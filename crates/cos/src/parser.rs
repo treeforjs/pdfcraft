@@ -323,7 +323,11 @@ impl<'a> Lexer<'a> {
             let cleaned: String = s.trim_start_matches('+').replacen("--", "-", 1);
             let mut end = cleaned.len();
             while end > 0 {
-                if let Ok(v) = cleaned[..end].parse::<f64>() {
+                // Only cut at character boundaries: a token can hold multi-byte UTF-8 (fuzzing
+                // found ".—", which panicked here).
+                if cleaned.is_char_boundary(end)
+                    && let Ok(v) = cleaned[..end].parse::<f64>()
+                {
                     return Ok(Object::Real(v));
                 }
                 end -= 1;
@@ -428,6 +432,17 @@ fn find_endstream(data: &[u8], from: usize) -> Option<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn numbers_with_multibyte_garbage_do_not_panic() {
+        // From `cargo xtask fuzz`: "2 0 obj\n.\u{2014}" (an em dash after a dot).
+        let doc = crate::Document::open(std::sync::Arc::new("2 0 obj\n.\u{2014}\n".as_bytes().to_vec()));
+        assert!(doc.is_err());
+        for t in [".\u{2014}", "1.\u{e9}5", "-.\u{1F600}", "+.5\u{2014}"] {
+            let _ = Lexer::new(t.as_bytes(), 0).object();
+        }
+        assert_eq!(Lexer::new("1.5\u{2014}".as_bytes(), 0).object().unwrap(), Object::Real(1.5));
+    }
 
     fn obj(s: &str) -> Object {
         Lexer::new(s.as_bytes(), 0).object().unwrap_or_else(|e| panic!("{s}: {e}"))
