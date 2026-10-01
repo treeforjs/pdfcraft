@@ -180,7 +180,14 @@ fn synthetic_seeds() -> Vec<Vec<u8>> {
             ],
             "/Root 1 0 R /Info << /Title (Fuzz) >>",
         ),
-        build(&["<< /Type /Catalog /Pages 2 0 R >>", "<< /Type /Pages /Kids [3 0 R] /Count 1 >>", "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 10 10] >>"], "/Root 1 0 R"),
+        build(
+            &[
+                "<< /Type /Catalog /Pages 2 0 R >>",
+                "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+                "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 10 10] >>",
+            ],
+            "/Root 1 0 R",
+        ),
     ]
 }
 
@@ -209,11 +216,8 @@ enum Outcome {
 }
 
 fn run_one(exe: &Path, file: &Path, timeout: Duration) -> (Outcome, String) {
-    let child = Command::new(exe)
-        .args(["check-one", &file.to_string_lossy(), "--dpi", "18", "--edit"])
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .spawn();
+    let child =
+        Command::new(exe).args(["check-one", &file.to_string_lossy(), "--dpi", "18", "--edit"]).stdout(Stdio::null()).stderr(Stdio::piped()).spawn();
     let Ok(mut child) = child else { return (Outcome::Ok, String::new()) };
     let start = Instant::now();
     loop {
@@ -228,7 +232,17 @@ fn run_one(exe: &Path, file: &Path, timeout: Duration) -> (Outcome, String) {
                     let _ = e.read_to_string(&mut err);
                 }
                 // Keep the first panic location or abort message: it identifies the bug.
-                let what = err.lines().find(|l| l.contains("panicked at") || l.contains("overflow") || l.contains("fatal")).unwrap_or("").trim().to_string();
+                let what = err.lines().find(|l| l.contains("panicked at") || l.contains("overflow") || l.contains("fatal")).unwrap_or("").trim();
+                // Drop the per-process thread id ("thread 'main' (12345)") so runs compare equal.
+                let what: String = what
+                    .split(" (")
+                    .map(|part| match part.split_once(')') {
+                        Some((id, rest)) if id.chars().all(|c| c.is_ascii_digit()) => rest.to_string(),
+                        _ => format!(" ({part}"),
+                    })
+                    .collect::<String>()
+                    .trim_start_matches(" (")
+                    .to_string();
                 return (Outcome::Crash, format!("{status}; {what}"));
             }
             Ok(None) if start.elapsed() > timeout => {
@@ -278,7 +292,9 @@ pub fn run(args: &[String]) -> Result<()> {
     let time = Duration::from_secs(flag(args, "--time").unwrap_or("300").parse()?);
     let iterations: usize = flag(args, "--iterations").map(str::parse).transpose()?.unwrap_or(usize::MAX);
     let seed: u64 = flag(args, "--seed").unwrap_or("1").parse()?;
-    let jobs: usize = flag(args, "--jobs").map(str::parse).transpose()?.unwrap_or_else(|| std::thread::available_parallelism().map_or(4, |n| n.get()));
+    // Half the cores by default: a saturated machine turns slow inputs into false hangs.
+    let jobs: usize =
+        flag(args, "--jobs").map(str::parse).transpose()?.unwrap_or_else(|| std::thread::available_parallelism().map_or(2, |n| (n.get() / 2).max(1)));
     let timeout = Duration::from_secs(flag(args, "--timeout").unwrap_or("10").parse()?);
 
     let status = Command::new(std::env::var("CARGO").unwrap_or_else(|_| "cargo".into()))
@@ -299,10 +315,14 @@ pub fn run(args: &[String]) -> Result<()> {
 
     let done = Arc::new(AtomicUsize::new(0));
     let found: Arc<Mutex<Vec<(Outcome, String, String)>>> = Arc::default();
+    // Held while confirming a hang; the other jobs keep running, so this only serializes
+    // confirmations with each other.
+    let solo = Arc::new(Mutex::new(()));
     let start = Instant::now();
     std::thread::scope(|s| {
         for job in 0..jobs {
-            let (seeds, done, found, exe, work, findings) = (seeds.clone(), done.clone(), found.clone(), exe.clone(), work.clone(), findings.clone());
+            let (seeds, done, found, exe, work, findings, solo) =
+                (seeds.clone(), done.clone(), found.clone(), exe.clone(), work.clone(), findings.clone(), solo.clone());
             s.spawn(move || {
                 let mut rng = Rng(seed.wrapping_mul(0x9E37_79B9_7F4A_7C15).wrapping_add(job as u64 + 1) | 1);
                 let file = work.join(format!("job{job}.pdf"));
@@ -330,7 +350,18 @@ pub fn run(args: &[String]) -> Result<()> {
                             continue;
                         }
                     }
-                    let small = minimize(&exe, &work, data.clone(), outcome, &what, timeout);
+                    // A hang under full load may just be a slow machine: confirm it alone, with
+                    // three times the time, before recording it. Hangs are not minimized (each
+                    // probe costs a full timeout).
+                    let small = if outcome == Outcome::Hang {
+                        let _guard = solo.lock().expect("lock");
+                        if run_one(&exe, &file, timeout * 3).0 != Outcome::Hang {
+                            continue;
+                        }
+                        data.clone()
+                    } else {
+                        minimize(&exe, &work, data.clone(), outcome, &what, timeout)
+                    };
                     let id = format!("{:?}-{:016x}", outcome, fxhash(&small)).to_lowercase();
                     let _ = std::fs::write(findings.join(format!("{id}.pdf")), &small);
                     let note = serde_json::json!({ "outcome": format!("{outcome:?}"), "detail": what, "seed_file": name, "bytes": small.len(), "original_bytes": data.len() });

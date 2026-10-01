@@ -5,6 +5,8 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * *" # nightly fuzzing
 
 env:
   CARGO_TERM_COLOR: always
@@ -83,4 +85,24 @@ jobs:
         with:
           command: check
 
-  # Nightly fuzzing arrives with the M1 fuzz targets (execution plan M0.5 / M1).
+  fuzz:
+    name: fuzz (mutation, 15 min)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: fuzz
+      - name: Fetch the pdf.js corpus (seeds)
+        run: cargo xtask corpus
+      - name: Fuzz
+        run: cargo xtask fuzz --time 900 --seed ${{ github.run_number }}
+      - name: Upload findings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-findings
+          path: fuzz-out/findings
+          if-no-files-found: ignore

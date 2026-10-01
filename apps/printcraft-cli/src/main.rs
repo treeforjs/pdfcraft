@@ -295,7 +295,10 @@ fn edit_round_trip(bytes: &[u8]) {
         let _ = doc.update_dict(root, |d| d.set(b"PrintCraftFuzz".to_vec(), Object::Bool(true)));
     }
     let classic = SaveOptions { object_streams: false, ..SaveOptions::default() };
-    for out in [write_incremental(&doc, &SaveOptions::default()), write_full(&doc, &SaveOptions::default()), write_full(&doc, &classic)].into_iter().flatten() {
+    for out in [write_incremental(&doc, &SaveOptions::default()), write_full(&doc, &SaveOptions::default()), write_full(&doc, &classic)]
+        .into_iter()
+        .flatten()
+    {
         if let Ok(again) = Document::open(Arc::new(out)) {
             let _ = again.root().map(|r| again.get(r));
         }
