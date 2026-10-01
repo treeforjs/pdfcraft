@@ -3019,10 +3019,10 @@ title = "Edit page labels (style, prefix, start)"
 area = "D"
 tier = "P1"
 milestone = "M4"
-status = "planned"
-commands = []
-tools = []
-evidence = []
+status = "shipped"
+commands = ["page.number"]
+tools = ["page_number"]
+evidence = ["crates/organize/src/tests.rs::number_pages_like_acrobat", "crates/engine/src/tests.rs::number_pages_shows_in_the_viewer_and_undoes", "crates/ui-egui/tests/bookmarks.rs::number_pages_dialog_labels_the_selected_pages", "crates/automation/tests/automation.rs::numbering_pages_through_tools"]
 notes = ""
 
 [[feature]]
