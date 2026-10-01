@@ -2,6 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
+#[cfg(feature = "mcp")]
 use printcraft_automation::mcp::McpServer;
 use printcraft_automation::{Automation, Content, ToolError, tools};
 use serde_json::{Value, json};
@@ -231,11 +232,13 @@ fn command_list_reports_enablement_and_tools() {
 
 // ---- MCP ---------------------------------------------------------------------------------------
 
+#[cfg(feature = "mcp")]
 fn rpc(server: &mut McpServer, id: u64, method: &str, params: Value) -> Value {
     let line = json!({ "jsonrpc": "2.0", "id": id, "method": method, "params": params }).to_string();
     serde_json::from_str(&server.handle_line(&line).expect("a reply")).unwrap()
 }
 
+#[cfg(feature = "mcp")]
 #[test]
 fn mcp_session_over_stdio() {
     let dir = workdir("mcp");
@@ -268,6 +271,7 @@ fn mcp_session_over_stdio() {
     assert_eq!(&png[1..4], b"PNG");
 }
 
+#[cfg(feature = "mcp")]
 #[test]
 fn mcp_errors() {
     let mut s = McpServer::new(Automation::new());

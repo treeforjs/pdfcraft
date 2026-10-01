@@ -14,5 +14,10 @@ printcraft-render = { workspace = true }
 printcraft-organize = { workspace = true }
 serde_json = { workspace = true }
 png = "0.18"
-base64 = "0.22"
+base64 = { version = "0.22", optional = true }
 
+
+[features]
+default = ["mcp"]
+# The MCP server module. Opt-in at run time either way; disable to leave it out of the build.
+mcp = ["dep:base64"]

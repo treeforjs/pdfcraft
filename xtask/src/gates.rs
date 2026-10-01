@@ -92,6 +92,7 @@ pub fn ci(_: &[String]) -> anyhow::Result<()> {
         ("layers", Box::new(|| layers(&[]))),
         ("wasm", Box::new(|| wasm(&[]))),
         ("assets", Box::new(|| crate::assets::run(&[]))),
+        ("deny", Box::new(|| deny(&[]))),
     ];
     for (i, (name, f)) in steps.iter().enumerate() {
         eprintln!("\n=== ci: {name} ===");
@@ -102,6 +103,20 @@ pub fn ci(_: &[String]) -> anyhow::Result<()> {
     }
     println!("\nCI: all {} steps passed", steps.len());
     Ok(())
+}
+
+/// Dependency licences, bans, sources and advisories (`deny.toml`). Skipped with a hint when
+/// cargo-deny is not installed, except under CI (`CI` set), where it is required.
+pub fn deny(_: &[String]) -> anyhow::Result<()> {
+    let installed = Command::new("cargo-deny").arg("--version").output().is_ok_and(|o| o.status.success());
+    if !installed {
+        if std::env::var_os("CI").is_some() {
+            bail!("cargo-deny is required in CI: cargo install cargo-deny --locked");
+        }
+        eprintln!("deny: SKIPPED, cargo-deny is not installed (cargo install cargo-deny --locked)");
+        return Ok(());
+    }
+    run_args(&["deny", "--log-level", "error", "check"])
 }
 
 fn run_args(args: &[&str]) -> anyhow::Result<()> {

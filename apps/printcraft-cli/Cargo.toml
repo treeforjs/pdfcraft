@@ -21,4 +21,4 @@ printcraft-automation = { workspace = true }
 [features]
 default = ["mcp"]
 # The opt-in MCP server (`printcraft-cli mcp`). Build with --no-default-features to leave it out.
-mcp = []
+mcp = ["printcraft-automation/mcp"]

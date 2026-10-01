@@ -9,6 +9,7 @@
 //!   with the origin at the top-left of the displayed page.
 //! - An optional root directory confines every path a tool reads or writes.
 
+#[cfg(feature = "mcp")]
 pub mod mcp;
 mod tools;
 
