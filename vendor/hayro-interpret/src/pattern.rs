@@ -24,6 +24,9 @@ use kurbo::{Affine, BezPath, Rect, Shape};
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 
+
+/// PrintCraft patch: maximum nesting of tiling patterns (and the forms around them).
+const MAX_PATTERN_NESTING: u32 = 16;
 /// A PDF pattern.
 #[derive(Debug, Clone)]
 pub enum Pattern<'a> {
@@ -228,6 +231,13 @@ impl<'a> TilingPattern<'a> {
         initial_transform: Affine,
         is_stroke: bool,
     ) -> Option<()> {
+        // PrintCraft patch: a tiling pattern can paint itself (directly, or through resources it
+        // inherits when its own are missing), which recursed until the stack overflowed. Bound
+        // the nesting like XObjects do, tighter because every level rasterizes a tile.
+        if self.nesting_depth > MAX_PATTERN_NESTING {
+            warn!("tiling pattern nesting depth exceeded");
+            return None;
+        }
         let state = State::new(initial_transform);
 
         let mut context = Context::new_with(
