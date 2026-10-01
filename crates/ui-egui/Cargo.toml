@@ -13,7 +13,7 @@ printcraft-engine = { workspace = true }
 printcraft-render = { workspace = true }
 egui = { workspace = true }
 egui_extras = { workspace = true }
-eframe = { workspace = true, features = ["default_fonts", "wgpu", "accesskit", "persistence"] }
+eframe = { workspace = true, features = ["default_fonts", "wgpu", "accesskit", "persistence", "links"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 log = { workspace = true }

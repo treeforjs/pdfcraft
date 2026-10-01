@@ -12,6 +12,7 @@
 
 pub mod catalog;
 pub mod commands;
+pub mod links;
 
 pub use printcraft_organize::{SplitBy, split_ranges};
 

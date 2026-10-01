@@ -63,6 +63,16 @@
 
 ---
 
+## Community
+
+PrintCraft is part of [ArtCraft](https://getartcraft.com). Come say hello, get help and follow development:
+
+- **Discord: [discord.gg/artcraft](https://discord.gg/artcraft)**. This is the fastest way to get help and share feedback. The app has a Discord button in its title bar.
+- **Web page:** [getartcraft.com/apps/printcraft](https://getartcraft.com/apps/printcraft)
+- **Source:** [github.com/storytold/printcraft](https://github.com/storytold/printcraft)
+
+The ArtCraft name and logos in `docs/brand/` belong to Storyteller and are not open source (see `docs/brand/LICENSE-brand.txt`). Forks must remove them.
+
 ## Highlights
 
 <table>

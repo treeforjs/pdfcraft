@@ -57,6 +57,10 @@ impl PrintCraftApp {
                 }
                 self.dialog = Some(Dialog::NumberPages);
             }
+            link if printcraft_engine::links::for_command(link).is_some() => {
+                let url = printcraft_engine::links::for_command(link).expect("checked").url;
+                self.open_url(url);
+            }
             "bookmark.add" => self.bookmark_action(crate::panels::BmAction::New),
             "edit.undo" => self.undo(),
             "edit.redo" => self.redo(),

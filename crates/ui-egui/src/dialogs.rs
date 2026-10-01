@@ -29,6 +29,7 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
     let mut recover: Option<bool> = None;
     let mut number_now: Option<Edit> = None;
     let mut apply_number = false;
+    let mut link_command: Option<&'static str> = None;
     let t = Tokens::get(ctx);
     let mut close = false;
     let mut next = dialog;
@@ -317,8 +318,13 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
                 });
             }
             Dialog::About => {
-                ui.label(egui::RichText::new("PrintCraft").font(theme::semibold(20.0)));
-                ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));
+                ui.horizontal(|ui| {
+                    widgets::artcraft_mark(ui, 40.0);
+                    ui.vertical(|ui| {
+                        ui.label(egui::RichText::new("PrintCraft").font(theme::semibold(20.0)));
+                        ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));
+                    });
+                });
                 ui.add_space(6.0);
                 ui.label("A clean-room, open-source PDF application written in Rust. MIT OR Apache-2.0.");
                 ui.label(
@@ -326,6 +332,15 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
                         .color(t.text_muted)
                         .small(),
                 );
+                ui.add_space(12.0);
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new("Part of").color(t.text_muted));
+                    widgets::artcraft_logo(ui, 16.0);
+                });
+                ui.add_space(6.0);
+                if let Some(cmd) = widgets::community_links(ui) {
+                    link_command = Some(cmd);
+                }
             }
         }
         ui.add_space(12.0);
@@ -376,6 +391,9 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
         } else {
             app.discard_recovered(&keys);
         }
+    }
+    if let Some(cmd) = link_command {
+        app.execute(cmd);
     }
     if apply_number && let Some(edit) = number_now {
         app.apply_edit(edit);

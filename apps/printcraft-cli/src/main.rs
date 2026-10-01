@@ -57,9 +57,12 @@ fn main() -> ExitCode {
             Some("mcp") => mcp(&args[1..]),
             Some("--version") => {
                 println!("printcraft-cli {}", env!("CARGO_PKG_VERSION"));
+                println!("Discord: {}  (help and feedback)", printcraft_engine::links::DISCORD);
+                println!("Web:     {}", printcraft_engine::links::APP_PAGE);
+                println!("Source:  {}", printcraft_engine::links::GITHUB);
                 Ok(())
             }
-            _ => Err("usage: printcraft-cli <info|render|text|edit|combine|extract|split|check|tools|run|mcp|ui> …  (see source header for options)"
+            _ => Err("usage: printcraft-cli <info|render|text|edit|combine|extract|split|check|tools|run|mcp|ui> …  (see source header for options)\nhelp and feedback: https://discord.gg/artcraft"
                 .into()),
         };
     match result {

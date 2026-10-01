@@ -157,6 +157,8 @@ pub struct PrintCraftApp {
     pub bookmark_rename: Option<(Vec<usize>, String)>,
     /// Number pages dialog settings (1-based pages).
     pub number_draft: NumberDraft,
+    /// The last web link the app asked the system to open (tests and automation).
+    pub last_opened_url: Option<String>,
 }
 
 /// Settings for the Number pages dialog.
@@ -215,6 +217,7 @@ impl PrintCraftApp {
             fonts_ready: false,
             control: None,
             bookmark_rename: None,
+            last_opened_url: None,
             number_draft: NumberDraft { from: 1, to: 1, style: printcraft_engine::LabelStyle::Decimal, prefix: String::new(), start: 1 },
         }
     }
@@ -398,6 +401,14 @@ impl PrintCraftApp {
         let (control, client) = control::attach(ctx);
         self.control = Some(control);
         client
+    }
+
+    /// Open a web link in the system browser (a new tab on the web).
+    pub fn open_url(&mut self, url: &str) {
+        if let Some(ctx) = &self.ctx {
+            ctx.open_url(egui::OpenUrl::new_tab(url));
+        }
+        self.last_opened_url = Some(url.to_string());
     }
 
     pub fn notify(&mut self, msg: impl Into<String>) {

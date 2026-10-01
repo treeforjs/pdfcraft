@@ -156,6 +156,10 @@ pub const COMMANDS: &[CommandSpec] = &[
     c("page.split", "Split document…", PAGES, None, Assembly, "scissors"),
     c("page.number", "Number pages…", PAGES, None, Assembly, "hash"),
     c("help.shortcuts", "Keyboard shortcuts", HELP, None, Nothing, "circle-help"),
+    c("help.discord", "Join the ArtCraft Discord", HELP, None, Nothing, "messages-square"),
+    c("help.app_page", "PrintCraft web page", HELP, None, Nothing, "globe"),
+    c("help.github", "PrintCraft on GitHub", HELP, None, Nothing, "code-xml"),
+    c("help.website", "ArtCraft website", HELP, None, Nothing, "external-link"),
     c("help.about", "About PrintCraft", HELP, None, Nothing, "info"),
 ];
 
