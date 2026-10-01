@@ -193,11 +193,21 @@ fn synthetic_seeds() -> Vec<Vec<u8>> {
 
 fn seeds() -> Vec<(String, Vec<u8>)> {
     let mut out: Vec<(String, Vec<u8>)> = synthetic_seeds().into_iter().enumerate().map(|(i, b)| (format!("synthetic-{i}"), b)).collect();
+    // Seeds the corpus sweep already knows to hang only rediscover that hang.
+    let known_hangs: std::collections::HashSet<String> = std::fs::read_to_string(root().join("xtask/baselines/pdfjs.json"))
+        .ok()
+        .and_then(|t| serde_json::from_str::<std::collections::BTreeMap<String, String>>(&t).ok())
+        .map(|m| m.into_iter().filter(|(_, v)| v == "timeout").map(|(k, _)| k).collect())
+        .unwrap_or_default();
     let dir = root().join("corpus/pdfjs/test/pdfs");
     if let Ok(rd) = std::fs::read_dir(&dir) {
         let mut files: Vec<PathBuf> = rd.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|e| e == "pdf")).collect();
         files.sort();
         for f in files {
+            let name = f.file_name().unwrap_or_default().to_string_lossy().into_owned();
+            if known_hangs.contains(&name) {
+                continue;
+            }
             if let Ok(b) = std::fs::read(&f)
                 && b.len() <= 64 * 1024
             {
