@@ -107,7 +107,10 @@ pub fn effective_scale(width_pt: f32, height_pt: f32, scale: f32) -> f32 {
     let (w, h) = (width_pt.max(1.0), height_pt.max(1.0));
     let by_side = MAX_SIDE / w.max(h);
     let by_area = (MAX_PIXELS / (w * h)).sqrt();
-    scale.min(by_side).min(by_area).max(0.01)
+    // The caps always win: a floor here once let a 934-million-point-wide page (a fuzzed file)
+    // render 9 million pixels wide. Only guard against a zero or non-finite scale.
+    let capped = scale.min(by_side).min(by_area);
+    if capped.is_finite() && capped > 0.0 { capped } else { by_side.min(by_area).max(f32::MIN_POSITIVE) }
 }
 
 /// Render one page with a caller-owned parser and cache. Panics inside the renderer are caught
@@ -314,6 +317,17 @@ fn worker(bytes: Arc<Vec<u8>>, config: RenderConfig, queue: Queue, wake: Receive
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn effective_scale_never_exceeds_the_caps() {
+        for (w, h, s) in [(934_775_807.0, 792.0, 0.25), (612.0, 792.0, 0.0), (1.0e9, 1.0e9, 1.0), (612.0, 792.0, 2.0)] {
+            let k = super::effective_scale(w, h, s);
+            assert!(k > 0.0 && k.is_finite(), "{w}×{h} @ {s}: {k}");
+            assert!(w * k <= super::MAX_SIDE + 1.0 && h * k <= super::MAX_SIDE + 1.0, "{w}×{h} @ {s}: {k}");
+            assert!(w * k * h * k <= super::MAX_PIXELS * 1.01, "{w}×{h} @ {s}: {k}");
+        }
+        assert_eq!(super::effective_scale(612.0, 792.0, 2.0), 2.0);
+    }
+
     use super::*;
 
     const ONE_PAGE: &[u8] = b"%PDF-1.4
@@ -448,6 +462,67 @@ trailer << /Root 1 0 R >>
         assert_eq!(px(RenderConfig::default()), vec![255, 0, 0, 255], "layer is on by default");
         let off = RenderConfig { layers: Arc::new(vec![(5, 0, false)]), ..Default::default() };
         assert_eq!(px(off), vec![255, 255, 255, 255], "toggled-off layer must not draw");
+    }
+
+    /// From `cargo xtask fuzz`: a tiling pattern with no /Resources inherits the page's, where
+    /// its own name points back at it. It painted itself until the stack overflowed (vendored
+    /// hayro-interpret patch: `MAX_PATTERN_NESTING`). Ordinary patterns must still paint.
+    #[test]
+    fn self_referencing_tiling_pattern_terminates() {
+        let pdf = |pattern_body: &str| {
+            format!(
+                "%PDF-1.7
+1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
+2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj
+3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 40 40] /Contents 4 0 R /Resources << /Pattern << /P1 5 0 R >> >> >> endobj
+4 0 obj << /Length 30 >> stream
+/Pattern cs /P1 scn 0 0 40 40 re f
+endstream endobj
+5 0 obj << /Type /Pattern /PatternType 1 /PaintType 1 /TilingType 1 /BBox [0 0 10 10] /XStep 10 /YStep 10 /Length {} >> stream
+{pattern_body}
+endstream endobj
+trailer << /Root 1 0 R >>
+%%EOF",
+                pattern_body.len()
+            )
+        };
+        let render = |doc: String| {
+            let mut r = PageRenderer::new(Arc::new(doc.into_bytes()), RenderConfig::default());
+            r.render(RenderRequest { page: 0, kind: RequestKind::Pixels, tile: None, scale: 1.0, tag: 0 })
+        };
+        let looped = render(pdf("/Pattern cs /P1 scn 0 0 10 10 re f"));
+        assert_eq!((looped.width, looped.height), (40, 40));
+        let red = render(pdf("1 0 0 rg 0 0 10 10 re f"));
+        assert!(red.error.is_none(), "{:?}", red.error);
+        assert_eq!(&red.rgba[((20 * 40 + 20) * 4)..][..4], &[255, 0, 0, 255], "a normal tiling pattern still paints");
+    }
+
+    /// From `cargo xtask fuzz`: a CID font whose /W range spans every u32 inserted billions of
+    /// widths (vendored hayro-interpret patch: `MAX_CID`). Must finish quickly.
+    #[test]
+    fn huge_cid_width_ranges_terminate() {
+        let pdf = "%PDF-1.7
+1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
+2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj
+3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 100 40] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >> endobj
+4 0 obj << /Length 35 >> stream
+BT /F1 12 Tf 10 10 Td <0041> Tj ET
+endstream endobj
+5 0 obj << /Type /Font /Subtype /Type0 /BaseFont /Helvetica /Encoding /Identity-H /DescendantFonts [6 0 R] >> endobj
+6 0 obj << /Type /Font /Subtype /CIDFontType2 /BaseFont /Helvetica /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >>
+  /FontDescriptor 7 0 R /W [0 4294967295 500] /W2 [0 4294967295 -1000 250 880] >> endobj
+7 0 obj << /Type /FontDescriptor /FontName /Helvetica /Flags 32 /FontBBox [0 -200 1000 900] /ItalicAngle 0 /Ascent 800 /Descent -200 /CapHeight 700 /StemV 80 >> endobj
+trailer << /Root 1 0 R >>
+%%EOF";
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let mut r = PageRenderer::new(Arc::new(pdf.as_bytes().to_vec()), RenderConfig::default());
+            let px = r.render(RenderRequest { page: 0, kind: RequestKind::Pixels, tile: None, scale: 1.0, tag: 0 });
+            let text = r.render(RenderRequest { page: 0, kind: RequestKind::Text, tile: None, scale: 1.0, tag: 0 });
+            let _ = tx.send((px.error, text.error));
+        });
+        let (px, text) = rx.recv_timeout(std::time::Duration::from_secs(20)).expect("rendering a huge /W range must not hang");
+        assert!(px.is_none() && text.is_none(), "{px:?} {text:?}");
     }
 
     #[test]
