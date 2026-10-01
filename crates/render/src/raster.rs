@@ -58,7 +58,7 @@ pub const MAX_SIDE: f32 = 8192.0;
 pub const MAX_PIXELS: f32 = 64.0e6;
 
 /// What a request asks for.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
 pub enum RequestKind {
     /// A raster of the page.
     #[default]
@@ -210,13 +210,48 @@ pub(crate) fn panic_message(p: &Box<dyn std::any::Any + Send>) -> String {
     p.downcast_ref::<&str>().map(|s| s.to_string()).or_else(|| p.downcast_ref::<String>().cloned()).unwrap_or_else(|| "unknown panic".into())
 }
 
-type Queue = Arc<Mutex<Vec<RenderRequest>>>;
+/// How long one page may render before the pool gives up on it (the watchdog).
+pub const STUCK_AFTER: std::time::Duration = std::time::Duration::from_secs(20);
 
+/// State shared by the pool and its workers.
+#[derive(Default)]
+struct Shared {
+    /// Pending requests, most urgent last (workers pop from the end).
+    queue: Mutex<Vec<RenderRequest>>,
+    /// Per worker id: the request it is rendering and since when.
+    #[cfg(not(target_arch = "wasm32"))]
+    busy: Mutex<Vec<Option<(RenderRequest, std::time::Instant)>>>,
+    /// Pages (and request kinds) the watchdog gave up on: answered with an error at once, so a
+    /// pathological page cannot trap every worker in turn.
+    stuck: Mutex<std::collections::HashSet<(usize, RequestKind)>>,
+    /// Test hook: make one page slow.
+    #[cfg(test)]
+    slow_page: Mutex<Option<(usize, std::time::Duration)>>,
+}
+
+fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// Renders pages on worker threads, most urgent request first.
+///
+/// **Watchdog:** a render running longer than `stuck_after` (default [`STUCK_AFTER`]) is reported
+/// as an error for that page, the page is not attempted again, and a replacement worker takes
+/// the stuck one's place (threads cannot be killed; the stuck one exits when its render
+/// finally returns, and its late result is dropped). At most `threads` replacements are started
+/// per pool, so a document full of pathological pages cannot spawn threads without bound.
 pub struct RenderPool {
-    queue: Queue,
-    wake: Vec<Sender<()>>,
+    shared: Arc<Shared>,
+    wake: Mutex<Vec<Sender<()>>>,
     results: Receiver<RenderedPage>,
-    _workers: Vec<JoinHandle<()>>,
+    results_tx: Sender<RenderedPage>,
+    bytes: Arc<Vec<u8>>,
+    config: RenderConfig,
+    _workers: Mutex<Vec<JoinHandle<()>>>,
+    /// Errors produced by the watchdog, handed out by `try_recv`.
+    abandoned: Mutex<Vec<RenderedPage>>,
+    stuck_after: std::time::Duration,
+    replacements_left: Mutex<usize>,
     /// Used when threads are unavailable (wasm32 without atomics, or spawn failure): requests are
     /// rendered on the calling thread inside `try_recv`, one per call.
     inline: Option<std::cell::RefCell<PageRenderer>>,
@@ -224,33 +259,66 @@ pub struct RenderPool {
 
 impl RenderPool {
     pub fn new(bytes: Arc<Vec<u8>>, threads: usize, config: RenderConfig) -> Self {
-        let queue: Queue = Arc::new(Mutex::new(Vec::new()));
-        let (res_tx, results) = channel();
-        let mut wake = Vec::new();
-        let mut workers = Vec::new();
+        let (results_tx, results) = channel();
         let threads = if cfg!(target_arch = "wasm32") { 0 } else { threads.max(1) };
-        for i in 0..threads {
+        let mut pool = Self {
+            shared: Arc::default(),
+            wake: Mutex::new(Vec::new()),
+            results,
+            results_tx,
+            bytes: bytes.clone(),
+            config: config.clone(),
+            _workers: Mutex::new(Vec::new()),
+            abandoned: Mutex::new(Vec::new()),
+            stuck_after: STUCK_AFTER,
+            replacements_left: Mutex::new(threads),
+            inline: None,
+        };
+        for _ in 0..threads {
+            pool.spawn_worker();
+        }
+        if lock(&pool._workers).is_empty() {
+            pool.inline = Some(std::cell::RefCell::new(PageRenderer::new(bytes, config)));
+        }
+        pool
+    }
+
+    /// Start one worker thread; returns whether it started.
+    fn spawn_worker(&self) -> bool {
+        #[cfg(target_arch = "wasm32")]
+        return false;
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let id = {
+                let mut busy = lock(&self.shared.busy);
+                busy.push(None);
+                busy.len() - 1
+            };
             let (wtx, wrx) = channel::<()>();
-            wake.push(wtx);
-            let queue = queue.clone();
-            let res_tx = res_tx.clone();
-            let bytes = bytes.clone();
-            let config = config.clone();
-            let spawned = std::thread::Builder::new().name(format!("printcraft-render-{i}")).spawn(move || worker(bytes, config, queue, wrx, res_tx));
-            match spawned {
-                Ok(h) => workers.push(h),
-                Err(e) => log::error!("could not spawn render worker {i}: {e}"),
+            let (shared, out, bytes, config) = (self.shared.clone(), self.results_tx.clone(), self.bytes.clone(), self.config.clone());
+            match std::thread::Builder::new().name(format!("printcraft-render-{id}")).spawn(move || worker(id, bytes, config, shared, wrx, out)) {
+                Ok(h) => {
+                    lock(&self.wake).push(wtx);
+                    lock(&self._workers).push(h);
+                    true
+                }
+                Err(e) => {
+                    log::error!("could not spawn render worker {id}: {e}");
+                    false
+                }
             }
         }
-        let inline = workers.is_empty().then(|| std::cell::RefCell::new(PageRenderer::new(bytes, config)));
-        Self { queue, wake, results, _workers: workers, inline }
     }
 
     /// A pool without worker threads: renders inside `try_recv` (the web path; also used in tests).
     pub fn new_inline(bytes: Arc<Vec<u8>>, config: RenderConfig) -> Self {
-        let (_tx, results) = channel();
-        let inline = Some(std::cell::RefCell::new(PageRenderer::new(bytes, config)));
-        Self { queue: Arc::new(Mutex::new(Vec::new())), wake: Vec::new(), results, _workers: Vec::new(), inline }
+        let mut pool = Self::new(bytes.clone(), 0, config.clone());
+        if pool.inline.is_none() {
+            // Native `new` always spawns at least one worker; drop to inline explicitly.
+            pool = Self { shared: Arc::default(), wake: Mutex::new(Vec::new()), _workers: Mutex::new(Vec::new()), ..pool };
+            pool.inline = Some(std::cell::RefCell::new(PageRenderer::new(bytes, config)));
+        }
+        pool
     }
 
     /// `true` when rendering happens on the caller's thread (no worker threads available).
@@ -258,52 +326,121 @@ impl RenderPool {
         self.inline.is_some()
     }
 
+    /// Change the watchdog limit (tests and benchmarks).
+    pub fn set_stuck_after(&mut self, limit: std::time::Duration) {
+        self.stuck_after = limit;
+    }
+
     /// Replace the pending queue (most urgent first). In-flight renders are not interrupted.
     pub fn set_queue(&self, mut requests: Vec<RenderRequest>) {
         requests.reverse(); // workers pop from the end
-        match self.queue.lock() {
-            Ok(mut q) => *q = requests,
-            Err(poisoned) => *poisoned.into_inner() = requests,
-        }
-        for w in &self.wake {
+        *lock(&self.shared.queue) = requests;
+        for w in lock(&self.wake).iter() {
             let _ = w.send(());
         }
     }
 
     pub fn try_recv(&self) -> Option<RenderedPage> {
         if let Some(r) = &self.inline {
-            let next = match self.queue.lock() {
-                Ok(mut q) => q.pop(),
-                Err(poisoned) => poisoned.into_inner().pop(),
-            };
+            let next = lock(&self.shared.queue).pop();
             return next.map(|req| r.borrow_mut().render(req));
+        }
+        self.watchdog();
+        if let Some(p) = lock(&self.abandoned).pop() {
+            return Some(p);
         }
         self.results.try_recv().ok()
     }
+
+    /// Give up on renders that exceeded `stuck_after` (see the type docs).
+    fn watchdog(&self) {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let mut gave_up = Vec::new();
+            {
+                let mut busy = lock(&self.shared.busy);
+                for slot in busy.iter_mut() {
+                    if let Some((req, since)) = *slot
+                        && since.elapsed() > self.stuck_after
+                    {
+                        *slot = None; // the worker sees this and exits when it returns
+                        gave_up.push(req);
+                    }
+                }
+            }
+            for req in gave_up {
+                lock(&self.shared.stuck).insert((req.page, req.kind));
+                let what = if req.kind == RequestKind::Text { "text extraction for page" } else { "page" };
+                let error = format!(
+                    "{what} {} took longer than {:.0} s and was skipped; the page may be damaged or extremely complex",
+                    req.page + 1,
+                    self.stuck_after.as_secs_f32().max(1.0)
+                );
+                lock(&self.abandoned).push(RenderedPage {
+                    request: req,
+                    width: 0,
+                    height: 0,
+                    rgba: Vec::new(),
+                    error: Some(error),
+                    text: None,
+                    millis: 0,
+                });
+                let mut left = lock(&self.replacements_left);
+                if *left > 0 && self.spawn_worker() {
+                    *left -= 1;
+                }
+            }
+        }
+    }
 }
 
-fn worker(bytes: Arc<Vec<u8>>, config: RenderConfig, queue: Queue, wake: Receiver<()>, out: Sender<RenderedPage>) {
+#[cfg(not(target_arch = "wasm32"))]
+fn worker(id: usize, bytes: Arc<Vec<u8>>, config: RenderConfig, shared: Arc<Shared>, wake: Receiver<()>, out: Sender<RenderedPage>) {
     let settings = config.settings();
     // Outer loop: (re)build parser + cache; rebuilt after a renderer panic.
     loop {
         let pdf = parse(&bytes, config.password.as_deref());
         let cache = RenderCache::new();
         loop {
-            let next = match queue.lock() {
-                Ok(mut q) => q.pop(),
-                Err(poisoned) => poisoned.into_inner().pop(),
-            };
+            let next = lock(&shared.queue).pop();
             let Some(req) = next else {
                 if wake.recv().is_err() {
                     return; // pool dropped
                 }
                 continue;
             };
+            if lock(&shared.stuck).contains(&(req.page, req.kind)) {
+                let error = format!("page {} was skipped earlier because it took too long to render", req.page + 1);
+                let page = RenderedPage { request: req, width: 0, height: 0, rgba: Vec::new(), error: Some(error), text: None, millis: 0 };
+                if out.send(page).is_err() {
+                    return;
+                }
+                continue;
+            }
             let start = Stopwatch::start();
+            if let Some(slot) = lock(&shared.busy).get_mut(id) {
+                *slot = Some((req, std::time::Instant::now()));
+            }
+            #[cfg(test)]
+            {
+                // Copy out first: a guard held in the `if let` would block the other workers.
+                let slow = *lock(&shared.slow_page);
+                if let Some((page, delay)) = slow
+                    && page == req.page
+                {
+                    std::thread::sleep(delay);
+                }
+            }
             let r = match &pdf {
                 Some(pdf) => render_page(pdf, &cache, &settings, req),
                 None => Err(("the document could not be parsed".into(), false)),
             };
+            // If the watchdog cleared our slot meanwhile, it already answered for this request
+            // and started a replacement: drop the late result and retire.
+            let abandoned = lock(&shared.busy).get_mut(id).is_none_or(|slot| slot.take().is_none());
+            if abandoned {
+                return;
+            }
             let panicked = matches!(r, Err((_, true)));
             if out.send(finish(req, start, r)).is_err() {
                 return;
@@ -317,6 +454,41 @@ fn worker(bytes: Arc<Vec<u8>>, config: RenderConfig, queue: Queue, wake: Receive
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn watchdog_skips_a_stuck_page_and_keeps_rendering() {
+        use super::*;
+        let mut pool = RenderPool::new(Arc::new(ONE_PAGE_TWICE.to_vec()), 1, RenderConfig::default());
+        pool.set_stuck_after(std::time::Duration::from_millis(1000));
+        *lock(&pool.shared.slow_page) = Some((0, std::time::Duration::from_secs(4)));
+        let req = |page| RenderRequest { page, kind: RequestKind::Pixels, tile: None, scale: 0.5, tag: 0 };
+        pool.set_queue(vec![req(0)]);
+        let recv = |pool: &RenderPool| {
+            let t = std::time::Instant::now();
+            loop {
+                if let Some(p) = pool.try_recv() {
+                    return p;
+                }
+                assert!(t.elapsed() < std::time::Duration::from_secs(8), "no result");
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
+        };
+        let started = std::time::Instant::now();
+        let first = recv(&pool);
+        assert!(started.elapsed() < std::time::Duration::from_millis(3000), "the watchdog answers before the render ends");
+        assert!(first.error.as_deref().is_some_and(|e| e.contains("took longer")), "{:?}", first.error);
+        // The single worker is stuck, yet page 2 still renders (on the replacement worker).
+        pool.set_queue(vec![req(1)]);
+        let second = recv(&pool);
+        assert!(second.error.is_none() && second.request.page == 1, "{:?}", second.error);
+        // Asking for the stuck page again fails fast instead of trapping another worker.
+        pool.set_queue(vec![req(0)]);
+        let again = recv(&pool);
+        assert!(again.error.as_deref().is_some_and(|e| e.contains("skipped earlier")), "{:?}", again.error);
+        // The stuck worker's late result is dropped, not delivered twice.
+        std::thread::sleep(std::time::Duration::from_millis(4200));
+        assert!(pool.try_recv().is_none());
+    }
+
     #[test]
     fn effective_scale_never_exceeds_the_caps() {
         for (w, h, s) in [(934_775_807.0, 792.0, 0.25), (612.0, 792.0, 0.0), (1.0e9, 1.0e9, 1.0), (612.0, 792.0, 2.0)] {
@@ -337,6 +509,17 @@ mod tests {
 4 0 obj << /Length 35 >> stream
 0 0 1 rg 10 10 30 20 re f
 endstream endobj
+trailer << /Root 1 0 R >>
+%%EOF";
+
+    const ONE_PAGE_TWICE: &[u8] = b"%PDF-1.4
+1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
+2 0 obj << /Type /Pages /Kids [3 0 R 5 0 R] /Count 2 >> endobj
+3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 100 50] /Contents 4 0 R >> endobj
+4 0 obj << /Length 35 >> stream
+0 0 1 rg 10 10 30 20 re f
+endstream endobj
+5 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 100 50] /Contents 4 0 R >> endobj
 trailer << /Root 1 0 R >>
 %%EOF";
 

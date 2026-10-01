@@ -135,6 +135,13 @@ pub enum ViewAction {
 }
 
 impl DocView {
+    /// Pages that could not be rendered, with the reason (for automation; 0-based pages).
+    pub fn page_errors(&self) -> Vec<(usize, &str)> {
+        let mut v: Vec<(usize, &str)> = self.errors.iter().map(|(p, e)| (*p, e.as_str())).collect();
+        v.sort_unstable_by_key(|(p, _)| *p);
+        v
+    }
+
     pub fn new(id: DocId, info: &DocInfo) -> Self {
         Self {
             id,

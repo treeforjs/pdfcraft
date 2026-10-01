@@ -12,7 +12,8 @@
 //!   frame, so they see and change exactly what the user would.
 //!
 //! Methods (JSON in, JSON out):
-//! - `ui.state`: open documents, active document, page, zoom, mode, panels, dialog, notice.
+//! - `ui.state`: open documents, active document, page, zoom, page errors, mode, panels, dialog,
+//!   notice.
 //! - `ui.inspect {query?, role?, limit?}`: widgets in tree order with `id` (a string), `role`, `label`,
 //!   `value`, `rect` (points), `enabled`, `toggled`, `selected`, `clickable`, `depth`.
 //! - `ui.click {id}` | `{label}` | `{x, y}`: click a widget (by its AccessKit action) or a point.
@@ -446,6 +447,7 @@ impl Host for crate::PrintCraftApp {
                 "layout": format!("{:?}", v.layout),
                 "organize": v.organize,
                 "find_open": v.find.is_some(),
+                "page_errors": v.page_errors().iter().map(|(p, e)| json!({ "page": p + 1, "error": e })).collect::<Vec<_>>(),
             })),
             "home": self.active.is_none(),
             "mode": format!("{:?}", self.mode),
