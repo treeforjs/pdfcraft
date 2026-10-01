@@ -10,7 +10,18 @@
 //! printcraft-cli extract <in.pdf> --pages 1,3,5 --out out.pdf
 //! printcraft-cli split   <in.pdf> (--every N | --before 3,7) [--out-dir DIR]
 //! printcraft-cli check  <files or dirs…> [--timeout 20] [--dpi 36] [--json out.json]
+//! printcraft-cli tools                                       automation tools and their JSON Schemas
+//! printcraft-cli run    <tool> [key=value …] [--root DIR] [--out image.png]
+//! printcraft-cli run    --script steps.json [--root DIR]      [{"tool": "doc_open", "args": {…}}, …]
+//! printcraft-cli mcp    [--root DIR]                          MCP server on stdin/stdout (opt-in)
 //! ```
+//!
+//! `run` and `mcp` drive the same tool table (`printcraft-automation`). In `run`, values parse as
+//! JSON when they can (`pages=[1,3]`, `degrees=90`) and are strings otherwise. A script runs its
+//! steps in one session, so `doc_open` returns id 1, the next document id 2, and so on.
+//!
+//! The MCP server never starts on its own: it runs only when this command is launched (normally
+//! by an agent configured to use it), talks only over stdio, and exits when stdin closes.
 //!
 //! `check` is the robustness harness: every file is opened, inspected and fully rendered in a
 //! *separate child process* with a wall-clock timeout, so hangs, panics and aborts in any
@@ -36,11 +47,15 @@ fn main() -> ExitCode {
         Some("split") => split(&args[1..]),
         Some("check") => check(&args[1..]),
         Some("check-one") => check_one(&args[1..]),
+        Some("tools") => tools(),
+        Some("run") => run(&args[1..]),
+        #[cfg(feature = "mcp")]
+        Some("mcp") => mcp(&args[1..]),
         Some("--version") => {
             println!("printcraft-cli {}", env!("CARGO_PKG_VERSION"));
             Ok(())
         }
-        _ => Err("usage: printcraft-cli <info|render|text|edit|combine|extract|split|check> …  (see source header for options)".into()),
+        _ => Err("usage: printcraft-cli <info|render|text|edit|combine|extract|split|check|tools|run|mcp> …  (see source header for options)".into()),
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,
@@ -336,4 +351,73 @@ fn run_child(exe: &Path, file: &Path, dpi: &str, timeout: Duration) -> serde_jso
             Err(e) => return serde_json::json!({ "file": file_s, "status": "harness-error", "detail": e.to_string() }),
         }
     }
+}
+
+// ---- automation --------------------------------------------------------------------------------
+
+fn automation(args: &[String]) -> Result<printcraft_automation::Automation, String> {
+    let a = printcraft_automation::Automation::new();
+    match flag(args, "--root") {
+        Some(root) => a.with_root(root).map_err(|e| format!("--root {root}: {e}")),
+        None => Ok(a),
+    }
+}
+
+fn tools() -> Result<(), String> {
+    let list: Vec<serde_json::Value> = printcraft_automation::tools()
+        .iter()
+        .map(|t| serde_json::json!({ "name": t.name, "description": t.description, "read_only": t.read_only, "command": t.command, "input_schema": t.input_schema }))
+        .collect();
+    println!("{}", serde_json::to_string_pretty(&list).unwrap_or_default());
+    Ok(())
+}
+
+/// Print a tool's result: JSON as JSON; images go to `--out` (or are summarised).
+fn print_output(content: Vec<printcraft_automation::Content>, out: Option<&str>) -> Result<(), String> {
+    for c in content {
+        match c {
+            printcraft_automation::Content::Json(v) => println!("{}", serde_json::to_string_pretty(&v).unwrap_or_default()),
+            printcraft_automation::Content::Png { data, width, height } => match out {
+                Some(path) => {
+                    std::fs::write(path, &data).map_err(|e| format!("{path}: {e}"))?;
+                    println!("{}", serde_json::json!({ "image": path, "width": width, "height": height }));
+                }
+                None => println!(
+                    "{}",
+                    serde_json::json!({ "image": "png", "width": width, "height": height, "bytes": data.len(), "hint": "pass --out file.png to save it" })
+                ),
+            },
+        }
+    }
+    Ok(())
+}
+
+fn run(args: &[String]) -> Result<(), String> {
+    let mut auto = automation(args)?;
+    if let Some(script) = flag(args, "--script") {
+        let text = std::fs::read_to_string(script).map_err(|e| format!("{script}: {e}"))?;
+        let steps: Vec<serde_json::Value> = serde_json::from_str(&text).map_err(|e| format!("{script}: {e}"))?;
+        for (i, step) in steps.iter().enumerate() {
+            let tool = step["tool"].as_str().ok_or(format!("step {}: missing \"tool\"", i + 1))?;
+            let content = auto.call(tool, &step["args"]).map_err(|e| format!("step {} ({tool}): {e}", i + 1))?;
+            print_output(content, step["out"].as_str())?;
+        }
+        return Ok(());
+    }
+    let tool = *positional(args).first().ok_or("run: missing tool name (see `printcraft-cli tools`)")?;
+    let mut obj = serde_json::Map::new();
+    for kv in positional(args).iter().skip(1) {
+        let (k, v) = kv.split_once('=').ok_or(format!("run: expected key=value, got {kv:?}"))?;
+        let value = serde_json::from_str(v).unwrap_or_else(|_| serde_json::Value::String(v.to_string()));
+        obj.insert(k.to_string(), value);
+    }
+    let content = auto.call(tool, &serde_json::Value::Object(obj)).map_err(|e| e.to_string())?;
+    print_output(content, flag(args, "--out"))
+}
+
+#[cfg(feature = "mcp")]
+fn mcp(args: &[String]) -> Result<(), String> {
+    let mut server = printcraft_automation::mcp::McpServer::new(automation(args)?);
+    eprintln!("printcraft-cli: MCP server on stdio (protocol {}); close stdin to stop", printcraft_automation::mcp::PROTOCOL_VERSIONS[0]);
+    server.serve(std::io::stdin().lock(), std::io::stdout().lock()).map_err(|e| e.to_string())
 }

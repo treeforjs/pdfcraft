@@ -21,6 +21,7 @@ printcraft-organize = { path = "crates/organize" }
 printcraft-render = { path = "crates/render" }
 printcraft-engine = { path = "crates/engine" }
 printcraft-ui-egui = { path = "crates/ui-egui" }
+printcraft-automation = { path = "crates/automation" }
 
 # pdf
 hayro = "0.7.1"

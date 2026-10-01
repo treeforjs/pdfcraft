@@ -2888,9 +2888,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "printcraft-automation"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "png 0.18.1",
+ "printcraft-engine",
+ "printcraft-organize",
+ "printcraft-render",
+ "serde_json",
+]
+
+[[package]]
 name = "printcraft-cli"
 version = "0.1.0"
 dependencies = [
+ "printcraft-automation",
  "printcraft-engine",
  "printcraft-render",
  "serde_json",

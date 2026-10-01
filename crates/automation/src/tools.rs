@@ -1,0 +1,179 @@
+//! The tool table: names, descriptions and JSON Schemas for every automation tool.
+//!
+//! Tool names use `[a-z_]` only (MCP clients reject dots). `command` links a tool to the
+//! registry id it automates, so `command_list` can tell an agent which tool runs a menu command.
+
+use serde_json::{Value, json};
+
+use crate::ToolError;
+
+#[derive(Clone, Debug)]
+pub struct ToolDef {
+    pub name: &'static str,
+    pub title: &'static str,
+    pub description: &'static str,
+    /// JSON Schema (draft 2020-12 subset) for the arguments object.
+    pub input_schema: Value,
+    /// Does not change any document or file.
+    pub read_only: bool,
+    /// May remove content or overwrite files.
+    pub destructive: bool,
+    /// The registry command this tool automates, if any.
+    pub command: Option<&'static str>,
+}
+
+fn doc() -> Value {
+    json!({ "type": "integer", "minimum": 1, "description": "Document id from doc_open or doc_list." })
+}
+
+fn pages(what: &str) -> Value {
+    json!({ "type": "array", "items": { "type": "integer", "minimum": 1 }, "minItems": 1, "description": format!("1-based page numbers {what}.") })
+}
+
+fn schema(props: Value, required: &[&str]) -> Value {
+    json!({ "type": "object", "properties": props, "required": required, "additionalProperties": false })
+}
+
+struct T {
+    name: &'static str,
+    title: &'static str,
+    description: &'static str,
+    read_only: bool,
+    destructive: bool,
+    command: Option<&'static str>,
+}
+
+const fn t(name: &'static str, title: &'static str, description: &'static str) -> T {
+    T { name, title, description, read_only: false, destructive: false, command: None }
+}
+
+impl T {
+    const fn ro(mut self) -> Self {
+        self.read_only = true;
+        self
+    }
+    const fn destructive(mut self) -> Self {
+        self.destructive = true;
+        self
+    }
+    const fn cmd(mut self, id: &'static str) -> Self {
+        self.command = Some(id);
+        self
+    }
+    fn with(self, input_schema: Value) -> ToolDef {
+        ToolDef {
+            name: self.name,
+            title: self.title,
+            description: self.description,
+            input_schema,
+            read_only: self.read_only,
+            destructive: self.destructive,
+            command: self.command,
+        }
+    }
+}
+
+/// Every tool, in a stable order.
+pub fn tools() -> Vec<ToolDef> {
+    let save_out = json!({ "type": "string", "description": "File to write. Omit to open the result as a new unsaved document instead." });
+    let open = json!({ "type": "boolean", "description": "Also open the result as a new document (default: only when out is omitted)." });
+    vec![
+        t("doc_open", "Open a PDF", "Open a PDF file and return its document id, page count and whether it can be edited.")
+            .cmd("file.open")
+            .with(schema(json!({ "path": { "type": "string" }, "password": { "type": "string", "description": "User or owner password for encrypted files." } }), &["path"])),
+        t("doc_list", "List open documents", "List the open documents with their ids, page counts and unsaved state.").ro().with(schema(json!({}), &[])),
+        t("doc_info", "Inspect a document", "Metadata, page sizes and labels, bookmarks, annotations, form fields, links, layers, attachments, fonts, security and repair notes.")
+            .ro()
+            .cmd("file.properties")
+            .with(schema(json!({ "doc": doc() }), &["doc"])),
+        t("doc_close", "Close a document", "Close a document. Fails if it has unsaved changes unless discard_changes is true.")
+            .cmd("file.close")
+            .with(schema(json!({ "doc": doc(), "discard_changes": { "type": "boolean" } }), &["doc"])),
+        t(
+            "doc_save",
+            "Save a document",
+            "Save to its own file (an incremental update, which keeps signatures valid) or to a new path (a full rewrite). The write is atomic.",
+        )
+        .destructive()
+        .cmd("file.save")
+        .with(schema(
+            json!({ "doc": doc(), "path": { "type": "string", "description": "Save as this file. Omit to save in place." }, "full": { "type": "boolean", "description": "Force a full rewrite (or, with false, an incremental update)." } }),
+            &["doc"],
+        )),
+        t("doc_set_info", "Set document metadata", "Set a document information entry such as Title, Author, Subject or Keywords. Undoable.")
+            .with(schema(json!({ "doc": doc(), "key": { "type": "string" }, "value": { "type": "string" } }), &["doc", "key", "value"])),
+        t("page_render", "Render a page", "Render one page to a PNG image (default 96 dpi, at most 600).")
+            .ro()
+            .with(schema(json!({ "doc": doc(), "page": { "type": "integer", "minimum": 1 }, "dpi": { "type": "number", "minimum": 1, "maximum": 600 } }), &["doc", "page"])),
+        t("text_extract", "Extract text", "Extract the text of some or all pages, in reading order.")
+            .ro()
+            .with(schema(json!({ "doc": doc(), "pages": pages("to extract (default: all)") }), &["doc"])),
+        t("text_find", "Find text", "Find a phrase (case-insensitive, whitespace-normalised) and return each match with its page and line rectangles in points (origin top-left).")
+            .ro()
+            .cmd("edit.find")
+            .with(schema(json!({ "doc": doc(), "query": { "type": "string", "minLength": 1 }, "limit": { "type": "integer", "minimum": 1, "description": "Maximum matches (default 500)." } }), &["doc", "query"])),
+        t("page_rotate", "Rotate pages", "Rotate pages by a multiple of 90 degrees (positive is clockwise). Undoable.")
+            .cmd("page.rotate")
+            .with(schema(json!({ "doc": doc(), "pages": pages("to rotate"), "degrees": { "type": "integer" } }), &["doc", "pages", "degrees"])),
+        t("page_delete", "Delete pages", "Delete pages. Undoable until saved.")
+            .destructive()
+            .cmd("page.delete")
+            .with(schema(json!({ "doc": doc(), "pages": pages("to delete") }), &["doc", "pages"])),
+        t("page_move", "Move pages", "Move pages so the first of them lands at position `to` (1-based, counted before the move). Undoable.").with(schema(
+            json!({ "doc": doc(), "pages": pages("to move"), "to": { "type": "integer", "minimum": 1 } }),
+            &["doc", "pages", "to"],
+        )),
+        t("page_insert_blank", "Insert a blank page", "Insert a blank page so it becomes page `at`. Size defaults to the neighbouring page. Undoable.")
+            .cmd("page.insert_blank")
+            .with(schema(
+                json!({ "doc": doc(), "at": { "type": "integer", "minimum": 1 }, "width": { "type": "number", "description": "Points." }, "height": { "type": "number", "description": "Points." } }),
+                &["doc", "at"],
+            )),
+        t("page_insert_file", "Insert pages from a file", "Insert pages of another PDF so the first becomes page `at`. Undoable.")
+            .cmd("page.insert")
+            .with(schema(json!({ "doc": doc(), "path": { "type": "string" }, "at": { "type": "integer", "minimum": 1 }, "pages": pages("of the source file (default: all)") }), &["doc", "path", "at"])),
+        t("page_extract", "Extract pages", "Copy pages into a new PDF (links, bookmarks, fields and layers that belong to them come along).")
+            .cmd("page.extract")
+            .with(schema(json!({ "doc": doc(), "pages": pages("to extract"), "out": save_out.clone(), "open": open.clone() }), &["doc", "pages"])),
+        t("doc_combine", "Combine files", "Combine PDFs, in order, into one (bookmarks are kept under one entry per file).")
+            .cmd("page.combine")
+            .with(schema(json!({ "paths": { "type": "array", "items": { "type": "string" }, "minItems": 2 }, "out": save_out, "open": open }), &["paths"])),
+        t("doc_split", "Split a document", "Split into several files, every N pages or before given pages, written to out_dir as <name>-partK.pdf.")
+            .cmd("page.split")
+            .with(schema(
+                json!({ "doc": doc(), "every": { "type": "integer", "minimum": 1 }, "before": pages("that start a new part"), "out_dir": { "type": "string" } }),
+                &["doc", "out_dir"],
+            )),
+        t("edit_undo", "Undo", "Undo the last edit of a document.").cmd("edit.undo").with(schema(json!({ "doc": doc() }), &["doc"])),
+        t("edit_redo", "Redo", "Redo the last undone edit of a document.").cmd("edit.redo").with(schema(json!({ "doc": doc() }), &["doc"])),
+        t("command_list", "List commands", "Every registered PrintCraft command with its menu, shortcut, whether it is enabled now, and the tool that automates it.")
+            .ro()
+            .with(schema(json!({ "doc": doc() }), &[])),
+    ]
+}
+
+static TOOLS: std::sync::LazyLock<Vec<ToolDef>> = std::sync::LazyLock::new(tools);
+
+pub(crate) fn find(name: &str) -> Option<&'static ToolDef> {
+    TOOLS.iter().find(|t| t.name == name)
+}
+
+pub(crate) fn tool_for_command(id: &str) -> Option<&'static str> {
+    TOOLS.iter().find(|t| t.command == Some(id)).map(|t| t.name)
+}
+
+/// Reject unknown and missing arguments (types are checked when each value is read).
+pub(crate) fn check_args(def: &ToolDef, args: &Value) -> Result<(), ToolError> {
+    let obj = args.as_object().ok_or_else(|| ToolError::InvalidArgs("arguments must be a JSON object".into()))?;
+    let props = def.input_schema["properties"].as_object().cloned().unwrap_or_default();
+    if let Some(k) = obj.keys().find(|k| !props.contains_key(*k)) {
+        let known: Vec<&str> = props.keys().map(String::as_str).collect();
+        return Err(ToolError::InvalidArgs(format!("{}: unknown argument {k:?} (expected: {})", def.name, known.join(", "))));
+    }
+    for r in def.input_schema["required"].as_array().into_iter().flatten().filter_map(Value::as_str) {
+        if obj.get(r).is_none_or(Value::is_null) {
+            return Err(ToolError::InvalidArgs(format!("{}: missing argument {r}", def.name)));
+        }
+    }
+    Ok(())
+}
