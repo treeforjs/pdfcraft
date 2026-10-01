@@ -179,11 +179,18 @@ impl Document {
             log.push("the %PDF- header is missing; reading the file as PDF 1.4".into());
         }
         let parsed = doc.read_xref_chain(&mut log);
+        let mut authenticated = false;
         let ok = match parsed {
             Ok((entries, trailer, revisions)) => {
                 doc.entries = Arc::new(entries);
                 doc.trailer = trailer;
                 doc.revisions = Arc::new(revisions);
+                // Authenticate before checking the catalog: it may sit in an encrypted object
+                // stream, which reads as garbage until the key is known.
+                if let Some(enc) = doc.trailer.get(b"Encrypt").cloned() {
+                    doc.authenticate(&enc, password)?;
+                    authenticated = true;
+                }
                 doc.root_is_catalog()
             }
             Err(e) => {
@@ -198,7 +205,10 @@ impl Document {
             doc.reconstruct(&mut log)?;
         }
         doc.repair_log = Arc::new(log);
-        if let Some(enc) = doc.trailer.get(b"Encrypt").cloned() {
+        // Reconstruction may have found a different trailer: (re)authenticate against it.
+        if (!ok || !authenticated)
+            && let Some(enc) = doc.trailer.get(b"Encrypt").cloned()
+        {
             doc.authenticate(&enc, password)?;
         }
         let max = doc.entries.keys().next_back().copied().unwrap_or(0);

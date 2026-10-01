@@ -158,7 +158,10 @@ fn loopback_transport_requires_the_token() {
             let mut r = BufReader::new(s).lines();
             let mut out = Vec::new();
             for l in lines {
-                writeln!(w, "{l}").unwrap();
+                // The server closes the connection after a failed auth; later writes may fail.
+                if writeln!(w, "{l}").is_err() {
+                    break;
+                }
                 match r.next() {
                     Some(Ok(reply)) => out.push(serde_json::from_str::<Value>(&reply).unwrap()),
                     _ => break,

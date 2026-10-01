@@ -142,12 +142,29 @@ pub struct SaveOptions {
     pub mod_date: Option<String>,
     /// Seed for a new file identifier when the document has none (deterministic in tests).
     pub id_seed: u64,
+    /// Full saves: pack non-stream objects into compressed object streams with a cross-reference
+    /// stream (PDF 1.5+, §7.5.7–7.5.8). Off writes a classic table that any reader accepts.
+    pub object_streams: bool,
 }
 
 impl Default for SaveOptions {
     fn default() -> Self {
-        Self { mod_date: None, id_seed: 0x5052_494E_5443_5241 }
+        Self { mod_date: None, id_seed: 0x5052_494E_5443_5241, object_streams: true }
     }
+}
+
+/// Objects per object stream (Acrobat and qpdf use 100–200).
+const OBJSTM_SIZE: usize = 100;
+
+/// Where an object lives, for the cross-reference section.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Row {
+    /// Free, with the generation the number gets when reused.
+    Free(u16),
+    /// At a byte offset.
+    InFile(u64, u16),
+    /// Inside object stream `stream`, at position `index`.
+    InStream(u32, u32),
 }
 
 /// Append the document's edits to its original bytes (incremental update, §7.5.6).
@@ -192,7 +209,8 @@ pub fn write_incremental(doc: &Document, opts: &SaveOptions) -> Result<Vec<u8>, 
     }
     let size = doc.next_num().max(trailer.int(b"Size").unwrap_or(0) as u32);
     if as_stream {
-        write_xref_stream(&mut out, &mut trailer, &offsets, size, &[])?;
+        let rows = offsets.iter().map(|(n, (o, g, used))| (*n, if *used { Row::InFile(*o, *g) } else { Row::Free(*g) })).collect();
+        write_xref_stream(&mut out, &mut trailer, rows, size);
     } else {
         trailer.set(b"Size".to_vec(), Object::Int(size as i64));
         let xref_at = out.len();
@@ -231,20 +249,59 @@ pub fn write_full(doc: &Document, opts: &SaveOptions) -> Result<Vec<u8>, CosErro
         order.push(r);
         visit_refs(&o, &mut queue);
     }
+    let version = doc.version().chars().take(3).collect::<String>();
+    let version = if opts.object_streams && version.as_str() < "1.5" { "1.5".to_string() } else { version };
     let mut out = Vec::new();
-    let _ = writeln!(out, "%PDF-{}\n%\u{e2}\u{e3}\u{cf}\u{d3}", doc.version().chars().take(3).collect::<String>());
-    // The binary comment must be raw high bytes, not UTF-8.
-    out.truncate(out.len() - "\u{e2}\u{e3}\u{cf}\u{d3}\n".len());
-    out.extend_from_slice(&[0xE2, 0xE3, 0xCF, 0xD3, b'\n']);
-    let mut offsets: BTreeMap<u32, (u64, u16, bool)> = BTreeMap::new();
+    let _ = writeln!(out, "%PDF-{version}");
+    // A binary comment (raw high bytes) marks the file as binary for transfer tools.
+    out.extend_from_slice(&[b'%', 0xE2, 0xE3, 0xCF, 0xD3, b'\n']);
+    // The /Encrypt dictionary and everything it references (e.g. indirect /CF crypt-filter
+    // dictionaries) are needed before anything can be decrypted: never inside object streams.
+    let mut encryption_objects: std::collections::HashSet<ObjRef> = std::collections::HashSet::new();
+    let mut pending: Vec<ObjRef> = trailer_in.reference(b"Encrypt").into_iter().collect();
+    while let Some(r) = pending.pop() {
+        if encryption_objects.insert(r) {
+            collect_refs(&doc.get(r), &mut |x| pending.push(x));
+        }
+    }
+    let mut rows: BTreeMap<u32, Row> = BTreeMap::new();
+    let mut packed: Vec<(u32, Object)> = Vec::new(); // objects bound for object streams
     for (i, r) in order.iter().enumerate() {
         let num = (i + 1) as u32;
         let o = renumber(&doc.get(*r), &map);
-        offsets.insert(num, (out.len() as u64, 0, true));
-        write_indirect(num, 0, &prepared(&doc, r.num, num, 0, &o), &mut out);
+        let in_stream = opts.object_streams && !matches!(o, Object::Stream(_)) && !encryption_objects.contains(r);
+        if in_stream {
+            packed.push((num, o));
+        } else {
+            rows.insert(num, Row::InFile(out.len() as u64, 0));
+            write_indirect(num, 0, &prepared(&doc, r.num, num, 0, &o), &mut out);
+        }
+    }
+    // Object streams take the numbers after the last object. Their contents are not encrypted
+    // individually: the whole stream is (§7.5.7, §7.6.2).
+    let mut next = order.len() as u32 + 1;
+    for chunk in packed.chunks(OBJSTM_SIZE) {
+        let stm_num = next;
+        next += 1;
+        let mut header = Vec::new();
+        let mut body = Vec::new();
+        for (index, (num, o)) in chunk.iter().enumerate() {
+            let _ = write!(header, "{} {} ", num, body.len());
+            serialize(o, &mut body);
+            body.push(b'\n');
+            rows.insert(*num, Row::InStream(stm_num, index as u32));
+        }
+        let first = header.len();
+        header.extend_from_slice(&body);
+        let mut d = Dict::new();
+        d.set(b"Type".to_vec(), Object::name("ObjStm"));
+        d.set(b"N".to_vec(), Object::Int(chunk.len() as i64));
+        d.set(b"First".to_vec(), Object::Int(first as i64));
+        let stm = Object::Stream(Stream::flate(d, &header));
+        rows.insert(stm_num, Row::InFile(out.len() as u64, 0));
+        write_indirect(stm_num, 0, &prepared(&doc, u32::MAX, stm_num, 0, &stm), &mut out);
     }
     let mut trailer = Dict::new();
-    trailer.set(b"Size".to_vec(), Object::Int(order.len() as i64 + 1));
     for key in [&b"Root"[..], b"Info", b"Encrypt"] {
         if let Some(r) = trailer_in.reference(key).and_then(|r| map.get(&r)) {
             trailer.set(key.to_vec(), Object::Ref(ObjRef::new(*r, 0)));
@@ -259,11 +316,18 @@ pub fn write_full(doc: &Document, opts: &SaveOptions) -> Result<Vec<u8>, CosErro
     if doc.output_security().0.is_none() {
         ensure_id(&mut trailer, opts, doc.bytes());
     }
-    let xref_at = out.len();
-    write_xref_table(&mut out, &offsets, true);
-    out.extend_from_slice(b"trailer\n");
-    write_dict(&trailer, &mut out);
-    let _ = write!(out, "\nstartxref\n{xref_at}\n%%EOF\n");
+    if opts.object_streams {
+        write_xref_stream(&mut out, &mut trailer, rows, next);
+    } else {
+        trailer.set(b"Size".to_vec(), Object::Int(next as i64));
+        let offsets: BTreeMap<u32, (u64, u16, bool)> =
+            rows.iter().filter_map(|(n, r)| if let Row::InFile(o, g) = r { Some((*n, (*o, *g, true))) } else { None }).collect();
+        let xref_at = out.len();
+        write_xref_table(&mut out, &offsets, true);
+        out.extend_from_slice(b"trailer\n");
+        write_dict(&trailer, &mut out);
+        let _ = write!(out, "\nstartxref\n{xref_at}\n%%EOF\n");
+    }
     Ok(out)
 }
 
@@ -309,20 +373,22 @@ fn write_xref_table(out: &mut Vec<u8>, offsets: &BTreeMap<u32, (u64, u16, bool)>
     }
 }
 
-/// A cross-reference stream section (for files whose last section is a stream, §7.5.8).
-fn write_xref_stream(
-    out: &mut Vec<u8>,
-    trailer: &mut Dict,
-    offsets: &BTreeMap<u32, (u64, u16, bool)>,
-    size: u32,
-    _extra: &[u32],
-) -> Result<(), CosError> {
-    let xref_num = size;
+/// A cross-reference stream section (§7.5.8) that takes object number `num`, ending the file.
+/// Rows are Flate-compressed with the PNG Up predictor, and field widths fit the largest value.
+fn write_xref_stream(out: &mut Vec<u8>, trailer: &mut Dict, mut rows: BTreeMap<u32, Row>, num: u32) {
     let xref_at = out.len() as u64;
-    let mut rows: BTreeMap<u32, (u8, u64, u16)> =
-        offsets.iter().map(|(n, (o, g, used))| (*n, if *used { (1, *o, *g) } else { (0, 0, *g) })).collect();
-    rows.insert(xref_num, (1, xref_at, 0));
-    let mut data = Vec::new();
+    rows.insert(num, Row::InFile(xref_at, 0));
+    if trailer.get(b"Prev").is_none() {
+        rows.entry(0).or_insert(Row::Free(65535));
+    }
+    let fields = |r: &Row| match *r {
+        Row::Free(g) => (0u64, 0u64, u64::from(g)),
+        Row::InFile(o, g) => (1, o, u64::from(g)),
+        Row::InStream(s, i) => (2, u64::from(s), u64::from(i)),
+    };
+    let width = |v: u64| ((64 - v.leading_zeros()).div_ceil(8)).max(1) as usize;
+    let (w2, w3) = rows.values().map(fields).fold((1, 1), |(a, b), (_, x, y)| (width(x).max(a), width(y).max(b)));
+    let cols = 1 + w2 + w3;
     let mut index = Vec::new();
     let nums: Vec<u32> = rows.keys().copied().collect();
     let mut i = 0;
@@ -335,21 +401,30 @@ fn write_xref_stream(
         index.push(Object::Int((j - i + 1) as i64));
         i = j + 1;
     }
-    for (t, a, b) in rows.values() {
-        data.push(*t);
-        data.extend_from_slice(&(*a as u32).to_be_bytes());
-        data.extend_from_slice(&b.to_be_bytes());
+    let mut data = Vec::with_capacity(rows.len() * (cols + 1));
+    let mut prev = vec![0u8; cols];
+    for r in rows.values() {
+        let (t, a, b) = fields(r);
+        let mut row = vec![t as u8];
+        row.extend_from_slice(&a.to_be_bytes()[8 - w2..]);
+        row.extend_from_slice(&b.to_be_bytes()[8 - w3..]);
+        data.push(2); // PNG "Up"
+        data.extend(row.iter().zip(&prev).map(|(c, p)| c.wrapping_sub(*p)));
+        prev = row;
     }
     let mut d = trailer.clone();
     d.set(b"Type".to_vec(), Object::name("XRef"));
-    d.set(b"Size".to_vec(), Object::Int(xref_num as i64 + 1));
-    d.set(b"W".to_vec(), Object::Array(vec![Object::Int(1), Object::Int(4), Object::Int(2)]));
+    d.set(b"Size".to_vec(), Object::Int(num as i64 + 1));
+    d.set(b"W".to_vec(), Object::Array(vec![Object::Int(1), Object::Int(w2 as i64), Object::Int(w3 as i64)]));
     d.set(b"Index".to_vec(), Object::Array(index));
-    let stream = Stream::flate(d, &data);
-    write_indirect(xref_num, 0, &Object::Stream(stream), out);
+    let mut stream = Stream::flate(d, &data);
+    let mut parms = Dict::new();
+    parms.set(b"Predictor".to_vec(), Object::Int(12));
+    parms.set(b"Columns".to_vec(), Object::Int(cols as i64));
+    stream.dict.set(b"DecodeParms".to_vec(), Object::Dict(parms));
+    write_indirect(num, 0, &Object::Stream(stream), out);
     let _ = write!(out, "startxref\n{xref_at}\n%%EOF\n");
-    trailer.set(b"Size".to_vec(), Object::Int(xref_num as i64 + 1));
-    Ok(())
+    trailer.set(b"Size".to_vec(), Object::Int(num as i64 + 1));
 }
 
 fn stamp_mod_date(doc: &mut Document, opts: &SaveOptions) {
