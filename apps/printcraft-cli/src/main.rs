@@ -268,10 +268,38 @@ fn check_one(args: &[String]) -> Result<(), String> {
             (status, info.pages.len(), failed.len(), failed.join(" | "), info.warnings.len())
         }
     };
+    // `--edit` (fuzzing): also run our own object layer end to end, with no panic safety net,
+    // so a panic in cos shows up as a crash of this process.
+    if args.iter().any(|a| a == "--edit") {
+        edit_round_trip(&std::fs::read(path).map_err(|e| e.to_string())?);
+    }
     let line = serde_json::json!({ "file": path, "status": status, "pages": pages, "failed_pages": failed, "warnings": warnings,
         "ms": start.elapsed().as_millis() as u64, "detail": detail.chars().take(400).collect::<String>() });
     println!("{line}");
     Ok(())
+}
+
+/// Open with cos, touch every object, edit the catalog, save incrementally and in full (both
+/// output styles), and reopen each result. Errors are fine; panics, hangs and aborts are bugs.
+fn edit_round_trip(bytes: &[u8]) {
+    use printcraft_cos::{Document, Object, SaveOptions, write_full, write_incremental};
+    let Ok(mut doc) = Document::open(Arc::new(bytes.to_vec())) else { return };
+    for num in doc.object_numbers().into_iter().take(20_000) {
+        if let Ok(o) = doc.try_get(num)
+            && let Object::Stream(s) = &*o
+        {
+            let _ = s.decoded();
+        }
+    }
+    if let Some(root) = doc.root() {
+        let _ = doc.update_dict(root, |d| d.set(b"PrintCraftFuzz".to_vec(), Object::Bool(true)));
+    }
+    let classic = SaveOptions { object_streams: false, ..SaveOptions::default() };
+    for out in [write_incremental(&doc, &SaveOptions::default()), write_full(&doc, &SaveOptions::default()), write_full(&doc, &classic)].into_iter().flatten() {
+        if let Ok(again) = Document::open(Arc::new(out)) {
+            let _ = again.root().map(|r| again.get(r));
+        }
+    }
 }
 
 fn short(s: &str) -> String {

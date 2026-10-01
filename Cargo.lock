@@ -2904,6 +2904,7 @@ version = "0.1.0"
 dependencies = [
  "base64",
  "printcraft-automation",
+ "printcraft-cos",
  "printcraft-engine",
  "printcraft-render",
  "serde_json",
