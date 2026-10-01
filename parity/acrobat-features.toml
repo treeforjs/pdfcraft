@@ -3127,10 +3127,10 @@ title = "Add a bookmark (⌘B)"
 area = "D"
 tier = "P0"
 milestone = "M4"
-status = "planned"
-commands = []
-tools = []
-evidence = []
+status = "shipped"
+commands = ["bookmark.add"]
+tools = ["bookmark_add"]
+evidence = ["crates/ui-egui/tests/bookmarks.rs::new_rename_reorder_indent_delete_and_undo", "crates/organize/src/tests.rs::bookmarks_add_rename_move_delete", "crates/engine/src/tests.rs::bookmark_edits_show_in_the_viewer_undo_and_save", "crates/automation/tests/automation.rs::bookmarks_through_tools"]
 notes = ""
 
 [[feature]]
@@ -3139,10 +3139,10 @@ title = "Rename bookmarks"
 area = "D"
 tier = "P0"
 milestone = "M4"
-status = "planned"
+status = "shipped"
 commands = []
-tools = []
-evidence = []
+tools = ["bookmark_rename"]
+evidence = ["crates/ui-egui/tests/bookmarks.rs::new_rename_reorder_indent_delete_and_undo", "crates/ui-egui/tests/bookmarks.rs::escape_cancels_a_rename", "crates/organize/src/tests.rs::bookmarks_add_rename_move_delete", "crates/organize/src/tests.rs::bookmark_edits_keep_unknown_keys_and_touch_few_objects"]
 notes = ""
 
 [[feature]]
@@ -3151,10 +3151,10 @@ title = "Delete bookmarks"
 area = "D"
 tier = "P0"
 milestone = "M4"
-status = "planned"
+status = "shipped"
 commands = []
-tools = []
-evidence = []
+tools = ["bookmark_delete"]
+evidence = ["crates/ui-egui/tests/bookmarks.rs::new_rename_reorder_indent_delete_and_undo", "crates/organize/src/tests.rs::bookmarks_add_rename_move_delete", "crates/engine/src/tests.rs::bookmark_edits_show_in_the_viewer_undo_and_save"]
 notes = ""
 
 [[feature]]
@@ -3163,10 +3163,10 @@ title = "Reorder and nest bookmarks"
 area = "D"
 tier = "P0"
 milestone = "M4"
-status = "planned"
+status = "shipped"
 commands = []
-tools = []
-evidence = []
+tools = ["bookmark_move"]
+evidence = ["crates/ui-egui/tests/bookmarks.rs::new_rename_reorder_indent_delete_and_undo", "crates/organize/src/tests.rs::bookmarks_add_rename_move_delete", "crates/engine/src/tests.rs::bookmark_edits_show_in_the_viewer_undo_and_save", "crates/automation/tests/automation.rs::bookmarks_through_tools"]
 notes = ""
 
 [[feature]]
@@ -3175,10 +3175,10 @@ title = "Set a bookmark's destination"
 area = "D"
 tier = "P0"
 milestone = "M4"
-status = "planned"
+status = "shipped"
 commands = []
-tools = []
-evidence = []
+tools = ["bookmark_set_page"]
+evidence = ["crates/organize/src/tests.rs::bookmarks_add_rename_move_delete", "crates/engine/src/tests.rs::bookmark_edits_show_in_the_viewer_undo_and_save", "crates/automation/tests/automation.rs::bookmarks_through_tools"]
 notes = ""
 
 [[feature]]
