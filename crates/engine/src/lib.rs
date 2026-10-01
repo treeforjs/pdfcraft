@@ -16,6 +16,8 @@ pub mod commands;
 pub use printcraft_organize::{SplitBy, split_ranges};
 
 /// One file produced by a split: (1-based first page, last page, PDF bytes).
+pub use printcraft_organize::LabelStyle;
+
 pub type SplitPart = (usize, usize, Arc<Vec<u8>>);
 
 use std::sync::Arc;
@@ -196,6 +198,14 @@ pub enum Edit {
         path: Vec<usize>,
         page: usize,
     },
+    /// Label pages `from..=to` (0-based) as Acrobat's "Number pages" does; later pages keep their labels.
+    NumberPages {
+        from: usize,
+        to: usize,
+        style: printcraft_organize::LabelStyle,
+        prefix: String,
+        first: u32,
+    },
     /// Several edits applied as one undoable step (all or nothing).
     Batch {
         label: String,
@@ -218,6 +228,7 @@ impl Edit {
             Edit::DeleteBookmark { .. } => "Delete bookmark".into(),
             Edit::MoveBookmark { .. } => "Move bookmark".into(),
             Edit::SetBookmarkPage { .. } => "Set bookmark destination".into(),
+            Edit::NumberPages { .. } => "Number pages".into(),
             Edit::Batch { label, .. } => label.clone(),
         }
     }
@@ -236,7 +247,8 @@ fn check_permission(edit: &Edit, p: &printcraft_cos::Permissions) -> Result<(), 
         | Edit::RenameBookmark { .. }
         | Edit::DeleteBookmark { .. }
         | Edit::MoveBookmark { .. }
-        | Edit::SetBookmarkPage { .. } => {
+        | Edit::SetBookmarkPage { .. }
+        | Edit::NumberPages { .. } => {
             if p.assemble() {
                 Ok(())
             } else {
@@ -281,6 +293,7 @@ fn run_edit(doc: &mut printcraft_cos::Document, edit: &Edit) -> Result<(), EditE
             printcraft_organize::move_bookmark(doc, from, to_parent, *index)?;
         }
         Edit::SetBookmarkPage { path, page } => printcraft_organize::set_bookmark_page(doc, path, *page)?,
+        Edit::NumberPages { from, to, style, prefix, first } => printcraft_organize::number_pages(doc, *from, *to, *style, prefix, *first)?,
         Edit::Batch { edits, .. } => {
             for e in edits {
                 run_edit(doc, e)?;

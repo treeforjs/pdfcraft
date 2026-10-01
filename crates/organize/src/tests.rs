@@ -548,3 +548,33 @@ fn bookmark_edits_keep_unknown_keys_and_touch_few_objects() {
     assert!(d.get(b[0].obj).as_dict().unwrap().get(b"C").is_some(), "colour kept");
     assert_eq!(d.modified_objects(), vec![b[0].obj.num], "a rename rewrites only that item");
 }
+
+// ---- page labels (M4.4) ------------------------------------------------------------------------
+
+#[test]
+fn number_pages_like_acrobat() {
+    use crate::LabelStyle::*;
+    let mut d = doc_a();
+    crate::insert_blank_page(&mut d, 3, 300.0, 400.0).unwrap();
+    crate::insert_blank_page(&mut d, 4, 300.0, 400.0).unwrap();
+    crate::insert_blank_page(&mut d, 5, 300.0, 400.0).unwrap();
+    assert_eq!(crate::page_labels(&d).unwrap(), ["1", "2", "3", "4", "5", "6"]);
+    // Front matter in roman numerals; later pages keep their labels.
+    crate::number_pages(&mut d, 0, 1, LowerRoman, "", 1).unwrap();
+    assert_eq!(crate::page_labels(&d).unwrap(), ["i", "ii", "3", "4", "5", "6"]);
+    // The body restarts at 1, an appendix gets a prefix.
+    crate::number_pages(&mut d, 2, 5, Decimal, "", 1).unwrap();
+    crate::number_pages(&mut d, 4, 5, Decimal, "A-", 1).unwrap();
+    assert_eq!(crate::page_labels(&d).unwrap(), ["i", "ii", "1", "2", "A-1", "A-2"]);
+    assert_eq!(crate::page_label_ranges(&d).len(), 3, "continuations are merged");
+    // Relabelling the middle keeps the pages after it.
+    crate::number_pages(&mut d, 3, 3, UpperAlpha, "Fig ", 3).unwrap();
+    assert_eq!(crate::page_labels(&d).unwrap(), ["i", "ii", "1", "Fig C", "A-1", "A-2"]);
+    assert!(crate::number_pages(&mut d, 4, 9, Decimal, "", 1).is_err());
+    // Survives a save and reopen; back to plain numbers removes /PageLabels.
+    let back = full_roundtrip(&d);
+    assert_eq!(crate::page_labels(&back).unwrap(), ["i", "ii", "1", "Fig C", "A-1", "A-2"]);
+    crate::number_pages(&mut d, 0, 5, Decimal, "", 1).unwrap();
+    assert!(crate::page_label_ranges(&d).is_empty());
+    assert!(d.get(d.root().unwrap()).as_dict().unwrap().get(b"PageLabels").is_none());
+}

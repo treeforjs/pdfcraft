@@ -107,3 +107,23 @@ fn escape_cancels_a_rename() {
     h.run_steps(3);
     assert_eq!(outline(&h)[0].0, "Keep");
 }
+
+#[test]
+fn number_pages_dialog_labels_the_selected_pages() {
+    let mut h = harness();
+    h.state_mut().views[0].select_pages(&[0, 1]);
+    assert!(h.state_mut().execute("page.number"));
+    h.run_steps(3);
+    h.get_by_label("Number pages");
+    h.get_by_value("1, 2, 3").click(); // the style menu
+    h.run_steps(2);
+    h.get_by_label("i, ii, iii").click();
+    h.run_steps(2);
+    h.get_by_label_contains("Labels: i, ii");
+    h.get_by_label("OK").click();
+    h.run_steps(3);
+    let id = h.state().views[0].id;
+    let labels: Vec<String> = h.state().session.get(id).unwrap().info.pages.iter().map(|p| p.label.clone()).collect();
+    assert_eq!(labels, ["i", "ii", "3"]);
+    assert_eq!(h.state().session.get(id).unwrap().can_undo(), Some("Number pages"));
+}

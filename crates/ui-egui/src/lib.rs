@@ -70,6 +70,8 @@ pub enum Dialog {
     About,
     Shortcuts,
     Split,
+    /// Pages ▸ Number pages… (page labels).
+    NumberPages,
     /// Documents from a session that ended unexpectedly.
     Recovery,
 }
@@ -153,6 +155,18 @@ pub struct PrintCraftApp {
     control: Option<control::Control>,
     /// A bookmark being renamed in the Bookmarks panel: (path, text so far).
     pub bookmark_rename: Option<(Vec<usize>, String)>,
+    /// Number pages dialog settings (1-based pages).
+    pub number_draft: NumberDraft,
+}
+
+/// Settings for the Number pages dialog.
+#[derive(Clone, Debug, PartialEq)]
+pub struct NumberDraft {
+    pub from: usize,
+    pub to: usize,
+    pub style: printcraft_engine::LabelStyle,
+    pub prefix: String,
+    pub start: u32,
 }
 
 impl Default for PrintCraftApp {
@@ -201,6 +215,7 @@ impl PrintCraftApp {
             fonts_ready: false,
             control: None,
             bookmark_rename: None,
+            number_draft: NumberDraft { from: 1, to: 1, style: printcraft_engine::LabelStyle::Decimal, prefix: String::new(), start: 1 },
         }
     }
 
@@ -481,6 +496,11 @@ impl PrintCraftApp {
                     "advanced" => Some(Dialog::Properties(PropsTab::Advanced)),
                     "shortcuts" => Some(Dialog::Shortcuts),
                     "split" => Some(Dialog::Split),
+                    "number-pages" => {
+                        // Same path as the menu, so the page range is seeded.
+                        self.execute("page.number");
+                        Some(Dialog::NumberPages)
+                    }
                     "none" => None,
                     _ => Some(Dialog::About),
                 }

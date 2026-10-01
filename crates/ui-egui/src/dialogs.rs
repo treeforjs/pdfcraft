@@ -27,6 +27,8 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
     let mut split_now: Option<printcraft_engine::SplitBy> = None;
     let mut split_ready: Option<printcraft_engine::SplitBy> = None;
     let mut recover: Option<bool> = None;
+    let mut number_now: Option<Edit> = None;
+    let mut apply_number = false;
     let t = Tokens::get(ctx);
     let mut close = false;
     let mut next = dialog;
@@ -191,6 +193,68 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
                     split_ready = Some(by);
                 }
             }
+            Dialog::NumberPages => {
+                use printcraft_engine::LabelStyle as L;
+                ui.label(egui::RichText::new("Number pages").font(theme::semibold(18.0)));
+                ui.add_space(8.0);
+                let Some((_, id)) = app.active_ids() else { return };
+                let n = app.session.get(id).map(|d| d.info.pages.len()).unwrap_or(1).max(1);
+                let d = &mut app.number_draft;
+                d.to = d.to.clamp(1, n);
+                d.from = d.from.clamp(1, d.to);
+                // Editable values get a visible border (the dialog and field fills are alike).
+                let boxed = |ui: &mut egui::Ui, add: &mut dyn FnMut(&mut egui::Ui) -> egui::Response| {
+                    egui::Frame::new()
+                        .stroke(egui::Stroke::new(1.0, t.border))
+                        .corner_radius(egui::CornerRadius::same(5))
+                        .inner_margin(egui::Margin::symmetric(4, 1))
+                        .show(ui, |ui| add(ui))
+                        .inner
+                };
+                egui::Grid::new("number_pages").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
+                    ui.label("Pages");
+                    ui.horizontal(|ui| {
+                        boxed(ui, &mut |ui| ui.add(egui::DragValue::new(&mut d.from).range(1..=n)));
+                        ui.label("to");
+                        boxed(ui, &mut |ui| ui.add(egui::DragValue::new(&mut d.to).range(1..=n)));
+                        ui.label(egui::RichText::new(format!("of {n}")).color(t.text_muted));
+                    });
+                    ui.end_row();
+                    ui.label("Style");
+                    let styles = [
+                        (L::Decimal, "1, 2, 3"),
+                        (L::LowerRoman, "i, ii, iii"),
+                        (L::UpperRoman, "I, II, III"),
+                        (L::LowerAlpha, "a, b, c"),
+                        (L::UpperAlpha, "A, B, C"),
+                        (L::None, "None (prefix only)"),
+                    ];
+                    let current = styles.iter().find(|(s, _)| *s == d.style).map_or("1, 2, 3", |(_, l)| *l);
+                    egui::ComboBox::from_id_salt("label_style").selected_text(current).show_ui(ui, |ui| {
+                        for (s, l) in styles {
+                            ui.selectable_value(&mut d.style, s, l);
+                        }
+                    });
+                    ui.end_row();
+                    let l = ui.label("Prefix");
+                    boxed(ui, &mut |ui| ui.add(egui::TextEdit::singleline(&mut d.prefix).desired_width(160.0).frame(egui::Frame::NONE)))
+                        .labelled_by(l.id);
+                    ui.end_row();
+                    ui.label("Start");
+                    boxed(ui, &mut |ui| ui.add(egui::DragValue::new(&mut d.start).range(1..=99_999)));
+                    ui.end_row();
+                });
+                d.to = d.to.max(d.from);
+                let label = |k: u32| format!("{}{}", d.prefix, d.style.format(k));
+                ui.add_space(8.0);
+                let preview = if d.from == d.to {
+                    label(d.start)
+                } else {
+                    format!("{}, {} … {}", label(d.start), label(d.start + 1), label(d.start + (d.to - d.from) as u32))
+                };
+                ui.label(egui::RichText::new(format!("Labels: {preview}. Later pages keep their labels.")).color(t.text_muted));
+                number_now = Some(Edit::NumberPages { from: d.from - 1, to: d.to - 1, style: d.style, prefix: d.prefix.clone(), first: d.start });
+            }
             Dialog::Recovery => {
                 ui.horizontal(|ui| {
                     ui.add(crate::icons::image("clock-3", 22.0, t.accent));
@@ -276,6 +340,14 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
                     recover = Some(false);
                     close = true;
                 }
+            } else if dialog == Dialog::NumberPages {
+                if widgets::pill_button(ui, "OK", true).clicked() {
+                    apply_number = true;
+                    close = true;
+                }
+                if widgets::pill_button(ui, "Cancel", false).clicked() {
+                    close = true;
+                }
             } else if dialog == Dialog::Split {
                 if ui.add_enabled_ui(split_ready.is_some(), |ui| widgets::pill_button(ui, "Split", true)).inner.clicked() {
                     split_now = split_ready.clone();
@@ -304,6 +376,9 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
         } else {
             app.discard_recovered(&keys);
         }
+    }
+    if apply_number && let Some(edit) = number_now {
+        app.apply_edit(edit);
     }
     if let Some(by) = split_now {
         app.split_active(&by);

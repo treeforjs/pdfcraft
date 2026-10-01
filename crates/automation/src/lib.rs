@@ -160,6 +160,28 @@ impl Automation {
                 json!({ "redone": label, "document": summary(self.doc(&a)?) })
             }
             "command_list" => self.command_list(&a)?,
+            "page_number" => {
+                use printcraft_organize::LabelStyle as L;
+                let n = self.doc(&a)?.info.pages.len();
+                let (from, to) = (a.int("from")?, a.int("to")?);
+                if from < 1 || to < from || to as usize > n {
+                    return Err(ToolError::InvalidArgs(format!("from and to must satisfy 1 ≤ from ≤ to ≤ {n}")));
+                }
+                let style = match a.opt_str("style")?.unwrap_or("decimal") {
+                    "decimal" => L::Decimal,
+                    "upper-roman" => L::UpperRoman,
+                    "lower-roman" => L::LowerRoman,
+                    "upper-alpha" => L::UpperAlpha,
+                    "lower-alpha" => L::LowerAlpha,
+                    "none" => L::None,
+                    other => return Err(ToolError::InvalidArgs(format!("unknown style {other:?}"))),
+                };
+                let prefix = a.opt_str("prefix")?.unwrap_or_default().to_string();
+                let first = a.opt_int("start")?.unwrap_or(1).clamp(1, u32::MAX as i64) as u32;
+                let mut out = self.apply(&a, Edit::NumberPages { from: from as usize - 1, to: to as usize - 1, style, prefix, first })?;
+                out["labels"] = json!(self.doc(&a)?.info.pages.iter().map(|p| p.label.clone()).collect::<Vec<_>>());
+                out
+            }
             "bookmark_list" => json!({ "bookmarks": bookmark_tree(&self.doc(&a)?.info.outline, &[]) }),
             "bookmark_add" => {
                 let page = self.page(&a)?;

@@ -154,6 +154,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     c("page.insert", "Insert pages from file…", PAGES, None, Assembly, "file-input"),
     c("page.extract", "Extract pages…", PAGES, None, Assembly, "file-output"),
     c("page.split", "Split document…", PAGES, None, Assembly, "scissors"),
+    c("page.number", "Number pages…", PAGES, None, Assembly, "hash"),
     c("help.shortcuts", "Keyboard shortcuts", HELP, None, Nothing, "circle-help"),
     c("help.about", "About PrintCraft", HELP, None, Nothing, "info"),
 ];

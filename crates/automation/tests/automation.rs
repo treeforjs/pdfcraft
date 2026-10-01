@@ -327,3 +327,16 @@ fn bookmarks_through_tools() {
     let list = ok(&mut b, "bookmark_list", json!({ "doc": re }))["bookmarks"].clone();
     assert_eq!((list[0]["title"].as_str(), list[0]["children"][0]["title"].as_str()), (Some("Body"), Some("Details")));
 }
+
+#[test]
+fn numbering_pages_through_tools() {
+    let dir = workdir("labels");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    let r = ok(&mut a, "page_number", json!({ "doc": doc, "from": 1, "to": 1, "style": "upper-roman" }));
+    assert_eq!(r["labels"], json!(["I", "2", "3"]));
+    let r = ok(&mut a, "page_number", json!({ "doc": doc, "from": 2, "to": 3, "prefix": "B-", "start": 5 }));
+    assert_eq!(r["labels"], json!(["I", "B-5", "B-6"]));
+    assert!(matches!(a.call("page_number", &json!({ "doc": doc, "from": 2, "to": 4 })), Err(ToolError::InvalidArgs(_))));
+    assert!(matches!(a.call("page_number", &json!({ "doc": doc, "from": 1, "to": 1, "style": "klingon" })), Err(ToolError::InvalidArgs(_))));
+}
