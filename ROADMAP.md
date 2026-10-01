@@ -31,7 +31,7 @@ Hours are for a single agent (low–high). "Done" is the estimated fraction of t
 
 | M | Milestone | Est. hours | Done | Remaining (h) | Notes |
 |---|---|---|---|---|---|
-| M0 | Skeleton: workspace, xtask gates, CI | 15–30 | 70% | 5–10 | Missing: GitHub workflow, `deny.toml`, remaining crate stubs, parity TOML |
+| M0 | Skeleton: workspace, xtask gates, CI | 15–30 | 85% | 3–6 | GitHub workflow and `deny.toml` (licence audit of every dependency) done. Missing: remaining crate stubs, testkit/oracle crates, parity TOML |
 | M1 | COS: filters, crypt, parser, xref, writer | 120–200 | 55% | 55–90 | Done:<br>- filters and crypt: every standard-security revision R2–R6 (RC4, AES-128/256), SASLprep, permissions, creating encryption;<br>- cos: parse and repair, decrypt on load, re-encrypt on save, incremental and full writing.<br>Corpus: open/edit/save passes on 958 files, and all 7 password-protected files open.<br>Missing: object-stream and xref-stream output, fuzzing, ≥ 250 tests |
 | M2 | Model, render, text | 200–350 | 15% | 170–300 | hayro bootstrap renderer (vendored patches). Text extraction reaches word-F1 0.98 against pdftotext. Missing: model crate, fonts, DisplayList, renderer independent of hayro |
 | M3 | Viewer app (native + web) | 80–150 | 65% | 30–55 | Acrobat-style shell, find, select, panels, tiles, web build. Missing: UI control channel, 60 fps test on a 500-page document, snapshot tests of every panel |
@@ -44,11 +44,11 @@ Hours are for a single agent (low–high). "Done" is the estimated fraction of t
 | M10 | OCR, create, export, print | 200–350 | 0% | 200–350 | |
 | M11 | Optimize, preflight, PDF/A/X/UA, print production | 200–350 | 0% | 200–350 | |
 | M12 | Accessibility, compare, measure, search, XFA | 200–380 | 0% | 200–380 | |
-| M13 | Automation (MCP, Action Wizard, CLI) + AI providers | 60–120 | 0% | 60–120 | |
+| M13 | Automation (MCP, Action Wizard, CLI) + AI providers | 60–120 | 15% | 50–100 | Done: headless tool table (20 tools), opt-in MCP server over stdio, CLI `run`/`tools`. Missing: Action Wizard, more tools as features land, AI providers |
 | M14 | 1.0 polish: performance, localization, installers | 120–250 | 0% | 120–250 | |
-| | **Total** | **2,085–3,840** | **≈ 7%** | **≈ 1,870–3,465** | |
+| | **Total** | **2,085–3,840** | **≈ 8%** | **≈ 1,870–3,465** | |
 
-**Overall progress: about 7% of the effort.** The viewer and the core are far ahead of the editing features, because the viewer was built first so progress could be seen.
+**Overall progress: about 8% of the effort.** The viewer and the core are far ahead of the editing features, because the viewer was built first so progress could be seen.
 
 ## Critical path
 
@@ -66,6 +66,13 @@ M0 → M1 → M2 → M3 → M4 must happen in order. After M4, M5–M12 can run 
 ## Log
 
 Newest first. One line per session: the date, what moved, and the new overall percentage.
+
+- **2026-09-30 (session 5, after a machine crash; no work lost):**
+  - Agent control: new `printcraft-automation` crate with 20 JSON-Schema tools, an opt-in MCP server (`printcraft-cli mcp`, stdio only, can be compiled out), and `printcraft-cli run`/`tools`.
+  - Text on rotated pages now reads along its lines; the pdf.js oracle is unchanged at median 0.980.
+  - Finding text in 520 pages: 17.9 s → 3.7 s (parallel), about 20 ms when repeated (cached).
+  - CI: dependency licence audit (`deny.toml`, `xtask deny`) and a GitHub workflow for macOS, Windows, Linux and wasm.
+  - Overall ≈ 8%.
 
 - **2026-09-30 (session 4):**
   - Combine, extract and split, with links, named destinations, fields, layers, attachments and nested bookmarks all carried over. Combined pages render pixel-identical to their sources.
