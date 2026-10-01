@@ -170,6 +170,32 @@ pub enum Edit {
         pages: Option<Vec<usize>>,
         at: usize,
     },
+    /// Add a bookmark to `page` as child `index` of the bookmark at `parent` (`[]` = top level).
+    AddBookmark {
+        parent: Vec<usize>,
+        index: usize,
+        title: String,
+        page: usize,
+    },
+    RenameBookmark {
+        path: Vec<usize>,
+        title: String,
+    },
+    /// Delete a bookmark and the bookmarks under it.
+    DeleteBookmark {
+        path: Vec<usize>,
+    },
+    /// Move a bookmark to child `index` of `to_parent` (indices after removing it).
+    MoveBookmark {
+        from: Vec<usize>,
+        to_parent: Vec<usize>,
+        index: usize,
+    },
+    /// Point a bookmark at another page.
+    SetBookmarkPage {
+        path: Vec<usize>,
+        page: usize,
+    },
     /// Several edits applied as one undoable step (all or nothing).
     Batch {
         label: String,
@@ -187,6 +213,11 @@ impl Edit {
             Edit::InsertBlankPage { .. } => "Insert blank page".into(),
             Edit::SetInfo { key, .. } => format!("Change {key}"),
             Edit::InsertPagesFrom { name, .. } => format!("Insert pages from {name}"),
+            Edit::AddBookmark { .. } => "Add bookmark".into(),
+            Edit::RenameBookmark { .. } => "Rename bookmark".into(),
+            Edit::DeleteBookmark { .. } => "Delete bookmark".into(),
+            Edit::MoveBookmark { .. } => "Move bookmark".into(),
+            Edit::SetBookmarkPage { .. } => "Set bookmark destination".into(),
             Edit::Batch { label, .. } => label.clone(),
         }
     }
@@ -199,7 +230,13 @@ fn check_permission(edit: &Edit, p: &printcraft_cos::Permissions) -> Result<(), 
         | Edit::DeletePages { .. }
         | Edit::MovePages { .. }
         | Edit::InsertBlankPage { .. }
-        | Edit::InsertPagesFrom { .. } => {
+        | Edit::InsertPagesFrom { .. }
+        // "Assemble the document: insert, rotate or delete pages and create bookmarks" (Table 22).
+        | Edit::AddBookmark { .. }
+        | Edit::RenameBookmark { .. }
+        | Edit::DeleteBookmark { .. }
+        | Edit::MoveBookmark { .. }
+        | Edit::SetBookmarkPage { .. } => {
             if p.assemble() {
                 Ok(())
             } else {
@@ -235,6 +272,15 @@ fn run_edit(doc: &mut printcraft_cos::Document, edit: &Edit) -> Result<(), EditE
             };
             printcraft_organize::import_pages(doc, &src, &pages, *at)?;
         }
+        Edit::AddBookmark { parent, index, title, page } => {
+            printcraft_organize::add_bookmark(doc, parent, *index, title, *page)?;
+        }
+        Edit::RenameBookmark { path, title } => printcraft_organize::rename_bookmark(doc, path, title)?,
+        Edit::DeleteBookmark { path } => printcraft_organize::delete_bookmark(doc, path)?,
+        Edit::MoveBookmark { from, to_parent, index } => {
+            printcraft_organize::move_bookmark(doc, from, to_parent, *index)?;
+        }
+        Edit::SetBookmarkPage { path, page } => printcraft_organize::set_bookmark_page(doc, path, *page)?,
         Edit::Batch { edits, .. } => {
             for e in edits {
                 run_edit(doc, e)?;
@@ -271,6 +317,8 @@ pub enum EditError {
     NotPermitted(&'static str),
     #[error("{0}")]
     Organize(#[from] printcraft_organize::OrganizeError),
+    #[error("{0}")]
+    Bookmark(#[from] printcraft_organize::OutlineError),
     #[error("the edited document could not be written: {0}")]
     Write(String),
     #[error("the edited document could not be reopened: {0}")]

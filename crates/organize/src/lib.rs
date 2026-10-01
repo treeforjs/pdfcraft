@@ -13,9 +13,13 @@ use printcraft_cos::{Dict, Document, ObjRef, Object, PdfString};
 
 mod dedupe;
 mod import;
+mod outline;
 
 pub use dedupe::dedupe_resources;
 pub use import::{SplitBy, combine, extract_pages, import_pages, split, split_ranges};
+pub use outline::{
+    Bookmark, OutlineError, add_bookmark, bookmarks, delete_bookmark, move_bookmark, rename_bookmark, set_bookmark_open, set_bookmark_page,
+};
 
 #[derive(Debug, thiserror::Error, PartialEq)]
 pub enum OrganizeError {

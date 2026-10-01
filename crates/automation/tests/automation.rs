@@ -299,3 +299,31 @@ fn parallel_text_extraction_keeps_page_order_and_follows_edits() {
     assert_eq!(ok(&mut a, "text_find", json!({ "doc": doc, "query": "page 3" }))["count"], 10);
     assert_eq!(page_text(&mut a, doc)[2], "Page 4");
 }
+
+#[test]
+fn bookmarks_through_tools() {
+    let dir = workdir("bookmarks");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    assert_eq!(ok(&mut a, "bookmark_list", json!({ "doc": doc }))["bookmarks"], json!([]));
+    ok(&mut a, "bookmark_add", json!({ "doc": doc, "title": "Intro", "page": 1 }));
+    ok(&mut a, "bookmark_add", json!({ "doc": doc, "title": "Body", "page": 2 }));
+    ok(&mut a, "bookmark_add", json!({ "doc": doc, "title": "Detail", "page": 3, "parent": [2] }));
+    ok(&mut a, "bookmark_move", json!({ "doc": doc, "path": [1], "parent": [2], "position": 1 })); // Intro under Body
+    ok(&mut a, "bookmark_rename", json!({ "doc": doc, "path": [1, 2], "title": "Details" }));
+    ok(&mut a, "bookmark_set_page", json!({ "doc": doc, "path": [1, 1], "page": 3 }));
+    let list = ok(&mut a, "bookmark_list", json!({ "doc": doc }))["bookmarks"].clone();
+    assert_eq!(list[0]["title"], "Body");
+    assert_eq!(list[0]["children"][0]["title"], "Intro");
+    assert_eq!(list[0]["children"][0]["page"], 3);
+    assert_eq!(list[0]["children"][0]["path"], json!([1, 1]));
+    assert_eq!(list[0]["children"][1]["title"], "Details");
+    assert!(matches!(a.call("bookmark_delete", &json!({ "doc": doc, "path": [9] })), Err(ToolError::Failed(_))));
+    assert!(matches!(a.call("bookmark_delete", &json!({ "doc": doc, "path": [0] })), Err(ToolError::InvalidArgs(_))));
+    ok(&mut a, "bookmark_delete", json!({ "doc": doc, "path": [1, 1] }));
+    ok(&mut a, "doc_save", json!({ "doc": doc, "path": "marked.pdf" }));
+    let mut b = auto(&dir);
+    let re = ok(&mut b, "doc_open", json!({ "path": "marked.pdf" }))["doc"].as_u64().unwrap();
+    let list = ok(&mut b, "bookmark_list", json!({ "doc": re }))["bookmarks"].clone();
+    assert_eq!((list[0]["title"].as_str(), list[0]["children"][0]["title"].as_str()), (Some("Body"), Some("Details")));
+}

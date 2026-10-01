@@ -480,3 +480,71 @@ fn combine_and_insert_share_identical_resources() {
     let d = full_roundtrip(&d);
     assert_eq!(labels(&d), ["A1", "A2", "A3", "A1", "A2"]);
 }
+
+// ---- bookmarks (M4.6) --------------------------------------------------------------------------
+
+fn titles(b: &[crate::Bookmark]) -> Vec<String> {
+    b.iter().map(|x| if x.children.is_empty() { x.title.clone() } else { format!("{}[{}]", x.title, titles(&x.children).join(",")) }).collect()
+}
+
+fn count_of(doc: &Document, r: ObjRef) -> Option<i64> {
+    doc.get(r).as_dict().and_then(|d| d.int(b"Count"))
+}
+
+#[test]
+fn bookmarks_add_rename_move_delete() {
+    let mut d = doc_a();
+    assert!(crate::bookmarks(&d).is_empty());
+    assert_eq!(crate::add_bookmark(&mut d, &[], 0, "Intro", 0).unwrap(), vec![0]);
+    assert_eq!(crate::add_bookmark(&mut d, &[], 9, "Results", 2).unwrap(), vec![1]);
+    assert_eq!(crate::add_bookmark(&mut d, &[1], 0, "Table", 1).unwrap(), vec![1, 0]);
+    crate::add_bookmark(&mut d, &[1], 1, "Chart", 2).unwrap();
+    assert_eq!(titles(&crate::bookmarks(&d)), ["Intro", "Results[Table,Chart]"]);
+
+    crate::rename_bookmark(&mut d, &[1, 1], "Figure 1").unwrap();
+    assert_eq!(crate::move_bookmark(&mut d, &[1, 1], &[], 0).unwrap(), vec![0]);
+    assert_eq!(titles(&crate::bookmarks(&d)), ["Figure 1", "Intro", "Results[Table]"]);
+    // Into a later sibling: the target path is adjusted for the removal.
+    assert_eq!(crate::move_bookmark(&mut d, &[0], &[2], 9).unwrap(), vec![1, 1]);
+    assert_eq!(titles(&crate::bookmarks(&d)), ["Intro", "Results[Table,Figure 1]"]);
+    assert_eq!(crate::move_bookmark(&mut d, &[1], &[1, 0], 0), Err(crate::OutlineError::IntoItself));
+    crate::delete_bookmark(&mut d, &[1, 0]).unwrap();
+    assert_eq!(titles(&crate::bookmarks(&d)), ["Intro", "Results[Figure 1]"]);
+
+    // Counts: the root counts visible items; open items count their visible descendants.
+    let b = crate::bookmarks(&d);
+    let root = d.get(d.root().unwrap()).as_dict().unwrap().reference(b"Outlines").unwrap();
+    assert_eq!(count_of(&d, root), Some(3));
+    assert_eq!(count_of(&d, b[1].obj), Some(1));
+    crate::set_bookmark_open(&mut d, &[1], false).unwrap();
+    assert_eq!((count_of(&d, b[1].obj), count_of(&d, root)), (Some(-1), Some(2)));
+
+    // Destinations point at the chosen page; errors are specific.
+    crate::set_bookmark_page(&mut d, &[0], 2).unwrap();
+    let dest = d.get(b[0].obj).as_dict().unwrap().get(b"Dest").cloned().unwrap();
+    let pages = crate::walk(&d).unwrap();
+    assert_eq!(dest.as_array().unwrap()[0], Object::Ref(pages[2].0));
+    assert_eq!(crate::rename_bookmark(&mut d, &[5], "x"), Err(crate::OutlineError::NoSuchBookmark(vec![5])));
+    assert_eq!(crate::rename_bookmark(&mut d, &[0], "  "), Err(crate::OutlineError::EmptyTitle));
+    assert!(crate::add_bookmark(&mut d, &[], 0, "Nowhere", 7).is_err());
+
+    // Everything survives a save and reopen.
+    let back = full_roundtrip(&d);
+    assert_eq!(titles(&crate::bookmarks(&back)), ["Intro", "Results[Figure 1]"]);
+}
+
+#[test]
+fn bookmark_edits_keep_unknown_keys_and_touch_few_objects() {
+    let mut d = doc_a();
+    crate::add_bookmark(&mut d, &[], 0, "One", 0).unwrap();
+    crate::add_bookmark(&mut d, &[], 1, "Two", 1).unwrap();
+    let first = crate::bookmarks(&d)[0].obj;
+    d.update_dict(first, |x| x.set(b"C".to_vec(), Object::Array(vec![Object::Real(1.0), Object::Int(0), Object::Int(0)]))).unwrap();
+    let bytes = std::sync::Arc::new(write_full(&d, &SaveOptions::default()).unwrap());
+    let mut d = Document::open(bytes).unwrap();
+    crate::rename_bookmark(&mut d, &[0], "Uno").unwrap();
+    let b = crate::bookmarks(&d);
+    assert_eq!(b[0].title, "Uno");
+    assert!(d.get(b[0].obj).as_dict().unwrap().get(b"C").is_some(), "colour kept");
+    assert_eq!(d.modified_objects(), vec![b[0].obj.num], "a rename rewrites only that item");
+}

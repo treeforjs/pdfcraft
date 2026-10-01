@@ -181,6 +181,9 @@ pub fn right_panel(app: &mut PrintCraftApp, ui: &mut egui::Ui) {
     let mut close = false;
     let mut toggle_layer: Option<(usize, bool)> = None;
     let mut attachment_action: Option<(usize, bool)> = None; // (index, open instead of save)
+    let mut bm_action: Option<BmAction> = None;
+    let mut bm_rename = app.bookmark_rename.clone();
+    let bm_editable = app.session.get(id).is_some_and(|d| d.allows_assembly() && d.read_only_reason.is_none());
     {
         let Some(doc) = app.session.get(id) else { return };
         let info = &doc.info;
@@ -213,6 +216,12 @@ pub fn right_panel(app: &mut PrintCraftApp, ui: &mut egui::Ui) {
                         if icons::button(ui, "x", 26.0, false, "Close").clicked() {
                             close = true;
                         }
+                        if panel == RightPanel::Bookmarks
+                            && bm_editable
+                            && icons::button(ui, "bookmark-plus", 26.0, false, "New bookmark (⌘B)").clicked()
+                        {
+                            bm_action = Some(BmAction::New);
+                        }
                     });
                 });
                 ui.add_space(6.0);
@@ -222,8 +231,15 @@ pub fn right_panel(app: &mut PrintCraftApp, ui: &mut egui::Ui) {
                         if info.outline.is_empty() {
                             empty(ui, &t, "bookmark", "This document has no bookmarks.");
                         }
-                        for item in &info.outline {
-                            outline_item(ui, &t, info, item, 0, &mut nav);
+                        let mut ctx = OutlineCtx {
+                            nav: &mut nav,
+                            action: &mut bm_action,
+                            rename: &mut bm_rename,
+                            editable: bm_editable,
+                            current: view.current,
+                        };
+                        for (i, item) in info.outline.iter().enumerate() {
+                            outline_item(ui, &t, info, item, &[i], info.outline.len(), &mut ctx);
                         }
                     }
                     RightPanel::Pages => pages(ui, &t, info, view, &mut nav),
@@ -291,6 +307,10 @@ pub fn right_panel(app: &mut PrintCraftApp, ui: &mut egui::Ui) {
     }
     if close {
         app.right = None;
+    }
+    app.bookmark_rename = bm_rename;
+    if let Some(a) = bm_action {
+        app.bookmark_action(a);
     }
     if let Some((ai, open)) = attachment_action {
         app.attachment_action(id, ai, open);
@@ -450,40 +470,124 @@ fn comment_card(ui: &mut egui::Ui, t: &Tokens, a: &Annotation, replies: &[&Annot
     click
 }
 
-fn outline_item(ui: &mut egui::Ui, t: &Tokens, info: &DocInfo, item: &OutlineItem, depth: usize, nav: &mut Option<Nav>) {
+/// What the user asked to do with a bookmark (applied after the panel is drawn).
+#[derive(Clone, Debug, PartialEq)]
+pub enum BmAction {
+    /// New "Untitled" bookmark for the current page, after the selected one (⌘B).
+    New,
+    StartRename(Vec<usize>),
+    Rename(Vec<usize>, String),
+    SetToCurrentPage(Vec<usize>),
+    Delete(Vec<usize>),
+    MoveUp(Vec<usize>),
+    MoveDown(Vec<usize>),
+    /// Make it the last child of the bookmark above it.
+    Indent(Vec<usize>),
+    /// Move it out to follow its parent.
+    Outdent(Vec<usize>),
+}
+
+struct OutlineCtx<'a> {
+    nav: &'a mut Option<Nav>,
+    action: &'a mut Option<BmAction>,
+    rename: &'a mut Option<(Vec<usize>, String)>,
+    editable: bool,
+    current: usize,
+}
+
+fn outline_item(ui: &mut egui::Ui, t: &Tokens, info: &DocInfo, item: &OutlineItem, path: &[usize], siblings: usize, cx: &mut OutlineCtx<'_>) {
+    let depth = path.len() - 1;
     let indent = depth as f32 * 16.0;
-    let id = ui.id().with(("outline", depth, item.title.as_str(), item.page));
+    let id = ui.id().with(("outline", path));
     let mut open = ui.data(|d| d.get_temp::<bool>(id)).unwrap_or(item.open || depth == 0);
-    let font = if depth == 0 { theme::medium(13.0) } else { theme::regular(13.0) };
-    let wrap_w = (ui.available_width() - indent - 20.0 - 36.0).max(60.0);
-    let galley = ui.fonts_mut(|f| f.layout(item.title.clone(), font, t.text, wrap_w));
-    let h = (galley.size().y + 12.0).max(28.0);
-    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), h), Sense::click());
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &item.title));
-    if resp.hovered() {
-        ui.painter().rect_filled(rect, CornerRadius::same(6), t.hover);
-    }
-    let x0 = rect.left() + indent;
-    if !item.children.is_empty() {
-        let tri = Rect::from_min_size(pos2(x0, rect.top() + 6.0), vec2(16.0, 16.0));
-        icons::paint(ui, tri, if open { "chevron-down" } else { "chevron-right" }, 14.0, t.text_muted);
-        if ui.interact(tri, id.with("tri"), Sense::click()).clicked() {
-            open = !open;
-            ui.data_mut(|d| d.insert_temp(id, open));
+    let x_text = indent + 20.0;
+    if let Some((rpath, text)) = cx.rename.as_mut()
+        && rpath.as_slice() == path
+    {
+        // Inline rename: Enter commits, Escape cancels.
+        let mut commit = None;
+        let mut cancel = false;
+        ui.horizontal(|ui| {
+            ui.add_space(x_text);
+            let edit = egui::TextEdit::singleline(text).desired_width(ui.available_width() - 8.0).id(id.with("rename"));
+            let resp = ui.add(edit);
+            if !resp.has_focus() && !resp.lost_focus() {
+                resp.request_focus();
+            }
+            if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                cancel = true;
+            } else if resp.lost_focus() {
+                commit = Some(text.trim().to_string());
+            }
+        });
+        if cancel {
+            *cx.rename = None;
+        } else if let Some(title) = commit {
+            *cx.rename = None;
+            if !title.is_empty() && title != item.title {
+                *cx.action = Some(BmAction::Rename(path.to_vec(), title));
+            }
+        }
+    } else {
+        let font = if depth == 0 { theme::medium(13.0) } else { theme::regular(13.0) };
+        let wrap_w = (ui.available_width() - indent - 20.0 - 36.0).max(60.0);
+        let galley = ui.fonts_mut(|f| f.layout(item.title.clone(), font, t.text, wrap_w));
+        let h = (galley.size().y + 12.0).max(28.0);
+        let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), h), Sense::click());
+        resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &item.title));
+        if resp.hovered() {
+            ui.painter().rect_filled(rect, CornerRadius::same(6), t.hover);
+        }
+        let x0 = rect.left() + indent;
+        if !item.children.is_empty() {
+            let tri = Rect::from_min_size(pos2(x0, rect.top() + 6.0), vec2(16.0, 16.0));
+            icons::paint(ui, tri, if open { "chevron-down" } else { "chevron-right" }, 14.0, t.text_muted);
+            if ui.interact(tri, id.with("tri"), Sense::click()).clicked() {
+                open = !open;
+                ui.data_mut(|d| d.insert_temp(id, open));
+            }
+        }
+        ui.painter().galley(pos2(x0 + 20.0, rect.top() + 6.0), galley, t.text);
+        if let Some(p) = item.page
+            && let Some(page) = info.pages.get(p)
+        {
+            ui.painter().text(rect.right_top() + vec2(-6.0, 14.0), Align2::RIGHT_CENTER, &page.label, theme::regular(11.0), t.text_faint);
+        }
+        if resp.clicked()
+            && let Some(p) = item.page
+        {
+            *cx.nav = Some(Nav::Page(p));
+        }
+        if resp.double_clicked() && cx.editable {
+            *cx.action = Some(BmAction::StartRename(path.to_vec()));
+        }
+        if cx.editable {
+            let i = *path.last().expect("non-empty path");
+            let current = cx.current;
+            resp.context_menu(|ui| {
+                let mut pick = |ui: &mut egui::Ui, label: &str, enabled: bool, a: BmAction| {
+                    if ui.add_enabled(enabled, egui::Button::new(label)).clicked() {
+                        *cx.action = Some(a);
+                        ui.close();
+                    }
+                };
+                pick(ui, "Rename", true, BmAction::StartRename(path.to_vec()));
+                pick(ui, &format!("Set to current page ({})", current + 1), true, BmAction::SetToCurrentPage(path.to_vec()));
+                ui.separator();
+                pick(ui, "Move up", i > 0, BmAction::MoveUp(path.to_vec()));
+                pick(ui, "Move down", i + 1 < siblings, BmAction::MoveDown(path.to_vec()));
+                pick(ui, "Indent", i > 0, BmAction::Indent(path.to_vec()));
+                pick(ui, "Outdent", depth > 0, BmAction::Outdent(path.to_vec()));
+                ui.separator();
+                pick(ui, "Delete", true, BmAction::Delete(path.to_vec()));
+            });
         }
     }
-    ui.painter().galley(pos2(x0 + 20.0, rect.top() + 6.0), galley, t.text);
-    if let Some(p) = item.page {
-        ui.painter().text(rect.right_top() + vec2(-6.0, 14.0), Align2::RIGHT_CENTER, &info.pages[p].label, theme::regular(11.0), t.text_faint);
-    }
-    if resp.clicked()
-        && let Some(p) = item.page
-    {
-        *nav = Some(Nav::Page(p));
-    }
     if open {
-        for c in &item.children {
-            outline_item(ui, t, info, c, depth + 1, nav);
+        for (ci, c) in item.children.iter().enumerate() {
+            let mut p = path.to_vec();
+            p.push(ci);
+            outline_item(ui, t, info, c, &p, item.children.len(), cx);
         }
     }
 }

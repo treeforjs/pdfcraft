@@ -273,3 +273,57 @@ pub(crate) fn download(name: &str, bytes: &[u8]) -> Result<(), String> {
     let _ = web_sys::Url::revoke_object_url(&url);
     Ok(())
 }
+
+impl PrintCraftApp {
+    /// Carry out a Bookmarks-panel action as an undoable edit.
+    pub fn bookmark_action(&mut self, action: crate::panels::BmAction) {
+        use crate::panels::BmAction as A;
+        let Some((i, id)) = self.active_ids() else { return };
+        let current = self.views[i].current;
+        let parent_of = |p: &[usize]| p[..p.len() - 1].to_vec();
+        let edit = match action {
+            A::New => {
+                let n = self.session.get(id).map_or(0, |d| d.info.outline.len());
+                self.apply_edit(Edit::AddBookmark { parent: vec![], index: n, title: "Untitled".into(), page: current });
+                // Like Acrobat: the new bookmark starts in rename mode.
+                self.bookmark_rename = Some((vec![n], "Untitled".into()));
+                self.right = Some(crate::RightPanel::Bookmarks);
+                return;
+            }
+            A::StartRename(path) => {
+                let title = self.session.get(id).and_then(|d| bookmark_at(&d.info.outline, &path)).map(|b| b.title.clone()).unwrap_or_default();
+                self.bookmark_rename = Some((path, title));
+                return;
+            }
+            A::Rename(path, title) => Edit::RenameBookmark { path, title },
+            A::SetToCurrentPage(path) => Edit::SetBookmarkPage { path, page: current },
+            A::Delete(path) => Edit::DeleteBookmark { path },
+            A::MoveUp(path) => {
+                let at = path[path.len() - 1].saturating_sub(1);
+                Edit::MoveBookmark { to_parent: parent_of(&path), from: path, index: at }
+            }
+            A::MoveDown(path) => {
+                let at = path[path.len() - 1] + 1;
+                Edit::MoveBookmark { to_parent: parent_of(&path), from: path, index: at }
+            }
+            A::Indent(path) => {
+                let mut to_parent = parent_of(&path);
+                to_parent.push(path[path.len() - 1].saturating_sub(1));
+                Edit::MoveBookmark { from: path, to_parent, index: usize::MAX }
+            }
+            A::Outdent(path) => {
+                let parent = parent_of(&path);
+                let grand = parent_of(&parent);
+                let at = parent[parent.len() - 1] + 1;
+                Edit::MoveBookmark { from: path, to_parent: grand, index: at }
+            }
+        };
+        self.apply_edit(edit);
+    }
+}
+
+fn bookmark_at<'a>(items: &'a [printcraft_render::OutlineItem], path: &[usize]) -> Option<&'a printcraft_render::OutlineItem> {
+    let (first, rest) = path.split_first()?;
+    let item = items.get(*first)?;
+    if rest.is_empty() { Some(item) } else { bookmark_at(&item.children, rest) }
+}

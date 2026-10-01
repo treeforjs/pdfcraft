@@ -146,6 +146,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     c("form.fields", "Form fields panel", VIEW, None, Document, "list"),
     c("protect.properties", "Security properties…", FILE, None, Document, "shield-check"),
     c("page.organize", "Organize pages", PAGES, None, Document, "layout-grid"),
+    c("bookmark.add", "New bookmark", PAGES, Some(Shortcut::cmd("B")), Assembly, "bookmark-plus"),
     c("page.rotate", "Rotate pages clockwise", PAGES, None, Assembly, "rotate-cw"),
     c("page.rotate_ccw", "Rotate pages counterclockwise", PAGES, None, Assembly, "rotate-ccw"),
     c("page.delete", "Delete pages", PAGES, None, Assembly, "trash-2"),

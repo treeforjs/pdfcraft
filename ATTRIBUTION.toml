@@ -152,6 +152,17 @@ usage = "UI icon, embedded via crates/ui-egui/src/icon_data.rs"
 sha256 = "864613d93fddfb9b22368882c00b7895fa2681ceb3ed45c85a1cf2c3d01a3aad"
 
 [[asset]]
+path = "assets/icons/bookmark-plus.svg"
+title = "Lucide icon \"bookmark-plus\""
+author = "Lucide Contributors (portions Cole Bemis, Feather)"
+source = "https://github.com/lucide-icons/lucide (npm lucide-static 1.49.0, icons/bookmark-plus.svg)"
+licence = "ISC"
+licence_file = "assets/icons/LICENSE-lucide.txt"
+kind = "icon"
+usage = "UI icon, embedded via crates/ui-egui/src/icon_data.rs"
+sha256 = "e111411ef061a708e351caefefa68bd1f8c82533f08f9e20dc6bbc0815d7fc1f"
+
+[[asset]]
 path = "assets/icons/braces.svg"
 title = "Lucide icon \"braces\""
 author = "Lucide Contributors (portions Cole Bemis, Feather)"

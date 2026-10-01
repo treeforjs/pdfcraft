@@ -160,6 +160,32 @@ impl Automation {
                 json!({ "redone": label, "document": summary(self.doc(&a)?) })
             }
             "command_list" => self.command_list(&a)?,
+            "bookmark_list" => json!({ "bookmarks": bookmark_tree(&self.doc(&a)?.info.outline, &[]) }),
+            "bookmark_add" => {
+                let page = self.page(&a)?;
+                let parent = a.opt_path("parent")?.unwrap_or_default();
+                let index = a.opt_int("position")?.map_or(usize::MAX, |p| (p.max(1) - 1) as usize);
+                let title = a.str("title")?.to_string();
+                self.apply(&a, Edit::AddBookmark { parent, index, title, page })?
+            }
+            "bookmark_rename" => {
+                let (path, title) = (a.path("path")?, a.str("title")?.to_string());
+                self.apply(&a, Edit::RenameBookmark { path, title })?
+            }
+            "bookmark_delete" => {
+                let path = a.path("path")?;
+                self.apply(&a, Edit::DeleteBookmark { path })?
+            }
+            "bookmark_move" => {
+                let from = a.path("path")?;
+                let to_parent = a.opt_path("parent")?.unwrap_or_default();
+                let index = a.opt_int("position")?.map_or(usize::MAX, |p| (p.max(1) - 1) as usize);
+                self.apply(&a, Edit::MoveBookmark { from, to_parent, index })?
+            }
+            "bookmark_set_page" => {
+                let (path, page) = (a.path("path")?, self.page(&a)?);
+                self.apply(&a, Edit::SetBookmarkPage { path, page })?
+            }
             other => return Err(ToolError::UnknownTool(other.into())),
         };
         Ok(vec![Content::Json(out)])
@@ -505,11 +531,36 @@ impl Args<'_> {
         let arr = v.as_array().ok_or_else(|| Self::wrong(key, "an array of integers"))?;
         arr.iter().map(|x| x.as_i64().ok_or_else(|| Self::wrong(key, "an array of integers"))).collect::<Result<Vec<_>>>().map(Some)
     }
+    /// A 1-based bookmark path → 0-based indices.
+    fn path(&self, key: &str) -> Result<Vec<usize>> {
+        let p = self.opt_path(key)?.ok_or_else(|| Self::missing(key))?;
+        if p.is_empty() {
+            return Err(ToolError::InvalidArgs(format!("{key} must not be empty")));
+        }
+        Ok(p)
+    }
+    fn opt_path(&self, key: &str) -> Result<Option<Vec<usize>>> {
+        let Some(v) = self.opt_ints(key)? else { return Ok(None) };
+        v.iter().map(|i| if *i >= 1 { Ok(*i as usize - 1) } else { Err(Self::wrong(key, "1-based positions")) }).collect::<Result<Vec<_>>>().map(Some)
+    }
     fn strs(&self, key: &str) -> Result<Vec<&str>> {
         let v = self.get(key).ok_or_else(|| Self::missing(key))?;
         let arr = v.as_array().ok_or_else(|| Self::wrong(key, "an array of strings"))?;
         arr.iter().map(|x| x.as_str().ok_or_else(|| Self::wrong(key, "an array of strings"))).collect()
     }
+}
+
+/// The bookmark tree as JSON, with 1-based paths and pages.
+fn bookmark_tree(items: &[printcraft_render::OutlineItem], parent: &[usize]) -> Vec<Value> {
+    items
+        .iter()
+        .enumerate()
+        .map(|(i, o)| {
+            let mut path = parent.to_vec();
+            path.push(i + 1);
+            json!({ "path": path, "title": o.title, "page": o.page.map(|p| p + 1), "open": o.open, "children": bookmark_tree(&o.children, &path) })
+        })
+        .collect()
 }
 
 fn one_based(pages: &[i64]) -> Result<Vec<usize>> {

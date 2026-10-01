@@ -330,3 +330,41 @@ fn recovered_documents_reopen_unsaved_at_their_original_path() {
     assert_eq!(d.info.pages.len(), 1, "the edit survived");
     assert!(s2.autosave_snapshots().is_empty(), "already in the recovery store");
 }
+
+fn outline_titles(items: &[printcraft_render::OutlineItem]) -> Vec<String> {
+    items
+        .iter()
+        .map(|o| {
+            if o.children.is_empty() {
+                format!("{}→{}", o.title, o.page.map_or(0, |p| p + 1))
+            } else {
+                format!("{}→{}[{}]", o.title, o.page.map_or(0, |p| p + 1), outline_titles(&o.children).join(","))
+            }
+        })
+        .collect()
+}
+
+#[test]
+fn bookmark_edits_show_in_the_viewer_undo_and_save() {
+    let (mut s, id) = session_with(3);
+    let titles = |s: &Session| outline_titles(&s.get(id).unwrap().info.outline);
+    s.apply(id, Edit::AddBookmark { parent: vec![], index: 0, title: "Start".into(), page: 0 }).unwrap();
+    s.apply(id, Edit::AddBookmark { parent: vec![], index: 1, title: "End".into(), page: 2 }).unwrap();
+    s.apply(id, Edit::AddBookmark { parent: vec![1], index: 0, title: "Détail".into(), page: 1 }).unwrap();
+    // The inspector (an independent parser) sees the same tree and destinations.
+    assert_eq!(titles(&s), ["Start→1", "End→3[Détail→2]"]);
+    s.apply(id, Edit::MoveBookmark { from: vec![1, 0], to_parent: vec![], index: 0 }).unwrap();
+    s.apply(id, Edit::RenameBookmark { path: vec![2], title: "Finish".into() }).unwrap();
+    s.apply(id, Edit::SetBookmarkPage { path: vec![1], page: 1 }).unwrap();
+    assert_eq!(titles(&s), ["Détail→2", "Start→2", "Finish→3"]);
+    assert_eq!(s.get(id).unwrap().can_undo(), Some("Set bookmark destination"));
+    s.undo(id).unwrap();
+    assert_eq!(titles(&s), ["Détail→2", "Start→1", "Finish→3"]);
+    s.apply(id, Edit::DeleteBookmark { path: vec![0] }).unwrap();
+    assert!(matches!(s.apply(id, Edit::DeleteBookmark { path: vec![7] }), Err(EditError::Bookmark(_))));
+
+    let saved = s.save_bytes(id).unwrap();
+    let mut again = Session::new();
+    let id2 = again.open("again.pdf", None, saved, None).unwrap();
+    assert_eq!(outline_titles(&again.get(id2).unwrap().info.outline), ["Start→1", "Finish→3"]);
+}

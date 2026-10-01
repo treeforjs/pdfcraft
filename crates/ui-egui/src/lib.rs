@@ -151,6 +151,8 @@ pub struct PrintCraftApp {
     fonts_ready: bool,
     /// The UI control channel, when enabled (`--control`; off by default).
     control: Option<control::Control>,
+    /// A bookmark being renamed in the Bookmarks panel: (path, text so far).
+    pub bookmark_rename: Option<(Vec<usize>, String)>,
 }
 
 impl Default for PrintCraftApp {
@@ -198,6 +200,7 @@ impl PrintCraftApp {
             styled: false,
             fonts_ready: false,
             control: None,
+            bookmark_rename: None,
         }
     }
 

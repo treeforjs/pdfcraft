@@ -48,6 +48,7 @@ impl PrintCraftApp {
             }
             "file.properties" => self.dialog = Some(Dialog::Properties(PropsTab::Description)),
             "protect.properties" => self.dialog = Some(Dialog::Properties(PropsTab::Security)),
+            "bookmark.add" => self.bookmark_action(crate::panels::BmAction::New),
             "edit.undo" => self.undo(),
             "edit.redo" => self.redo(),
             "edit.find" => {

@@ -4,7 +4,7 @@
 
 Every asset PrintCraft includes, bundles or uses to build its published material, with its author, source and licence. The policy is in [AGENTS.md](AGENTS.md) §1. The machine-readable list, with SHA-256 hashes, is [ATTRIBUTION.toml](ATTRIBUTION.toml). Licence texts are kept beside the assets and summarised in [NOTICE](NOTICE).
 
-## In this repository (192)
+## In this repository (193)
 
 | Asset | Title | Author | Licence | Source | Used for |
 |---|---|---|---|---|---|
@@ -21,6 +21,7 @@ Every asset PrintCraft includes, bundles or uses to build its published material
 | `assets/icons/bold.svg` | Lucide icon "bold" | Lucide Contributors (portions Cole Bemis, Feather) | ISC | https://github.com/lucide-icons/lucide (npm lucide-static 1.49.0, icons/bold.svg) | UI icon, embedded via crates/ui-egui/src/icon_data.rs |
 | `assets/icons/book-open.svg` | Lucide icon "book-open" | Lucide Contributors (portions Cole Bemis, Feather) | ISC | https://github.com/lucide-icons/lucide (npm lucide-static 1.49.0, icons/book-open.svg) | UI icon, embedded via crates/ui-egui/src/icon_data.rs |
 | `assets/icons/bookmark.svg` | Lucide icon "bookmark" | Lucide Contributors (portions Cole Bemis, Feather) | ISC | https://github.com/lucide-icons/lucide (npm lucide-static 1.49.0, icons/bookmark.svg) | UI icon, embedded via crates/ui-egui/src/icon_data.rs |
+| `assets/icons/bookmark-plus.svg` | Lucide icon "bookmark-plus" | Lucide Contributors (portions Cole Bemis, Feather) | ISC | https://github.com/lucide-icons/lucide (npm lucide-static 1.49.0, icons/bookmark-plus.svg) | UI icon, embedded via crates/ui-egui/src/icon_data.rs |
 | `assets/icons/braces.svg` | Lucide icon "braces" | Lucide Contributors (portions Cole Bemis, Feather) | ISC | https://github.com/lucide-icons/lucide (npm lucide-static 1.49.0, icons/braces.svg) | UI icon, embedded via crates/ui-egui/src/icon_data.rs |
 | `assets/icons/brush-cleaning.svg` | Lucide icon "brush-cleaning" | Lucide Contributors (portions Cole Bemis, Feather) | ISC | https://github.com/lucide-icons/lucide (npm lucide-static 1.49.0, icons/brush-cleaning.svg) | UI icon, embedded via crates/ui-egui/src/icon_data.rs |
 | `assets/icons/brush.svg` | Lucide icon "brush" | Lucide Contributors (portions Cole Bemis, Feather) | ISC | https://github.com/lucide-icons/lucide (npm lucide-static 1.49.0, icons/brush.svg) | UI icon, embedded via crates/ui-egui/src/icon_data.rs |
