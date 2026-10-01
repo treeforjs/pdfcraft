@@ -194,13 +194,39 @@ Press <kbd>⌘K</kbd> to search every tool and command, or browse the **All tool
 - **Native on macOS, Windows and Linux**, and **in the browser** through WebAssembly, from the same Rust codebase.
 - **Private by design.** Documents never leave your machine. There's no account, no telemetry and no cloud processing.
 - **Engine first.** Parsing, rendering and editing live in reusable library crates. The interface is one swappable layer on top.
-- **Scriptable.** The `printcraft-cli` tool covers inspecting, rendering, extracting text, editing, combining, extracting pages and splitting. Robustness sweeps run on the same engine as the app.
+- **Scriptable.** The `printcraft-cli` tool (see [Built for agents, too](#built-for-agents-too)) covers inspecting, rendering, extracting text, editing, combining, extracting pages and splitting. Robustness sweeps run on the same engine as the app.
 
 ```sh
 printcraft-cli info  form.pdf                                  # structure as JSON
 printcraft-cli text  paper.pdf --page 3                        # reading-order text
 printcraft-cli edit  in.pdf --rotate 1,2:90 --delete 5 --title "Q3" --out out.pdf
 ```
+
+---
+
+## Built for agents, too
+
+Every engine feature is reachable without the GUI, through one table of JSON-Schema-described tools: open, inspect, render pages to PNG, extract and find text, rotate, delete, move and insert pages, set metadata, undo and redo, save, combine, extract and split. Three front doors share it:
+
+- **`printcraft-cli run`**, for one-off calls and JSON scripts:
+
+  ```sh
+  printcraft-cli tools                                        # every tool and its JSON Schema
+  printcraft-cli run text_find doc=1 query=invoice            # key=value; values parse as JSON
+  printcraft-cli run --script steps.json --root ./work        # several steps in one session
+  ```
+
+- **An MCP server**, for AI agents such as Claude. **It is opt-in:** PrintCraft never starts it on its own, and it opens no network port. It runs only while an agent launches `printcraft-cli mcp`, talks over stdin/stdout, and stops when the agent disconnects. To enable it, add it to your agent's MCP configuration:
+
+  ```json
+  { "mcpServers": { "printcraft": { "command": "printcraft-cli", "args": ["mcp", "--root", "/path/to/your/pdfs"] } } }
+  ```
+
+  `--root` confines every file the agent can read or write to one directory. Builds that should not include the server at all can use `cargo build -p printcraft-cli --no-default-features`.
+
+- **The Rust API** (`printcraft_automation::Automation::call`), for embedding.
+
+Edits stay in memory, undoable, until `doc_save`. Saving to the same file appends an incremental update, so the original bytes are preserved, and the write is atomic. Unsaved changes are never discarded silently. A UI control channel, so agents can drive and screenshot the running app, is next (M3.9).
 
 ---
 
@@ -216,6 +242,7 @@ PrintCraft is a Cargo workspace of focused crates, layered so the core never dep
 | `printcraft-organize` | Page operations, combine / extract / split, document information |
 | `printcraft-render` | Rendering, inspection and text extraction with reading order |
 | `printcraft-engine` | The façade every frontend uses: sessions, edits, undo, saving, the tool catalogue |
+| `printcraft-automation` | Agent control: the headless tool table, `printcraft-cli run`, and the opt-in MCP server |
 | `printcraft-ui-egui` | The desktop and web interface |
 
 **Quality gates.** Every change passes the same automated checks:
@@ -251,7 +278,8 @@ PrintCraft is young and moving fast. **Available today:**
 - opening encrypted documents, honouring their permissions, and saving them encrypted;
 - undo and safe saving;
 - autosave with crash recovery;
-- a single command registry behind menus, shortcuts and the palette.
+- a single command registry behind menus, shortcuts and the palette;
+- agent control through the CLI and an opt-in MCP server.
 
 **On the roadmap:**
 

@@ -80,6 +80,13 @@ If you find an asset that breaks these rules, stop and remove it from the reposi
 - Never copy GPL/AGPL code. Copyleft tools run only as external oracle processes.
 - Observe Acrobat only with synthetic fixtures. Never capture personal data, account information or recent files.
 
-## 3. Everything else
+## 3. Agent control (automation and MCP)
+
+- **Everything is reachable headlessly.** Every user-facing feature must be callable without the GUI: an engine API, then a tool in `crates/automation` (`printcraft-cli run` and MCP use the same table). A feature is not done until its tool exists and has an end-to-end test (`crates/automation/README.md`, "Adding a tool").
+- **The MCP server is opt-in.** Never make the app, the CLI or an installer start it, register it with an agent, or listen on a port by default. It runs only when a user (or an agent the user configured) launches `printcraft-cli mcp`. Any future network transport must be off by default, bound to loopback and authenticated with a token.
+- **Safe by default.** Tools must never discard unsaved work silently, must write atomically, must honour `--root`, and must return errors an agent can act on (say what was wrong and what is allowed).
+- **Use it to test.** Agents should drive the engine through `printcraft-cli run --script` or the MCP tools, and look at `page_render` output, to check their own changes.
+
+## 4. Everything else
 
 Follow `CLAUDE.md`. It covers quality gates, layering, commit rules and how to run and look at the app.
