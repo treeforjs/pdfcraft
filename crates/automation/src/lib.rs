@@ -18,7 +18,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use printcraft_engine::{DocId, Document, Edit, Session, commands};
-use printcraft_render::{PageRenderer, RenderConfig, RenderRequest, RequestKind};
+use printcraft_render::{PageRenderer, PageText, RenderConfig, RenderRequest, RequestKind};
 use serde_json::{Value, json};
 
 pub use tools::{ToolDef, tools};
@@ -64,12 +64,17 @@ fn failed(e: impl std::fmt::Display) -> ToolError {
 const DEFAULT_DPI: f64 = 96.0;
 const MAX_DPI: f64 = 600.0;
 
+/// Page texts of one document version: (the working bytes, one slot per page).
+type TextCache = (Arc<Vec<u8>>, Vec<Option<Arc<PageText>>>);
+
 /// A headless PrintCraft session driven by tool calls.
 pub struct Automation {
     session: Session,
     root: Option<PathBuf>,
     /// Synchronous renderers, rebuilt when a document's working bytes change.
     renderers: HashMap<DocId, (Arc<Vec<u8>>, PageRenderer)>,
+    /// Extracted page text per document version (the working bytes it was taken from).
+    texts: HashMap<DocId, TextCache>,
 }
 
 impl Default for Automation {
@@ -80,7 +85,7 @@ impl Default for Automation {
 
 impl Automation {
     pub fn new() -> Self {
-        Self { session: Session::new(), root: None, renderers: HashMap::new() }
+        Self { session: Session::new(), root: None, renderers: HashMap::new(), texts: HashMap::new() }
     }
 
     /// Confine every path the tools read or write to `root` (relative paths resolve inside it).
@@ -185,6 +190,7 @@ impl Automation {
         }
         self.session.close(id);
         self.renderers.remove(&id);
+        self.texts.remove(&id);
         Ok(json!({ "closed": id.0 }))
     }
 
@@ -354,12 +360,22 @@ impl Automation {
         Ok(p as usize - 1)
     }
 
-    fn page_text(&mut self, id: DocId, page: usize) -> Result<Arc<printcraft_render::PageText>> {
-        let out = self.renderer(id)?.render(RenderRequest { page, kind: RequestKind::Text, tile: None, scale: 1.0, tag: 0 });
-        if let Some(e) = out.error {
-            return Err(failed(format!("page {}: {e}", page + 1)));
+    /// The text of `pages` (0-based), from the cache or extracted in parallel.
+    fn page_texts(&mut self, id: DocId, pages: &[usize]) -> Result<Vec<Arc<PageText>>> {
+        let doc = self.session.get(id).ok_or_else(|| failed("no such document"))?;
+        let (bytes, n) = (doc.bytes.clone(), doc.info.pages.len());
+        let password: Option<Arc<str>> = doc.password.as_deref().map(Arc::from);
+        let entry = self.texts.entry(id).or_insert_with(|| (bytes.clone(), Vec::new()));
+        if !Arc::ptr_eq(&entry.0, &bytes) || entry.1.len() != n {
+            *entry = (bytes.clone(), vec![None; n]);
         }
-        Ok(out.text.unwrap_or_default())
+        let mut missing: Vec<usize> = pages.iter().copied().filter(|p| entry.1[*p].is_none()).collect();
+        missing.sort_unstable();
+        missing.dedup();
+        for (p, text) in extract_parallel(&bytes, password, &missing) {
+            entry.1[p] = Some(Arc::new(text.map_err(|e| failed(format!("page {}: {e}", p + 1)))?));
+        }
+        Ok(pages.iter().map(|p| entry.1[*p].clone().expect("extracted above")).collect())
     }
 
     fn text_extract(&mut self, a: &Args) -> Result<Value> {
@@ -369,10 +385,8 @@ impl Automation {
             Some(_) => self.pages(a, "pages")?,
             None => (0..doc.info.pages.len()).collect(),
         };
-        let mut out = Vec::new();
-        for p in pages {
-            out.push(json!({ "page": p + 1, "text": self.page_text(id, p)?.plain_text() }));
-        }
+        let texts = self.page_texts(id, &pages)?;
+        let out: Vec<Value> = pages.iter().zip(texts).map(|(p, t)| json!({ "page": p + 1, "text": t.plain_text() })).collect();
         Ok(json!({ "pages": out }))
     }
 
@@ -381,9 +395,9 @@ impl Automation {
         let (id, n) = (doc.id, doc.info.pages.len());
         let query = a.str("query")?;
         let limit = a.opt_int("limit")?.unwrap_or(500).max(1) as usize;
+        let texts = self.page_texts(id, &(0..n).collect::<Vec<_>>())?;
         let mut matches = Vec::new();
-        'pages: for p in 0..n {
-            let text = self.page_text(id, p)?;
+        'pages: for (p, text) in texts.iter().enumerate() {
             for r in text.find(query) {
                 if matches.len() == limit {
                     break 'pages;
@@ -586,6 +600,44 @@ fn encode_png(width: u32, height: u32, premultiplied: &[u8]) -> Result<Vec<u8>> 
     w.write_image_data(&rgba).map_err(failed)?;
     w.finish().map_err(failed)?;
     Ok(out)
+}
+
+/// Extract the text of `pages` (0-based) with one renderer per worker thread.
+fn extract_parallel(bytes: &Arc<Vec<u8>>, password: Option<Arc<str>>, pages: &[usize]) -> Vec<(usize, std::result::Result<PageText, String>)> {
+    let extract = |r: &mut PageRenderer, p: usize| {
+        let out = r.render(RenderRequest { page: p, kind: RequestKind::Text, tile: None, scale: 1.0, tag: 0 });
+        match out.error {
+            Some(e) => Err(e),
+            None => Ok(out.text.map(|t| (*t).clone()).unwrap_or_default()),
+        }
+    };
+    let config = RenderConfig { password, ..Default::default() };
+    let workers = if cfg!(target_arch = "wasm32") { 1 } else { std::thread::available_parallelism().map_or(1, |n| n.get()).min(8) };
+    // Small jobs aren't worth a second parse of the document.
+    if workers == 1 || pages.len() < 8 {
+        let mut r = PageRenderer::new(bytes.clone(), config);
+        return pages.iter().map(|p| (*p, extract(&mut r, *p))).collect();
+    }
+    let next = std::sync::atomic::AtomicUsize::new(0);
+    let mut out: Vec<(usize, std::result::Result<PageText, String>)> = std::thread::scope(|s| {
+        let handles: Vec<_> = (0..workers)
+            .map(|_| {
+                s.spawn(|| {
+                    let mut r = PageRenderer::new(bytes.clone(), config.clone());
+                    let mut done = Vec::new();
+                    loop {
+                        let i = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        let Some(p) = pages.get(i) else { break };
+                        done.push((*p, extract(&mut r, *p)));
+                    }
+                    done
+                })
+            })
+            .collect();
+        handles.into_iter().flat_map(|h| h.join().unwrap_or_default()).collect()
+    });
+    out.sort_by_key(|(p, _)| *p);
+    out
 }
 
 /// Write via a temporary file in the same directory, then rename over the target.

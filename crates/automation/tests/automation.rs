@@ -285,3 +285,17 @@ fn mcp_errors() {
     let bad: Value = serde_json::from_str(&s.handle_line("{not json").unwrap()).unwrap();
     assert_eq!(bad["error"]["code"], -32700);
 }
+
+#[test]
+fn parallel_text_extraction_keeps_page_order_and_follows_edits() {
+    let dir = workdir("parallel");
+    std::fs::write(dir.join("long.pdf"), fixture(40)).unwrap();
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "long.pdf" }))["doc"].as_u64().unwrap();
+    let expected: Vec<String> = (1..=40).map(|i| format!("Page {i}")).collect();
+    assert_eq!(page_text(&mut a, doc), expected);
+    assert_eq!(ok(&mut a, "text_find", json!({ "doc": doc, "query": "page 3" }))["count"], 11); // 3, 30–39
+    ok(&mut a, "page_delete", json!({ "doc": doc, "pages": [3] }));
+    assert_eq!(ok(&mut a, "text_find", json!({ "doc": doc, "query": "page 3" }))["count"], 10);
+    assert_eq!(page_text(&mut a, doc)[2], "Page 4");
+}
