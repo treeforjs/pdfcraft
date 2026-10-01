@@ -142,6 +142,8 @@ impl PageText {
 
 struct TextDevice {
     glyphs: Vec<TextGlyph>,
+    /// How many glyphs run in each view direction: right, down, left, up.
+    directions: [usize; 4],
 }
 
 impl<'a> Device<'a> for TextDevice {
@@ -177,6 +179,16 @@ impl<'a> Device<'a> for TextDevice {
             }
             Glyph::Type3(g) => g.advance_width().filter(|a| a.is_finite() && *a > 0.0).map(f64::from).unwrap_or(600.0),
         };
+        // The baseline direction in view space (y down), to the nearest quarter turn.
+        let (dx, dy) = (t.as_coeffs()[0], t.as_coeffs()[1]);
+        let dir = if dx.abs() >= dy.abs() {
+            if dx >= 0.0 { 0 } else { 2 }
+        } else if dy > 0.0 {
+            1
+        } else {
+            3
+        };
+        self.directions[dir] += text.chars().count();
         let em = Rect::new(0.0, -200.0, advance, 800.0);
         let b = (t * em.to_path(0.1)).bounding_box();
         if !(b.x0.is_finite() && b.y0.is_finite() && b.x1.is_finite() && b.y1.is_finite()) || b.width() > 10_000.0 || b.height() > 10_000.0 {
@@ -206,9 +218,43 @@ pub(crate) fn extract_page(pdf: &Pdf, page: usize, settings: &InterpreterSetting
     let settings = settings.clone();
     let initial = p.initial_transform(true).to_kurbo();
     let mut ctx = Context::new(initial, Rect::new(0.0, 0.0, w as f64, h as f64), &cache, p.xref(), settings);
-    let mut dev = TextDevice { glyphs: Vec::new() };
+    let mut dev = TextDevice { glyphs: Vec::new(), directions: [0; 4] };
     interpret_page(p, &mut ctx, &mut dev);
-    Some(layout(dev.glyphs))
+    // Lay out in the frame where most text runs left to right, so a page shown rotated (by
+    // `/Rotate` or by its content matrix) still reads along its lines; then map the boxes back.
+    // Pages whose `/Rotate` is cancelled by counter-rotated content stay as they are.
+    let quarter = (0..4u8).max_by_key(|q| (dev.directions[*q as usize], *q == 0)).unwrap_or(0);
+    for g in &mut dev.glyphs {
+        g.rect = to_upright(g.rect, quarter, w, h);
+    }
+    let mut text = layout(dev.glyphs);
+    for g in &mut text.glyphs {
+        g.rect = from_upright(g.rect, quarter, w, h);
+    }
+    Some(text)
+}
+
+/// View-space box → the frame where text runs left to right, for text running `quarter` × 90°
+/// clockwise from that in a `w` × `h` view (1: text runs downwards).
+fn to_upright(r: [f32; 4], quarter: u8, w: f32, h: f32) -> [f32; 4] {
+    let [x0, y0, x1, y1] = r;
+    match quarter {
+        1 => [y0, w - x1, y1, w - x0],
+        2 => [w - x1, h - y1, w - x0, h - y0],
+        3 => [h - y1, x0, h - y0, x1],
+        _ => r,
+    }
+}
+
+/// The inverse of [`to_upright`].
+fn from_upright(r: [f32; 4], quarter: u8, w: f32, h: f32) -> [f32; 4] {
+    let [u0, v0, u1, v1] = r;
+    match quarter {
+        1 => [w - v1, u0, w - v0, u1],
+        2 => [w - u1, h - v1, w - u0, h - v0],
+        3 => [v0, h - u1, v1, h - u0],
+        _ => r,
+    }
 }
 
 use hayro::hayro_interpret::TransformExt;
@@ -435,6 +481,16 @@ pub fn layout(glyphs: Vec<TextGlyph>) -> PageText {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn upright_mapping_round_trips() {
+        let r = [10.0, 20.0, 30.0, 25.0];
+        for q in 0..4 {
+            assert_eq!(from_upright(to_upright(r, q, 300.0, 200.0), q, 300.0, 200.0), r, "quarter {q}");
+        }
+        // A 90° page: the view's top-right corner is the upright top-left.
+        assert_eq!(to_upright([290.0, 0.0, 300.0, 10.0], 1, 300.0, 200.0), [0.0, 0.0, 10.0, 10.0]);
+    }
 
     fn g(t: &str, x0: f32, y0: f32, x1: f32) -> TextGlyph {
         TextGlyph { text: t.into(), rect: [x0, y0, x1, y0 + 10.0] }
