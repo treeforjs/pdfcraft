@@ -144,3 +144,59 @@ fn screenshots_of_window_and_region() {
     assert_eq!((region["width"].as_f64().unwrap(), region["height"].as_f64().unwrap()), ((100.0 * ppp).round(), (50.0 * ppp).round()));
     assert!(call(&mut h, &c, "ui.screenshot", json!({ "region": [5, 5, 1, 1] })).is_err());
 }
+
+#[test]
+fn loopback_transport_requires_the_token() {
+    use std::io::{BufRead, BufReader, Write};
+    let (mut h, c) = harness();
+    let ep = printcraft_ui_egui::control::serve(c).unwrap();
+    let talk = |lines: Vec<Value>| {
+        let port = ep.port;
+        std::thread::spawn(move || {
+            let s = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
+            let mut w = s.try_clone().unwrap();
+            let mut r = BufReader::new(s).lines();
+            let mut out = Vec::new();
+            for l in lines {
+                writeln!(w, "{l}").unwrap();
+                match r.next() {
+                    Some(Ok(reply)) => out.push(serde_json::from_str::<Value>(&reply).unwrap()),
+                    _ => break,
+                }
+            }
+            out
+        })
+    };
+    let pump = |h: &mut Harness<'static, PrintCraftApp>, t: std::thread::JoinHandle<Vec<Value>>| {
+        while !t.is_finished() {
+            h.step();
+        }
+        t.join().unwrap()
+    };
+
+    // Wrong token: rejected and disconnected before any request reaches the app.
+    let bad = pump(
+        &mut h,
+        talk(vec![
+            json!({ "jsonrpc": "2.0", "id": 1, "method": "auth", "params": { "token": "guess" } }),
+            json!({ "jsonrpc": "2.0", "id": 2, "method": "ui.state" }),
+        ]),
+    );
+    assert_eq!(bad.len(), 1);
+    assert_eq!(bad[0]["error"]["code"], -32001);
+    // No auth at all: same.
+    let none = pump(&mut h, talk(vec![json!({ "jsonrpc": "2.0", "id": 1, "method": "ui.state" })]));
+    assert_eq!(none[0]["error"]["code"], -32001);
+
+    let good = pump(
+        &mut h,
+        talk(vec![
+            json!({ "jsonrpc": "2.0", "id": 1, "method": "auth", "params": { "token": ep.token } }),
+            json!({ "jsonrpc": "2.0", "id": 2, "method": "ui.state" }),
+            json!({ "jsonrpc": "2.0", "id": 3, "method": "ui.command", "params": { "id": "edit.undo" } }),
+        ]),
+    );
+    assert_eq!(good[0]["result"]["ok"], true);
+    assert_eq!(good[1]["result"]["documents"][0]["name"], "doc.pdf");
+    assert!(good[2]["error"]["message"].as_str().unwrap().contains("disabled"));
+}
