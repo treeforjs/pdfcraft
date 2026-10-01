@@ -183,8 +183,15 @@ impl Copier<'_> {
 
 /// Copy pages `src_pages` (0-based, in the given order) of `src` into `dst`, inserting them at
 /// position `at`. Returns the new page references in order.
+///
+/// Resources identical to ones already in `dst` (the same fonts, images, colour profiles) are
+/// shared rather than stored twice (see `dedupe`).
 pub fn import_pages(dst: &mut Document, src: &Document, src_pages: &[usize], at: usize) -> Result<Vec<ObjRef>, OrganizeError> {
-    import_pages_mapped(dst, src, src_pages, at).map(|(pages, _)| pages)
+    let first_new = dst.object_numbers().last().map_or(1, |n| n + 1);
+    let pages = import_pages_mapped(dst, src, src_pages, at)?.0;
+    let created: Vec<ObjRef> = dst.object_numbers().into_iter().filter(|n| *n >= first_new).map(|n| ObjRef::new(n, dst.generation(n))).collect();
+    crate::dedupe::dedupe_resources(dst, &created, true);
+    Ok(pages)
 }
 
 /// `import_pages`, also returning the source-page → destination-page map.
@@ -406,7 +413,8 @@ fn register_fields(dst: &mut Document, fields: &[ObjRef]) -> Result<(), Organize
 /// Document information (title, author…) is carried over.
 pub fn extract_pages(src: &Document, pages: &[usize]) -> Result<Document, OrganizeError> {
     let mut out = Document::new_empty();
-    import_pages(&mut out, src, pages, 0)?;
+    // One source: nothing to deduplicate.
+    import_pages_mapped(&mut out, src, pages, 0)?;
     for key in crate::INFO_KEYS {
         if let Some(v) = crate::info(src, key) {
             crate::set_info(&mut out, key, &v)?;
@@ -466,6 +474,9 @@ pub fn combine(sources: &[(&str, &Document)]) -> Result<Document, OrganizeError>
         }
         collect_attachments(&mut out, src, &mut attachments);
     }
+    // Sources often share fonts, images and profiles (or are the same file): store them once.
+    let all: Vec<ObjRef> = out.object_numbers().into_iter().map(|n| ObjRef::new(n, out.generation(n))).collect();
+    crate::dedupe::dedupe_resources(&mut out, &all, false);
     add_outline(&mut out, &marks)?;
     set_attachments(&mut out, attachments)?;
     Ok(out)

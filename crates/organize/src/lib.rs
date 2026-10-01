@@ -11,8 +11,10 @@
 
 use printcraft_cos::{Dict, Document, ObjRef, Object, PdfString};
 
+mod dedupe;
 mod import;
 
+pub use dedupe::dedupe_resources;
 pub use import::{SplitBy, combine, extract_pages, import_pages, split, split_ranges};
 
 #[derive(Debug, thiserror::Error, PartialEq)]

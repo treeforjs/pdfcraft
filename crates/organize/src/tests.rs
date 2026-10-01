@@ -455,3 +455,28 @@ fn combine_nests_source_bookmarks_and_keeps_attachments() {
     let keys: Vec<String> = tree.get(b"Names").and_then(|n| n.as_array()).unwrap().chunks(2).map(|p| p[0].as_string().unwrap().to_text()).collect();
     assert_eq!(keys, ["notes.txt", "notes.txt (2)"]);
 }
+
+#[test]
+fn combine_and_insert_share_identical_resources() {
+    let a = doc_a();
+    let fonts = |d: &Document| {
+        d.object_numbers()
+            .into_iter()
+            .filter(|n| d.get(ObjRef::new(*n, d.generation(*n))).as_dict().is_some_and(|x| x.name(b"Type") == Some(b"Font")))
+            .count()
+    };
+    assert_eq!(fonts(&a), 1);
+    // The same document three times: one font, and every page still renders its own text.
+    let out = full_roundtrip(&crate::combine(&[("one", &a), ("two", &a), ("three", &a)]).unwrap());
+    assert_eq!(fonts(&out), 1);
+    assert_eq!(labels(&out), ["A1", "A2", "A3", "A1", "A2", "A3", "A1", "A2", "A3"]);
+    // Inserting pages that use the same font reuses the font already there, without touching it.
+    let mut d = doc_a();
+    let font_before =
+        d.object_numbers().into_iter().find(|n| d.get(ObjRef::new(*n, 0)).as_dict().is_some_and(|x| x.name(b"Type") == Some(b"Font"))).unwrap();
+    crate::import_pages(&mut d, &doc_a(), &[0, 1], 3).unwrap();
+    assert_eq!(fonts(&d), 1);
+    assert!(!d.modified_objects().contains(&font_before));
+    let d = full_roundtrip(&d);
+    assert_eq!(labels(&d), ["A1", "A2", "A3", "A1", "A2"]);
+}
