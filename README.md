@@ -1,29 +1,65 @@
-<div align="center">
+<p align="center">
+  <a href="https://getartcraft.com/">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="docs/brand/artcraft-logo-white.svg">
+      <img alt="ArtCraft" src="docs/brand/artcraft-logo.svg" width="200">
+    </picture>
+  </a>
+</p>
 
-# PrintCraft
+<h1 align="center">PrintCraft</h1>
 
-**The open-source PDF workbench.**<br>
-Read, organize, combine, split and secure PDFs in a fast, native app, written in Rust from the ground up.<br>
-macOS · Windows · Linux · the web
+<p align="center">
+  <b>The open-source PDF workbench.</b><br>
+  Read, organize, combine, split and secure PDFs in a fast, native app, written in Rust from the ground up.<br>
+  macOS · Windows · Linux · the web
+</p>
 
-<sub>From the artcraft team · <a href="#crafting-apps">part of the Crafting Apps family</a></sub>
+<p align="center">
+  <img alt="License: MIT OR Apache-2.0" src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-12a58a">
+  <img alt="Written in Rust" src="https://img.shields.io/badge/written%20in-Rust-0a7563">
+  <img alt="Platforms: macOS, Windows, Linux, web" src="https://img.shields.io/badge/runs%20on-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux%20%C2%B7%20web-12a58a">
+  <img alt="No account, no telemetry" src="https://img.shields.io/badge/no%20account-no%20telemetry-0a7563">
+</p>
+
+<p align="center">
+  <a href="https://discord.gg/artcraft"><img alt="Join the ArtCraft community on Discord" src="https://img.shields.io/badge/Join%20us%20on%20Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" height="40"></a>
+</p>
+
+<p align="center">
+  <a href="https://getartcraft.com/apps/printcraft"><b>PrintCraft on getartcraft.com</b></a> ·
+  <a href="https://getartcraft.com/">ArtCraft</a> ·
+  <a href="https://getartcraft.com/apps">All Crafting Apps</a>
+</p>
 
 <br>
 
-<img src="docs/images/printcraft-viewer.png" alt="PrintCraft showing a typography showcase PDF, with the All tools panel on the left and threaded comments on the right" width="100%">
+<p align="center">
+  <img src="docs/images/printcraft-viewer.png" alt="PrintCraft with the PrintCraft Showcase cover page open, the All tools panel on the left and 20 threaded comments on the right" width="100%">
+  <br>
+  <sub>The PrintCraft Showcase, a 13-page specimen PDF, open with the All tools panel and threaded comments.</sub>
+</p>
 
-<br>
+> [!NOTE]
+> **ArtCraft is a community of artists from all walks of life.** Painters, photographers,
+> filmmakers, illustrators, designers, animators, hobbyists, and people who picked up a pencil
+> last week. If you make things, you're one of us. **[Come say hi on Discord](https://discord.gg/artcraft).**
 
-[Highlights](#highlights) ·
-[Read](#read-anything-beautifully) ·
-[Organize](#organize-pages-like-cards-on-a-table) ·
-[Combine &amp; split](#combine-and-split-without-losing-a-thing) ·
-[Protect](#open-protected-documents-and-respect-their-rules) ·
-[Everywhere](#runs-everywhere-stays-yours) ·
-[Get started](#get-started) ·
-[Roadmap](ROADMAP.md)
-
-</div>
+<p align="center">
+  <a href="#highlights">Highlights</a> ·
+  <a href="#read-anything-beautifully">Read</a> ·
+  <a href="#find-it-select-it-copy-it">Find</a> ·
+  <a href="#organize-pages-like-cards-on-a-table">Organize</a> ·
+  <a href="#combine-and-split-without-losing-a-thing">Combine &amp; split</a> ·
+  <a href="#open-protected-documents-and-respect-their-rules">Protect</a> ·
+  <a href="#comments-forms-layers-and-attachments">Forms &amp; layers</a> ·
+  <a href="#runs-everywhere-stays-yours">Everywhere</a> ·
+  <a href="#built-for-agents-too">Agents</a> ·
+  <a href="#how-its-built">How it's built</a> ·
+  <a href="#get-started">Get started</a> ·
+  <a href="#whats-next">What's next</a> ·
+  <a href="#the-crafting-apps">Crafting Apps</a>
+</p>
 
 ---
 
@@ -58,7 +94,11 @@ No account, no telemetry, no cloud. It works offline and opens instantly. The en
 
 PrintCraft renders PDFs with care for the details that make a page feel right: kerning and ligatures, right-to-left and complex scripts, vertical CJK, colour emoji, shadings, blend modes, soft masks and optional content.
 
-<img src="docs/images/printcraft-scripts.png" alt="A page of world scripts — Arabic, Hebrew, Devanagari, Thai, Greek, Cyrillic, Chinese, Korean, IPA, Armenian, Georgian, Tamil and vertical Japanese — rendered crisply" width="100%">
+<p align="center">
+  <img src="docs/images/printcraft-scripts.png" alt="The Scripts of the World page: Arabic, Hebrew, Devanagari, Thai, Greek, Cyrillic, Chinese, Korean, IPA, Armenian, Georgian and Tamil samples, with vertical Japanese in the right margin" width="100%">
+  <br>
+  <sub>Twelve writing systems on one page, plus vertical Japanese, at 125%.</sub>
+</p>
 
 - **Deep zoom stays sharp.** Large pages render in tiles, so text stays crisp at any magnification.
 - **Built to survive bad files.** Every page renders in isolation and damaged documents are repaired. Across the 983-file pdf.js test corpus the result is 0 crashes.
@@ -67,12 +107,12 @@ PrintCraft renders PDFs with care for the details that make a page feel right: k
 
 <table>
 <tr>
-<td width="50%"><img src="docs/images/printcraft-twoup.png" alt="Two-up reading in Read mode with the dark theme"></td>
-<td width="50%"><img src="docs/images/printcraft-dark.png" alt="The dark theme with the comments panel"></td>
+<td width="50%"><img src="docs/images/printcraft-twoup.png" alt="Two facing pages in Read mode with the dark theme: the Foreword and the Setting Text chapter with its drop cap and pull quote"></td>
+<td width="50%"><img src="docs/images/printcraft-dark.png" alt="The dark theme showing the Code and Images chapter, a syntax-coloured listing and a fractal image, with the comments panel open"></td>
 </tr>
 <tr>
-<td align="center"><sub>Two-up Read mode</sub></td>
-<td align="center"><sub>Dark theme</sub></td>
+<td align="center"><sub>Two-up Read mode, ready for long reading</sub></td>
+<td align="center"><sub>The dark theme, with the comments panel open</sub></td>
 </tr>
 </table>
 
@@ -80,13 +120,20 @@ PrintCraft renders PDFs with care for the details that make a page feel right: k
 
 Search the whole document as you type, step through matches with <kbd>⌘G</kbd>, and select text that comes out in the right reading order. That holds for columns, right-to-left runs and CJK too.
 
-<img src="docs/images/printcraft-find.png" alt="Find bar showing match 10 of 16 for the word 'type', highlighted on the page" width="100%">
-
 ## Navigate long documents
 
 Bookmarks, page thumbnails and the document's own page labels (i, ii, 1, 2…) keep you oriented in long documents.
 
-<img src="docs/images/printcraft-bookmarks.png" alt="The bookmarks panel showing a nested outline next to a page of world scripts" width="100%">
+<table>
+<tr>
+<td width="50%"><img src="docs/images/printcraft-find.png" alt="The find bar showing match 10 of 16 for the word 'type', highlighted in the Expressive Type chapter heading"></td>
+<td width="50%"><img src="docs/images/printcraft-bookmarks.png" alt="The Bookmarks panel showing the nested outline of the showcase, with page labels such as Cover, i and ii, next to the Scripts of the World page"></td>
+</tr>
+<tr>
+<td align="center"><sub>Find as you type: match 10 of 16</sub></td>
+<td align="center"><sub>Nested bookmarks with the document's own page labels</sub></td>
+</tr>
+</table>
 
 ---
 
@@ -97,7 +144,11 @@ Open **Organize pages** to see every page at once:
 - **Change them:** rotate, delete, insert blank pages, insert pages from another file, and move them earlier or later.
 - **Undo anything:** <kbd>⌘Z</kbd>, then save.
 
-<img src="docs/images/printcraft-organize.png" alt="The Organize pages grid with three pages selected and the page toolbar above" width="100%">
+<p align="center">
+  <img src="docs/images/printcraft-organize.png" alt="The Organize pages grid with the showcase's pages as thumbnails, three of them selected, and the page toolbar above" width="100%">
+  <br>
+  <sub>Organize pages with three pages selected and the page tools in the toolbar above.</sub>
+</p>
 
 <table>
 <tr>
@@ -113,7 +164,7 @@ Open **Organize pages** to see every page at once:
 Unsaved documents carry a dot on their tab, and closing or quitting asks before anything is lost. Changes are autosaved every minute. If PrintCraft ever quits unexpectedly, it offers to recover your work the next time it opens. Encrypted documents stay encrypted on disk.
 
 </td>
-<td width="50%"><img src="docs/images/printcraft-split.png" alt="The Split document dialog over the organize view"></td>
+<td width="50%" valign="top"><img src="docs/images/printcraft-split.png" alt="The Split document dialog over the organize view, set to one page per file and reporting that it creates 13 files from 13 pages"><br><sub>Split document: one page per file makes 13 files.</sub></td>
 </tr>
 </table>
 
@@ -150,7 +201,7 @@ Documents restricted by their author show a clear notice, and PrintCraft honours
 
 <table>
 <tr>
-<td width="50%"><img src="docs/images/printcraft-properties.png" alt="Document Properties with editable title, author, subject and keywords"></td>
+<td width="50%" valign="top"><img src="docs/images/printcraft-properties.png" alt="The Document Properties dialog on its Description tab, with editable title, author, subject and keywords, and tabs for Security, Fonts and Advanced"><br><sub>Document Properties, Description tab</sub></td>
 <td width="50%" valign="top">
 
 **Document Properties** shows:
@@ -167,8 +218,8 @@ Documents restricted by their author show a clear notice, and PrintCraft honours
 
 <table>
 <tr>
-<td width="50%"><img src="docs/images/printcraft-forms.png" alt="An interactive form with highlighted fields and the Fields panel listing every field and value"></td>
-<td width="50%"><img src="docs/images/printcraft-layers.png" alt="A review page with markup and a DRAFT watermark layer, and the Layers panel"></td>
+<td width="50%"><img src="docs/images/printcraft-forms.png" alt="The Interactive Form page with highlighted text fields, checkboxes, radio buttons, a list and a signature field, and the Fields panel listing all 13 fields and their values"></td>
+<td width="50%"><img src="docs/images/printcraft-layers.png" alt="The Review and Markup page with highlights, shapes, ink and an APPROVED stamp under a DRAFT watermark, and the Layers panel with Draft watermark and Print-only notes"></td>
 </tr>
 <tr>
 <td valign="top"><b>Forms</b>: every field with its current value, field highlighting, and checkboxes, radio buttons, lists and signatures drawn the way their author designed them.</td>
@@ -182,8 +233,12 @@ Press <kbd>⌘K</kbd> to search every tool and command, or browse the **All tool
 
 <table>
 <tr>
-<td width="50%"><img src="docs/images/printcraft-palette.png" alt="The command palette searching for page tools"></td>
-<td width="50%"><img src="docs/images/printcraft-tools.png" alt="The home screen with recommended tools and the full tool catalogue"></td>
+<td width="50%"><img src="docs/images/printcraft-palette.png" alt="The command palette searching for 'page', listing Page grid, Page labels, Rotate pages, Insert pages, Delete pages, Extract pages and more, each with the tool it belongs to"></td>
+<td width="50%"><img src="docs/images/printcraft-tools.png" alt="The Welcome to PrintCraft home screen with recommended tools, a recent file, a privacy note, and the full tool catalogue in the side panel"></td>
+</tr>
+<tr>
+<td align="center"><sub>The <kbd>⌘K</kbd> command palette</sub></td>
+<td align="center"><sub>The home screen and the All tools catalogue</sub></td>
 </tr>
 </table>
 
@@ -226,14 +281,18 @@ Every engine feature is reachable without the GUI, through one table of JSON-Sch
 
 - **The Rust API** (`printcraft_automation::Automation::call`), for embedding.
 
-Edits stay in memory, undoable, until `doc_save`. Saving to the same file appends an incremental update, so the original bytes are preserved, and the write is atomic. Unsaved changes are never discarded silently. **Driving the app itself.** Start the desktop app with `printcraft --control /tmp/pc.json` and an agent can see and operate the real interface: the widget tree with labels and positions (from the accessibility tree), clicks, typing, keys, commands, view options and screenshots. This is also off by default. It listens only on loopback, and every connection must present the random token written to that file, which only you can read.
+Edits stay in memory, undoable, until `doc_save`. Saving to the same file appends an incremental update, so the original bytes are preserved, and the write is atomic. Unsaved changes are never discarded silently.
 
-  ```sh
-  printcraft-cli ui --control /tmp/pc.json inspect query=rotate      # find widgets
-  printcraft-cli ui --control /tmp/pc.json click label="Organize pages"
-  printcraft-cli ui --control /tmp/pc.json key key=K modifiers='["command"]'
-  printcraft-cli ui --control /tmp/pc.json screenshot --out window.png
-  ```
+### Driving the app itself
+
+Start the desktop app with `printcraft --control /tmp/pc.json` and an agent can see and operate the real interface: the widget tree with labels and positions (from the accessibility tree), clicks, typing, keys, commands, view options and screenshots. This is also off by default. It listens only on loopback, and every connection must present the random token written to that file, which only you can read.
+
+```sh
+printcraft-cli ui --control /tmp/pc.json inspect query=rotate      # find widgets
+printcraft-cli ui --control /tmp/pc.json click label="Organize pages"
+printcraft-cli ui --control /tmp/pc.json key key=K modifiers='["command"]'
+printcraft-cli ui --control /tmp/pc.json screenshot --out window.png
+```
 
 ---
 
@@ -278,7 +337,9 @@ cargo xtask screenshots                           # regenerate every screenshot 
 
 ## What's next
 
-PrintCraft is young and moving fast. **Available today:**
+PrintCraft is young and moving fast. The aim is a workbench where you can view, organize, annotate, fill, sign and edit PDFs, at parity with Acrobat Pro.
+
+**Available today:**
 - viewing, search and navigation;
 - organizing pages, combining, extracting and splitting;
 - document information;
@@ -306,44 +367,55 @@ The full plan, with progress and estimates, is in **[ROADMAP.md](ROADMAP.md)**.
 
 ---
 
-## Crafting Apps
+## The Crafting Apps
 
-Open-source, clean-room, pure-Rust creative applications. Each is native on macOS, Windows and Linux, runs on the web, and can be driven by agents.
+PrintCraft is one of the **Crafting Apps**: free, open-source creative tools from the
+[ArtCraft](https://getartcraft.com/) team, each written from scratch in Rust and each able to
+stand on its own.
 
-<table>
-  <tr>
-    <td width="20%" align="center" valign="top">
-      <a href="https://github.com/storytold/photocraft"><b>PhotoCraft</b></a><br>
-      <sub>Image editing</sub>
-    </td>
-    <td width="20%" align="center" valign="top">
-      <a href="https://github.com/storytold/drawcraft"><b>DrawCraft</b></a><br>
-      <sub>Vector illustration</sub>
-    </td>
-    <td width="20%" align="center" valign="top">
-      <a href="https://github.com/storytold/filmcraft"><b>FilmCraft</b></a><br>
-      <sub>Video editing</sub>
-    </td>
-    <td width="20%" align="center" valign="top">
-      <a href="https://github.com/storytold/lightcraft"><b>LightCraft</b></a><br>
-      <sub>Photo library &amp; raw</sub>
-    </td>
-    <td width="20%" align="center" valign="top">
-      <a href="https://github.com/storytold/printcraft"><b>PrintCraft</b></a><br>
-      <sub>PDF documents</sub>
-    </td>
-  </tr>
-  <tr>
-    <td valign="top"><sub>Layered raster editor with byte-exact PSD/PSB round trips and 13 formats at 8/16/32-bit. A Photoshop-class workflow.</sub></td>
-    <td valign="top"><sub>Vector illustration with the Illustrator-style tools, panels, menus and shortcuts people already know.</sub></td>
-    <td valign="top"><sub>Non-linear video editor with frame-exact timing and its own codecs. Aims at Premiere Pro parity.</sub></td>
-    <td valign="top"><sub>Photo library and non-destructive raw developer: its own raw decoders, a wide-gamut float pipeline and a local-first catalog.</sub></td>
-    <td valign="top"><sub>View, organize, annotate, fill, sign and edit PDFs. Aims at Acrobat Pro parity. <i>You are here.</i></sub></td>
-  </tr>
-</table>
+| App | What it's for | Code | Learn more |
+|---|---|---|---|
+| <img src="https://img.shields.io/badge/PhotoCraft-2f7bf5?style=for-the-badge" alt="PhotoCraft" height="24"> | Image editing: layers, masks, type and real PSD files | [GitHub](https://github.com/storytold/photocraft) | [getartcraft.com](https://getartcraft.com/apps/photocraft) |
+| <img src="https://img.shields.io/badge/VectorCraft-e8573f?style=for-the-badge" alt="VectorCraft" height="24"> | Vector illustration (formerly DrawCraft) | [GitHub](https://github.com/storytold/vectorcraft) | [getartcraft.com](https://getartcraft.com/apps/drawcraft) |
+| <img src="https://img.shields.io/badge/FilmCraft-8b5cf6?style=for-the-badge" alt="FilmCraft" height="24"> | Video editing, color and sound | [GitHub](https://github.com/storytold/filmcraft) | [getartcraft.com](https://getartcraft.com/apps/filmcraft) |
+| <img src="https://img.shields.io/badge/LightCraft-f2a516?style=for-the-badge" alt="LightCraft" height="24"> | Photo library and raw development | [GitHub](https://github.com/storytold/lightcraft) | [getartcraft.com](https://getartcraft.com/apps/lightcraft) |
+| <img src="https://img.shields.io/badge/PrintCraft-12a58a?style=for-the-badge" alt="PrintCraft" height="24"> | **Reading, organizing and protecting PDFs** · **you are here** | [GitHub](https://github.com/storytold/printcraft) | [getartcraft.com](https://getartcraft.com/apps/printcraft) |
+| <img src="https://img.shields.io/badge/EffectCraft-e0368f?style=for-the-badge" alt="EffectCraft" height="24"> | Motion graphics and visual effects | [GitHub](https://github.com/storytold/effectcraft) | [getartcraft.com](https://getartcraft.com/apps/effectcraft) |
+| <img src="https://img.shields.io/badge/DesignCraft-7bb51c?style=for-the-badge" alt="DesignCraft" height="24"> | Page layout and publishing | [GitHub](https://github.com/storytold/designcraft) | [getartcraft.com](https://getartcraft.com/apps/designcraft) |
+
+And [**ArtCraft**](https://getartcraft.com/) itself, our AI image and video studio for artists who want real control.
+
+<br>
+
+<p align="center">
+  <a href="https://discord.gg/artcraft"><img alt="Join the ArtCraft community on Discord" src="https://img.shields.io/badge/Join%20us%20on%20Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" height="40"></a>
+</p>
+
+<h3 align="center">Come make things with us</h3>
+
+<p align="center">
+  Our Discord is where artists of every kind hang out: people who paint, shoot, draw, cut film,
+  set type, and people still figuring out what they like to make. Share what you're working on,
+  ask for help, tell us what's broken, or tell us what you wish these tools could do.
+  Whatever your medium and however long you've been at it, you're welcome here.
+</p>
+
+<p align="center">
+  <a href="https://discord.gg/artcraft"><b>discord.gg/artcraft</b></a> ·
+  <a href="https://getartcraft.com/">getartcraft.com</a> ·
+  <a href="https://getartcraft.com/apps">The Crafting Apps</a> ·
+  <a href="https://getartcraft.com/apps/printcraft">PrintCraft</a>
+</p>
+
+---
 
 ## Licence
 
 MIT OR Apache-2.0 ([LICENSE-MIT](LICENSE-MIT), [LICENSE-APACHE](LICENSE-APACHE)). Every icon, font and image is openly licensed and listed, with its author and source, in [ATTRIBUTION.md](ATTRIBUTION.md). The policy is in [AGENTS.md](AGENTS.md), and required notices are in [NOTICE](NOTICE). Contributors and agents: read [AGENTS.md](AGENTS.md) and [CLAUDE.md](CLAUDE.md).
 
 <sub>Adobe, Acrobat, Photoshop, Illustrator, Premiere Pro and Lightroom are trademarks of Adobe Inc. PrintCraft is an independent project, not affiliated with or endorsed by Adobe.</sub>
+
+<p align="center">
+  <a href="https://getartcraft.com/"><img alt="ArtCraft" src="docs/brand/artcraft-mark.svg" width="28"></a><br>
+  <sub>Made by the <a href="https://getartcraft.com/">ArtCraft</a> team and community.</sub>
+</p>

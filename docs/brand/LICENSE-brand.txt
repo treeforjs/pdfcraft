@@ -1,0 +1,11 @@
+ArtCraft brand assets
+
+The files in this directory (the ArtCraft name, wordmark and mark, in every colour and format) are
+owned by Storyteller and are NOT open source. They are not covered by PrintCraft's MIT OR
+Apache-2.0 licence.
+
+Storyteller permits them to be included, unmodified, in official PrintCraft builds and
+documentation to identify the project and link to its community. Forks and redistributions must
+remove or replace them, and may not use the ArtCraft name or logos to imply endorsement.
+
+All other rights reserved.
