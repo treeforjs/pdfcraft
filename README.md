@@ -226,7 +226,14 @@ Every engine feature is reachable without the GUI, through one table of JSON-Sch
 
 - **The Rust API** (`printcraft_automation::Automation::call`), for embedding.
 
-Edits stay in memory, undoable, until `doc_save`. Saving to the same file appends an incremental update, so the original bytes are preserved, and the write is atomic. Unsaved changes are never discarded silently. A UI control channel, so agents can drive and screenshot the running app, is next (M3.9).
+Edits stay in memory, undoable, until `doc_save`. Saving to the same file appends an incremental update, so the original bytes are preserved, and the write is atomic. Unsaved changes are never discarded silently. **Driving the app itself.** Start the desktop app with `printcraft --control /tmp/pc.json` and an agent can see and operate the real interface: the widget tree with labels and positions (from the accessibility tree), clicks, typing, keys, commands, view options and screenshots. This is also off by default. It listens only on loopback, and every connection must present the random token written to that file, which only you can read.
+
+  ```sh
+  printcraft-cli ui --control /tmp/pc.json inspect query=rotate      # find widgets
+  printcraft-cli ui --control /tmp/pc.json click label="Organize pages"
+  printcraft-cli ui --control /tmp/pc.json key key=K modifiers='["command"]'
+  printcraft-cli ui --control /tmp/pc.json screenshot --out window.png
+  ```
 
 ---
 

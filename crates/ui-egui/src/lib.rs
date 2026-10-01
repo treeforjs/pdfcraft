@@ -8,6 +8,7 @@
 mod canvas;
 mod chrome;
 mod commands;
+pub mod control;
 mod dialogs;
 mod editing;
 mod files;
@@ -148,6 +149,8 @@ pub struct PrintCraftApp {
     pending_theme: Option<ThemeKind>,
     styled: bool,
     fonts_ready: bool,
+    /// The UI control channel, when enabled (`--control`; off by default).
+    control: Option<control::Control>,
 }
 
 impl Default for PrintCraftApp {
@@ -194,6 +197,7 @@ impl PrintCraftApp {
             pending_theme: None,
             styled: false,
             fonts_ready: false,
+            control: None,
         }
     }
 
@@ -368,6 +372,14 @@ impl PrintCraftApp {
 
     pub fn active_ids(&self) -> Option<(usize, DocId)> {
         self.active.and_then(|i| self.views.get(i).map(|v| (i, v.id)))
+    }
+
+    /// Enable the UI control channel on `ctx` (opt-in; see [`control`]). Returns a client that
+    /// sends requests to this app; [`control::serve`] exposes it on loopback.
+    pub fn attach_control(&mut self, ctx: &egui::Context) -> control::ControlClient {
+        let (control, client) = control::attach(ctx);
+        self.control = Some(control);
+        client
     }
 
     pub fn notify(&mut self, msg: impl Into<String>) {
@@ -566,6 +578,10 @@ impl eframe::App for PrintCraftApp {
             if let Err(e) = self.open_bytes(&name, None, bytes) {
                 self.notify(format!("Couldn't open {name}: {e}"));
             }
+        }
+        if let Some(mut control) = self.control.take() {
+            control.tick(ctx, self);
+            self.control = Some(control);
         }
         self.guard_quit(ctx);
         let now = ctx.input(|i| i.time);

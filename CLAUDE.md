@@ -27,7 +27,7 @@ PrintCraft is a clean-room, open-source, Rust-native PDF application targeting A
 - `cargo run -p printcraft -- <file.pdf>` opens the desktop app.
 - `cargo run -p printcraft-cli -- run --script steps.json --root DIR` drives the engine headlessly through the automation tools (`printcraft-cli tools` lists them). Use it, together with `page_render`, to check engine changes. `printcraft-cli mcp` is the opt-in MCP server (AGENTS.md §3).
 - `cargo xtask demo-pdf` builds `dist/demo/printcraft-showcase.pdf` (needs Chrome) for visual checks.
-- For UI work, **look at the result**: screenshot the window by id (`plan/acrobat/tools/winlist.swift` + `screencapture -l`) until the UI control channel (M3.9) exists, then use `ui.screenshot`. Compare against `plan/acrobat/02-ui-ux.md`.
+- For UI work, **look at the result**. Either launch `printcraft --control FILE doc.pdf` and use `printcraft-cli ui --control FILE screenshot --out x.png` (plus `inspect`, `click`, `key`, `type`, `command`, `set`), or take a headless shot with `cargo run -p printcraft-ui-egui --example shot`. Compare against `plan/acrobat/02-ui-ux.md`. Control-channel tests use kittest (`crates/ui-egui/tests/control.rs`).
 - Parallel agents: use a separate `CARGO_TARGET_DIR` per agent and separate git worktrees.
 
 ## Current bootstrap debt (tracked in STATUS.md)

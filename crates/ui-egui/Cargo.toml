@@ -19,6 +19,12 @@ serde_json = { workspace = true }
 log = { workspace = true }
 
 rfd = { workspace = true }
+png = "0.18"
+base64 = "0.22"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# Control-channel tokens.
+getrandom = "0.4"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen-futures = "0.4"

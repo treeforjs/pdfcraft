@@ -2885,6 +2885,7 @@ dependencies = [
  "eframe",
  "egui",
  "printcraft-ui-egui",
+ "serde_json",
 ]
 
 [[package]]
@@ -2903,6 +2904,7 @@ dependencies = [
 name = "printcraft-cli"
 version = "0.1.0"
 dependencies = [
+ "base64",
  "printcraft-automation",
  "printcraft-engine",
  "printcraft-render",
@@ -2983,13 +2985,16 @@ dependencies = [
 name = "printcraft-ui-egui"
 version = "0.1.0"
 dependencies = [
+ "base64",
  "eframe",
  "egui",
  "egui_extras",
  "egui_kittest",
+ "getrandom 0.4.3",
  "image",
  "js-sys",
  "log",
+ "png 0.18.1",
  "printcraft-cos",
  "printcraft-engine",
  "printcraft-render",

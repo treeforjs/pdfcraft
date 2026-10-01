@@ -14,6 +14,8 @@
 //! printcraft-cli run    <tool> [key=value …] [--root DIR] [--out image.png]
 //! printcraft-cli run    --script steps.json [--root DIR]      [{"tool": "doc_open", "args": {…}}, …]
 //! printcraft-cli mcp    [--root DIR]                          MCP server on stdin/stdout (opt-in)
+//! printcraft-cli ui     --control FILE <method> [key=value …] [--out shot.png]
+//!                                                            drive a running app started with --control FILE
 //! ```
 //!
 //! `run` and `mcp` drive the same tool table (`printcraft-automation`). In `run`, values parse as
@@ -37,26 +39,29 @@ use printcraft_render::{PageRenderer, RenderConfig, RenderRequest, RequestKind, 
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let result = match args.first().map(String::as_str) {
-        Some("info") => info(&args[1..]),
-        Some("render") => render(&args[1..]),
-        Some("text") => text(&args[1..]),
-        Some("edit") => edit(&args[1..]),
-        Some("combine") => combine(&args[1..]),
-        Some("extract") => extract(&args[1..]),
-        Some("split") => split(&args[1..]),
-        Some("check") => check(&args[1..]),
-        Some("check-one") => check_one(&args[1..]),
-        Some("tools") => tools(),
-        Some("run") => run(&args[1..]),
-        #[cfg(feature = "mcp")]
-        Some("mcp") => mcp(&args[1..]),
-        Some("--version") => {
-            println!("printcraft-cli {}", env!("CARGO_PKG_VERSION"));
-            Ok(())
-        }
-        _ => Err("usage: printcraft-cli <info|render|text|edit|combine|extract|split|check|tools|run|mcp> …  (see source header for options)".into()),
-    };
+    let result =
+        match args.first().map(String::as_str) {
+            Some("info") => info(&args[1..]),
+            Some("render") => render(&args[1..]),
+            Some("text") => text(&args[1..]),
+            Some("edit") => edit(&args[1..]),
+            Some("combine") => combine(&args[1..]),
+            Some("extract") => extract(&args[1..]),
+            Some("split") => split(&args[1..]),
+            Some("check") => check(&args[1..]),
+            Some("check-one") => check_one(&args[1..]),
+            Some("tools") => tools(),
+            Some("run") => run(&args[1..]),
+            Some("ui") => ui(&args[1..]),
+            #[cfg(feature = "mcp")]
+            Some("mcp") => mcp(&args[1..]),
+            Some("--version") => {
+                println!("printcraft-cli {}", env!("CARGO_PKG_VERSION"));
+                Ok(())
+            }
+            _ => Err("usage: printcraft-cli <info|render|text|edit|combine|extract|split|check|tools|run|mcp|ui> …  (see source header for options)"
+                .into()),
+        };
     match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
@@ -420,4 +425,48 @@ fn mcp(args: &[String]) -> Result<(), String> {
     let mut server = printcraft_automation::mcp::McpServer::new(automation(args)?);
     eprintln!("printcraft-cli: MCP server on stdio (protocol {}); close stdin to stop", printcraft_automation::mcp::PROTOCOL_VERSIONS[0]);
     server.serve(std::io::stdin().lock(), std::io::stdout().lock()).map_err(|e| e.to_string())
+}
+
+// ---- UI control channel client -----------------------------------------------------------------
+
+/// One request to a running app's control channel (`printcraft --control FILE`).
+fn ui(args: &[String]) -> Result<(), String> {
+    use std::io::{BufRead, BufReader, Write as _};
+    let file = flag(args, "--control").ok_or("ui: missing --control FILE (start the app with `printcraft --control FILE`)")?;
+    let info: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(file).map_err(|e| format!("{file}: {e}"))?).map_err(|e| format!("{file}: {e}"))?;
+    let port = info["port"].as_u64().ok_or(format!("{file}: no port"))?;
+    let token = info["token"].as_str().ok_or(format!("{file}: no token"))?;
+    let pos = positional(args);
+    let method = *pos.first().ok_or("ui: missing method (state, inspect, click, type, key, command, commands, set, open, screenshot)")?;
+    let method = if method.starts_with("ui.") { method.to_string() } else { format!("ui.{method}") };
+    let mut params = serde_json::Map::new();
+    for kv in pos.iter().skip(1) {
+        let (k, v) = kv.split_once('=').ok_or(format!("ui: expected key=value, got {kv:?}"))?;
+        params.insert(k.to_string(), serde_json::from_str(v).unwrap_or_else(|_| serde_json::Value::String(v.to_string())));
+    }
+    let stream = std::net::TcpStream::connect(("127.0.0.1", port as u16))
+        .map_err(|e| format!("can't reach the app on port {port}: {e} (is it still running?)"))?;
+    stream.set_read_timeout(Some(Duration::from_secs(40))).map_err(|e| e.to_string())?;
+    let mut write = stream.try_clone().map_err(|e| e.to_string())?;
+    let mut lines = BufReader::new(stream).lines();
+    let mut rpc = |id: u64, method: &str, params: serde_json::Value| -> Result<serde_json::Value, String> {
+        writeln!(write, "{}", serde_json::json!({ "jsonrpc": "2.0", "id": id, "method": method, "params": params })).map_err(|e| e.to_string())?;
+        let line = lines.next().ok_or("the app closed the connection")?.map_err(|e| e.to_string())?;
+        let reply: serde_json::Value = serde_json::from_str(&line).map_err(|e| e.to_string())?;
+        match reply.get("error") {
+            Some(e) => Err(e["message"].as_str().unwrap_or("error").to_string()),
+            None => Ok(reply["result"].clone()),
+        }
+    };
+    rpc(1, "auth", serde_json::json!({ "token": token }))?;
+    let mut result = rpc(2, &method, serde_json::Value::Object(params))?;
+    if let (Some(out), Some(data)) = (flag(args, "--out"), result.get("png_base64").and_then(|d| d.as_str())) {
+        use base64::Engine as _;
+        let png = base64::engine::general_purpose::STANDARD.decode(data).map_err(|e| e.to_string())?;
+        std::fs::write(out, png).map_err(|e| format!("{out}: {e}"))?;
+        result["png_base64"] = serde_json::json!(format!("written to {out}"));
+    }
+    println!("{}", serde_json::to_string_pretty(&result).unwrap_or_default());
+    Ok(())
 }

@@ -6,12 +6,17 @@
 //! `--page N  --zoom 150  --layout continuous|two-up|single  --panel comments|bookmarks|pages|fields|layers|attachments|none
 //!  --theme light|dark  --mode all|read|edit|convert|sign  --tool <catalogue id>  --left open|closed
 //!  --organize on  --fields on  --dialog properties|shortcuts|about  --palette <query>  --home on`
+//!
+//! `--control <file>` enables the UI control channel (off by default): the app listens on a random
+//! loopback port and writes `{"port", "token", "pid"}` to `<file>` (owner-only permissions).
+//! Agents then drive it with `printcraft-cli ui --control <file> <method> …`.
 
 use printcraft_ui_egui::PrintCraftApp;
 
 fn main() -> eframe::Result {
     let mut files = Vec::new();
     let mut options: Vec<(String, String)> = Vec::new();
+    let mut control_file: Option<String> = None;
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
         match a.as_str() {
@@ -19,6 +24,7 @@ fn main() -> eframe::Result {
                 println!("printcraft {}", env!("CARGO_PKG_VERSION"));
                 return Ok(());
             }
+            "--control" => control_file = args.next(),
             flag if flag.starts_with("--") => {
                 let value = args.next().unwrap_or_default();
                 options.push((flag.trim_start_matches("--").to_string(), value));
@@ -45,6 +51,13 @@ fn main() -> eframe::Result {
                 app.restore(&json);
             }
             app.integrated_titlebar = integrated;
+            if let Some(file) = &control_file {
+                let client = app.attach_control(&cc.egui_ctx);
+                match printcraft_ui_egui::control::serve(client).and_then(|ep| write_control_file(file, ep.port, &ep.token).map(|()| ep.port)) {
+                    Ok(port) => eprintln!("printcraft: UI control channel on 127.0.0.1:{port} (connection details in {file})"),
+                    Err(e) => eprintln!("printcraft: --control {file}: {e}"),
+                }
+            }
             // Autosave unsaved changes; offer to recover documents a crashed session left behind.
             if let Some(dir) = printcraft_ui_egui::RecoveryStore::default_dir() {
                 app.enable_recovery(printcraft_ui_egui::RecoveryStore::new(dir));
@@ -60,4 +73,24 @@ fn main() -> eframe::Result {
             Ok(Box::new(app))
         }),
     )
+}
+
+/// Write the control endpoint so that only the current user can read the token.
+fn write_control_file(path: &str, port: u16, token: &str) -> std::io::Result<()> {
+    let json = serde_json::json!({ "port": port, "token": token, "pid": std::process::id() }).to_string();
+    let mut opts = std::fs::OpenOptions::new();
+    opts.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        opts.mode(0o600);
+    }
+    use std::io::Write;
+    let mut f = opts.open(path)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        f.set_permissions(std::fs::Permissions::from_mode(0o600))?;
+    }
+    f.write_all(json.as_bytes())
 }
