@@ -68,3 +68,4 @@ codegen-units = 1
 [patch.crates-io]
 hayro-interpret = { path = "vendor/hayro-interpret" }
 hayro = { path = "vendor/hayro" }
+hayro-syntax = { path = "vendor/hayro-syntax" }
