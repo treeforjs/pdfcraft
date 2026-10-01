@@ -20,6 +20,9 @@ use vello_cpu::{
     Image, ImageSource, Mask, PaintType, Pixmap, RenderContext, RenderSettings, peniko,
 };
 
+
+/// PrintCraft patch: largest image drawn, in pixels (2^28 ≈ 268 MP, well above real page images).
+const MAX_IMAGE_PIXELS: u64 = 1 << 28;
 pub(crate) struct Renderer {
     pub(crate) ctx: RenderContext,
     pub(crate) inside_pattern: bool,
@@ -213,6 +216,11 @@ impl Renderer {
         };
         let mut img_width = image_data.width();
         let mut img_height = image_data.height();
+        // PrintCraft patch: skip images with absurd dimensions (a fuzzed inline image claimed
+        // /W 4294967295 over four bytes of data; resampling it never finished).
+        if img_width == 0 || img_height == 0 || u64::from(img_width) * u64::from(img_height) > MAX_IMAGE_PIXELS {
+            return;
+        }
         let interpolate = image_data.interpolate();
 
         if let Some(a) = &alpha_data

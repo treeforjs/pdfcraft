@@ -123,6 +123,11 @@ impl<'a> Type3<'a> {
         paint: &Paint<'a>,
         device: &mut impl Device<'a>,
     ) -> Option<()> {
+        // PrintCraft patch: a glyph procedure may show text in this same font (through
+        // inherited resources), recursing until the stack overflowed.
+        if glyph.nesting_depth > crate::context::MAX_PAINT_NESTING {
+            return None;
+        }
         let mut state = glyph.state.clone();
         let root_transform =
             transform * glyph_transform * self.matrix * Affine::scale(UNITS_PER_EM as f64);

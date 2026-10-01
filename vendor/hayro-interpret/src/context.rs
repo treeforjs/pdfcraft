@@ -18,6 +18,10 @@ use std::rc::Rc;
 
 /// Maximum nesting depth for interpreting `XObject`'s/patterns/streams.
 pub(crate) const MAX_NESTED_INTERPRETATION_DEPTH: u32 = 50;
+/// PrintCraft patch: maximum nesting for content that is painted recursively by the device
+/// (tiling patterns, Type 3 glyphs). Either can refer back to itself through resources it
+/// inherits, which recursed until the stack overflowed (found by fuzzing).
+pub(crate) const MAX_PAINT_NESTING: u32 = 16;
 
 /// A cache used by the interpreter.
 ///

@@ -466,7 +466,7 @@ trailer << /Root 1 0 R >>
 
     /// From `cargo xtask fuzz`: a tiling pattern with no /Resources inherits the page's, where
     /// its own name points back at it. It painted itself until the stack overflowed (vendored
-    /// hayro-interpret patch: `MAX_PATTERN_NESTING`). Ordinary patterns must still paint.
+    /// hayro-interpret patch: `MAX_PAINT_NESTING`). Ordinary patterns must still paint.
     #[test]
     fn self_referencing_tiling_pattern_terminates() {
         let pdf = |pattern_body: &str| {
@@ -495,6 +495,69 @@ trailer << /Root 1 0 R >>
         let red = render(pdf("1 0 0 rg 0 0 10 10 re f"));
         assert!(red.error.is_none(), "{:?}", red.error);
         assert_eq!(&red.rgba[((20 * 40 + 20) * 4)..][..4], &[255, 0, 0, 255], "a normal tiling pattern still paints");
+    }
+
+    /// From `cargo xtask fuzz`: a Type 3 font without /Resources inherits the page's, where its
+    /// own name is defined, and its glyph shows text in itself (vendored patch:
+    /// `MAX_PAINT_NESTING`). Must terminate; a normal Type 3 glyph must still paint.
+    #[test]
+    fn self_referencing_type3_glyph_terminates() {
+        let pdf = |proc_body: &str| {
+            format!(
+                "%PDF-1.7
+1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
+2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj
+3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 40 40] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >> endobj
+4 0 obj << /Length 31 >> stream
+BT /F1 20 Tf 10 10 Td (A) Tj ET
+endstream endobj
+5 0 obj << /Type /Font /Subtype /Type3 /FontBBox [0 0 1 1] /FontMatrix [1 0 0 1 0 0] /FirstChar 65 /LastChar 65 /Widths [1]
+  /Encoding << /Differences [65 /a] >> /CharProcs << /a 6 0 R >> >> endobj
+6 0 obj << /Length {} >> stream
+{proc_body}
+endstream endobj
+trailer << /Root 1 0 R >>
+%%EOF",
+                proc_body.len()
+            )
+        };
+        let render = |doc: String| {
+            let mut r = PageRenderer::new(Arc::new(doc.into_bytes()), RenderConfig::default());
+            r.render(RenderRequest { page: 0, kind: RequestKind::Pixels, tile: None, scale: 1.0, tag: 0 })
+        };
+        let looped = render(pdf("1 0 d0 BT /F1 1 Tf (A) Tj ET 0 0 1 1 re f"));
+        assert_eq!((looped.width, looped.height), (40, 40));
+        let plain = render(pdf("1 0 d0 0 0 1 1 re f"));
+        assert!(plain.error.is_none(), "{:?}", plain.error);
+        assert!(plain.rgba.chunks_exact(4).any(|p| p[0] < 128), "a normal Type 3 glyph still paints");
+    }
+
+    /// From `cargo xtask fuzz`: an inline image claiming /W 4294967295 over four bytes of data
+    /// hung in resampling (vendored hayro patch: `MAX_IMAGE_PIXELS`).
+    #[test]
+    fn absurd_image_dimensions_are_skipped() {
+        let content = "q 20 0 0 20 5 5 cm BI /W 4294967295 /H 2 /BPC 8 /CS /G ID \u{0}\u{ff}\u{ff}\u{0} EI Q 1 0 0 rg 0 0 4 4 re f";
+        let pdf = format!(
+            "%PDF-1.7
+1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
+2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj
+3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 40 40] /Contents 4 0 R >> endobj
+4 0 obj << /Length {} >> stream
+{content}
+endstream endobj
+trailer << /Root 1 0 R >>
+%%EOF",
+            content.len()
+        );
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let mut r = PageRenderer::new(Arc::new(pdf.into_bytes()), RenderConfig::default());
+            let _ = tx.send(r.render(RenderRequest { page: 0, kind: RequestKind::Pixels, tile: None, scale: 1.0, tag: 0 }));
+        });
+        let page = rx.recv_timeout(std::time::Duration::from_secs(20)).expect("an absurd image must not hang the renderer");
+        assert!(page.error.is_none(), "{:?}", page.error);
+        // The rest of the page still draws: the red square at the bottom left (y-down: last rows).
+        assert_eq!(&page.rgba[((38 * 40 + 1) * 4)..][..4], &[255, 0, 0, 255]);
     }
 
     /// From `cargo xtask fuzz`: a CID font whose /W range spans every u32 inserted billions of
