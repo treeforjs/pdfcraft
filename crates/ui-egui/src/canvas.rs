@@ -135,6 +135,16 @@ pub enum ViewAction {
 }
 
 impl DocView {
+    /// Where `page` is drawn on screen this frame (`None` when it is not on screen).
+    pub fn page_screen_rect(&self, page: usize) -> Option<Rect> {
+        self.screen_xforms.iter().find(|(p, _)| *p == page).map(|(_, xf)| xf.rect)
+    }
+
+    /// The document area on screen.
+    pub fn viewport_rect(&self) -> Rect {
+        self.viewport_screen
+    }
+
     /// Pages that could not be rendered, with the reason (for automation; 0-based pages).
     pub fn page_errors(&self) -> Vec<(usize, &str)> {
         let mut v: Vec<(usize, &str)> = self.errors.iter().map(|(p, e)| (*p, e.as_str())).collect();

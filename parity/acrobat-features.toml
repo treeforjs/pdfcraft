@@ -782,7 +782,7 @@ milestone = "M3"
 status = "shipped"
 commands = []
 tools = []
-evidence = ["crates/render/src/raster.rs::missing_page_and_garbage_input_fail_gracefully", "crates/render/src/raster.rs::scale_is_clamped_for_huge_pages"]
+evidence = ["crates/render/src/raster.rs::missing_page_and_garbage_input_fail_gracefully", "crates/render/src/raster.rs::scale_is_clamped_for_huge_pages", "crates/render/src/raster.rs::watchdog_skips_a_stuck_page_and_keeps_rendering"]
 notes = ""
 
 [[feature]]
@@ -815,11 +815,11 @@ title = "Single page continuous scrolling"
 area = "B"
 tier = "P0"
 milestone = "M3"
-status = "partial"
+status = "shipped"
 commands = []
 tools = []
-evidence = []
-notes = "works; no layout test yet"
+evidence = ["crates/ui-egui/tests/view.rs::continuous_layout_stacks_pages_vertically"]
+notes = ""
 
 [[feature]]
 id = "view.layout-single-page"
@@ -827,11 +827,11 @@ title = "Single page view"
 area = "B"
 tier = "P0"
 milestone = "M3"
-status = "partial"
+status = "shipped"
 commands = []
 tools = []
-evidence = []
-notes = "works; no layout test yet"
+evidence = ["crates/ui-egui/tests/view.rs::single_page_layout_shows_one_page_at_a_time"]
+notes = ""
 
 [[feature]]
 id = "view.layout-two-up"
@@ -839,11 +839,11 @@ title = "Two-page view"
 area = "B"
 tier = "P0"
 milestone = "M3"
-status = "partial"
+status = "shipped"
 commands = []
 tools = []
-evidence = []
-notes = "works; no layout test yet"
+evidence = ["crates/ui-egui/tests/view.rs::two_up_layout_places_pages_side_by_side"]
+notes = ""
 
 [[feature]]
 id = "view.layout-two-up-scrolling"
@@ -923,11 +923,11 @@ title = "Actual size"
 area = "B"
 tier = "P0"
 milestone = "M3"
-status = "partial"
+status = "shipped"
 commands = []
 tools = []
-evidence = []
-notes = "menu item exists; no test"
+evidence = ["crates/ui-egui/tests/view.rs::actual_size_fit_width_and_fit_page"]
+notes = ""
 
 [[feature]]
 id = "view.zoom-fit-page"
@@ -935,11 +935,11 @@ title = "Fit page"
 area = "B"
 tier = "P0"
 milestone = "M3"
-status = "partial"
+status = "shipped"
 commands = []
 tools = []
-evidence = []
-notes = "fit page / fit width toggle; no test"
+evidence = ["crates/ui-egui/tests/view.rs::actual_size_fit_width_and_fit_page"]
+notes = ""
 
 [[feature]]
 id = "view.zoom-fit-width"
@@ -947,11 +947,11 @@ title = "Fit width"
 area = "B"
 tier = "P0"
 milestone = "M3"
-status = "partial"
+status = "shipped"
 commands = []
 tools = []
-evidence = []
-notes = "fit page / fit width toggle; no test"
+evidence = ["crates/ui-egui/tests/view.rs::actual_size_fit_width_and_fit_page"]
+notes = ""
 
 [[feature]]
 id = "view.zoom-fit-height"
@@ -1139,11 +1139,11 @@ title = "Follow links and destinations"
 area = "B"
 tier = "P0"
 milestone = "M3"
-status = "partial"
+status = "shipped"
 commands = []
 tools = []
-evidence = []
-notes = "link clicks work in the viewer; no test; actions beyond GoTo/URI pending"
+evidence = ["crates/ui-egui/tests/view.rs::clicking_a_link_goes_to_its_destination"]
+notes = "GoTo and URI links; other action types (JavaScript, Launch, named actions) arrive with M6"
 
 [[feature]]
 id = "view.annotation-hover"
@@ -3343,11 +3343,11 @@ title = "List fonts with type and embedding status"
 area = "D"
 tier = "P1"
 milestone = "M3"
-status = "partial"
+status = "shipped"
 commands = ["file.properties"]
 tools = ["doc_info"]
-evidence = []
-notes = "Fonts tab works; no test yet"
+evidence = ["crates/ui-egui/tests/view.rs::fonts_tab_lists_fonts_and_embedding"]
+notes = ""
 
 [[feature]]
 id = "organize.initial-view"
@@ -4263,11 +4263,11 @@ title = "Form fields panel listing every field and value"
 area = "F"
 tier = "P0"
 milestone = "M3"
-status = "partial"
+status = "shipped"
 commands = ["form.fields"]
 tools = ["doc_info"]
-evidence = []
-notes = "read-only list works; no panel test yet; editing in M6"
+evidence = ["crates/ui-egui/tests/view.rs::field_list_jumps_to_a_fields_page"]
+notes = "read-only list with jump-to-field; filling and editing are separate features (M6)"
 
 [[feature]]
 id = "form.highlight-fields"
@@ -4275,11 +4275,11 @@ title = "Highlight existing fields"
 area = "F"
 tier = "P0"
 milestone = "M3"
-status = "partial"
+status = "shipped"
 commands = []
 tools = []
-evidence = []
-notes = "toggle exists; no test"
+evidence = ["crates/ui-egui/tests/view.rs::highlight_fields_tints_the_field_area"]
+notes = ""
 
 [[feature]]
 id = "form.field-appearance-display"
