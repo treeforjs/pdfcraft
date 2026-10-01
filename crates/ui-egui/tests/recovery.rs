@@ -195,3 +195,35 @@ fn incomplete_entries_are_ignored_and_cleaned_up() {
     assert!(s.list().is_empty());
     assert_eq!(files_in(&s), 0);
 }
+
+/// Through the control channel, the reply to a click comes after the click's effects: state read
+/// right after it already reflects them (found driving the live app).
+#[test]
+fn control_click_effects_are_visible_when_the_reply_arrives() {
+    let s = store("control");
+    crashed_session(&s, fixture(2), None, None);
+    let slot: std::sync::Arc<std::sync::Mutex<Option<printcraft_ui_egui::control::ControlClient>>> = Default::default();
+    let (slot2, s2) = (slot.clone(), s.clone());
+    let mut h = Harness::builder().with_size(egui::vec2(1200.0, 800.0)).build_eframe(move |cc| {
+        let mut app = PrintCraftApp::new();
+        *slot2.lock().unwrap() = Some(app.attach_control(&cc.egui_ctx));
+        app.enable_recovery(s2);
+        app
+    });
+    h.run_steps(4);
+    let c = slot.lock().unwrap().take().unwrap();
+    let call = |h: &mut Harness<'static, PrintCraftApp>, m: &str, p: serde_json::Value| {
+        let rx = c.send(m, p);
+        for _ in 0..30 {
+            h.step();
+            if let Ok(r) = rx.try_recv() {
+                return r.unwrap();
+            }
+        }
+        panic!("no reply to {m}");
+    };
+    assert_eq!(call(&mut h, "ui.state", serde_json::json!({}))["dialog"], "Recovery");
+    call(&mut h, "ui.click", serde_json::json!({ "label": "Discard" }));
+    assert_eq!(files_in(&s), 0, "discarded by the time the click is answered");
+    assert_eq!(call(&mut h, "ui.state", serde_json::json!({}))["dialog"], serde_json::Value::Null);
+}

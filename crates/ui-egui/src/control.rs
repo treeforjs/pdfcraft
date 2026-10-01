@@ -32,6 +32,30 @@ use serde_json::{Value, json};
 
 pub type Reply = Result<Value, String>;
 
+/// Seconds to wait for frames (input to be handled, a screenshot to be taken) before reporting
+/// that the window is not being drawn. While a window is hidden, minimized or fully covered,
+/// eframe keeps calling `logic` but runs no egui pass, so input and screenshots wait.
+const NOT_DRAWN_TIMEOUT: f64 = 5.0;
+
+/// Wall-clock seconds (egui's own clock stops while the window is not drawn).
+fn now_secs() -> f64 {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+        START.get_or_init(std::time::Instant::now).elapsed().as_secs_f64()
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        js_sys::Date::now() / 1000.0
+    }
+}
+
+fn not_drawn(what: &str) -> String {
+    format!(
+        "{what} did not happen within {NOT_DRAWN_TIMEOUT:.0} s: the window is not being drawn (it may be hidden, minimized or covered); bring it to the front and retry"
+    )
+}
+
 /// One request from a client, answered on `reply`.
 pub struct ControlRequest {
     pub method: String,
@@ -67,6 +91,8 @@ struct Shared {
     focus: Option<NodeId>,
     /// Event batches to inject, one batch per frame.
     inject: VecDeque<Vec<egui::Event>>,
+    /// Real egui passes so far (counted in `output_hook`, which `logic`-only calls never reach).
+    passes: u64,
 }
 
 /// The egui plugin half of the control channel.
@@ -90,8 +116,9 @@ impl egui::Plugin for ControlPlugin {
     }
 
     fn output_hook(&mut self, _ctx: &egui::Context, output: &mut egui::FullOutput) {
-        let Some(update) = &output.platform_output.accesskit_update else { return };
         let Ok(mut s) = self.shared.lock() else { return };
+        s.passes += 1;
+        let Some(update) = &output.platform_output.accesskit_update else { return };
         s.nodes = update.nodes.iter().cloned().collect();
         s.root = update.tree.as_ref().map(|t| t.root);
         s.focus = Some(update.focus);
@@ -101,7 +128,9 @@ impl egui::Plugin for ControlPlugin {
 enum Pending {
     /// Answer after `frames` more frames (the injected input has been handled by then).
     Frames {
-        frames: u32,
+        /// Answer once this many egui passes have run (the injected input has been handled).
+        until_pass: u64,
+        since: f64,
         reply: Sender<Reply>,
         value: Value,
     },
@@ -109,6 +138,8 @@ enum Pending {
         tag: u64,
         region: Option<egui::Rect>,
         reply: Sender<Reply>,
+        /// When it was requested (egui time, seconds).
+        since: f64,
     },
 }
 
@@ -147,12 +178,15 @@ impl Control {
                 Handled::Now(r) => {
                     let _ = req.reply.send(r);
                 }
-                Handled::AfterFrames(frames, value) => self.pending.push(Pending::Frames { frames, reply: req.reply, value }),
+                Handled::AfterFrames(frames, value) => {
+                    let until_pass = self.passes() + u64::from(frames);
+                    self.pending.push(Pending::Frames { until_pass, since: now_secs(), reply: req.reply, value });
+                }
                 Handled::Screenshot(region) => {
                     let tag = self.next_tag;
                     self.next_tag += 1;
                     ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(egui::UserData::new(tag)));
-                    self.pending.push(Pending::Screenshot { tag, region, reply: req.reply });
+                    self.pending.push(Pending::Screenshot { tag, region, reply: req.reply, since: now_secs() });
                 }
             }
         }
@@ -175,22 +209,40 @@ impl Control {
                 .collect()
         });
         let ppp = ctx.pixels_per_point();
+        let now = now_secs();
+        let passes = self.passes();
         let mut keep = Vec::new();
         for p in self.pending.drain(..) {
             match p {
-                Pending::Frames { frames: 0, reply, value } => {
+                Pending::Frames { until_pass, reply, value, .. } if passes >= until_pass => {
                     let _ = reply.send(Ok(value));
                 }
-                Pending::Frames { frames, reply, value } => keep.push(Pending::Frames { frames: frames - 1, reply, value }),
-                Pending::Screenshot { tag, region, reply } => match shots.iter().find(|(t, _)| *t == tag) {
+                Pending::Frames { since, reply, .. } if now - since > NOT_DRAWN_TIMEOUT => {
+                    // The agent is told it failed, so it must not happen later either.
+                    if let Ok(mut sh) = self.shared.lock() {
+                        sh.inject.clear();
+                    }
+                    let _ = reply.send(Err(not_drawn("handling the input")));
+                }
+                p @ Pending::Frames { .. } => keep.push(p),
+                Pending::Screenshot { tag, region, reply, since } => match shots.iter().find(|(t, _)| *t == tag) {
                     Some((_, image)) => {
                         let _ = reply.send(screenshot_png(image, region, ppp));
                     }
-                    None => keep.push(Pending::Screenshot { tag, region, reply }),
+                    // The platform skips painting windows that are hidden, minimized or fully
+                    // covered, so no screenshot ever arrives: say so instead of hanging.
+                    None if now - since > NOT_DRAWN_TIMEOUT => {
+                        let _ = reply.send(Err(not_drawn("the screenshot")));
+                    }
+                    None => keep.push(Pending::Screenshot { tag, region, reply, since }),
                 },
             }
         }
         self.pending = keep;
+    }
+
+    fn passes(&self) -> u64 {
+        self.shared.lock().map(|s| s.passes).unwrap_or(0)
     }
 
     fn inject(&self, batches: Vec<Vec<egui::Event>>) -> u32 {
