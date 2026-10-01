@@ -1,4 +1,5 @@
-//! ⌘K command palette over the tool catalogue (fuzzy-ish substring match on tool and item names).
+//! ⌘K command palette: every registered command (with its shortcut) and every tool in the
+//! catalogue, with a fuzzy-ish substring match.
 
 use egui::{Align2, CornerRadius, Rect, Sense, Stroke, vec2};
 use printcraft_engine::catalog::{Availability, TOOL_GROUPS};
@@ -7,9 +8,10 @@ use crate::theme::{self, Tokens};
 use crate::{LeftPanel, PrintCraftApp, icons};
 
 struct Hit {
-    group: &'static str,
+    /// The tool panel to open (tools and catalogue items); `None` for plain commands.
+    group: Option<&'static str>,
     label: String,
-    detail: &'static str,
+    detail: String,
     icon: &'static str,
     command: Option<&'static str>,
     ready: bool,
@@ -39,14 +41,32 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
     }
     let q = app.palette_query.trim().to_lowercase();
     let mut hits: Vec<(usize, Hit)> = Vec::new();
+    let mac = cfg!(target_os = "macos") || cfg!(target_arch = "wasm32");
+    let active = app.active_ids().map(|(_, id)| id);
+    for spec in printcraft_engine::commands::COMMANDS {
+        let label = printcraft_engine::commands::current_label(spec, &app.session, active);
+        if let Some(s) = score(&label, &q).or_else(|| score(spec.id, &q).map(|s| s + 50)) {
+            hits.push((
+                s,
+                Hit {
+                    group: None,
+                    label,
+                    detail: spec.shortcut.map(|k| k.label(mac)).unwrap_or_else(|| spec.menu.unwrap_or("Command").to_string()),
+                    icon: spec.icon,
+                    command: Some(spec.id),
+                    ready: app.command_enabled(spec),
+                },
+            ));
+        }
+    }
     for g in TOOL_GROUPS {
         if let Some(s) = score(g.label, &q) {
             hits.push((
                 s,
                 Hit {
-                    group: g.id,
+                    group: Some(g.id),
                     label: g.label.to_string(),
-                    detail: "Tool",
+                    detail: "Tool".into(),
                     icon: g.icon,
                     command: None,
                     ready: g.availability == Availability::Ready,
@@ -55,13 +75,16 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
         }
         for sec in g.sections {
             for i in sec.items {
+                if printcraft_engine::commands::command(i.command).is_some() {
+                    continue; // listed above as a command
+                }
                 if let Some(s) = score(i.label, &q).or_else(|| score(i.command, &q).map(|s| s + 50)) {
                     hits.push((
                         s + 1,
                         Hit {
-                            group: g.id,
+                            group: Some(g.id),
                             label: i.label.to_string(),
-                            detail: g.label,
+                            detail: g.label.into(),
                             icon: i.icon,
                             command: Some(i.command),
                             ready: i.availability == Availability::Ready,
@@ -75,7 +98,7 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
     hits.truncate(12);
 
     let screen = ctx.content_rect();
-    let mut chosen: Option<(Option<&'static str>, &'static str)> = None;
+    let mut chosen: Option<(Option<&'static str>, Option<&'static str>)> = None;
     egui::Area::new(egui::Id::new("palette"))
         .order(egui::Order::Foreground)
         .pivot(Align2::CENTER_TOP)
@@ -92,13 +115,15 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
                             .font(theme::regular(15.0))
                             .desired_width(f32::INFINITY),
                     );
-                    r.request_focus();
-                    if r.lost_focus()
+                    // Enter runs the top hit. The field keeps focus (requested every frame), so
+                    // check while it is focused as well as when focus is lost.
+                    if (r.has_focus() || r.lost_focus())
                         && ui.input(|i| i.key_pressed(egui::Key::Enter))
                         && let Some((_, h)) = hits.first()
                     {
                         chosen = Some((h.command, h.group));
                     }
+                    r.request_focus();
                 });
                 ui.separator();
                 for (_, h) in &hits {
@@ -107,8 +132,10 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
                         ui.painter().rect_filled(rect, CornerRadius::same(6), t.hover);
                     }
                     icons::paint(ui, Rect::from_min_size(rect.min + vec2(8.0, 9.0), vec2(18.0, 18.0)), h.icon, 17.0, t.icon);
-                    ui.painter().text(rect.left_center() + vec2(36.0, 0.0), Align2::LEFT_CENTER, &h.label, theme::regular(13.5), t.text);
-                    ui.painter().text(rect.right_center() - vec2(10.0, 0.0), Align2::RIGHT_CENTER, h.detail, theme::regular(12.0), t.text_faint);
+                    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, h.ready, &h.label));
+                    let fg = if h.ready { t.text } else { t.text_faint };
+                    ui.painter().text(rect.left_center() + vec2(36.0, 0.0), Align2::LEFT_CENTER, &h.label, theme::regular(13.5), fg);
+                    ui.painter().text(rect.right_center() - vec2(10.0, 0.0), Align2::RIGHT_CENTER, &h.detail, theme::regular(12.0), t.text_faint);
                     if resp.clicked() {
                         chosen = Some((h.command, h.group));
                     }
@@ -123,8 +150,10 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
     if let Some((command, group)) = chosen {
         app.palette_open = false;
         app.palette_query.clear();
-        app.left_open = true;
-        app.left = LeftPanel::Tool(group);
+        if let Some(g) = group {
+            app.left_open = true;
+            app.left = LeftPanel::Tool(g);
+        }
         if let Some(c) = command {
             app.run_command(c);
         }

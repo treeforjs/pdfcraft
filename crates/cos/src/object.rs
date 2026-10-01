@@ -194,6 +194,8 @@ impl Stream {
         names
             .into_iter()
             .enumerate()
+            // `/Crypt` is applied by the security handler when the object is loaded (§7.4.10).
+            .filter(|(_, n)| *n != b"Crypt")
             .map(|(i, n)| {
                 let p = parms.get(i).copied().flatten();
                 let get = |k: &[u8], d: i64| p.and_then(|p| p.int(k)).unwrap_or(d);

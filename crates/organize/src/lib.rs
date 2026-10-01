@@ -11,6 +11,10 @@
 
 use printcraft_cos::{Dict, Document, ObjRef, Object, PdfString};
 
+mod import;
+
+pub use import::{SplitBy, combine, extract_pages, import_pages, split, split_ranges};
+
 #[derive(Debug, thiserror::Error, PartialEq)]
 pub enum OrganizeError {
     #[error("the document has no page tree")]

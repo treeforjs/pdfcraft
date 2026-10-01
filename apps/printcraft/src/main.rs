@@ -45,6 +45,10 @@ fn main() -> eframe::Result {
                 app.restore(&json);
             }
             app.integrated_titlebar = integrated;
+            // Autosave unsaved changes; offer to recover documents a crashed session left behind.
+            if let Some(dir) = printcraft_ui_egui::RecoveryStore::default_dir() {
+                app.enable_recovery(printcraft_ui_egui::RecoveryStore::new(dir));
+            }
             for f in files {
                 app.open_path(&f);
             }

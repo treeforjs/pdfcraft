@@ -56,7 +56,7 @@ fn corpus_parity() {
         let result = std::panic::catch_unwind(|| -> Result<(), String> {
             let mut doc = match Document::open(bytes.clone()) {
                 Ok(d) => d,
-                Err(printcraft_cos::CosError::Encrypted) => return Err("encrypted".into()),
+                Err(printcraft_cos::CosError::NeedsPassword) => return Err("encrypted".into()),
                 Err(e) => return Err(format!("open: {e}")),
             };
             // hayro may repair a broken /Count; compare against the leaf walk count loosely.
@@ -98,4 +98,53 @@ fn corpus_parity() {
         eprintln!("  {f}");
     }
     assert!(failures.iter().all(|f| !f.ends_with("PANIC")), "no panics");
+}
+
+/// Password-protected corpus files (passwords from pdf.js's test manifest): the right password
+/// opens them and the edit/save round trip still works; no or a wrong password is reported.
+#[test]
+#[ignore = "needs corpus/; run with --ignored"]
+fn corpus_passwords() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/pdfjs/test");
+    let Ok(manifest) = std::fs::read_to_string(dir.join("test_manifest.json")) else {
+        eprintln!("corpus not present");
+        return;
+    };
+    let entries: Vec<serde_json::Value> = serde_json::from_str(&manifest).expect("manifest is JSON");
+    let cases: Vec<(String, String)> =
+        entries.iter().filter_map(|e| Some((e.get("file")?.as_str()?.to_string(), e.get("password")?.as_str()?.to_string()))).collect();
+    assert!(cases.len() >= 5, "manifest parsed ({} cases)", cases.len());
+    let mut failures = Vec::new();
+    for (file, pw) in &cases {
+        let Ok(bytes) = std::fs::read(dir.join(file)) else { continue };
+        let bytes = Arc::new(bytes);
+        if !matches!(Document::open(bytes.clone()), Err(printcraft_cos::CosError::NeedsPassword)) {
+            failures.push(format!("{file}: opened without a password"));
+        }
+        if !matches!(Document::open_with_password(bytes.clone(), Some("definitely wrong")), Err(printcraft_cos::CosError::WrongPassword)) {
+            failures.push(format!("{file}: wrong password not rejected"));
+        }
+        match Document::open_with_password(bytes.clone(), Some(pw)) {
+            Ok(mut doc) => {
+                let pages = page_count(&doc);
+                if pages.unwrap_or(0) == 0 {
+                    failures.push(format!("{file}: no pages after decryption"));
+                    continue;
+                }
+                let root = doc.root().unwrap();
+                doc.update_dict(root, |d| d.set(b"PrintCraftTest".to_vec(), Object::Bool(true))).unwrap();
+                let saved = write_incremental(&doc, &SaveOptions::default()).unwrap();
+                match Document::open_with_password(Arc::new(saved.clone()), Some(pw)) {
+                    Ok(again) if page_count(&again) == pages => {}
+                    other => failures.push(format!("{file}: reopen after save failed ({:?})", other.err())),
+                }
+            }
+            Err(e) => failures.push(format!("{file}: {e}")),
+        }
+    }
+    eprintln!("password corpus: {} cases, {} failures", cases.len(), failures.len());
+    for f in &failures {
+        eprintln!("  {f}");
+    }
+    assert!(failures.is_empty());
 }

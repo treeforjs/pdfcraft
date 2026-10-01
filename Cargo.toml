@@ -16,6 +16,7 @@ repository = "https://github.com/storytold/printcraft"
 printcraft-geom = { path = "crates/geom" }
 printcraft-filters = { path = "crates/filters" }
 printcraft-cos = { path = "crates/cos" }
+printcraft-crypt = { path = "crates/crypt" }
 printcraft-organize = { path = "crates/organize" }
 printcraft-render = { path = "crates/render" }
 printcraft-engine = { path = "crates/engine" }

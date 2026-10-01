@@ -122,6 +122,16 @@ pub struct DocView {
     select_anchor: Option<usize>,
     /// An edit requested by the view (organize toolbar, keys), applied by the app this frame.
     pub pending_edit: Option<Edit>,
+    /// A non-edit action requested by the organize toolbar, handled by the app.
+    pub pending_action: Option<ViewAction>,
+}
+
+/// Organize-toolbar actions that need the app (file pickers, new tabs, dialogs).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ViewAction {
+    InsertFromFile,
+    Extract,
+    Split,
 }
 
 impl DocView {
@@ -160,6 +170,7 @@ impl DocView {
             selected: BTreeSet::new(),
             select_anchor: None,
             pending_edit: None,
+            pending_action: None,
         }
     }
 
@@ -615,9 +626,13 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
     }
     let want_thumbs = app.right == Some(RightPanel::Pages) || app.views[index].organize;
     let view = &mut app.views[index];
-    notices(view, info, ui, &t);
+    // Opened without the owner password and something is restricted.
+    let secured = doc.security_summary().is_some_and(|s| !(s.owner || (s.permissions.modify() && s.permissions.assemble())));
+    if notices(view, info, secured, ui, &t) {
+        app.dialog = Some(crate::Dialog::Properties(crate::PropsTab::Security));
+    }
     if view.organize {
-        organize_grid(view, info, &doc.renderer, doc.editable(), ui, &t);
+        organize_grid(view, info, &doc.renderer, doc.allows_assembly(), ui, &t);
         return;
     }
 
@@ -1044,18 +1059,22 @@ fn find_bar(view: &mut DocView, pages: usize, area: Rect, ui: &mut egui::Ui, t: 
     }
 }
 
-fn notices(view: &mut DocView, info: &DocInfo, ui: &mut egui::Ui, t: &Tokens) {
+/// The notice bar above the pages. Returns `true` when "Security settings" was clicked.
+fn notices(view: &mut DocView, info: &DocInfo, secured: bool, ui: &mut egui::Ui, t: &Tokens) -> bool {
     if view.notice_dismissed {
-        return;
+        return false;
     }
-    let msg = if !info.fields.is_empty() {
+    let mut open_security = false;
+    let msg = if secured {
+        Some(("lock", "This document is secured. Some changes are restricted by its security settings.".to_string(), false))
+    } else if !info.fields.is_empty() {
         Some(("text-cursor-input", format!("This document contains {} interactive form fields.", info.fields.len()), true))
     } else if !info.warnings.is_empty() {
         Some(("triangle-alert", info.warnings[0].clone(), false))
     } else {
         None
     };
-    let Some((icon, text, fields)) = msg else { return };
+    let Some((icon, text, fields)) = msg else { return false };
     egui::Frame::NONE.fill(t.accent_soft).inner_margin(egui::Margin::symmetric(14, 7)).show(ui, |ui| {
         ui.horizontal(|ui| {
             ui.add(icons::image(icon, 16.0, t.accent_text));
@@ -1070,9 +1089,13 @@ fn notices(view: &mut DocView, info: &DocInfo, ui: &mut egui::Ui, t: &Tokens) {
                         view.highlight_fields = !view.highlight_fields;
                     }
                 }
+                if secured && crate::widgets::pill_button(ui, "Security settings", false).clicked() {
+                    open_security = true;
+                }
             });
         });
     });
+    open_security
 }
 
 /// The floating quick-action bar at the left edge of the document area.
@@ -1141,6 +1164,16 @@ fn organize_toolbar(view: &mut DocView, info: &DocInfo, editable: bool, ui: &mut
                     let (w, h) = ((c[2] - c[0]).abs().max(1.0) as f64, (c[3] - c[1]).abs().max(1.0) as f64);
                     view.pending_edit = Some(Edit::InsertBlankPage { at: last + 1, width: w, height: h });
                 }
+                if icons::button(ui, "file-input", 30.0, false, "Insert pages from a file…").clicked() {
+                    view.pending_action = Some(ViewAction::InsertFromFile);
+                }
+                if icons::button(ui, "file-output", 30.0, false, "Extract pages to a new document").clicked() {
+                    view.pending_action = Some(ViewAction::Extract);
+                }
+                if icons::button(ui, "scissors", 30.0, false, "Split into files…").clicked() {
+                    view.pending_action = Some(ViewAction::Split);
+                }
+                ui.add_space(8.0);
                 if ui.add_enabled_ui(first > 0, |ui| icons::button(ui, "chevron-left", 30.0, false, "Move earlier")).inner.clicked() {
                     view.pending_edit = Some(Edit::MovePages { pages: targets.clone(), to: first - 1 });
                 }

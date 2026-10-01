@@ -2901,8 +2901,22 @@ name = "printcraft-cos"
 version = "0.1.0"
 dependencies = [
  "hayro-syntax",
+ "printcraft-crypt",
  "printcraft-filters",
  "proptest",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "printcraft-crypt"
+version = "0.1.0"
+dependencies = [
+ "aes",
+ "md-5",
+ "proptest",
+ "sha2",
+ "stringprep",
  "thiserror 2.0.21",
 ]
 
@@ -2963,6 +2977,7 @@ dependencies = [
  "image",
  "js-sys",
  "log",
+ "printcraft-cos",
  "printcraft-engine",
  "printcraft-render",
  "rfd",

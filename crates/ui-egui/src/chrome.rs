@@ -153,51 +153,9 @@ fn main_menu(app: &mut PrintCraftApp, ui: &mut egui::Ui) {
     let resp = widgets::ghost_button(ui, "panel-left", "Menu");
     egui::Popup::menu(&resp).show(|ui| {
         ui.set_min_width(230.0);
-        ui.menu_button("File", |ui| {
-            if widgets::menu_item(ui, "Open…", "⌘O").clicked() {
-                app.open_dialog();
-            }
-            let has = app.active.is_some();
-            if ui.add_enabled(has, egui::Button::new("Close file").shortcut_text("⌘W")).clicked()
-                && let Some(i) = app.active
-            {
-                app.request_close_tab(i);
-            }
-            let dirty = app.active_ids().and_then(|(_, id)| app.session.get(id)).is_some_and(|d| d.dirty);
-            if ui.add_enabled(has && dirty, egui::Button::new("Save").shortcut_text("⌘S")).clicked() {
-                app.save_active(crate::SaveTarget::InPlace);
-            }
-            if ui.add_enabled(has, egui::Button::new("Save as…").shortcut_text("⇧⌘S")).clicked() {
-                app.save_active(crate::SaveTarget::As);
-            }
-            ui.separator();
-            if ui.add_enabled(has, egui::Button::new("Find…").shortcut_text("⌘F")).clicked()
-                && let Some(i) = app.active
-            {
-                app.views[i].open_find();
-            }
-            ui.separator();
-            if ui.add_enabled(has, egui::Button::new("Document properties…").shortcut_text("⌘D")).clicked() {
-                app.dialog = Some(Dialog::Properties(PropsTab::Description));
-            }
-        });
-        ui.menu_button("Edit", |ui| {
-            let doc = app.active_ids().and_then(|(_, id)| app.session.get(id));
-            let undo = doc.and_then(|d| d.can_undo()).map(str::to_owned);
-            let redo = doc.and_then(|d| d.can_redo()).map(str::to_owned);
-            let label = |verb: &str, what: &Option<String>| what.as_ref().map(|w| format!("{verb} {w}")).unwrap_or_else(|| verb.to_string());
-            if ui.add_enabled(undo.is_some(), egui::Button::new(label("Undo", &undo)).shortcut_text("⌘Z")).clicked() {
-                app.undo();
-            }
-            if ui.add_enabled(redo.is_some(), egui::Button::new(label("Redo", &redo)).shortcut_text("⇧⌘Z")).clicked() {
-                app.redo();
-            }
-            ui.separator();
-            let has = app.active.is_some();
-            if ui.add_enabled(has, egui::Button::new("Organize pages")).clicked() {
-                app.run_command("page.organize");
-            }
-        });
+        ui.menu_button("File", |ui| crate::commands::registry_menu(app, ui, "File"));
+        ui.menu_button("Edit", |ui| crate::commands::registry_menu(app, ui, "Edit"));
+        ui.menu_button("Pages", |ui| crate::commands::registry_menu(app, ui, "Pages"));
         ui.menu_button("View", |ui| {
             if let Some(i) = app.active {
                 let v = &mut app.views[i];
@@ -235,13 +193,7 @@ fn main_menu(app: &mut PrintCraftApp, ui: &mut egui::Ui) {
                 }
                 ui.separator();
             }
-            if app.active.is_some() && widgets::menu_item(ui, "Full screen mode", "⌘L").clicked() {
-                let ctx = ui.ctx().clone();
-                app.set_full_screen(&ctx, true);
-            }
-            if widgets::menu_item(ui, "Read mode", "⌃⌘H").clicked() {
-                app.mode = if app.mode == Mode::Read { Mode::AllTools } else { Mode::Read };
-            }
+            crate::commands::registry_menu(app, ui, "View");
             ui.menu_button("Display theme", |ui| {
                 let ctx = ui.ctx().clone();
                 if ui.radio(app.theme == ThemeKind::Light, "Light gray").clicked() {
@@ -266,14 +218,7 @@ fn main_menu(app: &mut PrintCraftApp, ui: &mut egui::Ui) {
                 }
             });
         });
-        ui.menu_button("Help", |ui| {
-            if ui.button("Keyboard shortcuts").clicked() {
-                app.dialog = Some(Dialog::Shortcuts);
-            }
-            if ui.button("About PrintCraft").clicked() {
-                app.dialog = Some(Dialog::About);
-            }
-        });
+        ui.menu_button("Help", |ui| crate::commands::registry_menu(app, ui, "Help"));
     });
 }
 

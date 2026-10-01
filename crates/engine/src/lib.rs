@@ -11,6 +11,12 @@
 //! will write. Saving rebases onto the written bytes, so the next save appends only new edits.
 
 pub mod catalog;
+pub mod commands;
+
+pub use printcraft_organize::{SplitBy, split_ranges};
+
+/// One file produced by a split: (1-based first page, last page, PDF bytes).
+pub type SplitPart = (usize, usize, Arc<Vec<u8>>);
 
 use std::sync::Arc;
 
@@ -44,6 +50,10 @@ pub struct Document {
     pub password: Option<String>,
     /// `true` when there are edits that have not been saved.
     pub dirty: bool,
+    /// Bumped on every change to the working file (edit, undo, redo, save); autosave compares it.
+    generation: u64,
+    /// The generation last handed out by `autosave_snapshots`.
+    snapshot_generation: u64,
     /// Why the document cannot be edited (e.g. encryption), if so.
     pub read_only_reason: Option<String>,
     editor: Option<Editor>,
@@ -63,6 +73,37 @@ impl Document {
         self.editor.is_some()
     }
 
+    /// What the opening password allows; `None` when the document is not encrypted.
+    pub fn permissions(&self) -> Option<printcraft_cos::Permissions> {
+        self.editor.as_ref().and_then(|e| e.cos.permissions())
+    }
+
+    /// Page changes (insert, delete, rotate, move, extract) are allowed.
+    pub fn allows_assembly(&self) -> bool {
+        self.editable() && self.permissions().is_none_or(|p| p.assemble())
+    }
+
+    /// Changes to content and document information are allowed.
+    pub fn allows_modification(&self) -> bool {
+        self.editable() && self.permissions().is_none_or(|p| p.modify())
+    }
+
+    /// A summary of the document's security for Document Properties ▸ Security.
+    pub fn security_summary(&self) -> Option<SecuritySummary> {
+        let editor = self.editor.as_ref()?;
+        let h = editor.cos.security()?;
+        let d = h.dict();
+        let stream = d.crypt_filters.iter().find(|(name, _)| *name == d.stm_f).map(|(_, m)| *m);
+        let method = match (d.v, stream) {
+            (1..=3, _) if d.length_bits <= 40 => "RC4, 40-bit",
+            (1..=3, _) | (_, Some(printcraft_cos::CryptMethod::Rc4)) => "RC4, 128-bit",
+            (_, Some(printcraft_cos::CryptMethod::Aes128)) => "AES, 128-bit",
+            (_, Some(printcraft_cos::CryptMethod::Aes256)) => "AES, 256-bit",
+            _ => "Attachments only",
+        };
+        Some(SecuritySummary { method: method.into(), owner: h.auth() == printcraft_cos::Auth::Owner, permissions: h.permissions() })
+    }
+
     /// Current value of a document-information entry (Title, Author, …).
     pub fn info_value(&self, key: &str) -> Option<String> {
         self.editor.as_ref().and_then(|e| printcraft_organize::info(&e.cos, key))
@@ -76,6 +117,27 @@ impl Document {
 
 fn render_threads() -> usize {
     std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4).clamp(2, 8) - 1
+}
+
+/// A document's working file captured for crash recovery.
+#[derive(Clone, Debug)]
+pub struct RecoverySnapshot {
+    pub doc: DocId,
+    pub name: String,
+    pub path: Option<String>,
+    pub bytes: Arc<Vec<u8>>,
+    /// The snapshot is encrypted (recovering it asks for the password again).
+    pub encrypted: bool,
+}
+
+/// Document Properties ▸ Security.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SecuritySummary {
+    /// "AES, 256-bit" etc.
+    pub method: String,
+    /// Opened with the owner password (no restrictions apply).
+    pub owner: bool,
+    pub permissions: printcraft_cos::Permissions,
 }
 
 /// Edits that can be applied to a document. Page indices are 0-based.
@@ -101,6 +163,13 @@ pub enum Edit {
         key: String,
         value: String,
     },
+    /// Insert pages from another PDF (all pages when `pages` is `None`) at position `at`.
+    InsertPagesFrom {
+        name: String,
+        bytes: Arc<Vec<u8>>,
+        pages: Option<Vec<usize>>,
+        at: usize,
+    },
     /// Several edits applied as one undoable step (all or nothing).
     Batch {
         label: String,
@@ -117,8 +186,34 @@ impl Edit {
             Edit::MovePages { pages, .. } => plural("Move page", pages.len()),
             Edit::InsertBlankPage { .. } => "Insert blank page".into(),
             Edit::SetInfo { key, .. } => format!("Change {key}"),
+            Edit::InsertPagesFrom { name, .. } => format!("Insert pages from {name}"),
             Edit::Batch { label, .. } => label.clone(),
         }
+    }
+}
+
+/// Whether the opening password allows an edit (§7.6.4.2, Table 22).
+fn check_permission(edit: &Edit, p: &printcraft_cos::Permissions) -> Result<(), EditError> {
+    match edit {
+        Edit::RotatePages { .. }
+        | Edit::DeletePages { .. }
+        | Edit::MovePages { .. }
+        | Edit::InsertBlankPage { .. }
+        | Edit::InsertPagesFrom { .. } => {
+            if p.assemble() {
+                Ok(())
+            } else {
+                Err(EditError::NotPermitted("page changes"))
+            }
+        }
+        Edit::SetInfo { .. } => {
+            if p.modify() {
+                Ok(())
+            } else {
+                Err(EditError::NotPermitted("changes to the document"))
+            }
+        }
+        Edit::Batch { edits, .. } => edits.iter().try_for_each(|e| check_permission(e, p)),
     }
 }
 
@@ -132,6 +227,14 @@ fn run_edit(doc: &mut printcraft_cos::Document, edit: &Edit) -> Result<(), EditE
             printcraft_organize::insert_blank_page(doc, *at, *width, *height)?;
         }
         Edit::SetInfo { key, value } => printcraft_organize::set_info(doc, key, value)?,
+        Edit::InsertPagesFrom { name, bytes, pages, at } => {
+            let src = open_source(name, bytes)?;
+            let pages = match pages {
+                Some(p) => p.clone(),
+                None => (0..printcraft_organize::page_count(&src)?).collect(),
+            };
+            printcraft_organize::import_pages(doc, &src, &pages, *at)?;
+        }
         Edit::Batch { edits, .. } => {
             for e in edits {
                 run_edit(doc, e)?;
@@ -139,6 +242,19 @@ fn run_edit(doc: &mut printcraft_cos::Document, edit: &Edit) -> Result<(), EditE
         }
     }
     Ok(())
+}
+
+/// Parse another PDF to copy pages from.
+fn open_source(name: &str, bytes: &Arc<Vec<u8>>) -> Result<printcraft_cos::Document, EditError> {
+    match std::panic::catch_unwind(|| printcraft_cos::Document::open(bytes.clone())) {
+        Ok(Ok(d)) if d.permissions().is_some_and(|p| !p.assemble()) => {
+            Err(EditError::Source(format!("{name}: its security settings don't allow copying pages")))
+        }
+        Ok(Ok(d)) => Ok(d),
+        Ok(Err(printcraft_cos::CosError::NeedsPassword)) => Err(EditError::Source(format!("{name}: it is password-protected"))),
+        Ok(Err(e)) => Err(EditError::Source(format!("{name}: {e}"))),
+        Err(_) => Err(EditError::Source(format!("{name}: the file could not be read"))),
+    }
 }
 
 fn plural(s: &str, n: usize) -> String {
@@ -151,12 +267,16 @@ pub enum EditError {
     NoDocument,
     #[error("this document can't be edited: {0}")]
     ReadOnly(String),
+    #[error("the document's security settings don't allow {0}; open it with the owner password to make this change")]
+    NotPermitted(&'static str),
     #[error("{0}")]
     Organize(#[from] printcraft_organize::OrganizeError),
     #[error("the edited document could not be written: {0}")]
     Write(String),
     #[error("the edited document could not be reopened: {0}")]
     Reopen(String),
+    #[error("couldn't use {0}")]
+    Source(String),
     #[error("nothing to undo")]
     NothingToUndo,
     #[error("nothing to redo")]
@@ -196,10 +316,24 @@ impl Session {
     ///
     /// `password` is tried as either the user or owner password when the file is encrypted.
     pub fn open(&mut self, name: impl Into<String>, path: Option<String>, bytes: Arc<Vec<u8>>, password: Option<&str>) -> Result<DocId, OpenError> {
-        let info = inspect(bytes.clone(), password)?;
-        let config = RenderConfig { password: password.map(Arc::from), ..Default::default() };
+        let cos = std::panic::catch_unwind(|| printcraft_cos::Document::open_with_password(bytes.clone(), password));
+        // The renderer authenticates on its own. It cannot use the owner password of R2–R4
+        // files, so give it the user password that owner authentication recovers.
+        let (info, render_password) = match inspect(bytes.clone(), password) {
+            Ok(info) => (info, password.map(str::to_owned)),
+            Err(OpenError::WrongPassword) => {
+                let user = match &cos {
+                    Ok(Ok(d)) => d.security().and_then(|s| s.recovered_user_password()),
+                    _ => None,
+                };
+                let user: String = user.ok_or(OpenError::WrongPassword)?.iter().map(|b| char::from(*b)).collect();
+                (inspect(bytes.clone(), Some(&user))?, Some(user))
+            }
+            Err(e) => return Err(e),
+        };
+        let config = RenderConfig { password: render_password.as_deref().map(Arc::from), ..Default::default() };
         let renderer = RenderPool::new(bytes.clone(), render_threads(), config.clone());
-        let (editor, read_only_reason) = match std::panic::catch_unwind(|| printcraft_cos::Document::open(bytes.clone())) {
+        let (editor, read_only_reason) = match cos {
             Ok(Ok(cos)) => (Some(Editor { cos, undo: Vec::new(), redo: Vec::new() }), None),
             Ok(Err(e)) => (None, Some(e.to_string())),
             Err(_) => (None, Some("the document structure could not be read for editing".into())),
@@ -213,8 +347,10 @@ impl Session {
             bytes,
             info,
             renderer,
-            password: password.map(str::to_owned),
+            password: render_password,
             dirty: false,
+            generation: 0,
+            snapshot_generation: 0,
             read_only_reason,
             editor,
             config,
@@ -231,6 +367,9 @@ impl Session {
         let doc = self.doc_mut(id)?;
         let reason = doc.read_only_reason.clone().unwrap_or_default();
         let editor = doc.editor.as_mut().ok_or(EditError::ReadOnly(reason))?;
+        if let Some(p) = editor.cos.permissions() {
+            check_permission(&edit, &p)?;
+        }
         let mut next = editor.cos.clone();
         run_edit(&mut next, &edit)?;
         let previous = std::mem::replace(&mut editor.cos, next);
@@ -250,6 +389,7 @@ impl Session {
             return Err(e);
         }
         doc.dirty = true;
+        doc.generation += 1;
         Ok(())
     }
 
@@ -261,6 +401,7 @@ impl Session {
         editor.redo.push((label.clone(), current));
         Self::refresh(doc)?;
         doc.dirty = true;
+        doc.generation += 1;
         Ok(label)
     }
 
@@ -272,6 +413,7 @@ impl Session {
         editor.undo.push((label.clone(), current));
         Self::refresh(doc)?;
         doc.dirty = true;
+        doc.generation += 1;
         Ok(label)
     }
 
@@ -329,7 +471,91 @@ impl Session {
             doc.path = Some(p);
         }
         doc.dirty = false;
+        doc.generation += 1;
         Self::refresh(doc)
+    }
+
+    /// Combine whole files, in order, into new PDF bytes (one bookmark per file).
+    pub fn combine(&self, sources: &[(String, Arc<Vec<u8>>)]) -> Result<Arc<Vec<u8>>, EditError> {
+        let docs = sources.iter().map(|(n, b)| open_source(n, b)).collect::<Result<Vec<_>, _>>()?;
+        let named: Vec<(&str, &printcraft_cos::Document)> = sources.iter().map(|(n, _)| n.as_str()).zip(docs.iter()).collect();
+        let out = printcraft_organize::combine(&named)?;
+        self.write_new(&out)
+    }
+
+    /// New PDF bytes containing copies of `pages` of the document (Extract Pages).
+    pub fn extract(&self, id: DocId, pages: &[usize]) -> Result<Arc<Vec<u8>>, EditError> {
+        let src = self.cos(id)?;
+        if src.permissions().is_some_and(|p| !p.assemble()) {
+            return Err(EditError::NotPermitted("extracting pages"));
+        }
+        let out = printcraft_organize::extract_pages(src, pages)?;
+        self.write_new(&out)
+    }
+
+    /// Split the document into several new PDFs.
+    pub fn split(&self, id: DocId, by: &printcraft_organize::SplitBy) -> Result<Vec<SplitPart>, EditError> {
+        let src = self.cos(id)?;
+        if src.permissions().is_some_and(|p| !p.assemble()) {
+            return Err(EditError::NotPermitted("splitting the document"));
+        }
+        let n = printcraft_organize::page_count(src)?;
+        printcraft_organize::split_ranges(n, by)
+            .into_iter()
+            .map(|r| {
+                let doc = printcraft_organize::extract_pages(src, &r.clone().collect::<Vec<_>>())?;
+                Ok((r.start + 1, r.end, self.write_new(&doc)?))
+            })
+            .collect()
+    }
+
+    /// Open freshly created bytes (combine / extract) as a new, unsaved document.
+    pub fn open_new(&mut self, name: impl Into<String>, bytes: Arc<Vec<u8>>) -> Result<DocId, OpenError> {
+        let id = self.open(name, None, bytes, None)?;
+        if let Some(d) = self.docs.iter_mut().find(|d| d.id == id) {
+            d.dirty = true;
+        }
+        Ok(id)
+    }
+
+    fn cos(&self, id: DocId) -> Result<&printcraft_cos::Document, EditError> {
+        let doc = self.get(id).ok_or(EditError::NoDocument)?;
+        doc.editor.as_ref().map(|e| &e.cos).ok_or_else(|| EditError::ReadOnly(doc.read_only_reason.clone().unwrap_or_default()))
+    }
+
+    fn write_new(&self, doc: &printcraft_cos::Document) -> Result<Arc<Vec<u8>>, EditError> {
+        let opts = SaveOptions { mod_date: self.now().map(printcraft_cos::pdf_date), ..SaveOptions::default() };
+        write_full(doc, &opts).map(Arc::new).map_err(|e| EditError::Write(e.to_string()))
+    }
+
+    /// Documents with unsaved changes made since the last call: their current working file,
+    /// for crash recovery. Encrypted documents stay encrypted in the snapshot.
+    pub fn autosave_snapshots(&mut self) -> Vec<RecoverySnapshot> {
+        let mut out = Vec::new();
+        for d in &mut self.docs {
+            if d.dirty && d.generation != d.snapshot_generation {
+                d.snapshot_generation = d.generation;
+                out.push(RecoverySnapshot {
+                    doc: d.id,
+                    name: d.name.clone(),
+                    path: d.path.clone(),
+                    bytes: d.bytes.clone(),
+                    encrypted: d.info.encrypted || d.editor.as_ref().is_some_and(|e| e.cos.security().is_some()),
+                });
+            }
+        }
+        out
+    }
+
+    /// Mark a document opened from a recovery file: it has unsaved changes and belongs at
+    /// `path` (where Save writes), as when the session ended.
+    pub fn mark_recovered(&mut self, id: DocId, path: Option<String>) {
+        if let Some(d) = self.docs.iter_mut().find(|d| d.id == id) {
+            d.path = path;
+            d.dirty = true;
+            d.generation += 1;
+            d.snapshot_generation = d.generation; // its bytes are already in the recovery store
+        }
     }
 
     /// Show or hide a layer (optional content group) for viewing. Returns `true` if it changed;

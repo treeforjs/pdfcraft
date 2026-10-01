@@ -301,3 +301,167 @@ fn edit_menu_names_the_step_to_undo() {
     assert_eq!(doc.can_redo(), Some("Rotate page"));
     assert_eq!(doc.info.pages[0].rotation, 0);
 }
+
+// ── Combine / insert from file / extract / split ──────────────────────────────────────────────
+
+fn texts_of(app: &PrintCraftApp, tab: usize) -> Vec<String> {
+    let doc = app.session.get(app.views[tab].id).unwrap();
+    let mut r = PageRenderer::new(doc.bytes.clone(), Default::default());
+    (0..r.page_count())
+        .map(|p| {
+            let out = r.render(RenderRequest { page: p, kind: RequestKind::Text, scale: 1.0, ..Default::default() });
+            out.text.map(|t| t.plain_text().trim().to_string()).unwrap_or_default()
+        })
+        .collect()
+}
+
+#[test]
+fn combining_files_opens_a_new_unsaved_tab() {
+    let mut h = harness(1, |app| {
+        app.use_files(printcraft_ui_egui::FilePurpose::Combine, vec![("one.pdf".into(), fixture(2)), ("two.pdf".into(), fixture(1))]);
+    });
+    h.run_steps(3);
+    let app = h.state();
+    assert_eq!(app.views.len(), 2);
+    assert_eq!(app.active, Some(1));
+    assert_eq!(texts_of(app, 1), ["Page 1", "Page 2", "Page 1"]);
+    let doc = app.session.get(app.views[1].id).unwrap();
+    assert_eq!(doc.name, "Combined.pdf");
+    assert!(doc.dirty && doc.path.is_none(), "unsaved until the user saves it");
+    assert_eq!(doc.info.outline.iter().map(|o| o.title.as_str()).collect::<Vec<_>>(), ["one", "two"]);
+    h.get_by_label("Combined.pdf (edited)");
+}
+
+#[test]
+fn extract_button_copies_selected_pages_to_a_new_tab() {
+    let mut h = organize(3);
+    h.get_by_label("Page 2").click();
+    h.run_steps(1);
+    h.get_by_label("Page 3").click_modifiers(Modifiers::COMMAND);
+    h.run_steps(2);
+    h.get_by_label("Extract pages to a new document").click();
+    h.run_steps(3);
+    let app = h.state();
+    assert_eq!(app.views.len(), 2);
+    assert_eq!(texts_of(app, 1), ["Page 2", "Page 3"]);
+    assert_eq!(texts_of(app, 0).len(), 3, "the original is unchanged");
+    assert!(!app.session.get(app.views[0].id).unwrap().dirty);
+}
+
+#[test]
+fn inserting_a_file_goes_after_the_selection_and_undoes() {
+    let mut h = organize(2);
+    h.get_by_label("Page 1").click();
+    h.run_steps(2);
+    h.state_mut().use_files(printcraft_ui_egui::FilePurpose::InsertPages, vec![("extra.pdf".into(), fixture(2))]);
+    h.run_steps(3);
+    assert_eq!(texts_of(h.state(), 0), ["Page 1", "Page 1", "Page 2", "Page 2"]);
+    h.key_press_modifiers(Modifiers::COMMAND, Key::Z);
+    h.run_steps(3);
+    assert_eq!(texts_of(h.state(), 0), ["Page 1", "Page 2"]);
+}
+
+#[test]
+fn split_dialog_writes_one_file_per_part() {
+    let dir = temp_path("split-count");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let d = dir.to_string_lossy().into_owned();
+    let mut h = organize(3);
+    h.state_mut().export_dir_override = Some(d);
+    h.get_by_label("Split into files…").click();
+    h.run_steps(3);
+    h.get_by_label_contains("Creates 3 files from 3 pages");
+    h.get_by_label("Split").click();
+    h.run_steps(3);
+    let mut names: Vec<String> = std::fs::read_dir(&dir).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+    names.sort();
+    assert_eq!(names, ["doc (page 1).pdf", "doc (page 2).pdf", "doc (page 3).pdf"]);
+    for name in names {
+        let info = printcraft_render::inspect(std::sync::Arc::new(std::fs::read(dir.join(name)).unwrap()), None).unwrap();
+        assert_eq!(info.pages.len(), 1);
+    }
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn split_before_selected_pages() {
+    let dir = temp_path("split-sel");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut h = organize(4);
+    h.state_mut().export_dir_override = Some(dir.to_string_lossy().into_owned());
+    h.state_mut().views[0].select_pages(&[2]);
+    h.state_mut().split_draft.at_selection = true;
+    h.state_mut().run_command("page.split");
+    h.run_steps(3);
+    h.get_by_label_contains("Creates 2 files from 4 pages");
+    h.get_by_label("Split").click();
+    h.run_steps(3);
+    let mut names: Vec<String> = std::fs::read_dir(&dir).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+    names.sort();
+    assert_eq!(names, ["doc (pages 1-2).pdf", "doc (pages 3-4).pdf"]);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+// ── Encrypted documents ───────────────────────────────────────────────────────────────────────
+
+fn protected(user: &str, owner: &str, permissions: i32) -> Vec<u8> {
+    let mut doc = printcraft_cos::Document::open(std::sync::Arc::new(fixture(2))).unwrap();
+    doc.set_encryption(&printcraft_cos::NewEncryption {
+        algorithm: printcraft_cos::Algorithm::Aes256,
+        user_password: user,
+        owner_password: owner,
+        permissions,
+        encrypt_metadata: true,
+        seed: [4; 32],
+    })
+    .unwrap();
+    printcraft_cos::write_full(&doc, &Default::default()).unwrap()
+}
+
+#[test]
+fn password_prompt_opens_and_security_tab_reports_the_details() {
+    let mut h = Harness::builder().with_size(egui::vec2(1400.0, 900.0)).build_eframe(|_cc| {
+        let mut app = PrintCraftApp::new();
+        app.open_bytes("secret.pdf", None, protected("pw", "owner", -1)).unwrap();
+        app
+    });
+    h.run_steps(4);
+    h.get_by_label_contains("is protected");
+    let field = h.get_by_role(Role::PasswordInput);
+    field.focus();
+    field.type_text("pw");
+    h.run_steps(2);
+    h.key_press(Key::Enter);
+    h.run_steps(4);
+    assert_eq!(h.state().views.len(), 1);
+    h.state_mut().set_option("dialog", "properties").unwrap();
+    h.run_steps(2);
+    h.get_by_label("Security").click();
+    h.run_steps(3);
+    h.get_by_label("AES, 256-bit");
+    h.get_by_label("User password");
+}
+
+#[test]
+fn restricted_documents_show_a_notice_and_block_page_changes() {
+    let mut h = Harness::builder().with_size(egui::vec2(1400.0, 900.0)).build_eframe(|_cc| {
+        let mut app = PrintCraftApp::new();
+        app.open_bytes("locked.pdf", None, protected("", "owner", 0b0100)).unwrap(); // opens without a password
+        app.set_option("organize", "on").unwrap();
+        app
+    });
+    h.run_steps(4);
+    h.get_by_label_contains("This document is secured");
+    h.get_by_label("Page 1").click();
+    h.run_steps(1);
+    h.get_by_label("Delete pages (Delete)").click();
+    h.key_press(Key::Delete);
+    h.run_steps(3);
+    assert_eq!(texts_of(h.state(), 0).len(), 2, "page changes are blocked");
+    assert!(!dirty(&h));
+    h.get_by_label("Security settings").click();
+    h.run_steps(3);
+    assert!(h.query_all_by_label("Not allowed").count() >= 4);
+}

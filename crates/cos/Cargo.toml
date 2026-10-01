@@ -9,9 +9,11 @@ license.workspace = true
 workspace = true
 
 [dependencies]
+printcraft-crypt = { workspace = true }
 printcraft-filters = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
+serde_json = { workspace = true }
 proptest = { workspace = true }
 hayro-syntax = { workspace = true }

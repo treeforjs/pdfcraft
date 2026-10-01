@@ -24,11 +24,14 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
         app.props_draft = Some((id, INFO_KEYS.map(|k| doc.info_value(k).unwrap_or_default())));
     }
     let mut apply = false;
+    let mut split_now: Option<printcraft_engine::SplitBy> = None;
+    let mut split_ready: Option<printcraft_engine::SplitBy> = None;
+    let mut recover: Option<bool> = None;
     let t = Tokens::get(ctx);
     let mut close = false;
     let mut next = dialog;
     let modal = egui::Modal::new(egui::Id::new("dialog")).show(ctx, |ui| {
-        ui.set_width(560.0);
+        ui.set_width(if matches!(dialog, Dialog::Properties(_)) { 640.0 } else { 520.0 });
         match dialog {
             Dialog::Properties(tab) => {
                 ui.label(egui::RichText::new("Document Properties").font(theme::semibold(18.0)));
@@ -59,10 +62,17 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
                         PropsTab::Description => {
                             row(ui, "File", doc.name.clone());
                             match app.props_draft.as_mut() {
-                                Some((_, draft)) if doc.editable() => {
+                                Some((_, draft)) if doc.allows_modification() => {
                                     for (k, v) in INFO_KEYS.iter().zip(draft.iter_mut()) {
                                         let l = ui.label(egui::RichText::new(*k).color(t.text_muted));
-                                        ui.add(egui::TextEdit::singleline(v).desired_width(f32::INFINITY).id_salt(("info", *k))).labelled_by(l.id);
+                                        ui.add(
+                                            egui::TextEdit::singleline(v)
+                                                .desired_width(420.0)
+                                                .background_color(t.field)
+                                                .margin(egui::Margin::symmetric(6, 4))
+                                                .id_salt(("info", *k)),
+                                        )
+                                        .labelled_by(l.id);
                                         ui.end_row();
                                     }
                                 }
@@ -76,20 +86,40 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
                             row(ui, "Application", i.creator.clone().unwrap_or_default());
                             row(ui, "PDF producer", i.producer.clone().unwrap_or_default());
                         }
-                        PropsTab::Security => {
-                            row(ui, "Security method", if i.encrypted { "Password security".into() } else { "No security".into() });
-                            for k in [
-                                "Printing",
-                                "Changing the document",
-                                "Document assembly",
-                                "Content copying",
-                                "Commenting",
-                                "Filling of form fields",
-                                "Signing",
-                            ] {
-                                row(ui, k, if i.encrypted { "See permissions (M8)".into() } else { "Allowed".into() });
+                        PropsTab::Security => match doc.security_summary() {
+                            None => {
+                                row(ui, "Security method", "No security".into());
+                                row(ui, "Restrictions", "None — everything is allowed".into());
                             }
-                        }
+                            Some(sec) => {
+                                row(ui, "Security method", "Password security".into());
+                                row(ui, "Encryption", sec.method.clone());
+                                row(
+                                    ui,
+                                    "Opened with",
+                                    if sec.owner { "Owner password (no restrictions apply)".into() } else { "User password".into() },
+                                );
+                                let p = sec.permissions;
+                                let yes = |b: bool| if b { "Allowed".to_string() } else { "Not allowed".to_string() };
+                                row(
+                                    ui,
+                                    "Printing",
+                                    if !p.print() {
+                                        "Not allowed".into()
+                                    } else if p.print_high_quality() {
+                                        "High resolution".into()
+                                    } else {
+                                        "Low resolution".into()
+                                    },
+                                );
+                                row(ui, "Changing the document", yes(p.modify()));
+                                row(ui, "Document assembly", yes(p.assemble()));
+                                row(ui, "Content copying", yes(p.copy()));
+                                row(ui, "Content copying for accessibility", yes(p.extract_for_accessibility()));
+                                row(ui, "Commenting", yes(p.annotate()));
+                                row(ui, "Filling of form fields", yes(p.fill_forms()));
+                            }
+                        },
                         PropsTab::Fonts => {
                             if i.fonts.is_empty() {
                                 row(ui, "Fonts", "No fonts are referenced by the pages.".into());
@@ -126,35 +156,100 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
                     })
                 });
             }
+            Dialog::Split => {
+                ui.label(egui::RichText::new("Split document").font(theme::semibold(18.0)));
+                ui.add_space(8.0);
+                let Some((vi, id)) = app.active_ids() else { return };
+                let n = app.session.get(id).map(|d| d.info.pages.len()).unwrap_or(0);
+                let selected: Vec<usize> = app.views[vi].selected.iter().copied().filter(|p| *p > 0).collect();
+                let draft = &mut app.split_draft;
+                if selected.is_empty() {
+                    draft.at_selection = false;
+                }
+                ui.radio_value(&mut draft.at_selection, false, "By number of pages");
+                ui.add_enabled_ui(!draft.at_selection, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.add_space(24.0);
+                        ui.label("Pages per file");
+                        ui.add(egui::DragValue::new(&mut draft.every).range(1..=n.max(1)));
+                    });
+                });
+                ui.add_enabled_ui(!selected.is_empty(), |ui| {
+                    ui.radio_value(&mut draft.at_selection, true, "Before each selected page (select pages in Organize)")
+                });
+                let by = if draft.at_selection {
+                    printcraft_engine::SplitBy::Before(selected)
+                } else {
+                    printcraft_engine::SplitBy::PageCount(draft.every)
+                };
+                let files = printcraft_engine::split_ranges(n, &by).len();
+                ui.add_space(8.0);
+                ui.label(
+                    egui::RichText::new(format!("Creates {files} file{} from {n} pages.", if files == 1 { "" } else { "s" })).color(t.text_muted),
+                );
+                if files > 1 {
+                    split_ready = Some(by);
+                }
+            }
+            Dialog::Recovery => {
+                ui.horizontal(|ui| {
+                    ui.add(crate::icons::image("clock-3", 22.0, t.accent));
+                    ui.label(egui::RichText::new("Recover unsaved documents?").font(theme::semibold(18.0)));
+                });
+                ui.add_space(6.0);
+                ui.label("PrintCraft didn't shut down normally. These documents had changes that were autosaved:");
+                ui.add_space(8.0);
+                let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+                egui::Grid::new("recoverable").num_columns(2).spacing([18.0, 6.0]).show(ui, |ui| {
+                    for m in &app.recoverable {
+                        ui.label(egui::RichText::new(&m.name).font(theme::medium(13.0)));
+                        let mins = now.saturating_sub(m.saved_at) / 60;
+                        let when = match mins {
+                            0 => "just now".to_string(),
+                            1..=59 => format!("{mins} min ago"),
+                            _ => format!("{} h ago", mins / 60),
+                        };
+                        let lock = if m.encrypted { " · password-protected" } else { "" };
+                        ui.label(egui::RichText::new(format!("{when}{lock}")).color(t.text_muted));
+                        ui.end_row();
+                    }
+                });
+            }
             Dialog::Shortcuts => {
                 ui.label(egui::RichText::new("Keyboard shortcuts").font(theme::semibold(18.0)));
                 ui.add_space(8.0);
-                egui::Grid::new("keys").num_columns(2).spacing([24.0, 6.0]).show(ui, |ui| {
-                    for (k, v) in [
-                        ("⌘O", "Open"),
-                        ("⌘W", "Close file"),
-                        ("⌘S / ⇧⌘S", "Save / Save as"),
-                        ("⌘Z / ⇧⌘Z", "Undo / Redo"),
-                        ("Delete", "Delete selected pages (Organize)"),
-                        ("⌘D", "Document properties"),
-                        ("⌘K", "Find tools and commands"),
-                        ("⌘F", "Find text in the document"),
-                        ("⌘G / ⇧⌘G", "Next / previous match"),
-                        ("⌘C", "Copy selected text"),
-                        ("Double-click", "Select a word"),
-                        ("Esc", "Clear selection / close find"),
-                        ("⌘1", "Actual size"),
-                        ("⌘0", "Zoom to page level"),
-                        ("⌘2", "Fit to width"),
-                        ("⌘+ / ⌘−", "Zoom in / out (also pinch or ⌘-scroll)"),
-                        ("Home / End", "First / last page"),
-                        ("⌘← / ⌘→", "Previous / next page"),
-                        ("⌃⌘H", "Read mode"),
-                    ] {
-                        ui.label(egui::RichText::new(k).font(egui::FontId::monospace(12.5)));
-                        ui.label(v);
-                        ui.end_row();
-                    }
+                let mac = cfg!(target_os = "macos") || cfg!(target_arch = "wasm32");
+                // Registered commands first (always in sync with the real bindings), then the
+                // keys the document view handles itself.
+                let mut rows: Vec<(String, String)> = printcraft_engine::commands::COMMANDS
+                    .iter()
+                    .filter_map(|c| c.shortcut.map(|k| (k.label(mac), c.label.trim_end_matches('…').to_string())))
+                    .collect();
+                for (k, v) in [
+                    ("⌘G / ⇧⌘G", "Next / previous match"),
+                    ("⌘C", "Copy selected text"),
+                    ("Double-click", "Select a word"),
+                    ("Esc", "Clear selection / close find"),
+                    ("⌘1", "Actual size"),
+                    ("⌘0", "Zoom to page level"),
+                    ("⌘2", "Fit to width"),
+                    ("⌘+ / ⌘−", "Zoom in / out (also pinch or ⌘-scroll)"),
+                    ("⇧⌘+ / ⇧⌘−", "Rotate view"),
+                    ("Home / End", "First / last page"),
+                    ("⌘← / ⌘→", "Previous / next page"),
+                    ("Delete", "Delete selected pages (Organize)"),
+                    ("⌘A", "Select all pages (Organize)"),
+                ] {
+                    rows.push((k.to_string(), v.to_string()));
+                }
+                egui::ScrollArea::vertical().max_height(460.0).show(ui, |ui| {
+                    egui::Grid::new("keys").num_columns(2).spacing([24.0, 6.0]).show(ui, |ui| {
+                        for (k, v) in &rows {
+                            ui.label(egui::RichText::new(k).font(egui::FontId::monospace(12.5)));
+                            ui.label(v);
+                            ui.end_row();
+                        }
+                    });
                 });
             }
             Dialog::About => {
@@ -172,7 +267,24 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
         ui.add_space(12.0);
         let changed = draft_changes(app).is_some_and(|c| !c.is_empty());
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            if changed {
+            if dialog == Dialog::Recovery {
+                if widgets::pill_button(ui, "Recover", true).clicked() {
+                    recover = Some(true);
+                    close = true;
+                }
+                if widgets::pill_button(ui, "Discard", false).clicked() {
+                    recover = Some(false);
+                    close = true;
+                }
+            } else if dialog == Dialog::Split {
+                if ui.add_enabled_ui(split_ready.is_some(), |ui| widgets::pill_button(ui, "Split", true)).inner.clicked() {
+                    split_now = split_ready.clone();
+                    close = true;
+                }
+                if widgets::pill_button(ui, "Cancel", false).clicked() {
+                    close = true;
+                }
+            } else if changed {
                 if widgets::pill_button(ui, "OK", true).clicked() {
                     apply = true;
                     close = true;
@@ -185,6 +297,17 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
             }
         });
     });
+    if let Some(yes) = recover {
+        let keys: Vec<String> = app.recoverable.iter().map(|m| m.key.clone()).collect();
+        if yes {
+            app.recover(&keys);
+        } else {
+            app.discard_recovered(&keys);
+        }
+    }
+    if let Some(by) = split_now {
+        app.split_active(&by);
+    }
     if apply && let Some(edits) = draft_changes(app) {
         app.apply_edit(Edit::Batch { label: "Change document properties".into(), edits });
     }
@@ -274,10 +397,12 @@ fn password(app: &mut PrintCraftApp, ctx: &egui::Context) {
         ui.label(format!("“{}” is protected. Enter a password to open it.", prompt.name));
         ui.add_space(8.0);
         let r = ui.add(egui::TextEdit::singleline(&mut prompt.input).password(true).hint_text("Password").desired_width(f32::INFINITY));
-        r.request_focus();
-        if r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+        // Enter submits. The field keeps focus (we request it every frame), so check the key
+        // while it is focused as well as on the frame focus is lost.
+        if (r.has_focus() || r.lost_focus()) && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
             submit = true;
         }
+        r.request_focus();
         if let Some(e) = &prompt.error {
             ui.add_space(4.0);
             ui.label(egui::RichText::new(e).color(egui::Color32::from_rgb(0xD1, 0x3B, 0x3B)));

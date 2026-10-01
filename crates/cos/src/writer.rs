@@ -51,9 +51,10 @@ fn write_real(r: f64, out: &mut Vec<u8>) {
         let _ = write!(out, "{}", r as i64);
         return;
     }
-    // Plain decimal notation (no exponents, §7.3.3), trimmed.
-    let s = format!("{r:.6}");
-    let s = s.trim_end_matches('0').trim_end_matches('.');
+    // Plain decimal notation (§7.3.3 has no exponents). Rust's `Display` for f64 prints the
+    // shortest string that parses back to the same value, never in exponent form, so values
+    // round-trip exactly (rounding to a fixed number of places visibly shifted shading colours).
+    let s = format!("{r}");
     out.extend_from_slice(if s == "-0" { b"0" } else { s.as_bytes() });
 }
 
@@ -119,6 +120,15 @@ fn write_stream(s: &Stream, out: &mut Vec<u8>) {
     out.extend_from_slice(b"\nendstream");
 }
 
+/// The object as written: encrypted with its (output) number when the document is encrypted,
+/// except the `/Encrypt` dictionary itself (`source_num` is its number in the source document).
+fn prepared(doc: &Document, source_num: u32, num: u32, generation: u16, o: &Object) -> Object {
+    match doc.output_security() {
+        (Some(h), encrypt_num) if Some(source_num) != encrypt_num => crate::security::transform(h, o, num, generation, false),
+        _ => o.clone(),
+    }
+}
+
 fn write_indirect(num: u32, generation: u16, o: &Object, out: &mut Vec<u8>) {
     let _ = writeln!(out, "{num} {generation} obj");
     serialize(o, out);
@@ -146,7 +156,9 @@ impl Default for SaveOptions {
 /// incrementally — other readers would follow the broken chain — so it is rewritten in full,
 /// which also repairs the file (what users expect after "the file was damaged and repaired").
 pub fn write_incremental(doc: &Document, opts: &SaveOptions) -> Result<Vec<u8>, CosError> {
-    if doc.revisions().is_empty() {
+    // Reconstructed files have no chain to append to; added or removed encryption must
+    // rewrite every object. Both need a full save.
+    if doc.revisions().is_empty() || doc.encryption_changed() {
         return write_full(doc, opts);
     }
     let mut doc = doc.clone();
@@ -162,7 +174,7 @@ pub fn write_incremental(doc: &Document, opts: &SaveOptions) -> Result<Vec<u8>, 
         match obj {
             Some(o) => {
                 offsets.insert(num, (out.len() as u64, generation, true));
-                write_indirect(num, generation, &o, &mut out);
+                write_indirect(num, generation, &prepared(&doc, num, num, generation, &o), &mut out);
             }
             None => {
                 offsets.insert(num, (0, generation, false));
@@ -172,7 +184,9 @@ pub fn write_incremental(doc: &Document, opts: &SaveOptions) -> Result<Vec<u8>, 
     let prev = doc.revisions().last().map(|r| r.xref_offset);
     let as_stream = doc.revisions().last().is_some_and(|r| r.is_stream);
     let mut trailer = doc.trailer().clone();
-    ensure_id(&mut trailer, opts, &original);
+    if doc.output_security().0.is_none() {
+        ensure_id(&mut trailer, opts, &original); // an encrypted file's ID is part of its key
+    }
     if let Some(p) = prev {
         trailer.set(b"Prev".to_vec(), Object::Int(p as i64));
     }
@@ -200,7 +214,7 @@ pub fn write_full(doc: &Document, opts: &SaveOptions) -> Result<Vec<u8>, CosErro
     let mut order: Vec<ObjRef> = Vec::new();
     let mut queue: VecDeque<ObjRef> = VecDeque::new();
     let visit_refs = |o: &Object, queue: &mut VecDeque<ObjRef>| collect_refs(o, &mut |r| queue.push_back(r));
-    for key in [&b"Root"[..], b"Info"] {
+    for key in [&b"Root"[..], b"Info", b"Encrypt"] {
         if let Some(r) = trailer_in.reference(key) {
             queue.push_back(r);
         }
@@ -227,19 +241,24 @@ pub fn write_full(doc: &Document, opts: &SaveOptions) -> Result<Vec<u8>, CosErro
         let num = (i + 1) as u32;
         let o = renumber(&doc.get(*r), &map);
         offsets.insert(num, (out.len() as u64, 0, true));
-        write_indirect(num, 0, &o, &mut out);
+        write_indirect(num, 0, &prepared(&doc, r.num, num, 0, &o), &mut out);
     }
     let mut trailer = Dict::new();
     trailer.set(b"Size".to_vec(), Object::Int(order.len() as i64 + 1));
-    for key in [&b"Root"[..], b"Info"] {
+    for key in [&b"Root"[..], b"Info", b"Encrypt"] {
         if let Some(r) = trailer_in.reference(key).and_then(|r| map.get(&r)) {
             trailer.set(key.to_vec(), Object::Ref(ObjRef::new(*r, 0)));
         }
     }
+    if let Some(Object::Dict(d)) = trailer_in.get(b"Encrypt") {
+        trailer.set(b"Encrypt".to_vec(), Object::Dict(d.clone()));
+    }
     if let Some(id) = trailer_in.get(b"ID") {
         trailer.set(b"ID".to_vec(), id.clone());
     }
-    ensure_id(&mut trailer, opts, doc.bytes());
+    if doc.output_security().0.is_none() {
+        ensure_id(&mut trailer, opts, doc.bytes());
+    }
     let xref_at = out.len();
     write_xref_table(&mut out, &offsets, true);
     out.extend_from_slice(b"trailer\n");
@@ -383,4 +402,50 @@ pub fn pdf_date(unix_secs: i64) -> String {
     let m = if mp < 10 { mp + 3 } else { mp - 9 };
     let y = if m <= 2 { y + 1 } else { y };
     format!("D:{y:04}{m:02}{d:02}{:02}{:02}{:02}Z", secs / 3600, secs / 60 % 60, secs % 60)
+}
+
+#[cfg(test)]
+mod tests {
+    use proptest::prelude::*;
+
+    use super::*;
+    use crate::Lexer;
+
+    fn roundtrip(o: &Object) -> Object {
+        let mut out = Vec::new();
+        serialize(o, &mut out);
+        Lexer::new(&out, 0).object().expect("parses")
+    }
+
+    #[test]
+    fn reals_keep_full_precision_without_exponents() {
+        for r in [0.1, -0.000_000_123_456_789, 1e-12, 123_456.789_012_345, 1.0 / 3.0, -2.5e7 + 0.25] {
+            let mut out = Vec::new();
+            serialize(&Object::Real(r), &mut out);
+            assert!(!out.contains(&b'e') && !out.contains(&b'E'), "{}", String::from_utf8_lossy(&out));
+            assert_eq!(roundtrip(&Object::Real(r)), Object::Real(r));
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn any_finite_real_round_trips(r in proptest::num::f64::NORMAL | proptest::num::f64::SUBNORMAL | proptest::num::f64::ZERO) {
+            prop_assume!(r.abs() < 1e15 || r.fract() == 0.0);
+            let back = roundtrip(&Object::Real(r));
+            match back {
+                Object::Real(b) => prop_assert_eq!(b, r),
+                Object::Int(i) => prop_assert_eq!(i as f64, r),
+                other => prop_assert!(false, "unexpected {other:?}"),
+            }
+        }
+
+        #[test]
+        fn strings_and_names_round_trip(bytes in proptest::collection::vec(any::<u8>(), 0..64)) {
+            let s = Object::String(PdfString { bytes: bytes.clone(), hex: false });
+            prop_assert_eq!(roundtrip(&s).as_string().map(|s| s.bytes.clone()), Some(bytes.clone()));
+            if !bytes.is_empty() && !bytes.contains(&0) {
+                prop_assert_eq!(roundtrip(&Object::Name(bytes.clone())), Object::Name(bytes));
+            }
+        }
+    }
 }

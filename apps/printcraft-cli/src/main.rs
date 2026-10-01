@@ -6,6 +6,9 @@
 //! printcraft-cli text   <file.pdf> [--page N]                  extracted text (pages separated by form feeds)
 //! printcraft-cli edit   <in.pdf> --out out.pdf [--rotate 1,3:90] [--delete 2,4] [--move 5:1]
 //!                       [--insert-blank 1] [--title T] [--author A] [--full]
+//! printcraft-cli combine <a.pdf> <b.pdf> … --out combined.pdf
+//! printcraft-cli extract <in.pdf> --pages 1,3,5 --out out.pdf
+//! printcraft-cli split   <in.pdf> (--every N | --before 3,7) [--out-dir DIR]
 //! printcraft-cli check  <files or dirs…> [--timeout 20] [--dpi 36] [--json out.json]
 //! ```
 //!
@@ -28,13 +31,16 @@ fn main() -> ExitCode {
         Some("render") => render(&args[1..]),
         Some("text") => text(&args[1..]),
         Some("edit") => edit(&args[1..]),
+        Some("combine") => combine(&args[1..]),
+        Some("extract") => extract(&args[1..]),
+        Some("split") => split(&args[1..]),
         Some("check") => check(&args[1..]),
         Some("check-one") => check_one(&args[1..]),
         Some("--version") => {
             println!("printcraft-cli {}", env!("CARGO_PKG_VERSION"));
             Ok(())
         }
-        _ => Err("usage: printcraft-cli <info|render|text|edit|check> …  (see source header for options)".into()),
+        _ => Err("usage: printcraft-cli <info|render|text|edit|combine|extract|split|check> …  (see source header for options)".into()),
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,
@@ -153,6 +159,51 @@ fn edit(args: &[String]) -> Result<(), String> {
     }
     let bytes = if args.iter().any(|a| a == "--full") { session.save_full_bytes(id) } else { session.save_bytes(id) }.map_err(|e| e.to_string())?;
     std::fs::write(out, bytes.as_slice()).map_err(|e| format!("{out}: {e}"))
+}
+
+fn file_stem(path: &str) -> String {
+    Path::new(path).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| path.to_string())
+}
+
+fn combine(args: &[String]) -> Result<(), String> {
+    let out = flag(args, "--out").ok_or("combine: missing --out")?;
+    let inputs = positional(args);
+    if inputs.len() < 2 {
+        return Err("combine: give at least two input files".into());
+    }
+    let sources = inputs.iter().map(|p| Ok((file_stem(p), read(p)?))).collect::<Result<Vec<_>, String>>()?;
+    let bytes = printcraft_engine::Session::new().combine(&sources).map_err(|e| e.to_string())?;
+    std::fs::write(out, bytes.as_slice()).map_err(|e| format!("{out}: {e}"))
+}
+
+fn extract(args: &[String]) -> Result<(), String> {
+    let path = *positional(args).first().ok_or("extract: missing file")?;
+    let out = flag(args, "--out").ok_or("extract: missing --out")?;
+    let pages = page_list(flag(args, "--pages").ok_or("extract: missing --pages")?)?;
+    let mut session = printcraft_engine::Session::new();
+    let id = session.open(path, None, read(path)?, flag(args, "--password")).map_err(|e| e.to_string())?;
+    let bytes = session.extract(id, &pages).map_err(|e| e.to_string())?;
+    std::fs::write(out, bytes.as_slice()).map_err(|e| format!("{out}: {e}"))
+}
+
+fn split(args: &[String]) -> Result<(), String> {
+    use printcraft_engine::SplitBy;
+    let path = *positional(args).first().ok_or("split: missing file")?;
+    let by = match (flag(args, "--every"), flag(args, "--before")) {
+        (Some(n), None) => SplitBy::PageCount(n.parse().map_err(|_| "bad --every")?),
+        (None, Some(list)) => SplitBy::Before(page_list(list)?),
+        _ => return Err("split: give either --every N or --before PAGES".into()),
+    };
+    let dir = PathBuf::from(flag(args, "--out-dir").unwrap_or("."));
+    let mut session = printcraft_engine::Session::new();
+    let id = session.open(path, None, read(path)?, flag(args, "--password")).map_err(|e| e.to_string())?;
+    let stem = file_stem(path);
+    for (a, b, bytes) in session.split(id, &by).map_err(|e| e.to_string())? {
+        let name = dir.join(if a == b { format!("{stem}-p{a}.pdf") } else { format!("{stem}-p{a}-{b}.pdf") });
+        std::fs::write(&name, bytes.as_slice()).map_err(|e| format!("{}: {e}", name.display()))?;
+        println!("{}", name.display());
+    }
+    Ok(())
 }
 
 fn render(args: &[String]) -> Result<(), String> {

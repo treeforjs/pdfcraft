@@ -83,6 +83,15 @@ pub struct Document {
     /// Position of the `%PDF-` header (some files have junk before it).
     header_offset: usize,
     version: String,
+    /// The authenticated security handler of an encrypted document.
+    security: Option<Arc<printcraft_crypt::SecurityHandler>>,
+    /// Object number of the `/Encrypt` dictionary (never encrypted itself).
+    encrypt_num: Option<u32>,
+    /// Encryption was added, changed or removed since opening: only a full save can apply it.
+    encryption_changed: bool,
+    /// The handler and `/Encrypt` object number that saves use, when encryption changed.
+    out_security: Option<Arc<printcraft_crypt::SecurityHandler>>,
+    out_encrypt_num: Option<u32>,
 }
 
 impl std::fmt::Debug for Document {
@@ -92,8 +101,49 @@ impl std::fmt::Debug for Document {
 }
 
 impl Document {
+    /// A new document with an empty page tree (for split / extract / combine). It has no
+    /// original bytes, so saving always writes a full file.
+    pub fn new_empty() -> Self {
+        let mut doc = Document {
+            data: Arc::new(Vec::new()),
+            entries: Arc::new(BTreeMap::new()),
+            trailer: Dict::new(),
+            revisions: Arc::new(Vec::new()),
+            repair_log: Arc::new(Vec::new()),
+            cache: Arc::default(),
+            objstms: Arc::default(),
+            overlay: BTreeMap::new(),
+            next_num: 1,
+            header_offset: 0,
+            version: "1.7".into(),
+            security: None,
+            encrypt_num: None,
+            encryption_changed: false,
+            out_security: None,
+            out_encrypt_num: None,
+        };
+        let mut pages = Dict::new();
+        pages.set(b"Type".to_vec(), Object::name("Pages"));
+        pages.set(b"Kids".to_vec(), Object::Array(Vec::new()));
+        pages.set(b"Count".to_vec(), Object::Int(0));
+        let pages = doc.add(pages);
+        let mut catalog = Dict::new();
+        catalog.set(b"Type".to_vec(), Object::name("Catalog"));
+        catalog.set(b"Pages".to_vec(), Object::Ref(pages));
+        let root = doc.add(catalog);
+        doc.trailer.set(b"Root".to_vec(), Object::Ref(root));
+        doc
+    }
+
     /// Parse a document. Damaged cross-reference data is reconstructed; see `repair_log`.
+    /// Encrypted documents open only if their user password is empty; see `open_with_password`.
     pub fn open(data: Arc<Vec<u8>>) -> Result<Self, CosError> {
+        Self::open_with_password(data, None)
+    }
+
+    /// Parse a document, authenticating encrypted ones with `password` (owner or user; `None`
+    /// tries the empty password). Fails with `NeedsPassword` / `WrongPassword` as appropriate.
+    pub fn open_with_password(data: Arc<Vec<u8>>, password: Option<&str>) -> Result<Self, CosError> {
         // Viewers accept files whose header is missing or damaged as long as the body looks
         // like PDF; so do we (a note goes to the repair log).
         let header = find(&data, b"%PDF-", 0, 1024);
@@ -118,6 +168,11 @@ impl Document {
             next_num: 1,
             header_offset,
             version,
+            security: None,
+            encrypt_num: None,
+            encryption_changed: false,
+            out_security: None,
+            out_encrypt_num: None,
         };
         let mut log = Vec::new();
         if headerless {
@@ -143,13 +198,143 @@ impl Document {
             doc.reconstruct(&mut log)?;
         }
         doc.repair_log = Arc::new(log);
-        if doc.trailer.contains(b"Encrypt") {
-            return Err(CosError::Encrypted);
+        if let Some(enc) = doc.trailer.get(b"Encrypt").cloned() {
+            doc.authenticate(&enc, password)?;
         }
         let max = doc.entries.keys().next_back().copied().unwrap_or(0);
         let size = doc.trailer.int(b"Size").unwrap_or(0).max(0) as u32;
         doc.next_num = max.max(size.saturating_sub(1)) + 1;
         Ok(doc)
+    }
+
+    fn authenticate(&mut self, enc: &Object, password: Option<&str>) -> Result<(), CosError> {
+        let (num, dict) = match enc {
+            Object::Ref(r) => (Some(r.num), self.get(*r).as_dict().cloned()),
+            Object::Dict(d) => (None, Some(d.clone())),
+            _ => (None, None),
+        };
+        let Some(dict) = dict else {
+            // A dangling /Encrypt: viewers treat the file as unencrypted, and so do we.
+            let mut log = self.repair_log.as_ref().clone();
+            log.push("the trailer names an /Encrypt dictionary that does not exist; reading the file as unencrypted".into());
+            self.repair_log = Arc::new(log);
+            self.trailer.remove(b"Encrypt");
+            return Ok(());
+        };
+        let params = crate::security::encrypt_dict(self, &dict);
+        let id0 = match self.trailer.get(b"ID") {
+            Some(Object::Array(a)) => a.first().and_then(|s| s.as_string()).map(|s| s.bytes.clone()).unwrap_or_default(),
+            _ => Vec::new(),
+        };
+        let handler = printcraft_crypt::SecurityHandler::open(params, &id0, password).map_err(|e| match e {
+            printcraft_crypt::CryptError::WrongPassword if password.is_none() => CosError::NeedsPassword,
+            printcraft_crypt::CryptError::WrongPassword => CosError::WrongPassword,
+            other => CosError::Security(other.to_string()),
+        })?;
+        self.security = Some(Arc::new(handler));
+        self.encrypt_num = num;
+        // Objects read while locating the catalog were read before decryption was possible.
+        self.cache = Arc::default();
+        self.objstms = Arc::default();
+        Ok(())
+    }
+
+    /// The security handler, when the document is encrypted.
+    pub fn security(&self) -> Option<&printcraft_crypt::SecurityHandler> {
+        self.security.as_deref()
+    }
+
+    /// What the opening password allows (`None` for unencrypted documents: everything).
+    pub fn permissions(&self) -> Option<printcraft_crypt::Permissions> {
+        self.security().map(|s| s.permissions())
+    }
+
+    pub(crate) fn encryption_changed(&self) -> bool {
+        self.encryption_changed
+    }
+
+    /// The handler used to write: the new one after `set_encryption` / `remove_encryption`,
+    /// otherwise the one the document was opened with.
+    pub(crate) fn output_security(&self) -> (Option<&printcraft_crypt::SecurityHandler>, Option<u32>) {
+        if self.encryption_changed { (self.out_security.as_deref(), self.out_encrypt_num) } else { (self.security.as_deref(), self.encrypt_num) }
+    }
+
+    /// Protect the document with a password (§7.6.4). Takes effect on the next save, which is
+    /// always a full rewrite. Returns the handler (authenticated as owner).
+    pub fn set_encryption(&mut self, params: &printcraft_crypt::NewEncryption) -> Result<(), CosError> {
+        // The file identifier is part of the key; make sure it exists and keep it.
+        let id0 = match self.trailer.get(b"ID") {
+            Some(Object::Array(a)) if a.len() == 2 => a[0].as_string().map(|s| s.bytes.clone()).unwrap_or_default(),
+            _ => {
+                let mut id = generated_id(&params.seed);
+                id.truncate(16);
+                let s = Object::String(crate::PdfString { bytes: id.clone(), hex: true });
+                self.trailer.set(b"ID".to_vec(), Object::Array(vec![s.clone(), s]));
+                id
+            }
+        };
+        let h = printcraft_crypt::create(params, &id0).map_err(|e| CosError::Security(e.to_string()))?;
+        let d = h.dict();
+        let s = |b: &[u8]| Object::String(crate::PdfString { bytes: b.to_vec(), hex: true });
+        let mut e = Dict::new();
+        e.set(b"Filter".to_vec(), Object::name("Standard"));
+        e.set(b"V".to_vec(), Object::Int(d.v));
+        e.set(b"R".to_vec(), Object::Int(d.r));
+        e.set(b"Length".to_vec(), Object::Int(d.length_bits));
+        e.set(b"O".to_vec(), s(&d.o));
+        e.set(b"U".to_vec(), s(&d.u));
+        e.set(b"P".to_vec(), Object::Int(i64::from(d.p)));
+        if d.v >= 4 {
+            let mut cf = Dict::new();
+            let mut std_cf = Dict::new();
+            std_cf.set(b"Type".to_vec(), Object::name("CryptFilter"));
+            let (cfm, len) = if d.v >= 5 { ("AESV3", 32) } else { ("AESV2", 16) };
+            std_cf.set(b"CFM".to_vec(), Object::name(cfm));
+            std_cf.set(b"Length".to_vec(), Object::Int(len));
+            std_cf.set(b"AuthEvent".to_vec(), Object::name("DocOpen"));
+            cf.set(b"StdCF".to_vec(), Object::Dict(std_cf));
+            e.set(b"CF".to_vec(), Object::Dict(cf));
+            e.set(b"StmF".to_vec(), Object::name("StdCF"));
+            e.set(b"StrF".to_vec(), Object::name("StdCF"));
+            if !d.encrypt_metadata {
+                e.set(b"EncryptMetadata".to_vec(), Object::Bool(false));
+            }
+        }
+        if d.v >= 5 {
+            e.set(b"OE".to_vec(), s(&d.oe));
+            e.set(b"UE".to_vec(), s(&d.ue));
+            e.set(b"Perms".to_vec(), s(&d.perms));
+        }
+        if let Some(Object::Ref(old)) = self.trailer.get(b"Encrypt").cloned() {
+            self.free(old);
+        }
+        let r = self.add(e);
+        self.trailer.set(b"Encrypt".to_vec(), Object::Ref(r));
+        // Objects are still read with the original handler; saves use the new one.
+        self.out_security = Some(Arc::new(h));
+        self.out_encrypt_num = Some(r.num);
+        self.encryption_changed = true;
+        Ok(())
+    }
+
+    /// Remove password protection (requires the document to be open — any authenticated
+    /// password; callers should require the owner password, §7.6.4). Applied by a full save.
+    pub fn remove_encryption(&mut self) {
+        if let Some(Object::Ref(r)) = self.trailer.get(b"Encrypt").cloned() {
+            self.free(r);
+        }
+        self.trailer.remove(b"Encrypt");
+        self.out_security = None;
+        self.out_encrypt_num = None;
+        self.encryption_changed = true;
+    }
+
+    /// Decrypt a freshly parsed indirect object if the document is encrypted.
+    fn decrypted(&self, id: ObjRef, o: Object) -> Object {
+        match &self.security {
+            Some(h) if Some(id.num) != self.encrypt_num => crate::security::transform(h, &o, id.num, id.generation, true),
+            _ => o,
+        }
     }
 
     pub fn bytes(&self) -> &Arc<Vec<u8>> {
@@ -239,11 +424,11 @@ impl Document {
                 let resolve = |r: ObjRef| self.try_get(r.num).ok().and_then(|o| o.as_int());
                 let off = *offset as usize;
                 match parse_indirect(&self.data, off, &resolve) {
-                    Ok((id, o)) if id.num == num => Ok(o),
+                    Ok((id, o)) if id.num == num => Ok(self.decrypted(id, o)),
                     // Offsets relative to a shifted header, or simply wrong: try both fixes.
                     _ => match parse_indirect(&self.data, off + self.header_offset, &resolve) {
-                        Ok((id, o)) if id.num == num => Ok(o),
-                        _ => self.scan_for(num).ok_or(CosError::MissingObject(num)),
+                        Ok((id, o)) if id.num == num => Ok(self.decrypted(id, o)),
+                        _ => self.scan_for(num).map(|(id, o)| self.decrypted(id, o)).ok_or(CosError::MissingObject(num)),
                     },
                 }
             }
@@ -282,7 +467,7 @@ impl Document {
     }
 
     /// Last-resort lookup: scan the file for `num G obj`.
-    fn scan_for(&self, num: u32) -> Option<Object> {
+    fn scan_for(&self, num: u32) -> Option<(ObjRef, Object)> {
         let needle = format!("{num} ");
         let data = &self.data;
         let mut found = None;
@@ -295,7 +480,7 @@ impl Document {
             if let Ok((id, o)) = parse_indirect(data, p, &|_| None)
                 && id.num == num
             {
-                found = Some(o); // keep the last (newest) definition
+                found = Some((id, o)); // keep the last (newest) definition
             }
         }
         found
@@ -630,6 +815,18 @@ fn rfind(hay: &[u8], needle: &[u8], from: usize) -> Option<usize> {
         return None;
     }
     (from..=hay.len() - needle.len()).rev().find(|&i| &hay[i..i + needle.len()] == needle)
+}
+
+/// A file identifier derived from entropy supplied by the caller.
+fn generated_id(seed: &[u8; 32]) -> Vec<u8> {
+    use std::hash::{Hash, Hasher};
+    let mut out = Vec::new();
+    for i in 0..2u8 {
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        (seed, i, b"printcraft id").hash(&mut h);
+        out.extend_from_slice(&h.finish().to_be_bytes());
+    }
+    out
 }
 
 #[cfg(test)]

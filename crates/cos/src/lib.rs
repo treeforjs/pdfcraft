@@ -12,11 +12,13 @@
 mod document;
 mod object;
 mod parser;
+mod security;
 mod writer;
 
 pub use document::{Document, Revision, XrefEntry};
 pub use object::{Dict, MAX_DECODED, Name, ObjRef, Object, PdfString, Stream};
 pub use parser::{Lexer, parse_indirect};
+pub use printcraft_crypt::{Algorithm, Auth, Method as CryptMethod, NewEncryption, Permissions, SecurityHandler};
 pub use writer::{SaveOptions, pdf_date, serialize, write_full, write_incremental};
 
 #[derive(Debug, thiserror::Error, Clone, PartialEq)]
@@ -31,8 +33,12 @@ pub enum CosError {
     NotADictionary(ObjRef),
     #[error("stream data could not be decoded: {0}")]
     Filter(String),
-    #[error("the document is encrypted; editing encrypted documents arrives with M1.6")]
-    Encrypted,
+    #[error("the document is protected by a password")]
+    NeedsPassword,
+    #[error("the password is incorrect")]
+    WrongPassword,
+    #[error("unsupported security: {0}")]
+    Security(String),
     #[error("internal lock poisoned")]
     Poisoned,
 }

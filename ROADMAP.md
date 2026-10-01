@@ -32,23 +32,23 @@ Hours are for a single agent (low–high). "Done" is the estimated fraction of t
 | M | Milestone | Est. hours | Done | Remaining (h) | Notes |
 |---|---|---|---|---|---|
 | M0 | Skeleton: workspace, xtask gates, CI | 15–30 | 70% | 5–10 | Missing: GitHub workflow, `deny.toml`, remaining crate stubs, parity TOML |
-| M1 | COS: filters, crypt, parser, xref, writer | 120–200 | 40% | 70–120 | Filters done. cos parses every xref form, repairs damaged files, and writes incremental and full saves. Open, edit and save pass on 946 of 951 corpus files. Missing: crypt (R2–R6), object-stream and xref-stream output for full saves, fuzzing, ≥ 250 tests |
+| M1 | COS: filters, crypt, parser, xref, writer | 120–200 | 55% | 55–90 | Done:<br>- filters and crypt: every standard-security revision R2–R6 (RC4, AES-128/256), SASLprep, permissions, creating encryption;<br>- cos: parse and repair, decrypt on load, re-encrypt on save, incremental and full writing.<br>Corpus: open/edit/save passes on 958 files, and all 7 password-protected files open.<br>Missing: object-stream and xref-stream output, fuzzing, ≥ 250 tests |
 | M2 | Model, render, text | 200–350 | 15% | 170–300 | hayro bootstrap renderer (vendored patches). Text extraction reaches word-F1 0.98 against pdftotext. Missing: model crate, fonts, DisplayList, renderer independent of hayro |
 | M3 | Viewer app (native + web) | 80–150 | 65% | 30–55 | Acrobat-style shell, find, select, panels, tiles, web build. Missing: UI control channel, 60 fps test on a 500-page document, snapshot tests of every panel |
-| M4 | Engine, history, save, organize | 100–180 | 30% | 70–125 | Done: page rotate, delete, move and insert blank; info edits; undo/redo (⌘Z/⇧⌘Z, Edit menu); save and save-as (incremental, atomic write, web download); a dot on tabs with unsaved changes; save prompt on close and quit; organize-grid multi-select; CLI `edit`. Missing: command registry, autosave and recovery, combine/split, bookmark and label editing, drag-to-reorder |
+| M4 | Engine, history, save, organize | 100–180 | 60% | 40–70 | Done:<br>- command registry (menus, shortcuts and palette all use it);<br>- undo/redo; incremental, atomic and encrypted saves;<br>- autosave and crash recovery;<br>- organize, combine, extract, split and insert-from-file;<br>- CLI `edit/combine/extract/split`.<br>Missing: bookmark and page-label editing, page boxes, CLI `run`, recovery on the web |
 | M5 | Comments (all annotation types, XFDF) | 120–200 | 0% | 120–200 | Read-only comments panel exists |
 | M6 | Forms + JavaScript | 160–320 | 0% | 160–320 | Fields are displayed, not filled |
 | M7 | Content editing (text, images, header/footer, watermark) | 250–500 | 0% | 250–500 | Longest pole |
-| M8 | Security + redaction | 100–180 | 0% | 100–180 | |
+| M8 | Security + redaction | 100–180 | 10% | 90–160 | Done: opening protected documents, honouring permissions, and the engine side of setting and removing passwords. Missing: Protect UI, certificate security, sanitize, redaction |
 | M9 | Signatures (PAdES, validation) | 160–280 | 0% | 160–280 | |
 | M10 | OCR, create, export, print | 200–350 | 0% | 200–350 | |
 | M11 | Optimize, preflight, PDF/A/X/UA, print production | 200–350 | 0% | 200–350 | |
 | M12 | Accessibility, compare, measure, search, XFA | 200–380 | 0% | 200–380 | |
 | M13 | Automation (MCP, Action Wizard, CLI) + AI providers | 60–120 | 0% | 60–120 | |
 | M14 | 1.0 polish: performance, localization, installers | 120–250 | 0% | 120–250 | |
-| | **Total** | **2,085–3,840** | **≈ 5%** | **≈ 1,915–3,540** | |
+| | **Total** | **2,085–3,840** | **≈ 7%** | **≈ 1,870–3,465** | |
 
-**Overall progress: about 5% of the effort.** The viewer and the core are far ahead of the editing features, because the viewer was built first so progress could be seen.
+**Overall progress: about 7% of the effort.** The viewer and the core are far ahead of the editing features, because the viewer was built first so progress could be seen.
 
 ## Critical path
 
@@ -67,6 +67,14 @@ M0 → M1 → M2 → M3 → M4 must happen in order. After M4, M5–M12 can run 
 
 Newest first. One line per session: the date, what moved, and the new overall percentage.
 
+- **2026-09-30 (session 4):**
+  - Combine, extract and split, with links, named destinations, fields, layers, attachments and nested bookmarks all carried over. Combined pages render pixel-identical to their sources.
+  - Fixed a precision bug in how reals were written.
+  - Encryption: a new `crypt` crate covering R2–R6. Encrypted documents can be opened, edited and saved; permissions are honoured; the Security tab is real. Checked against hayro and qpdf.
+  - Autosave and crash recovery.
+  - Command registry.
+  - Asset policy (`AGENTS.md`, `ATTRIBUTION.toml`, `xtask assets`) and a README with 13 reproducible screenshots (`xtask screenshots`).
+  - Overall ≈ 7%.
 - **2026-09-30 (session 3):**
   - New crates: `filters` (every non-image filter, 57 tests) and `cos` (object parser, xref reader, repair, incremental and full writer).
   - New `organize` crate: page operations and info edits.

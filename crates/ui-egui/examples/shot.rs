@@ -3,7 +3,8 @@
 //! ```text
 //! cargo run -p printcraft-ui-egui --example shot -- out.png [file.pdf] [--size 1440x900] [--scale 2] [--page 3 --panel pages …]
 //! ```
-//! Any `--key value` pair other than size/scale is passed to `PrintCraftApp::set_option`
+//! `--width N` downscales the image to N pixels wide (README screenshots). Any other
+//! `--key value` pair is passed to `PrintCraftApp::set_option`
 //! (the same verbs as the desktop app's command-line flags and the future control channel).
 
 use std::time::{Duration, Instant};
@@ -16,6 +17,7 @@ fn main() -> Result<(), String> {
     let out = args.next().ok_or("usage: shot <out.png> [file.pdf] [--option value …]")?;
     let (mut file, mut opts) = (None, Vec::new());
     let (mut size, mut scale) = (egui::vec2(1440.0, 900.0), 2.0f32);
+    let mut width: Option<u32> = None;
     while let Some(a) = args.next() {
         match a.strip_prefix("--") {
             Some("size") => {
@@ -24,6 +26,7 @@ fn main() -> Result<(), String> {
                 size = egui::vec2(w.parse().map_err(|_| "bad width")?, h.parse().map_err(|_| "bad height")?);
             }
             Some("scale") => scale = args.next().and_then(|v| v.parse().ok()).ok_or("bad --scale")?,
+            Some("width") => width = Some(args.next().and_then(|v| v.parse().ok()).ok_or("bad --width")?),
             Some(k) => opts.push((k.to_string(), args.next().unwrap_or_default())),
             None => file = Some(a),
         }
@@ -57,7 +60,11 @@ fn main() -> Result<(), String> {
         }
         std::thread::sleep(Duration::from_millis(30));
     }
-    let image = harness.render()?;
+    let mut image = harness.render()?;
+    if let Some(w) = width.filter(|w| *w < image.width()) {
+        let h = (image.height() as f64 * w as f64 / image.width() as f64).round() as u32;
+        image = image::imageops::resize(&image, w, h, image::imageops::FilterType::Lanczos3);
+    }
     image.save(&out).map_err(|e| e.to_string())?;
     eprintln!("shot: wrote {out} ({}×{})", image.width(), image.height());
     Ok(())

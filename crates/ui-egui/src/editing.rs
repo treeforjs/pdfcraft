@@ -80,6 +80,12 @@ impl PrintCraftApp {
         if let Some(edit) = self.views.get_mut(i).and_then(|v| v.pending_edit.take()) {
             self.apply_edit(edit);
         }
+        match self.views.get_mut(i).and_then(|v| v.pending_action.take()) {
+            Some(crate::canvas::ViewAction::InsertFromFile) => self.insert_from_file_dialog(),
+            Some(crate::canvas::ViewAction::Extract) => self.extract_selection(),
+            Some(crate::canvas::ViewAction::Split) => self.dialog = Some(crate::Dialog::Split),
+            None => {}
+        }
     }
 
     /// Save the active document. Returns `true` if it was written.
@@ -116,6 +122,7 @@ impl PrintCraftApp {
             }
             match self.session.mark_saved(id, bytes, Some(dest.clone())) {
                 Ok(()) => {
+                    self.forget_recovery(id);
                     let info = &self.session.get(id).expect("exists").info;
                     self.views[index].document_changed(info);
                     self.notify(format!("Saved {}", short_name(&dest)));
@@ -210,16 +217,21 @@ impl PrintCraftApp {
 
     /// Intercept window close while documents have unsaved changes.
     pub(crate) fn guard_quit(&mut self, ctx: &egui::Context) {
-        if ctx.input(|i| i.viewport().close_requested()) && !self.allow_quit && self.first_dirty().is_some() {
+        if !ctx.input(|i| i.viewport().close_requested()) {
+            return;
+        }
+        if !self.allow_quit && self.first_dirty().is_some() {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
             self.close_request = Some(CloseRequest::Quit);
+        } else {
+            // A clean quit: nothing is left to recover.
+            self.shutdown_recovery();
         }
     }
 }
 
 /// Write via a temporary file in the same directory and rename over the target, so a crash or
 /// full disk never leaves a half-written PDF where the original was.
-#[cfg(not(target_arch = "wasm32"))]
 pub fn write_atomically(path: &str, bytes: &[u8]) -> std::io::Result<()> {
     use std::io::Write;
     let target = std::path::Path::new(path);
@@ -244,7 +256,7 @@ fn short_name(path: &str) -> String {
 
 /// Offer bytes as a browser download.
 #[cfg(target_arch = "wasm32")]
-fn download(name: &str, bytes: &[u8]) -> Result<(), String> {
+pub(crate) fn download(name: &str, bytes: &[u8]) -> Result<(), String> {
     use wasm_bindgen::JsCast;
     let err = |e: wasm_bindgen::JsValue| format!("{e:?}");
     let array = js_sys::Uint8Array::from(bytes);

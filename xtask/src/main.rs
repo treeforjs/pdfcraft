@@ -6,6 +6,7 @@ mod assets;
 mod demo_pdf;
 mod gates;
 mod layers;
+mod screenshots;
 
 type Command = fn(&[String]) -> anyhow::Result<()>;
 
@@ -18,6 +19,7 @@ const COMMANDS: &[(&str, &str, Command)] = &[
     ("corpus", "Fetch test corpora into corpus/ (git-ignored): pdf.js test PDFs", gates::corpus),
     ("check", "Robustness sweep over corpus/ with printcraft-cli; fails on crashes or regressions vs xtask/baselines", gates::check),
     ("text-oracle", "Compare text extraction with pdftotext over corpus/ (word F1; target median ≥ 0.97)", gates::text_oracle),
+    ("screenshots", "Regenerate the README screenshots in docs/images/ and their ATTRIBUTION entries", screenshots::run),
     ("demo-pdf", "Build dist/demo/printcraft-showcase.pdf (needs Google Chrome or Chromium)", demo_pdf::run),
 ];
 

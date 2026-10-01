@@ -7,13 +7,16 @@
 
 mod canvas;
 mod chrome;
+mod commands;
 mod dialogs;
 mod editing;
+mod files;
 mod home;
 mod icon_data;
 pub mod icons;
 mod palette;
 mod panels;
+mod recovery;
 pub mod theme;
 mod widgets;
 
@@ -21,6 +24,8 @@ use printcraft_engine::{DocId, Session};
 
 pub use canvas::DocView;
 pub use editing::{CloseRequest, SaveTarget};
+pub use files::{FilePurpose, SplitDraft};
+pub use recovery::{AUTOSAVE_SECS, RecoveryMeta, RecoveryStore};
 use theme::ThemeKind;
 
 /// Top-level workspace modes (Acrobat's mode bar).
@@ -63,6 +68,9 @@ pub enum Dialog {
     Properties(PropsTab),
     About,
     Shortcuts,
+    Split,
+    /// Documents from a session that ended unexpectedly.
+    Recovery,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -121,7 +129,22 @@ pub struct PrintCraftApp {
     pub save_override: Option<String>,
     /// Document Properties ▸ Description fields being edited: (document, Title/Author/Subject/Keywords).
     pub props_draft: Option<(DocId, [String; 4])>,
+    /// Files picked asynchronously for combine / insert (web).
+    pub requests: files::Requests,
+    /// Write exported files (split) here instead of asking (tests and automation).
+    pub export_dir_override: Option<String>,
+    /// Split dialog settings.
+    pub split_draft: SplitDraft,
+    /// Where autosaves go (`None`: autosave off, e.g. on the web and in tests).
+    pub recovery: Option<RecoveryStore>,
+    /// Entries left by a previous session, offered in the Recovery dialog.
+    pub recoverable: Vec<RecoveryMeta>,
+    recovery_keys: std::collections::HashMap<DocId, String>,
+    last_autosave: f64,
+    pending_recovered: Option<RecoveryMeta>,
     allow_quit: bool,
+    /// The egui context, for commands that change window or theme state.
+    ctx: Option<egui::Context>,
     pending_theme: Option<ThemeKind>,
     styled: bool,
     fonts_ready: bool,
@@ -158,7 +181,16 @@ impl PrintCraftApp {
             close_request: None,
             save_override: None,
             props_draft: None,
+            requests: Default::default(),
+            export_dir_override: None,
+            split_draft: SplitDraft { every: 1, at_selection: false },
+            recovery: None,
+            recoverable: Vec::new(),
+            recovery_keys: Default::default(),
+            last_autosave: 0.0,
+            pending_recovered: None,
             allow_quit: false,
+            ctx: None,
             pending_theme: None,
             styled: false,
             fonts_ready: false,
@@ -275,8 +307,15 @@ impl PrintCraftApp {
     pub fn submit_password(&mut self, password: Option<String>) {
         let Some(p) = self.password_prompt.take() else { return };
         let Some(pw) = password else { return };
-        if let Err(e) = self.try_open(&p.name, p.path, p.bytes, Some(&pw)) {
-            self.notify(format!("Couldn't open {}: {e}", p.name));
+        match self.try_open(&p.name, p.path, p.bytes, Some(&pw)) {
+            Err(e) => self.notify(format!("Couldn't open {}: {e}", p.name)),
+            // A recovered encrypted document is open once the prompt is gone.
+            Ok(()) if self.password_prompt.is_none() => {
+                if let Some(meta) = self.pending_recovered.clone() {
+                    self.finish_recovery(&meta);
+                }
+            }
+            Ok(()) => {}
         }
     }
 
@@ -318,6 +357,7 @@ impl PrintCraftApp {
             return;
         }
         let id = self.views.remove(index).id;
+        self.forget_recovery(id);
         self.session.close(id);
         self.active = match self.active {
             _ if self.views.is_empty() => None,
@@ -341,31 +381,22 @@ impl PrintCraftApp {
 
     /// Run a catalogue command. Commands that aren't implemented yet say which milestone ships them.
     pub fn run_command(&mut self, command: &str) {
-        match command {
-            "page.organize" => {
-                if let Some(i) = self.active {
-                    self.views[i].organize = !self.views[i].organize;
-                } else {
-                    self.notify("Open a document first");
-                }
-            }
-            "comment.list" => self.right = Some(RightPanel::Comments),
-            "form.fields" => self.right = Some(RightPanel::Fields),
-            "protect.properties" => self.dialog = Some(Dialog::Properties(PropsTab::Security)),
-            other => {
-                let when = printcraft_engine::catalog::TOOL_GROUPS
-                    .iter()
-                    .flat_map(|g| g.sections.iter().flat_map(|s| s.items.iter()))
-                    .find(|i| i.command == other)
-                    .map(|i| match i.availability {
-                        printcraft_engine::catalog::Availability::Planned(m) => format!("ships in milestone {m}"),
-                        printcraft_engine::catalog::Availability::Provider => "needs an AI provider (off by default)".to_string(),
-                        printcraft_engine::catalog::Availability::Ready => "is available".to_string(),
-                    })
-                    .unwrap_or_else(|| "is not available yet".into());
-                self.notify(format!("`{other}` {when}"));
-            }
+        if printcraft_engine::commands::command(command).is_some() {
+            self.execute(command);
+            return;
         }
+        // Not implemented yet: say which milestone ships it.
+        let when = printcraft_engine::catalog::TOOL_GROUPS
+            .iter()
+            .flat_map(|g| g.sections.iter().flat_map(|s| s.items.iter()))
+            .find(|i| i.command == command)
+            .map(|i| match i.availability {
+                printcraft_engine::catalog::Availability::Planned(m) => format!("ships in milestone {m}"),
+                printcraft_engine::catalog::Availability::Provider => "needs an AI provider (off by default)".to_string(),
+                printcraft_engine::catalog::Availability::Ready => "is available".to_string(),
+            })
+            .unwrap_or_else(|| "is not available yet".into());
+        self.notify(format!("`{command}` {when}"));
     }
 
     /// Serialize the user's persistent state (recent files, theme). Local only.
@@ -430,10 +461,16 @@ impl PrintCraftApp {
             ("dialog", _) => {
                 self.dialog = match value {
                     "properties" => Some(Dialog::Properties(PropsTab::Description)),
+                    "security" => Some(Dialog::Properties(PropsTab::Security)),
+                    "fonts" => Some(Dialog::Properties(PropsTab::Fonts)),
+                    "advanced" => Some(Dialog::Properties(PropsTab::Advanced)),
                     "shortcuts" => Some(Dialog::Shortcuts),
+                    "split" => Some(Dialog::Split),
+                    "none" => None,
                     _ => Some(Dialog::About),
                 }
             }
+            ("tools", _) => self.all_tools_expanded = value != "collapsed",
             ("palette", _) => {
                 self.palette_open = true;
                 self.palette_query = value.to_string();
@@ -476,7 +513,13 @@ impl PrintCraftApp {
                 v.rerun_find();
             }
             ("fields", Some(v)) => v.highlight_fields = value != "off",
-            (k, None) if ["page", "zoom", "layout", "organize", "fields", "find", "rotate"].contains(&k) => {
+            ("select", Some(v)) => {
+                // `--select 2,3,5` (1-based) selects pages in the organize grid.
+                let pages: Result<Vec<usize>, _> = value.split(',').map(|p| p.trim().parse::<usize>().map(|n| n.saturating_sub(1))).collect();
+                v.select_pages(&pages.map_err(|_| "select: comma-separated page numbers")?);
+            }
+            ("notice", Some(v)) => v.notice_dismissed = value == "off",
+            (k, None) if ["page", "zoom", "layout", "organize", "fields", "find", "rotate", "select", "notice"].contains(&k) => {
                 return Err(format!("`{k}` needs an open document"));
             }
             (other, _) => return Err(format!("unknown option {other}")),
@@ -485,46 +528,10 @@ impl PrintCraftApp {
     }
 
     fn shortcuts(&mut self, ctx: &egui::Context) {
-        use egui::{Key, KeyboardShortcut, Modifiers};
-        let cmd = |k| KeyboardShortcut::new(Modifiers::COMMAND, k);
-        let pressed = |s: KeyboardShortcut| ctx.input_mut(|i| i.consume_shortcut(&s));
-        if pressed(cmd(Key::O)) {
-            self.open_dialog();
-        }
-        if pressed(cmd(Key::K)) {
-            self.palette_open = !self.palette_open;
-        }
-        if pressed(cmd(Key::D)) && self.active.is_some() {
-            self.dialog = Some(Dialog::Properties(PropsTab::Description));
-        }
-        if pressed(cmd(Key::W))
-            && let Some(i) = self.active
-        {
-            self.request_close_tab(i);
-        }
-        if pressed(KeyboardShortcut::new(Modifiers::COMMAND | Modifiers::SHIFT, Key::S)) && self.active.is_some() {
-            self.save_active(SaveTarget::As);
-        }
-        if pressed(cmd(Key::S)) && self.active.is_some() {
-            self.save_active(SaveTarget::InPlace);
-        }
-        // Text fields keep their own undo; otherwise ⌘Z/⇧⌘Z step the document history.
-        if !ctx.egui_wants_keyboard_input() && self.active.is_some() {
-            if pressed(KeyboardShortcut::new(Modifiers::COMMAND | Modifiers::SHIFT, Key::Z)) {
-                self.redo();
-            } else if pressed(cmd(Key::Z)) {
-                self.undo();
-            }
-        }
-        if pressed(cmd(Key::L)) && self.active.is_some() {
-            let on = !self.full_screen;
-            self.set_full_screen(ctx, on);
-        }
+        use egui::Key;
+        self.registry_shortcuts(ctx);
         if self.full_screen && ctx.input(|i| i.key_pressed(Key::Escape)) {
             self.set_full_screen(ctx, false);
-        }
-        if pressed(KeyboardShortcut::new(Modifiers::COMMAND | Modifiers::CTRL, Key::H)) {
-            self.mode = if self.mode == Mode::Read { Mode::AllTools } else { Mode::Read };
         }
         if let Some(i) = self.active {
             canvas::shortcuts(&mut self.views[i], ctx);
@@ -538,6 +545,7 @@ impl eframe::App for PrintCraftApp {
     }
 
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.ctx = Some(ctx.clone());
         if !self.styled {
             egui_extras::install_image_loaders(ctx);
             theme::install_fonts(ctx);
@@ -560,8 +568,11 @@ impl eframe::App for PrintCraftApp {
             }
         }
         self.guard_quit(ctx);
+        let now = ctx.input(|i| i.time);
+        self.autosave_tick(now);
         self.shortcuts(ctx);
         self.process_pending_edits();
+        self.process_file_requests();
         // Pull finished renders into textures for every open document.
         for view in &mut self.views {
             if let Some(doc) = self.session.get(view.id) {

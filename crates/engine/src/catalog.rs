@@ -108,10 +108,10 @@ pub static TOOL_GROUPS: &[ToolGroup] = &[
             ToolSection {
                 title: "Modify page",
                 items: &[
-                    item("Rotate pages", "rotate-cw", "page.rotate", Planned("M4")),
-                    item("Insert pages", "file-plus-2", "page.insert", Planned("M4")),
-                    item("Delete pages", "trash-2", "page.delete", Planned("M4")),
-                    item("Extract pages", "file-output", "page.extract", Planned("M4")),
+                    item("Rotate pages", "rotate-cw", "page.rotate", Ready),
+                    item("Insert pages", "file-plus-2", "page.insert", Ready),
+                    item("Delete pages", "trash-2", "page.delete", Ready),
+                    item("Extract pages", "file-output", "page.extract", Ready),
                     item("Organize pages", "layout-grid", "page.organize", Ready),
                 ],
             },
@@ -154,8 +154,8 @@ pub static TOOL_GROUPS: &[ToolGroup] = &[
         icon: "files",
         hue: BLUE,
         badge: None,
-        availability: Planned("M4"),
-        sections: &[ToolSection { title: "Combine", items: &[item("Add files to combine", "files", "page.combine", Planned("M4"))] }],
+        availability: Ready,
+        sections: &[ToolSection { title: "Combine", items: &[item("Add files to combine", "files", "page.combine", Ready)] }],
     },
     ToolGroup {
         id: "organize",
@@ -169,12 +169,12 @@ pub static TOOL_GROUPS: &[ToolGroup] = &[
                 title: "Page options",
                 items: &[
                     item("Page grid", "layout-grid", "page.organize", Ready),
-                    item("Rotate", "rotate-cw", "page.rotate", Planned("M4")),
-                    item("Delete", "trash-2", "page.delete", Planned("M4")),
-                    item("Extract", "file-output", "page.extract", Planned("M4")),
-                    item("Insert", "file-plus-2", "page.insert", Planned("M4")),
+                    item("Rotate", "rotate-cw", "page.rotate", Ready),
+                    item("Delete", "trash-2", "page.delete", Ready),
+                    item("Extract", "file-output", "page.extract", Ready),
+                    item("Insert", "file-plus-2", "page.insert", Ready),
                     item("Replace", "replace", "page.replace", Planned("M4")),
-                    item("Split", "scissors", "page.split", Planned("M4")),
+                    item("Split", "scissors", "page.split", Ready),
                 ],
             },
             ToolSection {

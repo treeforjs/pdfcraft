@@ -38,7 +38,8 @@ fn session_with(n: usize) -> (Session, DocId) {
 
 fn page_texts(s: &Session, id: DocId) -> Vec<String> {
     let doc = s.get(id).unwrap();
-    let mut r = printcraft_render::PageRenderer::new(doc.bytes.clone(), Default::default());
+    let config = printcraft_render::RenderConfig { password: doc.password.as_deref().map(Arc::from), ..Default::default() };
+    let mut r = printcraft_render::PageRenderer::new(doc.bytes.clone(), config);
     (0..doc.info.pages.len())
         .map(|p| {
             let r = r.render(RenderRequestFor::text(p));
@@ -188,4 +189,144 @@ fn insert_blank_between_pages_keeps_both_neighbours() {
     let (mut s, id) = session_with(2);
     s.apply(id, Edit::InsertBlankPage { at: 1, width: 200.0, height: 300.0 }).unwrap();
     assert_eq!(page_texts(&s, id), ["Page 1", "", "Page 2"]);
+}
+
+#[test]
+fn combine_extract_split_and_insert_from_file() {
+    let (mut s, id) = session_with(3);
+    let other = Arc::new(fixture(2));
+    // Combine: the first file then the second.
+    let combined = s.combine(&[("a.pdf".into(), Arc::new(fixture(3))), ("b.pdf".into(), other.clone())]).unwrap();
+    let cid = s.open_new("Combined.pdf", combined).unwrap();
+    assert_eq!(page_texts(&s, cid), ["Page 1", "Page 2", "Page 3", "Page 1", "Page 2"]);
+    assert!(s.get(cid).unwrap().dirty, "a new document starts unsaved");
+    assert_eq!(s.get(cid).unwrap().info.outline.len(), 2, "one bookmark per file");
+    // Extract pages 3 and 1 into a new document.
+    let ex = s.extract(id, &[2, 0]).unwrap();
+    let eid = s.open_new("Extract.pdf", ex).unwrap();
+    assert_eq!(page_texts(&s, eid), ["Page 3", "Page 1"]);
+    // Split every 2 pages.
+    let parts = s.split(id, &printcraft_organize::SplitBy::PageCount(2)).unwrap();
+    assert_eq!(parts.iter().map(|(a, b, _)| (*a, *b)).collect::<Vec<_>>(), [(1, 2), (3, 3)]);
+    // Insert pages from a file, undoably, into the open document.
+    s.apply(id, Edit::InsertPagesFrom { name: "b.pdf".into(), bytes: other, pages: Some(vec![1]), at: 1 }).unwrap();
+    assert_eq!(page_texts(&s, id), ["Page 1", "Page 2", "Page 2", "Page 3"]);
+    assert_eq!(s.undo(id).unwrap(), "Insert pages from b.pdf");
+    assert_eq!(page_texts(&s, id).len(), 3);
+    // Garbage sources fail cleanly.
+    let bad = s.apply(id, Edit::InsertPagesFrom { name: "junk.pdf".into(), bytes: Arc::new(b"nope".to_vec()), pages: None, at: 0 });
+    assert!(matches!(bad, Err(EditError::Source(_))));
+}
+
+fn protected(user: &str, owner: &str, permissions: i32) -> Arc<Vec<u8>> {
+    let mut doc = printcraft_cos::Document::open(Arc::new(fixture(2))).unwrap();
+    doc.set_encryption(&printcraft_cos::NewEncryption {
+        algorithm: printcraft_cos::Algorithm::Aes256,
+        user_password: user,
+        owner_password: owner,
+        permissions,
+        encrypt_metadata: true,
+        seed: [7; 32],
+    })
+    .unwrap();
+    Arc::new(printcraft_cos::write_full(&doc, &Default::default()).unwrap())
+}
+
+#[test]
+fn encrypted_documents_open_edit_and_save_encrypted() {
+    let bytes = protected("pw", "owner", -1);
+    let mut s = Session::new();
+    assert!(s.open("x.pdf", None, bytes.clone(), None).is_err(), "needs a password");
+    let id = s.open("x.pdf", None, bytes.clone(), Some("pw")).unwrap();
+    assert!(s.get(id).unwrap().editable(), "{:?}", s.get(id).unwrap().read_only_reason);
+    assert_eq!(s.get(id).unwrap().security_summary().unwrap().method, "AES, 256-bit");
+    s.apply(id, Edit::RotatePages { pages: vec![0], degrees: 90 }).unwrap();
+    let saved = s.save_bytes(id).unwrap();
+    assert_eq!(&saved[..bytes.len()], &bytes[..], "incremental");
+    assert!(printcraft_cos::Document::open(saved.clone()).is_err(), "still protected after saving");
+    let mut s2 = Session::new();
+    let id2 = s2.open("x.pdf", None, saved, Some("pw")).unwrap();
+    assert_eq!(s2.get(id2).unwrap().info.pages[0].rotation, 90);
+}
+
+#[test]
+fn restricted_documents_refuse_changes_unless_opened_by_the_owner() {
+    let bytes = protected("", "owner", 0b0100); // print only, no password to open
+    let mut s = Session::new();
+    let id = s.open("r.pdf", None, bytes.clone(), None).unwrap();
+    let d = s.get(id).unwrap();
+    assert!(!d.allows_assembly() && !d.allows_modification());
+    let summary = d.security_summary().unwrap();
+    assert!(!summary.owner && summary.permissions.print() && !summary.permissions.copy());
+    assert_eq!(s.apply(id, Edit::DeletePages { pages: vec![0] }), Err(EditError::NotPermitted("page changes")));
+    assert_eq!(s.apply(id, Edit::SetInfo { key: "Title".into(), value: "x".into() }), Err(EditError::NotPermitted("changes to the document")));
+    assert!(matches!(s.extract(id, &[0]), Err(EditError::NotPermitted(_))));
+    assert!(!s.get(id).unwrap().dirty);
+    // The owner password lifts the restrictions.
+    let oid = s.open("r.pdf", None, bytes, Some("owner")).unwrap();
+    assert!(s.get(oid).unwrap().allows_assembly());
+    s.apply(oid, Edit::DeletePages { pages: vec![0] }).unwrap();
+}
+
+#[test]
+fn combining_protected_files_is_refused_clearly() {
+    let s = Session::new();
+    let err = s.combine(&[("a.pdf".into(), protected("pw", "o", -1)), ("b.pdf".into(), Arc::new(fixture(1)))]).unwrap_err();
+    assert_eq!(err, EditError::Source("a.pdf: it is password-protected".into()));
+    let err = s.combine(&[("c.pdf".into(), protected("", "o", 0b0100))]).unwrap_err();
+    assert!(matches!(err, EditError::Source(m) if m.contains("don't allow copying pages")));
+}
+
+#[test]
+fn owner_password_of_older_revisions_opens_the_viewer_too() {
+    for alg in [printcraft_cos::Algorithm::Rc4_128, printcraft_cos::Algorithm::Aes128] {
+        let mut doc = printcraft_cos::Document::open(Arc::new(fixture(1))).unwrap();
+        doc.set_encryption(&printcraft_cos::NewEncryption {
+            algorithm: alg,
+            user_password: "u",
+            owner_password: "o",
+            permissions: 0,
+            encrypt_metadata: true,
+            seed: [1; 32],
+        })
+        .unwrap();
+        let bytes = Arc::new(printcraft_cos::write_full(&doc, &Default::default()).unwrap());
+        let mut s = Session::new();
+        let id = s.open("x.pdf", None, bytes, Some("o")).unwrap_or_else(|e| panic!("{alg:?}: {e}"));
+        let d = s.get(id).unwrap();
+        assert!(d.security_summary().unwrap().owner && d.allows_modification(), "{alg:?}");
+        assert_eq!(page_texts(&s, id), ["Page 1"], "{alg:?}: the renderer reads it");
+    }
+}
+
+#[test]
+fn autosave_snapshots_only_changed_documents() {
+    let (mut s, id) = session_with(2);
+    assert!(s.autosave_snapshots().is_empty(), "clean documents are not snapshotted");
+    s.apply(id, Edit::RotatePages { pages: vec![0], degrees: 90 }).unwrap();
+    let snaps = s.autosave_snapshots();
+    assert_eq!(snaps.len(), 1);
+    assert_eq!(snaps[0].bytes, s.get(id).unwrap().bytes, "the working file");
+    assert!(s.autosave_snapshots().is_empty(), "nothing new since the last snapshot");
+    s.undo(id).unwrap();
+    assert_eq!(s.autosave_snapshots().len(), 1, "undo is a change too");
+    let saved = s.save_bytes(id).unwrap();
+    s.mark_saved(id, saved, None).unwrap();
+    assert!(s.autosave_snapshots().is_empty(), "saved documents need no recovery");
+}
+
+#[test]
+fn recovered_documents_reopen_unsaved_at_their_original_path() {
+    let (mut s, id) = session_with(2);
+    s.apply(id, Edit::DeletePages { pages: vec![1] }).unwrap();
+    let snap = s.autosave_snapshots().remove(0);
+    // A new session after a crash.
+    let mut s2 = Session::new();
+    let rid = s2.open(snap.name.clone(), None, snap.bytes.clone(), None).unwrap();
+    s2.mark_recovered(rid, Some("/docs/report.pdf".into()));
+    let d = s2.get(rid).unwrap();
+    assert!(d.dirty);
+    assert_eq!(d.path.as_deref(), Some("/docs/report.pdf"));
+    assert_eq!(d.info.pages.len(), 1, "the edit survived");
+    assert!(s2.autosave_snapshots().is_empty(), "already in the recovery store");
 }
