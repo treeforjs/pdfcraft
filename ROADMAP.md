@@ -31,8 +31,8 @@ Hours are for a single agent (low–high). "Done" is the estimated fraction of t
 
 | M | Milestone | Est. hours | Done | Remaining (h) | Notes |
 |---|---|---|---|---|---|
-| M0 | Skeleton: workspace, xtask gates, CI | 15–30 | 85% | 3–6 | GitHub workflow and `deny.toml` (licence audit of every dependency) done. Missing: remaining crate stubs, testkit/oracle crates, parity TOML |
-| M1 | COS: filters, crypt, parser, xref, writer | 120–200 | 65% | 40–70 | Done:<br>- filters and crypt: every standard-security revision R2–R6 (RC4, AES-128/256), SASLprep, permissions, creating encryption;<br>- cos: parse and repair, decrypt on load, re-encrypt on save, incremental and full writing.<br>Corpus: open/edit/save passes on 958 files, and all 7 password-protected files open.<br>Full saves now pack objects into compressed object streams. Missing: fuzzing, ≥ 250 tests |
+| M0 | Skeleton: workspace, xtask gates, CI | 15–30 | 92% | 2–4 | GitHub workflow, `deny.toml` (licence audit of every dependency), parity checklist (826 features, `xtask parity`) done. Missing: remaining crate stubs, testkit/oracle crates |
+| M1 | COS: filters, crypt, parser, xref, writer | 120–200 | 72% | 35–60 | Done:<br>- filters and crypt: every standard-security revision R2–R6 (RC4, AES-128/256), SASLprep, permissions, creating encryption;<br>- cos: parse and repair, decrypt on load, re-encrypt on save, incremental and full writing.<br>Corpus: open/edit/save passes on 958 files, and all 7 password-protected files open.<br>Full saves now pack objects into compressed object streams. Fuzzing runs nightly (`xtask fuzz`). Missing: ≥ 250 tests, own image codecs |
 | M2 | Model, render, text | 200–350 | 15% | 170–300 | hayro bootstrap renderer (vendored patches). Text extraction reaches word-F1 0.98 against pdftotext. Missing: model crate, fonts, DisplayList, renderer independent of hayro |
 | M3 | Viewer app (native + web) | 80–150 | 72% | 22–42 | Acrobat-style shell, find, select, panels, tiles, web build, UI control channel for agents (opt-in). Missing: 60 fps test on a 500-page document, snapshot tests of every panel |
 | M4 | Engine, history, save, organize | 100–180 | 65% | 35–63 | Done:<br>- command registry (menus, shortcuts and palette all use it);<br>- undo/redo; incremental, atomic and encrypted saves;<br>- autosave and crash recovery;<br>- organize, combine, extract, split and insert-from-file, with identical fonts and images stored once;<br>- CLI `edit/combine/extract/split`.<br>Missing: bookmark and page-label editing, page boxes, CLI `run`, recovery on the web |
@@ -46,9 +46,9 @@ Hours are for a single agent (low–high). "Done" is the estimated fraction of t
 | M12 | Accessibility, compare, measure, search, XFA | 200–380 | 0% | 200–380 | |
 | M13 | Automation (MCP, Action Wizard, CLI) + AI providers | 60–120 | 15% | 50–100 | Done: headless tool table (20 tools), opt-in MCP server over stdio, CLI `run`/`tools`. Missing: Action Wizard, more tools as features land, AI providers |
 | M14 | 1.0 polish: performance, localization, installers | 120–250 | 0% | 120–250 | |
-| | **Total** | **2,085–3,840** | **≈ 9%** | **≈ 1,870–3,465** | |
+| | **Total** | **2,085–3,840** | **≈ 9.5%** | **≈ 1,870–3,465** | |
 
-**Overall progress: about 9% of the effort.** The viewer and the core are far ahead of the editing features, because the viewer was built first so progress could be seen.
+**Overall progress: about 9.5% of the effort.** The viewer and the core are far ahead of the editing features, because the viewer was built first so progress could be seen.
 
 ## Critical path
 
@@ -71,7 +71,9 @@ Newest first. One line per session: the date, what moved, and the new overall pe
   - UI control channel: agents can inspect the widget tree, click, type, press keys, run commands and take screenshots of the running app. Off unless the app is started with `--control`; loopback only, token-authenticated.
   - Combine and insert store identical fonts, images and other resources once. 40 copies of the showcase: 130 MB → 3.9 MB, 3× faster, pixel-identical.
   - Full saves use compressed object streams (showcase 3.4 → 2.8 MB; the 40× combine is now 2.3 MB). Fixed opening encrypted files whose catalog is compressed, and a crash on looped page trees.
-  - Overall ≈ 9%.
+  - Fuzzing (`cargo xtask fuzz`, nightly in CI): about 150,000 mutated files tried. Seven crash and hang bugs found and fixed, each with a regression test: two in our code, five in the temporary renderer.
+  - Parity checklist: 826 Acrobat Pro features tracked in `parity/acrobat-features.toml`; `cargo xtask parity` checks every claim against code and tests. 11.8% shipped overall, 31.6% of P0.
+  - Overall ≈ 9.5%.
 
 - **2026-09-30 (session 5, after a machine crash; no work lost):**
   - Agent control: new `printcraft-automation` crate with 20 JSON-Schema tools, an opt-in MCP server (`printcraft-cli mcp`, stdio only, can be compiled out), and `printcraft-cli run`/`tools`.
