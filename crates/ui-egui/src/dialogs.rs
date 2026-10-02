@@ -43,6 +43,7 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
     let mut print_go = false;
     let mut revert_now = false;
     let mut summarize_now = false;
+    let mut optimize_now = false;
     let mut replace_now = false;
     let t = Tokens::get(ctx);
     let mut close = false;
@@ -449,6 +450,12 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
                 });
                 return;
             }
+            Dialog::Optimize => {
+                let (ok, cancel) = crate::optimize_ui::body(ui, &mut app.optimize_draft, &t);
+                optimize_now = ok;
+                close = ok || cancel;
+                return;
+            }
             Dialog::Sign => {
                 if crate::sign_ui::dialog(ui, app, &t) {
                     app.sign_draft = None;
@@ -796,6 +803,9 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
     }
     if summarize_now {
         app.summarize_comments();
+    }
+    if optimize_now {
+        app.optimize_with_draft();
     }
     if extract_now {
         app.extract_selection();

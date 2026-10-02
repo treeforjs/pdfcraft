@@ -697,9 +697,26 @@ pub fn tools() -> Vec<ToolDef> {
             }),
             &["from"],
         )),
-        t("doc_reduce", "Reduce file size", "Write a compacted copy of the document to `path` (identical fonts and images merged, unused objects dropped, compressed object streams). The open document is unchanged.")
+        t("doc_reduce", "Reduce file size", "Write a smaller copy of the document to `path` with Acrobat's Reduce File Size choices: images above 225 ppi downsampled to 150 ppi and JPEG-compressed (medium quality), thumbnails dropped, identical fonts and images merged, unused objects dropped, compressed object streams. The open document is unchanged.")
             .cmd("optimize.reduce")
             .with(schema(json!({ "doc": doc(), "path": { "type": "string" } }), &["doc", "path"])),
+        t("doc_optimize", "Optimize PDF", "Write an optimized copy to `path` (Acrobat's PDF Optimizer). color / gray: { downsample, ppi, above_ppi, compression: jpeg|zip|retain, quality 1–100 } (defaults: downsample to 150 ppi above 225, JPEG 60). Images are measured where pages draw them and replaced only when smaller. discard_*: thumbnails (default true), alternate_images (true), tags, print_settings; flate_unencoded (true). discard: Remove Hidden Information categories (metadata, attachments, comments, form-fields, hidden-text, hidden-layers, bookmarks, links-actions-scripts, private-data). Signed documents are refused. The open document is unchanged.")
+            .cmd("optimize.advanced")
+            .with(schema(
+                json!({
+                    "doc": doc(),
+                    "path": { "type": "string" },
+                    "color": { "type": "object" },
+                    "gray": { "type": "object" },
+                    "discard_thumbnails": { "type": "boolean" },
+                    "discard_alternate_images": { "type": "boolean" },
+                    "discard_tags": { "type": "boolean" },
+                    "discard_print_settings": { "type": "boolean" },
+                    "flate_unencoded": { "type": "boolean" },
+                    "discard": { "type": "array", "items": { "type": "string" } },
+                }),
+                &["doc", "path"],
+            )),
         t("doc_flatten", "Flatten", "Merge comment and/or form field appearances into the page content, so they print and display everywhere but can no longer be edited. Undoable until saved.")
             .destructive()
             .with(schema(json!({ "doc": doc(), "comments": { "type": "boolean", "description": "Default true." }, "fields": { "type": "boolean", "description": "Default true." } }), &["doc"])),

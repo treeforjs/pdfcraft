@@ -21,3 +21,6 @@ base64 = { version = "0.22", optional = true }
 default = ["mcp"]
 # The MCP server module. Opt-in at run time either way; disable to leave it out of the build.
 mcp = ["dep:base64"]
+
+[dev-dependencies]
+image = { version = "0.25", default-features = false, features = ["jpeg"] }

@@ -296,12 +296,12 @@ pub static TOOL_GROUPS: &[ToolGroup] = &[
         icon: "file-down",
         hue: RED,
         badge: None,
-        availability: Planned("M11"),
+        availability: Ready,
         sections: &[ToolSection {
             title: "Optimize",
             items: &[
                 item("Reduce file size", "file-down", "optimize.reduce", Ready),
-                item("Advanced optimization", "settings-2", "optimize.advanced", Planned("M11")),
+                item("Advanced optimization", "settings-2", "optimize.advanced", Ready),
                 item("Audit space usage", "gauge", "optimize.audit", Planned("M11")),
             ],
         }],

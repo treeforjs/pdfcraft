@@ -16,6 +16,7 @@ mod create_ui;
 mod crop;
 mod export_ui;
 mod marks_ui;
+mod optimize_ui;
 mod sign_ui;
 /// Header & footer / watermark / background dialog types (tests and automation).
 pub mod marks {
@@ -25,6 +26,7 @@ mod content_ui;
 mod link_ui;
 pub use create_ui::Clip;
 pub use link_ui::LinkDraft;
+pub use optimize_ui::{OptimizeDraft, OptimizeTab};
 pub use sign_ui::{DigitalIdEntry, SignDraft, SignStep};
 mod dialogs;
 mod editing;
@@ -158,6 +160,8 @@ pub enum Dialog {
     SummarizeComments,
     /// Sign with a Digital ID ▸ Configure ▸ Sign as.
     Sign,
+    /// Optimize PDF ▸ Advanced optimization.
+    Optimize,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -236,6 +240,8 @@ pub struct PrintCraftApp {
     pub digital_ids: Vec<DigitalIdEntry>,
     /// Signatures panel: expanded entries (field names).
     pub sig_expanded: Vec<String>,
+    /// PDF Optimizer choices.
+    pub optimize_draft: OptimizeDraft,
     /// Where autosaves go (`None`: autosave off, e.g. on the web and in tests).
     pub recovery: Option<RecoveryStore>,
     /// Entries left by a previous session, offered in the Recovery dialog.
@@ -338,6 +344,7 @@ impl PrintCraftApp {
             sign_draft: None,
             digital_ids: Vec::new(),
             sig_expanded: Vec::new(),
+            optimize_draft: OptimizeDraft::default(),
             recovery: None,
             recoverable: Vec::new(),
             recovery_keys: Default::default(),
@@ -691,6 +698,7 @@ impl PrintCraftApp {
                     "export-image" => Some(Dialog::Export(export_ui::ExportKind::Image)),
                     "export-text" => Some(Dialog::Export(export_ui::ExportKind::Text)),
                     "signature" => Some(Dialog::Signature),
+                    "optimize" => Some(Dialog::Optimize),
                     "sign" | "certify" => {
                         // Sign with a Digital ID for an invisible signature on the current page.
                         let page = self.active.map_or(0, |i| self.views[i].current);

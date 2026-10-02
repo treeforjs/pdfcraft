@@ -233,6 +233,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     c("sign.fill.signature", "Fill & Sign: sign", None, None, Annotate, "signature"),
     c("export.image", "Export to image…", FILE, None, Document, "image"),
     c("optimize.reduce", "Reduce file size…", FILE, None, Document, "file-down"),
+    c("optimize.advanced", "Optimize PDF…", FILE, None, Document, "settings-2"),
     c("export.text", "Export to text…", FILE, None, Document, "type"),
     c("edit.header_footer", "Add header & footer…", None, None, Modification, "heading"),
     c("edit.header_footer.update", "Update header & footer…", None, None, Marks(crate::MarkKind::HeaderFooter), "heading"),

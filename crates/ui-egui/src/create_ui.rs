@@ -163,22 +163,35 @@ impl PrintCraftApp {
         }
     }
 
-    /// Reduce File Size: write a compacted copy (the open document is unchanged).
+    /// Reduce File Size: write a compacted copy with images downsampled (the open document is
+    /// unchanged).
     pub(crate) fn reduce_file_size(&mut self) {
         let Some((_, id)) = self.active_ids() else { return };
+        let result = self.session.reduced_bytes(id).map(|(b, _)| (b, String::new()));
+        self.save_optimized(id, "reduced", result);
+    }
+
+    /// Save an optimized copy (Reduce File Size, Optimize PDF) next to the original, reporting
+    /// the saving.
+    pub(crate) fn save_optimized(
+        &mut self,
+        id: printcraft_engine::DocId,
+        suffix: &str,
+        result: Result<(Arc<Vec<u8>>, String), printcraft_engine::EditError>,
+    ) {
         let Some(doc) = self.session.get(id) else { return };
-        let (before, name) = (doc.bytes.len(), format!("{} (reduced).pdf", stem(&doc.name)));
-        let (bytes, _) = match self.session.reduced_bytes(id) {
+        let (before, name) = (doc.bytes.len(), format!("{} ({suffix}).pdf", stem(&doc.name)));
+        let (bytes, detail) = match result {
             Ok(r) => r,
             Err(e) => {
-                self.notify(format!("Couldn't reduce the file: {e}"));
+                self.notify(format!("Couldn't optimize the file: {e}"));
                 return;
             }
         };
         let saved = |app: &mut PrintCraftApp, place: String| {
             let pct = 100.0 * (1.0 - bytes.len() as f64 / before.max(1) as f64);
             app.notify(format!(
-                "Saved {place}: {} → {} ({pct:.0}% smaller)",
+                "Saved {place}: {} → {} ({pct:.0}% smaller){detail}",
                 crate::panels::human_size(before),
                 crate::panels::human_size(bytes.len())
             ));

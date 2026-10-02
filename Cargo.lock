@@ -3349,6 +3349,7 @@ name = "printcraft-automation"
 version = "0.1.0"
 dependencies = [
  "base64",
+ "image",
  "png 0.18.1",
  "printcraft-engine",
  "printcraft-organize",
@@ -3438,6 +3439,7 @@ dependencies = [
  "printcraft-edit",
  "printcraft-forms",
  "printcraft-model",
+ "printcraft-optimize",
  "printcraft-organize",
  "printcraft-print",
  "printcraft-redact",
@@ -3480,6 +3482,18 @@ name = "printcraft-model"
 version = "0.1.0"
 dependencies = [
  "printcraft-cos",
+]
+
+[[package]]
+name = "printcraft-optimize"
+version = "0.1.0"
+dependencies = [
+ "image",
+ "printcraft-annot",
+ "printcraft-content",
+ "printcraft-cos",
+ "printcraft-render",
+ "thiserror 2.0.21",
 ]
 
 [[package]]

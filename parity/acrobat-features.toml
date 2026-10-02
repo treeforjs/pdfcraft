@@ -7067,11 +7067,11 @@ title = "Reduce file size (one click)"
 area = "K"
 tier = "P0"
 milestone = "M11"
-status = "partial"
+status = "shipped"
 commands = ["optimize.reduce"]
 tools = ["doc_reduce"]
-evidence = ["crates/ui-egui/tests/create.rs::reduce_file_size_writes_a_compact_copy", "crates/engine/src/tests.rs::create_and_reduce", "crates/automation/tests/automation.rs::creating_and_reducing_through_tools"]
-notes = "merges identical resources, drops unused objects, object streams; no image downsampling yet"
+evidence = ["crates/ui-egui/tests/create.rs::reduce_file_size_writes_a_compact_copy", "crates/engine/src/tests.rs::create_and_reduce", "crates/automation/tests/automation.rs::creating_and_reducing_through_tools", "crates/automation/tests/automation.rs::optimizing_through_tools"]
+notes = "images above 225 ppi to 150 ppi JPEG medium, thumbnails dropped, resources merged, object streams"
 
 [[feature]]
 id = "optimize.compatibility-level"
@@ -7091,11 +7091,11 @@ title = "Advanced optimization (PDF Optimizer)"
 area = "K"
 tier = "P1"
 milestone = "M11"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["optimize.advanced"]
+tools = ["doc_optimize"]
+evidence = ["crates/ui-egui/tests/create.rs::the_pdf_optimizer_dialog_saves_an_optimized_copy", "crates/automation/tests/automation.rs::optimizing_through_tools"]
+notes = "Images, Discard Objects, Discard User Data, Clean Up; no Fonts or Transparency panels, no space audit"
 
 [[feature]]
 id = "optimize.downsample-images"
@@ -7103,11 +7103,11 @@ title = "Downsample colour, grey and mono images"
 area = "K"
 tier = "P1"
 milestone = "M11"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["optimize.advanced"]
+tools = ["doc_optimize"]
+evidence = ["crates/optimize/tests/optimize.rs::images_are_measured_where_drawn_and_downsampled", "crates/optimize/tests/optimize.rs::settings_choose_what_happens", "crates/automation/tests/automation.rs::optimizing_through_tools"]
+notes = "colour and grayscale, bicubic, effective resolution measured where drawn; monochrome not yet"
 
 [[feature]]
 id = "optimize.recompress-images"
@@ -7115,11 +7115,11 @@ title = "Recompress images (JPEG, JPEG 2000, Flate)"
 area = "K"
 tier = "P1"
 milestone = "M11"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["optimize.advanced"]
+tools = ["doc_optimize"]
+evidence = ["crates/optimize/tests/optimize.rs::images_are_measured_where_drawn_and_downsampled", "crates/optimize/tests/optimize.rs::settings_choose_what_happens"]
+notes = "JPEG (quality steps) and ZIP; no JPEG 2000"
 
 [[feature]]
 id = "optimize.mono-compression"
@@ -7139,11 +7139,11 @@ title = "Optimize images only if smaller"
 area = "K"
 tier = "P1"
 milestone = "M11"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["optimize.advanced"]
+tools = ["doc_optimize"]
+evidence = ["crates/optimize/tests/optimize.rs::images_are_measured_where_drawn_and_downsampled"]
+notes = "always on"
 
 [[feature]]
 id = "optimize.unembed-fonts"
@@ -7175,11 +7175,11 @@ title = "Discard JavaScript actions"
 area = "K"
 tier = "P1"
 milestone = "M11"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["optimize.advanced"]
+tools = ["doc_optimize"]
+evidence = ["crates/redact/src/tests.rs::hidden_information_is_counted_and_removed", "crates/automation/tests/automation.rs::optimizing_through_tools"]
+notes = "with links and actions (Remove Hidden Information)"
 
 [[feature]]
 id = "optimize.discard-thumbnails"
@@ -7187,10 +7187,10 @@ title = "Discard embedded thumbnails"
 area = "K"
 tier = "P1"
 milestone = "M11"
-status = "planned"
-commands = []
-tools = []
-evidence = []
+status = "shipped"
+commands = ["optimize.advanced"]
+tools = ["doc_optimize"]
+evidence = ["crates/optimize/tests/optimize.rs::images_are_measured_where_drawn_and_downsampled"]
 notes = ""
 
 [[feature]]
@@ -7199,10 +7199,10 @@ title = "Discard document tags"
 area = "K"
 tier = "P2"
 milestone = "M11"
-status = "planned"
-commands = []
-tools = []
-evidence = []
+status = "shipped"
+commands = ["optimize.advanced"]
+tools = ["doc_optimize"]
+evidence = ["crates/optimize/tests/optimize.rs::discards_and_clean_up", "crates/ui-egui/tests/create.rs::the_pdf_optimizer_dialog_saves_an_optimized_copy"]
 notes = ""
 
 [[feature]]
@@ -7211,10 +7211,10 @@ title = "Discard bookmarks"
 area = "K"
 tier = "P2"
 milestone = "M11"
-status = "planned"
-commands = []
-tools = []
-evidence = []
+status = "shipped"
+commands = ["optimize.advanced"]
+tools = ["doc_optimize"]
+evidence = ["crates/redact/src/tests.rs::hidden_information_is_counted_and_removed", "crates/automation/tests/automation.rs::optimizing_through_tools"]
 notes = ""
 
 [[feature]]
@@ -7235,10 +7235,10 @@ title = "Discard embedded print settings"
 area = "K"
 tier = "P2"
 milestone = "M11"
-status = "planned"
-commands = []
-tools = []
-evidence = []
+status = "shipped"
+commands = ["optimize.advanced"]
+tools = ["doc_optimize"]
+evidence = ["crates/optimize/tests/optimize.rs::discards_and_clean_up"]
 notes = ""
 
 [[feature]]
@@ -7247,10 +7247,10 @@ title = "Discard alternate images"
 area = "K"
 tier = "P2"
 milestone = "M11"
-status = "planned"
-commands = []
-tools = []
-evidence = []
+status = "shipped"
+commands = ["optimize.advanced"]
+tools = ["doc_optimize"]
+evidence = ["crates/optimize/tests/optimize.rs::images_are_measured_where_drawn_and_downsampled"]
 notes = ""
 
 [[feature]]
@@ -7271,10 +7271,10 @@ title = "Flatten form fields while optimizing"
 area = "K"
 tier = "P1"
 milestone = "M11"
-status = "planned"
-commands = []
-tools = []
-evidence = []
+status = "shipped"
+commands = ["optimize.advanced"]
+tools = ["doc_optimize"]
+evidence = ["crates/redact/src/tests.rs::hidden_information_is_counted_and_removed", "crates/automation/tests/automation.rs::optimizing_through_tools"]
 notes = ""
 
 [[feature]]
@@ -7283,10 +7283,10 @@ title = "Discard comments, forms and multimedia"
 area = "K"
 tier = "P1"
 milestone = "M11"
-status = "planned"
-commands = []
-tools = []
-evidence = []
+status = "shipped"
+commands = ["optimize.advanced"]
+tools = ["doc_optimize"]
+evidence = ["crates/redact/src/tests.rs::hidden_information_is_counted_and_removed", "crates/automation/tests/automation.rs::optimizing_through_tools"]
 notes = ""
 
 [[feature]]
@@ -7295,10 +7295,10 @@ title = "Discard document information and metadata"
 area = "K"
 tier = "P1"
 milestone = "M11"
-status = "planned"
-commands = []
-tools = []
-evidence = []
+status = "shipped"
+commands = ["optimize.advanced"]
+tools = ["doc_optimize"]
+evidence = ["crates/automation/tests/automation.rs::optimizing_through_tools", "crates/ui-egui/tests/create.rs::the_pdf_optimizer_dialog_saves_an_optimized_copy"]
 notes = ""
 
 [[feature]]
@@ -7307,10 +7307,10 @@ title = "Discard file attachments"
 area = "K"
 tier = "P1"
 milestone = "M11"
-status = "planned"
-commands = []
-tools = []
-evidence = []
+status = "shipped"
+commands = ["optimize.advanced"]
+tools = ["doc_optimize"]
+evidence = ["crates/redact/src/tests.rs::hidden_information_is_counted_and_removed", "crates/automation/tests/automation.rs::optimizing_through_tools"]
 notes = ""
 
 [[feature]]
@@ -7319,10 +7319,10 @@ title = "Discard private application data (PieceInfo)"
 area = "K"
 tier = "P2"
 milestone = "M11"
-status = "planned"
-commands = []
-tools = []
-evidence = []
+status = "shipped"
+commands = ["optimize.advanced"]
+tools = ["doc_optimize"]
+evidence = ["crates/redact/src/tests.rs::hidden_information_is_counted_and_removed", "crates/automation/tests/automation.rs::optimizing_through_tools"]
 notes = ""
 
 [[feature]]
@@ -7343,11 +7343,11 @@ title = "Discard hidden layers and flatten visible ones"
 area = "K"
 tier = "P2"
 milestone = "M11"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["optimize.advanced"]
+tools = ["doc_optimize"]
+evidence = ["crates/redact/src/tests.rs::hidden_information_is_counted_and_removed", "crates/automation/tests/automation.rs::optimizing_through_tools"]
+notes = "hidden layer content removed; visible layers not flattened"
 
 [[feature]]
 id = "optimize.merge-image-fragments"
@@ -7391,11 +7391,11 @@ title = "Flate-encode unencoded streams; replace LZW with Flate"
 area = "K"
 tier = "P1"
 milestone = "M11"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["optimize.advanced"]
+tools = ["doc_optimize"]
+evidence = ["crates/optimize/tests/optimize.rs::discards_and_clean_up"]
+notes = "unencoded streams; LZW not yet re-encoded"
 
 [[feature]]
 id = "optimize.remove-invalid-links"

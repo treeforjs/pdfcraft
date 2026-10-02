@@ -985,3 +985,41 @@ fn digital_ids_signing_and_validation_through_tools() {
     assert_eq!(ok(&mut a, "sign_trust", json!({ "clear": true }))["trusted"].as_array().unwrap().len(), 0);
     assert_eq!(ok(&mut a, "sign_list", json!({ "doc": doc }))["signatures"][0]["status"], "unknown");
 }
+
+#[test]
+fn optimizing_through_tools() {
+    let dir = workdir("optimize");
+    // A 2400 × 1600 photo-like JPEG at 600 dpi: a 4 × 2.67 inch page.
+    let (w, h) = (2400u32, 1600u32);
+    let px: Vec<u8> = (0..w * h)
+        .flat_map(|i| {
+            let (x, y) = (i % w, i / w);
+            [(x * 255 / w) as u8 ^ ((x * y) & 15) as u8, (y * 255 / h) as u8, ((x + y) & 255) as u8]
+        })
+        .collect();
+    let mut jpeg = Vec::new();
+    let mut enc = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg, 95);
+    enc.set_pixel_density(image::codecs::jpeg::PixelDensity::dpi(600));
+    enc.encode(&px, w, h, image::ExtendedColorType::Rgb8).unwrap();
+    std::fs::write(dir.join("photo.jpg"), &jpeg).unwrap();
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_create", json!({ "from": "images", "paths": ["photo.jpg"] }))["doc"].as_u64().unwrap();
+    let r = ok(
+        &mut a,
+        "doc_optimize",
+        json!({ "doc": doc, "path": "small.pdf", "color": { "ppi": 100, "above_ppi": 150, "compression": "jpeg", "quality": 45 }, "discard": ["metadata"] }),
+    );
+    assert_eq!((r["images"].as_u64(), r["images_resampled"].as_u64()), (Some(1), Some(1)), "{r}");
+    assert!(r["bytes_after"].as_u64().unwrap() * 5 < r["bytes_before"].as_u64().unwrap(), "{r}");
+    assert_eq!(r["discarded"][0]["category"], "metadata");
+    // The result opens and shows one page of the same size.
+    let small = ok(&mut a, "doc_open", json!({ "path": "small.pdf" }));
+    assert_eq!(small["pages"], 1);
+    let reduced = ok(&mut a, "doc_reduce", json!({ "doc": doc, "path": "reduced.pdf" }));
+    assert!(reduced["bytes_after"].as_u64().unwrap() < reduced["bytes_before"].as_u64().unwrap());
+    assert!(matches!(
+        a.call("doc_optimize", &json!({ "doc": doc, "path": "x.pdf", "color": { "compression": "gif" } })),
+        Err(ToolError::InvalidArgs(_))
+    ));
+    assert!(matches!(a.call("doc_optimize", &json!({ "doc": doc, "path": "x.pdf", "discard": ["everything"] })), Err(ToolError::InvalidArgs(_))));
+}

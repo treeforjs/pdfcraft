@@ -271,6 +271,7 @@ impl Automation {
                 write_atomic(&path, &bytes)?;
                 json!({ "path": path.to_string_lossy(), "bytes_before": before, "bytes_after": bytes.len(), "merged_objects": merged })
             }
+            "doc_optimize" => self.doc_optimize(&a)?,
             "doc_export_images" | "doc_export_text" => self.export(name, &a)?,
             "doc_header_footer" | "doc_watermark" | "doc_background" | "doc_remove_marks" => self.marks(name, &a)?,
             "doc_unprotect" => {
@@ -369,6 +370,83 @@ impl Automation {
         let path = target.to_string_lossy().into_owned();
         self.session.mark_saved(id, bytes.clone(), Some(path.clone())).map_err(failed)?;
         Ok(json!({ "path": path, "bytes": bytes.len(), "incremental": !full, "document": summary(self.doc(a)?) }))
+    }
+
+    fn doc_optimize(&mut self, a: &Args) -> Result<Value> {
+        use printcraft_engine::optimize::{Compression, ImageSettings, Settings};
+        let id = self.doc(a)?.id;
+        let before = self.doc(a)?.bytes.len();
+        let path = self.resolve(a.str("path")?, true)?;
+        let mut settings = Settings::default();
+        let images = |key: &str, base: ImageSettings| -> Result<ImageSettings> {
+            let Some(v) = a.get(key) else { return Ok(base) };
+            let mut s = base;
+            if let Some(d) = v.get("downsample").and_then(Value::as_bool) {
+                s.downsample = d;
+            }
+            if let Some(p) = v.get("ppi").and_then(Value::as_f64) {
+                s.target_ppi = p.clamp(9.0, 2400.0);
+            }
+            if let Some(p) = v.get("above_ppi").and_then(Value::as_f64) {
+                s.above_ppi = p.clamp(9.0, 2400.0);
+            }
+            s.above_ppi = s.above_ppi.max(s.target_ppi);
+            if let Some(c) = v.get("compression").and_then(Value::as_str) {
+                let q = v.get("quality").and_then(Value::as_u64).unwrap_or(60).clamp(1, 100) as u8;
+                s.compression = match c {
+                    "jpeg" => Compression::Jpeg(q),
+                    "zip" | "flate" => Compression::Flate,
+                    "retain" => Compression::Retain,
+                    other => return Err(ToolError::InvalidArgs(format!("unknown compression {other:?} (jpeg, zip, retain)"))),
+                };
+            }
+            Ok(s)
+        };
+        settings.color = images("color", settings.color)?;
+        settings.gray = images("gray", settings.gray)?;
+        for (key, flag) in [
+            ("discard_thumbnails", &mut settings.discard_thumbnails),
+            ("discard_alternate_images", &mut settings.discard_alternate_images),
+            ("discard_tags", &mut settings.discard_tags),
+            ("discard_print_settings", &mut settings.discard_print_settings),
+            ("flate_unencoded", &mut settings.flate_unencoded),
+        ] {
+            if let Some(b) = a.opt_bool(key)? {
+                *flag = b;
+            }
+        }
+        let discard: Vec<printcraft_engine::Hidden> = match a.get("discard") {
+            None => Vec::new(),
+            Some(v) => v
+                .as_array()
+                .ok_or_else(|| ToolError::InvalidArgs("discard must be an array".into()))?
+                .iter()
+                .map(|x| {
+                    x.as_str()
+                        .and_then(printcraft_engine::Hidden::from_id)
+                        .ok_or_else(|| ToolError::InvalidArgs(format!("unknown discard category {x}")))
+                })
+                .collect::<Result<_>>()?,
+        };
+        let (bytes, r) = self.session.optimized_bytes(id, &settings, &discard).map_err(failed)?;
+        write_atomic(&path, &bytes)?;
+        let o = &r.optimize;
+        Ok(json!({
+            "path": path.to_string_lossy(),
+            "bytes_before": before,
+            "bytes_after": bytes.len(),
+            "images": o.images,
+            "images_resampled": o.images_resampled,
+            "images_recompressed": o.images_recompressed,
+            "image_bytes_before": o.image_bytes_before,
+            "image_bytes_after": o.image_bytes_after,
+            "thumbnails": o.thumbnails,
+            "alternate_images": o.alternate_images,
+            "tags_removed": o.tags_removed,
+            "streams_compressed": o.streams_compressed,
+            "merged_objects": r.merged,
+            "discarded": r.discarded.iter().map(|(h, n)| json!({ "category": h.id(), "count": n })).collect::<Vec<_>>(),
+        }))
     }
 
     fn apply(&mut self, a: &Args, edit: Edit) -> Result<Value> {

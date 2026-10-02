@@ -35,6 +35,7 @@ pub use printcraft_annot::links::{Highlight as LinkHighlight, LinkAction, LinkIt
 pub use printcraft_annot::{
     FillMark, Markup, NewAnnotation, NoteIcon, Props as CommentProps, ReviewState, Rgb, Shape, StampGroup, StampKind, Style, rect_quad,
 };
+pub use printcraft_optimize as optimize;
 pub use printcraft_print as print;
 pub use printcraft_redact::patterns::{PATTERNS as REDACT_PATTERNS, Pattern as RedactPattern, find as find_pattern};
 pub use printcraft_redact::sanitize::{HIDDEN, Hidden};
@@ -1240,6 +1241,8 @@ pub enum EditError {
     NothingToRedo,
     #[error("{0}")]
     Sign(String),
+    #[error("{0}")]
+    Optimize(String),
     #[error("this document is signed: rewriting it would invalidate its signatures (save it incrementally instead)")]
     Signed,
 }
@@ -1608,18 +1611,32 @@ impl Session {
         self.write_new(&printcraft_create::from_text(title, text, printcraft_create::LETTER, 11.0)?)
     }
 
-    /// Reduce File Size: identical resources merged, unused objects dropped, objects packed
-    /// into compressed object streams. Returns the bytes and how many objects were merged.
-    /// The open document is not changed (Acrobat saves the reduced copy as a new file).
+    /// Reduce File Size: Acrobat's defaults (images above 225 ppi to 150 ppi, JPEG medium
+    /// quality; thumbnails dropped), identical resources merged, unused objects dropped, objects
+    /// packed into compressed object streams. Returns the bytes and how many objects were
+    /// merged. The open document is not changed (Acrobat saves the reduced copy as a new file).
     pub fn reduced_bytes(&self, id: DocId) -> Result<(Arc<Vec<u8>>, usize), EditError> {
+        let (bytes, report) = self.optimized_bytes(id, &optimize::Settings::default(), &[])?;
+        Ok((bytes, report.merged))
+    }
+
+    /// Optimize PDF ▸ Advanced optimization: `settings` for images and objects, plus Remove
+    /// Hidden Information's `discard` categories (user data). A full rewrite: signed documents
+    /// are refused. The open document is not changed.
+    pub fn optimized_bytes(&self, id: DocId, settings: &optimize::Settings, discard: &[Hidden]) -> Result<(Arc<Vec<u8>>, OptimizeReport), EditError> {
         let doc = self.get(id).ok_or(EditError::NoDocument)?;
+        if doc.is_signed() {
+            return Err(EditError::Signed);
+        }
         let editor = doc.editor.as_ref().ok_or_else(|| EditError::ReadOnly(doc.read_only_reason.clone().unwrap_or_default()))?;
         let mut cos = editor.cos.clone();
+        let discarded = if discard.is_empty() { Vec::new() } else { printcraft_redact::sanitize::remove_hidden(&mut cos, discard)? };
+        let report = optimize::optimize(&mut cos, settings).map_err(|e| EditError::Optimize(e.to_string()))?;
         let all: Vec<printcraft_cos::ObjRef> = cos.object_numbers().into_iter().map(|n| printcraft_cos::ObjRef::new(n, cos.generation(n))).collect();
         let merged = printcraft_organize::dedupe_resources(&mut cos, &all, false);
         let opts = SaveOptions { mod_date: self.now().map(printcraft_cos::pdf_date), ..SaveOptions::default() };
         let bytes = write_full(&cos, &opts).map_err(|e| EditError::Write(e.to_string()))?;
-        Ok((Arc::new(bytes), merged))
+        Ok((Arc::new(bytes), OptimizeReport { optimize: report, merged, discarded }))
     }
 
     /// Export comments and/or form data: XFDF and FDF carry either or both; XML, CSV and text
@@ -1911,6 +1928,16 @@ impl Session {
     pub fn docs(&self) -> &[Document] {
         &self.docs
     }
+}
+
+/// What Optimize PDF did.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct OptimizeReport {
+    pub optimize: optimize::Report,
+    /// Identical objects merged.
+    pub merged: usize,
+    /// Remove Hidden Information categories discarded, with counts.
+    pub discarded: Vec<(Hidden, usize)>,
 }
 
 /// Order of Summarize Comments.

@@ -59,3 +59,39 @@ fn clipboard_images_and_text_become_new_pdfs() {
     assert!((p.width / p.height - 2.0).abs() < 0.01, "{} × {}", p.width, p.height);
     assert!(app.create_from_clip(Clip::Image { width: 4, height: 4, rgba: vec![0; 3] }).is_err(), "malformed images are refused");
 }
+
+#[test]
+fn the_pdf_optimizer_dialog_saves_an_optimized_copy() {
+    use egui_kittest::Harness;
+    use egui_kittest::kittest::Queryable;
+    let dir = std::env::temp_dir().join(format!("printcraft-optimizer-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let out = dir.join("optimized.pdf");
+    let out2 = out.clone();
+    let mut h = Harness::builder().with_size(egui::vec2(1200.0, 800.0)).build_eframe(move |_cc| {
+        let mut app = PrintCraftApp::new();
+        app.open_bytes("notes.txt", None, "lorem ipsum ".repeat(500).into_bytes()).unwrap();
+        app.save_override = Some(out2.to_string_lossy().into_owned());
+        app
+    });
+    h.run_steps(4);
+    assert!(h.state_mut().execute("optimize.advanced"));
+    h.run_steps(2);
+    h.get_by_label("PDF Optimizer");
+    h.get_by_label("Color Images");
+    h.get_by_label("Discard Objects").click();
+    h.run_steps(2);
+    h.get_by_label("Discard document tags").click();
+    h.get_by_label("Discard User Data").click();
+    h.run_steps(2);
+    h.get_by_label("Discard document information and metadata").click();
+    h.run_steps(1);
+    {
+        let d = &h.state().optimize_draft;
+        assert!(d.settings.discard_tags && d.discard == vec![printcraft_engine::Hidden::Metadata]);
+    }
+    h.get_by_label("OK").click();
+    h.run_steps(3);
+    assert!(std::fs::read(&out).unwrap().starts_with(b"%PDF-"));
+    assert_eq!(h.state().dialog, None);
+}

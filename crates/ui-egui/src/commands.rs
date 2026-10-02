@@ -307,6 +307,7 @@ impl PrintCraftApp {
                 self.right = Some(RightPanel::Signatures);
             }
             "sign.panel" => self.right = Some(RightPanel::Signatures),
+            "optimize.advanced" => self.dialog = Some(Dialog::Optimize),
             "comment.hide_all" => {
                 if let Some(i) = active {
                     let id = self.views[i].id;
