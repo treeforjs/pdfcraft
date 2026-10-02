@@ -5,7 +5,7 @@
 //! Everything here is presentation: documents, rendering and the tool catalogue live in
 //! `printcraft-engine`.
 
-mod canvas;
+pub mod canvas;
 mod chrome;
 mod commands;
 mod comment_props;
@@ -128,6 +128,8 @@ pub enum Dialog {
     RedactApply,
     /// File ▸ Print.
     Print,
+    /// File ▸ Revert confirmation.
+    Revert,
     /// Remove Hidden Information and Sanitize Document.
     RemoveHidden,
     Sanitize,
@@ -175,6 +177,8 @@ pub struct PrintCraftApp {
     /// Comment author, per-tool colours and widths, pin.
     pub comment_prefs: comments::CommentPrefs,
     pub theme: ThemeKind,
+    /// Follow the operating system's light/dark setting.
+    pub follow_system_theme: bool,
     pub dialog: Option<Dialog>,
     pub palette_open: bool,
     pub palette_query: String,
@@ -277,6 +281,7 @@ impl PrintCraftApp {
             quick_tool: QuickTool::Select,
             comment_prefs: Default::default(),
             theme: ThemeKind::Light,
+            follow_system_theme: false,
             dialog: None,
             palette_open: false,
             palette_query: String::new(),
@@ -587,7 +592,10 @@ impl PrintCraftApp {
     pub fn set_option(&mut self, key: &str, value: &str) -> Result<(), String> {
         let view = self.active.and_then(|i| self.views.get_mut(i));
         match (key, view) {
-            ("theme", _) => self.pending_theme = Some(if value == "dark" { ThemeKind::Dark } else { ThemeKind::Light }),
+            ("theme", _) => {
+                self.follow_system_theme = value == "system";
+                self.pending_theme = Some(if value == "dark" { ThemeKind::Dark } else { ThemeKind::Light });
+            }
             ("panel", _) => {
                 self.right = match value {
                     "comments" => Some(RightPanel::Comments),
@@ -757,6 +765,14 @@ impl eframe::App for PrintCraftApp {
         }
         if let Some(k) = self.pending_theme.take() {
             self.set_theme(ctx, k);
+        }
+        if self.follow_system_theme
+            && let Some(sys) = ctx.system_theme()
+        {
+            let want = if sys == egui::Theme::Dark { ThemeKind::Dark } else { ThemeKind::Light };
+            if want != self.theme {
+                self.set_theme(ctx, want);
+            }
         }
         let dropped = ctx.input(|i| i.raw.dropped_files.clone());
         for f in dropped {

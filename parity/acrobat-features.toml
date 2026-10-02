@@ -607,11 +607,11 @@ title = "Close all documents"
 area = "A"
 tier = "P1"
 milestone = "M3"
-status = "planned"
-commands = []
+status = "shipped"
+commands = ["file.close_all"]
 tools = []
-evidence = []
-notes = ""
+evidence = ["crates/ui-egui/tests/viewer.rs::close_all_asks_only_for_changed_documents"]
+notes = "clean documents close; each changed one asks"
 
 [[feature]]
 id = "core.revert"
@@ -619,11 +619,11 @@ title = "Revert to the last saved version"
 area = "A"
 tier = "P1"
 milestone = "M4"
-status = "planned"
-commands = []
+status = "shipped"
+commands = ["file.revert"]
 tools = []
-evidence = []
-notes = ""
+evidence = ["crates/ui-egui/tests/viewer.rs::revert_after_confirming", "crates/engine/src/tests.rs::revert_goes_back_to_the_saved_version"]
+notes = "with confirmation; clears undo, as Acrobat"
 
 [[feature]]
 id = "core.signed-save-policy"
@@ -851,11 +851,11 @@ title = "Two-page scrolling"
 area = "B"
 tier = "P1"
 milestone = "M3"
-status = "planned"
+status = "shipped"
 commands = []
 tools = []
-evidence = []
-notes = ""
+evidence = ["crates/ui-egui/tests/viewer.rs::layouts_fit_height_labels_and_system_theme"]
+notes = "the two-page view scrolls continuously"
 
 [[feature]]
 id = "view.cover-page"
@@ -863,11 +863,11 @@ title = "Show cover page in two-page view"
 area = "B"
 tier = "P1"
 milestone = "M3"
-status = "planned"
+status = "shipped"
 commands = []
 tools = []
-evidence = []
-notes = ""
+evidence = ["crates/ui-egui/tests/viewer.rs::layouts_fit_height_labels_and_system_theme"]
+notes = "View ▸ Show cover page in two-page view"
 
 [[feature]]
 id = "view.page-gaps"
@@ -959,11 +959,11 @@ title = "Fit height"
 area = "B"
 tier = "P1"
 milestone = "M3"
-status = "planned"
+status = "shipped"
 commands = []
 tools = []
-evidence = []
-notes = ""
+evidence = ["crates/ui-egui/tests/viewer.rs::layouts_fit_height_labels_and_system_theme"]
+notes = "View ▸ Fit to height"
 
 [[feature]]
 id = "view.zoom-fit-visible"
@@ -1115,11 +1115,11 @@ title = "Go to a page by its label (logical page numbers)"
 area = "B"
 tier = "P1"
 milestone = "M3"
-status = "planned"
+status = "shipped"
 commands = []
 tools = []
-evidence = []
-notes = ""
+evidence = ["crates/ui-egui/tests/viewer.rs::layouts_fit_height_labels_and_system_theme"]
+notes = "the page box takes labels (iv, A-1) before numbers"
 
 [[feature]]
 id = "view.view-history"
@@ -1127,11 +1127,11 @@ title = "Previous view / next view"
 area = "B"
 tier = "P1"
 milestone = "M3"
-status = "planned"
+status = "shipped"
 commands = []
 tools = []
-evidence = []
-notes = ""
+evidence = ["crates/ui-egui/tests/viewer.rs::view_history_select_all_and_find_options"]
+notes = "⌘[ / ⌘] and View ▸ Page navigation"
 
 [[feature]]
 id = "view.follow-links"
@@ -1367,11 +1367,11 @@ title = "Find options: whole words, case-sensitive"
 area = "B"
 tier = "P1"
 milestone = "M3"
-status = "planned"
-commands = []
+status = "shipped"
+commands = ["edit.find"]
 tools = []
-evidence = []
-notes = ""
+evidence = ["crates/ui-egui/tests/viewer.rs::view_history_select_all_and_find_options"]
+notes = "whole words only, case-sensitive"
 
 [[feature]]
 id = "view.find-in-comments-bookmarks"
@@ -1487,11 +1487,11 @@ title = "Select all text on a page"
 area = "B"
 tier = "P1"
 milestone = "M3"
-status = "planned"
+status = "shipped"
 commands = []
 tools = []
-evidence = []
-notes = ""
+evidence = ["crates/ui-egui/tests/viewer.rs::view_history_select_all_and_find_options"]
+notes = "⌘A on the current page"
 
 [[feature]]
 id = "view.copy-with-layout"
@@ -1595,11 +1595,11 @@ title = "Follow the system theme"
 area = "B"
 tier = "P1"
 milestone = "M3"
-status = "planned"
-commands = []
+status = "shipped"
+commands = ["view.theme"]
 tools = []
-evidence = []
-notes = ""
+evidence = ["crates/ui-egui/tests/viewer.rs::layouts_fit_height_labels_and_system_theme"]
+notes = "Display theme ▸ Use system setting (and --theme system)"
 
 [[feature]]
 id = "view.home-view"

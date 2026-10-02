@@ -38,6 +38,7 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
     let mut field_props_now = false;
     let mut redact_now: Option<Dialog> = None;
     let mut print_go = false;
+    let mut revert_now = false;
     let mut replace_now = false;
     let t = Tokens::get(ctx);
     let mut close = false;
@@ -315,6 +316,23 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
                     redact_now = Some(dialog);
                 }
                 close = ok || cancel;
+                return;
+            }
+            Dialog::Revert => {
+                let name = app.active_ids().and_then(|(_, id)| app.session.get(id)).map(|d| d.name.clone()).unwrap_or_default();
+                ui.label(egui::RichText::new("Revert").font(theme::semibold(18.0)));
+                ui.add_space(8.0);
+                ui.label(format!("Revert to the previously saved version of \"{name}\"? Changes since then can't be undone afterwards."));
+                ui.add_space(12.0);
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if widgets::pill_button(ui, "Revert", true).clicked() {
+                        revert_now = true;
+                        close = true;
+                    }
+                    if widgets::pill_button(ui, "Cancel", false).clicked() {
+                        close = true;
+                    }
+                });
                 return;
             }
             Dialog::Print => {
@@ -609,6 +627,9 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
     if print_go {
         app.print_now();
     }
+    if revert_now {
+        app.revert_active();
+    }
     match redact_now {
         Some(Dialog::RedactPages) => app.redact_pages(),
         Some(Dialog::RedactSearch) => {
@@ -716,7 +737,7 @@ fn save_prompt(app: &mut PrintCraftApp, ctx: &egui::Context) {
     let Some(req) = app.close_request else { return };
     let index = match req {
         CloseRequest::Tab(i) => Some(i),
-        CloseRequest::Quit => app.first_dirty(),
+        CloseRequest::Quit | CloseRequest::All => app.first_dirty(),
     };
     let Some(name) = index.and_then(|i| app.views.get(i)).and_then(|v| app.session.get(v.id)).map(|d| d.name.clone()) else {
         // Nothing left to ask about (tab already gone or no dirty documents).

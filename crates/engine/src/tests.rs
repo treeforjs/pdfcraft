@@ -924,3 +924,19 @@ fn added_images_rotate_flip_and_crop_as_drawn() {
     s.apply(id, Edit::UpdateContent { page: 0, index: 0, content: AddedContent::Image(img) }).unwrap();
     assert!(red(colour_at(&s, 130, 150)), "the right half cropped away: red fills the box");
 }
+
+#[test]
+fn revert_goes_back_to_the_saved_version() {
+    let (mut s, id) = session_with(2);
+    s.apply(id, Edit::DeletePages { pages: vec![0] }).unwrap();
+    let saved = s.save_bytes(id).unwrap();
+    s.mark_saved(id, saved, None).unwrap();
+    s.apply(id, Edit::RotatePages { pages: vec![0], degrees: 90 }).unwrap();
+    s.apply(id, Edit::InsertBlankPage { at: 0, width: 200.0, height: 300.0 }).unwrap();
+    assert!(s.get(id).unwrap().dirty);
+    s.revert(id).unwrap();
+    let d = s.get(id).unwrap();
+    assert!(!d.dirty && d.can_undo().is_none() && d.can_redo().is_none());
+    assert_eq!(page_texts(&s, id), ["Page 2"], "the saved state, not the opened one");
+    assert_eq!(d.info.pages[0].rotation, 0);
+}

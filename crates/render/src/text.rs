@@ -64,7 +64,13 @@ impl PageText {
     /// Case-insensitive search. Returns glyph ranges of every match (words may span line breaks,
     /// which count as a single space).
     pub fn find(&self, needle: &str) -> Vec<std::ops::Range<usize>> {
-        let needle: Vec<char> = needle.to_lowercase().split_whitespace().collect::<Vec<_>>().join(" ").chars().collect();
+        self.find_opts(needle, false, false)
+    }
+
+    /// Search with Acrobat's find options: case-sensitive, whole words only.
+    pub fn find_opts(&self, needle: &str, case_sensitive: bool, whole_words: bool) -> Vec<std::ops::Range<usize>> {
+        let fold = |s: &str| if case_sensitive { s.to_string() } else { s.to_lowercase() };
+        let needle: Vec<char> = fold(needle).split_whitespace().collect::<Vec<_>>().join(" ").chars().collect();
         if needle.is_empty() {
             return Vec::new();
         }
@@ -74,14 +80,16 @@ impl PageText {
             if i > 0 && (self.space_before[i] || self.line_of[i] != self.line_of[i - 1]) && chars.last().is_some_and(|c| c.0 != ' ') {
                 chars.push((' ', i));
             }
-            for c in g.text.chars().flat_map(char::to_lowercase) {
+            for c in fold(&g.text).chars() {
                 chars.push((if c.is_whitespace() { ' ' } else { c }, i));
             }
         }
+        let word = |k: Option<&(char, usize)>| k.is_some_and(|c| c.0.is_alphanumeric());
         let mut out = Vec::new();
         let mut i = 0;
         while i + needle.len() <= chars.len() {
-            if chars[i..i + needle.len()].iter().map(|c| c.0).eq(needle.iter().copied()) {
+            let bounded = !whole_words || (!word(i.checked_sub(1).and_then(|p| chars.get(p))) && !word(chars.get(i + needle.len())));
+            if bounded && chars[i..i + needle.len()].iter().map(|c| c.0).eq(needle.iter().copied()) {
                 let start = chars[i].1;
                 let end = chars[i + needle.len() - 1].1 + 1;
                 out.push(start..end);

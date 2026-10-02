@@ -12,6 +12,8 @@ pub enum CloseRequest {
     Tab(usize),
     /// Quit the application once every dirty document is resolved.
     Quit,
+    /// File ▸ Close all: like Quit, but the application stays open.
+    All,
 }
 
 /// Where Save writes.
@@ -189,6 +191,34 @@ impl PrintCraftApp {
         }
     }
 
+    /// File ▸ Close all: clean documents close at once; each one with unsaved changes asks.
+    pub fn close_all(&mut self) {
+        for i in (0..self.views.len()).rev() {
+            if !self.session.get(self.views[i].id).is_some_and(|d| d.dirty) {
+                self.close_tab(i);
+            }
+        }
+        if self.first_dirty().is_some() {
+            self.close_request = Some(CloseRequest::All);
+        }
+    }
+
+    /// File ▸ Revert (after the confirmation).
+    pub fn revert_active(&mut self) {
+        let Some((_, id)) = self.active_ids() else { return };
+        match self.session.revert(id) {
+            Ok(()) => {
+                if let Some(i) = self.active
+                    && let Some(d) = self.session.get(id)
+                {
+                    self.views[i].document_changed(&d.info);
+                }
+                self.notify("Reverted to the last saved version");
+            }
+            Err(e) => self.notify(e.to_string()),
+        }
+    }
+
     /// The first tab with unsaved changes.
     pub fn first_dirty(&self) -> Option<usize> {
         self.views.iter().position(|v| self.session.get(v.id).is_some_and(|d| d.dirty))
@@ -199,10 +229,12 @@ impl PrintCraftApp {
         let Some(req) = self.close_request.take() else { return };
         let index = match req {
             CloseRequest::Tab(i) => i,
-            CloseRequest::Quit => match self.first_dirty() {
+            CloseRequest::Quit | CloseRequest::All => match self.first_dirty() {
                 Some(i) => i,
                 None => {
-                    self.quit(ctx);
+                    if req == CloseRequest::Quit {
+                        self.quit(ctx);
+                    }
                     return;
                 }
             },
@@ -214,11 +246,12 @@ impl PrintCraftApp {
                     return; // save failed or was cancelled: keep the document open
                 }
                 self.close_tab(index);
-                if req == CloseRequest::Quit {
+                if req == CloseRequest::Quit || req == CloseRequest::All {
                     // Ask about the next dirty document, or quit.
                     match self.first_dirty() {
-                        Some(_) => self.close_request = Some(CloseRequest::Quit),
-                        None => self.quit(ctx),
+                        Some(_) => self.close_request = Some(req),
+                        None if req == CloseRequest::Quit => self.quit(ctx),
+                        None => {}
                     }
                 }
             }

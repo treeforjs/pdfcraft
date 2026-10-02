@@ -153,6 +153,8 @@ pub const COMMANDS: &[CommandSpec] = &[
     c("file.save", "Save", FILE, Some(Shortcut::cmd("S")), Document, "save"),
     c("file.save_as", "Save as…", FILE, Some(Shortcut::cmd_shift("S")), Document, "save"),
     c("file.close", "Close file", FILE, Some(Shortcut::cmd("W")), Document, "x"),
+    c("file.close_all", "Close all", FILE, Some(Shortcut::cmd_shift("W")), Document, "x"),
+    c("file.revert", "Revert", FILE, None, Undo, "rotate-ccw"),
     c("print.dialog", "Print…", FILE, Some(Shortcut::cmd("P")), Document, "printer"),
     c("file.properties", "Document properties…", FILE, Some(Shortcut::cmd("D")), Document, "info"),
     ct("edit.undo", "Undo", EDIT, Some(Shortcut::cmd("Z")), Undo, "undo-2"),

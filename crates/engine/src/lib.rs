@@ -1392,6 +1392,31 @@ impl Session {
         Self::refresh(doc)
     }
 
+    /// File ▸ Revert: back to the last saved version (or the file as opened). Undo history is
+    /// cleared, as in Acrobat.
+    pub fn revert(&mut self, id: DocId) -> Result<(), EditError> {
+        let doc = self.doc_mut(id)?;
+        let editor = doc.editor.as_mut().ok_or_else(|| EditError::ReadOnly(doc.read_only_reason.clone().unwrap_or_default()))?;
+        let base = editor.cos.bytes().clone();
+        // The saved file opens with the passwords of the state that was saved: try the current
+        // ones, then each earlier state's.
+        let mut candidates = vec![editor.keys.clone()];
+        candidates.extend(editor.undo.iter().rev().map(|s| s.2.clone()));
+        candidates.push(Keys::default());
+        let (cos, keys) = candidates
+            .into_iter()
+            .find_map(|k| printcraft_cos::Document::open_with_password(base.clone(), k.reopen.as_deref()).ok().map(|c| (c, k)))
+            .ok_or_else(|| EditError::Reopen("the saved file can't be opened".into()))?;
+        editor.cos = cos;
+        editor.keys = keys;
+        editor.undo.clear();
+        editor.redo.clear();
+        Self::adopt_keys(doc);
+        doc.dirty = false;
+        doc.generation += 1;
+        Self::refresh(doc)
+    }
+
     /// The page count of another PDF (Replace Pages, Insert Pages dialogs).
     pub fn page_count_of(&self, name: &str, bytes: &Arc<Vec<u8>>) -> Result<usize, EditError> {
         Ok(printcraft_organize::page_count(&open_source(name, bytes)?)?)

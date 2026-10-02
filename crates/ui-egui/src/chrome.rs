@@ -173,6 +173,10 @@ fn main_menu(app: &mut PrintCraftApp, ui: &mut egui::Ui) {
                 if widgets::menu_item(ui, "Fit to width", "⌘2").clicked() {
                     v.fit = Fit::Width;
                 }
+                if widgets::menu_item(ui, "Fit to height", "").clicked() {
+                    v.fit = Fit::Height;
+                    v.goto = Some((v.current, 0.0));
+                }
                 if widgets::menu_item(ui, "Zoom in", "⌘+").clicked() {
                     v.zoom_step(true);
                 }
@@ -186,6 +190,14 @@ fn main_menu(app: &mut PrintCraftApp, ui: &mut egui::Ui) {
                     v.rotate_view(false);
                 }
                 ui.separator();
+                ui.label(egui::RichText::new("Page navigation").color(t.text_faint).small());
+                if ui.add_enabled(!v.back.is_empty(), egui::Button::new("Previous view").shortcut_text("⌘[")).clicked() {
+                    v.view_history(false);
+                }
+                if ui.add_enabled(!v.forward.is_empty(), egui::Button::new("Next view").shortcut_text("⌘]")).clicked() {
+                    v.view_history(true);
+                }
+                ui.separator();
                 ui.label(egui::RichText::new("Page display").color(t.text_faint).small());
                 for (l, label) in
                     [(PageLayout::Continuous, "Continuous scrolling"), (PageLayout::TwoUp, "Two-page view"), (PageLayout::Single, "Single page")]
@@ -195,15 +207,23 @@ fn main_menu(app: &mut PrintCraftApp, ui: &mut egui::Ui) {
                         v.goto = Some((v.current, 0.0));
                     }
                 }
+                if ui.add_enabled(v.layout == PageLayout::TwoUp, egui::Checkbox::new(&mut v.cover, "Show cover page in two-page view")).changed() {
+                    v.goto = Some((v.current, 0.0));
+                }
                 ui.separator();
             }
             crate::commands::registry_menu(app, ui, "View");
             ui.menu_button("Display theme", |ui| {
                 let ctx = ui.ctx().clone();
-                if ui.radio(app.theme == ThemeKind::Light, "Light gray").clicked() {
+                if ui.radio(app.follow_system_theme, "Use system setting").clicked() {
+                    app.follow_system_theme = true;
+                }
+                if ui.radio(!app.follow_system_theme && app.theme == ThemeKind::Light, "Light gray").clicked() {
+                    app.follow_system_theme = false;
                     app.set_theme(&ctx, ThemeKind::Light);
                 }
-                if ui.radio(app.theme == ThemeKind::Dark, "Dark gray").clicked() {
+                if ui.radio(!app.follow_system_theme && app.theme == ThemeKind::Dark, "Dark gray").clicked() {
+                    app.follow_system_theme = false;
                     app.set_theme(&ctx, ThemeKind::Dark);
                 }
             });
@@ -238,6 +258,7 @@ pub fn right_rail(app: &mut PrintCraftApp, ui: &mut egui::Ui) {
         !doc.info.attachments.is_empty(),
     );
     let page_count = doc.info.pages.len();
+    let labels: Vec<String> = doc.info.pages.iter().map(|p| p.label.clone()).collect();
     egui::Panel::right("rail")
         .resizable(false)
         .exact_size(48.0)
@@ -301,12 +322,13 @@ pub fn right_rail(app: &mut PrintCraftApp, ui: &mut egui::Ui) {
                     .corner_radius(CornerRadius::same(5))
                     .show(ui, |ui| ui.add(edit))
                     .inner
-                    .on_hover_text("Current page — type a number and press Enter");
-                if r.lost_focus()
-                    && ui.input(|i| i.key_pressed(egui::Key::Enter))
-                    && let Ok(n) = view.page_input.trim().parse::<usize>()
-                {
-                    view.go_to_page(n.saturating_sub(1));
+                    .on_hover_text("Current page — type a page number or label (such as iv) and press Enter");
+                if r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                    // A page label first (logical page numbers, as Acrobat), then a number.
+                    let typed = view.page_input.clone();
+                    if !view.go_to_typed(&typed, &labels) {
+                        view.page_input = (view.current + 1).to_string();
+                    }
                 }
             });
         });

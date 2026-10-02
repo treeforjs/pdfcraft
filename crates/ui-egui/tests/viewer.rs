@@ -1,0 +1,173 @@
+//! Viewer conveniences: close all, revert, fit height, view history, select all, find options,
+//! cover page.
+
+use egui_kittest::Harness;
+use egui_kittest::kittest::Queryable;
+use printcraft_ui_egui::{Dialog, PrintCraftApp};
+
+/// `n` pages of 200×300; page i says "Page i+1" plus "page" and "Pages" for find tests.
+fn fixture(n: usize) -> Vec<u8> {
+    let mut objs: Vec<String> = vec!["<< /Type /Catalog /Pages 2 0 R >>".into()];
+    let kids: Vec<String> = (0..n).map(|i| format!("{} 0 R", 4 + 2 * i)).collect();
+    objs.push(format!("<< /Type /Pages /Kids [{}] /Count {n} /MediaBox [0 0 200 300] >>", kids.join(" ")));
+    objs.push("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".into());
+    for i in 0..n {
+        objs.push(format!("<< /Type /Page /Parent 2 0 R /Contents {} 0 R /Resources << /Font << /F1 3 0 R >> >> >>", 5 + 2 * i));
+        let body = format!("BT /F1 18 Tf 20 150 Td (Page {} pages PAGE) Tj ET", i + 1);
+        objs.push(format!("<< /Length {} >>\nstream\n{body}\nendstream", body.len()));
+    }
+    let mut out = b"%PDF-1.7\n".to_vec();
+    let mut offs = Vec::new();
+    for (i, o) in objs.iter().enumerate() {
+        offs.push(out.len());
+        out.extend_from_slice(format!("{} 0 obj\n{o}\nendobj\n", i + 1).as_bytes());
+    }
+    let x = out.len();
+    out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objs.len() + 1).as_bytes());
+    for o in offs {
+        out.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+    }
+    out.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{x}\n%%EOF\n", objs.len() + 1).as_bytes());
+    out
+}
+
+fn harness() -> Harness<'static, PrintCraftApp> {
+    let mut h = Harness::builder().with_size(egui::vec2(1400.0, 900.0)).build_eframe(|_cc| {
+        let mut app = PrintCraftApp::new();
+        app.open_bytes("a.pdf", None, fixture(5)).unwrap();
+        app.open_bytes("b.pdf", None, fixture(2)).unwrap();
+        app
+    });
+    for _ in 0..40 {
+        h.run_steps(2);
+        if !h.state().render_pending() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    h
+}
+
+#[test]
+fn close_all_asks_only_for_changed_documents() {
+    let mut h = harness();
+    // Change the active document (b.pdf).
+    h.state_mut().apply_edit(printcraft_engine::Edit::RotatePages { pages: vec![0], degrees: 90 });
+    h.state_mut().execute("file.close_all");
+    h.run_steps(2);
+    assert_eq!(h.state().views.len(), 1, "the clean document closed at once");
+    assert_eq!(h.state().close_request, Some(printcraft_ui_egui::CloseRequest::All), "b.pdf asks to be saved");
+    h.get_by_label_contains("Save changes");
+}
+
+#[test]
+fn revert_after_confirming() {
+    let mut h = harness();
+    h.state_mut().apply_edit(printcraft_engine::Edit::DeletePages { pages: vec![0] });
+    assert!(h.state_mut().execute("file.revert"));
+    h.run_steps(2);
+    assert_eq!(h.state().dialog, Some(Dialog::Revert));
+    h.get_all_by_label("Revert").last().expect("the button").click();
+    h.run_steps(3);
+    let s = h.state();
+    let d = s.session.get(s.views[1].id).unwrap();
+    assert_eq!((d.info.pages.len(), d.dirty), (2, false));
+}
+
+#[test]
+fn view_history_select_all_and_find_options() {
+    let mut h = harness();
+    h.state_mut().active = Some(0);
+    h.run_steps(2);
+    h.state_mut().views[0].go_to_page(3);
+    h.run_steps(2);
+    h.state_mut().views[0].go_to_page(1);
+    h.run_steps(2);
+    assert!(h.state_mut().views[0].view_history(false));
+    assert_eq!(h.state().views[0].current, 3, "previous view");
+    assert!(h.state_mut().views[0].view_history(false));
+    assert_eq!(h.state().views[0].current, 0);
+    assert!(h.state_mut().views[0].view_history(true));
+    assert_eq!(h.state().views[0].current, 3, "next view");
+    // Select all on the current page (once its text is known).
+    for _ in 0..40 {
+        h.run_steps(2);
+        if h.state_mut().views[0].select_all() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert_eq!(h.state().views[0].selected_text().as_deref(), Some("Page 4 pages PAGE"));
+    // Find: "page" matches three times a page; whole words, case-sensitive narrows it.
+    h.state_mut().views[0].open_find();
+    h.state_mut().views[0].find.as_mut().unwrap().query = "page".into();
+    h.state_mut().views[0].rerun_find();
+    for _ in 0..60 {
+        h.run_steps(2);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        if h.state().views[0].find.as_ref().unwrap().matches.len() >= 15 {
+            break;
+        }
+    }
+    assert_eq!(h.state().views[0].find.as_ref().unwrap().matches.len(), 15);
+    {
+        let f = h.state_mut().views[0].find.as_mut().unwrap();
+        f.whole_words = true;
+        f.case_sensitive = true;
+    }
+    h.state_mut().views[0].rerun_find();
+    h.run_steps(2);
+    assert_eq!(h.state().views[0].find.as_ref().unwrap().matches.len(), 0, "\"page\" alone, lower case, appears nowhere");
+    h.state_mut().views[0].find.as_mut().unwrap().query = "PAGE".into();
+    h.state_mut().views[0].rerun_find();
+    h.run_steps(2);
+    assert_eq!(h.state().views[0].find.as_ref().unwrap().matches.len(), 5);
+}
+
+#[test]
+fn layouts_fit_height_labels_and_system_theme() {
+    use printcraft_ui_egui::canvas::{Fit, PageLayout};
+    let mut h = harness();
+    h.state_mut().active = Some(0);
+    // Fit height: the page's height fills the view (less the margins).
+    h.state_mut().views[0].fit = Fit::Height;
+    h.run_steps(4);
+    let r = h.state().views[0].page_screen_rect(0).expect("on screen");
+    let vp = h.state().views[0].viewport_rect();
+    assert!(r.height() > vp.height() * 0.85 && r.top() >= vp.top() && r.bottom() <= vp.bottom() + 1.0, "page {r:?} in {vp:?}");
+    // Two-page view scrolls continuously; a cover puts page 1 alone on the right.
+    h.state_mut().views[0].fit = Fit::Width;
+    h.state_mut().views[0].layout = PageLayout::TwoUp;
+    h.run_steps(4);
+    let (a, b) = (h.state().views[0].page_screen_rect(0).unwrap(), h.state().views[0].page_screen_rect(1).unwrap());
+    assert!((a.top() - b.top()).abs() < 1.0 && b.left() > a.right(), "side by side");
+    h.state_mut().views[0].cover = true;
+    h.run_steps(4);
+    let (a, b, c) = (
+        h.state().views[0].page_screen_rect(0).unwrap(),
+        h.state().views[0].page_screen_rect(1).unwrap(),
+        h.state().views[0].page_screen_rect(2).unwrap(),
+    );
+    assert!(a.left() > vp.center().x - 1.0, "the cover sits on the right");
+    assert!(b.top() > a.bottom() && (b.top() - c.top()).abs() < 1.0, "then pairs 2–3");
+    // Page labels in the page box.
+    h.state_mut().apply_edit(printcraft_engine::Edit::NumberPages {
+        from: 0,
+        to: 1,
+        style: printcraft_engine::LabelStyle::LowerRoman,
+        prefix: String::new(),
+        first: 1,
+    });
+    h.run_steps(2);
+    let labels: Vec<String> = {
+        let s = h.state();
+        s.session.get(s.views[0].id).unwrap().info.pages.iter().map(|p| p.label.clone()).collect()
+    };
+    assert_eq!(labels[1], "ii");
+    assert!(h.state_mut().views[0].go_to_typed("ii", &labels));
+    assert_eq!(h.state().views[0].current, 1);
+    assert!(!h.state_mut().views[0].go_to_typed("xx", &labels));
+    // Follow the system theme.
+    h.state_mut().set_option("theme", "system").unwrap();
+    assert!(h.state().follow_system_theme);
+}

@@ -36,6 +36,7 @@ const THUMB_W: f32 = 132.0;
 pub enum Fit {
     Width,
     Page,
+    Height,
     None,
 }
 
@@ -55,6 +56,9 @@ pub struct Find {
     pub current: Option<usize>,
     pub focus: bool,
     pub case_query: String,
+    /// Find options (Acrobat's: case-sensitive, whole words only).
+    pub case_sensitive: bool,
+    pub whole_words: bool,
 }
 
 /// A text selection on one page, in reading-order glyph indices.
@@ -88,6 +92,11 @@ pub struct DocView {
     pub highlight_fields: bool,
     pub page_input: String,
     pub notice_dismissed: bool,
+    /// Two-page view: show the first page alone, as a cover (View ▸ Page display).
+    pub cover: bool,
+    /// Previous view / Next view: pages visited before (and after, once going back).
+    pub back: Vec<usize>,
+    pub forward: Vec<usize>,
     /// Pending navigation: page and fraction down the page to align with the viewport top.
     pub goto: Option<(usize, f32)>,
     /// Briefly outline an annotation after navigating to it from a panel.
@@ -183,6 +192,9 @@ impl DocView {
             highlight_fields: false,
             page_input: "1".into(),
             notice_dismissed: false,
+            cover: false,
+            back: Vec::new(),
+            forward: Vec::new(),
             goto: None,
             flash: None,
             pages: HashMap::new(),
@@ -360,7 +372,7 @@ impl DocView {
         }
         let current_key = f.current.and_then(|c| f.matches.get(c).cloned());
         f.matches.retain(|(p, _)| *p != page);
-        f.matches.extend(text.find(&f.case_query).into_iter().map(|r| (page, r)));
+        f.matches.extend(text.find_opts(&f.case_query, f.case_sensitive, f.whole_words).into_iter().map(|r| (page, r)));
         f.matches.sort_by_key(|(p, r)| (*p, r.start));
         f.current = match current_key {
             Some(k) => f.matches.iter().position(|m| *m == k),
@@ -424,9 +436,59 @@ impl DocView {
 
     pub fn go_to_page(&mut self, page: usize) {
         let page = page.min(self.page_count.saturating_sub(1));
+        if page != self.current {
+            // The view history (Previous view / Next view).
+            if self.back.last() != Some(&self.current) {
+                self.back.push(self.current);
+                if self.back.len() > 200 {
+                    self.back.remove(0);
+                }
+            }
+            self.forward.clear();
+        }
         self.goto = Some((page, 0.0));
         self.current = page;
         self.page_input = (page + 1).to_string();
+    }
+
+    /// Go to the page typed in the page box: a page label (logical page numbers, as Acrobat
+    /// does), else a page number. `false` when it names no page.
+    pub fn go_to_typed(&mut self, typed: &str, labels: &[String]) -> bool {
+        let t = typed.trim();
+        let page = labels
+            .iter()
+            .position(|l| !l.is_empty() && l.eq_ignore_ascii_case(t))
+            .or_else(|| t.parse::<usize>().ok().filter(|n| *n >= 1).map(|n| n - 1));
+        match page {
+            Some(p) if p < self.page_count => {
+                self.go_to_page(p);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// View ▸ Page navigation ▸ Previous view (`false`) / Next view (`true`).
+    pub fn view_history(&mut self, forward: bool) -> bool {
+        let (from, to) = if forward { (&mut self.forward, &mut self.back) } else { (&mut self.back, &mut self.forward) };
+        let Some(page) = from.pop() else { return false };
+        to.push(self.current);
+        let page = page.min(self.page_count.saturating_sub(1));
+        self.goto = Some((page, 0.0));
+        self.current = page;
+        self.page_input = (page + 1).to_string();
+        true
+    }
+
+    /// Edit ▸ Select all: every word on the current page.
+    pub fn select_all(&mut self) -> bool {
+        let page = self.current;
+        let Some(t) = self.texts.get(&page) else { return false };
+        if t.glyphs.is_empty() {
+            return false;
+        }
+        self.selection = Some(Selection { page, anchor: 0, head: t.glyphs.len() - 1 });
+        true
     }
 
     /// Rotate the view 90° clockwise or counter-clockwise (View ▸ Rotate View, ⇧⌘+ / ⇧⌘−).
@@ -534,6 +596,10 @@ impl DocView {
                 let zh = (self.viewport_h - 2.0 * MARGIN) / (h * PT);
                 self.zoom = zw.min(zh);
             }
+            Fit::Height => {
+                let (_, h) = self.display_size(&info.pages[self.current.min(info.pages.len() - 1)]);
+                self.zoom = (self.viewport_h - 2.0 * MARGIN) / (h * PT);
+            }
             Fit::None => {}
         }
         self.zoom = self.zoom.clamp(0.08, 64.0);
@@ -554,11 +620,17 @@ impl DocView {
                 }
             }
             PageLayout::TwoUp => {
-                for pair in info.pages.chunks(2) {
+                // With a cover page, the first page sits alone on the right.
+                let rows: Vec<&[printcraft_render::PageInfo]> = if self.cover && !info.pages.is_empty() {
+                    std::iter::once(&info.pages[..1]).chain(info.pages[1..].chunks(2)).collect()
+                } else {
+                    info.pages.chunks(2).collect()
+                };
+                for (ri, pair) in rows.into_iter().enumerate() {
                     let sizes: Vec<Vec2> = pair.iter().map(|p| self.display_size(p)).map(|(w, h)| vec2(w * s, h * s)).collect();
                     let row_w: f32 = sizes.iter().map(|v| v.x).sum::<f32>() + GAP * (sizes.len() as f32 - 1.0);
                     let row_h = sizes.iter().map(|v| v.y).fold(0.0, f32::max);
-                    let mut x = ((content_w - row_w) / 2.0).max(SIDE);
+                    let mut x = if self.cover && ri == 0 { (content_w / 2.0 + GAP / 2.0).max(SIDE) } else { ((content_w - row_w) / 2.0).max(SIDE) };
                     for size in sizes {
                         rects.push(Rect::from_min_size(pos2(x, y + (row_h - size.y) / 2.0), size));
                         x += size.x + GAP;
@@ -692,6 +764,15 @@ pub fn shortcuts(view: &mut DocView, ctx: &egui::Context) {
     }
     if pressed(cmd(Key::G)) {
         view.find_step(true);
+    }
+    if pressed(cmd(Key::A)) {
+        view.select_all();
+    }
+    if pressed(cmd(Key::OpenBracket)) {
+        view.view_history(false);
+    }
+    if pressed(cmd(Key::CloseBracket)) {
+        view.view_history(true);
     }
     if pressed(KeyboardShortcut::new(Modifiers::COMMAND | Modifiers::SHIFT, Key::G)) {
         view.find_step(false);
@@ -1369,6 +1450,15 @@ fn find_bar(view: &mut DocView, pages: usize, area: Rect, ui: &mut egui::Ui, t: 
                         if icons::button(ui, "chevron-down", 26.0, false, "Next (⌘G)").clicked() {
                             step = Some(true);
                         }
+                        let opts = icons::button(ui, "settings-2", 26.0, find.case_sensitive || find.whole_words, "Find options");
+                        egui::Popup::menu(&opts).show(|ui| {
+                            let a = ui.checkbox(&mut find.whole_words, "Whole words only").changed();
+                            let b = ui.checkbox(&mut find.case_sensitive, "Case-sensitive").changed();
+                            if a || b {
+                                // Search again with the new options.
+                                find.case_query.clear();
+                            }
+                        });
                         if icons::button(ui, "x", 26.0, false, "Close (Esc)").clicked() {
                             close = true;
                         }
