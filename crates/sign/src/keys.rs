@@ -29,7 +29,7 @@ pub mod oid {
 }
 
 /// Message digests.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum DigestAlg {
     Sha1,
     Sha256,

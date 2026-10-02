@@ -14,7 +14,7 @@ pub mod x509;
 
 pub use der::Time;
 pub use keys::{DigestAlg, PrivateKey, PublicKey};
-pub use pdf::{Appearance, Modification, SignOptions, SignatureInfo, Status, TrustStore, list as signatures, sign, validate};
+pub use pdf::{Appearance, DigestCache, Modification, SignOptions, SignatureInfo, Status, TrustStore, list as signatures, sign, validate};
 pub use pkcs12::DigitalId;
 pub use x509::{Certificate, Name};
 

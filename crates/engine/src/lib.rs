@@ -140,6 +140,7 @@ pub struct Document {
     /// Signature fields, validated against the session's trust store (Signatures panel).
     pub signatures: Arc<Vec<SignatureInfo>>,
     trust: Arc<TrustStore>,
+    sig_cache: Arc<printcraft_sign::DigestCache>,
     editor: Option<Editor>,
     config: RenderConfig,
 }
@@ -1260,8 +1261,8 @@ pub struct Session {
 }
 
 /// Validate the signature fields of `cos` (written as `bytes`).
-fn signatures_of(cos: &printcraft_cos::Document, bytes: &[u8], trust: &TrustStore) -> Arc<Vec<SignatureInfo>> {
-    Arc::new(printcraft_sign::signatures(cos, bytes, trust))
+fn signatures_of(cos: &printcraft_cos::Document, bytes: &[u8], trust: &TrustStore, cache: &printcraft_sign::DigestCache) -> Arc<Vec<SignatureInfo>> {
+    Arc::new(printcraft_sign::pdf::list_cached(cos, bytes, trust, cache))
 }
 
 impl Session {
@@ -1342,7 +1343,8 @@ impl Session {
         let marks = editor.as_ref().map(|e| printcraft_edit::marks_present(&e.cos)).unwrap_or_default();
         let added = editor.as_ref().map(|e| printcraft_edit::list_added(&e.cos)).unwrap_or_default();
         let links = editor.as_ref().map(|e| printcraft_annot::links::list(&e.cos)).unwrap_or_default();
-        let signatures = editor.as_ref().map(|e| signatures_of(&e.cos, &bytes, &self.trust)).unwrap_or_default();
+        let sig_cache = Arc::new(printcraft_sign::DigestCache::default());
+        let signatures = editor.as_ref().map(|e| signatures_of(&e.cos, &bytes, &self.trust, &sig_cache)).unwrap_or_default();
         self.next_id += 1;
         let id = DocId(self.next_id);
         self.docs.push(Document {
@@ -1363,6 +1365,7 @@ impl Session {
             links,
             signatures,
             trust: self.trust.clone(),
+            sig_cache,
             editor,
             config,
         });
@@ -1484,7 +1487,7 @@ impl Session {
         doc.info.file_size = bytes.len();
         doc.form = form;
         if !doc.signatures.is_empty() {
-            doc.signatures = signatures_of(&editor.cos, &bytes, &doc.trust);
+            doc.signatures = signatures_of(&editor.cos, &bytes, &doc.trust, &doc.sig_cache);
         }
         doc.bytes = bytes.clone();
         doc.renderer = RenderPool::new(bytes, render_threads(), doc.config.clone());
@@ -1512,7 +1515,7 @@ impl Session {
         doc.marks = printcraft_edit::marks_present(&editor.cos);
         doc.added = printcraft_edit::list_added(&editor.cos);
         doc.links = printcraft_annot::links::list(&editor.cos);
-        doc.signatures = signatures_of(&editor.cos, &bytes, &doc.trust);
+        doc.signatures = signatures_of(&editor.cos, &bytes, &doc.trust, &doc.sig_cache);
         doc.bytes = bytes.clone();
         doc.renderer = RenderPool::new(bytes, render_threads(), doc.config.clone());
         Ok(())
@@ -1855,7 +1858,7 @@ impl Session {
         for doc in &mut self.docs {
             doc.trust = self.trust.clone();
             if let Some(e) = doc.editor.as_ref() {
-                doc.signatures = signatures_of(&e.cos, &doc.bytes, &doc.trust);
+                doc.signatures = signatures_of(&e.cos, &doc.bytes, &doc.trust, &doc.sig_cache);
             }
         }
     }

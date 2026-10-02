@@ -403,6 +403,16 @@ impl Document {
         self.overlay.keys().copied().collect()
     }
 
+    /// Where object `num` is stored in the file (ignoring unsaved edits).
+    pub fn xref_entry(&self, num: u32) -> Option<XrefEntry> {
+        self.entries.get(&num).cloned()
+    }
+
+    /// Object `num` has an unsaved edit.
+    pub fn is_edited(&self, num: u32) -> bool {
+        self.overlay.contains_key(&num)
+    }
+
     pub fn root(&self) -> Option<ObjRef> {
         self.trailer.reference(b"Root")
     }

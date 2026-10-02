@@ -23,6 +23,68 @@ use crate::keys::DigestAlg;
 use crate::pkcs12::DigitalId;
 use crate::x509::{Certificate, build_chain};
 
+/// Digests of signed byte ranges (and parsed signed revisions), kept across revalidations of
+/// one document: incremental edits only append to the file, so the signed bytes and their
+/// digest don't change, and rehashing a large file on every edit was the expensive part of
+/// validation (120 MB: 84 ms per comment edit before, 6 ms after). Keyed by the ranges, the
+/// algorithm and a sampled fingerprint of the covered bytes; use one cache per document, whose
+/// bytes only ever grow.
+#[derive(Debug, Default)]
+pub struct DigestCache {
+    map: std::sync::Mutex<HashMap<RangeKey, Vec<u8>>>,
+    /// Signed revisions opened for change classification, by length and fingerprint.
+    revisions: std::sync::Mutex<HashMap<(usize, [u8; 32]), Document>>,
+}
+
+/// (end of first range, start of second, end of second, algorithm, fingerprint).
+type RangeKey = (usize, usize, usize, DigestAlg, [u8; 32]);
+
+/// 64 KiB sampled from across `covered`, plus its length.
+fn fingerprint(covered: &[u8]) -> [u8; 32] {
+    let mut parts: Vec<&[u8]> = (0..64)
+        .map(|i| {
+            let at = covered.len().saturating_sub(1024) * i / 63;
+            &covered[at..(at + 1024).min(covered.len())]
+        })
+        .collect();
+    let len = (covered.len() as u64).to_be_bytes();
+    parts.push(&len);
+    DigestAlg::Sha256.digest(&parts).try_into().unwrap_or([0; 32])
+}
+
+impl DigestCache {
+    /// The signed revision `bytes[..end]`, parsed (and kept).
+    fn revision(&self, bytes: &[u8], end: usize) -> Option<Document> {
+        let key = (end, fingerprint(&bytes[..end]));
+        if let Some(d) = self.revisions.lock().ok().and_then(|m| m.get(&key).cloned()) {
+            return Some(d);
+        }
+        let d = Document::open(Arc::new(bytes[..end].to_vec())).ok()?;
+        if let Ok(mut m) = self.revisions.lock() {
+            if m.len() > 8 {
+                m.clear();
+            }
+            m.insert(key, d.clone());
+        }
+        Some(d)
+    }
+
+    fn digest(&self, alg: DigestAlg, bytes: &[u8], l0: usize, o1: usize, end: usize) -> Vec<u8> {
+        let key = (l0, o1, end, alg, fingerprint(&bytes[..end]));
+        if let Some(d) = self.map.lock().ok().and_then(|m| m.get(&key).cloned()) {
+            return d;
+        }
+        let d = alg.digest(&[&bytes[..l0], &bytes[o1..end]]);
+        if let Ok(mut m) = self.map.lock() {
+            if m.len() > 64 {
+                m.clear();
+            }
+            m.insert(key, d.clone());
+        }
+        d
+    }
+}
+
 /// Certificates the user trusts for signing (Acrobat: Trusted Certificates).
 #[derive(Clone, Debug, Default)]
 pub struct TrustStore {
@@ -189,6 +251,11 @@ fn nums(doc: &Document, d: &Dict, key: &[u8]) -> Option<Vec<f64>> {
 
 /// List and validate every signature field. `bytes` is the file as stored (the ranges index it).
 pub fn list(doc: &Document, bytes: &[u8], trust: &TrustStore) -> Vec<SignatureInfo> {
+    list_cached(doc, bytes, trust, &DigestCache::default())
+}
+
+/// [`list`], reusing digests from `cache`.
+pub fn list_cached(doc: &Document, bytes: &[u8], trust: &TrustStore, cache: &DigestCache) -> Vec<SignatureInfo> {
     let pages = annot_pages(doc);
     let mut out = Vec::new();
     for f in sig_fields(doc) {
@@ -226,7 +293,7 @@ pub fn list(doc: &Document, bytes: &[u8], trust: &TrustStore) -> Vec<SignatureIn
             details: Vec::new(),
         };
         if let Some(v) = v {
-            validate_into(doc, bytes, trust, &v, &mut info);
+            validate_into(doc, bytes, trust, &v, &mut info, cache);
         }
         out.push(info);
     }
@@ -248,7 +315,7 @@ fn unhex(s: &[u8]) -> Option<Vec<u8>> {
     digits.chunks(2).map(|p| Some(val(p[0])? << 4 | p.get(1).map_or(Some(0), |c| val(*c))?)).collect()
 }
 
-fn validate_into(doc: &Document, bytes: &[u8], trust: &TrustStore, v: &Dict, info: &mut SignatureInfo) {
+fn validate_into(doc: &Document, bytes: &[u8], trust: &TrustStore, v: &Dict, info: &mut SignatureInfo, cache: &DigestCache) {
     info.date = text(doc, v, b"M");
     info.reason = text(doc, v, b"Reason");
     info.location = text(doc, v, b"Location");
@@ -285,8 +352,8 @@ fn validate_into(doc: &Document, bytes: &[u8], trust: &TrustStore, v: &Dict, inf
     let Some(contents) = unhex(&gap[1..gap.len() - 1]) else { return invalid(info, "The signature contents are not hexadecimal.") };
     let covered = o1 + l1;
     info.signed_len = covered;
-    info.revision = bytes[..covered].windows(5).filter(|w| *w == b"%%EOF").count().max(1);
-    let ranges: [&[u8]; 2] = [&bytes[..l0], &bytes[o1..covered]];
+    // The signed revision's number: its cross-reference sections (1 for a reconstructed file).
+    info.revision = cache.revision(bytes, covered).map_or(1, |d| d.revisions().len().max(1));
     if info.sub_filter.as_deref() == Some("adbe.x509.rsa_sha1") {
         info.details.push("This signature uses the legacy adbe.x509.rsa_sha1 format, which PrintCraft does not validate yet.".into());
         return;
@@ -302,12 +369,12 @@ fn validate_into(doc: &Document, bytes: &[u8], trust: &TrustStore, v: &Dict, inf
     let content_digest = match &sd.content {
         // adbe.pkcs7.sha1: the document's SHA-1 digest is the signed content.
         Some(c) => {
-            if *c != DigestAlg::Sha1.digest(&ranges) {
+            if *c != cache.digest(DigestAlg::Sha1, bytes, l0, o1, covered) {
                 return invalid(info, "The document has been altered or corrupted since the signature was applied.");
             }
             s.digest.digest(&[c])
         }
-        None => s.digest.digest(&ranges),
+        None => cache.digest(s.digest, bytes, l0, o1, covered),
     };
     if let Some(md) = &s.message_digest
         && *md != content_digest
@@ -334,7 +401,7 @@ fn validate_into(doc: &Document, bytes: &[u8], trust: &TrustStore, v: &Dict, inf
     info.modification = if covered == bytes.len() || bytes[covered..].iter().all(|b| b.is_ascii_whitespace() || *b == 0) {
         Modification::None
     } else {
-        classify_changes(doc, &bytes[..covered], info.certify)
+        classify_changes(doc, cache.revision(bytes, covered), info.certify)
     };
     let mut problems = false;
     match &info.modification {
@@ -381,8 +448,8 @@ fn validate_into(doc: &Document, bytes: &[u8], trust: &TrustStore, v: &Dict, inf
 
 /// What later revisions changed, classified as Acrobat reports it, under DocMDP `p` (or none:
 /// an approval signature permits form fill, comments and further signatures).
-fn classify_changes(doc: &Document, signed: &[u8], p: Option<u8>) -> Modification {
-    let Ok(old) = Document::open(Arc::new(signed.to_vec())) else {
+fn classify_changes(doc: &Document, old: Option<Document>, p: Option<u8>) -> Modification {
+    let Some(old) = old else {
         return Modification::Disallowed(vec!["the signed version could not be read".into()]);
     };
     let old_content: HashSet<ObjRef> = printcraft_annot::page_refs(&old)
@@ -401,7 +468,24 @@ fn classify_changes(doc: &Document, signed: &[u8], p: Option<u8>) -> Modificatio
         })
         .collect();
     let (mut allowed, mut disallowed): (Vec<&str>, Vec<&str>) = (Vec::new(), Vec::new());
+    // Stored at the same place in both (and not edited since): the same bytes, unchanged.
+    let same_place = |num: u32| -> bool {
+        use printcraft_cos::XrefEntry;
+        if doc.is_edited(num) {
+            return false;
+        }
+        match (doc.xref_entry(num), old.xref_entry(num)) {
+            (Some(a @ XrefEntry::InFile { .. }), Some(b)) => a == b,
+            (Some(a @ XrefEntry::InStream { stream, .. }), Some(b)) => {
+                a == b && !doc.is_edited(stream) && doc.xref_entry(stream) == old.xref_entry(stream)
+            }
+            _ => false,
+        }
+    };
     for num in doc.object_numbers() {
+        if same_place(num) {
+            continue;
+        }
         let r = ObjRef { num, generation: doc.generation(num) };
         let new = doc.get(r);
         let before = old.try_get(num).ok().filter(|o| !matches!(**o, Object::Null));

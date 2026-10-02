@@ -1074,3 +1074,51 @@ fn signing_saving_trusting_and_commenting_afterwards() {
     s.mark_saved(id, saved, None).unwrap();
     assert_eq!(s.get(id).unwrap().signatures[0].status, SignatureStatus::Valid);
 }
+
+#[test]
+#[ignore = "timing probe"]
+fn probe_edit_latency_on_a_large_signed_document() {
+    // ~120 MB: one page whose content stream is large.
+    let big: Vec<u8> = (0..120_000_000u32).map(|i| b"0123456789 "[(i % 11) as usize]).collect();
+    let mut pdf = b"%PDF-1.7\n".to_vec();
+    let mut offs = vec![];
+    let objs: Vec<Vec<u8>> = vec![
+        b"<< /Type /Catalog /Pages 2 0 R >>".to_vec(),
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_vec(),
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Contents 4 0 R >>".to_vec(),
+        [format!("<< /Length {} >>\nstream\n", big.len() + 3).into_bytes(), b"%  ".to_vec(), big, b"\nendstream".to_vec()].concat(),
+    ];
+    for (i, o) in objs.iter().enumerate() {
+        offs.push(pdf.len());
+        pdf.extend(format!("{} 0 obj\n", i + 1).bytes());
+        pdf.extend(o);
+        pdf.extend(b"\nendobj\n");
+    }
+    let x = pdf.len();
+    pdf.extend(b"xref\n0 5\n0000000000 65535 f \n");
+    for o in offs {
+        pdf.extend(format!("{o:010} 00000 n \n").bytes());
+    }
+    pdf.extend(format!("trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n{x}\n%%EOF\n").bytes());
+    let p12 = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../sign/tests/data/ec-p256.p12")).unwrap();
+    let digital_id = sign::pkcs12::open(&p12, "test").unwrap();
+    let mut s = Session::new().with_clock(|| 1_800_000_000);
+    let t = std::time::Instant::now();
+    let id = s.open("big.pdf", None, Arc::new(pdf), None).unwrap();
+    eprintln!("open: {:?}", t.elapsed());
+    let t = std::time::Instant::now();
+    s.apply(id, rect_comment(0, [5.0, 10.0, 50.0, 50.0])).unwrap();
+    eprintln!("comment edit before signing: {:?}", t.elapsed());
+    s.undo(id).unwrap();
+    let t = std::time::Instant::now();
+    let signed = s.sign(id, &digital_id, SignOptions { rect: None, ..SignOptions::default() }).unwrap();
+    eprintln!("sign: {:?}", t.elapsed());
+    let t = std::time::Instant::now();
+    s.mark_signed(id, signed, None).unwrap();
+    eprintln!("mark_signed (reopen + validate): {:?}", t.elapsed());
+    for k in 0..3 {
+        let t = std::time::Instant::now();
+        s.apply(id, rect_comment(0, [10.0 + k as f64, 10.0, 50.0, 50.0])).unwrap();
+        eprintln!("comment edit {k}: {:?}", t.elapsed());
+    }
+}
