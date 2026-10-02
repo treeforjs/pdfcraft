@@ -579,7 +579,7 @@ pub enum Edit {
     /// Field Properties ▸ General / Options.
     SetFieldProps {
         name: String,
-        props: FieldProps,
+        props: Box<FieldProps>,
     },
     /// Delete a field and all its widgets.
     DeleteField {

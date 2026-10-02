@@ -76,6 +76,12 @@ pub struct FieldProps {
     pub format: Option<crate::af::Format>,
     pub validate: Option<crate::af::Validate>,
     pub calculate: Option<crate::af::Calculate>,
+    /// Options-tab flags (`/Ff` bits from [`crate::flags`]) to set or clear.
+    pub flags: Vec<(u32, bool)>,
+    /// Alignment (`/Q`): 0 left, 1 centre, 2 right.
+    pub quadding: Option<i64>,
+    /// Default value (`/DV`): what Reset form restores.
+    pub default_value: Option<Option<String>>,
 }
 
 fn invalid<T>(m: impl Into<String>) -> Result<T, FormError> {
@@ -580,6 +586,26 @@ pub fn set_props(doc: &mut Document, name: &str, props: &FieldProps) -> Result<S
     if f.kind == FieldKind::Text {
         set_flag(flags::MULTILINE, props.multiline);
     }
+    for (flag, on) in &props.flags {
+        set_flag(*flag, Some(*on));
+    }
+    // A comb spreads a fixed number of characters across the field: it needs a limit and
+    // excludes multi-line, password, file selection and scrolling (ISO 32000-2 Table 229).
+    if f.kind == FieldKind::Text && ff & flags::COMB != 0 {
+        let limit = match props.max_len {
+            Some(m) => m,
+            None => f.max_len,
+        };
+        if limit.is_none_or(|m| m == 0) {
+            return invalid("a comb of characters needs a character limit");
+        }
+        ff &= !(flags::MULTILINE | flags::PASSWORD | flags::FILE_SELECT);
+    }
+    if let Some(q) = props.quadding
+        && !(0..=2).contains(&q)
+    {
+        return invalid("alignment is 0 (left), 1 (centre) or 2 (right)");
+    }
     if props.options.as_ref().is_some_and(|o| o.is_empty()) && matches!(f.kind, FieldKind::Combo | FieldKind::List) {
         return invalid("a list needs at least one option");
     }
@@ -602,6 +628,37 @@ pub fn set_props(doc: &mut Document, name: &str, props: &FieldProps) -> Result<S
         }
         if let Some(opts) = &props.options {
             d.set(b"Opt".to_vec(), Object::Array(opts.iter().map(|o| Object::String(PdfString::text(o))).collect()));
+        }
+        // "Sort items": the list itself is kept in order (export values stay with their items).
+        if ff & flags::SORT != 0 && matches!(f.kind, FieldKind::Combo | FieldKind::List) {
+            let mut items: Vec<(String, String)> = match &props.options {
+                Some(o) => o.iter().map(|x| (x.clone(), x.clone())).collect(),
+                None => f.options.clone(),
+            };
+            items.sort_by_key(|(_, display)| display.to_lowercase());
+            let opt = items
+                .iter()
+                .map(|(e, disp)| {
+                    if e == disp {
+                        Object::String(PdfString::text(disp))
+                    } else {
+                        Object::Array(vec![Object::String(PdfString::text(e)), Object::String(PdfString::text(disp))])
+                    }
+                })
+                .collect();
+            d.set(b"Opt".to_vec(), Object::Array(opt));
+        }
+        if let Some(q) = props.quadding {
+            d.set(b"Q".to_vec(), Object::Int(q));
+        }
+        match &props.default_value {
+            // Buttons name their default state; text and choices hold a string.
+            Some(Some(v)) if matches!(f.kind, FieldKind::CheckBox | FieldKind::Radio) => d.set(b"DV".to_vec(), Object::name(v)),
+            Some(Some(v)) => d.set(b"DV".to_vec(), PdfString::text(v)),
+            Some(None) => {
+                d.remove(b"DV");
+            }
+            None => {}
         }
         if props.font_size.is_some() || props.look.is_some() {
             d.set(b"DA".to_vec(), PdfString::literal(new_da.clone().into_bytes()));

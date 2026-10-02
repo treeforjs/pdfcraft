@@ -347,12 +347,49 @@ impl Automation {
             format: a.get("format").map(format_arg).transpose()?,
             validate: a.get("validate").map(validate_arg).transpose()?,
             calculate: a.get("calculate").map(calculate_arg).transpose()?,
+            quadding: match a.opt_str("align")? {
+                None => None,
+                Some("left") => Some(0),
+                Some("center" | "centre") => Some(1),
+                Some("right") => Some(2),
+                Some(o) => return Err(bad(format!("unknown alignment {o:?} (left, center, right)"))),
+            },
+            default_value: a.opt_str("default")?.map(|d| (!d.is_empty()).then(|| d.to_owned())),
+            flags: match a.get("flags") {
+                None => Vec::new(),
+                Some(v) => {
+                    use printcraft_engine::field_flags as ff;
+                    let obj = v.as_object().ok_or_else(|| bad("flags must be an object of booleans"))?;
+                    let mut out = Vec::new();
+                    for (k, on) in obj {
+                        let on = on.as_bool().ok_or_else(|| bad(format!("flags.{k} must be true or false")))?;
+                        // Acrobat's wording: "Scroll long text" and "Check spelling" are the
+                        // inverse of their bits.
+                        let (bit, inverted) = match k.as_str() {
+                            "scroll" => (ff::DO_NOT_SCROLL, true),
+                            "rich_text" => (ff::RICH_TEXT, false),
+                            "password" => (ff::PASSWORD, false),
+                            "file_select" => (ff::FILE_SELECT, false),
+                            "spell_check" => (ff::DO_NOT_SPELL_CHECK, true),
+                            "comb" => (ff::COMB, false),
+                            "sort" => (ff::SORT, false),
+                            "editable" => (ff::EDIT, false),
+                            "multi_select" => (ff::MULTI_SELECT, false),
+                            "commit_immediately" => (ff::COMMIT_ON_SEL_CHANGE, false),
+                            "radios_in_unison" => (ff::RADIOS_IN_UNISON, false),
+                            other => return Err(bad(format!("unknown flag {other:?}"))),
+                        };
+                        out.push((bit, on != inverted));
+                    }
+                    out
+                }
+            },
         };
         if props == FieldProps::default() {
             return Err(ToolError::InvalidArgs("nothing to change".into()));
         }
         let new_name = props.name.clone().unwrap_or(name.clone());
-        let mut out = self.apply(a, Edit::SetFieldProps { name, props })?;
+        let mut out = self.apply(a, Edit::SetFieldProps { name, props: Box::new(props) })?;
         out["field"] = json!(new_name);
         Ok(out)
     }

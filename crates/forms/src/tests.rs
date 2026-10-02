@@ -474,3 +474,51 @@ fn tab_order_follows_the_page_setting() {
     assert_eq!(order(&doc), "ACBD", "saved as /Tabs");
     assert!(set_tab_order(&mut doc.clone(), &[3], TabOrder::Row).is_err());
 }
+
+#[test]
+fn options_tab_flags_alignment_and_defaults() {
+    let mut doc = one_page();
+    let text = add_field(&mut doc, 0, [50.0, 700.0, 250.0, 720.0], &NewField::Text { multiline: false }, None).unwrap();
+    let combo = add_field(
+        &mut doc,
+        0,
+        [50.0, 600.0, 250.0, 620.0],
+        &NewField::Combo { options: vec!["Pear".into(), "apple".into(), "Fig".into()], editable: false },
+        None,
+    )
+    .unwrap();
+    let check = add_field(&mut doc, 0, [50.0, 500.0, 64.0, 514.0], &NewField::CheckBox, None).unwrap();
+    // A comb needs a limit.
+    let comb = FieldProps { flags: vec![(flags::COMB, true)], ..FieldProps::default() };
+    assert!(matches!(set_props(&mut doc, &text, &comb), Err(FormError::Invalid(_))));
+    set_props(
+        &mut doc,
+        &text,
+        &FieldProps {
+            flags: vec![(flags::COMB, true), (flags::DO_NOT_SPELL_CHECK, true)],
+            max_len: Some(Some(6)),
+            quadding: Some(1),
+            default_value: Some(Some("ABC123".into())),
+            ..FieldProps::default()
+        },
+    )
+    .unwrap();
+    let f = fields(&doc).into_iter().find(|f| f.name == text).unwrap();
+    assert!(f.has(flags::COMB) && f.has(flags::DO_NOT_SPELL_CHECK) && !f.has(flags::MULTILINE));
+    assert_eq!((f.max_len, f.quadding, f.default.clone()), (Some(6), 1, vec!["ABC123".to_string()]));
+    // Reset form restores the default.
+    set_value(&mut doc, &text, &FieldValue::Text("XYZ".into())).unwrap();
+    reset(&mut doc, None).unwrap();
+    assert_eq!(fields(&doc).into_iter().find(|f| f.name == text).unwrap().value, vec!["ABC123".to_string()]);
+    // Sort items orders the list; custom text allowed.
+    set_props(&mut doc, &combo, &FieldProps { flags: vec![(flags::SORT, true), (flags::EDIT, true)], ..FieldProps::default() }).unwrap();
+    let c = fields(&doc).into_iter().find(|f| f.name == combo).unwrap();
+    assert_eq!(c.options.iter().map(|(_, d)| d.as_str()).collect::<Vec<_>>(), vec!["apple", "Fig", "Pear"]);
+    assert!(c.has(flags::EDIT));
+    // Checked by default: the on state is the default.
+    let on = fields(&doc).into_iter().find(|f| f.name == check).unwrap().widgets[0].on_state.clone().unwrap();
+    set_props(&mut doc, &check, &FieldProps { default_value: Some(Some(on.clone())), ..FieldProps::default() }).unwrap();
+    reset(&mut doc, None).unwrap();
+    assert_eq!(fields(&doc).into_iter().find(|f| f.name == check).unwrap().value, vec![on]);
+    assert!(set_props(&mut doc, &text, &FieldProps { quadding: Some(5), ..FieldProps::default() }).is_err());
+}

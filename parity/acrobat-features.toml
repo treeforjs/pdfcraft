@@ -4791,11 +4791,11 @@ title = "Field properties: options per field type"
 area = "F"
 tier = "P0"
 milestone = "M6"
-status = "partial"
+status = "shipped"
 commands = ["form.field.properties"]
 tools = ["form_set_props"]
-evidence = ["crates/forms/src/tests.rs::properties_rename_and_delete", "crates/automation/tests/automation.rs::preparing_a_form_through_tools"]
-notes = "text: multi-line, character limit; choices: item list add/delete/reorder"
+evidence = ["crates/forms/src/tests.rs::properties_rename_and_delete", "crates/automation/tests/automation.rs::preparing_a_form_through_tools", "crates/forms/src/tests.rs::options_tab_flags_alignment_and_defaults", "crates/ui-egui/tests/prepare.rs::options_tab_sets_flags_alignment_and_defaults"]
+notes = "text: alignment, default, multi-line, scroll, rich text flag, limit, password, file selection, spell check, comb; choices: items, default, sort, custom text, multiple selection, commit immediately; check boxes and radios: checked by default, radios in unison"
 
 [[feature]]
 id = "form.props-actions"

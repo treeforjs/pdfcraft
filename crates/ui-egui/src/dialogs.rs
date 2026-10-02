@@ -858,7 +858,7 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
     if field_props_now
         && let Some(d) = app.field_props.take()
         && let Some(props) = d.props()
-        && app.apply_edit(Edit::SetFieldProps { name: d.field.clone(), props })
+        && app.apply_edit(Edit::SetFieldProps { name: d.field.clone(), props: Box::new(props) })
         && let Some(i) = app.active
     {
         // Keep the (possibly renamed) field selected.

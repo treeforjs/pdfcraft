@@ -57,10 +57,16 @@ pub mod flags {
     pub const PUSH_BUTTON: u32 = 1 << 16;
     pub const COMBO: u32 = 1 << 17;
     pub const EDIT: u32 = 1 << 18;
+    pub const SORT: u32 = 1 << 19;
+    pub const FILE_SELECT: u32 = 1 << 20;
     pub const MULTI_SELECT: u32 = 1 << 21;
+    pub const DO_NOT_SPELL_CHECK: u32 = 1 << 22;
     pub const DO_NOT_SCROLL: u32 = 1 << 23;
     pub const COMB: u32 = 1 << 24;
+    /// Buttons: radios in unison. Text fields use the same bit for rich text.
     pub const RADIOS_IN_UNISON: u32 = 1 << 25;
+    pub const RICH_TEXT: u32 = 1 << 25;
+    pub const COMMIT_ON_SEL_CHANGE: u32 = 1 << 26;
 }
 
 /// One widget (the field's appearance on a page).

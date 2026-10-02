@@ -227,7 +227,8 @@ pub(crate) fn page_input(
                     if delta.length() >= 1.0 {
                         let r = dragged(screen_rect(xf, info, page, w.rect), grab, delta);
                         let rect = user_rect(xf, info, page, r);
-                        view.pending_edit = Some(Edit::SetFieldProps { name, props: FieldProps { rect: Some((wi, rect)), ..Default::default() } });
+                        view.pending_edit =
+                            Some(Edit::SetFieldProps { name, props: Box::new(FieldProps { rect: Some((wi, rect)), ..Default::default() }) });
                     }
                 }
             }
@@ -441,6 +442,14 @@ pub struct FieldDraft {
     pub max_len: usize,
     pub options: Vec<String>,
     pub new_option: String,
+    /// `/Ff` as edited on the Options tab.
+    pub flags: u32,
+    /// `/Q`: 0 left, 1 centre, 2 right.
+    pub quadding: i64,
+    /// `/DV` (text and choices), or the default state (buttons: empty = off).
+    pub default: String,
+    /// Check boxes and radio buttons: this widget's "on" state (export value).
+    pub on_state: String,
     /// 0 = auto.
     pub font_size: f64,
     /// Left, bottom, width, height in points.
@@ -476,6 +485,10 @@ impl FieldDraft {
             max_len: f.max_len.unwrap_or(0),
             options: f.options.iter().map(|(_, d)| d.clone()).collect(),
             new_option: String::new(),
+            flags: f.flags,
+            quadding: f.quadding,
+            default: f.default.first().cloned().unwrap_or_default(),
+            on_state: f.widgets.get(widget).and_then(|w| w.on_state.clone()).unwrap_or_default(),
             font_size: da_size(&f.da),
             position: [r[0], r[1], r[2] - r[0], r[3] - r[1]],
             look: None,
@@ -503,7 +516,7 @@ impl FieldDraft {
 
     fn tabs(&self) -> Vec<(FieldTab, &'static str)> {
         let mut t = vec![(FieldTab::General, "General"), (FieldTab::Appearance, "Appearance"), (FieldTab::Position, "Position")];
-        if matches!(self.kind, FormFieldKind::Text | FormFieldKind::Combo | FormFieldKind::List) {
+        if !matches!(self.kind, FormFieldKind::PushButton | FormFieldKind::Signature) {
             t.push((FieldTab::Options, "Options"));
         }
         if matches!(self.kind, FormFieldKind::Text | FormFieldKind::Combo) {
@@ -533,8 +546,40 @@ impl FieldDraft {
             format: (self.format != o.format).then(|| self.format.clone()),
             validate: (self.validate != o.validate).then(|| self.validate.clone()),
             calculate: (self.calculate != o.calculate).then(|| self.calculate.clone()),
+            flags: OPTION_FLAGS.iter().filter(|b| (self.flags ^ o.flags) & **b != 0).map(|b| (*b, self.flags & b != 0)).collect(),
+            quadding: (self.quadding != o.quadding).then_some(self.quadding),
+            default_value: (self.default != o.default).then(|| (!self.default.is_empty()).then(|| self.default.clone())),
         };
         (p != FieldProps::default()).then_some(p)
+    }
+}
+
+/// The `/Ff` bits the Options tab edits.
+const OPTION_FLAGS: [u32; 10] = {
+    use printcraft_engine::field_flags as ff;
+    [
+        ff::DO_NOT_SCROLL,
+        ff::RICH_TEXT,
+        ff::PASSWORD,
+        ff::FILE_SELECT,
+        ff::DO_NOT_SPELL_CHECK,
+        ff::COMB,
+        ff::SORT,
+        ff::EDIT,
+        ff::MULTI_SELECT,
+        ff::COMMIT_ON_SEL_CHANGE,
+    ]
+};
+
+/// A check box for a `/Ff` bit (`inverted`: checked when the bit is clear).
+fn flag_box(ui: &mut egui::Ui, flags: &mut u32, bit: u32, inverted: bool, label: &str) {
+    let mut on = (*flags & bit != 0) != inverted;
+    if ui.checkbox(&mut on, label).changed() {
+        if on != inverted {
+            *flags |= bit;
+        } else {
+            *flags &= !bit;
+        }
     }
 }
 
@@ -656,12 +701,60 @@ pub(crate) fn body(ui: &mut egui::Ui, d: &mut FieldDraft, t: &crate::theme::Toke
         FieldTab::Calculate => calculate_tab(ui, d, t),
         FieldTab::Options => match d.kind {
             FormFieldKind::Text => {
+                use printcraft_engine::field_flags as ff;
+                egui::Grid::new("text-options").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
+                    ui.label("Alignment:");
+                    egui::ComboBox::from_id_salt("quadding").selected_text(["Left", "Center", "Right"][d.quadding.clamp(0, 2) as usize]).show_ui(
+                        ui,
+                        |ui| {
+                            for (q, l) in [(0, "Left"), (1, "Center"), (2, "Right")] {
+                                ui.selectable_value(&mut d.quadding, q, l);
+                            }
+                        },
+                    );
+                    ui.end_row();
+                    let l = ui.label("Default Value:");
+                    ui.add(egui::TextEdit::singleline(&mut d.default).desired_width(260.0)).labelled_by(l.id);
+                    ui.end_row();
+                });
+                ui.add_space(6.0);
                 ui.checkbox(&mut d.multiline, "Multi-line");
+                flag_box(ui, &mut d.flags, ff::DO_NOT_SCROLL, true, "Scroll long text");
+                flag_box(ui, &mut d.flags, ff::RICH_TEXT, false, "Allow Rich Text Formatting");
                 ui.horizontal(|ui| {
                     ui.checkbox(&mut d.limit, "Limit of");
                     ui.add_enabled(d.limit, egui::DragValue::new(&mut d.max_len).range(0..=10_000));
                     ui.label("characters");
                 });
+                flag_box(ui, &mut d.flags, ff::PASSWORD, false, "Password");
+                flag_box(ui, &mut d.flags, ff::FILE_SELECT, false, "Field is used for file selection");
+                flag_box(ui, &mut d.flags, ff::DO_NOT_SPELL_CHECK, true, "Check spelling");
+                ui.horizontal(|ui| {
+                    flag_box(ui, &mut d.flags, ff::COMB, false, "Comb of");
+                    if d.flags & ff::COMB != 0 {
+                        d.limit = true;
+                        d.multiline = false;
+                        d.flags &= !(ff::PASSWORD | ff::FILE_SELECT);
+                        if d.max_len == 0 {
+                            d.max_len = 10;
+                        }
+                    }
+                    ui.add_enabled(d.flags & ff::COMB != 0, egui::DragValue::new(&mut d.max_len).range(1..=500));
+                    ui.label("characters");
+                });
+            }
+            FormFieldKind::CheckBox | FormFieldKind::Radio => {
+                use printcraft_engine::field_flags as ff;
+                let on = d.on_state.clone();
+                ui.label(format!("Export Value: {on}"));
+                let mut checked = !d.default.is_empty() && d.default == on;
+                let label = if d.kind == FormFieldKind::CheckBox { "Check box is checked by default" } else { "Button is checked by default" };
+                if ui.checkbox(&mut checked, label).changed() {
+                    d.default = if checked { on } else { String::new() };
+                }
+                if d.kind == FormFieldKind::Radio {
+                    flag_box(ui, &mut d.flags, ff::RADIOS_IN_UNISON, false, "Buttons with the same name and value are selected in unison");
+                }
             }
             _ => {
                 ui.horizontal(|ui| {
@@ -701,6 +794,26 @@ pub(crate) fn body(ui: &mut egui::Ui, d: &mut FieldDraft, t: &crate::theme::Toke
                 if d.options.is_empty() {
                     ui.label(egui::RichText::new("Add the choices people pick from.").color(t.text_muted));
                 }
+                use printcraft_engine::field_flags as ff;
+                ui.add_space(6.0);
+                ui.horizontal(|ui| {
+                    ui.label("Default:");
+                    let shown = if d.default.is_empty() { "(none)".to_string() } else { d.default.clone() };
+                    egui::ComboBox::from_id_salt("choice-default").selected_text(shown).show_ui(ui, |ui| {
+                        ui.selectable_value(&mut d.default, String::new(), "(none)");
+                        for o in d.options.clone() {
+                            ui.selectable_value(&mut d.default, o.clone(), o);
+                        }
+                    });
+                });
+                flag_box(ui, &mut d.flags, ff::SORT, false, "Sort items");
+                if d.kind == FormFieldKind::Combo {
+                    flag_box(ui, &mut d.flags, ff::EDIT, false, "Allow user to enter custom text");
+                    flag_box(ui, &mut d.flags, ff::DO_NOT_SPELL_CHECK, true, "Check spelling");
+                } else {
+                    flag_box(ui, &mut d.flags, ff::MULTI_SELECT, false, "Multiple selection");
+                }
+                flag_box(ui, &mut d.flags, ff::COMMIT_ON_SEL_CHANGE, false, "Commit selected value immediately");
             }
         },
     }

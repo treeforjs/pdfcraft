@@ -616,6 +616,17 @@ fn preparing_a_form_through_tools() {
     assert_eq!(f[1]["options"], json!(["S", "L"]));
     ok(&mut a, "form_fill", json!({ "doc": doc, "values": { "full name": "Ada", "size": "L" } }));
     assert!(page_text(&mut a, doc)[0].contains("Ada"));
+    // Options tab: alignment, default, flags (comb needs a limit).
+    assert!(matches!(a.call("form_set_props", &json!({ "doc": doc, "field": "full name", "flags": { "comb": true } })), Err(ToolError::Failed(_))));
+    ok(
+        &mut a,
+        "form_set_props",
+        json!({ "doc": doc, "field": "full name", "align": "center", "default": "Anon", "max_length": 8, "flags": { "comb": true, "spell_check": false } }),
+    );
+    assert!(matches!(
+        a.call("form_set_props", &json!({ "doc": doc, "field": "full name", "flags": { "sparkles": true } })),
+        Err(ToolError::InvalidArgs(_))
+    ));
     assert!(matches!(
         a.call("form_add_field", &json!({ "doc": doc, "page": 1, "type": "slider", "rect": [0, 0, 9, 9] })),
         Err(ToolError::InvalidArgs(_))

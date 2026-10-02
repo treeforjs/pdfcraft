@@ -677,7 +677,7 @@ fn preparing_a_form_adds_renames_and_deletes_fields() {
     assert_eq!(names(&s), ["Text1", "Check Box1", "Text2"]);
     assert_eq!(s.get(id).unwrap().can_undo(), Some("Add field"));
     let props = FieldProps { name: Some("email".into()), tooltip: Some("Your e-mail".into()), required: Some(true), ..Default::default() };
-    s.apply(id, Edit::SetFieldProps { name: "Text2".into(), props }).unwrap();
+    s.apply(id, Edit::SetFieldProps { name: "Text2".into(), props: Box::new(props) }).unwrap();
     s.apply(id, Edit::DeleteField { name: "Check Box1".into() }).unwrap();
     assert_eq!(names(&s), ["Text1", "email"]);
     s.apply(id, Edit::SetFieldValue { name: "email".into(), value: FieldValue::Text("ada@example.org".into()) }).unwrap();

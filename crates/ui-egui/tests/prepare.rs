@@ -169,3 +169,28 @@ fn appearance_tab_restyles_the_field() {
     let l = s.session.get(s.views[0].id).unwrap().field_look("city").unwrap();
     assert_eq!((l.style, l.font, l.fill), (BorderStyle::Dashed, FieldFont::Courier, Some([1.0, 1.0, 0.8])));
 }
+
+#[test]
+fn options_tab_sets_flags_alignment_and_defaults() {
+    use printcraft_engine::field_flags as ff;
+    let mut h = harness();
+    h.state_mut().open_field_props("city", 0);
+    h.run_steps(2);
+    h.get_by_label("Options").click();
+    h.run_steps(2);
+    h.get_by_label("Check spelling").click();
+    h.get_by_label("Password").click();
+    h.run_steps(1);
+    {
+        let d = h.state_mut().field_props.as_mut().unwrap();
+        d.quadding = 2;
+        d.default = "Paris".into();
+    }
+    h.get_by_label("OK").click();
+    h.run_steps(3);
+    let s = h.state();
+    let f = s.session.get(s.views[0].id).unwrap().form.iter().find(|f| f.name == "city").cloned().unwrap();
+    assert!(f.has(ff::PASSWORD) && f.has(ff::DO_NOT_SPELL_CHECK), "{:b}", f.flags);
+    assert_eq!((f.quadding, f.default.clone()), (2, vec!["Paris".to_string()]));
+    assert_eq!(s.session.get(s.views[0].id).unwrap().can_undo(), Some("Change field properties"));
+}
