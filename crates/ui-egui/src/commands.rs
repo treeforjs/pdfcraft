@@ -308,6 +308,13 @@ impl PrintCraftApp {
             }
             "sign.panel" => self.right = Some(RightPanel::Signatures),
             "optimize.advanced" => self.dialog = Some(Dialog::Optimize),
+            "view.fit_visible" => {
+                if let Some(i) = self.active
+                    && let Err(e) = self.fit_visible(i)
+                {
+                    self.notify(format!("Couldn't fit the visible content: {e}"));
+                }
+            }
             "view.marquee_zoom" => self.quick_tool = crate::QuickTool::MarqueeZoom,
             "edit.snapshot" => {
                 self.quick_tool = crate::QuickTool::Snapshot;

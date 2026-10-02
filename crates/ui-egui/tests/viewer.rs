@@ -261,3 +261,21 @@ fn marquee_zoom_and_snapshot() {
     let after = h.state().views[i].zoom;
     assert!(after > before * 2.0, "{before} → {after}");
 }
+
+#[test]
+fn fit_visible_zooms_to_the_content_width() {
+    let mut h = harness();
+    let i = h.state().active.unwrap();
+    let before = h.state().views[i].zoom;
+    assert!(h.state_mut().execute("view.fit_visible"));
+    for _ in 0..4 {
+        h.run_steps(2);
+    }
+    let v = &h.state().views[i];
+    assert!(v.zoom > before * 1.2, "{before} → {}", v.zoom);
+    // The text starts 20 pt in from the page's left; that edge is now near the window's left.
+    let r = v.page_screen_rect(v.current).expect("on screen");
+    let ink_left = r.left() + 20.0 / 200.0 * r.width();
+    let vp = v.viewport_rect();
+    assert!((ink_left - vp.left() - 16.0).abs() < 12.0, "ink at {ink_left}, viewport {vp:?}");
+}

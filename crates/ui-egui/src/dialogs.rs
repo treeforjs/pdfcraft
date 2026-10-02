@@ -869,6 +869,7 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
                     ("⌘1", "Actual size"),
                     ("⌘0", "Zoom to page level"),
                     ("⌘2", "Fit to width"),
+                    ("⌘3", "Fit visible"),
                     ("⌘+ / ⌘−", "Zoom in / out (also pinch or ⌘-scroll)"),
                     ("⇧⌘+ / ⇧⌘−", "Rotate view"),
                     ("Home / End", "First / last page"),

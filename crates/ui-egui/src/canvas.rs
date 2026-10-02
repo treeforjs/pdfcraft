@@ -532,6 +532,20 @@ impl DocView {
         self.zoom_anchor = Some((page, f.x.clamp(0.0, 1.0), f.y.clamp(0.0, 1.0), self.viewport_screen.center() - self.viewport_screen.min));
     }
 
+    /// View ▸ Zoom ▸ Fit Visible: zoom so the visible content of `page` (display-normalised
+    /// [x0, y0, x1, y1], i.e. after view rotation) spans the window's width, its left edge at
+    /// the window's left and its top at the top.
+    pub fn fit_content(&mut self, page: usize, content: [f32; 4]) -> bool {
+        const PAD: f32 = 16.0;
+        let Some((_, pr)) = self.screen_rects.iter().find(|(p, _)| *p == page).copied() else { return false };
+        let w = (content[2] - content[0]).max(0.01) * pr.width();
+        let k = (self.viewport_screen.width() - 2.0 * PAD).max(50.0) / w.max(1.0);
+        self.zoom = (self.zoom * k).clamp(0.08, 64.0);
+        self.fit = Fit::None;
+        self.zoom_anchor = Some((page, content[0].clamp(0.0, 1.0), content[1].clamp(0.0, 1.0), vec2(PAD, MARGIN)));
+        true
+    }
+
     /// Zoom keeping the centre of the view still.
     pub fn set_zoom(&mut self, zoom: f32) {
         let centre = self.viewport_screen.center();

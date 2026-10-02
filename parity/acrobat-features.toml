@@ -971,11 +971,11 @@ title = "Fit visible content"
 area = "B"
 tier = "P1"
 milestone = "M3"
-status = "planned"
-commands = []
+status = "shipped"
+commands = ["view.fit_visible"]
 tools = []
-evidence = []
-notes = ""
+evidence = ["crates/ui-egui/tests/viewer.rs::fit_visible_zooms_to_the_content_width", "crates/ui-egui/src/zoom_snap.rs::ink_bounds_finds_the_marked_area"]
+notes = "View ▸ Zoom ▸ Fit visible (⌘3): the current page's inked area (found by a quick low-resolution render) spans the window width; respects view rotation; drivable via the control channel's command"
 
 [[feature]]
 id = "view.marquee-zoom"

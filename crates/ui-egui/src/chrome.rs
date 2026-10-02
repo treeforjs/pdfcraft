@@ -177,6 +177,11 @@ fn main_menu(app: &mut PrintCraftApp, ui: &mut egui::Ui) {
                     v.fit = Fit::Height;
                     v.goto = Some((v.current, 0.0));
                 }
+                if widgets::menu_item(ui, "Fit visible", "⌘3").clicked() {
+                    ui.close();
+                    app.execute("view.fit_visible");
+                    return;
+                }
                 if widgets::menu_item(ui, "Zoom in", "⌘+").clicked() {
                     v.zoom_step(true);
                 }
