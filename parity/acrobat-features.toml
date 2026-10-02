@@ -2283,11 +2283,11 @@ title = "Add header and footer"
 area = "C"
 tier = "P0"
 milestone = "M7"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["edit.header_footer"]
+tools = ["doc_header_footer"]
+evidence = ["crates/ui-egui/tests/marks.rs::header_and_footer_dialog_inserts_tokens_and_applies_to_a_subset", "crates/edit/src/tests.rs::header_and_footer_are_drawn_in_display_space_and_wrap_the_original_content", "crates/engine/src/tests.rs::headers_footers_watermarks_and_backgrounds_show_update_and_remove"]
+notes = "Helvetica only (no font choice yet); drawn in display space on rotated pages; artifact-tagged"
 
 [[feature]]
 id = "edit.header-footer-update-remove"
@@ -2295,11 +2295,11 @@ title = "Update or remove header and footer"
 area = "C"
 tier = "P0"
 milestone = "M7"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["edit.header_footer.update", "edit.header_footer.remove"]
+tools = ["doc_header_footer", "doc_remove_marks"]
+evidence = ["crates/edit/src/tests.rs::replace_and_remove_restore_the_original_content", "crates/ui-egui/tests/marks.rs::header_and_footer_dialog_inserts_tokens_and_applies_to_a_subset"]
+notes = "recognises PrintCraft marks; Acrobat-made headers are not detected yet"
 
 [[feature]]
 id = "edit.header-footer-tokens"
@@ -2307,11 +2307,11 @@ title = "Page number and date tokens in header and footer"
 area = "C"
 tier = "P0"
 milestone = "M7"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["edit.header_footer"]
+tools = ["doc_header_footer"]
+evidence = ["crates/edit/src/tests.rs::tokens_expand", "crates/engine/src/tests.rs::headers_footers_watermarks_and_backgrounds_show_update_and_remove"]
+notes = "<<1>>, <<n>>, <<1 of n>>, <<Page 1 of n>>, dates, Bates"
 
 [[feature]]
 id = "edit.header-footer-ranges"
@@ -2319,11 +2319,11 @@ title = "Header and footer page ranges (all, range, odd, even)"
 area = "C"
 tier = "P1"
 milestone = "M7"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["edit.header_footer"]
+tools = ["doc_header_footer"]
+evidence = ["crates/ui-egui/src/marks_ui.rs::page_ranges_with_subsets", "crates/ui-egui/tests/marks.rs::header_and_footer_dialog_inserts_tokens_and_applies_to_a_subset"]
+notes = "all / from–to, all / even / odd"
 
 [[feature]]
 id = "edit.header-footer-shrink"
@@ -2343,11 +2343,11 @@ title = "Add a text watermark"
 area = "C"
 tier = "P0"
 milestone = "M7"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["edit.watermark"]
+tools = ["doc_watermark"]
+evidence = ["crates/edit/src/tests.rs::watermarks_rotate_fade_and_can_go_behind", "crates/ui-egui/tests/marks.rs::watermark_and_background_dialogs", "crates/automation/tests/automation.rs::headers_watermarks_and_backgrounds_through_tools"]
+notes = "Helvetica; fit-to-page or a size"
 
 [[feature]]
 id = "edit.watermark-add-file"
@@ -2367,10 +2367,10 @@ title = "Update or remove watermarks"
 area = "C"
 tier = "P0"
 milestone = "M7"
-status = "planned"
-commands = []
-tools = []
-evidence = []
+status = "shipped"
+commands = ["edit.watermark.update", "edit.watermark.remove"]
+tools = ["doc_watermark", "doc_remove_marks"]
+evidence = ["crates/edit/src/tests.rs::replace_and_remove_restore_the_original_content", "crates/engine/src/tests.rs::headers_footers_watermarks_and_backgrounds_show_update_and_remove"]
 notes = ""
 
 [[feature]]
@@ -2379,11 +2379,11 @@ title = "Watermark rotation, opacity, scale, position, print/screen visibility"
 area = "C"
 tier = "P1"
 milestone = "M7"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["edit.watermark"]
+tools = ["doc_watermark"]
+evidence = ["crates/edit/src/tests.rs::watermarks_rotate_fade_and_can_go_behind"]
+notes = "rotation, opacity, behind/on top; no position offsets, scale or print/screen-only variants in the UI yet"
 
 [[feature]]
 id = "edit.background-add"
@@ -2391,11 +2391,11 @@ title = "Add a page background (colour or file)"
 area = "C"
 tier = "P0"
 milestone = "M7"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["edit.background"]
+tools = ["doc_background"]
+evidence = ["crates/ui-egui/tests/marks.rs::watermark_and_background_dialogs", "crates/engine/src/tests.rs::headers_footers_watermarks_and_backgrounds_show_update_and_remove"]
+notes = "colour backgrounds; from a file is not supported yet"
 
 [[feature]]
 id = "edit.background-update-remove"
@@ -2403,10 +2403,10 @@ title = "Update or remove backgrounds"
 area = "C"
 tier = "P0"
 milestone = "M7"
-status = "planned"
-commands = []
-tools = []
-evidence = []
+status = "shipped"
+commands = ["edit.background.update", "edit.background.remove"]
+tools = ["doc_background", "doc_remove_marks"]
+evidence = ["crates/edit/src/tests.rs::replace_and_remove_restore_the_original_content", "crates/engine/src/tests.rs::headers_footers_watermarks_and_backgrounds_show_update_and_remove"]
 notes = ""
 
 [[feature]]
@@ -2427,11 +2427,11 @@ title = "Bates numbering"
 area = "C"
 tier = "P1"
 milestone = "M7"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["edit.header_footer"]
+tools = ["doc_header_footer"]
+evidence = ["crates/edit/src/tests.rs::tokens_expand"]
+notes = "Bates tokens in headers and footers within one document; no multi-file batch yet"
 
 [[feature]]
 id = "edit.bates-multi-file"

@@ -1114,7 +1114,7 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
     let mut tool = app.quick_tool;
     comments::keys(ui.ctx(), view, &mut tool, allowed);
     match canvas_action {
-        Some(comments::CanvasAction::Edit(e)) => view.pending_edit = Some(e),
+        Some(comments::CanvasAction::Edit(e)) => view.pending_edit = Some(*e),
         Some(comments::CanvasAction::OpenComments) => app.right = Some(RightPanel::Comments),
         None => {}
     }

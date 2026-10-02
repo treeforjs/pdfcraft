@@ -216,6 +216,7 @@ impl Automation {
                 self.apply(&a, Edit::DuplicatePages { pages })?
             }
             "page_set_box" => self.page_set_box(&a)?,
+            "doc_header_footer" | "doc_watermark" | "doc_background" | "doc_remove_marks" => self.marks(name, &a)?,
             "doc_unprotect" => {
                 let mut out = self.apply(&a, Edit::RemoveProtection)?;
                 out["security"] = security(self.doc(&a)?);
@@ -285,6 +286,66 @@ impl Automation {
         let id = self.doc(a)?.id;
         self.session.apply(id, edit).map_err(failed)?;
         Ok(summary(self.doc(a)?))
+    }
+
+    fn marks(&mut self, tool: &str, a: &Args) -> Result<Value> {
+        use printcraft_engine::{Background, HeaderFooter, MarkKind, Watermark};
+        let n = self.doc(a)?.info.pages.len();
+        let pages = match a.opt_ints("pages")? {
+            Some(_) => self.pages(a, "pages")?,
+            None => (0..n).collect(),
+        };
+        let color =
+            |key: &str, default: [f64; 3]| -> Result<[f64; 3]> { Ok(a.opt_str(key)?.map(comments::parse_color).transpose()?.unwrap_or(default)) };
+        let replace = a.opt_bool("replace")?.unwrap_or(false);
+        let edit = match tool {
+            "doc_header_footer" => {
+                let mut hf = HeaderFooter::default();
+                for (k, key) in ["header_left", "header_center", "header_right", "footer_left", "footer_center", "footer_right"].iter().enumerate() {
+                    hf.text[k] = a.opt_str(key)?.unwrap_or_default().to_string();
+                }
+                if let Some(s) = a.opt_num("font_size")? {
+                    hf.font_size = s;
+                }
+                hf.color = color("color", hf.color)?;
+                if let Some(m) = a.get("margins").and_then(Value::as_array) {
+                    let m: Vec<f64> = m.iter().filter_map(Value::as_f64).collect();
+                    hf.margins = <[f64; 4]>::try_from(m).map_err(|_| ToolError::InvalidArgs("margins must be 4 numbers".into()))?;
+                }
+                if let Some(s) = a.opt_int("start_number")? {
+                    hf.start_number = s.clamp(1, u32::MAX as i64) as u32;
+                }
+                Edit::AddHeaderFooter { pages, settings: hf, replace }
+            }
+            "doc_watermark" => {
+                let d = Watermark::default();
+                let wm = Watermark {
+                    text: a.str("text")?.to_string(),
+                    font_size: a.opt_num("font_size")?.unwrap_or(0.0),
+                    color: color("color", d.color)?,
+                    opacity: a.opt_num("opacity")?.unwrap_or(d.opacity),
+                    rotation: a.opt_num("rotation")?.unwrap_or(d.rotation),
+                    behind: a.opt_bool("behind")?.unwrap_or(false),
+                    offset: [0.0; 2],
+                };
+                Edit::AddWatermark { pages, settings: wm, replace }
+            }
+            "doc_background" => Edit::AddBackground {
+                pages,
+                settings: Background { color: color("color", [1.0; 3])?, opacity: a.opt_num("opacity")?.unwrap_or(1.0) },
+                replace,
+            },
+            _ => {
+                let kind = match a.str("kind")? {
+                    "header_footer" => MarkKind::HeaderFooter,
+                    "watermark" => MarkKind::Watermark,
+                    "background" => MarkKind::Background,
+                    other => return Err(ToolError::InvalidArgs(format!("unknown kind {other:?}"))),
+                };
+                Edit::RemoveMarks { kind }
+            }
+        };
+        self.apply(a, edit)
     }
 
     fn page_set_box(&mut self, a: &Args) -> Result<Value> {

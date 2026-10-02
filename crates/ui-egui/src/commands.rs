@@ -23,6 +23,14 @@ impl PrintCraftApp {
                 commands::Needs::Undo => "Nothing to undo".to_string(),
                 commands::Needs::Redo => "Nothing to redo".to_string(),
                 commands::Needs::FillForms if self.active.is_some() => "This document has no form fields you can fill in".to_string(),
+                commands::Needs::Marks(k) if self.active.is_some() => format!(
+                    "This document has no {} to change",
+                    match k {
+                        printcraft_engine::MarkKind::HeaderFooter => "header or footer",
+                        printcraft_engine::MarkKind::Watermark => "watermark",
+                        printcraft_engine::MarkKind::Background => "background",
+                    }
+                ),
                 commands::Needs::Security | commands::Needs::ProtectedSecurity if self.active.is_some() => {
                     if self.active_ids().and_then(|(_, id)| self.session.get(id)).is_some_and(|d| d.allows_security_change()) {
                         "This document isn't password-protected".to_string()
@@ -159,6 +167,32 @@ impl PrintCraftApp {
                 }
             }
             "page.insert" => self.insert_from_file_dialog(),
+            "edit.header_footer"
+            | "edit.watermark"
+            | "edit.background"
+            | "edit.header_footer.update"
+            | "edit.watermark.update"
+            | "edit.background.update" => {
+                use printcraft_engine::MarkKind as K;
+                let kind = if id.starts_with("edit.header_footer") {
+                    K::HeaderFooter
+                } else if id.starts_with("edit.watermark") {
+                    K::Watermark
+                } else {
+                    K::Background
+                };
+                self.marks_draft.replace = id.ends_with(".update");
+                self.dialog = Some(Dialog::Marks(kind));
+            }
+            "edit.header_footer.remove" | "edit.watermark.remove" | "edit.background.remove" => {
+                use printcraft_engine::MarkKind as K;
+                let kind = match id {
+                    "edit.header_footer.remove" => K::HeaderFooter,
+                    "edit.watermark.remove" => K::Watermark,
+                    _ => K::Background,
+                };
+                self.apply_edit(Edit::RemoveMarks { kind });
+            }
             "page.duplicate" => {
                 self.apply_edit(Edit::DuplicatePages { pages: targets });
             }

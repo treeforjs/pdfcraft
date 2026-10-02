@@ -675,3 +675,29 @@ fn crop_and_duplicate_pages_show_in_the_viewer() {
     assert_eq!(page_texts(&s, id), ["Page 1", "Page 2", "Page 2"]);
     assert_eq!(s.get(id).unwrap().can_undo(), Some("Duplicate page"));
 }
+
+#[test]
+fn headers_footers_watermarks_and_backgrounds_show_update_and_remove() {
+    let (mut s, id) = session_with(2);
+    let mut hf = HeaderFooter::default();
+    hf.text[4] = "Page <<1>> of <<n>> · <<yyyy-mm-dd>>".into();
+    s.apply(id, Edit::AddHeaderFooter { pages: vec![0, 1], settings: hf.clone(), replace: false }).unwrap();
+    // The session clock is 2023-11-14.
+    assert_eq!(page_texts(&s, id)[1], "Page 2\nPage 2 of 2 · 2023-11-14");
+    assert_eq!(s.get(id).unwrap().marks, [MarkKind::HeaderFooter]);
+    hf.text[4] = "Draft".into();
+    s.apply(id, Edit::AddHeaderFooter { pages: vec![0, 1], settings: hf, replace: true }).unwrap();
+    assert_eq!(page_texts(&s, id)[0], "Page 1\nDraft");
+    s.apply(id, Edit::AddWatermark { pages: vec![0], settings: Watermark { text: "SECRET".into(), ..Watermark::default() }, replace: false })
+        .unwrap();
+    s.apply(id, Edit::AddBackground { pages: vec![1], settings: Background { color: [1.0, 0.9, 0.9], opacity: 1.0 }, replace: false }).unwrap();
+    assert_eq!(s.get(id).unwrap().marks.len(), 3);
+    assert!(page_texts(&s, id)[0].contains("SECRET"));
+    s.apply(id, Edit::RemoveMarks { kind: MarkKind::HeaderFooter }).unwrap();
+    s.apply(id, Edit::RemoveMarks { kind: MarkKind::Watermark }).unwrap();
+    s.apply(id, Edit::RemoveMarks { kind: MarkKind::Background }).unwrap();
+    assert_eq!(page_texts(&s, id), ["Page 1", "Page 2"]);
+    assert!(s.get(id).unwrap().marks.is_empty());
+    assert!(matches!(s.apply(id, Edit::RemoveMarks { kind: MarkKind::Watermark }), Err(EditError::Edit(_))));
+    assert_eq!(s.get(id).unwrap().can_undo(), Some("Remove background"));
+}

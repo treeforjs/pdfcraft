@@ -3085,12 +3085,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "printcraft-edit"
+version = "0.1.0"
+dependencies = [
+ "hayro-syntax",
+ "printcraft-cos",
+ "printcraft-fonts",
+ "printcraft-model",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "printcraft-engine"
 version = "0.1.0"
 dependencies = [
  "printcraft-annot",
  "printcraft-cos",
+ "printcraft-edit",
  "printcraft-forms",
+ "printcraft-model",
  "printcraft-organize",
  "printcraft-render",
  "thiserror 2.0.21",
@@ -3123,6 +3136,13 @@ dependencies = [
 [[package]]
 name = "printcraft-geom"
 version = "0.1.0"
+
+[[package]]
+name = "printcraft-model"
+version = "0.1.0"
+dependencies = [
+ "printcraft-cos",
+]
 
 [[package]]
 name = "printcraft-organize"

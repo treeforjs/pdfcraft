@@ -62,6 +62,14 @@ fn every_registered_command_is_implemented() {
         if spec.id == "edit.redo" {
             app.undo();
         }
+        if spec.id.starts_with("edit.") && (spec.id.ends_with(".update") || spec.id.ends_with(".remove")) {
+            use printcraft_engine::{Background, Edit, HeaderFooter, Watermark};
+            let mut hf = HeaderFooter::default();
+            hf.text[1] = "x".into();
+            app.apply_edit(Edit::AddHeaderFooter { pages: vec![0], settings: hf, replace: false });
+            app.apply_edit(Edit::AddWatermark { pages: vec![0], settings: Watermark { text: "x".into(), ..Watermark::default() }, replace: false });
+            app.apply_edit(Edit::AddBackground { pages: vec![0], settings: Background { color: [1.0; 3], opacity: 1.0 }, replace: false });
+        }
         if spec.id == "protect.remove" {
             let p = printcraft_engine::Protection { open_password: Some("pw".into()), ..Default::default() };
             app.apply_edit(printcraft_engine::Edit::Protect(p));

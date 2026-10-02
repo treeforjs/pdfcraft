@@ -12,6 +12,11 @@ pub mod comments;
 mod comments_panel;
 pub mod control;
 mod crop;
+mod marks_ui;
+/// Header & footer / watermark / background dialog types (tests and automation).
+pub mod marks {
+    pub use crate::marks_ui::{MarksDraft, PageRange, Subset};
+}
 mod dialogs;
 mod editing;
 mod files;
@@ -86,6 +91,8 @@ pub enum Dialog {
     Protect,
     /// Set Page Boxes (crop, trim, bleed, art, media).
     PageBoxes,
+    /// Add / Update Header and Footer, Watermark, Background.
+    Marks(printcraft_engine::MarkKind),
     /// Documents from a session that ended unexpectedly.
     Recovery,
 }
@@ -177,6 +184,8 @@ pub struct PrintCraftApp {
     pub protect_draft: protect::ProtectDraft,
     /// Set Page Boxes dialog state.
     pub boxes_draft: pageboxes::BoxesDraft,
+    /// Header & footer / watermark / background dialog state.
+    pub marks_draft: marks_ui::MarksDraft,
     /// The last web link the app asked the system to open (tests and automation).
     pub last_opened_url: Option<String>,
 }
@@ -241,6 +250,7 @@ impl PrintCraftApp {
             last_opened_url: None,
             protect_draft: Default::default(),
             boxes_draft: Default::default(),
+            marks_draft: Default::default(),
             number_draft: NumberDraft { from: 1, to: 1, style: printcraft_engine::LabelStyle::Decimal, prefix: String::new(), start: 1 },
         }
     }
@@ -532,6 +542,9 @@ impl PrintCraftApp {
                     "split" => Some(Dialog::Split),
                     "protect" => Some(Dialog::Protect),
                     "page-boxes" => Some(Dialog::PageBoxes),
+                    "header-footer" => Some(Dialog::Marks(printcraft_engine::MarkKind::HeaderFooter)),
+                    "watermark" => Some(Dialog::Marks(printcraft_engine::MarkKind::Watermark)),
+                    "background" => Some(Dialog::Marks(printcraft_engine::MarkKind::Background)),
                     "number-pages" => {
                         // Same path as the menu, so the page range is seeded.
                         self.execute("page.number");

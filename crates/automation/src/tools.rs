@@ -304,6 +304,48 @@ pub fn tools() -> Vec<ToolDef> {
             }),
             &["doc"],
         )),
+        t(
+            "doc_header_footer",
+            "Add header and footer",
+            "Add a header and/or footer to pages. Text boxes: header_left/center/right, footer_left/center/right. Tokens: <<1>> page number, <<n>> page count, <<1 of n>>, <<Page 1 of n>>, <<1/n>>, dates <<m/d/yyyy>> <<yyyy-mm-dd>> <<mmmm d, yyyy>> (and more), Bates <<Bates Number#6#1#PREFIX#SUFFIX>>. replace: true swaps out existing ones (Update). Undoable.",
+        )
+        .cmd("edit.header_footer")
+        .with(schema(
+            json!({
+                "doc": doc(),
+                "pages": pages("to mark (default: all)"),
+                "header_left": { "type": "string" }, "header_center": { "type": "string" }, "header_right": { "type": "string" },
+                "footer_left": { "type": "string" }, "footer_center": { "type": "string" }, "footer_right": { "type": "string" },
+                "font_size": { "type": "number", "exclusiveMinimum": 0 },
+                "color": { "type": "string", "description": "#RRGGBB or a colour name." },
+                "margins": { "type": "array", "items": { "type": "number", "minimum": 0 }, "minItems": 4, "maxItems": 4, "description": "Top, bottom, left, right in points (default 36, 36, 72, 72)." },
+                "start_number": { "type": "integer", "minimum": 1 },
+                "replace": { "type": "boolean" },
+            }),
+            &["doc"],
+        )),
+        t("doc_watermark", "Add watermark", "Add a text watermark to pages: rotated (degrees counter-clockwise, default 45), semi-transparent (opacity 0–1, default 0.5), fitted to the page unless font_size is given, on top unless behind: true. replace: true swaps out existing ones. Undoable.")
+            .cmd("edit.watermark")
+            .with(schema(
+                json!({
+                    "doc": doc(),
+                    "pages": pages("to mark (default: all)"),
+                    "text": { "type": "string", "minLength": 1 },
+                    "font_size": { "type": "number", "exclusiveMinimum": 0 },
+                    "color": { "type": "string" },
+                    "opacity": { "type": "number", "minimum": 0, "maximum": 1 },
+                    "rotation": { "type": "number" },
+                    "behind": { "type": "boolean" },
+                    "replace": { "type": "boolean" },
+                }),
+                &["doc", "text"],
+            )),
+        t("doc_background", "Add background", "Fill page backgrounds with a colour, behind the content. Undoable.")
+            .cmd("edit.background")
+            .with(schema(json!({ "doc": doc(), "pages": pages("to fill (default: all)"), "color": { "type": "string" }, "opacity": { "type": "number", "minimum": 0, "maximum": 1 }, "replace": { "type": "boolean" } }), &["doc", "color"])),
+        t("doc_remove_marks", "Remove header & footer, watermark or background", "Remove every header and footer, watermark or background PrintCraft (or a compatible tool) added. Undoable.")
+            .destructive()
+            .with(schema(json!({ "doc": doc(), "kind": { "type": "string", "enum": ["header_footer", "watermark", "background"] } }), &["doc", "kind"])),
         t("edit_undo", "Undo", "Undo the last edit of a document.").cmd("edit.undo").with(schema(json!({ "doc": doc() }), &["doc"])),
         t("edit_redo", "Redo", "Redo the last undone edit of a document.").cmd("edit.redo").with(schema(json!({ "doc": doc() }), &["doc"])),
         t("command_list", "List commands", "Every registered PrintCraft command with its menu, shortcut, whether it is enabled now, and the tool that automates it.")

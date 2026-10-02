@@ -501,3 +501,21 @@ fn duplicating_and_cropping_through_tools() {
     assert!(matches!(a.call("page_set_box", &json!({ "doc": doc, "margins": [150, 0, 150, 0] })), Err(ToolError::Failed(_))));
     assert!(matches!(a.call("page_set_box", &json!({ "doc": doc, "rect": [0, 0, 10, 10] })), Err(ToolError::InvalidArgs(_))));
 }
+
+#[test]
+fn headers_watermarks_and_backgrounds_through_tools() {
+    let dir = workdir("marks");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    ok(&mut a, "doc_header_footer", json!({ "doc": doc, "footer_center": "<<Page 1 of n>>", "header_right": "ACME" }));
+    let texts = page_text(&mut a, doc);
+    assert!(texts[2].contains("Page 3 of 3") && texts[0].contains("ACME"), "{texts:?}");
+    ok(&mut a, "doc_watermark", json!({ "doc": doc, "pages": [1], "text": "DRAFT", "opacity": 0.2 }));
+    assert!(page_text(&mut a, doc)[0].contains("DRAFT"));
+    ok(&mut a, "doc_background", json!({ "doc": doc, "color": "yellow" }));
+    ok(&mut a, "doc_remove_marks", json!({ "doc": doc, "kind": "watermark" }));
+    assert!(!page_text(&mut a, doc)[0].contains("DRAFT"));
+    assert!(matches!(a.call("doc_remove_marks", &json!({ "doc": doc, "kind": "watermark" })), Err(ToolError::Failed(_))));
+    assert!(matches!(a.call("doc_header_footer", &json!({ "doc": doc })), Err(ToolError::Failed(_))), "no text");
+    ok(&mut a, "doc_save", json!({ "doc": doc, "path": "marked.pdf" }));
+}

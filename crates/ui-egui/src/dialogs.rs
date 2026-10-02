@@ -32,6 +32,7 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
     let mut link_command: Option<&'static str> = None;
     let mut protect_now = false;
     let mut boxes_now = false;
+    let mut marks_now = false;
     let t = Tokens::get(ctx);
     let mut close = false;
     let mut next = dialog;
@@ -42,6 +43,8 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
         let w = &mut ui.visuals_mut().widgets;
         w.inactive.bg_stroke = egui::Stroke::new(1.0, t.border);
         w.inactive.weak_bg_fill = t.field;
+        // Slider rails and check-box interiors use the plain fill.
+        w.inactive.bg_fill = t.hover;
         w.hovered.bg_stroke = egui::Stroke::new(1.0, t.text_muted);
         match dialog {
             Dialog::Properties(tab) => {
@@ -220,6 +223,13 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
                 if files > 1 {
                     split_ready = Some(by);
                 }
+            }
+            Dialog::Marks(kind) => {
+                ui.set_width(720.0);
+                let (apply, cancel) = crate::marks_ui::body(ui, app, &t, kind);
+                marks_now = apply;
+                close = apply || cancel;
+                return;
             }
             Dialog::PageBoxes => {
                 let (apply, cancel) = crate::pageboxes::body(ui, app, &t);
@@ -430,6 +440,11 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
         } else {
             app.discard_recovered(&keys);
         }
+    }
+    if marks_now && let (Dialog::Marks(kind), Some((_, id))) = (dialog, app.active_ids()) {
+        let count = app.session.get(id).map(|d| d.info.pages.len()).unwrap_or(0);
+        let edit = crate::marks_ui::edit(&app.marks_draft, kind, count);
+        app.apply_edit(edit);
     }
     if boxes_now && let Some((i, id)) = app.active_ids() {
         let count = app.session.get(id).map(|d| d.info.pages.len()).unwrap_or(0);

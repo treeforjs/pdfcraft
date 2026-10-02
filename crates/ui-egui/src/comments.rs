@@ -813,14 +813,16 @@ pub(crate) fn context_menu(ui: &mut egui::Ui, view: &mut DocView, info: &DocInfo
                 ui.menu_button("Set status", |ui| {
                     for s in [ReviewState::None, ReviewState::Accepted, ReviewState::Cancelled, ReviewState::Completed, ReviewState::Rejected] {
                         if ui.button(s.name()).clicked() {
-                            action = Some(CanvasAction::Edit(Edit::SetAnnotationStatus { page, index, state: s, author: prefs.author.clone() }));
+                            action =
+                                Some(CanvasAction::Edit(Box::new(Edit::SetAnnotationStatus { page, index, state: s, author: prefs.author.clone() })));
                             ui.close();
                         }
                     }
                 });
                 ui.menu_button("Colour", |ui| {
                     if let Some(c) = swatch_grid(ui, a.color.map(|c| c.map(f64::from))) {
-                        action = Some(CanvasAction::Edit(Edit::StyleAnnotation { page, index, color: Some(c), opacity: None, width: None }));
+                        action =
+                            Some(CanvasAction::Edit(Box::new(Edit::StyleAnnotation { page, index, color: Some(c), opacity: None, width: None })));
                         ui.close();
                     }
                 });
@@ -828,7 +830,7 @@ pub(crate) fn context_menu(ui: &mut egui::Ui, view: &mut DocView, info: &DocInfo
             ui.separator();
             if ui.add_enabled(allowed, egui::Button::new("Delete")).clicked() {
                 view.comments.selected = None;
-                action = Some(CanvasAction::Edit(Edit::DeleteAnnotation { page, index }));
+                action = Some(CanvasAction::Edit(Box::new(Edit::DeleteAnnotation { page, index })));
                 ui.close();
             }
         }
@@ -851,7 +853,7 @@ pub(crate) fn context_menu(ui: &mut egui::Ui, view: &mut DocView, info: &DocInfo
 /// What the canvas asks the app to do.
 #[derive(Clone, Debug, PartialEq)]
 pub enum CanvasAction {
-    Edit(Edit),
+    Edit(Box<Edit>),
     OpenComments,
 }
 

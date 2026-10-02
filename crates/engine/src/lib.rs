@@ -20,6 +20,7 @@ pub use printcraft_organize::{BoxSpec, PageBox, SplitBy, split_ranges};
 pub use printcraft_organize::LabelStyle;
 
 pub use printcraft_cos::Algorithm;
+pub use printcraft_edit::{Background, HeaderFooter, MarkKind, Watermark};
 pub use printcraft_forms::{Field as FormField, FieldKind as FormFieldKind, FieldValue, Widget as FormWidget, flags as field_flags};
 
 /// Comment geometry helpers (text-box line breaking) for frontends.
@@ -112,6 +113,8 @@ pub struct Document {
     pub read_only_reason: Option<String>,
     /// Interactive form fields of the current state (empty without a form).
     pub form: Arc<Vec<printcraft_forms::Field>>,
+    /// Page marks present (headers and footers, watermarks, backgrounds), for Update/Remove.
+    pub marks: Vec<MarkKind>,
     editor: Option<Editor>,
     config: RenderConfig,
 }
@@ -472,6 +475,26 @@ pub enum Edit {
     ResetForm {
         names: Option<Vec<String>>,
     },
+    /// Add a header and footer (with `replace`, existing ones on those pages go first).
+    AddHeaderFooter {
+        pages: Vec<usize>,
+        settings: HeaderFooter,
+        replace: bool,
+    },
+    AddWatermark {
+        pages: Vec<usize>,
+        settings: Watermark,
+        replace: bool,
+    },
+    AddBackground {
+        pages: Vec<usize>,
+        settings: Background,
+        replace: bool,
+    },
+    /// Remove every mark of a kind from every page.
+    RemoveMarks {
+        kind: MarkKind,
+    },
     /// Protect with passwords and permissions (written by the next save, which is a full rewrite).
     Protect(Protection),
     /// Remove password security (needs the owner password).
@@ -512,6 +535,15 @@ impl Edit {
             Edit::StyleAnnotation { .. } => "Change comment properties".into(),
             Edit::SetFieldValue { name, .. } => format!("Fill in {name}"),
             Edit::ResetForm { .. } => "Clear form".into(),
+            Edit::AddHeaderFooter { replace: false, .. } => "Add header & footer".into(),
+            Edit::AddHeaderFooter { .. } => "Update header & footer".into(),
+            Edit::AddWatermark { replace: false, .. } => "Add watermark".into(),
+            Edit::AddWatermark { .. } => "Update watermark".into(),
+            Edit::AddBackground { replace: false, .. } => "Add background".into(),
+            Edit::AddBackground { .. } => "Update background".into(),
+            Edit::RemoveMarks { kind: MarkKind::HeaderFooter } => "Remove header & footer".into(),
+            Edit::RemoveMarks { kind: MarkKind::Watermark } => "Remove watermark".into(),
+            Edit::RemoveMarks { kind: MarkKind::Background } => "Remove background".into(),
             Edit::Protect(_) => "Protect with password".into(),
             Edit::RemoveProtection => "Remove security".into(),
             Edit::Batch { label, .. } => label.clone(),
@@ -594,7 +626,7 @@ fn check_permission(edit: &Edit, p: &printcraft_cos::Permissions) -> Result<(), 
                 Err(EditError::NotPermitted("changing security"))
             }
         }
-        Edit::SetInfo { .. } => {
+        Edit::SetInfo { .. } | Edit::AddHeaderFooter { .. } | Edit::AddWatermark { .. } | Edit::AddBackground { .. } | Edit::RemoveMarks { .. } => {
             if p.modify() {
                 Ok(())
             } else {
@@ -713,6 +745,18 @@ fn run_edit(doc: &mut printcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -
         Edit::ResetForm { names } => {
             printcraft_forms::reset(doc, names.as_deref())?;
         }
+        Edit::AddHeaderFooter { pages, settings, replace } => {
+            let date = cx.date.as_deref().and_then(parse_ymd).unwrap_or((1970, 1, 1));
+            printcraft_edit::add_header_footer(doc, pages, settings, *replace, &printcraft_edit::Context { date })?;
+        }
+        Edit::AddWatermark { pages, settings, replace } => printcraft_edit::add_watermark(doc, pages, settings, *replace)?,
+        Edit::AddBackground { pages, settings, replace } => printcraft_edit::add_background(doc, pages, settings, *replace)?,
+        Edit::RemoveMarks { kind } => {
+            let n = printcraft_model::pages(doc).len();
+            if printcraft_edit::remove_marks(doc, &(0..n).collect::<Vec<_>>(), *kind)? == 0 {
+                return Err(EditError::Edit(printcraft_edit::EditError::Invalid("there is nothing to remove".into())));
+            }
+        }
         Edit::Protect(p) => {
             p.validate()?;
             let seed = cx.entropy();
@@ -765,6 +809,12 @@ fn comment_list(doc: &printcraft_cos::Document) -> Vec<printcraft_render::Annota
         .collect()
 }
 
+/// (year, month, day) from a PDF date `D:YYYYMMDD…`.
+fn parse_ymd(d: &str) -> Option<(i64, u32, u32)> {
+    let d = d.strip_prefix("D:").unwrap_or(d);
+    Some((d.get(0..4)?.parse().ok()?, d.get(4..6)?.parse().ok()?, d.get(6..8)?.parse().ok()?))
+}
+
 /// The passwords after `edit`, if it changes them.
 fn keys_after(edit: &Edit) -> Option<Keys> {
     match edit {
@@ -812,6 +862,8 @@ pub enum EditError {
     Protection(String),
     #[error("{0}")]
     Form(#[from] printcraft_forms::FormError),
+    #[error("{0}")]
+    Edit(#[from] printcraft_edit::EditError),
     #[error("the edited document could not be written: {0}")]
     Write(String),
     #[error("the edited document could not be reopened: {0}")]
@@ -883,6 +935,7 @@ impl Session {
             Err(_) => (None, Some("the document structure could not be read for editing".into())),
         };
         let form = editor.as_ref().map(|e| printcraft_forms::fields(&e.cos)).unwrap_or_default();
+        let marks = editor.as_ref().map(|e| printcraft_edit::marks_present(&e.cos)).unwrap_or_default();
         self.next_id += 1;
         let id = DocId(self.next_id);
         self.docs.push(Document {
@@ -898,6 +951,7 @@ impl Session {
             snapshot_generation: 0,
             read_only_reason,
             form: Arc::new(form),
+            marks,
             editor,
             config,
         });
@@ -1039,6 +1093,7 @@ impl Session {
         }
         doc.info = info;
         doc.form = Arc::new(printcraft_forms::fields(&editor.cos));
+        doc.marks = printcraft_edit::marks_present(&editor.cos);
         doc.bytes = bytes.clone();
         doc.renderer = RenderPool::new(bytes, render_threads(), doc.config.clone());
         Ok(())
