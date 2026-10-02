@@ -330,6 +330,9 @@ fn render_threads() -> usize {
     std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4).clamp(2, 8) - 1
 }
 
+/// A file to combine: its name (the bookmark title), bytes, and page range (`None`: all).
+pub type CombineSource = (String, Arc<Vec<u8>>, Option<String>);
+
 /// A document's working file captured for crash recovery.
 #[derive(Clone, Debug)]
 pub struct RecoverySnapshot {
@@ -1816,6 +1819,28 @@ impl Session {
         let docs = sources.iter().map(|(n, b)| open_source(n, b)).collect::<Result<Vec<_>, _>>()?;
         let named: Vec<(&str, &printcraft_cos::Document)> = sources.iter().map(|(n, _)| n.as_str()).zip(docs.iter()).collect();
         let out = printcraft_organize::combine(&named)?;
+        self.write_new(&out)
+    }
+
+    /// Combine Files with a page range per file ("1-3, 6"; `None` or empty for all pages).
+    pub fn combine_ranges(&self, sources: &[CombineSource]) -> Result<Arc<Vec<u8>>, EditError> {
+        let docs = sources.iter().map(|(n, b, _)| open_source(n, b)).collect::<Result<Vec<_>, _>>()?;
+        let mut pages = Vec::with_capacity(docs.len());
+        for ((name, _, range), d) in sources.iter().zip(&docs) {
+            let range = range.as_deref().map(str::trim).filter(|r| !r.is_empty());
+            pages.push(match range {
+                Some(r) => {
+                    let n = printcraft_organize::page_count(d)?;
+                    let p = printcraft_print::select_pages(n, Some(r), &[], printcraft_print::Subset::All, false)
+                        .map_err(|e| EditError::Print(format!("{name}: {e}")))?;
+                    Some(p)
+                }
+                None => None,
+            });
+        }
+        let named: Vec<(&str, &printcraft_cos::Document, Option<&[usize]>)> =
+            sources.iter().zip(docs.iter()).zip(&pages).map(|(((n, _, _), d), p)| (n.as_str(), d, p.as_deref())).collect();
+        let out = printcraft_organize::combine_selected(&named)?;
         self.write_new(&out)
     }
 

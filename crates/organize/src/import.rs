@@ -462,13 +462,29 @@ pub fn split(src: &Document, by: &SplitBy) -> Result<Vec<Document>, OrganizeErro
 /// The source's own bookmarks are nested (collapsed) under its entry, and its document-level
 /// attachments are carried over.
 pub fn combine(sources: &[(&str, &Document)]) -> Result<Document, OrganizeError> {
+    let all: Vec<(&str, &Document, Option<&[usize]>)> = sources.iter().map(|(t, d)| (*t, *d, None)).collect();
+    combine_selected(&all)
+}
+
+/// Combine Files with chosen pages: each source contributes `pages` (0-based, in that order;
+/// `None` for all of them). Bookmarks that point at pages left out lose their destination.
+pub fn combine_selected(sources: &[(&str, &Document, Option<&[usize]>)]) -> Result<Document, OrganizeError> {
     let mut out = Document::new_empty();
     let mut marks = Vec::new();
     let mut attachments = Vec::new();
-    for (title, src) in sources {
+    for (title, src, chosen) in sources {
         let n = crate::page_count(src)?;
+        let pages: Vec<usize> = match chosen {
+            Some(p) => {
+                if let Some(bad) = p.iter().find(|i| **i >= n) {
+                    return Err(OrganizeError::NoSuchPage(*bad));
+                }
+                p.to_vec()
+            }
+            None => (0..n).collect(),
+        };
         let at = crate::page_count(&out)?;
-        let (new, page_map) = import_pages_mapped(&mut out, src, &(0..n).collect::<Vec<_>>(), at)?;
+        let (new, page_map) = import_pages_mapped(&mut out, src, &pages, at)?;
         if let Some(first) = new.first() {
             marks.push((title.to_string(), *first, *src, page_map));
         }

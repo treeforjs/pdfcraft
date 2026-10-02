@@ -2887,11 +2887,11 @@ title = "Choose which pages of each file to combine"
 area = "D"
 tier = "P1"
 milestone = "M4"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["page.combine"]
+tools = ["doc_combine"]
+evidence = ["crates/ui-egui/tests/editing.rs::combine_files_takes_chosen_pages_in_the_order_listed", "crates/automation/tests/automation.rs::combine_extract_and_split"]
+notes = "Combine files list: order (move up/down), remove, add files, a page range per file (such as 1-3, 6; in the order given); bookmarks to left-out pages lose their destination"
 
 [[feature]]
 id = "organize.combine-sort"

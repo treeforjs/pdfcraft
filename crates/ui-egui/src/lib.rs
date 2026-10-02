@@ -8,6 +8,7 @@
 mod a11y_ui;
 pub mod canvas;
 mod chrome;
+mod combine_ui;
 mod commands;
 mod comment_props;
 pub mod comments;
@@ -174,6 +175,8 @@ pub enum Dialog {
     DuplicateField,
     /// Check for accessibility ▸ Accessibility Checker Options.
     AccessibilityOptions,
+    /// Combine files: the files, their order and pages.
+    Combine,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -276,6 +279,8 @@ pub struct PrintCraftApp {
     pub a11y_options: a11y_ui::A11yOptions,
     pub a11y: a11y_ui::A11yState,
     pub a11y_skipped: std::collections::BTreeSet<printcraft_engine::a11y::Rule>,
+    /// Combine files: the files staged so far.
+    pub combine_draft: Vec<combine_ui::CombineFile>,
     /// PDF Optimizer choices.
     pub optimize_draft: OptimizeDraft,
     /// Pages copied or cut in Organize Pages, ready to paste (into any document).
@@ -398,6 +403,7 @@ impl PrintCraftApp {
             a11y_options: a11y_ui::A11yOptions::default(),
             a11y: a11y_ui::A11yState::default(),
             a11y_skipped: Default::default(),
+            combine_draft: Vec::new(),
             optimize_draft: OptimizeDraft::default(),
             page_clipboard: None,
             last_snapshot: None,

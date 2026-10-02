@@ -321,6 +321,8 @@ fn combining_files_opens_a_new_unsaved_tab() {
         app.use_files(printcraft_ui_egui::FilePurpose::Combine, vec![("one.pdf".into(), fixture(2)), ("two.pdf".into(), fixture(1))]);
     });
     h.run_steps(3);
+    h.get_by_label("Combine").click();
+    h.run_steps(3);
     let app = h.state();
     assert_eq!(app.views.len(), 2);
     assert_eq!(app.active, Some(1));
@@ -330,6 +332,28 @@ fn combining_files_opens_a_new_unsaved_tab() {
     assert!(doc.dirty && doc.path.is_none(), "unsaved until the user saves it");
     assert_eq!(doc.info.outline.iter().map(|o| o.title.as_str()).collect::<Vec<_>>(), ["one", "two"]);
     h.get_by_label("Combined.pdf (edited)");
+}
+
+#[test]
+fn combine_files_takes_chosen_pages_in_the_order_listed() {
+    let mut h = harness(1, |app| {
+        app.use_files(printcraft_ui_egui::FilePurpose::Combine, vec![("one.pdf".into(), fixture(3)), ("two.pdf".into(), fixture(2))]);
+    });
+    h.run_steps(3);
+    h.get_by_label_contains("Files are combined in this order");
+    h.get_by_label("3 pages");
+    // two.pdf first; one.pdf's pages 3 and 1.
+    h.get_all_by_label("Move up").last().unwrap().click();
+    h.run_steps(2);
+    h.state_mut().combine_draft[1].range = "3, 1".into();
+    h.run_steps(1);
+    h.get_by_label("Combine").click();
+    h.run_steps(3);
+    let app = h.state();
+    assert_eq!(texts_of(app, 1), ["Page 1", "Page 2", "Page 3", "Page 1"]);
+    let doc = app.session.get(app.views[1].id).unwrap();
+    assert_eq!(doc.info.outline.iter().map(|o| o.title.as_str()).collect::<Vec<_>>(), ["two", "one"]);
+    assert!(app.combine_draft.is_empty());
 }
 
 #[test]

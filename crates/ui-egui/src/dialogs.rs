@@ -50,6 +50,7 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
     let mut replace_now = false;
     let mut open_revision: Option<usize> = None;
     let mut a11y_now = false;
+    let mut combine_now = false;
     let t = Tokens::get(ctx);
     let mut close = false;
     let mut next = dialog;
@@ -757,6 +758,16 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
                 close = apply || cancel;
                 return;
             }
+            Dialog::Combine => {
+                ui.set_width(620.0);
+                let (go, cancel) = crate::combine_ui::body(ui, app, &t);
+                combine_now = go;
+                if cancel {
+                    app.combine_draft.clear();
+                }
+                close = go || cancel;
+                return;
+            }
             Dialog::AccessibilityOptions => {
                 let (start, cancel) = crate::a11y_ui::options_body(ui, app, &t);
                 a11y_now = start;
@@ -1111,6 +1122,9 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
     }
     if let Some(n) = open_revision {
         app.open_revision(n);
+    }
+    if combine_now {
+        app.combine_staged();
     }
     if a11y_now {
         app.a11y_skipped.clear();

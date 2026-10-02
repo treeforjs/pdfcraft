@@ -894,14 +894,19 @@ impl Automation {
         if paths.len() < 2 {
             return Err(ToolError::InvalidArgs("combine needs at least two files".into()));
         }
+        let ranges: Vec<Option<String>> = match a.get("pages") {
+            None | Some(Value::Null) => vec![None; paths.len()],
+            Some(Value::Array(v)) if v.len() == paths.len() => v.iter().map(|x| x.as_str().map(str::to_owned)).collect(),
+            Some(_) => return Err(ToolError::InvalidArgs("pages must list a range (or null) for each path".into())),
+        };
         let mut sources = Vec::new();
-        for p in paths {
+        for (p, range) in paths.into_iter().zip(ranges) {
             let path = self.resolve(p, false)?;
             let bytes = std::fs::read(&path).map_err(|e| failed(format!("{}: {e}", path.display())))?;
             let name = path.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-            sources.push((name, Arc::new(bytes)));
+            sources.push((name, Arc::new(bytes), range));
         }
-        let bytes = self.session.combine(&sources).map_err(failed)?;
+        let bytes = self.session.combine_ranges(&sources).map_err(failed)?;
         self.deliver(a, "Combined", bytes)
     }
 

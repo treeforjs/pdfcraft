@@ -164,6 +164,11 @@ fn combine_extract_and_split() {
     let doc = combined["document"]["doc"].as_u64().unwrap();
     assert_eq!(combined["document"]["pages"], 5);
     assert_eq!(page_text(&mut a, doc), ["Page 1", "Page 2", "Page 3", "Page 1", "Page 2"]);
+    // Chosen pages per file, in the order given.
+    let some = ok(&mut a, "doc_combine", json!({ "paths": ["a.pdf", "b.pdf"], "pages": ["3, 1", null], "open": true }));
+    assert_eq!(page_text(&mut a, some["document"]["doc"].as_u64().unwrap()), ["Page 3", "Page 1", "Page 1", "Page 2"]);
+    assert!(matches!(a.call("doc_combine", &json!({ "paths": ["a.pdf", "b.pdf"], "pages": ["9", null] })), Err(ToolError::Failed(_))));
+    assert!(matches!(a.call("doc_combine", &json!({ "paths": ["a.pdf", "b.pdf"], "pages": ["1"] })), Err(ToolError::InvalidArgs(_))));
 
     let ex = ok(&mut a, "page_extract", json!({ "doc": doc, "pages": [2, 4] }));
     let ex_doc = ex["document"]["doc"].as_u64().unwrap();

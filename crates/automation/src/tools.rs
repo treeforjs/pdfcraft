@@ -171,9 +171,17 @@ pub fn tools() -> Vec<ToolDef> {
                 json!({ "doc": doc(), "pages": pages("to extract"), "out": save_out.clone(), "open": open.clone(), "separate": { "type": "boolean" }, "out_dir": { "type": "string" }, "delete": { "type": "boolean" } }),
                 &["doc", "pages"],
             )),
-        t("doc_combine", "Combine files", "Combine PDFs, in order, into one (bookmarks are kept under one entry per file).")
+        t("doc_combine", "Combine files", "Combine PDFs, in order, into one (bookmarks are kept under one entry per file). pages optionally chooses each file's pages, in step with paths: a range such as \"1-3, 6\" or null for all pages.")
             .cmd("page.combine")
-            .with(schema(json!({ "paths": { "type": "array", "items": { "type": "string" }, "minItems": 2 }, "out": save_out, "open": open }), &["paths"])),
+            .with(schema(
+                json!({
+                    "paths": { "type": "array", "items": { "type": "string" }, "minItems": 2 },
+                    "pages": { "type": "array", "items": { "type": ["string", "null"] } },
+                    "out": save_out,
+                    "open": open,
+                }),
+                &["paths"],
+            )),
         t("doc_split", "Split a document", "Split into several files written to out_dir: every N pages, before given pages, at top-level bookmarks (bookmarks: true; files named after them), or by file size (max_mb). Files are <name>-partK.pdf.")
             .cmd("page.split")
             .with(schema(

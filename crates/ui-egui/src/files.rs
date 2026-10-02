@@ -158,7 +158,7 @@ impl PrintCraftApp {
     /// Use picked files (also the entry point for tests and automation).
     pub fn use_files(&mut self, purpose: FilePurpose, files: Vec<(String, Vec<u8>)>) {
         match purpose {
-            FilePurpose::Combine => self.combine_files(files),
+            FilePurpose::Combine => self.stage_combine(files),
             FilePurpose::InsertPages => {
                 for (name, bytes) in files {
                     self.insert_pages_from(&name, bytes);
@@ -169,19 +169,6 @@ impl PrintCraftApp {
                     self.start_replace(name, bytes);
                 }
             }
-        }
-    }
-
-    /// Combine files, in order, into a new unsaved document tab.
-    pub fn combine_files(&mut self, files: Vec<(String, Vec<u8>)>) {
-        if files.is_empty() {
-            return;
-        }
-        let sources: Vec<(String, Arc<Vec<u8>>)> = files.into_iter().map(|(n, b)| (strip_pdf(&n).to_string(), Arc::new(b))).collect();
-        let count = sources.len();
-        match self.session.combine(&sources) {
-            Ok(bytes) => self.open_created("Combined.pdf", bytes, &format!("Combined {count} files")),
-            Err(e) => self.notify(format!("Couldn't combine files: {e}")),
         }
     }
 
@@ -352,7 +339,7 @@ impl PrintCraftApp {
         }
     }
 
-    fn open_created(&mut self, name: &str, bytes: Arc<Vec<u8>>, message: &str) {
+    pub(crate) fn open_created(&mut self, name: &str, bytes: Arc<Vec<u8>>, message: &str) {
         match self.session.open_new(name, bytes) {
             Ok(id) => {
                 let info = &self.session.get(id).expect("just opened").info;
@@ -365,7 +352,7 @@ impl PrintCraftApp {
     }
 }
 
-fn strip_pdf(name: &str) -> &str {
+pub(crate) fn strip_pdf(name: &str) -> &str {
     name.strip_suffix(".pdf").or_else(|| name.strip_suffix(".PDF")).unwrap_or(name)
 }
 
