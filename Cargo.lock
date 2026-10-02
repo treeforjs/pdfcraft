@@ -3130,6 +3130,7 @@ version = "0.1.0"
 dependencies = [
  "hayro-syntax",
  "printcraft-annot",
+ "printcraft-content",
  "printcraft-cos",
  "printcraft-fonts",
  "printcraft-model",
@@ -3153,6 +3154,7 @@ dependencies = [
  "printcraft-print",
  "printcraft-redact",
  "printcraft-render",
+ "printcraft-xfdf",
  "thiserror 2.0.21",
 ]
 
@@ -3273,6 +3275,18 @@ dependencies = [
  "printcraft-ui-egui",
  "wasm-bindgen-futures",
  "web-sys",
+]
+
+[[package]]
+name = "printcraft-xfdf"
+version = "0.1.0"
+dependencies = [
+ "printcraft-annot",
+ "printcraft-cos",
+ "printcraft-forms",
+ "printcraft-model",
+ "roxmltree",
+ "thiserror 2.0.21",
 ]
 
 [[package]]

@@ -277,6 +277,9 @@ impl PrintCraftApp {
                 let n = active.and_then(|i| self.session.get(self.views[i].id)).map_or(0, |d| d.info.pages.len());
                 self.apply_edit(Edit::SetTabOrder { pages: (0..n).collect(), order });
             }
+            "comment.import" | "form.import_data" => self.import_data_dialog(),
+            "comment.export" => self.export_data_dialog(true, false),
+            "form.export_data" => self.export_data_dialog(false, true),
             "form.prepare" => {
                 self.left = crate::LeftPanel::Tool("form");
                 self.left_open = true;

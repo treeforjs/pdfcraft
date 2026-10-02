@@ -387,4 +387,36 @@ impl Automation {
         }
         self.apply(a, Edit::DeleteField { name })
     }
+
+    pub(crate) fn doc_export_data(&mut self, a: &Args) -> Result<Value> {
+        let id = self.doc(a)?.id;
+        let path = self.resolve(a.str("path")?, true)?;
+        let ext = path.extension().map(|e| e.to_string_lossy().into_owned()).unwrap_or_default();
+        let format =
+            printcraft_engine::DataFormat::from_extension(&ext).ok_or_else(|| bad("the path must end in .xfdf, .fdf, .xml, .csv or .txt"))?;
+        let (comments, fields) = match a.opt_str("what")?.unwrap_or("all") {
+            "all" => (true, true),
+            "comments" => (true, false),
+            "fields" => (false, true),
+            w => return Err(bad(format!("unknown what {w:?} (all, comments, fields)"))),
+        };
+        if comments && !matches!(format, printcraft_engine::DataFormat::Xfdf | printcraft_engine::DataFormat::Fdf) {
+            return Err(bad("comments travel as .xfdf or .fdf; .xml, .csv and .txt hold form data (use what: fields)"));
+        }
+        let bytes = self.session.export_data(id, format, comments, fields).map_err(failed)?;
+        crate::write_atomic(&path, &bytes)?;
+        Ok(json!({ "path": path.to_string_lossy(), "bytes": bytes.len() }))
+    }
+
+    pub(crate) fn doc_import_data(&mut self, a: &Args) -> Result<Value> {
+        let path = self.resolve(a.str("path")?, false)?;
+        let bytes = std::fs::read(&path).map_err(|e| failed(format!("{}: {e}", path.display())))?;
+        let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let before = (self.doc(a)?.info.annotations.len(), self.doc(a)?.form.iter().filter(|f| !f.value.is_empty()).count());
+        let mut out = self.apply(a, Edit::ImportData { name, bytes: std::sync::Arc::new(bytes) })?;
+        let doc = self.doc(a)?;
+        out["comments"] = json!(doc.info.annotations.len() as i64 - before.0 as i64);
+        out["filled_fields"] = json!(doc.form.iter().filter(|f| !f.value.is_empty()).count());
+        Ok(out)
+    }
 }

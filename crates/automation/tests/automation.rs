@@ -780,3 +780,26 @@ fn tab_order_and_field_appearance_through_tools() {
         Err(ToolError::InvalidArgs(_))
     ));
 }
+
+#[test]
+fn comments_and_form_data_travel_as_xfdf_fdf_and_text() {
+    let dir = workdir("xfdf");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    ok(&mut a, "comment_add", json!({ "doc": doc, "page": 2, "type": "note", "at": [30, 30], "contents": "Please review", "author": "Ada" }));
+    ok(&mut a, "form_add_field", json!({ "doc": doc, "page": 1, "type": "text", "rect": [20, 20, 180, 42], "name": "City" }));
+    ok(&mut a, "form_fill", json!({ "doc": doc, "values": { "City": "Paris" } }));
+    ok(&mut a, "doc_save", json!({ "doc": doc, "path": "reviewed.pdf" }));
+    ok(&mut a, "doc_export_data", json!({ "doc": doc, "path": "all.xfdf" }));
+    ok(&mut a, "doc_export_data", json!({ "doc": doc, "path": "data.txt", "what": "fields" }));
+    assert_eq!(std::fs::read_to_string(dir.join("data.txt")).unwrap(), "City\nParis\n");
+    assert!(matches!(a.call("doc_export_data", &json!({ "doc": doc, "path": "c.csv", "what": "comments" })), Err(ToolError::InvalidArgs(_))));
+    // A copy without the comment and with the field empty takes both back.
+    ok(&mut a, "comment_delete", json!({ "doc": doc, "page": 2, "index": 1 }));
+    ok(&mut a, "form_reset", json!({ "doc": doc }));
+    let r = ok(&mut a, "doc_import_data", json!({ "doc": doc, "path": "all.xfdf" }));
+    assert_eq!(r["filled_fields"], 1);
+    let list = ok(&mut a, "comment_list", json!({ "doc": doc }));
+    assert_eq!(list["comments"][0]["contents"], "Please review", "{list}");
+    assert_eq!(r["undo"], "Import all.xfdf");
+}

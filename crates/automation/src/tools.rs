@@ -260,6 +260,11 @@ pub fn tools() -> Vec<ToolDef> {
         )),
         t("form_tab_order", "Set the tab order", "Set the tab order of pages (default all): row (top to bottom, left to right), column, structure, or annotations (unspecified). Returns the resulting order of fields. Undoable.")
             .with(schema(json!({ "doc": doc(), "order": { "type": "string", "enum": ["row", "column", "structure", "annotations"] }, "pages": pages("to set (default: all)") }), &["doc", "order"])),
+        t("doc_export_data", "Export comments or form data", "Write comments and/or form data to path; the extension picks the format: .xfdf or .fdf (comments and/or fields), .xml, .csv or .txt (form data). what: all (default), comments, fields.")
+            .ro()
+            .with(schema(json!({ "doc": doc(), "path": { "type": "string" }, "what": { "type": "string", "enum": ["all", "comments", "fields"] } }), &["doc", "path"])),
+        t("doc_import_data", "Import comments or form data", "Import comments and/or field values from an XFDF, FDF, XML, CSV or tab-delimited text file (detected from its content). Comments with the same name are replaced; values go through the form's formats and validation. Undoable.")
+            .with(schema(json!({ "doc": doc(), "path": { "type": "string" } }), &["doc", "path"])),
         t("form_delete_field", "Delete a field", "Delete a form field and all its widgets. Undoable.")
             .destructive()
             .with(schema(json!({ "doc": doc(), "field": { "type": "string" } }), &["doc", "field"])),

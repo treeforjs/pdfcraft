@@ -70,7 +70,7 @@ fn every_registered_command_is_implemented() {
             app.apply_edit(Edit::AddWatermark { pages: vec![0], settings: Watermark { text: "x".into(), ..Watermark::default() }, replace: false });
             app.apply_edit(Edit::AddBackground { pages: vec![0], settings: Background { color: [1.0; 3], opacity: 1.0 }, replace: false });
         }
-        if spec.id == "comment.flatten" {
+        if spec.id == "comment.flatten" || spec.id == "comment.export" {
             use printcraft_engine::{Edit, NewAnnotation, Shape, Style};
             let shape = Shape::Rectangle { rect: [10.0, 10.0, 50.0, 50.0] };
             app.apply_edit(Edit::AddAnnotation(NewAnnotation {

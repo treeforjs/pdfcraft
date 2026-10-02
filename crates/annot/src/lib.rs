@@ -590,7 +590,8 @@ pub fn add_annotation(doc: &mut Document, new: &NewAnnotation, meta: &Meta) -> R
 }
 
 /// (Re)generate `/AP /N` for the annotation `r` from its dictionary.
-fn set_appearance(doc: &mut Document, r: ObjRef) -> Result<(), AnnotError> {
+/// Regenerate an annotation's normal appearance from its dictionary.
+pub fn set_appearance(doc: &mut Document, r: ObjRef) -> Result<(), AnnotError> {
     let d = annot_dict(doc, r);
     let subtype = String::from_utf8_lossy(d.name(b"Subtype").unwrap_or_default()).into_owned();
     let Some(stream) = appearance::build(&d) else { return Err(AnnotError::Unsupported(subtype)) };

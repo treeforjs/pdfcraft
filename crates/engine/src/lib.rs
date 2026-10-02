@@ -35,6 +35,7 @@ pub use printcraft_annot::{FillMark, Markup, NewAnnotation, NoteIcon, Props as C
 pub use printcraft_print as print;
 pub use printcraft_redact::patterns::{PATTERNS as REDACT_PATTERNS, Pattern as RedactPattern, find as find_pattern};
 pub use printcraft_redact::sanitize::{HIDDEN, Hidden};
+pub use printcraft_xfdf::Format as DataFormat;
 
 pub type SplitPart = (usize, usize, Arc<Vec<u8>>);
 
@@ -608,6 +609,11 @@ pub enum Edit {
     },
     /// Remove redaction marks without applying them.
     ClearRedactions,
+    /// Import comments and/or form data (XFDF, FDF, XML, CSV, tab-delimited text).
+    ImportData {
+        name: String,
+        bytes: Arc<Vec<u8>>,
+    },
     /// Remove Hidden Information: the chosen categories.
     RemoveHidden {
         which: Vec<Hidden>,
@@ -681,6 +687,7 @@ impl Edit {
             Edit::ApplyRedactions { .. } => "Apply redactions".into(),
             Edit::ClearRedactions => "Remove redaction marks".into(),
             Edit::RemoveHidden { .. } => "Remove hidden information".into(),
+            Edit::ImportData { name, .. } => format!("Import {name}"),
             Edit::Sanitize => "Sanitize document".into(),
             Edit::Flatten { comments: true, fields: false } => "Flatten comments".into(),
             Edit::Flatten { comments: false, fields: true } => "Flatten form fields".into(),
@@ -790,6 +797,7 @@ fn check_permission(edit: &Edit, p: &printcraft_cos::Permissions) -> Result<(), 
         | Edit::ReplaceImage { .. }
         | Edit::ClearRedactions
         | Edit::RemoveHidden { .. }
+        | Edit::ImportData { .. }
         | Edit::Sanitize
         | Edit::SetFieldProps { .. }
         | Edit::DeleteField { .. }
@@ -975,6 +983,9 @@ fn run_edit(doc: &mut printcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -
         Edit::ClearRedactions => {
             printcraft_redact::clear_marks(doc, None)?;
         }
+        Edit::ImportData { bytes, .. } => {
+            printcraft_xfdf::import(doc, bytes)?;
+        }
         Edit::RemoveHidden { which } => {
             printcraft_redact::sanitize::remove_hidden(doc, which)?;
         }
@@ -1102,6 +1113,8 @@ pub enum EditError {
     Redact(#[from] printcraft_redact::RedactError),
     #[error("{0}")]
     Print(String),
+    #[error(transparent)]
+    Data(#[from] printcraft_xfdf::DataError),
     #[error("{0}")]
     Edit(#[from] printcraft_edit::EditError),
     #[error("{0}")]
@@ -1449,6 +1462,22 @@ impl Session {
         let opts = SaveOptions { mod_date: self.now().map(printcraft_cos::pdf_date), ..SaveOptions::default() };
         let bytes = write_full(&cos, &opts).map_err(|e| EditError::Write(e.to_string()))?;
         Ok((Arc::new(bytes), merged))
+    }
+
+    /// Export comments and/or form data: XFDF and FDF carry either or both; XML, CSV and text
+    /// are form data only.
+    pub fn export_data(&self, id: DocId, format: DataFormat, comments: bool, fields: bool) -> Result<Vec<u8>, EditError> {
+        let doc = self.get(id).ok_or(EditError::NoDocument)?;
+        let cos = match doc.editor.as_ref() {
+            Some(e) => e.cos.clone(),
+            None => printcraft_cos::Document::open_with_password(doc.bytes.clone(), doc.password.as_deref())
+                .map_err(|e| EditError::Write(e.to_string()))?,
+        };
+        Ok(match format {
+            DataFormat::Xfdf => printcraft_xfdf::export_xfdf(&cos, comments, fields, &doc.name).into_bytes(),
+            DataFormat::Fdf => printcraft_xfdf::export_fdf(&cos, comments, fields, &doc.name),
+            other => printcraft_xfdf::export_data(&cos, other).into_bytes(),
+        })
     }
 
     /// The print-ready PDF for `settings` (sheets laid out for the paper; see `printcraft-print`).

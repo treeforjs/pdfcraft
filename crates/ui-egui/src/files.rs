@@ -232,3 +232,75 @@ impl PrintCraftApp {
 fn strip_pdf(name: &str) -> &str {
     name.strip_suffix(".pdf").or_else(|| name.strip_suffix(".PDF")).unwrap_or(name)
 }
+
+impl PrintCraftApp {
+    /// Comments ▸ Import comments / Prepare a form ▸ Import data: XFDF, FDF, XML, CSV or text.
+    pub fn import_data_dialog(&mut self) {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let picked = match self.save_override.clone() {
+                Some(p) if [".xfdf", ".fdf", ".xml", ".csv", ".txt"].iter().any(|e| p.ends_with(e)) => Some(std::path::PathBuf::from(p)),
+                Some(_) => None,
+                None => rfd::FileDialog::new()
+                    .add_filter("Comment and form data", &["xfdf", "fdf", "xml", "csv", "txt"])
+                    .set_title("Import data")
+                    .pick_file(),
+            };
+            let Some(path) = picked else { return };
+            match std::fs::read(&path) {
+                Ok(bytes) => {
+                    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                    self.apply_edit(printcraft_engine::Edit::ImportData { name, bytes: std::sync::Arc::new(bytes) });
+                }
+                Err(e) => self.notify(format!("Couldn't read {}: {e}", path.display())),
+            }
+        }
+        #[cfg(target_arch = "wasm32")]
+        self.notify("Importing data arrives on the web with file pickers for data files");
+    }
+
+    /// Export all comments / form data: the format follows the file name's extension.
+    pub fn export_data_dialog(&mut self, comments: bool, fields: bool) {
+        let Some((_, id)) = self.active_ids() else { return };
+        let Some(doc) = self.session.get(id) else { return };
+        let stem = doc.name.trim_end_matches(".pdf").trim_end_matches(".PDF").to_string();
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let path = match self.save_override.clone() {
+                Some(p) => Some(std::path::PathBuf::from(p)),
+                None => {
+                    let d = rfd::FileDialog::new()
+                        .set_title(if comments { "Export comments" } else { "Export form data" })
+                        .set_file_name(format!("{stem}.xfdf"));
+                    let d = if comments {
+                        d.add_filter("XFDF", &["xfdf"]).add_filter("FDF", &["fdf"])
+                    } else {
+                        d.add_filter("XFDF", &["xfdf"])
+                            .add_filter("FDF", &["fdf"])
+                            .add_filter("XML", &["xml"])
+                            .add_filter("CSV", &["csv"])
+                            .add_filter("Text", &["txt"])
+                    };
+                    d.save_file()
+                }
+            };
+            let Some(path) = path else { return };
+            let ext = path.extension().map(|e| e.to_string_lossy().into_owned()).unwrap_or_default();
+            let format = printcraft_engine::DataFormat::from_extension(&ext).unwrap_or(printcraft_engine::DataFormat::Xfdf);
+            match self.session.export_data(id, format, comments, fields) {
+                Ok(bytes) => match crate::editing::write_atomically(&path.to_string_lossy(), &bytes) {
+                    Ok(()) => self.notify(format!("Exported to {}", path.display())),
+                    Err(e) => self.notify(format!("Couldn't write {}: {e}", path.display())),
+                },
+                Err(e) => self.notify(e.to_string()),
+            }
+        }
+        #[cfg(target_arch = "wasm32")]
+        match self.session.export_data(id, printcraft_engine::DataFormat::Xfdf, comments, fields) {
+            Ok(bytes) => {
+                let _ = crate::editing::download(&format!("{stem}.xfdf"), &bytes);
+            }
+            Err(e) => self.notify(e.to_string()),
+        }
+    }
+}

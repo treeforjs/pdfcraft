@@ -260,6 +260,8 @@ impl Automation {
             "form_set_props" => self.form_set_props(&a)?,
             "form_delete_field" => self.form_delete_field(&a)?,
             "form_tab_order" => self.form_tab_order(&a)?,
+            "doc_export_data" => self.doc_export_data(&a)?,
+            "doc_import_data" => self.doc_import_data(&a)?,
             "redact_mark" => self.redact_mark(&a)?,
             "redact_apply" => self.redact_apply(&a)?,
             "redact_clear" => self.redact_clear(&a)?,
