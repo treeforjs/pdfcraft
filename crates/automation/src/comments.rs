@@ -271,6 +271,18 @@ impl Automation {
                     };
                     Shape::Callout { rect, knee, point, font_size: a.opt_num("font_size")?.unwrap_or(10.0) }
                 }
+                "attachment" => {
+                    let [x, y] = a.need::<2>("at", "an attachment (its icon's top-left)")?;
+                    let path = self.resolve(a.str("path")?, false)?;
+                    let data = std::fs::read(&path).map_err(|e| failed(format!("{}: {e}", path.display())))?;
+                    let file = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                    let icon = match a.opt_str("icon")? {
+                        Some(n) => printcraft_engine::AttachIcon::from_name(n)
+                            .ok_or_else(|| ToolError::InvalidArgs(format!("unknown icon {n:?} (PushPin, Paperclip, Graph, Tag)")))?,
+                        None => printcraft_engine::AttachIcon::PushPin,
+                    };
+                    Shape::Attachment { at: to_user(&info, x, y), icon, file, data }
+                }
                 "caret" => {
                     let [x, y] = a.need::<2>("at", "a caret (the insertion point on the baseline)")?;
                     Shape::Caret { rect: rect_to_user(&info, [x - 4.0, y, x + 4.0, y + 8.0]) }

@@ -1450,6 +1450,9 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
         }
     }
     app.quick_tool = tool;
+    if let Some((page, at)) = app.views[index].comments.attach_at.take() {
+        app.attach_file_comment(page, at);
+    }
     if let Some((p, i)) = open_props {
         app.open_comment_props(p, i);
     }

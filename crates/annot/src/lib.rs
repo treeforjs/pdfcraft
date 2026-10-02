@@ -356,6 +356,39 @@ pub enum Shape {
     Caret {
         rect: [f64; 4],
     },
+    /// Attach a file as a comment: an icon whose top-left corner is at `at`, holding `data`
+    /// (embedded) under the name `file`.
+    Attachment {
+        at: [f64; 2],
+        icon: AttachIcon,
+        file: String,
+        data: Vec<u8>,
+    },
+}
+
+/// The standard file attachment icons (§12.5.6.15).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum AttachIcon {
+    #[default]
+    PushPin,
+    Paperclip,
+    Graph,
+    Tag,
+}
+
+impl AttachIcon {
+    pub const ALL: [AttachIcon; 4] = [AttachIcon::PushPin, AttachIcon::Paperclip, AttachIcon::Graph, AttachIcon::Tag];
+    pub fn name(self) -> &'static str {
+        match self {
+            AttachIcon::PushPin => "PushPin",
+            AttachIcon::Paperclip => "Paperclip",
+            AttachIcon::Graph => "Graph",
+            AttachIcon::Tag => "Tag",
+        }
+    }
+    pub fn from_name(n: &str) -> Option<AttachIcon> {
+        Self::ALL.into_iter().find(|i| i.name().eq_ignore_ascii_case(n))
+    }
 }
 
 /// A rectangle `[x0 y0 x1 y1]` as a quad in Acrobat's order (top-left, top-right, bottom-left,
@@ -380,6 +413,7 @@ impl Shape {
             Shape::Polygon { .. } => "Polygon",
             Shape::PolyLine { .. } => "PolyLine",
             Shape::Caret { .. } => "Caret",
+            Shape::Attachment { .. } => "FileAttachment",
         }
     }
 }
@@ -473,7 +507,7 @@ impl Style {
                 ([0.89, 0.13, 0.13], 2.0)
             }
             Shape::Callout { .. } => ([0.0, 0.0, 0.0], 1.0),
-            Shape::Caret { .. } => ([0.0, 0.47, 0.84], 1.0),
+            Shape::Caret { .. } | Shape::Attachment { .. } => ([0.0, 0.47, 0.84], 1.0),
             Shape::Ink { .. } => ([0.0, 0.4, 0.87], 2.0),
             Shape::TextBox { .. } | Shape::Typewriter { .. } => ([0.0, 0.0, 0.0], 0.0),
             Shape::Mark { .. } => ([0.0, 0.0, 0.0], 1.5),
@@ -653,7 +687,7 @@ fn rect_for(shape: &Shape, style: &Style) -> Result<[f64; 4], AnnotError> {
     let bad = |what: &str| AnnotError::Invalid(format!("invalid {what}"));
     let half = style.width.max(0.0) / 2.0;
     let r = match shape {
-        Shape::Note { at, .. } => {
+        Shape::Note { at, .. } | Shape::Attachment { at, .. } => {
             if !finite(at) {
                 return Err(bad("position"));
             }
@@ -770,6 +804,7 @@ fn subject(shape: &Shape) -> &'static str {
         Shape::PolyLine { .. } => "Polygonal Line",
         Shape::Callout { .. } => "Callout",
         Shape::Caret { .. } => "Inserted Text",
+        Shape::Attachment { .. } => "File Attachment",
     }
 }
 
@@ -898,6 +933,36 @@ pub fn add_annotation(doc: &mut Document, new: &NewAnnotation, meta: &Meta) -> R
         Shape::Caret { .. } => {
             d.set(b"C".to_vec(), rgb(style.color));
             d.set(b"Sy".to_vec(), Object::name("None"));
+        }
+        Shape::Attachment { icon, file, data, .. } => {
+            if file.trim().is_empty() {
+                return Err(AnnotError::Invalid("the attached file needs a name".into()));
+            }
+            d.set(b"C".to_vec(), rgb(style.color));
+            d.set(b"Name".to_vec(), Object::name(icon.name()));
+            d.set(b"F".to_vec(), Object::Int(FLAG_PRINT | FLAG_NO_ZOOM | FLAG_NO_ROTATE));
+            // The file: an embedded file stream inside a file specification (§7.11.4).
+            let mut params = Dict::new();
+            params.set(b"Size".to_vec(), Object::Int(data.len() as i64));
+            if let Some(date) = &meta.date {
+                params.set(b"ModDate".to_vec(), PdfString::literal(date.as_bytes().to_vec()));
+            }
+            let mut ef = Dict::new();
+            ef.set(b"Type".to_vec(), Object::name("EmbeddedFile"));
+            ef.set(b"Params".to_vec(), Object::Dict(params));
+            let ef = doc.add(Object::Stream(printcraft_cos::Stream::flate(ef, data)));
+            let mut efd = Dict::new();
+            efd.set(b"F".to_vec(), Object::Ref(ef));
+            efd.set(b"UF".to_vec(), Object::Ref(ef));
+            let mut fs = Dict::new();
+            fs.set(b"Type".to_vec(), Object::name("Filespec"));
+            fs.set(b"F".to_vec(), PdfString::text(file.trim()));
+            fs.set(b"UF".to_vec(), PdfString::text(file.trim()));
+            fs.set(b"EF".to_vec(), Object::Dict(efd));
+            d.set(b"FS".to_vec(), Object::Ref(doc.add(Object::Dict(fs))));
+            if new.contents.is_empty() {
+                d.set(b"Contents".to_vec(), PdfString::text(file.trim()));
+            }
         }
         Shape::Callout { rect: tb, knee, point, .. } => {
             let tb = normalize(*tb);

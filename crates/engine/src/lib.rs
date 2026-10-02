@@ -34,8 +34,8 @@ pub use printcraft_forms::{
 pub use printcraft_annot::appearance as annot_text;
 pub use printcraft_annot::links::{Highlight as LinkHighlight, LinkAction, LinkItem, LinkStyle};
 pub use printcraft_annot::{
-    FillMark, Markup, NewAnnotation, NoteIcon, OverlayFont, OverlayLook, Props as CommentProps, ReviewState, Rgb, Shape, StampGroup, StampKind,
-    Style, rect_quad,
+    AttachIcon, FillMark, Markup, NewAnnotation, NoteIcon, OverlayFont, OverlayLook, Props as CommentProps, ReviewState, Rgb, Shape, StampGroup,
+    StampKind, Style, rect_quad,
 };
 pub use printcraft_optimize as optimize;
 pub use printcraft_print as print;
@@ -81,6 +81,8 @@ enum Scope {
 
 fn scope_of(edit: &Edit) -> Scope {
     match edit {
+        // A file attachment also changes the Attachments list.
+        Edit::AddAnnotation(a) if matches!(a.shape, Shape::Attachment { .. }) => Scope::Full,
         Edit::AddAnnotation(_)
         | Edit::DeleteAnnotation { .. }
         | Edit::SetAnnotationContents { .. }
@@ -830,6 +832,7 @@ fn annotation_noun(s: &Shape) -> &'static str {
         Shape::PolyLine { .. } => "connected lines",
         Shape::Callout { .. } => "callout",
         Shape::Caret { .. } => "inserted text",
+        Shape::Attachment { .. } => "file attachment",
     }
 }
 

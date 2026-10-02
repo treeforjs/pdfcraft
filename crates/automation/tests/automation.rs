@@ -957,6 +957,11 @@ fn drawing_comments_through_tools() {
     let strike = list["comments"].as_array().unwrap().iter().find(|c| c["type"] == "StrikeOut").unwrap().clone();
     assert_eq!(strike["replies"][0]["contents"], "second page", "the caret threads under the strikeout");
     assert!(matches!(a.call("comment_add", &json!({ "doc": doc, "page": 2, "type": "replace", "find": "page 2" })), Err(ToolError::InvalidArgs(_))));
+    // A file attached as a comment.
+    std::fs::write(dir.join("notes.txt"), b"remember").unwrap();
+    ok(&mut a, "comment_add", json!({ "doc": doc, "page": 1, "type": "attachment", "path": "notes.txt", "at": [250, 20], "icon": "Paperclip" }));
+    let info = ok(&mut a, "doc_info", json!({ "doc": doc }));
+    assert!(info.to_string().contains("notes.txt"), "{info}");
     let png = a.call("page_render", &json!({ "doc": doc, "page": 1, "dpi": 72 })).unwrap();
     assert!(matches!(png[0], Content::Png { .. }));
 }

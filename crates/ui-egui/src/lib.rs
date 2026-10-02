@@ -264,6 +264,8 @@ pub struct PrintCraftApp {
     /// system clipboard (tests turn that off).
     pub last_snapshot: Option<(u32, u32, Vec<u8>)>,
     pub system_clipboard: bool,
+    /// Attach file: the file to attach instead of asking (tests, automation).
+    pub attach_override: Option<(String, Vec<u8>)>,
     /// Where autosaves go (`None`: autosave off, e.g. on the web and in tests).
     pub recovery: Option<RecoveryStore>,
     /// Entries left by a previous session, offered in the Recovery dialog.
@@ -371,6 +373,7 @@ impl PrintCraftApp {
             page_clipboard: None,
             last_snapshot: None,
             system_clipboard: true,
+            attach_override: None,
             recovery: None,
             recoverable: Vec::new(),
             recovery_keys: Default::default(),

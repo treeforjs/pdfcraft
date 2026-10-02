@@ -29,6 +29,35 @@ const ICONS: [NoteIcon; 7] =
     [NoteIcon::Comment, NoteIcon::Note, NoteIcon::Help, NoteIcon::Insert, NoteIcon::Key, NoteIcon::NewParagraph, NoteIcon::Paragraph];
 
 impl PrintCraftApp {
+    /// Attach file: ask for a file (or take `attach_override`) and attach it at `at`.
+    pub fn attach_file_comment(&mut self, page: usize, at: [f64; 2]) {
+        let picked = match self.attach_override.take() {
+            Some(f) => Some(f),
+            #[cfg(not(target_arch = "wasm32"))]
+            None => rfd::FileDialog::new().set_title("Attach a file").pick_file().and_then(|p| {
+                let data = std::fs::read(&p).ok()?;
+                Some((p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(), data))
+            }),
+            #[cfg(target_arch = "wasm32")]
+            None => None,
+        };
+        let Some((file, data)) = picked else { return };
+        let tool = crate::comments::CommentTool::Attach;
+        let shape = printcraft_engine::Shape::Attachment { at, icon: printcraft_engine::AttachIcon::PushPin, file, data };
+        let edit = Edit::AddAnnotation(printcraft_engine::NewAnnotation {
+            page,
+            shape,
+            style: self.comment_prefs.style(tool),
+            contents: String::new(),
+            author: self.comment_prefs.author.clone(),
+        });
+        // A one-shot tool: back to Select unless pinned (apply_edit acts on this).
+        if let Some((i, _)) = self.active_ids() {
+            self.views[i].comments.tool_done = true;
+        }
+        self.apply_edit(edit);
+    }
+
     /// Make Current Properties Default: new comments of this kind take this one's colour,
     /// opacity and line width.
     pub fn make_comment_default(&mut self, page: usize, index: usize) {

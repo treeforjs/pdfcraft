@@ -487,3 +487,17 @@ fn replacing_text_strikes_it_and_adds_a_caret() {
     assert_eq!(h.state().session.get(h.state().views[0].id).unwrap().can_undo(), Some("Replace text"));
     assert_eq!(h.state().quick_tool, QuickTool::Select);
 }
+
+#[test]
+fn attaching_a_file_as_a_comment() {
+    let mut h = harness(|app| app.set_option("quick", "attach").unwrap());
+    h.state_mut().attach_override = Some(("notes.txt".into(), b"remember the milk".to_vec()));
+    click_pt(&mut h, (250.0, 180.0));
+    h.run_steps(3);
+    let c = comments(&h);
+    assert_eq!((c.len(), c[0].subtype.as_str(), c[0].contents.as_deref()), (1, "FileAttachment", Some("notes.txt")));
+    let s = h.state();
+    let doc = s.session.get(s.views[0].id).unwrap();
+    assert!(doc.info.attachments.iter().any(|a| a.name == "notes.txt"), "listed in the Attachments panel");
+    assert_eq!(s.quick_tool, QuickTool::Select);
+}

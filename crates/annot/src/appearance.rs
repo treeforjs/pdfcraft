@@ -206,6 +206,12 @@ pub fn build(d: &Dict) -> Option<Stream> {
             c.push_str(&note_icon(&icon, col));
             return Some(form([0.0, 0.0, NOTE_SIZE, NOTE_SIZE], c.as_bytes(), res));
         }
+        b"FileAttachment" => {
+            let col = stroke.unwrap_or([0.0, 0.47, 0.84]);
+            let icon = d.name(b"Name").map(|n| String::from_utf8_lossy(n).into_owned()).unwrap_or_else(|| "PushPin".into());
+            c.push_str(&attach_icon(&icon, col));
+            return Some(form([0.0, 0.0, NOTE_SIZE, NOTE_SIZE], c.as_bytes(), res));
+        }
         _ if markup => {
             let q = nums(d, b"QuadPoints").filter(|q| !q.is_empty() && q.len() % 8 == 0)?;
             let col = stroke?;
@@ -689,6 +695,21 @@ fn ellipse(x0: f64, y0: f64, x1: f64, y1: f64) -> String {
 
 /// PrintCraft's note icons, drawn in a 20 × 20 box: a speech bubble for `/Comment`, a page
 /// with a folded corner for everything else, both filled with the note colour.
+/// File attachment icons in a 20 × 20 box: PrintCraft's own drawings.
+fn attach_icon(name: &str, col: Rgb) -> String {
+    let mut s = format!("{}{}1.2 w 1 j 1 J\n", rg(col), rg_stroke(col));
+    match name {
+        "Paperclip" => s.push_str("8 4 m 8 15 l 8 18 13 18 13 15 c 13 6 l 13 3 10 3 10 6 c 10 14 l S\n"),
+        "Graph" => s.push_str("3 3 m 3 17 l 3 3 m 17 3 l S\n5 3 3 6 re 9 3 3 10 re 13 3 3 13 re f\n"),
+        "Tag" => s.push_str("3 10 m 8 15 l 17 15 l 17 5 l 8 5 l h S\n7.3 10 m 7.3 10.7 6.7 11.3 6 11.3 c 5.3 11.3 4.7 10.7 4.7 10 c 4.7 9.3 5.3 8.7 6 8.7 c 6.7 8.7 7.3 9.3 7.3 10 c f\n"),
+        _ => {
+            // Push pin: a round head on a short needle.
+            s.push_str("10 2 m 10 9 l S\n6 9 m 14 9 l 14 11 l 12 12 l 12 16 l 13.5 17 l 13.5 18.5 l 6.5 18.5 l 6.5 17 l 8 16 l 8 12 l 6 11 l h f\n");
+        }
+    }
+    s
+}
+
 fn note_icon(name: &str, col: Rgb) -> String {
     let mut s = format!("{}0.25 0.25 0.25 RG 0.8 w 1 j 1 J\n", rg(col));
     if name == "Comment" {

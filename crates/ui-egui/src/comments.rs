@@ -41,11 +41,12 @@ pub enum CommentTool {
     Callout,
     Caret,
     ReplaceText,
+    Attach,
 }
 
 /// The quick-bar flyout groups, in Acrobat's order: Comment ▸, Highlight ▸, Draw ▸.
 pub const GROUPS: [&[CommentTool]; 3] = [
-    &[CommentTool::Note, CommentTool::TextBox, CommentTool::Callout],
+    &[CommentTool::Note, CommentTool::TextBox, CommentTool::Callout, CommentTool::Attach],
     &[CommentTool::Highlight, CommentTool::Underline, CommentTool::StrikeOut, CommentTool::Caret, CommentTool::ReplaceText],
     &[
         CommentTool::Ink,
@@ -59,8 +60,9 @@ pub const GROUPS: [&[CommentTool]; 3] = [
     ],
 ];
 
-pub const ALL: [CommentTool; 16] = [
+pub const ALL: [CommentTool; 17] = [
     CommentTool::ReplaceText,
+    CommentTool::Attach,
     CommentTool::Polygon,
     CommentTool::PolyLine,
     CommentTool::Cloud,
@@ -97,6 +99,7 @@ impl CommentTool {
             Self::Callout => "comment.callout",
             Self::Caret => "comment.caret",
             Self::ReplaceText => "comment.replace",
+            Self::Attach => "comment.attach",
         }
     }
 
@@ -122,6 +125,7 @@ impl CommentTool {
             Self::Callout => "Add a callout",
             Self::Caret => "Insert text",
             Self::ReplaceText => "Replace text",
+            Self::Attach => "Attach file",
         }
     }
 
@@ -143,6 +147,7 @@ impl CommentTool {
             Self::Callout => "message-square-quote",
             Self::Caret => "text-cursor-input",
             Self::ReplaceText => "replace",
+            Self::Attach => "paperclip",
         }
     }
 
@@ -193,6 +198,7 @@ impl CommentTool {
             Self::Callout => Shape::Callout { rect: [0.0; 4], knee: [0.0; 2], point: [0.0; 2], font_size: 10.0 },
             Self::Caret => Shape::Caret { rect: [0.0; 4] },
             Self::ReplaceText => Shape::TextMarkup { kind: Markup::StrikeOut, quads: Vec::new() },
+            Self::Attach => Shape::Attachment { at: [0.0; 2], icon: printcraft_engine::AttachIcon::PushPin, file: String::new(), data: Vec::new() },
         }
     }
 }
@@ -281,6 +287,7 @@ pub fn tool_for(a: &Annotation) -> Option<CommentTool> {
         ("Polygon", _) => CommentTool::Polygon,
         ("PolyLine", _) => CommentTool::PolyLine,
         ("Caret", _) => CommentTool::Caret,
+        ("FileAttachment", _) => CommentTool::Attach,
         _ => return None,
     })
 }
@@ -369,6 +376,8 @@ pub struct CommentView {
     pub default_request: Option<(usize, usize)>,
     /// Replace Text: the struck-out text's quads while the replacement is typed.
     pub replace: Option<Vec<[f64; 8]>>,
+    /// Attach file: where the icon goes (page, top-left in user space), for the app to pick a file.
+    pub attach_at: Option<(usize, [f64; 2])>,
     pub search_focus: bool,
     /// Where the canvas context menu was opened: (page, user-space point).
     pub context_at: Option<(usize, [f64; 2])>,
@@ -627,6 +636,22 @@ pub(crate) fn page_input(ui: &egui::Ui, resp: &egui::Response, cx: &PageCx<'_>, 
                 {
                     cv.composer = Some(Composer { page, at, kind: ComposerKind::Callout { point }, text: String::new(), focus: true });
                 }
+            }
+            true
+        }
+        QuickTool::Comment(CommentTool::Attach) => {
+            if !cx.allowed {
+                return false;
+            }
+            if over_page {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
+            }
+            if resp.clicked()
+                && over_page
+                && let Some(p) = pointer
+            {
+                cv.attach_at = Some((cx.page, cx.to_user(p)));
+                cv.selected = None;
             }
             true
         }

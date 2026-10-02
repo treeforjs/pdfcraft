@@ -527,3 +527,36 @@ fn replace_text_groups_a_strikeout_and_a_caret() {
     assert!(!list(&doc, 0).iter().any(|d| d.name(b"Subtype") == Some(b"Caret")));
     assert!(add_text_replacement(&mut doc, 0, &[], "x", "Ada", &red, &blue, &meta("r")).is_err());
 }
+
+#[test]
+fn files_attach_as_comments() {
+    let mut doc = fixture();
+    let data = b"col1,col2\n1,2\n".to_vec();
+    let shape = Shape::Attachment { at: [300.0, 500.0], icon: AttachIcon::Paperclip, file: "data.csv".into(), data: data.clone() };
+    let i = add_annotation(
+        &mut doc,
+        &NewAnnotation { page: 0, shape, style: Style::default(), contents: String::new(), author: "Ada".into() },
+        &meta("f"),
+    )
+    .unwrap();
+    let doc = reopen(&doc);
+    let a = &list(&doc, 0)[i];
+    assert_eq!((a.name(b"Subtype"), a.name(b"Name")), (Some(&b"FileAttachment"[..]), Some(&b"Paperclip"[..])));
+    assert_eq!(text(a, b"Contents"), "data.csv", "the file name describes it");
+    let fs = doc.resolve(a.get(b"FS").unwrap()).as_dict().cloned().unwrap();
+    assert_eq!(text(&fs, b"UF"), "data.csv");
+    let ef = fs.get(b"EF").and_then(|e| e.as_dict()).and_then(|e| e.reference(b"F")).unwrap();
+    let Object::Stream(s) = &*doc.get(ef) else { panic!() };
+    assert_eq!(s.decoded().unwrap(), data);
+    assert!(ap_content(&doc, a).contains(" c\n") || ap_content(&doc, a).contains(" c "), "a drawn paperclip");
+    let mut doc = doc;
+    let bad = Shape::Attachment { at: [0.0, 0.0], icon: AttachIcon::Tag, file: " ".into(), data: Vec::new() };
+    assert!(
+        add_annotation(
+            &mut doc,
+            &NewAnnotation { page: 0, shape: bad, style: Style::default(), contents: String::new(), author: String::new() },
+            &meta("x")
+        )
+        .is_err()
+    );
+}
