@@ -7,6 +7,10 @@
   </a>
 </p>
 
+<p align="center">
+  <img alt="PrintCraft app icon: an engraved lion on PrintCraft green (#12a58a)" src="assets/app-icon/printcraft-small.svg" width="112">
+</p>
+
 <h1 align="center">PrintCraft</h1>
 
 <p align="center">

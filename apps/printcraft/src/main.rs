@@ -13,6 +13,16 @@
 
 use printcraft_ui_egui::PrintCraftApp;
 
+/// Freedesktop app id: the `.desktop` file name and the hicolor icon name.
+const APP_ID: &str = "ai.storyteller.printcraft";
+
+/// The app icon (assets/app-icon/README.md). macOS gets the version on Apple's icon grid, with a
+/// transparent margin; Windows and Linux get the full-bleed tile.
+#[cfg(target_os = "macos")]
+const APP_ICON_PNG: &[u8] = include_bytes!("../../../assets/app-icon/printcraft-1024.png");
+#[cfg(not(target_os = "macos"))]
+const APP_ICON_PNG: &[u8] = include_bytes!("../../../assets/app-icon/hicolor/256x256/apps/ai.storyteller.printcraft.png");
+
 fn main() -> eframe::Result {
     let mut files = Vec::new();
     let mut options: Vec<(String, String)> = Vec::new();
@@ -37,11 +47,20 @@ fn main() -> eframe::Result {
         .with_title("PrintCraft")
         .with_inner_size([1440.0, 920.0])
         .with_min_inner_size([820.0, 520.0])
-        .with_drag_and_drop(true);
+        .with_drag_and_drop(true)
+        // Wayland app id: matches packaging/linux/ai.storyteller.printcraft.desktop.
+        .with_app_id(APP_ID);
+    // Dock, taskbar, Alt-Tab and launcher icon when running unbundled.
+    match eframe::icon_data::from_png_bytes(APP_ICON_PNG) {
+        Ok(icon) => viewport = viewport.with_icon(icon),
+        Err(e) => eprintln!("printcraft: app icon: {e}"),
+    }
     if integrated {
         viewport = viewport.with_fullsize_content_view(true).with_titlebar_shown(false).with_title_shown(false);
     }
-    let native = eframe::NativeOptions { viewport, ..Default::default() };
+    // eframe would otherwise derive the settings folder from the app id: keep it under "PrintCraft".
+    let persistence_path = eframe::storage_dir("PrintCraft").map(|d| d.join("app.ron"));
+    let native = eframe::NativeOptions { viewport, persistence_path, ..Default::default() };
     eframe::run_native(
         "PrintCraft",
         native,

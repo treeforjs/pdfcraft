@@ -13,3 +13,7 @@ printcraft-ui-egui = { workspace = true }
 eframe = { workspace = true, features = ["default_fonts", "wgpu", "accesskit", "wayland", "x11", "persistence", "links"] }
 egui = { workspace = true }
 serde_json = { workspace = true }
+
+[build-dependencies]
+# Icon + VERSIONINFO for printcraft.exe; build.rs only uses it when targeting Windows.
+winresource = "0.1"
