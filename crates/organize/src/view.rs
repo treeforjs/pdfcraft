@@ -138,6 +138,16 @@ pub fn initial_view(doc: &Document) -> InitialView {
     v
 }
 
+/// Whether viewers should show the document title rather than the file name
+/// (`/ViewerPreferences /DisplayDocTitle`), without reading the rest of the initial view.
+pub fn displays_doc_title(doc: &Document) -> bool {
+    let Ok((_, c)) = catalog(doc) else { return false };
+    c.get(b"ViewerPreferences")
+        .map(|o| doc.resolve(o))
+        .and_then(|o| o.as_dict().map(|vp| matches!(vp.get(b"DisplayDocTitle").map(|x| doc.resolve(x)).as_deref(), Some(Object::Bool(true)))))
+        .unwrap_or(false)
+}
+
 /// Write the initial view. An opening action that isn't a plain destination (a script, say) is
 /// kept unless the page or magnification asks for a destination.
 pub fn set_initial_view(doc: &mut Document, v: &InitialView) -> Result<(), OrganizeError> {

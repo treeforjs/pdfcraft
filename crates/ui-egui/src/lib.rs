@@ -294,6 +294,8 @@ pub struct PrintCraftApp {
     pending_theme: Option<ThemeKind>,
     styled: bool,
     fonts_ready: bool,
+    /// The window title last sent to the platform.
+    pub window_title: String,
     /// The UI control channel, when enabled (`--control`; off by default).
     control: Option<control::Control>,
     /// A bookmark being renamed in the Bookmarks panel: (path, text so far).
@@ -391,6 +393,7 @@ impl PrintCraftApp {
             attach_override: None,
             duplicate_draft: None,
             form_preview: false,
+            window_title: String::new(),
             recovery: None,
             recoverable: Vec::new(),
             recovery_keys: Default::default(),
@@ -975,6 +978,15 @@ impl eframe::App for PrintCraftApp {
         if !self.fonts_ready {
             ctx.request_repaint();
             return;
+        }
+        // The window shows the active document's name (or title, if it asks for that).
+        let title = self
+            .active
+            .and_then(|i| self.session.get(self.views[i].id))
+            .map_or_else(|| "PrintCraft".to_owned(), |d| format!("{} — PrintCraft", d.display_name()));
+        if title != self.window_title {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
+            self.window_title = title;
         }
         if self.full_screen && self.active.is_some() {
             // Full screen: the page, nothing else (Esc or ⌘L to leave).

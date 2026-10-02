@@ -279,3 +279,22 @@ fn fit_visible_zooms_to_the_content_width() {
     let vp = v.viewport_rect();
     assert!((ink_left - vp.left() - 16.0).abs() < 12.0, "ink at {ink_left}, viewport {vp:?}");
 }
+
+#[test]
+fn tab_and_window_show_the_document_title_when_asked() {
+    use printcraft_engine::Edit;
+    let mut h = harness();
+    h.run_steps(2);
+    assert_eq!(h.state().window_title, "b.pdf — PrintCraft");
+    {
+        let s = h.state_mut();
+        let id = s.views[s.active.unwrap()].id;
+        s.session.apply(id, Edit::SetInfo { key: "Title".into(), value: "Quarterly report".into() }).unwrap();
+        let mut v = s.session.get(id).unwrap().initial_view();
+        v.display_title = true;
+        s.session.apply(id, Edit::SetInitialView(Box::new(v))).unwrap();
+    }
+    h.run_steps(2);
+    assert_eq!(h.state().window_title, "Quarterly report — PrintCraft");
+    h.get_by_label_contains("Quarterly report");
+}

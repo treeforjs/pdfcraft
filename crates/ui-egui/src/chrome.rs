@@ -30,7 +30,7 @@ pub fn tab_strip(app: &mut PrintCraftApp, ui: &mut egui::Ui) {
                 let mut close = None;
                 for i in 0..app.views.len() {
                     let Some(doc) = app.session.get(app.views[i].id) else { continue };
-                    let (name, dirty) = (doc.name.clone(), doc.dirty);
+                    let (name, dirty) = (doc.display_name(), doc.dirty);
                     if tab(ui, &t, &name, dirty, app.active == Some(i), &mut close, i).clicked() {
                         app.active = Some(i);
                     }

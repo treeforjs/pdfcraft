@@ -267,6 +267,18 @@ impl Document {
         self.editor.as_ref().and_then(|e| printcraft_organize::info(&e.cos, key))
     }
 
+    /// The name shown on the tab and window: the document title when the document asks for it
+    /// (Initial View ▸ Show: Document Title) and has one, else the file name.
+    pub fn display_name(&self) -> String {
+        self.editor
+            .as_ref()
+            .filter(|e| printcraft_organize::displays_doc_title(&e.cos))
+            .and_then(|e| printcraft_organize::info(&e.cos, "Title"))
+            .map(|t| t.trim().to_owned())
+            .filter(|t| !t.is_empty())
+            .unwrap_or_else(|| self.name.clone())
+    }
+
     /// Notes about damage repaired while opening (Document Properties ▸ Advanced, notices).
     pub fn repair_log(&self) -> Vec<String> {
         self.editor.as_ref().map(|e| e.cos.repair_log().to_vec()).unwrap_or_default()
