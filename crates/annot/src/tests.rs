@@ -560,3 +560,22 @@ fn files_attach_as_comments() {
         .is_err()
     );
 }
+
+#[test]
+fn the_eraser_cuts_strokes_and_removes_empty_drawings() {
+    let mut doc = fixture();
+    let line = |y: f64| (0..=10).map(|k| [100.0 + k as f64 * 20.0, y]).collect::<Vec<_>>();
+    let shape = Shape::Ink { strokes: vec![line(500.0), line(400.0)] };
+    let i = add_annotation(&mut doc, &new(0, shape), &meta("i")).unwrap();
+    // A vertical swipe through the middle of both lines.
+    assert!(erase_ink(&mut doc, 0, i, &[[200.0, 550.0], [200.0, 350.0]], 5.0, &meta("e")).unwrap());
+    let d = &list(&doc, 0)[i];
+    let strokes = d.get(b"InkList").unwrap().as_array().unwrap().len();
+    assert_eq!(strokes, 4, "each line cut in two");
+    assert!(!erase_ink(&mut doc, 0, i, &[[600.0, 100.0]], 5.0, &meta("e")).unwrap(), "nothing under the eraser");
+    // Rubbing out everything deletes the drawing.
+    let all: Vec<[f64; 2]> = (0..=20).map(|k| [100.0 + k as f64 * 10.0, 500.0]).chain((0..=20).map(|k| [100.0 + k as f64 * 10.0, 400.0])).collect();
+    erase_ink(&mut doc, 0, i, &all[..21], 8.0, &meta("e")).unwrap();
+    erase_ink(&mut doc, 0, i, &all[21..], 8.0, &meta("e")).unwrap();
+    assert!(!list(&doc, 0).iter().any(|d| d.name(b"Subtype") == Some(b"Ink")));
+}

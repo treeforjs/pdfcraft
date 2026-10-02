@@ -1562,3 +1562,89 @@ pub fn add_text_replacement(
     })?;
     Ok(s)
 }
+
+/// The Eraser (Draw tools): remove the parts of drawing `(page, index)` within `radius` points
+/// of `path`, splitting strokes where they are cut. A drawing with nothing left is deleted.
+/// Returns whether anything was erased.
+pub fn erase_ink(doc: &mut Document, page: usize, index: usize, path: &[[f64; 2]], radius: f64, meta: &Meta) -> Result<bool, AnnotError> {
+    let (_, r) = annot_ref(doc, page, index)?;
+    unlocked(doc, r)?;
+    let d = annot_dict(doc, r);
+    if d.name(b"Subtype") != Some(b"Ink") {
+        return Err(AnnotError::Invalid("only drawings can be erased".into()));
+    }
+    if path.is_empty() || !path.iter().all(|p| finite(p)) || !radius.is_finite() || radius <= 0.0 {
+        return Err(AnnotError::Invalid("invalid eraser path".into()));
+    }
+    let strokes: Vec<Vec<[f64; 2]>> = d
+        .get(b"InkList")
+        .map(|l| doc.resolve(l))
+        .and_then(|l| l.as_array().cloned())
+        .unwrap_or_default()
+        .iter()
+        .map(|s| {
+            let v: Vec<f64> = doc.resolve(s).as_array().map(|a| a.iter().filter_map(|x| doc.resolve(x).as_f64()).collect()).unwrap_or_default();
+            v.chunks_exact(2).map(|p| [p[0], p[1]]).collect()
+        })
+        .collect();
+    // Distance from a point to the eraser's path (segments, or a single point).
+    let near = |p: [f64; 2]| -> bool {
+        if path.len() == 1 {
+            return (p[0] - path[0][0]).hypot(p[1] - path[0][1]) <= radius;
+        }
+        path.windows(2).any(|w| {
+            let (a, b) = (w[0], w[1]);
+            let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
+            let len2 = dx * dx + dy * dy;
+            let t = if len2 > 0.0 { (((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / len2).clamp(0.0, 1.0) } else { 0.0 };
+            (p[0] - (a[0] + t * dx)).hypot(p[1] - (a[1] + t * dy)) <= radius
+        })
+    };
+    let mut kept: Vec<Vec<[f64; 2]>> = Vec::new();
+    let mut erased = false;
+    for s in &strokes {
+        // Densify so long segments are cut where the eraser crosses them.
+        let mut pts: Vec<[f64; 2]> = Vec::new();
+        for w in s.windows(2) {
+            let n = ((w[1][0] - w[0][0]).hypot(w[1][1] - w[0][1]) / (radius / 2.0)).ceil().clamp(1.0, 2000.0) as usize;
+            for k in 0..n {
+                let t = k as f64 / n as f64;
+                pts.push([w[0][0] + (w[1][0] - w[0][0]) * t, w[0][1] + (w[1][1] - w[0][1]) * t]);
+            }
+        }
+        if let Some(last) = s.last() {
+            pts.push(*last);
+        }
+        let mut run: Vec<[f64; 2]> = Vec::new();
+        for p in pts {
+            if near(p) {
+                erased = true;
+                if run.len() >= 2 {
+                    kept.push(std::mem::take(&mut run));
+                }
+                run.clear();
+            } else {
+                run.push(p);
+            }
+        }
+        if run.len() >= 2 {
+            kept.push(run);
+        }
+    }
+    if !erased {
+        return Ok(false);
+    }
+    if kept.is_empty() {
+        delete_annotation(doc, page, index)?;
+        return Ok(true);
+    }
+    let width = d.get(b"BS").and_then(|b| b.as_dict()).and_then(|b| b.get(b"W")).and_then(|w| w.as_f64()).unwrap_or(1.0);
+    let rect = grow(bounds(kept.iter().flatten().copied()).unwrap_or_default(), width / 2.0 + 1.0);
+    doc.update_dict(r, |d| {
+        d.set(b"InkList".to_vec(), Object::Array(kept.iter().map(|s| num_array(&s.concat())).collect()));
+        d.set(b"Rect".to_vec(), num_array(&rect));
+        touch(d, meta);
+    })?;
+    set_appearance(doc, r)?;
+    Ok(true)
+}

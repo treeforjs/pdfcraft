@@ -3587,11 +3587,11 @@ title = "Eraser for ink strokes"
 area = "E"
 tier = "P1"
 milestone = "M5"
-status = "planned"
-commands = []
+status = "shipped"
+commands = ["comment.eraser"]
 tools = []
-evidence = []
-notes = ""
+evidence = ["crates/annot/src/tests.rs::the_eraser_cuts_strokes_and_removes_empty_drawings", "crates/ui-egui/tests/comments.rs::erasing_part_of_a_drawing"]
+notes = "cuts strokes where the eraser passes; an emptied drawing is deleted; one undo step"
 
 [[feature]]
 id = "comment.line"

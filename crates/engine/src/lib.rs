@@ -91,6 +91,7 @@ fn scope_of(edit: &Edit) -> Scope {
         | Edit::MarkAnnotation { .. }
         | Edit::LockAnnotation { .. }
         | Edit::ReplaceText { .. }
+        | Edit::EraseInk { .. }
         | Edit::MoveAnnotation { .. }
         | Edit::ResizeAnnotation { .. }
         | Edit::StyleAnnotation { .. }
@@ -529,6 +530,13 @@ pub enum Edit {
         state: ReviewState,
         author: String,
     },
+    /// The Eraser: rub out the parts of drawing `(page, index)` near `path` (user space).
+    EraseInk {
+        page: usize,
+        index: usize,
+        path: Vec<[f64; 2]>,
+        radius: f64,
+    },
     /// Replace Text: strike out `quads` and add a grouped caret holding `text`.
     ReplaceText {
         page: usize,
@@ -757,6 +765,7 @@ impl Edit {
             Edit::ReplyToAnnotation { .. } => "Reply".into(),
             Edit::SetAnnotationStatus { state, .. } => format!("Set status {}", state.name()),
             Edit::ReplaceText { .. } => "Replace text".into(),
+            Edit::EraseInk { .. } => "Erase".into(),
             Edit::MarkAnnotation { marked: true, .. } => "Mark with checkmark".into(),
             Edit::MarkAnnotation { .. } => "Remove checkmark".into(),
             Edit::LockAnnotation { locked: true, .. } => "Lock comment".into(),
@@ -874,6 +883,7 @@ fn check_permission(edit: &Edit, p: &printcraft_cos::Permissions) -> Result<(), 
         | Edit::SetAnnotationStatus { .. }
         | Edit::MarkAnnotation { .. }
         | Edit::ReplaceText { .. }
+        | Edit::EraseInk { .. }
         | Edit::LockAnnotation { .. }
         | Edit::MoveAnnotation { .. }
         | Edit::ResizeAnnotation { .. }
@@ -1040,6 +1050,9 @@ fn run_edit(doc: &mut printcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -
         }
         Edit::SetAnnotationStatus { page, index, state, author } => {
             printcraft_annot::set_review_state(doc, *page, *index, *state, author, &cx.meta())?;
+        }
+        Edit::EraseInk { page, index, path, radius } => {
+            printcraft_annot::erase_ink(doc, *page, *index, path, *radius, &cx.meta())?;
         }
         Edit::ReplaceText { page, quads, text, author, strike, caret } => {
             printcraft_annot::add_text_replacement(doc, *page, quads, text, author, strike, caret, &cx.meta())?;

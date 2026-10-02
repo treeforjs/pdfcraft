@@ -42,6 +42,7 @@ pub enum CommentTool {
     Caret,
     ReplaceText,
     Attach,
+    Eraser,
 }
 
 /// The quick-bar flyout groups, in Acrobat's order: Comment ▸, Highlight ▸, Draw ▸.
@@ -57,10 +58,12 @@ pub const GROUPS: [&[CommentTool]; 3] = [
         CommentTool::PolyLine,
         CommentTool::Polygon,
         CommentTool::Cloud,
+        CommentTool::Eraser,
     ],
 ];
 
-pub const ALL: [CommentTool; 17] = [
+pub const ALL: [CommentTool; 18] = [
+    CommentTool::Eraser,
     CommentTool::ReplaceText,
     CommentTool::Attach,
     CommentTool::Polygon,
@@ -100,6 +103,7 @@ impl CommentTool {
             Self::Caret => "comment.caret",
             Self::ReplaceText => "comment.replace",
             Self::Attach => "comment.attach",
+            Self::Eraser => "comment.eraser",
         }
     }
 
@@ -126,6 +130,7 @@ impl CommentTool {
             Self::Caret => "Insert text",
             Self::ReplaceText => "Replace text",
             Self::Attach => "Attach file",
+            Self::Eraser => "Eraser",
         }
     }
 
@@ -148,6 +153,7 @@ impl CommentTool {
             Self::Caret => "text-cursor-input",
             Self::ReplaceText => "replace",
             Self::Attach => "paperclip",
+            Self::Eraser => "eraser",
         }
     }
 
@@ -166,7 +172,7 @@ impl CommentTool {
 
     /// Tools that draw with a drag gesture.
     pub fn draws(self) -> bool {
-        matches!(self, Self::Ink | Self::Line | Self::Arrow | Self::Rectangle | Self::Oval)
+        matches!(self, Self::Ink | Self::Line | Self::Arrow | Self::Rectangle | Self::Oval | Self::Eraser)
     }
 
     /// Tools that place points one click at a time (double-click or Enter finishes).
@@ -198,6 +204,7 @@ impl CommentTool {
             Self::Callout => Shape::Callout { rect: [0.0; 4], knee: [0.0; 2], point: [0.0; 2], font_size: 10.0 },
             Self::Caret => Shape::Caret { rect: [0.0; 4] },
             Self::ReplaceText => Shape::TextMarkup { kind: Markup::StrikeOut, quads: Vec::new() },
+            Self::Eraser => Shape::Ink { strokes: Vec::new() },
             Self::Attach => Shape::Attachment { at: [0.0; 2], icon: printcraft_engine::AttachIcon::PushPin, file: String::new(), data: Vec::new() },
         }
     }
@@ -535,7 +542,7 @@ pub(crate) fn page_input(ui: &egui::Ui, resp: &egui::Response, cx: &PageCx<'_>, 
             {
                 let p = clamp_to(page_rect, p);
                 let u = cx.to_user(p);
-                if *tool == CommentTool::Ink {
+                if matches!(*tool, CommentTool::Ink | CommentTool::Eraser) {
                     let last = points.last().map(|l| cx.to_screen(*l)).unwrap_or(p);
                     if last.distance(p) >= 1.5 {
                         points.push(u);
@@ -550,7 +557,9 @@ pub(crate) fn page_input(ui: &egui::Ui, resp: &egui::Response, cx: &PageCx<'_>, 
                 && page == cx.page
             {
                 cv.gesture = None;
-                if let Some(shape) = drawn_shape(tool, &points) {
+                if tool == CommentTool::Eraser {
+                    view.pending_edit = erase(cx, &points);
+                } else if let Some(shape) = drawn_shape(tool, &points) {
                     view.pending_edit = Some(new_comment(cx, tool, shape, String::new()));
                 }
             }
@@ -885,6 +894,9 @@ fn paint_gesture(painter: &egui::Painter, cx: &PageCx<'_>, view: &DocView) {
             CommentTool::Ink => {
                 painter.add(egui::Shape::line(pts, stroke));
             }
+            CommentTool::Eraser => {
+                painter.add(egui::Shape::line(pts, Stroke::new(12.0, Color32::from_gray(128).gamma_multiply(0.35))));
+            }
             CommentTool::Line | CommentTool::Arrow if pts.len() == 2 => {
                 painter.line_segment([pts[0], pts[1]], stroke);
                 if *tool == CommentTool::Arrow {
@@ -940,6 +952,29 @@ fn drawn_shape(tool: CommentTool, points: &[[f64; 2]]) -> Option<Shape> {
         CommentTool::PolyLine if points.len() >= 2 => Some(Shape::PolyLine { vertices: points.to_vec() }),
         _ => None,
     }
+}
+
+/// Eraser: rub out drawings along `path` (user space); one undo step for all of them.
+fn erase(cx: &PageCx<'_>, path: &[[f64; 2]]) -> Option<Edit> {
+    let zoom = (cx.xf.rect.width() / cx.xf.pw.max(1.0)) as f64;
+    let radius = (6.0 / zoom).max(1.0);
+    let b = path.iter().fold([f64::MAX, f64::MAX, f64::MIN, f64::MIN], |r, p| [r[0].min(p[0]), r[1].min(p[1]), r[2].max(p[0]), r[3].max(p[1])]);
+    let mut hits: Vec<usize> = cx
+        .comments()
+        .filter(|a| a.subtype == "Ink" && !a.locked)
+        .filter(|a| {
+            let r = a.rect;
+            (r[0] as f64) <= b[2] + radius && (r[2] as f64) >= b[0] - radius && (r[1] as f64) <= b[3] + radius && (r[3] as f64) >= b[1] - radius
+        })
+        .map(|a| a.index)
+        .collect();
+    if hits.is_empty() {
+        return None;
+    }
+    // Later indices first: deleting an emptied drawing shifts the ones after it.
+    hits.sort_unstable_by(|a, b| b.cmp(a));
+    let edits = hits.into_iter().map(|index| Edit::EraseInk { page: cx.page, index, path: path.to_vec(), radius }).collect();
+    Some(Edit::Batch { label: "Erase".into(), edits })
 }
 
 fn new_comment(cx: &PageCx<'_>, tool: CommentTool, shape: Shape, contents: String) -> Edit {

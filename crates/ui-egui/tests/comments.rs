@@ -501,3 +501,20 @@ fn attaching_a_file_as_a_comment() {
     assert!(doc.info.attachments.iter().any(|a| a.name == "notes.txt"), "listed in the Attachments panel");
     assert_eq!(s.quick_tool, QuickTool::Select);
 }
+
+#[test]
+fn erasing_part_of_a_drawing() {
+    let mut h = harness(|app| app.set_option("quick", "ink").unwrap());
+    drag_pt(&mut h, (40.0, 60.0), (260.0, 60.0));
+    assert_eq!(comments(&h).len(), 1);
+    h.state_mut().set_option("quick", "eraser").unwrap();
+    drag_pt(&mut h, (150.0, 90.0), (150.0, 30.0));
+    let c = comments(&h);
+    assert_eq!(c.len(), 1);
+    let s = h.state();
+    let doc = s.session.get(s.views[0].id).unwrap();
+    assert_eq!(doc.can_undo(), Some("Erase"));
+    // Rubbing along the rest removes the drawing.
+    drag_pt(&mut h, (40.0, 60.0), (260.0, 60.0));
+    assert!(comments(&h).is_empty(), "{:?}", comments(&h));
+}
