@@ -653,11 +653,14 @@ impl Document {
                 log.push(format!("cross-reference chain loops at offset {off}; stopped"));
                 break;
             }
-            let (sect_trailer, is_stream) = match self.read_section(off as usize, &mut entries) {
+            // This section's own entries; older sections only fill what newer ones left out.
+            let mut sect = BTreeMap::new();
+            let (sect_trailer, is_stream) = match self.read_section(off as usize, &mut sect) {
                 Ok(v) => v,
                 Err(e) if self.header_offset > 0 => {
                     log.push(format!("xref at {off} unreadable ({e}); retrying relative to the header"));
-                    self.read_section(off as usize + self.header_offset, &mut entries)?
+                    sect.clear();
+                    self.read_section(off as usize + self.header_offset, &mut sect)?
                 }
                 Err(e) => {
                     if revisions.is_empty() {
@@ -668,11 +671,23 @@ impl Document {
                 }
             };
             revisions.push(Revision { xref_offset: off, is_stream });
-            // Hybrid files: the /XRefStm entries supplement the table (§7.5.8.4).
-            if let Some(x) = sect_trailer.int(b"XRefStm").filter(|x| *x >= 0)
-                && let Err(e) = self.read_section(x as usize, &mut entries)
-            {
-                log.push(format!("hybrid /XRefStm at {x} unreadable: {e}"));
+            // Hybrid files (§7.5.8.4): the /XRefStm entries supplement the table and replace the
+            // free entries it gives objects only a cross-reference stream can locate.
+            if let Some(x) = sect_trailer.int(b"XRefStm").filter(|x| *x >= 0) {
+                let mut stm = BTreeMap::new();
+                match self.read_section(x as usize, &mut stm) {
+                    Ok(_) => {
+                        for (num, e) in stm {
+                            if sect.get(&num).is_none_or(|old| matches!(old, XrefEntry::Free { .. })) {
+                                sect.insert(num, e);
+                            }
+                        }
+                    }
+                    Err(e) => log.push(format!("hybrid /XRefStm at {x} unreadable: {e}")),
+                }
+            }
+            for (num, e) in sect {
+                entries.entry(num).or_insert(e);
             }
             next = sect_trailer.int(b"Prev").filter(|p| *p >= 0).map(|p| p as u64);
             if trailer.is_none() {
@@ -954,6 +969,43 @@ mod tests {
         edited.update_dict(ObjRef::new(1, 0), |d| d.set(b"Lang".to_vec(), Object::String(crate::PdfString::literal("en")))).unwrap();
         assert!(edited.is_modified() && !doc.is_modified(), "clone is an independent snapshot");
         assert!(doc.get(ObjRef::new(1, 0)).as_dict().unwrap().get(b"Lang").is_none());
+    }
+
+    /// A hybrid-reference file: the classic table leaves object 3 out; the `/XRefStm` stream
+    /// says it lives in object stream 4.
+    #[test]
+    fn hybrid_reference_files_read_the_xref_stream_too() {
+        let mut out = b"%PDF-1.5\n".to_vec();
+        let mut offs = [0usize; 6];
+        let mut obj = |out: &mut Vec<u8>, n: usize, body: &[u8]| {
+            offs[n] = out.len();
+            out.extend_from_slice(format!("{n} 0 obj\n").as_bytes());
+            out.extend_from_slice(body);
+            out.extend_from_slice(b"\nendobj\n");
+        };
+        obj(&mut out, 1, b"<< /Type /Catalog /Pages 2 0 R >>");
+        obj(&mut out, 2, b"<< /Type /Pages /Kids [] /Count 0 /Extra 3 0 R >>");
+        let inner = b"3 0 << /Hidden (yes) >>";
+        let mut stm = format!("<< /Type /ObjStm /N 1 /First 4 /Length {} >>\nstream\n", inner.len()).into_bytes();
+        stm.extend_from_slice(inner);
+        stm.extend_from_slice(b"\nendstream");
+        obj(&mut out, 4, &stm);
+        let data = [2u8, 0, 4, 0];
+        let mut xs = format!("<< /Type /XRef /Size 6 /W [1 2 1] /Index [3 1] /Length {} >>\nstream\n", data.len()).into_bytes();
+        xs.extend_from_slice(&data);
+        xs.extend_from_slice(b"\nendstream");
+        obj(&mut out, 5, &xs);
+        let table = out.len();
+        out.extend_from_slice(b"xref\n0 6\n0000000000 65535 f \n");
+        for (n, off) in offs.iter().enumerate().skip(1) {
+            let line = if n == 3 { "0000000000 65535 f \n".to_string() } else { format!("{off:010} 00000 n \n") };
+            out.extend_from_slice(line.as_bytes());
+        }
+        out.extend_from_slice(format!("trailer << /Size 6 /Root 1 0 R /XRefStm {} >>\nstartxref\n{table}\n%%EOF\n", offs[5]).as_bytes());
+        let doc = Document::open(Arc::new(out)).unwrap();
+        assert!(doc.repair_log().is_empty(), "{:?}", doc.repair_log());
+        let hidden = doc.get(ObjRef::new(3, 0));
+        assert_eq!(hidden.as_dict().and_then(|d| d.get(b"Hidden").and_then(|h| h.as_string().map(|s| s.to_text()))), Some("yes".into()));
     }
 
     #[test]

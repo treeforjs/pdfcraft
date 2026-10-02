@@ -79,11 +79,11 @@ title = "Hybrid-reference files (/XRefStm) and quirky xref subsections"
 area = "A"
 tier = "P0"
 milestone = "M1"
-status = "planned"
+status = "shipped"
 commands = []
-tools = []
-evidence = []
-notes = "M1.4"
+tools = ["doc_open"]
+evidence = ["crates/cos/src/document.rs::hybrid_reference_files_read_the_xref_stream_too"]
+notes = "/XRefStm entries supplement the classic table and replace its free entries for objects in object streams; each section is merged as a unit so older revisions only fill gaps"
 
 [[feature]]
 id = "core.revision-chain"
@@ -631,11 +631,11 @@ title = "Force incremental saves for signed documents"
 area = "A"
 tier = "P0"
 milestone = "M4"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = "M4.3; needs signature detection"
+status = "shipped"
+commands = ["file.save"]
+tools = ["doc_save"]
+evidence = ["crates/engine/src/tests.rs::signing_saving_trusting_and_commenting_afterwards"]
+notes = "saves of signed documents are always incremental: full rewrites are refused, and edits that would need one (applying redactions, changing security, sanitizing) are refused before they change anything"
 
 [[feature]]
 id = "core.drag-drop-open"

@@ -1086,6 +1086,10 @@ fn signing_saving_trusting_and_commenting_afterwards() {
     let saved = s.save_bytes(id).unwrap();
     s.mark_saved(id, saved, None).unwrap();
     assert_eq!(s.get(id).unwrap().signatures[0].status, SignatureStatus::Valid);
+    // Edits that would need a full rewrite are refused, and change nothing.
+    let before = s.get(id).unwrap().can_undo().map(str::to_owned);
+    assert!(matches!(s.apply(id, Edit::Sanitize), Err(EditError::SignedRewrite(_))));
+    assert!(!s.get(id).unwrap().dirty && s.get(id).unwrap().can_undo().map(str::to_owned) == before);
 }
 
 #[test]

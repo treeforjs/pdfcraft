@@ -1451,6 +1451,8 @@ pub enum EditError {
     Sign(String),
     #[error("{0}")]
     Optimize(String),
+    #[error("{0} isn't possible in a signed document: it would rewrite the file and invalidate the signatures")]
+    SignedRewrite(String),
     #[error("this document is signed: rewriting it would invalidate its signatures (save it incrementally instead)")]
     Signed,
 }
@@ -1606,12 +1608,19 @@ impl Session {
         let mut cx = EditCtx::new(now, doc.generation ^ (id.0 << 48));
         cx.today = today;
         let reason = doc.read_only_reason.clone().unwrap_or_default();
+        let signed = doc.is_signed();
         let editor = doc.editor.as_mut().ok_or(EditError::ReadOnly(reason))?;
         if let Some(p) = editor.cos.permissions() {
             check_permission(&edit, &p)?;
         }
         let mut next = editor.cos.clone();
         run_edit(&mut next, &edit, &mut cx)?;
+        // Signed documents are only ever saved incrementally: an edit that needs a full rewrite
+        // (applying redactions, changing security, sanitizing) would invalidate the signatures.
+        let rewrites = |c: &printcraft_cos::Document| c.full_save_required() || c.encryption_changed();
+        if signed && rewrites(&next) && !rewrites(&editor.cos) {
+            return Err(EditError::SignedRewrite(edit.label()));
+        }
         let previous = std::mem::replace(&mut editor.cos, next);
         let keys = keys_after(&edit).unwrap_or_else(|| editor.keys.clone());
         let previous_keys = std::mem::replace(&mut editor.keys, keys);
