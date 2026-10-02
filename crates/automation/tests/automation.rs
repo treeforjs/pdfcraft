@@ -640,3 +640,25 @@ fn redacting_through_tools() {
     assert!(matches!(a.call("redact_mark", &json!({ "doc": doc, "find": "nowhere to be found" })), Err(ToolError::Failed(_))));
     assert!(matches!(a.call("redact_mark", &json!({ "doc": doc })), Err(ToolError::InvalidArgs(_))));
 }
+
+#[test]
+fn removing_hidden_information_through_tools() {
+    let dir = workdir("hidden");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    ok(&mut a, "comment_add", json!({ "doc": doc, "page": 1, "type": "note", "at": [20, 20], "contents": "internal note" }));
+    ok(&mut a, "doc_set_info", json!({ "doc": doc, "key": "Title", "value": "Secret plan" }));
+    let info = ok(&mut a, "doc_hidden_info", json!({ "doc": doc }));
+    let count = |v: &Value, c: &str| v["categories"].as_array().unwrap().iter().find(|x| x["category"] == c).unwrap()["count"].as_u64().unwrap();
+    assert!(count(&info, "comments") >= 1 && count(&info, "metadata") >= 1, "{info}");
+    let r = ok(&mut a, "doc_remove_hidden", json!({ "doc": doc, "categories": ["comments"] }));
+    assert_eq!(r["undo"], "Remove hidden information");
+    assert_eq!(ok(&mut a, "comment_list", json!({ "doc": doc }))["count"], 0);
+    assert!(count(&ok(&mut a, "doc_hidden_info", json!({ "doc": doc })), "metadata") >= 1, "only comments went");
+    let r = ok(&mut a, "doc_remove_hidden", json!({ "doc": doc }));
+    assert_eq!(r["undo"], "Sanitize document");
+    ok(&mut a, "doc_save", json!({ "doc": doc, "path": "clean.pdf" }));
+    let bytes = std::fs::read(dir.join("clean.pdf")).unwrap();
+    assert!(!bytes.windows(11).any(|w| w == b"Secret plan"), "the old revision is gone");
+    assert!(matches!(a.call("doc_remove_hidden", &json!({ "doc": doc, "categories": ["nonsense"] })), Err(ToolError::InvalidArgs(_))));
+}

@@ -5659,11 +5659,11 @@ title = "Remove hidden information (selectable categories)"
 area = "G"
 tier = "P1"
 milestone = "M8"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["protect.remove_hidden"]
+tools = ["doc_hidden_info", "doc_remove_hidden"]
+evidence = ["crates/redact/src/tests.rs::hidden_information_is_counted_and_removed", "crates/ui-egui/tests/redact.rs::removing_hidden_information_and_sanitizing", "crates/automation/tests/automation.rs::removing_hidden_information_through_tools"]
+notes = "metadata, attachments, comments, form fields (flattened), hidden text, hidden layers, bookmarks, links/actions/scripts, private data; overlapping objects and cropped content pending"
 
 [[feature]]
 id = "protect.sanitize"
@@ -5671,11 +5671,11 @@ title = "Sanitize document (remove all hidden information)"
 area = "G"
 tier = "P1"
 milestone = "M8"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["redact.sanitize"]
+tools = ["doc_remove_hidden"]
+evidence = ["crates/redact/src/tests.rs::hidden_information_is_counted_and_removed", "crates/ui-egui/tests/redact.rs::removing_hidden_information_and_sanitizing", "crates/automation/tests/automation.rs::removing_hidden_information_through_tools"]
+notes = "every category, then a full rewrite on save"
 
 [[feature]]
 id = "protect.remove-hidden-on-close"

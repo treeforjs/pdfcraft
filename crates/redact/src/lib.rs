@@ -18,6 +18,7 @@ mod fonts;
 mod image;
 mod interp;
 pub mod patterns;
+pub mod sanitize;
 #[cfg(test)]
 mod tests;
 
@@ -85,7 +86,7 @@ fn color(doc: &Document, d: &Dict, key: &[u8]) -> Option<Rgb> {
     }
 }
 
-fn annots_of(doc: &Document, page: &Dict) -> Vec<Object> {
+pub(crate) fn annots_of(doc: &Document, page: &Dict) -> Vec<Object> {
     page.get(b"Annots").map(|a| doc.resolve(a)).and_then(|a| a.as_array().cloned()).unwrap_or_default()
 }
 
@@ -134,7 +135,7 @@ pub fn marks(doc: &Document) -> Vec<Mark> {
 }
 
 /// A page's content streams: (the references or inline objects as listed, their decoded data).
-fn page_streams(doc: &Document, page: &Dict, index: usize) -> Result<(Vec<Object>, Vec<Vec<u8>>), RedactError> {
+pub(crate) fn page_streams(doc: &Document, page: &Dict, index: usize) -> Result<(Vec<Object>, Vec<Vec<u8>>), RedactError> {
     let list: Vec<Object> = match page.get(b"Contents") {
         None => Vec::new(),
         Some(c) => match &*doc.resolve(c) {

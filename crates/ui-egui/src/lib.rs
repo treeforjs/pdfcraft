@@ -33,7 +33,7 @@ mod palette;
 mod panels;
 pub mod prepare;
 mod redact_ui;
-pub use redact_ui::{PagesDraft as RedactPagesDraft, RedactPrefs, SearchDraft as RedactSearchDraft};
+pub use redact_ui::{HiddenDraft, PagesDraft as RedactPagesDraft, RedactPrefs, SearchDraft as RedactSearchDraft};
 mod protect;
 mod recovery;
 pub mod theme;
@@ -121,6 +121,9 @@ pub enum Dialog {
     RedactSearch,
     RedactProps,
     RedactApply,
+    /// Remove Hidden Information and Sanitize Document.
+    RemoveHidden,
+    Sanitize,
     /// Documents from a session that ended unexpectedly.
     Recovery,
 }
@@ -228,6 +231,7 @@ pub struct PrintCraftApp {
     pub redact_prefs: RedactPrefs,
     pub redact_pages_draft: RedactPagesDraft,
     pub redact_search: RedactSearchDraft,
+    pub hidden_draft: HiddenDraft,
     /// The Replace Pages dialog's state.
     pub replace_draft: Option<files::ReplaceDraft>,
     /// The last web link the app asked the system to open (tests and automation).
@@ -304,6 +308,7 @@ impl PrintCraftApp {
             redact_prefs: RedactPrefs::default(),
             redact_pages_draft: RedactPagesDraft::default(),
             redact_search: RedactSearchDraft::default(),
+            hidden_draft: HiddenDraft::default(),
             replace_draft: None,
             number_draft: NumberDraft { from: 1, to: 1, style: printcraft_engine::LabelStyle::Decimal, prefix: String::new(), start: 1 },
         }

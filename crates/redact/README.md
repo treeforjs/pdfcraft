@@ -33,5 +33,21 @@ A verification pass re-reads each redacted page and fails the operation if any g
 image is still under an area. Content that can't be decoded makes the operation fail rather than
 leave it unredacted.
 
-Not yet: search-and-redact patterns, struct-tree/alt-text cleanup, metadata and hidden-information
+## Remove hidden information / Sanitize
+
+```rust
+let found = sanitize::scan(&doc);                          // [(Hidden, count)] per category
+sanitize::remove_hidden(&mut doc, &[Hidden::Comments])?;   // chosen categories
+sanitize::sanitize(&mut doc)?;                             // all of them
+```
+
+Categories: metadata (`/Info`, XMP), file attachments, comments, form fields (flattened so the
+values stay visible), hidden text (render modes 3 and 7, or wholly off the page), hidden layers
+(content of off optional-content groups, then the groups), bookmarks, links/actions/JavaScript,
+and `/PieceInfo` private data. Both make the next save a full rewrite.
+
+`patterns` finds phone numbers, e-mail addresses, credit card numbers (Luhn-checked), US Social
+Security numbers and dates for Search & Redact.
+
+Not yet: pattern locales, struct-tree/alt-text cleanup, metadata and hidden-information
 sanitising (M8.4), re-encoding of DCT images (they are removed instead).

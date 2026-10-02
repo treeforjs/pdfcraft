@@ -41,6 +41,7 @@ struct Gs {
     size: f64,
     char_spacing: f64,
     word_spacing: f64,
+    render_mode: i64,
     scale: f64,
     leading: f64,
     rise: f64,
@@ -61,6 +62,13 @@ pub(crate) struct Scope<'a> {
     pub rects: &'a [[f64; 4]],
     pub mode: Mode,
     pub report: &'a mut Report,
+    /// Sanitize: remove hidden text (invisible render modes, or wholly outside this page box).
+    pub hidden_text: Option<[f64; 4]>,
+    /// Sanitize: optional content groups (and membership dictionaries) that are off; content
+    /// marked with them is removed.
+    pub hidden_layers: Vec<ObjRef>,
+    /// Content removed from hidden layers (blocks and XObjects).
+    pub layer_blocks: usize,
     fonts: HashMap<Vec<u8>, Rc<Metrics>>,
     used_names: Vec<Vec<u8>>,
     depth: usize,
@@ -68,7 +76,46 @@ pub(crate) struct Scope<'a> {
 
 impl<'a> Scope<'a> {
     pub fn new(rects: &'a [[f64; 4]], mode: Mode, report: &'a mut Report) -> Self {
-        Scope { rects, mode, report, fonts: HashMap::new(), used_names: Vec::new(), depth: 0 }
+        Scope {
+            rects,
+            mode,
+            report,
+            hidden_text: None,
+            hidden_layers: Vec::new(),
+            layer_blocks: 0,
+            fonts: HashMap::new(),
+            used_names: Vec::new(),
+            depth: 0,
+        }
+    }
+
+    /// Sanitizing visits every form XObject (not only those under a region).
+    fn everywhere(&self) -> bool {
+        self.hidden_text.is_some() || !self.hidden_layers.is_empty()
+    }
+
+    /// Is this optional-content reference (an OCG or OCMD) hidden?
+    fn layer_hidden(&self, doc: &Document, o: &Object) -> bool {
+        if self.hidden_layers.is_empty() {
+            return false;
+        }
+        if let Some(r) = o.as_ref()
+            && self.hidden_layers.contains(&r)
+        {
+            return true;
+        }
+        // A membership dictionary (default policy AnyOn): hidden when all its groups are.
+        let d = doc.resolve(o);
+        let Some(d) = d.as_dict() else { return false };
+        if d.name(b"Type") != Some(b"OCMD") {
+            return false;
+        }
+        let groups: Vec<ObjRef> = match d.get(b"OCGs").map(|g| (*doc.resolve(g)).clone()) {
+            Some(Object::Array(a)) => a.iter().filter_map(Object::as_ref).collect(),
+            Some(_) => d.get(b"OCGs").and_then(Object::as_ref).into_iter().collect(),
+            None => Vec::new(),
+        };
+        !groups.is_empty() && groups.iter().all(|g| self.hidden_layers.contains(g))
     }
 
     fn hits(&self, b: [f64; 4]) -> bool {
@@ -148,7 +195,8 @@ struct Glyph {
 pub(crate) fn process(doc: &mut Document, scope: &mut Scope<'_>, streams: &[Vec<u8>], resources: &Dict, ctm: Matrix) -> Output {
     let mut out = Output::default();
     let fallback = Rc::new(Metrics::fallback());
-    let mut gs = Gs { ctm, font: fallback.clone(), size: 0.0, char_spacing: 0.0, word_spacing: 0.0, scale: 1.0, leading: 0.0, rise: 0.0 };
+    let mut gs =
+        Gs { ctm, font: fallback.clone(), size: 0.0, char_spacing: 0.0, word_spacing: 0.0, render_mode: 0, scale: 1.0, leading: 0.0, rise: 0.0 };
     let mut stack: Vec<Gs> = Vec::new();
     let (mut tm, mut tlm) = (Matrix::IDENTITY, Matrix::IDENTITY);
     let fonts_res = res_dict(doc, resources, b"Font");
@@ -157,11 +205,21 @@ pub(crate) fn process(doc: &mut Document, scope: &mut Scope<'_>, streams: &[Vec<
     let mut path: Vec<Op> = Vec::new();
     let mut path_box: Option<[f64; 4]> = None;
     let mut clip = false;
+    let mut forced_change = false;
 
     for data in streams {
-        let parsed = parse(data);
+        let mut parsed = parse(data);
+        if !scope.hidden_layers.is_empty() {
+            let props = res_dict(doc, resources, b"Properties");
+            let (kept, removed) = strip_hidden_layers(doc, scope, parsed.ops, &props);
+            parsed.ops = kept;
+            if removed > 0 {
+                scope.layer_blocks += removed;
+                forced_change = true;
+            }
+        }
         let mut ops: Vec<Op> = Vec::with_capacity(parsed.ops.len());
-        let mut changed = false;
+        let mut changed = std::mem::take(&mut forced_change);
         for op in parsed.ops {
             let o = op.op.as_slice();
             // Path construction.
@@ -271,6 +329,7 @@ pub(crate) fn process(doc: &mut Document, scope: &mut Scope<'_>, streams: &[Vec<
                 b"Tz" => gs.scale = op.num(0).unwrap_or(100.0) / 100.0,
                 b"TL" => gs.leading = op.num(0).unwrap_or(0.0),
                 b"Ts" => gs.rise = op.num(0).unwrap_or(0.0),
+                b"Tr" => gs.render_mode = op.num(0).unwrap_or(0.0) as i64,
                 b"Td" | b"TD" => {
                     if let Some([x, y]) = op.nums::<2>() {
                         if o == b"TD" {
@@ -403,7 +462,15 @@ fn show(scope: &Scope<'_>, gs: &Gs, tm: &mut Matrix, items: &[Object]) -> (Vec<O
                     let b = trm.bbox([0.0, f.descent, w0, f.ascent]);
                     let origin = trm.apply(0.0, 0.0);
                     let advance = w0 * size + spacing;
-                    glyphs.push(Glyph { bytes: pos..pos + len, advance, hit: scope.glyph_hit(b, origin) });
+                    let hit = match scope.hidden_text {
+                        // Invisible (Tr 3) and clip-only (Tr 7) text, or text wholly off the page.
+                        Some(page) => {
+                            let degenerate = b[2] - b[0] < 0.01 && b[3] - b[1] < 0.01;
+                            matches!(gs.render_mode, 3 | 7) || !(overlaps(page, b, 0.0) || degenerate)
+                        }
+                        None => scope.glyph_hit(b, origin),
+                    };
+                    glyphs.push(Glyph { bytes: pos..pos + len, advance, hit });
                     *tm = Matrix::translate(advance * gs.scale, 0.0).then(tm);
                     pos += len;
                 }
@@ -452,6 +519,13 @@ fn xobject(
     let obj = doc.get(r);
     let Object::Stream(s) = &*obj else { return None };
     match s.dict.name(b"Subtype") {
+        _ if s.dict.get(b"OC").is_some_and(|oc| scope.layer_hidden(doc, oc)) => {
+            if scope.mode == Mode::Verify {
+                return None;
+            }
+            scope.layer_blocks += 1;
+            Some(None)
+        }
         Some(b"Image") => {
             let b = gs.ctm.bbox([0.0, 0.0, 1.0, 1.0]);
             if !scope.hits(b) || scope.mode == Mode::Verify {
@@ -485,6 +559,7 @@ fn xobject(
                 (v.len() == 4).then(|| [v[0].min(v[2]), v[1].min(v[3]), v[0].max(v[2]), v[1].max(v[3])])
             });
             if let Some(bb) = bbox
+                && !scope.everywhere()
                 && !scope.hits(fctm.bbox(bb))
             {
                 return None;
@@ -543,4 +618,46 @@ fn xobject(
         }
         _ => None,
     }
+}
+
+/// Remove marked-content blocks of hidden layers (`/OC /name BDC … EMC`, nested blocks
+/// included). Returns the remaining operators and how many blocks went.
+fn strip_hidden_layers(doc: &Document, scope: &Scope<'_>, ops: Vec<Op>, props: &Dict) -> (Vec<Op>, usize) {
+    let mut out = Vec::with_capacity(ops.len());
+    // For each open marked-content block: does it hide its contents?
+    let mut stack: Vec<bool> = Vec::new();
+    let mut removed = 0;
+    for op in ops {
+        let hidden_now = stack.last().copied().unwrap_or(false);
+        match op.op.as_slice() {
+            b"BDC" | b"BMC" => {
+                let this = op.is("BDC")
+                    && op.name(0) == Some(b"OC")
+                    && match op.operands.get(1) {
+                        Some(Object::Name(n)) => props.get(n).is_some_and(|o| scope.layer_hidden(doc, o)),
+                        Some(o) => scope.layer_hidden(doc, o),
+                        None => false,
+                    };
+                if this && !hidden_now {
+                    removed += 1;
+                }
+                stack.push(hidden_now || this);
+                if !(hidden_now || this) {
+                    out.push(op);
+                }
+            }
+            b"EMC" => {
+                let was = stack.pop().unwrap_or(false);
+                if !was {
+                    out.push(op);
+                }
+            }
+            _ => {
+                if !hidden_now {
+                    out.push(op);
+                }
+            }
+        }
+    }
+    (out, removed)
 }

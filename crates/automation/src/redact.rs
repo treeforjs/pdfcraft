@@ -1,7 +1,7 @@
 //! Redaction tools: mark areas, text, patterns or whole pages for redaction, apply the marks
 //! (removing what they cover for good) or clear them.
 
-use printcraft_engine::{Edit, NewAnnotation, RedactPattern, Shape, Style, find_pattern, rect_quad};
+use printcraft_engine::{Edit, Hidden, NewAnnotation, RedactPattern, Shape, Style, find_pattern, rect_quad};
 use serde_json::{Value, json};
 
 use crate::comments::{DEFAULT_AUTHOR, parse_color};
@@ -102,5 +102,34 @@ impl Automation {
             return Err(failed("there are no redaction marks"));
         }
         self.apply(a, Edit::ClearRedactions)
+    }
+
+    pub(crate) fn doc_hidden_info(&self, a: &Args) -> Result<Value> {
+        let doc = self.doc(a)?;
+        let items: Vec<Value> = doc.hidden_info().into_iter().map(|(h, n)| json!({ "category": h.id(), "label": h.label(), "count": n })).collect();
+        let total: usize = doc.hidden_info().iter().map(|c| c.1).sum();
+        Ok(json!({ "total": total, "categories": items }))
+    }
+
+    pub(crate) fn doc_remove_hidden(&mut self, a: &Args) -> Result<Value> {
+        let edit = match a.get("categories") {
+            None => Edit::Sanitize,
+            Some(_) => {
+                let which = a
+                    .strs("categories")?
+                    .into_iter()
+                    .map(|c| Hidden::from_id(c).ok_or_else(|| ToolError::InvalidArgs(format!("unknown category {c:?} (see doc_hidden_info)"))))
+                    .collect::<Result<Vec<_>>>()?;
+                if which.is_empty() {
+                    return Err(ToolError::InvalidArgs("categories is empty".into()));
+                }
+                Edit::RemoveHidden { which }
+            }
+        };
+        let before: usize = self.doc(a)?.hidden_info().iter().map(|c| c.1).sum();
+        let mut out = self.apply(a, edit)?;
+        let after: usize = self.doc(a)?.hidden_info().iter().map(|c| c.1).sum();
+        out["removed"] = json!(before.saturating_sub(after));
+        Ok(out)
     }
 }

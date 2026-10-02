@@ -183,6 +183,8 @@ pub const COMMANDS: &[CommandSpec] = &[
     c("redact.properties", "Redaction properties…", None, None, Document, "settings-2"),
     c("redact.apply", "Apply redactions…", None, None, HasRedactions, "check"),
     c("redact.clear", "Clear redaction marks", None, None, HasRedactions, "eraser"),
+    c("protect.remove_hidden", "Remove hidden information…", None, None, Modification, "eye-off"),
+    c("redact.sanitize", "Sanitize document…", None, None, Modification, "sparkles"),
     c("form.field.properties", "Field properties…", None, None, HasFields, "settings-2"),
     c("form.add.text", "Add a text field", None, None, Modification, "text-cursor-input"),
     c("form.add.checkbox", "Add a checkbox", None, None, Modification, "check-circle-2"),

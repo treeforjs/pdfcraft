@@ -30,6 +30,7 @@ pub use printcraft_forms::{
 pub use printcraft_annot::appearance as annot_text;
 pub use printcraft_annot::{FillMark, Markup, NewAnnotation, NoteIcon, Props as CommentProps, ReviewState, Rgb, Shape, Style, rect_quad};
 pub use printcraft_redact::patterns::{PATTERNS as REDACT_PATTERNS, Pattern as RedactPattern, find as find_pattern};
+pub use printcraft_redact::sanitize::{HIDDEN, Hidden};
 
 pub type SplitPart = (usize, usize, Arc<Vec<u8>>);
 
@@ -195,6 +196,11 @@ impl Document {
     /// Comment properties of the comment at `(page, index)` (Comment Properties dialog).
     pub fn comment_props(&self, page: usize, index: usize) -> Option<printcraft_annot::Props> {
         self.editor.as_ref().and_then(|e| printcraft_annot::props(&e.cos, page, index))
+    }
+
+    /// Remove Hidden Information: what each category would remove.
+    pub fn hidden_info(&self) -> Vec<(Hidden, usize)> {
+        self.editor.as_ref().map(|e| printcraft_redact::sanitize::scan(&e.cos)).unwrap_or_default()
     }
 
     /// Every page's media, crop, bleed, trim and art boxes (user space), for Set Page Boxes.
@@ -549,6 +555,12 @@ pub enum Edit {
     },
     /// Remove redaction marks without applying them.
     ClearRedactions,
+    /// Remove Hidden Information: the chosen categories.
+    RemoveHidden {
+        which: Vec<Hidden>,
+    },
+    /// Sanitize Document: every category, then a full rewrite on save.
+    Sanitize,
     /// Flatten comments and/or form fields on every page into page content.
     Flatten {
         comments: bool,
@@ -609,6 +621,8 @@ impl Edit {
             Edit::RemoveMarks { kind: MarkKind::Background } => "Remove background".into(),
             Edit::ApplyRedactions { .. } => "Apply redactions".into(),
             Edit::ClearRedactions => "Remove redaction marks".into(),
+            Edit::RemoveHidden { .. } => "Remove hidden information".into(),
+            Edit::Sanitize => "Sanitize document".into(),
             Edit::Flatten { comments: true, fields: false } => "Flatten comments".into(),
             Edit::Flatten { comments: false, fields: true } => "Flatten form fields".into(),
             Edit::Flatten { .. } => "Flatten".into(),
@@ -711,6 +725,8 @@ fn check_permission(edit: &Edit, p: &printcraft_cos::Permissions) -> Result<(), 
         | Edit::AddField { .. }
         | Edit::ApplyRedactions { .. }
         | Edit::ClearRedactions
+        | Edit::RemoveHidden { .. }
+        | Edit::Sanitize
         | Edit::SetFieldProps { .. }
         | Edit::DeleteField { .. }
         | Edit::Flatten { .. } => {
@@ -865,6 +881,12 @@ fn run_edit(doc: &mut printcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -
         }
         Edit::ClearRedactions => {
             printcraft_redact::clear_marks(doc, None)?;
+        }
+        Edit::RemoveHidden { which } => {
+            printcraft_redact::sanitize::remove_hidden(doc, which)?;
+        }
+        Edit::Sanitize => {
+            printcraft_redact::sanitize::sanitize(doc)?;
         }
         Edit::Flatten { comments, fields } => {
             let n = printcraft_model::pages(doc).len();

@@ -260,6 +260,8 @@ impl Automation {
             "redact_mark" => self.redact_mark(&a)?,
             "redact_apply" => self.redact_apply(&a)?,
             "redact_clear" => self.redact_clear(&a)?,
+            "doc_hidden_info" => self.doc_hidden_info(&a)?,
+            "doc_remove_hidden" => self.doc_remove_hidden(&a)?,
             "fill_sign_add" => self.fill_sign_add(&a)?,
             "comment_list" => self.comment_list(&a)?,
             "comment_add" => self.comment_add(&a)?,

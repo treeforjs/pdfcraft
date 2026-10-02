@@ -244,6 +244,8 @@ impl PrintCraftApp {
                     self.dialog = Some(Dialog::RedactApply);
                 }
             }
+            "protect.remove_hidden" => self.open_remove_hidden(),
+            "redact.sanitize" => self.dialog = Some(Dialog::Sanitize),
             "redact.clear" => {
                 self.apply_edit(Edit::ClearRedactions);
             }

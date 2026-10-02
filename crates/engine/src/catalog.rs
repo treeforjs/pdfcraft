@@ -259,7 +259,7 @@ pub static TOOL_GROUPS: &[ToolGroup] = &[
                 title: "Protect",
                 items: &[
                     item("Protect with password", "lock", "protect.password", Ready),
-                    item("Remove hidden information", "eye-off", "protect.sanitize", Planned("M8")),
+                    item("Remove hidden information", "eye-off", "protect.remove_hidden", Ready),
                 ],
             },
             ToolSection {
@@ -286,7 +286,7 @@ pub static TOOL_GROUPS: &[ToolGroup] = &[
                 item("Redact pages", "file-x", "redact.pages", Ready),
                 item("Find text and redact", "file-search", "redact.search", Ready),
                 item("Set properties", "settings-2", "redact.properties", Ready),
-                item("Sanitize document", "sparkles", "redact.sanitize", Planned("M8")),
+                item("Sanitize document", "sparkles", "redact.sanitize", Ready),
             ],
         }],
     },

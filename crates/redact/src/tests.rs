@@ -264,3 +264,87 @@ fn unreadable_content_fails_closed() {
     mark(&mut doc, 0, &[[0.0, 0.0, 50.0, 50.0]], "");
     assert_eq!(apply(&mut doc, None), Err(RedactError::Unreadable(1)));
 }
+
+/// A document with something in every hidden-information category.
+fn hidden_fixture() -> Document {
+    let content = b"BT /F1 10 Tf 10 100 Td (Visible) Tj 3 Tr (Hidden) Tj 0 Tr ET BT /F1 10 Tf 500 500 Td (Offpage) Tj ET /OC /L1 BDC BT /F1 10 Tf 10 50 Td (Layer) Tj ET EMC";
+    let objs: Vec<Vec<u8>> = vec![
+        // 1 catalog
+        b"<< /Type /Catalog /Pages 2 0 R /Metadata 7 0 R /Names << /EmbeddedFiles << /Names [(a.txt) 8 0 R] >> /JavaScript << /Names [(init) 9 0 R] >> >> /OpenAction 9 0 R /Outlines 10 0 R /PageMode /UseOutlines /PieceInfo << /App << /Private 1 >> >> /OCProperties << /OCGs [13 0 R 14 0 R] /D << /OFF [13 0 R] /Order [13 0 R 14 0 R] >> >> /AcroForm << /Fields [17 0 R] >> >>".to_vec(),
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_vec(),
+        // 3 page
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> /Properties << /L1 13 0 R >> >> /Annots [15 0 R 16 0 R 17 0 R 18 0 R 19 0 R] /PieceInfo << /App << /Private 2 >> >> /AA << /O 9 0 R >> >>".to_vec(),
+        stream("", content),
+        FONT.replace("95 0 R", "6 0 R").into_bytes(),
+        widths(),
+        stream("/Type /Metadata /Subtype /XML", b"<x:xmpmeta/>"),
+        b"<< /Type /Filespec /F (a.txt) /EF << /F 20 0 R >> >>".to_vec(),
+        b"<< /S /JavaScript /JS (app.alert(1)) >>".to_vec(),
+        b"<< /Type /Outlines /First 11 0 R /Last 12 0 R /Count 2 >>".to_vec(),
+        b"<< /Title (One) /Parent 10 0 R /Next 12 0 R >>".to_vec(),
+        b"<< /Title (Two) /Parent 10 0 R /Prev 11 0 R >>".to_vec(),
+        b"<< /Type /OCG /Name (Secret layer) >>".to_vec(),
+        b"<< /Type /OCG /Name (Shown layer) >>".to_vec(),
+        // 15 comment + 16 its pop-up, 17 widget, 18 link, 19 attachment
+        b"<< /Type /Annot /Subtype /Square /Rect [10 10 50 50] /C [1 0 0] /Popup 16 0 R >>".to_vec(),
+        b"<< /Type /Annot /Subtype /Popup /Rect [60 10 160 60] /Parent 15 0 R >>".to_vec(),
+        b"<< /Type /Annot /Subtype /Widget /FT /Tx /T (name) /V (Ada) /Rect [10 200 150 220] /A 9 0 R >>".to_vec(),
+        b"<< /Type /Annot /Subtype /Link /Rect [10 230 50 240] /A << /S /URI /URI (https://example.org) >> >>".to_vec(),
+        b"<< /Type /Annot /Subtype /FileAttachment /Rect [200 10 210 20] /FS 8 0 R >>".to_vec(),
+        stream("", b"attached"),
+    ];
+    let mut doc = pdf(objs);
+    let info = doc.add(Object::Dict({
+        let mut d = Dict::new();
+        d.set(b"Title".to_vec(), printcraft_cos::PdfString::text("Secret plan"));
+        d.set(b"Author".to_vec(), printcraft_cos::PdfString::text("Ada"));
+        d
+    }));
+    doc.trailer_mut().set(b"Info".to_vec(), Object::Ref(info));
+    doc
+}
+
+#[test]
+fn hidden_information_is_counted_and_removed() {
+    use crate::sanitize::{Hidden, remove_hidden, sanitize, scan};
+    let mut doc = hidden_fixture();
+    let counts: std::collections::HashMap<Hidden, usize> = scan(&doc).into_iter().collect();
+    assert_eq!(counts[&Hidden::Metadata], 3, "two Info entries and the XMP stream");
+    assert_eq!(counts[&Hidden::Attachments], 2, "the embedded file and the attachment annotation");
+    assert_eq!(counts[&Hidden::Comments], 1);
+    assert_eq!(counts[&Hidden::FormFields], 1);
+    assert_eq!(counts[&Hidden::HiddenText], 6 + 7, "Hidden (render mode 3) and Offpage (off the page)");
+    assert_eq!(counts[&Hidden::HiddenLayers], 2, "one off layer and its block");
+    assert_eq!(counts[&Hidden::Bookmarks], 2);
+    assert_eq!(counts[&Hidden::LinksActionsScripts], 5, "link, open action, page actions, widget action, document script");
+    assert_eq!(counts[&Hidden::PrivateData], 2);
+
+    // Only hidden text first.
+    let done = remove_hidden(&mut doc, &[Hidden::HiddenText]).unwrap();
+    assert_eq!(done, [(Hidden::HiddenText, 13)]);
+    let c = content(&doc, 0);
+    assert!(c.contains("(Visible)") && !c.contains("Hidden") && !c.contains("Offpage") && c.contains("(Layer)"), "{c}");
+    assert!(doc.full_save_required());
+
+    // Then everything.
+    let done = sanitize(&mut doc).unwrap();
+    assert!(done.iter().all(|(h, _)| *h != Hidden::HiddenText));
+    let c = content(&doc, 0);
+    assert!(!c.contains("Layer") && c.contains("(Visible)"), "{c}");
+    let doc = reopen(&doc);
+    let after: Vec<(Hidden, usize)> = scan(&doc).into_iter().filter(|(_, n)| *n > 0).collect();
+    // A full save writes a fresh /Info with the modification date only.
+    assert!(after.iter().all(|(h, _)| *h == Hidden::Metadata), "{after:?}");
+    let cat = doc.get(doc.root().unwrap()).as_dict().cloned().unwrap();
+    for k in [&b"Outlines"[..], b"OpenAction", b"PieceInfo", b"AcroForm", b"Metadata"] {
+        assert!(!cat.contains(k), "{}", String::from_utf8_lossy(k));
+    }
+    assert!(printcraft_forms::fields(&doc).is_empty());
+    let p = printcraft_model::pages(&doc).swap_remove(0);
+    assert!(annots_of(&doc, &p.dict).is_empty());
+    let shown = doc.object_numbers().into_iter().any(|n| match &*doc.get(ObjRef::new(n, doc.generation(n))) {
+        Object::Stream(s) => s.decoded().is_ok_and(|d| d.windows(5).any(|w| w == b"(Ada)")),
+        _ => false,
+    });
+    assert!(shown, "the field's value stays visible as page content");
+}

@@ -287,6 +287,26 @@ pub fn tools() -> Vec<ToolDef> {
         t("redact_clear", "Remove redaction marks", "Remove every redaction mark without applying it. Undoable.")
             .destructive()
             .with(schema(json!({ "doc": doc() }), &["doc"])),
+        t(
+            "doc_hidden_info",
+            "Find hidden information",
+            "What Remove Hidden Information would remove, by category (metadata, attachments, comments, form-fields, hidden-text, hidden-layers, bookmarks, links-actions-scripts, private-data) with counts.",
+        )
+        .ro()
+        .with(schema(json!({ "doc": doc() }), &["doc"])),
+        t(
+            "doc_remove_hidden",
+            "Remove hidden information / Sanitize",
+            "Remove the listed categories (see doc_hidden_info), or every category when none are listed (Sanitize Document). Form fields are flattened so their values stay visible. The next save rewrites the whole file. Undoable until saved.",
+        )
+        .destructive()
+        .with(schema(
+            json!({
+                "doc": doc(),
+                "categories": { "type": "array", "items": { "type": "string", "enum": ["metadata", "attachments", "comments", "form-fields", "hidden-text", "hidden-layers", "bookmarks", "links-actions-scripts", "private-data"] } },
+            }),
+            &["doc"],
+        )),
         t("comment_list", "List comments", "Every comment (annotation other than links, form widgets and pop-ups) with its page, index, id, type, author, text, date, rectangle, colour, review status and replies.")
             .ro()
             .with(schema(json!({ "doc": doc(), "page": { "type": "integer", "minimum": 1, "description": "Only this page." } }), &["doc"])),

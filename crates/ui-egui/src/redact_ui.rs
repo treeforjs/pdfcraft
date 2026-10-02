@@ -308,3 +308,71 @@ fn buttons(ui: &mut egui::Ui, ok: &str, primary: bool) -> (bool, bool) {
     });
     (a, c)
 }
+
+/// Remove Hidden Information: each category with what was found, checked by default when
+/// something was.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct HiddenDraft {
+    pub found: Vec<(printcraft_engine::Hidden, usize, bool)>,
+}
+
+impl PrintCraftApp {
+    pub fn open_remove_hidden(&mut self) {
+        let Some((_, id)) = self.active_ids() else { return };
+        let Some(doc) = self.session.get(id) else { return };
+        self.hidden_draft = HiddenDraft { found: doc.hidden_info().into_iter().map(|(h, n)| (h, n, n > 0)).collect() };
+        self.dialog = Some(crate::Dialog::RemoveHidden);
+    }
+}
+
+/// Returns (remove, cancel).
+pub(crate) fn hidden_body(ui: &mut egui::Ui, d: &mut HiddenDraft, t: &Tokens) -> (bool, bool) {
+    ui.set_width(440.0);
+    ui.label(egui::RichText::new("Remove hidden information").font(crate::theme::semibold(18.0)));
+    ui.add_space(4.0);
+    ui.label(egui::RichText::new("Select the items to remove from this document.").color(t.text_muted));
+    ui.add_space(8.0);
+    let total: usize = d.found.iter().map(|f| f.1).sum();
+    for (h, n, on) in d.found.iter_mut() {
+        ui.add_enabled_ui(*n > 0, |ui| {
+            ui.horizontal(|ui| {
+                ui.checkbox(on, h.label());
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.label(egui::RichText::new(if *n == 0 { "None found".to_string() } else { n.to_string() }).color(t.text_muted));
+                });
+            });
+        });
+    }
+    ui.add_space(6.0);
+    ui.label(
+        egui::RichText::new("Form fields are flattened: their values stay visible. Saving rewrites the whole file.").small().color(t.text_faint),
+    );
+    ui.add_space(12.0);
+    let any = d.found.iter().any(|f| f.2 && f.1 > 0);
+    let (mut a, mut c) = (false, false);
+    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+        if ui.add_enabled_ui(any && total > 0, |ui| widgets::pill_button(ui, "Remove", true)).inner.clicked() {
+            a = true;
+        }
+        if widgets::pill_button(ui, "Cancel", false).clicked() {
+            c = true;
+        }
+    });
+    (a, c)
+}
+
+/// Sanitize Document confirmation. Returns (sanitize, cancel).
+pub(crate) fn sanitize_body(ui: &mut egui::Ui, t: &Tokens) -> (bool, bool) {
+    ui.set_width(440.0);
+    ui.label(egui::RichText::new("Sanitize document").font(crate::theme::semibold(18.0)));
+    ui.add_space(8.0);
+    ui.label("Sanitizing removes hidden information from the document: metadata, file attachments, comments, form fields (flattened), hidden text and layers, bookmarks, links, actions and scripts, and private application data.");
+    ui.add_space(4.0);
+    ui.label(
+        egui::RichText::new("Save the document afterwards; saving rewrites the whole file so nothing removed stays in it.")
+            .small()
+            .color(t.text_muted),
+    );
+    ui.add_space(12.0);
+    buttons(ui, "Sanitize", true)
+}

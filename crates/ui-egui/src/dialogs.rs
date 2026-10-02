@@ -311,6 +311,22 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
                 close = ok || cancel;
                 return;
             }
+            Dialog::RemoveHidden => {
+                let (ok, cancel) = crate::redact_ui::hidden_body(ui, &mut app.hidden_draft, &t);
+                if ok {
+                    redact_now = Some(dialog);
+                }
+                close = ok || cancel;
+                return;
+            }
+            Dialog::Sanitize => {
+                let (ok, cancel) = crate::redact_ui::sanitize_body(ui, &t);
+                if ok {
+                    redact_now = Some(dialog);
+                }
+                close = ok || cancel;
+                return;
+            }
             Dialog::FieldProps => {
                 let Some(d) = app.field_props.as_mut() else {
                     close = true;
@@ -574,6 +590,18 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
         Some(Dialog::RedactSearch) => {
             let n = app.redact_search();
             app.redact_search.found = Some(n);
+        }
+        Some(Dialog::RemoveHidden) => {
+            let which: Vec<printcraft_engine::Hidden> = app.hidden_draft.found.iter().filter(|f| f.2 && f.1 > 0).map(|f| f.0).collect();
+            let n: usize = app.hidden_draft.found.iter().filter(|f| f.2).map(|f| f.1).sum();
+            if app.apply_edit(Edit::RemoveHidden { which }) {
+                app.notify(format!("Removed {n} hidden item{}. Save to remove them from the file.", if n == 1 { "" } else { "s" }));
+            }
+        }
+        Some(Dialog::Sanitize) => {
+            if app.apply_edit(Edit::Sanitize) {
+                app.notify("Document sanitized. Save to finish: saving rewrites the whole file.");
+            }
         }
         Some(Dialog::RedactApply) => {
             let marks = app.active_ids().and_then(|(_, id)| app.session.get(id)).map_or(0, |d| d.redaction_marks());

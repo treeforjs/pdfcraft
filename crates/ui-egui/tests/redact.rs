@@ -78,3 +78,30 @@ fn marking_applying_and_clearing() {
     assert_eq!((doc.redaction_marks(), doc.can_undo()), (0, Some("Apply redactions")));
     assert!(doc.form.is_empty(), "the whole page was redacted, fields included");
 }
+
+#[test]
+fn removing_hidden_information_and_sanitizing() {
+    let mut h = harness();
+    h.state_mut().execute("protect.remove_hidden");
+    h.run_steps(2);
+    h.get_by_label("Remove hidden information");
+    {
+        let d = &h.state().hidden_draft;
+        let fields = d.found.iter().find(|f| f.0 == printcraft_engine::Hidden::FormFields).unwrap();
+        assert_eq!((fields.1, fields.2), (5, true), "five fields, checked");
+    }
+    h.get_by_label("Remove").click();
+    h.run_steps(3);
+    {
+        let s = h.state();
+        let doc = s.session.get(s.views[0].id).unwrap();
+        assert!(doc.form.is_empty());
+        assert_eq!(doc.can_undo(), Some("Remove hidden information"));
+    }
+    h.state_mut().execute("redact.sanitize");
+    h.run_steps(2);
+    h.get_by_label("Sanitize").click();
+    h.run_steps(3);
+    let s = h.state();
+    assert_eq!(s.session.get(s.views[0].id).unwrap().can_undo(), Some("Sanitize document"));
+}
