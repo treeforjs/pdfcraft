@@ -58,6 +58,10 @@ fn every_registered_command_is_implemented() {
         if spec.id == "edit.redo" {
             app.undo();
         }
+        if spec.id == "protect.remove" {
+            let p = printcraft_engine::Protection { open_password: Some("pw".into()), ..Default::default() };
+            app.apply_edit(printcraft_engine::Edit::Protect(p));
+        }
         let dir = std::env::temp_dir().join(format!("printcraft-cmd-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         app.save_override = Some(dir.join("out.pdf").to_string_lossy().into_owned());

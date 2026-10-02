@@ -209,6 +209,12 @@ impl Automation {
                 let (path, page) = (a.path("path")?, self.page(&a)?);
                 self.apply(&a, Edit::SetBookmarkPage { path, page })?
             }
+            "doc_protect" => self.doc_protect(&a)?,
+            "doc_unprotect" => {
+                let mut out = self.apply(&a, Edit::RemoveProtection)?;
+                out["security"] = security(self.doc(&a)?);
+                out
+            }
             "comment_list" => self.comment_list(&a)?,
             "comment_add" => self.comment_add(&a)?,
             "comment_reply" => self.comment_reply(&a)?,
@@ -270,6 +276,44 @@ impl Automation {
         let id = self.doc(a)?.id;
         self.session.apply(id, edit).map_err(failed)?;
         Ok(summary(self.doc(a)?))
+    }
+
+    fn doc_protect(&mut self, a: &Args) -> Result<Value> {
+        use printcraft_engine::{Algorithm, Changes, Printing, Protection};
+        let d = Protection::default();
+        let p = Protection {
+            open_password: a.opt_str("open_password")?.map(str::to_owned),
+            permissions_password: a.opt_str("permissions_password")?.map(str::to_owned),
+            printing: match a.opt_str("printing")? {
+                None => d.printing,
+                Some("none") => Printing::None,
+                Some("low") => Printing::Low,
+                Some("high") => Printing::High,
+                Some(o) => return Err(ToolError::InvalidArgs(format!("unknown printing {o:?}"))),
+            },
+            changes: match a.opt_str("changes")? {
+                None => d.changes,
+                Some("none") => Changes::None,
+                Some("pages") => Changes::Pages,
+                Some("fill-sign") => Changes::FillSign,
+                Some("comment-fill-sign") => Changes::CommentFillSign,
+                Some("any-except-extract") => Changes::AnyExceptExtract,
+                Some(o) => return Err(ToolError::InvalidArgs(format!("unknown changes {o:?}"))),
+            },
+            copy: a.opt_bool("copy")?.unwrap_or(d.copy),
+            accessibility: a.opt_bool("accessibility")?.unwrap_or(d.accessibility),
+            algorithm: match a.opt_str("compatibility")? {
+                None | Some("aes-256") => Algorithm::Aes256,
+                Some("aes-128") => Algorithm::Aes128,
+                Some("rc4-128") => Algorithm::Rc4_128,
+                Some("rc4-40") => Algorithm::Rc4_40,
+                Some(o) => return Err(ToolError::InvalidArgs(format!("unknown compatibility {o:?}"))),
+            },
+            encrypt_metadata: a.opt_bool("encrypt_metadata")?.unwrap_or(d.encrypt_metadata),
+        };
+        let mut out = self.apply(a, Edit::Protect(p))?;
+        out["security"] = security(self.doc(a)?);
+        Ok(out)
     }
 
     fn insert_blank(&mut self, a: &Args) -> Result<Value> {
@@ -599,6 +643,24 @@ fn one_based(pages: &[i64]) -> Result<Vec<usize>> {
         .collect()
 }
 
+/// The document's security as the next save writes it (never includes passwords).
+fn security(d: &Document) -> Value {
+    match d.security_summary() {
+        None => json!({ "protected": false }),
+        Some(s) => {
+            let p = s.permissions;
+            json!({
+                "protected": true,
+                "method": s.method,
+                "pending": s.pending,
+                "printing": if !p.print() { "none" } else if p.print_high_quality() { "high" } else { "low" },
+                "modify": p.modify(), "assemble": p.assemble(), "copy": p.copy(), "annotate": p.annotate(),
+                "fill_forms": p.fill_forms(), "accessibility": p.extract_for_accessibility(),
+            })
+        }
+    }
+}
+
 /// What every tool that changes a document returns.
 fn summary(d: &Document) -> Value {
     json!({
@@ -618,7 +680,10 @@ fn summary(d: &Document) -> Value {
 fn info(d: &Document) -> Value {
     let i = &d.info;
     let page1 = |p: usize| p + 1;
-    let security = d.security_summary().map(|s| json!({ "method": s.method, "owner": s.owner, "permissions": format!("{:?}", s.permissions) }));
+    let mut security = security(d);
+    if let Some(s) = d.security_summary() {
+        security["opened_as_owner"] = json!(s.owner);
+    }
     json!({
         "document": summary(d),
         "pdf_version": i.pdf_version,

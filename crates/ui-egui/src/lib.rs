@@ -19,6 +19,7 @@ mod icon_data;
 pub mod icons;
 mod palette;
 mod panels;
+mod protect;
 mod recovery;
 pub mod theme;
 mod widgets;
@@ -76,6 +77,8 @@ pub enum Dialog {
     Split,
     /// Pages ▸ Number pages… (page labels).
     NumberPages,
+    /// Protect Using Password.
+    Protect,
     /// Documents from a session that ended unexpectedly.
     Recovery,
 }
@@ -163,6 +166,8 @@ pub struct PrintCraftApp {
     pub bookmark_rename: Option<(Vec<usize>, String)>,
     /// Number pages dialog settings (1-based pages).
     pub number_draft: NumberDraft,
+    /// Protect Using Password dialog state.
+    pub protect_draft: protect::ProtectDraft,
     /// The last web link the app asked the system to open (tests and automation).
     pub last_opened_url: Option<String>,
 }
@@ -225,6 +230,7 @@ impl PrintCraftApp {
             control: None,
             bookmark_rename: None,
             last_opened_url: None,
+            protect_draft: Default::default(),
             number_draft: NumberDraft { from: 1, to: 1, style: printcraft_engine::LabelStyle::Decimal, prefix: String::new(), start: 1 },
         }
     }
@@ -514,6 +520,7 @@ impl PrintCraftApp {
                     "advanced" => Some(Dialog::Properties(PropsTab::Advanced)),
                     "shortcuts" => Some(Dialog::Shortcuts),
                     "split" => Some(Dialog::Split),
+                    "protect" => Some(Dialog::Protect),
                     "number-pages" => {
                         // Same path as the menu, so the page range is seeded.
                         self.execute("page.number");

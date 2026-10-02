@@ -277,7 +277,8 @@ impl<'a> Inspector<'a> {
     }
 
     fn fill(&self, info: &mut DocInfo) {
-        info.encrypted = self.doc.is_encrypted() || self.doc.trailer.get(b"Encrypt").is_ok();
+        // lopdf drops /Encrypt from the trailer once it has decrypted the file.
+        info.encrypted = self.doc.is_encrypted() || self.doc.was_encrypted() || self.doc.trailer.get(b"Encrypt").is_ok();
         if let Some(d) = self.doc.trailer.get(b"Info").ok().and_then(|o| self.dict(o)) {
             info.title = self.text(d, b"Title");
             info.author = self.text(d, b"Author");

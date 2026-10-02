@@ -30,6 +30,7 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
     let mut number_now: Option<Edit> = None;
     let mut apply_number = false;
     let mut link_command: Option<&'static str> = None;
+    let mut protect_now = false;
     let t = Tokens::get(ctx);
     let mut close = false;
     let mut next = dialog;
@@ -93,6 +94,9 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
                             None => {
                                 row(ui, "Security method", "No security".into());
                                 row(ui, "Restrictions", "None — everything is allowed".into());
+                                if doc.allows_security_change() && ui.button("Protect using password…").clicked() {
+                                    link_command = Some("protect.password");
+                                }
                             }
                             Some(sec) => {
                                 row(ui, "Security method", "Password security".into());
@@ -100,8 +104,24 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
                                 row(
                                     ui,
                                     "Opened with",
-                                    if sec.owner { "Owner password (no restrictions apply)".into() } else { "User password".into() },
+                                    if sec.pending {
+                                        "— (protection is applied when you save)".into()
+                                    } else if sec.owner {
+                                        "Owner password (no restrictions apply)".into()
+                                    } else {
+                                        "User password".into()
+                                    },
                                 );
+                                if doc.allows_security_change() {
+                                    ui.horizontal(|ui| {
+                                        if ui.button("Change settings…").clicked() {
+                                            link_command = Some("protect.password");
+                                        }
+                                        if ui.button("Remove security").clicked() {
+                                            link_command = Some("protect.remove");
+                                        }
+                                    });
+                                }
                                 let p = sec.permissions;
                                 let yes = |b: bool| if b { "Allowed".to_string() } else { "Not allowed".to_string() };
                                 row(
@@ -193,6 +213,12 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
                 if files > 1 {
                     split_ready = Some(by);
                 }
+            }
+            Dialog::Protect => {
+                let (apply, cancel) = crate::protect::body(ui, app, &t);
+                protect_now = apply;
+                close = apply || cancel;
+                return;
             }
             Dialog::NumberPages => {
                 use printcraft_engine::LabelStyle as L;
@@ -392,8 +418,9 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
             app.discard_recovered(&keys);
         }
     }
-    if let Some(cmd) = link_command {
-        app.execute(cmd);
+    if protect_now && app.apply_edit(app.protect_draft.edit()) {
+        app.protect_draft = Default::default();
+        app.notify("Password protection will be applied when you save");
     }
     if apply_number && let Some(edit) = number_now {
         app.apply_edit(edit);
@@ -404,11 +431,16 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
     if apply && let Some(edits) = draft_changes(app) {
         app.apply_edit(Edit::Batch { label: "Change document properties".into(), edits });
     }
-    if modal.should_close() || close {
+    // Protect / Remove security replace the Properties dialog.
+    let replaces = link_command.is_some_and(|c| c.starts_with("protect."));
+    if modal.should_close() || close || replaces {
         app.dialog = None;
         app.props_draft = None;
     } else {
         app.dialog = Some(next);
+    }
+    if let Some(cmd) = link_command {
+        app.execute(cmd);
     }
 }
 

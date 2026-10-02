@@ -249,6 +249,30 @@ pub fn tools() -> Vec<ToolDef> {
             &["doc"],
         )),
         t("comment_delete", "Delete a comment", "Delete a comment with its pop-up and replies. Undoable.").destructive().with(schema(comment_ref(json!({})), &["doc"])),
+        t(
+            "doc_protect",
+            "Protect with passwords",
+            "Encrypt the document (applied by the next doc_save, a full rewrite). open_password is needed to open it; permissions_password is needed to change security and lifts the restrictions given by printing/changes/copy. Passwords are never echoed back. Undoable.",
+        )
+        .cmd("protect.password")
+        .with(schema(
+            json!({
+                "doc": doc(),
+                "open_password": { "type": "string", "minLength": 1 },
+                "permissions_password": { "type": "string", "minLength": 1 },
+                "printing": { "type": "string", "enum": ["none", "low", "high"], "description": "Default high." },
+                "changes": { "type": "string", "enum": ["none", "pages", "fill-sign", "comment-fill-sign", "any-except-extract"], "description": "Default none." },
+                "copy": { "type": "boolean", "description": "Allow copying text and images (default false)." },
+                "accessibility": { "type": "boolean", "description": "Allow screen readers to read the text (default true)." },
+                "compatibility": { "type": "string", "enum": ["aes-256", "aes-128", "rc4-128", "rc4-40"], "description": "Default aes-256 (Acrobat X and later)." },
+                "encrypt_metadata": { "type": "boolean", "description": "Default true." },
+            }),
+            &["doc"],
+        )),
+        t("doc_unprotect", "Remove security", "Remove password security (the document must have been opened with its permissions password, or have none). Applied by the next doc_save. Undoable.")
+            .cmd("protect.remove")
+            .destructive()
+            .with(schema(json!({ "doc": doc() }), &["doc"])),
         t("edit_undo", "Undo", "Undo the last edit of a document.").cmd("edit.undo").with(schema(json!({ "doc": doc() }), &["doc"])),
         t("edit_redo", "Redo", "Redo the last undone edit of a document.").cmd("edit.redo").with(schema(json!({ "doc": doc() }), &["doc"])),
         t("command_list", "List commands", "Every registered PrintCraft command with its menu, shortcut, whether it is enabled now, and the tool that automates it.")

@@ -19,6 +19,8 @@ pub use printcraft_organize::{SplitBy, split_ranges};
 /// One file produced by a split: (1-based first page, last page, PDF bytes).
 pub use printcraft_organize::LabelStyle;
 
+pub use printcraft_cos::Algorithm;
+
 /// Comment geometry helpers (text-box line breaking) for frontends.
 pub use printcraft_annot::appearance as annot_text;
 pub use printcraft_annot::{Markup, NewAnnotation, NoteIcon, ReviewState, Rgb, Shape, Style};
@@ -37,12 +39,25 @@ pub struct DocId(pub u64);
 /// Undo/redo depth. Snapshots share unchanged data, so this is memory-cheap.
 const MAX_UNDO: usize = 100;
 
+/// The passwords that go with one state of a document (protection can change them).
+#[derive(Clone, Debug, Default, PartialEq)]
+struct Keys {
+    /// What the renderer and inspector open the working file with (the user password).
+    render: Option<String>,
+    /// What the editor re-opens a saved file with: the strongest password known (owner if any).
+    reopen: Option<String>,
+}
+
+/// One undo/redo step: its label, the document state and its passwords.
+type Snapshot = (String, printcraft_cos::Document, Keys);
+
 /// Editing state of a document (absent when the document cannot be edited yet, e.g. encrypted).
 #[derive(Clone)]
 struct Editor {
     cos: printcraft_cos::Document,
-    undo: Vec<(String, printcraft_cos::Document)>,
-    redo: Vec<(String, printcraft_cos::Document)>,
+    undo: Vec<Snapshot>,
+    redo: Vec<Snapshot>,
+    keys: Keys,
 }
 
 pub struct Document {
@@ -69,11 +84,11 @@ pub struct Document {
 
 impl Document {
     pub fn can_undo(&self) -> Option<&str> {
-        self.editor.as_ref().and_then(|e| e.undo.last()).map(|(l, _)| l.as_str())
+        self.editor.as_ref().and_then(|e| e.undo.last()).map(|(l, _, _)| l.as_str())
     }
 
     pub fn can_redo(&self) -> Option<&str> {
-        self.editor.as_ref().and_then(|e| e.redo.last()).map(|(l, _)| l.as_str())
+        self.editor.as_ref().and_then(|e| e.redo.last()).map(|(l, _, _)| l.as_str())
     }
 
     pub fn editable(&self) -> bool {
@@ -100,10 +115,17 @@ impl Document {
         self.editable() && self.permissions().is_none_or(|p| p.annotate())
     }
 
-    /// A summary of the document's security for Document Properties ▸ Security.
+    /// The document's security may be changed (Protect, Remove security): it is editable and,
+    /// if encrypted, was opened with the owner password.
+    pub fn allows_security_change(&self) -> bool {
+        self.editable() && self.permissions().is_none_or(|p| unrestricted(&p))
+    }
+
+    /// A summary of the document's security for Document Properties ▸ Security, including
+    /// protection applied in this session (written by the next save).
     pub fn security_summary(&self) -> Option<SecuritySummary> {
         let editor = self.editor.as_ref()?;
-        let h = editor.cos.security()?;
+        let h = editor.cos.output_handler()?;
         let d = h.dict();
         let stream = d.crypt_filters.iter().find(|(name, _)| *name == d.stm_f).map(|(_, m)| *m);
         let method = match (d.v, stream) {
@@ -113,7 +135,9 @@ impl Document {
             (_, Some(printcraft_cos::CryptMethod::Aes256)) => "AES, 256-bit",
             _ => "Attachments only",
         };
-        Some(SecuritySummary { method: method.into(), owner: h.auth() == printcraft_cos::Auth::Owner, permissions: h.permissions() })
+        let pending = editor.cos.encryption_changed();
+        let permissions = if pending { printcraft_cos::Permissions { bits: h.permissions().bits, owner: false } } else { h.permissions() };
+        Some(SecuritySummary { method: method.into(), owner: h.auth() == printcraft_cos::Auth::Owner && !pending, permissions, pending })
     }
 
     /// Current value of a document-information entry (Title, Author, …).
@@ -149,7 +173,132 @@ pub struct SecuritySummary {
     pub method: String,
     /// Opened with the owner password (no restrictions apply).
     pub owner: bool,
+    /// For pending protection: the restrictions as they will apply to others.
     pub permissions: printcraft_cos::Permissions,
+    /// Set in this session; written by the next save.
+    pub pending: bool,
+}
+
+/// What printing a protected document allows (Acrobat: Printing allowed).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Printing {
+    None,
+    /// "Low Resolution (150 dpi)".
+    Low,
+    High,
+}
+
+/// What changes a protected document allows (Acrobat: Changes allowed).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Changes {
+    None,
+    /// "Inserting, deleting, and rotating pages".
+    Pages,
+    /// "Filling in form fields and signing existing signature fields".
+    FillSign,
+    /// "Commenting, filling in form fields, and signing existing signature fields".
+    CommentFillSign,
+    /// "Any except extracting pages".
+    AnyExceptExtract,
+}
+
+/// Password protection to apply (Protect Using Password and its Advanced options).
+#[derive(Clone, PartialEq)]
+pub struct Protection {
+    /// Required to open the document (the user password).
+    pub open_password: Option<String>,
+    /// Required to change security and lift the restrictions below (the owner password).
+    pub permissions_password: Option<String>,
+    pub printing: Printing,
+    pub changes: Changes,
+    /// "Enable copying of text, images, and other content".
+    pub copy: bool,
+    /// "Enable text access for screen reader devices".
+    pub accessibility: bool,
+    /// Compatibility level; AES-256 (Acrobat X and later) by default.
+    pub algorithm: printcraft_cos::Algorithm,
+    /// `false`: "Encrypt all document contents except metadata".
+    pub encrypt_metadata: bool,
+}
+
+impl std::fmt::Debug for Protection {
+    // Never print passwords (edits end up in logs and error messages).
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Protection")
+            .field("open_password", &self.open_password.as_ref().map(|_| "…"))
+            .field("permissions_password", &self.permissions_password.as_ref().map(|_| "…"))
+            .field("printing", &self.printing)
+            .field("changes", &self.changes)
+            .field("copy", &self.copy)
+            .field("accessibility", &self.accessibility)
+            .field("algorithm", &self.algorithm)
+            .field("encrypt_metadata", &self.encrypt_metadata)
+            .finish()
+    }
+}
+
+impl Default for Protection {
+    /// Acrobat's defaults: AES-256, printing and accessibility allowed, no changes, no copying.
+    fn default() -> Self {
+        Self {
+            open_password: None,
+            permissions_password: None,
+            printing: Printing::High,
+            changes: Changes::None,
+            copy: false,
+            accessibility: true,
+            algorithm: printcraft_cos::Algorithm::Aes256,
+            encrypt_metadata: true,
+        }
+    }
+}
+
+impl Protection {
+    /// The `/P` permission bits (ISO 32000-2 Table 22), as Acrobat maps its choices.
+    pub fn permission_bits(&self) -> i32 {
+        let bit = |n: u32| 1i32 << (n - 1);
+        if self.permissions_password.is_none() {
+            return -1; // nothing restricted without a permissions password
+        }
+        let mut p = 0;
+        match self.printing {
+            Printing::None => {}
+            Printing::Low => p |= bit(3),
+            Printing::High => p |= bit(3) | bit(12),
+        }
+        p |= match self.changes {
+            Changes::None => 0,
+            Changes::Pages => bit(11),
+            Changes::FillSign => bit(9),
+            Changes::CommentFillSign => bit(6) | bit(9),
+            Changes::AnyExceptExtract => bit(4) | bit(6) | bit(9),
+        };
+        if self.copy {
+            p |= bit(5) | bit(10);
+        }
+        if self.accessibility {
+            p |= bit(10);
+        }
+        p
+    }
+
+    fn validate(&self) -> Result<(), EditError> {
+        let bad = |m: &str| Err(EditError::Protection(m.to_string()));
+        match (&self.open_password, &self.permissions_password) {
+            (None, None) => return bad("enter a password to open the document, a permissions password, or both"),
+            (Some(a), Some(b)) if a == b => return bad("the open password and the permissions password must be different"),
+            _ => {}
+        }
+        if [&self.open_password, &self.permissions_password].into_iter().flatten().any(|p| p.is_empty()) {
+            return bad("passwords can't be empty");
+        }
+        if self.algorithm != printcraft_cos::Algorithm::Aes256
+            && [&self.open_password, &self.permissions_password].into_iter().flatten().any(|p| p.chars().any(|c| !(' '..='~').contains(&c)))
+        {
+            return bad("this compatibility level supports only plain ASCII passwords; use AES-256 (Acrobat X and later)");
+        }
+        Ok(())
+    }
 }
 
 /// Edits that can be applied to a document. Page indices are 0-based.
@@ -260,6 +409,10 @@ pub enum Edit {
         opacity: Option<f64>,
         width: Option<f64>,
     },
+    /// Protect with passwords and permissions (written by the next save, which is a full rewrite).
+    Protect(Protection),
+    /// Remove password security (needs the owner password).
+    RemoveProtection,
     /// Several edits applied as one undoable step (all or nothing).
     Batch {
         label: String,
@@ -291,6 +444,8 @@ impl Edit {
             Edit::MoveAnnotation { .. } => "Move comment".into(),
             Edit::ResizeAnnotation { .. } => "Resize comment".into(),
             Edit::StyleAnnotation { .. } => "Change comment properties".into(),
+            Edit::Protect(_) => "Protect with password".into(),
+            Edit::RemoveProtection => "Remove security".into(),
             Edit::Batch { label, .. } => label.clone(),
         }
     }
@@ -311,6 +466,13 @@ fn annotation_noun(s: &Shape) -> &'static str {
         Shape::Ink { .. } => "drawing",
         Shape::TextBox { .. } => "text box",
     }
+}
+
+/// Opened as owner, or nothing is restricted (no permissions password was set): security may
+/// be changed, as in Acrobat.
+fn unrestricted(p: &printcraft_cos::Permissions) -> bool {
+    const ALL: i32 = 0b1111_0011_1100; // bits 3–6 and 9–12
+    p.owner || p.bits & ALL == ALL
 }
 
 /// Whether the opening password allows an edit (§7.6.4.2, Table 22).
@@ -348,6 +510,13 @@ fn check_permission(edit: &Edit, p: &printcraft_cos::Permissions) -> Result<(), 
                 Err(EditError::NotPermitted("comments"))
             }
         }
+        Edit::Protect(_) | Edit::RemoveProtection => {
+            if unrestricted(p) {
+                Ok(())
+            } else {
+                Err(EditError::NotPermitted("changing security"))
+            }
+        }
         Edit::SetInfo { .. } => {
             if p.modify() {
                 Ok(())
@@ -378,6 +547,21 @@ impl EditCtx {
             seed ^= std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.subsec_nanos() as u64).unwrap_or(0) << 32;
         }
         Self { date: now.map(printcraft_cos::pdf_date), seed, count: 0 }
+    }
+
+    /// 32 bytes of entropy for new encryption keys and salts. `RandomState` is seeded by the
+    /// operating system, so no extra dependency is needed.
+    fn entropy(&mut self) -> [u8; 32] {
+        use std::hash::{BuildHasher, Hasher};
+        let mut out = [0u8; 32];
+        for (i, chunk) in out.chunks_mut(8).enumerate() {
+            let mut h = std::collections::hash_map::RandomState::new().build_hasher();
+            h.write_u64(self.seed ^ i as u64);
+            h.write_u64(self.count);
+            self.count += 1;
+            chunk.copy_from_slice(&h.finish().to_le_bytes());
+        }
+        out
     }
 
     /// A fresh `/NM`: a random-looking UUID (version 4 layout) from a splitmix64 stream.
@@ -446,6 +630,28 @@ fn run_edit(doc: &mut printcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -
         Edit::StyleAnnotation { page, index, color, opacity, width } => {
             printcraft_annot::set_style(doc, *page, *index, *color, *opacity, *width, &cx.meta())?;
         }
+        Edit::Protect(p) => {
+            p.validate()?;
+            let seed = cx.entropy();
+            // Without a permissions password nothing is restricted, so the owner password is a
+            // random one nobody needs.
+            let random_owner: String = cx.entropy().iter().map(|b| format!("{b:02x}")).collect();
+            let params = printcraft_cos::NewEncryption {
+                algorithm: p.algorithm,
+                user_password: p.open_password.as_deref().unwrap_or(""),
+                owner_password: p.permissions_password.as_deref().unwrap_or(&random_owner),
+                permissions: p.permission_bits(),
+                encrypt_metadata: p.encrypt_metadata,
+                seed,
+            };
+            doc.set_encryption(&params).map_err(|e| EditError::Protection(e.to_string()))?;
+        }
+        Edit::RemoveProtection => {
+            if doc.output_handler().is_none() {
+                return Err(EditError::Protection("the document isn't protected".into()));
+            }
+            doc.remove_encryption();
+        }
         Edit::Batch { edits, .. } => {
             for e in edits {
                 run_edit(doc, e, cx)?;
@@ -453,6 +659,18 @@ fn run_edit(doc: &mut printcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -
         }
     }
     Ok(())
+}
+
+/// The passwords after `edit`, if it changes them.
+fn keys_after(edit: &Edit) -> Option<Keys> {
+    match edit {
+        Edit::Protect(p) => {
+            Some(Keys { render: p.open_password.clone(), reopen: p.permissions_password.clone().or_else(|| p.open_password.clone()) })
+        }
+        Edit::RemoveProtection => Some(Keys::default()),
+        Edit::Batch { edits, .. } => edits.iter().rev().find_map(keys_after),
+        _ => None,
+    }
 }
 
 /// Parse another PDF to copy pages from.
@@ -486,6 +704,8 @@ pub enum EditError {
     Bookmark(#[from] printcraft_organize::OutlineError),
     #[error("{0}")]
     Comment(#[from] printcraft_annot::AnnotError),
+    #[error("{0}")]
+    Protection(String),
     #[error("the edited document could not be written: {0}")]
     Write(String),
     #[error("the edited document could not be reopened: {0}")]
@@ -549,7 +769,10 @@ impl Session {
         let config = RenderConfig { password: render_password.as_deref().map(Arc::from), ..Default::default() };
         let renderer = RenderPool::new(bytes.clone(), render_threads(), config.clone());
         let (editor, read_only_reason) = match cos {
-            Ok(Ok(cos)) => (Some(Editor { cos, undo: Vec::new(), redo: Vec::new() }), None),
+            Ok(Ok(cos)) => {
+                let keys = Keys { render: render_password.clone(), reopen: password.map(str::to_owned) };
+                (Some(Editor { cos, undo: Vec::new(), redo: Vec::new(), keys }), None)
+            }
             Ok(Err(e)) => (None, Some(e.to_string())),
             Err(_) => (None, Some("the document structure could not be read for editing".into())),
         };
@@ -590,18 +813,23 @@ impl Session {
         let mut next = editor.cos.clone();
         run_edit(&mut next, &edit, &mut cx)?;
         let previous = std::mem::replace(&mut editor.cos, next);
-        editor.undo.push((edit.label(), previous));
+        let keys = keys_after(&edit).unwrap_or_else(|| editor.keys.clone());
+        let previous_keys = std::mem::replace(&mut editor.keys, keys);
+        editor.undo.push((edit.label(), previous, previous_keys));
         if editor.undo.len() > MAX_UNDO {
             editor.undo.remove(0);
         }
         editor.redo.clear();
+        Self::adopt_keys(doc);
         if let Err(e) = Self::refresh(doc) {
             // Roll back: the edit produced something we cannot display.
             if let Some(ed) = doc.editor.as_mut()
-                && let Some((_, prev)) = ed.undo.pop()
+                && let Some((_, prev, keys)) = ed.undo.pop()
             {
                 ed.cos = prev;
+                ed.keys = keys;
             }
+            Self::adopt_keys(doc);
             let _ = Self::refresh(doc);
             return Err(e);
         }
@@ -613,9 +841,11 @@ impl Session {
     pub fn undo(&mut self, id: DocId) -> Result<String, EditError> {
         let doc = self.doc_mut(id)?;
         let editor = doc.editor.as_mut().ok_or(EditError::NothingToUndo)?;
-        let (label, prev) = editor.undo.pop().ok_or(EditError::NothingToUndo)?;
+        let (label, prev, keys) = editor.undo.pop().ok_or(EditError::NothingToUndo)?;
         let current = std::mem::replace(&mut editor.cos, prev);
-        editor.redo.push((label.clone(), current));
+        let current_keys = std::mem::replace(&mut editor.keys, keys);
+        editor.redo.push((label.clone(), current, current_keys));
+        Self::adopt_keys(doc);
         Self::refresh(doc)?;
         doc.dirty = true;
         doc.generation += 1;
@@ -625,13 +855,23 @@ impl Session {
     pub fn redo(&mut self, id: DocId) -> Result<String, EditError> {
         let doc = self.doc_mut(id)?;
         let editor = doc.editor.as_mut().ok_or(EditError::NothingToRedo)?;
-        let (label, next) = editor.redo.pop().ok_or(EditError::NothingToRedo)?;
+        let (label, next, keys) = editor.redo.pop().ok_or(EditError::NothingToRedo)?;
         let current = std::mem::replace(&mut editor.cos, next);
-        editor.undo.push((label.clone(), current));
+        let current_keys = std::mem::replace(&mut editor.keys, keys);
+        editor.undo.push((label.clone(), current, current_keys));
+        Self::adopt_keys(doc);
         Self::refresh(doc)?;
         doc.dirty = true;
         doc.generation += 1;
         Ok(label)
+    }
+
+    /// Use the current state's password for viewing (protection edits change it).
+    fn adopt_keys(doc: &mut Document) {
+        if let Some(e) = doc.editor.as_ref() {
+            doc.password = e.keys.render.clone();
+            doc.config.password = e.keys.render.as_deref().map(Arc::from);
+        }
     }
 
     /// Rebuild working bytes, inspection and renderer from the current edit state.
@@ -681,7 +921,10 @@ impl Session {
     pub fn mark_saved(&mut self, id: DocId, bytes: Arc<Vec<u8>>, path: Option<String>) -> Result<(), EditError> {
         let doc = self.doc_mut(id)?;
         if let Some(editor) = doc.editor.as_mut() {
-            editor.cos = printcraft_cos::Document::open(bytes.clone()).map_err(|e| EditError::Reopen(e.to_string()))?;
+            // An encrypted file needs the password it is protected with now (the owner
+            // password when known, so saving never downgrades this session's rights).
+            editor.cos = printcraft_cos::Document::open_with_password(bytes.clone(), editor.keys.reopen.as_deref())
+                .map_err(|e| EditError::Reopen(e.to_string()))?;
         }
         if let Some(p) = path {
             doc.name = std::path::Path::new(&p).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| p.clone());

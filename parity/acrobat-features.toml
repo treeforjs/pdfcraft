@@ -5251,11 +5251,11 @@ title = "Protect with a password to open"
 area = "G"
 tier = "P0"
 milestone = "M8"
-status = "partial"
-commands = []
-tools = []
-evidence = ["crates/cos/tests/encryption.rs::changing_and_removing_passwords"]
-notes = "engine can set passwords; Protect UI and command are M8.1"
+status = "shipped"
+commands = ["protect.password"]
+tools = ["doc_protect"]
+evidence = ["crates/ui-egui/tests/protect.rs::protecting_for_viewing_requires_matching_passwords_and_saves_encrypted", "crates/engine/src/tests.rs::protect_with_an_open_password_then_save_reopen_and_undo", "crates/automation/tests/automation.rs::protecting_through_tools"]
+notes = "Protect Using Password (Viewing); applied by the next save"
 
 [[feature]]
 id = "protect.permissions-password"
@@ -5263,11 +5263,11 @@ title = "Restrict editing and printing with a permissions password"
 area = "G"
 tier = "P0"
 milestone = "M8"
-status = "partial"
-commands = []
-tools = []
-evidence = ["crates/crypt/src/tests.rs::created_encryption_authenticates_owner_and_user"]
-notes = "engine only; no UI"
+status = "shipped"
+commands = ["protect.password"]
+tools = ["doc_protect"]
+evidence = ["crates/ui-egui/tests/protect.rs::editing_restrictions_via_advanced_options", "crates/engine/src/tests.rs::permissions_password_restricts_others_but_not_this_session", "crates/automation/tests/automation.rs::protecting_through_tools"]
+notes = "Protect Using Password (Editing); the author keeps full rights after saving"
 
 [[feature]]
 id = "protect.permissions-matrix"
@@ -5275,11 +5275,11 @@ title = "Choose printing, changes, copying and accessibility permissions"
 area = "G"
 tier = "P0"
 milestone = "M8"
-status = "partial"
-commands = []
-tools = []
-evidence = ["crates/crypt/src/tests.rs::permission_bits_follow_table_22"]
-notes = "engine only; no UI"
+status = "shipped"
+commands = ["protect.password"]
+tools = ["doc_protect"]
+evidence = ["crates/ui-egui/tests/protect.rs::editing_restrictions_via_advanced_options", "crates/engine/src/tests.rs::permissions_password_restricts_others_but_not_this_session"]
+notes = "Advanced Options: printing (none/low/high), changes (5 levels), copying, screen readers"
 
 [[feature]]
 id = "protect.encryption-level"
@@ -5287,11 +5287,11 @@ title = "Choose encryption compatibility (RC4 40/128, AES-128, AES-256)"
 area = "G"
 tier = "P1"
 milestone = "M8"
-status = "partial"
-commands = []
-tools = []
-evidence = ["crates/cos/tests/encryption.rs::every_algorithm_round_trips_and_hides_the_content"]
-notes = "engine only; AES-256 default in the planned UI"
+status = "shipped"
+commands = ["protect.password"]
+tools = ["doc_protect"]
+evidence = ["crates/engine/src/tests.rs::protection_is_validated_undoable_and_never_logged"]
+notes = "AES-256 (default), AES-128, RC4-128, RC4-40"
 
 [[feature]]
 id = "protect.encrypt-except-metadata"
@@ -5299,11 +5299,11 @@ title = "Encrypt everything except metadata"
 area = "G"
 tier = "P1"
 milestone = "M8"
-status = "partial"
-commands = []
-tools = []
-evidence = ["crates/cos/tests/encryption.rs::unencrypted_metadata_is_left_readable"]
-notes = "engine only"
+status = "shipped"
+commands = ["protect.password"]
+tools = ["doc_protect"]
+evidence = ["crates/engine/src/tests.rs::protection_is_validated_undoable_and_never_logged"]
+notes = "Advanced Options; disabled for RC4 levels as in Acrobat"
 
 [[feature]]
 id = "protect.encrypt-attachments-only"
@@ -5323,11 +5323,11 @@ title = "Password strength meter"
 area = "G"
 tier = "P2"
 milestone = "M8"
-status = "planned"
-commands = []
+status = "shipped"
+commands = ["protect.password"]
 tools = []
-evidence = []
-notes = ""
+evidence = ["crates/ui-egui/tests/protect.rs::protecting_for_viewing_requires_matching_passwords_and_saves_encrypted"]
+notes = "Weak / Medium / Strong under the password field"
 
 [[feature]]
 id = "protect.remove-security"
@@ -5335,11 +5335,11 @@ title = "Remove security"
 area = "G"
 tier = "P0"
 milestone = "M8"
-status = "partial"
-commands = []
-tools = []
-evidence = ["crates/cos/tests/encryption.rs::changing_and_removing_passwords"]
-notes = "engine only"
+status = "shipped"
+commands = ["protect.remove"]
+tools = ["doc_unprotect"]
+evidence = ["crates/engine/src/tests.rs::protect_with_an_open_password_then_save_reopen_and_undo", "crates/automation/tests/automation.rs::protecting_through_tools"]
+notes = "needs the permissions password (or none set)"
 
 [[feature]]
 id = "protect.certificate-encryption"

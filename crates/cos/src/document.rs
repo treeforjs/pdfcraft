@@ -259,7 +259,8 @@ impl Document {
         self.security().map(|s| s.permissions())
     }
 
-    pub(crate) fn encryption_changed(&self) -> bool {
+    /// Security was set or removed since the document was opened (the next save applies it).
+    pub fn encryption_changed(&self) -> bool {
         self.encryption_changed
     }
 
@@ -267,6 +268,12 @@ impl Document {
     /// otherwise the one the document was opened with.
     pub(crate) fn output_security(&self) -> (Option<&printcraft_crypt::SecurityHandler>, Option<u32>) {
         if self.encryption_changed { (self.out_security.as_deref(), self.out_encrypt_num) } else { (self.security.as_deref(), self.encrypt_num) }
+    }
+
+    /// The security the next save writes: protection applied with `set_encryption`, none after
+    /// `remove_encryption`, otherwise the security the document was opened with.
+    pub fn output_handler(&self) -> Option<&printcraft_crypt::SecurityHandler> {
+        self.output_security().0
     }
 
     /// Protect the document with a password (§7.6.4). Takes effect on the next save, which is

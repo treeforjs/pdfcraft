@@ -406,3 +406,37 @@ fn comments_through_tools() {
     let re = ok(&mut b, "doc_open", json!({ "path": "commented.pdf" }))["doc"].as_u64().unwrap();
     assert_eq!(ok(&mut b, "comment_list", json!({ "doc": re }))["count"], 5);
 }
+
+#[test]
+fn protecting_through_tools() {
+    let dir = workdir("protect");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    assert_eq!(ok(&mut a, "doc_info", json!({ "doc": doc }))["security"]["protected"], false);
+    assert!(matches!(a.call("doc_protect", &json!({ "doc": doc })), Err(ToolError::Failed(_))), "a password is required");
+    let r = ok(
+        &mut a,
+        "doc_protect",
+        json!({ "doc": doc, "open_password": "open", "permissions_password": "boss", "printing": "low", "changes": "comment-fill-sign" }),
+    );
+    assert_eq!(r["security"]["pending"], true);
+    assert_eq!(
+        (r["security"]["printing"].as_str(), r["security"]["annotate"].as_bool(), r["security"]["copy"].as_bool()),
+        (Some("low"), Some(true), Some(false))
+    );
+    assert!(!r.to_string().contains("boss"), "passwords are never echoed");
+    ok(&mut a, "doc_save", json!({ "doc": doc, "path": "locked.pdf" }));
+    // Another session: the open password is required, and the restrictions hold.
+    let mut b = auto(&dir);
+    assert!(matches!(b.call("doc_open", &json!({ "path": "locked.pdf" })), Err(ToolError::Failed(_))));
+    let re = ok(&mut b, "doc_open", json!({ "path": "locked.pdf", "password": "open" }))["doc"].as_u64().unwrap();
+    assert!(matches!(b.call("page_delete", &json!({ "doc": re, "pages": [1] })), Err(ToolError::Failed(_))));
+    assert!(matches!(b.call("doc_unprotect", &json!({ "doc": re })), Err(ToolError::Failed(_))));
+    ok(&mut b, "comment_add", json!({ "doc": re, "page": 1, "type": "note", "at": [10, 10], "contents": "allowed" }));
+    // With the permissions password everything is possible, including removing security.
+    let owner = ok(&mut b, "doc_open", json!({ "path": "locked.pdf", "password": "boss" }))["doc"].as_u64().unwrap();
+    assert_eq!(ok(&mut b, "doc_unprotect", json!({ "doc": owner }))["security"]["protected"], false);
+    ok(&mut b, "doc_save", json!({ "doc": owner, "path": "open.pdf" }));
+    let mut c = auto(&dir);
+    ok(&mut c, "doc_open", json!({ "path": "open.pdf" }));
+}

@@ -240,6 +240,7 @@ fn encrypted_documents_open_edit_and_save_encrypted() {
     let id = s.open("x.pdf", None, bytes.clone(), Some("pw")).unwrap();
     assert!(s.get(id).unwrap().editable(), "{:?}", s.get(id).unwrap().read_only_reason);
     assert_eq!(s.get(id).unwrap().security_summary().unwrap().method, "AES, 256-bit");
+    assert!(s.get(id).unwrap().info.encrypted, "reported as encrypted");
     s.apply(id, Edit::RotatePages { pages: vec![0], degrees: 90 }).unwrap();
     let saved = s.save_bytes(id).unwrap();
     assert_eq!(&saved[..bytes.len()], &bytes[..], "incremental");
@@ -483,4 +484,88 @@ fn comment_permission_is_enforced() {
     let id = s.open("locked.pdf", None, Arc::new(bytes), None).unwrap();
     let err = s.apply(id, rect_comment(0, [10.0, 10.0, 50.0, 50.0])).unwrap_err();
     assert_eq!(err, EditError::NotPermitted("comments"));
+}
+
+#[test]
+fn saving_a_password_protected_document_rebases_on_it() {
+    let bytes = protected("pw", "owner", -1);
+    let mut s = Session::new();
+    let id = s.open("x.pdf", None, bytes, Some("pw")).unwrap();
+    s.apply(id, Edit::RotatePages { pages: vec![0], degrees: 90 }).unwrap();
+    let saved = s.save_bytes(id).unwrap();
+    s.mark_saved(id, saved.clone(), None).expect("rebases on the encrypted file");
+    assert!(!s.get(id).unwrap().dirty);
+    s.apply(id, Edit::RotatePages { pages: vec![1], degrees: 90 }).unwrap();
+    let again = s.save_bytes(id).unwrap();
+    assert_eq!(&again[..saved.len()], &saved[..], "the next save appends");
+}
+
+fn protection(open: Option<&str>, perms: Option<&str>) -> Protection {
+    Protection { open_password: open.map(Into::into), permissions_password: perms.map(Into::into), ..Protection::default() }
+}
+
+#[test]
+fn protect_with_an_open_password_then_save_reopen_and_undo() {
+    let (mut s, id) = session_with(2);
+    s.apply(id, Edit::Protect(protection(Some("secret"), None))).unwrap();
+    let d = s.get(id).unwrap();
+    assert!(d.info.encrypted, "the working file is encrypted: {:?}", d.info.warnings);
+    assert_eq!(d.security_summary().unwrap().method, "AES, 256-bit");
+    assert_eq!(page_texts(&s, id), ["Page 1", "Page 2"], "still viewable in this session");
+    let saved = s.save_bytes(id).unwrap();
+    assert!(printcraft_cos::Document::open(saved.clone()).is_err(), "needs the password");
+    s.mark_saved(id, saved.clone(), None).unwrap();
+    // Further edits keep working and saving stays encrypted.
+    s.apply(id, Edit::RotatePages { pages: vec![0], degrees: 90 }).unwrap();
+    let again = s.save_bytes(id).unwrap();
+    let mut s2 = Session::new();
+    assert!(s2.open("p.pdf", None, again.clone(), None).is_err());
+    let id2 = s2.open("p.pdf", None, again, Some("secret")).unwrap();
+    assert_eq!(s2.get(id2).unwrap().info.pages[0].rotation, 90);
+    // Nothing is restricted without a permissions password: the opener may remove security.
+    assert!(s2.get(id2).unwrap().allows_security_change());
+    s2.apply(id2, Edit::RemoveProtection).unwrap();
+    let plain = s2.save_bytes(id2).unwrap();
+    assert!(printcraft_cos::Document::open(plain).is_ok());
+}
+
+#[test]
+fn permissions_password_restricts_others_but_not_this_session() {
+    let (mut s, id) = session_with(1);
+    let p = Protection { printing: Printing::Low, changes: Changes::CommentFillSign, copy: false, ..protection(None, Some("boss")) };
+    s.apply(id, Edit::Protect(p.clone())).unwrap();
+    assert!(s.get(id).unwrap().allows_modification(), "the author keeps full rights");
+    let saved = s.save_bytes(id).unwrap();
+    s.mark_saved(id, saved.clone(), None).unwrap();
+    assert!(s.get(id).unwrap().allows_modification(), "…also after saving (re-opened as owner)");
+    // Someone else opens it without a password: restricted as chosen.
+    let mut s2 = Session::new();
+    let id2 = s2.open("r.pdf", None, saved.clone(), None).unwrap();
+    let perm = s2.get(id2).unwrap().permissions().unwrap();
+    assert!(perm.print() && !perm.print_high_quality() && perm.annotate() && perm.fill_forms() && !perm.copy() && !perm.modify());
+    assert!(perm.extract_for_accessibility());
+    assert!(!s2.get(id2).unwrap().allows_security_change());
+    assert_eq!(s2.apply(id2, Edit::RemoveProtection), Err(EditError::NotPermitted("changing security")));
+    assert!(s2.get(id2).unwrap().allows_annotation(), "commenting was allowed");
+    // The owner password lifts everything.
+    let id3 = s2.open("r.pdf", None, saved, Some("boss")).unwrap();
+    assert!(s2.get(id3).unwrap().allows_security_change());
+}
+
+#[test]
+fn protection_is_validated_undoable_and_never_logged() {
+    let (mut s, id) = session_with(1);
+    assert!(matches!(s.apply(id, Edit::Protect(protection(None, None))), Err(EditError::Protection(_))));
+    assert!(matches!(s.apply(id, Edit::Protect(protection(Some("same"), Some("same")))), Err(EditError::Protection(_))));
+    let rc4 = Protection { algorithm: printcraft_cos::Algorithm::Rc4_128, ..protection(Some("pässword"), None) };
+    assert!(matches!(s.apply(id, Edit::Protect(rc4)), Err(EditError::Protection(_))));
+    assert!(!format!("{:?}", Edit::Protect(protection(Some("hunter2"), Some("x")))).contains("hunter2"));
+    s.apply(id, Edit::Protect(protection(Some("pw"), Some("owner")))).unwrap();
+    assert!(s.get(id).unwrap().info.encrypted);
+    s.undo(id).unwrap();
+    assert!(!s.get(id).unwrap().info.encrypted, "undo removes the pending protection");
+    assert!(s.get(id).unwrap().security_summary().is_none());
+    s.redo(id).unwrap();
+    assert!(s.get(id).unwrap().info.encrypted);
+    assert_eq!(page_texts(&s, id), ["Page 1"]);
 }

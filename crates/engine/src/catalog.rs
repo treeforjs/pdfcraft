@@ -248,7 +248,7 @@ pub static TOOL_GROUPS: &[ToolGroup] = &[
             ToolSection {
                 title: "Protect",
                 items: &[
-                    item("Protect with password", "lock", "protect.password", Planned("M8")),
+                    item("Protect with password", "lock", "protect.password", Ready),
                     item("Remove hidden information", "eye-off", "protect.sanitize", Planned("M8")),
                 ],
             },
@@ -257,7 +257,7 @@ pub static TOOL_GROUPS: &[ToolGroup] = &[
                 items: &[
                     item("Encrypt with certificate", "file-lock-2", "protect.certificate", Planned("M8")),
                     item("Security properties", "shield-check", "protect.properties", Ready),
-                    item("Remove security", "lock", "protect.remove", Planned("M8")),
+                    item("Remove security", "lock-open", "protect.remove", Ready),
                 ],
             },
         ],

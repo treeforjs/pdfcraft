@@ -22,6 +22,13 @@ impl PrintCraftApp {
             let why = match spec.needs {
                 commands::Needs::Undo => "Nothing to undo".to_string(),
                 commands::Needs::Redo => "Nothing to redo".to_string(),
+                commands::Needs::Security | commands::Needs::ProtectedSecurity if self.active.is_some() => {
+                    if self.active_ids().and_then(|(_, id)| self.session.get(id)).is_some_and(|d| d.allows_security_change()) {
+                        "This document isn't password-protected".to_string()
+                    } else {
+                        "Only the document's owner can change its security (open it with the permissions password)".to_string()
+                    }
+                }
                 commands::Needs::Assembly | commands::Needs::Modification | commands::Needs::Annotate if self.active.is_some() => {
                     "The document's security settings don't allow this change".to_string()
                 }
@@ -48,6 +55,15 @@ impl PrintCraftApp {
             }
             "file.properties" => self.dialog = Some(Dialog::Properties(PropsTab::Description)),
             "protect.properties" => self.dialog = Some(Dialog::Properties(PropsTab::Security)),
+            "protect.password" => {
+                self.protect_draft = Default::default();
+                self.dialog = Some(Dialog::Protect);
+            }
+            "protect.remove" => {
+                if self.apply_edit(Edit::RemoveProtection) {
+                    self.notify("Security will be removed when you save");
+                }
+            }
             "page.number" => {
                 if let Some(i) = active {
                     let v = &self.views[i];
