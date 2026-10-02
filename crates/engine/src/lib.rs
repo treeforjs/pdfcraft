@@ -25,7 +25,7 @@ pub use printcraft_edit::{
     Added, AddedText, Align as TextAlign, Background, Content as AddedContent, Family as FontFamily, HeaderFooter, MarkKind, Watermark,
 };
 pub use printcraft_forms::{
-    Field as FormField, FieldKind as FormFieldKind, FieldProps, FieldValue, NewField, Widget as FormWidget, flags as field_flags,
+    Field as FormField, FieldKind as FormFieldKind, FieldProps, FieldValue, NewField, Widget as FormWidget, af as form_scripts, flags as field_flags,
 };
 
 /// Comment geometry helpers (text-box line breaking) for frontends.

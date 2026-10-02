@@ -113,3 +113,34 @@ fn placing_moving_editing_and_deleting_a_field() {
     let r = rect_of(&h, "Check Box1");
     assert_eq!((r[2] - r[0], r[3] - r[1]), (14.0, 14.0));
 }
+
+#[test]
+fn format_validate_and_calculate_tabs() {
+    use printcraft_engine::form_scripts::{Calculate, Format, Validate};
+    let mut h = harness();
+    h.state_mut().execute("form.prepare");
+    h.run_steps(2);
+    h.state_mut().open_field_props("city", 0);
+    h.run_steps(2);
+    h.get_by_label("Format").click();
+    h.run_steps(2);
+    h.get_by_label("Select format category:");
+    {
+        let d = h.state_mut().field_props.as_mut().unwrap();
+        d.format = Format::Number { decimals: 2, sep: 0, neg: 0, currency: "$".into(), prepend: true };
+        d.validate = Validate::Range { min: Some(0.0), max: None };
+        d.calculate = Calculate::Notation("name".into());
+    }
+    h.run_steps(2);
+    h.get_by_label_contains("Example: -$1,234.50");
+    h.get_by_label("Calculate").click();
+    h.run_steps(2);
+    h.get_by_label("Simplified field notation:");
+    h.get_by_label("OK").click();
+    h.run_steps(3);
+    let s = h.state();
+    let f = s.session.get(s.views[0].id).unwrap().form.iter().find(|f| f.name == "city").unwrap().clone();
+    assert!(matches!(f.actions.format, Format::Number { decimals: 2, .. }));
+    assert_eq!(f.actions.validate, Validate::Range { min: Some(0.0), max: None });
+    assert_eq!(f.actions.calculate, Calculate::Notation("name".into()));
+}

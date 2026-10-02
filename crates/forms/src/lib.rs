@@ -13,6 +13,7 @@
 
 use printcraft_cos::{Dict, Document, ObjRef, Object, PdfString};
 
+pub mod af;
 pub mod appearance;
 mod author;
 pub use author::{FieldProps, NewField, add_field, delete_field, redraw_field, set_props};
@@ -97,6 +98,8 @@ pub struct Field {
     pub quadding: i64,
     pub tooltip: Option<String>,
     pub widgets: Vec<Widget>,
+    /// Format, validate and calculate scripts (Acrobat's AF functions), see [`af`].
+    pub actions: af::Actions,
 }
 
 impl Field {
@@ -142,6 +145,64 @@ fn text_of(o: &Object) -> Option<String> {
         Object::Name(n) => Some(String::from_utf8_lossy(n).into_owned()),
         _ => None,
     }
+}
+
+/// The JavaScript of an action dictionary (`/JS` string or stream).
+fn script(doc: &Document, action: &Object) -> Option<String> {
+    let a = doc.resolve(action);
+    let js = a.as_dict()?.get(b"JS")?.clone();
+    match &*doc.resolve(&js) {
+        Object::String(s) => Some(s.to_text()),
+        Object::Stream(s) => s.decoded().ok().map(|b| String::from_utf8_lossy(&b).into_owned()),
+        _ => None,
+    }
+}
+
+/// A field's format/keystroke, validate and calculate scripts (field dictionary, or its only
+/// widget's when the field has none).
+fn actions_of(doc: &Document, d: &Dict, widgets: &[ObjRef]) -> af::Actions {
+    let aa = d.get(b"AA").map(|a| doc.resolve(a)).and_then(|a| a.as_dict().cloned()).or_else(|| {
+        (widgets.len() == 1)
+            .then(|| doc.get(widgets[0]))
+            .and_then(|w| w.as_dict().and_then(|wd| wd.get(b"AA").map(|a| doc.resolve(a))))
+            .and_then(|a| a.as_dict().cloned())
+    });
+    let mut out = af::Actions::default();
+    let Some(aa) = aa else { return out };
+    let js = |k: &[u8]| aa.get(k).and_then(|a| script(doc, a));
+    if let Some(f) = js(b"F") {
+        match af::parse_format(&f) {
+            Some(fm) => out.format = fm,
+            None if !f.trim().is_empty() => out.unsupported.push("format"),
+            None => {}
+        }
+    }
+    if let Some(k) = js(b"K")
+        && out.format == af::Format::None
+    {
+        // A mask has only a keystroke script.
+        match af::parse_format(&k) {
+            Some(fm @ af::Format::Mask(_)) => out.format = fm,
+            Some(_) => {}
+            None if !k.trim().is_empty() => out.unsupported.push("keystroke"),
+            None => {}
+        }
+    }
+    if let Some(v) = js(b"V") {
+        match af::parse_validate(&v) {
+            Some(vv) => out.validate = vv,
+            None if !v.trim().is_empty() => out.unsupported.push("validate"),
+            None => {}
+        }
+    }
+    if let Some(c) = js(b"C") {
+        match af::parse_calculate(&c) {
+            Some(cc) => out.calculate = cc,
+            None if !c.trim().is_empty() => out.unsupported.push("calculate"),
+            None => {}
+        }
+    }
+    out
 }
 
 fn values_of(doc: &Document, o: Option<&Object>) -> Vec<String> {
@@ -280,6 +341,7 @@ fn walk(
         return;
     }
     let widget_refs: Vec<ObjRef> = if d.contains(b"Rect") { vec![r] } else { kids };
+    let actions = actions_of(doc, d, &widget_refs);
     let ff = inh.ff.unwrap_or(0);
     let kind = match inh.ft.as_deref() {
         Some(b"Tx") => FieldKind::Text,
@@ -336,6 +398,7 @@ fn walk(
         quadding: inh.q.unwrap_or(0),
         tooltip: d.get(b"TU").and_then(|o| text_of(&doc.resolve(o))),
         widgets,
+        actions,
     });
 }
 
@@ -351,7 +414,47 @@ pub fn set_value(doc: &mut Document, name: &str, value: &FieldValue) -> Result<(
     if f.read_only() {
         return Err(FormError::ReadOnly(name.into()));
     }
-    write_value(doc, f, value)
+    write_value(doc, f, value)?;
+    recalculate(doc)?;
+    Ok(())
+}
+
+/// Run every field's Calculate script in the form's calculation order (`/CO`, then the other
+/// calculated fields), as Acrobat does after any value changes. Returns how many changed.
+pub fn recalculate(doc: &mut Document) -> Result<usize, FormError> {
+    let all = fields(doc);
+    if !all.iter().any(|f| f.actions.calculate != af::Calculate::None) {
+        return Ok(0);
+    }
+    let co: Vec<ObjRef> = acroform(doc)
+        .and_then(|af| af.get(b"CO").map(|c| doc.resolve(c)).and_then(|c| c.as_array().cloned()))
+        .unwrap_or_default()
+        .iter()
+        .filter_map(Object::as_ref)
+        .collect();
+    let mut order: Vec<String> = co.iter().filter_map(|r| all.iter().find(|f| f.obj == *r)).map(|f| f.name.clone()).collect();
+    for f in &all {
+        if f.actions.calculate != af::Calculate::None && !order.contains(&f.name) {
+            order.push(f.name.clone());
+        }
+    }
+    let mut changed = 0;
+    for name in order {
+        let now = fields(doc);
+        let Some(f) = now.iter().find(|f| f.name == name) else { continue };
+        let lookup = |n: &str| -> Vec<String> {
+            let prefix = format!("{n}.");
+            now.iter().filter(|x| x.name == n || x.name.starts_with(&prefix)).flat_map(|x| x.value.first().cloned()).collect()
+        };
+        let Some(v) = af::calculate(&f.actions.calculate, &lookup) else { continue };
+        if f.value.first().map(String::as_str).unwrap_or("") != v && f.kind == FieldKind::Text {
+            let f = f.clone();
+            doc.update_dict(f.obj, |d| d.set(b"V".to_vec(), PdfString::text(&v)))?;
+            redraw(doc, &f, std::slice::from_ref(&v))?;
+            changed += 1;
+        }
+    }
+    Ok(changed)
 }
 
 fn invalid<T>(m: impl Into<String>) -> Result<T, FormError> {
@@ -366,6 +469,9 @@ fn write_value(doc: &mut Document, f: &Field, value: &FieldValue) -> Result<(), 
             {
                 return invalid(format!("{:?} takes at most {max} characters", f.name));
             }
+            // Keystroke (on commit) and Validate, as Acrobat runs them before accepting a value.
+            let t = &af::keystroke(&f.actions.format, &f.name, t).map_err(FormError::Invalid)?;
+            af::validate(&f.actions.validate, t).map_err(FormError::Invalid)?;
             doc.update_dict(f.obj, |d| {
                 if t.is_empty() {
                     d.remove(b"V");
@@ -527,5 +633,6 @@ pub fn reset(doc: &mut Document, names: Option<&[String]>) -> Result<usize, Form
         write_value(doc, &tmp, &v)?;
         changed += 1;
     }
+    recalculate(doc)?;
     Ok(changed)
 }

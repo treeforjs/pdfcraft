@@ -131,6 +131,15 @@ fn frame(doc: &Document, wd: &Dict, w: f64, h: f64) -> (String, f64) {
 
 /// The appearance of a text or choice field's widget showing `values`.
 pub fn field_appearance(doc: &Document, f: &Field, w: &Widget, values: &[String]) -> Stream {
+    // The Format event: what is shown, not what is stored.
+    let formatted: Vec<String>;
+    let values =
+        if matches!(f.kind, crate::FieldKind::Text | crate::FieldKind::Combo) && values.len() == 1 && f.actions.format != crate::af::Format::None {
+            formatted = vec![crate::af::format_value(&f.actions.format, &values[0])];
+            &formatted[..]
+        } else {
+            values
+        };
     let wobj = doc.get(w.obj);
     let wd = wobj.as_dict().cloned().unwrap_or_default();
     let (width, height) = ((w.rect[2] - w.rect[0]).max(1.0), (w.rect[3] - w.rect[1]).max(1.0));

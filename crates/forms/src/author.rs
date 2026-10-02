@@ -70,6 +70,10 @@ pub struct FieldProps {
     /// Position: move or resize one widget (its index in [`Field::widgets`]) to a new rect in
     /// user space.
     pub rect: Option<(usize, [f64; 4])>,
+    /// Format, Validate and Calculate tabs (written as Acrobat's AF scripts).
+    pub format: Option<crate::af::Format>,
+    pub validate: Option<crate::af::Validate>,
+    pub calculate: Option<crate::af::Calculate>,
 }
 
 fn invalid<T>(m: impl Into<String>) -> Result<T, FormError> {
@@ -469,6 +473,73 @@ pub fn set_props(doc: &mut Document, name: &str, props: &FieldProps) -> Result<S
         }
         doc.update_dict(w.obj, |d| d.set(b"Rect".to_vec(), Object::Array(r.iter().map(|v| Object::Real(*v)).collect())))?;
     }
+    if props.format.is_some() || props.validate.is_some() || props.calculate.is_some() {
+        if !matches!(f.kind, FieldKind::Text | FieldKind::Combo) {
+            return invalid("only text fields and drop-down lists have format, validate and calculate scripts");
+        }
+        let mut aa = doc
+            .get(f.obj)
+            .as_dict()
+            .and_then(|d| d.get(b"AA").cloned())
+            .map(|a| doc.resolve(&a))
+            .and_then(|a| a.as_dict().cloned())
+            .unwrap_or_default();
+        let action = |js: &str| -> Object {
+            let mut a = Dict::new();
+            a.set(b"S".to_vec(), Object::name("JavaScript"));
+            a.set(b"JS".to_vec(), PdfString::literal(js.as_bytes().to_vec()));
+            Object::Dict(a)
+        };
+        if let Some(fm) = &props.format {
+            aa.remove(b"F");
+            aa.remove(b"K");
+            if let Some((fjs, kjs)) = crate::af::format_js(fm) {
+                if !fjs.is_empty() {
+                    aa.set(b"F".to_vec(), action(&fjs));
+                }
+                aa.set(b"K".to_vec(), action(&kjs));
+            }
+        }
+        if let Some(v) = &props.validate {
+            aa.remove(b"V");
+            if let Some(js) = crate::af::validate_js(v) {
+                aa.set(b"V".to_vec(), action(&js));
+            }
+        }
+        if let Some(c) = &props.calculate {
+            aa.remove(b"C");
+            if let Some(js) = crate::af::calculate_js(c) {
+                aa.set(b"C".to_vec(), action(&js));
+            }
+            // The calculation order lists calculated fields.
+            let af_ref = ensure_form(doc)?;
+            let mut co: Vec<Object> = doc
+                .get(af_ref)
+                .as_dict()
+                .and_then(|d| d.get(b"CO").cloned())
+                .map(|c| doc.resolve(&c))
+                .and_then(|c| c.as_array().cloned())
+                .unwrap_or_default();
+            co.retain(|o| o.as_ref() != Some(f.obj));
+            if *c != crate::af::Calculate::None {
+                co.push(Object::Ref(f.obj));
+            }
+            doc.update_dict(af_ref, |d| {
+                if co.is_empty() {
+                    d.remove(b"CO");
+                } else {
+                    d.set(b"CO".to_vec(), Object::Array(co));
+                }
+            })?;
+        }
+        doc.update_dict(f.obj, |d| {
+            if aa.is_empty() {
+                d.remove(b"AA");
+            } else {
+                d.set(b"AA".to_vec(), Object::Dict(aa));
+            }
+        })?;
+    }
     // Widgets may carry their own /DA; keep them in step with the field.
     if let Some(size) = props.font_size {
         for w in &f.widgets {
@@ -485,6 +556,9 @@ pub fn set_props(doc: &mut Document, name: &str, props: &FieldProps) -> Result<S
         }
     }
     redraw_field(doc, &new_name)?;
+    if props.calculate.is_some() {
+        crate::recalculate(doc)?;
+    }
     Ok(new_name)
 }
 

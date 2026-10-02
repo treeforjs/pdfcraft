@@ -46,6 +46,7 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
         ui.set_width(match dialog {
             Dialog::Properties(_) => 640.0,
             Dialog::Print => 820.0,
+            Dialog::FieldProps => 600.0,
             _ => 520.0,
         });
         // Dialog controls are outlined (radio buttons, check boxes, combo boxes and number fields

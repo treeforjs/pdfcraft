@@ -6,6 +6,7 @@
 //! its name; clicks select fields instead of filling them in, as in Acrobat.
 
 use egui::{Color32, CornerRadius, Pos2, Rect, Stroke, vec2};
+use printcraft_engine::form_scripts::{CalcOp, Calculate, DATE_PRESETS, Format, TIME_PRESETS, Validate, format_value};
 use printcraft_engine::{Edit, FieldProps, FormField, FormFieldKind, NewField};
 use printcraft_render::DocInfo;
 
@@ -397,7 +398,14 @@ impl crate::PrintCraftApp {
     pub fn open_field_props(&mut self, name: &str, widget: usize) {
         let Some((_, id)) = self.active_ids() else { return };
         let Some(f) = self.session.get(id).and_then(|d| d.form.iter().find(|f| f.name == name).cloned()) else { return };
-        self.field_props = Some(FieldDraft::new(&f, widget));
+        let mut d = FieldDraft::new(&f, widget);
+        let others: Vec<String> =
+            self.session.get(id).map(|doc| doc.form.iter().filter(|x| x.name != name).map(|x| x.name.clone()).collect()).unwrap_or_default();
+        d.others = others.clone();
+        if let Some(o) = d.original.as_mut() {
+            o.others = others;
+        }
+        self.field_props = Some(d);
         self.dialog = Some(crate::Dialog::FieldProps);
     }
 }
@@ -408,6 +416,9 @@ pub enum FieldTab {
     Appearance,
     Position,
     Options,
+    Format,
+    Validate,
+    Calculate,
 }
 
 /// The Field Properties dialog's working copy.
@@ -430,6 +441,11 @@ pub struct FieldDraft {
     pub font_size: f64,
     /// Left, bottom, width, height in points.
     pub position: [f64; 4],
+    pub format: Format,
+    pub validate: Validate,
+    pub calculate: Calculate,
+    /// Every other field's name (the Calculate tab picks from them).
+    pub others: Vec<String>,
     original: Box<Option<FieldDraft>>,
 }
 
@@ -457,6 +473,10 @@ impl FieldDraft {
             new_option: String::new(),
             font_size: da_size(&f.da),
             position: [r[0], r[1], r[2] - r[0], r[3] - r[1]],
+            format: f.actions.format.clone(),
+            validate: f.actions.validate.clone(),
+            calculate: f.actions.calculate.clone(),
+            others: Vec::new(),
             original: Box::new(None),
         };
         d.original = Box::new(Some(d.clone()));
@@ -480,6 +500,9 @@ impl FieldDraft {
         if matches!(self.kind, FormFieldKind::Text | FormFieldKind::Combo | FormFieldKind::List) {
             t.push((FieldTab::Options, "Options"));
         }
+        if matches!(self.kind, FormFieldKind::Text | FormFieldKind::Combo) {
+            t.extend([(FieldTab::Format, "Format"), (FieldTab::Validate, "Validate"), (FieldTab::Calculate, "Calculate")]);
+        }
         t
     }
 
@@ -500,6 +523,9 @@ impl FieldDraft {
                 let [x, y, w, h] = self.position;
                 (self.widget, [x, y, x + w.max(4.0), y + h.max(4.0)])
             }),
+            format: (self.format != o.format).then(|| self.format.clone()),
+            validate: (self.validate != o.validate).then(|| self.validate.clone()),
+            calculate: (self.calculate != o.calculate).then(|| self.calculate.clone()),
         };
         (p != FieldProps::default()).then_some(p)
     }
@@ -508,7 +534,7 @@ impl FieldDraft {
 /// Draw Field Properties; returns (apply, cancel).
 pub(crate) fn body(ui: &mut egui::Ui, d: &mut FieldDraft, t: &crate::theme::Tokens) -> (bool, bool) {
     use crate::widgets;
-    ui.set_width(520.0);
+    ui.set_width(600.0);
     ui.label(egui::RichText::new(d.title()).font(theme::semibold(18.0)));
     ui.add_space(6.0);
     ui.horizontal(|ui| {
@@ -566,6 +592,9 @@ pub(crate) fn body(ui: &mut egui::Ui, d: &mut FieldDraft, t: &crate::theme::Toke
             });
             ui.label(egui::RichText::new("Points from the page's bottom-left corner.").small().color(t.text_faint));
         }
+        FieldTab::Format => format_tab(ui, d, t),
+        FieldTab::Validate => validate_tab(ui, d),
+        FieldTab::Calculate => calculate_tab(ui, d, t),
         FieldTab::Options => match d.kind {
             FormFieldKind::Text => {
                 ui.checkbox(&mut d.multiline, "Multi-line");
@@ -627,4 +656,267 @@ pub(crate) fn body(ui: &mut egui::Ui, d: &mut FieldDraft, t: &crate::theme::Toke
         }
     });
     (apply, cancel)
+}
+
+/// The categories of the Format tab.
+#[derive(Clone, Copy, PartialEq)]
+enum Category {
+    None,
+    Number,
+    Percent,
+    Date,
+    Time,
+    Special,
+}
+
+fn category(f: &Format) -> Category {
+    match f {
+        Format::None => Category::None,
+        Format::Number { .. } => Category::Number,
+        Format::Percent { .. } => Category::Percent,
+        Format::Date(_) => Category::Date,
+        Format::Time(_) => Category::Time,
+        Format::Special(_) | Format::Mask(_) => Category::Special,
+    }
+}
+
+const SEPARATORS: [&str; 5] = ["1,234.56", "1234.56", "1.234,56", "1234,56", "1'234.56"];
+const NEGATIVES: [&str; 4] = ["-1,234.01", "1,234.01 (red)", "(1,234.01)", "(1,234.01) (red)"];
+const SPECIALS: [&str; 5] = ["Zip Code", "Zip Code + 4", "Phone Number", "Social Security Number", "Arbitrary Mask"];
+
+fn format_tab(ui: &mut egui::Ui, d: &mut FieldDraft, t: &crate::theme::Tokens) {
+    let cat = category(&d.format);
+    let mut picked = cat;
+    ui.horizontal(|ui| {
+        ui.label("Select format category:");
+        egui::ComboBox::from_id_salt("format-cat")
+            .selected_text(match cat {
+                Category::None => "None",
+                Category::Number => "Number",
+                Category::Percent => "Percentage",
+                Category::Date => "Date",
+                Category::Time => "Time",
+                Category::Special => "Special",
+            })
+            .show_ui(ui, |ui| {
+                for (c, l) in [
+                    (Category::None, "None"),
+                    (Category::Number, "Number"),
+                    (Category::Percent, "Percentage"),
+                    (Category::Date, "Date"),
+                    (Category::Time, "Time"),
+                    (Category::Special, "Special"),
+                ] {
+                    ui.selectable_value(&mut picked, c, l);
+                }
+            });
+    });
+    if picked != cat {
+        d.format = match picked {
+            Category::None => Format::None,
+            Category::Number => Format::Number { decimals: 2, sep: 0, neg: 0, currency: String::new(), prepend: true },
+            Category::Percent => Format::Percent { decimals: 2, sep: 0 },
+            Category::Date => Format::Date("mm/dd/yyyy".into()),
+            Category::Time => Format::Time("HH:MM".into()),
+            Category::Special => Format::Special(0),
+        };
+    }
+    ui.add_space(8.0);
+    let sample = match &d.format {
+        Format::Number { .. } | Format::Percent { .. } => "-1234.5",
+        Format::Date(_) => "10/1/2026",
+        Format::Time(_) => "14:05",
+        Format::Special(2) => "5551234567",
+        Format::Special(3) => "123456789",
+        Format::Special(_) => "123456789",
+        _ => "",
+    };
+    match &mut d.format {
+        Format::None => {
+            ui.label(egui::RichText::new("The value is shown as typed.").color(t.text_muted));
+        }
+        Format::Number { decimals, sep, neg, currency, prepend } => {
+            egui::Grid::new("fmt-number").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
+                ui.label("Decimal places:");
+                ui.add(egui::DragValue::new(decimals).range(0..=10));
+                ui.end_row();
+                ui.label("Separator style:");
+                egui::ComboBox::from_id_salt("fmt-sep").selected_text(SEPARATORS[(*sep).min(4) as usize]).show_ui(ui, |ui| {
+                    for (i, s) in SEPARATORS.iter().enumerate() {
+                        ui.selectable_value(sep, i as u8, *s);
+                    }
+                });
+                ui.end_row();
+                ui.label("Currency symbol:");
+                ui.horizontal(|ui| {
+                    egui::ComboBox::from_id_salt("fmt-cur")
+                        .selected_text(if currency.is_empty() { "None" } else { currency.as_str() })
+                        .width(70.0)
+                        .show_ui(ui, |ui| {
+                            for c in ["", "$", "€", "£", "¥", "CHF "] {
+                                ui.selectable_value(currency, c.to_string(), if c.is_empty() { "None" } else { c });
+                            }
+                        });
+                    ui.checkbox(prepend, "Before the number");
+                });
+                ui.end_row();
+                ui.label("Negative number style:");
+                egui::ComboBox::from_id_salt("fmt-neg").selected_text(NEGATIVES[(*neg).min(3) as usize]).show_ui(ui, |ui| {
+                    for (i, s) in NEGATIVES.iter().enumerate() {
+                        ui.selectable_value(neg, i as u8, *s);
+                    }
+                });
+                ui.end_row();
+            });
+        }
+        Format::Percent { decimals, sep } => {
+            egui::Grid::new("fmt-pct").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
+                ui.label("Decimal places:");
+                ui.add(egui::DragValue::new(decimals).range(0..=10));
+                ui.end_row();
+                ui.label("Separator style:");
+                egui::ComboBox::from_id_salt("fmt-psep").selected_text(SEPARATORS[(*sep).min(4) as usize]).show_ui(ui, |ui| {
+                    for (i, s) in SEPARATORS.iter().enumerate() {
+                        ui.selectable_value(sep, i as u8, *s);
+                    }
+                });
+                ui.end_row();
+            });
+        }
+        Format::Date(p) | Format::Time(p) => {
+            let presets: Vec<&str> = if matches!(cat, Category::Time) || picked == Category::Time {
+                TIME_PRESETS.to_vec()
+            } else {
+                DATE_PRESETS.iter().copied().chain(["m/d/yyyy", "mm/dd/yyyy", "yyyy-mm-dd", "dd/mm/yyyy"]).collect()
+            };
+            ui.horizontal(|ui| {
+                ui.label("Format:");
+                egui::ComboBox::from_id_salt("fmt-date").selected_text(p.as_str()).width(170.0).show_ui(ui, |ui| {
+                    for pr in presets {
+                        ui.selectable_value(p, pr.to_string(), pr);
+                    }
+                });
+                ui.label("Custom:");
+                ui.add(egui::TextEdit::singleline(p).desired_width(120.0));
+            });
+        }
+        Format::Special(n) => {
+            let mut idx = *n as usize;
+            egui::ComboBox::from_id_salt("fmt-special").selected_text(SPECIALS[idx.min(4)]).show_ui(ui, |ui| {
+                for (i, s) in SPECIALS.iter().enumerate() {
+                    ui.selectable_value(&mut idx, i, *s);
+                }
+            });
+            if idx == 4 {
+                d.format = Format::Mask("999-999".into());
+            } else {
+                *n = idx as u8;
+            }
+        }
+        Format::Mask(m) => {
+            let mut idx = 4usize;
+            egui::ComboBox::from_id_salt("fmt-special").selected_text(SPECIALS[4]).show_ui(ui, |ui| {
+                for (i, s) in SPECIALS.iter().enumerate() {
+                    ui.selectable_value(&mut idx, i, *s);
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.label("Mask:");
+                ui.add(egui::TextEdit::singleline(m).desired_width(160.0));
+            });
+            ui.label(egui::RichText::new("9 digit, A letter, O letter or digit, X any character").small().color(t.text_faint));
+            if idx < 4 {
+                d.format = Format::Special(idx as u8);
+            }
+        }
+    }
+    if !sample.is_empty() && d.format != Format::None {
+        ui.add_space(6.0);
+        ui.label(egui::RichText::new(format!("Example: {}", format_value(&d.format, sample))).color(t.text_muted));
+    }
+}
+
+fn validate_tab(ui: &mut egui::Ui, d: &mut FieldDraft) {
+    let mut ranged = matches!(d.validate, Validate::Range { .. });
+    ui.radio_value(&mut ranged, false, "Field value is not validated");
+    ui.radio_value(&mut ranged, true, "Field value is in range:");
+    if !ranged {
+        d.validate = Validate::None;
+        return;
+    }
+    if d.validate == Validate::None {
+        d.validate = Validate::Range { min: Some(0.0), max: Some(100.0) };
+    }
+    if let Validate::Range { min, max } = &mut d.validate {
+        ui.horizontal(|ui| {
+            let mut has = min.is_some();
+            ui.checkbox(&mut has, "From:");
+            let mut v = min.unwrap_or(0.0);
+            ui.add_enabled(has, egui::DragValue::new(&mut v).speed(1.0));
+            *min = has.then_some(v);
+            let mut has = max.is_some();
+            ui.checkbox(&mut has, "To:");
+            let mut v = max.unwrap_or(100.0);
+            ui.add_enabled(has, egui::DragValue::new(&mut v).speed(1.0));
+            *max = has.then_some(v);
+        });
+    }
+}
+
+fn calculate_tab(ui: &mut egui::Ui, d: &mut FieldDraft, t: &crate::theme::Tokens) {
+    #[derive(PartialEq, Clone, Copy)]
+    enum Mode {
+        None,
+        Simple,
+        Notation,
+    }
+    let mode = match d.calculate {
+        Calculate::None => Mode::None,
+        Calculate::Simple { .. } => Mode::Simple,
+        Calculate::Notation(_) => Mode::Notation,
+    };
+    let mut m = mode;
+    ui.radio_value(&mut m, Mode::None, "Value is not calculated");
+    ui.radio_value(&mut m, Mode::Simple, "Value is the");
+    if m != mode {
+        d.calculate = match m {
+            Mode::None => Calculate::None,
+            Mode::Simple => Calculate::Simple { op: CalcOp::Sum, fields: Vec::new() },
+            Mode::Notation => Calculate::Notation(String::new()),
+        };
+    }
+    if let Calculate::Simple { op, fields } = &mut d.calculate {
+        ui.horizontal(|ui| {
+            ui.add_space(24.0);
+            egui::ComboBox::from_id_salt("calc-op").selected_text(op.label()).show_ui(ui, |ui| {
+                for o in CalcOp::ALL {
+                    ui.selectable_value(op, o, o.label());
+                }
+            });
+            ui.label("of the following fields:");
+        });
+        egui::ScrollArea::vertical().max_height(110.0).show(ui, |ui| {
+            for name in &d.others {
+                let mut on = fields.contains(name);
+                if ui.checkbox(&mut on, name).changed() {
+                    if on {
+                        fields.push(name.clone());
+                    } else {
+                        fields.retain(|f| f != name);
+                    }
+                }
+            }
+        });
+    }
+    let mut m2 = match d.calculate {
+        Calculate::Notation(_) => Mode::Notation,
+        _ => m,
+    };
+    if ui.radio_value(&mut m2, Mode::Notation, "Simplified field notation:").clicked() && !matches!(d.calculate, Calculate::Notation(_)) {
+        d.calculate = Calculate::Notation(String::new());
+    }
+    if let Calculate::Notation(expr) = &mut d.calculate {
+        ui.add(egui::TextEdit::multiline(expr).hint_text("Price * Quantity").desired_rows(2).desired_width(420.0));
+        ui.label(egui::RichText::new("Field names with + - * / and parentheses; put \\ before spaces in names.").small().color(t.text_faint));
+    }
 }

@@ -713,3 +713,35 @@ fn adding_content_through_tools() {
     assert_eq!(ok(&mut a, "content_list", json!({ "doc": doc }))["count"], 1);
     assert!(matches!(a.call("content_delete", &json!({ "doc": doc, "page": 1, "index": 5 })), Err(ToolError::Failed(_))));
 }
+
+#[test]
+fn form_formats_and_calculations_through_tools() {
+    let dir = workdir("formcalc");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    for (name, y) in [("Price", 20), ("Qty", 60), ("Total", 100)] {
+        ok(&mut a, "form_add_field", json!({ "doc": doc, "page": 1, "type": "text", "rect": [20, y, 180, y + 22], "name": name }));
+    }
+    ok(
+        &mut a,
+        "form_set_props",
+        json!({ "doc": doc, "field": "Price", "format": { "type": "number", "decimals": 2, "currency": "$" }, "validate": { "min": 0 } }),
+    );
+    ok(
+        &mut a,
+        "form_set_props",
+        json!({ "doc": doc, "field": "Total", "format": { "type": "number", "decimals": 2, "currency": "$" }, "calculate": { "notation": "Price * Qty" } }),
+    );
+    ok(&mut a, "form_fill", json!({ "doc": doc, "values": { "Price": "19.99", "Qty": "3" } }));
+    let f = ok(&mut a, "form_fields", json!({ "doc": doc }));
+    let total = f["fields"].as_array().unwrap().iter().find(|x| x["name"] == "Total").unwrap().clone();
+    assert_eq!((total["value"].as_str(), total["display"].as_str()), (Some("59.97"), Some("$59.97")), "{total}");
+    assert_eq!(total["calculate"]["notation"], "Price * Qty");
+    assert!(page_text(&mut a, doc)[0].contains("$59.97"));
+    let err = a.call("form_fill", &json!({ "doc": doc, "values": { "Price": "-5" } })).unwrap_err();
+    assert!(err.to_string().contains("greater than or equal to 0"), "{err}");
+    assert!(matches!(
+        a.call("form_set_props", &json!({ "doc": doc, "field": "Qty", "format": { "type": "roman" } })),
+        Err(ToolError::InvalidArgs(_))
+    ));
+}

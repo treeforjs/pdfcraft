@@ -4383,11 +4383,11 @@ title = "Number and currency formatting (AFNumber)"
 area = "F"
 tier = "P0"
 milestone = "M6"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["form.field.properties"]
+tools = ["form_set_props", "form_fill"]
+evidence = ["crates/forms/src/af.rs::numbers_format_like_acrobat", "crates/forms/src/tests.rs::formats_validation_and_calculations_run_like_acrobat", "crates/automation/tests/automation.rs::form_formats_and_calculations_through_tools"]
+notes = "AFNumber_Format/Keystroke run natively: decimals, 5 separator styles, currency before/after, negative styles (red shown as minus/parentheses)"
 
 [[feature]]
 id = "form.af-percent"
@@ -4395,11 +4395,11 @@ title = "Percentage formatting"
 area = "F"
 tier = "P0"
 milestone = "M6"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["form.field.properties"]
+tools = ["form_set_props", "form_fill"]
+evidence = ["crates/forms/src/af.rs::numbers_format_like_acrobat"]
+notes = "AFPercent_Format/Keystroke"
 
 [[feature]]
 id = "form.af-date-time"
@@ -4407,11 +4407,11 @@ title = "Date and time formatting and parsing"
 area = "F"
 tier = "P0"
 milestone = "M6"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["form.field.properties"]
+tools = ["form_set_props", "form_fill"]
+evidence = ["crates/forms/src/af.rs::dates_times_and_masks", "crates/forms/src/tests.rs::formats_validation_and_calculations_run_like_acrobat"]
+notes = "AFDate_FormatEx/KeystrokeEx, AFDate_Format presets, AFTime_Format(Ex): lenient parsing, month and day names, impossible dates refused"
 
 [[feature]]
 id = "form.af-special"
@@ -4419,11 +4419,11 @@ title = "Special formats (zip, phone, SSN, arbitrary mask)"
 area = "F"
 tier = "P0"
 milestone = "M6"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["form.field.properties"]
+tools = ["form_set_props", "form_fill"]
+evidence = ["crates/forms/src/af.rs::dates_times_and_masks"]
+notes = "zip, zip+4, phone, SSN, arbitrary masks (9 A O X)"
 
 [[feature]]
 id = "form.af-range-validate"
@@ -4431,11 +4431,11 @@ title = "Range validation"
 area = "F"
 tier = "P0"
 milestone = "M6"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["form.field.properties"]
+tools = ["form_set_props", "form_fill"]
+evidence = ["crates/forms/src/af.rs::validation_and_calculation", "crates/forms/src/tests.rs::formats_validation_and_calculations_run_like_acrobat", "crates/automation/tests/automation.rs::form_formats_and_calculations_through_tools"]
+notes = "AFRange_Validate with Acrobat's messages"
 
 [[feature]]
 id = "form.af-simple-calculate"
@@ -4443,11 +4443,11 @@ title = "Sum, product, average, min, max calculations"
 area = "F"
 tier = "P0"
 milestone = "M6"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["form.field.properties"]
+tools = ["form_set_props", "form_fill"]
+evidence = ["crates/forms/src/af.rs::validation_and_calculation", "crates/forms/src/tests.rs::formats_validation_and_calculations_run_like_acrobat"]
+notes = "SUM, PRD, AVG, MIN, MAX over fields and groups"
 
 [[feature]]
 id = "form.simplified-notation"
@@ -4455,11 +4455,11 @@ title = "Simplified field notation calculations"
 area = "F"
 tier = "P0"
 milestone = "M6"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["form.field.properties"]
+tools = ["form_set_props", "form_fill"]
+evidence = ["crates/forms/src/af.rs::validation_and_calculation", "crates/forms/src/tests.rs::formats_validation_and_calculations_run_like_acrobat", "crates/automation/tests/automation.rs::form_formats_and_calculations_through_tools"]
+notes = "BVCALC expressions with + - * / and parentheses, escaped names"
 
 [[feature]]
 id = "form.custom-scripts"
@@ -4479,11 +4479,11 @@ title = "Calculation order"
 area = "F"
 tier = "P0"
 milestone = "M6"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["form.field.properties"]
+tools = ["form_set_props", "form_fill"]
+evidence = ["crates/forms/src/tests.rs::formats_validation_and_calculations_run_like_acrobat"]
+notes = "/CO order, then other calculated fields; recalculated after every fill and Clear form"
 
 [[feature]]
 id = "form.event-order"
@@ -4491,11 +4491,11 @@ title = "Keystroke, validate, calculate, format event order"
 area = "F"
 tier = "P0"
 milestone = "M6"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["form.field.properties"]
+tools = ["form_set_props", "form_fill"]
+evidence = ["crates/forms/src/tests.rs::formats_validation_and_calculations_run_like_acrobat"]
+notes = "keystroke (on commit) → validate → calculate → format, natively for the AF functions; custom scripts need the JavaScript engine"
 
 [[feature]]
 id = "form.date-picker"
@@ -4815,11 +4815,11 @@ title = "Field properties: format"
 area = "F"
 tier = "P0"
 milestone = "M6"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["form.field.properties"]
+tools = ["form_set_props", "form_fill"]
+evidence = ["crates/ui-egui/tests/prepare.rs::format_validate_and_calculate_tabs", "crates/automation/tests/automation.rs::form_formats_and_calculations_through_tools"]
+notes = "None/Number/Percentage/Date/Time/Special with a live example; writes Acrobat's AF scripts"
 
 [[feature]]
 id = "form.props-validate"
@@ -4827,11 +4827,11 @@ title = "Field properties: validate"
 area = "F"
 tier = "P0"
 milestone = "M6"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["form.field.properties"]
+tools = ["form_set_props", "form_fill"]
+evidence = ["crates/ui-egui/tests/prepare.rs::format_validate_and_calculate_tabs", "crates/automation/tests/automation.rs::form_formats_and_calculations_through_tools"]
+notes = "range from/to"
 
 [[feature]]
 id = "form.props-calculate"
@@ -4839,11 +4839,11 @@ title = "Field properties: calculate"
 area = "F"
 tier = "P0"
 milestone = "M6"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["form.field.properties"]
+tools = ["form_set_props", "form_fill"]
+evidence = ["crates/ui-egui/tests/prepare.rs::format_validate_and_calculate_tabs", "crates/automation/tests/automation.rs::form_formats_and_calculations_through_tools"]
+notes = "sum/product/average/min/max of picked fields, simplified field notation; custom script pending"
 
 [[feature]]
 id = "form.props-selection-change"

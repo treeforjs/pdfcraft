@@ -1,10 +1,98 @@
 //! Form tools: list fields, fill them (several at once, one undo step), clear the form, and
 //! prepare a form (add, change and delete fields).
 
+use printcraft_engine::form_scripts::{CalcOp, Calculate, Format, Validate};
 use printcraft_engine::{Edit, FieldProps, FieldValue, FormField, FormFieldKind, NewField, field_flags};
 use serde_json::{Value, json};
 
 use crate::{Args, Automation, Result, ToolError, failed};
+
+fn bad(m: impl Into<String>) -> ToolError {
+    ToolError::InvalidArgs(m.into())
+}
+
+/// `{"type": "number", "decimals": 2, "currency": "$"}`, `{"type": "date", "pattern": "mm/dd/yyyy"}`,
+/// `{"type": "phone"}`, `{"type": "mask", "mask": "AA-9999"}`, `"none"`…
+fn format_arg(v: &Value) -> Result<Format> {
+    if v.as_str() == Some("none") {
+        return Ok(Format::None);
+    }
+    let o = v.as_object().ok_or_else(|| bad("format must be an object such as {\"type\": \"number\", \"decimals\": 2}, or \"none\""))?;
+    let num = |k: &str, d: u64| o.get(k).and_then(Value::as_u64).unwrap_or(d).min(255) as u8;
+    let s = |k: &str| o.get(k).and_then(Value::as_str).map(str::to_owned);
+    Ok(match o.get("type").and_then(Value::as_str).unwrap_or("") {
+        "none" => Format::None,
+        "number" => Format::Number {
+            decimals: num("decimals", 2),
+            sep: num("separator", 0).min(4),
+            neg: num("negative", 0).min(3),
+            currency: s("currency").unwrap_or_default(),
+            prepend: !o.get("currency_after").and_then(Value::as_bool).unwrap_or(false),
+        },
+        "percent" => Format::Percent { decimals: num("decimals", 2), sep: num("separator", 0).min(4) },
+        "date" => Format::Date(s("pattern").unwrap_or_else(|| "mm/dd/yyyy".into())),
+        "time" => Format::Time(s("pattern").unwrap_or_else(|| "HH:MM".into())),
+        "zip" => Format::Special(0),
+        "zip4" => Format::Special(1),
+        "phone" => Format::Special(2),
+        "ssn" => Format::Special(3),
+        "mask" => Format::Mask(s("mask").ok_or_else(|| bad("mask needs \"mask\""))?),
+        t => return Err(bad(format!("unknown format type {t:?} (none, number, percent, date, time, zip, zip4, phone, ssn, mask)"))),
+    })
+}
+
+/// `{"min": 0, "max": 100}` or `"none"`.
+fn validate_arg(v: &Value) -> Result<Validate> {
+    if v.as_str() == Some("none") {
+        return Ok(Validate::None);
+    }
+    let o = v.as_object().ok_or_else(|| bad("validate must be {\"min\": …, \"max\": …} or \"none\""))?;
+    let (min, max) = (o.get("min").and_then(Value::as_f64), o.get("max").and_then(Value::as_f64));
+    if min.is_none() && max.is_none() {
+        return Err(bad("validate needs min, max or both"));
+    }
+    Ok(Validate::Range { min, max })
+}
+
+/// `{"op": "sum", "fields": ["a", "b"]}`, `{"notation": "Price * Qty"}` or `"none"`.
+fn calculate_arg(v: &Value) -> Result<Calculate> {
+    if v.as_str() == Some("none") {
+        return Ok(Calculate::None);
+    }
+    let o = v.as_object().ok_or_else(|| bad("calculate must be {\"op\": …, \"fields\": […]}, {\"notation\": …} or \"none\""))?;
+    if let Some(n) = o.get("notation").and_then(Value::as_str) {
+        return Ok(Calculate::Notation(n.to_string()));
+    }
+    let op = match o.get("op").and_then(Value::as_str).unwrap_or("") {
+        "sum" => CalcOp::Sum,
+        "product" => CalcOp::Product,
+        "average" => CalcOp::Average,
+        "min" | "minimum" => CalcOp::Minimum,
+        "max" | "maximum" => CalcOp::Maximum,
+        x => return Err(bad(format!("unknown op {x:?} (sum, product, average, min, max)"))),
+    };
+    let fields: Vec<String> =
+        o.get("fields").and_then(Value::as_array).map(|a| a.iter().filter_map(|x| x.as_str().map(str::to_owned)).collect()).unwrap_or_default();
+    if fields.is_empty() {
+        return Err(bad("calculate needs fields"));
+    }
+    Ok(Calculate::Simple { op, fields })
+}
+
+fn format_json(f: &Format) -> Value {
+    match f {
+        Format::None => Value::Null,
+        Format::Number { decimals, currency, .. } => json!({ "type": "number", "decimals": decimals, "currency": currency }),
+        Format::Percent { decimals, .. } => json!({ "type": "percent", "decimals": decimals }),
+        Format::Date(p) => json!({ "type": "date", "pattern": p }),
+        Format::Time(p) => json!({ "type": "time", "pattern": p }),
+        Format::Special(n) => {
+            let t = ["zip", "zip4", "phone", "ssn"][(*n).min(3) as usize];
+            json!({ "type": t })
+        }
+        Format::Mask(m) => json!({ "type": "mask", "mask": m }),
+    }
+}
 
 fn kind_name(k: FormFieldKind) -> &'static str {
     match k {
@@ -65,6 +153,25 @@ impl Automation {
                 let o = v.as_object_mut().expect("object");
                 if let Some(t) = &f.tooltip {
                     o.insert("tooltip".into(), json!(t));
+                }
+                if f.actions.format != Format::None {
+                    o.insert("format".into(), format_json(&f.actions.format));
+                    o.insert("display".into(), json!(f.value.first().map(|v| printcraft_engine::form_scripts::format_value(&f.actions.format, v))));
+                }
+                if let Validate::Range { min, max } = &f.actions.validate {
+                    o.insert("validate".into(), json!({ "min": min, "max": max }));
+                }
+                match &f.actions.calculate {
+                    Calculate::Simple { op, fields } => {
+                        o.insert("calculate".into(), json!({ "op": op.code().to_lowercase(), "fields": fields }));
+                    }
+                    Calculate::Notation(n) => {
+                        o.insert("calculate".into(), json!({ "notation": n }));
+                    }
+                    Calculate::None => {}
+                }
+                if !f.actions.unsupported.is_empty() {
+                    o.insert("unsupported_scripts".into(), json!(f.actions.unsupported));
                 }
                 match f.kind {
                     FormFieldKind::Radio => {
@@ -187,6 +294,9 @@ impl Automation {
             },
             options: a.get("options").map(|_| a.strs("options")).transpose()?.map(|v| v.into_iter().map(str::to_owned).collect()),
             font_size: a.opt_num("font_size")?,
+            format: a.get("format").map(format_arg).transpose()?,
+            validate: a.get("validate").map(validate_arg).transpose()?,
+            calculate: a.get("calculate").map(calculate_arg).transpose()?,
         };
         if props == FieldProps::default() {
             return Err(ToolError::InvalidArgs("nothing to change".into()));

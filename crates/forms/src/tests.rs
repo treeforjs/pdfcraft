@@ -320,3 +320,103 @@ fn deleting_works_with_a_form_dictionary_inside_the_catalog() {
     assert_eq!(all.len(), before - 1);
     assert!(!all.iter().any(|f| f.name == "name"));
 }
+
+fn one_page() -> Document {
+    let mut doc = Document::new_empty();
+    let pages = doc.get(doc.root().unwrap()).as_dict().unwrap().reference(b"Pages").unwrap();
+    let mut p = printcraft_cos::Dict::new();
+    p.set(b"Type".to_vec(), Object::name("Page"));
+    p.set(b"Parent".to_vec(), Object::Ref(pages));
+    p.set(b"MediaBox".to_vec(), Object::Array(vec![0.into(), 0.into(), 600.into(), 800.into()]));
+    let r = doc.add(p);
+    doc.update_dict(pages, |d| {
+        d.set(b"Kids".to_vec(), Object::Array(vec![Object::Ref(r)]));
+        d.set(b"Count".to_vec(), Object::Int(1));
+    })
+    .unwrap();
+    doc
+}
+
+#[test]
+fn formats_validation_and_calculations_run_like_acrobat() {
+    use crate::af::{CalcOp, Calculate, Format, Validate};
+    let mut doc = one_page();
+    let text = NewField::Text { multiline: false };
+    for (name, y) in [("Price", 700.0), ("Qty", 660.0), ("Total", 620.0), ("Count", 580.0), ("Due", 540.0)] {
+        add_field(&mut doc, 0, [50.0, y, 250.0, y + 20.0], &text, Some(name)).unwrap();
+    }
+    let money = Format::Number { decimals: 2, sep: 0, neg: 0, currency: "$".into(), prepend: true };
+    set_props(
+        &mut doc,
+        "Price",
+        &FieldProps { format: Some(money.clone()), validate: Some(Validate::Range { min: Some(0.0), max: None }), ..FieldProps::default() },
+    )
+    .unwrap();
+    set_props(
+        &mut doc,
+        "Qty",
+        &FieldProps {
+            format: Some(Format::Number { decimals: 0, sep: 0, neg: 0, currency: String::new(), prepend: true }),
+            validate: Some(Validate::Range { min: Some(1.0), max: Some(99.0) }),
+            ..FieldProps::default()
+        },
+    )
+    .unwrap();
+    set_props(
+        &mut doc,
+        "Total",
+        &FieldProps {
+            format: Some(money),
+            calculate: Some(Calculate::Notation("Price * Qty".into())),
+            read_only: Some(true),
+            ..FieldProps::default()
+        },
+    )
+    .unwrap();
+    set_props(
+        &mut doc,
+        "Count",
+        &FieldProps { calculate: Some(Calculate::Simple { op: CalcOp::Sum, fields: vec!["Qty".into()] }), ..FieldProps::default() },
+    )
+    .unwrap();
+    set_props(&mut doc, "Due", &FieldProps { format: Some(Format::Date("mmm d, yyyy".into())), ..FieldProps::default() }).unwrap();
+    // The scripts are Acrobat's, so Acrobat (and we, after a save) read them back.
+    let doc2 = reopen(&doc);
+    let total = field(&fields(&doc2), "Total").clone();
+    assert_eq!(total.actions.calculate, Calculate::Notation("Price * Qty".into()));
+    assert!(matches!(total.actions.format, Format::Number { decimals: 2, .. }));
+    let co =
+        doc2.get(doc2.root().unwrap()).as_dict().unwrap().get(b"AcroForm").cloned().map(|a| doc2.resolve(&a).as_dict().cloned().unwrap()).unwrap();
+    assert_eq!(doc2.resolve(co.get(b"CO").unwrap()).as_array().unwrap().len(), 2, "both calculated fields are in the calculation order");
+    let mut doc = doc2;
+    // Typing a formatted number stores the number and shows it formatted.
+    set_value(&mut doc, "Price", &FieldValue::Text("$1,234.5".into())).unwrap();
+    set_value(&mut doc, "Qty", &FieldValue::Text("2".into())).unwrap();
+    let all = fields(&doc);
+    assert_eq!(field(&all, "Price").value, ["1234.5"]);
+    assert!(ap(&doc, &field(&all, "Price").widgets[0]).contains("($1,234.50) Tj"));
+    // Calculations ran in order.
+    assert_eq!(field(&all, "Total").value, ["2469"]);
+    assert!(ap(&doc, &field(&all, "Total").widgets[0]).contains("($2,469.00) Tj"));
+    assert_eq!(field(&all, "Count").value, ["2"]);
+    // Keystroke and validation errors use Acrobat's messages and change nothing.
+    assert_eq!(
+        set_value(&mut doc, "Qty", &FieldValue::Text("lots".into())),
+        Err(FormError::Invalid("The value entered does not match the format of the field [ Qty ]".into()))
+    );
+    assert_eq!(
+        set_value(&mut doc, "Qty", &FieldValue::Text("120".into())),
+        Err(FormError::Invalid("Invalid value: must be greater than or equal to 1 and less than or equal to 99.".into()))
+    );
+    assert_eq!(field(&fields(&doc), "Qty").value, ["2"]);
+    // Dates: stored as typed, shown in the format; impossible dates are refused.
+    set_value(&mut doc, "Due", &FieldValue::Text("10/1/2026".into())).unwrap();
+    assert!(ap(&doc, &field(&fields(&doc), "Due").widgets[0]).contains("(Oct 1, 2026) Tj"));
+    assert!(set_value(&mut doc, "Due", &FieldValue::Text("2/30/2026".into())).is_err());
+    // Clear form recalculates.
+    reset(&mut doc, None).unwrap();
+    assert_eq!(field(&fields(&doc), "Total").value, ["0"]);
+    // Removing a format.
+    set_props(&mut doc, "Price", &FieldProps { format: Some(Format::None), ..FieldProps::default() }).unwrap();
+    assert_eq!(field(&fields(&doc), "Price").actions.format, Format::None);
+}
