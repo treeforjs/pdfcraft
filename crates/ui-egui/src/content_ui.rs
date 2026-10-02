@@ -1,0 +1,414 @@
+//! Edit a PDF ▸ Add content: the Text tool (click on the page and type), Image (pick a file;
+//! it lands in the middle of the page), and editing what was added: select, move, resize
+//! (images keep their proportions), double-click text to retype it, format it from the panel,
+//! Delete to remove it. Each change is one undoable engine edit.
+
+use egui::{Color32, CornerRadius, Pos2, Rect, Stroke};
+use printcraft_engine::{Added, AddedContent, AddedText, Edit, FontFamily, TextAlign};
+use printcraft_render::DocInfo;
+
+use crate::canvas::{DocView, PageXform};
+use crate::theme::Tokens;
+use crate::widgets;
+
+const SELECT_BLUE: Color32 = Color32::from_rgb(0x14, 0x73, 0xE6);
+
+/// The text being typed or retyped in place.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TextDraft {
+    pub page: usize,
+    /// `None` for new text; the item index for retyping.
+    pub index: Option<usize>,
+    /// Display space.
+    pub rect: [f64; 4],
+    pub text: String,
+    pub style: AddedText,
+    pub focus: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Grab {
+    Move,
+    /// Which corner: (left, top) in screen terms.
+    Corner(bool, bool),
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ContentView {
+    /// The selected added item: (page, index among the page's items).
+    pub selected: Option<(usize, usize)>,
+    pub draft: Option<TextDraft>,
+    /// Select the item an add creates (the page's item count before it).
+    pub select_added: Option<(usize, usize)>,
+    grab: Option<(usize, Grab, Pos2)>,
+}
+
+/// Text style for new text (the panel's Format controls set it).
+pub fn default_style() -> AddedText {
+    AddedText { size: 12.0, ..AddedText::default() }
+}
+
+/// Display-space rect → screen.
+fn screen_rect(xf: &PageXform, info: &DocInfo, page: usize, r: [f64; 4]) -> Rect {
+    let ph = info.pages[page].height as f64;
+    xf.view_rect([r[0] as f32, (ph - r[3]) as f32, r[2] as f32, (ph - r[1]) as f32])
+}
+
+/// Screen point → display space.
+fn to_display(xf: &PageXform, info: &DocInfo, page: usize, p: Pos2) -> [f64; 2] {
+    let (vx, vy) = xf.screen_to_view(p);
+    [vx as f64, info.pages[page].height as f64 - vy as f64]
+}
+
+fn on_page(added: &[Added], page: usize) -> Vec<(usize, &Added)> {
+    added.iter().filter(|a| a.page == page).enumerate().collect()
+}
+
+fn handles(r: Rect) -> [(Pos2, bool, bool); 4] {
+    [(r.left_top(), true, true), (r.right_top(), false, true), (r.left_bottom(), true, false), (r.right_bottom(), false, false)]
+}
+
+/// The rect while moving or resizing (images keep their proportions).
+fn dragged(r: Rect, grab: Grab, d: egui::Vec2, keep_aspect: bool) -> Rect {
+    match grab {
+        Grab::Move => r.translate(d),
+        Grab::Corner(left, top) => {
+            let (mut dx, mut dy) = (if left { -d.x } else { d.x }, if top { -d.y } else { d.y });
+            if keep_aspect && r.width() > 0.0 && r.height() > 0.0 {
+                let k = ((r.width() + dx) / r.width()).max((r.height() + dy) / r.height()).max(0.05);
+                dx = r.width() * k - r.width();
+                dy = r.height() * k - r.height();
+            }
+            let mut out = r;
+            if left {
+                out.min.x -= dx;
+            } else {
+                out.max.x += dx;
+            }
+            if top {
+                out.min.y -= dy;
+            } else {
+                out.max.y += dy;
+            }
+            Rect::from_two_pos(out.min, out.max)
+        }
+    }
+}
+
+pub(crate) struct Outcome {
+    pub consumed: bool,
+    /// A text item was placed or edited: go back to Select.
+    pub done: bool,
+}
+
+/// Pointer input on one page in Edit mode (`adding_text` with the Text tool).
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn page_input(
+    ui: &egui::Ui,
+    resp: &egui::Response,
+    xf: &PageXform,
+    page: usize,
+    info: &DocInfo,
+    added: &[Added],
+    adding_text: bool,
+    style: &AddedText,
+    view: &mut DocView,
+) -> Outcome {
+    let mut out = Outcome { consumed: false, done: false };
+    let pointer = ui.input(|i| i.pointer.hover_pos().or(i.pointer.interact_pos()));
+    let cv = &mut view.content;
+    if let Some((gp, grab, start)) = cv.grab
+        && gp == page
+    {
+        out.consumed = true;
+        if resp.drag_stopped() || !ui.input(|i| i.pointer.primary_down()) {
+            cv.grab = None;
+            let end = pointer.unwrap_or(start);
+            if let Some((sp, si)) = cv.selected
+                && sp == page
+                && let Some((_, a)) = on_page(added, page).into_iter().find(|(i, _)| *i == si)
+                && (end - start).length() >= 1.0
+            {
+                let keep = matches!(a.content, AddedContent::Image(_));
+                let r = dragged(screen_rect(xf, info, page, a.content.rect()), grab, end - start, keep);
+                let (p0, p1) = (to_display(xf, info, page, r.left_bottom()), to_display(xf, info, page, r.right_top()));
+                let mut rect = [p0[0], p0[1], p1[0], p1[1]];
+                if let AddedContent::Text(t) = &a.content
+                    && grab == Grab::Move
+                {
+                    // Text height follows its lines: keep the top edge's offset only.
+                    rect = [rect[0], rect[3] - (t.rect[3] - t.rect[1]), rect[2], rect[3]];
+                }
+                view.pending_edit = Some(Edit::UpdateContent { page, index: si, content: a.content.with_rect(rect) });
+            }
+        }
+        return out;
+    }
+    let Some(p) = pointer.filter(|p| xf.rect.contains(*p)) else { return out };
+    let items = on_page(added, page);
+    let hit = items.iter().rev().find(|(_, a)| screen_rect(xf, info, page, a.content.rect()).expand(2.0).contains(p)).map(|(i, a)| (*i, *a));
+    let selected_rect = cv
+        .selected
+        .filter(|s| s.0 == page)
+        .and_then(|(_, si)| items.iter().find(|(i, _)| *i == si))
+        .map(|(_, a)| screen_rect(xf, info, page, a.content.rect()));
+    let corner = selected_rect.and_then(|r| handles(r).into_iter().find(|(c, ..)| c.distance(p) <= 6.0));
+    if adding_text && hit.is_none() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::Text);
+        if resp.clicked() {
+            let at = to_display(xf, info, page, p);
+            let mut style = style.clone();
+            style.text.clear();
+            cv.draft = Some(TextDraft {
+                page,
+                index: None,
+                rect: [at[0], at[1] - style.size * 1.2, at[0] + 200.0, at[1]],
+                text: String::new(),
+                style,
+                focus: true,
+            });
+            out.consumed = true;
+        }
+        return out;
+    }
+    if let Some((_, left, top)) = corner {
+        ui.ctx().set_cursor_icon(if left == top { egui::CursorIcon::ResizeNwSe } else { egui::CursorIcon::ResizeNeSw });
+    } else if hit.is_some() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::Move);
+    }
+    if resp.drag_started() {
+        let origin = ui.input(|i| i.pointer.press_origin()).unwrap_or(p);
+        if let Some((_, left, top)) = selected_rect.and_then(|r| handles(r).into_iter().find(|(c, ..)| c.distance(origin) <= 6.0)) {
+            cv.grab = Some((page, Grab::Corner(left, top), origin));
+            out.consumed = true;
+        } else if let Some((i, _)) = items.iter().rev().find(|(_, a)| screen_rect(xf, info, page, a.content.rect()).expand(2.0).contains(origin)) {
+            cv.selected = Some((page, *i));
+            cv.grab = Some((page, Grab::Move, origin));
+            out.consumed = true;
+        }
+        return out;
+    }
+    if resp.double_clicked()
+        && let Some((i, a)) = hit
+        && let AddedContent::Text(t) = &a.content
+    {
+        cv.draft = Some(TextDraft { page, index: Some(i), rect: t.rect, text: t.text.clone(), style: t.clone(), focus: true });
+        cv.selected = Some((page, i));
+        out.consumed = true;
+        return out;
+    }
+    if resp.clicked() {
+        match hit {
+            Some((i, _)) => {
+                cv.selected = Some((page, i));
+                out.consumed = true;
+            }
+            None if corner.is_none() => cv.selected = None,
+            None => out.consumed = true,
+        }
+    }
+    out.consumed |= hit.is_some() && resp.is_pointer_button_down_on();
+    out
+}
+
+/// Outlines of added items (hover and selection with handles) and the box being dragged.
+pub(crate) fn paint_page(ui: &egui::Ui, painter: &egui::Painter, xf: &PageXform, page: usize, info: &DocInfo, added: &[Added], view: &DocView) {
+    let cv = &view.content;
+    let pointer = ui.input(|i| i.pointer.hover_pos());
+    for (i, a) in on_page(added, page) {
+        if cv.draft.as_ref().is_some_and(|d| d.page == page && d.index == Some(i)) {
+            continue;
+        }
+        let mut r = screen_rect(xf, info, page, a.content.rect());
+        let selected = cv.selected == Some((page, i));
+        if selected
+            && let (Some((gp, g, start)), Some(p)) = (cv.grab, pointer)
+            && gp == page
+        {
+            r = dragged(r, g, p - start, matches!(a.content, AddedContent::Image(_)));
+        }
+        if selected {
+            painter.rect_stroke(r.expand(1.0), CornerRadius::ZERO, Stroke::new(1.5, SELECT_BLUE), egui::StrokeKind::Outside);
+            for (c, ..) in handles(r.expand(1.0)) {
+                painter.circle(c, 3.5, Color32::WHITE, Stroke::new(1.5, SELECT_BLUE));
+            }
+        } else if pointer.is_some_and(|p| r.expand(2.0).contains(p)) {
+            painter.rect_stroke(r.expand(1.0), CornerRadius::ZERO, Stroke::new(1.0, SELECT_BLUE.gamma_multiply(0.7)), egui::StrokeKind::Outside);
+        }
+    }
+}
+
+/// Delete removes the selected item; Escape clears the selection.
+pub(crate) fn keys(ctx: &egui::Context, view: &mut DocView) {
+    if view.content.selected.is_none() || view.content.draft.is_some() || ctx.egui_wants_keyboard_input() {
+        return;
+    }
+    let (del, esc) = ctx.input(|i| (i.key_pressed(egui::Key::Delete) || i.key_pressed(egui::Key::Backspace), i.key_pressed(egui::Key::Escape)));
+    if del && let Some((page, index)) = view.content.selected.take() {
+        view.pending_edit = Some(Edit::DeleteContent { page, index });
+    } else if esc {
+        view.content.selected = None;
+    }
+}
+
+/// After an add: select the new item.
+pub(crate) fn after_refresh(view: &mut DocView, added: &[Added]) {
+    if let Some((page, before)) = view.content.select_added.take()
+        && on_page(added, page).len() > before
+    {
+        view.content.selected = Some((page, before));
+    }
+    if let Some((p, i)) = view.content.selected
+        && on_page(added, p).len() <= i
+    {
+        view.content.selected = None;
+    }
+}
+
+/// The in-place text editor. Returns the edit once committed (click away; Escape cancels).
+pub(crate) fn editor(ctx: &egui::Context, view: &mut DocView, info: &DocInfo, added: &[Added]) -> Option<Edit> {
+    let d = view.content.draft.clone()?;
+    let xf = view.page_xform(d.page)?;
+    let r = screen_rect(&xf, info, d.page, d.rect);
+    let zoom = xf.rect.width() / xf.pw.max(1.0);
+    let (mut commit, mut cancel) = (false, false);
+    egui::Area::new(egui::Id::new(("added-text", view.id.0))).order(egui::Order::Foreground).fixed_pos(r.min).show(ctx, |ui| {
+        let t = view.content.draft.as_mut().expect("checked");
+        let [cr, cg, cb] = t.style.color.map(|v| (v.clamp(0.0, 1.0) * 255.0) as u8);
+        let resp = ui.add(
+            egui::TextEdit::multiline(&mut t.text)
+                .font(egui::FontId::proportional((t.style.size as f32 * zoom).max(8.0)))
+                .desired_width(r.width().max(60.0))
+                .desired_rows(1)
+                .background_color(Color32::from_rgba_unmultiplied(255, 255, 255, 235))
+                .text_color(Color32::from_rgb(cr, cg, cb))
+                .hint_text("Type text")
+                .id_salt("added-text-edit"),
+        );
+        if t.focus {
+            resp.request_focus();
+            t.focus = false;
+        }
+        if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+            cancel = true;
+        } else if resp.lost_focus() {
+            commit = true;
+        }
+    });
+    if cancel {
+        view.content.draft = None;
+        return None;
+    }
+    if !commit {
+        return None;
+    }
+    let d = view.content.draft.take()?;
+    let text = d.text.trim_end().to_string();
+    match d.index {
+        None if text.trim().is_empty() => None,
+        None => {
+            view.content.select_added = Some((d.page, on_page(added, d.page).len()));
+            Some(Edit::AddText { page: d.page, text: AddedText { rect: d.rect, text, ..d.style } })
+        }
+        Some(i) if text.trim().is_empty() => Some(Edit::DeleteContent { page: d.page, index: i }),
+        Some(i) => {
+            let (_, a) = on_page(added, d.page).into_iter().find(|(k, _)| *k == i)?;
+            let AddedContent::Text(old) = &a.content else { return None };
+            (old.text != text).then(|| Edit::UpdateContent { page: d.page, index: i, content: AddedContent::Text(AddedText { text, ..old.clone() }) })
+        }
+    }
+}
+
+/// Format text (shown in the Edit panel while a text item is selected, or for new text).
+/// Returns the changed style; for a selected item the caller turns it into an update.
+pub(crate) fn format_panel(ui: &mut egui::Ui, t: &Tokens, style: &AddedText) -> Option<AddedText> {
+    let mut s = style.clone();
+    widgets::section_title(ui, "Format text");
+    ui.horizontal(|ui| {
+        egui::ComboBox::from_id_salt("font-family").selected_text(s.family.label()).width(110.0).show_ui(ui, |ui| {
+            for f in [FontFamily::Helvetica, FontFamily::Times, FontFamily::Courier] {
+                ui.selectable_value(&mut s.family, f, f.label());
+            }
+        });
+        // A list rather than a drag value: every change is an undo step.
+        egui::ComboBox::from_id_salt("font-size").selected_text(format!("{} pt", s.size)).width(70.0).show_ui(ui, |ui| {
+            for size in [8.0, 9.0, 10.0, 11.0, 12.0, 14.0, 16.0, 18.0, 20.0, 24.0, 28.0, 36.0, 48.0, 72.0] {
+                ui.selectable_value(&mut s.size, size, format!("{size} pt"));
+            }
+        });
+    });
+    ui.horizontal(|ui| {
+        if ui.selectable_label(s.bold, egui::RichText::new("B").strong()).on_hover_text("Bold").clicked() {
+            s.bold = !s.bold;
+        }
+        if ui.selectable_label(s.italic, egui::RichText::new("I").italics()).on_hover_text("Italic").clicked() {
+            s.italic = !s.italic;
+        }
+        ui.separator();
+        for (a, icon, tip) in [
+            (TextAlign::Left, "align-left", "Align left"),
+            (TextAlign::Center, "align-center", "Centre"),
+            (TextAlign::Right, "align-right", "Align right"),
+        ] {
+            if crate::icons::button(ui, icon, 26.0, s.align == a, tip).clicked() {
+                s.align = a;
+            }
+        }
+    });
+    let c = s.color;
+    if let Some(picked) = crate::comments::swatch_grid(ui, Some(c)) {
+        s.color = picked;
+    }
+    ui.label(egui::RichText::new("Standard fonts; text outside Windows-1252 isn't supported yet.").small().color(t.text_faint));
+    (s != *style).then_some(s)
+}
+
+/// How to use the tools, under the Add content list.
+pub(crate) fn hint(ui: &mut egui::Ui, t: &Tokens) {
+    ui.label(
+        egui::RichText::new("Click on the page to add text. Drag items to move them, drag a corner to resize, double-click text to edit it.")
+            .small()
+            .color(t.text_faint),
+    );
+    ui.add_space(4.0);
+}
+
+impl crate::PrintCraftApp {
+    /// Edit a PDF ▸ Add content ▸ Image: pick a file and place it in the middle of the current page.
+    pub fn add_image_dialog(&mut self) {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let picked = match self.save_override.clone() {
+                Some(p) if p.ends_with(".png") || p.ends_with(".jpg") => Some(std::path::PathBuf::from(p)),
+                // Tests and automation set `save_override` and never see a native dialog.
+                Some(_) => None,
+                None => rfd::FileDialog::new()
+                    .add_filter("Images", &["png", "jpg", "jpeg", "tif", "tiff", "gif", "bmp"])
+                    .set_title("Choose an image")
+                    .pick_file(),
+            };
+            let Some(path) = picked else { return };
+            match std::fs::read(&path) {
+                Ok(bytes) => {
+                    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                    self.add_image(name, bytes);
+                }
+                Err(e) => self.notify(format!("Couldn't read {}: {e}", path.display())),
+            }
+        }
+        #[cfg(target_arch = "wasm32")]
+        self.notify("Adding images arrives on the web with file pickers for images");
+    }
+
+    /// Place image `bytes` in the middle of the current page and select it.
+    pub fn add_image(&mut self, name: String, bytes: Vec<u8>) {
+        let Some((i, id)) = self.active_ids() else { return };
+        let page = self.views[i].current;
+        let before = self.session.get(id).map_or(0, |d| d.added.iter().filter(|a| a.page == page).count());
+        if self.apply_edit(Edit::AddImage { page, rect: None, name, bytes: std::sync::Arc::new(bytes) }) {
+            self.views[i].content.select_added = Some((page, before));
+            self.left = crate::LeftPanel::Tool("edit");
+            self.left_open = true;
+        }
+    }
+}

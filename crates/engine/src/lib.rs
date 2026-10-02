@@ -21,7 +21,9 @@ pub use printcraft_organize::{BoxSpec, PageBox, SplitBy, split_ranges};
 pub use printcraft_organize::LabelStyle;
 
 pub use printcraft_cos::Algorithm;
-pub use printcraft_edit::{Background, HeaderFooter, MarkKind, Watermark};
+pub use printcraft_edit::{
+    Added, AddedText, Align as TextAlign, Background, Content as AddedContent, Family as FontFamily, HeaderFooter, MarkKind, Watermark,
+};
 pub use printcraft_forms::{
     Field as FormField, FieldKind as FormFieldKind, FieldProps, FieldValue, NewField, Widget as FormWidget, flags as field_flags,
 };
@@ -122,6 +124,8 @@ pub struct Document {
     pub form: Arc<Vec<printcraft_forms::Field>>,
     /// Page marks present (headers and footers, watermarks, backgrounds), for Update/Remove.
     pub marks: Vec<MarkKind>,
+    /// Text and images added with Edit a PDF ▸ Add content (still editable).
+    pub added: Vec<printcraft_edit::Added>,
     editor: Option<Editor>,
     config: RenderConfig,
 }
@@ -555,6 +559,29 @@ pub enum Edit {
     RemoveMarks {
         kind: MarkKind,
     },
+    /// Edit a PDF ▸ Add content ▸ Text (`text.rect` in display space).
+    AddText {
+        page: usize,
+        text: AddedText,
+    },
+    /// Edit a PDF ▸ Add content ▸ Image: an image file placed at `rect` (display space), or at
+    /// its natural size centred on the page (shrunk to fit).
+    AddImage {
+        page: usize,
+        rect: Option<[f64; 4]>,
+        name: String,
+        bytes: Arc<Vec<u8>>,
+    },
+    /// Move, resize, retype or reformat an added item (`index` among the page's added items).
+    UpdateContent {
+        page: usize,
+        index: usize,
+        content: AddedContent,
+    },
+    DeleteContent {
+        page: usize,
+        index: usize,
+    },
     /// Apply redaction marks (all, or those on `pages`): remove what they cover for good.
     ApplyRedactions {
         pages: Option<Vec<usize>>,
@@ -625,6 +652,10 @@ impl Edit {
             Edit::RemoveMarks { kind: MarkKind::HeaderFooter } => "Remove header & footer".into(),
             Edit::RemoveMarks { kind: MarkKind::Watermark } => "Remove watermark".into(),
             Edit::RemoveMarks { kind: MarkKind::Background } => "Remove background".into(),
+            Edit::AddText { .. } => "Add text".into(),
+            Edit::AddImage { .. } => "Add image".into(),
+            Edit::UpdateContent { .. } => "Edit content".into(),
+            Edit::DeleteContent { .. } => "Delete content".into(),
             Edit::ApplyRedactions { .. } => "Apply redactions".into(),
             Edit::ClearRedactions => "Remove redaction marks".into(),
             Edit::RemoveHidden { .. } => "Remove hidden information".into(),
@@ -730,6 +761,10 @@ fn check_permission(edit: &Edit, p: &printcraft_cos::Permissions) -> Result<(), 
         | Edit::RemoveMarks { .. }
         | Edit::AddField { .. }
         | Edit::ApplyRedactions { .. }
+        | Edit::AddText { .. }
+        | Edit::AddImage { .. }
+        | Edit::UpdateContent { .. }
+        | Edit::DeleteContent { .. }
         | Edit::ClearRedactions
         | Edit::RemoveHidden { .. }
         | Edit::Sanitize
@@ -882,6 +917,25 @@ fn run_edit(doc: &mut printcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -
                 return Err(EditError::Edit(printcraft_edit::EditError::Invalid("there is nothing to remove".into())));
             }
         }
+        Edit::AddText { page, text } => {
+            printcraft_edit::add_content(doc, *page, &AddedContent::Text(text.clone()))?;
+        }
+        Edit::AddImage { page, rect, name, bytes } => {
+            let (image, natural) = printcraft_create::image_xobject(doc, name, bytes)?;
+            let rect = match rect {
+                Some(r) => *r,
+                None => {
+                    let p = printcraft_model::pages(doc).swap_remove(*page);
+                    let (pw, ph) = p.display_size(doc);
+                    let k = ((pw * 0.8) / natural.0).min((ph * 0.8) / natural.1).min(1.0);
+                    let (w, h) = (natural.0 * k, natural.1 * k);
+                    [(pw - w) / 2.0, (ph - h) / 2.0, (pw + w) / 2.0, (ph + h) / 2.0]
+                }
+            };
+            printcraft_edit::add_content(doc, *page, &AddedContent::Image(printcraft_edit::AddedImage { rect, image }))?;
+        }
+        Edit::UpdateContent { page, index, content } => printcraft_edit::update_content(doc, *page, *index, content)?,
+        Edit::DeleteContent { page, index } => printcraft_edit::delete_content(doc, *page, *index)?,
         Edit::ApplyRedactions { pages } => {
             printcraft_redact::apply(doc, pages.as_deref())?;
         }
@@ -1098,6 +1152,7 @@ impl Session {
         };
         let form = editor.as_ref().map(|e| printcraft_forms::fields(&e.cos)).unwrap_or_default();
         let marks = editor.as_ref().map(|e| printcraft_edit::marks_present(&e.cos)).unwrap_or_default();
+        let added = editor.as_ref().map(|e| printcraft_edit::list_added(&e.cos)).unwrap_or_default();
         self.next_id += 1;
         let id = DocId(self.next_id);
         self.docs.push(Document {
@@ -1114,6 +1169,7 @@ impl Session {
             read_only_reason,
             form: Arc::new(form),
             marks,
+            added,
             editor,
             config,
         });
@@ -1258,6 +1314,7 @@ impl Session {
         doc.info = info;
         doc.form = Arc::new(printcraft_forms::fields(&editor.cos));
         doc.marks = printcraft_edit::marks_present(&editor.cos);
+        doc.added = printcraft_edit::list_added(&editor.cos);
         doc.bytes = bytes.clone();
         doc.renderer = RenderPool::new(bytes, render_threads(), doc.config.clone());
         Ok(())

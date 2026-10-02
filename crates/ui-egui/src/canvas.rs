@@ -132,6 +132,8 @@ pub struct DocView {
     pub forms: crate::forms_ui::FormView,
     /// Prepare a form: the selected field and the gesture in progress.
     pub prepare: crate::prepare::PrepareView,
+    /// Edit a PDF: the selected added item, the text being typed.
+    pub content: crate::content_ui::ContentView,
     /// Redact tool: the box being drawn, and a mark to add (page, quads) for the app to style.
     pub redact_drag: crate::redact_ui::AreaDrag,
     pub pending_redaction: Option<(usize, Vec<[f64; 8]>)>,
@@ -209,6 +211,7 @@ impl DocView {
             comments: Default::default(),
             forms: Default::default(),
             prepare: Default::default(),
+            content: Default::default(),
             redact_drag: None,
             pending_redaction: None,
             crop_drag: None,
@@ -733,6 +736,9 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
     let want_thumbs = app.right == Some(RightPanel::Pages) || app.views[index].organize || app.dialog == Some(crate::Dialog::Print);
     // The Prepare a form panel is open (or a field tool is picked): fields are edited, not filled.
     let preparing = (app.left_open && app.left == crate::LeftPanel::Tool("form")) || matches!(app.quick_tool, QuickTool::Field(_));
+    // Edit a PDF: added text and images can be selected, moved and edited.
+    let editing_content = (app.left_open && app.left == crate::LeftPanel::Tool("edit")) || app.quick_tool == QuickTool::AddText;
+    let text_style = app.text_style.clone();
     let view = &mut app.views[index];
     // Opened without the owner password and something is restricted.
     let secured = doc.security_summary().is_some_and(|s| !(s.owner || (s.permissions.modify() && s.permissions.assemble())));
@@ -801,7 +807,7 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
         QuickTool::Comment(t) => t.markup().is_some(),
         QuickTool::Select => !preparing,
         QuickTool::Redact => true,
-        QuickTool::Hand | QuickTool::Crop | QuickTool::Fill(_) | QuickTool::Field(_) => false,
+        QuickTool::Hand | QuickTool::Crop | QuickTool::Fill(_) | QuickTool::Field(_) | QuickTool::AddText => false,
     };
     let prefs = &app.comment_prefs;
     let allowed = doc.allows_annotation();
@@ -824,6 +830,13 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
         crate::prepare::after_refresh(view, &form);
     } else {
         view.prepare.selected = None;
+    }
+    let added = doc.added.clone();
+    let mut content_done = false;
+    if editing_content {
+        crate::content_ui::after_refresh(view, &added);
+    } else {
+        view.content.selected = None;
     }
 
     let out = scroll.show_viewport(ui, |ui, viewport| {
@@ -977,7 +990,12 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
                 };
                 crate::redact_ui::page_input(ui, &resp, &xf, i, info, over_text, view)
             };
-            let consumed = boxing || on_field || comments::page_input(ui, &resp, &pcx, view);
+            let on_content = editing_content && can_modify && {
+                let o = crate::content_ui::page_input(ui, &resp, &xf, i, info, &added, tool == QuickTool::AddText, &text_style, view);
+                content_done |= o.done;
+                o.consumed || tool == QuickTool::AddText
+            };
+            let consumed = on_content || boxing || on_field || comments::page_input(ui, &resp, &pcx, view);
 
             // Text layer: find matches, selection, I-beam and drag-to-select.
             let to_screen = |g: [f32; 4]| xf.view_rect(g);
@@ -1052,6 +1070,9 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
                 crate::redact_ui::paint(ui, painter, i, view);
             }
             comments::paint_page(ui, painter, &pcx, view);
+            if editing_content {
+                crate::content_ui::paint_page(ui, painter, &xf, i, info, &added, view);
+            }
             if preparing {
                 crate::prepare::paint_page(ui, painter, &xf, i, info, &form, view);
             } else {
@@ -1192,6 +1213,11 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
     if let Some(e) = crate::fill_sign::type_box(ui.ctx(), view, info, &author) {
         view.pending_edit = Some(e);
     }
+    let typed_text = view.content.draft.is_some();
+    if let Some(e) = crate::content_ui::editor(ui.ctx(), view, info, &added) {
+        view.pending_edit = Some(e);
+    }
+    content_done |= typed_text && view.content.draft.is_none();
     let form_notice = view.forms.notice.take();
     // One crop, then back to selecting (as Acrobat does).
     let cropped = view.pending_edit.as_ref().is_some_and(|e| matches!(e, printcraft_engine::Edit::SetPageBox { .. }));
@@ -1199,6 +1225,13 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
     comments::keys(ui.ctx(), view, &mut tool, allowed);
     if preparing {
         crate::prepare::keys(ui.ctx(), view);
+    }
+    if editing_content {
+        crate::content_ui::keys(ui.ctx(), view);
+    }
+    // One text box, then back to selecting (as Acrobat does).
+    if content_done && tool == QuickTool::AddText {
+        tool = QuickTool::Select;
     }
     // One field, then back to selecting (Acrobat's default without "Keep tools pinned").
     if field_placed {

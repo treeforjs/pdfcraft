@@ -125,6 +125,10 @@ fn tool_detail(app: &mut PrintCraftApp, ui: &mut egui::Ui, t: &Tokens, g: &'stat
             );
         });
     }
+    // Edit a PDF shows Format text at the top while text is selected or being added.
+    if g.id == "edit" {
+        format_section(app, ui, t);
+    }
     let mut run = None;
     // Redact a PDF has Acrobat's footer: Clear all / Redact all.
     let footer = g.id == "redact";
@@ -184,6 +188,37 @@ fn tool_detail(app: &mut PrintCraftApp, ui: &mut egui::Ui, t: &Tokens, g: &'stat
     if let Some(cmd) = run {
         app.run_command(cmd);
     }
+}
+
+/// Edit a PDF ▸ Format text: for the selected added text (one undoable change), or the style
+/// new text gets.
+fn format_section(app: &mut PrintCraftApp, ui: &mut egui::Ui, t: &Tokens) {
+    let selected = app.active_ids().and_then(|(i, id)| {
+        let (page, index) = app.views[i].content.selected?;
+        let doc = app.session.get(id)?;
+        let a = doc.added.iter().filter(|a| a.page == page).nth(index)?;
+        match &a.content {
+            printcraft_engine::AddedContent::Text(text) => Some((page, index, text.clone())),
+            _ => None,
+        }
+    });
+    match selected {
+        Some((page, index, text)) => {
+            if let Some(style) = crate::content_ui::format_panel(ui, t, &text) {
+                app.text_style = printcraft_engine::AddedText { text: String::new(), rect: [0.0; 4], ..style.clone() };
+                app.apply_edit(printcraft_engine::Edit::UpdateContent { page, index, content: printcraft_engine::AddedContent::Text(style) });
+            }
+        }
+        None if app.quick_tool == crate::QuickTool::AddText => {
+            crate::content_ui::hint(ui, t);
+            if let Some(style) = crate::content_ui::format_panel(ui, t, &app.text_style) {
+                app.text_style = style;
+            }
+        }
+        None => return,
+    }
+    ui.add_space(6.0);
+    ui.separator();
 }
 
 // ───────────────────────────────────────────────────────────────────────────── right panels

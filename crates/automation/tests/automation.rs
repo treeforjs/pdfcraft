@@ -685,3 +685,31 @@ fn printing_through_tools() {
     assert!(matches!(a.call("doc_print", &json!({ "doc": doc })), Err(ToolError::InvalidArgs(_))));
     assert!(matches!(a.call("doc_print", &json!({ "doc": doc, "pages": "99", "path": "x.pdf" })), Err(ToolError::InvalidArgs(_))));
 }
+
+#[test]
+fn adding_content_through_tools() {
+    let dir = workdir("content");
+    let mut png = Vec::new();
+    {
+        let mut enc = png::Encoder::new(&mut png, 40, 20);
+        enc.set_color(png::ColorType::Rgb);
+        let mut w = enc.write_header().unwrap();
+        w.write_image_data(&[200u8; 2400]).unwrap();
+    }
+    std::fs::write(dir.join("logo.png"), png).unwrap();
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    ok(&mut a, "page_add_text", json!({ "doc": doc, "page": 1, "text": "CONFIDENTIAL", "at": [20, 20], "size": 18, "bold": true, "color": "red" }));
+    let r = ok(&mut a, "page_add_image", json!({ "doc": doc, "page": 1, "path": "logo.png", "rect": [100, 200, 180, 240] }));
+    assert_eq!(r["rect"], json!([100.0, 200.0, 180.0, 240.0]));
+    assert!(page_text(&mut a, doc)[0].contains("CONFIDENTIAL"));
+    let list = ok(&mut a, "content_list", json!({ "doc": doc }));
+    assert_eq!(list["count"], 2);
+    assert_eq!((list["items"][0]["type"].as_str(), list["items"][0]["bold"].as_bool()), (Some("text"), Some(true)));
+    ok(&mut a, "content_update", json!({ "doc": doc, "page": 1, "index": 1, "text": "DRAFT", "font": "times" }));
+    let text = page_text(&mut a, doc)[0].clone();
+    assert!(text.contains("DRAFT") && !text.contains("CONFIDENTIAL"), "{text}");
+    ok(&mut a, "content_delete", json!({ "doc": doc, "page": 1, "index": 2 }));
+    assert_eq!(ok(&mut a, "content_list", json!({ "doc": doc }))["count"], 1);
+    assert!(matches!(a.call("content_delete", &json!({ "doc": doc, "page": 1, "index": 5 })), Err(ToolError::Failed(_))));
+}

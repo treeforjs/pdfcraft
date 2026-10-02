@@ -20,6 +20,7 @@ mod marks_ui;
 pub mod marks {
     pub use crate::marks_ui::{MarksDraft, PageRange, Subset};
 }
+mod content_ui;
 mod dialogs;
 mod editing;
 mod files;
@@ -92,6 +93,8 @@ pub enum QuickTool {
     Field(prepare::FieldTool),
     /// Redact text and images (drag across text or draw a box).
     Redact,
+    /// Edit a PDF ▸ Add content ▸ Text.
+    AddText,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -237,6 +240,8 @@ pub struct PrintCraftApp {
     pub redact_search: RedactSearchDraft,
     pub hidden_draft: HiddenDraft,
     pub print_draft: PrintDraft,
+    /// The style new text gets (Edit a PDF ▸ Format text).
+    pub text_style: printcraft_engine::AddedText,
     /// The Replace Pages dialog's state.
     pub replace_draft: Option<files::ReplaceDraft>,
     /// The last web link the app asked the system to open (tests and automation).
@@ -315,6 +320,7 @@ impl PrintCraftApp {
             redact_search: RedactSearchDraft::default(),
             hidden_draft: HiddenDraft::default(),
             print_draft: PrintDraft::default(),
+            text_style: content_ui::default_style(),
             replace_draft: None,
             number_draft: NumberDraft { from: 1, to: 1, style: printcraft_engine::LabelStyle::Decimal, prefix: String::new(), start: 1 },
         }
@@ -691,6 +697,7 @@ impl PrintCraftApp {
                     "hand" => QuickTool::Hand,
                     "crop" => QuickTool::Crop,
                     "redact" => QuickTool::Redact,
+                    "add-text" => QuickTool::AddText,
                     field if field.starts_with("field-") => QuickTool::Field(
                         prepare::FieldTool::from_command(&format!("form.add.{}", &field[6..])).ok_or_else(|| format!("unknown tool {field}"))?,
                     ),

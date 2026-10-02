@@ -120,12 +120,12 @@ pub static TOOL_GROUPS: &[ToolGroup] = &[
             ToolSection {
                 title: "Add content",
                 items: &[
-                    item("Text", "type", "edit.text", Planned("M7")),
-                    item("Image", "image-plus", "edit.image", Planned("M7")),
+                    item("Text", "type", "edit.text", Ready),
+                    item("Image", "image-plus", "edit.image", Ready),
                     item("Header and footer", "heading", "edit.header_footer", Ready),
                     item("Watermark", "stamp", "edit.watermark", Ready),
                     item("Link", "link-2", "edit.link", Planned("M7")),
-                    item("Bates numbering", "hash", "edit.bates", Planned("M7")),
+                    item("Bates numbering", "hash", "edit.bates", Ready),
                     item("Background", "palette", "edit.background", Ready),
                     item("Attach file", "paperclip", "edit.attach", Planned("M12")),
                 ],

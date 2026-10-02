@@ -10,6 +10,7 @@
 //! - An optional root directory confines every path a tool reads or writes.
 
 mod comments;
+mod content;
 mod forms;
 #[cfg(feature = "mcp")]
 pub mod mcp;
@@ -263,6 +264,11 @@ impl Automation {
             "redact_clear" => self.redact_clear(&a)?,
             "doc_hidden_info" => self.doc_hidden_info(&a)?,
             "printers" => self.printers()?,
+            "content_list" => self.content_list(&a)?,
+            "page_add_text" => self.page_add_text(&a)?,
+            "page_add_image" => self.page_add_image(&a)?,
+            "content_update" => self.content_update(&a)?,
+            "content_delete" => self.content_delete(&a)?,
             "doc_print" => self.doc_print(&a)?,
             "doc_remove_hidden" => self.doc_remove_hidden(&a)?,
             "fill_sign_add" => self.fill_sign_add(&a)?,

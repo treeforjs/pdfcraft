@@ -852,3 +852,31 @@ fn pages_export_as_png_jpeg_and_tiff() {
     let decoded = image::load_from_memory_with_format(&tif, image::ImageFormat::Tiff).unwrap();
     assert_eq!((decoded.width(), decoded.height()), (400, 600));
 }
+
+#[test]
+fn added_text_and_images_render_and_stay_editable() {
+    let (mut s, id) = session_with(1);
+    let text = AddedText { rect: [20.0, 250.0, 180.0, 280.0], text: "Added note".into(), size: 12.0, ..AddedText::default() };
+    s.apply(id, Edit::AddText { page: 0, text: text.clone() }).unwrap();
+    assert_eq!(s.get(id).unwrap().can_undo(), Some("Add text"));
+    assert!(page_texts(&s, id)[0].contains("Added note"), "the renderer's extractor sees page content");
+    // A PNG, centred at its natural size.
+    let mut png = Vec::new();
+    {
+        let mut enc = png::Encoder::new(&mut png, 20, 10);
+        enc.set_color(png::ColorType::Rgb);
+        let mut w = enc.write_header().unwrap();
+        w.write_image_data(&[0u8; 600]).unwrap();
+    }
+    s.apply(id, Edit::AddImage { page: 0, rect: None, name: "dot.png".into(), bytes: Arc::new(png) }).unwrap();
+    let d = s.get(id).unwrap();
+    assert_eq!(d.added.len(), 2);
+    assert_eq!(d.added[1].content.rect(), [90.0, 145.0, 110.0, 155.0], "20×10 px at 72 dpi, centred on 200×300");
+    let moved = d.added[0].content.with_rect([30.0, 100.0, 190.0, 130.0]);
+    s.apply(id, Edit::UpdateContent { page: 0, index: 0, content: moved }).unwrap();
+    assert_eq!(s.get(id).unwrap().added[0].content.rect()[3], 130.0);
+    s.apply(id, Edit::DeleteContent { page: 0, index: 1 }).unwrap();
+    assert_eq!(s.get(id).unwrap().added.len(), 1);
+    s.undo(id).unwrap();
+    assert_eq!(s.get(id).unwrap().added.len(), 2);
+}

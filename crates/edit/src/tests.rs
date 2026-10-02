@@ -171,3 +171,55 @@ fn flattening_draws_appearances_into_the_page_and_removes_the_comments() {
     assert!(xo.as_dict().unwrap().contains(b"PCFl1"));
     assert!(marks_present(&doc).is_empty(), "flattened content is not a removable mark");
 }
+
+#[test]
+fn added_text_and_images_are_page_content_that_stays_editable() {
+    let mut doc = fixture();
+    let text = AddedText { rect: [72.0, 600.0, 300.0, 700.0], text: "Approved by Ada\nSecond line".into(), size: 14.0, ..AddedText::default() };
+    assert_eq!(add_content(&mut doc, 0, &Content::Text(text.clone())).unwrap(), 0);
+    // An 1×1 gray image, placed on the rotated page.
+    let mut d = Dict::new();
+    d.set(b"Type".to_vec(), Object::name("XObject"));
+    d.set(b"Subtype".to_vec(), Object::name("Image"));
+    d.set(b"Width".to_vec(), Object::Int(1));
+    d.set(b"Height".to_vec(), Object::Int(1));
+    d.set(b"ColorSpace".to_vec(), Object::name("DeviceGray"));
+    d.set(b"BitsPerComponent".to_vec(), Object::Int(8));
+    let img = doc.add(Object::Stream(Stream::from_raw(d, vec![128])));
+    add_content(&mut doc, 1, &Content::Image(AddedImage { rect: [10.0, 10.0, 110.0, 60.0], image: img })).unwrap();
+    let doc2 = reopen(&doc);
+    let all = list_added(&doc2);
+    assert_eq!(all.len(), 2);
+    let Content::Text(t) = &all[0].content else { panic!() };
+    assert_eq!((t.text.as_str(), t.size), ("Approved by Ada\nSecond line", 14.0));
+    assert_eq!(t.rect, [72.0, 700.0 - 2.0 * 14.0 * 1.2, 300.0, 700.0], "the box height follows the two lines");
+    let page0 = streams(&doc2, 0).join("\n");
+    assert!(page0.contains("(Approved by Ada) Tj") && page0.contains("(Second line) Tj") && page0.contains("/PCFHelvetica 14 Tf"), "{page0}");
+    // The rotated page draws in display space: the view matrix comes first.
+    let page1 = streams(&doc2, 1).join("\n");
+    assert!(page1.contains("q 0 1 -1 0 600 0 cm") && page1.contains(&format!("/PCImg{} Do", img.num)), "{page1}");
+    // Edit: move, restyle, retype; then delete.
+    let mut doc = doc2;
+    let moved = AddedText {
+        rect: [100.0, 500.0, 300.0, 520.0],
+        text: "Approved".into(),
+        bold: true,
+        family: Family::Times,
+        align: Align::Right,
+        color: [1.0, 0.0, 0.0],
+        ..text
+    };
+    update_content(&mut doc, 0, 0, &Content::Text(moved)).unwrap();
+    let page0 = streams(&doc, 0).join("\n");
+    assert!(page0.contains("/PCFTimesBold 14 Tf 1 0 0 rg") && !page0.contains("Second line"), "{page0}");
+    assert!(
+        update_content(&mut doc, 1, 0, &Content::Text(AddedText { text: "x".into(), rect: [0.0, 0.0, 50.0, 10.0], ..AddedText::default() })).is_err(),
+        "kinds don't change"
+    );
+    delete_content(&mut doc, 0, 0).unwrap();
+    assert_eq!(list_added(&doc).len(), 1);
+    assert!(!streams(&doc, 0).join("").contains("Approved"));
+    assert!(add_content(&mut doc, 0, &Content::Text(AddedText { rect: [0.0, 0.0, 100.0, 10.0], ..AddedText::default() })).is_err(), "empty text");
+    // Page marks ignore added items.
+    assert!(marks_present(&doc).is_empty());
+}

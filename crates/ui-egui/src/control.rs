@@ -539,6 +539,7 @@ impl Host for crate::PrintCraftApp {
                 crate::QuickTool::Hand => "hand".to_string(),
                 crate::QuickTool::Crop => "crop".to_string(),
                 crate::QuickTool::Redact => "redact".to_string(),
+                crate::QuickTool::AddText => "add-text".to_string(),
                 crate::QuickTool::Fill(f) => format!("fill-{}", f.command().trim_start_matches("sign.fill.")),
                 crate::QuickTool::Field(f) => format!("field-{}", f.command().trim_start_matches("form.add.")),
                 crate::QuickTool::Comment(t) => t.command().trim_start_matches("comment.").to_string(),

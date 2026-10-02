@@ -303,6 +303,24 @@ fn embed(name: &str, bytes: &[u8]) -> Result<Vec<Embedded>, CreateError> {
     }
 }
 
+/// Embed an image file (its first page, for TIFFs) as an image XObject in `doc`. Returns the
+/// object and the image's natural size in points (from its resolution).
+pub fn image_xobject(doc: &mut Document, name: &str, bytes: &[u8]) -> Result<(ObjRef, (f64, f64)), CreateError> {
+    let img = embed(name, bytes)?.into_iter().next().ok_or_else(|| CreateError::Image(name.into(), "the file has no image".into()))?;
+    let size = (img.px.0 as f64 * 72.0 / img.dpi.0, img.px.1 as f64 * 72.0 / img.dpi.1);
+    let mut d = img.dict;
+    d.set(b"Type".to_vec(), Object::name("XObject"));
+    d.set(b"Subtype".to_vec(), Object::name("Image"));
+    d.set(b"Width".to_vec(), Object::Int(img.px.0 as i64));
+    d.set(b"Height".to_vec(), Object::Int(img.px.1 as i64));
+    if let Some((m, alpha)) = img.smask {
+        let mr = doc.add(Object::Stream(Stream::flate(m, &alpha)));
+        d.set(b"SMask".to_vec(), Object::Ref(mr));
+    }
+    let stream = if img.filtered { Stream::from_raw(d, img.data) } else { Stream::flate(d, &img.data) };
+    Ok((doc.add(Object::Stream(stream)), size))
+}
+
 /// One page per image, each the size of its image at the image's resolution.
 pub fn from_images(images: &[(String, Vec<u8>)]) -> Result<Document, CreateError> {
     if images.is_empty() {

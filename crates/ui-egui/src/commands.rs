@@ -199,6 +199,16 @@ impl PrintCraftApp {
                 self.marks_draft.replace = id.ends_with(".update");
                 self.dialog = Some(Dialog::Marks(kind));
             }
+            "edit.bates" => {
+                // Bates numbering ▸ Add: the header & footer dialog with a Bates number in the
+                // bottom-right box (6 digits from 1), ready to edit.
+                self.marks_draft.replace = false;
+                if self.marks_draft.hf.text.iter().all(|t| !t.contains("<<Bates")) {
+                    self.marks_draft.hf.text[5] = "<<Bates Number#6#1##>>".into();
+                }
+                self.marks_draft.focused_box = 5;
+                self.dialog = Some(Dialog::Marks(printcraft_engine::MarkKind::HeaderFooter));
+            }
             "edit.header_footer.remove" | "edit.watermark.remove" | "edit.background.remove" => {
                 use printcraft_engine::MarkKind as K;
                 let kind = match id {
@@ -210,6 +220,12 @@ impl PrintCraftApp {
             }
             "export.image" => self.dialog = Some(Dialog::Export(crate::export_ui::ExportKind::Image)),
             "export.text" => self.dialog = Some(Dialog::Export(crate::export_ui::ExportKind::Text)),
+            "edit.text" => {
+                self.quick_tool = crate::QuickTool::AddText;
+                self.left = crate::LeftPanel::Tool("edit");
+                self.left_open = true;
+            }
+            "edit.image" => self.add_image_dialog(),
             "redact.mark" => {
                 self.quick_tool = crate::QuickTool::Redact;
                 self.left = crate::LeftPanel::Tool("redact");
