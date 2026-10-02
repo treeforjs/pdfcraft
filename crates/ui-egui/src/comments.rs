@@ -35,16 +35,35 @@ pub enum CommentTool {
     Arrow,
     Rectangle,
     Oval,
+    Polygon,
+    PolyLine,
+    Cloud,
+    Callout,
+    Caret,
 }
 
 /// The quick-bar flyout groups, in Acrobat's order: Comment ▸, Highlight ▸, Draw ▸.
 pub const GROUPS: [&[CommentTool]; 3] = [
-    &[CommentTool::Note, CommentTool::TextBox],
-    &[CommentTool::Highlight, CommentTool::Underline, CommentTool::StrikeOut],
-    &[CommentTool::Ink, CommentTool::Line, CommentTool::Arrow, CommentTool::Rectangle, CommentTool::Oval],
+    &[CommentTool::Note, CommentTool::TextBox, CommentTool::Callout],
+    &[CommentTool::Highlight, CommentTool::Underline, CommentTool::StrikeOut, CommentTool::Caret],
+    &[
+        CommentTool::Ink,
+        CommentTool::Line,
+        CommentTool::Arrow,
+        CommentTool::Rectangle,
+        CommentTool::Oval,
+        CommentTool::PolyLine,
+        CommentTool::Polygon,
+        CommentTool::Cloud,
+    ],
 ];
 
-pub const ALL: [CommentTool; 10] = [
+pub const ALL: [CommentTool; 15] = [
+    CommentTool::Polygon,
+    CommentTool::PolyLine,
+    CommentTool::Cloud,
+    CommentTool::Callout,
+    CommentTool::Caret,
     CommentTool::Note,
     CommentTool::TextBox,
     CommentTool::Highlight,
@@ -70,6 +89,11 @@ impl CommentTool {
             Self::Arrow => "comment.arrow",
             Self::Rectangle => "comment.square",
             Self::Oval => "comment.circle",
+            Self::Polygon => "comment.polygon",
+            Self::PolyLine => "comment.polyline",
+            Self::Cloud => "comment.cloud",
+            Self::Callout => "comment.callout",
+            Self::Caret => "comment.caret",
         }
     }
 
@@ -89,6 +113,11 @@ impl CommentTool {
             Self::Arrow => "Arrow",
             Self::Rectangle => "Rectangle",
             Self::Oval => "Oval",
+            Self::Polygon => "Polygon",
+            Self::PolyLine => "Connected lines",
+            Self::Cloud => "Cloud",
+            Self::Callout => "Add a callout",
+            Self::Caret => "Insert text",
         }
     }
 
@@ -104,6 +133,11 @@ impl CommentTool {
             Self::Arrow => "move-right",
             Self::Rectangle => "square",
             Self::Oval => "circle",
+            Self::Polygon => "pentagon",
+            Self::PolyLine => "spline",
+            Self::Cloud => "cloud",
+            Self::Callout => "message-square-quote",
+            Self::Caret => "text-cursor-input",
         }
     }
 
@@ -125,9 +159,14 @@ impl CommentTool {
         matches!(self, Self::Ink | Self::Line | Self::Arrow | Self::Rectangle | Self::Oval)
     }
 
+    /// Tools that place points one click at a time (double-click or Enter finishes).
+    pub fn clicks_points(self) -> bool {
+        matches!(self, Self::Polygon | Self::PolyLine | Self::Cloud)
+    }
+
     /// Whether the line-thickness control applies.
     pub fn has_width(self) -> bool {
-        self.draws()
+        self.draws() || self.clicks_points()
     }
 
     /// A placeholder shape of this kind (for per-tool default styles).
@@ -143,6 +182,11 @@ impl CommentTool {
             Self::Arrow => Shape::Line { from: [0.0; 2], to: [0.0; 2], arrow: true },
             Self::Rectangle => Shape::Rectangle { rect: [0.0; 4] },
             Self::Oval => Shape::Oval { rect: [0.0; 4] },
+            Self::Polygon => Shape::Polygon { vertices: Vec::new(), cloud: false },
+            Self::Cloud => Shape::Polygon { vertices: Vec::new(), cloud: true },
+            Self::PolyLine => Shape::PolyLine { vertices: Vec::new() },
+            Self::Callout => Shape::Callout { rect: [0.0; 4], knee: [0.0; 2], point: [0.0; 2], font_size: 10.0 },
+            Self::Caret => Shape::Caret { rect: [0.0; 4] },
         }
     }
 }
@@ -223,7 +267,8 @@ fn login_name() -> String {
 /// A drag in progress on a page.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Gesture {
-    /// Drawing with a tool: points in user space (ink: the stroke; others: start and end).
+    /// Drawing with a tool: points in user space (ink: the stroke; polygons: the vertices
+    /// clicked so far; others: start and end).
     Draw { page: usize, tool: CommentTool, points: Vec<[f64; 2]> },
     /// Moving a comment, from the press position on screen.
     Move { page: usize, index: usize, from: Pos2 },
@@ -231,10 +276,16 @@ pub enum Gesture {
     Resize { page: usize, index: usize, handle: (i8, i8), from: Pos2 },
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ComposerKind {
     Note,
     TextBox,
+    /// A callout whose arrow touches `point`; the composer's anchor is the text box's top-left.
+    Callout {
+        point: [f64; 2],
+    },
+    /// Insert text at the anchor (the caret's tip).
+    Caret,
     /// Edit the text of the comment at this index on the composer's page.
     Edit(usize),
 }
@@ -359,8 +410,10 @@ fn is_markup(subtype: &str) -> bool {
     matches!(subtype, "Highlight" | "Underline" | "StrikeOut" | "Squiggly")
 }
 
-fn resizable(subtype: &str) -> bool {
-    matches!(subtype, "Square" | "Circle" | "FreeText")
+/// Rectangles, ovals and text boxes. A callout's `/Rect` also holds its leader line, so it
+/// only moves.
+fn resizable(a: &Annotation) -> bool {
+    matches!(a.subtype.as_str(), "Square" | "Circle" | "FreeText") && a.intent.as_deref() != Some("FreeTextCallout")
 }
 
 const HANDLES: [(i8, i8); 8] = [(-1, -1), (0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0)];
@@ -451,6 +504,105 @@ pub(crate) fn page_input(ui: &egui::Ui, resp: &egui::Response, cx: &PageCx<'_>, 
             }
             true
         }
+        QuickTool::Comment(tool) if tool.clicks_points() => {
+            if !cx.allowed {
+                return false;
+            }
+            if over_page {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
+            }
+            let finish = resp.double_clicked() || ui.input(|i| i.key_pressed(egui::Key::Enter));
+            if resp.clicked()
+                && over_page
+                && let Some(p) = pointer
+            {
+                let u = cx.to_user(p);
+                match cv.gesture.as_mut() {
+                    Some(Gesture::Draw { page, tool: t, points }) if *page == cx.page && *t == tool => {
+                        // Clicking the first point again closes a polygon.
+                        let closes = points.len() >= 3 && tool != CommentTool::PolyLine && cx.to_screen(points[0]).distance(p) <= 6.0;
+                        let repeat = points.last().is_some_and(|l| cx.to_screen(*l).distance(p) < 2.0);
+                        if closes {
+                            let pts = std::mem::take(points);
+                            cv.gesture = None;
+                            if let Some(shape) = drawn_shape(tool, &pts) {
+                                view.pending_edit = Some(new_comment(cx, tool, shape, String::new()));
+                            }
+                            return true;
+                        }
+                        if !repeat {
+                            points.push(u);
+                        }
+                    }
+                    _ => {
+                        cv.gesture = Some(Gesture::Draw { page: cx.page, tool, points: vec![u] });
+                        cv.selected = None;
+                    }
+                }
+            }
+            if finish
+                && let Some(Gesture::Draw { page, tool: t, points }) = cv.gesture.clone()
+                && page == cx.page
+                && t == tool
+            {
+                cv.gesture = None;
+                if let Some(shape) = drawn_shape(tool, &points) {
+                    view.pending_edit = Some(new_comment(cx, tool, shape, String::new()));
+                }
+            }
+            true
+        }
+        QuickTool::Comment(CommentTool::Callout) => {
+            // Drag from what the callout points at to where its text box goes.
+            if !cx.allowed {
+                return false;
+            }
+            if over_page {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
+            }
+            if resp.drag_started()
+                && pressed_here
+                && let Some(o) = origin
+            {
+                cv.gesture = Some(Gesture::Draw { page: cx.page, tool: CommentTool::Callout, points: vec![cx.to_user(o)] });
+                cv.selected = None;
+            }
+            if let Some(Gesture::Draw { page, points, .. }) = cv.gesture.as_mut()
+                && *page == cx.page
+                && let Some(p) = pointer
+            {
+                points.truncate(1);
+                points.push(cx.to_user(clamp_to(page_rect, p)));
+            }
+            if resp.drag_stopped()
+                && let Some(Gesture::Draw { page, points, .. }) = cv.gesture.clone()
+                && page == cx.page
+            {
+                cv.gesture = None;
+                if let [point, at] = points[..]
+                    && (point[0] - at[0]).hypot(point[1] - at[1]) >= 8.0
+                {
+                    cv.composer = Some(Composer { page, at, kind: ComposerKind::Callout { point }, text: String::new(), focus: true });
+                }
+            }
+            true
+        }
+        QuickTool::Comment(CommentTool::Caret) => {
+            if !cx.allowed {
+                return false;
+            }
+            if over_page {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::Text);
+            }
+            if resp.clicked()
+                && over_page
+                && let Some(p) = pointer
+            {
+                cv.composer = Some(Composer { page: cx.page, at: cx.to_user(p), kind: ComposerKind::Caret, text: String::new(), focus: true });
+                cv.selected = None;
+            }
+            true
+        }
         QuickTool::Comment(tool @ (CommentTool::Note | CommentTool::TextBox)) => {
             if !cx.allowed {
                 return false;
@@ -491,7 +643,7 @@ fn select_input(
     let selected = cv.selected.filter(|(p, _)| *p == cx.page).and_then(|(_, i)| cx.get(i));
     // Handles of a selected, resizable comment.
     let handle_at = |p: Pos2| -> Option<(i8, i8)> {
-        let a = selected.filter(|a| cx.allowed && resizable(&a.subtype))?;
+        let a = selected.filter(|a| cx.allowed && resizable(a))?;
         let r = cx.screen_rect(a);
         HANDLES.into_iter().find(|h| handle_pos(r, *h).distance(p) <= 7.0)
     };
@@ -632,7 +784,7 @@ pub(crate) fn paint_page(ui: &egui::Ui, painter: &egui::Painter, cx: &PageCx<'_>
             }
         }
         painter.rect_stroke(r, CornerRadius::ZERO, Stroke::new(1.0, SELECT_BLUE), egui::StrokeKind::Middle);
-        if cx.allowed && resizable(&a.subtype) {
+        if cx.allowed && resizable(a) {
             for h in HANDLES {
                 let c = handle_pos(r, h);
                 painter.circle(c, 4.5, Color32::WHITE, Stroke::new(1.0, SELECT_BLUE));
@@ -672,6 +824,21 @@ fn paint_gesture(painter: &egui::Painter, cx: &PageCx<'_>, view: &DocView) {
                 let r = Rect::from_two_pos(pts[0], pts[1]);
                 painter.add(egui::Shape::ellipse_stroke(r.center(), r.size() / 2.0, stroke));
             }
+            CommentTool::Polygon | CommentTool::PolyLine | CommentTool::Cloud => {
+                // The vertices so far, and a rubber band to the pointer.
+                let mut line = pts.clone();
+                if let Some(p) = painter.ctx().input(|i| i.pointer.hover_pos()) {
+                    line.push(p);
+                }
+                painter.add(egui::Shape::line(line, stroke));
+                if let Some(first) = pts.first().filter(|_| *tool != CommentTool::PolyLine && pts.len() >= 3) {
+                    painter.circle_stroke(*first, 5.0, Stroke::new(1.0, SELECT_BLUE));
+                }
+            }
+            CommentTool::Callout if pts.len() == 2 => {
+                painter.line_segment([pts[0], pts[1]], stroke);
+                painter.rect_stroke(Rect::from_min_size(pts[1], vec2(160.0, 40.0) * zoom), CornerRadius::ZERO, stroke, egui::StrokeKind::Inside);
+            }
             _ => {}
         }
     }
@@ -688,6 +855,10 @@ fn drawn_shape(tool: CommentTool, points: &[[f64; 2]]) -> Option<Shape> {
         CommentTool::Line | CommentTool::Arrow if far => Some(Shape::Line { from: first, to: last, arrow: tool == CommentTool::Arrow }),
         CommentTool::Rectangle if big => Some(Shape::Rectangle { rect }),
         CommentTool::Oval if big => Some(Shape::Oval { rect }),
+        CommentTool::Polygon | CommentTool::Cloud if points.len() >= 3 => {
+            Some(Shape::Polygon { vertices: points.to_vec(), cloud: tool == CommentTool::Cloud })
+        }
+        CommentTool::PolyLine if points.len() >= 2 => Some(Shape::PolyLine { vertices: points.to_vec() }),
         _ => None,
     }
 }
@@ -713,6 +884,8 @@ pub(crate) fn composer(ctx: &egui::Context, view: &mut DocView, info: &DocInfo, 
     let title = match c.kind {
         ComposerKind::Note => "Sticky note",
         ComposerKind::TextBox => "Text box",
+        ComposerKind::Callout { .. } => "Callout",
+        ComposerKind::Caret => "Inserted text",
         ComposerKind::Edit(_) => "Edit comment",
     };
     let pos = pos2(anchor.x + 12.0, anchor.y);
@@ -724,7 +897,11 @@ pub(crate) fn composer(ctx: &egui::Context, view: &mut DocView, info: &DocInfo, 
                 ui.label(egui::RichText::new(title).font(theme::regular(11.5)).color(t.text_faint));
             });
             ui.add_space(6.0);
-            let hint = if c.kind == ComposerKind::TextBox { "Type text" } else { "Add a comment" };
+            let hint = match c.kind {
+                ComposerKind::TextBox | ComposerKind::Callout { .. } => "Type text",
+                ComposerKind::Caret => "Text to insert",
+                _ => "Add a comment",
+            };
             let edit =
                 ui.add(egui::TextEdit::multiline(&mut c.text).hint_text(hint).desired_rows(3).desired_width(f32::INFINITY).id_salt("composer-text"));
             if c.focus {
@@ -771,6 +948,24 @@ pub(crate) fn composer(ctx: &egui::Context, view: &mut DocView, info: &DocInfo, 
         ComposerKind::TextBox => {
             view.comments.tool_done = true;
             Some(new_comment(&cx, CommentTool::TextBox, Shape::TextBox { rect: text_box_rect(c.at, &text, 12.0), font_size: 12.0 }, text))
+        }
+        ComposerKind::Callout { point } => {
+            view.comments.tool_done = true;
+            let rect = text_box_rect(c.at, &text, 10.0);
+            let side = if point[0] < rect[0] {
+                rect[0]
+            } else if point[0] > rect[2] {
+                rect[2]
+            } else {
+                (rect[0] + rect[2]) / 2.0
+            };
+            let knee = [(point[0] + side) / 2.0, (rect[1] + rect[3]) / 2.0];
+            Some(new_comment(&cx, CommentTool::Callout, Shape::Callout { rect, knee, point, font_size: 10.0 }, text))
+        }
+        ComposerKind::Caret => {
+            view.comments.tool_done = true;
+            let [x, y] = c.at;
+            Some(new_comment(&cx, CommentTool::Caret, Shape::Caret { rect: [x - 4.0, y - 8.0, x + 4.0, y] }, text))
         }
     }
 }

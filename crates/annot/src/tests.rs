@@ -408,3 +408,99 @@ fn urls_are_found_in_text() {
     let found: Vec<String> = crate::links::find_urls(&t).into_iter().map(|(_, u)| u).collect();
     assert_eq!(found, ["https://example.org/a?b=1", "http://www.rust-lang.org"]);
 }
+
+#[test]
+fn polygons_clouds_connected_lines_callouts_and_carets_are_drawn() {
+    let mut doc = fixture();
+    let tri = vec![[100.0, 100.0], [200.0, 100.0], [150.0, 180.0]];
+    let i = add_annotation(&mut doc, &new(0, Shape::Polygon { vertices: tri.clone(), cloud: false }), &meta("p")).unwrap();
+    let c = add_annotation(&mut doc, &new(0, Shape::Polygon { vertices: tri.clone(), cloud: true }), &meta("c")).unwrap();
+    let l =
+        add_annotation(&mut doc, &new(0, Shape::PolyLine { vertices: vec![[300.0, 300.0], [350.0, 320.0], [400.0, 300.0]] }), &meta("l")).unwrap();
+    let co = add_annotation(
+        &mut doc,
+        &new(0, Shape::Callout { rect: [300.0, 500.0, 420.0, 540.0], knee: [260.0, 520.0], point: [220.0, 460.0], font_size: 10.0 }),
+        &meta("co"),
+    )
+    .unwrap();
+    let k = add_annotation(&mut doc, &new(0, Shape::Caret { rect: [50.0, 600.0, 60.0, 612.0] }), &meta("k")).unwrap();
+    let doc = reopen(&doc);
+    let a = list(&doc, 0);
+
+    let p = &a[i];
+    assert_eq!(p.name(b"Subtype"), Some(&b"Polygon"[..]));
+    assert_eq!(text(p, b"Subj"), "Polygon");
+    let ap = ap_content(&doc, p);
+    assert!(ap.contains("100 100 m") && ap.contains("150 180 l") && ap.contains("h\nS"), "{ap}");
+    let r = rect(p);
+    assert!(r[0] <= 99.0 && r[3] >= 181.0, "{r:?}");
+
+    let cl = &a[c];
+    assert_eq!((text(cl, b"Subj").as_str(), cl.name(b"IT")), ("Cloud", Some(&b"PolygonCloud"[..])));
+    let ap = ap_content(&doc, cl);
+    assert!(ap.matches(" c\n").count() >= 6, "bumps along every edge: {ap}");
+    // Bumps bulge outwards: the outline reaches below the bottom edge.
+    let r = rect(cl);
+    assert!(r[1] < 100.0 - appearance::cloud_radius(2.0), "{r:?}");
+
+    let pl = &a[l];
+    assert_eq!((pl.name(b"Subtype"), text(pl, b"Subj").as_str()), (Some(&b"PolyLine"[..]), "Polygonal Line"));
+    let ap = ap_content(&doc, pl);
+    assert!(ap.contains("400 300 l") && !ap.contains("h\n"), "open path: {ap}");
+
+    let callout = &a[co];
+    assert_eq!(callout.name(b"IT"), Some(&b"FreeTextCallout"[..]));
+    let line: Vec<f64> = callout.get(b"CL").unwrap().as_array().unwrap().iter().map(|o| o.as_f64().unwrap()).collect();
+    assert_eq!(line, vec![220.0, 460.0, 260.0, 520.0, 300.0, 520.0], "attached to the box's left side");
+    let r = rect(callout);
+    assert!(r[0] < 220.0 && r[1] < 460.0 && r[2] >= 420.0 && r[3] >= 540.0, "{r:?}");
+    let ap = ap_content(&doc, callout);
+    assert!(ap.contains("220 460 m") && ap.contains("(hello) Tj"), "{ap}");
+
+    let caret = &a[k];
+    assert_eq!((caret.name(b"Subtype"), text(caret, b"Subj").as_str()), (Some(&b"Caret"[..]), "Inserted Text"));
+    assert!(ap_content(&doc, caret).contains(" c h f"));
+
+    // Resizing a callout moves its text box; the leader re-attaches.
+    let mut doc = doc;
+    set_rect(&mut doc, 0, co, [100.0, 500.0, 200.0, 540.0], &meta("x")).unwrap();
+    let callout = &list(&doc, 0)[co];
+    let line: Vec<f64> = callout.get(b"CL").unwrap().as_array().unwrap().iter().map(|o| o.as_f64().unwrap()).collect();
+    assert_eq!(&line[4..], &[200.0, 520.0], "now the right side");
+    assert!(ap_content(&doc, callout).contains("(hello) Tj"));
+
+    // Moving shifts vertices.
+    move_annotation(&mut doc, 0, i, 10.0, 0.0, &meta("m")).unwrap();
+    let v: Vec<f64> = list(&doc, 0)[i].get(b"Vertices").unwrap().as_array().unwrap().iter().map(|o| o.as_f64().unwrap()).collect();
+    assert_eq!(v[0], 110.0);
+
+    for bad in [
+        Shape::Polygon { vertices: vec![[0.0, 0.0], [10.0, 10.0]], cloud: false },
+        Shape::PolyLine { vertices: vec![[0.0, 0.0]] },
+        Shape::Caret { rect: [0.0, 0.0, 0.0, 10.0] },
+    ] {
+        assert!(add_annotation(&mut doc, &new(0, bad), &meta("b")).is_err());
+    }
+}
+
+#[test]
+fn cloud_paths_bulge_outwards_either_way_round() {
+    let ccw = [(0.0, 0.0), (100.0, 0.0), (100.0, 100.0), (0.0, 100.0)];
+    let cw: Vec<(f64, f64)> = ccw.iter().rev().copied().collect();
+    for pts in [ccw.to_vec(), cw] {
+        let p = cloud_ys(&appearance::cloud_path(&pts, 5.0));
+        assert!(p.iter().any(|y| *y < -3.0) && p.iter().any(|y| *y > 103.0), "{p:?}");
+        assert!(p.iter().all(|y| *y > -10.0 && *y < 110.0));
+    }
+}
+
+/// Every y coordinate of the curve control points in a cloud path.
+fn cloud_ys(path: &str) -> Vec<f64> {
+    path.lines()
+        .filter(|l| l.ends_with(" c"))
+        .flat_map(|l| {
+            let v: Vec<f64> = l.split_whitespace().filter_map(|t| t.parse().ok()).collect();
+            [v[1], v[3]]
+        })
+        .collect()
+}

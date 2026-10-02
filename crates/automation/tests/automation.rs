@@ -906,3 +906,36 @@ fn comment_checkmarks_locks_hiding_and_summaries_through_tools() {
     assert!(found["count"].as_u64().unwrap() >= 1, "{found}");
     assert!(matches!(a.call("comments_summarize", &json!({ "doc": doc, "sort": "colour" })), Err(ToolError::InvalidArgs(_))));
 }
+
+#[test]
+fn drawing_comments_through_tools() {
+    let dir = workdir("drawing");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    for (ty, extra) in [
+        ("polygon", json!({ "points": [[20, 20], [80, 20], [50, 70]] })),
+        ("cloud", json!({ "points": [[100, 20], [180, 20], [180, 80], [100, 80]], "color": "red" })),
+        ("polyline", json!({ "points": [[20, 120], [60, 100], [100, 120]] })),
+        ("callout", json!({ "rect": [110, 200, 190, 240], "to": [40, 160], "contents": "Look" })),
+        ("caret", json!({ "at": [60, 150], "contents": "insert this" })),
+    ] {
+        let mut args = json!({ "doc": doc, "page": 1, "type": ty });
+        args.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        ok(&mut a, "comment_add", args);
+    }
+    let list = ok(&mut a, "comment_list", json!({ "doc": doc }));
+    let types: Vec<&str> = list["comments"].as_array().unwrap().iter().map(|c| c["type"].as_str().unwrap()).collect();
+    for t in ["Polygon", "PolyLine", "FreeText", "Caret"] {
+        assert!(types.contains(&t), "{types:?}");
+    }
+    assert_eq!(types.iter().filter(|t| **t == "Polygon").count(), 2);
+    let callout = list["comments"].as_array().unwrap().iter().find(|c| c["type"] == "FreeText").unwrap();
+    let r: Vec<f64> = callout["rect"].as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect();
+    assert!(r[0] < 40.0 && r[3] > 159.0, "the rect holds the leader line: {r:?}");
+    assert!(matches!(
+        a.call("comment_add", &json!({ "doc": doc, "page": 1, "type": "polygon", "points": [[1, 1]] })),
+        Err(ToolError::Failed(_) | ToolError::InvalidArgs(_))
+    ));
+    let png = a.call("page_render", &json!({ "doc": doc, "page": 1, "dpi": 72 })).unwrap();
+    assert!(matches!(png[0], Content::Png { .. }));
+}

@@ -21,6 +21,61 @@ pub fn arrow_size(w: f64) -> f64 {
     6.0 + 3.0 * w.max(0.0)
 }
 
+/// Nominal radius of a cloudy border's bumps for a line of width `w` (intensity 1).
+pub fn cloud_radius(w: f64) -> f64 {
+    6.0 + 1.5 * w.max(0.0)
+}
+
+/// Draw a line ending (`/LE`) at `tip`, for a line arriving from `from`. Open and closed arrows only.
+fn line_end(c: &mut String, kind: &[u8], tip: (f64, f64), from: (f64, f64), w: f64) {
+    if kind == b"None" {
+        return;
+    }
+    let (dx, dy) = (from.0 - tip.0, from.1 - tip.1);
+    let len = dx.hypot(dy);
+    if len == 0.0 {
+        return;
+    }
+    let (ux, uy) = (dx / len, dy / len);
+    let s = arrow_size(w);
+    let (cos, sin) = (30f64.to_radians().cos(), 30f64.to_radians().sin());
+    let a = (tip.0 + s * (ux * cos - uy * sin), tip.1 + s * (ux * sin + uy * cos));
+    let b = (tip.0 + s * (ux * cos + uy * sin), tip.1 + s * (-ux * sin + uy * cos));
+    let op = if kind == b"ClosedArrow" { "h B" } else { "S" };
+    c.push_str(&format!("{} {} m {} {} l {} {} l {op}\n", n(a.0), n(a.1), n(tip.0), n(tip.1), n(b.0), n(b.1)));
+}
+
+/// A closed cloudy outline through `pts` (§12.5.4 `/BE /S /C`): each edge becomes a row of
+/// half-circle bumps of about `r`, bulging outwards.
+pub fn cloud_path(pts: &[(f64, f64)], r: f64) -> String {
+    let area: f64 = pts.iter().zip(pts.iter().cycle().skip(1)).map(|(a, b)| a.0 * b.1 - b.0 * a.1).sum();
+    // Outward normal of an edge: to the right of travel for counter-clockwise outlines.
+    let sign = if area >= 0.0 { 1.0 } else { -1.0 };
+    let mut c = String::new();
+    for (i, (a, b)) in pts.iter().zip(pts.iter().cycle().skip(1)).enumerate() {
+        let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+        let len = dx.hypot(dy);
+        if i == 0 {
+            c.push_str(&format!("{} {} m\n", n(a.0), n(a.1)));
+        }
+        if len < 1e-6 {
+            continue;
+        }
+        let k = ((len / (2.0 * r)).round() as usize).clamp(1, 10_000);
+        let step = len / k as f64;
+        let (ux, uy) = (dx / len, dy / len);
+        let (nx, ny) = (sign * uy, -sign * ux);
+        let h = 4.0 / 3.0 * step / 2.0;
+        for j in 0..k {
+            let p0 = (a.0 + ux * step * j as f64, a.1 + uy * step * j as f64);
+            let p1 = (a.0 + ux * step * (j + 1) as f64, a.1 + uy * step * (j + 1) as f64);
+            c.push_str(&format!("{} {} {} {} {} {} c\n", n(p0.0 + nx * h), n(p0.1 + ny * h), n(p1.0 + nx * h), n(p1.1 + ny * h), n(p1.0), n(p1.1)));
+        }
+    }
+    c.push_str("h\n");
+    c
+}
+
 fn nums(d: &Dict, key: &[u8]) -> Option<Vec<f64>> {
     d.get(key)?.as_array()?.iter().map(|o| o.as_f64()).collect()
 }
@@ -129,8 +184,9 @@ pub fn build(d: &Dict) -> Option<Stream> {
     let subtype = d.name(b"Subtype")?.to_vec();
     let rect = nums(d, b"Rect").filter(|r| r.len() == 4)?;
     let rect = [rect[0].min(rect[2]), rect[1].min(rect[3]), rect[0].max(rect[2]), rect[1].max(rect[3])];
-    // Cloudy borders (§12.5.4) are not drawn yet.
-    if d.get(b"BE").and_then(|b| b.as_dict()).is_some_and(|b| b.name(b"S") == Some(b"C")) {
+    // Cloudy borders (§12.5.4) are drawn for polygons only.
+    let cloudy = d.get(b"BE").and_then(|b| b.as_dict()).is_some_and(|b| b.name(b"S") == Some(b"C"));
+    if cloudy && subtype != b"Polygon" {
         return None;
     }
     let opacity = d.get(b"CA").and_then(|o| o.as_f64()).unwrap_or(1.0).clamp(0.0, 1.0);
@@ -259,22 +315,66 @@ pub fn build(d: &Dict) -> Option<Stream> {
             c.push_str(&format!("{}{}{} w 1 J 1 j\n{}", rg_stroke(col), rg(fill), n(w), dash(d)));
             c.push_str(&format!("{} {} m {} {} l S\n[] 0 d\n", n(l[0]), n(l[1]), n(l[2]), n(l[3])));
             for (end, (tip, from)) in ends.iter().zip([((l[0], l[1]), (l[2], l[3])), ((l[2], l[3]), (l[0], l[1]))]) {
-                if end.as_slice() == b"None" {
-                    continue;
-                }
-                let (dx, dy) = (from.0 - tip.0, from.1 - tip.1);
-                let len = dx.hypot(dy);
-                if len == 0.0 {
-                    continue;
-                }
-                let (ux, uy) = (dx / len, dy / len);
-                let s = arrow_size(w);
-                let (cos, sin) = (30f64.to_radians().cos(), 30f64.to_radians().sin());
-                let a = (tip.0 + s * (ux * cos - uy * sin), tip.1 + s * (ux * sin + uy * cos));
-                let b = (tip.0 + s * (ux * cos + uy * sin), tip.1 + s * (-ux * sin + uy * cos));
-                let op = if end.as_slice() == b"ClosedArrow" { "h B" } else { "S" };
-                c.push_str(&format!("{} {} m {} {} l {} {} l {op}\n", n(a.0), n(a.1), n(tip.0), n(tip.1), n(b.0), n(b.1)));
+                line_end(&mut c, end, tip, from, w);
             }
+        }
+        b"Polygon" | b"PolyLine" => {
+            let v = nums(d, b"Vertices").filter(|v| v.len() >= 4 && v.len() % 2 == 0)?;
+            let pts: Vec<(f64, f64)> = v.chunks_exact(2).map(|p| (p[0], p[1])).collect();
+            let col = stroke;
+            let closed = subtype == b"Polygon";
+            let fill = if closed { color(d, b"IC")? } else { None };
+            if subtype == b"PolyLine" && d.get(b"LE").is_some_and(|e| e.as_array().is_none_or(|a| a.iter().any(|x| x.as_name() != Some(b"None")))) {
+                // Line endings on connected lines aren't drawn yet.
+                return None;
+            }
+            if let Some(f) = fill {
+                c.push_str(&rg(f));
+            }
+            if let Some(s) = col {
+                c.push_str(&format!("{}{} w 1 J 1 j\n{}", rg_stroke(s), n(w), dash(d)));
+            }
+            if cloudy {
+                let intensity = d.get(b"BE").and_then(|b| b.as_dict()).and_then(|b| b.get(b"I")).and_then(|i| i.as_f64()).unwrap_or(1.0);
+                c.push_str(&cloud_path(&pts, cloud_radius(w) * intensity.clamp(0.5, 2.0)));
+            } else {
+                for (i, p) in pts.iter().enumerate() {
+                    c.push_str(&format!("{} {} {}\n", n(p.0), n(p.1), if i == 0 { "m" } else { "l" }));
+                }
+                if closed {
+                    c.push_str("h\n");
+                }
+            }
+            c.push_str(match (fill.is_some(), col.is_some() && w > 0.0) {
+                (true, true) => "B\n",
+                (true, false) => "f\n",
+                (false, true) => "S\n",
+                (false, false) => "n\n",
+            });
+        }
+        b"Caret" => {
+            // A filled caret: two curved flanks meeting at the top centre.
+            let col = stroke.unwrap_or([0.0, 0.47, 0.84]);
+            let [x0, y0, x1, y1] = rect;
+            let (cx, h) = ((x0 + x1) / 2.0, y1 - y0);
+            c.push_str(&format!(
+                "{}{} {} m {} {} {} {} {} {} c {} {} {} {} {} {} c h f\n",
+                rg(col),
+                n(x0),
+                n(y0),
+                n(cx - (x1 - x0) * 0.1),
+                n(y0 + h * 0.2),
+                n(cx),
+                n(y1 - h * 0.25),
+                n(cx),
+                n(y1),
+                n(cx),
+                n(y1 - h * 0.25),
+                n(cx + (x1 - x0) * 0.1),
+                n(y0 + h * 0.2),
+                n(x1),
+                n(y0)
+            ));
         }
         b"Ink" => {
             let col = stroke?;
@@ -353,13 +453,36 @@ pub fn build(d: &Dict) -> Option<Stream> {
             }
         }
         b"FreeText" => {
-            // Callouts (`/CL`) and rich text without plain contents aren't drawn yet.
-            if d.contains(b"CL") {
-                return None;
-            }
             let (text_color, size) = parse_da(d);
             let bg = stroke;
             let bw = if d.contains(b"BS") || d.contains(b"Border") { border_width(d) } else { 0.0 };
+            // A callout: the leader line (arrowhead at its first point), and the text box inside
+            // `/Rect` by `/RD`.
+            let full = rect;
+            let mut rect = rect;
+            if d.contains(b"CL") {
+                let cl = nums(d, b"CL").filter(|l| l.len() == 4 || l.len() == 6)?;
+                let rd = nums(d, b"RD").filter(|r| r.len() == 4 && r.iter().all(|x| *x >= 0.0))?;
+                rect = [full[0] + rd[0], full[1] + rd[1], full[2] - rd[2], full[3] - rd[3]];
+                if rect[2] - rect[0] < 1.0 || rect[3] - rect[1] < 1.0 {
+                    return None;
+                }
+                let end = match d.get(b"LE") {
+                    None => b"None".to_vec(),
+                    Some(o) => o.as_name()?.to_vec(),
+                };
+                if !matches!(end.as_slice(), b"None" | b"OpenArrow" | b"ClosedArrow") {
+                    return None;
+                }
+                let lw = bw.max(0.5);
+                let pts: Vec<(f64, f64)> = cl.chunks_exact(2).map(|p| (p[0], p[1])).collect();
+                c.push_str(&format!("{}{}{} w 1 J 1 j\n", rg_stroke(text_color), rg(bg.unwrap_or([1.0; 3])), n(lw)));
+                for (i, p) in pts.iter().enumerate() {
+                    c.push_str(&format!("{} {} {}\n", n(p.0), n(p.1), if i == 0 { "m" } else { "l" }));
+                }
+                c.push_str("S\n");
+                line_end(&mut c, &end, pts[0], pts[1], lw);
+            }
             if let Some(bg) = bg {
                 c.push_str(&format!("{}{} {} {} {} re f\n", rg(bg), n(rect[0]), n(rect[1]), n(rect[2] - rect[0]), n(rect[3] - rect[1])));
             }
@@ -415,7 +538,7 @@ pub fn build(d: &Dict) -> Option<Stream> {
             let mut fonts = Dict::new();
             fonts.set(b"Helv".to_vec(), Object::Dict(font));
             res.set(b"Font".to_vec(), Object::Dict(fonts));
-            return Some(form(rect, &out, res));
+            return Some(form(full, &out, res));
         }
         _ => return None,
     }

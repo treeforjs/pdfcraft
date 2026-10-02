@@ -334,3 +334,57 @@ fn comments_take_checkmarks_lock_hide_and_summarize() {
     assert_eq!(s.views.len(), 2);
     assert!(s.session.get(s.views[1].id).unwrap().name.starts_with("Summary of comments on text"));
 }
+
+#[test]
+fn polygons_clouds_connected_lines_callouts_and_inserted_text() {
+    let mut h = harness(|app| app.set_option("quick", "polygon").unwrap());
+    // Polygon: click the corners, Enter finishes.
+    for p in [(40.0, 40.0), (120.0, 40.0), (80.0, 110.0)] {
+        click_pt(&mut h, p);
+    }
+    assert_eq!(comments(&h).len(), 0, "still drawing");
+    h.key_press(egui::Key::Enter);
+    h.run_steps(3);
+    let c = comments(&h);
+    assert_eq!(c.len(), 1);
+    assert_eq!(c[0].subtype, "Polygon");
+
+    // Cloud: clicking the first point again closes it.
+    h.state_mut().set_option("quick", "cloud").unwrap();
+    for p in [(160.0, 40.0), (260.0, 40.0), (260.0, 100.0), (160.0, 100.0), (160.0, 40.0)] {
+        click_pt(&mut h, p);
+    }
+    assert_eq!(comments(&h).len(), 2);
+
+    // Connected lines.
+    h.state_mut().set_option("quick", "polyline").unwrap();
+    for p in [(20.0, 150.0), (60.0, 130.0), (100.0, 150.0)] {
+        click_pt(&mut h, p);
+    }
+    h.key_press(egui::Key::Enter);
+    h.run_steps(3);
+    assert!(comments(&h).iter().any(|a| a.subtype == "PolyLine"));
+
+    // Callout: drag from the target to where the box goes, then type.
+    h.state_mut().set_option("quick", "callout").unwrap();
+    drag_pt(&mut h, (60.0, 160.0), (180.0, 190.0));
+    assert!(h.state().views[0].comments.composer.is_some(), "the composer opened");
+    field(&h, "Type text").type_text("Why?");
+    h.run_steps(2);
+    h.get_by_label("Post").click();
+    h.run_steps(3);
+    let callout = comments(&h).into_iter().find(|a| a.subtype == "FreeText").expect("a callout");
+    assert_eq!(callout.contents.as_deref(), Some("Why?"));
+    assert!(callout.rect[0] <= 60.0 && callout.rect[1] <= 160.0, "holds the leader: {:?}", callout.rect);
+
+    // Insert text at a click.
+    h.state_mut().set_option("quick", "caret").unwrap();
+    click_pt(&mut h, (95.0, 150.0));
+    field(&h, "Text to insert").type_text("very ");
+    h.run_steps(2);
+    h.get_by_label("Post").click();
+    h.run_steps(3);
+    let caret = comments(&h).into_iter().find(|a| a.subtype == "Caret").expect("a caret");
+    assert_eq!(caret.contents.as_deref(), Some("very"));
+    assert_eq!(h.state().quick_tool, QuickTool::Select);
+}

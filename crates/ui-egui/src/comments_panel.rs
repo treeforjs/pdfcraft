@@ -33,6 +33,16 @@ pub fn subtype_label(s: &str) -> &str {
     }
 }
 
+/// The comment type as the panel names it, telling callouts and clouds apart by `/IT`.
+pub fn kind_label(a: &Annotation) -> &str {
+    match a.intent.as_deref() {
+        Some("FreeTextCallout") => "Callout",
+        Some("PolygonCloud") => "Cloud",
+        Some("FreeTextTypeWriter") => "Typewriter",
+        _ => subtype_label(&a.subtype),
+    }
+}
+
 pub fn subtype_icon(s: &str) -> &'static str {
     match s {
         "Text" => "message-square-text",
@@ -71,7 +81,7 @@ pub fn count(info: &DocInfo) -> usize {
 
 fn matches(a: &Annotation, q: &str) -> bool {
     let q = q.to_lowercase();
-    [a.author.as_deref(), a.contents.as_deref(), Some(subtype_label(&a.subtype))].into_iter().flatten().any(|s| s.to_lowercase().contains(&q))
+    [a.author.as_deref(), a.contents.as_deref(), Some(kind_label(a))].into_iter().flatten().any(|s| s.to_lowercase().contains(&q))
 }
 
 /// Draw the panel body. Returns an edit to apply (posting, replying, deleting…).
@@ -146,7 +156,7 @@ pub(crate) fn show(
         .iter()
         .filter(|a| a.in_reply_to.is_none())
         .filter(|a| query.as_deref().is_none_or(|q| matches(a, q) || replies_of(a).iter().any(|r| matches(r, q))))
-        .filter(|a| !cv.hidden_types.iter().any(|t| t == subtype_label(&a.subtype)))
+        .filter(|a| !cv.hidden_types.iter().any(|t| t == kind_label(a)))
         .filter(|a| !cv.hidden_authors.contains(&a.author.clone().unwrap_or_default()))
         .filter(|a| !cv.hidden_statuses.contains(&status_of(a)))
         .collect();
@@ -158,7 +168,7 @@ pub(crate) fn show(
         SortBy::Page => {}
         SortBy::Author => roots.sort_by_key(|a| a.author.clone().unwrap_or_default().to_lowercase()),
         SortBy::Date => roots.sort_by(|a, b| b.modified.cmp(&a.modified)),
-        SortBy::Type => roots.sort_by_key(|a| subtype_label(&a.subtype).to_string()),
+        SortBy::Type => roots.sort_by_key(|a| kind_label(a).to_string()),
         SortBy::Color => roots.sort_by_key(|a| color_key(a)),
     }
     if roots.is_empty() {
@@ -169,7 +179,7 @@ pub(crate) fn show(
         match sort {
             SortBy::Page => Some(format!("Page {}", info.pages.get(a.page).map(|p| p.label.as_str()).unwrap_or("?"))),
             SortBy::Author => Some(a.author.clone().unwrap_or_else(|| "Unknown author".into())),
-            SortBy::Type => Some(subtype_label(&a.subtype).to_string()),
+            SortBy::Type => Some(kind_label(a).to_string()),
             SortBy::Color => Some(if a.color.is_some() { format!("#{}", color_key(a)) } else { "No colour".into() }),
             SortBy::Date => None,
         }
@@ -279,7 +289,7 @@ fn card(
                 } else {
                     let body = a.contents.as_deref().unwrap_or("");
                     let text = if body.is_empty() {
-                        egui::RichText::new(subtype_label(&a.subtype)).italics().color(t.text_faint)
+                        egui::RichText::new(kind_label(a)).italics().color(t.text_faint)
                     } else {
                         egui::RichText::new(body).color(t.text)
                     };
@@ -359,7 +369,7 @@ fn card(
     let click = ui
         .interact(hit, ui.id().with(("card", key)), Sense::click())
         .on_hover_cursor(egui::CursorIcon::PointingHand)
-        .on_hover_text(format!("{} — click to show it on the page", subtype_label(&a.subtype)));
+        .on_hover_text(format!("{} — click to show it on the page", kind_label(a)));
     if click.clicked() {
         view.comments.selected = Some(key);
         view.comments.reply.clear();
@@ -443,7 +453,7 @@ fn legible(c: Color32, t: &Tokens) -> Color32 {
 pub(crate) fn header_controls(ui: &mut egui::Ui, info: &DocInfo, view: &mut DocView, hidden: bool) -> Option<&'static str> {
     let mut command = None;
     let cv = &mut view.comments;
-    let mut types: Vec<String> = info.annotations.iter().filter(|a| a.in_reply_to.is_none()).map(|a| subtype_label(&a.subtype).to_string()).collect();
+    let mut types: Vec<String> = info.annotations.iter().filter(|a| a.in_reply_to.is_none()).map(|a| kind_label(a).to_string()).collect();
     types.sort();
     types.dedup();
     let mut authors: Vec<String> =

@@ -138,6 +138,8 @@ pub struct Annotation {
     pub quads: Vec<[f32; 8]>,
     /// The Locked flag (`/F` bit 8): the comment can't be moved, resized, restyled or deleted.
     pub locked: bool,
+    /// `/IT`, the intent: `FreeTextCallout`, `PolygonCloud`, `FreeTextTypeWriter`…
+    pub intent: Option<String>,
 }
 
 impl Annotation {
@@ -603,6 +605,7 @@ impl<'a> Inspector<'a> {
                     state: self.text(d, b"State"),
                     quads,
                     locked: d.get(b"F").ok().and_then(|f| self.resolve(f).as_i64().ok()).unwrap_or(0) & 128 != 0,
+                    intent: self.name(d, b"IT"),
                 });
             }
         }

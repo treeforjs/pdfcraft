@@ -172,11 +172,13 @@ impl PrintCraftApp {
                 }
             },
             None => {
-                let stem = name.trim_end_matches(".pdf").trim_end_matches(".PDF");
                 let path = match self.save_override.clone() {
                     Some(p) => Some(std::path::PathBuf::from(p)),
                     #[cfg(not(target_arch = "wasm32"))]
-                    None => rfd::FileDialog::new().add_filter("PDF", &["pdf"]).set_file_name(format!("{stem} (print).pdf")).save_file(),
+                    None => {
+                        let stem = name.trim_end_matches(".pdf").trim_end_matches(".PDF");
+                        rfd::FileDialog::new().add_filter("PDF", &["pdf"]).set_file_name(format!("{stem} (print).pdf")).save_file()
+                    }
                     #[cfg(target_arch = "wasm32")]
                     None => None,
                 };

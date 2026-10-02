@@ -783,6 +783,11 @@ fn annotation_noun(s: &Shape) -> &'static str {
         Shape::Signature { .. } => "signature",
         Shape::Redact { .. } => "redaction mark",
         Shape::Stamp { .. } => "stamp",
+        Shape::Polygon { cloud: true, .. } => "cloud",
+        Shape::Polygon { .. } => "polygon",
+        Shape::PolyLine { .. } => "connected lines",
+        Shape::Callout { .. } => "callout",
+        Shape::Caret { .. } => "inserted text",
     }
 }
 
@@ -1136,6 +1141,7 @@ fn comment_list(doc: &printcraft_cos::Document) -> Vec<printcraft_render::Annota
             state: s.state,
             quads: s.quads,
             locked: s.locked,
+            intent: s.intent,
         })
         .collect()
 }
@@ -1858,6 +1864,16 @@ pub fn comment_type_name(subtype: &str) -> &str {
     }
 }
 
+/// [`comment_type_name`], telling callouts, clouds and typewriter text apart by `/IT`.
+pub fn comment_kind(a: &printcraft_render::Annotation) -> &str {
+    match a.intent.as_deref() {
+        Some("FreeTextCallout") => "Callout",
+        Some("PolygonCloud") => "Cloud",
+        Some("FreeTextTypeWriter") => "Typewriter",
+        _ => comment_type_name(&a.subtype),
+    }
+}
+
 /// The text of a comment summary: one block per comment (replies indented under it), with a
 /// "Page N" heading when sorted by page. Checkmarks and status replies are left out, as are
 /// pop-ups; the number is the comment's position on its page.
@@ -1882,7 +1898,7 @@ pub fn comment_summary(name: &str, all: &[printcraft_render::Annotation], sort: 
         SummarySort::Page => {}
         SummarySort::Author => numbered.sort_by(|x, y| x.1.author.cmp(&y.1.author)),
         SummarySort::Date => numbered.sort_by(|x, y| x.1.modified.cmp(&y.1.modified)),
-        SummarySort::Type => numbered.sort_by(|x, y| comment_type_name(&x.1.subtype).cmp(comment_type_name(&y.1.subtype))),
+        SummarySort::Type => numbered.sort_by(|x, y| comment_kind(x.1).cmp(comment_kind(y.1))),
     }
     let mut out = format!("Summary of Comments on {name}\n\n");
     if numbered.is_empty() {
@@ -1895,7 +1911,7 @@ pub fn comment_summary(name: &str, all: &[printcraft_render::Annotation], sort: 
             heading = a.page;
             let _ = writeln!(out, "Page: {}", a.page + 1);
         }
-        let _ = write!(out, "Number: {n}  Author: {}  Subject: {}", a.author.as_deref().unwrap_or(""), comment_type_name(&a.subtype));
+        let _ = write!(out, "Number: {n}  Author: {}  Subject: {}", a.author.as_deref().unwrap_or(""), comment_kind(a));
         if sort != SummarySort::Page {
             let _ = write!(out, "  Page: {}", a.page + 1);
         }

@@ -235,6 +235,46 @@ impl Automation {
                         .collect::<Result<Vec<_>>>()?;
                     Shape::Ink { strokes }
                 }
+                "polygon" | "cloud" | "polyline" => {
+                    let wrong = || ToolError::InvalidArgs(format!("{kind} needs `points`: an array of [x, y] points"));
+                    let pts = a.get("points").and_then(|p| p.as_array()).ok_or_else(wrong)?;
+                    let vertices = pts
+                        .iter()
+                        .map(|p| match p.as_array().map(|p| p.iter().map(|v| v.as_f64()).collect::<Vec<_>>()).as_deref() {
+                            Some([Some(x), Some(y)]) => Ok(to_user(&info, *x, *y)),
+                            _ => Err(wrong()),
+                        })
+                        .collect::<Result<Vec<_>>>()?;
+                    match kind {
+                        "polyline" => Shape::PolyLine { vertices },
+                        _ => Shape::Polygon { vertices, cloud: kind == "cloud" },
+                    }
+                }
+                "callout" => {
+                    let rect = rect_to_user(&info, a.need::<4>("rect", "a callout (its text box)")?);
+                    let t = a.need::<2>("to", "a callout (the point it points at)")?;
+                    let point = to_user(&info, t[0], t[1]);
+                    let knee = match a.nums::<2>("knee")? {
+                        Some(k) => to_user(&info, k[0], k[1]),
+                        // Halfway between the point and the box, level with the box's middle.
+                        None => {
+                            let mid = (rect[1] + rect[3]) / 2.0;
+                            let side = if point[0] < rect[0] {
+                                rect[0]
+                            } else if point[0] > rect[2] {
+                                rect[2]
+                            } else {
+                                (rect[0] + rect[2]) / 2.0
+                            };
+                            [(point[0] + side) / 2.0, mid]
+                        }
+                    };
+                    Shape::Callout { rect, knee, point, font_size: a.opt_num("font_size")?.unwrap_or(10.0) }
+                }
+                "caret" => {
+                    let [x, y] = a.need::<2>("at", "a caret (the insertion point on the baseline)")?;
+                    Shape::Caret { rect: rect_to_user(&info, [x - 4.0, y, x + 4.0, y + 8.0]) }
+                }
                 other => return Err(ToolError::InvalidArgs(format!("unknown comment type {other:?}"))),
             }
         };

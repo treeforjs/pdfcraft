@@ -3527,11 +3527,11 @@ title = "Insert-text proposal (caret)"
 area = "E"
 tier = "P1"
 milestone = "M5"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["comment.caret"]
+tools = ["comment_add"]
+evidence = ["crates/annot/src/tests.rs::polygons_clouds_connected_lines_callouts_and_carets_are_drawn", "crates/ui-egui/tests/comments.rs::polygons_clouds_connected_lines_callouts_and_inserted_text", "crates/automation/tests/automation.rs::drawing_comments_through_tools"]
+notes = "caret at a click; not yet snapped to the text insertion point"
 
 [[feature]]
 id = "comment.typewriter"
@@ -3563,11 +3563,11 @@ title = "Callout comment"
 area = "E"
 tier = "P1"
 milestone = "M5"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["comment.callout"]
+tools = ["comment_add"]
+evidence = ["crates/annot/src/tests.rs::polygons_clouds_connected_lines_callouts_and_carets_are_drawn", "crates/ui-egui/tests/comments.rs::polygons_clouds_connected_lines_callouts_and_inserted_text", "crates/automation/tests/automation.rs::drawing_comments_through_tools"]
+notes = "drag from the target to the box; resizing re-attaches the leader"
 
 [[feature]]
 id = "comment.pencil"
@@ -3647,11 +3647,11 @@ title = "Polygon"
 area = "E"
 tier = "P1"
 milestone = "M5"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["comment.polygon"]
+tools = ["comment_add"]
+evidence = ["crates/annot/src/tests.rs::polygons_clouds_connected_lines_callouts_and_carets_are_drawn", "crates/ui-egui/tests/comments.rs::polygons_clouds_connected_lines_callouts_and_inserted_text", "crates/automation/tests/automation.rs::drawing_comments_through_tools"]
+notes = "click the corners; Enter, double-click or the first point finishes"
 
 [[feature]]
 id = "comment.polyline"
@@ -3659,10 +3659,10 @@ title = "Connected lines (polyline)"
 area = "E"
 tier = "P1"
 milestone = "M5"
-status = "planned"
-commands = []
-tools = []
-evidence = []
+status = "shipped"
+commands = ["comment.polyline"]
+tools = ["comment_add"]
+evidence = ["crates/annot/src/tests.rs::polygons_clouds_connected_lines_callouts_and_carets_are_drawn", "crates/ui-egui/tests/comments.rs::polygons_clouds_connected_lines_callouts_and_inserted_text", "crates/automation/tests/automation.rs::drawing_comments_through_tools"]
 notes = ""
 
 [[feature]]
@@ -3671,11 +3671,11 @@ title = "Cloud shape"
 area = "E"
 tier = "P1"
 milestone = "M5"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["comment.cloud"]
+tools = ["comment_add"]
+evidence = ["crates/annot/src/tests.rs::polygons_clouds_connected_lines_callouts_and_carets_are_drawn", "crates/annot/src/tests.rs::cloud_paths_bulge_outwards_either_way_round", "crates/ui-egui/tests/comments.rs::polygons_clouds_connected_lines_callouts_and_inserted_text", "crates/automation/tests/automation.rs::drawing_comments_through_tools"]
+notes = "polygon with a cloudy border (/BE /S /C, /IT /PolygonCloud)"
 
 [[feature]]
 id = "comment.area-highlight"

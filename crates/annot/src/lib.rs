@@ -333,6 +333,28 @@ pub enum Shape {
         quads: Vec<[f64; 8]>,
         overlay: String,
     },
+    /// A closed polygon (Polygon tool); with `cloud`, Acrobat's Cloud tool: the same polygon
+    /// with a cloudy border (`/BE /S /C`, `/IT /PolygonCloud`).
+    Polygon {
+        vertices: Vec<[f64; 2]>,
+        cloud: bool,
+    },
+    /// Connected lines (Polygonal Line tool).
+    PolyLine {
+        vertices: Vec<[f64; 2]>,
+    },
+    /// A text callout: a text box at `rect` with a leader line from `point` (arrowhead) via
+    /// `knee` to the box (FreeText, `/IT /FreeTextCallout`, `/CL`).
+    Callout {
+        rect: [f64; 4],
+        knee: [f64; 2],
+        point: [f64; 2],
+        font_size: f64,
+    },
+    /// Insert text: a caret in `rect` (its point at the top centre).
+    Caret {
+        rect: [f64; 4],
+    },
 }
 
 /// A rectangle `[x0 y0 x1 y1]` as a quad in Acrobat's order (top-left, top-right, bottom-left,
@@ -351,9 +373,12 @@ impl Shape {
             Shape::Oval { .. } => "Circle",
             Shape::Line { .. } => "Line",
             Shape::Ink { .. } | Shape::Signature { .. } => "Ink",
-            Shape::TextBox { .. } | Shape::Typewriter { .. } => "FreeText",
+            Shape::TextBox { .. } | Shape::Typewriter { .. } | Shape::Callout { .. } => "FreeText",
             Shape::Mark { .. } | Shape::Stamp { .. } => "Stamp",
             Shape::Redact { .. } => "Redact",
+            Shape::Polygon { .. } => "Polygon",
+            Shape::PolyLine { .. } => "PolyLine",
+            Shape::Caret { .. } => "Caret",
         }
     }
 }
@@ -386,7 +411,11 @@ impl Style {
             Shape::TextMarkup { kind: Markup::Underline, .. } => ([0.0, 0.47, 0.84], 1.0),
             Shape::TextMarkup { kind: Markup::StrikeOut, .. } => ([0.89, 0.13, 0.13], 1.0),
             Shape::TextMarkup { kind: Markup::Squiggly, .. } => ([0.18, 0.62, 0.36], 1.0),
-            Shape::Rectangle { .. } | Shape::Oval { .. } | Shape::Line { .. } => ([0.89, 0.13, 0.13], 2.0),
+            Shape::Rectangle { .. } | Shape::Oval { .. } | Shape::Line { .. } | Shape::Polygon { .. } | Shape::PolyLine { .. } => {
+                ([0.89, 0.13, 0.13], 2.0)
+            }
+            Shape::Callout { .. } => ([0.0, 0.0, 0.0], 1.0),
+            Shape::Caret { .. } => ([0.0, 0.47, 0.84], 1.0),
             Shape::Ink { .. } => ([0.0, 0.4, 0.87], 2.0),
             Shape::TextBox { .. } | Shape::Typewriter { .. } => ([0.0, 0.0, 0.0], 0.0),
             Shape::Mark { .. } => ([0.0, 0.0, 0.0], 1.5),
@@ -603,6 +632,33 @@ fn rect_for(shape: &Shape, style: &Style) -> Result<[f64; 4], AnnotError> {
             }
             grow(bounds(strokes.iter().flatten().copied()).unwrap_or_default(), half + 1.0)
         }
+        Shape::Polygon { vertices, cloud } => {
+            let b = bounds(vertices.iter().copied())
+                .filter(|b| vertices.len() >= 3 && vertices.iter().all(|p| finite(p)) && b[2] - b[0] >= 1.0 && b[3] - b[1] >= 1.0);
+            let b = b.ok_or_else(|| bad("polygon (it needs three points)"))?;
+            grow(b, half + 1.0 + if *cloud { 1.5 * appearance::cloud_radius(style.width) } else { 0.0 })
+        }
+        Shape::PolyLine { vertices } => {
+            let b = bounds(vertices.iter().copied())
+                .filter(|b| vertices.len() >= 2 && vertices.iter().all(|p| finite(p)) && (b[2] - b[0]).max(b[3] - b[1]) >= 1.0);
+            grow(b.ok_or_else(|| bad("connected lines (they need two points)"))?, half + 1.0)
+        }
+        Shape::Callout { rect, knee, point, .. } => {
+            let r = normalize(*rect);
+            if !finite(rect) || !finite(knee) || !finite(point) || r[2] - r[0] < 1.0 || r[3] - r[1] < 1.0 {
+                return Err(bad("callout"));
+            }
+            let pad = half + appearance::arrow_size(style.width) + 1.0;
+            let lead = grow(bounds([*knee, *point].into_iter()).unwrap_or_default(), pad);
+            [r[0].min(lead[0]), r[1].min(lead[1]), r[2].max(lead[2]), r[3].max(lead[3])]
+        }
+        Shape::Caret { rect } => {
+            let r = normalize(*rect);
+            if !finite(rect) || r[2] - r[0] < 1.0 || r[3] - r[1] < 1.0 {
+                return Err(bad("caret"));
+            }
+            r
+        }
     };
     Ok(r)
 }
@@ -651,6 +707,26 @@ fn subject(shape: &Shape) -> &'static str {
             StampGroup::SignHere => "Sign Here",
             StampGroup::StandardBusiness => "Stamp",
         },
+        Shape::Polygon { cloud: true, .. } => "Cloud",
+        Shape::Polygon { .. } => "Polygon",
+        Shape::PolyLine { .. } => "Polygonal Line",
+        Shape::Callout { .. } => "Callout",
+        Shape::Caret { .. } => "Inserted Text",
+    }
+}
+
+/// Where a callout's leader line meets its text box: the middle of the side facing `knee`.
+pub fn callout_attach(rect: [f64; 4], knee: [f64; 2]) -> [f64; 2] {
+    let [x0, y0, x1, y1] = normalize(rect);
+    let (cx, cy) = ((x0 + x1) / 2.0, (y0 + y1) / 2.0);
+    if knee[0] < x0 {
+        [x0, cy]
+    } else if knee[0] > x1 {
+        [x1, cy]
+    } else if knee[1] > y1 {
+        [cx, y1]
+    } else {
+        [cx, y0]
     }
 }
 
@@ -733,7 +809,43 @@ pub fn add_annotation(doc: &mut Document, new: &NewAnnotation, meta: &Meta) -> R
             d.set(b"InkList".to_vec(), Object::Array(list));
             border(&mut d);
         }
-        Shape::TextBox { font_size, .. } | Shape::Typewriter { font_size, .. } => {
+        Shape::Polygon { vertices, cloud } => {
+            d.set(b"C".to_vec(), rgb(style.color));
+            if let Some(f) = style.fill {
+                d.set(b"IC".to_vec(), rgb(f));
+            }
+            d.set(b"Vertices".to_vec(), num_array(&vertices.concat()));
+            if *cloud {
+                d.set(b"IT".to_vec(), Object::name("PolygonCloud"));
+                let mut be = Dict::new();
+                be.set(b"S".to_vec(), Object::name("C"));
+                be.set(b"I".to_vec(), Object::Int(1));
+                d.set(b"BE".to_vec(), Object::Dict(be));
+            }
+            border(&mut d);
+        }
+        Shape::PolyLine { vertices } => {
+            d.set(b"C".to_vec(), rgb(style.color));
+            d.set(b"Vertices".to_vec(), num_array(&vertices.concat()));
+            border(&mut d);
+        }
+        Shape::Caret { .. } => {
+            d.set(b"C".to_vec(), rgb(style.color));
+            d.set(b"Sy".to_vec(), Object::name("None"));
+        }
+        Shape::Callout { rect: tb, knee, point, .. } => {
+            let tb = normalize(*tb);
+            let attach = callout_attach(tb, *knee);
+            d.set(b"IT".to_vec(), Object::name("FreeTextCallout"));
+            d.set(b"CL".to_vec(), num_array(&[point[0], point[1], knee[0], knee[1], attach[0], attach[1]]));
+            d.set(b"LE".to_vec(), Object::name("OpenArrow"));
+            // The text box inside /Rect (§12.5.6.6 /RD).
+            d.set(b"RD".to_vec(), num_array(&[tb[0] - rect[0], tb[1] - rect[1], rect[2] - tb[2], rect[3] - tb[3]]));
+        }
+        _ => {}
+    }
+    match &new.shape {
+        Shape::TextBox { font_size, .. } | Shape::Typewriter { font_size, .. } | Shape::Callout { font_size, .. } => {
             if matches!(new.shape, Shape::Typewriter { .. }) {
                 d.set(b"IT".to_vec(), Object::name("FreeTextTypeWriter"));
             }
@@ -746,6 +858,7 @@ pub fn add_annotation(doc: &mut Document, new: &NewAnnotation, meta: &Meta) -> R
             }
             border(&mut d);
         }
+        _ => {}
     }
     let r = doc.add(Object::Dict(d.clone()));
     set_appearance(doc, r)?;
@@ -1015,12 +1128,36 @@ pub fn set_rect(doc: &mut Document, page: usize, index: usize, rect: [f64; 4], m
     if !finite(&rect) || rect[2] - rect[0] < 1.0 || rect[3] - rect[1] < 1.0 {
         return Err(AnnotError::Invalid("invalid rectangle (too small)".into()));
     }
+    // A callout's rectangle is its text box: the leader line re-attaches and `/Rect` grows to hold it.
+    let callout = d.get(b"CL").and_then(|o| o.as_array()).map(|a| a.iter().filter_map(|x| x.as_f64()).collect::<Vec<f64>>()).filter(|l| l.len() == 6);
+    let (outer, cl) = match callout {
+        Some(mut l) => {
+            let attach = callout_attach(rect, [l[2], l[3]]);
+            (l[4], l[5]) = (attach[0], attach[1]);
+            let pad = border_width_of(&d) / 2.0 + appearance::arrow_size(border_width_of(&d)) + 1.0;
+            let lead = grow(bounds([[l[0], l[1]], [l[2], l[3]]].into_iter()).unwrap_or_default(), pad);
+            ([rect[0].min(lead[0]), rect[1].min(lead[1]), rect[2].max(lead[2]), rect[3].max(lead[3])], Some(l))
+        }
+        None => (rect, None),
+    };
     doc.update_dict(r, |d| {
-        d.set(b"Rect".to_vec(), num_array(&rect));
-        d.remove(b"RD");
+        d.set(b"Rect".to_vec(), num_array(&outer));
+        match &cl {
+            Some(l) => {
+                d.set(b"CL".to_vec(), num_array(l));
+                d.set(b"RD".to_vec(), num_array(&[rect[0] - outer[0], rect[1] - outer[1], outer[2] - rect[2], outer[3] - rect[3]]));
+            }
+            None => {
+                d.remove(b"RD");
+            }
+        }
         touch(d, meta);
     })?;
     set_appearance(doc, r)
+}
+
+fn border_width_of(d: &Dict) -> f64 {
+    d.get(b"BS").and_then(|b| b.as_dict()).and_then(|b| b.get(b"W")).and_then(|w| w.as_f64()).unwrap_or(1.0).max(0.0)
 }
 
 /// Change a comment's colour, opacity and/or line width, and redraw it.
@@ -1095,6 +1232,7 @@ pub struct Summary {
     pub state: Option<String>,
     pub quads: Vec<[f32; 8]>,
     pub locked: bool,
+    pub intent: Option<String>,
 }
 
 fn text_value(doc: &Document, d: &Dict, key: &[u8]) -> Option<String> {
@@ -1157,6 +1295,7 @@ pub fn summaries(doc: &Document) -> Vec<Summary> {
                 state: text_value(doc, d, b"State"),
                 quads,
                 locked: d.get(b"F").and_then(|f| doc.resolve(f).as_int()).unwrap_or(0) & FLAG_LOCKED != 0,
+                intent: d.get(b"IT").and_then(|o| doc.resolve(o).as_name().map(|n| String::from_utf8_lossy(n).into_owned())),
             });
         }
     }
