@@ -119,8 +119,10 @@ enum Grab {
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct PrepareView {
-    /// The selected field and which of its widgets.
+    /// The selected field and which of its widgets (the anchor of Align and Match Size).
     pub selected: Option<(String, usize)>,
+    /// More fields selected with Shift- or ⌘-click.
+    pub also: Vec<(String, usize)>,
     /// Select the field an Add field edit creates (the form's length before it).
     pub select_added: Option<usize>,
     grab: Option<(usize, Grab, Pos2)>,
@@ -266,7 +268,17 @@ pub(crate) fn page_input(
             f.widgets.iter().enumerate().find(|(_, w)| w.page == Some(page) && screen_rect(xf, info, page, w.rect).contains(p)).map(|(i, _)| (f, i))
         })
     {
-        prep.selected = Some((f.name.clone(), wi));
+        let key = (f.name.clone(), wi);
+        if let Some(i) = prep.also.iter().position(|k| *k == key) {
+            // Part of the selection: it becomes the anchor the others line up with.
+            prep.also.remove(i);
+            if let Some(old) = prep.selected.replace(key) {
+                prep.also.push(old);
+            }
+        } else if prep.selected.as_ref() != Some(&key) {
+            prep.selected = Some(key);
+            prep.also.clear();
+        }
     }
     // The Select tool: corner handles of the selection, then fields.
     let selected_rect = prep
@@ -307,17 +319,129 @@ pub(crate) fn page_input(
         return out;
     }
     if resp.clicked() {
+        let extend = ui.input(|i| i.modifiers.shift || i.modifiers.command);
         match hit {
-            Some((f, wi)) => {
-                prep.selected = Some((f.name.clone(), wi));
+            // Shift/⌘-click adds or removes a field from the selection.
+            Some((f, wi)) if extend && prep.selected.is_some() => {
+                let key = (f.name.clone(), wi);
+                if prep.selected.as_ref() != Some(&key) {
+                    if let Some(i) = prep.also.iter().position(|k| *k == key) {
+                        prep.also.remove(i);
+                    } else {
+                        prep.also.push(key);
+                    }
+                }
                 out.consumed = true;
             }
-            None if corner.is_none() => prep.selected = None,
+            Some((f, wi)) => {
+                prep.selected = Some((f.name.clone(), wi));
+                prep.also.clear();
+                out.consumed = true;
+            }
+            None if corner.is_none() => {
+                prep.selected = None;
+                prep.also.clear();
+            }
             None => out.consumed = true,
         }
     }
     out.consumed |= hit.is_some() && resp.is_pointer_button_down_on();
     out
+}
+
+/// Align, Center, Distribute and Set Fields to Same Size (Prepare a form, several fields
+/// selected).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Arrange {
+    AlignLeft,
+    AlignRight,
+    AlignTop,
+    AlignBottom,
+    /// Centres on one vertical line (the anchor's).
+    AlignCenterH,
+    /// Centres on one horizontal line.
+    AlignCenterV,
+    DistributeH,
+    DistributeV,
+    SameWidth,
+    SameHeight,
+    SameSize,
+}
+
+impl Arrange {
+    pub fn label(self) -> &'static str {
+        match self {
+            Arrange::AlignLeft | Arrange::AlignRight | Arrange::AlignTop | Arrange::AlignBottom | Arrange::AlignCenterH | Arrange::AlignCenterV => {
+                "Align fields"
+            }
+            Arrange::DistributeH | Arrange::DistributeV => "Distribute fields",
+            Arrange::SameWidth | Arrange::SameHeight | Arrange::SameSize => "Match field sizes",
+        }
+    }
+}
+
+/// The edits that arrange the selected widgets (user space; the anchor stays put).
+pub fn arrange(form: &[FormField], anchor: &(String, usize), others: &[(String, usize)], op: Arrange) -> Option<Edit> {
+    let rect_of = |k: &(String, usize)| form.iter().find(|f| f.name == k.0).and_then(|f| f.widgets.get(k.1)).map(|w| w.rect);
+    let a = rect_of(anchor)?;
+    let mut items: Vec<((String, usize), [f64; 4])> = others.iter().filter_map(|k| rect_of(k).map(|r| (k.clone(), r))).collect();
+    if items.is_empty() {
+        return None;
+    }
+    let (aw, ah) = (a[2] - a[0], a[3] - a[1]);
+    let mut moved: Vec<((String, usize), [f64; 4])> = Vec::new();
+    match op {
+        Arrange::DistributeH | Arrange::DistributeV => {
+            // Even gaps between all selected fields (the outermost stay).
+            items.push((anchor.clone(), a));
+            if items.len() < 3 {
+                return None;
+            }
+            let horiz = op == Arrange::DistributeH;
+            items.sort_by(|x, y| if horiz { x.1[0].total_cmp(&y.1[0]) } else { y.1[3].total_cmp(&x.1[3]) });
+            let size = |r: &[f64; 4]| if horiz { r[2] - r[0] } else { r[3] - r[1] };
+            let (first, last) = (items[0].1, items[items.len() - 1].1);
+            let span = if horiz { last[2] - first[0] } else { first[3] - last[1] };
+            let total: f64 = items.iter().map(|(_, r)| size(r)).sum();
+            let gap = (span - total) / (items.len() - 1) as f64;
+            let mut at = if horiz { first[0] } else { first[3] };
+            for (k, r) in &items {
+                let s = size(r);
+                let nr = if horiz { [at, r[1], at + s, r[3]] } else { [r[0], at - s, r[2], at] };
+                at = if horiz { at + s + gap } else { at - s - gap };
+                moved.push((k.clone(), nr));
+            }
+        }
+        _ => {
+            for (k, r) in items {
+                let (w, h) = (r[2] - r[0], r[3] - r[1]);
+                let nr = match op {
+                    Arrange::AlignLeft => [a[0], r[1], a[0] + w, r[3]],
+                    Arrange::AlignRight => [a[2] - w, r[1], a[2], r[3]],
+                    Arrange::AlignTop => [r[0], a[3] - h, r[2], a[3]],
+                    Arrange::AlignBottom => [r[0], a[1], r[2], a[1] + h],
+                    Arrange::AlignCenterH => {
+                        let cx = (a[0] + a[2]) / 2.0;
+                        [cx - w / 2.0, r[1], cx + w / 2.0, r[3]]
+                    }
+                    Arrange::AlignCenterV => {
+                        let cy = (a[1] + a[3]) / 2.0;
+                        [r[0], cy - h / 2.0, r[2], cy + h / 2.0]
+                    }
+                    Arrange::SameWidth => [r[0], r[1], r[0] + aw, r[3]],
+                    Arrange::SameHeight => [r[0], r[3] - ah, r[2], r[3]],
+                    _ => [r[0], r[3] - ah, r[0] + aw, r[3]],
+                };
+                moved.push((k, nr));
+            }
+        }
+    }
+    let edits: Vec<Edit> = moved
+        .into_iter()
+        .filter(|(k, nr)| rect_of(k).is_some_and(|r| r.iter().zip(nr).any(|(x, y)| (x - y).abs() > 1e-6)))
+        .map(|((name, wi), rect)| Edit::SetFieldProps { name, props: Box::new(FieldProps { rect: Some((wi, rect)), ..Default::default() }) })
+        .collect();
+    (!edits.is_empty()).then(|| Edit::Batch { label: op.label().into(), edits })
 }
 
 /// Fields with their light-blue fill and name tags, the selection with its handles, and the
@@ -331,6 +455,7 @@ pub(crate) fn paint_page(ui: &egui::Ui, painter: &egui::Painter, xf: &PageXform,
         for (wi, w) in f.widgets.iter().enumerate().filter(|(_, w)| w.page == Some(page)) {
             let mut r = screen_rect(xf, info, page, w.rect);
             let selected = prep.selected.as_ref().is_some_and(|(n, i)| n == &f.name && *i == wi);
+            let also = prep.also.iter().any(|(n, i)| n == &f.name && *i == wi);
             if selected && let (Some((_, g, start)), Some(p)) = (grab, pointer) {
                 r = dragged(r, g, p - start);
             }
@@ -338,7 +463,7 @@ pub(crate) fn paint_page(ui: &egui::Ui, painter: &egui::Painter, xf: &PageXform,
             painter.rect_stroke(
                 r,
                 CornerRadius::ZERO,
-                Stroke::new(1.0, if selected { SELECT_BLUE } else { Color32::from_gray(90) }),
+                Stroke::new(if also { 2.0 } else { 1.0 }, if selected || also { SELECT_BLUE } else { Color32::from_gray(90) }),
                 egui::StrokeKind::Inside,
             );
             // The name tag: white text on black, clipped to the field.

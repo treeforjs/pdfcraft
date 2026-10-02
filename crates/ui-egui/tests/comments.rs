@@ -465,8 +465,19 @@ fn highlighting_an_area_off_the_text() {
     assert_eq!((c[0].subtype.as_str(), c[0].quads.len()), ("Highlight", 1));
     let q = c[0].quads[0];
     assert!((q[0] - 40.0).abs() < 3.0 && (q[1] - 100.0).abs() < 3.0, "{q:?}");
-    // Dragging over text still highlights the text.
-    drag_pt(&mut h, (20.0, 155.0), (120.0, 155.0));
+    // Dragging over text still highlights the text (once the text layer is in).
+    let mut glyphs = None;
+    for _ in 0..200 {
+        h.run_steps(1);
+        let v = &h.state().views[0];
+        if let (Some(a), Some(b)) = (v.glyph_screen_pos(0, 4), v.glyph_screen_pos(0, 14)) {
+            glyphs = Some((a, b));
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    let (a, b) = glyphs.expect("text layer");
+    drag(&mut h, a, b);
     assert_eq!(comments(&h).len(), 2);
 }
 

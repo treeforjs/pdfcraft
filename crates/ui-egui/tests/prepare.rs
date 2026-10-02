@@ -249,3 +249,38 @@ fn duplicating_a_field_onto_every_page() {
     assert_eq!(pages, (0..n).collect::<Vec<_>>());
     assert_eq!(doc.can_undo(), Some("Duplicate field"));
 }
+
+#[test]
+fn aligning_distributing_and_sizing_several_fields() {
+    use printcraft_ui_egui::prepare::{Arrange, arrange};
+    let mut h = harness();
+    for (name, x, y, w) in [("a", 20.0, 300.0, 60.0), ("b", 120.0, 280.0, 80.0), ("c", 260.0, 260.0, 30.0)] {
+        h.state_mut().apply_edit(printcraft_engine::Edit::AddField {
+            page: 0,
+            rect: [x, y, x + w, y + 20.0],
+            kind: printcraft_engine::NewField::Text { multiline: false },
+            name: Some(name.into()),
+        });
+    }
+    h.run_steps(2);
+    let form = |h: &Harness<'static, PrintCraftApp>| h.state().session.get(h.state().views[0].id).unwrap().form.as_ref().clone();
+    let rect = |h: &Harness<'static, PrintCraftApp>, n: &str| form(h).iter().find(|f| f.name == n).unwrap().widgets[0].rect;
+    let a = ("a".to_string(), 0);
+    let others = vec![("b".to_string(), 0), ("c".to_string(), 0)];
+    // Align tops with a.
+    let e = arrange(&form(&h), &a, &others, Arrange::AlignTop).unwrap();
+    h.state_mut().apply_edit(e);
+    assert!(["b", "c"].iter().all(|n| rect(&h, n)[3] == 320.0));
+    assert_eq!(h.state().session.get(h.state().views[0].id).unwrap().can_undo(), Some("Align fields"));
+    // Distribute horizontally: equal gaps between a, b and c.
+    let e = arrange(&form(&h), &a, &others, Arrange::DistributeH).unwrap();
+    h.state_mut().apply_edit(e);
+    let (ra, rb, rc) = (rect(&h, "a"), rect(&h, "b"), rect(&h, "c"));
+    assert!(((rb[0] - ra[2]) - (rc[0] - rb[2])).abs() < 1e-6, "{ra:?} {rb:?} {rc:?}");
+    // Same width as a.
+    let e = arrange(&form(&h), &a, &others, Arrange::SameWidth).unwrap();
+    h.state_mut().apply_edit(e);
+    assert!(["b", "c"].iter().all(|n| (rect(&h, n)[2] - rect(&h, n)[0] - 60.0).abs() < 1e-6));
+    assert_eq!(h.state().session.get(h.state().views[0].id).unwrap().can_undo(), Some("Match field sizes"));
+    assert!(arrange(&form(&h), &a, &[("b".into(), 0)], Arrange::DistributeV).is_none(), "distributing needs three");
+}

@@ -4875,11 +4875,11 @@ title = "Align, centre, distribute and match field sizes"
 area = "F"
 tier = "P1"
 milestone = "M6"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["form.prepare"]
+tools = ["form_set_props"]
+evidence = ["crates/ui-egui/tests/prepare.rs::aligning_distributing_and_sizing_several_fields"]
+notes = "Shift/⌘-click to select several; right-click: Align (left, right, top, bottom, centres), Distribute, Set Fields to Same Size; the right-clicked field is the anchor"
 
 [[feature]]
 id = "form.duplicate-fields"

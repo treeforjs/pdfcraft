@@ -1319,7 +1319,37 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
         }
         resp.context_menu(|ui| {
             // Preparing a form: the selected field's menu.
-            if preparing && let Some((name, _)) = view.prepare.selected.clone() {
+            if preparing && let Some((name, wi)) = view.prepare.selected.clone() {
+                // Several fields: Align, Center, Distribute, Set Fields to Same Size.
+                if !view.prepare.also.is_empty() {
+                    use crate::prepare::Arrange as A;
+                    let others = view.prepare.also.clone();
+                    let anchor = (name.clone(), wi);
+                    let mut pick = |ui: &mut egui::Ui, op: A, label: &str| {
+                        if ui.add_enabled(can_modify, egui::Button::new(label)).clicked() {
+                            view.pending_edit = crate::prepare::arrange(&form, &anchor, &others, op);
+                            ui.close();
+                        }
+                    };
+                    ui.menu_button("Align", |ui| {
+                        pick(ui, A::AlignLeft, "Left");
+                        pick(ui, A::AlignRight, "Right");
+                        pick(ui, A::AlignTop, "Top");
+                        pick(ui, A::AlignBottom, "Bottom");
+                        pick(ui, A::AlignCenterV, "Vertically");
+                        pick(ui, A::AlignCenterH, "Horizontally");
+                    });
+                    ui.menu_button("Distribute", |ui| {
+                        pick(ui, A::DistributeH, "Horizontally");
+                        pick(ui, A::DistributeV, "Vertically");
+                    });
+                    ui.menu_button("Set Fields to Same Size", |ui| {
+                        pick(ui, A::SameHeight, "Height");
+                        pick(ui, A::SameWidth, "Width");
+                        pick(ui, A::SameSize, "Both");
+                    });
+                    ui.separator();
+                }
                 if ui.button("Properties…").clicked() {
                     field_menu = Some(FieldMenu::Properties);
                     ui.close();
