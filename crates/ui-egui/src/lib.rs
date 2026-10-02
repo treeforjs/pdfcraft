@@ -173,6 +173,14 @@ pub enum PropsTab {
     Advanced,
 }
 
+/// Copied pages: their document's name and bytes (as it was when copied) and the pages.
+#[derive(Clone, Debug)]
+pub struct PageClip {
+    pub name: String,
+    pub bytes: std::sync::Arc<Vec<u8>>,
+    pub pages: Vec<usize>,
+}
+
 /// Files delivered asynchronously: (name, bytes).
 pub type Inbox = std::sync::Arc<std::sync::Mutex<Vec<(String, Vec<u8>)>>>;
 
@@ -245,6 +253,8 @@ pub struct PrintCraftApp {
     pub sig_expanded: Vec<String>,
     /// PDF Optimizer choices.
     pub optimize_draft: OptimizeDraft,
+    /// Pages copied or cut in Organize Pages, ready to paste (into any document).
+    pub page_clipboard: Option<PageClip>,
     /// Where autosaves go (`None`: autosave off, e.g. on the web and in tests).
     pub recovery: Option<RecoveryStore>,
     /// Entries left by a previous session, offered in the Recovery dialog.
@@ -349,6 +359,7 @@ impl PrintCraftApp {
             digital_ids: Vec::new(),
             sig_expanded: Vec::new(),
             optimize_draft: OptimizeDraft::default(),
+            page_clipboard: None,
             recovery: None,
             recoverable: Vec::new(),
             recovery_keys: Default::default(),

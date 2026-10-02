@@ -166,6 +166,12 @@ pub enum ViewAction {
     InsertFromFile,
     Extract,
     Split,
+    /// Copy the selected pages (Cut also deletes them).
+    CopyPages {
+        cut: bool,
+    },
+    /// Paste copied pages after the selection.
+    PastePages,
 }
 
 impl DocView {
@@ -1875,6 +1881,17 @@ fn organize_toolbar(view: &mut DocView, info: &DocInfo, editable: bool, ui: &mut
                 i.consume_key(Modifiers::NONE, Key::Escape),
             )
         });
+        // ⌘C / ⌘X / ⌘V copy, cut and paste pages (egui delivers them as clipboard events).
+        let (copy, cut, paste) = ui.input(|i| {
+            let any = |f: &dyn Fn(&egui::Event) -> bool| i.events.iter().any(f);
+            (any(&|e| matches!(e, egui::Event::Copy)), any(&|e| matches!(e, egui::Event::Cut)), any(&|e| matches!(e, egui::Event::Paste(_))))
+        });
+        if copy || cut {
+            view.pending_action = Some(ViewAction::CopyPages { cut });
+        }
+        if paste {
+            view.pending_action = Some(ViewAction::PastePages);
+        }
         if del && targets.len() < n {
             view.pending_edit = Some(Edit::DeletePages { pages: targets });
         }
@@ -1967,6 +1984,25 @@ fn organize_grid(view: &mut DocView, info: &DocInfo, pool: &RenderPool, editable
                 if resp.double_clicked() {
                     open_page = Some(i);
                 }
+                // Right-click: Cut, Copy, Paste (on the selection, or this page).
+                resp.context_menu(|ui| {
+                    if !view.selected.contains(&i) {
+                        view.selected = [i].into();
+                        view.current = i;
+                    }
+                    if ui.add_enabled(editable, egui::Button::new("Cut")).clicked() {
+                        view.pending_action = Some(ViewAction::CopyPages { cut: true });
+                        ui.close();
+                    }
+                    if ui.button("Copy").clicked() {
+                        view.pending_action = Some(ViewAction::CopyPages { cut: false });
+                        ui.close();
+                    }
+                    if ui.add_enabled(editable, egui::Button::new("Paste after")).clicked() {
+                        view.pending_action = Some(ViewAction::PastePages);
+                        ui.close();
+                    }
+                });
             }
         }
         // While dragging: the gap the pages would go to, drawn as a bar.

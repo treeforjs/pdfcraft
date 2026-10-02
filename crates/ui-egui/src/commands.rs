@@ -308,6 +308,9 @@ impl PrintCraftApp {
             }
             "sign.panel" => self.right = Some(RightPanel::Signatures),
             "optimize.advanced" => self.dialog = Some(Dialog::Optimize),
+            "page.copy" => self.copy_pages(false),
+            "page.cut" => self.copy_pages(true),
+            "page.paste" => self.paste_pages(),
             "comment.hide_all" => {
                 if let Some(i) = active {
                     let id = self.views[i].id;

@@ -2743,11 +2743,11 @@ title = "Cut, copy and paste pages"
 area = "D"
 tier = "P1"
 milestone = "M4"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["page.copy", "page.cut", "page.paste"]
+tools = ["page_insert_file"]
+evidence = ["crates/ui-egui/tests/editing.rs::copying_cutting_and_pasting_pages"]
+notes = "⌘C/⌘X/⌘V and the thumbnail menu in Organize Pages; paste works across documents"
 
 [[feature]]
 id = "organize.drag-pages-between-documents"

@@ -101,7 +101,42 @@ impl PrintCraftApp {
             Some(crate::canvas::ViewAction::InsertFromFile) => self.insert_from_file_dialog(),
             Some(crate::canvas::ViewAction::Extract) => self.dialog = Some(crate::Dialog::Extract),
             Some(crate::canvas::ViewAction::Split) => self.dialog = Some(crate::Dialog::Split),
+            Some(crate::canvas::ViewAction::CopyPages { cut }) => self.copy_pages(cut),
+            Some(crate::canvas::ViewAction::PastePages) => self.paste_pages(),
             None => {}
+        }
+    }
+
+    /// Organize ▸ Copy / Cut: remember the selected pages (the document as it is now); Cut also
+    /// deletes them (one page always stays).
+    pub fn copy_pages(&mut self, cut: bool) {
+        let Some((i, id)) = self.active_ids() else { return };
+        let Some(doc) = self.session.get(id) else { return };
+        let pages = self.views[i].target_pages();
+        let n = doc.info.pages.len();
+        if cut && pages.len() >= n {
+            self.notify("A document needs at least one page: copy instead");
+            return;
+        }
+        self.page_clipboard = Some(crate::PageClip { name: doc.name.clone(), bytes: doc.bytes.clone(), pages: pages.clone() });
+        if cut {
+            self.apply_edit(Edit::DeletePages { pages: pages.clone() });
+        }
+        let what = if pages.len() == 1 { "1 page".to_string() } else { format!("{} pages", pages.len()) };
+        self.notify(format!("{} {what}", if cut { "Cut" } else { "Copied" }));
+    }
+
+    /// Organize ▸ Paste: insert the copied pages after the selection (or the current page).
+    pub fn paste_pages(&mut self) {
+        let Some(clip) = self.page_clipboard.clone() else {
+            self.notify("Copy or cut pages first");
+            return;
+        };
+        let Some(i) = self.active else { return };
+        let at = self.views[i].target_pages().into_iter().max().map_or(0, |p| p + 1);
+        let count = clip.pages.len();
+        if self.apply_edit(Edit::InsertPagesFrom { name: clip.name.clone(), bytes: clip.bytes.clone(), pages: Some(clip.pages.clone()), at }) {
+            self.views[i].select_pages(&(at..at + count).collect::<Vec<_>>());
         }
     }
 

@@ -147,6 +147,9 @@ const HELP: Option<&str> = Some("Help");
 pub const COMMANDS: &[CommandSpec] = &[
     c("file.open", "Open…", FILE, Some(Shortcut::cmd("O")), Nothing, "folder-open"),
     c("create.blank", "New blank PDF", FILE, None, Nothing, "file-plus-2"),
+    c("page.copy", "Copy pages", None, None, Document, "copy"),
+    c("page.cut", "Cut pages", None, None, Assembly, "scissors"),
+    c("page.paste", "Paste pages", None, None, Assembly, "clipboard-paste"),
     c("create.file", "Create PDF from file…", FILE, None, Nothing, "file-input"),
     c("create.images", "Create PDF from images…", FILE, None, Nothing, "image"),
     c("create.clipboard", "Create PDF from clipboard", FILE, None, Nothing, "copy-plus"),

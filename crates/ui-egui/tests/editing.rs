@@ -541,3 +541,29 @@ fn dragging_thumbnails_reorders_pages() {
     let sel: Vec<usize> = h.state().views[0].selected.iter().copied().collect();
     assert_eq!(sel, vec![2], "the moved page stays selected");
 }
+
+#[test]
+fn copying_cutting_and_pasting_pages() {
+    let mut h = organize(4);
+    let before = page_texts(h.state());
+    h.state_mut().views[0].select_pages(&[0]);
+    assert!(h.state_mut().execute("page.copy"));
+    h.state_mut().views[0].select_pages(&[2]);
+    assert!(h.state_mut().execute("page.paste"));
+    h.run_steps(2);
+    let after = page_texts(h.state());
+    assert_eq!(after, vec![before[0].clone(), before[1].clone(), before[2].clone(), before[0].clone(), before[3].clone()], "pasted after page 3");
+    let sel: Vec<usize> = h.state().views[0].selected.iter().copied().collect();
+    assert_eq!(sel, vec![3], "the pasted page is selected");
+    // Cut page 2 and paste it at the end.
+    h.state_mut().views[0].select_pages(&[1]);
+    assert!(h.state_mut().execute("page.cut"));
+    h.state_mut().views[0].select_pages(&[3]);
+    assert!(h.state_mut().execute("page.paste"));
+    let after = page_texts(h.state());
+    assert_eq!(after, vec![before[0].clone(), before[2].clone(), before[0].clone(), before[3].clone(), before[1].clone()]);
+    // Every page can be copied but not cut.
+    h.state_mut().views[0].select_pages(&[0, 1, 2, 3, 4]);
+    h.state_mut().execute("page.cut");
+    assert_eq!(page_texts(h.state()).len(), 5);
+}
