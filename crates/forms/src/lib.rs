@@ -84,6 +84,8 @@ pub struct Widget {
     /// Position in the document's tab order (pages in order; within a page by its `/Tabs`:
     /// rows, columns, or annotation/structure order). `usize::MAX` when not on a page.
     pub tab: usize,
+    /// The widget's Locked flag (`/F` bit 8): its properties can't be changed.
+    pub locked: bool,
 }
 
 /// A terminal form field.
@@ -120,6 +122,11 @@ impl Field {
 
     pub fn read_only(&self) -> bool {
         self.has(flags::READ_ONLY)
+    }
+
+    /// Locked (Field Properties ▸ General ▸ Locked): its properties can't be changed.
+    pub fn locked(&self) -> bool {
+        self.widgets.iter().any(|w| w.locked)
     }
 
     /// The value as one string: text, the state name, or the selected display texts.
@@ -535,6 +542,7 @@ fn walk(
                 on_state: on_state.filter(|_| matches!(kind, FieldKind::CheckBox | FieldKind::Radio)),
                 state: wd.name(b"AS").map(|s| String::from_utf8_lossy(s).into_owned()),
                 tab: usize::MAX,
+                locked: wd.get(b"F").and_then(|f| doc.resolve(f).as_int()).unwrap_or(0) & 128 != 0,
             })
         })
         .collect();

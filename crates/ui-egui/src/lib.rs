@@ -279,6 +279,8 @@ pub struct PrintCraftApp {
     pub attach_override: Option<(String, Vec<u8>)>,
     /// Duplicate Field: which field and onto which pages.
     pub duplicate_draft: Option<DuplicateDraft>,
+    /// Prepare a form ▸ Preview: fill the form instead of editing its fields.
+    pub form_preview: bool,
     /// Where autosaves go (`None`: autosave off, e.g. on the web and in tests).
     pub recovery: Option<RecoveryStore>,
     /// Entries left by a previous session, offered in the Recovery dialog.
@@ -388,6 +390,7 @@ impl PrintCraftApp {
             system_clipboard: true,
             attach_override: None,
             duplicate_draft: None,
+            form_preview: false,
             recovery: None,
             recoverable: Vec::new(),
             recovery_keys: Default::default(),
@@ -420,6 +423,12 @@ impl PrintCraftApp {
             replace_draft: None,
             number_draft: NumberDraft { from: 1, to: 1, style: printcraft_engine::LabelStyle::Decimal, prefix: String::new(), start: 1 },
         }
+    }
+
+    /// Fields are being edited (Prepare a form is open or a field tool is picked), unless the
+    /// form is being previewed.
+    pub fn is_preparing(&self) -> bool {
+        ((self.left_open && self.left == LeftPanel::Tool("form")) || matches!(self.quick_tool, QuickTool::Field(_))) && !self.form_preview
     }
 
     /// Open a document the way it asks to be opened: navigation panel, layout, magnification,

@@ -846,7 +846,7 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
     }
     let want_thumbs = app.right == Some(RightPanel::Pages) || app.views[index].organize || app.dialog == Some(crate::Dialog::Print);
     // The Prepare a form panel is open (or a field tool is picked): fields are edited, not filled.
-    let preparing = (app.left_open && app.left == crate::LeftPanel::Tool("form")) || matches!(app.quick_tool, QuickTool::Field(_));
+    let preparing = app.is_preparing();
     // Edit a PDF: added text and images can be selected, moved and edited.
     let editing_content = (app.left_open && app.left == crate::LeftPanel::Tool("edit")) || app.quick_tool == QuickTool::AddText;
     let text_style = app.text_style.clone();

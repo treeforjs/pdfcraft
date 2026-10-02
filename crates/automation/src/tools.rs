@@ -260,6 +260,7 @@ pub fn tools() -> Vec<ToolDef> {
                 "max_length": { "type": "integer", "minimum": 0 },
                 "options": { "type": "array", "items": { "type": "string" } },
                 "align": { "type": "string", "enum": ["left", "center", "right"] },
+                "locked": { "type": "boolean", "description": "Lock the field's properties (only unlocking is accepted while locked)." },
                 "default": { "type": "string" },
                 "flags": { "type": "object", "additionalProperties": { "type": "boolean" } },
                 "font_size": { "type": "number", "minimum": 0 },

@@ -4911,11 +4911,11 @@ title = "Rename and lock fields"
 area = "F"
 tier = "P1"
 milestone = "M6"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["form.prepare"]
+tools = ["form_set_props"]
+evidence = ["crates/forms/src/tests.rs::locked_fields_only_take_unlocking", "crates/ui-egui/tests/prepare.rs::preview_fills_the_form_and_locked_fields_keep_their_properties"]
+notes = "rename in Field Properties ▸ General; Locked sets the widgets' annotation Locked flag (/F bit 8) and greys out the properties until unlocked; values can still be filled in"
 
 [[feature]]
 id = "form.tab-order"
@@ -4947,11 +4947,11 @@ title = "Preview mode for testing a form"
 area = "F"
 tier = "P1"
 milestone = "M6"
-status = "planned"
-commands = []
+status = "shipped"
+commands = ["form.prepare"]
 tools = []
-evidence = []
-notes = ""
+evidence = ["crates/ui-egui/tests/prepare.rs::preview_fills_the_form_and_locked_fields_keep_their_properties"]
+notes = "Preview / Edit fields toggle in the Prepare a form panel"
 
 [[feature]]
 id = "form.auto-detect-fields"

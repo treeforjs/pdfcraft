@@ -355,6 +355,7 @@ impl Automation {
                 Some(o) => return Err(bad(format!("unknown alignment {o:?} (left, center, right)"))),
             },
             default_value: a.opt_str("default")?.map(|d| (!d.is_empty()).then(|| d.to_owned())),
+            locked: a.opt_bool("locked")?,
             flags: match a.get("flags") {
                 None => Vec::new(),
                 Some(v) => {

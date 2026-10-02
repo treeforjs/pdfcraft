@@ -82,6 +82,8 @@ pub struct FieldProps {
     pub quadding: Option<i64>,
     /// Default value (`/DV`): what Reset form restores.
     pub default_value: Option<Option<String>>,
+    /// Lock or unlock the field (its widgets' Locked flag).
+    pub locked: Option<bool>,
 }
 
 fn invalid<T>(m: impl Into<String>) -> Result<T, FormError> {
@@ -431,7 +433,15 @@ pub fn add_field(doc: &mut Document, page: usize, rect: [f64; 4], kind: &NewFiel
                 kids.push(Object::Ref(widget));
                 d.set(b"Kids".to_vec(), Object::Array(kids));
             })?;
-            let w = Widget { obj: widget, page: Some(page), rect, on_state: Some(export.clone()), state: Some("Off".into()), tab: usize::MAX };
+            let w = Widget {
+                obj: widget,
+                page: Some(page),
+                rect,
+                on_state: Some(export.clone()),
+                state: Some("Off".into()),
+                tab: usize::MAX,
+                locked: false,
+            };
             let ap = appearance::check_box_states(doc, &w, FieldKind::Radio, export);
             doc.update_dict(widget, |d| d.set(b"AP".to_vec(), Object::Dict(ap)))?;
         }
@@ -548,6 +558,20 @@ fn empty_box(doc: &Document, w: &Widget) -> Stream {
 pub fn set_props(doc: &mut Document, name: &str, props: &FieldProps) -> Result<String, FormError> {
     let all = fields(doc);
     let f = all.iter().find(|f| f.name == name).ok_or_else(|| FormError::NoSuchField(name.into()))?.clone();
+    // A locked field only takes unlocking (Acrobat greys its properties out).
+    if f.locked() && props.locked != Some(false) && *props != (FieldProps { locked: props.locked, ..FieldProps::default() }) {
+        return invalid(format!("{name} is locked: unlock it first"));
+    }
+    if let Some(lock) = props.locked {
+        for w in &f.widgets {
+            let flags = doc.get(w.obj).as_dict().and_then(|d| d.get(b"F").and_then(|v| doc.resolve(v).as_int())).unwrap_or(0);
+            let v = if lock { flags | 128 } else { flags & !128 };
+            doc.update_dict(w.obj, |d| d.set(b"F".to_vec(), Object::Int(v)))?;
+        }
+        if *props == (FieldProps { locked: props.locked, ..FieldProps::default() }) {
+            return Ok(name.to_string());
+        }
+    }
     let mut new_name = name.to_string();
     if let Some(n) = props.name.as_deref().map(str::trim).filter(|n| *n != f.name) {
         if n.is_empty() || n.contains('.') {

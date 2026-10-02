@@ -130,6 +130,19 @@ fn tool_detail(app: &mut PrintCraftApp, ui: &mut egui::Ui, t: &Tokens, g: &'stat
         stamp_palette(app, ui, t);
         return;
     }
+    // Prepare a form: Preview fills the form as a reader would; Edit goes back.
+    if g.id == "form" {
+        ui.horizontal(|ui| {
+            let label = if app.form_preview { "Edit fields" } else { "Preview" };
+            if widgets::pill_button(ui, label, app.form_preview).on_hover_text("Try the form as people filling it in will see it").clicked() {
+                app.form_preview = !app.form_preview;
+                if app.form_preview {
+                    app.quick_tool = crate::QuickTool::Select;
+                }
+            }
+        });
+        ui.add_space(6.0);
+    }
     // Edit a PDF shows Format text at the top while text is selected or being added.
     if g.id == "edit" {
         format_section(app, ui, t);
@@ -329,14 +342,14 @@ pub fn right_panel(app: &mut PrintCraftApp, ui: &mut egui::Ui) {
     let mut sig_action: Option<crate::sign_ui::PanelAction> = None;
     let mut bm_rename = app.bookmark_rename.clone();
     let bm_editable = app.session.get(id).is_some_and(|d| d.allows_assembly() && d.read_only_reason.is_none());
+    // Prepare a form is open: the Fields panel orders tabs.
+    let preparing = app.is_preparing();
     {
         let Some(doc) = app.session.get(id) else { return };
         let info = &doc.info;
         let view = &mut app.views[index];
         let prefs = &app.comment_prefs;
         let sig_expanded = &mut app.sig_expanded;
-        // Prepare a form is open: the Fields panel orders tabs.
-        let preparing = (app.left_open && app.left == LeftPanel::Tool("form")) || matches!(app.quick_tool, crate::QuickTool::Field(_));
         let comment_allowed = doc.allows_annotation();
         egui::Panel::right("right_panel")
             .resizable(true)

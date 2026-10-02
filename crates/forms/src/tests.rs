@@ -594,3 +594,17 @@ fn duplicating_a_field_across_pages_shares_its_value() {
     assert_eq!(fields(&doc).len(), 1);
     assert!(duplicate_field(&mut doc.clone(), &name, &[7]).is_err());
 }
+
+#[test]
+fn locked_fields_only_take_unlocking() {
+    let mut doc = one_page();
+    let name = add_field(&mut doc, 0, [50.0, 700.0, 250.0, 720.0], &NewField::Text { multiline: false }, Some("ID")).unwrap();
+    set_props(&mut doc, &name, &FieldProps { locked: Some(true), ..FieldProps::default() }).unwrap();
+    assert!(fields(&doc)[0].locked());
+    assert!(set_props(&mut doc, &name, &FieldProps { required: Some(true), ..FieldProps::default() }).is_err(), "locked");
+    // Values can still be filled in.
+    set_value(&mut doc, &name, &FieldValue::Text("42".into())).unwrap();
+    set_props(&mut doc, &name, &FieldProps { locked: Some(false), required: Some(true), ..FieldProps::default() }).unwrap();
+    let f = &fields(&doc)[0];
+    assert!(!f.locked() && f.has(flags::REQUIRED));
+}

@@ -284,3 +284,37 @@ fn aligning_distributing_and_sizing_several_fields() {
     assert_eq!(h.state().session.get(h.state().views[0].id).unwrap().can_undo(), Some("Match field sizes"));
     assert!(arrange(&form(&h), &a, &[("b".into(), 0)], Arrange::DistributeV).is_none(), "distributing needs three");
 }
+
+#[test]
+fn preview_fills_the_form_and_locked_fields_keep_their_properties() {
+    let mut h = harness();
+    assert!(h.state_mut().execute("form.prepare"));
+    h.run_steps(2);
+    assert!(h.state().is_preparing());
+    h.get_by_label("Preview").click();
+    h.run_steps(2);
+    assert!(!h.state().is_preparing(), "Preview fills the form");
+    h.get_by_label("Edit fields").click();
+    h.run_steps(2);
+    assert!(h.state().is_preparing());
+    // Lock a field: its properties are then greyed out until unlocked.
+    h.state_mut().open_field_props("city", 0);
+    h.run_steps(2);
+    h.get_by_label("Locked").click();
+    h.run_steps(1);
+    h.get_by_label("OK").click();
+    h.run_steps(3);
+    let locked = |h: &Harness<'static, PrintCraftApp>| {
+        let s = h.state();
+        s.session.get(s.views[0].id).unwrap().form.iter().find(|f| f.name == "city").unwrap().locked()
+    };
+    assert!(locked(&h));
+    h.state_mut().open_field_props("city", 0);
+    h.run_steps(2);
+    h.get_by_label_contains("This field is locked");
+    h.get_by_label("Locked").click();
+    h.run_steps(1);
+    h.get_by_label("OK").click();
+    h.run_steps(3);
+    assert!(!locked(&h));
+}
