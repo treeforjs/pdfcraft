@@ -171,3 +171,26 @@ fn layouts_fit_height_labels_and_system_theme() {
     h.state_mut().set_option("theme", "system").unwrap();
     assert!(h.state().follow_system_theme);
 }
+
+#[test]
+fn damaged_files_say_they_were_repaired() {
+    // No cross-reference table: the file is reconstructed.
+    let damaged = b"%PDF-1.7
+1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
+2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj
+3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] >> endobj
+trailer << /Root 1 0 R >>
+%%EOF"
+        .to_vec();
+    let mut h = Harness::builder().with_size(egui::vec2(1200.0, 800.0)).build_eframe(move |_cc| {
+        let mut app = PrintCraftApp::new();
+        app.open_bytes("damaged.pdf", None, damaged.clone()).unwrap();
+        app
+    });
+    h.run_steps(4);
+    h.get_by_label_contains("This file was damaged and has been repaired.");
+    h.get_by_label("Details").click();
+    h.run_steps(3);
+    assert_eq!(h.state().dialog, Some(Dialog::Properties(printcraft_ui_egui::PropsTab::Advanced)));
+    h.get_by_label("Repair log");
+}

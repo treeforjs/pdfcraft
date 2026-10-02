@@ -152,6 +152,8 @@ pub struct DocView {
     pub crop_drag: crate::crop::CropDrag,
     /// Use a certificate: a signature rectangle being drawn, or an empty signature field clicked.
     pub sign: crate::sign_ui::SignView,
+    /// Organize: the pages being dragged to a new place.
+    pub org_drag: Option<Vec<usize>>,
     /// Fill & Sign text being typed.
     pub fill_text: Option<crate::fill_sign::TypeBox>,
     /// A non-edit action requested by the organize toolbar, handled by the app.
@@ -233,6 +235,7 @@ impl DocView {
             pending_redaction: None,
             crop_drag: None,
             sign: Default::default(),
+            org_drag: None,
             fill_text: None,
         }
     }
@@ -829,7 +832,9 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
     let view = &mut app.views[index];
     // Opened without the owner password and something is restricted.
     let secured = doc.security_summary().is_some_and(|s| !(s.owner || (s.permissions.modify() && s.permissions.assemble())));
-    match notices(view, info, secured, crate::sign_ui::banner(&doc.signatures), ui, &t) {
+    let repaired = !doc.repair_log().is_empty();
+    match notices(view, info, secured, repaired, crate::sign_ui::banner(&doc.signatures), ui, &t) {
+        Some(Notice::Repairs) => app.dialog = Some(crate::Dialog::Properties(crate::PropsTab::Advanced)),
         Some(Notice::Security) => app.dialog = Some(crate::Dialog::Properties(crate::PropsTab::Security)),
         Some(Notice::Signatures) => app.right = Some(RightPanel::Signatures),
         None => {}
@@ -1564,6 +1569,7 @@ fn find_bar(view: &mut DocView, pages: usize, area: Rect, ui: &mut egui::Ui, t: 
 enum Notice {
     Security,
     Signatures,
+    Repairs,
 }
 
 /// The notice bar above the pages: the signature status first (Acrobat's signature bar), then
@@ -1572,6 +1578,7 @@ fn notices(
     view: &mut DocView,
     info: &DocInfo,
     secured: bool,
+    repaired: bool,
     signed: Option<(&str, Color32, String)>,
     ui: &mut egui::Ui,
     t: &Tokens,
@@ -1595,10 +1602,13 @@ fn notices(
         return None;
     }
     let mut open_security = false;
+    let mut open_repairs = false;
     let msg = if secured {
         Some(("lock", "This document is secured. Some changes are restricted by its security settings.".to_string(), false))
     } else if !info.fields.is_empty() {
         Some(("text-cursor-input", format!("This document contains {} interactive form fields.", info.fields.len()), true))
+    } else if repaired {
+        Some(("bandage", "This file was damaged and has been repaired. Saving keeps the repaired version.".to_string(), false))
     } else if !info.warnings.is_empty() {
         Some(("triangle-alert", info.warnings[0].clone(), false))
     } else {
@@ -1622,9 +1632,15 @@ fn notices(
                 if secured && crate::widgets::pill_button(ui, "Security settings", false).clicked() {
                     open_security = true;
                 }
+                if repaired && !secured && info.fields.is_empty() && crate::widgets::pill_button(ui, "Details", false).clicked() {
+                    open_repairs = true;
+                }
             });
         });
     });
+    if open_repairs {
+        return Some(Notice::Repairs);
+    }
     open_security.then_some(Notice::Security)
 }
 
@@ -1870,11 +1886,19 @@ fn organize_toolbar(view: &mut DocView, info: &DocInfo, editable: bool, ui: &mut
 
 /// Organize pages: a thumbnail grid (Acrobat's Organize Pages view). Click selects, ⌘-click
 /// toggles, ⇧-click extends; double-click opens the page.
+/// The gap (0 = before the first page, n = after the last) the pointer points at in the grid.
+fn drop_gap(cells: &[(usize, Rect)], p: Pos2) -> Option<usize> {
+    let (i, r) = cells.iter().min_by(|(_, a), (_, b)| a.distance_sq_to_pos(p).total_cmp(&b.distance_sq_to_pos(p)))?;
+    Some(if p.x < r.center().x { *i } else { i + 1 })
+}
+
 fn organize_grid(view: &mut DocView, info: &DocInfo, pool: &RenderPool, editable: bool, ui: &mut egui::Ui, t: &Tokens) {
     let ppp = ui.ctx().pixels_per_point();
     let cell = vec2(190.0, 250.0);
     let mut open_page = None;
     organize_toolbar(view, info, editable, ui, t);
+    let mut cells: Vec<(usize, Rect)> = Vec::with_capacity(info.pages.len());
+    let mut drop = false;
     egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
         ui.add_space(20.0);
         let cols = ((ui.available_width() - 40.0) / cell.x).floor().max(1.0) as usize;
@@ -1886,7 +1910,21 @@ fn organize_grid(view: &mut DocView, info: &DocInfo, pool: &RenderPool, editable
                 let i = row * cols + col;
                 let Some(p) = info.pages.get(i) else { break };
                 let c = Rect::from_min_size(pos2(row_rect.left() + left + col as f32 * cell.x, row_rect.top()), cell);
-                let resp = ui.interact(c, ui.id().with(("org", i)), Sense::click());
+                let resp = ui.interact(c, ui.id().with(("org", i)), if editable { Sense::click_and_drag() } else { Sense::click() });
+                cells.push((i, c));
+                // Drag pages to move them (the selection, or the page grabbed).
+                if resp.drag_started() {
+                    if !view.selected.contains(&i) {
+                        view.selected = [i].into();
+                        view.select_anchor = Some(i);
+                    }
+                    let mut pages: Vec<usize> = view.selected.iter().copied().collect();
+                    pages.sort_unstable();
+                    view.org_drag = Some(pages);
+                }
+                if resp.drag_stopped() {
+                    drop = true;
+                }
                 resp.widget_info(|| {
                     egui::WidgetInfo::selected(egui::WidgetType::Checkbox, true, view.selected.contains(&i), format!("Page {}", p.label))
                 });
@@ -1927,6 +1965,39 @@ fn organize_grid(view: &mut DocView, info: &DocInfo, pool: &RenderPool, editable
                     open_page = Some(i);
                 }
             }
+        }
+        // While dragging: the gap the pages would go to, drawn as a bar.
+        if let (Some(pages), Some(p)) = (view.org_drag.clone(), ui.input(|i| i.pointer.hover_pos())) {
+            if let Some(gap) = drop_gap(&cells, p) {
+                let x = match cells.iter().find(|(i, _)| *i == gap) {
+                    Some((_, r)) => r.left() + 3.0,
+                    None => cells.last().map_or(0.0, |(_, r)| r.right() - 3.0),
+                };
+                let row = cells.iter().find(|(i, _)| *i == gap).or(cells.last()).map(|(_, r)| r.y_range()).unwrap_or(egui::Rangef::new(0.0, 0.0));
+                ui.painter().line_segment([pos2(x, row.min + 10.0), pos2(x, row.max - 10.0)], Stroke::new(3.0, t.accent));
+                ui.painter().text(
+                    p + vec2(14.0, 14.0),
+                    Align2::LEFT_TOP,
+                    format!("{} page{}", pages.len(), if pages.len() == 1 { "" } else { "s" }),
+                    theme::medium(12.0),
+                    t.accent_text,
+                );
+            }
+            if drop {
+                view.org_drag = None;
+                if let Some(gap) = drop_gap(&cells, p) {
+                    // `to` counts positions without the moving pages.
+                    let to = gap - pages.iter().filter(|x| **x < gap).count();
+                    let first = pages[0];
+                    let contiguous = pages.windows(2).all(|w| w[1] == w[0] + 1);
+                    if !(contiguous && to == first) {
+                        view.pending_edit = Some(Edit::MovePages { pages: pages.clone(), to });
+                        view.selected = (to..to + pages.len()).collect();
+                    }
+                }
+            }
+        } else if drop {
+            view.org_drag = None;
         }
     });
     let s = THUMB_W * ppp / info.pages.iter().map(|p| p.width).fold(1.0, f32::max);

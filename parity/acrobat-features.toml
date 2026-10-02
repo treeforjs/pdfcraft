@@ -55,11 +55,11 @@ title = "Record repairs and show them to the user"
 area = "A"
 tier = "P0"
 milestone = "M1"
-status = "partial"
+status = "shipped"
 commands = []
 tools = ["doc_info"]
-evidence = []
-notes = "doc_info reports repair notes; no repair log in the UI yet"
+evidence = ["crates/ui-egui/tests/viewer.rs::damaged_files_say_they_were_repaired"]
+notes = "a notice says the file was repaired; Document Properties ▸ Advanced lists the repairs; doc_info reports them"
 
 [[feature]]
 id = "core.xref-streams"
@@ -2587,11 +2587,11 @@ title = "Reorder pages by drag and drop"
 area = "D"
 tier = "P0"
 milestone = "M4"
-status = "partial"
+status = "shipped"
 commands = []
 tools = []
-evidence = []
-notes = "move-earlier/later buttons exist; drag in the grid is M4.7"
+evidence = ["crates/ui-egui/tests/editing.rs::dragging_thumbnails_reorders_pages"]
+notes = "drag thumbnails (or the selection) in the page grid; an insertion bar shows where they go; move earlier/later buttons too"
 
 [[feature]]
 id = "organize.insert-blank"
@@ -3446,8 +3446,8 @@ milestone = "M5"
 status = "partial"
 commands = []
 tools = ["comment_add"]
-evidence = ["crates/annot/src/tests.rs::every_tool_creates_a_drawable_comment", "crates/engine/src/tests.rs::highlight_multiplies_over_text"]
-notes = "appearances for every type PrintCraft creates (highlight multiplies); clouds, callouts, stamps and rich text are not drawn yet"
+evidence = ["crates/annot/src/tests.rs::every_tool_creates_a_drawable_comment", "crates/engine/src/tests.rs::highlight_multiplies_over_text", "crates/annot/src/tests.rs::polygons_clouds_connected_lines_callouts_and_carets_are_drawn"]
+notes = "appearances for every type PrintCraft creates (highlight multiplies; clouds, callouts, stamps, polygons, carets); rich text not yet"
 
 [[feature]]
 id = "comment.sticky-note"

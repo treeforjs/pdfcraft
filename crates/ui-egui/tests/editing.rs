@@ -517,3 +517,27 @@ fn extract_options_and_rotate_pages_dialog() {
     let d = s.session.get(s.views[0].id).unwrap();
     assert_eq!(d.info.pages.iter().map(|p| p.rotation).collect::<Vec<_>>(), [90, 0]);
 }
+
+#[test]
+fn dragging_thumbnails_reorders_pages() {
+    let mut h = organize(4);
+    let before = page_texts(h.state());
+    let grab = |h: &Harness<'static, PrintCraftApp>, label: &str| h.get_by_label(label).rect();
+    let (from, to) = (grab(&h, "Page 1").center(), grab(&h, "Page 3").right_center() - egui::vec2(10.0, 0.0));
+    h.hover_at(from);
+    h.run_steps(1);
+    h.drag_at(from);
+    h.run_steps(1);
+    for k in 1..=5 {
+        h.hover_at(from + (to - from) * (k as f32 / 5.0));
+        h.run_steps(1);
+    }
+    h.drop_at(to);
+    h.run_steps(4);
+    // Page 1 now sits after page 3.
+    let after = page_texts(h.state());
+    assert_eq!(after, vec![before[1].clone(), before[2].clone(), before[0].clone(), before[3].clone()], "{after:?}");
+    assert_eq!(h.state().session.get(h.state().views[0].id).unwrap().can_undo(), Some("Move page"));
+    let sel: Vec<usize> = h.state().views[0].selected.iter().copied().collect();
+    assert_eq!(sel, vec![2], "the moved page stays selected");
+}

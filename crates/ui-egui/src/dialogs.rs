@@ -202,6 +202,18 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
                             row(ui, "Layers", i.layers.len().to_string());
                             row(ui, "Attachments", i.attachments.len().to_string());
                             row(ui, "JavaScript", yes(i.has_javascript));
+                            // What was repaired while reading a damaged file (fidelity: never silent).
+                            let repairs = doc.repair_log();
+                            row(ui, "Repairs", if repairs.is_empty() { "None".to_string() } else { repairs.len().to_string() });
+                            if !repairs.is_empty() {
+                                ui.label("");
+                                egui::CollapsingHeader::new("Repair log").show(ui, |ui| {
+                                    for r in &repairs {
+                                        ui.add(egui::Label::new(egui::RichText::new(r).small()).wrap());
+                                    }
+                                });
+                                ui.end_row();
+                            }
                         }
                     })
                 });
