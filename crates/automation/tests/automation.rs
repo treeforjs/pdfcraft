@@ -440,3 +440,43 @@ fn protecting_through_tools() {
     let mut c = auto(&dir);
     ok(&mut c, "doc_open", json!({ "path": "open.pdf" }));
 }
+
+#[test]
+fn forms_through_tools() {
+    let dir = workdir("forms");
+    let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dist/demo/printcraft-showcase.pdf");
+    if !src.exists() {
+        eprintln!("skipped: run `cargo xtask demo-pdf` for the showcase form");
+        return;
+    }
+    std::fs::copy(&src, dir.join("show.pdf")).unwrap();
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "show.pdf" }))["doc"].as_u64().unwrap();
+    let list = ok(&mut a, "form_fields", json!({ "doc": doc }));
+    let fields = list["fields"].as_array().unwrap().clone();
+    assert!(fields.len() >= 5, "{list}");
+    let pick = |t: &str| fields.iter().find(|f| f["type"] == t && f["read_only"] == false).cloned();
+    let text = pick("text").expect("a text field");
+    let mut values = serde_json::Map::new();
+    values.insert(text["name"].as_str().unwrap().into(), json!("Filled by an agent"));
+    if let Some(cb) = pick("checkbox") {
+        values.insert(cb["name"].as_str().unwrap().into(), json!(true));
+    }
+    if let Some(combo) = pick("combo") {
+        values.insert(combo["name"].as_str().unwrap().into(), combo["options"][1]["label"].clone());
+    }
+    let r = ok(&mut a, "form_fill", json!({ "doc": doc, "values": values }));
+    assert_eq!(r["undo"], "Fill in form");
+    let after = ok(&mut a, "form_fields", json!({ "doc": doc }));
+    let get = |name: &str| after["fields"].as_array().unwrap().iter().find(|f| f["name"] == name).unwrap()["value"].clone();
+    assert_eq!(get(text["name"].as_str().unwrap()), "Filled by an agent");
+    // The page shows it.
+    let page = text["page"].as_u64().unwrap();
+    let found = ok(&mut a, "text_find", json!({ "doc": doc, "query": "Filled by an agent" }));
+    assert_eq!(found["count"], 1, "rendered on page {page}");
+    assert!(matches!(a.call("form_fill", &json!({ "doc": doc, "values": { "no such field": "x" } })), Err(ToolError::Failed(_))));
+    ok(&mut a, "form_reset", json!({ "doc": doc }));
+    let reset = ok(&mut a, "form_fields", json!({ "doc": doc }));
+    let v = reset["fields"].as_array().unwrap().iter().find(|f| f["name"] == text["name"]).unwrap()["value"].clone();
+    assert_ne!(v, "Filled by an agent");
+}

@@ -4299,11 +4299,11 @@ title = "Fill text fields"
 area = "F"
 tier = "P0"
 milestone = "M6"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["form.fields"]
+tools = ["form_fill", "form_fields"]
+evidence = ["crates/ui-egui/tests/forms.rs::typing_into_a_text_field_and_tabbing_on", "crates/forms/src/tests.rs::text_fields_get_new_appearances", "crates/engine/src/tests.rs::filling_a_form_shows_saves_and_undoes"]
+notes = "in-place editor; Enter or clicking away commits, Escape cancels; no format/keystroke JavaScript yet (M6.4)"
 
 [[feature]]
 id = "form.fill-checkbox-radio"
@@ -4311,11 +4311,11 @@ title = "Toggle checkboxes and radio buttons (radios in unison)"
 area = "F"
 tier = "P0"
 milestone = "M6"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["form.fields"]
+tools = ["form_fill"]
+evidence = ["crates/ui-egui/tests/forms.rs::check_boxes_radios_and_choices", "crates/forms/src/tests.rs::check_boxes_and_radios_switch_states"]
+notes = "NoToggleToOff honoured; widgets without appearances get our own"
 
 [[feature]]
 id = "form.fill-choice"
@@ -4323,11 +4323,11 @@ title = "Choose from combo boxes and list boxes"
 area = "F"
 tier = "P0"
 milestone = "M6"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["form.fields"]
+tools = ["form_fill"]
+evidence = ["crates/ui-egui/tests/forms.rs::check_boxes_radios_and_choices", "crates/forms/src/tests.rs::choices_accept_exports_or_display_text"]
+notes = "combo and list boxes, multi-select lists; editable combo boxes accept free text"
 
 [[feature]]
 id = "form.push-buttons"
@@ -4347,11 +4347,11 @@ title = "Tab between fields"
 area = "F"
 tier = "P0"
 milestone = "M6"
-status = "planned"
-commands = []
+status = "shipped"
+commands = ["form.fields"]
 tools = []
-evidence = []
-notes = ""
+evidence = ["crates/ui-egui/tests/forms.rs::tabbing_into_a_filled_field_selects_it_so_typing_replaces"]
+notes = "Tab / Shift+Tab move between text and choice fields in field order; entering with Tab selects the value"
 
 [[feature]]
 id = "form.appearance-regeneration"
@@ -4359,11 +4359,11 @@ title = "Regenerate field appearances (auto-size, comb, multiline, password)"
 area = "F"
 tier = "P0"
 milestone = "M6"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["form.fields"]
+tools = ["form_fill"]
+evidence = ["crates/forms/src/tests.rs::text_fields_get_new_appearances", "crates/forms/src/tests.rs::choices_accept_exports_or_display_text"]
+notes = "auto-size, comb, multiline, password, quadding, /MK colours; approximate Helvetica metrics, no /MK rotation yet"
 
 [[feature]]
 id = "form.rich-text-fields"
@@ -4539,11 +4539,11 @@ title = "Clear or reset a form"
 area = "F"
 tier = "P0"
 milestone = "M6"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["form.clear"]
+tools = ["form_reset"]
+evidence = ["crates/forms/src/tests.rs::reset_restores_defaults", "crates/ui-egui/tests/forms.rs::check_boxes_radios_and_choices"]
+notes = "back to /DV; undoable"
 
 [[feature]]
 id = "form.submit-form"

@@ -24,6 +24,8 @@ pub enum Needs {
     Modification,
     /// The open document's security allows adding and changing comments.
     Annotate,
+    /// The document has form fields and its security allows filling them in.
+    FillForms,
     /// The document's security may be changed (owner, or nothing restricted).
     Security,
     /// The document is protected and its security may be removed.
@@ -160,6 +162,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     c("comment.square", "Draw a rectangle", None, None, Annotate, "square"),
     c("comment.circle", "Draw an oval", None, None, Annotate, "circle"),
     c("form.fields", "Form fields panel", VIEW, None, Document, "list"),
+    c("form.clear", "Clear form", EDIT, None, FillForms, "eraser"),
     c("protect.password", "Protect using password…", FILE, None, Security, "lock"),
     c("protect.remove", "Remove security", FILE, None, ProtectedSecurity, "lock-open"),
     c("protect.properties", "Security properties…", FILE, None, Document, "shield-check"),
@@ -199,6 +202,7 @@ pub fn is_enabled(spec: &CommandSpec, session: &Session, active: Option<DocId>) 
         Assembly => doc.is_some_and(|d| d.allows_assembly()),
         Modification => doc.is_some_and(|d| d.allows_modification()),
         Annotate => doc.is_some_and(|d| d.allows_annotation()),
+        FillForms => doc.is_some_and(|d| d.allows_form_filling() && !d.form.is_empty()),
         Security => doc.is_some_and(|d| d.allows_security_change()),
         ProtectedSecurity => doc.is_some_and(|d| d.allows_security_change() && d.security_summary().is_some()),
         Undo => doc.is_some_and(|d| d.can_undo().is_some()),

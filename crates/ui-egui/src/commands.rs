@@ -22,6 +22,7 @@ impl PrintCraftApp {
             let why = match spec.needs {
                 commands::Needs::Undo => "Nothing to undo".to_string(),
                 commands::Needs::Redo => "Nothing to redo".to_string(),
+                commands::Needs::FillForms if self.active.is_some() => "This document has no form fields you can fill in".to_string(),
                 commands::Needs::Security | commands::Needs::ProtectedSecurity if self.active.is_some() => {
                     if self.active_ids().and_then(|(_, id)| self.session.get(id)).is_some_and(|d| d.allows_security_change()) {
                         "This document isn't password-protected".to_string()
@@ -129,6 +130,12 @@ impl PrintCraftApp {
                 }
             }
             "form.fields" => self.right = Some(RightPanel::Fields),
+            "form.clear" => {
+                if let Some(i) = active {
+                    self.views[i].forms.focus = None;
+                }
+                self.apply_edit(Edit::ResetForm { names: None });
+            }
             "page.organize" => {
                 if let Some(i) = active {
                     self.views[i].organize = !self.views[i].organize;

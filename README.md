@@ -271,7 +271,7 @@ printcraft-cli edit  in.pdf --rotate 1,2:90 --delete 5 --title "Q3" --out out.pd
 
 ## Built for agents, too
 
-Every engine feature is reachable without the GUI, through one table of JSON-Schema-described tools: open, inspect, render pages to PNG, extract and find text, rotate, delete, move and insert pages, edit bookmarks and page labels, add, reply to, restyle and delete comments (highlight a phrase just by naming it), set metadata, undo and redo, save, combine, extract and split. Three front doors share it:
+Every engine feature is reachable without the GUI, through one table of JSON-Schema-described tools: open, inspect, render pages to PNG, extract and find text, rotate, delete, move and insert pages, edit bookmarks and page labels, add, reply to, restyle and delete comments (highlight a phrase just by naming it), list and fill in form fields, protect with passwords, set metadata, undo and redo, save, combine, extract and split. Three front doors share it:
 
 - **`printcraft-cli run`**, for one-off calls and JSON scripts:
 
@@ -319,7 +319,9 @@ PrintCraft is a Cargo workspace of focused crates, layered so the core never dep
 | `printcraft-crypt` | The standard security handler: RC4, AES-128/256, revisions 2–6, permissions |
 | `printcraft-cos` | The PDF object layer: tolerant parsing, repair, copy-on-write edits, incremental and full writing |
 | `printcraft-organize` | Page operations, combine / extract / split, bookmarks, page labels, document information |
+| `printcraft-fonts` | Font metrics and encodings for generated appearances |
 | `printcraft-annot` | Comments: builders and appearance streams for notes, text markup, shapes, ink and text boxes; replies, status, edits |
+| `printcraft-forms` | Interactive forms: the field model, filling with regenerated appearances, Clear form |
 | `printcraft-render` | Rendering, inspection and text extraction with reading order |
 | `printcraft-engine` | The façade every frontend uses: sessions, edits, undo, saving, the tool catalogue |
 | `printcraft-automation` | Agent control: the headless tool table, `printcraft-cli run`, and the opt-in MCP server |
@@ -357,6 +359,8 @@ PrintCraft is young and moving fast. The aim is a workbench where you can view, 
 - viewing, search and navigation;
 - organizing pages, combining, extracting and splitting; bookmarks and page labels;
 - commenting: sticky notes, highlight / underline / strikethrough, text boxes, freehand drawing, lines, arrows, rectangles and ovals, with replies, status, colours, moving, resizing and a searchable Comments panel;
+- filling in forms: text fields, check boxes, radio buttons, combo and list boxes, Tab between fields, Clear form;
+- password protection: a password to open, permissions (printing, changes, copying), AES-256, removing security;
 - document information;
 - opening encrypted documents, honouring their permissions, and saving them encrypted;
 - undo and safe saving;
@@ -370,9 +374,9 @@ PrintCraft is young and moving fast. The aim is a workbench where you can view, 
 |---|---|
 | Page boxes | M4 |
 | Callouts, clouds, stamps, FDF/XFDF, comment summaries | M5 |
-| Filling and authoring forms, JavaScript | M6 |
+| Authoring forms, JavaScript (formatting, calculations) | M6 |
 | Editing text and images in place, headers, watermarks | M7 |
-| Adding passwords, redaction | M8 |
+| Certificate security, redaction, sanitizing | M8 |
 | Digital signatures (PAdES) | M9 |
 | OCR, export to Office formats, printing | M10 |
 | Optimize, preflight, PDF/A | M11 |

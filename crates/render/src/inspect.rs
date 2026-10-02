@@ -268,12 +268,23 @@ pub fn inspect(bytes: Arc<Vec<u8>>, password: Option<&str>) -> Result<DocInfo, O
 struct Inspector<'a> {
     doc: &'a Document,
     page_index: HashMap<ObjectId, usize>,
+    /// Named destinations (`/Names /Dests` tree), keyed by raw string bytes, built once.
+    /// Looking each name up by walking the tree was O(links × names): minutes on manuals.
+    named: HashMap<Vec<u8>, &'a Object>,
 }
 
 impl<'a> Inspector<'a> {
     fn new(doc: &'a Document) -> Self {
         let page_index = doc.get_pages().into_iter().map(|(n, id)| (id, n as usize - 1)).collect();
-        Self { doc, page_index }
+        let mut me = Self { doc, page_index, named: HashMap::new() };
+        let mut named = HashMap::new();
+        if let Some(tree) =
+            doc.catalog().ok().and_then(|c| c.get(b"Names").ok()).and_then(|o| me.dict(o)).and_then(|n| n.get(b"Dests").ok()).and_then(|o| me.dict(o))
+        {
+            me.name_tree_raw(tree, &mut HashSet::new(), 0, &mut named);
+        }
+        me.named = named;
+        me
     }
 
     fn fill(&self, info: &mut DocInfo) {
@@ -384,14 +395,37 @@ impl<'a> Inspector<'a> {
 
     fn named_dest(&self, key: &[u8]) -> Option<&'a Object> {
         let catalog = self.doc.catalog().ok()?;
-        if let Some(tree) = catalog.get(b"Names").ok().and_then(|o| self.dict(o)).and_then(|n| n.get(b"Dests").ok()).and_then(|o| self.dict(o)) {
-            let mut seen = HashSet::new();
-            if let Some((_, v)) = self.name_tree(tree, &mut seen, 0).into_iter().find(|(k, _)| k.as_bytes() == key) {
-                return Some(v);
-            }
+        if let Some(v) = self.named.get(key) {
+            return Some(v);
         }
         // PDF 1.1 style /Dests dictionary.
         catalog.get(b"Dests").ok().and_then(|o| self.dict(o)).and_then(|d| d.get(key).ok())
+    }
+
+    /// A name tree's leaves keyed by their raw key bytes (first occurrence wins).
+    fn name_tree_raw(&self, node: &'a Dictionary, seen: &mut HashSet<*const Dictionary>, depth: u32, out: &mut HashMap<Vec<u8>, &'a Object>) {
+        if depth > 32 || !seen.insert(node as *const _) {
+            return;
+        }
+        if let Ok(Object::Array(pairs)) = node.get(b"Names").map(|o| self.resolve(o)) {
+            for pair in pairs.chunks(2) {
+                if let [k, v] = pair {
+                    let key = match self.resolve(k) {
+                        Object::String(s, _) => s.clone(),
+                        Object::Name(n) => n.clone(),
+                        _ => continue,
+                    };
+                    out.entry(key).or_insert(v);
+                }
+            }
+        }
+        if let Ok(Object::Array(kids)) = node.get(b"Kids").map(|o| self.resolve(o)) {
+            for k in kids {
+                if let Some(d) = self.dict(k) {
+                    self.name_tree_raw(d, seen, depth + 1, out);
+                }
+            }
+        }
     }
 
     fn name_tree(&self, node: &'a Dictionary, seen: &mut HashSet<*const Dictionary>, depth: u32) -> Vec<(String, &'a Object)> {
@@ -801,7 +835,8 @@ fn alpha(n: usize) -> String {
 }
 
 /// `D:20260930104512-04'00'` → `2026-09-30 10:45`.
-fn pretty_date(s: &str) -> String {
+/// A PDF date (`D:20261001123000Z`) as "2026-10-01 12:30"; other strings unchanged.
+pub fn pretty_date(s: &str) -> String {
     let d = s.trim_start_matches("D:");
     if d.len() >= 12 && d[..12].bytes().all(|b| b.is_ascii_digit()) {
         format!("{}-{}-{} {}:{}", &d[0..4], &d[4..6], &d[6..8], &d[8..10], &d[10..12])

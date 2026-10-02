@@ -303,7 +303,10 @@ pub static TOOL_GROUPS: &[ToolGroup] = &[
         badge: None,
         availability: Planned("M6"),
         sections: &[
-            ToolSection { title: "Fields", items: &[item("Field list", "list", "form.fields", Ready)] },
+            ToolSection {
+                title: "Fields",
+                items: &[item("Field list", "list", "form.fields", Ready), item("Clear form", "eraser", "form.clear", Ready)],
+            },
             ToolSection {
                 title: "Add form components",
                 items: &[

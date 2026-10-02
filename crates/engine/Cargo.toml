@@ -13,4 +13,5 @@ printcraft-render = { workspace = true }
 printcraft-cos = { workspace = true }
 printcraft-organize = { workspace = true }
 printcraft-annot = { workspace = true }
+printcraft-forms = { workspace = true }
 thiserror = { workspace = true }

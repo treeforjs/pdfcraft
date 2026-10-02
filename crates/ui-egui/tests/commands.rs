@@ -52,7 +52,11 @@ fn every_registered_command_is_implemented() {
             continue;
         }
         let mut app = PrintCraftApp::new();
-        app.open_bytes("doc.pdf", None, fixture(3)).unwrap();
+        if spec.id.starts_with("form.") {
+            app.open_bytes("form.pdf", None, include_bytes!("data/form.pdf").to_vec()).unwrap();
+        } else {
+            app.open_bytes("doc.pdf", None, fixture(3)).unwrap();
+        }
         // Give undo/redo something to do.
         app.apply_edit(printcraft_engine::Edit::RotatePages { pages: vec![0], degrees: 90 });
         if spec.id == "edit.redo" {

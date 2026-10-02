@@ -3032,6 +3032,7 @@ version = "0.1.0"
 dependencies = [
  "hayro-syntax",
  "printcraft-cos",
+ "printcraft-fonts",
  "thiserror 2.0.21",
 ]
 
@@ -3089,6 +3090,7 @@ version = "0.1.0"
 dependencies = [
  "printcraft-annot",
  "printcraft-cos",
+ "printcraft-forms",
  "printcraft-organize",
  "printcraft-render",
  "thiserror 2.0.21",
@@ -3102,6 +3104,20 @@ dependencies = [
  "proptest",
  "thiserror 2.0.21",
  "weezl 0.2.1",
+]
+
+[[package]]
+name = "printcraft-fonts"
+version = "0.1.0"
+
+[[package]]
+name = "printcraft-forms"
+version = "0.1.0"
+dependencies = [
+ "hayro-syntax",
+ "printcraft-cos",
+ "printcraft-fonts",
+ "thiserror 2.0.21",
 ]
 
 [[package]]

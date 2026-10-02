@@ -36,19 +36,19 @@ Hours are for a single agent (low–high). "Done" is the estimated fraction of t
 | M2 | Model, render, text | 200–350 | 15% | 170–300 | hayro bootstrap renderer (vendored patches). Text extraction reaches word-F1 0.98 against pdftotext. Missing: model crate, fonts, DisplayList, renderer independent of hayro |
 | M3 | Viewer app (native + web) | 80–150 | 72% | 22–42 | Acrobat-style shell, find, select, panels, tiles, web build, UI control channel for agents (opt-in). Missing: 60 fps test on a 500-page document, snapshot tests of every panel |
 | M4 | Engine, history, save, organize | 100–180 | 80% | 20–36 | Done:<br>- command registry (menus, shortcuts and palette all use it);<br>- undo/redo; incremental, atomic and encrypted saves;<br>- autosave and crash recovery;<br>- organize, combine, extract, split and insert-from-file, with identical fonts and images stored once;<br>- CLI `edit/combine/extract/split`.<br>Done since: bookmark editing, page labels (Number pages), CLI `run`. Missing: page boxes/crop, recovery on the web |
-| M5 | Comments (all annotation types, XFDF) | 120–200 | 0% | 120–200 | Read-only comments panel exists |
-| M6 | Forms + JavaScript | 160–320 | 0% | 160–320 | Fields are displayed, not filled |
+| M5 | Comments (all annotation types, XFDF) | 120–200 | 40% | 70–120 | Done: notes, highlight/underline/strikeout/squiggly, text boxes, ink, lines, arrows, rectangles, ovals, with appearance streams; replies, status, move/resize/restyle/delete; quick-bar tools and Comments panel; agent tools. Missing: callouts, clouds, polygons, stamps, carets, FDF/XFDF, summaries, flatten |
+| M6 | Forms + JavaScript | 160–320 | 15% | 135–270 | Done: filling text, check box, radio, combo and list fields with regenerated appearances, Tab order, Clear form, agent tools. Missing: JavaScript (AF functions, events), form authoring, FDF/XFDF data |
 | M7 | Content editing (text, images, header/footer, watermark) | 250–500 | 0% | 250–500 | Longest pole |
-| M8 | Security + redaction | 100–180 | 10% | 90–160 | Done: opening protected documents, honouring permissions, and the engine side of setting and removing passwords. Missing: Protect UI, certificate security, sanitize, redaction |
+| M8 | Security + redaction | 100–180 | 25% | 75–135 | Done: opening protected documents, honouring permissions, Protect Using Password (open and permissions passwords, all compatibility levels, Advanced options), Remove security. Missing: certificate security, sanitize, redaction |
 | M9 | Signatures (PAdES, validation) | 160–280 | 0% | 160–280 | |
 | M10 | OCR, create, export, print | 200–350 | 0% | 200–350 | |
 | M11 | Optimize, preflight, PDF/A/X/UA, print production | 200–350 | 0% | 200–350 | |
 | M12 | Accessibility, compare, measure, search, XFA | 200–380 | 0% | 200–380 | |
-| M13 | Automation (MCP, Action Wizard, CLI) + AI providers | 60–120 | 15% | 50–100 | Done: headless tool table (20 tools), opt-in MCP server over stdio, CLI `run`/`tools`. Missing: Action Wizard, more tools as features land, AI providers |
+| M13 | Automation (MCP, Action Wizard, CLI) + AI providers | 60–120 | 22% | 45–95 | Done: headless tool table (38 tools: pages, bookmarks, labels, comments, forms, protection…), opt-in MCP server over stdio, CLI `run`/`tools`, UI control channel with drag. Missing: Action Wizard, more tools as features land, AI providers |
 | M14 | 1.0 polish: performance, localization, installers | 120–250 | 0% | 120–250 | |
-| | **Total** | **2,085–3,840** | **≈ 10%** | **≈ 1,870–3,465** | |
+| | **Total** | **2,085–3,840** | **≈ 13%** | **≈ 1,800–3,350** | |
 
-**Overall progress: about 10% of the effort.** The viewer and the core are far ahead of the editing features, because the viewer was built first so progress could be seen.
+**Overall progress: about 13% of the effort.** The viewer and the core are far ahead of the editing features, because the viewer was built first so progress could be seen.
 
 ## Critical path
 
@@ -66,6 +66,14 @@ M0 → M1 → M2 → M3 → M4 must happen in order. After M4, M5–M12 can run 
 ## Log
 
 Newest first. One line per session: the date, what moved, and the new overall percentage.
+
+- **2026-10-01 (session 8):**
+  - Commenting: sticky notes, highlights, underline, strikethrough, text boxes, freehand, lines, arrows, rectangles and ovals, with replies, status, colours, moving and resizing; Acrobat-style quick bar and Comments panel; six agent tools (an agent can highlight a phrase by naming it).
+  - Protect Using Password, with Acrobat's permission levels and compatibility options; Remove security.
+  - Filling in forms: text, check boxes, radio buttons, combo and list boxes, Tab between fields, Clear form; three agent tools.
+  - Performance: opening a 190 MB manual went from 172 s to under 2 s; comment and form edits on it are 6× faster.
+  - Fixed: saving a password-protected document failed; encrypted documents were not reported as encrypted.
+  - Overall ≈ 13%.
 
 - **2026-10-01 (session 7):**
   - Bookmark editing and page numbering (Number pages), with undo, agent tools and UI.

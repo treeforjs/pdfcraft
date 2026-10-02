@@ -10,6 +10,7 @@
 //! - An optional root directory confines every path a tool reads or writes.
 
 mod comments;
+mod forms;
 #[cfg(feature = "mcp")]
 pub mod mcp;
 mod tools;
@@ -215,6 +216,9 @@ impl Automation {
                 out["security"] = security(self.doc(&a)?);
                 out
             }
+            "form_fields" => self.form_fields(&a)?,
+            "form_fill" => self.form_fill(&a)?,
+            "form_reset" => self.form_reset(&a)?,
             "comment_list" => self.comment_list(&a)?,
             "comment_add" => self.comment_add(&a)?,
             "comment_reply" => self.comment_reply(&a)?,

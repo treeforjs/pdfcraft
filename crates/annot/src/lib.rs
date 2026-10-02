@@ -756,3 +756,91 @@ pub fn set_style(
     })?;
     set_appearance(doc, r)
 }
+
+// ── reading ─────────────────────────────────────────────────────────────────────────────────
+
+/// One comment as the viewer lists it (the same fields and rules as
+/// `printcraft_render::Annotation`), read straight from the object graph. The engine uses it to
+/// refresh the comment list after a comment edit without re-inspecting the whole document.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Summary {
+    pub page: usize,
+    pub index: usize,
+    pub subtype: String,
+    pub author: Option<String>,
+    pub contents: Option<String>,
+    /// `/M` as written (a PDF date string).
+    pub modified: Option<String>,
+    pub name: Option<String>,
+    pub in_reply_to: Option<String>,
+    pub rect: [f32; 4],
+    pub color: Option<[f32; 3]>,
+    pub state: Option<String>,
+    pub quads: Vec<[f32; 8]>,
+}
+
+fn text_value(doc: &Document, d: &Dict, key: &[u8]) -> Option<String> {
+    let o = doc.resolve(d.get(key)?);
+    let s = match &*o {
+        Object::String(s) => s.to_text(),
+        Object::Name(n) => String::from_utf8_lossy(n).into_owned(),
+        _ => return None,
+    };
+    let s = s.trim_matches('\0').trim().to_string();
+    (!s.is_empty()).then_some(s)
+}
+
+/// Every comment (not links, form widgets or pop-ups), ordered by page and then top edge.
+pub fn summaries(doc: &Document) -> Vec<Summary> {
+    let mut out = Vec::new();
+    let Ok(pages) = page_refs(doc) else { return out };
+    for (page, p) in pages.iter().enumerate() {
+        for (index, entry) in annots(doc, *p).iter().enumerate() {
+            let obj = doc.resolve(entry);
+            let Some(d) = obj.as_dict() else { continue };
+            let Some(subtype) = d.name(b"Subtype").map(|s| String::from_utf8_lossy(s).into_owned()) else { continue };
+            if matches!(subtype.as_str(), "Link" | "Widget" | "Popup") {
+                continue;
+            }
+            let nums = |k: &[u8]| -> Vec<f32> {
+                d.get(k)
+                    .map(|o| doc.resolve(o))
+                    .and_then(|o| o.as_array().map(|a| a.iter().map(|x| doc.resolve(x).as_f64().unwrap_or(0.0) as f32).collect()))
+                    .unwrap_or_default()
+            };
+            let r = nums(b"Rect");
+            let rect = if r.len() == 4 { [r[0].min(r[2]), r[1].min(r[3]), r[0].max(r[2]), r[1].max(r[3])] } else { [0.0; 4] };
+            let c = nums(b"C");
+            let mut color = (c.len() == 3).then(|| [c[0], c[1], c[2]]);
+            if subtype == "FreeText"
+                && let Some(da) = text_value(doc, d, b"DA")
+            {
+                let t: Vec<&str> = da.split_whitespace().collect();
+                if let Some(i) = t.iter().position(|x| *x == "rg")
+                    && i >= 3
+                {
+                    let f = |k: usize| t[k].parse::<f32>().unwrap_or(0.0);
+                    color = Some([f(i - 3), f(i - 2), f(i - 1)]);
+                }
+            }
+            let quads = nums(b"QuadPoints").chunks_exact(8).map(|q| <[f32; 8]>::try_from(q).unwrap_or_default()).collect();
+            let in_reply_to = d.get(b"IRT").map(|o| doc.resolve(o)).and_then(|o| o.as_dict().cloned()).and_then(|p| text_value(doc, &p, b"NM"));
+            out.push(Summary {
+                page,
+                index,
+                subtype,
+                author: text_value(doc, d, b"T"),
+                contents: text_value(doc, d, b"Contents"),
+                modified: text_value(doc, d, b"M"),
+                name: text_value(doc, d, b"NM"),
+                in_reply_to,
+                rect,
+                color,
+                state: text_value(doc, d, b"State"),
+                quads,
+            });
+        }
+    }
+    out.sort_by(|a, b| a.page.cmp(&b.page).then(b.rect[3].total_cmp(&a.rect[3])));
+    out
+}

@@ -569,3 +569,95 @@ fn protection_is_validated_undoable_and_never_logged() {
     assert!(s.get(id).unwrap().info.encrypted);
     assert_eq!(page_texts(&s, id), ["Page 1"]);
 }
+
+/// A one-page form: a text field and a check box (with appearance states).
+fn form_fixture() -> Vec<u8> {
+    let objs = [
+        "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [4 0 R 5 0 R] /DA (/Helv 0 Tf 0 g) /DR << /Font << /Helv 6 0 R >> >> >> >>",
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 /MediaBox [0 0 200 300] >>",
+        "<< /Type /Page /Parent 2 0 R /Annots [4 0 R 5 0 R] >>",
+        "<< /Type /Annot /Subtype /Widget /FT /Tx /T (name) /Rect [20 250 180 270] /P 3 0 R /MK << /BC [0 0 0] >> >>",
+        "<< /Type /Annot /Subtype /Widget /FT /Btn /T (ok) /V /Off /AS /Off /Rect [20 200 35 215] /P 3 0 R /AP << /N << /Yes 7 0 R /Off 7 0 R >> >> >>",
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
+        "<< /Length 0 >>\nstream\n\nendstream",
+    ];
+    let mut out = b"%PDF-1.7\n".to_vec();
+    let mut offsets = Vec::new();
+    for (i, o) in objs.iter().enumerate() {
+        offsets.push(out.len());
+        out.extend_from_slice(format!("{} 0 obj\n{o}\nendobj\n", i + 1).as_bytes());
+    }
+    let xref = out.len();
+    out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objs.len() + 1).as_bytes());
+    for o in offsets {
+        out.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+    }
+    out.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objs.len() + 1).as_bytes());
+    out
+}
+
+#[test]
+fn filling_a_form_shows_saves_and_undoes() {
+    let mut s = Session::new().with_clock(|| 1_700_000_000);
+    let id = s.open("form.pdf", None, Arc::new(form_fixture()), None).unwrap();
+    assert_eq!(s.get(id).unwrap().form.len(), 2);
+    s.apply(id, Edit::SetFieldValue { name: "name".into(), value: FieldValue::Text("Ada Lovelace".into()) }).unwrap();
+    s.apply(id, Edit::SetFieldValue { name: "ok".into(), value: FieldValue::Check(true) }).unwrap();
+    let d = s.get(id).unwrap();
+    assert_eq!(d.can_undo(), Some("Fill in ok"));
+    assert_eq!(d.form[0].value, ["Ada Lovelace"]);
+    assert_eq!(d.form[1].value, ["Yes"]);
+    assert_eq!(page_texts(&s, id), ["Ada Lovelace"], "the new appearance shows the text");
+    let err = s.apply(id, Edit::SetFieldValue { name: "missing".into(), value: FieldValue::Text("x".into()) }).unwrap_err();
+    assert_eq!(err.to_string(), "there is no field named \"missing\"");
+    s.apply(id, Edit::ResetForm { names: None }).unwrap();
+    assert!(s.get(id).unwrap().form.iter().all(|f| f.value.is_empty()));
+    s.undo(id).unwrap();
+    assert_eq!(s.get(id).unwrap().form[0].value, ["Ada Lovelace"]);
+    let saved = s.save_bytes(id).unwrap();
+    let mut s2 = Session::new();
+    let id2 = s2.open("f.pdf", None, saved, None).unwrap();
+    assert_eq!(s2.get(id2).unwrap().form[1].value, ["Yes"]);
+}
+
+#[test]
+fn comment_edits_refresh_the_list_exactly_as_a_full_inspection_would() {
+    let (mut s, id) = session_with(3);
+    let add = |page: usize, shape: Shape, contents: &str| {
+        Edit::AddAnnotation(NewAnnotation {
+            page,
+            shape,
+            style: Style::default_for(&Shape::Rectangle { rect: [0.0; 4] }),
+            contents: contents.into(),
+            author: "Ada".into(),
+        })
+    };
+    s.apply(id, add(0, Shape::Rectangle { rect: [10.0, 10.0, 60.0, 60.0] }, "box")).unwrap();
+    s.apply(id, add(1, Shape::TextMarkup { kind: Markup::Highlight, quads: vec![[20.0, 170.0, 90.0, 170.0, 20.0, 150.0, 90.0, 150.0]] }, ""))
+        .unwrap();
+    s.apply(id, add(1, Shape::TextBox { rect: [10.0, 200.0, 150.0, 240.0], font_size: 11.0 }, "Text box")).unwrap();
+    s.apply(id, add(2, Shape::Note { at: [100.0, 280.0], icon: NoteIcon::Comment }, "Sticky")).unwrap();
+    s.apply(id, Edit::ReplyToAnnotation { page: 2, index: 0, text: "Reply".into(), author: "Bob".into() }).unwrap();
+    s.apply(id, Edit::SetAnnotationStatus { page: 2, index: 0, state: ReviewState::Accepted, author: "Bob".into() }).unwrap();
+    s.apply(id, Edit::MoveAnnotation { page: 0, index: 0, dx: 5.0, dy: 5.0 }).unwrap();
+    s.apply(id, Edit::DeleteAnnotation { page: 1, index: 0 }).unwrap();
+    s.undo(id).unwrap();
+    let d = s.get(id).unwrap();
+    let full = printcraft_render::inspect(d.bytes.clone(), None).unwrap();
+    assert_eq!(format!("{:?}", d.info.annotations), format!("{:?}", full.annotations));
+    assert_eq!(d.info.file_size, full.file_size);
+    assert_eq!(d.info.annotations.len(), 6);
+}
+
+#[test]
+fn form_edits_refresh_field_values_without_a_full_inspection() {
+    let mut s = Session::new();
+    let id = s.open("form.pdf", None, Arc::new(form_fixture()), None).unwrap();
+    s.apply(id, Edit::SetFieldValue { name: "name".into(), value: FieldValue::Text("Ada".into()) }).unwrap();
+    s.apply(id, Edit::SetFieldValue { name: "ok".into(), value: FieldValue::Check(true) }).unwrap();
+    let d = s.get(id).unwrap();
+    let full = printcraft_render::inspect(d.bytes.clone(), None).unwrap();
+    let values = |fs: &[printcraft_render::Field]| fs.iter().map(|f| (f.name.clone(), f.value.clone())).collect::<Vec<_>>();
+    assert_eq!(values(&d.info.fields), values(&full.fields));
+    assert_eq!(values(&d.info.fields), [("name".to_string(), Some("Ada".to_string())), ("ok".to_string(), Some("Yes".to_string()))]);
+}

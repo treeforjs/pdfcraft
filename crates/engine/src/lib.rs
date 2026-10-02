@@ -20,6 +20,7 @@ pub use printcraft_organize::{SplitBy, split_ranges};
 pub use printcraft_organize::LabelStyle;
 
 pub use printcraft_cos::Algorithm;
+pub use printcraft_forms::{Field as FormField, FieldKind as FormFieldKind, FieldValue, Widget as FormWidget, flags as field_flags};
 
 /// Comment geometry helpers (text-box line breaking) for frontends.
 pub use printcraft_annot::appearance as annot_text;
@@ -48,8 +49,39 @@ struct Keys {
     reopen: Option<String>,
 }
 
-/// One undo/redo step: its label, the document state and its passwords.
-type Snapshot = (String, printcraft_cos::Document, Keys);
+/// What an edit can change, and so what the view data must be rebuilt from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Scope {
+    /// Anything: re-inspect the whole document.
+    Full,
+    /// Only comments: re-read the comment list from the object graph.
+    Comments,
+    /// Only form field values (and their widget appearances).
+    Form,
+}
+
+fn scope_of(edit: &Edit) -> Scope {
+    match edit {
+        Edit::AddAnnotation(_)
+        | Edit::DeleteAnnotation { .. }
+        | Edit::SetAnnotationContents { .. }
+        | Edit::ReplyToAnnotation { .. }
+        | Edit::SetAnnotationStatus { .. }
+        | Edit::MoveAnnotation { .. }
+        | Edit::ResizeAnnotation { .. }
+        | Edit::StyleAnnotation { .. } => Scope::Comments,
+        Edit::SetFieldValue { .. } | Edit::ResetForm { .. } => Scope::Form,
+        Edit::Batch { edits, .. } => {
+            let mut scopes = edits.iter().map(scope_of);
+            let first = scopes.next().unwrap_or(Scope::Full);
+            if scopes.all(|s| s == first) { first } else { Scope::Full }
+        }
+        _ => Scope::Full,
+    }
+}
+
+/// One undo/redo step: its label, the document state, its passwords, and what it changed.
+type Snapshot = (String, printcraft_cos::Document, Keys, Scope);
 
 /// Editing state of a document (absent when the document cannot be edited yet, e.g. encrypted).
 #[derive(Clone)]
@@ -78,17 +110,19 @@ pub struct Document {
     snapshot_generation: u64,
     /// Why the document cannot be edited (e.g. encryption), if so.
     pub read_only_reason: Option<String>,
+    /// Interactive form fields of the current state (empty without a form).
+    pub form: Arc<Vec<printcraft_forms::Field>>,
     editor: Option<Editor>,
     config: RenderConfig,
 }
 
 impl Document {
     pub fn can_undo(&self) -> Option<&str> {
-        self.editor.as_ref().and_then(|e| e.undo.last()).map(|(l, _, _)| l.as_str())
+        self.editor.as_ref().and_then(|e| e.undo.last()).map(|(l, ..)| l.as_str())
     }
 
     pub fn can_redo(&self) -> Option<&str> {
-        self.editor.as_ref().and_then(|e| e.redo.last()).map(|(l, _, _)| l.as_str())
+        self.editor.as_ref().and_then(|e| e.redo.last()).map(|(l, ..)| l.as_str())
     }
 
     pub fn editable(&self) -> bool {
@@ -108,6 +142,11 @@ impl Document {
     /// Changes to content and document information are allowed.
     pub fn allows_modification(&self) -> bool {
         self.editable() && self.permissions().is_none_or(|p| p.modify())
+    }
+
+    /// Filling in form fields is allowed (Table 22, bits 6 and 9).
+    pub fn allows_form_filling(&self) -> bool {
+        self.editable() && self.permissions().is_none_or(|p| p.fill_forms())
     }
 
     /// Adding and changing comments is allowed (Table 22, bit 6).
@@ -409,6 +448,15 @@ pub enum Edit {
         opacity: Option<f64>,
         width: Option<f64>,
     },
+    /// Fill in a form field.
+    SetFieldValue {
+        name: String,
+        value: FieldValue,
+    },
+    /// Clear form: the named fields (all when `None`) back to their defaults.
+    ResetForm {
+        names: Option<Vec<String>>,
+    },
     /// Protect with passwords and permissions (written by the next save, which is a full rewrite).
     Protect(Protection),
     /// Remove password security (needs the owner password).
@@ -444,6 +492,8 @@ impl Edit {
             Edit::MoveAnnotation { .. } => "Move comment".into(),
             Edit::ResizeAnnotation { .. } => "Resize comment".into(),
             Edit::StyleAnnotation { .. } => "Change comment properties".into(),
+            Edit::SetFieldValue { name, .. } => format!("Fill in {name}"),
+            Edit::ResetForm { .. } => "Clear form".into(),
             Edit::Protect(_) => "Protect with password".into(),
             Edit::RemoveProtection => "Remove security".into(),
             Edit::Batch { label, .. } => label.clone(),
@@ -508,6 +558,13 @@ fn check_permission(edit: &Edit, p: &printcraft_cos::Permissions) -> Result<(), 
                 Ok(())
             } else {
                 Err(EditError::NotPermitted("comments"))
+            }
+        }
+        Edit::SetFieldValue { .. } | Edit::ResetForm { .. } => {
+            if p.fill_forms() {
+                Ok(())
+            } else {
+                Err(EditError::NotPermitted("filling in form fields"))
             }
         }
         Edit::Protect(_) | Edit::RemoveProtection => {
@@ -630,6 +687,10 @@ fn run_edit(doc: &mut printcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -
         Edit::StyleAnnotation { page, index, color, opacity, width } => {
             printcraft_annot::set_style(doc, *page, *index, *color, *opacity, *width, &cx.meta())?;
         }
+        Edit::SetFieldValue { name, value } => printcraft_forms::set_value(doc, name, value)?,
+        Edit::ResetForm { names } => {
+            printcraft_forms::reset(doc, names.as_deref())?;
+        }
         Edit::Protect(p) => {
             p.validate()?;
             let seed = cx.entropy();
@@ -659,6 +720,27 @@ fn run_edit(doc: &mut printcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -
         }
     }
     Ok(())
+}
+
+/// The comment list, read from the object graph (as `inspect` lists comments).
+fn comment_list(doc: &printcraft_cos::Document) -> Vec<printcraft_render::Annotation> {
+    printcraft_annot::summaries(doc)
+        .into_iter()
+        .map(|s| printcraft_render::Annotation {
+            page: s.page,
+            subtype: s.subtype,
+            author: s.author,
+            contents: s.contents,
+            modified: s.modified.map(|m| printcraft_render::pretty_date(&m)),
+            name: s.name,
+            in_reply_to: s.in_reply_to,
+            rect: s.rect,
+            color: s.color,
+            index: s.index,
+            state: s.state,
+            quads: s.quads,
+        })
+        .collect()
 }
 
 /// The passwords after `edit`, if it changes them.
@@ -706,6 +788,8 @@ pub enum EditError {
     Comment(#[from] printcraft_annot::AnnotError),
     #[error("{0}")]
     Protection(String),
+    #[error("{0}")]
+    Form(#[from] printcraft_forms::FormError),
     #[error("the edited document could not be written: {0}")]
     Write(String),
     #[error("the edited document could not be reopened: {0}")]
@@ -776,6 +860,7 @@ impl Session {
             Ok(Err(e)) => (None, Some(e.to_string())),
             Err(_) => (None, Some("the document structure could not be read for editing".into())),
         };
+        let form = editor.as_ref().map(|e| printcraft_forms::fields(&e.cos)).unwrap_or_default();
         self.next_id += 1;
         let id = DocId(self.next_id);
         self.docs.push(Document {
@@ -790,6 +875,7 @@ impl Session {
             generation: 0,
             snapshot_generation: 0,
             read_only_reason,
+            form: Arc::new(form),
             editor,
             config,
         });
@@ -815,16 +901,17 @@ impl Session {
         let previous = std::mem::replace(&mut editor.cos, next);
         let keys = keys_after(&edit).unwrap_or_else(|| editor.keys.clone());
         let previous_keys = std::mem::replace(&mut editor.keys, keys);
-        editor.undo.push((edit.label(), previous, previous_keys));
+        let scope = scope_of(&edit);
+        editor.undo.push((edit.label(), previous, previous_keys, scope));
         if editor.undo.len() > MAX_UNDO {
             editor.undo.remove(0);
         }
         editor.redo.clear();
         Self::adopt_keys(doc);
-        if let Err(e) = Self::refresh(doc) {
+        if let Err(e) = Self::refresh_scoped(doc, scope) {
             // Roll back: the edit produced something we cannot display.
             if let Some(ed) = doc.editor.as_mut()
-                && let Some((_, prev, keys)) = ed.undo.pop()
+                && let Some((_, prev, keys, _)) = ed.undo.pop()
             {
                 ed.cos = prev;
                 ed.keys = keys;
@@ -841,12 +928,12 @@ impl Session {
     pub fn undo(&mut self, id: DocId) -> Result<String, EditError> {
         let doc = self.doc_mut(id)?;
         let editor = doc.editor.as_mut().ok_or(EditError::NothingToUndo)?;
-        let (label, prev, keys) = editor.undo.pop().ok_or(EditError::NothingToUndo)?;
+        let (label, prev, keys, scope) = editor.undo.pop().ok_or(EditError::NothingToUndo)?;
         let current = std::mem::replace(&mut editor.cos, prev);
         let current_keys = std::mem::replace(&mut editor.keys, keys);
-        editor.redo.push((label.clone(), current, current_keys));
+        editor.redo.push((label.clone(), current, current_keys, scope));
         Self::adopt_keys(doc);
-        Self::refresh(doc)?;
+        Self::refresh_scoped(doc, scope)?;
         doc.dirty = true;
         doc.generation += 1;
         Ok(label)
@@ -855,12 +942,12 @@ impl Session {
     pub fn redo(&mut self, id: DocId) -> Result<String, EditError> {
         let doc = self.doc_mut(id)?;
         let editor = doc.editor.as_mut().ok_or(EditError::NothingToRedo)?;
-        let (label, next, keys) = editor.redo.pop().ok_or(EditError::NothingToRedo)?;
+        let (label, next, keys, scope) = editor.redo.pop().ok_or(EditError::NothingToRedo)?;
         let current = std::mem::replace(&mut editor.cos, next);
         let current_keys = std::mem::replace(&mut editor.keys, keys);
-        editor.undo.push((label.clone(), current, current_keys));
+        editor.undo.push((label.clone(), current, current_keys, scope));
         Self::adopt_keys(doc);
-        Self::refresh(doc)?;
+        Self::refresh_scoped(doc, scope)?;
         doc.dirty = true;
         doc.generation += 1;
         Ok(label)
@@ -872,6 +959,44 @@ impl Session {
             doc.password = e.keys.render.clone();
             doc.config.password = e.keys.render.as_deref().map(Arc::from);
         }
+    }
+
+    /// Rebuild the working bytes and renderer, and the view data that `scope` may have changed.
+    /// Comment and form edits skip the full re-inspection (seconds on very large files): the
+    /// comment list and field values are re-read from the object graph instead.
+    fn refresh_scoped(doc: &mut Document, scope: Scope) -> Result<(), EditError> {
+        if scope == Scope::Full || doc.info.encrypted != doc.editor.as_ref().is_some_and(|e| e.cos.output_handler().is_some()) {
+            return Self::refresh(doc);
+        }
+        let Some(editor) = doc.editor.as_ref() else { return Ok(()) };
+        let bytes = if editor.cos.is_modified() {
+            Arc::new(write_incremental(&editor.cos, &SaveOptions::default()).map_err(|e| EditError::Write(e.to_string()))?)
+        } else {
+            editor.cos.bytes().clone()
+        };
+        let form = Arc::new(printcraft_forms::fields(&editor.cos));
+        match scope {
+            Scope::Comments => doc.info.annotations = comment_list(&editor.cos),
+            Scope::Form => {
+                for f in &mut doc.info.fields {
+                    if let Some(ff) = form.iter().find(|x| x.name == f.name) {
+                        f.value = match ff.kind {
+                            printcraft_forms::FieldKind::CheckBox | printcraft_forms::FieldKind::Radio => {
+                                Some(ff.value.first().cloned().unwrap_or_else(|| "Off".into()))
+                            }
+                            _ if ff.value.is_empty() => None,
+                            _ => Some(ff.value.join(", ")),
+                        };
+                    }
+                }
+            }
+            Scope::Full => unreachable!("handled above"),
+        }
+        doc.info.file_size = bytes.len();
+        doc.form = form;
+        doc.bytes = bytes.clone();
+        doc.renderer = RenderPool::new(bytes, render_threads(), doc.config.clone());
+        Ok(())
     }
 
     /// Rebuild working bytes, inspection and renderer from the current edit state.
@@ -891,6 +1016,7 @@ impl Session {
             }
         }
         doc.info = info;
+        doc.form = Arc::new(printcraft_forms::fields(&editor.cos));
         doc.bytes = bytes.clone();
         doc.renderer = RenderPool::new(bytes, render_threads(), doc.config.clone());
         Ok(())

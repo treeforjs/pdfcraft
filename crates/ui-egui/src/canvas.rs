@@ -128,6 +128,8 @@ pub struct DocView {
     pub pending_edit: Option<Edit>,
     /// Commenting state: selected comment, gestures, composer.
     pub comments: crate::comments::CommentView,
+    /// Form filling state: the focused field.
+    pub forms: crate::forms_ui::FormView,
     /// A non-edit action requested by the organize toolbar, handled by the app.
     pub pending_action: Option<ViewAction>,
 }
@@ -196,6 +198,7 @@ impl DocView {
             pending_edit: None,
             pending_action: None,
             comments: Default::default(),
+            forms: Default::default(),
         }
     }
 
@@ -776,6 +779,8 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
     };
     let prefs = &app.comment_prefs;
     let allowed = doc.allows_annotation();
+    let form = doc.form.clone();
+    let can_fill = doc.allows_form_filling();
     let mut hover_text: Option<(Pos2, String)> = None;
     let mut clicked_link: Option<LinkTarget> = None;
     let mut canvas_action: Option<comments::CanvasAction> = None;
@@ -887,7 +892,10 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
 
             // Comments: tools, selection, moving and resizing come before text selection.
             let pcx = comments::PageCx { page: i, xf: &xf, info, tool, prefs, allowed };
-            let consumed = comments::page_input(ui, &resp, &pcx, view);
+            // Form fields take clicks first with the Select tool (as Acrobat fills fields in
+            // every viewing mode); then comments; then text selection.
+            let on_field = tool == QuickTool::Select && crate::forms_ui::page_input(ui, &resp, &xf, i, info, &form, can_fill, view);
+            let consumed = on_field || comments::page_input(ui, &resp, &pcx, view);
 
             // Text layer: find matches, selection, I-beam and drag-to-select.
             let to_screen = |g: [f32; 4]| xf.view_rect(g);
@@ -958,6 +966,7 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
 
             comments::page_after_text(&resp, &pcx, view);
             comments::paint_page(ui, painter, &pcx, view);
+            crate::forms_ui::paint_page(ui, painter, &xf, i, info, &form, view);
 
             // Form-field highlight (Acrobat's "Highlight existing fields").
             if view.highlight_fields {
@@ -1087,6 +1096,10 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
     if let Some(e) = comments::composer(ui.ctx(), view, info, prefs) {
         view.pending_edit = Some(e);
     }
+    if let Some(e) = crate::forms_ui::overlay(ui.ctx(), view, info, &form) {
+        view.pending_edit = Some(e);
+    }
+    let form_notice = view.forms.notice.take();
     let mut tool = app.quick_tool;
     comments::keys(ui.ctx(), view, &mut tool, allowed);
     match canvas_action {
@@ -1101,6 +1114,9 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
         None => {}
     }
     app.quick_tool = tool;
+    if let Some(n) = form_notice {
+        app.notify(n);
+    }
     quick_bar(app, avail, ui);
 }
 

@@ -11,6 +11,8 @@
 //! Helvetica's proportions by character class (no font program or metrics file is bundled).
 
 use printcraft_cos::{Dict, Object, PdfString, Stream};
+pub use printcraft_fonts::{helvetica_width as text_width, wrap};
+use printcraft_fonts::{literal, win_ansi};
 
 use crate::{NOTE_SIZE, Rgb, n};
 
@@ -94,85 +96,6 @@ pub fn parse_da(d: &Dict) -> (Rgb, f64) {
         }
     }
     (col.map(|x| x.clamp(0.0, 1.0)), size.min(400.0))
-}
-
-/// Approximate advance of `s` in Helvetica at `size` points.
-pub fn text_width(s: &str, size: f64) -> f64 {
-    let units: f64 = s
-        .chars()
-        .map(|c| match c {
-            ' ' | 'i' | 'j' | 'l' | '\'' | '!' | '|' | '.' | ',' | ':' | ';' | 'I' => 260.0,
-            'f' | 't' | 'r' | '(' | ')' | '[' | ']' | '/' | '-' | '"' => 333.0,
-            'm' => 833.0,
-            'w' => 722.0,
-            'M' => 833.0,
-            'W' => 944.0,
-            'J' | 'c' | 'k' | 's' | 'v' | 'x' | 'y' | 'z' => 500.0,
-            '0'..='9' | 'a'..='z' | '$' | '#' | '?' | '_' => 556.0,
-            'A'..='Z' => 680.0,
-            '@' => 1015.0,
-            _ if c.is_whitespace() => 260.0,
-            _ => 584.0,
-        })
-        .sum();
-    units * size / 1000.0
-}
-
-/// WinAnsi-encode text for a literal string, escaping delimiters; unmappable characters → `?`.
-fn win_ansi(s: &str) -> Vec<u8> {
-    let mut out = Vec::new();
-    for c in s.chars() {
-        let b = match c {
-            '\u{20}'..='\u{7e}' => c as u8,
-            '\u{a0}'..='\u{ff}' => c as u32 as u8,
-            '€' => 0x80,
-            '‚' => 0x82,
-            '„' => 0x84,
-            '…' => 0x85,
-            '‘' => 0x91,
-            '’' => 0x92,
-            '“' => 0x93,
-            '”' => 0x94,
-            '•' => 0x95,
-            '–' => 0x96,
-            '—' => 0x97,
-            '™' => 0x99,
-            '\t' => b' ',
-            _ => b'?',
-        };
-        if matches!(b, b'(' | b')' | b'\\') {
-            out.push(b'\\');
-        }
-        out.push(b);
-    }
-    out
-}
-
-/// Greedy line breaking within `width` (paragraphs split on newlines; long words are split).
-pub fn wrap(text: &str, size: f64, width: f64) -> Vec<String> {
-    let mut lines = Vec::new();
-    for para in text.split(['\n', '\r']) {
-        let mut line = String::new();
-        for word in para.split(' ') {
-            let candidate = if line.is_empty() { word.to_string() } else { format!("{line} {word}") };
-            if text_width(&candidate, size) <= width || line.is_empty() && text_width(word, size) <= width {
-                line = candidate;
-                continue;
-            }
-            if !line.is_empty() {
-                lines.push(std::mem::take(&mut line));
-            }
-            // A word wider than the box: break it by characters.
-            for ch in word.chars() {
-                if !line.is_empty() && text_width(&format!("{line}{ch}"), size) > width {
-                    lines.push(std::mem::take(&mut line));
-                }
-                line.push(ch);
-            }
-        }
-        lines.push(line);
-    }
-    lines
 }
 
 fn ext_gstate(opacity: f64, multiply: bool) -> Option<Dict> {
@@ -401,9 +324,9 @@ pub fn build(d: &Dict) -> Option<Stream> {
                     2 => rect[2] - pad - lw,
                     _ => rect[0] + pad,
                 };
-                out.extend(format!("1 0 0 1 {} {} Tm (", n(x), n(y)).bytes());
-                out.extend(win_ansi(&line));
-                out.extend_from_slice(b") Tj\n");
+                out.extend(format!("1 0 0 1 {} {} Tm ", n(x), n(y)).bytes());
+                out.extend(literal(&win_ansi(&line)));
+                out.extend_from_slice(b" Tj\n");
                 y -= size * 1.2;
             }
             out.extend_from_slice(b"ET\n");

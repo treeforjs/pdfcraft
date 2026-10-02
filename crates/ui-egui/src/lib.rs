@@ -14,6 +14,7 @@ pub mod control;
 mod dialogs;
 mod editing;
 mod files;
+pub mod forms_ui;
 mod home;
 mod icon_data;
 pub mod icons;
