@@ -20,6 +20,7 @@ mod export_ui;
 mod marks_ui;
 mod optimize_ui;
 mod sign_ui;
+mod stamps_ui;
 mod zoom_snap;
 /// Header & footer / watermark / background dialog types (tests and automation).
 pub mod marks {
@@ -110,6 +111,8 @@ pub enum QuickTool {
     AddText,
     /// Add a stamp: click to place this stamp.
     Stamp(printcraft_engine::StampKind),
+    /// A custom stamp from the library (its index).
+    CustomStamp(usize),
     /// Edit a PDF ▸ Link: draw link areas, select and edit links.
     Link,
     /// Use a certificate ▸ Digitally sign / Certify (visible): drag the signature's rectangle.
@@ -177,6 +180,8 @@ pub enum Dialog {
     AccessibilityOptions,
     /// Combine files: the files, their order and pages.
     Combine,
+    /// Custom stamps ▸ Create.
+    CreateStamp,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -281,6 +286,9 @@ pub struct PrintCraftApp {
     pub a11y_skipped: std::collections::BTreeSet<printcraft_engine::a11y::Rule>,
     /// Combine files: the files staged so far.
     pub combine_draft: Vec<combine_ui::CombineFile>,
+    /// The custom stamp library, and the stamp being created.
+    pub custom_stamps: Vec<stamps_ui::CustomStamp>,
+    pub stamp_draft: stamps_ui::StampDraft,
     /// PDF Optimizer choices.
     pub optimize_draft: OptimizeDraft,
     /// Pages copied or cut in Organize Pages, ready to paste (into any document).
@@ -404,6 +412,8 @@ impl PrintCraftApp {
             a11y: a11y_ui::A11yState::default(),
             a11y_skipped: Default::default(),
             combine_draft: Vec::new(),
+            custom_stamps: Vec::new(),
+            stamp_draft: Default::default(),
             optimize_draft: OptimizeDraft::default(),
             page_clipboard: None,
             last_snapshot: None,
@@ -719,8 +729,15 @@ impl PrintCraftApp {
     /// Serialize the user's persistent state (recent files, theme). Local only.
     pub fn persist(&self) -> String {
         let trusted: Vec<String> = self.session.trusted_certificates().iter().map(printcraft_engine::sign::x509::to_pem).collect();
-        serde_json::json!({ "recent": self.recent, "theme": self.theme, "signature": self.signature, "digital_ids": self.digital_ids, "trusted": trusted })
-            .to_string()
+        serde_json::json!({
+            "recent": self.recent,
+            "theme": self.theme,
+            "signature": self.signature,
+            "digital_ids": self.digital_ids,
+            "trusted": trusted,
+            "custom_stamps": stamps_ui::encode(&self.custom_stamps),
+        })
+        .to_string()
     }
 
     /// Restore state written by `persist`. Unknown or malformed data is ignored.
@@ -743,6 +760,7 @@ impl PrintCraftApp {
         if let Ok(ids) = serde_json::from_value::<Vec<DigitalIdEntry>>(v["digital_ids"].clone()) {
             self.digital_ids = ids;
         }
+        self.custom_stamps = stamps_ui::decode(&v["custom_stamps"]);
         if let Ok(pems) = serde_json::from_value::<Vec<String>>(v["trusted"].clone()) {
             let certs = pems.iter().filter_map(|p| printcraft_engine::sign::x509::load_certificates(p.as_bytes()).ok()).flatten().collect();
             self.session.set_trusted_certificates(certs);
@@ -890,6 +908,13 @@ impl PrintCraftApp {
                     "marquee-zoom" => QuickTool::MarqueeZoom,
                     "snapshot" => QuickTool::Snapshot,
                     "certify" => QuickTool::SignArea { certify: true },
+                    custom if custom.starts_with("custom-stamp-") => {
+                        let i: usize = custom[13..].parse().map_err(|_| format!("bad stamp {custom}"))?;
+                        if i >= self.custom_stamps.len() {
+                            return Err(format!("there are {} custom stamps", self.custom_stamps.len()));
+                        }
+                        QuickTool::CustomStamp(i)
+                    }
                     stamp if stamp.starts_with("stamp-") => QuickTool::Stamp(
                         printcraft_engine::StampKind::ALL
                             .into_iter()

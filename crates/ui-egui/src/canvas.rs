@@ -942,6 +942,7 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
         | QuickTool::Field(_)
         | QuickTool::AddText
         | QuickTool::Stamp(_)
+        | QuickTool::CustomStamp(_)
         | QuickTool::Link
         | QuickTool::SignArea { .. }
         | QuickTool::MarqueeZoom
@@ -959,6 +960,10 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
     let today = app.session.today();
     let by_line = app.session.stamp_by_line(&author);
     let mut stamp_placed = false;
+    let custom_stamp = match app.quick_tool {
+        QuickTool::CustomStamp(i) => app.custom_stamps.get(i).cloned(),
+        _ => None,
+    };
     let mut open_signature = false;
     let mut hover_text: Option<(Pos2, String)> = None;
     let mut clicked_link: Option<LinkTarget> = None;
@@ -1121,6 +1126,26 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
                         contents: String::new(),
                         author: author.clone(),
                     }));
+                    stamp_placed = true;
+                }
+            }
+            if let Some(cs) = custom_stamp.as_ref()
+                && allowed
+                && let Some(p) = ui.input(|inp| inp.pointer.hover_pos()).filter(|p| xf.rect.contains(*p))
+            {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
+                if resp.clicked() {
+                    // Centred on the click at its natural size (the engine sizes it).
+                    let (vx, vy) = xf.screen_to_view(p);
+                    let u = info.pages[i].view_to_user(vx, vy);
+                    let (x, y) = (u[0] as f64, u[1] as f64);
+                    view.pending_edit = Some(printcraft_engine::Edit::AddCustomStamp {
+                        page: i,
+                        rect: [x, y, x, y],
+                        name: cs.name.clone(),
+                        file: printcraft_engine::MarkFile { name: cs.file.clone(), bytes: cs.data.clone(), page: cs.page },
+                        author: author.clone(),
+                    });
                     stamp_placed = true;
                 }
             }

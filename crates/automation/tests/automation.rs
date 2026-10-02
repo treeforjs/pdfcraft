@@ -935,6 +935,14 @@ fn stamps_through_tools() {
         a.call("comment_add", &json!({ "doc": doc, "page": 1, "type": "stamp", "stamp": "nonsense", "at": [1, 1] })),
         Err(ToolError::InvalidArgs(_))
     ));
+    // A custom stamp from another PDF's page.
+    ok(&mut a, "stamp_custom", json!({ "doc": doc, "page": 2, "path": "b.pdf", "file_page": 2, "at": [100, 150], "name": "Logo" }));
+    let list = ok(&mut a, "comment_list", json!({ "doc": doc }));
+    assert_eq!(list["count"], 4, "{list}");
+    // Its "Page 2" is drawn over the page's own.
+    assert_eq!(page_text(&mut a, doc)[1].matches('2').count(), 2);
+    assert_eq!(ok(&mut a, "edit_undo", json!({ "doc": doc }))["undone"], "Add stamp");
+    assert!(matches!(a.call("stamp_custom", &json!({ "doc": doc, "page": 1, "path": "nope.png", "at": [1, 1] })), Err(ToolError::Failed(_))));
 }
 
 #[test]

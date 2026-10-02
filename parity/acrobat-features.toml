@@ -3995,11 +3995,11 @@ title = "Custom stamps from images or PDF pages"
 area = "E"
 tier = "P1"
 milestone = "M5"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["comment.stamp"]
+tools = ["stamp_custom"]
+evidence = ["crates/ui-egui/tests/stamps.rs::creating_placing_and_keeping_custom_stamps", "crates/automation/tests/automation.rs::stamps_through_tools"]
+notes = "Create custom stamp from a PDF page or an image (category and name), kept in the app's settings; placed at natural size (at most 200 pt) keeping its shape; resizable (appearance redrawn from /PCPicture); delete from the palette"
 
 [[feature]]
 id = "comment.stamps-manage"

@@ -51,6 +51,7 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
     let mut open_revision: Option<usize> = None;
     let mut a11y_now = false;
     let mut combine_now = false;
+    let mut stamp_now = false;
     let t = Tokens::get(ctx);
     let mut close = false;
     let mut next = dialog;
@@ -758,6 +759,12 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
                 close = apply || cancel;
                 return;
             }
+            Dialog::CreateStamp => {
+                let (save, cancel) = crate::stamps_ui::create_body(ui, app, &t);
+                stamp_now = save;
+                close = save || cancel;
+                return;
+            }
             Dialog::Combine => {
                 ui.set_width(620.0);
                 let (go, cancel) = crate::combine_ui::body(ui, app, &t);
@@ -1122,6 +1129,9 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
     }
     if let Some(n) = open_revision {
         app.open_revision(n);
+    }
+    if stamp_now {
+        app.save_custom_stamp();
     }
     if combine_now {
         app.combine_staged();

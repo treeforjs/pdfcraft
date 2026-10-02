@@ -85,6 +85,7 @@ fn scope_of(edit: &Edit) -> Scope {
         // A file attachment also changes the Attachments list.
         Edit::AddAnnotation(a) if matches!(a.shape, Shape::Attachment { .. }) => Scope::Full,
         Edit::AddAnnotation(_)
+        | Edit::AddCustomStamp { .. }
         | Edit::DeleteAnnotation { .. }
         | Edit::SetAnnotationContents { .. }
         | Edit::ReplyToAnnotation { .. }
@@ -563,6 +564,15 @@ pub enum Edit {
     },
     /// Add a comment (sticky note, highlight, shape, drawing, text box…).
     AddAnnotation(NewAnnotation),
+    /// A custom stamp from a picture file (a PDF page or an image) on `page`. A zero-size
+    /// `rect` is a point: the stamp is centred there at its natural size (at most 200 pt).
+    AddCustomStamp {
+        page: usize,
+        rect: [f64; 4],
+        name: String,
+        file: MarkFile,
+        author: String,
+    },
     /// Delete the comment at `index` in the page's `/Annots`, with its pop-up and replies.
     DeleteAnnotation {
         page: usize,
@@ -825,6 +835,7 @@ impl Edit {
             Edit::SetBookmarkPage { .. } => "Set bookmark destination".into(),
             Edit::NumberPages { .. } => "Number pages".into(),
             Edit::AddAnnotation(a) => format!("Add {}", annotation_noun(&a.shape)),
+            Edit::AddCustomStamp { .. } => "Add stamp".into(),
             Edit::DeleteAnnotation { .. } => "Delete comment".into(),
             Edit::SetAnnotationContents { .. } => "Edit comment".into(),
             Edit::ReplyToAnnotation { .. } => "Reply".into(),
@@ -902,7 +913,7 @@ fn annotation_noun(s: &Shape) -> &'static str {
         Shape::Mark { mark: FillMark::Line, .. } => "line",
         Shape::Signature { .. } => "signature",
         Shape::Redact { .. } => "redaction mark",
-        Shape::Stamp { .. } => "stamp",
+        Shape::Stamp { .. } | Shape::CustomStamp { .. } => "stamp",
         Shape::Polygon { cloud: true, .. } => "cloud",
         Shape::Polygon { .. } => "polygon",
         Shape::PolyLine { .. } => "connected lines",
@@ -944,6 +955,7 @@ fn check_permission(edit: &Edit, p: &printcraft_cos::Permissions) -> Result<(), 
             }
         }
         Edit::AddAnnotation(_)
+        | Edit::AddCustomStamp { .. }
         | Edit::DeleteAnnotation { .. }
         | Edit::SetAnnotationContents { .. }
         | Edit::ReplyToAnnotation { .. }
@@ -1110,6 +1122,21 @@ fn run_edit(doc: &mut printcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -
         Edit::NumberPages { from, to, style, prefix, first } => printcraft_organize::number_pages(doc, *from, *to, *style, prefix, *first)?,
         Edit::AddAnnotation(a) => {
             printcraft_annot::add_annotation(doc, a, &cx.meta())?;
+        }
+        Edit::AddCustomStamp { page, rect, name, file, author } => {
+            let src = mark_source(doc, file)?;
+            let (sw, sh) = (src.size.0.max(1.0), src.size.1.max(1.0));
+            let rect = if (rect[2] - rect[0]).abs() < 1.0 || (rect[3] - rect[1]).abs() < 1.0 {
+                let k = (200.0 / sw.max(sh)).min(1.0);
+                let (w, h) = (sw * k, sh * k);
+                [rect[0] - w / 2.0, rect[1] - h / 2.0, rect[0] + w / 2.0, rect[1] + h / 2.0]
+            } else {
+                *rect
+            };
+            let shape = Shape::CustomStamp { rect, name: name.clone(), picture: src.xobject, image: src.image, size: (sw, sh) };
+            let style = printcraft_annot::Style::default_for(&shape);
+            let new = NewAnnotation { page: *page, shape, style, contents: name.clone(), author: author.clone() };
+            printcraft_annot::add_annotation(doc, &new, &cx.meta())?;
         }
         Edit::DeleteAnnotation { page, index } => printcraft_annot::delete_annotation(doc, *page, *index)?,
         Edit::SetAnnotationContents { page, index, text } => printcraft_annot::set_contents(doc, *page, *index, text, &cx.meta())?,

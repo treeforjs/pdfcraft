@@ -266,6 +266,7 @@ fn stamp_palette(app: &mut PrintCraftApp, ui: &mut egui::Ui, t: &Tokens) {
                 }
             }
         }
+        crate::stamps_ui::palette_section(app, ui, t);
     });
 }
 

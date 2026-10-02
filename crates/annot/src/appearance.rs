@@ -401,6 +401,23 @@ pub fn build(d: &Dict) -> Option<Stream> {
             }
         }
         b"Stamp" => {
+            // A custom stamp: its picture (an image, or a form mapped to /PCPictureSize) fills
+            // the rectangle.
+            if let Some(pic) = d.get(b"PCPicture").and_then(Object::as_ref) {
+                let [x0, y0, x1, y1] = rect;
+                let (w, h) = (x1 - x0, y1 - y0);
+                let place = if matches!(d.get(b"PCPictureImage"), Some(Object::Bool(true))) {
+                    format!("{} 0 0 {} {} {} cm", n(w), n(h), n(x0), n(y0))
+                } else {
+                    let size = nums(d, b"PCPictureSize").filter(|s| s.len() == 2 && s[0] > 0.0 && s[1] > 0.0)?;
+                    format!("{} 0 0 {} {} {} cm", n(w / size[0]), n(h / size[1]), n(x0), n(y0))
+                };
+                c.push_str(&format!("q {place} /Pic Do Q\n"));
+                let mut xo = Dict::new();
+                xo.set(b"Pic".to_vec(), Object::Ref(pic));
+                res.set(b"XObject".to_vec(), Object::Dict(xo));
+                return Some(form(rect, c.as_bytes(), res));
+            }
             // Only PrintCraft's own Fill & Sign marks are drawn here.
             let name = d.name(b"Name")?;
             let col = stroke.unwrap_or([0.0; 3]);

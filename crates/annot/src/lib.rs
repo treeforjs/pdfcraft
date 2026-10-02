@@ -327,6 +327,15 @@ pub enum Shape {
         stamp: StampKind,
         by: Option<String>,
     },
+    /// A custom stamp: a picture already in the document (an image XObject, or a form XObject
+    /// whose `/Matrix` maps it to `size` points) filling `rect`, named `name`.
+    CustomStamp {
+        rect: [f64; 4],
+        name: String,
+        picture: ObjRef,
+        image: bool,
+        size: (f64, f64),
+    },
     /// A redaction mark (§12.5.6.23) over quadrilaterals (text) or one rectangle as a quad
     /// (areas, pages). `overlay` is the text shown on the box once applied, drawn with `look`.
     Redact {
@@ -408,7 +417,7 @@ impl Shape {
             Shape::Line { .. } => "Line",
             Shape::Ink { .. } | Shape::Signature { .. } => "Ink",
             Shape::TextBox { .. } | Shape::Typewriter { .. } | Shape::Callout { .. } => "FreeText",
-            Shape::Mark { .. } | Shape::Stamp { .. } => "Stamp",
+            Shape::Mark { .. } | Shape::Stamp { .. } | Shape::CustomStamp { .. } => "Stamp",
             Shape::Redact { .. } => "Redact",
             Shape::Polygon { .. } => "Polygon",
             Shape::PolyLine { .. } => "PolyLine",
@@ -513,6 +522,7 @@ impl Style {
             Shape::Mark { .. } => ([0.0, 0.0, 0.0], 1.5),
             Shape::Signature { .. } => ([0.0, 0.0, 0.0], 1.5),
             Shape::Stamp { stamp, .. } => (stamp.color(), 2.0),
+            Shape::CustomStamp { .. } => ([0.0, 0.0, 0.0], 0.0),
             // Red outline while marked; a black box once applied.
             Shape::Redact { .. } => return Self { color: [0.89, 0.13, 0.13], opacity: 1.0, width: 1.0, fill: Some([0.0, 0.0, 0.0]) },
         };
@@ -704,6 +714,7 @@ fn rect_for(shape: &Shape, style: &Style) -> Result<[f64; 4], AnnotError> {
         | Shape::TextBox { rect, .. }
         | Shape::Typewriter { rect, .. }
         | Shape::Stamp { rect, .. }
+        | Shape::CustomStamp { rect, .. }
         | Shape::Mark { rect, .. } => {
             let r = normalize(*rect);
             if !finite(rect) || r[2] - r[0] < 1.0 || r[3] - r[1] < 1.0 {
@@ -799,6 +810,7 @@ fn subject(shape: &Shape) -> &'static str {
             StampGroup::SignHere => "Sign Here",
             StampGroup::StandardBusiness => "Stamp",
         },
+        Shape::CustomStamp { .. } => "Stamp",
         Shape::Polygon { cloud: true, .. } => "Cloud",
         Shape::Polygon { .. } => "Polygon",
         Shape::PolyLine { .. } => "Polygonal Line",
@@ -903,6 +915,13 @@ pub fn add_annotation(doc: &mut Document, new: &NewAnnotation, meta: &Meta) -> R
             if let Some(b) = by {
                 d.set(b"PCByLine".to_vec(), PdfString::text(b));
             }
+        }
+        Shape::CustomStamp { name, picture, image, size, .. } => {
+            let clean: String = name.chars().filter(|c| c.is_ascii_alphanumeric()).collect();
+            d.set(b"Name".to_vec(), Object::name(&format!("PCCustom{clean}")));
+            d.set(b"PCPicture".to_vec(), Object::Ref(*picture));
+            d.set(b"PCPictureImage".to_vec(), Object::Bool(*image));
+            d.set(b"PCPictureSize".to_vec(), num_array(&[size.0, size.1]));
         }
         Shape::Ink { strokes } | Shape::Signature { strokes } => {
             d.set(b"C".to_vec(), rgb(style.color));

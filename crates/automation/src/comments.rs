@@ -444,6 +444,33 @@ impl Automation {
     }
 }
 
+impl Automation {
+    /// A custom stamp: a picture file (PDF page or image) centred at `at`, at its natural size
+    /// (at most 200 pt) or `width` points wide.
+    pub(crate) fn stamp_custom(&mut self, a: &Args) -> Result<Value> {
+        let page = self.page(a)?;
+        let info = self.doc(a)?.info.pages[page].clone();
+        let path = self.resolve(a.str("path")?, false)?;
+        let bytes = std::fs::read(&path).map_err(|e| failed(format!("{}: {e}", path.display())))?;
+        let file = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let name = a.opt_str("name")?.map(str::to_owned).unwrap_or_else(|| file.rsplit_once('.').map_or(file.clone(), |(s, _)| s.to_owned()));
+        let [x, y] = a.need::<2>("at", "a stamp (its centre)")?;
+        let [ux, uy] = to_user(&info, x, y);
+        let edit = Edit::AddCustomStamp {
+            page,
+            rect: [ux, uy, ux, uy],
+            name,
+            file: printcraft_engine::MarkFile {
+                name: file,
+                bytes: std::sync::Arc::new(bytes),
+                page: a.opt_int("file_page")?.unwrap_or(1).max(1) as usize - 1,
+            },
+            author: a.opt_str("author")?.unwrap_or(DEFAULT_AUTHOR).to_string(),
+        };
+        self.apply(a, edit)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
