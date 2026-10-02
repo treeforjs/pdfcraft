@@ -254,8 +254,8 @@ impl Tree {
                         _ => continue,
                     };
                     if level > prev + 1 {
-                        let after = if prev == 0 { "the first heading".to_string() } else { format!("follows an H{prev}") };
-                        out.push(self.finding(i, &format!("H{level} is {after}; headings should not skip levels")));
+                        let what = if prev == 0 { format!("the first heading is an H{level}") } else { format!("H{level} follows an H{prev}") };
+                        out.push(self.finding(i, &format!("{what}; headings should not skip levels")));
                     }
                     prev = level;
                 }
