@@ -314,6 +314,11 @@ impl DocView {
         (!quads.is_empty()).then_some((s.page, quads))
     }
 
+    /// A page's thumbnail texture, when rendered (the print preview uses them).
+    pub(crate) fn thumb_id(&self, page: usize) -> Option<egui::TextureId> {
+        self.thumbs.get(&page).map(|t| t.id())
+    }
+
     pub(crate) fn page_text(&self, page: usize) -> Option<Arc<PageText>> {
         self.texts.get(&page).cloned()
     }
@@ -725,7 +730,7 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
         ui.centered_and_justified(|ui| ui.label("This document has no pages."));
         return;
     }
-    let want_thumbs = app.right == Some(RightPanel::Pages) || app.views[index].organize;
+    let want_thumbs = app.right == Some(RightPanel::Pages) || app.views[index].organize || app.dialog == Some(crate::Dialog::Print);
     // The Prepare a form panel is open (or a field tool is picked): fields are edited, not filled.
     let preparing = (app.left_open && app.left == crate::LeftPanel::Tool("form")) || matches!(app.quick_tool, QuickTool::Field(_));
     let view = &mut app.views[index];

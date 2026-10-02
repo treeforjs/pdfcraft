@@ -13,6 +13,7 @@ mod comments;
 mod forms;
 #[cfg(feature = "mcp")]
 pub mod mcp;
+mod printing;
 mod redact;
 mod tools;
 
@@ -261,6 +262,8 @@ impl Automation {
             "redact_apply" => self.redact_apply(&a)?,
             "redact_clear" => self.redact_clear(&a)?,
             "doc_hidden_info" => self.doc_hidden_info(&a)?,
+            "printers" => self.printers()?,
+            "doc_print" => self.doc_print(&a)?,
             "doc_remove_hidden" => self.doc_remove_hidden(&a)?,
             "fill_sign_add" => self.fill_sign_add(&a)?,
             "comment_list" => self.comment_list(&a)?,

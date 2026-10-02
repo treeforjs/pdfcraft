@@ -7767,11 +7767,11 @@ title = "Print dialog"
 area = "L"
 tier = "P0"
 milestone = "M10"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["print.dialog"]
+tools = ["doc_print", "printers"]
+evidence = ["crates/ui-egui/tests/print.rs::print_dialog_lays_out_sheets_and_saves_a_pdf", "crates/engine/src/tests.rs::printing_lays_out_sheets_that_render"]
+notes = "⌘P; settings and live sheet preview"
 
 [[feature]]
 id = "print.printer-selection"
@@ -7779,11 +7779,11 @@ title = "Choose printer and properties"
 area = "L"
 tier = "P0"
 milestone = "M10"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["print.dialog"]
+tools = ["printers", "doc_print"]
+evidence = ["crates/print/src/tests.rs::spooler_arguments_and_printer_list"]
+notes = "CUPS printers via lpstat; Save as PDF; Windows spooler pending"
 
 [[feature]]
 id = "print.copies-collate"
@@ -7791,11 +7791,11 @@ title = "Copies and collation"
 area = "L"
 tier = "P0"
 milestone = "M10"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["print.dialog"]
+tools = ["doc_print"]
+evidence = ["crates/print/src/tests.rs::spooler_arguments_and_printer_list"]
+notes = "lp -n, collate option"
 
 [[feature]]
 id = "print.page-range"
@@ -7803,11 +7803,11 @@ title = "Print all, current page or a range (labels allowed)"
 area = "L"
 tier = "P0"
 milestone = "M10"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["print.dialog"]
+tools = ["doc_print"]
+evidence = ["crates/print/src/tests.rs::page_selection", "crates/automation/tests/automation.rs::printing_through_tools"]
+notes = "all, current, ranges with labels and open ends"
 
 [[feature]]
 id = "print.odd-even-reverse"
@@ -7815,10 +7815,10 @@ title = "Odd/even pages and reverse order"
 area = "L"
 tier = "P1"
 milestone = "M10"
-status = "planned"
-commands = []
-tools = []
-evidence = []
+status = "shipped"
+commands = ["print.dialog"]
+tools = ["doc_print"]
+evidence = ["crates/print/src/tests.rs::page_selection"]
 notes = ""
 
 [[feature]]
@@ -7827,11 +7827,11 @@ title = "Fit, actual size, shrink oversized, custom scale"
 area = "L"
 tier = "P0"
 milestone = "M10"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["print.dialog"]
+tools = ["doc_print"]
+evidence = ["crates/print/src/tests.rs::size_modes"]
+notes = "fit, actual size, shrink oversized, custom %"
 
 [[feature]]
 id = "print.paper-source-by-size"
@@ -7851,11 +7851,11 @@ title = "Print on both sides"
 area = "L"
 tier = "P1"
 milestone = "M10"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["print.dialog"]
+tools = ["doc_print"]
+evidence = ["crates/print/src/tests.rs::spooler_arguments_and_printer_list"]
+notes = "long/short edge via the spooler"
 
 [[feature]]
 id = "print.n-up"
@@ -7863,11 +7863,11 @@ title = "Multiple pages per sheet"
 area = "L"
 tier = "P0"
 milestone = "M10"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["print.dialog"]
+tools = ["doc_print"]
+evidence = ["crates/print/src/tests.rs::multiple_pages_per_sheet", "crates/automation/tests/automation.rs::printing_through_tools"]
+notes = "2/4/6/9/16, four orders, borders, auto-rotate"
 
 [[feature]]
 id = "print.booklet"
@@ -7875,11 +7875,11 @@ title = "Booklet printing"
 area = "L"
 tier = "P0"
 milestone = "M10"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["print.dialog"]
+tools = ["doc_print"]
+evidence = ["crates/print/src/tests.rs::booklets_pair_pages_for_folding"]
+notes = "both/front/back, left/right binding"
 
 [[feature]]
 id = "print.poster"
@@ -7887,11 +7887,11 @@ title = "Poster / tiled printing with overlap and cut marks"
 area = "L"
 tier = "P1"
 milestone = "M10"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["print.dialog"]
+tools = ["doc_print"]
+evidence = ["crates/print/src/tests.rs::posters_tile_with_overlap", "crates/automation/tests/automation.rs::printing_through_tools"]
+notes = "tile scale, overlap, cut marks (labels pending)"
 
 [[feature]]
 id = "print.orientation"
@@ -7899,11 +7899,11 @@ title = "Auto portrait/landscape"
 area = "L"
 tier = "P0"
 milestone = "M10"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["print.dialog"]
+tools = ["doc_print"]
+evidence = ["crates/print/src/tests.rs::size_modes"]
+notes = "auto portrait/landscape"
 
 [[feature]]
 id = "print.comments-and-forms"
@@ -7911,11 +7911,11 @@ title = "Print document, markups, stamps or form fields only"
 area = "L"
 tier = "P0"
 milestone = "M10"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["print.dialog"]
+tools = ["doc_print"]
+evidence = ["crates/print/src/tests.rs::imposed_pdf_has_the_sheets_and_honours_comments_and_forms"]
+notes = "Print flag honoured"
 
 [[feature]]
 id = "print.print-with-comment-summary"
@@ -7935,11 +7935,11 @@ title = "Print preview"
 area = "L"
 tier = "P0"
 milestone = "M10"
-status = "planned"
-commands = []
+status = "shipped"
+commands = ["print.dialog"]
 tools = []
-evidence = []
-notes = ""
+evidence = ["crates/ui-egui/tests/print.rs::print_dialog_lays_out_sheets_and_saves_a_pdf"]
+notes = "live sheet preview with sheet navigation"
 
 [[feature]]
 id = "print.grayscale"
@@ -7947,11 +7947,11 @@ title = "Print in grayscale"
 area = "L"
 tier = "P1"
 milestone = "M10"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["print.dialog"]
+tools = ["doc_print"]
+evidence = ["crates/print/src/tests.rs::spooler_arguments_and_printer_list"]
+notes = "asks the printer for monochrome; the PDF itself stays in colour"
 
 [[feature]]
 id = "print.print-as-image"
@@ -7983,11 +7983,11 @@ title = "Produce a print-ready imposed PDF"
 area = "L"
 tier = "P1"
 milestone = "M10"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["print.dialog"]
+tools = ["doc_print"]
+evidence = ["crates/ui-egui/tests/print.rs::print_dialog_lays_out_sheets_and_saves_a_pdf", "crates/automation/tests/automation.rs::printing_through_tools", "crates/engine/src/tests.rs::printing_lays_out_sheets_that_render"]
+notes = "Save as PDF from the dialog"
 
 [[feature]]
 id = "print.print-pages-from-thumbnails"

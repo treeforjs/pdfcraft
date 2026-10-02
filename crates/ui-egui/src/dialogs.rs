@@ -37,12 +37,17 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
     let mut props_now = false;
     let mut field_props_now = false;
     let mut redact_now: Option<Dialog> = None;
+    let mut print_go = false;
     let mut replace_now = false;
     let t = Tokens::get(ctx);
     let mut close = false;
     let mut next = dialog;
     let modal = egui::Modal::new(egui::Id::new("dialog")).show(ctx, |ui| {
-        ui.set_width(if matches!(dialog, Dialog::Properties(_)) { 640.0 } else { 520.0 });
+        ui.set_width(match dialog {
+            Dialog::Properties(_) => 640.0,
+            Dialog::Print => 820.0,
+            _ => 520.0,
+        });
         // Dialog controls are outlined (radio buttons, check boxes, combo boxes and number fields
         // would otherwise blend into the dialog, whose fill matches the theme's field colour).
         let w = &mut ui.visuals_mut().widgets;
@@ -309,6 +314,21 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
                     redact_now = Some(dialog);
                 }
                 close = ok || cancel;
+                return;
+            }
+            Dialog::Print => {
+                let Some((i, id)) = app.active_ids() else {
+                    close = true;
+                    return;
+                };
+                let Some(doc) = app.session.get(id) else { return };
+                let sizes: Vec<(f64, f64)> = doc.info.pages.iter().map(|p| (p.width as f64, p.height as f64)).collect();
+                let labels: Vec<String> = doc.info.pages.iter().map(|p| p.label.clone()).collect();
+                let thumbs: std::collections::HashMap<usize, egui::TextureId> =
+                    (0..sizes.len()).filter_map(|p| app.views[i].thumb_id(p).map(|t| (p, t))).collect();
+                let (go, cancel) = crate::print_ui::body(ui, &mut app.print_draft, &t, &sizes, &labels, &|p| thumbs.get(&p).copied());
+                print_go = go;
+                close = go || cancel;
                 return;
             }
             Dialog::RemoveHidden => {
@@ -584,6 +604,9 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
             bytes: d.bytes.clone(),
             src_pages: (d.src_from - 1..d.src_from - 1 + n).collect(),
         });
+    }
+    if print_go {
+        app.print_now();
     }
     match redact_now {
         Some(Dialog::RedactPages) => app.redact_pages(),

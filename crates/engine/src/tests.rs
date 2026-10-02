@@ -719,6 +719,31 @@ fn redaction_marks_apply_for_good_and_undo() {
 }
 
 #[test]
+fn printing_lays_out_sheets_that_render() {
+    let (s, id) = session_with(5);
+    let settings = print::Settings {
+        pages: print::select_pages(5, Some("2-5"), &[], print::Subset::All, false).unwrap(),
+        layout: print::Layout::multiple(2),
+        ..Default::default()
+    };
+    let bytes = s.print_pdf(id, &settings).unwrap();
+    let mut s2 = Session::new();
+    let id2 = s2.open("print.pdf", None, Arc::new(bytes), None).unwrap();
+    assert_eq!(s2.get(id2).unwrap().info.pages.len(), 2, "four pages, two per sheet");
+    let texts = page_texts(&s2, id2);
+    assert!(texts[0].contains("Page 2") && texts[0].contains("Page 3") && texts[1].contains("Page 5"), "{texts:?}");
+    // Printing honours the permissions.
+    let p =
+        Protection { open_password: Some("pw".into()), permissions_password: Some("owner".into()), printing: Printing::None, ..Default::default() };
+    let (mut s3, id3) = session_with(1);
+    s3.apply(id3, Edit::Protect(p)).unwrap();
+    let saved = s3.save_bytes(id3).unwrap();
+    let mut s4 = Session::new();
+    let id4 = s4.open("locked.pdf", None, saved, Some("pw")).unwrap();
+    assert_eq!(s4.print_pdf(id4, &print::Settings { pages: vec![0], ..Default::default() }), Err(EditError::NotPermitted("printing")));
+}
+
+#[test]
 fn crop_and_duplicate_pages_show_in_the_viewer() {
     let (mut s, id) = session_with(2);
     s.apply(id, Edit::SetPageBox { pages: vec![0], which: PageBox::Crop, spec: BoxSpec::Margins([10.0, 20.0, 30.0, 40.0]) }).unwrap();

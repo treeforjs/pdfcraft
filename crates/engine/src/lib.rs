@@ -29,6 +29,7 @@ pub use printcraft_forms::{
 /// Comment geometry helpers (text-box line breaking) for frontends.
 pub use printcraft_annot::appearance as annot_text;
 pub use printcraft_annot::{FillMark, Markup, NewAnnotation, NoteIcon, Props as CommentProps, ReviewState, Rgb, Shape, Style, rect_quad};
+pub use printcraft_print as print;
 pub use printcraft_redact::patterns::{PATTERNS as REDACT_PATTERNS, Pattern as RedactPattern, find as find_pattern};
 pub use printcraft_redact::sanitize::{HIDDEN, Hidden};
 
@@ -141,6 +142,11 @@ impl Document {
     /// What the opening password allows; `None` when the document is not encrypted.
     pub fn permissions(&self) -> Option<printcraft_cos::Permissions> {
         self.editor.as_ref().and_then(|e| e.cos.permissions())
+    }
+
+    /// Printing is allowed (Table 22, bit 3).
+    pub fn allows_printing(&self) -> bool {
+        self.permissions().is_none_or(|p| p.print())
     }
 
     /// Page changes (insert, delete, rotate, move, extract) are allowed.
@@ -1008,6 +1014,8 @@ pub enum EditError {
     #[error(transparent)]
     Redact(#[from] printcraft_redact::RedactError),
     #[error("{0}")]
+    Print(String),
+    #[error("{0}")]
     Edit(#[from] printcraft_edit::EditError),
     #[error("{0}")]
     Create(#[from] printcraft_create::CreateError),
@@ -1326,6 +1334,20 @@ impl Session {
         let opts = SaveOptions { mod_date: self.now().map(printcraft_cos::pdf_date), ..SaveOptions::default() };
         let bytes = write_full(&cos, &opts).map_err(|e| EditError::Write(e.to_string()))?;
         Ok((Arc::new(bytes), merged))
+    }
+
+    /// The print-ready PDF for `settings` (sheets laid out for the paper; see `printcraft-print`).
+    pub fn print_pdf(&self, id: DocId, settings: &print::Settings) -> Result<Vec<u8>, EditError> {
+        let doc = self.get(id).ok_or(EditError::NoDocument)?;
+        if !doc.allows_printing() {
+            return Err(EditError::NotPermitted("printing"));
+        }
+        let cos = match doc.editor.as_ref() {
+            Some(e) => e.cos.clone(),
+            None => printcraft_cos::Document::open_with_password(doc.bytes.clone(), doc.password.as_deref())
+                .map_err(|e| EditError::Write(e.to_string()))?,
+        };
+        printcraft_print::impose(&cos, settings).map_err(|e| EditError::Print(e.to_string()))
     }
 
     /// Combine whole files, in order, into new PDF bytes (one bookmark per file).

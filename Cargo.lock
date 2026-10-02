@@ -3127,6 +3127,7 @@ dependencies = [
  "printcraft-forms",
  "printcraft-model",
  "printcraft-organize",
+ "printcraft-print",
  "printcraft-redact",
  "printcraft-render",
  "thiserror 2.0.21",
@@ -3177,6 +3178,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "printcraft-print"
+version = "0.1.0"
+dependencies = [
+ "printcraft-content",
+ "printcraft-cos",
+ "printcraft-model",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "printcraft-redact"
 version = "0.1.0"
 dependencies = [
@@ -3219,6 +3230,7 @@ dependencies = [
  "png 0.18.1",
  "printcraft-cos",
  "printcraft-engine",
+ "printcraft-model",
  "printcraft-render",
  "rfd",
  "serde",

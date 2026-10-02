@@ -133,7 +133,7 @@ pub fn mode_bar(app: &mut PrintCraftApp, ui: &mut egui::Ui) {
                     ui.spacing_mut().item_spacing.x = 4.0;
                     let has_doc = app.active.is_some();
                     ui.add_enabled_ui(has_doc, |ui| {
-                        if icons::button(ui, "printer", 32.0, false, "Print (M10)").clicked() {
+                        if icons::button(ui, "printer", 32.0, false, "Print (⌘P)").clicked() {
                             app.run_command("print.dialog");
                         }
                         if icons::button(ui, "save", 32.0, false, "Save (M4)").clicked() {

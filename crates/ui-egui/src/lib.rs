@@ -32,6 +32,8 @@ mod pageboxes;
 mod palette;
 mod panels;
 pub mod prepare;
+mod print_ui;
+pub use print_ui::{Handling as PrintHandling, PrintDraft, Which as PrintWhich};
 mod redact_ui;
 pub use redact_ui::{HiddenDraft, PagesDraft as RedactPagesDraft, RedactPrefs, SearchDraft as RedactSearchDraft};
 mod protect;
@@ -121,6 +123,8 @@ pub enum Dialog {
     RedactSearch,
     RedactProps,
     RedactApply,
+    /// File ▸ Print.
+    Print,
     /// Remove Hidden Information and Sanitize Document.
     RemoveHidden,
     Sanitize,
@@ -232,6 +236,7 @@ pub struct PrintCraftApp {
     pub redact_pages_draft: RedactPagesDraft,
     pub redact_search: RedactSearchDraft,
     pub hidden_draft: HiddenDraft,
+    pub print_draft: PrintDraft,
     /// The Replace Pages dialog's state.
     pub replace_draft: Option<files::ReplaceDraft>,
     /// The last web link the app asked the system to open (tests and automation).
@@ -309,6 +314,7 @@ impl PrintCraftApp {
             redact_pages_draft: RedactPagesDraft::default(),
             redact_search: RedactSearchDraft::default(),
             hidden_draft: HiddenDraft::default(),
+            print_draft: PrintDraft::default(),
             replace_draft: None,
             number_draft: NumberDraft { from: 1, to: 1, style: printcraft_engine::LabelStyle::Decimal, prefix: String::new(), start: 1 },
         }
