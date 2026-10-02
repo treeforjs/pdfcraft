@@ -69,6 +69,16 @@ fn initials(name: &str) -> String {
     if s.is_empty() { "?".into() } else { s.to_uppercase() }
 }
 
+/// A comment's colour as `RRGGBB` (empty: none), the key the colour sort and filter use.
+pub fn color_key(a: &Annotation) -> String {
+    a.color.map(|c| format!("{:02X}{:02X}{:02X}", (c[0] * 255.0) as u8, (c[1] * 255.0) as u8, (c[2] * 255.0) as u8)).unwrap_or_default()
+}
+
+/// The filter's name for a checkmark state.
+fn check_label(marked: bool) -> &'static str {
+    if marked { "Checked" } else { "Unchecked" }
+}
+
 /// The latest checkmark reply in a thread says "Marked".
 pub fn is_marked(thread: &[&Annotation]) -> bool {
     thread.iter().rev().find(|r| r.is_mark()).is_some_and(|r| r.state.as_deref() == Some("Marked"))
@@ -159,11 +169,10 @@ pub(crate) fn show(
         .filter(|a| !cv.hidden_types.iter().any(|t| t == kind_label(a)))
         .filter(|a| !cv.hidden_authors.contains(&a.author.clone().unwrap_or_default()))
         .filter(|a| !cv.hidden_statuses.contains(&status_of(a)))
+        .filter(|a| !cv.hidden_colors.contains(&color_key(a)))
+        .filter(|a| !cv.hidden_checks.contains(&check_label(is_marked(&replies_of(a))).to_string()))
         .collect();
     let sort = cv.sort;
-    let color_key = |a: &Annotation| {
-        a.color.map(|c| format!("{:02X}{:02X}{:02X}", (c[0] * 255.0) as u8, (c[1] * 255.0) as u8, (c[2] * 255.0) as u8)).unwrap_or_default()
-    };
     match sort {
         SortBy::Page => {}
         SortBy::Author => roots.sort_by_key(|a| a.author.clone().unwrap_or_default().to_lowercase()),
@@ -460,7 +469,15 @@ pub(crate) fn header_controls(ui: &mut egui::Ui, info: &DocInfo, view: &mut DocV
         info.annotations.iter().filter(|a| a.in_reply_to.is_none()).map(|a| a.author.clone().unwrap_or_default()).collect();
     authors.sort();
     authors.dedup();
-    let active = !(cv.hidden_types.is_empty() && cv.hidden_authors.is_empty() && cv.hidden_statuses.is_empty());
+    let mut colors: Vec<(String, Option<[f32; 3]>)> =
+        info.annotations.iter().filter(|a| a.in_reply_to.is_none()).map(|a| (color_key(a), a.color)).collect();
+    colors.sort_by(|a, b| a.0.cmp(&b.0));
+    colors.dedup_by(|a, b| a.0 == b.0);
+    let active = !(cv.hidden_types.is_empty()
+        && cv.hidden_authors.is_empty()
+        && cv.hidden_statuses.is_empty()
+        && cv.hidden_colors.is_empty()
+        && cv.hidden_checks.is_empty());
     let more = icons::button(ui, "ellipsis", 26.0, false, "More options");
     egui::Popup::menu(&more).show(|ui| {
         ui.set_min_width(220.0);
@@ -513,10 +530,37 @@ pub(crate) fn header_controls(ui: &mut egui::Ui, info: &DocInfo, view: &mut DocV
         for s in ["None", "Accepted", "Rejected", "Cancelled", "Completed"] {
             toggle(ui, &mut cv.hidden_statuses, s, s);
         }
+        ui.separator();
+        ui.label(egui::RichText::new("Colour").small());
+        for (key, c) in &colors {
+            ui.horizontal(|ui| {
+                let name = crate::comments::SWATCHES
+                    .iter()
+                    .find(|(_, s)| c.is_some_and(|c| (0..3).all(|i| (s[i] as f32 - c[i]).abs() < 0.02)))
+                    .map(|(n, _)| n.to_string())
+                    .unwrap_or_else(|| if key.is_empty() { "No colour".into() } else { format!("#{key}") });
+                toggle(ui, &mut cv.hidden_colors, key, &name);
+                if let Some(c) = c {
+                    let (r, _) = ui.allocate_exact_size(vec2(12.0, 12.0), Sense::hover());
+                    ui.painter().rect_filled(
+                        r,
+                        CornerRadius::same(2),
+                        Color32::from_rgb((c[0] * 255.0) as u8, (c[1] * 255.0) as u8, (c[2] * 255.0) as u8),
+                    );
+                }
+            });
+        }
+        ui.separator();
+        ui.label(egui::RichText::new("Checkmark").small());
+        for s in ["Checked", "Unchecked"] {
+            toggle(ui, &mut cv.hidden_checks, s, s);
+        }
         if active && ui.button("Show all").clicked() {
             cv.hidden_types.clear();
             cv.hidden_authors.clear();
             cv.hidden_statuses.clear();
+            cv.hidden_colors.clear();
+            cv.hidden_checks.clear();
         }
     });
     command

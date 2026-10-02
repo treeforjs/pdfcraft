@@ -3875,11 +3875,11 @@ title = "Filter comments (type, author, status, colour, checkmark)"
 area = "E"
 tier = "P0"
 milestone = "M5"
-status = "partial"
+status = "shipped"
 commands = ["comment.list"]
 tools = ["comment_list"]
-evidence = ["crates/ui-egui/tests/comments.rs::the_panel_filters_and_sorts"]
-notes = "type, author and status; colour and checkmark filters not yet"
+evidence = ["crates/ui-egui/tests/comments.rs::the_panel_filters_and_sorts", "crates/ui-egui/tests/comments.rs::the_panel_filters_by_colour_and_checkmark"]
+notes = "type, author, status, colour and checkmark"
 
 [[feature]]
 id = "comment.sort-comments"
@@ -6691,11 +6691,11 @@ title = "Create PDF from the clipboard"
 area = "J"
 tier = "P0"
 milestone = "M10"
-status = "planned"
-commands = []
+status = "shipped"
+commands = ["create.clipboard"]
 tools = []
-evidence = []
-notes = ""
+evidence = ["crates/ui-egui/tests/create.rs::clipboard_images_and_text_become_new_pdfs"]
+notes = "an image (one page at its size) or text; headless tools read files instead"
 
 [[feature]]
 id = "create.from-screenshot"

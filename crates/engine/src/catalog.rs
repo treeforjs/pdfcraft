@@ -145,7 +145,7 @@ pub static TOOL_GROUPS: &[ToolGroup] = &[
                 item("Single file", "file-input", "create.file", Ready),
                 item("Multiple files", "files", "create.multiple", Planned("M10")),
                 item("Images", "image", "create.images", Ready),
-                item("Clipboard", "copy-plus", "create.clipboard", Planned("M10")),
+                item("Clipboard", "copy-plus", "create.clipboard", Ready),
                 item("Blank page", "file-plus-2", "create.blank", Ready),
             ],
         }],

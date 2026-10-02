@@ -22,6 +22,7 @@ pub mod marks {
 }
 mod content_ui;
 mod link_ui;
+pub use create_ui::Clip;
 pub use link_ui::LinkDraft;
 mod dialogs;
 mod editing;

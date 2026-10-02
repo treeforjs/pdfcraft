@@ -388,3 +388,39 @@ fn polygons_clouds_connected_lines_callouts_and_inserted_text() {
     assert_eq!(caret.contents.as_deref(), Some("very"));
     assert_eq!(h.state().quick_tool, QuickTool::Select);
 }
+
+#[test]
+fn the_panel_filters_by_colour_and_checkmark() {
+    let mut h = harness(|app| {
+        app.set_option("panel", "comments").unwrap();
+        app.set_option("quick", "square").unwrap();
+    });
+    drag_pt(&mut h, (40.0, 100.0), (140.0, 40.0));
+    h.state_mut().set_option("quick", "circle").unwrap();
+    drag_pt(&mut h, (160.0, 100.0), (260.0, 40.0));
+    h.state_mut().set_option("quick", "select").unwrap();
+    h.state_mut().apply_edit(printcraft_engine::Edit::StyleAnnotation {
+        page: 0,
+        index: 1,
+        color: Some([0.0, 0.47, 0.84]),
+        opacity: None,
+        width: None,
+    });
+    h.state_mut().apply_edit(printcraft_engine::Edit::MarkAnnotation { page: 0, index: 0, marked: true, author: "Tester".into() });
+    h.run_steps(2);
+    let cards = |h: &Harness<'static, PrintCraftApp>| (h.query_all_by_label("Rectangle").count(), h.query_all_by_label("Oval").count());
+    // The filter menu lists the colours by name (counted with it open: it names the types too).
+    h.get_by_label("Filter comments").click();
+    h.run_steps(2);
+    let before = cards(&h);
+    h.get_by_label("Blue").click();
+    h.run_steps(2);
+    assert_eq!(h.state().views[0].comments.hidden_colors, vec!["0077D6".to_string()]);
+    assert_eq!(cards(&h).1, before.1 - 1, "the blue oval is filtered out");
+    h.get_by_label("Checked").click();
+    h.run_steps(2);
+    assert_eq!(cards(&h).0, before.0 - 1, "the checked rectangle is filtered out");
+    h.get_by_label("Show all").click();
+    h.run_steps(2);
+    assert_eq!(cards(&h), before);
+}

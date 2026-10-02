@@ -44,3 +44,18 @@ fn reduce_file_size_writes_a_compact_copy() {
     assert!(bytes.starts_with(b"%PDF-"));
     assert!(app.session.docs()[0].dirty, "the open document is unchanged");
 }
+
+#[test]
+fn clipboard_images_and_text_become_new_pdfs() {
+    use printcraft_ui_egui::Clip;
+    let mut app = PrintCraftApp::new();
+    app.create_from_clip(Clip::Image { width: 40, height: 20, rgba: [10u8, 20, 30, 255].repeat(40 * 20) }).unwrap();
+    app.create_from_clip(Clip::Text("Pasted\nlines".into())).unwrap();
+    let docs = app.session.docs();
+    assert_eq!(docs.len(), 2);
+    assert_eq!(docs[0].name, "Clipboard.pdf");
+    // The image page takes the image's size (one pixel per point at 72 dpi).
+    let p = &docs[0].info.pages[0];
+    assert!((p.width / p.height - 2.0).abs() < 0.01, "{} × {}", p.width, p.height);
+    assert!(app.create_from_clip(Clip::Image { width: 4, height: 4, rgba: vec![0; 3] }).is_err(), "malformed images are refused");
+}

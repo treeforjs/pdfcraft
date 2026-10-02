@@ -18,6 +18,43 @@ fn is_image(bytes: &[u8]) -> bool {
         || (bytes.starts_with(b"BM") && bytes.get(14..18).is_some_and(|h| matches!(u32::from_le_bytes([h[0], h[1], h[2], h[3]]), 12 | 40 | 52 | 56 | 108 | 124)))
 }
 
+/// What Create ▸ Clipboard found on the clipboard.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Clip {
+    /// RGBA pixels, row by row.
+    Image {
+        width: usize,
+        height: usize,
+        rgba: Vec<u8>,
+    },
+    Text(String),
+}
+
+/// An image on the system clipboard, or else its text.
+#[cfg(not(target_arch = "wasm32"))]
+fn read_clipboard() -> Option<Clip> {
+    let mut cb = arboard::Clipboard::new().ok()?;
+    if let Ok(img) = cb.get_image() {
+        return Some(Clip::Image { width: img.width, height: img.height, rgba: img.bytes.into_owned() });
+    }
+    cb.get_text().ok().filter(|t| !t.trim().is_empty()).map(Clip::Text)
+}
+
+fn png_from_rgba(width: usize, height: usize, rgba: &[u8]) -> Result<Vec<u8>, String> {
+    let (w, h) = (u32::try_from(width).map_err(|e| e.to_string())?, u32::try_from(height).map_err(|e| e.to_string())?);
+    if w == 0 || h == 0 || rgba.len() != width * height * 4 {
+        return Err("the clipboard image is empty or malformed".into());
+    }
+    let mut out = Vec::new();
+    let mut enc = png::Encoder::new(&mut out, w, h);
+    enc.set_color(png::ColorType::Rgba);
+    enc.set_depth(png::BitDepth::Eight);
+    let mut writer = enc.write_header().map_err(|e| e.to_string())?;
+    writer.write_image_data(rgba).map_err(|e| e.to_string())?;
+    writer.finish().map_err(|e| e.to_string())?;
+    Ok(out)
+}
+
 fn stem(name: &str) -> &str {
     name.rsplit_once('.').map_or(name, |(s, _)| s)
 }
@@ -48,6 +85,35 @@ impl PrintCraftApp {
         self.views.push(crate::DocView::new(id, info));
         self.active = Some(self.views.len() - 1);
         Ok(())
+    }
+
+    /// Create ▸ Clipboard: a new document from the image (one page, its size) or the text on
+    /// the clipboard, as Acrobat does.
+    pub(crate) fn create_from_clipboard(&mut self) {
+        #[cfg(not(target_arch = "wasm32"))]
+        let clip = read_clipboard();
+        #[cfg(target_arch = "wasm32")]
+        let clip: Option<Clip> = None;
+        match clip {
+            Some(c) => {
+                if let Err(e) = self.create_from_clip(c) {
+                    self.notify(format!("Couldn't create a PDF: {e}"));
+                }
+            }
+            None => self.notify("The clipboard has no image or text"),
+        }
+    }
+
+    /// Create a new document from clipboard contents.
+    pub fn create_from_clip(&mut self, clip: Clip) -> Result<(), String> {
+        let created = match clip {
+            Clip::Image { width, height, rgba } => {
+                let png = png_from_rgba(width, height, &rgba)?;
+                self.session.create_from_images(&[("Clipboard.png".into(), png)])
+            }
+            Clip::Text(t) => self.session.create_from_text("Clipboard", &t),
+        };
+        self.open_created_bytes("Clipboard.pdf", created.map_err(|e| e.to_string()))
     }
 
     /// Create ▸ Blank page: a new untitled US Letter document.

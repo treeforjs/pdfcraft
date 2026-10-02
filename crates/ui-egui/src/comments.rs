@@ -322,6 +322,9 @@ pub struct CommentView {
     pub hidden_types: Vec<String>,
     pub hidden_authors: Vec<String>,
     pub hidden_statuses: Vec<String>,
+    /// Colours (`RRGGBB`, empty for none) and checkmark states ("Checked", "Unchecked") hidden.
+    pub hidden_colors: Vec<String>,
+    pub hidden_checks: Vec<String>,
     /// How the panel orders comments.
     pub sort: SortBy,
     /// Comment Properties was asked for from the panel: (page, index).
