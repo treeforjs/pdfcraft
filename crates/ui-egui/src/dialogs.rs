@@ -46,6 +46,7 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
     let mut revert_now = false;
     let mut summarize_now = false;
     let mut optimize_now = false;
+    let mut duplicate_now: Option<Edit> = None;
     let mut replace_now = false;
     let t = Tokens::get(ctx);
     let mut close = false;
@@ -595,6 +596,37 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
                 });
                 return;
             }
+            Dialog::DuplicateField => {
+                let n = app.active_ids().and_then(|(_, id)| app.session.get(id)).map_or(1, |d| d.info.pages.len());
+                let Some(d) = app.duplicate_draft.as_mut() else {
+                    close = true;
+                    return;
+                };
+                ui.label(egui::RichText::new("Duplicate Field").font(theme::semibold(18.0)));
+                ui.add_space(8.0);
+                ui.label(format!("Duplicate \"{}\" onto:", d.name));
+                ui.radio_value(&mut d.all, true, "All pages");
+                ui.horizontal(|ui| {
+                    ui.radio_value(&mut d.all, false, "From");
+                    ui.add_enabled(!d.all, egui::DragValue::new(&mut d.from).range(1..=n));
+                    ui.label("to");
+                    ui.add_enabled(!d.all, egui::DragValue::new(&mut d.to).range(1..=n));
+                    ui.label(format!("of {n}"));
+                });
+                d.to = d.to.max(d.from);
+                ui.add_space(12.0);
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if widgets::pill_button(ui, "OK", true).clicked() {
+                        let pages: Vec<usize> = if d.all { (0..n).collect() } else { (d.from - 1..d.to.min(n)).collect() };
+                        duplicate_now = Some(Edit::DuplicateField { name: d.name.clone(), pages });
+                        close = true;
+                    }
+                    if widgets::pill_button(ui, "Cancel", false).clicked() {
+                        close = true;
+                    }
+                });
+                return;
+            }
             Dialog::Optimize => {
                 let (ok, cancel) = crate::optimize_ui::body(ui, &mut app.optimize_draft, &t);
                 optimize_now = ok;
@@ -951,6 +983,10 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
     }
     if optimize_now {
         app.optimize_with_draft();
+    }
+    if let Some(e) = duplicate_now {
+        app.duplicate_draft = None;
+        app.apply_edit(e);
     }
     if extract_now {
         app.extract_selection();

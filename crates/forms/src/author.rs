@@ -831,3 +831,92 @@ pub fn delete_field(doc: &mut Document, name: &str) -> Result<(), FormError> {
     }
     Ok(())
 }
+
+/// Widget-only keys: they stay with each widget when a merged field is split.
+const WIDGET_KEYS: [&[u8]; 12] = [b"Type", b"Subtype", b"Rect", b"P", b"AP", b"AS", b"MK", b"F", b"BS", b"Border", b"H", b"StructParent"];
+
+/// Duplicate a field onto other pages (Acrobat: right-click a field ▸ Duplicate): each page
+/// gets a widget at the same place, belonging to the same field, so they share one value.
+/// A field that is its own widget is first split into a field and a widget kid. Returns how
+/// many widgets were added (pages that already have one are skipped).
+pub fn duplicate_field(doc: &mut Document, name: &str, pages: &[usize]) -> Result<usize, FormError> {
+    let f = fields(doc).into_iter().find(|f| f.name == name).ok_or_else(|| FormError::NoSuchField(name.into()))?;
+    let model = f.widgets.first().cloned().ok_or_else(|| FormError::Invalid(format!("{name} has no widget")))?;
+    let refs = page_refs(doc);
+    for p in pages {
+        if *p >= refs.len() {
+            return invalid(format!("page {} does not exist", p + 1));
+        }
+    }
+    let have: std::collections::HashSet<usize> = f.widgets.iter().filter_map(|w| w.page).collect();
+    let targets: Vec<usize> = pages.iter().copied().filter(|p| !have.contains(p)).collect();
+    if targets.is_empty() {
+        return Ok(0);
+    }
+    // A merged field/widget becomes a field with one widget kid.
+    let mut model_ref = model.obj;
+    if model.obj == f.obj {
+        let d = doc.get(f.obj).as_dict().cloned().unwrap_or_default();
+        let mut kid = Dict::new();
+        for k in WIDGET_KEYS {
+            if let Some(v) = d.get(k) {
+                kid.set(k.to_vec(), v.clone());
+            }
+        }
+        kid.set(b"Parent".to_vec(), Object::Ref(f.obj));
+        let kr = doc.add(Object::Dict(kid));
+        doc.update_dict(f.obj, |d| {
+            for k in WIDGET_KEYS {
+                d.remove(k);
+            }
+            d.set(b"Kids".to_vec(), Object::Array(vec![Object::Ref(kr)]));
+        })?;
+        // The page lists the widget now, not the field.
+        if let Some(p) = model.page {
+            let pr = refs[p];
+            let annots = doc.get(pr).as_dict().and_then(|d| d.get(b"Annots").cloned());
+            let swap =
+                |a: Vec<Object>| -> Vec<Object> { a.into_iter().map(|o| if o.as_ref() == Some(f.obj) { Object::Ref(kr) } else { o }).collect() };
+            match annots {
+                Some(Object::Ref(ar)) => {
+                    let a = doc.get(ar).as_array().cloned().unwrap_or_default();
+                    doc.set(ar, Object::Array(swap(a)));
+                }
+                Some(Object::Array(a)) => doc.update_dict(pr, |d| d.set(b"Annots".to_vec(), Object::Array(swap(a))))?,
+                _ => {}
+            }
+        }
+        model_ref = kr;
+    }
+    let template = doc.get(model_ref).as_dict().cloned().unwrap_or_default();
+    let mut added = Vec::new();
+    for p in &targets {
+        let pr = refs[*p];
+        let mut w = template.clone();
+        w.set(b"P".to_vec(), Object::Ref(pr));
+        w.set(b"Parent".to_vec(), Object::Ref(f.obj));
+        w.remove(b"StructParent");
+        let wr = doc.add(Object::Dict(w));
+        let annots = doc.get(pr).as_dict().and_then(|d| d.get(b"Annots").cloned());
+        match annots {
+            Some(Object::Ref(ar)) => {
+                let mut a = doc.get(ar).as_array().cloned().unwrap_or_default();
+                a.push(Object::Ref(wr));
+                doc.set(ar, Object::Array(a));
+            }
+            other => {
+                let mut a = other.and_then(|o| o.as_array().cloned()).unwrap_or_default();
+                a.push(Object::Ref(wr));
+                doc.update_dict(pr, |d| d.set(b"Annots".to_vec(), Object::Array(a)))?;
+            }
+        }
+        added.push(wr);
+    }
+    doc.update_dict(f.obj, |d| {
+        let mut kids = d.get(b"Kids").and_then(|k| k.as_array().cloned()).unwrap_or_default();
+        kids.extend(added.iter().map(|r| Object::Ref(*r)));
+        d.set(b"Kids".to_vec(), Object::Array(kids));
+    })?;
+    redraw_field(doc, name)?;
+    Ok(added.len())
+}

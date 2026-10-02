@@ -609,6 +609,11 @@ pub enum Edit {
         props: Box<FieldProps>,
     },
     /// Delete a field and all its widgets.
+    /// Duplicate a field onto other pages (same field, shared value).
+    DuplicateField {
+        name: String,
+        pages: Vec<usize>,
+    },
     DeleteField {
         name: String,
     },
@@ -778,6 +783,7 @@ impl Edit {
             Edit::AddField { .. } => "Add field".into(),
             Edit::SetFieldProps { .. } => "Change field properties".into(),
             Edit::DeleteField { .. } => "Delete field".into(),
+            Edit::DuplicateField { .. } => "Duplicate field".into(),
             Edit::SetTabOrder { .. } | Edit::MoveInTabOrder { .. } => "Set tab order".into(),
             Edit::SetInitialView(_) => "Change initial view".into(),
             Edit::AddHeaderFooter { replace: false, .. } => "Add header & footer".into(),
@@ -932,6 +938,7 @@ fn check_permission(edit: &Edit, p: &printcraft_cos::Permissions) -> Result<(), 
         | Edit::Sanitize
         | Edit::SetFieldProps { .. }
         | Edit::DeleteField { .. }
+        | Edit::DuplicateField { .. }
         | Edit::SetTabOrder { .. }
         | Edit::MoveInTabOrder { .. }
         | Edit::SetInitialView(_)
@@ -1078,6 +1085,11 @@ fn run_edit(doc: &mut printcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -
         }
         Edit::SetFieldProps { name, props } => {
             printcraft_forms::set_props(doc, name, props)?;
+        }
+        Edit::DuplicateField { name, pages } => {
+            if printcraft_forms::duplicate_field(doc, name, pages)? == 0 {
+                return Err(EditError::Form(printcraft_forms::FormError::Invalid(format!("{name} is already on those pages"))));
+            }
         }
         Edit::DeleteField { name } => printcraft_forms::delete_field(doc, name)?,
         Edit::SetTabOrder { pages, order } => printcraft_forms::set_tab_order(doc, pages, *order)?,

@@ -16,7 +16,7 @@ use printcraft_cos::{Dict, Document, ObjRef, Object, PdfString};
 pub mod af;
 pub mod appearance;
 mod author;
-pub use author::{BorderStyle, FieldFont, FieldProps, Look, NewField, add_field, delete_field, look, redraw_field, set_props};
+pub use author::{BorderStyle, FieldFont, FieldProps, Look, NewField, add_field, delete_field, duplicate_field, look, redraw_field, set_props};
 
 #[cfg(test)]
 mod tests;

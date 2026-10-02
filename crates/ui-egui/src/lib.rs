@@ -167,6 +167,8 @@ pub enum Dialog {
     Sign,
     /// Optimize PDF ▸ Advanced optimization.
     Optimize,
+    /// Prepare a form ▸ right-click a field ▸ Duplicate.
+    DuplicateField,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -176,6 +178,15 @@ pub enum PropsTab {
     Security,
     Fonts,
     Advanced,
+}
+
+/// Duplicate Field: the field and the pages (all, or a range, 1-based).
+#[derive(Clone, Debug, PartialEq)]
+pub struct DuplicateDraft {
+    pub name: String,
+    pub all: bool,
+    pub from: usize,
+    pub to: usize,
 }
 
 /// Copied pages: their document's name and bytes (as it was when copied) and the pages.
@@ -266,6 +277,8 @@ pub struct PrintCraftApp {
     pub system_clipboard: bool,
     /// Attach file: the file to attach instead of asking (tests, automation).
     pub attach_override: Option<(String, Vec<u8>)>,
+    /// Duplicate Field: which field and onto which pages.
+    pub duplicate_draft: Option<DuplicateDraft>,
     /// Where autosaves go (`None`: autosave off, e.g. on the web and in tests).
     pub recovery: Option<RecoveryStore>,
     /// Entries left by a previous session, offered in the Recovery dialog.
@@ -374,6 +387,7 @@ impl PrintCraftApp {
             last_snapshot: None,
             system_clipboard: true,
             attach_override: None,
+            duplicate_draft: None,
             recovery: None,
             recoverable: Vec::new(),
             recovery_keys: Default::default(),

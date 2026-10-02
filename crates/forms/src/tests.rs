@@ -562,3 +562,35 @@ fn ordering_tabs_manually() {
     let doc = reopen(&doc);
     assert_eq!(order(&doc), "CAB", "saved");
 }
+
+#[test]
+fn duplicating_a_field_across_pages_shares_its_value() {
+    let mut doc = one_page();
+    // A second and third page.
+    let pages = doc.get(doc.root().unwrap()).as_dict().unwrap().reference(b"Pages").unwrap();
+    for _ in 0..2 {
+        let mut p = printcraft_cos::Dict::new();
+        p.set(b"Type".to_vec(), Object::name("Page"));
+        p.set(b"Parent".to_vec(), Object::Ref(pages));
+        p.set(b"MediaBox".to_vec(), Object::Array(vec![0.into(), 0.into(), 600.into(), 800.into()]));
+        let r = doc.add(p);
+        doc.update_dict(pages, |d| {
+            let mut kids = d.get(b"Kids").unwrap().as_array().unwrap().clone();
+            kids.push(Object::Ref(r));
+            d.set(b"Count".to_vec(), Object::Int(kids.len() as i64));
+            d.set(b"Kids".to_vec(), Object::Array(kids));
+        })
+        .unwrap();
+    }
+    let name = add_field(&mut doc, 0, [50.0, 750.0, 250.0, 770.0], &NewField::Text { multiline: false }, Some("Initials")).unwrap();
+    assert_eq!(duplicate_field(&mut doc, &name, &[0, 1, 2]).unwrap(), 2, "page 1 already has it");
+    let f = fields(&doc).into_iter().find(|f| f.name == name).unwrap();
+    assert_eq!(f.widgets.iter().filter_map(|w| w.page).collect::<Vec<_>>(), vec![0, 1, 2]);
+    assert!(f.widgets.iter().all(|w| w.rect == [50.0, 750.0, 250.0, 770.0]));
+    set_value(&mut doc, &name, &FieldValue::Text("AL".into())).unwrap();
+    let doc = reopen(&doc);
+    let f = fields(&doc).into_iter().find(|f| f.name == name).unwrap();
+    assert_eq!((f.value.clone(), f.widgets.len()), (vec!["AL".to_string()], 3), "one field, one value, three widgets");
+    assert_eq!(fields(&doc).len(), 1);
+    assert!(duplicate_field(&mut doc.clone(), &name, &[7]).is_err());
+}

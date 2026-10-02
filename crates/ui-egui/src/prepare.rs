@@ -260,6 +260,14 @@ pub(crate) fn page_input(
         return out;
     }
 
+    // Right-click a field: select it (the context menu acts on it).
+    if resp.secondary_clicked()
+        && let Some((f, wi)) = form.iter().find_map(|f| {
+            f.widgets.iter().enumerate().find(|(_, w)| w.page == Some(page) && screen_rect(xf, info, page, w.rect).contains(p)).map(|(i, _)| (f, i))
+        })
+    {
+        prep.selected = Some((f.name.clone(), wi));
+    }
     // The Select tool: corner handles of the selection, then fields.
     let selected_rect = prep
         .selected

@@ -217,3 +217,35 @@ fn the_fields_panel_orders_tabs_manually() {
     assert_eq!(after[0], second, "{before:?} → {after:?}");
     assert_eq!(h.state().session.get(h.state().views[0].id).unwrap().can_undo(), Some("Set tab order"));
 }
+
+#[test]
+fn duplicating_a_field_onto_every_page() {
+    let mut h = harness();
+    h.state_mut().apply_edit(printcraft_engine::Edit::InsertBlankPage { at: 1, width: 300.0, height: 400.0 });
+    h.state_mut().execute("form.prepare");
+    h.run_steps(3);
+    let (n, p) = {
+        let s = h.state();
+        let doc = s.session.get(s.views[0].id).unwrap();
+        let f = doc.form.iter().find(|f| f.name == "city").unwrap();
+        (doc.info.pages.len(), printcraft_ui_egui::forms_ui::field_screen_rect(&s.views[0], &doc.info, f, 0).expect("on screen").center())
+    };
+    assert!(n >= 2, "the fixture has {n} pages");
+    h.hover_at(p);
+    h.run_steps(1);
+    h.event(egui::Event::PointerButton { pos: p, button: egui::PointerButton::Secondary, pressed: true, modifiers: Default::default() });
+    h.event(egui::Event::PointerButton { pos: p, button: egui::PointerButton::Secondary, pressed: false, modifiers: Default::default() });
+    h.run_steps(3);
+    h.get_by_label("Duplicate…").click();
+    h.run_steps(2);
+    h.get_by_label("Duplicate Field");
+    h.get_by_label("OK").click();
+    h.run_steps(3);
+    let s = h.state();
+    let doc = s.session.get(s.views[0].id).unwrap();
+    let f = doc.form.iter().find(|f| f.name == "city").unwrap();
+    let mut pages: Vec<usize> = f.widgets.iter().filter_map(|w| w.page).collect();
+    pages.sort();
+    assert_eq!(pages, (0..n).collect::<Vec<_>>());
+    assert_eq!(doc.can_undo(), Some("Duplicate field"));
+}

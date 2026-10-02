@@ -949,6 +949,7 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
     let mut hover_text: Option<(Pos2, String)> = None;
     let mut clicked_link: Option<LinkTarget> = None;
     let mut canvas_action: Option<comments::CanvasAction> = None;
+    let mut field_menu: Option<FieldMenu> = None;
     let mut open_props: Option<(usize, usize)> = None;
     let mut field_props = false;
     let mut field_placed = false;
@@ -1317,6 +1318,24 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
             }
         }
         resp.context_menu(|ui| {
+            // Preparing a form: the selected field's menu.
+            if preparing && let Some((name, _)) = view.prepare.selected.clone() {
+                if ui.button("Properties…").clicked() {
+                    field_menu = Some(FieldMenu::Properties);
+                    ui.close();
+                }
+                if ui.add_enabled(can_modify, egui::Button::new("Duplicate…")).clicked() {
+                    field_menu = Some(FieldMenu::Duplicate(name.clone()));
+                    ui.close();
+                }
+                ui.separator();
+                if ui.add_enabled(can_modify, egui::Button::new("Delete")).clicked() {
+                    view.prepare.selected = None;
+                    view.pending_edit = Some(printcraft_engine::Edit::DeleteField { name });
+                    ui.close();
+                }
+                return;
+            }
             canvas_action = comments::context_menu(ui, view, info, prefs, allowed);
         });
         (wanted, visible_now)
@@ -1411,6 +1430,9 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
     if field_placed {
         tool = QuickTool::Select;
     }
+    if matches!(field_menu, Some(FieldMenu::Properties)) {
+        field_props = true;
+    }
     let field_props = field_props.then(|| view.prepare.selected.clone()).flatten();
     match canvas_action {
         Some(comments::CanvasAction::Edit(e)) => view.pending_edit = Some(*e),
@@ -1461,6 +1483,11 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
     }
     if let Some((name, w)) = field_props {
         app.open_field_props(&name, w);
+    }
+    if let Some(FieldMenu::Duplicate(name)) = field_menu {
+        let pages = app.session.get(app.views[index].id).map_or(1, |d| d.info.pages.len());
+        app.duplicate_draft = Some(crate::DuplicateDraft { name, all: true, from: 1, to: pages });
+        app.dialog = Some(crate::Dialog::DuplicateField);
     }
     if let Some((page, rect)) = app.views[index].links.open_new.take() {
         app.open_link_props(page, Some(rect), None);
@@ -1614,6 +1641,12 @@ fn find_bar(view: &mut DocView, pages: usize, area: Rect, ui: &mut egui::Ui, t: 
     if let Some(forward) = step {
         view.find_step(forward);
     }
+}
+
+/// The prepare-mode field menu's choices.
+enum FieldMenu {
+    Properties,
+    Duplicate(String),
 }
 
 /// What the notice bar's buttons ask for.
