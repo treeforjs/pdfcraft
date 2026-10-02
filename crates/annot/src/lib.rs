@@ -15,6 +15,7 @@
 use printcraft_cos::{Dict, Document, ObjRef, Object, PdfString};
 
 pub mod appearance;
+pub mod links;
 
 #[cfg(test)]
 mod tests;

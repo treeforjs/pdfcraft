@@ -852,3 +852,26 @@ fn organizing_with_filters_bookmark_splits_and_extract_options() {
     assert_eq!(e["original"]["pages"], 1);
     assert!(matches!(a.call("page_extract", &json!({ "doc": doc, "pages": [1], "separate": true })), Err(ToolError::InvalidArgs(_))));
 }
+
+#[test]
+fn links_through_tools() {
+    let dir = workdir("links");
+    std::fs::write(dir.join("notes.txt"), "Docs at https://example.org/docs and www.rust-lang.org").unwrap();
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_create", json!({ "from": "text", "path": "notes.txt" }))["doc"].as_u64().unwrap();
+    let r = ok(&mut a, "links_from_urls", json!({ "doc": doc }));
+    assert_eq!(r["created"], json!(["https://example.org/docs", "http://www.rust-lang.org"]));
+    ok(&mut a, "link_add", json!({ "doc": doc, "page": 1, "rect": [72, 300, 200, 320], "to_page": 1, "visible": true, "color": "red" }));
+    let list = ok(&mut a, "link_list", json!({ "doc": doc }));
+    assert_eq!(list["count"], 3);
+    let added = list["links"].as_array().unwrap().iter().find(|l| l["to_page"] == 1).unwrap().clone();
+    assert_eq!(added["rect"], json!([72.0, 300.0, 200.0, 320.0]));
+    ok(&mut a, "link_edit", json!({ "doc": doc, "page": 1, "index": added["index"], "url": "https://printcraft.dev" }));
+    let list = ok(&mut a, "link_list", json!({ "doc": doc }));
+    assert!(list["links"].as_array().unwrap().iter().any(|l| l["url"] == "https://printcraft.dev"));
+    ok(&mut a, "link_delete", json!({ "doc": doc, "page": 1, "index": added["index"] }));
+    let r = ok(&mut a, "links_remove", json!({ "doc": doc }));
+    assert_eq!(r["removed"], 2);
+    assert_eq!(ok(&mut a, "link_list", json!({ "doc": doc }))["count"], 0);
+    assert!(matches!(a.call("link_add", &json!({ "doc": doc, "page": 1, "rect": [0, 0, 50, 20] })), Err(ToolError::InvalidArgs(_))));
+}

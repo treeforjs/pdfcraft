@@ -372,3 +372,39 @@ fn stamps_draw_their_label_and_by_line() {
     assert_eq!(StampKind::from_name(b"Approved"), Some(StampKind::Approved), "standard names");
     assert!(StampKind::ALL.iter().all(|k| k.size().0 >= 80.0));
 }
+
+#[test]
+fn links_are_added_edited_listed_and_removed() {
+    use crate::links::{self, Highlight, LinkAction, LinkStyle};
+    let mut doc = fixture();
+    let before = links::list(&doc).len();
+    let i = links::add(&mut doc, 0, [10.0, 10.0, 110.0, 30.0], &LinkAction::Uri("https://example.org".into()), &LinkStyle::default()).unwrap();
+    let style = LinkStyle { visible: true, color: [1.0, 0.0, 0.0], width: 2.0, dashed: true, underline: false, highlight: Highlight::Outline };
+    links::add(&mut doc, 1, [10.0, 10.0, 60.0, 30.0], &LinkAction::Page(0), &style).unwrap();
+    let doc = reopen(&doc);
+    let all = links::list(&doc);
+    assert_eq!(all.len(), before + 2);
+    let web = all.iter().find(|l| l.page == 0 && l.index == i).unwrap();
+    assert_eq!(
+        (web.action.clone(), web.style.visible, web.style.highlight),
+        (LinkAction::Uri("https://example.org".into()), false, Highlight::Invert)
+    );
+    let page = all.iter().find(|l| l.page == 1 && l.action == LinkAction::Page(0)).unwrap().clone();
+    assert_eq!(page.style, style);
+    let mut doc = doc;
+    links::set(&mut doc, 1, page.index, Some([0.0, 0.0, 50.0, 20.0]), Some(&LinkAction::Uri("mailto:ada@example.org".into())), None).unwrap();
+    let changed = links::list(&doc).into_iter().find(|l| l.page == 1 && l.index == page.index).unwrap();
+    assert_eq!((changed.rect, changed.action), ([0.0, 0.0, 50.0, 20.0], LinkAction::Uri("mailto:ada@example.org".into())));
+    links::delete(&mut doc, 1, page.index).unwrap();
+    assert!(links::delete(&mut doc, 0, 999).is_err(), "no such annotation");
+    let n = links::remove_all(&mut doc, None).unwrap();
+    assert!(n >= 1 && links::list(&doc).is_empty());
+    assert!(links::add(&mut doc, 0, [0.0, 0.0, 1.0, 1.0], &LinkAction::Page(0), &LinkStyle::default()).is_err(), "too small");
+}
+
+#[test]
+fn urls_are_found_in_text() {
+    let t: Vec<char> = "See https://example.org/a?b=1, or www.rust-lang.org. Not a.b or http:/x.".chars().collect();
+    let found: Vec<String> = crate::links::find_urls(&t).into_iter().map(|(_, u)| u).collect();
+    assert_eq!(found, ["https://example.org/a?b=1", "http://www.rust-lang.org"]);
+}

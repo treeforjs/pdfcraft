@@ -410,6 +410,39 @@ pub fn tools() -> Vec<ToolDef> {
         t("content_delete", "Delete added content", "Delete an added item (page, index from content_list). Undoable.")
             .destructive()
             .with(schema(json!({ "doc": doc(), "page": { "type": "integer", "minimum": 1 }, "index": { "type": "integer", "minimum": 1 } }), &["doc", "page", "index"])),
+        t("link_list", "List links", "Every link: page, 1-based index (for link_edit/link_delete), rect (points from the top-left of the page), and where it goes (url or to_page).")
+            .ro()
+            .with(schema(json!({ "doc": doc() }), &["doc"])),
+        t("link_add", "Add a link", "Add a link over rect on page that opens url or goes to to_page. Appearance: visible (rectangle), color, width 1-3, highlight none/invert/outline/inset. Undoable.")
+            .cmd("edit.link")
+            .with(schema(
+                json!({
+                    "doc": doc(), "page": { "type": "integer", "minimum": 1 }, "rect": { "type": "array", "items": { "type": "number" }, "minItems": 4, "maxItems": 4 },
+                    "url": { "type": "string" }, "to_page": { "type": "integer", "minimum": 1 },
+                    "visible": { "type": "boolean" }, "color": { "type": "string" }, "width": { "type": "number" }, "highlight": { "type": "string", "enum": ["none", "invert", "outline", "inset"] },
+                }),
+                &["doc", "page", "rect"],
+            )),
+        t("link_edit", "Edit a link", "Change a link's rect, destination (url or to_page) or appearance. Undoable.")
+            .with(schema(
+                json!({
+                    "doc": doc(), "page": { "type": "integer", "minimum": 1 }, "index": { "type": "integer", "minimum": 1 },
+                    "rect": { "type": "array", "items": { "type": "number" }, "minItems": 4, "maxItems": 4 },
+                    "url": { "type": "string" }, "to_page": { "type": "integer", "minimum": 1 },
+                    "visible": { "type": "boolean" }, "color": { "type": "string" }, "width": { "type": "number" }, "highlight": { "type": "string", "enum": ["none", "invert", "outline", "inset"] },
+                }),
+                &["doc", "page", "index"],
+            )),
+        t("link_delete", "Delete a link", "Delete one link (page, index from link_list). Undoable.")
+            .destructive()
+            .with(schema(json!({ "doc": doc(), "page": { "type": "integer", "minimum": 1 }, "index": { "type": "integer", "minimum": 1 } }), &["doc", "page", "index"])),
+        t("links_from_urls", "Create links from URLs", "Find web addresses (http://, https://, www.) in the text of every page and make them clickable links. Returns the URLs. Undoable.")
+            .cmd("edit.links_from_urls")
+            .with(schema(json!({ "doc": doc() }), &["doc"])),
+        t("links_remove", "Remove all links", "Remove every link in the document. Undoable.")
+            .destructive()
+            .cmd("edit.remove_links")
+            .with(schema(json!({ "doc": doc() }), &["doc"])),
         t("comment_list", "List comments", "Every comment (annotation other than links, form widgets and pop-ups) with its page, index, id, type, author, text, date, rectangle, colour, review status and replies.")
             .ro()
             .with(schema(json!({ "doc": doc(), "page": { "type": "integer", "minimum": 1, "description": "Only this page." } }), &["doc"])),

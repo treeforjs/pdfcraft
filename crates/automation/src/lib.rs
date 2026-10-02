@@ -12,6 +12,7 @@
 mod comments;
 mod content;
 mod forms;
+mod links;
 #[cfg(feature = "mcp")]
 pub mod mcp;
 mod printing;
@@ -290,6 +291,12 @@ impl Automation {
             "redact_clear" => self.redact_clear(&a)?,
             "doc_hidden_info" => self.doc_hidden_info(&a)?,
             "printers" => self.printers()?,
+            "link_list" => self.link_list(&a)?,
+            "link_add" => self.link_add(&a)?,
+            "link_edit" => self.link_edit(&a)?,
+            "link_delete" => self.link_delete(&a)?,
+            "links_from_urls" => self.links_from_urls(&a)?,
+            "links_remove" => self.links_remove(&a)?,
             "content_list" => self.content_list(&a)?,
             "page_add_text" => self.page_add_text(&a)?,
             "page_add_image" => self.page_add_image(&a)?,

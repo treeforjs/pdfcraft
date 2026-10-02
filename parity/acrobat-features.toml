@@ -2115,11 +2115,11 @@ title = "Create web and page links"
 area = "C"
 tier = "P1"
 milestone = "M7"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["edit.link"]
+tools = ["link_add"]
+evidence = ["crates/ui-egui/tests/pdf_links.rs::drawing_editing_and_deleting_links", "crates/automation/tests/automation.rs::links_through_tools", "crates/annot/src/tests.rs::links_are_added_edited_listed_and_removed"]
+notes = "drag a rectangle; go to a page or open a web page"
 
 [[feature]]
 id = "edit.link-properties"
@@ -2127,11 +2127,11 @@ title = "Link appearance and properties"
 area = "C"
 tier = "P1"
 milestone = "M7"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["edit.link"]
+tools = ["link_edit"]
+evidence = ["crates/ui-egui/tests/pdf_links.rs::drawing_editing_and_deleting_links", "crates/automation/tests/automation.rs::links_through_tools", "crates/annot/src/tests.rs::links_are_added_edited_listed_and_removed"]
+notes = "visible/invisible rectangle, highlight, thickness, solid/dashed/underline, colour; action"
 
 [[feature]]
 id = "edit.links-from-urls"
@@ -2139,11 +2139,11 @@ title = "Create links from URLs in the text"
 area = "C"
 tier = "P1"
 milestone = "M7"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["edit.links_from_urls"]
+tools = ["links_from_urls"]
+evidence = ["crates/engine/src/tests.rs::links_from_urls_and_link_edits", "crates/automation/tests/automation.rs::links_through_tools", "crates/annot/src/tests.rs::urls_are_found_in_text"]
+notes = "http(s):// and www. addresses; already-linked text skipped"
 
 [[feature]]
 id = "edit.remove-all-links"
@@ -2163,11 +2163,11 @@ title = "Go-to-page-view action (with named destinations)"
 area = "C"
 tier = "P1"
 milestone = "M7"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["edit.link"]
+tools = ["link_add"]
+evidence = ["crates/annot/src/tests.rs::links_are_added_edited_listed_and_removed", "crates/ui-egui/tests/pdf_links.rs::drawing_editing_and_deleting_links"]
+notes = "go to a page (Fit view); named destinations and zoom pending"
 
 [[feature]]
 id = "edit.action-uri"
@@ -2175,10 +2175,10 @@ title = "Open-a-web-link action"
 area = "C"
 tier = "P1"
 milestone = "M7"
-status = "planned"
-commands = []
-tools = []
-evidence = []
+status = "shipped"
+commands = ["edit.link"]
+tools = ["link_add"]
+evidence = ["crates/annot/src/tests.rs::links_are_added_edited_listed_and_removed", "crates/automation/tests/automation.rs::links_through_tools"]
 notes = ""
 
 [[feature]]

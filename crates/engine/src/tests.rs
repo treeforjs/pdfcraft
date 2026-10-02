@@ -961,3 +961,45 @@ fn split_by_size_and_bookmarks_and_page_filters() {
     assert_eq!(filter_pages(info, &all, PageParity::Odd, PageOrientation::Landscape), Vec::<usize>::new());
     assert_eq!(filter_pages(info, &all, PageParity::Odd, PageOrientation::Portrait), [0, 2, 4]);
 }
+
+#[test]
+fn links_from_urls_and_link_edits() {
+    // One page whose text contains a web address.
+    let mut objs: Vec<Vec<u8>> =
+        vec![b"<< /Type /Catalog /Pages 2 0 R >>".to_vec(), b"<< /Type /Pages /Kids [4 0 R] /Count 1 /MediaBox [0 0 300 200] >>".to_vec()];
+    objs.push(b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".to_vec());
+    objs.push(b"<< /Type /Page /Parent 2 0 R /Contents 5 0 R /Resources << /Font << /F1 3 0 R >> >> >>".to_vec());
+    let body = b"BT /F1 12 Tf 20 100 Td (Visit www.example.org today) Tj ET";
+    objs.push([format!("<< /Length {} >>\nstream\n", body.len()).into_bytes(), body.to_vec(), b"\nendstream".to_vec()].concat());
+    let mut out = b"%PDF-1.7\n".to_vec();
+    let mut offs = Vec::new();
+    for (i, o) in objs.iter().enumerate() {
+        offs.push(out.len());
+        out.extend_from_slice(format!("{} 0 obj\n", i + 1).as_bytes());
+        out.extend_from_slice(o);
+        out.extend_from_slice(b"\nendobj\n");
+    }
+    let x = out.len();
+    out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objs.len() + 1).as_bytes());
+    for o in offs {
+        out.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+    }
+    out.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{x}\n%%EOF\n", objs.len() + 1).as_bytes());
+    let mut s = Session::new();
+    let id = s.open("u.pdf", None, Arc::new(out), None).unwrap();
+    let found = s.find_urls(id);
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].2, "http://www.example.org");
+    s.apply(id, Edit::AddLinks { links: found, style: LinkStyle::default() }).unwrap();
+    let d = s.get(id).unwrap();
+    assert_eq!(d.links.len(), 1);
+    assert_eq!(d.info.links.len(), 1, "the viewer follows it");
+    assert!(s.find_urls(id).is_empty(), "already linked");
+    // Link Properties and delete.
+    let l = s.get(id).unwrap().links[0].clone();
+    s.apply(id, Edit::SetLink { page: 0, index: l.index, rect: None, action: Some(LinkAction::Page(0)), style: None }).unwrap();
+    assert_eq!(s.get(id).unwrap().links[0].action, LinkAction::Page(0));
+    s.apply(id, Edit::DeleteLink { page: 0, index: l.index }).unwrap();
+    assert!(s.get(id).unwrap().links.is_empty());
+    assert!(s.apply(id, Edit::RemoveLinks { pages: None }).is_err(), "nothing left to remove");
+}

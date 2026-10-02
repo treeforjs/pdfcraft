@@ -143,6 +143,8 @@ pub struct DocView {
     pub prepare: crate::prepare::PrepareView,
     /// Edit a PDF: the selected added item, the text being typed.
     pub content: crate::content_ui::ContentView,
+    /// Edit a PDF ▸ Link tool state.
+    pub links: crate::link_ui::LinkView,
     /// Redact tool: the box being drawn, and a mark to add (page, quads) for the app to style.
     pub redact_drag: crate::redact_ui::AreaDrag,
     pub pending_redaction: Option<(usize, Vec<[f64; 8]>)>,
@@ -224,6 +226,7 @@ impl DocView {
             forms: Default::default(),
             prepare: Default::default(),
             content: Default::default(),
+            links: Default::default(),
             redact_drag: None,
             pending_redaction: None,
             crop_drag: None,
@@ -888,7 +891,9 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
         QuickTool::Comment(t) => t.markup().is_some(),
         QuickTool::Select => !preparing,
         QuickTool::Redact => true,
-        QuickTool::Hand | QuickTool::Crop | QuickTool::Fill(_) | QuickTool::Field(_) | QuickTool::AddText | QuickTool::Stamp(_) => false,
+        QuickTool::Hand | QuickTool::Crop | QuickTool::Fill(_) | QuickTool::Field(_) | QuickTool::AddText | QuickTool::Stamp(_) | QuickTool::Link => {
+            false
+        }
     };
     let prefs = &app.comment_prefs;
     let allowed = doc.allows_annotation();
@@ -915,6 +920,7 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
         view.prepare.selected = None;
     }
     let added = doc.added.clone();
+    let doc_links = if tool == QuickTool::Link { doc.links.clone() } else { Vec::new() };
     let mut content_done = false;
     if editing_content {
         crate::content_ui::after_refresh(view, &added);
@@ -1102,7 +1108,8 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
                 content_done |= o.done;
                 o.consumed || tool == QuickTool::AddText
             };
-            let consumed = on_content || boxing || on_field || comments::page_input(ui, &resp, &pcx, view);
+            let on_link = tool == QuickTool::Link && can_modify && crate::link_ui::page_input(ui, &resp, &xf, i, info, &doc_links, view);
+            let consumed = on_link || on_content || boxing || on_field || comments::page_input(ui, &resp, &pcx, view);
 
             // Text layer: find matches, selection, I-beam and drag-to-select.
             let to_screen = |g: [f32; 4]| xf.view_rect(g);
@@ -1179,6 +1186,9 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
             comments::paint_page(ui, painter, &pcx, view);
             if editing_content {
                 crate::content_ui::paint_page(ui, painter, &xf, i, info, &added, view);
+            }
+            if tool == QuickTool::Link {
+                crate::link_ui::paint(ui, painter, &xf, i, info, &doc_links, view);
             }
             if preparing {
                 crate::prepare::paint_page(ui, painter, &xf, i, info, &form, view);
@@ -1336,6 +1346,11 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
     if editing_content {
         crate::content_ui::keys(ui.ctx(), view);
     }
+    if tool == QuickTool::Link {
+        crate::link_ui::keys(ui.ctx(), view);
+    } else {
+        view.links.selected = None;
+    }
     if stamp_placed {
         tool = QuickTool::Select;
     }
@@ -1369,6 +1384,12 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
     }
     if let Some((name, w)) = field_props {
         app.open_field_props(&name, w);
+    }
+    if let Some((page, rect)) = app.views[index].links.open_new.take() {
+        app.open_link_props(page, Some(rect), None);
+    }
+    if let Some((page, i)) = app.views[index].links.open_existing.take() {
+        app.open_link_props(page, None, Some(i));
     }
     if let Some((page, quads)) = app.views[index].pending_redaction.take() {
         let author = app.comment_prefs.author.clone();

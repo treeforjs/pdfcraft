@@ -28,6 +28,7 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
     let mut split_ready: Option<crate::SplitPlan> = None;
     let mut extract_now = false;
     let mut rotate_now = false;
+    let mut link_now: Option<Edit> = None;
     let mut recover: Option<bool> = None;
     let mut number_now: Option<Edit> = None;
     let mut apply_number = false;
@@ -338,6 +339,19 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
                 let (ok, cancel) = crate::redact_ui::apply_body(ui, marks, &t);
                 if ok {
                     redact_now = Some(dialog);
+                }
+                close = ok || cancel;
+                return;
+            }
+            Dialog::LinkProps => {
+                let pages = app.active_ids().and_then(|(_, id)| app.session.get(id)).map_or(1, |d| d.info.pages.len());
+                let Some(d) = app.link_draft.as_mut() else {
+                    close = true;
+                    return;
+                };
+                let (ok, cancel) = crate::link_ui::body(ui, d, pages, &t);
+                if ok {
+                    link_now = Some(crate::link_ui::edit_for(d));
                 }
                 close = ok || cancel;
                 return;
@@ -748,6 +762,10 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
     }
     if extract_now {
         app.extract_selection();
+    }
+    if let Some(e) = link_now {
+        app.apply_edit(e);
+        app.link_draft = None;
     }
     if rotate_now {
         app.rotate_with_draft();

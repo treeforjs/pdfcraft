@@ -228,6 +228,14 @@ impl PrintCraftApp {
                 self.left_open = true;
             }
             "edit.image" => self.add_image_dialog(),
+            "edit.link" => {
+                self.quick_tool = crate::QuickTool::Link;
+                self.notify("Drag a rectangle to create a link; double-click a link to edit it");
+            }
+            "edit.links_from_urls" => self.links_from_urls(),
+            "edit.remove_links" => {
+                self.apply_edit(Edit::RemoveLinks { pages: None });
+            }
             "redact.mark" => {
                 self.quick_tool = crate::QuickTool::Redact;
                 self.left = crate::LeftPanel::Tool("redact");

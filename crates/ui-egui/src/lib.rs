@@ -21,6 +21,8 @@ pub mod marks {
     pub use crate::marks_ui::{MarksDraft, PageRange, Subset};
 }
 mod content_ui;
+mod link_ui;
+pub use link_ui::LinkDraft;
 mod dialogs;
 mod editing;
 mod files;
@@ -97,6 +99,8 @@ pub enum QuickTool {
     AddText,
     /// Add a stamp: click to place this stamp.
     Stamp(printcraft_engine::StampKind),
+    /// Edit a PDF ▸ Link: draw link areas, select and edit links.
+    Link,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -132,6 +136,8 @@ pub enum Dialog {
     Print,
     /// File ▸ Revert confirmation.
     Revert,
+    /// Link Properties.
+    LinkProps,
     /// Organize ▸ Extract (options), Rotate Pages.
     Extract,
     RotatePages,
@@ -251,6 +257,7 @@ pub struct PrintCraftApp {
     pub redact_search: RedactSearchDraft,
     pub hidden_draft: HiddenDraft,
     pub print_draft: PrintDraft,
+    pub link_draft: Option<LinkDraft>,
     /// The style new text gets (Edit a PDF ▸ Format text).
     pub text_style: printcraft_engine::AddedText,
     /// The Replace Pages dialog's state.
@@ -334,6 +341,7 @@ impl PrintCraftApp {
             redact_search: RedactSearchDraft::default(),
             hidden_draft: HiddenDraft::default(),
             print_draft: PrintDraft::default(),
+            link_draft: None,
             text_style: content_ui::default_style(),
             replace_draft: None,
             number_draft: NumberDraft { from: 1, to: 1, style: printcraft_engine::LabelStyle::Decimal, prefix: String::new(), start: 1 },
@@ -715,6 +723,7 @@ impl PrintCraftApp {
                     "crop" => QuickTool::Crop,
                     "redact" => QuickTool::Redact,
                     "add-text" => QuickTool::AddText,
+                    "link" => QuickTool::Link,
                     stamp if stamp.starts_with("stamp-") => QuickTool::Stamp(
                         printcraft_engine::StampKind::ALL
                             .into_iter()

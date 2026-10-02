@@ -31,6 +31,7 @@ pub use printcraft_forms::{
 
 /// Comment geometry helpers (text-box line breaking) for frontends.
 pub use printcraft_annot::appearance as annot_text;
+pub use printcraft_annot::links::{Highlight as LinkHighlight, LinkAction, LinkItem, LinkStyle};
 pub use printcraft_annot::{
     FillMark, Markup, NewAnnotation, NoteIcon, Props as CommentProps, ReviewState, Rgb, Shape, StampGroup, StampKind, Style, rect_quad,
 };
@@ -130,6 +131,8 @@ pub struct Document {
     pub marks: Vec<MarkKind>,
     /// Text and images added with Edit a PDF ▸ Add content (still editable).
     pub added: Vec<printcraft_edit::Added>,
+    /// Link annotations, for Edit a PDF ▸ Link.
+    pub links: Vec<printcraft_annot::links::LinkItem>,
     editor: Option<Editor>,
     config: RenderConfig,
 }
@@ -611,6 +614,34 @@ pub enum Edit {
     },
     /// Remove redaction marks without applying them.
     ClearRedactions,
+    /// Edit a PDF ▸ Link: a new link over `rect` (user space).
+    AddLink {
+        page: usize,
+        rect: [f64; 4],
+        action: LinkAction,
+        style: LinkStyle,
+    },
+    /// Link Properties (`index` in the page's `/Annots`).
+    SetLink {
+        page: usize,
+        index: usize,
+        rect: Option<[f64; 4]>,
+        action: Option<LinkAction>,
+        style: Option<LinkStyle>,
+    },
+    DeleteLink {
+        page: usize,
+        index: usize,
+    },
+    /// Remove all links (on `pages`, or everywhere).
+    RemoveLinks {
+        pages: Option<Vec<usize>>,
+    },
+    /// Create links from URLs in the text: (page, line rects in user space, URI).
+    AddLinks {
+        links: Vec<(usize, Vec<[f64; 4]>, String)>,
+        style: LinkStyle,
+    },
     /// Import comments and/or form data (XFDF, FDF, XML, CSV, tab-delimited text).
     ImportData {
         name: String,
@@ -690,6 +721,11 @@ impl Edit {
             Edit::ClearRedactions => "Remove redaction marks".into(),
             Edit::RemoveHidden { .. } => "Remove hidden information".into(),
             Edit::ImportData { name, .. } => format!("Import {name}"),
+            Edit::AddLink { .. } => "Add link".into(),
+            Edit::SetLink { .. } => "Change link properties".into(),
+            Edit::DeleteLink { .. } => "Delete link".into(),
+            Edit::RemoveLinks { .. } => "Remove all links".into(),
+            Edit::AddLinks { links, .. } => plural("Create link", links.len()),
             Edit::Sanitize => "Sanitize document".into(),
             Edit::Flatten { comments: true, fields: false } => "Flatten comments".into(),
             Edit::Flatten { comments: false, fields: true } => "Flatten form fields".into(),
@@ -801,6 +837,11 @@ fn check_permission(edit: &Edit, p: &printcraft_cos::Permissions) -> Result<(), 
         | Edit::ClearRedactions
         | Edit::RemoveHidden { .. }
         | Edit::ImportData { .. }
+        | Edit::AddLink { .. }
+        | Edit::SetLink { .. }
+        | Edit::DeleteLink { .. }
+        | Edit::RemoveLinks { .. }
+        | Edit::AddLinks { .. }
         | Edit::Sanitize
         | Edit::SetFieldProps { .. }
         | Edit::DeleteField { .. }
@@ -985,6 +1026,23 @@ fn run_edit(doc: &mut printcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -
         }
         Edit::ClearRedactions => {
             printcraft_redact::clear_marks(doc, None)?;
+        }
+        Edit::AddLink { page, rect, action, style } => {
+            printcraft_annot::links::add(doc, *page, *rect, action, style)?;
+        }
+        Edit::SetLink { page, index, rect, action, style } => {
+            printcraft_annot::links::set(doc, *page, *index, *rect, action.as_ref(), style.as_ref())?
+        }
+        Edit::DeleteLink { page, index } => printcraft_annot::links::delete(doc, *page, *index)?,
+        Edit::RemoveLinks { pages } => {
+            if printcraft_annot::links::remove_all(doc, pages.as_deref())? == 0 {
+                return Err(EditError::Edit(printcraft_edit::EditError::Invalid("there are no links to remove".into())));
+            }
+        }
+        Edit::AddLinks { links, style } => {
+            if printcraft_annot::links::add_many(doc, links, style)? == 0 {
+                return Err(EditError::Edit(printcraft_edit::EditError::Invalid("no web addresses were found".into())));
+            }
         }
         Edit::ImportData { bytes, .. } => {
             printcraft_xfdf::import(doc, bytes)?;
@@ -1214,6 +1272,7 @@ impl Session {
         let form = editor.as_ref().map(|e| printcraft_forms::fields(&e.cos)).unwrap_or_default();
         let marks = editor.as_ref().map(|e| printcraft_edit::marks_present(&e.cos)).unwrap_or_default();
         let added = editor.as_ref().map(|e| printcraft_edit::list_added(&e.cos)).unwrap_or_default();
+        let links = editor.as_ref().map(|e| printcraft_annot::links::list(&e.cos)).unwrap_or_default();
         self.next_id += 1;
         let id = DocId(self.next_id);
         self.docs.push(Document {
@@ -1231,6 +1290,7 @@ impl Session {
             form: Arc::new(form),
             marks,
             added,
+            links,
             editor,
             config,
         });
@@ -1376,6 +1436,7 @@ impl Session {
         doc.form = Arc::new(printcraft_forms::fields(&editor.cos));
         doc.marks = printcraft_edit::marks_present(&editor.cos);
         doc.added = printcraft_edit::list_added(&editor.cos);
+        doc.links = printcraft_annot::links::list(&editor.cos);
         doc.bytes = bytes.clone();
         doc.renderer = RenderPool::new(bytes, render_threads(), doc.config.clone());
         Ok(())
@@ -1563,6 +1624,51 @@ impl Session {
             used += size;
         }
         self.split(id, &printcraft_organize::SplitBy::Before(cuts))
+    }
+
+    /// Web addresses in the text of every page (Create links from URLs): (page, one rectangle
+    /// per line in user space, URI). Text that already has a link over it is skipped.
+    pub fn find_urls(&self, id: DocId) -> Vec<(usize, Vec<[f64; 4]>, String)> {
+        let Some(doc) = self.get(id) else { return Vec::new() };
+        let config = RenderConfig { password: doc.password.as_deref().map(Arc::from), ..Default::default() };
+        let mut r = printcraft_render::PageRenderer::new(doc.bytes.clone(), config);
+        let mut out = Vec::new();
+        for page in 0..doc.info.pages.len() {
+            let res =
+                r.render(printcraft_render::RenderRequest { page, kind: printcraft_render::RequestKind::Text, scale: 1.0, ..Default::default() });
+            let Some(text) = res.text else { continue };
+            let found: std::cell::RefCell<Vec<(std::ops::Range<usize>, String)>> = Default::default();
+            let hits = text.find_with(|chars| {
+                let urls = printcraft_annot::links::find_urls(chars);
+                let ranges = urls.iter().map(|u| u.0.clone()).collect();
+                *found.borrow_mut() = urls;
+                ranges
+            });
+            for (glyphs, (_, uri)) in hits.into_iter().zip(found.into_inner()) {
+                let rects: Vec<[f64; 4]> = text
+                    .line_rects(glyphs)
+                    .into_iter()
+                    .map(|v| {
+                        let q = doc.info.pages[page].view_rect_to_quad(v);
+                        let xs = [q[0], q[2], q[4], q[6]];
+                        let ys = [q[1], q[3], q[5], q[7]];
+                        [
+                            xs.iter().copied().fold(f64::MAX, f64::min),
+                            ys.iter().copied().fold(f64::MAX, f64::min),
+                            xs.iter().copied().fold(f64::MIN, f64::max),
+                            ys.iter().copied().fold(f64::MIN, f64::max),
+                        ]
+                    })
+                    .filter(|r| {
+                        !doc.links.iter().any(|l| l.page == page && l.rect[0] < r[2] && r[0] < l.rect[2] && l.rect[1] < r[3] && r[1] < l.rect[3])
+                    })
+                    .collect();
+                if !rects.is_empty() {
+                    out.push((page, rects, uri));
+                }
+            }
+        }
+        out
     }
 
     /// Top-level bookmarks as split points: (first page of each part, its bookmark's title).
