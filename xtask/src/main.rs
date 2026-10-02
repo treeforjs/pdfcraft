@@ -9,6 +9,7 @@ mod gates;
 mod layers;
 mod parity;
 mod screenshots;
+mod version;
 
 type Command = fn(&[String]) -> anyhow::Result<()>;
 
