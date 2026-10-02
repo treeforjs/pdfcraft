@@ -37,18 +37,18 @@ Hours are for a single agent (low–high). "Done" is the estimated fraction of t
 | M3 | Viewer app (native + web) | 80–150 | 72% | 22–42 | Acrobat-style shell, find, select, panels, tiles, web build, UI control channel for agents (opt-in). Missing: 60 fps test on a 500-page document, snapshot tests of every panel |
 | M4 | Engine, history, save, organize | 100–180 | 88% | 20–36 | Done:<br>- command registry (menus, shortcuts and palette all use it);<br>- undo/redo; incremental, atomic and encrypted saves;<br>- autosave and crash recovery;<br>- organize, combine, extract, split and insert-from-file, with identical fonts and images stored once;<br>- CLI `edit/combine/extract/split`.<br>Done since: bookmark editing, page labels (Number pages), CLI `run`, Set Page Boxes, Crop tool, Duplicate pages. Missing: Replace pages, page transitions, recovery on the web |
 | M5 | Comments (all annotation types, XFDF) | 120–200 | 55% | 55–90 | Done: notes, highlight/underline/strikeout/squiggly, text boxes, ink, lines, arrows, rectangles, ovals, with appearance streams; replies, status, move/resize/restyle/delete; properties dialog; panel filter and sort; flatten; Fill & Sign (text, marks, date, drawn signature); agent tools. Missing: callouts, clouds, polygons, stamps, carets, FDF/XFDF, summaries |
-| M6 | Forms + JavaScript | 160–320 | 17% | 130–265 | Done: filling text, check box, radio, combo and list fields with regenerated appearances, Tab order, Clear form, Flatten, agent tools. Missing: JavaScript (AF functions, events), form authoring, FDF/XFDF data |
+| M6 | Forms + JavaScript | 160–320 | 27% | 115–235 | Done: filling text, check box, radio, combo and list fields with regenerated appearances, Tab order, Clear form, Flatten; Prepare a form (add every field type with Acrobat names, move/resize/delete, Field Properties General/Appearance size/Position/Options), agent tools. Missing: JavaScript (AF functions, events), Format/Validate/Calculate/Actions tabs, FDF/XFDF data |
 | M7 | Content editing (text, images, header/footer, watermark) | 250–500 | 6% | 235–470 | Done: header & footer (tokens, Bates), text watermarks, colour backgrounds, with Update/Remove. Missing: editing text and images in place (the longest pole), image/PDF watermarks |
-| M8 | Security + redaction | 100–180 | 25% | 75–135 | Done: opening protected documents, honouring permissions, Protect Using Password (open and permissions passwords, all compatibility levels, Advanced options), Remove security. Missing: certificate security, sanitize, redaction |
+| M8 | Security + redaction | 100–180 | 60% | 40–75 | Done: opening protected documents, permissions, Protect Using Password, Remove security; redaction (mark text/areas/pages, Search & Redact with patterns, apply removing glyphs, image pixels, vectors, XObject content, annotations and fields, verification, full rewrite on save); Remove hidden information and Sanitize. Missing: certificate security, redaction codes and pattern locales, DCT re-encoding |
 | M9 | Signatures (PAdES, validation) | 160–280 | 0% | 160–280 | |
 | M10 | OCR, create, export, print | 200–350 | 8% | 185–320 | Done: create blank / from PNG and JPEG / from text, opening images converts them, export to PNG and text. Missing: OCR, Office export and import, printing |
 | M11 | Optimize, preflight, PDF/A/X/UA, print production | 200–350 | 2% | 195–345 | Done: Reduce file size (resource merging, object streams). Missing: image downsampling, optimizer, preflight, standards |
 | M12 | Accessibility, compare, measure, search, XFA | 200–380 | 0% | 200–380 | |
-| M13 | Automation (MCP, Action Wizard, CLI) + AI providers | 60–120 | 24% | 45–90 | Done: headless tool table (44 tools: pages, boxes, bookmarks, labels, comments, forms, protection, headers/watermarks…), opt-in MCP server over stdio, CLI `run`/`tools`, UI control channel with drag. Missing: Action Wizard, more tools as features land, AI providers |
+| M13 | Automation (MCP, Action Wizard, CLI) + AI providers | 60–120 | 27% | 45–88 | Done: headless tool table (59 tools: pages, boxes, bookmarks, labels, comments, forms incl. authoring, protection, redaction, sanitize, headers/watermarks…), opt-in MCP server over stdio, CLI `run`/`tools`, UI control channel with drag. Missing: Action Wizard, more tools as features land, AI providers |
 | M14 | 1.0 polish: performance, localization, installers | 120–250 | 0% | 120–250 | |
-| | **Total** | **2,085–3,840** | **≈ 16%** | **≈ 1,750–3,250** | |
+| | **Total** | **2,085–3,840** | **≈ 18%** | **≈ 1,700–3,150** | |
 
-**Overall progress: about 16% of the effort.** The viewer and the core are far ahead of the editing features, because the viewer was built first so progress could be seen.
+**Overall progress: about 18% of the effort.** The viewer and the core are far ahead of the editing features, because the viewer was built first so progress could be seen.
 
 ## Critical path
 
@@ -67,6 +67,7 @@ M0 → M1 → M2 → M3 → M4 must happen in order. After M4, M5–M12 can run 
 
 Newest first. One line per session: the date, what moved, and the new overall percentage.
 
+- **2026-10-02 (session 9):** Prepare a form (field authoring, Field Properties), Redaction (new `content` and `redact` crates: glyph/image/vector/XObject removal with verification, Search & Redact patterns, full-rewrite saves), Remove hidden information and Sanitize. 59 agent tools; P0 parity ≈ 63%. ≈ 18%.
 - **2026-10-01 (session 8):**
   - Commenting: sticky notes, highlights, underline, strikethrough, text boxes, freehand, lines, arrows, rectangles and ovals, with replies, status, colours, moving and resizing; Acrobat-style quick bar and Comments panel; six agent tools (an agent can highlight a phrase by naming it).
   - Protect Using Password, with Acrobat's permission levels and compatibility options; Remove security.
