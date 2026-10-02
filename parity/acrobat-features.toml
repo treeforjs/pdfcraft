@@ -1031,11 +1031,11 @@ title = "Hand tool for panning"
 area = "B"
 tier = "P0"
 milestone = "M3"
-status = "planned"
+status = "shipped"
 commands = []
 tools = []
-evidence = []
-notes = ""
+evidence = ["crates/ui-egui/tests/view.rs::the_hand_tool_pans_by_dragging"]
+notes = "drag to pan; Grab/Grabbing cursors"
 
 [[feature]]
 id = "view.rotate-view"
@@ -6643,11 +6643,11 @@ title = "Create PDF from images (JPEG, PNG, TIFF, GIF, BMP, JPEG 2000)"
 area = "J"
 tier = "P0"
 milestone = "M10"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["create.images", "create.file"]
+tools = ["doc_create"]
+evidence = ["crates/ui-egui/tests/create.rs::opening_images_and_text_converts_them_to_new_pdfs", "crates/create/src/tests.rs::images_become_pages_at_their_resolution"]
+notes = "PNG and JPEG (grey, RGB, CMYK; transparency kept); TIFF, GIF, BMP, JPEG 2000 not yet"
 
 [[feature]]
 id = "create.from-multipage-tiff"
@@ -6667,11 +6667,11 @@ title = "Create PDF from plain text"
 area = "J"
 tier = "P0"
 milestone = "M10"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["create.file"]
+tools = ["doc_create"]
+evidence = ["crates/create/src/tests.rs::text_is_wrapped_and_paginated", "crates/automation/tests/automation.rs::creating_and_reducing_through_tools"]
+notes = "Helvetica 11 pt on US Letter; form feeds start pages"
 
 [[feature]]
 id = "create.from-markdown"
@@ -6715,10 +6715,10 @@ title = "Create a blank PDF"
 area = "J"
 tier = "P0"
 milestone = "M10"
-status = "planned"
-commands = []
-tools = []
-evidence = []
+status = "shipped"
+commands = ["create.blank"]
+tools = ["doc_create"]
+evidence = ["crates/ui-egui/tests/create.rs::opening_images_and_text_converts_them_to_new_pdfs", "crates/create/src/tests.rs::blank_documents", "crates/automation/tests/automation.rs::creating_and_reducing_through_tools"]
 notes = ""
 
 [[feature]]
@@ -7067,11 +7067,11 @@ title = "Reduce file size (one click)"
 area = "K"
 tier = "P0"
 milestone = "M11"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["optimize.reduce"]
+tools = ["doc_reduce"]
+evidence = ["crates/ui-egui/tests/create.rs::reduce_file_size_writes_a_compact_copy", "crates/engine/src/tests.rs::create_and_reduce", "crates/automation/tests/automation.rs::creating_and_reducing_through_tools"]
+notes = "merges identical resources, drops unused objects, object streams; no image downsampling yet"
 
 [[feature]]
 id = "optimize.compatibility-level"

@@ -799,6 +799,15 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
 
     let out = scroll.show_viewport(ui, |ui, viewport| {
         let (resp_rect, resp) = ui.allocate_exact_size(vec2(content_w, content_h), Sense::click_and_drag());
+        // The Hand tool pans: the content widget takes every drag, so scroll by its delta.
+        if hand {
+            if resp.dragged() {
+                ui.scroll_with_delta(resp.drag_delta());
+                ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
+            } else if resp.hovered() {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
+            }
+        }
         let origin = resp_rect.min - vec2(0.0, y_shift);
         let painter = ui.painter();
         let visible = viewport.translate(resp_rect.min.to_vec2());

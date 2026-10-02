@@ -138,15 +138,15 @@ pub static TOOL_GROUPS: &[ToolGroup] = &[
         icon: "file-plus-2",
         hue: RED,
         badge: None,
-        availability: Planned("M10"),
+        availability: Ready,
         sections: &[ToolSection {
             title: "Create from",
             items: &[
-                item("Single file", "file-input", "create.file", Planned("M10")),
+                item("Single file", "file-input", "create.file", Ready),
                 item("Multiple files", "files", "create.multiple", Planned("M10")),
-                item("Images", "image", "create.images", Planned("M10")),
+                item("Images", "image", "create.images", Ready),
                 item("Clipboard", "copy-plus", "create.clipboard", Planned("M10")),
-                item("Blank page", "file-plus-2", "create.blank", Planned("M10")),
+                item("Blank page", "file-plus-2", "create.blank", Ready),
             ],
         }],
     },
@@ -293,7 +293,7 @@ pub static TOOL_GROUPS: &[ToolGroup] = &[
         sections: &[ToolSection {
             title: "Optimize",
             items: &[
-                item("Reduce file size", "file-down", "optimize.reduce", Planned("M11")),
+                item("Reduce file size", "file-down", "optimize.reduce", Ready),
                 item("Advanced optimization", "settings-2", "optimize.advanced", Planned("M11")),
                 item("Audit space usage", "gauge", "optimize.audit", Planned("M11")),
             ],

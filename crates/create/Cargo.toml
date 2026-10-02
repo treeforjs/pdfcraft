@@ -1,0 +1,18 @@
+[package]
+name = "printcraft-create"
+description = "Create PDFs: blank documents, from images (PNG, JPEG) and from plain text"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+printcraft-cos = { workspace = true }
+printcraft-fonts = { workspace = true }
+png = "0.18"
+thiserror = { workspace = true }
+
+[dev-dependencies]
+hayro-syntax = { workspace = true }

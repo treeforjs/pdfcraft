@@ -3073,6 +3073,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "printcraft-create"
+version = "0.1.0"
+dependencies = [
+ "hayro-syntax",
+ "png 0.18.1",
+ "printcraft-cos",
+ "printcraft-fonts",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "printcraft-crypt"
 version = "0.1.0"
 dependencies = [
@@ -3103,6 +3114,7 @@ dependencies = [
  "png 0.18.1",
  "printcraft-annot",
  "printcraft-cos",
+ "printcraft-create",
  "printcraft-edit",
  "printcraft-forms",
  "printcraft-model",

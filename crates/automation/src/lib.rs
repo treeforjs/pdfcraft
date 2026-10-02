@@ -216,6 +216,15 @@ impl Automation {
                 self.apply(&a, Edit::DuplicatePages { pages })?
             }
             "page_set_box" => self.page_set_box(&a)?,
+            "doc_create" => self.doc_create(&a)?,
+            "doc_reduce" => {
+                let id = self.doc(&a)?.id;
+                let before = self.doc(&a)?.bytes.len();
+                let path = self.resolve(a.str("path")?, true)?;
+                let (bytes, merged) = self.session.reduced_bytes(id).map_err(failed)?;
+                write_atomic(&path, &bytes)?;
+                json!({ "path": path.to_string_lossy(), "bytes_before": before, "bytes_after": bytes.len(), "merged_objects": merged })
+            }
             "doc_export_images" | "doc_export_text" => self.export(name, &a)?,
             "doc_header_footer" | "doc_watermark" | "doc_background" | "doc_remove_marks" => self.marks(name, &a)?,
             "doc_unprotect" => {
@@ -375,6 +384,46 @@ impl Automation {
             files.push(path.to_string_lossy().into_owned());
         }
         Ok(json!({ "count": files.len(), "files": files }))
+    }
+
+    fn doc_create(&mut self, a: &Args) -> Result<Value> {
+        let (name, bytes) = match a.str("from")? {
+            "blank" => {
+                let n = a.opt_int("pages")?.unwrap_or(1).clamp(1, 10_000) as usize;
+                let (w, h) = (a.opt_num("width")?.unwrap_or(612.0), a.opt_num("height")?.unwrap_or(792.0));
+                ("Untitled.pdf".to_string(), self.session.create_blank(w, h, n).map_err(failed)?)
+            }
+            "images" => {
+                let mut images = Vec::new();
+                for p in a.strs("paths")? {
+                    let path = self.resolve(p, false)?;
+                    let bytes = std::fs::read(&path).map_err(|e| failed(format!("{}: {e}", path.display())))?;
+                    images.push((path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(), bytes));
+                }
+                let name = if images.len() == 1 {
+                    format!("{}.pdf", images[0].0.rsplit_once('.').map_or(images[0].0.as_str(), |(s, _)| s))
+                } else {
+                    "Images.pdf".into()
+                };
+                (name, self.session.create_from_images(&images).map_err(failed)?)
+            }
+            "text" => {
+                let (title, text) = match (a.opt_str("text")?, a.opt_str("path")?) {
+                    (Some(t), _) => ("Text".to_string(), t.to_string()),
+                    (None, Some(p)) => {
+                        let path = self.resolve(p, false)?;
+                        let t = std::fs::read(&path).map_err(|e| failed(format!("{}: {e}", path.display())))?;
+                        (path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default(), String::from_utf8_lossy(&t).into_owned())
+                    }
+                    (None, None) => return Err(ToolError::InvalidArgs("text needs `text` or `path`".into())),
+                };
+                (format!("{title}.pdf"), self.session.create_from_text(&title, &text).map_err(failed)?)
+            }
+            other => return Err(ToolError::InvalidArgs(format!("unknown source {other:?}"))),
+        };
+        let name = a.opt_str("name")?.map(str::to_owned).unwrap_or(name);
+        let id = self.session.open_new(name, bytes).map_err(failed)?;
+        Ok(summary(self.session.get(id).ok_or_else(|| failed("the document vanished"))?))
     }
 
     fn page_set_box(&mut self, a: &Args) -> Result<Value> {

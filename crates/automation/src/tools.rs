@@ -369,6 +369,27 @@ pub fn tools() -> Vec<ToolDef> {
             }),
             &["doc", "page", "type", "at"],
         )),
+        t(
+            "doc_create",
+            "Create a PDF",
+            "Create a new, unsaved document and return it like doc_open: `blank` (pages, width, height in points; default 1 US Letter page), `images` (paths of PNG/JPEG files, one page each at the image's resolution) or `text` (a .txt path, or `text` directly). Save it with doc_save and a path.",
+        )
+        .with(schema(
+            json!({
+                "from": { "type": "string", "enum": ["blank", "images", "text"] },
+                "paths": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+                "text": { "type": "string" },
+                "path": { "type": "string" },
+                "pages": { "type": "integer", "minimum": 1, "maximum": 10000 },
+                "width": { "type": "number", "minimum": 3 },
+                "height": { "type": "number", "minimum": 3 },
+                "name": { "type": "string", "description": "Name for the new document (default derived from the source)." },
+            }),
+            &["from"],
+        )),
+        t("doc_reduce", "Reduce file size", "Write a compacted copy of the document to `path` (identical fonts and images merged, unused objects dropped, compressed object streams). The open document is unchanged.")
+            .cmd("optimize.reduce")
+            .with(schema(json!({ "doc": doc(), "path": { "type": "string" } }), &["doc", "path"])),
         t("edit_undo", "Undo", "Undo the last edit of a document.").cmd("edit.undo").with(schema(json!({ "doc": doc() }), &["doc"])),
         t("edit_redo", "Redo", "Redo the last undone edit of a document.").cmd("edit.redo").with(schema(json!({ "doc": doc() }), &["doc"])),
         t("command_list", "List commands", "Every registered PrintCraft command with its menu, shortcut, whether it is enabled now, and the tool that automates it.")

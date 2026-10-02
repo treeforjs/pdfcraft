@@ -547,3 +547,18 @@ fn fill_and_sign_through_tools() {
     assert_eq!(list["count"], 3);
     assert!(matches!(a.call("fill_sign_add", &json!({ "doc": doc, "page": 1, "type": "text", "at": [1, 1] })), Err(ToolError::InvalidArgs(_))));
 }
+
+#[test]
+fn creating_and_reducing_through_tools() {
+    let dir = workdir("create");
+    std::fs::write(dir.join("notes.txt"), "Meeting notes\nAction items").unwrap();
+    let mut a = auto(&dir);
+    let blank = ok(&mut a, "doc_create", json!({ "from": "blank", "pages": 2 }));
+    assert_eq!((blank["pages"].as_u64(), blank["dirty"].as_bool()), (Some(2), Some(true)));
+    let t = ok(&mut a, "doc_create", json!({ "from": "text", "path": "notes.txt" }))["doc"].as_u64().unwrap();
+    assert_eq!(page_text(&mut a, t), ["Meeting notes\nAction items"]);
+    ok(&mut a, "doc_save", json!({ "doc": t, "path": "notes.pdf" }));
+    let r = ok(&mut a, "doc_reduce", json!({ "doc": t, "path": "notes-small.pdf" }));
+    assert!(r["bytes_after"].as_u64().unwrap() > 0 && dir.join("notes-small.pdf").exists());
+    assert!(matches!(a.call("doc_create", &json!({ "from": "images", "paths": ["notes.txt"] })), Err(ToolError::Failed(_))));
+}

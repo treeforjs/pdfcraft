@@ -1,0 +1,46 @@
+//! Create a PDF and Reduce File Size in the real shell.
+
+use printcraft_ui_egui::PrintCraftApp;
+
+fn png() -> Vec<u8> {
+    let mut out = Vec::new();
+    {
+        let mut enc = png::Encoder::new(&mut out, 8, 4);
+        enc.set_color(png::ColorType::Rgb);
+        enc.set_depth(png::BitDepth::Eight);
+        let mut w = enc.write_header().unwrap();
+        w.write_image_data(&[120u8; 8 * 4 * 3]).unwrap();
+    }
+    out
+}
+
+#[test]
+fn opening_images_and_text_converts_them_to_new_pdfs() {
+    let mut app = PrintCraftApp::new();
+    app.open_bytes("photo.png", Some("/tmp/photo.png".into()), png()).unwrap();
+    app.open_bytes("notes.txt", None, b"first line\nsecond line".to_vec()).unwrap();
+    app.create_from_images(vec![("a.png".into(), png()), ("b.png".into(), png())]);
+    assert!(app.execute("create.blank"));
+    let docs = app.session.docs();
+    let summary: Vec<(String, usize, bool)> = docs.iter().map(|d| (d.name.clone(), d.info.pages.len(), d.dirty)).collect();
+    assert_eq!(
+        summary,
+        [("photo.pdf".to_string(), 1, true), ("notes.pdf".into(), 1, true), ("Images.pdf".into(), 2, true), ("Untitled.pdf".into(), 1, true)]
+    );
+    assert!(docs[0].path.is_none(), "a converted file has no PDF path yet: Save asks where");
+    assert!(app.open_bytes("junk.png", None, b"\x89PNG\r\n\x1a\nnot really".to_vec()).is_err());
+}
+
+#[test]
+fn reduce_file_size_writes_a_compact_copy() {
+    let dir = std::env::temp_dir().join(format!("printcraft-reduce-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let out = dir.join("reduced.pdf");
+    let mut app = PrintCraftApp::new();
+    app.open_bytes("notes.txt", None, "lorem ipsum ".repeat(500).into_bytes()).unwrap();
+    app.save_override = Some(out.to_string_lossy().into_owned());
+    assert!(app.execute("optimize.reduce"));
+    let bytes = std::fs::read(&out).unwrap();
+    assert!(bytes.starts_with(b"%PDF-"));
+    assert!(app.session.docs()[0].dirty, "the open document is unchanged");
+}

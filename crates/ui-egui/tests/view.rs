@@ -180,3 +180,24 @@ fn fonts_tab_lists_fonts_and_embedding() {
     h.get_by_label("Helvetica");
     h.get_by_label_contains("Not embedded");
 }
+
+#[test]
+fn the_hand_tool_pans_by_dragging() {
+    let mut h = harness(&[("layout", "continuous"), ("zoom", "150"), ("quick", "hand")]);
+    h.run_steps(4);
+    let before = rect(&h, 0).expect("page 1 on screen");
+    let start = egui::pos2(700.0, 700.0);
+    h.hover_at(start);
+    h.run_steps(1);
+    h.drag_at(start);
+    h.run_steps(1);
+    for k in 1..=5 {
+        h.hover_at(start - egui::vec2(0.0, 60.0 * k as f32));
+        h.run_steps(1);
+    }
+    h.drop_at(start - egui::vec2(0.0, 300.0));
+    h.run_steps(4);
+    let after = rect(&h, 0).expect("still on screen");
+    assert!(before.top() - after.top() > 200.0, "dragging up scrolls down: {before:?} → {after:?}");
+    assert!(h.state().views[0].selected_text().is_none(), "no text selection with the hand");
+}

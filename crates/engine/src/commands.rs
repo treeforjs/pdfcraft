@@ -140,6 +140,9 @@ const HELP: Option<&str> = Some("Help");
 /// Every command, in menu order.
 pub const COMMANDS: &[CommandSpec] = &[
     c("file.open", "Open…", FILE, Some(Shortcut::cmd("O")), Nothing, "folder-open"),
+    c("create.blank", "New blank PDF", FILE, None, Nothing, "file-plus-2"),
+    c("create.file", "Create PDF from file…", FILE, None, Nothing, "file-input"),
+    c("create.images", "Create PDF from images…", FILE, None, Nothing, "image"),
     c("page.combine", "Combine files…", FILE, None, Nothing, "files"),
     c("file.save", "Save", FILE, Some(Shortcut::cmd("S")), Document, "save"),
     c("file.save_as", "Save as…", FILE, Some(Shortcut::cmd_shift("S")), Document, "save"),
@@ -173,6 +176,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     c("sign.fill.date", "Fill & Sign: date", None, None, Annotate, "clock-3"),
     c("sign.fill.signature", "Fill & Sign: sign", None, None, Annotate, "signature"),
     c("export.image", "Export to image…", FILE, None, Document, "image"),
+    c("optimize.reduce", "Reduce file size…", FILE, None, Document, "file-down"),
     c("export.text", "Export to text…", FILE, None, Document, "type"),
     c("edit.header_footer", "Add header & footer…", None, None, Modification, "heading"),
     c("edit.header_footer.update", "Update header & footer…", None, None, Marks(crate::MarkKind::HeaderFooter), "heading"),

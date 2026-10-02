@@ -717,3 +717,24 @@ fn export_images_and_text_follow_the_working_file() {
     assert_eq!(ex.text_of(&[0, 1]).unwrap(), "Page 1\n\u{c}Page 2\n");
     assert!(ex.png(5, 72.0).is_err());
 }
+
+#[test]
+fn create_and_reduce() {
+    let mut s = Session::new();
+    let blank = s.create_blank(612.0, 792.0, 2).unwrap();
+    let id = s.open_new("Untitled.pdf", blank).unwrap();
+    assert_eq!(s.get(id).unwrap().info.pages.len(), 2);
+    let text = s.create_from_text("notes", "hello\nworld").unwrap();
+    let t = s.open_new("notes.pdf", text).unwrap();
+    assert_eq!(page_texts(&s, t), ["hello\nworld"]);
+    // A file with the same page imported twice shares nothing until reduced.
+    let (mut s2, id2) = session_with(1);
+    let src = Arc::new(fixture(1));
+    s2.apply(id2, Edit::InsertPagesFrom { name: "x".into(), bytes: src.clone(), pages: None, at: 1 }).unwrap();
+    let full = s2.save_full_bytes(id2).unwrap();
+    let (reduced, _) = s2.reduced_bytes(id2).unwrap();
+    assert!(reduced.len() <= full.len(), "{} > {}", reduced.len(), full.len());
+    let mut s3 = Session::new();
+    let r = s3.open("r.pdf", None, reduced, None).unwrap();
+    assert_eq!(page_texts(&s3, r), ["Page 1", "Page 1"]);
+}

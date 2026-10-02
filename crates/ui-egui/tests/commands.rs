@@ -43,7 +43,7 @@ fn harness() -> Harness<'static, PrintCraftApp> {
 }
 
 /// Commands that open a native file picker can't run headless.
-const PICKERS: &[&str] = &["file.open", "page.combine", "page.insert", "file.save_as"];
+const PICKERS: &[&str] = &["file.open", "page.combine", "page.insert", "file.save_as", "create.file", "create.images"];
 
 #[test]
 fn every_registered_command_is_implemented() {

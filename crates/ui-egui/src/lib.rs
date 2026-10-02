@@ -11,6 +11,7 @@ mod commands;
 pub mod comments;
 mod comments_panel;
 pub mod control;
+mod create_ui;
 mod crop;
 mod export_ui;
 mod marks_ui;
@@ -277,6 +278,10 @@ impl PrintCraftApp {
 
     /// Open a document and make it the active tab. Encrypted files raise the password prompt.
     pub fn open_bytes(&mut self, name: &str, path: Option<String>, bytes: Vec<u8>) -> Result<(), String> {
+        // Images and text files become new, unsaved PDFs (Create a PDF).
+        if let Some(r) = self.open_converted(name, &bytes) {
+            return r;
+        }
         self.try_open(name, path, std::sync::Arc::new(bytes), None)
     }
 
@@ -412,7 +417,9 @@ impl PrintCraftApp {
 
     pub fn open_dialog(&mut self) {
         #[cfg(not(target_arch = "wasm32"))]
-        if let Some(p) = rfd::FileDialog::new().add_filter("PDF", &["pdf"]).pick_file() {
+        if let Some(p) =
+            rfd::FileDialog::new().add_filter("PDF", &["pdf"]).add_filter("Images and text (converted to PDF)", &create_ui::CONVERTIBLE).pick_file()
+        {
             self.open_path(&p.to_string_lossy());
         }
         // Browsers pick files asynchronously; the bytes arrive through `inbox`.
@@ -420,7 +427,9 @@ impl PrintCraftApp {
         {
             let inbox = self.inbox.clone();
             wasm_bindgen_futures::spawn_local(async move {
-                if let Some(h) = rfd::AsyncFileDialog::new().add_filter("PDF", &["pdf"]).pick_file().await {
+                if let Some(h) =
+                    rfd::AsyncFileDialog::new().add_filter("PDF", &["pdf"]).add_filter("Images and text", &create_ui::CONVERTIBLE).pick_file().await
+                {
                     let bytes = h.read().await;
                     if let Ok(mut q) = inbox.lock() {
                         q.push((h.file_name(), bytes));

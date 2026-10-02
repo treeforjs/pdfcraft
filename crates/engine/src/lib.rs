@@ -881,6 +881,8 @@ pub enum EditError {
     Form(#[from] printcraft_forms::FormError),
     #[error("{0}")]
     Edit(#[from] printcraft_edit::EditError),
+    #[error("{0}")]
+    Create(#[from] printcraft_create::CreateError),
     #[error("the edited document could not be written: {0}")]
     Write(String),
     #[error("the edited document could not be reopened: {0}")]
@@ -1162,6 +1164,35 @@ impl Session {
         doc.dirty = false;
         doc.generation += 1;
         Self::refresh(doc)
+    }
+
+    /// A new blank document (Create ▸ Blank page).
+    pub fn create_blank(&self, width: f64, height: f64, pages: usize) -> Result<Arc<Vec<u8>>, EditError> {
+        self.write_new(&printcraft_create::blank(width, height, pages)?)
+    }
+
+    /// A new document with one page per image (PNG, JPEG).
+    pub fn create_from_images(&self, images: &[(String, Vec<u8>)]) -> Result<Arc<Vec<u8>>, EditError> {
+        self.write_new(&printcraft_create::from_images(images)?)
+    }
+
+    /// A new document from plain text (US Letter, 11 pt Helvetica).
+    pub fn create_from_text(&self, title: &str, text: &str) -> Result<Arc<Vec<u8>>, EditError> {
+        self.write_new(&printcraft_create::from_text(title, text, printcraft_create::LETTER, 11.0)?)
+    }
+
+    /// Reduce File Size: identical resources merged, unused objects dropped, objects packed
+    /// into compressed object streams. Returns the bytes and how many objects were merged.
+    /// The open document is not changed (Acrobat saves the reduced copy as a new file).
+    pub fn reduced_bytes(&self, id: DocId) -> Result<(Arc<Vec<u8>>, usize), EditError> {
+        let doc = self.get(id).ok_or(EditError::NoDocument)?;
+        let editor = doc.editor.as_ref().ok_or_else(|| EditError::ReadOnly(doc.read_only_reason.clone().unwrap_or_default()))?;
+        let mut cos = editor.cos.clone();
+        let all: Vec<printcraft_cos::ObjRef> = cos.object_numbers().into_iter().map(|n| printcraft_cos::ObjRef::new(n, cos.generation(n))).collect();
+        let merged = printcraft_organize::dedupe_resources(&mut cos, &all, false);
+        let opts = SaveOptions { mod_date: self.now().map(printcraft_cos::pdf_date), ..SaveOptions::default() };
+        let bytes = write_full(&cos, &opts).map_err(|e| EditError::Write(e.to_string()))?;
+        Ok((Arc::new(bytes), merged))
     }
 
     /// Combine whole files, in order, into new PDF bytes (one bookmark per file).

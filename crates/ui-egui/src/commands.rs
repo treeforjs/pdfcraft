@@ -203,6 +203,10 @@ impl PrintCraftApp {
                     self.dialog = Some(Dialog::Signature);
                 }
             }
+            "create.blank" => self.create_blank(),
+            "create.file" => self.open_dialog(),
+            "create.images" => self.create_from_images_dialog(),
+            "optimize.reduce" => self.reduce_file_size(),
             "page.duplicate" => {
                 self.apply_edit(Edit::DuplicatePages { pages: targets });
             }
