@@ -307,3 +307,16 @@ fn properties_rename_and_delete() {
     let annots = doc.resolve(doc.get(*p).as_dict().unwrap().get(b"Annots").unwrap());
     assert_eq!(annots.as_array().unwrap().len(), 13 - 3, "the deleted widgets left the page");
 }
+
+#[test]
+fn deleting_works_with_a_form_dictionary_inside_the_catalog() {
+    let mut doc = fixture();
+    let root = doc.root().unwrap();
+    let af = doc.get(printcraft_cos::ObjRef::new(4, 0)).as_dict().cloned().unwrap();
+    doc.update_dict(root, |d| d.set(b"AcroForm".to_vec(), Object::Dict(af))).unwrap();
+    let before = fields(&doc).len();
+    delete_field(&mut doc, "name").unwrap();
+    let all = fields(&reopen(&doc));
+    assert_eq!(all.len(), before - 1);
+    assert!(!all.iter().any(|f| f.name == "name"));
+}

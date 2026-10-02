@@ -518,8 +518,16 @@ pub fn delete_field(doc: &mut Document, name: &str) -> Result<(), FormError> {
         Some(p) => remove_from(doc, p, b"Kids")?,
         None => {
             let root = doc.root().ok_or(FormError::NoForm)?;
-            if let Some(af) = doc.get(root).as_dict().and_then(|d| d.reference(b"AcroForm")) {
-                remove_from(doc, af, b"Fields")?;
+            match doc.get(root).as_dict().and_then(|d| d.get(b"AcroForm").cloned()) {
+                Some(Object::Ref(af)) => remove_from(doc, af, b"Fields")?,
+                // A form dictionary held directly in the catalog.
+                Some(Object::Dict(mut af)) => {
+                    let list = af.get(b"Fields").map(|o| doc.resolve(o)).and_then(|o| o.as_array().cloned()).unwrap_or_default();
+                    let kept: Vec<Object> = list.into_iter().filter(|o| o.as_ref() != Some(f.obj)).collect();
+                    af.set(b"Fields".to_vec(), Object::Array(kept));
+                    doc.update_dict(root, |d| d.set(b"AcroForm".to_vec(), Object::Dict(af)))?;
+                }
+                _ => {}
             }
         }
     }

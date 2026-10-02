@@ -279,6 +279,17 @@ fn place_tagged(doc: &mut Document, page: &printcraft_model::Page, tag: &str, co
     Ok(())
 }
 
+/// Draw `content` on top of a page (0-based) as permanent page content, with standard Helvetica
+/// available as `/PCHelv`. The stream is tagged `tag` (not a mark kind, so Remove never takes
+/// it away); the original content is wrapped in q/Q first. Used for applied redaction boxes.
+pub fn stamp(doc: &mut Document, page: usize, tag: &str, content: Vec<u8>) -> Result<(), EditError> {
+    let all = page_list(doc);
+    check(&[page], all.len())?;
+    add_resources(doc, &all[page], None)?;
+    let p = page_list(doc).swap_remove(page);
+    place_tagged(doc, &p, tag, content, false)
+}
+
 fn begin(kind: MarkKind, subtype: &str, matrix: [f64; 6]) -> String {
     format!(
         "q\n/Artifact <</Type /Pagination /Subtype /{subtype} /PCMark /{}>> BDC\n{} {} {} {} {} {} cm\n",

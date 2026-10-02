@@ -32,6 +32,8 @@ mod pageboxes;
 mod palette;
 mod panels;
 pub mod prepare;
+mod redact_ui;
+pub use redact_ui::{PagesDraft as RedactPagesDraft, RedactPrefs, SearchDraft as RedactSearchDraft};
 mod protect;
 mod recovery;
 pub mod theme;
@@ -86,6 +88,8 @@ pub enum QuickTool {
     Fill(fill_sign::FillTool),
     /// A Prepare a form field tool.
     Field(prepare::FieldTool),
+    /// Redact text and images (drag across text or draw a box).
+    Redact,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -112,6 +116,11 @@ pub enum Dialog {
     ReplacePages,
     /// Prepare a form ▸ Field Properties.
     FieldProps,
+    /// Redact a PDF ▸ Redact pages, Find text and redact, Set properties, apply confirmation.
+    RedactPages,
+    RedactSearch,
+    RedactProps,
+    RedactApply,
     /// Documents from a session that ended unexpectedly.
     Recovery,
 }
@@ -216,6 +225,9 @@ pub struct PrintCraftApp {
     /// The Comment Properties dialog's state.
     pub comment_props: Option<comment_props::PropsDraft>,
     pub field_props: Option<prepare::FieldDraft>,
+    pub redact_prefs: RedactPrefs,
+    pub redact_pages_draft: RedactPagesDraft,
+    pub redact_search: RedactSearchDraft,
     /// The Replace Pages dialog's state.
     pub replace_draft: Option<files::ReplaceDraft>,
     /// The last web link the app asked the system to open (tests and automation).
@@ -289,6 +301,9 @@ impl PrintCraftApp {
             signature_draft: Vec::new(),
             comment_props: None,
             field_props: None,
+            redact_prefs: RedactPrefs::default(),
+            redact_pages_draft: RedactPagesDraft::default(),
+            redact_search: RedactSearchDraft::default(),
             replace_draft: None,
             number_draft: NumberDraft { from: 1, to: 1, style: printcraft_engine::LabelStyle::Decimal, prefix: String::new(), start: 1 },
         }
@@ -664,6 +679,7 @@ impl PrintCraftApp {
                     "select" => QuickTool::Select,
                     "hand" => QuickTool::Hand,
                     "crop" => QuickTool::Crop,
+                    "redact" => QuickTool::Redact,
                     field if field.starts_with("field-") => QuickTool::Field(
                         prepare::FieldTool::from_command(&format!("form.add.{}", &field[6..])).ok_or_else(|| format!("unknown tool {field}"))?,
                     ),

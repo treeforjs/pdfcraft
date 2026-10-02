@@ -616,3 +616,27 @@ fn preparing_a_form_through_tools() {
     ));
     assert!(matches!(a.call("form_delete_field", &json!({ "doc": doc, "field": "nope" })), Err(ToolError::Failed(_))));
 }
+
+#[test]
+fn redacting_through_tools() {
+    let dir = workdir("redact");
+    std::fs::write(dir.join("memo.txt"), "Call 555-123-4567 today\nSSN 123-45-6789 is private\nPublic line").unwrap();
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_create", json!({ "from": "text", "path": "memo.txt" }))["doc"].as_u64().unwrap();
+    let r = ok(&mut a, "redact_mark", json!({ "doc": doc, "pattern": "phone" }));
+    assert_eq!((r["marked"].as_u64(), r["marks_pending"].as_u64()), (Some(1), Some(1)));
+    ok(&mut a, "redact_mark", json!({ "doc": doc, "pattern": "ssn", "overlay": "SSN" }));
+    ok(&mut a, "redact_mark", json!({ "doc": doc, "find": "private" }));
+    assert_eq!(page_text(&mut a, doc)[0].matches("555-123-4567").count(), 1, "marks alone remove nothing");
+    let r = ok(&mut a, "redact_apply", json!({ "doc": doc }));
+    assert_eq!((r["applied"].as_u64(), r["marks_pending"].as_u64()), (Some(3), Some(0)));
+    let text = page_text(&mut a, doc)[0].clone();
+    assert!(!text.contains("555") && !text.contains("6789") && !text.contains("private"), "{text}");
+    assert!(text.contains("Call") && text.contains("today") && text.contains("Public line"), "{text}");
+    ok(&mut a, "doc_save", json!({ "doc": doc, "path": "memo.pdf" }));
+    let bytes = std::fs::read(dir.join("memo.pdf")).unwrap();
+    assert!(!bytes.windows(4).any(|w| w == b"4567"), "the saved file has no trace of the number");
+    assert!(matches!(a.call("redact_apply", &json!({ "doc": doc })), Err(ToolError::Failed(_))));
+    assert!(matches!(a.call("redact_mark", &json!({ "doc": doc, "find": "nowhere to be found" })), Err(ToolError::Failed(_))));
+    assert!(matches!(a.call("redact_mark", &json!({ "doc": doc })), Err(ToolError::InvalidArgs(_))));
+}

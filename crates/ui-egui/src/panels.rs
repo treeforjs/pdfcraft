@@ -126,7 +126,11 @@ fn tool_detail(app: &mut PrintCraftApp, ui: &mut egui::Ui, t: &Tokens, g: &'stat
         });
     }
     let mut run = None;
-    egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+    // Redact a PDF has Acrobat's footer: Clear all / Redact all.
+    let footer = g.id == "redact";
+    let marks = if footer { app.active_ids().and_then(|(_, id)| app.session.get(id)).map_or(0, |d| d.redaction_marks()) } else { 0 };
+    let list_h = if footer { (ui.available_height() - 52.0).max(80.0) } else { ui.available_height() };
+    egui::ScrollArea::vertical().auto_shrink([false, false]).max_height(list_h).show(ui, |ui| {
         for s in g.sections {
             widgets::section_title(ui, s.title);
             for item in s.items {
@@ -161,6 +165,22 @@ fn tool_detail(app: &mut PrintCraftApp, ui: &mut egui::Ui, t: &Tokens, g: &'stat
             }
         }
     });
+    if footer {
+        ui.add_space(8.0);
+        ui.horizontal(|ui| {
+            if marks > 0 {
+                ui.label(egui::RichText::new(format!("{marks} mark{}", if marks == 1 { "" } else { "s" })).color(t.text_muted));
+            }
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui.add_enabled_ui(marks > 0, |ui| widgets::pill_button(ui, "Redact all", true)).inner.clicked() {
+                    run = Some("redact.apply");
+                }
+                if ui.add_enabled_ui(marks > 0, |ui| widgets::pill_button(ui, "Clear all", false)).inner.clicked() {
+                    run = Some("redact.clear");
+                }
+            });
+        });
+    }
     if let Some(cmd) = run {
         app.run_command(cmd);
     }

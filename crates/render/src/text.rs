@@ -93,6 +93,24 @@ impl PageText {
         out
     }
 
+    /// Glyph ranges of the matches a character matcher finds in the page text (words and lines
+    /// separated by one space, original case). Used for pattern search (Search & Redact).
+    pub fn find_with(&self, matcher: impl Fn(&[char]) -> Vec<std::ops::Range<usize>>) -> Vec<std::ops::Range<usize>> {
+        let mut chars: Vec<char> = Vec::new();
+        let mut owner: Vec<usize> = Vec::new();
+        for (i, g) in self.glyphs.iter().enumerate() {
+            if i > 0 && (self.space_before[i] || self.line_of[i] != self.line_of[i - 1]) && chars.last().is_some_and(|c| *c != ' ') {
+                chars.push(' ');
+                owner.push(i);
+            }
+            for c in g.text.chars() {
+                chars.push(if c.is_whitespace() { ' ' } else { c });
+                owner.push(i);
+            }
+        }
+        matcher(&chars).into_iter().filter(|r| r.start < r.end && r.end <= chars.len()).map(|r| owner[r.start]..owner[r.end - 1] + 1).collect()
+    }
+
     /// Index of the glyph nearest to a view-space point (for selection anchors).
     pub fn nearest(&self, x: f32, y: f32) -> Option<usize> {
         self.glyphs

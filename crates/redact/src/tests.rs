@@ -1,0 +1,266 @@
+use std::sync::Arc;
+
+use printcraft_annot::{Meta, NewAnnotation, Shape, Style, add_annotation, rect_quad};
+use printcraft_cos::{Document, SaveOptions, write_incremental};
+
+use super::*;
+
+fn stream(dict: &str, data: &[u8]) -> Vec<u8> {
+    let mut v = format!("<< {dict} /Length {} >>\nstream\n", data.len()).into_bytes();
+    v.extend_from_slice(data);
+    v.extend_from_slice(b"\nendstream");
+    v
+}
+
+fn pdf(objs: Vec<Vec<u8>>) -> Document {
+    let mut out = b"%PDF-1.7\n".to_vec();
+    let mut offs = Vec::new();
+    for (i, o) in objs.iter().enumerate() {
+        offs.push(out.len());
+        out.extend_from_slice(format!("{} 0 obj\n", i + 1).as_bytes());
+        out.extend_from_slice(o);
+        out.extend_from_slice(b"\nendobj\n");
+    }
+    let x = out.len();
+    out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objs.len() + 1).as_bytes());
+    for o in offs {
+        out.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+    }
+    out.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{x}\n%%EOF\n", objs.len() + 1).as_bytes());
+    Document::open(Arc::new(out)).unwrap()
+}
+
+/// A font where every glyph is 500 units wide (so a 10 pt glyph advances 5 pt).
+const FONT: &str = "<< /Type /Font /Subtype /TrueType /BaseFont /Arial /FirstChar 32 /LastChar 126 /Widths 95 0 R /FontDescriptor << /Ascent 800 /Descent -200 >> >>";
+
+fn widths() -> Vec<u8> {
+    format!("[{}]", vec!["500"; 95].join(" ")).into_bytes()
+}
+
+/// One 300×300 page with `content`, font /F1, and extra resources/objects.
+fn one_page(content: &[u8], extra_res: &str, extra: Vec<Vec<u8>>) -> Document {
+    let mut objs: Vec<Vec<u8>> = vec![
+        b"<< /Type /Catalog /Pages 2 0 R >>".to_vec(),
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_vec(),
+        format!("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> {extra_res} >> >>")
+            .into_bytes(),
+        stream("", content),
+        FONT.replace("95 0 R", "6 0 R").into_bytes(),
+        widths(),
+    ];
+    objs.extend(extra);
+    pdf(objs)
+}
+
+fn mark(doc: &mut Document, page: usize, rects: &[[f64; 4]], overlay: &str) {
+    let shape = Shape::Redact { quads: rects.iter().map(|r| rect_quad(*r)).collect(), overlay: overlay.into() };
+    let style = Style::default_for(&shape);
+    add_annotation(doc, &NewAnnotation { page, shape, style, contents: String::new(), author: "Tester".into() }, &Meta::default()).unwrap();
+}
+
+/// The decoded content streams of a page, joined.
+fn content(doc: &Document, page: usize) -> String {
+    let p = &printcraft_model::pages(doc)[page];
+    let (_, data) = page_streams(doc, &p.dict, page).unwrap();
+    data.iter().map(|d| String::from_utf8_lossy(d).into_owned()).collect::<Vec<_>>().join("\n")
+}
+
+/// Glyphs (and inline images) of page `page` under `rects` (the verifier's count).
+fn under(doc: &mut Document, page: usize, rects: &[[f64; 4]]) -> usize {
+    let p = printcraft_model::pages(doc).swap_remove(page);
+    let (_, data) = page_streams(doc, &p.dict, page).unwrap();
+    let res = p.dict.get(b"Resources").and_then(|r| doc.resolve(r).as_dict().cloned()).unwrap_or_default();
+    let mut rep = Report::default();
+    let mut scope = Scope::new(rects, Mode::Verify, &mut rep);
+    process(doc, &mut scope, &data, &res, printcraft_content::Matrix::IDENTITY).residue
+}
+
+fn reopen(doc: &Document) -> Document {
+    Document::open(Arc::new(write_incremental(doc, &SaveOptions::default()).unwrap())).unwrap()
+}
+
+#[test]
+fn glyphs_under_a_mark_go_and_the_rest_stays_put() {
+    // "AB1234CD" from x = 10 at 10 pt: each glyph 5 pt wide; 1234 spans x 20–40.
+    let mut doc = one_page(b"BT /F1 10 Tf 10 100 Td (AB1234CD) Tj ET", "", vec![]);
+    assert_eq!(under(&mut doc, 0, &[[40.0, 95.0, 50.0, 110.0]]), 2, "C and D before");
+    mark(&mut doc, 0, &[[20.0, 95.0, 40.0, 110.0]], "");
+    let r = apply(&mut doc, None).unwrap();
+    assert_eq!((r.marks, r.glyphs), (1, 4));
+    let c = content(&doc, 0);
+    assert!(c.contains("[(AB) -2000 (CD)] TJ"), "{c}");
+    assert!(!c.contains("1234"));
+    assert_eq!(under(&mut doc, 0, &[[40.0, 95.0, 50.0, 110.0]]), 2, "C and D are where they were");
+    assert_eq!(under(&mut doc, 0, &[[20.0, 95.0, 40.0, 110.0]]), 0);
+    // The mark became a black box drawn into the page; the annotation is gone.
+    assert!(marks(&doc).is_empty());
+    assert!(c.contains("0 0 0 rg") && c.contains("20 95 20 15 re f"), "{c}");
+    let doc = reopen(&doc);
+    assert!(!content(&doc, 0).contains("1234"));
+}
+
+#[test]
+fn kerning_spacing_scaling_and_line_operators_are_honoured() {
+    // TJ kerning, character and word spacing, 50% horizontal scaling, ' and ".
+    let src = b"BT /F1 10 Tf 2 Tc 4 Tw 50 Tz 12 TL 0 200 Td [(AB) -1000 (C D)] TJ (EF) ' 1 0 (GH) \" ET";
+    let mut doc = one_page(src, "", vec![]);
+    // Line 1 (y 200): A at 0, B at 3.5 (advance (5+2)×0.5), kern +5 → C at 12, space at 15.5,
+    // D at 21 (space advance (5+2+4)×0.5 = 5.5). Remove C only.
+    mark(&mut doc, 0, &[[12.2, 195.0, 14.8, 210.0]], "");
+    // Line 2 (y 188) "EF" and line 3 (y 176) "GH" (Tw 1, Tc 0): remove F and G.
+    mark(&mut doc, 0, &[[3.8, 183.0, 6.0, 198.0 - 10.0], [0.2, 171.0, 2.3, 180.0]], "");
+    let r = apply(&mut doc, None).unwrap();
+    assert_eq!(r.glyphs, 3, "{r:?}");
+    let c = content(&doc, 0);
+    assert!(c.contains("[(AB) -1700 ( D)] TJ"), "{c}");
+    assert!(c.contains("T*\n[(E) -700] TJ"), "{c}");
+    assert!(c.contains("1 Tw\n0 Tc\nT*\n[-500 (H)] TJ"), "{c}");
+    // Everything else stays readable where it was.
+    assert_eq!(under(&mut doc, 0, &[[20.0, 195.0, 30.0, 210.0]]), 1, "D");
+    assert_eq!(under(&mut doc, 0, &[[2.6, 171.0, 6.0, 180.0]]), 1, "H");
+}
+
+#[test]
+fn rotated_text_and_composite_fonts() {
+    // A Type0 Identity-H font (two-byte codes) with /W widths, and a 90° text matrix.
+    let t0 = b"<< /Type /Font /Subtype /Type0 /BaseFont /X /Encoding /Identity-H /DescendantFonts [<< /Type /Font /Subtype /CIDFontType2 /BaseFont /X /DW 1000 /W [1 [500 500] 3 4 250] >>] >>".to_vec();
+    let src = b"BT /F2 10 Tf 0 1 -1 0 100 50 Tm <0001000200030004> Tj ET";
+    let mut doc = one_page(src, "", vec![]);
+    let font_ref = doc.add(Object::Dict(Dict::new()));
+    let parsed = {
+        let mut lx = printcraft_cos::Lexer::new(&t0, 0);
+        lx.object().unwrap()
+    };
+    doc.set(font_ref, parsed);
+    let page = printcraft_model::pages(&doc)[0].obj;
+    doc.update_dict(page, |d| {
+        let mut res = d.get(b"Resources").and_then(Object::as_dict).cloned().unwrap();
+        let mut fonts = res.get(b"Font").and_then(Object::as_dict).cloned().unwrap();
+        fonts.set(b"F2".to_vec(), Object::Ref(font_ref));
+        res.set(b"Font".to_vec(), Object::Dict(fonts));
+        d.set(b"Resources".to_vec(), Object::Dict(res));
+    })
+    .unwrap();
+    // Glyphs run upwards from y 50: CID1 50–55, CID2 55–60, CID3 60–62.5, CID4 62.5–65.
+    mark(&mut doc, 0, &[[85.0, 55.5, 105.0, 61.0]], "");
+    let r = apply(&mut doc, None).unwrap();
+    assert_eq!(r.glyphs, 2, "CIDs 2 and 3");
+    let c = content(&doc, 0);
+    assert!(c.contains("[<0001> -750 <0004>] TJ") || c.contains("[(\\000\\001) -750 (\\000\\004)] TJ"), "{c}");
+}
+
+#[test]
+fn images_are_removed_or_have_their_pixels_cleared() {
+    // Image 1 is fully covered; image 2 (4×1 gray, all white) is half covered.
+    let img = stream("/Type /XObject /Subtype /Image /Width 4 /Height 1 /ColorSpace /DeviceGray /BitsPerComponent 8", &[255, 255, 255, 255]);
+    let src = b"q 10 0 0 10 10 10 cm /Im1 Do Q q 40 0 0 10 100 100 cm /Im2 Do Q";
+    let mut doc = one_page(src, "/XObject << /Im1 7 0 R /Im2 7 0 R >>", vec![img]);
+    mark(&mut doc, 0, &[[5.0, 5.0, 25.0, 25.0], [95.0, 95.0, 120.0, 115.0]], "");
+    let r = apply(&mut doc, None).unwrap();
+    assert_eq!((r.images_removed, r.images_cleared), (1, 1), "{r:?}");
+    let c = content(&doc, 0);
+    assert!(!c.contains("/Im1 Do") && !c.contains("/Im2 Do"), "{c}");
+    let p = printcraft_model::pages(&doc).swap_remove(0);
+    let res = doc.resolve(p.dict.get(b"Resources").unwrap()).as_dict().cloned().unwrap();
+    let xo = doc.resolve(res.get(b"XObject").unwrap()).as_dict().cloned().unwrap();
+    let new = xo.iter().find(|(k, _)| k.starts_with(b"PCRedacted")).map(|(_, v)| v.clone()).expect("a cleared copy");
+    let Object::Stream(s) = &*doc.resolve(&new) else { panic!() };
+    assert_eq!(s.decoded().unwrap(), [0, 0, 255, 255], "pixels 1–2 (x 100–120) cleared");
+    let Object::Stream(orig) = &*doc.get(ObjRef::new(7, 0)) else { panic!() };
+    assert_eq!(orig.decoded().unwrap(), [255; 4], "the shared original is untouched");
+}
+
+#[test]
+fn vectors_are_removed_or_clipped_and_inline_images_go() {
+    let src = b"0 g 10 10 20 20 re f 0 0 300 300 re f q 10 0 0 10 50 50 cm BI /W 1 /H 1 /CS /G /BPC 8 ID \x80 EI Q 1 0 0 RG 150 150 m 160 160 l S";
+    let mut doc = one_page(src, "", vec![]);
+    mark(&mut doc, 0, &[[5.0, 5.0, 35.0, 35.0], [45.0, 45.0, 65.0, 65.0]], "");
+    let r = apply(&mut doc, None).unwrap();
+    assert_eq!((r.paths_removed, r.paths_clipped, r.images_removed), (1, 1, 1), "{r:?}");
+    let c = content(&doc, 0);
+    assert!(!c.contains("10 10 20 20 re"), "{c}");
+    assert!(c.contains("W*\nn\n0 0 300 300 re\nf\nQ"), "the page-size rect is clipped: {c}");
+    assert!(!c.contains("BI"), "{c}");
+    assert!(c.contains("150 150 m"), "the line elsewhere stays");
+}
+
+#[test]
+fn shared_form_xobjects_are_copied_not_changed() {
+    let form =
+        stream("/Type /XObject /Subtype /Form /BBox [0 0 300 300] /Resources << /Font << /F1 5 0 R >> >>", b"BT /F1 10 Tf 10 100 Td (SECRET) Tj ET");
+    let mut objs: Vec<Vec<u8>> = vec![
+        b"<< /Type /Catalog /Pages 2 0 R >>".to_vec(),
+        b"<< /Type /Pages /Kids [3 0 R 8 0 R] /Count 2 /MediaBox [0 0 300 300] /Resources << /XObject << /Fm 7 0 R >> >> >>".to_vec(),
+        b"<< /Type /Page /Parent 2 0 R /Contents 4 0 R >>".to_vec(),
+        stream("", b"/Fm Do"),
+        FONT.replace("95 0 R", "6 0 R").into_bytes(),
+        widths(),
+        form,
+    ];
+    objs.push(b"<< /Type /Page /Parent 2 0 R /Contents 4 0 R >>".to_vec());
+    let mut doc = pdf(objs);
+    mark(&mut doc, 0, &[[0.0, 90.0, 300.0, 120.0]], "");
+    let r = apply(&mut doc, None).unwrap();
+    assert_eq!((r.glyphs, r.forms_rewritten), (6, 1), "{r:?}");
+    assert!(content(&doc, 0).contains("/PCRedacted1 Do"));
+    assert_eq!(content(&doc, 1), "/Fm Do", "page 2 shares the stream and the form: untouched");
+    assert_eq!(under(&mut doc, 1, &[[0.0, 90.0, 300.0, 120.0]]), 6);
+    assert_eq!(under(&mut doc, 0, &[[0.0, 90.0, 300.0, 120.0]]), 0);
+}
+
+#[test]
+fn comments_links_and_fields_under_a_mark_go() {
+    let mut doc = one_page(b"", "", vec![]);
+    // A comment under the mark, a link elsewhere, and a text field under the mark.
+    let square = Shape::Rectangle { rect: [20.0, 20.0, 40.0, 40.0] };
+    add_annotation(
+        &mut doc,
+        &NewAnnotation { page: 0, style: Style::default_for(&square), shape: square, contents: "x".into(), author: "a".into() },
+        &Meta::default(),
+    )
+    .unwrap();
+    let link = Shape::Rectangle { rect: [200.0, 200.0, 220.0, 220.0] };
+    add_annotation(
+        &mut doc,
+        &NewAnnotation { page: 0, style: Style::default_for(&link), shape: link, contents: "keep".into(), author: "a".into() },
+        &Meta::default(),
+    )
+    .unwrap();
+    printcraft_forms::add_field(&mut doc, 0, [10.0, 50.0, 100.0, 70.0], &printcraft_forms::NewField::Text { multiline: false }, Some("ssn")).unwrap();
+    mark(&mut doc, 0, &[[0.0, 0.0, 120.0, 80.0]], "REDACTED");
+    let r = apply(&mut doc, None).unwrap();
+    assert_eq!((r.annotations, r.fields), (1, 1), "{r:?}");
+    assert!(printcraft_forms::fields(&doc).is_empty());
+    let p = printcraft_model::pages(&doc).swap_remove(0);
+    assert_eq!(annots_of(&doc, &p.dict).len(), 1, "only the far rectangle stays");
+    let c = content(&doc, 0);
+    assert!(c.contains("(REDACTED) Tj"), "overlay text: {c}");
+}
+
+#[test]
+fn nothing_to_apply_and_clearing_marks() {
+    let mut doc = one_page(b"BT /F1 10 Tf 10 100 Td (AB) Tj ET", "", vec![]);
+    assert_eq!(apply(&mut doc, None), Err(RedactError::NothingToApply));
+    mark(&mut doc, 0, &[[0.0, 0.0, 50.0, 50.0]], "");
+    assert_eq!(marks(&doc).len(), 1);
+    assert_eq!(clear_marks(&mut doc, None), Ok(1));
+    assert!(marks(&doc).is_empty());
+    assert!(content(&doc, 0).contains("(AB) Tj"));
+}
+
+#[test]
+fn unreadable_content_fails_closed() {
+    let mut doc = one_page(b"", "", vec![]);
+    let page = printcraft_model::pages(&doc)[0].obj;
+    let bad = doc.add(Object::Stream(Stream::from_raw(
+        {
+            let mut d = Dict::new();
+            d.set(b"Filter".to_vec(), Object::name("DCTDecode"));
+            d
+        },
+        b"garbage".to_vec(),
+    )));
+    doc.update_dict(page, |d| d.set(b"Contents".to_vec(), Object::Ref(bad))).unwrap();
+    mark(&mut doc, 0, &[[0.0, 0.0, 50.0, 50.0]], "");
+    assert_eq!(apply(&mut doc, None), Err(RedactError::Unreadable(1)));
+}

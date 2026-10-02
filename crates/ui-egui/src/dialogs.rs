@@ -36,6 +36,7 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
     let mut export_now = false;
     let mut props_now = false;
     let mut field_props_now = false;
+    let mut redact_now: Option<Dialog> = None;
     let mut replace_now = false;
     let t = Tokens::get(ctx);
     let mut close = false;
@@ -275,6 +276,39 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
                         close = true;
                     }
                 });
+                return;
+            }
+            Dialog::RedactPages => {
+                let n = app.active_ids().and_then(|(_, id)| app.session.get(id)).map_or(1, |d| d.info.pages.len());
+                let (ok, cancel) = crate::redact_ui::pages_body(ui, &mut app.redact_pages_draft, n, &t);
+                if ok {
+                    redact_now = Some(dialog);
+                }
+                close = ok || cancel;
+                return;
+            }
+            Dialog::RedactSearch => {
+                let (go, cancel) = crate::redact_ui::search_body(ui, &mut app.redact_search, &t);
+                if go {
+                    redact_now = Some(dialog);
+                }
+                close = cancel;
+                return;
+            }
+            Dialog::RedactProps => {
+                let mut prefs = app.redact_prefs.clone();
+                let (ok, cancel) = crate::redact_ui::props_body(ui, &mut prefs, &t);
+                app.redact_prefs = prefs;
+                close = ok || cancel;
+                return;
+            }
+            Dialog::RedactApply => {
+                let marks = app.active_ids().and_then(|(_, id)| app.session.get(id)).map_or(0, |d| d.redaction_marks());
+                let (ok, cancel) = crate::redact_ui::apply_body(ui, marks, &t);
+                if ok {
+                    redact_now = Some(dialog);
+                }
+                close = ok || cancel;
                 return;
             }
             Dialog::FieldProps => {
@@ -534,6 +568,20 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
             bytes: d.bytes.clone(),
             src_pages: (d.src_from - 1..d.src_from - 1 + n).collect(),
         });
+    }
+    match redact_now {
+        Some(Dialog::RedactPages) => app.redact_pages(),
+        Some(Dialog::RedactSearch) => {
+            let n = app.redact_search();
+            app.redact_search.found = Some(n);
+        }
+        Some(Dialog::RedactApply) => {
+            let marks = app.active_ids().and_then(|(_, id)| app.session.get(id)).map_or(0, |d| d.redaction_marks());
+            if app.apply_edit(Edit::ApplyRedactions { pages: None }) {
+                app.notify(format!("Applied {marks} redaction mark{}. Save to remove the content from the file.", if marks == 1 { "" } else { "s" }));
+            }
+        }
+        _ => {}
     }
     if field_props_now
         && let Some(d) = app.field_props.take()

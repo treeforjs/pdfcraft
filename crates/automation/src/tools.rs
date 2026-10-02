@@ -257,6 +257,36 @@ pub fn tools() -> Vec<ToolDef> {
         t("form_delete_field", "Delete a field", "Delete a form field and all its widgets. Undoable.")
             .destructive()
             .with(schema(json!({ "doc": doc(), "field": { "type": "string" } }), &["doc", "field"])),
+        t(
+            "redact_mark",
+            "Mark for redaction",
+            "Mark content for redaction (nothing is removed until redact_apply). One of: rect [x0, y0, x1, y1] (points from the top-left of the displayed page) with page; find (text, every match); pattern (phone, email, credit-card, ssn, date: every match, Acrobat's Search & Redact patterns); whole_pages: true. find, pattern and whole_pages work on pages (default all). overlay: text shown on the box once applied; fill: box colour (default black). Undoable.",
+        )
+        .with(schema(
+            json!({
+                "doc": doc(),
+                "page": { "type": "integer", "minimum": 1 },
+                "rect": { "type": "array", "items": { "type": "number" }, "minItems": 4, "maxItems": 4 },
+                "find": { "type": "string", "minLength": 1 },
+                "pattern": { "type": "string", "enum": ["phone", "email", "credit-card", "ssn", "date"] },
+                "whole_pages": { "type": "boolean" },
+                "pages": pages("to search or mark (default: all)"),
+                "overlay": { "type": "string" },
+                "fill": { "type": "string", "description": "#RRGGBB or a colour name." },
+                "author": { "type": "string" },
+            }),
+            &["doc"],
+        )),
+        t(
+            "redact_apply",
+            "Apply redactions",
+            "Apply the redaction marks (all, or those on pages): text, images, vectors, comments and form fields under them are removed for good and boxes are drawn in their place. A verification pass fails the operation if anything readable remains. Undoable until saved; the saved file no longer contains the content.",
+        )
+        .destructive()
+        .with(schema(json!({ "doc": doc(), "pages": pages("whose marks to apply (default: all)") }), &["doc"])),
+        t("redact_clear", "Remove redaction marks", "Remove every redaction mark without applying it. Undoable.")
+            .destructive()
+            .with(schema(json!({ "doc": doc() }), &["doc"])),
         t("comment_list", "List comments", "Every comment (annotation other than links, form widgets and pop-ups) with its page, index, id, type, author, text, date, rectangle, colour, review status and replies.")
             .ro()
             .with(schema(json!({ "doc": doc(), "page": { "type": "integer", "minimum": 1, "description": "Only this page." } }), &["doc"])),

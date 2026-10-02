@@ -21,6 +21,8 @@ printcraft-organize = { path = "crates/organize", version = "0.1.0" }
 printcraft-annot = { path = "crates/annot", version = "0.1.0" }
 printcraft-fonts = { path = "crates/fonts", version = "0.1.0" }
 printcraft-model = { path = "crates/model", version = "0.1.0" }
+printcraft-content = { path = "crates/content", version = "0.1.0" }
+printcraft-redact = { path = "crates/redact", version = "0.1.0" }
 printcraft-edit = { path = "crates/edit", version = "0.1.0" }
 printcraft-create = { path = "crates/create", version = "0.1.0" }
 printcraft-forms = { path = "crates/forms", version = "0.1.0" }

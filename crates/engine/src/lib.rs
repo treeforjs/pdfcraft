@@ -28,7 +28,8 @@ pub use printcraft_forms::{
 
 /// Comment geometry helpers (text-box line breaking) for frontends.
 pub use printcraft_annot::appearance as annot_text;
-pub use printcraft_annot::{FillMark, Markup, NewAnnotation, NoteIcon, Props as CommentProps, ReviewState, Rgb, Shape, Style};
+pub use printcraft_annot::{FillMark, Markup, NewAnnotation, NoteIcon, Props as CommentProps, ReviewState, Rgb, Shape, Style, rect_quad};
+pub use printcraft_redact::patterns::{PATTERNS as REDACT_PATTERNS, Pattern as RedactPattern, find as find_pattern};
 
 pub type SplitPart = (usize, usize, Arc<Vec<u8>>);
 
@@ -144,6 +145,11 @@ impl Document {
     /// Page changes (insert, delete, rotate, move, extract) are allowed.
     pub fn allows_assembly(&self) -> bool {
         self.editable() && self.permissions().is_none_or(|p| p.assemble())
+    }
+
+    /// Redaction marks waiting to be applied.
+    pub fn redaction_marks(&self) -> usize {
+        self.info.annotations.iter().filter(|a| a.subtype == "Redact").count()
     }
 
     /// Changes to content and document information are allowed.
@@ -537,6 +543,12 @@ pub enum Edit {
     RemoveMarks {
         kind: MarkKind,
     },
+    /// Apply redaction marks (all, or those on `pages`): remove what they cover for good.
+    ApplyRedactions {
+        pages: Option<Vec<usize>>,
+    },
+    /// Remove redaction marks without applying them.
+    ClearRedactions,
     /// Flatten comments and/or form fields on every page into page content.
     Flatten {
         comments: bool,
@@ -595,6 +607,8 @@ impl Edit {
             Edit::RemoveMarks { kind: MarkKind::HeaderFooter } => "Remove header & footer".into(),
             Edit::RemoveMarks { kind: MarkKind::Watermark } => "Remove watermark".into(),
             Edit::RemoveMarks { kind: MarkKind::Background } => "Remove background".into(),
+            Edit::ApplyRedactions { .. } => "Apply redactions".into(),
+            Edit::ClearRedactions => "Remove redaction marks".into(),
             Edit::Flatten { comments: true, fields: false } => "Flatten comments".into(),
             Edit::Flatten { comments: false, fields: true } => "Flatten form fields".into(),
             Edit::Flatten { .. } => "Flatten".into(),
@@ -625,6 +639,7 @@ fn annotation_noun(s: &Shape) -> &'static str {
         Shape::Mark { mark: FillMark::Dot, .. } => "dot",
         Shape::Mark { mark: FillMark::Line, .. } => "line",
         Shape::Signature { .. } => "signature",
+        Shape::Redact { .. } => "redaction mark",
     }
 }
 
@@ -694,6 +709,8 @@ fn check_permission(edit: &Edit, p: &printcraft_cos::Permissions) -> Result<(), 
         | Edit::AddBackground { .. }
         | Edit::RemoveMarks { .. }
         | Edit::AddField { .. }
+        | Edit::ApplyRedactions { .. }
+        | Edit::ClearRedactions
         | Edit::SetFieldProps { .. }
         | Edit::DeleteField { .. }
         | Edit::Flatten { .. } => {
@@ -843,6 +860,12 @@ fn run_edit(doc: &mut printcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -
                 return Err(EditError::Edit(printcraft_edit::EditError::Invalid("there is nothing to remove".into())));
             }
         }
+        Edit::ApplyRedactions { pages } => {
+            printcraft_redact::apply(doc, pages.as_deref())?;
+        }
+        Edit::ClearRedactions => {
+            printcraft_redact::clear_marks(doc, None)?;
+        }
         Edit::Flatten { comments, fields } => {
             let n = printcraft_model::pages(doc).len();
             printcraft_edit::flatten(doc, &(0..n).collect::<Vec<_>>(), *comments, *fields)?;
@@ -960,6 +983,8 @@ pub enum EditError {
     Protection(String),
     #[error("{0}")]
     Form(#[from] printcraft_forms::FormError),
+    #[error(transparent)]
+    Redact(#[from] printcraft_redact::RedactError),
     #[error("{0}")]
     Edit(#[from] printcraft_edit::EditError),
     #[error("{0}")]

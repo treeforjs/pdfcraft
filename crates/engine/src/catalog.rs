@@ -278,13 +278,14 @@ pub static TOOL_GROUPS: &[ToolGroup] = &[
         icon: "rectangle-horizontal",
         hue: RED,
         badge: None,
-        availability: Planned("M8"),
+        availability: Ready,
         sections: &[ToolSection {
             title: "Redact",
             items: &[
-                item("Redact text and images", "rectangle-horizontal", "redact.mark", Planned("M8")),
-                item("Redact pages", "file-x", "redact.pages", Planned("M8")),
-                item("Find text and redact", "file-search", "redact.search", Planned("M8")),
+                item("Redact text and images", "rectangle-horizontal", "redact.mark", Ready),
+                item("Redact pages", "file-x", "redact.pages", Ready),
+                item("Find text and redact", "file-search", "redact.search", Ready),
+                item("Set properties", "settings-2", "redact.properties", Ready),
                 item("Sanitize document", "sparkles", "redact.sanitize", Planned("M8")),
             ],
         }],

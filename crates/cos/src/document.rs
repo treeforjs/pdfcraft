@@ -89,6 +89,8 @@ pub struct Document {
     encrypt_num: Option<u32>,
     /// Encryption was added, changed or removed since opening: only a full save can apply it.
     encryption_changed: bool,
+    /// Set by edits that must not leave earlier revisions in the file (redaction).
+    full_save: bool,
     /// The handler and `/Encrypt` object number that saves use, when encryption changed.
     out_security: Option<Arc<printcraft_crypt::SecurityHandler>>,
     out_encrypt_num: Option<u32>,
@@ -119,6 +121,7 @@ impl Document {
             security: None,
             encrypt_num: None,
             encryption_changed: false,
+            full_save: false,
             out_security: None,
             out_encrypt_num: None,
         };
@@ -171,6 +174,7 @@ impl Document {
             security: None,
             encrypt_num: None,
             encryption_changed: false,
+            full_save: false,
             out_security: None,
             out_encrypt_num: None,
         };
@@ -257,6 +261,17 @@ impl Document {
     /// What the opening password allows (`None` for unencrypted documents: everything).
     pub fn permissions(&self) -> Option<printcraft_crypt::Permissions> {
         self.security().map(|s| s.permissions())
+    }
+
+    /// Make the next save a full rewrite: earlier revisions (which still hold what an edit
+    /// removed) must not stay in the file. Redaction requires this.
+    pub fn require_full_save(&mut self) {
+        self.full_save = true;
+    }
+
+    /// The next save must rewrite the whole file (see [`Document::require_full_save`]).
+    pub fn full_save_required(&self) -> bool {
+        self.full_save
     }
 
     /// Security was set or removed since the document was opened (the next save applies it).

@@ -201,6 +201,25 @@ pub fn build(d: &Dict) -> Option<Stream> {
                 }
             }
         }
+        b"Redact" => {
+            // While marked: the outline of each area (the fill comes when applied).
+            let q = nums(d, b"QuadPoints").filter(|q| !q.is_empty() && q.len() % 8 == 0)?;
+            let col = stroke.unwrap_or([0.89, 0.13, 0.13]);
+            c.push_str(&format!("{}1 w\n", rg_stroke(col)));
+            for quad in q.chunks_exact(8) {
+                c.push_str(&format!(
+                    "{} {} m {} {} l {} {} l {} {} l h S\n",
+                    n(quad[0]),
+                    n(quad[1]),
+                    n(quad[2]),
+                    n(quad[3]),
+                    n(quad[6]),
+                    n(quad[7]),
+                    n(quad[4]),
+                    n(quad[5])
+                ));
+            }
+        }
         b"Square" | b"Circle" => {
             let fill = color(d, b"IC")?;
             if stroke.is_none() && fill.is_none() {

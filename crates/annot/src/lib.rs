@@ -167,6 +167,19 @@ pub enum Shape {
     Signature {
         strokes: Vec<Vec<[f64; 2]>>,
     },
+    /// A redaction mark (§12.5.6.23) over quadrilaterals (text) or one rectangle as a quad
+    /// (areas, pages). `overlay` is the text shown on the box once applied.
+    Redact {
+        quads: Vec<[f64; 8]>,
+        overlay: String,
+    },
+}
+
+/// A rectangle `[x0 y0 x1 y1]` as a quad in Acrobat's order (top-left, top-right, bottom-left,
+/// bottom-right).
+pub fn rect_quad(r: [f64; 4]) -> [f64; 8] {
+    let [x0, y0, x1, y1] = normalize(r);
+    [x0, y1, x1, y1, x0, y0, x1, y0]
 }
 
 impl Shape {
@@ -180,6 +193,7 @@ impl Shape {
             Shape::Ink { .. } | Shape::Signature { .. } => "Ink",
             Shape::TextBox { .. } | Shape::Typewriter { .. } => "FreeText",
             Shape::Mark { .. } => "Stamp",
+            Shape::Redact { .. } => "Redact",
         }
     }
 }
@@ -217,6 +231,8 @@ impl Style {
             Shape::TextBox { .. } | Shape::Typewriter { .. } => ([0.0, 0.0, 0.0], 0.0),
             Shape::Mark { .. } => ([0.0, 0.0, 0.0], 1.5),
             Shape::Signature { .. } => ([0.0, 0.0, 0.0], 1.5),
+            // Red outline while marked; a black box once applied.
+            Shape::Redact { .. } => return Self { color: [0.89, 0.13, 0.13], opacity: 1.0, width: 1.0, fill: Some([0.0, 0.0, 0.0]) },
         };
         Self { color, opacity: 1.0, width, fill: None }
     }
@@ -393,7 +409,7 @@ fn rect_for(shape: &Shape, style: &Style) -> Result<[f64; 4], AnnotError> {
             }
             [at[0], at[1] - NOTE_SIZE, at[0] + NOTE_SIZE, at[1]]
         }
-        Shape::TextMarkup { quads, .. } => {
+        Shape::TextMarkup { quads, .. } | Shape::Redact { quads, .. } => {
             if quads.is_empty() || !quads.iter().all(|q| finite(q)) {
                 return Err(bad("text area (no quadrilaterals)"));
             }
@@ -465,6 +481,7 @@ fn subject(shape: &Shape) -> &'static str {
         Shape::Typewriter { .. } => "Typewriter",
         Shape::Mark { mark, .. } => mark.label(),
         Shape::Signature { .. } => "Signature",
+        Shape::Redact { .. } => "Redact",
     }
 }
 
@@ -500,6 +517,16 @@ pub fn add_annotation(doc: &mut Document, new: &NewAnnotation, meta: &Meta) -> R
         Shape::TextMarkup { quads, .. } => {
             d.set(b"C".to_vec(), rgb(style.color));
             d.set(b"QuadPoints".to_vec(), num_array(&quads.concat()));
+        }
+        Shape::Redact { quads, overlay } => {
+            d.set(b"C".to_vec(), rgb(style.color));
+            d.set(b"IC".to_vec(), rgb(style.fill.unwrap_or([0.0, 0.0, 0.0])));
+            d.set(b"QuadPoints".to_vec(), num_array(&quads.concat()));
+            if !overlay.is_empty() {
+                d.set(b"OverlayText".to_vec(), PdfString::text(overlay));
+                d.set(b"DA".to_vec(), PdfString::literal(b"1 0 0 rg /Helv 10 Tf".to_vec()));
+                d.set(b"Q".to_vec(), Object::Int(1));
+            }
         }
         Shape::Rectangle { .. } | Shape::Oval { .. } => {
             d.set(b"C".to_vec(), rgb(style.color));

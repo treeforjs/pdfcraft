@@ -174,8 +174,8 @@ enum Row {
 /// which also repairs the file (what users expect after "the file was damaged and repaired").
 pub fn write_incremental(doc: &Document, opts: &SaveOptions) -> Result<Vec<u8>, CosError> {
     // Reconstructed files have no chain to append to; added or removed encryption must
-    // rewrite every object. Both need a full save.
-    if doc.revisions().is_empty() || doc.encryption_changed() {
+    // rewrite every object; redaction must not leave the old revision behind. All need a full save.
+    if doc.revisions().is_empty() || doc.encryption_changed() || doc.full_save_required() {
         return write_full(doc, opts);
     }
     let mut doc = doc.clone();

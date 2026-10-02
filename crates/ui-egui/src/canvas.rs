@@ -132,6 +132,9 @@ pub struct DocView {
     pub forms: crate::forms_ui::FormView,
     /// Prepare a form: the selected field and the gesture in progress.
     pub prepare: crate::prepare::PrepareView,
+    /// Redact tool: the box being drawn, and a mark to add (page, quads) for the app to style.
+    pub redact_drag: crate::redact_ui::AreaDrag,
+    pub pending_redaction: Option<(usize, Vec<[f64; 8]>)>,
     /// A crop rectangle being dragged (Crop tool).
     pub crop_drag: crate::crop::CropDrag,
     /// Fill & Sign text being typed.
@@ -206,6 +209,8 @@ impl DocView {
             comments: Default::default(),
             forms: Default::default(),
             prepare: Default::default(),
+            redact_drag: None,
+            pending_redaction: None,
             crop_drag: None,
             fill_text: None,
         }
@@ -307,6 +312,10 @@ impl DocView {
         let page = info.pages.get(s.page)?;
         let quads: Vec<[f64; 8]> = text.line_rects(s.range()).into_iter().map(|r| page.view_rect_to_quad(r)).collect();
         (!quads.is_empty()).then_some((s.page, quads))
+    }
+
+    pub(crate) fn page_text(&self, page: usize) -> Option<Arc<PageText>> {
+        self.texts.get(&page).cloned()
     }
 
     pub(crate) fn clear_selection(&mut self) {
@@ -786,6 +795,7 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
     let selects_text = match tool {
         QuickTool::Comment(t) => t.markup().is_some(),
         QuickTool::Select => !preparing,
+        QuickTool::Redact => true,
         QuickTool::Hand | QuickTool::Crop | QuickTool::Fill(_) | QuickTool::Field(_) => false,
     };
     let prefs = &app.comment_prefs;
@@ -954,7 +964,15 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
             } else {
                 tool == QuickTool::Select && crate::forms_ui::page_input(ui, &resp, &xf, i, info, &form, can_fill, view)
             };
-            let consumed = on_field || comments::page_input(ui, &resp, &pcx, view);
+            let boxing = tool == QuickTool::Redact && can_modify && {
+                let text = view.page_text(i);
+                let over_text = |p: Pos2| {
+                    let (vx, vy) = xf.screen_to_view(p);
+                    text.as_ref().is_some_and(|t| t.glyphs.iter().any(|g| vx >= g.rect[0] && vx <= g.rect[2] && vy >= g.rect[1] && vy <= g.rect[3]))
+                };
+                crate::redact_ui::page_input(ui, &resp, &xf, i, info, over_text, view)
+            };
+            let consumed = boxing || on_field || comments::page_input(ui, &resp, &pcx, view);
 
             // Text layer: find matches, selection, I-beam and drag-to-select.
             let to_screen = |g: [f32; 4]| xf.view_rect(g);
@@ -1024,6 +1042,10 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
             }
 
             comments::page_after_text(&resp, &pcx, view);
+            if tool == QuickTool::Redact && can_modify {
+                crate::redact_ui::after_text(&resp, i, info, view);
+                crate::redact_ui::paint(ui, painter, i, view);
+            }
             comments::paint_page(ui, painter, &pcx, view);
             if preparing {
                 crate::prepare::paint_page(ui, painter, &xf, i, info, &form, view);
@@ -1199,6 +1221,10 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
     }
     if let Some((name, w)) = field_props {
         app.open_field_props(&name, w);
+    }
+    if let Some((page, quads)) = app.views[index].pending_redaction.take() {
+        let author = app.comment_prefs.author.clone();
+        app.views[index].pending_edit = Some(app.redact_prefs.mark(page, quads, &author));
     }
     if open_signature {
         app.signature_draft.clear();

@@ -30,6 +30,8 @@ pub enum Needs {
     HasComments,
     /// The document has form fields and allows changes.
     HasFields,
+    /// The document has redaction marks and allows changes.
+    HasRedactions,
     /// The document has page marks of this kind and allows changes.
     Marks(crate::MarkKind),
     /// The document's security may be changed (owner, or nothing restricted).
@@ -175,6 +177,12 @@ pub const COMMANDS: &[CommandSpec] = &[
     c("comment.flatten", "Flatten comments", None, None, HasComments, "layers"),
     c("form.flatten", "Flatten form fields", None, None, HasFields, "layers"),
     c("form.prepare", "Prepare a form", None, None, Modification, "text-cursor-input"),
+    c("redact.mark", "Redact text and images", None, None, Modification, "rectangle-horizontal"),
+    c("redact.pages", "Redact pages…", None, None, Modification, "file-x"),
+    c("redact.search", "Find text and redact…", None, None, Modification, "file-search"),
+    c("redact.properties", "Redaction properties…", None, None, Document, "settings-2"),
+    c("redact.apply", "Apply redactions…", None, None, HasRedactions, "check"),
+    c("redact.clear", "Clear redaction marks", None, None, HasRedactions, "eraser"),
     c("form.field.properties", "Field properties…", None, None, HasFields, "settings-2"),
     c("form.add.text", "Add a text field", None, None, Modification, "text-cursor-input"),
     c("form.add.checkbox", "Add a checkbox", None, None, Modification, "check-circle-2"),
@@ -250,6 +258,7 @@ pub fn is_enabled(spec: &CommandSpec, session: &Session, active: Option<DocId>) 
         Marks(k) => doc.is_some_and(|d| d.allows_modification() && d.marks.contains(&k)),
         HasComments => doc.is_some_and(|d| d.allows_modification() && !d.info.annotations.is_empty()),
         HasFields => doc.is_some_and(|d| d.allows_modification() && !d.form.is_empty()),
+        HasRedactions => doc.is_some_and(|d| d.allows_modification() && d.redaction_marks() > 0),
         Security => doc.is_some_and(|d| d.allows_security_change()),
         ProtectedSecurity => doc.is_some_and(|d| d.allows_security_change() && d.security_summary().is_some()),
         Undo => doc.is_some_and(|d| d.can_undo().is_some()),

@@ -5419,11 +5419,11 @@ title = "Mark text for redaction"
 area = "G"
 tier = "P0"
 milestone = "M8"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["redact.mark"]
+tools = ["redact_mark"]
+evidence = ["crates/ui-egui/tests/redact.rs::marking_applying_and_clearing", "crates/automation/tests/automation.rs::redacting_through_tools", "crates/redact/src/tests.rs::glyphs_under_a_mark_go_and_the_rest_stays_put"]
+notes = "drag across text (or select first) with the Redact tool"
 
 [[feature]]
 id = "protect.redact-area"
@@ -5431,11 +5431,11 @@ title = "Mark areas and images for redaction"
 area = "G"
 tier = "P0"
 milestone = "M8"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["redact.mark"]
+tools = ["redact_mark"]
+evidence = ["crates/ui-egui/tests/redact.rs::marking_applying_and_clearing", "crates/redact/src/tests.rs::images_are_removed_or_have_their_pixels_cleared"]
+notes = "drag a box anywhere else"
 
 [[feature]]
 id = "protect.redact-pages"
@@ -5443,11 +5443,11 @@ title = "Mark whole pages for redaction"
 area = "G"
 tier = "P0"
 milestone = "M8"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["redact.pages"]
+tools = ["redact_mark"]
+evidence = ["crates/ui-egui/tests/redact.rs::marking_applying_and_clearing"]
+notes = "Mark Page Range: current page or a range"
 
 [[feature]]
 id = "protect.search-and-redact"
@@ -5455,11 +5455,11 @@ title = "Find text and redact"
 area = "G"
 tier = "P0"
 milestone = "M8"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["redact.search"]
+tools = ["redact_mark"]
+evidence = ["crates/automation/tests/automation.rs::redacting_through_tools"]
+notes = "single word or phrase, every match on every page"
 
 [[feature]]
 id = "protect.redact-word-lists"
@@ -5479,11 +5479,11 @@ title = "Redact patterns (phone, email, card, SSN, dates)"
 area = "G"
 tier = "P0"
 milestone = "M8"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["redact.search"]
+tools = ["redact_mark"]
+evidence = ["crates/redact/src/patterns.rs::phone_numbers", "crates/redact/src/patterns.rs::credit_cards_need_a_valid_checksum", "crates/automation/tests/automation.rs::redacting_through_tools"]
+notes = "phone, e-mail, credit card (Luhn), SSN, dates (English US forms)"
 
 [[feature]]
 id = "protect.redact-pattern-locales"
@@ -5527,11 +5527,11 @@ title = "Redaction fill colour and overlay text"
 area = "G"
 tier = "P0"
 milestone = "M8"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["redact.properties"]
+tools = ["redact_mark"]
+evidence = ["crates/ui-egui/tests/redact.rs::marking_applying_and_clearing"]
+notes = "fill colour or none, custom overlay text; fonts, repeat, codes pending"
 
 [[feature]]
 id = "protect.redaction-codes"
@@ -5551,11 +5551,11 @@ title = "Apply redactions (remove underlying content)"
 area = "G"
 tier = "P0"
 milestone = "M8"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["redact.apply"]
+tools = ["redact_apply"]
+evidence = ["crates/ui-egui/tests/redact.rs::marking_applying_and_clearing", "crates/engine/src/tests.rs::redaction_marks_apply_for_good_and_undo", "crates/automation/tests/automation.rs::redacting_through_tools"]
+notes = "confirmation; one undo step; next save is a full rewrite"
 
 [[feature]]
 id = "protect.redact-glyph-removal"
@@ -5563,11 +5563,11 @@ title = "Remove redacted text glyphs from content streams"
 area = "G"
 tier = "P0"
 milestone = "M8"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["redact.apply"]
+tools = ["redact_apply"]
+evidence = ["crates/redact/src/tests.rs::glyphs_under_a_mark_go_and_the_rest_stays_put", "crates/redact/src/tests.rs::kerning_spacing_scaling_and_line_operators_are_honoured", "crates/redact/src/tests.rs::rotated_text_and_composite_fonts", "crates/redact/src/tests.rs::shared_form_xobjects_are_copied_not_changed"]
+notes = "TJ displacement keeps the rest in place; simple, composite (CMaps), Type 3 fonts"
 
 [[feature]]
 id = "protect.redact-image-pixels"
@@ -5575,11 +5575,11 @@ title = "Remove redacted image pixels"
 area = "G"
 tier = "P0"
 milestone = "M8"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["redact.apply"]
+tools = ["redact_apply"]
+evidence = ["crates/redact/src/tests.rs::images_are_removed_or_have_their_pixels_cleared"]
+notes = "covered pixels cleared in a copy; DCT/JPX/JBIG2/CCITT images removed whole"
 
 [[feature]]
 id = "protect.redact-vectors"
@@ -5587,11 +5587,11 @@ title = "Remove or cut redacted vector paths"
 area = "G"
 tier = "P0"
 milestone = "M8"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["redact.apply"]
+tools = ["redact_apply"]
+evidence = ["crates/redact/src/tests.rs::vectors_are_removed_or_clipped_and_inline_images_go"]
+notes = "covered paths removed, others clipped; shadings clipped"
 
 [[feature]]
 id = "protect.redact-annots-fields"
@@ -5599,11 +5599,11 @@ title = "Remove annotations and fields under redactions"
 area = "G"
 tier = "P0"
 milestone = "M8"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["redact.apply"]
+tools = ["redact_apply"]
+evidence = ["crates/redact/src/tests.rs::comments_links_and_fields_under_a_mark_go", "crates/ui-egui/tests/redact.rs::marking_applying_and_clearing"]
+notes = "with pop-ups; fields lose all widgets"
 
 [[feature]]
 id = "protect.redact-struct-tree"
@@ -5623,11 +5623,11 @@ title = "Verify no residue remains after redaction"
 area = "G"
 tier = "P0"
 milestone = "M8"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["redact.apply"]
+tools = ["redact_apply"]
+evidence = ["crates/redact/src/tests.rs::unreadable_content_fails_closed", "crates/engine/src/tests.rs::redaction_marks_apply_for_good_and_undo"]
+notes = "re-reads redacted pages; residue or unreadable content fails the whole operation"
 
 [[feature]]
 id = "protect.redact-filename-suffix"

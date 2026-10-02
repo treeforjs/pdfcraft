@@ -15,6 +15,7 @@ printcraft-organize = { workspace = true }
 printcraft-annot = { workspace = true }
 printcraft-forms = { workspace = true }
 printcraft-edit = { workspace = true }
+printcraft-redact = { workspace = true }
 printcraft-create = { workspace = true }
 printcraft-model = { workspace = true }
 thiserror = { workspace = true }

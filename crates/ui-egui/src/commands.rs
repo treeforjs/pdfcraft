@@ -25,6 +25,9 @@ impl PrintCraftApp {
                 commands::Needs::FillForms if self.active.is_some() => "This document has no form fields you can fill in".to_string(),
                 commands::Needs::HasComments if self.active.is_some() => "This document has no comments to flatten".to_string(),
                 commands::Needs::HasFields if self.active.is_some() => "This document has no form fields to flatten".to_string(),
+                commands::Needs::HasRedactions if self.active.is_some() => {
+                    "There are no redaction marks (mark text, areas or pages first)".to_string()
+                }
                 commands::Needs::Marks(k) if self.active.is_some() => format!(
                     "This document has no {} to change",
                     match k {
@@ -207,6 +210,43 @@ impl PrintCraftApp {
             }
             "export.image" => self.dialog = Some(Dialog::Export(crate::export_ui::ExportKind::Image)),
             "export.text" => self.dialog = Some(Dialog::Export(crate::export_ui::ExportKind::Text)),
+            "redact.mark" => {
+                self.quick_tool = crate::QuickTool::Redact;
+                self.left = crate::LeftPanel::Tool("redact");
+                self.left_open = true;
+                // A text selection made first is marked right away.
+                if let Some(i) = active {
+                    let info = &self.session.get(self.views[i].id).expect("active").info;
+                    if let Some((page, quads)) = self.views[i].selection_quads(info) {
+                        self.views[i].clear_selection();
+                        let author = self.comment_prefs.author.clone();
+                        self.apply_edit(self.redact_prefs.mark(page, quads, &author));
+                    }
+                }
+            }
+            "redact.pages" => {
+                if let Some(i) = active {
+                    let n = self.session.get(self.views[i].id).map_or(1, |d| d.info.pages.len());
+                    self.redact_pages_draft = crate::RedactPagesDraft { current: true, from: self.views[i].current + 1, to: n };
+                }
+                self.dialog = Some(Dialog::RedactPages);
+            }
+            "redact.search" => {
+                self.redact_search.found = None;
+                self.dialog = Some(Dialog::RedactSearch);
+            }
+            "redact.properties" => self.dialog = Some(Dialog::RedactProps),
+            "redact.apply" => {
+                let marks = active.and_then(|i| self.session.get(self.views[i].id)).map_or(0, |d| d.redaction_marks());
+                if marks == 0 {
+                    self.notify("There are no redaction marks to apply");
+                } else {
+                    self.dialog = Some(Dialog::RedactApply);
+                }
+            }
+            "redact.clear" => {
+                self.apply_edit(Edit::ClearRedactions);
+            }
             "form.prepare" => {
                 self.left = crate::LeftPanel::Tool("form");
                 self.left_open = true;
