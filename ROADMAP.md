@@ -46,7 +46,7 @@ Hours are for a single agent (low–high). "Done" is the estimated fraction of t
 | M12 | Accessibility, compare, measure, search, XFA | 200–380 | 12% | 175–335 | Done: new `a11y` crate with the Accessibility Checker (all 32 rules, report, Fix/Skip/Explain, options dialog and results panel, agent tools). Missing: autotag, Tags/Order/Content panels, Reading Order tool, alt-text workflow, compare, measure, search index, XFA |
 | M13 | Automation (MCP, Action Wizard, CLI) + AI providers | 60–120 | 40% | 36–72 | Done: MCP resources (document info, text, page images); headless tool table (91 tools incl. signing, optimizing, initial view, links, stamps, data exchange, comment review, forms authoring and scripts, redaction, sanitize, print, add content), opt-in MCP server over stdio, CLI `run`/`tools`, UI control channel with drag. Missing: Action Wizard, AI providers |
 | M14 | 1.0 polish: performance, localization, installers | 120–250 | 0% | 120–250 | |
-| | **Total** | **2,085–3,840** | **≈ 29%** | **≈ 1,480–2,760** | |
+| | **Total** | **2,085–3,840** | **≈ 30%** | **≈ 1,480–2,760** | |
 
 **Overall progress: about 27% of the effort.** The viewer and the core are far ahead of the editing features, because the viewer was built first so progress could be seen.
 
@@ -67,6 +67,7 @@ M0 → M1 → M2 → M3 → M4 must happen in order. After M4, M5–M12 can run 
 
 Newest first. One line per session: the date, what moved, and the new overall percentage.
 
+- **2026-10-02 (session 11, later):** Sign with macOS Keychain identities, Add alternate text, Advanced Search panel, space audit and link clean-up in the Optimizer, hybrid-reference files, signed documents protected from rewrites, redaction cleans the tags, custom stamps, image fields, Combine files with page choice. 97 tools; P0 82%, P1 45%. ≈ 30%.
 - **2026-10-02 (session 11):** Accessibility Checker (new `a11y` crate: all 32 rules, report, fixes, options dialog and results panel), MCP resources for page images and text, revisions (list, open an earlier one), export all images, fit visible, form Preview and locked fields, document title in the window; plus attachment comments, eraser, date picker, duplicate/align/distribute fields. 91 tools; P0 80%, P1 43%. ≈ 29%.
 
 - **2026-10-02 (session 10, last):** Manual tab order, backgrounds/watermarks from files (PDF pages as forms, images), Initial View and reading options (honoured on open), bookmarks expand/collapse, make-default comment properties, required-field borders, cut/copy/paste pages, marquee zoom, snapshot. 85 tools; P0 80%, P1 ≈ 27%.
