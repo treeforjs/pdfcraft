@@ -9323,11 +9323,11 @@ title = "MCP resources for page images and text"
 area = "N"
 tier = "P1"
 milestone = "M13"
-status = "planned"
+status = "shipped"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["doc_info", "text_extract", "page_render"]
+evidence = ["crates/automation/tests/automation.rs::mcp_resources_expose_open_documents", "crates/automation/src/mcp.rs::resource_uris_parse"]
+notes = "resources/list, resources/templates/list and resources/read: printcraft://doc/{doc}/info (JSON), /text, /page/{page}/text, /page/{page}/image?dpi= (PNG)"
 
 [[feature]]
 id = "misc.ui-control-channel"

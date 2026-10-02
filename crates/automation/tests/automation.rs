@@ -277,13 +277,40 @@ fn mcp_errors() {
     let mut s = McpServer::new(Automation::new());
     assert_eq!(rpc(&mut s, 1, "initialize", json!({ "protocolVersion": "1999-01-01" }))["result"]["protocolVersion"], "2025-06-18");
     assert_eq!(rpc(&mut s, 2, "ping", json!({}))["result"], json!({}));
-    assert_eq!(rpc(&mut s, 3, "resources/list", json!({}))["error"]["code"], -32601);
+    assert_eq!(rpc(&mut s, 3, "prompts/list", json!({}))["error"]["code"], -32601);
+    assert_eq!(rpc(&mut s, 6, "resources/read", json!({ "uri": "printcraft://doc/9/info" }))["error"]["code"], -32602);
     assert_eq!(rpc(&mut s, 4, "tools/call", json!({ "name": "nope" }))["error"]["code"], -32602);
     let failed = rpc(&mut s, 5, "tools/call", json!({ "name": "doc_open", "arguments": { "path": "/definitely/not/here.pdf" } }));
     assert_eq!(failed["result"]["isError"], true);
     assert!(failed["result"]["content"][0]["text"].as_str().unwrap().contains("here.pdf"));
     let bad: Value = serde_json::from_str(&s.handle_line("{not json").unwrap()).unwrap();
     assert_eq!(bad["error"]["code"], -32700);
+}
+
+#[cfg(feature = "mcp")]
+#[test]
+fn mcp_resources_expose_open_documents() {
+    let dir = workdir("mcp-resources");
+    let mut s = McpServer::new(auto(&dir));
+    assert!(rpc(&mut s, 1, "initialize", json!({}))["result"]["capabilities"]["resources"].is_object());
+    assert_eq!(rpc(&mut s, 2, "resources/list", json!({}))["result"]["resources"], json!([]));
+    assert_eq!(rpc(&mut s, 3, "resources/templates/list", json!({}))["result"]["resourceTemplates"].as_array().unwrap().len(), 4);
+    rpc(&mut s, 4, "tools/call", json!({ "name": "doc_open", "arguments": { "path": "a.pdf" } }));
+    let list = rpc(&mut s, 5, "resources/list", json!({}))["result"]["resources"].as_array().cloned().unwrap();
+    assert_eq!(list.len(), 2 + 3, "info, text and three page images");
+    assert_eq!(list[0]["uri"], "printcraft://doc/1/info");
+    let read = |s: &mut McpServer, uri: &str| rpc(s, 6, "resources/read", json!({ "uri": uri }))["result"]["contents"][0].clone();
+    let text = read(&mut s, "printcraft://doc/1/text");
+    assert_eq!(text["mimeType"], "text/plain");
+    assert!(text["text"].as_str().unwrap().contains("Page 2\nPage 2"), "{text}");
+    assert_eq!(read(&mut s, "printcraft://doc/1/page/3/text")["text"], "Page 3");
+    let info: Value = serde_json::from_str(read(&mut s, "printcraft://doc/1/info")["text"].as_str().unwrap()).unwrap();
+    assert_eq!(info["pages"].as_array().unwrap().len(), 3);
+    let img = read(&mut s, "printcraft://doc/1/page/1/image?dpi=36");
+    use base64::Engine as _;
+    let png = base64::engine::general_purpose::STANDARD.decode(img["blob"].as_str().unwrap()).unwrap();
+    assert_eq!(&png[1..4], b"PNG");
+    assert_eq!(rpc(&mut s, 7, "resources/read", json!({ "uri": "printcraft://doc/1/page/9/image" }))["error"]["code"], -32602);
 }
 
 #[test]
