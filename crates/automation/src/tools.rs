@@ -232,13 +232,13 @@ pub fn tools() -> Vec<ToolDef> {
         t(
             "form_add_field",
             "Prepare form: add a field",
-            "Add a form field on a page. type: text, date, checkbox, radio, combo, list, button, signature. rect in points from the top-left of the displayed page [x0, y0, x1, y1]. name defaults to Acrobat's next free name (Text1, Check Box1, Group1, Dropdown1, List Box1, Button1, Signature1, Date1). Radio buttons join the radio group named by group (a new group otherwise) with the export value export. Returns the field's name. Undoable.",
+            "Add a form field on a page. type: text, date, checkbox, radio, combo, list, button, image (a picture placeholder; fill it with form_set_image), signature. rect in points from the top-left of the displayed page [x0, y0, x1, y1]. name defaults to Acrobat's next free name (Text1, Check Box1, Group1, Dropdown1, List Box1, Button1, Image1, Signature1, Date1). Radio buttons join the radio group named by group (a new group otherwise) with the export value export. Returns the field's name. Undoable.",
         )
         .with(schema(
             json!({
                 "doc": doc(),
                 "page": { "type": "integer", "minimum": 1 },
-                "type": { "type": "string", "enum": ["text", "date", "checkbox", "radio", "combo", "list", "button", "signature"] },
+                "type": { "type": "string", "enum": ["text", "date", "checkbox", "radio", "combo", "list", "button", "image", "signature"] },
                 "rect": { "type": "array", "items": { "type": "number" }, "minItems": 4, "maxItems": 4 },
                 "name": { "type": "string" },
                 "multiline": { "type": "boolean" },
@@ -251,6 +251,8 @@ pub fn tools() -> Vec<ToolDef> {
             }),
             &["doc", "page", "type", "rect"],
         )),
+        t("form_set_image", "Set an image field's picture", "Show an image file (PNG, JPEG, TIFF, GIF or BMP) in an image field or button, scaled to fit and centred (what clicking an image field does). Undoable.")
+            .with(schema(json!({ "doc": doc(), "field": { "type": "string" }, "path": { "type": "string" } }), &["doc", "field", "path"])),
         t(
             "form_set_props",
             "Field properties",

@@ -318,3 +318,29 @@ fn preview_fills_the_form_and_locked_fields_keep_their_properties() {
     h.run_steps(3);
     assert!(!locked(&h));
 }
+
+#[test]
+fn image_fields_take_a_picture_when_clicked() {
+    let mut h = harness();
+    assert!(h.state_mut().execute("form.add.image"));
+    h.run_steps(2);
+    let (a, b) = (at(&h, 40.0, 220.0), at(&h, 140.0, 290.0));
+    drag(&mut h, a, b);
+    assert_eq!(names(&h).last().map(String::as_str), Some("Image1"));
+    // A picture to choose (the picker is bypassed in tests).
+    let path = std::env::temp_dir().join(format!("printcraft-image-field-{}.png", std::process::id()));
+    image::RgbImage::from_pixel(8, 4, image::Rgb([200, 30, 30])).save(&path).unwrap();
+    h.state_mut().save_override = Some(path.to_string_lossy().into_owned());
+    // Fill it in as a reader would.
+    h.get_by_label("Preview").click();
+    h.run_steps(2);
+    let c = at(&h, 90.0, 255.0);
+    h.hover_at(c);
+    h.run_steps(1);
+    h.drag_at(c);
+    h.run_steps(1);
+    h.drop_at(c);
+    h.run_steps(4);
+    let s = h.state();
+    assert_eq!(s.session.get(s.views[0].id).unwrap().can_undo(), Some("Set the image of Image1"));
+}

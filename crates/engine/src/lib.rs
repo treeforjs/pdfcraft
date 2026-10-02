@@ -97,7 +97,7 @@ fn scope_of(edit: &Edit) -> Scope {
         | Edit::ResizeAnnotation { .. }
         | Edit::StyleAnnotation { .. }
         | Edit::SetAnnotationInfo { .. } => Scope::Comments,
-        Edit::SetFieldValue { .. } | Edit::ResetForm { .. } => Scope::Form,
+        Edit::SetFieldValue { .. } | Edit::ResetForm { .. } | Edit::SetFieldImage { .. } => Scope::Form,
         Edit::Batch { edits, .. } => {
             let mut scopes = edits.iter().map(scope_of);
             let first = scopes.next().unwrap_or(Scope::Full);
@@ -664,7 +664,11 @@ pub enum Edit {
         name: String,
         props: Box<FieldProps>,
     },
-    /// Delete a field and all its widgets.
+    /// An image field (or any button): show this image file (PNG, JPEG, TIFF, GIF, BMP).
+    SetFieldImage {
+        name: String,
+        image: Arc<Vec<u8>>,
+    },
     /// Duplicate a field onto other pages (same field, shared value).
     DuplicateField {
         name: String,
@@ -835,6 +839,7 @@ impl Edit {
             Edit::ResizeAnnotation { .. } => "Resize comment".into(),
             Edit::StyleAnnotation { .. } | Edit::SetAnnotationInfo { .. } => "Change comment properties".into(),
             Edit::SetFieldValue { name, .. } => format!("Fill in {name}"),
+            Edit::SetFieldImage { name, .. } => format!("Set the image of {name}"),
             Edit::ResetForm { .. } => "Clear form".into(),
             Edit::AddField { .. } => "Add field".into(),
             Edit::SetFieldProps { .. } => "Change field properties".into(),
@@ -957,7 +962,7 @@ fn check_permission(edit: &Edit, p: &printcraft_cos::Permissions) -> Result<(), 
                 Err(EditError::NotPermitted("comments"))
             }
         }
-        Edit::SetFieldValue { .. } | Edit::ResetForm { .. } => {
+        Edit::SetFieldValue { .. } | Edit::ResetForm { .. } | Edit::SetFieldImage { .. } => {
             if p.fill_forms() {
                 Ok(())
             } else {
@@ -1133,6 +1138,14 @@ fn run_edit(doc: &mut printcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -
             printcraft_annot::set_info(doc, *page, *index, author.as_deref(), subject.as_deref(), *icon, &cx.meta())?;
         }
         Edit::SetFieldValue { name, value } => printcraft_forms::set_value(doc, name, value)?,
+        Edit::SetFieldImage { name, image } => {
+            let (img, _) = printcraft_create::image_xobject(doc, name, image)?;
+            let px = match &*doc.get(img) {
+                printcraft_cos::Object::Stream(s) => (s.dict.int(b"Width").unwrap_or(1) as u32, s.dict.int(b"Height").unwrap_or(1) as u32),
+                _ => (1, 1),
+            };
+            printcraft_forms::set_button_icon(doc, name, img, px)?;
+        }
         Edit::ResetForm { names } => {
             printcraft_forms::reset(doc, names.as_deref())?;
         }

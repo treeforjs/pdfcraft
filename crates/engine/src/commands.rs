@@ -226,6 +226,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     c("form.add.combo", "Add a drop-down list", None, None, Modification, "chevron-down"),
     c("form.add.list", "Add a list box", None, None, Modification, "list"),
     c("form.add.button", "Add a button", None, None, Modification, "square"),
+    c("form.add.image", "Add an image field", None, None, Modification, "image"),
     c("form.add.date", "Add a date field", None, None, Modification, "clock-3"),
     c("form.add.signature", "Add a digital signature field", None, None, Modification, "signature"),
     c("sign.digital", "Digitally sign", None, None, Document, "signature"),

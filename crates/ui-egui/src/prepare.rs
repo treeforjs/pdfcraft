@@ -26,17 +26,19 @@ pub enum FieldTool {
     Combo,
     List,
     Button,
+    Image,
     Date,
     Signature,
 }
 
-pub const FIELD_TOOLS: [FieldTool; 8] = [
+pub const FIELD_TOOLS: [FieldTool; 9] = [
     FieldTool::Text,
     FieldTool::CheckBox,
     FieldTool::Radio,
     FieldTool::Combo,
     FieldTool::List,
     FieldTool::Button,
+    FieldTool::Image,
     FieldTool::Date,
     FieldTool::Signature,
 ];
@@ -50,6 +52,7 @@ impl FieldTool {
             FieldTool::Combo => "form.add.combo",
             FieldTool::List => "form.add.list",
             FieldTool::Button => "form.add.button",
+            FieldTool::Image => "form.add.image",
             FieldTool::Date => "form.add.date",
             FieldTool::Signature => "form.add.signature",
         }
@@ -67,6 +70,7 @@ impl FieldTool {
             FieldTool::Combo => "Drop-down list",
             FieldTool::List => "List box",
             FieldTool::Button => "Button",
+            FieldTool::Image => "Image field",
             FieldTool::Date => "Date field",
             FieldTool::Signature => "Digital signature",
         }
@@ -89,6 +93,7 @@ impl FieldTool {
             FieldTool::Combo => NewField::Combo { options: Vec::new(), editable: false },
             FieldTool::List => NewField::List { options: Vec::new(), multi: false },
             FieldTool::Button => NewField::Button { caption: String::new() },
+            FieldTool::Image => NewField::Image,
             FieldTool::Date => NewField::Date,
             FieldTool::Signature => NewField::Signature,
         }
@@ -100,6 +105,7 @@ impl FieldTool {
             FieldTool::CheckBox | FieldTool::Radio => (14.0, 14.0),
             FieldTool::List => (144.0, 54.0),
             FieldTool::Button => (72.0, 22.0),
+            FieldTool::Image => (144.0, 108.0),
             FieldTool::Signature => (180.0, 36.0),
             FieldTool::Date => (108.0, 22.0),
             FieldTool::Text | FieldTool::Combo => (144.0, 22.0),

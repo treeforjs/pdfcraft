@@ -4707,11 +4707,11 @@ title = "Add image fields"
 area = "F"
 tier = "P1"
 milestone = "M6"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["form.add.image"]
+tools = ["form_add_field", "form_set_image"]
+evidence = ["crates/forms/src/tests.rs::image_fields_ask_for_a_picture_and_show_it", "crates/ui-egui/tests/prepare.rs::image_fields_take_a_picture_when_clicked", "crates/automation/tests/automation.rs::preparing_a_form_through_tools"]
+notes = "icon-only push button with event.target.buttonImportIcon(), recognised natively; clicking asks for a PNG/JPEG/TIFF/GIF/BMP that becomes /MK /I, scaled proportionally and centred"
 
 [[feature]]
 id = "form.add-date-field"

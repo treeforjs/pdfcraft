@@ -36,6 +36,8 @@ pub enum NewField {
     Button {
         caption: String,
     },
+    /// An image field: an icon-only push button that asks for a picture when clicked.
+    Image,
     Signature,
 }
 
@@ -49,6 +51,7 @@ impl NewField {
             NewField::Combo { .. } => "Dropdown",
             NewField::List { .. } => "List Box",
             NewField::Button { .. } => "Button",
+            NewField::Image => "Image",
             NewField::Signature => "Signature",
         }
     }
@@ -405,6 +408,21 @@ pub fn add_field(doc: &mut Document, page: usize, rect: [f64; 4], kind: &NewFiel
             mk.set(b"CA".to_vec(), PdfString::text(caption));
             w.set(b"MK".to_vec(), Object::Dict(mk));
         }
+        NewField::Image => {
+            w.set(b"FT".to_vec(), Object::name("Btn"));
+            w.set(b"Ff".to_vec(), Object::Int(flags::PUSH_BUTTON as i64));
+            w.set(b"DA".to_vec(), PdfString::literal(b"/Helv 0 Tf 0 g".to_vec()));
+            let mut mk = w.get(b"MK").and_then(|m| m.as_dict()).cloned().unwrap_or_default();
+            // Icon only, no border or fill: the picture is the field.
+            mk.remove(b"BC");
+            mk.remove(b"BG");
+            mk.set(b"TP".to_vec(), Object::Int(1));
+            w.set(b"MK".to_vec(), Object::Dict(mk));
+            let mut a = Dict::new();
+            a.set(b"S".to_vec(), Object::name("JavaScript"));
+            a.set(b"JS".to_vec(), PdfString::literal(b"event.target.buttonImportIcon();".to_vec()));
+            w.set(b"A".to_vec(), Object::Dict(a));
+        }
         NewField::Signature => {
             w.set(b"FT".to_vec(), Object::name("Sig"));
         }
@@ -519,24 +537,38 @@ fn form_stream(width: f64, height: f64, content: Vec<u8>, resources: Dict) -> St
     Stream::flate(d, &content)
 }
 
-/// A push button: background, border and its centred caption.
+/// A push button: background, border, its icon (`/MK /I`, scaled to fit and centred) and its
+/// centred caption (unless the layout is icon only, `/TP 1`).
 fn button_appearance(doc: &Document, w: &Widget) -> Stream {
     let (mut c, width, height) = frame_only(doc, w);
     let wobj = doc.get(w.obj);
-    let caption = wobj
-        .as_dict()
-        .and_then(|d| d.get(b"MK"))
-        .and_then(|m| m.as_dict())
-        .and_then(|m| m.get(b"CA"))
-        .and_then(|c| c.as_string())
-        .map(|s| s.to_text())
-        .unwrap_or_default();
-    let size = ((height - 4.0) * 0.6).clamp(4.0, 14.0);
-    let tw = helvetica_width(&caption, size);
+    let mk = wobj.as_dict().and_then(|d| d.get(b"MK")).map(|m| doc.resolve(m)).and_then(|m| m.as_dict().cloned()).unwrap_or_default();
+    let caption = mk.get(b"CA").and_then(|c| c.as_string()).map(|s| s.to_text()).unwrap_or_default();
+    let icon_only = mk.int(b"TP") == Some(1);
     let mut content = std::mem::take(&mut c).into_bytes();
-    content.extend(format!("BT /Helv {size:.2} Tf 0 g 1 0 0 1 {:.3} {:.3} Tm ", (width - tw) / 2.0, (height - size * 0.7) / 2.0).bytes());
-    content.extend(literal(&win_ansi(&caption)));
-    content.extend_from_slice(b" Tj ET\n");
+    let mut xobjects = Dict::new();
+    if let Some(icon) = mk.get(b"I").and_then(Object::as_ref)
+        && let Object::Stream(s) = &*doc.get(icon)
+    {
+        let bb: Vec<f64> = s.dict.get(b"BBox").and_then(|b| b.as_array().map(|a| a.iter().filter_map(Object::as_f64).collect())).unwrap_or_default();
+        if let [x0, y0, x1, y1] = bb[..]
+            && x1 > x0
+            && y1 > y0
+        {
+            // Proportional, as large as fits (Acrobat's default icon placement), centred.
+            let k = ((width - 2.0) / (x1 - x0)).min((height - 2.0) / (y1 - y0)).max(0.0);
+            let (dx, dy) = ((width - (x1 - x0) * k) / 2.0 - x0 * k, (height - (y1 - y0) * k) / 2.0 - y0 * k);
+            content.extend(format!("q {k:.6} 0 0 {k:.6} {dx:.3} {dy:.3} cm /Icon Do Q\n").bytes());
+            xobjects.set(b"Icon".to_vec(), Object::Ref(icon));
+        }
+    }
+    if !icon_only && !caption.is_empty() {
+        let size = ((height - 4.0) * 0.6).clamp(4.0, 14.0);
+        let tw = helvetica_width(&caption, size);
+        content.extend(format!("BT /Helv {size:.2} Tf 0 g 1 0 0 1 {:.3} {:.3} Tm ", (width - tw) / 2.0, (height - size * 0.7) / 2.0).bytes());
+        content.extend(literal(&win_ansi(&caption)));
+        content.extend_from_slice(b" Tj ET\n");
+    }
     let mut font = Dict::new();
     font.set(b"Type".to_vec(), Object::name("Font"));
     font.set(b"Subtype".to_vec(), Object::name("Type1"));
@@ -546,7 +578,36 @@ fn button_appearance(doc: &Document, w: &Widget) -> Stream {
     fonts.set(b"Helv".to_vec(), Object::Dict(font));
     let mut res = Dict::new();
     res.set(b"Font".to_vec(), Object::Dict(fonts));
+    if !xobjects.is_empty() {
+        res.set(b"XObject".to_vec(), Object::Dict(xobjects));
+    }
     form_stream(width, height, content, res)
+}
+
+/// Give a push button (an image field) the picture `image` (an image XObject of `px` pixels):
+/// it becomes the button's icon (`/MK /I`) and its appearance.
+pub fn set_button_icon(doc: &mut Document, name: &str, image: ObjRef, px: (u32, u32)) -> Result<(), FormError> {
+    let f = fields(doc).into_iter().find(|f| f.name == name).ok_or_else(|| FormError::NoSuchField(name.into()))?;
+    if f.kind != FieldKind::PushButton {
+        return invalid(format!("{name} is not a button or image field"));
+    }
+    // The icon form draws the image in a box of its pixel size (keeping its aspect ratio).
+    let (w, h) = (px.0.max(1) as f64, px.1.max(1) as f64);
+    let mut xo = Dict::new();
+    xo.set(b"Im0".to_vec(), Object::Ref(image));
+    let mut res = Dict::new();
+    res.set(b"XObject".to_vec(), Object::Dict(xo));
+    let icon = doc.add(Object::Stream(form_stream(w, h, format!("q {w} 0 0 {h} 0 0 cm /Im0 Do Q").into_bytes(), res)));
+    for wd in &f.widgets {
+        let mut mk =
+            doc.get(wd.obj).as_dict().and_then(|d| d.get(b"MK").map(|m| doc.resolve(m))).and_then(|m| m.as_dict().cloned()).unwrap_or_default();
+        mk.set(b"I".to_vec(), Object::Ref(icon));
+        if !mk.contains(b"TP") {
+            mk.set(b"TP".to_vec(), Object::Int(1));
+        }
+        doc.update_dict(wd.obj, |d| d.set(b"MK".to_vec(), Object::Dict(mk)))?;
+    }
+    redraw_field(doc, name)
 }
 
 fn empty_box(doc: &Document, w: &Widget) -> Stream {

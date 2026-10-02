@@ -290,6 +290,11 @@ impl Automation {
             }
             "form_fields" => self.form_fields(&a)?,
             "form_fill" => self.form_fill(&a)?,
+            "form_set_image" => {
+                let path = self.resolve(a.str("path")?, false)?;
+                let bytes = std::fs::read(&path).map_err(|e| failed(format!("{}: {e}", path.display())))?;
+                self.apply(&a, Edit::SetFieldImage { name: a.str("field")?.to_owned(), image: Arc::new(bytes) })?
+            }
             "form_reset" => self.form_reset(&a)?,
             "form_add_field" => self.form_add_field(&a)?,
             "form_set_props" => self.form_set_props(&a)?,

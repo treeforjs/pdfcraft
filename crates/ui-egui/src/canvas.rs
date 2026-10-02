@@ -1604,6 +1604,7 @@ fn run_button(app: &mut PrintCraftApp, index: usize, ctx: &egui::Context, name: 
         B::Submit(url) => {
             app.notify(format!("{name} submits the form to {url}; PrintCraft doesn't send form data. Save the document to keep your entries."))
         }
+        B::ImportIcon => app.choose_field_image(name),
         B::Script(_) => app.notify(format!("{name} runs a script that needs the JavaScript engine (M6)")),
     }
 }

@@ -608,3 +608,29 @@ fn locked_fields_only_take_unlocking() {
     let f = &fields(&doc)[0];
     assert!(!f.locked() && f.has(flags::REQUIRED));
 }
+
+#[test]
+fn image_fields_ask_for_a_picture_and_show_it() {
+    let mut doc = one_page();
+    let name = add_field(&mut doc, 0, [50.0, 600.0, 250.0, 700.0], &NewField::Image, None).unwrap();
+    assert_eq!(name, "Image1");
+    let f = fields(&doc).into_iter().find(|f| f.name == name).unwrap();
+    assert_eq!((f.kind, f.button.clone()), (FieldKind::PushButton, Some(af::ButtonAction::ImportIcon)));
+    // A 4×2 image: the icon keeps its shape and is centred in the 200×100 box.
+    let mut d = Dict::new();
+    for (k, v) in
+        [(&b"Type"[..], Object::name("XObject")), (b"Subtype", Object::name("Image")), (b"Width", Object::Int(4)), (b"Height", Object::Int(2))]
+    {
+        d.set(k.to_vec(), v);
+    }
+    let img = doc.add(Object::Stream(printcraft_cos::Stream::from_raw(d, vec![0; 24])));
+    set_button_icon(&mut doc, &name, img, (4, 2)).unwrap();
+    let w = doc.get(f.widgets[0].obj).as_dict().cloned().unwrap();
+    let mk = w.get(b"MK").unwrap().as_dict().unwrap().clone();
+    assert_eq!(mk.int(b"TP"), Some(1));
+    let ap = w.get(b"AP").unwrap().as_dict().unwrap().reference(b"N").unwrap();
+    let Object::Stream(s) = &*doc.get(ap) else { panic!("appearance") };
+    let text = String::from_utf8(s.decoded().unwrap()).unwrap();
+    assert!(text.contains("/Icon Do") && text.contains("49.000000 0 0 49.000000 2.000 1.000 cm"), "{text}");
+    assert!(set_button_icon(&mut doc, "nope", img, (1, 1)).is_err());
+}

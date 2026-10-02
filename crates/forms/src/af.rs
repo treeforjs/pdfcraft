@@ -1002,6 +1002,8 @@ pub enum ButtonAction {
     Alert(String),
     /// Submit the form to a URL (not sent: PrintCraft never posts form data on its own).
     Submit(String),
+    /// `event.target.buttonImportIcon()`: choose an image for the button (an image field).
+    ImportIcon,
     /// A script PrintCraft can't run yet.
     Script(String),
 }
@@ -1028,6 +1030,9 @@ pub fn button_script(js: &str) -> ButtonAction {
         return ButtonAction::Uri(u);
     }
     let compact: String = t.chars().filter(|c| !c.is_whitespace()).collect();
+    if compact.trim_end_matches(';') == "event.target.buttonImportIcon()" {
+        return ButtonAction::ImportIcon;
+    }
     match compact.trim_end_matches(';') {
         "this.pageNum++" | "pageNum++" => ButtonAction::Named("NextPage".into()),
         "this.pageNum--" | "pageNum--" => ButtonAction::Named("PrevPage".into()),
@@ -1048,6 +1053,7 @@ mod button_tests {
         assert_eq!(button_script("app.alert('Thanks!');"), ButtonAction::Alert("Thanks!".into()));
         assert_eq!(button_script("app.launchURL(\"https://example.org\", true);"), ButtonAction::Uri("https://example.org".into()));
         assert_eq!(button_script("this.pageNum++;"), ButtonAction::Named("NextPage".into()));
+        assert_eq!(button_script("event.target.buttonImportIcon();"), ButtonAction::ImportIcon);
         assert!(matches!(button_script("var x = 1; doStuff(x);"), ButtonAction::Script(_)));
     }
 }

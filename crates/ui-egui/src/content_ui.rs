@@ -400,6 +400,30 @@ impl crate::PrintCraftApp {
         self.notify("Adding images arrives on the web with file pickers for images");
     }
 
+    /// Click an image field: pick a picture for it.
+    pub fn choose_field_image(&mut self, name: &str) {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let picked = match self.save_override.clone() {
+                Some(p) if p.ends_with(".png") || p.ends_with(".jpg") => Some(std::path::PathBuf::from(p)),
+                Some(_) => None,
+                None => rfd::FileDialog::new()
+                    .add_filter("Images", &["png", "jpg", "jpeg", "tif", "tiff", "gif", "bmp"])
+                    .set_title("Select Icon")
+                    .pick_file(),
+            };
+            let Some(path) = picked else { return };
+            match std::fs::read(&path) {
+                Ok(bytes) => {
+                    self.apply_edit(Edit::SetFieldImage { name: name.to_string(), image: std::sync::Arc::new(bytes) });
+                }
+                Err(e) => self.notify(format!("Couldn't read {}: {e}", path.display())),
+            }
+        }
+        #[cfg(target_arch = "wasm32")]
+        self.notify(format!("{name}: choosing images arrives on the web with file pickers for images"));
+    }
+
     /// Edit image ▸ Replace: pick a file for the selected image.
     pub fn replace_image_dialog(&mut self, page: usize, index: usize) {
         #[cfg(not(target_arch = "wasm32"))]

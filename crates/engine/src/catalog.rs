@@ -337,6 +337,7 @@ pub static TOOL_GROUPS: &[ToolGroup] = &[
                     item("Drop-down list", "chevron-down", "form.add.combo", Ready),
                     item("List box", "list", "form.add.list", Ready),
                     item("Button", "square", "form.add.button", Ready),
+                    item("Image field", "image", "form.add.image", Ready),
                     item("Date field", "clock-3", "form.add.date", Ready),
                     item("Digital signature", "signature", "form.add.signature", Ready),
                 ],

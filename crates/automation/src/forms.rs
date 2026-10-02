@@ -283,6 +283,7 @@ impl Automation {
             "combo" => NewField::Combo { options: options()?, editable: a.opt_bool("editable")?.unwrap_or(false) },
             "list" => NewField::List { options: options()?, multi: a.opt_bool("multi_select")?.unwrap_or(false) },
             "button" => NewField::Button { caption: a.opt_str("caption")?.unwrap_or("").to_owned() },
+            "image" => NewField::Image,
             "signature" => NewField::Signature,
             t => return Err(ToolError::InvalidArgs(format!("unknown field type {t:?}"))),
         };
