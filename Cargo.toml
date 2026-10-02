@@ -18,6 +18,7 @@ printcraft-filters = { path = "crates/filters", version = "0.1.0" }
 printcraft-cos = { path = "crates/cos", version = "0.1.0" }
 printcraft-crypt = { path = "crates/crypt", version = "0.1.0" }
 printcraft-organize = { path = "crates/organize", version = "0.1.0" }
+printcraft-annot = { path = "crates/annot", version = "0.1.0" }
 printcraft-render = { path = "crates/render", version = "0.1.0" }
 printcraft-engine = { path = "crates/engine", version = "0.1.0" }
 printcraft-ui-egui = { path = "crates/ui-egui", version = "0.1.0" }

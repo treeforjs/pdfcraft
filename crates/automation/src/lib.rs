@@ -9,6 +9,7 @@
 //!   with the origin at the top-left of the displayed page.
 //! - An optional root directory confines every path a tool reads or writes.
 
+mod comments;
 #[cfg(feature = "mcp")]
 pub mod mcp;
 mod tools;
@@ -208,6 +209,12 @@ impl Automation {
                 let (path, page) = (a.path("path")?, self.page(&a)?);
                 self.apply(&a, Edit::SetBookmarkPage { path, page })?
             }
+            "comment_list" => self.comment_list(&a)?,
+            "comment_add" => self.comment_add(&a)?,
+            "comment_reply" => self.comment_reply(&a)?,
+            "comment_set_status" => self.comment_set_status(&a)?,
+            "comment_edit" => self.comment_edit(&a)?,
+            "comment_delete" => self.comment_delete(&a)?,
             other => return Err(ToolError::UnknownTool(other.into())),
         };
         Ok(vec![Content::Json(out)])

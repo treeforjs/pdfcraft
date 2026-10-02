@@ -19,6 +19,10 @@ pub use printcraft_organize::{SplitBy, split_ranges};
 /// One file produced by a split: (1-based first page, last page, PDF bytes).
 pub use printcraft_organize::LabelStyle;
 
+/// Comment geometry helpers (text-box line breaking) for frontends.
+pub use printcraft_annot::appearance as annot_text;
+pub use printcraft_annot::{Markup, NewAnnotation, NoteIcon, ReviewState, Rgb, Shape, Style};
+
 pub type SplitPart = (usize, usize, Arc<Vec<u8>>);
 
 use std::sync::Arc;
@@ -89,6 +93,11 @@ impl Document {
     /// Changes to content and document information are allowed.
     pub fn allows_modification(&self) -> bool {
         self.editable() && self.permissions().is_none_or(|p| p.modify())
+    }
+
+    /// Adding and changing comments is allowed (Table 22, bit 6).
+    pub fn allows_annotation(&self) -> bool {
+        self.editable() && self.permissions().is_none_or(|p| p.annotate())
     }
 
     /// A summary of the document's security for Document Properties ▸ Security.
@@ -207,6 +216,50 @@ pub enum Edit {
         prefix: String,
         first: u32,
     },
+    /// Add a comment (sticky note, highlight, shape, drawing, text box…).
+    AddAnnotation(NewAnnotation),
+    /// Delete the comment at `index` in the page's `/Annots`, with its pop-up and replies.
+    DeleteAnnotation {
+        page: usize,
+        index: usize,
+    },
+    SetAnnotationContents {
+        page: usize,
+        index: usize,
+        text: String,
+    },
+    ReplyToAnnotation {
+        page: usize,
+        index: usize,
+        text: String,
+        author: String,
+    },
+    /// Acrobat's "Set status" (a state reply by `author`).
+    SetAnnotationStatus {
+        page: usize,
+        index: usize,
+        state: ReviewState,
+        author: String,
+    },
+    MoveAnnotation {
+        page: usize,
+        index: usize,
+        dx: f64,
+        dy: f64,
+    },
+    /// Resize a rectangle, oval or text box.
+    ResizeAnnotation {
+        page: usize,
+        index: usize,
+        rect: [f64; 4],
+    },
+    StyleAnnotation {
+        page: usize,
+        index: usize,
+        color: Option<Rgb>,
+        opacity: Option<f64>,
+        width: Option<f64>,
+    },
     /// Several edits applied as one undoable step (all or nothing).
     Batch {
         label: String,
@@ -230,8 +283,33 @@ impl Edit {
             Edit::MoveBookmark { .. } => "Move bookmark".into(),
             Edit::SetBookmarkPage { .. } => "Set bookmark destination".into(),
             Edit::NumberPages { .. } => "Number pages".into(),
+            Edit::AddAnnotation(a) => format!("Add {}", annotation_noun(&a.shape)),
+            Edit::DeleteAnnotation { .. } => "Delete comment".into(),
+            Edit::SetAnnotationContents { .. } => "Edit comment".into(),
+            Edit::ReplyToAnnotation { .. } => "Reply".into(),
+            Edit::SetAnnotationStatus { state, .. } => format!("Set status {}", state.name()),
+            Edit::MoveAnnotation { .. } => "Move comment".into(),
+            Edit::ResizeAnnotation { .. } => "Resize comment".into(),
+            Edit::StyleAnnotation { .. } => "Change comment properties".into(),
             Edit::Batch { label, .. } => label.clone(),
         }
+    }
+}
+
+/// What the Edit menu calls a new comment ("Undo Add highlight").
+fn annotation_noun(s: &Shape) -> &'static str {
+    match s {
+        Shape::Note { .. } => "sticky note",
+        Shape::TextMarkup { kind: Markup::Highlight, .. } => "highlight",
+        Shape::TextMarkup { kind: Markup::Underline, .. } => "underline",
+        Shape::TextMarkup { kind: Markup::StrikeOut, .. } => "strikethrough",
+        Shape::TextMarkup { kind: Markup::Squiggly, .. } => "squiggly underline",
+        Shape::Rectangle { .. } => "rectangle",
+        Shape::Oval { .. } => "oval",
+        Shape::Line { arrow: true, .. } => "arrow",
+        Shape::Line { .. } => "line",
+        Shape::Ink { .. } => "drawing",
+        Shape::TextBox { .. } => "text box",
     }
 }
 
@@ -256,6 +334,20 @@ fn check_permission(edit: &Edit, p: &printcraft_cos::Permissions) -> Result<(), 
                 Err(EditError::NotPermitted("page changes"))
             }
         }
+        Edit::AddAnnotation(_)
+        | Edit::DeleteAnnotation { .. }
+        | Edit::SetAnnotationContents { .. }
+        | Edit::ReplyToAnnotation { .. }
+        | Edit::SetAnnotationStatus { .. }
+        | Edit::MoveAnnotation { .. }
+        | Edit::ResizeAnnotation { .. }
+        | Edit::StyleAnnotation { .. } => {
+            if p.annotate() {
+                Ok(())
+            } else {
+                Err(EditError::NotPermitted("comments"))
+            }
+        }
         Edit::SetInfo { .. } => {
             if p.modify() {
                 Ok(())
@@ -267,8 +359,51 @@ fn check_permission(edit: &Edit, p: &printcraft_cos::Permissions) -> Result<(), 
     }
 }
 
+/// Dates and unique ids stamped onto what an edit creates.
+struct EditCtx {
+    date: Option<String>,
+    seed: u64,
+    count: u64,
+}
+
+impl EditCtx {
+    fn new(now: Option<i64>, salt: u64) -> Self {
+        let mut seed = 0x9E37_79B9_7F4A_7C15u64 ^ salt;
+        if let Some(t) = now {
+            seed ^= (t as u64).rotate_left(17);
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        if now.is_some() {
+            // Real clock: mix in sub-second time so ids from two sessions don't collide.
+            seed ^= std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.subsec_nanos() as u64).unwrap_or(0) << 32;
+        }
+        Self { date: now.map(printcraft_cos::pdf_date), seed, count: 0 }
+    }
+
+    /// A fresh `/NM`: a random-looking UUID (version 4 layout) from a splitmix64 stream.
+    fn meta(&mut self) -> printcraft_annot::Meta {
+        let mut next = || {
+            self.count += 1;
+            let mut z = self.seed.wrapping_add(self.count.wrapping_mul(0x9E37_79B9_7F4A_7C15));
+            z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+            z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+            z ^ (z >> 31)
+        };
+        let (a, b) = (next(), next());
+        let id = format!(
+            "{:08x}-{:04x}-4{:03x}-{:04x}-{:012x}",
+            a >> 32,
+            (a >> 16) & 0xffff,
+            a & 0xfff,
+            0x8000 | (b >> 48) & 0x3fff,
+            b & 0xffff_ffff_ffff
+        );
+        printcraft_annot::Meta { date: self.date.clone(), id }
+    }
+}
+
 /// Perform an edit on a working copy (the caller discards it on error).
-fn run_edit(doc: &mut printcraft_cos::Document, edit: &Edit) -> Result<(), EditError> {
+fn run_edit(doc: &mut printcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -> Result<(), EditError> {
     match edit {
         Edit::RotatePages { pages, degrees } => printcraft_organize::rotate_pages(doc, pages, *degrees)?,
         Edit::DeletePages { pages } => printcraft_organize::delete_pages(doc, pages)?,
@@ -295,9 +430,25 @@ fn run_edit(doc: &mut printcraft_cos::Document, edit: &Edit) -> Result<(), EditE
         }
         Edit::SetBookmarkPage { path, page } => printcraft_organize::set_bookmark_page(doc, path, *page)?,
         Edit::NumberPages { from, to, style, prefix, first } => printcraft_organize::number_pages(doc, *from, *to, *style, prefix, *first)?,
+        Edit::AddAnnotation(a) => {
+            printcraft_annot::add_annotation(doc, a, &cx.meta())?;
+        }
+        Edit::DeleteAnnotation { page, index } => printcraft_annot::delete_annotation(doc, *page, *index)?,
+        Edit::SetAnnotationContents { page, index, text } => printcraft_annot::set_contents(doc, *page, *index, text, &cx.meta())?,
+        Edit::ReplyToAnnotation { page, index, text, author } => {
+            printcraft_annot::add_reply(doc, *page, *index, text, author, &cx.meta())?;
+        }
+        Edit::SetAnnotationStatus { page, index, state, author } => {
+            printcraft_annot::set_review_state(doc, *page, *index, *state, author, &cx.meta())?;
+        }
+        Edit::MoveAnnotation { page, index, dx, dy } => printcraft_annot::move_annotation(doc, *page, *index, *dx, *dy, &cx.meta())?,
+        Edit::ResizeAnnotation { page, index, rect } => printcraft_annot::set_rect(doc, *page, *index, *rect, &cx.meta())?,
+        Edit::StyleAnnotation { page, index, color, opacity, width } => {
+            printcraft_annot::set_style(doc, *page, *index, *color, *opacity, *width, &cx.meta())?;
+        }
         Edit::Batch { edits, .. } => {
             for e in edits {
-                run_edit(doc, e)?;
+                run_edit(doc, e, cx)?;
             }
         }
     }
@@ -333,6 +484,8 @@ pub enum EditError {
     Organize(#[from] printcraft_organize::OrganizeError),
     #[error("{0}")]
     Bookmark(#[from] printcraft_organize::OutlineError),
+    #[error("{0}")]
+    Comment(#[from] printcraft_annot::AnnotError),
     #[error("the edited document could not be written: {0}")]
     Write(String),
     #[error("the edited document could not be reopened: {0}")]
@@ -426,14 +579,16 @@ impl Session {
 
     /// Apply an edit. On success the previous state is undoable and the view data is refreshed.
     pub fn apply(&mut self, id: DocId, edit: Edit) -> Result<(), EditError> {
+        let now = self.now();
         let doc = self.doc_mut(id)?;
+        let mut cx = EditCtx::new(now, doc.generation ^ (id.0 << 48));
         let reason = doc.read_only_reason.clone().unwrap_or_default();
         let editor = doc.editor.as_mut().ok_or(EditError::ReadOnly(reason))?;
         if let Some(p) = editor.cos.permissions() {
             check_permission(&edit, &p)?;
         }
         let mut next = editor.cos.clone();
-        run_edit(&mut next, &edit)?;
+        run_edit(&mut next, &edit, &mut cx)?;
         let previous = std::mem::replace(&mut editor.cos, next);
         editor.undo.push((edit.label(), previous));
         if editor.undo.len() > MAX_UNDO {

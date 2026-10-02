@@ -53,6 +53,47 @@ pub struct PageInfo {
     pub rotation: u16,
 }
 
+impl PageInfo {
+    /// A point in view space (points, y down, after `/Rotate`; what the text layer uses) →
+    /// PDF user space.
+    pub fn view_to_user(&self, x: f32, y: f32) -> [f32; 2] {
+        let [cx0, cy0, cx1, cy1] = self.crop;
+        let (a, b) = (x / self.width.max(1e-3), y / self.height.max(1e-3));
+        let (u, v) = match self.rotation {
+            90 => (b, 1.0 - a),
+            180 => (1.0 - a, 1.0 - b),
+            270 => (1.0 - b, a),
+            _ => (a, b),
+        };
+        [cx0 + u * (cx1 - cx0), cy1 - v * (cy1 - cy0)]
+    }
+
+    /// PDF user space → view space (the inverse of [`Self::view_to_user`]).
+    pub fn user_to_view(&self, x: f32, y: f32) -> [f32; 2] {
+        let [cx0, cy0, cx1, cy1] = self.crop;
+        let (u, v) = ((x - cx0) / (cx1 - cx0).max(1e-3), (cy1 - y) / (cy1 - cy0).max(1e-3));
+        let (a, b) = match self.rotation {
+            90 => (1.0 - v, u),
+            180 => (1.0 - u, 1.0 - v),
+            270 => (v, 1.0 - u),
+            _ => (u, v),
+        };
+        [a * self.width, b * self.height]
+    }
+
+    /// A view-space rectangle as a text-markup quad in user space: top-left, top-right,
+    /// bottom-left, bottom-right as read on screen.
+    pub fn view_rect_to_quad(&self, r: [f32; 4]) -> [f64; 8] {
+        let mut q = [0.0; 8];
+        for (i, (x, y)) in [(r[0], r[1]), (r[2], r[1]), (r[0], r[3]), (r[2], r[3])].into_iter().enumerate() {
+            let [ux, uy] = self.view_to_user(x, y);
+            q[2 * i] = ux as f64;
+            q[2 * i + 1] = uy as f64;
+        }
+        q
+    }
+}
+
 /// A clickable link annotation.
 #[derive(Clone, Debug)]
 pub struct Link {
@@ -89,6 +130,12 @@ pub struct Annotation {
     /// Rect in PDF user space: [x0, y0, x1, y1].
     pub rect: [f32; 4],
     pub color: Option<[f32; 3]>,
+    /// Position in the page's `/Annots` (how edits address the comment).
+    pub index: usize,
+    /// For a status reply (`/State`, Acrobat's "Set status"): the state it sets.
+    pub state: Option<String>,
+    /// Text markup quadrilaterals (`/QuadPoints`), 8 numbers each.
+    pub quads: Vec<[f32; 8]>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -471,12 +518,31 @@ impl<'a> Inspector<'a> {
                     continue;
                 }
                 let rect = rect4(self.resolve(d.get(b"Rect").unwrap_or(&Object::Null)));
-                let color = match d.get(b"C").map(|o| self.resolve(o)) {
+                let mut color = match d.get(b"C").map(|o| self.resolve(o)) {
                     Ok(Object::Array(c)) if c.len() == 3 => {
                         let f = |i: usize| c[i].as_float().unwrap_or(0.0);
                         Some([f(0), f(1), f(2)])
                     }
                     _ => None,
+                };
+                // A text box's /C is its background; its text colour is in /DA.
+                if subtype == "FreeText"
+                    && let Some(da) = self.text(d, b"DA")
+                {
+                    let t: Vec<&str> = da.split_whitespace().collect();
+                    if let Some(i) = t.iter().position(|x| *x == "rg")
+                        && i >= 3
+                    {
+                        let f = |k: usize| t[k].parse::<f32>().unwrap_or(0.0);
+                        color = Some([f(i - 3), f(i - 2), f(i - 1)]);
+                    }
+                }
+                let quads = match d.get(b"QuadPoints").map(|o| self.resolve(o)) {
+                    Ok(Object::Array(q)) => {
+                        let v: Vec<f32> = q.iter().map(|o| o.as_float().unwrap_or(0.0)).collect();
+                        v.chunks_exact(8).map(|c| <[f32; 8]>::try_from(c).unwrap_or_default()).collect()
+                    }
+                    _ => Vec::new(),
                 };
                 let in_reply_to = d.get(b"IRT").ok().and_then(|o| self.dict(o)).and_then(|p| self.text(p, b"NM"));
                 info.annotations.push(Annotation {
@@ -489,6 +555,9 @@ impl<'a> Inspector<'a> {
                     in_reply_to,
                     rect,
                     color,
+                    index,
+                    state: self.text(d, b"State"),
+                    quads,
                 });
             }
         }
@@ -775,6 +844,23 @@ pub fn attachment_data(bytes: &[u8], password: Option<&str>, att: &Attachment) -
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn view_and_user_space_round_trip_for_every_rotation() {
+        for rotation in [0u16, 90, 180, 270] {
+            let (w, h) = if rotation % 180 == 0 { (200.0, 300.0) } else { (300.0, 200.0) };
+            let p = super::PageInfo { width: w, height: h, label: String::new(), crop: [10.0, 20.0, 210.0, 320.0], rotation };
+            for (x, y) in [(0.0, 0.0), (15.0, 40.0), (w, h)] {
+                let [ux, uy] = p.view_to_user(x, y);
+                let [vx, vy] = p.user_to_view(ux, uy);
+                assert!((vx - x).abs() < 1e-3 && (vy - y).abs() < 1e-3, "{rotation}: {x},{y} → {ux},{uy} → {vx},{vy}");
+            }
+        }
+        // Unrotated: the view's top-left is the crop box's top-left.
+        let p = super::PageInfo { width: 200.0, height: 300.0, label: String::new(), crop: [10.0, 20.0, 210.0, 320.0], rotation: 0 };
+        assert_eq!(p.view_to_user(0.0, 0.0), [10.0, 320.0]);
+        assert_eq!(p.view_rect_to_quad([0.0, 0.0, 10.0, 5.0]), [10.0, 320.0, 20.0, 320.0, 10.0, 315.0, 20.0, 315.0]);
+    }
+
     use super::*;
 
     #[test]

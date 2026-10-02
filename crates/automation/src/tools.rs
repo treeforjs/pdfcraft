@@ -34,6 +34,24 @@ fn path(what: &str) -> Value {
     json!({ "type": "array", "items": { "type": "integer", "minimum": 1 }, "description": format!("{what}: 1-based positions from the top level, e.g. [2, 1] = the first child of the second bookmark.") })
 }
 
+fn point() -> Value {
+    json!({ "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2, "description": "[x, y] in points from the top-left of the displayed page." })
+}
+
+fn color() -> Value {
+    json!({ "type": "string", "description": "#RRGGBB or a name: yellow, red, orange, green, blue, purple, pink, black, gray, white." })
+}
+
+/// Properties that pick one comment: its `id` (from comment_list), or `page` + `index`.
+fn comment_ref(mut extra: Value) -> Value {
+    let props = extra.as_object_mut().expect("an object");
+    props.insert("doc".into(), doc());
+    props.insert("id".into(), json!({ "type": "string", "description": "The comment's id (from comment_list)." }));
+    props.insert("page".into(), json!({ "type": "integer", "minimum": 1, "description": "With `index`, instead of `id`." }));
+    props.insert("index".into(), json!({ "type": "integer", "minimum": 1, "description": "1-based position on the page, as comment_list reports." }));
+    extra
+}
+
 fn schema(props: Value, required: &[&str]) -> Value {
     json!({ "type": "object", "properties": props, "required": required, "additionalProperties": false })
 }
@@ -177,6 +195,60 @@ pub fn tools() -> Vec<ToolDef> {
             }),
             &["doc", "from", "to"],
         )),
+        t("comment_list", "List comments", "Every comment (annotation other than links, form widgets and pop-ups) with its page, index, id, type, author, text, date, rectangle, colour, review status and replies.")
+            .ro()
+            .with(schema(json!({ "doc": doc(), "page": { "type": "integer", "minimum": 1, "description": "Only this page." } }), &["doc"])),
+        t(
+            "comment_add",
+            "Add a comment",
+            "Add a comment as Acrobat's commenting tools do. Geometry is in points with the origin at the top-left of the displayed page, y down (as in page_render images at 72 dpi and text_find rects). \
+             note: `at` [x, y] (icon top-left). highlight/underline/strikeout/squiggly: `find` (text on the page to mark; every match with all: true) or `quads`. \
+             rectangle/oval/textbox: `rect` [x0, y0, x1, y1]. line/arrow: `from`, `to`. ink: `strokes` [[[x, y], …], …]. Undoable.",
+        )
+        .with(schema(
+            json!({
+                "doc": doc(),
+                "page": { "type": "integer", "minimum": 1 },
+                "type": { "type": "string", "enum": ["note", "highlight", "underline", "strikeout", "squiggly", "rectangle", "oval", "line", "arrow", "ink", "textbox"] },
+                "contents": { "type": "string", "description": "The comment text (what a text box shows)." },
+                "author": { "type": "string" },
+                "at": point(),
+                "rect": { "type": "array", "items": { "type": "number" }, "minItems": 4, "maxItems": 4 },
+                "from": point(),
+                "to": point(),
+                "find": { "type": "string", "description": "Text on the page to mark up (case-insensitive)." },
+                "all": { "type": "boolean", "description": "Mark every match of `find` on the page, not just the first." },
+                "quads": { "type": "array", "items": { "type": "array", "items": { "type": "number" }, "minItems": 8, "maxItems": 8 } },
+                "strokes": { "type": "array", "items": { "type": "array", "items": point() } },
+                "icon": { "type": "string", "enum": ["Comment", "Note", "Help", "Insert", "Key", "NewParagraph", "Paragraph"] },
+                "color": color(),
+                "fill": color(),
+                "opacity": { "type": "number", "minimum": 0, "maximum": 1 },
+                "width": { "type": "number", "minimum": 0, "description": "Line width in points." },
+                "font_size": { "type": "number", "exclusiveMinimum": 0 },
+            }),
+            &["doc", "page", "type"],
+        )),
+        t("comment_reply", "Reply to a comment", "Add a reply to a comment's thread. Undoable.").with(schema(
+            comment_ref(json!({ "text": { "type": "string", "minLength": 1 }, "author": { "type": "string" } })),
+            &["doc", "text"],
+        )),
+        t("comment_set_status", "Set a comment's status", "Set a comment's review status (Acrobat: Set status), recorded as a status reply. Undoable.").with(schema(
+            comment_ref(json!({ "status": { "type": "string", "enum": ["none", "accepted", "rejected", "cancelled", "completed"] }, "author": { "type": "string" } })),
+            &["doc", "status"],
+        )),
+        t("comment_edit", "Edit a comment", "Change a comment's text, colour, opacity, line width, rectangle (rectangle/oval/text box) or position (`move` [dx, dy] in points). One undo step.").with(schema(
+            comment_ref(json!({
+                "contents": { "type": "string" },
+                "color": color(),
+                "opacity": { "type": "number", "minimum": 0, "maximum": 1 },
+                "width": { "type": "number", "minimum": 0 },
+                "rect": { "type": "array", "items": { "type": "number" }, "minItems": 4, "maxItems": 4 },
+                "move": point(),
+            })),
+            &["doc"],
+        )),
+        t("comment_delete", "Delete a comment", "Delete a comment with its pop-up and replies. Undoable.").destructive().with(schema(comment_ref(json!({})), &["doc"])),
         t("edit_undo", "Undo", "Undo the last edit of a document.").cmd("edit.undo").with(schema(json!({ "doc": doc() }), &["doc"])),
         t("edit_redo", "Redo", "Redo the last undone edit of a document.").cmd("edit.redo").with(schema(json!({ "doc": doc() }), &["doc"])),
         t("command_list", "List commands", "Every registered PrintCraft command with its menu, shortcut, whether it is enabled now, and the tool that automates it.")

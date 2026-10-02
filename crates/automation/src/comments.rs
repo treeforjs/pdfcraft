@@ -1,0 +1,308 @@
+//! Comment tools: list, add, reply, set status, edit and delete (execution plan M5, AGENTS.md §3).
+//!
+//! Geometry follows the automation convention: points from the top-left of the displayed page,
+//! y down. It is converted to PDF user space (crop box, `/Rotate`) here.
+
+use printcraft_engine::{Edit, Markup, NewAnnotation, NoteIcon, ReviewState, Rgb, Shape, Style};
+use printcraft_render::{Annotation, PageInfo};
+use serde_json::{Value, json};
+
+use crate::{Args, Automation, Result, ToolError, failed};
+
+/// Author used when a tool call names none.
+const DEFAULT_AUTHOR: &str = "PrintCraft";
+
+pub(crate) fn parse_color(s: &str) -> Result<Rgb> {
+    let named = match s.to_ascii_lowercase().as_str() {
+        "yellow" => Some("#FFEF00"),
+        "red" => Some("#E32222"),
+        "orange" => Some("#FF8A00"),
+        "green" => Some("#2E9E5C"),
+        "blue" => Some("#0078D6"),
+        "purple" => Some("#8A3FD1"),
+        "pink" => Some("#FF5FA2"),
+        "black" => Some("#000000"),
+        "gray" | "grey" => Some("#808080"),
+        "white" => Some("#FFFFFF"),
+        _ => None,
+    };
+    let hex = named.unwrap_or(s).trim_start_matches('#');
+    if hex.len() != 6 || !hex.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Err(ToolError::InvalidArgs(format!("{s:?} is not a colour (use #RRGGBB or a name)")));
+    }
+    let c = |i: usize| u8::from_str_radix(&hex[i..i + 2], 16).map(|v| v as f64 / 255.0).unwrap_or(0.0);
+    Ok([c(0), c(2), c(4)])
+}
+
+fn hex(c: [f32; 3]) -> String {
+    let b = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
+    format!("#{:02X}{:02X}{:02X}", b(c[0]), b(c[1]), b(c[2]))
+}
+
+fn to_user(p: &PageInfo, x: f64, y: f64) -> [f64; 2] {
+    let [ux, uy] = p.view_to_user(x as f32, y as f32);
+    [ux as f64, uy as f64]
+}
+
+fn rect_to_user(p: &PageInfo, r: [f64; 4]) -> [f64; 4] {
+    let (a, b) = (to_user(p, r[0], r[1]), to_user(p, r[2], r[3]));
+    [a[0].min(b[0]), a[1].min(b[1]), a[0].max(b[0]), a[1].max(b[1])]
+}
+
+fn rect_to_view(p: &PageInfo, r: [f32; 4]) -> [f32; 4] {
+    let (a, b) = (p.user_to_view(r[0], r[1]), p.user_to_view(r[2], r[3]));
+    let round = |v: f32| (v * 100.0).round() / 100.0;
+    [round(a[0].min(b[0])), round(a[1].min(b[1])), round(a[0].max(b[0])), round(a[1].max(b[1]))]
+}
+
+impl Args<'_> {
+    fn nums<const N: usize>(&self, key: &str) -> Result<Option<[f64; N]>> {
+        let Some(v) = self.get(key) else { return Ok(None) };
+        let wrong = || Self::wrong(key, &format!("an array of {N} numbers"));
+        let arr = v.as_array().ok_or_else(wrong)?;
+        let nums: Vec<f64> = arr.iter().map(|x| x.as_f64().filter(|f| f.is_finite())).collect::<Option<_>>().ok_or_else(wrong)?;
+        <[f64; N]>::try_from(nums).map(Some).map_err(|_| wrong())
+    }
+
+    fn need<const N: usize>(&self, key: &str, why: &str) -> Result<[f64; N]> {
+        self.nums(key)?.ok_or_else(|| ToolError::InvalidArgs(format!("{why} needs `{key}`")))
+    }
+
+    fn color(&self, key: &str) -> Result<Option<Rgb>> {
+        self.opt_str(key)?.map(parse_color).transpose()
+    }
+}
+
+impl Automation {
+    /// Comments of a document, optionally only of one 0-based page.
+    fn comments(&self, a: &Args) -> Result<Vec<Annotation>> {
+        let doc = self.doc(a)?;
+        Ok(doc.info.annotations.iter().filter(|x| x.subtype != "Popup").cloned().collect())
+    }
+
+    /// The (0-based page, index) a comment tool call refers to: `id`, or `page` + `index`.
+    fn comment_target(&self, a: &Args) -> Result<(usize, usize)> {
+        let all = self.comments(a)?;
+        if let Some(id) = a.opt_str("id")? {
+            let c =
+                all.iter().find(|c| c.name.as_deref() == Some(id)).ok_or_else(|| failed(format!("no comment with id {id:?} (see comment_list)")))?;
+            return Ok((c.page, c.index));
+        }
+        let (Some(page), Some(index)) = (a.opt_int("page")?, a.opt_int("index")?) else {
+            return Err(ToolError::InvalidArgs("pass the comment's id, or page and index".into()));
+        };
+        let (page, index) = ((page.max(1) - 1) as usize, (index.max(1) - 1) as usize);
+        if !all.iter().any(|c| c.page == page && c.index == index) {
+            return Err(failed(format!("there is no comment {} on page {} (see comment_list)", index + 1, page + 1)));
+        }
+        Ok((page, index))
+    }
+
+    pub(crate) fn comment_list(&self, a: &Args) -> Result<Value> {
+        let doc = self.doc(a)?;
+        let only = a.opt_int("page")?.map(|p| (p.max(1) - 1) as usize);
+        let all = self.comments(a)?;
+        let view = |c: &Annotation| -> Value {
+            let p = &doc.info.pages[c.page.min(doc.info.pages.len().saturating_sub(1))];
+            json!({
+                "id": c.name,
+                "page": c.page + 1,
+                "index": c.index + 1,
+                "type": c.subtype,
+                "author": c.author,
+                "contents": c.contents,
+                "modified": c.modified,
+                "rect": rect_to_view(p, c.rect),
+                "color": c.color.map(hex),
+            })
+        };
+        let roots: Vec<Value> = all
+            .iter()
+            .filter(|c| c.in_reply_to.is_none() && only.is_none_or(|p| c.page == p))
+            .map(|c| {
+                let mut v = view(c);
+                let thread: Vec<&Annotation> = match &c.name {
+                    Some(nm) => all.iter().filter(|r| r.in_reply_to.as_deref() == Some(nm.as_str())).collect(),
+                    None => Vec::new(),
+                };
+                let status = thread.iter().rev().find_map(|r| r.state.clone());
+                v["status"] = json!(status);
+                v["replies"] = thread.iter().filter(|r| r.state.is_none()).map(|r| view(r)).collect();
+                v
+            })
+            .collect();
+        Ok(json!({ "count": roots.len(), "comments": roots }))
+    }
+
+    pub(crate) fn comment_add(&mut self, a: &Args) -> Result<Value> {
+        let page = self.page(a)?;
+        let info = self.doc(a)?.info.pages[page].clone();
+        let kind = a.str("type")?;
+        let markup = match kind {
+            "highlight" => Some(Markup::Highlight),
+            "underline" => Some(Markup::Underline),
+            "strikeout" => Some(Markup::StrikeOut),
+            "squiggly" => Some(Markup::Squiggly),
+            _ => None,
+        };
+        let shape = if let Some(markup) = markup {
+            let quads = match (a.opt_str("find")?, a.get("quads")) {
+                (Some(needle), _) => {
+                    let id = self.doc(a)?.id;
+                    let text = self.page_texts(id, &[page])?.remove(0);
+                    let mut hits = text.find(needle);
+                    if hits.is_empty() {
+                        return Err(failed(format!("{needle:?} was not found on page {}", page + 1)));
+                    }
+                    if !a.opt_bool("all")?.unwrap_or(false) {
+                        hits.truncate(1);
+                    }
+                    hits.into_iter().flat_map(|r| text.line_rects(r)).map(|r| info.view_rect_to_quad(r)).collect()
+                }
+                (None, Some(q)) => {
+                    let wrong = || ToolError::InvalidArgs("quads must be arrays of 8 numbers".into());
+                    let quads = q.as_array().ok_or_else(wrong)?;
+                    quads
+                        .iter()
+                        .map(|q| {
+                            let v: Vec<f64> = q.as_array().ok_or_else(wrong)?.iter().map(|x| x.as_f64()).collect::<Option<_>>().ok_or_else(wrong)?;
+                            let v: [f64; 8] = v.try_into().map_err(|_| wrong())?;
+                            let mut out = [0.0; 8];
+                            for i in 0..4 {
+                                let [x, y] = to_user(&info, v[2 * i], v[2 * i + 1]);
+                                (out[2 * i], out[2 * i + 1]) = (x, y);
+                            }
+                            Ok(out)
+                        })
+                        .collect::<Result<Vec<_>>>()?
+                }
+                (None, None) => return Err(ToolError::InvalidArgs(format!("{kind} needs `find` (text to mark) or `quads`"))),
+            };
+            Shape::TextMarkup { kind: markup, quads }
+        } else {
+            match kind {
+                "note" => {
+                    let [x, y] = a.need::<2>("at", "a note")?;
+                    let icon = match a.opt_str("icon")? {
+                        Some(n) => NoteIcon::from_name(n).ok_or_else(|| ToolError::InvalidArgs(format!("unknown icon {n:?}")))?,
+                        None => NoteIcon::Comment,
+                    };
+                    Shape::Note { at: to_user(&info, x, y), icon }
+                }
+                "rectangle" => Shape::Rectangle { rect: rect_to_user(&info, a.need::<4>("rect", "a rectangle")?) },
+                "oval" => Shape::Oval { rect: rect_to_user(&info, a.need::<4>("rect", "an oval")?) },
+                "textbox" => {
+                    let font_size = a.opt_num("font_size")?.unwrap_or(12.0);
+                    Shape::TextBox { rect: rect_to_user(&info, a.need::<4>("rect", "a text box")?), font_size }
+                }
+                "line" | "arrow" => {
+                    let (f, t) = (a.need::<2>("from", "a line")?, a.need::<2>("to", "a line")?);
+                    Shape::Line { from: to_user(&info, f[0], f[1]), to: to_user(&info, t[0], t[1]), arrow: kind == "arrow" }
+                }
+                "ink" => {
+                    let wrong = || ToolError::InvalidArgs("strokes must be an array of arrays of [x, y] points".into());
+                    let strokes = a.get("strokes").ok_or_else(|| ToolError::InvalidArgs("ink needs `strokes`".into()))?;
+                    let strokes = strokes
+                        .as_array()
+                        .ok_or_else(wrong)?
+                        .iter()
+                        .map(|s| {
+                            s.as_array()
+                                .ok_or_else(wrong)?
+                                .iter()
+                                .map(|p| match p.as_array().map(|p| p.iter().map(|v| v.as_f64()).collect::<Vec<_>>()).as_deref() {
+                                    Some([Some(x), Some(y)]) => Ok(to_user(&info, *x, *y)),
+                                    _ => Err(wrong()),
+                                })
+                                .collect::<Result<Vec<_>>>()
+                        })
+                        .collect::<Result<Vec<_>>>()?;
+                    Shape::Ink { strokes }
+                }
+                other => return Err(ToolError::InvalidArgs(format!("unknown comment type {other:?}"))),
+            }
+        };
+        let mut style = Style::default_for(&shape);
+        if let Some(c) = a.color("color")? {
+            style.color = c;
+        }
+        style.fill = a.color("fill")?;
+        if let Some(o) = a.opt_num("opacity")? {
+            style.opacity = o.clamp(0.0, 1.0);
+        }
+        if let Some(w) = a.opt_num("width")? {
+            style.width = w.max(0.0);
+        }
+        let contents = a.opt_str("contents")?.unwrap_or_default().to_string();
+        let author = a.opt_str("author")?.unwrap_or(DEFAULT_AUTHOR).to_string();
+        let marked = match &shape {
+            Shape::TextMarkup { quads, .. } => Some(quads.len()),
+            _ => None,
+        };
+        let before: Vec<Option<String>> = self.doc(a)?.info.annotations.iter().map(|c| c.name.clone()).collect();
+        let mut out = self.apply(a, Edit::AddAnnotation(NewAnnotation { page, shape, style, contents, author }))?;
+        let added = self.doc(a)?.info.annotations.iter().find(|c| c.page == page && c.subtype != "Popup" && !before.contains(&c.name));
+        out["comment"] = json!({ "id": added.and_then(|c| c.name.clone()), "page": page + 1, "index": added.map(|c| c.index + 1) });
+        if let Some(n) = marked {
+            out["comment"]["lines"] = json!(n);
+        }
+        Ok(out)
+    }
+
+    pub(crate) fn comment_reply(&mut self, a: &Args) -> Result<Value> {
+        let (page, index) = self.comment_target(a)?;
+        let author = a.opt_str("author")?.unwrap_or(DEFAULT_AUTHOR).to_string();
+        self.apply(a, Edit::ReplyToAnnotation { page, index, text: a.str("text")?.to_string(), author })
+    }
+
+    pub(crate) fn comment_set_status(&mut self, a: &Args) -> Result<Value> {
+        let (page, index) = self.comment_target(a)?;
+        let status = a.str("status")?;
+        let state = ReviewState::from_name(status).ok_or_else(|| ToolError::InvalidArgs(format!("unknown status {status:?}")))?;
+        let author = a.opt_str("author")?.unwrap_or(DEFAULT_AUTHOR).to_string();
+        self.apply(a, Edit::SetAnnotationStatus { page, index, state, author })
+    }
+
+    pub(crate) fn comment_edit(&mut self, a: &Args) -> Result<Value> {
+        let (page, index) = self.comment_target(a)?;
+        let info = self.doc(a)?.info.pages[page].clone();
+        let mut edits = Vec::new();
+        if let Some(text) = a.opt_str("contents")? {
+            edits.push(Edit::SetAnnotationContents { page, index, text: text.to_string() });
+        }
+        let (color, opacity, width) = (a.color("color")?, a.opt_num("opacity")?, a.opt_num("width")?);
+        if color.is_some() || opacity.is_some() || width.is_some() {
+            edits.push(Edit::StyleAnnotation { page, index, color, opacity, width });
+        }
+        if let Some(r) = a.nums::<4>("rect")? {
+            edits.push(Edit::ResizeAnnotation { page, index, rect: rect_to_user(&info, r) });
+        }
+        if let Some([dx, dy]) = a.nums::<2>("move")? {
+            let (o, d) = (to_user(&info, 0.0, 0.0), to_user(&info, dx, dy));
+            edits.push(Edit::MoveAnnotation { page, index, dx: d[0] - o[0], dy: d[1] - o[1] });
+        }
+        if edits.is_empty() {
+            return Err(ToolError::InvalidArgs("nothing to change: pass contents, color, opacity, width, rect or move".into()));
+        }
+        let edit = if edits.len() == 1 { edits.remove(0) } else { Edit::Batch { label: "Edit comment".into(), edits } };
+        self.apply(a, edit)
+    }
+
+    pub(crate) fn comment_delete(&mut self, a: &Args) -> Result<Value> {
+        let (page, index) = self.comment_target(a)?;
+        self.apply(a, Edit::DeleteAnnotation { page, index })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn colours_parse_by_hex_and_name() {
+        assert_eq!(parse_color("#FF0000").unwrap(), [1.0, 0.0, 0.0]);
+        assert_eq!(parse_color("black").unwrap(), [0.0, 0.0, 0.0]);
+        assert!(parse_color("#12").is_err() && parse_color("chartreuse").is_err());
+        assert_eq!(hex([1.0, 0.5, 0.0]), "#FF8000");
+    }
+}

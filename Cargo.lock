@@ -3027,6 +3027,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "printcraft-annot"
+version = "0.1.0"
+dependencies = [
+ "hayro-syntax",
+ "printcraft-cos",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "printcraft-automation"
 version = "0.1.0"
 dependencies = [
@@ -3078,6 +3087,7 @@ dependencies = [
 name = "printcraft-engine"
 version = "0.1.0"
 dependencies = [
+ "printcraft-annot",
  "printcraft-cos",
  "printcraft-organize",
  "printcraft-render",

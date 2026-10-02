@@ -1,0 +1,303 @@
+use std::sync::Arc;
+
+use printcraft_cos::{Document, ObjRef, Object, SaveOptions, write_incremental};
+
+use super::*;
+
+/// Two pages. Page 1 has an inline Square annotation in a direct /Annots array; page 2 has an
+/// indirect /Annots array holding a Stamp (a type we cannot redraw).
+fn fixture() -> Document {
+    let objs: Vec<&[u8]> = vec![
+        b"<< /Type /Catalog /Pages 2 0 R >>",                                       // 1
+        b"<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 /MediaBox [0 0 612 792] >>", // 2
+        b"<< /Type /Page /Parent 2 0 R /Annots [<< /Type /Annot /Subtype /Square /Rect [10 10 50 50] /C [1 0 0] >>] >>", // 3
+        b"<< /Type /Page /Parent 2 0 R /Annots 5 0 R >>",                           // 4
+        b"[6 0 R]",                                                                 // 5
+        b"<< /Type /Annot /Subtype /Stamp /Rect [100 100 200 150] /Name /Approved /Foo (kept) >>", // 6
+    ];
+    let mut out = b"%PDF-1.7\n".to_vec();
+    let mut offsets = Vec::new();
+    for (i, o) in objs.iter().enumerate() {
+        offsets.push(out.len());
+        out.extend_from_slice(format!("{} 0 obj\n", i + 1).as_bytes());
+        out.extend_from_slice(o);
+        out.extend_from_slice(b"\nendobj\n");
+    }
+    let xref = out.len();
+    out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objs.len() + 1).as_bytes());
+    for o in offsets {
+        out.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+    }
+    out.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objs.len() + 1).as_bytes());
+    Document::open(Arc::new(out)).expect("opens")
+}
+
+fn meta(id: &str) -> Meta {
+    Meta { date: Some("D:20261001120000Z".into()), id: id.into() }
+}
+
+fn new(page: usize, shape: Shape) -> NewAnnotation {
+    NewAnnotation {
+        page,
+        shape,
+        style: Style { color: [0.0, 0.4, 1.0], opacity: 1.0, width: 2.0, fill: None },
+        contents: "hello".into(),
+        author: "Ada".into(),
+    }
+}
+
+/// Save incrementally and reopen, so every check runs against what a reader would see.
+fn reopen(doc: &Document) -> Document {
+    let bytes = write_incremental(doc, &SaveOptions::default()).expect("writes");
+    // A second, independent parser must accept the result too.
+    hayro_syntax::Pdf::new(bytes.clone()).expect("hayro-syntax parses the output");
+    Document::open(Arc::new(bytes)).expect("reopens")
+}
+
+fn list(doc: &Document, page: usize) -> Vec<Dict> {
+    let p = page_refs(doc).unwrap()[page];
+    annots(doc, p).iter().map(|o| doc.resolve(o).as_dict().cloned().unwrap()).collect()
+}
+
+fn ap_content(doc: &Document, d: &Dict) -> String {
+    let n = d.get(b"AP").and_then(|a| a.as_dict()).and_then(|a| a.reference(b"N")).expect("has /AP /N");
+    let obj = doc.get(n);
+    let Object::Stream(s) = &*obj else { panic!("AP is not a stream") };
+    String::from_utf8_lossy(&s.decoded().unwrap()).into_owned()
+}
+
+fn text(d: &Dict, k: &[u8]) -> String {
+    d.get(k).and_then(|o| o.as_string()).map(|s| s.to_text()).unwrap_or_default()
+}
+
+fn rect(d: &Dict) -> Vec<f64> {
+    d.get(b"Rect").unwrap().as_array().unwrap().iter().map(|o| o.as_f64().unwrap()).collect()
+}
+
+#[test]
+fn every_tool_creates_a_drawable_comment() {
+    let shapes = [
+        Shape::Note { at: [100.0, 700.0], icon: NoteIcon::Comment },
+        Shape::TextMarkup { kind: Markup::Highlight, quads: vec![[72.0, 712.0, 200.0, 712.0, 72.0, 700.0, 200.0, 700.0]] },
+        Shape::TextMarkup { kind: Markup::Underline, quads: vec![[72.0, 612.0, 200.0, 612.0, 72.0, 600.0, 200.0, 600.0]] },
+        Shape::TextMarkup { kind: Markup::StrikeOut, quads: vec![[72.0, 512.0, 200.0, 512.0, 72.0, 500.0, 200.0, 500.0]] },
+        Shape::TextMarkup { kind: Markup::Squiggly, quads: vec![[72.0, 412.0, 200.0, 412.0, 72.0, 400.0, 200.0, 400.0]] },
+        Shape::Rectangle { rect: [300.0, 300.0, 200.0, 200.0] },
+        Shape::Oval { rect: [300.0, 300.0, 400.0, 350.0] },
+        Shape::Line { from: [50.0, 50.0], to: [150.0, 100.0], arrow: true },
+        Shape::Ink { strokes: vec![vec![[10.0, 10.0], [20.0, 30.0], [30.0, 10.0]], vec![[40.0, 40.0]]] },
+        Shape::TextBox { rect: [300.0, 600.0, 500.0, 650.0], font_size: 14.0 },
+    ];
+    let mut doc = fixture();
+    for (i, s) in shapes.iter().enumerate() {
+        let idx = add_annotation(&mut doc, &new(0, s.clone()), &meta(&format!("id-{i}"))).expect("adds");
+        assert!(idx >= 1, "appended after the existing inline annotation");
+    }
+    let doc = reopen(&doc);
+    let all = list(&doc, 0);
+    // The inline square, 10 comments and the sticky note's pop-up.
+    assert_eq!(all.len(), 12);
+    let subtypes: Vec<&[u8]> = all.iter().map(|d| d.name(b"Subtype").unwrap()).collect();
+    assert_eq!(
+        subtypes,
+        [
+            &b"Square"[..],
+            b"Text",
+            b"Popup",
+            b"Highlight",
+            b"Underline",
+            b"StrikeOut",
+            b"Squiggly",
+            b"Square",
+            b"Circle",
+            b"Line",
+            b"Ink",
+            b"FreeText"
+        ]
+    );
+    for d in all.iter().filter(|d| d.contains(b"NM")) {
+        assert_eq!(text(d, b"T"), "Ada");
+        assert_eq!(text(d, b"Contents"), "hello");
+        assert!(d.reference(b"P").is_some(), "/P points at the page");
+        assert!(!ap_content(&doc, d).is_empty(), "{:?} has an appearance", d.name(b"Subtype"));
+    }
+    // Highlight multiplies; the rectangle was normalized.
+    let hl = &all[3];
+    let ap = hl.get(b"AP").unwrap().as_dict().unwrap().reference(b"N").unwrap();
+    let res = doc.get(ap).as_dict().unwrap().get(b"Resources").cloned().unwrap();
+    let gs = res.as_dict().unwrap().get(b"ExtGState").unwrap().as_dict().unwrap().get(b"GS0").unwrap().as_dict().unwrap().clone();
+    assert_eq!(gs.name(b"BM"), Some(&b"Multiply"[..]));
+    assert_eq!(rect(&all[7]), [200.0, 200.0, 300.0, 300.0]);
+    // The arrow's rectangle includes the arrowhead and the stroke.
+    let r = rect(&all[9]);
+    assert!(r[0] < 50.0 && r[2] > 150.0 + 1.0);
+    // The text box draws its contents in Helvetica.
+    assert!(ap_content(&doc, &all[11]).contains("(hello) Tj"));
+    assert!(ap_content(&doc, &all[11]).contains("/Helv 14 Tf"));
+    // The note is a fixed-size icon with a closed pop-up.
+    assert_eq!(all[1].int(b"F"), Some(28));
+    let entries = annots(&doc, page_refs(&doc).unwrap()[0]);
+    assert_eq!(all[2].reference(b"Parent"), entries[1].as_ref());
+    assert_eq!(all[1].reference(b"Popup"), entries[2].as_ref());
+}
+
+#[test]
+fn indirect_annots_array_is_updated_in_place() {
+    let mut doc = fixture();
+    add_annotation(&mut doc, &new(1, Shape::Rectangle { rect: [0.0, 0.0, 10.0, 10.0] }), &meta("x")).unwrap();
+    let doc = reopen(&doc);
+    let page = doc.get(page_refs(&doc).unwrap()[1]);
+    assert_eq!(page.as_dict().unwrap().reference(b"Annots"), Some(ObjRef::new(5, 0)));
+    assert_eq!(doc.get(ObjRef::new(5, 0)).as_array().unwrap().len(), 2);
+}
+
+#[test]
+fn invalid_geometry_is_rejected() {
+    let mut doc = fixture();
+    let bad = [
+        Shape::TextMarkup { kind: Markup::Highlight, quads: vec![] },
+        Shape::Rectangle { rect: [0.0, 0.0, 0.5, 10.0] },
+        Shape::Line { from: [1.0, 1.0], to: [1.0, 1.0], arrow: false },
+        Shape::Ink { strokes: vec![vec![]] },
+        Shape::Note { at: [f64::NAN, 0.0], icon: NoteIcon::Note },
+    ];
+    for s in bad {
+        assert!(matches!(add_annotation(&mut doc, &new(0, s.clone()), &meta("x")), Err(AnnotError::Invalid(_))), "{s:?}");
+    }
+    assert_eq!(add_annotation(&mut doc, &new(5, Shape::Rectangle { rect: [0.0, 0.0, 10.0, 10.0] }), &meta("x")), Err(AnnotError::NoSuchPage(5)));
+    assert!(!doc.is_modified(), "failed adds change nothing");
+}
+
+#[test]
+fn replies_and_status_thread_onto_the_parent() {
+    let mut doc = fixture();
+    // Replying to the inline square promotes it to an indirect object.
+    let r = add_reply(&mut doc, 0, 0, "Agreed", "Bob", &meta("r1")).unwrap();
+    let s = set_review_state(&mut doc, 0, 0, ReviewState::Accepted, "Bob", &meta("r2")).unwrap();
+    assert_eq!((r, s), (1, 2));
+    let doc = reopen(&doc);
+    let p = page_refs(&doc).unwrap()[0];
+    let entries = annots(&doc, p);
+    let parent = entries[0].as_ref().expect("promoted to an indirect object");
+    let all = list(&doc, 0);
+    assert_eq!(all[1].reference(b"IRT"), Some(parent));
+    assert_eq!(text(&all[1], b"Contents"), "Agreed");
+    assert_eq!(rect(&all[1]), [10.0, 10.0, 50.0, 50.0]);
+    assert_eq!(ap_content(&doc, &all[1]), "", "replies draw nothing");
+    assert_eq!(text(&all[2], b"State"), "Accepted");
+    assert_eq!(text(&all[2], b"StateModel"), "Review");
+    assert_eq!(text(&all[2], b"Contents"), "Accepted set by Bob");
+}
+
+#[test]
+fn delete_takes_popup_and_reply_chain() {
+    let mut doc = fixture();
+    let note = add_annotation(&mut doc, &new(0, Shape::Note { at: [100.0, 100.0], icon: NoteIcon::Comment }), &meta("n")).unwrap();
+    let reply = add_reply(&mut doc, 0, note, "first", "Bob", &meta("r1")).unwrap();
+    add_reply(&mut doc, 0, reply, "reply to reply", "Ada", &meta("r2")).unwrap();
+    add_reply(&mut doc, 0, 0, "on the square", "Ada", &meta("r3")).unwrap();
+    assert_eq!(list(&doc, 0).len(), 6);
+    delete_annotation(&mut doc, 0, note).unwrap();
+    let doc = reopen(&doc);
+    let left: Vec<String> =
+        list(&doc, 0).iter().map(|d| format!("{}:{}", String::from_utf8_lossy(d.name(b"Subtype").unwrap()), text(d, b"Contents"))).collect();
+    assert_eq!(left, ["Square:", "Text:on the square"]);
+    let mut doc = doc;
+    assert_eq!(delete_annotation(&mut doc, 0, 9), Err(AnnotError::NoSuchAnnotation { page: 0, index: 9 }));
+}
+
+#[test]
+fn deleting_the_last_comment_removes_annots() {
+    let mut doc = fixture();
+    delete_annotation(&mut doc, 0, 0).unwrap();
+    let doc = reopen(&doc);
+    assert!(!doc.get(page_refs(&doc).unwrap()[0]).as_dict().unwrap().contains(b"Annots"));
+}
+
+#[test]
+fn move_shifts_all_geometry_and_the_popup() {
+    let mut doc = fixture();
+    let q = [72.0, 712.0, 200.0, 712.0, 72.0, 700.0, 200.0, 700.0];
+    let h = add_annotation(&mut doc, &new(0, Shape::TextMarkup { kind: Markup::Highlight, quads: vec![q] }), &meta("h")).unwrap();
+    let i = add_annotation(&mut doc, &new(0, Shape::Ink { strokes: vec![vec![[10.0, 10.0], [20.0, 20.0]]] }), &meta("i")).unwrap();
+    let n = add_annotation(&mut doc, &new(0, Shape::Note { at: [100.0, 100.0], icon: NoteIcon::Note }), &meta("n")).unwrap();
+    for idx in [h, i, n] {
+        move_annotation(&mut doc, 0, idx, 10.0, -5.0, &meta("")).unwrap();
+    }
+    let doc = reopen(&doc);
+    let all = list(&doc, 0);
+    let qp: Vec<f64> = all[h].get(b"QuadPoints").unwrap().as_array().unwrap().iter().map(|o| o.as_f64().unwrap()).collect();
+    assert_eq!(qp, [82.0, 707.0, 210.0, 707.0, 82.0, 695.0, 210.0, 695.0]);
+    let ink = all[i].get(b"InkList").unwrap().as_array().unwrap()[0].as_array().unwrap().iter().map(|o| o.as_f64().unwrap()).collect::<Vec<_>>();
+    assert_eq!(ink, [20.0, 5.0, 30.0, 15.0]);
+    assert_eq!(rect(&all[n]), [110.0, 75.0, 130.0, 95.0]);
+    let popup = &all[n + 1];
+    assert_eq!(rect(popup)[0], 140.0);
+}
+
+#[test]
+fn restyle_and_resize_redraw_the_appearance() {
+    let mut doc = fixture();
+    let r = add_annotation(&mut doc, &new(0, Shape::Rectangle { rect: [10.0, 10.0, 110.0, 60.0] }), &meta("r")).unwrap();
+    set_style(&mut doc, 0, r, Some([1.0, 0.0, 0.0]), Some(0.5), Some(4.0), &meta("")).unwrap();
+    set_rect(&mut doc, 0, r, [0.0, 0.0, 200.0, 100.0], &meta("")).unwrap();
+    let doc2 = reopen(&doc);
+    let d = &list(&doc2, 0)[r];
+    let ap = ap_content(&doc2, d);
+    assert!(ap.contains("1 0 0 RG") && ap.contains("4 w") && ap.contains("/GS0 gs"), "{ap}");
+    assert!(ap.contains("2 2 196 96 re"), "inset by half the border: {ap}");
+    assert_eq!(d.get(b"CA").and_then(|o| o.as_f64()), Some(0.5));
+    // A stamp's appearance can't be regenerated, so restyling it changes nothing.
+    let before = list(&doc, 1)[0].clone();
+    assert_eq!(set_style(&mut doc, 1, 0, Some([0.0; 3]), None, None, &meta("")), Err(AnnotError::Unsupported("Stamp".into())));
+    assert_eq!(list(&doc, 1)[0], before);
+    // Lines can't be resized as rectangles.
+    let l = add_annotation(&mut doc, &new(0, Shape::Line { from: [0.0, 0.0], to: [10.0, 10.0], arrow: false }), &meta("l")).unwrap();
+    assert!(matches!(set_rect(&mut doc, 0, l, [0.0, 0.0, 5.0, 5.0], &meta("")), Err(AnnotError::Invalid(_))));
+}
+
+#[test]
+fn text_box_text_and_colour_changes_are_drawn() {
+    let mut doc = fixture();
+    let t = add_annotation(&mut doc, &new(0, Shape::TextBox { rect: [0.0, 0.0, 300.0, 100.0], font_size: 12.0 }), &meta("t")).unwrap();
+    set_contents(&mut doc, 0, t, "Caf\u{e9} (draft) \u{2014} 100%", &meta("")).unwrap();
+    set_style(&mut doc, 0, t, Some([1.0, 0.0, 0.0]), None, None, &meta("")).unwrap();
+    let doc = reopen(&doc);
+    let d = &list(&doc, 0)[t];
+    assert_eq!(text(d, b"Contents"), "Caf\u{e9} (draft) \u{2014} 100%");
+    assert_eq!(text(d, b"DA"), "1 0 0 rg /Helv 12 Tf");
+    let n = d.get(b"AP").unwrap().as_dict().unwrap().reference(b"N").unwrap();
+    let Object::Stream(s) = &*doc.get(n) else { panic!() };
+    let raw = s.decoded().unwrap();
+    // WinAnsi bytes, with the parentheses escaped.
+    let needle = b"(Caf\xe9 \\(draft\\) \x97 100%) Tj";
+    assert!(raw.windows(needle.len()).any(|w| w == needle), "{}", String::from_utf8_lossy(&raw));
+    assert!(String::from_utf8_lossy(&raw).contains("1 0 0 rg"));
+}
+
+#[test]
+fn unknown_keys_survive_edits() {
+    let mut doc = fixture();
+    move_annotation(&mut doc, 1, 0, 1.0, 1.0, &meta("")).unwrap();
+    set_contents(&mut doc, 1, 0, "note", &meta("")).unwrap();
+    let doc = reopen(&doc);
+    let d = &list(&doc, 1)[0];
+    assert_eq!(text(d, b"Foo"), "kept");
+    assert_eq!(d.name(b"Name"), Some(&b"Approved"[..]));
+    assert_eq!(rect(d), [101.0, 101.0, 201.0, 151.0]);
+}
+
+#[test]
+fn wrapping_and_widths() {
+    assert!(appearance::text_width("MMMM", 10.0) > appearance::text_width("iiii", 10.0) * 2.0);
+    let lines = appearance::wrap("the quick brown fox jumps over the lazy dog", 12.0, 80.0);
+    assert!(lines.len() > 2);
+    assert!(lines.iter().all(|l| appearance::text_width(l, 12.0) <= 80.0));
+    assert_eq!(appearance::wrap("a\nb", 12.0, 100.0), ["a", "b"]);
+    // A word longer than the line is broken.
+    let long = appearance::wrap("Supercalifragilisticexpialidocious", 12.0, 40.0);
+    assert!(long.len() > 3 && long.concat() == "Supercalifragilisticexpialidocious");
+    assert_eq!(n(1.0), "1");
+    assert_eq!(n(-0.0001), "0");
+    assert_eq!(n(2.50), "2.5");
+}

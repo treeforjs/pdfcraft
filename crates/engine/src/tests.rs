@@ -382,3 +382,105 @@ fn number_pages_shows_in_the_viewer_and_undoes() {
     assert_eq!(labels(&s), ["i", "ii", "3", "4", "5"]);
     assert!(s.apply(id, Edit::NumberPages { from: 3, to: 9, style: LabelStyle::Decimal, prefix: String::new(), first: 1 }).is_err());
 }
+
+/// RGBA of the pixel at PDF point (x, y) on `page`, rendered at 1 px/pt (page height 300).
+fn pixel(s: &Session, id: DocId, page: usize, x: u32, y: u32) -> [u8; 4] {
+    let doc = s.get(id).unwrap();
+    let mut r = printcraft_render::PageRenderer::new(doc.bytes.clone(), printcraft_render::RenderConfig::default());
+    let out = r.render(printcraft_render::RenderRequest { page, scale: 1.0, ..Default::default() });
+    assert!(out.error.is_none(), "{:?}", out.error);
+    let i = (((300 - y) * out.width + x) * 4) as usize;
+    out.rgba[i..i + 4].try_into().unwrap()
+}
+
+fn rect_comment(page: usize, rect: [f64; 4]) -> Edit {
+    Edit::AddAnnotation(NewAnnotation {
+        page,
+        shape: Shape::Rectangle { rect },
+        style: Style { color: [1.0, 0.0, 0.0], opacity: 1.0, width: 2.0, fill: Some([1.0, 0.0, 0.0]) },
+        contents: "Look here".into(),
+        author: "Reviewer".into(),
+    })
+}
+
+#[test]
+fn comments_are_added_drawn_threaded_and_undone() {
+    let (mut s, id) = session_with(2);
+    assert_eq!(pixel(&s, id, 1, 100, 100), [255, 255, 255, 255]);
+    s.apply(id, rect_comment(1, [80.0, 80.0, 120.0, 120.0])).unwrap();
+    assert_eq!(s.get(id).unwrap().can_undo(), Some("Add rectangle"));
+    let px = pixel(&s, id, 1, 100, 100);
+    assert!(px[0] > 200 && px[1] < 40 && px[2] < 40, "the rectangle is drawn: {px:?}");
+    let a = &s.get(id).unwrap().info.annotations;
+    assert_eq!(a.len(), 1);
+    assert_eq!((a[0].page, a[0].index, a[0].author.as_deref(), a[0].contents.as_deref()), (1, 0, Some("Reviewer"), Some("Look here")));
+    assert_eq!(a[0].modified.as_deref().map(|m| m.contains("2023")), Some(true), "dated by the session clock");
+    let nm = a[0].name.clone().expect("has an /NM");
+    assert_eq!(nm.len(), 36);
+
+    s.apply(id, Edit::ReplyToAnnotation { page: 1, index: 0, text: "Done".into(), author: "Ada".into() }).unwrap();
+    s.apply(id, Edit::SetAnnotationStatus { page: 1, index: 0, state: ReviewState::Completed, author: "Ada".into() }).unwrap();
+    let a = &s.get(id).unwrap().info.annotations;
+    assert_eq!(a.len(), 3);
+    assert!(a.iter().filter(|r| r.in_reply_to.as_deref() == Some(nm.as_str())).count() == 2);
+    assert!(a.iter().any(|r| r.state.as_deref() == Some("Completed")));
+    assert_ne!(a[1].name, a[2].name, "every comment gets its own id");
+
+    s.apply(id, Edit::MoveAnnotation { page: 1, index: 0, dx: 50.0, dy: 0.0 }).unwrap();
+    assert_eq!(pixel(&s, id, 1, 100, 100), [255, 255, 255, 255]);
+    let px = pixel(&s, id, 1, 150, 100);
+    assert!(px[0] > 200 && px[1] < 40, "moved: {px:?}");
+
+    s.apply(id, Edit::DeleteAnnotation { page: 1, index: 0 }).unwrap();
+    assert!(s.get(id).unwrap().info.annotations.is_empty(), "replies go with their parent");
+    for _ in 0..4 {
+        s.undo(id).unwrap();
+    }
+    assert_eq!(s.get(id).unwrap().info.annotations.len(), 1);
+    let px = pixel(&s, id, 1, 100, 100);
+    assert!(px[0] > 200 && px[1] < 40, "back where it was: {px:?}");
+}
+
+#[test]
+fn highlight_multiplies_over_text() {
+    let (mut s, id) = session_with(1);
+    // "Page 1" is drawn at 20,150 in 24 pt Helvetica.
+    let quad = [18.0, 172.0, 100.0, 172.0, 18.0, 145.0, 100.0, 145.0];
+    s.apply(
+        id,
+        Edit::AddAnnotation(NewAnnotation {
+            page: 0,
+            shape: Shape::TextMarkup { kind: Markup::Highlight, quads: vec![quad] },
+            style: Style { color: [1.0, 1.0, 0.0], ..Style::default() },
+            contents: String::new(),
+            author: String::new(),
+        }),
+    )
+    .unwrap();
+    let a = &s.get(id).unwrap().info.annotations[0];
+    assert_eq!(a.subtype, "Highlight");
+    assert_eq!(a.quads, vec![quad.map(|v| v as f32)]);
+    // Background inside the quad turns yellow; text stays dark (multiply).
+    let bg = pixel(&s, id, 0, 19, 170);
+    assert!(bg[0] > 240 && bg[1] > 240 && bg[2] < 30, "{bg:?}");
+}
+
+#[test]
+fn comment_permission_is_enforced() {
+    let mut cos = printcraft_cos::Document::open(Arc::new(fixture(1))).unwrap();
+    // Owner "own", empty user password, everything allowed except commenting (bit 6).
+    let params = printcraft_cos::NewEncryption {
+        algorithm: printcraft_cos::Algorithm::Aes256,
+        user_password: "",
+        owner_password: "own",
+        permissions: !(1 << 5),
+        encrypt_metadata: true,
+        seed: [7; 32],
+    };
+    cos.set_encryption(&params).unwrap();
+    let bytes = printcraft_cos::write_full(&cos, &printcraft_cos::SaveOptions::default()).unwrap();
+    let mut s = Session::new();
+    let id = s.open("locked.pdf", None, Arc::new(bytes), None).unwrap();
+    let err = s.apply(id, rect_comment(0, [10.0, 10.0, 50.0, 50.0])).unwrap_err();
+    assert_eq!(err, EditError::NotPermitted("comments"));
+}
