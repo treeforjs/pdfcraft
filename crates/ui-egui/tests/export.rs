@@ -27,7 +27,7 @@ fn export_dialogs_write_images_and_text() {
     h.run_steps(4);
     assert!(h.state_mut().execute("export.image"));
     h.run_steps(2);
-    h.get_by_label("Export to Image (PNG)");
+    h.get_by_label("Export to Image");
     h.get_by_label("Export").click();
     h.run_steps(4);
     assert!(dir.join("doc_page_1.png").exists() && dir.join("doc_page_2.png").exists());

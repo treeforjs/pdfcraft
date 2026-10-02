@@ -6,10 +6,16 @@ use std::sync::Arc;
 use crate::PrintCraftApp;
 
 /// File types Open accepts besides PDF (converted on open).
-pub const CONVERTIBLE: [&str; 4] = ["png", "jpg", "jpeg", "txt"];
+pub const CONVERTIBLE: [&str; 9] = ["png", "jpg", "jpeg", "tif", "tiff", "gif", "bmp", "txt", "text"];
 
 fn is_image(bytes: &[u8]) -> bool {
-    bytes.starts_with(&[0xFF, 0xD8]) || bytes.starts_with(b"\x89PNG\r\n\x1a\n")
+    bytes.starts_with(&[0xFF, 0xD8])
+        || bytes.starts_with(b"\x89PNG\r\n\x1a\n")
+        || bytes.starts_with(b"II*\0")
+        || bytes.starts_with(b"MM\0*")
+        || bytes.starts_with(b"GIF8")
+        // BMP: "BM" and a known header size (so text starting with "BM" stays text).
+        || (bytes.starts_with(b"BM") && bytes.get(14..18).is_some_and(|h| matches!(u32::from_le_bytes([h[0], h[1], h[2], h[3]]), 12 | 40 | 52 | 56 | 108 | 124)))
 }
 
 fn stem(name: &str) -> &str {
@@ -56,7 +62,11 @@ impl PrintCraftApp {
     pub(crate) fn create_from_images_dialog(&mut self) {
         #[cfg(not(target_arch = "wasm32"))]
         {
-            let Some(files) = rfd::FileDialog::new().add_filter("Images", &["png", "jpg", "jpeg"]).set_title("Choose images").pick_files() else {
+            let Some(files) = rfd::FileDialog::new()
+                .add_filter("Images", &["png", "jpg", "jpeg", "tif", "tiff", "gif", "bmp"])
+                .set_title("Choose images")
+                .pick_files()
+            else {
                 return;
             };
             let mut images = Vec::new();

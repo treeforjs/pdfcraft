@@ -406,11 +406,18 @@ impl Automation {
         let folder = self.resolve(a.str("folder")?, true)?;
         std::fs::create_dir_all(&folder).map_err(|e| failed(format!("{}: {e}", folder.display())))?;
         let dpi = a.opt_num("dpi")?.unwrap_or(150.0);
+        let quality = a.opt_int("quality")?.unwrap_or(85).clamp(1, 100) as u8;
+        let format = match a.opt_str("format")?.unwrap_or("png") {
+            "png" => printcraft_engine::export::ImageFormat::Png,
+            "jpeg" | "jpg" => printcraft_engine::export::ImageFormat::Jpeg { quality },
+            "tiff" | "tif" => printcraft_engine::export::ImageFormat::Tiff,
+            f => return Err(ToolError::InvalidArgs(format!("unknown format {f:?} (png, jpeg, tiff)"))),
+        };
         let mut files = Vec::new();
         for p in pages {
-            let png = ex.png(p, dpi).map_err(failed)?;
-            let path = folder.join(format!("{stem}_page_{}.png", p + 1));
-            write_atomic(&path, &png)?;
+            let img = ex.image(p, dpi, format).map_err(failed)?;
+            let path = folder.join(format!("{stem}_page_{}.{}", p + 1, format.extension()));
+            write_atomic(&path, &img)?;
             files.push(path.to_string_lossy().into_owned());
         }
         Ok(json!({ "count": files.len(), "files": files }))

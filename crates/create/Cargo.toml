@@ -12,7 +12,10 @@ workspace = true
 printcraft-cos = { workspace = true }
 printcraft-fonts = { workspace = true }
 png = "0.18"
+tiff = "0.11"
+image = { version = "0.25", default-features = false, features = ["bmp", "gif"] }
 thiserror = { workspace = true }
 
 [dev-dependencies]
+image = { version = "0.25", default-features = false, features = ["bmp", "gif"] }
 hayro-syntax = { workspace = true }

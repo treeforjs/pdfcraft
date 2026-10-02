@@ -835,3 +835,20 @@ fn flattening_keeps_the_look_and_drops_the_objects() {
     s.undo(id).unwrap();
     assert_eq!(s.get(id).unwrap().form.len(), 2);
 }
+
+#[test]
+fn pages_export_as_png_jpeg_and_tiff() {
+    use crate::export::{Exporter, ImageFormat};
+    let (s, id) = session_with(1);
+    let mut ex = Exporter::new(s.get(id).unwrap());
+    let png = ex.image(0, 72.0, ImageFormat::Png).unwrap();
+    assert!(png.starts_with(b"\x89PNG"));
+    let jpg = ex.image(0, 72.0, ImageFormat::Jpeg { quality: 85 }).unwrap();
+    let decoded = image::load_from_memory_with_format(&jpg, image::ImageFormat::Jpeg).unwrap();
+    assert_eq!((decoded.width(), decoded.height()), (200, 300), "the page at 72 dpi");
+    let corner = decoded.to_rgb8().get_pixel(2, 2).0;
+    assert!(corner.iter().all(|c| *c > 240), "white paper, not black: {corner:?}");
+    let tif = ex.image(0, 144.0, ImageFormat::Tiff).unwrap();
+    let decoded = image::load_from_memory_with_format(&tif, image::ImageFormat::Tiff).unwrap();
+    assert_eq!((decoded.width(), decoded.height()), (400, 600));
+}

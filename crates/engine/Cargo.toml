@@ -9,6 +9,7 @@ license.workspace = true
 workspace = true
 
 [dependencies]
+image = { version = "0.25", default-features = false, features = ["jpeg", "tiff"] }
 printcraft-render = { workspace = true }
 printcraft-cos = { workspace = true }
 printcraft-organize = { workspace = true }

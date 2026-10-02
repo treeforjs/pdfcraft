@@ -483,9 +483,19 @@ pub fn tools() -> Vec<ToolDef> {
         t("doc_remove_marks", "Remove header & footer, watermark or background", "Remove every header and footer, watermark or background PrintCraft (or a compatible tool) added. Undoable.")
             .destructive()
             .with(schema(json!({ "doc": doc(), "kind": { "type": "string", "enum": ["header_footer", "watermark", "background"] } }), &["doc", "kind"])),
-        t("doc_export_images", "Export pages as images", "Write pages as PNG files (`<name>_page_<n>.png`) into a folder, at a resolution (default 150 dpi). Includes unsaved edits.")
+        t("doc_export_images", "Export pages as images", "Write pages as PNG, JPEG or TIFF files (`<name>_page_<n>.png|jpg|tif`) into a folder, at a resolution (default 150 dpi). JPEG and TIFF are flattened onto white paper. Includes unsaved edits.")
             .cmd("export.image")
-            .with(schema(json!({ "doc": doc(), "folder": { "type": "string" }, "dpi": { "type": "number", "minimum": 18, "maximum": 1200 }, "pages": pages("to export (default: all)") }), &["doc", "folder"])),
+            .with(schema(
+                json!({
+                    "doc": doc(),
+                    "folder": { "type": "string" },
+                    "format": { "type": "string", "enum": ["png", "jpeg", "tiff"] },
+                    "quality": { "type": "integer", "minimum": 1, "maximum": 100, "description": "JPEG quality (default 85)." },
+                    "dpi": { "type": "number", "minimum": 18, "maximum": 1200 },
+                    "pages": pages("to export (default: all)"),
+                }),
+                &["doc", "folder"],
+            )),
         t("doc_export_text", "Export text", "Write the reading-order text of pages to a .txt file (pages separated by form feeds).")
             .cmd("export.text")
             .with(schema(json!({ "doc": doc(), "path": { "type": "string" }, "pages": pages("to export (default: all)") }), &["doc", "path"])),
@@ -509,7 +519,7 @@ pub fn tools() -> Vec<ToolDef> {
         t(
             "doc_create",
             "Create a PDF",
-            "Create a new, unsaved document and return it like doc_open: `blank` (pages, width, height in points; default 1 US Letter page), `images` (paths of PNG/JPEG files, one page each at the image's resolution) or `text` (a .txt path, or `text` directly). Save it with doc_save and a path.",
+            "Create a new, unsaved document and return it like doc_open: `blank` (pages, width, height in points; default 1 US Letter page), `images` (paths of PNG, JPEG, TIFF (every page), GIF or BMP files, one page each at the image's resolution) or `text` (a .txt path, or `text` directly). Save it with doc_save and a path.",
         )
         .with(schema(
             json!({

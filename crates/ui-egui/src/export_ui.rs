@@ -1,4 +1,4 @@
-//! Export a PDF ▸ Image (PNG) and Text (Acrobat's Export a PDF tool, first formats).
+//! Export a PDF ▸ Image (PNG, JPEG, TIFF) and Text (Acrobat's Export a PDF tool, first formats).
 //!
 //! On the desktop the export runs on a worker thread and reports progress in the notice bar;
 //! on the web it runs in place and downloads the files.
@@ -6,7 +6,7 @@
 use std::sync::{Arc, Mutex};
 
 use egui::{Align, Layout};
-use printcraft_engine::export::{ExportSource, Exporter};
+use printcraft_engine::export::{ExportSource, Exporter, ImageFormat};
 
 use crate::marks_ui::PageRange;
 use crate::theme::{self, Tokens};
@@ -22,11 +22,12 @@ pub enum ExportKind {
 pub struct ExportDraft {
     pub dpi: f64,
     pub range: PageRange,
+    pub format: ImageFormat,
 }
 
 impl Default for ExportDraft {
     fn default() -> Self {
-        Self { dpi: 150.0, range: PageRange::default() }
+        Self { dpi: 150.0, range: PageRange::default(), format: ImageFormat::Png }
     }
 }
 
@@ -38,7 +39,7 @@ pub(crate) fn body(ui: &mut egui::Ui, app: &mut PrintCraftApp, t: &Tokens, kind:
     let d = &mut app.export_draft;
     ui.label(
         egui::RichText::new(match kind {
-            ExportKind::Image => "Export to Image (PNG)",
+            ExportKind::Image => "Export to Image",
             ExportKind::Text => "Export to Text",
         })
         .font(theme::semibold(18.0)),
@@ -53,7 +54,28 @@ pub(crate) fn body(ui: &mut egui::Ui, app: &mut PrintCraftApp, t: &Tokens, kind:
                 }
             });
         });
-        ui.label(egui::RichText::new("One PNG file per page, named after the document.").small().color(t.text_faint));
+        ui.horizontal(|ui| {
+            ui.label("Format");
+            let mut quality = match d.format {
+                ImageFormat::Jpeg { quality } => quality,
+                _ => 85,
+            };
+            egui::ComboBox::from_id_salt("export-format").selected_text(d.format.label()).show_ui(ui, |ui| {
+                for f in [ImageFormat::Png, ImageFormat::Jpeg { quality }, ImageFormat::Tiff] {
+                    let on = std::mem::discriminant(&d.format) == std::mem::discriminant(&f);
+                    if ui.selectable_label(on, f.label()).clicked() {
+                        d.format = f;
+                    }
+                }
+            });
+            if let ImageFormat::Jpeg { .. } = d.format {
+                ui.label("Quality");
+                if ui.add(egui::Slider::new(&mut quality, 10..=100)).changed() {
+                    d.format = ImageFormat::Jpeg { quality };
+                }
+            }
+        });
+        ui.label(egui::RichText::new(format!("One {} file per page, named after the document.", d.format.label())).small().color(t.text_faint));
     } else {
         ui.label(egui::RichText::new("Plain text in reading order; pages are separated by form feeds.").small().color(t.text_faint));
     }
@@ -75,10 +97,12 @@ pub(crate) fn body(ui: &mut egui::Ui, app: &mut PrintCraftApp, t: &Tokens, kind:
 }
 
 /// Write the files (`name`, bytes) produced for `pages`, reporting progress.
+#[allow(clippy::too_many_arguments)]
 fn run(
     src: ExportSource,
     kind: ExportKind,
     dpi: f64,
+    format: ImageFormat,
     pages: Vec<usize>,
     stem: String,
     mut sink: impl FnMut(&str, Vec<u8>) -> Result<(), String>,
@@ -95,7 +119,7 @@ fn run(
         ExportKind::Image => {
             for (k, p) in pages.iter().enumerate() {
                 set(k, None);
-                let result = ex.png(*p, dpi).and_then(|png| sink(&format!("{stem}_page_{}.png", p + 1), png));
+                let result = ex.image(*p, dpi, format).and_then(|img| sink(&format!("{stem}_page_{}.{}", p + 1, format.extension()), img));
                 if let Err(e) = result {
                     return format!("Export stopped: {e}");
                 }
@@ -121,6 +145,7 @@ impl PrintCraftApp {
         let stem = doc.name.trim_end_matches(".pdf").trim_end_matches(".PDF").to_string();
         let pages = self.export_draft.range.pages(src.pages);
         let dpi = self.export_draft.dpi;
+        let format = self.export_draft.format;
         let status: ExportStatus = Arc::new(Mutex::new(Some((0, pages.len(), None))));
         #[cfg(not(target_arch = "wasm32"))]
         {
@@ -135,7 +160,7 @@ impl PrintCraftApp {
                 let sink = |name: &str, bytes: Vec<u8>| {
                     crate::editing::write_atomically(&dir.join(name).to_string_lossy(), &bytes).map_err(|e| format!("{name}: {e}"))
                 };
-                let msg = run(src, kind, dpi, pages, stem, sink, &st);
+                let msg = run(src, kind, dpi, format, pages, stem, sink, &st);
                 if let Ok(mut s) = st.lock() {
                     let (done, total) = s.as_ref().map_or((0, 0), |(d, t, _)| (*d, *t));
                     *s = Some((done.max(total), total, Some(format!("{msg} to {shown}"))));
@@ -149,7 +174,7 @@ impl PrintCraftApp {
         }
         #[cfg(target_arch = "wasm32")]
         {
-            let msg = run(src, kind, dpi, pages, stem, |name, bytes| crate::editing::download(name, &bytes), &status);
+            let msg = run(src, kind, dpi, format, pages, stem, |name, bytes| crate::editing::download(name, &bytes), &status);
             if let Ok(mut s) = status.lock() {
                 *s = Some((0, 0, Some(msg)));
             }

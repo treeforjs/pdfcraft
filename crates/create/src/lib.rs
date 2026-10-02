@@ -184,14 +184,122 @@ fn png_image(name: &str, bytes: &[u8]) -> Result<Embedded, CreateError> {
     Ok(Embedded { dict: d, data: colour, filtered: false, smask, px: (w, h), dpi })
 }
 
-/// Detect the image format from its bytes.
-fn embed(name: &str, bytes: &[u8]) -> Result<Embedded, CreateError> {
+/// 8-bit RGBA pixels → an image (gray when every pixel is, with a soft mask when any pixel is
+/// not opaque).
+fn rgba_image(rgba: &[u8], (w, h): (u32, u32), dpi: (f64, f64)) -> Embedded {
+    let gray = rgba.chunks_exact(4).all(|p| p[0] == p[1] && p[1] == p[2]);
+    let opaque = rgba.chunks_exact(4).all(|p| p[3] == 255);
+    let colour: Vec<u8> =
+        if gray { rgba.chunks_exact(4).map(|p| p[0]).collect() } else { rgba.chunks_exact(4).flat_map(|p| [p[0], p[1], p[2]]).collect() };
+    let mut d = Dict::new();
+    d.set(b"ColorSpace".to_vec(), Object::name(if gray { "DeviceGray" } else { "DeviceRGB" }));
+    d.set(b"BitsPerComponent".to_vec(), Object::Int(8));
+    let smask = (!opaque).then(|| {
+        let mut m = Dict::new();
+        m.set(b"Type".to_vec(), Object::name("XObject"));
+        m.set(b"Subtype".to_vec(), Object::name("Image"));
+        m.set(b"Width".to_vec(), Object::Int(w as i64));
+        m.set(b"Height".to_vec(), Object::Int(h as i64));
+        m.set(b"ColorSpace".to_vec(), Object::name("DeviceGray"));
+        m.set(b"BitsPerComponent".to_vec(), Object::Int(8));
+        (m, rgba.chunks_exact(4).map(|p| p[3]).collect())
+    });
+    Embedded { dict: d, data: colour, filtered: false, smask, px: (w, h), dpi }
+}
+
+/// BMP and GIF (the first frame), through the `image` decoders. Their resolution is not read:
+/// 72 dpi, as for images without one.
+fn decoded(name: &str, bytes: &[u8], format: image::ImageFormat) -> Result<Embedded, CreateError> {
+    let img = image::load_from_memory_with_format(bytes, format).map_err(|e| CreateError::Image(name.into(), e.to_string()))?;
+    let rgba = img.to_rgba8();
+    Ok(rgba_image(rgba.as_raw(), rgba.dimensions(), (72.0, 72.0)))
+}
+
+/// Every page of a TIFF (multi-page scans become multi-page PDFs).
+fn tiff_pages(name: &str, bytes: &[u8]) -> Result<Vec<Embedded>, CreateError> {
+    use tiff::ColorType as C;
+    use tiff::decoder::{Decoder, DecodingResult};
+    use tiff::tags::Tag;
+    let bad = |m: String| CreateError::Image(name.into(), m);
+    let mut dec = Decoder::new(std::io::Cursor::new(bytes)).map_err(|e| bad(e.to_string()))?;
+    let mut out = Vec::new();
+    loop {
+        let (w, h) = dec.dimensions().map_err(|e| bad(e.to_string()))?;
+        let ct = dec.colortype().map_err(|e| bad(e.to_string()))?;
+        let unit = dec.get_tag_u32(Tag::ResolutionUnit).unwrap_or(2);
+        let res = |t: Tag, dec: &mut Decoder<std::io::Cursor<&[u8]>>| -> f64 {
+            // Resolutions are rationals.
+            let v = match dec.get_tag(t) {
+                Ok(tiff::decoder::ifd::Value::Rational(n, d)) if d != 0 => f64::from(n) / f64::from(d),
+                Ok(other) => other.into_f64().unwrap_or(72.0),
+                Err(_) => 72.0,
+            };
+            let v = if unit == 3 { v * 2.54 } else { v };
+            if v.is_finite() && v >= 1.0 { v } else { 72.0 }
+        };
+        let dpi = (res(Tag::XResolution, &mut dec), res(Tag::YResolution, &mut dec));
+        let data = match dec.read_image().map_err(|e| bad(e.to_string()))? {
+            DecodingResult::U8(v) => v,
+            // 16-bit samples: keep the high byte.
+            DecodingResult::U16(v) => v.iter().map(|x| (x >> 8) as u8).collect(),
+            _ => return Err(bad("this TIFF sample format isn't supported".into())),
+        };
+        let page = match ct {
+            C::Gray(1) => {
+                // Bilevel scans stay 1 bit per pixel (0 = black after the decoder's inversion).
+                let mut d = Dict::new();
+                d.set(b"ColorSpace".to_vec(), Object::name("DeviceGray"));
+                d.set(b"BitsPerComponent".to_vec(), Object::Int(1));
+                Embedded { dict: d, data, filtered: false, smask: None, px: (w, h), dpi }
+            }
+            C::Gray(8 | 16) => {
+                let mut d = Dict::new();
+                d.set(b"ColorSpace".to_vec(), Object::name("DeviceGray"));
+                d.set(b"BitsPerComponent".to_vec(), Object::Int(8));
+                Embedded { dict: d, data, filtered: false, smask: None, px: (w, h), dpi }
+            }
+            C::RGB(8 | 16) => {
+                let mut d = Dict::new();
+                d.set(b"ColorSpace".to_vec(), Object::name("DeviceRGB"));
+                d.set(b"BitsPerComponent".to_vec(), Object::Int(8));
+                Embedded { dict: d, data, filtered: false, smask: None, px: (w, h), dpi }
+            }
+            C::CMYK(8 | 16) => {
+                let mut d = Dict::new();
+                d.set(b"ColorSpace".to_vec(), Object::name("DeviceCMYK"));
+                d.set(b"BitsPerComponent".to_vec(), Object::Int(8));
+                Embedded { dict: d, data, filtered: false, smask: None, px: (w, h), dpi }
+            }
+            C::RGBA(8 | 16) => rgba_image(&data, (w, h), dpi),
+            C::GrayA(8 | 16) => {
+                let rgba: Vec<u8> = data.chunks_exact(2).flat_map(|p| [p[0], p[0], p[0], p[1]]).collect();
+                rgba_image(&rgba, (w, h), dpi)
+            }
+            other => return Err(bad(format!("{other:?} TIFF images aren't supported yet"))),
+        };
+        out.push(page);
+        if !dec.more_images() {
+            break;
+        }
+        dec.next_image().map_err(|e| bad(e.to_string()))?;
+    }
+    Ok(out)
+}
+
+/// Detect the image format from its bytes; a TIFF may hold several pages.
+fn embed(name: &str, bytes: &[u8]) -> Result<Vec<Embedded>, CreateError> {
     if bytes.starts_with(&[0xFF, 0xD8]) {
-        jpeg(name, bytes)
+        Ok(vec![jpeg(name, bytes)?])
     } else if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
-        png_image(name, bytes)
+        Ok(vec![png_image(name, bytes)?])
+    } else if bytes.starts_with(b"II*\0") || bytes.starts_with(b"MM\0*") {
+        tiff_pages(name, bytes)
+    } else if bytes.starts_with(b"BM") {
+        Ok(vec![decoded(name, bytes, image::ImageFormat::Bmp)?])
+    } else if bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a") {
+        Ok(vec![decoded(name, bytes, image::ImageFormat::Gif)?])
     } else {
-        Err(CreateError::Image(name.into(), "only PNG and JPEG images are supported so far".into()))
+        Err(CreateError::Image(name.into(), "use a PNG, JPEG, TIFF, GIF or BMP image".into()))
     }
 }
 
@@ -201,8 +309,7 @@ pub fn from_images(images: &[(String, Vec<u8>)]) -> Result<Document, CreateError
         return Err(CreateError::Invalid("no images".into()));
     }
     let mut doc = Document::new_empty();
-    for (name, bytes) in images {
-        let img = embed(name, bytes)?;
+    for img in images.iter().map(|(name, bytes)| embed(name, bytes)).collect::<Result<Vec<_>, _>>()?.into_iter().flatten() {
         let (mut w, mut h) = (img.px.0 as f64 * 72.0 / img.dpi.0, img.px.1 as f64 * 72.0 / img.dpi.1);
         // Keep huge images within the largest page PDF allows.
         let k = (MAX_SIDE / w.max(h)).min(1.0);

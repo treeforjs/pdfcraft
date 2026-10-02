@@ -6646,8 +6646,8 @@ milestone = "M10"
 status = "partial"
 commands = ["create.images", "create.file"]
 tools = ["doc_create"]
-evidence = ["crates/ui-egui/tests/create.rs::opening_images_and_text_converts_them_to_new_pdfs", "crates/create/src/tests.rs::images_become_pages_at_their_resolution"]
-notes = "PNG and JPEG (grey, RGB, CMYK; transparency kept); TIFF, GIF, BMP, JPEG 2000 not yet"
+evidence = ["crates/ui-egui/tests/create.rs::opening_images_and_text_converts_them_to_new_pdfs", "crates/create/src/tests.rs::images_become_pages_at_their_resolution", "crates/create/src/tests.rs::bmp_gif_and_multi_page_tiff_images"]
+notes = "PNG, JPEG, TIFF, GIF (first frame), BMP; JPEG 2000 pending"
 
 [[feature]]
 id = "create.from-multipage-tiff"
@@ -6655,11 +6655,11 @@ title = "Multi-page TIFF to multi-page PDF"
 area = "J"
 tier = "P0"
 milestone = "M10"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["create.images", "create.file"]
+tools = ["doc_create"]
+evidence = ["crates/create/src/tests.rs::bmp_gif_and_multi_page_tiff_images"]
+notes = "every page; 1-bit scans stay 1-bit; resolution from the TIFF"
 
 [[feature]]
 id = "create.from-text"
@@ -6883,11 +6883,11 @@ title = "Export pages as JPEG or TIFF"
 area = "J"
 tier = "P0"
 milestone = "M10"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["export.image"]
+tools = ["doc_export_images"]
+evidence = ["crates/engine/src/tests.rs::pages_export_as_png_jpeg_and_tiff", "crates/automation/tests/automation.rs::exporting_images_and_text_through_tools"]
+notes = "JPEG with quality, TIFF; flattened onto white"
 
 [[feature]]
 id = "create.export-jpeg2000"

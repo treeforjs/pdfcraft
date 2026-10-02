@@ -97,3 +97,47 @@ fn text_is_wrapped_and_paginated() {
     assert!(content(&p[0]).contains("(Line 0 of a plain text file) Tj"));
     assert!(content(p.last().unwrap()).contains("(After a form feed) Tj"), "a form feed starts a page");
 }
+
+fn image_of(doc: &Document, page: usize) -> Dict {
+    let p = &pages(doc)[page];
+    let res = doc.resolve(p.get(b"Resources").unwrap()).as_dict().cloned().unwrap();
+    let xo = doc.resolve(res.get(b"XObject").unwrap()).as_dict().cloned().unwrap();
+    match &*doc.resolve(xo.get(b"Im0").unwrap()) {
+        Object::Stream(s) => s.dict.clone(),
+        _ => panic!("not an image"),
+    }
+}
+
+#[test]
+fn bmp_gif_and_multi_page_tiff_images() {
+    use image::{ImageEncoder, Rgba, RgbaImage};
+    // BMP: 3×2 opaque colour.
+    let mut bmp = Vec::new();
+    image::codecs::bmp::BmpEncoder::new(&mut bmp).write_image(&[10, 20, 30].repeat(6), 3, 2, image::ExtendedColorType::Rgb8).unwrap();
+    // GIF: 2×2 with a transparent pixel.
+    let mut gif = Vec::new();
+    {
+        let mut img = RgbaImage::from_pixel(2, 2, Rgba([255, 0, 0, 255]));
+        img.put_pixel(0, 0, Rgba([0, 0, 0, 0]));
+        let mut enc = image::codecs::gif::GifEncoder::new(&mut gif);
+        enc.encode(img.as_raw(), 2, 2, image::ExtendedColorType::Rgba8).unwrap();
+    }
+    // TIFF: two pages, an 8-bit gray one at 144 dpi and a 1-bit one.
+    let mut tif = std::io::Cursor::new(Vec::new());
+    {
+        let mut enc = tiff::encoder::TiffEncoder::new(&mut tif).unwrap();
+        let mut im = enc.new_image::<tiff::encoder::colortype::Gray8>(4, 2).unwrap();
+        im.resolution(tiff::tags::ResolutionUnit::Inch, tiff::encoder::Rational { n: 144, d: 1 });
+        im.write_data(&[128; 8]).unwrap();
+        enc.write_image::<tiff::encoder::colortype::Gray8>(2, 2, &[0, 255, 255, 0]).unwrap();
+    }
+    let doc = from_images(&[("a.bmp".into(), bmp), ("b.gif".into(), gif), ("scan.tif".into(), tif.into_inner())]).unwrap();
+    let doc = reopen(&doc);
+    assert_eq!(pages(&doc).len(), 4, "one page per BMP and GIF, two for the TIFF");
+    assert_eq!(media(&pages(&doc)[0]), [0.0, 0.0, 3.0, 2.0]);
+    assert_eq!(image_of(&doc, 0).name(b"ColorSpace"), Some(&b"DeviceRGB"[..]));
+    assert!(image_of(&doc, 1).contains(b"SMask"), "GIF transparency");
+    assert_eq!(media(&pages(&doc)[2]), [0.0, 0.0, 2.0, 1.0], "4×2 px at 144 dpi");
+    assert_eq!(image_of(&doc, 2).name(b"ColorSpace"), Some(&b"DeviceGray"[..]));
+    assert!(matches!(from_images(&[("x.webp".into(), b"RIFF0000WEBP".to_vec())]), Err(CreateError::Image(..))));
+}

@@ -528,6 +528,12 @@ fn exporting_images_and_text_through_tools() {
     let r = ok(&mut a, "doc_export_images", json!({ "doc": doc, "folder": "out", "dpi": 72, "pages": [1, 3] }));
     assert_eq!(r["count"], 2);
     assert!(dir.join("out/a_page_3.png").exists());
+    ok(&mut a, "doc_export_images", json!({ "doc": doc, "folder": "out", "dpi": 72, "pages": [2], "format": "jpeg", "quality": 70 }));
+    assert!(std::fs::read(dir.join("out/a_page_2.jpg")).unwrap().starts_with(&[0xFF, 0xD8]));
+    ok(&mut a, "doc_export_images", json!({ "doc": doc, "folder": "out", "dpi": 72, "pages": [2], "format": "tiff" }));
+    let tif = std::fs::read(dir.join("out/a_page_2.tif")).unwrap();
+    assert!(tif.starts_with(b"II*\0") || tif.starts_with(b"MM\0*"));
+    assert!(matches!(a.call("doc_export_images", &json!({ "doc": doc, "folder": "out", "format": "webp" })), Err(ToolError::InvalidArgs(_))));
     ok(&mut a, "doc_export_text", json!({ "doc": doc, "path": "a.txt" }));
     assert_eq!(std::fs::read_to_string(dir.join("a.txt")).unwrap(), "Page 1\n\u{c}Page 2\n\u{c}Page 3\n");
     assert!(a.call("doc_export_text", &json!({ "doc": doc, "path": "/etc/x.txt" })).is_err(), "confined to the root");
