@@ -4503,11 +4503,11 @@ title = "Date picker for date fields"
 area = "F"
 tier = "P1"
 milestone = "M6"
-status = "planned"
+status = "shipped"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["form_fill"]
+evidence = ["crates/ui-egui/tests/forms.rs::date_fields_offer_a_calendar"]
+notes = "a month calendar under date fields; the pick is written in the field's own date format"
 
 [[feature]]
 id = "form.auto-complete"

@@ -1373,7 +1373,7 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
     if let Some(e) = comments::composer(ui.ctx(), view, info, prefs) {
         view.pending_edit = Some(e);
     }
-    if let Some(e) = crate::forms_ui::overlay(ui.ctx(), view, info, &form) {
+    if let Some(e) = crate::forms_ui::overlay(ui.ctx(), view, info, &form, today) {
         view.pending_edit = Some(e);
     }
     if let Some(e) = crate::fill_sign::type_box(ui.ctx(), view, info, &author) {

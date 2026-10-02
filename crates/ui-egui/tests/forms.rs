@@ -120,3 +120,27 @@ fn tabbing_into_a_filled_field_selects_it_so_typing_replaces() {
     h.run_steps(3);
     assert_eq!(value(&h, "city"), ["Lyon"]);
 }
+
+#[test]
+fn date_fields_offer_a_calendar() {
+    use egui_kittest::kittest::Queryable;
+    let mut h = harness();
+    h.state_mut().apply_edit(printcraft_engine::Edit::AddField {
+        page: 0,
+        rect: [50.0, 40.0, 200.0, 60.0],
+        kind: printcraft_engine::NewField::Date,
+        name: Some("due".into()),
+    });
+    h.run_steps(4);
+    click_field(&mut h, "due", 0);
+    let (y, m, _) = h.state().session.today();
+    let month =
+        ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][(m - 1) as usize];
+    h.get_by_label(&format!("{month} {y}"));
+    h.get_by_label("›").click();
+    h.run_steps(2);
+    h.get_by_label("15").click();
+    h.run_steps(4);
+    let (ny, nm) = if m == 12 { (y + 1, 1) } else { (y, m + 1) };
+    assert_eq!(value(&h, "due"), vec![format!("{nm:02}/15/{ny}")], "picked in the field's format");
+}

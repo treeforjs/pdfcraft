@@ -26,6 +26,9 @@ pub struct Focus {
     pub request_focus: bool,
     /// Select the whole value when the editor opens (entered with Tab), so typing replaces it.
     pub select_all: bool,
+    /// Date fields: the month the calendar shows (year, month 1–12), and where it was drawn.
+    pub calendar: Option<(i32, u32)>,
+    pub calendar_rect: Option<egui::Rect>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -53,6 +56,8 @@ fn open_focus(f: &FormField, widget: usize) -> Focus {
         picked: f.value.clone(),
         request_focus: true,
         select_all: false,
+        calendar: None,
+        calendar_rect: None,
     }
 }
 
@@ -130,6 +135,77 @@ fn commit(view: &mut DocView, form: &[FormField]) {
     view.pending_edit = Some(Edit::SetFieldValue { name: f.name.clone(), value });
 }
 
+const MONTHS: [&str; 12] = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+/// The date picker under a focused date field. Returns the picked date, formatted with the
+/// field's own format.
+fn calendar(ctx: &egui::Context, view: &mut DocView, field: egui::Rect, fmt: &str, today: (i64, u32, u32)) -> Option<String> {
+    use printcraft_engine::form_scripts::{DateTime, format_date, parse_date};
+    let fx = view.forms.focus.as_mut()?;
+    let (mut y, mut m) = fx.calendar.unwrap_or_else(|| match parse_date(&fx.text, fmt) {
+        Some(d) => (d.y, d.m),
+        None => (today.0 as i32, today.1),
+    });
+    let current = parse_date(&fx.text, fmt);
+    let mut picked = None;
+    let area = egui::Area::new(egui::Id::new(("date-picker", view.id.0)))
+        .order(egui::Order::Foreground)
+        .fixed_pos(field.left_bottom() + vec2(0.0, 2.0))
+        .show(ctx, |ui| {
+            egui::Frame::popup(ui.style()).show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    if ui.small_button("‹").on_hover_text("Previous month").clicked() {
+                        (y, m) = if m == 1 { (y - 1, 12) } else { (y, m - 1) };
+                    }
+                    ui.label(egui::RichText::new(format!("{} {y}", MONTHS[(m.clamp(1, 12) - 1) as usize])).strong());
+                    if ui.small_button("›").on_hover_text("Next month").clicked() {
+                        (y, m) = if m == 12 { (y + 1, 1) } else { (y, m + 1) };
+                    }
+                });
+                // Weekday of the 1st (0 = Sunday), Zeller-style via days since 1970-01-01 (a Thursday).
+                let days_from_civil = |y: i32, m: u32, d: u32| -> i64 {
+                    let (y, m) = if m <= 2 { (y as i64 - 1, m as i64 + 9) } else { (y as i64, m as i64 - 3) };
+                    let era = y.div_euclid(400);
+                    let yoe = y - era * 400;
+                    let doy = (153 * m + 2) / 5 + d as i64 - 1;
+                    era * 146_097 + yoe * 365 + yoe / 4 - yoe / 100 + doy - 719_468
+                };
+                let first = (days_from_civil(y, m, 1) + 4).rem_euclid(7) as usize;
+                let len = (days_from_civil(if m == 12 { y + 1 } else { y }, if m == 12 { 1 } else { m + 1 }, 1) - days_from_civil(y, m, 1)) as usize;
+                egui::Grid::new(("date-grid", view.id.0)).spacing([4.0, 2.0]).show(ui, |ui| {
+                    for d in ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"] {
+                        ui.label(egui::RichText::new(d).small());
+                    }
+                    ui.end_row();
+                    for cell in 0..(first + len).div_ceil(7) * 7 {
+                        if cell >= first && cell < first + len {
+                            let day = (cell - first + 1) as u32;
+                            let selected = current.is_some_and(|c| (c.y, c.m, c.d) == (y, m, day));
+                            let is_today = (today.0 as i32, today.1, today.2) == (y, m, day);
+                            let mut text = egui::RichText::new(day.to_string());
+                            if is_today {
+                                text = text.strong();
+                            }
+                            if ui.selectable_label(selected, text).on_hover_text(format!("{} {day}, {y}", MONTHS[(m - 1) as usize])).clicked() {
+                                picked = Some(format_date(DateTime { y, m, d: day, hh: 0, mm: 0, ss: 0 }, fmt));
+                            }
+                        } else {
+                            ui.label("");
+                        }
+                        if cell % 7 == 6 {
+                            ui.end_row();
+                        }
+                    }
+                });
+            });
+        });
+    if let Some(fx) = view.forms.focus.as_mut() {
+        fx.calendar = Some((y, m));
+        fx.calendar_rect = Some(area.response.rect);
+    }
+    picked
+}
+
 /// Paint focus and hover frames on a page.
 pub(crate) fn paint_page(ui: &egui::Ui, painter: &egui::Painter, xf: &PageXform, page: usize, info: &DocInfo, form: &[FormField], view: &DocView) {
     let pointer = ui.input(|i| i.pointer.hover_pos());
@@ -147,7 +223,7 @@ pub(crate) fn paint_page(ui: &egui::Ui, painter: &egui::Painter, xf: &PageXform,
 }
 
 /// The in-place editor or option list for the focused field. Returns an edit to apply.
-pub(crate) fn overlay(ctx: &egui::Context, view: &mut DocView, info: &DocInfo, form: &[FormField]) -> Option<Edit> {
+pub(crate) fn overlay(ctx: &egui::Context, view: &mut DocView, info: &DocInfo, form: &[FormField], today: (i64, u32, u32)) -> Option<Edit> {
     let focus = view.forms.focus.clone()?;
     let Some(f) = form.iter().find(|f| f.name == focus.name) else {
         view.forms.focus = None;
@@ -205,11 +281,24 @@ pub(crate) fn overlay(ctx: &egui::Context, view: &mut DocView, info: &DocInfo, f
                     close = true;
                 } else if tab {
                     next = Some(!shift);
-                } else if r.lost_focus() && (!multiline || !enter) {
+                } else if r.lost_focus()
+                    && (!multiline || !enter)
+                    && !fx.calendar_rect.is_some_and(|c| ui.input(|i| i.pointer.interact_pos().is_some_and(|p| c.contains(p))))
+                {
                     // Enter in a single-line field, or clicking elsewhere, commits.
                     commit(view, form);
                 }
             });
+            // Date fields: a calendar under the field (Acrobat's date picker).
+            if let printcraft_engine::form_scripts::Format::Date(fmt) = &f.actions.format
+                && let Some(picked) = calendar(ctx, view, rect, fmt, today)
+            {
+                if let Some(fx) = view.forms.focus.as_mut() {
+                    fx.text = picked;
+                }
+                commit(view, form);
+                return view.pending_edit.take();
+            }
         }
         FormFieldKind::Combo | FormFieldKind::List => {
             let multi = f.kind == FormFieldKind::List && f.has(field_flags::MULTI_SELECT);
