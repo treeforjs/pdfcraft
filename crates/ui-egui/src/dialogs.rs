@@ -31,11 +31,18 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
     let mut apply_number = false;
     let mut link_command: Option<&'static str> = None;
     let mut protect_now = false;
+    let mut boxes_now = false;
     let t = Tokens::get(ctx);
     let mut close = false;
     let mut next = dialog;
     let modal = egui::Modal::new(egui::Id::new("dialog")).show(ctx, |ui| {
         ui.set_width(if matches!(dialog, Dialog::Properties(_)) { 640.0 } else { 520.0 });
+        // Dialog controls are outlined (radio buttons, check boxes, combo boxes and number fields
+        // would otherwise blend into the dialog, whose fill matches the theme's field colour).
+        let w = &mut ui.visuals_mut().widgets;
+        w.inactive.bg_stroke = egui::Stroke::new(1.0, t.border);
+        w.inactive.weak_bg_fill = t.field;
+        w.hovered.bg_stroke = egui::Stroke::new(1.0, t.text_muted);
         match dialog {
             Dialog::Properties(tab) => {
                 ui.label(egui::RichText::new("Document Properties").font(theme::semibold(18.0)));
@@ -214,6 +221,12 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
                     split_ready = Some(by);
                 }
             }
+            Dialog::PageBoxes => {
+                let (apply, cancel) = crate::pageboxes::body(ui, app, &t);
+                boxes_now = apply;
+                close = apply || cancel;
+                return;
+            }
             Dialog::Protect => {
                 let (apply, cancel) = crate::protect::body(ui, app, &t);
                 protect_now = apply;
@@ -241,9 +254,9 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
                 egui::Grid::new("number_pages").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
                     ui.label("Pages");
                     ui.horizontal(|ui| {
-                        boxed(ui, &mut |ui| ui.add(egui::DragValue::new(&mut d.from).range(1..=n)));
+                        ui.add(egui::DragValue::new(&mut d.from).range(1..=n));
                         ui.label("to");
-                        boxed(ui, &mut |ui| ui.add(egui::DragValue::new(&mut d.to).range(1..=n)));
+                        ui.add(egui::DragValue::new(&mut d.to).range(1..=n));
                         ui.label(egui::RichText::new(format!("of {n}")).color(t.text_muted));
                     });
                     ui.end_row();
@@ -268,7 +281,7 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
                         .labelled_by(l.id);
                     ui.end_row();
                     ui.label("Start");
-                    boxed(ui, &mut |ui| ui.add(egui::DragValue::new(&mut d.start).range(1..=99_999)));
+                    ui.add(egui::DragValue::new(&mut d.start).range(1..=99_999));
                     ui.end_row();
                 });
                 d.to = d.to.max(d.from);
@@ -417,6 +430,12 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
         } else {
             app.discard_recovered(&keys);
         }
+    }
+    if boxes_now && let Some((i, id)) = app.active_ids() {
+        let count = app.session.get(id).map(|d| d.info.pages.len()).unwrap_or(0);
+        let edit = app.boxes_draft.edit(app.views[i].current, count);
+        app.apply_edit(edit);
+        app.boxes_draft.seeded = None;
     }
     if protect_now && app.apply_edit(app.protect_draft.edit()) {
         app.protect_draft = Default::default();

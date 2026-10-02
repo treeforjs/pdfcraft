@@ -130,6 +130,8 @@ pub struct DocView {
     pub comments: crate::comments::CommentView,
     /// Form filling state: the focused field.
     pub forms: crate::forms_ui::FormView,
+    /// A crop rectangle being dragged (Crop tool).
+    pub crop_drag: crate::crop::CropDrag,
     /// A non-edit action requested by the organize toolbar, handled by the app.
     pub pending_action: Option<ViewAction>,
 }
@@ -199,6 +201,7 @@ impl DocView {
             pending_action: None,
             comments: Default::default(),
             forms: Default::default(),
+            crop_drag: None,
         }
     }
 
@@ -775,12 +778,14 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
     let selects_text = match tool {
         QuickTool::Select => true,
         QuickTool::Comment(t) => t.markup().is_some(),
-        QuickTool::Hand => false,
+        QuickTool::Hand | QuickTool::Crop => false,
     };
     let prefs = &app.comment_prefs;
     let allowed = doc.allows_annotation();
     let form = doc.form.clone();
     let can_fill = doc.allows_form_filling();
+    let can_crop = doc.allows_assembly();
+    let mut open_boxes = false;
     let mut hover_text: Option<(Pos2, String)> = None;
     let mut clicked_link: Option<LinkTarget> = None;
     let mut canvas_action: Option<comments::CanvasAction> = None;
@@ -894,6 +899,10 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
             let pcx = comments::PageCx { page: i, xf: &xf, info, tool, prefs, allowed };
             // Form fields take clicks first with the Select tool (as Acrobat fills fields in
             // every viewing mode); then comments; then text selection.
+            if tool == QuickTool::Crop && crate::crop::page_input(ui, &resp, &xf, i, info, view, can_crop) {
+                view.current = i;
+                open_boxes = true;
+            }
             let on_field = tool == QuickTool::Select && crate::forms_ui::page_input(ui, &resp, &xf, i, info, &form, can_fill, view);
             let consumed = on_field || comments::page_input(ui, &resp, &pcx, view);
 
@@ -1100,6 +1109,8 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
         view.pending_edit = Some(e);
     }
     let form_notice = view.forms.notice.take();
+    // One crop, then back to selecting (as Acrobat does).
+    let cropped = view.pending_edit.as_ref().is_some_and(|e| matches!(e, printcraft_engine::Edit::SetPageBox { .. }));
     let mut tool = app.quick_tool;
     comments::keys(ui.ctx(), view, &mut tool, allowed);
     match canvas_action {
@@ -1113,7 +1124,15 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
         Some(LinkTarget::Other(s)) => app.notify(format!("{s} actions run in the JavaScript engine (M6)")),
         None => {}
     }
+    if tool == QuickTool::Crop && cropped {
+        tool = QuickTool::Select;
+    }
     app.quick_tool = tool;
+    if open_boxes {
+        app.boxes_draft.range = crate::pageboxes::Range::Current;
+        app.boxes_draft.seeded = None;
+        app.dialog = Some(crate::Dialog::PageBoxes);
+    }
     if let Some(n) = form_notice {
         app.notify(n);
     }

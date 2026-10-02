@@ -159,6 +159,17 @@ impl PrintCraftApp {
                 }
             }
             "page.insert" => self.insert_from_file_dialog(),
+            "page.duplicate" => {
+                self.apply_edit(Edit::DuplicatePages { pages: targets });
+            }
+            "page.crop" => {
+                self.quick_tool = crate::QuickTool::Crop;
+                self.notify("Drag a rectangle on a page to crop it; double-click a page for Set Page Boxes");
+            }
+            "page.boxes" => {
+                self.boxes_draft.seeded = None;
+                self.dialog = Some(Dialog::PageBoxes);
+            }
             "page.extract" => self.extract_selection(),
             "page.split" => self.dialog = Some(Dialog::Split),
             "help.shortcuts" => self.dialog = Some(Dialog::Shortcuts),

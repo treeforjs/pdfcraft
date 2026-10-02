@@ -578,3 +578,37 @@ fn number_pages_like_acrobat() {
     assert!(crate::page_label_ranges(&d).is_empty());
     assert!(d.get(d.root().unwrap()).as_dict().unwrap().get(b"PageLabels").is_none());
 }
+
+#[test]
+fn page_boxes_default_inherit_and_set() {
+    let mut doc = open(fixture());
+    let b = page_boxes(&doc).unwrap();
+    // Pages 1–2 inherit a 300×400 media box; page 3 has its own 500×500. Crop defaults to media.
+    assert_eq!(b[0][0], [0.0, 0.0, 300.0, 400.0]);
+    assert_eq!(b[2][1], [0.0, 0.0, 500.0, 500.0]);
+    set_page_box(&mut doc, &[0, 2], PageBox::Crop, BoxSpec::Margins([10.0, 20.0, 30.0, 40.0])).unwrap();
+    set_page_box(&mut doc, &[1], PageBox::Trim, BoxSpec::Rect([-50.0, 50.0, 100.0, 1000.0])).unwrap();
+    let doc = open(write_incremental(&doc, &SaveOptions::default()).unwrap());
+    let b = page_boxes(&doc).unwrap();
+    assert_eq!(b[0][1], [10.0, 20.0, 270.0, 360.0]);
+    assert_eq!(b[2][1], [10.0, 20.0, 470.0, 460.0], "margins apply to each page's own media box");
+    assert_eq!(b[1][3], [0.0, 50.0, 100.0, 400.0], "clipped to the media box");
+    assert_eq!(b[1][4], b[1][1], "art box defaults to the crop box");
+    // Removing goes back to the default; impossible requests change nothing.
+    let mut doc = doc;
+    set_page_box(&mut doc, &[0], PageBox::Crop, BoxSpec::Remove).unwrap();
+    assert_eq!(page_boxes(&doc).unwrap()[0][1], [0.0, 0.0, 300.0, 400.0]);
+    let before = page_boxes(&doc).unwrap();
+    assert!(matches!(set_page_box(&mut doc, &[0, 1], PageBox::Crop, BoxSpec::Margins([200.0, 0.0, 200.0, 0.0])), Err(OrganizeError::InvalidBox(_))));
+    assert!(matches!(set_page_box(&mut doc, &[0], PageBox::Media, BoxSpec::Remove), Err(OrganizeError::InvalidBox(_))));
+    assert_eq!(page_boxes(&doc).unwrap(), before);
+    assert_eq!(set_page_box(&mut doc, &[7], PageBox::Crop, BoxSpec::Remove), Err(OrganizeError::NoSuchPage(7)));
+}
+
+#[test]
+fn duplicate_pages_inserts_copies_after_the_last() {
+    let mut doc = open(fixture());
+    duplicate_pages(&mut doc, &[0, 1]).unwrap();
+    let doc = open(write_full(&doc, &SaveOptions::default()).unwrap());
+    assert_eq!(labels(&doc), ["Page 1", "Page 2", "Page 1", "Page 2", "Page 3"]);
+}

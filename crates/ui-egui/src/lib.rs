@@ -11,6 +11,7 @@ mod commands;
 pub mod comments;
 mod comments_panel;
 pub mod control;
+mod crop;
 mod dialogs;
 mod editing;
 mod files;
@@ -18,6 +19,7 @@ pub mod forms_ui;
 mod home;
 mod icon_data;
 pub mod icons;
+mod pageboxes;
 mod palette;
 mod panels;
 mod protect;
@@ -68,6 +70,8 @@ pub enum QuickTool {
     Hand,
     /// A commenting tool (Add comments).
     Comment(comments::CommentTool),
+    /// Crop pages by dragging a rectangle.
+    Crop,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -80,6 +84,8 @@ pub enum Dialog {
     NumberPages,
     /// Protect Using Password.
     Protect,
+    /// Set Page Boxes (crop, trim, bleed, art, media).
+    PageBoxes,
     /// Documents from a session that ended unexpectedly.
     Recovery,
 }
@@ -169,6 +175,8 @@ pub struct PrintCraftApp {
     pub number_draft: NumberDraft,
     /// Protect Using Password dialog state.
     pub protect_draft: protect::ProtectDraft,
+    /// Set Page Boxes dialog state.
+    pub boxes_draft: pageboxes::BoxesDraft,
     /// The last web link the app asked the system to open (tests and automation).
     pub last_opened_url: Option<String>,
 }
@@ -232,6 +240,7 @@ impl PrintCraftApp {
             bookmark_rename: None,
             last_opened_url: None,
             protect_draft: Default::default(),
+            boxes_draft: Default::default(),
             number_draft: NumberDraft { from: 1, to: 1, style: printcraft_engine::LabelStyle::Decimal, prefix: String::new(), start: 1 },
         }
     }
@@ -522,6 +531,7 @@ impl PrintCraftApp {
                     "shortcuts" => Some(Dialog::Shortcuts),
                     "split" => Some(Dialog::Split),
                     "protect" => Some(Dialog::Protect),
+                    "page-boxes" => Some(Dialog::PageBoxes),
                     "number-pages" => {
                         // Same path as the menu, so the page range is seeded.
                         self.execute("page.number");
@@ -585,6 +595,7 @@ impl PrintCraftApp {
                 self.quick_tool = match value {
                     "select" => QuickTool::Select,
                     "hand" => QuickTool::Hand,
+                    "crop" => QuickTool::Crop,
                     other => {
                         let t = comments::CommentTool::from_command(&format!("comment.{other}")).ok_or_else(|| format!("unknown tool {other}"))?;
                         self.comment_prefs.group_tool[t.group()] = t;

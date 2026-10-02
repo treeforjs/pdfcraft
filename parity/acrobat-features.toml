@@ -2719,11 +2719,11 @@ title = "Duplicate pages"
 area = "D"
 tier = "P0"
 milestone = "M4"
-status = "partial"
-commands = []
-tools = []
-evidence = ["crates/organize/src/tests.rs::duplicate_pages_become_independent_copies"]
-notes = "engine only; no command or UI yet"
+status = "shipped"
+commands = ["page.duplicate"]
+tools = ["page_duplicate"]
+evidence = ["crates/ui-egui/tests/pageboxes.rs::duplicate_pages_copies_the_current_page", "crates/organize/src/tests.rs::duplicate_pages_inserts_copies_after_the_last"]
+notes = "copies share fonts and images with the originals"
 
 [[feature]]
 id = "organize.reverse-pages"
@@ -3031,11 +3031,11 @@ title = "Set page boxes (crop, trim, bleed, art)"
 area = "D"
 tier = "P1"
 milestone = "M4"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["page.boxes"]
+tools = ["page_set_box"]
+evidence = ["crates/ui-egui/tests/pageboxes.rs::set_page_boxes_dialog_applies_margins_to_the_chosen_pages", "crates/organize/src/tests.rs::page_boxes_default_inherit_and_set"]
+notes = "crop/trim/bleed/art/media, margins in pt/in/mm, page ranges, preview; no Remove white margins yet"
 
 [[feature]]
 id = "organize.crop-tool"
@@ -3043,11 +3043,11 @@ title = "Crop pages by dragging a rectangle"
 area = "D"
 tier = "P1"
 milestone = "M4"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["page.crop"]
+tools = ["page_set_box"]
+evidence = ["crates/ui-egui/tests/pageboxes.rs::the_crop_tool_crops_to_the_dragged_rectangle_then_returns_to_select"]
+notes = "drag to crop; double-click opens Set Page Boxes"
 
 [[feature]]
 id = "organize.remove-white-margins"

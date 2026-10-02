@@ -211,6 +211,11 @@ impl Automation {
                 self.apply(&a, Edit::SetBookmarkPage { path, page })?
             }
             "doc_protect" => self.doc_protect(&a)?,
+            "page_duplicate" => {
+                let pages = self.pages(&a, "pages")?;
+                self.apply(&a, Edit::DuplicatePages { pages })?
+            }
+            "page_set_box" => self.page_set_box(&a)?,
             "doc_unprotect" => {
                 let mut out = self.apply(&a, Edit::RemoveProtection)?;
                 out["security"] = security(self.doc(&a)?);
@@ -280,6 +285,45 @@ impl Automation {
         let id = self.doc(a)?.id;
         self.session.apply(id, edit).map_err(failed)?;
         Ok(summary(self.doc(a)?))
+    }
+
+    fn page_set_box(&mut self, a: &Args) -> Result<Value> {
+        use printcraft_engine::{BoxSpec, PageBox};
+        let doc = self.doc(a)?;
+        let n = doc.info.pages.len();
+        let pages = match a.opt_ints("pages")? {
+            Some(_) => self.pages(a, "pages")?,
+            None => (0..n).collect(),
+        };
+        let which = match a.opt_str("box")? {
+            None => PageBox::Crop,
+            Some(b) => PageBox::from_name(b).ok_or_else(|| ToolError::InvalidArgs(format!("unknown box {b:?}")))?,
+        };
+        let nums = |key: &str| -> Result<Option<[f64; 4]>> {
+            a.get(key)
+                .map(|v| {
+                    let v: Vec<f64> = v.as_array().map(|x| x.iter().filter_map(Value::as_f64).collect()).unwrap_or_default();
+                    <[f64; 4]>::try_from(v).map_err(|_| ToolError::InvalidArgs(format!("{key} must be 4 numbers")))
+                })
+                .transpose()
+        };
+        let spec = match (nums("margins")?, nums("rect")?) {
+            (Some(_), Some(_)) => return Err(ToolError::InvalidArgs("pass margins or rect, not both".into())),
+            (Some(m), None) => BoxSpec::Margins(m),
+            (None, Some(r)) => {
+                // Top-left-origin points on the displayed page → user space (one page at a time).
+                if pages.len() != 1 {
+                    return Err(ToolError::InvalidArgs("rect applies to a single page; use margins for several".into()));
+                }
+                let p = &doc.info.pages[pages[0]];
+                let (u0, u1) = (p.view_to_user(r[0] as f32, r[1] as f32), p.view_to_user(r[2] as f32, r[3] as f32));
+                BoxSpec::Rect([u0[0].min(u1[0]) as f64, u0[1].min(u1[1]) as f64, u0[0].max(u1[0]) as f64, u0[1].max(u1[1]) as f64])
+            }
+            (None, None) => BoxSpec::Remove,
+        };
+        let mut out = self.apply(a, Edit::SetPageBox { pages, which, spec })?;
+        out["page_sizes"] = json!(self.doc(a)?.info.pages.iter().map(|p| [p.width, p.height]).collect::<Vec<_>>());
+        Ok(out)
     }
 
     fn doc_protect(&mut self, a: &Args) -> Result<Value> {

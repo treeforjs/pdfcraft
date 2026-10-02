@@ -11,11 +11,13 @@
 
 use printcraft_cos::{Dict, Document, ObjRef, Object, PdfString};
 
+mod boxes;
 mod dedupe;
 mod import;
 mod labels;
 mod outline;
 
+pub use boxes::{BoxSpec, PageBox, page_boxes, set_page_box};
 pub use dedupe::dedupe_resources;
 pub use import::{SplitBy, combine, extract_pages, import_pages, split, split_ranges};
 pub use labels::{LabelRange, LabelStyle, number_pages, page_label_ranges, page_labels, set_page_label_ranges};
@@ -31,6 +33,8 @@ pub enum OrganizeError {
     NoSuchPage(usize),
     #[error("a document must keep at least one page")]
     WouldRemoveAllPages,
+    #[error("{0}")]
+    InvalidBox(String),
     #[error("{0}")]
     Cos(#[from] printcraft_cos::CosError),
 }
@@ -165,6 +169,19 @@ pub fn move_pages(doc: &mut Document, indices: &[usize], to: usize) -> Result<()
     let at = to.min(rest.len());
     rest.splice(at..at, moving);
     rebuild(doc, &rest)
+}
+
+/// Duplicate pages: copies of `indices` (in order) are inserted after the last of them, sharing
+/// fonts and images with the originals.
+pub fn duplicate_pages(doc: &mut Document, indices: &[usize]) -> Result<(), OrganizeError> {
+    let n = page_count(doc)?;
+    check(indices, n)?;
+    let Some(&last) = indices.iter().max() else { return Ok(()) };
+    let mut order = indices.to_vec();
+    order.sort_unstable();
+    order.dedup();
+    let src = doc.clone();
+    import_pages(doc, &src, &order, last + 1).map(|_| ())
 }
 
 /// Insert a blank page of `width × height` points at position `at` (0 = before the first page).

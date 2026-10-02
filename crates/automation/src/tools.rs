@@ -285,6 +285,25 @@ pub fn tools() -> Vec<ToolDef> {
             .cmd("protect.remove")
             .destructive()
             .with(schema(json!({ "doc": doc() }), &["doc"])),
+        t("page_duplicate", "Duplicate pages", "Insert copies of pages after the last of them (fonts and images are shared, not copied). Undoable.")
+            .cmd("page.duplicate")
+            .with(schema(json!({ "doc": doc(), "pages": pages("to duplicate") }), &["doc", "pages"])),
+        t(
+            "page_set_box",
+            "Set page boxes / crop",
+            "Set a page box (crop by default; also trim, bleed, art, media) on pages: either margins in points from the media box [left, bottom, right, top], or an absolute rect in points from the top-left of the displayed page. Omit both to reset the box to its default. Undoable.",
+        )
+        .cmd("page.boxes")
+        .with(schema(
+            json!({
+                "doc": doc(),
+                "pages": pages("to change (default: all)"),
+                "box": { "type": "string", "enum": ["crop", "trim", "bleed", "art", "media"] },
+                "margins": { "type": "array", "items": { "type": "number", "minimum": 0 }, "minItems": 4, "maxItems": 4 },
+                "rect": { "type": "array", "items": { "type": "number" }, "minItems": 4, "maxItems": 4 },
+            }),
+            &["doc"],
+        )),
         t("edit_undo", "Undo", "Undo the last edit of a document.").cmd("edit.undo").with(schema(json!({ "doc": doc() }), &["doc"])),
         t("edit_redo", "Redo", "Redo the last undone edit of a document.").cmd("edit.redo").with(schema(json!({ "doc": doc() }), &["doc"])),
         t("command_list", "List commands", "Every registered PrintCraft command with its menu, shortcut, whether it is enabled now, and the tool that automates it.")

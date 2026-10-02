@@ -537,6 +537,7 @@ impl Host for crate::PrintCraftApp {
             "quick_tool": match self.quick_tool {
                 crate::QuickTool::Select => "select".to_string(),
                 crate::QuickTool::Hand => "hand".to_string(),
+                crate::QuickTool::Crop => "crop".to_string(),
                 crate::QuickTool::Comment(t) => t.command().trim_start_matches("comment.").to_string(),
             },
             "home": self.active.is_none(),

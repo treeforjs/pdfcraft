@@ -180,8 +180,10 @@ pub static TOOL_GROUPS: &[ToolGroup] = &[
             ToolSection {
                 title: "More",
                 items: &[
-                    item("Set page boxes", "square-dashed-mouse-pointer", "page.boxes", Planned("M4")),
-                    item("Page labels", "tag", "page.labels", Planned("M4")),
+                    item("Set page boxes", "square-dashed-mouse-pointer", "page.boxes", Ready),
+                    item("Crop pages", "crop", "page.crop", Ready),
+                    item("Duplicate pages", "copy-plus", "page.duplicate", Ready),
+                    item("Page labels", "tag", "page.number", Ready),
                     item("Page transitions", "presentation", "page.transitions", Planned("M4")),
                 ],
             },
@@ -361,7 +363,7 @@ pub static TOOL_GROUPS: &[ToolGroup] = &[
                 item("Output preview", "layers", "prepress.output_preview", Planned("M11")),
                 item("Preflight", "file-check", "preflight.run", Planned("M11")),
                 item("Convert colors", "palette", "prepress.convert_colors", Planned("M11")),
-                item("Set page boxes", "square-dashed-mouse-pointer", "page.boxes", Planned("M11")),
+                item("Set page boxes", "square-dashed-mouse-pointer", "page.boxes", Ready),
                 item("Add printer marks", "ruler", "prepress.marks", Planned("M11")),
                 item("Fix hairlines", "minus", "prepress.hairlines", Planned("M11")),
             ],

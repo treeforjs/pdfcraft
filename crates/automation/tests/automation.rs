@@ -480,3 +480,24 @@ fn forms_through_tools() {
     let v = reset["fields"].as_array().unwrap().iter().find(|f| f["name"] == text["name"]).unwrap()["value"].clone();
     assert_ne!(v, "Filled by an agent");
 }
+
+#[test]
+fn duplicating_and_cropping_through_tools() {
+    let dir = workdir("boxes");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    let r = ok(&mut a, "page_duplicate", json!({ "doc": doc, "pages": [2] }));
+    assert_eq!(r["pages"], 4);
+    assert_eq!(page_text(&mut a, doc), ["Page 1", "Page 2", "Page 2", "Page 3"]);
+    // Crop page 1 by margins, page 2 to a rect drawn from the top-left.
+    let r = ok(&mut a, "page_set_box", json!({ "doc": doc, "pages": [1], "margins": [10, 20, 30, 40] }));
+    assert_eq!(r["page_sizes"][0], json!([160.0, 240.0]));
+    let r = ok(&mut a, "page_set_box", json!({ "doc": doc, "pages": [2], "rect": [0, 0, 100, 150] }));
+    assert_eq!(r["page_sizes"][1], json!([100.0, 150.0]));
+    assert_eq!(page_text(&mut a, doc)[1], "Page 2", "the text at y = 150 is still inside");
+    // Reset and errors.
+    let r = ok(&mut a, "page_set_box", json!({ "doc": doc, "pages": [1] }));
+    assert_eq!(r["page_sizes"][0], json!([200.0, 300.0]));
+    assert!(matches!(a.call("page_set_box", &json!({ "doc": doc, "margins": [150, 0, 150, 0] })), Err(ToolError::Failed(_))));
+    assert!(matches!(a.call("page_set_box", &json!({ "doc": doc, "rect": [0, 0, 10, 10] })), Err(ToolError::InvalidArgs(_))));
+}

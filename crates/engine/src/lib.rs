@@ -14,7 +14,7 @@ pub mod catalog;
 pub mod commands;
 pub mod links;
 
-pub use printcraft_organize::{SplitBy, split_ranges};
+pub use printcraft_organize::{BoxSpec, PageBox, SplitBy, split_ranges};
 
 /// One file produced by a split: (1-based first page, last page, PDF bytes).
 pub use printcraft_organize::LabelStyle;
@@ -177,6 +177,11 @@ impl Document {
         let pending = editor.cos.encryption_changed();
         let permissions = if pending { printcraft_cos::Permissions { bits: h.permissions().bits, owner: false } } else { h.permissions() };
         Some(SecuritySummary { method: method.into(), owner: h.auth() == printcraft_cos::Auth::Owner && !pending, permissions, pending })
+    }
+
+    /// Every page's media, crop, bleed, trim and art boxes (user space), for Set Page Boxes.
+    pub fn page_boxes(&self) -> Vec<[[f64; 4]; 5]> {
+        self.editor.as_ref().and_then(|e| printcraft_organize::page_boxes(&e.cos).ok()).unwrap_or_default()
     }
 
     /// Current value of a document-information entry (Title, Author, …).
@@ -359,6 +364,16 @@ pub enum Edit {
         width: f64,
         height: f64,
     },
+    /// Copies of `pages` inserted after the last of them.
+    DuplicatePages {
+        pages: Vec<usize>,
+    },
+    /// Set Page Boxes / Crop: set (or reset) one box on `pages`.
+    SetPageBox {
+        pages: Vec<usize>,
+        which: PageBox,
+        spec: BoxSpec,
+    },
     SetInfo {
         key: String,
         value: String,
@@ -476,6 +491,9 @@ impl Edit {
             Edit::DeletePages { pages } => plural("Delete page", pages.len()),
             Edit::MovePages { pages, .. } => plural("Move page", pages.len()),
             Edit::InsertBlankPage { .. } => "Insert blank page".into(),
+            Edit::DuplicatePages { pages } => plural("Duplicate page", pages.len()),
+            Edit::SetPageBox { pages, which: PageBox::Crop, .. } => plural("Crop page", pages.len()),
+            Edit::SetPageBox { .. } => "Set page boxes".into(),
             Edit::SetInfo { key, .. } => format!("Change {key}"),
             Edit::InsertPagesFrom { name, .. } => format!("Insert pages from {name}"),
             Edit::AddBookmark { .. } => "Add bookmark".into(),
@@ -532,6 +550,8 @@ fn check_permission(edit: &Edit, p: &printcraft_cos::Permissions) -> Result<(), 
         | Edit::DeletePages { .. }
         | Edit::MovePages { .. }
         | Edit::InsertBlankPage { .. }
+        | Edit::DuplicatePages { .. }
+        | Edit::SetPageBox { .. }
         | Edit::InsertPagesFrom { .. }
         // "Assemble the document: insert, rotate or delete pages and create bookmarks" (Table 22).
         | Edit::AddBookmark { .. }
@@ -653,6 +673,8 @@ fn run_edit(doc: &mut printcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -
             printcraft_organize::insert_blank_page(doc, *at, *width, *height)?;
         }
         Edit::SetInfo { key, value } => printcraft_organize::set_info(doc, key, value)?,
+        Edit::DuplicatePages { pages } => printcraft_organize::duplicate_pages(doc, pages)?,
+        Edit::SetPageBox { pages, which, spec } => printcraft_organize::set_page_box(doc, pages, *which, *spec)?,
         Edit::InsertPagesFrom { name, bytes, pages, at } => {
             let src = open_source(name, bytes)?;
             let pages = match pages {

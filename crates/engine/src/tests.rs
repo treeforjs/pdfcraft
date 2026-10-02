@@ -661,3 +661,17 @@ fn form_edits_refresh_field_values_without_a_full_inspection() {
     assert_eq!(values(&d.info.fields), values(&full.fields));
     assert_eq!(values(&d.info.fields), [("name".to_string(), Some("Ada".to_string())), ("ok".to_string(), Some("Yes".to_string()))]);
 }
+
+#[test]
+fn crop_and_duplicate_pages_show_in_the_viewer() {
+    let (mut s, id) = session_with(2);
+    s.apply(id, Edit::SetPageBox { pages: vec![0], which: PageBox::Crop, spec: BoxSpec::Margins([10.0, 20.0, 30.0, 40.0]) }).unwrap();
+    let d = s.get(id).unwrap();
+    assert_eq!(d.can_undo(), Some("Crop page"));
+    assert_eq!(d.info.pages[0].crop, [10.0, 20.0, 170.0, 260.0]);
+    assert_eq!((d.info.pages[0].width, d.info.pages[0].height), (160.0, 240.0), "the viewer shows the cropped size");
+    assert_eq!(d.page_boxes()[1][1], [0.0, 0.0, 200.0, 300.0]);
+    s.apply(id, Edit::DuplicatePages { pages: vec![1] }).unwrap();
+    assert_eq!(page_texts(&s, id), ["Page 1", "Page 2", "Page 2"]);
+    assert_eq!(s.get(id).unwrap().can_undo(), Some("Duplicate page"));
+}
