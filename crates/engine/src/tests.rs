@@ -663,6 +663,34 @@ fn form_edits_refresh_field_values_without_a_full_inspection() {
 }
 
 #[test]
+fn preparing_a_form_adds_renames_and_deletes_fields() {
+    let (mut s, id) = session_with(1);
+    assert!(s.get(id).unwrap().form.is_empty());
+    let add = |kind: NewField, y: f64| Edit::AddField { page: 0, rect: [20.0, y, 180.0, y + 22.0], kind, name: None };
+    s.apply(id, add(NewField::Text { multiline: false }, 250.0)).unwrap();
+    s.apply(id, add(NewField::CheckBox, 200.0)).unwrap();
+    s.apply(id, add(NewField::Text { multiline: false }, 150.0)).unwrap();
+    let names = |s: &Session| s.get(id).unwrap().form.iter().map(|f| f.name.clone()).collect::<Vec<_>>();
+    assert_eq!(names(&s), ["Text1", "Check Box1", "Text2"]);
+    assert_eq!(s.get(id).unwrap().can_undo(), Some("Add field"));
+    let props = FieldProps { name: Some("email".into()), tooltip: Some("Your e-mail".into()), required: Some(true), ..Default::default() };
+    s.apply(id, Edit::SetFieldProps { name: "Text2".into(), props }).unwrap();
+    s.apply(id, Edit::DeleteField { name: "Check Box1".into() }).unwrap();
+    assert_eq!(names(&s), ["Text1", "email"]);
+    s.apply(id, Edit::SetFieldValue { name: "email".into(), value: FieldValue::Text("ada@example.org".into()) }).unwrap();
+    let saved = s.save_bytes(id).unwrap();
+    let mut s2 = Session::new();
+    let id2 = s2.open("f.pdf", None, saved, None).unwrap();
+    let d = s2.get(id2).unwrap();
+    assert_eq!(d.form.iter().map(|f| f.name.as_str()).collect::<Vec<_>>(), ["Text1", "email"]);
+    assert_eq!(d.form[1].value, ["ada@example.org"]);
+    assert!(page_texts(&s2, id2).iter().any(|t| t.contains("ada@example.org")));
+    s.undo(id).unwrap();
+    s.undo(id).unwrap();
+    assert_eq!(names(&s), ["Text1", "Check Box1", "email"]);
+}
+
+#[test]
 fn crop_and_duplicate_pages_show_in_the_viewer() {
     let (mut s, id) = session_with(2);
     s.apply(id, Edit::SetPageBox { pages: vec![0], which: PageBox::Crop, spec: BoxSpec::Margins([10.0, 20.0, 30.0, 40.0]) }).unwrap();

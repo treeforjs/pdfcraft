@@ -207,6 +207,26 @@ impl PrintCraftApp {
             }
             "export.image" => self.dialog = Some(Dialog::Export(crate::export_ui::ExportKind::Image)),
             "export.text" => self.dialog = Some(Dialog::Export(crate::export_ui::ExportKind::Text)),
+            "form.prepare" => {
+                self.left = crate::LeftPanel::Tool("form");
+                self.left_open = true;
+                self.right = Some(RightPanel::Fields);
+            }
+            "form.field.properties" => {
+                if let Some((name, w)) = active.and_then(|i| self.views[i].prepare.selected.clone()) {
+                    self.open_field_props(&name, w);
+                }
+            }
+            field if crate::prepare::FieldTool::from_command(field).is_some() => {
+                let tool = crate::prepare::FieldTool::from_command(field).expect("checked");
+                self.quick_tool = crate::QuickTool::Field(tool);
+                self.left = crate::LeftPanel::Tool("form");
+                self.left_open = true;
+                if let Some(i) = active {
+                    self.views[i].forms.focus = None;
+                }
+                self.notify(format!("Click on the page to add a {}, or drag to set its size", tool.label().to_lowercase()));
+            }
             fill if crate::fill_sign::FillTool::from_command(fill).is_some() => {
                 let tool = crate::fill_sign::FillTool::from_command(fill).expect("checked");
                 self.quick_tool = crate::QuickTool::Fill(tool);

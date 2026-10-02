@@ -130,6 +130,8 @@ pub struct DocView {
     pub comments: crate::comments::CommentView,
     /// Form filling state: the focused field.
     pub forms: crate::forms_ui::FormView,
+    /// Prepare a form: the selected field and the gesture in progress.
+    pub prepare: crate::prepare::PrepareView,
     /// A crop rectangle being dragged (Crop tool).
     pub crop_drag: crate::crop::CropDrag,
     /// Fill & Sign text being typed.
@@ -203,6 +205,7 @@ impl DocView {
             pending_action: None,
             comments: Default::default(),
             forms: Default::default(),
+            prepare: Default::default(),
             crop_drag: None,
             fill_text: None,
         }
@@ -714,6 +717,8 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
         return;
     }
     let want_thumbs = app.right == Some(RightPanel::Pages) || app.views[index].organize;
+    // The Prepare a form panel is open (or a field tool is picked): fields are edited, not filled.
+    let preparing = (app.left_open && app.left == crate::LeftPanel::Tool("form")) || matches!(app.quick_tool, QuickTool::Field(_));
     let view = &mut app.views[index];
     // Opened without the owner password and something is restricted.
     let secured = doc.security_summary().is_some_and(|s| !(s.owner || (s.permissions.modify() && s.permissions.assemble())));
@@ -779,9 +784,9 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
     let tool = app.quick_tool;
     // Text selection runs for the Select tool and for the markup tools (highlight…).
     let selects_text = match tool {
-        QuickTool::Select => true,
         QuickTool::Comment(t) => t.markup().is_some(),
-        QuickTool::Hand | QuickTool::Crop | QuickTool::Fill(_) => false,
+        QuickTool::Select => !preparing,
+        QuickTool::Hand | QuickTool::Crop | QuickTool::Fill(_) | QuickTool::Field(_) => false,
     };
     let prefs = &app.comment_prefs;
     let allowed = doc.allows_annotation();
@@ -797,6 +802,14 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
     let mut clicked_link: Option<LinkTarget> = None;
     let mut canvas_action: Option<comments::CanvasAction> = None;
     let mut open_props: Option<(usize, usize)> = None;
+    let mut field_props = false;
+    let mut field_placed = false;
+    let can_modify = doc.allows_modification();
+    if preparing {
+        crate::prepare::after_refresh(view, &form);
+    } else {
+        view.prepare.selected = None;
+    }
 
     let out = scroll.show_viewport(ui, |ui, viewport| {
         let (resp_rect, resp) = ui.allocate_exact_size(vec2(content_w, content_h), Sense::click_and_drag());
@@ -929,7 +942,18 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
                 view.current = i;
                 open_boxes = true;
             }
-            let on_field = tool == QuickTool::Select && crate::forms_ui::page_input(ui, &resp, &xf, i, info, &form, can_fill, view);
+            let on_field = if preparing {
+                let field_tool = match tool {
+                    QuickTool::Field(f) => Some(f),
+                    _ => None,
+                };
+                let o = crate::prepare::page_input(ui, &resp, &xf, i, info, &form, field_tool, can_modify, view);
+                field_props |= o.properties;
+                field_placed |= o.placed;
+                o.consumed || field_tool.is_some()
+            } else {
+                tool == QuickTool::Select && crate::forms_ui::page_input(ui, &resp, &xf, i, info, &form, can_fill, view)
+            };
             let consumed = on_field || comments::page_input(ui, &resp, &pcx, view);
 
             // Text layer: find matches, selection, I-beam and drag-to-select.
@@ -1001,7 +1025,11 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
 
             comments::page_after_text(&resp, &pcx, view);
             comments::paint_page(ui, painter, &pcx, view);
-            crate::forms_ui::paint_page(ui, painter, &xf, i, info, &form, view);
+            if preparing {
+                crate::prepare::paint_page(ui, painter, &xf, i, info, &form, view);
+            } else {
+                crate::forms_ui::paint_page(ui, painter, &xf, i, info, &form, view);
+            }
 
             // Form-field highlight (Acrobat's "Highlight existing fields").
             if view.highlight_fields {
@@ -1142,6 +1170,14 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
     let cropped = view.pending_edit.as_ref().is_some_and(|e| matches!(e, printcraft_engine::Edit::SetPageBox { .. }));
     let mut tool = app.quick_tool;
     comments::keys(ui.ctx(), view, &mut tool, allowed);
+    if preparing {
+        crate::prepare::keys(ui.ctx(), view);
+    }
+    // One field, then back to selecting (Acrobat's default without "Keep tools pinned").
+    if field_placed {
+        tool = QuickTool::Select;
+    }
+    let field_props = field_props.then(|| view.prepare.selected.clone()).flatten();
     match canvas_action {
         Some(comments::CanvasAction::Edit(e)) => view.pending_edit = Some(*e),
         Some(comments::CanvasAction::OpenComments) => app.right = Some(RightPanel::Comments),
@@ -1160,6 +1196,9 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
     app.quick_tool = tool;
     if let Some((p, i)) = open_props {
         app.open_comment_props(p, i);
+    }
+    if let Some((name, w)) = field_props {
+        app.open_field_props(&name, w);
     }
     if open_signature {
         app.signature_draft.clear();

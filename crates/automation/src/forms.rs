@@ -1,6 +1,7 @@
-//! Form tools: list fields, fill them (several at once, one undo step) and clear the form.
+//! Form tools: list fields, fill them (several at once, one undo step), clear the form, and
+//! prepare a form (add, change and delete fields).
 
-use printcraft_engine::{Edit, FieldValue, FormField, FormFieldKind, field_flags};
+use printcraft_engine::{Edit, FieldProps, FieldValue, FormField, FormFieldKind, NewField, field_flags};
 use serde_json::{Value, json};
 
 use crate::{Args, Automation, Result, ToolError, failed};
@@ -111,5 +112,96 @@ impl Automation {
     pub(crate) fn form_reset(&mut self, a: &Args) -> Result<Value> {
         let names = a.get("fields").map(|_| a.strs("fields").map(|v| v.into_iter().map(str::to_owned).collect::<Vec<_>>())).transpose()?;
         self.apply(a, Edit::ResetForm { names })
+    }
+
+    pub(crate) fn form_add_field(&mut self, a: &Args) -> Result<Value> {
+        let page = self.page(a)?;
+        let doc = self.doc(a)?;
+        let options = || -> Result<Vec<String>> {
+            Ok(a.get("options").map(|_| a.strs("options")).transpose()?.unwrap_or_default().into_iter().map(str::to_owned).collect())
+        };
+        let kind = match a.str("type")? {
+            "text" => NewField::Text { multiline: a.opt_bool("multiline")?.unwrap_or(false) },
+            "date" => NewField::Date,
+            "checkbox" => NewField::CheckBox,
+            "radio" => {
+                NewField::Radio { group: a.opt_str("group")?.map(str::to_owned), export: a.opt_str("export")?.unwrap_or("Choice1").to_owned() }
+            }
+            "combo" => NewField::Combo { options: options()?, editable: a.opt_bool("editable")?.unwrap_or(false) },
+            "list" => NewField::List { options: options()?, multi: a.opt_bool("multi_select")?.unwrap_or(false) },
+            "button" => NewField::Button { caption: a.opt_str("caption")?.unwrap_or("").to_owned() },
+            "signature" => NewField::Signature,
+            t => return Err(ToolError::InvalidArgs(format!("unknown field type {t:?}"))),
+        };
+        let r: Vec<f64> = a.get("rect").and_then(Value::as_array).map(|x| x.iter().filter_map(Value::as_f64).collect()).unwrap_or_default();
+        let r = <[f64; 4]>::try_from(r).map_err(|_| ToolError::InvalidArgs("rect must be 4 numbers".into()))?;
+        // Top-left-origin points on the displayed page → user space.
+        let p = &doc.info.pages[page];
+        let (u0, u1) = (p.view_to_user(r[0] as f32, r[1] as f32), p.view_to_user(r[2] as f32, r[3] as f32));
+        let rect = [u0[0].min(u1[0]) as f64, u0[1].min(u1[1]) as f64, u0[0].max(u1[0]) as f64, u0[1].max(u1[1]) as f64];
+        if rect[2] - rect[0] < 1.0 || rect[3] - rect[1] < 1.0 {
+            return Err(ToolError::InvalidArgs("rect is empty".into()));
+        }
+        let before: Vec<String> = doc.form.iter().map(|f| f.name.clone()).collect();
+        let name = a.opt_str("name")?.map(str::to_owned);
+        let mut out = self.apply(a, Edit::AddField { page, rect, kind, name })?;
+        let doc = self.doc(a)?;
+        let added = doc
+            .form
+            .iter()
+            .map(|f| &f.name)
+            .find(|n| !before.contains(n))
+            .or_else(|| a.opt_str("group").ok().flatten().and_then(|g| doc.form.iter().map(|f| &f.name).find(|n| *n == g)));
+        out["field"] = json!(added);
+        Ok(out)
+    }
+
+    pub(crate) fn form_set_props(&mut self, a: &Args) -> Result<Value> {
+        let name = a.str("field")?.to_owned();
+        let doc = self.doc(a)?;
+        let f = doc.form.iter().find(|f| f.name == name).ok_or_else(|| failed(format!("there is no field named {name:?} (see form_fields)")))?;
+        // Position: top-left-origin points on the displayed page → user space.
+        let rect = match a.get("rect") {
+            None => None,
+            Some(v) => {
+                let r: Vec<f64> = v.as_array().map(|x| x.iter().filter_map(Value::as_f64).collect()).unwrap_or_default();
+                let r = <[f64; 4]>::try_from(r).map_err(|_| ToolError::InvalidArgs("rect must be 4 numbers".into()))?;
+                let page = f.widgets.first().and_then(|w| w.page).ok_or_else(|| failed(format!("{name} is not on a page")))?;
+                let p = &doc.info.pages[page];
+                let (u0, u1) = (p.view_to_user(r[0] as f32, r[1] as f32), p.view_to_user(r[2] as f32, r[3] as f32));
+                Some((0, [u0[0].min(u1[0]) as f64, u0[1].min(u1[1]) as f64, u0[0].max(u1[0]) as f64, u0[1].max(u1[1]) as f64]))
+            }
+        };
+        let props = FieldProps {
+            rect,
+            name: a.opt_str("name")?.map(str::to_owned),
+            tooltip: a.opt_str("tooltip")?.map(str::to_owned),
+            read_only: a.opt_bool("read_only")?,
+            required: a.opt_bool("required")?,
+            multiline: a.opt_bool("multiline")?,
+            max_len: match a.opt_int("max_length")? {
+                None => None,
+                Some(0) => Some(None),
+                Some(n) if n > 0 => Some(Some(n as usize)),
+                Some(_) => return Err(ToolError::InvalidArgs("max_length must be 0 (no limit) or more".into())),
+            },
+            options: a.get("options").map(|_| a.strs("options")).transpose()?.map(|v| v.into_iter().map(str::to_owned).collect()),
+            font_size: a.opt_num("font_size")?,
+        };
+        if props == FieldProps::default() {
+            return Err(ToolError::InvalidArgs("nothing to change".into()));
+        }
+        let new_name = props.name.clone().unwrap_or(name.clone());
+        let mut out = self.apply(a, Edit::SetFieldProps { name, props })?;
+        out["field"] = json!(new_name);
+        Ok(out)
+    }
+
+    pub(crate) fn form_delete_field(&mut self, a: &Args) -> Result<Value> {
+        let name = a.str("field")?.to_owned();
+        if !self.doc(a)?.form.iter().any(|f| f.name == name) {
+            return Err(failed(format!("there is no field named {name:?} (see form_fields)")));
+        }
+        self.apply(a, Edit::DeleteField { name })
     }
 }

@@ -201,3 +201,109 @@ fn documents_without_forms_say_so() {
     assert!(fields(&doc).is_empty());
     assert_eq!(set_value(&mut doc, "x", &FieldValue::Text("y".into())), Err(FormError::NoForm));
 }
+
+#[test]
+fn every_field_type_can_be_added_named_and_drawn() {
+    let mut doc = Document::new_empty();
+    {
+        // One page.
+        let pages = doc.get(doc.root().unwrap()).as_dict().unwrap().reference(b"Pages").unwrap();
+        let mut p = printcraft_cos::Dict::new();
+        p.set(b"Type".to_vec(), Object::name("Page"));
+        p.set(b"Parent".to_vec(), Object::Ref(pages));
+        p.set(b"MediaBox".to_vec(), Object::Array(vec![0.into(), 0.into(), 600.into(), 800.into()]));
+        let r = doc.add(p);
+        doc.update_dict(pages, |d| {
+            d.set(b"Kids".to_vec(), Object::Array(vec![Object::Ref(r)]));
+            d.set(b"Count".to_vec(), Object::Int(1));
+        })
+        .unwrap();
+    }
+    let r = |y: f64| [50.0, y, 250.0, y + 20.0];
+    let names: Vec<String> = [
+        (NewField::Text { multiline: false }, r(700.0)),
+        (NewField::Text { multiline: true }, [50.0, 600.0, 250.0, 680.0]),
+        (NewField::Date, r(560.0)),
+        (NewField::CheckBox, [50.0, 520.0, 64.0, 534.0]),
+        (NewField::Radio { group: None, export: "Small".into() }, [50.0, 480.0, 64.0, 494.0]),
+        (NewField::Combo { options: vec!["Red".into(), "Blue".into()], editable: false }, r(440.0)),
+        (NewField::List { options: vec!["A".into(), "B".into(), "C".into()], multi: true }, [50.0, 340.0, 250.0, 420.0]),
+        (NewField::Button { caption: "Submit".into() }, r(300.0)),
+        (NewField::Signature, [50.0, 220.0, 250.0, 270.0]),
+    ]
+    .iter()
+    .map(|(k, rect)| add_field(&mut doc, 0, *rect, k, None).unwrap())
+    .collect();
+    assert_eq!(names, ["Text1", "Text2", "Date1", "Check Box1", "Group1", "Dropdown1", "List Box1", "Button1", "Signature1"]);
+    // A second radio button joins the group.
+    assert_eq!(
+        add_field(&mut doc, 0, [80.0, 480.0, 94.0, 494.0], &NewField::Radio { group: Some("Group1".into()), export: "Large".into() }, None).unwrap(),
+        "Group1"
+    );
+    let doc = reopen(&doc);
+    let all = fields(&doc);
+    assert_eq!(all.len(), 9);
+    let group = field(&all, "Group1");
+    assert_eq!(group.widgets.iter().filter_map(|w| w.on_state.clone()).collect::<Vec<_>>(), ["Small", "Large"]);
+    assert!(field(&all, "Text2").has(flags::MULTILINE));
+    assert_eq!(field(&all, "Dropdown1").options.len(), 2);
+    assert!(field(&all, "List Box1").has(flags::MULTI_SELECT));
+    assert_eq!(field(&all, "Button1").kind, FieldKind::PushButton);
+    assert!(ap(&doc, &field(&all, "Button1").widgets[0]).contains("(Submit) Tj"));
+    // Every widget is on the page and has an appearance.
+    for f in &all {
+        for w in &f.widgets {
+            assert_eq!(w.page, Some(0), "{}", f.name);
+            assert!(doc.get(w.obj).as_dict().unwrap().contains(b"AP"), "{} has an appearance", f.name);
+        }
+    }
+    // The new fields can be filled.
+    let mut doc = doc;
+    set_value(&mut doc, "Text1", &FieldValue::Text("hello".into())).unwrap();
+    set_value(&mut doc, "Group1", &FieldValue::Radio(Some("Large".into()))).unwrap();
+    assert!(add_field(&mut doc, 0, r(100.0), &NewField::CheckBox, Some("Text1")).is_err(), "names are unique");
+    assert!(add_field(&mut doc, 0, [0.0, 0.0, 2.0, 2.0], &NewField::CheckBox, None).is_err(), "too small");
+}
+
+#[test]
+fn properties_rename_and_delete() {
+    let mut doc = fixture();
+    let renamed = set_props(
+        &mut doc,
+        "name",
+        &FieldProps {
+            name: Some("full_name".into()),
+            tooltip: Some("Your name".into()),
+            required: Some(true),
+            max_len: Some(Some(20)),
+            font_size: Some(9.0),
+            ..FieldProps::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(renamed, "full_name");
+    let all = fields(&doc);
+    let f = field(&all, "full_name");
+    assert!(f.has(flags::REQUIRED) && f.max_len == Some(20) && f.tooltip.as_deref() == Some("Your name"));
+    assert!(ap(&doc, &f.widgets[0]).contains("/Helv 9 Tf"), "redrawn with the new size");
+    let nested = set_props(&mut doc, "address.city", &FieldProps { name: Some("town".into()), ..FieldProps::default() }).unwrap();
+    assert_eq!(nested, "address.town", "only the last part changes");
+    set_props(&mut doc, "country", &FieldProps { options: Some(vec!["Japan".into()]), ..FieldProps::default() }).unwrap();
+    assert_eq!(field(&fields(&doc), "country").options, [("Japan".to_string(), "Japan".to_string())]);
+    assert!(set_props(&mut doc, "zip", &FieldProps { name: Some("pin".into()), ..FieldProps::default() }).is_err(), "taken");
+    set_props(&mut doc, "full_name", &FieldProps { rect: Some((0, [10.0, 10.0, 110.0, 30.0])), ..FieldProps::default() }).unwrap();
+    let f = field(&fields(&doc), "full_name").clone();
+    assert_eq!(f.widgets[0].rect, [10.0, 10.0, 110.0, 30.0]);
+    assert!(ap(&doc, &f.widgets[0]).contains("100"), "the appearance takes the new size");
+    assert!(set_props(&mut doc, "full_name", &FieldProps { rect: Some((0, [0.0, 0.0, 2.0, 2.0])), ..FieldProps::default() }).is_err());
+    let before = fields(&doc).len();
+    delete_field(&mut doc, "size").unwrap();
+    delete_field(&mut doc, "address.town").unwrap();
+    let doc = reopen(&doc);
+    let all = fields(&doc);
+    assert_eq!(all.len(), before - 2);
+    assert!(!all.iter().any(|f| f.name == "size" || f.name == "address.town"));
+    let p = &page_refs(&doc)[0];
+    let annots = doc.resolve(doc.get(*p).as_dict().unwrap().get(b"Annots").unwrap());
+    assert_eq!(annots.as_array().unwrap().len(), 13 - 3, "the deleted widgets left the page");
+}

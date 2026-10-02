@@ -21,6 +21,11 @@ fn n(v: f64) -> String {
     if s == "-0" { "0".into() } else { s.into() }
 }
 
+/// Format a number for content streams (up to three decimals).
+pub fn fmt(v: f64) -> String {
+    n(v)
+}
+
 /// A parsed default appearance string: font resource name, size (0 = auto) and colour operator.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Da {
@@ -250,17 +255,18 @@ pub fn field_appearance(doc: &Document, f: &Field, w: &Widget, values: &[String]
 
 /// On/Off appearances for a check box or radio button that has none (a check mark or a dot,
 /// drawn as paths, so no symbol font is needed).
-pub fn check_box_states(doc: &Document, w: &Widget, kind: FieldKind, on_name: &str) -> Dict {
+/// The streams are added to `doc` as indirect objects (streams can't be direct objects).
+pub fn check_box_states(doc: &mut Document, w: &Widget, kind: FieldKind, on_name: &str) -> Dict {
     let wobj = doc.get(w.obj);
     let wd = wobj.as_dict().cloned().unwrap_or_default();
     let (width, height) = ((w.rect[2] - w.rect[0]).max(1.0), (w.rect[3] - w.rect[1]).max(1.0));
     let (frame_c, _) = frame(doc, &wd, width, height);
-    let form = |content: String| -> Object {
+    let mut form = |content: String| -> Object {
         let mut d = Dict::new();
         d.set(b"Type".to_vec(), Object::name("XObject"));
         d.set(b"Subtype".to_vec(), Object::name("Form"));
         d.set(b"BBox".to_vec(), Object::Array([0.0, 0.0, width, height].iter().map(|v| Object::Real(*v)).collect()));
-        Object::Stream(Stream::flate(d, content.as_bytes()))
+        Object::Ref(doc.add(Object::Stream(Stream::flate(d, content.as_bytes()))))
     };
     let s = width.min(height);
     let (cx, cy) = (width / 2.0, height / 2.0);

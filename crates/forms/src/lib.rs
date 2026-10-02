@@ -14,6 +14,8 @@
 use printcraft_cos::{Dict, Document, ObjRef, Object, PdfString};
 
 pub mod appearance;
+mod author;
+pub use author::{FieldProps, NewField, add_field, delete_field, redraw_field, set_props};
 
 #[cfg(test)]
 mod tests;
@@ -157,7 +159,7 @@ fn nums(doc: &Document, o: Option<&Object>) -> Option<Vec<f64>> {
 }
 
 /// Leaf page objects in order (a small walker; `organize` and `annot` have their own).
-fn page_refs(doc: &Document) -> Vec<ObjRef> {
+pub(crate) fn page_refs(doc: &Document) -> Vec<ObjRef> {
     let Some(root) = doc.root() else { return Vec::new() };
     let Some(pages) = doc.get(root).as_dict().and_then(|d| d.reference(b"Pages")) else { return Vec::new() };
     let mut out = Vec::new();

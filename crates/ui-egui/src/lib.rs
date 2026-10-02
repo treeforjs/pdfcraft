@@ -31,6 +31,7 @@ pub mod icons;
 mod pageboxes;
 mod palette;
 mod panels;
+pub mod prepare;
 mod protect;
 mod recovery;
 pub mod theme;
@@ -83,6 +84,8 @@ pub enum QuickTool {
     Crop,
     /// A Fill & Sign tool.
     Fill(fill_sign::FillTool),
+    /// A Prepare a form field tool.
+    Field(prepare::FieldTool),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -107,6 +110,8 @@ pub enum Dialog {
     CommentProps,
     /// Replace Pages (after choosing the file).
     ReplacePages,
+    /// Prepare a form ▸ Field Properties.
+    FieldProps,
     /// Documents from a session that ended unexpectedly.
     Recovery,
 }
@@ -210,6 +215,7 @@ pub struct PrintCraftApp {
     pub signature_draft: Vec<Vec<[f32; 2]>>,
     /// The Comment Properties dialog's state.
     pub comment_props: Option<comment_props::PropsDraft>,
+    pub field_props: Option<prepare::FieldDraft>,
     /// The Replace Pages dialog's state.
     pub replace_draft: Option<files::ReplaceDraft>,
     /// The last web link the app asked the system to open (tests and automation).
@@ -282,6 +288,7 @@ impl PrintCraftApp {
             signature: None,
             signature_draft: Vec::new(),
             comment_props: None,
+            field_props: None,
             replace_draft: None,
             number_draft: NumberDraft { from: 1, to: 1, style: printcraft_engine::LabelStyle::Decimal, prefix: String::new(), start: 1 },
         }
@@ -657,6 +664,9 @@ impl PrintCraftApp {
                     "select" => QuickTool::Select,
                     "hand" => QuickTool::Hand,
                     "crop" => QuickTool::Crop,
+                    field if field.starts_with("field-") => QuickTool::Field(
+                        prepare::FieldTool::from_command(&format!("form.add.{}", &field[6..])).ok_or_else(|| format!("unknown tool {field}"))?,
+                    ),
                     fill if fill.starts_with("fill-") => QuickTool::Fill(
                         fill_sign::FillTool::from_command(&format!("sign.fill.{}", &fill[5..])).ok_or_else(|| format!("unknown tool {fill}"))?,
                     ),

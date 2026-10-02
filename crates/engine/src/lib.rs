@@ -22,7 +22,9 @@ pub use printcraft_organize::LabelStyle;
 
 pub use printcraft_cos::Algorithm;
 pub use printcraft_edit::{Background, HeaderFooter, MarkKind, Watermark};
-pub use printcraft_forms::{Field as FormField, FieldKind as FormFieldKind, FieldValue, Widget as FormWidget, flags as field_flags};
+pub use printcraft_forms::{
+    Field as FormField, FieldKind as FormFieldKind, FieldProps, FieldValue, NewField, Widget as FormWidget, flags as field_flags,
+};
 
 /// Comment geometry helpers (text-box line breaking) for frontends.
 pub use printcraft_annot::appearance as annot_text;
@@ -498,6 +500,23 @@ pub enum Edit {
     ResetForm {
         names: Option<Vec<String>>,
     },
+    /// Prepare a form: add a field on a page (`rect` in PDF user space); `name` defaults to
+    /// Acrobat's next free name ("Text1", "Check Box2", …).
+    AddField {
+        page: usize,
+        rect: [f64; 4],
+        kind: NewField,
+        name: Option<String>,
+    },
+    /// Field Properties ▸ General / Options.
+    SetFieldProps {
+        name: String,
+        props: FieldProps,
+    },
+    /// Delete a field and all its widgets.
+    DeleteField {
+        name: String,
+    },
     /// Add a header and footer (with `replace`, existing ones on those pages go first).
     AddHeaderFooter {
         pages: Vec<usize>,
@@ -564,6 +583,9 @@ impl Edit {
             Edit::StyleAnnotation { .. } | Edit::SetAnnotationInfo { .. } => "Change comment properties".into(),
             Edit::SetFieldValue { name, .. } => format!("Fill in {name}"),
             Edit::ResetForm { .. } => "Clear form".into(),
+            Edit::AddField { .. } => "Add field".into(),
+            Edit::SetFieldProps { .. } => "Change field properties".into(),
+            Edit::DeleteField { .. } => "Delete field".into(),
             Edit::AddHeaderFooter { replace: false, .. } => "Add header & footer".into(),
             Edit::AddHeaderFooter { .. } => "Update header & footer".into(),
             Edit::AddWatermark { replace: false, .. } => "Add watermark".into(),
@@ -671,6 +693,9 @@ fn check_permission(edit: &Edit, p: &printcraft_cos::Permissions) -> Result<(), 
         | Edit::AddWatermark { .. }
         | Edit::AddBackground { .. }
         | Edit::RemoveMarks { .. }
+        | Edit::AddField { .. }
+        | Edit::SetFieldProps { .. }
+        | Edit::DeleteField { .. }
         | Edit::Flatten { .. } => {
             if p.modify() {
                 Ok(())
@@ -799,6 +824,13 @@ fn run_edit(doc: &mut printcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -
         Edit::ResetForm { names } => {
             printcraft_forms::reset(doc, names.as_deref())?;
         }
+        Edit::AddField { page, rect, kind, name } => {
+            printcraft_forms::add_field(doc, *page, *rect, kind, name.as_deref())?;
+        }
+        Edit::SetFieldProps { name, props } => {
+            printcraft_forms::set_props(doc, name, props)?;
+        }
+        Edit::DeleteField { name } => printcraft_forms::delete_field(doc, name)?,
         Edit::AddHeaderFooter { pages, settings, replace } => {
             let date = cx.today;
             printcraft_edit::add_header_footer(doc, pages, settings, *replace, &printcraft_edit::Context { date })?;

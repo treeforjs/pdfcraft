@@ -35,6 +35,7 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
     let mut marks_now = false;
     let mut export_now = false;
     let mut props_now = false;
+    let mut field_props_now = false;
     let mut replace_now = false;
     let t = Tokens::get(ctx);
     let mut close = false;
@@ -274,6 +275,16 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
                         close = true;
                     }
                 });
+                return;
+            }
+            Dialog::FieldProps => {
+                let Some(d) = app.field_props.as_mut() else {
+                    close = true;
+                    return;
+                };
+                let (apply, cancel) = crate::prepare::body(ui, d, &t);
+                field_props_now = apply;
+                close = apply || cancel;
                 return;
             }
             Dialog::CommentProps => {
@@ -523,6 +534,16 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
             bytes: d.bytes.clone(),
             src_pages: (d.src_from - 1..d.src_from - 1 + n).collect(),
         });
+    }
+    if field_props_now
+        && let Some(d) = app.field_props.take()
+        && let Some(props) = d.props()
+        && app.apply_edit(Edit::SetFieldProps { name: d.field.clone(), props })
+        && let Some(i) = app.active
+    {
+        // Keep the (possibly renamed) field selected.
+        let prefix = d.field.rsplit_once('.').map(|(p, _)| format!("{p}.")).unwrap_or_default();
+        app.views[i].prepare.selected = Some((format!("{prefix}{}", d.name.trim()), d.widget));
     }
     if props_now && let Some(d) = app.comment_props.take() {
         let mut edits = crate::comment_props::edits(&d);

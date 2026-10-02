@@ -1,0 +1,630 @@
+//! Prepare a form (Acrobat's Prepare Form, execution plan M6.6): add fields with the field
+//! tools (click for the default size, or drag a rectangle), select, move and resize them, see
+//! their name tags, delete them, and edit them in Field Properties.
+//!
+//! While the Prepare a form panel is open the page shows every field with a light-blue fill and
+//! its name; clicks select fields instead of filling them in, as in Acrobat.
+
+use egui::{Color32, CornerRadius, Pos2, Rect, Stroke, vec2};
+use printcraft_engine::{Edit, FieldProps, FormField, FormFieldKind, NewField};
+use printcraft_render::DocInfo;
+
+use crate::canvas::{DocView, PageXform};
+use crate::theme;
+
+const SELECT_BLUE: Color32 = Color32::from_rgb(0x14, 0x73, 0xE6);
+/// Acrobat's field fill in Prepare Form (light blue).
+const FIELD_FILL: Color32 = Color32::from_rgba_premultiplied(0x1B, 0x34, 0x54, 0x59);
+
+/// The Add form components tools.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum FieldTool {
+    Text,
+    CheckBox,
+    Radio,
+    Combo,
+    List,
+    Button,
+    Date,
+    Signature,
+}
+
+pub const FIELD_TOOLS: [FieldTool; 8] = [
+    FieldTool::Text,
+    FieldTool::CheckBox,
+    FieldTool::Radio,
+    FieldTool::Combo,
+    FieldTool::List,
+    FieldTool::Button,
+    FieldTool::Date,
+    FieldTool::Signature,
+];
+
+impl FieldTool {
+    pub fn command(self) -> &'static str {
+        match self {
+            FieldTool::Text => "form.add.text",
+            FieldTool::CheckBox => "form.add.checkbox",
+            FieldTool::Radio => "form.add.radio",
+            FieldTool::Combo => "form.add.combo",
+            FieldTool::List => "form.add.list",
+            FieldTool::Button => "form.add.button",
+            FieldTool::Date => "form.add.date",
+            FieldTool::Signature => "form.add.signature",
+        }
+    }
+
+    pub fn from_command(id: &str) -> Option<Self> {
+        FIELD_TOOLS.into_iter().find(|t| t.command() == id)
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            FieldTool::Text => "Text field",
+            FieldTool::CheckBox => "Checkbox",
+            FieldTool::Radio => "Radio button",
+            FieldTool::Combo => "Drop-down list",
+            FieldTool::List => "List box",
+            FieldTool::Button => "Button",
+            FieldTool::Date => "Date field",
+            FieldTool::Signature => "Digital signature",
+        }
+    }
+
+    /// The field a click or drag creates. Radio buttons dropped next to a selected radio group
+    /// join it with the next free choice.
+    pub fn new_field(self, join: Option<&FormField>) -> NewField {
+        match self {
+            FieldTool::Text => NewField::Text { multiline: false },
+            FieldTool::CheckBox => NewField::CheckBox,
+            FieldTool::Radio => match join.filter(|f| f.kind == FormFieldKind::Radio) {
+                Some(g) => {
+                    let taken: Vec<&str> = g.widgets.iter().filter_map(|w| w.on_state.as_deref()).collect();
+                    let export = (1..).map(|i| format!("Choice{i}")).find(|c| !taken.contains(&c.as_str())).expect("unbounded");
+                    NewField::Radio { group: Some(g.name.clone()), export }
+                }
+                None => NewField::Radio { group: None, export: "Choice1".into() },
+            },
+            FieldTool::Combo => NewField::Combo { options: Vec::new(), editable: false },
+            FieldTool::List => NewField::List { options: Vec::new(), multi: false },
+            FieldTool::Button => NewField::Button { caption: String::new() },
+            FieldTool::Date => NewField::Date,
+            FieldTool::Signature => NewField::Signature,
+        }
+    }
+
+    /// Width and height in points of a field placed with a single click.
+    pub fn default_size(self) -> (f64, f64) {
+        match self {
+            FieldTool::CheckBox | FieldTool::Radio => (14.0, 14.0),
+            FieldTool::List => (144.0, 54.0),
+            FieldTool::Button => (72.0, 22.0),
+            FieldTool::Signature => (180.0, 36.0),
+            FieldTool::Date => (108.0, 22.0),
+            FieldTool::Text | FieldTool::Combo => (144.0, 22.0),
+        }
+    }
+}
+
+/// What the pointer is doing to a field.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Grab {
+    /// Drawing a new field from this screen point.
+    Draw(Pos2),
+    Move,
+    /// Resizing by a corner: (moves left edge, moves top edge) in screen terms.
+    Corner(bool, bool),
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct PrepareView {
+    /// The selected field and which of its widgets.
+    pub selected: Option<(String, usize)>,
+    /// Select the field an Add field edit creates (the form's length before it).
+    pub select_added: Option<usize>,
+    grab: Option<(usize, Grab, Pos2)>,
+}
+
+fn screen_rect(xf: &PageXform, info: &DocInfo, page: usize, r: [f64; 4]) -> Rect {
+    xf.user_rect(info, page, [r[0] as f32, r[1] as f32, r[2] as f32, r[3] as f32])
+}
+
+fn to_user(xf: &PageXform, info: &DocInfo, page: usize, p: Pos2) -> [f64; 2] {
+    let (vx, vy) = xf.screen_to_view(p);
+    let u = info.pages[page].view_to_user(vx, vy);
+    [u[0] as f64, u[1] as f64]
+}
+
+/// A screen rect → a normalised user-space rect.
+fn user_rect(xf: &PageXform, info: &DocInfo, page: usize, r: Rect) -> [f64; 4] {
+    let (a, b) = (to_user(xf, info, page, r.min), to_user(xf, info, page, r.max));
+    [a[0].min(b[0]), a[1].min(b[1]), a[0].max(b[0]), a[1].max(b[1])]
+}
+
+fn handles(r: Rect) -> [(Pos2, bool, bool); 4] {
+    [(r.left_top(), true, true), (r.right_top(), false, true), (r.left_bottom(), true, false), (r.right_bottom(), false, false)]
+}
+
+/// The rect while a move or resize is in progress.
+fn dragged(r: Rect, grab: Grab, delta: egui::Vec2) -> Rect {
+    match grab {
+        Grab::Move => r.translate(delta),
+        Grab::Corner(left, top) => {
+            let mut r = r;
+            if left {
+                r.min.x += delta.x;
+            } else {
+                r.max.x += delta.x;
+            }
+            if top {
+                r.min.y += delta.y;
+            } else {
+                r.max.y += delta.y;
+            }
+            Rect::from_two_pos(r.min, r.max)
+        }
+        Grab::Draw(_) => r,
+    }
+}
+
+pub(crate) struct Outcome {
+    /// The click or drag belonged to Prepare a form.
+    pub consumed: bool,
+    /// Open Field Properties for the selected field.
+    pub properties: bool,
+    /// A field was placed: go back to the Select tool.
+    pub placed: bool,
+}
+
+/// Pointer input on one page while preparing a form.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn page_input(
+    ui: &egui::Ui,
+    resp: &egui::Response,
+    xf: &PageXform,
+    page: usize,
+    info: &DocInfo,
+    form: &[FormField],
+    tool: Option<FieldTool>,
+    allowed: bool,
+    view: &mut DocView,
+) -> Outcome {
+    let mut out = Outcome { consumed: false, properties: false, placed: false };
+    let pointer = ui.input(|i| i.pointer.hover_pos().or(i.pointer.interact_pos()));
+    let prep = &mut view.prepare;
+
+    // A grab in progress on this page.
+    if let Some((gp, grab, start)) = prep.grab
+        && gp == page
+    {
+        out.consumed = true;
+        if resp.drag_stopped() || !ui.input(|i| i.pointer.primary_down()) {
+            prep.grab = None;
+            let end = pointer.unwrap_or(start);
+            match grab {
+                Grab::Draw(from) => {
+                    let Some(tool) = tool else { return out };
+                    let r = Rect::from_two_pos(from, end).intersect(xf.rect);
+                    let rect = user_rect(xf, info, page, r);
+                    let rect = if r.width() < 4.0 || r.height() < 4.0 {
+                        // A click: the default size, top-left at the pointer.
+                        let at = to_user(xf, info, page, from);
+                        let (w, h) = tool.default_size();
+                        [at[0], at[1] - h, at[0] + w, at[1]]
+                    } else {
+                        rect
+                    };
+                    let join = prep.selected.as_ref().and_then(|(n, _)| form.iter().find(|f| &f.name == n));
+                    prep.select_added = Some(form.len());
+                    view.pending_edit = Some(Edit::AddField { page, rect, kind: tool.new_field(join), name: None });
+                    out.placed = true;
+                }
+                Grab::Move | Grab::Corner(..) => {
+                    let Some((name, wi)) = prep.selected.clone() else { return out };
+                    let Some(w) = form.iter().find(|f| f.name == name).and_then(|f| f.widgets.get(wi)) else { return out };
+                    let delta = end - start;
+                    if delta.length() >= 1.0 {
+                        let r = dragged(screen_rect(xf, info, page, w.rect), grab, delta);
+                        let rect = user_rect(xf, info, page, r);
+                        view.pending_edit = Some(Edit::SetFieldProps { name, props: FieldProps { rect: Some((wi, rect)), ..Default::default() } });
+                    }
+                }
+            }
+        }
+        return out;
+    }
+
+    let Some(p) = pointer.filter(|p| xf.rect.contains(*p)) else { return out };
+    if !allowed {
+        return out;
+    }
+    if let Some(tool) = tool {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
+        if resp.drag_started() || resp.clicked() {
+            let origin = ui.input(|i| i.pointer.press_origin()).filter(|o| xf.rect.contains(*o)).unwrap_or(p);
+            prep.grab = Some((page, Grab::Draw(origin), origin));
+            out.consumed = true;
+            if resp.clicked() {
+                // A click without a drag: finish at once.
+                prep.grab = None;
+                let at = to_user(xf, info, page, p);
+                let (w, h) = tool.default_size();
+                let join = prep.selected.as_ref().and_then(|(n, _)| form.iter().find(|f| &f.name == n));
+                prep.select_added = Some(form.len());
+                view.pending_edit = Some(Edit::AddField { page, rect: [at[0], at[1] - h, at[0] + w, at[1]], kind: tool.new_field(join), name: None });
+                out.placed = true;
+            }
+        }
+        return out;
+    }
+
+    // The Select tool: corner handles of the selection, then fields.
+    let selected_rect = prep
+        .selected
+        .as_ref()
+        .and_then(|(n, wi)| form.iter().find(|f| &f.name == n)?.widgets.get(*wi).filter(|w| w.page == Some(page)))
+        .map(|w| screen_rect(xf, info, page, w.rect));
+    let corner = selected_rect.and_then(|r| handles(r).into_iter().find(|(c, ..)| c.distance(p) <= 6.0));
+    let hit = form.iter().find_map(|f| {
+        f.widgets.iter().enumerate().find(|(_, w)| w.page == Some(page) && screen_rect(xf, info, page, w.rect).contains(p)).map(|(i, _)| (f, i))
+    });
+    if let Some((_, left, top)) = corner {
+        ui.ctx().set_cursor_icon(if left == top { egui::CursorIcon::ResizeNwSe } else { egui::CursorIcon::ResizeNeSw });
+    } else if hit.is_some() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::Move);
+    }
+    if resp.drag_started() {
+        let origin = ui.input(|i| i.pointer.press_origin()).unwrap_or(p);
+        if let Some((_, left, top)) = selected_rect.and_then(|r| handles(r).into_iter().find(|(c, ..)| c.distance(origin) <= 6.0)) {
+            prep.grab = Some((page, Grab::Corner(left, top), origin));
+            out.consumed = true;
+        } else if let Some((f, wi)) = form.iter().find_map(|f| {
+            f.widgets
+                .iter()
+                .enumerate()
+                .find(|(_, w)| w.page == Some(page) && screen_rect(xf, info, page, w.rect).contains(origin))
+                .map(|(i, _)| (f, i))
+        }) {
+            prep.selected = Some((f.name.clone(), wi));
+            prep.grab = Some((page, Grab::Move, origin));
+            out.consumed = true;
+        }
+        return out;
+    }
+    if resp.double_clicked() && hit.is_some() {
+        out.consumed = true;
+        out.properties = true;
+        return out;
+    }
+    if resp.clicked() {
+        match hit {
+            Some((f, wi)) => {
+                prep.selected = Some((f.name.clone(), wi));
+                out.consumed = true;
+            }
+            None if corner.is_none() => prep.selected = None,
+            None => out.consumed = true,
+        }
+    }
+    out.consumed |= hit.is_some() && resp.is_pointer_button_down_on();
+    out
+}
+
+/// Fields with their light-blue fill and name tags, the selection with its handles, and the
+/// rectangle being drawn or dragged.
+pub(crate) fn paint_page(ui: &egui::Ui, painter: &egui::Painter, xf: &PageXform, page: usize, info: &DocInfo, form: &[FormField], view: &DocView) {
+    let prep = &view.prepare;
+    let pointer = ui.input(|i| i.pointer.hover_pos());
+    let grab = prep.grab.filter(|(gp, ..)| *gp == page);
+    let zoom = (xf.rect.width() / xf.pw.max(1.0)).clamp(0.5, 3.0);
+    for f in form {
+        for (wi, w) in f.widgets.iter().enumerate().filter(|(_, w)| w.page == Some(page)) {
+            let mut r = screen_rect(xf, info, page, w.rect);
+            let selected = prep.selected.as_ref().is_some_and(|(n, i)| n == &f.name && *i == wi);
+            if selected && let (Some((_, g, start)), Some(p)) = (grab, pointer) {
+                r = dragged(r, g, p - start);
+            }
+            painter.rect_filled(r, CornerRadius::ZERO, FIELD_FILL);
+            painter.rect_stroke(
+                r,
+                CornerRadius::ZERO,
+                Stroke::new(1.0, if selected { SELECT_BLUE } else { Color32::from_gray(90) }),
+                egui::StrokeKind::Inside,
+            );
+            // The name tag: white text on black, clipped to the field.
+            let label = f.name.rsplit('.').next().unwrap_or(&f.name);
+            let font = theme::regular((9.0 * zoom).clamp(7.0, 13.0));
+            let galley = painter.layout_no_wrap(label.to_string(), font, Color32::WHITE);
+            let size = galley.size() + vec2(6.0, 2.0);
+            let tag = Rect::from_center_size(r.center(), size);
+            let clip = painter.clip_rect().intersect(r);
+            let p2 = painter.with_clip_rect(clip);
+            p2.rect_filled(tag, CornerRadius::same(1), if selected { SELECT_BLUE } else { Color32::BLACK });
+            p2.galley(tag.min + vec2(3.0, 1.0), galley, Color32::WHITE);
+            if selected {
+                painter.rect_stroke(r.expand(1.0), CornerRadius::ZERO, Stroke::new(2.0, SELECT_BLUE), egui::StrokeKind::Outside);
+                for (c, ..) in handles(r) {
+                    painter.circle(c, 3.5, Color32::WHITE, Stroke::new(1.5, SELECT_BLUE));
+                }
+            }
+        }
+    }
+    if let (Some((_, Grab::Draw(from), _)), Some(p)) = (grab, pointer) {
+        let r = Rect::from_two_pos(from, p).intersect(xf.rect);
+        painter.rect_filled(r, CornerRadius::ZERO, FIELD_FILL);
+        painter.rect_stroke(r, CornerRadius::ZERO, Stroke::new(1.0, SELECT_BLUE), egui::StrokeKind::Inside);
+    }
+}
+
+/// Delete removes the selected field; Escape clears the selection.
+pub(crate) fn keys(ctx: &egui::Context, view: &mut DocView) {
+    if view.prepare.selected.is_none() || ctx.egui_wants_keyboard_input() {
+        return;
+    }
+    let (del, esc) = ctx.input(|i| (i.key_pressed(egui::Key::Delete) || i.key_pressed(egui::Key::Backspace), i.key_pressed(egui::Key::Escape)));
+    if del && let Some((name, _)) = view.prepare.selected.take() {
+        view.pending_edit = Some(Edit::DeleteField { name });
+    } else if esc {
+        view.prepare.selected = None;
+    }
+}
+
+/// After an Add field edit: select the new field (the form's last).
+pub(crate) fn after_refresh(view: &mut DocView, form: &[FormField]) {
+    if let Some(n) = view.prepare.select_added.take() {
+        if form.len() > n
+            && let Some(f) = form.last()
+        {
+            view.prepare.selected = Some((f.name.clone(), 0));
+        } else if let Some((name, _)) = &view.prepare.selected
+            && let Some(f) = form.iter().find(|f| &f.name == name)
+        {
+            // A radio button joined the selected group: select the new button.
+            view.prepare.selected = Some((f.name.clone(), f.widgets.len().saturating_sub(1)));
+        }
+    }
+    if let Some((name, wi)) = &view.prepare.selected
+        && !form.iter().any(|f| &f.name == name && *wi < f.widgets.len())
+    {
+        view.prepare.selected = None;
+    }
+}
+
+// ───────────────────────────────────────────────────────────────────────── Field Properties
+
+impl crate::PrintCraftApp {
+    /// Open Field Properties for a field of the active document.
+    pub fn open_field_props(&mut self, name: &str, widget: usize) {
+        let Some((_, id)) = self.active_ids() else { return };
+        let Some(f) = self.session.get(id).and_then(|d| d.form.iter().find(|f| f.name == name).cloned()) else { return };
+        self.field_props = Some(FieldDraft::new(&f, widget));
+        self.dialog = Some(crate::Dialog::FieldProps);
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FieldTab {
+    General,
+    Appearance,
+    Position,
+    Options,
+}
+
+/// The Field Properties dialog's working copy.
+#[derive(Clone, Debug, PartialEq)]
+pub struct FieldDraft {
+    pub field: String,
+    pub kind: FormFieldKind,
+    pub widget: usize,
+    pub tab: FieldTab,
+    pub name: String,
+    pub tooltip: String,
+    pub read_only: bool,
+    pub required: bool,
+    pub multiline: bool,
+    pub limit: bool,
+    pub max_len: usize,
+    pub options: Vec<String>,
+    pub new_option: String,
+    /// 0 = auto.
+    pub font_size: f64,
+    /// Left, bottom, width, height in points.
+    pub position: [f64; 4],
+    original: Box<Option<FieldDraft>>,
+}
+
+fn da_size(da: &str) -> f64 {
+    let toks: Vec<&str> = da.split_whitespace().collect();
+    toks.windows(2).rev().find(|w| w[1] == "Tf").and_then(|w| w[0].parse().ok()).unwrap_or(0.0)
+}
+
+impl FieldDraft {
+    pub fn new(f: &FormField, widget: usize) -> Self {
+        let r = f.widgets.get(widget).map(|w| w.rect).unwrap_or_default();
+        let mut d = FieldDraft {
+            field: f.name.clone(),
+            kind: f.kind,
+            widget,
+            tab: FieldTab::General,
+            name: f.name.rsplit('.').next().unwrap_or(&f.name).to_string(),
+            tooltip: f.tooltip.clone().unwrap_or_default(),
+            read_only: f.read_only(),
+            required: f.has(printcraft_engine::field_flags::REQUIRED),
+            multiline: f.has(printcraft_engine::field_flags::MULTILINE),
+            limit: f.max_len.is_some(),
+            max_len: f.max_len.unwrap_or(0),
+            options: f.options.iter().map(|(_, d)| d.clone()).collect(),
+            new_option: String::new(),
+            font_size: da_size(&f.da),
+            position: [r[0], r[1], r[2] - r[0], r[3] - r[1]],
+            original: Box::new(None),
+        };
+        d.original = Box::new(Some(d.clone()));
+        d
+    }
+
+    pub fn title(&self) -> &'static str {
+        match self.kind {
+            FormFieldKind::Text => "Text Field Properties",
+            FormFieldKind::CheckBox => "Check Box Properties",
+            FormFieldKind::Radio => "Radio Button Properties",
+            FormFieldKind::Combo => "Dropdown Properties",
+            FormFieldKind::List => "List Box Properties",
+            FormFieldKind::PushButton => "Button Properties",
+            FormFieldKind::Signature => "Digital Signature Properties",
+        }
+    }
+
+    fn tabs(&self) -> Vec<(FieldTab, &'static str)> {
+        let mut t = vec![(FieldTab::General, "General"), (FieldTab::Appearance, "Appearance"), (FieldTab::Position, "Position")];
+        if matches!(self.kind, FormFieldKind::Text | FormFieldKind::Combo | FormFieldKind::List) {
+            t.push((FieldTab::Options, "Options"));
+        }
+        t
+    }
+
+    /// The properties that changed (`None` when nothing did).
+    pub fn props(&self) -> Option<FieldProps> {
+        let o = self.original.as_ref().as_ref()?;
+        let ch = |a: bool, b: bool| (a != b).then_some(a);
+        let p = FieldProps {
+            name: (self.name.trim() != o.name).then(|| self.name.trim().to_string()),
+            tooltip: (self.tooltip != o.tooltip).then(|| self.tooltip.clone()),
+            read_only: ch(self.read_only, o.read_only),
+            required: ch(self.required, o.required),
+            multiline: ch(self.multiline, o.multiline),
+            max_len: ((self.limit, self.max_len) != (o.limit, o.max_len)).then_some((self.limit && self.max_len > 0).then_some(self.max_len)),
+            options: (self.options != o.options).then(|| self.options.clone()),
+            font_size: ((self.font_size - o.font_size).abs() > 1e-6).then_some(self.font_size),
+            rect: (self.position != o.position).then(|| {
+                let [x, y, w, h] = self.position;
+                (self.widget, [x, y, x + w.max(4.0), y + h.max(4.0)])
+            }),
+        };
+        (p != FieldProps::default()).then_some(p)
+    }
+}
+
+/// Draw Field Properties; returns (apply, cancel).
+pub(crate) fn body(ui: &mut egui::Ui, d: &mut FieldDraft, t: &crate::theme::Tokens) -> (bool, bool) {
+    use crate::widgets;
+    ui.set_width(520.0);
+    ui.label(egui::RichText::new(d.title()).font(theme::semibold(18.0)));
+    ui.add_space(6.0);
+    ui.horizontal(|ui| {
+        for (tab, label) in d.tabs() {
+            if widgets::mode_tab(ui, label, d.tab == tab).clicked() {
+                d.tab = tab;
+            }
+        }
+    });
+    ui.separator();
+    ui.add_space(6.0);
+    let mut enter = false;
+    match d.tab {
+        FieldTab::General => {
+            egui::Grid::new("field-general").num_columns(2).spacing([12.0, 10.0]).show(ui, |ui| {
+                let l = ui.label("Name:");
+                let r = ui.add(egui::TextEdit::singleline(&mut d.name).desired_width(340.0)).labelled_by(l.id);
+                enter |= r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+                ui.end_row();
+                let l = ui.label("Tooltip:");
+                ui.add(egui::TextEdit::singleline(&mut d.tooltip).desired_width(340.0)).labelled_by(l.id);
+                ui.end_row();
+            });
+            ui.add_space(12.0);
+            widgets::section_title(ui, "Common Properties");
+            ui.checkbox(&mut d.read_only, "Read Only");
+            ui.checkbox(&mut d.required, "Required");
+        }
+        FieldTab::Appearance => {
+            egui::Grid::new("field-appearance").num_columns(2).spacing([12.0, 10.0]).show(ui, |ui| {
+                ui.label("Font Size:");
+                let mut auto = d.font_size == 0.0;
+                ui.horizontal(|ui| {
+                    if ui.checkbox(&mut auto, "Auto").changed() {
+                        d.font_size = if auto { 0.0 } else { 12.0 };
+                    }
+                    ui.add_enabled(!auto, egui::DragValue::new(&mut d.font_size).range(2.0..=100.0).speed(0.25).suffix(" pt"));
+                });
+                ui.end_row();
+                ui.label("Font:");
+                ui.label("Helvetica");
+                ui.end_row();
+            });
+        }
+        FieldTab::Position => {
+            egui::Grid::new("field-position").num_columns(4).spacing([12.0, 10.0]).show(ui, |ui| {
+                for (i, label) in ["Left:", "Bottom:", "Width:", "Height:"].into_iter().enumerate() {
+                    ui.label(label);
+                    let range = if i < 2 { -14_400.0..=14_400.0 } else { 4.0..=14_400.0 };
+                    ui.add(egui::DragValue::new(&mut d.position[i]).range(range).speed(0.5).suffix(" pt"));
+                    if i % 2 == 1 {
+                        ui.end_row();
+                    }
+                }
+            });
+            ui.label(egui::RichText::new("Points from the page's bottom-left corner.").small().color(t.text_faint));
+        }
+        FieldTab::Options => match d.kind {
+            FormFieldKind::Text => {
+                ui.checkbox(&mut d.multiline, "Multi-line");
+                ui.horizontal(|ui| {
+                    ui.checkbox(&mut d.limit, "Limit of");
+                    ui.add_enabled(d.limit, egui::DragValue::new(&mut d.max_len).range(0..=10_000));
+                    ui.label("characters");
+                });
+            }
+            _ => {
+                ui.horizontal(|ui| {
+                    let l = ui.label("Item:");
+                    let r = ui.add(egui::TextEdit::singleline(&mut d.new_option).desired_width(240.0)).labelled_by(l.id);
+                    let typed = r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+                    if (widgets::pill_button(ui, "Add", false).clicked() || typed) && !d.new_option.trim().is_empty() {
+                        d.options.push(d.new_option.trim().to_string());
+                        d.new_option.clear();
+                    }
+                });
+                ui.add_space(6.0);
+                widgets::section_title(ui, "Item List");
+                let mut remove = None;
+                let mut up = None;
+                egui::ScrollArea::vertical().max_height(140.0).show(ui, |ui| {
+                    for (i, o) in d.options.iter().enumerate() {
+                        ui.horizontal(|ui| {
+                            ui.label(o);
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                if ui.small_button("Delete").on_hover_text(format!("Delete {o}")).clicked() {
+                                    remove = Some(i);
+                                }
+                                if i > 0 && ui.small_button("Up").clicked() {
+                                    up = Some(i);
+                                }
+                            });
+                        });
+                    }
+                });
+                if let Some(i) = remove {
+                    d.options.remove(i);
+                }
+                if let Some(i) = up {
+                    d.options.swap(i - 1, i);
+                }
+                if d.options.is_empty() {
+                    ui.label(egui::RichText::new("Add the choices people pick from.").color(t.text_muted));
+                }
+            }
+        },
+    }
+    ui.add_space(14.0);
+    let (mut apply, mut cancel) = (enter, false);
+    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+        if widgets::pill_button(ui, "OK", true).clicked() {
+            apply = true;
+        }
+        if widgets::pill_button(ui, "Cancel", false).clicked() {
+            cancel = true;
+        }
+    });
+    (apply, cancel)
+}

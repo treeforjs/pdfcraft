@@ -211,6 +211,52 @@ pub fn tools() -> Vec<ToolDef> {
         t("form_reset", "Clear form", "Reset fields to their default values: all of them, or only those listed. Undoable.")
             .destructive()
             .with(schema(json!({ "doc": doc(), "fields": { "type": "array", "items": { "type": "string" } } }), &["doc"])),
+        t(
+            "form_add_field",
+            "Prepare form: add a field",
+            "Add a form field on a page. type: text, date, checkbox, radio, combo, list, button, signature. rect in points from the top-left of the displayed page [x0, y0, x1, y1]. name defaults to Acrobat's next free name (Text1, Check Box1, Group1, Dropdown1, List Box1, Button1, Signature1, Date1). Radio buttons join the radio group named by group (a new group otherwise) with the export value export. Returns the field's name. Undoable.",
+        )
+        .with(schema(
+            json!({
+                "doc": doc(),
+                "page": { "type": "integer", "minimum": 1 },
+                "type": { "type": "string", "enum": ["text", "date", "checkbox", "radio", "combo", "list", "button", "signature"] },
+                "rect": { "type": "array", "items": { "type": "number" }, "minItems": 4, "maxItems": 4 },
+                "name": { "type": "string" },
+                "multiline": { "type": "boolean" },
+                "group": { "type": "string", "description": "Radio group to join." },
+                "export": { "type": "string", "description": "Radio button export value (default Choice1)." },
+                "options": { "type": "array", "items": { "type": "string" }, "description": "Combo box / list box items." },
+                "editable": { "type": "boolean", "description": "Combo box accepts typed text." },
+                "multi_select": { "type": "boolean" },
+                "caption": { "type": "string", "description": "Button label." },
+            }),
+            &["doc", "page", "type", "rect"],
+        )),
+        t(
+            "form_set_props",
+            "Field properties",
+            "Change a field's properties (General and Options tabs): name (renames it), tooltip, read_only, required, multiline, max_length (0 = no limit), options (combo/list items), font_size (0 = auto), rect (position). Only the given ones change. Undoable.",
+        )
+        .with(schema(
+            json!({
+                "doc": doc(),
+                "field": { "type": "string", "description": "The field's current name." },
+                "name": { "type": "string" },
+                "tooltip": { "type": "string" },
+                "read_only": { "type": "boolean" },
+                "required": { "type": "boolean" },
+                "multiline": { "type": "boolean" },
+                "max_length": { "type": "integer", "minimum": 0 },
+                "options": { "type": "array", "items": { "type": "string" } },
+                "font_size": { "type": "number", "minimum": 0 },
+                "rect": { "type": "array", "items": { "type": "number" }, "minItems": 4, "maxItems": 4, "description": "Move/resize: points from the top-left of the displayed page." },
+            }),
+            &["doc", "field"],
+        )),
+        t("form_delete_field", "Delete a field", "Delete a form field and all its widgets. Undoable.")
+            .destructive()
+            .with(schema(json!({ "doc": doc(), "field": { "type": "string" } }), &["doc", "field"])),
         t("comment_list", "List comments", "Every comment (annotation other than links, form widgets and pop-ups) with its page, index, id, type, author, text, date, rectangle, colour, review status and replies.")
             .ro()
             .with(schema(json!({ "doc": doc(), "page": { "type": "integer", "minimum": 1, "description": "Only this page." } }), &["doc"])),

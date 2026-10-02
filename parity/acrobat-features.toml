@@ -4623,11 +4623,11 @@ title = "Prepare a form mode"
 area = "F"
 tier = "P0"
 milestone = "M6"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["form.prepare"]
+tools = ["form_add_field", "form_set_props", "form_delete_field"]
+evidence = ["crates/ui-egui/tests/prepare.rs::placing_moving_editing_and_deleting_a_field", "crates/engine/src/tests.rs::preparing_a_form_adds_renames_and_deletes_fields"]
+notes = "fields shown with blue fill and name tags; select, move, resize by corners, Delete; field tools return to Select after one field"
 
 [[feature]]
 id = "form.add-text-field"
@@ -4635,11 +4635,11 @@ title = "Add text fields"
 area = "F"
 tier = "P0"
 milestone = "M6"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["form.add.text"]
+tools = ["form_add_field"]
+evidence = ["crates/forms/src/tests.rs::every_field_type_can_be_added_named_and_drawn", "crates/ui-egui/tests/prepare.rs::placing_moving_editing_and_deleting_a_field", "crates/automation/tests/automation.rs::preparing_a_form_through_tools"]
+notes = "click for the default size or drag; named Text1, Text2…"
 
 [[feature]]
 id = "form.add-checkbox"
@@ -4647,11 +4647,11 @@ title = "Add checkboxes"
 area = "F"
 tier = "P0"
 milestone = "M6"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["form.add.checkbox"]
+tools = ["form_add_field"]
+evidence = ["crates/forms/src/tests.rs::every_field_type_can_be_added_named_and_drawn", "crates/ui-egui/tests/prepare.rs::placing_moving_editing_and_deleting_a_field"]
+notes = "Check Box1…, Yes/Off appearance states"
 
 [[feature]]
 id = "form.add-radio"
@@ -4659,11 +4659,11 @@ title = "Add radio buttons"
 area = "F"
 tier = "P0"
 milestone = "M6"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["form.add.radio"]
+tools = ["form_add_field"]
+evidence = ["crates/forms/src/tests.rs::every_field_type_can_be_added_named_and_drawn", "crates/automation/tests/automation.rs::preparing_a_form_through_tools"]
+notes = "new group Group1… or join the selected group with the next ChoiceN"
 
 [[feature]]
 id = "form.add-dropdown"
@@ -4671,11 +4671,11 @@ title = "Add drop-down lists"
 area = "F"
 tier = "P0"
 milestone = "M6"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["form.add.combo"]
+tools = ["form_add_field"]
+evidence = ["crates/forms/src/tests.rs::every_field_type_can_be_added_named_and_drawn", "crates/automation/tests/automation.rs::preparing_a_form_through_tools"]
+notes = "Dropdown1…; items in Field Properties ▸ Options"
 
 [[feature]]
 id = "form.add-listbox"
@@ -4683,11 +4683,11 @@ title = "Add list boxes"
 area = "F"
 tier = "P0"
 milestone = "M6"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["form.add.list"]
+tools = ["form_add_field"]
+evidence = ["crates/forms/src/tests.rs::every_field_type_can_be_added_named_and_drawn"]
+notes = "List Box1…"
 
 [[feature]]
 id = "form.add-button"
@@ -4695,11 +4695,11 @@ title = "Add push buttons"
 area = "F"
 tier = "P0"
 milestone = "M6"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["form.add.button"]
+tools = ["form_add_field"]
+evidence = ["crates/forms/src/tests.rs::every_field_type_can_be_added_named_and_drawn"]
+notes = "Button1…; actions arrive with the JavaScript engine"
 
 [[feature]]
 id = "form.add-image-field"
@@ -4719,11 +4719,11 @@ title = "Add date fields"
 area = "F"
 tier = "P0"
 milestone = "M6"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["form.add.date"]
+tools = ["form_add_field"]
+evidence = ["crates/forms/src/tests.rs::every_field_type_can_be_added_named_and_drawn"]
+notes = "text field with AFDate_FormatEx(\"mm/dd/yyyy\") format/keystroke actions"
 
 [[feature]]
 id = "form.add-signature-field"
@@ -4731,11 +4731,11 @@ title = "Add digital signature fields"
 area = "F"
 tier = "P0"
 milestone = "M6"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["form.add.signature"]
+tools = ["form_add_field"]
+evidence = ["crates/forms/src/tests.rs::every_field_type_can_be_added_named_and_drawn"]
+notes = "unsigned /Sig field; signing is M9"
 
 [[feature]]
 id = "form.add-barcode-field"
@@ -4755,11 +4755,11 @@ title = "Field properties: general (name, tooltip, visibility, read-only, requir
 area = "F"
 tier = "P0"
 milestone = "M6"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["form.field.properties"]
+tools = ["form_set_props"]
+evidence = ["crates/forms/src/tests.rs::properties_rename_and_delete", "crates/ui-egui/tests/prepare.rs::placing_moving_editing_and_deleting_a_field", "crates/automation/tests/automation.rs::preparing_a_form_through_tools"]
+notes = "name, tooltip, read only, required (visibility/orientation pending)"
 
 [[feature]]
 id = "form.props-appearance"
@@ -4767,11 +4767,11 @@ title = "Field properties: appearance (border, fill, font)"
 area = "F"
 tier = "P0"
 milestone = "M6"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["form.field.properties"]
+tools = ["form_set_props"]
+evidence = ["crates/forms/src/tests.rs::properties_rename_and_delete"]
+notes = "font size (incl. Auto); border/fill colours and fonts pending"
 
 [[feature]]
 id = "form.props-position"
@@ -4779,11 +4779,11 @@ title = "Field properties: position and size"
 area = "F"
 tier = "P1"
 milestone = "M6"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["form.field.properties"]
+tools = ["form_set_props"]
+evidence = ["crates/forms/src/tests.rs::properties_rename_and_delete", "crates/ui-egui/tests/prepare.rs::placing_moving_editing_and_deleting_a_field"]
+notes = "left/bottom/width/height in points; drag to move, corners to resize"
 
 [[feature]]
 id = "form.props-options"
@@ -4791,11 +4791,11 @@ title = "Field properties: options per field type"
 area = "F"
 tier = "P0"
 milestone = "M6"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["form.field.properties"]
+tools = ["form_set_props"]
+evidence = ["crates/forms/src/tests.rs::properties_rename_and_delete", "crates/automation/tests/automation.rs::preparing_a_form_through_tools"]
+notes = "text: multi-line, character limit; choices: item list add/delete/reorder"
 
 [[feature]]
 id = "form.props-actions"
