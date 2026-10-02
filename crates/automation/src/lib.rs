@@ -275,6 +275,15 @@ impl Automation {
             "doc_optimize" => self.doc_optimize(&a)?,
             "doc_initial_view" => self.doc_initial_view(&a)?,
             "doc_revisions" => self.doc_revisions(&a)?,
+            "doc_audit_space" => {
+                let rows: Vec<Value> = self
+                    .doc(&a)?
+                    .audit_space()
+                    .iter()
+                    .map(|u| json!({ "category": u.category.label(), "bytes": u.bytes, "percent": (u.percent * 100.0).round() / 100.0 }))
+                    .collect();
+                json!({ "categories": rows })
+            }
             "doc_open_revision" => {
                 let id = self.doc(&a)?.id;
                 let n = usize::try_from(a.opt_int("revision")?.ok_or_else(|| ToolError::InvalidArgs("revision is required".into()))?).unwrap_or(0);

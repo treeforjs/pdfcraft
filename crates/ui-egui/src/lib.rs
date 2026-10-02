@@ -187,6 +187,8 @@ pub enum Dialog {
     CreateStamp,
     /// Prepare for accessibility ▸ Add alternate text.
     AltText,
+    /// PDF Optimizer ▸ Audit space usage (then back to the optimizer).
+    AuditSpace,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -290,6 +292,8 @@ pub struct PrintCraftApp {
     pub a11y: a11y_ui::A11yState,
     pub a11y_skipped: std::collections::BTreeSet<printcraft_engine::a11y::Rule>,
     pub alt_draft: a11y_ui::AltDraft,
+    /// The last space audit.
+    pub space_audit: Vec<printcraft_engine::optimize::SpaceUse>,
     /// Combine files: the files staged so far.
     pub combine_draft: Vec<combine_ui::CombineFile>,
     /// The custom stamp library, and the stamp being created.
@@ -418,6 +422,7 @@ impl PrintCraftApp {
             a11y: a11y_ui::A11yState::default(),
             a11y_skipped: Default::default(),
             alt_draft: Default::default(),
+            space_audit: Vec::new(),
             combine_draft: Vec::new(),
             custom_stamps: Vec::new(),
             stamp_draft: Default::default(),

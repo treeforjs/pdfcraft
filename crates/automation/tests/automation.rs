@@ -636,6 +636,19 @@ trailer << /Root 1 0 R >>
 }
 
 #[test]
+fn auditing_space_through_tools() {
+    let dir = workdir("audit");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    let r = ok(&mut a, "doc_audit_space", json!({ "doc": doc }));
+    let rows = r["categories"].as_array().unwrap();
+    let total: f64 = rows.iter().map(|x| x["percent"].as_f64().unwrap()).sum();
+    assert!((total - 100.0).abs() < 0.1, "{r}");
+    let content = rows.iter().find(|x| x["category"] == "Content Streams").unwrap();
+    assert!(content["bytes"].as_u64().unwrap() > 0, "{r}");
+}
+
+#[test]
 fn exporting_all_images_through_tools() {
     let dir = workdir("export-all-images");
     let mut a = auto(&dir);

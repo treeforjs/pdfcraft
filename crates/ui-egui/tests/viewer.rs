@@ -351,3 +351,18 @@ fn advanced_search_lists_results_with_context() {
     h.run_steps(2);
     assert!(!h.state().views[i].find.as_ref().unwrap().in_panel);
 }
+
+#[test]
+fn optimizer_audits_space_usage() {
+    let mut h = harness();
+    assert!(h.state_mut().execute("optimize.advanced"));
+    h.run_steps(2);
+    h.get_by_label("Audit space usage…").click();
+    h.run_steps(3);
+    h.get_by_label("Space Audit");
+    h.get_by_label("Content Streams");
+    h.get_by_label("Total");
+    h.get_by_label("OK").click();
+    h.run_steps(2);
+    assert_eq!(h.state().dialog, Some(Dialog::Optimize), "back to the optimizer");
+}

@@ -804,6 +804,10 @@ pub fn tools() -> Vec<ToolDef> {
             }),
             &["doc"],
         )),
+        t("doc_audit_space", "Audit space usage", "How many bytes each kind of content takes and its share of the file (PDF Optimizer ▸ Audit space usage): images, content streams, fonts, forms, comments, structure, bookmarks, … and document overhead.")
+            .ro()
+            .cmd("optimize.advanced")
+            .with(schema(json!({ "doc": doc() }), &["doc"])),
         t("doc_revisions", "List revisions", "List the document's saved revisions (oldest first): each incremental update is one. Returns revision number, where it ends in the file and its size, and which signatures sign exactly that revision.")
             .with(schema(json!({ "doc": doc() }), &["doc"])),
         t("doc_open_revision", "Open a revision", "Open saved revision `revision` (1 = the oldest) of a document as a new, unsaved document, to see the file as it was then.")

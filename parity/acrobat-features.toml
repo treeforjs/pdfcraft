@@ -7427,11 +7427,11 @@ title = "Audit space usage"
 area = "K"
 tier = "P1"
 milestone = "M11"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["optimize.advanced"]
+tools = ["doc_audit_space"]
+evidence = ["crates/optimize/tests/optimize.rs::space_audit_shares_the_file_out_by_kind", "crates/automation/tests/automation.rs::auditing_space_through_tools", "crates/ui-egui/tests/viewer.rs::optimizer_audits_space_usage"]
+notes = "PDF Optimizer ▸ Audit space usage: 16 categories (images, content streams, fonts, X Object forms, structure, bookmarks, thumbnails, comments, forms, named destinations, colour spaces, shadings, patterns, graphics states, embedded files, overhead) with bytes and percentages"
 
 [[feature]]
 id = "optimize.optimizer-presets"

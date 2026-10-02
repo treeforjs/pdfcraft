@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use printcraft_cos::{Dict, Document, ObjRef, Object, SaveOptions, Stream, write_full};
-use printcraft_optimize::{Compression, ImageSettings, Settings, effective_resolutions, optimize};
+use printcraft_optimize::{Compression, ImageSettings, Settings, SpaceCategory, audit_space, effective_resolutions, optimize};
 
 fn image(doc: &mut Document, w: u32, h: u32, n: usize, jpeg: bool, smask: Option<ObjRef>) -> ObjRef {
     // A smooth gradient with a little texture (photo-like).
@@ -174,4 +174,21 @@ fn discards_and_clean_up() {
     assert!(!c.contains(b"StructTreeRoot") && !c.contains(b"MarkInfo"));
     let vp = c.get(b"ViewerPreferences").and_then(|v| v.as_dict().cloned()).unwrap();
     assert!(vp.contains(b"HideToolbar") && !vp.contains(b"Duplex"), "other preferences stay");
+}
+
+#[test]
+fn space_audit_shares_the_file_out_by_kind() {
+    let mut doc = Document::new_empty();
+    let img = image(&mut doc, 300, 300, 3, false, None);
+    page(&mut doc, &[("Im0", img)], "q 300 0 0 300 0 0 cm /Im0 Do Q BT ET");
+    let bytes = write_full(&doc, &SaveOptions { object_streams: false, ..SaveOptions::default() }).unwrap();
+    let doc = Document::open(Arc::new(bytes.clone())).unwrap();
+    let audit = audit_space(&doc, bytes.len() as u64);
+    assert_eq!(audit.len(), SpaceCategory::ALL.len());
+    let get = |c: SpaceCategory| audit.iter().find(|u| u.category == c).unwrap().clone();
+    let (images, content, overhead) = (get(SpaceCategory::Images), get(SpaceCategory::ContentStreams), get(SpaceCategory::DocumentOverhead));
+    assert!(images.percent > 80.0, "{audit:?}");
+    assert!(content.bytes > 0 && overhead.bytes > 0, "{audit:?}");
+    assert_eq!(audit.iter().map(|u| u.bytes).sum::<u64>(), bytes.len() as u64);
+    assert!((audit.iter().map(|u| u.percent).sum::<f64>() - 100.0).abs() < 1e-6);
 }

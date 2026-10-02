@@ -15,7 +15,10 @@
 //! fields are discarded by `printcraft-redact`'s Remove Hidden Information, which the engine
 //! runs alongside.
 
+mod audit;
 mod images;
+
+pub use audit::{SpaceCategory, SpaceUse, audit_space};
 
 use printcraft_cos::{Document, ObjRef, Object, Stream};
 

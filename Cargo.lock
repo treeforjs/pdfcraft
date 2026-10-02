@@ -3504,6 +3504,7 @@ dependencies = [
  "printcraft-annot",
  "printcraft-content",
  "printcraft-cos",
+ "printcraft-model",
  "printcraft-render",
  "thiserror 2.0.21",
 ]

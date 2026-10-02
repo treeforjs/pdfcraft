@@ -22,11 +22,13 @@ pub struct OptimizeDraft {
     pub settings: Settings,
     /// Remove Hidden Information categories to discard.
     pub discard: Vec<Hidden>,
+    /// "Audit space usage…" was pressed.
+    pub audit: bool,
 }
 
 impl Default for OptimizeDraft {
     fn default() -> Self {
-        Self { tab: OptimizeTab::Images, settings: Settings::default(), discard: Vec::new() }
+        Self { tab: OptimizeTab::Images, settings: Settings::default(), discard: Vec::new(), audit: false }
     }
 }
 
@@ -133,15 +135,47 @@ pub(crate) fn body(ui: &mut egui::Ui, d: &mut OptimizeDraft, t: &Tokens) -> (boo
     }
     ui.add_space(12.0);
     let (mut ok, mut cancel) = (false, false);
-    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-        if widgets::pill_button(ui, "OK", true).clicked() {
-            ok = true;
+    ui.horizontal(|ui| {
+        if widgets::pill_button(ui, "Audit space usage…", false).clicked() {
+            d.audit = true;
         }
-        if widgets::pill_button(ui, "Cancel", false).clicked() {
-            cancel = true;
-        }
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            if widgets::pill_button(ui, "OK", true).clicked() {
+                ok = true;
+            }
+            if widgets::pill_button(ui, "Cancel", false).clicked() {
+                cancel = true;
+            }
+        });
     });
     (ok, cancel)
+}
+
+/// Audit Space Usage: bytes and share of the file per kind of content.
+pub(crate) fn audit_body(ui: &mut egui::Ui, rows: &[printcraft_engine::optimize::SpaceUse], t: &Tokens) -> bool {
+    ui.label(egui::RichText::new("Space Audit").font(crate::theme::semibold(18.0)));
+    ui.add_space(8.0);
+    egui::Grid::new("space-audit").num_columns(3).striped(true).spacing([24.0, 4.0]).show(ui, |ui| {
+        for h in ["Description", "Bytes", "Percentage"] {
+            ui.label(egui::RichText::new(h).color(t.text_muted));
+        }
+        ui.end_row();
+        let total: u64 = rows.iter().map(|r| r.bytes).sum();
+        for r in rows.iter().filter(|r| r.bytes > 0) {
+            ui.label(r.category.label());
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| ui.label(r.bytes.to_string()));
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| ui.label(format!("{:.2}%", r.percent)));
+            ui.end_row();
+        }
+        ui.label(egui::RichText::new("Total").strong());
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| ui.label(egui::RichText::new(total.to_string()).strong()));
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| ui.label(egui::RichText::new("100.00%").strong()));
+        ui.end_row();
+    });
+    ui.add_space(12.0);
+    let mut ok = false;
+    ui.with_layout(Layout::right_to_left(Align::Center), |ui| ok = widgets::pill_button(ui, "OK", true).clicked());
+    ok
 }
 
 impl PrintCraftApp {

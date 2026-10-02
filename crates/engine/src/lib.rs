@@ -162,6 +162,11 @@ impl Document {
         self.editor.as_ref().map(|e| a11y::check(&e.cos, options))
     }
 
+    /// PDF Optimizer ▸ Audit space usage.
+    pub fn audit_space(&self) -> Vec<optimize::SpaceUse> {
+        self.editor.as_ref().map(|e| optimize::audit_space(&e.cos, self.bytes.len() as u64)).unwrap_or_default()
+    }
+
     /// Add alternate text: the figures, in document order.
     pub fn figures(&self) -> Vec<a11y::Figure> {
         self.editor.as_ref().map(|e| a11y::figures(&e.cos)).unwrap_or_default()
