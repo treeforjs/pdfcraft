@@ -1276,7 +1276,45 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
     if let Some(n) = form_notice {
         app.notify(n);
     }
+    if let Some((name, action)) = app.views[index].forms.button.take() {
+        run_button(app, index, ui.ctx(), &name, action);
+    }
     quick_bar(app, avail, ui);
+}
+
+/// Run a push button's action (the ones that need no JavaScript engine).
+fn run_button(app: &mut PrintCraftApp, index: usize, ctx: &egui::Context, name: &str, action: printcraft_engine::form_scripts::ButtonAction) {
+    use printcraft_engine::form_scripts::ButtonAction as B;
+    let pages = app.session.get(app.views[index].id).map_or(0, |d| d.info.pages.len());
+    let current = app.views[index].current;
+    match action {
+        B::Reset { fields, exclude } => {
+            let all: Vec<String> = app.session.get(app.views[index].id).map(|d| d.form.iter().map(|f| f.name.clone()).collect()).unwrap_or_default();
+            let listed = |n: &String| fields.iter().any(|f| n == f || n.starts_with(&format!("{f}.")));
+            let names = match (fields.is_empty(), exclude) {
+                (true, _) => None,
+                (false, false) => Some(all.iter().filter(|n| listed(n)).cloned().collect()),
+                (false, true) => Some(all.iter().filter(|n| !listed(n)).cloned().collect()),
+            };
+            app.views[index].forms.focus = None;
+            app.views[index].pending_edit = Some(printcraft_engine::Edit::ResetForm { names });
+        }
+        B::Named(n) => match n.as_str() {
+            "Print" => app.open_print(),
+            "NextPage" => app.views[index].go_to_page((current + 1).min(pages.saturating_sub(1))),
+            "PrevPage" => app.views[index].go_to_page(current.saturating_sub(1)),
+            "FirstPage" => app.views[index].go_to_page(0),
+            "LastPage" => app.views[index].go_to_page(pages.saturating_sub(1)),
+            other => app.notify(format!("{name}: the {other} action isn't supported yet")),
+        },
+        B::Uri(u) => ctx.open_url(egui::OpenUrl::new_tab(u)),
+        B::GoTo(p) => app.views[index].go_to_page(p.min(pages.saturating_sub(1))),
+        B::Alert(m) => app.notify(m),
+        B::Submit(url) => {
+            app.notify(format!("{name} submits the form to {url}; PrintCraft doesn't send form data. Save the document to keep your entries."))
+        }
+        B::Script(_) => app.notify(format!("{name} runs a script that needs the JavaScript engine (M6)")),
+    }
 }
 
 /// Acrobat-style floating find bar at the top-right of the document area.

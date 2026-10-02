@@ -320,6 +320,8 @@ pub static TOOL_GROUPS: &[ToolGroup] = &[
                     item("Field list", "list", "form.fields", Ready),
                     item("Clear form", "eraser", "form.clear", Ready),
                     item("Field properties", "settings-2", "form.field.properties", Ready),
+                    item("Tab order by rows", "rows-3", "form.tab_order.row", Ready),
+                    item("Tab order by columns", "columns-3", "form.tab_order.column", Ready),
                     item("Flatten form fields", "layers", "form.flatten", Ready),
                 ],
             },

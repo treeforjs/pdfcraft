@@ -113,7 +113,13 @@ fn frame(doc: &Document, wd: &Dict, w: f64, h: f64) -> (String, f64) {
     if let Some(bc) = color_array(doc, mk.as_ref(), b"BC")
         && bw > 0.0
     {
-        let dashed = bs.as_ref().is_some_and(|b| b.name(b"S") == Some(b"D"));
+        let style = bs.as_ref().and_then(|b| b.name(b"S").map(<[u8]>::to_vec)).unwrap_or_default();
+        if style == b"U" {
+            // Underline: only the bottom edge.
+            c.push_str(&format!("{}\n{} w\n0 {} m {} {} l S\n", stroke_op(&bc), n(bw), n(bw / 2.0), n(w), n(bw / 2.0)));
+            return (c, bw);
+        }
+        let dashed = style == b"D";
         c.push_str(&format!(
             "{}\n{} w\n{}{} {} {} {} re S\n[] 0 d\n",
             stroke_op(&bc),
@@ -124,6 +130,41 @@ fn frame(doc: &Document, wd: &Dict, w: f64, h: f64) -> (String, f64) {
             n(w - bw),
             n(h - bw)
         ));
+        if style == b"B" || style == b"I" {
+            // Beveled: a light top-left and a darker bottom-right inside the border; inset:
+            // grey top-left and light grey bottom-right.
+            let (tl, br) = if style == b"B" { ("1 g", "0.5 g") } else { ("0.5 g", "0.75 g") };
+            let (x0, y0, x1, y1) = (bw, bw, w - bw, h - bw);
+            let k = bw;
+            c.push_str(&format!(
+                "{tl}\n{} {} m {} {} l {} {} l {} {} l {} {} l {} {} l f\n{br}\n{} {} m {} {} l {} {} l {} {} l {} {} l {} {} l f\n",
+                n(x0),
+                n(y0),
+                n(x0),
+                n(y1),
+                n(x1),
+                n(y1),
+                n(x1 - k),
+                n(y1 - k),
+                n(x0 + k),
+                n(y1 - k),
+                n(x0 + k),
+                n(y0 + k),
+                n(x1),
+                n(y1),
+                n(x1),
+                n(y0),
+                n(x0),
+                n(y0),
+                n(x0 + k),
+                n(y0 + k),
+                n(x1 - k),
+                n(y0 + k),
+                n(x1 - k),
+                n(y1 - k)
+            ));
+            return (c, 2.0 * bw);
+        }
         return (c, bw);
     }
     (c, 0.0)

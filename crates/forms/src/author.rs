@@ -70,6 +70,8 @@ pub struct FieldProps {
     /// Position: move or resize one widget (its index in [`Field::widgets`]) to a new rect in
     /// user space.
     pub rect: Option<(usize, [f64; 4])>,
+    /// Appearance tab (border, fill, line, text colour, font).
+    pub look: Option<Look>,
     /// Format, Validate and Calculate tabs (written as Acrobat's AF scripts).
     pub format: Option<crate::af::Format>,
     pub validate: Option<crate::af::Validate>,
@@ -106,18 +108,148 @@ fn ensure_form(doc: &mut Document) -> Result<ObjRef, FormError> {
     }
     let mut dr = af.get(b"DR").map(|o| doc.resolve(o)).and_then(|o| o.as_dict().cloned()).unwrap_or_default();
     let mut fonts = dr.get(b"Font").map(|o| doc.resolve(o)).and_then(|o| o.as_dict().cloned()).unwrap_or_default();
-    if !fonts.contains(b"Helv") {
+    // Acrobat's resource names for the standard fonts its Appearance tab offers.
+    let mut added = false;
+    for (name, base) in [("Helv", "Helvetica"), ("TiRo", "Times-Roman"), ("Cour", "Courier")] {
+        if fonts.contains(name.as_bytes()) {
+            continue;
+        }
         let mut f = Dict::new();
         f.set(b"Type".to_vec(), Object::name("Font"));
         f.set(b"Subtype".to_vec(), Object::name("Type1"));
-        f.set(b"BaseFont".to_vec(), Object::name("Helvetica"));
+        f.set(b"BaseFont".to_vec(), Object::name(base));
         f.set(b"Encoding".to_vec(), Object::name("WinAnsiEncoding"));
-        fonts.set(b"Helv".to_vec(), Object::Dict(f));
+        fonts.set(name.as_bytes().to_vec(), Object::Dict(f));
+        added = true;
+    }
+    if added {
         dr.set(b"Font".to_vec(), Object::Dict(fonts));
         af.set(b"DR".to_vec(), Object::Dict(dr));
     }
     doc.set(r, Object::Dict(af));
     Ok(r)
+}
+
+/// The Appearance tab: borders, colours and text.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Look {
+    pub border: Option<[f64; 3]>,
+    pub fill: Option<[f64; 3]>,
+    /// Line thickness in points (Acrobat: thin 1, medium 2, thick 3).
+    pub width: f64,
+    pub style: BorderStyle,
+    pub text: [f64; 3],
+    pub font: FieldFont,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BorderStyle {
+    Solid,
+    Dashed,
+    Beveled,
+    Inset,
+    Underline,
+}
+
+impl BorderStyle {
+    pub const ALL: [BorderStyle; 5] = [BorderStyle::Solid, BorderStyle::Dashed, BorderStyle::Beveled, BorderStyle::Inset, BorderStyle::Underline];
+
+    fn code(self) -> &'static str {
+        match self {
+            BorderStyle::Solid => "S",
+            BorderStyle::Dashed => "D",
+            BorderStyle::Beveled => "B",
+            BorderStyle::Inset => "I",
+            BorderStyle::Underline => "U",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            BorderStyle::Solid => "Solid",
+            BorderStyle::Dashed => "Dashed",
+            BorderStyle::Beveled => "Beveled",
+            BorderStyle::Inset => "Inset",
+            BorderStyle::Underline => "Underline",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FieldFont {
+    Helvetica,
+    Times,
+    Courier,
+}
+
+impl FieldFont {
+    pub const ALL: [FieldFont; 3] = [FieldFont::Helvetica, FieldFont::Times, FieldFont::Courier];
+
+    fn resource(self) -> &'static str {
+        match self {
+            FieldFont::Helvetica => "Helv",
+            FieldFont::Times => "TiRo",
+            FieldFont::Courier => "Cour",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            FieldFont::Helvetica => "Helvetica",
+            FieldFont::Times => "Times Roman",
+            FieldFont::Courier => "Courier",
+        }
+    }
+}
+
+fn rgb_of(doc: &Document, o: Option<&Object>) -> Option<[f64; 3]> {
+    let v: Vec<f64> = doc.resolve(o?).as_array()?.iter().filter_map(Object::as_f64).collect();
+    match v.len() {
+        1 => Some([v[0]; 3]),
+        3 => Some([v[0], v[1], v[2]]),
+        4 => Some([(1.0 - v[0]) * (1.0 - v[3]), (1.0 - v[1]) * (1.0 - v[3]), (1.0 - v[2]) * (1.0 - v[3])]),
+        _ => None,
+    }
+}
+
+/// A field's current look (from its first widget and its default appearance).
+pub fn look(doc: &Document, f: &Field) -> Look {
+    let wd = f.widgets.first().and_then(|w| doc.get(w.obj).as_dict().cloned()).unwrap_or_default();
+    let mk = wd.get(b"MK").and_then(|m| doc.resolve(m).as_dict().cloned()).unwrap_or_default();
+    let bs = wd.get(b"BS").and_then(|b| doc.resolve(b).as_dict().cloned()).unwrap_or_default();
+    let da = wd.get(b"DA").and_then(|o| doc.resolve(o).as_string().map(|s| s.to_text())).unwrap_or_else(|| f.da.clone());
+    let parsed = appearance::parse_da(&da);
+    let nums: Vec<f64> = parsed.color.split_whitespace().filter_map(|t| t.parse().ok()).collect();
+    let text = match nums.len() {
+        1 => [nums[0]; 3],
+        3 => [nums[0], nums[1], nums[2]],
+        4 => [(1.0 - nums[0]) * (1.0 - nums[3]), (1.0 - nums[1]) * (1.0 - nums[3]), (1.0 - nums[2]) * (1.0 - nums[3])],
+        _ => [0.0; 3],
+    };
+    Look {
+        border: rgb_of(doc, mk.get(b"BC")),
+        fill: rgb_of(doc, mk.get(b"BG")),
+        width: bs.get(b"W").and_then(|w| doc.resolve(w).as_f64()).unwrap_or(1.0),
+        style: match bs.name(b"S") {
+            Some(b"D") => BorderStyle::Dashed,
+            Some(b"B") => BorderStyle::Beveled,
+            Some(b"I") => BorderStyle::Inset,
+            Some(b"U") => BorderStyle::Underline,
+            _ => BorderStyle::Solid,
+        },
+        text,
+        font: match parsed.font.as_str() {
+            "TiRo" | "Times-Roman" => FieldFont::Times,
+            "Cour" | "Courier" => FieldFont::Courier,
+            _ => FieldFont::Helvetica,
+        },
+    }
+}
+
+/// A `/DA` string with the given font, size and colour.
+fn da_string(font: FieldFont, size: f64, c: [f64; 3]) -> String {
+    let f = crate::appearance::fmt;
+    format!("/{} {} Tf {} {} {} rg", font.resource(), f(size.clamp(0.0, 100.0)), f(c[0]), f(c[1]), f(c[2]))
 }
 
 fn add_to_page(doc: &mut Document, page: ObjRef, widget: ObjRef) -> Result<(), FormError> {
@@ -293,7 +425,7 @@ pub fn add_field(doc: &mut Document, page: usize, rect: [f64; 4], kind: &NewFiel
                 kids.push(Object::Ref(widget));
                 d.set(b"Kids".to_vec(), Object::Array(kids));
             })?;
-            let w = Widget { obj: widget, page: Some(page), rect, on_state: Some(export.clone()), state: Some("Off".into()) };
+            let w = Widget { obj: widget, page: Some(page), rect, on_state: Some(export.clone()), state: Some("Off".into()), tab: usize::MAX };
             let ap = appearance::check_box_states(doc, &w, FieldKind::Radio, export);
             doc.update_dict(widget, |d| d.set(b"AP".to_vec(), Object::Dict(ap)))?;
         }
@@ -423,6 +555,16 @@ pub fn set_props(doc: &mut Document, name: &str, props: &FieldProps) -> Result<S
         new_name = format!("{prefix}{n}");
         doc.update_dict(f.obj, |d| d.set(b"T".to_vec(), PdfString::text(n)))?;
     }
+    // The new default appearance when the size or the look changes.
+    let current = look(doc, &f);
+    let size = props.font_size.unwrap_or_else(|| crate::appearance::parse_da(&f.da).size);
+    let new_da = match &props.look {
+        Some(l) => da_string(l.font, size, l.text),
+        None => da_string(current.font, size, current.text),
+    };
+    if props.look.is_some() {
+        ensure_form(doc)?;
+    }
     let mut ff = f.flags;
     let mut set_flag = |flag: u32, on: Option<bool>| {
         if let Some(on) = on {
@@ -461,10 +603,38 @@ pub fn set_props(doc: &mut Document, name: &str, props: &FieldProps) -> Result<S
         if let Some(opts) = &props.options {
             d.set(b"Opt".to_vec(), Object::Array(opts.iter().map(|o| Object::String(PdfString::text(o))).collect()));
         }
-        if let Some(size) = props.font_size {
-            d.set(b"DA".to_vec(), PdfString::literal(format!("/Helv {} Tf 0 g", crate::appearance::fmt(size.clamp(0.0, 100.0))).into_bytes()));
+        if props.font_size.is_some() || props.look.is_some() {
+            d.set(b"DA".to_vec(), PdfString::literal(new_da.clone().into_bytes()));
         }
     })?;
+    if let Some(l) = &props.look {
+        let arr = |c: [f64; 3]| Object::Array(c.iter().map(|v| Object::Real(v.clamp(0.0, 1.0))).collect());
+        for w in &f.widgets {
+            doc.update_dict(w.obj, |d| {
+                let mut mk = d.get(b"MK").and_then(|m| m.as_dict().cloned()).unwrap_or_default();
+                match l.border {
+                    Some(c) => mk.set(b"BC".to_vec(), arr(c)),
+                    None => {
+                        mk.remove(b"BC");
+                    }
+                }
+                match l.fill {
+                    Some(c) => mk.set(b"BG".to_vec(), arr(c)),
+                    None => {
+                        mk.remove(b"BG");
+                    }
+                }
+                d.set(b"MK".to_vec(), Object::Dict(mk));
+                let mut bs = Dict::new();
+                bs.set(b"W".to_vec(), Object::Real(l.width.clamp(0.0, 12.0)));
+                bs.set(b"S".to_vec(), Object::name(l.style.code()));
+                if l.style == BorderStyle::Dashed {
+                    bs.set(b"D".to_vec(), Object::Array(vec![Object::Int(3)]));
+                }
+                d.set(b"BS".to_vec(), Object::Dict(bs));
+            })?;
+        }
+    }
     if let Some((wi, r)) = props.rect {
         let w = f.widgets.get(wi).ok_or_else(|| FormError::Invalid(format!("{name} has no widget {}", wi + 1)))?;
         let r = [r[0].min(r[2]), r[1].min(r[3]), r[0].max(r[2]), r[1].max(r[3])];
@@ -541,15 +711,12 @@ pub fn set_props(doc: &mut Document, name: &str, props: &FieldProps) -> Result<S
         })?;
     }
     // Widgets may carry their own /DA; keep them in step with the field.
-    if let Some(size) = props.font_size {
+    if props.font_size.is_some() || props.look.is_some() {
         for w in &f.widgets {
             if w.obj != f.obj {
                 doc.update_dict(w.obj, |d| {
                     if d.contains(b"DA") {
-                        d.set(
-                            b"DA".to_vec(),
-                            PdfString::literal(format!("/Helv {} Tf 0 g", crate::appearance::fmt(size.clamp(0.0, 100.0))).into_bytes()),
-                        );
+                        d.set(b"DA".to_vec(), PdfString::literal(new_da.clone().into_bytes()));
                     }
                 })?;
             }

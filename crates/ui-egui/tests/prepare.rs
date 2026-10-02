@@ -144,3 +144,28 @@ fn format_validate_and_calculate_tabs() {
     assert_eq!(f.actions.validate, Validate::Range { min: Some(0.0), max: None });
     assert_eq!(f.actions.calculate, Calculate::Notation("name".into()));
 }
+
+#[test]
+fn appearance_tab_restyles_the_field() {
+    use printcraft_engine::{BorderStyle, FieldFont};
+    let mut h = harness();
+    h.state_mut().execute("form.prepare");
+    h.run_steps(2);
+    h.state_mut().open_field_props("city", 0);
+    h.run_steps(2);
+    h.get_by_label("Appearance").click();
+    h.run_steps(2);
+    h.get_by_label("Line Style:");
+    {
+        let d = h.state_mut().field_props.as_mut().unwrap();
+        let l = d.look.as_mut().expect("a look");
+        l.style = BorderStyle::Dashed;
+        l.font = FieldFont::Courier;
+        l.fill = Some([1.0, 1.0, 0.8]);
+    }
+    h.get_by_label("OK").click();
+    h.run_steps(3);
+    let s = h.state();
+    let l = s.session.get(s.views[0].id).unwrap().field_look("city").unwrap();
+    assert_eq!((l.style, l.font, l.fill), (BorderStyle::Dashed, FieldFont::Courier, Some([1.0, 1.0, 0.8])));
+}

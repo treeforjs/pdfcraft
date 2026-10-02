@@ -16,7 +16,7 @@ use printcraft_cos::{Dict, Document, ObjRef, Object, PdfString};
 pub mod af;
 pub mod appearance;
 mod author;
-pub use author::{FieldProps, NewField, add_field, delete_field, redraw_field, set_props};
+pub use author::{BorderStyle, FieldFont, FieldProps, Look, NewField, add_field, delete_field, look, redraw_field, set_props};
 
 #[cfg(test)]
 mod tests;
@@ -75,6 +75,9 @@ pub struct Widget {
     pub on_state: Option<String>,
     /// The current appearance state (`/AS`).
     pub state: Option<String>,
+    /// Position in the document's tab order (pages in order; within a page by its `/Tabs`:
+    /// rows, columns, or annotation/structure order). `usize::MAX` when not on a page.
+    pub tab: usize,
 }
 
 /// A terminal form field.
@@ -100,6 +103,8 @@ pub struct Field {
     pub widgets: Vec<Widget>,
     /// Format, validate and calculate scripts (Acrobat's AF functions), see [`af`].
     pub actions: af::Actions,
+    /// Push buttons: what a click does.
+    pub button: Option<af::ButtonAction>,
 }
 
 impl Field {
@@ -145,6 +150,49 @@ fn text_of(o: &Object) -> Option<String> {
         Object::Name(n) => Some(String::from_utf8_lossy(n).into_owned()),
         _ => None,
     }
+}
+
+/// A push button's mouse-up action (`/A`, or `/AA /U`, on the field or its widget).
+fn button_action(doc: &Document, d: &Dict, widgets: &[ObjRef]) -> Option<af::ButtonAction> {
+    let pick = |dict: &Dict| -> Option<Object> {
+        dict.get(b"A").cloned().or_else(|| dict.get(b"AA").map(|a| doc.resolve(a)).and_then(|a| a.as_dict().and_then(|aa| aa.get(b"U").cloned())))
+    };
+    let action = pick(d).or_else(|| widgets.iter().find_map(|w| doc.get(*w).as_dict().and_then(pick)))?;
+    let a = doc.resolve(&action);
+    let a = a.as_dict()?;
+    let s = |k: &[u8]| a.get(k).and_then(|v| text_of(&doc.resolve(v)));
+    Some(match a.name(b"S")? {
+        b"ResetForm" => {
+            let fields = a
+                .get(b"Fields")
+                .map(|f| doc.resolve(f))
+                .and_then(|f| f.as_array().cloned())
+                .unwrap_or_default()
+                .iter()
+                .filter_map(|o| match o {
+                    Object::Ref(r) => doc.get(*r).as_dict().and_then(|fd| fd.get(b"T").and_then(|t| text_of(&doc.resolve(t)))),
+                    other => text_of(&doc.resolve(other)),
+                })
+                .collect();
+            let exclude = a.get(b"Flags").and_then(|f| doc.resolve(f).as_int()).unwrap_or(0) & 1 != 0;
+            af::ButtonAction::Reset { fields, exclude }
+        }
+        b"Named" => af::ButtonAction::Named(String::from_utf8_lossy(a.name(b"N")?).into_owned()),
+        b"URI" => af::ButtonAction::Uri(s(b"URI")?),
+        b"SubmitForm" => af::ButtonAction::Submit(
+            a.get(b"F")
+                .map(|f| doc.resolve(f))
+                .and_then(|f| f.as_dict().and_then(|fd| fd.get(b"F").and_then(|x| text_of(&doc.resolve(x)))).or_else(|| text_of(&f)))
+                .unwrap_or_default(),
+        ),
+        b"GoTo" => {
+            let dest = doc.resolve(a.get(b"D")?);
+            let target = dest.as_array()?.first()?.as_ref()?;
+            af::ButtonAction::GoTo(page_refs(doc).iter().position(|p| *p == target)?)
+        }
+        b"JavaScript" => af::button_script(&script(doc, &action)?),
+        _ => return None,
+    })
 }
 
 /// The JavaScript of an action dictionary (`/JS` string or stream).
@@ -268,11 +316,14 @@ struct Inherited {
 pub fn fields(doc: &Document) -> Vec<Field> {
     let Some(af) = acroform(doc) else { return Vec::new() };
     let mut page_of = std::collections::HashMap::new();
-    for (i, p) in page_refs(doc).iter().enumerate() {
+    let mut annot_index = std::collections::HashMap::new();
+    let pages = page_refs(doc);
+    for (i, p) in pages.iter().enumerate() {
         if let Some(a) = doc.get(*p).as_dict().and_then(|d| d.get(b"Annots").cloned()) {
-            for e in doc.resolve(&a).as_array().into_iter().flatten() {
+            for (k, e) in doc.resolve(&a).as_array().into_iter().flatten().enumerate() {
                 if let Some(r) = e.as_ref() {
                     page_of.entry(r).or_insert(i);
+                    annot_index.entry(r).or_insert(k);
                 }
             }
         }
@@ -289,7 +340,111 @@ pub fn fields(doc: &Document) -> Vec<Field> {
             walk(doc, r, &base, &page_of, &mut seen, &mut out, 0);
         }
     }
+    rank_tabs(doc, &pages, &annot_index, &mut out);
     out
+}
+
+/// A page's tab order (`/Tabs`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TabOrder {
+    /// Rows, top to bottom, left to right within a row (`/R`).
+    Row,
+    /// Columns, left to right, top to bottom within a column (`/C`).
+    Column,
+    /// The document structure (`/S`; annotation order when the file has none).
+    Structure,
+    /// Unspecified: annotation order.
+    Annotations,
+}
+
+impl TabOrder {
+    fn of(name: Option<&[u8]>) -> TabOrder {
+        match name {
+            Some(b"R") => TabOrder::Row,
+            Some(b"C") => TabOrder::Column,
+            Some(b"S") => TabOrder::Structure,
+            _ => TabOrder::Annotations,
+        }
+    }
+}
+
+/// A widget on a page for tab ordering: (page, field, widget, rect, annotation index).
+type TabItem = (usize, usize, usize, [f64; 4], usize);
+
+/// Every widget's place in the tab order.
+fn rank_tabs(doc: &Document, pages: &[ObjRef], annot_index: &std::collections::HashMap<ObjRef, usize>, out: &mut [Field]) {
+    let mut items: Vec<TabItem> = Vec::new();
+    for (fi, f) in out.iter().enumerate() {
+        for (wi, w) in f.widgets.iter().enumerate() {
+            if let Some(p) = w.page {
+                items.push((p, fi, wi, w.rect, annot_index.get(&w.obj).copied().unwrap_or(usize::MAX)));
+            }
+        }
+    }
+    let mut ordered: Vec<(usize, usize)> = Vec::with_capacity(items.len());
+    for (pi, p) in pages.iter().enumerate() {
+        let mut on: Vec<_> = items.iter().filter(|i| i.0 == pi).collect();
+        if on.is_empty() {
+            continue;
+        }
+        let tabs = TabOrder::of(doc.get(*p).as_dict().and_then(|d| d.name(b"Tabs")));
+        match tabs {
+            TabOrder::Row | TabOrder::Column => {
+                let row = tabs == TabOrder::Row;
+                // Primary axis: rows by top edge (down the page), columns by left edge.
+                on.sort_by(|a, b| if row { b.3[3].total_cmp(&a.3[3]) } else { a.3[0].total_cmp(&b.3[0]) });
+                let mut groups: Vec<Vec<&TabItem>> = Vec::new();
+                for it in on {
+                    let fits = groups.last().is_some_and(|g| {
+                        let first = g[0];
+                        if row {
+                            (first.3[3] - it.3[3]).abs() < ((first.3[3] - first.3[1]) / 2.0).max(2.0)
+                        } else {
+                            (it.3[0] - first.3[0]).abs() < ((first.3[2] - first.3[0]) / 2.0).max(2.0)
+                        }
+                    });
+                    if fits {
+                        groups.last_mut().expect("checked").push(it);
+                    } else {
+                        groups.push(vec![it]);
+                    }
+                }
+                for mut g in groups {
+                    g.sort_by(|a, b| if row { a.3[0].total_cmp(&b.3[0]) } else { b.3[3].total_cmp(&a.3[3]) });
+                    ordered.extend(g.iter().map(|i| (i.1, i.2)));
+                }
+            }
+            TabOrder::Structure | TabOrder::Annotations => {
+                on.sort_by_key(|i| i.4);
+                ordered.extend(on.iter().map(|i| (i.1, i.2)));
+            }
+        }
+    }
+    for f in out.iter_mut() {
+        for w in &mut f.widgets {
+            w.tab = usize::MAX;
+        }
+    }
+    for (rank, (fi, wi)) in ordered.into_iter().enumerate() {
+        out[fi].widgets[wi].tab = rank;
+    }
+}
+
+/// Set the tab order of pages (0-based).
+pub fn set_tab_order(doc: &mut Document, pages: &[usize], order: TabOrder) -> Result<(), FormError> {
+    let refs = page_refs(doc);
+    for &p in pages {
+        let r = *refs.get(p).ok_or_else(|| FormError::Invalid(format!("page {} does not exist", p + 1)))?;
+        doc.update_dict(r, |d| match order {
+            TabOrder::Row => d.set(b"Tabs".to_vec(), Object::name("R")),
+            TabOrder::Column => d.set(b"Tabs".to_vec(), Object::name("C")),
+            TabOrder::Structure => d.set(b"Tabs".to_vec(), Object::name("S")),
+            TabOrder::Annotations => {
+                d.remove(b"Tabs");
+            }
+        })?;
+    }
+    Ok(())
 }
 
 fn walk(
@@ -342,6 +497,8 @@ fn walk(
     }
     let widget_refs: Vec<ObjRef> = if d.contains(b"Rect") { vec![r] } else { kids };
     let actions = actions_of(doc, d, &widget_refs);
+    let button =
+        (inh.ft.as_deref() == Some(b"Btn") && inh.ff.unwrap_or(0) & flags::PUSH_BUTTON != 0).then(|| button_action(doc, d, &widget_refs)).flatten();
     let ff = inh.ff.unwrap_or(0);
     let kind = match inh.ft.as_deref() {
         Some(b"Tx") => FieldKind::Text,
@@ -371,6 +528,7 @@ fn walk(
                 rect: [rect[0].min(rect[2]), rect[1].min(rect[3]), rect[0].max(rect[2]), rect[1].max(rect[3])],
                 on_state: on_state.filter(|_| matches!(kind, FieldKind::CheckBox | FieldKind::Radio)),
                 state: wd.name(b"AS").map(|s| String::from_utf8_lossy(s).into_owned()),
+                tab: usize::MAX,
             })
         })
         .collect();
@@ -399,6 +557,7 @@ fn walk(
         tooltip: d.get(b"TU").and_then(|o| text_of(&doc.resolve(o))),
         widgets,
         actions,
+        button,
     });
 }
 

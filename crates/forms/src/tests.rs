@@ -420,3 +420,57 @@ fn formats_validation_and_calculations_run_like_acrobat() {
     set_props(&mut doc, "Price", &FieldProps { format: Some(Format::None), ..FieldProps::default() }).unwrap();
     assert_eq!(field(&fields(&doc), "Price").actions.format, Format::None);
 }
+
+#[test]
+fn appearance_properties_restyle_every_widget() {
+    let mut doc = one_page();
+    add_field(&mut doc, 0, [50.0, 700.0, 250.0, 720.0], &NewField::Text { multiline: false }, Some("name")).unwrap();
+    set_value(&mut doc, "name", &FieldValue::Text("Ada".into())).unwrap();
+    let f = field(&fields(&doc), "name").clone();
+    let before = look(&doc, &f);
+    assert_eq!((before.font, before.style, before.text), (FieldFont::Helvetica, BorderStyle::Solid, [0.0; 3]));
+    let new = Look {
+        border: Some([1.0, 0.0, 0.0]),
+        fill: Some([1.0, 1.0, 0.8]),
+        width: 2.0,
+        style: BorderStyle::Dashed,
+        text: [0.0, 0.0, 1.0],
+        font: FieldFont::Times,
+    };
+    set_props(&mut doc, "name", &FieldProps { look: Some(new), font_size: Some(14.0), ..FieldProps::default() }).unwrap();
+    let doc = reopen(&doc);
+    let f = field(&fields(&doc), "name").clone();
+    assert_eq!(look(&doc, &f), new);
+    let a = ap(&doc, &f.widgets[0]);
+    assert!(a.contains("/TiRo 14 Tf") && a.contains("0 0 1 rg") && a.contains("[3] 0 d") && a.contains("(Ada) Tj"), "{a}");
+    let mut doc = doc;
+    set_props(&mut doc, "name", &FieldProps { look: Some(Look { style: BorderStyle::Underline, fill: None, ..new }), ..FieldProps::default() })
+        .unwrap();
+    let a = ap(&doc, &field(&fields(&doc), "name").widgets[0]);
+    assert!(!a.contains(" re S") && a.contains(" l S"), "underline only: {a}");
+}
+
+#[test]
+fn tab_order_follows_the_page_setting() {
+    let mut doc = one_page();
+    let text = NewField::Text { multiline: false };
+    // Added in a scrambled order: annotation order is C, A, D, B.
+    // Layout:  A (50,700)  B (300,700)
+    //          C (50,600)  D (300,600)
+    for (name, x, y) in [("C", 50.0, 600.0), ("A", 50.0, 700.0), ("D", 300.0, 600.0), ("B", 300.0, 700.0)] {
+        add_field(&mut doc, 0, [x, y, x + 200.0, y + 20.0], &text, Some(name)).unwrap();
+    }
+    let order = |doc: &Document| -> String {
+        let mut all: Vec<(usize, String)> = fields(doc).into_iter().map(|f| (f.widgets[0].tab, f.name)).collect();
+        all.sort();
+        all.into_iter().map(|x| x.1).collect()
+    };
+    assert_eq!(order(&doc), "CADB", "unspecified: annotation order");
+    set_tab_order(&mut doc, &[0], TabOrder::Row).unwrap();
+    assert_eq!(order(&doc), "ABCD");
+    set_tab_order(&mut doc, &[0], TabOrder::Column).unwrap();
+    assert_eq!(order(&doc), "ACBD");
+    let doc = reopen(&doc);
+    assert_eq!(order(&doc), "ACBD", "saved as /Tabs");
+    assert!(set_tab_order(&mut doc.clone(), &[3], TabOrder::Row).is_err());
+}

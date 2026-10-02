@@ -745,3 +745,29 @@ fn form_formats_and_calculations_through_tools() {
         Err(ToolError::InvalidArgs(_))
     ));
 }
+
+#[test]
+fn tab_order_and_field_appearance_through_tools() {
+    let dir = workdir("taborder");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    // Added out of reading order: B (top right), A (top left), C (below).
+    for (name, x, y) in [("B", 110, 20), ("A", 10, 20), ("C", 10, 60)] {
+        ok(&mut a, "form_add_field", json!({ "doc": doc, "page": 1, "type": "text", "rect": [x, y, x + 80, y + 20], "name": name }));
+    }
+    let r = ok(&mut a, "form_tab_order", json!({ "doc": doc, "order": "row" }));
+    assert_eq!(r["tab_order"], json!(["A", "B", "C"]));
+    let r = ok(&mut a, "form_tab_order", json!({ "doc": doc, "order": "column" }));
+    assert_eq!(r["tab_order"], json!(["A", "C", "B"]));
+    ok(
+        &mut a,
+        "form_set_props",
+        json!({ "doc": doc, "field": "A", "appearance": { "border": "red", "fill": "none", "style": "underline", "font": "courier" } }),
+    );
+    ok(&mut a, "form_fill", json!({ "doc": doc, "values": { "A": "typed" } }));
+    assert!(page_text(&mut a, doc)[0].contains("typed"));
+    assert!(matches!(
+        a.call("form_set_props", &json!({ "doc": doc, "field": "A", "appearance": { "style": "wavy" } })),
+        Err(ToolError::InvalidArgs(_))
+    ));
+}

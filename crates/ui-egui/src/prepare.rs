@@ -7,7 +7,7 @@
 
 use egui::{Color32, CornerRadius, Pos2, Rect, Stroke, vec2};
 use printcraft_engine::form_scripts::{CalcOp, Calculate, DATE_PRESETS, Format, TIME_PRESETS, Validate, format_value};
-use printcraft_engine::{Edit, FieldProps, FormField, FormFieldKind, NewField};
+use printcraft_engine::{BorderStyle, Edit, FieldFont, FieldLook, FieldProps, FormField, FormFieldKind, NewField};
 use printcraft_render::DocInfo;
 
 use crate::canvas::{DocView, PageXform};
@@ -399,6 +399,10 @@ impl crate::PrintCraftApp {
         let Some((_, id)) = self.active_ids() else { return };
         let Some(f) = self.session.get(id).and_then(|d| d.form.iter().find(|f| f.name == name).cloned()) else { return };
         let mut d = FieldDraft::new(&f, widget);
+        d.look = self.session.get(id).and_then(|doc| doc.field_look(name));
+        if let Some(o) = d.original.as_mut() {
+            o.look = d.look;
+        }
         let others: Vec<String> =
             self.session.get(id).map(|doc| doc.form.iter().filter(|x| x.name != name).map(|x| x.name.clone()).collect()).unwrap_or_default();
         d.others = others.clone();
@@ -441,6 +445,7 @@ pub struct FieldDraft {
     pub font_size: f64,
     /// Left, bottom, width, height in points.
     pub position: [f64; 4],
+    pub look: Option<FieldLook>,
     pub format: Format,
     pub validate: Validate,
     pub calculate: Calculate,
@@ -473,6 +478,7 @@ impl FieldDraft {
             new_option: String::new(),
             font_size: da_size(&f.da),
             position: [r[0], r[1], r[2] - r[0], r[3] - r[1]],
+            look: None,
             format: f.actions.format.clone(),
             validate: f.actions.validate.clone(),
             calculate: f.actions.calculate.clone(),
@@ -523,6 +529,7 @@ impl FieldDraft {
                 let [x, y, w, h] = self.position;
                 (self.widget, [x, y, x + w.max(4.0), y + h.max(4.0)])
             }),
+            look: (self.look != o.look).then_some(self.look).flatten(),
             format: (self.format != o.format).then(|| self.format.clone()),
             validate: (self.validate != o.validate).then(|| self.validate.clone()),
             calculate: (self.calculate != o.calculate).then(|| self.calculate.clone()),
@@ -574,10 +581,62 @@ pub(crate) fn body(ui: &mut egui::Ui, d: &mut FieldDraft, t: &crate::theme::Toke
                     ui.add_enabled(!auto, egui::DragValue::new(&mut d.font_size).range(2.0..=100.0).speed(0.25).suffix(" pt"));
                 });
                 ui.end_row();
-                ui.label("Font:");
-                ui.label("Helvetica");
-                ui.end_row();
+                if let Some(l) = d.look.as_mut() {
+                    ui.label("Font:");
+                    egui::ComboBox::from_id_salt("field-font").selected_text(l.font.label()).show_ui(ui, |ui| {
+                        for f in FieldFont::ALL {
+                            ui.selectable_value(&mut l.font, f, f.label());
+                        }
+                    });
+                    ui.end_row();
+                    ui.label("Text Color:");
+                    if let Some(c) = crate::comments::swatch_grid(ui, Some(l.text)) {
+                        l.text = c;
+                    }
+                    ui.end_row();
+                }
             });
+            if let Some(l) = d.look.as_mut() {
+                widgets::section_title(ui, "Borders and Colors");
+                egui::Grid::new("field-borders").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
+                    for (label, slot) in [("Border Color:", &mut l.border), ("Fill Color:", &mut l.fill)] {
+                        ui.label(label);
+                        ui.horizontal(|ui| {
+                            let mut none = slot.is_none();
+                            if ui.checkbox(&mut none, "No color").changed() {
+                                *slot = if none { None } else { Some([0.0; 3]) };
+                            }
+                            if let Some(c) = crate::comments::swatch_grid(ui, *slot) {
+                                *slot = Some(c);
+                            }
+                        });
+                        ui.end_row();
+                    }
+                    ui.label("Line Thickness:");
+                    let thick = |w: f64| {
+                        if w <= 1.0 {
+                            "Thin"
+                        } else if w <= 2.0 {
+                            "Medium"
+                        } else {
+                            "Thick"
+                        }
+                    };
+                    egui::ComboBox::from_id_salt("field-width").selected_text(thick(l.width)).show_ui(ui, |ui| {
+                        for (w, label) in [(1.0, "Thin"), (2.0, "Medium"), (3.0, "Thick")] {
+                            ui.selectable_value(&mut l.width, w, label);
+                        }
+                    });
+                    ui.end_row();
+                    ui.label("Line Style:");
+                    egui::ComboBox::from_id_salt("field-style").selected_text(l.style.label()).show_ui(ui, |ui| {
+                        for s in BorderStyle::ALL {
+                            ui.selectable_value(&mut l.style, s, s.label());
+                        }
+                    });
+                    ui.end_row();
+                });
+            }
         }
         FieldTab::Position => {
             egui::Grid::new("field-position").num_columns(4).spacing([12.0, 10.0]).show(ui, |ui| {

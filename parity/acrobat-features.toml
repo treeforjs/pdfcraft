@@ -4335,11 +4335,11 @@ title = "Push buttons run their actions"
 area = "F"
 tier = "P0"
 milestone = "M6"
-status = "planned"
-commands = []
+status = "partial"
+commands = ["form.fields"]
 tools = []
-evidence = []
-notes = ""
+evidence = ["crates/ui-egui/tests/buttons.rs::buttons_reset_navigate_and_print", "crates/forms/src/af.rs::common_button_scripts_are_recognised"]
+notes = "Reset form, Named (print, page navigation), URI, Go to, app.alert, this.print/resetForm/pageNum scripts; submit explained, not sent; other scripts need the JS engine"
 
 [[feature]]
 id = "form.field-navigation"
@@ -4767,11 +4767,11 @@ title = "Field properties: appearance (border, fill, font)"
 area = "F"
 tier = "P0"
 milestone = "M6"
-status = "partial"
+status = "shipped"
 commands = ["form.field.properties"]
 tools = ["form_set_props"]
-evidence = ["crates/forms/src/tests.rs::properties_rename_and_delete"]
-notes = "font size (incl. Auto); border/fill colours and fonts pending"
+evidence = ["crates/forms/src/tests.rs::appearance_properties_restyle_every_widget", "crates/ui-egui/tests/prepare.rs::appearance_tab_restyles_the_field", "crates/automation/tests/automation.rs::tab_order_and_field_appearance_through_tools"]
+notes = "border/fill colour, thin/medium/thick, solid/dashed/beveled/inset/underline, text colour, Helvetica/Times/Courier, font size"
 
 [[feature]]
 id = "form.props-position"
@@ -4923,11 +4923,11 @@ title = "Tab order (row, column, structure, manual)"
 area = "F"
 tier = "P0"
 milestone = "M6"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["form.tab_order.row", "form.tab_order.column", "form.tab_order.structure"]
+tools = ["form_tab_order"]
+evidence = ["crates/forms/src/tests.rs::tab_order_follows_the_page_setting", "crates/automation/tests/automation.rs::tab_order_and_field_appearance_through_tools"]
+notes = "rows, columns, structure/annotation order (page /Tabs), honoured by Tab; manual reordering pending"
 
 [[feature]]
 id = "form.show-tab-numbers"

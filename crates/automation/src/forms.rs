@@ -41,6 +41,52 @@ fn format_arg(v: &Value) -> Result<Format> {
     })
 }
 
+/// `{"border": "#FF0000" | "none", "fill": …, "width": 1-3, "style": "solid"|…, "text_color": …,
+/// "font": "helvetica"|"times"|"courier"}`, changing only what is given.
+fn look_arg(v: &Value, mut l: printcraft_engine::FieldLook) -> Result<printcraft_engine::FieldLook> {
+    use printcraft_engine::{BorderStyle, FieldFont};
+    let o = v.as_object().ok_or_else(|| bad("appearance must be an object"))?;
+    let colour = |k: &str| -> Result<Option<Option<[f64; 3]>>> {
+        match o.get(k) {
+            None => Ok(None),
+            Some(Value::String(s)) if s == "none" => Ok(Some(None)),
+            Some(Value::String(s)) => Ok(Some(Some(crate::comments::parse_color(s)?))),
+            Some(_) => Err(bad(format!("{k} must be a colour or \"none\""))),
+        }
+    };
+    if let Some(c) = colour("border")? {
+        l.border = c;
+    }
+    if let Some(c) = colour("fill")? {
+        l.fill = c;
+    }
+    if let Some(c) = colour("text_color")? {
+        l.text = c.unwrap_or([0.0; 3]);
+    }
+    if let Some(w) = o.get("width").and_then(Value::as_f64) {
+        l.width = w.clamp(0.0, 12.0);
+    }
+    if let Some(s) = o.get("style").and_then(Value::as_str) {
+        l.style = match s {
+            "solid" => BorderStyle::Solid,
+            "dashed" => BorderStyle::Dashed,
+            "beveled" => BorderStyle::Beveled,
+            "inset" => BorderStyle::Inset,
+            "underline" => BorderStyle::Underline,
+            x => return Err(bad(format!("unknown style {x:?}"))),
+        };
+    }
+    if let Some(f) = o.get("font").and_then(Value::as_str) {
+        l.font = match f {
+            "helvetica" => FieldFont::Helvetica,
+            "times" => FieldFont::Times,
+            "courier" => FieldFont::Courier,
+            x => return Err(bad(format!("unknown font {x:?} (helvetica, times, courier)"))),
+        };
+    }
+    Ok(l)
+}
+
 /// `{"min": 0, "max": 100}` or `"none"`.
 fn validate_arg(v: &Value) -> Result<Validate> {
     if v.as_str() == Some("none") {
@@ -294,6 +340,10 @@ impl Automation {
             },
             options: a.get("options").map(|_| a.strs("options")).transpose()?.map(|v| v.into_iter().map(str::to_owned).collect()),
             font_size: a.opt_num("font_size")?,
+            look: match a.get("appearance") {
+                None => None,
+                Some(v) => Some(look_arg(v, self.doc(a)?.field_look(&name).ok_or_else(|| failed("this field has no widget"))?)?),
+            },
             format: a.get("format").map(format_arg).transpose()?,
             validate: a.get("validate").map(validate_arg).transpose()?,
             calculate: a.get("calculate").map(calculate_arg).transpose()?,
@@ -304,6 +354,29 @@ impl Automation {
         let new_name = props.name.clone().unwrap_or(name.clone());
         let mut out = self.apply(a, Edit::SetFieldProps { name, props })?;
         out["field"] = json!(new_name);
+        Ok(out)
+    }
+
+    pub(crate) fn form_tab_order(&mut self, a: &Args) -> Result<Value> {
+        let n = self.doc(a)?.info.pages.len();
+        let pages = match a.opt_ints("pages")? {
+            Some(_) => self.pages(a, "pages")?,
+            None => (0..n).collect(),
+        };
+        let order = match a.str("order")? {
+            "row" | "rows" => printcraft_engine::TabOrder::Row,
+            "column" | "columns" => printcraft_engine::TabOrder::Column,
+            "structure" => printcraft_engine::TabOrder::Structure,
+            "annotations" | "unspecified" => printcraft_engine::TabOrder::Annotations,
+            o => return Err(bad(format!("unknown order {o:?} (row, column, structure, annotations)"))),
+        };
+        let mut out = self.apply(a, Edit::SetTabOrder { pages, order })?;
+        let doc = self.doc(a)?;
+        let mut seq: Vec<(usize, &str)> =
+            doc.form.iter().flat_map(|f| f.widgets.iter().filter(|w| w.page.is_some()).map(move |w| (w.tab, f.name.as_str()))).collect();
+        seq.sort();
+        seq.dedup_by(|x, y| x.1 == y.1);
+        out["tab_order"] = json!(seq.iter().map(|x| x.1).collect::<Vec<_>>());
         Ok(out)
     }
 

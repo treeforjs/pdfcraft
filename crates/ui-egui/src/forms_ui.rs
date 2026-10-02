@@ -33,6 +33,8 @@ pub struct FormView {
     pub focus: Option<Focus>,
     /// A message for the app to show (e.g. "buttons run JavaScript").
     pub notice: Option<String>,
+    /// A push button was clicked: (its field name, what it does).
+    pub button: Option<(String, printcraft_engine::form_scripts::ButtonAction)>,
 }
 
 fn widget_rect(xf: &PageXform, info: &DocInfo, page: usize, r: [f64; 4]) -> Rect {
@@ -87,7 +89,10 @@ pub(crate) fn page_input(
     }
     match f.kind {
         _ if f.read_only() => view.forms.notice = Some(format!("{} is read-only", f.name)),
-        FormFieldKind::PushButton => view.forms.notice = Some("Buttons run JavaScript actions, which arrive with the JavaScript engine (M6)".into()),
+        FormFieldKind::PushButton => match &f.button {
+            Some(a) => view.forms.button = Some((f.name.clone(), a.clone())),
+            None => view.forms.notice = Some(format!("{} has no action", f.name)),
+        },
         FormFieldKind::Signature => view.forms.notice = Some("Signing arrives with digital signatures (M9)".into()),
         FormFieldKind::CheckBox => {
             view.forms.focus = None;
@@ -258,20 +263,21 @@ pub(crate) fn overlay(ctx: &egui::Context, view: &mut DocView, info: &DocInfo, f
     if let Some(forward) = next {
         commit(view, form);
         let pending = view.pending_edit.take();
-        // The next field that takes typing or a choice, in form order (wrapping).
-        let order: Vec<(usize, &FormField)> = form
+        // The next widget that takes typing or a choice, in the document's tab order (each
+        // page's /Tabs: rows, columns or structure), wrapping.
+        let mut order: Vec<(usize, &FormField, usize)> = form
             .iter()
-            .enumerate()
-            .filter(|(_, x)| {
-                fillable(x)
-                    && matches!(x.kind, FormFieldKind::Text | FormFieldKind::Combo | FormFieldKind::List)
-                    && x.widgets.iter().any(|w| w.page.is_some())
-            })
+            .filter(|x| fillable(x) && matches!(x.kind, FormFieldKind::Text | FormFieldKind::Combo | FormFieldKind::List))
+            .flat_map(|x| x.widgets.iter().enumerate().filter(|(_, w)| w.page.is_some()).map(move |(wi, w)| (w.tab, x, wi)))
             .collect();
-        if let Some(pos) = order.iter().position(|(_, x)| x.name == f.name) {
+        order.sort_by_key(|o| o.0);
+        if let Some(pos) = order
+            .iter()
+            .position(|(_, x, wi)| x.name == f.name && *wi == focus.widget)
+            .or_else(|| order.iter().position(|(_, x, _)| x.name == f.name))
+        {
             let k = if forward { (pos + 1) % order.len() } else { (pos + order.len() - 1) % order.len() };
-            let target = order[k].1;
-            let wi = target.widgets.iter().position(|w| w.page.is_some()).unwrap_or(0);
+            let (_, target, wi) = order[k];
             view.forms.focus = Some(Focus { select_all: true, ..open_focus(target, wi) });
             if let Some(p) = target.widgets[wi].page
                 && view.page_screen_rect(p).is_none()

@@ -981,3 +981,73 @@ mod tests {
         assert_eq!(calculate(&Calculate::Notation("a +".into()), &vals), None);
     }
 }
+
+// ── push buttons ────────────────────────────────────────────────────────────────────────────
+
+/// What clicking a push button does (its mouse-up action), as far as PrintCraft can run it
+/// without a JavaScript engine.
+#[derive(Clone, Debug, PartialEq)]
+pub enum ButtonAction {
+    /// Reset fields: the listed ones, or all but them (`exclude`), or all when empty.
+    Reset {
+        fields: Vec<String>,
+        exclude: bool,
+    },
+    /// A named action: Print, NextPage, PrevPage, FirstPage, LastPage, …
+    Named(String),
+    Uri(String),
+    /// Go to a page (0-based) in this document.
+    GoTo(usize),
+    /// `app.alert("…")`.
+    Alert(String),
+    /// Submit the form to a URL (not sent: PrintCraft never posts form data on its own).
+    Submit(String),
+    /// A script PrintCraft can't run yet.
+    Script(String),
+}
+
+/// Recognise the common one-line button scripts.
+pub fn button_script(js: &str) -> ButtonAction {
+    let t = js.trim();
+    // Print takes an options object whose contents don't change what PrintCraft does.
+    if t.starts_with("this.print(") || t.starts_with("print(") || t.contains(";this.print(") || t.contains("; this.print(") {
+        return ButtonAction::Named("Print".into());
+    }
+    if let Some(args) = call(t, "this.resetForm").or_else(|| call(t, "resetForm")) {
+        let fields = match args.first() {
+            Some(Arg::List(l)) => l.iter().filter_map(Arg::string).collect(),
+            Some(Arg::Str(s)) => vec![s.clone()],
+            _ => Vec::new(),
+        };
+        return ButtonAction::Reset { fields, exclude: false };
+    }
+    if let Some(m) = call(t, "app.alert").and_then(|args| args.first().and_then(Arg::string)) {
+        return ButtonAction::Alert(m);
+    }
+    if let Some(u) = call(t, "app.launchURL").and_then(|args| args.first().and_then(Arg::string)) {
+        return ButtonAction::Uri(u);
+    }
+    let compact: String = t.chars().filter(|c| !c.is_whitespace()).collect();
+    match compact.trim_end_matches(';') {
+        "this.pageNum++" | "pageNum++" => ButtonAction::Named("NextPage".into()),
+        "this.pageNum--" | "pageNum--" => ButtonAction::Named("PrevPage".into()),
+        "this.pageNum=0" => ButtonAction::Named("FirstPage".into()),
+        _ => ButtonAction::Script(t.to_string()),
+    }
+}
+
+#[cfg(test)]
+mod button_tests {
+    use super::*;
+
+    #[test]
+    fn common_button_scripts_are_recognised() {
+        assert_eq!(button_script("this.print({bUI: true});"), ButtonAction::Named("Print".into()));
+        assert_eq!(button_script("this.resetForm([\"a\", \"b\"]);"), ButtonAction::Reset { fields: vec!["a".into(), "b".into()], exclude: false });
+        assert_eq!(button_script("this.resetForm();"), ButtonAction::Reset { fields: vec![], exclude: false });
+        assert_eq!(button_script("app.alert('Thanks!');"), ButtonAction::Alert("Thanks!".into()));
+        assert_eq!(button_script("app.launchURL(\"https://example.org\", true);"), ButtonAction::Uri("https://example.org".into()));
+        assert_eq!(button_script("this.pageNum++;"), ButtonAction::Named("NextPage".into()));
+        assert!(matches!(button_script("var x = 1; doStuff(x);"), ButtonAction::Script(_)));
+    }
+}

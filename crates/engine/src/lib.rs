@@ -25,7 +25,8 @@ pub use printcraft_edit::{
     Added, AddedText, Align as TextAlign, Background, Content as AddedContent, Family as FontFamily, HeaderFooter, MarkKind, Watermark,
 };
 pub use printcraft_forms::{
-    Field as FormField, FieldKind as FormFieldKind, FieldProps, FieldValue, NewField, Widget as FormWidget, af as form_scripts, flags as field_flags,
+    BorderStyle, Field as FormField, FieldFont, FieldKind as FormFieldKind, FieldProps, FieldValue, Look as FieldLook, NewField, TabOrder,
+    Widget as FormWidget, af as form_scripts, flags as field_flags,
 };
 
 /// Comment geometry helpers (text-box line breaking) for frontends.
@@ -206,6 +207,13 @@ impl Document {
     /// Comment properties of the comment at `(page, index)` (Comment Properties dialog).
     pub fn comment_props(&self, page: usize, index: usize) -> Option<printcraft_annot::Props> {
         self.editor.as_ref().and_then(|e| printcraft_annot::props(&e.cos, page, index))
+    }
+
+    /// A form field's Appearance-tab look (borders, colours, font).
+    pub fn field_look(&self, name: &str) -> Option<printcraft_forms::Look> {
+        let e = self.editor.as_ref()?;
+        let f = self.form.iter().find(|f| f.name == name)?;
+        Some(printcraft_forms::look(&e.cos, f))
     }
 
     /// Remove Hidden Information: what each category would remove.
@@ -539,6 +547,11 @@ pub enum Edit {
     DeleteField {
         name: String,
     },
+    /// Page properties ▸ Tab order, for pages (0-based).
+    SetTabOrder {
+        pages: Vec<usize>,
+        order: TabOrder,
+    },
     /// Add a header and footer (with `replace`, existing ones on those pages go first).
     AddHeaderFooter {
         pages: Vec<usize>,
@@ -643,6 +656,7 @@ impl Edit {
             Edit::AddField { .. } => "Add field".into(),
             Edit::SetFieldProps { .. } => "Change field properties".into(),
             Edit::DeleteField { .. } => "Delete field".into(),
+            Edit::SetTabOrder { .. } => "Set tab order".into(),
             Edit::AddHeaderFooter { replace: false, .. } => "Add header & footer".into(),
             Edit::AddHeaderFooter { .. } => "Update header & footer".into(),
             Edit::AddWatermark { replace: false, .. } => "Add watermark".into(),
@@ -770,6 +784,7 @@ fn check_permission(edit: &Edit, p: &printcraft_cos::Permissions) -> Result<(), 
         | Edit::Sanitize
         | Edit::SetFieldProps { .. }
         | Edit::DeleteField { .. }
+        | Edit::SetTabOrder { .. }
         | Edit::Flatten { .. } => {
             if p.modify() {
                 Ok(())
@@ -905,6 +920,7 @@ fn run_edit(doc: &mut printcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -
             printcraft_forms::set_props(doc, name, props)?;
         }
         Edit::DeleteField { name } => printcraft_forms::delete_field(doc, name)?,
+        Edit::SetTabOrder { pages, order } => printcraft_forms::set_tab_order(doc, pages, *order)?,
         Edit::AddHeaderFooter { pages, settings, replace } => {
             let date = cx.today;
             printcraft_edit::add_header_footer(doc, pages, settings, *replace, &printcraft_edit::Context { date })?;

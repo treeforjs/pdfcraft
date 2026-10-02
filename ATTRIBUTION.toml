@@ -53,6 +53,28 @@ usage = "UI icon, embedded via crates/ui-egui/src/icon_data.rs"
 sha256 = "70ef15bcaa5721820aef032ad1e65370fb2667fd2e2d63eb24fbf3c2f57346cc"
 
 [[asset]]
+path = "assets/icons/columns-3.svg"
+title = "Lucide icon \"columns-3\""
+author = "Lucide Contributors (portions Cole Bemis, Feather)"
+source = "https://github.com/lucide-icons/lucide (npm lucide-static 1.49.0, icons/columns-3.svg)"
+licence = "ISC"
+licence_file = "assets/icons/LICENSE-lucide.txt"
+kind = "icon"
+usage = "UI icon, embedded via crates/ui-egui/src/icon_data.rs"
+sha256 = "54f7a2f2c3ffe9c0f13189e85571192651aaafe1eea0726de97701f67921aafb"
+
+[[asset]]
+path = "assets/icons/rows-3.svg"
+title = "Lucide icon \"rows-3\""
+author = "Lucide Contributors (portions Cole Bemis, Feather)"
+source = "https://github.com/lucide-icons/lucide (npm lucide-static 1.49.0, icons/rows-3.svg)"
+licence = "ISC"
+licence_file = "assets/icons/LICENSE-lucide.txt"
+kind = "icon"
+usage = "UI icon, embedded via crates/ui-egui/src/icon_data.rs"
+sha256 = "401a4ceb06a88210638e3264e05f2a5281acad42df5c96363160db75f7fd105a"
+
+[[asset]]
 path = "assets/icons/app-window.svg"
 title = "Lucide icon \"app-window\""
 author = "Lucide Contributors (portions Cole Bemis, Feather)"

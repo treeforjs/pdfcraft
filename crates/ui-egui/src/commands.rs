@@ -266,6 +266,15 @@ impl PrintCraftApp {
             "redact.clear" => {
                 self.apply_edit(Edit::ClearRedactions);
             }
+            "form.tab_order.row" | "form.tab_order.column" | "form.tab_order.structure" => {
+                let order = match id {
+                    "form.tab_order.row" => printcraft_engine::TabOrder::Row,
+                    "form.tab_order.column" => printcraft_engine::TabOrder::Column,
+                    _ => printcraft_engine::TabOrder::Structure,
+                };
+                let n = active.and_then(|i| self.session.get(self.views[i].id)).map_or(0, |d| d.info.pages.len());
+                self.apply_edit(Edit::SetTabOrder { pages: (0..n).collect(), order });
+            }
             "form.prepare" => {
                 self.left = crate::LeftPanel::Tool("form");
                 self.left_open = true;
