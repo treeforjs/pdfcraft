@@ -562,3 +562,15 @@ fn creating_and_reducing_through_tools() {
     assert!(r["bytes_after"].as_u64().unwrap() > 0 && dir.join("notes-small.pdf").exists());
     assert!(matches!(a.call("doc_create", &json!({ "from": "images", "paths": ["notes.txt"] })), Err(ToolError::Failed(_))));
 }
+
+#[test]
+fn flattening_through_tools() {
+    let dir = workdir("flatten");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    ok(&mut a, "comment_add", json!({ "doc": doc, "page": 1, "type": "textbox", "rect": [10, 200, 190, 240], "contents": "Approved" }));
+    ok(&mut a, "doc_flatten", json!({ "doc": doc }));
+    assert_eq!(ok(&mut a, "comment_list", json!({ "doc": doc }))["count"], 0);
+    assert!(page_text(&mut a, doc)[0].contains("Approved"), "the text box is now page text");
+    assert!(matches!(a.call("doc_flatten", &json!({ "doc": doc, "comments": false, "fields": false })), Err(ToolError::InvalidArgs(_))));
+}

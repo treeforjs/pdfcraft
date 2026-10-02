@@ -510,6 +510,11 @@ pub enum Edit {
     RemoveMarks {
         kind: MarkKind,
     },
+    /// Flatten comments and/or form fields on every page into page content.
+    Flatten {
+        comments: bool,
+        fields: bool,
+    },
     /// Protect with passwords and permissions (written by the next save, which is a full rewrite).
     Protect(Protection),
     /// Remove password security (needs the owner password).
@@ -559,6 +564,9 @@ impl Edit {
             Edit::RemoveMarks { kind: MarkKind::HeaderFooter } => "Remove header & footer".into(),
             Edit::RemoveMarks { kind: MarkKind::Watermark } => "Remove watermark".into(),
             Edit::RemoveMarks { kind: MarkKind::Background } => "Remove background".into(),
+            Edit::Flatten { comments: true, fields: false } => "Flatten comments".into(),
+            Edit::Flatten { comments: false, fields: true } => "Flatten form fields".into(),
+            Edit::Flatten { .. } => "Flatten".into(),
             Edit::Protect(_) => "Protect with password".into(),
             Edit::RemoveProtection => "Remove security".into(),
             Edit::Batch { label, .. } => label.clone(),
@@ -648,7 +656,12 @@ fn check_permission(edit: &Edit, p: &printcraft_cos::Permissions) -> Result<(), 
                 Err(EditError::NotPermitted("changing security"))
             }
         }
-        Edit::SetInfo { .. } | Edit::AddHeaderFooter { .. } | Edit::AddWatermark { .. } | Edit::AddBackground { .. } | Edit::RemoveMarks { .. } => {
+        Edit::SetInfo { .. }
+        | Edit::AddHeaderFooter { .. }
+        | Edit::AddWatermark { .. }
+        | Edit::AddBackground { .. }
+        | Edit::RemoveMarks { .. }
+        | Edit::Flatten { .. } => {
             if p.modify() {
                 Ok(())
             } else {
@@ -783,6 +796,10 @@ fn run_edit(doc: &mut printcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -
             if printcraft_edit::remove_marks(doc, &(0..n).collect::<Vec<_>>(), *kind)? == 0 {
                 return Err(EditError::Edit(printcraft_edit::EditError::Invalid("there is nothing to remove".into())));
             }
+        }
+        Edit::Flatten { comments, fields } => {
+            let n = printcraft_model::pages(doc).len();
+            printcraft_edit::flatten(doc, &(0..n).collect::<Vec<_>>(), *comments, *fields)?;
         }
         Edit::Protect(p) => {
             p.validate()?;

@@ -221,7 +221,13 @@ pub static TOOL_GROUPS: &[ToolGroup] = &[
                     item("Stamp", "stamp", "comment.stamp", Planned("M5")),
                 ],
             },
-            ToolSection { title: "Review", items: &[item("Comment list", "message-square-text", "comment.list", Ready)] },
+            ToolSection {
+                title: "Review",
+                items: &[
+                    item("Comment list", "message-square-text", "comment.list", Ready),
+                    item("Flatten comments", "layers", "comment.flatten", Ready),
+                ],
+            },
         ],
     },
     ToolGroup {
@@ -309,7 +315,11 @@ pub static TOOL_GROUPS: &[ToolGroup] = &[
         sections: &[
             ToolSection {
                 title: "Fields",
-                items: &[item("Field list", "list", "form.fields", Ready), item("Clear form", "eraser", "form.clear", Ready)],
+                items: &[
+                    item("Field list", "list", "form.fields", Ready),
+                    item("Clear form", "eraser", "form.clear", Ready),
+                    item("Flatten form fields", "layers", "form.flatten", Ready),
+                ],
             },
             ToolSection {
                 title: "Add form components",

@@ -52,7 +52,7 @@ fn every_registered_command_is_implemented() {
             continue;
         }
         let mut app = PrintCraftApp::new();
-        if spec.id.starts_with("form.") {
+        if spec.id.starts_with("form.") || spec.id == "comment.flatten" {
             app.open_bytes("form.pdf", None, include_bytes!("data/form.pdf").to_vec()).unwrap();
         } else {
             app.open_bytes("doc.pdf", None, fixture(3)).unwrap();
@@ -69,6 +69,17 @@ fn every_registered_command_is_implemented() {
             app.apply_edit(Edit::AddHeaderFooter { pages: vec![0], settings: hf, replace: false });
             app.apply_edit(Edit::AddWatermark { pages: vec![0], settings: Watermark { text: "x".into(), ..Watermark::default() }, replace: false });
             app.apply_edit(Edit::AddBackground { pages: vec![0], settings: Background { color: [1.0; 3], opacity: 1.0 }, replace: false });
+        }
+        if spec.id == "comment.flatten" {
+            use printcraft_engine::{Edit, NewAnnotation, Shape, Style};
+            let shape = Shape::Rectangle { rect: [10.0, 10.0, 50.0, 50.0] };
+            app.apply_edit(Edit::AddAnnotation(NewAnnotation {
+                page: 0,
+                style: Style::default_for(&shape),
+                shape,
+                contents: String::new(),
+                author: String::new(),
+            }));
         }
         if spec.id == "protect.remove" {
             let p = printcraft_engine::Protection { open_password: Some("pw".into()), ..Default::default() };

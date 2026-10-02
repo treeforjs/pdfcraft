@@ -253,8 +253,13 @@ fn tagged(tag: &str) -> Dict {
 /// Put a mark's content on a page: behind (prepended) or on top (appended, after wrapping the
 /// original content in q/Q).
 fn place(doc: &mut Document, page: &printcraft_model::Page, kind: MarkKind, content: Vec<u8>, behind: bool) -> Result<(), EditError> {
+    place_tagged(doc, page, kind.tag(), content, behind)
+}
+
+/// Put content on a page, tagged `tag` (see [`place`]).
+fn place_tagged(doc: &mut Document, page: &printcraft_model::Page, tag: &str, content: Vec<u8>, behind: bool) -> Result<(), EditError> {
     let mut list = contents(doc, page)?;
-    let mark = Object::Ref(doc.add(Object::Stream(Stream::flate(tagged(kind.tag()), &content))));
+    let mark = Object::Ref(doc.add(Object::Stream(Stream::flate(tagged(tag), &content))));
     if behind {
         list.insert(0, mark);
     } else {
@@ -480,6 +485,9 @@ pub fn marks_present(doc: &Document) -> Vec<MarkKind> {
     }
     found
 }
+
+mod flatten;
+pub use flatten::flatten;
 
 #[cfg(test)]
 mod tests;

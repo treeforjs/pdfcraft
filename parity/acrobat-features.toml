@@ -4091,11 +4091,11 @@ title = "Flatten comments into page content"
 area = "E"
 tier = "P1"
 milestone = "M5"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["comment.flatten"]
+tools = ["doc_flatten"]
+evidence = ["crates/edit/src/tests.rs::flattening_draws_appearances_into_the_page_and_removes_the_comments", "crates/engine/src/tests.rs::flattening_keeps_the_look_and_drops_the_objects", "crates/automation/tests/automation.rs::flattening_through_tools"]
+notes = "appearances become page content; pop-ups and replies removed"
 
 [[feature]]
 id = "comment.migrate"
@@ -4611,11 +4611,11 @@ title = "Flatten form fields"
 area = "F"
 tier = "P1"
 milestone = "M6"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["form.flatten"]
+tools = ["doc_flatten"]
+evidence = ["crates/edit/src/tests.rs::flattening_draws_appearances_into_the_page_and_removes_the_comments", "crates/engine/src/tests.rs::flattening_keeps_the_look_and_drops_the_objects", "crates/automation/tests/automation.rs::flattening_through_tools"]
+notes = "widgets drawn into content and pruned from the field tree"
 
 [[feature]]
 id = "form.prepare-form-mode"
@@ -5187,11 +5187,11 @@ title = "Fill & Sign: flatten on save"
 area = "F"
 tier = "P0"
 milestone = "M5"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["comment.flatten"]
+tools = ["doc_flatten"]
+evidence = ["crates/edit/src/tests.rs::flattening_draws_appearances_into_the_page_and_removes_the_comments", "crates/engine/src/tests.rs::flattening_keeps_the_look_and_drops_the_objects", "crates/automation/tests/automation.rs::flattening_through_tools"]
+notes = "Flatten comments flattens Fill & Sign items; no flatten-on-save option yet"
 
 [[feature]]
 id = "form.autofill-profile"

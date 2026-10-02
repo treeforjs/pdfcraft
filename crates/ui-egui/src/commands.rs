@@ -23,6 +23,8 @@ impl PrintCraftApp {
                 commands::Needs::Undo => "Nothing to undo".to_string(),
                 commands::Needs::Redo => "Nothing to redo".to_string(),
                 commands::Needs::FillForms if self.active.is_some() => "This document has no form fields you can fill in".to_string(),
+                commands::Needs::HasComments if self.active.is_some() => "This document has no comments to flatten".to_string(),
+                commands::Needs::HasFields if self.active.is_some() => "This document has no form fields to flatten".to_string(),
                 commands::Needs::Marks(k) if self.active.is_some() => format!(
                     "This document has no {} to change",
                     match k {
@@ -138,6 +140,15 @@ impl PrintCraftApp {
                 }
             }
             "form.fields" => self.right = Some(RightPanel::Fields),
+            "comment.flatten" => {
+                self.apply_edit(Edit::Flatten { comments: true, fields: false });
+            }
+            "form.flatten" => {
+                if let Some(i) = active {
+                    self.views[i].forms.focus = None;
+                }
+                self.apply_edit(Edit::Flatten { comments: false, fields: true });
+            }
             "form.clear" => {
                 if let Some(i) = active {
                     self.views[i].forms.focus = None;

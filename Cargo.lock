@@ -3100,6 +3100,7 @@ name = "printcraft-edit"
 version = "0.1.0"
 dependencies = [
  "hayro-syntax",
+ "printcraft-annot",
  "printcraft-cos",
  "printcraft-fonts",
  "printcraft-model",

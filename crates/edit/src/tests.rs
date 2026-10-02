@@ -139,3 +139,35 @@ fn invalid_requests_change_nothing() {
     assert_eq!(add_background(&mut doc, &[9], &Background { color: [1.0; 3], opacity: 1.0 }, false), Err(EditError::NoSuchPage(9)));
     assert!(!doc.is_modified());
 }
+
+#[test]
+fn flattening_draws_appearances_into_the_page_and_removes_the_comments() {
+    use printcraft_annot::{Meta, NewAnnotation, NoteIcon, Shape, Style, add_annotation, add_reply};
+    let mut doc = fixture();
+    let meta = Meta { date: None, id: "x".into() };
+    let add = |doc: &mut Document, shape: Shape| {
+        let style = Style::default_for(&shape);
+        add_annotation(doc, &NewAnnotation { page: 0, shape, style, contents: "c".into(), author: "a".into() }, &meta).unwrap()
+    };
+    add(&mut doc, Shape::Rectangle { rect: [10.0, 10.0, 110.0, 60.0] });
+    let note = add(&mut doc, Shape::Note { at: [200.0, 700.0], icon: NoteIcon::Comment });
+    add_reply(&mut doc, 0, note, "reply", "b", &meta).unwrap();
+    let before = streams(&doc, 0);
+    let n = flatten(&mut doc, &[0], true, false).unwrap();
+    assert_eq!(n, 2, "the rectangle and the note icon are drawn; the reply has nothing to draw");
+    let doc = reopen(&doc);
+    let p = &printcraft_model::pages(&doc)[0];
+    assert!(!p.dict.contains(b"Annots"), "comments, pop-up and reply are gone");
+    let s = streams(&doc, 0);
+    assert_eq!(s.len(), before.len() + 3, "wrapped original + flattened content: {s:?}");
+    let flat = s.last().unwrap();
+    assert!(flat.contains("/PCFl0 Do") && flat.contains("/PCFl1 Do"), "{flat}");
+    // The rectangle's appearance is drawn at its rectangle (bbox = rect, identity mapping).
+    assert!(flat.contains("q 1 0 0 1 0 0 cm /PCFl0 Do Q"), "{flat}");
+    // The note's 20×20 icon box is mapped onto its rect at (200, 680).
+    assert!(flat.contains("1 0 0 1 200 680 cm /PCFl1 Do"), "{flat}");
+    let res = doc.resolve(p.dict.get(b"Resources").unwrap());
+    let xo = doc.resolve(res.as_dict().unwrap().get(b"XObject").unwrap());
+    assert!(xo.as_dict().unwrap().contains(b"PCFl1"));
+    assert!(marks_present(&doc).is_empty(), "flattened content is not a removable mark");
+}

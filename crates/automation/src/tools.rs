@@ -390,6 +390,9 @@ pub fn tools() -> Vec<ToolDef> {
         t("doc_reduce", "Reduce file size", "Write a compacted copy of the document to `path` (identical fonts and images merged, unused objects dropped, compressed object streams). The open document is unchanged.")
             .cmd("optimize.reduce")
             .with(schema(json!({ "doc": doc(), "path": { "type": "string" } }), &["doc", "path"])),
+        t("doc_flatten", "Flatten", "Merge comment and/or form field appearances into the page content, so they print and display everywhere but can no longer be edited. Undoable until saved.")
+            .destructive()
+            .with(schema(json!({ "doc": doc(), "comments": { "type": "boolean", "description": "Default true." }, "fields": { "type": "boolean", "description": "Default true." } }), &["doc"])),
         t("edit_undo", "Undo", "Undo the last edit of a document.").cmd("edit.undo").with(schema(json!({ "doc": doc() }), &["doc"])),
         t("edit_redo", "Redo", "Redo the last undone edit of a document.").cmd("edit.redo").with(schema(json!({ "doc": doc() }), &["doc"])),
         t("command_list", "List commands", "Every registered PrintCraft command with its menu, shortcut, whether it is enabled now, and the tool that automates it.")

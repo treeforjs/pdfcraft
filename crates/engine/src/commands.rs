@@ -26,6 +26,10 @@ pub enum Needs {
     Annotate,
     /// The document has form fields and its security allows filling them in.
     FillForms,
+    /// The document has comments and allows changes.
+    HasComments,
+    /// The document has form fields and allows changes.
+    HasFields,
     /// The document has page marks of this kind and allows changes.
     Marks(crate::MarkKind),
     /// The document's security may be changed (owner, or nothing restricted).
@@ -168,6 +172,8 @@ pub const COMMANDS: &[CommandSpec] = &[
     c("comment.circle", "Draw an oval", None, None, Annotate, "circle"),
     c("form.fields", "Form fields panel", VIEW, None, Document, "list"),
     c("form.clear", "Clear form", EDIT, None, FillForms, "eraser"),
+    c("comment.flatten", "Flatten comments", None, None, HasComments, "layers"),
+    c("form.flatten", "Flatten form fields", None, None, HasFields, "layers"),
     c("sign.fill.text", "Fill & Sign: add text", None, None, Annotate, "type"),
     c("sign.fill.check", "Fill & Sign: checkmark", None, None, Annotate, "check"),
     c("sign.fill.cross", "Fill & Sign: cross", None, None, Annotate, "x"),
@@ -231,6 +237,8 @@ pub fn is_enabled(spec: &CommandSpec, session: &Session, active: Option<DocId>) 
         Annotate => doc.is_some_and(|d| d.allows_annotation()),
         FillForms => doc.is_some_and(|d| d.allows_form_filling() && !d.form.is_empty()),
         Marks(k) => doc.is_some_and(|d| d.allows_modification() && d.marks.contains(&k)),
+        HasComments => doc.is_some_and(|d| d.allows_modification() && !d.info.annotations.is_empty()),
+        HasFields => doc.is_some_and(|d| d.allows_modification() && !d.form.is_empty()),
         Security => doc.is_some_and(|d| d.allows_security_change()),
         ProtectedSecurity => doc.is_some_and(|d| d.allows_security_change() && d.security_summary().is_some()),
         Undo => doc.is_some_and(|d| d.can_undo().is_some()),
