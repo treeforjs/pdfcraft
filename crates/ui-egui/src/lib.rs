@@ -691,6 +691,12 @@ impl PrintCraftApp {
                     "export-image" => Some(Dialog::Export(export_ui::ExportKind::Image)),
                     "export-text" => Some(Dialog::Export(export_ui::ExportKind::Text)),
                     "signature" => Some(Dialog::Signature),
+                    "sign" | "certify" => {
+                        // Sign with a Digital ID for an invisible signature on the current page.
+                        let page = self.active.map_or(0, |i| self.views[i].current);
+                        self.start_signing(page, None, None, (value == "certify").then_some(2));
+                        Some(Dialog::Sign)
+                    }
                     "number-pages" => {
                         // Same path as the menu, so the page range is seeded.
                         self.execute("page.number");
