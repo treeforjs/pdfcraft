@@ -6907,11 +6907,11 @@ title = "Export all embedded images"
 area = "J"
 tier = "P1"
 milestone = "M10"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["export.all_images"]
+tools = ["doc_export_all_images"]
+evidence = ["crates/create/src/tests.rs::images_export_as_jpeg_unchanged_and_others_as_png", "crates/create/src/tests.rs::indexed_and_one_bit_images_decode", "crates/automation/tests/automation.rs::exporting_all_images_through_tools", "crates/ui-egui/tests/export.rs::export_dialogs_write_images_and_text"]
+notes = "each image once (page resources and nested forms); JPEG unchanged, others PNG (gray/RGB/CMYK/ICC/Indexed, 1–16 bpc, stencil masks, soft mask as alpha); JPX/JBIG2/CCITT/separations reported as skipped; minimum size filter"
 
 [[feature]]
 id = "create.export-html"

@@ -73,6 +73,7 @@ pub static TOOL_GROUPS: &[ToolGroup] = &[
                 item("Spreadsheet (.xlsx)", "grid-3x3", "export.xlsx", Planned("M10")),
                 item("Presentation (.pptx)", "presentation", "export.pptx", Planned("M10")),
                 item("Image (PNG)", "image", "export.image", Ready),
+                item("Export all images", "image", "export.all_images", Ready),
                 item("HTML web page", "file-symlink", "export.html", Planned("M10")),
                 item("Text (plain)", "type", "export.text", Ready),
                 item("PostScript / EPS", "file-down", "export.ps", Planned("M10")),

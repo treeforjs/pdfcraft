@@ -280,7 +280,7 @@ impl Automation {
                 let new = self.session.open_revision(id, n).map_err(failed)?;
                 summary(self.session.get(new).ok_or_else(|| failed("the document vanished"))?)
             }
-            "doc_export_images" | "doc_export_text" => self.export(name, &a)?,
+            "doc_export_images" | "doc_export_text" | "doc_export_all_images" => self.export(name, &a)?,
             "doc_header_footer" | "doc_watermark" | "doc_background" | "doc_remove_marks" => self.marks(name, &a)?,
             "doc_unprotect" => {
                 let mut out = self.apply(&a, Edit::RemoveProtection)?;
@@ -671,6 +671,18 @@ impl Automation {
         }
         let folder = self.resolve(a.str("folder")?, true)?;
         std::fs::create_dir_all(&folder).map_err(|e| failed(format!("{}: {e}", folder.display())))?;
+        if tool == "doc_export_all_images" {
+            let min = u32::try_from(a.opt_int("min_size")?.unwrap_or(0).max(0)).unwrap_or(u32::MAX);
+            let out = printcraft_engine::export::extract_images(&doc.export_source(), &pages, min).map_err(failed)?;
+            let mut files = Vec::new();
+            for (k, img) in out.images.iter().enumerate() {
+                let path = folder.join(printcraft_engine::export::image_file_name(&stem, img, k + 1));
+                write_atomic(&path, &img.data)?;
+                files.push(json!({ "path": path.to_string_lossy(), "page": img.page + 1, "width": img.width, "height": img.height }));
+            }
+            let skipped: Vec<Value> = out.skipped.iter().map(|(p, r, why)| json!({ "page": p + 1, "object": r.num, "reason": why })).collect();
+            return Ok(json!({ "count": files.len(), "files": files, "skipped": skipped }));
+        }
         let dpi = a.opt_num("dpi")?.unwrap_or(150.0);
         let quality = a.opt_int("quality")?.unwrap_or(85).clamp(1, 100) as u8;
         let format = match a.opt_str("format")?.unwrap_or("png") {

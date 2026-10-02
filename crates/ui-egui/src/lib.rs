@@ -790,6 +790,7 @@ impl PrintCraftApp {
                     "background" => Some(Dialog::Marks(printcraft_engine::MarkKind::Background)),
                     "export-image" => Some(Dialog::Export(export_ui::ExportKind::Image)),
                     "export-text" => Some(Dialog::Export(export_ui::ExportKind::Text)),
+                    "export-all-images" => Some(Dialog::Export(export_ui::ExportKind::AllImages)),
                     "signature" => Some(Dialog::Signature),
                     "optimize" => Some(Dialog::Optimize),
                     "sign" | "certify" => {

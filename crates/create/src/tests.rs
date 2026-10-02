@@ -141,3 +141,57 @@ fn bmp_gif_and_multi_page_tiff_images() {
     assert_eq!(image_of(&doc, 2).name(b"ColorSpace"), Some(&b"DeviceGray"[..]));
     assert!(matches!(from_images(&[("x.webp".into(), b"RIFF0000WEBP".to_vec())]), Err(CreateError::Image(..))));
 }
+
+#[test]
+fn images_export_as_jpeg_unchanged_and_others_as_png() {
+    let doc = reopen(
+        &from_images(&[("photo.png".into(), png_bytes(true)), ("scan.jpg".into(), jpeg_bytes()), ("flat.png".into(), png_bytes(false))]).unwrap(),
+    );
+    let out = extract_images(&doc, &[0, 1, 2], 0);
+    assert!(out.skipped.is_empty(), "{:?}", out.skipped);
+    let kinds: Vec<(usize, &str, u32, u32)> = out.images.iter().map(|i| (i.page, i.extension, i.width, i.height)).collect();
+    assert_eq!(kinds, [(0, "png", 4, 2), (1, "jpg", 3, 2), (2, "png", 4, 2)]);
+    assert_eq!(out.images[1].data, jpeg_bytes(), "JPEG data is written as is");
+    // The PNG round-trips the pixels, with the soft mask as alpha.
+    let dec = png::Decoder::new(std::io::Cursor::new(out.images[0].data.clone()));
+    let mut r = dec.read_info().unwrap();
+    let mut buf = vec![0; r.output_buffer_size().unwrap()];
+    let info = r.next_frame(&mut buf).unwrap();
+    assert_eq!(info.color_type, png::ColorType::Rgba);
+    assert_eq!(&buf[..8], &[200, 200, 200, 0, 200, 200, 200, 200]);
+    // Pages filter; small images can be left out.
+    assert_eq!(extract_images(&doc, &[2], 0).images.len(), 1);
+    assert!(extract_images(&doc, &[0, 1, 2], 3).images.iter().all(|i| i.width.min(i.height) >= 3));
+}
+
+#[test]
+fn indexed_and_one_bit_images_decode() {
+    let mut doc = from_images(&[("flat.png".into(), png_bytes(false))]).unwrap();
+    // Replace the page's image with a 4×1 indexed image (two colours) and add a 1-bit mask.
+    let page = printcraft_model::pages(&doc)[0].clone();
+    let res = doc.resolve(page.dict.get(b"Resources").unwrap()).as_dict().cloned().unwrap();
+    let xo = doc.resolve(res.get(b"XObject").unwrap()).as_dict().cloned().unwrap();
+    let (_, r) = xo.iter().next().map(|(k, v)| (k.clone(), v.as_ref().unwrap())).unwrap();
+    let mut d = Dict::new();
+    d.set(b"Type".to_vec(), Object::name("XObject"));
+    d.set(b"Subtype".to_vec(), Object::name("Image"));
+    d.set(b"Width".to_vec(), Object::Int(4));
+    d.set(b"Height".to_vec(), Object::Int(1));
+    d.set(b"BitsPerComponent".to_vec(), Object::Int(1));
+    d.set(
+        b"ColorSpace".to_vec(),
+        Object::Array(vec![
+            Object::name("Indexed"),
+            Object::name("DeviceRGB"),
+            Object::Int(1),
+            Object::String(PdfString::literal(vec![255, 0, 0, 0, 0, 255])),
+        ]),
+    );
+    doc.set(r, Object::Stream(Stream::from_raw(d, vec![0b0101_0000])));
+    let out = extract_images(&doc, &[0], 0);
+    let dec = png::Decoder::new(std::io::Cursor::new(out.images[0].data.clone()));
+    let mut rd = dec.read_info().unwrap();
+    let mut buf = vec![0; rd.output_buffer_size().unwrap()];
+    rd.next_frame(&mut buf).unwrap();
+    assert_eq!(&buf[..12], &[255, 0, 0, 0, 0, 255, 255, 0, 0, 0, 0, 255]);
+}

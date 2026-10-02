@@ -10,6 +10,7 @@ workspace = true
 
 [dependencies]
 printcraft-cos = { workspace = true }
+printcraft-model = { workspace = true }
 printcraft-fonts = { workspace = true }
 png = "0.18"
 tiff = "0.11"

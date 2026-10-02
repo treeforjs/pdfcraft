@@ -16,6 +16,8 @@ use crate::{PrintCraftApp, widgets};
 pub enum ExportKind {
     Image,
     Text,
+    /// Export all images: the images pages use, as files.
+    AllImages,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -23,11 +25,13 @@ pub struct ExportDraft {
     pub dpi: f64,
     pub range: PageRange,
     pub format: ImageFormat,
+    /// Export all images ▸ skip images with fewer pixels than this on their shorter side.
+    pub min_side: u32,
 }
 
 impl Default for ExportDraft {
     fn default() -> Self {
-        Self { dpi: 150.0, range: PageRange::default(), format: ImageFormat::Png }
+        Self { dpi: 150.0, range: PageRange::default(), format: ImageFormat::Png, min_side: 0 }
     }
 }
 
@@ -41,6 +45,7 @@ pub(crate) fn body(ui: &mut egui::Ui, app: &mut PrintCraftApp, t: &Tokens, kind:
         egui::RichText::new(match kind {
             ExportKind::Image => "Export to Image",
             ExportKind::Text => "Export to Text",
+            ExportKind::AllImages => "Export All Images",
         })
         .font(theme::semibold(18.0)),
     );
@@ -76,6 +81,21 @@ pub(crate) fn body(ui: &mut egui::Ui, app: &mut PrintCraftApp, t: &Tokens, kind:
             }
         });
         ui.label(egui::RichText::new(format!("One {} file per page, named after the document.", d.format.label())).small().color(t.text_faint));
+    } else if kind == ExportKind::AllImages {
+        ui.horizontal(|ui| {
+            ui.label("Exclude images smaller than");
+            let label = |n: u32| if n == 0 { "No limit".to_string() } else { format!("{n} pixels") };
+            egui::ComboBox::from_id_salt("export-min").selected_text(label(d.min_side)).show_ui(ui, |ui| {
+                for n in [0, 16, 32, 64, 128, 256] {
+                    ui.selectable_value(&mut d.min_side, n, label(n));
+                }
+            });
+        });
+        ui.label(
+            egui::RichText::new("Each image once, named after the document and page. JPEG images are saved unchanged; others as PNG.")
+                .small()
+                .color(t.text_faint),
+        );
     } else {
         ui.label(egui::RichText::new("Plain text in reading order; pages are separated by form feeds.").small().color(t.text_faint));
     }
@@ -103,19 +123,39 @@ fn run(
     kind: ExportKind,
     dpi: f64,
     format: ImageFormat,
+    min_side: u32,
     pages: Vec<usize>,
     stem: String,
     mut sink: impl FnMut(&str, Vec<u8>) -> Result<(), String>,
     status: &ExportStatus,
 ) -> String {
-    let mut ex = Exporter::from_source(src);
     let total = pages.len();
     let set = |done: usize, msg: Option<String>| {
         if let Ok(mut s) = status.lock() {
             *s = Some((done, total, msg));
         }
     };
+    if kind == ExportKind::AllImages {
+        set(0, None);
+        let out = match printcraft_engine::export::extract_images(&src, &pages, min_side) {
+            Ok(o) => o,
+            Err(e) => return format!("Export stopped: {e}"),
+        };
+        for (k, img) in out.images.iter().enumerate() {
+            if let Err(e) = sink(&printcraft_engine::export::image_file_name(&stem, img, k + 1), img.data.clone()) {
+                return format!("Export stopped: {e}");
+            }
+        }
+        let n = out.images.len();
+        let mut msg = format!("Exported {n} image{}", if n == 1 { "" } else { "s" });
+        if !out.skipped.is_empty() {
+            msg.push_str(&format!(" ({} not exported: {})", out.skipped.len(), out.skipped[0].2));
+        }
+        return msg;
+    }
+    let mut ex = Exporter::from_source(src);
     match kind {
+        ExportKind::AllImages => unreachable!("handled above"),
         ExportKind::Image => {
             for (k, p) in pages.iter().enumerate() {
                 set(k, None);
@@ -146,6 +186,7 @@ impl PrintCraftApp {
         let pages = self.export_draft.range.pages(src.pages);
         let dpi = self.export_draft.dpi;
         let format = self.export_draft.format;
+        let min_side = self.export_draft.min_side;
         let status: ExportStatus = Arc::new(Mutex::new(Some((0, pages.len(), None))));
         #[cfg(not(target_arch = "wasm32"))]
         {
@@ -160,7 +201,7 @@ impl PrintCraftApp {
                 let sink = |name: &str, bytes: Vec<u8>| {
                     crate::editing::write_atomically(&dir.join(name).to_string_lossy(), &bytes).map_err(|e| format!("{name}: {e}"))
                 };
-                let msg = run(src, kind, dpi, format, pages, stem, sink, &st);
+                let msg = run(src, kind, dpi, format, min_side, pages, stem, sink, &st);
                 if let Ok(mut s) = st.lock() {
                     let (done, total) = s.as_ref().map_or((0, 0), |(d, t, _)| (*d, *t));
                     *s = Some((done.max(total), total, Some(format!("{msg} to {shown}"))));
@@ -174,7 +215,7 @@ impl PrintCraftApp {
         }
         #[cfg(target_arch = "wasm32")]
         {
-            let msg = run(src, kind, dpi, format, pages, stem, |name, bytes| crate::editing::download(name, &bytes), &status);
+            let msg = run(src, kind, dpi, format, min_side, pages, stem, |name, bytes| crate::editing::download(name, &bytes), &status);
             if let Ok(mut s) = status.lock() {
                 *s = Some((0, 0, Some(msg)));
             }

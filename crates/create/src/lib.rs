@@ -1,6 +1,9 @@
 //! printcraft-create — create PDFs from nothing, images or text (L4). See the README.
 
 use printcraft_cos::{Dict, Document, ObjRef, Object, PdfString, Stream};
+
+mod extract;
+pub use extract::{ExtractedImage, ImageExport, extract_images};
 use printcraft_fonts::{literal, win_ansi, wrap};
 
 #[derive(Debug, thiserror::Error, PartialEq)]

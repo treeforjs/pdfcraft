@@ -37,4 +37,11 @@ fn export_dialogs_write_images_and_text() {
     h.get_by_label("Export").click();
     h.run_steps(4);
     assert!(dir.join("doc.txt").exists());
+    // Export all images: this document has none, and says so.
+    assert!(h.state_mut().execute("export.all_images"));
+    h.run_steps(2);
+    h.get_by_label("Export All Images");
+    h.get_by_label("Export").click();
+    h.run_steps(4);
+    h.get_by_label_contains("Exported 0 images");
 }
