@@ -3335,6 +3335,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "printcraft-a11y"
+version = "0.1.0"
+dependencies = [
+ "printcraft-content",
+ "printcraft-cos",
+ "printcraft-model",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "printcraft-annot"
 version = "0.1.0"
 dependencies = [
@@ -3397,6 +3407,7 @@ dependencies = [
  "png 0.18.1",
  "printcraft-cos",
  "printcraft-fonts",
+ "printcraft-model",
  "thiserror 2.0.21",
  "tiff",
 ]
@@ -3433,6 +3444,7 @@ dependencies = [
  "chrono",
  "image",
  "png 0.18.1",
+ "printcraft-a11y",
  "printcraft-annot",
  "printcraft-cos",
  "printcraft-create",

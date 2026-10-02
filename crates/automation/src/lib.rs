@@ -9,6 +9,7 @@
 //!   with the origin at the top-left of the displayed page.
 //! - An optional root directory confines every path a tool reads or writes.
 
+mod a11y;
 mod comments;
 mod content;
 mod forms;
@@ -320,6 +321,9 @@ impl Automation {
             "comment_reply" => self.comment_reply(&a)?,
             "comment_set_status" => self.comment_set_status(&a)?,
             "sign_list" => self.sign_list(&a)?,
+            "accessibility_check" => self.a11y_check(&a)?,
+            "accessibility_report" => self.a11y_report(&a)?,
+            "accessibility_fix" => self.a11y_fix(&a)?,
             "sign_id_create" => self.sign_id_create(&a)?,
             "sign_document" => self.sign_document(&a)?,
             "sign_trust" => self.sign_trust(&a)?,

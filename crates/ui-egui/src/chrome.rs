@@ -241,6 +241,7 @@ fn main_menu(app: &mut PrintCraftApp, ui: &mut egui::Ui) {
                     (RightPanel::Layers, "Layers"),
                     (RightPanel::Attachments, "Attachments"),
                     (RightPanel::Signatures, "Signatures"),
+                    (RightPanel::Accessibility, "Accessibility Checker"),
                 ] {
                     if ui.radio(app.right == Some(p), label).clicked() {
                         app.right = Some(p);
@@ -257,6 +258,7 @@ pub fn right_rail(app: &mut PrintCraftApp, ui: &mut egui::Ui) {
     let Some((index, id)) = app.active_ids() else { return };
     let Some(doc) = app.session.get(id) else { return };
     let has_signatures = doc.is_signed();
+    let has_check = app.a11y.report.as_ref().is_some_and(|(d, _)| *d == id);
     let (has_comments, has_outline, has_fields, has_layers, has_files) = (
         !doc.info.annotations.is_empty(),
         !doc.info.outline.is_empty(),
@@ -290,6 +292,9 @@ pub fn right_rail(app: &mut PrintCraftApp, ui: &mut egui::Ui) {
             rail_button(ui, RightPanel::Layers, "layers", "Layers", has_layers);
             rail_button(ui, RightPanel::Attachments, "paperclip", "Attachments", has_files);
             rail_button(ui, RightPanel::Signatures, "signature", "Signatures", has_signatures);
+            if has_check {
+                rail_button(ui, RightPanel::Accessibility, "accessibility", "Accessibility Checker", false);
+            }
 
             // Page navigation cluster at the bottom (as in Acrobat's rail).
             let view = &mut app.views[index];

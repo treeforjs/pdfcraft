@@ -567,6 +567,37 @@ fn exporting_images_and_text_through_tools() {
 }
 
 #[test]
+fn accessibility_check_report_and_fixes_through_tools() {
+    let dir = workdir("a11y");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    let r = ok(&mut a, "accessibility_check", json!({ "doc": doc }));
+    assert_eq!(r["results"].as_array().unwrap().len(), 32);
+    let status =
+        |r: &Value, id: &str| r["results"].as_array().unwrap().iter().find(|x| x["rule"] == id).unwrap()["status"].as_str().unwrap().to_owned();
+    for id in ["tagged-pdf", "primary-language", "title", "tagged-content"] {
+        assert_eq!(status(&r, id), "failed", "{id}");
+    }
+    assert_eq!((status(&r, "color-contrast"), status(&r, "scripts")), ("skipped".into(), "manual".into()));
+    assert_eq!(status(&ok(&mut a, "accessibility_check", json!({ "doc": doc, "all": true })), "color-contrast"), "manual");
+    let docs = ok(&mut a, "accessibility_check", json!({ "doc": doc, "categories": ["document"] }));
+    assert_eq!(docs["skipped"], 25, "24 other rules and colour contrast");
+    // Fixes.
+    assert!(matches!(a.call("accessibility_fix", &json!({ "doc": doc, "rule": "primary-language" })), Err(ToolError::Failed(_))), "needs a language");
+    assert_eq!(ok(&mut a, "accessibility_fix", json!({ "doc": doc, "rule": "primary-language", "value": "en-GB" }))["status"], "passed");
+    assert_eq!(ok(&mut a, "accessibility_fix", json!({ "doc": doc, "rule": "title" }))["status"], "passed");
+    assert_eq!(ok(&mut a, "doc_info", json!({ "doc": doc }))["title"], "a");
+    assert_eq!(ok(&mut a, "edit_undo", json!({ "doc": doc }))["undone"], "Set document title");
+    assert!(matches!(a.call("accessibility_fix", &json!({ "doc": doc, "rule": "tagged-pdf" })), Err(ToolError::Failed(_))));
+    assert!(matches!(a.call("accessibility_check", &json!({ "doc": doc, "rules": ["nope"] })), Err(ToolError::InvalidArgs(_))));
+    // The report.
+    let r = ok(&mut a, "accessibility_report", json!({ "doc": doc, "path": "report.html" }));
+    assert_eq!(r["failed"].as_u64(), Some(3), "tagging, tagged content and (undone) title");
+    let html = std::fs::read_to_string(dir.join("report.html")).unwrap();
+    assert!(html.contains("Accessibility Report") && html.contains("a.pdf"));
+}
+
+#[test]
 fn exporting_all_images_through_tools() {
     let dir = workdir("export-all-images");
     let mut a = auto(&dir);

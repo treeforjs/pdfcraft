@@ -30,6 +30,7 @@ pub use printcraft_forms::{
     Widget as FormWidget, af as form_scripts, flags as field_flags,
 };
 
+pub use printcraft_a11y as a11y;
 /// Comment geometry helpers (text-box line breaking) for frontends.
 pub use printcraft_annot::appearance as annot_text;
 pub use printcraft_annot::links::{Highlight as LinkHighlight, LinkAction, LinkItem, LinkStyle};
@@ -154,6 +155,40 @@ pub struct Document {
 
 impl Document {
     /// How the document opens (Document Properties ▸ Initial View).
+    /// Accessibility ▸ Check for accessibility: the full check (`None` if the document can't be
+    /// read for editing).
+    pub fn accessibility_check(&self, options: &a11y::Options) -> Option<a11y::Report> {
+        self.editor.as_ref().map(|e| a11y::check(&e.cos, options))
+    }
+
+    /// The edit that fixes `rule`, for the rules with an automatic fix: the document language
+    /// (`value` is the language), the title (`value` replaces it; else the current title or the
+    /// file name) and the tab order.
+    pub fn accessibility_fix(&self, rule: a11y::Rule, value: Option<&str>) -> Result<Edit, String> {
+        let value = value.map(str::trim).filter(|v| !v.is_empty());
+        match rule {
+            a11y::Rule::PrimaryLanguage => {
+                let mut v = self.initial_view();
+                v.language = Some(value.ok_or("give the document language (for example en-US)")?.to_owned());
+                Ok(Edit::SetInitialView(Box::new(v)))
+            }
+            a11y::Rule::Title => {
+                let title = value
+                    .map(str::to_owned)
+                    .or_else(|| self.info_value("Title").filter(|t| !t.trim().is_empty()))
+                    .unwrap_or_else(|| self.name.trim_end_matches(".pdf").trim_end_matches(".PDF").to_owned());
+                let mut v = self.initial_view();
+                v.display_title = true;
+                Ok(Edit::Batch {
+                    label: "Set document title".into(),
+                    edits: vec![Edit::SetInfo { key: "Title".into(), value: title }, Edit::SetInitialView(Box::new(v))],
+                })
+            }
+            a11y::Rule::TabOrder => Ok(Edit::SetTabOrder { pages: (0..self.info.pages.len()).collect(), order: TabOrder::Structure }),
+            other => Err(format!("\"{}\" has no automatic fix", other.name())),
+        }
+    }
+
     pub fn initial_view(&self) -> InitialView {
         self.editor.as_ref().map(|e| printcraft_organize::initial_view(&e.cos)).unwrap_or_default()
     }

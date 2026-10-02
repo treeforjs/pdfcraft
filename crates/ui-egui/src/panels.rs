@@ -340,6 +340,7 @@ pub fn right_panel(app: &mut PrintCraftApp, ui: &mut egui::Ui) {
     let mut panel_edit: Option<printcraft_engine::Edit> = None;
     let mut panel_command: Option<&'static str> = None;
     let mut sig_action: Option<crate::sign_ui::PanelAction> = None;
+    let mut a11y_action: Option<crate::a11y_ui::PanelAction> = None;
     let mut bm_rename = app.bookmark_rename.clone();
     let bm_editable = app.session.get(id).is_some_and(|d| d.allows_assembly() && d.read_only_reason.is_none());
     // Prepare a form is open: the Fields panel orders tabs.
@@ -350,6 +351,7 @@ pub fn right_panel(app: &mut PrintCraftApp, ui: &mut egui::Ui) {
         let view = &mut app.views[index];
         let prefs = &app.comment_prefs;
         let sig_expanded = &mut app.sig_expanded;
+        let a11y = &mut app.a11y;
         let comment_allowed = doc.allows_annotation();
         egui::Panel::right("right_panel")
             .resizable(true)
@@ -370,6 +372,7 @@ pub fn right_panel(app: &mut PrintCraftApp, ui: &mut egui::Ui) {
                     RightPanel::Layers => ("Layers", Some(info.layers.len())),
                     RightPanel::Attachments => ("Attachments", Some(info.attachments.len())),
                     RightPanel::Signatures => ("Signatures", Some(doc.signatures.iter().filter(|s| s.signed).count())),
+                    RightPanel::Accessibility => ("Accessibility Checker", None),
                 };
                 ui.horizontal(|ui| {
                     ui.label(egui::RichText::new(title).font(theme::semibold(15.5)));
@@ -467,6 +470,9 @@ pub fn right_panel(app: &mut PrintCraftApp, ui: &mut egui::Ui) {
                     RightPanel::Signatures => {
                         sig_action = crate::sign_ui::panel(ui, &t, &doc.signatures, sig_expanded);
                     }
+                    RightPanel::Accessibility => {
+                        a11y_action = crate::a11y_ui::panel(ui, &t, a11y, id);
+                    }
                     RightPanel::Attachments => {
                         if info.attachments.is_empty() {
                             empty(ui, &t, "paperclip", "This document has no attachments.");
@@ -512,6 +518,9 @@ pub fn right_panel(app: &mut PrintCraftApp, ui: &mut egui::Ui) {
     }
     if let Some(c) = panel_command {
         app.run_command(c);
+    }
+    if let Some(a) = a11y_action {
+        app.a11y_action(index, a);
     }
     match sig_action {
         Some(crate::sign_ui::PanelAction::Validate) => app.run_command("sign.validate"),

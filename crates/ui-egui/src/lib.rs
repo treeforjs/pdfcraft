@@ -5,6 +5,7 @@
 //! Everything here is presentation: documents, rendering and the tool catalogue live in
 //! `printcraft-engine`.
 
+mod a11y_ui;
 pub mod canvas;
 mod chrome;
 mod commands;
@@ -85,6 +86,8 @@ pub enum RightPanel {
     Layers,
     Attachments,
     Signatures,
+    /// Accessibility Checker results.
+    Accessibility,
 }
 
 /// Quick-action bar tools (the vertical floating strip).
@@ -169,6 +172,8 @@ pub enum Dialog {
     Optimize,
     /// Prepare a form ▸ right-click a field ▸ Duplicate.
     DuplicateField,
+    /// Check for accessibility ▸ Accessibility Checker Options.
+    AccessibilityOptions,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -267,6 +272,10 @@ pub struct PrintCraftApp {
     pub digital_ids: Vec<DigitalIdEntry>,
     /// Signatures panel: expanded entries (field names).
     pub sig_expanded: Vec<String>,
+    /// Accessibility Checker: options, the last check, and rules skipped by hand.
+    pub a11y_options: a11y_ui::A11yOptions,
+    pub a11y: a11y_ui::A11yState,
+    pub a11y_skipped: std::collections::BTreeSet<printcraft_engine::a11y::Rule>,
     /// PDF Optimizer choices.
     pub optimize_draft: OptimizeDraft,
     /// Pages copied or cut in Organize Pages, ready to paste (into any document).
@@ -386,6 +395,9 @@ impl PrintCraftApp {
             sign_draft: None,
             digital_ids: Vec::new(),
             sig_expanded: Vec::new(),
+            a11y_options: a11y_ui::A11yOptions::default(),
+            a11y: a11y_ui::A11yState::default(),
+            a11y_skipped: Default::default(),
             optimize_draft: OptimizeDraft::default(),
             page_clipboard: None,
             last_snapshot: None,
@@ -755,6 +767,7 @@ impl PrintCraftApp {
                     "layers" => Some(RightPanel::Layers),
                     "attachments" => Some(RightPanel::Attachments),
                     "signatures" => Some(RightPanel::Signatures),
+                    "accessibility" => Some(RightPanel::Accessibility),
                     "none" => None,
                     other => return Err(format!("unknown panel {other}")),
                 }
@@ -791,6 +804,7 @@ impl PrintCraftApp {
                     "export-image" => Some(Dialog::Export(export_ui::ExportKind::Image)),
                     "export-text" => Some(Dialog::Export(export_ui::ExportKind::Text)),
                     "export-all-images" => Some(Dialog::Export(export_ui::ExportKind::AllImages)),
+                    "accessibility-options" => Some(Dialog::AccessibilityOptions),
                     "signature" => Some(Dialog::Signature),
                     "optimize" => Some(Dialog::Optimize),
                     "sign" | "certify" => {

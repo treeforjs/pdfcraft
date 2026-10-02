@@ -673,6 +673,35 @@ pub fn tools() -> Vec<ToolDef> {
                 }),
                 &["doc", "folder"],
             )),
+        t("accessibility_check", "Check for accessibility", "Run the Accessibility Checker's full check (32 rules in 7 categories: document, page_content, forms, alternate_text, tables, lists, headings). Each rule is passed, failed (with findings and pages), manual (needs a person) or skipped. Colour contrast is off unless all is true; rules (ids such as tagged-pdf, figures-alt-text) or categories narrow the check; pages limit the page rules.")
+            .ro()
+            .cmd("a11y.check")
+            .with(schema(
+                json!({
+                    "doc": doc(),
+                    "rules": { "type": "array", "items": { "type": "string" } },
+                    "categories": { "type": "array", "items": { "type": "string", "enum": ["document", "page_content", "forms", "alternate_text", "tables", "lists", "headings"] } },
+                    "all": { "type": "boolean", "description": "Include rules that are off by default (colour contrast)." },
+                    "pages": pages("for the page rules (default: all)"),
+                }),
+                &["doc"],
+            )),
+        t("accessibility_report", "Accessibility report", "Run the full check and write the accessibility report (HTML) to path; returns the results too. Takes the same options as accessibility_check.")
+            .ro()
+            .cmd("a11y.report")
+            .with(schema(
+                json!({
+                    "doc": doc(),
+                    "path": { "type": "string" },
+                    "rules": { "type": "array", "items": { "type": "string" } },
+                    "categories": { "type": "array", "items": { "type": "string" } },
+                    "all": { "type": "boolean" },
+                    "pages": pages("for the page rules (default: all)"),
+                }),
+                &["doc", "path"],
+            )),
+        t("accessibility_fix", "Fix an accessibility problem", "Apply the checker's automatic fix for a rule: primary-language (value: the language, e.g. en-US), title (value: the title; default the current title or file name; also shows it in the title bar) or tab-order (every page tabs in structure order). Returns the rule's new status. Undoable.")
+            .with(schema(json!({ "doc": doc(), "rule": { "type": "string", "enum": ["primary-language", "title", "tab-order"] }, "value": { "type": "string" } }), &["doc", "rule"])),
         t("doc_export_all_images", "Export all images", "Write the images that pages use into a folder (`<name>_Page_<n>_Image_<k>.jpg|png`), each once: JPEG images unchanged, others as PNG with their soft mask as alpha. min_size skips images with fewer pixels on their shorter side. Images that can't be decoded yet (JPEG 2000, JBIG2, CCITT, separations) are listed under skipped. Includes unsaved edits.")
             .cmd("export.all_images")
             .with(schema(

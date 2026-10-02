@@ -8263,11 +8263,11 @@ title = "Accessibility checker (full check)"
 area = "M"
 tier = "P1"
 milestone = "M12"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["a11y.check"]
+tools = ["accessibility_check"]
+evidence = ["crates/a11y/src/tests.rs::an_untagged_document_fails_the_document_rules", "crates/a11y/src/tests.rs::a_well_tagged_document_passes", "crates/ui-egui/tests/accessibility.rs::checking_fixing_skipping_and_reporting", "crates/automation/tests/automation.rs::accessibility_check_report_and_fixes_through_tools"]
+notes = "full check: options dialog (report, page range, 32 rules by category, 31 on by default), results panel by category with Passed / Failed / Needs manual check / Skipped and findings that go to their page"
 
 [[feature]]
 id = "a11y.checker-report"
@@ -8275,11 +8275,11 @@ title = "Accessibility report"
 area = "M"
 tier = "P1"
 milestone = "M12"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["a11y.report"]
+tools = ["accessibility_report"]
+evidence = ["crates/a11y/src/tests.rs::rules_have_ids_and_the_report_lists_them", "crates/ui-egui/tests/accessibility.rs::checking_fixing_skipping_and_reporting", "crates/automation/tests/automation.rs::accessibility_check_report_and_fixes_through_tools"]
+notes = "HTML report: summary counts and a table per category with descriptions and findings"
 
 [[feature]]
 id = "a11y.checker-fix"
@@ -8287,11 +8287,11 @@ title = "Fix, skip, explain and re-check rules"
 area = "M"
 tier = "P1"
 milestone = "M12"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["a11y.check"]
+tools = ["accessibility_fix"]
+evidence = ["crates/ui-egui/tests/accessibility.rs::checking_fixing_skipping_and_reporting", "crates/automation/tests/automation.rs::accessibility_check_report_and_fixes_through_tools"]
+notes = "right-click a rule: Fix (language via Document Properties, title, tab order), Skip Rule (kept on Check Again), Explain, Check Again, Show Report, Options"
 
 [[feature]]
 id = "a11y.rule-permission-flag"
@@ -8299,11 +8299,11 @@ title = "Rule: accessibility permission flag"
 area = "M"
 tier = "P1"
 milestone = "M12"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["a11y.check"]
+tools = ["accessibility_check"]
+evidence = ["crates/a11y/src/tests.rs::an_untagged_document_fails_the_document_rules"]
+notes = "rule permission-flag: the file's /P bit 10 whichever password opened it"
 
 [[feature]]
 id = "a11y.rule-image-only"
@@ -8311,11 +8311,11 @@ title = "Rule: image-only PDF"
 area = "M"
 tier = "P1"
 milestone = "M12"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["a11y.check"]
+tools = ["accessibility_check"]
+evidence = ["crates/a11y/src/tests.rs::scans_identity_fonts_and_long_documents"]
+notes = "rule image-only: images and no text on the checked pages"
 
 [[feature]]
 id = "a11y.rule-tagged-pdf"
@@ -8323,11 +8323,11 @@ title = "Rule: tagged PDF"
 area = "M"
 tier = "P1"
 milestone = "M12"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["a11y.check"]
+tools = ["accessibility_check"]
+evidence = ["crates/a11y/src/tests.rs::an_untagged_document_fails_the_document_rules"]
+notes = "rule tagged-pdf: StructTreeRoot and MarkInfo Marked true"
 
 [[feature]]
 id = "a11y.rule-logical-order"
@@ -8335,11 +8335,11 @@ title = "Rule: logical reading order (manual)"
 area = "M"
 tier = "P1"
 milestone = "M12"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["a11y.check"]
+tools = ["accessibility_check"]
+evidence = ["crates/a11y/src/tests.rs::a_well_tagged_document_passes"]
+notes = "rule logical-reading-order: needs manual check"
 
 [[feature]]
 id = "a11y.rule-primary-language"
@@ -8347,11 +8347,11 @@ title = "Rule: primary language"
 area = "M"
 tier = "P1"
 milestone = "M12"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["a11y.check"]
+tools = ["accessibility_check"]
+evidence = ["crates/automation/tests/automation.rs::accessibility_check_report_and_fixes_through_tools"]
+notes = "rule primary-language: catalog /Lang; fix via Document Properties or accessibility_fix"
 
 [[feature]]
 id = "a11y.rule-title"
@@ -8359,11 +8359,11 @@ title = "Rule: title shown in the window"
 area = "M"
 tier = "P1"
 milestone = "M12"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["a11y.check"]
+tools = ["accessibility_check"]
+evidence = ["crates/automation/tests/automation.rs::accessibility_check_report_and_fixes_through_tools"]
+notes = "rule title: Info Title and DisplayDocTitle; Fix sets both"
 
 [[feature]]
 id = "a11y.rule-bookmarks"
@@ -8371,11 +8371,11 @@ title = "Rule: bookmarks in long documents"
 area = "M"
 tier = "P1"
 milestone = "M12"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["a11y.check"]
+tools = ["accessibility_check"]
+evidence = ["crates/a11y/src/tests.rs::scans_identity_fonts_and_long_documents"]
+notes = "rule bookmarks: more than 20 pages need bookmarks"
 
 [[feature]]
 id = "a11y.rule-color-contrast"
@@ -8383,11 +8383,11 @@ title = "Rule: colour contrast (manual)"
 area = "M"
 tier = "P1"
 milestone = "M12"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["a11y.check"]
+tools = ["accessibility_check"]
+evidence = ["crates/automation/tests/automation.rs::accessibility_check_report_and_fixes_through_tools"]
+notes = "rule color-contrast: needs manual check; off by default as in Acrobat"
 
 [[feature]]
 id = "a11y.rule-tagged-content"
@@ -8395,11 +8395,11 @@ title = "Rule: all content tagged or artifact"
 area = "M"
 tier = "P1"
 milestone = "M12"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["a11y.check"]
+tools = ["accessibility_check"]
+evidence = ["crates/a11y/src/tests.rs::page_content_and_annotation_problems_are_found"]
+notes = "rule tagged-content: painting outside MCID or Artifact marked content, through form XObjects; counted per page"
 
 [[feature]]
 id = "a11y.rule-tagged-annotations"
@@ -8407,11 +8407,11 @@ title = "Rule: tagged annotations"
 area = "M"
 tier = "P1"
 milestone = "M12"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["a11y.check"]
+tools = ["accessibility_check"]
+evidence = ["crates/a11y/src/tests.rs::page_content_and_annotation_problems_are_found"]
+notes = "rule tagged-annotations: annotations other than popups, widgets and multimedia need /StructParent"
 
 [[feature]]
 id = "a11y.rule-tab-order"
@@ -8419,11 +8419,11 @@ title = "Rule: tab order follows structure"
 area = "M"
 tier = "P1"
 milestone = "M12"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["a11y.check"]
+tools = ["accessibility_check"]
+evidence = ["crates/a11y/src/tests.rs::page_content_and_annotation_problems_are_found"]
+notes = "rule tab-order: pages with annotations need /Tabs /S; Fix sets it on every page"
 
 [[feature]]
 id = "a11y.rule-character-encoding"
@@ -8431,11 +8431,11 @@ title = "Rule: reliable character encoding"
 area = "M"
 tier = "P1"
 milestone = "M12"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["a11y.check"]
+tools = ["accessibility_check"]
+evidence = ["crates/a11y/src/tests.rs::scans_identity_fonts_and_long_documents"]
+notes = "rule character-encoding: ToUnicode, a standard encoding, or a predefined CJK collection; each font once"
 
 [[feature]]
 id = "a11y.rule-tagged-multimedia"
@@ -8443,11 +8443,11 @@ title = "Rule: tagged multimedia"
 area = "M"
 tier = "P1"
 milestone = "M12"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["a11y.check"]
+tools = ["accessibility_check"]
+evidence = ["crates/a11y/src/tests.rs::a_well_tagged_document_passes"]
+notes = "rule tagged-multimedia: Screen, Movie, Sound, RichMedia and 3D annotations need /StructParent"
 
 [[feature]]
 id = "a11y.rule-screen-flicker"
@@ -8455,11 +8455,11 @@ title = "Rule: screen flicker (manual)"
 area = "M"
 tier = "P1"
 milestone = "M12"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["a11y.check"]
+tools = ["accessibility_check"]
+evidence = ["crates/a11y/src/tests.rs::a_well_tagged_document_passes"]
+notes = "rule screen-flicker: needs manual check"
 
 [[feature]]
 id = "a11y.rule-scripts"
@@ -8467,11 +8467,11 @@ title = "Rule: scripts (manual)"
 area = "M"
 tier = "P1"
 milestone = "M12"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["a11y.check"]
+tools = ["accessibility_check"]
+evidence = ["crates/automation/tests/automation.rs::accessibility_check_report_and_fixes_through_tools"]
+notes = "rule scripts: needs manual check"
 
 [[feature]]
 id = "a11y.rule-timed-responses"
@@ -8479,11 +8479,11 @@ title = "Rule: timed responses (manual)"
 area = "M"
 tier = "P1"
 milestone = "M12"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["a11y.check"]
+tools = ["accessibility_check"]
+evidence = ["crates/a11y/src/tests.rs::a_well_tagged_document_passes"]
+notes = "rule timed-responses: needs manual check"
 
 [[feature]]
 id = "a11y.rule-navigation-links"
@@ -8491,11 +8491,11 @@ title = "Rule: navigation links (manual)"
 area = "M"
 tier = "P1"
 milestone = "M12"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["a11y.check"]
+tools = ["accessibility_check"]
+evidence = ["crates/a11y/src/tests.rs::a_well_tagged_document_passes"]
+notes = "rule navigation-links: needs manual check"
 
 [[feature]]
 id = "a11y.rule-tagged-fields"
@@ -8503,11 +8503,11 @@ title = "Rule: tagged form fields"
 area = "M"
 tier = "P1"
 milestone = "M12"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["a11y.check"]
+tools = ["accessibility_check"]
+evidence = ["crates/a11y/src/tests.rs::a_well_tagged_document_passes"]
+notes = "rule tagged-form-fields: widgets need /StructParent"
 
 [[feature]]
 id = "a11y.rule-field-descriptions"
@@ -8515,11 +8515,11 @@ title = "Rule: field descriptions"
 area = "M"
 tier = "P1"
 milestone = "M12"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["a11y.check"]
+tools = ["accessibility_check"]
+evidence = ["crates/a11y/src/tests.rs::page_content_and_annotation_problems_are_found"]
+notes = "rule field-descriptions: fields need a tooltip (/TU)"
 
 [[feature]]
 id = "a11y.rule-figure-alt"
@@ -8527,11 +8527,11 @@ title = "Rule: figures have alternate text"
 area = "M"
 tier = "P1"
 milestone = "M12"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["a11y.check"]
+tools = ["accessibility_check"]
+evidence = ["crates/a11y/src/tests.rs::structure_problems_are_found"]
+notes = "rule figures-alt-text: Figure elements need Alt or ActualText (or an ancestor's)"
 
 [[feature]]
 id = "a11y.rule-nested-alt"
@@ -8539,11 +8539,11 @@ title = "Rule: no nested alternate text"
 area = "M"
 tier = "P1"
 milestone = "M12"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["a11y.check"]
+tools = ["accessibility_check"]
+evidence = ["crates/a11y/src/tests.rs::structure_problems_are_found"]
+notes = "rule nested-alt-text: Alt inside an element with Alt"
 
 [[feature]]
 id = "a11y.rule-alt-associated"
@@ -8551,11 +8551,11 @@ title = "Rule: alternate text associated with content"
 area = "M"
 tier = "P1"
 milestone = "M12"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["a11y.check"]
+tools = ["accessibility_check"]
+evidence = ["crates/a11y/src/tests.rs::structure_problems_are_found"]
+notes = "rule alt-text-associated: Alt on an element with no content beneath it"
 
 [[feature]]
 id = "a11y.rule-alt-hides-annot"
@@ -8563,11 +8563,11 @@ title = "Rule: alternate text does not hide annotations"
 area = "M"
 tier = "P1"
 milestone = "M12"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["a11y.check"]
+tools = ["accessibility_check"]
+evidence = ["crates/a11y/src/tests.rs::structure_problems_are_found"]
+notes = "rule alt-text-hides-annotation: Alt on an element containing an OBJR"
 
 [[feature]]
 id = "a11y.rule-other-alt"
@@ -8575,11 +8575,11 @@ title = "Rule: other elements have alternate text"
 area = "M"
 tier = "P1"
 milestone = "M12"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["a11y.check"]
+tools = ["accessibility_check"]
+evidence = ["crates/a11y/src/tests.rs::structure_problems_are_found"]
+notes = "rule other-elements-alt-text: Formula elements need Alt"
 
 [[feature]]
 id = "a11y.rule-table-rows"
@@ -8587,11 +8587,11 @@ title = "Rule: table rows"
 area = "M"
 tier = "P1"
 milestone = "M12"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["a11y.check"]
+tools = ["accessibility_check"]
+evidence = ["crates/a11y/src/tests.rs::structure_problems_are_found"]
+notes = "rule table-rows: TR parent is Table, THead, TBody or TFoot"
 
 [[feature]]
 id = "a11y.rule-table-cells"
@@ -8599,11 +8599,11 @@ title = "Rule: TH and TD in rows"
 area = "M"
 tier = "P1"
 milestone = "M12"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["a11y.check"]
+tools = ["accessibility_check"]
+evidence = ["crates/a11y/src/tests.rs::structure_problems_are_found"]
+notes = "rule table-cells: TH/TD parent is TR"
 
 [[feature]]
 id = "a11y.rule-table-headers"
@@ -8611,11 +8611,11 @@ title = "Rule: tables have headers"
 area = "M"
 tier = "P1"
 milestone = "M12"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["a11y.check"]
+tools = ["accessibility_check"]
+evidence = ["crates/a11y/src/tests.rs::structure_problems_are_found"]
+notes = "rule table-headers: at least one TH"
 
 [[feature]]
 id = "a11y.rule-table-regularity"
@@ -8623,11 +8623,11 @@ title = "Rule: table regularity"
 area = "M"
 tier = "P1"
 milestone = "M12"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["a11y.check"]
+tools = ["accessibility_check"]
+evidence = ["crates/a11y/src/tests.rs::row_and_column_spans_keep_a_table_regular"]
+notes = "rule table-regularity: equal row widths counting ColSpan and RowSpan"
 
 [[feature]]
 id = "a11y.rule-table-summary"
@@ -8635,11 +8635,11 @@ title = "Rule: table summary"
 area = "M"
 tier = "P1"
 milestone = "M12"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["a11y.check"]
+tools = ["accessibility_check"]
+evidence = ["crates/a11y/src/tests.rs::structure_problems_are_found"]
+notes = "rule table-summary: Summary table attribute"
 
 [[feature]]
 id = "a11y.rule-list-items"
@@ -8647,11 +8647,11 @@ title = "Rule: list items"
 area = "M"
 tier = "P1"
 milestone = "M12"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["a11y.check"]
+tools = ["accessibility_check"]
+evidence = ["crates/a11y/src/tests.rs::structure_problems_are_found"]
+notes = "rule list-items: LI parent is L"
 
 [[feature]]
 id = "a11y.rule-lbl-lbody"
@@ -8659,11 +8659,11 @@ title = "Rule: Lbl and LBody"
 area = "M"
 tier = "P1"
 milestone = "M12"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["a11y.check"]
+tools = ["accessibility_check"]
+evidence = ["crates/a11y/src/tests.rs::structure_problems_are_found"]
+notes = "rule lbl-lbody: Lbl/LBody parent is LI (TOCI and notes allowed)"
 
 [[feature]]
 id = "a11y.rule-heading-nesting"
@@ -8671,11 +8671,11 @@ title = "Rule: heading nesting"
 area = "M"
 tier = "P1"
 milestone = "M12"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["a11y.check"]
+tools = ["accessibility_check"]
+evidence = ["crates/a11y/src/tests.rs::structure_problems_are_found"]
+notes = "rule heading-nesting: H1–H6 never skip a level going down; the first is H1"
 
 [[feature]]
 id = "a11y.autotag"
