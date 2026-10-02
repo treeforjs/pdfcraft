@@ -192,3 +192,57 @@ fn space_audit_shares_the_file_out_by_kind() {
     assert_eq!(audit.iter().map(|u| u.bytes).sum::<u64>(), bytes.len() as u64);
     assert!((audit.iter().map(|u| u.percent).sum::<f64>() - 100.0).abs() < 1e-6);
 }
+
+#[test]
+fn invalid_links_and_unreferenced_destinations_go() {
+    let mut doc = Document::new_empty();
+    let p = page(&mut doc, &[], "BT ET");
+    let link = |doc: &mut Document, dest: Object| {
+        let mut d = Dict::new();
+        d.set(b"Type".to_vec(), Object::name("Annot"));
+        d.set(b"Subtype".to_vec(), Object::name("Link"));
+        d.set(b"Rect".to_vec(), Object::Array(vec![0.into(), 0.into(), 10.into(), 10.into()]));
+        d.set(b"Dest".to_vec(), dest);
+        Object::Ref(doc.add(Object::Dict(d)))
+    };
+    let s = |t: &str| Object::String(printcraft_cos::PdfString::literal(t.as_bytes().to_vec()));
+    let annots = vec![
+        link(&mut doc, Object::Array(vec![Object::Ref(p), Object::name("Fit")])),
+        link(&mut doc, Object::Array(vec![Object::Ref(ObjRef::new(999, 0)), Object::name("Fit")])),
+        link(&mut doc, s("gone")),
+        link(&mut doc, s("kept")),
+    ];
+    doc.update_dict(p, |d| d.set(b"Annots".to_vec(), Object::Array(annots))).unwrap();
+    // Named destinations "kept" (used) and "unused"; a bookmark to a missing name.
+    let fit = Object::Array(vec![Object::Ref(p), Object::name("Fit")]);
+    let mut tree = Dict::new();
+    tree.set(b"Names".to_vec(), Object::Array(vec![s("kept"), fit.clone(), s("unused"), fit]));
+    let tree = doc.add(Object::Dict(tree));
+    let mut names = Dict::new();
+    names.set(b"Dests".to_vec(), Object::Ref(tree));
+    let outlines = doc.add(Object::Null);
+    let mut item = Dict::new();
+    item.set(b"Title".to_vec(), s("Lost"));
+    item.set(b"Parent".to_vec(), Object::Ref(outlines));
+    item.set(b"Dest".to_vec(), s("nowhere"));
+    let item = doc.add(Object::Dict(item));
+    let mut o = Dict::new();
+    o.set(b"First".to_vec(), Object::Ref(item));
+    o.set(b"Last".to_vec(), Object::Ref(item));
+    doc.set(outlines, Object::Dict(o));
+    let root = doc.root().unwrap();
+    doc.update_dict(root, |c| {
+        c.set(b"Names".to_vec(), Object::Dict(names));
+        c.set(b"Outlines".to_vec(), Object::Ref(outlines));
+    })
+    .unwrap();
+    let report = optimize(&mut doc, &Settings::default()).unwrap();
+    assert_eq!((report.invalid_links, report.invalid_bookmarks, report.unreferenced_dests), (2, 1, 1));
+    let left = doc.get(p).as_dict().unwrap().get(b"Annots").unwrap().as_array().unwrap().len();
+    assert_eq!(left, 2);
+    assert!(doc.get(item).as_dict().unwrap().get(b"Dest").is_none(), "the bookmark stays, without its broken destination");
+    // Off: nothing changes.
+    let mut again = doc.clone();
+    let off = Settings { remove_invalid_links: false, remove_unreferenced_dests: false, ..Settings::default() };
+    assert_eq!(optimize(&mut again, &off).unwrap().invalid_links, 0);
+}

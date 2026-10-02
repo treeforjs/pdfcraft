@@ -7403,11 +7403,11 @@ title = "Remove invalid links, bookmarks and unreferenced destinations"
 area = "K"
 tier = "P1"
 milestone = "M11"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["optimize.advanced"]
+tools = ["doc_optimize"]
+evidence = ["crates/optimize/tests/optimize.rs::invalid_links_and_unreferenced_destinations_go"]
+notes = "Clean Up: links to missing pages or names are removed; bookmarks keep their place (and children) but lose a broken destination; named destinations nothing refers to (links, bookmarks, actions anywhere) are removed from the name tree and the old /Dests; counts reported"
 
 [[feature]]
 id = "optimize.optimize-content"

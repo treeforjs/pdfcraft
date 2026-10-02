@@ -129,6 +129,8 @@ pub(crate) fn body(ui: &mut egui::Ui, d: &mut OptimizeDraft, t: &Tokens) -> (boo
         }
         OptimizeTab::CleanUp => {
             ui.checkbox(&mut s.flate_unencoded, "Use Flate to encode streams that are not encoded");
+            ui.checkbox(&mut s.remove_invalid_links, "Remove invalid links and bookmarks");
+            ui.checkbox(&mut s.remove_unreferenced_dests, "Remove unreferenced named destinations");
             ui.add_enabled(false, egui::Checkbox::new(&mut true, "Compress document structure (object streams)"));
             ui.add_enabled(false, egui::Checkbox::new(&mut true, "Remove unused objects and merge identical ones"));
         }

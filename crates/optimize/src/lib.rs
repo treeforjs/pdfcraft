@@ -17,6 +17,7 @@
 
 mod audit;
 mod images;
+mod links;
 
 pub use audit::{SpaceCategory, SpaceUse, audit_space};
 
@@ -70,6 +71,10 @@ pub struct Settings {
     pub discard_print_settings: bool,
     /// Flate-compress streams stored without a filter.
     pub flate_unencoded: bool,
+    /// Clean Up: remove links (and bookmark destinations) that point nowhere.
+    pub remove_invalid_links: bool,
+    /// Clean Up: remove named destinations nothing refers to.
+    pub remove_unreferenced_dests: bool,
 }
 
 impl Default for Settings {
@@ -83,6 +88,8 @@ impl Default for Settings {
             discard_tags: false,
             discard_print_settings: false,
             flate_unencoded: true,
+            remove_invalid_links: true,
+            remove_unreferenced_dests: true,
         }
     }
 }
@@ -101,6 +108,10 @@ pub struct Report {
     pub tags_removed: bool,
     pub print_settings: usize,
     pub streams_compressed: usize,
+    /// Links removed and bookmarks whose destination was cleared (Clean Up).
+    pub invalid_links: usize,
+    pub invalid_bookmarks: usize,
+    pub unreferenced_dests: usize,
 }
 
 /// Optimize `doc` in place.
@@ -173,6 +184,14 @@ pub fn optimize(doc: &mut Document, settings: &Settings) -> Result<Report, Optim
             }
             _ => {}
         }
+    }
+    if settings.remove_invalid_links {
+        let (l, b) = links::remove_invalid(doc, &pages)?;
+        report.invalid_links = l;
+        report.invalid_bookmarks = b;
+    }
+    if settings.remove_unreferenced_dests {
+        report.unreferenced_dests = links::remove_unreferenced_dests(doc)?;
     }
     if settings.flate_unencoded {
         for num in doc.object_numbers() {
