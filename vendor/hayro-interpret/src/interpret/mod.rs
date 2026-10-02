@@ -17,7 +17,7 @@ use crate::x_object::{
 };
 use hayro_syntax::content::TypedIter;
 use hayro_syntax::content::ops::TypedInstruction;
-use hayro_syntax::object::dict::keys::{ANNOTS, AP, AS, F, MCID, N, OC, RECT};
+use hayro_syntax::object::dict::keys::{ANNOTS, AP, AS, F, MCID, N, OC, RECT, SUBTYPE};
 use hayro_syntax::object::{Array, Dict, Object, Rect, Stream, dict_or_stream};
 use hayro_syntax::page::{Page, Resources};
 use kurbo::{Affine, Point, Shape};
@@ -101,6 +101,9 @@ pub struct InterpreterSettings {
     /// Note that this feature is currently not fully implemented yet, so some
     /// annotations might be missing.
     pub render_annotations: bool,
+    /// PrintCraft patch: hide comments (markup annotations) but keep form fields (`/Widget`)
+    /// and links, for the viewer's "Hide all comments".
+    pub hide_comments: bool,
     /// PrintCraft patch: viewer overrides for optional content groups (object number, generation,
     /// visible), applied on top of the document's default configuration (Layers panel toggles).
     pub ocg_overrides: Arc<Vec<(i32, i32, bool)>>,
@@ -122,6 +125,7 @@ impl Default for InterpreterSettings {
             cmap_resolver: Arc::new(|_| None),
             warning_sink: Arc::new(|_| {}),
             render_annotations: true,
+            hide_comments: false,
             ocg_overrides: Arc::new(Vec::new()),
         }
     }
@@ -156,6 +160,12 @@ pub fn interpret_page<'a>(
             // Annotation should be hidden (Hidden = bit 2, NoView = bit 6).
             // PrintCraft patch: NoView was not honoured upstream.
             if flags & (2 | 32) != 0 {
+                continue;
+            }
+            // PrintCraft patch: "Hide all comments" keeps widgets and links.
+            if context.settings.hide_comments
+                && !matches!(annot.get::<hayro_syntax::object::Name<'_>>(SUBTYPE).as_deref(), Some(b"Widget" | b"Link"))
+            {
                 continue;
             }
 

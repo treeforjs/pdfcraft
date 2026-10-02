@@ -81,6 +81,8 @@ fn scope_of(edit: &Edit) -> Scope {
         | Edit::SetAnnotationContents { .. }
         | Edit::ReplyToAnnotation { .. }
         | Edit::SetAnnotationStatus { .. }
+        | Edit::MarkAnnotation { .. }
+        | Edit::LockAnnotation { .. }
         | Edit::MoveAnnotation { .. }
         | Edit::ResizeAnnotation { .. }
         | Edit::StyleAnnotation { .. }
@@ -138,6 +140,11 @@ pub struct Document {
 }
 
 impl Document {
+    /// Whether comments are hidden (Comments ▸ Hide all comments).
+    pub fn comments_hidden(&self) -> bool {
+        self.config.hide_comments
+    }
+
     pub fn can_undo(&self) -> Option<&str> {
         self.editor.as_ref().and_then(|e| e.undo.last()).map(|(l, ..)| l.as_str())
     }
@@ -500,6 +507,19 @@ pub enum Edit {
         state: ReviewState,
         author: String,
     },
+    /// Acrobat's "Mark with checkmark" (a hidden `/StateModel /Marked` reply by `author`).
+    MarkAnnotation {
+        page: usize,
+        index: usize,
+        marked: bool,
+        author: String,
+    },
+    /// Properties ▸ Locked.
+    LockAnnotation {
+        page: usize,
+        index: usize,
+        locked: bool,
+    },
     MoveAnnotation {
         page: usize,
         index: usize,
@@ -694,6 +714,10 @@ impl Edit {
             Edit::SetAnnotationContents { .. } => "Edit comment".into(),
             Edit::ReplyToAnnotation { .. } => "Reply".into(),
             Edit::SetAnnotationStatus { state, .. } => format!("Set status {}", state.name()),
+            Edit::MarkAnnotation { marked: true, .. } => "Mark with checkmark".into(),
+            Edit::MarkAnnotation { .. } => "Remove checkmark".into(),
+            Edit::LockAnnotation { locked: true, .. } => "Lock comment".into(),
+            Edit::LockAnnotation { .. } => "Unlock comment".into(),
             Edit::MoveAnnotation { .. } => "Move comment".into(),
             Edit::ResizeAnnotation { .. } => "Resize comment".into(),
             Edit::StyleAnnotation { .. } | Edit::SetAnnotationInfo { .. } => "Change comment properties".into(),
@@ -798,6 +822,8 @@ fn check_permission(edit: &Edit, p: &printcraft_cos::Permissions) -> Result<(), 
         | Edit::SetAnnotationContents { .. }
         | Edit::ReplyToAnnotation { .. }
         | Edit::SetAnnotationStatus { .. }
+        | Edit::MarkAnnotation { .. }
+        | Edit::LockAnnotation { .. }
         | Edit::MoveAnnotation { .. }
         | Edit::ResizeAnnotation { .. }
         | Edit::StyleAnnotation { .. }
@@ -962,6 +988,10 @@ fn run_edit(doc: &mut printcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -
         Edit::SetAnnotationStatus { page, index, state, author } => {
             printcraft_annot::set_review_state(doc, *page, *index, *state, author, &cx.meta())?;
         }
+        Edit::MarkAnnotation { page, index, marked, author } => {
+            printcraft_annot::set_marked(doc, *page, *index, *marked, author, &cx.meta())?;
+        }
+        Edit::LockAnnotation { page, index, locked } => printcraft_annot::set_locked(doc, *page, *index, *locked)?,
         Edit::MoveAnnotation { page, index, dx, dy } => printcraft_annot::move_annotation(doc, *page, *index, *dx, *dy, &cx.meta())?,
         Edit::ResizeAnnotation { page, index, rect } => printcraft_annot::set_rect(doc, *page, *index, *rect, &cx.meta())?,
         Edit::StyleAnnotation { page, index, color, opacity, width } => {
@@ -1105,6 +1135,7 @@ fn comment_list(doc: &printcraft_cos::Document) -> Vec<printcraft_render::Annota
             index: s.index,
             state: s.state,
             quads: s.quads,
+            locked: s.locked,
         })
         .collect()
 }
@@ -1744,6 +1775,27 @@ impl Session {
         true
     }
 
+    /// Hide or show every comment on the page (Acrobat's Comments ▸ Hide all comments). Form
+    /// fields and links still draw. Returns whether anything changed.
+    pub fn set_hide_comments(&mut self, id: DocId, hide: bool) -> bool {
+        let Some(doc) = self.docs.iter_mut().find(|d| d.id == id) else { return false };
+        if doc.config.hide_comments == hide {
+            return false;
+        }
+        doc.config.hide_comments = hide;
+        doc.renderer = RenderPool::new(doc.bytes.clone(), render_threads(), doc.config.clone());
+        doc.generation += 1;
+        true
+    }
+
+    /// Acrobat's Summarize Comments ("Comments only" layout): a new PDF listing every comment
+    /// with its number, author, type, date, text and replies, grouped by page.
+    pub fn summarize_comments(&self, id: DocId, sort: SummarySort) -> Result<Arc<Vec<u8>>, EditError> {
+        let doc = self.get(id).ok_or(EditError::NoDocument)?;
+        let text = comment_summary(&doc.name, &doc.info.annotations, sort);
+        self.create_from_text(&format!("Summary of Comments on {}", doc.name), &text)
+    }
+
     pub fn close(&mut self, id: DocId) {
         self.docs.retain(|d| d.id != id);
     }
@@ -1755,6 +1807,111 @@ impl Session {
     pub fn docs(&self) -> &[Document] {
         &self.docs
     }
+}
+
+/// Order of Summarize Comments.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SummarySort {
+    #[default]
+    Page,
+    Author,
+    Date,
+    Type,
+}
+
+impl SummarySort {
+    pub const ALL: [SummarySort; 4] = [SummarySort::Page, SummarySort::Author, SummarySort::Date, SummarySort::Type];
+    pub fn name(self) -> &'static str {
+        match self {
+            SummarySort::Page => "Page",
+            SummarySort::Author => "Author",
+            SummarySort::Date => "Date",
+            SummarySort::Type => "Type",
+        }
+    }
+    pub fn parse(s: &str) -> Option<SummarySort> {
+        Self::ALL.into_iter().find(|k| k.name().eq_ignore_ascii_case(s))
+    }
+}
+
+/// Acrobat's name for a comment type, as comment lists show it.
+pub fn comment_type_name(subtype: &str) -> &str {
+    match subtype {
+        "Text" => "Sticky Note",
+        "FreeText" => "Text Box",
+        "Highlight" => "Highlight",
+        "Underline" => "Underline",
+        "StrikeOut" => "Strikethrough",
+        "Squiggly" => "Squiggly",
+        "Square" => "Rectangle",
+        "Circle" => "Oval",
+        "Line" => "Line",
+        "Ink" => "Pencil",
+        "Polygon" => "Polygon",
+        "PolyLine" => "Polygonal Line",
+        "Stamp" => "Stamp",
+        "Caret" => "Inserted Text",
+        "FileAttachment" => "File Attachment",
+        "Sound" => "Sound",
+        "Redact" => "Redaction",
+        other => other,
+    }
+}
+
+/// The text of a comment summary: one block per comment (replies indented under it), with a
+/// "Page N" heading when sorted by page. Checkmarks and status replies are left out, as are
+/// pop-ups; the number is the comment's position on its page.
+pub fn comment_summary(name: &str, all: &[printcraft_render::Annotation], sort: SummarySort) -> String {
+    use std::fmt::Write;
+    let top: Vec<&printcraft_render::Annotation> = all.iter().filter(|a| a.in_reply_to.is_none() && a.state.is_none()).collect();
+    let replies_of = |a: &printcraft_render::Annotation| -> Vec<&printcraft_render::Annotation> {
+        all.iter().filter(|r| r.state.is_none() && r.in_reply_to.is_some() && r.in_reply_to == a.name && a.name.is_some()).collect()
+    };
+    let mut numbered: Vec<(usize, &printcraft_render::Annotation)> = Vec::new();
+    let mut last = usize::MAX;
+    let mut n = 0;
+    for a in &top {
+        if a.page != last {
+            last = a.page;
+            n = 0;
+        }
+        n += 1;
+        numbered.push((n, a));
+    }
+    match sort {
+        SummarySort::Page => {}
+        SummarySort::Author => numbered.sort_by(|x, y| x.1.author.cmp(&y.1.author)),
+        SummarySort::Date => numbered.sort_by(|x, y| x.1.modified.cmp(&y.1.modified)),
+        SummarySort::Type => numbered.sort_by(|x, y| comment_type_name(&x.1.subtype).cmp(comment_type_name(&y.1.subtype))),
+    }
+    let mut out = format!("Summary of Comments on {name}\n\n");
+    if numbered.is_empty() {
+        out.push_str("This document has no comments.\n");
+        return out;
+    }
+    let mut heading = usize::MAX;
+    for (n, a) in numbered {
+        if sort == SummarySort::Page && a.page != heading {
+            heading = a.page;
+            let _ = writeln!(out, "Page: {}", a.page + 1);
+        }
+        let _ = write!(out, "Number: {n}  Author: {}  Subject: {}", a.author.as_deref().unwrap_or(""), comment_type_name(&a.subtype));
+        if sort != SummarySort::Page {
+            let _ = write!(out, "  Page: {}", a.page + 1);
+        }
+        let _ = writeln!(out, "  Date: {}", a.modified.as_deref().unwrap_or(""));
+        if let Some(c) = a.contents.as_deref().filter(|c| !c.is_empty()) {
+            let _ = writeln!(out, "{c}");
+        }
+        for r in replies_of(a) {
+            let _ = writeln!(out, "    Author: {}  Subject: Reply  Date: {}", r.author.as_deref().unwrap_or(""), r.modified.as_deref().unwrap_or(""));
+            for line in r.contents.as_deref().unwrap_or("").lines() {
+                let _ = writeln!(out, "    {line}");
+            }
+        }
+        out.push('\n');
+    }
+    out
 }
 
 #[cfg(test)]

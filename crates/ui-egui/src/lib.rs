@@ -146,6 +146,8 @@ pub enum Dialog {
     Sanitize,
     /// Documents from a session that ended unexpectedly.
     Recovery,
+    /// Comments ▸ Summarize comments (options).
+    SummarizeComments,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -216,6 +218,8 @@ pub struct PrintCraftApp {
     pub split_draft: SplitDraft,
     pub extract_draft: ExtractDraft,
     pub rotate_draft: RotateDraft,
+    /// Summarize Comments: sort order.
+    pub summary_sort: printcraft_engine::SummarySort,
     /// Where autosaves go (`None`: autosave off, e.g. on the web and in tests).
     pub recovery: Option<RecoveryStore>,
     /// Entries left by a previous session, offered in the Recovery dialog.
@@ -314,6 +318,7 @@ impl PrintCraftApp {
             split_draft: SplitDraft::default(),
             extract_draft: ExtractDraft::default(),
             rotate_draft: RotateDraft::default(),
+            summary_sort: Default::default(),
             recovery: None,
             recoverable: Vec::new(),
             recovery_keys: Default::default(),

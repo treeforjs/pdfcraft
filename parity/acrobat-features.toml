@@ -3767,11 +3767,11 @@ title = "Lock comments"
 area = "E"
 tier = "P1"
 milestone = "M5"
-status = "planned"
+status = "shipped"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["comment_lock"]
+evidence = ["crates/engine/src/tests.rs::comments_lock_take_checkmarks_hide_and_summarize", "crates/ui-egui/tests/comments.rs::comments_take_checkmarks_lock_hide_and_summarize", "crates/automation/tests/automation.rs::comment_checkmarks_locks_hiding_and_summaries_through_tools"]
+notes = "Comment Properties ▸ Locked; locked comments refuse move, resize, restyle and delete; text stays editable"
 
 [[feature]]
 id = "comment.default-properties"
@@ -3827,11 +3827,11 @@ title = "Mark comments with a checkmark"
 area = "E"
 tier = "P1"
 milestone = "M5"
-status = "planned"
+status = "shipped"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["comment_mark"]
+evidence = ["crates/engine/src/tests.rs::comments_lock_take_checkmarks_hide_and_summarize", "crates/ui-egui/tests/comments.rs::comments_take_checkmarks_lock_hide_and_summarize", "crates/automation/tests/automation.rs::comment_checkmarks_locks_hiding_and_summaries_through_tools"]
+notes = "hidden /StateModel /Marked reply; card toggle and context menu"
 
 [[feature]]
 id = "comment.delete-comment"
@@ -3863,11 +3863,11 @@ title = "Copy comment text"
 area = "E"
 tier = "P1"
 milestone = "M5"
-status = "planned"
+status = "shipped"
 commands = []
 tools = []
-evidence = []
-notes = ""
+evidence = ["crates/ui-egui/tests/comments.rs::comments_take_checkmarks_lock_hide_and_summarize"]
+notes = "card and canvas context menus"
 
 [[feature]]
 id = "comment.filter-comments"
@@ -3911,11 +3911,11 @@ title = "Show or hide all comments and pop-ups"
 area = "E"
 tier = "P1"
 milestone = "M5"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["comment.hide_all"]
+tools = ["comments_hide"]
+evidence = ["crates/engine/src/tests.rs::comments_lock_take_checkmarks_hide_and_summarize", "crates/ui-egui/tests/comments.rs::comments_take_checkmarks_lock_hide_and_summarize", "crates/automation/tests/automation.rs::comment_checkmarks_locks_hiding_and_summaries_through_tools"]
+notes = "hide/show all comments (fields and links still draw); per-type hiding not yet"
 
 [[feature]]
 id = "comment.popups"
@@ -4079,11 +4079,11 @@ title = "Summarize comments into a new PDF"
 area = "E"
 tier = "P1"
 milestone = "M5"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["comment.summarize"]
+tools = ["comments_summarize"]
+evidence = ["crates/engine/src/tests.rs::comments_lock_take_checkmarks_hide_and_summarize", "crates/ui-egui/tests/comments.rs::comments_take_checkmarks_lock_hide_and_summarize", "crates/automation/tests/automation.rs::comment_checkmarks_locks_hiding_and_summaries_through_tools"]
+notes = "Comments only layout, sorted by page, author, date or type; the layouts with the document and connector lines not yet"
 
 [[feature]]
 id = "comment.flatten"

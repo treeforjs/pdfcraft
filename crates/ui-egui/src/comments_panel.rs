@@ -59,6 +59,11 @@ fn initials(name: &str) -> String {
     if s.is_empty() { "?".into() } else { s.to_uppercase() }
 }
 
+/// The latest checkmark reply in a thread says "Marked".
+pub fn is_marked(thread: &[&Annotation]) -> bool {
+    thread.iter().rev().find(|r| r.is_mark()).is_some_and(|r| r.state.as_deref() == Some("Marked"))
+}
+
 /// The number shown in the header: comments and their replies (not status changes).
 pub fn count(info: &DocInfo) -> usize {
     info.annotations.iter().filter(|a| a.state.is_none()).count()
@@ -134,7 +139,8 @@ pub(crate) fn show(
         }
     };
     let cv = &view.comments;
-    let status_of = |a: &Annotation| replies_of(a).iter().rev().find_map(|r| r.state.clone()).unwrap_or_else(|| "None".into());
+    let status_of =
+        |a: &Annotation| replies_of(a).iter().rev().filter(|r| !r.is_mark()).find_map(|r| r.state.clone()).unwrap_or_else(|| "None".into());
     let mut roots: Vec<&Annotation> = info
         .annotations
         .iter()
@@ -212,28 +218,46 @@ fn card(
     let key = (a.page, a.index);
     let selected = view.comments.selected == Some(key);
     let color = a.color.map(|c| color32(c.map(f64::from))).unwrap_or(t.accent);
-    let status = thread.iter().rev().find_map(|r| r.state.as_deref());
+    let status = thread.iter().rev().filter(|r| !r.is_mark()).find_map(|r| r.state.as_deref());
+    let marked = is_marked(thread);
     let replies: Vec<&&Annotation> = thread.iter().filter(|r| r.state.is_none()).collect();
     let editing = view.comments.editing.as_ref().is_some_and(|(p, i, _)| (*p, *i) == key);
     let fill = if selected { t.hover.gamma_multiply(0.7) } else { Color32::TRANSPARENT };
     let mut open_menu = false;
+    let mut more_rect = None;
     let frame = egui::Frame::NONE
         .fill(fill)
         .corner_radius(CornerRadius::same(6))
         .inner_margin(egui::Margin { left: 10, right: 8, top: 10, bottom: 10 })
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
+            let mut buttons_left = f32::INFINITY;
             let head = ui.horizontal(|ui| {
                 avatar(ui, t, Some(subtype_icon(&a.subtype)), None, color);
                 ui.label(egui::RichText::new(a.author.as_deref().unwrap_or("Unknown author")).font(theme::semibold(12.5)).color(t.text));
                 if let Some(m) = &a.modified {
                     ui.add(egui::Label::new(egui::RichText::new(m).font(theme::regular(11.0)).color(t.text_faint)).truncate());
                 }
-                if selected && allowed {
-                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        open_menu = icons::button(ui, "ellipsis", 22.0, false, "More").clicked();
-                    });
-                }
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if selected && allowed {
+                        let more = icons::button(ui, "ellipsis", 22.0, false, "More");
+                        open_menu = more.clicked();
+                        more_rect = Some(more.rect);
+                    }
+                    // Acrobat's per-comment checkmark: a toggle on the selected card, a mark otherwise.
+                    let tip = if marked { "Remove checkmark" } else { "Mark with checkmark" };
+                    if selected && allowed {
+                        if icons::button(ui, "circle-check", 22.0, marked, tip).clicked() {
+                            edit = Some(Edit::MarkAnnotation { page: a.page, index: a.index, marked: !marked, author: prefs.author.clone() });
+                        }
+                    } else if marked {
+                        ui.add(icons::image("circle-check", 14.0, t.accent)).on_hover_text("Marked");
+                    }
+                    if a.locked {
+                        ui.add(icons::image("lock", 13.0, t.text_faint)).on_hover_text("Locked");
+                    }
+                    buttons_left = ui.min_rect().left();
+                });
             });
             egui::Frame::NONE.inner_margin(egui::Margin { left: 34, right: 0, top: 4, bottom: 0 }).show(ui, |ui| {
                 ui.set_width(ui.available_width());
@@ -314,7 +338,10 @@ fn card(
                     });
                 });
             }
-            head.response.rect
+            // The header selects the card, except where its buttons are.
+            let mut r = head.response.rect;
+            r.max.x = r.max.x.min(buttons_left - 2.0);
+            r
         });
     let rect = frame.response.rect;
     if selected {
@@ -345,7 +372,9 @@ fn card(
     if open_menu {
         egui::Popup::open_id(ui.ctx(), menu_id);
     }
-    egui::Popup::new(menu_id, ui.ctx().clone(), egui::PopupAnchor::Pointer, ui.layer_id())
+    // Hang the menu from the "…" button (a pointer anchor would follow the mouse to the items).
+    let anchor = more_rect.map_or(egui::PopupAnchor::PointerFixed, egui::PopupAnchor::ParentRect);
+    egui::Popup::new(menu_id, ui.ctx().clone(), anchor, ui.layer_id())
         .open_memory(None)
         .kind(egui::PopupKind::Menu)
         .layout(Layout::top_down_justified(Align::Min))
@@ -363,12 +392,20 @@ fn card(
                     }
                 }
             });
+            if ui.button(if marked { "Remove checkmark" } else { "Mark with checkmark" }).clicked() {
+                edit = Some(Edit::MarkAnnotation { page: a.page, index: a.index, marked: !marked, author: prefs.author.clone() });
+                ui.close();
+            }
+            if ui.button("Copy text").clicked() {
+                ui.ctx().copy_text(a.contents.clone().unwrap_or_default());
+                ui.close();
+            }
             if ui.button("Properties…").clicked() {
                 view.comments.props_request = Some((a.page, a.index));
                 ui.close();
             }
             ui.separator();
-            if ui.button("Delete").clicked() {
+            if ui.add_enabled(!a.locked, egui::Button::new("Delete")).clicked() {
                 view.comments.selected = None;
                 edit = Some(Edit::DeleteAnnotation { page: a.page, index: a.index });
                 ui.close();
@@ -401,7 +438,10 @@ fn legible(c: Color32, t: &Tokens) -> Color32 {
 }
 
 /// The Comments panel header's filter and sort controls (Acrobat: filter funnel and "…").
-pub(crate) fn header_controls(ui: &mut egui::Ui, info: &DocInfo, view: &mut DocView) {
+/// The header's "…" (sort, hide all, summary, data exchange) and filter menus; returns a
+/// command to run.
+pub(crate) fn header_controls(ui: &mut egui::Ui, info: &DocInfo, view: &mut DocView, hidden: bool) -> Option<&'static str> {
+    let mut command = None;
     let cv = &mut view.comments;
     let mut types: Vec<String> = info.annotations.iter().filter(|a| a.in_reply_to.is_none()).map(|a| subtype_label(&a.subtype).to_string()).collect();
     types.sort();
@@ -411,14 +451,27 @@ pub(crate) fn header_controls(ui: &mut egui::Ui, info: &DocInfo, view: &mut DocV
     authors.sort();
     authors.dedup();
     let active = !(cv.hidden_types.is_empty() && cv.hidden_authors.is_empty() && cv.hidden_statuses.is_empty());
-    let more = icons::button(ui, "ellipsis", 26.0, false, "Sort comments");
+    let more = icons::button(ui, "ellipsis", 26.0, false, "More options");
     egui::Popup::menu(&more).show(|ui| {
+        ui.set_min_width(220.0);
         ui.label(egui::RichText::new("Sort by").small());
         for (s, label) in
             [(SortBy::Page, "Page"), (SortBy::Author, "Author"), (SortBy::Date, "Date"), (SortBy::Type, "Type"), (SortBy::Color, "Colour")]
         {
             if ui.radio(cv.sort == s, label).clicked() {
                 cv.sort = s;
+                ui.close();
+            }
+        }
+        ui.separator();
+        for (id, label) in [
+            ("comment.hide_all", if hidden { "Show all comments" } else { "Hide all comments" }),
+            ("comment.summarize", "Create PDF comment summary…"),
+            ("comment.export", "Export all to data file…"),
+            ("comment.import", "Import comments…"),
+        ] {
+            if ui.button(label).clicked() {
+                command = Some(id);
                 ui.close();
             }
         }
@@ -456,4 +509,5 @@ pub(crate) fn header_controls(ui: &mut egui::Ui, info: &DocInfo, view: &mut DocV
             cv.hidden_statuses.clear();
         }
     });
+    command
 }

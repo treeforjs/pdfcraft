@@ -3,7 +3,7 @@
 //! Geometry follows the automation convention: points from the top-left of the displayed page,
 //! y down. It is converted to PDF user space (crop box, `/Rotate`) here.
 
-use printcraft_engine::{Edit, Markup, NewAnnotation, NoteIcon, ReviewState, Rgb, Shape, StampGroup, StampKind, Style};
+use printcraft_engine::{Edit, Markup, NewAnnotation, NoteIcon, ReviewState, Rgb, Shape, StampGroup, StampKind, Style, SummarySort};
 use printcraft_render::{Annotation, PageInfo};
 use serde_json::{Value, json};
 
@@ -125,8 +125,10 @@ impl Automation {
                     Some(nm) => all.iter().filter(|r| r.in_reply_to.as_deref() == Some(nm.as_str())).collect(),
                     None => Vec::new(),
                 };
-                let status = thread.iter().rev().find_map(|r| r.state.clone());
+                let status = thread.iter().rev().filter(|r| !r.is_mark()).find_map(|r| r.state.clone());
                 v["status"] = json!(status);
+                v["marked"] = json!(thread.iter().rev().find(|r| r.is_mark()).is_some_and(|r| r.state.as_deref() == Some("Marked")));
+                v["locked"] = json!(c.locked);
                 v["replies"] = thread.iter().filter(|r| r.state.is_none()).map(|r| view(r)).collect();
                 v
             })
@@ -314,6 +316,37 @@ impl Automation {
         let state = ReviewState::from_name(status).ok_or_else(|| ToolError::InvalidArgs(format!("unknown status {status:?}")))?;
         let author = a.opt_str("author")?.unwrap_or(DEFAULT_AUTHOR).to_string();
         self.apply(a, Edit::SetAnnotationStatus { page, index, state, author })
+    }
+
+    pub(crate) fn comment_mark(&mut self, a: &Args) -> Result<Value> {
+        let (page, index) = self.comment_target(a)?;
+        let marked = a.opt_bool("marked")?.unwrap_or(true);
+        let author = a.opt_str("author")?.unwrap_or(DEFAULT_AUTHOR).to_string();
+        self.apply(a, Edit::MarkAnnotation { page, index, marked, author })
+    }
+
+    pub(crate) fn comment_lock(&mut self, a: &Args) -> Result<Value> {
+        let (page, index) = self.comment_target(a)?;
+        let locked = a.opt_bool("locked")?.unwrap_or(true);
+        self.apply(a, Edit::LockAnnotation { page, index, locked })
+    }
+
+    pub(crate) fn comments_hide(&mut self, a: &Args) -> Result<Value> {
+        let id = self.doc(a)?.id;
+        let hidden = a.opt_bool("hidden")?.unwrap_or(true);
+        self.session.set_hide_comments(id, hidden);
+        Ok(json!({ "hidden": hidden }))
+    }
+
+    pub(crate) fn comments_summarize(&mut self, a: &Args) -> Result<Value> {
+        let doc = self.doc(a)?;
+        let (id, stem) = (doc.id, std::path::Path::new(&doc.name).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default());
+        let sort = match a.opt_str("sort")? {
+            Some(s) => SummarySort::parse(s).ok_or_else(|| ToolError::InvalidArgs(format!("unknown sort {s:?}")))?,
+            None => SummarySort::Page,
+        };
+        let bytes = self.session.summarize_comments(id, sort).map_err(failed)?;
+        self.deliver(a, &format!("Summary of comments on {stem}.pdf"), bytes)
     }
 
     pub(crate) fn comment_edit(&mut self, a: &Args) -> Result<Value> {

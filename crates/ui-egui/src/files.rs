@@ -341,6 +341,17 @@ impl PrintCraftApp {
         self.write_files(&named, "Choose a folder for the split files")
     }
 
+    /// Summarize Comments: make the summary and open it as a new document.
+    pub fn summarize_comments(&mut self) {
+        let Some((_, id)) = self.active_ids() else { return };
+        let stem =
+            self.session.get(id).map(|d| std::path::Path::new(&d.name).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default());
+        match self.session.summarize_comments(id, self.summary_sort) {
+            Ok(bytes) => self.open_created(&format!("Summary of comments on {}.pdf", stem.unwrap_or_default()), bytes, "Created a comment summary"),
+            Err(e) => self.notify(format!("Couldn't summarize comments: {e}")),
+        }
+    }
+
     fn open_created(&mut self, name: &str, bytes: Arc<Vec<u8>>, message: &str) {
         match self.session.open_new(name, bytes) {
             Ok(id) => {

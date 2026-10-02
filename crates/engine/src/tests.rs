@@ -387,7 +387,7 @@ fn number_pages_shows_in_the_viewer_and_undoes() {
 /// RGBA of the pixel at PDF point (x, y) on `page`, rendered at 1 px/pt (page height 300).
 fn pixel(s: &Session, id: DocId, page: usize, x: u32, y: u32) -> [u8; 4] {
     let doc = s.get(id).unwrap();
-    let mut r = printcraft_render::PageRenderer::new(doc.bytes.clone(), printcraft_render::RenderConfig::default());
+    let mut r = printcraft_render::PageRenderer::new(doc.bytes.clone(), doc.config.clone());
     let out = r.render(printcraft_render::RenderRequest { page, scale: 1.0, ..Default::default() });
     assert!(out.error.is_none(), "{:?}", out.error);
     let i = (((300 - y) * out.width + x) * 4) as usize;
@@ -639,6 +639,8 @@ fn comment_edits_refresh_the_list_exactly_as_a_full_inspection_would() {
     s.apply(id, add(2, Shape::Note { at: [100.0, 280.0], icon: NoteIcon::Comment }, "Sticky")).unwrap();
     s.apply(id, Edit::ReplyToAnnotation { page: 2, index: 0, text: "Reply".into(), author: "Bob".into() }).unwrap();
     s.apply(id, Edit::SetAnnotationStatus { page: 2, index: 0, state: ReviewState::Accepted, author: "Bob".into() }).unwrap();
+    s.apply(id, Edit::MarkAnnotation { page: 2, index: 0, marked: true, author: "Bob".into() }).unwrap();
+    s.apply(id, Edit::LockAnnotation { page: 1, index: 1, locked: true }).unwrap();
     s.apply(id, Edit::MoveAnnotation { page: 0, index: 0, dx: 5.0, dy: 5.0 }).unwrap();
     s.apply(id, Edit::DeleteAnnotation { page: 1, index: 0 }).unwrap();
     s.undo(id).unwrap();
@@ -646,7 +648,8 @@ fn comment_edits_refresh_the_list_exactly_as_a_full_inspection_would() {
     let full = printcraft_render::inspect(d.bytes.clone(), None).unwrap();
     assert_eq!(format!("{:?}", d.info.annotations), format!("{:?}", full.annotations));
     assert_eq!(d.info.file_size, full.file_size);
-    assert_eq!(d.info.annotations.len(), 6);
+    assert_eq!(d.info.annotations.len(), 7);
+    assert!(d.info.annotations.iter().any(|a| a.locked));
 }
 
 #[test]
@@ -1002,4 +1005,43 @@ fn links_from_urls_and_link_edits() {
     s.apply(id, Edit::DeleteLink { page: 0, index: l.index }).unwrap();
     assert!(s.get(id).unwrap().links.is_empty());
     assert!(s.apply(id, Edit::RemoveLinks { pages: None }).is_err(), "nothing left to remove");
+}
+
+#[test]
+fn comments_lock_take_checkmarks_hide_and_summarize() {
+    let (mut s, id) = session_with(2);
+    s.apply(id, rect_comment(1, [80.0, 80.0, 120.0, 120.0])).unwrap();
+    s.apply(id, Edit::ReplyToAnnotation { page: 1, index: 0, text: "Agreed".into(), author: "Ada".into() }).unwrap();
+    s.apply(id, Edit::LockAnnotation { page: 1, index: 0, locked: true }).unwrap();
+    assert_eq!(s.get(id).unwrap().can_undo(), Some("Lock comment"));
+    assert!(s.get(id).unwrap().info.annotations[0].locked);
+    assert!(s.apply(id, Edit::MoveAnnotation { page: 1, index: 0, dx: 5.0, dy: 0.0 }).is_err(), "locked comments stay put");
+    assert!(s.apply(id, Edit::DeleteAnnotation { page: 1, index: 0 }).is_err(), "and can't be deleted");
+    s.apply(id, Edit::SetAnnotationContents { page: 1, index: 0, text: "Still editable".into() }).unwrap();
+    s.apply(id, Edit::LockAnnotation { page: 1, index: 0, locked: false }).unwrap();
+    s.apply(id, Edit::MoveAnnotation { page: 1, index: 0, dx: 5.0, dy: 0.0 }).unwrap();
+
+    s.apply(id, Edit::MarkAnnotation { page: 1, index: 0, marked: true, author: "Ada".into() }).unwrap();
+    let a = &s.get(id).unwrap().info.annotations;
+    let mark = a.iter().find(|r| r.is_mark()).expect("a checkmark reply");
+    assert_eq!(mark.state.as_deref(), Some("Marked"));
+
+    // Hiding comments drops the rectangle but keeps the page.
+    let px = pixel(&s, id, 1, 105, 100);
+    assert!(px[0] > 200 && px[1] < 40, "drawn: {px:?}");
+    assert!(s.set_hide_comments(id, true));
+    assert!(!s.set_hide_comments(id, true));
+    assert_eq!(pixel(&s, id, 1, 105, 100), [255, 255, 255, 255]);
+    assert!(s.set_hide_comments(id, false));
+    assert!(pixel(&s, id, 1, 105, 100)[1] < 40);
+
+    let text = comment_summary("doc.pdf", &s.get(id).unwrap().info.annotations, SummarySort::Page);
+    assert!(text.starts_with("Summary of Comments on doc.pdf"));
+    assert!(text.contains("Page: 2\nNumber: 1  Author: Reviewer  Subject: Rectangle"), "{text}");
+    assert!(text.contains("Still editable") && text.contains("    Agreed"), "{text}");
+    assert!(!text.contains("Marked"), "checkmarks aren't listed: {text}");
+    let pdf = s.summarize_comments(id, SummarySort::Author).unwrap();
+    let n = s.open_new("summary.pdf", pdf).unwrap();
+    assert!(!s.get(n).unwrap().info.pages.is_empty());
+    assert_eq!(comment_summary("x", &[], SummarySort::Page), "Summary of Comments on x\n\nThis document has no comments.\n");
 }

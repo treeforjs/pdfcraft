@@ -291,6 +291,16 @@ impl PrintCraftApp {
                 self.left_open = true;
             }
             "comment.export" => self.export_data_dialog(true, false),
+            "comment.summarize" => self.dialog = Some(Dialog::SummarizeComments),
+            "comment.hide_all" => {
+                if let Some(i) = active {
+                    let id = self.views[i].id;
+                    let hide = !self.session.get(id).is_some_and(|d| d.comments_hidden());
+                    if self.session.set_hide_comments(id, hide) {
+                        self.views[i].invalidate_content();
+                    }
+                }
+            }
             "form.export_data" => self.export_data_dialog(false, true),
             "form.prepare" => {
                 self.left = crate::LeftPanel::Tool("form");

@@ -528,6 +528,8 @@ fn annot_dict(doc: &Document, r: ObjRef) -> Dict {
 const FLAG_PRINT: i64 = 4;
 const FLAG_NO_ZOOM: i64 = 8;
 const FLAG_NO_ROTATE: i64 = 16;
+const FLAG_HIDDEN: i64 = 2;
+const FLAG_LOCKED: i64 = 128;
 
 /// Size of a note icon (points, unscaled by zoom).
 pub const NOTE_SIZE: f64 = 20.0;
@@ -802,6 +804,9 @@ pub fn delete_annotation(doc: &mut Document, page: usize, index: usize) -> Resul
     let p = page_ref(doc, page)?;
     let list = annots(doc, p);
     let target = list.get(index).cloned().ok_or(AnnotError::NoSuchAnnotation { page, index })?;
+    if let Some(r) = target.as_ref() {
+        unlocked(doc, r)?;
+    }
     let mut doomed: Vec<ObjRef> = target.as_ref().into_iter().collect();
     // Replies (`/IRT`) and pop-ups (`/Parent`) of anything doomed, to a fixpoint.
     loop {
@@ -911,12 +916,55 @@ fn reply(
     Ok(i)
 }
 
+fn flags(doc: &Document, r: ObjRef) -> i64 {
+    doc.get(r).as_dict().and_then(|d| d.get(b"F").and_then(|f| doc.resolve(f).as_f64())).unwrap_or(0.0) as i64
+}
+
+/// Refuse to change a locked comment (Acrobat: Properties ▸ Locked).
+fn unlocked(doc: &Document, r: ObjRef) -> Result<(), AnnotError> {
+    if flags(doc, r) & FLAG_LOCKED != 0 { Err(AnnotError::Invalid("the comment is locked".into())) } else { Ok(()) }
+}
+
+/// Lock or unlock a comment (the Locked flag). A locked comment can't be moved, resized,
+/// restyled or deleted; its text and replies stay editable, as in Acrobat.
+pub fn set_locked(doc: &mut Document, page: usize, index: usize, locked: bool) -> Result<(), AnnotError> {
+    let (_, r) = annot_ref(doc, page, index)?;
+    let f = if locked { flags(doc, r) | FLAG_LOCKED } else { flags(doc, r) & !FLAG_LOCKED };
+    doc.update_dict(r, |d| d.set(b"F".to_vec(), Object::Int(f)))?;
+    Ok(())
+}
+
+/// Mark or unmark a comment with a checkmark. Like Acrobat this adds a hidden state reply with
+/// `/StateModel /Marked` by `author`; the latest one wins. It's private bookkeeping, not a status.
+pub fn set_marked(doc: &mut Document, page: usize, index: usize, marked: bool, author: &str, meta: &Meta) -> Result<usize, AnnotError> {
+    let (p, parent) = annot_ref(doc, page, index)?;
+    let pd = annot_dict(doc, parent);
+    if pd.name(b"Subtype") == Some(b"Popup") {
+        return Err(AnnotError::Invalid("pop-ups can't be marked".into()));
+    }
+    let state = if marked { "Marked" } else { "Unmarked" };
+    let text = format!("{state} set by {}", if author.is_empty() { "unknown" } else { author });
+    let mut d = base_dict("Text", [0.0; 4], p, &text, author, meta);
+    d.set(b"Rect".to_vec(), pd.get(b"Rect").cloned().unwrap_or_else(|| num_array(&[0.0; 4])));
+    d.set(b"IRT".to_vec(), Object::Ref(parent));
+    d.set(b"F".to_vec(), Object::Int(FLAG_HIDDEN | FLAG_PRINT | FLAG_NO_ZOOM | FLAG_NO_ROTATE));
+    d.set(b"State".to_vec(), PdfString::text(state));
+    d.set(b"StateModel".to_vec(), PdfString::text("Marked"));
+    let r = doc.add(Object::Dict(d));
+    let mut list = annots(doc, p);
+    list.push(Object::Ref(r));
+    let i = list.len() - 1;
+    set_annots(doc, p, list)?;
+    Ok(i)
+}
+
 /// Move a comment (and its pop-up) by `(dx, dy)` points. The appearance moves with `/Rect`.
 pub fn move_annotation(doc: &mut Document, page: usize, index: usize, dx: f64, dy: f64, meta: &Meta) -> Result<(), AnnotError> {
     if !finite(&[dx, dy]) {
         return Err(AnnotError::Invalid("invalid offset".into()));
     }
     let (_, r) = annot_ref(doc, page, index)?;
+    unlocked(doc, r)?;
     let shift = |o: &Object, every: bool| -> Option<Object> {
         let a = o.as_array()?;
         Some(Object::Array(
@@ -957,6 +1005,7 @@ pub fn move_annotation(doc: &mut Document, page: usize, index: usize, dx: f64, d
 /// Resize a rectangle, oval or text box to `rect`; its appearance is redrawn.
 pub fn set_rect(doc: &mut Document, page: usize, index: usize, rect: [f64; 4], meta: &Meta) -> Result<(), AnnotError> {
     let (_, r) = annot_ref(doc, page, index)?;
+    unlocked(doc, r)?;
     let d = annot_dict(doc, r);
     let subtype = String::from_utf8_lossy(d.name(b"Subtype").unwrap_or_default()).into_owned();
     if !matches!(subtype.as_str(), "Square" | "Circle" | "FreeText") {
@@ -985,6 +1034,7 @@ pub fn set_style(
     meta: &Meta,
 ) -> Result<(), AnnotError> {
     let (_, r) = annot_ref(doc, page, index)?;
+    unlocked(doc, r)?;
     let d = annot_dict(doc, r);
     let subtype = String::from_utf8_lossy(d.name(b"Subtype").unwrap_or_default()).into_owned();
     // Check before changing anything: a stale appearance would contradict the new style.
@@ -1044,6 +1094,7 @@ pub struct Summary {
     pub color: Option<[f32; 3]>,
     pub state: Option<String>,
     pub quads: Vec<[f32; 8]>,
+    pub locked: bool,
 }
 
 fn text_value(doc: &Document, d: &Dict, key: &[u8]) -> Option<String> {
@@ -1105,6 +1156,7 @@ pub fn summaries(doc: &Document) -> Vec<Summary> {
                 color,
                 state: text_value(doc, d, b"State"),
                 quads,
+                locked: d.get(b"F").and_then(|f| doc.resolve(f).as_int()).unwrap_or(0) & FLAG_LOCKED != 0,
             });
         }
     }
@@ -1124,6 +1176,7 @@ pub fn set_info(
     meta: &Meta,
 ) -> Result<(), AnnotError> {
     let (_, r) = annot_ref(doc, page, index)?;
+    unlocked(doc, r)?;
     let is_note = annot_dict(doc, r).name(b"Subtype") == Some(b"Text");
     if icon.is_some() && !is_note {
         return Err(AnnotError::Invalid("only sticky notes have an icon".into()));
@@ -1162,6 +1215,8 @@ pub struct Props {
     pub modified: Option<String>,
     /// The appearance can be redrawn (so colour, opacity and width can change).
     pub restylable: bool,
+    /// The Locked flag.
+    pub locked: bool,
 }
 
 /// The current properties of the comment at `(page, index)`.
@@ -1184,6 +1239,7 @@ pub fn props(doc: &Document, page: usize, index: usize) -> Option<Props> {
         icon: (subtype == "Text").then(|| d.name(b"Name").and_then(|n| NoteIcon::from_name(&String::from_utf8_lossy(n))).unwrap_or(NoteIcon::Note)),
         modified: text_value(doc, d, b"M"),
         restylable: appearance::build(d).is_some(),
+        locked: d.get(b"F").and_then(|f| doc.resolve(f).as_int()).unwrap_or(0) & FLAG_LOCKED != 0,
         subtype,
     })
 }

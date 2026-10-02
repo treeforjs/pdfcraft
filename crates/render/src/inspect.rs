@@ -136,6 +136,15 @@ pub struct Annotation {
     pub state: Option<String>,
     /// Text markup quadrilaterals (`/QuadPoints`), 8 numbers each.
     pub quads: Vec<[f32; 8]>,
+    /// The Locked flag (`/F` bit 8): the comment can't be moved, resized, restyled or deleted.
+    pub locked: bool,
+}
+
+impl Annotation {
+    /// A checkmark reply (`/StateModel /Marked`): "Marked" or "Unmarked" rather than a review status.
+    pub fn is_mark(&self) -> bool {
+        matches!(self.state.as_deref(), Some("Marked" | "Unmarked"))
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -593,6 +602,7 @@ impl<'a> Inspector<'a> {
                     index,
                     state: self.text(d, b"State"),
                     quads,
+                    locked: d.get(b"F").ok().and_then(|f| self.resolve(f).as_i64().ok()).unwrap_or(0) & 128 != 0,
                 });
             }
         }

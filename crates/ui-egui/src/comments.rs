@@ -302,6 +302,8 @@ pub(crate) struct PageCx<'a> {
     pub prefs: &'a CommentPrefs,
     /// The document allows commenting.
     pub allowed: bool,
+    /// Comments are hidden (Hide all comments): nothing to select.
+    pub hidden: bool,
 }
 
 impl PageCx<'_> {
@@ -322,7 +324,7 @@ impl PageCx<'_> {
 
     /// Top-level comments on this page, in paint order.
     fn comments(&self) -> impl Iterator<Item = &Annotation> {
-        self.info.annotations.iter().filter(move |a| a.page == self.page && a.in_reply_to.is_none() && a.subtype != "Popup")
+        self.info.annotations.iter().filter(move |a| !self.hidden && a.page == self.page && a.in_reply_to.is_none() && a.subtype != "Popup")
     }
 
     /// Where a comment is on screen: one rectangle, or one per marked line for text markup.
@@ -702,7 +704,7 @@ pub(crate) fn composer(ctx: &egui::Context, view: &mut DocView, info: &DocInfo, 
         // Scrolled away: keep the draft until the page is back.
         return None;
     };
-    let cx = PageCx { page, xf: &xf, info, tool: QuickTool::Select, prefs, allowed: true };
+    let cx = PageCx { page, xf: &xf, info, tool: QuickTool::Select, prefs, allowed: true, hidden: false };
     let anchor = cx.to_screen(c.at);
     let t = Tokens::get(ctx);
     let mut post = false;
@@ -846,8 +848,19 @@ pub(crate) fn context_menu(ui: &mut egui::Ui, view: &mut DocView, info: &DocInfo
                     }
                 });
             });
+            let thread: Vec<&printcraft_render::Annotation> =
+                info.annotations.iter().filter(|r| a.name.is_some() && r.in_reply_to == a.name).collect();
+            let marked = crate::comments_panel::is_marked(&thread);
+            if ui.add_enabled(allowed, egui::Button::new(if marked { "Remove checkmark" } else { "Mark with checkmark" })).clicked() {
+                action = Some(CanvasAction::Edit(Box::new(Edit::MarkAnnotation { page, index, marked: !marked, author: prefs.author.clone() })));
+                ui.close();
+            }
+            if ui.button("Copy text").clicked() {
+                ui.ctx().copy_text(a.contents.clone().unwrap_or_default());
+                ui.close();
+            }
             ui.separator();
-            if ui.add_enabled(allowed, egui::Button::new("Delete")).clicked() {
+            if ui.add_enabled(allowed && !a.locked, egui::Button::new("Delete")).clicked() {
                 view.comments.selected = None;
                 action = Some(CanvasAction::Edit(Box::new(Edit::DeleteAnnotation { page, index })));
                 ui.close();

@@ -42,6 +42,7 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
     let mut redact_now: Option<Dialog> = None;
     let mut print_go = false;
     let mut revert_now = false;
+    let mut summarize_now = false;
     let mut replace_now = false;
     let t = Tokens::get(ctx);
     let mut close = false;
@@ -448,6 +449,32 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
                 });
                 return;
             }
+            Dialog::SummarizeComments => {
+                ui.label(egui::RichText::new("Summarize Options").font(theme::semibold(18.0)));
+                ui.add_space(8.0);
+                ui.label("Choose a layout:");
+                let _ = ui.radio(true, "Comments only");
+                ui.add_space(6.0);
+                ui.horizontal(|ui| {
+                    ui.label("Sort comments by:");
+                    egui::ComboBox::from_id_salt("summary-sort").selected_text(app.summary_sort.name()).show_ui(ui, |ui| {
+                        for s in printcraft_engine::SummarySort::ALL {
+                            ui.selectable_value(&mut app.summary_sort, s, s.name());
+                        }
+                    });
+                });
+                ui.add_space(12.0);
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if widgets::pill_button(ui, "Create PDF Comment Summary", true).clicked() {
+                        summarize_now = true;
+                        close = true;
+                    }
+                    if widgets::pill_button(ui, "Cancel", false).clicked() {
+                        close = true;
+                    }
+                });
+                return;
+            }
             Dialog::Revert => {
                 let name = app.active_ids().and_then(|(_, id)| app.session.get(id)).map(|d| d.name.clone()).unwrap_or_default();
                 ui.label(egui::RichText::new("Revert").font(theme::semibold(18.0)));
@@ -759,6 +786,9 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
     }
     if revert_now {
         app.revert_active();
+    }
+    if summarize_now {
+        app.summarize_comments();
     }
     if extract_now {
         app.extract_selection();

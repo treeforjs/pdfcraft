@@ -181,6 +181,8 @@ pub const COMMANDS: &[CommandSpec] = &[
     c("comment.import", "Import comments…", None, None, Modification, "file-input"),
     c("comment.stamp", "Add a stamp", None, None, Annotate, "stamp"),
     c("comment.export", "Export all comments to data file…", None, None, HasComments, "file-output"),
+    c("comment.hide_all", "Hide all comments", None, None, Document, "eye-off"),
+    c("comment.summarize", "Summarize comments", None, None, HasComments, "file-text"),
     c("form.import_data", "Import form data…", None, None, HasFields, "file-input"),
     c("form.export_data", "Export form data…", None, None, HasFields, "file-output"),
     c("form.flatten", "Flatten form fields", None, None, HasFields, "layers"),

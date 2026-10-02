@@ -265,3 +265,72 @@ fn the_panel_filters_and_sorts() {
     // Grouped by type: a group header names each type.
     assert_eq!(h.query_all_by_label("Oval").count(), ovals + 1, "a group header was added");
 }
+
+#[test]
+fn comments_take_checkmarks_lock_hide_and_summarize() {
+    let mut h = harness(|app| {
+        app.set_option("panel", "comments").unwrap();
+        app.set_option("quick", "square").unwrap();
+    });
+    drag_pt(&mut h, (40.0, 100.0), (140.0, 40.0));
+    h.state_mut().set_option("quick", "select").unwrap();
+    h.run_steps(2);
+    assert_eq!(h.state().views[0].comments.selected, Some((0, 0)), "the new comment is selected");
+    // The card's checkmark.
+    h.get_by_label("Mark with checkmark").click();
+    h.run_steps(3);
+    assert!(comments(&h).iter().any(|a| a.state.as_deref() == Some("Marked")));
+    h.get_by_label("Remove checkmark");
+
+    // "…" ▸ Copy text puts the comment's text on the clipboard.
+    h.state_mut().apply_edit(printcraft_engine::Edit::SetAnnotationContents { page: 0, index: 0, text: "Copy me".into() });
+    h.run_steps(2);
+    h.get_by_label("More").click();
+    h.run_steps(2);
+    h.get_by_label("Copy text").click();
+    let mut copied = false;
+    for _ in 0..4 {
+        h.step();
+        copied |= h.output().platform_output.commands.iter().any(|c| matches!(c, egui::OutputCommand::CopyText(t) if t == "Copy me"));
+    }
+    assert!(copied, "the text is copied");
+    h.run_steps(2);
+
+    // Properties ▸ Locked.
+    h.state_mut().open_comment_props(0, 0);
+    h.run_steps(2);
+    h.get_by_label("Locked").click();
+    h.run_steps(1);
+    h.get_by_label("OK").click();
+    h.run_steps(3);
+    assert!(comments(&h)[0].locked);
+    h.key_press(egui::Key::Delete);
+    h.run_steps(3);
+    assert!(comments(&h).iter().any(|a| a.in_reply_to.is_none()), "a locked comment isn't deleted");
+
+    // "…" ▸ Hide all comments, then Show all comments.
+    h.get_by_label("More options").click();
+    h.run_steps(2);
+    h.get_by_label("Hide all comments").click();
+    h.run_steps(2);
+    let s = h.state();
+    assert!(s.session.get(s.views[0].id).unwrap().comments_hidden());
+    h.get_by_label("More options").click();
+    h.run_steps(2);
+    h.get_by_label("Show all comments").click();
+    h.run_steps(2);
+    let s = h.state();
+    assert!(!s.session.get(s.views[0].id).unwrap().comments_hidden());
+
+    // "…" ▸ Create PDF comment summary.
+    h.get_by_label("More options").click();
+    h.run_steps(2);
+    h.get_by_label("Create PDF comment summary…").click();
+    h.run_steps(2);
+    h.get_by_label("Summarize Options");
+    h.get_by_label("Create PDF Comment Summary").click();
+    h.run_steps(3);
+    let s = h.state();
+    assert_eq!(s.views.len(), 2);
+    assert!(s.session.get(s.views[1].id).unwrap().name.starts_with("Summary of comments on text"));
+}

@@ -875,3 +875,34 @@ fn links_through_tools() {
     assert_eq!(ok(&mut a, "link_list", json!({ "doc": doc }))["count"], 0);
     assert!(matches!(a.call("link_add", &json!({ "doc": doc, "page": 1, "rect": [0, 0, 50, 20] })), Err(ToolError::InvalidArgs(_))));
 }
+
+#[test]
+fn comment_checkmarks_locks_hiding_and_summaries_through_tools() {
+    let dir = workdir("comment-polish");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    let c = ok(&mut a, "comment_add", json!({ "doc": doc, "page": 1, "type": "note", "at": [20, 20], "contents": "Sticky", "author": "Ada" }));
+    let id = c["comment"]["id"].as_str().unwrap().to_string();
+    ok(&mut a, "comment_set_status", json!({ "doc": doc, "id": id, "status": "accepted" }));
+    ok(&mut a, "comment_mark", json!({ "doc": doc, "id": id }));
+    ok(&mut a, "comment_lock", json!({ "doc": doc, "id": id }));
+    let list = ok(&mut a, "comment_list", json!({ "doc": doc }));
+    assert_eq!(list["count"], 1, "{list}");
+    let c = &list["comments"][0];
+    assert_eq!((c["status"].as_str(), c["marked"].as_bool(), c["locked"].as_bool()), (Some("Accepted"), Some(true), Some(true)));
+    assert!(matches!(a.call("comment_delete", &json!({ "doc": doc, "id": id })), Err(ToolError::Failed(_))), "locked");
+    ok(&mut a, "comment_mark", json!({ "doc": doc, "id": id, "marked": false }));
+    ok(&mut a, "comment_lock", json!({ "doc": doc, "id": id, "locked": false }));
+    let list = ok(&mut a, "comment_list", json!({ "doc": doc }));
+    assert_eq!((list["comments"][0]["marked"].as_bool(), list["comments"][0]["locked"].as_bool()), (Some(false), Some(false)));
+
+    assert_eq!(ok(&mut a, "comments_hide", json!({ "doc": doc }))["hidden"], true);
+    ok(&mut a, "comments_hide", json!({ "doc": doc, "hidden": false }));
+
+    let r = ok(&mut a, "comments_summarize", json!({ "doc": doc, "sort": "author", "out": "summary.pdf" }));
+    assert!(r["bytes"].as_u64().unwrap() > 500);
+    let text = ok(&mut a, "doc_open", json!({ "path": "summary.pdf" }))["doc"].as_u64().unwrap();
+    let found = ok(&mut a, "text_find", json!({ "doc": text, "query": "Sticky" }));
+    assert!(found["count"].as_u64().unwrap() >= 1, "{found}");
+    assert!(matches!(a.call("comments_summarize", &json!({ "doc": doc, "sort": "colour" })), Err(ToolError::InvalidArgs(_))));
+}

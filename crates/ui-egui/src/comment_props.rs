@@ -1,6 +1,6 @@
 //! Comment Properties (Acrobat: right-click a comment ▸ Properties…; audit "Comment
 //! properties"): Appearance (colour, opacity, line thickness, note icon), General (author,
-//! subject, modified) and Review History (status changes).
+//! subject, modified) and Review History (status changes), with Acrobat's Locked box.
 
 use egui::{Align, Layout};
 use printcraft_engine::{CommentProps, Edit, NoteIcon};
@@ -42,6 +42,10 @@ impl PrintCraftApp {
 pub fn edits(d: &PropsDraft) -> Vec<Edit> {
     let (o, e) = (&d.original, &d.edited);
     let mut out = Vec::new();
+    // A locked comment refuses other changes: unlock first, lock last.
+    if o.locked && !e.locked {
+        out.push(Edit::LockAnnotation { page: d.page, index: d.index, locked: false });
+    }
     let color = (e.color != o.color).then_some(e.color).flatten();
     let opacity = ((e.opacity - o.opacity).abs() > 1e-6).then_some(e.opacity);
     let width = (e.width != o.width).then_some(e.width).flatten();
@@ -53,6 +57,9 @@ pub fn edits(d: &PropsDraft) -> Vec<Edit> {
     let icon = (e.icon != o.icon).then_some(e.icon).flatten();
     if author.is_some() || subject.is_some() || icon.is_some() {
         out.push(Edit::SetAnnotationInfo { page: d.page, index: d.index, author, subject, icon });
+    }
+    if !o.locked && e.locked {
+        out.push(Edit::LockAnnotation { page: d.page, index: d.index, locked: true });
     }
     out
 }
@@ -146,6 +153,7 @@ pub(crate) fn body(ui: &mut egui::Ui, app: &mut PrintCraftApp, t: &Tokens) -> (b
         }
     }
     ui.add_space(12.0);
+    ui.checkbox(&mut d.edited.locked, "Locked");
     let (mut apply, mut cancel) = (false, false);
     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
         if widgets::pill_button(ui, "OK", true).clicked() {
