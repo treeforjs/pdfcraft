@@ -465,3 +465,22 @@ fn restricted_documents_show_a_notice_and_block_page_changes() {
     h.run_steps(3);
     assert!(h.query_all_by_label("Not allowed").count() >= 4);
 }
+
+#[test]
+fn replace_pages_dialog_swaps_page_content() {
+    let mut app = PrintCraftApp::new();
+    app.open_bytes("doc.pdf", None, fixture(3)).unwrap();
+    app.views[0].select_pages(&[1]);
+    app.start_replace("other.pdf".into(), fixture(5));
+    let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1400.0, 900.0)).build_eframe(move |_cc| app);
+    h.run_steps(3);
+    egui_kittest::kittest::Queryable::get_by_label(&h, "Replace Pages");
+    h.state_mut().replace_draft.as_mut().unwrap().src_from = 5;
+    h.run_steps(1);
+    egui_kittest::kittest::Queryable::get_by_label(&h, "OK").click();
+    h.run_steps(3);
+    let s = h.state();
+    let doc = s.session.get(s.views[0].id).unwrap();
+    assert_eq!(doc.info.pages.len(), 3);
+    assert_eq!(doc.can_undo(), Some("Replace page"));
+}

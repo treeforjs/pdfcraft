@@ -2707,11 +2707,11 @@ title = "Replace pages with pages from another file"
 area = "D"
 tier = "P0"
 milestone = "M4"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["page.replace"]
+tools = ["page_replace"]
+evidence = ["crates/organize/src/tests.rs::replace_pages_swaps_content_but_keeps_annotations", "crates/ui-egui/tests/editing.rs::replace_pages_dialog_swaps_page_content", "crates/automation/tests/automation.rs::replacing_pages_through_tools"]
+notes = "content, resources and boxes replaced; links, comments, fields and bookmarks kept"
 
 [[feature]]
 id = "organize.duplicate-pages"

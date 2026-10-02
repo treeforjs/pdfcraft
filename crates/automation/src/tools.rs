@@ -34,6 +34,10 @@ fn path(what: &str) -> Value {
     json!({ "type": "array", "items": { "type": "integer", "minimum": 1 }, "description": format!("{what}: 1-based positions from the top level, e.g. [2, 1] = the first child of the second bookmark.") })
 }
 
+fn path_arg() -> Value {
+    json!({ "type": "string", "description": "A file path (relative to --root when set)." })
+}
+
 fn point() -> Value {
     json!({ "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2, "description": "[x, y] in points from the top-left of the displayed page." })
 }
@@ -285,6 +289,9 @@ pub fn tools() -> Vec<ToolDef> {
             .cmd("protect.remove")
             .destructive()
             .with(schema(json!({ "doc": doc() }), &["doc"])),
+        t("page_replace", "Replace pages", "Replace the content of pages with pages of another PDF (same count). Links, comments, form fields and bookmarks on the original pages stay, as in Acrobat. Undoable.")
+            .cmd("page.replace")
+            .with(schema(json!({ "doc": doc(), "pages": pages("to replace"), "path": path_arg(), "from_pages": pages("of the other file, in order (default: its first pages)") }), &["doc", "pages", "path"])),
         t("page_duplicate", "Duplicate pages", "Insert copies of pages after the last of them (fonts and images are shared, not copied). Undoable.")
             .cmd("page.duplicate")
             .with(schema(json!({ "doc": doc(), "pages": pages("to duplicate") }), &["doc", "pages"])),

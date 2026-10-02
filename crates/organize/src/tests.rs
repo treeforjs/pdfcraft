@@ -612,3 +612,26 @@ fn duplicate_pages_inserts_copies_after_the_last() {
     let doc = open(write_full(&doc, &SaveOptions::default()).unwrap());
     assert_eq!(labels(&doc), ["Page 1", "Page 2", "Page 1", "Page 2", "Page 3"]);
 }
+
+#[test]
+fn replace_pages_swaps_content_but_keeps_annotations() {
+    // Page 2 of the target gets an annotation; replacing its content keeps it.
+    let mut doc = open(fixture());
+    let p2 = pages(&doc).unwrap()[1].obj;
+    let annot = doc.add(Object::Dict({
+        let mut d = Dict::new();
+        d.set(b"Type".to_vec(), Object::name("Annot"));
+        d.set(b"Subtype".to_vec(), Object::name("Square"));
+        d.set(b"Rect".to_vec(), Object::Array(vec![0.into(), 0.into(), 10.into(), 10.into()]));
+        d
+    }));
+    doc.update_dict(p2, |d| d.set(b"Annots".to_vec(), Object::Array(vec![Object::Ref(annot)]))).unwrap();
+    let src = open(fixture());
+    replace_pages(&mut doc, &[1], &src, &[2]).unwrap();
+    let doc = open(write_full(&doc, &SaveOptions::default()).unwrap());
+    assert_eq!(labels(&doc), ["Page 1", "Page 3", "Page 3"]);
+    let p2 = doc.get(pages(&doc).unwrap()[1].obj);
+    assert!(p2.as_dict().unwrap().contains(b"Annots"), "the original page's annotations stay");
+    let mut doc = doc;
+    assert!(replace_pages(&mut doc, &[0, 1], &src, &[0]).is_err(), "counts must match");
+}

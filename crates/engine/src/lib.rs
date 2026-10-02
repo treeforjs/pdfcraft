@@ -378,6 +378,14 @@ pub enum Edit {
     DuplicatePages {
         pages: Vec<usize>,
     },
+    /// Replace Pages: the content of `pages` is replaced by `src_pages` of another PDF; the
+    /// pages' links, comments and bookmarks stay.
+    ReplacePages {
+        pages: Vec<usize>,
+        name: String,
+        bytes: Arc<Vec<u8>>,
+        src_pages: Vec<usize>,
+    },
     /// Set Page Boxes / Crop: set (or reset) one box on `pages`.
     SetPageBox {
         pages: Vec<usize>,
@@ -535,6 +543,7 @@ impl Edit {
             Edit::MovePages { pages, .. } => plural("Move page", pages.len()),
             Edit::InsertBlankPage { .. } => "Insert blank page".into(),
             Edit::DuplicatePages { pages } => plural("Duplicate page", pages.len()),
+            Edit::ReplacePages { pages, .. } => plural("Replace page", pages.len()),
             Edit::SetPageBox { pages, which: PageBox::Crop, .. } => plural("Crop page", pages.len()),
             Edit::SetPageBox { .. } => "Set page boxes".into(),
             Edit::SetInfo { key, .. } => format!("Change {key}"),
@@ -612,6 +621,7 @@ fn check_permission(edit: &Edit, p: &printcraft_cos::Permissions) -> Result<(), 
         | Edit::MovePages { .. }
         | Edit::InsertBlankPage { .. }
         | Edit::DuplicatePages { .. }
+        | Edit::ReplacePages { .. }
         | Edit::SetPageBox { .. }
         | Edit::InsertPagesFrom { .. }
         // "Assemble the document: insert, rotate or delete pages and create bookmarks" (Table 22).
@@ -743,6 +753,10 @@ fn run_edit(doc: &mut printcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -
         }
         Edit::SetInfo { key, value } => printcraft_organize::set_info(doc, key, value)?,
         Edit::DuplicatePages { pages } => printcraft_organize::duplicate_pages(doc, pages)?,
+        Edit::ReplacePages { pages, name, bytes, src_pages } => {
+            let src = open_source(name, bytes)?;
+            printcraft_organize::replace_pages(doc, pages, &src, src_pages)?;
+        }
         Edit::SetPageBox { pages, which, spec } => printcraft_organize::set_page_box(doc, pages, *which, *spec)?,
         Edit::InsertPagesFrom { name, bytes, pages, at } => {
             let src = open_source(name, bytes)?;
@@ -1199,6 +1213,11 @@ impl Session {
         doc.dirty = false;
         doc.generation += 1;
         Self::refresh(doc)
+    }
+
+    /// The page count of another PDF (Replace Pages, Insert Pages dialogs).
+    pub fn page_count_of(&self, name: &str, bytes: &Arc<Vec<u8>>) -> Result<usize, EditError> {
+        Ok(printcraft_organize::page_count(&open_source(name, bytes)?)?)
     }
 
     /// A new blank document (Create ▸ Blank page).

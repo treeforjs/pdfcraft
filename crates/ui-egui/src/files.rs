@@ -14,6 +14,18 @@ use crate::PrintCraftApp;
 pub enum FilePurpose {
     Combine,
     InsertPages,
+    ReplacePages,
+}
+
+/// The Replace Pages dialog: the chosen file and the ranges (1-based, inclusive).
+#[derive(Clone, Debug, PartialEq)]
+pub struct ReplaceDraft {
+    pub name: String,
+    pub bytes: Arc<Vec<u8>>,
+    pub src_pages: usize,
+    pub from: usize,
+    pub to: usize,
+    pub src_from: usize,
 }
 
 /// Files picked asynchronously (web), waiting to be used: (purpose, [(name, bytes)]).
@@ -99,6 +111,11 @@ impl PrintCraftApp {
                     self.insert_pages_from(&name, bytes);
                 }
             }
+            FilePurpose::ReplacePages => {
+                if let Some((name, bytes)) = files.into_iter().next() {
+                    self.start_replace(name, bytes);
+                }
+            }
         }
     }
 
@@ -113,6 +130,31 @@ impl PrintCraftApp {
             Ok(bytes) => self.open_created("Combined.pdf", bytes, &format!("Combined {count} files")),
             Err(e) => self.notify(format!("Couldn't combine files: {e}")),
         }
+    }
+
+    pub fn replace_pages_dialog(&mut self) {
+        if self.active.is_none() {
+            self.notify("Open a document first");
+            return;
+        }
+        self.pick_files(FilePurpose::ReplacePages, false);
+    }
+
+    /// Open the Replace Pages dialog for `bytes`, replacing the selection (or the current page).
+    pub fn start_replace(&mut self, name: String, bytes: Vec<u8>) {
+        let Some(i) = self.active else { return };
+        let bytes = Arc::new(bytes);
+        let src_pages = match self.session.page_count_of(&name, &bytes) {
+            Ok(n) => n,
+            Err(e) => {
+                self.notify(format!("Couldn't use {name}: {e}"));
+                return;
+            }
+        };
+        let targets = self.views[i].target_pages();
+        let (from, to) = (targets.first().map_or(1, |p| p + 1), targets.last().map_or(1, |p| p + 1));
+        self.replace_draft = Some(ReplaceDraft { name, bytes, src_pages, from, to, src_from: 1 });
+        self.dialog = Some(crate::Dialog::ReplacePages);
     }
 
     /// Insert all pages of a PDF after the organize selection (or the current page).

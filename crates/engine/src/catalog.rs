@@ -175,7 +175,7 @@ pub static TOOL_GROUPS: &[ToolGroup] = &[
                     item("Delete", "trash-2", "page.delete", Ready),
                     item("Extract", "file-output", "page.extract", Ready),
                     item("Insert", "file-plus-2", "page.insert", Ready),
-                    item("Replace", "replace", "page.replace", Planned("M4")),
+                    item("Replace", "replace", "page.replace", Ready),
                     item("Split", "scissors", "page.split", Ready),
                 ],
             },

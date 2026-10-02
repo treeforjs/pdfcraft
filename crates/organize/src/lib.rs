@@ -36,6 +36,8 @@ pub enum OrganizeError {
     #[error("{0}")]
     InvalidBox(String),
     #[error("{0}")]
+    Invalid(String),
+    #[error("{0}")]
     Cos(#[from] printcraft_cos::CosError),
 }
 
@@ -182,6 +184,38 @@ pub fn duplicate_pages(doc: &mut Document, indices: &[usize]) -> Result<(), Orga
     order.dedup();
     let src = doc.clone();
     import_pages(doc, &src, &order, last + 1).map(|_| ())
+}
+
+/// Replace Pages: the content of `targets` (in order) is replaced by that of `src_pages` of
+/// `src`. As in Acrobat, only what the page shows changes (contents, resources and page boxes);
+/// the original pages' links, comments, form widgets and the bookmarks pointing at them stay.
+pub fn replace_pages(doc: &mut Document, targets: &[usize], src: &Document, src_pages: &[usize]) -> Result<(), OrganizeError> {
+    let n = page_count(doc)?;
+    check(targets, n)?;
+    if targets.len() != src_pages.len() || targets.is_empty() {
+        return Err(OrganizeError::Invalid(format!("{} pages can't replace {}", src_pages.len(), targets.len())));
+    }
+    let imported = import_pages(doc, src, src_pages, n)?;
+    let all = walk(doc)?;
+    const SHOWN: [&[u8]; 8] = [b"Contents", b"Resources", b"MediaBox", b"CropBox", b"BleedBox", b"TrimBox", b"ArtBox", b"Rotate"];
+    for (t, new) in targets.iter().zip(&imported) {
+        // The imported page with its inherited attributes resolved.
+        let (_, inherited) = all.iter().find(|(r, _)| r == new).cloned().unwrap_or((*new, Dict::new()));
+        let src_dict = doc.get(*new).as_dict().cloned().unwrap_or_default();
+        let target = all[*t].0;
+        doc.update_dict(target, |d| {
+            for k in SHOWN {
+                match src_dict.get(k).or_else(|| inherited.get(k)) {
+                    Some(v) => d.set(k.to_vec(), v.clone()),
+                    None => {
+                        d.remove(k);
+                    }
+                }
+            }
+        })?;
+    }
+    // Drop the temporary copies (always the last pages now).
+    delete_pages(doc, &(n..n + imported.len()).collect::<Vec<_>>())
 }
 
 /// Insert a blank page of `width × height` points at position `at` (0 = before the first page).

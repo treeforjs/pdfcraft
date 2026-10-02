@@ -574,3 +574,16 @@ fn flattening_through_tools() {
     assert!(page_text(&mut a, doc)[0].contains("Approved"), "the text box is now page text");
     assert!(matches!(a.call("doc_flatten", &json!({ "doc": doc, "comments": false, "fields": false })), Err(ToolError::InvalidArgs(_))));
 }
+
+#[test]
+fn replacing_pages_through_tools() {
+    let dir = workdir("replace");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    ok(&mut a, "page_replace", json!({ "doc": doc, "pages": [2, 3], "path": "b.pdf", "from_pages": [2, 1] }));
+    assert_eq!(page_text(&mut a, doc), ["Page 1", "Page 2", "Page 1"]);
+    assert!(
+        matches!(a.call("page_replace", &json!({ "doc": doc, "pages": [1, 2, 3], "path": "b.pdf" })), Err(ToolError::Failed(_))),
+        "b.pdf has only 2 pages"
+    );
+}

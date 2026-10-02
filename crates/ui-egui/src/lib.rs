@@ -105,6 +105,8 @@ pub enum Dialog {
     Signature,
     /// Comment Properties.
     CommentProps,
+    /// Replace Pages (after choosing the file).
+    ReplacePages,
     /// Documents from a session that ended unexpectedly.
     Recovery,
 }
@@ -208,6 +210,8 @@ pub struct PrintCraftApp {
     pub signature_draft: Vec<Vec<[f32; 2]>>,
     /// The Comment Properties dialog's state.
     pub comment_props: Option<comment_props::PropsDraft>,
+    /// The Replace Pages dialog's state.
+    pub replace_draft: Option<files::ReplaceDraft>,
     /// The last web link the app asked the system to open (tests and automation).
     pub last_opened_url: Option<String>,
 }
@@ -278,6 +282,7 @@ impl PrintCraftApp {
             signature: None,
             signature_draft: Vec::new(),
             comment_props: None,
+            replace_draft: None,
             number_draft: NumberDraft { from: 1, to: 1, style: printcraft_engine::LabelStyle::Decimal, prefix: String::new(), start: 1 },
         }
     }

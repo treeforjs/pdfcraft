@@ -35,6 +35,7 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
     let mut marks_now = false;
     let mut export_now = false;
     let mut props_now = false;
+    let mut replace_now = false;
     let t = Tokens::get(ctx);
     let mut close = false;
     let mut next = dialog;
@@ -225,6 +226,55 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
                 if files > 1 {
                     split_ready = Some(by);
                 }
+            }
+            Dialog::ReplacePages => {
+                let count = app.active_ids().and_then(|(_, id)| app.session.get(id)).map(|d| d.info.pages.len()).unwrap_or(1).max(1);
+                let Some(d) = app.replace_draft.as_mut() else {
+                    close = true;
+                    return;
+                };
+                ui.label(egui::RichText::new("Replace Pages").font(theme::semibold(18.0)));
+                ui.add_space(8.0);
+                d.to = d.to.clamp(1, count);
+                d.from = d.from.clamp(1, d.to);
+                let n = d.to - d.from + 1;
+                ui.horizontal(|ui| {
+                    ui.label("Original: replace pages");
+                    ui.add(egui::DragValue::new(&mut d.from).range(1..=count));
+                    ui.label("to");
+                    ui.add(egui::DragValue::new(&mut d.to).range(1..=count));
+                    ui.label(egui::RichText::new(format!("of {count}")).color(t.text_muted));
+                });
+                let max_start = d.src_pages.saturating_sub(n) + 1;
+                d.src_from = d.src_from.clamp(1, max_start.max(1));
+                ui.horizontal(|ui| {
+                    ui.label(format!("Replacement: pages of {}", d.name));
+                    ui.add(egui::DragValue::new(&mut d.src_from).range(1..=max_start.max(1)));
+                    ui.label(format!("to {}", d.src_from + n - 1));
+                    ui.label(egui::RichText::new(format!("of {}", d.src_pages)).color(t.text_muted));
+                });
+                let fits = n <= d.src_pages;
+                ui.add_space(6.0);
+                ui.label(
+                    egui::RichText::new(if fits {
+                        "Only the page content changes: links, comments, form fields and bookmarks on the original pages stay."
+                    } else {
+                        "The replacement file doesn't have that many pages."
+                    })
+                    .small()
+                    .color(t.text_faint),
+                );
+                ui.add_space(10.0);
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui.add_enabled_ui(fits, |ui| widgets::pill_button(ui, "OK", true)).inner.clicked() {
+                        replace_now = true;
+                        close = true;
+                    }
+                    if widgets::pill_button(ui, "Cancel", false).clicked() {
+                        close = true;
+                    }
+                });
+                return;
             }
             Dialog::CommentProps => {
                 let (apply, cancel) = crate::comment_props::body(ui, app, &t);
@@ -464,6 +514,15 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
         } else {
             app.discard_recovered(&keys);
         }
+    }
+    if replace_now && let Some(d) = app.replace_draft.take() {
+        let n = d.to - d.from + 1;
+        app.apply_edit(Edit::ReplacePages {
+            pages: (d.from - 1..d.to).collect(),
+            name: d.name.clone(),
+            bytes: d.bytes.clone(),
+            src_pages: (d.src_from - 1..d.src_from - 1 + n).collect(),
+        });
     }
     if props_now && let Some(d) = app.comment_props.take() {
         let mut edits = crate::comment_props::edits(&d);

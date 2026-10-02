@@ -178,6 +178,7 @@ impl PrintCraftApp {
                 }
             }
             "page.insert" => self.insert_from_file_dialog(),
+            "page.replace" => self.replace_pages_dialog(),
             "edit.header_footer"
             | "edit.watermark"
             | "edit.background"

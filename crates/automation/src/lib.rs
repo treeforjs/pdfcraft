@@ -211,6 +211,17 @@ impl Automation {
                 self.apply(&a, Edit::SetBookmarkPage { path, page })?
             }
             "doc_protect" => self.doc_protect(&a)?,
+            "page_replace" => {
+                let pages = self.pages(&a, "pages")?;
+                let path = self.resolve(a.str("path")?, false)?;
+                let bytes = Arc::new(std::fs::read(&path).map_err(|e| failed(format!("{}: {e}", path.display())))?);
+                let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                let src_pages = match a.opt_ints("from_pages")? {
+                    Some(p) => one_based(&p)?,
+                    None => (0..pages.len()).collect(),
+                };
+                self.apply(&a, Edit::ReplacePages { pages, name, bytes, src_pages })?
+            }
             "page_duplicate" => {
                 let pages = self.pages(&a, "pages")?;
                 self.apply(&a, Edit::DuplicatePages { pages })?
