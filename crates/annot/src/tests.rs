@@ -332,3 +332,16 @@ fn fill_and_sign_items_are_drawn() {
     set_style(&mut doc, 1, marks[0], Some([0.0, 0.0, 1.0]), None, None, &meta("")).unwrap();
     assert!(set_style(&mut doc, 1, 0, Some([0.0; 3]), None, None, &meta("")).is_err());
 }
+
+#[test]
+fn author_subject_and_note_icon_change() {
+    let mut doc = fixture();
+    let n = add_annotation(&mut doc, &new(0, Shape::Note { at: [10.0, 100.0], icon: NoteIcon::Comment }), &meta("n")).unwrap();
+    let before = ap_content(&doc, &list(&doc, 0)[n]);
+    set_info(&mut doc, 0, n, Some("Grace"), Some("Question"), Some(NoteIcon::Help), &meta("")).unwrap();
+    let d = &list(&doc, 0)[n];
+    assert_eq!((text(d, b"T").as_str(), text(d, b"Subj").as_str()), ("Grace", "Question"));
+    assert_eq!(d.name(b"Name"), Some(&b"Help"[..]));
+    assert_ne!(ap_content(&doc, d), before, "the icon was redrawn");
+    assert!(matches!(set_info(&mut doc, 0, 0, None, None, Some(NoteIcon::Key), &meta("")), Err(AnnotError::Invalid(_))));
+}

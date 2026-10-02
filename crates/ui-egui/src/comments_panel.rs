@@ -9,7 +9,7 @@ use printcraft_engine::{Edit, NoteIcon, ReviewState, Shape};
 use printcraft_render::{Annotation, DocInfo};
 
 use crate::canvas::DocView;
-use crate::comments::{CommentPrefs, CommentTool, color32, status_badge};
+use crate::comments::{CommentPrefs, CommentTool, SortBy, color32, status_badge};
 use crate::icons;
 use crate::panels::Nav;
 use crate::theme::{self, Tokens};
@@ -133,18 +133,52 @@ pub(crate) fn show(
             None => Vec::new(),
         }
     };
-    let roots: Vec<&Annotation> = info
+    let cv = &view.comments;
+    let status_of = |a: &Annotation| replies_of(a).iter().rev().find_map(|r| r.state.clone()).unwrap_or_else(|| "None".into());
+    let mut roots: Vec<&Annotation> = info
         .annotations
         .iter()
         .filter(|a| a.in_reply_to.is_none())
         .filter(|a| query.as_deref().is_none_or(|q| matches(a, q) || replies_of(a).iter().any(|r| matches(r, q))))
+        .filter(|a| !cv.hidden_types.iter().any(|t| t == subtype_label(&a.subtype)))
+        .filter(|a| !cv.hidden_authors.contains(&a.author.clone().unwrap_or_default()))
+        .filter(|a| !cv.hidden_statuses.contains(&status_of(a)))
         .collect();
+    let sort = cv.sort;
+    let color_key = |a: &Annotation| {
+        a.color.map(|c| format!("{:02X}{:02X}{:02X}", (c[0] * 255.0) as u8, (c[1] * 255.0) as u8, (c[2] * 255.0) as u8)).unwrap_or_default()
+    };
+    match sort {
+        SortBy::Page => {}
+        SortBy::Author => roots.sort_by_key(|a| a.author.clone().unwrap_or_default().to_lowercase()),
+        SortBy::Date => roots.sort_by(|a, b| b.modified.cmp(&a.modified)),
+        SortBy::Type => roots.sort_by_key(|a| subtype_label(&a.subtype).to_string()),
+        SortBy::Color => roots.sort_by_key(|a| color_key(a)),
+    }
     if roots.is_empty() {
         ui.label(egui::RichText::new("No comments match.").color(t.text_muted));
     }
+    // Group headers follow the sort key (no headers when sorted by date).
+    let group_of = |a: &Annotation| -> Option<String> {
+        match sort {
+            SortBy::Page => Some(format!("Page {}", info.pages.get(a.page).map(|p| p.label.as_str()).unwrap_or("?"))),
+            SortBy::Author => Some(a.author.clone().unwrap_or_else(|| "Unknown author".into())),
+            SortBy::Type => Some(subtype_label(&a.subtype).to_string()),
+            SortBy::Color => Some(if a.color.is_some() { format!("#{}", color_key(a)) } else { "No colour".into() }),
+            SortBy::Date => None,
+        }
+    };
     let mut page = usize::MAX;
+    let mut group: Option<String> = None;
     for a in roots {
-        if a.page != page {
+        if sort != SortBy::Page {
+            let g = group_of(a);
+            if g.is_some() && g != group {
+                ui.add_space(6.0);
+                ui.label(egui::RichText::new(g.clone().unwrap_or_default()).font(theme::semibold(12.5)).color(t.text_muted));
+                group = g;
+            }
+        } else if a.page != page {
             page = a.page;
             let n = info.annotations.iter().filter(|x| x.page == page && x.in_reply_to.is_none()).count();
             ui.add_space(6.0);
@@ -329,6 +363,10 @@ fn card(
                     }
                 }
             });
+            if ui.button("Properties…").clicked() {
+                view.comments.props_request = Some((a.page, a.index));
+                ui.close();
+            }
             ui.separator();
             if ui.button("Delete").clicked() {
                 view.comments.selected = None;
@@ -360,4 +398,62 @@ fn legible(c: Color32, t: &Tokens) -> Color32 {
     } else {
         c
     }
+}
+
+/// The Comments panel header's filter and sort controls (Acrobat: filter funnel and "…").
+pub(crate) fn header_controls(ui: &mut egui::Ui, info: &DocInfo, view: &mut DocView) {
+    let cv = &mut view.comments;
+    let mut types: Vec<String> = info.annotations.iter().filter(|a| a.in_reply_to.is_none()).map(|a| subtype_label(&a.subtype).to_string()).collect();
+    types.sort();
+    types.dedup();
+    let mut authors: Vec<String> =
+        info.annotations.iter().filter(|a| a.in_reply_to.is_none()).map(|a| a.author.clone().unwrap_or_default()).collect();
+    authors.sort();
+    authors.dedup();
+    let active = !(cv.hidden_types.is_empty() && cv.hidden_authors.is_empty() && cv.hidden_statuses.is_empty());
+    let more = icons::button(ui, "ellipsis", 26.0, false, "Sort comments");
+    egui::Popup::menu(&more).show(|ui| {
+        ui.label(egui::RichText::new("Sort by").small());
+        for (s, label) in
+            [(SortBy::Page, "Page"), (SortBy::Author, "Author"), (SortBy::Date, "Date"), (SortBy::Type, "Type"), (SortBy::Color, "Colour")]
+        {
+            if ui.radio(cv.sort == s, label).clicked() {
+                cv.sort = s;
+                ui.close();
+            }
+        }
+    });
+    let filter = icons::button(ui, "filter", 26.0, active, "Filter comments");
+    egui::Popup::menu(&filter).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
+        ui.set_min_width(200.0);
+        let toggle = |ui: &mut egui::Ui, list: &mut Vec<String>, value: &str, label: &str| {
+            let mut shown = !list.iter().any(|x| x == value);
+            if ui.checkbox(&mut shown, label).changed() {
+                if shown {
+                    list.retain(|x| x != value);
+                } else {
+                    list.push(value.to_string());
+                }
+            }
+        };
+        ui.label(egui::RichText::new("Type").small());
+        for ty in &types {
+            toggle(ui, &mut cv.hidden_types, ty, ty);
+        }
+        ui.separator();
+        ui.label(egui::RichText::new("Author").small());
+        for a in &authors {
+            toggle(ui, &mut cv.hidden_authors, a, if a.is_empty() { "Unknown author" } else { a });
+        }
+        ui.separator();
+        ui.label(egui::RichText::new("Status").small());
+        for s in ["None", "Accepted", "Rejected", "Cancelled", "Completed"] {
+            toggle(ui, &mut cv.hidden_statuses, s, s);
+        }
+        if active && ui.button("Show all").clicked() {
+            cv.hidden_types.clear();
+            cv.hidden_authors.clear();
+            cv.hidden_statuses.clear();
+        }
+    });
 }

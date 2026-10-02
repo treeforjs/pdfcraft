@@ -219,6 +219,10 @@ pub fn right_panel(app: &mut PrintCraftApp, ui: &mut egui::Ui) {
                         if icons::button(ui, "x", 26.0, false, "Close").clicked() {
                             close = true;
                         }
+                        // Right to left: close, "…", filter, search (Acrobat's order left to right).
+                        if panel == RightPanel::Comments {
+                            crate::comments_panel::header_controls(ui, info, view);
+                        }
                         if panel == RightPanel::Comments
                             && icons::button(ui, "search", 26.0, view.comments.search.is_some(), "Search comments").clicked()
                         {
@@ -326,6 +330,9 @@ pub fn right_panel(app: &mut PrintCraftApp, ui: &mut egui::Ui) {
     }
     if let Some(e) = panel_edit {
         app.apply_edit(e);
+    }
+    if let Some((p, i)) = app.views.get_mut(index).and_then(|v| v.comments.props_request.take()) {
+        app.open_comment_props(p, i);
     }
     app.bookmark_rename = bm_rename;
     if let Some(a) = bm_action {

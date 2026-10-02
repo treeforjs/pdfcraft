@@ -8,6 +8,7 @@
 mod canvas;
 mod chrome;
 mod commands;
+mod comment_props;
 pub mod comments;
 mod comments_panel;
 pub mod control;
@@ -102,6 +103,8 @@ pub enum Dialog {
     Export(export_ui::ExportKind),
     /// Fill & Sign ▸ Create signature (the drawing pad).
     Signature,
+    /// Comment Properties.
+    CommentProps,
     /// Documents from a session that ended unexpectedly.
     Recovery,
 }
@@ -203,6 +206,8 @@ pub struct PrintCraftApp {
     pub signature: Option<Vec<Vec<[f32; 2]>>>,
     /// Strokes being drawn in the signature pad.
     pub signature_draft: Vec<Vec<[f32; 2]>>,
+    /// The Comment Properties dialog's state.
+    pub comment_props: Option<comment_props::PropsDraft>,
     /// The last web link the app asked the system to open (tests and automation).
     pub last_opened_url: Option<String>,
 }
@@ -272,6 +277,7 @@ impl PrintCraftApp {
             export_status: None,
             signature: None,
             signature_draft: Vec::new(),
+            comment_props: None,
             number_draft: NumberDraft { from: 1, to: 1, style: printcraft_engine::LabelStyle::Decimal, prefix: String::new(), start: 1 },
         }
     }

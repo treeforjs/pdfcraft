@@ -26,7 +26,7 @@ pub use printcraft_forms::{Field as FormField, FieldKind as FormFieldKind, Field
 
 /// Comment geometry helpers (text-box line breaking) for frontends.
 pub use printcraft_annot::appearance as annot_text;
-pub use printcraft_annot::{FillMark, Markup, NewAnnotation, NoteIcon, ReviewState, Rgb, Shape, Style};
+pub use printcraft_annot::{FillMark, Markup, NewAnnotation, NoteIcon, Props as CommentProps, ReviewState, Rgb, Shape, Style};
 
 pub type SplitPart = (usize, usize, Arc<Vec<u8>>);
 
@@ -71,7 +71,8 @@ fn scope_of(edit: &Edit) -> Scope {
         | Edit::SetAnnotationStatus { .. }
         | Edit::MoveAnnotation { .. }
         | Edit::ResizeAnnotation { .. }
-        | Edit::StyleAnnotation { .. } => Scope::Comments,
+        | Edit::StyleAnnotation { .. }
+        | Edit::SetAnnotationInfo { .. } => Scope::Comments,
         Edit::SetFieldValue { .. } | Edit::ResetForm { .. } => Scope::Form,
         Edit::Batch { edits, .. } => {
             let mut scopes = edits.iter().map(scope_of);
@@ -181,6 +182,11 @@ impl Document {
         let pending = editor.cos.encryption_changed();
         let permissions = if pending { printcraft_cos::Permissions { bits: h.permissions().bits, owner: false } } else { h.permissions() };
         Some(SecuritySummary { method: method.into(), owner: h.auth() == printcraft_cos::Auth::Owner && !pending, permissions, pending })
+    }
+
+    /// Comment properties of the comment at `(page, index)` (Comment Properties dialog).
+    pub fn comment_props(&self, page: usize, index: usize) -> Option<printcraft_annot::Props> {
+        self.editor.as_ref().and_then(|e| printcraft_annot::props(&e.cos, page, index))
     }
 
     /// Every page's media, crop, bleed, trim and art boxes (user space), for Set Page Boxes.
@@ -467,6 +473,14 @@ pub enum Edit {
         opacity: Option<f64>,
         width: Option<f64>,
     },
+    /// Comment properties ▸ General / note icon.
+    SetAnnotationInfo {
+        page: usize,
+        index: usize,
+        author: Option<String>,
+        subject: Option<String>,
+        icon: Option<NoteIcon>,
+    },
     /// Fill in a form field.
     SetFieldValue {
         name: String,
@@ -533,7 +547,7 @@ impl Edit {
             Edit::SetAnnotationStatus { state, .. } => format!("Set status {}", state.name()),
             Edit::MoveAnnotation { .. } => "Move comment".into(),
             Edit::ResizeAnnotation { .. } => "Resize comment".into(),
-            Edit::StyleAnnotation { .. } => "Change comment properties".into(),
+            Edit::StyleAnnotation { .. } | Edit::SetAnnotationInfo { .. } => "Change comment properties".into(),
             Edit::SetFieldValue { name, .. } => format!("Fill in {name}"),
             Edit::ResetForm { .. } => "Clear form".into(),
             Edit::AddHeaderFooter { replace: false, .. } => "Add header & footer".into(),
@@ -612,7 +626,8 @@ fn check_permission(edit: &Edit, p: &printcraft_cos::Permissions) -> Result<(), 
         | Edit::SetAnnotationStatus { .. }
         | Edit::MoveAnnotation { .. }
         | Edit::ResizeAnnotation { .. }
-        | Edit::StyleAnnotation { .. } => {
+        | Edit::StyleAnnotation { .. }
+        | Edit::SetAnnotationInfo { .. } => {
             if p.annotate() {
                 Ok(())
             } else {
@@ -749,6 +764,9 @@ fn run_edit(doc: &mut printcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -
         Edit::ResizeAnnotation { page, index, rect } => printcraft_annot::set_rect(doc, *page, *index, *rect, &cx.meta())?,
         Edit::StyleAnnotation { page, index, color, opacity, width } => {
             printcraft_annot::set_style(doc, *page, *index, *color, *opacity, *width, &cx.meta())?;
+        }
+        Edit::SetAnnotationInfo { page, index, author, subject, icon } => {
+            printcraft_annot::set_info(doc, *page, *index, author.as_deref(), subject.as_deref(), *icon, &cx.meta())?;
         }
         Edit::SetFieldValue { name, value } => printcraft_forms::set_value(doc, name, value)?,
         Edit::ResetForm { names } => {

@@ -906,3 +906,79 @@ pub fn summaries(doc: &Document) -> Vec<Summary> {
     out.sort_by(|a, b| a.page.cmp(&b.page).then(b.rect[3].total_cmp(&a.rect[3])));
     out
 }
+
+/// Change a comment's author (`/T`), subject (`/Subj`) and, for notes, icon (`/Name`, redrawn).
+/// `None` leaves a value as it is.
+pub fn set_info(
+    doc: &mut Document,
+    page: usize,
+    index: usize,
+    author: Option<&str>,
+    subject: Option<&str>,
+    icon: Option<NoteIcon>,
+    meta: &Meta,
+) -> Result<(), AnnotError> {
+    let (_, r) = annot_ref(doc, page, index)?;
+    let is_note = annot_dict(doc, r).name(b"Subtype") == Some(b"Text");
+    if icon.is_some() && !is_note {
+        return Err(AnnotError::Invalid("only sticky notes have an icon".into()));
+    }
+    doc.update_dict(r, |d| {
+        if let Some(a) = author {
+            d.set(b"T".to_vec(), PdfString::text(a));
+        }
+        if let Some(s) = subject {
+            d.set(b"Subj".to_vec(), PdfString::text(s));
+        }
+        if let Some(i) = icon {
+            d.set(b"Name".to_vec(), Object::name(i.name()));
+        }
+        touch(d, meta);
+    })?;
+    if icon.is_some() {
+        set_appearance(doc, r)?;
+    }
+    Ok(())
+}
+
+/// What Comment properties shows for one comment.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Props {
+    pub subtype: String,
+    pub author: String,
+    pub subject: String,
+    pub color: Option<Rgb>,
+    pub opacity: f64,
+    /// Border / line width, for shapes, lines and drawings.
+    pub width: Option<f64>,
+    /// Notes only.
+    pub icon: Option<NoteIcon>,
+    /// `/M`, as written.
+    pub modified: Option<String>,
+    /// The appearance can be redrawn (so colour, opacity and width can change).
+    pub restylable: bool,
+}
+
+/// The current properties of the comment at `(page, index)`.
+pub fn props(doc: &Document, page: usize, index: usize) -> Option<Props> {
+    let p = page_ref(doc, page).ok()?;
+    let entry = annots(doc, p).get(index).cloned()?;
+    let obj = doc.resolve(&entry);
+    let d = obj.as_dict()?;
+    let subtype = String::from_utf8_lossy(d.name(b"Subtype")?).into_owned();
+    let c: Vec<f64> = d.get(b"C").and_then(|o| o.as_array().map(|a| a.iter().filter_map(|x| x.as_f64()).collect())).unwrap_or_default();
+    let color = if subtype == "FreeText" { Some(appearance::parse_da(d).0) } else { (c.len() == 3).then(|| [c[0], c[1], c[2]]) };
+    let width = matches!(subtype.as_str(), "Square" | "Circle" | "Line" | "Ink" | "Polygon" | "PolyLine")
+        .then(|| d.get(b"BS").and_then(|b| b.as_dict()).and_then(|b| b.get(b"W")).and_then(|w| w.as_f64()).unwrap_or(1.0));
+    Some(Props {
+        author: text_value(doc, d, b"T").unwrap_or_default(),
+        subject: text_value(doc, d, b"Subj").unwrap_or_default(),
+        color,
+        opacity: d.get(b"CA").and_then(|o| o.as_f64()).unwrap_or(1.0),
+        width,
+        icon: (subtype == "Text").then(|| d.name(b"Name").and_then(|n| NoteIcon::from_name(&String::from_utf8_lossy(n))).unwrap_or(NoteIcon::Note)),
+        modified: text_value(doc, d, b"M"),
+        restylable: appearance::build(d).is_some(),
+        subtype,
+    })
+}

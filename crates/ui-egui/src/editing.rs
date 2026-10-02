@@ -255,7 +255,8 @@ fn comment_page(edit: &Edit) -> Option<usize> {
         | Edit::SetAnnotationStatus { page, .. }
         | Edit::MoveAnnotation { page, .. }
         | Edit::ResizeAnnotation { page, .. }
-        | Edit::StyleAnnotation { page, .. } => Some(*page),
+        | Edit::StyleAnnotation { page, .. }
+        | Edit::SetAnnotationInfo { page, .. } => Some(*page),
         _ => None,
     }
 }

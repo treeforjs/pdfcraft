@@ -267,11 +267,30 @@ pub struct CommentView {
     pub add_box: String,
     /// The Comments panel's search query (`None`: search closed).
     pub search: Option<String>,
+    /// Comment types, authors and statuses hidden by the panel's filter.
+    pub hidden_types: Vec<String>,
+    pub hidden_authors: Vec<String>,
+    pub hidden_statuses: Vec<String>,
+    /// How the panel orders comments.
+    pub sort: SortBy,
+    /// Comment Properties was asked for from the panel: (page, index).
+    pub props_request: Option<(usize, usize)>,
     pub search_focus: bool,
     /// Where the canvas context menu was opened: (page, user-space point).
     pub context_at: Option<(usize, [f64; 2])>,
     /// A one-shot tool just finished; the app returns to the Select tool unless pinned.
     pub tool_done: bool,
+}
+
+/// Comments panel order (Acrobat: Sort by page, author, date, type, colour).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SortBy {
+    #[default]
+    Page,
+    Author,
+    Date,
+    Type,
+    Color,
 }
 
 /// What a page needs to know to handle comment input.
@@ -833,6 +852,10 @@ pub(crate) fn context_menu(ui: &mut egui::Ui, view: &mut DocView, info: &DocInfo
                 action = Some(CanvasAction::Edit(Box::new(Edit::DeleteAnnotation { page, index })));
                 ui.close();
             }
+            if ui.add_enabled(allowed, egui::Button::new("Properties…")).clicked() {
+                action = Some(CanvasAction::Properties(page, index));
+                ui.close();
+            }
         }
         None => {
             if let Some((page, at)) = view.comments.context_at
@@ -855,6 +878,8 @@ pub(crate) fn context_menu(ui: &mut egui::Ui, view: &mut DocView, info: &DocInfo
 pub enum CanvasAction {
     Edit(Box<Edit>),
     OpenComments,
+    /// Comment Properties for (page, index).
+    Properties(usize, usize),
 }
 
 /// A grid of colour swatches; returns the one clicked.

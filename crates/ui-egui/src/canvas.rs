@@ -796,6 +796,7 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
     let mut hover_text: Option<(Pos2, String)> = None;
     let mut clicked_link: Option<LinkTarget> = None;
     let mut canvas_action: Option<comments::CanvasAction> = None;
+    let mut open_props: Option<(usize, usize)> = None;
 
     let out = scroll.show_viewport(ui, |ui, viewport| {
         let (resp_rect, resp) = ui.allocate_exact_size(vec2(content_w, content_h), Sense::click_and_drag());
@@ -1144,6 +1145,7 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
     match canvas_action {
         Some(comments::CanvasAction::Edit(e)) => view.pending_edit = Some(*e),
         Some(comments::CanvasAction::OpenComments) => app.right = Some(RightPanel::Comments),
+        Some(comments::CanvasAction::Properties(p, i)) => open_props = Some((p, i)),
         None => {}
     }
     match clicked_link {
@@ -1156,6 +1158,9 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
         tool = QuickTool::Select;
     }
     app.quick_tool = tool;
+    if let Some((p, i)) = open_props {
+        app.open_comment_props(p, i);
+    }
     if open_signature {
         app.signature_draft.clear();
         app.dialog = Some(crate::Dialog::Signature);

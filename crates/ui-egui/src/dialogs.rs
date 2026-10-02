@@ -34,6 +34,7 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
     let mut boxes_now = false;
     let mut marks_now = false;
     let mut export_now = false;
+    let mut props_now = false;
     let t = Tokens::get(ctx);
     let mut close = false;
     let mut next = dialog;
@@ -224,6 +225,12 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
                 if files > 1 {
                     split_ready = Some(by);
                 }
+            }
+            Dialog::CommentProps => {
+                let (apply, cancel) = crate::comment_props::body(ui, app, &t);
+                props_now = apply;
+                close = apply || cancel;
+                return;
             }
             Dialog::Signature => {
                 let (apply, cancel) = crate::fill_sign::signature_pad(ui, &t, &mut app.signature_draft);
@@ -456,6 +463,18 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
             app.recover(&keys);
         } else {
             app.discard_recovered(&keys);
+        }
+    }
+    if props_now && let Some(d) = app.comment_props.take() {
+        let mut edits = crate::comment_props::edits(&d);
+        match edits.len() {
+            0 => {}
+            1 => {
+                app.apply_edit(edits.remove(0));
+            }
+            _ => {
+                app.apply_edit(Edit::Batch { label: "Change comment properties".into(), edits });
+            }
         }
     }
     if export_now && let Dialog::Export(kind) = dialog {

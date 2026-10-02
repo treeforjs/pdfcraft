@@ -215,3 +215,53 @@ fn the_panel_posts_comments_and_replies() {
     assert_eq!((reply.contents.as_deref(), reply.author.as_deref()), (Some("Agreed"), Some("Tester")));
     h.get_by_label_contains("Agreed");
 }
+
+#[test]
+fn comment_properties_change_appearance_and_author() {
+    let mut h = harness(|app| app.set_option("quick", "square").unwrap());
+    drag_pt(&mut h, (40.0, 100.0), (140.0, 40.0));
+    h.state_mut().open_comment_props(0, 0);
+    h.run_steps(2);
+    h.get_by_label("Rectangle Properties");
+    {
+        let d = h.state_mut().comment_props.as_mut().expect("open");
+        assert_eq!(d.original.width, Some(2.0));
+        d.edited.color = Some([0.0, 0.0, 1.0]);
+        d.edited.width = Some(5.0);
+        d.edited.author = "Grace".into();
+    }
+    h.get_by_label("General").click();
+    h.run_steps(2);
+    h.get_by_label("Author");
+    h.get_by_label("OK").click();
+    h.run_steps(3);
+    let s = h.state();
+    let doc = s.session.get(s.views[0].id).unwrap();
+    let p = doc.comment_props(0, 0).unwrap();
+    assert_eq!((p.color, p.width, p.author.as_str()), (Some([0.0, 0.0, 1.0]), Some(5.0), "Grace"));
+    assert_eq!(doc.can_undo(), Some("Change comment properties"), "one undo step");
+}
+
+#[test]
+fn the_panel_filters_and_sorts() {
+    let mut h = harness(|app| {
+        app.set_option("panel", "comments").unwrap();
+        app.set_option("quick", "square").unwrap();
+    });
+    drag_pt(&mut h, (40.0, 100.0), (140.0, 40.0));
+    h.state_mut().set_option("quick", "circle").unwrap();
+    drag_pt(&mut h, (160.0, 100.0), (260.0, 40.0));
+    h.state_mut().set_option("quick", "select").unwrap();
+    h.run_steps(2);
+    let ovals = h.query_all_by_label("Oval").count();
+    assert!(ovals >= 1);
+    h.state_mut().views[0].comments.hidden_types.push("Oval".into());
+    h.run_steps(2);
+    assert_eq!(h.query_all_by_label("Oval").count(), ovals - 1, "the oval's card is filtered out");
+    assert!(h.query_all_by_label("Rectangle").count() >= 1);
+    h.state_mut().views[0].comments.hidden_types.clear();
+    h.state_mut().views[0].comments.sort = printcraft_ui_egui::comments::SortBy::Type;
+    h.run_steps(2);
+    // Grouped by type: a group header names each type.
+    assert_eq!(h.query_all_by_label("Oval").count(), ovals + 1, "a group header was added");
+}
