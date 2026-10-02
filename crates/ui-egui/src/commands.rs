@@ -193,6 +193,8 @@ impl PrintCraftApp {
                 };
                 self.apply_edit(Edit::RemoveMarks { kind });
             }
+            "export.image" => self.dialog = Some(Dialog::Export(crate::export_ui::ExportKind::Image)),
+            "export.text" => self.dialog = Some(Dialog::Export(crate::export_ui::ExportKind::Text)),
             "page.duplicate" => {
                 self.apply_edit(Edit::DuplicatePages { pages: targets });
             }

@@ -44,7 +44,7 @@ impl PageRange {
             .collect()
     }
 
-    fn ui(&mut self, ui: &mut egui::Ui, count: usize) {
+    pub(crate) fn ui(&mut self, ui: &mut egui::Ui, count: usize) {
         ui.horizontal(|ui| {
             ui.radio_value(&mut self.all, true, "All pages");
             ui.radio_value(&mut self.all, false, "Pages from");

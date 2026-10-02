@@ -12,6 +12,7 @@
 
 pub mod catalog;
 pub mod commands;
+pub mod export;
 pub mod links;
 
 pub use printcraft_organize::{BoxSpec, PageBox, SplitBy, split_ranges};

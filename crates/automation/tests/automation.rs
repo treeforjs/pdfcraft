@@ -519,3 +519,16 @@ fn headers_watermarks_and_backgrounds_through_tools() {
     assert!(matches!(a.call("doc_header_footer", &json!({ "doc": doc })), Err(ToolError::Failed(_))), "no text");
     ok(&mut a, "doc_save", json!({ "doc": doc, "path": "marked.pdf" }));
 }
+
+#[test]
+fn exporting_images_and_text_through_tools() {
+    let dir = workdir("export");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    let r = ok(&mut a, "doc_export_images", json!({ "doc": doc, "folder": "out", "dpi": 72, "pages": [1, 3] }));
+    assert_eq!(r["count"], 2);
+    assert!(dir.join("out/a_page_3.png").exists());
+    ok(&mut a, "doc_export_text", json!({ "doc": doc, "path": "a.txt" }));
+    assert_eq!(std::fs::read_to_string(dir.join("a.txt")).unwrap(), "Page 1\n\u{c}Page 2\n\u{c}Page 3\n");
+    assert!(a.call("doc_export_text", &json!({ "doc": doc, "path": "/etc/x.txt" })).is_err(), "confined to the root");
+}

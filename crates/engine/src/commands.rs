@@ -165,6 +165,8 @@ pub const COMMANDS: &[CommandSpec] = &[
     c("comment.circle", "Draw an oval", None, None, Annotate, "circle"),
     c("form.fields", "Form fields panel", VIEW, None, Document, "list"),
     c("form.clear", "Clear form", EDIT, None, FillForms, "eraser"),
+    c("export.image", "Export to image…", FILE, None, Document, "image"),
+    c("export.text", "Export to text…", FILE, None, Document, "type"),
     c("edit.header_footer", "Add header & footer…", None, None, Modification, "heading"),
     c("edit.header_footer.update", "Update header & footer…", None, None, Marks(crate::MarkKind::HeaderFooter), "heading"),
     c("edit.header_footer.remove", "Remove header & footer", None, None, Marks(crate::MarkKind::HeaderFooter), "heading"),

@@ -216,6 +216,7 @@ impl Automation {
                 self.apply(&a, Edit::DuplicatePages { pages })?
             }
             "page_set_box" => self.page_set_box(&a)?,
+            "doc_export_images" | "doc_export_text" => self.export(name, &a)?,
             "doc_header_footer" | "doc_watermark" | "doc_background" | "doc_remove_marks" => self.marks(name, &a)?,
             "doc_unprotect" => {
                 let mut out = self.apply(&a, Edit::RemoveProtection)?;
@@ -346,6 +347,33 @@ impl Automation {
             }
         };
         self.apply(a, edit)
+    }
+
+    fn export(&mut self, tool: &str, a: &Args) -> Result<Value> {
+        let doc = self.doc(a)?;
+        let pages = match a.opt_ints("pages")? {
+            Some(_) => self.pages(a, "pages")?,
+            None => (0..doc.info.pages.len()).collect(),
+        };
+        let stem = doc.name.trim_end_matches(".pdf").trim_end_matches(".PDF").to_string();
+        let mut ex = printcraft_engine::export::Exporter::new(doc);
+        if tool == "doc_export_text" {
+            let path = self.resolve(a.str("path")?, true)?;
+            let text = ex.text_of(&pages).map_err(failed)?;
+            write_atomic(&path, text.as_bytes())?;
+            return Ok(json!({ "path": path.to_string_lossy(), "pages": pages.len(), "bytes": text.len() }));
+        }
+        let folder = self.resolve(a.str("folder")?, true)?;
+        std::fs::create_dir_all(&folder).map_err(|e| failed(format!("{}: {e}", folder.display())))?;
+        let dpi = a.opt_num("dpi")?.unwrap_or(150.0);
+        let mut files = Vec::new();
+        for p in pages {
+            let png = ex.png(p, dpi).map_err(failed)?;
+            let path = folder.join(format!("{stem}_page_{}.png", p + 1));
+            write_atomic(&path, &png)?;
+            files.push(path.to_string_lossy().into_owned());
+        }
+        Ok(json!({ "count": files.len(), "files": files }))
     }
 
     fn page_set_box(&mut self, a: &Args) -> Result<Value> {

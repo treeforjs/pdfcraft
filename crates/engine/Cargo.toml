@@ -17,3 +17,4 @@ printcraft-forms = { workspace = true }
 printcraft-edit = { workspace = true }
 printcraft-model = { workspace = true }
 thiserror = { workspace = true }
+png = "0.18"

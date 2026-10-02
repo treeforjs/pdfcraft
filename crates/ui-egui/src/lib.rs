@@ -12,6 +12,7 @@ pub mod comments;
 mod comments_panel;
 pub mod control;
 mod crop;
+mod export_ui;
 mod marks_ui;
 /// Header & footer / watermark / background dialog types (tests and automation).
 pub mod marks {
@@ -93,6 +94,8 @@ pub enum Dialog {
     PageBoxes,
     /// Add / Update Header and Footer, Watermark, Background.
     Marks(printcraft_engine::MarkKind),
+    /// Export a PDF ▸ Image / Text.
+    Export(export_ui::ExportKind),
     /// Documents from a session that ended unexpectedly.
     Recovery,
 }
@@ -186,6 +189,10 @@ pub struct PrintCraftApp {
     pub boxes_draft: pageboxes::BoxesDraft,
     /// Header & footer / watermark / background dialog state.
     pub marks_draft: marks_ui::MarksDraft,
+    /// Export dialog settings.
+    pub export_draft: export_ui::ExportDraft,
+    /// A running export's progress.
+    export_status: Option<export_ui::ExportStatus>,
     /// The last web link the app asked the system to open (tests and automation).
     pub last_opened_url: Option<String>,
 }
@@ -251,6 +258,8 @@ impl PrintCraftApp {
             protect_draft: Default::default(),
             boxes_draft: Default::default(),
             marks_draft: Default::default(),
+            export_draft: Default::default(),
+            export_status: None,
             number_draft: NumberDraft { from: 1, to: 1, style: printcraft_engine::LabelStyle::Decimal, prefix: String::new(), start: 1 },
         }
     }
@@ -545,6 +554,8 @@ impl PrintCraftApp {
                     "header-footer" => Some(Dialog::Marks(printcraft_engine::MarkKind::HeaderFooter)),
                     "watermark" => Some(Dialog::Marks(printcraft_engine::MarkKind::Watermark)),
                     "background" => Some(Dialog::Marks(printcraft_engine::MarkKind::Background)),
+                    "export-image" => Some(Dialog::Export(export_ui::ExportKind::Image)),
+                    "export-text" => Some(Dialog::Export(export_ui::ExportKind::Text)),
                     "number-pages" => {
                         // Same path as the menu, so the page range is seeded.
                         self.execute("page.number");
@@ -682,6 +693,7 @@ impl eframe::App for PrintCraftApp {
         self.autosave_tick(now);
         self.shortcuts(ctx);
         self.process_pending_edits();
+        self.poll_export();
         self.process_file_requests();
         // Pull finished renders into textures for every open document.
         for view in &mut self.views {

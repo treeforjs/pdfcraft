@@ -701,3 +701,19 @@ fn headers_footers_watermarks_and_backgrounds_show_update_and_remove() {
     assert!(matches!(s.apply(id, Edit::RemoveMarks { kind: MarkKind::Watermark }), Err(EditError::Edit(_))));
     assert_eq!(s.get(id).unwrap().can_undo(), Some("Remove background"));
 }
+
+#[test]
+fn export_images_and_text_follow_the_working_file() {
+    let (mut s, id) = session_with(2);
+    s.apply(id, Edit::RotatePages { pages: vec![1], degrees: 90 }).unwrap();
+    let doc = s.get(id).unwrap();
+    let mut ex = export::Exporter::new(doc);
+    let png = ex.png(1, 144.0).unwrap();
+    assert_eq!(&png[1..4], b"PNG");
+    // 200×300 pt rotated → 300×200 pt at 2 px/pt.
+    let w = u32::from_be_bytes(png[16..20].try_into().unwrap());
+    let h = u32::from_be_bytes(png[20..24].try_into().unwrap());
+    assert_eq!((w, h), (600, 400));
+    assert_eq!(ex.text_of(&[0, 1]).unwrap(), "Page 1\n\u{c}Page 2\n");
+    assert!(ex.png(5, 72.0).is_err());
+}

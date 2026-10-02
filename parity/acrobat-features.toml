@@ -6871,11 +6871,11 @@ title = "Export pages as PNG"
 area = "J"
 tier = "P0"
 milestone = "M10"
-status = "partial"
-commands = []
-tools = ["page_render"]
-evidence = ["crates/automation/tests/automation.rs::open_inspect_render_and_find"]
-notes = "page_render tool and CLI render only; no Export UI"
+status = "shipped"
+commands = ["export.image"]
+tools = ["doc_export_images", "page_render"]
+evidence = ["crates/ui-egui/tests/export.rs::export_dialogs_write_images_and_text", "crates/engine/src/tests.rs::export_images_and_text_follow_the_working_file", "crates/automation/tests/automation.rs::exporting_images_and_text_through_tools"]
+notes = "PNG at 72–600 dpi, page ranges; includes unsaved edits; background thread with progress"
 
 [[feature]]
 id = "create.export-jpeg-tiff"
@@ -6931,11 +6931,11 @@ title = "Export to plain text"
 area = "J"
 tier = "P0"
 milestone = "M10"
-status = "partial"
-commands = []
-tools = ["text_extract"]
-evidence = ["crates/automation/tests/automation.rs::parallel_text_extraction_keeps_page_order_and_follows_edits", "crates/render/src/text.rs::two_columns_read_left_then_right_even_if_drawn_interleaved"]
-notes = "text_extract tool and CLI text; no Export UI"
+status = "shipped"
+commands = ["export.text"]
+tools = ["doc_export_text", "text_extract"]
+evidence = ["crates/ui-egui/tests/export.rs::export_dialogs_write_images_and_text", "crates/automation/tests/automation.rs::exporting_images_and_text_through_tools"]
+notes = "plain reading-order text; accessible text (tags) comes with M12"
 
 [[feature]]
 id = "create.export-accessible-text"

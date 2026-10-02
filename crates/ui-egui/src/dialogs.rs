@@ -33,6 +33,7 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
     let mut protect_now = false;
     let mut boxes_now = false;
     let mut marks_now = false;
+    let mut export_now = false;
     let t = Tokens::get(ctx);
     let mut close = false;
     let mut next = dialog;
@@ -223,6 +224,12 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
                 if files > 1 {
                     split_ready = Some(by);
                 }
+            }
+            Dialog::Export(kind) => {
+                let (apply, cancel) = crate::export_ui::body(ui, app, &t, kind);
+                export_now = apply;
+                close = apply || cancel;
+                return;
             }
             Dialog::Marks(kind) => {
                 ui.set_width(720.0);
@@ -440,6 +447,9 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
         } else {
             app.discard_recovered(&keys);
         }
+    }
+    if export_now && let Dialog::Export(kind) = dialog {
+        app.start_export(kind);
     }
     if marks_now && let (Dialog::Marks(kind), Some((_, id))) = (dialog, app.active_ids()) {
         let count = app.session.get(id).map(|d| d.info.pages.len()).unwrap_or(0);
