@@ -91,11 +91,11 @@ title = "Follow /Prev revision chains with loop protection"
 area = "A"
 tier = "P0"
 milestone = "M1"
-status = "partial"
-commands = []
-tools = []
-evidence = ["crates/organize/src/tests.rs::successive_incremental_saves_stack_revisions"]
-notes = "reading works; revision list API is M1.4"
+status = "shipped"
+commands = ["file.properties"]
+tools = ["doc_revisions"]
+evidence = ["crates/cos/src/document.rs::looping_revision_chains_stop", "crates/cos/src/document.rs::revision_ends_split_incremental_updates"]
+notes = "/Prev chains followed newest first with a visited set (loops stop and are logged); revisions listed and opened (doc_revisions, doc_open_revision)"
 
 [[feature]]
 id = "core.stream-filters"
@@ -6643,11 +6643,11 @@ title = "Create PDF from images (JPEG, PNG, TIFF, GIF, BMP, JPEG 2000)"
 area = "J"
 tier = "P0"
 milestone = "M10"
-status = "partial"
-commands = ["create.images", "create.file"]
+status = "shipped"
+commands = ["create.images"]
 tools = ["doc_create"]
-evidence = ["crates/ui-egui/tests/create.rs::opening_images_and_text_converts_them_to_new_pdfs", "crates/create/src/tests.rs::images_become_pages_at_their_resolution", "crates/create/src/tests.rs::bmp_gif_and_multi_page_tiff_images"]
-notes = "PNG, JPEG, TIFF, GIF (first frame), BMP; JPEG 2000 pending"
+evidence = ["crates/create/src/tests.rs::jpeg_2000_images_are_embedded_as_is", "crates/create/src/tests.rs::images_export_as_jpeg_unchanged_and_others_as_png"]
+notes = "PNG, JPEG, TIFF (multi-page), GIF (first frame), BMP, and JPEG 2000 (JP2 or codestream, embedded as JPXDecode with its capture resolution)"
 
 [[feature]]
 id = "create.from-multipage-tiff"

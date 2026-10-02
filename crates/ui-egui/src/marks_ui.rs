@@ -402,8 +402,9 @@ fn file_source(ui: &mut egui::Ui, d: &mut MarksDraft, kind: MarkKind) {
     ui.horizontal(|ui| {
         #[cfg(not(target_arch = "wasm32"))]
         if ui.button("Browse…").clicked()
-            && let Some(p) =
-                rfd::FileDialog::new().add_filter("PDF or image", &["pdf", "png", "jpg", "jpeg", "tif", "tiff", "gif", "bmp"]).pick_file()
+            && let Some(p) = rfd::FileDialog::new()
+                .add_filter("PDF or image", &["pdf", "png", "jpg", "jpeg", "tif", "tiff", "gif", "bmp", "jp2", "j2k", "jpx"])
+                .pick_file()
         {
             match std::fs::read(&p) {
                 Ok(b) => d.file = Some((p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(), std::sync::Arc::new(b))),

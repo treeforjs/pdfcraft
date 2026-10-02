@@ -6,7 +6,7 @@ use std::sync::Arc;
 use crate::PrintCraftApp;
 
 /// File types Open accepts besides PDF (converted on open).
-pub const CONVERTIBLE: [&str; 9] = ["png", "jpg", "jpeg", "tif", "tiff", "gif", "bmp", "txt", "text"];
+pub const CONVERTIBLE: [&str; 12] = ["png", "jpg", "jpeg", "tif", "tiff", "gif", "bmp", "jp2", "j2k", "jpx", "txt", "text"];
 
 fn is_image(bytes: &[u8]) -> bool {
     bytes.starts_with(&[0xFF, 0xD8])
@@ -14,6 +14,9 @@ fn is_image(bytes: &[u8]) -> bool {
         || bytes.starts_with(b"II*\0")
         || bytes.starts_with(b"MM\0*")
         || bytes.starts_with(b"GIF8")
+        // JPEG 2000: a JP2 file or a raw codestream.
+        || bytes.starts_with(&[0, 0, 0, 0x0C, b'j', b'P', b' ', b' '])
+        || bytes.starts_with(&[0xFF, 0x4F, 0xFF, 0x51])
         // BMP: "BM" and a known header size (so text starting with "BM" stays text).
         || (bytes.starts_with(b"BM") && bytes.get(14..18).is_some_and(|h| matches!(u32::from_le_bytes([h[0], h[1], h[2], h[3]]), 12 | 40 | 52 | 56 | 108 | 124)))
 }
@@ -129,7 +132,7 @@ impl PrintCraftApp {
         #[cfg(not(target_arch = "wasm32"))]
         {
             let Some(files) = rfd::FileDialog::new()
-                .add_filter("Images", &["png", "jpg", "jpeg", "tif", "tiff", "gif", "bmp"])
+                .add_filter("Images", &["png", "jpg", "jpeg", "tif", "tiff", "gif", "bmp", "jp2", "j2k", "jpx"])
                 .set_title("Choose images")
                 .pick_files()
             else {

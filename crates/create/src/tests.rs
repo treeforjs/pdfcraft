@@ -195,3 +195,40 @@ fn indexed_and_one_bit_images_decode() {
     rd.next_frame(&mut buf).unwrap();
     assert_eq!(&buf[..12], &[255, 0, 0, 0, 0, 255, 255, 0, 0, 0, 0, 255]);
 }
+
+#[test]
+fn jpeg_2000_images_are_embedded_as_is() {
+    // A JP2 file: signature, ftyp, jp2h (ihdr 30 × 20, 3 components; resc 5906 px/m ≈ 150 dpi),
+    // and a (stub) codestream.
+    let bx = |ty: &[u8], payload: &[u8]| {
+        let mut v = ((payload.len() + 8) as u32).to_be_bytes().to_vec();
+        v.extend_from_slice(ty);
+        v.extend_from_slice(payload);
+        v
+    };
+    let mut ihdr = Vec::new();
+    ihdr.extend_from_slice(&20u32.to_be_bytes());
+    ihdr.extend_from_slice(&30u32.to_be_bytes());
+    ihdr.extend_from_slice(&[0, 3, 7, 7, 0, 0]);
+    let mut resc = Vec::new();
+    for _ in 0..2 {
+        resc.extend_from_slice(&5906u16.to_be_bytes());
+        resc.extend_from_slice(&1u16.to_be_bytes());
+    }
+    resc.extend_from_slice(&[0, 0]);
+    let jp2h = [bx(b"ihdr", &ihdr), bx(b"res ", &bx(b"resc", &resc))].concat();
+    let file = [JP2_SIGNATURE.to_vec(), bx(b"ftyp", b"jp2 \0\0\0\0jp2 "), bx(b"jp2h", &jp2h), bx(b"jp2c", &[0xFF, 0x4F, 0xFF, 0x51])].concat();
+    let doc = reopen(&from_images(&[("photo.jp2".into(), file.clone())]).unwrap());
+    let p = &pages(&doc)[0];
+    let m = media(p);
+    assert!((m[2] - 30.0 * 72.0 / 150.0).abs() < 0.2 && (m[3] - 20.0 * 72.0 / 150.0).abs() < 0.2, "{m:?}");
+    let out = extract_images(&doc, &[0], 0);
+    assert!(out.images.is_empty() && out.skipped.len() == 1, "JPX can't be exported yet: {:?}", out.skipped);
+    // A raw codestream: the size comes from SIZ.
+    let mut siz = vec![0xFF, 0x4F, 0xFF, 0x51, 0, 41, 0, 0];
+    for v in [64u32, 48, 0, 0] {
+        siz.extend_from_slice(&v.to_be_bytes());
+    }
+    let doc = reopen(&from_images(&[("raw.j2k".into(), siz)]).unwrap());
+    assert_eq!(media(&pages(&doc)[0])[2], 64.0);
+}

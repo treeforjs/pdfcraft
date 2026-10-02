@@ -971,6 +971,20 @@ mod tests {
         assert!(doc.get(ObjRef::new(1, 0)).as_dict().unwrap().get(b"Lang").is_none());
     }
 
+    /// A /Prev chain that loops back on itself stops at the loop (and says so).
+    #[test]
+    fn looping_revision_chains_stop() {
+        let mut bytes = build(&["<< /Type /Catalog /Pages 2 0 R >>", "<< /Type /Pages /Kids [] /Count 0 >>"], "/Root 1 0 R");
+        // An update whose /Prev points at itself.
+        let at = bytes.len();
+        bytes.extend_from_slice(
+            format!("xref\n0 1\n0000000000 65535 f \ntrailer << /Size 3 /Root 1 0 R /Prev {at} >>\nstartxref\n{at}\n%%EOF\n").as_bytes(),
+        );
+        let doc = Document::open(Arc::new(bytes)).unwrap();
+        assert_eq!(doc.root(), Some(ObjRef::new(1, 0)));
+        assert!(doc.repair_log().iter().any(|l| l.contains("loops")), "{:?}", doc.repair_log());
+    }
+
     /// A hybrid-reference file: the classic table leaves object 3 out; the `/XRefStm` stream
     /// says it lives in object stream 4.
     #[test]

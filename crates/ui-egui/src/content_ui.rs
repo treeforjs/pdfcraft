@@ -383,7 +383,7 @@ impl crate::PrintCraftApp {
                 // Tests and automation set `save_override` and never see a native dialog.
                 Some(_) => None,
                 None => rfd::FileDialog::new()
-                    .add_filter("Images", &["png", "jpg", "jpeg", "tif", "tiff", "gif", "bmp"])
+                    .add_filter("Images", &["png", "jpg", "jpeg", "tif", "tiff", "gif", "bmp", "jp2", "j2k", "jpx"])
                     .set_title("Choose an image")
                     .pick_file(),
             };
@@ -408,7 +408,7 @@ impl crate::PrintCraftApp {
                 Some(p) if p.ends_with(".png") || p.ends_with(".jpg") => Some(std::path::PathBuf::from(p)),
                 Some(_) => None,
                 None => rfd::FileDialog::new()
-                    .add_filter("Images", &["png", "jpg", "jpeg", "tif", "tiff", "gif", "bmp"])
+                    .add_filter("Images", &["png", "jpg", "jpeg", "tif", "tiff", "gif", "bmp", "jp2", "j2k", "jpx"])
                     .set_title("Select Icon")
                     .pick_file(),
             };
@@ -432,7 +432,7 @@ impl crate::PrintCraftApp {
                 Some(p) if p.ends_with(".png") || p.ends_with(".jpg") => Some(std::path::PathBuf::from(p)),
                 Some(_) => None,
                 None => rfd::FileDialog::new()
-                    .add_filter("Images", &["png", "jpg", "jpeg", "tif", "tiff", "gif", "bmp"])
+                    .add_filter("Images", &["png", "jpg", "jpeg", "tif", "tiff", "gif", "bmp", "jp2", "j2k", "jpx"])
                     .set_title("Replace image")
                     .pick_file(),
             };

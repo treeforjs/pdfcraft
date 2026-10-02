@@ -137,7 +137,7 @@ impl PrintCraftApp {
                 Some(p) if [".png", ".jpg", ".pdf"].iter().any(|e| p.ends_with(e)) => Some(std::path::PathBuf::from(p)),
                 Some(_) => None,
                 None => rfd::FileDialog::new()
-                    .add_filter("PDF or image", &["pdf", "png", "jpg", "jpeg", "tif", "tiff", "gif", "bmp"])
+                    .add_filter("PDF or image", &["pdf", "png", "jpg", "jpeg", "tif", "tiff", "gif", "bmp", "jp2", "j2k", "jpx"])
                     .set_title("Select a file for the stamp")
                     .pick_file(),
             };
