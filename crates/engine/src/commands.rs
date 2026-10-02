@@ -22,6 +22,8 @@ pub enum Needs {
     Assembly,
     /// The open document's security allows content and metadata changes.
     Modification,
+    /// The open document's security allows adding and changing comments.
+    Annotate,
     /// There is something to undo.
     Undo,
     /// There is something to redo.
@@ -143,6 +145,16 @@ pub const COMMANDS: &[CommandSpec] = &[
     c("view.read_mode", "Read mode", VIEW, Some(Shortcut { command: true, shift: false, mac_ctrl: true, key: "H" }), Document, "book-open"),
     c("view.theme", "Switch light / dark theme", VIEW, None, Nothing, "moon"),
     c("comment.list", "Comments panel", VIEW, None, Document, "message-square-text"),
+    c("comment.note", "Add a sticky note", None, None, Annotate, "sticky-note"),
+    c("comment.freetext", "Add a text box", None, None, Annotate, "type"),
+    c("comment.highlight", "Highlight text", None, None, Annotate, "highlighter"),
+    c("comment.underline", "Underline text", None, None, Annotate, "underline"),
+    c("comment.strikeout", "Strikethrough text", None, None, Annotate, "strikethrough"),
+    c("comment.ink", "Draw freehand", None, None, Annotate, "pencil"),
+    c("comment.line", "Draw a line", None, None, Annotate, "minus"),
+    c("comment.arrow", "Draw an arrow", None, None, Annotate, "move-right"),
+    c("comment.square", "Draw a rectangle", None, None, Annotate, "square"),
+    c("comment.circle", "Draw an oval", None, None, Annotate, "circle"),
     c("form.fields", "Form fields panel", VIEW, None, Document, "list"),
     c("protect.properties", "Security properties…", FILE, None, Document, "shield-check"),
     c("page.organize", "Organize pages", PAGES, None, Document, "layout-grid"),
@@ -180,6 +192,7 @@ pub fn is_enabled(spec: &CommandSpec, session: &Session, active: Option<DocId>) 
         Document => doc.is_some(),
         Assembly => doc.is_some_and(|d| d.allows_assembly()),
         Modification => doc.is_some_and(|d| d.allows_modification()),
+        Annotate => doc.is_some_and(|d| d.allows_annotation()),
         Undo => doc.is_some_and(|d| d.can_undo().is_some()),
         Redo => doc.is_some_and(|d| d.can_redo().is_some()),
     }

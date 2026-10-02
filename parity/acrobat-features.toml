@@ -3433,9 +3433,9 @@ tier = "P0"
 milestone = "M3"
 status = "shipped"
 commands = ["comment.list"]
-tools = ["doc_info"]
-evidence = ["crates/ui-egui/tests/ui.rs::opening_a_pdf_shows_comments_and_bookmarks"]
-notes = "read-only; creating and managing comments is M5"
+tools = ["comment_list"]
+evidence = ["crates/ui-egui/tests/ui.rs::opening_a_pdf_shows_comments_and_bookmarks", "crates/ui-egui/tests/comments.rs::the_panel_posts_comments_and_replies"]
+notes = "cards grouped by page with replies, status badges, selection, reply box and an Add a comment box"
 
 [[feature]]
 id = "comment.appearance-generation"
@@ -3443,11 +3443,11 @@ title = "Generate correct appearances for every markup type"
 area = "E"
 tier = "P0"
 milestone = "M5"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["comment_add"]
+evidence = ["crates/annot/src/tests.rs::every_tool_creates_a_drawable_comment", "crates/engine/src/tests.rs::highlight_multiplies_over_text"]
+notes = "appearances for every type PrintCraft creates (highlight multiplies); clouds, callouts, stamps and rich text are not drawn yet"
 
 [[feature]]
 id = "comment.sticky-note"
@@ -3455,11 +3455,11 @@ title = "Sticky note comments"
 area = "E"
 tier = "P0"
 milestone = "M5"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["comment.note"]
+tools = ["comment_add"]
+evidence = ["crates/ui-egui/tests/comments.rs::sticky_note_composer_posts_and_returns_to_select", "crates/annot/src/tests.rs::every_tool_creates_a_drawable_comment"]
+notes = "our own Comment/Note icon drawings, with a pop-up"
 
 [[feature]]
 id = "comment.highlight"
@@ -3467,11 +3467,11 @@ title = "Highlight text"
 area = "E"
 tier = "P0"
 milestone = "M5"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["comment.highlight"]
+tools = ["comment_add"]
+evidence = ["crates/ui-egui/tests/comments.rs::dragging_over_text_with_the_highlighter_highlights_it", "crates/engine/src/tests.rs::highlight_multiplies_over_text"]
+notes = "drag over text, or pick the tool with text selected; agents can highlight by text search"
 
 [[feature]]
 id = "comment.underline"
@@ -3479,10 +3479,10 @@ title = "Underline text"
 area = "E"
 tier = "P0"
 milestone = "M5"
-status = "planned"
-commands = []
-tools = []
-evidence = []
+status = "shipped"
+commands = ["comment.underline"]
+tools = ["comment_add"]
+evidence = ["crates/annot/src/tests.rs::every_tool_creates_a_drawable_comment", "crates/ui-egui/tests/comments.rs::a_selection_made_first_is_marked_when_a_tool_is_picked"]
 notes = ""
 
 [[feature]]
@@ -3491,10 +3491,10 @@ title = "Strikethrough text"
 area = "E"
 tier = "P0"
 milestone = "M5"
-status = "planned"
-commands = []
-tools = []
-evidence = []
+status = "shipped"
+commands = ["comment.strikeout"]
+tools = ["comment_add"]
+evidence = ["crates/ui-egui/tests/comments.rs::a_selection_made_first_is_marked_when_a_tool_is_picked", "crates/annot/src/tests.rs::every_tool_creates_a_drawable_comment"]
 notes = ""
 
 [[feature]]
@@ -3503,11 +3503,11 @@ title = "Squiggly underline"
 area = "E"
 tier = "P2"
 milestone = "M5"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["comment_add"]
+evidence = ["crates/annot/src/tests.rs::every_tool_creates_a_drawable_comment"]
+notes = "engine and agent tool; no toolbar entry yet"
 
 [[feature]]
 id = "comment.replace-text"
@@ -3551,11 +3551,11 @@ title = "Text box comment with rich text"
 area = "E"
 tier = "P0"
 milestone = "M5"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["comment.freetext"]
+tools = ["comment_add"]
+evidence = ["crates/ui-egui/tests/comments.rs::sticky_note_composer_posts_and_returns_to_select", "crates/annot/src/tests.rs::text_box_text_and_colour_changes_are_drawn"]
+notes = "plain text in Helvetica; rich text (/RC, /DS) is not written yet"
 
 [[feature]]
 id = "comment.callout"
@@ -3575,11 +3575,11 @@ title = "Freehand drawing (ink)"
 area = "E"
 tier = "P0"
 milestone = "M5"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["comment.ink"]
+tools = ["comment_add"]
+evidence = ["crates/ui-egui/tests/comments.rs::shapes_and_ink_are_drawn_by_dragging"]
+notes = "one ink annotation per stroke"
 
 [[feature]]
 id = "comment.eraser"
@@ -3599,10 +3599,10 @@ title = "Line"
 area = "E"
 tier = "P0"
 milestone = "M5"
-status = "planned"
-commands = []
-tools = []
-evidence = []
+status = "shipped"
+commands = ["comment.line"]
+tools = ["comment_add"]
+evidence = ["crates/annot/src/tests.rs::every_tool_creates_a_drawable_comment"]
 notes = ""
 
 [[feature]]
@@ -3611,10 +3611,10 @@ title = "Arrow"
 area = "E"
 tier = "P0"
 milestone = "M5"
-status = "planned"
-commands = []
-tools = []
-evidence = []
+status = "shipped"
+commands = ["comment.arrow"]
+tools = ["comment_add"]
+evidence = ["crates/ui-egui/tests/comments.rs::shapes_and_ink_are_drawn_by_dragging"]
 notes = ""
 
 [[feature]]
@@ -3623,11 +3623,11 @@ title = "Rectangle"
 area = "E"
 tier = "P0"
 milestone = "M5"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["comment.square"]
+tools = ["comment_add", "comment_edit"]
+evidence = ["crates/ui-egui/tests/comments.rs::shapes_and_ink_are_drawn_by_dragging", "crates/annot/src/tests.rs::restyle_and_resize_redraw_the_appearance"]
+notes = "resize with the 8 handles"
 
 [[feature]]
 id = "comment.oval"
@@ -3635,10 +3635,10 @@ title = "Oval"
 area = "E"
 tier = "P0"
 milestone = "M5"
-status = "planned"
-commands = []
-tools = []
-evidence = []
+status = "shipped"
+commands = ["comment.circle"]
+tools = ["comment_add"]
+evidence = ["crates/annot/src/tests.rs::every_tool_creates_a_drawable_comment"]
 notes = ""
 
 [[feature]]
@@ -3731,11 +3731,11 @@ title = "All ten line-ending styles and dashed/cloudy borders"
 area = "E"
 tier = "P1"
 milestone = "M5"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["comment_add"]
+evidence = ["crates/annot/src/tests.rs::every_tool_creates_a_drawable_comment"]
+notes = "None, OpenArrow and ClosedArrow are drawn; other endings are kept but not redrawn"
 
 [[feature]]
 id = "comment.properties-dialog"
@@ -3755,11 +3755,11 @@ title = "Comment properties bar"
 area = "E"
 tier = "P1"
 milestone = "M5"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["comment.note"]
+tools = ["comment_edit"]
+evidence = ["crates/annot/src/tests.rs::restyle_and_resize_redraw_the_appearance"]
+notes = "quick-bar colour swatches and line thickness per tool, colour from the context menu; no opacity control in the UI yet"
 
 [[feature]]
 id = "comment.lock-comment"
@@ -3791,11 +3791,11 @@ title = "Author name from identity preferences"
 area = "E"
 tier = "P1"
 milestone = "M5"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["comment_add"]
+evidence = ["crates/ui-egui/tests/comments.rs::dragging_over_text_with_the_highlighter_highlights_it"]
+notes = "the login name, as Acrobat defaults to; no Identity preferences yet"
 
 [[feature]]
 id = "comment.reply"
@@ -3803,10 +3803,10 @@ title = "Reply to comments"
 area = "E"
 tier = "P0"
 milestone = "M5"
-status = "planned"
-commands = []
-tools = []
-evidence = []
+status = "shipped"
+commands = ["comment.list"]
+tools = ["comment_reply"]
+evidence = ["crates/ui-egui/tests/comments.rs::the_panel_posts_comments_and_replies", "crates/annot/src/tests.rs::replies_and_status_thread_onto_the_parent"]
 notes = ""
 
 [[feature]]
@@ -3815,11 +3815,11 @@ title = "Set review status (accepted, rejected, cancelled, completed)"
 area = "E"
 tier = "P0"
 milestone = "M5"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["comment.list"]
+tools = ["comment_set_status"]
+evidence = ["crates/annot/src/tests.rs::replies_and_status_thread_onto_the_parent", "crates/engine/src/tests.rs::comments_are_added_drawn_threaded_and_undone"]
+notes = "status replies (/State, /StateModel Review), shown as a badge"
 
 [[feature]]
 id = "comment.checkmark"
@@ -3839,11 +3839,11 @@ title = "Delete comments"
 area = "E"
 tier = "P0"
 milestone = "M5"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["comment.list"]
+tools = ["comment_delete"]
+evidence = ["crates/ui-egui/tests/comments.rs::comments_are_selected_moved_and_deleted_with_the_select_tool", "crates/annot/src/tests.rs::delete_takes_popup_and_reply_chain"]
+notes = "deletes the pop-up and the reply thread"
 
 [[feature]]
 id = "comment.edit-comment-text"
@@ -3851,11 +3851,11 @@ title = "Edit comment text"
 area = "E"
 tier = "P0"
 milestone = "M5"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["comment.list"]
+tools = ["comment_edit"]
+evidence = ["crates/annot/src/tests.rs::text_box_text_and_colour_changes_are_drawn", "crates/automation/tests/automation.rs::comments_through_tools"]
+notes = "double-click a comment or card, or Edit in the menus"
 
 [[feature]]
 id = "comment.copy-comment-text"
@@ -3899,11 +3899,11 @@ title = "Search comments"
 area = "E"
 tier = "P1"
 milestone = "M5"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["comment.list"]
+tools = ["comment_list"]
+evidence = ["crates/ui-egui/tests/comments.rs::the_panel_posts_comments_and_replies"]
+notes = "search by author, text and type in the panel; not yet in the Find bar"
 
 [[feature]]
 id = "comment.show-hide-comments"

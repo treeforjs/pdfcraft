@@ -32,7 +32,11 @@ impl PrintCraftApp {
             Ok(()) => {
                 let info = &self.session.get(id).expect("exists").info;
                 let view = &mut self.views[i];
-                view.document_changed(info);
+                match comment_page(&edit) {
+                    // Comment edits change one page: keep every other raster.
+                    Some(page) => view.page_changed(page),
+                    None => view.document_changed(info),
+                }
                 // Keep the pages the user acted on selected, where they now are.
                 match edit {
                     Edit::MovePages { pages, to } => {
@@ -42,7 +46,17 @@ impl PrintCraftApp {
                     }
                     Edit::InsertBlankPage { at, .. } => view.select_pages(&[at.min(info.pages.len() - 1)]),
                     Edit::DeletePages { .. } => view.select_pages(&[]),
+                    Edit::AddAnnotation(a) => {
+                        // Select the new comment (appended last among the page's comments).
+                        let newest = info.annotations.iter().filter(|x| x.page == a.page && x.in_reply_to.is_none()).map(|x| x.index).max();
+                        view.comments.selected = newest.map(|n| (a.page, n));
+                        view.comments.reveal = true;
+                    }
+                    Edit::DeleteAnnotation { .. } => view.comments.selected = None,
                     _ => {}
+                }
+                if std::mem::take(&mut view.comments.tool_done) && !self.comment_prefs.pinned {
+                    self.quick_tool = crate::QuickTool::Select;
                 }
                 true
             }
@@ -68,6 +82,7 @@ impl PrintCraftApp {
             Ok(label) => {
                 let info = &self.session.get(id).expect("exists").info;
                 self.views[i].document_changed(info);
+                self.views[i].comments.selected = None;
                 self.notify(format!("{} {label}", if undo { "Undid" } else { "Redid" }));
             }
             Err(e) => self.notify(e.to_string()),
@@ -227,6 +242,21 @@ impl PrintCraftApp {
             // A clean quit: nothing is left to recover.
             self.shutdown_recovery();
         }
+    }
+}
+
+/// The page a comment edit changes (`None` for other edits).
+fn comment_page(edit: &Edit) -> Option<usize> {
+    match edit {
+        Edit::AddAnnotation(a) => Some(a.page),
+        Edit::DeleteAnnotation { page, .. }
+        | Edit::SetAnnotationContents { page, .. }
+        | Edit::ReplyToAnnotation { page, .. }
+        | Edit::SetAnnotationStatus { page, .. }
+        | Edit::MoveAnnotation { page, .. }
+        | Edit::ResizeAnnotation { page, .. }
+        | Edit::StyleAnnotation { page, .. } => Some(*page),
+        _ => None,
     }
 }
 

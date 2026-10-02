@@ -22,7 +22,7 @@ impl PrintCraftApp {
             let why = match spec.needs {
                 commands::Needs::Undo => "Nothing to undo".to_string(),
                 commands::Needs::Redo => "Nothing to redo".to_string(),
-                commands::Needs::Assembly | commands::Needs::Modification if self.active.is_some() => {
+                commands::Needs::Assembly | commands::Needs::Modification | commands::Needs::Annotate if self.active.is_some() => {
                     "The document's security settings don't allow this change".to_string()
                 }
                 _ => "Open a document first".to_string(),
@@ -86,6 +86,32 @@ impl PrintCraftApp {
                 }
             }
             "comment.list" => self.right = Some(RightPanel::Comments),
+            tool if crate::comments::CommentTool::from_command(tool).is_some() => {
+                let tool = crate::comments::CommentTool::from_command(tool).expect("checked");
+                self.comment_prefs.group_tool[tool.group()] = tool;
+                self.quick_tool = crate::QuickTool::Comment(tool);
+                // Acrobat opens the Comments panel with the commenting tools.
+                if self.right.is_none() {
+                    self.right = Some(RightPanel::Comments);
+                }
+                // A text selection made before picking a markup tool is marked right away.
+                if let (Some(kind), Some(i)) = (tool.markup(), active) {
+                    let info = &self.session.get(self.views[i].id).expect("active").info;
+                    if let Some((page, quads)) = self.views[i].selection_quads(info) {
+                        self.views[i].clear_selection();
+                        let style = self.comment_prefs.style(tool);
+                        let author = self.comment_prefs.author.clone();
+                        let shape = printcraft_engine::Shape::TextMarkup { kind, quads };
+                        self.apply_edit(Edit::AddAnnotation(printcraft_engine::NewAnnotation {
+                            page,
+                            shape,
+                            style,
+                            contents: String::new(),
+                            author,
+                        }));
+                    }
+                }
+            }
             "form.fields" => self.right = Some(RightPanel::Fields),
             "page.organize" => {
                 if let Some(i) = active {

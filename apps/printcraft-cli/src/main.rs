@@ -472,7 +472,7 @@ fn ui(args: &[String]) -> Result<(), String> {
     let port = info["port"].as_u64().ok_or(format!("{file}: no port"))?;
     let token = info["token"].as_str().ok_or(format!("{file}: no token"))?;
     let pos = positional(args);
-    let method = *pos.first().ok_or("ui: missing method (state, inspect, click, type, key, command, commands, set, open, screenshot)")?;
+    let method = *pos.first().ok_or("ui: missing method (state, inspect, click, drag, type, key, command, commands, set, open, screenshot)")?;
     let method = if method.starts_with("ui.") { method.to_string() } else { format!("ui.{method}") };
     let mut params = serde_json::Map::new();
     for kv in pos.iter().skip(1) {

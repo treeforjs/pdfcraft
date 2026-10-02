@@ -3,7 +3,7 @@
 
 use egui::{Align, Align2, Color32, CornerRadius, Layout, Rect, Sense, Stroke, pos2, vec2};
 use printcraft_engine::catalog::{self, Availability, TOOL_GROUPS, ToolGroup};
-use printcraft_render::{Annotation, DocInfo, FieldKind, OutlineItem};
+use printcraft_render::{DocInfo, FieldKind, OutlineItem};
 
 use crate::theme::{self, Tokens};
 use crate::{LeftPanel, PrintCraftApp, RightPanel, icons, widgets};
@@ -168,7 +168,7 @@ fn tool_detail(app: &mut PrintCraftApp, ui: &mut egui::Ui, t: &Tokens, g: &'stat
 
 // ───────────────────────────────────────────────────────────────────────────── right panels
 
-enum Nav {
+pub(crate) enum Nav {
     Page(usize),
     Flash(usize, [f32; 4]),
 }
@@ -182,12 +182,15 @@ pub fn right_panel(app: &mut PrintCraftApp, ui: &mut egui::Ui) {
     let mut toggle_layer: Option<(usize, bool)> = None;
     let mut attachment_action: Option<(usize, bool)> = None; // (index, open instead of save)
     let mut bm_action: Option<BmAction> = None;
+    let mut panel_edit: Option<printcraft_engine::Edit> = None;
     let mut bm_rename = app.bookmark_rename.clone();
     let bm_editable = app.session.get(id).is_some_and(|d| d.allows_assembly() && d.read_only_reason.is_none());
     {
         let Some(doc) = app.session.get(id) else { return };
         let info = &doc.info;
-        let view = &app.views[index];
+        let view = &mut app.views[index];
+        let prefs = &app.comment_prefs;
+        let comment_allowed = doc.allows_annotation();
         egui::Panel::right("right_panel")
             .resizable(true)
             .default_size(330.0)
@@ -200,7 +203,7 @@ pub fn right_panel(app: &mut PrintCraftApp, ui: &mut egui::Ui) {
             )
             .show(ui, |ui| {
                 let (title, count) = match panel {
-                    RightPanel::Comments => ("Comments", Some(info.annotations.len())),
+                    RightPanel::Comments => ("Comments", Some(crate::comments_panel::count(info))),
                     RightPanel::Bookmarks => ("Bookmarks", None),
                     RightPanel::Pages => ("Pages", Some(info.pages.len())),
                     RightPanel::Fields => ("Fields", Some(info.fields.len())),
@@ -216,6 +219,15 @@ pub fn right_panel(app: &mut PrintCraftApp, ui: &mut egui::Ui) {
                         if icons::button(ui, "x", 26.0, false, "Close").clicked() {
                             close = true;
                         }
+                        if panel == RightPanel::Comments
+                            && icons::button(ui, "search", 26.0, view.comments.search.is_some(), "Search comments").clicked()
+                        {
+                            view.comments.search = match view.comments.search {
+                                Some(_) => None,
+                                None => Some(String::new()),
+                            };
+                            view.comments.search_focus = true;
+                        }
                         if panel == RightPanel::Bookmarks
                             && bm_editable
                             && icons::button(ui, "bookmark-plus", 26.0, false, "New bookmark (⌘B)").clicked()
@@ -226,7 +238,11 @@ pub fn right_panel(app: &mut PrintCraftApp, ui: &mut egui::Ui) {
                 });
                 ui.add_space(6.0);
                 egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| match panel {
-                    RightPanel::Comments => comments(ui, &t, info, &mut nav),
+                    RightPanel::Comments => {
+                        if let Some(e) = crate::comments_panel::show(ui, &t, info, view, prefs, comment_allowed, &mut nav) {
+                            panel_edit = Some(e);
+                        }
+                    }
                     RightPanel::Bookmarks => {
                         if info.outline.is_empty() {
                             empty(ui, &t, "bookmark", "This document has no bookmarks.");
@@ -308,6 +324,9 @@ pub fn right_panel(app: &mut PrintCraftApp, ui: &mut egui::Ui) {
     if close {
         app.right = None;
     }
+    if let Some(e) = panel_edit {
+        app.apply_edit(e);
+    }
     app.bookmark_rename = bm_rename;
     if let Some(a) = bm_action {
         app.bookmark_action(a);
@@ -338,136 +357,6 @@ fn empty(ui: &mut egui::Ui, t: &Tokens, icon: &str, text: &str) {
         ui.add_space(8.0);
         ui.label(egui::RichText::new(text).color(t.text_muted));
     });
-}
-
-fn subtype_icon(s: &str) -> &'static str {
-    match s {
-        "Text" => "sticky-note",
-        "Highlight" => "highlighter",
-        "Underline" => "underline",
-        "StrikeOut" => "strikethrough",
-        "Squiggly" => "spline",
-        "FreeText" => "type",
-        "Ink" => "pencil",
-        "Square" => "square",
-        "Circle" => "circle",
-        "Line" => "arrow-up-right",
-        "Polygon" | "PolyLine" => "pen-tool",
-        "Stamp" => "stamp",
-        "FileAttachment" => "paperclip",
-        "Caret" => "text-select",
-        "Redact" => "rectangle-horizontal",
-        _ => "message-square-text",
-    }
-}
-
-fn comments(ui: &mut egui::Ui, t: &Tokens, info: &DocInfo, nav: &mut Option<Nav>) {
-    if info.annotations.is_empty() {
-        empty(ui, t, "message-square-text", "No comments yet.");
-        return;
-    }
-    let mut page = usize::MAX;
-    let roots: Vec<&Annotation> = info.annotations.iter().filter(|a| a.in_reply_to.is_none()).collect();
-    for a in roots {
-        if a.page != page {
-            page = a.page;
-            let n = info.annotations.iter().filter(|x| x.page == page && x.in_reply_to.is_none()).count();
-            ui.add_space(6.0);
-            ui.horizontal(|ui| {
-                ui.label(egui::RichText::new(format!("Page {}", info.pages[page].label)).font(theme::semibold(12.5)).color(t.text_muted));
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| ui.label(egui::RichText::new(n.to_string()).color(t.text_faint).small()));
-            });
-        }
-        let replies: Vec<&Annotation> = match &a.name {
-            Some(nm) => info.annotations.iter().filter(|r| r.in_reply_to.as_deref() == Some(nm.as_str())).collect(),
-            None => Vec::new(),
-        };
-        if comment_card(ui, t, a, &replies).clicked() {
-            *nav = Some(Nav::Flash(a.page, a.rect));
-        }
-    }
-}
-
-/// Reader-friendly names for annotation subtypes (the PDF names are shown in tooltips).
-fn subtype_label(s: &str) -> &str {
-    match s {
-        "Text" => "Note",
-        "FreeText" => "Text box",
-        "StrikeOut" => "Strikethrough",
-        "Square" => "Rectangle",
-        "Circle" => "Oval",
-        "Ink" => "Drawing",
-        "PolyLine" => "Polyline",
-        "FileAttachment" => "Attachment",
-        "Caret" => "Insert text",
-        other => other,
-    }
-}
-
-/// Darken very light annotation colours (e.g. note yellow) so their icon stays legible.
-fn legible(c: Color32, t: &Tokens) -> Color32 {
-    let lum = 0.2126 * c.r() as f32 + 0.7152 * c.g() as f32 + 0.0722 * c.b() as f32;
-    if !t.dark() && lum > 170.0 {
-        Color32::from_rgb((c.r() as f32 * 0.62) as u8, (c.g() as f32 * 0.62) as u8, (c.b() as f32 * 0.62) as u8)
-    } else {
-        c
-    }
-}
-
-fn comment_card(ui: &mut egui::Ui, t: &Tokens, a: &Annotation, replies: &[&Annotation]) -> egui::Response {
-    let color = a.color.map(|c| Color32::from_rgb((c[0] * 255.0) as u8, (c[1] * 255.0) as u8, (c[2] * 255.0) as u8)).unwrap_or(t.accent);
-    let id = ui.id().with(("comment", a.page, a.rect[0].to_bits(), a.rect[1].to_bits()));
-    let hovered = ui.data(|d| d.get_temp::<bool>(id)).unwrap_or(false);
-    let resp = egui::Frame::NONE
-        .fill(if hovered { t.hover } else { Color32::TRANSPARENT })
-        .corner_radius(CornerRadius::same(8))
-        .inner_margin(egui::Margin { left: 8, right: 8, top: 10, bottom: 10 })
-        .show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            ui.horizontal(|ui| {
-                let (r, _) = ui.allocate_exact_size(vec2(28.0, 28.0), Sense::hover());
-                ui.painter().circle_filled(r.center(), 14.0, color.gamma_multiply(if t.dark() { 0.35 } else { 0.28 }));
-                icons::paint(ui, r, subtype_icon(&a.subtype), 14.0, legible(color, t));
-                ui.vertical(|ui| {
-                    ui.spacing_mut().item_spacing.y = 1.0;
-                    ui.add(
-                        egui::Label::new(egui::RichText::new(a.author.as_deref().unwrap_or("Unknown author")).font(theme::semibold(13.0))).truncate(),
-                    );
-                    let meta = format!("{}{}", subtype_label(&a.subtype), a.modified.as_deref().map(|m| format!("  ·  {m}")).unwrap_or_default());
-                    ui.add(egui::Label::new(egui::RichText::new(meta).color(t.text_faint).font(theme::regular(11.0))).truncate());
-                });
-            });
-            // Body and replies are indented under the avatar and must wrap to the panel width.
-            egui::Frame::NONE.inner_margin(egui::Margin { left: 36, right: 0, top: 4, bottom: 0 }).show(ui, |ui| {
-                ui.set_width(ui.available_width());
-                if let Some(c) = &a.contents {
-                    ui.add(egui::Label::new(egui::RichText::new(c).color(t.text)).wrap());
-                }
-                for r in replies {
-                    ui.add_space(6.0);
-                    let resp = egui::Frame::NONE.inner_margin(egui::Margin { left: 10, right: 0, top: 2, bottom: 2 }).show(ui, |ui| {
-                        ui.set_width(ui.available_width());
-                        ui.spacing_mut().item_spacing.y = 1.0;
-                        ui.add(egui::Label::new(egui::RichText::new(r.author.as_deref().unwrap_or("Reply")).font(theme::semibold(12.0))).truncate());
-                        if let Some(c) = &r.contents {
-                            ui.add(egui::Label::new(egui::RichText::new(c).color(t.text_muted).font(theme::regular(12.0))).wrap());
-                        }
-                    });
-                    let b = resp.response.rect;
-                    ui.painter().vline(b.left() + 1.0, b.y_range(), Stroke::new(2.0, t.border));
-                }
-            });
-        })
-        .response;
-    let div_y = resp.rect.bottom() + 2.0;
-    ui.painter().hline(resp.rect.x_range().shrink(8.0), div_y, Stroke::new(1.0, t.divider));
-    ui.add_space(5.0);
-    let click = ui
-        .interact(resp.rect, id.with("click"), Sense::click())
-        .on_hover_cursor(egui::CursorIcon::PointingHand)
-        .on_hover_text(format!("/{} annotation — click to show it on the page", a.subtype));
-    ui.data_mut(|d| d.insert_temp(id, click.hovered()));
-    click
 }
 
 /// What the user asked to do with a bookmark (applied after the panel is drawn).

@@ -16,7 +16,10 @@
 //!   notice.
 //! - `ui.inspect {query?, role?, limit?}`: widgets in tree order with `id` (a string), `role`, `label`,
 //!   `value`, `rect` (points), `enabled`, `toggled`, `selected`, `clickable`, `depth`.
-//! - `ui.click {id}` | `{label}` | `{x, y}`: click a widget (by its AccessKit action) or a point.
+//! - `ui.click {id}` | `{label}` | `{x, y, button?}`: click a widget (by its AccessKit action) or a
+//!   point (`button`: primary or secondary, for context menus).
+//! - `ui.drag {from: [x, y], to: [x, y], steps?, modifiers?}`: press, move and release (drawing
+//!   comments, selecting text, moving comments). `ui.state` reports `pages_on_screen` to aim at.
 //! - `ui.type {text}`, `ui.key {key, modifiers?}`: keyboard input to the focused widget / app.
 //! - `ui.command {id}`: run a registry command (as the menu would). `ui.commands` lists them.
 //! - `ui.set {key, value}`: the view options of the command line (`--page`, `--zoom`, …).
@@ -271,6 +274,7 @@ impl Control {
             "ui.open" => Ok(Handled::Now(host.open(str_param("path")?))),
             "ui.inspect" => Ok(Handled::Now(Ok(self.inspect(p)))),
             "ui.click" => self.click(p),
+            "ui.drag" => self.drag(p),
             "ui.type" => {
                 let text = str_param("text")?.to_string();
                 Ok(Handled::AfterFrames(self.inject(vec![vec![egui::Event::Text(text)]]), json!({ "typed": true })))
@@ -327,11 +331,36 @@ impl Control {
         json!({ "widgets": out, "count": total, "truncated": total > out.len() })
     }
 
+    /// Press at `from`, move to `to` in `steps` frames, release (drawing, selecting text, moving).
+    fn drag(&mut self, p: &Value) -> Result<Handled, String> {
+        let point = |k: &str| -> Result<egui::Pos2, String> {
+            match p.get(k).and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_f64).collect::<Vec<_>>()).as_deref() {
+                Some([x, y]) => Ok(egui::pos2(*x as f32, *y as f32)),
+                _ => Err(format!("ui.drag: {k} must be [x, y] in points")),
+            }
+        };
+        let (from, to) = (point("from")?, point("to")?);
+        let steps = p.get("steps").and_then(Value::as_u64).unwrap_or(8).clamp(1, 200) as usize;
+        let modifiers = modifiers(p.get("modifiers"))?;
+        let button = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers };
+        let mut frames = vec![vec![egui::Event::PointerMoved(from)], vec![button(from, true)]];
+        for k in 1..=steps {
+            frames.push(vec![egui::Event::PointerMoved(from + (to - from) * (k as f32 / steps as f32))]);
+        }
+        frames.push(vec![button(to, false)]);
+        let n = self.inject(frames);
+        Ok(Handled::AfterFrames(n, json!({ "dragged": [[from.x, from.y], [to.x, to.y]] })))
+    }
+
     fn click(&mut self, p: &Value) -> Result<Handled, String> {
         if let (Some(x), Some(y)) = (p.get("x").and_then(Value::as_f64), p.get("y").and_then(Value::as_f64)) {
             let pos = egui::pos2(x as f32, y as f32);
-            let button =
-                |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+            let which = match p.get("button").and_then(Value::as_str).unwrap_or("primary") {
+                "primary" | "left" => egui::PointerButton::Primary,
+                "secondary" | "right" => egui::PointerButton::Secondary,
+                other => return Err(format!("ui.click: unknown button {other:?} (primary, secondary)")),
+            };
+            let button = |pressed| egui::Event::PointerButton { pos, button: which, pressed, modifiers: egui::Modifiers::NONE };
             let frames = self.inject(vec![vec![egui::Event::PointerMoved(pos)], vec![button(true)], vec![button(false)]]);
             return Ok(Handled::AfterFrames(frames, json!({ "clicked": [x, y] })));
         }
@@ -500,7 +529,16 @@ impl Host for crate::PrintCraftApp {
                 "organize": v.organize,
                 "find_open": v.find.is_some(),
                 "page_errors": v.page_errors().iter().map(|(p, e)| json!({ "page": p + 1, "error": e })).collect::<Vec<_>>(),
+                // Where pages are on screen (points), to aim ui.click / ui.drag at page content.
+                "pages_on_screen": v.visible_page_rects().iter().map(|(p, r)| json!({ "page": p + 1, "rect": [r.min.x, r.min.y, r.max.x, r.max.y] })).collect::<Vec<_>>(),
+                "selected_comment": v.comments.selected.map(|(p, i)| json!({ "page": p + 1, "index": i + 1 })),
+                "comment_composer_open": v.comments.composer.is_some(),
             })),
+            "quick_tool": match self.quick_tool {
+                crate::QuickTool::Select => "select".to_string(),
+                crate::QuickTool::Hand => "hand".to_string(),
+                crate::QuickTool::Comment(t) => t.command().trim_start_matches("comment.").to_string(),
+            },
             "home": self.active.is_none(),
             "mode": format!("{:?}", self.mode),
             "left_panel": if self.left_open { json!(format!("{:?}", self.left)) } else { Value::Null },

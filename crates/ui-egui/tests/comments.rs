@@ -1,0 +1,217 @@
+//! Commenting in the real shell (egui_kittest): tools, gestures, selection, the composer and
+//! the Comments panel.
+
+use egui::{Pos2, pos2};
+use egui_kittest::Harness;
+use egui_kittest::kittest::Queryable;
+use printcraft_render::Annotation;
+use printcraft_ui_egui::{PrintCraftApp, QuickTool};
+
+/// Two 300×200 pages of Helvetica text.
+const TEXT_FIXTURE: &[u8] = b"%PDF-1.7
+1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
+2 0 obj << /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >> endobj
+3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] /Contents 5 0 R /Resources << /Font << /F1 7 0 R >> >> >> endobj
+4 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] /Contents 6 0 R /Resources << /Font << /F1 7 0 R >> >> >> endobj
+5 0 obj << /Length 55 >> stream
+BT /F1 14 Tf 20 150 Td (The quick brown fox) Tj ET
+endstream endobj
+6 0 obj << /Length 58 >> stream
+BT /F1 14 Tf 20 150 Td (A second brown animal) Tj ET
+endstream endobj
+7 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj
+trailer << /Root 1 0 R >>
+%%EOF";
+
+fn harness(setup: impl FnOnce(&mut PrintCraftApp) + 'static) -> Harness<'static, PrintCraftApp> {
+    let mut h = Harness::builder().with_size(egui::vec2(1400.0, 900.0)).build_eframe(move |_cc| {
+        let mut app = PrintCraftApp::new();
+        app.open_bytes("text.pdf", None, TEXT_FIXTURE.to_vec()).expect("opens");
+        app.set_option("left", "closed").unwrap();
+        app.set_option("author", "Tester").unwrap();
+        setup(&mut app);
+        app
+    });
+    h.run_steps(4);
+    settle(&mut h);
+    h
+}
+
+fn settle(h: &mut Harness<'static, PrintCraftApp>) {
+    for _ in 0..200 {
+        h.run_steps(2);
+        if !h.state().render_pending() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+}
+
+/// A point on page 1 in PDF user space → screen (no rotation; MediaBox 300×200).
+fn at(h: &Harness<'static, PrintCraftApp>, x: f32, y: f32) -> Pos2 {
+    let r = h.state().views[0].page_screen_rect(0).expect("page 1 on screen");
+    pos2(r.left() + x / 300.0 * r.width(), r.top() + (200.0 - y) / 200.0 * r.height())
+}
+
+fn drag(h: &mut Harness<'static, PrintCraftApp>, from: Pos2, to: Pos2) {
+    h.hover_at(from);
+    h.run_steps(1);
+    h.drag_at(from);
+    h.run_steps(1);
+    for k in 1..=4 {
+        h.hover_at(from + (to - from) * (k as f32 / 4.0));
+        h.run_steps(1);
+    }
+    h.drop_at(to);
+    h.run_steps(3);
+}
+
+fn click(h: &mut Harness<'static, PrintCraftApp>, p: Pos2) {
+    h.hover_at(p);
+    h.run_steps(1);
+    h.drag_at(p);
+    h.run_steps(1);
+    h.drop_at(p);
+    h.run_steps(3);
+}
+
+/// Drag between two page points (user space).
+fn drag_pt(h: &mut Harness<'static, PrintCraftApp>, a: (f32, f32), b: (f32, f32)) {
+    let (a, b) = (at(h, a.0, a.1), at(h, b.0, b.1));
+    drag(h, a, b);
+}
+
+/// Click a page point (user space).
+fn click_pt(h: &mut Harness<'static, PrintCraftApp>, p: (f32, f32)) {
+    let p = at(h, p.0, p.1);
+    click(h, p);
+}
+
+/// A text field by its placeholder ("Add a comment", "Add a reply").
+fn field<'a>(h: &'a Harness<'static, PrintCraftApp>, placeholder: &'a str) -> egui_kittest::Node<'a> {
+    h.query_all_by(|n| n.placeholder() == Some(placeholder)).next().unwrap_or_else(|| panic!("no field {placeholder:?}"))
+}
+
+fn comments(h: &Harness<'static, PrintCraftApp>) -> Vec<Annotation> {
+    let s = h.state();
+    s.session.get(s.views[0].id).unwrap().info.annotations.clone()
+}
+
+#[test]
+fn dragging_over_text_with_the_highlighter_highlights_it() {
+    let mut h = harness(|app| app.set_option("quick", "highlight").unwrap());
+    let (a, b) = {
+        let v = &h.state().views[0];
+        (v.glyph_screen_pos(0, 4).expect("text layer"), v.glyph_screen_pos(0, 14).expect("glyph"))
+    };
+    drag(&mut h, a, b);
+    let c = comments(&h);
+    assert_eq!(c.len(), 1, "{c:?}");
+    assert_eq!((c[0].subtype.as_str(), c[0].author.as_deref(), c[0].quads.len()), ("Highlight", Some("Tester"), 1));
+    assert_eq!(h.state().views[0].comments.selected, Some((0, 0)), "the new comment is selected");
+    assert_eq!(h.state().quick_tool, QuickTool::Comment(printcraft_ui_egui::comments::CommentTool::Highlight), "the highlighter stays on");
+    // The Comments panel opened with the tool and lists it.
+    h.get_by_label_contains("Comments");
+    assert_eq!(h.state().session.get(h.state().views[0].id).unwrap().can_undo(), Some("Add highlight"));
+}
+
+#[test]
+fn a_selection_made_first_is_marked_when_a_tool_is_picked() {
+    let mut h = harness(|_| {});
+    h.state_mut().views[0].select_text(0, 4, 8);
+    assert!(h.state_mut().execute("comment.strikeout"));
+    h.run_steps(2);
+    let c = comments(&h);
+    assert_eq!(c.len(), 1);
+    assert_eq!(c[0].subtype, "StrikeOut");
+    assert!(h.state().views[0].selected_text().is_none(), "the selection is consumed");
+}
+
+#[test]
+fn shapes_and_ink_are_drawn_by_dragging() {
+    let mut h = harness(|app| app.set_option("quick", "square").unwrap());
+    drag_pt(&mut h, (40.0, 100.0), (140.0, 40.0));
+    h.state_mut().set_option("quick", "ink").unwrap();
+    drag_pt(&mut h, (160.0, 100.0), (260.0, 40.0));
+    h.state_mut().set_option("quick", "arrow").unwrap();
+    drag_pt(&mut h, (20.0, 20.0), (120.0, 30.0));
+    // A click with a drawing tool draws nothing.
+    h.state_mut().set_option("quick", "circle").unwrap();
+    click_pt(&mut h, (200.0, 180.0));
+    let c = comments(&h);
+    let mut c = c;
+    c.sort_by_key(|a| a.index);
+    let kinds: Vec<&str> = c.iter().map(|a| a.subtype.as_str()).collect();
+    assert_eq!(kinds, ["Square", "Ink", "Line"], "{c:?}");
+    let r = c[0].rect;
+    assert!((r[0] - 40.0).abs() < 3.0 && (r[1] - 40.0).abs() < 3.0 && (r[2] - 140.0).abs() < 3.0 && (r[3] - 100.0).abs() < 3.0, "{r:?}");
+}
+
+#[test]
+fn sticky_note_composer_posts_and_returns_to_select() {
+    let mut h = harness(|app| app.set_option("quick", "note").unwrap());
+    click_pt(&mut h, (250.0, 180.0));
+    assert!(h.state().views[0].comments.composer.is_some(), "the composer opened");
+    field(&h, "Add a comment").type_text("Please check");
+    h.run_steps(2);
+    h.get_by_label("Post").click();
+    h.run_steps(3);
+    let c = comments(&h);
+    assert_eq!(c.len(), 1);
+    assert_eq!((c[0].subtype.as_str(), c[0].contents.as_deref()), ("Text", Some("Please check")));
+    assert!(h.state().views[0].comments.composer.is_none());
+    assert_eq!(h.state().quick_tool, QuickTool::Select, "one-shot tools return to Select");
+    // Cancelling another one creates nothing.
+    h.state_mut().set_option("quick", "freetext").unwrap();
+    click_pt(&mut h, (50.0, 60.0));
+    h.get_by_label("Cancel").click();
+    h.run_steps(2);
+    assert_eq!(comments(&h).len(), 1);
+}
+
+#[test]
+fn comments_are_selected_moved_and_deleted_with_the_select_tool() {
+    let mut h = harness(|app| app.set_option("quick", "square").unwrap());
+    drag_pt(&mut h, (40.0, 100.0), (140.0, 40.0));
+    h.state_mut().set_option("quick", "select").unwrap();
+    // Click away, then on the rectangle's border area.
+    click_pt(&mut h, (250.0, 20.0));
+    assert_eq!(h.state().views[0].comments.selected, None);
+    click_pt(&mut h, (90.0, 70.0));
+    assert_eq!(h.state().views[0].comments.selected, Some((0, 0)));
+    drag_pt(&mut h, (90.0, 70.0), (140.0, 70.0));
+    let r = comments(&h)[0].rect;
+    assert!((r[0] - 90.0).abs() < 3.0 && (r[2] - 190.0).abs() < 3.0, "moved right by 50 pt: {r:?}");
+    assert_eq!(h.state().session.get(h.state().views[0].id).unwrap().can_undo(), Some("Move comment"));
+    h.key_press(egui::Key::Delete);
+    h.run_steps(3);
+    assert!(comments(&h).is_empty());
+    h.state_mut().undo();
+    h.run_steps(2);
+    assert_eq!(comments(&h).len(), 1);
+}
+
+#[test]
+fn the_panel_posts_comments_and_replies() {
+    let mut h = harness(|app| app.set_option("panel", "comments").unwrap());
+    field(&h, "Add a comment").click();
+    h.run_steps(2);
+    field(&h, "Add a comment").type_text("General remark");
+    h.run_steps(1);
+    h.key_press(egui::Key::Enter);
+    h.run_steps(3);
+    let c = comments(&h);
+    assert_eq!((c.len(), c[0].subtype.as_str(), c[0].contents.as_deref()), (1, "Text", Some("General remark")));
+    // The new comment is selected: reply to it.
+    field(&h, "Add a reply").click();
+    h.run_steps(2);
+    field(&h, "Add a reply").type_text("Agreed");
+    h.run_steps(1);
+    h.get_by_label("Post").click();
+    h.run_steps(3);
+    let c = comments(&h);
+    assert_eq!(c.len(), 2);
+    let reply = c.iter().find(|a| a.in_reply_to.is_some()).expect("a reply");
+    assert_eq!((reply.contents.as_deref(), reply.author.as_deref()), (Some("Agreed"), Some("Tester")));
+    h.get_by_label_contains("Agreed");
+}

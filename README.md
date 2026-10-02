@@ -271,13 +271,14 @@ printcraft-cli edit  in.pdf --rotate 1,2:90 --delete 5 --title "Q3" --out out.pd
 
 ## Built for agents, too
 
-Every engine feature is reachable without the GUI, through one table of JSON-Schema-described tools: open, inspect, render pages to PNG, extract and find text, rotate, delete, move and insert pages, set metadata, undo and redo, save, combine, extract and split. Three front doors share it:
+Every engine feature is reachable without the GUI, through one table of JSON-Schema-described tools: open, inspect, render pages to PNG, extract and find text, rotate, delete, move and insert pages, edit bookmarks and page labels, add, reply to, restyle and delete comments (highlight a phrase just by naming it), set metadata, undo and redo, save, combine, extract and split. Three front doors share it:
 
 - **`printcraft-cli run`**, for one-off calls and JSON scripts:
 
   ```sh
   printcraft-cli tools                                        # every tool and its JSON Schema
   printcraft-cli run text_find doc=1 query=invoice            # key=value; values parse as JSON
+  printcraft-cli run --script review.json                     # e.g. comment_add {"type": "highlight", "find": "total due"}
   printcraft-cli run --script steps.json --root ./work        # several steps in one session
   ```
 
@@ -301,6 +302,8 @@ Start the desktop app with `printcraft --control /tmp/pc.json` and an agent can 
 printcraft-cli ui --control /tmp/pc.json inspect query=rotate      # find widgets
 printcraft-cli ui --control /tmp/pc.json click label="Organize pages"
 printcraft-cli ui --control /tmp/pc.json key key=K modifiers='["command"]'
+printcraft-cli ui --control /tmp/pc.json command id=comment.square   # pick a tool, then draw:
+printcraft-cli ui --control /tmp/pc.json drag from='[400,300]' to='[600,420]'
 printcraft-cli ui --control /tmp/pc.json screenshot --out window.png
 ```
 
@@ -315,7 +318,8 @@ PrintCraft is a Cargo workspace of focused crates, layered so the core never dep
 | `printcraft-filters` | Every PDF stream filter (Flate, LZW, ASCII85, RunLength, predictors), encode and decode, property-tested |
 | `printcraft-crypt` | The standard security handler: RC4, AES-128/256, revisions 2–6, permissions |
 | `printcraft-cos` | The PDF object layer: tolerant parsing, repair, copy-on-write edits, incremental and full writing |
-| `printcraft-organize` | Page operations, combine / extract / split, document information |
+| `printcraft-organize` | Page operations, combine / extract / split, bookmarks, page labels, document information |
+| `printcraft-annot` | Comments: builders and appearance streams for notes, text markup, shapes, ink and text boxes; replies, status, edits |
 | `printcraft-render` | Rendering, inspection and text extraction with reading order |
 | `printcraft-engine` | The façade every frontend uses: sessions, edits, undo, saving, the tool catalogue |
 | `printcraft-automation` | Agent control: the headless tool table, `printcraft-cli run`, and the opt-in MCP server |
@@ -351,7 +355,8 @@ PrintCraft is young and moving fast. The aim is a workbench where you can view, 
 
 **Available today:**
 - viewing, search and navigation;
-- organizing pages, combining, extracting and splitting;
+- organizing pages, combining, extracting and splitting; bookmarks and page labels;
+- commenting: sticky notes, highlight / underline / strikethrough, text boxes, freehand drawing, lines, arrows, rectangles and ovals, with replies, status, colours, moving, resizing and a searchable Comments panel;
 - document information;
 - opening encrypted documents, honouring their permissions, and saving them encrypted;
 - undo and safe saving;
@@ -363,8 +368,8 @@ PrintCraft is young and moving fast. The aim is a workbench where you can view, 
 
 | Next up | Milestone |
 |---|---|
-| Bookmark and page-label editing, page boxes | M4 |
-| Creating and editing comments, stamps, FDF/XFDF | M5 |
+| Page boxes | M4 |
+| Callouts, clouds, stamps, FDF/XFDF, comment summaries | M5 |
 | Filling and authoring forms, JavaScript | M6 |
 | Editing text and images in place, headers, watermarks | M7 |
 | Adding passwords, redaction | M8 |

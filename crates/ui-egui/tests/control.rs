@@ -133,6 +133,27 @@ fn commands_keys_and_typing() {
 }
 
 #[test]
+fn drawing_a_comment_by_drag_and_its_context_menu() {
+    let (mut h, c) = harness();
+    ok(&mut h, &c, "ui.command", json!({ "id": "comment.square" }));
+    let st = ok(&mut h, &c, "ui.state", json!({}));
+    assert_eq!(st["quick_tool"], "square");
+    let r = &st["active"]["pages_on_screen"][0]["rect"];
+    let (x0, y0, x1, y1) = (r[0].as_f64().unwrap(), r[1].as_f64().unwrap(), r[2].as_f64().unwrap(), r[3].as_f64().unwrap());
+    let (a, b) = ([x0 + (x1 - x0) * 0.2, y0 + (y1 - y0) * 0.2], [x0 + (x1 - x0) * 0.5, y0 + (y1 - y0) * 0.4]);
+    ok(&mut h, &c, "ui.drag", json!({ "from": a, "to": b }));
+    h.run_steps(2);
+    let st = ok(&mut h, &c, "ui.state", json!({}));
+    assert_eq!(st["active"]["selected_comment"], json!({ "page": 1, "index": 1 }), "{st}");
+    assert_eq!(st["documents"][0]["dirty"], true);
+    // A right-click on it offers the comment menu.
+    ok(&mut h, &c, "ui.click", json!({ "x": (a[0] + b[0]) / 2.0, "y": (a[1] + b[1]) / 2.0, "button": "secondary" }));
+    let menu = ok(&mut h, &c, "ui.inspect", json!({ "query": "Set status" }));
+    assert!(menu["count"].as_u64().unwrap() >= 1, "{menu}");
+    assert!(call(&mut h, &c, "ui.drag", json!({ "from": [1, 2] })).unwrap_err().contains("to must be"));
+}
+
+#[test]
 fn screenshots_of_window_and_region() {
     let (mut h, c) = harness();
     let shot = ok(&mut h, &c, "ui.screenshot", json!({}));

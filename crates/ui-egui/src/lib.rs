@@ -8,6 +8,8 @@
 mod canvas;
 mod chrome;
 mod commands;
+pub mod comments;
+mod comments_panel;
 pub mod control;
 mod dialogs;
 mod editing;
@@ -62,6 +64,8 @@ pub enum RightPanel {
 pub enum QuickTool {
     Select,
     Hand,
+    /// A commenting tool (Add comments).
+    Comment(comments::CommentTool),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -113,6 +117,8 @@ pub struct PrintCraftApp {
     pub left_open: bool,
     pub right: Option<RightPanel>,
     pub quick_tool: QuickTool,
+    /// Comment author, per-tool colours and widths, pin.
+    pub comment_prefs: comments::CommentPrefs,
     pub theme: ThemeKind,
     pub dialog: Option<Dialog>,
     pub palette_open: bool,
@@ -188,6 +194,7 @@ impl PrintCraftApp {
             left_open: true,
             right: None,
             quick_tool: QuickTool::Select,
+            comment_prefs: Default::default(),
             theme: ThemeKind::Light,
             dialog: None,
             palette_open: false,
@@ -565,7 +572,28 @@ impl PrintCraftApp {
                 v.select_pages(&pages.map_err(|_| "select: comma-separated page numbers")?);
             }
             ("notice", Some(v)) => v.notice_dismissed = value == "off",
-            (k, None) if ["page", "zoom", "layout", "organize", "fields", "find", "rotate", "select", "notice"].contains(&k) => {
+            ("quick", _) => {
+                // `--quick select|hand|note|freetext|highlight|underline|strikeout|ink|line|arrow|square|circle`
+                self.quick_tool = match value {
+                    "select" => QuickTool::Select,
+                    "hand" => QuickTool::Hand,
+                    other => {
+                        let t = comments::CommentTool::from_command(&format!("comment.{other}")).ok_or_else(|| format!("unknown tool {other}"))?;
+                        self.comment_prefs.group_tool[t.group()] = t;
+                        QuickTool::Comment(t)
+                    }
+                };
+            }
+            ("author", _) => self.comment_prefs.author = value.to_string(),
+            ("comment", Some(v)) => {
+                // `--comment 2:4` selects the 4th annotation of page 2 (1-based, as comment_list reports).
+                let (p, i) = value.split_once(':').ok_or("comment: PAGE:INDEX")?;
+                let (p, i): (usize, usize) =
+                    (p.trim().parse().map_err(|_| "comment: PAGE:INDEX")?, i.trim().parse().map_err(|_| "comment: PAGE:INDEX")?);
+                v.comments.selected = Some((p.saturating_sub(1), i.saturating_sub(1)));
+                v.comments.reveal = true;
+            }
+            (k, None) if ["page", "zoom", "layout", "organize", "fields", "find", "rotate", "select", "notice", "comment"].contains(&k) => {
                 return Err(format!("`{k}` needs an open document"));
             }
             (other, _) => return Err(format!("unknown option {other}")),

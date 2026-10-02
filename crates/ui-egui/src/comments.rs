@@ -1,0 +1,952 @@
+//! Commenting in the document view (execution plan M5.3–M5.4; Acrobat's "Add comments").
+//!
+//! - **Tools** ([`CommentTool`]): sticky note, text box, highlight / underline / strikethrough
+//!   (driven by text selection), freehand, line, arrow, rectangle, oval. They live in the quick
+//!   bar in three flyout groups, as in Acrobat's comment toolbar (audit `a14-*`).
+//! - **On the page:** drawing gestures with live previews; with the Select tool, comments can be
+//!   hovered, selected (blue frame with 8 round handles), moved, resized (rectangles, ovals and
+//!   text boxes), edited (double-click) and deleted (⌫ / Delete); a context menu offers Edit,
+//!   Reply, Set status, Colour and Delete.
+//! - **Composer:** the floating "Add a comment" card used for new notes, text boxes and edits.
+//!
+//! Everything is turned into `printcraft_engine::Edit`s, queued on the view as `pending_edit` and
+//! applied by the app, so each change is one undo step.
+
+use egui::{Color32, CornerRadius, Pos2, Rect, Sense, Stroke, pos2, vec2};
+use printcraft_engine::{Edit, Markup, NewAnnotation, NoteIcon, ReviewState, Rgb, Shape, Style};
+use printcraft_render::{Annotation, DocInfo};
+
+use crate::canvas::{DocView, PageXform};
+use crate::theme::{self, Tokens};
+use crate::{QuickTool, icons};
+
+/// Acrobat's selection blue for annotation frames and handles (11-visual-spec §5).
+const SELECT_BLUE: Color32 = Color32::from_rgb(0x14, 0x73, 0xE6);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum CommentTool {
+    Note,
+    TextBox,
+    Highlight,
+    Underline,
+    StrikeOut,
+    Ink,
+    Line,
+    Arrow,
+    Rectangle,
+    Oval,
+}
+
+/// The quick-bar flyout groups, in Acrobat's order: Comment ▸, Highlight ▸, Draw ▸.
+pub const GROUPS: [&[CommentTool]; 3] = [
+    &[CommentTool::Note, CommentTool::TextBox],
+    &[CommentTool::Highlight, CommentTool::Underline, CommentTool::StrikeOut],
+    &[CommentTool::Ink, CommentTool::Line, CommentTool::Arrow, CommentTool::Rectangle, CommentTool::Oval],
+];
+
+pub const ALL: [CommentTool; 10] = [
+    CommentTool::Note,
+    CommentTool::TextBox,
+    CommentTool::Highlight,
+    CommentTool::Underline,
+    CommentTool::StrikeOut,
+    CommentTool::Ink,
+    CommentTool::Line,
+    CommentTool::Arrow,
+    CommentTool::Rectangle,
+    CommentTool::Oval,
+];
+
+impl CommentTool {
+    pub fn command(self) -> &'static str {
+        match self {
+            Self::Note => "comment.note",
+            Self::TextBox => "comment.freetext",
+            Self::Highlight => "comment.highlight",
+            Self::Underline => "comment.underline",
+            Self::StrikeOut => "comment.strikeout",
+            Self::Ink => "comment.ink",
+            Self::Line => "comment.line",
+            Self::Arrow => "comment.arrow",
+            Self::Rectangle => "comment.square",
+            Self::Oval => "comment.circle",
+        }
+    }
+
+    pub fn from_command(id: &str) -> Option<Self> {
+        ALL.into_iter().find(|t| t.command() == id)
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Note => "Add a sticky note",
+            Self::TextBox => "Add a text box",
+            Self::Highlight => "Highlight",
+            Self::Underline => "Underline",
+            Self::StrikeOut => "Strikethrough",
+            Self::Ink => "Draw",
+            Self::Line => "Line",
+            Self::Arrow => "Arrow",
+            Self::Rectangle => "Rectangle",
+            Self::Oval => "Oval",
+        }
+    }
+
+    pub fn icon(self) -> &'static str {
+        match self {
+            Self::Note => "message-square-plus",
+            Self::TextBox => "type",
+            Self::Highlight => "highlighter",
+            Self::Underline => "underline",
+            Self::StrikeOut => "strikethrough",
+            Self::Ink => "pencil",
+            Self::Line => "minus",
+            Self::Arrow => "move-right",
+            Self::Rectangle => "square",
+            Self::Oval => "circle",
+        }
+    }
+
+    pub fn group(self) -> usize {
+        GROUPS.iter().position(|g| g.contains(&self)).unwrap_or(0)
+    }
+
+    pub fn markup(self) -> Option<Markup> {
+        match self {
+            Self::Highlight => Some(Markup::Highlight),
+            Self::Underline => Some(Markup::Underline),
+            Self::StrikeOut => Some(Markup::StrikeOut),
+            _ => None,
+        }
+    }
+
+    /// Tools that draw with a drag gesture.
+    pub fn draws(self) -> bool {
+        matches!(self, Self::Ink | Self::Line | Self::Arrow | Self::Rectangle | Self::Oval)
+    }
+
+    /// Whether the line-thickness control applies.
+    pub fn has_width(self) -> bool {
+        self.draws()
+    }
+
+    /// A placeholder shape of this kind (for per-tool default styles).
+    fn sample(self) -> Shape {
+        match self {
+            Self::Note => Shape::Note { at: [0.0; 2], icon: NoteIcon::Comment },
+            Self::TextBox => Shape::TextBox { rect: [0.0; 4], font_size: 12.0 },
+            Self::Highlight | Self::Underline | Self::StrikeOut => {
+                Shape::TextMarkup { kind: self.markup().unwrap_or(Markup::Highlight), quads: Vec::new() }
+            }
+            Self::Ink => Shape::Ink { strokes: Vec::new() },
+            Self::Line => Shape::Line { from: [0.0; 2], to: [0.0; 2], arrow: false },
+            Self::Arrow => Shape::Line { from: [0.0; 2], to: [0.0; 2], arrow: true },
+            Self::Rectangle => Shape::Rectangle { rect: [0.0; 4] },
+            Self::Oval => Shape::Oval { rect: [0.0; 4] },
+        }
+    }
+}
+
+/// The comment swatches (our palette, close to Acrobat's quick colours).
+pub const SWATCHES: [(&str, Rgb); 10] = [
+    ("Yellow", [1.0, 0.94, 0.0]),
+    ("Orange", [1.0, 0.54, 0.0]),
+    ("Red", [0.89, 0.13, 0.13]),
+    ("Pink", [1.0, 0.37, 0.64]),
+    ("Purple", [0.54, 0.25, 0.82]),
+    ("Blue", [0.0, 0.47, 0.84]),
+    ("Light blue", [0.36, 0.75, 0.98]),
+    ("Green", [0.18, 0.62, 0.36]),
+    ("Gray", [0.5, 0.5, 0.5]),
+    ("Black", [0.0, 0.0, 0.0]),
+];
+
+pub fn color32(c: Rgb) -> Color32 {
+    let b = |v: f64| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
+    Color32::from_rgb(b(c[0]), b(c[1]), b(c[2]))
+}
+
+/// Commenting preferences shared by every document (author, per-tool styles, pin).
+#[derive(Clone, Debug)]
+pub struct CommentPrefs {
+    /// `/T` of new comments (Acrobat: Preferences ▸ Identity, default the login name).
+    pub author: String,
+    styles: Vec<(CommentTool, Style)>,
+    /// Keep the tool selected after use (the pin).
+    pub pinned: bool,
+    /// The tool each flyout group shows (the last one used).
+    pub group_tool: [CommentTool; 3],
+}
+
+impl Default for CommentPrefs {
+    fn default() -> Self {
+        Self {
+            author: login_name(),
+            styles: ALL.iter().map(|t| (*t, Style::default_for(&t.sample()))).collect(),
+            pinned: false,
+            group_tool: [CommentTool::Note, CommentTool::Highlight, CommentTool::Ink],
+        }
+    }
+}
+
+impl CommentPrefs {
+    pub fn style(&self, tool: CommentTool) -> Style {
+        self.styles.iter().find(|(t, _)| *t == tool).map(|(_, s)| s.clone()).unwrap_or_default()
+    }
+
+    pub fn set_color(&mut self, tool: CommentTool, c: Rgb) {
+        if let Some((_, s)) = self.styles.iter_mut().find(|(t, _)| *t == tool) {
+            s.color = c;
+        }
+    }
+
+    pub fn set_width(&mut self, tool: CommentTool, w: f64) {
+        if let Some((_, s)) = self.styles.iter_mut().find(|(t, _)| *t == tool) {
+            s.width = w.clamp(0.5, 12.0);
+        }
+    }
+}
+
+/// The user's login name, which Acrobat uses as the default comment author.
+fn login_name() -> String {
+    #[cfg(not(target_arch = "wasm32"))]
+    for var in ["USER", "USERNAME", "LOGNAME"] {
+        if let Ok(v) = std::env::var(var)
+            && !v.trim().is_empty()
+        {
+            return v;
+        }
+    }
+    "Guest".into()
+}
+
+/// A drag in progress on a page.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Gesture {
+    /// Drawing with a tool: points in user space (ink: the stroke; others: start and end).
+    Draw { page: usize, tool: CommentTool, points: Vec<[f64; 2]> },
+    /// Moving a comment, from the press position on screen.
+    Move { page: usize, index: usize, from: Pos2 },
+    /// Resizing a comment by one of its handles: (dx, dy) ∈ {-1, 0, 1}² says which sides move.
+    Resize { page: usize, index: usize, handle: (i8, i8), from: Pos2 },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ComposerKind {
+    Note,
+    TextBox,
+    /// Edit the text of the comment at this index on the composer's page.
+    Edit(usize),
+}
+
+/// The floating "Add a comment" card.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Composer {
+    pub page: usize,
+    /// Anchor in user space (the note's top-left, the text box's top-left, the comment's corner).
+    pub at: [f64; 2],
+    pub kind: ComposerKind,
+    pub text: String,
+    pub focus: bool,
+}
+
+/// Per-document commenting state.
+#[derive(Clone, Debug, Default)]
+pub struct CommentView {
+    /// The selected comment: (page, index in `/Annots`).
+    pub selected: Option<(usize, usize)>,
+    pub gesture: Option<Gesture>,
+    pub composer: Option<Composer>,
+    /// Reply being typed under the selected card.
+    pub reply: String,
+    /// Inline edit of a card's text in the Comments panel: (page, index, text).
+    pub editing: Option<(usize, usize, String)>,
+    /// The panel should scroll the selected card into view.
+    pub reveal: bool,
+    /// The "Add a comment" box at the top of the Comments panel.
+    pub add_box: String,
+    /// The Comments panel's search query (`None`: search closed).
+    pub search: Option<String>,
+    pub search_focus: bool,
+    /// Where the canvas context menu was opened: (page, user-space point).
+    pub context_at: Option<(usize, [f64; 2])>,
+    /// A one-shot tool just finished; the app returns to the Select tool unless pinned.
+    pub tool_done: bool,
+}
+
+/// What a page needs to know to handle comment input.
+pub(crate) struct PageCx<'a> {
+    pub page: usize,
+    pub xf: &'a PageXform,
+    pub info: &'a DocInfo,
+    pub tool: QuickTool,
+    pub prefs: &'a CommentPrefs,
+    /// The document allows commenting.
+    pub allowed: bool,
+}
+
+impl PageCx<'_> {
+    fn to_user(&self, p: Pos2) -> [f64; 2] {
+        let (vx, vy) = self.xf.screen_to_view(p);
+        let u = self.info.pages[self.page].view_to_user(vx, vy);
+        [u[0] as f64, u[1] as f64]
+    }
+
+    fn to_screen(&self, p: [f64; 2]) -> Pos2 {
+        let v = self.info.pages[self.page].user_to_view(p[0] as f32, p[1] as f32);
+        self.xf.norm_to_screen(v[0] / self.xf.pw, v[1] / self.xf.ph)
+    }
+
+    fn screen_rect(&self, a: &Annotation) -> Rect {
+        self.xf.user_rect(self.info, self.page, a.rect)
+    }
+
+    /// Top-level comments on this page, in paint order.
+    fn comments(&self) -> impl Iterator<Item = &Annotation> {
+        self.info.annotations.iter().filter(move |a| a.page == self.page && a.in_reply_to.is_none() && a.subtype != "Popup")
+    }
+
+    /// Where a comment is on screen: one rectangle, or one per marked line for text markup.
+    fn screen_rects(&self, a: &Annotation) -> Vec<Rect> {
+        if is_markup(&a.subtype) && !a.quads.is_empty() {
+            a.quads
+                .iter()
+                .map(|q| {
+                    let xs = [q[0], q[2], q[4], q[6]];
+                    let ys = [q[1], q[3], q[5], q[7]];
+                    let (x0, x1) = (xs.iter().copied().fold(f32::MAX, f32::min), xs.iter().copied().fold(f32::MIN, f32::max));
+                    let (y0, y1) = (ys.iter().copied().fold(f32::MAX, f32::min), ys.iter().copied().fold(f32::MIN, f32::max));
+                    self.xf.user_rect(self.info, self.page, [x0, y0, x1, y1])
+                })
+                .collect()
+        } else {
+            vec![self.screen_rect(a)]
+        }
+    }
+
+    /// The topmost comment under `p`.
+    fn hit(&self, p: Pos2) -> Option<&Annotation> {
+        self.comments().filter(|a| self.screen_rects(a).iter().any(|r| r.expand(3.0).contains(p))).last()
+    }
+
+    fn get(&self, index: usize) -> Option<&Annotation> {
+        self.comments().find(|a| a.index == index)
+    }
+}
+
+fn is_markup(subtype: &str) -> bool {
+    matches!(subtype, "Highlight" | "Underline" | "StrikeOut" | "Squiggly")
+}
+
+fn resizable(subtype: &str) -> bool {
+    matches!(subtype, "Square" | "Circle" | "FreeText")
+}
+
+const HANDLES: [(i8, i8); 8] = [(-1, -1), (0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0)];
+
+fn handle_pos(r: Rect, (hx, hy): (i8, i8)) -> Pos2 {
+    let x = match hx {
+        -1 => r.left(),
+        0 => r.center().x,
+        _ => r.right(),
+    };
+    let y = match hy {
+        -1 => r.top(),
+        0 => r.center().y,
+        _ => r.bottom(),
+    };
+    pos2(x, y)
+}
+
+fn resized(r: Rect, (hx, hy): (i8, i8), d: egui::Vec2) -> Rect {
+    let mut r = r;
+    match hx {
+        -1 => r.min.x += d.x,
+        1 => r.max.x += d.x,
+        _ => {}
+    }
+    match hy {
+        -1 => r.min.y += d.y,
+        1 => r.max.y += d.y,
+        _ => {}
+    }
+    Rect::from_two_pos(r.min, r.max)
+}
+
+/// Comment input on one page, before text selection runs. Returns `true` when the pointer
+/// gesture belongs to commenting (text selection must ignore it).
+pub(crate) fn page_input(ui: &egui::Ui, resp: &egui::Response, cx: &PageCx<'_>, view: &mut DocView) -> bool {
+    let pointer = ui.input(|i| i.pointer.hover_pos());
+    let origin = ui.input(|i| i.pointer.press_origin());
+    let page_rect = cx.xf.rect;
+    let pressed_here = origin.is_some_and(|o| page_rect.contains(o));
+    let over_page = pointer.is_some_and(|p| page_rect.contains(p));
+    let cv = &mut view.comments;
+    if resp.secondary_clicked()
+        && let Some(p) = pointer.filter(|p| page_rect.contains(*p))
+    {
+        cv.context_at = Some((cx.page, cx.to_user(p)));
+        cv.selected = cx.hit(p).map(|a| (cx.page, a.index));
+    }
+    match cx.tool {
+        QuickTool::Comment(tool) if tool.draws() => {
+            if !cx.allowed {
+                return false;
+            }
+            if over_page {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
+            }
+            if resp.drag_started()
+                && pressed_here
+                && let Some(o) = origin
+            {
+                cv.gesture = Some(Gesture::Draw { page: cx.page, tool, points: vec![cx.to_user(o)] });
+                cv.selected = None;
+            }
+            if let Some(Gesture::Draw { page, tool, points }) = cv.gesture.as_mut()
+                && *page == cx.page
+                && let Some(p) = pointer
+            {
+                let p = clamp_to(page_rect, p);
+                let u = cx.to_user(p);
+                if *tool == CommentTool::Ink {
+                    let last = points.last().map(|l| cx.to_screen(*l)).unwrap_or(p);
+                    if last.distance(p) >= 1.5 {
+                        points.push(u);
+                    }
+                } else {
+                    points.truncate(1);
+                    points.push(u);
+                }
+            }
+            if resp.drag_stopped()
+                && let Some(Gesture::Draw { page, tool, points }) = cv.gesture.clone()
+                && page == cx.page
+            {
+                cv.gesture = None;
+                if let Some(shape) = drawn_shape(tool, &points) {
+                    view.pending_edit = Some(new_comment(cx, tool, shape, String::new()));
+                }
+            }
+            true
+        }
+        QuickTool::Comment(tool @ (CommentTool::Note | CommentTool::TextBox)) => {
+            if !cx.allowed {
+                return false;
+            }
+            if over_page {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
+            }
+            if resp.clicked()
+                && over_page
+                && let Some(p) = pointer
+            {
+                let kind = if tool == CommentTool::Note { ComposerKind::Note } else { ComposerKind::TextBox };
+                cv.composer = Some(Composer { page: cx.page, at: cx.to_user(p), kind, text: String::new(), focus: true });
+                cv.selected = None;
+            }
+            true
+        }
+        QuickTool::Select => select_input(ui, resp, cx, view, pointer, origin, pressed_here),
+        _ => false,
+    }
+}
+
+fn clamp_to(r: Rect, p: Pos2) -> Pos2 {
+    pos2(p.x.clamp(r.left(), r.right()), p.y.clamp(r.top(), r.bottom()))
+}
+
+/// The Select tool: hover, select, move, resize, edit, delete.
+fn select_input(
+    ui: &egui::Ui,
+    resp: &egui::Response,
+    cx: &PageCx<'_>,
+    view: &mut DocView,
+    pointer: Option<Pos2>,
+    origin: Option<Pos2>,
+    pressed_here: bool,
+) -> bool {
+    let cv = &mut view.comments;
+    let selected = cv.selected.filter(|(p, _)| *p == cx.page).and_then(|(_, i)| cx.get(i));
+    // Handles of a selected, resizable comment.
+    let handle_at = |p: Pos2| -> Option<(i8, i8)> {
+        let a = selected.filter(|a| cx.allowed && resizable(&a.subtype))?;
+        let r = cx.screen_rect(a);
+        HANDLES.into_iter().find(|h| handle_pos(r, *h).distance(p) <= 7.0)
+    };
+    let mut consumed = false;
+    if let Some(p) = pointer {
+        if let Some(h) = handle_at(p) {
+            ui.ctx().set_cursor_icon(match h {
+                (0, _) => egui::CursorIcon::ResizeVertical,
+                (_, 0) => egui::CursorIcon::ResizeHorizontal,
+                (-1, -1) | (1, 1) => egui::CursorIcon::ResizeNwSe,
+                _ => egui::CursorIcon::ResizeNeSw,
+            });
+        } else if let Some(a) = cx.hit(p) {
+            let movable = cx.allowed && !is_markup(&a.subtype);
+            ui.ctx().set_cursor_icon(if movable { egui::CursorIcon::Move } else { egui::CursorIcon::PointingHand });
+        }
+    }
+    if resp.drag_started()
+        && pressed_here
+        && let Some(o) = origin
+    {
+        if let (Some(h), Some(a)) = (handle_at(o), selected) {
+            cv.gesture = Some(Gesture::Resize { page: cx.page, index: a.index, handle: h, from: o });
+            consumed = true;
+        } else if let Some(a) = cx.hit(o)
+            && !is_markup(&a.subtype)
+        {
+            cv.selected = Some((cx.page, a.index));
+            cv.reveal = true;
+            if cx.allowed {
+                cv.gesture = Some(Gesture::Move { page: cx.page, index: a.index, from: o });
+            }
+            consumed = true;
+        }
+    }
+    if matches!(cv.gesture, Some(Gesture::Move { page, .. } | Gesture::Resize { page, .. }) if page == cx.page) {
+        consumed = true;
+    }
+    if resp.drag_stopped()
+        && let Some(p) = pointer
+    {
+        match cv.gesture.clone() {
+            Some(Gesture::Move { page, index, from }) if page == cx.page => {
+                cv.gesture = None;
+                let (a, b) = (cx.to_user(from), cx.to_user(p));
+                let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
+                if from.distance(p) >= 2.0 {
+                    view.pending_edit = Some(Edit::MoveAnnotation { page, index, dx, dy });
+                }
+            }
+            Some(Gesture::Resize { page, index, handle, from }) if page == cx.page => {
+                cv.gesture = None;
+                if let Some(a) = cx.get(index) {
+                    let r = resized(cx.screen_rect(a), handle, p - from);
+                    let (u0, u1) = (cx.to_user(r.left_top()), cx.to_user(r.right_bottom()));
+                    let rect = [u0[0].min(u1[0]), u0[1].min(u1[1]), u0[0].max(u1[0]), u0[1].max(u1[1])];
+                    if r.width() >= 4.0 && r.height() >= 4.0 {
+                        view.pending_edit = Some(Edit::ResizeAnnotation { page, index, rect });
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    // (egui clears the press origin on release, so clicks are located by the pointer.)
+    let on_page = pointer.is_some_and(|p| cx.xf.rect.contains(p));
+    if resp.clicked() && on_page {
+        match pointer.and_then(|p| cx.hit(p)) {
+            Some(a) => {
+                cv.selected = Some((cx.page, a.index));
+                cv.reveal = true;
+                consumed = true;
+            }
+            None => cv.selected = None,
+        }
+    }
+    if resp.double_clicked()
+        && on_page
+        && cx.allowed
+        && let Some(a) = pointer.and_then(|p| cx.hit(p))
+    {
+        cv.selected = Some((cx.page, a.index));
+        cv.composer = Some(Composer {
+            page: cx.page,
+            at: [a.rect[2] as f64, a.rect[3] as f64],
+            kind: ComposerKind::Edit(a.index),
+            text: a.contents.clone().unwrap_or_default(),
+            focus: true,
+        });
+        consumed = true;
+    }
+    consumed
+}
+
+/// After text selection ran: a markup tool turns a finished selection into a comment.
+pub(crate) fn page_after_text(resp: &egui::Response, cx: &PageCx<'_>, view: &mut DocView) {
+    let QuickTool::Comment(tool) = cx.tool else { return };
+    if tool.markup().is_none() || !cx.allowed || !(resp.drag_stopped() || resp.double_clicked()) {
+        return;
+    }
+    if let Some((page, quads)) = view.selection_quads(cx.info).filter(|(p, _)| *p == cx.page) {
+        view.clear_selection();
+        let kind = tool.markup().expect("checked");
+        view.pending_edit = Some(new_comment(cx, tool, Shape::TextMarkup { kind, quads }, String::new()));
+        let _ = page;
+    }
+}
+
+/// Paint comment selection, hover and gesture previews on a page.
+pub(crate) fn paint_page(ui: &egui::Ui, painter: &egui::Painter, cx: &PageCx<'_>, view: &DocView) {
+    let cv = &view.comments;
+    let pointer = ui.input(|i| i.pointer.hover_pos());
+    if cx.tool == QuickTool::Select
+        && cv.gesture.is_none()
+        && let Some(a) = pointer.and_then(|p| cx.hit(p))
+        && cv.selected != Some((cx.page, a.index))
+    {
+        for r in cx.screen_rects(a) {
+            painter.rect_stroke(r.expand(2.0), CornerRadius::same(2), Stroke::new(1.0, SELECT_BLUE.gamma_multiply(0.7)), egui::StrokeKind::Outside);
+        }
+    }
+    if let Some((page, index)) = cv.selected
+        && page == cx.page
+        && let Some(a) = cx.get(index)
+    {
+        if is_markup(&a.subtype) && !a.quads.is_empty() {
+            for r in cx.screen_rects(a) {
+                painter.rect_stroke(r.expand(2.0), CornerRadius::ZERO, Stroke::new(1.0, SELECT_BLUE), egui::StrokeKind::Middle);
+            }
+            return paint_gesture(painter, cx, view);
+        }
+        let mut r = cx.screen_rect(a).expand(2.0);
+        if let (Some(p), Some(g)) = (pointer, &cv.gesture) {
+            match g {
+                Gesture::Move { page, index: gi, from } if *page == cx.page && *gi == index => r = r.translate(p - *from),
+                Gesture::Resize { page, index: gi, handle, from } if *page == cx.page && *gi == index => r = resized(r, *handle, p - *from),
+                _ => {}
+            }
+        }
+        painter.rect_stroke(r, CornerRadius::ZERO, Stroke::new(1.0, SELECT_BLUE), egui::StrokeKind::Middle);
+        if cx.allowed && resizable(&a.subtype) {
+            for h in HANDLES {
+                let c = handle_pos(r, h);
+                painter.circle(c, 4.5, Color32::WHITE, Stroke::new(1.0, SELECT_BLUE));
+            }
+        }
+    }
+    paint_gesture(painter, cx, view);
+}
+
+fn paint_gesture(painter: &egui::Painter, cx: &PageCx<'_>, view: &DocView) {
+    if let Some(Gesture::Draw { page, tool, points }) = &view.comments.gesture
+        && *page == cx.page
+    {
+        let style = cx.prefs.style(*tool);
+        let zoom = cx.xf.rect.width() / cx.xf.pw.max(1.0);
+        let stroke = Stroke::new((style.width as f32 * zoom).max(1.0), color32(style.color));
+        let pts: Vec<Pos2> = points.iter().map(|p| cx.to_screen(*p)).collect();
+        match tool {
+            CommentTool::Ink => {
+                painter.add(egui::Shape::line(pts, stroke));
+            }
+            CommentTool::Line | CommentTool::Arrow if pts.len() == 2 => {
+                painter.line_segment([pts[0], pts[1]], stroke);
+                if *tool == CommentTool::Arrow {
+                    let d = (pts[0] - pts[1]).normalized();
+                    let s = (6.0 + 3.0 * style.width as f32) * zoom;
+                    let rot = |v: egui::Vec2, a: f32| vec2(v.x * a.cos() - v.y * a.sin(), v.x * a.sin() + v.y * a.cos());
+                    for a in [0.52f32, -0.52] {
+                        painter.line_segment([pts[1], pts[1] + rot(d, a) * s], stroke);
+                    }
+                }
+            }
+            CommentTool::Rectangle if pts.len() == 2 => {
+                painter.rect_stroke(Rect::from_two_pos(pts[0], pts[1]), CornerRadius::ZERO, stroke, egui::StrokeKind::Inside);
+            }
+            CommentTool::Oval if pts.len() == 2 => {
+                let r = Rect::from_two_pos(pts[0], pts[1]);
+                painter.add(egui::Shape::ellipse_stroke(r.center(), r.size() / 2.0, stroke));
+            }
+            _ => {}
+        }
+    }
+}
+
+/// The shape a finished drawing gesture makes (`None` if it is too small to mean anything).
+fn drawn_shape(tool: CommentTool, points: &[[f64; 2]]) -> Option<Shape> {
+    let (first, last) = (*points.first()?, *points.last()?);
+    let far = (first[0] - last[0]).hypot(first[1] - last[1]) >= 2.0;
+    let rect = [first[0].min(last[0]), first[1].min(last[1]), first[0].max(last[0]), first[1].max(last[1])];
+    let big = rect[2] - rect[0] >= 2.0 && rect[3] - rect[1] >= 2.0;
+    match tool {
+        CommentTool::Ink if points.len() >= 2 => Some(Shape::Ink { strokes: vec![points.to_vec()] }),
+        CommentTool::Line | CommentTool::Arrow if far => Some(Shape::Line { from: first, to: last, arrow: tool == CommentTool::Arrow }),
+        CommentTool::Rectangle if big => Some(Shape::Rectangle { rect }),
+        CommentTool::Oval if big => Some(Shape::Oval { rect }),
+        _ => None,
+    }
+}
+
+fn new_comment(cx: &PageCx<'_>, tool: CommentTool, shape: Shape, contents: String) -> Edit {
+    Edit::AddAnnotation(NewAnnotation { page: cx.page, shape, style: cx.prefs.style(tool), contents, author: cx.prefs.author.clone() })
+}
+
+/// The floating composer card (new note, new text box, edit). Returns the edit to apply.
+pub(crate) fn composer(ctx: &egui::Context, view: &mut DocView, info: &DocInfo, prefs: &CommentPrefs) -> Option<Edit> {
+    let c = view.comments.composer.as_ref()?;
+    let page = c.page;
+    let Some(xf) = view.page_xform(page) else {
+        // Scrolled away: keep the draft until the page is back.
+        return None;
+    };
+    let cx = PageCx { page, xf: &xf, info, tool: QuickTool::Select, prefs, allowed: true };
+    let anchor = cx.to_screen(c.at);
+    let t = Tokens::get(ctx);
+    let mut post = false;
+    let mut cancel = false;
+    let c = view.comments.composer.as_mut().expect("checked");
+    let title = match c.kind {
+        ComposerKind::Note => "Sticky note",
+        ComposerKind::TextBox => "Text box",
+        ComposerKind::Edit(_) => "Edit comment",
+    };
+    let pos = pos2(anchor.x + 12.0, anchor.y);
+    egui::Area::new(egui::Id::new(("comment-composer", view.id.0))).order(egui::Order::Foreground).fixed_pos(pos).show(ctx, |ui| {
+        egui::Frame::popup(ui.style()).inner_margin(egui::Margin::same(12)).corner_radius(CornerRadius::same(8)).show(ui, |ui| {
+            ui.set_width(260.0);
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new(&prefs.author).font(theme::semibold(13.0)));
+                ui.label(egui::RichText::new(title).font(theme::regular(11.5)).color(t.text_faint));
+            });
+            ui.add_space(6.0);
+            let hint = if c.kind == ComposerKind::TextBox { "Type text" } else { "Add a comment" };
+            let edit =
+                ui.add(egui::TextEdit::multiline(&mut c.text).hint_text(hint).desired_rows(3).desired_width(f32::INFINITY).id_salt("composer-text"));
+            if c.focus {
+                edit.request_focus();
+                c.focus = false;
+            }
+            let enter = ui.input(|i| i.key_pressed(egui::Key::Enter) && i.modifiers.command);
+            if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                cancel = true;
+            }
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let can_post = !c.text.trim().is_empty() || matches!(c.kind, ComposerKind::Edit(_));
+                    if ui
+                        .add_enabled(can_post, egui::Button::new(egui::RichText::new("Post").color(Color32::WHITE)).fill(t.accent).corner_radius(14))
+                        .clicked()
+                        || (enter && can_post)
+                    {
+                        post = true;
+                    }
+                    if ui.add(egui::Button::new("Cancel").corner_radius(14)).clicked() {
+                        cancel = true;
+                    }
+                });
+            });
+        });
+    });
+    if cancel {
+        view.comments.composer = None;
+        return None;
+    }
+    if !post {
+        return None;
+    }
+    let c = view.comments.composer.take()?;
+    let text = c.text.trim_end().to_string();
+    match c.kind {
+        ComposerKind::Edit(index) => Some(Edit::SetAnnotationContents { page, index, text }),
+        ComposerKind::Note => {
+            view.comments.tool_done = true;
+            Some(new_comment(&cx, CommentTool::Note, Shape::Note { at: c.at, icon: NoteIcon::Comment }, text))
+        }
+        ComposerKind::TextBox => {
+            view.comments.tool_done = true;
+            Some(new_comment(&cx, CommentTool::TextBox, Shape::TextBox { rect: text_box_rect(c.at, &text, 12.0), font_size: 12.0 }, text))
+        }
+    }
+}
+
+/// A text box sized to its text (at most 300 pt wide), hanging from its top-left corner.
+pub fn text_box_rect(at: [f64; 2], text: &str, size: f64) -> [f64; 4] {
+    use printcraft_engine::annot_text::{text_width, wrap};
+    let pad = 2.0;
+    let longest = text.lines().map(|l| text_width(l, size)).fold(0.0, f64::max);
+    let w = (longest + 2.0 * pad + 4.0).clamp(40.0, 300.0);
+    let lines = wrap(text, size, w - 2.0 * pad).len().max(1);
+    let h = lines as f64 * size * 1.2 + 2.0 * pad + 2.0;
+    [at[0], at[1] - h, at[0] + w, at[1]]
+}
+
+/// Delete / Escape handling for comments (only while no text field has focus).
+pub(crate) fn keys(ctx: &egui::Context, view: &mut DocView, tool: &mut QuickTool, allowed: bool) {
+    if ctx.egui_wants_keyboard_input() {
+        return;
+    }
+    let cv = &mut view.comments;
+    if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+        // One step back per press: cancel the gesture, then deselect, then drop the tool.
+        let cancelled = cv.gesture.take().is_some() || cv.selected.take().is_some();
+        if !cancelled && matches!(tool, QuickTool::Comment(_)) {
+            *tool = QuickTool::Select;
+        }
+    }
+    if allowed
+        && let Some((page, index)) = cv.selected
+        && ctx.input(|i| i.key_pressed(egui::Key::Delete) || i.key_pressed(egui::Key::Backspace))
+    {
+        cv.selected = None;
+        view.pending_edit = Some(Edit::DeleteAnnotation { page, index });
+    }
+}
+
+/// Items of the canvas context menu for the selected comment (or the page).
+pub(crate) fn context_menu(ui: &mut egui::Ui, view: &mut DocView, info: &DocInfo, prefs: &CommentPrefs, allowed: bool) -> Option<CanvasAction> {
+    let mut action = None;
+    let selected = view.comments.selected.and_then(|(p, i)| info.annotations.iter().find(|a| a.page == p && a.index == i && a.in_reply_to.is_none()));
+    match selected {
+        Some(a) => {
+            let (page, index) = (a.page, a.index);
+            if ui.add_enabled(allowed, egui::Button::new("Edit text…")).clicked() {
+                view.comments.composer = Some(Composer {
+                    page,
+                    at: [a.rect[2] as f64, a.rect[3] as f64],
+                    kind: ComposerKind::Edit(index),
+                    text: a.contents.clone().unwrap_or_default(),
+                    focus: true,
+                });
+                ui.close();
+            }
+            if ui.add_enabled(allowed, egui::Button::new("Reply")).clicked() {
+                view.comments.reveal = true;
+                action = Some(CanvasAction::OpenComments);
+                ui.close();
+            }
+            ui.add_enabled_ui(allowed, |ui| {
+                ui.menu_button("Set status", |ui| {
+                    for s in [ReviewState::None, ReviewState::Accepted, ReviewState::Cancelled, ReviewState::Completed, ReviewState::Rejected] {
+                        if ui.button(s.name()).clicked() {
+                            action = Some(CanvasAction::Edit(Edit::SetAnnotationStatus { page, index, state: s, author: prefs.author.clone() }));
+                            ui.close();
+                        }
+                    }
+                });
+                ui.menu_button("Colour", |ui| {
+                    if let Some(c) = swatch_grid(ui, a.color.map(|c| c.map(f64::from))) {
+                        action = Some(CanvasAction::Edit(Edit::StyleAnnotation { page, index, color: Some(c), opacity: None, width: None }));
+                        ui.close();
+                    }
+                });
+            });
+            ui.separator();
+            if ui.add_enabled(allowed, egui::Button::new("Delete")).clicked() {
+                view.comments.selected = None;
+                action = Some(CanvasAction::Edit(Edit::DeleteAnnotation { page, index }));
+                ui.close();
+            }
+        }
+        None => {
+            if let Some((page, at)) = view.comments.context_at
+                && ui.add_enabled(allowed, egui::Button::new("Add a sticky note here")).clicked()
+            {
+                view.comments.composer = Some(Composer { page, at, kind: ComposerKind::Note, text: String::new(), focus: true });
+                ui.close();
+            }
+            if ui.button("Comments panel").clicked() {
+                action = Some(CanvasAction::OpenComments);
+                ui.close();
+            }
+        }
+    }
+    action
+}
+
+/// What the canvas asks the app to do.
+#[derive(Clone, Debug, PartialEq)]
+pub enum CanvasAction {
+    Edit(Edit),
+    OpenComments,
+}
+
+/// A grid of colour swatches; returns the one clicked.
+pub fn swatch_grid(ui: &mut egui::Ui, current: Option<Rgb>) -> Option<Rgb> {
+    let mut picked = None;
+    egui::Grid::new(ui.id().with("swatches")).spacing(vec2(6.0, 6.0)).show(ui, |ui| {
+        for (i, (name, c)) in SWATCHES.iter().enumerate() {
+            let (r, resp) = ui.allocate_exact_size(vec2(22.0, 22.0), Sense::click());
+            let on = current.is_some_and(|cur| cur.iter().zip(c).all(|(a, b)| (a - b).abs() < 0.02));
+            ui.painter().circle_filled(r.center(), 9.0, color32(*c));
+            ui.painter().circle_stroke(r.center(), 9.0, Stroke::new(1.0, Color32::from_black_alpha(40)));
+            if on || resp.hovered() {
+                ui.painter().circle_stroke(r.center(), 11.0, Stroke::new(1.5, SELECT_BLUE));
+            }
+            if resp.on_hover_text(*name).clicked() {
+                picked = Some(*c);
+            }
+            if i % 5 == 4 {
+                ui.end_row();
+            }
+        }
+    });
+    picked
+}
+
+/// The comment tools' extra quick-bar controls: pin, colour and thickness.
+pub(crate) fn quick_bar_controls(ui: &mut egui::Ui, tool: CommentTool, prefs: &mut CommentPrefs) {
+    let style = prefs.style(tool);
+    if icons::button(ui, "pin", 32.0, prefs.pinned, if prefs.pinned { "Keep tool selected: on" } else { "Keep tool selected" }).clicked() {
+        prefs.pinned = !prefs.pinned;
+    }
+    let (r, resp) = ui.allocate_exact_size(vec2(32.0, 32.0), Sense::click());
+    ui.painter().circle_filled(r.center(), 9.0, color32(style.color));
+    ui.painter().circle_stroke(r.center(), 9.0, Stroke::new(1.0, Color32::from_black_alpha(50)));
+    let resp = resp.on_hover_text("Colour");
+    egui::Popup::menu(&resp).align(egui::RectAlign::RIGHT_START).show(|ui| {
+        if let Some(c) = swatch_grid(ui, Some(style.color)) {
+            prefs.set_color(tool, c);
+            ui.close();
+        }
+    });
+    if tool.has_width() {
+        let resp = icons::button(ui, "sliders-horizontal", 32.0, false, "Line thickness");
+        egui::Popup::menu(&resp).align(egui::RectAlign::RIGHT_START).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
+            ui.set_min_width(180.0);
+            let mut w = style.width;
+            ui.label(egui::RichText::new("Line thickness").font(theme::semibold(12.0)));
+            if ui.add(egui::Slider::new(&mut w, 0.5..=12.0).step_by(0.5).suffix(" pt")).changed() {
+                prefs.set_width(tool, w);
+            }
+        });
+    }
+}
+
+/// Status badge icon and label for a review state name.
+pub fn status_badge(state: &str) -> Option<(&'static str, &'static str, Color32)> {
+    match state {
+        "Accepted" => Some(("thumbs-up", "Accepted", Color32::from_rgb(0x2D, 0x9D, 0x5B))),
+        "Rejected" => Some(("thumbs-down", "Rejected", Color32::from_rgb(0xD3, 0x2F, 0x2F))),
+        "Cancelled" => Some(("circle-x", "Cancelled", Color32::from_rgb(0x8E, 0x8E, 0x8E))),
+        "Completed" => Some(("check", "Completed", Color32::from_rgb(0x2D, 0x9D, 0x5B))),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tools_round_trip_through_their_commands() {
+        for t in ALL {
+            assert_eq!(CommentTool::from_command(t.command()), Some(t));
+            assert!(printcraft_engine::commands::command(t.command()).is_some(), "{} is registered", t.command());
+            assert!(icons::exists(t.icon()), "icon {}", t.icon());
+            assert!(GROUPS[t.group()].contains(&t));
+        }
+    }
+
+    #[test]
+    fn drawn_shapes_ignore_slips() {
+        assert_eq!(drawn_shape(CommentTool::Rectangle, &[[0.0, 0.0], [1.0, 1.0]]), None);
+        assert_eq!(drawn_shape(CommentTool::Rectangle, &[[10.0, 0.0], [0.0, 10.0]]), Some(Shape::Rectangle { rect: [0.0, 0.0, 10.0, 10.0] }));
+        assert_eq!(drawn_shape(CommentTool::Ink, &[[0.0, 0.0]]), None);
+        assert!(matches!(drawn_shape(CommentTool::Arrow, &[[0.0, 0.0], [5.0, 0.0]]), Some(Shape::Line { arrow: true, .. })));
+    }
+
+    #[test]
+    fn text_boxes_fit_their_text() {
+        let r = text_box_rect([100.0, 500.0], "Hi", 12.0);
+        assert_eq!((r[0], r[3]), (100.0, 500.0));
+        assert!(r[2] - r[0] < 60.0);
+        let long = text_box_rect([0.0, 500.0], &"word ".repeat(80), 12.0);
+        assert_eq!(long[2], 300.0);
+        assert!(long[3] - long[1] > 50.0);
+    }
+}

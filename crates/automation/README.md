@@ -3,7 +3,7 @@
 Agent control for PrintCraft: a headless tool table over the engine, and an opt-in MCP server.
 
 - **Layer:** L7 (architecture §13), but headless. It depends on `engine`, `render` and `organize`, never on a UI toolkit.
-- **Status:** 20 tools covering inspection, rendering, text, page edits, metadata, undo/redo, save, combine, extract and split. Planned next: the UI control channel (`ui.*`, M3.9), tools for comments, forms and bookmarks as those features land, and MCP resources for page images.
+- **Status:** 33 tools covering inspection, rendering, text, page edits, page labels, bookmarks, comments, metadata, undo/redo, save, combine, extract and split. Comment tools take geometry in the same top-left-origin points as everything else, and `comment_add` can mark text by searching for it (`find`). Planned next: tools for forms and protection as those features land, and MCP resources for page images. The running app's UI is driven separately, through the `ui.*` control channel in `printcraft-ui-egui`.
 
 ## API
 
