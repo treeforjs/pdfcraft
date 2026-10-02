@@ -129,13 +129,15 @@ pub(crate) fn options_body(ui: &mut egui::Ui, app: &mut PrintCraftApp, t: &Token
     ui.checkbox(&mut o.show_dialog, "Show this dialog when the Checker starts");
     ui.add_space(10.0);
     let (mut start, mut cancel) = (false, false);
-    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-        if widgets::pill_button(ui, "Start Checking", true).clicked() {
-            start = true;
-        }
-        if widgets::pill_button(ui, "Cancel", false).clicked() {
-            cancel = true;
-        }
+    ui.horizontal(|ui| {
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            if widgets::pill_button(ui, "Start Checking", true).clicked() {
+                start = true;
+            }
+            if widgets::pill_button(ui, "Cancel", false).clicked() {
+                cancel = true;
+            }
+        })
     });
     (start, cancel)
 }
@@ -433,7 +435,7 @@ pub(crate) fn alt_body(ui: &mut egui::Ui, app: &mut PrintCraftApp, t: &Tokens) -
     if n == 0 {
         ui.label(egui::RichText::new("This document has no tagged figures.").color(t.text_muted));
         let mut cancel = false;
-        ui.with_layout(Layout::right_to_left(Align::Center), |ui| cancel = widgets::pill_button(ui, "Close", true).clicked());
+        ui.horizontal(|ui| ui.with_layout(Layout::right_to_left(Align::Center), |ui| cancel = widgets::pill_button(ui, "Close", true).clicked()));
         return (false, cancel);
     }
     d.index = d.index.min(n - 1);

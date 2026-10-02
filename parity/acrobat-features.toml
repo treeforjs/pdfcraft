@@ -6095,11 +6095,11 @@ title = "Certificate viewer"
 area = "H"
 tier = "P1"
 milestone = "M9"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["sign.panel"]
+tools = ["sign_list"]
+evidence = ["crates/ui-egui/tests/signing.rs::drawing_a_signature_creating_an_id_signing_and_trusting"]
+notes = "Signatures panel ▸ Show certificate: the chain (root on top) and Summary, Details (serial, key, constraints, usage, SHA-1/SHA-256 digests) and Trust tabs; add to trusted certificates; export"
 
 [[feature]]
 id = "sign.trust-store"

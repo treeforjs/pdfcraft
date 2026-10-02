@@ -176,7 +176,7 @@ pub(crate) fn audit_body(ui: &mut egui::Ui, rows: &[printcraft_engine::optimize:
     });
     ui.add_space(12.0);
     let mut ok = false;
-    ui.with_layout(Layout::right_to_left(Align::Center), |ui| ok = widgets::pill_button(ui, "OK", true).clicked());
+    ui.horizontal(|ui| ui.with_layout(Layout::right_to_left(Align::Center), |ui| ok = widgets::pill_button(ui, "OK", true).clicked()));
     ok
 }
 

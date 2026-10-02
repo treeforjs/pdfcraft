@@ -124,6 +124,24 @@ fn drawing_a_signature_creating_an_id_signing_and_trusting() {
     h.get_by_label("Signed and all signatures are valid.");
     let s = h.state();
     assert_eq!(s.session.get(s.views[0].id).unwrap().signatures[0].status, SignatureStatus::Valid);
+    // Show certificate: the Certificate Viewer.
+    h.get_by_label("Show certificate…").click();
+    h.run_steps(3);
+    h.get_by_label("Certificate Viewer");
+    assert!(h.get_all_by_label_contains("CN=Grace Hopper").count() >= 2, "issued to and by (self-signed)");
+    h.run_steps(2);
+    h.get_by_label("Details").click();
+    h.run_steps(2);
+    h.get_by_label("SHA-256 digest");
+    h.run_steps(2);
+    h.get_by_label("Trust").click();
+    h.run_steps(2);
+
+    h.get_by_label("This certificate is in your list of trusted certificates.");
+    h.run_steps(2);
+    h.get_by_label("OK").click();
+    h.run_steps(2);
+    assert_eq!(h.state().dialog, None);
     // View signed version opens the bytes the signature covers as a new document.
     h.get_by_label("View signed version").click();
     h.run_steps(3);

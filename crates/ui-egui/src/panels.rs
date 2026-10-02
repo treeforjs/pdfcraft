@@ -529,6 +529,10 @@ pub fn right_panel(app: &mut PrintCraftApp, ui: &mut egui::Ui) {
         Some(crate::sign_ui::PanelAction::Validate) => app.run_command("sign.validate"),
         Some(crate::sign_ui::PanelAction::GoTo(p)) => app.views[index].go_to_page(p),
         Some(crate::sign_ui::PanelAction::Trust(c)) => app.trust_certificate(*c),
+        Some(crate::sign_ui::PanelAction::ViewCertificate(chain)) => {
+            app.cert_viewer = Some(crate::sign_ui::CertViewer { chain, selected: 0, tab: crate::sign_ui::CertTab::Summary });
+            app.dialog = Some(crate::Dialog::CertificateViewer);
+        }
         Some(crate::sign_ui::PanelAction::ViewSigned(len)) => app.view_signed_version(len),
         Some(crate::sign_ui::PanelAction::Sign(field)) => {
             let page = app.views[index].current;

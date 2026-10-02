@@ -657,6 +657,25 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
                 }
                 return;
             }
+            Dialog::CertificateViewer => {
+                ui.set_width(700.0);
+                let trusted = app.session.trusted_certificates().to_vec();
+                let Some(v) = app.cert_viewer.as_mut() else {
+                    close = true;
+                    return;
+                };
+                let (done, action) = crate::sign_ui::cert_viewer(ui, v, &trusted, &t);
+                close = done;
+                match action {
+                    Some(crate::sign_ui::CertAction::Trust(c)) => app.trust_certificate(*c),
+                    Some(crate::sign_ui::CertAction::Export(c)) => {
+                        let pem = crate::sign_ui::certificate_pem(&c);
+                        app.write_files(&[(format!("{}.cer", c.display_name()), std::sync::Arc::new(pem.into_bytes()))], "Export certificate");
+                    }
+                    None => {}
+                }
+                return;
+            }
             Dialog::AuditSpace => {
                 if crate::optimize_ui::audit_body(ui, &app.space_audit, &t) {
                     next = Dialog::Optimize;

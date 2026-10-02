@@ -189,6 +189,8 @@ pub enum Dialog {
     AltText,
     /// PDF Optimizer ▸ Audit space usage (then back to the optimizer).
     AuditSpace,
+    /// Signatures ▸ Show certificate.
+    CertificateViewer,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -294,6 +296,7 @@ pub struct PrintCraftApp {
     pub alt_draft: a11y_ui::AltDraft,
     /// List the macOS Keychain's signing identities among the digital IDs (the desktop app).
     pub keychain_ids: bool,
+    pub cert_viewer: Option<sign_ui::CertViewer>,
     /// The last space audit.
     pub space_audit: Vec<printcraft_engine::optimize::SpaceUse>,
     /// Combine files: the files staged so far.
@@ -425,6 +428,7 @@ impl PrintCraftApp {
             a11y_skipped: Default::default(),
             alt_draft: Default::default(),
             keychain_ids: false,
+            cert_viewer: None,
             space_audit: Vec::new(),
             combine_draft: Vec::new(),
             custom_stamps: Vec::new(),

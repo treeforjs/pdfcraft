@@ -701,6 +701,8 @@ pub enum PanelAction {
     ViewSigned(usize),
     Sign(String),
     ExportCertificate(Box<Certificate>),
+    /// Certificate Viewer for the signer's chain (signer first).
+    ViewCertificate(Vec<Certificate>),
 }
 
 /// The Signatures panel body.
@@ -825,6 +827,13 @@ pub(crate) fn panel(ui: &mut egui::Ui, t: &Tokens, sigs: &[SignatureInfo], expan
                     action = Some(PanelAction::ViewSigned(s.signed_len));
                 }
                 if let Some(c) = &s.certificate
+                    && ui.button("Show certificate…").clicked()
+                {
+                    let mut chain = vec![c.clone()];
+                    chain.extend(s.chain.iter().filter(|x| x.raw != c.raw).cloned());
+                    action = Some(PanelAction::ViewCertificate(chain));
+                }
+                if let Some(c) = &s.certificate
                     && ui.button("Export certificate…").clicked()
                 {
                     action = Some(PanelAction::ExportCertificate(Box::new(c.clone())));
@@ -833,6 +842,145 @@ pub(crate) fn panel(ui: &mut egui::Ui, t: &Tokens, sigs: &[SignatureInfo], expan
         });
     }
     action
+}
+
+/// Certificate Viewer: a chain (the end certificate first) and the tab shown.
+#[derive(Clone, Debug)]
+pub struct CertViewer {
+    pub chain: Vec<Certificate>,
+    pub selected: usize,
+    pub tab: CertTab,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CertTab {
+    Summary,
+    Details,
+    Trust,
+}
+
+fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02X}")).collect::<Vec<_>>().join(" ")
+}
+
+fn key_usage(bits: u16) -> String {
+    const NAMES: [&str; 9] = [
+        "Digital Signature",
+        "Non-Repudiation",
+        "Key Encipherment",
+        "Data Encipherment",
+        "Key Agreement",
+        "Certificate Signing",
+        "CRL Signing",
+        "Encipher Only",
+        "Decipher Only",
+    ];
+    let used: Vec<&str> = NAMES.iter().enumerate().filter(|(i, _)| bits & (1 << i) != 0).map(|(_, n)| *n).collect();
+    if used.is_empty() { "None".into() } else { used.join(", ") }
+}
+
+/// What the viewer asks for.
+pub(crate) enum CertAction {
+    Trust(Box<Certificate>),
+    Export(Box<Certificate>),
+}
+
+/// The Certificate Viewer dialog: the chain on the left, the selected certificate's tabs.
+pub(crate) fn cert_viewer(ui: &mut egui::Ui, v: &mut CertViewer, trusted: &[Certificate], t: &Tokens) -> (bool, Option<CertAction>) {
+    title(ui, "Certificate Viewer");
+    ui.label(egui::RichText::new("This dialog shows the details of a certificate and its chain.").color(t.text_muted));
+    ui.add_space(8.0);
+    let mut action = None;
+    v.selected = v.selected.min(v.chain.len().saturating_sub(1));
+    ui.horizontal_top(|ui| {
+        // The chain, root at the top (as Acrobat shows it).
+        ui.vertical(|ui| {
+            ui.set_width(200.0);
+            for (depth, i) in (0..v.chain.len()).rev().enumerate() {
+                let c = &v.chain[i];
+                ui.horizontal(|ui| {
+                    ui.add_space(depth as f32 * 12.0);
+                    if ui.selectable_label(v.selected == i, c.display_name()).clicked() {
+                        v.selected = i;
+                    }
+                });
+            }
+        });
+        ui.add_space(16.0);
+        ui.vertical(|ui| {
+            ui.set_width(440.0);
+            let Some(c) = v.chain.get(v.selected).cloned() else { return };
+            ui.horizontal(|ui| {
+                for (tab, label) in [(CertTab::Summary, "Summary"), (CertTab::Details, "Details"), (CertTab::Trust, "Trust")] {
+                    if widgets::pill_button(ui, label, v.tab == tab).clicked() {
+                        v.tab = tab;
+                    }
+                }
+            });
+            ui.add_space(8.0);
+            let grid = |ui: &mut egui::Ui, rows: Vec<(&str, String)>| {
+                egui::Grid::new(("cert-rows", v.tab as u8)).num_columns(2).spacing([12.0, 5.0]).show(ui, |ui| {
+                    for (k, val) in rows {
+                        ui.label(egui::RichText::new(k).color(t.text_muted));
+                        ui.add(egui::Label::new(val).wrap());
+                        ui.end_row();
+                    }
+                });
+            };
+            match v.tab {
+                CertTab::Summary => grid(
+                    ui,
+                    vec![
+                        ("Issued to", c.subject.display()),
+                        ("Issued by", c.issuer.display()),
+                        ("Valid from", c.not_before.to_string()),
+                        ("Valid to", c.not_after.to_string()),
+                        ("Intended usage", c.key_usage.map(key_usage).unwrap_or_else(|| "Any".into())),
+                    ],
+                ),
+                CertTab::Details => grid(
+                    ui,
+                    vec![
+                        ("Version", "3".into()),
+                        ("Serial number", c.serial_hex()),
+                        ("Issuer", c.issuer.display()),
+                        ("Subject", c.subject.display()),
+                        ("Validity starts", c.not_before.to_string()),
+                        ("Validity ends", c.not_after.to_string()),
+                        ("Public key", c.public_key.describe()),
+                        ("Basic constraints", if c.is_ca { "Certificate authority".into() } else { "End entity".into() }),
+                        ("Key usage", c.key_usage.map(key_usage).unwrap_or_else(|| "Not present".into())),
+                        ("Self-signed", if c.is_self_signed() { "Yes".into() } else { "No".into() }),
+                        ("SHA-1 digest", hex(&sign::keys::DigestAlg::Sha1.digest(&[&c.raw]))),
+                        ("SHA-256 digest", hex(&sign::keys::DigestAlg::Sha256.digest(&[&c.raw]))),
+                    ],
+                ),
+                CertTab::Trust => {
+                    let is_trusted = trusted.iter().any(|x| x.raw == c.raw);
+                    let anchored = v.chain.iter().any(|x| trusted.iter().any(|y| y.raw == x.raw));
+                    ui.label(if is_trusted {
+                        "This certificate is in your list of trusted certificates."
+                    } else if anchored {
+                        "This certificate is trusted through a certificate above it in the chain."
+                    } else {
+                        "This certificate is not trusted. Signatures made with it show an unknown identity."
+                    });
+                    ui.add_space(8.0);
+                    if !is_trusted && widgets::pill_button(ui, "Add to Trusted Certificates", false).clicked() {
+                        action = Some(CertAction::Trust(Box::new(c.clone())));
+                    }
+                }
+            }
+            ui.add_space(8.0);
+            if widgets::pill_button(ui, "Export…", false).clicked() {
+                action = Some(CertAction::Export(Box::new(c.clone())));
+            }
+        });
+    });
+    ui.add_space(10.0);
+    let mut close = false;
+    ui.horizontal(|ui| ui.with_layout(Layout::right_to_left(Align::Center), |ui| close = widgets::pill_button(ui, "OK", true).clicked()));
+    (close, action)
 }
 
 /// The text of an exported certificate (`.cer`, PEM).
