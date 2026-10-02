@@ -223,6 +223,14 @@ impl PrintCraftApp {
             "export.image" => self.dialog = Some(Dialog::Export(crate::export_ui::ExportKind::Image)),
             "export.text" => self.dialog = Some(Dialog::Export(crate::export_ui::ExportKind::Text)),
             "a11y.check" => self.start_accessibility_check(),
+            "edit.advanced_search" => {
+                if let Some(i) = self.active {
+                    let f = self.views[i].find.get_or_insert_with(Default::default);
+                    f.in_panel = true;
+                    f.focus = true;
+                    self.right = Some(crate::RightPanel::Search);
+                }
+            }
             "a11y.report" => self.show_accessibility_report(),
             "a11y.alt_text" => self.start_alt_text(),
             "a11y.reading_options" => self.dialog = Some(Dialog::Properties(crate::PropsTab::Advanced)),

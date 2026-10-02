@@ -59,6 +59,8 @@ pub struct Find {
     /// Find options (Acrobat's: case-sensitive, whole words only).
     pub case_sensitive: bool,
     pub whole_words: bool,
+    /// Shown in the Search panel (Advanced Search) instead of the find bar.
+    pub in_panel: bool,
 }
 
 /// A text selection on one page, in reading-order glyph indices.
@@ -112,8 +114,8 @@ pub struct DocView {
     /// Sharp tiles of large pages: (page, tile x, tile y) → (scale tag, texture).
     tiles: HashMap<(usize, u32, u32), (u64, TextureHandle)>,
     /// Text layers, extracted in the background on demand (selection, find, copy).
-    texts: HashMap<usize, Arc<PageText>>,
-    text_failed: HashSet<usize>,
+    pub(crate) texts: HashMap<usize, Arc<PageText>>,
+    pub(crate) text_failed: HashSet<usize>,
     pub find: Option<Find>,
     selection: Option<Selection>,
     last_queue: Vec<RenderRequest>,
@@ -406,6 +408,14 @@ impl DocView {
             let (p, _) = f.matches[i];
             self.flash_match(p);
         }
+    }
+
+    /// Go to match `i` (the Search panel's results).
+    pub fn go_to_match(&mut self, i: usize) {
+        let Some(f) = self.find.as_mut() else { return };
+        let Some(&(p, _)) = f.matches.get(i) else { return };
+        f.current = Some(i);
+        self.flash_match(p);
     }
 
     /// Move to the next/previous match.
@@ -852,6 +862,14 @@ pub fn shortcuts(view: &mut DocView, ctx: &egui::Context) {
 
 pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
     let t = Tokens::get(ui.ctx());
+    // The Search panel closed: its search moves to the find bar.
+    let search_open = app.right == Some(crate::RightPanel::Search);
+    if let Some(f) = app.views[index].find.as_mut()
+        && f.in_panel
+        && !search_open
+    {
+        f.in_panel = false;
+    }
     let Some(doc) = app.session.get(app.views[index].id) else { return };
     let info = &doc.info;
     if info.pages.is_empty() {
@@ -1637,6 +1655,10 @@ fn run_button(app: &mut PrintCraftApp, index: usize, ctx: &egui::Context, name: 
 /// Acrobat-style floating find bar at the top-right of the document area.
 fn find_bar(view: &mut DocView, pages: usize, area: Rect, ui: &mut egui::Ui, t: &Tokens) {
     let Some(find) = view.find.as_mut() else { return };
+    // The Search panel shows this search.
+    if find.in_panel {
+        return;
+    }
     let mut close = false;
     let mut step: Option<bool> = None;
     let searched = view.texts.len() + view.text_failed.len();

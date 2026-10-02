@@ -19,6 +19,7 @@ mod crop;
 mod export_ui;
 mod marks_ui;
 mod optimize_ui;
+mod search_ui;
 mod sign_ui;
 mod stamps_ui;
 mod zoom_snap;
@@ -90,6 +91,8 @@ pub enum RightPanel {
     Signatures,
     /// Accessibility Checker results.
     Accessibility,
+    /// Advanced Search results.
+    Search,
 }
 
 /// Quick-action bar tools (the vertical floating strip).
@@ -796,6 +799,7 @@ impl PrintCraftApp {
                     "attachments" => Some(RightPanel::Attachments),
                     "signatures" => Some(RightPanel::Signatures),
                     "accessibility" => Some(RightPanel::Accessibility),
+                    "search" => Some(RightPanel::Search),
                     "none" => None,
                     other => return Err(format!("unknown panel {other}")),
                 }

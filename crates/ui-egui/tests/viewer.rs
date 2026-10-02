@@ -322,3 +322,32 @@ fn an_earlier_revision_opens_from_document_properties() {
     assert_eq!(doc.name, "updated (revision 1).pdf");
     assert_eq!(doc.info_value("Title"), None, "as it was before the update");
 }
+
+#[test]
+fn advanced_search_lists_results_with_context() {
+    let mut h = harness();
+    let i = h.state().active.unwrap();
+    assert!(h.state_mut().execute("edit.advanced_search"));
+    h.run_steps(2);
+    h.get_by_label("What word or phrase would you like to search for?");
+    h.state_mut().views[i].find.as_mut().unwrap().query = "pages".into();
+    for _ in 0..40 {
+        h.run_steps(2);
+        if h.state().views[i].find.as_ref().is_some_and(|f| f.matches.len() == 2) {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    h.run_steps(2);
+    h.get_by_label("2 instances");
+    h.get_by_label("Page 2");
+    // A result shows its context; clicking it goes there.
+    h.get_by_label_contains("Page 2 pages PAGE").click();
+    h.run_steps(3);
+    let v = &h.state().views[i];
+    assert_eq!((v.find.as_ref().unwrap().current, v.current), (Some(1), 1));
+    // Closing the panel moves the search to the find bar.
+    h.state_mut().right = None;
+    h.run_steps(2);
+    assert!(!h.state().views[i].find.as_ref().unwrap().in_panel);
+}

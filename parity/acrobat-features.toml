@@ -1391,11 +1391,11 @@ title = "Find results list"
 area = "B"
 tier = "P1"
 milestone = "M3"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["edit.advanced_search"]
+tools = ["text_find"]
+evidence = ["crates/ui-egui/tests/viewer.rs::advanced_search_lists_results_with_context"]
+notes = "Search panel (⇧⌘F): every match grouped by page with its context, whole words / case options, click to go; shares the find bar's search (closing the panel moves it to the bar)"
 
 [[feature]]
 id = "view.advanced-search"
@@ -1403,11 +1403,11 @@ title = "Advanced search window"
 area = "B"
 tier = "P1"
 milestone = "M12"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["edit.advanced_search"]
+tools = ["text_find"]
+evidence = ["crates/ui-egui/tests/viewer.rs::advanced_search_lists_results_with_context"]
+notes = "in the current document, as a side panel; searching other open documents, folders and indexes is still to come"
 
 [[feature]]
 id = "view.search-folder"
