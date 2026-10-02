@@ -1007,6 +1007,7 @@ pub fn add_annotation(doc: &mut Document, new: &NewAnnotation, meta: &Meta) -> R
                 d.set(b"C".to_vec(), rgb(f));
             }
             border(&mut d);
+            rich_text(&mut d);
         }
         _ => {}
     }
@@ -1055,6 +1056,35 @@ pub(crate) fn n(v: f64) -> String {
 }
 
 // ── edits ───────────────────────────────────────────────────────────────────────────────────
+
+/// A text box's rich text (§12.7.4.3): `/DS` (default style) and `/RC` (XHTML) written from its
+/// plain `/Contents`, `/DA` and `/Q`, so viewers that edit rich text show the same thing.
+fn rich_text(d: &mut Dict) {
+    let text = d.get(b"Contents").and_then(|c| c.as_string()).map(PdfString::to_text).unwrap_or_default();
+    let (col, size) = appearance::parse_da(d);
+    let hex = format!(
+        "#{:02X}{:02X}{:02X}",
+        (col[0].clamp(0.0, 1.0) * 255.0).round() as u8,
+        (col[1].clamp(0.0, 1.0) * 255.0).round() as u8,
+        (col[2].clamp(0.0, 1.0) * 255.0).round() as u8
+    );
+    let align = match d.get(b"Q").and_then(Object::as_int) {
+        Some(1) => "center",
+        Some(2) => "right",
+        _ => "left",
+    };
+    let esc = |s: &str| s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;");
+    let body: String = text.split('\n').map(|line| format!("<p dir=\"ltr\">{}</p>", esc(line.trim_end_matches('\r')))).collect();
+    let style = format!(
+        "font-size:{}pt;text-align:{align};color:{hex};font-weight:normal;font-style:normal;font-family:Helvetica;font-stretch:normal",
+        n(size)
+    );
+    let rc = format!(
+        "<?xml version=\"1.0\"?><body xmlns=\"http://www.w3.org/1999/xhtml\" xmlns:xfa=\"http://www.xfa.org/schema/xfa-data/1.0/\" xfa:spec=\"2.0.2\" style=\"{style}\">{body}</body>"
+    );
+    d.set(b"DS".to_vec(), PdfString::text(&format!("font: Helvetica {}pt; text-align:{align}; color:{hex}", n(size))));
+    d.set(b"RC".to_vec(), PdfString::text(&rc));
+}
 
 fn touch(d: &mut Dict, meta: &Meta) {
     if let Some(date) = &meta.date {
@@ -1108,8 +1138,12 @@ pub fn set_contents(doc: &mut Document, page: usize, index: usize, text: &str, m
     let free_text = annot_dict(doc, r).name(b"Subtype") == Some(b"FreeText");
     doc.update_dict(r, |d| {
         d.set(b"Contents".to_vec(), PdfString::text(text));
-        // The rich-text version would contradict the new plain text.
-        d.remove(b"RC");
+        // The rich-text version follows the new plain text (text boxes), or would contradict it.
+        if free_text {
+            rich_text(d);
+        } else {
+            d.remove(b"RC");
+        }
         touch(d, meta);
     })?;
     if free_text {
@@ -1338,6 +1372,7 @@ pub fn set_style(
                 let (_, size) = appearance::parse_da(d);
                 let [r, g, b] = c.map(|x| x.clamp(0.0, 1.0));
                 d.set(b"DA".to_vec(), PdfString::literal(format!("{} {} {} rg /Helv {} Tf", n(r), n(g), n(b), n(size)).into_bytes()));
+                rich_text(d);
             } else {
                 d.set(b"C".to_vec(), rgb(c));
             }

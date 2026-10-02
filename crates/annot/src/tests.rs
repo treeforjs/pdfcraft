@@ -273,6 +273,10 @@ fn text_box_text_and_colour_changes_are_drawn() {
     let needle = b"(Caf\xe9 \\(draft\\) \x97 100%) Tj";
     assert!(raw.windows(needle.len()).any(|w| w == needle), "{}", String::from_utf8_lossy(&raw));
     assert!(String::from_utf8_lossy(&raw).contains("1 0 0 rg"));
+    // Rich text follows the plain text and the style.
+    assert_eq!(text(d, b"DS"), "font: Helvetica 12pt; text-align:left; color:#FF0000");
+    let rc = text(d, b"RC");
+    assert!(rc.starts_with("<?xml") && rc.contains("<p dir=\"ltr\">Caf\u{e9} (draft) \u{2014} 100%</p>") && rc.contains("color:#FF0000"), "{rc}");
 }
 
 #[test]
