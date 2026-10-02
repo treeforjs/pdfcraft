@@ -21,6 +21,7 @@ pub mod marks {
 mod dialogs;
 mod editing;
 mod files;
+pub mod fill_sign;
 pub mod forms_ui;
 mod home;
 mod icon_data;
@@ -78,6 +79,8 @@ pub enum QuickTool {
     Comment(comments::CommentTool),
     /// Crop pages by dragging a rectangle.
     Crop,
+    /// A Fill & Sign tool.
+    Fill(fill_sign::FillTool),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -96,6 +99,8 @@ pub enum Dialog {
     Marks(printcraft_engine::MarkKind),
     /// Export a PDF ▸ Image / Text.
     Export(export_ui::ExportKind),
+    /// Fill & Sign ▸ Create signature (the drawing pad).
+    Signature,
     /// Documents from a session that ended unexpectedly.
     Recovery,
 }
@@ -193,6 +198,10 @@ pub struct PrintCraftApp {
     pub export_draft: export_ui::ExportDraft,
     /// A running export's progress.
     export_status: Option<export_ui::ExportStatus>,
+    /// The saved Fill & Sign signature (strokes normalised to the pad width, y up).
+    pub signature: Option<Vec<Vec<[f32; 2]>>>,
+    /// Strokes being drawn in the signature pad.
+    pub signature_draft: Vec<Vec<[f32; 2]>>,
     /// The last web link the app asked the system to open (tests and automation).
     pub last_opened_url: Option<String>,
 }
@@ -260,6 +269,8 @@ impl PrintCraftApp {
             marks_draft: Default::default(),
             export_draft: Default::default(),
             export_status: None,
+            signature: None,
+            signature_draft: Vec::new(),
             number_draft: NumberDraft { from: 1, to: 1, style: printcraft_engine::LabelStyle::Decimal, prefix: String::new(), start: 1 },
         }
     }
@@ -484,7 +495,7 @@ impl PrintCraftApp {
 
     /// Serialize the user's persistent state (recent files, theme). Local only.
     pub fn persist(&self) -> String {
-        serde_json::json!({ "recent": self.recent, "theme": self.theme }).to_string()
+        serde_json::json!({ "recent": self.recent, "theme": self.theme, "signature": self.signature }).to_string()
     }
 
     /// Restore state written by `persist`. Unknown or malformed data is ignored.
@@ -498,6 +509,11 @@ impl PrintCraftApp {
         }
         if let Ok(t) = serde_json::from_value::<ThemeKind>(v["theme"].clone()) {
             self.theme = t;
+        }
+        if let Ok(s) = serde_json::from_value::<Vec<Vec<[f32; 2]>>>(v["signature"].clone())
+            && s.iter().all(|st| st.iter().all(|p| p.iter().all(|x| x.is_finite())))
+        {
+            self.signature = Some(s);
         }
     }
 
@@ -556,6 +572,7 @@ impl PrintCraftApp {
                     "background" => Some(Dialog::Marks(printcraft_engine::MarkKind::Background)),
                     "export-image" => Some(Dialog::Export(export_ui::ExportKind::Image)),
                     "export-text" => Some(Dialog::Export(export_ui::ExportKind::Text)),
+                    "signature" => Some(Dialog::Signature),
                     "number-pages" => {
                         // Same path as the menu, so the page range is seeded.
                         self.execute("page.number");
@@ -620,6 +637,9 @@ impl PrintCraftApp {
                     "select" => QuickTool::Select,
                     "hand" => QuickTool::Hand,
                     "crop" => QuickTool::Crop,
+                    fill if fill.starts_with("fill-") => QuickTool::Fill(
+                        fill_sign::FillTool::from_command(&format!("sign.fill.{}", &fill[5..])).ok_or_else(|| format!("unknown tool {fill}"))?,
+                    ),
                     other => {
                         let t = comments::CommentTool::from_command(&format!("comment.{other}")).ok_or_else(|| format!("unknown tool {other}"))?;
                         self.comment_prefs.group_tool[t.group()] = t;

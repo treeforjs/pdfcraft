@@ -301,3 +301,34 @@ fn wrapping_and_widths() {
     assert_eq!(n(-0.0001), "0");
     assert_eq!(n(2.50), "2.5");
 }
+
+#[test]
+fn fill_and_sign_items_are_drawn() {
+    let mut doc = fixture();
+    let add = |doc: &mut Document, shape: Shape, contents: &str| {
+        let style = Style::default_for(&shape);
+        add_annotation(doc, &NewAnnotation { page: 1, shape, style, contents: contents.into(), author: "Ada".into() }, &meta("x")).unwrap()
+    };
+    let t = add(&mut doc, Shape::Typewriter { rect: [100.0, 700.0, 200.0, 716.0], font_size: 11.0 }, "Ada Lovelace");
+    let marks: Vec<usize> = [FillMark::Check, FillMark::Cross, FillMark::Dot, FillMark::Line]
+        .into_iter()
+        .enumerate()
+        .map(|(k, m)| add(&mut doc, Shape::Mark { rect: [100.0 + 20.0 * k as f64, 600.0, 114.0 + 20.0 * k as f64, 614.0], mark: m }, ""))
+        .collect();
+    let s = add(&mut doc, Shape::Signature { strokes: vec![vec![[10.0, 10.0], [30.0, 20.0], [50.0, 10.0]]] }, "");
+    let doc = reopen(&doc);
+    let all = list(&doc, 1);
+    assert_eq!(all[t].name(b"IT"), Some(&b"FreeTextTypeWriter"[..]));
+    assert!(ap_content(&doc, &all[t]).contains("(Ada Lovelace) Tj"));
+    for (k, m) in marks.iter().enumerate() {
+        assert_eq!(all[*m].name(b"Subtype"), Some(&b"Stamp"[..]));
+        let ap = ap_content(&doc, &all[*m]);
+        assert!(ap.contains(if k == 2 { " c" } else { " l" }), "mark {k}: {ap}");
+    }
+    assert_eq!(text(&all[marks[0]], b"Subj"), "Checkmark");
+    assert_eq!(text(&all[s], b"Subj"), "Signature");
+    // Other stamps still can't be restyled; ours can.
+    let mut doc = doc;
+    set_style(&mut doc, 1, marks[0], Some([0.0, 0.0, 1.0]), None, None, &meta("")).unwrap();
+    assert!(set_style(&mut doc, 1, 0, Some([0.0; 3]), None, None, &meta("")).is_err());
+}

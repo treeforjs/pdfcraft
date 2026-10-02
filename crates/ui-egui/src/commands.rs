@@ -195,6 +195,14 @@ impl PrintCraftApp {
             }
             "export.image" => self.dialog = Some(Dialog::Export(crate::export_ui::ExportKind::Image)),
             "export.text" => self.dialog = Some(Dialog::Export(crate::export_ui::ExportKind::Text)),
+            fill if crate::fill_sign::FillTool::from_command(fill).is_some() => {
+                let tool = crate::fill_sign::FillTool::from_command(fill).expect("checked");
+                self.quick_tool = crate::QuickTool::Fill(tool);
+                if tool == crate::fill_sign::FillTool::Signature && self.signature.is_none() {
+                    self.signature_draft.clear();
+                    self.dialog = Some(Dialog::Signature);
+                }
+            }
             "page.duplicate" => {
                 self.apply_edit(Edit::DuplicatePages { pages: targets });
             }

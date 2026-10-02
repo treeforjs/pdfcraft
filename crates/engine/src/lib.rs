@@ -26,7 +26,7 @@ pub use printcraft_forms::{Field as FormField, FieldKind as FormFieldKind, Field
 
 /// Comment geometry helpers (text-box line breaking) for frontends.
 pub use printcraft_annot::appearance as annot_text;
-pub use printcraft_annot::{Markup, NewAnnotation, NoteIcon, ReviewState, Rgb, Shape, Style};
+pub use printcraft_annot::{FillMark, Markup, NewAnnotation, NoteIcon, ReviewState, Rgb, Shape, Style};
 
 pub type SplitPart = (usize, usize, Arc<Vec<u8>>);
 
@@ -566,6 +566,12 @@ fn annotation_noun(s: &Shape) -> &'static str {
         Shape::Line { .. } => "line",
         Shape::Ink { .. } => "drawing",
         Shape::TextBox { .. } => "text box",
+        Shape::Typewriter { .. } => "text",
+        Shape::Mark { mark: FillMark::Check, .. } => "checkmark",
+        Shape::Mark { mark: FillMark::Cross, .. } => "cross",
+        Shape::Mark { mark: FillMark::Dot, .. } => "dot",
+        Shape::Mark { mark: FillMark::Line, .. } => "line",
+        Shape::Signature { .. } => "signature",
     }
 }
 
@@ -641,6 +647,8 @@ fn check_permission(edit: &Edit, p: &printcraft_cos::Permissions) -> Result<(), 
 /// Dates and unique ids stamped onto what an edit creates.
 struct EditCtx {
     date: Option<String>,
+    /// Today in local time, for date tokens.
+    today: (i64, u32, u32),
     seed: u64,
     count: u64,
 }
@@ -656,7 +664,7 @@ impl EditCtx {
             // Real clock: mix in sub-second time so ids from two sessions don't collide.
             seed ^= std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.subsec_nanos() as u64).unwrap_or(0) << 32;
         }
-        Self { date: now.map(printcraft_cos::pdf_date), seed, count: 0 }
+        Self { date: now.map(printcraft_cos::pdf_date), today: (1970, 1, 1), seed, count: 0 }
     }
 
     /// 32 bytes of entropy for new encryption keys and salts. `RandomState` is seeded by the
@@ -747,7 +755,7 @@ fn run_edit(doc: &mut printcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -
             printcraft_forms::reset(doc, names.as_deref())?;
         }
         Edit::AddHeaderFooter { pages, settings, replace } => {
-            let date = cx.date.as_deref().and_then(parse_ymd).unwrap_or((1970, 1, 1));
+            let date = cx.today;
             printcraft_edit::add_header_footer(doc, pages, settings, *replace, &printcraft_edit::Context { date })?;
         }
         Edit::AddWatermark { pages, settings, replace } => printcraft_edit::add_watermark(doc, pages, settings, *replace)?,
@@ -808,6 +816,14 @@ fn comment_list(doc: &printcraft_cos::Document) -> Vec<printcraft_render::Annota
             quads: s.quads,
         })
         .collect()
+}
+
+/// Seconds to add to UTC for local time (0 where unknown).
+fn local_utc_offset() -> i64 {
+    #[cfg(not(target_arch = "wasm32"))]
+    return i64::from(chrono::Local::now().offset().local_minus_utc());
+    #[cfg(target_arch = "wasm32")]
+    return 0;
 }
 
 /// (year, month, day) from a PDF date `D:YYYYMMDD…`.
@@ -906,6 +922,13 @@ impl Session {
         return None;
     }
 
+    /// Today's date in local time: (year, month, day). With an injected clock (tests) the clock
+    /// is taken as local time.
+    pub fn today(&self) -> (i64, u32, u32) {
+        let offset = if self.clock.is_some() { 0 } else { local_utc_offset() };
+        self.now().map(|t| printcraft_cos::pdf_date(t + offset)).as_deref().and_then(parse_ymd).unwrap_or((1970, 1, 1))
+    }
+
     /// Open a document from bytes. Rendering starts lazily when pages are requested.
     ///
     /// `password` is tried as either the user or owner password when the file is encrypted.
@@ -966,8 +989,10 @@ impl Session {
     /// Apply an edit. On success the previous state is undoable and the view data is refreshed.
     pub fn apply(&mut self, id: DocId, edit: Edit) -> Result<(), EditError> {
         let now = self.now();
+        let today = self.today();
         let doc = self.doc_mut(id)?;
         let mut cx = EditCtx::new(now, doc.generation ^ (id.0 << 48));
+        cx.today = today;
         let reason = doc.read_only_reason.clone().unwrap_or_default();
         let editor = doc.editor.as_mut().ok_or(EditError::ReadOnly(reason))?;
         if let Some(p) = editor.cos.permissions() {

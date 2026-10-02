@@ -226,6 +226,7 @@ impl Automation {
             "form_fields" => self.form_fields(&a)?,
             "form_fill" => self.form_fill(&a)?,
             "form_reset" => self.form_reset(&a)?,
+            "fill_sign_add" => self.fill_sign_add(&a)?,
             "comment_list" => self.comment_list(&a)?,
             "comment_add" => self.comment_add(&a)?,
             "comment_reply" => self.comment_reply(&a)?,

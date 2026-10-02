@@ -275,6 +275,56 @@ pub fn build(d: &Dict) -> Option<Stream> {
                 c.push_str("S\n");
             }
         }
+        b"Stamp" => {
+            // Only PrintCraft's own Fill & Sign marks are drawn here.
+            let name = d.name(b"Name")?;
+            let col = stroke.unwrap_or([0.0; 3]);
+            let [x0, y0, x1, y1] = rect;
+            let (w, h) = (x1 - x0, y1 - y0);
+            let lw = w.min(h) * 0.12;
+            match name {
+                b"PCCheck" => c.push_str(&format!(
+                    "{}{} w 1 J 1 j\n{} {} m {} {} l {} {} l S\n",
+                    rg_stroke(col),
+                    n(lw),
+                    n(x0 + w * 0.15),
+                    n(y0 + h * 0.5),
+                    n(x0 + w * 0.4),
+                    n(y0 + h * 0.2),
+                    n(x0 + w * 0.88),
+                    n(y0 + h * 0.85)
+                )),
+                b"PCCross" => c.push_str(&format!(
+                    "{}{} w 1 J\n{} {} m {} {} l {} {} m {} {} l S\n",
+                    rg_stroke(col),
+                    n(lw),
+                    n(x0 + w * 0.18),
+                    n(y0 + h * 0.18),
+                    n(x1 - w * 0.18),
+                    n(y1 - h * 0.18),
+                    n(x0 + w * 0.18),
+                    n(y1 - h * 0.18),
+                    n(x1 - w * 0.18),
+                    n(y0 + h * 0.18)
+                )),
+                b"PCDot" => {
+                    let r = w.min(h) * 0.3;
+                    c.push_str(&rg(col));
+                    c.push_str(&ellipse(x0 + w / 2.0 - r, y0 + h / 2.0 - r, x0 + w / 2.0 + r, y0 + h / 2.0 + r));
+                    c.push_str("f\n");
+                }
+                b"PCLine" => c.push_str(&format!(
+                    "{}{} w 1 J\n{} {} m {} {} l S\n",
+                    rg_stroke(col),
+                    n(h.clamp(0.5, 2.0)),
+                    n(x0),
+                    n(y0 + h / 2.0),
+                    n(x1),
+                    n(y0 + h / 2.0)
+                )),
+                _ => return None,
+            }
+        }
         b"FreeText" => {
             // Callouts (`/CL`) and rich text without plain contents aren't drawn yet.
             if d.contains(b"CL") {

@@ -225,6 +225,16 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
                     split_ready = Some(by);
                 }
             }
+            Dialog::Signature => {
+                let (apply, cancel) = crate::fill_sign::signature_pad(ui, &t, &mut app.signature_draft);
+                if apply {
+                    app.signature = Some(std::mem::take(&mut app.signature_draft));
+                    app.quick_tool = crate::QuickTool::Fill(crate::fill_sign::FillTool::Signature);
+                    app.toast = None;
+                }
+                close = apply || cancel;
+                return;
+            }
             Dialog::Export(kind) => {
                 let (apply, cancel) = crate::export_ui::body(ui, app, &t, kind);
                 export_now = apply;

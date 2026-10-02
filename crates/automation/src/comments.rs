@@ -249,6 +249,45 @@ impl Automation {
         Ok(out)
     }
 
+    pub(crate) fn fill_sign_add(&mut self, a: &Args) -> Result<Value> {
+        use printcraft_engine::FillMark;
+        let page = self.page(a)?;
+        let info = self.doc(a)?.info.pages[page].clone();
+        let [x, y] = a.need::<2>("at", "Fill & Sign")?;
+        let at = to_user(&info, x, y);
+        let author = a.opt_str("author")?.unwrap_or(DEFAULT_AUTHOR).to_string();
+        let size = 10.0;
+        let text_at = |t: &str| {
+            let w = (printcraft_engine::annot_text::text_width(t, size) + 8.0).clamp(20.0, 600.0);
+            let h = size * 1.2 + 6.0;
+            Shape::Typewriter { rect: [at[0], at[1] - h, at[0] + w, at[1]], font_size: size }
+        };
+        let (shape, contents) = match a.str("type")? {
+            "text" => {
+                let t = a.str("text")?.to_string();
+                (text_at(&t), t)
+            }
+            "date" => {
+                let (yy, m, d) = self.session.today();
+                let t = format!("{m}/{d}/{yy}");
+                (text_at(&t), t)
+            }
+            kind => {
+                let mark = match kind {
+                    "check" => FillMark::Check,
+                    "cross" => FillMark::Cross,
+                    "dot" => FillMark::Dot,
+                    "line" => FillMark::Line,
+                    other => return Err(ToolError::InvalidArgs(format!("unknown type {other:?}"))),
+                };
+                let (w, h) = if mark == FillMark::Line { (36.0, 4.0) } else { (12.0, 12.0) };
+                (Shape::Mark { rect: [at[0] - w / 2.0, at[1] - h / 2.0, at[0] + w / 2.0, at[1] + h / 2.0], mark }, String::new())
+            }
+        };
+        let style = Style::default_for(&shape);
+        self.apply(a, Edit::AddAnnotation(NewAnnotation { page, shape, style, contents, author }))
+    }
+
     pub(crate) fn comment_reply(&mut self, a: &Args) -> Result<Value> {
         let (page, index) = self.comment_target(a)?;
         let author = a.opt_str("author")?.unwrap_or(DEFAULT_AUTHOR).to_string();

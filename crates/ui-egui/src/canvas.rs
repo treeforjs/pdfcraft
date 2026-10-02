@@ -132,6 +132,8 @@ pub struct DocView {
     pub forms: crate::forms_ui::FormView,
     /// A crop rectangle being dragged (Crop tool).
     pub crop_drag: crate::crop::CropDrag,
+    /// Fill & Sign text being typed.
+    pub fill_text: Option<crate::fill_sign::TypeBox>,
     /// A non-edit action requested by the organize toolbar, handled by the app.
     pub pending_action: Option<ViewAction>,
 }
@@ -202,6 +204,7 @@ impl DocView {
             comments: Default::default(),
             forms: Default::default(),
             crop_drag: None,
+            fill_text: None,
         }
     }
 
@@ -778,7 +781,7 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
     let selects_text = match tool {
         QuickTool::Select => true,
         QuickTool::Comment(t) => t.markup().is_some(),
-        QuickTool::Hand | QuickTool::Crop => false,
+        QuickTool::Hand | QuickTool::Crop | QuickTool::Fill(_) => false,
     };
     let prefs = &app.comment_prefs;
     let allowed = doc.allows_annotation();
@@ -786,6 +789,10 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
     let can_fill = doc.allows_form_filling();
     let can_crop = doc.allows_assembly();
     let mut open_boxes = false;
+    let signature = app.signature.clone();
+    let author = app.comment_prefs.author.clone();
+    let today = app.session.today();
+    let mut open_signature = false;
     let mut hover_text: Option<(Pos2, String)> = None;
     let mut clicked_link: Option<LinkTarget> = None;
     let mut canvas_action: Option<comments::CanvasAction> = None;
@@ -899,6 +906,15 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
             let pcx = comments::PageCx { page: i, xf: &xf, info, tool, prefs, allowed };
             // Form fields take clicks first with the Select tool (as Acrobat fills fields in
             // every viewing mode); then comments; then text selection.
+            if let QuickTool::Fill(ft) = tool
+                && allowed
+            {
+                match crate::fill_sign::page_input(ui, &resp, &xf, i, info, ft, view, signature.as_ref(), &author, today) {
+                    Some(crate::fill_sign::FillAction::Edit(e)) => view.pending_edit = Some(*e),
+                    Some(crate::fill_sign::FillAction::CreateSignature) => open_signature = true,
+                    None => {}
+                }
+            }
             if tool == QuickTool::Crop && crate::crop::page_input(ui, &resp, &xf, i, info, view, can_crop) {
                 view.current = i;
                 open_boxes = true;
@@ -1108,6 +1124,9 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
     if let Some(e) = crate::forms_ui::overlay(ui.ctx(), view, info, &form) {
         view.pending_edit = Some(e);
     }
+    if let Some(e) = crate::fill_sign::type_box(ui.ctx(), view, info, &author) {
+        view.pending_edit = Some(e);
+    }
     let form_notice = view.forms.notice.take();
     // One crop, then back to selecting (as Acrobat does).
     let cropped = view.pending_edit.as_ref().is_some_and(|e| matches!(e, printcraft_engine::Edit::SetPageBox { .. }));
@@ -1128,6 +1147,10 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
         tool = QuickTool::Select;
     }
     app.quick_tool = tool;
+    if open_signature {
+        app.signature_draft.clear();
+        app.dialog = Some(crate::Dialog::Signature);
+    }
     if open_boxes {
         app.boxes_draft.range = crate::pageboxes::Range::Current;
         app.boxes_draft.seeded = None;
@@ -1319,9 +1342,65 @@ fn quick_bar(app: &mut PrintCraftApp, area: Rect, ui: &mut egui::Ui) {
                                 }
                             });
                     }
-                    if icons::button(ui, "pen-line", 32.0, false, "Fill & Sign (M5)").clicked() {
-                        app.run_command("sign.fill.text");
+                    // Fill & Sign ▸ (text, marks, date, signature).
+                    let current_fill = match app.quick_tool {
+                        QuickTool::Fill(f) => Some(f),
+                        _ => None,
+                    };
+                    let shown = current_fill.unwrap_or(crate::fill_sign::FillTool::Text);
+                    let resp = icons::button(
+                        ui,
+                        if current_fill.is_some() { shown.icon() } else { "pen-line" },
+                        32.0,
+                        current_fill.is_some(),
+                        "Fill & Sign",
+                    );
+                    let r = resp.rect;
+                    let tri = [r.right_bottom() + vec2(-4.0, -4.0), r.right_bottom() + vec2(-9.0, -4.0), r.right_bottom() + vec2(-4.0, -9.0)];
+                    ui.painter().add(egui::Shape::convex_polygon(
+                        tri.to_vec(),
+                        if current_fill.is_some() { Color32::WHITE } else { t.text_muted },
+                        Stroke::NONE,
+                    ));
+                    if resp.clicked() && current_fill.is_none() {
+                        app.execute(shown.command());
                     }
+                    let open = (resp.clicked() && current_fill.is_some()) || resp.secondary_clicked();
+                    egui::Popup::menu(&resp)
+                        .open_memory(open.then_some(egui::SetOpenCommand::Toggle))
+                        .align(egui::RectAlign::RIGHT_START)
+                        .gap(6.0)
+                        .show(|ui| {
+                            for tool in crate::fill_sign::FILL_TOOLS {
+                                let on = current_fill == Some(tool);
+                                let (row, click) = ui.allocate_exact_size(vec2(180.0, 28.0), Sense::click());
+                                if click.hovered() {
+                                    ui.painter().rect_filled(row, CornerRadius::same(4), t.hover);
+                                }
+                                icons::paint(ui, Rect::from_min_size(row.min + vec2(8.0, 6.0), vec2(16.0, 16.0)), tool.icon(), 16.0, t.text);
+                                ui.painter().text(
+                                    row.left_center() + vec2(34.0, 0.0),
+                                    Align2::LEFT_CENTER,
+                                    tool.label(),
+                                    theme::regular(13.0),
+                                    t.text,
+                                );
+                                if on {
+                                    icons::paint(
+                                        ui,
+                                        Rect::from_min_size(row.right_top() + vec2(-24.0, 7.0), vec2(14.0, 14.0)),
+                                        "check",
+                                        14.0,
+                                        t.accent,
+                                    );
+                                }
+                                click.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, true, on, tool.label()));
+                                if click.clicked() {
+                                    app.execute(tool.command());
+                                    ui.close();
+                                }
+                            }
+                        });
                     if let QuickTool::Comment(tool) = app.quick_tool {
                         let (r, _) = ui.allocate_exact_size(vec2(32.0, 9.0), Sense::hover());
                         ui.painter().hline(r.x_range().shrink(6.0), r.center().y, Stroke::new(1.0, t.divider));

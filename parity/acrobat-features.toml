@@ -3539,10 +3539,10 @@ title = "Add text comment (typewriter)"
 area = "E"
 tier = "P0"
 milestone = "M5"
-status = "planned"
-commands = []
-tools = []
-evidence = []
+status = "shipped"
+commands = ["sign.fill.text"]
+tools = ["fill_sign_add"]
+evidence = ["crates/annot/src/tests.rs::fill_and_sign_items_are_drawn", "crates/ui-egui/tests/fill_sign.rs::text_marks_and_date"]
 notes = ""
 
 [[feature]]
@@ -5139,11 +5139,11 @@ title = "Fill & Sign: add text on flat forms"
 area = "F"
 tier = "P0"
 milestone = "M5"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["sign.fill.text"]
+tools = ["fill_sign_add"]
+evidence = ["crates/ui-egui/tests/fill_sign.rs::text_marks_and_date", "crates/annot/src/tests.rs::fill_and_sign_items_are_drawn", "crates/automation/tests/automation.rs::fill_and_sign_through_tools"]
+notes = "typewriter FreeText, 10 pt Helvetica"
 
 [[feature]]
 id = "form.fill-sign-marks"
@@ -5151,11 +5151,11 @@ title = "Fill & Sign: check, cross, dot, line marks"
 area = "F"
 tier = "P0"
 milestone = "M5"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["sign.fill.check", "sign.fill.cross", "sign.fill.dot", "sign.fill.line"]
+tools = ["fill_sign_add"]
+evidence = ["crates/ui-egui/tests/fill_sign.rs::text_marks_and_date", "crates/annot/src/tests.rs::fill_and_sign_items_are_drawn"]
+notes = "PrintCraft-drawn stamps"
 
 [[feature]]
 id = "form.fill-sign-date"
@@ -5163,11 +5163,11 @@ title = "Fill & Sign: today's date"
 area = "F"
 tier = "P0"
 milestone = "M5"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["sign.fill.date"]
+tools = ["fill_sign_add"]
+evidence = ["crates/ui-egui/tests/fill_sign.rs::text_marks_and_date", "crates/automation/tests/automation.rs::fill_and_sign_through_tools"]
+notes = "local date, m/d/yyyy"
 
 [[feature]]
 id = "form.fill-sign-signature"
@@ -5175,11 +5175,11 @@ title = "Fill & Sign: typed, drawn or image signature and initials"
 area = "F"
 tier = "P0"
 milestone = "M5"
-status = "planned"
-commands = []
+status = "partial"
+commands = ["sign.fill.signature"]
 tools = []
-evidence = []
-notes = ""
+evidence = ["crates/ui-egui/tests/fill_sign.rs::signing_draws_a_signature_once_and_places_it"]
+notes = "drawn signature, saved in settings; typed/image signatures and initials not yet"
 
 [[feature]]
 id = "form.fill-sign-flatten"

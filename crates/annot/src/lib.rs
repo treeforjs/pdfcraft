@@ -88,6 +88,36 @@ impl NoteIcon {
     }
 }
 
+/// Fill & Sign marks (Acrobat's ✓, ✕, ●, ─).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FillMark {
+    Check,
+    Cross,
+    Dot,
+    Line,
+}
+
+impl FillMark {
+    /// The `/Name` of the stamp PrintCraft draws for it.
+    pub fn name(self) -> &'static str {
+        match self {
+            FillMark::Check => "PCCheck",
+            FillMark::Cross => "PCCross",
+            FillMark::Dot => "PCDot",
+            FillMark::Line => "PCLine",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            FillMark::Check => "Checkmark",
+            FillMark::Cross => "Cross",
+            FillMark::Dot => "Dot",
+            FillMark::Line => "Line",
+        }
+    }
+}
+
 /// Geometry of a new comment, in PDF user space of its page.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Shape {
@@ -123,6 +153,20 @@ pub enum Shape {
         rect: [f64; 4],
         font_size: f64,
     },
+    /// Fill & Sign text typed onto the page (FreeText, typewriter intent, no border).
+    Typewriter {
+        rect: [f64; 4],
+        font_size: f64,
+    },
+    /// A Fill & Sign mark in `rect`.
+    Mark {
+        rect: [f64; 4],
+        mark: FillMark,
+    },
+    /// A drawn signature (ink strokes).
+    Signature {
+        strokes: Vec<Vec<[f64; 2]>>,
+    },
 }
 
 impl Shape {
@@ -133,8 +177,9 @@ impl Shape {
             Shape::Rectangle { .. } => "Square",
             Shape::Oval { .. } => "Circle",
             Shape::Line { .. } => "Line",
-            Shape::Ink { .. } => "Ink",
-            Shape::TextBox { .. } => "FreeText",
+            Shape::Ink { .. } | Shape::Signature { .. } => "Ink",
+            Shape::TextBox { .. } | Shape::Typewriter { .. } => "FreeText",
+            Shape::Mark { .. } => "Stamp",
         }
     }
 }
@@ -169,7 +214,9 @@ impl Style {
             Shape::TextMarkup { kind: Markup::Squiggly, .. } => ([0.18, 0.62, 0.36], 1.0),
             Shape::Rectangle { .. } | Shape::Oval { .. } | Shape::Line { .. } => ([0.89, 0.13, 0.13], 2.0),
             Shape::Ink { .. } => ([0.0, 0.4, 0.87], 2.0),
-            Shape::TextBox { .. } => ([0.0, 0.0, 0.0], 0.0),
+            Shape::TextBox { .. } | Shape::Typewriter { .. } => ([0.0, 0.0, 0.0], 0.0),
+            Shape::Mark { .. } => ([0.0, 0.0, 0.0], 1.5),
+            Shape::Signature { .. } => ([0.0, 0.0, 0.0], 1.5),
         };
         Self { color, opacity: 1.0, width, fill: None }
     }
@@ -352,7 +399,11 @@ fn rect_for(shape: &Shape, style: &Style) -> Result<[f64; 4], AnnotError> {
             }
             bounds(quads.iter().flat_map(|q| q.chunks_exact(2).map(|p| [p[0], p[1]]).collect::<Vec<_>>())).ok_or_else(|| bad("text area"))?
         }
-        Shape::Rectangle { rect } | Shape::Oval { rect } | Shape::TextBox { rect, .. } => {
+        Shape::Rectangle { rect }
+        | Shape::Oval { rect }
+        | Shape::TextBox { rect, .. }
+        | Shape::Typewriter { rect, .. }
+        | Shape::Mark { rect, .. } => {
             let r = normalize(*rect);
             if !finite(rect) || r[2] - r[0] < 1.0 || r[3] - r[1] < 1.0 {
                 return Err(bad("rectangle (too small)"));
@@ -366,7 +417,7 @@ fn rect_for(shape: &Shape, style: &Style) -> Result<[f64; 4], AnnotError> {
             let pad = half + if *arrow { appearance::arrow_size(style.width) } else { 0.0 };
             grow(bounds([*from, *to].into_iter()).unwrap_or_default(), pad + 1.0)
         }
-        Shape::Ink { strokes } => {
+        Shape::Ink { strokes } | Shape::Signature { strokes } => {
             if strokes.iter().all(|s| s.is_empty()) || !strokes.iter().flatten().all(|p| finite(p)) {
                 return Err(bad("drawing (no points)"));
             }
@@ -411,6 +462,9 @@ fn subject(shape: &Shape) -> &'static str {
         Shape::Line { .. } => "Line",
         Shape::Ink { .. } => "Pencil",
         Shape::TextBox { .. } => "Text Box",
+        Shape::Typewriter { .. } => "Typewriter",
+        Shape::Mark { mark, .. } => mark.label(),
+        Shape::Signature { .. } => "Signature",
     }
 }
 
@@ -462,13 +516,21 @@ pub fn add_annotation(doc: &mut Document, new: &NewAnnotation, meta: &Meta) -> R
             }
             border(&mut d);
         }
-        Shape::Ink { strokes } => {
+        Shape::Mark { mark, .. } => {
+            d.set(b"C".to_vec(), rgb(style.color));
+            d.set(b"Name".to_vec(), Object::name(mark.name()));
+            border(&mut d);
+        }
+        Shape::Ink { strokes } | Shape::Signature { strokes } => {
             d.set(b"C".to_vec(), rgb(style.color));
             let list = strokes.iter().filter(|s| !s.is_empty()).map(|s| num_array(&s.concat())).collect();
             d.set(b"InkList".to_vec(), Object::Array(list));
             border(&mut d);
         }
-        Shape::TextBox { font_size, .. } => {
+        Shape::TextBox { font_size, .. } | Shape::Typewriter { font_size, .. } => {
+            if matches!(new.shape, Shape::Typewriter { .. }) {
+                d.set(b"IT".to_vec(), Object::name("FreeTextTypeWriter"));
+            }
             let size = if font_size.is_finite() && *font_size > 0.0 { font_size.clamp(1.0, 400.0) } else { 12.0 };
             let [r, g, b] = style.color.map(|x| x.clamp(0.0, 1.0));
             d.set(b"DA".to_vec(), PdfString::literal(format!("{} {} {} rg /Helv {} Tf", n(r), n(g), n(b), n(size)).into_bytes()));
