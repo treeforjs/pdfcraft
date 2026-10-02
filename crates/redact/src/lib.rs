@@ -53,6 +53,39 @@ pub struct Mark {
     /// The box colour once applied (`/IC`; none = no box).
     pub fill: Option<Rgb>,
     pub overlay: String,
+    /// How the overlay text is drawn (`/DA`, `/Q`, `/Repeat`).
+    pub look: printcraft_annot::OverlayLook,
+}
+
+/// The overlay look of a Redact annotation: font, size and colour from `/DA`, alignment from
+/// `/Q`, repetition from `/Repeat`.
+fn overlay_look(doc: &Document, d: &Dict) -> printcraft_annot::OverlayLook {
+    let mut look = printcraft_annot::OverlayLook::default();
+    if let Some(da) = d.get(b"DA").and_then(|o| doc.resolve(o).as_string().map(|s| String::from_utf8_lossy(&s.bytes).into_owned())) {
+        let t: Vec<&str> = da.split_whitespace().collect();
+        for (i, w) in t.iter().enumerate() {
+            match *w {
+                "rg" if i >= 3 => {
+                    if let (Ok(r), Ok(g), Ok(b)) = (t[i - 3].parse::<f64>(), t[i - 2].parse::<f64>(), t[i - 1].parse::<f64>()) {
+                        look.color = [r, g, b];
+                    }
+                }
+                "g" if i >= 1 => {
+                    if let Ok(g) = t[i - 1].parse::<f64>() {
+                        look.color = [g; 3];
+                    }
+                }
+                "Tf" if i >= 2 => {
+                    look.font = printcraft_annot::OverlayFont::from_resource(t[i - 2].trim_start_matches('/'));
+                    look.size = t[i - 1].parse::<f64>().unwrap_or(0.0).max(0.0);
+                }
+                _ => {}
+            }
+        }
+    }
+    look.align = d.int(b"Q").unwrap_or(1).clamp(0, 2) as u8;
+    look.repeat = matches!(d.get(b"Repeat"), Some(Object::Bool(true)));
+    look
 }
 
 /// What [`apply`] removed.
@@ -128,7 +161,7 @@ pub fn marks(doc: &Document) -> Vec<Mark> {
                 continue;
             }
             let overlay = d.get(b"OverlayText").and_then(|t| doc.resolve(t).as_string().map(|s| s.to_text())).unwrap_or_default();
-            out.push(Mark { page: pi, obj: r, rects, fill: color(doc, d, b"IC"), overlay });
+            out.push(Mark { page: pi, obj: r, rects, fill: color(doc, d, b"IC"), overlay, look: overlay_look(doc, d) });
         }
     }
     out
@@ -171,23 +204,53 @@ fn overlay_content(marks: &[&Mark]) -> Vec<u8> {
         if m.overlay.is_empty() {
             continue;
         }
-        // The overlay text, centred in each area and shrunk to fit.
-        let text = printcraft_fonts::literal(&printcraft_fonts::win_ansi(&m.overlay));
+        // The overlay text: its font, colour and alignment; auto-sized to fit unless a size is
+        // set; repeated to fill the area when asked.
+        let look = &m.look;
+        let (res, width): (&str, fn(&str, f64) -> f64) = match look.font {
+            printcraft_annot::OverlayFont::Helvetica => ("PCHelv", printcraft_fonts::helvetica_width),
+            // Approximations of the standard metrics (no font program is bundled).
+            printcraft_annot::OverlayFont::Times => ("PCTimes", |s, size| printcraft_fonts::helvetica_width(s, size) * 0.9),
+            printcraft_annot::OverlayFont::Courier => ("PCCour", |s, size| s.chars().count() as f64 * size * 0.6),
+        };
+        let [cr, cg, cb] = look.color.map(|v| v.clamp(0.0, 1.0));
         for r in &m.rects {
             let (w, h) = (r[2] - r[0], r[3] - r[1]);
-            let mut size = (h * 0.7).min(12.0);
-            let tw = printcraft_fonts::helvetica_width(&m.overlay, size);
-            if tw > w - 2.0 && tw > 0.0 {
+            let mut size = if look.size > 0.0 { look.size } else { (h * 0.7).min(12.0) };
+            let tw = width(&m.overlay, size);
+            if look.size <= 0.0 && tw > w - 2.0 && tw > 0.0 {
                 size *= (w - 2.0).max(0.0) / tw;
             }
             if size < 2.0 {
                 continue;
             }
-            let tw = printcraft_fonts::helvetica_width(&m.overlay, size);
-            let (x, y) = (r[0] + (w - tw) / 2.0, r[1] + (h - size * 0.7) / 2.0);
-            c.extend(format!("q BT 1 0 0 rg /PCHelv {} Tf {} {} Td ", n(size), n(x), n(y)).bytes());
-            c.extend_from_slice(&text);
-            c.extend_from_slice(b" Tj ET Q\n");
+            // One line, or as many repeated lines as fit (each line the text repeated across).
+            let lines: Vec<String> = if look.repeat {
+                let unit = width(&format!("{} ", m.overlay), size).max(0.01);
+                let per_line = ((w - 2.0) / unit).floor().max(1.0) as usize;
+                let count = ((h / (size * 1.2)).floor() as usize).max(1);
+                vec![vec![m.overlay.as_str(); per_line].join(" "); count]
+            } else {
+                vec![m.overlay.clone()]
+            };
+            let block = lines.len() as f64 * size * 1.2;
+            let mut y = r[1] + (h + block) / 2.0 - size * 0.95;
+            c.extend(
+                format!("q {} {} {} {} re W n BT {} {} {} rg /{res} {} Tf ", n(r[0]), n(r[1]), n(w), n(h), n(cr), n(cg), n(cb), n(size)).bytes(),
+            );
+            for line in &lines {
+                let lw = width(line, size);
+                let x = match look.align {
+                    0 => r[0] + 1.0,
+                    2 => r[2] - 1.0 - lw,
+                    _ => r[0] + (w - lw) / 2.0,
+                };
+                c.extend(format!("1 0 0 1 {} {} Tm ", n(x), n(y)).bytes());
+                c.extend_from_slice(&printcraft_fonts::literal(&printcraft_fonts::win_ansi(line)));
+                c.extend_from_slice(b" Tj ");
+                y -= size * 1.2;
+            }
+            c.extend_from_slice(b"ET Q\n");
         }
     }
     c

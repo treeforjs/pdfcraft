@@ -53,7 +53,7 @@ fn one_page(content: &[u8], extra_res: &str, extra: Vec<Vec<u8>>) -> Document {
 }
 
 fn mark(doc: &mut Document, page: usize, rects: &[[f64; 4]], overlay: &str) {
-    let shape = Shape::Redact { quads: rects.iter().map(|r| rect_quad(*r)).collect(), overlay: overlay.into() };
+    let shape = Shape::Redact { quads: rects.iter().map(|r| rect_quad(*r)).collect(), overlay: overlay.into(), look: Default::default() };
     let style = Style::default_for(&shape);
     add_annotation(doc, &NewAnnotation { page, shape, style, contents: String::new(), author: "Tester".into() }, &Meta::default()).unwrap();
 }
@@ -347,4 +347,32 @@ fn hidden_information_is_counted_and_removed() {
         _ => false,
     });
     assert!(shown, "the field's value stays visible as page content");
+}
+
+#[test]
+fn overlay_text_takes_its_font_size_colour_alignment_and_repeats() {
+    let mut doc = one_page(b"BT /F1 12 Tf 20 250 Td (Secret salary figures) Tj ET", "", Vec::new());
+    let look =
+        printcraft_annot::OverlayLook { font: printcraft_annot::OverlayFont::Courier, size: 8.0, color: [0.0, 0.0, 1.0], align: 0, repeat: true };
+    let shape = Shape::Redact { quads: vec![rect_quad([10.0, 200.0, 290.0, 270.0])], overlay: "REDACTED".into(), look };
+    let style = Style::default_for(&shape);
+    add_annotation(&mut doc, &NewAnnotation { page: 0, shape, style, contents: String::new(), author: "T".into() }, &Meta::default()).unwrap();
+    // Written as Acrobat writes it.
+    let m = &marks(&doc)[0];
+    assert_eq!(m.look, look, "the look round-trips through /DA, /Q and /Repeat");
+    apply(&mut doc, None).unwrap();
+    let doc = reopen(&doc);
+    let c = content(&doc, 0);
+    assert!(c.contains("0 0 1 rg /PCCour 8 Tf"), "{c}");
+    // 70 pt high at 8 pt × 1.2 leading: several lines, each the word repeated.
+    assert!(c.matches(" Tm (REDACTED REDACTED").count() >= 5, "{c}");
+    assert!(c.contains("1 0 0 1 11 "), "left aligned at the area's edge: {c}");
+    let p = &printcraft_model::pages(&doc)[0];
+    let fonts = p
+        .dict
+        .get(b"Resources")
+        .and_then(|r| doc.resolve(r).as_dict().cloned())
+        .and_then(|r| r.get(b"Font").and_then(|f| doc.resolve(f).as_dict().cloned()))
+        .unwrap();
+    assert!(fonts.contains(b"PCCour") && !fonts.contains(b"PCTimes"));
 }

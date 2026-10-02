@@ -15,7 +15,7 @@ printcraft-fonts = { workspace = true }
 printcraft-model = { workspace = true }
 printcraft-forms = { workspace = true }
 printcraft-edit = { workspace = true }
+printcraft-annot = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
-printcraft-annot = { workspace = true }

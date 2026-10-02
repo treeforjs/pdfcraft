@@ -20,17 +20,19 @@ pub struct RedactPrefs {
     pub fill: Option<Rgb>,
     pub use_overlay: bool,
     pub overlay: String,
+    /// Overlay text font, size (0 = auto), colour, alignment and repetition.
+    pub look: printcraft_engine::OverlayLook,
 }
 
 impl Default for RedactPrefs {
     fn default() -> Self {
-        Self { fill: Some([0.0, 0.0, 0.0]), use_overlay: false, overlay: String::new() }
+        Self { fill: Some([0.0, 0.0, 0.0]), use_overlay: false, overlay: String::new(), look: Default::default() }
     }
 }
 
 impl RedactPrefs {
     pub fn mark(&self, page: usize, quads: Vec<[f64; 8]>, author: &str) -> Edit {
-        let shape = Shape::Redact { quads, overlay: if self.use_overlay { self.overlay.clone() } else { String::new() } };
+        let shape = Shape::Redact { quads, overlay: if self.use_overlay { self.overlay.clone() } else { String::new() }, look: self.look };
         let mut style = Style::default_for(&shape);
         style.fill = self.fill;
         Edit::AddAnnotation(NewAnnotation { page, shape, style, contents: String::new(), author: author.to_string() })
@@ -271,6 +273,49 @@ pub(crate) fn props_body(ui: &mut egui::Ui, d: &mut RedactPrefs, _t: &Tokens) ->
         ui.end_row();
         let l = ui.label("Custom text:");
         ui.add_enabled(d.use_overlay, egui::TextEdit::singleline(&mut d.overlay).desired_width(220.0)).labelled_by(l.id);
+        ui.end_row();
+        let on = d.use_overlay;
+        let look = &mut d.look;
+        ui.label("Font:");
+        ui.add_enabled_ui(on, |ui| {
+            egui::ComboBox::from_id_salt("overlay-font").selected_text(look.font.name()).show_ui(ui, |ui| {
+                for f in printcraft_engine::OverlayFont::ALL {
+                    ui.selectable_value(&mut look.font, f, f.name());
+                }
+            });
+        });
+        ui.end_row();
+        ui.label("Font size:");
+        ui.add_enabled_ui(on, |ui| {
+            ui.horizontal(|ui| {
+                let mut auto = look.size <= 0.0;
+                if ui.checkbox(&mut auto, "Auto-size text to fit redaction region").changed() {
+                    look.size = if auto { 0.0 } else { 10.0 };
+                }
+                if !auto {
+                    ui.add(egui::DragValue::new(&mut look.size).range(2.0..=144.0).suffix(" pt"));
+                }
+            });
+        });
+        ui.end_row();
+        ui.label("Font colour:");
+        ui.add_enabled_ui(on, |ui| {
+            if let Some(c) = crate::comments::swatch_grid(ui, Some(look.color)) {
+                look.color = c;
+            }
+        });
+        ui.end_row();
+        ui.label("");
+        ui.add_enabled(on, egui::Checkbox::new(&mut look.repeat, "Repeat overlay text"));
+        ui.end_row();
+        ui.label("Text alignment:");
+        ui.add_enabled_ui(on, |ui| {
+            ui.horizontal(|ui| {
+                for (a, label) in [(0u8, "Left"), (1, "Center"), (2, "Right")] {
+                    ui.radio_value(&mut look.align, a, label);
+                }
+            });
+        });
         ui.end_row();
     });
     ui.add_space(12.0);

@@ -201,15 +201,21 @@ fn contents(doc: &mut Document, page: &printcraft_model::Page) -> Result<Vec<Obj
 }
 
 /// Add the font (and an opacity state) to the page's own resources.
-fn add_resources(doc: &mut Document, page: &printcraft_model::Page, opacity: Option<f64>) -> Result<(), EditError> {
+fn add_resources(doc: &mut Document, page: &printcraft_model::Page, opacity: Option<f64>, content: Option<&[u8]>) -> Result<(), EditError> {
     let mut res = page.dict.get(b"Resources").map(|r| doc.resolve(r)).and_then(|r| r.as_dict().cloned()).unwrap_or_default();
     let mut fonts = res.get(b"Font").map(|f| doc.resolve(f)).and_then(|f| f.as_dict().cloned()).unwrap_or_default();
-    let mut font = Dict::new();
-    font.set(b"Type".to_vec(), Object::name("Font"));
-    font.set(b"Subtype".to_vec(), Object::name("Type1"));
-    font.set(b"BaseFont".to_vec(), Object::name("Helvetica"));
-    font.set(b"Encoding".to_vec(), Object::name("WinAnsiEncoding"));
-    fonts.set(b"PCHelv".to_vec(), Object::Dict(font));
+    for (name, base) in [(&b"PCHelv"[..], "Helvetica"), (b"PCTimes", "Times-Roman"), (b"PCCour", "Courier")] {
+        // Helvetica always (marks use it); the others only when the content names them.
+        if name != b"PCHelv" && !content.is_some_and(|c| c.windows(name.len() + 1).any(|w| w[0] == b'/' && &w[1..] == name)) {
+            continue;
+        }
+        let mut font = Dict::new();
+        font.set(b"Type".to_vec(), Object::name("Font"));
+        font.set(b"Subtype".to_vec(), Object::name("Type1"));
+        font.set(b"BaseFont".to_vec(), Object::name(base));
+        font.set(b"Encoding".to_vec(), Object::name("WinAnsiEncoding"));
+        fonts.set(name.to_vec(), Object::Dict(font));
+    }
     res.set(b"Font".to_vec(), Object::Dict(fonts));
     if let Some(o) = opacity {
         let mut gs = res.get(b"ExtGState").map(|g| doc.resolve(g)).and_then(|g| g.as_dict().cloned()).unwrap_or_default();
@@ -285,7 +291,7 @@ fn place_tagged(doc: &mut Document, page: &printcraft_model::Page, tag: &str, co
 pub fn stamp(doc: &mut Document, page: usize, tag: &str, content: Vec<u8>) -> Result<(), EditError> {
     let all = page_list(doc);
     check(&[page], all.len())?;
-    add_resources(doc, &all[page], None)?;
+    add_resources(doc, &all[page], None, Some(&content))?;
     let p = page_list(doc).swap_remove(page);
     place_tagged(doc, &p, tag, content, false)
 }
@@ -367,7 +373,7 @@ pub fn add_header_footer(doc: &mut Document, pages: &[usize], hf: &HeaderFooter,
         let mut content = begin(MarkKind::HeaderFooter, "Header", page.view_matrix(doc)).into_bytes();
         content.extend(body);
         content.extend_from_slice(END.as_bytes());
-        add_resources(doc, page, None)?;
+        add_resources(doc, page, None, None)?;
         let page = &page_list(doc)[i];
         place(doc, page, MarkKind::HeaderFooter, content, false)?;
     }
@@ -421,7 +427,7 @@ pub fn add_watermark(doc: &mut Document, pages: &[usize], wm: &Watermark, replac
         }
         content.extend_from_slice(b"ET\n");
         content.extend_from_slice(END.as_bytes());
-        add_resources(doc, &page, Some(opacity))?;
+        add_resources(doc, &page, Some(opacity), None)?;
         let page = &page_list(doc)[i];
         place(doc, page, MarkKind::Watermark, content, wm.behind)?;
     }
@@ -442,7 +448,7 @@ pub fn add_background(doc: &mut Document, pages: &[usize], bg: &Background, repl
         let mut content = begin(MarkKind::Background, "Background", page.view_matrix(doc));
         content.push_str(&format!("/PCGS{} gs\n{}\n0 0 {} {} re f\n", (opacity * 100.0).round() as i64, rgb(bg.color), n(w), n(h)));
         content.push_str(END);
-        add_resources(doc, &page, Some(opacity))?;
+        add_resources(doc, &page, Some(opacity), None)?;
         let page = &page_list(doc)[i];
         place(doc, page, MarkKind::Background, content.into_bytes(), true)?;
     }

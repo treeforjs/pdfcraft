@@ -328,10 +328,11 @@ pub enum Shape {
         by: Option<String>,
     },
     /// A redaction mark (§12.5.6.23) over quadrilaterals (text) or one rectangle as a quad
-    /// (areas, pages). `overlay` is the text shown on the box once applied.
+    /// (areas, pages). `overlay` is the text shown on the box once applied, drawn with `look`.
     Redact {
         quads: Vec<[f64; 8]>,
         overlay: String,
+        look: OverlayLook,
     },
     /// A closed polygon (Polygon tool); with `cloud`, Acrobat's Cloud tool: the same polygon
     /// with a cloudy border (`/BE /S /C`, `/IT /PolygonCloud`).
@@ -380,6 +381,63 @@ impl Shape {
             Shape::PolyLine { .. } => "PolyLine",
             Shape::Caret { .. } => "Caret",
         }
+    }
+}
+
+/// The standard fonts of redaction overlay text.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum OverlayFont {
+    #[default]
+    Helvetica,
+    Times,
+    Courier,
+}
+
+impl OverlayFont {
+    pub const ALL: [OverlayFont; 3] = [OverlayFont::Helvetica, OverlayFont::Times, OverlayFont::Courier];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            OverlayFont::Helvetica => "Helvetica",
+            OverlayFont::Times => "Times Roman",
+            OverlayFont::Courier => "Courier",
+        }
+    }
+
+    /// The `/DA` font resource name (Acrobat's form font names).
+    pub fn resource(self) -> &'static str {
+        match self {
+            OverlayFont::Helvetica => "Helv",
+            OverlayFont::Times => "TiRo",
+            OverlayFont::Courier => "Cour",
+        }
+    }
+
+    pub fn from_resource(n: &str) -> OverlayFont {
+        match n {
+            "TiRo" | "Times-Roman" | "TimesRoman" => OverlayFont::Times,
+            "Cour" | "Courier" => OverlayFont::Courier,
+            _ => OverlayFont::Helvetica,
+        }
+    }
+}
+
+/// How redaction overlay text is drawn (Redaction Properties ▸ Appearance).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct OverlayLook {
+    pub font: OverlayFont,
+    /// Points; 0 = auto-size to fit the area.
+    pub size: f64,
+    pub color: Rgb,
+    /// 0 left, 1 centre, 2 right.
+    pub align: u8,
+    /// Repeat the text to fill the area.
+    pub repeat: bool,
+}
+
+impl Default for OverlayLook {
+    fn default() -> Self {
+        Self { font: OverlayFont::Helvetica, size: 0.0, color: [1.0, 0.0, 0.0], align: 1, repeat: false }
     }
 }
 
@@ -763,14 +821,22 @@ pub fn add_annotation(doc: &mut Document, new: &NewAnnotation, meta: &Meta) -> R
             d.set(b"C".to_vec(), rgb(style.color));
             d.set(b"QuadPoints".to_vec(), num_array(&quads.concat()));
         }
-        Shape::Redact { quads, overlay } => {
+        Shape::Redact { quads, overlay, look } => {
             d.set(b"C".to_vec(), rgb(style.color));
             d.set(b"IC".to_vec(), rgb(style.fill.unwrap_or([0.0, 0.0, 0.0])));
             d.set(b"QuadPoints".to_vec(), num_array(&quads.concat()));
             if !overlay.is_empty() {
                 d.set(b"OverlayText".to_vec(), PdfString::text(overlay));
-                d.set(b"DA".to_vec(), PdfString::literal(b"1 0 0 rg /Helv 10 Tf".to_vec()));
-                d.set(b"Q".to_vec(), Object::Int(1));
+                let [r, g, b] = look.color.map(|x| x.clamp(0.0, 1.0));
+                let size = if look.size > 0.0 { look.size.min(400.0) } else { 0.0 };
+                d.set(
+                    b"DA".to_vec(),
+                    PdfString::literal(format!("{} {} {} rg /{} {} Tf", n(r), n(g), n(b), look.font.resource(), n(size)).into_bytes()),
+                );
+                d.set(b"Q".to_vec(), Object::Int(look.align.min(2) as i64));
+                if look.repeat {
+                    d.set(b"Repeat".to_vec(), Object::Bool(true));
+                }
             }
         }
         Shape::Rectangle { .. } | Shape::Oval { .. } => {

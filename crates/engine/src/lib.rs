@@ -33,7 +33,8 @@ pub use printcraft_forms::{
 pub use printcraft_annot::appearance as annot_text;
 pub use printcraft_annot::links::{Highlight as LinkHighlight, LinkAction, LinkItem, LinkStyle};
 pub use printcraft_annot::{
-    FillMark, Markup, NewAnnotation, NoteIcon, Props as CommentProps, ReviewState, Rgb, Shape, StampGroup, StampKind, Style, rect_quad,
+    FillMark, Markup, NewAnnotation, NoteIcon, OverlayFont, OverlayLook, Props as CommentProps, ReviewState, Rgb, Shape, StampGroup, StampKind,
+    Style, rect_quad,
 };
 pub use printcraft_optimize as optimize;
 pub use printcraft_print as print;

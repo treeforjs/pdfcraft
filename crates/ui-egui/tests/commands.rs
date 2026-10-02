@@ -85,7 +85,11 @@ fn every_registered_command_is_implemented() {
         }
         if spec.id.starts_with("redact.") {
             use printcraft_engine::{Edit, NewAnnotation, Shape, Style};
-            let shape = Shape::Redact { quads: vec![printcraft_engine::rect_quad([10.0, 10.0, 50.0, 50.0])], overlay: String::new() };
+            let shape = Shape::Redact {
+                quads: vec![printcraft_engine::rect_quad([10.0, 10.0, 50.0, 50.0])],
+                overlay: String::new(),
+                look: Default::default(),
+            };
             app.apply_edit(Edit::AddAnnotation(NewAnnotation {
                 page: 0,
                 style: Style::default_for(&shape),
