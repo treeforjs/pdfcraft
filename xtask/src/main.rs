@@ -15,6 +15,7 @@ type Command = fn(&[String]) -> anyhow::Result<()>;
 
 /// Every subcommand: name, one-line summary, entry point.
 const COMMANDS: &[(&str, &str, Command)] = &[
+    ("version", "Print the workspace version, or `version set X.Y.Z[-pre]` to change it and refresh Cargo.lock", version_cmd),
     ("layers", "Enforce the crate dependency layering (plan/architecture.md §3)", gates::layers),
     ("wasm", "cargo check --target wasm32-unknown-unknown for every crate below L8", gates::wasm),
     ("deny", "Dependency licences, bans, sources and advisories (deny.toml; needs cargo-deny)", gates::deny),
@@ -28,6 +29,11 @@ const COMMANDS: &[(&str, &str, Command)] = &[
     ("screenshots", "Regenerate the README screenshots in docs/images/ and their ATTRIBUTION entries", screenshots::run),
     ("demo-pdf", "Build dist/demo/printcraft-showcase.pdf (needs Google Chrome or Chromium)", demo_pdf::run),
 ];
+
+fn version_cmd(args: &[String]) -> anyhow::Result<()> {
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    version::run(&gates::root(), &args).map_err(anyhow::Error::msg)
+}
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
