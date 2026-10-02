@@ -19,6 +19,7 @@ pub use printcraft_organize::{BoxSpec, PageBox, SplitBy, split_ranges};
 
 /// One file produced by a split: (1-based first page, last page, PDF bytes).
 pub use printcraft_organize::LabelStyle;
+pub use printcraft_organize::view::{InitialView, Layout as InitialLayout, Magnification, Navigation};
 
 pub use printcraft_cos::Algorithm;
 pub use printcraft_edit::{
@@ -148,6 +149,11 @@ pub struct Document {
 }
 
 impl Document {
+    /// How the document opens (Document Properties ▸ Initial View).
+    pub fn initial_view(&self) -> InitialView {
+        self.editor.as_ref().map(|e| printcraft_organize::initial_view(&e.cos)).unwrap_or_default()
+    }
+
     /// Signed: at least one signature field holds a signature.
     pub fn is_signed(&self) -> bool {
         self.signatures.iter().any(|s| s.signed)
@@ -591,6 +597,8 @@ pub enum Edit {
         pages: Vec<usize>,
         order: TabOrder,
     },
+    /// Document Properties ▸ Initial View (and the language and binding).
+    SetInitialView(Box<InitialView>),
     /// Order tabs manually: move a field one place earlier or later on its page.
     MoveInTabOrder {
         name: String,
@@ -749,6 +757,7 @@ impl Edit {
             Edit::SetFieldProps { .. } => "Change field properties".into(),
             Edit::DeleteField { .. } => "Delete field".into(),
             Edit::SetTabOrder { .. } | Edit::MoveInTabOrder { .. } => "Set tab order".into(),
+            Edit::SetInitialView(_) => "Change initial view".into(),
             Edit::AddHeaderFooter { replace: false, .. } => "Add header & footer".into(),
             Edit::AddHeaderFooter { .. } => "Update header & footer".into(),
             Edit::AddWatermark { replace: false, .. } => "Add watermark".into(),
@@ -900,6 +909,7 @@ fn check_permission(edit: &Edit, p: &printcraft_cos::Permissions) -> Result<(), 
         | Edit::DeleteField { .. }
         | Edit::SetTabOrder { .. }
         | Edit::MoveInTabOrder { .. }
+        | Edit::SetInitialView(_)
         | Edit::Flatten { .. } => {
             if p.modify() {
                 Ok(())
@@ -1041,6 +1051,7 @@ fn run_edit(doc: &mut printcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -
         Edit::DeleteField { name } => printcraft_forms::delete_field(doc, name)?,
         Edit::SetTabOrder { pages, order } => printcraft_forms::set_tab_order(doc, pages, *order)?,
         Edit::MoveInTabOrder { name, earlier } => printcraft_forms::move_in_tab_order(doc, name, *earlier)?,
+        Edit::SetInitialView(v) => printcraft_organize::set_initial_view(doc, v)?,
         Edit::AddHeaderFooter { pages, settings, replace } => {
             let date = cx.today;
             printcraft_edit::add_header_footer(doc, pages, settings, *replace, &printcraft_edit::Context { date })?;

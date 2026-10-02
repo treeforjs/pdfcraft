@@ -14,6 +14,7 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
     save_prompt(app, ctx);
     let Some(dialog) = app.dialog else {
         app.props_draft = None;
+        app.view_draft = None;
         return;
     };
     // Seed the editable Description fields from the document when the dialog opens.
@@ -22,6 +23,7 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
         && let Some(doc) = app.session.get(id)
     {
         app.props_draft = Some((id, INFO_KEYS.map(|k| doc.info_value(k).unwrap_or_default())));
+        app.view_draft = Some((id, doc.initial_view()));
     }
     let mut apply = false;
     let mut split_now: Option<crate::SplitPlan> = None;
@@ -70,6 +72,7 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
                 ui.horizontal(|ui| {
                     for (tb, label) in [
                         (PropsTab::Description, "Description"),
+                        (PropsTab::InitialView, "Initial View"),
                         (PropsTab::Security, "Security"),
                         (PropsTab::Fonts, "Fonts"),
                         (PropsTab::Advanced, "Advanced"),
@@ -116,6 +119,114 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
                             }
                             row(ui, "Application", i.creator.clone().unwrap_or_default());
                             row(ui, "PDF producer", i.producer.clone().unwrap_or_default());
+                        }
+                        PropsTab::InitialView => {
+                            use printcraft_engine::{InitialLayout as L, Magnification as M, Navigation as N};
+                            let editable = doc.allows_modification();
+                            let pages = i.pages.len();
+                            let Some((_, v)) = app.view_draft.as_mut() else { return };
+                            ui.label(egui::RichText::new("Layout and Magnification").font(theme::semibold(12.5)));
+                            ui.end_row();
+                            ui.label("Navigation tab");
+                            ui.add_enabled_ui(editable, |ui| {
+                                egui::ComboBox::from_id_salt("iv-nav")
+                                    .selected_text(
+                                        format!("{:?}", v.navigation).replace("PageOnly", "Page Only").replace("Pages", "Pages Panel and Page"),
+                                    )
+                                    .show_ui(ui, |ui| {
+                                        for (n, l) in [
+                                            (N::PageOnly, "Page Only"),
+                                            (N::Bookmarks, "Bookmarks Panel and Page"),
+                                            (N::Pages, "Pages Panel and Page"),
+                                            (N::Attachments, "Attachments Panel and Page"),
+                                            (N::Layers, "Layers Panel and Page"),
+                                        ] {
+                                            ui.selectable_value(&mut v.navigation, n, l);
+                                        }
+                                    });
+                            });
+                            ui.end_row();
+                            ui.label("Page layout");
+                            ui.add_enabled_ui(editable, |ui| {
+                                let names = [
+                                    (L::Default, "Default"),
+                                    (L::SinglePage, "Single Page"),
+                                    (L::SinglePageContinuous, "Single Page Continuous"),
+                                    (L::TwoUp, "Two-Up (Facing)"),
+                                    (L::TwoUpContinuous, "Two-Up Continuous (Facing)"),
+                                    (L::TwoUpCoverPage, "Two-Up (Cover Page)"),
+                                    (L::TwoUpContinuousCoverPage, "Two-Up Continuous (Cover Page)"),
+                                ];
+                                let shown = names.iter().find(|(l, _)| *l == v.layout).map_or("Default", |(_, n)| n);
+                                egui::ComboBox::from_id_salt("iv-layout").selected_text(shown).show_ui(ui, |ui| {
+                                    for (l, n) in names {
+                                        ui.selectable_value(&mut v.layout, l, n);
+                                    }
+                                });
+                            });
+                            ui.end_row();
+                            ui.label("Magnification");
+                            ui.add_enabled_ui(editable, |ui| {
+                                ui.horizontal(|ui| {
+                                    let names = [
+                                        (M::Default, "Default"),
+                                        (M::ActualSize, "Actual Size"),
+                                        (M::FitPage, "Fit Page"),
+                                        (M::FitWidth, "Fit Width"),
+                                        (M::FitHeight, "Fit Height"),
+                                        (M::FitVisible, "Fit Visible"),
+                                    ];
+                                    let shown = match v.magnification {
+                                        M::Percent(p) => format!("{p:.0}%"),
+                                        m => names.iter().find(|(x, _)| *x == m).map_or("Default", |(_, n)| n).to_string(),
+                                    };
+                                    egui::ComboBox::from_id_salt("iv-mag").selected_text(shown).show_ui(ui, |ui| {
+                                        for (m, n) in names {
+                                            ui.selectable_value(&mut v.magnification, m, n);
+                                        }
+                                        for p in [50.0, 75.0, 125.0, 150.0, 200.0] {
+                                            ui.selectable_value(&mut v.magnification, M::Percent(p), format!("{p:.0}%"));
+                                        }
+                                    });
+                                });
+                            });
+                            ui.end_row();
+                            ui.label("Open to page");
+                            ui.add_enabled_ui(editable, |ui| {
+                                let mut p = v.page + 1;
+                                if ui.add(egui::DragValue::new(&mut p).range(1..=pages.max(1))).changed() {
+                                    v.page = p - 1;
+                                }
+                                ui.label(format!("of {pages}"));
+                            });
+                            ui.end_row();
+                            ui.label(egui::RichText::new("Window Options").font(theme::semibold(12.5)));
+                            ui.end_row();
+                            ui.label("");
+                            ui.add_enabled_ui(editable, |ui| {
+                                ui.vertical(|ui| {
+                                    ui.checkbox(&mut v.fit_window, "Resize window to initial page");
+                                    ui.checkbox(&mut v.center_window, "Center window on screen");
+                                    ui.checkbox(&mut v.full_screen, "Open in Full Screen mode");
+                                    ui.horizontal(|ui| {
+                                        ui.label("Show:");
+                                        ui.radio_value(&mut v.display_title, false, "File Name");
+                                        ui.radio_value(&mut v.display_title, true, "Document Title");
+                                    });
+                                });
+                            });
+                            ui.end_row();
+                            ui.label(egui::RichText::new("User Interface Options").font(theme::semibold(12.5)));
+                            ui.end_row();
+                            ui.label("");
+                            ui.add_enabled_ui(editable, |ui| {
+                                ui.vertical(|ui| {
+                                    ui.checkbox(&mut v.hide_menubar, "Hide menu bar");
+                                    ui.checkbox(&mut v.hide_toolbar, "Hide toolbars");
+                                    ui.checkbox(&mut v.hide_window_ui, "Hide window controls");
+                                });
+                            });
+                            ui.end_row();
                         }
                         PropsTab::Security => match doc.security_summary() {
                             None => {
@@ -202,6 +313,28 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
                             row(ui, "Layers", i.layers.len().to_string());
                             row(ui, "Attachments", i.attachments.len().to_string());
                             row(ui, "JavaScript", yes(i.has_javascript));
+                            // Reading Options: binding and language.
+                            if let Some((_, v)) = app.view_draft.as_mut() {
+                                let editable = doc.allows_modification();
+                                ui.label(egui::RichText::new("Binding").color(t.text_muted));
+                                ui.add_enabled_ui(editable, |ui| {
+                                    ui.horizontal(|ui| {
+                                        ui.radio_value(&mut v.right_to_left, false, "Left Edge");
+                                        ui.radio_value(&mut v.right_to_left, true, "Right Edge");
+                                    });
+                                });
+                                ui.end_row();
+                                let l = ui.label(egui::RichText::new("Language").color(t.text_muted));
+                                let mut lang = v.language.clone().unwrap_or_default();
+                                if ui
+                                    .add_enabled(editable, egui::TextEdit::singleline(&mut lang).hint_text("e.g. en-US").desired_width(160.0))
+                                    .labelled_by(l.id)
+                                    .changed()
+                                {
+                                    v.language = (!lang.trim().is_empty()).then(|| lang.trim().to_string());
+                                }
+                                ui.end_row();
+                            }
                             // What was repaired while reading a damaged file (fidelity: never silent).
                             let repairs = doc.repair_log();
                             row(ui, "Repairs", if repairs.is_empty() { "None".to_string() } else { repairs.len().to_string() });
@@ -909,6 +1042,7 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
     if modal.should_close() || close || replaces {
         app.dialog = None;
         app.props_draft = None;
+        app.view_draft = None;
     } else {
         app.dialog = Some(next);
     }
@@ -921,14 +1055,19 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
 fn draft_changes(app: &PrintCraftApp) -> Option<Vec<Edit>> {
     let (id, draft) = app.props_draft.as_ref()?;
     let doc = app.session.get(*id)?;
-    Some(
-        INFO_KEYS
-            .iter()
-            .zip(draft.iter())
-            .filter(|(k, v)| doc.info_value(k).unwrap_or_default().trim() != v.trim())
-            .map(|(k, v)| Edit::SetInfo { key: (*k).to_string(), value: v.clone() })
-            .collect(),
-    )
+    let mut edits: Vec<Edit> = INFO_KEYS
+        .iter()
+        .zip(draft.iter())
+        .filter(|(k, v)| doc.info_value(k).unwrap_or_default().trim() != v.trim())
+        .map(|(k, v)| Edit::SetInfo { key: (*k).to_string(), value: v.clone() })
+        .collect();
+    if let Some((vid, v)) = &app.view_draft
+        && vid == id
+        && *v != doc.initial_view()
+    {
+        edits.push(Edit::SetInitialView(Box::new(v.clone())));
+    }
+    Some(edits)
 }
 
 /// "Save changes?" when closing a tab or quitting with unsaved edits.

@@ -194,3 +194,34 @@ trailer << /Root 1 0 R >>
     assert_eq!(h.state().dialog, Some(Dialog::Properties(printcraft_ui_egui::PropsTab::Advanced)));
     h.get_by_label("Repair log");
 }
+
+#[test]
+fn initial_view_is_edited_and_honoured_on_open() {
+    use printcraft_engine::{InitialLayout, Magnification, Navigation};
+    let mut h = harness();
+    h.state_mut().dialog = Some(Dialog::Properties(printcraft_ui_egui::PropsTab::InitialView));
+    h.run_steps(2);
+    h.get_by_label("Open to page");
+    {
+        let (_, v) = h.state_mut().view_draft.as_mut().expect("seeded");
+        v.navigation = Navigation::Bookmarks;
+        v.layout = InitialLayout::TwoUpCoverPage;
+        v.magnification = Magnification::FitWidth;
+        v.page = 1;
+        v.language = Some("de-DE".into());
+    }
+    h.run_steps(2);
+    h.get_by_label("OK").click();
+    h.run_steps(3);
+    let s = h.state();
+    let id = s.views[s.active.unwrap()].id;
+    let v = s.session.get(id).unwrap().initial_view();
+    assert_eq!((v.navigation, v.layout, v.page, v.language.as_deref()), (Navigation::Bookmarks, InitialLayout::TwoUpCoverPage, 1, Some("de-DE")));
+    assert_eq!(s.session.get(id).unwrap().can_undo(), Some("Change document properties"));
+    // Opening the saved file follows it.
+    let bytes = s.session.save_bytes(id).unwrap();
+    let mut app = PrintCraftApp::new();
+    app.open_bytes("again.pdf", None, bytes.to_vec()).unwrap();
+    let view = &app.views[0];
+    assert_eq!((view.current, view.cover, app.right), (1, true, Some(printcraft_ui_egui::RightPanel::Bookmarks)));
+}

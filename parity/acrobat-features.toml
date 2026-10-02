@@ -3211,11 +3211,11 @@ title = "Expand and collapse all bookmarks"
 area = "D"
 tier = "P1"
 milestone = "M4"
-status = "planned"
-commands = []
+status = "shipped"
+commands = ["file.properties"]
 tools = []
-evidence = []
-notes = ""
+evidence = ["crates/ui-egui/tests/bookmarks.rs::expanding_and_collapsing_all_bookmarks"]
+notes = "Bookmarks panel options: expand all, expand top-level, collapse all"
 
 [[feature]]
 id = "organize.bookmarks-from-structure"
@@ -3355,11 +3355,11 @@ title = "Edit initial view (layout, magnification, panels, window options)"
 area = "D"
 tier = "P1"
 milestone = "M4"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["file.properties"]
+tools = ["doc_initial_view"]
+evidence = ["crates/organize/src/tests.rs::initial_view_round_trips_and_keeps_scripts", "crates/ui-egui/tests/viewer.rs::initial_view_is_edited_and_honoured_on_open", "crates/automation/tests/automation.rs::initial_view_through_tools"]
+notes = "navigation panel, layout, magnification, page, window and interface options; honoured on open; script open actions kept"
 
 [[feature]]
 id = "organize.custom-properties"
@@ -3391,11 +3391,11 @@ title = "Set document language and binding"
 area = "D"
 tier = "P1"
 milestone = "M4"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["file.properties"]
+tools = ["doc_initial_view"]
+evidence = ["crates/organize/src/tests.rs::initial_view_round_trips_and_keeps_scripts", "crates/automation/tests/automation.rs::initial_view_through_tools"]
+notes = "Advanced ▸ Reading Options: binding and language"
 
 [[feature]]
 id = "organize.print-presets"

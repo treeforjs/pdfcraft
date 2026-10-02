@@ -712,6 +712,25 @@ pub fn tools() -> Vec<ToolDef> {
         t("doc_reduce", "Reduce file size", "Write a smaller copy of the document to `path` with Acrobat's Reduce File Size choices: images above 225 ppi downsampled to 150 ppi and JPEG-compressed (medium quality), thumbnails dropped, identical fonts and images merged, unused objects dropped, compressed object streams. The open document is unchanged.")
             .cmd("optimize.reduce")
             .with(schema(json!({ "doc": doc(), "path": { "type": "string" } }), &["doc", "path"])),
+        t("doc_initial_view", "Initial view", "Read or change how the document opens (Document Properties ▸ Initial View) and its reading options: navigation (page, bookmarks, pages, attachments, layers), layout (default, single, continuous, two_up, two_up_continuous, two_up_cover, two_up_continuous_cover), magnification (default, actual, fit_page, fit_width, fit_height, fit_visible, or a percentage), page, window options (fit_window, center_window, full_screen, display_title), interface options (hide_menubar, hide_toolbar, hide_window_ui), language and binding (left, right). Only the given ones change; returns the result. Undoable.").with(schema(
+            json!({
+                "doc": doc(),
+                "navigation": { "type": "string", "enum": ["page", "bookmarks", "pages", "attachments", "layers"] },
+                "layout": { "type": "string", "enum": ["default", "single", "continuous", "two_up", "two_up_continuous", "two_up_cover", "two_up_continuous_cover"] },
+                "magnification": {},
+                "page": { "type": "integer", "minimum": 1 },
+                "fit_window": { "type": "boolean" },
+                "center_window": { "type": "boolean" },
+                "full_screen": { "type": "boolean" },
+                "display_title": { "type": "boolean" },
+                "hide_menubar": { "type": "boolean" },
+                "hide_toolbar": { "type": "boolean" },
+                "hide_window_ui": { "type": "boolean" },
+                "language": { "type": "string" },
+                "binding": { "type": "string", "enum": ["left", "right"] },
+            }),
+            &["doc"],
+        )),
         t("doc_optimize", "Optimize PDF", "Write an optimized copy to `path` (Acrobat's PDF Optimizer). color / gray: { downsample, ppi, above_ppi, compression: jpeg|zip|retain, quality 1–100 } (defaults: downsample to 150 ppi above 225, JPEG 60). Images are measured where pages draw them and replaced only when smaller. discard_*: thumbnails (default true), alternate_images (true), tags, print_settings; flate_unencoded (true). discard: Remove Hidden Information categories (metadata, attachments, comments, form-fields, hidden-text, hidden-layers, bookmarks, links-actions-scripts, private-data). Signed documents are refused. The open document is unchanged.")
             .cmd("optimize.advanced")
             .with(schema(

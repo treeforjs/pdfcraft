@@ -127,3 +127,29 @@ fn number_pages_dialog_labels_the_selected_pages() {
     assert_eq!(labels, ["i", "ii", "3"]);
     assert_eq!(h.state().session.get(id).unwrap().can_undo(), Some("Number pages"));
 }
+
+#[test]
+fn expanding_and_collapsing_all_bookmarks() {
+    use printcraft_engine::Edit;
+    let mut h = harness();
+    for (parent, title) in [(vec![], "Part"), (vec![0], "Chapter"), (vec![0, 0], "Section")] {
+        h.state_mut().apply_edit(Edit::AddBookmark { parent, index: 0, title: title.into(), page: 0 });
+    }
+    h.run_steps(3);
+    let shown = |h: &Harness<'static, PrintCraftApp>, t: &str| h.query_by_label(t).is_some();
+    h.get_by_label("Bookmark options").click();
+    h.run_steps(2);
+    h.get_by_label("Expand all bookmarks").click();
+    h.run_steps(3);
+    assert!(shown(&h, "Chapter") && shown(&h, "Section"));
+    h.get_by_label("Bookmark options").click();
+    h.run_steps(2);
+    h.get_by_label("Collapse all bookmarks").click();
+    h.run_steps(3);
+    assert!(shown(&h, "Part") && !shown(&h, "Chapter"));
+    h.get_by_label("Bookmark options").click();
+    h.run_steps(2);
+    h.get_by_label("Expand top-level bookmarks").click();
+    h.run_steps(3);
+    assert!(shown(&h, "Chapter") && !shown(&h, "Section"));
+}

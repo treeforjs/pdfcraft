@@ -16,6 +16,7 @@ mod dedupe;
 mod import;
 mod labels;
 mod outline;
+pub mod view;
 
 pub use boxes::{BoxSpec, PageBox, page_boxes, set_page_box};
 pub use dedupe::dedupe_resources;
@@ -24,6 +25,7 @@ pub use labels::{LabelRange, LabelStyle, number_pages, page_label_ranges, page_l
 pub use outline::{
     Bookmark, OutlineError, add_bookmark, bookmarks, delete_bookmark, move_bookmark, rename_bookmark, set_bookmark_open, set_bookmark_page,
 };
+pub use view::{InitialView, initial_view, set_initial_view};
 
 #[derive(Debug, thiserror::Error, PartialEq)]
 pub enum OrganizeError {

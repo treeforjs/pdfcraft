@@ -323,6 +323,7 @@ pub fn right_panel(app: &mut PrintCraftApp, ui: &mut egui::Ui) {
     let mut toggle_layer: Option<(usize, bool)> = None;
     let mut attachment_action: Option<(usize, bool)> = None; // (index, open instead of save)
     let mut bm_action: Option<BmAction> = None;
+    let mut bm_expand: Option<usize> = None;
     let mut panel_edit: Option<printcraft_engine::Edit> = None;
     let mut panel_command: Option<&'static str> = None;
     let mut sig_action: Option<crate::sign_ui::PanelAction> = None;
@@ -379,6 +380,20 @@ pub fn right_panel(app: &mut PrintCraftApp, ui: &mut egui::Ui) {
                             };
                             view.comments.search_focus = true;
                         }
+                        if panel == RightPanel::Bookmarks && !info.outline.is_empty() {
+                            let more = icons::button(ui, "ellipsis", 26.0, false, "Bookmark options");
+                            egui::Popup::menu(&more).show(|ui| {
+                                ui.set_min_width(200.0);
+                                for (levels, label) in
+                                    [(usize::MAX, "Expand all bookmarks"), (1, "Expand top-level bookmarks"), (0, "Collapse all bookmarks")]
+                                {
+                                    if ui.button(label).clicked() {
+                                        bm_expand = Some(levels);
+                                        ui.close();
+                                    }
+                                }
+                            });
+                        }
                         if panel == RightPanel::Bookmarks
                             && bm_editable
                             && icons::button(ui, "bookmark-plus", 26.0, false, "New bookmark (⌘B)").clicked()
@@ -404,6 +419,7 @@ pub fn right_panel(app: &mut PrintCraftApp, ui: &mut egui::Ui) {
                             rename: &mut bm_rename,
                             editable: bm_editable,
                             current: view.current,
+                            expand: bm_expand,
                         };
                         for (i, item) in info.outline.iter().enumerate() {
                             outline_item(ui, &t, info, item, &[i], info.outline.len(), &mut ctx);
@@ -557,12 +573,17 @@ struct OutlineCtx<'a> {
     rename: &'a mut Option<(Vec<usize>, String)>,
     editable: bool,
     current: usize,
+    /// Expand all (`Some(usize::MAX)`), collapse all (`Some(0)`) or expand to a depth, this frame.
+    expand: Option<usize>,
 }
 
 fn outline_item(ui: &mut egui::Ui, t: &Tokens, info: &DocInfo, item: &OutlineItem, path: &[usize], siblings: usize, cx: &mut OutlineCtx<'_>) {
     let depth = path.len() - 1;
     let indent = depth as f32 * 16.0;
     let id = ui.id().with(("outline", path));
+    if let Some(levels) = cx.expand {
+        ui.data_mut(|d| d.insert_temp(id, depth < levels));
+    }
     let mut open = ui.data(|d| d.get_temp::<bool>(id)).unwrap_or(item.open || depth == 0);
     let x_text = indent + 20.0;
     if let Some((rpath, text)) = cx.rename.as_mut()

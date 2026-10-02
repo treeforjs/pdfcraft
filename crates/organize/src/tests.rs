@@ -652,3 +652,35 @@ fn a_page_becomes_a_form_xobject_upright() {
     assert!(res.get(b"Font").is_some(), "inherited resources come along");
     assert!(crate::page_as_form(&mut dst, &src, 7).is_err());
 }
+
+#[test]
+fn initial_view_round_trips_and_keeps_scripts() {
+    use crate::view::{Layout, Magnification, Navigation};
+    let mut doc = open(fixture());
+    assert_eq!(crate::initial_view(&doc), crate::InitialView::default());
+    let v = crate::InitialView {
+        navigation: Navigation::Bookmarks,
+        layout: Layout::TwoUpContinuousCoverPage,
+        magnification: Magnification::Percent(150.0),
+        page: 2,
+        fit_window: true,
+        display_title: true,
+        hide_toolbar: true,
+        language: Some("fr-FR".into()),
+        right_to_left: true,
+        ..Default::default()
+    };
+    crate::set_initial_view(&mut doc, &v).unwrap();
+    let doc = save_and_reopen(&doc);
+    assert_eq!(crate::initial_view(&doc), v);
+    // A script opening action survives a change that needs no destination.
+    let mut doc = doc;
+    let root = doc.root().unwrap();
+    let mut js = printcraft_cos::Dict::new();
+    js.set(b"S".to_vec(), Object::name("JavaScript"));
+    js.set(b"JS".to_vec(), printcraft_cos::PdfString::text("app.alert('hi')"));
+    doc.update_dict(root, |c| c.set(b"OpenAction".to_vec(), Object::Dict(js))).unwrap();
+    crate::set_initial_view(&mut doc, &crate::InitialView { layout: Layout::SinglePage, ..Default::default() }).unwrap();
+    assert!(doc.get(root).as_dict().unwrap().get(b"OpenAction").and_then(|o| o.as_dict()).is_some_and(|d| d.name(b"S") == Some(b"JavaScript")));
+    assert!(crate::set_initial_view(&mut doc, &crate::InitialView { page: 9, ..Default::default() }).is_err());
+}

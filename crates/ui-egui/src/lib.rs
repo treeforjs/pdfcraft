@@ -167,6 +167,7 @@ pub enum Dialog {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PropsTab {
     Description,
+    InitialView,
     Security,
     Fonts,
     Advanced,
@@ -224,6 +225,8 @@ pub struct PrintCraftApp {
     pub save_override: Option<String>,
     /// Document Properties ▸ Description fields being edited: (document, Title/Author/Subject/Keywords).
     pub props_draft: Option<(DocId, [String; 4])>,
+    /// Document Properties ▸ Initial View (and reading options) being edited.
+    pub view_draft: Option<(DocId, printcraft_engine::InitialView)>,
     /// Files picked asynchronously for combine / insert (web).
     pub requests: files::Requests,
     /// Write exported files (split) here instead of asking (tests and automation).
@@ -335,6 +338,7 @@ impl PrintCraftApp {
             close_request: None,
             save_override: None,
             props_draft: None,
+            view_draft: None,
             requests: Default::default(),
             export_dir_override: None,
             split_draft: SplitDraft::default(),
@@ -379,6 +383,42 @@ impl PrintCraftApp {
         }
     }
 
+    /// Open a document the way it asks to be opened: navigation panel, layout, magnification,
+    /// page (Document Properties ▸ Initial View).
+    fn apply_initial_view(&mut self, index: usize, v: &printcraft_engine::InitialView) {
+        use printcraft_engine::{InitialLayout as L, Magnification as M, Navigation as N};
+        let pages = self.session.get(self.views[index].id).map_or(0, |d| d.info.pages.len());
+        match v.navigation {
+            N::PageOnly => {}
+            N::Bookmarks => self.right = Some(RightPanel::Bookmarks),
+            N::Pages => self.right = Some(RightPanel::Pages),
+            N::Attachments => self.right = Some(RightPanel::Attachments),
+            N::Layers => self.right = Some(RightPanel::Layers),
+        }
+        let view = &mut self.views[index];
+        match v.layout {
+            L::Default => {}
+            L::SinglePage => view.layout = canvas::PageLayout::Single,
+            L::SinglePageContinuous => view.layout = canvas::PageLayout::Continuous,
+            L::TwoUp | L::TwoUpContinuous => view.layout = canvas::PageLayout::TwoUp,
+            L::TwoUpCoverPage | L::TwoUpContinuousCoverPage => {
+                view.layout = canvas::PageLayout::TwoUp;
+                view.cover = true;
+            }
+        }
+        match v.magnification {
+            M::Default => {}
+            M::ActualSize => view.set_zoom(1.0),
+            M::Percent(p) => view.set_zoom((p / 100.0) as f32),
+            M::FitPage | M::FitVisible => view.fit = canvas::Fit::Page,
+            M::FitWidth => view.fit = canvas::Fit::Width,
+            M::FitHeight => view.fit = canvas::Fit::Height,
+        }
+        if v.page > 0 && v.page < pages {
+            view.go_to_page(v.page);
+        }
+    }
+
     /// Open a document and make it the active tab. Encrypted files raise the password prompt.
     pub fn open_bytes(&mut self, name: &str, path: Option<String>, bytes: Vec<u8>) -> Result<(), String> {
         // Images and text files become new, unsaved PDFs (Create a PDF).
@@ -413,8 +453,10 @@ impl PrintCraftApp {
                 None
             };
         }
+        let initial = doc.initial_view();
         self.views.push(DocView::new(id, &doc.info));
         self.active = Some(self.views.len() - 1);
+        self.apply_initial_view(self.views.len() - 1, &initial);
         if let Some(p) = path {
             self.recent.retain(|r| r.path != p);
             self.recent.insert(0, RecentFile { name: name.to_string(), path: p, pages, size });

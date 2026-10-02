@@ -272,6 +272,7 @@ impl Automation {
                 json!({ "path": path.to_string_lossy(), "bytes_before": before, "bytes_after": bytes.len(), "merged_objects": merged })
             }
             "doc_optimize" => self.doc_optimize(&a)?,
+            "doc_initial_view" => self.doc_initial_view(&a)?,
             "doc_export_images" | "doc_export_text" => self.export(name, &a)?,
             "doc_header_footer" | "doc_watermark" | "doc_background" | "doc_remove_marks" => self.marks(name, &a)?,
             "doc_unprotect" => {
@@ -370,6 +371,94 @@ impl Automation {
         let path = target.to_string_lossy().into_owned();
         self.session.mark_saved(id, bytes.clone(), Some(path.clone())).map_err(failed)?;
         Ok(json!({ "path": path, "bytes": bytes.len(), "incremental": !full, "document": summary(self.doc(a)?) }))
+    }
+
+    fn doc_initial_view(&mut self, a: &Args) -> Result<Value> {
+        use printcraft_engine::{InitialLayout as L, Magnification as M, Navigation as N};
+        let bad = |m: String| ToolError::InvalidArgs(m);
+        let mut v = self.doc(a)?.initial_view();
+        let before = v.clone();
+        if let Some(n) = a.opt_str("navigation")? {
+            v.navigation = match n {
+                "page" => N::PageOnly,
+                "bookmarks" => N::Bookmarks,
+                "pages" => N::Pages,
+                "attachments" => N::Attachments,
+                "layers" => N::Layers,
+                o => return Err(bad(format!("unknown navigation {o:?}"))),
+            };
+        }
+        if let Some(l) = a.opt_str("layout")? {
+            v.layout = match l {
+                "default" => L::Default,
+                "single" => L::SinglePage,
+                "continuous" => L::SinglePageContinuous,
+                "two_up" => L::TwoUp,
+                "two_up_continuous" => L::TwoUpContinuous,
+                "two_up_cover" => L::TwoUpCoverPage,
+                "two_up_continuous_cover" => L::TwoUpContinuousCoverPage,
+                o => return Err(bad(format!("unknown layout {o:?}"))),
+            };
+        }
+        match a.get("magnification") {
+            None => {}
+            Some(Value::Number(p)) => v.magnification = M::Percent(p.as_f64().unwrap_or(100.0).clamp(1.0, 6400.0)),
+            Some(Value::String(m)) => {
+                v.magnification = match m.as_str() {
+                    "default" => M::Default,
+                    "actual" => M::ActualSize,
+                    "fit_page" => M::FitPage,
+                    "fit_width" => M::FitWidth,
+                    "fit_height" => M::FitHeight,
+                    "fit_visible" => M::FitVisible,
+                    o => return Err(bad(format!("unknown magnification {o:?}"))),
+                }
+            }
+            Some(_) => return Err(bad("magnification is a name or a percentage".into())),
+        }
+        if let Some(p) = a.opt_int("page")? {
+            v.page = (p.max(1) - 1) as usize;
+        }
+        for (k, f) in [
+            ("fit_window", &mut v.fit_window),
+            ("center_window", &mut v.center_window),
+            ("full_screen", &mut v.full_screen),
+            ("display_title", &mut v.display_title),
+            ("hide_menubar", &mut v.hide_menubar),
+            ("hide_toolbar", &mut v.hide_toolbar),
+            ("hide_window_ui", &mut v.hide_window_ui),
+        ] {
+            if let Some(b) = a.opt_bool(k)? {
+                *f = b;
+            }
+        }
+        if let Some(l) = a.opt_str("language")? {
+            v.language = (!l.trim().is_empty()).then(|| l.trim().to_string());
+        }
+        if let Some(b) = a.opt_str("binding")? {
+            v.right_to_left = match b {
+                "left" => false,
+                "right" => true,
+                o => return Err(bad(format!("binding is left or right, not {o:?}"))),
+            };
+        }
+        let mut out = if v != before { self.apply(a, Edit::SetInitialView(Box::new(v.clone())))? } else { json!({}) };
+        out["initial_view"] = json!({
+            "navigation": format!("{:?}", v.navigation),
+            "layout": format!("{:?}", v.layout),
+            "magnification": format!("{:?}", v.magnification),
+            "page": v.page + 1,
+            "fit_window": v.fit_window,
+            "center_window": v.center_window,
+            "full_screen": v.full_screen,
+            "display_title": v.display_title,
+            "hide_menubar": v.hide_menubar,
+            "hide_toolbar": v.hide_toolbar,
+            "hide_window_ui": v.hide_window_ui,
+            "language": v.language,
+            "binding": if v.right_to_left { "right" } else { "left" },
+        });
+        Ok(out)
     }
 
     fn doc_optimize(&mut self, a: &Args) -> Result<Value> {
