@@ -36,8 +36,61 @@ pub type Requests = Arc<std::sync::Mutex<Vec<(FilePurpose, Vec<(String, Vec<u8>)
 pub struct SplitDraft {
     /// Pages per file.
     pub every: usize,
-    /// Split before each selected page instead of by count.
-    pub at_selection: bool,
+    pub mode: SplitMode,
+    /// The largest part, in megabytes (File size mode).
+    pub size_mb: f64,
+}
+
+impl Default for SplitDraft {
+    fn default() -> Self {
+        SplitDraft { every: 1, mode: SplitMode::Pages, size_mb: 2.0 }
+    }
+}
+
+/// Acrobat's Split by: number of pages, file size, top-level bookmarks (and PrintCraft's
+/// before-selected-pages).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SplitMode {
+    Pages,
+    Selection,
+    Size,
+    Bookmarks,
+}
+
+/// What Split does once confirmed.
+#[derive(Clone, Debug, PartialEq)]
+pub enum SplitPlan {
+    By(SplitBy),
+    Size(usize),
+    Bookmarks,
+}
+
+/// Organize ▸ Extract options.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ExtractDraft {
+    /// Each page as its own file.
+    pub separate: bool,
+    /// Delete the pages after extracting them.
+    pub delete: bool,
+}
+
+/// Pages ▸ Rotate Pages.
+#[derive(Clone, Debug, PartialEq)]
+pub struct RotateDraft {
+    /// Degrees clockwise: 90, 180 or 270.
+    pub degrees: i64,
+    /// 0 all pages, 1 the selection, 2 the range below.
+    pub which: u8,
+    pub from: usize,
+    pub to: usize,
+    pub parity: printcraft_engine::PageParity,
+    pub orientation: printcraft_engine::PageOrientation,
+}
+
+impl Default for RotateDraft {
+    fn default() -> Self {
+        RotateDraft { degrees: 90, which: 0, from: 1, to: 1, parity: Default::default(), orientation: Default::default() }
+    }
 }
 
 impl PrintCraftApp {
@@ -169,51 +222,123 @@ impl PrintCraftApp {
         let Some((i, id)) = self.active_ids() else { return };
         let pages = self.views[i].target_pages();
         let stem = self.session.get(id).map(|d| strip_pdf(&d.name).to_string()).unwrap_or_default();
-        match self.session.extract(id, &pages) {
-            Ok(bytes) => self.open_created(&format!("{stem} (extract).pdf"), bytes, &format!("Extracted {} page(s)", pages.len())),
-            Err(e) => self.notify(format!("Couldn't extract pages: {e}")),
+        let opts = self.extract_draft.clone();
+        if opts.separate {
+            // Each page as its own file, in a chosen folder.
+            let mut named = Vec::new();
+            for &p in &pages {
+                match self.session.extract(id, &[p]) {
+                    Ok(bytes) => named.push((format!("{stem} (page {}).pdf", p + 1), bytes)),
+                    Err(e) => {
+                        self.notify(format!("Couldn't extract pages: {e}"));
+                        return;
+                    }
+                }
+            }
+            if self.write_files(&named, "Choose a folder for the extracted pages") == 0 {
+                return;
+            }
+        } else {
+            match self.session.extract(id, &pages) {
+                Ok(bytes) => self.open_created(&format!("{stem} (extract).pdf"), bytes, &format!("Extracted {} page(s)", pages.len())),
+                Err(e) => {
+                    self.notify(format!("Couldn't extract pages: {e}"));
+                    return;
+                }
+            }
         }
+        if opts.delete {
+            // Back on the original document.
+            self.active = Some(i);
+            self.apply_edit(printcraft_engine::Edit::DeletePages { pages });
+        }
+    }
+
+    /// Write named files into a chosen folder (desktop) or as downloads (web). Returns how many.
+    fn write_files(&mut self, named: &[(String, Arc<Vec<u8>>)], title: &str) -> usize {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let dir = match &self.export_dir_override {
+                Some(d) => Some(std::path::PathBuf::from(d)),
+                None => rfd::FileDialog::new().set_title(title).pick_folder(),
+            };
+            let Some(dir) = dir else { return 0 };
+            for (name, bytes) in named {
+                if let Err(e) = crate::editing::write_atomically(&dir.join(name).to_string_lossy(), bytes) {
+                    self.notify(format!("Couldn't write {name}: {e}"));
+                    return 0;
+                }
+            }
+            self.notify(format!("Wrote {} file{} to {}", named.len(), if named.len() == 1 { "" } else { "s" }, dir.display()));
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            let _ = title;
+            for (name, bytes) in named {
+                if let Err(e) = crate::editing::download(name, bytes) {
+                    self.notify(format!("Couldn't download {name}: {e}"));
+                    return 0;
+                }
+            }
+        }
+        named.len()
+    }
+
+    /// Pages ▸ Rotate Pages with the dialog's range and filters.
+    pub fn rotate_with_draft(&mut self) {
+        let Some((i, id)) = self.active_ids() else { return };
+        let Some(doc) = self.session.get(id) else { return };
+        let n = doc.info.pages.len();
+        let d = self.rotate_draft.clone();
+        let base: Vec<usize> = match d.which {
+            1 => self.views[i].target_pages(),
+            2 => (d.from.max(1) - 1..d.to.min(n)).collect(),
+            _ => (0..n).collect(),
+        };
+        let pages = printcraft_engine::filter_pages(&doc.info, &base, d.parity, d.orientation);
+        if pages.is_empty() {
+            self.notify("No pages match those choices");
+            return;
+        }
+        self.apply_edit(printcraft_engine::Edit::RotatePages { pages, degrees: d.degrees });
     }
 
     /// Split the active document and write the parts: into a chosen folder (desktop) or as
     /// downloads (web). Returns the number of files written.
-    pub fn split_active(&mut self, by: &SplitBy) -> usize {
+    pub fn split_active(&mut self, plan: &SplitPlan) -> usize {
         let Some((_, id)) = self.active_ids() else { return 0 };
         let stem = self.session.get(id).map(|d| strip_pdf(&d.name).to_string()).unwrap_or_else(|| "document".into());
-        let parts = match self.session.split(id, by) {
+        let (parts, titles) = match plan {
+            SplitPlan::By(by) => (self.session.split(id, by), Vec::new()),
+            SplitPlan::Size(max) => (self.session.split_by_size(id, *max), Vec::new()),
+            SplitPlan::Bookmarks => {
+                let marks = self.session.bookmark_splits(id);
+                let cuts: Vec<usize> = marks.iter().map(|m| m.0).collect();
+                (self.session.split(id, &SplitBy::Before(cuts)), marks)
+            }
+        };
+        let parts = match parts {
             Ok(p) => p,
             Err(e) => {
                 self.notify(format!("Couldn't split: {e}"));
                 return 0;
             }
         };
+        let safe = |t: &str| t.chars().map(|c| if c.is_alphanumeric() || " -_.,()".contains(c) { c } else { '_' }).collect::<String>();
         let named: Vec<(String, Arc<Vec<u8>>)> = parts
             .into_iter()
-            .map(|(a, b, bytes)| (if a == b { format!("{stem} (page {a}).pdf") } else { format!("{stem} (pages {a}-{b}).pdf") }, bytes))
+            .map(|(a, b, bytes)| {
+                // Bookmark splits are named after the bookmark that starts the part.
+                let title = titles.iter().find(|(p, _)| *p + 1 == a).map(|(_, t)| safe(t));
+                let name = match title {
+                    Some(t) => format!("{stem} - {t}.pdf"),
+                    None if a == b => format!("{stem} (page {a}).pdf"),
+                    None => format!("{stem} (pages {a}-{b}).pdf"),
+                };
+                (name, bytes)
+            })
             .collect();
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            let dir = match &self.export_dir_override {
-                Some(d) => Some(std::path::PathBuf::from(d)),
-                None => rfd::FileDialog::new().set_title("Choose a folder for the split files").pick_folder(),
-            };
-            let Some(dir) = dir else { return 0 };
-            for (name, bytes) in &named {
-                if let Err(e) = crate::editing::write_atomically(&dir.join(name).to_string_lossy(), bytes) {
-                    self.notify(format!("Couldn't write {name}: {e}"));
-                    return 0;
-                }
-            }
-            self.notify(format!("Split into {} files in {}", named.len(), dir.display()));
-        }
-        #[cfg(target_arch = "wasm32")]
-        for (name, bytes) in &named {
-            if let Err(e) = crate::editing::download(name, bytes) {
-                self.notify(format!("Couldn't download {name}: {e}"));
-                return 0;
-            }
-        }
-        named.len()
+        self.write_files(&named, "Choose a folder for the split files")
     }
 
     fn open_created(&mut self, name: &str, bytes: Arc<Vec<u8>>, message: &str) {

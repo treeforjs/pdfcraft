@@ -24,8 +24,10 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
         app.props_draft = Some((id, INFO_KEYS.map(|k| doc.info_value(k).unwrap_or_default())));
     }
     let mut apply = false;
-    let mut split_now: Option<printcraft_engine::SplitBy> = None;
-    let mut split_ready: Option<printcraft_engine::SplitBy> = None;
+    let mut split_now: Option<crate::SplitPlan> = None;
+    let mut split_ready: Option<crate::SplitPlan> = None;
+    let mut extract_now = false;
+    let mut rotate_now = false;
     let mut recover: Option<bool> = None;
     let mut number_now: Option<Edit> = None;
     let mut apply_number = false;
@@ -207,33 +209,55 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
                 let Some((vi, id)) = app.active_ids() else { return };
                 let n = app.session.get(id).map(|d| d.info.pages.len()).unwrap_or(0);
                 let selected: Vec<usize> = app.views[vi].selected.iter().copied().filter(|p| *p > 0).collect();
+                let marks = app.session.bookmark_splits(id);
                 let draft = &mut app.split_draft;
-                if selected.is_empty() {
-                    draft.at_selection = false;
+                use crate::SplitMode as M;
+                if selected.is_empty() && draft.mode == M::Selection {
+                    draft.mode = M::Pages;
                 }
-                ui.radio_value(&mut draft.at_selection, false, "By number of pages");
-                ui.add_enabled_ui(!draft.at_selection, |ui| {
+                ui.radio_value(&mut draft.mode, M::Pages, "Number of pages");
+                ui.add_enabled_ui(draft.mode == M::Pages, |ui| {
                     ui.horizontal(|ui| {
                         ui.add_space(24.0);
                         ui.label("Pages per file");
                         ui.add(egui::DragValue::new(&mut draft.every).range(1..=n.max(1)));
                     });
                 });
-                ui.add_enabled_ui(!selected.is_empty(), |ui| {
-                    ui.radio_value(&mut draft.at_selection, true, "Before each selected page (select pages in Organize)")
+                ui.radio_value(&mut draft.mode, M::Size, "File size");
+                ui.add_enabled_ui(draft.mode == M::Size, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.add_space(24.0);
+                        ui.label("At most");
+                        ui.add(egui::DragValue::new(&mut draft.size_mb).range(0.05..=2000.0).speed(0.1).suffix(" MB"));
+                    });
                 });
-                let by = if draft.at_selection {
-                    printcraft_engine::SplitBy::Before(selected)
-                } else {
-                    printcraft_engine::SplitBy::PageCount(draft.every)
+                ui.add_enabled_ui(!marks.is_empty(), |ui| {
+                    ui.radio_value(&mut draft.mode, M::Bookmarks, format!("Top-level bookmarks ({})", marks.len()))
+                });
+                ui.add_enabled_ui(!selected.is_empty(), |ui| {
+                    ui.radio_value(&mut draft.mode, M::Selection, "Before each selected page (select pages in Organize)")
+                });
+                let plan = match draft.mode {
+                    M::Pages => crate::SplitPlan::By(printcraft_engine::SplitBy::PageCount(draft.every)),
+                    M::Selection => crate::SplitPlan::By(printcraft_engine::SplitBy::Before(selected)),
+                    M::Size => crate::SplitPlan::Size((draft.size_mb * 1_048_576.0) as usize),
+                    M::Bookmarks => crate::SplitPlan::Bookmarks,
                 };
-                let files = printcraft_engine::split_ranges(n, &by).len();
+                let files = match &plan {
+                    crate::SplitPlan::By(by) => Some(printcraft_engine::split_ranges(n, by).len()),
+                    crate::SplitPlan::Bookmarks => {
+                        Some(printcraft_engine::split_ranges(n, &printcraft_engine::SplitBy::Before(marks.iter().map(|m| m.0).collect())).len())
+                    }
+                    crate::SplitPlan::Size(_) => None,
+                };
                 ui.add_space(8.0);
-                ui.label(
-                    egui::RichText::new(format!("Creates {files} file{} from {n} pages.", if files == 1 { "" } else { "s" })).color(t.text_muted),
-                );
-                if files > 1 {
-                    split_ready = Some(by);
+                let text = match files {
+                    Some(f) => format!("Creates {f} file{} from {n} pages.", if f == 1 { "" } else { "s" }),
+                    None => format!("Each file holds as many of the {n} pages as fit."),
+                };
+                ui.label(egui::RichText::new(text).color(t.text_muted));
+                if files.is_none_or(|f| f > 1) {
+                    split_ready = Some(plan);
                 }
             }
             Dialog::ReplacePages => {
@@ -316,6 +340,98 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
                     redact_now = Some(dialog);
                 }
                 close = ok || cancel;
+                return;
+            }
+            Dialog::Extract => {
+                let count = app.active_ids().map_or(0, |(i, _)| app.views[i].target_pages().len());
+                ui.label(egui::RichText::new("Extract pages").font(theme::semibold(18.0)));
+                ui.add_space(8.0);
+                ui.label(format!("{count} page{} selected.", if count == 1 { "" } else { "s" }));
+                ui.checkbox(&mut app.extract_draft.delete, "Delete pages after extracting");
+                ui.checkbox(&mut app.extract_draft.separate, "Extract pages as separate files");
+                ui.add_space(12.0);
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if widgets::pill_button(ui, "Extract", true).clicked() {
+                        extract_now = true;
+                        close = true;
+                    }
+                    if widgets::pill_button(ui, "Cancel", false).clicked() {
+                        close = true;
+                    }
+                });
+                return;
+            }
+            Dialog::RotatePages => {
+                use printcraft_engine::{PageOrientation as O, PageParity as P};
+                let n = app.active_ids().and_then(|(_, id)| app.session.get(id)).map_or(1, |d| d.info.pages.len());
+                let d = &mut app.rotate_draft;
+                ui.label(egui::RichText::new("Rotate Pages").font(theme::semibold(18.0)));
+                ui.add_space(8.0);
+                egui::Grid::new("rotate-pages").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
+                    ui.label("Direction:");
+                    egui::ComboBox::from_id_salt("rotate-dir")
+                        .selected_text(match d.degrees {
+                            270 => "Counterclockwise 90 degrees",
+                            180 => "180 degrees",
+                            _ => "Clockwise 90 degrees",
+                        })
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut d.degrees, 90, "Clockwise 90 degrees");
+                            ui.selectable_value(&mut d.degrees, 270, "Counterclockwise 90 degrees");
+                            ui.selectable_value(&mut d.degrees, 180, "180 degrees");
+                        });
+                    ui.end_row();
+                    ui.label("Pages:");
+                    ui.vertical(|ui| {
+                        ui.radio_value(&mut d.which, 0, "All");
+                        ui.radio_value(&mut d.which, 1, "Selection");
+                        ui.horizontal(|ui| {
+                            ui.radio_value(&mut d.which, 2, "From");
+                            ui.add_enabled(d.which == 2, egui::DragValue::new(&mut d.from).range(1..=n));
+                            ui.label("to");
+                            ui.add_enabled(d.which == 2, egui::DragValue::new(&mut d.to).range(1..=n));
+                            ui.label(format!("of {n}"));
+                        });
+                    });
+                    ui.end_row();
+                    ui.label("Rotate:");
+                    egui::ComboBox::from_id_salt("rotate-parity")
+                        .selected_text(match d.parity {
+                            P::Both => "Even and Odd Pages",
+                            P::Even => "Even Pages Only",
+                            P::Odd => "Odd Pages Only",
+                        })
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut d.parity, P::Both, "Even and Odd Pages");
+                            ui.selectable_value(&mut d.parity, P::Even, "Even Pages Only");
+                            ui.selectable_value(&mut d.parity, P::Odd, "Odd Pages Only");
+                        });
+                    ui.end_row();
+                    ui.label("");
+                    egui::ComboBox::from_id_salt("rotate-orient")
+                        .selected_text(match d.orientation {
+                            O::Both => "Landscape and Portrait Pages",
+                            O::Landscape => "Landscape Pages",
+                            O::Portrait => "Portrait Pages",
+                        })
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut d.orientation, O::Both, "Landscape and Portrait Pages");
+                            ui.selectable_value(&mut d.orientation, O::Landscape, "Landscape Pages");
+                            ui.selectable_value(&mut d.orientation, O::Portrait, "Portrait Pages");
+                        });
+                    ui.end_row();
+                });
+                d.to = d.to.max(d.from);
+                ui.add_space(12.0);
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if widgets::pill_button(ui, "OK", true).clicked() {
+                        rotate_now = true;
+                        close = true;
+                    }
+                    if widgets::pill_button(ui, "Cancel", false).clicked() {
+                        close = true;
+                    }
+                });
                 return;
             }
             Dialog::Revert => {
@@ -629,6 +745,12 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
     }
     if revert_now {
         app.revert_active();
+    }
+    if extract_now {
+        app.extract_selection();
+    }
+    if rotate_now {
+        app.rotate_with_draft();
     }
     match redact_now {
         Some(Dialog::RedactPages) => app.redact_pages(),

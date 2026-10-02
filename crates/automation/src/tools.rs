@@ -138,9 +138,16 @@ pub fn tools() -> Vec<ToolDef> {
             .ro()
             .cmd("edit.find")
             .with(schema(json!({ "doc": doc(), "query": { "type": "string", "minLength": 1 }, "limit": { "type": "integer", "minimum": 1, "description": "Maximum matches (default 500)." } }), &["doc", "query"])),
-        t("page_rotate", "Rotate pages", "Rotate pages by a multiple of 90 degrees (positive is clockwise). Undoable.")
+        t("page_rotate", "Rotate pages", "Rotate pages by a multiple of 90 degrees (positive is clockwise): the listed pages (default all), filtered like Acrobat's Rotate Pages by subset (all, even, odd page numbers) and orientation (all, landscape, portrait). Undoable.")
             .cmd("page.rotate")
-            .with(schema(json!({ "doc": doc(), "pages": pages("to rotate"), "degrees": { "type": "integer" } }), &["doc", "pages", "degrees"])),
+            .with(schema(
+                json!({
+                    "doc": doc(), "pages": pages("to rotate (default: all)"), "degrees": { "type": "integer" },
+                    "subset": { "type": "string", "enum": ["all", "even", "odd"] },
+                    "orientation": { "type": "string", "enum": ["all", "landscape", "portrait"] },
+                }),
+                &["doc", "degrees"],
+            )),
         t("page_delete", "Delete pages", "Delete pages. Undoable until saved.")
             .destructive()
             .cmd("page.delete")
@@ -158,16 +165,19 @@ pub fn tools() -> Vec<ToolDef> {
         t("page_insert_file", "Insert pages from a file", "Insert pages of another PDF so the first becomes page `at`. Undoable.")
             .cmd("page.insert")
             .with(schema(json!({ "doc": doc(), "path": { "type": "string" }, "at": { "type": "integer", "minimum": 1 }, "pages": pages("of the source file (default: all)") }), &["doc", "path", "at"])),
-        t("page_extract", "Extract pages", "Copy pages into a new PDF (links, bookmarks, fields and layers that belong to them come along).")
+        t("page_extract", "Extract pages", "Copy pages into a new PDF (links, bookmarks, fields and layers that belong to them come along). separate: true writes each page as its own file into out_dir; delete: true removes the pages from this document afterwards (undoable).")
             .cmd("page.extract")
-            .with(schema(json!({ "doc": doc(), "pages": pages("to extract"), "out": save_out.clone(), "open": open.clone() }), &["doc", "pages"])),
+            .with(schema(
+                json!({ "doc": doc(), "pages": pages("to extract"), "out": save_out.clone(), "open": open.clone(), "separate": { "type": "boolean" }, "out_dir": { "type": "string" }, "delete": { "type": "boolean" } }),
+                &["doc", "pages"],
+            )),
         t("doc_combine", "Combine files", "Combine PDFs, in order, into one (bookmarks are kept under one entry per file).")
             .cmd("page.combine")
             .with(schema(json!({ "paths": { "type": "array", "items": { "type": "string" }, "minItems": 2 }, "out": save_out, "open": open }), &["paths"])),
-        t("doc_split", "Split a document", "Split into several files, every N pages or before given pages, written to out_dir as <name>-partK.pdf.")
+        t("doc_split", "Split a document", "Split into several files written to out_dir: every N pages, before given pages, at top-level bookmarks (bookmarks: true; files named after them), or by file size (max_mb). Files are <name>-partK.pdf.")
             .cmd("page.split")
             .with(schema(
-                json!({ "doc": doc(), "every": { "type": "integer", "minimum": 1 }, "before": pages("that start a new part"), "out_dir": { "type": "string" } }),
+                json!({ "doc": doc(), "every": { "type": "integer", "minimum": 1 }, "before": pages("that start a new part"), "bookmarks": { "type": "boolean" }, "max_mb": { "type": "number", "exclusiveMinimum": 0 }, "out_dir": { "type": "string" } }),
                 &["doc", "out_dir"],
             )),
         t("bookmark_list", "List bookmarks", "The bookmark tree with each bookmark's path, title, target page and open state.")

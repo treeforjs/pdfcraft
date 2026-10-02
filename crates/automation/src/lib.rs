@@ -137,8 +137,31 @@ impl Automation {
                 if degrees % 90 != 0 {
                     return Err(ToolError::InvalidArgs("degrees must be a multiple of 90".into()));
                 }
-                let pages = self.pages(&a, "pages")?;
-                self.apply(&a, Edit::RotatePages { pages, degrees })?
+                let doc = self.doc(&a)?;
+                let base = match a.opt_ints("pages")? {
+                    Some(_) => self.pages(&a, "pages")?,
+                    None => (0..doc.info.pages.len()).collect(),
+                };
+                let parity = match a.opt_str("subset")?.unwrap_or("all") {
+                    "all" => printcraft_engine::PageParity::Both,
+                    "even" => printcraft_engine::PageParity::Even,
+                    "odd" => printcraft_engine::PageParity::Odd,
+                    s => return Err(ToolError::InvalidArgs(format!("unknown subset {s:?} (all, even, odd)"))),
+                };
+                let orientation = match a.opt_str("orientation")?.unwrap_or("all") {
+                    "all" => printcraft_engine::PageOrientation::Both,
+                    "landscape" => printcraft_engine::PageOrientation::Landscape,
+                    "portrait" => printcraft_engine::PageOrientation::Portrait,
+                    o => return Err(ToolError::InvalidArgs(format!("unknown orientation {o:?} (all, landscape, portrait)"))),
+                };
+                let pages = printcraft_engine::filter_pages(&self.doc(&a)?.info, &base, parity, orientation);
+                if pages.is_empty() {
+                    return Err(failed("no pages match the filters"));
+                }
+                let n = pages.len();
+                let mut out = self.apply(&a, Edit::RotatePages { pages, degrees })?;
+                out["rotated"] = json!(n);
+                out
             }
             "page_delete" => {
                 let pages = self.pages(&a, "pages")?;
@@ -591,9 +614,29 @@ impl Automation {
     fn page_extract(&mut self, a: &Args) -> Result<Value> {
         let doc = self.doc(a)?;
         let (id, name) = (doc.id, format!("{} (extract)", doc.name));
+        let stem = Path::new(&doc.name).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "page".into());
         let pages = self.pages(a, "pages")?;
-        let bytes = self.session.extract(id, &pages).map_err(failed)?;
-        self.deliver(a, &name, bytes)
+        let mut out = if a.opt_bool("separate")?.unwrap_or(false) {
+            // Each page as its own file.
+            let dir = self.resolve(a.str("out_dir").map_err(|_| ToolError::InvalidArgs("separate files need out_dir".into()))?, true)?;
+            std::fs::create_dir_all(&dir).map_err(|e| failed(format!("{}: {e}", dir.display())))?;
+            let mut files = Vec::new();
+            for &p in &pages {
+                let bytes = self.session.extract(id, &[p]).map_err(failed)?;
+                let path = dir.join(format!("{stem}-page{}.pdf", p + 1));
+                write_atomic(&path, &bytes)?;
+                files.push(path.to_string_lossy().into_owned());
+            }
+            json!({ "files": files })
+        } else {
+            let bytes = self.session.extract(id, &pages).map_err(failed)?;
+            self.deliver(a, &name, bytes)?
+        };
+        if a.opt_bool("delete")?.unwrap_or(false) {
+            let deleted = self.apply(a, Edit::DeletePages { pages })?;
+            out["original"] = deleted;
+        }
+        Ok(out)
     }
 
     fn doc_combine(&mut self, a: &Args) -> Result<Value> {
@@ -616,17 +659,45 @@ impl Automation {
         let doc = self.doc(a)?;
         let id = doc.id;
         let stem = Path::new(&doc.name).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "part".into());
-        let by = match (a.opt_int("every")?, a.opt_ints("before")?) {
-            (Some(n), None) if n > 0 => printcraft_organize::SplitBy::PageCount(n as usize),
-            (None, Some(b)) => printcraft_organize::SplitBy::Before(one_based(&b)?),
-            _ => return Err(ToolError::InvalidArgs("pass exactly one of every (a positive page count) or before (page numbers)".into())),
+        let bookmarks = a.opt_bool("bookmarks")?.unwrap_or(false);
+        let max_mb = a.opt_num("max_mb")?;
+        let chosen = [a.get("every").is_some(), a.get("before").is_some(), bookmarks, max_mb.is_some()].iter().filter(|x| **x).count();
+        if chosen != 1 {
+            return Err(ToolError::InvalidArgs(
+                "pass exactly one of every (pages per file), before (page numbers), bookmarks: true, or max_mb".into(),
+            ));
+        }
+        let mut titles: Vec<(usize, String)> = Vec::new();
+        let parts = if let Some(mb) = max_mb {
+            if !mb.is_finite() || mb <= 0.0 {
+                return Err(ToolError::InvalidArgs("max_mb must be positive".into()));
+            }
+            self.session.split_by_size(id, (mb * 1_048_576.0) as usize).map_err(failed)?
+        } else {
+            let by = match (a.opt_int("every")?, a.opt_ints("before")?) {
+                (Some(n), None) if n > 0 => printcraft_organize::SplitBy::PageCount(n as usize),
+                (None, Some(b)) => printcraft_organize::SplitBy::Before(one_based(&b)?),
+                _ if bookmarks => {
+                    titles = self.session.bookmark_splits(id);
+                    if titles.is_empty() {
+                        return Err(failed("the document has no top-level bookmarks"));
+                    }
+                    printcraft_organize::SplitBy::Before(titles.iter().map(|t| t.0).collect())
+                }
+                _ => return Err(ToolError::InvalidArgs("every must be a positive page count".into())),
+            };
+            self.session.split(id, &by).map_err(failed)?
         };
         let dir = self.resolve(a.str("out_dir")?, true)?;
         std::fs::create_dir_all(&dir).map_err(|e| failed(format!("{}: {e}", dir.display())))?;
-        let parts = self.session.split(id, &by).map_err(failed)?;
         let mut files = Vec::new();
         for (i, (first, last, bytes)) in parts.iter().enumerate() {
-            let path = dir.join(format!("{stem}-part{}.pdf", i + 1));
+            let safe = |t: &str| t.chars().map(|c| if c.is_alphanumeric() || " -_.,()".contains(c) { c } else { '_' }).collect::<String>();
+            let file = match titles.iter().find(|t| t.0 + 1 == *first) {
+                Some((_, t)) => format!("{stem}-{}.pdf", safe(t)),
+                None => format!("{stem}-part{}.pdf", i + 1),
+            };
+            let path = dir.join(file);
             write_atomic(&path, bytes)?;
             files.push(json!({ "path": path.to_string_lossy(), "first_page": first, "last_page": last }));
         }

@@ -1543,6 +1543,37 @@ impl Session {
             .collect()
     }
 
+    /// Split into parts of at most `max_bytes` each (Acrobat's "File size"): pages are taken in
+    /// order while their size (as single-page files, an over-estimate because shared fonts and
+    /// images count once per part) fits; a page larger than the limit is a part of its own.
+    pub fn split_by_size(&self, id: DocId, max_bytes: usize) -> Result<Vec<SplitPart>, EditError> {
+        let src = self.cos(id)?;
+        if src.permissions().is_some_and(|p| !p.assemble()) {
+            return Err(EditError::NotPermitted("splitting the document"));
+        }
+        let n = printcraft_organize::page_count(src)?;
+        let mut cuts = Vec::new();
+        let mut used = 0usize;
+        for p in 0..n {
+            let size = self.write_new(&printcraft_organize::extract_pages(src, &[p])?)?.len();
+            if used > 0 && used + size > max_bytes {
+                cuts.push(p);
+                used = 0;
+            }
+            used += size;
+        }
+        self.split(id, &printcraft_organize::SplitBy::Before(cuts))
+    }
+
+    /// Top-level bookmarks as split points: (first page of each part, its bookmark's title).
+    pub fn bookmark_splits(&self, id: DocId) -> Vec<(usize, String)> {
+        let Some(doc) = self.get(id) else { return Vec::new() };
+        let mut out: Vec<(usize, String)> = doc.info.outline.iter().filter_map(|o| Some((o.page?, o.title.clone()))).collect();
+        out.sort_by_key(|x| x.0);
+        out.dedup_by_key(|x| x.0);
+        out
+    }
+
     /// Open freshly created bytes (combine / extract) as a new, unsaved document.
     pub fn open_new(&mut self, name: impl Into<String>, bytes: Arc<Vec<u8>>) -> Result<DocId, OpenError> {
         let id = self.open(name, None, bytes, None)?;
@@ -1622,3 +1653,43 @@ impl Session {
 
 #[cfg(test)]
 mod tests;
+
+/// Page filters of Acrobat's Rotate Pages and page selection: even/odd page numbers and
+/// orientation (as displayed).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum PageParity {
+    #[default]
+    Both,
+    Even,
+    Odd,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum PageOrientation {
+    #[default]
+    Both,
+    Landscape,
+    Portrait,
+}
+
+/// The pages of `pages` (0-based) that pass the filters.
+pub fn filter_pages(info: &printcraft_render::DocInfo, pages: &[usize], parity: PageParity, orientation: PageOrientation) -> Vec<usize> {
+    pages
+        .iter()
+        .copied()
+        .filter(|p| match parity {
+            PageParity::Both => true,
+            // Page numbers are 1-based: index 1 is page 2, an even page.
+            PageParity::Even => p % 2 == 1,
+            PageParity::Odd => p % 2 == 0,
+        })
+        .filter(|p| {
+            let Some(pg) = info.pages.get(*p) else { return false };
+            match orientation {
+                PageOrientation::Both => true,
+                PageOrientation::Landscape => pg.width > pg.height,
+                PageOrientation::Portrait => pg.width <= pg.height,
+            }
+        })
+        .collect()
+}

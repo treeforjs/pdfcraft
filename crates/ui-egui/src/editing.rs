@@ -99,7 +99,7 @@ impl PrintCraftApp {
         }
         match self.views.get_mut(i).and_then(|v| v.pending_action.take()) {
             Some(crate::canvas::ViewAction::InsertFromFile) => self.insert_from_file_dialog(),
-            Some(crate::canvas::ViewAction::Extract) => self.extract_selection(),
+            Some(crate::canvas::ViewAction::Extract) => self.dialog = Some(crate::Dialog::Extract),
             Some(crate::canvas::ViewAction::Split) => self.dialog = Some(crate::Dialog::Split),
             None => {}
         }

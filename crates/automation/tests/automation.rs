@@ -825,3 +825,30 @@ fn stamps_through_tools() {
         Err(ToolError::InvalidArgs(_))
     ));
 }
+
+#[test]
+fn organizing_with_filters_bookmark_splits_and_extract_options() {
+    let dir = workdir("organize2");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    // Rotate the even page numbers only (a.pdf has 3 pages: page 2 is the only even one).
+    let r = ok(&mut a, "page_rotate", json!({ "doc": doc, "degrees": 90, "subset": "even" }));
+    assert_eq!(r["rotated"], 1);
+    let info = ok(&mut a, "doc_info", json!({ "doc": doc }));
+    assert_eq!(info["pages"][1]["rotation"], 90);
+    assert_eq!(info["pages"][0]["rotation"], 0);
+    // Split at top-level bookmarks: parts named after them.
+    ok(&mut a, "bookmark_add", json!({ "doc": doc, "title": "Start", "page": 1 }));
+    ok(&mut a, "bookmark_add", json!({ "doc": doc, "title": "End/Part", "page": 3 }));
+    let s = ok(&mut a, "doc_split", json!({ "doc": doc, "bookmarks": true, "out_dir": "parts" }));
+    let files: Vec<String> =
+        s["files"].as_array().unwrap().iter().map(|f| f["path"].as_str().unwrap().rsplit('/').next().unwrap().to_string()).collect();
+    assert_eq!(files, ["a-Start.pdf", "a-End_Part.pdf"]);
+    let s = ok(&mut a, "doc_split", json!({ "doc": doc, "max_mb": 0.0001, "out_dir": "sized" }));
+    assert_eq!(s["files"].as_array().unwrap().len(), 3, "tiny limit: a page per file");
+    // Extract as separate files and delete them from the original.
+    let e = ok(&mut a, "page_extract", json!({ "doc": doc, "pages": [1, 2], "separate": true, "out_dir": "pages", "delete": true }));
+    assert_eq!(e["files"].as_array().unwrap().len(), 2);
+    assert_eq!(e["original"]["pages"], 1);
+    assert!(matches!(a.call("page_extract", &json!({ "doc": doc, "pages": [1], "separate": true })), Err(ToolError::InvalidArgs(_))));
+}

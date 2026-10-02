@@ -1725,6 +1725,29 @@ fn organize_toolbar(view: &mut DocView, info: &DocInfo, editable: bool, ui: &mut
                 if icons::button(ui, "scissors", 30.0, false, "Split into files…").clicked() {
                     view.pending_action = Some(ViewAction::Split);
                 }
+                // Select ▸ all, odd, even, landscape, portrait pages (Acrobat's page range
+                // selection in Organize Pages).
+                let sel = icons::button(ui, "list", 30.0, false, "Select pages");
+                egui::Popup::menu(&sel).show(|ui| {
+                    use printcraft_engine::{PageOrientation as O, PageParity as P, filter_pages};
+                    let all: Vec<usize> = (0..n).collect();
+                    for (label, parity, orient) in [
+                        ("All pages", P::Both, O::Both),
+                        ("Odd pages", P::Odd, O::Both),
+                        ("Even pages", P::Even, O::Both),
+                        ("Landscape pages", P::Both, O::Landscape),
+                        ("Portrait pages", P::Both, O::Portrait),
+                    ] {
+                        if ui.button(label).clicked() {
+                            view.select_pages(&filter_pages(info, &all, parity, orient));
+                            ui.close();
+                        }
+                    }
+                    if ui.button("None").clicked() {
+                        view.select_pages(&[]);
+                        ui.close();
+                    }
+                });
                 ui.add_space(8.0);
                 if ui.add_enabled_ui(first > 0, |ui| icons::button(ui, "chevron-left", 30.0, false, "Move earlier")).inner.clicked() {
                     view.pending_edit = Some(Edit::MovePages { pages: targets.clone(), to: first - 1 });

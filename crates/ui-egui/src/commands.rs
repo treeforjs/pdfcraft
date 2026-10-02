@@ -327,7 +327,15 @@ impl PrintCraftApp {
                 self.boxes_draft.seeded = None;
                 self.dialog = Some(Dialog::PageBoxes);
             }
-            "page.extract" => self.extract_selection(),
+            "page.extract" => self.dialog = Some(Dialog::Extract),
+            "page.rotate_dialog" => {
+                if let Some(i) = active {
+                    let n = self.session.get(self.views[i].id).map_or(1, |d| d.info.pages.len());
+                    self.rotate_draft.to = n;
+                    self.rotate_draft.which = if self.views[i].selected.is_empty() { 0 } else { 1 };
+                }
+                self.dialog = Some(Dialog::RotatePages);
+            }
             "page.split" => self.dialog = Some(Dialog::Split),
             "help.shortcuts" => self.dialog = Some(Dialog::Shortcuts),
             "help.about" => self.dialog = Some(Dialog::About),

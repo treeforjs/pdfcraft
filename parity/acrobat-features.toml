@@ -2551,11 +2551,11 @@ title = "Rotate by range with even/odd and orientation filters"
 area = "D"
 tier = "P1"
 milestone = "M4"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["page.rotate_dialog"]
+tools = ["page_rotate"]
+evidence = ["crates/ui-egui/tests/editing.rs::extract_options_and_rotate_pages_dialog", "crates/automation/tests/automation.rs::organizing_with_filters_bookmark_splits_and_extract_options", "crates/engine/src/tests.rs::split_by_size_and_bookmarks_and_page_filters"]
+notes = "Rotate Pages: all/selection/range; even/odd; landscape/portrait"
 
 [[feature]]
 id = "organize.delete-pages"
@@ -2683,10 +2683,10 @@ title = "Extract pages as separate files"
 area = "D"
 tier = "P1"
 milestone = "M4"
-status = "planned"
-commands = []
-tools = []
-evidence = []
+status = "shipped"
+commands = ["page.extract"]
+tools = ["page_extract"]
+evidence = ["crates/ui-egui/tests/editing.rs::extract_options_and_rotate_pages_dialog", "crates/automation/tests/automation.rs::organizing_with_filters_bookmark_splits_and_extract_options"]
 notes = ""
 
 [[feature]]
@@ -2695,11 +2695,11 @@ title = "Delete pages after extracting"
 area = "D"
 tier = "P1"
 milestone = "M4"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["page.extract"]
+tools = ["page_extract"]
+evidence = ["crates/ui-egui/tests/editing.rs::extract_options_and_rotate_pages_dialog", "crates/automation/tests/automation.rs::organizing_with_filters_bookmark_splits_and_extract_options"]
+notes = "undoable"
 
 [[feature]]
 id = "organize.replace-pages"
@@ -2767,11 +2767,11 @@ title = "Select by range, odd/even, landscape/portrait"
 area = "D"
 tier = "P1"
 milestone = "M4"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["page.organize"]
+tools = ["page_rotate"]
+evidence = ["crates/engine/src/tests.rs::split_by_size_and_bookmarks_and_page_filters"]
+notes = "Organize ▸ Select: all, odd, even, landscape, portrait; ranges via the page tools"
 
 [[feature]]
 id = "organize.thumbnail-size"
@@ -2815,11 +2815,11 @@ title = "Split by file size"
 area = "D"
 tier = "P1"
 milestone = "M4"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["page.split"]
+tools = ["doc_split"]
+evidence = ["crates/automation/tests/automation.rs::organizing_with_filters_bookmark_splits_and_extract_options", "crates/engine/src/tests.rs::split_by_size_and_bookmarks_and_page_filters"]
+notes = "greedy by single-page size (an over-estimate: parts stay under the limit)"
 
 [[feature]]
 id = "organize.split-by-bookmarks"
@@ -2827,11 +2827,11 @@ title = "Split by top-level bookmarks"
 area = "D"
 tier = "P1"
 milestone = "M4"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["page.split"]
+tools = ["doc_split"]
+evidence = ["crates/automation/tests/automation.rs::organizing_with_filters_bookmark_splits_and_extract_options", "crates/engine/src/tests.rs::split_by_size_and_bookmarks_and_page_filters"]
+notes = "files named after the bookmarks"
 
 [[feature]]
 id = "organize.split-naming"

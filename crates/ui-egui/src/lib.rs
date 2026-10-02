@@ -46,7 +46,7 @@ use printcraft_engine::{DocId, Session};
 
 pub use canvas::DocView;
 pub use editing::{CloseRequest, SaveTarget};
-pub use files::{FilePurpose, SplitDraft};
+pub use files::{ExtractDraft, FilePurpose, RotateDraft, SplitDraft, SplitMode, SplitPlan};
 pub use recovery::{AUTOSAVE_SECS, RecoveryMeta, RecoveryStore};
 use theme::ThemeKind;
 
@@ -132,6 +132,9 @@ pub enum Dialog {
     Print,
     /// File ▸ Revert confirmation.
     Revert,
+    /// Organize ▸ Extract (options), Rotate Pages.
+    Extract,
+    RotatePages,
     /// Remove Hidden Information and Sanitize Document.
     RemoveHidden,
     Sanitize,
@@ -205,6 +208,8 @@ pub struct PrintCraftApp {
     pub export_dir_override: Option<String>,
     /// Split dialog settings.
     pub split_draft: SplitDraft,
+    pub extract_draft: ExtractDraft,
+    pub rotate_draft: RotateDraft,
     /// Where autosaves go (`None`: autosave off, e.g. on the web and in tests).
     pub recovery: Option<RecoveryStore>,
     /// Entries left by a previous session, offered in the Recovery dialog.
@@ -299,7 +304,9 @@ impl PrintCraftApp {
             props_draft: None,
             requests: Default::default(),
             export_dir_override: None,
-            split_draft: SplitDraft { every: 1, at_selection: false },
+            split_draft: SplitDraft::default(),
+            extract_draft: ExtractDraft::default(),
+            rotate_draft: RotateDraft::default(),
             recovery: None,
             recoverable: Vec::new(),
             recovery_keys: Default::default(),

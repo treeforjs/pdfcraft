@@ -341,6 +341,9 @@ fn extract_button_copies_selected_pages_to_a_new_tab() {
     h.run_steps(2);
     h.get_by_label("Extract pages to a new document").click();
     h.run_steps(3);
+    h.get_by_label("2 pages selected.");
+    h.get_all_by_label("Extract").last().unwrap().click();
+    h.run_steps(3);
     let app = h.state();
     assert_eq!(app.views.len(), 2);
     assert_eq!(texts_of(app, 1), ["Page 2", "Page 3"]);
@@ -392,7 +395,7 @@ fn split_before_selected_pages() {
     let mut h = organize(4);
     h.state_mut().export_dir_override = Some(dir.to_string_lossy().into_owned());
     h.state_mut().views[0].select_pages(&[2]);
-    h.state_mut().split_draft.at_selection = true;
+    h.state_mut().split_draft.mode = printcraft_ui_egui::SplitMode::Selection;
     h.state_mut().run_command("page.split");
     h.run_steps(3);
     h.get_by_label_contains("Creates 2 files from 4 pages");
@@ -483,4 +486,34 @@ fn replace_pages_dialog_swaps_page_content() {
     let doc = s.session.get(s.views[0].id).unwrap();
     assert_eq!(doc.info.pages.len(), 3);
     assert_eq!(doc.can_undo(), Some("Replace page"));
+}
+
+#[test]
+fn extract_options_and_rotate_pages_dialog() {
+    let dir = temp_path("extract-sep");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut h = organize(4);
+    h.state_mut().export_dir_override = Some(dir.to_string_lossy().into_owned());
+    h.state_mut().views[0].select_pages(&[1, 2]);
+    h.state_mut().run_command("page.extract");
+    h.run_steps(2);
+    h.state_mut().extract_draft = printcraft_ui_egui::ExtractDraft { separate: true, delete: true };
+    h.get_all_by_label("Extract").last().unwrap().click();
+    h.run_steps(3);
+    let mut names: Vec<String> = std::fs::read_dir(&dir).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+    names.sort();
+    assert_eq!(names, ["doc (page 2).pdf", "doc (page 3).pdf"]);
+    assert_eq!(texts_of(h.state(), 0), ["Page 1", "Page 4"], "deleted after extracting");
+    let _ = std::fs::remove_dir_all(dir);
+    // Rotate Pages: odd page numbers only.
+    h.state_mut().run_command("page.rotate_dialog");
+    h.run_steps(2);
+    h.state_mut().rotate_draft.which = 0;
+    h.state_mut().rotate_draft.parity = printcraft_engine::PageParity::Odd;
+    h.get_by_label("OK").click();
+    h.run_steps(3);
+    let s = h.state();
+    let d = s.session.get(s.views[0].id).unwrap();
+    assert_eq!(d.info.pages.iter().map(|p| p.rotation).collect::<Vec<_>>(), [90, 0]);
 }

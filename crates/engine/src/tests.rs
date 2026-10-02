@@ -940,3 +940,24 @@ fn revert_goes_back_to_the_saved_version() {
     assert_eq!(page_texts(&s, id), ["Page 2"], "the saved state, not the opened one");
     assert_eq!(d.info.pages[0].rotation, 0);
 }
+
+#[test]
+fn split_by_size_and_bookmarks_and_page_filters() {
+    let (mut s, id) = session_with(6);
+    // Every page alone is a few hundred bytes: a limit of about two pages gives three parts.
+    let one = s.split(id, &printcraft_organize::SplitBy::PageCount(1)).unwrap()[0].2.len();
+    let parts = s.split_by_size(id, one * 2 + one / 2).unwrap();
+    assert!(parts.len() >= 2 && parts.len() <= 6, "{}", parts.len());
+    assert_eq!(parts.last().unwrap().1, 6, "every page is in a part");
+    assert_eq!(s.split_by_size(id, 1).unwrap().len(), 6, "pages larger than the limit stand alone");
+    // Top-level bookmarks name the parts.
+    s.apply(id, Edit::AddBookmark { parent: vec![], index: 0, title: "Intro".into(), page: 0 }).unwrap();
+    s.apply(id, Edit::AddBookmark { parent: vec![], index: 1, title: "Results".into(), page: 3 }).unwrap();
+    assert_eq!(s.bookmark_splits(id), [(0, "Intro".to_string()), (3, "Results".to_string())]);
+    // Filters: page numbers 2, 4, 6 are even.
+    let info = &s.get(id).unwrap().info;
+    let all: Vec<usize> = (0..6).collect();
+    assert_eq!(filter_pages(info, &all, PageParity::Even, PageOrientation::Both), [1, 3, 5]);
+    assert_eq!(filter_pages(info, &all, PageParity::Odd, PageOrientation::Landscape), Vec::<usize>::new());
+    assert_eq!(filter_pages(info, &all, PageParity::Odd, PageOrientation::Portrait), [0, 2, 4]);
+}
