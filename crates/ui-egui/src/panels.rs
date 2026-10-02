@@ -515,6 +515,9 @@ pub fn right_panel(app: &mut PrintCraftApp, ui: &mut egui::Ui) {
         }
         None => {}
     }
+    if let Some((p, i)) = app.views.get_mut(index).and_then(|v| v.comments.default_request.take()) {
+        app.make_comment_default(p, i);
+    }
     if let Some((p, i)) = app.views.get_mut(index).and_then(|v| v.comments.props_request.take()) {
         app.open_comment_props(p, i);
     }

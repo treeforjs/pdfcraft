@@ -3779,11 +3779,11 @@ title = "Make current properties the tool default"
 area = "E"
 tier = "P1"
 milestone = "M5"
-status = "planned"
-commands = []
+status = "shipped"
+commands = ["comment.list"]
 tools = []
-evidence = []
-notes = ""
+evidence = ["crates/ui-egui/tests/comments.rs::make_current_properties_default"]
+notes = "colour, opacity and line width become the tool's defaults (canvas and Comments panel menus)"
 
 [[feature]]
 id = "comment.author-identity"
@@ -4527,11 +4527,11 @@ title = "Required-field highlighting"
 area = "F"
 tier = "P1"
 milestone = "M6"
-status = "planned"
+status = "shipped"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["form_set_props"]
+evidence = ["crates/ui-egui/tests/view.rs::required_fields_get_a_red_border_when_highlighting"]
+notes = "required fields get a red border when fields are highlighted"
 
 [[feature]]
 id = "form.reset-form"

@@ -1215,18 +1215,18 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
                 crate::forms_ui::paint_page(ui, painter, &xf, i, info, &form, view);
             }
 
-            // Form-field highlight (Acrobat's "Highlight existing fields").
+            // Form-field highlight (Acrobat's "Highlight existing fields"); required fields get a
+            // red border.
             if view.highlight_fields {
-                for f in info.fields.iter().filter(|f| f.page == Some(i)) {
-                    if let Some(fr) = f.rect {
-                        let sr = xf.user_rect(info, i, fr);
+                for f in form.iter() {
+                    let required = f.has(printcraft_engine::field_flags::REQUIRED);
+                    for w in f.widgets.iter().filter(|w| w.page == Some(i)) {
+                        let r = w.rect;
+                        let sr = xf.user_rect(info, i, [r[0] as f32, r[1] as f32, r[2] as f32, r[3] as f32]);
                         painter.rect_filled(sr, CornerRadius::same(1), Color32::from_rgba_unmultiplied(0x6E, 0x8E, 0xF5, 48));
-                        painter.rect_stroke(
-                            sr,
-                            CornerRadius::same(1),
-                            Stroke::new(1.0, Color32::from_rgb(0x6E, 0x8E, 0xF5)),
-                            egui::StrokeKind::Inside,
-                        );
+                        let (width, color) =
+                            if required { (2.0, Color32::from_rgb(0xE3, 0x22, 0x22)) } else { (1.0, Color32::from_rgb(0x6E, 0x8E, 0xF5)) };
+                        painter.rect_stroke(sr, CornerRadius::same(1), Stroke::new(width, color), egui::StrokeKind::Inside);
                     }
                 }
             }
@@ -1419,6 +1419,9 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
     app.quick_tool = tool;
     if let Some((p, i)) = open_props {
         app.open_comment_props(p, i);
+    }
+    if let Some((p, i)) = app.views[index].comments.default_request.take() {
+        app.make_comment_default(p, i);
     }
     if let Some((name, w)) = field_props {
         app.open_field_props(&name, w);

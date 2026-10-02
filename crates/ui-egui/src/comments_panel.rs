@@ -423,6 +423,10 @@ fn card(
                 view.comments.props_request = Some((a.page, a.index));
                 ui.close();
             }
+            if ui.add_enabled(crate::comments::tool_for(a).is_some(), egui::Button::new("Make Current Properties Default")).clicked() {
+                view.comments.default_request = Some((a.page, a.index));
+                ui.close();
+            }
             ui.separator();
             if ui.add_enabled(!a.locked, egui::Button::new("Delete")).clicked() {
                 view.comments.selected = None;

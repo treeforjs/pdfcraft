@@ -249,6 +249,34 @@ impl CommentPrefs {
             s.width = w.clamp(0.5, 12.0);
         }
     }
+
+    pub fn set_style(&mut self, tool: CommentTool, style: Style) {
+        if let Some((_, s)) = self.styles.iter_mut().find(|(t, _)| *t == tool) {
+            *s = style;
+        }
+    }
+}
+
+/// The tool that makes comments like `a` (for Make Current Properties Default).
+pub fn tool_for(a: &Annotation) -> Option<CommentTool> {
+    Some(match (a.subtype.as_str(), a.intent.as_deref()) {
+        ("Text", _) => CommentTool::Note,
+        ("FreeText", Some("FreeTextCallout")) => CommentTool::Callout,
+        ("FreeText", Some("FreeTextTypeWriter")) => return None,
+        ("FreeText", _) => CommentTool::TextBox,
+        ("Highlight", _) => CommentTool::Highlight,
+        ("Underline", _) => CommentTool::Underline,
+        ("StrikeOut", _) => CommentTool::StrikeOut,
+        ("Ink", _) => CommentTool::Ink,
+        ("Line", _) => CommentTool::Line,
+        ("Square", _) => CommentTool::Rectangle,
+        ("Circle", _) => CommentTool::Oval,
+        ("Polygon", Some("PolygonCloud")) => CommentTool::Cloud,
+        ("Polygon", _) => CommentTool::Polygon,
+        ("PolyLine", _) => CommentTool::PolyLine,
+        ("Caret", _) => CommentTool::Caret,
+        _ => return None,
+    })
 }
 
 /// The user's login name, which Acrobat uses as the default comment author.
@@ -329,6 +357,8 @@ pub struct CommentView {
     pub sort: SortBy,
     /// Comment Properties was asked for from the panel: (page, index).
     pub props_request: Option<(usize, usize)>,
+    /// Make Current Properties Default was asked for: (page, index).
+    pub default_request: Option<(usize, usize)>,
     pub search_focus: bool,
     /// Where the canvas context menu was opened: (page, user-space point).
     pub context_at: Option<(usize, [f64; 2])>,
@@ -1065,6 +1095,10 @@ pub(crate) fn context_menu(ui: &mut egui::Ui, view: &mut DocView, info: &DocInfo
             }
             if ui.add_enabled(allowed, egui::Button::new("Properties…")).clicked() {
                 action = Some(CanvasAction::Properties(page, index));
+                ui.close();
+            }
+            if ui.add_enabled(tool_for(a).is_some(), egui::Button::new("Make Current Properties Default")).clicked() {
+                view.comments.default_request = Some((page, index));
                 ui.close();
             }
         }

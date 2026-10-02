@@ -424,3 +424,33 @@ fn the_panel_filters_by_colour_and_checkmark() {
     h.run_steps(2);
     assert_eq!(cards(&h), before);
 }
+
+#[test]
+fn make_current_properties_default() {
+    let mut h = harness(|app| {
+        app.set_option("panel", "comments").unwrap();
+        app.set_option("quick", "square").unwrap();
+    });
+    drag_pt(&mut h, (40.0, 100.0), (140.0, 40.0));
+    h.state_mut().set_option("quick", "select").unwrap();
+    h.state_mut().apply_edit(printcraft_engine::Edit::StyleAnnotation {
+        page: 0,
+        index: 0,
+        color: Some([0.0, 0.47, 0.84]),
+        opacity: Some(0.5),
+        width: Some(5.0),
+    });
+    h.run_steps(2);
+    h.get_by_label("More").click();
+    h.run_steps(2);
+    h.get_by_label("Make Current Properties Default").click();
+    h.run_steps(3);
+    let st = h.state().comment_prefs.style(printcraft_ui_egui::comments::CommentTool::Rectangle);
+    assert_eq!((st.color, st.opacity, st.width), ([0.0, 0.47, 0.84], 0.5, 5.0));
+    // The next rectangle takes it.
+    h.state_mut().set_option("quick", "square").unwrap();
+    drag_pt(&mut h, (160.0, 100.0), (260.0, 40.0));
+    let c = comments(&h);
+    let last = c.iter().rfind(|a| a.subtype == "Square").unwrap();
+    assert_eq!(last.color, Some([0.0, 0.47, 0.84]));
+}

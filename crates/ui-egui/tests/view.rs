@@ -201,3 +201,26 @@ fn the_hand_tool_pans_by_dragging() {
     assert!(before.top() - after.top() > 200.0, "dragging up scrolls down: {before:?} → {after:?}");
     assert!(h.state().views[0].selected_text().is_none(), "no text selection with the hand");
 }
+
+#[test]
+fn required_fields_get_a_red_border_when_highlighting() {
+    let mut h = form_harness();
+    h.state_mut().set_option("panel", "none").unwrap();
+    h.state_mut().set_option("fields", "on").unwrap();
+    let props = printcraft_engine::FieldProps { required: Some(true), ..Default::default() };
+    h.state_mut().apply_edit(printcraft_engine::Edit::SetFieldProps { name: "fullname".into(), props: Box::new(props) });
+    for _ in 0..100 {
+        h.run_steps(2);
+        if !h.state().render_pending() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    let r = rect(&h, 0).expect("page 1");
+    // Just inside the left edge of the field (x 50, y 300..330 on a 300×400 page).
+    let ppp = h.ctx.pixels_per_point();
+    let at = egui::pos2(r.min.x + r.width() * (50.0 / 300.0) + 0.75, r.min.y + r.height() * (1.0 - 315.0 / 400.0));
+    let img = h.render().expect("renders");
+    let px = *img.get_pixel((at.x * ppp) as u32, (at.y * ppp) as u32);
+    assert!(px[0] > 180 && px[1] < 100 && px[2] < 100, "a red border: {px:?}");
+}

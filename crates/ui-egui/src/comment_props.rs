@@ -29,6 +29,26 @@ const ICONS: [NoteIcon; 7] =
     [NoteIcon::Comment, NoteIcon::Note, NoteIcon::Help, NoteIcon::Insert, NoteIcon::Key, NoteIcon::NewParagraph, NoteIcon::Paragraph];
 
 impl PrintCraftApp {
+    /// Make Current Properties Default: new comments of this kind take this one's colour,
+    /// opacity and line width.
+    pub fn make_comment_default(&mut self, page: usize, index: usize) {
+        let Some((_, id)) = self.active_ids() else { return };
+        let Some(doc) = self.session.get(id) else { return };
+        let Some(a) = doc.info.annotations.iter().find(|a| a.page == page && a.index == index && a.in_reply_to.is_none()) else { return };
+        let Some(tool) = crate::comments::tool_for(a) else { return };
+        let Some(p) = doc.comment_props(page, index) else { return };
+        let mut style = self.comment_prefs.style(tool);
+        if let Some(c) = p.color {
+            style.color = c;
+        }
+        style.opacity = p.opacity;
+        if let Some(w) = p.width {
+            style.width = w;
+        }
+        self.comment_prefs.set_style(tool, style);
+        self.notify(format!("New {} comments will look like this one", tool.label().to_lowercase()));
+    }
+
     /// Open Comment Properties for the comment at `(page, index)` of the active document.
     pub fn open_comment_props(&mut self, page: usize, index: usize) {
         let Some((_, id)) = self.active_ids() else { return };
