@@ -343,6 +343,17 @@ impl Automation {
             "accessibility_set_alt" => self.accessibility_set_alt(&a)?,
             "sign_id_create" => self.sign_id_create(&a)?,
             "sign_document" => self.sign_document(&a)?,
+            "sign_keychain_ids" => {
+                #[cfg(target_os = "macos")]
+                let ids: Vec<Value> = printcraft_engine::sign::keychain::identities(None)
+                    .map_err(failed)?
+                    .iter()
+                    .map(|id| json!({ "id": printcraft_engine::sign::keychain::reference(&id.certificate), "certificate": signing::cert_json(&id.certificate) }))
+                    .collect();
+                #[cfg(not(target_os = "macos"))]
+                let ids: Vec<Value> = Vec::new();
+                json!({ "count": ids.len(), "ids": ids })
+            }
             "sign_trust" => self.sign_trust(&a)?,
             "comment_mark" => self.comment_mark(&a)?,
             "comment_lock" => self.comment_lock(&a)?,

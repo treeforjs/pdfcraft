@@ -5759,11 +5759,11 @@ title = "Sign with macOS Keychain identities"
 area = "H"
 tier = "P0"
 milestone = "M9"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["sign.digital"]
+tools = ["sign_keychain_ids", "sign_document"]
+evidence = ["crates/sign/tests/pdf.rs::signing_with_keychain_identities", "crates/automation/tests/automation.rs::digital_ids_signing_and_validation_through_tools"]
+notes = "Security framework identities (RSA PKCS #1 v1.5, ECDSA P-256/P-384) listed with the digital IDs in Sign with a Digital ID; the key never leaves the Keychain (ExternalKey); keychain:<fingerprint|name> for agents. The test uses a throwaway keychain file (run with --ignored)"
 
 [[feature]]
 id = "sign.windows-cert-store"

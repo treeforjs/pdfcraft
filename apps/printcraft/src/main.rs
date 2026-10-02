@@ -51,6 +51,7 @@ fn main() -> eframe::Result {
                 app.restore(&json);
             }
             app.integrated_titlebar = integrated;
+            app.keychain_ids = cfg!(target_os = "macos");
             if let Some(file) = &control_file {
                 let client = app.attach_control(&cc.egui_ctx);
                 match printcraft_ui_egui::control::serve(client).and_then(|ep| write_control_file(file, ep.port, &ep.token).map(|()| ep.port)) {

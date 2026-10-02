@@ -7,6 +7,8 @@
 
 pub mod cms;
 pub mod der;
+#[cfg(target_os = "macos")]
+pub mod keychain;
 pub mod keys;
 pub mod pdf;
 pub mod pkcs12;

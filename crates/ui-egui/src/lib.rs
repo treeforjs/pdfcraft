@@ -292,6 +292,8 @@ pub struct PrintCraftApp {
     pub a11y: a11y_ui::A11yState,
     pub a11y_skipped: std::collections::BTreeSet<printcraft_engine::a11y::Rule>,
     pub alt_draft: a11y_ui::AltDraft,
+    /// List the macOS Keychain's signing identities among the digital IDs (the desktop app).
+    pub keychain_ids: bool,
     /// The last space audit.
     pub space_audit: Vec<printcraft_engine::optimize::SpaceUse>,
     /// Combine files: the files staged so far.
@@ -422,6 +424,7 @@ impl PrintCraftApp {
             a11y: a11y_ui::A11yState::default(),
             a11y_skipped: Default::default(),
             alt_draft: Default::default(),
+            keychain_ids: false,
             space_audit: Vec::new(),
             combine_draft: Vec::new(),
             custom_stamps: Vec::new(),
@@ -745,7 +748,8 @@ impl PrintCraftApp {
             "recent": self.recent,
             "theme": self.theme,
             "signature": self.signature,
-            "digital_ids": self.digital_ids,
+            // Keychain identities are read from macOS each time.
+            "digital_ids": self.digital_ids.iter().filter(|e| !e.path.starts_with("keychain:")).collect::<Vec<_>>(),
             "trusted": trusted,
             "custom_stamps": stamps_ui::encode(&self.custom_stamps),
         })

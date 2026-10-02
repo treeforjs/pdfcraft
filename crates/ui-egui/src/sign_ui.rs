@@ -162,6 +162,14 @@ fn id_dir() -> Option<PathBuf> {
     crate::recovery::RecoveryStore::default_dir().and_then(|d| d.parent().map(|p| p.join("Digital IDs")))
 }
 
+/// A Keychain identity by its `keychain:` reference.
+fn keychain_id(reference: &str) -> Result<DigitalId, String> {
+    #[cfg(target_os = "macos")]
+    return sign::keychain::find(reference).map_err(|e| e.to_string());
+    #[cfg(not(target_os = "macos"))]
+    Err(format!("{reference}: Keychain identities are only available on macOS"))
+}
+
 pub fn entry_for(path: &str, c: &Certificate) -> DigitalIdEntry {
     DigitalIdEntry {
         path: path.to_string(),
@@ -175,8 +183,25 @@ pub fn entry_for(path: &str, c: &Certificate) -> DigitalIdEntry {
 impl PrintCraftApp {
     /// Start signing: the rectangle (or field) is known; show Sign with a Digital ID.
     pub fn start_signing(&mut self, page: usize, rect: Option<[f64; 4]>, field: Option<String>, certify: Option<u8>) {
+        self.refresh_keychain_ids();
         self.sign_draft = Some(SignDraft::new(page, rect, field, certify, self.digital_ids.len()));
         self.dialog = Some(crate::Dialog::Sign);
+    }
+
+    /// List the macOS Keychain's signing identities (after the file-based IDs).
+    fn refresh_keychain_ids(&mut self) {
+        self.digital_ids.retain(|e| !e.path.starts_with("keychain:"));
+        #[cfg(target_os = "macos")]
+        if self.keychain_ids {
+            match sign::keychain::identities(None) {
+                Ok(ids) => {
+                    for id in ids {
+                        self.digital_ids.push(entry_for(&sign::keychain::reference(&id.certificate), &id.certificate));
+                    }
+                }
+                Err(e) => self.notify(format!("The Keychain's digital IDs couldn't be listed: {e}")),
+            }
+        }
     }
 
     /// Add a digital ID file to the list (or select it if it's there).
@@ -246,11 +271,15 @@ impl PrintCraftApp {
         let Some((_, doc_id)) = self.active_ids() else { return Err("no document".into()) };
         let d = self.sign_draft.clone().ok_or("nothing to sign")?;
         let entry = d.selected.and_then(|i| self.digital_ids.get(i)).cloned().ok_or("Choose a digital ID.")?;
-        let bytes = std::fs::read(&entry.path).map_err(|e| format!("{}: {e}", entry.path))?;
-        let id = sign::pkcs12::open(&bytes, &d.password).map_err(|e| match e {
-            sign::SignError::WrongPassword => "The password is incorrect.".to_string(),
-            e => e.to_string(),
-        })?;
+        let id = if entry.path.starts_with("keychain:") {
+            keychain_id(&entry.path)?
+        } else {
+            let bytes = std::fs::read(&entry.path).map_err(|e| format!("{}: {e}", entry.path))?;
+            sign::pkcs12::open(&bytes, &d.password).map_err(|e| match e {
+                sign::SignError::WrongPassword => "The password is incorrect.".to_string(),
+                e => e.to_string(),
+            })?
+        };
         let some = |s: &str| (!s.trim().is_empty()).then(|| s.trim().to_string());
         let opts = SignOptions {
             field: d.field.clone(),
@@ -370,7 +399,8 @@ fn choose(ui: &mut egui::Ui, app: &mut PrintCraftApp, t: &Tokens) -> bool {
             icons::paint(ui, Rect::from_min_size(rect.min + vec2(10.0, 15.0), vec2(20.0, 20.0)), "badge-check", 18.0, t.accent);
             ui.painter().text(rect.min + vec2(40.0, 9.0), egui::Align2::LEFT_TOP, &e.name, theme::semibold(13.0), t.text);
             let sub = format!(
-                "{}Issued by: {}, Expires: {}",
+                "{}{}Issued by: {}, Expires: {}",
+                if e.path.starts_with("keychain:") { "Keychain  ·  " } else { "" },
                 if e.email.is_empty() { String::new() } else { format!("{}  ·  ", e.email) },
                 e.issuer,
                 e.expires
@@ -538,6 +568,7 @@ fn sign_as(ui: &mut egui::Ui, app: &mut PrintCraftApp, t: &Tokens) -> bool {
         return false;
     };
     title(ui, &format!("{} as \"{}\"", if d.certify.is_some() { "Certify" } else { "Sign" }, entry.name));
+    let in_keychain = entry.path.starts_with("keychain:");
     let mut close = false;
     let mut go = false;
     if d.rect.is_some() || d.field.is_some() {
@@ -579,10 +610,17 @@ fn sign_as(ui: &mut egui::Ui, app: &mut PrintCraftApp, t: &Tokens) -> bool {
         let l = ui.label("Location");
         ui.add(egui::TextEdit::singleline(&mut d.location).hint_text("Optional").desired_width(260.0)).labelled_by(l.id);
         ui.end_row();
-        let l = ui.label("Digital ID password");
-        let r = ui.add(egui::TextEdit::singleline(&mut d.password).password(true).desired_width(200.0)).labelled_by(l.id);
-        if r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-            go = true;
+        if in_keychain {
+            ui.label("");
+            ui.label(
+                egui::RichText::new("The key is in the macOS Keychain, which may ask to allow PrintCraft to use it.").small().color(t.text_muted),
+            );
+        } else {
+            let l = ui.label("Digital ID password");
+            let r = ui.add(egui::TextEdit::singleline(&mut d.password).password(true).desired_width(200.0)).labelled_by(l.id);
+            if r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                go = true;
+            }
         }
         ui.end_row();
     });

@@ -206,3 +206,49 @@ trailer << /Root 1 0 R >>
         assert_eq!((s.status, s.certify, s.modification.clone()), (Status::Unknown, certify, Modification::None), "{:?}", s.details);
     }
 }
+
+/// Signing with Keychain identities, in a throwaway keychain file. Ignored by default: creating
+/// a keychain touches the user's keychain search list (restored afterwards).
+#[cfg(target_os = "macos")]
+#[test]
+#[ignore = "creates a temporary macOS keychain; run with --ignored"]
+fn signing_with_keychain_identities() {
+    use std::process::Command;
+    let dir = std::env::temp_dir().join(format!("printcraft-keychain-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let kc = dir.join("test.keychain-db");
+    let sec = |args: &[&str]| Command::new("security").args(args).output().unwrap();
+    let list = String::from_utf8(sec(&["list-keychains", "-d", "user"]).stdout).unwrap();
+    let saved: Vec<String> = list.lines().map(|l| l.trim().trim_matches('"').to_string()).filter(|l| !l.is_empty()).collect();
+    let k = kc.to_str().unwrap();
+    assert!(sec(&["create-keychain", "-p", "pc-test", k]).status.success());
+    let restore = || {
+        let mut args = vec!["list-keychains", "-d", "user", "-s"];
+        args.extend(saved.iter().map(String::as_str));
+        sec(&args);
+    };
+    restore();
+    // Everything that can fail runs before the clean-up below.
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        sec(&["unlock-keychain", "-p", "pc-test", k]);
+        // macOS imports only legacy-format PKCS #12 (SHA-1 MAC).
+        for f in ["rsa-legacy.p12", "ec-legacy.p12"] {
+            let p = format!("{}/tests/data/{f}", env!("CARGO_MANIFEST_DIR"));
+            let out = sec(&["import", &p, "-k", k, "-P", "test", "-A"]);
+            assert!(out.status.success(), "{f}: {}", String::from_utf8_lossy(&out.stderr));
+        }
+        let ids = printcraft_sign::keychain::identities(Some(&kc)).unwrap();
+        assert_eq!(ids.len(), 2, "{ids:?}");
+        for id in &ids {
+            assert!(id.key.is_external());
+            let signed = printcraft_sign::sign(&open(&fixture()), id, &opts()).unwrap();
+            let trusted = signatures(&open(&signed), &signed, &TrustStore { certs: vec![id.certificate.clone()] });
+            let s = trusted.iter().find(|s| s.signed).unwrap();
+            assert_eq!(s.status, Status::Valid, "{:?}", s.details);
+        }
+    }));
+    sec(&["delete-keychain", k]);
+    restore();
+    let _ = std::fs::remove_dir_all(&dir);
+    result.unwrap();
+}

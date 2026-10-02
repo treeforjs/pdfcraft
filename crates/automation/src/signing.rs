@@ -117,6 +117,13 @@ impl Automation {
     }
 
     fn open_id(&self, a: &Args) -> Result<DigitalId> {
+        // A macOS Keychain identity: "keychain:<fingerprint>" or "keychain:<common name>".
+        if let Some(r) = a.str("id")?.strip_prefix("keychain:") {
+            #[cfg(target_os = "macos")]
+            return sign::keychain::find(&format!("keychain:{r}")).map_err(failed);
+            #[cfg(not(target_os = "macos"))]
+            return Err(failed(format!("keychain:{r}: Keychain identities are only available on macOS")));
+        }
         let path = self.resolve(a.str("id")?, false)?;
         let bytes = std::fs::read(&path).map_err(|e| failed(format!("{}: {e}", path.display())))?;
         sign::pkcs12::open(&bytes, a.opt_str("password")?.unwrap_or("")).map_err(|e| match e {

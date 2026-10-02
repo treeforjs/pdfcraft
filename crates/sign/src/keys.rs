@@ -223,6 +223,14 @@ enum Inner {
     Rsa,
     P256(p256::ecdsa::SigningKey),
     P384(p384::ecdsa::SigningKey),
+    /// A key held elsewhere (the macOS Keychain, a token) that signs on request.
+    External(std::sync::Arc<dyn ExternalKey>),
+}
+
+/// A private key PrintCraft can't read, only ask to sign (OS key stores, tokens).
+pub trait ExternalKey: Send + Sync {
+    /// Sign `msg`, hashing it with `alg` (PKCS #1 v1.5 for RSA, DER-encoded ECDSA).
+    fn sign(&self, alg: DigestAlg, msg: &[u8]) -> Result<Vec<u8>, SignError>;
 }
 
 /// A private key that can sign.
@@ -240,6 +248,17 @@ impl std::fmt::Debug for PrivateKey {
 }
 
 impl PrivateKey {
+    /// A key held outside PrintCraft's memory (its public half is `public`). It can't be
+    /// exported to a PKCS #12 file.
+    pub fn external(public: PublicKey, key: std::sync::Arc<dyn ExternalKey>) -> PrivateKey {
+        PrivateKey { inner: Inner::External(key), public, pkcs8: Vec::new() }
+    }
+
+    /// Whether the key lives outside the app (and so can't be exported).
+    pub fn is_external(&self) -> bool {
+        matches!(self.inner, Inner::External(_))
+    }
+
     /// From a PKCS#8 `PrivateKeyInfo`.
     pub fn from_pkcs8(info: &[u8]) -> Result<PrivateKey, SignError> {
         let t = Tlv::parse_all(info)?.children()?;
@@ -387,6 +406,7 @@ impl PrivateKey {
                 let s: p256::ecdsa::Signature = k.sign_prehash(&alg.digest(&[msg])).map_err(|e| SignError::Crypto(e.to_string()))?;
                 Ok(s.to_der().as_bytes().to_vec())
             }
+            Inner::External(k) => k.sign(alg, msg),
             Inner::P384(k) => {
                 use p384::ecdsa::signature::hazmat::PrehashSigner;
                 let s: p384::ecdsa::Signature = k.sign_prehash(&alg.digest(&[msg])).map_err(|e| SignError::Crypto(e.to_string()))?;
