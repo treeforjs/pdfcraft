@@ -951,6 +951,12 @@ fn drawing_comments_through_tools() {
         a.call("comment_add", &json!({ "doc": doc, "page": 1, "type": "polygon", "points": [[1, 1]] })),
         Err(ToolError::Failed(_) | ToolError::InvalidArgs(_))
     ));
+    // Replace Text: a strikeout over the found text and a grouped caret.
+    ok(&mut a, "comment_add", json!({ "doc": doc, "page": 2, "type": "replace", "find": "page 2", "contents": "second page" }));
+    let list = ok(&mut a, "comment_list", json!({ "doc": doc, "page": 2 }));
+    let strike = list["comments"].as_array().unwrap().iter().find(|c| c["type"] == "StrikeOut").unwrap().clone();
+    assert_eq!(strike["replies"][0]["contents"], "second page", "the caret threads under the strikeout");
+    assert!(matches!(a.call("comment_add", &json!({ "doc": doc, "page": 2, "type": "replace", "find": "page 2" })), Err(ToolError::InvalidArgs(_))));
     let png = a.call("page_render", &json!({ "doc": doc, "page": 1, "dpi": 72 })).unwrap();
     assert!(matches!(png[0], Content::Png { .. }));
 }

@@ -3515,11 +3515,11 @@ title = "Replace-text proposal (strikeout + caret)"
 area = "E"
 tier = "P1"
 milestone = "M5"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["comment.replace"]
+tools = ["comment_add"]
+evidence = ["crates/annot/src/tests.rs::replace_text_groups_a_strikeout_and_a_caret", "crates/ui-egui/tests/comments.rs::replacing_text_strikes_it_and_adds_a_caret", "crates/automation/tests/automation.rs::drawing_comments_through_tools"]
+notes = "strikeout (/IT StrikeOutTextEdit) and a grouped caret (/RT /Group) with the replacement"
 
 [[feature]]
 id = "comment.insert-text"
@@ -3683,11 +3683,11 @@ title = "Area highlight"
 area = "E"
 tier = "P1"
 milestone = "M5"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["comment.highlight"]
+tools = ["comment_add"]
+evidence = ["crates/ui-egui/tests/comments.rs::highlighting_an_area_off_the_text"]
+notes = "drag the highlighter off text to highlight a box"
 
 [[feature]]
 id = "comment.attach-file-comment"

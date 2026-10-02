@@ -40,12 +40,13 @@ pub enum CommentTool {
     Cloud,
     Callout,
     Caret,
+    ReplaceText,
 }
 
 /// The quick-bar flyout groups, in Acrobat's order: Comment ▸, Highlight ▸, Draw ▸.
 pub const GROUPS: [&[CommentTool]; 3] = [
     &[CommentTool::Note, CommentTool::TextBox, CommentTool::Callout],
-    &[CommentTool::Highlight, CommentTool::Underline, CommentTool::StrikeOut, CommentTool::Caret],
+    &[CommentTool::Highlight, CommentTool::Underline, CommentTool::StrikeOut, CommentTool::Caret, CommentTool::ReplaceText],
     &[
         CommentTool::Ink,
         CommentTool::Line,
@@ -58,7 +59,8 @@ pub const GROUPS: [&[CommentTool]; 3] = [
     ],
 ];
 
-pub const ALL: [CommentTool; 15] = [
+pub const ALL: [CommentTool; 16] = [
+    CommentTool::ReplaceText,
     CommentTool::Polygon,
     CommentTool::PolyLine,
     CommentTool::Cloud,
@@ -94,6 +96,7 @@ impl CommentTool {
             Self::Cloud => "comment.cloud",
             Self::Callout => "comment.callout",
             Self::Caret => "comment.caret",
+            Self::ReplaceText => "comment.replace",
         }
     }
 
@@ -118,6 +121,7 @@ impl CommentTool {
             Self::Cloud => "Cloud",
             Self::Callout => "Add a callout",
             Self::Caret => "Insert text",
+            Self::ReplaceText => "Replace text",
         }
     }
 
@@ -138,6 +142,7 @@ impl CommentTool {
             Self::Cloud => "cloud",
             Self::Callout => "message-square-quote",
             Self::Caret => "text-cursor-input",
+            Self::ReplaceText => "replace",
         }
     }
 
@@ -187,6 +192,7 @@ impl CommentTool {
             Self::PolyLine => Shape::PolyLine { vertices: Vec::new() },
             Self::Callout => Shape::Callout { rect: [0.0; 4], knee: [0.0; 2], point: [0.0; 2], font_size: 10.0 },
             Self::Caret => Shape::Caret { rect: [0.0; 4] },
+            Self::ReplaceText => Shape::TextMarkup { kind: Markup::StrikeOut, quads: Vec::new() },
         }
     }
 }
@@ -314,6 +320,8 @@ pub enum ComposerKind {
     },
     /// Insert text at the anchor (the caret's tip).
     Caret,
+    /// Replace the selected text (`CommentView::replace` holds the quads).
+    Replace,
     /// Edit the text of the comment at this index on the composer's page.
     Edit(usize),
 }
@@ -359,6 +367,8 @@ pub struct CommentView {
     pub props_request: Option<(usize, usize)>,
     /// Make Current Properties Default was asked for: (page, index).
     pub default_request: Option<(usize, usize)>,
+    /// Replace Text: the struck-out text's quads while the replacement is typed.
+    pub replace: Option<Vec<[f64; 8]>>,
     pub search_focus: bool,
     /// Where the canvas context menu was opened: (page, user-space point).
     pub context_at: Option<(usize, [f64; 2])>,
@@ -771,9 +781,20 @@ fn select_input(
     consumed
 }
 
-/// After text selection ran: a markup tool turns a finished selection into a comment.
+/// After text selection ran: a markup tool turns a finished selection into a comment; Replace
+/// Text asks for the replacement.
 pub(crate) fn page_after_text(resp: &egui::Response, cx: &PageCx<'_>, view: &mut DocView) {
     let QuickTool::Comment(tool) = cx.tool else { return };
+    if tool == CommentTool::ReplaceText && cx.allowed && (resp.drag_stopped() || resp.double_clicked()) {
+        if let Some((page, quads)) = view.selection_quads(cx.info).filter(|(p, _)| *p == cx.page) {
+            view.clear_selection();
+            let last = quads.last().copied().unwrap_or_default();
+            let at = [last[2].max(last[6]), last[1].max(last[3])];
+            view.comments.replace = Some(quads);
+            view.comments.composer = Some(Composer { page, at, kind: ComposerKind::Replace, text: String::new(), focus: true });
+        }
+        return;
+    }
     if tool.markup().is_none() || !cx.allowed || !(resp.drag_stopped() || resp.double_clicked()) {
         return;
     }
@@ -919,6 +940,7 @@ pub(crate) fn composer(ctx: &egui::Context, view: &mut DocView, info: &DocInfo, 
         ComposerKind::TextBox => "Text box",
         ComposerKind::Callout { .. } => "Callout",
         ComposerKind::Caret => "Inserted text",
+        ComposerKind::Replace => "Replacement text",
         ComposerKind::Edit(_) => "Edit comment",
     };
     let pos = pos2(anchor.x + 12.0, anchor.y);
@@ -933,6 +955,7 @@ pub(crate) fn composer(ctx: &egui::Context, view: &mut DocView, info: &DocInfo, 
             let hint = match c.kind {
                 ComposerKind::TextBox | ComposerKind::Callout { .. } => "Type text",
                 ComposerKind::Caret => "Text to insert",
+                ComposerKind::Replace => "Replacement text",
                 _ => "Add a comment",
             };
             let edit =
@@ -994,6 +1017,18 @@ pub(crate) fn composer(ctx: &egui::Context, view: &mut DocView, info: &DocInfo, 
             };
             let knee = [(point[0] + side) / 2.0, (rect[1] + rect[3]) / 2.0];
             Some(new_comment(&cx, CommentTool::Callout, Shape::Callout { rect, knee, point, font_size: 10.0 }, text))
+        }
+        ComposerKind::Replace => {
+            view.comments.tool_done = true;
+            let quads = view.comments.replace.take()?;
+            Some(Edit::ReplaceText {
+                page,
+                quads,
+                text,
+                author: prefs.author.clone(),
+                strike: prefs.style(CommentTool::ReplaceText),
+                caret: prefs.style(CommentTool::Caret),
+            })
         }
         ComposerKind::Caret => {
             view.comments.tool_done = true;

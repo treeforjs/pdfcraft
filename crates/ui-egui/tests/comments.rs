@@ -454,3 +454,36 @@ fn make_current_properties_default() {
     let last = c.iter().rfind(|a| a.subtype == "Square").unwrap();
     assert_eq!(last.color, Some([0.0, 0.47, 0.84]));
 }
+
+#[test]
+fn highlighting_an_area_off_the_text() {
+    let mut h = harness(|app| app.set_option("quick", "highlight").unwrap());
+    // Blank space below the text line (text is at y 150).
+    drag_pt(&mut h, (40.0, 100.0), (140.0, 40.0));
+    let c = comments(&h);
+    assert_eq!(c.len(), 1, "{c:?}");
+    assert_eq!((c[0].subtype.as_str(), c[0].quads.len()), ("Highlight", 1));
+    let q = c[0].quads[0];
+    assert!((q[0] - 40.0).abs() < 3.0 && (q[1] - 100.0).abs() < 3.0, "{q:?}");
+    // Dragging over text still highlights the text.
+    drag_pt(&mut h, (20.0, 155.0), (120.0, 155.0));
+    assert_eq!(comments(&h).len(), 2);
+}
+
+#[test]
+fn replacing_text_strikes_it_and_adds_a_caret() {
+    let mut h = harness(|app| app.set_option("quick", "replace").unwrap());
+    drag_pt(&mut h, (20.0, 155.0), (120.0, 155.0));
+    assert!(h.state().views[0].comments.composer.is_some(), "the composer asks for the replacement");
+    field(&h, "Replacement text").type_text("slow red");
+    h.run_steps(2);
+    h.get_by_label("Post").click();
+    h.run_steps(3);
+    let c = comments(&h);
+    let strike = c.iter().find(|a| a.subtype == "StrikeOut").expect("a strikeout");
+    let caret = c.iter().find(|a| a.subtype == "Caret").expect("a caret");
+    assert_eq!(caret.contents.as_deref(), Some("slow red"));
+    assert_eq!(caret.in_reply_to, strike.name, "grouped with the strikeout");
+    assert_eq!(h.state().session.get(h.state().views[0].id).unwrap().can_undo(), Some("Replace text"));
+    assert_eq!(h.state().quick_tool, QuickTool::Select);
+}

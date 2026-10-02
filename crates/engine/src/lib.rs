@@ -88,6 +88,7 @@ fn scope_of(edit: &Edit) -> Scope {
         | Edit::SetAnnotationStatus { .. }
         | Edit::MarkAnnotation { .. }
         | Edit::LockAnnotation { .. }
+        | Edit::ReplaceText { .. }
         | Edit::MoveAnnotation { .. }
         | Edit::ResizeAnnotation { .. }
         | Edit::StyleAnnotation { .. }
@@ -526,6 +527,15 @@ pub enum Edit {
         state: ReviewState,
         author: String,
     },
+    /// Replace Text: strike out `quads` and add a grouped caret holding `text`.
+    ReplaceText {
+        page: usize,
+        quads: Vec<[f64; 8]>,
+        text: String,
+        author: String,
+        strike: Style,
+        caret: Style,
+    },
     /// Acrobat's "Mark with checkmark" (a hidden `/StateModel /Marked` reply by `author`).
     MarkAnnotation {
         page: usize,
@@ -744,6 +754,7 @@ impl Edit {
             Edit::SetAnnotationContents { .. } => "Edit comment".into(),
             Edit::ReplyToAnnotation { .. } => "Reply".into(),
             Edit::SetAnnotationStatus { state, .. } => format!("Set status {}", state.name()),
+            Edit::ReplaceText { .. } => "Replace text".into(),
             Edit::MarkAnnotation { marked: true, .. } => "Mark with checkmark".into(),
             Edit::MarkAnnotation { .. } => "Remove checkmark".into(),
             Edit::LockAnnotation { locked: true, .. } => "Lock comment".into(),
@@ -859,6 +870,7 @@ fn check_permission(edit: &Edit, p: &printcraft_cos::Permissions) -> Result<(), 
         | Edit::ReplyToAnnotation { .. }
         | Edit::SetAnnotationStatus { .. }
         | Edit::MarkAnnotation { .. }
+        | Edit::ReplaceText { .. }
         | Edit::LockAnnotation { .. }
         | Edit::MoveAnnotation { .. }
         | Edit::ResizeAnnotation { .. }
@@ -1025,6 +1037,9 @@ fn run_edit(doc: &mut printcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -
         }
         Edit::SetAnnotationStatus { page, index, state, author } => {
             printcraft_annot::set_review_state(doc, *page, *index, *state, author, &cx.meta())?;
+        }
+        Edit::ReplaceText { page, quads, text, author, strike, caret } => {
+            printcraft_annot::add_text_replacement(doc, *page, quads, text, author, strike, caret, &cx.meta())?;
         }
         Edit::MarkAnnotation { page, index, marked, author } => {
             printcraft_annot::set_marked(doc, *page, *index, *marked, author, &cx.meta())?;

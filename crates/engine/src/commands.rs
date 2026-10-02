@@ -186,6 +186,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     c("comment.cloud", "Draw a cloud", None, None, Annotate, "cloud"),
     c("comment.callout", "Add a callout", None, None, Annotate, "message-square-quote"),
     c("comment.caret", "Insert text", None, None, Annotate, "text-cursor-input"),
+    c("comment.replace", "Replace text", None, None, Annotate, "replace"),
     c("form.fields", "Form fields panel", VIEW, None, Document, "list"),
     c("form.clear", "Clear form", EDIT, None, FillForms, "eraser"),
     c("comment.flatten", "Flatten comments", None, None, HasComments, "layers"),

@@ -1448,3 +1448,52 @@ pub fn props(doc: &Document, page: usize, index: usize) -> Option<Props> {
         subtype,
     })
 }
+
+/// Replace Text (Acrobat's proposal): strike out `quads` and add a caret at the end of the
+/// struck text holding `replacement`, grouped with the strikeout (`/IRT` + `/RT /Group`) so they
+/// move, list and delete as one. Returns the strikeout's index.
+#[allow(clippy::too_many_arguments)]
+pub fn add_text_replacement(
+    doc: &mut Document,
+    page: usize,
+    quads: &[[f64; 8]],
+    replacement: &str,
+    author: &str,
+    strike: &Style,
+    caret: &Style,
+    meta: &Meta,
+) -> Result<usize, AnnotError> {
+    let last = *quads.last().ok_or_else(|| AnnotError::Invalid("select the text to replace first".into()))?;
+    let s = add_annotation(
+        doc,
+        &NewAnnotation {
+            page,
+            shape: Shape::TextMarkup { kind: Markup::StrikeOut, quads: quads.to_vec() },
+            style: strike.clone(),
+            contents: String::new(),
+            author: author.into(),
+        },
+        meta,
+    )?;
+    let (_, sr) = annot_ref(doc, page, s)?;
+    doc.update_dict(sr, |d| d.set(b"IT".to_vec(), Object::name("StrikeOutTextEdit")))?;
+    // The caret sits on the baseline at the end of the last line, its point at the text.
+    let xs = [last[0], last[2], last[4], last[6]];
+    let ys = [last[1], last[3], last[5], last[7]];
+    let x = xs.iter().copied().fold(f64::MIN, f64::max);
+    let (y0, y1) = (ys.iter().copied().fold(f64::MAX, f64::min), ys.iter().copied().fold(f64::MIN, f64::max));
+    let h = ((y1 - y0) * 0.6).clamp(4.0, 24.0);
+    let rect = [x - h / 2.0, y0 - h * 0.6, x + h / 2.0, y0 + h * 0.4];
+    let c = add_annotation(
+        doc,
+        &NewAnnotation { page, shape: Shape::Caret { rect }, style: caret.clone(), contents: replacement.into(), author: author.into() },
+        meta,
+    )?;
+    let (_, cr) = annot_ref(doc, page, c)?;
+    doc.update_dict(cr, |d| {
+        d.set(b"IRT".to_vec(), Object::Ref(sr));
+        d.set(b"RT".to_vec(), Object::name("Group"));
+        d.set(b"Subj".to_vec(), PdfString::text("Replace Text"));
+    })?;
+    Ok(s)
+}

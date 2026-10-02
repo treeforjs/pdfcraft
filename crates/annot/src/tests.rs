@@ -504,3 +504,26 @@ fn cloud_ys(path: &str) -> Vec<f64> {
         })
         .collect()
 }
+
+#[test]
+fn replace_text_groups_a_strikeout_and_a_caret() {
+    let mut doc = fixture();
+    let quads = [[100.0, 720.0, 200.0, 720.0, 100.0, 706.0, 200.0, 706.0]];
+    let red = Style { color: [0.89, 0.13, 0.13], opacity: 1.0, width: 1.0, fill: None };
+    let blue = Style { color: [0.0, 0.47, 0.84], opacity: 1.0, width: 1.0, fill: None };
+    let i = add_text_replacement(&mut doc, 0, &quads, "new words", "Ada", &red, &blue, &meta("r")).unwrap();
+    let doc = reopen(&doc);
+    let a = list(&doc, 0);
+    let strike = &a[i];
+    assert_eq!((strike.name(b"Subtype"), strike.name(b"IT")), (Some(&b"StrikeOut"[..]), Some(&b"StrikeOutTextEdit"[..])));
+    let caret = a.iter().find(|d| d.name(b"Subtype") == Some(b"Caret")).unwrap();
+    assert_eq!((text(caret, b"Contents").as_str(), caret.name(b"RT")), ("new words", Some(&b"Group"[..])));
+    assert!(caret.reference(b"IRT").is_some());
+    let r = rect(caret);
+    assert!(r[0] < 200.0 && r[2] > 200.0 && r[1] < 706.0, "at the end of the line, below its baseline: {r:?}");
+    // Deleting the strikeout takes the caret with it (the group).
+    let mut doc = doc;
+    delete_annotation(&mut doc, 0, i).unwrap();
+    assert!(!list(&doc, 0).iter().any(|d| d.name(b"Subtype") == Some(b"Caret")));
+    assert!(add_text_replacement(&mut doc, 0, &[], "x", "Ada", &red, &blue, &meta("r")).is_err());
+}

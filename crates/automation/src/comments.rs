@@ -143,7 +143,7 @@ impl Automation {
         let markup = match kind {
             "highlight" => Some(Markup::Highlight),
             "underline" => Some(Markup::Underline),
-            "strikeout" => Some(Markup::StrikeOut),
+            "strikeout" | "replace" => Some(Markup::StrikeOut),
             "squiggly" => Some(Markup::Squiggly),
             _ => None,
         };
@@ -291,6 +291,18 @@ impl Automation {
         }
         let contents = a.opt_str("contents")?.unwrap_or_default().to_string();
         let author = a.opt_str("author")?.unwrap_or(DEFAULT_AUTHOR).to_string();
+        // Replace Text: the struck-out text and a grouped caret holding `contents`.
+        if kind == "replace" {
+            let Shape::TextMarkup { quads, .. } = shape else { unreachable!("replace marks text") };
+            if contents.trim().is_empty() {
+                return Err(ToolError::InvalidArgs("replace needs `contents`: the replacement text".into()));
+            }
+            let strike = style;
+            let caret = Style::default_for(&Shape::Caret { rect: [0.0; 4] });
+            let mut out = self.apply(a, Edit::ReplaceText { page, quads, text: contents, author, strike, caret })?;
+            out["comment"] = json!({ "page": page + 1, "type": "replace" });
+            return Ok(out);
+        }
         let marked = match &shape {
             Shape::TextMarkup { quads, .. } => Some(quads.len()),
             _ => None,
