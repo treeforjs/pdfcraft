@@ -400,6 +400,17 @@ impl Automation {
             Some(_) => self.pages(a, "pages")?,
             None => (0..n).collect(),
         };
+        // Order tabs manually: move one field earlier or later on its page.
+        if let Some(field) = a.opt_str("field")? {
+            let earlier = match a.opt_str("move")?.unwrap_or("earlier") {
+                "earlier" => true,
+                "later" => false,
+                m => return Err(bad(format!("move must be earlier or later, not {m:?}"))),
+            };
+            let mut out = self.apply(a, Edit::MoveInTabOrder { name: field.to_owned(), earlier })?;
+            out["tab_order"] = self.tab_sequence(a)?;
+            return Ok(out);
+        }
         let order = match a.str("order")? {
             "row" | "rows" => printcraft_engine::TabOrder::Row,
             "column" | "columns" => printcraft_engine::TabOrder::Column,
@@ -408,13 +419,17 @@ impl Automation {
             o => return Err(bad(format!("unknown order {o:?} (row, column, structure, annotations)"))),
         };
         let mut out = self.apply(a, Edit::SetTabOrder { pages, order })?;
+        out["tab_order"] = self.tab_sequence(a)?;
+        Ok(out)
+    }
+
+    fn tab_sequence(&self, a: &Args) -> Result<Value> {
         let doc = self.doc(a)?;
         let mut seq: Vec<(usize, &str)> =
             doc.form.iter().flat_map(|f| f.widgets.iter().filter(|w| w.page.is_some()).map(move |w| (w.tab, f.name.as_str()))).collect();
         seq.sort();
         seq.dedup_by(|x, y| x.1 == y.1);
-        out["tab_order"] = json!(seq.iter().map(|x| x.1).collect::<Vec<_>>());
-        Ok(out)
+        Ok(json!(seq.iter().map(|x| x.1).collect::<Vec<_>>()))
     }
 
     pub(crate) fn form_delete_field(&mut self, a: &Args) -> Result<Value> {

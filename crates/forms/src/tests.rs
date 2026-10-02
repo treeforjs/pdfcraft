@@ -522,3 +522,43 @@ fn options_tab_flags_alignment_and_defaults() {
     assert_eq!(fields(&doc).into_iter().find(|f| f.name == check).unwrap().value, vec![on]);
     assert!(set_props(&mut doc, &text, &FieldProps { quadding: Some(5), ..FieldProps::default() }).is_err());
 }
+
+#[test]
+fn ordering_tabs_manually() {
+    let mut doc = one_page();
+    let text = NewField::Text { multiline: false };
+    for (name, x, y) in [("A", 50.0, 700.0), ("B", 300.0, 700.0), ("C", 50.0, 600.0)] {
+        add_field(&mut doc, 0, [x, y, x + 200.0, y + 20.0], &text, Some(name)).unwrap();
+    }
+    // A comment between the widgets keeps its place.
+    let page = page_refs(&doc)[0];
+    let mut note = printcraft_cos::Dict::new();
+    note.set(b"Type".to_vec(), Object::name("Annot"));
+    note.set(b"Subtype".to_vec(), Object::name("Text"));
+    note.set(b"Rect".to_vec(), Object::Array(vec![0.into(), 0.into(), 10.into(), 10.into()]));
+    let note = doc.add(Object::Dict(note));
+    doc.update_dict(page, |d| {
+        if let Some(Object::Array(a)) = d.get_mut(b"Annots") {
+            a.insert(1, Object::Ref(note));
+        }
+    })
+    .unwrap();
+    set_tab_order(&mut doc, &[0], TabOrder::Row).unwrap();
+    let order = |doc: &Document| -> String {
+        let mut all: Vec<(usize, String)> = fields(doc).into_iter().map(|f| (f.widgets[0].tab, f.name)).collect();
+        all.sort();
+        all.into_iter().map(|x| x.1).collect()
+    };
+    assert_eq!(order(&doc), "ABC");
+    move_in_tab_order(&mut doc, "C", true).unwrap();
+    assert_eq!(order(&doc), "ACB", "row order became manual");
+    move_in_tab_order(&mut doc, "A", false).unwrap();
+    assert_eq!(order(&doc), "CAB");
+    move_in_tab_order(&mut doc, "B", false).unwrap();
+    assert_eq!(order(&doc), "CAB", "already last");
+    let annots = doc.get(page).as_dict().unwrap().get(b"Annots").unwrap().as_array().unwrap().clone();
+    assert_eq!(annots[1].as_ref(), Some(note), "the comment stays where it was");
+    assert!(!doc.get(page).as_dict().unwrap().contains(b"Tabs"));
+    let doc = reopen(&doc);
+    assert_eq!(order(&doc), "CAB", "saved");
+}

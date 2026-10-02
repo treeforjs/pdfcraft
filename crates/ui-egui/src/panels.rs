@@ -334,6 +334,8 @@ pub fn right_panel(app: &mut PrintCraftApp, ui: &mut egui::Ui) {
         let view = &mut app.views[index];
         let prefs = &app.comment_prefs;
         let sig_expanded = &mut app.sig_expanded;
+        // Prepare a form is open: the Fields panel orders tabs.
+        let preparing = (app.left_open && app.left == LeftPanel::Tool("form")) || matches!(app.quick_tool, crate::QuickTool::Field(_));
         let comment_allowed = doc.allows_annotation();
         egui::Panel::right("right_panel")
             .resizable(true)
@@ -408,7 +410,7 @@ pub fn right_panel(app: &mut PrintCraftApp, ui: &mut egui::Ui) {
                         }
                     }
                     RightPanel::Pages => pages(ui, &t, info, view, &mut nav),
-                    RightPanel::Fields => fields(ui, &t, info, &mut nav),
+                    RightPanel::Fields => fields(ui, &t, info, &doc.form, preparing, &mut nav, &mut panel_edit),
                     RightPanel::Layers => {
                         if info.layers.is_empty() {
                             empty(ui, &t, "layers", "This document has no layers.");
@@ -687,10 +689,26 @@ fn pages(ui: &mut egui::Ui, t: &Tokens, info: &DocInfo, view: &crate::DocView, n
     }
 }
 
-fn fields(ui: &mut egui::Ui, t: &Tokens, info: &DocInfo, nav: &mut Option<Nav>) {
+/// The Fields panel: fields by page, in tab order. While preparing a form, each field can move
+/// earlier or later in its page's tab order (Acrobat: Order Tabs Manually).
+fn fields(
+    ui: &mut egui::Ui,
+    t: &Tokens,
+    info: &DocInfo,
+    form: &[printcraft_engine::FormField],
+    preparing: bool,
+    nav: &mut Option<Nav>,
+    edit: &mut Option<printcraft_engine::Edit>,
+) {
     if info.fields.is_empty() {
         empty(ui, t, "text-cursor-input", "This document has no form fields.");
         return;
+    }
+    let rank = |name: &str| form.iter().find(|f| f.name == name).and_then(|f| f.widgets.iter().map(|w| w.tab).min()).unwrap_or(usize::MAX);
+    let mut ordered: Vec<_> = info.fields.iter().collect();
+    ordered.sort_by_key(|f| (f.page, rank(&f.name)));
+    if preparing {
+        ui.label(egui::RichText::new("Tab order: move a field with its arrows.").small().color(t.text_muted));
     }
     let mut pages: Vec<Option<usize>> = info.fields.iter().map(|f| f.page).collect();
     pages.sort();
@@ -699,7 +717,7 @@ fn fields(ui: &mut egui::Ui, t: &Tokens, info: &DocInfo, nav: &mut Option<Nav>) 
         let label = p.map(|p| format!("Page {}", info.pages[p].label)).unwrap_or_else(|| "Unplaced".into());
         ui.add_space(4.0);
         ui.label(egui::RichText::new(label).font(theme::semibold(12.5)).color(t.text_muted));
-        for f in info.fields.iter().filter(|f| f.page == p) {
+        for f in ordered.iter().copied().filter(|f| f.page == p) {
             let icon = match f.kind {
                 FieldKind::Text => "text-cursor-input",
                 FieldKind::CheckBox => "check-circle-2",
@@ -727,6 +745,22 @@ fn fields(ui: &mut egui::Ui, t: &Tokens, info: &DocInfo, nav: &mut Option<Nav>) 
             }
             if f.has_actions {
                 tip.push_str("\nHas JavaScript actions (run in M6)");
+            }
+            if preparing && f.page.is_some() {
+                let up = Rect::from_center_size(rect.right_center() - vec2(44.0, 0.0), vec2(22.0, 22.0));
+                let down = Rect::from_center_size(rect.right_center() - vec2(20.0, 0.0), vec2(22.0, 22.0));
+                for (r, icon, earlier, tip) in [(up, "chevron-up", true, "Earlier in tab order"), (down, "chevron-down", false, "Later in tab order")]
+                {
+                    let b = ui.interact(r, ui.id().with((&f.name, earlier)), Sense::click());
+                    b.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, format!("{tip}: {}", f.name)));
+                    if b.hovered() {
+                        ui.painter().rect_filled(r, CornerRadius::same(4), t.pressed);
+                    }
+                    icons::paint(ui, r.shrink(3.0), icon, 15.0, t.icon);
+                    if b.on_hover_text(tip).clicked() {
+                        *edit = Some(printcraft_engine::Edit::MoveInTabOrder { name: f.name.clone(), earlier });
+                    }
+                }
             }
             if resp.on_hover_text(tip).clicked()
                 && let (Some(p), Some(r)) = (f.page, f.rect)

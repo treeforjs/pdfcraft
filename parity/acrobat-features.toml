@@ -4923,11 +4923,11 @@ title = "Tab order (row, column, structure, manual)"
 area = "F"
 tier = "P0"
 milestone = "M6"
-status = "partial"
+status = "shipped"
 commands = ["form.tab_order.row", "form.tab_order.column", "form.tab_order.structure"]
 tools = ["form_tab_order"]
-evidence = ["crates/forms/src/tests.rs::tab_order_follows_the_page_setting", "crates/automation/tests/automation.rs::tab_order_and_field_appearance_through_tools"]
-notes = "rows, columns, structure/annotation order (page /Tabs), honoured by Tab; manual reordering pending"
+evidence = ["crates/forms/src/tests.rs::tab_order_follows_the_page_setting", "crates/automation/tests/automation.rs::tab_order_and_field_appearance_through_tools", "crates/forms/src/tests.rs::ordering_tabs_manually", "crates/ui-egui/tests/prepare.rs::the_fields_panel_orders_tabs_manually"]
+notes = "rows, columns, structure/annotation order (page /Tabs), and manual order from the Fields panel while preparing a form; honoured by Tab"
 
 [[feature]]
 id = "form.show-tab-numbers"

@@ -591,6 +591,11 @@ pub enum Edit {
         pages: Vec<usize>,
         order: TabOrder,
     },
+    /// Order tabs manually: move a field one place earlier or later on its page.
+    MoveInTabOrder {
+        name: String,
+        earlier: bool,
+    },
     /// Add a header and footer (with `replace`, existing ones on those pages go first).
     AddHeaderFooter {
         pages: Vec<usize>,
@@ -739,7 +744,7 @@ impl Edit {
             Edit::AddField { .. } => "Add field".into(),
             Edit::SetFieldProps { .. } => "Change field properties".into(),
             Edit::DeleteField { .. } => "Delete field".into(),
-            Edit::SetTabOrder { .. } => "Set tab order".into(),
+            Edit::SetTabOrder { .. } | Edit::MoveInTabOrder { .. } => "Set tab order".into(),
             Edit::AddHeaderFooter { replace: false, .. } => "Add header & footer".into(),
             Edit::AddHeaderFooter { .. } => "Update header & footer".into(),
             Edit::AddWatermark { replace: false, .. } => "Add watermark".into(),
@@ -890,6 +895,7 @@ fn check_permission(edit: &Edit, p: &printcraft_cos::Permissions) -> Result<(), 
         | Edit::SetFieldProps { .. }
         | Edit::DeleteField { .. }
         | Edit::SetTabOrder { .. }
+        | Edit::MoveInTabOrder { .. }
         | Edit::Flatten { .. } => {
             if p.modify() {
                 Ok(())
@@ -1030,6 +1036,7 @@ fn run_edit(doc: &mut printcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -
         }
         Edit::DeleteField { name } => printcraft_forms::delete_field(doc, name)?,
         Edit::SetTabOrder { pages, order } => printcraft_forms::set_tab_order(doc, pages, *order)?,
+        Edit::MoveInTabOrder { name, earlier } => printcraft_forms::move_in_tab_order(doc, name, *earlier)?,
         Edit::AddHeaderFooter { pages, settings, replace } => {
             let date = cx.today;
             printcraft_edit::add_header_footer(doc, pages, settings, *replace, &printcraft_edit::Context { date })?;

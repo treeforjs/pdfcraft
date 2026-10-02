@@ -194,3 +194,26 @@ fn options_tab_sets_flags_alignment_and_defaults() {
     assert_eq!((f.quadding, f.default.clone()), (2, vec!["Paris".to_string()]));
     assert_eq!(s.session.get(s.views[0].id).unwrap().can_undo(), Some("Change field properties"));
 }
+
+#[test]
+fn the_fields_panel_orders_tabs_manually() {
+    let mut h = harness();
+    h.state_mut().execute("form.prepare");
+    h.state_mut().set_option("panel", "fields").unwrap();
+    h.run_steps(3);
+    let order = |h: &Harness<'static, PrintCraftApp>| -> Vec<String> {
+        let s = h.state();
+        let form = &s.session.get(s.views[0].id).unwrap().form;
+        let mut v: Vec<(usize, String)> = form.iter().filter_map(|f| f.widgets.iter().map(|w| w.tab).min().map(|t| (t, f.name.clone()))).collect();
+        v.sort();
+        v.into_iter().map(|x| x.1).collect()
+    };
+    let before = order(&h);
+    assert!(before.len() >= 2);
+    let second = before[1].clone();
+    h.get_by_label(&format!("Earlier in tab order: {second}")).click();
+    h.run_steps(3);
+    let after = order(&h);
+    assert_eq!(after[0], second, "{before:?} → {after:?}");
+    assert_eq!(h.state().session.get(h.state().views[0].id).unwrap().can_undo(), Some("Set tab order"));
+}

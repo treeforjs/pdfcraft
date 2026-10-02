@@ -779,6 +779,10 @@ fn tab_order_and_field_appearance_through_tools() {
     assert_eq!(r["tab_order"], json!(["A", "B", "C"]));
     let r = ok(&mut a, "form_tab_order", json!({ "doc": doc, "order": "column" }));
     assert_eq!(r["tab_order"], json!(["A", "C", "B"]));
+    let r = ok(&mut a, "form_tab_order", json!({ "doc": doc, "field": "B", "move": "earlier" }));
+    assert_eq!(r["tab_order"], json!(["A", "B", "C"]), "ordered manually");
+    let r = ok(&mut a, "form_tab_order", json!({ "doc": doc, "order": "column" }));
+    assert_eq!(r["tab_order"], json!(["A", "C", "B"]));
     ok(
         &mut a,
         "form_set_props",

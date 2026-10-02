@@ -801,3 +801,51 @@ pub fn reset(doc: &mut Document, names: Option<&[String]>) -> Result<usize, Form
     recalculate(doc)?;
     Ok(changed)
 }
+
+/// Order tabs manually (Acrobat: Fields ▸ Tab Order ▸ Order Tabs Manually, then drag a field):
+/// move field `name` one place earlier or later in its page's tab order. The page switches to
+/// annotation order (`/Tabs` removed) and its widgets are reordered in `/Annots`; other
+/// annotations keep their places.
+pub fn move_in_tab_order(doc: &mut Document, name: &str, earlier: bool) -> Result<(), FormError> {
+    let all = fields(doc);
+    let f = all.iter().find(|f| f.name == name).ok_or_else(|| FormError::NoSuchField(name.into()))?;
+    let page = f.widgets.iter().filter_map(|w| w.page).min().ok_or_else(|| FormError::Invalid(format!("{name} is not on a page")))?;
+    // The page's fields in their current tab order (a field counts once, at its first widget).
+    let mut order: Vec<(usize, &str)> =
+        all.iter().filter_map(|g| g.widgets.iter().filter(|w| w.page == Some(page)).map(|w| w.tab).min().map(|t| (t, g.name.as_str()))).collect();
+    order.sort();
+    let names: Vec<&str> = order.iter().map(|(_, n)| *n).collect();
+    let i = names.iter().position(|n| *n == name).expect("on this page");
+    let j = if earlier { i.checked_sub(1) } else { Some(i + 1).filter(|j| *j < names.len()) };
+    let Some(j) = j else { return Ok(()) };
+    let mut names = names.into_iter().map(str::to_string).collect::<Vec<_>>();
+    names.swap(i, j);
+    // The widgets of this page in the new order.
+    let mut widgets: Vec<ObjRef> = Vec::new();
+    for n in &names {
+        if let Some(g) = all.iter().find(|g| &g.name == n) {
+            widgets.extend(g.widgets.iter().filter(|w| w.page == Some(page)).map(|w| w.obj));
+        }
+    }
+    let pr = *page_refs(doc).get(page).ok_or_else(|| FormError::Invalid("no such page".into()))?;
+    let annots_obj =
+        doc.get(pr).as_dict().and_then(|d| d.get(b"Annots").cloned()).ok_or_else(|| FormError::Invalid("the page has no annotations".into()))?;
+    let list = doc.resolve(&annots_obj).as_array().cloned().unwrap_or_default();
+    let mut next = widgets.into_iter();
+    let set: std::collections::HashSet<ObjRef> = all.iter().flat_map(|g| g.widgets.iter().filter(|w| w.page == Some(page)).map(|w| w.obj)).collect();
+    let new_list: Vec<Object> = list
+        .iter()
+        .map(|o| match o.as_ref() {
+            Some(r) if set.contains(&r) => next.next().map(Object::Ref).unwrap_or_else(|| o.clone()),
+            _ => o.clone(),
+        })
+        .collect();
+    match annots_obj {
+        Object::Ref(ar) => doc.set(ar, Object::Array(new_list)),
+        _ => doc.update_dict(pr, |d| d.set(b"Annots".to_vec(), Object::Array(new_list)))?,
+    }
+    doc.update_dict(pr, |d| {
+        d.remove(b"Tabs");
+    })?;
+    Ok(())
+}
