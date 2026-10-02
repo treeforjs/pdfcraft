@@ -19,6 +19,7 @@ mod image;
 mod interp;
 pub mod patterns;
 pub mod sanitize;
+mod tags;
 #[cfg(test)]
 mod tests;
 
@@ -102,6 +103,8 @@ pub struct Report {
     pub forms_removed: usize,
     pub annotations: usize,
     pub fields: usize,
+    /// Structure elements that lost alternate/actual text or emptied marked content.
+    pub tags: usize,
 }
 
 fn rect_of(doc: &Document, o: Option<&Object>) -> Option<[f64; 4]> {
@@ -311,6 +314,11 @@ pub fn apply(doc: &mut Document, pages: Option<&[usize]>) -> Result<Report, Reda
                 d.set(b"Contents".to_vec(), Object::Array(new_list));
                 d.set(b"Resources".to_vec(), Object::Dict(res));
             })?;
+            // Tags must not keep what the page no longer shows.
+            let after = doc.get(page.obj).as_dict().cloned().unwrap_or_default();
+            let (_, new_data) = page_streams(doc, &after, pi)?;
+            let (changed_ids, empty_ids) = tags::touched(&data.join(&b'\n'), &new_data.join(&b'\n'));
+            report.tags += tags::clean(doc, page.obj, &changed_ids, &empty_ids)?;
         }
 
         // 2. Annotations: the marks, and whatever lies under them (with their pop-ups).

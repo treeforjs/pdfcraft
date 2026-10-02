@@ -376,3 +376,29 @@ fn overlay_text_takes_its_font_size_colour_alignment_and_repeats() {
         .unwrap();
     assert!(fonts.contains(b"PCCour") && !fonts.contains(b"PCTimes"));
 }
+
+#[test]
+fn tags_lose_what_redaction_removed() {
+    let content = b"/P <</MCID 0>> BDC BT /F1 10 Tf 10 200 Td (SECRET) Tj ET EMC /P <</MCID 1>> BDC BT /F1 10 Tf 10 100 Td (Public) Tj ET EMC";
+    let mut doc = pdf(vec![
+        b"<< /Type /Catalog /Pages 2 0 R /StructTreeRoot 7 0 R /MarkInfo << /Marked true >> >>".to_vec(),
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_vec(),
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Contents 4 0 R /StructParents 0 /Resources << /Font << /F1 5 0 R >> >> >>".to_vec(),
+        stream("", content),
+        FONT.replace("95 0 R", "6 0 R").into_bytes(),
+        widths(),
+        b"<< /Type /StructTreeRoot /K 8 0 R >>".to_vec(),
+        b"<< /S /Document /P 7 0 R /K [9 0 R 10 0 R] >>".to_vec(),
+        b"<< /S /P /P 8 0 R /Pg 3 0 R /ActualText (SECRET) /Alt (the secret) /K 0 >>".to_vec(),
+        b"<< /S /P /P 8 0 R /Pg 3 0 R /ActualText (Public) /K 1 >>".to_vec(),
+    ]);
+    mark(&mut doc, 0, &[[5.0, 195.0, 60.0, 212.0]], "");
+    let report = apply(&mut doc, None).unwrap();
+    assert_eq!(report.tags, 1);
+    let secret = doc.get(printcraft_cos::ObjRef::new(9, 0)).as_dict().cloned().unwrap();
+    assert!(secret.get(b"ActualText").is_none() && secret.get(b"Alt").is_none());
+    assert!(secret.get(b"K").is_none(), "its marked content is empty now");
+    let public = doc.get(printcraft_cos::ObjRef::new(10, 0)).as_dict().cloned().unwrap();
+    assert_eq!(public.get(b"K").and_then(Object::as_int), Some(1));
+    assert!(public.get(b"ActualText").is_some(), "untouched content keeps its tags");
+}

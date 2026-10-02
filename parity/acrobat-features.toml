@@ -5611,11 +5611,11 @@ title = "Remove redacted content from tags and alternate text"
 area = "G"
 tier = "P0"
 milestone = "M8"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["redact.apply"]
+tools = ["redact_apply"]
+evidence = ["crates/redact/src/tests.rs::tags_lose_what_redaction_removed"]
+notes = "marked content changed by redaction is found by comparing each MCID before and after; its elements lose Alt, ActualText and E, and references to now-empty marked content are dropped; untouched tags stay"
 
 [[feature]]
 id = "protect.redaction-verification"
