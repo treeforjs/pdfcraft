@@ -3,6 +3,9 @@
 //! See the README: the metrics are approximations by character class (no vendor metrics files
 //! are bundled). The full font subsystem lands in M2.2/M7.
 
+mod script;
+pub use script::{ScriptOutline, script_outline};
+
 /// Approximate advance of `s` in Helvetica (or Arial) at `size` points.
 pub fn helvetica_width(s: &str, size: f64) -> f64 {
     let units: f64 = s

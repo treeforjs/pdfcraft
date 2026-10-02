@@ -97,6 +97,7 @@ pub static TOOL_GROUPS: &[ToolGroup] = &[
                 item("Line", "minus", "sign.fill.line", Ready),
                 item("Date", "clock-3", "sign.fill.date", Ready),
                 item("Signature", "signature", "sign.fill.signature", Ready),
+                item("Initials", "signature", "sign.fill.initials", Ready),
             ],
         }],
     },

@@ -5176,10 +5176,10 @@ area = "F"
 tier = "P0"
 milestone = "M5"
 status = "partial"
-commands = ["sign.fill.signature"]
-tools = []
-evidence = ["crates/ui-egui/tests/fill_sign.rs::signing_draws_a_signature_once_and_places_it"]
-notes = "drawn signature, saved in settings; typed/image signatures and initials not yet"
+commands = ["sign.fill.signature", "sign.fill.initials"]
+tools = ["fill_sign_add"]
+evidence = ["crates/ui-egui/tests/fill_sign.rs::typed_signatures_and_initials", "crates/ui-egui/tests/fill_sign.rs::signing_draws_a_signature_once_and_places_it", "crates/fonts/src/script.rs::a_name_becomes_outlines", "crates/automation/tests/automation.rs::fill_and_sign_through_tools"]
+notes = "signature and initials, typed (Dancing Script outlines as filled paths, no font embedded) or drawn, saved in settings; image signatures not yet"
 
 [[feature]]
 id = "form.fill-sign-flatten"

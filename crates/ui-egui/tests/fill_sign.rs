@@ -74,6 +74,8 @@ fn signing_draws_a_signature_once_and_places_it() {
     assert!(h.state_mut().execute("sign.fill.signature"));
     h.run_steps(2);
     assert_eq!(h.state().dialog, Some(Dialog::Signature), "no signature yet: the pad opens");
+    h.get_all_by_label("Draw").last().unwrap().click();
+    h.run_steps(2);
     let pad = h.get_by_label("Draw your signature below.").rect();
     let start = pos2(pad.left() + 40.0, pad.bottom() + 70.0);
     h.hover_at(start);
@@ -97,4 +99,35 @@ fn signing_draws_a_signature_once_and_places_it() {
     let mut again = PrintCraftApp::new();
     again.restore(&saved);
     assert!(again.signature.is_some());
+}
+
+#[test]
+fn typed_signatures_and_initials() {
+    let mut h = harness();
+    h.state_mut().comment_prefs.author = "Grace Hopper".into();
+    assert!(h.state_mut().execute("sign.fill.signature"));
+    h.run_steps(2);
+    // Type is the default, with the author's name filled in.
+    h.get_by_label("Type your signature.");
+    assert_eq!(h.state().signature_draft.text, "Grace Hopper");
+    h.get_by_label("Apply").click();
+    h.run_steps(3);
+    assert_eq!(h.state().signature, Some(printcraft_ui_egui::fill_sign::SavedSig::Typed("Grace Hopper".into())));
+    click(&mut h, 60.0, 100.0);
+    assert!(items(&h).iter().any(|(t, _)| t == "Stamp"), "typed signatures are filled outlines");
+    // Initials: their own pad (GH), then placed.
+    assert!(h.state_mut().execute("sign.fill.initials"));
+    h.run_steps(2);
+    h.get_by_label("Create initials");
+    assert_eq!(h.state().signature_draft.text, "GH");
+    h.get_by_label("Apply").click();
+    h.run_steps(3);
+    click(&mut h, 60.0, 160.0);
+    assert_eq!(items(&h).iter().filter(|(t, _)| t == "Stamp").count(), 2);
+    // Both are remembered.
+    let saved = h.state().persist();
+    let mut again = PrintCraftApp::new();
+    again.restore(&saved);
+    assert_eq!(again.signature, h.state().signature);
+    assert_eq!(again.initials, Some(printcraft_ui_egui::fill_sign::SavedSig::Typed("GH".into())));
 }

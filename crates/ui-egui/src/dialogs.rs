@@ -780,10 +780,17 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
                 return;
             }
             Dialog::Signature => {
-                let (apply, cancel) = crate::fill_sign::signature_pad(ui, &t, &mut app.signature_draft);
+                let (apply, cancel) = crate::fill_sign::signature_pad(ui, &t, &mut app.signature_draft, &mut app.signature_preview);
                 if apply {
-                    app.signature = Some(std::mem::take(&mut app.signature_draft));
-                    app.quick_tool = crate::QuickTool::Fill(crate::fill_sign::FillTool::Signature);
+                    let d = std::mem::take(&mut app.signature_draft);
+                    let tool = if d.initials {
+                        app.initials = Some(d.saved());
+                        crate::fill_sign::FillTool::Initials
+                    } else {
+                        app.signature = Some(d.saved());
+                        crate::fill_sign::FillTool::Signature
+                    };
+                    app.quick_tool = crate::QuickTool::Fill(tool);
                     app.toast = None;
                 }
                 close = apply || cancel;

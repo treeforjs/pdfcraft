@@ -242,6 +242,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     c("sign.fill.line", "Fill & Sign: line", None, None, Annotate, "minus"),
     c("sign.fill.date", "Fill & Sign: date", None, None, Annotate, "clock-3"),
     c("sign.fill.signature", "Fill & Sign: sign", None, None, Annotate, "signature"),
+    c("sign.fill.initials", "Fill & Sign: initials", None, None, Annotate, "signature"),
     c("export.image", "Export to image…", FILE, None, Document, "image"),
     c("optimize.reduce", "Reduce file size…", FILE, None, Document, "file-down"),
     c("optimize.advanced", "Optimize PDF…", FILE, None, Document, "settings-2"),

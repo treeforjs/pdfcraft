@@ -349,10 +349,12 @@ pub struct PrintCraftApp {
     pub export_draft: export_ui::ExportDraft,
     /// A running export's progress.
     export_status: Option<export_ui::ExportStatus>,
-    /// The saved Fill & Sign signature (strokes normalised to the pad width, y up).
-    pub signature: Option<Vec<Vec<[f32; 2]>>>,
-    /// Strokes being drawn in the signature pad.
-    pub signature_draft: Vec<Vec<[f32; 2]>>,
+    /// The saved Fill & Sign signature and initials (drawn or typed).
+    pub signature: Option<fill_sign::SavedSig>,
+    pub initials: Option<fill_sign::SavedSig>,
+    /// The Create signature / initials dialog, and its typed preview.
+    pub signature_draft: fill_sign::SigDraft,
+    pub(crate) signature_preview: Option<(String, egui::TextureHandle)>,
     /// The Comment Properties dialog's state.
     pub comment_props: Option<comment_props::PropsDraft>,
     pub field_props: Option<prepare::FieldDraft>,
@@ -460,7 +462,9 @@ impl PrintCraftApp {
             export_draft: Default::default(),
             export_status: None,
             signature: None,
-            signature_draft: Vec::new(),
+            initials: None,
+            signature_draft: Default::default(),
+            signature_preview: None,
             comment_props: None,
             field_props: None,
             redact_prefs: RedactPrefs::default(),
@@ -751,7 +755,10 @@ impl PrintCraftApp {
         serde_json::json!({
             "recent": self.recent,
             "theme": self.theme,
-            "signature": self.signature,
+            // Drawn signatures keep their original form (older settings read the same).
+            "signature": match &self.signature { Some(fill_sign::SavedSig::Drawn(s)) => Some(s), _ => None },
+            "signature_text": match &self.signature { Some(fill_sign::SavedSig::Typed(t)) => Some(t), _ => None },
+            "initials": self.initials,
             // Keychain identities are read from macOS each time.
             "digital_ids": self.digital_ids.iter().filter(|e| !e.path.starts_with("keychain:")).collect::<Vec<_>>(),
             "trusted": trusted,
@@ -775,7 +782,13 @@ impl PrintCraftApp {
         if let Ok(s) = serde_json::from_value::<Vec<Vec<[f32; 2]>>>(v["signature"].clone())
             && s.iter().all(|st| st.iter().all(|p| p.iter().all(|x| x.is_finite())))
         {
-            self.signature = Some(s);
+            self.signature = Some(fill_sign::SavedSig::Drawn(s));
+        }
+        if let Some(t) = v["signature_text"].as_str().filter(|t| !t.trim().is_empty()) {
+            self.signature = Some(fill_sign::SavedSig::Typed(t.to_string()));
+        }
+        if let Ok(i) = serde_json::from_value::<fill_sign::SavedSig>(v["initials"].clone()) {
+            self.initials = Some(i);
         }
         if let Ok(ids) = serde_json::from_value::<Vec<DigitalIdEntry>>(v["digital_ids"].clone()) {
             self.digital_ids = ids;

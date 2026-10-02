@@ -369,8 +369,9 @@ impl PrintCraftApp {
             fill if crate::fill_sign::FillTool::from_command(fill).is_some() => {
                 let tool = crate::fill_sign::FillTool::from_command(fill).expect("checked");
                 self.quick_tool = crate::QuickTool::Fill(tool);
-                if tool == crate::fill_sign::FillTool::Signature && self.signature.is_none() {
-                    self.signature_draft.clear();
+                let initials = tool == crate::fill_sign::FillTool::Initials;
+                if (tool == crate::fill_sign::FillTool::Signature && self.signature.is_none()) || (initials && self.initials.is_none()) {
+                    self.signature_draft = crate::fill_sign::SigDraft::new(initials, &self.comment_prefs.author);
                     self.dialog = Some(Dialog::Signature);
                 }
             }

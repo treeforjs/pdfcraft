@@ -3460,6 +3460,7 @@ dependencies = [
  "printcraft-cos",
  "printcraft-create",
  "printcraft-edit",
+ "printcraft-fonts",
  "printcraft-forms",
  "printcraft-model",
  "printcraft-optimize",
@@ -3485,6 +3486,9 @@ dependencies = [
 [[package]]
 name = "printcraft-fonts"
 version = "0.1.0"
+dependencies = [
+ "skrifa 0.44.0",
+]
 
 [[package]]
 name = "printcraft-forms"

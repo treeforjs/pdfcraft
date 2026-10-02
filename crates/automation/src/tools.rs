@@ -754,14 +754,14 @@ pub fn tools() -> Vec<ToolDef> {
         t(
             "fill_sign_add",
             "Fill & Sign: type text or place a mark",
-            "Fill in a form that has no fields, as Acrobat's Fill & Sign does: type text (`text`, 10 pt), place a check, cross, dot or line, or today's date, at `at` [x, y] in points from the top-left of the page (the text's top-left; a mark's centre). Creates movable, undoable annotations.",
+            "Fill in a form that has no fields, as Acrobat's Fill & Sign does: type text (`text`, 10 pt), place a check, cross, dot or line, today's date, or a typed signature or initials (`text` drawn in a script font as filled outlines; at is its left edge, centred vertically), at `at` [x, y] in points from the top-left of the page (the text's top-left; a mark's centre). Creates movable, undoable annotations.",
         )
         .cmd("sign.fill.text")
         .with(schema(
             json!({
                 "doc": doc(),
                 "page": { "type": "integer", "minimum": 1 },
-                "type": { "type": "string", "enum": ["text", "check", "cross", "dot", "line", "date"] },
+                "type": { "type": "string", "enum": ["text", "check", "cross", "dot", "line", "date", "signature", "initials"] },
                 "at": point(),
                 "text": { "type": "string", "minLength": 1 },
                 "author": { "type": "string" },

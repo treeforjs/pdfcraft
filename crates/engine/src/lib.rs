@@ -31,6 +31,21 @@ pub use printcraft_forms::{
 };
 
 pub use printcraft_a11y as a11y;
+pub use printcraft_fonts::{ScriptOutline, script_outline};
+
+/// Fill & Sign: `text` in the script font as a typed signature, its left edge at `at` (user
+/// space, vertically centred) and `height` points tall. `None` for text with no outlines.
+pub fn typed_signature_shape(at: [f64; 2], text: &str, height: f64) -> Option<Shape> {
+    let o = script_outline(text);
+    let span = (o.ascent - o.descent).max(0.1);
+    if o.contours.is_empty() || o.width <= 0.0 {
+        return None;
+    }
+    let k = height / span;
+    let rect = [at[0], at[1] - height / 2.0, at[0] + o.width * k, at[1] + height / 2.0];
+    let contours = o.contours.iter().map(|c| c.iter().map(|p| [p[0] / o.width, (p[1] - o.descent) / span]).collect()).collect();
+    Some(Shape::TypedSignature { rect, contours })
+}
 /// Comment geometry helpers (text-box line breaking) for frontends.
 pub use printcraft_annot::appearance as annot_text;
 pub use printcraft_annot::links::{Highlight as LinkHighlight, LinkAction, LinkItem, LinkStyle};
@@ -933,7 +948,7 @@ fn annotation_noun(s: &Shape) -> &'static str {
         Shape::Mark { mark: FillMark::Cross, .. } => "cross",
         Shape::Mark { mark: FillMark::Dot, .. } => "dot",
         Shape::Mark { mark: FillMark::Line, .. } => "line",
-        Shape::Signature { .. } => "signature",
+        Shape::Signature { .. } | Shape::TypedSignature { .. } => "signature",
         Shape::Redact { .. } => "redaction mark",
         Shape::Stamp { .. } | Shape::CustomStamp { .. } => "stamp",
         Shape::Polygon { cloud: true, .. } => "cloud",

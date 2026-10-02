@@ -9,3 +9,5 @@ license.workspace = true
 workspace = true
 
 [dependencies]
+# Glyph outlines of the bundled script font (typed signatures); already in the tree via egui.
+skrifa = "0.44"

@@ -352,6 +352,14 @@ impl Automation {
                 let t = format!("{m}/{d}/{yy}");
                 (text_at(&t), t)
             }
+            // A typed signature or initials in the script font, left edge at `at`.
+            kind @ ("signature" | "initials") => {
+                let t = a.str("text")?;
+                let h = if kind == "initials" { 24.0 } else { 32.0 };
+                let shape =
+                    printcraft_engine::typed_signature_shape(at, t, h).ok_or_else(|| ToolError::InvalidArgs("text has nothing to draw".into()))?;
+                (shape, String::new())
+            }
             kind => {
                 let mark = match kind {
                     "check" => FillMark::Check,

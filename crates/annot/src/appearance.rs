@@ -401,6 +401,23 @@ pub fn build(d: &Dict) -> Option<Stream> {
             }
         }
         b"Stamp" => {
+            // A typed signature: filled outlines normalised to the rectangle.
+            if let Some(outline) = d.get(b"PCOutline").and_then(|o| o.as_array()) {
+                let [x0, y0, x1, y1] = rect;
+                let (w, h) = (x1 - x0, y1 - y0);
+                c.push_str(&rg(stroke.unwrap_or([0.0; 3])));
+                for contour in outline {
+                    let v: Vec<f64> = contour.as_array().map(|a| a.iter().filter_map(Object::as_f64).collect()).unwrap_or_default();
+                    for (i, p) in v.chunks_exact(2).enumerate() {
+                        c.push_str(&format!("{} {} {}\n", n(x0 + p[0] * w), n(y0 + p[1] * h), if i == 0 { "m" } else { "l" }));
+                    }
+                    if v.len() >= 6 {
+                        c.push_str("h\n");
+                    }
+                }
+                c.push_str("f*\n");
+                return Some(form(rect, c.as_bytes(), res));
+            }
             // A custom stamp: its picture (an image, or a form mapped to /PCPictureSize) fills
             // the rectangle.
             if let Some(pic) = d.get(b"PCPicture").and_then(Object::as_ref) {

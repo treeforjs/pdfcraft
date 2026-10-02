@@ -22,6 +22,7 @@ printcraft-xfdf = { workspace = true }
 printcraft-sign = { workspace = true }
 printcraft-optimize = { workspace = true }
 printcraft-a11y = { workspace = true }
+printcraft-fonts = { workspace = true }
 printcraft-create = { workspace = true }
 printcraft-model = { workspace = true }
 thiserror = { workspace = true }

@@ -974,6 +974,8 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
     let can_crop = doc.allows_assembly();
     let mut open_boxes = false;
     let signature = app.signature.clone();
+    let initials = app.initials.clone();
+    let mut open_initials = false;
     let author = app.comment_prefs.author.clone();
     let today = app.session.today();
     let by_line = app.session.stamp_by_line(&author);
@@ -1170,9 +1172,10 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
             if let QuickTool::Fill(ft) = tool
                 && allowed
             {
-                match crate::fill_sign::page_input(ui, &resp, &xf, i, info, ft, view, signature.as_ref(), &author, today) {
+                match crate::fill_sign::page_input(ui, &resp, &xf, i, info, ft, view, signature.as_ref(), initials.as_ref(), &author, today) {
                     Some(crate::fill_sign::FillAction::Edit(e)) => view.pending_edit = Some(*e),
                     Some(crate::fill_sign::FillAction::CreateSignature) => open_signature = true,
+                    Some(crate::fill_sign::FillAction::CreateInitials) => open_initials = true,
                     None => {}
                 }
             }
@@ -1598,8 +1601,8 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
             app.redact_prefs.mark(page, quads, &author)
         });
     }
-    if open_signature {
-        app.signature_draft.clear();
+    if open_signature || open_initials {
+        app.signature_draft = crate::fill_sign::SigDraft::new(open_initials, &app.comment_prefs.author);
         app.dialog = Some(crate::Dialog::Signature);
     }
     if open_boxes {

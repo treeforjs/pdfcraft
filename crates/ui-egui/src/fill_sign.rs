@@ -19,10 +19,45 @@ pub enum FillTool {
     Line,
     Date,
     Signature,
+    Initials,
 }
 
-pub const FILL_TOOLS: [FillTool; 7] =
-    [FillTool::Text, FillTool::Cross, FillTool::Check, FillTool::Dot, FillTool::Line, FillTool::Date, FillTool::Signature];
+pub const FILL_TOOLS: [FillTool; 8] =
+    [FillTool::Text, FillTool::Cross, FillTool::Check, FillTool::Dot, FillTool::Line, FillTool::Date, FillTool::Signature, FillTool::Initials];
+
+/// A saved signature or initials: drawn strokes (normalised to the pad width, y up) or typed
+/// text (drawn in the script font).
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum SavedSig {
+    Drawn(Vec<Vec<[f32; 2]>>),
+    Typed(String),
+}
+
+/// The Create signature / initials dialog.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct SigDraft {
+    pub strokes: Vec<Vec<[f32; 2]>>,
+    pub text: String,
+    /// The Draw tab (otherwise Type).
+    pub drawing: bool,
+    /// Creating initials (otherwise the signature).
+    pub initials: bool,
+}
+
+impl SigDraft {
+    pub fn new(initials: bool, name: &str) -> Self {
+        let text = if initials { name.split_whitespace().filter_map(|w| w.chars().next()).collect() } else { name.trim().to_string() };
+        Self { strokes: Vec::new(), text, drawing: false, initials }
+    }
+
+    fn ready(&self) -> bool {
+        if self.drawing { self.strokes.iter().any(|s| s.len() > 1) } else { !self.text.trim().is_empty() }
+    }
+
+    pub fn saved(&self) -> SavedSig {
+        if self.drawing { SavedSig::Drawn(self.strokes.clone()) } else { SavedSig::Typed(self.text.trim().to_string()) }
+    }
+}
 
 impl FillTool {
     pub fn command(self) -> &'static str {
@@ -34,6 +69,7 @@ impl FillTool {
             FillTool::Line => "sign.fill.line",
             FillTool::Date => "sign.fill.date",
             FillTool::Signature => "sign.fill.signature",
+            FillTool::Initials => "sign.fill.initials",
         }
     }
 
@@ -50,6 +86,7 @@ impl FillTool {
             FillTool::Line => "Line",
             FillTool::Date => "Date",
             FillTool::Signature => "Sign",
+            FillTool::Initials => "Initials",
         }
     }
 
@@ -61,7 +98,7 @@ impl FillTool {
             FillTool::Dot => "circle-dot",
             FillTool::Line => "minus",
             FillTool::Date => "clock-3",
-            FillTool::Signature => "signature",
+            FillTool::Signature | FillTool::Initials => "signature",
         }
     }
 
@@ -122,6 +159,57 @@ pub fn signature_at(page: usize, at: [f64; 2], strokes: &[Vec<[f32; 2]>], author
     (!strokes.is_empty()).then(|| new(page, Shape::Signature { strokes }, String::new(), author))
 }
 
+/// Place typed text in the script font with its left edge at `at`, `height` points tall.
+pub fn typed_signature_at(page: usize, at: [f64; 2], text: &str, height: f64, author: &str) -> Option<Edit> {
+    printcraft_engine::typed_signature_shape(at, text, height).map(|shape| new(page, shape, String::new(), author))
+}
+
+/// Place a saved signature or initials.
+pub fn place(page: usize, at: [f64; 2], sig: &SavedSig, initials: bool, author: &str) -> Option<Edit> {
+    match sig {
+        SavedSig::Drawn(strokes) => signature_at(page, at, strokes, author),
+        SavedSig::Typed(text) => typed_signature_at(page, at, text, if initials { 24.0 } else { 32.0 }, author),
+    }
+}
+
+/// The text in the script font as a picture (`w`×`h` px, black on transparent), for previews.
+pub(crate) fn script_preview(text: &str, w: usize, h: usize) -> egui::ColorImage {
+    let o = printcraft_engine::script_outline(text);
+    let mut img = egui::ColorImage::filled([w, h], Color32::TRANSPARENT);
+    let span = (o.ascent - o.descent).max(0.1);
+    if o.contours.is_empty() {
+        return img;
+    }
+    let k = ((h as f64 * 0.9) / span).min((w as f64 * 0.95) / o.width.max(0.01));
+    let x0 = (w as f64 - o.width * k) / 2.0;
+    // Device points (y down), then an even-odd scanline fill.
+    let polys: Vec<Vec<(f64, f64)>> = o
+        .contours
+        .iter()
+        .map(|c| c.iter().map(|p| (x0 + p[0] * k, h as f64 * 0.5 + (o.ascent + o.descent) / 2.0 * k - p[1] * k)).collect())
+        .collect();
+    for y in 0..h {
+        let sy = y as f64 + 0.5;
+        let mut xs: Vec<f64> = Vec::new();
+        for poly in &polys {
+            for i in 0..poly.len() {
+                let (a, b) = (poly[i], poly[(i + 1) % poly.len()]);
+                if (a.1 <= sy) != (b.1 <= sy) {
+                    xs.push(a.0 + (sy - a.1) / (b.1 - a.1) * (b.0 - a.0));
+                }
+            }
+        }
+        xs.sort_by(|a, b| a.total_cmp(b));
+        for pair in xs.chunks_exact(2) {
+            let (from, to) = (pair[0].round().max(0.0) as usize, (pair[1].round() as usize).min(w));
+            for x in from..to {
+                img[(x, y)] = Color32::BLACK;
+            }
+        }
+    }
+    img
+}
+
 /// Clicks with a Fill & Sign tool on one page. Returns `true` when the click was used.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn page_input(
@@ -132,7 +220,8 @@ pub(crate) fn page_input(
     info: &DocInfo,
     tool: FillTool,
     view: &mut DocView,
-    signature: Option<&Vec<Vec<[f32; 2]>>>,
+    signature: Option<&SavedSig>,
+    initials: Option<&SavedSig>,
     author: &str,
     today: (i64, u32, u32),
 ) -> Option<FillAction> {
@@ -155,8 +244,12 @@ pub(crate) fn page_input(
             Some(FillAction::Edit(Box::new(typed(page, [at[0], at[1] + TEXT_SIZE * 0.6], &format!("{m}/{d}/{y}"), author))))
         }
         FillTool::Signature => match signature {
-            Some(s) => signature_at(page, at, s, author).map(|e| FillAction::Edit(Box::new(e))),
+            Some(s) => place(page, at, s, false, author).map(|e| FillAction::Edit(Box::new(e))),
             None => Some(FillAction::CreateSignature),
+        },
+        FillTool::Initials => match initials {
+            Some(s) => place(page, at, s, true, author).map(|e| FillAction::Edit(Box::new(e))),
+            None => Some(FillAction::CreateInitials),
         },
         mark => {
             let mark = mark.mark().expect("marks");
@@ -173,6 +266,8 @@ pub enum FillAction {
     Edit(Box<Edit>),
     /// No signature yet: open the signature pad.
     CreateSignature,
+    /// No initials yet.
+    CreateInitials,
 }
 
 /// The in-place editor for typed text. Returns the edit once committed.
@@ -220,10 +315,37 @@ pub(crate) fn type_box(ctx: &egui::Context, view: &mut DocView, info: &DocInfo, 
 }
 
 /// The signature pad: draw with the pointer; returns the strokes (normalised) on Apply.
-pub(crate) fn signature_pad(ui: &mut egui::Ui, t: &Tokens, strokes: &mut Vec<Vec<[f32; 2]>>) -> (bool, bool) {
-    ui.label(egui::RichText::new("Create signature").font(crate::theme::semibold(18.0)));
-    ui.label(egui::RichText::new("Draw your signature below.").color(t.text_muted));
+pub(crate) fn signature_pad(ui: &mut egui::Ui, t: &Tokens, d: &mut SigDraft, preview: &mut Option<(String, egui::TextureHandle)>) -> (bool, bool) {
+    let what = if d.initials { "initials" } else { "signature" };
+    ui.label(egui::RichText::new(format!("Create {what}")).font(crate::theme::semibold(18.0)));
+    ui.horizontal(|ui| {
+        if crate::widgets::pill_button(ui, "Type", !d.drawing).clicked() {
+            d.drawing = false;
+        }
+        if crate::widgets::pill_button(ui, "Draw", d.drawing).clicked() {
+            d.drawing = true;
+        }
+    });
     ui.add_space(6.0);
+    if !d.drawing {
+        let l = ui.label(egui::RichText::new(format!("Type your {what}.")).color(t.text_muted));
+        ui.add(egui::TextEdit::singleline(&mut d.text).desired_width(460.0).hint_text(if d.initials { "Initials" } else { "Your name" }))
+            .labelled_by(l.id);
+        let (rect, _) = ui.allocate_exact_size(vec2(460.0, 150.0), Sense::hover());
+        let painter = ui.painter_at(rect);
+        painter.rect_filled(rect, CornerRadius::same(6), Color32::WHITE);
+        painter.rect_stroke(rect, CornerRadius::same(6), Stroke::new(1.0, t.border), egui::StrokeKind::Inside);
+        if preview.as_ref().is_none_or(|(s, _)| *s != d.text) {
+            let img = script_preview(&d.text, 920, 300);
+            *preview = Some((d.text.clone(), ui.ctx().load_texture("typed-signature", img, egui::TextureOptions::LINEAR)));
+        }
+        if let Some((_, tex)) = preview {
+            painter.image(tex.id(), rect.shrink(4.0), egui::Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
+        }
+        return pad_buttons(ui, d);
+    }
+    ui.label(egui::RichText::new(format!("Draw your {what} below.")).color(t.text_muted));
+    let strokes = &mut d.strokes;
     let (rect, resp) = ui.allocate_exact_size(vec2(460.0, 150.0), Sense::drag());
     let painter = ui.painter_at(rect);
     painter.rect_filled(rect, CornerRadius::same(6), Color32::WHITE);
@@ -246,14 +368,19 @@ pub(crate) fn signature_pad(ui: &mut egui::Ui, t: &Tokens, strokes: &mut Vec<Vec
         let pts: Vec<Pos2> = s.iter().map(|p| pos2(rect.left() + p[0] * rect.width(), rect.bottom() - p[1] * rect.width())).collect();
         painter.add(egui::Shape::line(pts, Stroke::new(2.0, Color32::BLACK)));
     }
+    pad_buttons(ui, d)
+}
+
+fn pad_buttons(ui: &mut egui::Ui, d: &mut SigDraft) -> (bool, bool) {
     ui.add_space(10.0);
     let (mut apply, mut cancel) = (false, false);
     ui.horizontal(|ui| {
         if ui.button("Clear").clicked() {
-            strokes.clear();
+            d.strokes.clear();
+            d.text.clear();
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let ready = strokes.iter().any(|s| s.len() > 1);
+            let ready = d.ready();
             if ui.add_enabled_ui(ready, |ui| crate::widgets::pill_button(ui, "Apply", true)).inner.clicked() {
                 apply = true;
             }
