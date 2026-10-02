@@ -3,7 +3,7 @@
 //! Geometry follows the automation convention: points from the top-left of the displayed page,
 //! y down. It is converted to PDF user space (crop box, `/Rotate`) here.
 
-use printcraft_engine::{Edit, Markup, NewAnnotation, NoteIcon, ReviewState, Rgb, Shape, Style};
+use printcraft_engine::{Edit, Markup, NewAnnotation, NoteIcon, ReviewState, Rgb, Shape, StampGroup, StampKind, Style};
 use printcraft_render::{Annotation, PageInfo};
 use serde_json::{Value, json};
 
@@ -188,6 +188,20 @@ impl Automation {
                         None => NoteIcon::Comment,
                     };
                     Shape::Note { at: to_user(&info, x, y), icon }
+                }
+                "stamp" => {
+                    let want = a.opt_str("stamp")?.unwrap_or("approved").to_ascii_lowercase().replace([' ', '-', '_'], "");
+                    let dynamic = a.opt_bool("dynamic")?.unwrap_or(false);
+                    let stamp = StampKind::ALL
+                        .into_iter()
+                        .find(|k| k.label().to_ascii_lowercase().replace(' ', "") == want && ((k.group() == StampGroup::Dynamic) == dynamic))
+                        .ok_or_else(|| ToolError::InvalidArgs(format!("unknown stamp {want:?} (see the tool description)")))?;
+                    let (w, h) = stamp.size();
+                    let [x, y] = a.need::<2>("at", "a stamp (its centre)")?;
+                    let rect = rect_to_user(&info, [x - w / 2.0, y - h / 2.0, x + w / 2.0, y + h / 2.0]);
+                    let author = a.opt_str("author")?.unwrap_or(DEFAULT_AUTHOR).to_string();
+                    let by = dynamic.then(|| self.session.stamp_by_line(&author));
+                    Shape::Stamp { rect, stamp, by }
                 }
                 "rectangle" => Shape::Rectangle { rect: rect_to_user(&info, a.need::<4>("rect", "a rectangle")?) },
                 "oval" => Shape::Oval { rect: rect_to_user(&info, a.need::<4>("rect", "an oval")?) },

@@ -341,7 +341,15 @@ pub fn build(d: &Dict) -> Option<Stream> {
                     n(x1),
                     n(y0 + h / 2.0)
                 )),
-                _ => return None,
+                other => {
+                    // Only stamps PrintCraft made: others keep their own artwork.
+                    if !matches!(d.get(b"PCStamp"), Some(Object::Bool(true))) {
+                        return None;
+                    }
+                    let kind = crate::StampKind::from_name(other)?;
+                    let by = d.get(b"PCByLine").and_then(|o| o.as_string()).map(PdfString::to_text);
+                    return Some(stamp(kind, rect, stroke.unwrap_or(kind.color()), by.as_deref(), opacity, res));
+                }
             }
         }
         b"FreeText" => {
@@ -412,6 +420,130 @@ pub fn build(d: &Dict) -> Option<Stream> {
         _ => return None,
     }
     Some(form(rect, c.as_bytes(), res))
+}
+
+/// A rubber stamp: a rounded frame (a pointed tag for sign-here stamps) with the label in bold
+/// capitals, and the dynamic stamps' "By … at …" line.
+fn stamp(kind: crate::StampKind, rect: [f64; 4], col: Rgb, by: Option<&str>, opacity: f64, mut res: Dict) -> Stream {
+    let [x0, y0, x1, y1] = rect;
+    let h = y1 - y0;
+    let mut c = String::new();
+    if opacity < 1.0 {
+        c.push_str("/GS0 gs\n");
+    }
+    let lw = (h * 0.07).clamp(1.0, 3.0);
+    let inset = lw / 2.0 + 0.5;
+    if kind.group() == crate::StampGroup::SignHere {
+        // A tag pointing left, filled, with white text.
+        let tip = h * 0.45;
+        c.push_str(&format!(
+            "{}{}{} w 1 j\n{} {} m {} {} l {} {} l {} {} l {} {} l h B\n",
+            rg(col),
+            rg_stroke(col),
+            n(lw),
+            n(x0 + inset),
+            n(y0 + h / 2.0),
+            n(x0 + tip),
+            n(y1 - inset),
+            n(x1 - inset),
+            n(y1 - inset),
+            n(x1 - inset),
+            n(y0 + inset),
+            n(x0 + tip),
+            n(y0 + inset)
+        ));
+    } else {
+        // A rounded frame with a light tint.
+        let r = (h * 0.2).min(8.0);
+        let k = 0.552_284_75 * r;
+        let (a0, b0, a1, b1) = (x0 + inset, y0 + inset, x1 - inset, y1 - inset);
+        let tint = col.map(|v| 1.0 - (1.0 - v) * 0.12);
+        c.push_str(&format!(
+            "{}{}{} w\n{} {} m {} {} l {} {} {} {} {} {} c {} {} l {} {} {} {} {} {} c {} {} l {} {} {} {} {} {} c {} {} l {} {} {} {} {} {} c h B\n",
+            rg(tint),
+            rg_stroke(col),
+            n(lw),
+            n(a0 + r),
+            n(b0),
+            n(a1 - r),
+            n(b0),
+            n(a1 - r + k),
+            n(b0),
+            n(a1),
+            n(b0 + r - k),
+            n(a1),
+            n(b0 + r),
+            n(a1),
+            n(b1 - r),
+            n(a1),
+            n(b1 - r + k),
+            n(a1 - r + k),
+            n(b1),
+            n(a1 - r),
+            n(b1),
+            n(a0 + r),
+            n(b1),
+            n(a0 + r - k),
+            n(b1),
+            n(a0),
+            n(b1 - r + k),
+            n(a0),
+            n(b1 - r),
+            n(a0),
+            n(b0 + r),
+            n(a0),
+            n(b0 + r - k),
+            n(a0 + r - k),
+            n(b0),
+            n(a0 + r),
+            n(b0)
+        ));
+    }
+    let label = kind.label();
+    let (title_h, by_h) = if by.is_some() { (h * 0.5, h * 0.22) } else { (h * 0.52, 0.0) };
+    let text_area = if kind.group() == crate::StampGroup::SignHere { (x0 + h * 0.45, x1 - lw * 2.0) } else { (x0 + lw * 2.0, x1 - lw * 2.0) };
+    let mut size = title_h;
+    let tw = text_width(label, size) * 1.12;
+    if tw > text_area.1 - text_area.0 - 4.0 {
+        size *= (text_area.1 - text_area.0 - 4.0) / tw;
+    }
+    let tw = text_width(label, size) * 1.12;
+    let text_col = if kind.group() == crate::StampGroup::SignHere { [1.0, 1.0, 1.0] } else { col };
+    let ty = if by.is_some() { y0 + h * 0.48 } else { y0 + (h - size * 0.72) / 2.0 };
+    let mut out = c.into_bytes();
+    out.extend(
+        format!("BT\n{}/HelvB {} Tf\n1 0 0 1 {} {} Tm ", rg(text_col), n(size), n(text_area.0 + (text_area.1 - text_area.0 - tw) / 2.0), n(ty))
+            .bytes(),
+    );
+    out.extend(literal(&win_ansi(label)));
+    out.extend_from_slice(b" Tj\n");
+    if let Some(b) = by {
+        let mut s = by_h;
+        let bw = text_width(b, s);
+        if bw > text_area.1 - text_area.0 - 4.0 {
+            s *= (text_area.1 - text_area.0 - 4.0) / bw;
+        }
+        let bw = text_width(b, s);
+        out.extend(
+            format!("/Helv {} Tf\n1 0 0 1 {} {} Tm ", n(s), n(text_area.0 + (text_area.1 - text_area.0 - bw) / 2.0), n(y0 + h * 0.18)).bytes(),
+        );
+        out.extend(literal(&win_ansi(b)));
+        out.extend_from_slice(b" Tj\n");
+    }
+    out.extend_from_slice(b"ET\n");
+    let font = |base: &str| {
+        let mut f = Dict::new();
+        f.set(b"Type".to_vec(), Object::name("Font"));
+        f.set(b"Subtype".to_vec(), Object::name("Type1"));
+        f.set(b"BaseFont".to_vec(), Object::name(base));
+        f.set(b"Encoding".to_vec(), Object::name("WinAnsiEncoding"));
+        Object::Dict(f)
+    };
+    let mut fonts = Dict::new();
+    fonts.set(b"HelvB".to_vec(), font("Helvetica-Bold"));
+    fonts.set(b"Helv".to_vec(), font("Helvetica"));
+    res.set(b"Font".to_vec(), Object::Dict(fonts));
+    form(rect, &out, res)
 }
 
 /// An ellipse inscribed in a rectangle, as four Bézier arcs.

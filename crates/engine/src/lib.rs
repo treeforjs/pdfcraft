@@ -31,7 +31,9 @@ pub use printcraft_forms::{
 
 /// Comment geometry helpers (text-box line breaking) for frontends.
 pub use printcraft_annot::appearance as annot_text;
-pub use printcraft_annot::{FillMark, Markup, NewAnnotation, NoteIcon, Props as CommentProps, ReviewState, Rgb, Shape, Style, rect_quad};
+pub use printcraft_annot::{
+    FillMark, Markup, NewAnnotation, NoteIcon, Props as CommentProps, ReviewState, Rgb, Shape, StampGroup, StampKind, Style, rect_quad,
+};
 pub use printcraft_print as print;
 pub use printcraft_redact::patterns::{PATTERNS as REDACT_PATTERNS, Pattern as RedactPattern, find as find_pattern};
 pub use printcraft_redact::sanitize::{HIDDEN, Hidden};
@@ -720,6 +722,7 @@ fn annotation_noun(s: &Shape) -> &'static str {
         Shape::Mark { mark: FillMark::Line, .. } => "line",
         Shape::Signature { .. } => "signature",
         Shape::Redact { .. } => "redaction mark",
+        Shape::Stamp { .. } => "stamp",
     }
 }
 
@@ -1162,6 +1165,18 @@ impl Session {
 
     /// Today's date in local time: (year, month, day). With an injected clock (tests) the clock
     /// is taken as local time.
+    /// A dynamic stamp's second line: "By Ada at 2:14 pm, Oct 02, 2026" (local time).
+    pub fn stamp_by_line(&self, author: &str) -> String {
+        let offset = if self.clock.is_some() { 0 } else { local_utc_offset() };
+        let d = self.now().map(|t| printcraft_cos::pdf_date(t + offset)).unwrap_or_default();
+        let num = |a: usize, b: usize| d.get(a..b).and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
+        let (y, mo, day, hh, mm) = (num(2, 6), num(6, 8), num(8, 10), num(10, 12), num(12, 14));
+        const MONTHS: [&str; 12] = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        let h12 = if hh % 12 == 0 { 12 } else { hh % 12 };
+        let who = if author.trim().is_empty() { String::new() } else { format!("By {} ", author.trim()) };
+        format!("{who}at {h12}:{mm:02} {}, {} {day:02}, {y}", if hh < 12 { "am" } else { "pm" }, MONTHS[(mo.clamp(1, 12) - 1) as usize])
+    }
+
     pub fn today(&self) -> (i64, u32, u32) {
         let offset = if self.clock.is_some() { 0 } else { local_utc_offset() };
         self.now().map(|t| printcraft_cos::pdf_date(t + offset)).as_deref().and_then(parse_ymd).unwrap_or((1970, 1, 1))

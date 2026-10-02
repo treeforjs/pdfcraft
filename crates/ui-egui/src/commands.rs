@@ -278,6 +278,10 @@ impl PrintCraftApp {
                 self.apply_edit(Edit::SetTabOrder { pages: (0..n).collect(), order });
             }
             "comment.import" | "form.import_data" => self.import_data_dialog(),
+            "comment.stamp" => {
+                self.left = crate::LeftPanel::Tool("stamp");
+                self.left_open = true;
+            }
             "comment.export" => self.export_data_dialog(true, false),
             "form.export_data" => self.export_data_dialog(false, true),
             "form.prepare" => {

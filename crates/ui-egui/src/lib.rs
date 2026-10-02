@@ -95,6 +95,8 @@ pub enum QuickTool {
     Redact,
     /// Edit a PDF ▸ Add content ▸ Text.
     AddText,
+    /// Add a stamp: click to place this stamp.
+    Stamp(printcraft_engine::StampKind),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -706,6 +708,12 @@ impl PrintCraftApp {
                     "crop" => QuickTool::Crop,
                     "redact" => QuickTool::Redact,
                     "add-text" => QuickTool::AddText,
+                    stamp if stamp.starts_with("stamp-") => QuickTool::Stamp(
+                        printcraft_engine::StampKind::ALL
+                            .into_iter()
+                            .find(|k| k.name().trim_start_matches("PC").eq_ignore_ascii_case(&stamp[6..]))
+                            .ok_or_else(|| format!("unknown stamp {stamp}"))?,
+                    ),
                     field if field.starts_with("field-") => QuickTool::Field(
                         prepare::FieldTool::from_command(&format!("form.add.{}", &field[6..])).ok_or_else(|| format!("unknown tool {field}"))?,
                     ),

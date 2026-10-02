@@ -407,14 +407,14 @@ pub fn tools() -> Vec<ToolDef> {
             "comment_add",
             "Add a comment",
             "Add a comment as Acrobat's commenting tools do. Geometry is in points with the origin at the top-left of the displayed page, y down (as in page_render images at 72 dpi and text_find rects). \
-             note: `at` [x, y] (icon top-left). highlight/underline/strikeout/squiggly: `find` (text on the page to mark; every match with all: true) or `quads`. \
+             note: `at` [x, y] (icon top-left). stamp: `at` [x, y] (its centre) and `stamp`: approved, completed, confidential, draft, final, for comment, for public release, information only, not approved, not for public release, preliminary results, void, accepted, initial here, rejected, sign here, witness; dynamic: true for the dynamic approved/confidential/received/reviewed/revised stamps with a By … at … line. highlight/underline/strikeout/squiggly: `find` (text on the page to mark; every match with all: true) or `quads`. \
              rectangle/oval/textbox: `rect` [x0, y0, x1, y1]. line/arrow: `from`, `to`. ink: `strokes` [[[x, y], …], …]. Undoable.",
         )
         .with(schema(
             json!({
                 "doc": doc(),
                 "page": { "type": "integer", "minimum": 1 },
-                "type": { "type": "string", "enum": ["note", "highlight", "underline", "strikeout", "squiggly", "rectangle", "oval", "line", "arrow", "ink", "textbox"] },
+                "type": { "type": "string", "enum": ["note", "highlight", "underline", "strikeout", "squiggly", "rectangle", "oval", "line", "arrow", "ink", "textbox", "stamp"] },
                 "contents": { "type": "string", "description": "The comment text (what a text box shows)." },
                 "author": { "type": "string" },
                 "at": point(),
@@ -424,6 +424,8 @@ pub fn tools() -> Vec<ToolDef> {
                 "find": { "type": "string", "description": "Text on the page to mark up (case-insensitive)." },
                 "all": { "type": "boolean", "description": "Mark every match of `find` on the page, not just the first." },
                 "quads": { "type": "array", "items": { "type": "array", "items": { "type": "number" }, "minItems": 8, "maxItems": 8 } },
+                "stamp": { "type": "string" },
+                "dynamic": { "type": "boolean" },
                 "strokes": { "type": "array", "items": { "type": "array", "items": point() } },
                 "icon": { "type": "string", "enum": ["Comment", "Note", "Help", "Insert", "Key", "NewParagraph", "Paragraph"] },
                 "color": color(),

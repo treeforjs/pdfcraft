@@ -348,8 +348,8 @@ pub static TOOL_GROUPS: &[ToolGroup] = &[
         icon: "stamp",
         hue: PURPLE,
         badge: None,
-        availability: Planned("M5"),
-        sections: &[ToolSection { title: "Stamps", items: &[item("Stamp palette", "stamp", "comment.stamp", Planned("M5"))] }],
+        availability: Ready,
+        sections: &[ToolSection { title: "Stamps", items: &[item("Stamp palette", "stamp", "comment.stamp", Ready)] }],
     },
     ToolGroup {
         id: "certificate",

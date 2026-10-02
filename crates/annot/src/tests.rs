@@ -345,3 +345,30 @@ fn author_subject_and_note_icon_change() {
     assert_ne!(ap_content(&doc, d), before, "the icon was redrawn");
     assert!(matches!(set_info(&mut doc, 0, 0, None, None, Some(NoteIcon::Key), &meta("")), Err(AnnotError::Invalid(_))));
 }
+
+#[test]
+fn stamps_draw_their_label_and_by_line() {
+    let mut doc = fixture();
+    let shape =
+        Shape::Stamp { rect: [100.0, 100.0, 260.0, 142.0], stamp: StampKind::DynApproved, by: Some("By Ada at 2:14 pm, Oct 02, 2026".into()) };
+    let i = add_annotation(
+        &mut doc,
+        &NewAnnotation { page: 0, style: Style::default_for(&shape), shape, contents: String::new(), author: "Ada".into() },
+        &Meta::default(),
+    )
+    .unwrap();
+    let s = &summaries(&doc)[0];
+    assert_eq!((s.subtype.as_str(), s.index), ("Stamp", i));
+    let ap = ap_content(&doc, &list(&doc, 0)[i]);
+    assert!(ap.contains("(APPROVED) Tj") && ap.contains("(By Ada at 2:14 pm, Oct 02, 2026) Tj") && ap.contains("/HelvB"), "{ap}");
+    let sign = Shape::Stamp { rect: [100.0, 300.0, 220.0, 330.0], stamp: StampKind::SignHere, by: None };
+    let j = add_annotation(
+        &mut doc,
+        &NewAnnotation { page: 0, style: Style::default_for(&sign), shape: sign, contents: String::new(), author: "Ada".into() },
+        &Meta::default(),
+    )
+    .unwrap();
+    assert!(ap_content(&doc, &list(&doc, 0)[j]).contains("(SIGN HERE) Tj"));
+    assert_eq!(StampKind::from_name(b"Approved"), Some(StampKind::Approved), "standard names");
+    assert!(StampKind::ALL.iter().all(|k| k.size().0 >= 80.0));
+}

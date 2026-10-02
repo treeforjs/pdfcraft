@@ -118,6 +118,159 @@ impl FillMark {
     }
 }
 
+/// The stamps of Acrobat's stamp palette (drawn in PrintCraft's own style).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum StampKind {
+    // Standard business.
+    Approved,
+    Completed,
+    Confidential,
+    Draft,
+    Final,
+    ForComment,
+    ForPublicRelease,
+    InformationOnly,
+    NotApproved,
+    NotForPublicRelease,
+    PreliminaryResults,
+    Void,
+    // Sign here.
+    Accepted,
+    InitialHere,
+    Rejected,
+    SignHere,
+    Witness,
+    // Dynamic (with a "By … at …" line).
+    DynApproved,
+    DynConfidential,
+    DynReceived,
+    DynReviewed,
+    DynRevised,
+}
+
+/// The palette's sections.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StampGroup {
+    Dynamic,
+    SignHere,
+    StandardBusiness,
+}
+
+impl StampKind {
+    pub const ALL: [StampKind; 22] = [
+        StampKind::DynApproved,
+        StampKind::DynConfidential,
+        StampKind::DynReceived,
+        StampKind::DynReviewed,
+        StampKind::DynRevised,
+        StampKind::Accepted,
+        StampKind::InitialHere,
+        StampKind::Rejected,
+        StampKind::SignHere,
+        StampKind::Witness,
+        StampKind::Approved,
+        StampKind::Completed,
+        StampKind::Confidential,
+        StampKind::Draft,
+        StampKind::Final,
+        StampKind::ForComment,
+        StampKind::ForPublicRelease,
+        StampKind::InformationOnly,
+        StampKind::NotApproved,
+        StampKind::NotForPublicRelease,
+        StampKind::PreliminaryResults,
+        StampKind::Void,
+    ];
+
+    pub fn group(self) -> StampGroup {
+        use StampKind::*;
+        match self {
+            DynApproved | DynConfidential | DynReceived | DynReviewed | DynRevised => StampGroup::Dynamic,
+            Accepted | InitialHere | Rejected | SignHere | Witness => StampGroup::SignHere,
+            _ => StampGroup::StandardBusiness,
+        }
+    }
+
+    /// The text on the stamp.
+    pub fn label(self) -> &'static str {
+        use StampKind::*;
+        match self {
+            Approved | DynApproved => "APPROVED",
+            Completed => "COMPLETED",
+            Confidential | DynConfidential => "CONFIDENTIAL",
+            Draft => "DRAFT",
+            Final => "FINAL",
+            ForComment => "FOR COMMENT",
+            ForPublicRelease => "FOR PUBLIC RELEASE",
+            InformationOnly => "INFORMATION ONLY",
+            NotApproved => "NOT APPROVED",
+            NotForPublicRelease => "NOT FOR PUBLIC RELEASE",
+            PreliminaryResults => "PRELIMINARY RESULTS",
+            Void => "VOID",
+            Accepted => "ACCEPTED",
+            InitialHere => "INITIAL HERE",
+            Rejected => "REJECTED",
+            SignHere => "SIGN HERE",
+            Witness => "WITNESS",
+            DynReceived => "RECEIVED",
+            DynReviewed => "REVIEWED",
+            DynRevised => "REVISED",
+        }
+    }
+
+    /// `/Name`: the standard stamp names of ISO 32000-2 Table 184 where one exists.
+    pub fn name(self) -> &'static str {
+        use StampKind::*;
+        match self {
+            Approved => "Approved",
+            Confidential => "Confidential",
+            Draft => "Draft",
+            Final => "Final",
+            ForComment => "ForComment",
+            ForPublicRelease => "ForPublicRelease",
+            NotApproved => "NotApproved",
+            NotForPublicRelease => "NotForPublicRelease",
+            Completed => "PCCompleted",
+            InformationOnly => "PCInformationOnly",
+            PreliminaryResults => "PCPreliminaryResults",
+            Void => "PCVoid",
+            Accepted => "PCAccepted",
+            InitialHere => "PCInitialHere",
+            Rejected => "PCRejected",
+            SignHere => "PCSignHere",
+            Witness => "PCWitness",
+            DynApproved => "PCDynApproved",
+            DynConfidential => "PCDynConfidential",
+            DynReceived => "PCDynReceived",
+            DynReviewed => "PCDynReviewed",
+            DynRevised => "PCDynRevised",
+        }
+    }
+
+    pub fn from_name(n: &[u8]) -> Option<Self> {
+        Self::ALL.into_iter().find(|k| k.name().as_bytes() == n)
+    }
+
+    /// The stamp's colour: green for approval, red for refusal and restriction, blue otherwise.
+    pub fn color(self) -> Rgb {
+        use StampKind::*;
+        match self {
+            Approved | Completed | Final | Accepted | DynApproved | DynReceived | DynReviewed => [0.13, 0.55, 0.13],
+            NotApproved | Rejected | Void | Confidential | NotForPublicRelease | DynConfidential => [0.80, 0.10, 0.10],
+            SignHere | InitialHere | Witness => [0.85, 0.35, 0.05],
+            _ => [0.10, 0.30, 0.70],
+        }
+    }
+
+    /// The stamp's size (points) for its label, as placed with a click.
+    pub fn size(self) -> (f64, f64) {
+        let w = appearance::text_width(self.label(), 16.0) * 1.12 + 24.0;
+        let h = if self.group() == StampGroup::Dynamic { 42.0 } else { 30.0 };
+        let w = if self.group() == StampGroup::SignHere { w + 14.0 } else { w };
+        (w.max(80.0), h)
+    }
+}
+
 /// Geometry of a new comment, in PDF user space of its page.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Shape {
@@ -167,6 +320,12 @@ pub enum Shape {
     Signature {
         strokes: Vec<Vec<[f64; 2]>>,
     },
+    /// A rubber stamp from the stamp palette; `by` is the dynamic stamps' second line.
+    Stamp {
+        rect: [f64; 4],
+        stamp: StampKind,
+        by: Option<String>,
+    },
     /// A redaction mark (§12.5.6.23) over quadrilaterals (text) or one rectangle as a quad
     /// (areas, pages). `overlay` is the text shown on the box once applied.
     Redact {
@@ -192,7 +351,7 @@ impl Shape {
             Shape::Line { .. } => "Line",
             Shape::Ink { .. } | Shape::Signature { .. } => "Ink",
             Shape::TextBox { .. } | Shape::Typewriter { .. } => "FreeText",
-            Shape::Mark { .. } => "Stamp",
+            Shape::Mark { .. } | Shape::Stamp { .. } => "Stamp",
             Shape::Redact { .. } => "Redact",
         }
     }
@@ -231,6 +390,7 @@ impl Style {
             Shape::TextBox { .. } | Shape::Typewriter { .. } => ([0.0, 0.0, 0.0], 0.0),
             Shape::Mark { .. } => ([0.0, 0.0, 0.0], 1.5),
             Shape::Signature { .. } => ([0.0, 0.0, 0.0], 1.5),
+            Shape::Stamp { stamp, .. } => (stamp.color(), 2.0),
             // Red outline while marked; a black box once applied.
             Shape::Redact { .. } => return Self { color: [0.89, 0.13, 0.13], opacity: 1.0, width: 1.0, fill: Some([0.0, 0.0, 0.0]) },
         };
@@ -419,6 +579,7 @@ fn rect_for(shape: &Shape, style: &Style) -> Result<[f64; 4], AnnotError> {
         | Shape::Oval { rect }
         | Shape::TextBox { rect, .. }
         | Shape::Typewriter { rect, .. }
+        | Shape::Stamp { rect, .. }
         | Shape::Mark { rect, .. } => {
             let r = normalize(*rect);
             if !finite(rect) || r[2] - r[0] < 1.0 || r[3] - r[1] < 1.0 {
@@ -482,6 +643,11 @@ fn subject(shape: &Shape) -> &'static str {
         Shape::Mark { mark, .. } => mark.label(),
         Shape::Signature { .. } => "Signature",
         Shape::Redact { .. } => "Redact",
+        Shape::Stamp { stamp, .. } => match stamp.group() {
+            StampGroup::Dynamic => "Dynamic stamp",
+            StampGroup::SignHere => "Sign Here",
+            StampGroup::StandardBusiness => "Stamp",
+        },
     }
 }
 
@@ -547,6 +713,16 @@ pub fn add_annotation(doc: &mut Document, new: &NewAnnotation, meta: &Meta) -> R
             d.set(b"C".to_vec(), rgb(style.color));
             d.set(b"Name".to_vec(), Object::name(mark.name()));
             border(&mut d);
+        }
+        Shape::Stamp { stamp, by, .. } => {
+            d.set(b"C".to_vec(), rgb(style.color));
+            d.set(b"Name".to_vec(), Object::name(stamp.name()));
+            // Marks the stamp as drawn by PrintCraft: other stamps with standard names keep
+            // their own artwork.
+            d.set(b"PCStamp".to_vec(), Object::Bool(true));
+            if let Some(b) = by {
+                d.set(b"PCByLine".to_vec(), PdfString::text(b));
+            }
         }
         Shape::Ink { strokes } | Shape::Signature { strokes } => {
             d.set(b"C".to_vec(), rgb(style.color));

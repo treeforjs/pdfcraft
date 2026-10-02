@@ -3959,11 +3959,11 @@ title = "Standard business stamps"
 area = "E"
 tier = "P1"
 milestone = "M5"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["comment.stamp"]
+tools = ["comment_add"]
+evidence = ["crates/annot/src/tests.rs::stamps_draw_their_label_and_by_line", "crates/ui-egui/tests/stamps.rs::choosing_and_placing_stamps", "crates/automation/tests/automation.rs::stamps_through_tools"]
+notes = "12 standard business stamps in PrintCraft's own design; ISO 32000 stamp names where defined"
 
 [[feature]]
 id = "comment.stamps-sign-here"
@@ -3971,11 +3971,11 @@ title = "Sign-here stamps"
 area = "E"
 tier = "P1"
 milestone = "M5"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["comment.stamp"]
+tools = ["comment_add"]
+evidence = ["crates/annot/src/tests.rs::stamps_draw_their_label_and_by_line", "crates/ui-egui/tests/stamps.rs::choosing_and_placing_stamps", "crates/automation/tests/automation.rs::stamps_through_tools"]
+notes = "Accepted, Initial Here, Rejected, Sign Here, Witness as pointed tags"
 
 [[feature]]
 id = "comment.stamps-dynamic"
@@ -3983,11 +3983,11 @@ title = "Dynamic stamps (name and date)"
 area = "E"
 tier = "P1"
 milestone = "M6"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["comment.stamp"]
+tools = ["comment_add"]
+evidence = ["crates/annot/src/tests.rs::stamps_draw_their_label_and_by_line", "crates/ui-egui/tests/stamps.rs::choosing_and_placing_stamps", "crates/automation/tests/automation.rs::stamps_through_tools"]
+notes = "Approved, Confidential, Received, Reviewed, Revised with a By author at time, date line (local time)"
 
 [[feature]]
 id = "comment.stamps-custom"

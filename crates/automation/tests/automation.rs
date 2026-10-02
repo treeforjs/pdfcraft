@@ -803,3 +803,25 @@ fn comments_and_form_data_travel_as_xfdf_fdf_and_text() {
     assert_eq!(list["comments"][0]["contents"], "Please review", "{list}");
     assert_eq!(r["undo"], "Import all.xfdf");
 }
+
+#[test]
+fn stamps_through_tools() {
+    let dir = workdir("stamps");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    ok(&mut a, "comment_add", json!({ "doc": doc, "page": 1, "type": "stamp", "stamp": "approved", "at": [100, 100] }));
+    ok(
+        &mut a,
+        "comment_add",
+        json!({ "doc": doc, "page": 1, "type": "stamp", "stamp": "reviewed", "dynamic": true, "at": [100, 200], "author": "Ada" }),
+    );
+    ok(&mut a, "comment_add", json!({ "doc": doc, "page": 1, "type": "stamp", "stamp": "sign here", "at": [100, 250] }));
+    let list = ok(&mut a, "comment_list", json!({ "doc": doc }));
+    assert_eq!(list["count"], 3, "{list}");
+    let text = page_text(&mut a, doc)[0].clone();
+    assert!(text.contains("APPROVED") && text.contains("REVIEWED") && text.contains("By Ada at") && text.contains("SIGN HERE"), "{text}");
+    assert!(matches!(
+        a.call("comment_add", &json!({ "doc": doc, "page": 1, "type": "stamp", "stamp": "nonsense", "at": [1, 1] })),
+        Err(ToolError::InvalidArgs(_))
+    ));
+}

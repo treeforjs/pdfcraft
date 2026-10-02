@@ -125,6 +125,11 @@ fn tool_detail(app: &mut PrintCraftApp, ui: &mut egui::Ui, t: &Tokens, g: &'stat
             );
         });
     }
+    // Add a stamp: the palette.
+    if g.id == "stamp" {
+        stamp_palette(app, ui, t);
+        return;
+    }
     // Edit a PDF shows Format text at the top while text is selected or being added.
     if g.id == "edit" {
         format_section(app, ui, t);
@@ -188,6 +193,67 @@ fn tool_detail(app: &mut PrintCraftApp, ui: &mut egui::Ui, t: &Tokens, g: &'stat
     if let Some(cmd) = run {
         app.run_command(cmd);
     }
+}
+
+/// Add a stamp: Dynamic, Sign Here and Standard Business stamps; click one, then click on the
+/// page to place it.
+fn stamp_palette(app: &mut PrintCraftApp, ui: &mut egui::Ui, t: &Tokens) {
+    use printcraft_engine::{StampGroup, StampKind};
+    ui.label(egui::RichText::new("Choose a stamp, then click on the page to place it.").small().color(t.text_faint));
+    egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+        for (group, title) in
+            [(StampGroup::Dynamic, "Dynamic"), (StampGroup::SignHere, "Sign Here"), (StampGroup::StandardBusiness, "Standard Business")]
+        {
+            widgets::section_title(ui, title);
+            for kind in StampKind::ALL.into_iter().filter(|k| k.group() == group) {
+                let active = app.quick_tool == crate::QuickTool::Stamp(kind);
+                let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 38.0), Sense::click());
+                resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, true, active, kind.label()));
+                if active {
+                    ui.painter().rect_filled(rect, CornerRadius::same(6), t.accent_soft);
+                } else if resp.hovered() {
+                    ui.painter().rect_filled(rect, CornerRadius::same(6), t.hover);
+                }
+                let [r, g, b] = kind.color().map(|v| (v * 255.0) as u8);
+                let col = Color32::from_rgb(r, g, b);
+                let chip = Rect::from_min_size(rect.min + vec2(8.0, 5.0), vec2((rect.width() - 16.0).min(200.0), 28.0));
+                if group == StampGroup::SignHere {
+                    let tip = chip.height() * 0.45;
+                    let pts = vec![
+                        chip.left_center(),
+                        chip.left_top() + vec2(tip, 0.0),
+                        chip.right_top(),
+                        chip.right_bottom(),
+                        chip.left_bottom() + vec2(tip, 0.0),
+                    ];
+                    ui.painter().add(egui::Shape::convex_polygon(pts, col, Stroke::NONE));
+                    ui.painter().text(
+                        chip.center() + vec2(tip / 2.0, 0.0),
+                        Align2::CENTER_CENTER,
+                        kind.label(),
+                        theme::semibold(11.0),
+                        Color32::WHITE,
+                    );
+                } else {
+                    ui.painter().rect(chip, CornerRadius::same(5), col.gamma_multiply(0.1), Stroke::new(1.5, col), egui::StrokeKind::Inside);
+                    let y = if group == StampGroup::Dynamic { chip.center().y - 4.0 } else { chip.center().y };
+                    ui.painter().text(egui::pos2(chip.center().x, y), Align2::CENTER_CENTER, kind.label(), theme::semibold(11.0), col);
+                    if group == StampGroup::Dynamic {
+                        ui.painter().text(
+                            egui::pos2(chip.center().x, chip.bottom() - 6.0),
+                            Align2::CENTER_CENTER,
+                            "By name at time, date",
+                            theme::regular(7.5),
+                            col,
+                        );
+                    }
+                }
+                if resp.clicked() {
+                    app.quick_tool = crate::QuickTool::Stamp(kind);
+                }
+            }
+        }
+    });
 }
 
 /// Edit a PDF ▸ Format text: for the selected added text (one undoable change), or the style

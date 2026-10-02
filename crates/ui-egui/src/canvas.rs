@@ -888,7 +888,7 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
         QuickTool::Comment(t) => t.markup().is_some(),
         QuickTool::Select => !preparing,
         QuickTool::Redact => true,
-        QuickTool::Hand | QuickTool::Crop | QuickTool::Fill(_) | QuickTool::Field(_) | QuickTool::AddText => false,
+        QuickTool::Hand | QuickTool::Crop | QuickTool::Fill(_) | QuickTool::Field(_) | QuickTool::AddText | QuickTool::Stamp(_) => false,
     };
     let prefs = &app.comment_prefs;
     let allowed = doc.allows_annotation();
@@ -899,6 +899,8 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
     let signature = app.signature.clone();
     let author = app.comment_prefs.author.clone();
     let today = app.session.today();
+    let by_line = app.session.stamp_by_line(&author);
+    let mut stamp_placed = false;
     let mut open_signature = false;
     let mut hover_text: Option<(Pos2, String)> = None;
     let mut clicked_link: Option<LinkTarget> = None;
@@ -1038,6 +1040,30 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
             let pcx = comments::PageCx { page: i, xf: &xf, info, tool, prefs, allowed };
             // Form fields take clicks first with the Select tool (as Acrobat fills fields in
             // every viewing mode); then comments; then text selection.
+            if let QuickTool::Stamp(kind) = tool
+                && allowed
+                && let Some(p) = ui.input(|inp| inp.pointer.hover_pos()).filter(|p| xf.rect.contains(*p))
+            {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
+                if resp.clicked() {
+                    // Centred on the click, upright as the page is shown.
+                    let (vx, vy) = xf.screen_to_view(p);
+                    let (w, h) = kind.size();
+                    let corners = [(vx as f64 - w / 2.0, vy as f64 - h / 2.0), (vx as f64 + w / 2.0, vy as f64 + h / 2.0)];
+                    let u: Vec<[f32; 2]> = corners.iter().map(|(x, y)| info.pages[i].view_to_user(*x as f32, *y as f32)).collect();
+                    let rect = [u[0][0].min(u[1][0]) as f64, u[0][1].min(u[1][1]) as f64, u[0][0].max(u[1][0]) as f64, u[0][1].max(u[1][1]) as f64];
+                    let by = (kind.group() == printcraft_engine::StampGroup::Dynamic).then(|| by_line.clone());
+                    let shape = printcraft_engine::Shape::Stamp { rect, stamp: kind, by };
+                    view.pending_edit = Some(printcraft_engine::Edit::AddAnnotation(printcraft_engine::NewAnnotation {
+                        page: i,
+                        style: printcraft_engine::Style::default_for(&shape),
+                        shape,
+                        contents: String::new(),
+                        author: author.clone(),
+                    }));
+                    stamp_placed = true;
+                }
+            }
             if let QuickTool::Fill(ft) = tool
                 && allowed
             {
@@ -1309,6 +1335,9 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
     }
     if editing_content {
         crate::content_ui::keys(ui.ctx(), view);
+    }
+    if stamp_placed {
+        tool = QuickTool::Select;
     }
     // One text box, then back to selecting (as Acrobat does).
     if content_done && tool == QuickTool::AddText {
