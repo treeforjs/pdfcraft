@@ -69,6 +69,10 @@ const STANDARD: &[&[u8]] = &[
     b"Artifact",
 ];
 
+pub(crate) fn is_standard(t: &[u8]) -> bool {
+    STANDARD.contains(&t)
+}
+
 /// Elements beyond this are not read (a guard against absurd trees).
 const MAX_ELEMENTS: usize = 2_000_000;
 

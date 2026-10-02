@@ -380,3 +380,143 @@ impl PrintCraftApp {
         }
     }
 }
+
+/// Add alternate text: the figures one by one.
+#[derive(Clone, Default)]
+pub struct AltDraft {
+    pub doc: Option<DocId>,
+    pub figures: Vec<printcraft_engine::a11y::Figure>,
+    pub index: usize,
+    pub texts: Vec<String>,
+    pub decorative: Vec<bool>,
+    /// The figure shown (index, picture).
+    preview: Option<(usize, egui::TextureHandle)>,
+}
+
+impl std::fmt::Debug for AltDraft {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AltDraft").field("figures", &self.figures.len()).field("index", &self.index).finish()
+    }
+}
+
+/// Render a figure's area for the dialog (at most 360 × 220 px).
+fn figure_picture(ctx: &egui::Context, doc: &printcraft_engine::Document, f: &printcraft_engine::a11y::Figure) -> Option<egui::TextureHandle> {
+    let (page, b) = (f.page?, f.bbox?);
+    let info = doc.info.pages.get(page)?;
+    let (u, v) = (info.user_to_view(b[0] as f32, b[1] as f32), info.user_to_view(b[2] as f32, b[3] as f32));
+    let (x0, y0, x1, y1) = (u[0].min(v[0]), u[1].min(v[1]), u[0].max(v[0]), u[1].max(v[1]));
+    let (w, h) = ((x1 - x0).max(1.0), (y1 - y0).max(1.0));
+    let scale = (360.0 / w).min(220.0 / h).clamp(0.05, 8.0);
+    let tile = printcraft_render::Tile {
+        x: (x0 * scale).floor().max(0.0) as u32,
+        y: (y0 * scale).floor().max(0.0) as u32,
+        w: (w * scale).ceil().max(1.0) as u32,
+        h: (h * scale).ceil().max(1.0) as u32,
+    };
+    let config = printcraft_render::RenderConfig { password: doc.password.as_deref().map(std::sync::Arc::from), ..Default::default() };
+    let mut r = printcraft_render::PageRenderer::new(doc.bytes.clone(), config);
+    let out = r.render(printcraft_render::RenderRequest { page, kind: printcraft_render::RequestKind::Pixels, tile: Some(tile), scale, tag: 0 });
+    if out.error.is_some() || out.width == 0 {
+        return None;
+    }
+    let img = egui::ColorImage::from_rgba_premultiplied([out.width as usize, out.height as usize], &out.rgba);
+    Some(ctx.load_texture("alt-figure", img, egui::TextureOptions::LINEAR))
+}
+
+pub(crate) fn alt_body(ui: &mut egui::Ui, app: &mut PrintCraftApp, t: &Tokens) -> (bool, bool) {
+    let ctx = ui.ctx().clone();
+    let doc = app.alt_draft.doc.and_then(|id| app.session.get(id));
+    let d = &mut app.alt_draft;
+    ui.label(egui::RichText::new("Set Alternate Text").font(theme::semibold(18.0)));
+    ui.add_space(8.0);
+    let n = d.figures.len();
+    if n == 0 {
+        ui.label(egui::RichText::new("This document has no tagged figures.").color(t.text_muted));
+        let mut cancel = false;
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| cancel = widgets::pill_button(ui, "Close", true).clicked());
+        return (false, cancel);
+    }
+    d.index = d.index.min(n - 1);
+    let i = d.index;
+    if d.preview.as_ref().is_none_or(|(k, _)| *k != i)
+        && let Some(doc) = doc
+    {
+        d.preview = figure_picture(&ctx, doc, &d.figures[i]).map(|tex| (i, tex));
+    }
+    let page = d.figures[i].page.map(|p| format!(" on page {}", p + 1)).unwrap_or_default();
+    ui.label(egui::RichText::new(format!("Figure {} of {n}{page}", i + 1)).color(t.text_muted));
+    ui.add_space(6.0);
+    egui::Frame::new().fill(t.hover).corner_radius(egui::CornerRadius::same(6)).inner_margin(egui::Margin::same(8)).show(ui, |ui| {
+        let (area, _) = ui.allocate_exact_size(egui::vec2(380.0, 220.0), egui::Sense::hover());
+        match &d.preview {
+            Some((_, tex)) => {
+                let s = tex.size_vec2();
+                let k = (area.width() / s.x).min(area.height() / s.y).min(2.0);
+                let fit = egui::Rect::from_center_size(area.center(), s * k);
+                ui.painter().image(tex.id(), fit, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), egui::Color32::WHITE);
+            }
+            None => {
+                ui.painter().text(area.center(), egui::Align2::CENTER_CENTER, "No preview", theme::regular(13.0), t.text_faint);
+            }
+        }
+    });
+    ui.add_space(8.0);
+    ui.add_enabled_ui(!d.decorative[i], |ui| {
+        let l = ui.label("Alternate text");
+        ui.add(egui::TextEdit::multiline(&mut d.texts[i]).desired_rows(3).desired_width(380.0).hint_text("Describe the figure")).labelled_by(l.id);
+    });
+    ui.checkbox(&mut d.decorative[i], "Decorative figure");
+    ui.add_space(10.0);
+    let (mut save, mut cancel) = (false, false);
+    ui.horizontal(|ui| {
+        if ui.add_enabled_ui(i > 0, |ui| icons::button(ui, "chevron-left", 28.0, false, "Previous figure")).inner.clicked() {
+            d.index -= 1;
+        }
+        if ui.add_enabled_ui(i + 1 < n, |ui| icons::button(ui, "chevron-right", 28.0, false, "Next figure")).inner.clicked() {
+            d.index += 1;
+        }
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            if widgets::pill_button(ui, "Save & Close", true).clicked() {
+                save = true;
+            }
+            if widgets::pill_button(ui, "Cancel", false).clicked() {
+                cancel = true;
+            }
+        });
+    });
+    (save, cancel)
+}
+
+impl PrintCraftApp {
+    /// Prepare for accessibility ▸ Add alternate text.
+    pub(crate) fn start_alt_text(&mut self) {
+        let Some((_, id)) = self.active_ids() else { return };
+        let Some(doc) = self.session.get(id) else { return };
+        let figures = doc.figures();
+        self.alt_draft = AltDraft {
+            doc: Some(id),
+            texts: figures.iter().map(|f| f.alt.clone().unwrap_or_default()).collect(),
+            decorative: vec![false; figures.len()],
+            figures,
+            index: 0,
+            preview: None,
+        };
+        self.dialog = Some(Dialog::AltText);
+    }
+
+    /// Save & Close: one undo step for every change.
+    pub(crate) fn save_alt_text(&mut self) {
+        let d = std::mem::take(&mut self.alt_draft);
+        let mut edits = Vec::new();
+        for (k, f) in d.figures.iter().enumerate() {
+            if d.decorative[k] {
+                edits.push(printcraft_engine::Edit::MarkDecorative { figure: f.obj.num });
+            } else if d.texts[k].trim() != f.alt.as_deref().unwrap_or("").trim() {
+                edits.push(printcraft_engine::Edit::SetAltText { figure: f.obj.num, alt: Some(d.texts[k].clone()) });
+            }
+        }
+        if !edits.is_empty() {
+            self.apply_edit(printcraft_engine::Edit::Batch { label: "Set alternate text".into(), edits });
+        }
+    }
+}

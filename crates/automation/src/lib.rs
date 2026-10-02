@@ -330,6 +330,8 @@ impl Automation {
             "accessibility_check" => self.a11y_check(&a)?,
             "accessibility_report" => self.a11y_report(&a)?,
             "accessibility_fix" => self.a11y_fix(&a)?,
+            "accessibility_figures" => self.accessibility_figures(&a)?,
+            "accessibility_set_alt" => self.accessibility_set_alt(&a)?,
             "sign_id_create" => self.sign_id_create(&a)?,
             "sign_document" => self.sign_document(&a)?,
             "sign_trust" => self.sign_trust(&a)?,

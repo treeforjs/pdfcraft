@@ -162,6 +162,11 @@ impl Document {
         self.editor.as_ref().map(|e| a11y::check(&e.cos, options))
     }
 
+    /// Add alternate text: the figures, in document order.
+    pub fn figures(&self) -> Vec<a11y::Figure> {
+        self.editor.as_ref().map(|e| a11y::figures(&e.cos)).unwrap_or_default()
+    }
+
     /// The edit that fixes `rule`, for the rules with an automatic fix: the document language
     /// (`value` is the language), the title (`value` replaces it; else the current title or the
     /// file name) and the tab order.
@@ -694,6 +699,16 @@ pub enum Edit {
     },
     /// Document Properties ▸ Initial View (and the language and binding).
     SetInitialView(Box<InitialView>),
+    /// Add alternate text: set (or clear, with `None`) a figure's alternate text. `figure` is
+    /// the figure element's object number (from `Document::figures`).
+    SetAltText {
+        figure: u32,
+        alt: Option<String>,
+    },
+    /// Add alternate text ▸ Decorative figure: the figure's content becomes an artifact.
+    MarkDecorative {
+        figure: u32,
+    },
     /// Order tabs manually: move a field one place earlier or later on its page.
     MoveInTabOrder {
         name: String,
@@ -858,6 +873,8 @@ impl Edit {
             Edit::DuplicateField { .. } => "Duplicate field".into(),
             Edit::SetTabOrder { .. } | Edit::MoveInTabOrder { .. } => "Set tab order".into(),
             Edit::SetInitialView(_) => "Change initial view".into(),
+            Edit::SetAltText { .. } => "Set alternate text".into(),
+            Edit::MarkDecorative { .. } => "Mark figure as decorative".into(),
             Edit::AddHeaderFooter { replace: false, .. } => "Add header & footer".into(),
             Edit::AddHeaderFooter { .. } => "Update header & footer".into(),
             Edit::AddWatermark { replace: false, .. } => "Add watermark".into(),
@@ -1015,6 +1032,8 @@ fn check_permission(edit: &Edit, p: &printcraft_cos::Permissions) -> Result<(), 
         | Edit::SetTabOrder { .. }
         | Edit::MoveInTabOrder { .. }
         | Edit::SetInitialView(_)
+        | Edit::SetAltText { .. }
+        | Edit::MarkDecorative { .. }
         | Edit::Flatten { .. } => {
             if p.modify() {
                 Ok(())
@@ -1191,6 +1210,14 @@ fn run_edit(doc: &mut printcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -
         Edit::SetTabOrder { pages, order } => printcraft_forms::set_tab_order(doc, pages, *order)?,
         Edit::MoveInTabOrder { name, earlier } => printcraft_forms::move_in_tab_order(doc, name, *earlier)?,
         Edit::SetInitialView(v) => printcraft_organize::set_initial_view(doc, v)?,
+        Edit::SetAltText { figure, alt } => {
+            let r = printcraft_cos::ObjRef::new(*figure, doc.generation(*figure));
+            a11y::set_alt(doc, r, alt.as_deref()).map_err(|e| EditError::Accessibility(e.to_string()))?;
+        }
+        Edit::MarkDecorative { figure } => {
+            let r = printcraft_cos::ObjRef::new(*figure, doc.generation(*figure));
+            a11y::mark_decorative(doc, r).map_err(|e| EditError::Accessibility(e.to_string()))?;
+        }
         Edit::AddHeaderFooter { pages, settings, replace } => {
             let date = cx.today;
             printcraft_edit::add_header_footer(doc, pages, settings, *replace, &printcraft_edit::Context { date })?;
@@ -1397,6 +1424,8 @@ pub enum EditError {
     Redact(#[from] printcraft_redact::RedactError),
     #[error("{0}")]
     Print(String),
+    #[error("{0}")]
+    Accessibility(String),
     #[error(transparent)]
     Data(#[from] printcraft_xfdf::DataError),
     #[error("{0}")]

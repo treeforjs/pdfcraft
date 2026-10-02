@@ -182,6 +182,8 @@ pub enum Dialog {
     Combine,
     /// Custom stamps ▸ Create.
     CreateStamp,
+    /// Prepare for accessibility ▸ Add alternate text.
+    AltText,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -284,6 +286,7 @@ pub struct PrintCraftApp {
     pub a11y_options: a11y_ui::A11yOptions,
     pub a11y: a11y_ui::A11yState,
     pub a11y_skipped: std::collections::BTreeSet<printcraft_engine::a11y::Rule>,
+    pub alt_draft: a11y_ui::AltDraft,
     /// Combine files: the files staged so far.
     pub combine_draft: Vec<combine_ui::CombineFile>,
     /// The custom stamp library, and the stamp being created.
@@ -411,6 +414,7 @@ impl PrintCraftApp {
             a11y_options: a11y_ui::A11yOptions::default(),
             a11y: a11y_ui::A11yState::default(),
             a11y_skipped: Default::default(),
+            alt_draft: Default::default(),
             combine_draft: Vec::new(),
             custom_stamps: Vec::new(),
             stamp_draft: Default::default(),

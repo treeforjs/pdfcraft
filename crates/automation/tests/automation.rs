@@ -600,6 +600,39 @@ fn accessibility_check_report_and_fixes_through_tools() {
     assert_eq!(r["failed"].as_u64(), Some(3), "tagging, tagged content and (undone) title");
     let html = std::fs::read_to_string(dir.join("report.html")).unwrap();
     assert!(html.contains("Accessibility Report") && html.contains("a.pdf"));
+    // Figures: list, describe, mark decorative.
+    std::fs::write(
+        dir.join("figures.pdf"),
+        b"%PDF-1.7
+1 0 obj << /Type /Catalog /Pages 2 0 R /MarkInfo << /Marked true >> /StructTreeRoot 5 0 R >> endobj
+2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj
+3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 4 0 R /StructParents 0 >> endobj
+4 0 obj << /Length 74 >> stream
+/Figure << /MCID 0 >> BDC 10 150 40 20 re f EMC /Figure << /MCID 1 >> BDC 100 100 50 30 re f EMC
+endstream endobj
+5 0 obj << /Type /StructTreeRoot /K 6 0 R /ParentTree 9 0 R >> endobj
+6 0 obj << /S /Document /P 5 0 R /K [7 0 R 8 0 R] >> endobj
+7 0 obj << /S /Figure /P 6 0 R /Pg 3 0 R /K 0 >> endobj
+8 0 obj << /S /Figure /P 6 0 R /Pg 3 0 R /K 1 >> endobj
+9 0 obj << /Nums [0 [7 0 R 8 0 R]] >> endobj
+trailer << /Root 1 0 R >>
+%%EOF"
+            .as_slice(),
+    )
+    .unwrap();
+    let fd = ok(&mut a, "doc_open", json!({ "path": "figures.pdf" }))["doc"].as_u64().unwrap();
+    let figs = ok(&mut a, "accessibility_figures", json!({ "doc": fd }));
+    assert_eq!(figs["count"], 2);
+    assert_eq!(figs["figures"][0]["rect"], json!([10.0, 30.0, 50.0, 50.0]), "top-left-origin points");
+    let first = figs["figures"][0]["figure"].as_u64().unwrap();
+    let second = figs["figures"][1]["figure"].as_u64().unwrap();
+    let r = ok(&mut a, "accessibility_set_alt", json!({ "doc": fd, "figure": first, "alt": "A small bar" }));
+    assert_eq!(r["figures"][0]["alt"], "A small bar");
+    let r = ok(&mut a, "accessibility_set_alt", json!({ "doc": fd, "figure": second, "decorative": true }));
+    assert_eq!(r["count"], 1);
+    let check = ok(&mut a, "accessibility_check", json!({ "doc": fd, "rules": ["figures-alt-text", "tagged-content"] }));
+    assert_eq!(check["failed"], 0, "{check}");
+    assert!(matches!(a.call("accessibility_set_alt", &json!({ "doc": fd, "figure": 6, "alt": "x" })), Err(ToolError::Failed(_))));
 }
 
 #[test]

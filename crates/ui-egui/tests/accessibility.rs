@@ -86,3 +86,51 @@ fn checking_fixing_skipping_and_reporting() {
     let html = std::fs::read_to_string(dir.join("notes Accessibility Report.html")).unwrap();
     assert!(html.contains("Accessibility Report") && html.contains("Skipped"));
 }
+
+/// Two tagged figures: an image without alternate text and a bar (role-mapped Photo) with.
+const FIGURES: &[u8] = b"%PDF-1.7
+1 0 obj << /Type /Catalog /Pages 2 0 R /MarkInfo << /Marked true >> /StructTreeRoot 5 0 R >> endobj
+2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj
+3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 4 0 R /StructParents 0 /Resources << /XObject << /Im 10 0 R >> >> >> endobj
+4 0 obj << /Length 97 >> stream
+/Figure << /MCID 0 >> BDC q 40 0 0 20 10 150 cm /Im Do Q EMC /Photo << /MCID 1 >> BDC 100 100 50 30 re f EMC
+endstream endobj
+5 0 obj << /Type /StructTreeRoot /K 6 0 R /ParentTree 9 0 R /RoleMap << /Photo /Figure >> >> endobj
+6 0 obj << /S /Document /P 5 0 R /K [7 0 R 8 0 R] >> endobj
+7 0 obj << /S /Figure /P 6 0 R /Pg 3 0 R /K 0 >> endobj
+8 0 obj << /S /Photo /P 6 0 R /Pg 3 0 R /Alt (A bar) /K 1 >> endobj
+9 0 obj << /Nums [0 [7 0 R 8 0 R]] >> endobj
+10 0 obj << /Type /XObject /Subtype /Image /Width 1 /Height 1 /ColorSpace /DeviceGray /BitsPerComponent 8 /Length 1 >> stream
+\x00
+endstream endobj
+trailer << /Root 1 0 R >>
+%%EOF";
+
+#[test]
+fn setting_alternate_text_figure_by_figure() {
+    let mut h = Harness::builder().with_size(egui::vec2(1400.0, 900.0)).build_eframe(move |_cc| {
+        let mut app = PrintCraftApp::new();
+        app.open_bytes("figures.pdf", None, FIGURES.to_vec()).unwrap();
+        app
+    });
+    h.run_steps(4);
+    assert!(h.state_mut().execute("a11y.alt_text"));
+    h.run_steps(2);
+    h.get_by_label("Set Alternate Text");
+    h.get_by_label("Figure 1 of 2 on page 1");
+    h.state_mut().alt_draft.texts[0] = "A grey square".into();
+    h.run_steps(2);
+    h.get_by_label("Next figure").click();
+    h.run_steps(2);
+    h.get_by_label("Figure 2 of 2 on page 1");
+    h.get_by_label("Decorative figure").click();
+    h.run_steps(1);
+    h.get_by_label("Save & Close").click();
+    h.run_steps(3);
+    let s = h.state();
+    let doc = s.session.get(s.views[0].id).unwrap();
+    assert_eq!(doc.can_undo(), Some("Set alternate text"));
+    let f = doc.figures();
+    assert_eq!(f.len(), 1, "the decorative one left the tags");
+    assert_eq!(f[0].alt.as_deref(), Some("A grey square"));
+}

@@ -10,10 +10,12 @@ use std::collections::BTreeSet;
 
 use printcraft_cos::Document;
 
+mod alt;
 mod content;
 mod report;
 mod structure;
 
+pub use alt::{AltError, Figure, figures, mark_decorative, set_alt};
 pub use report::report_html;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]

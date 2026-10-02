@@ -222,3 +222,60 @@ fn rules_have_ids_and_the_report_lists_them() {
     assert!(html.contains("a&lt;b&gt;.pdf") && html.contains("Accessibility permission flag") && html.contains("Needs manual check: 5"));
     assert!(html.contains("<h3>Headings</h3>"));
 }
+
+fn figures_doc() -> Document {
+    pdf(
+        &[
+            "<< /Type /Catalog /Pages 2 0 R /MarkInfo << /Marked true >> /StructTreeRoot 5 0 R >>".into(),
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".into(),
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 4 0 R /StructParents 0 /Resources << /XObject << /Im 10 0 R >> >> >>"
+                .into(),
+            stream(
+                "/Figure << /MCID 0 >> BDC q 40 0 0 20 10 150 cm /Im Do Q EMC \
+                 /Photo << /MCID 1 >> BDC 100 100 50 30 re f EMC",
+            ),
+            "<< /Type /StructTreeRoot /K 6 0 R /ParentTree 9 0 R /RoleMap << /Photo /Figure >> >>".into(),
+            "<< /S /Document /P 5 0 R /K [7 0 R 8 0 R] >>".into(),
+            "<< /S /Figure /P 6 0 R /Pg 3 0 R /K 0 >>".into(),
+            "<< /S /Photo /P 6 0 R /Pg 3 0 R /Alt (A bar) /K 1 >>".into(),
+            "<< /Nums [0 [7 0 R 8 0 R]] >>".into(),
+            "<< /Type /XObject /Subtype /Image /Width 1 /Height 1 /ColorSpace /DeviceGray /BitsPerComponent 8 /Length 1 >>\nstream\n\u{0}\nendstream"
+                .into(),
+        ],
+        "",
+    )
+}
+
+#[test]
+fn figures_are_listed_with_their_alt_text_and_place() {
+    let doc = figures_doc();
+    let f = figures(&doc);
+    assert_eq!(f.len(), 2, "role-mapped Photo counts");
+    assert_eq!((f[0].page, f[0].alt.as_deref(), f[0].bbox), (Some(0), None, Some([10.0, 150.0, 50.0, 170.0])));
+    assert_eq!((f[1].alt.as_deref(), f[1].bbox), (Some("A bar"), Some([100.0, 100.0, 150.0, 130.0])));
+}
+
+#[test]
+fn setting_alt_text_and_marking_decorative() {
+    let mut doc = figures_doc();
+    let f = figures(&doc);
+    set_alt(&mut doc, f[0].obj, Some("  A grey square ")).unwrap();
+    assert_eq!(figures(&doc)[0].alt.as_deref(), Some("A grey square"));
+    let r = check(&doc, &Options { rules: [Rule::FiguresAltText].into(), pages: None });
+    assert_eq!(r.result(Rule::FiguresAltText).unwrap().status, Status::Passed);
+    set_alt(&mut doc, f[0].obj, None).unwrap();
+    assert_eq!(figures(&doc)[0].alt, None);
+    assert_eq!(set_alt(&mut doc, printcraft_cos::ObjRef::new(6, 0), Some("x")), Err(AltError::NotAFigure(6)));
+    // Decorative: the figure leaves the tags and its content becomes an artifact.
+    mark_decorative(&mut doc, f[0].obj).unwrap();
+    let left = figures(&doc);
+    assert_eq!(left.len(), 1);
+    assert_eq!(left[0].alt.as_deref(), Some("A bar"));
+    let r = check(&doc, &Options { rules: [Rule::FiguresAltText, Rule::TaggedContent].into(), pages: None });
+    assert_eq!(failed(&r), Vec::<Rule>::new(), "{:?}", r.results);
+    let pages = printcraft_model::pages(&doc);
+    let c = doc.resolve(pages[0].dict.get(b"Contents").unwrap());
+    let printcraft_cos::Object::Stream(c) = &*c else { panic!("one content stream") };
+    let text = String::from_utf8(c.decoded().unwrap()).unwrap();
+    assert!(text.contains("/Artifact BMC") && !text.contains("/MCID 0"), "{text}");
+}

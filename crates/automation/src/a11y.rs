@@ -101,4 +101,36 @@ impl Automation {
             self.doc(a)?.accessibility_check(&Options { rules: [rule].into(), pages: None }).ok_or_else(|| failed("the document can't be read"))?;
         Ok(json!({ "rule": id, "status": status_id(r.results.iter().find(|x| x.rule == rule).map_or(Status::Skipped, |x| x.status)) }))
     }
+
+    pub(crate) fn accessibility_figures(&self, a: &Args) -> Result<Value> {
+        let doc = self.doc(a)?;
+        let list: Vec<Value> = doc
+            .figures()
+            .iter()
+            .map(|f| {
+                // Top-left-origin points on the displayed page.
+                let rect = f.page.zip(f.bbox).and_then(|(p, b)| {
+                    let info = doc.info.pages.get(p)?;
+                    let (u, v) = (info.user_to_view(b[0] as f32, b[1] as f32), info.user_to_view(b[2] as f32, b[3] as f32));
+                    let r = |x: f32| (x as f64 * 100.0).round() / 100.0;
+                    Some([r(u[0].min(v[0])), r(u[1].min(v[1])), r(u[0].max(v[0])), r(u[1].max(v[1]))])
+                });
+                json!({ "figure": f.obj.num, "page": f.page.map(|p| p + 1), "alt": f.alt, "rect": rect })
+            })
+            .collect();
+        Ok(json!({ "count": list.len(), "figures": list }))
+    }
+
+    pub(crate) fn accessibility_set_alt(&mut self, a: &Args) -> Result<Value> {
+        let figure = u32::try_from(a.int("figure")?)
+            .map_err(|_| ToolError::InvalidArgs("figure must be a figure number from accessibility_figures".into()))?;
+        let edit = if a.opt_bool("decorative")?.unwrap_or(false) {
+            printcraft_engine::Edit::MarkDecorative { figure }
+        } else {
+            printcraft_engine::Edit::SetAltText { figure, alt: a.opt_str("alt")?.map(str::to_owned) }
+        };
+        let id = self.doc(a)?.id;
+        self.session.apply(id, edit).map_err(failed)?;
+        self.accessibility_figures(a)
+    }
 }

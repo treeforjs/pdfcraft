@@ -248,6 +248,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     c("a11y.check", "Check for accessibility…", None, None, Document, "accessibility"),
     c("a11y.report", "Open accessibility report", None, None, Document, "file-text"),
     c("a11y.reading_options", "Change reading options…", None, None, Document, "book-open"),
+    c("a11y.alt_text", "Add alternate text…", None, None, Modification, "image"),
     c("export.all_images", "Export all images…", FILE, None, Document, "image"),
     c("edit.header_footer", "Add header & footer…", None, None, Modification, "heading"),
     c("edit.header_footer.update", "Update header & footer…", None, None, Marks(crate::MarkKind::HeaderFooter), "heading"),
