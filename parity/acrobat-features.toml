@@ -2355,11 +2355,11 @@ title = "Add a watermark from an image or PDF page"
 area = "C"
 tier = "P1"
 milestone = "M7"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["edit.watermark"]
+tools = ["doc_watermark"]
+evidence = ["crates/engine/src/tests.rs::backgrounds_and_watermarks_from_files"]
+notes = "an image or a page of a PDF, scaled relative to the page, rotated, with opacity, behind or on top"
 
 [[feature]]
 id = "edit.watermark-update-remove"
@@ -2391,11 +2391,11 @@ title = "Add a page background (colour or file)"
 area = "C"
 tier = "P0"
 milestone = "M7"
-status = "partial"
+status = "shipped"
 commands = ["edit.background"]
 tools = ["doc_background"]
-evidence = ["crates/ui-egui/tests/marks.rs::watermark_and_background_dialogs", "crates/engine/src/tests.rs::headers_footers_watermarks_and_backgrounds_show_update_and_remove"]
-notes = "colour backgrounds; from a file is not supported yet"
+evidence = ["crates/ui-egui/tests/marks.rs::watermark_and_background_dialogs", "crates/engine/src/tests.rs::headers_footers_watermarks_and_backgrounds_show_update_and_remove", "crates/engine/src/tests.rs::backgrounds_and_watermarks_from_files", "crates/ui-egui/tests/marks.rs::backgrounds_and_watermarks_from_a_file", "crates/organize/src/tests.rs::a_page_becomes_a_form_xobject_upright"]
+notes = "colour, or a picture from a file (an image or a page of a PDF) scaled relative to the page"
 
 [[feature]]
 id = "edit.background-update-remove"

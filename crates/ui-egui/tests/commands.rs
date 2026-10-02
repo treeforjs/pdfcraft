@@ -69,8 +69,18 @@ fn every_registered_command_is_implemented() {
             let mut hf = HeaderFooter::default();
             hf.text[1] = "x".into();
             app.apply_edit(Edit::AddHeaderFooter { pages: vec![0], settings: hf, replace: false });
-            app.apply_edit(Edit::AddWatermark { pages: vec![0], settings: Watermark { text: "x".into(), ..Watermark::default() }, replace: false });
-            app.apply_edit(Edit::AddBackground { pages: vec![0], settings: Background { color: [1.0; 3], opacity: 1.0 }, replace: false });
+            app.apply_edit(Edit::AddWatermark {
+                pages: vec![0],
+                settings: Watermark { text: "x".into(), ..Watermark::default() },
+                replace: false,
+                file: None,
+            });
+            app.apply_edit(Edit::AddBackground {
+                pages: vec![0],
+                settings: Background { color: [1.0; 3], opacity: 1.0, ..Background::default() },
+                replace: false,
+                file: None,
+            });
         }
         if matches!(spec.id, "comment.flatten" | "comment.export" | "comment.summarize") {
             use printcraft_engine::{Edit, NewAnnotation, Shape, Style};

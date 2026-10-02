@@ -70,10 +70,24 @@ impl Default for HeaderFooter {
     }
 }
 
-/// A text watermark.
+/// A picture for a background or watermark (Acrobat: Source ▸ File): an XObject already in
+/// the document, an image (drawn into a unit square) or a form (a page of a PDF).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct MarkSource {
+    pub xobject: printcraft_cos::ObjRef,
+    /// Its natural size in points.
+    pub size: (f64, f64),
+    /// An image XObject (unit square); otherwise a form whose `/Matrix` maps it to `size`.
+    pub image: bool,
+}
+
+/// A watermark: text, or a picture from a file (`source`; the text is then ignored).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Watermark {
     pub text: String,
+    pub source: Option<MarkSource>,
+    /// Pictures: size relative to the page (1.0 fits the page).
+    pub scale: f64,
     /// 0 = fit: about half the page diagonal.
     pub font_size: f64,
     pub color: Rgb,
@@ -89,15 +103,63 @@ pub struct Watermark {
 
 impl Default for Watermark {
     fn default() -> Self {
-        Self { text: String::new(), font_size: 0.0, color: [0.6, 0.6, 0.6], opacity: 0.5, rotation: 45.0, behind: false, offset: [0.0; 2] }
+        Self {
+            text: String::new(),
+            source: None,
+            scale: 0.5,
+            font_size: 0.0,
+            color: [0.6, 0.6, 0.6],
+            opacity: 0.5,
+            rotation: 45.0,
+            behind: false,
+            offset: [0.0; 2],
+        }
     }
 }
 
-/// A solid-colour background behind the page content.
+/// A background behind the page content: a solid colour, or a picture from a file.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Background {
     pub color: Rgb,
     pub opacity: f64,
+    pub source: Option<MarkSource>,
+    /// Pictures: size relative to the page (1.0 fits the page).
+    pub scale: f64,
+}
+
+impl Default for Background {
+    fn default() -> Self {
+        Self { color: [1.0, 1.0, 0.85], opacity: 1.0, source: None, scale: 1.0 }
+    }
+}
+
+/// Drawing a picture mark: fitted to the page at `scale`, centred (plus `offset`), turned by
+/// `rotation` degrees. Returns the content and the resource name it uses.
+fn picture(src: &MarkSource, page: (f64, f64), scale: f64, rotation: f64, offset: [f64; 2]) -> String {
+    let (w, h) = page;
+    let (sw, sh) = (src.size.0.max(0.01), src.size.1.max(0.01));
+    let k = (w / sw).min(h / sh) * if scale.is_finite() && scale > 0.0 { scale } else { 1.0 };
+    let (dw, dh) = (sw * k, sh * k);
+    let (s, c) = rotation.to_radians().sin_cos();
+    let (cx, cy) = (w / 2.0 + offset[0], h / 2.0 + offset[1]);
+    // Centre, rotate, then place the picture's box (unit square for images).
+    let place = if src.image {
+        format!("{} 0 0 {} {} {} cm", n(dw), n(dh), n(-dw / 2.0), n(-dh / 2.0))
+    } else {
+        format!("{} 0 0 {} {} {} cm", n(k), n(k), n(-dw / 2.0), n(-dh / 2.0))
+    };
+    format!("{} {} {} {} {} {} cm\n{place}\n/PCPic{} Do\n", n(c), n(s), n(-s), n(c), n(cx), n(cy), src.xobject.num)
+}
+
+/// Register a mark picture in the page's own resources (`/PCPic<num>`).
+fn add_picture_resource(doc: &mut Document, page: &printcraft_model::Page, src: &MarkSource) -> Result<(), EditError> {
+    let p = doc.get(page.obj).as_dict().cloned().unwrap_or_default();
+    let mut res = p.get(b"Resources").map(|r| doc.resolve(r)).and_then(|r| r.as_dict().cloned()).unwrap_or_default();
+    let mut xo = res.get(b"XObject").map(|x| doc.resolve(x)).and_then(|x| x.as_dict().cloned()).unwrap_or_default();
+    xo.set(format!("PCPic{}", src.xobject.num).into_bytes(), Object::Ref(src.xobject));
+    res.set(b"XObject".to_vec(), Object::Dict(xo));
+    doc.update_dict(page.obj, |d| d.set(b"Resources".to_vec(), Object::Dict(res)))?;
+    Ok(())
 }
 
 /// Values tokens need that come from outside the document.
@@ -385,7 +447,7 @@ pub fn add_watermark(doc: &mut Document, pages: &[usize], wm: &Watermark, replac
     let all = page_list(doc);
     check(pages, all.len())?;
     let text = wm.text.trim();
-    if text.is_empty() {
+    if text.is_empty() && wm.source.is_none() {
         return Err(EditError::Invalid("type the watermark text first".into()));
     }
     if !(wm.opacity.is_finite() && wm.rotation.is_finite() && wm.font_size.is_finite() && wm.font_size >= 0.0) {
@@ -399,6 +461,17 @@ pub fn add_watermark(doc: &mut Document, pages: &[usize], wm: &Watermark, replac
     for &i in pages {
         let page = page_list(doc)[i].clone();
         let (w, h) = page.display_size(doc);
+        if let Some(src) = &wm.source {
+            let mut content = begin(MarkKind::Watermark, "Watermark", page.view_matrix(doc));
+            content.push_str(&format!("/PCGS{} gs\n", (opacity * 100.0).round() as i64));
+            content.push_str(&picture(src, (w, h), wm.scale, wm.rotation, wm.offset));
+            content.push_str(END);
+            add_resources(doc, &page, Some(opacity), None)?;
+            add_picture_resource(doc, &page_list(doc)[i].clone(), src)?;
+            let page = &page_list(doc)[i];
+            place(doc, page, MarkKind::Watermark, content.into_bytes(), wm.behind)?;
+            continue;
+        }
         let widest = lines.iter().map(|l| helvetica_width(l, 1.0)).fold(0.0, f64::max).max(0.01);
         let size = if wm.font_size > 0.0 { wm.font_size } else { ((w * w + h * h).sqrt() * 0.5 / widest).clamp(6.0, 300.0) };
         let (s, c) = wm.rotation.to_radians().sin_cos();
@@ -446,9 +519,18 @@ pub fn add_background(doc: &mut Document, pages: &[usize], bg: &Background, repl
         let page = page_list(doc)[i].clone();
         let (w, h) = page.display_size(doc);
         let mut content = begin(MarkKind::Background, "Background", page.view_matrix(doc));
-        content.push_str(&format!("/PCGS{} gs\n{}\n0 0 {} {} re f\n", (opacity * 100.0).round() as i64, rgb(bg.color), n(w), n(h)));
+        match &bg.source {
+            Some(src) => {
+                content.push_str(&format!("/PCGS{} gs\n", (opacity * 100.0).round() as i64));
+                content.push_str(&picture(src, (w, h), bg.scale, 0.0, [0.0; 2]));
+            }
+            None => content.push_str(&format!("/PCGS{} gs\n{}\n0 0 {} {} re f\n", (opacity * 100.0).round() as i64, rgb(bg.color), n(w), n(h))),
+        }
         content.push_str(END);
         add_resources(doc, &page, Some(opacity), None)?;
+        if let Some(src) = &bg.source {
+            add_picture_resource(doc, &page_list(doc)[i].clone(), src)?;
+        }
         let page = &page_list(doc)[i];
         place(doc, page, MarkKind::Background, content.into_bytes(), true)?;
     }

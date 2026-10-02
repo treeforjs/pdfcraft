@@ -602,15 +602,19 @@ pub enum Edit {
         settings: HeaderFooter,
         replace: bool,
     },
+    /// `file`: a picture from a file (an image, or a page of a PDF) instead of text.
     AddWatermark {
         pages: Vec<usize>,
         settings: Watermark,
         replace: bool,
+        file: Option<MarkFile>,
     },
+    /// `file`: a picture from a file instead of a colour.
     AddBackground {
         pages: Vec<usize>,
         settings: Background,
         replace: bool,
+        file: Option<MarkFile>,
     },
     /// Remove every mark of a kind from every page.
     RemoveMarks {
@@ -1041,8 +1045,20 @@ fn run_edit(doc: &mut printcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -
             let date = cx.today;
             printcraft_edit::add_header_footer(doc, pages, settings, *replace, &printcraft_edit::Context { date })?;
         }
-        Edit::AddWatermark { pages, settings, replace } => printcraft_edit::add_watermark(doc, pages, settings, *replace)?,
-        Edit::AddBackground { pages, settings, replace } => printcraft_edit::add_background(doc, pages, settings, *replace)?,
+        Edit::AddWatermark { pages, settings, replace, file } => {
+            let mut s = settings.clone();
+            if let Some(f) = file {
+                s.source = Some(mark_source(doc, f)?);
+            }
+            printcraft_edit::add_watermark(doc, pages, &s, *replace)?
+        }
+        Edit::AddBackground { pages, settings, replace, file } => {
+            let mut s = settings.clone();
+            if let Some(f) = file {
+                s.source = Some(mark_source(doc, f)?);
+            }
+            printcraft_edit::add_background(doc, pages, &s, *replace)?
+        }
         Edit::RemoveMarks { kind } => {
             let n = printcraft_model::pages(doc).len();
             if printcraft_edit::remove_marks(doc, &(0..n).collect::<Vec<_>>(), *kind)? == 0 {
@@ -1935,6 +1951,28 @@ impl Session {
 
     pub fn docs(&self) -> &[Document] {
         &self.docs
+    }
+}
+
+/// A picture for a watermark or background (Acrobat: Source ▸ File): an image, or `page`
+/// (0-based) of a PDF.
+#[derive(Clone, Debug, PartialEq)]
+pub struct MarkFile {
+    pub name: String,
+    pub bytes: Arc<Vec<u8>>,
+    pub page: usize,
+}
+
+/// Bring a mark's picture into `doc`: a PDF page as a form XObject, or an image.
+fn mark_source(doc: &mut printcraft_cos::Document, f: &MarkFile) -> Result<printcraft_edit::MarkSource, EditError> {
+    let head = &f.bytes[..f.bytes.len().min(1024)];
+    if head.windows(5).any(|w| w == b"%PDF-") {
+        let src = printcraft_cos::Document::open(f.bytes.clone()).map_err(|e| EditError::Source(format!("{}: {e}", f.name)))?;
+        let (xobject, size) = printcraft_organize::page_as_form(doc, &src, f.page)?;
+        Ok(printcraft_edit::MarkSource { xobject, size, image: false })
+    } else {
+        let (xobject, size) = printcraft_create::image_xobject(doc, &f.name, &f.bytes)?;
+        Ok(printcraft_edit::MarkSource { xobject, size, image: true })
     }
 }
 

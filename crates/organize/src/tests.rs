@@ -635,3 +635,20 @@ fn replace_pages_swaps_content_but_keeps_annotations() {
     let mut doc = doc;
     assert!(replace_pages(&mut doc, &[0, 1], &src, &[0]).is_err(), "counts must match");
 }
+
+#[test]
+fn a_page_becomes_a_form_xobject_upright() {
+    let src = open(fixture());
+    let mut dst = Document::new_empty();
+    // Page 1 inherits a 300 × 400 media box, rotation 90 and its font resources.
+    let (r, size) = crate::page_as_form(&mut dst, &src, 0).unwrap();
+    assert_eq!(size, (400.0, 300.0), "displayed size of a quarter-turned page");
+    let obj = dst.get(r);
+    let Object::Stream(s) = &*obj else { panic!("a stream") };
+    let m: Vec<f64> = s.dict.get(b"Matrix").unwrap().as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect();
+    assert_eq!(m, vec![0.0, -1.0, 1.0, 0.0, 0.0, 300.0]);
+    assert!(String::from_utf8_lossy(&s.decoded().unwrap()).contains("(Page 1) Tj"));
+    let res = s.dict.get(b"Resources").and_then(|r| dst.resolve(r).as_dict().cloned()).unwrap();
+    assert!(res.get(b"Font").is_some(), "inherited resources come along");
+    assert!(crate::page_as_form(&mut dst, &src, 7).is_err());
+}

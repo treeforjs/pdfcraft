@@ -449,6 +449,19 @@ impl Automation {
         }))
     }
 
+    /// A watermark or background picture: `file` (an image or a PDF) and `file_page` (1-based).
+    fn mark_file(&self, a: &Args) -> Result<Option<printcraft_engine::MarkFile>> {
+        let Some(p) = a.opt_str("file")? else { return Ok(None) };
+        let path = self.resolve(p, false)?;
+        let bytes = std::fs::read(&path).map_err(|e| failed(format!("{}: {e}", path.display())))?;
+        let page = a.opt_int("file_page")?.unwrap_or(1).max(1) as usize - 1;
+        Ok(Some(printcraft_engine::MarkFile {
+            name: path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
+            bytes: Arc::new(bytes),
+            page,
+        }))
+    }
+
     fn apply(&mut self, a: &Args, edit: Edit) -> Result<Value> {
         let id = self.doc(a)?.id;
         self.session.apply(id, edit).map_err(failed)?;
@@ -486,8 +499,15 @@ impl Automation {
             }
             "doc_watermark" => {
                 let d = Watermark::default();
+                let file = self.mark_file(a)?;
+                let text = match &file {
+                    Some(_) => a.opt_str("text")?.unwrap_or_default().to_string(),
+                    None => a.str("text")?.to_string(),
+                };
                 let wm = Watermark {
-                    text: a.str("text")?.to_string(),
+                    text,
+                    source: None,
+                    scale: a.opt_num("scale")?.unwrap_or(d.scale).clamp(0.01, 1.0),
                     font_size: a.opt_num("font_size")?.unwrap_or(0.0),
                     color: color("color", d.color)?,
                     opacity: a.opt_num("opacity")?.unwrap_or(d.opacity),
@@ -495,12 +515,18 @@ impl Automation {
                     behind: a.opt_bool("behind")?.unwrap_or(false),
                     offset: [0.0; 2],
                 };
-                Edit::AddWatermark { pages, settings: wm, replace }
+                Edit::AddWatermark { pages, settings: wm, replace, file }
             }
             "doc_background" => Edit::AddBackground {
                 pages,
-                settings: Background { color: color("color", [1.0; 3])?, opacity: a.opt_num("opacity")?.unwrap_or(1.0) },
+                settings: Background {
+                    color: color("color", [1.0; 3])?,
+                    opacity: a.opt_num("opacity")?.unwrap_or(1.0),
+                    scale: a.opt_num("scale")?.unwrap_or(1.0).clamp(0.01, 1.0),
+                    ..Background::default()
+                },
                 replace,
+                file: self.mark_file(a)?,
             },
             _ => {
                 let kind = match a.str("kind")? {

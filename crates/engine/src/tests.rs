@@ -773,9 +773,21 @@ fn headers_footers_watermarks_and_backgrounds_show_update_and_remove() {
     hf.text[4] = "Draft".into();
     s.apply(id, Edit::AddHeaderFooter { pages: vec![0, 1], settings: hf, replace: true }).unwrap();
     assert_eq!(page_texts(&s, id)[0], "Page 1\nDraft");
-    s.apply(id, Edit::AddWatermark { pages: vec![0], settings: Watermark { text: "SECRET".into(), ..Watermark::default() }, replace: false })
-        .unwrap();
-    s.apply(id, Edit::AddBackground { pages: vec![1], settings: Background { color: [1.0, 0.9, 0.9], opacity: 1.0 }, replace: false }).unwrap();
+    s.apply(
+        id,
+        Edit::AddWatermark { pages: vec![0], settings: Watermark { text: "SECRET".into(), ..Watermark::default() }, file: None, replace: false },
+    )
+    .unwrap();
+    s.apply(
+        id,
+        Edit::AddBackground {
+            pages: vec![1],
+            settings: Background { color: [1.0, 0.9, 0.9], opacity: 1.0, ..Background::default() },
+            replace: false,
+            file: None,
+        },
+    )
+    .unwrap();
     assert_eq!(s.get(id).unwrap().marks.len(), 3);
     assert!(page_texts(&s, id)[0].contains("SECRET"));
     s.apply(id, Edit::RemoveMarks { kind: MarkKind::HeaderFooter }).unwrap();
@@ -1122,4 +1134,65 @@ fn probe_edit_latency_on_a_large_signed_document() {
         s.apply(id, rect_comment(0, [10.0 + k as f64, 10.0, 50.0, 50.0])).unwrap();
         eprintln!("comment edit {k}: {:?}", t.elapsed());
     }
+}
+
+/// A tiny uncompressed BMP of one colour.
+fn bmp(w: u32, h: u32, bgr: [u8; 3]) -> Vec<u8> {
+    let row = (w * 3).div_ceil(4) * 4;
+    let size = 54 + row * h;
+    let mut b = b"BM".to_vec();
+    b.extend(size.to_le_bytes());
+    b.extend([0u8; 4]);
+    b.extend(54u32.to_le_bytes());
+    b.extend(40u32.to_le_bytes());
+    b.extend((w as i32).to_le_bytes());
+    b.extend((h as i32).to_le_bytes());
+    b.extend(1u16.to_le_bytes());
+    b.extend(24u16.to_le_bytes());
+    b.extend([0u8; 24]);
+    for _ in 0..h {
+        for _ in 0..w {
+            b.extend(bgr);
+        }
+        b.extend(vec![0u8; (row - w * 3) as usize]);
+    }
+    b
+}
+
+#[test]
+fn backgrounds_and_watermarks_from_files() {
+    let (mut s, id) = session_with(1);
+    // A source PDF whose second page is solid blue.
+    let blue = {
+        let mut src = Session::new();
+        let sid = src.open("src.pdf", None, Arc::new(fixture(2)), None).unwrap();
+        src.apply(
+            sid,
+            Edit::AddBackground {
+                pages: vec![1],
+                settings: Background { color: [0.0, 0.0, 1.0], ..Background::default() },
+                replace: false,
+                file: None,
+            },
+        )
+        .unwrap();
+        src.save_bytes(sid).unwrap()
+    };
+    let file = MarkFile { name: "src.pdf".into(), bytes: blue, page: 1 };
+    s.apply(id, Edit::AddBackground { pages: vec![0], settings: Background::default(), replace: false, file: Some(file) }).unwrap();
+    let corner = pixel(&s, id, 0, 3, 3);
+    assert!(corner[2] > 200 && corner[0] < 40, "the blue page fills the background: {corner:?}");
+    // The page's own text still draws on top (at "Page 1", 20,150).
+    assert_eq!(s.get(id).unwrap().can_undo(), Some("Add background"));
+    // A red image watermark at half the page, on top, unrotated.
+    let red = MarkFile { name: "stamp.bmp".into(), bytes: Arc::new(bmp(4, 4, [0, 0, 255])), page: 0 };
+    let wm = Watermark { rotation: 0.0, opacity: 1.0, scale: 0.5, ..Watermark::default() };
+    s.apply(id, Edit::AddWatermark { pages: vec![0], settings: wm, replace: false, file: Some(red) }).unwrap();
+    let centre = pixel(&s, id, 0, 100, 150);
+    assert!(centre[0] > 200 && centre[2] < 40, "the red picture sits in the middle: {centre:?}");
+    let edge = pixel(&s, id, 0, 10, 150);
+    assert!(edge[2] > 200, "outside it the background shows: {edge:?}");
+    // A bad file is refused clearly.
+    let junk = MarkFile { name: "x.png".into(), bytes: Arc::new(b"not an image".to_vec()), page: 0 };
+    assert!(s.apply(id, Edit::AddBackground { pages: vec![0], settings: Background::default(), replace: true, file: Some(junk) }).is_err());
 }

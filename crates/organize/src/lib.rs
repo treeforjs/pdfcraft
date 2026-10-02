@@ -19,7 +19,7 @@ mod outline;
 
 pub use boxes::{BoxSpec, PageBox, page_boxes, set_page_box};
 pub use dedupe::dedupe_resources;
-pub use import::{SplitBy, combine, extract_pages, import_pages, split, split_ranges};
+pub use import::{SplitBy, combine, extract_pages, import_pages, page_as_form, split, split_ranges};
 pub use labels::{LabelRange, LabelStyle, number_pages, page_label_ranges, page_labels, set_page_label_ranges};
 pub use outline::{
     Bookmark, OutlineError, add_bookmark, bookmarks, delete_bookmark, move_bookmark, rename_bookmark, set_bookmark_open, set_bookmark_page,

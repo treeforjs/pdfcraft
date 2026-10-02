@@ -73,3 +73,24 @@ fn watermark_and_background_dialogs() {
     h.run_steps(3);
     assert_eq!(marks(&h).len(), 2);
 }
+
+#[test]
+fn backgrounds_and_watermarks_from_a_file() {
+    let mut h = harness();
+    h.state_mut().execute("edit.background");
+    h.run_steps(2);
+    h.get_by_label("File").click();
+    h.run_steps(2);
+    h.get_by_label("No file chosen");
+    assert!(h.query_by(|n| n.label().as_deref() == Some("OK") && n.is_disabled()).is_some(), "OK waits for a file");
+    // (Browse… opens the system picker; the test supplies the file directly.)
+    h.state_mut().marks_draft.file = Some(("letterhead.pdf".into(), std::sync::Arc::new(FIXTURE.to_vec())));
+    h.run_steps(2);
+    h.get_by_label("Page number");
+    h.get_by_label("Scale relative to target page");
+    h.get_by_label("OK").click();
+    h.run_steps(3);
+    assert_eq!(marks(&h), vec![MarkKind::Background]);
+    let s = h.state();
+    assert_eq!(s.session.get(s.views[0].id).unwrap().can_undo(), Some("Add background"));
+}

@@ -630,13 +630,16 @@ pub fn tools() -> Vec<ToolDef> {
             }),
             &["doc"],
         )),
-        t("doc_watermark", "Add watermark", "Add a text watermark to pages: rotated (degrees counter-clockwise, default 45), semi-transparent (opacity 0–1, default 0.5), fitted to the page unless font_size is given, on top unless behind: true. replace: true swaps out existing ones. Undoable.")
+        t("doc_watermark", "Add watermark", "Add a watermark to pages: text, or a picture from `file` (an image, or page `file_page` of a PDF) at `scale` of the page (default 0.5); rotated (degrees counter-clockwise, default 45), semi-transparent (opacity 0–1, default 0.5), text fitted to the page unless font_size is given, on top unless behind: true. replace: true swaps out existing ones. Undoable.")
             .cmd("edit.watermark")
             .with(schema(
                 json!({
                     "doc": doc(),
                     "pages": pages("to mark (default: all)"),
                     "text": { "type": "string", "minLength": 1 },
+                    "file": { "type": "string" },
+                    "file_page": { "type": "integer", "minimum": 1 },
+                    "scale": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
                     "font_size": { "type": "number", "exclusiveMinimum": 0 },
                     "color": { "type": "string" },
                     "opacity": { "type": "number", "minimum": 0, "maximum": 1 },
@@ -644,11 +647,14 @@ pub fn tools() -> Vec<ToolDef> {
                     "behind": { "type": "boolean" },
                     "replace": { "type": "boolean" },
                 }),
-                &["doc", "text"],
+                &["doc"],
             )),
-        t("doc_background", "Add background", "Fill page backgrounds with a colour, behind the content. Undoable.")
+        t("doc_background", "Add background", "Fill page backgrounds with a colour, or a picture from `file` (an image, or page `file_page` of a PDF) fitted at `scale` (default 1), behind the content. Undoable.")
             .cmd("edit.background")
-            .with(schema(json!({ "doc": doc(), "pages": pages("to fill (default: all)"), "color": { "type": "string" }, "opacity": { "type": "number", "minimum": 0, "maximum": 1 }, "replace": { "type": "boolean" } }), &["doc", "color"])),
+            .with(schema(
+                json!({ "doc": doc(), "pages": pages("to fill (default: all)"), "color": { "type": "string" }, "file": { "type": "string" }, "file_page": { "type": "integer", "minimum": 1 }, "scale": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 }, "opacity": { "type": "number", "minimum": 0, "maximum": 1 }, "replace": { "type": "boolean" } }),
+                &["doc"],
+            )),
         t("doc_remove_marks", "Remove header & footer, watermark or background", "Remove every header and footer, watermark or background PrintCraft (or a compatible tool) added. Undoable.")
             .destructive()
             .with(schema(json!({ "doc": doc(), "kind": { "type": "string", "enum": ["header_footer", "watermark", "background"] } }), &["doc", "kind"])),

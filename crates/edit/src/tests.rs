@@ -109,7 +109,7 @@ fn replace_and_remove_restore_the_original_content() {
     assert_eq!(s.iter().filter(|x| x.contains("/PCMark")).count(), 1, "replaced, not added");
     assert!(s.last().unwrap().contains("(Second)"));
     add_watermark(&mut doc, &[0], &Watermark { text: "DRAFT".into(), ..Watermark::default() }, false).unwrap();
-    add_background(&mut doc, &[0], &Background { color: [1.0, 1.0, 0.9], opacity: 1.0 }, false).unwrap();
+    add_background(&mut doc, &[0], &Background { color: [1.0, 1.0, 0.9], opacity: 1.0, ..Background::default() }, false).unwrap();
     assert_eq!(marks_present(&doc).len(), 3);
     assert_eq!(remove_marks(&mut doc, &[0], MarkKind::HeaderFooter).unwrap(), 1);
     assert_eq!(remove_marks(&mut doc, &[0], MarkKind::Watermark).unwrap(), 1);
@@ -136,7 +136,10 @@ fn invalid_requests_change_nothing() {
     let mut doc = fixture();
     assert!(matches!(add_header_footer(&mut doc, &[0], &HeaderFooter::default(), false, &cx()), Err(EditError::Invalid(_))));
     assert!(matches!(add_watermark(&mut doc, &[0], &Watermark::default(), false), Err(EditError::Invalid(_))));
-    assert_eq!(add_background(&mut doc, &[9], &Background { color: [1.0; 3], opacity: 1.0 }, false), Err(EditError::NoSuchPage(9)));
+    assert_eq!(
+        add_background(&mut doc, &[9], &Background { color: [1.0; 3], opacity: 1.0, ..Background::default() }, false),
+        Err(EditError::NoSuchPage(9))
+    );
     assert!(!doc.is_modified());
 }
 

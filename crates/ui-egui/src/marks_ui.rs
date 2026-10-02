@@ -83,6 +83,10 @@ pub struct MarksDraft {
     pub date_format: usize,
     /// Watermark: size the text to the page.
     pub fit: bool,
+    /// Source ▸ File (watermark or background): the file picked, and the page of a PDF (1-based).
+    pub use_file: bool,
+    pub file: Option<(String, std::sync::Arc<Vec<u8>>)>,
+    pub file_page: usize,
 }
 
 impl Default for MarksDraft {
@@ -90,13 +94,16 @@ impl Default for MarksDraft {
         Self {
             hf: HeaderFooter::default(),
             wm: Watermark::default(),
-            bg: Background { color: [1.0, 1.0, 0.85], opacity: 1.0 },
+            bg: Background::default(),
             range: PageRange::default(),
             replace: false,
             focused_box: 1,
             page_format: 0,
             date_format: 0,
             fit: true,
+            use_file: false,
+            file: None,
+            file_page: 1,
         }
     }
 }
@@ -211,14 +218,28 @@ pub(crate) fn body(ui: &mut egui::Ui, app: &mut PrintCraftApp, t: &Tokens, kind:
             });
         }
         MarkKind::Watermark => {
+            ui.horizontal(|ui| {
+                ui.label("Source");
+                ui.radio_value(&mut d.use_file, false, "Text");
+                ui.radio_value(&mut d.use_file, true, "File");
+            });
+            if d.use_file {
+                file_source(ui, d, MarkKind::Watermark);
+            }
             ui.horizontal_top(|ui| {
                 ui.vertical(|ui| {
-                    ui.label("Text");
-                    ui.add(
-                        egui::TextEdit::multiline(&mut d.wm.text).desired_rows(2).desired_width(320.0).hint_text("CONFIDENTIAL").id_salt("wm-text"),
-                    );
+                    ui.add_enabled_ui(!d.use_file, |ui| {
+                        ui.label("Text");
+                        ui.add(
+                            egui::TextEdit::multiline(&mut d.wm.text)
+                                .desired_rows(2)
+                                .desired_width(320.0)
+                                .hint_text("CONFIDENTIAL")
+                                .id_salt("wm-text"),
+                        );
+                    });
                     ui.horizontal(|ui| {
-                        ui.checkbox(&mut d.fit, "Fit to page");
+                        ui.add_enabled_ui(!d.use_file, |ui| ui.checkbox(&mut d.fit, "Fit to page"));
                         ui.add_enabled_ui(!d.fit, |ui| {
                             ui.label("Size");
                             if d.wm.font_size == 0.0 {
@@ -252,9 +273,15 @@ pub(crate) fn body(ui: &mut egui::Ui, app: &mut PrintCraftApp, t: &Tokens, kind:
         }
         MarkKind::Background => {
             ui.horizontal(|ui| {
-                ui.label("From colour");
-                color_button(ui, &mut d.bg.color);
+                ui.radio_value(&mut d.use_file, false, "From colour");
+                ui.add_enabled_ui(!d.use_file, |ui| color_button(ui, &mut d.bg.color));
                 ui.add_space(12.0);
+                ui.radio_value(&mut d.use_file, true, "File");
+            });
+            if d.use_file {
+                file_source(ui, d, MarkKind::Background);
+            }
+            ui.horizontal(|ui| {
                 ui.label("Opacity");
                 let mut pct = d.bg.opacity * 100.0;
                 if ui.add(egui::Slider::new(&mut pct, 0.0..=100.0).suffix("%")).changed() {
@@ -270,6 +297,7 @@ pub(crate) fn body(ui: &mut egui::Ui, app: &mut PrintCraftApp, t: &Tokens, kind:
     // Preview of the current page.
     let hf = d.hf.clone();
     let (wm, bg, fit) = (d.wm.clone(), d.bg.clone(), d.fit);
+    let file_name = d.use_file.then(|| d.file.as_ref().map(|f| f.0.clone())).flatten();
     ui.horizontal(|ui| {
         preview(ui, t, page, |p, r, s| match kind {
             MarkKind::HeaderFooter => {
@@ -287,6 +315,22 @@ pub(crate) fn body(ui: &mut egui::Ui, app: &mut PrintCraftApp, t: &Tokens, kind:
                     p.text(pos2(x, y), align, shown, egui::FontId::proportional((hf.font_size as f32 * s).max(5.0)), rgb32(hf.color));
                 }
             }
+            MarkKind::Watermark if file_name.is_some() => {
+                let side = r.width().min(r.height()) * wm.scale as f32;
+                p.rect_stroke(
+                    Rect::from_center_size(r.center(), vec2(side, side)),
+                    CornerRadius::ZERO,
+                    egui::Stroke::new(1.0, Color32::GRAY),
+                    egui::StrokeKind::Inside,
+                );
+                p.text(
+                    r.center(),
+                    egui::Align2::CENTER_CENTER,
+                    file_name.clone().unwrap_or_default(),
+                    egui::FontId::proportional(10.0),
+                    Color32::GRAY,
+                );
+            }
             MarkKind::Watermark => {
                 let text = if wm.text.trim().is_empty() { "CONFIDENTIAL" } else { wm.text.trim() };
                 let size = if fit {
@@ -300,6 +344,16 @@ pub(crate) fn body(ui: &mut egui::Ui, app: &mut PrintCraftApp, t: &Tokens, kind:
                 let (sn, cs) = angle.sin_cos();
                 let offset = vec2(half.x * cs - half.y * sn, half.x * sn + half.y * cs);
                 p.add(egui::epaint::TextShape::new(r.center() - offset, galley, Color32::BLACK).with_angle(angle));
+            }
+            MarkKind::Background if file_name.is_some() => {
+                p.rect_stroke(r.shrink(6.0), CornerRadius::ZERO, egui::Stroke::new(1.0, Color32::GRAY), egui::StrokeKind::Inside);
+                p.text(
+                    r.center(),
+                    egui::Align2::CENTER_CENTER,
+                    file_name.clone().unwrap_or_default(),
+                    egui::FontId::proportional(10.0),
+                    Color32::GRAY,
+                );
             }
             MarkKind::Background => {
                 p.rect_filled(r, CornerRadius::ZERO, rgb32(bg.color).gamma_multiply(bg.opacity as f32));
@@ -319,8 +373,14 @@ pub(crate) fn body(ui: &mut egui::Ui, app: &mut PrintCraftApp, t: &Tokens, kind:
     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
         let ready = match kind {
             MarkKind::HeaderFooter => d.hf.text.iter().any(|x| !x.trim().is_empty()),
-            MarkKind::Watermark => !d.wm.text.trim().is_empty(),
-            MarkKind::Background => true,
+            MarkKind::Watermark => {
+                if d.use_file {
+                    d.file.is_some()
+                } else {
+                    !d.wm.text.trim().is_empty()
+                }
+            }
+            MarkKind::Background => !d.use_file || d.file.is_some(),
         } && !d.range.pages(count).is_empty();
         if ui.add_enabled_ui(ready, |ui| widgets::pill_button(ui, "OK", true)).inner.clicked() {
             apply = true;
@@ -330,6 +390,40 @@ pub(crate) fn body(ui: &mut egui::Ui, app: &mut PrintCraftApp, t: &Tokens, kind:
         }
     });
     (apply, cancel)
+}
+
+fn mark_file(d: &MarksDraft) -> Option<printcraft_engine::MarkFile> {
+    let (name, bytes) = d.file.clone().filter(|_| d.use_file)?;
+    Some(printcraft_engine::MarkFile { name, bytes, page: d.file_page.max(1) - 1 })
+}
+
+/// Source ▸ File: Browse…, the page of a PDF, and the size relative to the page.
+fn file_source(ui: &mut egui::Ui, d: &mut MarksDraft, kind: MarkKind) {
+    ui.horizontal(|ui| {
+        #[cfg(not(target_arch = "wasm32"))]
+        if ui.button("Browse…").clicked()
+            && let Some(p) =
+                rfd::FileDialog::new().add_filter("PDF or image", &["pdf", "png", "jpg", "jpeg", "tif", "tiff", "gif", "bmp"]).pick_file()
+        {
+            match std::fs::read(&p) {
+                Ok(b) => d.file = Some((p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(), std::sync::Arc::new(b))),
+                Err(_) => d.file = None,
+            }
+        }
+        ui.label(d.file.as_ref().map(|f| f.0.clone()).unwrap_or_else(|| "No file chosen".into()));
+        if d.file.as_ref().is_some_and(|f| f.1.starts_with(b"%PDF")) {
+            ui.label("Page number");
+            ui.add(egui::DragValue::new(&mut d.file_page).range(1..=9999));
+        }
+    });
+    ui.horizontal(|ui| {
+        ui.label("Scale relative to target page");
+        let scale = if kind == MarkKind::Background { &mut d.bg.scale } else { &mut d.wm.scale };
+        let mut pct = *scale * 100.0;
+        if ui.add(egui::Slider::new(&mut pct, 5.0..=100.0).suffix("%")).changed() {
+            *scale = pct / 100.0;
+        }
+    });
 }
 
 /// The edit the dialog's OK makes.
@@ -342,9 +436,9 @@ pub fn edit(d: &MarksDraft, kind: MarkKind, count: usize) -> Edit {
             if d.fit {
                 wm.font_size = 0.0;
             }
-            Edit::AddWatermark { pages, settings: wm, replace: d.replace }
+            Edit::AddWatermark { pages, settings: wm, replace: d.replace, file: mark_file(d) }
         }
-        MarkKind::Background => Edit::AddBackground { pages, settings: d.bg.clone(), replace: d.replace },
+        MarkKind::Background => Edit::AddBackground { pages, settings: d.bg.clone(), replace: d.replace, file: mark_file(d) },
     }
 }
 
