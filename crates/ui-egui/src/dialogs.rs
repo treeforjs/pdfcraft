@@ -449,6 +449,13 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
                 });
                 return;
             }
+            Dialog::Sign => {
+                if crate::sign_ui::dialog(ui, app, &t) {
+                    app.sign_draft = None;
+                    close = true;
+                }
+                return;
+            }
             Dialog::SummarizeComments => {
                 ui.label(egui::RichText::new("Summarize Options").font(theme::semibold(18.0)));
                 ui.add_space(8.0);

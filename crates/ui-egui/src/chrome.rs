@@ -235,6 +235,7 @@ fn main_menu(app: &mut PrintCraftApp, ui: &mut egui::Ui) {
                     (RightPanel::Fields, "Fields"),
                     (RightPanel::Layers, "Layers"),
                     (RightPanel::Attachments, "Attachments"),
+                    (RightPanel::Signatures, "Signatures"),
                 ] {
                     if ui.radio(app.right == Some(p), label).clicked() {
                         app.right = Some(p);
@@ -250,6 +251,7 @@ pub fn right_rail(app: &mut PrintCraftApp, ui: &mut egui::Ui) {
     let t = Tokens::get(ui.ctx());
     let Some((index, id)) = app.active_ids() else { return };
     let Some(doc) = app.session.get(id) else { return };
+    let has_signatures = doc.is_signed();
     let (has_comments, has_outline, has_fields, has_layers, has_files) = (
         !doc.info.annotations.is_empty(),
         !doc.info.outline.is_empty(),
@@ -282,6 +284,7 @@ pub fn right_rail(app: &mut PrintCraftApp, ui: &mut egui::Ui) {
             rail_button(ui, RightPanel::Fields, "text-cursor-input", "Form fields", has_fields);
             rail_button(ui, RightPanel::Layers, "layers", "Layers", has_layers);
             rail_button(ui, RightPanel::Attachments, "paperclip", "Attachments", has_files);
+            rail_button(ui, RightPanel::Signatures, "signature", "Signatures", has_signatures);
 
             // Page navigation cluster at the bottom (as in Acrobat's rail).
             let view = &mut app.views[index];

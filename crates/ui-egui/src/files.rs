@@ -255,7 +255,7 @@ impl PrintCraftApp {
     }
 
     /// Write named files into a chosen folder (desktop) or as downloads (web). Returns how many.
-    fn write_files(&mut self, named: &[(String, Arc<Vec<u8>>)], title: &str) -> usize {
+    pub(crate) fn write_files(&mut self, named: &[(String, Arc<Vec<u8>>)], title: &str) -> usize {
         #[cfg(not(target_arch = "wasm32"))]
         {
             let dir = match &self.export_dir_override {

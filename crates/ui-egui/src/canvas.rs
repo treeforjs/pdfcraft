@@ -150,6 +150,8 @@ pub struct DocView {
     pub pending_redaction: Option<(usize, Vec<[f64; 8]>)>,
     /// A crop rectangle being dragged (Crop tool).
     pub crop_drag: crate::crop::CropDrag,
+    /// Use a certificate: a signature rectangle being drawn, or an empty signature field clicked.
+    pub sign: crate::sign_ui::SignView,
     /// Fill & Sign text being typed.
     pub fill_text: Option<crate::fill_sign::TypeBox>,
     /// A non-edit action requested by the organize toolbar, handled by the app.
@@ -230,6 +232,7 @@ impl DocView {
             redact_drag: None,
             pending_redaction: None,
             crop_drag: None,
+            sign: Default::default(),
             fill_text: None,
         }
     }
@@ -826,8 +829,10 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
     let view = &mut app.views[index];
     // Opened without the owner password and something is restricted.
     let secured = doc.security_summary().is_some_and(|s| !(s.owner || (s.permissions.modify() && s.permissions.assemble())));
-    if notices(view, info, secured, ui, &t) {
-        app.dialog = Some(crate::Dialog::Properties(crate::PropsTab::Security));
+    match notices(view, info, secured, crate::sign_ui::banner(&doc.signatures), ui, &t) {
+        Some(Notice::Security) => app.dialog = Some(crate::Dialog::Properties(crate::PropsTab::Security)),
+        Some(Notice::Signatures) => app.right = Some(RightPanel::Signatures),
+        None => {}
     }
     if view.organize {
         organize_grid(view, info, &doc.renderer, doc.allows_assembly(), ui, &t);
@@ -891,9 +896,14 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
         QuickTool::Comment(t) => t.markup().is_some(),
         QuickTool::Select => !preparing,
         QuickTool::Redact => true,
-        QuickTool::Hand | QuickTool::Crop | QuickTool::Fill(_) | QuickTool::Field(_) | QuickTool::AddText | QuickTool::Stamp(_) | QuickTool::Link => {
-            false
-        }
+        QuickTool::Hand
+        | QuickTool::Crop
+        | QuickTool::Fill(_)
+        | QuickTool::Field(_)
+        | QuickTool::AddText
+        | QuickTool::Stamp(_)
+        | QuickTool::Link
+        | QuickTool::SignArea { .. } => false,
     };
     let prefs = &app.comment_prefs;
     let allowed = doc.allows_annotation();
@@ -1079,6 +1089,9 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
                     Some(crate::fill_sign::FillAction::CreateSignature) => open_signature = true,
                     None => {}
                 }
+            }
+            if matches!(tool, QuickTool::SignArea { .. }) {
+                crate::sign_ui::page_input(ui, &resp, &xf, i, info, view);
             }
             if tool == QuickTool::Crop && crate::crop::page_input(ui, &resp, &xf, i, info, view, can_crop) {
                 view.current = i;
@@ -1379,6 +1392,25 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
     if tool == QuickTool::Crop && cropped {
         tool = QuickTool::Select;
     }
+    // A signature rectangle was drawn, or an empty signature field clicked.
+    let drawn = app.views[index].sign.drawn.take();
+    if let (Some((page, rect)), QuickTool::SignArea { certify }) = (drawn, tool) {
+        tool = QuickTool::Select;
+        app.quick_tool = tool;
+        app.start_signing(page, Some(rect), None, certify.then_some(2));
+    }
+    if let Some(field) = app.views[index].sign.field.take() {
+        let signed = app.session.get(app.views[index].id).is_some_and(|d| d.signatures.iter().any(|s| s.field == field && s.signed));
+        if signed {
+            app.right = Some(RightPanel::Signatures);
+            if !app.sig_expanded.contains(&field) {
+                app.sig_expanded.push(field);
+            }
+        } else {
+            let page = app.views[index].current;
+            app.start_signing(page, None, Some(field), None);
+        }
+    }
     app.quick_tool = tool;
     if let Some((p, i)) = open_props {
         app.open_comment_props(p, i);
@@ -1528,10 +1560,39 @@ fn find_bar(view: &mut DocView, pages: usize, area: Rect, ui: &mut egui::Ui, t: 
     }
 }
 
-/// The notice bar above the pages. Returns `true` when "Security settings" was clicked.
-fn notices(view: &mut DocView, info: &DocInfo, secured: bool, ui: &mut egui::Ui, t: &Tokens) -> bool {
+/// What the notice bar's buttons ask for.
+enum Notice {
+    Security,
+    Signatures,
+}
+
+/// The notice bar above the pages: the signature status first (Acrobat's signature bar), then
+/// security, forms and warnings.
+fn notices(
+    view: &mut DocView,
+    info: &DocInfo,
+    secured: bool,
+    signed: Option<(&str, Color32, String)>,
+    ui: &mut egui::Ui,
+    t: &Tokens,
+) -> Option<Notice> {
+    if let Some((icon, color, text)) = signed {
+        let mut open = false;
+        egui::Frame::NONE.fill(t.accent_soft).inner_margin(egui::Margin::symmetric(14, 7)).show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.add(icons::image(icon, 16.0, color));
+                ui.label(egui::RichText::new(text).color(t.text));
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if crate::widgets::pill_button(ui, "Signature panel", false).clicked() {
+                        open = true;
+                    }
+                });
+            });
+        });
+        return open.then_some(Notice::Signatures);
+    }
     if view.notice_dismissed {
-        return false;
+        return None;
     }
     let mut open_security = false;
     let msg = if secured {
@@ -1543,7 +1604,7 @@ fn notices(view: &mut DocView, info: &DocInfo, secured: bool, ui: &mut egui::Ui,
     } else {
         None
     };
-    let Some((icon, text, fields)) = msg else { return false };
+    let (icon, text, fields) = msg?;
     egui::Frame::NONE.fill(t.accent_soft).inner_margin(egui::Margin::symmetric(14, 7)).show(ui, |ui| {
         ui.horizontal(|ui| {
             ui.add(icons::image(icon, 16.0, t.accent_text));
@@ -1564,7 +1625,7 @@ fn notices(view: &mut DocView, info: &DocInfo, secured: bool, ui: &mut egui::Ui,
             });
         });
     });
-    open_security
+    open_security.then_some(Notice::Security)
 }
 
 /// The floating quick-action bar at the left edge of the document area.

@@ -188,3 +188,21 @@ fn validates_a_signature_made_by_openssl() {
     let s = signatures(&open(&edited), &edited, &TrustStore::default()).into_iter().next().unwrap();
     assert_eq!(s.modification, Modification::Allowed(vec!["comments".into()]));
 }
+
+#[test]
+fn files_without_a_cross_reference_table_are_signed_with_a_full_write() {
+    // No xref: the document is reconstructed, so saving rewrites (and renumbers) everything.
+    let bytes = b"%PDF-1.7
+1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
+2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj
+3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] >> endobj
+trailer << /Root 1 0 R >>
+%%EOF"
+        .to_vec();
+    let id = pkcs12::open(&data("ec-p256.p12"), "test").unwrap();
+    for certify in [None, Some(2)] {
+        let signed = printcraft_sign::sign(&open(&bytes), &id, &SignOptions { certify, rect: None, ..opts() }).unwrap();
+        let s = signatures(&open(&signed), &signed, &TrustStore::default()).into_iter().find(|s| s.signed).unwrap();
+        assert_eq!((s.status, s.certify, s.modification.clone()), (Status::Unknown, certify, Modification::None), "{:?}", s.details);
+    }
+}

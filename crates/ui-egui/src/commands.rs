@@ -292,6 +292,21 @@ impl PrintCraftApp {
             }
             "comment.export" => self.export_data_dialog(true, false),
             "comment.summarize" => self.dialog = Some(Dialog::SummarizeComments),
+            "sign.digital" | "sign.certify" => {
+                let certify = id == "sign.certify";
+                self.quick_tool = crate::QuickTool::SignArea { certify };
+                self.notify("Drag to draw the area where the signature should appear.");
+            }
+            "sign.certify_invisible" => {
+                let page = active.map_or(0, |i| self.views[i].current);
+                self.start_signing(page, None, None, Some(2));
+            }
+            "sign.validate" => {
+                let certs = self.session.trusted_certificates().to_vec();
+                self.session.set_trusted_certificates(certs);
+                self.right = Some(RightPanel::Signatures);
+            }
+            "sign.panel" => self.right = Some(RightPanel::Signatures),
             "comment.hide_all" => {
                 if let Some(i) = active {
                     let id = self.views[i].id;

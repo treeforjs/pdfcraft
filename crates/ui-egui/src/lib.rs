@@ -16,6 +16,7 @@ mod create_ui;
 mod crop;
 mod export_ui;
 mod marks_ui;
+mod sign_ui;
 /// Header & footer / watermark / background dialog types (tests and automation).
 pub mod marks {
     pub use crate::marks_ui::{MarksDraft, PageRange, Subset};
@@ -24,6 +25,7 @@ mod content_ui;
 mod link_ui;
 pub use create_ui::Clip;
 pub use link_ui::LinkDraft;
+pub use sign_ui::{DigitalIdEntry, SignDraft, SignStep};
 mod dialogs;
 mod editing;
 mod files;
@@ -79,6 +81,7 @@ pub enum RightPanel {
     Fields,
     Layers,
     Attachments,
+    Signatures,
 }
 
 /// Quick-action bar tools (the vertical floating strip).
@@ -102,6 +105,10 @@ pub enum QuickTool {
     Stamp(printcraft_engine::StampKind),
     /// Edit a PDF ▸ Link: draw link areas, select and edit links.
     Link,
+    /// Use a certificate ▸ Digitally sign / Certify (visible): drag the signature's rectangle.
+    SignArea {
+        certify: bool,
+    },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -149,6 +156,8 @@ pub enum Dialog {
     Recovery,
     /// Comments ▸ Summarize comments (options).
     SummarizeComments,
+    /// Sign with a Digital ID ▸ Configure ▸ Sign as.
+    Sign,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -221,6 +230,12 @@ pub struct PrintCraftApp {
     pub rotate_draft: RotateDraft,
     /// Summarize Comments: sort order.
     pub summary_sort: printcraft_engine::SummarySort,
+    /// The signing dialogs' state.
+    pub sign_draft: Option<SignDraft>,
+    /// Digital ID files the user has created or added.
+    pub digital_ids: Vec<DigitalIdEntry>,
+    /// Signatures panel: expanded entries (field names).
+    pub sig_expanded: Vec<String>,
     /// Where autosaves go (`None`: autosave off, e.g. on the web and in tests).
     pub recovery: Option<RecoveryStore>,
     /// Entries left by a previous session, offered in the Recovery dialog.
@@ -320,6 +335,9 @@ impl PrintCraftApp {
             extract_draft: ExtractDraft::default(),
             rotate_draft: RotateDraft::default(),
             summary_sort: Default::default(),
+            sign_draft: None,
+            digital_ids: Vec::new(),
+            sig_expanded: Vec::new(),
             recovery: None,
             recoverable: Vec::new(),
             recovery_keys: Default::default(),
@@ -582,7 +600,9 @@ impl PrintCraftApp {
 
     /// Serialize the user's persistent state (recent files, theme). Local only.
     pub fn persist(&self) -> String {
-        serde_json::json!({ "recent": self.recent, "theme": self.theme, "signature": self.signature }).to_string()
+        let trusted: Vec<String> = self.session.trusted_certificates().iter().map(printcraft_engine::sign::x509::to_pem).collect();
+        serde_json::json!({ "recent": self.recent, "theme": self.theme, "signature": self.signature, "digital_ids": self.digital_ids, "trusted": trusted })
+            .to_string()
     }
 
     /// Restore state written by `persist`. Unknown or malformed data is ignored.
@@ -601,6 +621,13 @@ impl PrintCraftApp {
             && s.iter().all(|st| st.iter().all(|p| p.iter().all(|x| x.is_finite())))
         {
             self.signature = Some(s);
+        }
+        if let Ok(ids) = serde_json::from_value::<Vec<DigitalIdEntry>>(v["digital_ids"].clone()) {
+            self.digital_ids = ids;
+        }
+        if let Ok(pems) = serde_json::from_value::<Vec<String>>(v["trusted"].clone()) {
+            let certs = pems.iter().filter_map(|p| printcraft_engine::sign::x509::load_certificates(p.as_bytes()).ok()).flatten().collect();
+            self.session.set_trusted_certificates(certs);
         }
     }
 
@@ -627,6 +654,7 @@ impl PrintCraftApp {
                     "fields" => Some(RightPanel::Fields),
                     "layers" => Some(RightPanel::Layers),
                     "attachments" => Some(RightPanel::Attachments),
+                    "signatures" => Some(RightPanel::Signatures),
                     "none" => None,
                     other => return Err(format!("unknown panel {other}")),
                 }
@@ -730,6 +758,8 @@ impl PrintCraftApp {
                     "redact" => QuickTool::Redact,
                     "add-text" => QuickTool::AddText,
                     "link" => QuickTool::Link,
+                    "sign" => QuickTool::SignArea { certify: false },
+                    "certify" => QuickTool::SignArea { certify: true },
                     stamp if stamp.starts_with("stamp-") => QuickTool::Stamp(
                         printcraft_engine::StampKind::ALL
                             .into_iter()

@@ -737,7 +737,7 @@ pub fn sign(doc: &Document, id: &DigitalId, opts: &SignOptions) -> Result<Vec<u8
     // Write with the placeholders, then patch them.
     let save = SaveOptions { mod_date: Some(opts.date.clone()), object_streams: false, ..SaveOptions::default() };
     let mut out = printcraft_cos::write_incremental(&doc, &save)?;
-    let (br_at, gap) = locate(&out, sig.num, reserve)?;
+    let (br_at, gap) = locate(&out, reserve)?;
     let (start, end) = gap;
     let ranges = [0usize, start, end, out.len() - end];
     let mut br_text = format!("0 {} {} {}", ranges[1], ranges[2], ranges[3]).into_bytes();
@@ -757,26 +757,21 @@ pub fn sign(doc: &Document, id: &DigitalId, opts: &SignOptions) -> Result<Vec<u8
     Ok(out)
 }
 
-/// Find the placeholders of signature object `num` in the written file: the offset of the
-/// ByteRange numbers, and the `<…>` hex string's span.
-fn locate(out: &[u8], num: u32, reserve: usize) -> Result<(usize, (usize, usize)), SignError> {
-    let head = format!("{num} 0 obj");
-    let starts: Vec<usize> = out
-        .windows(head.len())
-        .enumerate()
-        .filter(|(i, w)| *w == head.as_bytes() && (*i == 0 || matches!(out[i - 1], b'\n' | b'\r' | b' ')))
-        .map(|(i, _)| i)
-        .collect();
-    let obj = *starts.last().ok_or_else(|| SignError::Pdf("the signature object was not written".into()))?;
-    let end = obj + out[obj..].windows(6).position(|w| w == b"endobj").ok_or_else(|| SignError::Pdf("unterminated signature object".into()))?;
-    let region = &out[obj..end];
+/// Find the placeholders in the written file: the offset of the ByteRange numbers, and the
+/// `<…>` hex string's span. The ByteRange marker is unique; the Contents placeholder is the one
+/// in the same object (a full save may renumber objects, so they are not found by number).
+fn locate(out: &[u8], reserve: usize) -> Result<(usize, (usize, usize)), SignError> {
     let mark = format!("0 {} {} {}", BR_MARK[0], BR_MARK[1], BR_MARK[2]);
-    let br = region.windows(mark.len()).position(|w| w == mark.as_bytes()).ok_or_else(|| SignError::Pdf("ByteRange placeholder not found".into()))?;
+    let hits: Vec<usize> = out.windows(mark.len()).enumerate().filter(|(_, w)| *w == mark.as_bytes()).map(|(i, _)| i).collect();
+    let [br] = hits.as_slice() else { return Err(SignError::Pdf("ByteRange placeholder not found".into())) };
+    let start = out[..*br].windows(3).rposition(|w| w == b"obj").ok_or_else(|| SignError::Pdf("signature object not found".into()))?;
+    let end = br + out[*br..].windows(6).position(|w| w == b"endobj").ok_or_else(|| SignError::Pdf("unterminated signature object".into()))?;
+    let region = &out[start..end];
     let mut zeros = vec![b'<'];
     zeros.extend(std::iter::repeat_n(b'0', reserve * 2));
     zeros.push(b'>');
     let c = region.windows(zeros.len()).position(|w| w == zeros.as_slice()).ok_or_else(|| SignError::Pdf("Contents placeholder not found".into()))?;
-    Ok((obj + br, (obj + c, obj + c + zeros.len())))
+    Ok((*br, (start + c, start + c + zeros.len())))
 }
 
 /// "2026.10.02 14:03:11 +02'00'" from a PDF date.

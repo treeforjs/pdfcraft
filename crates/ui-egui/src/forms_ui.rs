@@ -74,7 +74,8 @@ pub(crate) fn page_input(
         f.widgets.iter().enumerate().find(|(_, w)| w.page == Some(page) && widget_rect(xf, info, page, w.rect).contains(p)).map(|(i, w)| (f, i, w))
     });
     let Some((f, wi, w)) = hit else { return false };
-    let usable = allowed && fillable(f);
+    // Empty signature fields are signed by clicking them (Use a certificate).
+    let usable = allowed && (fillable(f) || f.kind == FormFieldKind::Signature);
     ui.ctx().set_cursor_icon(match (usable, f.kind) {
         (false, _) => egui::CursorIcon::NotAllowed,
         (true, FormFieldKind::Text) => egui::CursorIcon::Text,
@@ -93,7 +94,7 @@ pub(crate) fn page_input(
             Some(a) => view.forms.button = Some((f.name.clone(), a.clone())),
             None => view.forms.notice = Some(format!("{} has no action", f.name)),
         },
-        FormFieldKind::Signature => view.forms.notice = Some("Signing arrives with digital signatures (M9)".into()),
+        FormFieldKind::Signature => view.sign.field = Some(f.name.clone()),
         FormFieldKind::CheckBox => {
             view.forms.focus = None;
             view.pending_edit = Some(Edit::SetFieldValue { name: f.name.clone(), value: FieldValue::Check(f.value.is_empty()) });

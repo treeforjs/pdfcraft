@@ -719,11 +719,11 @@ title = "Knockout transparency groups"
 area = "B"
 tier = "P1"
 milestone = "M11"
-status = "planned"
+status = "shipped"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["doc_save"]
+evidence = ["crates/engine/src/tests.rs::signing_saving_trusting_and_commenting_afterwards", "crates/automation/tests/automation.rs::digital_ids_signing_and_validation_through_tools"]
+notes = "full rewrites of signed documents are refused; saves stay incremental"
 
 [[feature]]
 id = "view.render-type3"
@@ -5747,11 +5747,11 @@ title = "Sign with a PKCS#12 (.p12/.pfx) digital ID"
 area = "H"
 tier = "P0"
 milestone = "M9"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["sign.digital"]
+tools = ["sign_document"]
+evidence = ["crates/sign/tests/crypto.rs::opens_every_openssl_flavour_of_pkcs12", "crates/sign/tests/pdf.rs::signing_then_validating_with_and_without_trust", "crates/ui-egui/tests/signing.rs::certifying_without_a_visible_signature", "crates/automation/tests/automation.rs::digital_ids_signing_and_validation_through_tools"]
+notes = "PBES2 (AES, 3DES) and legacy SHA-1 3DES/RC2 files; RSA, P-256, P-384"
 
 [[feature]]
 id = "sign.macos-keychain"
@@ -5795,11 +5795,11 @@ title = "Create a self-signed digital ID"
 area = "H"
 tier = "P1"
 milestone = "M9"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["sign.digital"]
+tools = ["sign_id_create"]
+evidence = ["crates/sign/tests/crypto.rs::new_digital_ids_are_self_signed_and_survive_a_p12_round_trip", "crates/ui-egui/tests/signing.rs::drawing_a_signature_creating_an_id_signing_and_trusting", "crates/automation/tests/automation.rs::digital_ids_signing_and_validation_through_tools"]
+notes = "RSA 2048/3072/4096 or P-256, saved as a password-protected .p12"
 
 [[feature]]
 id = "sign.export-certificate"
@@ -5807,11 +5807,11 @@ title = "Export a public certificate"
 area = "H"
 tier = "P2"
 milestone = "M9"
-status = "planned"
-commands = []
+status = "shipped"
+commands = ["sign.panel"]
 tools = []
-evidence = []
-notes = ""
+evidence = ["crates/sign/tests/crypto.rs::certificates_load_from_pem_and_der_and_export_as_pem"]
+notes = "Signatures panel ▸ Export certificate (.cer, PEM)"
 
 [[feature]]
 id = "sign.visible-signature"
@@ -5819,11 +5819,11 @@ title = "Visible signature by drawing a rectangle"
 area = "H"
 tier = "P0"
 milestone = "M9"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["sign.digital"]
+tools = ["sign_document"]
+evidence = ["crates/ui-egui/tests/signing.rs::drawing_a_signature_creating_an_id_signing_and_trusting", "crates/automation/tests/automation.rs::digital_ids_signing_and_validation_through_tools"]
+notes = "drag a rectangle; Acrobat's name-and-details appearance"
 
 [[feature]]
 id = "sign.sign-existing-field"
@@ -5831,10 +5831,10 @@ title = "Sign an existing signature field"
 area = "H"
 tier = "P0"
 milestone = "M9"
-status = "planned"
-commands = []
-tools = []
-evidence = []
+status = "shipped"
+commands = ["sign.digital"]
+tools = ["sign_document"]
+evidence = ["crates/sign/tests/pdf.rs::signing_an_existing_field_and_counter_signing", "crates/ui-egui/tests/signing.rs::clicking_an_empty_signature_field_signs_it"]
 notes = ""
 
 [[feature]]
@@ -5843,10 +5843,10 @@ title = "Invisible signature"
 area = "H"
 tier = "P1"
 milestone = "M9"
-status = "planned"
-commands = []
-tools = []
-evidence = []
+status = "shipped"
+commands = ["sign.certify_invisible"]
+tools = ["sign_document"]
+evidence = ["crates/sign/tests/pdf.rs::invisible_signatures_and_refusals", "crates/ui-egui/tests/signing.rs::certifying_without_a_visible_signature"]
 notes = ""
 
 [[feature]]
@@ -5855,11 +5855,11 @@ title = "Configure signature appearance (text, graphic, name)"
 area = "H"
 tier = "P1"
 milestone = "M9"
-status = "planned"
-commands = []
+status = "partial"
+commands = ["sign.digital"]
 tools = []
-evidence = []
-notes = ""
+evidence = ["crates/ui-egui/tests/signing.rs::drawing_a_signature_creating_an_id_signing_and_trusting"]
+notes = "text items (name, date, reason, location, DN, labels); no graphics or saved appearances yet"
 
 [[feature]]
 id = "sign.reason-location"
@@ -5867,10 +5867,10 @@ title = "Reason, location and contact info"
 area = "H"
 tier = "P1"
 milestone = "M9"
-status = "planned"
-commands = []
-tools = []
-evidence = []
+status = "shipped"
+commands = ["sign.digital"]
+tools = ["sign_document"]
+evidence = ["crates/sign/tests/pdf.rs::signing_then_validating_with_and_without_trust", "crates/automation/tests/automation.rs::digital_ids_signing_and_validation_through_tools"]
 notes = ""
 
 [[feature]]
@@ -5891,11 +5891,11 @@ title = "PKCS#7 detached signatures"
 area = "H"
 tier = "P0"
 milestone = "M9"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["sign.validate"]
+tools = ["sign_list"]
+evidence = ["crates/sign/tests/pdf.rs::validates_a_signature_made_by_openssl"]
+notes = "validated; new signatures use CAdES"
 
 [[feature]]
 id = "sign.cades-pades-bb"
@@ -5903,11 +5903,11 @@ title = "CAdES / PAdES B-B signatures"
 area = "H"
 tier = "P0"
 milestone = "M9"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["sign.digital"]
+tools = ["sign_document"]
+evidence = ["crates/sign/tests/crypto.rs::signatures_round_trip_for_every_key_type", "crates/sign/tests/pdf.rs::signing_then_validating_with_and_without_trust"]
+notes = "ETSI.CAdES.detached with signing-certificate-v2; pdfsig reports them valid"
 
 [[feature]]
 id = "sign.hash-algorithms"
@@ -5915,11 +5915,11 @@ title = "SHA-256/384/512 hashes; no SHA-1 for new signatures"
 area = "H"
 tier = "P0"
 milestone = "M9"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["sign.digital"]
+tools = ["sign_document"]
+evidence = ["crates/sign/tests/crypto.rs::signatures_round_trip_for_every_key_type"]
+notes = "SHA-256, SHA-384 for P-384; SHA-1 refused for new signatures, validated in old ones"
 
 [[feature]]
 id = "sign.certify"
@@ -5927,10 +5927,10 @@ title = "Certify a document (DocMDP)"
 area = "H"
 tier = "P1"
 milestone = "M9"
-status = "planned"
-commands = []
-tools = []
-evidence = []
+status = "shipped"
+commands = ["sign.certify", "sign.certify_invisible"]
+tools = ["sign_document"]
+evidence = ["crates/sign/tests/pdf.rs::later_changes_are_classified_under_the_signature_permissions", "crates/ui-egui/tests/signing.rs::certifying_without_a_visible_signature"]
 notes = ""
 
 [[feature]]
@@ -5939,11 +5939,11 @@ title = "Allowed changes after certifying"
 area = "H"
 tier = "P1"
 milestone = "M9"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["sign.certify"]
+tools = ["sign_document"]
+evidence = ["crates/sign/tests/pdf.rs::later_changes_are_classified_under_the_signature_permissions"]
+notes = "DocMDP P=1/2/3 enforced when validating"
 
 [[feature]]
 id = "sign.field-mdp"
@@ -6035,10 +6035,10 @@ title = "Validate all signatures"
 area = "H"
 tier = "P0"
 milestone = "M9"
-status = "planned"
-commands = []
-tools = []
-evidence = []
+status = "shipped"
+commands = ["sign.validate"]
+tools = ["sign_list"]
+evidence = ["crates/sign/tests/pdf.rs::signing_then_validating_with_and_without_trust", "crates/automation/tests/automation.rs::digital_ids_signing_and_validation_through_tools"]
 notes = ""
 
 [[feature]]
@@ -6047,11 +6047,11 @@ title = "Signatures panel with per-revision tree"
 area = "H"
 tier = "P0"
 milestone = "M9"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["sign.panel"]
+tools = ["sign_list"]
+evidence = ["crates/ui-egui/tests/signing.rs::drawing_a_signature_creating_an_id_signing_and_trusting"]
+notes = "per-signature tree with details and actions; no per-revision page outline yet"
 
 [[feature]]
 id = "sign.status-icons"
@@ -6059,10 +6059,10 @@ title = "Signature status (valid, unknown, invalid)"
 area = "H"
 tier = "P0"
 milestone = "M9"
-status = "planned"
-commands = []
-tools = []
-evidence = []
+status = "shipped"
+commands = ["sign.panel"]
+tools = ["sign_list"]
+evidence = ["crates/ui-egui/tests/signing.rs::drawing_a_signature_creating_an_id_signing_and_trusting"]
 notes = ""
 
 [[feature]]
@@ -6071,11 +6071,11 @@ title = "Signed/certified document message bar"
 area = "H"
 tier = "P0"
 milestone = "M9"
-status = "planned"
-commands = []
+status = "shipped"
+commands = ["sign.panel"]
 tools = []
-evidence = []
-notes = ""
+evidence = ["crates/ui-egui/tests/signing.rs::drawing_a_signature_creating_an_id_signing_and_trusting", "crates/ui-egui/tests/signing.rs::certifying_without_a_visible_signature"]
+notes = "signed/valid, problems, invalid and certified bars"
 
 [[feature]]
 id = "sign.signature-properties"
@@ -6083,11 +6083,11 @@ title = "Signature properties (validity summary, signer, time)"
 area = "H"
 tier = "P0"
 milestone = "M9"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["sign.panel"]
+tools = ["sign_list"]
+evidence = ["crates/ui-egui/tests/signing.rs::drawing_a_signature_creating_an_id_signing_and_trusting"]
+notes = "validity summary, signer, issuer, time, algorithm in the panel; no separate properties dialog"
 
 [[feature]]
 id = "sign.certificate-viewer"
@@ -6107,11 +6107,11 @@ title = "Trusted certificates store"
 area = "H"
 tier = "P0"
 milestone = "M9"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["sign.panel"]
+tools = ["sign_trust"]
+evidence = ["crates/sign/tests/pdf.rs::signing_then_validating_with_and_without_trust", "crates/ui-egui/tests/signing.rs::drawing_a_signature_creating_an_id_signing_and_trusting", "crates/automation/tests/automation.rs::digital_ids_signing_and_validation_through_tools"]
+notes = "trusted certificates persist with the app's settings"
 
 [[feature]]
 id = "sign.trust-import"
@@ -6119,11 +6119,11 @@ title = "Import trusted certificates and set trust"
 area = "H"
 tier = "P1"
 milestone = "M9"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["sign_trust"]
+evidence = ["crates/automation/tests/automation.rs::digital_ids_signing_and_validation_through_tools"]
+notes = "import .cer/.pem/.der/.p12 through the tool; per-certificate trust settings not yet"
 
 [[feature]]
 id = "sign.eutl"
@@ -6167,11 +6167,11 @@ title = "List changes made after signing (MDP-aware diff)"
 area = "H"
 tier = "P0"
 milestone = "M9"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["sign.panel"]
+tools = ["sign_list"]
+evidence = ["crates/sign/tests/pdf.rs::later_changes_are_classified_under_the_signature_permissions", "crates/sign/tests/pdf.rs::signing_an_existing_field_and_counter_signing", "crates/engine/src/tests.rs::signing_saving_trusting_and_commenting_afterwards"]
+notes = "revision diff classified as signing, form fill, comments, metadata, page content or structure"
 
 [[feature]]
 id = "sign.view-signed-version"
@@ -6179,10 +6179,10 @@ title = "View the signed version"
 area = "H"
 tier = "P1"
 milestone = "M9"
-status = "planned"
-commands = []
+status = "shipped"
+commands = ["sign.panel"]
 tools = []
-evidence = []
+evidence = ["crates/ui-egui/tests/signing.rs::drawing_a_signature_creating_an_id_signing_and_trusting"]
 notes = ""
 
 [[feature]]
@@ -6203,11 +6203,11 @@ title = "Verify signatures when a document opens"
 area = "H"
 tier = "P1"
 milestone = "M9"
-status = "planned"
+status = "shipped"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["sign_list"]
+evidence = ["crates/engine/src/tests.rs::signing_saving_trusting_and_commenting_afterwards"]
+notes = "validated when opened and after every edit"
 
 [[feature]]
 id = "sign.clear-signature"

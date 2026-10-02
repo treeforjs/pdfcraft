@@ -541,6 +541,8 @@ impl Host for crate::PrintCraftApp {
                 crate::QuickTool::Redact => "redact".to_string(),
                 crate::QuickTool::AddText => "add-text".to_string(),
                 crate::QuickTool::Link => "link".to_string(),
+                crate::QuickTool::SignArea { certify: false } => "sign".to_string(),
+                crate::QuickTool::SignArea { certify: true } => "certify".to_string(),
                 crate::QuickTool::Stamp(k) => format!("stamp-{}", k.name().trim_start_matches("PC").to_ascii_lowercase()),
                 crate::QuickTool::Fill(f) => format!("fill-{}", f.command().trim_start_matches("sign.fill.")),
                 crate::QuickTool::Field(f) => format!("field-{}", f.command().trim_start_matches("form.add.")),

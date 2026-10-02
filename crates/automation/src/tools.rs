@@ -508,6 +508,7 @@ pub fn tools() -> Vec<ToolDef> {
             &["name", "password", "path"],
         )),
         t("sign_document", "Sign a document", "Sign with a digital ID (.p12/.pfx) and save the signed file to `out` (signing always saves, as in Acrobat; the document then shows the signed file). Sign an existing empty signature field (`field`), or a new one on `page` at `rect` (omit rect for an invisible signature). certify: no_changes, form_fill or comments makes a certification signature. PAdES B-B, SHA-256 (SHA-384 for P-384 keys).")
+            .cmd("sign.digital")
             .with(schema(
                 json!({
                     "doc": doc(),

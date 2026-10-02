@@ -325,6 +325,7 @@ pub fn right_panel(app: &mut PrintCraftApp, ui: &mut egui::Ui) {
     let mut bm_action: Option<BmAction> = None;
     let mut panel_edit: Option<printcraft_engine::Edit> = None;
     let mut panel_command: Option<&'static str> = None;
+    let mut sig_action: Option<crate::sign_ui::PanelAction> = None;
     let mut bm_rename = app.bookmark_rename.clone();
     let bm_editable = app.session.get(id).is_some_and(|d| d.allows_assembly() && d.read_only_reason.is_none());
     {
@@ -332,6 +333,7 @@ pub fn right_panel(app: &mut PrintCraftApp, ui: &mut egui::Ui) {
         let info = &doc.info;
         let view = &mut app.views[index];
         let prefs = &app.comment_prefs;
+        let sig_expanded = &mut app.sig_expanded;
         let comment_allowed = doc.allows_annotation();
         egui::Panel::right("right_panel")
             .resizable(true)
@@ -351,6 +353,7 @@ pub fn right_panel(app: &mut PrintCraftApp, ui: &mut egui::Ui) {
                     RightPanel::Fields => ("Fields", Some(info.fields.len())),
                     RightPanel::Layers => ("Layers", Some(info.layers.len())),
                     RightPanel::Attachments => ("Attachments", Some(info.attachments.len())),
+                    RightPanel::Signatures => ("Signatures", Some(doc.signatures.iter().filter(|s| s.signed).count())),
                 };
                 ui.horizontal(|ui| {
                     ui.label(egui::RichText::new(title).font(theme::semibold(15.5)));
@@ -430,6 +433,9 @@ pub fn right_panel(app: &mut PrintCraftApp, ui: &mut egui::Ui) {
                             }
                         }
                     }
+                    RightPanel::Signatures => {
+                        sig_action = crate::sign_ui::panel(ui, &t, &doc.signatures, sig_expanded);
+                    }
                     RightPanel::Attachments => {
                         if info.attachments.is_empty() {
                             empty(ui, &t, "paperclip", "This document has no attachments.");
@@ -475,6 +481,21 @@ pub fn right_panel(app: &mut PrintCraftApp, ui: &mut egui::Ui) {
     }
     if let Some(c) = panel_command {
         app.run_command(c);
+    }
+    match sig_action {
+        Some(crate::sign_ui::PanelAction::Validate) => app.run_command("sign.validate"),
+        Some(crate::sign_ui::PanelAction::GoTo(p)) => app.views[index].go_to_page(p),
+        Some(crate::sign_ui::PanelAction::Trust(c)) => app.trust_certificate(*c),
+        Some(crate::sign_ui::PanelAction::ViewSigned(len)) => app.view_signed_version(len),
+        Some(crate::sign_ui::PanelAction::Sign(field)) => {
+            let page = app.views[index].current;
+            app.start_signing(page, None, Some(field), None);
+        }
+        Some(crate::sign_ui::PanelAction::ExportCertificate(c)) => {
+            let pem = crate::sign_ui::certificate_pem(&c);
+            app.write_files(&[(format!("{}.cer", c.display_name()), std::sync::Arc::new(pem.into_bytes()))], "Export certificate");
+        }
+        None => {}
     }
     if let Some((p, i)) = app.views.get_mut(index).and_then(|v| v.comments.props_request.take()) {
         app.open_comment_props(p, i);
