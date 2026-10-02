@@ -115,3 +115,15 @@ fn new_digital_ids_are_self_signed_and_survive_a_p12_round_trip() {
         assert!(sd.verify_signature(&back.certificate, &d));
     }
 }
+
+#[test]
+fn certificates_load_from_pem_and_der_and_export_as_pem() {
+    let pem_text = data("rsa.crt.pem");
+    let certs = printcraft_sign::x509::load_certificates(&pem_text).unwrap();
+    assert_eq!(certs.len(), 1);
+    let der = certs[0].raw.clone();
+    assert_eq!(printcraft_sign::x509::load_certificates(&der).unwrap()[0], certs[0]);
+    let back = printcraft_sign::x509::to_pem(&certs[0]);
+    assert_eq!(printcraft_sign::x509::load_certificates(back.as_bytes()).unwrap()[0], certs[0]);
+    assert!(printcraft_sign::x509::load_certificates(b"hello").is_err());
+}

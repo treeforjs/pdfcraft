@@ -1045,3 +1045,32 @@ fn comments_lock_take_checkmarks_hide_and_summarize() {
     assert!(!s.get(n).unwrap().info.pages.is_empty());
     assert_eq!(comment_summary("x", &[], SummarySort::Page), "Summary of Comments on x\n\nThis document has no comments.\n");
 }
+
+#[test]
+fn signing_saving_trusting_and_commenting_afterwards() {
+    let p12 = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../sign/tests/data/ec-p256.p12")).unwrap();
+    let digital_id = sign::pkcs12::open(&p12, "test").unwrap();
+    // After the test certificate's start date (2026-10-02).
+    let mut s = Session::new().with_clock(|| 1_800_000_000);
+    let id = s.open("fixture.pdf", None, Arc::new(fixture(2)), None).unwrap();
+    assert!(s.get(id).unwrap().signatures.is_empty());
+    let opts = SignOptions { page: 1, rect: Some([20.0, 20.0, 180.0, 60.0]), reason: Some("Approved".into()), ..SignOptions::default() };
+    let signed = s.sign(id, &digital_id, opts).unwrap();
+    s.mark_signed(id, signed, Some("/tmp/signed.pdf".into())).unwrap();
+    let doc = s.get(id).unwrap();
+    assert_eq!(doc.name, "signed.pdf");
+    assert!(doc.is_signed() && !doc.dirty && doc.can_undo().is_none(), "signing can't be undone");
+    let sig = &doc.signatures[0];
+    assert_eq!((sig.status, sig.page, sig.date.as_deref()), (SignatureStatus::Unknown, Some(1), Some("D:20270115080000Z")));
+    assert_eq!(s.save_full_bytes(id).unwrap_err(), EditError::Signed);
+    // Trusting the signer makes it valid; a later comment is permitted.
+    s.set_trusted_certificates(vec![digital_id.certificate.clone()]);
+    assert_eq!(s.get(id).unwrap().signatures[0].status, SignatureStatus::Valid);
+    s.apply(id, rect_comment(0, [80.0, 80.0, 120.0, 120.0])).unwrap();
+    let sig = &s.get(id).unwrap().signatures[0];
+    assert_eq!((sig.status, sig.modification.clone()), (SignatureStatus::Valid, sign::Modification::Allowed(vec!["comments".into()])));
+    // Saving keeps the signature (incremental).
+    let saved = s.save_bytes(id).unwrap();
+    s.mark_saved(id, saved, None).unwrap();
+    assert_eq!(s.get(id).unwrap().signatures[0].status, SignatureStatus::Valid);
+}

@@ -278,3 +278,68 @@ pub fn build_chain<'a>(leaf: &'a Certificate, pool: &'a [Certificate]) -> Vec<&'
     }
     chain
 }
+
+/// Certificates from a file: DER, or PEM with one or more `CERTIFICATE` blocks (`.cer`, `.crt`,
+/// `.pem`, Acrobat's `.fdf`-free exports).
+pub fn load_certificates(bytes: &[u8]) -> Result<Vec<Certificate>, SignError> {
+    if bytes.first() == Some(&0x30) {
+        return Ok(vec![Certificate::parse(bytes)?]);
+    }
+    let text = String::from_utf8_lossy(bytes);
+    let mut out = Vec::new();
+    let mut block: Option<String> = None;
+    for line in text.lines().map(str::trim) {
+        if line == "-----BEGIN CERTIFICATE-----" {
+            block = Some(String::new());
+        } else if line == "-----END CERTIFICATE-----" {
+            if let Some(b) = block.take() {
+                out.push(Certificate::parse(&base64(&b).ok_or_else(|| SignError::Malformed("PEM base64".into()))?)?);
+            }
+        } else if let Some(b) = block.as_mut() {
+            b.push_str(line);
+        }
+    }
+    if out.is_empty() {
+        return Err(SignError::Malformed("no certificate found (expected DER or PEM)".into()));
+    }
+    Ok(out)
+}
+
+/// The certificate as PEM text (Export certificate).
+pub fn to_pem(cert: &Certificate) -> String {
+    const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut s = String::new();
+    for c in cert.raw.chunks(3) {
+        let n = (c[0] as u32) << 16 | (*c.get(1).unwrap_or(&0) as u32) << 8 | *c.get(2).unwrap_or(&0) as u32;
+        for i in 0..4 {
+            s.push(if i <= c.len() { T[(n >> (18 - 6 * i) & 63) as usize] as char } else { '=' });
+        }
+    }
+    let body: Vec<String> = s.as_bytes().chunks(64).map(|l| String::from_utf8_lossy(l).into_owned()).collect();
+    format!("-----BEGIN CERTIFICATE-----\n{}\n-----END CERTIFICATE-----\n", body.join("\n"))
+}
+
+fn base64(s: &str) -> Option<Vec<u8>> {
+    let val = |c: u8| -> Option<u32> {
+        Some(match c {
+            b'A'..=b'Z' => c - b'A',
+            b'a'..=b'z' => c - b'a' + 26,
+            b'0'..=b'9' => c - b'0' + 52,
+            b'+' => 62,
+            b'/' => 63,
+            _ => return None,
+        } as u32)
+    };
+    let digits: Vec<u8> = s.bytes().filter(|c| !c.is_ascii_whitespace() && *c != b'=').collect();
+    let mut out = Vec::with_capacity(digits.len() * 3 / 4);
+    for chunk in digits.chunks(4) {
+        let mut n = 0u32;
+        for (i, c) in chunk.iter().enumerate() {
+            n |= val(*c)? << (18 - 6 * i);
+        }
+        for i in 0..chunk.len().saturating_sub(1) {
+            out.push((n >> (16 - 8 * i)) as u8);
+        }
+    }
+    Some(out)
+}

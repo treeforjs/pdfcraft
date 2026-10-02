@@ -490,6 +490,44 @@ pub fn tools() -> Vec<ToolDef> {
             comment_ref(json!({ "status": { "type": "string", "enum": ["none", "accepted", "rejected", "cancelled", "completed"] }, "author": { "type": "string" } })),
             &["doc", "status"],
         )),
+        t("sign_list", "List and validate signatures", "Every signature field with its validation: status (valid, unknown = intact but the signer isn't trusted, invalid, unsigned), signer and certificate, date, reason, location, certification level, page and rect, the revision it covers and changes made after signing (none, allowed, disallowed), with Acrobat-style explanations.")
+            .ro()
+            .with(schema(json!({ "doc": doc() }), &["doc"])),
+        t("sign_id_create", "Create a digital ID", "Create a self-signed digital ID and save it as a password-protected .p12 file (Acrobat: Configure a new digital ID ▸ Create a new digital ID ▸ Save to file). Default key: 2048-bit RSA, valid 5 years.").with(schema(
+            json!({
+                "name": { "type": "string", "minLength": 1 },
+                "organization": { "type": "string" },
+                "unit": { "type": "string" },
+                "email": { "type": "string" },
+                "country": { "type": "string", "description": "Two-letter country code." },
+                "key": { "type": "string", "enum": ["rsa2048", "rsa3072", "rsa4096", "p256"] },
+                "years": { "type": "integer", "minimum": 1, "maximum": 50 },
+                "password": { "type": "string", "minLength": 6 },
+                "path": { "type": "string", "description": "The .p12 file to write." },
+            }),
+            &["name", "password", "path"],
+        )),
+        t("sign_document", "Sign a document", "Sign with a digital ID (.p12/.pfx) and save the signed file to `out` (signing always saves, as in Acrobat; the document then shows the signed file). Sign an existing empty signature field (`field`), or a new one on `page` at `rect` (omit rect for an invisible signature). certify: no_changes, form_fill or comments makes a certification signature. PAdES B-B, SHA-256 (SHA-384 for P-384 keys).")
+            .with(schema(
+                json!({
+                    "doc": doc(),
+                    "id": { "type": "string", "description": "Path of the digital ID (.p12 / .pfx)." },
+                    "password": { "type": "string" },
+                    "field": { "type": "string" },
+                    "page": { "type": "integer", "minimum": 1 },
+                    "rect": { "type": "array", "items": { "type": "number" }, "minItems": 4, "maxItems": 4 },
+                    "reason": { "type": "string" },
+                    "location": { "type": "string" },
+                    "contact": { "type": "string" },
+                    "certify": { "type": "string", "enum": ["no_changes", "form_fill", "comments"] },
+                    "out": { "type": "string", "description": "Where to save the signed document." },
+                }),
+                &["doc", "id", "out"],
+            )),
+        t("sign_trust", "Trust certificates", "Add certificates (.cer/.crt/.pem/.der, or the certificates in a .p12 with `password`) to the trusted certificates used to validate signatures, or clear the list (clear: true). Every open document is revalidated. Returns the trusted list.").with(schema(
+            json!({ "paths": { "type": "array", "items": { "type": "string" } }, "password": { "type": "string" }, "clear": { "type": "boolean" } }),
+            &[],
+        )),
         t("comment_mark", "Mark a comment with a checkmark", "Mark or unmark a comment with a checkmark (Acrobat: Mark with checkmark), recorded as a private reply. Undoable.").with(schema(
             comment_ref(json!({ "marked": { "type": "boolean", "description": "Default true." }, "author": { "type": "string" } })),
             &["doc"],

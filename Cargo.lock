@@ -3442,6 +3442,7 @@ dependencies = [
  "printcraft-print",
  "printcraft-redact",
  "printcraft-render",
+ "printcraft-sign",
  "printcraft-xfdf",
  "thiserror 2.0.21",
 ]

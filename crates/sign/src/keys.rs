@@ -311,6 +311,12 @@ impl PrivateKey {
         PrivateKey::from_pkcs8(der.as_ref())
     }
 
+    /// RSA keys are generated only on native targets (ADR-0009).
+    #[cfg(target_arch = "wasm32")]
+    pub fn generate_rsa(_bits: usize) -> Result<PrivateKey, SignError> {
+        Err(SignError::Unsupported("creating RSA keys in the browser (use a P-256 key)".into()))
+    }
+
     /// A new P-256 key.
     pub fn generate_p256() -> Result<PrivateKey, SignError> {
         loop {

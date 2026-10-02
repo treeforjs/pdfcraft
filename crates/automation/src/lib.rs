@@ -17,6 +17,7 @@ mod links;
 pub mod mcp;
 mod printing;
 mod redact;
+mod signing;
 mod tools;
 
 use std::collections::HashMap;
@@ -309,6 +310,10 @@ impl Automation {
             "comment_add" => self.comment_add(&a)?,
             "comment_reply" => self.comment_reply(&a)?,
             "comment_set_status" => self.comment_set_status(&a)?,
+            "sign_list" => self.sign_list(&a)?,
+            "sign_id_create" => self.sign_id_create(&a)?,
+            "sign_document" => self.sign_document(&a)?,
+            "sign_trust" => self.sign_trust(&a)?,
             "comment_mark" => self.comment_mark(&a)?,
             "comment_lock" => self.comment_lock(&a)?,
             "comments_hide" => self.comments_hide(&a)?,

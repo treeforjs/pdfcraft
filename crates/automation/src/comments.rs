@@ -56,7 +56,7 @@ fn rect_to_view(p: &PageInfo, r: [f32; 4]) -> [f32; 4] {
 }
 
 impl Args<'_> {
-    fn nums<const N: usize>(&self, key: &str) -> Result<Option<[f64; N]>> {
+    pub(crate) fn nums<const N: usize>(&self, key: &str) -> Result<Option<[f64; N]>> {
         let Some(v) = self.get(key) else { return Ok(None) };
         let wrong = || Self::wrong(key, &format!("an array of {N} numbers"));
         let arr = v.as_array().ok_or_else(wrong)?;

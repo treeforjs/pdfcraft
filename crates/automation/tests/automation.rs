@@ -939,3 +939,49 @@ fn drawing_comments_through_tools() {
     let png = a.call("page_render", &json!({ "doc": doc, "page": 1, "dpi": 72 })).unwrap();
     assert!(matches!(png[0], Content::Png { .. }));
 }
+
+#[test]
+fn digital_ids_signing_and_validation_through_tools() {
+    let dir = workdir("signing");
+    let mut a = auto(&dir);
+    let id = ok(
+        &mut a,
+        "sign_id_create",
+        json!({ "name": "Ada Lovelace", "organization": "Analytical Engines", "email": "ada@example.com", "country": "GB", "key": "p256", "password": "secret1", "path": "ada.p12" }),
+    );
+    assert_eq!(id["certificate"]["subject"], "C=GB, O=Analytical Engines, CN=Ada Lovelace, E=ada@example.com");
+    assert_eq!(id["certificate"]["self_signed"], true);
+    assert!(matches!(a.call("sign_id_create", &json!({ "name": "X", "password": "short", "path": "x.p12" })), Err(ToolError::InvalidArgs(_))));
+
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    assert_eq!(ok(&mut a, "sign_list", json!({ "doc": doc }))["count"], 0);
+    assert!(matches!(
+        a.call("sign_document", &json!({ "doc": doc, "id": "ada.p12", "password": "wrong!", "out": "signed.pdf" })),
+        Err(ToolError::InvalidArgs(_))
+    ));
+    let r = ok(
+        &mut a,
+        "sign_document",
+        json!({ "doc": doc, "id": "ada.p12", "password": "secret1", "page": 2, "rect": [20, 200, 180, 250], "reason": "Approved", "location": "London", "out": "signed.pdf" }),
+    );
+    assert_eq!(r["signature"]["status"], "unknown");
+    assert_eq!(r["signature"]["signer"], "Ada Lovelace");
+    assert_eq!(r["signature"]["page"], 2);
+    let rect: Vec<f64> = r["signature"]["rect"].as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect();
+    assert!((rect[0] - 20.0).abs() < 0.5 && (rect[3] - 250.0).abs() < 0.5, "{rect:?}");
+    assert!(dir.join("signed.pdf").exists());
+
+    // Trust the ID: valid; comment afterwards: still valid, change allowed.
+    let t = ok(&mut a, "sign_trust", json!({ "paths": ["ada.p12"], "password": "secret1" }));
+    assert_eq!(t["trusted"].as_array().unwrap().len(), 1);
+    let list = ok(&mut a, "sign_list", json!({ "doc": doc }));
+    assert_eq!((list["all_valid"].as_bool(), list["signatures"][0]["status"].as_str()), (Some(true), Some("valid")));
+    ok(&mut a, "comment_add", json!({ "doc": doc, "page": 1, "type": "note", "at": [20, 20], "contents": "ok" }));
+    let s = &ok(&mut a, "sign_list", json!({ "doc": doc }))["signatures"][0];
+    assert_eq!((s["status"].as_str(), s["modification"].as_str()), (Some("valid"), Some("allowed")));
+    // A full rewrite is refused for a signed document.
+    assert!(matches!(a.call("doc_save", &json!({ "doc": doc, "path": "copy.pdf", "full": true })), Err(ToolError::Failed(_))));
+    ok(&mut a, "doc_save", json!({ "doc": doc }));
+    assert_eq!(ok(&mut a, "sign_trust", json!({ "clear": true }))["trusted"].as_array().unwrap().len(), 0);
+    assert_eq!(ok(&mut a, "sign_list", json!({ "doc": doc }))["signatures"][0]["status"], "unknown");
+}

@@ -38,6 +38,8 @@ pub use printcraft_annot::{
 pub use printcraft_print as print;
 pub use printcraft_redact::patterns::{PATTERNS as REDACT_PATTERNS, Pattern as RedactPattern, find as find_pattern};
 pub use printcraft_redact::sanitize::{HIDDEN, Hidden};
+pub use printcraft_sign as sign;
+pub use printcraft_sign::{SignOptions, SignatureInfo, Status as SignatureStatus, TrustStore};
 pub use printcraft_xfdf::Format as DataFormat;
 
 pub type SplitPart = (usize, usize, Arc<Vec<u8>>);
@@ -135,11 +137,19 @@ pub struct Document {
     pub added: Vec<printcraft_edit::Added>,
     /// Link annotations, for Edit a PDF ▸ Link.
     pub links: Vec<printcraft_annot::links::LinkItem>,
+    /// Signature fields, validated against the session's trust store (Signatures panel).
+    pub signatures: Arc<Vec<SignatureInfo>>,
+    trust: Arc<TrustStore>,
     editor: Option<Editor>,
     config: RenderConfig,
 }
 
 impl Document {
+    /// Signed: at least one signature field holds a signature.
+    pub fn is_signed(&self) -> bool {
+        self.signatures.iter().any(|s| s.signed)
+    }
+
     /// Whether comments are hidden (Comments ▸ Hide all comments).
     pub fn comments_hidden(&self) -> bool {
         self.config.hide_comments
@@ -1227,6 +1237,16 @@ pub enum EditError {
     NothingToUndo,
     #[error("nothing to redo")]
     NothingToRedo,
+    #[error("{0}")]
+    Sign(String),
+    #[error("this document is signed: rewriting it would invalidate its signatures (save it incrementally instead)")]
+    Signed,
+}
+
+impl From<printcraft_sign::SignError> for EditError {
+    fn from(e: printcraft_sign::SignError) -> Self {
+        EditError::Sign(e.to_string())
+    }
 }
 
 #[derive(Default)]
@@ -1235,6 +1255,13 @@ pub struct Session {
     next_id: u64,
     /// Seconds since the Unix epoch, injected so saves are deterministic in tests.
     clock: Option<fn() -> i64>,
+    /// Certificates trusted for signing (Acrobat: Trusted Certificates).
+    trust: Arc<TrustStore>,
+}
+
+/// Validate the signature fields of `cos` (written as `bytes`).
+fn signatures_of(cos: &printcraft_cos::Document, bytes: &[u8], trust: &TrustStore) -> Arc<Vec<SignatureInfo>> {
+    Arc::new(printcraft_sign::signatures(cos, bytes, trust))
 }
 
 impl Session {
@@ -1246,6 +1273,11 @@ impl Session {
     pub fn with_clock(mut self, clock: fn() -> i64) -> Self {
         self.clock = Some(clock);
         self
+    }
+
+    /// Seconds since the Unix epoch from the session clock (0 when unknown).
+    pub fn now_secs(&self) -> i64 {
+        self.now().unwrap_or(0)
     }
 
     fn now(&self) -> Option<i64> {
@@ -1310,6 +1342,7 @@ impl Session {
         let marks = editor.as_ref().map(|e| printcraft_edit::marks_present(&e.cos)).unwrap_or_default();
         let added = editor.as_ref().map(|e| printcraft_edit::list_added(&e.cos)).unwrap_or_default();
         let links = editor.as_ref().map(|e| printcraft_annot::links::list(&e.cos)).unwrap_or_default();
+        let signatures = editor.as_ref().map(|e| signatures_of(&e.cos, &bytes, &self.trust)).unwrap_or_default();
         self.next_id += 1;
         let id = DocId(self.next_id);
         self.docs.push(Document {
@@ -1328,6 +1361,8 @@ impl Session {
             marks,
             added,
             links,
+            signatures,
+            trust: self.trust.clone(),
             editor,
             config,
         });
@@ -1448,6 +1483,9 @@ impl Session {
         }
         doc.info.file_size = bytes.len();
         doc.form = form;
+        if !doc.signatures.is_empty() {
+            doc.signatures = signatures_of(&editor.cos, &bytes, &doc.trust);
+        }
         doc.bytes = bytes.clone();
         doc.renderer = RenderPool::new(bytes, render_threads(), doc.config.clone());
         Ok(())
@@ -1474,6 +1512,7 @@ impl Session {
         doc.marks = printcraft_edit::marks_present(&editor.cos);
         doc.added = printcraft_edit::list_added(&editor.cos);
         doc.links = printcraft_annot::links::list(&editor.cos);
+        doc.signatures = signatures_of(&editor.cos, &bytes, &doc.trust);
         doc.bytes = bytes.clone();
         doc.renderer = RenderPool::new(bytes, render_threads(), doc.config.clone());
         Ok(())
@@ -1494,6 +1533,9 @@ impl Session {
     /// A compact, garbage-collected rewrite (Save As ▸ "Optimized" / Reduce File Size groundwork).
     pub fn save_full_bytes(&self, id: DocId) -> Result<Arc<Vec<u8>>, EditError> {
         let doc = self.get(id).ok_or(EditError::NoDocument)?;
+        if doc.is_signed() {
+            return Err(EditError::Signed);
+        }
         let editor = doc.editor.as_ref().ok_or_else(|| EditError::ReadOnly(doc.read_only_reason.clone().unwrap_or_default()))?;
         let opts = SaveOptions { mod_date: self.now().map(printcraft_cos::pdf_date), ..SaveOptions::default() };
         write_full(&editor.cos, &opts).map(Arc::new).map_err(|e| EditError::Write(e.to_string()))
@@ -1800,6 +1842,59 @@ impl Session {
         let doc = self.get(id).ok_or(EditError::NoDocument)?;
         let text = comment_summary(&doc.name, &doc.info.annotations, sort);
         self.create_from_text(&format!("Summary of Comments on {}", doc.name), &text)
+    }
+
+    /// The certificates trusted for signing.
+    pub fn trusted_certificates(&self) -> &[printcraft_sign::Certificate] {
+        &self.trust.certs
+    }
+
+    /// Replace the trusted certificates and revalidate every open document's signatures.
+    pub fn set_trusted_certificates(&mut self, certs: Vec<printcraft_sign::Certificate>) {
+        self.trust = Arc::new(TrustStore { certs });
+        for doc in &mut self.docs {
+            doc.trust = self.trust.clone();
+            if let Some(e) = doc.editor.as_ref() {
+                doc.signatures = signatures_of(&e.cos, &doc.bytes, &doc.trust);
+            }
+        }
+    }
+
+    /// The signing time as a PDF date in local time with its offset (`D:…+02'00'`).
+    pub fn signing_date(&self) -> String {
+        let offset = if self.clock.is_some() { 0 } else { local_utc_offset() };
+        let local = printcraft_cos::pdf_date(self.now().unwrap_or(0) + offset);
+        let stamp = local.trim_end_matches('Z');
+        if offset == 0 {
+            return format!("{stamp}Z");
+        }
+        let (sign, m) = if offset < 0 { ('-', -offset / 60) } else { ('+', offset / 60) };
+        format!("{stamp}{sign}{:02}'{:02}'", m / 60, m % 60)
+    }
+
+    /// Sign the document's current state with `id` (Use a certificate ▸ Digitally sign). Returns
+    /// the signed file; the caller saves it and then calls [`Session::mark_signed`]. An empty
+    /// `opts.date` takes the session clock.
+    pub fn sign(&self, doc: DocId, id: &printcraft_sign::DigitalId, mut opts: SignOptions) -> Result<Arc<Vec<u8>>, EditError> {
+        let d = self.get(doc).ok_or(EditError::NoDocument)?;
+        // (Encrypted documents are refused by the signer for now.)
+        let editor = d.editor.as_ref().ok_or_else(|| EditError::ReadOnly(d.read_only_reason.clone().unwrap_or_default()))?;
+        if opts.date.is_empty() {
+            opts.date = self.signing_date();
+        }
+        Ok(Arc::new(printcraft_sign::sign(&editor.cos, id, &opts)?))
+    }
+
+    /// Record that the signed file `bytes` was saved (to `path`): like [`Session::mark_saved`],
+    /// and the edit history before signing is dropped (signing can't be undone).
+    pub fn mark_signed(&mut self, id: DocId, bytes: Arc<Vec<u8>>, path: Option<String>) -> Result<(), EditError> {
+        self.mark_saved(id, bytes, path)?;
+        let doc = self.doc_mut(id)?;
+        if let Some(e) = doc.editor.as_mut() {
+            e.undo.clear();
+            e.redo.clear();
+        }
+        Ok(())
     }
 
     pub fn close(&mut self, id: DocId) {

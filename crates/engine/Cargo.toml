@@ -19,6 +19,7 @@ printcraft-edit = { workspace = true }
 printcraft-redact = { workspace = true }
 printcraft-print = { workspace = true }
 printcraft-xfdf = { workspace = true }
+printcraft-sign = { workspace = true }
 printcraft-create = { workspace = true }
 printcraft-model = { workspace = true }
 thiserror = { workspace = true }
