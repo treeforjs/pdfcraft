@@ -1983,11 +1983,11 @@ title = "Replace an image (keep position and size)"
 area = "C"
 tier = "P0"
 milestone = "M7"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["edit.image"]
+tools = ["content_update"]
+evidence = ["crates/engine/src/tests.rs::added_images_rotate_flip_and_crop_as_drawn", "crates/automation/tests/automation.rs::adding_content_through_tools"]
+notes = "for images added in PrintCraft (box and transforms kept); existing page images need the M7 content editor"
 
 [[feature]]
 id = "edit.image-crop"
@@ -1995,11 +1995,11 @@ title = "Crop an image"
 area = "C"
 tier = "P0"
 milestone = "M7"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["edit.image"]
+tools = ["content_update"]
+evidence = ["crates/engine/src/tests.rs::added_images_rotate_flip_and_crop_as_drawn", "crates/automation/tests/automation.rs::adding_content_through_tools"]
+notes = "for added images: trim each side, clipped"
 
 [[feature]]
 id = "edit.image-rotate-flip"
@@ -2007,11 +2007,11 @@ title = "Rotate and flip images"
 area = "C"
 tier = "P0"
 milestone = "M7"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["edit.image"]
+tools = ["content_update"]
+evidence = ["crates/engine/src/tests.rs::added_images_rotate_flip_and_crop_as_drawn", "crates/ui-egui/tests/content.rs::typing_moving_styling_and_deleting_added_content", "crates/automation/tests/automation.rs::adding_content_through_tools"]
+notes = "for added images: quarter turns (box turns around its centre), horizontal/vertical flips"
 
 [[feature]]
 id = "edit.image-move-resize"

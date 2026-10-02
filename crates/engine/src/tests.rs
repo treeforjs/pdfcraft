@@ -880,3 +880,47 @@ fn added_text_and_images_render_and_stay_editable() {
     s.undo(id).unwrap();
     assert_eq!(s.get(id).unwrap().added.len(), 2);
 }
+
+#[test]
+fn added_images_rotate_flip_and_crop_as_drawn() {
+    // A 20×10 image: left half red, right half blue.
+    let mut px = Vec::new();
+    for _y in 0..10 {
+        for x in 0..20 {
+            px.extend_from_slice(if x < 10 { &[255, 0, 0] } else { &[0, 0, 255] });
+        }
+    }
+    let mut png = Vec::new();
+    {
+        let mut enc = png::Encoder::new(&mut png, 20, 10);
+        enc.set_color(png::ColorType::Rgb);
+        enc.write_header().unwrap().write_image_data(&px).unwrap();
+    }
+    let (mut s, id) = session_with(1);
+    // A 100×100 box at (50, 100) on the 200×300 page.
+    s.apply(id, Edit::AddImage { page: 0, rect: Some([50.0, 100.0, 150.0, 200.0]), name: "rb.png".into(), bytes: Arc::new(png) }).unwrap();
+    let colour_at = |s: &Session, x: u32, y_from_top: u32| -> [u8; 3] {
+        let doc = s.get(id).unwrap();
+        let mut r = printcraft_render::PageRenderer::new(doc.bytes.clone(), Default::default());
+        let out = r.render(printcraft_render::RenderRequest { page: 0, scale: 1.0, ..Default::default() });
+        let i = ((y_from_top * out.width + x) * 4) as usize;
+        [out.rgba[i], out.rgba[i + 1], out.rgba[i + 2]]
+    };
+    let red = |c: [u8; 3]| c[0] > 200 && c[2] < 60;
+    let blue = |c: [u8; 3]| c[2] > 200 && c[0] < 60;
+    // Display y 100–200 is rows 100–200 from the top on a 300 pt page.
+    assert!(red(colour_at(&s, 70, 150)) && blue(colour_at(&s, 130, 150)), "as placed: red left, blue right");
+    let item = |s: &Session| s.get(id).unwrap().added[0].content.clone();
+    let AddedContent::Image(mut img) = item(&s) else { panic!() };
+    img.rotation = 1;
+    s.apply(id, Edit::UpdateContent { page: 0, index: 0, content: AddedContent::Image(img.clone()) }).unwrap();
+    assert!(red(colour_at(&s, 100, 180)) && blue(colour_at(&s, 100, 120)), "a quarter turn left: red at the bottom");
+    img.rotation = 0;
+    img.flip_h = true;
+    s.apply(id, Edit::UpdateContent { page: 0, index: 0, content: AddedContent::Image(img.clone()) }).unwrap();
+    assert!(blue(colour_at(&s, 70, 150)) && red(colour_at(&s, 130, 150)), "flipped");
+    img.flip_h = false;
+    img.crop = [0.0, 0.0, 0.5, 0.0];
+    s.apply(id, Edit::UpdateContent { page: 0, index: 0, content: AddedContent::Image(img) }).unwrap();
+    assert!(red(colour_at(&s, 130, 150)), "the right half cropped away: red fills the box");
+}

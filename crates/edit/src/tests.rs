@@ -186,7 +186,7 @@ fn added_text_and_images_are_page_content_that_stays_editable() {
     d.set(b"ColorSpace".to_vec(), Object::name("DeviceGray"));
     d.set(b"BitsPerComponent".to_vec(), Object::Int(8));
     let img = doc.add(Object::Stream(Stream::from_raw(d, vec![128])));
-    add_content(&mut doc, 1, &Content::Image(AddedImage { rect: [10.0, 10.0, 110.0, 60.0], image: img })).unwrap();
+    add_content(&mut doc, 1, &Content::Image(AddedImage::new([10.0, 10.0, 110.0, 60.0], img))).unwrap();
     let doc2 = reopen(&doc);
     let all = list_added(&doc2);
     assert_eq!(all.len(), 2);

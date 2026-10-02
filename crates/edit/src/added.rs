@@ -116,6 +116,39 @@ pub struct AddedImage {
     pub rect: [f64; 4],
     /// The image XObject.
     pub image: ObjRef,
+    /// Quarter turns counter-clockwise (0–3).
+    pub rotation: u8,
+    pub flip_h: bool,
+    pub flip_v: bool,
+    /// The fraction trimmed from each side of the image: left, bottom, right, top.
+    pub crop: [f64; 4],
+}
+
+impl AddedImage {
+    pub fn new(rect: [f64; 4], image: ObjRef) -> Self {
+        AddedImage { rect, image, rotation: 0, flip_h: false, flip_v: false, crop: [0.0; 4] }
+    }
+
+    /// The matrix from image space (the unit square) to display space: crop, flip, rotate,
+    /// then fill the box.
+    fn matrix(&self) -> printcraft_content::Matrix {
+        use printcraft_content::Matrix as M;
+        let [l, b, r, t] = self.crop.map(|v| v.clamp(0.0, 0.45));
+        let (cw, ch) = ((1.0 - l - r).max(0.05), (1.0 - b - t).max(0.05));
+        let mut m = M([1.0 / cw, 0.0, 0.0, 1.0 / ch, -l / cw, -b / ch]);
+        if self.flip_h {
+            m = m.then(&M([-1.0, 0.0, 0.0, 1.0, 1.0, 0.0]));
+        }
+        if self.flip_v {
+            m = m.then(&M([1.0, 0.0, 0.0, -1.0, 0.0, 1.0]));
+        }
+        for _ in 0..self.rotation % 4 {
+            // A quarter turn counter-clockwise within the unit square.
+            m = m.then(&M([0.0, 1.0, -1.0, 0.0, 1.0, 0.0]));
+        }
+        let [x0, y0, x1, y1] = norm(self.rect);
+        m.then(&M([x1 - x0, 0.0, 0.0, y1 - y0, x0, y0]))
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -234,7 +267,24 @@ fn draw(doc: &Document, c: &Content, view: [f64; 6]) -> Result<(Vec<u8>, Dict), 
             let mut xo = Dict::new();
             xo.set(name.clone().into_bytes(), Object::Ref(i.image));
             res.set(b"XObject".to_vec(), Object::Dict(xo));
-            out.extend(format!("{} 0 0 {} {} {} cm /{name} Do\n", n(r[2] - r[0]), n(r[3] - r[1]), n(r[0]), n(r[1])).bytes());
+            let [a, b, c, d, e, f] = i.matrix().0;
+            // Clip to the box: the cropped-away parts stay hidden.
+            out.extend(
+                format!(
+                    "{} {} {} {} re W n {} {} {} {} {} {} cm /{name} Do\n",
+                    n(r[0]),
+                    n(r[1]),
+                    n(r[2] - r[0]),
+                    n(r[3] - r[1]),
+                    n(a),
+                    n(b),
+                    n(c),
+                    n(d),
+                    n(e),
+                    n(f)
+                )
+                .bytes(),
+            );
         }
     }
     out.extend_from_slice(b"Q\n");
@@ -265,6 +315,18 @@ fn params(c: &Content) -> Dict {
             d.set(b"Kind".to_vec(), Object::name("Image"));
             d.set(b"Image".to_vec(), Object::Ref(i.image));
             d.set(b"Rect".to_vec(), arr(&norm(i.rect)));
+            if i.rotation % 4 != 0 {
+                d.set(b"Rotate".to_vec(), Object::Int(i64::from(i.rotation % 4) * 90));
+            }
+            if i.flip_h {
+                d.set(b"FlipH".to_vec(), Object::Bool(true));
+            }
+            if i.flip_v {
+                d.set(b"FlipV".to_vec(), Object::Bool(true));
+            }
+            if i.crop != [0.0; 4] {
+                d.set(b"Crop".to_vec(), arr(&i.crop));
+            }
         }
     }
     d
@@ -292,7 +354,17 @@ fn parse(doc: &Document, d: &Dict) -> Option<Content> {
                 },
             }))
         }
-        b"Image" => Some(Content::Image(AddedImage { rect, image: d.get(b"Image")?.as_ref()? })),
+        b"Image" => {
+            let crop = nums(doc, d.get(b"Crop"));
+            Some(Content::Image(AddedImage {
+                rect,
+                image: d.get(b"Image")?.as_ref()?,
+                rotation: (d.int(b"Rotate").unwrap_or(0).rem_euclid(360) / 90) as u8,
+                flip_h: matches!(d.get(b"FlipH"), Some(Object::Bool(true))),
+                flip_v: matches!(d.get(b"FlipV"), Some(Object::Bool(true))),
+                crop: crop.try_into().unwrap_or([0.0; 4]),
+            }))
+        }
         _ => None,
     }
 }

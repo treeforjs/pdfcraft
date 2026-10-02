@@ -149,13 +149,47 @@ impl Automation {
             Some(r) => content.with_rect(to_display(r, ph)),
             None => content,
         };
-        if let AddedContent::Text(t) = &mut content {
-            if let Some(s) = a.opt_str("text")? {
-                t.text = s.to_string();
+        match &mut content {
+            AddedContent::Text(t) => {
+                if let Some(s) = a.opt_str("text")? {
+                    t.text = s.to_string();
+                }
+                style(a, t)?;
+                if ["rotate", "flip_h", "flip_v", "crop", "image"].iter().any(|k| a.get(k).is_some()) {
+                    return Err(bad("rotate, flip, crop and image apply to images"));
+                }
             }
-            style(a, t)?;
-        } else if a.get("text").is_some() {
-            return Err(bad("images have no text"));
+            AddedContent::Image(i) => {
+                if a.get("text").is_some() {
+                    return Err(bad("images have no text"));
+                }
+                if let Some(deg) = a.opt_int("rotate")? {
+                    if deg.rem_euclid(90) != 0 {
+                        return Err(bad("rotate must be a multiple of 90"));
+                    }
+                    i.rotation = ((i64::from(i.rotation) * 90 + deg).rem_euclid(360) / 90) as u8;
+                }
+                if a.opt_bool("flip_h")? == Some(true) {
+                    i.flip_h = !i.flip_h;
+                }
+                if a.opt_bool("flip_v")? == Some(true) {
+                    i.flip_v = !i.flip_v;
+                }
+                if let Some(c) = rect_arg(a, "crop")? {
+                    if !c.iter().all(|v| (0.0..0.5).contains(v)) {
+                        return Err(bad("crop takes fractions from 0 to under 0.5 (left, bottom, right, top)"));
+                    }
+                    i.crop = c;
+                }
+                if let Some(p) = a.opt_str("image")? {
+                    let path = self.resolve(p, false)?;
+                    let bytes = std::fs::read(&path).map_err(|e| failed(format!("{}: {e}", path.display())))?;
+                    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                    // Box and transforms first, then the new picture.
+                    self.apply(a, Edit::UpdateContent { page, index, content: content.clone() })?;
+                    return self.apply(a, Edit::ReplaceImage { page, index, name, bytes: std::sync::Arc::new(bytes) });
+                }
+            }
         }
         self.apply(a, Edit::UpdateContent { page, index, content })
     }

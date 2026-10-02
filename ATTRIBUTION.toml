@@ -75,6 +75,28 @@ usage = "UI icon, embedded via crates/ui-egui/src/icon_data.rs"
 sha256 = "401a4ceb06a88210638e3264e05f2a5281acad42df5c96363160db75f7fd105a"
 
 [[asset]]
+path = "assets/icons/flip-horizontal-2.svg"
+title = "Lucide icon \"flip-horizontal-2\""
+author = "Lucide Contributors (portions Cole Bemis, Feather)"
+source = "https://github.com/lucide-icons/lucide (npm lucide-static 1.49.0, icons/flip-horizontal-2.svg)"
+licence = "ISC"
+licence_file = "assets/icons/LICENSE-lucide.txt"
+kind = "icon"
+usage = "UI icon, embedded via crates/ui-egui/src/icon_data.rs"
+sha256 = "b50af0f3281f7d639a2958c12f0336e41ba889a6f4ff277de16d5c3324c43778"
+
+[[asset]]
+path = "assets/icons/flip-vertical-2.svg"
+title = "Lucide icon \"flip-vertical-2\""
+author = "Lucide Contributors (portions Cole Bemis, Feather)"
+source = "https://github.com/lucide-icons/lucide (npm lucide-static 1.49.0, icons/flip-vertical-2.svg)"
+licence = "ISC"
+licence_file = "assets/icons/LICENSE-lucide.txt"
+kind = "icon"
+usage = "UI icon, embedded via crates/ui-egui/src/icon_data.rs"
+sha256 = "1372eabd5f05d58ec554a6f67da83337367f8c818b2ada7d1591c0ba227ca0a6"
+
+[[asset]]
 path = "assets/icons/app-window.svg"
 title = "Lucide icon \"app-window\""
 author = "Lucide Contributors (portions Cole Bemis, Feather)"

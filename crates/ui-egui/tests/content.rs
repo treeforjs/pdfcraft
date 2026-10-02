@@ -92,4 +92,14 @@ fn typing_moving_styling_and_deleting_added_content() {
     assert_eq!(a.len(), 1);
     assert_eq!(a[0].content.rect(), [135.0, 190.0, 165.0, 210.0]);
     assert_eq!(h.state().views[0].content.selected, Some((0, 0)));
+    // Edit image: rotate clockwise turns the box around its centre.
+    h.get_by_label("Rotate clockwise").click();
+    h.run_steps(3);
+    let a = added(&h);
+    let printcraft_engine::AddedContent::Image(img) = &a[0].content else { panic!() };
+    assert_eq!((img.rotation, img.rect), (3, [140.0, 185.0, 160.0, 215.0]));
+    h.get_by_label("Flip horizontal").click();
+    h.run_steps(3);
+    let printcraft_engine::AddedContent::Image(img) = &added(&h)[0].content else { panic!() };
+    assert!(img.flip_h);
 }

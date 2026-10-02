@@ -709,6 +709,15 @@ fn adding_content_through_tools() {
     ok(&mut a, "content_update", json!({ "doc": doc, "page": 1, "index": 1, "text": "DRAFT", "font": "times" }));
     let text = page_text(&mut a, doc)[0].clone();
     assert!(text.contains("DRAFT") && !text.contains("CONFIDENTIAL"), "{text}");
+    // Image tools: rotate, flip, crop, replace.
+    ok(&mut a, "content_update", json!({ "doc": doc, "page": 1, "index": 2, "rotate": 90, "flip_h": true, "crop": [0.1, 0, 0.1, 0] }));
+    ok(&mut a, "content_update", json!({ "doc": doc, "page": 1, "index": 2, "image": "logo.png" }));
+    assert_eq!(ok(&mut a, "doc_info", json!({ "doc": doc }))["document"]["dirty"], true);
+    assert!(matches!(a.call("content_update", &json!({ "doc": doc, "page": 1, "index": 2, "rotate": 45 })), Err(ToolError::InvalidArgs(_))));
+    assert!(
+        matches!(a.call("content_update", &json!({ "doc": doc, "page": 1, "index": 1, "rotate": 90 })), Err(ToolError::InvalidArgs(_))),
+        "text doesn't rotate"
+    );
     ok(&mut a, "content_delete", json!({ "doc": doc, "page": 1, "index": 2 }));
     assert_eq!(ok(&mut a, "content_list", json!({ "doc": doc }))["count"], 1);
     assert!(matches!(a.call("content_delete", &json!({ "doc": doc, "page": 1, "index": 5 })), Err(ToolError::Failed(_))));

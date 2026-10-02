@@ -22,7 +22,7 @@ pub use printcraft_organize::LabelStyle;
 
 pub use printcraft_cos::Algorithm;
 pub use printcraft_edit::{
-    Added, AddedText, Align as TextAlign, Background, Content as AddedContent, Family as FontFamily, HeaderFooter, MarkKind, Watermark,
+    Added, AddedImage, AddedText, Align as TextAlign, Background, Content as AddedContent, Family as FontFamily, HeaderFooter, MarkKind, Watermark,
 };
 pub use printcraft_forms::{
     BorderStyle, Field as FormField, FieldFont, FieldKind as FormFieldKind, FieldProps, FieldValue, Look as FieldLook, NewField, TabOrder,
@@ -595,6 +595,13 @@ pub enum Edit {
         page: usize,
         index: usize,
     },
+    /// Replace an added image with another file (keeping its box and transforms).
+    ReplaceImage {
+        page: usize,
+        index: usize,
+        name: String,
+        bytes: Arc<Vec<u8>>,
+    },
     /// Apply redaction marks (all, or those on `pages`): remove what they cover for good.
     ApplyRedactions {
         pages: Option<Vec<usize>>,
@@ -670,6 +677,7 @@ impl Edit {
             Edit::AddImage { .. } => "Add image".into(),
             Edit::UpdateContent { .. } => "Edit content".into(),
             Edit::DeleteContent { .. } => "Delete content".into(),
+            Edit::ReplaceImage { .. } => "Replace image".into(),
             Edit::ApplyRedactions { .. } => "Apply redactions".into(),
             Edit::ClearRedactions => "Remove redaction marks".into(),
             Edit::RemoveHidden { .. } => "Remove hidden information".into(),
@@ -779,6 +787,7 @@ fn check_permission(edit: &Edit, p: &printcraft_cos::Permissions) -> Result<(), 
         | Edit::AddImage { .. }
         | Edit::UpdateContent { .. }
         | Edit::DeleteContent { .. }
+        | Edit::ReplaceImage { .. }
         | Edit::ClearRedactions
         | Edit::RemoveHidden { .. }
         | Edit::Sanitize
@@ -948,10 +957,18 @@ fn run_edit(doc: &mut printcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -
                     [(pw - w) / 2.0, (ph - h) / 2.0, (pw + w) / 2.0, (ph + h) / 2.0]
                 }
             };
-            printcraft_edit::add_content(doc, *page, &AddedContent::Image(printcraft_edit::AddedImage { rect, image }))?;
+            printcraft_edit::add_content(doc, *page, &AddedContent::Image(printcraft_edit::AddedImage::new(rect, image)))?;
         }
         Edit::UpdateContent { page, index, content } => printcraft_edit::update_content(doc, *page, *index, content)?,
         Edit::DeleteContent { page, index } => printcraft_edit::delete_content(doc, *page, *index)?,
+        Edit::ReplaceImage { page, index, name, bytes } => {
+            let item = printcraft_edit::list_added(doc).into_iter().filter(|a| a.page == *page).nth(*index);
+            let Some(AddedContent::Image(old)) = item.map(|a| a.content) else {
+                return Err(EditError::Edit(printcraft_edit::EditError::Invalid("that item is not an image".into())));
+            };
+            let (image, _) = printcraft_create::image_xobject(doc, name, bytes)?;
+            printcraft_edit::update_content(doc, *page, *index, &AddedContent::Image(printcraft_edit::AddedImage { image, ..old }))?;
+        }
         Edit::ApplyRedactions { pages } => {
             printcraft_redact::apply(doc, pages.as_deref())?;
         }

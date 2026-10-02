@@ -400,6 +400,34 @@ impl crate::PrintCraftApp {
         self.notify("Adding images arrives on the web with file pickers for images");
     }
 
+    /// Edit image ▸ Replace: pick a file for the selected image.
+    pub fn replace_image_dialog(&mut self, page: usize, index: usize) {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let picked = match self.save_override.clone() {
+                Some(p) if p.ends_with(".png") || p.ends_with(".jpg") => Some(std::path::PathBuf::from(p)),
+                Some(_) => None,
+                None => rfd::FileDialog::new()
+                    .add_filter("Images", &["png", "jpg", "jpeg", "tif", "tiff", "gif", "bmp"])
+                    .set_title("Replace image")
+                    .pick_file(),
+            };
+            let Some(path) = picked else { return };
+            match std::fs::read(&path) {
+                Ok(bytes) => {
+                    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                    self.apply_edit(Edit::ReplaceImage { page, index, name, bytes: std::sync::Arc::new(bytes) });
+                }
+                Err(e) => self.notify(format!("Couldn't read {}: {e}", path.display())),
+            }
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            let _ = (page, index);
+            self.notify("Replacing images arrives on the web with image file pickers");
+        }
+    }
+
     /// Place image `bytes` in the middle of the current page and select it.
     pub fn add_image(&mut self, name: String, bytes: Vec<u8>) {
         let Some((i, id)) = self.active_ids() else { return };
@@ -411,4 +439,64 @@ impl crate::PrintCraftApp {
             self.left_open = true;
         }
     }
+}
+
+/// What the image tools ask for.
+pub(crate) enum ImageAction {
+    Update(printcraft_engine::AddedContent),
+    Replace,
+}
+
+/// Edit image: rotate, flip, crop, replace (shown while an added image is selected).
+pub(crate) fn image_panel(ui: &mut egui::Ui, t: &Tokens, img: &printcraft_engine::AddedImage) -> Option<ImageAction> {
+    let mut out = None;
+    widgets::section_title(ui, "Edit image");
+    ui.horizontal(|ui| {
+        let mut i = img.clone();
+        let r = i.rect;
+        let turn = |i: &mut printcraft_engine::AddedImage, k: u8| {
+            i.rotation = (i.rotation + k) % 4;
+            // The box turns with the picture, around its centre.
+            let (cx, cy, w, h) = ((r[0] + r[2]) / 2.0, (r[1] + r[3]) / 2.0, r[2] - r[0], r[3] - r[1]);
+            i.rect = [cx - h / 2.0, cy - w / 2.0, cx + h / 2.0, cy + w / 2.0];
+        };
+        if crate::icons::button(ui, "rotate-ccw", 28.0, false, "Rotate counterclockwise").clicked() {
+            turn(&mut i, 1);
+            out = Some(ImageAction::Update(AddedContent::Image(i.clone())));
+        }
+        if crate::icons::button(ui, "rotate-cw", 28.0, false, "Rotate clockwise").clicked() {
+            turn(&mut i, 3);
+            out = Some(ImageAction::Update(AddedContent::Image(i.clone())));
+        }
+        if crate::icons::button(ui, "flip-horizontal-2", 28.0, false, "Flip horizontal").clicked() {
+            i.flip_h = !i.flip_h;
+            out = Some(ImageAction::Update(AddedContent::Image(i.clone())));
+        }
+        if crate::icons::button(ui, "flip-vertical-2", 28.0, false, "Flip vertical").clicked() {
+            i.flip_v = !i.flip_v;
+            out = Some(ImageAction::Update(AddedContent::Image(i.clone())));
+        }
+        if crate::icons::button(ui, "replace", 28.0, false, "Replace image").clicked() {
+            out = Some(ImageAction::Replace);
+        }
+    });
+    ui.label(egui::RichText::new("Crop (% trimmed from each side)").small().color(t.text_muted));
+    let mut crop = img.crop.map(|v| (v * 100.0).round());
+    let mut changed = false;
+    ui.horizontal(|ui| {
+        for (k, label) in ["L", "B", "R", "T"].into_iter().enumerate() {
+            ui.label(label);
+            // Applied when the drag ends, so a drag is one undo step.
+            let r = ui.add(egui::DragValue::new(&mut crop[k]).range(0.0..=45.0).speed(0.5).suffix("%"));
+            changed |= r.drag_stopped() || (r.changed() && !r.dragged());
+        }
+    });
+    if changed {
+        let mut i = img.clone();
+        i.crop = crop.map(|v| v / 100.0);
+        if i.crop != img.crop {
+            out = Some(ImageAction::Update(AddedContent::Image(i)));
+        }
+    }
+    out
 }
