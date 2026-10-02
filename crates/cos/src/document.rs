@@ -389,6 +389,28 @@ impl Document {
         &self.revisions
     }
 
+    /// Where each revision of the file ends (oldest first): the byte after the `%%EOF` (and its
+    /// end-of-line) that closes its cross-reference section. `data[..end]` is that revision as it
+    /// was saved. A linearized file's first-page section belongs to the revision it precedes, so
+    /// ends only ever increase. Empty for a reconstructed file.
+    pub fn revision_ends(&self) -> Vec<usize> {
+        let d = &self.data[..];
+        let mut ends: Vec<usize> = Vec::with_capacity(self.revisions.len());
+        for r in self.revisions.iter() {
+            let from = (r.xref_offset as usize).saturating_add(self.header_offset).min(d.len());
+            let Some(at) = d[from..].windows(5).position(|w| w == b"%%EOF") else { continue };
+            let mut end = from + at + 5;
+            while end < d.len() && matches!(d[end], b'\r' | b'\n') && end - (from + at + 5) < 2 {
+                end += 1;
+            }
+            match ends.last_mut() {
+                Some(last) if end <= *last => {}
+                _ => ends.push(end),
+            }
+        }
+        ends
+    }
+
     pub fn repair_log(&self) -> &[String] {
         &self.repair_log
     }
@@ -932,6 +954,24 @@ mod tests {
         edited.update_dict(ObjRef::new(1, 0), |d| d.set(b"Lang".to_vec(), Object::String(crate::PdfString::literal("en")))).unwrap();
         assert!(edited.is_modified() && !doc.is_modified(), "clone is an independent snapshot");
         assert!(doc.get(ObjRef::new(1, 0)).as_dict().unwrap().get(b"Lang").is_none());
+    }
+
+    #[test]
+    fn revision_ends_split_incremental_updates() {
+        let mut bytes = build(&["<< /Type /Catalog /Pages 2 0 R >>", "<< /Type /Pages /Kids [] /Count 0 >>"], "/Root 1 0 R");
+        let first = bytes.len();
+        let doc = Document::open(Arc::new(bytes.clone())).unwrap();
+        assert_eq!(doc.revision_ends(), vec![first]);
+        let mut edited = doc.clone();
+        edited.update_dict(ObjRef::new(1, 0), |d| d.set(b"Lang".to_vec(), Object::String(crate::PdfString::literal("en")))).unwrap();
+        bytes = crate::write_incremental(&edited, &crate::SaveOptions::default()).unwrap();
+        let doc = Document::open(Arc::new(bytes.clone())).unwrap();
+        let ends = doc.revision_ends();
+        assert_eq!(ends.len(), 2, "{ends:?}");
+        assert!(ends[0] >= first && ends[0] < bytes.len() && ends[1] == bytes.len(), "{ends:?} of {}", bytes.len());
+        // The first revision opens on its own, without the update.
+        let old = Document::open(Arc::new(bytes[..ends[0]].to_vec())).unwrap();
+        assert!(old.get(ObjRef::new(1, 0)).as_dict().unwrap().get(b"Lang").is_none());
     }
 
     #[test]

@@ -367,11 +367,11 @@ title = "List document revisions from the xref chain"
 area = "A"
 tier = "P1"
 milestone = "M1"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["file.properties"]
+tools = ["doc_revisions"]
+evidence = ["crates/cos/src/document.rs::revision_ends_split_incremental_updates", "crates/automation/tests/automation.rs::digital_ids_signing_and_validation_through_tools"]
+notes = "revision ends from the xref chain (linearized first-page sections fold into their revision); listed in Document Properties ▸ Advanced and by doc_revisions with the signatures covering each"
 
 [[feature]]
 id = "core.view-revision"
@@ -379,11 +379,11 @@ title = "View an earlier revision as a read-only snapshot"
 area = "A"
 tier = "P1"
 milestone = "M9"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["file.properties"]
+tools = ["doc_open_revision"]
+evidence = ["crates/ui-egui/tests/viewer.rs::an_earlier_revision_opens_from_document_properties", "crates/automation/tests/automation.rs::digital_ids_signing_and_validation_through_tools"]
+notes = "opens the revision's bytes as a new unsaved document named '<name> (revision n)'"
 
 [[feature]]
 id = "core.lazy-loading"

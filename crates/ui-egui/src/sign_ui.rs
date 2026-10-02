@@ -293,6 +293,19 @@ impl PrintCraftApp {
         self.session.set_trusted_certificates(certs);
     }
 
+    /// Open saved revision `n` (1 = the oldest) of the active document as a new document.
+    pub fn open_revision(&mut self, n: usize) {
+        let Some((_, id)) = self.active_ids() else { return };
+        match self.session.open_revision(id, n) {
+            Ok(new) => {
+                let info = &self.session.get(new).expect("just opened").info;
+                self.views.push(DocView::new(new, info));
+                self.active = Some(self.views.len() - 1);
+            }
+            Err(e) => self.notify(format!("Couldn't open revision {n}: {e}")),
+        }
+    }
+
     /// Open the signed version of a signature as a new document (View signed version).
     pub fn view_signed_version(&mut self, len: usize) {
         let Some((_, id)) = self.active_ids() else { return };

@@ -298,3 +298,27 @@ fn tab_and_window_show_the_document_title_when_asked() {
     assert_eq!(h.state().window_title, "Quarterly report — PrintCraft");
     h.get_by_label_contains("Quarterly report");
 }
+
+#[test]
+fn an_earlier_revision_opens_from_document_properties() {
+    use printcraft_engine::Edit;
+    let mut h = harness();
+    {
+        let s = h.state_mut();
+        let id = s.views[s.active.unwrap()].id;
+        s.session.apply(id, Edit::SetInfo { key: "Title".into(), value: "Second".into() }).unwrap();
+        let bytes = s.session.save_bytes(id).unwrap();
+        s.open_bytes("updated.pdf", None, bytes.to_vec()).unwrap();
+    }
+    h.run_steps(2);
+    h.state_mut().dialog = Some(Dialog::Properties(printcraft_ui_egui::PropsTab::Advanced));
+    h.run_steps(2);
+    h.run_steps(2);
+    h.get_by_label("View revision 1").click();
+    h.run_steps(3);
+    let s = h.state();
+    assert!(s.dialog.is_none(), "{:?} {:?}", s.dialog, s.session.get(s.views[s.active.unwrap()].id).unwrap().name);
+    let doc = s.session.get(s.views[s.active.unwrap()].id).unwrap();
+    assert_eq!(doc.name, "updated (revision 1).pdf");
+    assert_eq!(doc.info_value("Title"), None, "as it was before the update");
+}

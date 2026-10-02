@@ -273,6 +273,13 @@ impl Automation {
             }
             "doc_optimize" => self.doc_optimize(&a)?,
             "doc_initial_view" => self.doc_initial_view(&a)?,
+            "doc_revisions" => self.doc_revisions(&a)?,
+            "doc_open_revision" => {
+                let id = self.doc(&a)?.id;
+                let n = usize::try_from(a.opt_int("revision")?.ok_or_else(|| ToolError::InvalidArgs("revision is required".into()))?).unwrap_or(0);
+                let new = self.session.open_revision(id, n).map_err(failed)?;
+                summary(self.session.get(new).ok_or_else(|| failed("the document vanished"))?)
+            }
             "doc_export_images" | "doc_export_text" => self.export(name, &a)?,
             "doc_header_footer" | "doc_watermark" | "doc_background" | "doc_remove_marks" => self.marks(name, &a)?,
             "doc_unprotect" => {
@@ -371,6 +378,24 @@ impl Automation {
         let path = target.to_string_lossy().into_owned();
         self.session.mark_saved(id, bytes.clone(), Some(path.clone())).map_err(failed)?;
         Ok(json!({ "path": path, "bytes": bytes.len(), "incremental": !full, "document": summary(self.doc(a)?) }))
+    }
+
+    fn doc_revisions(&mut self, a: &Args) -> Result<Value> {
+        let doc = self.doc(a)?;
+        let ends = doc.revision_ends();
+        let sigs = doc.signatures.clone();
+        let list: Vec<Value> = ends
+            .iter()
+            .enumerate()
+            .map(|(i, end)| {
+                let start = if i == 0 { 0 } else { ends[i - 1] };
+                // A signature signs the revision its byte range ends in.
+                let signed: Vec<&str> =
+                    sigs.iter().filter(|s| s.signed && s.signed_len > start && s.signed_len <= *end).map(|s| s.field.as_str()).collect();
+                json!({ "revision": i + 1, "end": end, "bytes": end - start, "signed_by": signed })
+            })
+            .collect();
+        Ok(json!({ "revisions": list, "unsaved_changes": doc.dirty }))
     }
 
     fn doc_initial_view(&mut self, a: &Args) -> Result<Value> {

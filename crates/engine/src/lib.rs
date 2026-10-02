@@ -279,6 +279,12 @@ impl Document {
             .unwrap_or_else(|| self.name.clone())
     }
 
+    /// Where each saved revision of the file ends (oldest first; `bytes[..end]` is that
+    /// revision). Unsaved edits aren't a revision yet.
+    pub fn revision_ends(&self) -> Vec<usize> {
+        self.editor.as_ref().map(|e| e.cos.revision_ends()).unwrap_or_default()
+    }
+
     /// Notes about damage repaired while opening (Document Properties ▸ Advanced, notices).
     pub fn repair_log(&self) -> Vec<String> {
         self.editor.as_ref().map(|e| e.cos.repair_log().to_vec()).unwrap_or_default()
@@ -1406,6 +1412,17 @@ impl Session {
     /// Open a document from bytes. Rendering starts lazily when pages are requested.
     ///
     /// `password` is tried as either the user or owner password when the file is encrypted.
+    /// Open saved revision `n` (1 = the oldest) of a document as a new, unsaved document named
+    /// "<name> (revision n)".
+    pub fn open_revision(&mut self, id: DocId, n: usize) -> Result<DocId, String> {
+        let doc = self.get(id).ok_or("no such document")?;
+        let ends = doc.revision_ends();
+        let end = *n.checked_sub(1).and_then(|i| ends.get(i)).ok_or_else(|| format!("the document has {} revision(s)", ends.len()))?;
+        let name = format!("{} (revision {n}).pdf", doc.name.trim_end_matches(".pdf"));
+        let (bytes, password) = (Arc::new(doc.bytes[..end.min(doc.bytes.len())].to_vec()), doc.password.clone());
+        self.open(name, None, bytes, password.as_deref()).map_err(|e| e.to_string())
+    }
+
     pub fn open(&mut self, name: impl Into<String>, path: Option<String>, bytes: Arc<Vec<u8>>, password: Option<&str>) -> Result<DocId, OpenError> {
         let cos = std::panic::catch_unwind(|| printcraft_cos::Document::open_with_password(bytes.clone(), password));
         // The renderer authenticates on its own. It cannot use the owner password of R2–R4

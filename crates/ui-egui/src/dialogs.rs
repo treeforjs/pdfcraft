@@ -48,6 +48,7 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
     let mut optimize_now = false;
     let mut duplicate_now: Option<Edit> = None;
     let mut replace_now = false;
+    let mut open_revision: Option<usize> = None;
     let t = Tokens::get(ctx);
     let mut close = false;
     let mut next = dialog;
@@ -302,7 +303,7 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
                             }
                         }
                         PropsTab::Advanced => {
-                            row(ui, "PDF version", i.pdf_version.replace("Pdf", "").replace('_', "."));
+                            row(ui, "PDF version", i.pdf_version.clone());
                             row(ui, "Location", doc.path.clone().unwrap_or_default());
                             row(ui, "File size", format!("{} ({} bytes)", human_size(i.file_size), i.file_size));
                             let p = &i.pages[0];
@@ -314,6 +315,21 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
                             row(ui, "Layers", i.layers.len().to_string());
                             row(ui, "Attachments", i.attachments.len().to_string());
                             row(ui, "JavaScript", yes(i.has_javascript));
+                            // Each incremental update is a revision; earlier ones open as their own document.
+                            let ends = doc.revision_ends();
+                            if ends.len() > 1 {
+                                ui.label(egui::RichText::new("Revisions").color(t.text_muted));
+                                ui.horizontal_wrapped(|ui| {
+                                    ui.label(ends.len().to_string());
+                                    for n in (1..ends.len()).rev().take(12) {
+                                        if ui.small_button(format!("View revision {n}")).on_hover_text("Open the file as it was saved then").clicked()
+                                        {
+                                            open_revision = Some(n);
+                                        }
+                                    }
+                                });
+                                ui.end_row();
+                            }
                             // Reading Options: binding and language.
                             if let Some((_, v)) = app.view_draft.as_mut() {
                                 let editable = doc.allows_modification();
@@ -1075,7 +1091,7 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
         app.apply_edit(Edit::Batch { label: "Change document properties".into(), edits });
     }
     // Protect / Remove security replace the Properties dialog.
-    let replaces = link_command.is_some_and(|c| c.starts_with("protect."));
+    let replaces = link_command.is_some_and(|c| c.starts_with("protect.")) || open_revision.is_some();
     if modal.should_close() || close || replaces {
         app.dialog = None;
         app.props_draft = None;
@@ -1085,6 +1101,9 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
     }
     if let Some(cmd) = link_command {
         app.execute(cmd);
+    }
+    if let Some(n) = open_revision {
+        app.open_revision(n);
     }
 }
 

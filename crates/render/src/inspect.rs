@@ -226,7 +226,7 @@ pub fn inspect(bytes: Arc<Vec<u8>>, password: Option<&str>) -> Result<DocInfo, O
             LoadPdfError::Decryption(other) => OpenError::Unsupported(format!("encryption not supported: {other:?}")),
             LoadPdfError::Invalid => OpenError::Invalid("no readable page tree or cross-reference data was found".into()),
         })?;
-    let mut info = DocInfo { file_size: bytes.len(), pdf_version: format!("{:?}", pdf.version()), ..Default::default() };
+    let mut info = DocInfo { file_size: bytes.len(), pdf_version: version_label(&format!("{:?}", pdf.version())), ..Default::default() };
     let pages = catch_unwind(AssertUnwindSafe(|| {
         let mut out = Vec::new();
         for (i, page) in pdf.pages().iter().enumerate() {
@@ -956,5 +956,24 @@ trailer << /Root 1 0 R >>
     fn dates_are_prettified() {
         assert_eq!(pretty_date("D:20260930104512-04'00'"), "2026-09-30 10:45");
         assert_eq!(pretty_date("yesterday"), "yesterday");
+    }
+}
+
+/// "1.7" from the parser's version name ("Pdf17", "V1_7", …).
+fn version_label(name: &str) -> String {
+    let digits: Vec<char> = name.chars().filter(char::is_ascii_digit).collect();
+    match digits[..] {
+        [a, b] => format!("{a}.{b}"),
+        _ => name.to_owned(),
+    }
+}
+
+#[cfg(test)]
+mod version_tests {
+    #[test]
+    fn version_labels_read_as_numbers() {
+        assert_eq!(super::version_label("Pdf17"), "1.7");
+        assert_eq!(super::version_label("V2_0"), "2.0");
+        assert_eq!(super::version_label("Unknown"), "Unknown");
     }
 }
