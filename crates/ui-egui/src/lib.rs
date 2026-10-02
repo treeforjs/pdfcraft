@@ -18,6 +18,7 @@ mod export_ui;
 mod marks_ui;
 mod optimize_ui;
 mod sign_ui;
+mod zoom_snap;
 /// Header & footer / watermark / background dialog types (tests and automation).
 pub mod marks {
     pub use crate::marks_ui::{MarksDraft, PageRange, Subset};
@@ -111,6 +112,10 @@ pub enum QuickTool {
     SignArea {
         certify: bool,
     },
+    /// View ▸ Zoom ▸ Marquee Zoom.
+    MarqueeZoom,
+    /// Edit ▸ Take a Snapshot.
+    Snapshot,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -255,6 +260,10 @@ pub struct PrintCraftApp {
     pub optimize_draft: OptimizeDraft,
     /// Pages copied or cut in Organize Pages, ready to paste (into any document).
     pub page_clipboard: Option<PageClip>,
+    /// The last snapshot (width, height, RGBA); `system_clipboard` also puts it on the
+    /// system clipboard (tests turn that off).
+    pub last_snapshot: Option<(u32, u32, Vec<u8>)>,
+    pub system_clipboard: bool,
     /// Where autosaves go (`None`: autosave off, e.g. on the web and in tests).
     pub recovery: Option<RecoveryStore>,
     /// Entries left by a previous session, offered in the Recovery dialog.
@@ -360,6 +369,8 @@ impl PrintCraftApp {
             sig_expanded: Vec::new(),
             optimize_draft: OptimizeDraft::default(),
             page_clipboard: None,
+            last_snapshot: None,
+            system_clipboard: true,
             recovery: None,
             recoverable: Vec::new(),
             recovery_keys: Default::default(),
@@ -826,6 +837,8 @@ impl PrintCraftApp {
                     "add-text" => QuickTool::AddText,
                     "link" => QuickTool::Link,
                     "sign" => QuickTool::SignArea { certify: false },
+                    "marquee-zoom" => QuickTool::MarqueeZoom,
+                    "snapshot" => QuickTool::Snapshot,
                     "certify" => QuickTool::SignArea { certify: true },
                     stamp if stamp.starts_with("stamp-") => QuickTool::Stamp(
                         printcraft_engine::StampKind::ALL

@@ -308,6 +308,11 @@ impl PrintCraftApp {
             }
             "sign.panel" => self.right = Some(RightPanel::Signatures),
             "optimize.advanced" => self.dialog = Some(Dialog::Optimize),
+            "view.marquee_zoom" => self.quick_tool = crate::QuickTool::MarqueeZoom,
+            "edit.snapshot" => {
+                self.quick_tool = crate::QuickTool::Snapshot;
+                self.notify("Drag a rectangle around the area to copy");
+            }
             "page.copy" => self.copy_pages(false),
             "page.cut" => self.copy_pages(true),
             "page.paste" => self.paste_pages(),

@@ -154,6 +154,9 @@ pub struct DocView {
     pub sign: crate::sign_ui::SignView,
     /// Organize: the pages being dragged to a new place.
     pub org_drag: Option<Vec<usize>>,
+    /// Marquee Zoom / Snapshot: the rectangle being dragged (page, start), and a finished one.
+    pub marquee: Option<(usize, Pos2)>,
+    pub marquee_done: Option<crate::zoom_snap::Marquee>,
     /// Fill & Sign text being typed.
     pub fill_text: Option<crate::fill_sign::TypeBox>,
     /// A non-edit action requested by the organize toolbar, handled by the app.
@@ -242,6 +245,8 @@ impl DocView {
             crop_drag: None,
             sign: Default::default(),
             org_drag: None,
+            marquee: None,
+            marquee_done: None,
             fill_text: None,
         }
     }
@@ -515,6 +520,16 @@ impl DocView {
     /// Displayed page size in points for this view rotation.
     fn display_size(&self, p: &printcraft_render::PageInfo) -> (f32, f32) {
         if self.rotation % 180 == 90 { (p.height, p.width) } else { (p.width, p.height) }
+    }
+
+    /// Marquee Zoom: zoom so `r` (on screen) fills the window, centred.
+    pub fn zoom_to_rect(&mut self, r: Rect) {
+        let Some((page, pr)) = self.screen_rects.iter().find(|(_, pr)| pr.contains(r.center())).copied() else { return };
+        let k = (self.viewport_screen.width() / r.width().max(1.0)).min(self.viewport_screen.height() / r.height().max(1.0));
+        let f = (r.center() - pr.min) / pr.size();
+        self.zoom = (self.zoom * k).clamp(0.08, 64.0);
+        self.fit = Fit::None;
+        self.zoom_anchor = Some((page, f.x.clamp(0.0, 1.0), f.y.clamp(0.0, 1.0), self.viewport_screen.center() - self.viewport_screen.min));
     }
 
     /// Zoom keeping the centre of the view still.
@@ -914,7 +929,9 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
         | QuickTool::AddText
         | QuickTool::Stamp(_)
         | QuickTool::Link
-        | QuickTool::SignArea { .. } => false,
+        | QuickTool::SignArea { .. }
+        | QuickTool::MarqueeZoom
+        | QuickTool::Snapshot => false,
     };
     let prefs = &app.comment_prefs;
     let allowed = doc.allows_annotation();
@@ -1103,6 +1120,9 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
             }
             if matches!(tool, QuickTool::SignArea { .. }) {
                 crate::sign_ui::page_input(ui, &resp, &xf, i, info, view);
+            }
+            if matches!(tool, QuickTool::MarqueeZoom | QuickTool::Snapshot) {
+                crate::zoom_snap::page_input(ui, &resp, &xf, i, view);
             }
             if tool == QuickTool::Crop && crate::crop::page_input(ui, &resp, &xf, i, info, view, can_crop) {
                 view.current = i;
@@ -1402,6 +1422,9 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
     }
     if tool == QuickTool::Crop && cropped {
         tool = QuickTool::Select;
+    }
+    if let Some(done) = app.views[index].marquee_done.take() {
+        app.finish_marquee(index, done);
     }
     // A signature rectangle was drawn, or an empty signature field clicked.
     let drawn = app.views[index].sign.drawn.take();

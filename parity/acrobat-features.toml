@@ -983,11 +983,11 @@ title = "Marquee zoom tool"
 area = "B"
 tier = "P1"
 milestone = "M3"
-status = "planned"
-commands = []
+status = "shipped"
+commands = ["view.marquee_zoom"]
 tools = []
-evidence = []
-notes = ""
+evidence = ["crates/ui-egui/tests/viewer.rs::marquee_zoom_and_snapshot"]
+notes = "drag to fill the window with an area; click to zoom in"
 
 [[feature]]
 id = "view.dynamic-zoom"
@@ -1511,11 +1511,11 @@ title = "Snapshot tool (copy a region as an image)"
 area = "B"
 tier = "P1"
 milestone = "M3"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["edit.snapshot"]
+tools = ["page_render"]
+evidence = ["crates/ui-egui/tests/viewer.rs::marquee_zoom_and_snapshot"]
+notes = "copies the area at the current zoom to the clipboard as an image"
 
 [[feature]]
 id = "view.rulers"

@@ -225,3 +225,39 @@ fn initial_view_is_edited_and_honoured_on_open() {
     let view = &app.views[0];
     assert_eq!((view.current, view.cover, app.right), (1, true, Some(printcraft_ui_egui::RightPanel::Bookmarks)));
 }
+
+fn drag(h: &mut Harness<'static, PrintCraftApp>, a: egui::Pos2, b: egui::Pos2) {
+    h.hover_at(a);
+    h.run_steps(1);
+    h.drag_at(a);
+    h.run_steps(1);
+    for k in 1..=4 {
+        h.hover_at(a + (b - a) * (k as f32 / 4.0));
+        h.run_steps(1);
+    }
+    h.drop_at(b);
+    h.run_steps(3);
+}
+
+#[test]
+fn marquee_zoom_and_snapshot() {
+    let mut h = harness();
+    let i = h.state().active.unwrap();
+    // Text "Page 2 pages PAGE" sits at y 150 (of 300) from x 20.
+    let r = h.state().views[i].page_screen_rect(0).expect("on screen");
+    let at = |x: f32, y: f32| egui::pos2(r.left() + x / 200.0 * r.width(), r.top() + (300.0 - y) / 300.0 * r.height());
+    // Snapshot of the text line.
+    h.state_mut().system_clipboard = false;
+    assert!(h.state_mut().execute("edit.snapshot"));
+    drag(&mut h, at(15.0, 175.0), at(180.0, 140.0));
+    let (w, hgt, px) = h.state().last_snapshot.clone().expect("a snapshot");
+    assert!(w > 50 && hgt > 10, "{w} × {hgt}");
+    assert!(px.chunks_exact(4).any(|p| p[0] < 100), "the text is in it");
+    // Marquee zoom on a small area zooms in, centred on it.
+    let before = h.state().views[i].zoom;
+    h.state_mut().set_option("quick", "marquee-zoom").unwrap();
+    drag(&mut h, at(20.0, 160.0), at(60.0, 140.0));
+    h.run_steps(4);
+    let after = h.state().views[i].zoom;
+    assert!(after > before * 2.0, "{before} → {after}");
+}
