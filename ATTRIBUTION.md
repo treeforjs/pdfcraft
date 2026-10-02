@@ -4,7 +4,7 @@
 
 Every asset PrintCraft includes, bundles or uses to build its published material, with its author, source and licence. The policy is in [AGENTS.md](AGENTS.md) §1. The machine-readable list, with SHA-256 hashes, is [ATTRIBUTION.toml](ATTRIBUTION.toml). Licence texts are kept beside the assets and summarised in [NOTICE](NOTICE).
 
-## In this repository (221)
+## In this repository (222)
 
 | Asset | Title | Author | Licence | Source | Used for |
 |---|---|---|---|---|---|
@@ -229,6 +229,7 @@ Every asset PrintCraft includes, bundles or uses to build its published material
 | `crates/ui-egui/tests/data/form.pdf` | One-page AcroForm test fixture (text, check box, radio group, combo box) | PrintCraft contributors | MIT OR Apache-2.0 | Contributor-original: hand-written PDF objects, no third-party content | Form-filling UI tests (crates/ui-egui/tests/forms.rs, commands.rs) |
 | `assets/icons/pentagon.svg` | Lucide icon "pentagon" | Lucide Contributors (portions Cole Bemis, Feather) | ISC | https://github.com/lucide-icons/lucide (npm lucide-static 1.49.0, icons/pentagon.svg) | UI icon, embedded via crates/ui-egui/src/icon_data.rs |
 | `assets/icons/message-square-quote.svg` | Lucide icon "message-square-quote" | Lucide Contributors (portions Cole Bemis, Feather) | ISC | https://github.com/lucide-icons/lucide (npm lucide-static 1.49.0, icons/message-square-quote.svg) | UI icon, embedded via crates/ui-egui/src/icon_data.rs |
+| `crates/sign/tests/data/openssl-signed.pdf` | One-page PDF signed with OpenSSL CMS (adbe.pkcs7.detached) by the RSA test key | PrintCraft contributors | MIT OR Apache-2.0 | Contributor-original: hand-written PDF objects; signature made with `openssl cms -sign` over its byte ranges (see crates/sign/tests/data/README.md) | Signature validation tests (crates/sign/tests/pdf.rs): a signature PrintCraft did not make |
 
 ## Compiled in through dependencies (6)
 

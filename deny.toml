@@ -35,6 +35,13 @@ unknown-git = "deny"
 
 [advisories]
 yanked = "warn"
+ignore = [
+    # Marvin (RSA private-key timing side channel, no fixed `rsa` release). printcraft-sign uses
+    # `rsa` only for public-key signature verification, which the advisory does not affect; RSA
+    # private-key operations use aws-lc-rs on native targets and are refused in the browser
+    # (ADR-0009). Revisit when a fixed `rsa` ships.
+    { id = "RUSTSEC-2023-0071", reason = "rsa is used for verification only (ADR-0009)" },
+]
 
 # egui's default UI fonts (Ubuntu-Light, Hack, emoji-icon-font): font licences on the AGENTS.md
 # §1.2 allowlist, attributed in ATTRIBUTION.toml as dependency-bundled assets.
