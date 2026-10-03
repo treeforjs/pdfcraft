@@ -14,7 +14,6 @@
 
 use printcraft_cos::{Dict, Document, ObjRef, Object, Stream};
 
-mod fonts;
 mod image;
 mod interp;
 pub mod patterns;

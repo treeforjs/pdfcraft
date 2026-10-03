@@ -3487,6 +3487,7 @@ dependencies = [
 name = "printcraft-fonts"
 version = "0.1.0"
 dependencies = [
+ "printcraft-cos",
  "skrifa 0.44.0",
 ]
 

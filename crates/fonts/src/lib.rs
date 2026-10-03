@@ -3,6 +3,8 @@
 //! See the README: the metrics are approximations by character class (no vendor metrics files
 //! are bundled). The full font subsystem lands in M2.2/M7.
 
+mod encodings;
+pub mod pdf;
 mod script;
 pub use script::{ScriptOutline, script_outline};
 

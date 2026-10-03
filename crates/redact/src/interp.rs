@@ -23,8 +23,8 @@ use std::rc::Rc;
 use printcraft_content::{Matrix, Op, contains, num, overlaps, parse, serialize_ops, string};
 use printcraft_cos::{Dict, Document, ObjRef, Object, Stream};
 
-use crate::fonts::Metrics;
 use crate::{Report, image};
+use printcraft_fonts::pdf::Metrics;
 
 const MAX_DEPTH: usize = 12;
 
