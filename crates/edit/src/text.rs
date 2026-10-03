@@ -35,6 +35,82 @@ pub struct TextLine {
     pub decodable: bool,
     stream: usize,
     ops: Vec<usize>,
+    /// Where the line starts: text matrix (text space), the state there, and its `BT`.
+    origin: Origin,
+}
+
+/// Text and graphics state captured for rewriting.
+#[derive(Clone, Debug, PartialEq)]
+struct TextState {
+    font: Option<(String, f64)>,
+    char_spacing: f64,
+    word_spacing: f64,
+    scale: f64,
+    leading: f64,
+    rise: f64,
+    fill: Vec<Op>,
+}
+
+impl TextState {
+    fn of(ts: &Ts) -> Self {
+        TextState {
+            font: ts.font.as_ref().map(|(n, _)| (String::from_utf8_lossy(n).into_owned(), ts.size)),
+            char_spacing: ts.char_spacing,
+            word_spacing: ts.word_spacing,
+            scale: ts.scale,
+            leading: ts.leading,
+            rise: ts.rise,
+            fill: ts.fill.clone(),
+        }
+    }
+
+    /// Operators that set this state (inside a text object).
+    fn ops(&self) -> Vec<Op> {
+        let n = printcraft_content::num;
+        let mut v = Vec::new();
+        if let Some((f, size)) = &self.font {
+            v.push(Op::new("Tf", vec![Object::name(f), n(*size)]));
+        }
+        v.push(Op::new("Tc", vec![n(self.char_spacing)]));
+        v.push(Op::new("Tw", vec![n(self.word_spacing)]));
+        v.push(Op::new("Tz", vec![n(self.scale * 100.0)]));
+        v.push(Op::new("TL", vec![n(self.leading)]));
+        v.push(Op::new("Ts", vec![n(self.rise)]));
+        v.extend(self.fill.iter().cloned());
+        v
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct Origin {
+    tm: [f64; 6],
+    /// Text-space units → user space (the scale of the text rendering matrix's y axis).
+    k: f64,
+    baseline: f64,
+    x: f64,
+    state: TextState,
+    bt_op: usize,
+    bt_state: TextState,
+}
+
+/// A paragraph: consecutive lines in one stream with the same font and size, aligned on the left
+/// and regularly spaced.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TextBlock {
+    /// The lines' text joined with spaces (lines that ended in a hyphen are joined directly).
+    pub text: String,
+    pub rect: [f64; 4],
+    pub base_font: String,
+    pub size: f64,
+    /// Indexes into [`text_lines`].
+    pub lines: Vec<usize>,
+}
+
+impl TextLine {
+    /// The baseline's height in user space.
+    pub fn origin_baseline(&self) -> f64 {
+        self.origin.baseline
+    }
 }
 
 /// What replacing a line did.
@@ -47,6 +123,8 @@ pub struct LineEdit {
 #[derive(Clone)]
 struct Ts {
     ctm: Matrix,
+    /// The operators that set the current fill colour (`g`, `rg`, `k`, or `cs` + `sc`/`scn`).
+    fill: Vec<Op>,
     font: Option<(Vec<u8>, Rc<Metrics>)>,
     size: f64,
     char_spacing: f64,
@@ -82,6 +160,11 @@ fn page_dict(doc: &Document, page: usize) -> Result<printcraft_model::Page, Edit
 /// The text-showing operators of one stream with their text, font, box and baseline.
 struct Shown {
     op: usize,
+    /// The text matrix where it starts (text space), and the state there and at its `BT`.
+    tm: Matrix,
+    state: Ts,
+    bt_op: usize,
+    bt_state: Ts,
     text: String,
     rect: [f64; 4],
     baseline: f64,
@@ -96,7 +179,18 @@ struct Shown {
 
 fn interpret(doc: &Document, ops: &[Op], fonts_res: &Dict, cache: &mut HashMap<Vec<u8>, Rc<Metrics>>) -> Vec<Shown> {
     let mut out = Vec::new();
-    let mut ts = Ts { ctm: Matrix::IDENTITY, font: None, size: 0.0, char_spacing: 0.0, word_spacing: 0.0, scale: 1.0, leading: 0.0, rise: 0.0 };
+    let mut ts = Ts {
+        ctm: Matrix::IDENTITY,
+        fill: Vec::new(),
+        font: None,
+        size: 0.0,
+        char_spacing: 0.0,
+        word_spacing: 0.0,
+        scale: 1.0,
+        leading: 0.0,
+        rise: 0.0,
+    };
+    let mut at_bt = (0usize, ts.clone());
     let mut stack: Vec<Ts> = Vec::new();
     let (mut tm, mut tlm) = (Matrix::IDENTITY, Matrix::IDENTITY);
     let mut bt = 0usize;
@@ -117,6 +211,12 @@ fn interpret(doc: &Document, ops: &[Op], fonts_res: &Dict, cache: &mut HashMap<V
                 tm = Matrix::IDENTITY;
                 tlm = Matrix::IDENTITY;
                 bt += 1;
+                at_bt = (i, ts.clone());
+            }
+            b"g" | b"rg" | b"k" | b"cs" => ts.fill = vec![op.clone()],
+            b"sc" | b"scn" => {
+                ts.fill.retain(|o| o.is("cs"));
+                ts.fill.push(op.clone());
             }
             b"Tf" => {
                 ts.size = op.num(1).unwrap_or(ts.size);
@@ -216,6 +316,10 @@ fn interpret(doc: &Document, ops: &[Op], fonts_res: &Dict, cache: &mut HashMap<V
                 let size_user = (trm0.0[2].powi(2) + trm0.0[3].powi(2)).sqrt() * ts.size;
                 out.push(Shown {
                     op: i,
+                    tm: Matrix([tm.0[0], tm.0[1], tm.0[2], tm.0[3], tm.0[4] - x_text * tm.0[0], tm.0[5] - x_text * tm.0[1]]),
+                    state: ts.clone(),
+                    bt_op: at_bt.0,
+                    bt_state: at_bt.1.clone(),
                     text,
                     rect,
                     baseline: start.1,
@@ -268,6 +372,15 @@ pub fn text_lines(doc: &Document, page: usize) -> Result<Vec<TextLine>, EditErro
                     decodable: s.decodable,
                     stream: si,
                     ops: vec![s.op],
+                    origin: Origin {
+                        tm: s.tm.0,
+                        k: (s.tm.then(&s.state.ctm).0[2].powi(2) + s.tm.then(&s.state.ctm).0[3].powi(2)).sqrt(),
+                        baseline: s.baseline,
+                        x: s.start_x,
+                        state: TextState::of(&s.state),
+                        bt_op: s.bt_op,
+                        bt_state: TextState::of(&s.bt_state),
+                    },
                 });
             }
             last = Some((s.bt, s.baseline, s.end_x, s.size.max(1.0)));
@@ -277,6 +390,9 @@ pub fn text_lines(doc: &Document, page: usize) -> Result<Vec<TextLine>, EditErro
     lines.retain(|l| !l.text.trim().is_empty());
     Ok(lines)
 }
+
+/// Text → the bytes that show it in the chosen font.
+type Encoder = Box<dyn Fn(&str) -> Option<Vec<u8>>>;
 
 /// The substitute font's resource name.
 const SUBSTITUTE: &[u8] = b"PCEdHelv";
@@ -364,4 +480,175 @@ pub fn replace_line(doc: &mut Document, page: usize, line: usize, text: &str) ->
 /// The size of the last `Tf` before operator `at`.
 fn font_size_before(ops: &[Op], at: usize) -> Option<f64> {
     ops[..at].iter().rev().find(|o| o.is("Tf")).and_then(|o| o.num(1))
+}
+
+/// The paragraphs on a page (0-based).
+pub fn text_blocks(doc: &Document, page: usize) -> Result<Vec<TextBlock>, EditError> {
+    let lines = text_lines(doc, page)?;
+    Ok(group_blocks(&lines))
+}
+
+fn group_blocks(lines: &[TextLine]) -> Vec<TextBlock> {
+    let mut blocks: Vec<TextBlock> = Vec::new();
+    let mut gap: Option<f64> = None;
+    for (i, l) in lines.iter().enumerate() {
+        let joins = i > 0
+            && blocks.last().is_some_and(|b| {
+                let prev = &lines[*b.lines.last().expect("non-empty")];
+                let g = prev.origin.baseline - l.origin.baseline;
+                prev.stream == l.stream
+                    && prev.font == l.font
+                    && (prev.size - l.size).abs() < 0.01
+                    && (prev.origin.x - l.origin.x).abs() < l.size
+                    && g > l.size * 0.8
+                    && g < l.size * 2.5
+                    && gap.is_none_or(|first| (g - first).abs() < first * 0.2)
+            });
+        if joins && let Some(b) = blocks.last_mut() {
+            let prev = &lines[*b.lines.last().expect("non-empty")];
+            gap.get_or_insert(prev.origin.baseline - l.origin.baseline);
+            if b.text.ends_with('-') {
+                b.text.pop();
+            } else {
+                b.text.push(' ');
+            }
+            b.text.push_str(l.text.trim());
+            b.rect = [b.rect[0].min(l.rect[0]), b.rect[1].min(l.rect[1]), b.rect[2].max(l.rect[2]), b.rect[3].max(l.rect[3])];
+            b.lines.push(i);
+        } else {
+            gap = None;
+            blocks.push(TextBlock { text: l.text.trim().to_string(), rect: l.rect, base_font: l.base_font.clone(), size: l.size, lines: vec![i] });
+        }
+    }
+    blocks
+}
+
+/// Greedy word wrapping to `width` with `advance` giving a string's width.
+fn wrap(text: &str, width: f64, advance: impl Fn(&str) -> f64) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut line = String::new();
+    for word in text.split_whitespace() {
+        let candidate = if line.is_empty() { word.to_string() } else { format!("{line} {word}") };
+        if !line.is_empty() && advance(&candidate) > width {
+            out.push(std::mem::take(&mut line));
+            line = word.to_string();
+        } else {
+            line = candidate;
+        }
+    }
+    if !line.is_empty() || out.is_empty() {
+        out.push(line);
+    }
+    out
+}
+
+/// Replace paragraph `block` (an index into [`text_blocks`]) with `text`, rewrapped to the
+/// paragraph's width with its line spacing. The paragraph keeps its first line's position, font
+/// (or Helvetica when the font can't show the text), size and colour.
+pub fn replace_block(doc: &mut Document, page: usize, block: usize, text: &str) -> Result<LineEdit, EditError> {
+    let lines = text_lines(doc, page)?;
+    let blocks = group_blocks(&lines);
+    let b = blocks.get(block).cloned().ok_or_else(|| EditError::Invalid(format!("page {} has no paragraph {}", page + 1, block + 1)))?;
+    let members: Vec<&TextLine> = b.lines.iter().map(|i| &lines[*i]).collect();
+    let first = members[0];
+    let p = page_dict(doc, page)?;
+    let mut res = p.dict.get(b"Resources").map(|r| doc.resolve(r)).and_then(|r| r.as_dict().cloned()).unwrap_or_default();
+    let mut fonts_res = res.get(b"Font").map(|f| doc.resolve(f)).and_then(|f| f.as_dict().cloned()).unwrap_or_default();
+    let streams = content_streams(doc, &p.dict);
+    let (stream_obj, data) = streams.get(first.stream).cloned().ok_or_else(|| EditError::Invalid("the page's content changed".into()))?;
+    let ops = parse(&data).ops;
+    let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    let o = &first.origin;
+    let (font_name, size) = o.state.font.clone().ok_or_else(|| EditError::Invalid("the paragraph has no font".into()))?;
+    let metrics = fonts_res.get(font_name.as_bytes()).and_then(|f| doc.resolve(f).as_dict().cloned()).map(|d| Metrics::from_dict(doc, &d));
+    let reuse = metrics.as_ref().is_some_and(|m| m.encode(&text).is_some());
+    // Widths in user space: the paragraph's width, and each candidate line's advance.
+    let k = o.k.max(1e-6);
+    // A paragraph keeps its width; a single line grows to the right, up to the page's margin.
+    let mut width = (b.rect[2] - b.rect[0]).max(size * k);
+    if members.len() == 1 {
+        let crop = p.crop(doc);
+        width = width.max(crop[2] - 36.0 - b.rect[0]);
+    }
+    let advance = |s: &str| -> f64 {
+        let t = match (&metrics, reuse) {
+            (Some(m), true) => m
+                .encode(s)
+                .map(|bytes| {
+                    m.codes(&bytes)
+                        .iter()
+                        .map(|(c, l)| m.width(*c) * size + o.state.char_spacing + if m.is_space(*c, *l) { o.state.word_spacing } else { 0.0 })
+                        .sum::<f64>()
+                })
+                .unwrap_or(0.0),
+            _ => printcraft_fonts::helvetica_width(s, size),
+        };
+        t * o.state.scale * k
+    };
+    let wrapped = wrap(&text, width + 0.5, advance);
+    let mut substituted = None;
+    let (show_font, encode): (String, Encoder) = if reuse {
+        let m = metrics.clone().expect("checked");
+        (font_name.clone(), Box::new(move |s: &str| m.encode(s)))
+    } else {
+        let win = printcraft_fonts::win_ansi(&text);
+        let back: String = win.iter().map(|c| char::from_u32(u32::from(*c)).unwrap_or('?')).collect();
+        if text.chars().zip(back.chars()).any(|(a, c)| c == '?' && a != '?') {
+            return Err(EditError::Invalid(format!("\"{text}\" has characters neither {} nor Helvetica can show", b.base_font)));
+        }
+        let mut f = Dict::new();
+        f.set(b"Type".to_vec(), Object::name("Font"));
+        f.set(b"Subtype".to_vec(), Object::name("Type1"));
+        f.set(b"BaseFont".to_vec(), Object::name("Helvetica"));
+        f.set(b"Encoding".to_vec(), Object::name("WinAnsiEncoding"));
+        fonts_res.set(SUBSTITUTE.to_vec(), Object::Dict(f));
+        substituted = Some("Helvetica".to_string());
+        (String::from_utf8_lossy(SUBSTITUTE).into_owned(), Box::new(|s: &str| Some(printcraft_fonts::win_ansi(s))))
+    };
+    // Line spacing in text space: the paragraph's own, or 1.2 × the size for one line.
+    let lead = if members.len() > 1 { (members[0].origin.baseline - members[1].origin.baseline) / k } else { size * 1.2 };
+    let n = printcraft_content::num;
+    let mut block_ops = vec![Op::new("BT", vec![])];
+    let mut state = o.state.clone();
+    state.font = Some((show_font, size));
+    block_ops.extend(state.ops());
+    block_ops.push(Op::new("Tm", o.tm.iter().map(|v| n(*v)).collect()));
+    for (i, line) in wrapped.iter().enumerate() {
+        if i > 0 {
+            block_ops.push(Op::new("Td", vec![n(0.0), n(-lead)]));
+        }
+        let bytes = encode(line).ok_or_else(|| EditError::Invalid(format!("\"{line}\" can't be shown")))?;
+        block_ops.push(Op::new("Tj", vec![Object::String(PdfString::literal(bytes))]));
+    }
+    block_ops.push(Op::new("ET", vec![]));
+    // What the text after the paragraph expects: the state at its BT.
+    block_ops.extend(o.bt_state.ops().into_iter().filter(|op| !op.is("Tf") || o.bt_state.font.is_some()));
+    let drop: std::collections::HashSet<usize> = members.iter().flat_map(|l| l.ops.iter().copied()).collect();
+    let mut new_ops = Vec::with_capacity(ops.len() + block_ops.len());
+    for (i, op) in ops.into_iter().enumerate() {
+        if i == o.bt_op {
+            new_ops.append(&mut block_ops);
+        }
+        if !drop.contains(&i) {
+            new_ops.push(op);
+        }
+    }
+    let mut dict = match &*doc.resolve(&stream_obj) {
+        Object::Stream(s) => s.dict.clone(),
+        _ => Dict::new(),
+    };
+    dict.remove(b"Length");
+    let new = doc.add(Object::Stream(Stream::flate(dict, &serialize_ops(&new_ops))));
+    let contents: Vec<Object> = streams.iter().enumerate().map(|(i, (o, _))| if i == first.stream { Object::Ref(new) } else { o.clone() }).collect();
+    if substituted.is_some() {
+        res.set(b"Font".to_vec(), Object::Dict(fonts_res));
+    }
+    let page_ref = p.obj;
+    doc.update_dict(page_ref, |d| {
+        d.set(b"Contents".to_vec(), if contents.len() == 1 { contents[0].clone() } else { Object::Array(contents) });
+        if substituted.is_some() {
+            d.set(b"Resources".to_vec(), Object::Dict(res));
+        }
+    })?;
+    Ok(LineEdit { substituted })
 }

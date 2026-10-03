@@ -288,3 +288,57 @@ fn missing_glyphs_substitute_helvetica_and_impossible_text_is_refused() {
     assert!(text::replace_line(&mut doc, 0, 0, "Ωmega").is_err());
     assert!(text::replace_line(&mut doc, 0, 5, "x").is_err(), "no such line");
 }
+
+#[test]
+fn paragraphs_are_found_and_rewrapped() {
+    let mut doc = text_page(
+        "BT 0 0 1 rg /F1 10 Tf 12 TL 72 700 Td (The quick brown fox) Tj T* (jumps over the) Tj T* (lazy dog.) Tj ET \
+         BT /F1 10 Tf 72 600 Td (Next paragraph) Tj ET",
+    );
+    let blocks = text::text_blocks(&doc, 0).unwrap();
+    let texts: Vec<&str> = blocks.iter().map(|b| b.text.as_str()).collect();
+    assert_eq!(texts, ["The quick brown fox jumps over the lazy dog.", "Next paragraph"]);
+    assert_eq!(blocks[0].lines, [0, 1, 2]);
+    let width = blocks[0].rect[2] - blocks[0].rect[0];
+    let next = blocks[1].rect;
+    let long = "PrintCraft rewraps a paragraph to its own width when its text changes, keeping the font, size, colour and line spacing.";
+    assert_eq!(text::replace_block(&mut doc, 0, 0, long).unwrap().substituted, None);
+    let doc = reopen(&doc);
+    let lines = text::text_lines(&doc, 0).unwrap();
+    let blocks = text::text_blocks(&doc, 0).unwrap();
+    assert_eq!(blocks[0].text, long);
+    assert!(blocks[0].lines.len() > 3, "more lines: {}", blocks[0].lines.len());
+    for i in &blocks[0].lines {
+        assert!(lines[*i].rect[2] - lines[*i].rect[0] <= width + 1.0, "line {} fits", lines[*i].text);
+    }
+    // Same left edge, same spacing (12 pt).
+    assert!((lines[0].rect[0] - 72.0).abs() < 0.01);
+    let spacing = lines[blocks[0].lines[0]].origin_baseline() - lines[blocks[0].lines[1]].origin_baseline();
+    assert!((spacing - 12.0).abs() < 0.01, "{spacing}");
+    // The next paragraph is untouched, and the new text is blue like the old.
+    assert_eq!(blocks[1].text, "Next paragraph");
+    assert_eq!(blocks[1].rect, next);
+    let content = String::from_utf8_lossy(&page_content_bytes(&doc, 0)).into_owned();
+    assert!(content.contains("0 0 1 rg"), "{content}");
+    // Shorter text: fewer lines.
+    let mut doc = doc;
+    text::replace_block(&mut doc, 0, 0, "Short.").unwrap();
+    let blocks = text::text_blocks(&doc, 0).unwrap();
+    assert_eq!((blocks[0].text.as_str(), blocks[0].lines.len()), ("Short.", 1));
+}
+
+fn page_content_bytes(doc: &Document, page: usize) -> Vec<u8> {
+    let p = printcraft_model::pages(doc).swap_remove(page);
+    let c = p.dict.get(b"Contents").unwrap();
+    match &*doc.resolve(c) {
+        printcraft_cos::Object::Stream(s) => s.decoded().unwrap(),
+        printcraft_cos::Object::Array(a) => a
+            .iter()
+            .flat_map(|x| match &*doc.resolve(x) {
+                printcraft_cos::Object::Stream(s) => s.decoded().unwrap(),
+                _ => Vec::new(),
+            })
+            .collect(),
+        _ => Vec::new(),
+    }
+}

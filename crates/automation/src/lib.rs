@@ -297,6 +297,43 @@ impl Automation {
                     .collect();
                 json!({ "page": page + 1, "count": lines.len(), "lines": lines })
             }
+            "text_paragraphs" => {
+                let page = self.page(&a)?;
+                let doc = self.doc(&a)?;
+                let info = &doc.info.pages[page];
+                let r = |x: f32| (x as f64 * 100.0).round() / 100.0;
+                let blocks: Vec<Value> = doc
+                    .text_blocks(page)
+                    .iter()
+                    .enumerate()
+                    .map(|(i, b)| {
+                        let (u, v) = (info.user_to_view(b.rect[0] as f32, b.rect[1] as f32), info.user_to_view(b.rect[2] as f32, b.rect[3] as f32));
+                        json!({
+                            "paragraph": i + 1,
+                            "text": b.text,
+                            "lines": b.lines.iter().map(|l| l + 1).collect::<Vec<_>>(),
+                            "rect": [r(u[0].min(v[0])), r(u[1].min(v[1])), r(u[0].max(v[0])), r(u[1].max(v[1]))],
+                            "font": b.base_font,
+                            "size": (b.size * 100.0).round() / 100.0,
+                        })
+                    })
+                    .collect();
+                json!({ "page": page + 1, "count": blocks.len(), "paragraphs": blocks })
+            }
+            "text_edit" if a.get("paragraph").is_some() => {
+                let page = self.page(&a)?;
+                let n = self.doc(&a)?.text_blocks(page).len();
+                let k = a.int("paragraph")?;
+                if k < 1 || k as usize > n {
+                    return Err(ToolError::InvalidArgs(format!("paragraph {k} is out of range: page {} has {n} paragraphs", page + 1)));
+                }
+                let text = a.str("text")?.to_owned();
+                let mut out = self.apply(&a, Edit::EditTextBlock { page, block: k as usize - 1, text })?;
+                if let Some(b) = self.doc(&a)?.text_blocks(page).get(k as usize - 1) {
+                    out["paragraph"] = json!({ "text": b.text, "lines": b.lines.len(), "font": b.base_font });
+                }
+                out
+            }
             "text_edit" => {
                 let page = self.page(&a)?;
                 let n = self.doc(&a)?.text_lines(page).len();

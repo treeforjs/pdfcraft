@@ -31,7 +31,7 @@ pub use printcraft_forms::{
 };
 
 pub use printcraft_a11y as a11y;
-pub use printcraft_edit::TextLine;
+pub use printcraft_edit::{TextBlock, TextLine};
 pub use printcraft_fonts::{ScriptOutline, script_outline};
 
 /// Fill & Sign: `text` in the script font as a typed signature, its left edge at `at` (user
@@ -181,6 +181,11 @@ impl Document {
     /// PDF Optimizer ▸ Audit space usage.
     pub fn audit_space(&self) -> Vec<optimize::SpaceUse> {
         self.editor.as_ref().map(|e| optimize::audit_space(&e.cos, self.bytes.len() as u64)).unwrap_or_default()
+    }
+
+    /// Edit a PDF ▸ Edit text: the paragraphs on `page` (0-based).
+    pub fn text_blocks(&self, page: usize) -> Vec<printcraft_edit::TextBlock> {
+        self.editor.as_ref().and_then(|e| printcraft_edit::text_blocks(&e.cos, page).ok()).unwrap_or_default()
     }
 
     /// A counter that changes with every edit (for caches of derived data).
@@ -747,6 +752,13 @@ pub enum Edit {
         line: usize,
         text: String,
     },
+    /// Edit text in a paragraph box: replace paragraph `block` (from `Document::text_blocks`),
+    /// rewrapped to the box's width.
+    EditTextBlock {
+        page: usize,
+        block: usize,
+        text: String,
+    },
     /// Order tabs manually: move a field one place earlier or later on its page.
     MoveInTabOrder {
         name: String,
@@ -913,7 +925,7 @@ impl Edit {
             Edit::SetInitialView(_) => "Change initial view".into(),
             Edit::SetAltText { .. } => "Set alternate text".into(),
             Edit::MarkDecorative { .. } => "Mark figure as decorative".into(),
-            Edit::EditTextLine { .. } => "Edit text".into(),
+            Edit::EditTextLine { .. } | Edit::EditTextBlock { .. } => "Edit text".into(),
             Edit::AddHeaderFooter { replace: false, .. } => "Add header & footer".into(),
             Edit::AddHeaderFooter { .. } => "Update header & footer".into(),
             Edit::AddWatermark { replace: false, .. } => "Add watermark".into(),
@@ -1074,6 +1086,7 @@ fn check_permission(edit: &Edit, p: &printcraft_cos::Permissions) -> Result<(), 
         | Edit::SetAltText { .. }
         | Edit::MarkDecorative { .. }
         | Edit::EditTextLine { .. }
+        | Edit::EditTextBlock { .. }
         | Edit::Flatten { .. } => {
             if p.modify() {
                 Ok(())
@@ -1256,6 +1269,9 @@ fn run_edit(doc: &mut printcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -
         }
         Edit::EditTextLine { page, line, text } => {
             printcraft_edit::replace_line(doc, *page, *line, text)?;
+        }
+        Edit::EditTextBlock { page, block, text } => {
+            printcraft_edit::replace_block(doc, *page, *block, text)?;
         }
         Edit::MarkDecorative { figure } => {
             let r = printcraft_cos::ObjRef::new(*figure, doc.generation(*figure));

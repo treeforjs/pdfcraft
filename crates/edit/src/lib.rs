@@ -588,7 +588,7 @@ pub fn marks_present(doc: &Document) -> Vec<MarkKind> {
 mod flatten;
 pub use flatten::flatten;
 pub mod text;
-pub use text::{LineEdit, TextLine, replace_line, text_lines};
+pub use text::{LineEdit, TextBlock, TextLine, replace_block, replace_line, text_blocks, text_lines};
 pub mod added;
 pub use added::{Added, AddedImage, AddedText, Align, Content, Family, add_content, delete_content, list_added, update_content};
 

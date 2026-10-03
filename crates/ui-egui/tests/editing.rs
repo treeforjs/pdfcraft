@@ -607,10 +607,10 @@ fn editing_existing_text_in_place() {
     h.drop_at(at);
     h.run_steps(3);
     let ed = h.state().views[0].line_editor.clone().expect("the line opens for editing");
-    assert_eq!((ed.page, ed.line, ed.text.as_str()), (0, 0, "Page 1"));
+    assert_eq!((ed.page, ed.block, ed.text.as_str()), (0, 0, "Page 1"));
     h.state_mut().views[0].line_editor.as_mut().unwrap().text = "Chapter One".into();
     h.run_steps(1);
-    h.key_press(egui::Key::Enter);
+    h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::Enter);
     h.run_steps(4);
     let s = h.state();
     let doc = s.session.get(s.views[0].id).unwrap();

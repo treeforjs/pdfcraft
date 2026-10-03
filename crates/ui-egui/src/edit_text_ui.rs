@@ -1,5 +1,5 @@
-//! Edit a PDF ▸ Edit text: boxes around the lines of existing text; click one to edit it in place
-//! (Enter or clicking away applies, Esc cancels).
+//! Edit a PDF ▸ Edit text: boxes around the paragraphs of existing text; click one to edit it in
+//! place (⌘Enter or clicking away applies and rewraps it to the box, Esc cancels).
 
 use egui::{Color32, CornerRadius, Pos2, Rect, Stroke};
 use printcraft_engine::Edit;
@@ -9,11 +9,11 @@ use crate::canvas::{DocView, PageXform};
 
 const ACCENT: Color32 = Color32::from_rgb(0x14, 0x73, 0xE6);
 
-/// A line being edited.
+/// A paragraph being edited.
 #[derive(Clone, Debug, PartialEq)]
 pub struct LineEditor {
     pub page: usize,
-    pub line: usize,
+    pub block: usize,
     pub text: String,
     original: String,
     rect: Rect,
@@ -29,7 +29,7 @@ pub(crate) fn page_input(
     xf: &PageXform,
     page: usize,
     info: &DocInfo,
-    lines: &[printcraft_engine::TextLine],
+    lines: &[printcraft_engine::TextBlock],
     view: &mut DocView,
 ) -> bool {
     let boxes: Vec<Rect> = lines.iter().map(|l| xf.user_rect(info, page, l.rect.map(|v| v as f32)).expand(2.0)).collect();
@@ -43,10 +43,11 @@ pub(crate) fn page_input(
     ui.ctx().set_cursor_icon(egui::CursorIcon::Text);
     if resp.clicked() {
         let l = &lines[hit];
-        let scale = boxes[hit].height() / ((l.rect[3] - l.rect[1]).max(1.0) as f32 + 4.0);
+        // Screen pixels per point, from the box's width.
+        let scale = (boxes[hit].width() - 4.0) / ((l.rect[2] - l.rect[0]).max(1.0) as f32);
         view.line_editor = Some(LineEditor {
             page,
-            line: hit,
+            block: hit,
             text: l.text.clone(),
             original: l.text.clone(),
             rect: boxes[hit],
@@ -66,21 +67,23 @@ pub(crate) fn overlay(ctx: &egui::Context, view: &mut DocView) -> Option<Edit> {
         |ui| {
             egui::Frame::NONE.fill(Color32::WHITE).stroke(Stroke::new(1.5, ACCENT)).inner_margin(egui::Margin::symmetric(2, 0)).show(ui, |ui| {
                 let r = ui.add(
-                    egui::TextEdit::singleline(&mut ed.text)
+                    egui::TextEdit::multiline(&mut ed.text)
                         .id(egui::Id::new("edit-text-line-input"))
                         .font(egui::FontId::proportional(ed.size))
                         .text_color(Color32::BLACK)
                         .frame(egui::Frame::NONE)
-                        .desired_width(ed.rect.width().max(120.0)),
+                        .desired_width(ed.rect.width().max(120.0))
+                        .desired_rows(((ed.rect.height() / (ed.size * 1.2)).round() as usize).max(1)),
                 );
                 if ed.focus {
                     r.request_focus();
                     ed.focus = false;
                 }
                 let esc = ui.input(|i| i.key_pressed(egui::Key::Escape));
+                let apply = ui.input(|i| i.key_pressed(egui::Key::Enter) && i.modifiers.command);
                 if esc {
                     done = Some(false);
-                } else if r.lost_focus() {
+                } else if apply || r.lost_focus() {
                     done = Some(true);
                 }
             });
@@ -89,7 +92,7 @@ pub(crate) fn overlay(ctx: &egui::Context, view: &mut DocView) -> Option<Edit> {
     match done {
         Some(apply) => {
             let ed = view.line_editor.take()?;
-            (apply && ed.text != ed.original).then_some(Edit::EditTextLine { page: ed.page, line: ed.line, text: ed.text })
+            (apply && ed.text != ed.original).then_some(Edit::EditTextBlock { page: ed.page, block: ed.block, text: ed.text })
         }
         None => None,
     }

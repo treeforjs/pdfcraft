@@ -139,7 +139,7 @@ pub struct DocView {
     pub pending_edit: Option<Edit>,
     /// Edit text: the lines per page (with the document generation they were read at), and the
     /// line being edited.
-    pub(crate) edit_lines: HashMap<usize, (u64, Vec<printcraft_engine::TextLine>)>,
+    pub(crate) edit_lines: HashMap<usize, (u64, Vec<printcraft_engine::TextBlock>)>,
     pub line_editor: Option<crate::edit_text_ui::LineEditor>,
     /// Commenting state: selected comment, gestures, composer.
     pub comments: crate::comments::CommentView,
@@ -1228,7 +1228,7 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
                 let lines = match view.edit_lines.get(&i) {
                     Some((g, l)) if *g == generation => l.clone(),
                     _ => {
-                        let l = doc.text_lines(i);
+                        let l = doc.text_blocks(i);
                         view.edit_lines.insert(i, (generation, l.clone()));
                         l
                     }

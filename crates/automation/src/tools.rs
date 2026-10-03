@@ -816,11 +816,15 @@ pub fn tools() -> Vec<ToolDef> {
             .ro()
             .cmd("edit.edit_text")
             .with(schema(json!({ "doc": doc(), "page": { "type": "integer", "minimum": 1 } }), &["doc", "page"])),
-        t("text_edit", "Edit a line of text", "Replace the text of one line (from text_lines) in place, keeping its position, size and colour. Its own font is reused when it can show every character; otherwise the line is set in Helvetica (the result shows the font used). Text that no available font can show is refused. Undoable.")
+        t("text_paragraphs", "List paragraphs", "The paragraphs on a page (lines grouped by font, size, alignment and spacing): number, text, its line numbers, box (top-left-origin points), font and size. Use the number with text_edit's paragraph.")
+            .ro()
+            .cmd("edit.edit_text")
+            .with(schema(json!({ "doc": doc(), "page": { "type": "integer", "minimum": 1 } }), &["doc", "page"])),
+        t("text_edit", "Edit text", "Replace the text of one paragraph (paragraph, from text_paragraphs: rewrapped to the paragraph's width with its line spacing) or one line (line, from text_lines) in place, keeping position, size and colour. Its own font is reused when it can show every character; otherwise the line is set in Helvetica (the result shows the font used). Text that no available font can show is refused. Undoable.")
             .cmd("edit.edit_text")
             .with(schema(
-                json!({ "doc": doc(), "page": { "type": "integer", "minimum": 1 }, "line": { "type": "integer", "minimum": 1 }, "text": { "type": "string" } }),
-                &["doc", "page", "line", "text"],
+                json!({ "doc": doc(), "page": { "type": "integer", "minimum": 1 }, "line": { "type": "integer", "minimum": 1 }, "paragraph": { "type": "integer", "minimum": 1 }, "text": { "type": "string" } }),
+                &["doc", "page", "text"],
             )),
         t("doc_revisions", "List revisions", "List the document's saved revisions (oldest first): each incremental update is one. Returns revision number, where it ends in the file and its size, and which signatures sign exactly that revision.")
             .with(schema(json!({ "doc": doc() }), &["doc"])),

@@ -647,6 +647,11 @@ fn editing_existing_text_through_tools() {
     assert_eq!(page_text(&mut a, doc)[1], "Section two");
     assert!(matches!(a.call("text_edit", &json!({ "doc": doc, "page": 2, "line": 9, "text": "x" })), Err(ToolError::InvalidArgs(_))));
     assert_eq!(ok(&mut a, "edit_undo", json!({ "doc": doc }))["undone"], "Edit text");
+    let paras = ok(&mut a, "text_paragraphs", json!({ "doc": doc, "page": 3 }));
+    assert_eq!(paras["paragraphs"][0]["text"], "Page 3");
+    let r = ok(&mut a, "text_edit", json!({ "doc": doc, "page": 3, "paragraph": 1, "text": "Part three" }));
+    assert_eq!(r["paragraph"]["text"], "Part three");
+    assert!(matches!(a.call("text_edit", &json!({ "doc": doc, "page": 3, "paragraph": 4, "text": "x" })), Err(ToolError::InvalidArgs(_))));
 }
 
 #[test]
