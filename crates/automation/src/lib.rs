@@ -388,8 +388,30 @@ impl Automation {
                 if k < 1 || k as usize > n {
                     return Err(ToolError::InvalidArgs(format!("paragraph {k} is out of range: page {} has {n} paragraphs", page + 1)));
                 }
-                let text = a.str("text")?.to_owned();
-                let mut out = self.apply(&a, Edit::EditTextBlock { page, block: k as usize - 1, text })?;
+                let block = self.doc(&a)?.text_blocks(page)[k as usize - 1].clone();
+                let text = a.opt_str("text")?.map(str::to_owned).unwrap_or(block.text);
+                let mut style = printcraft_engine::BlockStyle { size: a.opt_num("size")?, ..Default::default() };
+                if let Some(f) = a.opt_str("font")? {
+                    let family = match f {
+                        "helvetica" => printcraft_engine::FontFamily::Helvetica,
+                        "times" => printcraft_engine::FontFamily::Times,
+                        "courier" => printcraft_engine::FontFamily::Courier,
+                        other => return Err(ToolError::InvalidArgs(format!("unknown font {other:?} (helvetica, times, courier)"))),
+                    };
+                    style.family = Some((family, a.opt_bool("bold")?.unwrap_or(false), a.opt_bool("italic")?.unwrap_or(false)));
+                }
+                if let Some(c) = a.opt_str("color")? {
+                    style.color = Some(comments::parse_color(c)?);
+                }
+                if let Some(al) = a.opt_str("align")? {
+                    style.align = Some(match al {
+                        "left" => printcraft_engine::TextAlign::Left,
+                        "center" => printcraft_engine::TextAlign::Center,
+                        "right" => printcraft_engine::TextAlign::Right,
+                        other => return Err(ToolError::InvalidArgs(format!("unknown align {other:?}"))),
+                    });
+                }
+                let mut out = self.apply(&a, Edit::EditTextBlock { page, block: k as usize - 1, text, style })?;
                 if let Some(b) = self.doc(&a)?.text_blocks(page).get(k as usize - 1) {
                     out["paragraph"] = json!({ "text": b.text, "lines": b.lines.len(), "font": b.base_font });
                 }

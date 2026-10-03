@@ -665,3 +665,28 @@ fn editing_existing_images_on_the_page() {
     h.run_steps(4);
     assert!(h.state().session.get(id).unwrap().page_images(0).is_empty());
 }
+
+#[test]
+fn the_format_panel_restyles_the_paragraph_being_edited() {
+    let mut h = harness(1, |_| {});
+    assert!(h.state_mut().execute("edit.edit_text"));
+    h.run_steps(2);
+    let r = h.state().views[0].page_screen_rect(0).expect("on screen");
+    let at = egui::pos2(r.left() + 40.0 / 200.0 * r.width(), r.top() + (300.0 - 158.0) / 300.0 * r.height());
+    h.hover_at(at);
+    h.run_steps(1);
+    h.drag_at(at);
+    h.run_steps(1);
+    h.drop_at(at);
+    h.run_steps(3);
+    assert!(h.state().views[0].line_editor.is_some());
+    // The Format text panel shows the paragraph's look; making it bold applies at once.
+    h.get_by_label("FORMAT TEXT");
+    h.get_by_label("B").click();
+    h.run_steps(4);
+    let s = h.state();
+    let doc = s.session.get(s.views[0].id).unwrap();
+    assert_eq!(doc.can_undo(), Some("Edit text"));
+    assert_eq!(doc.text_blocks(0)[0].base_font, "Helvetica-Bold");
+    assert!(s.views[0].line_editor.is_some(), "still editing");
+}

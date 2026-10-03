@@ -225,6 +225,8 @@ impl PrintCraftApp {
             "a11y.check" => self.start_accessibility_check(),
             "edit.edit_text" => {
                 self.quick_tool = crate::QuickTool::EditText;
+                self.left = crate::LeftPanel::Tool("edit");
+                self.left_open = true;
                 self.notify("Click text or an image to edit it");
             }
             "edit.advanced_search" => {

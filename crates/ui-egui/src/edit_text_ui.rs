@@ -21,6 +21,48 @@ pub struct LineEditor {
     rect: Rect,
     size: f32,
     focus: bool,
+    /// The Format text panel's values, and what the paragraph had (to send only changes).
+    pub look: printcraft_engine::AddedText,
+    look0: printcraft_engine::AddedText,
+}
+
+impl LineEditor {
+    /// The formatting the panel changed.
+    pub fn style(&self) -> printcraft_engine::BlockStyle {
+        let (l, o) = (&self.look, &self.look0);
+        printcraft_engine::BlockStyle {
+            family: (l.family != o.family || l.bold != o.bold || l.italic != o.italic).then_some((l.family, l.bold, l.italic)),
+            size: (l.size != o.size).then_some(l.size),
+            color: (l.color != o.color).then_some(l.color),
+            align: (l.align != o.align).then_some(l.align),
+        }
+    }
+
+    /// After applying formatting: the paragraph now has it.
+    pub fn applied(&mut self) {
+        self.look0 = self.look.clone();
+        self.original = self.text.clone();
+        self.focus = true;
+    }
+}
+
+/// The look shown for a paragraph: the family and weight guessed from its font's name.
+fn look_of(b: &printcraft_engine::TextBlock) -> printcraft_engine::AddedText {
+    use printcraft_engine::FontFamily as F;
+    let name = b.base_font.to_ascii_lowercase();
+    printcraft_engine::AddedText {
+        family: if name.contains("times") || name.contains("serif") && !name.contains("sans") {
+            F::Times
+        } else if name.contains("courier") || name.contains("mono") {
+            F::Courier
+        } else {
+            F::Helvetica
+        },
+        bold: name.contains("bold") || name.contains("black") || name.contains("heavy"),
+        italic: name.contains("italic") || name.contains("oblique"),
+        size: (b.size * 10.0).round() / 10.0,
+        ..Default::default()
+    }
 }
 
 /// A selected page image, and what the pointer is doing to it.
@@ -199,6 +241,8 @@ pub(crate) fn page_input(
             rect: boxes[hit],
             size: (l.size as f32 * scale).clamp(8.0, 72.0),
             focus: true,
+            look: look_of(l),
+            look0: look_of(l),
         });
     }
     true
@@ -206,6 +250,8 @@ pub(crate) fn page_input(
 
 /// The inline editor; returns the edit once the text is applied.
 pub(crate) fn overlay(ctx: &egui::Context, view: &mut DocView) -> Option<Edit> {
+    // Clicks outside the document (the Format text panel) keep the paragraph open.
+    let outside = ctx.input(|i| i.pointer.latest_pos()).is_some_and(|p| !view.viewport_rect().contains(p));
     let ed = view.line_editor.as_mut()?;
     let mut done = None;
     egui::Area::new(egui::Id::new("edit-text-line")).order(egui::Order::Foreground).fixed_pos(Pos2::new(ed.rect.left(), ed.rect.top())).show(
@@ -229,7 +275,7 @@ pub(crate) fn overlay(ctx: &egui::Context, view: &mut DocView) -> Option<Edit> {
                 let apply = ui.input(|i| i.key_pressed(egui::Key::Enter) && i.modifiers.command);
                 if esc {
                     done = Some(false);
-                } else if apply || r.lost_focus() {
+                } else if apply || (r.lost_focus() && !outside) {
                     done = Some(true);
                 }
             });
@@ -238,7 +284,13 @@ pub(crate) fn overlay(ctx: &egui::Context, view: &mut DocView) -> Option<Edit> {
     match done {
         Some(apply) => {
             let ed = view.line_editor.take()?;
-            (apply && ed.text != ed.original).then_some(Edit::EditTextBlock { page: ed.page, block: ed.block, text: ed.text })
+            let style = ed.style();
+            (apply && (ed.text != ed.original || style != printcraft_engine::BlockStyle::default())).then_some(Edit::EditTextBlock {
+                page: ed.page,
+                block: ed.block,
+                text: ed.text,
+                style,
+            })
         }
         None => None,
     }

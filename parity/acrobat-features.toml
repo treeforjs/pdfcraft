@@ -1827,11 +1827,11 @@ title = "Change font, size and colour"
 area = "C"
 tier = "P0"
 milestone = "M7"
-status = "partial"
-commands = ["edit.text"]
-tools = ["content_update"]
-evidence = ["crates/ui-egui/tests/content.rs::typing_moving_styling_and_deleting_added_content", "crates/edit/src/tests.rs::added_text_and_images_are_page_content_that_stays_editable"]
-notes = "for added text: family, size, bold, italic, colour; existing text needs the M7 editor"
+status = "shipped"
+commands = ["edit.edit_text", "edit.text"]
+tools = ["text_edit", "content_update"]
+evidence = ["crates/edit/src/tests.rs::paragraphs_take_new_formatting", "crates/ui-egui/tests/editing.rs::the_format_panel_restyles_the_paragraph_being_edited", "crates/automation/tests/automation.rs::editing_existing_text_through_tools"]
+notes = "existing paragraphs and added text: font family (Helvetica, Times, Courier) with bold and italic, size, colour; existing paragraphs are rewrapped"
 
 [[feature]]
 id = "edit.text-format-style"
@@ -1839,11 +1839,11 @@ title = "Bold, italic, underline"
 area = "C"
 tier = "P1"
 milestone = "M7"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["edit.edit_text", "edit.text"]
+tools = ["text_edit"]
+evidence = ["crates/edit/src/tests.rs::paragraphs_take_new_formatting", "crates/ui-egui/tests/editing.rs::the_format_panel_restyles_the_paragraph_being_edited", "crates/automation/tests/automation.rs::editing_existing_text_through_tools"]
+notes = "bold and italic through the standard font families; underline is not done yet"
 
 [[feature]]
 id = "edit.text-super-subscript"
@@ -1864,10 +1864,10 @@ area = "C"
 tier = "P0"
 milestone = "M7"
 status = "partial"
-commands = ["edit.text"]
-tools = ["content_update"]
-evidence = ["crates/edit/src/tests.rs::added_text_and_images_are_page_content_that_stays_editable"]
-notes = "left/centre/right for added text"
+commands = ["edit.edit_text", "edit.text"]
+tools = ["text_edit"]
+evidence = ["crates/edit/src/tests.rs::paragraphs_take_new_formatting", "crates/ui-egui/tests/editing.rs::the_format_panel_restyles_the_paragraph_being_edited", "crates/automation/tests/automation.rs::editing_existing_text_through_tools"]
+notes = "left, centre, right for existing paragraphs (per wrapped line) and added text; justify is not done yet"
 
 [[feature]]
 id = "edit.line-paragraph-spacing"
@@ -2487,11 +2487,11 @@ title = "Format panel for edited text"
 area = "C"
 tier = "P0"
 milestone = "M7"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["edit.edit_text"]
+tools = ["text_edit"]
+evidence = ["crates/edit/src/tests.rs::paragraphs_take_new_formatting", "crates/ui-egui/tests/editing.rs::the_format_panel_restyles_the_paragraph_being_edited", "crates/automation/tests/automation.rs::editing_existing_text_through_tools"]
+notes = "Edit a PDF ▸ Format text shows the paragraph being edited (family, bold/italic guessed from its font, size) and applies changes at once as one undo step each, keeping the paragraph open"
 
 [[feature]]
 id = "edit.adobe-express-edits"

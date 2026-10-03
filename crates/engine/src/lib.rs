@@ -31,7 +31,7 @@ pub use printcraft_forms::{
 };
 
 pub use printcraft_a11y as a11y;
-pub use printcraft_edit::{PageImage, TextBlock, TextLine};
+pub use printcraft_edit::{BlockStyle, PageImage, TextBlock, TextLine};
 
 /// A change to an existing page image.
 #[derive(Clone, Debug, PartialEq)]
@@ -794,6 +794,8 @@ pub enum Edit {
         page: usize,
         block: usize,
         text: String,
+        /// Formatting changes (font, size, colour, alignment); default keeps the paragraph's.
+        style: printcraft_edit::BlockStyle,
     },
     /// Order tabs manually: move a field one place earlier or later on its page.
     MoveInTabOrder {
@@ -1330,8 +1332,8 @@ fn run_edit(doc: &mut printcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -
             };
             printcraft_edit::change_image(doc, *page, *index, &c)?;
         }
-        Edit::EditTextBlock { page, block, text } => {
-            printcraft_edit::replace_block(doc, *page, *block, text)?;
+        Edit::EditTextBlock { page, block, text, style } => {
+            printcraft_edit::rewrite_block(doc, *page, *block, Some(text), style)?;
         }
         Edit::MarkDecorative { figure } => {
             let r = printcraft_cos::ObjRef::new(*figure, doc.generation(*figure));

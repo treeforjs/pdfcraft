@@ -842,11 +842,19 @@ pub fn tools() -> Vec<ToolDef> {
             .ro()
             .cmd("edit.edit_text")
             .with(schema(json!({ "doc": doc(), "page": { "type": "integer", "minimum": 1 } }), &["doc", "page"])),
-        t("text_edit", "Edit text", "Replace the text of one paragraph (paragraph, from text_paragraphs: rewrapped to the paragraph's width with its line spacing) or one line (line, from text_lines) in place, keeping position, size and colour. Its own font is reused when it can show every character; otherwise the line is set in Helvetica (the result shows the font used). Text that no available font can show is refused. Undoable.")
+        t("text_edit", "Edit text", "Replace the text of one paragraph (paragraph, from text_paragraphs: rewrapped to the paragraph's width with its line spacing) or one line (line, from text_lines) in place, keeping position, size and colour. For a paragraph, also change its formatting: font (helvetica, times, courier) with bold/italic, size (points), color (#rrggbb) and align (left, center, right); text may then be omitted. Its own font is reused when it can show every character; otherwise the line is set in Helvetica (the result shows the font used). Text that no available font can show is refused. Undoable.")
             .cmd("edit.edit_text")
             .with(schema(
-                json!({ "doc": doc(), "page": { "type": "integer", "minimum": 1 }, "line": { "type": "integer", "minimum": 1 }, "paragraph": { "type": "integer", "minimum": 1 }, "text": { "type": "string" } }),
-                &["doc", "page", "text"],
+                json!({ "doc": doc(), "page": { "type": "integer", "minimum": 1 }, "line": { "type": "integer", "minimum": 1 },
+                    "paragraph": { "type": "integer", "minimum": 1 },
+                    "text": { "type": "string" },
+                    "font": { "type": "string", "enum": ["helvetica", "times", "courier"] },
+                    "bold": { "type": "boolean" },
+                    "italic": { "type": "boolean" },
+                    "size": { "type": "number", "exclusiveMinimum": 0 },
+                    "color": { "type": "string", "description": "#rrggbb" },
+                    "align": { "type": "string", "enum": ["left", "center", "right"] } }),
+                &["doc", "page"],
             )),
         t("doc_revisions", "List revisions", "List the document's saved revisions (oldest first): each incremental update is one. Returns revision number, where it ends in the file and its size, and which signatures sign exactly that revision.")
             .with(schema(json!({ "doc": doc() }), &["doc"])),

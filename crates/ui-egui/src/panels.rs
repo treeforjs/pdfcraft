@@ -273,6 +273,23 @@ fn stamp_palette(app: &mut PrintCraftApp, ui: &mut egui::Ui, t: &Tokens) {
 /// Edit a PDF ▸ Format text: for the selected added text (one undoable change), or the style
 /// new text gets.
 fn format_section(app: &mut PrintCraftApp, ui: &mut egui::Ui, t: &Tokens) {
+    // Editing a paragraph of existing text: its formatting, applied as it changes.
+    if let Some((i, _)) = app.active_ids()
+        && let Some(ed) = app.views[i].line_editor.clone()
+    {
+        if let Some(look) = crate::content_ui::format_panel(ui, t, &ed.look) {
+            let mut ed = ed;
+            ed.look = look;
+            let edit = printcraft_engine::Edit::EditTextBlock { page: ed.page, block: ed.block, text: ed.text.clone(), style: ed.style() };
+            if app.apply_edit(edit) {
+                ed.applied();
+            }
+            app.views[i].line_editor = Some(ed);
+        }
+        ui.add_space(6.0);
+        ui.separator();
+        return;
+    }
     let image = app.active_ids().and_then(|(i, id)| {
         let (page, index) = app.views[i].content.selected?;
         let doc = app.session.get(id)?;

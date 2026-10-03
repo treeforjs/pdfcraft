@@ -414,3 +414,36 @@ fn page_images_move_turn_replace_and_delete() {
     assert!(images::page_images(&doc, 0).unwrap().is_empty());
     assert!(images::change_image(&mut doc, 0, 0, &images::ImageChange::Delete).is_err());
 }
+
+#[test]
+fn paragraphs_take_new_formatting() {
+    let mut doc = text_page("BT /F1 10 Tf 12 TL 100 700 Td (One two three four five six seven) Tj T* (eight nine ten eleven twelve) Tj ET");
+    let before = text::text_blocks(&doc, 0).unwrap()[0].clone();
+    let style = text::BlockStyle {
+        family: Some((added::Family::Times, true, false)),
+        size: Some(12.0),
+        color: Some([1.0, 0.0, 0.0]),
+        align: Some(added::Align::Center),
+    };
+    text::rewrite_block(&mut doc, 0, 0, None, &style).unwrap();
+    let doc = reopen(&doc);
+    let blocks = text::text_blocks(&doc, 0).unwrap();
+    let lines = text::text_lines(&doc, 0).unwrap();
+    assert_eq!(blocks[0].text, before.text, "same words");
+    assert_eq!((blocks[0].base_font.as_str(), blocks[0].size), ("Times-Bold", 12.0));
+    // Centred in the paragraph's width.
+    let mid = (before.rect[0] + before.rect[2]) / 2.0;
+    for i in &blocks[0].lines {
+        let r = lines[*i].rect;
+        assert!(((r[0] + r[2]) / 2.0 - mid).abs() < 2.0, "line {:?} centred on {mid}", lines[*i].text);
+    }
+    assert!(String::from_utf8_lossy(&page_content_bytes(&doc, 0)).contains("1 0 0 rg"));
+    // Right alignment keeps lines flush with the right edge.
+    let mut doc = text_page("BT /F1 10 Tf 12 TL 100 700 Td (One two three four five six seven) Tj T* (eight nine ten eleven twelve) Tj ET");
+    let right = text::text_blocks(&doc, 0).unwrap()[0].rect[2];
+    text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { align: Some(added::Align::Right), ..Default::default() }).unwrap();
+    let lines = text::text_lines(&doc, 0).unwrap();
+    for l in &lines {
+        assert!((l.rect[2] - right).abs() < 1.0, "{:?} ends at {} not {right}", l.text, l.rect[2]);
+    }
+}

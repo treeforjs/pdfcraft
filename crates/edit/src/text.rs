@@ -488,6 +488,13 @@ pub fn text_blocks(doc: &Document, page: usize) -> Result<Vec<TextBlock>, EditEr
     Ok(group_blocks(&lines))
 }
 
+/// Lines that share a left edge, a centre or a right edge (left, centred or right-aligned text).
+fn aligned(a: &TextLine, b: &TextLine) -> bool {
+    let tol = b.size.max(1.0);
+    let centre = |r: [f64; 4]| (r[0] + r[2]) / 2.0;
+    (a.origin.x - b.origin.x).abs() < tol || (centre(a.rect) - centre(b.rect)).abs() < tol || (a.rect[2] - b.rect[2]).abs() < tol
+}
+
 fn group_blocks(lines: &[TextLine]) -> Vec<TextBlock> {
     let mut blocks: Vec<TextBlock> = Vec::new();
     let mut gap: Option<f64> = None;
@@ -499,7 +506,7 @@ fn group_blocks(lines: &[TextLine]) -> Vec<TextBlock> {
                 prev.stream == l.stream
                     && prev.font == l.font
                     && (prev.size - l.size).abs() < 0.01
-                    && (prev.origin.x - l.origin.x).abs() < l.size
+                    && aligned(prev, l)
                     && g > l.size * 0.8
                     && g < l.size * 2.5
                     && gap.is_none_or(|first| (g - first).abs() < first * 0.2)
@@ -546,6 +553,23 @@ fn wrap(text: &str, width: f64, advance: impl Fn(&str) -> f64) -> Vec<String> {
 /// paragraph's width with its line spacing. The paragraph keeps its first line's position, font
 /// (or Helvetica when the font can't show the text), size and colour.
 pub fn replace_block(doc: &mut Document, page: usize, block: usize, text: &str) -> Result<LineEdit, EditError> {
+    rewrite_block(doc, page, block, Some(text), &BlockStyle::default())
+}
+
+/// Formatting for a rewritten paragraph (`None` keeps the paragraph's own).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct BlockStyle {
+    /// A standard font family, bold, italic.
+    pub family: Option<(crate::added::Family, bool, bool)>,
+    /// Font size in points (user space).
+    pub size: Option<f64>,
+    /// Fill colour (RGB 0–1).
+    pub color: Option<[f64; 3]>,
+    pub align: Option<crate::added::Align>,
+}
+
+/// Rewrite paragraph `block` with new text (or its own) and formatting, rewrapped to its width.
+pub fn rewrite_block(doc: &mut Document, page: usize, block: usize, text: Option<&str>, style: &BlockStyle) -> Result<LineEdit, EditError> {
     let lines = text_lines(doc, page)?;
     let blocks = group_blocks(&lines);
     let b = blocks.get(block).cloned().ok_or_else(|| EditError::Invalid(format!("page {} has no paragraph {}", page + 1, block + 1)))?;
@@ -557,13 +581,23 @@ pub fn replace_block(doc: &mut Document, page: usize, block: usize, text: &str) 
     let streams = content_streams(doc, &p.dict);
     let (stream_obj, data) = streams.get(first.stream).cloned().ok_or_else(|| EditError::Invalid("the page's content changed".into()))?;
     let ops = parse(&data).ops;
-    let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    let text = text.unwrap_or(&b.text).split_whitespace().collect::<Vec<_>>().join(" ");
     let o = &first.origin;
-    let (font_name, size) = o.state.font.clone().ok_or_else(|| EditError::Invalid("the paragraph has no font".into()))?;
-    let metrics = fonts_res.get(font_name.as_bytes()).and_then(|f| doc.resolve(f).as_dict().cloned()).map(|d| Metrics::from_dict(doc, &d));
-    let reuse = metrics.as_ref().is_some_and(|m| m.encode(&text).is_some());
-    // Widths in user space: the paragraph's width, and each candidate line's advance.
+    let (font_name, old_size) = o.state.font.clone().ok_or_else(|| EditError::Invalid("the paragraph has no font".into()))?;
     let k = o.k.max(1e-6);
+    // The size in text space: points ÷ the text-to-user scale.
+    let size = style.size.map_or(old_size, |pt| (pt / k).max(0.1));
+    let metrics = fonts_res.get(font_name.as_bytes()).and_then(|f| doc.resolve(f).as_dict().cloned()).map(|d| Metrics::from_dict(doc, &d));
+    let reuse = style.family.is_none() && metrics.as_ref().is_some_and(|m| m.encode(&text).is_some());
+    // The standard font used when the paragraph's own can't be (chosen, or substituted).
+    let (family, bold, italic) = style.family.unwrap_or((crate::added::Family::Helvetica, false, false));
+    let std_width = move |s: &str, size: f64| -> f64 {
+        match family {
+            crate::added::Family::Courier => s.chars().count() as f64 * 0.6 * size,
+            crate::added::Family::Times => printcraft_fonts::helvetica_width(s, size) * 0.92,
+            crate::added::Family::Helvetica => printcraft_fonts::helvetica_width(s, size) * if bold { 1.05 } else { 1.0 },
+        }
+    };
     // A paragraph keeps its width; a single line grows to the right, up to the page's margin.
     let mut width = (b.rect[2] - b.rect[0]).max(size * k);
     if members.len() == 1 {
@@ -581,42 +615,62 @@ pub fn replace_block(doc: &mut Document, page: usize, block: usize, text: &str) 
                         .sum::<f64>()
                 })
                 .unwrap_or(0.0),
-            _ => printcraft_fonts::helvetica_width(s, size),
+            _ => std_width(s, size),
         };
         t * o.state.scale * k
     };
     let wrapped = wrap(&text, width + 0.5, advance);
     let mut substituted = None;
+    let new_font = !reuse;
     let (show_font, encode): (String, Encoder) = if reuse {
         let m = metrics.clone().expect("checked");
         (font_name.clone(), Box::new(move |s: &str| m.encode(s)))
     } else {
         let win = printcraft_fonts::win_ansi(&text);
         let back: String = win.iter().map(|c| char::from_u32(u32::from(*c)).unwrap_or('?')).collect();
+        let base = family.base_font(bold, italic);
         if text.chars().zip(back.chars()).any(|(a, c)| c == '?' && a != '?') {
-            return Err(EditError::Invalid(format!("\"{text}\" has characters neither {} nor Helvetica can show", b.base_font)));
+            return Err(EditError::Invalid(format!("\"{text}\" has characters neither {} nor {base} can show", b.base_font)));
         }
         let mut f = Dict::new();
         f.set(b"Type".to_vec(), Object::name("Font"));
         f.set(b"Subtype".to_vec(), Object::name("Type1"));
-        f.set(b"BaseFont".to_vec(), Object::name("Helvetica"));
+        f.set(b"BaseFont".to_vec(), Object::name(base));
         f.set(b"Encoding".to_vec(), Object::name("WinAnsiEncoding"));
-        fonts_res.set(SUBSTITUTE.to_vec(), Object::Dict(f));
-        substituted = Some("Helvetica".to_string());
-        (String::from_utf8_lossy(SUBSTITUTE).into_owned(), Box::new(|s: &str| Some(printcraft_fonts::win_ansi(s))))
+        let name = if style.family.is_none() { String::from_utf8_lossy(SUBSTITUTE).into_owned() } else { format!("PCEd{}", base.replace('-', "")) };
+        fonts_res.set(name.clone().into_bytes(), Object::Dict(f));
+        if style.family.is_none() {
+            substituted = Some(base.to_string());
+        }
+        (name, Box::new(|s: &str| Some(printcraft_fonts::win_ansi(s))))
     };
-    // Line spacing in text space: the paragraph's own, or 1.2 × the size for one line.
-    let lead = if members.len() > 1 { (members[0].origin.baseline - members[1].origin.baseline) / k } else { size * 1.2 };
+    // Line spacing in text space: the paragraph's own (scaled with the size), or 1.2 × the size.
+    let lead = if members.len() > 1 { (members[0].origin.baseline - members[1].origin.baseline) / k * size / old_size } else { size * 1.2 };
     let n = printcraft_content::num;
     let mut block_ops = vec![Op::new("BT", vec![])];
     let mut state = o.state.clone();
     state.font = Some((show_font, size));
+    if let Some([r, g, bl]) = style.color {
+        state.fill = vec![Op::new("rg", vec![n(r), n(g), n(bl)])];
+    }
     block_ops.extend(state.ops());
     block_ops.push(Op::new("Tm", o.tm.iter().map(|v| n(*v)).collect()));
-    for (i, line) in wrapped.iter().enumerate() {
-        if i > 0 {
-            block_ops.push(Op::new("Td", vec![n(0.0), n(-lead)]));
+    // Alignment: each line's offset from the left edge, in text space.
+    let offset = |line: &str| -> f64 {
+        let free = (width - advance(line)).max(0.0) / k;
+        match style.align {
+            Some(crate::added::Align::Center) => free / 2.0,
+            Some(crate::added::Align::Right) => free,
+            _ => 0.0,
         }
+    };
+    let mut x = 0.0;
+    for (i, line) in wrapped.iter().enumerate() {
+        let dx = offset(line);
+        if i > 0 || dx != 0.0 {
+            block_ops.push(Op::new("Td", vec![n(dx - x), n(if i > 0 { -lead } else { 0.0 })]));
+        }
+        x = dx;
         let bytes = encode(line).ok_or_else(|| EditError::Invalid(format!("\"{line}\" can't be shown")))?;
         block_ops.push(Op::new("Tj", vec![Object::String(PdfString::literal(bytes))]));
     }
@@ -640,13 +694,13 @@ pub fn replace_block(doc: &mut Document, page: usize, block: usize, text: &str) 
     dict.remove(b"Length");
     let new = doc.add(Object::Stream(Stream::flate(dict, &serialize_ops(&new_ops))));
     let contents: Vec<Object> = streams.iter().enumerate().map(|(i, (o, _))| if i == first.stream { Object::Ref(new) } else { o.clone() }).collect();
-    if substituted.is_some() {
+    if new_font {
         res.set(b"Font".to_vec(), Object::Dict(fonts_res));
     }
     let page_ref = p.obj;
     doc.update_dict(page_ref, |d| {
         d.set(b"Contents".to_vec(), if contents.len() == 1 { contents[0].clone() } else { Object::Array(contents) });
-        if substituted.is_some() {
+        if new_font {
             d.set(b"Resources".to_vec(), Object::Dict(res));
         }
     })?;
