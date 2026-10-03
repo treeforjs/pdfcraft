@@ -74,6 +74,7 @@ pub use printcraft_annot::{
     AttachIcon, FillMark, Markup, NewAnnotation, NoteIcon, OverlayFont, OverlayLook, Props as CommentProps, ReviewState, Rgb, Shape, StampGroup,
     StampKind, Style, rect_quad,
 };
+pub use printcraft_forms::detect;
 pub use printcraft_optimize as optimize;
 pub use printcraft_print as print;
 pub use printcraft_redact::patterns::{PATTERNS as REDACT_PATTERNS, Pattern as RedactPattern, find as find_pattern};

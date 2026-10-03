@@ -365,7 +365,14 @@ impl PrintCraftApp {
                 self.left = crate::LeftPanel::Tool("form");
                 self.left_open = true;
                 self.right = Some(RightPanel::Fields);
+                // Like Acrobat, a document without fields gets them detected on the way in.
+                if let Some((_, id)) = self.active_ids()
+                    && self.session.get(id).is_some_and(|d| d.form.is_empty() && d.editable())
+                {
+                    self.detect_fields();
+                }
             }
+            "form.detect" => self.detect_fields(),
             "form.field.properties" => {
                 if let Some((name, w)) = active.and_then(|i| self.views[i].prepare.selected.clone()) {
                     self.open_field_props(&name, w);

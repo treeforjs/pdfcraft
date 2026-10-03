@@ -75,6 +75,21 @@ impl PrintCraftApp {
         }
     }
 
+    /// Prepare a form ▸ detect fields from the page's blanks, lines and boxes.
+    pub fn detect_fields(&mut self) {
+        let Some((i, id)) = self.active_ids() else { return };
+        match self.session.auto_detect_fields(id, &[]) {
+            Ok(names) if names.is_empty() => self.notify("No form fields were detected"),
+            Ok(names) => {
+                if let Some(info) = self.session.get(id).map(|d| d.info.clone()) {
+                    self.views[i].document_changed(&info);
+                }
+                self.notify(format!("Detected {} form field{}", names.len(), if names.len() == 1 { "" } else { "s" }));
+            }
+            Err(e) => self.notify(e.to_string()),
+        }
+    }
+
     /// The console's Run: evaluate the input in the active document.
     pub fn run_console(&mut self) {
         let Some((i, id)) = self.active_ids() else { return };

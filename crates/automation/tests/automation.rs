@@ -1416,3 +1416,20 @@ fn field_actions_through_tools() {
     assert_eq!(run["requests"][0]["page"], 3);
     assert!(a.call("form_set_actions", &json!({ "doc": doc, "field": "Go", "actions": [{ "trigger": "wave" }] })).is_err());
 }
+
+#[test]
+fn detecting_form_fields_through_tools() {
+    let dir = workdir("detect-fields");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_create", json!({ "from": "text", "text": "Name: ____________________\n\nCity: ____________________" }))["doc"]
+        .as_u64()
+        .unwrap();
+    let r = ok(&mut a, "form_detect_fields", json!({ "doc": doc, "add": false }));
+    assert_eq!(r["fields"].as_array().unwrap().len(), 2, "{r}");
+    assert_eq!(r["fields"][1]["name"], "City");
+    assert_eq!(ok(&mut a, "form_fields", json!({ "doc": doc }))["fields"].as_array().unwrap().len(), 0);
+    ok(&mut a, "form_detect_fields", json!({ "doc": doc }));
+    ok(&mut a, "form_fill", json!({ "doc": doc, "values": { "City": "Lisbon" } }));
+    let f = ok(&mut a, "form_fields", json!({ "doc": doc }));
+    assert_eq!(f["fields"][1]["value"], "Lisbon", "{f}");
+}

@@ -4959,11 +4959,11 @@ title = "Automatic form field detection"
 area = "F"
 tier = "P1"
 milestone = "M6"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["form.detect", "form.prepare"]
+tools = ["form_detect_fields"]
+evidence = ["crates/forms/src/tests.rs::detection_finds_blanks_rules_boxes_and_names_them", "crates/engine/src/tests.rs::detecting_fields_on_a_printed_form", "crates/automation/tests/automation.rs::detecting_form_fields_through_tools", "crates/ui-egui/tests/javascript.rs::prepare_a_form_detects_fields_on_a_paper_form"]
+notes = "Underscore runs, rules, empty boxes and small squares (check boxes); runs when Prepare a form starts on a document without fields. Not yet: comb boxes, tables of cells, scanned forms (needs OCR first), radio groups."
 
 [[feature]]
 id = "form.auto-name-fields"
@@ -4971,11 +4971,11 @@ title = "Name new fields from nearby labels"
 area = "F"
 tier = "P1"
 milestone = "M6"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["form.detect"]
+tools = ["form_detect_fields"]
+evidence = ["crates/forms/src/tests.rs::detection_finds_blanks_rules_boxes_and_names_them", "crates/engine/src/tests.rs::detecting_fields_on_a_printed_form", "crates/automation/tests/automation.rs::detecting_form_fields_through_tools"]
+notes = "Names come from the label to the left (or above; right of check boxes), unique like Acrobat's (Name2, Text1)."
 
 [[feature]]
 id = "form.document-javascripts"

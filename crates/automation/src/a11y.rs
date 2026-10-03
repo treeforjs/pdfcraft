@@ -259,6 +259,26 @@ impl Automation {
         Ok(json!({ "path": target.to_string_lossy(), "rows": files.len(), "columns": columns }))
     }
 
+    pub(crate) fn form_detect_fields(&mut self, a: &Args) -> Result<Value> {
+        let pages = if a.opt_ints("pages")?.is_some() { self.pages(a, "pages")? } else { Vec::new() };
+        let id = self.doc(a)?.id;
+        let found = self.session.detect_fields(id, &pages);
+        let list: Vec<Value> = found
+            .iter()
+            .map(|(p, c)| {
+                let kind = match c.kind {
+                    printcraft_engine::detect::Kind::Text => "text",
+                    printcraft_engine::detect::Kind::CheckBox => "checkbox",
+                };
+                json!({ "page": p + 1, "kind": kind, "name": c.name, "rect": c.rect.map(|v| (v * 100.0).round() / 100.0) })
+            })
+            .collect();
+        if a.opt_bool("add")?.unwrap_or(true) && !found.is_empty() {
+            self.session.auto_detect_fields(id, &pages).map_err(failed)?;
+        }
+        Ok(json!({ "fields": list }))
+    }
+
     pub(crate) fn form_actions(&self, a: &Args) -> Result<Value> {
         use printcraft_engine::FieldAction as A;
         let list: Vec<Value> = self

@@ -17,6 +17,7 @@ mod actions;
 pub mod af;
 pub mod appearance;
 mod author;
+pub mod detect;
 mod scripting;
 pub use actions::{FieldAction, Trigger, field_actions, set_field_actions};
 pub use author::{

@@ -1299,3 +1299,22 @@ fn form_javascript_validates_calculates_and_formats() {
     assert_eq!(value(&s, "total"), ["12"]);
     assert!(s.run_javascript(id, "1", None).is_err());
 }
+
+#[test]
+fn detecting_fields_on_a_printed_form() {
+    let mut s = Session::new().with_clock(|| 1_700_000_000);
+    let text = s.create_from_text("t", "Name: ______________________\n\nEmail address: ____________________\n\nPlain text without blanks.").unwrap();
+    let id = s.open("paper.pdf", None, text, None).unwrap();
+    let found = s.detect_fields(id, &[]);
+    let names: Vec<&str> = found.iter().map(|(_, c)| c.name.as_str()).collect();
+    assert_eq!(names, ["Name", "Email address"], "{found:?}");
+    let added = s.auto_detect_fields(id, &[]).unwrap();
+    assert_eq!(added, ["Name", "Email address"]);
+    let d = s.get(id).unwrap();
+    assert_eq!(d.form.len(), 2);
+    assert_eq!(d.can_undo(), Some("Detect form fields"));
+    // The field sits on the blank: right of the label, at its height.
+    let f = &d.form[0];
+    assert!(f.widgets[0].rect[0] > 72.0 + 20.0, "{:?}", f.widgets[0].rect);
+    assert!(s.detect_fields(id, &[]).is_empty(), "nothing left to detect");
+}

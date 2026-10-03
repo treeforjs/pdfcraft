@@ -225,3 +225,95 @@ impl Session {
         Ok(o)
     }
 }
+
+/// A page's words for form-field detection, in user space (underscore runs split from the
+/// text around them).
+fn detection_words(text: &printcraft_render::PageText, info: &printcraft_render::PageInfo) -> Vec<printcraft_forms::detect::Word> {
+    let mut words: Vec<(String, [f32; 4])> = Vec::new();
+    let mut last_line = u32::MAX;
+    // A space glyph ends the word before it.
+    let mut gap = false;
+    for (i, g) in text.glyphs.iter().enumerate() {
+        let line = text.line_of.get(i).copied().unwrap_or(0);
+        if g.text.trim().is_empty() {
+            gap = true;
+            continue;
+        }
+        let under = g.text.chars().all(|c| c == '_');
+        let breaks = match words.last() {
+            None => true,
+            Some((w, _)) => gap || line != last_line || text.space_before.get(i).copied().unwrap_or(false) || w.chars().all(|c| c == '_') != under,
+        };
+        gap = false;
+        last_line = line;
+        match words.last_mut() {
+            Some((w, r)) if !breaks => {
+                w.push_str(&g.text);
+                r[0] = r[0].min(g.rect[0]);
+                r[1] = r[1].min(g.rect[1]);
+                r[2] = r[2].max(g.rect[2]);
+                r[3] = r[3].max(g.rect[3]);
+            }
+            _ => words.push((g.text.clone(), g.rect)),
+        }
+    }
+    words
+        .into_iter()
+        .map(|(text, r)| {
+            let a = info.view_to_user(r[0], r[1]);
+            let b = info.view_to_user(r[2], r[3]);
+            let rect = [a[0].min(b[0]) as f64, a[1].min(b[1]) as f64, a[0].max(b[0]) as f64, a[1].max(b[1]) as f64];
+            printcraft_forms::detect::Word { text, rect }
+        })
+        .collect()
+}
+
+impl Session {
+    /// Prepare a form ▸ automatic field detection: the fields `pages` (0-based; empty = all)
+    /// seem to ask for, named from their labels, as (page, candidate).
+    pub fn detect_fields(&self, id: DocId, pages: &[usize]) -> Vec<(usize, printcraft_forms::detect::Candidate)> {
+        let Some(doc) = self.get(id) else { return Vec::new() };
+        let Some(cos) = doc.editor.as_ref().map(|e| &e.cos) else { return Vec::new() };
+        let config = printcraft_render::RenderConfig { password: doc.password.as_deref().map(std::sync::Arc::from), ..Default::default() };
+        let mut r = printcraft_render::PageRenderer::new(doc.bytes.clone(), config);
+        let mut taken: Vec<String> = doc.form.iter().map(|f| f.name.clone()).collect();
+        let all = doc.info.pages.len();
+        let list: Vec<usize> = if pages.is_empty() { (0..all).collect() } else { pages.iter().copied().filter(|p| *p < all).collect() };
+        let mut out = Vec::new();
+        for page in list {
+            let res =
+                r.render(printcraft_render::RenderRequest { page, kind: printcraft_render::RequestKind::Text, scale: 1.0, ..Default::default() });
+            let words = res.text.map(|t| detection_words(&t, &doc.info.pages[page])).unwrap_or_default();
+            let shapes = printcraft_forms::detect::page_shapes(cos, page);
+            let existing: Vec<[f64; 4]> = doc.form.iter().flat_map(|f| f.widgets.iter()).filter(|w| w.page == Some(page)).map(|w| w.rect).collect();
+            for c in printcraft_forms::detect::detect(&words, &shapes, &existing, &taken) {
+                taken.push(c.name.clone());
+                out.push((page, c));
+            }
+        }
+        out
+    }
+
+    /// Detect fields and add them, as one undoable step. Returns the new fields' names.
+    pub fn auto_detect_fields(&mut self, id: DocId, pages: &[usize]) -> Result<Vec<String>, EditError> {
+        let found = self.detect_fields(id, pages);
+        if found.is_empty() {
+            return Ok(Vec::new());
+        }
+        let names = found.iter().map(|(_, c)| c.name.clone()).collect();
+        let edits = found
+            .into_iter()
+            .map(|(page, c)| Edit::AddField {
+                page,
+                rect: c.rect,
+                kind: match c.kind {
+                    printcraft_forms::detect::Kind::Text => printcraft_forms::NewField::Text { multiline: c.rect[3] - c.rect[1] > 30.0 },
+                    printcraft_forms::detect::Kind::CheckBox => printcraft_forms::NewField::CheckBox,
+                },
+                name: Some(c.name),
+            })
+            .collect();
+        self.apply(id, Edit::Batch { label: "Detect form fields".into(), edits })?;
+        Ok(names)
+    }
+}

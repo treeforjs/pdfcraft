@@ -659,3 +659,44 @@ fn field_actions_round_trip_on_every_trigger() {
     set_field_actions(&mut doc, &name, &[(Trigger::MouseUp, FieldAction::JavaScript("this.print();".into()))]).unwrap();
     assert_eq!(fields(&doc).iter().find(|f| f.name == "go").unwrap().button, Some(af::ButtonAction::Named("Print".into())));
 }
+
+#[test]
+fn detection_finds_blanks_rules_boxes_and_names_them() {
+    use crate::detect::*;
+    let w = |t: &str, x0: f64, y0: f64, x1: f64| Word { text: t.into(), rect: [x0, y0, x1, y0 + 10.0] };
+    let words = vec![
+        w("Name:", 50.0, 700.0, 80.0),
+        w("______________", 85.0, 699.0, 250.0),
+        w("Date", 300.0, 700.0, 325.0),
+        w("of", 328.0, 700.0, 338.0),
+        w("birth", 341.0, 700.0, 365.0),
+        w("I", 72.0, 602.0, 75.0),
+        w("agree", 78.0, 602.0, 105.0),
+        w("Comments", 50.0, 560.0, 100.0),
+        w("Heading", 50.0, 750.0, 100.0),
+    ];
+    let shapes = Shapes {
+        boxes: vec![[56.0, 600.0, 68.0, 612.0], [50.0, 500.0, 300.0, 540.0], [40.0, 20.0, 560.0, 780.0]],
+        rules: vec![[370.0, 699.0, 500.0, 699.0], [50.0, 748.0, 100.0, 748.0]],
+    };
+    let found = detect(&words, &shapes, &[], &["Comments".into()]);
+    let names: Vec<(&str, &Kind)> = found.iter().map(|c| (c.name.as_str(), &c.kind)).collect();
+    assert_eq!(names, [("Name", &Kind::Text), ("Date of birth", &Kind::Text), ("I agree", &Kind::CheckBox), ("Comments2", &Kind::Text)], "{found:?}");
+    // An existing field there: nothing new.
+    let again = detect(&words, &shapes, &found.iter().map(|c| c.rect).collect::<Vec<_>>(), &[]);
+    assert!(again.is_empty(), "{again:?}");
+}
+
+#[test]
+fn page_shapes_reads_boxes_and_rules() {
+    let mut doc = fixture();
+    let page = printcraft_model::pages(&doc)[0].obj;
+    let s = doc.add(printcraft_cos::Object::Stream(printcraft_cos::Stream::flate(
+        Default::default(),
+        b"q 2 0 0 2 0 0 cm 10 10 6 6 re S 20 50 m 120 50 l S 0 0 m 5 5 l S 30 300 100 0.5 re f Q",
+    )));
+    doc.update_dict(page, |d| d.set(b"Contents".to_vec(), printcraft_cos::Object::Ref(s))).unwrap();
+    let sh = crate::detect::page_shapes(&doc, 0);
+    assert_eq!(sh.boxes, [[20.0, 20.0, 32.0, 32.0]]);
+    assert_eq!(sh.rules, [[40.0, 100.0, 240.0, 100.0], [60.0, 600.5, 260.0, 600.5]]);
+}

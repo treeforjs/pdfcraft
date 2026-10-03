@@ -3894,8 +3894,10 @@ name = "printcraft-forms"
 version = "0.1.0"
 dependencies = [
  "hayro-syntax",
+ "printcraft-content",
  "printcraft-cos",
  "printcraft-fonts",
+ "printcraft-model",
  "thiserror 2.0.21",
 ]
 

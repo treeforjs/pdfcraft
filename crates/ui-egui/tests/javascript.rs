@@ -115,3 +115,22 @@ fn merge_data_files_into_a_spreadsheet() {
     app.merge_data_files(vec![("x.fdf".into(), b"junk".to_vec())]);
     assert!(app.toast.clone().unwrap().0.starts_with("x.fdf:"));
 }
+
+#[test]
+fn prepare_a_form_detects_fields_on_a_paper_form() {
+    let paper =
+        printcraft_engine::Session::new().create_from_text("t", "Name: ____________________\n\nPhone: ____________________").unwrap().to_vec();
+    let mut h = Harness::builder().with_size(egui::vec2(1400.0, 900.0)).build_eframe(move |_cc| {
+        let mut app = PrintCraftApp::new();
+        app.open_bytes("paper.pdf", None, paper.clone()).unwrap();
+        app
+    });
+    h.run_steps(4);
+    assert!(h.state_mut().execute("form.prepare"));
+    h.run_steps(3);
+    let app = h.state();
+    let id = app.active_ids().unwrap().1;
+    let names: Vec<String> = app.session.get(id).unwrap().form.iter().map(|f| f.name.clone()).collect();
+    assert_eq!(names, ["Name", "Phone"]);
+    assert_eq!(app.toast.clone().unwrap().0, "Detected 2 form fields");
+}
