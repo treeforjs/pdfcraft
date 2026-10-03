@@ -50,6 +50,7 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
     let mut replace_now = false;
     let mut open_revision: Option<usize> = None;
     let mut a11y_now = false;
+    let mut ocr_now = false;
     let mut combine_now = false;
     let mut stamp_now = false;
     let mut alt_now = false;
@@ -818,6 +819,12 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
                 close = go || cancel;
                 return;
             }
+            Dialog::RecognizeText => {
+                let (go, cancel) = crate::ocr_ui::body(ui, app, &t);
+                ocr_now = go;
+                close = go || cancel;
+                return;
+            }
             Dialog::AccessibilityOptions => {
                 let (start, cancel) = crate::a11y_ui::options_body(ui, app, &t);
                 a11y_now = start;
@@ -1183,6 +1190,9 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
     }
     if combine_now {
         app.combine_staged();
+    }
+    if ocr_now {
+        app.start_ocr();
     }
     if a11y_now {
         app.a11y_skipped.clear();

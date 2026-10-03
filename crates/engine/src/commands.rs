@@ -248,6 +248,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     c("optimize.reduce", "Reduce file size…", FILE, None, Document, "file-down"),
     c("optimize.advanced", "Optimize PDF…", FILE, None, Document, "settings-2"),
     c("export.text", "Export to text…", FILE, None, Document, "type"),
+    c("ocr.recognize", "Recognize text…", None, None, Modification, "scan-text"),
     c("a11y.check", "Check for accessibility…", None, None, Document, "accessibility"),
     c("a11y.report", "Open accessibility report", None, None, Document, "file-text"),
     c("a11y.reading_options", "Change reading options…", None, None, Document, "book-open"),

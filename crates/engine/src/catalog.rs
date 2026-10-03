@@ -239,11 +239,11 @@ pub static TOOL_GROUPS: &[ToolGroup] = &[
         icon: "scan-text",
         hue: GREEN,
         badge: None,
-        availability: Planned("M10"),
+        availability: Ready,
         sections: &[ToolSection {
             title: "Recognize text",
             items: &[
-                item("In this file", "scan-text", "ocr.recognize", Planned("M10")),
+                item("In this file", "scan-text", "ocr.recognize", Ready),
                 item("In multiple files", "files", "ocr.recognize_batch", Planned("M10")),
                 item("Enhance scanned file", "sparkles", "ocr.enhance", Planned("M10")),
                 item("Correct recognized text", "text-select", "ocr.correct", Planned("M10")),

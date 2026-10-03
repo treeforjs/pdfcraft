@@ -270,12 +270,12 @@ pub fn check(root: &Path, m: &Manifest, repo_files: &[String], lock: &BTreeSet<(
     problems
 }
 
-/// Download (if needed) and verify every `[[fetched]]` entry into `dir`, with its licence text.
-/// Returns the paths of the fetched files. Uses `curl`, present on macOS, Windows 10+ and Linux.
-pub fn fetch_all(m: &Manifest, dir: &Path) -> Result<Vec<PathBuf>> {
+/// Download (if needed) and verify every `[[fetched]]` entry of `kind` into `dir`, with its licence
+/// text. Returns the paths of the fetched files. Uses `curl`, present on macOS, Windows 10+ and Linux.
+pub fn fetch_all(m: &Manifest, dir: &Path, kind: &str) -> Result<Vec<PathBuf>> {
     std::fs::create_dir_all(dir)?;
     let mut out = Vec::new();
-    for f in &m.fetched {
+    for f in m.fetched.iter().filter(|f| f.kind == kind) {
         let path = dir.join(&f.file);
         fetch_verified(&f.url, &path, &f.sha256)?;
         let licence = dir.join(format!("{}.LICENCE.txt", f.file));
@@ -301,6 +301,18 @@ fn fetch_verified(url: &str, path: &Path, sha256: &str) -> Result<()> {
         bail!("{url}: SHA-256 mismatch (expected {sha256}); refusing to use it");
     }
     std::fs::rename(&tmp, path)?;
+    Ok(())
+}
+
+/// `cargo xtask models [DIR]`: fetch the OCR models (`kind = "model"`) into `assets/models/` (git-ignored),
+/// where the app and tests look for them.
+pub fn models(args: &[String]) -> Result<()> {
+    let root = root();
+    let m = load(&root)?;
+    let dir = args.first().map(PathBuf::from).unwrap_or_else(|| root.join("assets/models"));
+    for p in fetch_all(&m, &dir, "model")? {
+        println!("models: {}", p.display());
+    }
     Ok(())
 }
 
@@ -343,7 +355,7 @@ pub fn render_markdown(m: &Manifest) -> String {
         );
     }
     s.push_str(&format!(
-        "\n## Downloaded at build time ({})\n\nFetched by `cargo xtask demo-pdf` into `target/demo-fonts/`, verified by SHA-256 and never committed.\n\n| File | Title | Author | Licence | Source | Used for |\n|---|---|---|---|---|---|\n",
+        "\n## Downloaded at build time ({})\n\nFonts are fetched by `cargo xtask demo-pdf` into `target/demo-fonts/`, OCR models by `cargo xtask models` into `assets/models/`; each is verified by SHA-256 and never committed.\n\n| File | Title | Author | Licence | Source | Used for |\n|---|---|---|---|---|---|\n",
         m.fetched.len()
     ));
     for f in &m.fetched {

@@ -28,6 +28,7 @@ printcraft-xfdf = { path = "crates/xfdf", version = "0.1.0" }
 printcraft-sign = { path = "crates/sign", version = "0.1.0" }
 printcraft-optimize = { path = "crates/optimize", version = "0.1.0" }
 printcraft-a11y = { path = "crates/a11y", version = "0.1.0" }
+printcraft-ocr = { path = "crates/ocr", version = "0.1.0" }
 printcraft-edit = { path = "crates/edit", version = "0.1.0" }
 printcraft-create = { path = "crates/create", version = "0.1.0" }
 printcraft-forms = { path = "crates/forms", version = "0.1.0" }

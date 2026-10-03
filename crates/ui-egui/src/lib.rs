@@ -18,6 +18,7 @@ mod create_ui;
 mod crop;
 mod export_ui;
 mod marks_ui;
+mod ocr_ui;
 mod optimize_ui;
 mod search_ui;
 mod sign_ui;
@@ -184,6 +185,8 @@ pub enum Dialog {
     DuplicateField,
     /// Check for accessibility ▸ Accessibility Checker Options.
     AccessibilityOptions,
+    /// Scan & OCR ▸ Recognize text.
+    RecognizeText,
     /// Combine files: the files, their order and pages.
     Combine,
     /// Custom stamps ▸ Create.
@@ -294,6 +297,10 @@ pub struct PrintCraftApp {
     pub sig_expanded: Vec<String>,
     /// Accessibility Checker: options, the last check, and rules skipped by hand.
     pub a11y_options: a11y_ui::A11yOptions,
+    /// Scan & OCR: the Recognize Text choices, the running job, and (tests) run it inline.
+    pub ocr_draft: ocr_ui::OcrDraft,
+    pub ocr_run: Option<ocr_ui::OcrRun>,
+    pub ocr_sync: bool,
     pub a11y: a11y_ui::A11yState,
     pub a11y_skipped: std::collections::BTreeSet<printcraft_engine::a11y::Rule>,
     pub alt_draft: a11y_ui::AltDraft,
@@ -429,6 +436,9 @@ impl PrintCraftApp {
             digital_ids: Vec::new(),
             sig_expanded: Vec::new(),
             a11y_options: a11y_ui::A11yOptions::default(),
+            ocr_draft: ocr_ui::OcrDraft::default(),
+            ocr_run: None,
+            ocr_sync: false,
             a11y: a11y_ui::A11yState::default(),
             a11y_skipped: Default::default(),
             alt_draft: Default::default(),
@@ -866,6 +876,7 @@ impl PrintCraftApp {
                     "export-text" => Some(Dialog::Export(export_ui::ExportKind::Text)),
                     "export-all-images" => Some(Dialog::Export(export_ui::ExportKind::AllImages)),
                     "accessibility-options" => Some(Dialog::AccessibilityOptions),
+                    "recognize-text" => Some(Dialog::RecognizeText),
                     "signature" => Some(Dialog::Signature),
                     "optimize" => Some(Dialog::Optimize),
                     "sign" | "certify" => {
@@ -1047,6 +1058,7 @@ impl eframe::App for PrintCraftApp {
         self.shortcuts(ctx);
         self.process_pending_edits();
         self.poll_export();
+        self.poll_ocr();
         self.process_file_requests();
         // Pull finished renders into textures for every open document.
         for view in &mut self.views {

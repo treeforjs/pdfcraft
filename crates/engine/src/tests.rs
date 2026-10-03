@@ -1200,3 +1200,38 @@ fn backgrounds_and_watermarks_from_files() {
     let junk = MarkFile { name: "x.png".into(), bytes: Arc::new(b"not an image".to_vec()), page: 0 };
     assert!(s.apply(id, Edit::AddBackground { pages: vec![0], settings: Background::default(), replace: true, file: Some(junk) }).is_err());
 }
+
+/// Scan & OCR ▸ Recognize text on a page that is only a picture of text (needs the models:
+/// `cargo xtask models`; skipped without them).
+#[test]
+fn recognize_text_makes_a_scanned_page_searchable() {
+    if !ocr::available() {
+        eprintln!("skipped: OCR models not installed");
+        return;
+    }
+    let mut s = Session::new().with_clock(|| 1_700_000_000);
+    let text = s.create_from_text("t", "The quick brown fox jumps over the lazy dog.").unwrap();
+    let id = s.open("text.pdf", None, text, None).unwrap();
+    let png = export::Exporter::new(s.get(id).unwrap()).png(0, 150.0).unwrap();
+    let scan = s.create_from_images(&[("scan.png".into(), png)]).unwrap();
+    let id = s.open("scan.pdf", None, scan, None).unwrap();
+    assert_eq!(page_texts(&s, id), [""], "a picture has no text");
+
+    let found = s.recognize_text(id, &[], ocr::OcrSettings::default()).unwrap();
+    assert_eq!(found.len(), 1);
+    let text = page_texts(&s, id)[0].to_lowercase();
+    for w in ["quick", "brown", "fox", "lazy"] {
+        assert!(text.contains(w), "{text}");
+    }
+    assert_eq!(s.get(id).unwrap().can_undo(), Some("Recognize text"));
+    // The text sits over the words: "quick" is left of "lazy" and on the same line.
+    let words = &found[0].words;
+    let q = words.iter().find(|w| w.text.to_lowercase().contains("quick")).unwrap();
+    let l = words.iter().find(|w| w.text.to_lowercase().contains("lazy")).unwrap();
+    let top = |w: &ocr::PlacedWord| w.origin[1] + w.up[1];
+    assert!(q.origin[0] < l.origin[0] && (top(q) - top(l)).abs() < 3.0, "{q:?} {l:?}");
+
+    // A second pass skips the page: it has text now.
+    let again = s.recognize_text(id, &[], ocr::OcrSettings::default()).unwrap();
+    assert!(again[0].skipped.is_some());
+}

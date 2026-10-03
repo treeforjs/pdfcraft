@@ -46,7 +46,7 @@ pub fn run(args: &[String]) -> Result<()> {
     // Fonts: only the pinned, openly licensed files listed in ATTRIBUTION.toml (AGENTS.md §1).
     let manifest = crate::assets::load(&root)?;
     let fonts = root.join("target/demo-fonts");
-    crate::assets::fetch_all(&manifest, &fonts)?;
+    crate::assets::fetch_all(&manifest, &fonts, "font")?;
 
     println!("demo-pdf: rendering raster");
     let png = raster::mandelbrot_png(640)?;

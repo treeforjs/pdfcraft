@@ -134,3 +134,40 @@ impl Automation {
         self.accessibility_figures(a)
     }
 }
+
+impl Automation {
+    pub(crate) fn ocr_recognize(&mut self, a: &Args) -> Result<Value> {
+        use printcraft_engine::ocr::OcrSettings;
+        let mut settings = OcrSettings::default();
+        if let Some(d) = a.opt_num("dpi")? {
+            settings.dpi = d.clamp(72.0, 600.0) as f32;
+        }
+        if let Some(l) = a.opt_str("language")? {
+            if !printcraft_engine::ocr::LANGUAGES.iter().any(|x| x.0 == l) {
+                return Err(ToolError::InvalidArgs(format!("unsupported language {l:?}")));
+            }
+            settings.language = l.into();
+        }
+        if let Some(s) = a.opt_bool("skip_text_pages")? {
+            settings.skip_text_pages = s;
+        }
+        let pages = if a.opt_ints("pages")?.is_some() { self.pages(a, "pages")? } else { Vec::new() };
+        let id = self.doc(a)?.id;
+        let found = self.session.recognize_text(id, &pages, settings).map_err(failed)?;
+        let list: Vec<Value> = found
+            .iter()
+            .map(|p| match &p.skipped {
+                Some(why) => json!({ "page": p.page + 1, "skipped": why }),
+                None => json!({ "page": p.page + 1, "words": p.words.len(), "text": p.text() }),
+            })
+            .collect();
+        Ok(json!({ "words": found.iter().map(|p| p.words.len()).sum::<usize>(), "pages": list }))
+    }
+
+    pub(crate) fn ocr_status(&self) -> Result<Value> {
+        use printcraft_engine::ocr;
+        let dirs: Vec<String> = ocr::Models::search_dirs().iter().map(|d| d.to_string_lossy().into_owned()).collect();
+        let langs: Vec<Value> = ocr::LANGUAGES.iter().map(|(c, n)| json!({ "code": c, "name": n })).collect();
+        Ok(json!({ "available": ocr::available(), "search_dirs": dirs, "languages": langs }))
+    }
+}

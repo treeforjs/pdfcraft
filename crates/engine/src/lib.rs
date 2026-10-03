@@ -14,6 +14,7 @@ pub mod catalog;
 pub mod commands;
 pub mod export;
 pub mod links;
+pub mod ocr;
 
 pub use printcraft_organize::{BoxSpec, PageBox, SplitBy, split_ranges};
 
@@ -775,6 +776,12 @@ pub enum Edit {
     MarkDecorative {
         figure: u32,
     },
+    /// Scan & OCR ▸ Recognize text: put recognised words on `page` as invisible text over the
+    /// image (from [`ocr::OcrJob::run`]).
+    AddOcrText {
+        page: usize,
+        words: Vec<printcraft_ocr::PlacedWord>,
+    },
     /// Edit a PDF ▸ Edit text: replace the text of line `line` (from `Document::text_lines`) on
     /// `page`, in its own font when it can show it, else in Helvetica.
     EditTextLine {
@@ -963,6 +970,7 @@ impl Edit {
             Edit::SetInitialView(_) => "Change initial view".into(),
             Edit::SetAltText { .. } => "Set alternate text".into(),
             Edit::MarkDecorative { .. } => "Mark figure as decorative".into(),
+            Edit::AddOcrText { .. } => "Recognize text".into(),
             Edit::EditTextLine { .. } | Edit::EditTextBlock { .. } => "Edit text".into(),
             Edit::EditPageImage { change, .. } => match change {
                 ImageEdit::Move(_) => "Move image".into(),
@@ -1130,6 +1138,7 @@ fn check_permission(edit: &Edit, p: &printcraft_cos::Permissions) -> Result<(), 
         | Edit::SetInitialView(_)
         | Edit::SetAltText { .. }
         | Edit::MarkDecorative { .. }
+        | Edit::AddOcrText { .. }
         | Edit::EditTextLine { .. }
         | Edit::EditTextBlock { .. }
         | Edit::EditPageImage { .. }
@@ -1315,6 +1324,9 @@ fn run_edit(doc: &mut printcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -
         }
         Edit::EditTextLine { page, line, text } => {
             printcraft_edit::replace_line(doc, *page, *line, text)?;
+        }
+        Edit::AddOcrText { page, words } => {
+            printcraft_edit::stamp(doc, *page, "OCR", printcraft_ocr::text_layer(words))?;
         }
         Edit::EditPageImage { page, index, change } => {
             let img = printcraft_edit::page_images(doc, *page)?

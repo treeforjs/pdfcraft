@@ -6315,11 +6315,11 @@ title = "Recognize text (OCR) in this file"
 area = "I"
 tier = "P0"
 milestone = "M10"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["ocr.recognize"]
+tools = ["ocr_recognize", "ocr_status"]
+evidence = ["crates/engine/src/tests.rs::recognize_text_makes_a_scanned_page_searchable", "crates/automation/tests/automation.rs::ocr_tools_make_a_scan_searchable", "crates/ui-egui/tests/ocr.rs::recognize_text_dialog_adds_searchable_text"]
+notes = "ocrs engine (MIT/Apache) with CC-BY-SA models fetched by `cargo xtask models`; runs on a worker thread with progress; one undoable step; pages with text are skipped."
 
 [[feature]]
 id = "ocr.recognize-range"
@@ -6327,11 +6327,11 @@ title = "Recognize text in the current page or a range"
 area = "I"
 tier = "P0"
 milestone = "M10"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["ocr.recognize"]
+tools = ["ocr_recognize"]
+evidence = ["crates/automation/tests/automation.rs::ocr_tools_make_a_scan_searchable", "crates/ui-egui/tests/ocr.rs::recognize_text_dialog_adds_searchable_text"]
+notes = "All pages, current page or a range."
 
 [[feature]]
 id = "ocr.recognize-multiple"
@@ -6351,11 +6351,11 @@ title = "OCR document language selection"
 area = "I"
 tier = "P0"
 milestone = "M10"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["ocr.recognize"]
+tools = ["ocr_recognize"]
+evidence = ["crates/ui-egui/tests/ocr.rs::recognize_text_dialog_adds_searchable_text"]
+notes = "Language choice exists, but the models read only the Latin alphabet without accents (English)."
 
 [[feature]]
 id = "ocr.searchable-image"
@@ -6363,11 +6363,11 @@ title = "Searchable image output (invisible text layer)"
 area = "I"
 tier = "P0"
 milestone = "M10"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["ocr.recognize"]
+tools = ["ocr_recognize"]
+evidence = ["crates/engine/src/tests.rs::recognize_text_makes_a_scanned_page_searchable"]
+notes = "Invisible text (Tr 3) fitted to each word box; the image is not deskewed or downsampled (exact mode only)."
 
 [[feature]]
 id = "ocr.searchable-image-exact"
@@ -6375,11 +6375,11 @@ title = "Searchable image (exact): leave the image untouched"
 area = "I"
 tier = "P1"
 milestone = "M10"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["ocr.recognize"]
+tools = ["ocr_recognize"]
+evidence = ["crates/engine/src/tests.rs::recognize_text_makes_a_scanned_page_searchable"]
+notes = "The image is left untouched."
 
 [[feature]]
 id = "ocr.editable-text-output"
