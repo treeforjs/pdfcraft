@@ -41,3 +41,25 @@ fn recognize_text_dialog_adds_searchable_text() {
     let id = app.active_ids().unwrap().1;
     assert_eq!(app.session.get(id).unwrap().can_undo(), Some("Recognize text"));
 }
+
+#[test]
+fn recognize_text_in_multiple_files_writes_searchable_copies() {
+    if !printcraft_engine::ocr::available() {
+        eprintln!("skipped: OCR models not installed");
+        return;
+    }
+    let dir = std::env::temp_dir().join(format!("printcraft-ocr-ui-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut app = PrintCraftApp::new();
+    app.ocr_sync = true;
+    app.export_dir_override = Some(dir.to_string_lossy().into_owned());
+    app.use_files(printcraft_ui_egui::FilePurpose::Ocr, vec![("one.pdf".into(), scan()), ("two.pdf".into(), scan())]);
+    assert!(app.ocr_batch.is_none(), "finished");
+    let toast = app.toast.clone().unwrap().0;
+    assert!(toast.starts_with("Recognized ") && toast.ends_with("in 2 files"), "{toast}");
+    for name in ["one.pdf", "two.pdf"] {
+        let bytes = std::fs::read(dir.join(name)).unwrap();
+        assert!(bytes.len() > scan().len(), "an incremental update was appended");
+    }
+}

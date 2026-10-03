@@ -173,3 +173,40 @@ impl Session {
         Ok(found)
     }
 }
+
+/// What [`recognize_file`] did to one file.
+#[derive(Clone, Debug, PartialEq)]
+pub struct FileResult {
+    /// The new file (incrementally saved), or the original when nothing was recognised.
+    pub bytes: Arc<Vec<u8>>,
+    pub pages: Vec<OcrPage>,
+}
+
+impl FileResult {
+    pub fn words(&self) -> usize {
+        self.pages.iter().map(|p| p.words.len()).sum()
+    }
+}
+
+/// Recognize text in multiple files: one PDF's bytes in, the searchable PDF out. `progress`
+/// works as for [`OcrJob::run`].
+pub fn recognize_file(
+    name: &str,
+    bytes: Arc<Vec<u8>>,
+    password: Option<&str>,
+    settings: OcrSettings,
+    ocr: &Ocr,
+    progress: impl FnMut(usize, usize) -> bool,
+) -> Result<FileResult, String> {
+    let mut s = Session::new();
+    let id = s.open(name, None, bytes.clone(), password).map_err(|e| e.to_string())?;
+    if let Some(why) = s.get(id).and_then(|d| d.read_only_reason.clone()) {
+        return Err(why);
+    }
+    let job = s.ocr_job(id, &[], settings).ok_or("the document could not be read")?;
+    let pages = job.run(ocr, progress);
+    if s.apply_ocr(id, &pages).map_err(|e| e.to_string())? == 0 {
+        return Ok(FileResult { bytes, pages });
+    }
+    Ok(FileResult { bytes: s.save_bytes(id).map_err(|e| e.to_string())?, pages })
+}

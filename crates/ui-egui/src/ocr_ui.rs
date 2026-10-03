@@ -45,6 +45,14 @@ pub struct OcrProgress {
     pub cancel: bool,
 }
 
+/// Recognize text in multiple files: files done, total, and the summary once finished.
+#[derive(Default)]
+pub struct BatchProgress {
+    pub done: usize,
+    pub total: usize,
+    pub message: Option<String>,
+}
+
 pub struct OcrRun {
     pub doc: DocId,
     pub progress: Arc<Mutex<OcrProgress>>,
@@ -173,6 +181,71 @@ impl PrintCraftApp {
         self.poll_ocr();
     }
 
+    /// Recognize text in each file, writing the searchable copies into a folder the user picks
+    /// (the export folder override in tests), under the same names.
+    pub fn ocr_files(&mut self, files: Vec<(String, Vec<u8>)>) {
+        if self.ocr_batch.is_some() {
+            self.notify("Text recognition is already running");
+            return;
+        }
+        let settings = OcrSettings { dpi: self.ocr_draft.dpi as f32, language: self.ocr_draft.language.clone(), ..Default::default() };
+        let progress = Arc::new(Mutex::new(BatchProgress { total: files.len(), ..Default::default() }));
+        #[cfg(not(target_arch = "wasm32"))]
+        let dir = match &self.export_dir_override {
+            Some(d) => Some(std::path::PathBuf::from(d)),
+            None => rfd::FileDialog::new().set_title("Choose a folder for the searchable files").pick_folder(),
+        };
+        #[cfg(not(target_arch = "wasm32"))]
+        let Some(dir) = dir else { return };
+        let p = progress.clone();
+        let work = move || {
+            let (mut ok, mut words, mut failed) = (0, 0, Vec::new());
+            match printcraft_engine::ocr::engine() {
+                Err(e) => failed.push(e),
+                Ok(ocr) => {
+                    for (i, (name, bytes)) in files.into_iter().enumerate() {
+                        if let Ok(mut s) = p.lock() {
+                            s.done = i;
+                        }
+                        let r = printcraft_engine::ocr::recognize_file(&name, Arc::new(bytes), None, settings.clone(), &ocr, |_, _| true);
+                        let saved = r.and_then(|r| {
+                            #[cfg(not(target_arch = "wasm32"))]
+                            crate::editing::write_atomically(&dir.join(&name).to_string_lossy(), &r.bytes).map_err(|e| e.to_string())?;
+                            #[cfg(target_arch = "wasm32")]
+                            crate::editing::download(&name, &r.bytes)?;
+                            Ok(r.words())
+                        });
+                        match saved {
+                            Ok(n) => {
+                                ok += 1;
+                                words += n;
+                            }
+                            Err(e) => failed.push(format!("{name}: {e}")),
+                        }
+                    }
+                }
+            }
+            let mut msg = format!("Recognized {words} words in {ok} file{}", if ok == 1 { "" } else { "s" });
+            if !failed.is_empty() {
+                msg.push_str(&format!("; failed: {}", failed.join("; ")));
+            }
+            if let Ok(mut s) = p.lock() {
+                s.done = s.total;
+                s.message = Some(msg);
+            }
+        };
+        #[cfg(not(target_arch = "wasm32"))]
+        if self.ocr_sync {
+            work();
+        } else {
+            std::thread::Builder::new().name("printcraft-ocr-files".into()).spawn(work).ok();
+        }
+        #[cfg(target_arch = "wasm32")]
+        work();
+        self.ocr_batch = Some(progress);
+        self.poll_ocr();
+    }
+
     /// Stop a running recognition (the pages read so far are kept).
     pub fn cancel_ocr(&mut self) {
         if let Some(r) = &self.ocr_run
@@ -184,6 +257,25 @@ impl PrintCraftApp {
 
     /// Show progress; apply the result once the worker is done.
     pub(crate) fn poll_ocr(&mut self) {
+        if let Some(b) = self.ocr_batch.clone() {
+            let msg = b.lock().ok().map(|mut s| s.message.take().ok_or((s.done, s.total)));
+            match msg {
+                Some(Ok(m)) => {
+                    self.ocr_batch = None;
+                    self.notify(m);
+                }
+                Some(Err((done, total))) => {
+                    let m = format!("Recognizing text… file {} of {}", (done + 1).min(total.max(1)), total.max(1));
+                    if self.toast.as_ref().is_none_or(|t| t.0 != m) {
+                        self.notify(m);
+                    }
+                    if let Some(ctx) = &self.ctx {
+                        ctx.request_repaint_after(std::time::Duration::from_millis(200));
+                    }
+                }
+                None => self.ocr_batch = None,
+            }
+        }
         let Some(run) = self.ocr_run.as_ref() else { return };
         let (doc, progress) = (run.doc, run.progress.clone());
         let Ok(mut s) = progress.lock() else { return };

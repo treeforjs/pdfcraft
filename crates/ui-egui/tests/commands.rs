@@ -44,8 +44,18 @@ fn harness() -> Harness<'static, PrintCraftApp> {
 
 /// Commands that open a native file picker can't run headless.
 /// (Create ▸ Clipboard reads the system clipboard: tests use `create_from_clip`.)
-const PICKERS: &[&str] =
-    &["file.open", "page.combine", "page.insert", "file.save_as", "create.file", "create.images", "page.replace", "create.clipboard", "a11y.report"];
+const PICKERS: &[&str] = &[
+    "file.open",
+    "page.combine",
+    "page.insert",
+    "file.save_as",
+    "create.file",
+    "create.images",
+    "page.replace",
+    "create.clipboard",
+    "a11y.report",
+    "ocr.recognize_batch",
+];
 
 #[test]
 fn every_registered_command_is_implemented() {

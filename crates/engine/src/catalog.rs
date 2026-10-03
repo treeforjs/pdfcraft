@@ -244,7 +244,7 @@ pub static TOOL_GROUPS: &[ToolGroup] = &[
             title: "Recognize text",
             items: &[
                 item("In this file", "scan-text", "ocr.recognize", Ready),
-                item("In multiple files", "files", "ocr.recognize_batch", Planned("M10")),
+                item("In multiple files", "files", "ocr.recognize_batch", Ready),
                 item("Enhance scanned file", "sparkles", "ocr.enhance", Planned("M10")),
                 item("Correct recognized text", "text-select", "ocr.correct", Planned("M10")),
             ],

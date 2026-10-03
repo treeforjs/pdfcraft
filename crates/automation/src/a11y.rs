@@ -136,9 +136,8 @@ impl Automation {
 }
 
 impl Automation {
-    pub(crate) fn ocr_recognize(&mut self, a: &Args) -> Result<Value> {
-        use printcraft_engine::ocr::OcrSettings;
-        let mut settings = OcrSettings::default();
+    fn ocr_settings(&self, a: &Args) -> Result<printcraft_engine::ocr::OcrSettings> {
+        let mut settings = printcraft_engine::ocr::OcrSettings::default();
         if let Some(d) = a.opt_num("dpi")? {
             settings.dpi = d.clamp(72.0, 600.0) as f32;
         }
@@ -151,6 +150,36 @@ impl Automation {
         if let Some(s) = a.opt_bool("skip_text_pages")? {
             settings.skip_text_pages = s;
         }
+        Ok(settings)
+    }
+
+    pub(crate) fn ocr_recognize_files(&mut self, a: &Args) -> Result<Value> {
+        let settings = self.ocr_settings(a)?;
+        let folder = self.resolve(a.str("folder")?, true)?;
+        std::fs::create_dir_all(&folder).map_err(|e| failed(e.to_string()))?;
+        let ocr = printcraft_engine::ocr::engine().map_err(failed)?;
+        let mut out = Vec::new();
+        for p in a.strs("paths")? {
+            let name = std::path::Path::new(p).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "document.pdf".into());
+            let result =
+                self.resolve(p, false).map_err(|e| e.to_string()).and_then(|src| std::fs::read(&src).map_err(|e| e.to_string())).and_then(|bytes| {
+                    printcraft_engine::ocr::recognize_file(&name, std::sync::Arc::new(bytes), None, settings.clone(), &ocr, |_, _| true)
+                });
+            out.push(match result {
+                Ok(r) => {
+                    let target = folder.join(&name);
+                    write_atomic(&target, &r.bytes)?;
+                    let skipped: Vec<usize> = r.pages.iter().filter(|p| p.skipped.is_some()).map(|p| p.page + 1).collect();
+                    json!({ "path": p, "output": target.to_string_lossy(), "words": r.words(), "skipped_pages": skipped })
+                }
+                Err(e) => json!({ "path": p, "error": e }),
+            });
+        }
+        Ok(json!({ "files": out }))
+    }
+
+    pub(crate) fn ocr_recognize(&mut self, a: &Args) -> Result<Value> {
+        let settings = self.ocr_settings(a)?;
         let pages = if a.opt_ints("pages")?.is_some() { self.pages(a, "pages")? } else { Vec::new() };
         let id = self.doc(a)?.id;
         let found = self.session.recognize_text(id, &pages, settings).map_err(failed)?;

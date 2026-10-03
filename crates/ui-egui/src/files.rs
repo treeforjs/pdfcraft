@@ -15,6 +15,8 @@ pub enum FilePurpose {
     Combine,
     InsertPages,
     ReplacePages,
+    /// Scan & OCR ▸ Recognize text in multiple files.
+    Ocr,
 }
 
 /// The Replace Pages dialog: the chosen file and the ranges (1-based, inclusive).
@@ -99,6 +101,11 @@ impl PrintCraftApp {
         self.pick_files(FilePurpose::Combine, true);
     }
 
+    /// Scan & OCR ▸ Recognize text ▸ In multiple files: ask for the PDFs.
+    pub fn ocr_files_dialog(&mut self) {
+        self.pick_files(FilePurpose::Ocr, true);
+    }
+
     /// Ask for a PDF whose pages to insert after the selection (Organize ▸ Insert from file).
     pub fn insert_from_file_dialog(&mut self) {
         if self.active.is_none() {
@@ -169,6 +176,7 @@ impl PrintCraftApp {
                     self.start_replace(name, bytes);
                 }
             }
+            FilePurpose::Ocr => self.ocr_files(files),
         }
     }
 

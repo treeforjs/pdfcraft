@@ -504,6 +504,7 @@ impl Automation {
             "accessibility_check" => self.a11y_check(&a)?,
             "ocr_recognize" => self.ocr_recognize(&a)?,
             "ocr_status" => self.ocr_status()?,
+            "ocr_recognize_files" => self.ocr_recognize_files(&a)?,
             "accessibility_report" => self.a11y_report(&a)?,
             "accessibility_fix" => self.a11y_fix(&a)?,
             "accessibility_figures" => self.accessibility_figures(&a)?,

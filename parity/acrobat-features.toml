@@ -6339,11 +6339,11 @@ title = "Recognize text in multiple files"
 area = "I"
 tier = "P1"
 milestone = "M10"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["ocr.recognize_batch"]
+tools = ["ocr_recognize_files"]
+evidence = ["crates/automation/tests/automation.rs::ocr_recognize_files_writes_searchable_copies", "crates/ui-egui/tests/ocr.rs::recognize_text_in_multiple_files_writes_searchable_copies"]
+notes = "Pick PDFs, then an output folder; copies are saved incrementally under the same names, in the background with progress."
 
 [[feature]]
 id = "ocr.ocr-languages"
