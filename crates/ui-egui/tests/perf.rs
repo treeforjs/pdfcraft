@@ -5,6 +5,29 @@
 use egui_kittest::Harness;
 use printcraft_ui_egui::PrintCraftApp;
 
+/// The one-minute load average, where the OS reports it (macOS `vm.loadavg`, Linux
+/// `/proc/loadavg`).
+fn load_average() -> Option<f64> {
+    if let Ok(s) = std::fs::read_to_string("/proc/loadavg") {
+        return s.split_whitespace().next()?.parse().ok();
+    }
+    let out = std::process::Command::new("sysctl").args(["-n", "vm.loadavg"]).output().ok()?;
+    String::from_utf8_lossy(&out.stdout).trim_matches(|c: char| c == '{' || c == '}' || c.is_whitespace()).split_whitespace().next()?.parse().ok()
+}
+
+/// Frame budgets only mean something on a machine that isn't overcommitted: with the load
+/// average above twice the core count (other builds running), skip and say so.
+fn overloaded() -> bool {
+    let cores = std::thread::available_parallelism().map_or(4, |n| n.get()) as f64;
+    match load_average() {
+        Some(l) if l > 2.0 * cores => {
+            eprintln!("PERF skipped: load average {l:.0} on {cores} cores; frame budgets need a quiet machine");
+            true
+        }
+        _ => false,
+    }
+}
+
 /// `n` text pages with a few comments each, so panels and overlays have work to do.
 fn big(n: usize) -> Vec<u8> {
     let mut objs: Vec<String> = vec!["<< /Type /Catalog /Pages 2 0 R >>".into()];
@@ -39,6 +62,9 @@ fn big(n: usize) -> Vec<u8> {
 
 #[test]
 fn scrolling_a_500_page_document_stays_within_the_frame_budget() {
+    if overloaded() {
+        return;
+    }
     let bytes = big(500);
     let t0 = std::time::Instant::now();
     let mut h = Harness::builder().with_size(egui::vec2(1400.0, 900.0)).build_eframe(move |_cc| {
@@ -66,6 +92,9 @@ fn scrolling_a_500_page_document_stays_within_the_frame_budget() {
 
 #[test]
 fn panels_with_hundreds_of_items_stay_within_the_frame_budget() {
+    if overloaded() {
+        return;
+    }
     let bytes = big(500);
     for panel in ["comments", "pages", "fields"] {
         let b = bytes.clone();
