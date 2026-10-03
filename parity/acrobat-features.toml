@@ -4803,11 +4803,11 @@ title = "Field properties: actions per trigger"
 area = "F"
 tier = "P1"
 milestone = "M6"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["form.prepare"]
+tools = ["form_actions", "form_set_actions"]
+evidence = ["crates/forms/src/tests.rs::field_actions_round_trip_on_every_trigger", "crates/automation/tests/automation.rs::field_actions_through_tools", "crates/ui-egui/tests/prepare.rs::actions_tab_adds_and_removes_actions"]
+notes = "Six triggers; Run a JavaScript, Open a web link, Reset a form, Execute a menu item, Go to a page view, Show/hide a field, Submit a form. Other action types are kept."
 
 [[feature]]
 id = "form.props-format"

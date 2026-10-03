@@ -87,6 +87,8 @@ pub struct FieldProps {
     pub default_value: Option<Option<String>>,
     /// Lock or unlock the field (its widgets' Locked flag).
     pub locked: Option<bool>,
+    /// Actions tab: every trigger's action (replacing the field's).
+    pub actions: Option<Vec<(crate::Trigger, crate::FieldAction)>>,
 }
 
 fn invalid<T>(m: impl Into<String>) -> Result<T, FormError> {
@@ -632,6 +634,9 @@ pub fn set_props(doc: &mut Document, name: &str, props: &FieldProps) -> Result<S
         if *props == (FieldProps { locked: props.locked, ..FieldProps::default() }) {
             return Ok(name.to_string());
         }
+    }
+    if let Some(acts) = &props.actions {
+        crate::set_field_actions(doc, name, acts)?;
     }
     let mut new_name = name.to_string();
     if let Some(n) = props.name.as_deref().map(str::trim).filter(|n| *n != f.name) {

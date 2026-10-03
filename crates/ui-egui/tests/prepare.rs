@@ -344,3 +344,47 @@ fn image_fields_take_a_picture_when_clicked() {
     let s = h.state();
     assert_eq!(s.session.get(s.views[0].id).unwrap().can_undo(), Some("Set the image of Image1"));
 }
+
+#[test]
+fn actions_tab_adds_and_removes_actions() {
+    use printcraft_engine::{FieldAction, FieldTrigger};
+    let mut h = harness();
+    h.state_mut().execute("form.prepare");
+    h.run_steps(2);
+    h.state_mut().open_field_props("city", 0);
+    h.run_steps(2);
+    h.get_by_label("Actions").click();
+    h.run_steps(2);
+    h.get_by_label("Select Trigger:");
+    h.get_by_label("No actions");
+    {
+        let d = h.state_mut().field_props.as_mut().unwrap();
+        d.new_action.trigger = FieldTrigger::OnBlur;
+        d.new_action.kind = 1;
+        d.new_action.text = "https://example.org".into();
+    }
+    h.run_steps(3);
+    h.get_by_label("Add").click();
+    h.run_steps(2);
+    h.get_by_label("Open a web link: https://example.org");
+    {
+        let d = h.state_mut().field_props.as_mut().unwrap();
+        d.new_action.trigger = FieldTrigger::MouseUp;
+        d.new_action.kind = 0;
+        d.new_action.text = "app.alert('x')".into();
+    }
+    h.run_steps(3);
+    h.get_by_label("Add").click();
+    h.run_steps(2);
+    h.get_by_label("OK").click();
+    h.run_steps(3);
+    let s = h.state();
+    let acts = s.session.get(s.views[0].id).unwrap().field_actions("city");
+    assert_eq!(
+        acts,
+        [
+            (FieldTrigger::MouseUp, FieldAction::JavaScript("app.alert('x')".into())),
+            (FieldTrigger::OnBlur, FieldAction::Uri("https://example.org".into()))
+        ]
+    );
+}

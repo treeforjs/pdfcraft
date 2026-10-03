@@ -1392,3 +1392,27 @@ fn merging_form_data_into_a_spreadsheet() {
     assert_eq!(r["rows"], 3);
     assert_eq!(std::fs::read_to_string(dir.join("report.csv")).unwrap(), "City\nParis\nOslo\nOslo\n");
 }
+
+#[test]
+fn field_actions_through_tools() {
+    let dir = workdir("field-actions");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    ok(&mut a, "form_add_field", json!({ "doc": doc, "page": 1, "type": "button", "rect": [20, 20, 120, 42], "name": "Go" }));
+    let r = ok(
+        &mut a,
+        "form_set_actions",
+        json!({ "doc": doc, "field": "Go", "actions": [
+            { "trigger": "mouse_up", "javascript": "this.pageNum = 2;" },
+            { "trigger": "mouse_enter", "hide": ["Go"] },
+            { "trigger": "on_focus", "page": 3 }
+        ] }),
+    );
+    assert_eq!(r["actions"].as_array().unwrap().len(), 3, "{r}");
+    assert_eq!(r["actions"][0], json!({ "trigger": "mouse_up", "javascript": "this.pageNum = 2;" }));
+    assert_eq!(r["actions"][1], json!({ "trigger": "mouse_enter", "hide": ["Go"] }));
+    assert_eq!(r["actions"][2], json!({ "trigger": "on_focus", "page": 3 }));
+    let run = ok(&mut a, "js_run", json!({ "doc": doc, "script": "this.pageNum = 2;", "field": "Go" }));
+    assert_eq!(run["requests"][0]["page"], 3);
+    assert!(a.call("form_set_actions", &json!({ "doc": doc, "field": "Go", "actions": [{ "trigger": "wave" }] })).is_err());
+}

@@ -259,6 +259,73 @@ impl Automation {
         Ok(json!({ "path": target.to_string_lossy(), "rows": files.len(), "columns": columns }))
     }
 
+    pub(crate) fn form_actions(&self, a: &Args) -> Result<Value> {
+        use printcraft_engine::FieldAction as A;
+        let list: Vec<Value> = self
+            .doc(a)?
+            .field_actions(a.str("field")?)
+            .iter()
+            .map(|(t, act)| {
+                let mut v = match act {
+                    A::JavaScript(j) => json!({ "javascript": j }),
+                    A::Uri(u) => json!({ "url": u }),
+                    A::Reset(f) => json!({ "reset": f }),
+                    A::Named(n) => json!({ "menu": n }),
+                    A::GoTo(p) => json!({ "page": p + 1 }),
+                    A::ShowHide { fields, hide: true } => json!({ "hide": fields }),
+                    A::ShowHide { fields, hide: false } => json!({ "show": fields }),
+                    A::Submit(u) => json!({ "submit": u }),
+                    A::Other(s) => json!({ "other": s }),
+                };
+                v["trigger"] = json!(t.id());
+                v
+            })
+            .collect();
+        Ok(json!({ "field": a.str("field")?, "actions": list }))
+    }
+
+    pub(crate) fn form_set_actions(&mut self, a: &Args) -> Result<Value> {
+        use printcraft_engine::{FieldAction as A, FieldTrigger as T};
+        let items = a.get("actions").and_then(Value::as_array).ok_or_else(|| ToolError::InvalidArgs("actions must be an array".into()))?;
+        let bad = |m: String| ToolError::InvalidArgs(m);
+        let names = |v: &Value| -> Vec<String> {
+            v.as_array().map(|x| x.iter().filter_map(|s| s.as_str().map(str::to_string)).collect()).unwrap_or_default()
+        };
+        let mut acts = Vec::new();
+        for it in items {
+            let tid = it["trigger"].as_str().unwrap_or("");
+            let t = T::from_id(tid).ok_or_else(|| bad(format!("unknown trigger {tid:?}")))?;
+            let act = if let Some(j) = it["javascript"].as_str() {
+                A::JavaScript(j.into())
+            } else if let Some(u) = it["url"].as_str() {
+                A::Uri(u.into())
+            } else if it.get("reset").is_some() {
+                A::Reset(names(&it["reset"]))
+            } else if let Some(m) = it["menu"].as_str() {
+                A::Named(m.into())
+            } else if let Some(p) = it["page"].as_u64() {
+                A::GoTo((p.max(1) - 1) as usize)
+            } else if it.get("show").is_some() {
+                A::ShowHide { fields: names(&it["show"]), hide: false }
+            } else if it.get("hide").is_some() {
+                A::ShowHide { fields: names(&it["hide"]), hide: true }
+            } else if let Some(u) = it["submit"].as_str() {
+                A::Submit(u.into())
+            } else {
+                return Err(bad(format!("{tid}: give one action (javascript, url, reset, menu, page, show, hide or submit)")));
+            };
+            acts.push((t, act));
+        }
+        let name = a.str("field")?.to_string();
+        let edit = printcraft_engine::Edit::SetFieldProps {
+            name,
+            props: Box::new(printcraft_engine::FieldProps { actions: Some(acts), ..Default::default() }),
+        };
+        let id = self.doc(a)?.id;
+        self.session.apply(id, edit).map_err(failed)?;
+        self.form_actions(a)
+    }
+
     pub(crate) fn js_enabled(&mut self, a: &Args) -> Result<Value> {
         if let Some(on) = a.opt_bool("enabled")? {
             self.session.set_javascript(on);

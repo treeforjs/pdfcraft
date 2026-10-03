@@ -17,8 +17,11 @@ endstream endobj
 trailer << /Root 1 0 R >>
 %%EOF";
 
+/// A fresh folder per call: tests run in parallel and must not remove each other's files.
 fn dir() -> std::path::PathBuf {
-    let d = std::env::temp_dir().join(format!("printcraft-signing-ui-{}", std::process::id()));
+    static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let d = std::env::temp_dir().join(format!("printcraft-signing-ui-{}-{n}", std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
     std::fs::create_dir_all(&d).unwrap();
     d

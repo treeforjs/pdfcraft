@@ -13,10 +13,12 @@
 
 use printcraft_cos::{Dict, Document, ObjRef, Object, PdfString};
 
+mod actions;
 pub mod af;
 pub mod appearance;
 mod author;
 mod scripting;
+pub use actions::{FieldAction, Trigger, field_actions, set_field_actions};
 pub use author::{
     BorderStyle, FieldFont, FieldProps, Look, NewField, add_field, delete_field, duplicate_field, look, redraw_field, set_button_icon, set_props,
 };

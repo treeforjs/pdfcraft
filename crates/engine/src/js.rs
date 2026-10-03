@@ -155,6 +155,11 @@ pub fn document_scripts(cos: &printcraft_cos::Document) -> Vec<(String, String)>
 }
 
 impl crate::Document {
+    /// Field Properties ▸ Actions: field `name`'s action per trigger.
+    pub fn field_actions(&self, name: &str) -> Vec<(printcraft_forms::Trigger, printcraft_forms::FieldAction)> {
+        self.editor.as_ref().and_then(|e| printcraft_forms::field_actions(&e.cos, name).ok()).unwrap_or_default()
+    }
+
     /// Document JavaScripts (name, source), in name order.
     pub fn document_scripts(&self) -> Vec<(String, String)> {
         self.editor.as_ref().map(|e| document_scripts(&e.cos)).unwrap_or_default()

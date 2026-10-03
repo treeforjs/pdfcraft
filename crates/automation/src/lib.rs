@@ -509,6 +509,8 @@ impl Automation {
             "js_enabled" => self.js_enabled(&a)?,
             "form_set_script" => self.form_set_script(&a)?,
             "form_merge_data" => self.form_merge_data(&a)?,
+            "form_actions" => self.form_actions(&a)?,
+            "form_set_actions" => self.form_set_actions(&a)?,
             "ocr_status" => self.ocr_status()?,
             "ocr_recognize_files" => self.ocr_recognize_files(&a)?,
             "accessibility_report" => self.a11y_report(&a)?,

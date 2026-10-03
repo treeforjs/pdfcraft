@@ -386,6 +386,7 @@ impl Automation {
                     out
                 }
             },
+            actions: None,
         };
         if props == FieldProps::default() {
             return Err(ToolError::InvalidArgs("nothing to change".into()));

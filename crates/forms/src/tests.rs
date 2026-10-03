@@ -634,3 +634,28 @@ fn image_fields_ask_for_a_picture_and_show_it() {
     assert!(text.contains("/Icon Do") && text.contains("49.000000 0 0 49.000000 2.000 1.000 cm"), "{text}");
     assert!(set_button_icon(&mut doc, "nope", img, (1, 1)).is_err());
 }
+
+#[test]
+fn field_actions_round_trip_on_every_trigger() {
+    let mut doc = fixture();
+    let name = "go".to_string();
+    let acts = vec![
+        (Trigger::MouseUp, FieldAction::JavaScript("app.alert('hi')".into())),
+        (Trigger::MouseEnter, FieldAction::ShowHide { fields: vec!["other".into()], hide: false }),
+        (Trigger::OnFocus, FieldAction::Uri("https://example.org".into())),
+        (Trigger::OnBlur, FieldAction::Reset(vec![])),
+        (Trigger::MouseDown, FieldAction::GoTo(0)),
+    ];
+    set_field_actions(&mut doc, &name, &acts).unwrap();
+    let mut got = field_actions(&doc, &name).unwrap();
+    let mut want = acts.clone();
+    let key = |x: &(Trigger, FieldAction)| Trigger::ALL.iter().position(|t| *t == x.0);
+    got.sort_by_key(key);
+    want.sort_by_key(key);
+    assert_eq!(got, want);
+    set_field_actions(&mut doc, &name, &[(Trigger::MouseExit, FieldAction::Named("NextPage".into()))]).unwrap();
+    assert_eq!(field_actions(&doc, &name).unwrap(), [(Trigger::MouseExit, FieldAction::Named("NextPage".into()))]);
+    // The Mouse Up script is what the button runs.
+    set_field_actions(&mut doc, &name, &[(Trigger::MouseUp, FieldAction::JavaScript("this.print();".into()))]).unwrap();
+    assert_eq!(fields(&doc).iter().find(|f| f.name == "go").unwrap().button, Some(af::ButtonAction::Named("Print".into())));
+}

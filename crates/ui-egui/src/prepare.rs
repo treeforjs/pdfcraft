@@ -546,8 +546,10 @@ impl crate::PrintCraftApp {
         let others: Vec<String> =
             self.session.get(id).map(|doc| doc.form.iter().filter(|x| x.name != name).map(|x| x.name.clone()).collect()).unwrap_or_default();
         d.others = others.clone();
+        d.actions = self.session.get(id).map(|doc| doc.field_actions(name)).unwrap_or_default();
         if let Some(o) = d.original.as_mut() {
             o.others = others;
+            o.actions = d.actions.clone();
         }
         self.field_props = Some(d);
         self.dialog = Some(crate::Dialog::FieldProps);
@@ -563,6 +565,54 @@ pub enum FieldTab {
     Format,
     Validate,
     Calculate,
+    Actions,
+}
+
+/// Actions tab: the "Select Action" choices.
+pub const ACTION_KINDS: [&str; 8] = [
+    "Run a JavaScript",
+    "Open a web link",
+    "Reset a form",
+    "Execute a menu item",
+    "Go to a page view",
+    "Show a field",
+    "Hide a field",
+    "Submit a form",
+];
+
+/// Actions tab: the action being added.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ActionDraft {
+    pub trigger: printcraft_engine::FieldTrigger,
+    pub kind: usize,
+    /// The script, URL, field names (comma-separated), menu item or page number.
+    pub text: String,
+}
+
+impl Default for ActionDraft {
+    fn default() -> Self {
+        ActionDraft { trigger: printcraft_engine::FieldTrigger::MouseUp, kind: 0, text: String::new() }
+    }
+}
+
+impl ActionDraft {
+    pub fn action(&self) -> Result<printcraft_engine::FieldAction, String> {
+        use printcraft_engine::FieldAction as A;
+        let t = self.text.trim();
+        let names = || t.split(',').map(str::trim).filter(|s| !s.is_empty()).map(str::to_string).collect::<Vec<_>>();
+        Ok(match self.kind {
+            0 => A::JavaScript(self.text.clone()),
+            1 if !t.is_empty() => A::Uri(t.to_string()),
+            2 => A::Reset(names()),
+            3 => A::Named(if t.is_empty() { "Print".into() } else { t.to_string() }),
+            4 => A::GoTo(t.parse::<usize>().ok().filter(|p| *p >= 1).ok_or("Enter a page number")? - 1),
+            5 if !t.is_empty() => A::ShowHide { fields: names(), hide: false },
+            6 if !t.is_empty() => A::ShowHide { fields: names(), hide: true },
+            7 if !t.is_empty() => A::Submit(t.to_string()),
+            1 | 7 => return Err("Enter a URL".into()),
+            _ => return Err("Enter the field names".into()),
+        })
+    }
 }
 
 /// The Field Properties dialog's working copy.
@@ -601,6 +651,9 @@ pub struct FieldDraft {
     pub calculate: Calculate,
     /// Every other field's name (the Calculate tab picks from them).
     pub others: Vec<String>,
+    /// Actions tab: each trigger's action, and the one being added.
+    pub actions: Vec<(printcraft_engine::FieldTrigger, printcraft_engine::FieldAction)>,
+    pub new_action: ActionDraft,
     original: Box<Option<FieldDraft>>,
 }
 
@@ -638,6 +691,8 @@ impl FieldDraft {
             validate: f.actions.validate.clone(),
             calculate: f.actions.calculate.clone(),
             others: Vec::new(),
+            actions: Vec::new(),
+            new_action: ActionDraft::default(),
             original: Box::new(None),
         };
         d.original = Box::new(Some(d.clone()));
@@ -664,6 +719,7 @@ impl FieldDraft {
         if matches!(self.kind, FormFieldKind::Text | FormFieldKind::Combo) {
             t.extend([(FieldTab::Format, "Format"), (FieldTab::Validate, "Validate"), (FieldTab::Calculate, "Calculate")]);
         }
+        t.push((FieldTab::Actions, "Actions"));
         t
     }
 
@@ -691,6 +747,7 @@ impl FieldDraft {
             flags: OPTION_FLAGS.iter().filter(|b| (self.flags ^ o.flags) & **b != 0).map(|b| (*b, self.flags & b != 0)).collect(),
             quadding: (self.quadding != o.quadding).then_some(self.quadding),
             locked: ch(self.locked, o.locked),
+            actions: (self.actions != o.actions).then(|| self.actions.clone()),
             default_value: (self.default != o.default).then(|| (!self.default.is_empty()).then(|| self.default.clone())),
         };
         (p != FieldProps::default()).then_some(p)
@@ -851,6 +908,7 @@ pub(crate) fn body(ui: &mut egui::Ui, d: &mut FieldDraft, t: &crate::theme::Toke
             FieldTab::Format => format_tab(ui, d, t),
             FieldTab::Validate => validate_tab(ui, d),
             FieldTab::Calculate => calculate_tab(ui, d, t),
+            FieldTab::Actions => actions_tab(ui, d, t),
             FieldTab::Options => match d.kind {
                 FormFieldKind::Text => {
                     use printcraft_engine::field_flags as ff;
@@ -1188,6 +1246,83 @@ fn validate_tab(ui: &mut egui::Ui, d: &mut FieldDraft) {
             *max = has.then_some(v);
         });
     }
+}
+
+fn actions_tab(ui: &mut egui::Ui, d: &mut FieldDraft, t: &crate::theme::Tokens) {
+    use printcraft_engine::FieldTrigger as T;
+    ui.label(egui::RichText::new("Add an Action").font(theme::semibold(13.0)));
+    let a = &mut d.new_action;
+    egui::Grid::new("field-actions-add").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
+        ui.label("Select Trigger:");
+        egui::ComboBox::from_id_salt("action-trigger").selected_text(a.trigger.label()).width(220.0).show_ui(ui, |ui| {
+            for tr in T::ALL {
+                ui.selectable_value(&mut a.trigger, tr, tr.label());
+            }
+        });
+        ui.end_row();
+        ui.label("Select Action:");
+        egui::ComboBox::from_id_salt("action-kind").selected_text(ACTION_KINDS[a.kind]).width(220.0).show_ui(ui, |ui| {
+            for (i, k) in ACTION_KINDS.iter().enumerate() {
+                ui.selectable_value(&mut a.kind, i, *k);
+            }
+        });
+        ui.end_row();
+        let hint = match a.kind {
+            0 => "JavaScript",
+            1 => "https://…",
+            2 => "Fields to reset (comma-separated; empty: all)",
+            3 => "Print, NextPage, PrevPage, FirstPage or LastPage",
+            4 => "Page number",
+            5 | 6 => "Field names (comma-separated)",
+            _ => "URL to submit to",
+        };
+        ui.label(if a.kind == 0 { "Script:" } else { "Value:" });
+        if a.kind == 0 {
+            ui.add(egui::TextEdit::multiline(&mut a.text).code_editor().desired_rows(3).desired_width(340.0).hint_text(hint).id_salt("action-text"));
+        } else {
+            ui.add(egui::TextEdit::singleline(&mut a.text).desired_width(340.0).hint_text(hint).id_salt("action-text"));
+        }
+        ui.end_row();
+    });
+    let mut error = None;
+    if ui.button("Add").clicked() {
+        match d.new_action.action() {
+            Ok(act) => {
+                let tr = d.new_action.trigger;
+                d.actions.retain(|(x, _)| *x != tr);
+                d.actions.push((tr, act));
+                d.actions.sort_by_key(|(x, _)| T::ALL.iter().position(|y| y == x));
+                d.new_action.text.clear();
+            }
+            Err(e) => error = Some(e),
+        }
+    }
+    if let Some(e) = error {
+        ui.label(egui::RichText::new(e).small().color(t.text_muted));
+    }
+    ui.add_space(8.0);
+    ui.label(egui::RichText::new("Actions").font(theme::semibold(13.0)));
+    egui::Frame::new().fill(t.hover).corner_radius(egui::CornerRadius::same(6)).inner_margin(egui::Margin::same(8)).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        if d.actions.is_empty() {
+            ui.label(egui::RichText::new("No actions").color(t.text_muted));
+        }
+        let mut remove = None;
+        for (i, (tr, act)) in d.actions.iter().enumerate() {
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new(tr.label()).strong());
+                ui.label(act.describe());
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui.push_id(i, |ui| ui.button("Delete")).inner.clicked() {
+                        remove = Some(i);
+                    }
+                });
+            });
+        }
+        if let Some(i) = remove {
+            d.actions.remove(i);
+        }
+    });
 }
 
 fn calculate_tab(ui: &mut egui::Ui, d: &mut FieldDraft, t: &crate::theme::Tokens) {
