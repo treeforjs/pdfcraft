@@ -56,6 +56,9 @@ const PICKERS: &[&str] = &[
     "a11y.report",
     "ocr.recognize_batch",
     "form.merge_data",
+    "export.docx",
+    "export.html",
+    "export.rtf",
 ];
 
 #[test]

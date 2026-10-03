@@ -122,3 +122,80 @@ impl Session {
         Ok(n)
     }
 }
+
+/// Export a PDF ▸ Word, HTML or RTF.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OfficeFormat {
+    Docx,
+    Html,
+    Rtf,
+}
+
+impl OfficeFormat {
+    pub fn extension(self) -> &'static str {
+        match self {
+            OfficeFormat::Docx => "docx",
+            OfficeFormat::Html => "html",
+            OfficeFormat::Rtf => "rtf",
+        }
+    }
+
+    pub fn from_extension(ext: &str) -> Option<OfficeFormat> {
+        match ext.to_ascii_lowercase().as_str() {
+            "docx" => Some(OfficeFormat::Docx),
+            "html" | "htm" => Some(OfficeFormat::Html),
+            "rtf" => Some(OfficeFormat::Rtf),
+            _ => None,
+        }
+    }
+}
+
+impl crate::Document {
+    /// The pages as paragraphs and images (for Word, HTML and RTF export).
+    pub fn export_pages(&self) -> Vec<printcraft_export::Page> {
+        let Some(cos) = self.editor.as_ref().map(|e| &e.cos) else { return Vec::new() };
+        self.info
+            .pages
+            .iter()
+            .enumerate()
+            .map(|(i, info)| {
+                let blocks = printcraft_edit::text_blocks(cos, i)
+                    .unwrap_or_default()
+                    .into_iter()
+                    .filter(|b| !b.text.trim().is_empty())
+                    .map(|b| {
+                        let f = b.base_font.to_ascii_lowercase();
+                        printcraft_export::Block {
+                            text: b.text,
+                            rect: b.rect,
+                            size: b.size,
+                            bold: f.contains("bold") || f.contains("black") || f.contains("heavy"),
+                            italic: f.contains("italic") || f.contains("oblique"),
+                        }
+                    })
+                    .collect();
+                let images = self
+                    .page_images(i)
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(k, im)| {
+                        let (ext, bytes) = self.page_image_file(i, k).ok()?;
+                        Some(printcraft_export::Image { ext: if ext == "jpg" { "jpg" } else { "png" }, bytes, rect: im.rect })
+                    })
+                    .collect();
+                printcraft_export::Page { width: info.width as f64, height: info.height as f64, blocks, images }
+            })
+            .collect()
+    }
+
+    /// The document as a Word, HTML or RTF file.
+    pub fn export_office(&self, format: OfficeFormat) -> Vec<u8> {
+        let pages = self.export_pages();
+        let title = self.info.title.clone().unwrap_or_else(|| self.name.trim_end_matches(".pdf").to_string());
+        match format {
+            OfficeFormat::Docx => printcraft_export::docx(&pages, &title),
+            OfficeFormat::Html => printcraft_export::html(&pages, &title).into_bytes(),
+            OfficeFormat::Rtf => printcraft_export::rtf(&pages).into_bytes(),
+        }
+    }
+}

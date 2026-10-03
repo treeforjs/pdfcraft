@@ -3861,6 +3861,7 @@ dependencies = [
  "printcraft-cos",
  "printcraft-create",
  "printcraft-edit",
+ "printcraft-export",
  "printcraft-fonts",
  "printcraft-forms",
  "printcraft-js",
@@ -3875,6 +3876,13 @@ dependencies = [
  "printcraft-sign",
  "printcraft-xfdf",
  "thiserror 2.0.21",
+]
+
+[[package]]
+name = "printcraft-export"
+version = "0.1.0"
+dependencies = [
+ "flate2",
 ]
 
 [[package]]

@@ -86,3 +86,19 @@ fn pdfa_dialog_verifies_and_converts() {
     let id = h.state().active_ids().unwrap().1;
     assert_eq!(h.state().session.get(id).unwrap().can_undo(), Some("Save as PDF/A-2b"));
 }
+
+#[test]
+fn export_to_word_html_and_rtf() {
+    let doc = Session::new().create_from_text("t", "Exported words").unwrap().to_vec();
+    let dir = std::env::temp_dir().join(format!("printcraft-office-ui-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut app = PrintCraftApp::new();
+    app.open_bytes("e.pdf", None, doc).unwrap();
+    for ext in ["docx", "html", "rtf"] {
+        let out = dir.join(format!("e.{ext}"));
+        app.save_override = Some(out.to_string_lossy().into_owned());
+        assert!(app.execute(&format!("export.{ext}")));
+        assert!(std::fs::metadata(&out).unwrap().len() > 40, "{ext}");
+    }
+    assert!(std::fs::read_to_string(dir.join("e.html")).unwrap().contains("Exported words"));
+}

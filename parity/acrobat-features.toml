@@ -6823,11 +6823,11 @@ title = "Export to Word (.docx)"
 area = "J"
 tier = "P1"
 milestone = "M10"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["export.docx"]
+tools = ["doc_export_office"]
+evidence = ["crates/export/src/lib.rs::docx_is_a_word_package", "crates/engine/src/tests.rs::exporting_office_files_keeps_images", "crates/automation/tests/automation.rs::exporting_to_word_html_and_rtf", "crates/ui-egui/tests/compare.rs::export_to_word_html_and_rtf"]
+notes = "Flowing Word document: paragraphs, Heading 1/2 from larger text, bold/italic, images inline, page breaks; checked with macOS textutil. Not yet: tables, columns, fonts and colours, exact layout mode."
 
 [[feature]]
 id = "create.export-rtf"
@@ -6835,11 +6835,11 @@ title = "Export to RTF"
 area = "J"
 tier = "P1"
 milestone = "M10"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["export.rtf"]
+tools = ["doc_export_office"]
+evidence = ["crates/export/src/lib.rs::rtf_escapes_and_sizes", "crates/automation/tests/automation.rs::exporting_to_word_html_and_rtf", "crates/ui-egui/tests/compare.rs::export_to_word_html_and_rtf"]
+notes = "Paragraphs with sizes, bold, italic, Unicode; page breaks. Images are left out."
 
 [[feature]]
 id = "create.export-xlsx"
@@ -6919,11 +6919,11 @@ title = "Export to HTML"
 area = "J"
 tier = "P1"
 milestone = "M10"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["export.html"]
+tools = ["doc_export_office"]
+evidence = ["crates/export/src/lib.rs::html_has_headings_paragraphs_and_images_in_order", "crates/automation/tests/automation.rs::exporting_to_word_html_and_rtf", "crates/ui-egui/tests/compare.rs::export_to_word_html_and_rtf"]
+notes = "Single HTML file with headings, paragraphs and inline images. Not yet: multi-page folder output, tables, CSS from fonts."
 
 [[feature]]
 id = "create.export-text"

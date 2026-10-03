@@ -32,6 +32,7 @@ printcraft-ocr = { path = "crates/ocr", version = "0.1.0" }
 printcraft-js = { path = "crates/js", version = "0.1.0" }
 printcraft-compare = { path = "crates/compare", version = "0.1.0" }
 printcraft-preflight = { path = "crates/preflight", version = "0.1.0" }
+printcraft-export = { path = "crates/export", version = "0.1.0" }
 printcraft-edit = { path = "crates/edit", version = "0.1.0" }
 printcraft-create = { path = "crates/create", version = "0.1.0" }
 printcraft-forms = { path = "crates/forms", version = "0.1.0" }

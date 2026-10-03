@@ -1384,3 +1384,21 @@ fn actions_run_their_steps_on_files() {
     assert!(page_texts(&s2, id)[0].contains("DRAFT"));
     assert!(actions::run_on(&custom, "bad.pdf", Arc::new(b"nope".to_vec()), |_, _| {}).is_err());
 }
+
+#[test]
+fn exporting_office_files_keeps_images() {
+    let mut s = Session::new();
+    let text = s.create_from_text("t", "Picture page").unwrap();
+    let id = s.open("t.pdf", None, text, None).unwrap();
+    let png = export::Exporter::new(s.get(id).unwrap()).png(0, 20.0).unwrap();
+    let pic = s.create_from_images(&[("p.png".into(), png)]).unwrap();
+    let pid = s.open("p.pdf", None, pic, None).unwrap();
+    let d = s.get(pid).unwrap();
+    assert_eq!(d.export_pages()[0].images.len(), 1);
+    let docx = d.export_office(compare::OfficeFormat::Docx);
+    assert!(docx.windows(16).any(|w| w == b"word/media/image"));
+    if let Ok(dir) = std::env::var("PRINTCRAFT_EXPORT_DIR") {
+        std::fs::write(format!("{dir}/pic.docx"), &docx).unwrap();
+    }
+    assert!(String::from_utf8(d.export_office(compare::OfficeFormat::Html)).unwrap().contains("data:image/png;base64,"));
+}

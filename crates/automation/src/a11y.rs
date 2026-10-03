@@ -259,6 +259,16 @@ impl Automation {
         Ok(json!({ "path": target.to_string_lossy(), "rows": files.len(), "columns": columns }))
     }
 
+    pub(crate) fn doc_export_office(&self, a: &Args) -> Result<Value> {
+        let path = self.resolve(a.str("path")?, true)?;
+        let ext = path.extension().map(|e| e.to_string_lossy().into_owned()).unwrap_or_default();
+        let format = printcraft_engine::compare::OfficeFormat::from_extension(&ext)
+            .ok_or_else(|| ToolError::InvalidArgs(format!("unsupported extension {ext:?} (docx, html or rtf)")))?;
+        let bytes = self.doc(a)?.export_office(format);
+        write_atomic(&path, &bytes)?;
+        Ok(json!({ "path": path.to_string_lossy(), "bytes": bytes.len(), "format": format.extension() }))
+    }
+
     fn pdfa_level(&self, a: &Args) -> Result<printcraft_engine::pdfa::Level> {
         let l = a.opt_str("level")?.unwrap_or("2b");
         printcraft_engine::pdfa::Level::from_id(l).ok_or_else(|| ToolError::InvalidArgs(format!("unknown PDF/A level {l:?} (2b or 3b)")))

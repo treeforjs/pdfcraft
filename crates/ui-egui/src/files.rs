@@ -391,6 +391,35 @@ impl PrintCraftApp {
     }
 
     /// Export all comments / form data: the format follows the file name's extension.
+    /// Export a PDF ▸ Word, HTML or RTF: ask where (`save_override` in tests), then write.
+    pub fn export_office_dialog(&mut self, format: printcraft_engine::compare::OfficeFormat) {
+        let Some((_, id)) = self.active_ids() else { return };
+        let Some(doc) = self.session.get(id) else { return };
+        let stem = doc.name.trim_end_matches(".pdf").trim_end_matches(".PDF").to_string();
+        let ext = format.extension();
+        let bytes = doc.export_office(format);
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let path = match self.save_override.clone() {
+                Some(p) => Some(std::path::PathBuf::from(p)),
+                None => rfd::FileDialog::new()
+                    .set_title("Export")
+                    .add_filter(ext.to_uppercase(), &[ext])
+                    .set_file_name(format!("{stem}.{ext}"))
+                    .save_file(),
+            };
+            let Some(path) = path else { return };
+            match crate::editing::write_atomically(&path.to_string_lossy(), &bytes) {
+                Ok(()) => self.notify(format!("Exported to {}", path.display())),
+                Err(e) => self.notify(format!("Couldn't write {}: {e}", path.display())),
+            }
+        }
+        #[cfg(target_arch = "wasm32")]
+        if let Err(e) = crate::editing::download(&format!("{stem}.{ext}"), &bytes) {
+            self.notify(e);
+        }
+    }
+
     /// Forms ▸ Merge data files into spreadsheet: choose data files (FDF, XFDF or filled-in PDF
     /// forms), then where to save the CSV.
     pub fn merge_data_dialog(&mut self) {

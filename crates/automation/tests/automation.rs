@@ -1484,3 +1484,19 @@ fn pdfa_through_tools() {
     assert!(r["issues"].as_array().unwrap().iter().all(|i| i["fixable"] == false), "{r}");
     assert!(a.call("pdfa_verify", &json!({ "doc": doc, "level": "9z" })).is_err());
 }
+
+#[test]
+fn exporting_to_word_html_and_rtf() {
+    let dir = workdir("office");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    for ext in ["docx", "html", "rtf"] {
+        let r = ok(&mut a, "doc_export_office", json!({ "doc": doc, "path": format!("a.{ext}") }));
+        assert_eq!(r["format"], ext);
+    }
+    let html = std::fs::read_to_string(dir.join("a.html")).unwrap();
+    assert!(html.contains("Page 1") && html.contains("Page 3") && html.matches("<hr>").count() == 2, "{html}");
+    assert!(std::fs::read(dir.join("a.docx")).unwrap().starts_with(b"PK"));
+    assert!(std::fs::read_to_string(dir.join("a.rtf")).unwrap().contains("Page 2"));
+    assert!(a.call("doc_export_office", &json!({ "doc": doc, "path": "a.xyz" })).is_err());
+}
