@@ -224,6 +224,12 @@ impl PrintCraftApp {
             "export.text" => self.dialog = Some(Dialog::Export(crate::export_ui::ExportKind::Text)),
             "a11y.check" => self.start_accessibility_check(),
             "ocr.recognize" => self.dialog = Some(Dialog::RecognizeText),
+            "tools.js_console" => self.dialog = Some(Dialog::JsConsole),
+            "tools.document_js" => {
+                self.doc_js = Default::default();
+                self.dialog = Some(Dialog::DocumentJs);
+            }
+            "app.preferences" => self.dialog = Some(Dialog::Preferences),
             "ocr.recognize_batch" => self.ocr_files_dialog(),
             "edit.edit_text" => {
                 self.quick_tool = crate::QuickTool::EditText;

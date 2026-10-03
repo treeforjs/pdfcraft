@@ -13,6 +13,7 @@
 pub mod catalog;
 pub mod commands;
 pub mod export;
+pub mod js;
 pub mod links;
 pub mod ocr;
 
@@ -115,6 +116,15 @@ enum Scope {
     Form,
 }
 
+/// Edits during which field scripts run.
+fn uses_scripts(edit: &Edit) -> bool {
+    match edit {
+        Edit::SetFieldValue { .. } | Edit::ApplyScriptChanges { .. } | Edit::SetFieldScript { .. } => true,
+        Edit::Batch { edits, .. } => edits.iter().any(uses_scripts),
+        _ => false,
+    }
+}
+
 fn scope_of(edit: &Edit) -> Scope {
     match edit {
         // A file attachment also changes the Attachments list.
@@ -133,7 +143,7 @@ fn scope_of(edit: &Edit) -> Scope {
         | Edit::ResizeAnnotation { .. }
         | Edit::StyleAnnotation { .. }
         | Edit::SetAnnotationInfo { .. } => Scope::Comments,
-        Edit::SetFieldValue { .. } | Edit::ResetForm { .. } | Edit::SetFieldImage { .. } => Scope::Form,
+        Edit::SetFieldValue { .. } | Edit::ResetForm { .. } | Edit::SetFieldImage { .. } | Edit::ApplyScriptChanges { .. } => Scope::Form,
         Edit::Batch { edits, .. } => {
             let mut scopes = edits.iter().map(scope_of);
             let first = scopes.next().unwrap_or(Scope::Full);
@@ -187,6 +197,8 @@ pub struct Document {
     sig_cache: Arc<printcraft_sign::DigestCache>,
     editor: Option<Editor>,
     config: RenderConfig,
+    /// What field scripts printed or asked for (see [`Session::take_js_output`]).
+    js_output: js::JsOutput,
 }
 
 impl Document {
@@ -776,6 +788,24 @@ pub enum Edit {
     MarkDecorative {
         figure: u32,
     },
+    /// Document JavaScripts: add, replace (`script`) or remove (`None`) the document-level
+    /// script `name`.
+    SetDocumentScript {
+        name: String,
+        script: Option<String>,
+    },
+    /// Field Properties ▸ a custom script: set or remove field `name`'s JavaScript for `event`
+    /// (keystroke, format, validate, calculate or mouse_up).
+    SetFieldScript {
+        name: String,
+        event: String,
+        script: Option<String>,
+    },
+    /// What a script (button or console) changed in form fields: values, read-only, required
+    /// and visibility.
+    ApplyScriptChanges {
+        changes: Vec<printcraft_forms::FieldChange>,
+    },
     /// Scan & OCR ▸ Recognize text: put recognised words on `page` as invisible text over the
     /// image (from [`ocr::OcrJob::run`]).
     AddOcrText {
@@ -971,6 +1001,10 @@ impl Edit {
             Edit::SetAltText { .. } => "Set alternate text".into(),
             Edit::MarkDecorative { .. } => "Mark figure as decorative".into(),
             Edit::AddOcrText { .. } => "Recognize text".into(),
+            Edit::ApplyScriptChanges { .. } => "Run JavaScript".into(),
+            Edit::SetFieldScript { name, .. } => format!("Edit script of {name}"),
+            Edit::SetDocumentScript { script: None, .. } => "Delete document JavaScript".into(),
+            Edit::SetDocumentScript { .. } => "Edit document JavaScript".into(),
             Edit::EditTextLine { .. } | Edit::EditTextBlock { .. } => "Edit text".into(),
             Edit::EditPageImage { change, .. } => match change {
                 ImageEdit::Move(_) => "Move image".into(),
@@ -1095,7 +1129,7 @@ fn check_permission(edit: &Edit, p: &printcraft_cos::Permissions) -> Result<(), 
                 Err(EditError::NotPermitted("comments"))
             }
         }
-        Edit::SetFieldValue { .. } | Edit::ResetForm { .. } | Edit::SetFieldImage { .. } => {
+        Edit::SetFieldValue { .. } | Edit::ResetForm { .. } | Edit::SetFieldImage { .. } | Edit::ApplyScriptChanges { .. } => {
             if p.fill_forms() {
                 Ok(())
             } else {
@@ -1139,6 +1173,8 @@ fn check_permission(edit: &Edit, p: &printcraft_cos::Permissions) -> Result<(), 
         | Edit::SetAltText { .. }
         | Edit::MarkDecorative { .. }
         | Edit::AddOcrText { .. }
+        | Edit::SetDocumentScript { .. }
+        | Edit::SetFieldScript { .. }
         | Edit::EditTextLine { .. }
         | Edit::EditTextBlock { .. }
         | Edit::EditPageImage { .. }
@@ -1155,6 +1191,8 @@ fn check_permission(edit: &Edit, p: &printcraft_cos::Permissions) -> Result<(), 
 
 /// Dates and unique ids stamped onto what an edit creates.
 struct EditCtx {
+    /// Field scripts run (`None`: JavaScript is off) and what they produced.
+    js: Option<js::JsRunner>,
     date: Option<String>,
     /// Today in local time, for date tokens.
     today: (i64, u32, u32),
@@ -1173,7 +1211,7 @@ impl EditCtx {
             // Real clock: mix in sub-second time so ids from two sessions don't collide.
             seed ^= std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.subsec_nanos() as u64).unwrap_or(0) << 32;
         }
-        Self { date: now.map(printcraft_cos::pdf_date), today: (1970, 1, 1), seed, count: 0 }
+        Self { js: None, date: now.map(printcraft_cos::pdf_date), today: (1970, 1, 1), seed, count: 0 }
     }
 
     /// 32 bytes of entropy for new encryption keys and salts. `RandomState` is seeded by the
@@ -1291,7 +1329,14 @@ fn run_edit(doc: &mut printcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -
         Edit::SetAnnotationInfo { page, index, author, subject, icon } => {
             printcraft_annot::set_info(doc, *page, *index, author.as_deref(), subject.as_deref(), *icon, &cx.meta())?;
         }
-        Edit::SetFieldValue { name, value } => printcraft_forms::set_value(doc, name, value)?,
+        Edit::SetFieldValue { name, value } => match cx.js.as_mut() {
+            Some(js) => printcraft_forms::set_value_with(doc, name, value, js)?,
+            None => printcraft_forms::set_value(doc, name, value)?,
+        },
+        Edit::ApplyScriptChanges { changes } => match cx.js.as_mut() {
+            Some(js) => printcraft_forms::apply_script_changes(doc, changes, js)?,
+            None => printcraft_forms::apply_script_changes(doc, changes, &mut printcraft_forms::NoScripts)?,
+        },
         Edit::SetFieldImage { name, image } => {
             let (img, _) = printcraft_create::image_xobject(doc, name, image)?;
             let px = match &*doc.get(img) {
@@ -1325,6 +1370,14 @@ fn run_edit(doc: &mut printcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -
         Edit::EditTextLine { page, line, text } => {
             printcraft_edit::replace_line(doc, *page, *line, text)?;
         }
+        Edit::SetFieldScript { name, event, script } => {
+            printcraft_forms::set_field_script(doc, name, event, script.as_deref())?;
+            match cx.js.as_mut() {
+                Some(js) => printcraft_forms::recalculate_with(doc, js)?,
+                None => printcraft_forms::recalculate(doc)?,
+            };
+        }
+        Edit::SetDocumentScript { name, script } => printcraft_forms::set_document_script(doc, name, script.as_deref())?,
         Edit::AddOcrText { page, words } => {
             printcraft_edit::stamp(doc, *page, "OCR", printcraft_ocr::text_layer(words))?;
         }
@@ -1583,6 +1636,8 @@ pub enum EditError {
     SignedRewrite(String),
     #[error("this document is signed: rewriting it would invalidate its signatures (save it incrementally instead)")]
     Signed,
+    #[error("{0}")]
+    Invalid(String),
 }
 
 impl From<printcraft_sign::SignError> for EditError {
@@ -1599,6 +1654,8 @@ pub struct Session {
     clock: Option<fn() -> i64>,
     /// Certificates trusted for signing (Acrobat: Trusted Certificates).
     trust: Arc<TrustStore>,
+    /// Preferences ▸ JavaScript ▸ Enable Acrobat JavaScript, inverted (on by default).
+    js_off: bool,
 }
 
 /// Validate the signature fields of `cos` (written as `bytes`).
@@ -1720,6 +1777,7 @@ impl Session {
             sig_cache,
             editor,
             config,
+            js_output: Default::default(),
         });
         Ok(id)
     }
@@ -1732,7 +1790,9 @@ impl Session {
     pub fn apply(&mut self, id: DocId, edit: Edit) -> Result<(), EditError> {
         let now = self.now();
         let today = self.today();
+        let js_off = self.js_off;
         let doc = self.doc_mut(id)?;
+        let name = doc.name.clone();
         let mut cx = EditCtx::new(now, doc.generation ^ (id.0 << 48));
         cx.today = today;
         let reason = doc.read_only_reason.clone().unwrap_or_default();
@@ -1742,6 +1802,9 @@ impl Session {
             check_permission(&edit, &p)?;
         }
         let mut next = editor.cos.clone();
+        if !js_off && uses_scripts(&edit) {
+            cx.js = Some(js::JsRunner::new(&next, &name));
+        }
         run_edit(&mut next, &edit, &mut cx)?;
         // Signed documents are only ever saved incrementally: an edit that needs a full rewrite
         // (applying redactions, changing security, sanitizing) would invalidate the signatures.
@@ -1773,6 +1836,9 @@ impl Session {
         }
         doc.dirty = true;
         doc.generation += 1;
+        if let Some(js) = cx.js {
+            doc.js_output.append(js.output);
+        }
         Ok(())
     }
 

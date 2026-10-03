@@ -17,6 +17,7 @@ pub mod control;
 mod create_ui;
 mod crop;
 mod export_ui;
+mod js_ui;
 mod marks_ui;
 mod ocr_ui;
 mod optimize_ui;
@@ -187,6 +188,12 @@ pub enum Dialog {
     AccessibilityOptions,
     /// Scan & OCR ▸ Recognize text.
     RecognizeText,
+    /// The JavaScript console (⌘J).
+    JsConsole,
+    /// Document JavaScripts.
+    DocumentJs,
+    /// Preferences.
+    Preferences,
     /// Combine files: the files, their order and pages.
     Combine,
     /// Custom stamps ▸ Create.
@@ -302,6 +309,9 @@ pub struct PrintCraftApp {
     pub ocr_run: Option<ocr_ui::OcrRun>,
     pub ocr_batch: Option<std::sync::Arc<std::sync::Mutex<ocr_ui::BatchProgress>>>,
     pub ocr_sync: bool,
+    /// The JavaScript console and the Document JavaScripts draft.
+    pub js_console: js_ui::JsConsole,
+    pub doc_js: js_ui::DocJsDraft,
     pub a11y: a11y_ui::A11yState,
     pub a11y_skipped: std::collections::BTreeSet<printcraft_engine::a11y::Rule>,
     pub alt_draft: a11y_ui::AltDraft,
@@ -441,6 +451,8 @@ impl PrintCraftApp {
             ocr_run: None,
             ocr_batch: None,
             ocr_sync: false,
+            js_console: Default::default(),
+            doc_js: Default::default(),
             a11y: a11y_ui::A11yState::default(),
             a11y_skipped: Default::default(),
             alt_draft: Default::default(),
@@ -778,6 +790,7 @@ impl PrintCraftApp {
             "digital_ids": self.digital_ids.iter().filter(|e| !e.path.starts_with("keychain:")).collect::<Vec<_>>(),
             "trusted": trusted,
             "custom_stamps": stamps_ui::encode(&self.custom_stamps),
+            "javascript": self.session.javascript(),
         })
         .to_string()
     }
@@ -809,6 +822,9 @@ impl PrintCraftApp {
             self.digital_ids = ids;
         }
         self.custom_stamps = stamps_ui::decode(&v["custom_stamps"]);
+        if let Some(on) = v["javascript"].as_bool() {
+            self.session.set_javascript(on);
+        }
         if let Ok(pems) = serde_json::from_value::<Vec<String>>(v["trusted"].clone()) {
             let certs = pems.iter().filter_map(|p| printcraft_engine::sign::x509::load_certificates(p.as_bytes()).ok()).flatten().collect();
             self.session.set_trusted_certificates(certs);
@@ -879,6 +895,9 @@ impl PrintCraftApp {
                     "export-all-images" => Some(Dialog::Export(export_ui::ExportKind::AllImages)),
                     "accessibility-options" => Some(Dialog::AccessibilityOptions),
                     "recognize-text" => Some(Dialog::RecognizeText),
+                    "js-console" => Some(Dialog::JsConsole),
+                    "document-js" => Some(Dialog::DocumentJs),
+                    "preferences" => Some(Dialog::Preferences),
                     "signature" => Some(Dialog::Signature),
                     "optimize" => Some(Dialog::Optimize),
                     "sign" | "certify" => {

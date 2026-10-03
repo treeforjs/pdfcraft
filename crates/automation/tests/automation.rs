@@ -1329,3 +1329,50 @@ fn ocr_recognize_files_writes_searchable_copies() {
     let found = ok(&mut a, "text_find", json!({ "doc": out, "query": "recognition" }));
     assert!(found.to_string().contains("\"page\""), "{found}");
 }
+
+#[test]
+fn javascript_through_tools() {
+    let dir = workdir("js");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    for (name, y) in [("Price", 20), ("Qty", 60), ("Total", 100)] {
+        ok(&mut a, "form_add_field", json!({ "doc": doc, "page": 1, "type": "text", "rect": [20, y, 180, y + 22], "name": name }));
+    }
+    ok(
+        &mut a,
+        "js_set_document_script",
+        json!({ "doc": doc, "name": "lib", "script": "function money(v) { return util.printf('EUR %,2.2f', v); }" }),
+    );
+    assert_eq!(ok(&mut a, "js_document_scripts", json!({ "doc": doc }))["scripts"][0]["name"], "lib");
+    ok(
+        &mut a,
+        "form_set_script",
+        json!({ "doc": doc, "field": "Total", "event": "calculate", "script": "event.value = getField('Price').value * getField('Qty').value;" }),
+    );
+    ok(&mut a, "form_set_script", json!({ "doc": doc, "field": "Total", "event": "format", "script": "event.value = money(event.value);" }));
+    ok(
+        &mut a,
+        "form_set_script",
+        json!({ "doc": doc, "field": "Qty", "event": "validate", "script": "if (event.value < 1) { app.alert('Order at least one'); event.rc = false; }" }),
+    );
+    ok(&mut a, "form_fill", json!({ "doc": doc, "values": { "Price": "1250", "Qty": "2" } }));
+    assert!(page_text(&mut a, doc)[0].contains("EUR 2.500,00"), "{:?}", page_text(&mut a, doc));
+    let err = a.call("form_fill", &json!({ "doc": doc, "values": { "Qty": "0" } })).unwrap_err();
+    assert!(err.to_string().contains("Order at least one"), "{err}");
+
+    let r = ok(
+        &mut a,
+        "js_run",
+        json!({ "doc": doc, "script": "console.println(getField('Total').value); getField('Qty').value = 3; this.pageNum = 1; app.alert('ok');" }),
+    );
+    assert_eq!(r["console"][0], "2500");
+    assert_eq!(r["alerts"][0], "ok");
+    assert_eq!(r["requests"][0]["page"], 2);
+    let f = ok(&mut a, "form_fields", json!({ "doc": doc }));
+    let total = f["fields"].as_array().unwrap().iter().find(|x| x["name"] == "Total").unwrap().clone();
+    assert_eq!(total["value"], "3750");
+    let r = ok(&mut a, "js_run", json!({ "doc": doc, "script": "nope()" }));
+    assert!(r["error"].as_str().unwrap().contains("nope"));
+    assert_eq!(ok(&mut a, "js_enabled", json!({ "enabled": false }))["enabled"], false);
+    assert!(a.call("js_run", &json!({ "doc": doc, "script": "1" })).is_err());
+}

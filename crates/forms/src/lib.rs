@@ -16,8 +16,13 @@ use printcraft_cos::{Dict, Document, ObjRef, Object, PdfString};
 pub mod af;
 pub mod appearance;
 mod author;
+mod scripting;
 pub use author::{
     BorderStyle, FieldFont, FieldProps, Look, NewField, add_field, delete_field, duplicate_field, look, redraw_field, set_button_icon, set_props,
+};
+pub use scripting::{
+    FieldChange, FieldEvent, NoScripts, ScriptResult, Scripts, apply_script_changes, document_scripts, document_scripts_named, set_document_script,
+    set_field_script,
 };
 
 #[cfg(test)]
@@ -236,7 +241,10 @@ fn actions_of(doc: &Document, d: &Dict, widgets: &[ObjRef]) -> af::Actions {
     if let Some(f) = js(b"F") {
         match af::parse_format(&f) {
             Some(fm) => out.format = fm,
-            None if !f.trim().is_empty() => out.unsupported.push("format"),
+            None if !f.trim().is_empty() => {
+                out.unsupported.push("format");
+                out.scripts.format = Some(f);
+            }
             None => {}
         }
     }
@@ -247,21 +255,30 @@ fn actions_of(doc: &Document, d: &Dict, widgets: &[ObjRef]) -> af::Actions {
         match af::parse_format(&k) {
             Some(fm @ af::Format::Mask(_)) => out.format = fm,
             Some(_) => {}
-            None if !k.trim().is_empty() => out.unsupported.push("keystroke"),
+            None if !k.trim().is_empty() => {
+                out.unsupported.push("keystroke");
+                out.scripts.keystroke = Some(k);
+            }
             None => {}
         }
     }
     if let Some(v) = js(b"V") {
         match af::parse_validate(&v) {
             Some(vv) => out.validate = vv,
-            None if !v.trim().is_empty() => out.unsupported.push("validate"),
+            None if !v.trim().is_empty() => {
+                out.unsupported.push("validate");
+                out.scripts.validate = Some(v);
+            }
             None => {}
         }
     }
     if let Some(c) = js(b"C") {
         match af::parse_calculate(&c) {
             Some(cc) => out.calculate = cc,
-            None if !c.trim().is_empty() => out.unsupported.push("calculate"),
+            None if !c.trim().is_empty() => {
+                out.unsupported.push("calculate");
+                out.scripts.calculate = Some(c);
+            }
             None => {}
         }
     }
@@ -581,6 +598,11 @@ fn walk(
 
 /// Fill the field `name`.
 pub fn set_value(doc: &mut Document, name: &str, value: &FieldValue) -> Result<(), FormError> {
+    set_value_with(doc, name, value, &mut NoScripts)
+}
+
+/// [`set_value`], running the fields' JavaScript through `scripts`.
+pub fn set_value_with(doc: &mut Document, name: &str, value: &FieldValue, scripts: &mut dyn Scripts) -> Result<(), FormError> {
     let all = fields(doc);
     if all.is_empty() {
         return Err(FormError::NoForm);
@@ -589,16 +611,22 @@ pub fn set_value(doc: &mut Document, name: &str, value: &FieldValue) -> Result<(
     if f.read_only() {
         return Err(FormError::ReadOnly(name.into()));
     }
-    write_value(doc, f, value)?;
-    recalculate(doc)?;
+    write_value(doc, f, value, scripts)?;
+    recalculate_with(doc, scripts)?;
     Ok(())
 }
 
 /// Run every field's Calculate script in the form's calculation order (`/CO`, then the other
 /// calculated fields), as Acrobat does after any value changes. Returns how many changed.
 pub fn recalculate(doc: &mut Document) -> Result<usize, FormError> {
+    recalculate_with(doc, &mut NoScripts)
+}
+
+/// [`recalculate`], running custom Calculate (and Format) scripts through `scripts`.
+pub fn recalculate_with(doc: &mut Document, scripts: &mut dyn Scripts) -> Result<usize, FormError> {
     let all = fields(doc);
-    if !all.iter().any(|f| f.actions.calculate != af::Calculate::None) {
+    let calculated = |f: &Field| f.actions.calculate != af::Calculate::None || f.actions.scripts.calculate.is_some();
+    if !all.iter().any(calculated) {
         return Ok(0);
     }
     let co: Vec<ObjRef> = acroform(doc)
@@ -609,7 +637,7 @@ pub fn recalculate(doc: &mut Document) -> Result<usize, FormError> {
         .collect();
     let mut order: Vec<String> = co.iter().filter_map(|r| all.iter().find(|f| f.obj == *r)).map(|f| f.name.clone()).collect();
     for f in &all {
-        if f.actions.calculate != af::Calculate::None && !order.contains(&f.name) {
+        if calculated(f) && !order.contains(&f.name) {
             order.push(f.name.clone());
         }
     }
@@ -621,11 +649,25 @@ pub fn recalculate(doc: &mut Document) -> Result<usize, FormError> {
             let prefix = format!("{n}.");
             now.iter().filter(|x| x.name == n || x.name.starts_with(&prefix)).flat_map(|x| x.value.first().cloned()).collect()
         };
-        let Some(v) = af::calculate(&f.actions.calculate, &lookup) else { continue };
-        if f.value.first().map(String::as_str).unwrap_or("") != v && f.kind == FieldKind::Text {
+        let current = f.value.first().cloned().unwrap_or_default();
+        let v = if let Some(js) = &f.actions.scripts.calculate {
+            let f = f.clone();
+            let r = scripts.run(FieldEvent::Calculate, js, &f, &current, &now);
+            scripting::apply_changes(doc, &r.changes, &f.name)?;
+            if !r.rc {
+                continue;
+            }
+            r.value
+        } else {
+            let Some(v) = af::calculate(&f.actions.calculate, &lookup) else { continue };
+            v
+        };
+        let now = fields(doc);
+        let Some(f) = now.iter().find(|f| f.name == name) else { continue };
+        if current != v && matches!(f.kind, FieldKind::Text | FieldKind::Combo) {
             let f = f.clone();
             doc.update_dict(f.obj, |d| d.set(b"V".to_vec(), PdfString::text(&v)))?;
-            redraw(doc, &f, std::slice::from_ref(&v))?;
+            redraw(doc, &f, std::slice::from_ref(&v), scripts)?;
             changed += 1;
         }
     }
@@ -636,7 +678,7 @@ fn invalid<T>(m: impl Into<String>) -> Result<T, FormError> {
     Err(FormError::Invalid(m.into()))
 }
 
-fn write_value(doc: &mut Document, f: &Field, value: &FieldValue) -> Result<(), FormError> {
+fn write_value(doc: &mut Document, f: &Field, value: &FieldValue, scripts: &mut dyn Scripts) -> Result<(), FormError> {
     match (f.kind, value) {
         (FieldKind::Text, FieldValue::Text(t)) => {
             if let Some(max) = f.max_len
@@ -647,6 +689,7 @@ fn write_value(doc: &mut Document, f: &Field, value: &FieldValue) -> Result<(), 
             // Keystroke (on commit) and Validate, as Acrobat runs them before accepting a value.
             let t = &af::keystroke(&f.actions.format, &f.name, t).map_err(FormError::Invalid)?;
             af::validate(&f.actions.validate, t).map_err(FormError::Invalid)?;
+            let t = &scripting::accept(doc, f, t, scripts)?;
             doc.update_dict(f.obj, |d| {
                 if t.is_empty() {
                     d.remove(b"V");
@@ -655,7 +698,7 @@ fn write_value(doc: &mut Document, f: &Field, value: &FieldValue) -> Result<(), 
                 }
                 d.remove(b"RV");
             })?;
-            redraw(doc, f, std::slice::from_ref(t))
+            redraw(doc, f, std::slice::from_ref(t), scripts)
         }
         (FieldKind::CheckBox, v) => {
             let state = f.widgets.iter().find_map(|w| w.on_state.clone()).unwrap_or_else(|| "Yes".into());
@@ -735,7 +778,7 @@ fn write_value(doc: &mut Document, f: &Field, value: &FieldValue) -> Result<(), 
                     d.set(b"I".to_vec(), Object::Array(indices));
                 }
             })?;
-            redraw(doc, f, &exports)
+            redraw(doc, f, &exports, scripts)
         }
         (FieldKind::PushButton, _) => invalid(format!("{:?} is a button; it has no value", f.name)),
         (FieldKind::Signature, _) => invalid(format!("{:?} is a signature field; sign it with Fill & Sign or a digital ID", f.name)),
@@ -765,9 +808,16 @@ fn set_states(doc: &mut Document, f: &Field, on: Option<&str>) -> Result<(), For
 }
 
 /// Regenerate the normal appearance of every widget of a text or choice field.
-fn redraw(doc: &mut Document, f: &Field, values: &[String]) -> Result<(), FormError> {
+fn redraw(doc: &mut Document, f: &Field, values: &[String], scripts: &mut dyn Scripts) -> Result<(), FormError> {
+    let shown = match values {
+        [one] if matches!(f.kind, FieldKind::Text | FieldKind::Combo) => scripting::formatted(doc, f, one, scripts),
+        _ => None,
+    };
     for w in &f.widgets {
-        let stream = appearance::field_appearance(doc, f, w, values);
+        let stream = match &shown {
+            Some(s) => appearance::field_appearance_as(doc, f, w, std::slice::from_ref(s), false),
+            None => appearance::field_appearance(doc, f, w, values),
+        };
         let ap = doc.add(Object::Stream(stream));
         let mut apd = Dict::new();
         apd.set(b"N".to_vec(), Object::Ref(ap));
@@ -805,7 +855,7 @@ pub fn reset(doc: &mut Document, names: Option<&[String]>) -> Result<usize, Form
         // A reset is not blocked by NoToggleToOff: go through the writer directly.
         let mut tmp = f.clone();
         tmp.flags &= !flags::NO_TOGGLE_TO_OFF;
-        write_value(doc, &tmp, &v)?;
+        write_value(doc, &tmp, &v, &mut NoScripts)?;
         changed += 1;
     }
     recalculate(doc)?;

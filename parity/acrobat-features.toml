@@ -4338,8 +4338,8 @@ milestone = "M6"
 status = "partial"
 commands = ["form.fields"]
 tools = []
-evidence = ["crates/ui-egui/tests/buttons.rs::buttons_reset_navigate_and_print", "crates/forms/src/af.rs::common_button_scripts_are_recognised"]
-notes = "Reset form, Named (print, page navigation), URI, Go to, app.alert, this.print/resetForm/pageNum scripts; submit explained, not sent; other scripts need the JS engine"
+evidence = ["crates/ui-egui/tests/buttons.rs::buttons_reset_navigate_and_print", "crates/forms/src/af.rs::common_button_scripts_are_recognised", "crates/ui-egui/tests/javascript.rs::button_scripts_run_and_alert"]
+notes = "Reset form, Named (print, page navigation), URI, Go to, and any JavaScript (run in the sandboxed engine); submit explained, not sent"
 
 [[feature]]
 id = "form.field-navigation"
@@ -4467,11 +4467,11 @@ title = "Custom format, keystroke, validate and calculate scripts"
 area = "F"
 tier = "P0"
 milestone = "M6"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["form.prepare"]
+tools = ["form_set_script"]
+evidence = ["crates/engine/src/tests.rs::form_javascript_validates_calculates_and_formats", "crates/automation/tests/automation.rs::javascript_through_tools"]
+notes = "Custom keystroke (commit), validate, calculate and format scripts run in Acrobat's event order; AF calls still run natively."
 
 [[feature]]
 id = "form.calculation-order"
@@ -4491,11 +4491,11 @@ title = "Keystroke, validate, calculate, format event order"
 area = "F"
 tier = "P0"
 milestone = "M6"
-status = "partial"
-commands = ["form.field.properties"]
-tools = ["form_set_props", "form_fill"]
-evidence = ["crates/forms/src/tests.rs::formats_validation_and_calculations_run_like_acrobat"]
-notes = "keystroke (on commit) → validate → calculate → format, natively for the AF functions; custom scripts need the JavaScript engine"
+status = "shipped"
+commands = ["form.prepare"]
+tools = ["form_fill"]
+evidence = ["crates/engine/src/tests.rs::form_javascript_validates_calculates_and_formats"]
+notes = "Keystroke (commit) \u2192 Validate \u2192 value \u2192 Calculate (in /CO order) \u2192 Format, for AF calls and custom scripts."
 
 [[feature]]
 id = "form.date-picker"
@@ -4983,11 +4983,11 @@ title = "Document-level JavaScripts"
 area = "F"
 tier = "P1"
 milestone = "M6"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["tools.document_js"]
+tools = ["js_document_scripts", "js_set_document_script"]
+evidence = ["crates/ui-egui/tests/javascript.rs::document_scripts_and_preferences", "crates/automation/tests/automation.rs::javascript_through_tools", "crates/engine/src/tests.rs::form_javascript_validates_calculates_and_formats"]
+notes = "Names /JavaScript tree: list, add, edit, delete; functions are available to field scripts."
 
 [[feature]]
 id = "form.document-actions"
@@ -5007,11 +5007,11 @@ title = "JavaScript engine with the Acrobat object model subset"
 area = "F"
 tier = "P0"
 milestone = "M6"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["tools.js_console"]
+tools = ["js_run"]
+evidence = ["crates/js/src/tests.rs::calculate_scripts_read_fields_and_set_the_value", "crates/engine/src/tests.rs::form_javascript_validates_calculates_and_formats", "crates/automation/tests/automation.rs::javascript_through_tools"]
+notes = "boa (pure Rust) with the forms object model: event, getField/Field (value, readonly, display, colours, items, check boxes), app, util.printf/printd/printx, console, display, color; no annotations, layers or dialogs (app.response returns null) yet."
 
 [[feature]]
 id = "form.js-console"
@@ -5019,11 +5019,11 @@ title = "JavaScript console"
 area = "F"
 tier = "P1"
 milestone = "M6"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["tools.js_console"]
+tools = ["js_run"]
+evidence = ["crates/ui-egui/tests/javascript.rs::console_runs_scripts_against_the_document", "crates/automation/tests/automation.rs::javascript_through_tools"]
+notes = "\u2318J: run JavaScript against the document, with console output, results and errors."
 
 [[feature]]
 id = "form.js-debugger"
@@ -5055,11 +5055,11 @@ title = "JavaScript enable switch and sandboxing"
 area = "F"
 tier = "P0"
 milestone = "M6"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["app.preferences"]
+tools = ["js_enabled"]
+evidence = ["crates/js/src/tests.rs::the_sandbox_has_no_host_access", "crates/js/src/tests.rs::errors_and_runaway_scripts_are_contained", "crates/ui-egui/tests/javascript.rs::document_scripts_and_preferences"]
+notes = "Preferences \u25b8 JavaScript \u25b8 Enable Acrobat JavaScript (remembered); no host access; loop and recursion limits."
 
 [[feature]]
 id = "form.folder-level-js"

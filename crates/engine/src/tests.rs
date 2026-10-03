@@ -1235,3 +1235,67 @@ fn recognize_text_makes_a_scanned_page_searchable() {
     let again = s.recognize_text(id, &[], ocr::OcrSettings::default()).unwrap();
     assert!(again[0].skipped.is_some());
 }
+
+/// A form whose scripts are custom JavaScript: total = price × qty (calculate, through a
+/// document-level function), shown with a custom format; qty is validated; a button script.
+fn scripted_form() -> Vec<u8> {
+    let text = |name: &str, y: u32, aa: &str| {
+        format!("<< /Type /Annot /Subtype /Widget /FT /Tx /T ({name}) /Rect [20 {y} 180 {}] /P 3 0 R /F 4 {aa} >>", y + 20)
+    };
+    let objs = [
+        "<< /Type /Catalog /Pages 2 0 R /Names << /JavaScript << /Names [(helpers) 10 0 R] >> >> /AcroForm << /Fields [4 0 R 5 0 R 6 0 R 7 0 R] /CO [6 0 R] /DA (/Helv 0 Tf 0 g) /DR << /Font << /Helv 8 0 R >> >> >> >>".to_string(),
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 /MediaBox [0 0 200 300] >>".to_string(),
+        "<< /Type /Page /Parent 2 0 R /Annots [4 0 R 5 0 R 6 0 R 7 0 R] >>".to_string(),
+        text("price", 250, "/V (2.5)"),
+        text("qty", 220, "/AA << /V << /S /JavaScript /JS (if (event.value > 100) { app.alert('At most 100'); event.rc = false; }) >> >>"),
+        text("total", 190, "/AA << /C << /S /JavaScript /JS (event.value = times\\(getField('price').value, getField('qty').value\\);) >> /F << /S /JavaScript /JS (event.value = 'USD ' + util.printf('%.2f', event.value);) >> >>"),
+        "<< /Type /Annot /Subtype /Widget /FT /Btn /Ff 65536 /T (go) /Rect [20 150 80 170] /P 3 0 R /F 4 >>".to_string(),
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>".to_string(),
+        "<< >>".to_string(),
+        "<< /S /JavaScript /JS (function times\\(a, b\\) { console.println('times'); return a * b; }) >>".to_string(),
+    ];
+    let mut out = b"%PDF-1.7\n".to_vec();
+    let mut offsets = Vec::new();
+    for (i, o) in objs.iter().enumerate() {
+        offsets.push(out.len());
+        out.extend_from_slice(format!("{} 0 obj\n{o}\nendobj\n", i + 1).as_bytes());
+    }
+    let xref = out.len();
+    out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objs.len() + 1).as_bytes());
+    for o in offsets {
+        out.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+    }
+    out.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objs.len() + 1).as_bytes());
+    out
+}
+
+#[test]
+fn form_javascript_validates_calculates_and_formats() {
+    let mut s = Session::new().with_clock(|| 1_700_000_000);
+    let id = s.open("order.pdf", None, Arc::new(scripted_form()), None).unwrap();
+    let value = |s: &Session, n: &str| s.get(id).unwrap().form.iter().find(|f| f.name == n).unwrap().value.clone();
+    s.apply(id, Edit::SetFieldValue { name: "qty".into(), value: FieldValue::Text("4".into()) }).unwrap();
+    assert_eq!(value(&s, "total"), ["10"], "calculated by the script");
+    assert!(page_texts(&s, id)[0].contains("USD 10.00"), "{:?}", page_texts(&s, id));
+    let out = s.take_js_output(id);
+    assert!(out.console.contains(&"times".to_string()), "{out:?}");
+
+    let err = s.apply(id, Edit::SetFieldValue { name: "qty".into(), value: FieldValue::Text("500".into()) }).unwrap_err();
+    assert_eq!(err.to_string(), "At most 100");
+    assert_eq!(value(&s, "qty"), ["4"]);
+
+    // A button script changes fields in one undoable step, and asks for a page.
+    let o =
+        s.run_javascript(id, "getField('price').value = 3; getField('total').readonly = true; app.alert('Done'); this.print();", Some("go")).unwrap();
+    assert_eq!(o.alerts, ["Done"]);
+    assert_eq!(o.requests, [js::Request::Print]);
+    assert_eq!(value(&s, "total"), ["12"], "recalculated after the change");
+    assert!(s.get(id).unwrap().form.iter().find(|f| f.name == "total").unwrap().read_only());
+    assert_eq!(s.get(id).unwrap().can_undo(), Some("Run JavaScript"));
+
+    // JavaScript off: scripts don't run.
+    s.set_javascript(false);
+    s.apply(id, Edit::SetFieldValue { name: "qty".into(), value: FieldValue::Text("500".into()) }).unwrap();
+    assert_eq!(value(&s, "total"), ["12"]);
+    assert!(s.run_javascript(id, "1", None).is_err());
+}

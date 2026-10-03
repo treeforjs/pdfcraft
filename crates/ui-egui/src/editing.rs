@@ -60,6 +60,8 @@ impl PrintCraftApp {
                 if std::mem::take(&mut view.comments.tool_done) && !self.comment_prefs.pinned {
                     self.quick_tool = crate::QuickTool::Select;
                 }
+                let out = self.session.take_js_output(id);
+                self.handle_js(id, out);
                 true
             }
             Err(e) => {

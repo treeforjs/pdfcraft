@@ -98,7 +98,7 @@ fn rgb(c: [f64; 3]) -> Object {
 }
 
 /// The AcroForm dictionary's reference, creating the form (with `/Helv` in `/DR`) if needed.
-fn ensure_form(doc: &mut Document) -> Result<ObjRef, FormError> {
+pub(crate) fn ensure_form(doc: &mut Document) -> Result<ObjRef, FormError> {
     let root = doc.root().ok_or(FormError::NoForm)?;
     let existing = doc.get(root).as_dict().and_then(|d| d.get(b"AcroForm").cloned());
     let r = match existing {

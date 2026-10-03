@@ -200,3 +200,56 @@ impl Automation {
         Ok(json!({ "available": ocr::available(), "search_dirs": dirs, "languages": langs }))
     }
 }
+
+fn request_json(r: &printcraft_engine::js::Request) -> Value {
+    use printcraft_engine::js::Request as R;
+    match r {
+        R::Reset(n) => json!({ "reset": n }),
+        R::Print => json!({ "print": true }),
+        R::GoToPage(p) => json!({ "page": p + 1 }),
+        R::LaunchUrl(u) => json!({ "url": u }),
+        R::Submit(u) => json!({ "submit": u }),
+        R::Focus(f) => json!({ "focus": f }),
+        R::Beep => json!({ "beep": true }),
+    }
+}
+
+impl Automation {
+    pub(crate) fn js_run(&mut self, a: &Args) -> Result<Value> {
+        let id = self.doc(a)?.id;
+        let o = self.session.run_javascript(id, a.str("script")?, a.opt_str("field")?).map_err(failed)?;
+        let reqs: Vec<Value> = o.requests.iter().map(request_json).collect();
+        Ok(json!({ "alerts": o.alerts, "console": o.console, "requests": reqs, "error": o.error, "result": o.result }))
+    }
+
+    pub(crate) fn js_document_scripts(&self, a: &Args) -> Result<Value> {
+        let list: Vec<Value> = self.doc(a)?.document_scripts().into_iter().map(|(n, s)| json!({ "name": n, "script": s })).collect();
+        Ok(json!({ "scripts": list }))
+    }
+
+    pub(crate) fn js_set_document_script(&mut self, a: &Args) -> Result<Value> {
+        let edit = printcraft_engine::Edit::SetDocumentScript { name: a.str("name")?.into(), script: a.opt_str("script")?.map(str::to_string) };
+        let id = self.doc(a)?.id;
+        self.session.apply(id, edit).map_err(failed)?;
+        self.js_document_scripts(a)
+    }
+
+    pub(crate) fn form_set_script(&mut self, a: &Args) -> Result<Value> {
+        let edit = printcraft_engine::Edit::SetFieldScript {
+            name: a.str("field")?.into(),
+            event: a.str("event")?.into(),
+            script: a.opt_str("script")?.map(str::to_string),
+        };
+        let id = self.doc(a)?.id;
+        self.session.apply(id, edit).map_err(failed)?;
+        let out = self.session.take_js_output(id);
+        Ok(json!({ "field": a.str("field")?, "event": a.str("event")?, "console": out.console, "errors": out.errors }))
+    }
+
+    pub(crate) fn js_enabled(&mut self, a: &Args) -> Result<Value> {
+        if let Some(on) = a.opt_bool("enabled")? {
+            self.session.set_javascript(on);
+        }
+        Ok(json!({ "enabled": self.session.javascript() }))
+    }
+}

@@ -819,6 +819,20 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
                 close = go || cancel;
                 return;
             }
+            Dialog::JsConsole => {
+                ui.set_width(640.0);
+                close = crate::js_ui::console_body(ui, app, &t);
+                return;
+            }
+            Dialog::DocumentJs => {
+                ui.set_width(640.0);
+                close = crate::js_ui::document_js_body(ui, app, &t);
+                return;
+            }
+            Dialog::Preferences => {
+                close = crate::js_ui::preferences_body(ui, app, &t);
+                return;
+            }
             Dialog::RecognizeText => {
                 let (go, cancel) = crate::ocr_ui::body(ui, app, &t);
                 ocr_now = go;

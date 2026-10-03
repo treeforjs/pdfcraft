@@ -91,6 +91,17 @@ pub struct Actions {
     pub calculate: Calculate,
     /// Events whose script isn't one of the AF calls (they need the JavaScript engine).
     pub unsupported: Vec<&'static str>,
+    /// Those scripts' JavaScript, run through [`crate::Scripts`].
+    pub scripts: Scripts,
+}
+
+/// Field scripts that aren't AF calls, by event.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Scripts {
+    pub format: Option<String>,
+    pub keystroke: Option<String>,
+    pub validate: Option<String>,
+    pub calculate: Option<String>,
 }
 
 impl Actions {

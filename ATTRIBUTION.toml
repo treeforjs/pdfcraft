@@ -42,6 +42,28 @@ usage = "UI icon, embedded via crates/ui-egui/src/icon_data.rs"
 sha256 = "bc70fba645343be0760d1a87f9e0975a10ead2b8d95883314f4cea007376e79f"
 
 [[asset]]
+path = "assets/icons/square-terminal.svg"
+title = "Lucide icon \"square-terminal\""
+author = "Lucide Contributors (portions Cole Bemis, Feather)"
+source = "https://github.com/lucide-icons/lucide (npm lucide-static 1.49.0, icons/square-terminal.svg)"
+licence = "ISC"
+licence_file = "assets/icons/LICENSE-lucide.txt"
+kind = "icon"
+usage = "UI icon, embedded via crates/ui-egui/src/icon_data.rs"
+sha256 = "023f88e71f9e3efad5904bf35d59657aece6b7e48bf77051e04dd8a3192b8278"
+
+[[asset]]
+path = "assets/icons/file-code.svg"
+title = "Lucide icon \"file-code\""
+author = "Lucide Contributors (portions Cole Bemis, Feather)"
+source = "https://github.com/lucide-icons/lucide (npm lucide-static 1.49.0, icons/file-code.svg)"
+licence = "ISC"
+licence_file = "assets/icons/LICENSE-lucide.txt"
+kind = "icon"
+usage = "UI icon, embedded via crates/ui-egui/src/icon_data.rs"
+sha256 = "a52ebec6ffe56b062b3a7bc11a844be424555694736da11a4654481fb5668493"
+
+[[asset]]
 path = "assets/icons/align-justify.svg"
 title = "Lucide icon \"align-justify\""
 author = "Lucide Contributors (portions Cole Bemis, Feather)"
