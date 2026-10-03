@@ -391,6 +391,54 @@ impl PrintCraftApp {
     }
 
     /// Export all comments / form data: the format follows the file name's extension.
+    /// Forms ▸ Merge data files into spreadsheet: choose data files (FDF, XFDF or filled-in PDF
+    /// forms), then where to save the CSV.
+    pub fn merge_data_dialog(&mut self) {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let paths = rfd::FileDialog::new()
+                .set_title("Select data files to merge")
+                .add_filter("Form data and PDF forms", &["fdf", "xfdf", "pdf"])
+                .pick_files()
+                .unwrap_or_default();
+            let mut files = Vec::new();
+            for p in paths {
+                let name = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                match std::fs::read(&p) {
+                    Ok(b) => files.push((name, b)),
+                    Err(e) => return self.notify(format!("Couldn't read {name}: {e}")),
+                }
+            }
+            if !files.is_empty() {
+                self.merge_data_files(files);
+            }
+        }
+        #[cfg(target_arch = "wasm32")]
+        self.notify("Merging data files needs the desktop app");
+    }
+
+    /// Merge the given data files and save the spreadsheet (asks where; `save_override` in tests).
+    pub fn merge_data_files(&mut self, files: Vec<(String, Vec<u8>)>) {
+        let csv = match printcraft_engine::merge_data_files(&files) {
+            Ok(c) => c,
+            Err(e) => return self.notify(e),
+        };
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let path = match self.save_override.clone() {
+                Some(p) => Some(std::path::PathBuf::from(p)),
+                None => rfd::FileDialog::new().set_title("Save the spreadsheet").add_filter("CSV", &["csv"]).set_file_name("report.csv").save_file(),
+            };
+            let Some(path) = path else { return };
+            match crate::editing::write_atomically(&path.to_string_lossy(), csv.as_bytes()) {
+                Ok(()) => self.notify(format!("Merged {} file{} into {}", files.len(), if files.len() == 1 { "" } else { "s" }, path.display())),
+                Err(e) => self.notify(format!("Couldn't write {}: {e}", path.display())),
+            }
+        }
+        #[cfg(target_arch = "wasm32")]
+        let _ = crate::editing::download("report.csv", csv.as_bytes());
+    }
+
     pub fn export_data_dialog(&mut self, comments: bool, fields: bool) {
         let Some((_, id)) = self.active_ids() else { return };
         let Some(doc) = self.session.get(id) else { return };

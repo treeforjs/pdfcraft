@@ -160,3 +160,21 @@ fn bad_data_is_refused_with_a_reason() {
     assert_eq!(Format::from_extension("XFDF"), Some(Format::Xfdf));
     assert_eq!(Format::from_extension("docx"), None);
 }
+
+#[test]
+fn data_files_merge_into_a_spreadsheet() {
+    let src = filled();
+    let xfdf = export_xfdf(&src, false, true, "form.pdf");
+    let fdf = export_fdf(&src, false, true, "form.pdf");
+    let mut other = blank();
+    set_value(&mut other, "Name", &FieldValue::Text("Grace \"Amazing\" Hopper, RADM".into())).unwrap();
+    let pdf = printcraft_cos::write_full(&other, &Default::default()).unwrap();
+    let rows: Vec<_> = [xfdf.as_bytes(), &fdf[..], &pdf[..]].iter().map(|b| data_values(b).unwrap()).collect();
+    assert_eq!(rows[0], rows[1], "XFDF and FDF carry the same values");
+    let csv = merge_csv(&rows);
+    let lines: Vec<&str> = csv.lines().collect();
+    assert_eq!(lines[0], "Name,Agree,Pick");
+    assert_eq!(lines[1], "Ada Lovelace,Yes,\"A, C\"");
+    assert!(lines[3].starts_with("\"Grace \"\"Amazing\"\" Hopper, RADM\",Off,"), "{csv}");
+    assert_eq!(data_values(b"not data"), Err(DataError::UnknownFormat));
+}

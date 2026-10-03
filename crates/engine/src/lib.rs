@@ -82,6 +82,14 @@ pub use printcraft_sign as sign;
 pub use printcraft_sign::{SignOptions, SignatureInfo, Status as SignatureStatus, TrustStore};
 pub use printcraft_xfdf::Format as DataFormat;
 
+/// Forms ▸ Merge data files into spreadsheet: the field values of each file (FDF, XFDF or a
+/// filled-in PDF form), as CSV with one row per file.
+pub fn merge_data_files(files: &[(String, Vec<u8>)]) -> Result<String, String> {
+    let rows =
+        files.iter().map(|(name, bytes)| printcraft_xfdf::data_values(bytes).map_err(|e| format!("{name}: {e}"))).collect::<Result<Vec<_>, _>>()?;
+    Ok(printcraft_xfdf::merge_csv(&rows))
+}
+
 pub type SplitPart = (usize, usize, Arc<Vec<u8>>);
 
 use std::sync::Arc;

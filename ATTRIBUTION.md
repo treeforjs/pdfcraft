@@ -4,7 +4,7 @@
 
 Every asset PrintCraft includes, bundles or uses to build its published material, with its author, source and licence. The policy is in [AGENTS.md](AGENTS.md) §1. The machine-readable list, with SHA-256 hashes, is [ATTRIBUTION.toml](ATTRIBUTION.toml). Licence texts are kept beside the assets and summarised in [NOTICE](NOTICE).
 
-## In this repository (241)
+## In this repository (242)
 
 | Asset | Title | Author | Licence | Source | Used for |
 |---|---|---|---|---|---|
@@ -13,6 +13,7 @@ Every asset PrintCraft includes, bundles or uses to build its published material
 | `assets/icons/align-center.svg` | Lucide icon "align-center" | Lucide Contributors (portions Cole Bemis, Feather) | ISC | https://github.com/lucide-icons/lucide (npm lucide-static 1.49.0, icons/align-center.svg) | UI icon, embedded via crates/ui-egui/src/icon_data.rs |
 | `assets/icons/square-terminal.svg` | Lucide icon "square-terminal" | Lucide Contributors (portions Cole Bemis, Feather) | ISC | https://github.com/lucide-icons/lucide (npm lucide-static 1.49.0, icons/square-terminal.svg) | UI icon, embedded via crates/ui-egui/src/icon_data.rs |
 | `assets/icons/file-code.svg` | Lucide icon "file-code" | Lucide Contributors (portions Cole Bemis, Feather) | ISC | https://github.com/lucide-icons/lucide (npm lucide-static 1.49.0, icons/file-code.svg) | UI icon, embedded via crates/ui-egui/src/icon_data.rs |
+| `assets/icons/file-spreadsheet.svg` | Lucide icon "file-spreadsheet" | Lucide Contributors (portions Cole Bemis, Feather) | ISC | https://github.com/lucide-icons/lucide (npm lucide-static 1.49.0, icons/file-spreadsheet.svg) | UI icon, embedded via crates/ui-egui/src/icon_data.rs |
 | `assets/icons/align-justify.svg` | Lucide icon "align-justify" | Lucide Contributors (portions Cole Bemis, Feather) | ISC | https://github.com/lucide-icons/lucide (npm lucide-static 1.49.0, icons/align-justify.svg) | UI icon, embedded via crates/ui-egui/src/icon_data.rs |
 | `assets/icons/align-right.svg` | Lucide icon "align-right" | Lucide Contributors (portions Cole Bemis, Feather) | ISC | https://github.com/lucide-icons/lucide (npm lucide-static 1.49.0, icons/align-right.svg) | UI icon, embedded via crates/ui-egui/src/icon_data.rs |
 | `assets/icons/columns-3.svg` | Lucide icon "columns-3" | Lucide Contributors (portions Cole Bemis, Feather) | ISC | https://github.com/lucide-icons/lucide (npm lucide-static 1.49.0, icons/columns-3.svg) | UI icon, embedded via crates/ui-egui/src/icon_data.rs |

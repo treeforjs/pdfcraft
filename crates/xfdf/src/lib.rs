@@ -663,18 +663,7 @@ fn import_xfdf(doc: &mut Document, text: &str) -> Result<Report, DataError> {
     // Fields.
     if let Some(fields) = root.children().find(|c| c.has_tag_name("fields")) {
         let mut values = Vec::new();
-        fn walk(node: roxmltree::Node, prefix: &str, out: &mut Vec<(String, Vec<String>)>) {
-            for f in node.children().filter(|c| c.has_tag_name("field")) {
-                let Some(name) = f.attribute("name") else { continue };
-                let full = if prefix.is_empty() { name.to_string() } else { format!("{prefix}.{name}") };
-                let vals: Vec<String> = f.children().filter(|c| c.has_tag_name("value")).map(|v| v.text().unwrap_or("").to_string()).collect();
-                if !vals.is_empty() {
-                    out.push((full.clone(), vals));
-                }
-                walk(f, &full, out);
-            }
-        }
-        walk(fields, "", &mut values);
+        walk_xfdf(fields, "", &mut values);
         apply_values(doc, &values, &mut report);
     }
     Ok(report)
@@ -707,43 +696,118 @@ fn deep(src: &Document, o: &Object, depth: usize) -> Object {
     }
 }
 
-fn import_fdf(doc: &mut Document, bytes: &[u8]) -> Result<Report, DataError> {
-    let fdf = Document::open(std::sync::Arc::new(bytes.to_vec())).map_err(|e| DataError::Malformed(e.to_string()))?;
+fn walk_xfdf(node: roxmltree::Node, prefix: &str, out: &mut Vec<(String, Vec<String>)>) {
+    for f in node.children().filter(|c| c.has_tag_name("field")) {
+        let Some(name) = f.attribute("name") else { continue };
+        let full = if prefix.is_empty() { name.to_string() } else { format!("{prefix}.{name}") };
+        let vals: Vec<String> = f.children().filter(|c| c.has_tag_name("value")).map(|v| v.text().unwrap_or("").to_string()).collect();
+        if !vals.is_empty() {
+            out.push((full.clone(), vals));
+        }
+        walk_xfdf(f, &full, out);
+    }
+}
+
+fn walk_fdf(fdf: &Document, list: &[Object], prefix: &str, out: &mut Vec<(String, Vec<String>)>, depth: usize) {
+    if depth > 32 {
+        return;
+    }
+    for f in list {
+        let Some(d) = fdf.resolve(f).as_dict().cloned() else { continue };
+        let Some(t) = d.get(b"T").and_then(|t| fdf.resolve(t).as_string().map(|s| s.to_text())) else { continue };
+        let full = if prefix.is_empty() { t } else { format!("{prefix}.{t}") };
+        if let Some(v) = d.get(b"V").map(|v| fdf.resolve(v)) {
+            let vals: Vec<String> = match &*v {
+                Object::String(s) => vec![s.to_text()],
+                Object::Name(n) => vec![String::from_utf8_lossy(n).into_owned()],
+                Object::Array(a) => a.iter().filter_map(|x| fdf.resolve(x).as_string().map(|s| s.to_text())).collect(),
+                _ => Vec::new(),
+            };
+            out.push((full.clone(), vals));
+        }
+        if let Some(kids) = d.get(b"Kids").map(|k| fdf.resolve(k)).and_then(|k| k.as_array().cloned()) {
+            walk_fdf(fdf, &kids, &full, out, depth + 1);
+        }
+    }
+}
+
+fn fdf_body(fdf: &Document) -> Result<Dict, DataError> {
     let root = fdf.root().ok_or_else(|| DataError::Malformed("no /Root".into()))?;
-    let body = fdf
-        .get(root)
+    fdf.get(root)
         .as_dict()
         .and_then(|d| d.get(b"FDF").cloned())
         .map(|f| fdf.resolve(&f))
         .and_then(|f| f.as_dict().cloned())
-        .ok_or(DataError::UnknownFormat)?;
-    let mut report = Report::default();
-    // Fields (with /Kids for hierarchical names).
-    let mut values = Vec::new();
-    fn walk(fdf: &Document, list: &[Object], prefix: &str, out: &mut Vec<(String, Vec<String>)>, depth: usize) {
-        if depth > 32 {
-            return;
+        .ok_or(DataError::UnknownFormat)
+}
+
+/// The field values in a form data file (FDF or XFDF) or a filled-in PDF form, in file order.
+pub fn data_values(bytes: &[u8]) -> Result<Vec<(String, Vec<String>)>, DataError> {
+    if bytes.starts_with(b"%FDF") {
+        let fdf = Document::open(std::sync::Arc::new(bytes.to_vec())).map_err(|e| DataError::Malformed(e.to_string()))?;
+        let body = fdf_body(&fdf)?;
+        let mut values = Vec::new();
+        if let Some(list) = body.get(b"Fields").map(|f| fdf.resolve(f)).and_then(|f| f.as_array().cloned()) {
+            walk_fdf(&fdf, &list, "", &mut values, 0);
         }
-        for f in list {
-            let Some(d) = fdf.resolve(f).as_dict().cloned() else { continue };
-            let Some(t) = d.get(b"T").and_then(|t| fdf.resolve(t).as_string().map(|s| s.to_text())) else { continue };
-            let full = if prefix.is_empty() { t } else { format!("{prefix}.{t}") };
-            if let Some(v) = d.get(b"V").map(|v| fdf.resolve(v)) {
-                let vals: Vec<String> = match &*v {
-                    Object::String(s) => vec![s.to_text()],
-                    Object::Name(n) => vec![String::from_utf8_lossy(n).into_owned()],
-                    Object::Array(a) => a.iter().filter_map(|x| fdf.resolve(x).as_string().map(|s| s.to_text())).collect(),
-                    _ => Vec::new(),
-                };
-                out.push((full.clone(), vals));
-            }
-            if let Some(kids) = d.get(b"Kids").map(|k| fdf.resolve(k)).and_then(|k| k.as_array().cloned()) {
-                walk(fdf, &kids, &full, out, depth + 1);
+        return Ok(values);
+    }
+    if bytes.starts_with(b"%PDF") || bytes.windows(5).take(1024).any(|w| w == b"%PDF-") {
+        let doc = Document::open(std::sync::Arc::new(bytes.to_vec())).map_err(|e| DataError::Malformed(e.to_string()))?;
+        return Ok(printcraft_forms::fields(&doc)
+            .into_iter()
+            .filter(|f| !matches!(f.kind, FieldKind::PushButton | FieldKind::Signature))
+            .map(|f| {
+                let v =
+                    if matches!(f.kind, FieldKind::CheckBox | FieldKind::Radio) && f.value.is_empty() { vec!["Off".to_string()] } else { f.value };
+                (f.name, v)
+            })
+            .collect());
+    }
+    let text = String::from_utf8_lossy(bytes);
+    let t = text.trim_start_matches('\u{feff}').trim_start();
+    let xml = roxmltree::Document::parse(t).map_err(|_| DataError::UnknownFormat)?;
+    let root = xml.root_element();
+    if root.tag_name().name() != "xfdf" {
+        return Err(DataError::UnknownFormat);
+    }
+    let mut values = Vec::new();
+    if let Some(fields) = root.children().find(|c| c.has_tag_name("fields")) {
+        walk_xfdf(fields, "", &mut values);
+    }
+    Ok(values)
+}
+
+/// Merge Data Files into Spreadsheet: one CSV row per file, one column per field name (in the
+/// order they first appear).
+pub fn merge_csv(files: &[Vec<(String, Vec<String>)>]) -> String {
+    let mut columns: Vec<&str> = Vec::new();
+    for f in files {
+        for (k, _) in f {
+            if !columns.contains(&k.as_str()) {
+                columns.push(k);
             }
         }
     }
+    let q = |s: &str| if s.contains([',', '"', '\n', '\r']) { format!("\"{}\"", s.replace('"', "\"\"")) } else { s.to_string() };
+    let mut out = columns.iter().map(|c| q(c)).collect::<Vec<_>>().join(",");
+    out.push('\n');
+    for f in files {
+        let row: Vec<String> = columns.iter().map(|c| f.iter().find(|(k, _)| k == c).map_or(String::new(), |(_, v)| q(&v.join(", ")))).collect();
+        out.push_str(&row.join(","));
+        out.push('\n');
+    }
+    out
+}
+
+fn import_fdf(doc: &mut Document, bytes: &[u8]) -> Result<Report, DataError> {
+    let fdf = Document::open(std::sync::Arc::new(bytes.to_vec())).map_err(|e| DataError::Malformed(e.to_string()))?;
+    let body = fdf_body(&fdf)?;
+    let mut report = Report::default();
+    // Fields (with /Kids for hierarchical names).
+    let mut values = Vec::new();
     if let Some(list) = body.get(b"Fields").map(|f| fdf.resolve(f)).and_then(|f| f.as_array().cloned()) {
-        walk(&fdf, &list, "", &mut values, 0);
+        walk_fdf(&fdf, &list, "", &mut values, 0);
     }
     // Comments.
     let pages: Vec<ObjRef> = printcraft_model::pages(doc).iter().map(|p| p.obj).collect();

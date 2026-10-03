@@ -64,6 +64,17 @@ usage = "UI icon, embedded via crates/ui-egui/src/icon_data.rs"
 sha256 = "a52ebec6ffe56b062b3a7bc11a844be424555694736da11a4654481fb5668493"
 
 [[asset]]
+path = "assets/icons/file-spreadsheet.svg"
+title = "Lucide icon \"file-spreadsheet\""
+author = "Lucide Contributors (portions Cole Bemis, Feather)"
+source = "https://github.com/lucide-icons/lucide (npm lucide-static 1.49.0, icons/file-spreadsheet.svg)"
+licence = "ISC"
+licence_file = "assets/icons/LICENSE-lucide.txt"
+kind = "icon"
+usage = "UI icon, embedded via crates/ui-egui/src/icon_data.rs"
+sha256 = "147afd6de42696232301090fcf32a506689e3b7f2b9e9ae588ed3c37f63d7e3a"
+
+[[asset]]
 path = "assets/icons/align-justify.svg"
 title = "Lucide icon \"align-justify\""
 author = "Lucide Contributors (portions Cole Bemis, Feather)"

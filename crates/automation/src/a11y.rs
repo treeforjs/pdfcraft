@@ -246,6 +246,19 @@ impl Automation {
         Ok(json!({ "field": a.str("field")?, "event": a.str("event")?, "console": out.console, "errors": out.errors }))
     }
 
+    pub(crate) fn form_merge_data(&mut self, a: &Args) -> Result<Value> {
+        let mut files = Vec::new();
+        for p in a.strs("paths")? {
+            let path = self.resolve(p, false)?;
+            files.push((p.to_string(), std::fs::read(&path).map_err(|e| failed(format!("{p}: {e}")))?));
+        }
+        let csv = printcraft_engine::merge_data_files(&files).map_err(failed)?;
+        let target = self.resolve(a.str("path")?, true)?;
+        write_atomic(&target, csv.as_bytes())?;
+        let columns = csv.lines().next().map_or(0, |h| h.split(',').count());
+        Ok(json!({ "path": target.to_string_lossy(), "rows": files.len(), "columns": columns }))
+    }
+
     pub(crate) fn js_enabled(&mut self, a: &Args) -> Result<Value> {
         if let Some(on) = a.opt_bool("enabled")? {
             self.session.set_javascript(on);

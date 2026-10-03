@@ -360,6 +360,7 @@ impl PrintCraftApp {
                 }
             }
             "form.export_data" => self.export_data_dialog(false, true),
+            "form.merge_data" => self.merge_data_dialog(),
             "form.prepare" => {
                 self.left = crate::LeftPanel::Tool("form");
                 self.left_open = true;

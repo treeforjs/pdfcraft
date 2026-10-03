@@ -1376,3 +1376,19 @@ fn javascript_through_tools() {
     assert_eq!(ok(&mut a, "js_enabled", json!({ "enabled": false }))["enabled"], false);
     assert!(a.call("js_run", &json!({ "doc": doc, "script": "1" })).is_err());
 }
+
+#[test]
+fn merging_form_data_into_a_spreadsheet() {
+    let dir = workdir("merge-data");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    ok(&mut a, "form_add_field", json!({ "doc": doc, "page": 1, "type": "text", "rect": [20, 20, 180, 42], "name": "City" }));
+    for (city, file) in [("Paris", "one.xfdf"), ("Oslo", "two.fdf")] {
+        ok(&mut a, "form_fill", json!({ "doc": doc, "values": { "City": city } }));
+        ok(&mut a, "doc_export_data", json!({ "doc": doc, "path": file, "what": "fields" }));
+    }
+    ok(&mut a, "doc_save", json!({ "doc": doc, "path": "filled.pdf" }));
+    let r = ok(&mut a, "form_merge_data", json!({ "paths": ["one.xfdf", "two.fdf", "filled.pdf"], "path": "report.csv" }));
+    assert_eq!(r["rows"], 3);
+    assert_eq!(std::fs::read_to_string(dir.join("report.csv")).unwrap(), "City\nParis\nOslo\nOslo\n");
+}
