@@ -10,20 +10,29 @@ Detailed task lists and acceptance tests are in `plan/execution-plan.md` (local-
 
 ## Estimate summary
 
-The unit is **wall-clock hours of agent work**: Claude Opus-class models coding continuously, with a person reviewing at milestone boundaries. Time spent waiting for that review is not included.
+The unit is **wall-clock hours of agent work** (Claude Opus 5.5 coding continuously; human review time not included).
 
-| Scenario | Hours to parity (M0–M14) | Continuous calendar time |
+**Where we are (2026-10-03, measured by `cargo xtask parity` over 803 tracked Acrobat Pro features):**
+
+| Tier | Features | Shipped | Partial | Shipped % | Weighted % (partial = ½) |
+|---|---|---|---|---|---|
+| P0 (must-have for 1.0) | 250 | 207 | 27 | 82.8% | 88.2% |
+| P1 | 325 | 148 | 23 | 45.5% | 49.1% |
+| P2 | 185 | 9 | 2 | 4.9% | 5.4% |
+| P3 | 43 | 0 | 0 | 0% | 0% |
+| **All** | **803** | **364** | **52** | **45.3%** | **48.6%** |
+
+**Effort-weighted parity: ≈ 35%.** Feature counts overstate progress: the remaining features include the hardest ones (in-place text editing and reflow, our own renderer and font engine, OCR, a JavaScript engine, XFA, PDF/A/X/UA preflight, Office export). Weighting each milestone by its estimated size gives about a third of the total work done.
+
+**Observed throughput:** about 72k lines of kept, tested Rust (plus 97 agent tools and ≈ 600 tests) in roughly 65–75 agent-hours since 2026-09-30, about 1.0k lines per agent-hour, with corpus, oracle and visual checks. That is faster than the original plan assumed, so the hour estimates below are revised down from the first plan (2,000–4,000 h).
+
+| Scenario | Remaining hours to full parity (M0–M14) | Calendar time |
 |---|---|---|
-| One agent, 24/7 | **2,000–4,000 h** | ≈ 3–6 months |
-| 3–5 agents in parallel on separate crates after M4 | **800–1,500 h** | ≈ 5–9 weeks |
-| Realistic, with human review, integration and pauses | — | ≈ 4–9 months (see `plan/execution-plan.md` §9) |
+| One Opus 5.5 agent, continuous | **≈ 600–1,100 h** | ≈ 4–7 weeks |
+| 3–5 agents in parallel on separate crates | **≈ 250–450 h wall clock** | ≈ 2–3 weeks |
+| With human review, integration and pauses | — | ≈ 2–4 months |
 
-**How these numbers are built:**
-- **Size:** about 450–700k lines of Rust at parity, including tests. The repo has about 15k today.
-- **Rate:** so far, about 1.0–1.5k lines of *kept, tested* code per agent-hour. That includes debugging against the oracles (qpdf, poppler, pdf.js corpus).
-- **Why the total is 3–6× the raw typing time:** the hard work is not the line count. Most of the time goes into fidelity work: text editing and reflow, font embedding, redaction that really removes content, signature validation, PDF/A and PDF/UA, XFA, OCR and web performance. Each of these needs repeated oracle checks and visual comparison.
-- **Parallelism is limited early:** M0–M4 are mostly sequential, because the core crates must settle first. Extra agents pay off from M5 onwards.
-- **The long tail:** the last 5–10% (odd real-world files, pixel-level polish) costs about as much as the first 50%.
+**How the estimate is built:** each milestone's remaining fraction (table below) times its size, re-based on the measured rate. The long poles are M2 (own renderer, ≈ 150–250 h), M7 (editing existing text and images, ≈ 150–250 h), M10 OCR and Office export (≈ 100–150 h), M6 JavaScript engine (≈ 60–100 h), M11 PDF/A/X/UA preflight (≈ 80–140 h) and M12 XFA/compare (≈ 80–140 h). The last 5–10% (odd real-world files, pixel-level polish against Acrobat) costs about as much as a mid-sized milestone.
 
 ## Milestones
 
@@ -32,23 +41,23 @@ Hours are for a single agent (low–high). "Done" is the estimated fraction of t
 | M | Milestone | Est. hours | Done | Remaining (h) | Notes |
 |---|---|---|---|---|---|
 | M0 | Skeleton: workspace, xtask gates, CI | 15–30 | 92% | 2–4 | GitHub workflow, `deny.toml` (licence audit of every dependency), parity checklist (826 features, `xtask parity`) done. Missing: remaining crate stubs, testkit/oracle crates |
-| M1 | COS: filters, crypt, parser, xref, writer | 120–200 | 72% | 35–60 | Done:<br>- filters and crypt: every standard-security revision R2–R6 (RC4, AES-128/256), SASLprep, permissions, creating encryption;<br>- cos: parse and repair, decrypt on load, re-encrypt on save, incremental and full writing.<br>Corpus: open/edit/save passes on 958 files, and all 7 password-protected files open.<br>Full saves now pack objects into compressed object streams. Fuzzing runs nightly (`xtask fuzz`). Missing: ≥ 250 tests, own image codecs |
+| M1 | COS: filters, crypt, parser, xref, writer | 120–200 | 78% | 25–45 | Done:<br>- filters and crypt: every standard-security revision R2–R6 (RC4, AES-128/256), SASLprep, permissions, creating encryption;<br>- cos: parse and repair, decrypt on load, re-encrypt on save, incremental and full writing.<br>Corpus: open/edit/save passes on 958 files, and all 7 password-protected files open.<br>Full saves now pack objects into compressed object streams. Fuzzing runs nightly (`xtask fuzz`). Missing: ≥ 250 tests, own image codecs |
 | M2 | Model, render, text | 200–350 | 15% | 170–300 | hayro bootstrap renderer (vendored patches). Text extraction reaches word-F1 0.98 against pdftotext. Missing: model crate, fonts, DisplayList, renderer independent of hayro |
 | M3 | Viewer app (native + web) | 80–150 | 88% | 10–19 | Acrobat-style shell, find, select, panels, tiles, web build, UI control channel for agents (opt-in). Missing: 60 fps test on a 500-page document, snapshot tests of every panel Done since: fit visible, document title in the window. |
 | M4 | Engine, history, save, organize | 100–180 | 95% | 9–17 | Done:<br>- command registry (menus, shortcuts and palette all use it);<br>- undo/redo; incremental, atomic and encrypted saves;<br>- autosave and crash recovery;<br>- organize, combine, extract, split and insert-from-file, with identical fonts and images stored once;<br>- CLI `edit/combine/extract/split`.<br>Done since: bookmark editing, page labels (Number pages), CLI `run`, Set Page Boxes, Crop tool, Duplicate pages. Missing: Replace pages, page transitions, recovery on the web |
-| M5 | Comments (all annotation types, XFDF) | 120–200 | 76% | 30–50 | Done: notes, highlight/underline/strikeout/squiggly, text boxes, ink, lines, arrows, rectangles, ovals, stamps (dynamic, Sign Here, Standard Business), with appearance streams; replies, status, checkmarks, locking, move/resize/restyle/delete; properties dialog; panel filter and sort; hide all; summaries (comments only); XFDF/FDF import and export; flatten; Fill & Sign; agent tools. Done since: polygons, connected lines, clouds, callouts, inserted text, colour and checkmark filters. Missing: custom stamps, replace-text proposals, summary layouts with the page |
+| M5 | Comments (all annotation types, XFDF) | 120–200 | 88% | 15–25 | Done: notes, highlight/underline/strikeout/squiggly, text boxes, ink, lines, arrows, rectangles, ovals, stamps (dynamic, Sign Here, Standard Business), with appearance streams; replies, status, checkmarks, locking, move/resize/restyle/delete; properties dialog; panel filter and sort; hide all; summaries (comments only); XFDF/FDF import and export; flatten; Fill & Sign; agent tools. Done since: polygons, connected lines, clouds, callouts, inserted text, colour and checkmark filters. Missing: custom stamps, replace-text proposals, summary layouts with the page |
 | M6 | Forms + JavaScript | 160–320 | 45% | 95–185 | Done: filling all field types with regenerated appearances; Prepare a form (every field type, move/resize/delete, Field Properties General/Appearance/Position/Options/Format/Validate/Calculate); Acrobat's AF format/keystroke/validate/calculate functions and simplified field notation run natively in Acrobat's event order; tab order; push-button actions; flatten; agent tools. Form data exchange (FDF, XFDF, XML, CSV, text) done. Missing: a JavaScript engine for custom scripts, Actions tab |
 | M7 | Content editing (text, images, header/footer, watermark) | 250–500 | 17% | 210–420 | Done: header & footer, watermarks, backgrounds, Bates; added text and images that stay editable (move, resize, format, rotate, flip, crop, replace); links (Link tool, Link Properties, create from URLs, remove all). Missing: editing existing text and images in place (the longest pole), image/PDF watermarks |
-| M8 | Security + redaction | 100–180 | 63% | 40–75 | Done: opening protected documents, permissions, Protect Using Password, Remove security; redaction (mark text/areas/pages, Search & Redact with patterns, apply removing glyphs, image pixels, vectors, XObject content, annotations and fields, verification, full rewrite on save); Remove hidden information and Sanitize. Missing: certificate security, redaction codes and pattern locales, DCT re-encoding |
-| M9 | Signatures (PAdES, validation) | 160–280 | 35% | 105–180 | Done: new `sign` crate (DER, X.509, CMS, PKCS #12 on RustCrypto; aws-lc-rs for RSA private keys); PAdES B-B signing (visible, invisible, existing fields, certification with DocMDP); validation with trust store and changes-after-signing classification; self-signed digital IDs; Signatures panel, message bar, sign dialogs; agent tools. Checked with pdfsig and OpenSSL. Missing: timestamps (B-T), LTV (DSS, OCSP, CRL), FieldMDP, OS key stores, PKCS #11, certificate viewer |
-| M10 | OCR, create, export, print | 200–350 | 30% | 140–245 | Done: create from blank/text/PNG/JPEG/TIFF (multi-page)/GIF/BMP; export PNG/JPEG/TIFF and text; Print (Acrobat's sizing, n-up, booklet, poster, comments & forms, preview, CUPS spooler, print-ready PDF). Missing: OCR, Office export/import, Windows/web printing Done since: export all images. |
-| M11 | Optimize, preflight, PDF/A/X/UA, print production | 200–350 | 10% | 180–315 | Done: new `optimize` crate: Reduce File Size and the PDF Optimizer (images measured where drawn, bicubic downsampling, JPEG/ZIP recompression only when smaller, discard objects and user data, Flate clean-up, resource merging, object streams). Missing: fonts and transparency panels, space audit, preflight, PDF/A/X/UA |
-| M12 | Accessibility, compare, measure, search, XFA | 200–380 | 12% | 175–335 | Done: new `a11y` crate with the Accessibility Checker (all 32 rules, report, Fix/Skip/Explain, options dialog and results panel, agent tools). Missing: autotag, Tags/Order/Content panels, Reading Order tool, alt-text workflow, compare, measure, search index, XFA |
-| M13 | Automation (MCP, Action Wizard, CLI) + AI providers | 60–120 | 40% | 36–72 | Done: MCP resources (document info, text, page images); headless tool table (91 tools incl. signing, optimizing, initial view, links, stamps, data exchange, comment review, forms authoring and scripts, redaction, sanitize, print, add content), opt-in MCP server over stdio, CLI `run`/`tools`, UI control channel with drag. Missing: Action Wizard, AI providers |
+| M8 | Security + redaction | 100–180 | 66% | 35–65 | Done: opening protected documents, permissions, Protect Using Password, Remove security; redaction (mark text/areas/pages, Search & Redact with patterns, apply removing glyphs, image pixels, vectors, XObject content, annotations and fields, verification, full rewrite on save); Remove hidden information and Sanitize. Missing: certificate security, redaction codes and pattern locales, DCT re-encoding |
+| M9 | Signatures (PAdES, validation) | 160–280 | 55% | 70–125 | Done: new `sign` crate (DER, X.509, CMS, PKCS #12 on RustCrypto; aws-lc-rs for RSA private keys); PAdES B-B signing (visible, invisible, existing fields, certification with DocMDP); validation with trust store and changes-after-signing classification; self-signed digital IDs; Signatures panel, message bar, sign dialogs; agent tools. Checked with pdfsig and OpenSSL. Done since: macOS Keychain signing, certificate viewer, signed documents protected from rewrites. Missing: timestamps (B-T), LTV (DSS, OCSP, CRL), FieldMDP, Windows store, PKCS #11 |
+| M10 | OCR, create, export, print | 200–350 | 33% | 130–235 | Done: create from blank/text/PNG/JPEG/TIFF (multi-page)/GIF/BMP; export PNG/JPEG/TIFF and text; Print (Acrobat's sizing, n-up, booklet, poster, comments & forms, preview, CUPS spooler, print-ready PDF). Missing: OCR, Office export/import, Windows/web printing Done since: export all images. |
+| M11 | Optimize, preflight, PDF/A/X/UA, print production | 200–350 | 18% | 165–290 | Done: new `optimize` crate: Reduce File Size and the PDF Optimizer (images measured where drawn, bicubic downsampling, JPEG/ZIP recompression only when smaller, discard objects and user data, Flate clean-up, resource merging, object streams). Missing: fonts and transparency panels, space audit, preflight, PDF/A/X/UA |
+| M12 | Accessibility, compare, measure, search, XFA | 200–380 | 20% | 160–305 | Done: new `a11y` crate with the Accessibility Checker (all 32 rules, report, Fix/Skip/Explain, options dialog and results panel, agent tools). Missing: autotag, Tags/Order/Content panels, Reading Order tool, alt-text workflow, compare, measure, search index, XFA |
+| M13 | Automation (MCP, Action Wizard, CLI) + AI providers | 60–120 | 45% | 33–66 | Done: MCP resources (document info, text, page images); headless tool table (91 tools incl. signing, optimizing, initial view, links, stamps, data exchange, comment review, forms authoring and scripts, redaction, sanitize, print, add content), opt-in MCP server over stdio, CLI `run`/`tools`, UI control channel with drag. Missing: Action Wizard, AI providers |
 | M14 | 1.0 polish: performance, localization, installers | 120–250 | 0% | 120–250 | |
-| | **Total** | **2,085–3,840** | **≈ 30%** | **≈ 1,480–2,760** | |
+| | **Total (original plan sizing)** | **2,085–3,840** | **≈ 35%** | **≈ 1,350–2,500 at the planned rate; ≈ 600–1,100 at the measured rate** | |
 
-**Overall progress: about 27% of the effort.** The viewer and the core are far ahead of the editing features, because the viewer was built first so progress could be seen.
+**Overall progress: about 35% of the effort (45% of features shipped).** The viewer and the core are far ahead of the editing features, because the viewer was built first so progress could be seen.
 
 ## Critical path
 
