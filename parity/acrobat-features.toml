@@ -9059,11 +9059,11 @@ title = "Run guided actions on files"
 area = "N"
 tier = "P1"
 milestone = "M13"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["actions.wizard"]
+tools = ["action_list", "action_run"]
+evidence = ["crates/engine/src/tests.rs::actions_run_their_steps_on_files", "crates/automation/tests/automation.rs::actions_through_tools", "crates/ui-egui/tests/actions.rs::run_and_create_actions"]
+notes = "Pick an action and files; results go to a chosen folder, in the background with progress."
 
 [[feature]]
 id = "misc.action-wizard-create"
@@ -9071,11 +9071,11 @@ title = "Create and edit actions"
 area = "N"
 tier = "P1"
 milestone = "M13"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["actions.wizard"]
+tools = ["action_run"]
+evidence = ["crates/automation/tests/automation.rs::actions_through_tools", "crates/ui-egui/tests/actions.rs::run_and_create_actions"]
+notes = "New/Edit/Delete actions with 12 step kinds (OCR, reduce size, remove hidden information, sanitize, flatten, watermark, header, footer, title, detect fields, JavaScript); remembered between runs."
 
 [[feature]]
 id = "misc.action-wizard-manage"
@@ -9095,11 +9095,11 @@ title = "Built-in action: prepare for distribution"
 area = "N"
 tier = "P1"
 milestone = "M13"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["actions.distribution"]
+tools = ["action_run"]
+evidence = ["crates/engine/src/tests.rs::actions_run_their_steps_on_files", "crates/automation/tests/automation.rs::actions_through_tools", "crates/ui-egui/tests/actions.rs::run_and_create_actions"]
+notes = "Remove hidden information, flatten comments and fields."
 
 [[feature]]
 id = "misc.action-optimize-scans"
@@ -9107,11 +9107,11 @@ title = "Built-in action: optimize scanned documents"
 area = "N"
 tier = "P1"
 milestone = "M13"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["actions.optimize_scans"]
+tools = ["action_run"]
+evidence = ["crates/engine/src/tests.rs::actions_run_their_steps_on_files", "crates/automation/tests/automation.rs::actions_through_tools"]
+notes = "Recognize text, then reduce file size."
 
 [[feature]]
 id = "misc.action-archive"
@@ -9143,11 +9143,11 @@ title = "Batch processing over files and folders"
 area = "N"
 tier = "P1"
 milestone = "M13"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["actions.wizard", "ocr.recognize_batch"]
+tools = ["action_run", "ocr_recognize_files"]
+evidence = ["crates/automation/tests/automation.rs::actions_through_tools", "crates/ui-egui/tests/actions.rs::run_and_create_actions"]
+notes = "Actions and OCR run over chosen files; whole folders (with subfolders) not yet."
 
 [[feature]]
 id = "misc.action-prompt-steps"

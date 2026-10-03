@@ -374,6 +374,15 @@ impl PrintCraftApp {
             }
             "form.detect" => self.detect_fields(),
             "doc.compare" => self.dialog = Some(Dialog::CompareFiles),
+            "actions.wizard" | "actions.distribution" | "actions.optimize_scans" => {
+                self.wizard.editing = None;
+                match id {
+                    "actions.distribution" => self.wizard.selected = Some("Prepare for Distribution".into()),
+                    "actions.optimize_scans" => self.wizard.selected = Some("Optimize Scanned Documents".into()),
+                    _ => {}
+                }
+                self.dialog = Some(Dialog::ActionWizard);
+            }
             "form.field.properties" => {
                 if let Some((name, w)) = active.and_then(|i| self.views[i].prepare.selected.clone()) {
                     self.open_field_props(&name, w);

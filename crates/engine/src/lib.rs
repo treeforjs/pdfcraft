@@ -10,6 +10,7 @@
 //! appended revision — and the view is refreshed from it, so what you see is exactly what Save
 //! will write. Saving rebases onto the written bytes, so the next save appends only new edits.
 
+pub mod actions;
 pub mod catalog;
 pub mod commands;
 pub mod compare;

@@ -259,6 +259,57 @@ impl Automation {
         Ok(json!({ "path": target.to_string_lossy(), "rows": files.len(), "columns": columns }))
     }
 
+    pub(crate) fn action_list(&self) -> Result<Value> {
+        use printcraft_engine::actions::{Step, builtin};
+        let step_json = |s: &Step| json!({ "step": s.id(), "arg": s.arg() });
+        let actions: Vec<Value> = builtin()
+            .iter()
+            .map(|a| json!({ "name": a.name, "description": a.description, "steps": a.steps.iter().map(step_json).collect::<Vec<_>>() }))
+            .collect();
+        let steps: Vec<Value> = Step::all().iter().map(|s| json!({ "step": s.id(), "label": s.label(), "takes_arg": s.arg().is_some() })).collect();
+        Ok(json!({ "actions": actions, "steps": steps }))
+    }
+
+    pub(crate) fn action_run(&mut self, a: &Args) -> Result<Value> {
+        use printcraft_engine::actions::{Action, Step, builtin, run_on};
+        let action = if let Some(name) = a.opt_str("action")? {
+            builtin()
+                .into_iter()
+                .find(|x| x.name.eq_ignore_ascii_case(name))
+                .ok_or_else(|| ToolError::InvalidArgs(format!("no built-in action {name:?}")))?
+        } else {
+            let items = a.get("steps").and_then(Value::as_array).ok_or_else(|| ToolError::InvalidArgs("give action or steps".into()))?;
+            let steps = items
+                .iter()
+                .map(|it| {
+                    let id = it["step"].as_str().unwrap_or("");
+                    Step::from_id(id, it["arg"].as_str().unwrap_or("")).ok_or_else(|| ToolError::InvalidArgs(format!("unknown step {id:?}")))
+                })
+                .collect::<Result<Vec<_>>>()?;
+            Action { name: "Custom".into(), description: String::new(), steps, builtin: false }
+        };
+        let folder = self.resolve(a.str("folder")?, true)?;
+        std::fs::create_dir_all(&folder).map_err(|e| failed(e.to_string()))?;
+        let mut out = Vec::new();
+        for p in a.strs("paths")? {
+            let name = std::path::Path::new(p).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "document.pdf".into());
+            let result = self
+                .resolve(p, false)
+                .map_err(|e| e.to_string())
+                .and_then(|src| std::fs::read(&src).map_err(|e| e.to_string()))
+                .and_then(|bytes| run_on(&action, &name, std::sync::Arc::new(bytes), |_, _| {}));
+            out.push(match result {
+                Ok(r) => {
+                    let target = folder.join(&name);
+                    write_atomic(&target, &r.bytes)?;
+                    json!({ "path": p, "output": target.to_string_lossy(), "log": r.log })
+                }
+                Err(e) => json!({ "path": p, "error": e }),
+            });
+        }
+        Ok(json!({ "action": action.name, "files": out }))
+    }
+
     fn compare_ids(&self, a: &Args) -> Result<(printcraft_engine::DocId, printcraft_engine::DocId)> {
         let new = self.doc(a)?.id;
         let other = a.int("other")?;

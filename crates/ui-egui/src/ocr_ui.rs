@@ -170,7 +170,7 @@ impl PrintCraftApp {
             }
         };
         #[cfg(not(target_arch = "wasm32"))]
-        if self.ocr_sync {
+        if self.run_inline {
             work();
         } else {
             std::thread::Builder::new().name("printcraft-ocr".into()).spawn(work).ok();
@@ -235,7 +235,7 @@ impl PrintCraftApp {
             }
         };
         #[cfg(not(target_arch = "wasm32"))]
-        if self.ocr_sync {
+        if self.run_inline {
             work();
         } else {
             std::thread::Builder::new().name("printcraft-ocr-files".into()).spawn(work).ok();

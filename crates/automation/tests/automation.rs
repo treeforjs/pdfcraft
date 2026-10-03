@@ -1453,3 +1453,20 @@ fn comparing_documents_through_tools() {
     assert_eq!(ok(&mut a, "doc_compare_mark", json!({ "doc": v2, "other": v1 }))["comments"], 3);
     assert!(a.call("doc_compare", &json!({ "doc": v2, "other": 999 })).is_err());
 }
+
+#[test]
+fn actions_through_tools() {
+    let dir = workdir("actions");
+    let mut a = auto(&dir);
+    let list = ok(&mut a, "action_list", json!({}));
+    assert!(list["actions"].as_array().unwrap().iter().any(|x| x["name"] == "Prepare for Distribution"));
+    assert!(list["steps"].as_array().unwrap().iter().any(|x| x["step"] == "add_watermark" && x["takes_arg"] == true));
+    let r = ok(&mut a, "action_run", json!({ "action": "add page numbers", "paths": ["a.pdf", "b.pdf", "missing.pdf"], "folder": "out" }));
+    assert_eq!(r["files"][0]["log"][0], "Add footer");
+    assert!(r["files"][2]["error"].is_string());
+    let doc = ok(&mut a, "doc_open", json!({ "path": "out/b.pdf" }))["doc"].as_u64().unwrap();
+    assert!(page_text(&mut a, doc)[1].contains("Page 2 of 2"), "{:?}", page_text(&mut a, doc));
+    let r = ok(&mut a, "action_run", json!({ "steps": [{ "step": "set_title", "arg": "Hello" }], "paths": ["a.pdf"], "folder": "out2" }));
+    assert_eq!(r["files"][0]["log"][0], "Set document title");
+    assert!(a.call("action_run", &json!({ "steps": [{ "step": "fly" }], "paths": ["a.pdf"], "folder": "x" })).is_err());
+}

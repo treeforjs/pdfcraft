@@ -512,6 +512,8 @@ impl Automation {
             "form_actions" => self.form_actions(&a)?,
             "form_detect_fields" => self.form_detect_fields(&a)?,
             "doc_compare" => self.doc_compare(&a)?,
+            "action_list" => self.action_list()?,
+            "action_run" => self.action_run(&a)?,
             "doc_compare_report" => self.doc_compare_report(&a)?,
             "doc_compare_mark" => self.doc_compare_mark(&a)?,
             "form_set_actions" => self.form_set_actions(&a)?,

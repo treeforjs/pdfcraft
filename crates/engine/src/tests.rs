@@ -1350,3 +1350,37 @@ fn comparing_two_versions_of_a_document() {
     assert_eq!(marks.len(), 2);
     assert!(marks[0].contents.as_deref().unwrap().starts_with("Replaced: \"Monday.\""));
 }
+
+#[test]
+fn actions_run_their_steps_on_files() {
+    let s = Session::new();
+    let src = s.create_from_text("t", "Quarterly numbers").unwrap();
+    let built = actions::builtin();
+    let numbers = built.iter().find(|a| a.name == "Add Page Numbers").unwrap();
+    let r = actions::run_on(numbers, "q.pdf", src.clone(), |_, _| {}).unwrap();
+    let mut s2 = Session::new();
+    let id = s2.open("out.pdf", None, r.bytes, None).unwrap();
+    assert!(page_texts(&s2, id)[0].contains("Page 1 of 1"), "{:?}", page_texts(&s2, id));
+    assert_eq!(r.log, ["Add footer"]);
+
+    let custom = actions::Action {
+        name: "Mine".into(),
+        description: String::new(),
+        steps: vec![
+            actions::Step::from_id("set_title", "Q3").unwrap(),
+            actions::Step::AddWatermark("DRAFT".into()),
+            actions::Step::ReduceFileSize,
+            actions::Step::FlattenComments,
+        ],
+        builtin: false,
+    };
+    let mut steps = Vec::new();
+    let r = actions::run_on(&custom, "q.pdf", src, |i, n| steps.push((i, n))).unwrap();
+    assert_eq!(steps, [(0, 4), (1, 4), (2, 4), (3, 4)]);
+    assert_eq!(r.log.len(), 4, "{:?}", r.log);
+    let id = s2.open("out2.pdf", None, r.bytes, None).unwrap();
+    let d = s2.get(id).unwrap();
+    assert_eq!(d.info.title.as_deref(), Some("Q3"));
+    assert!(page_texts(&s2, id)[0].contains("DRAFT"));
+    assert!(actions::run_on(&custom, "bad.pdf", Arc::new(b"nope".to_vec()), |_, _| {}).is_err());
+}

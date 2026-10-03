@@ -422,13 +422,14 @@ pub static TOOL_GROUPS: &[ToolGroup] = &[
         icon: "list-checks",
         hue: PURPLE,
         badge: None,
-        availability: Planned("M13"),
+        availability: Ready,
         sections: &[ToolSection {
             title: "Actions list",
             items: &[
+                item("Action Wizard", "list-checks", "actions.wizard", Ready),
                 item("Make accessible", "accessibility", "actions.make_accessible", Planned("M13")),
-                item("Prepare for distribution", "send", "actions.distribution", Planned("M13")),
-                item("Optimize scanned documents", "scan-text", "actions.optimize_scans", Planned("M13")),
+                item("Prepare for distribution", "send", "actions.distribution", Ready),
+                item("Optimize scanned documents", "scan-text", "actions.optimize_scans", Ready),
                 item("Archive documents", "file-check", "actions.archive", Planned("M13")),
             ],
         }],

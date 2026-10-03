@@ -759,6 +759,21 @@ pub fn tools() -> Vec<ToolDef> {
                 json!({ "doc": doc(), "field": { "type": "string" }, "event": { "type": "string", "enum": ["keystroke", "format", "validate", "calculate", "mouse_up"] }, "script": { "type": "string" } }),
                 &["doc", "field", "event"],
             )),
+        t("action_list", "List actions", "Action Wizard: the built-in actions (name, description, steps) and every step an action can use (id, label, whether it takes a text argument).")
+            .ro()
+            .cmd("actions.wizard")
+            .with(schema(json!({}), &[])),
+        t("action_run", "Run an action", "Action Wizard: run a built-in action (action: its name) or a list of steps ([{step, arg}], ids from action_list) on each PDF in paths, writing the results into folder under the same names. Returns each file's step log or error.")
+            .cmd("actions.wizard")
+            .with(schema(
+                json!({
+                    "action": { "type": "string" },
+                    "steps": { "type": "array", "items": { "type": "object", "properties": { "step": { "type": "string" }, "arg": { "type": "string" } }, "required": ["step"] } },
+                    "paths": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+                    "folder": { "type": "string" },
+                }),
+                &["paths", "folder"],
+            )),
         t("doc_compare", "Compare files", "Compare the text of two open documents: other is the older version, doc the newer. Returns counts and each change (replaced, inserted, deleted) with the old and new text, pages (1-based) and rectangles (points, origin bottom-left).")
             .ro()
             .cmd("doc.compare")

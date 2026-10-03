@@ -6,6 +6,7 @@
 //! `printcraft-engine`.
 
 mod a11y_ui;
+mod actions_ui;
 pub mod canvas;
 mod chrome;
 mod combine_ui;
@@ -199,6 +200,8 @@ pub enum Dialog {
     Preferences,
     /// Compare files: choose the older version.
     CompareFiles,
+    /// Action Wizard.
+    ActionWizard,
     /// Combine files: the files, their order and pages.
     Combine,
     /// Custom stamps ▸ Create.
@@ -313,7 +316,14 @@ pub struct PrintCraftApp {
     pub ocr_draft: ocr_ui::OcrDraft,
     pub ocr_run: Option<ocr_ui::OcrRun>,
     pub ocr_batch: Option<std::sync::Arc<std::sync::Mutex<ocr_ui::BatchProgress>>>,
-    pub ocr_sync: bool,
+    /// Background jobs (OCR, actions) run inline instead (tests).
+    pub run_inline: bool,
+    /// Action Wizard: the user's actions, the dialog state, the running action and (tests) the
+    /// files to use instead of a picker.
+    pub custom_actions: Vec<printcraft_engine::actions::Action>,
+    pub wizard: actions_ui::Wizard,
+    pub action_run: Option<std::sync::Arc<std::sync::Mutex<actions_ui::RunProgress>>>,
+    pub action_files_override: Option<Vec<String>>,
     /// Compare files: the chosen older document and the last result.
     pub compare_old: Option<DocId>,
     pub compare: Option<compare_ui::CompareState>,
@@ -458,7 +468,11 @@ impl PrintCraftApp {
             ocr_draft: ocr_ui::OcrDraft::default(),
             ocr_run: None,
             ocr_batch: None,
-            ocr_sync: false,
+            run_inline: false,
+            custom_actions: Vec::new(),
+            wizard: Default::default(),
+            action_run: None,
+            action_files_override: None,
             compare_old: None,
             compare: None,
             js_console: Default::default(),
@@ -801,6 +815,7 @@ impl PrintCraftApp {
             "trusted": trusted,
             "custom_stamps": stamps_ui::encode(&self.custom_stamps),
             "javascript": self.session.javascript(),
+            "actions": actions_ui::encode(&self.custom_actions),
         })
         .to_string()
     }
@@ -832,6 +847,7 @@ impl PrintCraftApp {
             self.digital_ids = ids;
         }
         self.custom_stamps = stamps_ui::decode(&v["custom_stamps"]);
+        self.custom_actions = actions_ui::decode(&v["actions"]);
         if let Some(on) = v["javascript"].as_bool() {
             self.session.set_javascript(on);
         }
@@ -910,6 +926,7 @@ impl PrintCraftApp {
                     "document-js" => Some(Dialog::DocumentJs),
                     "preferences" => Some(Dialog::Preferences),
                     "compare-files" => Some(Dialog::CompareFiles),
+                    "action-wizard" => Some(Dialog::ActionWizard),
                     "signature" => Some(Dialog::Signature),
                     "optimize" => Some(Dialog::Optimize),
                     "sign" | "certify" => {
@@ -1092,6 +1109,7 @@ impl eframe::App for PrintCraftApp {
         self.process_pending_edits();
         self.poll_export();
         self.poll_ocr();
+        self.poll_action();
         self.process_file_requests();
         // Pull finished renders into textures for every open document.
         for view in &mut self.views {
