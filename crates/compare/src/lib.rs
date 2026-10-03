@@ -394,3 +394,93 @@ mod tests {
         assert_eq!(c.changes[0].kind, Kind::Replaced);
     }
 }
+
+/// Visual compare: the regions where two renderings of a page differ, as pixel boxes
+/// `[x0, y0, x1, y1]` (y down) in `a`'s image. Both images are RGBA; `b` is sampled at the
+/// same relative position when sizes differ. Pixels count as different when a channel differs
+/// by more than `tolerance`; differing cells of a coarse grid are joined into regions.
+pub fn visual_regions(a: (&[u8], u32, u32), b: (&[u8], u32, u32), tolerance: u8) -> Vec<[u32; 4]> {
+    let (pa, wa, ha) = a;
+    let (pb, wb, hb) = b;
+    if wa == 0 || ha == 0 || wb == 0 || hb == 0 {
+        return Vec::new();
+    }
+    const CELL: u32 = 8;
+    let (gw, gh) = (wa.div_ceil(CELL), ha.div_ceil(CELL));
+    let mut grid = vec![false; (gw * gh) as usize];
+    for y in 0..ha {
+        let yb = (y as u64 * hb as u64 / ha as u64) as u32;
+        for x in 0..wa {
+            let xb = (x as u64 * wb as u64 / wa as u64) as u32;
+            let ia = ((y * wa + x) * 4) as usize;
+            let ib = ((yb * wb + xb) * 4) as usize;
+            let (Some(ca), Some(cb)) = (pa.get(ia..ia + 3), pb.get(ib..ib + 3)) else { continue };
+            if ca.iter().zip(cb).any(|(p, q)| p.abs_diff(*q) > tolerance) {
+                grid[((y / CELL) * gw + x / CELL) as usize] = true;
+            }
+        }
+    }
+    // Connected cells (8-neighbourhood, with a one-cell gap bridged) become one region.
+    let mut seen = vec![false; grid.len()];
+    let mut out = Vec::new();
+    for start in 0..grid.len() {
+        if !grid[start] || seen[start] {
+            continue;
+        }
+        let (mut x0, mut y0, mut x1, mut y1) = (u32::MAX, u32::MAX, 0, 0);
+        let mut stack = vec![start];
+        seen[start] = true;
+        while let Some(c) = stack.pop() {
+            let (cx, cy) = (c as u32 % gw, c as u32 / gw);
+            x0 = x0.min(cx);
+            y0 = y0.min(cy);
+            x1 = x1.max(cx);
+            y1 = y1.max(cy);
+            for dy in -2i64..=2 {
+                for dx in -2i64..=2 {
+                    let (nx, ny) = (cx as i64 + dx, cy as i64 + dy);
+                    if nx < 0 || ny < 0 || nx >= gw as i64 || ny >= gh as i64 {
+                        continue;
+                    }
+                    let n = (ny as u32 * gw + nx as u32) as usize;
+                    if grid[n] && !seen[n] {
+                        seen[n] = true;
+                        stack.push(n);
+                    }
+                }
+            }
+        }
+        out.push([x0 * CELL, y0 * CELL, ((x1 + 1) * CELL).min(wa), ((y1 + 1) * CELL).min(ha)]);
+    }
+    out
+}
+
+#[cfg(test)]
+mod visual_tests {
+    use super::*;
+
+    fn image(w: u32, h: u32, boxes: &[[u32; 4]]) -> Vec<u8> {
+        let mut px = vec![255u8; (w * h * 4) as usize];
+        for b in boxes {
+            for y in b[1]..b[3] {
+                for x in b[0]..b[2] {
+                    let i = ((y * w + x) * 4) as usize;
+                    px[i..i + 3].copy_from_slice(&[0, 0, 0]);
+                }
+            }
+        }
+        px
+    }
+
+    #[test]
+    fn finds_changed_regions() {
+        let a = image(200, 200, &[[10, 10, 50, 20]]);
+        let b = image(200, 200, &[[10, 10, 50, 20], [120, 150, 160, 170]]);
+        assert!(visual_regions((&a, 200, 200), (&a, 200, 200), 16).is_empty());
+        let r = visual_regions((&a, 200, 200), (&b, 200, 200), 16);
+        assert_eq!(r, [[120, 144, 160, 176]]);
+        // Two nearby marks join; distant ones don't.
+        let c = image(200, 200, &[[10, 10, 50, 20], [100, 100, 104, 104], [110, 100, 114, 104], [10, 180, 14, 184]]);
+        assert_eq!(visual_regions((&a, 200, 200), (&c, 200, 200), 16).len(), 2);
+    }
+}

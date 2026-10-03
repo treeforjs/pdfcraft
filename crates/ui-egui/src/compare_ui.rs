@@ -14,8 +14,13 @@ pub struct CompareState {
     pub old: DocId,
     pub new: DocId,
     pub result: Comparison,
+    /// Regions that look different (page, user-space box), page n against page n.
+    pub visual: Vec<(usize, [f64; 4])>,
     pub selected: Option<usize>,
 }
+
+/// Visual differences are shaded orange.
+pub const VISUAL: Color32 = Color32::from_rgb(0xF0, 0x8C, 0x1A);
 
 /// What the panel asks for.
 pub enum PanelAction {
@@ -88,6 +93,9 @@ pub(crate) fn panel(ui: &mut egui::Ui, t: &Tokens, state: &Option<CompareState>,
             ui.painter().rect_filled(dot, egui::CornerRadius::same(2), colour(k));
             ui.label(format!("{} {}", c.count(k), k.label()));
         }
+        let (dot, _) = ui.allocate_exact_size(egui::vec2(10.0, 10.0), egui::Sense::hover());
+        ui.painter().rect_filled(dot, egui::CornerRadius::same(2), VISUAL);
+        ui.label(format!("{} Visual", s.visual.len()));
     });
     ui.add_space(6.0);
     ui.horizontal(|ui| {
@@ -135,13 +143,23 @@ impl PrintCraftApp {
         let Some(old) = self.compare_old else { return };
         match self.session.compare(old, new) {
             Ok(result) => {
+                let visual = self.session.compare_visual(old, new, 72.0).unwrap_or_default();
                 self.views[i].compare_marks = result
                     .changes
                     .iter()
                     .flat_map(|ch| ch.new.rects.iter().map(move |r| (ch.new.page, r.map(|v| v as f32), colour(ch.kind))))
                     .collect();
+                // Visual differences not already covered by a text change.
+                let text_marks = self.views[i].compare_marks.clone();
+                for (p, r) in &visual {
+                    let r = r.map(|v| v as f32);
+                    let covered = text_marks.iter().any(|(mp, m, _)| *mp == *p && m[0] <= r[2] && r[0] <= m[2] && m[1] <= r[3] && r[1] <= m[3]);
+                    if !covered {
+                        self.views[i].compare_marks.push((*p, r, VISUAL));
+                    }
+                }
                 let n = result.changes.len();
-                self.compare = Some(crate::compare_ui::CompareState { old, new, result, selected: None });
+                self.compare = Some(crate::compare_ui::CompareState { old, new, result, visual, selected: None });
                 self.right = Some(RightPanel::Compare);
                 self.notify(if n == 0 {
                     "The text is the same".to_string()

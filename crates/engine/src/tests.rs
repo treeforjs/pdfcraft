@@ -1338,6 +1338,11 @@ fn comparing_two_versions_of_a_document() {
     let text = page_texts(&s, rid).join(" ");
     assert!(text.contains("2 changes: 2 replaced") && text.contains("Tuesday."), "{text}");
 
+    // Visually, only the changed words' places differ (and the page is otherwise the same).
+    let vis = s.compare_visual(old, new, 72.0).unwrap();
+    assert!(!vis.is_empty() && vis.iter().all(|(p, r)| *p == 0 && r[3] > 600.0), "{vis:?}");
+    assert!(s.compare_visual(old, old, 72.0).unwrap().is_empty());
+
     assert_eq!(s.mark_differences(old, new).unwrap(), 2);
     let d = s.get(new).unwrap();
     assert_eq!(d.can_undo(), Some("Mark differences"));

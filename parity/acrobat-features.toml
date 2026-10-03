@@ -8987,11 +8987,11 @@ title = "Compare files: visual differences"
 area = "N"
 tier = "P1"
 milestone = "M12"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["doc.compare"]
+tools = ["doc_compare"]
+evidence = ["crates/compare/src/lib.rs::finds_changed_regions", "crates/engine/src/tests.rs::comparing_two_versions_of_a_document", "crates/automation/tests/automation.rs::comparing_documents_through_tools"]
+notes = "Pages rendered at 72 dpi and compared page by page; differing regions shaded orange where no text change explains them."
 
 [[feature]]
 id = "misc.compare-side-by-side"
