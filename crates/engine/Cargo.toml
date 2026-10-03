@@ -25,6 +25,7 @@ printcraft-a11y = { workspace = true }
 printcraft-ocr = { workspace = true }
 printcraft-js = { workspace = true }
 printcraft-compare = { workspace = true }
+printcraft-preflight = { workspace = true }
 printcraft-fonts = { workspace = true }
 printcraft-create = { workspace = true }
 printcraft-model = { workspace = true }

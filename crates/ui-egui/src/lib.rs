@@ -26,6 +26,7 @@ mod optimize_ui;
 mod search_ui;
 mod sign_ui;
 mod stamps_ui;
+mod standards_ui;
 mod zoom_snap;
 /// Header & footer / watermark / background dialog types (tests and automation).
 pub mod marks {
@@ -202,6 +203,8 @@ pub enum Dialog {
     CompareFiles,
     /// Action Wizard.
     ActionWizard,
+    /// Standards ▸ PDF/A.
+    PdfA,
     /// Combine files: the files, their order and pages.
     Combine,
     /// Custom stamps ▸ Create.
@@ -324,6 +327,8 @@ pub struct PrintCraftApp {
     pub wizard: actions_ui::Wizard,
     pub action_run: Option<std::sync::Arc<std::sync::Mutex<actions_ui::RunProgress>>>,
     pub action_files_override: Option<Vec<String>>,
+    /// Standards ▸ PDF/A: level and last result.
+    pub pdfa: standards_ui::PdfaState,
     /// Compare files: the chosen older document and the last result.
     pub compare_old: Option<DocId>,
     pub compare: Option<compare_ui::CompareState>,
@@ -473,6 +478,7 @@ impl PrintCraftApp {
             wizard: Default::default(),
             action_run: None,
             action_files_override: None,
+            pdfa: Default::default(),
             compare_old: None,
             compare: None,
             js_console: Default::default(),
@@ -927,6 +933,7 @@ impl PrintCraftApp {
                     "preferences" => Some(Dialog::Preferences),
                     "compare-files" => Some(Dialog::CompareFiles),
                     "action-wizard" => Some(Dialog::ActionWizard),
+                    "pdfa" => Some(Dialog::PdfA),
                     "signature" => Some(Dialog::Signature),
                     "optimize" => Some(Dialog::Optimize),
                     "sign" | "certify" => {

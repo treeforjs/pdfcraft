@@ -7607,11 +7607,11 @@ title = "Verify PDF/A compliance (1-4)"
 area = "K"
 tier = "P1"
 milestone = "M11"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["standards.pdfa"]
+tools = ["pdfa_verify"]
+evidence = ["crates/preflight/src/tests.rs::verify_reports_what_breaks_pdfa", "crates/preflight/src/tests.rs::convert_fixes_all_but_fonts", "crates/automation/tests/automation.rs::pdfa_through_tools", "crates/ui-egui/tests/compare.rs::pdfa_dialog_verifies_and_converts"]
+notes = "PDF/A-2b/3b structural rules: identification, encryption, output intent, fonts embedded, annotations, actions, images, embedded files. Not yet: content-stream operator checks, transparency details, PDF/A-1 and -4, a veraPDF comparison."
 
 [[feature]]
 id = "optimize.pdfa-convert"
@@ -7619,11 +7619,11 @@ title = "Save as PDF/A (1b, 2b, 3b, 4)"
 area = "K"
 tier = "P1"
 milestone = "M11"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["standards.pdfa"]
+tools = ["pdfa_convert"]
+evidence = ["crates/preflight/src/tests.rs::convert_fixes_all_but_fonts", "crates/automation/tests/automation.rs::pdfa_through_tools", "crates/ui-egui/tests/compare.rs::pdfa_dialog_verifies_and_converts"]
+notes = "Fixes XMP, output intent (generated sRGB ICC profile), forbidden actions, annotation flags, interpolation, encryption, AFRelationship. Not yet: embedding fonts, converting device CMYK, flattening transparency for PDF/A-1."
 
 [[feature]]
 id = "optimize.pdfa-accessible-levels"
@@ -7667,11 +7667,11 @@ title = "Choose output intents and conditions"
 area = "K"
 tier = "P1"
 milestone = "M11"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["standards.pdfa"]
+tools = ["pdfa_convert", "pdfa_verify"]
+evidence = ["crates/preflight/src/tests.rs::convert_fixes_all_but_fonts", "crates/automation/tests/automation.rs::pdfa_through_tools", "crates/ui-egui/tests/compare.rs::pdfa_dialog_verifies_and_converts"]
+notes = "sRGB output intent added and listed; no choice of other conditions yet."
 
 [[feature]]
 id = "optimize.pdfe"
@@ -7715,11 +7715,11 @@ title = "Standards panel showing declared conformance"
 area = "K"
 tier = "P1"
 milestone = "M11"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["standards.pdfa"]
+tools = ["pdfa_verify"]
+evidence = ["crates/automation/tests/automation.rs::pdfa_through_tools", "crates/ui-egui/tests/compare.rs::pdfa_dialog_verifies_and_converts"]
+notes = "Declared PDF/A, PDF/UA and output intents shown in the PDF/A dialog and returned by pdfa_verify."
 
 [[feature]]
 id = "optimize.remove-standards-id"

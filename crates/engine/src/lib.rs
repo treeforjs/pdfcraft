@@ -78,6 +78,7 @@ pub use printcraft_annot::{
 };
 pub use printcraft_forms::detect;
 pub use printcraft_optimize as optimize;
+pub use printcraft_preflight as pdfa;
 pub use printcraft_print as print;
 pub use printcraft_redact::patterns::{PATTERNS as REDACT_PATTERNS, Pattern as RedactPattern, find as find_pattern};
 pub use printcraft_redact::sanitize::{HIDDEN, Hidden};
@@ -812,6 +813,11 @@ pub enum Edit {
         event: String,
         script: Option<String>,
     },
+    /// Standards ▸ Save as PDF/A: fix what can be fixed for `level` (metadata, output intent,
+    /// forbidden actions, annotation flags, …).
+    ConvertPdfA {
+        level: printcraft_preflight::Level,
+    },
     /// What a script (button or console) changed in form fields: values, read-only, required
     /// and visibility.
     ApplyScriptChanges {
@@ -1013,6 +1019,7 @@ impl Edit {
             Edit::MarkDecorative { .. } => "Mark figure as decorative".into(),
             Edit::AddOcrText { .. } => "Recognize text".into(),
             Edit::ApplyScriptChanges { .. } => "Run JavaScript".into(),
+            Edit::ConvertPdfA { level } => format!("Save as {}", level.label()),
             Edit::SetFieldScript { name, .. } => format!("Edit script of {name}"),
             Edit::SetDocumentScript { script: None, .. } => "Delete document JavaScript".into(),
             Edit::SetDocumentScript { .. } => "Edit document JavaScript".into(),
@@ -1186,6 +1193,7 @@ fn check_permission(edit: &Edit, p: &printcraft_cos::Permissions) -> Result<(), 
         | Edit::AddOcrText { .. }
         | Edit::SetDocumentScript { .. }
         | Edit::SetFieldScript { .. }
+        | Edit::ConvertPdfA { .. }
         | Edit::EditTextLine { .. }
         | Edit::EditTextBlock { .. }
         | Edit::EditPageImage { .. }
@@ -1387,6 +1395,9 @@ fn run_edit(doc: &mut printcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -
                 Some(js) => printcraft_forms::recalculate_with(doc, js)?,
                 None => printcraft_forms::recalculate(doc)?,
             };
+        }
+        Edit::ConvertPdfA { level } => {
+            printcraft_preflight::convert(doc, *level).map_err(|e| EditError::Invalid(e.to_string()))?;
         }
         Edit::SetDocumentScript { name, script } => printcraft_forms::set_document_script(doc, name, script.as_deref())?,
         Edit::AddOcrText { page, words } => {

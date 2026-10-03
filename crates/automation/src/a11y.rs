@@ -259,6 +259,35 @@ impl Automation {
         Ok(json!({ "path": target.to_string_lossy(), "rows": files.len(), "columns": columns }))
     }
 
+    fn pdfa_level(&self, a: &Args) -> Result<printcraft_engine::pdfa::Level> {
+        let l = a.opt_str("level")?.unwrap_or("2b");
+        printcraft_engine::pdfa::Level::from_id(l).ok_or_else(|| ToolError::InvalidArgs(format!("unknown PDF/A level {l:?} (2b or 3b)")))
+    }
+
+    pub(crate) fn pdfa_verify(&self, a: &Args) -> Result<Value> {
+        let level = self.pdfa_level(a)?;
+        let doc = self.doc(a)?;
+        let issues: Vec<Value> = doc
+            .pdfa_verify(level)
+            .iter()
+            .map(|i| json!({ "clause": i.clause, "message": i.message, "page": i.page.map(|p| p + 1), "fixable": i.fixable }))
+            .collect();
+        let d = doc.standards();
+        Ok(json!({
+            "level": level.label(),
+            "compliant": issues.is_empty(),
+            "issues": issues,
+            "declared": { "pdfa": d.pdfa.map(|(p, c)| format!("PDF/A-{p}{}", c.to_lowercase())), "pdfua": d.pdfua, "output_intents": d.output_intents },
+        }))
+    }
+
+    pub(crate) fn pdfa_convert(&mut self, a: &Args) -> Result<Value> {
+        let level = self.pdfa_level(a)?;
+        let id = self.doc(a)?.id;
+        self.session.apply(id, printcraft_engine::Edit::ConvertPdfA { level }).map_err(failed)?;
+        self.pdfa_verify(a)
+    }
+
     pub(crate) fn action_list(&self) -> Result<Value> {
         use printcraft_engine::actions::{Step, builtin};
         let step_json = |s: &Step| json!({ "step": s.id(), "arg": s.arg() });

@@ -3868,6 +3868,7 @@ dependencies = [
  "printcraft-ocr",
  "printcraft-optimize",
  "printcraft-organize",
+ "printcraft-preflight",
  "printcraft-print",
  "printcraft-redact",
  "printcraft-render",
@@ -3954,6 +3955,14 @@ dependencies = [
  "hayro-syntax",
  "printcraft-cos",
  "thiserror 2.0.21",
+]
+
+[[package]]
+name = "printcraft-preflight"
+version = "0.1.0"
+dependencies = [
+ "printcraft-cos",
+ "printcraft-model",
 ]
 
 [[package]]

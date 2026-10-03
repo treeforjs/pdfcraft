@@ -459,11 +459,11 @@ pub static TOOL_GROUPS: &[ToolGroup] = &[
         icon: "file-check",
         hue: RED,
         badge: None,
-        availability: Planned("M11"),
+        availability: Ready,
         sections: &[ToolSection {
             title: "Standards",
             items: &[
-                item("Save as PDF/A", "file-check", "standards.pdfa", Planned("M11")),
+                item("Save as PDF/A", "file-check", "standards.pdfa", Ready),
                 item("Save as PDF/X", "file-check", "standards.pdfx", Planned("M11")),
                 item("Save as PDF/UA", "accessibility", "standards.pdfua", Planned("M11")),
                 item("Preflight", "file-check", "preflight.run", Planned("M11")),

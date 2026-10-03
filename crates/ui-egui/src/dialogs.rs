@@ -820,6 +820,10 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
                 close = go || cancel;
                 return;
             }
+            Dialog::PdfA => {
+                close = crate::standards_ui::body(ui, app, &t);
+                return;
+            }
             Dialog::ActionWizard => {
                 ui.set_width(620.0);
                 close = crate::actions_ui::body(ui, app, &t);

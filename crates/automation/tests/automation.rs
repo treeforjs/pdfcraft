@@ -1470,3 +1470,17 @@ fn actions_through_tools() {
     assert_eq!(r["files"][0]["log"][0], "Set document title");
     assert!(a.call("action_run", &json!({ "steps": [{ "step": "fly" }], "paths": ["a.pdf"], "folder": "x" })).is_err());
 }
+
+#[test]
+fn pdfa_through_tools() {
+    let dir = workdir("pdfa");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_create", json!({ "from": "text", "text": "Archive me" }))["doc"].as_u64().unwrap();
+    let r = ok(&mut a, "pdfa_verify", json!({ "doc": doc }));
+    assert_eq!(r["compliant"], false);
+    assert!(r["issues"].as_array().unwrap().iter().any(|i| i["clause"] == "6.6.2.1"), "{r}");
+    let r = ok(&mut a, "pdfa_convert", json!({ "doc": doc, "level": "3b" }));
+    assert_eq!(r["declared"]["pdfa"], "PDF/A-3b", "{r}");
+    assert!(r["issues"].as_array().unwrap().iter().all(|i| i["fixable"] == false), "{r}");
+    assert!(a.call("pdfa_verify", &json!({ "doc": doc, "level": "9z" })).is_err());
+}

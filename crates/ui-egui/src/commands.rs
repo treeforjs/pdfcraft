@@ -374,6 +374,10 @@ impl PrintCraftApp {
             }
             "form.detect" => self.detect_fields(),
             "doc.compare" => self.dialog = Some(Dialog::CompareFiles),
+            "standards.pdfa" => {
+                self.pdfa.issues = None;
+                self.dialog = Some(Dialog::PdfA);
+            }
             "actions.wizard" | "actions.distribution" | "actions.optimize_scans" => {
                 self.wizard.editing = None;
                 match id {

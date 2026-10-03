@@ -62,3 +62,27 @@ fn compare_panel_screenshot() {
     }
     h.render().unwrap().save(out).unwrap();
 }
+
+#[test]
+fn pdfa_dialog_verifies_and_converts() {
+    let doc = Session::new().create_from_text("t", "Keep forever").unwrap().to_vec();
+    let mut h = Harness::builder().with_size(egui::vec2(1400.0, 900.0)).build_eframe(move |_cc| {
+        let mut app = PrintCraftApp::new();
+        app.open_bytes("keep.pdf", None, doc.clone()).unwrap();
+        app
+    });
+    h.run_steps(4);
+    assert!(h.state_mut().execute("standards.pdfa"));
+    h.run_steps(2);
+    h.get_by_label("Declared conformance: none");
+    h.get_by_label("Verify").click();
+    h.run_steps(3);
+    h.get_by_label("The document has no XMP metadata");
+    h.get_by_label("Save as PDF/A").click();
+    h.run_steps(3);
+    h.get_by_label("Declared conformance: PDF/A-2b");
+    let issues = h.state().pdfa.issues.clone().unwrap();
+    assert!(issues.iter().all(|i| !i.fixable), "{issues:?}");
+    let id = h.state().active_ids().unwrap().1;
+    assert_eq!(h.state().session.get(id).unwrap().can_undo(), Some("Save as PDF/A-2b"));
+}

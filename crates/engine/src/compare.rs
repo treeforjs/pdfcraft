@@ -17,6 +17,16 @@ pub fn colour(kind: Kind) -> crate::Rgb {
 }
 
 impl crate::Document {
+    /// Standards ▸ Verify PDF/A: the rules the document breaks for `level`.
+    pub fn pdfa_verify(&self, level: printcraft_preflight::Level) -> Vec<printcraft_preflight::Issue> {
+        self.editor.as_ref().map(|e| printcraft_preflight::verify(&e.cos, level)).unwrap_or_default()
+    }
+
+    /// The standards the document declares (Standards panel).
+    pub fn standards(&self) -> printcraft_preflight::Declared {
+        self.editor.as_ref().map(|e| printcraft_preflight::declared(&e.cos)).unwrap_or_default()
+    }
+
     /// Every word of the document in reading order, with page and box.
     pub fn words(&self) -> Vec<printcraft_compare::Word> {
         let config = printcraft_render::RenderConfig { password: self.password.as_deref().map(Arc::from), ..Default::default() };
