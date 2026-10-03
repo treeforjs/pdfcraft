@@ -229,6 +229,12 @@ impl Session {
 /// A page's words for form-field detection, in user space (underscore runs split from the
 /// text around them).
 fn detection_words(text: &printcraft_render::PageText, info: &printcraft_render::PageInfo) -> Vec<printcraft_forms::detect::Word> {
+    page_words(text, info).into_iter().map(|(text, rect)| printcraft_forms::detect::Word { text, rect }).collect()
+}
+
+/// A page's words in reading order, in user space ([x0, y0, x1, y1]); runs of underscores are
+/// words of their own.
+pub(crate) fn page_words(text: &printcraft_render::PageText, info: &printcraft_render::PageInfo) -> Vec<(String, [f64; 4])> {
     let mut words: Vec<(String, [f32; 4])> = Vec::new();
     let mut last_line = u32::MAX;
     // A space glyph ends the word before it.
@@ -263,7 +269,7 @@ fn detection_words(text: &printcraft_render::PageText, info: &printcraft_render:
             let a = info.view_to_user(r[0], r[1]);
             let b = info.view_to_user(r[2], r[3]);
             let rect = [a[0].min(b[0]) as f64, a[1].min(b[1]) as f64, a[0].max(b[0]) as f64, a[1].max(b[1]) as f64];
-            printcraft_forms::detect::Word { text, rect }
+            (text, rect)
         })
         .collect()
 }

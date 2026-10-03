@@ -201,6 +201,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     c("comment.summarize", "Summarize comments", None, None, HasComments, "file-text"),
     c("form.import_data", "Import form data…", None, None, HasFields, "file-input"),
     c("form.export_data", "Export form data…", None, None, HasFields, "file-output"),
+    c("doc.compare", "Compare files…", None, None, Document, "git-compare"),
     c("form.detect", "Detect form fields", None, None, Modification, "scan"),
     c("form.merge_data", "Merge data files into spreadsheet…", None, None, Nothing, "file-spreadsheet"),
     c("form.flatten", "Flatten form fields", None, None, HasFields, "layers"),

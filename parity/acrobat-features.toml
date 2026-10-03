@@ -6411,11 +6411,11 @@ title = "Skip pages that already have text"
 area = "I"
 tier = "P1"
 milestone = "M10"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["ocr.recognize"]
+tools = ["ocr_recognize"]
+evidence = ["crates/engine/src/tests.rs::recognize_text_makes_a_scanned_page_searchable", "crates/automation/tests/automation.rs::ocr_tools_make_a_scan_searchable"]
+notes = "Pages that already have text are skipped and reported (skip_text_pages false reads them anyway)."
 
 [[feature]]
 id = "ocr.rotation-detection"
@@ -8975,11 +8975,11 @@ title = "Compare files: text differences"
 area = "N"
 tier = "P1"
 milestone = "M12"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["doc.compare"]
+tools = ["doc_compare", "doc_compare_mark"]
+evidence = ["crates/compare/src/lib.rs::insertions_deletions_and_replacements", "crates/engine/src/tests.rs::comparing_two_versions_of_a_document", "crates/automation/tests/automation.rs::comparing_documents_through_tools", "crates/ui-egui/tests/compare.rs::compare_two_versions"]
+notes = "Word-level Myers diff with patience anchors for long files; replaced/inserted/deleted shaded on the new file, listed in the Compare panel, or added as comments."
 
 [[feature]]
 id = "misc.compare-visual"
@@ -9011,11 +9011,11 @@ title = "Compare summary report as PDF"
 area = "N"
 tier = "P1"
 milestone = "M12"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["doc.compare"]
+tools = ["doc_compare_report"]
+evidence = ["crates/engine/src/tests.rs::comparing_two_versions_of_a_document", "crates/automation/tests/automation.rs::comparing_documents_through_tools", "crates/ui-egui/tests/compare.rs::compare_two_versions"]
+notes = "Summary report as a new PDF (counts and every change with pages)."
 
 [[feature]]
 id = "misc.compare-filters"
@@ -9623,11 +9623,11 @@ title = "Preferences dialog generated from a schema"
 area = "N"
 tier = "P1"
 milestone = "M14"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["app.preferences"]
+tools = ["js_enabled"]
+evidence = ["crates/ui-egui/tests/javascript.rs::document_scripts_and_preferences"]
+notes = "Preferences dialog with the JavaScript category; other categories still live in their tools."
 
 [[feature]]
 id = "misc.prefs-general"
@@ -9815,11 +9815,11 @@ title = "Preferences: JavaScript"
 area = "N"
 tier = "P1"
 milestone = "M14"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["app.preferences"]
+tools = ["js_enabled"]
+evidence = ["crates/ui-egui/tests/javascript.rs::document_scripts_and_preferences"]
+notes = "Enable Acrobat JavaScript, remembered between runs."
 
 [[feature]]
 id = "misc.prefs-measuring"

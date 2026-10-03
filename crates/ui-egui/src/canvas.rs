@@ -103,6 +103,8 @@ pub struct DocView {
     pub goto: Option<(usize, f32)>,
     /// Briefly outline an annotation after navigating to it from a panel.
     pub flash: Option<(usize, [f32; 4], f64)>,
+    /// Compare files: differences shaded on this document's pages (page, user-space box, colour).
+    pub compare_marks: Vec<(usize, [f32; 4], Color32)>,
     pages: HashMap<usize, PageTex>,
     /// Pages the renderer could not draw, with the reason (never re-requested).
     errors: HashMap<usize, String>,
@@ -221,6 +223,7 @@ impl DocView {
             forward: Vec::new(),
             goto: None,
             flash: None,
+            compare_marks: Vec::new(),
             pages: HashMap::new(),
             errors: HashMap::new(),
             waiting_since: HashMap::new(),
@@ -1382,6 +1385,12 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
                         let body = a.contents.clone().unwrap_or_default();
                         hover_text = Some((p, if body.is_empty() { who } else { format!("{who}\n{body}") }));
                     }
+                }
+            }
+            for (mp, mr, mc) in &view.compare_marks {
+                if *mp == i {
+                    let sr = xf.user_rect(info, i, *mr).expand(1.5);
+                    painter.rect_filled(sr, CornerRadius::same(2), mc.gamma_multiply(0.28));
                 }
             }
             if let Some((fp, fr, t0)) = view.flash

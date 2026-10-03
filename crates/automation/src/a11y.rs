@@ -259,6 +259,56 @@ impl Automation {
         Ok(json!({ "path": target.to_string_lossy(), "rows": files.len(), "columns": columns }))
     }
 
+    fn compare_ids(&self, a: &Args) -> Result<(printcraft_engine::DocId, printcraft_engine::DocId)> {
+        let new = self.doc(a)?.id;
+        let other = a.int("other")?;
+        let old = u64::try_from(other)
+            .ok()
+            .and_then(|o| self.session.get(printcraft_engine::DocId(o)))
+            .map(|d| d.id)
+            .ok_or_else(|| ToolError::InvalidArgs(format!("no open document {other}")))?;
+        Ok((old, new))
+    }
+
+    pub(crate) fn doc_compare(&self, a: &Args) -> Result<Value> {
+        use printcraft_engine::compare::Kind;
+        let (old, new) = self.compare_ids(a)?;
+        let c = self.session.compare(old, new).map_err(failed)?;
+        let limit = a.opt_int("limit")?.unwrap_or(500).max(1) as usize;
+        let r2 = |r: &[f64; 4]| r.map(|v| (v * 100.0).round() / 100.0);
+        let side =
+            |s: &printcraft_engine::compare::Side| json!({ "text": s.text, "page": s.page + 1, "rects": s.rects.iter().map(r2).collect::<Vec<_>>() });
+        let list: Vec<Value> = c
+            .changes
+            .iter()
+            .take(limit)
+            .map(|ch| json!({ "kind": ch.kind.label().to_lowercase(), "old": side(&ch.old), "new": side(&ch.new) }))
+            .collect();
+        Ok(json!({
+            "identical": c.identical(),
+            "replaced": c.count(Kind::Replaced),
+            "inserted": c.count(Kind::Inserted),
+            "deleted": c.count(Kind::Deleted),
+            "old_words": c.old_words,
+            "new_words": c.new_words,
+            "changes": list,
+        }))
+    }
+
+    pub(crate) fn doc_compare_report(&self, a: &Args) -> Result<Value> {
+        let (old, new) = self.compare_ids(a)?;
+        let bytes = self.session.compare_report(old, new).map_err(failed)?;
+        let path = self.resolve(a.str("path")?, true)?;
+        write_atomic(&path, &bytes)?;
+        Ok(json!({ "path": path.to_string_lossy(), "bytes": bytes.len() }))
+    }
+
+    pub(crate) fn doc_compare_mark(&mut self, a: &Args) -> Result<Value> {
+        let (old, new) = self.compare_ids(a)?;
+        let n = self.session.mark_differences(old, new).map_err(failed)?;
+        Ok(json!({ "comments": n }))
+    }
+
     pub(crate) fn form_detect_fields(&mut self, a: &Args) -> Result<Value> {
         let pages = if a.opt_ints("pages")?.is_some() { self.pages(a, "pages")? } else { Vec::new() };
         let id = self.doc(a)?.id;

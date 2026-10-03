@@ -13,6 +13,7 @@ mod commands;
 mod comment_props;
 pub mod comments;
 mod comments_panel;
+mod compare_ui;
 pub mod control;
 mod create_ui;
 mod crop;
@@ -96,6 +97,8 @@ pub enum RightPanel {
     Accessibility,
     /// Advanced Search results.
     Search,
+    /// Compare files: the differences.
+    Compare,
 }
 
 /// Quick-action bar tools (the vertical floating strip).
@@ -194,6 +197,8 @@ pub enum Dialog {
     DocumentJs,
     /// Preferences.
     Preferences,
+    /// Compare files: choose the older version.
+    CompareFiles,
     /// Combine files: the files, their order and pages.
     Combine,
     /// Custom stamps ▸ Create.
@@ -309,6 +314,9 @@ pub struct PrintCraftApp {
     pub ocr_run: Option<ocr_ui::OcrRun>,
     pub ocr_batch: Option<std::sync::Arc<std::sync::Mutex<ocr_ui::BatchProgress>>>,
     pub ocr_sync: bool,
+    /// Compare files: the chosen older document and the last result.
+    pub compare_old: Option<DocId>,
+    pub compare: Option<compare_ui::CompareState>,
     /// The JavaScript console and the Document JavaScripts draft.
     pub js_console: js_ui::JsConsole,
     pub doc_js: js_ui::DocJsDraft,
@@ -451,6 +459,8 @@ impl PrintCraftApp {
             ocr_run: None,
             ocr_batch: None,
             ocr_sync: false,
+            compare_old: None,
+            compare: None,
             js_console: Default::default(),
             doc_js: Default::default(),
             a11y: a11y_ui::A11yState::default(),
@@ -857,6 +867,7 @@ impl PrintCraftApp {
                     "signatures" => Some(RightPanel::Signatures),
                     "accessibility" => Some(RightPanel::Accessibility),
                     "search" => Some(RightPanel::Search),
+                    "compare" => Some(RightPanel::Compare),
                     "none" => None,
                     other => return Err(format!("unknown panel {other}")),
                 }
@@ -898,6 +909,7 @@ impl PrintCraftApp {
                     "js-console" => Some(Dialog::JsConsole),
                     "document-js" => Some(Dialog::DocumentJs),
                     "preferences" => Some(Dialog::Preferences),
+                    "compare-files" => Some(Dialog::CompareFiles),
                     "signature" => Some(Dialog::Signature),
                     "optimize" => Some(Dialog::Optimize),
                     "sign" | "certify" => {

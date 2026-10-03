@@ -1433,3 +1433,22 @@ fn detecting_form_fields_through_tools() {
     let f = ok(&mut a, "form_fields", json!({ "doc": doc }));
     assert_eq!(f["fields"][1]["value"], "Lisbon", "{f}");
 }
+
+#[test]
+fn comparing_documents_through_tools() {
+    let dir = workdir("compare");
+    let mut a = auto(&dir);
+    let v1 = ok(&mut a, "doc_create", json!({ "from": "text", "text": "Rent is 900 per month. Pets are not allowed." }))["doc"].as_u64().unwrap();
+    let v2 = ok(&mut a, "doc_create", json!({ "from": "text", "text": "Rent is 950 per month. Pets are allowed. Parking included." }))["doc"]
+        .as_u64()
+        .unwrap();
+    let r = ok(&mut a, "doc_compare", json!({ "doc": v2, "other": v1 }));
+    assert_eq!((r["replaced"].as_u64(), r["inserted"].as_u64(), r["deleted"].as_u64()), (Some(1), Some(1), Some(1)), "{r}");
+    assert_eq!(r["changes"][0]["old"]["text"], "900");
+    assert_eq!(r["changes"][0]["new"]["text"], "950");
+    assert_eq!(r["changes"][0]["new"]["page"], 1);
+    ok(&mut a, "doc_compare_report", json!({ "doc": v2, "other": v1, "path": "report.pdf" }));
+    assert!(std::fs::read(dir.join("report.pdf")).unwrap().starts_with(b"%PDF"));
+    assert_eq!(ok(&mut a, "doc_compare_mark", json!({ "doc": v2, "other": v1 }))["comments"], 3);
+    assert!(a.call("doc_compare", &json!({ "doc": v2, "other": 999 })).is_err());
+}

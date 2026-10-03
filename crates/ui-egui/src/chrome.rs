@@ -243,6 +243,7 @@ fn main_menu(app: &mut PrintCraftApp, ui: &mut egui::Ui) {
                     (RightPanel::Signatures, "Signatures"),
                     (RightPanel::Accessibility, "Accessibility Checker"),
                     (RightPanel::Search, "Search"),
+                    (RightPanel::Compare, "Compare"),
                 ] {
                     if ui.radio(app.right == Some(p), label).clicked() {
                         app.right = Some(p);

@@ -51,6 +51,7 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
     let mut open_revision: Option<usize> = None;
     let mut a11y_now = false;
     let mut ocr_now = false;
+    let mut compare_now = false;
     let mut combine_now = false;
     let mut stamp_now = false;
     let mut alt_now = false;
@@ -819,6 +820,12 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
                 close = go || cancel;
                 return;
             }
+            Dialog::CompareFiles => {
+                let (go, cancel) = crate::compare_ui::body(ui, app, &t);
+                compare_now = go;
+                close = go || cancel;
+                return;
+            }
             Dialog::JsConsole => {
                 ui.set_width(640.0);
                 close = crate::js_ui::console_body(ui, app, &t);
@@ -1207,6 +1214,9 @@ pub fn show(app: &mut PrintCraftApp, ctx: &egui::Context) {
     }
     if ocr_now {
         app.start_ocr();
+    }
+    if compare_now {
+        app.run_compare();
     }
     if a11y_now {
         app.a11y_skipped.clear();

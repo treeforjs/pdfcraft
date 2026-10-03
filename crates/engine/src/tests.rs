@@ -1318,3 +1318,30 @@ fn detecting_fields_on_a_printed_form() {
     assert!(f.widgets[0].rect[0] > 72.0 + 20.0, "{:?}", f.widgets[0].rect);
     assert!(s.detect_fields(id, &[]).is_empty(), "nothing left to detect");
 }
+
+#[test]
+fn comparing_two_versions_of_a_document() {
+    let mut s = Session::new().with_clock(|| 1_700_000_000);
+    let v1 = s.create_from_text("t", "The contract starts on Monday.\n\nPayment is due within thirty days.\n\nSigned by both parties.").unwrap();
+    let v2 = s
+        .create_from_text("t", "The contract starts on Tuesday.\n\nPayment is due within thirty days of invoice.\n\nSigned by both parties.")
+        .unwrap();
+    let old = s.open("v1.pdf", None, v1, None).unwrap();
+    let new = s.open("v2.pdf", None, v2, None).unwrap();
+    let c = s.compare(old, new).unwrap();
+    let got: Vec<(compare::Kind, &str, &str)> = c.changes.iter().map(|x| (x.kind, x.old.text.as_str(), x.new.text.as_str())).collect();
+    assert_eq!(got, [(compare::Kind::Replaced, "Monday.", "Tuesday."), (compare::Kind::Replaced, "days.", "days of invoice.")], "{got:?}");
+    assert!(s.compare(old, old).unwrap().identical());
+
+    let report = s.compare_report(old, new).unwrap();
+    let rid = s.open("report.pdf", None, report, None).unwrap();
+    let text = page_texts(&s, rid).join(" ");
+    assert!(text.contains("2 changes: 2 replaced") && text.contains("Tuesday."), "{text}");
+
+    assert_eq!(s.mark_differences(old, new).unwrap(), 2);
+    let d = s.get(new).unwrap();
+    assert_eq!(d.can_undo(), Some("Mark differences"));
+    let marks: Vec<_> = d.info.annotations.iter().filter(|a| a.author.as_deref() == Some("Compare")).collect();
+    assert_eq!(marks.len(), 2);
+    assert!(marks[0].contents.as_deref().unwrap().starts_with("Replaced: \"Monday.\""));
+}

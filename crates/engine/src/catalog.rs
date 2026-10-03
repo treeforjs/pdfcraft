@@ -413,8 +413,8 @@ pub static TOOL_GROUPS: &[ToolGroup] = &[
         icon: "git-compare",
         hue: PINK,
         badge: None,
-        availability: Planned("M12"),
-        sections: &[ToolSection { title: "Compare", items: &[item("Select files to compare", "git-compare", "compare.files", Planned("M12"))] }],
+        availability: Ready,
+        sections: &[ToolSection { title: "Compare", items: &[item("Select files to compare", "git-compare", "doc.compare", Ready)] }],
     },
     ToolGroup {
         id: "actions",

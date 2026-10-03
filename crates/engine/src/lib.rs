@@ -12,6 +12,7 @@
 
 pub mod catalog;
 pub mod commands;
+pub mod compare;
 pub mod export;
 pub mod js;
 pub mod links;

@@ -373,6 +373,7 @@ impl PrintCraftApp {
                 }
             }
             "form.detect" => self.detect_fields(),
+            "doc.compare" => self.dialog = Some(Dialog::CompareFiles),
             "form.field.properties" => {
                 if let Some((name, w)) = active.and_then(|i| self.views[i].prepare.selected.clone()) {
                     self.open_field_props(&name, w);

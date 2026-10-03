@@ -3787,6 +3787,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "printcraft-compare"
+version = "0.1.0"
+
+[[package]]
 name = "printcraft-content"
 version = "0.1.0"
 dependencies = [
@@ -3853,6 +3857,7 @@ dependencies = [
  "png 0.18.1",
  "printcraft-a11y",
  "printcraft-annot",
+ "printcraft-compare",
  "printcraft-cos",
  "printcraft-create",
  "printcraft-edit",
