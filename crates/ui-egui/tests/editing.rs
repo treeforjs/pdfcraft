@@ -591,3 +591,30 @@ fn copying_cutting_and_pasting_pages() {
     h.state_mut().execute("page.cut");
     assert_eq!(page_texts(h.state()).len(), 5);
 }
+
+#[test]
+fn editing_existing_text_in_place() {
+    let mut h = harness(1, |_| {});
+    assert!(h.state_mut().execute("edit.edit_text"));
+    h.run_steps(2);
+    // The line "Page 1" sits at (20, 150) on a 200 × 300 page, 24 pt.
+    let r = h.state().views[0].page_screen_rect(0).expect("on screen");
+    let at = egui::pos2(r.left() + 40.0 / 200.0 * r.width(), r.top() + (300.0 - 158.0) / 300.0 * r.height());
+    h.hover_at(at);
+    h.run_steps(1);
+    h.drag_at(at);
+    h.run_steps(1);
+    h.drop_at(at);
+    h.run_steps(3);
+    let ed = h.state().views[0].line_editor.clone().expect("the line opens for editing");
+    assert_eq!((ed.page, ed.line, ed.text.as_str()), (0, 0, "Page 1"));
+    h.state_mut().views[0].line_editor.as_mut().unwrap().text = "Chapter One".into();
+    h.run_steps(1);
+    h.key_press(egui::Key::Enter);
+    h.run_steps(4);
+    let s = h.state();
+    let doc = s.session.get(s.views[0].id).unwrap();
+    assert_eq!(doc.can_undo(), Some("Edit text"));
+    assert_eq!(doc.text_lines(0)[0].text, "Chapter One");
+    assert_eq!(texts_of(s, 0), ["Chapter One"], "the page shows it");
+}

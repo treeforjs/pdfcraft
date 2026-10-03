@@ -275,6 +275,43 @@ impl Automation {
             "doc_optimize" => self.doc_optimize(&a)?,
             "doc_initial_view" => self.doc_initial_view(&a)?,
             "doc_revisions" => self.doc_revisions(&a)?,
+            "text_lines" => {
+                let page = self.page(&a)?;
+                let doc = self.doc(&a)?;
+                let info = &doc.info.pages[page];
+                let r = |x: f32| (x as f64 * 100.0).round() / 100.0;
+                let lines: Vec<Value> = doc
+                    .text_lines(page)
+                    .iter()
+                    .enumerate()
+                    .map(|(i, l)| {
+                        let (u, v) = (info.user_to_view(l.rect[0] as f32, l.rect[1] as f32), info.user_to_view(l.rect[2] as f32, l.rect[3] as f32));
+                        json!({
+                            "line": i + 1,
+                            "text": l.text,
+                            "rect": [r(u[0].min(v[0])), r(u[1].min(v[1])), r(u[0].max(v[0])), r(u[1].max(v[1]))],
+                            "font": l.base_font,
+                            "size": (l.size * 100.0).round() / 100.0,
+                        })
+                    })
+                    .collect();
+                json!({ "page": page + 1, "count": lines.len(), "lines": lines })
+            }
+            "text_edit" => {
+                let page = self.page(&a)?;
+                let n = self.doc(&a)?.text_lines(page).len();
+                let line = a.int("line")?;
+                if line < 1 || line as usize > n {
+                    return Err(ToolError::InvalidArgs(format!("line {line} is out of range: page {} has {n} lines", page + 1)));
+                }
+                let text = a.str("text")?.to_owned();
+                let mut out = self.apply(&a, Edit::EditTextLine { page, line: line as usize - 1, text })?;
+                let after = self.doc(&a)?.text_lines(page);
+                if let Some(l) = after.get(line as usize - 1) {
+                    out["line"] = json!({ "text": l.text, "font": l.base_font });
+                }
+                out
+            }
             "doc_audit_space" => {
                 let rows: Vec<Value> = self
                     .doc(&a)?

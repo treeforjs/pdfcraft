@@ -226,3 +226,65 @@ fn added_text_and_images_are_page_content_that_stays_editable() {
     // Page marks ignore added items.
     assert!(marks_present(&doc).is_empty());
 }
+
+/// One page with Helvetica (WinAnsi) and a subset font that has only the glyphs it uses.
+fn text_page(content: &str) -> Document {
+    let objs: Vec<String> = vec![
+        "<< /Type /Catalog /Pages 2 0 R >>".into(),
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".into(),
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 600 800] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>".into(),
+        format!("<< /Length {} >>\nstream\n{content}\nendstream", content.len()),
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>".into(),
+        // Subset: glyphs for a (97) and b (98) only.
+        "<< /Type /Font /Subtype /TrueType /BaseFont /ABCDEF+Arial /FirstChar 97 /LastChar 99 /Widths [500 520 0] /Encoding /WinAnsiEncoding >>"
+            .into(),
+    ];
+    let mut out = b"%PDF-1.7\n".to_vec();
+    let mut offs = Vec::new();
+    for (i, o) in objs.iter().enumerate() {
+        offs.push(out.len());
+        out.extend_from_slice(format!("{} 0 obj\n{o}\nendobj\n", i + 1).as_bytes());
+    }
+    let x = out.len();
+    out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objs.len() + 1).as_bytes());
+    for o in offs {
+        out.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+    }
+    out.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{x}\n%%EOF\n", objs.len() + 1).as_bytes());
+    Document::open(Arc::new(out)).unwrap()
+}
+
+#[test]
+fn text_lines_are_found_and_replaced_in_place() {
+    let mut doc =
+        text_page("BT /F1 12 Tf 72 700 Td (Hello) Tj 40 0 Td [(wor) -20 (ld)] TJ 0 -20 Td (Second line) Tj ET BT /F2 10 Tf 72 600 Td (ab) Tj ET");
+    let lines = text::text_lines(&doc, 0).unwrap();
+    let texts: Vec<&str> = lines.iter().map(|l| l.text.as_str()).collect();
+    assert_eq!(texts, ["Hello world", "Second line", "ab"]);
+    assert!((lines[0].rect[0] - 72.0).abs() < 0.01 && lines[0].rect[1] < 700.0 && lines[0].rect[3] > 700.0, "{:?}", lines[0].rect);
+    assert!((lines[0].size - 12.0).abs() < 1e-9 && lines[0].base_font == "Helvetica");
+    let second = lines[1].rect;
+    // Same font: reused; the next line stays where it was.
+    let r = text::replace_line(&mut doc, 0, 0, "Goodbye, café").unwrap();
+    assert_eq!(r.substituted, None);
+    let doc = reopen(&doc);
+    let lines = text::text_lines(&doc, 0).unwrap();
+    assert_eq!(lines[0].text, "Goodbye, café");
+    assert_eq!(lines[1].text, "Second line");
+    assert_eq!(lines[1].rect, second);
+}
+
+#[test]
+fn missing_glyphs_substitute_helvetica_and_impossible_text_is_refused() {
+    let mut doc = text_page("BT /F2 10 Tf 72 600 Td (ab) Tj ET");
+    // "c" has no glyph in the subset: Helvetica takes over for this line.
+    let r = text::replace_line(&mut doc, 0, 0, "abc").unwrap();
+    assert_eq!(r.substituted.as_deref(), Some("Helvetica"));
+    let doc2 = reopen(&doc);
+    let lines = text::text_lines(&doc2, 0).unwrap();
+    assert_eq!((lines[0].text.as_str(), lines[0].base_font.as_str()), ("abc", "Helvetica"));
+    // Neither font can show Greek.
+    let mut doc = text_page("BT /F1 12 Tf 72 700 Td (Hello) Tj ET");
+    assert!(text::replace_line(&mut doc, 0, 0, "Ωmega").is_err());
+    assert!(text::replace_line(&mut doc, 0, 5, "x").is_err(), "no such line");
+}

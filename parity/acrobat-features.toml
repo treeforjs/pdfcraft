@@ -1779,11 +1779,11 @@ title = "Edit existing text in place"
 area = "C"
 tier = "P0"
 milestone = "M7"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["edit.edit_text"]
+tools = ["text_lines", "text_edit"]
+evidence = ["crates/edit/src/tests.rs::text_lines_are_found_and_replaced_in_place", "crates/ui-egui/tests/editing.rs::editing_existing_text_in_place", "crates/automation/tests/automation.rs::editing_existing_text_through_tools"]
+notes = "line by line: click a line of existing text and retype it in place (position, size and colour kept; later lines untouched); paragraph boxes and multi-line reflow are next"
 
 [[feature]]
 id = "edit.text-reflow"
@@ -1815,11 +1815,11 @@ title = "Reuse embedded fonts or substitute with a warning"
 area = "C"
 tier = "P0"
 milestone = "M7"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["edit.edit_text"]
+tools = ["text_edit"]
+evidence = ["crates/edit/src/tests.rs::missing_glyphs_substitute_helvetica_and_impossible_text_is_refused", "crates/fonts/src/pdf.rs::subset_fonts_only_encode_the_glyphs_they_have", "crates/fonts/src/pdf.rs::composite_fonts_use_to_unicode"]
+notes = "the line's font is reused when every character has a code and a glyph (ToUnicode, encodings, Differences; subset glyph checks); otherwise Helvetica (WinAnsi) is used and reported; text no font can show is refused"
 
 [[feature]]
 id = "edit.text-format-font"

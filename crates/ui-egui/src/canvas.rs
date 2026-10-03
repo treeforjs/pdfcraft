@@ -137,6 +137,10 @@ pub struct DocView {
     select_anchor: Option<usize>,
     /// An edit requested by the view (organize toolbar, keys), applied by the app this frame.
     pub pending_edit: Option<Edit>,
+    /// Edit text: the lines per page (with the document generation they were read at), and the
+    /// line being edited.
+    pub(crate) edit_lines: HashMap<usize, (u64, Vec<printcraft_engine::TextLine>)>,
+    pub line_editor: Option<crate::edit_text_ui::LineEditor>,
     /// Commenting state: selected comment, gestures, composer.
     pub comments: crate::comments::CommentView,
     /// Form filling state: the focused field.
@@ -236,6 +240,8 @@ impl DocView {
             selected: BTreeSet::new(),
             select_anchor: None,
             pending_edit: None,
+            edit_lines: HashMap::new(),
+            line_editor: None,
             pending_action: None,
             comments: Default::default(),
             forms: Default::default(),
@@ -959,6 +965,7 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
         | QuickTool::Fill(_)
         | QuickTool::Field(_)
         | QuickTool::AddText
+        | QuickTool::EditText
         | QuickTool::Stamp(_)
         | QuickTool::CustomStamp(_)
         | QuickTool::Link
@@ -1216,8 +1223,20 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
                 content_done |= o.done;
                 o.consumed || tool == QuickTool::AddText
             };
+            let on_edit_text = tool == QuickTool::EditText && can_modify && {
+                let generation = doc.edit_generation();
+                let lines = match view.edit_lines.get(&i) {
+                    Some((g, l)) if *g == generation => l.clone(),
+                    _ => {
+                        let l = doc.text_lines(i);
+                        view.edit_lines.insert(i, (generation, l.clone()));
+                        l
+                    }
+                };
+                crate::edit_text_ui::page_input(ui, &resp, &xf, i, info, &lines, view)
+            };
             let on_link = tool == QuickTool::Link && can_modify && crate::link_ui::page_input(ui, &resp, &xf, i, info, &doc_links, view);
-            let consumed = on_link || on_content || boxing || on_field || comments::page_input(ui, &resp, &pcx, view);
+            let consumed = on_edit_text || on_link || on_content || boxing || on_field || comments::page_input(ui, &resp, &pcx, view);
 
             // Text layer: find matches, selection, I-beam and drag-to-select.
             let to_screen = |g: [f32; 4]| xf.view_rect(g);
@@ -1480,6 +1499,9 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
     }
     find_bar(view, info.pages.len(), avail, ui, &t);
     if let Some(e) = comments::composer(ui.ctx(), view, info, prefs) {
+        view.pending_edit = Some(e);
+    }
+    if let Some(e) = crate::edit_text_ui::overlay(ui.ctx(), view) {
         view.pending_edit = Some(e);
     }
     if let Some(e) = crate::forms_ui::overlay(ui.ctx(), view, info, &form, today) {

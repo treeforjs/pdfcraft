@@ -31,6 +31,7 @@ pub use printcraft_forms::{
 };
 
 pub use printcraft_a11y as a11y;
+pub use printcraft_edit::TextLine;
 pub use printcraft_fonts::{ScriptOutline, script_outline};
 
 /// Fill & Sign: `text` in the script font as a typed signature, its left edge at `at` (user
@@ -180,6 +181,16 @@ impl Document {
     /// PDF Optimizer ▸ Audit space usage.
     pub fn audit_space(&self) -> Vec<optimize::SpaceUse> {
         self.editor.as_ref().map(|e| optimize::audit_space(&e.cos, self.bytes.len() as u64)).unwrap_or_default()
+    }
+
+    /// A counter that changes with every edit (for caches of derived data).
+    pub fn edit_generation(&self) -> u64 {
+        self.generation
+    }
+
+    /// Edit a PDF ▸ Edit text: the lines of existing text on `page` (0-based).
+    pub fn text_lines(&self, page: usize) -> Vec<printcraft_edit::TextLine> {
+        self.editor.as_ref().and_then(|e| printcraft_edit::text_lines(&e.cos, page).ok()).unwrap_or_default()
     }
 
     /// Add alternate text: the figures, in document order.
@@ -729,6 +740,13 @@ pub enum Edit {
     MarkDecorative {
         figure: u32,
     },
+    /// Edit a PDF ▸ Edit text: replace the text of line `line` (from `Document::text_lines`) on
+    /// `page`, in its own font when it can show it, else in Helvetica.
+    EditTextLine {
+        page: usize,
+        line: usize,
+        text: String,
+    },
     /// Order tabs manually: move a field one place earlier or later on its page.
     MoveInTabOrder {
         name: String,
@@ -895,6 +913,7 @@ impl Edit {
             Edit::SetInitialView(_) => "Change initial view".into(),
             Edit::SetAltText { .. } => "Set alternate text".into(),
             Edit::MarkDecorative { .. } => "Mark figure as decorative".into(),
+            Edit::EditTextLine { .. } => "Edit text".into(),
             Edit::AddHeaderFooter { replace: false, .. } => "Add header & footer".into(),
             Edit::AddHeaderFooter { .. } => "Update header & footer".into(),
             Edit::AddWatermark { replace: false, .. } => "Add watermark".into(),
@@ -1054,6 +1073,7 @@ fn check_permission(edit: &Edit, p: &printcraft_cos::Permissions) -> Result<(), 
         | Edit::SetInitialView(_)
         | Edit::SetAltText { .. }
         | Edit::MarkDecorative { .. }
+        | Edit::EditTextLine { .. }
         | Edit::Flatten { .. } => {
             if p.modify() {
                 Ok(())
@@ -1233,6 +1253,9 @@ fn run_edit(doc: &mut printcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -
         Edit::SetAltText { figure, alt } => {
             let r = printcraft_cos::ObjRef::new(*figure, doc.generation(*figure));
             a11y::set_alt(doc, r, alt.as_deref()).map_err(|e| EditError::Accessibility(e.to_string()))?;
+        }
+        Edit::EditTextLine { page, line, text } => {
+            printcraft_edit::replace_line(doc, *page, *line, text)?;
         }
         Edit::MarkDecorative { figure } => {
             let r = printcraft_cos::ObjRef::new(*figure, doc.generation(*figure));

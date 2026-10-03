@@ -540,6 +540,7 @@ impl Host for crate::PrintCraftApp {
                 crate::QuickTool::Crop => "crop".to_string(),
                 crate::QuickTool::Redact => "redact".to_string(),
                 crate::QuickTool::AddText => "add-text".to_string(),
+                crate::QuickTool::EditText => "edit-text".to_string(),
                 crate::QuickTool::Link => "link".to_string(),
                 crate::QuickTool::SignArea { certify: false } => "sign".to_string(),
                 crate::QuickTool::SignArea { certify: true } => "certify".to_string(),

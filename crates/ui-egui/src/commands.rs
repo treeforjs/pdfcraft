@@ -223,6 +223,10 @@ impl PrintCraftApp {
             "export.image" => self.dialog = Some(Dialog::Export(crate::export_ui::ExportKind::Image)),
             "export.text" => self.dialog = Some(Dialog::Export(crate::export_ui::ExportKind::Text)),
             "a11y.check" => self.start_accessibility_check(),
+            "edit.edit_text" => {
+                self.quick_tool = crate::QuickTool::EditText;
+                self.notify("Click a line of text to edit it");
+            }
             "edit.advanced_search" => {
                 if let Some(i) = self.active {
                     let f = self.views[i].find.get_or_insert_with(Default::default);

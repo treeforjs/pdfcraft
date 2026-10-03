@@ -636,6 +636,20 @@ trailer << /Root 1 0 R >>
 }
 
 #[test]
+fn editing_existing_text_through_tools() {
+    let dir = workdir("edit-text");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    let lines = ok(&mut a, "text_lines", json!({ "doc": doc, "page": 2 }));
+    assert_eq!((lines["count"].as_u64(), lines["lines"][0]["text"].as_str()), (Some(1), Some("Page 2")));
+    let r = ok(&mut a, "text_edit", json!({ "doc": doc, "page": 2, "line": 1, "text": "Section two" }));
+    assert_eq!(r["line"]["text"], "Section two");
+    assert_eq!(page_text(&mut a, doc)[1], "Section two");
+    assert!(matches!(a.call("text_edit", &json!({ "doc": doc, "page": 2, "line": 9, "text": "x" })), Err(ToolError::InvalidArgs(_))));
+    assert_eq!(ok(&mut a, "edit_undo", json!({ "doc": doc }))["undone"], "Edit text");
+}
+
+#[test]
 fn auditing_space_through_tools() {
     let dir = workdir("audit");
     let mut a = auto(&dir);

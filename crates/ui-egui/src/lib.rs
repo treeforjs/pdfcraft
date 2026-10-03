@@ -34,6 +34,7 @@ pub use link_ui::LinkDraft;
 pub use optimize_ui::{OptimizeDraft, OptimizeTab};
 pub use sign_ui::{DigitalIdEntry, SignDraft, SignStep};
 mod dialogs;
+mod edit_text_ui;
 mod editing;
 mod files;
 pub mod fill_sign;
@@ -112,6 +113,8 @@ pub enum QuickTool {
     Redact,
     /// Edit a PDF ▸ Add content ▸ Text.
     AddText,
+    /// Edit a PDF ▸ Edit text: click a line of existing text to edit it.
+    EditText,
     /// Add a stamp: click to place this stamp.
     Stamp(printcraft_engine::StampKind),
     /// A custom stamp from the library (its index).
@@ -937,6 +940,7 @@ impl PrintCraftApp {
                     "crop" => QuickTool::Crop,
                     "redact" => QuickTool::Redact,
                     "add-text" => QuickTool::AddText,
+                    "edit-text" => QuickTool::EditText,
                     "link" => QuickTool::Link,
                     "sign" => QuickTool::SignArea { certify: false },
                     "marquee-zoom" => QuickTool::MarqueeZoom,
