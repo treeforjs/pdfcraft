@@ -42,6 +42,17 @@ usage = "UI icon, embedded via crates/ui-egui/src/icon_data.rs"
 sha256 = "bc70fba645343be0760d1a87f9e0975a10ead2b8d95883314f4cea007376e79f"
 
 [[asset]]
+path = "assets/icons/align-justify.svg"
+title = "Lucide icon \"align-justify\""
+author = "Lucide Contributors (portions Cole Bemis, Feather)"
+source = "https://github.com/lucide-icons/lucide (npm lucide-static 1.49.0, icons/align-justify.svg)"
+licence = "ISC"
+licence_file = "assets/icons/LICENSE-lucide.txt"
+kind = "icon"
+usage = "UI icon, embedded via crates/ui-egui/src/icon_data.rs"
+sha256 = "df46328a73b53ae85f6837d170411b2616204c6cedc59bd8603112b5b38b3b3e"
+
+[[asset]]
 path = "assets/icons/align-right.svg"
 title = "Lucide icon \"align-right\""
 author = "Lucide Contributors (portions Cole Bemis, Feather)"

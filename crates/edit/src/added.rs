@@ -79,6 +79,8 @@ pub enum Align {
     Left,
     Center,
     Right,
+    /// Lines (but the last) stretched to the box's width.
+    Justify,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -246,13 +248,18 @@ fn draw(doc: &Document, c: &Content, view: [f64; 6]) -> Result<(Vec<u8>, Dict), 
             for (i, line) in lines(t).iter().enumerate() {
                 let w = t.family.width(line, t.size, t.bold);
                 let x = match t.align {
-                    Align::Left => r[0],
+                    Align::Left | Align::Justify => r[0],
                     Align::Center => r[0] + ((r[2] - r[0]) - w) / 2.0,
                     Align::Right => r[2] - w,
                 };
                 // Baseline: 0.8 em below the line top.
                 let y = r[3] - (i as f64 * 1.2 + 0.95) * t.size;
-                out.extend(format!("1 0 0 1 {} {} Tm ", n(x), n(y)).bytes());
+                // Justified: word spacing makes every line but the last fill the box.
+                let all = lines(t);
+                let spaces = line.matches(' ').count();
+                let tw =
+                    if t.align == Align::Justify && i + 1 < all.len() && spaces > 0 { ((r[2] - r[0]) - w).max(0.0) / spaces as f64 } else { 0.0 };
+                out.extend(format!("1 0 0 1 {} {} Tm {} Tw ", n(x), n(y), n(tw)).bytes());
                 out.extend(literal(&win_ansi(line)));
                 out.extend_from_slice(b" Tj\n");
             }
@@ -307,6 +314,7 @@ fn params(c: &Content) -> Dict {
                     Align::Left => 0,
                     Align::Center => 1,
                     Align::Right => 2,
+                    Align::Justify => 3,
                 }),
             );
             d.set(b"Rect".to_vec(), arr(&text_rect(t)));
@@ -350,6 +358,7 @@ fn parse(doc: &Document, d: &Dict) -> Option<Content> {
                 align: match d.int(b"Align") {
                     Some(1) => Align::Center,
                     Some(2) => Align::Right,
+                    Some(3) => Align::Justify,
                     _ => Align::Left,
                 },
             }))

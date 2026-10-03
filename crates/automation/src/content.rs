@@ -57,6 +57,7 @@ fn style(a: &Args, t: &mut AddedText) -> Result<()> {
             "left" => TextAlign::Left,
             "center" | "centre" => TextAlign::Center,
             "right" => TextAlign::Right,
+            "justify" => TextAlign::Justify,
             other => return Err(bad(format!("unknown align {other:?}"))),
         };
     }

@@ -390,7 +390,14 @@ impl Automation {
                 }
                 let block = self.doc(&a)?.text_blocks(page)[k as usize - 1].clone();
                 let text = a.opt_str("text")?.map(str::to_owned).unwrap_or(block.text);
-                let mut style = printcraft_engine::BlockStyle { size: a.opt_num("size")?, ..Default::default() };
+                let mut style = printcraft_engine::BlockStyle {
+                    size: a.opt_num("size")?,
+                    underline: a.opt_bool("underline")?,
+                    line_spacing: a.opt_num("line_spacing")?,
+                    char_spacing: a.opt_num("char_spacing")?,
+                    scale: a.opt_num("scale")?,
+                    ..Default::default()
+                };
                 if let Some(f) = a.opt_str("font")? {
                     let family = match f {
                         "helvetica" => printcraft_engine::FontFamily::Helvetica,
@@ -408,6 +415,7 @@ impl Automation {
                         "left" => printcraft_engine::TextAlign::Left,
                         "center" => printcraft_engine::TextAlign::Center,
                         "right" => printcraft_engine::TextAlign::Right,
+                        "justify" => printcraft_engine::TextAlign::Justify,
                         other => return Err(ToolError::InvalidArgs(format!("unknown align {other:?}"))),
                     });
                 }

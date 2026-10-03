@@ -424,6 +424,7 @@ fn paragraphs_take_new_formatting() {
         size: Some(12.0),
         color: Some([1.0, 0.0, 0.0]),
         align: Some(added::Align::Center),
+        ..Default::default()
     };
     text::rewrite_block(&mut doc, 0, 0, None, &style).unwrap();
     let doc = reopen(&doc);
@@ -446,4 +447,35 @@ fn paragraphs_take_new_formatting() {
     for l in &lines {
         assert!((l.rect[2] - right).abs() < 1.0, "{:?} ends at {} not {right}", l.text, l.rect[2]);
     }
+}
+
+#[test]
+fn justify_underline_and_spacing() {
+    let src = "BT /F1 10 Tf 12 TL 100 700 Td (One two three four five six seven) Tj T* (eight nine ten eleven twelve) Tj T* (end) Tj ET";
+    // Justified: every line but the last reaches the right edge.
+    let mut doc = text_page(src);
+    let right = text::text_blocks(&doc, 0).unwrap()[0].rect[2];
+    text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { align: Some(added::Align::Justify), ..Default::default() }).unwrap();
+    let lines = text::text_lines(&doc, 0).unwrap();
+    for l in &lines[..lines.len() - 1] {
+        assert!((l.rect[2] - right).abs() < 1.0, "{:?} ends at {} not {right}", l.text, l.rect[2]);
+    }
+    // Double line spacing, underlined.
+    let mut doc = text_page(src);
+    let style = text::BlockStyle { line_spacing: Some(2.0), underline: Some(true), ..Default::default() };
+    text::rewrite_block(&mut doc, 0, 0, None, &style).unwrap();
+    let lines = text::text_lines(&doc, 0).unwrap();
+    assert!((lines[0].origin_baseline() - lines[1].origin_baseline() - 20.0).abs() < 0.01);
+    let content = String::from_utf8_lossy(&page_content_bytes(&doc, 0)).into_owned();
+    assert!(content.contains(" l\nS\n") || content.contains(" l S"), "{content}");
+    // Character spacing widens, horizontal scale narrows.
+    let mut doc = text_page("BT /F1 10 Tf 100 700 Td (Wide text) Tj ET");
+    let w0 = text::text_lines(&doc, 0).unwrap()[0].rect;
+    text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { char_spacing: Some(2.0), ..Default::default() }).unwrap();
+    let w1 = text::text_lines(&doc, 0).unwrap()[0].rect;
+    assert!((w1[2] - w1[0]) - (w0[2] - w0[0]) > 15.0, "{w0:?} → {w1:?}");
+    let mut doc = text_page("BT /F1 10 Tf 100 700 Td (Wide text) Tj ET");
+    text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { scale: Some(50.0), ..Default::default() }).unwrap();
+    let w2 = text::text_lines(&doc, 0).unwrap()[0].rect;
+    assert!(((w2[2] - w2[0]) - (w0[2] - w0[0]) / 2.0).abs() < 1.0, "{w0:?} → {w2:?}");
 }

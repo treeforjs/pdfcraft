@@ -1839,11 +1839,11 @@ title = "Bold, italic, underline"
 area = "C"
 tier = "P1"
 milestone = "M7"
-status = "partial"
-commands = ["edit.edit_text", "edit.text"]
+status = "shipped"
+commands = ["edit.edit_text"]
 tools = ["text_edit"]
-evidence = ["crates/edit/src/tests.rs::paragraphs_take_new_formatting", "crates/ui-egui/tests/editing.rs::the_format_panel_restyles_the_paragraph_being_edited", "crates/automation/tests/automation.rs::editing_existing_text_through_tools"]
-notes = "bold and italic through the standard font families; underline is not done yet"
+evidence = ["crates/edit/src/tests.rs::justify_underline_and_spacing", "crates/edit/src/tests.rs::paragraphs_take_new_formatting", "crates/ui-egui/tests/editing.rs::the_format_panel_restyles_the_paragraph_being_edited"]
+notes = "bold and italic through the standard families; underline drawn under each line in the text colour"
 
 [[feature]]
 id = "edit.text-super-subscript"
@@ -1863,11 +1863,11 @@ title = "Paragraph alignment (left, centre, right, justify)"
 area = "C"
 tier = "P0"
 milestone = "M7"
-status = "partial"
+status = "shipped"
 commands = ["edit.edit_text", "edit.text"]
-tools = ["text_edit"]
-evidence = ["crates/edit/src/tests.rs::paragraphs_take_new_formatting", "crates/ui-egui/tests/editing.rs::the_format_panel_restyles_the_paragraph_being_edited", "crates/automation/tests/automation.rs::editing_existing_text_through_tools"]
-notes = "left, centre, right for existing paragraphs (per wrapped line) and added text; justify is not done yet"
+tools = ["text_edit", "content_update"]
+evidence = ["crates/edit/src/tests.rs::justify_underline_and_spacing", "crates/edit/src/tests.rs::paragraphs_take_new_formatting", "crates/ui-egui/tests/editing.rs::the_format_panel_restyles_the_paragraph_being_edited"]
+notes = "left, centre, right and justify (word spacing per line, last line left) for existing paragraphs and added text"
 
 [[feature]]
 id = "edit.line-paragraph-spacing"
@@ -1875,11 +1875,11 @@ title = "Line and paragraph spacing"
 area = "C"
 tier = "P1"
 milestone = "M7"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["edit.edit_text"]
+tools = ["text_edit"]
+evidence = ["crates/edit/src/tests.rs::justify_underline_and_spacing", "crates/edit/src/tests.rs::paragraphs_take_new_formatting", "crates/ui-egui/tests/editing.rs::the_format_panel_restyles_the_paragraph_being_edited"]
+notes = "line spacing (1, 1.15, 1.5, 2 × size or any multiple); space between paragraphs is not adjustable yet"
 
 [[feature]]
 id = "edit.char-spacing-scale"
@@ -1887,11 +1887,11 @@ title = "Character spacing and horizontal scaling"
 area = "C"
 tier = "P1"
 milestone = "M7"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["edit.edit_text"]
+tools = ["text_edit"]
+evidence = ["crates/edit/src/tests.rs::justify_underline_and_spacing", "crates/edit/src/tests.rs::paragraphs_take_new_formatting", "crates/ui-egui/tests/editing.rs::the_format_panel_restyles_the_paragraph_being_edited"]
+notes = "character spacing in points and horizontal scaling in percent for a paragraph (Tc, Tz), rewrapped"
 
 [[feature]]
 id = "edit.lists"

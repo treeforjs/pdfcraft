@@ -24,6 +24,50 @@ pub struct LineEditor {
     /// The Format text panel's values, and what the paragraph had (to send only changes).
     pub look: printcraft_engine::AddedText,
     look0: printcraft_engine::AddedText,
+    /// Underline, line spacing (× size; 0 = the paragraph's own), character spacing (pt) and
+    /// horizontal scale (%), and what they were.
+    pub extras: Extras,
+    extras0: Extras,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Extras {
+    pub underline: bool,
+    pub line_spacing: f64,
+    pub char_spacing: f64,
+    pub scale: f64,
+}
+
+impl Default for Extras {
+    fn default() -> Self {
+        Extras { underline: false, line_spacing: 0.0, char_spacing: 0.0, scale: 100.0 }
+    }
+}
+
+/// Underline, line spacing, character spacing and horizontal scale for the paragraph being
+/// edited (under Format text). Returns `true` when something changed.
+pub(crate) fn extras_panel(ui: &mut egui::Ui, e: &mut Extras) -> bool {
+    let before = *e;
+    ui.horizontal(|ui| {
+        if crate::icons::button(ui, "underline", 26.0, e.underline, "Underline").clicked() {
+            e.underline = !e.underline;
+        }
+        let label = |v: f64| if v == 0.0 { "Line spacing".to_string() } else { format!("{v:.2}×") };
+        egui::ComboBox::from_id_salt("line-spacing").selected_text(label(e.line_spacing)).width(110.0).show_ui(ui, |ui| {
+            for v in [1.0, 1.15, 1.5, 2.0] {
+                ui.selectable_value(&mut e.line_spacing, v, label(v));
+            }
+        });
+    });
+    ui.horizontal(|ui| {
+        let l = ui.label("Character spacing");
+        ui.add(egui::DragValue::new(&mut e.char_spacing).range(-5.0..=50.0).speed(0.1).suffix(" pt")).labelled_by(l.id);
+    });
+    ui.horizontal(|ui| {
+        let l = ui.label("Horizontal scale");
+        ui.add(egui::DragValue::new(&mut e.scale).range(10.0..=400.0).speed(1.0).suffix(" %")).labelled_by(l.id);
+    });
+    *e != before
 }
 
 impl LineEditor {
@@ -35,12 +79,18 @@ impl LineEditor {
             size: (l.size != o.size).then_some(l.size),
             color: (l.color != o.color).then_some(l.color),
             align: (l.align != o.align).then_some(l.align),
+            underline: (self.extras.underline != self.extras0.underline).then_some(self.extras.underline),
+            line_spacing: (self.extras.line_spacing != self.extras0.line_spacing && self.extras.line_spacing > 0.0)
+                .then_some(self.extras.line_spacing),
+            char_spacing: (self.extras.char_spacing != self.extras0.char_spacing).then_some(self.extras.char_spacing),
+            scale: (self.extras.scale != self.extras0.scale).then_some(self.extras.scale),
         }
     }
 
     /// After applying formatting: the paragraph now has it.
     pub fn applied(&mut self) {
         self.look0 = self.look.clone();
+        self.extras0 = self.extras;
         self.original = self.text.clone();
         self.focus = true;
     }
@@ -243,6 +293,8 @@ pub(crate) fn page_input(
             focus: true,
             look: look_of(l),
             look0: look_of(l),
+            extras: Extras::default(),
+            extras0: Extras::default(),
         });
     }
     true

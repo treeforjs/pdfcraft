@@ -349,6 +349,7 @@ pub(crate) fn format_panel(ui: &mut egui::Ui, t: &Tokens, style: &AddedText) -> 
             (TextAlign::Left, "align-left", "Align left"),
             (TextAlign::Center, "align-center", "Centre"),
             (TextAlign::Right, "align-right", "Align right"),
+            (TextAlign::Justify, "align-justify", "Justify"),
         ] {
             if crate::icons::button(ui, icon, 26.0, s.align == a, tip).clicked() {
                 s.align = a;

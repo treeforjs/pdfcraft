@@ -277,9 +277,14 @@ fn format_section(app: &mut PrintCraftApp, ui: &mut egui::Ui, t: &Tokens) {
     if let Some((i, _)) = app.active_ids()
         && let Some(ed) = app.views[i].line_editor.clone()
     {
+        let mut ed = ed;
+        let mut changed = false;
         if let Some(look) = crate::content_ui::format_panel(ui, t, &ed.look) {
-            let mut ed = ed;
             ed.look = look;
+            changed = true;
+        }
+        changed |= crate::edit_text_ui::extras_panel(ui, &mut ed.extras);
+        if changed {
             let edit = printcraft_engine::Edit::EditTextBlock { page: ed.page, block: ed.block, text: ed.text.clone(), style: ed.style() };
             if app.apply_edit(edit) {
                 ed.applied();

@@ -689,4 +689,11 @@ fn the_format_panel_restyles_the_paragraph_being_edited() {
     assert_eq!(doc.can_undo(), Some("Edit text"));
     assert_eq!(doc.text_blocks(0)[0].base_font, "Helvetica-Bold");
     assert!(s.views[0].line_editor.is_some(), "still editing");
+    // Underline: another step, the text keeps its bold.
+    h.get_by_label("Underline").click();
+    h.run_steps(4);
+    let s = h.state();
+    let doc = s.session.get(s.views[0].id).unwrap();
+    assert_eq!(doc.text_blocks(0)[0].base_font, "Helvetica-Bold");
+    assert!(s.views[0].line_editor.as_ref().is_some_and(|e| e.extras.underline));
 }

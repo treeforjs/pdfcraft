@@ -566,6 +566,13 @@ pub struct BlockStyle {
     /// Fill colour (RGB 0–1).
     pub color: Option<[f64; 3]>,
     pub align: Option<crate::added::Align>,
+    /// Draw a line under each line of text.
+    pub underline: Option<bool>,
+    /// Line spacing as a multiple of the font size (1.2 is ordinary).
+    pub line_spacing: Option<f64>,
+    /// Character spacing (points) and horizontal scaling (percent).
+    pub char_spacing: Option<f64>,
+    pub scale: Option<f64>,
 }
 
 /// Rewrite paragraph `block` with new text (or its own) and formatting, rewrapped to its width.
@@ -587,6 +594,15 @@ pub fn rewrite_block(doc: &mut Document, page: usize, block: usize, text: Option
     let k = o.k.max(1e-6);
     // The size in text space: points ÷ the text-to-user scale.
     let size = style.size.map_or(old_size, |pt| (pt / k).max(0.1));
+    // Spacing and scaling (text state), with the chosen values.
+    let mut ts_state = o.state.clone();
+    if let Some(c) = style.char_spacing {
+        ts_state.char_spacing = c / k;
+    }
+    if let Some(sc) = style.scale {
+        ts_state.scale = (sc / 100.0).clamp(0.1, 10.0);
+    }
+    let o_state = ts_state.clone();
     let metrics = fonts_res.get(font_name.as_bytes()).and_then(|f| doc.resolve(f).as_dict().cloned()).map(|d| Metrics::from_dict(doc, &d));
     let reuse = style.family.is_none() && metrics.as_ref().is_some_and(|m| m.encode(&text).is_some());
     // The standard font used when the paragraph's own can't be (chosen, or substituted).
@@ -611,13 +627,13 @@ pub fn rewrite_block(doc: &mut Document, page: usize, block: usize, text: Option
                 .map(|bytes| {
                     m.codes(&bytes)
                         .iter()
-                        .map(|(c, l)| m.width(*c) * size + o.state.char_spacing + if m.is_space(*c, *l) { o.state.word_spacing } else { 0.0 })
+                        .map(|(c, l)| m.width(*c) * size + o_state.char_spacing + if m.is_space(*c, *l) { o_state.word_spacing } else { 0.0 })
                         .sum::<f64>()
                 })
                 .unwrap_or(0.0),
-            _ => std_width(s, size),
+            _ => std_width(s, size) + s.chars().count() as f64 * o_state.char_spacing,
         };
-        t * o.state.scale * k
+        t * o_state.scale * k
     };
     let wrapped = wrap(&text, width + 0.5, advance);
     let mut substituted = None;
@@ -645,10 +661,15 @@ pub fn rewrite_block(doc: &mut Document, page: usize, block: usize, text: Option
         (name, Box::new(|s: &str| Some(printcraft_fonts::win_ansi(s))))
     };
     // Line spacing in text space: the paragraph's own (scaled with the size), or 1.2 × the size.
-    let lead = if members.len() > 1 { (members[0].origin.baseline - members[1].origin.baseline) / k * size / old_size } else { size * 1.2 };
+    let lead = match style.line_spacing {
+        Some(m) => size * m.clamp(0.5, 5.0),
+        None if members.len() > 1 => (members[0].origin.baseline - members[1].origin.baseline) / k * size / old_size,
+        None => size * 1.2,
+    };
     let n = printcraft_content::num;
     let mut block_ops = vec![Op::new("BT", vec![])];
-    let mut state = o.state.clone();
+    let mut state = o_state.clone();
+    state.word_spacing = 0.0;
     state.font = Some((show_font, size));
     if let Some([r, g, bl]) = style.color {
         state.fill = vec![Op::new("rg", vec![n(r), n(g), n(bl)])];
@@ -664,17 +685,56 @@ pub fn rewrite_block(doc: &mut Document, page: usize, block: usize, text: Option
             _ => 0.0,
         }
     };
+    // Justify: word spacing (single-byte code 32 only) so each line but the last fills the width.
+    let single_byte = !reuse || metrics.as_ref().is_some_and(|m| !m.composite);
+    let justify = style.align == Some(crate::added::Align::Justify) && single_byte;
     let mut x = 0.0;
+    let mut tw_set = 0.0;
+    let mut underlines: Vec<(f64, f64, f64)> = Vec::new(); // (x0, x1, y) in text space
     for (i, line) in wrapped.iter().enumerate() {
         let dx = offset(line);
         if i > 0 || dx != 0.0 {
             block_ops.push(Op::new("Td", vec![n(dx - x), n(if i > 0 { -lead } else { 0.0 })]));
         }
         x = dx;
+        let spaces = line.matches(' ').count();
+        let tw =
+            if justify && i + 1 < wrapped.len() && spaces > 0 { (width - advance(line)).max(0.0) / k / o_state.scale / spaces as f64 } else { 0.0 };
+        if tw != tw_set {
+            block_ops.push(Op::new("Tw", vec![n(tw)]));
+            tw_set = tw;
+        }
         let bytes = encode(line).ok_or_else(|| EditError::Invalid(format!("\"{line}\" can't be shown")))?;
         block_ops.push(Op::new("Tj", vec![Object::String(PdfString::literal(bytes))]));
+        let w = (advance(line) + tw * spaces as f64 * o_state.scale * k) / k;
+        underlines.push((dx, dx + w, -(i as f64) * lead - size * 0.12));
     }
     block_ops.push(Op::new("ET", vec![]));
+    if style.underline == Some(true) {
+        // In text space (the paragraph's text matrix), in its fill colour.
+        let colour: Vec<Op> = state
+            .fill
+            .iter()
+            .map(|f| match f.op.as_slice() {
+                b"g" => Op::new("G", f.operands.clone()),
+                b"rg" => Op::new("RG", f.operands.clone()),
+                b"k" => Op::new("K", f.operands.clone()),
+                b"cs" => Op::new("CS", f.operands.clone()),
+                b"sc" => Op::new("SC", f.operands.clone()),
+                _ => Op::new("SCN", f.operands.clone()),
+            })
+            .collect();
+        block_ops.push(Op::new("q", vec![]));
+        block_ops.push(Op::new("cm", o.tm.iter().map(|v| n(*v)).collect()));
+        block_ops.extend(colour);
+        block_ops.push(Op::new("w", vec![n(size * 0.06)]));
+        for (x0, x1, y) in underlines {
+            block_ops.push(Op::new("m", vec![n(x0), n(y)]));
+            block_ops.push(Op::new("l", vec![n(x1), n(y)]));
+        }
+        block_ops.push(Op::new("S", vec![]));
+        block_ops.push(Op::new("Q", vec![]));
+    }
     // What the text after the paragraph expects: the state at its BT.
     block_ops.extend(o.bt_state.ops().into_iter().filter(|op| !op.is("Tf") || o.bt_state.font.is_some()));
     let drop: std::collections::HashSet<usize> = members.iter().flat_map(|l| l.ops.iter().copied()).collect();
