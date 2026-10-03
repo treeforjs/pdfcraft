@@ -17,10 +17,10 @@ The unit is **wall-clock hours of agent work** (Claude Opus 5.5 coding continuou
 | Tier | Features | Shipped | Partial | Shipped % | Weighted % (partial = ½) |
 |---|---|---|---|---|---|
 | P0 (must-have for 1.0) | 250 | 221 | 25 | 88.4% | 93.4% |
-| P1 | 325 | 155 | 24 | 47.7% | 51.4% |
+| P1 | 325 | 168 | 33 | 51.7% | 56.8% |
 | P2 | 185 | 9 | 2 | 4.9% | 5.4% |
 | P3 | 43 | 0 | 0 | 0% | 0% |
-| **All** | **803** | **385** | **51** | **47.9%** | **51.1%** |
+| **All** | **803** | **398** | **60** | **49.6%** | **53.3%** |
 
 **Effort-weighted parity: ≈ 35%.** Feature counts overstate progress: the remaining features include the hardest ones (in-place text editing and reflow, our own renderer and font engine, OCR, a JavaScript engine, XFA, PDF/A/X/UA preflight, Office export). Weighting each milestone by its estimated size gives about a third of the total work done.
 
@@ -76,6 +76,7 @@ M0 → M1 → M2 → M3 → M4 must happen in order. After M4, M5–M12 can run 
 
 Newest first. One line per session: the date, what moved, and the new overall percentage.
 
+- **2026-10-03 (session 12, later):** Forms (merge data into a spreadsheet, Actions tab, automatic field detection and naming), Compare files (new `compare` crate: text and visual differences, panel, report, comments), Action Wizard (built-in and custom actions over files), PDF/A verify and Save as PDF/A (new `preflight` crate), Export to Word/HTML/RTF (new `export` crate). P0 88%, P1 52%; 803 features 49.6% shipped (53.3% weighted). ≈ 39%.
 - **2026-10-03 (session 12):** Edit text and images in place (lines, paragraphs, formatting, existing images), Scan & OCR (new `ocr` crate on ocrs with CC-BY-SA models fetched by `cargo xtask models`: searchable image, page ranges, multiple files), Acrobat JavaScript (new `js` crate on boa: custom field scripts in Acrobat's event order, button scripts, document JavaScripts, console, Enable JavaScript preference, sandbox limits). 110+ tools; P0 88%, P1 48%; 803 features 47.9% shipped (51.1% weighted). ≈ 37%.
 - **2026-10-02 (session 11, later):** Sign with macOS Keychain identities, Add alternate text, Advanced Search panel, space audit and link clean-up in the Optimizer, hybrid-reference files, signed documents protected from rewrites, redaction cleans the tags, custom stamps, image fields, Combine files with page choice. 97 tools; P0 82%, P1 45%. ≈ 30%.
 - **2026-10-02 (session 11):** Accessibility Checker (new `a11y` crate: all 32 rules, report, fixes, options dialog and results panel), MCP resources for page images and text, revisions (list, open an earlier one), export all images, fit visible, form Preview and locked fields, document title in the window; plus attachment comments, eraser, date picker, duplicate/align/distribute fields. 91 tools; P0 80%, P1 43%. ≈ 29%.
