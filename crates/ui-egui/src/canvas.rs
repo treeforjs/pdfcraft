@@ -141,6 +141,9 @@ pub struct DocView {
     /// line being edited.
     pub(crate) edit_lines: HashMap<usize, (u64, Vec<printcraft_engine::TextBlock>)>,
     pub line_editor: Option<crate::edit_text_ui::LineEditor>,
+    /// Edit text & images: the images per page (by document generation), and the selected one.
+    pub(crate) edit_images: HashMap<usize, (u64, Vec<printcraft_engine::PageImage>)>,
+    pub image_selection: Option<crate::edit_text_ui::ImageSelection>,
     /// Commenting state: selected comment, gestures, composer.
     pub comments: crate::comments::CommentView,
     /// Form filling state: the focused field.
@@ -242,6 +245,8 @@ impl DocView {
             pending_edit: None,
             edit_lines: HashMap::new(),
             line_editor: None,
+            edit_images: HashMap::new(),
+            image_selection: None,
             pending_action: None,
             comments: Default::default(),
             forms: Default::default(),
@@ -987,6 +992,7 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
     let today = app.session.today();
     let by_line = app.session.stamp_by_line(&author);
     let mut stamp_placed = false;
+    let mut image_action: Option<crate::edit_text_ui::ImageAction> = None;
     let custom_stamp = match app.quick_tool {
         QuickTool::CustomStamp(i) => app.custom_stamps.get(i).cloned(),
         _ => None,
@@ -1233,7 +1239,17 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
                         l
                     }
                 };
-                crate::edit_text_ui::page_input(ui, &resp, &xf, i, info, &lines, view)
+                let images = match view.edit_images.get(&i) {
+                    Some((g, l)) if *g == generation => l.clone(),
+                    _ => {
+                        let l = doc.page_images(i);
+                        view.edit_images.insert(i, (generation, l.clone()));
+                        l
+                    }
+                };
+                // Images first (they can sit under text boxes' corners); then paragraphs.
+                crate::edit_text_ui::image_input(ui, &resp, &xf, i, info, &images, view, &mut image_action)
+                    || crate::edit_text_ui::page_input(ui, &resp, &xf, i, info, &lines, view)
             };
             let on_link = tool == QuickTool::Link && can_modify && crate::link_ui::page_input(ui, &resp, &xf, i, info, &doc_links, view);
             let consumed = on_edit_text || on_link || on_content || boxing || on_field || comments::page_input(ui, &resp, &pcx, view);
@@ -1622,6 +1638,11 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
         } else {
             app.redact_prefs.mark(page, quads, &author)
         });
+    }
+    match image_action {
+        Some(crate::edit_text_ui::ImageAction::Replace(page, index)) => app.replace_page_image_dialog(page, index),
+        Some(crate::edit_text_ui::ImageAction::Save(page, index)) => app.save_page_image(page, index),
+        None => {}
     }
     if open_signature || open_initials {
         app.signature_draft = crate::fill_sign::SigDraft::new(open_initials, &app.comment_prefs.author);

@@ -342,3 +342,75 @@ fn page_content_bytes(doc: &Document, page: usize) -> Vec<u8> {
         _ => Vec::new(),
     }
 }
+
+/// A page drawing image XObject /Im0 at 100,100 size 200 × 100 (pixels 4 × 2).
+fn image_page() -> Document {
+    let content = "q 200 0 0 100 100 100 cm /Im0 Do Q BT /F1 12 Tf 72 700 Td (Caption) Tj ET";
+    let objs: Vec<String> = vec![
+        "<< /Type /Catalog /Pages 2 0 R >>".into(),
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".into(),
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 600 800] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> /XObject << /Im0 6 0 R >> >> >>".into(),
+        format!("<< /Length {} >>\nstream\n{content}\nendstream", content.len()),
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".into(),
+        "<< /Type /XObject /Subtype /Image /Width 4 /Height 2 /ColorSpace /DeviceGray /BitsPerComponent 8 /Length 8 >>\nstream\n\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\nendstream".into(),
+    ];
+    let mut out = b"%PDF-1.7\n".to_vec();
+    let mut offs = Vec::new();
+    for (i, o) in objs.iter().enumerate() {
+        offs.push(out.len());
+        out.extend_from_slice(format!("{} 0 obj\n{o}\nendobj\n", i + 1).as_bytes());
+    }
+    let x = out.len();
+    out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objs.len() + 1).as_bytes());
+    for o in offs {
+        out.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+    }
+    out.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{x}\n%%EOF\n", objs.len() + 1).as_bytes());
+    Document::open(Arc::new(out)).unwrap()
+}
+
+fn close(a: [f64; 4], b: [f64; 4]) -> bool {
+    a.iter().zip(b).all(|(x, y)| (x - y).abs() < 1e-6)
+}
+
+#[test]
+fn page_images_move_turn_replace_and_delete() {
+    let mut doc = image_page();
+    let imgs = images::page_images(&doc, 0).unwrap();
+    assert_eq!(imgs.len(), 1);
+    assert!(close(imgs[0].rect, [100.0, 100.0, 300.0, 200.0]), "{:?}", imgs[0].rect);
+    assert_eq!((imgs[0].width, imgs[0].height, imgs[0].name.as_str()), (4, 2, "Im0"));
+    // Move and resize.
+    let t = images::rect_to_rect(imgs[0].rect, [50.0, 400.0, 150.0, 450.0]);
+    images::change_image(&mut doc, 0, 0, &images::ImageChange::Transform(t)).unwrap();
+    let doc = reopen(&doc);
+    let r = images::page_images(&doc, 0).unwrap()[0].rect;
+    assert!(close(r, [50.0, 400.0, 150.0, 450.0]), "{r:?}");
+    // A quarter turn about the centre: 100 × 50 becomes 50 × 100 around (100, 425).
+    let mut doc = doc;
+    let t = images::turn_about_centre(r, 1, false, false);
+    images::change_image(&mut doc, 0, 0, &images::ImageChange::Transform(t)).unwrap();
+    let r = images::page_images(&doc, 0).unwrap()[0].rect;
+    assert!(close(r, [75.0, 375.0, 125.0, 475.0]), "{r:?}");
+    // The text after it is untouched.
+    assert_eq!(text::text_lines(&doc, 0).unwrap()[0].text, "Caption");
+    // Replace with another image object, in the same place.
+    let mut d = printcraft_cos::Dict::new();
+    for (k, v) in [
+        (&b"Type"[..], printcraft_cos::Object::name("XObject")),
+        (b"Subtype", printcraft_cos::Object::name("Image")),
+        (b"Width", printcraft_cos::Object::Int(1)),
+        (b"Height", printcraft_cos::Object::Int(1)),
+    ] {
+        d.set(k.to_vec(), v);
+    }
+    let other = doc.add(printcraft_cos::Object::Stream(printcraft_cos::Stream::from_raw(d, vec![0])));
+    images::change_image(&mut doc, 0, 0, &images::ImageChange::Replace(other)).unwrap();
+    let imgs = images::page_images(&doc, 0).unwrap();
+    assert_eq!((imgs[0].object, imgs[0].width), (Some(other), 1));
+    assert!(close(imgs[0].rect, r));
+    // Delete.
+    images::change_image(&mut doc, 0, 0, &images::ImageChange::Delete).unwrap();
+    assert!(images::page_images(&doc, 0).unwrap().is_empty());
+    assert!(images::change_image(&mut doc, 0, 0, &images::ImageChange::Delete).is_err());
+}

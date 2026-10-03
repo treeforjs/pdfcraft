@@ -297,6 +297,67 @@ impl Automation {
                     .collect();
                 json!({ "page": page + 1, "count": lines.len(), "lines": lines })
             }
+            "page_images" => {
+                let page = self.page(&a)?;
+                let doc = self.doc(&a)?;
+                let info = &doc.info.pages[page];
+                let r = |x: f32| (x as f64 * 100.0).round() / 100.0;
+                let list: Vec<Value> = doc
+                    .page_images(page)
+                    .iter()
+                    .enumerate()
+                    .map(|(i, im)| {
+                        let (u, v) = (info.user_to_view(im.rect[0] as f32, im.rect[1] as f32), info.user_to_view(im.rect[2] as f32, im.rect[3] as f32));
+                        json!({ "image": i + 1, "rect": [r(u[0].min(v[0])), r(u[1].min(v[1])), r(u[0].max(v[0])), r(u[1].max(v[1]))], "pixels": [im.width, im.height], "name": im.name })
+                    })
+                    .collect();
+                json!({ "page": page + 1, "count": list.len(), "images": list })
+            }
+            "image_edit" | "image_save" => {
+                let page = self.page(&a)?;
+                let n = self.doc(&a)?.page_images(page).len();
+                let k = a.int("image")?;
+                if k < 1 || k as usize > n {
+                    return Err(ToolError::InvalidArgs(format!("image {k} is out of range: page {} has {n} images", page + 1)));
+                }
+                let index = k as usize - 1;
+                if name == "image_save" {
+                    let (ext, bytes) = self.doc(&a)?.page_image_file(page, index).map_err(failed)?;
+                    let mut path = self.resolve(a.str("path")?, true)?;
+                    if path.extension().is_none() {
+                        path.set_extension(ext);
+                    }
+                    write_atomic(&path, &bytes)?;
+                    json!({ "path": path.to_string_lossy(), "format": ext, "bytes": bytes.len() })
+                } else {
+                    use printcraft_engine::ImageEdit;
+                    let change = match a.str("action")? {
+                        "move" => {
+                            let r: Vec<f64> =
+                                a.get("rect").and_then(Value::as_array).map(|x| x.iter().filter_map(Value::as_f64).collect()).unwrap_or_default();
+                            let r = <[f64; 4]>::try_from(r).map_err(|_| ToolError::InvalidArgs("move needs rect: 4 numbers".into()))?;
+                            // Top-left-origin points → user space.
+                            let info = &self.doc(&a)?.info.pages[page];
+                            let (u0, u1) = (info.view_to_user(r[0] as f32, r[1] as f32), info.view_to_user(r[2] as f32, r[3] as f32));
+                            ImageEdit::Move([u0[0].min(u1[0]) as f64, u0[1].min(u1[1]) as f64, u0[0].max(u1[0]) as f64, u0[1].max(u1[1]) as f64])
+                        }
+                        "rotate" => ImageEdit::Rotate(a.opt_int("quarters")?.unwrap_or(1) as i32),
+                        "flip_horizontal" => ImageEdit::Flip { horizontal: true },
+                        "flip_vertical" => ImageEdit::Flip { horizontal: false },
+                        "delete" => ImageEdit::Delete,
+                        "replace" => {
+                            let path = self.resolve(a.str("path")?, false)?;
+                            let bytes = std::fs::read(&path).map_err(|e| failed(format!("{}: {e}", path.display())))?;
+                            ImageEdit::Replace {
+                                name: path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
+                                bytes: Arc::new(bytes),
+                            }
+                        }
+                        other => return Err(ToolError::InvalidArgs(format!("unknown action {other:?}"))),
+                    };
+                    self.apply(&a, Edit::EditPageImage { page, index, change })?
+                }
+            }
             "text_paragraphs" => {
                 let page = self.page(&a)?;
                 let doc = self.doc(&a)?;

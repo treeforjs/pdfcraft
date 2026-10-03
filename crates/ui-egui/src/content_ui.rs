@@ -400,6 +400,48 @@ impl crate::PrintCraftApp {
         self.notify("Adding images arrives on the web with file pickers for images");
     }
 
+    /// Edit text & images ▸ Replace Image: pick a file to draw in a page image's place.
+    pub(crate) fn replace_page_image_dialog(&mut self, page: usize, index: usize) {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let picked = match self.save_override.clone() {
+                Some(p) if p.ends_with(".png") || p.ends_with(".jpg") => Some(std::path::PathBuf::from(p)),
+                Some(_) => None,
+                None => rfd::FileDialog::new()
+                    .add_filter("Images", &["png", "jpg", "jpeg", "tif", "tiff", "gif", "bmp", "jp2", "j2k", "jpx"])
+                    .set_title("Replace image")
+                    .pick_file(),
+            };
+            let Some(path) = picked else { return };
+            match std::fs::read(&path) {
+                Ok(bytes) => {
+                    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                    self.apply_edit(Edit::EditPageImage {
+                        page,
+                        index,
+                        change: printcraft_engine::ImageEdit::Replace { name, bytes: std::sync::Arc::new(bytes) },
+                    });
+                }
+                Err(e) => self.notify(format!("Couldn't read {}: {e}", path.display())),
+            }
+        }
+        #[cfg(target_arch = "wasm32")]
+        self.notify(format!("Replacing images on page {} arrives on the web with image pickers ({index})", page + 1));
+    }
+
+    /// Edit text & images ▸ Save Image As.
+    pub(crate) fn save_page_image(&mut self, page: usize, index: usize) {
+        let Some((_, id)) = self.active_ids() else { return };
+        let file = self.session.get(id).map(|d| d.page_image_file(page, index));
+        match file {
+            Some(Ok((ext, bytes))) => {
+                self.write_files(&[(format!("Image page {} #{}.{ext}", page + 1, index + 1), std::sync::Arc::new(bytes))], "Save image");
+            }
+            Some(Err(e)) => self.notify(format!("Couldn't save the image: {e}")),
+            None => {}
+        }
+    }
+
     /// Click an image field: pick a picture for it.
     pub fn choose_field_image(&mut self, name: &str) {
         #[cfg(not(target_arch = "wasm32"))]

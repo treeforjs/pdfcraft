@@ -3,7 +3,7 @@
 use printcraft_cos::{Dict, Document, ObjRef, Object, PdfString, Stream};
 
 mod extract;
-pub use extract::{ExtractedImage, ImageExport, extract_images};
+pub use extract::{ExtractedImage, ImageExport, extract_images, image_file};
 use printcraft_fonts::{literal, win_ansi, wrap};
 
 #[derive(Debug, thiserror::Error, PartialEq)]

@@ -225,7 +225,7 @@ impl PrintCraftApp {
             "a11y.check" => self.start_accessibility_check(),
             "edit.edit_text" => {
                 self.quick_tool = crate::QuickTool::EditText;
-                self.notify("Click a line of text to edit it");
+                self.notify("Click text or an image to edit it");
             }
             "edit.advanced_search" => {
                 if let Some(i) = self.active {

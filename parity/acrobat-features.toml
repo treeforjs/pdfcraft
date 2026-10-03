@@ -1983,11 +1983,11 @@ title = "Replace an image (keep position and size)"
 area = "C"
 tier = "P0"
 milestone = "M7"
-status = "partial"
-commands = ["edit.image"]
-tools = ["content_update"]
-evidence = ["crates/engine/src/tests.rs::added_images_rotate_flip_and_crop_as_drawn", "crates/automation/tests/automation.rs::adding_content_through_tools"]
-notes = "for images added in PrintCraft (box and transforms kept); existing page images need the M7 content editor"
+status = "shipped"
+commands = ["edit.edit_text", "edit.image"]
+tools = ["image_edit"]
+evidence = ["crates/edit/src/tests.rs::page_images_move_turn_replace_and_delete", "crates/ui-egui/tests/editing.rs::editing_existing_images_on_the_page", "crates/automation/tests/automation.rs::editing_page_images_through_tools"]
+notes = "existing page images (right-click ▸ Replace Image) and added images: the new picture is drawn in the same place"
 
 [[feature]]
 id = "edit.image-crop"
@@ -2007,11 +2007,11 @@ title = "Rotate and flip images"
 area = "C"
 tier = "P0"
 milestone = "M7"
-status = "partial"
-commands = ["edit.image"]
-tools = ["content_update"]
-evidence = ["crates/engine/src/tests.rs::added_images_rotate_flip_and_crop_as_drawn", "crates/ui-egui/tests/content.rs::typing_moving_styling_and_deleting_added_content", "crates/automation/tests/automation.rs::adding_content_through_tools"]
-notes = "for added images: quarter turns (box turns around its centre), horizontal/vertical flips"
+status = "shipped"
+commands = ["edit.edit_text"]
+tools = ["image_edit"]
+evidence = ["crates/edit/src/tests.rs::page_images_move_turn_replace_and_delete", "crates/ui-egui/tests/editing.rs::editing_existing_images_on_the_page", "crates/automation/tests/automation.rs::editing_page_images_through_tools"]
+notes = "existing page images: rotate either way about the centre, flip horizontally or vertically (a q/cm/Q wrapper); added images too"
 
 [[feature]]
 id = "edit.image-move-resize"
@@ -2019,11 +2019,11 @@ title = "Move and resize images"
 area = "C"
 tier = "P0"
 milestone = "M7"
-status = "partial"
-commands = ["edit.image"]
-tools = ["content_update"]
-evidence = ["crates/ui-egui/tests/content.rs::typing_moving_styling_and_deleting_added_content", "crates/engine/src/tests.rs::added_text_and_images_render_and_stay_editable"]
-notes = "images added in PrintCraft (aspect kept on corner drags); existing page images need the M7 content editor"
+status = "shipped"
+commands = ["edit.edit_text"]
+tools = ["image_edit"]
+evidence = ["crates/edit/src/tests.rs::page_images_move_turn_replace_and_delete", "crates/ui-egui/tests/editing.rs::editing_existing_images_on_the_page", "crates/automation/tests/automation.rs::editing_page_images_through_tools"]
+notes = "existing page images: select, drag to move, drag a corner to resize keeping proportions; Delete removes; added images too"
 
 [[feature]]
 id = "edit.image-extract"
@@ -2031,11 +2031,11 @@ title = "Save an image to a file"
 area = "C"
 tier = "P1"
 milestone = "M7"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["edit.edit_text"]
+tools = ["image_save"]
+evidence = ["crates/edit/src/tests.rs::page_images_move_turn_replace_and_delete", "crates/ui-egui/tests/editing.rs::editing_existing_images_on_the_page", "crates/automation/tests/automation.rs::editing_page_images_through_tools", "crates/create/src/tests.rs::images_export_as_jpeg_unchanged_and_others_as_png"]
+notes = "right-click an image ▸ Save Image As: JPEG unchanged, others PNG"
 
 [[feature]]
 id = "edit.image-external-editor"

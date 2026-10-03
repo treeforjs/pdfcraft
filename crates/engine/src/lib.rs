@@ -31,7 +31,25 @@ pub use printcraft_forms::{
 };
 
 pub use printcraft_a11y as a11y;
-pub use printcraft_edit::{TextBlock, TextLine};
+pub use printcraft_edit::{PageImage, TextBlock, TextLine};
+
+/// A change to an existing page image.
+#[derive(Clone, Debug, PartialEq)]
+pub enum ImageEdit {
+    /// Move and resize it to this box (user space).
+    Move([f64; 4]),
+    /// Quarter turns clockwise about its centre.
+    Rotate(i32),
+    Flip {
+        horizontal: bool,
+    },
+    /// Draw this image file (PNG, JPEG, TIFF, GIF, BMP, JPEG 2000) in its place.
+    Replace {
+        name: String,
+        bytes: Arc<Vec<u8>>,
+    },
+    Delete,
+}
 pub use printcraft_fonts::{ScriptOutline, script_outline};
 
 /// Fill & Sign: `text` in the script font as a typed signature, its left edge at `at` (user
@@ -181,6 +199,18 @@ impl Document {
     /// PDF Optimizer ▸ Audit space usage.
     pub fn audit_space(&self) -> Vec<optimize::SpaceUse> {
         self.editor.as_ref().map(|e| optimize::audit_space(&e.cos, self.bytes.len() as u64)).unwrap_or_default()
+    }
+
+    /// Edit a PDF: the images `page` draws (0-based).
+    pub fn page_images(&self, page: usize) -> Vec<printcraft_edit::PageImage> {
+        self.editor.as_ref().and_then(|e| printcraft_edit::page_images(&e.cos, page).ok()).unwrap_or_default()
+    }
+
+    /// Save image as: image `index` on `page` as a file (extension, bytes).
+    pub fn page_image_file(&self, page: usize, index: usize) -> Result<(&'static str, Vec<u8>), String> {
+        let editor = self.editor.as_ref().ok_or("the document can't be read")?;
+        let img = self.page_images(page).into_iter().nth(index).ok_or_else(|| format!("page {} has no image {}", page + 1, index + 1))?;
+        printcraft_create::image_file(&editor.cos, img.object.ok_or("the image has no object")?)
     }
 
     /// Edit a PDF ▸ Edit text: the paragraphs on `page` (0-based).
@@ -752,6 +782,12 @@ pub enum Edit {
         line: usize,
         text: String,
     },
+    /// Edit a PDF ▸ an existing image on `page` (index from `Document::page_images`).
+    EditPageImage {
+        page: usize,
+        index: usize,
+        change: ImageEdit,
+    },
     /// Edit text in a paragraph box: replace paragraph `block` (from `Document::text_blocks`),
     /// rewrapped to the box's width.
     EditTextBlock {
@@ -926,6 +962,13 @@ impl Edit {
             Edit::SetAltText { .. } => "Set alternate text".into(),
             Edit::MarkDecorative { .. } => "Mark figure as decorative".into(),
             Edit::EditTextLine { .. } | Edit::EditTextBlock { .. } => "Edit text".into(),
+            Edit::EditPageImage { change, .. } => match change {
+                ImageEdit::Move(_) => "Move image".into(),
+                ImageEdit::Rotate(_) => "Rotate image".into(),
+                ImageEdit::Flip { .. } => "Flip image".into(),
+                ImageEdit::Replace { .. } => "Replace image".into(),
+                ImageEdit::Delete => "Delete image".into(),
+            },
             Edit::AddHeaderFooter { replace: false, .. } => "Add header & footer".into(),
             Edit::AddHeaderFooter { .. } => "Update header & footer".into(),
             Edit::AddWatermark { replace: false, .. } => "Add watermark".into(),
@@ -1087,6 +1130,7 @@ fn check_permission(edit: &Edit, p: &printcraft_cos::Permissions) -> Result<(), 
         | Edit::MarkDecorative { .. }
         | Edit::EditTextLine { .. }
         | Edit::EditTextBlock { .. }
+        | Edit::EditPageImage { .. }
         | Edit::Flatten { .. } => {
             if p.modify() {
                 Ok(())
@@ -1269,6 +1313,22 @@ fn run_edit(doc: &mut printcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -
         }
         Edit::EditTextLine { page, line, text } => {
             printcraft_edit::replace_line(doc, *page, *line, text)?;
+        }
+        Edit::EditPageImage { page, index, change } => {
+            let img = printcraft_edit::page_images(doc, *page)?
+                .into_iter()
+                .nth(*index)
+                .ok_or_else(|| EditError::Edit(printcraft_edit::EditError::Invalid(format!("page {} has no image {}", page + 1, index + 1))))?;
+            let c = match change {
+                ImageEdit::Move(to) => printcraft_edit::ImageChange::Transform(printcraft_edit::rect_to_rect(img.rect, *to)),
+                ImageEdit::Rotate(q) => printcraft_edit::ImageChange::Transform(printcraft_edit::turn_about_centre(img.rect, *q, false, false)),
+                ImageEdit::Flip { horizontal } => {
+                    printcraft_edit::ImageChange::Transform(printcraft_edit::turn_about_centre(img.rect, 0, *horizontal, !*horizontal))
+                }
+                ImageEdit::Replace { name, bytes } => printcraft_edit::ImageChange::Replace(printcraft_create::image_xobject(doc, name, bytes)?.0),
+                ImageEdit::Delete => printcraft_edit::ImageChange::Delete,
+            };
+            printcraft_edit::change_image(doc, *page, *index, &c)?;
         }
         Edit::EditTextBlock { page, block, text } => {
             printcraft_edit::replace_block(doc, *page, *block, text)?;

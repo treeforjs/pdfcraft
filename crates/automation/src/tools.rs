@@ -816,6 +816,28 @@ pub fn tools() -> Vec<ToolDef> {
             .ro()
             .cmd("edit.edit_text")
             .with(schema(json!({ "doc": doc(), "page": { "type": "integer", "minimum": 1 } }), &["doc", "page"])),
+        t("page_images", "List page images", "The images a page draws (Edit a PDF): number, box (top-left-origin points), pixel size and resource name.")
+            .ro()
+            .cmd("edit.edit_text")
+            .with(schema(json!({ "doc": doc(), "page": { "type": "integer", "minimum": 1 } }), &["doc", "page"])),
+        t("image_edit", "Edit an image", "Change one of a page's images (number from page_images): action move (rect: new box in top-left-origin points), rotate (quarters clockwise, default 1), flip_horizontal, flip_vertical, replace (path: an image file, drawn in the same place) or delete. Undoable.")
+            .cmd("edit.edit_text")
+            .with(schema(
+                json!({
+                    "doc": doc(),
+                    "page": { "type": "integer", "minimum": 1 },
+                    "image": { "type": "integer", "minimum": 1 },
+                    "action": { "type": "string", "enum": ["move", "rotate", "flip_horizontal", "flip_vertical", "replace", "delete"] },
+                    "rect": { "type": "array", "items": { "type": "number" }, "minItems": 4, "maxItems": 4 },
+                    "quarters": { "type": "integer" },
+                    "path": { "type": "string" },
+                }),
+                &["doc", "page", "image", "action"],
+            )),
+        t("image_save", "Save image as", "Write one of a page's images to path: JPEG images unchanged, others as PNG (the extension is added when missing).")
+            .ro()
+            .cmd("edit.edit_text")
+            .with(schema(json!({ "doc": doc(), "page": { "type": "integer", "minimum": 1 }, "image": { "type": "integer", "minimum": 1 }, "path": { "type": "string" } }), &["doc", "page", "image", "path"])),
         t("text_paragraphs", "List paragraphs", "The paragraphs on a page (lines grouped by font, size, alignment and spacing): number, text, its line numbers, box (top-left-origin points), font and size. Use the number with text_edit's paragraph.")
             .ro()
             .cmd("edit.edit_text")
