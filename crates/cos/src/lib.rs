@@ -9,6 +9,8 @@
 //! incremental and full writing. Not yet: encryption (M1.6), object-stream / xref-stream output
 //! for full saves, linearization (M11).
 
+#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
+
 mod document;
 mod object;
 mod parser;

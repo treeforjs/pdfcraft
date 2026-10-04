@@ -12,6 +12,8 @@
 //! Every edit mutates a `printcraft_cos::Document` (copy-on-write); callers snapshot it first
 //! for undo. Keys we do not understand are left alone.
 
+#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
+
 use printcraft_cos::{Dict, Document, ObjRef, Object, PdfString};
 
 pub mod appearance;

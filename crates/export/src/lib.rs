@@ -5,6 +5,8 @@
 //! document: headings are the paragraphs set larger than the body text, and images sit where
 //! they fall between paragraphs.
 
+#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
+
 mod zip;
 
 pub use zip::Zip;

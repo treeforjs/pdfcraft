@@ -5,6 +5,8 @@
 //! [`Parsed::skipped`]) instead of failing the whole stream, and it never panics. Inline images
 //! (`BI … ID … EI`) are kept whole, so a parse → serialize round trip preserves them.
 
+#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
+
 use printcraft_cos::{Dict, Lexer, Object, PdfString, serialize};
 
 #[cfg(test)]

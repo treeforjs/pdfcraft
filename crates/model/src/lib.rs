@@ -1,5 +1,7 @@
 //! printcraft-model — typed views over the PDF object graph (L2). See the README.
 
+#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
+
 use printcraft_cos::{Dict, Document, ObjRef, Object};
 
 /// Attributes a page inherits from its ancestors (ISO 32000-2 §7.7.3.4).
