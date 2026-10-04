@@ -194,6 +194,25 @@ fn space_audit_shares_the_file_out_by_kind() {
 }
 
 #[test]
+fn space_audit_counts_images_a_content_stream_dictionary_points_at_as_images() {
+    // Content added with Edit ▸ Add content records its image in the content stream's
+    // dictionary (/PCAdded); the image is still an image, not part of the content stream.
+    let mut doc = Document::new_empty();
+    let img = image(&mut doc, 300, 300, 3, false, None);
+    let p = page(&mut doc, &[("Im0", img)], "q 300 0 0 300 0 0 cm /Im0 Do Q");
+    let c = doc.get(p).as_dict().and_then(|d| d.reference(b"Contents")).unwrap();
+    let mut added = Dict::new();
+    added.set(b"Kind".to_vec(), Object::name("Image"));
+    added.set(b"Image".to_vec(), Object::Ref(img));
+    doc.update_dict(c, |d| d.set(b"PCAdded".to_vec(), Object::Dict(added))).unwrap();
+    let bytes = write_full(&doc, &SaveOptions { object_streams: false, ..SaveOptions::default() }).unwrap();
+    let doc = Document::open(Arc::new(bytes.clone())).unwrap();
+    let audit = audit_space(&doc, bytes.len() as u64);
+    let images = audit.iter().find(|u| u.category == SpaceCategory::Images).unwrap();
+    assert!(images.percent > 80.0, "{audit:?}");
+}
+
+#[test]
 fn invalid_links_and_unreferenced_destinations_go() {
     let mut doc = Document::new_empty();
     let p = page(&mut doc, &[], "BT ET");

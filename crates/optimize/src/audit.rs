@@ -188,11 +188,13 @@ pub fn audit_space(doc: &Document, file_len: u64) -> Vec<SpaceUse> {
                 a.claim(&x, if widget { SpaceCategory::Forms } else { SpaceCategory::Comments });
             }
         }
+        // Resources before the content: a content stream's dictionary may point at what it
+        // draws (PrintCraft's /PCAdded records an added image), which stays an image or font.
+        let res = a.resolve_dict(p.dict.get(b"Resources"));
+        a.resources(&res);
         if let Some(c) = p.dict.get(b"Contents") {
             a.claim(c, SpaceCategory::ContentStreams);
         }
-        let res = a.resolve_dict(p.dict.get(b"Resources"));
-        a.resources(&res);
         if let Some(t) = p.dict.get(b"Thumb") {
             a.claim(t, SpaceCategory::Thumbnails);
         }
