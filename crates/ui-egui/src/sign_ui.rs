@@ -247,10 +247,10 @@ impl PrintCraftApp {
         .ok_or("There is no folder to save the digital ID in.")?;
         std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
         let stem: String = d.name.trim().chars().map(|c| if c.is_alphanumeric() || c == ' ' || c == '-' { c } else { '_' }).collect();
-        let path = (1..)
+        let path = (1..=u64::MAX)
             .map(|i| dir.join(if i == 1 { format!("{stem}.p12") } else { format!("{stem} {i}.p12") }))
             .find(|p| !p.exists())
-            .expect("a free name");
+            .ok_or("no free file name for the digital ID")?;
         std::fs::write(&path, &p12).map_err(|e| e.to_string())?;
         Ok(self.add_digital_id(&path.to_string_lossy(), &cert))
     }
@@ -327,8 +327,8 @@ impl PrintCraftApp {
         let Some((_, id)) = self.active_ids() else { return };
         match self.session.open_revision(id, n) {
             Ok(new) => {
-                let info = &self.session.get(new).expect("just opened").info;
-                self.views.push(DocView::new(new, info));
+                let Some(doc) = self.session.get(new) else { return };
+                self.views.push(DocView::new(new, &doc.info));
                 self.active = Some(self.views.len() - 1);
             }
             Err(e) => self.notify(format!("Couldn't open revision {n}: {e}")),
@@ -343,8 +343,8 @@ impl PrintCraftApp {
         let name = format!("{} (signed version)", doc.name.trim_end_matches(".pdf"));
         match self.session.open(format!("{name}.pdf"), None, std::sync::Arc::new(bytes), doc.password.clone().as_deref()) {
             Ok(new) => {
-                let info = &self.session.get(new).expect("just opened").info;
-                self.views.push(DocView::new(new, info));
+                let Some(doc) = self.session.get(new) else { return };
+                self.views.push(DocView::new(new, &doc.info));
                 self.active = Some(self.views.len() - 1);
             }
             Err(e) => self.notify(format!("Couldn't open the signed version: {e}")),
@@ -381,7 +381,7 @@ fn choose(ui: &mut egui::Ui, app: &mut PrintCraftApp, t: &Tokens) -> bool {
     ui.label("Choose the digital ID that you want to use for signing:");
     ui.add_space(6.0);
     let ids = app.digital_ids.clone();
-    let d = app.sign_draft.as_mut().expect("checked");
+    let Some(d) = app.sign_draft.as_mut() else { return true };
     let mut close = false;
     egui::ScrollArea::vertical().max_height(220.0).show(ui, |ui| {
         for (i, e) in ids.iter().enumerate() {
@@ -438,7 +438,7 @@ fn choose(ui: &mut egui::Ui, app: &mut PrintCraftApp, t: &Tokens) -> bool {
 
 fn configure(ui: &mut egui::Ui, app: &mut PrintCraftApp, t: &Tokens) -> bool {
     title(ui, "Configure a Digital ID for Signing");
-    let d = app.sign_draft.as_mut().expect("checked");
+    let Some(d) = app.sign_draft.as_mut() else { return true };
     let mut close = false;
     let mut go = false;
     ui.radio_value(&mut d.new_id.create, false, "Use a Digital ID from a file");
@@ -516,7 +516,7 @@ fn configure(ui: &mut egui::Ui, app: &mut PrintCraftApp, t: &Tokens) -> bool {
     if go {
         let create = app.sign_draft.as_ref().is_some_and(|d| d.new_id.create);
         let result = if create { app.create_digital_id() } else { app.import_digital_id() };
-        let d = app.sign_draft.as_mut().expect("checked");
+        let Some(d) = app.sign_draft.as_mut() else { return true };
         match result {
             Ok(i) => {
                 d.selected = Some(i);
@@ -562,7 +562,7 @@ fn preview(ui: &mut egui::Ui, t: &Tokens, name: &str, d: &SignDraft) {
 
 fn sign_as(ui: &mut egui::Ui, app: &mut PrintCraftApp, t: &Tokens) -> bool {
     let ids = app.digital_ids.clone();
-    let d = app.sign_draft.as_mut().expect("checked");
+    let Some(d) = app.sign_draft.as_mut() else { return true };
     let Some(entry) = d.selected.and_then(|i| ids.get(i)).cloned() else {
         d.step = SignStep::Choose;
         return false;

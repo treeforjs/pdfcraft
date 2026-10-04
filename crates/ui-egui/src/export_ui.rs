@@ -155,7 +155,8 @@ fn run(
     }
     let mut ex = Exporter::from_source(src);
     match kind {
-        ExportKind::AllImages => unreachable!("handled above"),
+        // Handled above.
+        ExportKind::AllImages => String::new(),
         ExportKind::Image => {
             for (k, p) in pages.iter().enumerate() {
                 set(k, None);

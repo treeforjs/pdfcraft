@@ -350,8 +350,8 @@ impl PrintCraftApp {
     pub(crate) fn open_created(&mut self, name: &str, bytes: Arc<Vec<u8>>, message: &str) {
         match self.session.open_new(name, bytes) {
             Ok(id) => {
-                let info = &self.session.get(id).expect("just opened").info;
-                self.views.push(crate::DocView::new(id, info));
+                let Some(doc) = self.session.get(id) else { return };
+                self.views.push(crate::DocView::new(id, &doc.info));
                 self.active = Some(self.views.len() - 1);
                 self.notify(message);
             }

@@ -90,8 +90,9 @@ impl PrintCraftApp {
                 self.dialog = Some(Dialog::NumberPages);
             }
             link if printcraft_engine::links::for_command(link).is_some() => {
-                let url = printcraft_engine::links::for_command(link).expect("checked").url;
-                self.open_url(url);
+                if let Some(l) = printcraft_engine::links::for_command(link) {
+                    self.open_url(l.url);
+                }
             }
             "bookmark.add" => self.bookmark_action(crate::panels::BmAction::New),
             "edit.undo" => self.undo(),
@@ -119,7 +120,7 @@ impl PrintCraftApp {
             }
             "comment.list" => self.right = Some(RightPanel::Comments),
             tool if crate::comments::CommentTool::from_command(tool).is_some() => {
-                let tool = crate::comments::CommentTool::from_command(tool).expect("checked");
+                let Some(tool) = crate::comments::CommentTool::from_command(tool) else { return false };
                 self.comment_prefs.group_tool[tool.group()] = tool;
                 self.quick_tool = crate::QuickTool::Comment(tool);
                 // Acrobat opens the Comments panel with the commenting tools.
@@ -127,8 +128,10 @@ impl PrintCraftApp {
                     self.right = Some(RightPanel::Comments);
                 }
                 // A text selection made before picking a markup tool is marked right away.
-                if let (Some(kind), Some(i)) = (tool.markup(), active) {
-                    let info = &self.session.get(self.views[i].id).expect("active").info;
+                if let (Some(kind), Some(i)) = (tool.markup(), active)
+                    && let Some(doc) = self.session.get(self.views[i].id)
+                {
+                    let info = &doc.info;
                     if let Some((page, quads)) = self.views[i].selection_quads(info) {
                         self.views[i].clear_selection();
                         let style = self.comment_prefs.style(tool);
@@ -268,8 +271,10 @@ impl PrintCraftApp {
                 self.left = crate::LeftPanel::Tool("redact");
                 self.left_open = true;
                 // A text selection made first is marked right away.
-                if let Some(i) = active {
-                    let info = &self.session.get(self.views[i].id).expect("active").info;
+                if let Some(i) = active
+                    && let Some(doc) = self.session.get(self.views[i].id)
+                {
+                    let info = &doc.info;
                     if let Some((page, quads)) = self.views[i].selection_quads(info) {
                         self.views[i].clear_selection();
                         let author = self.comment_prefs.author.clone();
@@ -396,7 +401,7 @@ impl PrintCraftApp {
                 }
             }
             field if crate::prepare::FieldTool::from_command(field).is_some() => {
-                let tool = crate::prepare::FieldTool::from_command(field).expect("checked");
+                let Some(tool) = crate::prepare::FieldTool::from_command(field) else { return false };
                 self.quick_tool = crate::QuickTool::Field(tool);
                 self.left = crate::LeftPanel::Tool("form");
                 self.left_open = true;
@@ -406,7 +411,7 @@ impl PrintCraftApp {
                 self.notify(format!("Click on the page to add a {}, or drag to set its size", tool.label().to_lowercase()));
             }
             fill if crate::fill_sign::FillTool::from_command(fill).is_some() => {
-                let tool = crate::fill_sign::FillTool::from_command(fill).expect("checked");
+                let Some(tool) = crate::fill_sign::FillTool::from_command(fill) else { return false };
                 self.quick_tool = crate::QuickTool::Fill(tool);
                 let initials = tool == crate::fill_sign::FillTool::Initials;
                 if (tool == crate::fill_sign::FillTool::Signature && self.signature.is_none()) || (initials && self.initials.is_none()) {
@@ -454,7 +459,7 @@ impl PrintCraftApp {
         let mut specs: Vec<&CommandSpec> = COMMANDS.iter().filter(|c| c.shortcut.is_some()).collect();
         specs.sort_by_key(|c| std::cmp::Reverse(c.shortcut.map(|s| s.modifier_count()).unwrap_or(0)));
         for spec in specs {
-            let s = spec.shortcut.expect("filtered");
+            let Some(s) = spec.shortcut else { continue };
             if typing && !spec.in_text {
                 continue;
             }

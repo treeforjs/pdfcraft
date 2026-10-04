@@ -1,6 +1,8 @@
 //! PrintCraft in the browser. Build: `cd apps/printcraft-web && trunk build --release`
 //! (trunk generates the JS loader; no handwritten JS — plan/execution-plan.md §1).
 
+#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
+
 #[cfg(target_arch = "wasm32")]
 fn main() {
     use eframe::wasm_bindgen::JsCast;

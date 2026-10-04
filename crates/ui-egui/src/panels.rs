@@ -707,8 +707,9 @@ fn outline_item(ui: &mut egui::Ui, t: &Tokens, info: &DocInfo, item: &OutlineIte
         if resp.double_clicked() && cx.editable {
             *cx.action = Some(BmAction::StartRename(path.to_vec()));
         }
-        if cx.editable {
-            let i = *path.last().expect("non-empty path");
+        if cx.editable
+            && let Some(&i) = path.last()
+        {
             let current = cx.current;
             resp.context_menu(|ui| {
                 let mut pick = |ui: &mut egui::Ui, label: &str, enabled: bool, a: BmAction| {

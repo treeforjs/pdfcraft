@@ -21,7 +21,8 @@ fn main() {
         .set("InternalName", "printcraft");
     if let Err(e) = res.compile() {
         if std::env::var_os("PRINTCRAFT_REQUIRE_WINRES").is_some() {
-            panic!("embedding Windows resources failed: {e}");
+            println!("cargo::error=embedding Windows resources failed: {e}");
+            return;
         }
         println!("cargo:warning=printcraft.exe built without icon/version resources: {e}");
     }

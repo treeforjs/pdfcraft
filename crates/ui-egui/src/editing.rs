@@ -32,7 +32,8 @@ impl PrintCraftApp {
         let label = edit.label();
         match self.session.apply(id, edit.clone()) {
             Ok(()) => {
-                let info = &self.session.get(id).expect("exists").info;
+                let Some(doc) = self.session.get(id) else { return true };
+                let info = &doc.info;
                 let view = &mut self.views[i];
                 match comment_page(&edit) {
                     // Comment edits change one page: keep every other raster.
@@ -84,8 +85,9 @@ impl PrintCraftApp {
         let result = if undo { self.session.undo(id) } else { self.session.redo(id) };
         match result {
             Ok(label) => {
-                let info = &self.session.get(id).expect("exists").info;
-                self.views[i].document_changed(info);
+                if let Some(doc) = self.session.get(id) {
+                    self.views[i].document_changed(&doc.info);
+                }
                 self.views[i].comments.selected = None;
                 self.notify(format!("{} {label}", if undo { "Undid" } else { "Redid" }));
             }
@@ -177,8 +179,9 @@ impl PrintCraftApp {
             match self.session.mark_saved(id, bytes, Some(dest.clone())) {
                 Ok(()) => {
                     self.forget_recovery(id);
-                    let info = &self.session.get(id).expect("exists").info;
-                    self.views[index].document_changed(info);
+                    if let Some(doc) = self.session.get(id) {
+                        self.views[index].document_changed(&doc.info);
+                    }
                     self.notify(format!("Saved {}", short_name(&dest)));
                     true
                 }
@@ -194,8 +197,9 @@ impl PrintCraftApp {
             match download(&name, &bytes) {
                 Ok(()) => {
                     let _ = self.session.mark_saved(id, bytes, None);
-                    let info = &self.session.get(id).expect("exists").info;
-                    self.views[index].document_changed(info);
+                    if let Some(doc) = self.session.get(id) {
+                        self.views[index].document_changed(&doc.info);
+                    }
                     self.notify(format!("Downloaded {name}"));
                     true
                 }
