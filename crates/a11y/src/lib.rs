@@ -6,6 +6,8 @@
 //! accessibility report. Rules read the document only; the fixes that need edits (language,
 //! title, tab order) are applied by the engine.
 
+#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
+
 use std::collections::BTreeSet;
 
 use printcraft_cos::Document;

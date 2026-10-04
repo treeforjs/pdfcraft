@@ -50,7 +50,7 @@ fn walk(doc: &Document, data: &[u8], resources: &Dict, ctm: Matrix, depth: usize
     let xobjects = resources.get(b"XObject").map(|x| doc.resolve(x)).and_then(|x| x.as_dict().cloned()).unwrap_or_default();
     let mut stack = vec![ctm];
     for op in printcraft_content::parse(data).ops {
-        let top = *stack.last().expect("never empty");
+        let top = stack.last().copied().unwrap_or(ctm);
         match op.op.as_slice() {
             b"q" => stack.push(top),
             b"Q" => {
@@ -59,8 +59,10 @@ fn walk(doc: &Document, data: &[u8], resources: &Dict, ctm: Matrix, depth: usize
                 }
             }
             b"cm" => {
-                if let Some(m) = Matrix::from_operands(&op.operands) {
-                    *stack.last_mut().expect("never empty") = m.then(&top);
+                if let Some(m) = Matrix::from_operands(&op.operands)
+                    && let Some(t) = stack.last_mut()
+                {
+                    *t = m.then(&top);
                 }
             }
             b"Do" => {

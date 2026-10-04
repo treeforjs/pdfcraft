@@ -67,9 +67,10 @@ fn inflate_raw(input: &[u8], max: usize) -> Step {
 }
 
 /// zlib at level 6.
+// The documented never-crash exception: writing into a `Vec` cannot fail.
+#[allow(clippy::expect_used)]
 pub(crate) fn encode(data: &[u8]) -> Vec<u8> {
     let mut e = flate2::write::ZlibEncoder::new(Vec::with_capacity(data.len() / 2 + 64), Compression::new(6));
-    // Writing into a Vec cannot fail.
     e.write_all(data).expect("in-memory write");
     e.finish().expect("in-memory write")
 }

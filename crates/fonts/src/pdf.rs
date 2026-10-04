@@ -138,7 +138,7 @@ impl Metrics {
             ascent: 0.9,
             descent: -0.25,
             composite: false,
-            unicode: (32..127u32).map(|c| (c, char::from_u32(c).expect("ascii").to_string())).collect(),
+            unicode: (32..127u8).map(|c| (u32::from(c), char::from(c).to_string())).collect(),
             base_font: "Helvetica".into(),
             subset: false,
             code_len: 1,

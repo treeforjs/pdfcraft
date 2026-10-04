@@ -15,6 +15,8 @@
 //! fields are discarded by `printcraft-redact`'s Remove Hidden Information, which the engine
 //! runs alongside.
 
+#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
+
 mod audit;
 mod images;
 mod links;
