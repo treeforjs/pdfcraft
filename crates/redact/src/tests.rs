@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use printcraft_annot::{Meta, NewAnnotation, Shape, Style, add_annotation, rect_quad};
-use printcraft_cos::{Document, SaveOptions, write_incremental};
+use printcraft_cos::{Document, SaveOptions, write_full, write_incremental};
 
 use super::*;
 
@@ -97,6 +97,24 @@ fn glyphs_under_a_mark_go_and_the_rest_stays_put() {
     assert!(c.contains("0 0 0 rg") && c.contains("20 95 20 15 re f"), "{c}");
     let doc = reopen(&doc);
     assert!(!content(&doc, 0).contains("1234"));
+}
+
+#[test]
+fn added_text_parameters_do_not_keep_redacted_text() {
+    // An Edit ▸ Add content item: its stream dictionary keeps the source text under /PCAdded.
+    let mut doc = pdf(vec![
+        b"<< /Type /Catalog /Pages 2 0 R >>".to_vec(),
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_vec(),
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Contents [4 0 R] /Resources << /Font << /F1 5 0 R >> >> >>".to_vec(),
+        stream("/PCMark /Added /PCAdded << /Kind /Text /Text (AB1234CD) >>", b"BT /F1 10 Tf 10 100 Td (AB1234CD) Tj ET"),
+        FONT.replace("95 0 R", "6 0 R").into_bytes(),
+        widths(),
+    ]);
+    mark(&mut doc, 0, &[[20.0, 95.0, 40.0, 110.0]], "");
+    apply(&mut doc, None).unwrap();
+    assert!(!content(&doc, 0).contains("1234"));
+    let bytes = write_full(&doc, &SaveOptions::default()).unwrap();
+    assert!(!bytes.windows(4).any(|w| w == b"1234"), "redacted text left in the saved file");
 }
 
 #[test]

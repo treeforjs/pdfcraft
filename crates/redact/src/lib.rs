@@ -296,6 +296,10 @@ pub fn apply(doc: &mut Document, pages: Option<&[usize]>) -> Result<Report, Reda
                 _ => Dict::new(),
             };
             dict.remove(b"Length");
+            // Edit ▸ Add content keeps an added item's source text in `/PCAdded`; once its glyphs
+            // are redacted, keeping it would leave the redacted text in the file. The item stays
+            // as plain drawn content but is no longer editable.
+            dict.remove(b"PCAdded");
             // A new object: the original may be shared with other pages.
             new_list[i] = Object::Ref(doc.add(Object::Stream(Stream::flate(dict, &bytes))));
             changed = true;
