@@ -360,13 +360,12 @@ pub fn layout(glyphs: Vec<TextGlyph>) -> PageText {
     for i in 0..n {
         let g = glyphs[i].rect;
         let cont = segs.last().is_some_and(|s| {
-            let p = *s.idx.last().expect("non-empty");
+            let Some(&p) = s.idx.last() else { return false };
             let ph = height(p).min(height(i));
             let gap = g[0] - glyphs[p].rect[2];
             (cy(i) - cy(p)).abs() < ph * 0.5 && gap < ph * 3.0 && g[0] > glyphs[p].rect[0] - ph * 2.0
         });
-        if cont {
-            let s = segs.last_mut().expect("non-empty");
+        if cont && let Some(s) = segs.last_mut() {
             s.idx.push(i);
             union(&mut s.bbox, &g);
             s.h = s.h.max(height(i));
@@ -410,7 +409,8 @@ pub fn layout(glyphs: Vec<TextGlyph>) -> PageText {
     for si in by_top {
         let s = &segs[si];
         let target = blocks.iter().position(|(members, bb)| {
-            let last = &segs[*members.last().expect("non-empty")];
+            let Some(&m) = members.last() else { return false };
+            let last = &segs[m];
             let vgap = s.bbox[1] - last.bbox[3];
             let overlap = s.bbox[2].min(bb[2]) - s.bbox[0].max(bb[0]);
             let minw = (s.bbox[2] - s.bbox[0]).min(bb[2] - bb[0]).max(1.0);
@@ -429,8 +429,7 @@ pub fn layout(glyphs: Vec<TextGlyph>) -> PageText {
     // 3. Block order.
     let mut remaining: Vec<usize> = (0..blocks.len()).collect();
     let mut block_order = Vec::with_capacity(blocks.len());
-    while !remaining.is_empty() {
-        let top = *remaining.iter().min_by(|a, b| blocks[**a].1[1].total_cmp(&blocks[**b].1[1])).expect("non-empty");
+    while let Some(&top) = remaining.iter().min_by(|a, b| blocks[**a].1[1].total_cmp(&blocks[**b].1[1])) {
         let tb = blocks[top].1;
         let pick = remaining
             .iter()
@@ -500,7 +499,8 @@ pub fn layout(glyphs: Vec<TextGlyph>) -> PageText {
         }
     }
     let mut slots: Vec<Option<TextGlyph>> = glyphs.into_iter().map(Some).collect();
-    let glyphs = order.iter().map(|i| slots[*i].take().expect("each glyph emitted once")).collect();
+    // Each glyph is emitted exactly once.
+    let glyphs = order.iter().filter_map(|i| slots.get_mut(*i).and_then(Option::take)).collect();
     PageText { glyphs, line_of, space_before }
 }
 

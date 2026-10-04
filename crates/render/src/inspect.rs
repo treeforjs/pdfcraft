@@ -392,14 +392,7 @@ impl<'a> Inspector<'a> {
         match self.resolve(dest) {
             Object::Array(a) => a.first().and_then(|p| self.page_of(p)),
             Object::Dictionary(d) => d.get(b"D").ok().and_then(|d| self.dest_page(d, depth + 1)),
-            named @ (Object::String(..) | Object::Name(_)) => {
-                let key = match named {
-                    Object::String(s, _) => s.clone(),
-                    Object::Name(n) => n.clone(),
-                    _ => unreachable!(),
-                };
-                self.named_dest(&key).and_then(|d| self.dest_page(d, depth + 1))
-            }
+            Object::String(key, _) | Object::Name(key) => self.named_dest(key).and_then(|d| self.dest_page(d, depth + 1)),
             _ => None,
         }
     }
