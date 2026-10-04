@@ -24,6 +24,15 @@ const APP_ICON_PNG: &[u8] = include_bytes!("../../../assets/app-icon/printcraft-
 const APP_ICON_PNG: &[u8] = include_bytes!("../../../assets/app-icon/hicolor/256x256/apps/ai.storyteller.printcraft.png");
 
 fn main() -> eframe::Result {
+    // Last-resort guard (AGENTS.md §4): commands, edits, opens and saves catch panics and report
+    // them; this hook logs every panic, caught or not, with a backtrace when RUST_BACKTRACE is set.
+    std::panic::set_hook(Box::new(|info| {
+        eprintln!("printcraft: internal error: {info}");
+        let trace = std::backtrace::Backtrace::capture();
+        if trace.status() == std::backtrace::BacktraceStatus::Captured {
+            eprintln!("{trace}");
+        }
+    }));
     let mut files = Vec::new();
     let mut options: Vec<(String, String)> = Vec::new();
     let mut control_file: Option<String> = None;

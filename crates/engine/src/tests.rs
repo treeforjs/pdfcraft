@@ -1402,3 +1402,11 @@ fn exporting_office_files_keeps_images() {
     }
     assert!(String::from_utf8(d.export_office(compare::OfficeFormat::Html)).unwrap().contains("data:image/png;base64,"));
 }
+
+#[test]
+fn guard_turns_a_panic_into_an_error() {
+    assert_eq!(guard(|| 7), Ok(7));
+    assert_eq!(guard(|| -> u8 { panic!("boom") }), Err("boom".to_string()));
+    let n = 3;
+    assert_eq!(guard(|| -> u8 { panic!("page {n} is bad") }), Err("page 3 is bad".to_string()));
+}
