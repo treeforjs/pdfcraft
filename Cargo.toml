@@ -66,7 +66,7 @@ egui_kittest = "0.36"
 rfd = "0.17"
 
 [workspace.lints.rust]
-unsafe_code = "deny"
+unsafe_code = "forbid"
 
 [workspace.lints.clippy]
 dbg_macro = "warn"

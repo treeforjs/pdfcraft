@@ -93,14 +93,16 @@ If you find an asset that breaks these rules, stop and remove it from the reposi
 
 ## 4. Never crash
 
-PrintCraft opens files from strangers. A malformed PDF, a bad tool argument or a corrupt settings file must produce an error the user (or agent) can act on, never a crash.
+PrintCraft opens files from strangers, and people trust it with their work. A malformed PDF, a bad tool argument, a corrupt settings file or a full disk must produce an error the user (or agent) can act on, never a crash and never lost work. **This outranks feature work:** don't ship a feature by adding a panic path, and fix a crash before building on top of it. The shared standard for every Crafting App is [`craftrules/standards/never-crash.md`](https://github.com/storytold/craftrules/blob/main/standards/never-crash.md).
 
 - **Fail with `Result`.** Non-test code returns errors through the crate's error type and `?`. Where readers are lenient by design, fall back gracefully and record the repair (see Fidelity in `CLAUDE.md`).
 - **No panicking shortcuts.** No `unwrap()`, `expect()`, `panic!`, `unreachable!`, `todo!` or `unimplemented!` outside tests, unless the call is provably infallible (e.g. writing to a `Vec`), with a comment saying why. `assert!` only for internal invariants that input cannot reach.
+- **No `unsafe`.** The workspace sets `unsafe_code = "forbid"`. If a platform API needs it, use a maintained safe wrapper crate; a real exception needs the owner's sign-off.
 - **Treat every input-derived number as hostile.** Use `get()` instead of `[i]` or `[a..b]`. Slice strings only at char boundaries. Use checked/saturating arithmetic for lengths, offsets and counts. Guard against division by zero and NaN/inf casts, and never cast a negative value to `usize`. Cap allocations sized by the file.
 - **Bound recursion.** Object graphs can be cyclic or deeply nested. Walk them with seen-sets or depth limits.
-- **Don't cascade.** Handle lock poisoning, and keep a panic in a worker thread from taking the app down. Engine entry points that run untrusted-document code keep their last-resort `catch_unwind` guard. It is a safety net, not a substitute for the rules above.
+- **Don't cascade.** Handle lock poisoning, and keep a panic in a worker thread from taking the app down. Engine entry points that run untrusted-document code keep their last-resort `catch_unwind` guard, and command execution and file import/export must sit behind one that turns an escaped panic into an error message and keeps the user's document. Keep `panic = "unwind"` (the default) so the guard works. It is a safety net, not a substitute for the rules above.
 - **Prove it.** Every crash fix comes with a small synthetic regression test that panicked before the fix. Turn fuzzer findings (`cargo xtask fuzz`) into such tests before fixing them.
+- **Enforced by clippy.** Root `clippy.toml` lets tests use `unwrap`/`expect`/`panic!`. A crate that is clean carries `#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]`; new crates start with it.
 
 ## 5. Everything else
 

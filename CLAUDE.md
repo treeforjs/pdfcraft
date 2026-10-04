@@ -19,13 +19,14 @@ PrintCraft is a clean-room, open-source, Rust-native PDF application targeting A
 - **Privacy.** When observing Acrobat, use synthetic fixtures only. Never capture the Home view, recent files or account info. Capture by window id (`plan/acrobat/tools/`). Never commit Acrobat outputs, corpus files or personal data.
 - **Layering.** Nothing below L7 depends on egui/winit/eframe/rfd (`plan/architecture.md` §3). `cos`/`filters`/`crypt`/`arlington` stay standalone.
 - **Fidelity.** The PDF object graph is the model. Preserve unknown data. Saves are incremental unless a full rewrite is required. Never silently drop or repair data without recording it.
-- **Never panic.** Every PDF, script, MCP call, settings file and keystroke is untrusted input, and none of it may crash the app. Return `Result` (the crate's error enum) and propagate with `?`, or fall back leniently and record it. In non-test code:
+- **Never panic.** Every PDF, script, MCP call, settings file and keystroke is untrusted input, and none of it may crash the app or lose the user's work. This outranks feature work. Return `Result` (the crate's error enum) and propagate with `?`, or fall back leniently and record it. In non-test code:
   - No `unwrap`/`expect`/`panic!`/`unreachable!`/`todo!` unless it is provably infallible, with a comment saying why.
   - No indexing or slicing with input-derived positions (use `get`, and slice strings only at char boundaries).
   - Use checked or saturating arithmetic on input-derived numbers, and guard against division by zero and NaN/inf casts.
   - Cap allocations sized by input, and bound recursion with depth limits or seen-sets.
   - Handle lock poisoning.
-  - Every crash fix gets a synthetic regression test. See `AGENTS.md` §4.
+  - No `unsafe` (`unsafe_code = "forbid"`).
+  - Every crash fix gets a synthetic regression test. See `AGENTS.md` §4 and `craftrules/standards/never-crash.md`.
 - **Rust only** in the product and build (`xtask`). No handwritten JS/TS.
 - **Quality gates** before every commit: `cargo fmt --check`, `cargo clippy --workspace -- -D warnings`, `cargo test --workspace`, and the wasm check once `xtask ci` exists (M0).
 - **Commits:** one task id per commit (e.g. `M1.4: xref stream reader`). Commit only green states. End messages with the attribution line required by the environment.
