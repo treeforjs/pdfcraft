@@ -1,5 +1,7 @@
 //! printcraft-create — create PDFs from nothing, images or text (L4). See the README.
 
+#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
+
 use printcraft_cos::{Dict, Document, ObjRef, Object, PdfString, Stream};
 
 mod extract;
@@ -20,8 +22,12 @@ pub const LETTER: (f64, f64) = (612.0, 792.0);
 /// The largest page side PDF allows (ISO 32000-2 Annex C: 14 400 units).
 const MAX_SIDE: f64 = 14_400.0;
 
-fn add_page(doc: &mut Document, w: f64, h: f64, resources: Dict, content: Option<Vec<u8>>) -> ObjRef {
-    let pages = doc.root().and_then(|r| doc.get(r).as_dict().and_then(|d| d.reference(b"Pages"))).expect("new_empty has a page tree");
+fn add_page(doc: &mut Document, w: f64, h: f64, resources: Dict, content: Option<Vec<u8>>) -> Result<ObjRef, CreateError> {
+    // `Document::new_empty` always has a page tree.
+    let pages = doc
+        .root()
+        .and_then(|r| doc.get(r).as_dict().and_then(|d| d.reference(b"Pages")))
+        .ok_or_else(|| CreateError::Invalid("the new document has no page tree".into()))?;
     let mut page = Dict::new();
     page.set(b"Type".to_vec(), Object::name("Page"));
     page.set(b"Parent".to_vec(), Object::Ref(pages));
@@ -38,7 +44,7 @@ fn add_page(doc: &mut Document, w: f64, h: f64, resources: Dict, content: Option
         d.set(b"Count".to_vec(), Object::Int(kids.len() as i64));
         d.set(b"Kids".to_vec(), Object::Array(kids));
     });
-    r
+    Ok(r)
 }
 
 fn set_title(doc: &mut Document, title: &str) {
@@ -59,7 +65,7 @@ pub fn blank(width: f64, height: f64, pages: usize) -> Result<Document, CreateEr
     }
     let mut doc = Document::new_empty();
     for _ in 0..pages {
-        add_page(&mut doc, width, height, Dict::new(), None);
+        add_page(&mut doc, width, height, Dict::new(), None)?;
     }
     Ok(doc)
 }
@@ -433,7 +439,7 @@ pub fn from_images(images: &[(String, Vec<u8>)]) -> Result<Document, CreateError
         let mut res = Dict::new();
         res.set(b"XObject".to_vec(), Object::Dict(xobj));
         let content = format!("q {w:.3} 0 0 {h:.3} 0 0 cm /Im0 Do Q\n").into_bytes();
-        add_page(&mut doc, w, h, res, Some(content));
+        add_page(&mut doc, w, h, res, Some(content))?;
     }
     if let Some((name, _)) = images.first() {
         set_title(&mut doc, name.rsplit_once('.').map_or(name.as_str(), |(s, _)| s));
@@ -472,7 +478,9 @@ pub fn from_text(title: &str, text: &str, page: (f64, f64), font_size: f64) -> R
                 continue;
             }
         }
-        page_lines.last_mut().expect("non-empty").push(l.clone());
+        if let Some(p) = page_lines.last_mut() {
+            p.push(l.clone());
+        }
     }
     for lines in page_lines {
         let mut c = format!("BT /F1 {size} Tf {line_h:.3} TL {margin} {:.3} Td\n", h - margin - size).into_bytes();
@@ -485,7 +493,7 @@ pub fn from_text(title: &str, text: &str, page: (f64, f64), font_size: f64) -> R
         fonts.set(b"F1".to_vec(), Object::Ref(fr));
         let mut res = Dict::new();
         res.set(b"Font".to_vec(), Object::Dict(fonts));
-        add_page(&mut doc, w, h, res, Some(c));
+        add_page(&mut doc, w, h, res, Some(c))?;
     }
     set_title(&mut doc, title);
     Ok(doc)
