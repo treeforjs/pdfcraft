@@ -9,6 +9,8 @@
 //! save drops them; an incremental save leaves them untouched). Flat trees are valid for any
 //! page count and are what most producers write for small documents.
 
+#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
+
 use printcraft_cos::{Dict, Document, ObjRef, Object, PdfString};
 
 mod boxes;

@@ -212,7 +212,8 @@ pub fn number_pages(doc: &mut Document, from: usize, to: usize, style: LabelStyl
     if old.first().is_none_or(|r| r.start > 0) {
         old.insert(0, default_range());
     }
-    let at = |p: usize| old.iter().rev().find(|r| r.start <= p).cloned().expect("a range starts at 0");
+    // `old` starts at page 0, so a range is always found.
+    let at = |p: usize| old.iter().rev().find(|r| r.start <= p).cloned().unwrap_or_else(default_range);
     let mut ranges: Vec<LabelRange> = old.iter().filter(|r| r.start < from).cloned().collect();
     ranges.push(LabelRange { start: from, style, prefix: prefix.to_string(), first: first.max(1) });
     if to + 1 < n {

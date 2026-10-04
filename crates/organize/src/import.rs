@@ -562,6 +562,7 @@ fn add_outline(doc: &mut Document, marks: &[Mark<'_>]) -> Result<(), OrganizeErr
     }
     let outlines = doc.add(Object::Null);
     let items: Vec<ObjRef> = marks.iter().map(|_| doc.add(Object::Null)).collect();
+    let (Some(&first_item), Some(&last_item)) = (items.first(), items.last()) else { return Ok(()) };
     for (i, ((title, page, src, page_map), r)) in marks.iter().zip(&items).enumerate() {
         let mut d = Dict::new();
         d.set(b"Title".to_vec(), Object::String(printcraft_cos::PdfString::text(title)));
@@ -589,8 +590,8 @@ fn add_outline(doc: &mut Document, marks: &[Mark<'_>]) -> Result<(), OrganizeErr
     }
     let mut o = Dict::new();
     o.set(b"Type".to_vec(), Object::name("Outlines"));
-    o.set(b"First".to_vec(), Object::Ref(items[0]));
-    o.set(b"Last".to_vec(), Object::Ref(*items.last().expect("non-empty")));
+    o.set(b"First".to_vec(), Object::Ref(first_item));
+    o.set(b"Last".to_vec(), Object::Ref(last_item));
     o.set(b"Count".to_vec(), Object::Int(items.len() as i64));
     doc.set(outlines, Object::Dict(o));
     let root = doc.root().ok_or(OrganizeError::NoPageTree)?;
