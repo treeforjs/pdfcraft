@@ -112,7 +112,8 @@ fn resolve_path(doc: &Document, path: &[usize]) -> Result<(ObjRef, ObjRef)> {
         }
         parent = r;
     }
-    unreachable!("the loop returns on the last index")
+    // The loop returns on the last index.
+    Err(OutlineError::NoSuchBookmark(path.to_vec()))
 }
 
 /// The object that holds children at `parent_path` (`[]` = the outline root, created if needed).
