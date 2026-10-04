@@ -11,6 +11,8 @@
 //! Not yet: JavaScript actions (format, keystroke, validate, calculate — M6.4/M6.5) and rich text
 //! values (`/RV`, which is removed when a value is set so it can't contradict `/V`).
 
+#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
+
 use printcraft_cos::{Dict, Document, ObjRef, Object, PdfString};
 
 mod actions;
@@ -438,8 +440,8 @@ fn rank_tabs(doc: &Document, pages: &[ObjRef], annot_index: &std::collections::H
                             (it.3[0] - first.3[0]).abs() < ((first.3[2] - first.3[0]) / 2.0).max(2.0)
                         }
                     });
-                    if fits {
-                        groups.last_mut().expect("checked").push(it);
+                    if fits && let Some(g) = groups.last_mut() {
+                        g.push(it);
                     } else {
                         groups.push(vec![it]);
                     }
@@ -747,7 +749,7 @@ fn write_value(doc: &mut Document, f: &Field, value: &FieldValue, scripts: &mut 
                 FieldValue::Choice(v) => v.clone(),
                 FieldValue::Text(t) if t.is_empty() => Vec::new(),
                 FieldValue::Text(t) => vec![t.clone()],
-                _ => unreachable!("matched above"),
+                other => return invalid(format!("{:?} can't take {other:?}", f.name)),
             };
             if vals.len() > 1 && !(f.kind == FieldKind::List && f.has(flags::MULTI_SELECT)) {
                 return invalid(format!("{:?} takes a single value", f.name));
@@ -878,7 +880,7 @@ pub fn move_in_tab_order(doc: &mut Document, name: &str, earlier: bool) -> Resul
         all.iter().filter_map(|g| g.widgets.iter().filter(|w| w.page == Some(page)).map(|w| w.tab).min().map(|t| (t, g.name.as_str()))).collect();
     order.sort();
     let names: Vec<&str> = order.iter().map(|(_, n)| *n).collect();
-    let i = names.iter().position(|n| *n == name).expect("on this page");
+    let Some(i) = names.iter().position(|n| *n == name) else { return invalid(format!("{name} is not on a page")) };
     let j = if earlier { i.checked_sub(1) } else { Some(i + 1).filter(|j| *j < names.len()) };
     let Some(j) = j else { return Ok(()) };
     let mut names = names.into_iter().map(str::to_string).collect::<Vec<_>>();
