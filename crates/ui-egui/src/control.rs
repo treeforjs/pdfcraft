@@ -419,7 +419,8 @@ fn widget(id: NodeId, n: &accesskit::Node, depth: usize, focused: bool) -> Value
         "enabled": !n.is_disabled(),
         "clickable": n.supports_action(Action::Click),
     });
-    let obj = w.as_object_mut().expect("object");
+    let mut more = serde_json::Map::new();
+    let obj = &mut more;
     if let Some(l) = n.label() {
         obj.insert("label".into(), json!(l));
     }
@@ -440,6 +441,9 @@ fn widget(id: NodeId, n: &accesskit::Node, depth: usize, focused: bool) -> Value
     }
     if focused {
         obj.insert("focused".into(), json!(true));
+    }
+    if let Value::Object(m) = &mut w {
+        m.extend(more);
     }
     w
 }

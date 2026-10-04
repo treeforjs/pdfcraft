@@ -11,6 +11,8 @@
 //! loopback port and writes `{"port", "token", "pid"}` to `<file>` (owner-only permissions).
 //! Agents then drive it with `printcraft-cli ui --control <file> <method> …`.
 
+#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
+
 use printcraft_ui_egui::PrintCraftApp;
 
 /// Freedesktop app id: the `.desktop` file name and the hicolor icon name.

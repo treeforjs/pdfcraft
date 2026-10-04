@@ -188,12 +188,12 @@ impl PrintCraftApp {
                 self.redact_prefs.mark(p, vec![rect_quad([c[0] as f64, c[1] as f64, c[2] as f64, c[3] as f64])], &author)
             })
             .collect();
-        match edits.len() {
-            0 => {}
-            1 => {
-                self.apply_edit(edits.into_iter().next().expect("one"));
+        match <[Edit; 1]>::try_from(edits) {
+            Ok([one]) => {
+                self.apply_edit(one);
             }
-            _ => {
+            Err(edits) if edits.is_empty() => {}
+            Err(edits) => {
                 self.apply_edit(Edit::Batch { label: "Mark pages for redaction".into(), edits });
             }
         }

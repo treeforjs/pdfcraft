@@ -85,7 +85,8 @@ impl FieldTool {
             FieldTool::Radio => match join.filter(|f| f.kind == FormFieldKind::Radio) {
                 Some(g) => {
                     let taken: Vec<&str> = g.widgets.iter().filter_map(|w| w.on_state.as_deref()).collect();
-                    let export = (1..).map(|i| format!("Choice{i}")).find(|c| !taken.contains(&c.as_str())).expect("unbounded");
+                    let export =
+                        (1..=u64::MAX).map(|i| format!("Choice{i}")).find(|c| !taken.contains(&c.as_str())).unwrap_or_else(|| "Choice".into());
                     NewField::Radio { group: Some(g.name.clone()), export }
                 }
                 None => NewField::Radio { group: None, export: "Choice1".into() },

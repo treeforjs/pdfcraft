@@ -247,7 +247,7 @@ pub(crate) fn overlay(ctx: &egui::Context, view: &mut DocView, info: &DocInfo, f
             let font = (size.unwrap_or(((w.rect[3] - w.rect[1]) as f32 * 0.6).clamp(6.0, 12.0)) * zoom).clamp(6.0, 64.0);
             egui::Area::new(egui::Id::new(("form-editor", view.id.0))).order(egui::Order::Foreground).fixed_pos(rect.min).show(ctx, |ui| {
                 ui.set_min_size(rect.size());
-                let fx = view.forms.focus.as_mut().expect("checked");
+                let Some(fx) = view.forms.focus.as_mut() else { return };
                 let mut te = if multiline { egui::TextEdit::multiline(&mut fx.text) } else { egui::TextEdit::singleline(&mut fx.text) };
                 te = te
                     .desired_width(rect.width() - 6.0)
@@ -310,7 +310,7 @@ pub(crate) fn overlay(ctx: &egui::Context, view: &mut DocView, info: &DocInfo, f
                         ui.set_min_width(rect.width().max(160.0));
                         ui.label(egui::RichText::new(&f.name).small().color(t.text_faint));
                         egui::ScrollArea::vertical().max_height(260.0).show(ui, |ui| {
-                            let fx = view.forms.focus.as_mut().expect("checked");
+                            let Some(fx) = view.forms.focus.as_mut() else { return };
                             for (export, display) in &f.options {
                                 let on = if multi { fx.picked.contains(export) } else { f.value.first() == Some(export) };
                                 if multi {

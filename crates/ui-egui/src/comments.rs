@@ -832,9 +832,10 @@ pub(crate) fn page_after_text(resp: &egui::Response, cx: &PageCx<'_>, view: &mut
     if tool.markup().is_none() || !cx.allowed || !(resp.drag_stopped() || resp.double_clicked()) {
         return;
     }
-    if let Some((page, quads)) = view.selection_quads(cx.info).filter(|(p, _)| *p == cx.page) {
+    if let Some(kind) = tool.markup()
+        && let Some((page, quads)) = view.selection_quads(cx.info).filter(|(p, _)| *p == cx.page)
+    {
         view.clear_selection();
-        let kind = tool.markup().expect("checked");
         view.pending_edit = Some(new_comment(cx, tool, Shape::TextMarkup { kind, quads }, String::new()));
         let _ = page;
     }
@@ -994,7 +995,7 @@ pub(crate) fn composer(ctx: &egui::Context, view: &mut DocView, info: &DocInfo, 
     let t = Tokens::get(ctx);
     let mut post = false;
     let mut cancel = false;
-    let c = view.comments.composer.as_mut().expect("checked");
+    let c = view.comments.composer.as_mut()?;
     let title = match c.kind {
         ComposerKind::Note => "Sticky note",
         ComposerKind::TextBox => "Text box",

@@ -252,7 +252,7 @@ pub(crate) fn page_input(
             None => Some(FillAction::CreateInitials),
         },
         mark => {
-            let mark = mark.mark().expect("marks");
+            let mark = mark.mark()?;
             let (w, h) = if mark == FillMark::Line { (36.0, 4.0) } else { (12.0, 12.0) };
             let rect = [at[0] - w / 2.0, at[1] - h / 2.0, at[0] + w / 2.0, at[1] + h / 2.0];
             Some(FillAction::Edit(Box::new(new(page, Shape::Mark { rect, mark }, String::new(), author))))
@@ -280,7 +280,7 @@ pub(crate) fn type_box(ctx: &egui::Context, view: &mut DocView, info: &DocInfo, 
     let mut commit = false;
     let mut cancel = false;
     egui::Area::new(egui::Id::new(("fill-text", view.id.0))).order(egui::Order::Foreground).fixed_pos(pos).show(ctx, |ui| {
-        let t = view.fill_text.as_mut().expect("checked");
+        let Some(t) = view.fill_text.as_mut() else { return };
         let width = ((t.text.len().max(8) as f32) * TEXT_SIZE as f32 * 0.6 * zoom).clamp(60.0, 600.0);
         let r = ui.add(
             egui::TextEdit::singleline(&mut t.text)

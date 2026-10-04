@@ -280,15 +280,15 @@ fn card(
             });
             egui::Frame::NONE.inner_margin(egui::Margin { left: 34, right: 0, top: 4, bottom: 0 }).show(ui, |ui| {
                 ui.set_width(ui.available_width());
-                if editing {
-                    let (_, _, text) = view.comments.editing.as_mut().expect("checked");
+                if editing && let Some((_, _, text)) = view.comments.editing.as_mut() {
                     let r = ui.add(egui::TextEdit::multiline(text).desired_rows(2).desired_width(f32::INFINITY).id_salt(("comment-edit", key)));
                     if !r.has_focus() && !ui.memory(|m| m.focused().is_some()) {
                         r.request_focus();
                     }
                     ui.horizontal(|ui| {
-                        if ui.add(egui::Button::new(egui::RichText::new("Save").color(Color32::WHITE)).fill(t.accent).corner_radius(12)).clicked() {
-                            let (page, index, text) = view.comments.editing.take().expect("checked");
+                        if ui.add(egui::Button::new(egui::RichText::new("Save").color(Color32::WHITE)).fill(t.accent).corner_radius(12)).clicked()
+                            && let Some((page, index, text)) = view.comments.editing.take()
+                        {
                             edit = Some(Edit::SetAnnotationContents { page, index, text });
                         }
                         if ui.button("Cancel").clicked() || ui.input(|i| i.key_pressed(egui::Key::Escape)) {

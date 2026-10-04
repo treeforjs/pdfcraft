@@ -5,6 +5,8 @@
 //! Everything here is presentation: documents, rendering and the tool catalogue live in
 //! `printcraft-engine`.
 
+#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
+
 mod a11y_ui;
 mod actions_ui;
 pub mod canvas;
@@ -600,7 +602,7 @@ impl PrintCraftApp {
             Err(e) => return Err(e.to_string()),
         };
         self.password_prompt = None;
-        let doc = self.session.get(id).expect("just opened");
+        let doc = self.session.get(id).ok_or("the document could not be opened")?;
         let pages = doc.info.pages.len();
         // Acrobat opens straight to the Comments panel when a document has comments.
         if self.right.is_none() {

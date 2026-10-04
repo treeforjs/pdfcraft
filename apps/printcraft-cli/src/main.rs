@@ -29,6 +29,8 @@
 //! *separate child process* with a wall-clock timeout, so hangs, panics and aborts in any
 //! dependency are observed and reported instead of taking the harness down.
 
+#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
+
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
