@@ -400,7 +400,8 @@ pub fn text_lines(doc: &Document, page: usize) -> Result<Vec<TextLine>, EditErro
 type Encoder = Box<dyn Fn(&str) -> Option<Vec<u8>>>;
 
 /// The substitute font's resource name.
-const SUBSTITUTE: &[u8] = b"PCEdHelv";
+const SUBSTITUTE_NAME: &str = "PCEdHelv";
+const SUBSTITUTE: &[u8] = SUBSTITUTE_NAME.as_bytes();
 
 /// Replace the text of line `line` (an index into [`text_lines`]) on `page` with `text`.
 pub fn replace_line(doc: &mut Document, page: usize, line: usize, text: &str) -> Result<LineEdit, EditError> {
@@ -440,7 +441,7 @@ pub fn replace_line(doc: &mut Document, page: usize, line: usize, text: &str) ->
             }
             // The size in text space: the current Tf's size.
             let size = font_size_before(&ops, first).unwrap_or(target.size);
-            replacement.push(Op::new("Tf", vec![Object::name(std::str::from_utf8(SUBSTITUTE).expect("ascii")), printcraft_content::num(size)]));
+            replacement.push(Op::new("Tf", vec![Object::name(SUBSTITUTE_NAME), printcraft_content::num(size)]));
             replacement.push(Op::new("Tj", vec![Object::String(PdfString::literal(win))]));
             replacement.push(Op::new("Tf", vec![Object::name(&target.font), printcraft_content::num(size)]));
             substituted = Some("Helvetica".to_string());
@@ -506,7 +507,8 @@ fn group_blocks(lines: &[TextLine]) -> Vec<TextBlock> {
     for (i, l) in lines.iter().enumerate() {
         let joins = i > 0
             && blocks.last().is_some_and(|b| {
-                let prev = &lines[*b.lines.last().expect("non-empty")];
+                let Some(&p) = b.lines.last() else { return false };
+                let prev = &lines[p];
                 let g = prev.origin.baseline - l.origin.baseline;
                 prev.stream == l.stream
                     && prev.font == l.font
@@ -516,8 +518,11 @@ fn group_blocks(lines: &[TextLine]) -> Vec<TextBlock> {
                     && g < l.size * 2.5
                     && gap.is_none_or(|first| (g - first).abs() < first * 0.2)
             });
-        if joins && let Some(b) = blocks.last_mut() {
-            let prev = &lines[*b.lines.last().expect("non-empty")];
+        if joins
+            && let Some(b) = blocks.last_mut()
+            && let Some(&p) = b.lines.last()
+        {
+            let prev = &lines[p];
             gap.get_or_insert(prev.origin.baseline - l.origin.baseline);
             if b.text.ends_with('-') {
                 b.text.pop();
@@ -643,8 +648,7 @@ pub fn rewrite_block(doc: &mut Document, page: usize, block: usize, text: Option
     let wrapped = wrap(&text, width + 0.5, advance);
     let mut substituted = None;
     let new_font = !reuse;
-    let (show_font, encode): (String, Encoder) = if reuse {
-        let m = metrics.clone().expect("checked");
+    let (show_font, encode): (String, Encoder) = if let Some(m) = metrics.clone().filter(|_| reuse) {
         (font_name.clone(), Box::new(move |s: &str| m.encode(s)))
     } else {
         let win = printcraft_fonts::win_ansi(&text);

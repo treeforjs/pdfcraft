@@ -12,6 +12,8 @@
 //!
 //! Text uses standard Helvetica (WinAnsi) added to the page resources as `/PCHelv`.
 
+#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
+
 use printcraft_cos::{Dict, Document, Object, Stream};
 use printcraft_fonts::{helvetica_width, literal, win_ansi};
 
