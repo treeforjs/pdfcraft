@@ -1593,6 +1593,15 @@ fn keys_after(edit: &Edit) -> Option<Keys> {
     }
 }
 
+/// The last-resort guard (AGENTS.md §4): run `f`, turning a panic that escapes it into an error
+/// message, so one bad file or edit can't take the app and its other documents down. It is a
+/// safety net for bugs, not a substitute for returning errors.
+pub fn guard<T>(f: impl FnOnce() -> T) -> Result<T, String> {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)).map_err(|p| {
+        p.downcast_ref::<&str>().map(|s| (*s).to_string()).or_else(|| p.downcast_ref::<String>().cloned()).unwrap_or_else(|| "unknown error".into())
+    })
+}
+
 /// Parse another PDF to copy pages from.
 fn open_source(name: &str, bytes: &Arc<Vec<u8>>) -> Result<printcraft_cos::Document, EditError> {
     match std::panic::catch_unwind(|| printcraft_cos::Document::open(bytes.clone())) {
@@ -1745,6 +1754,12 @@ impl Session {
     }
 
     pub fn open(&mut self, name: impl Into<String>, path: Option<String>, bytes: Arc<Vec<u8>>, password: Option<&str>) -> Result<DocId, OpenError> {
+        let name = name.into();
+        guard(|| self.open_unguarded(name, path, bytes, password))
+            .unwrap_or_else(|m| Err(OpenError::Invalid(format!("reading it failed unexpectedly ({m})"))))
+    }
+
+    fn open_unguarded(&mut self, name: String, path: Option<String>, bytes: Arc<Vec<u8>>, password: Option<&str>) -> Result<DocId, OpenError> {
         let cos = std::panic::catch_unwind(|| printcraft_cos::Document::open_with_password(bytes.clone(), password));
         // The renderer authenticates on its own. It cannot use the owner password of R2–R4
         // files, so give it the user password that owner authentication recovers.
@@ -1780,7 +1795,7 @@ impl Session {
         let id = DocId(self.next_id);
         self.docs.push(Document {
             id,
-            name: name.into(),
+            name,
             path,
             bytes,
             info,
@@ -1827,7 +1842,9 @@ impl Session {
         if !js_off && uses_scripts(&edit) {
             cx.js = Some(js::JsRunner::new(&next, &name));
         }
-        run_edit(&mut next, &edit, &mut cx)?;
+        // `next` is a copy: if the edit fails or crashes, the document is unchanged.
+        guard(|| run_edit(&mut next, &edit, &mut cx))
+            .unwrap_or_else(|m| Err(EditError::Invalid(format!("{} failed unexpectedly ({m}); the document was not changed", edit.label()))))?;
         // Signed documents are only ever saved incrementally: an edit that needs a full rewrite
         // (applying redactions, changing security, sanitizing) would invalidate the signatures.
         let rewrites = |c: &printcraft_cos::Document| c.full_save_required() || c.encryption_changed();
@@ -1844,7 +1861,8 @@ impl Session {
         }
         editor.redo.clear();
         Self::adopt_keys(doc);
-        if let Err(e) = Self::refresh_scoped(doc, scope) {
+        let refreshed = guard(|| Self::refresh_scoped(doc, scope)).unwrap_or_else(|m| Err(EditError::Reopen(m)));
+        if let Err(e) = refreshed {
             // Roll back: the edit produced something we cannot display.
             if let Some(ed) = doc.editor.as_mut()
                 && let Some((_, prev, keys, _)) = ed.undo.pop()
@@ -1853,7 +1871,7 @@ impl Session {
                 ed.keys = keys;
             }
             Self::adopt_keys(doc);
-            let _ = Self::refresh(doc);
+            let _ = guard(|| Self::refresh(doc));
             return Err(e);
         }
         doc.dirty = true;
@@ -1977,7 +1995,7 @@ impl Session {
             return Ok(editor.cos.bytes().clone());
         }
         let opts = SaveOptions { mod_date: self.now().map(printcraft_cos::pdf_date), ..SaveOptions::default() };
-        write_incremental(&editor.cos, &opts).map(Arc::new).map_err(|e| EditError::Write(e.to_string()))
+        guard(|| write_incremental(&editor.cos, &opts)).map_err(EditError::Write)?.map(Arc::new).map_err(|e| EditError::Write(e.to_string()))
     }
 
     /// A compact, garbage-collected rewrite (Save As ▸ "Optimized" / Reduce File Size groundwork).
@@ -1988,7 +2006,7 @@ impl Session {
         }
         let editor = doc.editor.as_ref().ok_or_else(|| EditError::ReadOnly(doc.read_only_reason.clone().unwrap_or_default()))?;
         let opts = SaveOptions { mod_date: self.now().map(printcraft_cos::pdf_date), ..SaveOptions::default() };
-        write_full(&editor.cos, &opts).map(Arc::new).map_err(|e| EditError::Write(e.to_string()))
+        guard(|| write_full(&editor.cos, &opts)).map_err(EditError::Write)?.map(Arc::new).map_err(|e| EditError::Write(e.to_string()))
     }
 
     /// Record a successful save of `bytes` (to `path`, if any): rebase editing on the saved file
@@ -2092,11 +2110,12 @@ impl Session {
             None => printcraft_cos::Document::open_with_password(doc.bytes.clone(), doc.password.as_deref())
                 .map_err(|e| EditError::Write(e.to_string()))?,
         };
-        Ok(match format {
+        guard(|| match format {
             DataFormat::Xfdf => printcraft_xfdf::export_xfdf(&cos, comments, fields, &doc.name).into_bytes(),
             DataFormat::Fdf => printcraft_xfdf::export_fdf(&cos, comments, fields, &doc.name),
             other => printcraft_xfdf::export_data(&cos, other).into_bytes(),
         })
+        .map_err(EditError::Write)
     }
 
     /// The print-ready PDF for `settings` (sheets laid out for the paper; see `printcraft-print`).
