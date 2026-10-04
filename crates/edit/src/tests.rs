@@ -450,6 +450,28 @@ fn paragraphs_take_new_formatting() {
 }
 
 #[test]
+fn a_new_paragraph_colour_does_not_spill_into_the_text_after_it() {
+    let mut doc = text_page("BT /F1 10 Tf 72 700 Td (First paragraph) Tj 0 -40 Td (Second paragraph) Tj ET");
+    let style = text::BlockStyle { color: Some([1.0, 0.0, 0.0]), ..Default::default() };
+    text::rewrite_block(&mut doc, 0, 0, None, &style).unwrap();
+    let doc = reopen(&doc);
+    // The fill colour in force where the second paragraph is shown (q/Q nest it).
+    let ops = printcraft_content::parse(&page_content_bytes(&doc, 0)).ops;
+    let (mut fill, mut stack) = (String::from("0 g"), Vec::new());
+    for op in &ops {
+        match op.op.as_slice() {
+            b"q" => stack.push(fill.clone()),
+            b"Q" => fill = stack.pop().unwrap_or_default(),
+            b"g" | b"rg" | b"k" => fill = String::from_utf8_lossy(&printcraft_content::serialize_ops(std::slice::from_ref(op))).trim().to_string(),
+            b"Tj" if op.operands.first().and_then(|o| o.as_string()).is_some_and(|s| s.to_text() == "Second paragraph") => break,
+            _ => {}
+        }
+    }
+    assert_eq!(fill, "0 g", "{ops:?}");
+    assert_eq!(text::text_blocks(&doc, 0).unwrap()[1].text, "Second paragraph");
+}
+
+#[test]
 fn justify_underline_and_spacing() {
     let src = "BT /F1 10 Tf 12 TL 100 700 Td (One two three four five six seven) Tj T* (eight nine ten eleven twelve) Tj T* (end) Tj ET";
     // Justified: every line but the last reaches the right edge.

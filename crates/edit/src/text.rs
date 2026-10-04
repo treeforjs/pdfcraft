@@ -667,7 +667,8 @@ pub fn rewrite_block(doc: &mut Document, page: usize, block: usize, text: Option
         None => size * 1.2,
     };
     let n = printcraft_content::num;
-    let mut block_ops = vec![Op::new("BT", vec![])];
+    // In its own graphics state, so a new colour (or anything else) stops at the paragraph.
+    let mut block_ops = vec![Op::new("q", vec![]), Op::new("BT", vec![])];
     let mut state = o_state.clone();
     state.word_spacing = 0.0;
     state.font = Some((show_font, size));
@@ -735,6 +736,7 @@ pub fn rewrite_block(doc: &mut Document, page: usize, block: usize, text: Option
         block_ops.push(Op::new("S", vec![]));
         block_ops.push(Op::new("Q", vec![]));
     }
+    block_ops.push(Op::new("Q", vec![]));
     // What the text after the paragraph expects: the state at its BT.
     block_ops.extend(o.bt_state.ops().into_iter().filter(|op| !op.is("Tf") || o.bt_state.font.is_some()));
     let drop: std::collections::HashSet<usize> = members.iter().flat_map(|l| l.ops.iter().copied()).collect();
