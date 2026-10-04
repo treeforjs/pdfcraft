@@ -976,9 +976,121 @@ fn event_object(ctx: &mut Context, e: &Event) -> JsObject {
         .build()
 }
 
+// ── stack safety ────────────────────────────────────────────────────────────────────────────
+//
+// boa's parser and compiler recurse once per nesting level and have no limit of their own: about
+// a hundred nested parentheses overflow a 2 MiB stack, which aborts the whole app. Scripts come
+// from documents, so `run` refuses nesting no real form needs and runs the engine on a thread
+// with a large stack (address space, committed only as it is used). Together these bound the
+// stack a script can use: brackets and prefix operators by the limits below, and every other
+// construct (a few KiB per level, several bytes of source each) by the length limit.
+
+/// Longest script, in bytes.
+const MAX_SCRIPT_BYTES: usize = 256 * 1024;
+/// Deepest nesting of `(`, `[` and `{`.
+const MAX_BRACKET_DEPTH: usize = 64;
+/// Longest run of prefix operators (`!`, `~`, `+`, `-`).
+const MAX_PREFIX_RUN: usize = 64;
+/// Most `?` (conditional expressions nest without brackets).
+const MAX_CONDITIONALS: usize = 4096;
+/// The script thread's stack.
+#[cfg(not(target_arch = "wasm32"))]
+const SCRIPT_STACK: usize = 1 << 30;
+
+/// Why `source` is refused, if it is: too long, or nested deeper than any form needs. Strings
+/// and comments are skipped; brackets in regular expressions and templates count, which only
+/// errs on the safe side.
+fn refuse(source: &str) -> Option<String> {
+    if source.len() > MAX_SCRIPT_BYTES {
+        return Some(format!("the script is too long ({} KiB; the limit is {} KiB)", source.len() / 1024, MAX_SCRIPT_BYTES / 1024));
+    }
+    let too_deep = || Some("the script is nested too deeply to run safely".to_string());
+    let b = source.as_bytes();
+    let (mut depth, mut prefix, mut conditionals) = (0usize, 0usize, 0usize);
+    let mut i = 0;
+    while let Some(&c) = b.get(i) {
+        i += 1;
+        match c {
+            b'\'' | b'"' => {
+                // To the closing quote (or the end of the line, where an unclosed string ends).
+                while let Some(&d) = b.get(i) {
+                    i += 1;
+                    if d == b'\\' {
+                        i += 1;
+                    } else if d == c || d == b'\n' {
+                        break;
+                    }
+                }
+                prefix = 0;
+            }
+            b'/' if b.get(i) == Some(&b'/') => {
+                while b.get(i).is_some_and(|d| *d != b'\n') {
+                    i += 1;
+                }
+            }
+            b'/' if b.get(i) == Some(&b'*') => {
+                i += 1;
+                while i < b.len() && !b[i..].starts_with(b"*/") {
+                    i += 1;
+                }
+                i += 2;
+            }
+            b'(' | b'[' | b'{' => {
+                depth += 1;
+                if depth > MAX_BRACKET_DEPTH {
+                    return too_deep();
+                }
+                prefix = 0;
+            }
+            b')' | b']' | b'}' => {
+                depth = depth.saturating_sub(1);
+                prefix = 0;
+            }
+            b'!' | b'~' | b'+' | b'-' => {
+                prefix += 1;
+                if prefix > MAX_PREFIX_RUN {
+                    return too_deep();
+                }
+            }
+            b'?' => {
+                conditionals += 1;
+                if conditionals > MAX_CONDITIONALS {
+                    return too_deep();
+                }
+                prefix = 0;
+            }
+            c if c.is_ascii_whitespace() => {}
+            _ => prefix = 0,
+        }
+    }
+    None
+}
+
 /// Run `script` for `event`, after the document-level scripts (`doc_scripts`, which define the
 /// functions field scripts call), with the form's `fields`.
 pub fn run(script: &str, event: &Event, doc: &DocInfo, fields: &[FieldState], doc_scripts: &[String], limits: Limits) -> Outcome {
+    let failed = |why: String| Outcome { rc: true, value: event.value.clone(), change: event.change.clone(), error: Some(why), ..Default::default() };
+    if let Some(why) = std::iter::once(script).chain(doc_scripts.iter().map(String::as_str)).find_map(refuse) {
+        return failed(why);
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        std::thread::scope(|scope| {
+            let spawned = std::thread::Builder::new()
+                .name("printcraft-js".into())
+                .stack_size(SCRIPT_STACK)
+                .spawn_scoped(scope, || run_here(script, event, doc, fields, doc_scripts, limits));
+            match spawned {
+                Ok(thread) => thread.join().unwrap_or_else(|_| failed("the script stopped with an internal error".into())),
+                Err(e) => failed(format!("the script engine could not start: {e}")),
+            }
+        })
+    }
+    #[cfg(target_arch = "wasm32")]
+    run_here(script, event, doc, fields, doc_scripts, limits)
+}
+
+fn run_here(script: &str, event: &Event, doc: &DocInfo, fields: &[FieldState], doc_scripts: &[String], limits: Limits) -> Outcome {
     let mut ctx = Context::default();
     ctx.runtime_limits_mut().set_loop_iteration_limit(limits.loop_iterations);
     ctx.runtime_limits_mut().set_recursion_limit(limits.recursion);
