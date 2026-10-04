@@ -148,3 +148,38 @@ fn the_sandbox_has_no_host_access() {
     );
     assert_eq!(o.value, "undefined,undefined,undefined,undefined,undefined");
 }
+
+/// Hostile nesting used to overflow the stack in boa's parser and compiler, aborting the app
+/// (about 100 nested parentheses were enough on a 2 MiB stack).
+#[test]
+fn deeply_nested_scripts_fail_instead_of_crashing() {
+    let n = 100_000;
+    let hostile = [
+        format!("event.value = {}1{};", "(".repeat(n), ")".repeat(n)),
+        format!("var a = {}1{};", "[".repeat(n), "]".repeat(n)),
+        format!("{}{}", "{".repeat(n), "}".repeat(n)),
+        format!("var a = {}1;", "!".repeat(n)),
+        format!("var a = {}1;", "- ".repeat(n)),
+        format!("var a = {}1;", "1?1:".repeat(n)),
+        format!("var f = {}1;", "a=>".repeat(n)),
+    ];
+    for s in &hostile {
+        let o = go(s, &Event::doc("Open"));
+        assert!(o.error.is_some(), "{}…", &s[..20]);
+    }
+    // A hostile document-level script is refused too, before the field script runs.
+    let o = run("event.value = 'ran';", &Event::field("Calculate", "a", ""), &doc(), &fields(), &[hostile[0].clone()], Limits::default());
+    assert!(o.error.is_some());
+}
+
+#[test]
+fn ordinary_nesting_still_runs() {
+    let n = 40;
+    let s = format!("event.value = {}1{} + [[[2]]][0][0][0] + (1 ? 2 : 3);", "(".repeat(n), ")".repeat(n));
+    let o = go(&s, &Event::field("Calculate", "a", ""));
+    assert_eq!(o.error, None);
+    assert_eq!(o.value, "5");
+    // Brackets in strings and comments don't count.
+    let s = format!("// {}\nevent.value = '{}'.length;", "(".repeat(1000), "[".repeat(1000));
+    assert_eq!(go(&s, &Event::field("Calculate", "a", "")).value, "1000");
+}
