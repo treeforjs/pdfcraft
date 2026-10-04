@@ -5,6 +5,8 @@
 //! grouped into [`Change`]s — inserted, deleted or replaced runs of words — each with the
 //! rectangles to highlight on the old and new pages.
 
+#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
+
 /// A word of one document.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Word {

@@ -8,6 +8,8 @@
 //!
 //! The models read the Latin alphabet (English and other languages written without accents).
 
+#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
+
 use std::path::{Path, PathBuf};
 
 pub use printcraft_fonts::helvetica_width;
