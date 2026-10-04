@@ -65,6 +65,18 @@ fn children_of(doc: &Document, parent: ObjRef, seen: &mut HashSet<ObjRef>) -> Ve
     out
 }
 
+/// Every bookmark item, parents before their children. Cycle-safe.
+pub(crate) fn items(doc: &Document) -> Vec<ObjRef> {
+    let Some(root) = outline_root(doc) else { return Vec::new() };
+    let (mut seen, mut out, mut stack) = (HashSet::new(), Vec::new(), vec![root]);
+    while let Some(parent) = stack.pop() {
+        let kids = children_of(doc, parent, &mut seen);
+        stack.extend(kids.iter().copied());
+        out.extend(kids);
+    }
+    out
+}
+
 /// The bookmark tree.
 pub fn bookmarks(doc: &Document) -> Vec<Bookmark> {
     let Some(root) = outline_root(doc) else { return Vec::new() };

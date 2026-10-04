@@ -118,6 +118,35 @@ fn delete_keeps_inherited_attributes_on_survivors() {
 }
 
 #[test]
+fn deleted_pages_are_not_kept_by_what_points_at_them() {
+    // A1 links to A3, a bookmark goes to A3, and A2 holds the form's only field. After deleting
+    // A2 and A3 neither page, its content nor the field may stay in the saved file.
+    let mut doc = doc_a();
+    add_bookmark(&mut doc, &[], 0, "To A3", 2).unwrap();
+    delete_pages(&mut doc, &[1, 2]).unwrap();
+    let out = full_roundtrip(&doc);
+    assert_eq!(labels(&out), ["A1"]);
+    // The bookmark and A1's link now go nowhere instead of to a missing page.
+    let mark = out.get(bookmarks(&out)[0].obj).as_dict().cloned().unwrap();
+    assert!(!mark.contains(b"Dest") && !mark.contains(b"A"), "{mark:?}");
+    let link = &annots(&out, 0)[0];
+    assert!(!link.contains(b"A") && !link.contains(b"Dest"), "{link:?}");
+    let mut page_objects = 0;
+    for n in out.object_numbers() {
+        let o = out.get(ObjRef::new(n, out.generation(n)));
+        if let Object::Stream(s) = &*o {
+            let data = String::from_utf8_lossy(&s.decoded().unwrap()).into_owned();
+            assert!(!data.contains("(A2)") && !data.contains("(A3)"), "object {n} still holds a deleted page's content");
+        }
+        page_objects += usize::from(o.as_dict().is_some_and(|d| d.name(b"Type") == Some(b"Page")));
+    }
+    assert_eq!(page_objects, 1);
+    let cat = out.get(out.root().unwrap()).as_dict().cloned().unwrap();
+    let form = out.resolve(cat.get(b"AcroForm").unwrap());
+    assert_eq!(form.as_dict().and_then(|f| f.get(b"Fields")).and_then(Object::as_array).map(Vec::len), Some(0), "the field went with its page");
+}
+
+#[test]
 fn cannot_delete_every_page_or_missing_pages() {
     let mut doc = open(fixture());
     assert_eq!(delete_pages(&mut doc, &[0, 1, 2]), Err(OrganizeError::WouldRemoveAllPages));
