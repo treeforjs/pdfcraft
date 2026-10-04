@@ -9,6 +9,8 @@
 //!   with the origin at the top-left of the displayed page.
 //! - An optional root directory confines every path a tool reads or writes.
 
+#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
+
 mod a11y;
 mod comments;
 mod content;
@@ -1204,12 +1206,15 @@ impl Automation {
 
     fn renderer(&mut self, id: DocId) -> Result<&mut PageRenderer> {
         let doc = self.session.get(id).ok_or_else(|| failed("no such document"))?;
-        let stale = self.renderers.get(&id).is_none_or(|(b, _)| !Arc::ptr_eq(b, &doc.bytes));
-        if stale {
+        let fresh = || {
             let config = RenderConfig { password: doc.password.as_deref().map(Arc::from), ..Default::default() };
-            self.renderers.insert(id, (doc.bytes.clone(), PageRenderer::new(doc.bytes.clone(), config)));
+            (doc.bytes.clone(), PageRenderer::new(doc.bytes.clone(), config))
+        };
+        let entry = self.renderers.entry(id).or_insert_with(fresh);
+        if !Arc::ptr_eq(&entry.0, &doc.bytes) {
+            *entry = fresh();
         }
-        Ok(&mut self.renderers.get_mut(&id).expect("inserted above").1)
+        Ok(&mut entry.1)
     }
 
     fn page_render(&mut self, a: &Args) -> Result<Content> {
@@ -1245,13 +1250,16 @@ impl Automation {
         if !Arc::ptr_eq(&entry.0, &bytes) || entry.1.len() != n {
             *entry = (bytes.clone(), vec![None; n]);
         }
-        let mut missing: Vec<usize> = pages.iter().copied().filter(|p| entry.1[*p].is_none()).collect();
+        let mut missing: Vec<usize> = pages.iter().copied().filter(|p| entry.1.get(*p).is_some_and(Option::is_none)).collect();
         missing.sort_unstable();
         missing.dedup();
         for (p, text) in extract_parallel(&bytes, password, &missing) {
-            entry.1[p] = Some(Arc::new(text.map_err(|e| failed(format!("page {}: {e}", p + 1)))?));
+            let text = Arc::new(text.map_err(|e| failed(format!("page {}: {e}", p + 1)))?);
+            if let Some(slot) = entry.1.get_mut(p) {
+                *slot = Some(text);
+            }
         }
-        Ok(pages.iter().map(|p| entry.1[*p].clone().expect("extracted above")).collect())
+        pages.iter().map(|p| entry.1.get(*p).cloned().flatten().ok_or_else(|| failed(format!("page {} has no text", p + 1)))).collect()
     }
 
     fn text_extract(&mut self, a: &Args) -> Result<Value> {

@@ -73,7 +73,10 @@ impl Automation {
                 Edit::AddAnnotation(NewAnnotation { page: *page, shape, style: style.clone(), contents: String::new(), author: author.clone() })
             })
             .collect();
-        let edit = if edits.len() == 1 { edits.into_iter().next().expect("one") } else { Edit::Batch { label: "Mark for redaction".into(), edits } };
+        let edit = match <[Edit; 1]>::try_from(edits) {
+            Ok([one]) => one,
+            Err(edits) => Edit::Batch { label: "Mark for redaction".into(), edits },
+        };
         let mut out = self.apply(a, edit)?;
         out["marked"] = json!(count);
         out["pages_marked"] = json!(marks.iter().map(|m| m.0 + 1).collect::<std::collections::BTreeSet<_>>());

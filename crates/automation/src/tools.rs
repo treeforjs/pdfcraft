@@ -48,11 +48,15 @@ fn color() -> Value {
 
 /// Properties that pick one comment: its `id` (from comment_list), or `page` + `index`.
 fn comment_ref(mut extra: Value) -> Value {
-    let props = extra.as_object_mut().expect("an object");
-    props.insert("doc".into(), doc());
-    props.insert("id".into(), json!({ "type": "string", "description": "The comment's id (from comment_list)." }));
-    props.insert("page".into(), json!({ "type": "integer", "minimum": 1, "description": "With `index`, instead of `id`." }));
-    props.insert("index".into(), json!({ "type": "integer", "minimum": 1, "description": "1-based position on the page, as comment_list reports." }));
+    if let Some(props) = extra.as_object_mut() {
+        props.insert("doc".into(), doc());
+        props.insert("id".into(), json!({ "type": "string", "description": "The comment's id (from comment_list)." }));
+        props.insert("page".into(), json!({ "type": "integer", "minimum": 1, "description": "With `index`, instead of `id`." }));
+        props.insert(
+            "index".into(),
+            json!({ "type": "integer", "minimum": 1, "description": "1-based position on the page, as comment_list reports." }),
+        );
+    }
     extra
 }
 

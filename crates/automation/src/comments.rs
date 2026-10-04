@@ -305,7 +305,9 @@ impl Automation {
         let author = a.opt_str("author")?.unwrap_or(DEFAULT_AUTHOR).to_string();
         // Replace Text: the struck-out text and a grouped caret holding `contents`.
         if kind == "replace" {
-            let Shape::TextMarkup { quads, .. } = shape else { unreachable!("replace marks text") };
+            let Shape::TextMarkup { quads, .. } = shape else {
+                return Err(ToolError::InvalidArgs("replace marks text: give it text to replace".into()));
+            };
             if contents.trim().is_empty() {
                 return Err(ToolError::InvalidArgs("replace needs `contents`: the replacement text".into()));
             }
