@@ -196,7 +196,8 @@ impl Automation {
                     "read_only": f.read_only(),
                     "required": f.has(field_flags::REQUIRED),
                 });
-                let o = v.as_object_mut().expect("object");
+                let mut more = serde_json::Map::new();
+                let o = &mut more;
                 if let Some(t) = &f.tooltip {
                     o.insert("tooltip".into(), json!(t));
                 }
@@ -235,6 +236,9 @@ impl Automation {
                         }
                     }
                     _ => {}
+                }
+                if let Value::Object(m) = &mut v {
+                    m.extend(more);
                 }
                 v
             })
