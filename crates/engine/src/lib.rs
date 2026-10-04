@@ -10,6 +10,8 @@
 //! appended revision — and the view is refreshed from it, so what you see is exactly what Save
 //! will write. Saving rebases onto the written bytes, so the next save appends only new edits.
 
+#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
+
 pub mod actions;
 pub mod catalog;
 pub mod commands;
@@ -1929,7 +1931,8 @@ impl Session {
                     }
                 }
             }
-            Scope::Full => unreachable!("handled above"),
+            // Handled above; kept as a full refresh so the match stays total.
+            Scope::Full => return Self::refresh(doc),
         }
         doc.info.file_size = bytes.len();
         doc.form = form;
