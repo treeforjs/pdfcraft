@@ -12,6 +12,8 @@
 //! The crate knows nothing about the COS object model. Callers pass in the values of the
 //! `/Encrypt` dictionary and the first element of the trailer `/ID`.
 
+#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
+
 mod aes_cbc;
 mod rc4;
 
@@ -256,16 +258,19 @@ impl SecurityHandler {
                     h.update(num.to_le_bytes());
                     h.update(generation.to_le_bytes());
                     h.update(data);
-                    let iv: [u8; 16] = h.finalize()[..16].try_into().expect("16 bytes");
+                    let digest = h.finalize();
+                    let mut iv = [0u8; 16];
+                    for (d, s) in iv.iter_mut().zip(digest.iter()) {
+                        *d = *s;
+                    }
                     let mut out = iv.to_vec();
                     out.extend(aes_cbc_encrypt(&key, &iv, data, true));
                     out
                 } else {
-                    if data.len() < 16 {
+                    let Some((iv, body)) = data.split_first_chunk::<16>() else {
                         return Vec::new(); // only (part of) an IV: empty plaintext
-                    }
-                    let (iv, body) = data.split_at(16);
-                    aes_cbc_decrypt(&key, iv.try_into().expect("16 bytes"), body, true)
+                    };
+                    aes_cbc_decrypt(&key, iv, body, true)
                 }
             }
         }
@@ -429,15 +434,18 @@ fn hash_r6(r: i64, pw: &[u8], salt: &[u8], udata: &[u8]) -> Vec<u8> {
             k1.extend_from_slice(&k);
             k1.extend_from_slice(udata);
         }
-        let e = aes_cbc_encrypt(&k[..16], k[16..32].try_into().expect("16 bytes"), &k1, false);
-        let m = e[..16].iter().map(|b| u32::from(*b)).sum::<u32>() % 3;
+        // `k` is always a SHA-2 digest (32, 48 or 64 bytes): key = its first 16 bytes, IV = the next 16.
+        let Some((key, rest)) = k.split_first_chunk::<16>() else { break };
+        let Some(iv) = rest.first_chunk::<16>() else { break };
+        let e = aes_cbc_encrypt(key, iv, &k1, false);
+        let m = e.iter().take(16).map(|b| u32::from(*b)).sum::<u32>() % 3;
         k = match m {
             0 => Sha256::digest(&e).to_vec(),
             1 => Sha384::digest(&e).to_vec(),
             _ => Sha512::digest(&e).to_vec(),
         };
         round += 1;
-        if round >= 64 && u32::from(*e.last().expect("non-empty")) <= round - 32 {
+        if round >= 64 && e.last().is_none_or(|b| u32::from(*b) <= round - 32) {
             break;
         }
     }
