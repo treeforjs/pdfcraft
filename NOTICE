@@ -1,9 +1,16 @@
 PrintCraft
-Copyright the PrintCraft contributors. Licensed under MIT OR Apache-2.0.
+Copyright (c) 2026 ArtCraft Team and the PrintCraft contributors.
+Licensed under the MIT License or the Apache License, Version 2.0, at your option
+(LICENSE-MIT, LICENSE-APACHE).
 
-This product bundles or depends on third-party material under the following licences. The complete
-per-asset list (author, source, licence, SHA-256) is ATTRIBUTION.md / ATTRIBUTION.toml; the asset
-policy is AGENTS.md §1.
+The ArtCraft name, wordmark and logos in docs/brand/ are trademarks of the ArtCraft Team. They are
+not open source and are not covered by the license above; their terms are in
+docs/brand/LICENSE-brand.txt.
+
+Third-party material
+
+This product bundles third-party material under its own licenses, listed below. The per-file
+list (author, source, license) is in ATTRIBUTION.md.
 
 - Lucide icons (assets/icons/*.svg) — ISC License. See assets/icons/LICENSE-lucide.txt.
 - Inter typeface (assets/fonts/Inter-*.ttf) — SIL Open Font License 1.1. See assets/fonts/OFL-Inter.txt.

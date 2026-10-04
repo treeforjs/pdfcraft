@@ -71,7 +71,7 @@ PrintCraft is part of [ArtCraft](https://getartcraft.com). Come say hello, get h
 - **Web page:** [getartcraft.com/apps/printcraft](https://getartcraft.com/apps/printcraft)
 - **Source:** [github.com/storytold/printcraft](https://github.com/storytold/printcraft)
 
-The ArtCraft name and logos in `docs/brand/` belong to Storyteller and are not open source (see `docs/brand/LICENSE-brand.txt`). Forks must remove them.
+The ArtCraft name and logos in `docs/brand/` are trademarks of the ArtCraft Team and are not open source. They may be used only unmodified, and only as part of PrintCraft (see `docs/brand/LICENSE-brand.txt`). Forks and modified versions must remove them.
 
 ## Highlights
 
@@ -428,9 +428,18 @@ And [**ArtCraft**](https://getartcraft.com/) itself, our AI image and video stud
 
 ---
 
-## Licence
+## License and credits
 
-MIT OR Apache-2.0 ([LICENSE-MIT](LICENSE-MIT), [LICENSE-APACHE](LICENSE-APACHE)). Every icon, font and image is openly licensed and listed, with its author and source, in [ATTRIBUTION.md](ATTRIBUTION.md). The policy is in [AGENTS.md](AGENTS.md), and required notices are in [NOTICE](NOTICE). Contributors and agents: read [AGENTS.md](AGENTS.md) and [CLAUDE.md](CLAUDE.md).
+PrintCraft is dual-licensed under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option.
+Copyright (c) 2026 ArtCraft Team and the PrintCraft contributors. Required notices are in [NOTICE](NOTICE).
+
+Bundled fonts, icons, images and other assets keep their own open licenses; each one is listed
+with its author, source and license in [ATTRIBUTION.md](ATTRIBUTION.md).
+
+The ArtCraft name, wordmark and logos in [`docs/brand/`](docs/brand/) are trademarks of the
+ArtCraft Team and are not covered by this license. They may be used only unmodified, and only as
+part of this repository and PrintCraft, under [`docs/brand/LICENSE-brand.txt`](docs/brand/LICENSE-brand.txt).
+Forks and modified versions must remove them.
 
 <sub>Adobe, Photoshop, Illustrator, Premiere Pro, Lightroom, Acrobat, After Effects and InDesign are trademarks or registered trademarks of Adobe Inc. in the United States and/or other countries. PrintCraft is an independent, open-source project and is not affiliated with, sponsored by or endorsed by Adobe Inc.; these names are used only to describe the workflows it is compatible with.</sub>
 
