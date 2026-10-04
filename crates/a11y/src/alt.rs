@@ -141,7 +141,7 @@ fn content_bbox(doc: &Document, page: &Dict, ids: &HashSet<i64>) -> Option<[f64;
     let mut path: Vec<(f64, f64)> = Vec::new();
     for op in printcraft_content::parse(&page_content(doc, page)).ops {
         let inside = marks.iter().any(|m| *m);
-        let top = *ctm.last().expect("never empty");
+        let top = ctm.last().copied().unwrap_or(Matrix([1.0, 0.0, 0.0, 1.0, 0.0, 0.0]));
         match op.op.as_slice() {
             b"q" => ctm.push(top),
             b"Q" => {
@@ -150,8 +150,10 @@ fn content_bbox(doc: &Document, page: &Dict, ids: &HashSet<i64>) -> Option<[f64;
                 }
             }
             b"cm" => {
-                if let Some(m) = Matrix::from_operands(&op.operands) {
-                    *ctm.last_mut().expect("never empty") = m.then(&top);
+                if let Some(m) = Matrix::from_operands(&op.operands)
+                    && let Some(t) = ctm.last_mut()
+                {
+                    *t = m.then(&top);
                 }
             }
             b"BMC" => marks.push(false),

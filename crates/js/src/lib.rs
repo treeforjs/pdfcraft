@@ -21,6 +21,8 @@
 //! are bounded. Side effects (alerts, field changes, resets, printing, navigation) are returned
 //! in an [`Outcome`] for the caller to apply.
 
+#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
+
 use std::cell::RefCell;
 use std::collections::BTreeSet;
 
@@ -200,8 +202,9 @@ struct Host {
 
 type Shared = RefCell<Host>;
 
-fn host(ctx: &Context) -> &Shared {
-    ctx.get_data::<Shared>().expect("host state is installed before scripts run")
+/// The host state, installed before scripts run.
+fn host(ctx: &Context) -> JsResult<&Shared> {
+    ctx.get_data::<Shared>().ok_or_else(|| error("the script host is not set up"))
 }
 
 fn s(v: &str) -> JsValue {
@@ -267,17 +270,17 @@ fn colour(c: &Option<Vec<String>>, ctx: &mut Context) -> JsValue {
 
 fn field_index(ctx: &Context, name: &JsString) -> JsResult<usize> {
     let n = name.to_std_string_escaped();
-    host(ctx).borrow().fields.iter().position(|f| f.name == n).ok_or_else(|| error(format!("no field named {n}")))
+    host(ctx)?.borrow().fields.iter().position(|f| f.name == n).ok_or_else(|| error(format!("no field named {n}")))
 }
 
 fn read(ctx: &Context, name: &JsString) -> JsResult<FieldState> {
     let i = field_index(ctx, name)?;
-    Ok(host(ctx).borrow().fields[i].clone())
+    Ok(host(ctx)?.borrow().fields[i].clone())
 }
 
 fn write(ctx: &Context, name: &JsString, change: impl FnOnce(&mut FieldState)) -> JsResult<()> {
     let i = field_index(ctx, name)?;
-    let mut h = host(ctx).borrow_mut();
+    let mut h = host(ctx)?.borrow_mut();
     change(&mut h.fields[i]);
     h.changed.insert(i);
     Ok(())
@@ -428,7 +431,7 @@ fn field_object(ctx: &mut Context, name: &str) -> JsObject {
         Ok(JsValue::undefined())
     }
     fn set_focus(_: &JsValue, _: &[JsValue], name: &JsString, c: &mut Context) -> JsResult<JsValue> {
-        host(c).borrow_mut().requests.push(Request::Focus(name.to_std_string_escaped()));
+        host(c)?.borrow_mut().requests.push(Request::Focus(name.to_std_string_escaped()));
         Ok(JsValue::undefined())
     }
 
@@ -464,30 +467,30 @@ fn field_object(ctx: &mut Context, name: &str) -> JsObject {
 
 fn get_field(_: &JsValue, args: &[JsValue], ctx: &mut Context) -> JsResult<JsValue> {
     let name = text(&arg(args, 0), ctx)?;
-    let exists = host(ctx).borrow().fields.iter().any(|f| f.name == name);
+    let exists = host(ctx)?.borrow().fields.iter().any(|f| f.name == name);
     if exists {
         return Ok(field_object(ctx, &name).into());
     }
     // A parent name (e.g. "total" for "total.0"): its first kid stands in, as for groups.
     let prefix = format!("{name}.");
-    let kid = host(ctx).borrow().fields.iter().find(|f| f.name.starts_with(&prefix)).map(|f| f.name.clone());
+    let kid = host(ctx)?.borrow().fields.iter().find(|f| f.name.starts_with(&prefix)).map(|f| f.name.clone());
     Ok(kid.map_or(JsValue::null(), |k| field_object(ctx, &k).into()))
 }
 
 fn get_nth_field_name(_: &JsValue, args: &[JsValue], ctx: &mut Context) -> JsResult<JsValue> {
     let i = arg(args, 0).to_number(ctx)?;
-    let name = host(ctx).borrow().fields.get(i.max(0.0) as usize).map(|f| f.name.clone());
+    let name = host(ctx)?.borrow().fields.get(i.max(0.0) as usize).map(|f| f.name.clone());
     Ok(name.map_or(JsValue::null(), |n| s(&n)))
 }
 
 fn reset_form(_: &JsValue, args: &[JsValue], ctx: &mut Context) -> JsResult<JsValue> {
     let names = strings(&arg(args, 0), ctx)?;
-    host(ctx).borrow_mut().requests.push(Request::Reset(names));
+    host(ctx)?.borrow_mut().requests.push(Request::Reset(names));
     Ok(JsValue::undefined())
 }
 
 fn print(_: &JsValue, _: &[JsValue], ctx: &mut Context) -> JsResult<JsValue> {
-    host(ctx).borrow_mut().requests.push(Request::Print);
+    host(ctx)?.borrow_mut().requests.push(Request::Print);
     Ok(JsValue::undefined())
 }
 
@@ -500,7 +503,7 @@ fn submit_form(_: &JsValue, args: &[JsValue], ctx: &mut Context) -> JsResult<JsV
         }
         _ => text(&a, ctx)?,
     };
-    host(ctx).borrow_mut().requests.push(Request::Submit(url));
+    host(ctx)?.borrow_mut().requests.push(Request::Submit(url));
     Ok(JsValue::undefined())
 }
 
@@ -509,16 +512,16 @@ fn noop(_: &JsValue, _: &[JsValue], _: &mut Context) -> JsResult<JsValue> {
 }
 
 fn num_fields(_: &JsValue, _: &[JsValue], ctx: &mut Context) -> JsResult<JsValue> {
-    Ok(JsValue::from(host(ctx).borrow().fields.len() as f64))
+    Ok(JsValue::from(host(ctx)?.borrow().fields.len() as f64))
 }
 
 fn page_num_get(_: &JsValue, _: &[JsValue], ctx: &mut Context) -> JsResult<JsValue> {
-    Ok(JsValue::from(host(ctx).borrow().doc.page as f64))
+    Ok(JsValue::from(host(ctx)?.borrow().doc.page as f64))
 }
 
 fn page_num_set(_: &JsValue, args: &[JsValue], ctx: &mut Context) -> JsResult<JsValue> {
     let n = arg(args, 0).to_number(ctx)?;
-    let mut h = host(ctx).borrow_mut();
+    let mut h = host(ctx)?.borrow_mut();
     let last = h.doc.num_pages.saturating_sub(1);
     let p = (n.max(0.0) as usize).min(last);
     h.doc.page = p;
@@ -541,19 +544,19 @@ fn message(v: &JsValue, key: &str, ctx: &mut Context) -> JsResult<String> {
 
 fn alert(_: &JsValue, args: &[JsValue], ctx: &mut Context) -> JsResult<JsValue> {
     let m = message(&arg(args, 0), "cMsg", ctx)?;
-    host(ctx).borrow_mut().alerts.push(m);
+    host(ctx)?.borrow_mut().alerts.push(m);
     // The OK button.
     Ok(JsValue::from(1))
 }
 
 fn beep(_: &JsValue, _: &[JsValue], ctx: &mut Context) -> JsResult<JsValue> {
-    host(ctx).borrow_mut().requests.push(Request::Beep);
+    host(ctx)?.borrow_mut().requests.push(Request::Beep);
     Ok(JsValue::undefined())
 }
 
 fn launch_url(_: &JsValue, args: &[JsValue], ctx: &mut Context) -> JsResult<JsValue> {
     let u = message(&arg(args, 0), "cURL", ctx)?;
-    host(ctx).borrow_mut().requests.push(Request::LaunchUrl(u));
+    host(ctx)?.borrow_mut().requests.push(Request::LaunchUrl(u));
     Ok(JsValue::undefined())
 }
 
@@ -564,12 +567,12 @@ fn response(_: &JsValue, _: &[JsValue], _: &mut Context) -> JsResult<JsValue> {
 
 fn println(_: &JsValue, args: &[JsValue], ctx: &mut Context) -> JsResult<JsValue> {
     let m = text(&arg(args, 0), ctx)?;
-    host(ctx).borrow_mut().console.push(m);
+    host(ctx)?.borrow_mut().console.push(m);
     Ok(JsValue::undefined())
 }
 
 fn console_clear(_: &JsValue, _: &[JsValue], ctx: &mut Context) -> JsResult<JsValue> {
-    host(ctx).borrow_mut().console.clear();
+    host(ctx)?.borrow_mut().console.clear();
     Ok(JsValue::undefined())
 }
 
@@ -889,7 +892,7 @@ fn install(ctx: &mut Context) -> JsResult<()> {
     let pg = function(ctx, NativeFunction::from_fn_ptr(page_num_get));
     let ps = function(ctx, NativeFunction::from_fn_ptr(page_num_set));
     let (file, pages, info) = {
-        let h = host(ctx).borrow();
+        let h = host(ctx)?.borrow();
         (h.doc.file_name.clone(), h.doc.num_pages, h.doc.info.clone())
     };
     let mut io = ObjectInitializer::new(ctx);
