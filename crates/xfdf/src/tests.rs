@@ -153,6 +153,21 @@ fn form_data_as_xml_csv_and_text() {
 }
 
 #[test]
+fn csv_values_may_span_lines() {
+    // A quoted CSV value may hold line breaks (export_data writes multiline text that way): the
+    // record goes on to the closing quote, so later columns still import.
+    let mut dst = blank();
+    let r = import(&mut dst, b"Name,Agree\r\n\"Ada \"\"the\"\"\r\nCountess\",Yes\r\n").unwrap();
+    assert_eq!(r.fields, 2, "{r:?}");
+    assert!(values(&dst)[0].1[0].starts_with("Ada \"the\"") && values(&dst)[0].1[0].ends_with("Countess"), "{:?}", values(&dst));
+    assert_eq!(values(&dst)[1].1, ["Yes"]);
+    // A header without a record is still not a data file.
+    assert!(import(&mut blank(), b"Name,Agree\r\n").is_err());
+    // An unterminated quote runs to the end of the file and is read leniently, as before.
+    assert!(import(&mut blank(), b"Name,Agree\r\n\"Ada, Yes\r\n").is_ok());
+}
+
+#[test]
 fn bad_data_is_refused_with_a_reason() {
     let mut dst = blank();
     assert!(matches!(import(&mut dst, b"<xfdf><annots>"), Err(DataError::Malformed(_))));

@@ -843,34 +843,39 @@ fn import_table(doc: &mut Document, text: &str) -> Result<Report, DataError> {
                 (name, vec![c.text().unwrap_or("").to_string()])
             })
             .collect()
-    } else {
+    } else if t.lines().next().is_some_and(|l| l.contains('\t')) {
         let mut lines = t.lines();
         let (Some(head), Some(row)) = (lines.next(), lines.next()) else { return Err(DataError::UnknownFormat) };
-        let split = |l: &str| -> Vec<String> {
-            if l.contains('\t') {
-                l.split('\t').map(str::to_string).collect()
-            } else {
-                // CSV with quotes.
-                let mut out = Vec::new();
-                let mut cur = String::new();
-                let mut quoted = false;
-                let mut chars = l.chars().peekable();
-                while let Some(c) = chars.next() {
-                    match c {
-                        '"' if quoted && chars.peek() == Some(&'"') => {
-                            cur.push('"');
-                            chars.next();
-                        }
-                        '"' => quoted = !quoted,
-                        ',' if !quoted => out.push(std::mem::take(&mut cur)),
-                        c => cur.push(c),
-                    }
+        head.split('\t').map(str::to_string).zip(row.split('\t')).map(|(k, v)| (k, vec![v.to_string()])).collect()
+    } else {
+        // CSV with quotes: a quoted value may hold commas, doubled quotes and line breaks.
+        let mut records: Vec<Vec<String>> = Vec::new();
+        let mut record = Vec::new();
+        let mut cur = String::new();
+        let mut quoted = false;
+        let mut chars = t.chars().peekable();
+        while let Some(c) = chars.next() {
+            match c {
+                '"' if quoted && chars.peek() == Some(&'"') => {
+                    cur.push('"');
+                    chars.next();
                 }
-                out.push(cur);
-                out
+                '"' => quoted = !quoted,
+                ',' if !quoted => record.push(std::mem::take(&mut cur)),
+                '\r' if !quoted && chars.peek() == Some(&'\n') => {}
+                '\n' if !quoted => {
+                    record.push(std::mem::take(&mut cur));
+                    records.push(std::mem::take(&mut record));
+                }
+                c => cur.push(c),
             }
-        };
-        split(head).into_iter().zip(split(row)).map(|(k, v)| (k, vec![v])).collect()
+        }
+        record.push(cur);
+        records.push(record);
+        // Blank lines (such as the one a trailing line break leaves) are not records.
+        let mut records = records.into_iter().filter(|r| !matches!(r.as_slice(), [only] if only.is_empty()));
+        let (Some(head), Some(row)) = (records.next(), records.next()) else { return Err(DataError::UnknownFormat) };
+        head.into_iter().zip(row).map(|(k, v)| (k, vec![v])).collect()
     };
     apply_values(doc, &values, &mut report);
     Ok(report)
