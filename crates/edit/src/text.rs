@@ -84,6 +84,8 @@ impl TextState {
 #[derive(Clone, Debug, PartialEq)]
 struct Origin {
     tm: [f64; 6],
+    /// The text line matrix there (where the next line's Td/T* starts from).
+    tlm: [f64; 6],
     /// Text-space units → user space (the scale of the text rendering matrix's y axis).
     k: f64,
     baseline: f64,
@@ -162,6 +164,7 @@ struct Shown {
     op: usize,
     /// The text matrix where it starts (text space), and the state there and at its `BT`.
     tm: Matrix,
+    tlm: Matrix,
     state: Ts,
     bt_op: usize,
     bt_state: Ts,
@@ -318,6 +321,7 @@ fn interpret(doc: &Document, ops: &[Op], fonts_res: &Dict, cache: &mut HashMap<V
                     op: i,
                     tm: Matrix([tm.0[0], tm.0[1], tm.0[2], tm.0[3], tm.0[4] - x_text * tm.0[0], tm.0[5] - x_text * tm.0[1]]),
                     state: ts.clone(),
+                    tlm,
                     bt_op: at_bt.0,
                     bt_state: at_bt.1.clone(),
                     text,
@@ -374,6 +378,7 @@ pub fn text_lines(doc: &Document, page: usize) -> Result<Vec<TextLine>, EditErro
                     ops: vec![s.op],
                     origin: Origin {
                         tm: s.tm.0,
+                        tlm: s.tlm.0,
                         k: (s.tm.then(&s.state.ctm).0[2].powi(2) + s.tm.then(&s.state.ctm).0[3].powi(2)).sqrt(),
                         baseline: s.baseline,
                         x: s.start_x,
@@ -737,12 +742,28 @@ pub fn rewrite_block(doc: &mut Document, page: usize, block: usize, text: Option
         block_ops.push(Op::new("Q", vec![]));
     }
     block_ops.push(Op::new("Q", vec![]));
-    // What the text after the paragraph expects: the state at its BT.
-    block_ops.extend(o.bt_state.ops().into_iter().filter(|op| !op.is("Tf") || o.bt_state.font.is_some()));
     let drop: std::collections::HashSet<usize> = members.iter().flat_map(|l| l.ops.iter().copied()).collect();
+    // Text shown earlier in the same text object stays first: the paragraph then goes where it
+    // was, between two halves of the text object, so it keeps its place in reading order.
+    let start = first.ops.first().copied().unwrap_or(o.bt_op);
+    let split = ops
+        .get(o.bt_op..start)
+        .unwrap_or_default()
+        .iter()
+        .enumerate()
+        .any(|(i, op)| matches!(op.op.as_slice(), b"Tj" | b"TJ" | b"'" | b"\"") && !drop.contains(&(o.bt_op + i)));
+    // What the text after the paragraph expects: the state at its BT (or where it was split).
+    let after = if split { &o.state } else { &o.bt_state };
+    block_ops.extend(after.ops().into_iter().filter(|op| !op.is("Tf") || after.font.is_some()));
+    if split {
+        block_ops.insert(0, Op::new("ET", vec![]));
+        block_ops.push(Op::new("BT", vec![]));
+        block_ops.push(Op::new("Tm", o.tlm.iter().map(|v| n(*v)).collect()));
+    }
+    let at = if split { start } else { o.bt_op };
     let mut new_ops = Vec::with_capacity(ops.len() + block_ops.len());
     for (i, op) in ops.into_iter().enumerate() {
-        if i == o.bt_op {
+        if i == at {
             new_ops.append(&mut block_ops);
         }
         if !drop.contains(&i) {
