@@ -13,9 +13,8 @@ enum Cipher {
 
 impl Cipher {
     fn new(key: &[u8]) -> Self {
-        if key.len() >= 32 {
-            let k: [u8; 32] = key[..32].try_into().expect("32 bytes");
-            Cipher::A256(Box::new(Aes256::new(&Array::from(k))))
+        if let Some(k) = key.first_chunk::<32>() {
+            Cipher::A256(Box::new(Aes256::new(&Array::from(*k))))
         } else {
             let mut k = [0u8; 16];
             let n = key.len().min(16);
@@ -55,14 +54,12 @@ pub fn aes_cbc_encrypt(key: &[u8], iv: &[u8; 16], data: &[u8], pad: bool) -> Vec
         buf.resize(buf.len().div_ceil(16) * 16, 0);
     }
     let mut prev = *iv;
-    for chunk in buf.chunks_mut(16) {
-        let mut b: [u8; 16] = chunk.try_into().expect("16 bytes");
+    for b in buf.as_chunks_mut::<16>().0 {
         for (x, p) in b.iter_mut().zip(prev) {
             *x ^= p;
         }
-        c.encrypt(&mut b);
-        chunk.copy_from_slice(&b);
-        prev = b;
+        c.encrypt(b);
+        prev = *b;
     }
     buf
 }
@@ -70,11 +67,10 @@ pub fn aes_cbc_encrypt(key: &[u8], iv: &[u8; 16], data: &[u8], pad: bool) -> Vec
 /// Decrypt; with `pad`, PKCS#5 padding is removed when valid.
 pub fn aes_cbc_decrypt(key: &[u8], iv: &[u8; 16], data: &[u8], pad: bool) -> Vec<u8> {
     let c = Cipher::new(key);
-    let whole = data.len() / 16 * 16;
-    let mut out = Vec::with_capacity(whole);
+    let blocks = data.as_chunks::<16>().0;
+    let mut out = Vec::with_capacity(blocks.len() * 16);
     let mut prev = *iv;
-    for chunk in data[..whole].chunks(16) {
-        let cipher: [u8; 16] = chunk.try_into().expect("16 bytes");
+    for &cipher in blocks {
         let mut b = cipher;
         c.decrypt(&mut b);
         for (x, p) in b.iter_mut().zip(prev) {
