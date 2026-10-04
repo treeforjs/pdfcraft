@@ -6,6 +6,8 @@
 //! DisplayList device design in M1–M2. The public API here is what the engine and UI rely on, so
 //! the swap stays internal to this crate.
 
+#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
+
 mod inspect;
 mod raster;
 pub mod text;
