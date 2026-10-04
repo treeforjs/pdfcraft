@@ -9,6 +9,8 @@
 //! Import merges: a comment whose name (`/NM`) already exists on its page replaces it; field
 //! values go through the form's own checks (formats, validation) and recalculate.
 
+#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
+
 use std::collections::HashMap;
 use std::fmt::Write as _;
 
@@ -389,7 +391,8 @@ pub fn export_fdf(doc: &Document, comments: bool, fields: bool, file: &str) -> V
                 }
                 let keys: Vec<Vec<u8>> = d.iter().filter(|(_, v)| matches!(v, Object::Ref(_))).map(|(k, _)| k.clone()).collect();
                 for k in keys {
-                    let v = (*doc.resolve(d.get(&k).expect("listed"))).clone();
+                    let Some(o) = d.get(&k) else { continue };
+                    let v = (*doc.resolve(o)).clone();
                     if matches!(v, Object::Stream(_)) {
                         d.remove(&k);
                     } else {
