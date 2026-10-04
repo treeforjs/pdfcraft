@@ -168,6 +168,17 @@ fn csv_values_may_span_lines() {
 }
 
 #[test]
+fn multi_select_lists_round_trip_through_xml_csv_and_text() {
+    let src = filled();
+    for format in [Format::Xml, Format::Csv, Format::Txt] {
+        let mut dst = blank();
+        let r = import(&mut dst, export_data(&src, format).as_bytes()).unwrap();
+        assert!(r.rejected.is_empty(), "{format:?}: {r:?}");
+        assert_eq!(values(&dst)[2].1, ["A", "C"], "{format:?}");
+    }
+}
+
+#[test]
 fn bad_data_is_refused_with_a_reason() {
     let mut dst = blank();
     assert!(matches!(import(&mut dst, b"<xfdf><annots>"), Err(DataError::Malformed(_))));

@@ -476,6 +476,11 @@ fn apply_values(doc: &mut Document, values: &[(String, Vec<String>)], report: &m
             FieldKind::Text => FieldValue::Text(first),
             FieldKind::CheckBox => FieldValue::Check(!first.is_empty() && first != "Off"),
             FieldKind::Radio => FieldValue::Radio((!first.is_empty() && first != "Off").then_some(first)),
+            // XML, CSV and text hold a multi-select list's values in one cell, joined by ", "
+            // (as export_data writes them); split it unless the whole cell is one option.
+            FieldKind::List if f.has(printcraft_forms::flags::MULTI_SELECT) && vals.len() == 1 && !f.options.iter().any(|(e, _)| *e == first) => {
+                FieldValue::Choice(first.split(", ").filter(|v| !v.is_empty()).map(str::to_string).collect())
+            }
             FieldKind::Combo | FieldKind::List => FieldValue::Choice(vals.iter().filter(|v| !v.is_empty()).cloned().collect()),
             FieldKind::PushButton | FieldKind::Signature => continue,
         };
