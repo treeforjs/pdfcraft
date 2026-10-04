@@ -135,14 +135,15 @@ impl Cipher {
     }
 }
 
-fn hmac(alg: DigestAlg, key: &[u8], data: &[u8]) -> Vec<u8> {
-    fn run<D: hmac::EagerHash>(key: &[u8], data: &[u8]) -> Vec<u8>
+fn hmac(alg: DigestAlg, key: &[u8], data: &[u8]) -> Result<Vec<u8>, SignError> {
+    fn run<D: hmac::EagerHash>(key: &[u8], data: &[u8]) -> Result<Vec<u8>, SignError>
     where
         hmac::Hmac<D>: hmac::KeyInit + Mac,
     {
-        let mut m = <hmac::Hmac<D> as hmac::KeyInit>::new_from_slice(key).expect("HMAC takes any key length");
+        // HMAC takes any key length, so this never fails in practice.
+        let mut m = <hmac::Hmac<D> as hmac::KeyInit>::new_from_slice(key).map_err(|_| bad("MAC key"))?;
         m.update(data);
-        m.finalize().into_bytes().to_vec()
+        Ok(m.finalize().into_bytes().to_vec())
     }
     match alg {
         DigestAlg::Sha1 => run::<sha1::Sha1>(key, data),
@@ -301,7 +302,7 @@ pub fn open(bytes: &[u8], password: &str) -> Result<DigitalId, SignError> {
         let iterations = m.get(2).map(|i| i.u64()).transpose()?.unwrap_or(1) as u32;
         let key_len = alg.digest(&[]).len();
         let key = pkcs12_kdf(alg, &bmp(password), salt, 3, iterations, key_len);
-        if hmac(alg, &key, content) != expected {
+        if hmac(alg, &key, content)? != expected {
             return Err(SignError::WrongPassword);
         }
     }
@@ -328,8 +329,13 @@ pub fn open(bytes: &[u8], password: &str) -> Result<DigitalId, SignError> {
             _ => {}
         }
     }
-    let key_bag = all.iter().find(|b| matches!(b.kind, BagKind::Key(_))).ok_or_else(|| bad("no private key"))?;
-    let BagKind::Key(pkcs8) = &key_bag.kind else { unreachable!() };
+    let (key_bag, pkcs8) = all
+        .iter()
+        .find_map(|b| match &b.kind {
+            BagKind::Key(k) => Some((b, k)),
+            _ => None,
+        })
+        .ok_or_else(|| bad("no private key"))?;
     let key = PrivateKey::from_pkcs8(pkcs8)?;
     let certs: Vec<(Certificate, &Bag)> = all
         .iter()
@@ -401,7 +407,7 @@ pub fn write(id: &DigitalId, password: &str) -> Result<Vec<u8>, SignError> {
     let auth_safe = der::seq(&[&ci_certs, &ci_key]);
     let salt = random(16)?;
     let mac_key = pkcs12_kdf(DigestAlg::Sha256, &bmp(password), &salt, 3, ITER, 32);
-    let mac = hmac(DigestAlg::Sha256, &mac_key, &auth_safe);
+    let mac = hmac(DigestAlg::Sha256, &mac_key, &auth_safe)?;
     let mac_data = der::seq(&[&der::seq(&[&DigestAlg::Sha256.algorithm(), &der::octets(&mac)]), &der::octets(&salt), &der::int(ITER as u64)]);
     Ok(der::seq(&[&der::int(3), &der::seq(&[&der::oid(DATA), &der::explicit(0, &der::octets(&auth_safe))]), &mac_data]))
 }

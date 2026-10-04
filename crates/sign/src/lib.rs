@@ -5,6 +5,8 @@
 //! - [`pdf`]: signature fields in a document — listing and validating them, and signing
 //!   (PAdES B-B, `ETSI.CAdES.detached`) with an incremental save.
 
+#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
+
 pub mod cms;
 pub mod der;
 #[cfg(target_os = "macos")]

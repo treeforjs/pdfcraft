@@ -313,6 +313,9 @@ pub fn explicit(n: u8, inner: &[u8]) -> Vec<u8> {
     tlv(tag::ctx(n), inner)
 }
 
+/// The encoding of an OID constant (callers pass only literals from this crate).
+// The documented never-crash exception: every caller passes a literal that always parses.
+#[allow(clippy::expect_used)]
 pub fn oid(dotted: &str) -> Vec<u8> {
     let arcs: Vec<u64> = dotted.split('.').map(|a| a.parse().expect("valid OID constant")).collect();
     let mut body = Vec::new();

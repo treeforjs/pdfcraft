@@ -267,7 +267,7 @@ impl Certificate {
 pub fn build_chain<'a>(leaf: &'a Certificate, pool: &'a [Certificate]) -> Vec<&'a Certificate> {
     let mut chain = vec![leaf];
     while chain.len() < 10 {
-        let last = *chain.last().expect("non-empty");
+        let Some(&last) = chain.last() else { break };
         if last.issuer.raw == last.subject.raw {
             break;
         }
