@@ -148,9 +148,14 @@ impl Arg {
     }
 }
 
+/// How deeply script arguments and field notation may nest; deeper input is rejected rather
+/// than recursed into (a hostile file could otherwise overflow the stack).
+const MAX_NESTING: usize = 64;
+
 struct Parser<'a> {
     s: &'a [u8],
     i: usize,
+    depth: usize,
 }
 
 impl Parser<'_> {
@@ -191,7 +196,7 @@ impl Parser<'_> {
             b'"' | b'\'' => self.string().map(Arg::Str),
             b'[' => {
                 self.i += 1;
-                self.list(b']').map(Arg::List)
+                self.nested(b']').map(Arg::List)
             }
             _ if self.s[self.i..].starts_with(b"new Array") => {
                 self.i += b"new Array".len();
@@ -200,7 +205,7 @@ impl Parser<'_> {
                     return None;
                 }
                 self.i += 1;
-                self.list(b')').map(Arg::List)
+                self.nested(b')').map(Arg::List)
             }
             _ if self.s[self.i..].starts_with(b"true") => {
                 self.i += 4;
@@ -218,6 +223,17 @@ impl Parser<'_> {
                 std::str::from_utf8(&self.s[start..self.i]).ok()?.parse().ok().map(Arg::Num)
             }
         }
+    }
+
+    /// A list inside another, at most [`MAX_NESTING`] deep.
+    fn nested(&mut self, close: u8) -> Option<Vec<Arg>> {
+        if self.depth >= MAX_NESTING {
+            return None;
+        }
+        self.depth += 1;
+        let out = self.list(close);
+        self.depth -= 1;
+        out
     }
 
     fn list(&mut self, close: u8) -> Option<Vec<Arg>> {
@@ -249,7 +265,7 @@ fn call(js: &str, name: &str) -> Option<Vec<Arg>> {
     if js[..at].chars().last().is_some_and(|c| c.is_alphanumeric() || c == '_') {
         return None;
     }
-    let mut p = Parser { s: js.as_bytes(), i: at + name.len() + 1 };
+    let mut p = Parser { s: js.as_bytes(), i: at + name.len() + 1, depth: 0 };
     p.list(b')')
 }
 
@@ -478,10 +494,11 @@ fn days_in(y: i32, m: u32) -> u32 {
 }
 
 fn weekday(y: i32, m: u32, d: u32) -> usize {
-    // Sakamoto's method.
-    let t = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4];
-    let y = if m < 3 { y - 1 } else { y };
-    ((y + y / 4 - y / 100 + y / 400 + t[(m - 1) as usize] + d as i32).rem_euclid(7)) as usize
+    // Sakamoto's method, in i64 so no year or day can overflow it.
+    const T: [i64; 12] = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4];
+    let y = i64::from(y) - i64::from(m < 3);
+    let t = T.get((m as usize).wrapping_sub(1)).copied().unwrap_or(0);
+    (y + y / 4 - y / 100 + y / 400 + t + i64::from(d)).rem_euclid(7) as usize
 }
 
 /// The order of the year/month/day fields in a format, as letters.
@@ -552,12 +569,16 @@ pub fn parse_date(text: &str, fmt: &str) -> Option<DateTime> {
     let mut have_y = false;
     for k in order(fmt) {
         match k {
-            'm' if month_name.is_some() => dt.m = month_name.expect("checked"),
-            'm' => dt.m = it.next()?,
+            'm' => {
+                dt.m = match month_name {
+                    Some(m) => m,
+                    None => it.next()?,
+                }
+            }
             'd' => dt.d = it.next()?,
             'y' => {
-                let y = it.next()?;
-                dt.y = if y < 100 { if y < 50 { 2000 + y as i32 } else { 1900 + y as i32 } } else { y as i32 };
+                let y = i32::try_from(it.next()?).ok()?;
+                dt.y = if y < 100 { if y < 50 { 2000 + y } else { 1900 + y } } else { y };
                 have_y = true;
             }
             'H' => dt.hh = it.next().unwrap_or(0),
@@ -607,16 +628,23 @@ pub fn format_date(dt: DateTime, fmt: &str) -> String {
             ('y', _) => {
                 let _ = write!(out, "{:02}", dt.y.rem_euclid(100));
             }
-            ('m', 4..) => out.push_str(MONTHS[(dt.m - 1) as usize]),
-            ('m', 3) => out.push_str(&MONTHS[(dt.m - 1) as usize][..3]),
+            ('m', 3..) => match MONTHS.get((dt.m as usize).wrapping_sub(1)) {
+                Some(name) if n >= 4 => out.push_str(name),
+                Some(name) => out.push_str(name.get(..3).unwrap_or(name)),
+                None => {
+                    let _ = write!(out, "{}", dt.m);
+                }
+            },
             ('m', 2) => {
                 let _ = write!(out, "{:02}", dt.m);
             }
             ('m', _) => {
                 let _ = write!(out, "{}", dt.m);
             }
-            ('d', 4..) => out.push_str(DAYS[weekday(dt.y, dt.m, dt.d)]),
-            ('d', 3) => out.push_str(&DAYS[weekday(dt.y, dt.m, dt.d)][..3]),
+            ('d', 3..) => {
+                let name = DAYS.get(weekday(dt.y, dt.m, dt.d)).copied().unwrap_or_default();
+                out.push_str(if n >= 4 { name } else { name.get(..3).unwrap_or(name) });
+            }
             ('d', 2) => {
                 let _ = write!(out, "{:02}", dt.d);
             }
@@ -813,26 +841,29 @@ fn eval_notation(src: &str, value_of: &dyn Fn(&str) -> f64) -> Option<f64> {
             toks.push(T::N(value_of(&name)));
         }
     }
-    // Recursive descent.
-    fn expr(t: &[T], i: &mut usize) -> Option<f64> {
-        let mut v = term(t, i)?;
+    // Recursive descent, `d` levels deep (at most MAX_NESTING).
+    fn expr(t: &[T], i: &mut usize, d: usize) -> Option<f64> {
+        let mut v = term(t, i, d)?;
         while let Some(T::Op(o @ ('+' | '-'))) = t.get(*i) {
             *i += 1;
-            let r = term(t, i)?;
+            let r = term(t, i, d)?;
             v = if *o == '+' { v + r } else { v - r };
         }
         Some(v)
     }
-    fn term(t: &[T], i: &mut usize) -> Option<f64> {
-        let mut v = factor(t, i)?;
+    fn term(t: &[T], i: &mut usize, d: usize) -> Option<f64> {
+        let mut v = factor(t, i, d)?;
         while let Some(T::Op(o @ ('*' | '/'))) = t.get(*i) {
             *i += 1;
-            let r = factor(t, i)?;
+            let r = factor(t, i, d)?;
             v = if *o == '*' { v * r } else { v / r };
         }
         Some(v)
     }
-    fn factor(t: &[T], i: &mut usize) -> Option<f64> {
+    fn factor(t: &[T], i: &mut usize, d: usize) -> Option<f64> {
+        if d > MAX_NESTING {
+            return None;
+        }
         match t.get(*i)? {
             T::N(n) => {
                 *i += 1;
@@ -840,11 +871,11 @@ fn eval_notation(src: &str, value_of: &dyn Fn(&str) -> f64) -> Option<f64> {
             }
             T::Op('-') => {
                 *i += 1;
-                factor(t, i).map(|v| -v)
+                factor(t, i, d + 1).map(|v| -v)
             }
             T::Op('(') => {
                 *i += 1;
-                let v = expr(t, i)?;
+                let v = expr(t, i, d + 1)?;
                 (t.get(*i) == Some(&T::Op(')'))).then(|| *i += 1)?;
                 Some(v)
             }
@@ -852,7 +883,7 @@ fn eval_notation(src: &str, value_of: &dyn Fn(&str) -> f64) -> Option<f64> {
         }
     }
     let mut i = 0;
-    let v = expr(&toks, &mut i)?;
+    let v = expr(&toks, &mut i, 0)?;
     (i == toks.len() && v.is_finite()).then_some(v)
 }
 
@@ -1066,5 +1097,52 @@ mod button_tests {
         assert_eq!(button_script("this.pageNum++;"), ButtonAction::Named("NextPage".into()));
         assert_eq!(button_script("event.target.buttonImportIcon();"), ButtonAction::ImportIcon);
         assert!(matches!(button_script("var x = 1; doStuff(x);"), ButtonAction::Script(_)));
+    }
+}
+
+#[cfg(test)]
+mod never_crash_tests {
+    use super::*;
+
+    /// A field value or typed text with an absurd year used to overflow the weekday arithmetic.
+    #[test]
+    fn huge_years_format_without_panicking() {
+        let f = Format::Date("dddd, mmmm d, yyyy".into());
+        for v in ["1/1/2147483647", "1/1/4294967295", "12/31/3000000000"] {
+            let _ = format_value(&f, v);
+            let _ = keystroke(&f, "date", v);
+        }
+    }
+
+    /// Deeply nested arrays in a field's format script used to recurse until the stack overflowed.
+    #[test]
+    fn deeply_nested_script_arguments_are_rejected() {
+        let n = 200_000;
+        let js = format!("AFNumber_Format({}0{});", "[".repeat(n), "]".repeat(n));
+        assert_eq!(parse_format(&js), None);
+        let js = format!("AFNumber_Format({}0{});", "new Array(".repeat(n), ")".repeat(n));
+        assert_eq!(parse_format(&js), None);
+    }
+
+    /// Deeply nested simplified field notation (from a field's calculate script) likewise.
+    #[test]
+    fn deeply_nested_notation_is_rejected() {
+        let n = 200_000;
+        let deep = format!("{}1{}", "(".repeat(n), ")".repeat(n));
+        assert_eq!(eval_notation(&deep, &|_| 0.0), None);
+        let negated = format!("{}1", "-".repeat(n));
+        assert_eq!(eval_notation(&negated, &|_| 0.0), None);
+        assert_eq!(eval_notation("((1 + 2)) * -(3)", &|_| 0.0), Some(-9.0));
+    }
+
+    /// `DateTime` is public: an out-of-range month or day must not index past the name tables.
+    #[test]
+    fn out_of_range_dates_format_without_panicking() {
+        for m in [0, 13, u32::MAX] {
+            let dt = DateTime { y: 2024, m, d: 1, hh: 0, mm: 0, ss: 0 };
+            let _ = format_date(dt, "dddd mmmm mmm d yyyy");
+        }
+        let dt = DateTime { y: i32::MAX, m: 1, d: u32::MAX, hh: 0, mm: 0, ss: 0 };
+        let _ = format_date(dt, "dddd ddd");
     }
 }

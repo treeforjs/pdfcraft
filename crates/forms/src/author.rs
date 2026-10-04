@@ -293,7 +293,10 @@ fn add_to_fields(doc: &mut Document, af: ObjRef, field: ObjRef) -> Result<(), Fo
 
 /// The first free "<base>N" name.
 fn free_name(existing: &[Field], base: &str) -> String {
-    (1..).map(|n| format!("{base}{n}")).find(|c| !existing.iter().any(|f| f.name == *c || f.name.starts_with(&format!("{c}.")))).expect("unbounded")
+    (1..=u64::MAX)
+        .map(|n| format!("{base}{n}"))
+        .find(|c| !existing.iter().any(|f| f.name == *c || f.name.starts_with(&format!("{c}."))))
+        .unwrap_or_else(|| base.to_string())
 }
 
 fn widget_dict(page: ObjRef, rect: [f64; 4]) -> Dict {
