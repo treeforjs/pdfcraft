@@ -204,3 +204,15 @@ fn data_files_merge_into_a_spreadsheet() {
     assert!(lines[3].starts_with("\"Grace \"\"Amazing\"\" Hopper, RADM\",Off,"), "{csv}");
     assert_eq!(data_values(b"not data"), Err(DataError::UnknownFormat));
 }
+
+#[test]
+fn unicode_annotation_colours_are_ignored_without_panicking() {
+    for attr in ["color", "interior-color"] {
+        let mut doc = blank();
+        let xml = format!(
+            r##"<xfdf xmlns="http://ns.adobe.com/xfdf/"><annots><square page="0" rect="10,10,50,50" name="unicode-colour" {attr}="#€€" /></annots></xfdf>"##
+        );
+        let report = import(&mut doc, xml.as_bytes()).unwrap();
+        assert_eq!(report.comments, 1);
+    }
+}

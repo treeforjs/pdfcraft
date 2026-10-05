@@ -140,7 +140,7 @@ fn parse_hex(s: &str) -> Option<[f64; 3]> {
     if h.len() != 6 {
         return None;
     }
-    let p = |i: usize| u8::from_str_radix(&h[i..i + 2], 16).ok().map(|v| f64::from(v) / 255.0);
+    let p = |i: usize| h.get(i..i + 2).and_then(|s| u8::from_str_radix(s, 16).ok()).map(|v| f64::from(v) / 255.0);
     Some([p(0)?, p(2)?, p(4)?])
 }
 
