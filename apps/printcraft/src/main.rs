@@ -19,6 +19,8 @@
 
 use printcraft_ui_egui::PrintCraftApp;
 
+#[cfg(target_os = "macos")]
+mod apple_events;
 mod updates;
 
 /// Freedesktop app id: the `.desktop` file name and the hicolor icon name.
@@ -79,6 +81,12 @@ fn main() -> eframe::Result {
     let persistence_path = eframe::storage_dir("PrintCraft").map(|d| d.join("app.ron"));
     let mut native = eframe::NativeOptions { viewport, persistence_path, ..Default::default() };
     configure_gpu(&mut native);
+    // Finder, Open With and the Dock deliver files as Apple events, not arguments; catch the one
+    // that launched us as well as later ones. Lives until the event loop returns.
+    #[cfg(target_os = "macos")]
+    let apple_events = apple_events::AppleEvents::install();
+    #[cfg(target_os = "macos")]
+    let apple_events = &apple_events;
     eframe::run_native(
         "PrintCraft",
         native,
@@ -90,6 +98,10 @@ fn main() -> eframe::Result {
             app.integrated_titlebar = integrated;
             app.update_source = Some(std::sync::Arc::new(updates::latest_release));
             app.keychain_ids = cfg!(target_os = "macos");
+            #[cfg(target_os = "macos")]
+            {
+                app.os_events = Some(apple_events.connect(&cc.egui_ctx));
+            }
             if let Some(file) = &control_file {
                 let client = app.attach_control(&cc.egui_ctx);
                 match printcraft_ui_egui::control::serve(client).and_then(|ep| write_control_file(file, ep.port, &ep.token).map(|()| ep.port)) {

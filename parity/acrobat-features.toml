@@ -22,8 +22,8 @@ milestone = "M1"
 status = "shipped"
 commands = ["file.open"]
 tools = ["doc_open"]
-evidence = ["crates/automation/tests/automation.rs::open_inspect_render_and_find", "crates/ui-egui/tests/ui.rs::opening_a_pdf_shows_comments_and_bookmarks"]
-notes = ""
+evidence = ["crates/automation/tests/automation.rs::open_inspect_render_and_find", "crates/ui-egui/tests/ui.rs::opening_a_pdf_shows_comments_and_bookmarks", "crates/ui-egui/tests/ui.rs::files_and_quit_from_the_operating_system"]
+notes = "File ▸ Open, the command line (Linux and Windows file associations), and on macOS Finder, Open With and the Dock (Apple events; the bundle declares PDF as a document type)"
 
 [[feature]]
 id = "core.repair-broken-files"

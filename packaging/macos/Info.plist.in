@@ -45,64 +45,23 @@
   <key>NSHumanReadableCopyright</key>
   <string>Copyright © the PrintCraft authors. MIT OR Apache-2.0.</string>
 
-  <!-- Printcraft's own format. -->
-  <key>UTExportedTypeDeclarations</key>
+  <!-- Documents PrintCraft opens (#73): it is offered under Open With and can be made the default
+       for PDFs, without taking over from the system's viewer on install ("Alternate"). Declared by
+       extension and MIME type; LaunchServices maps them to the system's PDF type. Finder hands the
+       file over as an Apple event, which apps/printcraft/src/apple_events.rs receives. -->
+  <key>CFBundleDocumentTypes</key>
   <array>
     <dict>
-      <key>UTTypeIdentifier</key>
-      <string>ai.storyteller.printcraft.document</string>
-      <key>UTTypeDescription</key>
-      <string>PrintCraft Document</string>
-      <key>UTTypeConformsTo</key>
-      <array>
-        <string>public.data</string>
-        <string>public.image</string>
-      </array>
-      <key>UTTypeIconFile</key>
-      <string>PrintCraft</string>
-      <key>UTTypeTagSpecification</key>
-      <dict>
-        <key>public.filename-extension</key>
-        <array><string>pcraft</string></array>
-        <key>public.mime-type</key>
-        <array><string>application/x-printcraft</string></array>
-      </dict>
-    </dict>
-  </array>
-  <!-- Types macOS may not know; the system's own declaration wins when it has one. -->
-  <key>UTImportedTypeDeclarations</key>
-  <array>
-    <dict>
-      <key>UTTypeIdentifier</key>
-      <string>com.adobe.photoshop-large-image</string>
-      <key>UTTypeDescription</key>
-      <string>Photoshop Large Document</string>
-      <key>UTTypeConformsTo</key>
-      <array>
-        <string>public.data</string>
-        <string>public.image</string>
-      </array>
-      <key>UTTypeTagSpecification</key>
-      <dict>
-        <key>public.filename-extension</key>
-        <array><string>psb</string></array>
-      </dict>
-    </dict>
-    <dict>
-      <key>UTTypeIdentifier</key>
-      <string>ai.storyteller.printcraft.qoi</string>
-      <key>UTTypeDescription</key>
-      <string>QOI Image</string>
-      <key>UTTypeConformsTo</key>
-      <array>
-        <string>public.data</string>
-        <string>public.image</string>
-      </array>
-      <key>UTTypeTagSpecification</key>
-      <dict>
-        <key>public.filename-extension</key>
-        <array><string>qoi</string></array>
-      </dict>
+      <key>CFBundleTypeName</key>
+      <string>PDF Document</string>
+      <key>CFBundleTypeRole</key>
+      <string>Editor</string>
+      <key>LSHandlerRank</key>
+      <string>Alternate</string>
+      <key>CFBundleTypeExtensions</key>
+      <array><string>pdf</string></array>
+      <key>CFBundleTypeMIMETypes</key>
+      <array><string>application/pdf</string></array>
     </dict>
   </array>
 
