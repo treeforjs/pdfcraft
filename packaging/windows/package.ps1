@@ -114,5 +114,12 @@ $Zip = Join-Path $Dist "printcraft-$Version-windows-$Arch-portable.zip"
 Remove-Item -Force $Zip -ErrorAction SilentlyContinue
 Compress-Archive -Path $Portable -DestinationPath $Zip
 
-Invoke-Native 'printcraft-cli --version' { & (Join-Path $Stage 'printcraft-cli.exe') --version }
+# Smoke-test the CLI when this machine can run it. An ARM64 build made on an x64 runner can't run
+# here; .github/workflows/windows-arm64.yml installs and runs it on ARM64 instead.
+$HostArch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLowerInvariant()
+if ($Arch -ne 'arm64' -or $HostArch -eq 'arm64') {
+  Invoke-Native 'printcraft-cli --version' { & (Join-Path $Stage 'printcraft-cli.exe') --version }
+} else {
+  Write-Output "skipping printcraft-cli --version: an $Arch build doesn't run on this $HostArch machine"
+}
 Get-Item $Msi, $Zip | Format-Table Name, Length
