@@ -95,13 +95,8 @@ fn dragged(r: Rect, grab: Grab, d: egui::Vec2, keep_aspect: bool) -> Rect {
     }
 }
 
-pub(crate) struct Outcome {
-    pub consumed: bool,
-    /// A text item was placed or edited: go back to Select.
-    pub done: bool,
-}
-
-/// Pointer input on one page in Edit mode (`adding_text` with the Text tool).
+/// Pointer input on one page in Edit mode (`adding_text` with the Text tool). `true` when it
+/// used the input.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn page_input(
     ui: &egui::Ui,
@@ -113,14 +108,14 @@ pub(crate) fn page_input(
     adding_text: bool,
     style: &AddedText,
     view: &mut DocView,
-) -> Outcome {
-    let mut out = Outcome { consumed: false, done: false };
+) -> bool {
+    let mut consumed = false;
     let pointer = ui.input(|i| i.pointer.hover_pos().or(i.pointer.interact_pos()));
     let cv = &mut view.content;
     if let Some((gp, grab, start)) = cv.grab
         && gp == page
     {
-        out.consumed = true;
+        consumed = true;
         if resp.drag_stopped() || !ui.input(|i| i.pointer.primary_down()) {
             cv.grab = None;
             let end = pointer.unwrap_or(start);
@@ -142,9 +137,9 @@ pub(crate) fn page_input(
                 view.pending_edit = Some(Edit::UpdateContent { page, index: si, content: a.content.with_rect(rect) });
             }
         }
-        return out;
+        return consumed;
     }
-    let Some(p) = pointer.filter(|p| xf.rect.contains(*p)) else { return out };
+    let Some(p) = pointer.filter(|p| xf.rect.contains(*p)) else { return consumed };
     let items = on_page(added, page);
     let hit = items.iter().rev().find(|(_, a)| screen_rect(xf, info, page, a.content.rect()).expand(2.0).contains(p)).map(|(i, a)| (*i, *a));
     let selected_rect = cv
@@ -156,6 +151,11 @@ pub(crate) fn page_input(
     if adding_text && hit.is_none() {
         ui.ctx().set_cursor_icon(egui::CursorIcon::Text);
         if resp.clicked() {
+            // A click elsewhere keeps the text being typed and starts a new box (#74). The click
+            // can reach the page before the editor sees it lose focus, so finish it here.
+            let typed = cv.draft.take().and_then(|d| finish(cv, d, added));
+            // The Format panel styles the new text, not the box just kept.
+            (cv.selected, cv.select_added) = (None, None);
             let at = to_display(xf, info, page, p);
             let mut style = style.clone();
             style.text.clear();
@@ -167,9 +167,12 @@ pub(crate) fn page_input(
                 style,
                 focus: true,
             });
-            out.consumed = true;
+            consumed = true;
+            if typed.is_some() {
+                view.pending_edit = typed;
+            }
         }
-        return out;
+        return consumed;
     }
     if let Some((_, left, top)) = corner {
         ui.ctx().set_cursor_icon(if left == top { egui::CursorIcon::ResizeNwSe } else { egui::CursorIcon::ResizeNeSw });
@@ -180,13 +183,13 @@ pub(crate) fn page_input(
         let origin = ui.input(|i| i.pointer.press_origin()).unwrap_or(p);
         if let Some((_, left, top)) = selected_rect.and_then(|r| handles(r).into_iter().find(|(c, ..)| c.distance(origin) <= 6.0)) {
             cv.grab = Some((page, Grab::Corner(left, top), origin));
-            out.consumed = true;
+            consumed = true;
         } else if let Some((i, _)) = items.iter().rev().find(|(_, a)| screen_rect(xf, info, page, a.content.rect()).expand(2.0).contains(origin)) {
             cv.selected = Some((page, *i));
             cv.grab = Some((page, Grab::Move, origin));
-            out.consumed = true;
+            consumed = true;
         }
-        return out;
+        return consumed;
     }
     if resp.double_clicked()
         && let Some((i, a)) = hit
@@ -194,21 +197,20 @@ pub(crate) fn page_input(
     {
         cv.draft = Some(TextDraft { page, index: Some(i), rect: t.rect, text: t.text.clone(), style: t.clone(), focus: true });
         cv.selected = Some((page, i));
-        out.consumed = true;
-        return out;
+        consumed = true;
+        return consumed;
     }
     if resp.clicked() {
         match hit {
             Some((i, _)) => {
                 cv.selected = Some((page, i));
-                out.consumed = true;
+                consumed = true;
             }
             None if corner.is_none() => cv.selected = None,
-            None => out.consumed = true,
+            None => consumed = true,
         }
     }
-    out.consumed |= hit.is_some() && resp.is_pointer_button_down_on();
-    out
+    consumed || hit.is_some() && resp.is_pointer_button_down_on()
 }
 
 /// Outlines of added items (hover and selection with handles) and the box being dragged.
@@ -265,49 +267,74 @@ pub(crate) fn after_refresh(view: &mut DocView, added: &[Added]) {
     }
 }
 
-/// The in-place text editor. Returns the edit once committed (click away; Escape cancels).
-pub(crate) fn editor(ctx: &egui::Context, view: &mut DocView, info: &DocInfo, added: &[Added]) -> Option<Edit> {
-    let d = view.content.draft.clone()?;
-    let xf = view.page_xform(d.page)?;
-    let r = screen_rect(&xf, info, d.page, d.rect);
+/// The in-place text editor, with Done and Discard beside it. Returns the edit once the text is
+/// committed (a click away, or Done), and whether Done finished adding text. Discard or Escape
+/// throws the draft away.
+pub(crate) fn editor(ctx: &egui::Context, view: &mut DocView, info: &DocInfo, added: &[Added]) -> (Option<Edit>, bool) {
+    let Some((page, rect)) = view.content.draft.as_ref().map(|d| (d.page, d.rect)) else { return (None, false) };
+    let Some(xf) = view.page_xform(page) else { return (None, false) };
+    let r = screen_rect(&xf, info, page, rect);
     let zoom = xf.rect.width() / xf.pw.max(1.0);
-    let (mut commit, mut cancel) = (false, false);
+    let tokens = Tokens::get(ctx);
+    let (mut commit, mut cancel, mut done) = (false, false, false);
     egui::Area::new(egui::Id::new(("added-text", view.id.0))).order(egui::Order::Foreground).fixed_pos(r.min).show(ctx, |ui| {
         let Some(t) = view.content.draft.as_mut() else { return };
         let [cr, cg, cb] = t.style.color.map(|v| (v.clamp(0.0, 1.0) * 255.0) as u8);
-        let resp = ui.add(
-            egui::TextEdit::multiline(&mut t.text)
-                .font(egui::FontId::proportional((t.style.size as f32 * zoom).max(8.0)))
-                .desired_width(r.width().max(60.0))
-                .desired_rows(1)
-                .background_color(Color32::from_rgba_unmultiplied(255, 255, 255, 235))
-                .text_color(Color32::from_rgb(cr, cg, cb))
-                .hint_text("Type text")
-                .id_salt("added-text-edit"),
-        );
-        if t.focus {
-            resp.request_focus();
-            t.focus = false;
-        }
-        if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
-            cancel = true;
-        } else if resp.lost_focus() {
-            commit = true;
-        }
+        ui.horizontal_top(|ui| {
+            ui.spacing_mut().item_spacing.x = 4.0;
+            let resp = ui.add(
+                egui::TextEdit::multiline(&mut t.text)
+                    .font(egui::FontId::proportional((t.style.size as f32 * zoom).max(8.0)))
+                    .desired_width(r.width().max(60.0))
+                    .desired_rows(1)
+                    .background_color(Color32::from_rgba_unmultiplied(255, 255, 255, 235))
+                    .text_color(Color32::from_rgb(cr, cg, cb))
+                    .hint_text("Type text")
+                    .id_salt("added-text-edit"),
+            );
+            if t.focus {
+                resp.request_focus();
+                t.focus = false;
+            }
+            let buttons = egui::Frame::NONE
+                .fill(tokens.card)
+                .stroke(Stroke::new(1.0, tokens.border))
+                .corner_radius(CornerRadius::same(6))
+                .inner_margin(2)
+                .show(ui, |ui| {
+                    ui.spacing_mut().item_spacing = egui::vec2(2.0, 2.0);
+                    ui.horizontal(|ui| {
+                        done = crate::icons::button(ui, "check", 24.0, false, "Done adding text").clicked();
+                        cancel = crate::icons::button(ui, "x", 24.0, false, "Discard this text (Esc)").clicked();
+                    });
+                })
+                .response
+                .rect;
+            // Pressing a button takes the focus from the text: that is not a click away.
+            let on_buttons = ui.input(|i| i.pointer.interact_pos()).is_some_and(|p| buttons.contains(p));
+            cancel |= ui.input(|i| i.key_pressed(egui::Key::Escape));
+            commit = done || resp.lost_focus() && !on_buttons;
+        });
     });
     if cancel {
         view.content.draft = None;
-        return None;
+        return (None, false);
     }
     if !commit {
-        return None;
+        return (None, false);
     }
-    let d = view.content.draft.take()?;
+    let edit = view.content.draft.take().and_then(|d| finish(&mut view.content, d, added));
+    (edit, done)
+}
+
+/// A finished draft as an edit: new text is added (and selected once it exists), retyped text
+/// updated, and text emptied by retyping removed. Empty new text adds nothing.
+fn finish(cv: &mut ContentView, d: TextDraft, added: &[Added]) -> Option<Edit> {
     let text = d.text.trim_end().to_string();
     match d.index {
         None if text.trim().is_empty() => None,
         None => {
-            view.content.select_added = Some((d.page, on_page(added, d.page).len()));
+            cv.select_added = Some((d.page, on_page(added, d.page).len()));
             Some(Edit::AddText { page: d.page, text: AddedText { rect: d.rect, text, ..d.style } })
         }
         Some(i) if text.trim().is_empty() => Some(Edit::DeleteContent { page: d.page, index: i }),
@@ -367,7 +394,9 @@ pub(crate) fn format_panel(ui: &mut egui::Ui, t: &Tokens, style: &AddedText) -> 
 /// How to use the tools, under the Add content list.
 pub(crate) fn hint(ui: &mut egui::Ui, t: &Tokens) {
     ui.label(
-        egui::RichText::new("Click on the page to add text. Drag items to move them, drag a corner to resize, double-click text to edit it.")
+        egui::RichText::new(
+            "Click on the page to add text; each click starts a new box, and ✓ finishes. Drag items to move them, drag a corner to resize, double-click text to edit it.",
+        )
             .small()
             .color(t.text_faint),
     );

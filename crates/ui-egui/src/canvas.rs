@@ -1040,7 +1040,6 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
     }
     let added = doc.added.clone();
     let doc_links = if tool == QuickTool::Link { doc.links.clone() } else { Vec::new() };
-    let mut content_done = false;
     if editing_content {
         crate::content_ui::after_refresh(view, &added);
     } else {
@@ -1252,9 +1251,8 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
                 crate::redact_ui::page_input(ui, &resp, &xf, i, info, over_text, view)
             };
             let on_content = editing_content && can_modify && {
-                let o = crate::content_ui::page_input(ui, &resp, &xf, i, info, &added, tool == QuickTool::AddText, &text_style, view);
-                content_done |= o.done;
-                o.consumed || tool == QuickTool::AddText
+                crate::content_ui::page_input(ui, &resp, &xf, i, info, &added, tool == QuickTool::AddText, &text_style, view)
+                    || tool == QuickTool::AddText
             };
             let on_edit_text = tool == QuickTool::EditText && can_modify && {
                 let generation = doc.edit_generation();
@@ -1559,11 +1557,10 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
     if let Some(e) = crate::fill_sign::type_box(ui.ctx(), view, info, &author) {
         view.pending_edit = Some(e);
     }
-    let typed_text = view.content.draft.is_some();
-    if let Some(e) = crate::content_ui::editor(ui.ctx(), view, info, &added) {
-        view.pending_edit = Some(e);
+    let (typed, text_done) = crate::content_ui::editor(ui.ctx(), view, info, &added);
+    if typed.is_some() {
+        view.pending_edit = typed;
     }
-    content_done |= typed_text && view.content.draft.is_none();
     let form_notice = view.forms.notice.take();
     // One crop, then back to selecting (as Acrobat does).
     let cropped = view.pending_edit.as_ref().is_some_and(|e| matches!(e, printcraft_engine::Edit::SetPageBox { .. }));
@@ -1583,8 +1580,8 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
     if stamp_placed {
         tool = QuickTool::Select;
     }
-    // One text box, then back to selecting (as Acrobat does).
-    if content_done && tool == QuickTool::AddText {
+    // Text: each click on the page starts a box (#74); Done in the editor goes back to selecting.
+    if text_done && tool == QuickTool::AddText {
         tool = QuickTool::Select;
     }
     // One field, then back to selecting (Acrobat's default without "Keep tools pinned").
