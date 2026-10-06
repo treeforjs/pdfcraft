@@ -43,6 +43,57 @@ fn added(h: &Harness<'static, PrintCraftApp>) -> Vec<printcraft_engine::Added> {
     s.session.get(s.views[0].id).unwrap().added.clone()
 }
 
+/// A click whose press and release arrive in the same frame, as a quick real mouse click does.
+fn quick_click(h: &mut Harness<'static, PrintCraftApp>, p: Pos2) {
+    h.hover_at(p);
+    h.run_steps(1);
+    for pressed in [true, false] {
+        h.event(egui::Event::PointerButton { pos: p, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE });
+    }
+    h.run_steps(3);
+}
+
+fn texts(h: &Harness<'static, PrintCraftApp>) -> Vec<String> {
+    added(h)
+        .into_iter()
+        .filter_map(|a| match a.content {
+            printcraft_engine::AddedContent::Text(t) => Some(t.text),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn clicking_elsewhere_keeps_the_text_and_starts_a_new_box() {
+    // #74: a click elsewhere on the page threw away the text being typed and opened a new box.
+    let mut h = harness();
+    assert!(h.state_mut().execute("edit.text"));
+    h.run_steps(2);
+    let p = at(&h, 40.0, 100.0);
+    click(&mut h, p);
+    h.event(egui::Event::Text("First".into()));
+    h.run_steps(2);
+    // A slow click (press and release in different frames)…
+    let p = at(&h, 40.0, 200.0);
+    click(&mut h, p);
+    assert_eq!(texts(&h), ["First"]);
+    assert!(h.state().views[0].content.draft.is_some(), "a new box opened");
+    assert_eq!(h.state().quick_tool, QuickTool::AddText, "still adding text");
+    h.event(egui::Event::Text("Second".into()));
+    h.run_steps(2);
+    // …and a quick one (both in one frame, as a real mouse click usually arrives).
+    let p = at(&h, 40.0, 300.0);
+    quick_click(&mut h, p);
+    assert_eq!(texts(&h), ["First", "Second"]);
+    // Discard throws away only the box being typed.
+    h.event(egui::Event::Text("Third".into()));
+    h.run_steps(2);
+    h.get_by_label("Discard this text (Esc)").click();
+    h.run_steps(3);
+    assert_eq!(texts(&h), ["First", "Second"]);
+    assert!(h.state().views[0].content.draft.is_none());
+}
+
 #[test]
 fn typing_moving_styling_and_deleting_added_content() {
     let mut h = harness();
@@ -54,9 +105,9 @@ fn typing_moving_styling_and_deleting_added_content() {
     assert!(h.state().views[0].content.draft.is_some(), "the editor opened");
     h.event(egui::Event::Text("Reviewed".into()));
     h.run_steps(2);
-    // Click elsewhere on the page commits and goes back to Select.
-    let p = at(&h, 250.0, 380.0);
-    click(&mut h, p);
+    // Done keeps the text and goes back to Select, with the new text selected.
+    h.get_by_label("Done adding text").click();
+    h.run_steps(3);
     let a = added(&h);
     assert_eq!(a.len(), 1);
     let printcraft_engine::AddedContent::Text(t) = &a[0].content else { panic!() };
