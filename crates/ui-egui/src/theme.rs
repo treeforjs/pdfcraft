@@ -55,7 +55,7 @@ impl Tokens {
                 divider: Color32::from_rgb(0xE8, 0xE8, 0xEB),
                 text: Color32::from_rgb(0x22, 0x22, 0x26),
                 text_muted: Color32::from_rgb(0x5E, 0x5E, 0x66),
-                text_faint: Color32::from_rgb(0x8E, 0x8E, 0x96),
+                text_faint: Color32::from_rgb(0x6B, 0x6B, 0x73),
                 icon: Color32::from_rgb(0x44, 0x44, 0x4B),
                 hover: Color32::from_rgb(0xF0, 0xF0, 0xF3),
                 pressed: Color32::from_rgb(0xE4, 0xE4, 0xE9),
@@ -79,7 +79,7 @@ impl Tokens {
                 divider: Color32::from_rgb(0x33, 0x33, 0x39),
                 text: Color32::from_rgb(0xEC, 0xEC, 0xEF),
                 text_muted: Color32::from_rgb(0xAE, 0xAE, 0xB6),
-                text_faint: Color32::from_rgb(0x80, 0x80, 0x89),
+                text_faint: Color32::from_rgb(0x97, 0x97, 0x9E),
                 icon: Color32::from_rgb(0xD4, 0xD4, 0xDA),
                 hover: Color32::from_rgb(0x34, 0x34, 0x3A),
                 pressed: Color32::from_rgb(0x3E, 0x3E, 0x45),
@@ -180,6 +180,15 @@ pub fn apply(ctx: &egui::Context, kind: ThemeKind) {
     v.widgets.active.weak_bg_fill = t.pressed;
     v.widgets.active.bg_fill = t.pressed;
     v.widgets.open.weak_bg_fill = t.hover;
+    // Crisper text at 100–150 % scaling (#76): glyphs sit on whole pixels instead of being
+    // rendered at quarter-pixel offsets, which egui notes blurs them. In the light theme, a mild
+    // gamma darkens the antialiased edges of dark text (egui's default is linear, which reads thin
+    // and grey next to the system's text); the dark theme keeps egui's own curve. At 200 % both
+    // make little difference.
+    v.text_options.subpixel_binning = false;
+    if !t.dark() {
+        v.text_options.color_transfer_function = egui::epaint::FontColorTransferFunction::Gamma(0.75);
+    }
     ctx.set_visuals(v);
     ctx.global_style_mut(|s| {
         s.spacing.item_spacing = egui::vec2(8.0, 6.0);
@@ -193,4 +202,36 @@ pub fn apply(ctx: &egui::Context, kind: ThemeKind) {
         s.text_styles.insert(egui::TextStyle::Heading, semibold(17.0));
         s.interaction.tooltip_delay = 0.35;
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// WCAG 2 contrast ratio between two opaque colours.
+    fn contrast(a: Color32, b: Color32) -> f32 {
+        let lum = |c: Color32| {
+            let lin = |v: u8| {
+                let s = v as f32 / 255.0;
+                if s <= 0.04045 { s / 12.92 } else { ((s + 0.055) / 1.055).powf(2.4) }
+            };
+            0.2126 * lin(c.r()) + 0.7152 * lin(c.g()) + 0.0722 * lin(c.b())
+        };
+        let (x, y) = (lum(a) + 0.05, lum(b) + 0.05);
+        x.max(y) / x.min(y)
+    }
+
+    #[test]
+    fn text_is_readable_on_every_surface() {
+        // #76: the faintest text (hints, zoom level, captions) was 3.3:1 in the light theme.
+        for kind in [ThemeKind::Light, ThemeKind::Dark] {
+            let t = Tokens::for_kind(kind);
+            for (name, fg) in [("text", t.text), ("text_muted", t.text_muted), ("text_faint", t.text_faint)] {
+                for bg in [t.chrome, t.panel, t.card, t.pasteboard] {
+                    let r = contrast(fg, bg);
+                    assert!(r >= 4.5, "{kind:?} {name} on {bg:?}: {r:.2}:1, WCAG AA needs 4.5:1");
+                }
+            }
+        }
+    }
 }
