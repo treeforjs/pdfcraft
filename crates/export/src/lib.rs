@@ -307,8 +307,25 @@ fn items(pages: &[Page]) -> Vec<Item<'_>> {
     out
 }
 
+/// Whether a character may appear in the output. XML 1.0 forbids the C0 controls other than tab,
+/// line feed and carriage return, and U+FFFE/U+FFFF. Text extracted from PDFs often holds them
+/// (fonts without a usable `/ToUnicode`), and Word refuses a whole document over one (#72).
+fn allowed(c: char) -> bool {
+    matches!(c, '\t' | '\n' | '\r') || !(c.is_ascii_control() || c == '\u{FFFE}' || c == '\u{FFFF}')
+}
+
 fn esc(s: &str) -> String {
-    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
+    let mut o = String::with_capacity(s.len());
+    for c in s.chars().filter(|c| allowed(*c)) {
+        match c {
+            '&' => o.push_str("&amp;"),
+            '<' => o.push_str("&lt;"),
+            '>' => o.push_str("&gt;"),
+            '"' => o.push_str("&quot;"),
+            c => o.push(c),
+        }
+    }
+    o
 }
 
 fn base64(data: &[u8]) -> String {
@@ -387,7 +404,8 @@ fn run_xml(text: &str, size: f64, bold: bool, italic: bool) -> String {
     if italic {
         rpr.push_str("<w:i/>");
     }
-    rpr.push_str(&format!("<w:sz w:val=\"{}\"/>", (size * 2.0).round().clamp(2.0, 3276.0) as i64));
+    let half_points = if size.is_finite() { (size * 2.0).round().clamp(2.0, 3276.0) as i64 } else { 24 };
+    rpr.push_str(&format!("<w:sz w:val=\"{half_points}\"/>"));
     format!("<w:r><w:rPr>{rpr}</w:rPr><w:t xml:space=\"preserve\">{}</w:t></w:r>", esc(text))
 }
 
@@ -438,6 +456,13 @@ fn docx_table(t: &Table) -> String {
 /// A Word document (.docx, Office Open XML): Heading 1/2 and Normal paragraphs, images inline at
 /// their size on the page, page breaks between pages.
 pub fn docx(pages: &[Page], title: &str) -> Vec<u8> {
+    // The first page's size, within what Word accepts (0.1 to 22 in; a long receipt is taller),
+    // in twips. Margins are 1 in, less on small pages so text keeps room.
+    let twips = |pt: f64| if pt.is_finite() { (pt * 20.0).round().clamp(144.0, 31680.0) as i64 } else { 12240 };
+    let (pw, ph) = pages.first().map_or((12240, 15840), |p| (twips(p.width), twips(p.height)));
+    let (mx, my) = ((pw / 8).min(1440), (ph / 8).min(1440));
+    // Images are at most the text width, in points.
+    let text_w = (pw - 2 * mx) as f64 / 20.0;
     let mut body = String::new();
     let mut media: Vec<(String, &Image)> = Vec::new();
     // Word needs a paragraph between adjacent tables and after the last one in the body.
@@ -462,9 +487,9 @@ pub fn docx(pages: &[Page], title: &str) -> Vec<u8> {
             Item::Img(im) => {
                 let n = media.len() + 1;
                 let name = format!("image{n}.{}", im.ext);
-                // Size on the page, in EMU (12700 per point), at most the text width (6.5 in).
+                // Size on the page, in EMU (12700 per point), at most the text width.
                 let (w, h) = ((im.rect[2] - im.rect[0]).max(1.0), (im.rect[3] - im.rect[1]).max(1.0));
-                let k = (468.0 / w).min(1.0);
+                let k = (text_w / w).min(1.0);
                 let (cx, cy) = ((w * k * 12700.0) as i64, (h * k * 12700.0) as i64);
                 body.push_str(&format!(
                     "<w:p><w:r><w:drawing><wp:inline><wp:extent cx=\"{cx}\" cy=\"{cy}\"/><wp:docPr id=\"{n}\" name=\"Picture {n}\"/>\
@@ -483,15 +508,13 @@ pub fn docx(pages: &[Page], title: &str) -> Vec<u8> {
     if after_table {
         body.push_str("<w:p/>");
     }
-    // The first page's size and margins of 1 in.
-    let (pw, ph) = pages.first().map_or((612.0, 792.0), |p| (p.width, p.height));
     let doc = format!(
         "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n\
 <w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\" \
 xmlns:wp=\"http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing\"><w:body>{body}\
-<w:sectPr><w:pgSz w:w=\"{}\" w:h=\"{}\"/><w:pgMar w:top=\"1440\" w:right=\"1440\" w:bottom=\"1440\" w:left=\"1440\" w:header=\"720\" w:footer=\"720\" w:gutter=\"0\"/></w:sectPr></w:body></w:document>",
-        (pw * 20.0) as i64,
-        (ph * 20.0) as i64
+<w:sectPr><w:pgSz w:w=\"{pw}\" w:h=\"{ph}\"/><w:pgMar w:top=\"{my}\" w:right=\"{mx}\" w:bottom=\"{my}\" w:left=\"{mx}\" w:header=\"{}\" w:footer=\"{}\" w:gutter=\"0\"/></w:sectPr></w:body></w:document>",
+        my / 2,
+        my / 2
     );
     let mut types = String::from(
         "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">\
@@ -540,7 +563,7 @@ xmlns:wp=\"http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawin
 
 fn rtf_text(s: &str) -> String {
     let mut o = String::new();
-    for c in s.chars() {
+    for c in s.chars().filter(|c| allowed(*c)) {
         match c {
             '\\' | '{' | '}' => {
                 o.push('\\');
@@ -657,6 +680,48 @@ mod tests {
         for n in names {
             assert!(d.windows(n.len()).any(|w| w == n.as_bytes()), "{n}");
         }
+    }
+
+    /// One part of a package written by [`Zip`], inflated.
+    fn part(zip: &[u8], name: &str) -> String {
+        let at = |i: usize, n: usize| zip[i..i + n].iter().rev().fold(0usize, |v, b| v << 8 | *b as usize);
+        let mut i = 0;
+        while zip[i..].starts_with(b"PK\x03\x04") {
+            let (size, name_len) = (at(i + 18, 4), at(i + 26, 2));
+            let data = i + 30 + name_len;
+            if &zip[i + 30..data] == name.as_bytes() {
+                let mut s = String::new();
+                std::io::Read::read_to_string(&mut flate2::read::DeflateDecoder::new(&zip[data..data + size]), &mut s).unwrap();
+                return s;
+            }
+            i = data + size;
+        }
+        panic!("{name} missing")
+    }
+
+    #[test]
+    fn word_opens_text_with_control_characters_and_long_pages() {
+        // #72: text extracted without a usable /ToUnicode holds C0 controls, which XML forbids;
+        // Word then refused the whole file. A till receipt is also taller than Word's 22 in.
+        let mut p = page();
+        p.height = 2400.0;
+        p.blocks.push(Block {
+            text: "Total\u{0}\u{3}\u{c} 4.50\u{FFFF}\tGBP".into(),
+            rect: [72.0, 100.0, 300.0, 110.0],
+            size: f64::NAN,
+            bold: false,
+            italic: false,
+        });
+        let xml = part(&docx(&[p.clone()], "Receipt\u{1}"), "word/document.xml");
+        assert!(xml.contains(">Total 4.50\tGBP</w:t>"), "{xml}");
+        assert!(!xml.chars().any(|c| !allowed(c)));
+        assert!(xml.contains("<w:pgSz w:w=\"12240\" w:h=\"31680\"/>"), "clamped to 22 in: {xml}");
+        assert!(xml.contains("<w:sz w:val=\"24\"/>"), "a non-finite size falls back to 12 pt");
+        assert!(rtf(&[p]).contains("Total 4.50\tGBP"));
+        // A narrow page keeps room for text: margins shrink.
+        let narrow = Page { width: 100.0, height: 200.0, ..page() };
+        let xml = part(&docx(&[narrow], "Narrow"), "word/document.xml");
+        assert!(xml.contains("<w:pgMar w:top=\"500\" w:right=\"250\" w:bottom=\"500\" w:left=\"250\""), "{xml}");
     }
 
     #[test]
