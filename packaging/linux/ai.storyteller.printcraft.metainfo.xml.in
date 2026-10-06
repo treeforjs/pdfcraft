@@ -12,7 +12,8 @@
   </developer>
   <description>
     <p>
-      PrintCraft is a pdf editor. Read, organize, combine, split and secure PDFs
+      PrintCraft is an open-source PDF workbench. Read, comment on, fill in and sign PDFs;
+      organize, combine and split pages; edit, redact, protect and export documents.
     </p>
   </description>
   <launchable type="desktop-id">ai.storyteller.printcraft.desktop</launchable>
@@ -23,20 +24,19 @@
   <url type="help">https://github.com/storytold/printcraft</url>
   <url type="contact">https://discord.gg/artcraft</url>
   <categories>
-    <category>Graphics</category>
-    <category>RasterGraphics</category>
-    <category>Photography</category>
+    <category>Office</category>
+    <category>Viewer</category>
   </categories>
   <keywords>
-    <keyword>photo</keyword>
-    <keyword>image editor</keyword>
-    <keyword>psd</keyword>
-    <keyword>layers</keyword>
+    <keyword>pdf</keyword>
+    <keyword>viewer</keyword>
+    <keyword>annotate</keyword>
+    <keyword>forms</keyword>
   </keywords>
   <screenshots>
     <screenshot type="default">
-      <caption>Editing The Great Wave off Kanagawa with type layers and adjustment layers</caption>
-      <image>https://raw.githubusercontent.com/storytold/printcraft/main/docs/images/printcraft-demo.jpg</image>
+      <caption>A PDF open with its threaded comments</caption>
+      <image>https://raw.githubusercontent.com/storytold/printcraft/main/docs/images/printcraft-viewer.png</image>
     </screenshot>
   </screenshots>
   <branding>
@@ -53,6 +53,7 @@
   </supports>
   <provides>
     <binary>printcraft</binary>
+    <mediatype>application/pdf</mediatype>
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>

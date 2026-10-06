@@ -17,10 +17,9 @@ vendor: Learning Machines LLC
 homepage: https://getartcraft.com/apps/printcraft
 license: MIT OR Apache-2.0
 description: |-
-  Open-source, native image editor that works the way Photoshop users expect.
-  Layers, masks, adjustment layers, layer styles, type and brushes; opens and
-  saves layered PSD/PSB files; 8/16/32-bit documents; GPU compositing (wgpu).
-  Includes printcraft-cli, a headless converter and command runner.
+  Open-source, native PDF workbench: read, comment, fill and sign forms,
+  organize, combine, split, edit, redact, protect and export PDFs.
+  Includes printcraft-cli, a headless command runner and opt-in MCP server.
 
 # The binaries link only glibc and libgcc_s directly. Windowing (X11/Wayland, xkbcommon) and the
 # GPU (Vulkan, EGL/GL) are loaded at runtime, so they are dependencies/recommendations here
