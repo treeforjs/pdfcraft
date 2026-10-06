@@ -124,3 +124,38 @@ jobs:
           key: windows-arm64-test
       - name: Test
         run: cargo test --workspace --locked
+
+  # TEMPORARY (remove before merge): find the test in tests/view.rs that intermittently dies with
+  # STATUS_ACCESS_VIOLATION on ARM64. Single-threaded, so the last "test … " line names it.
+  diag-view:
+    name: diag view.rs crash (temporary)
+    runs-on: windows-11-arm
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: windows-arm64-test
+      - name: Build the view tests
+        run: cargo test -p printcraft-ui-egui --test view --no-run
+      - name: Run them 30 times, single-threaded
+        shell: bash
+        run: |
+          crashes=0
+          for i in $(seq 1 30); do
+            if ! cargo test -q -p printcraft-ui-egui --test view -- --test-threads=1 --nocapture > run.log 2>&1; then
+              crashes=$((crashes+1))
+              echo "::warning::run $i failed; last tests started:"
+              grep -E "^test |STATUS_|panicked" run.log | tail -4
+            fi
+          done
+          echo "crashes: $crashes / 30"
+      - name: Each test alone, 15 times
+        shell: bash
+        run: |
+          for t in $(cargo test -q -p printcraft-ui-egui --test view -- --list 2>/dev/null | sed -n 's/: test$//p'); do
+            n=0
+            for i in $(seq 1 15); do cargo test -q -p printcraft-ui-egui --test view -- --exact "$t" > one.log 2>&1 || n=$((n+1)); done
+            echo "$t: $n / 15 failed"
+          done
