@@ -157,22 +157,4 @@ jobs:
           $cdb = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\Debuggers' -Recurse -Filter cdb.exe -ErrorAction SilentlyContinue | Sort-Object { $_.FullName -notmatch 'arm64' } | Select-Object -First 1
           if (-not $cdb) { Write-Output 'cdb not found'; Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10' -Directory | Out-String; exit 0 }
           Write-Output "cdb: $($cdb.FullName)"
-          & $cdb.FullName -z $dump.FullName -y "srv*;$(Split-Path $exe)" -c ".ecxr; kn 40; ~* kn 12; q" 2>&1 | Select-Object -Last 220
-      - name: "A: parallel (the default), 30 runs"
-        shell: bash
-        run: |
-          crashes=0
-          for i in $(seq 1 30); do
-            cargo test -q -p printcraft-ui-egui --test view > run.log 2>&1 || { crashes=$((crashes+1)); grep -E "STATUS_|panicked" run.log | head -2; }
-          done
-          echo "A parallel: crashes $crashes / 30"
-      - name: "B: parallel with 16 MB test-thread stacks, 30 runs"
-        shell: bash
-        env:
-          RUST_MIN_STACK: "16777216"
-        run: |
-          crashes=0
-          for i in $(seq 1 30); do
-            cargo test -q -p printcraft-ui-egui --test view > run.log 2>&1 || { crashes=$((crashes+1)); grep -E "STATUS_|panicked" run.log | head -2; }
-          done
-          echo "B big stacks: crashes $crashes / 30"
+          & $cdb.FullName -z $dump.FullName -y "srv*;$(Split-Path $exe)" -c ".lines -d; .echo ===FAULT===; .ecxr; kn 30; .echo ===MODULES===; lm m d3d*; lm m dxgi*; lm m *warp*; lm m nv*; lm m qc*; .echo ===END===; q" 2>&1 | Select-String -Pattern '===|!|ExceptionCode|Attempt|d3d|dxgi|warp|start' | Select-Object -First 120
