@@ -351,6 +351,15 @@ cargo xtask demo-pdf                              # build the showcase PDF used 
 cargo xtask screenshots                           # regenerate every screenshot in this README
 ```
 
+Japanese fonts come from [craft-fonts](https://github.com/storytold/craft-fonts), an optional build
+input that every release includes. To build with them (Japanese interface text, and Japanese text in
+edited PDFs):
+
+```sh
+git clone https://github.com/storytold/craft-fonts ../craft-fonts
+CRAFT_FONTS_DIR=../craft-fonts cargo run --release -p printcraft -- some.pdf
+```
+
 ## What's next
 
 PrintCraft is young and moving fast. The aim is a workbench where you can view, organize, annotate, fill, sign and edit PDFs, at parity with Acrobat Pro.
@@ -416,7 +425,9 @@ PrintCraft is dual-licensed under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APA
 Copyright (c) 2026 ArtCraft Team and the PrintCraft contributors. Required notices are in [NOTICE](NOTICE).
 
 Bundled fonts, icons, images and other assets keep their own open licenses; each one is listed
-with its author, source and license in [ATTRIBUTION.md](ATTRIBUTION.md).
+with its author, source and license in [ATTRIBUTION.md](ATTRIBUTION.md). Release builds also embed
+the Japanese fonts of [craft-fonts](https://github.com/storytold/craft-fonts/blob/main/ATTRIBUTION.md)
+(SIL Open Font License 1.1).
 
 The ArtCraft name, wordmark and logos in [`docs/brand/`](docs/brand/) are trademarks of the
 ArtCraft Team and are not covered by this license. They may be used only unmodified, and only as

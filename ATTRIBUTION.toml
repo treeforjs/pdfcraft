@@ -4,6 +4,8 @@
 # [[asset]]    a file in this repository (committed or vendored); `sha256` must match the file.
 # [[bundled]]  a file compiled into PrintCraft by a Cargo dependency (its crate version must match Cargo.lock).
 # [[fetched]]  downloaded at build time by xtask (never committed), pinned by `sha256`.
+# [[build_input]] an optional build input outside this repository (e.g. craft-fonts via CRAFT_FONTS_DIR);
+#              never committed or downloaded here, its own repository attributes each file.
 #
 # licence: SPDX expression from the allowlist in AGENTS.md §1.2. adobe_data = true marks the closed list of
 # Adobe-authored non-visual technical data allowed by AGENTS.md §1.1.
@@ -1967,28 +1969,6 @@ usage = "UI monospace font; demo PDF code"
 sha256 = "e6fd0d7e91550b3ed2b735d4312474362c4716edc4fc0577a0f61ed782d5aed1"
 
 [[asset]]
-path = "assets/fonts/ShipporiMincho-Regular.ttf"
-title = "Shippori Mincho Regular"
-author = "The Shippori Mincho Project Authors (FONTDASU)"
-source = "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/shipporimincho/ShipporiMincho-Regular.ttf"
-licence = "OFL-1.1"
-licence_file = "assets/fonts/OFL-ShipporiMincho.txt"
-kind = "font"
-usage = "Japanese fallback glyphs in edited PDF text and the edit-text UI"
-sha256 = "769b5269f0f9bc6534b352c0e6bd856a566e03ff788f107191c2d835863570b2"
-
-[[asset]]
-path = "assets/fonts/OFL-ShipporiMincho.txt"
-title = "SIL Open Font License 1.1 for Shippori Mincho"
-author = "The Shippori Mincho Project Authors (FONTDASU)"
-source = "https://raw.githubusercontent.com/google/fonts/9710da1eacb3be272583c3224dcb70f9da6eadbb/ofl/shipporimincho/OFL.txt"
-licence = "OFL-1.1"
-licence_file = "assets/fonts/OFL-ShipporiMincho.txt"
-kind = "licence"
-usage = "License for Shippori Mincho fallback font"
-sha256 = "41fba056279be5f45ff9a99e44b7b53897b42732f5806d8e666e0ab49ac6bd38"
-
-[[asset]]
 path = "vendor/hayro-interpret/assets/FoxitDingbats.pfb"
 title = "FoxitDingbats (standard-14 substitute font)"
 author = "Foxit Software Inc. / PDFium Authors"
@@ -3051,3 +3031,14 @@ licence_sha256 = "28a9529c7d0bb4dc51f4bf5c116a3d16ef247a052f7591466768ddf563fd1c
 kind = "model"
 usage = "Scan & OCR: reads the words it finds (cargo xtask models)"
 sha256 = "e484866d4cce403175bd8d00b128feb08ab42e208de30e42cd9889d8f1735a6e"
+
+[[build_input]]
+name = "craft-fonts"
+option = "CRAFT_FONTS_DIR"
+title = "Japanese fonts: BIZ UDPGothic (Regular, Bold), Shippori Mincho, BIZ UDMincho"
+author = "The BIZ UDGothic and BIZ UDMincho Project Authors (Morisawa Inc.), The Shippori Mincho Project Authors (FONTDASU)"
+source = "https://github.com/storytold/craft-fonts (pinned by commit in .github/workflows/release.yml)"
+licence = "OFL-1.1"
+attribution = "https://github.com/storytold/craft-fonts/blob/main/ATTRIBUTION.md"
+kind = "font"
+usage = "Japanese fallback in the interface (BIZ UDPGothic first) and Japanese glyphs in edited PDF text (Shippori Mincho); the web build embeds only BIZ UDPGothic Regular"

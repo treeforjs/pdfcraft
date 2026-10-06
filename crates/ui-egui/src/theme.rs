@@ -105,6 +105,13 @@ impl Tokens {
 }
 
 pub fn install_fonts(ctx: &egui::Context) {
+    ctx.set_fonts(font_definitions());
+}
+
+/// The interface fonts: Inter (and JetBrains Mono for code) first, then egui's defaults, then
+/// the Japanese faces of the optional craft-fonts build input (BIZ UDPGothic first) as the last
+/// fallback in every family. Without craft-fonts there is no Japanese face.
+pub fn font_definitions() -> FontDefinitions {
     let mut fonts = FontDefinitions::default();
     let add = |fonts: &mut FontDefinitions, name: &str, bytes: &'static [u8]| {
         fonts.font_data.insert(name.to_owned(), Arc::new(FontData::from_static(bytes)));
@@ -113,19 +120,23 @@ pub fn install_fonts(ctx: &egui::Context) {
     add(&mut fonts, "Inter-Medium", include_bytes!("../../../assets/fonts/Inter-Medium.ttf"));
     add(&mut fonts, "Inter-SemiBold", include_bytes!("../../../assets/fonts/Inter-SemiBold.ttf"));
     add(&mut fonts, "JetBrainsMono", include_bytes!("../../../assets/fonts/JetBrainsMono-Regular.ttf"));
-    // The same bytes printcraft-fonts embeds for Japanese text in PDFs: one 8.7 MB copy, not two.
-    add(&mut fonts, "ShipporiMincho", printcraft_fonts::SHIPPORI_MINCHO);
     fonts.families.entry(FontFamily::Proportional).or_default().insert(0, "Inter".to_owned());
-    fonts.families.entry(FontFamily::Proportional).or_default().push("ShipporiMincho".to_owned());
     fonts.families.entry(FontFamily::Monospace).or_default().insert(0, "JetBrainsMono".to_owned());
-    fonts.families.entry(FontFamily::Monospace).or_default().push("ShipporiMincho".to_owned());
+    // The same static bytes printcraft-fonts uses for Japanese text in PDFs: one copy, not two.
+    for face in printcraft_fonts::ui_japanese_fonts() {
+        let name = face.name();
+        add(&mut fonts, &name, face.bytes);
+        for family in [FontFamily::Proportional, FontFamily::Monospace] {
+            fonts.families.entry(family).or_default().push(name.clone());
+        }
+    }
     let fallback: Vec<String> = fonts.families[&FontFamily::Proportional].clone();
     for (fam, primary) in [("medium", "Inter-Medium"), ("semibold", "Inter-SemiBold")] {
         let mut stack = vec![primary.to_owned()];
         stack.extend(fallback.iter().cloned());
         fonts.families.insert(FontFamily::Name(fam.into()), stack);
     }
-    ctx.set_fonts(fonts);
+    fonts
 }
 
 pub fn regular(size: f32) -> FontId {

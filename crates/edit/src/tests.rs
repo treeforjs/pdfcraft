@@ -279,8 +279,20 @@ fn descriptor_text_page() -> Document {
     Document::open(Arc::new(out)).unwrap()
 }
 
+/// The Japanese fallback face comes from craft-fonts, an optional build input.
+fn without_craft_fonts(test: &str) -> bool {
+    if printcraft_fonts::document_japanese_font().is_some() {
+        return false;
+    }
+    eprintln!("skipping {test}: built without craft-fonts (set CRAFT_FONTS_DIR to run it)");
+    true
+}
+
 #[test]
 fn japanese_line_uses_unicode_type3_fallback() {
+    if without_craft_fonts("japanese_line_uses_unicode_type3_fallback") {
+        return;
+    }
     let mut doc = text_page("BT /F2 12 Tf 72 700 Td (ab) Tj ET");
     let replacement = "25362738こんにちは、お元気ですか？ 2.3444";
     let result = text::replace_line(&mut doc, 0, 0, replacement).unwrap();
@@ -294,11 +306,36 @@ fn japanese_line_uses_unicode_type3_fallback() {
 
 #[test]
 fn japanese_paragraph_uses_unicode_type3_fallback() {
+    if without_craft_fonts("japanese_paragraph_uses_unicode_type3_fallback") {
+        return;
+    }
     let mut doc = text_page("BT /F2 12 Tf 72 700 Td (ab) Tj ET");
     let replacement = "こんにちは、お元気ですか？ 2.3444 日本語の文章";
     text::replace_block(&mut doc, 0, 0, replacement).unwrap();
     let reopened = reopen(&doc);
     assert_eq!(text::text_blocks(&reopened, 0).unwrap()[0].text, replacement);
+}
+
+/// Without craft-fonts there is no Japanese face: editing in Japanese is a clear error that
+/// leaves the page untouched, never a panic; Latin edits work as before.
+#[test]
+fn japanese_edit_without_craft_fonts_is_a_clear_error() {
+    let mut doc = text_page("BT /F2 12 Tf 72 700 Td (ab) Tj ET");
+    let before = page_content_bytes(&doc, 0);
+    let line = text::replace_line(&mut doc, 0, 0, "日本語の文字");
+    let block = text::replace_block(&mut doc, 0, 0, "日本語の文字");
+    if printcraft_fonts::document_japanese_font().is_some() {
+        eprintln!("built with craft-fonts: the Japanese edits succeed (checked by the tests above)");
+        assert!(line.is_ok() && block.is_ok());
+        return;
+    }
+    for result in [line.map(|_| ()), block.map(|_| ())] {
+        let Err(EditError::Invalid(msg)) = result else { panic!("expected a clear error, got {result:?}") };
+        assert!(msg.contains("Japanese fallback font") && msg.contains("CRAFT_FONTS_DIR"), "{msg}");
+    }
+    assert_eq!(page_content_bytes(&doc, 0), before);
+    let latin = text::replace_line(&mut doc, 0, 0, "Hello").unwrap();
+    assert_eq!(text::text_lines(&reopen(&doc), 0).unwrap()[0].text, "Hello", "{latin:?}");
 }
 #[test]
 fn font_descriptor_style_is_exposed_even_with_a_neutral_name() {

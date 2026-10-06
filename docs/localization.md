@@ -11,3 +11,5 @@ The control channel exposes the setting through `ui.set`:
 `ui.state` reports `language` as `en` or `ja`. Unknown language codes return an error without changing the current setting. Old preferences default to English.
 
 This first translation pass covers the main menu and core registered menu commands. Untranslated labels use English. Vertical Japanese PDF rendering is an existing viewer feature; this change does not add vertical text editing.
+
+Japanese interface text uses BIZ UDPGothic from [craft-fonts](https://github.com/storytold/craft-fonts), an optional build input that every release includes (`CRAFT_FONTS_DIR`; see the README). A build made without it has no Japanese face, so Japanese labels show replacement boxes.
