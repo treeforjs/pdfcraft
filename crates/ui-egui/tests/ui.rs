@@ -240,3 +240,23 @@ fn dropping_a_pdf_on_the_window_opens_it() {
     assert_eq!(h.state().views.len(), 1, "the dropped PDF opens in a tab");
     h.get_by_label_contains("dropped.pdf");
 }
+
+#[test]
+fn files_and_quit_from_the_operating_system() {
+    // #73: macOS hands Finder double-clicks, Open With and Dock drops over as Apple events.
+    use printcraft_ui_egui::OsEvent;
+    let name = format!("printcraft-os-open-{}.pdf", std::process::id());
+    let path = std::env::temp_dir().join(&name);
+    std::fs::write(&path, FIXTURE).unwrap();
+    let queue = std::rc::Rc::new(std::cell::RefCell::new(vec![OsEvent::Open(vec![path.to_string_lossy().into_owned()])]));
+    let q = queue.clone();
+    let mut h = harness(move |app| app.os_events = Some(Box::new(move || q.borrow_mut().drain(..).collect())));
+    std::fs::remove_file(&path).ok();
+    assert_eq!(h.state().views.len(), 1, "the file opens in a tab");
+    h.get_by_label_contains(&name);
+    // Quit closes the window like the close button, so unsaved changes are asked about.
+    queue.borrow_mut().push(OsEvent::Quit);
+    h.step();
+    let closing = h.output().viewport_output.values().any(|v| v.commands.iter().any(|c| matches!(c, egui::ViewportCommand::Close)));
+    assert!(closing);
+}

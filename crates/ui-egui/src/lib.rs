@@ -253,6 +253,19 @@ pub struct PageClip {
 /// Files delivered asynchronously: (name, bytes).
 pub type Inbox = std::sync::Arc<std::sync::Mutex<Vec<(String, Vec<u8>)>>>;
 
+/// A request the operating system sends the running app, outside its window: on macOS, Finder
+/// double-clicks, Open With and drops on the Dock icon arrive as Apple events, not arguments.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum OsEvent {
+    /// Open these files.
+    Open(Vec<String>),
+    /// Quit (the Dock's Quit, logging out), asking about unsaved changes first.
+    Quit,
+}
+
+/// Returns the [`OsEvent`]s that arrived since it was last called (set by the desktop app).
+pub type OsEventsFn = Box<dyn FnMut() -> Vec<OsEvent>>;
+
 pub struct PasswordPrompt {
     pub name: String,
     pub path: Option<String>,
@@ -300,6 +313,8 @@ pub struct PrintCraftApp {
     pub full_screen: bool,
     /// Files delivered asynchronously (web drag-and-drop, web file picker).
     pub inbox: Inbox,
+    /// Requests from the operating system, polled every frame (macOS Apple events).
+    pub os_events: Option<OsEventsFn>,
     /// A pending "save changes?" question (closing a dirty tab or quitting).
     pub close_request: Option<CloseRequest>,
     /// Save to this path instead of asking (tests and automation).
@@ -470,6 +485,7 @@ impl PrintCraftApp {
             password_prompt: None,
             full_screen: false,
             inbox: Default::default(),
+            os_events: None,
             close_request: None,
             save_override: None,
             props_draft: None,
@@ -1139,6 +1155,17 @@ impl eframe::App for PrintCraftApp {
         for (name, bytes) in arrived {
             if let Err(e) = self.open_bytes(&name, None, bytes) {
                 self.notify(format!("Couldn't open {name}: {e}"));
+            }
+        }
+        let os_events = self.os_events.as_mut().map(|poll| poll()).unwrap_or_default();
+        for e in os_events {
+            match e {
+                #[cfg(not(target_arch = "wasm32"))]
+                OsEvent::Open(paths) => paths.iter().for_each(|p| self.open_path(p)),
+                #[cfg(target_arch = "wasm32")]
+                OsEvent::Open(_) => {}
+                // Like closing the window: `guard_quit` asks about unsaved changes.
+                OsEvent::Quit => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
             }
         }
         if let Some(mut control) = self.control.take() {
