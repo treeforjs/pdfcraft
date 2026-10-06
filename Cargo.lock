@@ -3767,7 +3767,7 @@ dependencies = [
 
 [[package]]
 name = "printcraft"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "eframe",
  "egui",
@@ -3780,7 +3780,7 @@ dependencies = [
 
 [[package]]
 name = "printcraft-a11y"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "printcraft-content",
  "printcraft-cos",
@@ -3790,7 +3790,7 @@ dependencies = [
 
 [[package]]
 name = "printcraft-annot"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "hayro-syntax",
  "printcraft-cos",
@@ -3800,7 +3800,7 @@ dependencies = [
 
 [[package]]
 name = "printcraft-automation"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "base64 0.22.1",
  "image",
@@ -3813,7 +3813,7 @@ dependencies = [
 
 [[package]]
 name = "printcraft-cli"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "base64 0.22.1",
  "printcraft-automation",
@@ -3825,18 +3825,18 @@ dependencies = [
 
 [[package]]
 name = "printcraft-compare"
-version = "0.2.0"
+version = "0.2.1"
 
 [[package]]
 name = "printcraft-content"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "printcraft-cos",
 ]
 
 [[package]]
 name = "printcraft-cos"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "hayro-syntax",
  "printcraft-crypt",
@@ -3848,7 +3848,7 @@ dependencies = [
 
 [[package]]
 name = "printcraft-create"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "hayro-syntax",
  "image",
@@ -3862,7 +3862,7 @@ dependencies = [
 
 [[package]]
 name = "printcraft-crypt"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "aes",
  "md-5",
@@ -3874,7 +3874,7 @@ dependencies = [
 
 [[package]]
 name = "printcraft-edit"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "hayro-syntax",
  "printcraft-annot",
@@ -3887,7 +3887,7 @@ dependencies = [
 
 [[package]]
 name = "printcraft-engine"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "chrono",
  "image",
@@ -3917,14 +3917,14 @@ dependencies = [
 
 [[package]]
 name = "printcraft-export"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "flate2",
 ]
 
 [[package]]
 name = "printcraft-filters"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "flate2",
  "proptest",
@@ -3934,7 +3934,7 @@ dependencies = [
 
 [[package]]
 name = "printcraft-fonts"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "printcraft-cos",
  "skrifa 0.44.0",
@@ -3942,7 +3942,7 @@ dependencies = [
 
 [[package]]
 name = "printcraft-forms"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "hayro-syntax",
  "printcraft-content",
@@ -3954,25 +3954,25 @@ dependencies = [
 
 [[package]]
 name = "printcraft-geom"
-version = "0.2.0"
+version = "0.2.1"
 
 [[package]]
 name = "printcraft-js"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "boa_engine",
 ]
 
 [[package]]
 name = "printcraft-model"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "printcraft-cos",
 ]
 
 [[package]]
 name = "printcraft-ocr"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "ocrs",
  "printcraft-fonts",
@@ -3982,7 +3982,7 @@ dependencies = [
 
 [[package]]
 name = "printcraft-optimize"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "image",
  "printcraft-annot",
@@ -3995,7 +3995,7 @@ dependencies = [
 
 [[package]]
 name = "printcraft-organize"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "hayro-syntax",
  "printcraft-cos",
@@ -4004,7 +4004,7 @@ dependencies = [
 
 [[package]]
 name = "printcraft-preflight"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "printcraft-cos",
  "printcraft-model",
@@ -4012,7 +4012,7 @@ dependencies = [
 
 [[package]]
 name = "printcraft-print"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "printcraft-content",
  "printcraft-cos",
@@ -4022,7 +4022,7 @@ dependencies = [
 
 [[package]]
 name = "printcraft-redact"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "printcraft-annot",
  "printcraft-content",
@@ -4036,7 +4036,7 @@ dependencies = [
 
 [[package]]
 name = "printcraft-render"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "getrandom 0.4.3",
  "hayro",
@@ -4049,7 +4049,7 @@ dependencies = [
 
 [[package]]
 name = "printcraft-sign"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "aes",
  "aws-lc-rs",
@@ -4073,7 +4073,7 @@ dependencies = [
 
 [[package]]
 name = "printcraft-ui-egui"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "arboard",
  "base64 0.22.1",
@@ -4101,7 +4101,7 @@ dependencies = [
 
 [[package]]
 name = "printcraft-web"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "eframe",
  "egui",
@@ -4113,7 +4113,7 @@ dependencies = [
 
 [[package]]
 name = "printcraft-xfdf"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "printcraft-annot",
  "printcraft-cos",
