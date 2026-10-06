@@ -139,23 +139,21 @@ jobs:
           key: windows-arm64-test
       - name: Build the view tests
         run: cargo test -p printcraft-ui-egui --test view --no-run
-      - name: Run them 30 times, single-threaded
+      - name: "A: parallel (the default), 30 runs"
         shell: bash
         run: |
           crashes=0
           for i in $(seq 1 30); do
-            if ! cargo test -q -p printcraft-ui-egui --test view -- --test-threads=1 --nocapture > run.log 2>&1; then
-              crashes=$((crashes+1))
-              echo "::warning::run $i failed; last tests started:"
-              grep -E "^test |STATUS_|panicked" run.log | tail -4
-            fi
+            cargo test -q -p printcraft-ui-egui --test view > run.log 2>&1 || { crashes=$((crashes+1)); grep -E "STATUS_|panicked" run.log | head -2; }
           done
-          echo "crashes: $crashes / 30"
-      - name: Each test alone, 15 times
+          echo "A parallel: crashes $crashes / 30"
+      - name: "B: parallel with 16 MB test-thread stacks, 30 runs"
         shell: bash
+        env:
+          RUST_MIN_STACK: "16777216"
         run: |
-          for t in $(cargo test -q -p printcraft-ui-egui --test view -- --list 2>/dev/null | sed -n 's/: test$//p'); do
-            n=0
-            for i in $(seq 1 15); do cargo test -q -p printcraft-ui-egui --test view -- --exact "$t" > one.log 2>&1 || n=$((n+1)); done
-            echo "$t: $n / 15 failed"
+          crashes=0
+          for i in $(seq 1 30); do
+            cargo test -q -p printcraft-ui-egui --test view > run.log 2>&1 || { crashes=$((crashes+1)); grep -E "STATUS_|panicked" run.log | head -2; }
           done
+          echo "B big stacks: crashes $crashes / 30"
