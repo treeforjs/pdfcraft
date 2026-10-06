@@ -5,10 +5,12 @@
 
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
+mod craft;
 mod encodings;
 pub mod pdf;
 mod script;
-pub use script::{GlyphError, GlyphOutline, SHIPPORI_MINCHO, ScriptOutline, script_outline, shippori_glyph};
+pub use craft::{CRAFT_FONTS, CraftFont, SHIPPORI_MINCHO, document_japanese_font, ui_japanese_fonts};
+pub use script::{GlyphError, GlyphOutline, ScriptOutline, japanese_glyph, script_outline};
 
 /// Approximate advance of `s` in Helvetica (or Arial) at `size` points.
 pub fn helvetica_width(s: &str, size: f64) -> f64 {

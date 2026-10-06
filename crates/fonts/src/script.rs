@@ -1,13 +1,10 @@
-//! Typed signatures and bounded glyph outlines from approved bundled fonts.
+//! Typed signatures and bounded glyph outlines from approved fonts (bundled, or craft-fonts).
 
 use skrifa::instance::{LocationRef, Size};
 use skrifa::outline::{DrawSettings, OutlinePen};
 use skrifa::{FontRef, MetadataProvider};
 
 static FONT: &[u8] = include_bytes!("../../../assets/fonts/DancingScript.ttf");
-
-/// The approved Japanese fallback face used by the editor and generated Type 3 fonts.
-pub static SHIPPORI_MINCHO: &[u8] = include_bytes!("../../../assets/fonts/ShipporiMincho-Regular.ttf");
 
 /// Outlines of a line of existing text at a font size of 1 (em units).
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -28,6 +25,8 @@ pub struct GlyphOutline {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GlyphError {
+    /// This build has no Japanese face: it was built without craft-fonts (`CRAFT_FONTS_DIR`).
+    NoFont,
     Missing,
     TooComplex,
 }
@@ -109,10 +108,12 @@ impl OutlinePen for Flatten {
     }
 }
 
-/// Return one Shippori Mincho glyph, bounded so hostile replacement text cannot allocate
-/// unbounded outline data.
-pub fn shippori_glyph(ch: char) -> Result<GlyphOutline, GlyphError> {
-    let Ok(font) = FontRef::new(SHIPPORI_MINCHO) else { return Err(GlyphError::Missing) };
+/// Return one glyph of the Japanese document face ([`crate::document_japanese_font`], Shippori
+/// Mincho from craft-fonts), bounded so hostile replacement text cannot allocate unbounded
+/// outline data. [`GlyphError::NoFont`] when the build has no Japanese face.
+pub fn japanese_glyph(ch: char) -> Result<GlyphOutline, GlyphError> {
+    let Some(face) = crate::document_japanese_font() else { return Err(GlyphError::NoFont) };
+    let Ok(font) = FontRef::new(face.bytes) else { return Err(GlyphError::Missing) };
     let loc = LocationRef::default();
     let metrics = font.metrics(Size::unscaled(), loc);
     let scale = 1.0 / metrics.units_per_em.max(1) as f64;
@@ -184,10 +185,17 @@ mod tests {
     }
 
     #[test]
-    fn shippori_resolves_japanese_glyphs() {
-        let g = super::shippori_glyph('こ').expect("bundled font has Japanese glyph");
-        assert!(g.width > 0.2 && g.width < 2.0);
-        assert!(!g.contours.is_empty());
-        assert_eq!(super::shippori_glyph('\u{1f4a9}'), Err(super::GlyphError::Missing));
+    fn japanese_glyphs_come_from_craft_fonts() {
+        if crate::document_japanese_font().is_none() {
+            eprintln!("skipping the glyph checks: built without craft-fonts (set CRAFT_FONTS_DIR)");
+            assert_eq!(super::japanese_glyph('こ'), Err(super::GlyphError::NoFont));
+            return;
+        }
+        for ch in "日本語の文字こ".chars() {
+            let g = super::japanese_glyph(ch).expect("craft-fonts face has the Japanese glyph");
+            assert!(g.width > 0.2 && g.width < 2.0);
+            assert!(!g.contours.is_empty());
+        }
+        assert_eq!(super::japanese_glyph('\u{1f4a9}'), Err(super::GlyphError::Missing));
     }
 }

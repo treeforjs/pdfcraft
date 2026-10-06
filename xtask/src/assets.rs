@@ -58,6 +58,26 @@ pub struct Manifest {
     pub bundled: Vec<Bundled>,
     #[serde(default)]
     pub fetched: Vec<Fetched>,
+    #[serde(default)]
+    pub build_input: Vec<BuildInput>,
+}
+
+/// Material compiled in only when the builder opts in (e.g. `CRAFT_FONTS_DIR`): not in this
+/// repository, not downloaded by it. Its own repository attributes each file.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BuildInput {
+    pub name: String,
+    /// The environment variable that turns it on.
+    pub option: String,
+    pub title: String,
+    pub author: String,
+    pub source: String,
+    pub licence: String,
+    /// The input's own per-file attribution.
+    pub attribution: String,
+    pub kind: String,
+    pub usage: String,
 }
 
 #[derive(Deserialize)]
@@ -267,6 +287,15 @@ pub fn check(root: &Path, m: &Manifest, repo_files: &[String], lock: &BTreeSet<(
             problems.push(format!("{}: URLs must be https", f.file));
         }
     }
+    for b in &m.build_input {
+        licence_ok(&b.name, &b.licence, &mut problems);
+        if visual(&b.kind) && (mentions_adobe(&b.author) || mentions_adobe(&b.source) || mentions_adobe(&b.title)) {
+            problems.push(format!("{}: {} from Adobe is forbidden (AGENTS.md §1.1)", b.name, b.kind));
+        }
+        if !b.source.starts_with("https://") || !b.attribution.starts_with("https://") {
+            problems.push(format!("{}: URLs must be https", b.name));
+        }
+    }
     problems
 }
 
@@ -361,6 +390,24 @@ pub fn render_markdown(m: &Manifest) -> String {
     for f in &m.fetched {
         let _ = writeln!(s, "| `{}` | {} | {} | {} | {} | {} |", f.file, esc(&f.title), esc(&f.author), f.licence, esc(&f.source), esc(&f.usage));
     }
+    s.push_str(&format!(
+        "\n## Optional build inputs ({})\n\nNot in this repository and never downloaded by it: compiled in only when the build sets the option (official releases do). Each input attributes its own files.\n\n| Input | Option | Title | Author | Licence | Source | Attribution | Used for |\n|---|---|---|---|---|---|---|---|\n",
+        m.build_input.len()
+    ));
+    for b in &m.build_input {
+        let _ = writeln!(
+            s,
+            "| `{}` | `{}` | {} | {} | {} | {} | {} | {} |",
+            b.name,
+            b.option,
+            esc(&b.title),
+            esc(&b.author),
+            b.licence,
+            esc(&b.source),
+            esc(&b.attribution),
+            esc(&b.usage)
+        );
+    }
     s
 }
 
@@ -397,6 +444,25 @@ mod tests {
             sha256: "0".repeat(64),
             adobe_data,
         }
+    }
+
+    #[test]
+    fn build_inputs_need_an_open_licence_and_https_links() {
+        let input = |licence: &str, attribution: &str| BuildInput {
+            name: "craft-fonts".into(),
+            option: "CRAFT_FONTS_DIR".into(),
+            title: "t".into(),
+            author: "a".into(),
+            source: "https://github.com/storytold/craft-fonts".into(),
+            licence: licence.into(),
+            attribution: attribution.into(),
+            kind: "font".into(),
+            usage: "u".into(),
+        };
+        let check_one = |b: BuildInput| check(&root(), &Manifest { build_input: vec![b], ..Default::default() }, &[], &lock(&[]));
+        assert!(check_one(input("OFL-1.1", "https://example.org/ATTRIBUTION.md")).is_empty());
+        assert_eq!(check_one(input("LicenseRef-Proprietary", "https://example.org/A.md")).len(), 1);
+        assert_eq!(check_one(input("OFL-1.1", "ATTRIBUTION.md")).len(), 1);
     }
 
     fn lock(entries: &[(&str, &str)]) -> BTreeSet<(String, String)> {
