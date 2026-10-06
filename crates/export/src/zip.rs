@@ -51,7 +51,7 @@ impl Zip {
             h.extend(20u16.to_le_bytes()); // version needed
             h.extend(0x0800u16.to_le_bytes()); // UTF-8 names
             h.extend(method.to_le_bytes());
-            h.extend([0u8; 4]); // time, date
+            h.extend([0, 0, 0x21, 0]); // 00:00, 1980-01-01 (a zero date is not a valid DOS date)
             h.extend(crc.to_le_bytes());
             h.extend((body.len() as u32).to_le_bytes());
             h.extend((data.len() as u32).to_le_bytes());
