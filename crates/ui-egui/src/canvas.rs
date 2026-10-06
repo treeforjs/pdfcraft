@@ -498,6 +498,27 @@ impl DocView {
         self.page_input = (page + 1).to_string();
     }
 
+    /// Next page (`true`) or previous page. In two-page view this moves a whole spread: the other
+    /// page of the spread is already on screen, so stepping to it wouldn't move the view (#70).
+    pub fn step_page(&mut self, forward: bool) {
+        let c = self.current;
+        let target = match self.layout {
+            PageLayout::TwoUp => {
+                // Spreads are [0, 1], [2, 3], … or, with a cover page, [0], [1, 2], [3, 4], ….
+                let first = if self.cover { c.saturating_sub((c + 1) % 2) } else { c - c % 2 };
+                match (forward, self.cover && c == 0) {
+                    (true, true) => 1,
+                    (true, false) => first.saturating_add(2),
+                    (false, _) if self.cover && first <= 1 => 0,
+                    (false, _) => first.saturating_sub(2),
+                }
+            }
+            PageLayout::Continuous | PageLayout::Single if forward => c + 1,
+            PageLayout::Continuous | PageLayout::Single => c.saturating_sub(1),
+        };
+        self.go_to_page(target);
+    }
+
     /// Go to the page typed in the page box: a page label (logical page numbers, as Acrobat
     /// does), else a page number. `false` when it names no page.
     pub fn go_to_typed(&mut self, typed: &str, labels: &[String]) -> bool {
@@ -869,10 +890,10 @@ pub fn shortcuts(view: &mut DocView, ctx: &egui::Context) {
     }
     if view.layout == PageLayout::Single || ctx.input(|i| i.modifiers.command) {
         if key(Key::ArrowRight) || key(Key::PageDown) {
-            view.go_to_page(view.current + 1);
+            view.step_page(true);
         }
         if key(Key::ArrowLeft) || key(Key::PageUp) {
-            view.go_to_page(view.current.saturating_sub(1));
+            view.step_page(false);
         }
     }
 }
@@ -1678,7 +1699,6 @@ pub fn document_area(app: &mut PrintCraftApp, index: usize, ui: &mut egui::Ui) {
 fn run_button(app: &mut PrintCraftApp, index: usize, ctx: &egui::Context, name: &str, action: printcraft_engine::form_scripts::ButtonAction) {
     use printcraft_engine::form_scripts::ButtonAction as B;
     let pages = app.session.get(app.views[index].id).map_or(0, |d| d.info.pages.len());
-    let current = app.views[index].current;
     match action {
         B::Reset { fields, exclude } => {
             let all: Vec<String> = app.session.get(app.views[index].id).map(|d| d.form.iter().map(|f| f.name.clone()).collect()).unwrap_or_default();
@@ -1693,8 +1713,8 @@ fn run_button(app: &mut PrintCraftApp, index: usize, ctx: &egui::Context, name: 
         }
         B::Named(n) => match n.as_str() {
             "Print" => app.open_print(),
-            "NextPage" => app.views[index].go_to_page((current + 1).min(pages.saturating_sub(1))),
-            "PrevPage" => app.views[index].go_to_page(current.saturating_sub(1)),
+            "NextPage" => app.views[index].step_page(true),
+            "PrevPage" => app.views[index].step_page(false),
             "FirstPage" => app.views[index].go_to_page(0),
             "LastPage" => app.views[index].go_to_page(pages.saturating_sub(1)),
             other => app.notify(format!("{name}: the {other} action isn't supported yet")),
