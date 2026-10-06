@@ -40,9 +40,31 @@ pub struct Page {
     pub images: Vec<Image>,
 }
 
+/// One cell of a detected table. `span` is how many grid columns the cell covers (a header
+/// row that stretches over sub-columns).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Cell {
+    pub text: String,
+    pub size: f64,
+    pub bold: bool,
+    pub italic: bool,
+    pub span: usize,
+}
+
+/// A table detected from the page's text layout: rows of cells, and the left edge of each
+/// grid column (user space, y up) so the writers can size the columns.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Table {
+    pub rect: [f64; 4],
+    pub cols: Vec<f64>,
+    pub rows: Vec<Vec<Cell>>,
+}
+
 /// What goes into the output, in order.
 enum Item<'a> {
     Para(&'a Block, u8),
+    /// Owned: tables are detected per page inside [`items`], so they cannot borrow.
+    Table(Table),
     Img(&'a Image),
     PageBreak,
 }
@@ -72,6 +94,176 @@ fn level(b: &Block, body: f64) -> u8 {
     }
 }
 
+/// How far two cell left edges may drift (points) and still be the same grid column.
+const COL_TOL: f64 = 4.0;
+/// A cell is short: taller blocks are body text (or a multi-column layout), not table cells.
+fn is_cell_like(b: &Block) -> bool {
+    (b.rect[3] - b.rect[1]) <= b.size * 5.0 && !b.text.trim().is_empty()
+}
+
+/// Detect tables in a page's blocks from their text layout: columns are left edges shared by
+/// several short blocks, rows are blocks whose vertical spans overlap. Returns the tables and,
+/// per block, whether a table consumed it (so `items` can drop it from the paragraph flow).
+fn tables(blocks: &[Block]) -> (Vec<Table>, Vec<bool>) {
+    let mut consumed = vec![false; blocks.len()];
+    // Candidate columns: cluster the left edges of cell-like blocks.
+    let mut xs: Vec<(f64, usize)> = blocks.iter().enumerate().filter(|(_, b)| is_cell_like(b)).map(|(i, b)| (b.rect[0], i)).collect();
+    xs.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let mut cols: Vec<(f64, Vec<usize>)> = Vec::new(); // (left edge, member block indices)
+    for (x, i) in xs {
+        match cols.last_mut() {
+            Some((e, m)) if (x - *e).abs() <= COL_TOL => {
+                *e = (*e * m.len() as f64 + x) / (m.len() + 1) as f64;
+                m.push(i);
+            }
+            _ => cols.push((x, vec![i])),
+        }
+    }
+    let cols: Vec<(f64, Vec<usize>)> = cols.into_iter().filter(|(_, m)| m.len() >= 2).collect();
+    if cols.len() < 2 {
+        return (Vec::new(), consumed);
+    }
+    // Assign every cell-like block to its nearest column (within tolerance).
+    let mut rows: Vec<Vec<(usize, usize)>> = Vec::new(); // (column index, block index), top to bottom
+    let mut order: Vec<usize> = (0..blocks.len()).collect();
+    order.sort_by(|a, b| blocks[*b].rect[3].total_cmp(&blocks[*a].rect[3]).then(blocks[*a].rect[0].total_cmp(&blocks[*b].rect[0])));
+    for &bi in &order {
+        let b = &blocks[bi];
+        if !is_cell_like(b) {
+            continue;
+        }
+        let Some(ci) = cols.iter().position(|(e, _)| (*e - b.rect[0]).abs() <= COL_TOL) else { continue };
+        let joins = rows
+            .last()
+            .and_then(|row| row.first())
+            .map(|(_, fi)| {
+                let rb = &blocks[*fi];
+                let overlap = rb.rect[3].min(b.rect[3]) - rb.rect[1].max(b.rect[1]);
+                overlap > 0.5 * (rb.rect[3] - rb.rect[1]).min(b.rect[3] - b.rect[1])
+            })
+            .unwrap_or(false);
+        if joins {
+            if let Some(row) = rows.last_mut() {
+                row.push((ci, bi));
+            }
+        } else {
+            rows.push(vec![(ci, bi)]);
+        }
+    }
+    // Runs of consecutive rows that have two or more distinct columns are tables.
+    let mut out = Vec::new();
+    let flush = |run: &mut Vec<Vec<(usize, usize)>>, out: &mut Vec<Table>, consumed: &mut Vec<bool>| {
+        if run.len() < 2 {
+            run.clear();
+            return;
+        }
+        let mut used: Vec<usize> = run.iter().flatten().map(|(_, i)| *i).collect();
+        used.sort_unstable();
+        used.dedup();
+        let mut edges: Vec<f64> = used.iter().filter_map(|&i| cols.iter().position(|(_, m)| m.contains(&i))).map(|ci| cols[ci].0).collect();
+        edges.sort_by(|a, b| a.total_cmp(b));
+        edges.dedup_by(|a, b| (*a - *b).abs() <= COL_TOL);
+        let ncols = edges.len();
+        let ok = ncols >= 3 || (ncols == 2 && run.len() >= 3);
+        if !ok {
+            run.clear();
+            return;
+        }
+        let right = used.iter().map(|&i| blocks[i].rect[2]).fold(f64::MIN, f64::max) + COL_TOL;
+        let mut rows_out = Vec::new();
+        let mut slots: Vec<Option<Cell>> = vec![None; ncols];
+        for row in run.drain(..) {
+            for slot in slots.iter_mut() {
+                *slot = None;
+            }
+            for (_ci, bi) in row {
+                let b = &blocks[bi];
+                let Some(slot) = edges.iter().position(|e| (*e - b.rect[0]).abs() <= COL_TOL) else { continue };
+                let span = edges[slot + 1..].iter().filter(|e| **e > b.rect[0] + COL_TOL && **e < b.rect[2] - COL_TOL).count() + 1;
+                let cell = Cell { text: b.text.trim().to_string(), size: b.size, bold: b.bold, italic: b.italic, span };
+                match &mut slots[slot] {
+                    Some(c) => {
+                        c.text.push(' ');
+                        c.text.push_str(&cell.text);
+                    }
+                    None => slots[slot] = Some(cell),
+                }
+                consumed[bi] = true;
+            }
+            let mut materialized = Vec::with_capacity(ncols);
+            let mut column = 0;
+            while column < ncols {
+                match slots[column].take() {
+                    Some(mut cell) => {
+                        cell.span = cell.span.min(ncols - column).max(1);
+                        column += cell.span;
+                        materialized.push(cell);
+                    }
+                    None => {
+                        column += 1;
+                        materialized.push(Cell { text: String::new(), size: 11.0, bold: false, italic: false, span: 1 });
+                    }
+                }
+            }
+            while materialized.last().is_some_and(|cell| cell.text.is_empty()) && materialized.iter().any(|cell| cell.span > 1) {
+                materialized.pop();
+            }
+            rows_out.push(materialized);
+        }
+        let rect = [
+            edges[0],
+            used.iter().map(|&i| blocks[i].rect[1]).fold(f64::MAX, f64::min),
+            right,
+            used.iter().map(|&i| blocks[i].rect[3]).fold(f64::MIN, f64::max),
+        ];
+        out.push(Table { rect, cols: edges, rows: rows_out });
+    };
+    // Runs of consecutive multi-column rows are tables. Rows on either side of a run that
+    // hold a single cell wide enough to span two columns (a header band, a totals row) join
+    // the table; other single-column rows (captions, following text) stay paragraphs.
+    let spans_run = |edges: &[f64], bi: usize| -> bool {
+        let b = &blocks[bi];
+        edges.iter().any(|e| (*e - b.rect[0]).abs() <= COL_TOL) && edges.iter().any(|e| *e > b.rect[0] + COL_TOL && *e < b.rect[2] - COL_TOL)
+    };
+    let run_edges = |run: &[Vec<(usize, usize)>]| -> Vec<f64> {
+        let mut es: Vec<f64> = run.iter().flatten().filter_map(|(_, i)| cols.iter().position(|(_, m)| m.contains(i))).map(|ci| cols[ci].0).collect();
+        es.sort_by(|a, b| a.total_cmp(b));
+        es.dedup_by(|a, b| (*a - *b).abs() <= COL_TOL);
+        es
+    };
+    let qual: Vec<bool> = rows
+        .iter()
+        .map(|row| {
+            let mut cs: Vec<usize> = row.iter().map(|(c, _)| *c).collect();
+            cs.sort_unstable();
+            cs.dedup();
+            cs.len() >= 2
+        })
+        .collect();
+    let mut i = 0;
+    while i < rows.len() {
+        if !qual[i] {
+            i += 1;
+            continue;
+        }
+        let start = i;
+        while i < rows.len() && qual[i] {
+            i += 1;
+        }
+        let end = i; // run = rows[start..end]
+        let mut pieces: Vec<Vec<(usize, usize)>> = Vec::new();
+        if start > 0 && rows[start - 1].len() == 1 && spans_run(&run_edges(&rows[start..end]), rows[start - 1][0].1) {
+            pieces.push(rows[start - 1].clone());
+        }
+        pieces.extend(rows[start..end].iter().cloned());
+        if end < rows.len() && rows[end].len() == 1 && spans_run(&run_edges(&rows[start..end]), rows[end][0].1) {
+            pieces.push(rows[end].clone());
+        }
+        flush(&mut pieces, &mut out, &mut consumed);
+    }
+    (out, consumed)
+}
+
 fn items(pages: &[Page]) -> Vec<Item<'_>> {
     let body = body_size(pages);
     let mut out = Vec::new();
@@ -79,8 +271,16 @@ fn items(pages: &[Page]) -> Vec<Item<'_>> {
         if i > 0 {
             out.push(Item::PageBreak);
         }
+        let (tables, consumed) = tables(&p.blocks);
         // Blocks and images by their top edge, top to bottom.
-        let mut parts: Vec<(f64, f64, Item)> = p.blocks.iter().map(|b| (b.rect[3], b.rect[0], Item::Para(b, level(b, body)))).collect();
+        let mut parts: Vec<(f64, f64, Item)> = p
+            .blocks
+            .iter()
+            .enumerate()
+            .filter(|(bi, _)| !consumed.get(*bi).copied().unwrap_or(false))
+            .map(|(_, b)| (b.rect[3], b.rect[0], Item::Para(b, level(b, body))))
+            .collect();
+        parts.extend(tables.into_iter().map(|t| (t.rect[3], t.rect[0], Item::Table(t))));
         parts.extend(p.images.iter().map(|im| (im.rect[3], im.rect[0], Item::Img(im))));
         parts.sort_by(|a, b| b.0.total_cmp(&a.0).then(a.1.total_cmp(&b.1)));
         out.extend(parts.into_iter().map(|x| x.2));
@@ -105,10 +305,13 @@ fn base64(data: &[u8]) -> String {
     s
 }
 
-/// One HTML file: headings and paragraphs, images inline, a rule between pages.
+/// One HTML file: headings and paragraphs, tables as real `<table>` elements, images inline, a
+/// rule between pages.
 pub fn html(pages: &[Page], title: &str) -> String {
     let mut s = format!(
-        "<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"utf-8\">\n<title>{}</title>\n<style>body{{max-width:46em;margin:2em auto;font-family:sans-serif;line-height:1.45}}img{{max-width:100%}}hr{{border:0;border-top:1px solid #ccc;margin:2em 0}}</style>\n</head>\n<body>\n",
+        "<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"utf-8\">\n<title>{}</title>\n<style>body{{max-width:46em;margin:2em auto;font-family:sans-serif;line-height:1.45}}\
+img{{max-width:100%}}hr{{border:0;border-top:1px solid #ccc;margin:2em 0}}\
+table{{border-collapse:collapse;margin:1em 0}}td,th{{border:1px solid #999;padding:2px 6px;vertical-align:top}}</style>\n</head>\n<body>\n",
         esc(title)
     );
     for it in items(pages) {
@@ -126,6 +329,25 @@ pub fn html(pages: &[Page], title: &str) -> String {
                     l => s.push_str(&format!("<h{l}>{t}</h{l}>\n")),
                 }
             }
+            Item::Table(t) => {
+                s.push_str("<table>\n");
+                for row in &t.rows {
+                    s.push_str("<tr>");
+                    for c in row {
+                        let mut body = esc(&c.text);
+                        if c.italic {
+                            body = format!("<em>{body}</em>");
+                        }
+                        if c.bold {
+                            body = format!("<strong>{body}</strong>");
+                        }
+                        let span = if c.span > 1 { format!(" colspan=\"{}\"", c.span) } else { String::new() };
+                        s.push_str(&format!("<td{span}>{body}</td>"));
+                    }
+                    s.push_str("</tr>\n");
+                }
+                s.push_str("</table>\n");
+            }
             Item::Img(im) => {
                 let mime = if im.ext == "jpg" { "image/jpeg" } else { "image/png" };
                 s.push_str(&format!("<p><img alt=\"\" src=\"data:{mime};base64,{}\"></p>\n", base64(&im.bytes)));
@@ -137,24 +359,73 @@ pub fn html(pages: &[Page], title: &str) -> String {
     s
 }
 
+/// A formatted text run (shared by paragraphs and table cells).
+fn run_xml(text: &str, size: f64, bold: bool, italic: bool) -> String {
+    let mut rpr = String::new();
+    if bold {
+        rpr.push_str("<w:b/>");
+    }
+    if italic {
+        rpr.push_str("<w:i/>");
+    }
+    rpr.push_str(&format!("<w:sz w:val=\"{}\"/>", (size * 2.0).round().clamp(2.0, 3276.0) as i64));
+    format!("<w:r><w:rPr>{rpr}</w:rPr><w:t xml:space=\"preserve\">{}</w:t></w:r>", esc(text))
+}
+
+/// One Word table: explicit single borders (so it renders without a table style), a grid sized
+/// from the detected column edges, `gridSpan` for spanning cells, empty cells for holes.
+fn docx_table(t: &Table) -> String {
+    let mut edges = t.cols.clone();
+    edges.push(t.rect[2]);
+    let widths: Vec<i64> = edges.windows(2).map(|w| ((w[1] - w[0]).max(20.0) * 20.0).round().clamp(60.0, 31680.0) as i64).collect();
+    let border = "<w:top w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"999999\"/>";
+    let mut s = String::from("<w:tbl><w:tblPr><w:tblW w:w=\"0\" w:type=\"auto\"/><w:tblBorders>");
+    for b in [
+        border,
+        "<w:left w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"999999\"/>",
+        "<w:bottom w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"999999\"/>",
+        "<w:right w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"999999\"/>",
+        "<w:insideH w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"999999\"/>",
+        "<w:insideV w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"999999\"/>",
+    ] {
+        s.push_str(b);
+    }
+    s.push_str("</w:tblBorders></w:tblPr><w:tblGrid>");
+    for w in &widths {
+        s.push_str(&format!("<w:gridCol w:w=\"{w}\"/>"));
+    }
+    s.push_str("</w:tblGrid>");
+    for row in &t.rows {
+        s.push_str("<w:tr>");
+        for c in row {
+            let span = if c.span > 1 { format!("<w:gridSpan w:val=\"{}\"/>", c.span) } else { String::new() };
+            let w: i64 = widths.iter().take(c.span.min(widths.len())).sum();
+            s.push_str(&format!(
+                "<w:tc><w:tcPr><w:tcW w:w=\"{w}\" w:type=\"dxa\"/>{span}</w:tcPr><w:p>{}</w:p></w:tc>",
+                run_xml(&c.text, c.size, c.bold, c.italic)
+            ));
+        }
+        // Pad the grid so every row covers all columns (Word rejects short rows).
+        let used: usize = row.iter().map(|c| c.span).sum();
+        for _ in used..t.cols.len() {
+            s.push_str("<w:tc><w:tcPr><w:tcW w:w=\"0\" w:type=\"auto\"/></w:tcPr><w:p/></w:tc>");
+        }
+        s.push_str("</w:tr>");
+    }
+    s.push_str("</w:tbl>");
+    s
+}
+
 /// A Word document (.docx, Office Open XML): Heading 1/2 and Normal paragraphs, images inline at
 /// their size on the page, page breaks between pages.
 pub fn docx(pages: &[Page], title: &str) -> Vec<u8> {
     let mut body = String::new();
     let mut media: Vec<(String, &Image)> = Vec::new();
-    let run = |b: &Block| {
-        let mut rpr = String::new();
-        if b.bold {
-            rpr.push_str("<w:b/>");
-        }
-        if b.italic {
-            rpr.push_str("<w:i/>");
-        }
-        rpr.push_str(&format!("<w:sz w:val=\"{}\"/>", (b.size * 2.0).round().clamp(2.0, 3276.0) as i64));
-        format!("<w:r><w:rPr>{rpr}</w:rPr><w:t xml:space=\"preserve\">{}</w:t></w:r>", esc(&b.text))
-    };
+    // Word needs a paragraph between adjacent tables and after the last one in the body.
+    let mut after_table = false;
+    let run = |b: &Block| run_xml(&b.text, b.size, b.bold, b.italic);
     for it in items(pages) {
-        match it {
+        match &it {
             Item::Para(b, lvl) => {
                 let style = match lvl {
                     1 => "<w:pPr><w:pStyle w:val=\"Heading1\"/></w:pPr>",
@@ -162,6 +433,12 @@ pub fn docx(pages: &[Page], title: &str) -> Vec<u8> {
                     _ => "",
                 };
                 body.push_str(&format!("<w:p>{style}{}</w:p>", run(b)));
+            }
+            Item::Table(t) => {
+                if after_table {
+                    body.push_str("<w:p/>");
+                }
+                body.push_str(&docx_table(t));
             }
             Item::Img(im) => {
                 let n = media.len() + 1;
@@ -182,6 +459,10 @@ pub fn docx(pages: &[Page], title: &str) -> Vec<u8> {
             }
             Item::PageBreak => body.push_str("<w:p><w:r><w:br w:type=\"page\"/></w:r></w:p>"),
         }
+        after_table = matches!(it, Item::Table(_));
+    }
+    if after_table {
+        body.push_str("<w:p/>");
     }
     // The first page's size and margins of 1 in.
     let (pw, ph) = pages.first().map_or((612.0, 792.0), |p| (p.width, p.height));
@@ -259,8 +540,8 @@ fn rtf_text(s: &str) -> String {
     o
 }
 
-/// Rich Text Format: paragraphs with their sizes and bold/italic, page breaks between pages
-/// (images are left out).
+/// Rich Text Format: paragraphs with their sizes and bold/italic, real table rows, page breaks
+/// between pages (images are left out).
 pub fn rtf(pages: &[Page]) -> String {
     let mut s = String::from("{\\rtf1\\ansi\\deff0{\\fonttbl{\\f0 Helvetica;}}\n");
     for it in items(pages) {
@@ -274,6 +555,35 @@ pub fn rtf(pages: &[Page]) -> String {
                     fmt.push_str("\\i");
                 }
                 s.push_str(&format!("{{\\pard{fmt} {}\\par}}\n", rtf_text(&b.text)));
+            }
+            Item::Table(t) => {
+                let mut edges = t.cols.clone();
+                edges.push(t.rect[2]);
+                let cellx: Vec<i64> = edges.iter().skip(1).map(|e| (e * 20.0).round() as i64).collect();
+                for row in &t.rows {
+                    s.push_str("\\trowd\\trgaph108");
+                    for x in cellx.iter().take(row.len().max(1)) {
+                        s.push_str(&format!("\\cellx{x}"));
+                    }
+                    // Fill the row's cells; extend the last \cellx if the row spans wider.
+                    for (i, c) in row.iter().enumerate() {
+                        let mut fmt = format!("\\intbl\\fs{}", (c.size * 2.0).round() as i64);
+                        if c.bold {
+                            fmt.push_str("\\b");
+                        }
+                        if c.italic {
+                            fmt.push_str("\\i");
+                        }
+                        s.push_str(&format!("{{{fmt} {}}}\\cell", rtf_text(&c.text)));
+                        if c.span > 1
+                            && let Some(extra) = cellx.get(i + c.span - 1)
+                        {
+                            s.push_str(&format!("\\cellx{extra}"));
+                        }
+                    }
+                    let _ = cellx.len();
+                    s.push_str("\\row\n");
+                }
             }
             Item::Img(_) => {}
             Item::PageBreak => s.push_str("\\page\n"),
@@ -339,5 +649,83 @@ mod tests {
         assert!(r.starts_with("{\\rtf1") && r.ends_with('}'));
         assert!(r.contains("\\fs48\\b Annual Report"));
         assert!(r.contains("\\fs20\\i Caf\\u233? \\{x\\}"), "{r}");
+    }
+
+    /// A 3-column table with a spanning header row and a hole in the last row.
+    fn table_page() -> Page {
+        let cell = |t: &str, x: f64, y: f64, w: f64| Block { text: t.into(), rect: [x, y, x + w, y + 12.0], size: 11.0, bold: false, italic: false };
+        Page {
+            width: 612.0,
+            height: 792.0,
+            blocks: vec![
+                cell("Meter", 72.0, 620.0, 120.0),
+                cell("Unit", 232.0, 620.0, 80.0),
+                cell("Reading", 392.0, 620.0, 100.0),
+                cell("A1", 72.0, 590.0, 120.0),
+                cell("kWh", 232.0, 590.0, 80.0),
+                cell("37414.00", 392.0, 590.0, 100.0),
+                cell("A2", 72.0, 560.0, 120.0),
+                cell("kW", 232.0, 560.0, 80.0),
+                // A2's row is missing its third cell (an empty cell in the grid).
+                cell("Totals", 72.0, 530.0, 240.0),
+                Block {
+                    text: "Notes follow the table and are long enough to be the body text size of the page here.".into(),
+                    rect: [72.0, 460.0, 500.0, 471.0],
+                    size: 11.0,
+                    bold: false,
+                    italic: false,
+                },
+            ],
+            images: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn grid_text_becomes_a_real_table_in_every_format() {
+        let p = table_page();
+        let h = html(std::slice::from_ref(&p), "Bill");
+        assert!(h.contains("<table>"), "{h}");
+        assert!(h.contains("<td colspan=\"2\">Totals</td>"), "spanning cell: {h}");
+        assert_eq!(h.matches("<tr>").count(), 4, "{h}");
+        assert!(h.contains("<td></td>"), "the hole is an empty cell: {h}");
+        assert!(h.contains("<p>Notes follow"), "the paragraph after the table stays: {h}");
+
+        let d = docx(std::slice::from_ref(&p), "Bill");
+        assert!(d.starts_with(b"PK"));
+        assert!(d.windows(b"word/document.xml".len()).any(|w| w == b"word/document.xml"));
+        let (tables, _) = tables(&p.blocks);
+        assert_eq!(tables.len(), 1);
+        let table_xml = docx_table(&tables[0]);
+        assert!(table_xml.contains("<w:tblGrid>"));
+        assert!(table_xml.contains("<w:gridSpan w:val=\"2\"/>"), "{table_xml}");
+        assert_eq!(table_xml.matches("<w:tr>").count(), 4);
+
+        let r = rtf(&[p]);
+        assert!(r.contains("\\trowd"), "{r}");
+        assert_eq!(r.matches("\\row").count(), 4);
+    }
+
+    #[test]
+    fn two_column_body_text_is_not_mistaken_for_a_table() {
+        let para = |t: &str, x: f64, y: f64| Block {
+            text: t.into(),
+            rect: [x, y, x + 200.0, y + 90.0], // nine lines tall: body text, not a cell
+            size: 11.0,
+            bold: false,
+            italic: false,
+        };
+        let p = Page {
+            width: 612.0,
+            height: 792.0,
+            blocks: vec![
+                para("Left column text of the page, long enough to be a flowing paragraph.", 72.0, 500.0),
+                para("Right column text of the page, long enough to be a flowing paragraph.", 320.0, 500.0),
+                para("Second left block, still a tall flowing paragraph rather than a cell.", 72.0, 400.0),
+                para("Second right block, still a tall flowing paragraph rather than a cell.", 320.0, 400.0),
+            ],
+            images: Vec::new(),
+        };
+        let h = html(&[p], "Paper");
+        assert!(!h.contains("<table>"), "tall two-column text must stay paragraphs: {h}");
     }
 }
