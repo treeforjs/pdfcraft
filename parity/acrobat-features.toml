@@ -842,8 +842,8 @@ milestone = "M3"
 status = "shipped"
 commands = []
 tools = []
-evidence = ["crates/ui-egui/tests/view.rs::two_up_layout_places_pages_side_by_side"]
-notes = ""
+evidence = ["crates/ui-egui/tests/view.rs::two_up_layout_places_pages_side_by_side", "crates/ui-egui/tests/viewer.rs::two_page_view_steps_a_spread_at_a_time"]
+notes = "next/previous page step a spread at a time"
 
 [[feature]]
 id = "view.layout-two-up-scrolling"
@@ -1106,8 +1106,8 @@ milestone = "M3"
 status = "shipped"
 commands = []
 tools = []
-evidence = ["crates/ui-egui/tests/control.rs::state_and_view_options", "crates/ui-egui/tests/ui.rs::theme_and_view_options_apply"]
-notes = ""
+evidence = ["crates/ui-egui/tests/control.rs::state_and_view_options", "crates/ui-egui/tests/ui.rs::theme_and_view_options_apply", "crates/ui-egui/tests/viewer.rs::two_page_view_steps_a_spread_at_a_time"]
+notes = "in two-page view, next and previous page move a whole spread (with or without a cover page)"
 
 [[feature]]
 id = "view.goto-page-label"

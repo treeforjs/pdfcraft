@@ -173,6 +173,30 @@ fn layouts_fit_height_labels_and_system_theme() {
 }
 
 #[test]
+fn two_page_view_steps_a_spread_at_a_time() {
+    // #70: ⌘→ went to the right-hand page of the same spread, so the view never moved.
+    use egui::{Key, Modifiers};
+    use printcraft_ui_egui::canvas::{Fit, PageLayout};
+    let mut h = harness();
+    h.state_mut().active = Some(0);
+    h.state_mut().views[0].fit = Fit::Width;
+    h.state_mut().views[0].layout = PageLayout::TwoUp;
+    h.run_steps(4);
+    let step = |h: &mut Harness<'static, PrintCraftApp>, key| {
+        h.key_press_modifiers(Modifiers::COMMAND, key);
+        h.run_steps(4);
+        h.state().views[0].current
+    };
+    let pages: Vec<usize> = [Key::ArrowRight, Key::ArrowRight, Key::ArrowRight, Key::ArrowLeft, Key::ArrowLeft].map(|k| step(&mut h, k)).into();
+    assert_eq!(pages, [2, 4, 4, 2, 0], "spreads 1–2, 3–4, 5");
+    // With a cover page the spreads are 1, 2–3, 4–5.
+    h.state_mut().views[0].cover = true;
+    h.run_steps(4);
+    let pages: Vec<usize> = [Key::ArrowRight, Key::ArrowRight, Key::ArrowLeft, Key::ArrowLeft].map(|k| step(&mut h, k)).into();
+    assert_eq!(pages, [1, 3, 1, 0]);
+}
+
+#[test]
 fn damaged_files_say_they_were_repaired() {
     // No cross-reference table: the file is reconstructed.
     let damaged = b"%PDF-1.7

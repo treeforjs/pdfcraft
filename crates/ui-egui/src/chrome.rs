@@ -320,10 +320,10 @@ pub fn right_rail(app: &mut PrintCraftApp, ui: &mut egui::Ui) {
                 ui.label(egui::RichText::new(format!("{:.0}%", view.zoom * 100.0)).font(theme::regular(10.5)).color(t.text_faint));
                 ui.add_space(6.0);
                 if icons::button(ui, "chevron-down", 30.0, false, "Next page").clicked() {
-                    view.go_to_page(view.current + 1);
+                    view.step_page(true);
                 }
                 if icons::button(ui, "chevron-up", 30.0, false, "Previous page").clicked() {
-                    view.go_to_page(view.current.saturating_sub(1));
+                    view.step_page(false);
                 }
                 ui.label(egui::RichText::new(page_count.to_string()).font(theme::regular(11.0)).color(t.text_muted));
                 let edit = egui::TextEdit::singleline(&mut view.page_input)
