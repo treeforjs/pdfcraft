@@ -96,6 +96,10 @@ fn level(b: &Block, body: f64) -> u8 {
 
 /// How far two cell left edges may drift (points) and still be the same grid column.
 const COL_TOL: f64 = 4.0;
+/// More grid columns than this isn't a table. It also bounds a table's size: every row is
+/// materialized to all its columns, so a hostile page laid out as a staircase of blocks would
+/// otherwise make (blocks / 2)² cells.
+const MAX_COLS: usize = 64;
 /// A cell is short: taller blocks are body text (or a multi-column layout), not table cells.
 fn is_cell_like(b: &Block) -> bool {
     (b.rect[3] - b.rect[1]) <= b.size * 5.0 && !b.text.trim().is_empty()
@@ -123,6 +127,20 @@ fn tables(blocks: &[Block]) -> (Vec<Table>, Vec<bool>) {
     if cols.len() < 2 {
         return (Vec::new(), consumed);
     }
+    // Each block's column (an index into `cols`), so lookups stay linear on pages with many blocks.
+    let mut col_of: Vec<Option<usize>> = vec![None; blocks.len()];
+    for (ci, (_, members)) in cols.iter().enumerate() {
+        for &i in members {
+            if let Some(c) = col_of.get_mut(i) {
+                *c = Some(ci);
+            }
+        }
+    }
+    // The column whose edge is within tolerance of `x` (edges are in ascending order).
+    let column_at = |x: f64| -> Option<usize> {
+        let k = cols.partition_point(|(e, _)| *e < x - COL_TOL);
+        cols.get(k).filter(|(e, _)| (*e - x).abs() <= COL_TOL).map(|_| k)
+    };
     // Assign every cell-like block to its nearest column (within tolerance).
     let mut rows: Vec<Vec<(usize, usize)>> = Vec::new(); // (column index, block index), top to bottom
     let mut order: Vec<usize> = (0..blocks.len()).collect();
@@ -132,7 +150,7 @@ fn tables(blocks: &[Block]) -> (Vec<Table>, Vec<bool>) {
         if !is_cell_like(b) {
             continue;
         }
-        let Some(ci) = cols.iter().position(|(e, _)| (*e - b.rect[0]).abs() <= COL_TOL) else { continue };
+        let Some(ci) = column_at(b.rect[0]) else { continue };
         let joins = rows
             .last()
             .and_then(|row| row.first())
@@ -160,11 +178,11 @@ fn tables(blocks: &[Block]) -> (Vec<Table>, Vec<bool>) {
         let mut used: Vec<usize> = run.iter().flatten().map(|(_, i)| *i).collect();
         used.sort_unstable();
         used.dedup();
-        let mut edges: Vec<f64> = used.iter().filter_map(|&i| cols.iter().position(|(_, m)| m.contains(&i))).map(|ci| cols[ci].0).collect();
+        let mut edges: Vec<f64> = used.iter().filter_map(|&i| col_of.get(i).copied().flatten()).filter_map(|ci| cols.get(ci)).map(|c| c.0).collect();
         edges.sort_by(|a, b| a.total_cmp(b));
         edges.dedup_by(|a, b| (*a - *b).abs() <= COL_TOL);
         let ncols = edges.len();
-        let ok = ncols >= 3 || (ncols == 2 && run.len() >= 3);
+        let ok = (ncols >= 3 || (ncols == 2 && run.len() >= 3)) && ncols <= MAX_COLS;
         if !ok {
             run.clear();
             return;
@@ -226,7 +244,8 @@ fn tables(blocks: &[Block]) -> (Vec<Table>, Vec<bool>) {
         edges.iter().any(|e| (*e - b.rect[0]).abs() <= COL_TOL) && edges.iter().any(|e| *e > b.rect[0] + COL_TOL && *e < b.rect[2] - COL_TOL)
     };
     let run_edges = |run: &[Vec<(usize, usize)>]| -> Vec<f64> {
-        let mut es: Vec<f64> = run.iter().flatten().filter_map(|(_, i)| cols.iter().position(|(_, m)| m.contains(i))).map(|ci| cols[ci].0).collect();
+        let mut es: Vec<f64> =
+            run.iter().flatten().filter_map(|(_, i)| col_of.get(*i).copied().flatten()).filter_map(|ci| cols.get(ci)).map(|c| c.0).collect();
         es.sort_by(|a, b| a.total_cmp(b));
         es.dedup_by(|a, b| (*a - *b).abs() <= COL_TOL);
         es
@@ -562,11 +581,16 @@ pub fn rtf(pages: &[Page]) -> String {
                 let cellx: Vec<i64> = edges.iter().skip(1).map(|e| (e * 20.0).round() as i64).collect();
                 for row in &t.rows {
                     s.push_str("\\trowd\\trgaph108");
-                    for x in cellx.iter().take(row.len().max(1)) {
-                        s.push_str(&format!("\\cellx{x}"));
+                    // The row's cell boundaries come first: each cell ends at the right edge of
+                    // the last grid column it spans.
+                    let mut column = 0;
+                    for c in row {
+                        column += c.span.max(1);
+                        if let Some(x) = cellx.get(column.min(cellx.len()).saturating_sub(1)) {
+                            s.push_str(&format!("\\cellx{x}"));
+                        }
                     }
-                    // Fill the row's cells; extend the last \cellx if the row spans wider.
-                    for (i, c) in row.iter().enumerate() {
+                    for c in row {
                         let mut fmt = format!("\\intbl\\fs{}", (c.size * 2.0).round() as i64);
                         if c.bold {
                             fmt.push_str("\\b");
@@ -575,13 +599,7 @@ pub fn rtf(pages: &[Page]) -> String {
                             fmt.push_str("\\i");
                         }
                         s.push_str(&format!("{{{fmt} {}}}\\cell", rtf_text(&c.text)));
-                        if c.span > 1
-                            && let Some(extra) = cellx.get(i + c.span - 1)
-                        {
-                            s.push_str(&format!("\\cellx{extra}"));
-                        }
                     }
-                    let _ = cellx.len();
                     s.push_str("\\row\n");
                 }
             }
@@ -703,6 +721,27 @@ mod tests {
         let r = rtf(&[p]);
         assert!(r.contains("\\trowd"), "{r}");
         assert_eq!(r.matches("\\row").count(), 4);
+        // Boundaries precede the cells; "Totals" spans two columns, so it ends at the third edge.
+        assert!(r.contains("\\trowd\\trgaph108\\cellx4640\\cellx7840\\cellx9920{"), "{r}");
+        assert!(r.contains("\\trowd\\trgaph108\\cellx7840{\\intbl\\fs22 Totals}\\cell\\row"), "{r}");
+    }
+
+    #[test]
+    fn a_staircase_of_blocks_is_not_a_huge_table() {
+        // Row k holds blocks in columns k and k + 1: every column has two members and every row
+        // two columns, so without a cap this would be one table of (n / 2)² cells.
+        let n = 4000;
+        let blocks: Vec<Block> = (0..n)
+            .map(|i| {
+                let (row, col) = (i / 2, i / 2 + i % 2);
+                let (x, y) = (10.0 + col as f64 * 20.0, 10_000.0 - row as f64 * 14.0);
+                Block { text: "x".into(), rect: [x, y, x + 8.0, y + 12.0], size: 11.0, bold: false, italic: false }
+            })
+            .collect();
+        let started = std::time::Instant::now();
+        let (tables, _) = tables(&blocks);
+        assert!(tables.iter().all(|t| t.cols.len() <= MAX_COLS), "{} columns", tables.iter().map(|t| t.cols.len()).max().unwrap_or(0));
+        assert!(started.elapsed() < std::time::Duration::from_secs(5), "took {:?}", started.elapsed());
     }
 
     #[test]
