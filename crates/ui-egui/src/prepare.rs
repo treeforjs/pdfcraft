@@ -498,16 +498,34 @@ pub(crate) fn paint_page(ui: &egui::Ui, painter: &egui::Painter, xf: &PageXform,
     }
 }
 
-/// Delete removes the selected field; Escape clears the selection.
+/// Delete the selected field and every field selected with it (#95), as one undoable step, and
+/// clear the selection.
+pub(crate) fn delete_selected(view: &mut DocView) -> Option<Edit> {
+    let (first, _) = view.prepare.selected.take()?;
+    let mut names = vec![first];
+    for (name, _) in std::mem::take(&mut view.prepare.also) {
+        if !names.contains(&name) {
+            names.push(name);
+        }
+    }
+    if names.len() == 1 {
+        return names.pop().map(|name| Edit::DeleteField { name });
+    }
+    let label = format!("Delete {} fields", names.len());
+    Some(Edit::Batch { label, edits: names.into_iter().map(|name| Edit::DeleteField { name }).collect() })
+}
+
+/// Delete removes the selected fields; Escape clears the selection.
 pub(crate) fn keys(ctx: &egui::Context, view: &mut DocView) {
     if view.prepare.selected.is_none() || ctx.egui_wants_keyboard_input() {
         return;
     }
     let (del, esc) = ctx.input(|i| (i.key_pressed(egui::Key::Delete) || i.key_pressed(egui::Key::Backspace), i.key_pressed(egui::Key::Escape)));
-    if del && let Some((name, _)) = view.prepare.selected.take() {
-        view.pending_edit = Some(Edit::DeleteField { name });
+    if del {
+        view.pending_edit = delete_selected(view);
     } else if esc {
         view.prepare.selected = None;
+        view.prepare.also.clear();
     }
 }
 
