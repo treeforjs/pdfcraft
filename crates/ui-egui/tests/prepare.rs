@@ -286,6 +286,35 @@ fn aligning_distributing_and_sizing_several_fields() {
 }
 
 #[test]
+fn deleting_several_selected_fields_and_detecting_fields_from_the_panel() {
+    let mut h = harness();
+    for (name, x) in [("a", 20.0), ("b", 120.0), ("c", 220.0)] {
+        h.state_mut().apply_edit(printcraft_engine::Edit::AddField {
+            page: 0,
+            rect: [x, 300.0, x + 60.0, 320.0],
+            kind: printcraft_engine::NewField::Text { multiline: false },
+            name: Some(name.into()),
+        });
+    }
+    assert!(h.state_mut().execute("form.prepare"));
+    h.run_steps(2);
+    // #93: field detection is in the panel, not only run when a form has no fields.
+    h.get_by_label("Detect form fields");
+    // #95: Delete removes every selected field, as one undoable step.
+    {
+        let p = &mut h.state_mut().views[0].prepare;
+        p.selected = Some(("a".into(), 0));
+        p.also = vec![("b".into(), 0), ("c".into(), 0)];
+    }
+    h.key_press(egui::Key::Delete);
+    h.run_steps(3);
+    let left = names(&h);
+    assert!(!["a", "b", "c"].iter().any(|n| left.iter().any(|l| l == n)), "{left:?}");
+    assert_eq!(h.state().session.get(h.state().views[0].id).unwrap().can_undo(), Some("Delete 3 fields"));
+    assert!(h.state().views[0].prepare.selected.is_none() && h.state().views[0].prepare.also.is_empty());
+}
+
+#[test]
 fn preview_fills_the_form_and_locked_fields_keep_their_properties() {
     let mut h = harness();
     assert!(h.state_mut().execute("form.prepare"));
