@@ -171,6 +171,30 @@ fn appearance_tab_restyles_the_field() {
 }
 
 #[test]
+fn options_tab_sets_the_check_box_style() {
+    // #94: Check Box Style on the Options tab.
+    use printcraft_engine::CheckStyle;
+    let mut h = harness();
+    h.state_mut().apply_edit(printcraft_engine::Edit::AddField {
+        page: 0,
+        rect: [40.0, 300.0, 56.0, 316.0],
+        kind: printcraft_engine::NewField::CheckBox,
+        name: Some("agree".into()),
+    });
+    h.state_mut().open_field_props("agree", 0);
+    h.run_steps(2);
+    h.get_by_label("Options").click();
+    h.run_steps(2);
+    h.get_by_label("Check Box Style:");
+    assert_eq!(h.state().field_props.as_ref().unwrap().check_style, Some(CheckStyle::Check));
+    h.state_mut().field_props.as_mut().unwrap().check_style = Some(CheckStyle::Cross);
+    h.get_by_label("OK").click();
+    h.run_steps(3);
+    let s = h.state();
+    assert_eq!(s.session.get(s.views[0].id).unwrap().field_check_style("agree"), Some(CheckStyle::Cross));
+}
+
+#[test]
 fn options_tab_sets_flags_alignment_and_defaults() {
     use printcraft_engine::field_flags as ff;
     let mut h = harness();

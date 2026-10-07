@@ -541,8 +541,10 @@ impl crate::PrintCraftApp {
         let Some(f) = self.session.get(id).and_then(|d| d.form.iter().find(|f| f.name == name).cloned()) else { return };
         let mut d = FieldDraft::new(&f, widget);
         d.look = self.session.get(id).and_then(|doc| doc.field_look(name));
+        d.check_style = self.session.get(id).and_then(|doc| doc.field_check_style(name));
         if let Some(o) = d.original.as_mut() {
             o.look = d.look;
+            o.check_style = d.check_style;
         }
         let others: Vec<String> =
             self.session.get(id).map(|doc| doc.form.iter().filter(|x| x.name != name).map(|x| x.name.clone()).collect()).unwrap_or_default();
@@ -647,6 +649,8 @@ pub struct FieldDraft {
     /// Left, bottom, width, height in points.
     pub position: [f64; 4],
     pub look: Option<FieldLook>,
+    /// Check boxes and radio buttons: the mark when on (Options tab).
+    pub check_style: Option<printcraft_engine::CheckStyle>,
     pub format: Format,
     pub validate: Validate,
     pub calculate: Calculate,
@@ -688,6 +692,7 @@ impl FieldDraft {
             font_size: da_size(&f.da),
             position: [r[0], r[1], r[2] - r[0], r[3] - r[1]],
             look: None,
+            check_style: None,
             format: f.actions.format.clone(),
             validate: f.actions.validate.clone(),
             calculate: f.actions.calculate.clone(),
@@ -742,6 +747,7 @@ impl FieldDraft {
                 (self.widget, [x, y, x + w.max(4.0), y + h.max(4.0)])
             }),
             look: (self.look != o.look).then_some(self.look).flatten(),
+            check_style: (self.check_style != o.check_style).then_some(self.check_style).flatten(),
             format: (self.format != o.format).then(|| self.format.clone()),
             validate: (self.validate != o.validate).then(|| self.validate.clone()),
             calculate: (self.calculate != o.calculate).then(|| self.calculate.clone()),
@@ -962,6 +968,20 @@ pub(crate) fn body(ui: &mut egui::Ui, d: &mut FieldDraft, t: &crate::theme::Toke
                     let label = if d.kind == FormFieldKind::CheckBox { "Check box is checked by default" } else { "Button is checked by default" };
                     if ui.checkbox(&mut checked, label).changed() {
                         d.default = if checked { on } else { String::new() };
+                    }
+                    if let Some(style) = d.check_style.as_mut() {
+                        ui.horizontal(|ui| {
+                            let l = ui.label(if d.kind == FormFieldKind::CheckBox { "Check Box Style:" } else { "Button Style:" });
+                            egui::ComboBox::from_id_salt("check-style")
+                                .selected_text(style.label())
+                                .show_ui(ui, |ui| {
+                                    for s in printcraft_engine::CheckStyle::ALL {
+                                        ui.selectable_value(style, s, s.label());
+                                    }
+                                })
+                                .response
+                                .labelled_by(l.id);
+                        });
                     }
                     if d.kind == FormFieldKind::Radio {
                         flag_box(ui, &mut d.flags, ff::RADIOS_IN_UNISON, false, "Buttons with the same name and value are selected in unison");
