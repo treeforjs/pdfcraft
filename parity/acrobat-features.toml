@@ -4690,6 +4690,18 @@ evidence = ["crates/forms/src/tests.rs::every_field_type_can_be_added_named_and_
 notes = "new group Group1… or join the selected group with the next ChoiceN"
 
 [[feature]]
+id = "form.check-box-style"
+title = "Check box and radio button styles"
+area = "F"
+tier = "P1"
+milestone = "M6"
+status = "shipped"
+commands = ["form.field.properties"]
+tools = ["form_set_props", "form_fields"]
+evidence = ["crates/forms/src/tests.rs::check_box_styles_change_the_mark", "crates/ui-egui/tests/prepare.rs::options_tab_sets_the_check_box_style", "crates/automation/tests/automation.rs::preparing_a_form_through_tools"]
+notes = "Field Properties ▸ Options: check, circle, cross, diamond, square, star (/MK /CA, Acrobat's codes), drawn as paths; defaults check (check boxes) and circle (radio buttons)"
+
+[[feature]]
 id = "form.add-dropdown"
 title = "Add drop-down lists"
 area = "F"
