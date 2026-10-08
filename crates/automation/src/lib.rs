@@ -621,7 +621,8 @@ impl Automation {
     fn doc_close(&mut self, a: &Args) -> Result<Value> {
         let doc = self.doc(a)?;
         let id = doc.id;
-        if doc.dirty && !a.opt_bool("discard_changes")?.unwrap_or(false) {
+        let discard_changes = a.opt_bool("discard_changes")?.unwrap_or(false);
+        if doc.dirty && !discard_changes {
             return Err(failed("the document has unsaved changes: save it with doc_save, or pass discard_changes: true"));
         }
         self.session.close(id);
