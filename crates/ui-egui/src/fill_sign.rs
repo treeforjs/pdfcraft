@@ -500,7 +500,7 @@ pub(crate) fn signature_pad(
     let title = if d.editing { tl!("Change {what}") } else { tl!("Create {what}") };
     ui.label(egui::RichText::new(crate::i18n::fmt(title, &[("what", what)])).font(crate::theme::semibold(18.0)));
     ui.horizontal(|ui| {
-        if crate::widgets::pill_button(ui, tl!("Type"), !d.drawing && !d.image_mode).clicked() {
+        if crate::widgets::pill_button(ui, tl_ctx!("signature pad", "Type"), !d.drawing && !d.image_mode).clicked() {
             d.drawing = false;
             d.image_mode = false;
         }

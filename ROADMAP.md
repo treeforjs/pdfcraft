@@ -132,6 +132,8 @@ M0 → M1 → M2 → M3 → M4 must happen in order. After M4, M5–M12 can run 
 
 Newest first. One line per session: the date, what moved, and the new overall percentage.
 
+- **2026-10-09 (community, M14, Telugu):** Telugu (తెలుగు, `te`) as a complete catalog of 1,984 entries covering every command, All tools entry, dialog, panel and notice; `te` and `te_IN` locales follow it. Telugu text is drawn with a craft-fonts `Telu` face (Noto Sans Telugu, storytold/craft-fonts#10), kept in the web build too, after the CJK and Arabic faces; egui shapes its conjuncts. Commands use the plain imperative and sentences the polite form. The craft-fonts revision pinned for releases has no Telugu face yet, so release builds show Telugu as replacement boxes until the pin moves. Overall estimate unchanged (about 30–35%).
+
 - **2026-10-09 (M14, Simplified Chinese About):** The About tabs, contributor controls and statistics, and model table now have Simplified Chinese translations, along with multiline link-privacy and cut-and-stack guidance. Coverage checks include direct `i18n::t` calls, multiline literals and dynamic credit labels; UI control checks exercise the translated About tabs and tables. Chinese font delivery remains incomplete; overall ≈ 30–35% (unchanged).
 
 - **2026-10-09 (M14, #305):** Windows MSI rejects per-user installation overrides while allowing removal of legacy per-user installs and keeps its progress message visible. README documents unattended deployment without a desktop shortcut. Compiled x64 MSI checks pass; ARM64 install regressions added for CI. Overall estimate unchanged (about 30–35%).

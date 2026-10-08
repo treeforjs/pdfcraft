@@ -14,6 +14,14 @@ macro_rules! tl {
     };
 }
 
+/// [`tl!`] for a label whose meaning depends on where it appears ("Type" is a column and a
+/// button): a catalog can translate it under `context`, otherwise the plain translation is used.
+macro_rules! tl_ctx {
+    ($context:expr, $s:expr) => {
+        $crate::i18n::tr_ctx($crate::i18n::current(), $context, $s)
+    };
+}
+
 mod a11y_ui;
 mod actions_ui;
 pub mod canvas;
