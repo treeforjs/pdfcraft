@@ -1336,9 +1336,12 @@ fn save_prompt(app: &mut PdfCraftApp, ctx: &egui::Context) {
         ui.set_width(420.0);
         ui.horizontal(|ui| {
             ui.add(crate::icons::image("save", 22.0, t.accent));
-            ui.label(
-                egui::RichText::new(crate::i18n::fmt(tl!("Save changes to “{name}” before closing?"), &[("name", &name)]))
-                    .font(theme::semibold(16.0)),
+            ui.add(
+                egui::Label::new(
+                    egui::RichText::new(crate::i18n::fmt(tl!("Save changes to “{name}” before closing?"), &[("name", &name)]))
+                        .font(theme::semibold(16.0)),
+                )
+                .wrap(),
             );
         });
         ui.add_space(6.0);
@@ -1437,7 +1440,7 @@ fn password(app: &mut PdfCraftApp, ctx: &egui::Context) {
             ui.label(egui::RichText::new(tl!("Password required")).font(theme::semibold(17.0)));
         });
         ui.add_space(6.0);
-        ui.label(crate::i18n::fmt(tl!("“{name}” is protected. Enter a password to open it."), &[("name", &prompt.name)]));
+        ui.add(egui::Label::new(crate::i18n::fmt(tl!("“{name}” is protected. Enter a password to open it."), &[("name", &prompt.name)])).wrap());
         ui.add_space(8.0);
         let r = ui.add(egui::TextEdit::singleline(&mut prompt.input).password(true).hint_text(tl!("Password")).desired_width(f32::INFINITY));
         // Enter submits. The field keeps focus (we request it every frame), so check the key
