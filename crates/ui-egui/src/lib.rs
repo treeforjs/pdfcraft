@@ -884,6 +884,17 @@ impl PdfCraftApp {
         }
     }
 
+    /// Open a file from a recent list: focus the tab already showing it, else open it (File ▸
+    /// Open Recent and the Home view's list share this).
+    pub fn open_recent(&mut self, path: &str) {
+        if let Some(i) = self.views.iter().position(|v| self.session.get(v.id).and_then(|d| d.path.as_deref()) == Some(path)) {
+            self.active = Some(i);
+        } else {
+            #[cfg(not(target_arch = "wasm32"))]
+            self.open_path(path);
+        }
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     pub fn open_path(&mut self, path: &str) {
         let name = std::path::Path::new(path).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| path.to_string());

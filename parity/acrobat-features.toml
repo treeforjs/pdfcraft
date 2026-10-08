@@ -656,10 +656,10 @@ area = "A"
 tier = "P1"
 milestone = "M3"
 status = "shipped"
-commands = []
+commands = ["file.open_recent"]
 tools = []
-evidence = ["crates/ui-egui/tests/ui.rs::persistence_round_trips_and_tolerates_garbage"]
-notes = "never reads other apps' lists"
+evidence = ["crates/ui-egui/tests/ui.rs::persistence_round_trips_and_tolerates_garbage", "crates/ui-egui/tests/commands.rs::the_open_recent_menu_lists_files_and_opens_one", "crates/ui-egui/tests/commands.rs::the_open_recent_menu_is_disabled_while_the_list_is_empty"]
+notes = "never reads other apps' lists; File ▸ Open Recent lists them (#290), an already-open file focuses its tab instead of reopening it"
 
 [[feature]]
 id = "core.usage-rights-preserve"
