@@ -1,8 +1,8 @@
 # Interface language
 
-Choose **Edit > Preferences > Interface language** and select **Auto**, **English** or **日本語**. The change applies immediately and persists between launches. Command ids, document contents and file names are unchanged.
+Choose **Edit > Preferences > Interface language** and select **Auto**, **English**, **日本語** or **Português (Brasil)**. The change applies immediately and persists between launches. Command ids, document contents and file names are unchanged.
 
-**Auto** (the default) follows the system language: `LC_ALL`, `LC_MESSAGES` or `LANG`, then the preferred-languages list on macOS. A system language without a catalog, such as French, shows English. Windows has no system-language detection yet, so **Auto** shows English there unless `LANG` is set.
+**Auto** (the default) follows the system language: `LC_ALL`, `LC_MESSAGES` or `LANG`, then the preferred-languages list on macOS. Any Portuguese locale (`pt_BR`, `pt_PT`) uses the Brazilian catalog. A system language without a catalog, such as French, shows English. Windows has no system-language detection yet, so **Auto** shows English there unless `LANG` is set.
 
 The control channel exposes the setting through `ui.set`:
 
@@ -10,11 +10,11 @@ The control channel exposes the setting through `ui.set`:
 {"method":"ui.set","params":{"key":"language","value":"ja"}}
 ```
 
-The value is `auto` or a language code (`en`, `ja`), in any case. `ui.state` reports `language` as written in the preferences (`auto`, `en` or `ja`). Unknown values return an error without changing the current setting. Preferences saved before this setting existed follow the system language.
+The value is `auto` or a language code (`en`, `ja`, `pt-br`), in any case. `ui.state` reports `language` as written in the preferences (`auto`, `en`, `ja` or `pt-br`). Unknown values return an error without changing the current setting. Preferences saved before this setting existed follow the system language.
 
 This first translation pass covers the main menu and core registered menu commands. Untranslated labels use English. Vertical Japanese PDF rendering is an existing viewer feature; this change does not add vertical text editing.
 
-Japanese interface text uses BIZ UDPGothic from [craft-fonts](https://github.com/storytold/craft-fonts), an optional build input that every release includes (`CRAFT_FONTS_DIR`; see the README). A build made without it has no Japanese face, so Japanese labels show replacement boxes.
+Japanese interface text uses BIZ UDPGothic from [craft-fonts](https://github.com/storytold/craft-fonts), an optional build input that every release includes (`CRAFT_FONTS_DIR`; see the README). A build made without it has no Japanese face, so Japanese labels show replacement boxes. Brazilian Portuguese needs only the bundled Latin faces.
 
 ## How translations work
 

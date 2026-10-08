@@ -3776,7 +3776,6 @@ dependencies = [
  "rfd",
  "serde",
  "serde_json",
- "toml",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",

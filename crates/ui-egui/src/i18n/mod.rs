@@ -55,10 +55,17 @@ fn plural_none(_: u64) -> usize {
     0
 }
 
+/// Portuguese: 0 and 1 take the singular, everything else the plural.
+fn plural_pt(n: u64) -> usize {
+    usize::from(n > 1)
+}
+
 /// The registry. English first: it is the fallback and the source language.
-pub static LANGUAGES: [LangInfo; 2] = [
+pub static LANGUAGES: [LangInfo; 3] = [
     LangInfo { code: "en", name: "English", source: "", plural: plural_one_other, catalog: OnceLock::new() },
     LangInfo { code: "ja", name: "日本語", source: include_str!("ja.tsv"), plural: plural_none, catalog: OnceLock::new() },
+    // Brazilian Portuguese; `pt`, `pt-BR` and `pt-PT` locales all resolve here (see `candidates`).
+    LangInfo { code: "pt-br", name: "Português (Brasil)", source: include_str!("pt-br.tsv"), plural: plural_pt, catalog: OnceLock::new() },
 ];
 
 impl LangInfo {
@@ -151,6 +158,10 @@ fn candidates(tag: &str) -> Vec<String> {
         // Chinese by region when no script is given.
         let script = if parts.iter().any(|p| matches!(*p, "tw" | "hk" | "mo")) { "zh-hant" } else { "zh-hans" };
         out.insert(out.len().saturating_sub(1), script.to_string());
+    }
+    if primary == "pt" && !out.iter().any(|c| c == "pt-br") {
+        // The only Portuguese catalog is Brazilian; other regions use it rather than English.
+        out.insert(out.len().saturating_sub(1), "pt-br".to_string());
     }
     out
 }
@@ -303,6 +314,8 @@ mod tests {
     #[test]
     fn candidates_walk_from_specific_to_general() {
         assert_eq!(candidates("pt_BR.UTF-8"), ["pt-br", "pt"]);
+        assert_eq!(candidates("pt_PT.UTF-8"), ["pt-pt", "pt-br", "pt"]);
+        assert_eq!(candidates("pt"), ["pt-br", "pt"]);
         assert_eq!(candidates("zh_TW"), ["zh-tw", "zh-hant", "zh"]);
         assert_eq!(candidates("zh-CN"), ["zh-cn", "zh-hans", "zh"]);
         assert_eq!(candidates("zh-Hant-HK"), ["zh-hant-hk", "zh-hant", "zh"]);
@@ -478,6 +491,27 @@ mod tests {
         let mut legacy = crate::PdfCraftApp::default();
         legacy.restore("{}");
         assert_eq!(legacy.language, AUTO);
+    }
+
+    #[test]
+    fn brazilian_portuguese_is_registered() {
+        let pt = Lang::from_code("pt-br").expect("pt-br registered");
+        assert_eq!(pt.name(), "Português (Brasil)");
+        assert_eq!(Lang::from_code("PT-BR"), Some(pt));
+        assert_eq!(normalize_pref("pt-BR"), Some("pt-br"));
+        assert_eq!(normalize_pref("pt"), None, "only exact codes are preferences");
+        assert_eq!(lang_from_tag("pt_BR.UTF-8"), Some(pt));
+        assert_eq!(lang_from_tag("pt_PT"), Some(pt));
+        assert_eq!(tr(pt, "File"), "Arquivo");
+        assert_eq!(tr(pt, "Save as…"), "Salvar como…");
+        assert_eq!(tr(pt, "Arquivo do usuário.pdf"), "Arquivo do usuário.pdf");
+        assert_eq!((0..=3).map(|n| (pt.0.plural)(n)).collect::<Vec<_>>(), [0, 0, 1, 1]);
+        let mut app = crate::PdfCraftApp::default();
+        app.set_option("language", "pt-br").unwrap();
+        assert_eq!(app.language, "pt-br");
+        let mut restored = crate::PdfCraftApp::default();
+        restored.restore(&app.persist());
+        assert_eq!(restored.language, "pt-br");
     }
 
     /// Every bundled catalog is well-formed and consistent with its sources.

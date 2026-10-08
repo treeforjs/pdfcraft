@@ -1,4 +1,4 @@
-//! Modal dialogs: Document Properties, Keyboard Shortcuts, About (with the Contributors and Models credits).
+//! Modal dialogs: Document Properties, Keyboard Shortcuts, About.
 
 use egui::{Align, Layout};
 
@@ -65,7 +65,6 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
             Dialog::Properties(_) => 640.0,
             Dialog::Print => 820.0,
             Dialog::FieldProps => 600.0,
-            Dialog::About => 780.0,
             _ => 520.0,
         });
         // Dialog controls are outlined (radio buttons, check boxes, combo boxes and number fields
@@ -1014,49 +1013,30 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
                 });
             }
             Dialog::About => {
-                // Tabs About · Contributors · Models (craftrules standards/contributors.md).
-                let tab_id = egui::Id::new("about_tab");
-                let mut tab = ui.data_mut(|d| d.get_temp::<u8>(tab_id)).unwrap_or(0);
                 ui.horizontal(|ui| {
-                    for (i, label) in ["About", "Contributors", "Models"].into_iter().enumerate() {
-                        let i = i as u8;
-                        if widgets::mode_tab(ui, label, tab == i).clicked() {
-                            tab = i;
-                        }
-                    }
+                    widgets::artcraft_mark(ui, 40.0);
+                    ui.vertical(|ui| {
+                        ui.label(egui::RichText::new("PdfCraft").font(theme::semibold(20.0)));
+                        ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));
+                    });
                 });
-                ui.data_mut(|d| d.insert_temp(tab_id, tab));
-                ui.separator();
-                match tab {
-                    1 => crate::credits::contributors_ui(ui),
-                    2 => crate::credits::models_ui(ui),
-                    _ => {
-                        ui.horizontal(|ui| {
-                            widgets::artcraft_mark(ui, 40.0);
-                            ui.vertical(|ui| {
-                                ui.label(egui::RichText::new("PdfCraft").font(theme::semibold(20.0)));
-                                ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));
-                            });
-                        });
-                        ui.add_space(6.0);
-                        ui.label("A clean-room, open-source PDF application written in Rust. MIT OR Apache-2.0.");
-                        ui.label(
-                            egui::RichText::new(
-                                "Rendering: hayro (bootstrap) · UI: egui · Icons: Lucide (ISC) · Fonts: Inter, JetBrains Mono, Dancing Script (OFL)",
-                            )
-                            .color(t.text_muted)
-                            .small(),
-                        );
-                        ui.add_space(12.0);
-                        ui.horizontal(|ui| {
-                            ui.label(egui::RichText::new("Part of").color(t.text_muted));
-                            widgets::artcraft_logo(ui, 16.0);
-                        });
-                        ui.add_space(6.0);
-                        if let Some(cmd) = widgets::community_links(ui) {
-                            link_command = Some(cmd);
-                        }
-                    }
+                ui.add_space(6.0);
+                ui.label("A clean-room, open-source PDF application written in Rust. MIT OR Apache-2.0.");
+                ui.label(
+                    egui::RichText::new(
+                        "Rendering: hayro (bootstrap) · UI: egui · Icons: Lucide (ISC) · Fonts: Inter, JetBrains Mono, Dancing Script (OFL)",
+                    )
+                    .color(t.text_muted)
+                    .small(),
+                );
+                ui.add_space(12.0);
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new("Part of").color(t.text_muted));
+                    widgets::artcraft_logo(ui, 16.0);
+                });
+                ui.add_space(6.0);
+                if let Some(cmd) = widgets::community_links(ui) {
+                    link_command = Some(cmd);
                 }
             }
         }

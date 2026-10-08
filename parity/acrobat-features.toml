@@ -9290,8 +9290,8 @@ milestone = "M13"
 status = "shipped"
 commands = []
 tools = []
-evidence = ["crates/automation/tests/automation.rs::tool_table_is_well_formed", "crates/automation/tests/automation.rs::edit_undo_redo_and_save_round_trip", "apps/pdfcraft-cli/tests/stdout.rs::output_commands_exit_cleanly_when_the_reader_has_closed"]
-notes = "CLI stdout exits cleanly if a pipe reader closes early; other output errors and command failures remain errors."
+evidence = ["crates/automation/tests/automation.rs::tool_table_is_well_formed", "crates/automation/tests/automation.rs::edit_undo_redo_and_save_round_trip"]
+notes = ""
 
 [[feature]]
 id = "misc.cli-completeness"
@@ -9807,7 +9807,7 @@ status = "partial"
 commands = []
 tools = []
 evidence = ["crates/ui-egui/src/i18n/mod.rs::language_persists_and_invalid_input_keeps_current_language", "crates/ui-egui/src/i18n/mod.rs::bundled_catalogs_are_consistent", "crates/ui-egui/tests/control.rs::language_switch_preserves_document_and_command_ids"]
-notes = "Preferences switches Auto (system language)/English/Japanese and persists; ui.set language auto|en|ja and ui.state expose it. TSV catalogs per language (same system as PhotoCraft). Core menu labels translated; dialogs, panels, Windows system-language detection and more languages remain open."
+notes = "Preferences switches Auto (system language)/English/Japanese/Brazilian Portuguese and persists; ui.set language auto|en|ja|pt-br and ui.state expose it. TSV catalogs per language (same system as PhotoCraft). Core menu labels translated; dialogs, panels, Windows system-language detection and more languages remain open."
 
 [[feature]]
 id = "misc.prefs-reading"
