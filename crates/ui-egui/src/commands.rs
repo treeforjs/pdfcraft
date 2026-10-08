@@ -131,6 +131,7 @@ impl PdfCraftApp {
                     None => self.theme = next,
                 }
             }
+            command if command.starts_with("measure.") => crate::measure_ui::command(self, command),
             "comment.list" => self.right = Some(RightPanel::Comments),
             tool if crate::comments::CommentTool::from_command(tool).is_some() => {
                 let Some(tool) = crate::comments::CommentTool::from_command(tool) else { return false };

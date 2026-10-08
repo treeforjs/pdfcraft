@@ -3583,6 +3583,7 @@ dependencies = [
  "pdfcraft-fonts",
  "pdfcraft-forms",
  "pdfcraft-js",
+ "pdfcraft-measure",
  "pdfcraft-model",
  "pdfcraft-ocr",
  "pdfcraft-optimize",
@@ -3644,6 +3645,18 @@ name = "pdfcraft-js"
 version = "0.2.1"
 dependencies = [
  "boa_engine",
+]
+
+[[package]]
+name = "pdfcraft-measure"
+version = "0.2.1"
+dependencies = [
+ "pdfcraft-annot",
+ "pdfcraft-content",
+ "pdfcraft-cos",
+ "pdfcraft-model",
+ "serde",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
