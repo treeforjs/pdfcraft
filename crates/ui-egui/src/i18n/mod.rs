@@ -70,9 +70,12 @@ fn plural_pt(n: u64) -> usize {
 }
 
 /// The registry. English first: it is the fallback and the source language.
-pub static LANGUAGES: [LangInfo; 4] = [
+pub static LANGUAGES: [LangInfo; 5] = [
     LangInfo { code: "en", name: "English", source: "", plural: plural_one_other, catalog: OnceLock::new() },
     LangInfo { code: "ja", name: "日本語", source: include_str!("ja.tsv"), plural: plural_none, catalog: OnceLock::new() },
+    // Traditional Chinese in the vocabulary used in Taiwan; `zh-TW`, `zh-HK`, `zh-MO` and `zh-Hant-*`
+    // locales all resolve here (see `candidates`).
+    LangInfo { code: "zh-hant", name: "繁體中文", source: include_str!("zh-hant.tsv"), plural: plural_none, catalog: OnceLock::new() },
     LangInfo { code: "cs", name: "Čeština", source: include_str!("cs.tsv"), plural: plural_cs, catalog: OnceLock::new() },
     // Brazilian Portuguese; `pt`, `pt-BR` and `pt-PT` locales all resolve here (see `candidates`).
     LangInfo { code: "pt-br", name: "Português (Brasil)", source: include_str!("pt-br.tsv"), plural: plural_pt, catalog: OnceLock::new() },
@@ -357,7 +360,9 @@ mod tests {
         assert_eq!(lang_from_tag("C"), Some(Lang::EN));
         assert_eq!(lang_from_tag("POSIX"), Some(Lang::EN));
         assert_eq!(lang_from_tag("fr_FR"), None);
-        assert_eq!(lang_from_tag("zh-TW"), None);
+        assert_eq!(lang_from_tag("zh-TW"), Lang::from_code("zh-hant"));
+        assert_eq!(lang_from_tag("zh_HK.UTF-8"), Lang::from_code("zh-hant"));
+        assert_eq!(lang_from_tag("zh-Hant-MO"), Lang::from_code("zh-hant"));
         assert_eq!(lang_from_tag(""), None);
         assert_eq!(lang_from_tag("_"), None);
     }
@@ -646,6 +651,18 @@ mod tests {
         let mut restored = crate::PdfCraftApp::default();
         restored.restore(&app.persist());
         assert_eq!(restored.language, "cs");
+    }
+
+    #[test]
+    fn traditional_chinese_is_registered() {
+        let zh = Lang::from_code("zh-hant").expect("zh-hant registered");
+        assert_eq!(zh.name(), "繁體中文");
+        assert_eq!(normalize_pref("zh-Hant"), Some("zh-hant"));
+        assert_eq!(tr(zh, "File"), "檔案");
+        assert_eq!(tr(zh, "報告.pdf"), "報告.pdf");
+        for command in pdfcraft_engine::commands::COMMANDS {
+            assert!(has(zh, command.label), "missing command: {}", command.label);
+        }
     }
 
     /// Every bundled catalog is well-formed and consistent with its sources.

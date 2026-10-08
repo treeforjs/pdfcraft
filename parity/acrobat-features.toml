@@ -9807,7 +9807,7 @@ status = "partial"
 commands = ["app.preferences"]
 tools = []
 evidence = ["crates/ui-egui/src/i18n/mod.rs::language_persists_and_invalid_input_keeps_current_language", "crates/ui-egui/src/i18n/mod.rs::bundled_catalogs_are_consistent", "crates/ui-egui/src/i18n/mod.rs::japanese_covers_commands_and_catalogue", "crates/ui-egui/tests/control.rs::language_switch_preserves_document_and_command_ids", "crates/ui-egui/tests/control.rs::japanese_controls_and_search_keep_command_ids", "crates/ui-egui/tests/control.rs::japanese_dialogs_errors_and_custom_action_names"]
-notes = "Preferences switches Auto (system language)/English/Japanese/Czech/Brazilian Portuguese and persists; ui.set language auto|en|ja|cs|pt-br and ui.state expose it. TSV catalogs per language (same system as PhotoCraft); every dialog, panel and notice goes through tl!. Japanese covers commands, dialogs, panels, shortcuts and history labels; Czech and Brazilian Portuguese the menus. Engine/OS error details stay untranslated. Missing: the other catalogs filled in, Windows system-language detection, a full localization audit."
+notes = "Preferences switches Auto (system language)/English/Japanese/Traditional Chinese/Czech/Brazilian Portuguese and persists; ui.set language auto|en|ja|zh-hant|cs|pt-br and ui.state expose it. TSV catalogs per language (same system as PhotoCraft); every dialog, panel and notice goes through tl!. Japanese and Traditional Chinese cover commands, dialogs, panels, shortcuts and history labels; Czech and Brazilian Portuguese the menus. Engine/OS error details stay untranslated. Missing: the other catalogs filled in, Windows system-language detection, a full localization audit."
 
 [[feature]]
 id = "misc.prefs-reading"
