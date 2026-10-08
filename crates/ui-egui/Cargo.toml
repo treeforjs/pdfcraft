@@ -42,3 +42,5 @@ pdfcraft-cos = { workspace = true }
 pdfcraft-model = { workspace = true }
 egui_kittest = { workspace = true, features = ["eframe", "wgpu"] }
 image = { version = "0.25", default-features = false, features = ["png"] }
+# Glyph-coverage test of the interface fonts; the same skrifa pdfcraft-fonts already uses.
+skrifa = "0.44"

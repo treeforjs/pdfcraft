@@ -56,3 +56,29 @@ fn ui_fonts_work_without_craft_fonts() {
     let ctx = egui::Context::default();
     theme::install_fonts(&ctx);
 }
+
+/// Latin-script catalogs (Czech, Brazilian Portuguese) are drawn entirely by the app's own faces
+/// (Inter, JetBrains Mono): no letter falls through to egui's defaults or a CJK fallback. (egui's
+/// `has_glyphs` can't answer this: with only the primary face it is also the replacement face.)
+#[test]
+fn primary_ui_fonts_cover_latin_catalogs() {
+    use skrifa::MetadataProvider as _;
+    let defs = theme::font_definitions();
+    for (code, catalog) in [("cs", include_str!("../src/i18n/cs.tsv")), ("pt-br", include_str!("../src/i18n/pt-br.tsv"))] {
+        let mut text = String::from("áčďéěíňóřšťúůýžÁČĎÉĚÍŇÓŘŠŤÚŮÝŽãõçâêôàÃÕÇÂÊÔÀ…");
+        for line in catalog.lines().filter(|l| !l.starts_with('#')) {
+            if let Some(translation) = line.split('\t').nth(2) {
+                text.extend(translation.chars().filter(|c| !c.is_whitespace()));
+            }
+        }
+        for name in ["Inter", "Inter-Medium", "Inter-SemiBold", "JetBrainsMono"] {
+            let data = &defs.font_data[name];
+            let font = skrifa::FontRef::from_index(&data.font, data.index).unwrap();
+            let charmap = font.charmap();
+            let mut missing: Vec<char> = text.chars().filter(|c| charmap.map(*c).is_none()).collect();
+            missing.sort_unstable();
+            missing.dedup();
+            assert!(missing.is_empty(), "{code}: {name} lacks {missing:?}");
+        }
+    }
+}

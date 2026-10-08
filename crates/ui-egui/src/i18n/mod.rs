@@ -55,15 +55,25 @@ fn plural_none(_: u64) -> usize {
     0
 }
 
+/// Czech: 1 → one, 2–4 → few, everything else (0, 5+) → other.
+fn plural_cs(n: u64) -> usize {
+    match n {
+        1 => 0,
+        2..=4 => 1,
+        _ => 2,
+    }
+}
+
 /// Portuguese: 0 and 1 take the singular, everything else the plural.
 fn plural_pt(n: u64) -> usize {
     usize::from(n > 1)
 }
 
 /// The registry. English first: it is the fallback and the source language.
-pub static LANGUAGES: [LangInfo; 3] = [
+pub static LANGUAGES: [LangInfo; 4] = [
     LangInfo { code: "en", name: "English", source: "", plural: plural_one_other, catalog: OnceLock::new() },
     LangInfo { code: "ja", name: "日本語", source: include_str!("ja.tsv"), plural: plural_none, catalog: OnceLock::new() },
+    LangInfo { code: "cs", name: "Čeština", source: include_str!("cs.tsv"), plural: plural_cs, catalog: OnceLock::new() },
     // Brazilian Portuguese; `pt`, `pt-BR` and `pt-PT` locales all resolve here (see `candidates`).
     LangInfo { code: "pt-br", name: "Português (Brasil)", source: include_str!("pt-br.tsv"), plural: plural_pt, catalog: OnceLock::new() },
 ];
@@ -512,6 +522,36 @@ mod tests {
         let mut restored = crate::PdfCraftApp::default();
         restored.restore(&app.persist());
         assert_eq!(restored.language, "pt-br");
+    }
+
+    /// Czech covers every registered menu title and menu command label (#68), keeps ellipses, and
+    /// only leaves untranslated what is deliberately the same in Czech.
+    #[test]
+    fn czech_covers_every_menu_label() {
+        let cs = Lang::from_code("cs").expect("cs registered");
+        assert_eq!(cs.name(), "Čeština");
+        assert_eq!(tr(cs, "File"), "Soubor");
+        assert_eq!(tr(cs, "Žluťoučký kůň.pdf"), "Žluťoučký kůň.pdf");
+        assert_eq!((0..=6).map(|n| (cs.0.plural)(n)).collect::<Vec<_>>(), [2, 0, 1, 1, 1, 2, 2]);
+        for spec in pdfcraft_engine::commands::COMMANDS {
+            let Some(menu) = spec.menu else { continue };
+            assert!(has(cs, menu), "Czech lacks the menu title {menu:?}");
+            assert!(has(cs, spec.label), "Czech lacks the {menu} menu label {:?} ({})", spec.label, spec.id);
+        }
+        const KEEP_AS_IS: &[&str] = &["OK"];
+        let (entries, _) = parse_entries(cs.0.source, cs.0.plural_forms());
+        for e in &entries {
+            assert!(e.source != e.translation || KEEP_AS_IS.contains(&e.source.as_str()), "{:?} is untranslated", e.source);
+            assert!(!e.translation.contains("..."), "use … rather than three dots: {:?}", e.translation);
+            assert_eq!(e.translation.trim(), e.translation, "stray whitespace: {:?}", e.translation);
+        }
+        let mut app = crate::PdfCraftApp::default();
+        app.set_option("language", "cs").unwrap();
+        assert!(app.set_option("language", "cz").is_err());
+        assert_eq!(app.language, "cs");
+        let mut restored = crate::PdfCraftApp::default();
+        restored.restore(&app.persist());
+        assert_eq!(restored.language, "cs");
     }
 
     /// Every bundled catalog is well-formed and consistent with its sources.
