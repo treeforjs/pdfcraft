@@ -653,6 +653,14 @@ fn select_all_key_selects_every_page_in_organize() {
 }
 
 #[test]
+fn state_reports_the_selected_pages() {
+    let (mut h, c) = harness();
+    assert_eq!(ok(&mut h, &c, "ui.state", json!({}))["active"]["selected_pages"], json!([]));
+    ok(&mut h, &c, "ui.set", json!({ "key": "select", "value": "2,4" }));
+    assert_eq!(ok(&mut h, &c, "ui.state", json!({}))["active"]["selected_pages"], json!([2, 4]));
+}
+
+#[test]
 fn saved_signature_can_be_changed_through_the_control_channel() {
     let (mut h, c) = harness();
     h.state_mut().signature = Some(pdfcraft_ui_egui::fill_sign::SavedSig::Typed("Ada Lovelace".into()));

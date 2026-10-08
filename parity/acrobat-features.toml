@@ -8031,11 +8031,11 @@ title = "Print selected pages from thumbnails"
 area = "L"
 tier = "P2"
 milestone = "M10"
-status = "planned"
-commands = []
+status = "shipped"
+commands = ["print.dialog"]
 tools = []
-evidence = []
-notes = ""
+evidence = ["crates/ui-egui/tests/editing.rs::print_shortcut_offers_the_pages_picked_in_the_pages_panel", "crates/ui-egui/tests/editing.rs::pages_panel_command_click_picks_pages_without_moving_the_document", "crates/ui-egui/tests/editing.rs::pages_panel_shift_click_picks_a_range_and_a_plain_click_starts_over", "crates/ui-egui/tests/print.rs::print_dialog_prints_the_selected_pages", "crates/print/src/tests.rs::page_selection"]
+notes = "Ctrl/⌘-click and ⇧-click pick thumbnails in the Pages panel (and the Organize grid); Print opens on \"Selected pages\" and prints them in page order. Missing: the thumbnails' own context-menu Print command, picking by dragging a marquee, arrow-key selection, and a printer on Windows (Save as PDF only there, see print.printer-selection)."
 
 [[feature]]
 id = "print.postscript-output"

@@ -235,7 +235,7 @@ pub struct DocView {
     /// Turns wheel input into page turns in single-page view.
     wheel: crate::wheel_pager::WheelPager,
     pub(crate) auto_scroll: crate::autoscroll::AutoScroll,
-    /// Pages selected in the organize grid (0-based). Empty means "the current page".
+    /// Pages selected in the organize grid or the Pages panel (0-based). Empty means "the current page".
     pub selected: BTreeSet<usize>,
     /// Anchor for ⇧-click range selection in the organize grid.
     select_anchor: Option<usize>,
@@ -413,6 +413,37 @@ impl DocView {
         if let Some(first) = self.selected.first() {
             self.current = *first;
         }
+    }
+
+    /// A click on page `i`'s thumbnail, in the organize grid or the Pages panel. ⇧ selects the
+    /// range from the anchor (or the current page); ⌘/Ctrl toggles the page; a plain click
+    /// selects only it. `seed_current` is for the Pages panel, where an empty selection means
+    /// the current page: the first ⌘-click on another page keeps the current one selected too.
+    pub fn click_page(&mut self, i: usize, modifiers: egui::Modifiers, seed_current: bool) {
+        if i >= self.page_count {
+            return;
+        }
+        if modifiers.shift {
+            let a = self.select_anchor.unwrap_or(self.current);
+            self.selected = (a.min(i)..=a.max(i)).collect();
+        } else if modifiers.command {
+            if seed_current && self.selected.is_empty() && i != self.current {
+                self.selected.insert(self.current);
+            }
+            if !self.selected.remove(&i) {
+                self.selected.insert(i);
+            }
+            self.select_anchor = Some(i);
+        } else {
+            self.selected = [i].into();
+            self.select_anchor = Some(i);
+        }
+    }
+
+    /// Drop the page selection; a later ⇧-click ranges from `anchor`.
+    pub fn clear_page_selection(&mut self, anchor: Option<usize>) {
+        self.selected.clear();
+        self.select_anchor = anchor.filter(|a| *a < self.page_count);
     }
 
     pub fn render_pending(&self) -> bool {
@@ -2589,18 +2620,7 @@ fn organize_grid(view: &mut DocView, info: &DocInfo, pool: &RenderPool, editable
                 ui.painter().text(pos2(c.center().x, pr.bottom() + 16.0), Align2::CENTER_CENTER, &p.label, theme::medium(12.0), t.text_muted);
                 if resp.clicked() {
                     let m = ui.input(|i| i.modifiers);
-                    if m.shift {
-                        let a = view.select_anchor.unwrap_or(view.current);
-                        view.selected = (a.min(i)..=a.max(i)).collect();
-                    } else if m.command {
-                        if !view.selected.remove(&i) {
-                            view.selected.insert(i);
-                        }
-                        view.select_anchor = Some(i);
-                    } else {
-                        view.selected = [i].into();
-                        view.select_anchor = Some(i);
-                    }
+                    view.click_page(i, m, false);
                     view.current = i;
                 }
                 if resp.double_clicked() {
