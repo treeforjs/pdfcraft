@@ -2,11 +2,12 @@
 <!--
   PdfCraft MSI (WiX Toolset v5: `dotnet tool install -g wix`). Built by package.ps1:
 
-    wix build pdfcraft.wxs -arch x64 -d Version=1.2.3 -d BinDir=... -d IconPath=... -o out.msi
+    wix build pdfcraft.wxs installer-ui.wxs -arch x64 -d Version=1.2.3 -d BinDir=... -d IconPath=... -o out.msi
 
-  Per-machine install into Program Files, a Start Menu shortcut, an App Paths entry, and PdfCraft
-  registered as a PDF handler (offered under "Open with" and in Default apps, never forced as the
-  default). Files opened with PdfCraft arrive on its command line.
+  Per-machine install into Program Files, a Start Menu shortcut, a desktop shortcut (on by default,
+  optional), an App Paths entry, and PdfCraft registered as a PDF handler (offered under "Open with"
+  and in Default apps, never forced as the default). Files opened with PdfCraft arrive on its
+  command line.
 -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
   <Package
@@ -31,11 +32,17 @@
     <Property Id="ARPURLINFOABOUT" Value="https://getartcraft.com/apps/pdfcraft" />
     <Property Id="ARPURLUPDATEINFO" Value="https://getartcraft.com/apps/pdfcraft" />
     <Property Id="ARPHELPLINK" Value="https://discord.gg/artcraft" />
+    <!-- Desktop shortcut (#143): on by default, a checkbox in the full-UI welcome dialog, and
+         INSTALLDESKTOPSHORTCUT=0 on the msiexec command line for unattended installs. Secure, so the
+         choice made in the (unelevated) UI reaches the elevated install. -->
+    <Property Id="INSTALLDESKTOPSHORTCUT" Value="1" Secure="yes" />
+    <UIRef Id="PdfcraftInstallerUI" />
 
     <StandardDirectory Id="ProgramFiles6432Folder">
       <Directory Id="INSTALLFOLDER" Name="PdfCraft" />
     </StandardDirectory>
     <StandardDirectory Id="ProgramMenuFolder" />
+    <StandardDirectory Id="DesktopFolder" />
 
     <Feature Id="Main" Title="PdfCraft" Level="1">
       <ComponentGroupRef Id="PdfcraftFiles" />
@@ -45,11 +52,7 @@
   <Fragment>
     <ComponentGroup Id="PdfcraftFiles" Directory="INSTALLFOLDER">
       <Component Id="PdfcraftApp" Guid="E724C1C6-091F-4E21-A685-80D089FDBE21">
-        <File Id="PdfcraftExe" Source="$(var.BinDir)\pdfcraft.exe" KeyPath="yes">
-          <Shortcut Id="StartMenuShortcut" Directory="ProgramMenuFolder" Name="PdfCraft"
-              Description="PdfCraft PDF workbench" WorkingDirectory="INSTALLFOLDER" Advertise="yes"
-              Icon="PdfcraftIcon.ico" IconIndex="0" />
-        </File>
+        <File Id="PdfcraftExe" Source="$(var.BinDir)\pdfcraft.exe" KeyPath="yes" />
 
         <RegistryValue Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\App Paths\pdfcraft.exe" Value="[#PdfcraftExe]" Type="string" />
 
@@ -71,6 +74,24 @@
         <RegistryValue Root="HKLM" Key="Software\PdfCraft\Capabilities" Name="ApplicationIcon" Value="[#PdfcraftExe],0" Type="string" />
         <RegistryValue Root="HKLM" Key="Software\PdfCraft\Capabilities\FileAssociations" Name=".pdf" Value="PdfCraft.Document" Type="string" />
         <RegistryValue Root="HKLM" Key="Software\RegisteredApplications" Name="PdfCraft" Value="Software\PdfCraft\Capabilities" Type="string" />
+      </Component>
+
+      <!-- Shortcuts (#143) are plain links to pdfcraft.exe, not advertised MSI shortcuts: advertised
+           ones point at a Windows Installer descriptor rather than the program, which Windows can't
+           use as a file handler (#107), and 0.2.1's advertised one went missing from the Start menu
+           (#143). Each has its own component with an HKLM key path, so Windows Installer removes it
+           on uninstall; in this per-machine package both folders are the all-users ones. -->
+      <Component Id="PdfcraftStartMenuShortcut" Directory="ProgramMenuFolder" Guid="DC028192-C233-4F99-9A77-ED458C60DF26">
+        <Shortcut Id="StartMenuShortcut" Name="PdfCraft" Description="PdfCraft PDF workbench"
+            Target="[#PdfcraftExe]" WorkingDirectory="INSTALLFOLDER" Icon="PdfcraftIcon.ico" IconIndex="0" />
+        <RegistryValue Root="HKLM" Key="Software\PdfCraft\Shortcuts" Name="StartMenu" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+
+      <Component Id="PdfcraftDesktopShortcut" Directory="DesktopFolder" Guid="F6948627-32AB-4D78-8865-0FDF417CE442"
+          Condition="INSTALLDESKTOPSHORTCUT = 1">
+        <Shortcut Id="DesktopShortcut" Name="PdfCraft" Description="PdfCraft PDF workbench"
+            Target="[#PdfcraftExe]" WorkingDirectory="INSTALLFOLDER" Icon="PdfcraftIcon.ico" IconIndex="0" />
+        <RegistryValue Root="HKLM" Key="Software\PdfCraft\Shortcuts" Name="Desktop" Type="integer" Value="1" KeyPath="yes" />
       </Component>
 
       <Component Id="PdfcraftCli">

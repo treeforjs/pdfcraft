@@ -68,13 +68,26 @@ jobs:
         with:
           name: pdfcraft-windows-arm64
           path: dist
-      - name: Install the MSI, check it, run it, uninstall it
+      - name: Install the MSI, check it, run it, uninstall it, reinstall without the desktop shortcut
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $msi = (Get-ChildItem dist/*.msi | Select-Object -First 1).FullName
           $p = Start-Process msiexec.exe -ArgumentList '/i', "`"$msi`"", '/qn', '/l*v', 'install.log' -Wait -PassThru
           if ($p.ExitCode -ne 0) { Get-Content install.log -Tail 60; throw "msiexec /i exited $($p.ExitCode)" }
+          $shortcuts = @(
+            (Join-Path ([Environment]::GetFolderPath('CommonPrograms')) 'PdfCraft.lnk'),
+            (Join-Path ([Environment]::GetFolderPath('CommonDesktopDirectory')) 'PdfCraft.lnk')
+          )
+          # Plain shortcuts to the program (#143), not advertised ones, so TargetPath is the exe.
+          $exePath = Join-Path $env:ProgramFiles 'PdfCraft\pdfcraft.exe'
+          $wsh = New-Object -ComObject WScript.Shell
+          foreach ($shortcut in $shortcuts) {
+            if (-not (Test-Path -LiteralPath $shortcut)) { throw "installer did not create $shortcut" }
+            $target = $wsh.CreateShortcut($shortcut).TargetPath
+            if ($target -ne $exePath) { throw "$shortcut points to '$target', not $exePath" }
+            Write-Output "ok $shortcut -> $target"
+          }
           $dir = Join-Path $env:ProgramFiles 'PdfCraft'
           foreach ($exe in 'pdfcraft.exe', 'pdfcraft-cli.exe') {
             $path = Join-Path $dir $exe
@@ -110,7 +123,19 @@ jobs:
           $p = Start-Process msiexec.exe -ArgumentList '/x', "`"$msi`"", '/qn' -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw "msiexec /x exited $($p.ExitCode)" }
           if (Test-Path (Join-Path $dir 'pdfcraft.exe')) { throw 'uninstall left pdfcraft.exe behind' }
+          foreach ($shortcut in $shortcuts) {
+            if (Test-Path -LiteralPath $shortcut) { throw "uninstall left $shortcut behind" }
+          }
           Write-Output 'ok uninstalled'
+          # Unattended installs can opt out of the desktop shortcut (#143); the Start Menu one stays.
+          $p = Start-Process msiexec.exe -ArgumentList '/i', "`"$msi`"", '/qn', 'INSTALLDESKTOPSHORTCUT=0', '/l*v', 'install-nodesktop.log' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Get-Content install-nodesktop.log -Tail 60; throw "msiexec /i INSTALLDESKTOPSHORTCUT=0 exited $($p.ExitCode)" }
+          if (-not (Test-Path -LiteralPath $shortcuts[0])) { throw "INSTALLDESKTOPSHORTCUT=0 also skipped $($shortcuts[0])" }
+          if (Test-Path -LiteralPath $shortcuts[1]) { throw "INSTALLDESKTOPSHORTCUT=0 still created $($shortcuts[1])" }
+          $p = Start-Process msiexec.exe -ArgumentList '/x', "`"$msi`"", '/qn' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "msiexec /x exited $($p.ExitCode)" }
+          if (Test-Path -LiteralPath $shortcuts[0]) { throw "uninstall left $($shortcuts[0]) behind" }
+          Write-Output 'ok INSTALLDESKTOPSHORTCUT=0: Start Menu shortcut only'
 
   test:
     name: test (native ARM64)
