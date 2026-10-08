@@ -9951,7 +9951,7 @@ status = "planned"
 commands = []
 tools = []
 evidence = []
-notes = ""
+notes = "Only a first step exists: Arabic and Hebrew file names and paths in the tab strip, the recent-files list and Properties have glyphs (a craft-fonts Arab face, or an installed font on desktop) and are shown in display order (crates/ui-egui/src/bidi.rs). Missing: multi-line text (bookmarks, comments, search results), text input, a mirrored layout and a right-to-left interface language."
 
 [[feature]]
 id = "misc.installers"
