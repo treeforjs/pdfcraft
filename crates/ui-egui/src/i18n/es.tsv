@@ -1619,6 +1619,7 @@
 	Created a comment summary	Se ha creado un resumen de comentarios
 	Couldn't open {name}: {e}	No se pudo abrir {name}: {e}
 	Couldn't read {name}: {e}	No se pudo leer {name}: {e}
+	Portable mode is off: {folder} can't be written ({error}). Settings are kept in your user folder instead.	El modo portátil está desactivado: no se puede escribir en {folder} ({error}). La configuración se guarda en tu carpeta de usuario.
 	Couldn't save: {e}	No se pudo guardar: {e}
 	Downloading attachments on the web arrives with M3.10 ({n} bytes ready)	La descarga de archivos adjuntos en la versión web llegará con M3.10 ({n} bytes listos)
 	`{command}` {when}	`{command}` {when}

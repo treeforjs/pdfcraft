@@ -1534,6 +1534,7 @@
 	Created a comment summary	已建立註解摘要
 	Couldn't open {name}: {e}	無法開啟{name}：{e}
 	Couldn't read {name}: {e}	無法讀取{name}：{e}
+	Portable mode is off: {folder} can't be written ({error}). Settings are kept in your user folder instead.	可攜模式已關閉：無法寫入{folder}（{error}）。設定改為儲存在你的使用者資料夾中。
 	Couldn't save: {e}	無法儲存：{e}
 	Downloading attachments on the web arrives with M3.10 ({n} bytes ready)	Web 端附件下載將於 M3.10 到來（{n} 位元組已就緒）
 	`{command}` {when}	`{command}` {when}

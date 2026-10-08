@@ -84,6 +84,7 @@ pub mod i18n;
 
 /// The longest author name kept (Preferences ▸ Identity, restored settings).
 pub(crate) const MAX_AUTHOR_CHARS: usize = 200;
+pub mod portable;
 mod protect;
 mod recovery;
 #[cfg(not(target_arch = "wasm32"))]
