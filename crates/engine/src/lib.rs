@@ -23,7 +23,7 @@ pub mod ocr;
 pub mod signature_image;
 pub mod xfa;
 
-pub use signature_image::SignatureImage;
+pub use signature_image::{ImageSignaturePreview, SignatureImage};
 
 pub use pdfcraft_organize::{BoxSpec, PageBox, SplitBy, split_ranges};
 

@@ -37,6 +37,7 @@ impl PdfCraftApp {
                 let Some(doc) = self.session.get(id) else { return true };
                 let info = &doc.info;
                 let view = &mut self.views[i];
+                view.signature_drag.committed(&edit, doc.edit_generation());
                 match comment_page(&edit) {
                     // Comment edits change one page: keep every other raster.
                     Some(page) => view.page_changed(page),

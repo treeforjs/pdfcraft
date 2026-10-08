@@ -277,6 +277,7 @@ pub struct DocView {
     pub fill_text: Option<crate::fill_sign::TypeBox>,
     /// A queued Fill & Sign signature: select it after its edit succeeds, then leave placement.
     pub(crate) fill_signature_page: Option<usize>,
+    pub(crate) signature_drag: crate::signature_drag::SignatureDrag,
     /// A non-edit action requested by the organize toolbar, handled by the app.
     pub pending_action: Option<ViewAction>,
 }
@@ -384,6 +385,7 @@ impl DocView {
             marquee_done: None,
             fill_text: None,
             fill_signature_page: None,
+            signature_drag: Default::default(),
         }
     }
 
@@ -866,6 +868,7 @@ impl DocView {
             } else {
                 let tex = ctx.load_texture(format!("page-{:?}-{page}", self.id), img, TextureOptions::LINEAR);
                 self.pages.insert(page, PageTex { tag: r.request.tag, tex });
+                self.signature_drag.page_received(page);
                 self.waiting_since.remove(&page);
             }
         }
@@ -957,6 +960,26 @@ pub struct PageXform {
 }
 
 impl PageXform {
+    /// Draw an image in PDF user space, preserving orientation through both page rotations.
+    pub(crate) fn paint_user_image(
+        &self,
+        painter: &egui::Painter,
+        tex: egui::TextureId,
+        info: &DocInfo,
+        page: usize,
+        rect: [f64; 4],
+        color: Color32,
+    ) {
+        let Some(p) = info.pages.get(page) else { return };
+        let mut mesh = egui::Mesh::with_texture(tex);
+        for (x, y, u, v) in [(rect[0], rect[3], 0.0, 0.0), (rect[2], rect[3], 1.0, 0.0), (rect[2], rect[1], 1.0, 1.0), (rect[0], rect[1], 0.0, 1.0)] {
+            let p = p.user_to_view(x as f32, y as f32);
+            mesh.vertices.push(egui::epaint::Vertex { pos: self.norm_to_screen(p[0] / self.pw, p[1] / self.ph), uv: pos2(u, v), color });
+        }
+        mesh.add_triangle(0, 1, 2);
+        mesh.add_triangle(0, 2, 3);
+        painter.add(egui::Shape::mesh(mesh));
+    }
     pub fn norm_to_screen(&self, u: f32, v: f32) -> Pos2 {
         let (a, b) = match self.rot {
             90 => (1.0 - v, u),
@@ -1577,6 +1600,10 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
             };
             let on_link = tool == QuickTool::Link && can_modify && crate::link_ui::page_input(ui, &resp, &xf, i, info, &doc_links, view);
             let consumed = on_edit_text || on_link || on_content || boxing || on_field || comments::page_input(ui, &resp, &pcx, view);
+
+            let preview_target = (tool == QuickTool::Select && !comments_hidden).then_some(view.comments.selected).flatten();
+            view.signature_drag.prepare(ui.ctx(), doc, preview_target, scale);
+            view.signature_drag.paint(painter, &pcx, &view.comments, view.pending_edit.as_ref());
 
             // Text layer: find matches, selection, I-beam and drag-to-select.
             let to_screen = |g: [f32; 4]| xf.view_rect(g);
