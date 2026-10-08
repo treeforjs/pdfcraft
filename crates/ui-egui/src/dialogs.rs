@@ -55,6 +55,7 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
     let mut ocr_now = false;
     let mut compare_now = false;
     let mut combine_now = false;
+    let mut images_now = false;
     let mut stamp_now = false;
     let mut alt_now = false;
     let t = Tokens::get(ctx);
@@ -76,6 +77,12 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
         w.inactive.bg_fill = t.hover;
         w.hovered.bg_stroke = egui::Stroke::new(1.0, t.text_muted);
         match dialog {
+            Dialog::CreateImages => {
+                let (go, cancel) = crate::create_ui::image_import_body(ui, app);
+                images_now = go;
+                close = go || cancel;
+                return;
+            }
             Dialog::Properties(tab) => {
                 ui.label(egui::RichText::new(tl!("Document Properties")).font(theme::semibold(18.0)));
                 ui.add_space(8.0);
@@ -1256,6 +1263,11 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
     }
     if combine_now {
         app.combine_staged();
+    }
+    if images_now {
+        app.finish_image_import();
+    } else if dialog == Dialog::CreateImages && app.dialog != Some(Dialog::CreateImages) {
+        app.image_import = None;
     }
     if ocr_now {
         app.start_ocr();
