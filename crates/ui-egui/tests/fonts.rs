@@ -5,6 +5,7 @@ use egui::{Color32, FontFamily, FontId};
 use pdfcraft_ui_egui::theme;
 
 const JAPANESE: &str = "日本語の文字";
+const CHINESE: &str = "简体中文欢迎";
 
 fn families() -> Vec<FontId> {
     vec![FontId::proportional(13.0), FontId::monospace(13.0), theme::medium(13.0), theme::semibold(17.0)]
@@ -39,6 +40,35 @@ fn japanese_ui_text_uses_craft_fonts() {
     // Real glyphs are about a full em wide each; tofu boxes and missing glyphs are not.
     for w in layout_widths(&mut fonts, JAPANESE) {
         assert!(w > 13.0 * 0.8 * JAPANESE.chars().count() as f32, "{w}");
+    }
+}
+
+/// Chinese mode orders the CJK fallback with the `Hans` group first, so one line never
+/// mixes faces with different vertical metrics. Without an allowed `Hans` face in the
+/// build input the order part still holds; glyph coverage follows the craft-fonts checkout.
+#[test]
+fn chinese_ui_text_prefers_the_chinese_face() {
+    if pdfcraft_fonts::ui_chinese_fonts().is_empty() {
+        eprintln!(
+            "skipping chinese_ui_text_prefers_the_chinese_face: no Hans face bundled (set CRAFT_FONTS_DIR with an allowed Chinese face to run it)"
+        );
+        return;
+    }
+    let defs = theme::font_definitions_for(true);
+    let hans: Vec<String> = pdfcraft_fonts::ui_chinese_fonts().iter().map(|f| f.name()).collect();
+    for family in [FontFamily::Proportional, FontFamily::Monospace] {
+        let stack = &defs.families[&family];
+        let first_zh = stack.iter().position(|n| hans.iter().any(|h| h == n)).expect("a Hans face is a fallback");
+        let first_ja = stack.iter().position(|n| n.starts_with("BIZ UDPGothic")).expect("BIZ UDPGothic is a fallback");
+        let own = stack.iter().position(|n| n == "Inter" || n == "JetBrainsMono").expect("the app's own font");
+        assert!(own < first_zh && first_zh < first_ja, "{family:?}: {stack:?}");
+    }
+    let mut fonts = Fonts::new(TextOptions::default(), defs);
+    for id in families() {
+        assert!(fonts.has_glyphs(&id, CHINESE), "{id:?} lacks {CHINESE}");
+    }
+    for w in layout_widths(&mut fonts, CHINESE) {
+        assert!(w > 13.0 * 0.8 * CHINESE.chars().count() as f32, "{w}");
     }
 }
 

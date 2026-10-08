@@ -108,10 +108,25 @@ pub fn install_fonts(ctx: &egui::Context) {
     ctx.set_fonts(font_definitions());
 }
 
+/// Install the interface fonts with the CJK fallback order for the UI language (Chinese
+/// first for Simplified Chinese, Japanese first otherwise). Call it when the language
+/// changes; the new faces take effect next frame.
+pub fn install_fonts_for(ctx: &egui::Context, prefer_hans: bool) {
+    ctx.set_fonts(font_definitions_for(prefer_hans));
+}
+
 /// The interface fonts: Inter (and JetBrains Mono for code) first, then egui's defaults, then
-/// the Japanese faces of the optional craft-fonts build input (BIZ UDPGothic first) as the last
-/// fallback in every family. Without craft-fonts there is no Japanese face.
+/// the CJK faces of the optional craft-fonts build input as the last fallback in every family.
+/// Without craft-fonts there is no Japanese or Chinese face.
 pub fn font_definitions() -> FontDefinitions {
+    font_definitions_for(false)
+}
+
+/// [`font_definitions`] with the CJK fallback order for the UI language. Simplified Chinese
+/// must come first in Chinese mode: otherwise shared characters render in the Japanese face
+/// while Simplified-only characters (e.g. U+6B22 欢) fall through to the Chinese face, and
+/// the mixed vertical metrics sink them below the line.
+pub fn font_definitions_for(prefer_hans: bool) -> FontDefinitions {
     let mut fonts = FontDefinitions::default();
     let add = |fonts: &mut FontDefinitions, name: &str, bytes: &'static [u8]| {
         fonts.font_data.insert(name.to_owned(), Arc::new(FontData::from_static(bytes)));
@@ -122,10 +137,13 @@ pub fn font_definitions() -> FontDefinitions {
     add(&mut fonts, "JetBrainsMono", include_bytes!("../../../assets/fonts/JetBrainsMono-Regular.ttf"));
     fonts.families.entry(FontFamily::Proportional).or_default().insert(0, "Inter".to_owned());
     fonts.families.entry(FontFamily::Monospace).or_default().insert(0, "JetBrainsMono".to_owned());
-    // The same static bytes pdfcraft-fonts uses for Japanese text in PDFs: one copy, not two.
-    for face in pdfcraft_fonts::ui_japanese_fonts() {
+    // The same static bytes pdfcraft-fonts uses for Japanese/Chinese text in PDFs: one copy, not two.
+    for face in pdfcraft_fonts::ui_cjk_fonts(prefer_hans) {
         let name = face.name();
-        add(&mut fonts, &name, face.bytes);
+        // Japanese and Chinese faces have distinct family names, so no collision here.
+        if !fonts.font_data.contains_key(&name) {
+            add(&mut fonts, &name, face.bytes);
+        }
         for family in [FontFamily::Proportional, FontFamily::Monospace] {
             fonts.families.entry(family).or_default().push(name.clone());
         }

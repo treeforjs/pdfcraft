@@ -70,9 +70,11 @@ fn plural_pt(n: u64) -> usize {
 }
 
 /// The registry. English first: it is the fallback and the source language.
-pub static LANGUAGES: [LangInfo; 5] = [
+pub static LANGUAGES: [LangInfo; 6] = [
     LangInfo { code: "en", name: "English", source: "", plural: plural_one_other, catalog: OnceLock::new() },
     LangInfo { code: "ja", name: "日本語", source: include_str!("ja.tsv"), plural: plural_none, catalog: OnceLock::new() },
+    // Simplified Chinese; `zh`, `zh-CN`, `zh-SG` and `zh-Hans-*` locales resolve here (see `candidates`).
+    LangInfo { code: "zh-hans", name: "简体中文", source: include_str!("zh-hans.tsv"), plural: plural_none, catalog: OnceLock::new() },
     // Traditional Chinese in the vocabulary used in Taiwan; `zh-TW`, `zh-HK`, `zh-MO` and `zh-Hant-*`
     // locales all resolve here (see `candidates`).
     LangInfo { code: "zh-hant", name: "繁體中文", source: include_str!("zh-hant.tsv"), plural: plural_none, catalog: OnceLock::new() },
@@ -361,6 +363,8 @@ mod tests {
         assert_eq!(lang_from_tag("POSIX"), Some(Lang::EN));
         assert_eq!(lang_from_tag("fr_FR"), None);
         assert_eq!(lang_from_tag("zh-TW"), Lang::from_code("zh-hant"));
+        assert_eq!(lang_from_tag("zh_CN.UTF-8"), Lang::from_code("zh-hans"));
+        assert_eq!(lang_from_tag("zh"), Lang::from_code("zh-hans"));
         assert_eq!(lang_from_tag("zh_HK.UTF-8"), Lang::from_code("zh-hant"));
         assert_eq!(lang_from_tag("zh-Hant-MO"), Lang::from_code("zh-hant"));
         assert_eq!(lang_from_tag(""), None);
@@ -538,7 +542,7 @@ mod tests {
         let web_name = web.name();
         let mut web_only = crate::theme::font_definitions();
         for family in web_only.families.values_mut() {
-            family.retain(|name| !craft.iter().any(|face| face.name() == *name) || *name == web_name);
+            family.retain(|name| !pdfcraft_fonts::CRAFT_FONTS.iter().any(|face| face.name() == *name) || *name == web_name);
         }
         use egui::epaint::text::{Fonts, TextOptions};
         for (build, defs) in [("desktop", crate::theme::font_definitions()), ("web", web_only)] {
@@ -651,6 +655,19 @@ mod tests {
         let mut restored = crate::PdfCraftApp::default();
         restored.restore(&app.persist());
         assert_eq!(restored.language, "cs");
+    }
+
+    #[test]
+    fn simplified_chinese_is_registered() {
+        let zh = Lang::from_code("zh-hans").expect("zh-hans registered");
+        assert_eq!(zh.name(), "简体中文");
+        assert_eq!(normalize_pref("zh-Hans"), Some("zh-hans"));
+        assert_eq!(normalize_pref("zh"), None, "only exact codes are preferences");
+        assert_eq!(tr(zh, "File"), "文件");
+        assert_eq!(tr(zh, "报告.pdf"), "报告.pdf");
+        for menu in ["File", "Edit", "Pages", "View", "Help", "Preferences…", "Interface language"] {
+            assert!(has(zh, menu), "missing {menu}");
+        }
     }
 
     #[test]

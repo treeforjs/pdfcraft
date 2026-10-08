@@ -11,6 +11,17 @@
 # Adobe-authored non-visual technical data allowed by AGENTS.md §1.1.
 
 [[asset]]
+path = "crates/ui-egui/src/i18n/zh-hans.tsv"
+title = "Simplified Chinese interface translation catalog"
+author = "PdfCraft contributors"
+source = "Contributor-original: clean-room translations of PdfCraft's English UI labels, no proprietary localisation resources"
+licence = "MIT OR Apache-2.0"
+licence_file = "LICENSE-MIT"
+kind = "translation"
+usage = "Simplified Chinese UI strings, compiled in by crates/ui-egui/src/i18n/mod.rs"
+sha256 = "1a39d1886fed368cc5e23c376505074b3955fd8bcbcd0678209126ce07a10a95"
+
+[[asset]]
 path = "crates/ui-egui/src/i18n/zh-hant.tsv"
 title = "Traditional Chinese (Taiwan) interface translation catalog"
 author = "PdfCraft contributors"
