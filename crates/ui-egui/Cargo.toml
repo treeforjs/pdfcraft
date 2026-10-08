@@ -42,3 +42,7 @@ pdfcraft-cos = { workspace = true }
 pdfcraft-model = { workspace = true }
 egui_kittest = { workspace = true, features = ["eframe", "wgpu"] }
 image = { version = "0.25", default-features = false, features = ["png"] }
+
+[build-dependencies]
+serde_json = { workspace = true }
+toml = "1"
