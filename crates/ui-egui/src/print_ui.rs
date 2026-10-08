@@ -94,6 +94,9 @@ impl Default for PrintDraft {
 impl PrintDraft {
     /// The engine settings for this draft (page count and labels from the document).
     pub fn settings(&self, count: usize, labels: &[String]) -> Result<print::Settings, String> {
+        if self.handling == Handling::Multiple && self.order == PageOrder::CutStack && self.duplex != spool::Duplex::Off {
+            return Err("Cut and stack needs Two-sided: Off. Print single-sided sheets.".into());
+        }
         let range = match self.which {
             Which::All => None,
             Which::Current => Some((self.current_page + 1).to_string()),
@@ -338,6 +341,7 @@ pub(crate) fn body(
                                 (PageOrder::HorizontalReversed, "Horizontal reversed"),
                                 (PageOrder::Vertical, "Vertical"),
                                 (PageOrder::VerticalReversed, "Vertical reversed"),
+                                (PageOrder::CutStack, "Cut and stack"),
                             ],
                             150.0,
                         );
@@ -346,6 +350,11 @@ pub(crate) fn body(
                         ui.checkbox(&mut d.border, "Print page border");
                         ui.checkbox(&mut d.auto_rotate, "Auto-rotate pages");
                     });
+                    if d.order == PageOrder::CutStack {
+                        ui.label(
+                            "Print single-sided. Keep the sheets in order, cut at the marks, then stack the piles left to right, top to bottom.",
+                        );
+                    }
                 }
                 Handling::Booklet => {
                     ui.horizontal(|ui| {

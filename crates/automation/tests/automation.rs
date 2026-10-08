@@ -1796,3 +1796,60 @@ fn exporting_to_word_html_and_rtf() {
     assert!(std::fs::read_to_string(dir.join("a.rtf")).unwrap().contains("Page 2"));
     assert!(a.call("doc_export_office", &json!({ "doc": doc, "path": "a.xyz" })).is_err());
 }
+
+#[test]
+fn cut_stack_printing_through_tools() {
+    let dir = workdir("cut-stack");
+    std::fs::write(dir.join("numbered.pdf"), fixture(10)).unwrap();
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({"path": "numbered.pdf"}))["doc"].as_u64().unwrap();
+    let before = page_text(&mut a, doc);
+    for reverse in [false, true] {
+        let r = ok(
+            &mut a,
+            "doc_print",
+            json!({
+                "doc": doc, "layout": "multiple", "order": "cut-stack", "per_sheet": 4,
+                "orientation": "portrait", "auto_rotate": false, "reverse": reverse, "path": "cut.pdf"
+            }),
+        );
+        assert_eq!(r["sheets"], 3);
+        let printed = ok(&mut a, "doc_open", json!({"path": "cut.pdf"}))["doc"].as_u64().unwrap();
+        let expected =
+            if reverse { vec![vec![10, 7, 4, 1], vec![9, 6, 3], vec![8, 5, 2]] } else { vec![vec![1, 4, 7, 10], vec![2, 5, 8], vec![3, 6, 9]] };
+        for (text, expected) in page_text(&mut a, printed).iter().zip(&expected) {
+            let actual: Vec<usize> = text.split_whitespace().filter_map(|t| t.parse().ok()).collect();
+            assert_eq!(&actual, expected, "saved PDF must contain the imposed order: {text}");
+        }
+        ok(&mut a, "doc_close", json!({"doc": printed}));
+    }
+    let r = ok(
+        &mut a,
+        "doc_print",
+        json!({
+            "doc": doc, "pages": "2-10", "subset": "odd", "reverse": true,
+            "layout": "multiple", "order": "cut-stack", "per_sheet": 2, "auto_rotate": false,
+            "orientation": "landscape", "path": "range.pdf"
+        }),
+    );
+    assert_eq!(r["pages"], 5);
+    let printed = ok(&mut a, "doc_open", json!({"path": "range.pdf"}))["doc"].as_u64().unwrap();
+    assert_eq!(page_text(&mut a, printed), ["Page 10\nPage 4", "Page 8\nPage 2", "Page 6"]);
+    assert_eq!(page_text(&mut a, doc), before);
+    assert_eq!(ok(&mut a, "doc_info", json!({"doc": doc}))["document"]["dirty"], false);
+    for duplex in ["long-edge", "short-edge"] {
+        assert!(matches!(
+            a.call(
+                "doc_print",
+                &json!({
+                    "doc": doc, "layout": "multiple", "order": "cut-stack", "duplex": duplex, "path": "refused.pdf"
+                })
+            ),
+            Err(ToolError::InvalidArgs(_))
+        ));
+    }
+    assert!(matches!(a.call("doc_print", &json!({"doc": doc, "order": "cut-stack", "path": "refused.pdf"})), Err(ToolError::InvalidArgs(_))));
+    assert!(!dir.join("refused.pdf").exists());
+    assert!(a.call("doc_print", &json!({"doc": doc, "layout": "multiple", "order": "cut-stack", "path": "../escaped.pdf"})).is_err());
+    let _ = std::fs::remove_dir_all(dir);
+}

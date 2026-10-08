@@ -40,6 +40,7 @@ impl Automation {
                     "horizontal-reversed" => PageOrder::HorizontalReversed,
                     "vertical" => PageOrder::Vertical,
                     "vertical-reversed" => PageOrder::VerticalReversed,
+                    "cut-stack" => PageOrder::CutStack,
                     o => return Err(bad(format!("unknown order {o:?}"))),
                 };
                 match Layout::multiple(per) {
@@ -69,6 +70,12 @@ impl Automation {
             },
             l => return Err(bad(format!("unknown layout {l:?}"))),
         };
+        if matches!(layout, Layout::Multiple { order: PageOrder::CutStack, .. }) && a.opt_str("duplex")?.unwrap_or("off") != "off" {
+            return Err(bad("cut-and-stack printing needs duplex off (single-sided sheets)"));
+        }
+        if a.opt_str("order")? == Some("cut-stack") && !matches!(layout, Layout::Multiple { .. }) {
+            return Err(bad("cut-stack order needs layout multiple"));
+        }
         let orientation = match a.opt_str("orientation")?.unwrap_or("auto") {
             "auto" => Orientation::Auto,
             "portrait" => Orientation::Portrait,
