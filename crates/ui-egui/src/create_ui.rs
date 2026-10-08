@@ -100,10 +100,10 @@ impl PdfCraftApp {
         match clip {
             Some(c) => {
                 if let Err(e) = self.create_from_clip(c) {
-                    self.notify(format!("Couldn't create a PDF: {e}"));
+                    self.notify_fmt("Couldn't create a PDF: {e}", &[("e", &e.to_string())]);
                 }
             }
-            None => self.notify("The clipboard has no image or text"),
+            None => self.notify_tr("The clipboard has no image or text"),
         }
     }
 
@@ -123,7 +123,7 @@ impl PdfCraftApp {
     pub(crate) fn create_blank(&mut self) {
         let created = self.session.create_blank(612.0, 792.0, 1).map_err(|e| e.to_string());
         if let Err(e) = self.open_created_bytes("Untitled.pdf", created) {
-            self.notify(format!("Couldn't create a PDF: {e}"));
+            self.notify_fmt("Couldn't create a PDF: {e}", &[("e", &e.to_string())]);
         }
     }
 
@@ -132,8 +132,8 @@ impl PdfCraftApp {
         #[cfg(not(target_arch = "wasm32"))]
         {
             let Some(files) = rfd::FileDialog::new()
-                .add_filter("Images", &["png", "jpg", "jpeg", "tif", "tiff", "gif", "bmp", "jp2", "j2k", "jpx"])
-                .set_title("Choose images")
+                .add_filter(tl!("Images"), &["png", "jpg", "jpeg", "tif", "tiff", "gif", "bmp", "jp2", "j2k", "jpx"])
+                .set_title(tl!("Choose images"))
                 .pick_files()
             else {
                 return;
@@ -143,7 +143,7 @@ impl PdfCraftApp {
                 match std::fs::read(&f) {
                     Ok(b) => images.push((f.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(), b)),
                     Err(e) => {
-                        self.notify(format!("Couldn't read {}: {e}", f.display()));
+                        self.notify_fmt("Couldn't read {name}: {e}", &[("name", &f.display().to_string()), ("e", &e.to_string())]);
                         return;
                     }
                 }
@@ -151,7 +151,7 @@ impl PdfCraftApp {
             self.create_from_images(images);
         }
         #[cfg(target_arch = "wasm32")]
-        self.notify("On the web, open or drop an image to convert it");
+        self.notify_tr("On the web, open or drop an image to convert it");
     }
 
     /// One new document from images (tests and automation call this directly).
@@ -162,7 +162,7 @@ impl PdfCraftApp {
         let name = if images.len() == 1 { format!("{}.pdf", stem(&images[0].0)) } else { "Images.pdf".to_string() };
         let created = self.session.create_from_images(&images).map_err(|e| e.to_string());
         if let Err(e) = self.open_created_bytes(&name, created) {
-            self.notify(format!("Couldn't create a PDF: {e}"));
+            self.notify_fmt("Couldn't create a PDF: {e}", &[("e", &e.to_string())]);
         }
     }
 
@@ -187,17 +187,22 @@ impl PdfCraftApp {
         let (bytes, detail) = match result {
             Ok(r) => r,
             Err(e) => {
-                self.notify(format!("Couldn't optimize the file: {e}"));
+                self.notify_fmt("Couldn't optimize the file: {e}", &[("e", &e.to_string())]);
                 return;
             }
         };
         let saved = |app: &mut PdfCraftApp, place: String| {
             let pct = 100.0 * (1.0 - bytes.len() as f64 / before.max(1) as f64);
-            app.notify(format!(
-                "Saved {place}: {} → {} ({pct:.0}% smaller){detail}",
-                crate::panels::human_size(before),
-                crate::panels::human_size(bytes.len())
-            ));
+            app.notify_fmt(
+                "Saved {place}: {before} → {after} ({pct}% smaller){detail}",
+                &[
+                    ("place", &place),
+                    ("before", &crate::panels::human_size(before)),
+                    ("after", &crate::panels::human_size(bytes.len())),
+                    ("pct", &format!("{pct:.0}")),
+                    ("detail", &detail),
+                ],
+            );
         };
         #[cfg(not(target_arch = "wasm32"))]
         {
@@ -208,13 +213,13 @@ impl PdfCraftApp {
             let Some(path) = path else { return };
             match crate::editing::write_atomically(&path, &bytes) {
                 Ok(()) => saved(self, path),
-                Err(e) => self.notify(format!("Couldn't write {path}: {e}")),
+                Err(e) => self.notify_fmt("Couldn't write {path}: {e}", &[("path", &path), ("e", &e.to_string())]),
             }
         }
         #[cfg(target_arch = "wasm32")]
         match crate::editing::download(&name, &bytes) {
             Ok(()) => saved(self, name),
-            Err(e) => self.notify(format!("Couldn't download {name}: {e}")),
+            Err(e) => self.notify_fmt("Couldn't download {name}: {e}", &[("name", &name), ("e", &e.to_string())]),
         }
     }
 }

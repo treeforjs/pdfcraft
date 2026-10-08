@@ -44,9 +44,10 @@ impl PdfCraftApp {
                     }
                 }
                 Request::LaunchUrl(u) => self.request_document_url(&u, crate::LinkOrigin::Script),
-                Request::Submit(u) => self.notify(format!(
-                    "The form asks to be submitted to {u}; PdfCraft doesn't send form data. Save the document to keep your entries."
-                )),
+                Request::Submit(u) => self.notify_fmt(
+                    "The form asks to be submitted to {u}; PdfCraft doesn't send form data. Save the document to keep your entries.",
+                    &[("u", &u)],
+                ),
                 Request::Focus(_) | Request::Beep | Request::Reset(_) => {}
             }
         }
@@ -67,7 +68,7 @@ impl PdfCraftApp {
                 let out = JsOutput { alerts: o.alerts, console: o.console, requests: o.requests, errors: o.error.into_iter().collect() };
                 self.handle_js(id, out);
             }
-            Err(e) => self.notify(format!("{field}: {e}")),
+            Err(e) => self.notify_fmt("{field}: {e}", &[("field", field), ("e", &e.to_string())]),
         }
     }
 
@@ -75,14 +76,18 @@ impl PdfCraftApp {
     pub fn detect_fields(&mut self) {
         let Some((i, id)) = self.active_ids() else { return };
         match self.session.auto_detect_fields(id, &[]) {
-            Ok(names) if names.is_empty() => self.notify("No form fields were detected"),
+            Ok(names) if names.is_empty() => self.notify_tr("No form fields were detected"),
             Ok(names) => {
                 if let Some(info) = self.session.get(id).map(|d| d.info.clone()) {
                     self.views[i].document_changed(&info);
                 }
-                self.notify(format!("Detected {} form field{}", names.len(), if names.len() == 1 { "" } else { "s" }));
+                if names.len() == 1 {
+                    self.notify_tr("Detected 1 form field");
+                } else {
+                    self.notify_fmt("Detected {n} form fields", &[("n", &names.len().to_string())]);
+                }
             }
-            Err(e) => self.notify(e.to_string()),
+            Err(e) => self.notify_error(e),
         }
     }
 
@@ -117,11 +122,12 @@ fn buttons(ui: &mut egui::Ui, primary: &str, others: &[&str]) -> Option<String> 
     ui.horizontal(|ui| {
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             // Stable ids: the console's output above changes how many widgets come first.
-            if ui.push_id(primary, |ui| widgets::pill_button(ui, primary, true)).inner.clicked() {
+            // Labels are translated for display; the returned id stays English.
+            if ui.push_id(primary, |ui| widgets::pill_button(ui, tl!(primary), true)).inner.clicked() {
                 clicked = Some(primary.to_string());
             }
             for o in others {
-                if ui.push_id(o, |ui| widgets::pill_button(ui, o, false)).inner.clicked() {
+                if ui.push_id(o, |ui| widgets::pill_button(ui, tl!(o), false)).inner.clicked() {
                     clicked = Some(o.to_string());
                 }
             }
@@ -132,10 +138,10 @@ fn buttons(ui: &mut egui::Ui, primary: &str, others: &[&str]) -> Option<String> 
 
 /// The JavaScript console. Returns `true` to close.
 pub(crate) fn console_body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> bool {
-    ui.label(egui::RichText::new("JavaScript Console").font(theme::semibold(18.0)));
+    ui.label(egui::RichText::new(tl!("JavaScript Console")).font(theme::semibold(18.0)));
     ui.add_space(6.0);
     if !app.session.javascript() {
-        ui.label(egui::RichText::new("JavaScript is turned off (Preferences ▸ JavaScript).").small().color(t.text_muted));
+        ui.label(egui::RichText::new(tl!("JavaScript is turned off (Preferences ▸ JavaScript).")).small().color(t.text_muted));
     }
     egui::Frame::new().fill(t.hover).corner_radius(egui::CornerRadius::same(6)).inner_margin(egui::Margin::same(8)).show(ui, |ui| {
         ui.set_width(ui.available_width());
@@ -143,7 +149,7 @@ pub(crate) fn console_body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens)
             ui.set_width(ui.available_width());
             ui.set_min_height(160.0);
             if app.js_console.log.is_empty() {
-                ui.label(egui::RichText::new("Output appears here.").color(t.text_muted));
+                ui.label(egui::RichText::new(tl!("Output appears here.")).color(t.text_muted));
             }
             for line in &app.js_console.log {
                 ui.label(egui::RichText::new(line).monospace());
@@ -156,7 +162,7 @@ pub(crate) fn console_body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens)
             .code_editor()
             .desired_rows(4)
             .desired_width(f32::INFINITY)
-            .hint_text("JavaScript, e.g. getField(\"total\").value")
+            .hint_text(tl!("JavaScript, e.g. getField(\"total\").value"))
             .id_salt("js-console-input"),
     );
     let run_key = input.has_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter) && i.modifiers.command);
@@ -173,12 +179,12 @@ pub(crate) fn console_body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens)
 
 /// Document JavaScripts: list, edit, add and delete. Returns `true` to close.
 pub(crate) fn document_js_body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> bool {
-    ui.label(egui::RichText::new("Document JavaScripts").font(theme::semibold(18.0)));
+    ui.label(egui::RichText::new(tl!("Document JavaScripts")).font(theme::semibold(18.0)));
     ui.add_space(6.0);
     let scripts = app.active_ids().and_then(|(_, id)| app.session.get(id)).map(|d| d.document_scripts()).unwrap_or_default();
     let mut edit: Option<Edit> = None;
     ui.horizontal(|ui| {
-        ui.label("Script Name:");
+        ui.label(tl!("Script Name:"));
         ui.add(egui::TextEdit::singleline(&mut app.doc_js.name).desired_width(240.0).id_salt("doc-js-name"));
     });
     ui.add_space(4.0);
@@ -187,7 +193,7 @@ pub(crate) fn document_js_body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tok
         egui::ScrollArea::vertical().max_height(120.0).id_salt("doc-js-list").show(ui, |ui| {
             ui.set_width(ui.available_width());
             if scripts.is_empty() {
-                ui.label(egui::RichText::new("This document has no document-level scripts.").color(t.text_muted));
+                ui.label(egui::RichText::new(tl!("This document has no document-level scripts.")).color(t.text_muted));
             }
             for (name, js) in &scripts {
                 if ui.selectable_label(app.doc_js.name == *name, name).clicked() {
@@ -225,12 +231,21 @@ pub(crate) fn preferences_body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tok
     ui.horizontal(|ui| {
         ui.label(tl!("Interface language"));
         let selected = crate::i18n::Lang::from_code(&app.language).map_or(tl!("Auto"), crate::i18n::Lang::name);
+        let before = app.language.clone();
         egui::ComboBox::from_id_salt("interface-language").selected_text(selected).show_ui(ui, |ui| {
-            ui.selectable_value(&mut app.language, crate::i18n::AUTO.to_string(), tl!("Auto"));
+            if ui.selectable_value(&mut app.language, crate::i18n::AUTO.to_string(), tl!("Auto")).clicked() {
+                ui.close();
+            }
             for language in crate::i18n::Lang::all() {
-                ui.selectable_value(&mut app.language, language.code().to_string(), language.name());
+                if ui.selectable_value(&mut app.language, language.code().to_string(), language.name()).clicked() {
+                    ui.close();
+                }
             }
         });
+        // Relabel the rest of this dialog in the new language right away, not next frame.
+        if app.language != before {
+            crate::i18n::set_current(crate::i18n::Lang::from_pref(&app.language));
+        }
     });
     ui.add_space(8.0);
     ui.label(egui::RichText::new(tl!("Documents and view")).font(theme::semibold(13.0)));
@@ -268,11 +283,11 @@ pub(crate) fn preferences_body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tok
             app.session.set_javascript(on);
         }
         ui.label(
-            egui::RichText::new("Scripts run in a sandbox without file or network access. A script that asks to open a web page needs your permission first. With JavaScript off, Acrobat's standard format, validate and calculate functions still work.")
+            egui::RichText::new(tl!("Scripts run in a sandbox without file or network access. A script that asks to open a web page needs your permission first. With JavaScript off, Acrobat's standard format, validate and calculate functions still work."))
                 .small()
                 .color(t.text_muted),
         );
     });
     ui.add_space(10.0);
-    buttons(ui, "OK", &[]).is_some()
+    buttons(ui, tl!("OK"), &[]).is_some()
 }

@@ -58,10 +58,11 @@ impl Default for Extras {
 pub(crate) fn extras_panel(ui: &mut egui::Ui, e: &mut Extras) -> bool {
     let before = *e;
     ui.horizontal(|ui| {
-        if crate::icons::button(ui, "underline", 26.0, e.underline, "Underline").clicked() {
+        if crate::icons::button(ui, "underline", 26.0, e.underline, tl!("Underline")).clicked() {
             e.underline = !e.underline;
         }
-        let label = |v: f64| if v == 0.0 { "Line spacing".to_string() } else { format!("{v:.2}×") };
+        let zero = tl!("Line spacing").to_string();
+        let label = |v: f64| if v == 0.0 { zero.clone() } else { format!("{v:.2}×") };
         egui::ComboBox::from_id_salt("line-spacing").selected_text(label(e.line_spacing)).width(110.0).show_ui(ui, |ui| {
             for v in [1.0, 1.15, 1.5, 2.0] {
                 ui.selectable_value(&mut e.line_spacing, v, label(v));
@@ -69,11 +70,11 @@ pub(crate) fn extras_panel(ui: &mut egui::Ui, e: &mut Extras) -> bool {
         });
     });
     ui.horizontal(|ui| {
-        let l = ui.label("Character spacing");
+        let l = ui.label(tl!("Character spacing"));
         ui.add(egui::DragValue::new(&mut e.char_spacing).range(-5.0..=50.0).speed(0.1).suffix(" pt")).labelled_by(l.id);
     });
     ui.horizontal(|ui| {
-        let l = ui.label("Horizontal scale");
+        let l = ui.label(tl!("Horizontal scale"));
         ui.add(egui::DragValue::new(&mut e.scale).range(10.0..=400.0).speed(1.0).suffix(" %")).labelled_by(l.id);
     });
     *e != before
@@ -304,10 +305,10 @@ pub(crate) fn image_input(
         resp.context_menu(|ui| {
             use pdfcraft_engine::ImageEdit as E;
             let items: [(&str, Option<E>); 4] = [
-                ("Rotate Clockwise", Some(E::Rotate(1))),
-                ("Rotate Counterclockwise", Some(E::Rotate(3))),
-                ("Flip Horizontal", Some(E::Flip { horizontal: true })),
-                ("Flip Vertical", Some(E::Flip { horizontal: false })),
+                (tl!("Rotate Clockwise"), Some(E::Rotate(1))),
+                (tl!("Rotate Counterclockwise"), Some(E::Rotate(3))),
+                (tl!("Flip Horizontal"), Some(E::Flip { horizontal: true })),
+                (tl!("Flip Vertical"), Some(E::Flip { horizontal: false })),
             ];
             for (label, change) in items {
                 if ui.button(label).clicked() {
@@ -315,16 +316,16 @@ pub(crate) fn image_input(
                     ui.close();
                 }
             }
-            if ui.button("Replace Image…").clicked() {
+            if ui.button(tl!("Replace Image…")).clicked() {
                 *action = Some(ImageAction::Replace(page, hit));
                 ui.close();
             }
-            if ui.button("Save Image As…").clicked() {
+            if ui.button(tl!("Save Image As…")).clicked() {
                 *action = Some(ImageAction::Save(page, hit));
                 ui.close();
             }
             ui.separator();
-            if ui.button("Delete").clicked() {
+            if ui.button(tl!("Delete")).clicked() {
                 view.image_selection = None;
                 view.pending_edit = Some(Edit::EditPageImage { page, index: hit, change: E::Delete });
                 ui.close();

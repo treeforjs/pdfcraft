@@ -294,6 +294,47 @@ pub fn fmt(template: &str, args: &[(&str, &str)]) -> String {
     out
 }
 
+/// A generated history label (the action part of "Undo …") in the current language. Captured
+/// values (file and field names) are inserted as they are; unknown labels are looked up whole.
+pub fn action_label(text: &str) -> String {
+    for (prefix, template) in [
+        ("Insert pages from ", "Insert pages from {name}"),
+        ("Fill in ", "Fill in {name}"),
+        ("Set the image of ", "Set the image of {name}"),
+        ("Edit script of ", "Edit script of {name}"),
+        ("Import ", "Import {name}"),
+    ] {
+        if let Some(value) = text.strip_prefix(prefix) {
+            return fmt(t(template), &[("name", value)]);
+        }
+    }
+    if let Some(key) = text.strip_prefix("Change ")
+        && ["Title", "Author", "Subject", "Keywords", "Creator", "Producer"].contains(&key)
+    {
+        return fmt(t("Change {key}"), &[("key", t(key))]);
+    }
+    t(text).to_owned()
+}
+
+/// A command label such as "Undo Insert pages from a.pdf" in the current language.
+pub fn command_label(text: &str) -> String {
+    for prefix in ["Undo", "Redo"] {
+        if let Some(action) = text.strip_prefix(prefix).and_then(|tail| tail.strip_prefix(' ')) {
+            return format!("{} {}", t(prefix), action_label(action));
+        }
+    }
+    t(text).to_owned()
+}
+
+/// A registered command's menu label: its `@id` catalog entry if there is one, otherwise
+/// [`command_label`] of the current English label.
+pub fn menu_label(id: &str, label: &str) -> String {
+    match current().catalog().id(id) {
+        Some(translated) => translated.to_owned(),
+        None => command_label(label),
+    }
+}
+
 /// A plural-aware message: `one`/`other` are the English forms (with `{n}` where the count goes).
 pub fn trn(lang: Lang, n: u64, one: &str, other: &str) -> String {
     let idx = (lang.0.plural)(n);
@@ -459,6 +500,59 @@ mod tests {
         assert_eq!(fmt("text {unfinished", &args), "text {unfinished");
         assert_eq!(fmt("}{n}{", &args), "}2{");
         assert_eq!(fmt("unchanged", &[]), "unchanged");
+    }
+
+    /// Japanese translates every registered command and every All tools group, section and item.
+    #[test]
+    fn japanese_covers_commands_and_catalogue() {
+        for command in pdfcraft_engine::commands::COMMANDS {
+            assert!(has(JA(), command.label), "missing command: {}", command.label);
+        }
+        for group in pdfcraft_engine::catalog::TOOL_GROUPS {
+            assert!(has(JA(), group.label), "missing group: {}", group.label);
+            for section in group.sections {
+                assert!(has(JA(), section.title), "missing section: {}", section.title);
+                for item in section.items {
+                    assert!(has(JA(), item.label), "missing item: {}", item.label);
+                }
+            }
+        }
+    }
+
+    /// With craft-fonts, every Japanese translation has glyphs: with all interface faces (desktop)
+    /// and with BIZ UDPGothic Regular alone (the web build's only Japanese face).
+    #[test]
+    fn japanese_labels_have_glyphs() {
+        let craft = pdfcraft_fonts::ui_japanese_fonts();
+        let Some(web) = craft.iter().find(|f| f.family == "BIZ UDPGothic" && f.style == "Regular") else {
+            eprintln!("skipping Japanese glyph checks: build with CRAFT_FONTS_DIR to run them");
+            return;
+        };
+        let (entries, _) = parse_entries(JA().0.source, 1);
+        let labels: String = entries.iter().flat_map(|e| e.translation.chars()).chain(JA().name().chars()).filter(|c| !c.is_control()).collect();
+        let web_name = web.name();
+        let mut web_only = crate::theme::font_definitions();
+        for family in web_only.families.values_mut() {
+            family.retain(|name| !craft.iter().any(|face| face.name() == *name) || *name == web_name);
+        }
+        use egui::epaint::text::{Fonts, TextOptions};
+        for (build, defs) in [("desktop", crate::theme::font_definitions()), ("web", web_only)] {
+            let mut fonts = Fonts::new(TextOptions::default(), defs);
+            for id in [egui::FontId::proportional(13.0), egui::FontId::monospace(13.0), crate::theme::medium(13.0), crate::theme::semibold(17.0)] {
+                assert!(fonts.has_glyphs(&id, &labels), "{build}: {id:?} lacks a Japanese label glyph");
+            }
+        }
+    }
+
+    #[test]
+    fn history_labels_keep_captured_names() {
+        set_current(JA());
+        assert_eq!(action_label("Insert pages from Save {e}.pdf"), "Save {e}.pdf からページを挿入");
+        assert_eq!(command_label("Undo Insert pages from Save {e}.pdf"), "取り消し Save {e}.pdf からページを挿入");
+        assert_eq!(action_label("Untranslated custom action"), "Untranslated custom action");
+        assert_eq!(menu_label("file.open", "Open…"), "開く…");
+        set_current(Lang::EN);
+        assert_eq!(command_label("Undo Fill in Save {e}"), "Undo Fill in Save {e}");
     }
 
     #[test]

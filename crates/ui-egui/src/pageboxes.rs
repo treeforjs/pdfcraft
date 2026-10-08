@@ -106,12 +106,12 @@ pub(crate) fn body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> (boo
         };
         d.seeded = Some((current, d.which));
     }
-    ui.label(egui::RichText::new("Set Page Boxes").font(theme::semibold(18.0)));
+    ui.label(egui::RichText::new(tl!("Set Page Boxes")).font(theme::semibold(18.0)));
     ui.add_space(8.0);
     ui.horizontal_top(|ui| {
         ui.vertical(|ui| {
             egui::Grid::new("boxes-grid").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
-                ui.label("Box");
+                ui.label(tl!("Box"));
                 let names = [
                     (PageBox::Crop, "CropBox"),
                     (PageBox::Trim, "TrimBox"),
@@ -126,7 +126,7 @@ pub(crate) fn body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> (boo
                     }
                 });
                 ui.end_row();
-                ui.label("Units");
+                ui.label(tl!("Units"));
                 egui::ComboBox::from_id_salt("boxes-unit").selected_text(d.unit.label()).show_ui(ui, |ui| {
                     for u in [Unit::Inches, Unit::Millimetres, Unit::Points] {
                         ui.selectable_value(&mut d.unit, u, u.label());
@@ -134,7 +134,7 @@ pub(crate) fn body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> (boo
                 });
                 ui.end_row();
                 let k = d.unit.per_point();
-                for (label, idx) in [("Top", 3), ("Bottom", 1), ("Left", 0), ("Right", 2)] {
+                for (label, idx) in [(tl!("Top"), 3), (tl!("Bottom"), 1), (tl!("Left"), 0), (tl!("Right"), 2)] {
                     let l = ui.label(label);
                     let mut v = d.margins[idx] * k;
                     let speed = if d.unit == Unit::Inches { 0.01 } else { 0.5 };
@@ -147,25 +147,25 @@ pub(crate) fn body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> (boo
                     ui.end_row();
                 }
                 ui.label("");
-                if ui.button("Set to zero").clicked() {
+                if ui.button(tl!("Set to zero")).clicked() {
                     d.margins = [0.0; 4];
                 }
                 ui.end_row();
-                ui.label("Pages");
+                ui.label(tl!("Pages"));
                 ui.vertical(|ui| {
-                    ui.radio_value(&mut d.range, Range::All, "All");
-                    ui.radio_value(&mut d.range, Range::Current, format!("Current page ({})", current + 1));
+                    ui.radio_value(&mut d.range, Range::All, tl!("All"));
+                    ui.radio_value(&mut d.range, Range::Current, crate::i18n::fmt(tl!("Current page ({n})"), &[("n", &(current + 1).to_string())]));
                     let (mut a, mut b) = match d.range {
                         Range::Pages(a, b) => (a, b),
                         _ => (1, count),
                     };
                     ui.horizontal(|ui| {
                         let on = matches!(d.range, Range::Pages(..));
-                        if ui.radio(on, "From").clicked() {
+                        if ui.radio(on, tl!("From")).clicked() {
                             d.range = Range::Pages(a, b);
                         }
                         let ra = ui.add(egui::DragValue::new(&mut a).range(1..=count));
-                        ui.label("to");
+                        ui.label(tl!("to"));
                         let rb = ui.add(egui::DragValue::new(&mut b).range(1..=count));
                         if ra.changed() || rb.changed() {
                             d.range = Range::Pages(a.min(b), b.max(a));
@@ -202,10 +202,10 @@ pub(crate) fn body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> (boo
     ui.add_space(12.0);
     let (mut apply, mut cancel) = (false, false);
     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-        if widgets::pill_button(ui, "OK", true).clicked() {
+        if widgets::pill_button(ui, tl!("OK"), true).clicked() {
             apply = true;
         }
-        if widgets::pill_button(ui, "Cancel", false).clicked() {
+        if widgets::pill_button(ui, tl!("Cancel"), false).clicked() {
             cancel = true;
         }
     });

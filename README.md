@@ -353,6 +353,13 @@ cargo xtask demo-pdf                              # build the showcase PDF used 
 cargo xtask screenshots                           # regenerate every screenshot in this README
 ```
 
+The interface language is chosen in **Menu → Edit → Preferences…** (Command-comma on macOS,
+Ctrl-comma elsewhere, also with no document open; Auto follows the system language;
+see [docs/localization.md](docs/localization.md)) and saved. Japanese covers commands,
+dialogs, panels and keyboard shortcuts. Command search accepts the translated label, the
+English label and the stable command id; filenames, PDF contents, author names, custom
+action names and error details from the engine or the operating system keep their own text.
+
 Japanese fonts come from [craft-fonts](https://github.com/storytold/craft-fonts), an optional build
 input that every release includes. To build with them (Japanese interface text, and Japanese text in
 edited PDFs):

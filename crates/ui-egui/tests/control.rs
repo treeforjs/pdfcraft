@@ -423,6 +423,107 @@ fn state_and_view_options() {
 }
 
 #[test]
+fn japanese_controls_and_search_keep_command_ids() {
+    let (mut h, c) = harness();
+    ok(&mut h, &c, "ui.set", json!({ "key": "language", "value": "ja" }));
+    assert_eq!(ok(&mut h, &c, "ui.state", json!({}))["language"], "ja");
+    ok(&mut h, &c, "ui.click", json!({ "label": "閲覧" }));
+    assert_eq!(ok(&mut h, &c, "ui.state", json!({}))["mode"], "Read");
+
+    ok(&mut h, &c, "ui.command", json!({ "id": "app.preferences" }));
+    let prefs = ok(&mut h, &c, "ui.inspect", json!({ "query": "表示言語" }));
+    assert!(prefs["count"].as_u64().unwrap() > 0, "{prefs}");
+    ok(&mut h, &c, "ui.click", json!({ "label": "OK" }));
+
+    for (query, translated) in [("整理", "ページを整理"), ("Split document", "文書を分割…"), ("page.split", "文書を分割…")] {
+        ok(&mut h, &c, "ui.command", json!({ "id": "view.palette" }));
+        ok(&mut h, &c, "ui.type", json!({ "text": query }));
+        let hits = ok(&mut h, &c, "ui.inspect", json!({ "query": translated }));
+        assert!(hits["count"].as_u64().unwrap() > 0, "{query}: {hits}");
+        ok(&mut h, &c, "ui.key", json!({ "key": "Escape" }));
+        h.state_mut().palette_query.clear();
+    }
+    assert_eq!(ok(&mut h, &c, "ui.state", json!({}))["documents"][0]["name"], "doc.pdf");
+    ok(&mut h, &c, "ui.set", json!({ "key": "language", "value": "en" }));
+    ok(&mut h, &c, "ui.click", json!({ "label": "All tools" }));
+    assert_eq!(ok(&mut h, &c, "ui.state", json!({}))["mode"], "AllTools");
+}
+
+#[test]
+fn preferences_menu_and_shortcut_allow_switching_interface_languages() {
+    let (mut h, c) = harness();
+    ok(&mut h, &c, "ui.set", json!({ "key": "language", "value": "ja" }));
+    ok(&mut h, &c, "ui.click", json!({ "label": "メニュー" }));
+    ok(&mut h, &c, "ui.click", json!({ "label": "編集 ⏵" }));
+    let menu = ok(&mut h, &c, "ui.inspect", json!({ "query": "環境設定…" }));
+    let prefs = menu["widgets"].as_array().unwrap().iter().find(|w| w["clickable"] == true).expect("Preferences menu item");
+    ok(&mut h, &c, "ui.click", json!({ "id": prefs["id"] }));
+    for (current, next, code) in [("日本語", "English", "en"), ("English", "日本語", "ja")] {
+        let selector = ok(&mut h, &c, "ui.inspect", json!({ "query": current }));
+        let combo = selector["widgets"].as_array().unwrap().iter().find(|w| w["role"] == "ComboBox").expect("language selector");
+        ok(&mut h, &c, "ui.click", json!({ "id": combo["id"] }));
+        ok(&mut h, &c, "ui.click", json!({ "label": next }));
+        assert_eq!(ok(&mut h, &c, "ui.state", json!({}))["language"], code);
+    }
+    ok(&mut h, &c, "ui.click", json!({ "label": "OK" }));
+    ok(&mut h, &c, "ui.key", json!({ "key": ",", "modifiers": ["command"] }));
+    let prefs = ok(&mut h, &c, "ui.inspect", json!({ "query": "表示言語" }));
+    assert!(prefs["count"].as_u64().unwrap() > 0, "{prefs}");
+    ok(&mut h, &c, "ui.click", json!({ "label": "OK" }));
+
+    ok(&mut h, &c, "ui.command", json!({ "id": "help.shortcuts" }));
+    for label in ["キーボードショートカット", "開く", "環境設定", "次／前の検索結果", "ダブルクリック", "閉じる"]
+    {
+        let found = ok(&mut h, &c, "ui.inspect", json!({ "query": label }));
+        assert!(found["count"].as_u64().unwrap() > 0, "{label}: {found}");
+    }
+    let english = ok(&mut h, &c, "ui.inspect", json!({ "query": "Next / previous match" }));
+    assert_eq!(english["count"], 0);
+    ok(&mut h, &c, "ui.click", json!({ "label": "閉じる" }));
+    assert_eq!(ok(&mut h, &c, "ui.state", json!({}))["documents"][0]["name"], "doc.pdf");
+}
+
+#[test]
+fn japanese_dialogs_errors_and_custom_action_names() {
+    let (mut h, c) = harness();
+    ok(&mut h, &c, "ui.set", json!({"key": "language", "value": "ja"}));
+    for (dialog, label) in [
+        ("properties", "文書のプロパティ"),
+        ("protect", "パスワードで保護"),
+        ("export-image", "画像に書き出し"),
+        ("optimize", "PDF の最適化"),
+        ("recognize-text", "テキストを認識"),
+        ("accessibility-options", "アクセシビリティチェックのオプション"),
+        ("js-console", "JavaScript コンソール"),
+        ("compare-files", "ファイルを比較"),
+        ("sign", "署名用のデジタル ID を設定"),
+    ] {
+        ok(&mut h, &c, "ui.set", json!({"key": "dialog", "value": dialog}));
+        let found = ok(&mut h, &c, "ui.inspect", json!({"query": label}));
+        assert!(found["count"].as_u64().unwrap() > 0, "{dialog}: {found}");
+    }
+    ok(&mut h, &c, "ui.set", json!({"key": "dialog", "value": "none"}));
+    assert!(!h.state_mut().apply_edit(pdfcraft_engine::Edit::DeletePages { pages: vec![0, 1, 2, 3, 4] }));
+    let state = ok(&mut h, &c, "ui.state", json!({}));
+    // The frame is translated; the engine's own error text is shown as it is.
+    assert_eq!(state["notice"], "操作「ページを削除」に失敗しました: a document must keep at least one page");
+    assert_eq!(ok(&mut h, &c, "ui.state", json!({}))["documents"][0]["name"], "doc.pdf");
+
+    h.state_mut().custom_actions.push(pdfcraft_engine::actions::Action {
+        name: "Save".to_string(),
+        description: "Print".to_string(),
+        steps: Vec::new(),
+        builtin: false,
+    });
+    h.state_mut().wizard.selected = Some("Save".to_string());
+    ok(&mut h, &c, "ui.set", json!({"key": "dialog", "value": "action-wizard"}));
+    for label in ["アクションウィザード", "Save", "Print"] {
+        let found = ok(&mut h, &c, "ui.inspect", json!({"query": label}));
+        assert!(found["widgets"].as_array().unwrap().iter().any(|w| w["label"] == label || w["value"] == label), "{found}");
+    }
+}
+
+#[test]
 fn inspect_and_click_by_label_and_id() {
     let (mut h, c) = harness();
     let found = ok(&mut h, &c, "ui.inspect", json!({ "query": "read" }));

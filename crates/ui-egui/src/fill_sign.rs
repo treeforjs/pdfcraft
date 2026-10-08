@@ -244,15 +244,17 @@ pub(crate) fn signature_entries(ui: &mut egui::Ui, app: &mut crate::PdfCraftApp,
     .into_iter()
     .enumerate()
     {
+        let label = |template: &str| crate::i18n::fmt(tl!(template), &[("what", tl!(what))]);
         let Some(saved) = saved else {
-            if crate::widgets::ghost_button(ui, "plus", &format!("Add {what}")).clicked() {
+            if crate::widgets::ghost_button(ui, "plus", &label("Add {what}")).clicked() {
                 command = Some(use_id);
             }
             continue;
         };
         ui.horizontal(|ui| {
             let (rect, response) = ui.allocate_exact_size(vec2((ui.available_width() - 68.0).max(140.0), 52.0), Sense::click());
-            response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, format!("Use {what}")));
+            let use_label = label("Use {what}");
+            response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, use_label.clone()));
             let painter = ui.painter_at(rect);
             painter.rect_filled(rect, CornerRadius::same(4), Color32::WHITE);
             painter.rect_stroke(
@@ -300,13 +302,13 @@ pub(crate) fn signature_entries(ui: &mut egui::Ui, app: &mut crate::PdfCraftApp,
                     }
                 }
             }
-            if response.on_hover_text(format!("Place saved {what}")).clicked() {
+            if response.on_hover_text(label("Place saved {what}")).clicked() {
                 command = Some(use_id);
             }
-            if crate::icons::button(ui, "pencil", 26.0, false, &format!("Change {what}")).clicked() {
+            if crate::icons::button(ui, "pencil", 26.0, false, &label("Change {what}")).clicked() {
                 command = Some(change_id);
             }
-            if crate::icons::button(ui, "x", 26.0, false, &format!("Remove saved {what}")).clicked() {
+            if crate::icons::button(ui, "x", 26.0, false, &label("Remove saved {what}")).clicked() {
                 command = Some(remove_id);
             }
         });
@@ -393,7 +395,7 @@ pub(crate) fn type_box(ctx: &egui::Context, view: &mut DocView, info: &DocInfo, 
                 .desired_width(width)
                 .background_color(Color32::from_rgba_unmultiplied(255, 255, 255, 230))
                 .text_color(Color32::BLACK)
-                .hint_text("Type text")
+                .hint_text(tl!("Type text"))
                 .id_salt("fill-text-edit"),
         );
         if t.focus {
@@ -421,26 +423,25 @@ pub(crate) fn type_box(ctx: &egui::Context, view: &mut DocView, info: &DocInfo, 
 
 /// The signature pad: draw with the pointer; returns the strokes (normalised) on Apply.
 pub(crate) fn signature_pad(ui: &mut egui::Ui, t: &Tokens, d: &mut SigDraft, preview: &mut Option<(String, egui::TextureHandle)>) -> (bool, bool) {
-    let what = if d.initials { "initials" } else { "signature" };
-    let action = if d.editing { "Change" } else { "Create" };
-    ui.label(egui::RichText::new(format!("{action} {what}")).font(crate::theme::semibold(18.0)));
+    let what = if d.initials { tl!("initials") } else { tl!("signature") };
+    let title = if d.editing { tl!("Change {what}") } else { tl!("Create {what}") };
+    ui.label(egui::RichText::new(crate::i18n::fmt(title, &[("what", what)])).font(crate::theme::semibold(18.0)));
     ui.horizontal(|ui| {
-        if crate::widgets::pill_button(ui, "Type", !d.drawing).clicked() {
+        if crate::widgets::pill_button(ui, tl!("Type"), !d.drawing).clicked() {
             d.drawing = false;
         }
-        if crate::widgets::pill_button(ui, "Draw", d.drawing).clicked() {
+        if crate::widgets::pill_button(ui, tl!("Draw"), d.drawing).clicked() {
             d.drawing = true;
         }
     });
     ui.add_space(6.0);
     if !d.drawing {
-        let l = ui.label(egui::RichText::new(format!("Type your {what}.")).color(t.text_muted));
+        let l = ui.label(egui::RichText::new(crate::i18n::fmt(tl!("Type your {what}."), &[("what", what)])).color(t.text_muted));
         ui.add(
-            egui::TextEdit::singleline(&mut d.text).char_limit(pdfcraft_engine::MAX_SIGNATURE_CHARS).desired_width(460.0).hint_text(if d.initials {
-                "Initials"
-            } else {
-                "Your name"
-            }),
+            egui::TextEdit::singleline(&mut d.text)
+                .char_limit(pdfcraft_engine::MAX_SIGNATURE_CHARS)
+                .desired_width(460.0)
+                .hint_text(tl!(if d.initials { "Initials" } else { "Your name" })),
         )
         .labelled_by(l.id);
         let (rect, _) = ui.allocate_exact_size(vec2(460.0, 150.0), Sense::hover());
@@ -456,7 +457,7 @@ pub(crate) fn signature_pad(ui: &mut egui::Ui, t: &Tokens, d: &mut SigDraft, pre
         }
         return pad_buttons(ui, d);
     }
-    ui.label(egui::RichText::new(format!("Draw your {what} below.")).color(t.text_muted));
+    ui.label(egui::RichText::new(crate::i18n::fmt(tl!("Draw your {what} below."), &[("what", what)])).color(t.text_muted));
     let strokes = &mut d.strokes;
     let (rect, resp) = ui.allocate_exact_size(vec2(460.0, 150.0), Sense::drag());
     let painter = ui.painter_at(rect);
@@ -487,16 +488,16 @@ fn pad_buttons(ui: &mut egui::Ui, d: &mut SigDraft) -> (bool, bool) {
     ui.add_space(10.0);
     let (mut apply, mut cancel) = (false, false);
     ui.horizontal(|ui| {
-        if ui.button("Clear").clicked() {
+        if ui.button(tl!("Clear")).clicked() {
             d.strokes.clear();
             d.text.clear();
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let ready = d.ready();
-            if ui.add_enabled_ui(ready, |ui| crate::widgets::pill_button(ui, "Apply", true)).inner.clicked() {
+            if ui.add_enabled_ui(ready, |ui| crate::widgets::pill_button(ui, tl!("Apply"), true)).inner.clicked() {
                 apply = true;
             }
-            if crate::widgets::pill_button(ui, "Cancel", false).clicked() {
+            if crate::widgets::pill_button(ui, tl!("Cancel"), false).clicked() {
                 cancel = true;
             }
         });

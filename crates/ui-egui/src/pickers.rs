@@ -114,7 +114,7 @@ impl PdfCraftApp {
         };
         if !started {
             self.pickers.showing.store(false, Ordering::SeqCst);
-            self.notify("Couldn't show the file picker. Please try again.");
+            self.notify_tr("Couldn't show the file picker. Please try again.");
         }
     }
 
@@ -125,7 +125,7 @@ impl PdfCraftApp {
                 continue;
             }
             if target.is_some() && self.active_ids().map(|(_, id)| id) != target {
-                self.notify("The document changed while you were choosing a file, so nothing was added.");
+                self.notify_tr("The document changed while you were choosing a file, so nothing was added.");
                 continue;
             }
             match pick_for {

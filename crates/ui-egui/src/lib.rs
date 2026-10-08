@@ -750,10 +750,10 @@ impl PdfCraftApp {
         match f.bytes() {
             Ok(bytes) => {
                 if let Err(e) = self.open_bytes(&name, None, bytes) {
-                    self.notify(format!("Couldn't open {name}: {e}"));
+                    self.notify_fmt("Couldn't open {name}: {e}", &[("name", &name), ("e", &e.to_string())]);
                 }
             }
-            Err(e) => self.notify(format!("Couldn't read {name}: {e}")),
+            Err(e) => self.notify_fmt("Couldn't read {name}: {e}", &[("name", &name), ("e", &e.to_string())]),
         }
     }
 
@@ -779,22 +779,22 @@ impl PdfCraftApp {
         let Some(att) = d.info.attachments.get(index).cloned() else { return };
         let data = pdfcraft_render::attachment_data(&d.bytes, d.password.as_deref(), &att);
         match (data, open) {
-            (Err(e), _) => self.notify(format!("Couldn't read {}: {e}", att.name)),
+            (Err(e), _) => self.notify_fmt("Couldn't read {name}: {e}", &[("name", &att.name), ("e", &e.to_string())]),
             (Ok(bytes), true) => {
                 if let Err(e) = self.open_bytes(&att.name, None, bytes) {
-                    self.notify(format!("Couldn't open {}: {e}", att.name));
+                    self.notify_fmt("Couldn't open {name}: {e}", &[("name", &att.name), ("e", &e.to_string())]);
                 }
             }
             (Ok(bytes), false) => {
                 #[cfg(not(target_arch = "wasm32"))]
                 if let Some(path) = rfd::FileDialog::new().set_file_name(&att.name).save_file() {
                     match std::fs::write(&path, &bytes) {
-                        Ok(()) => self.notify(format!("Saved {}", path.display())),
-                        Err(e) => self.notify(format!("Couldn't save: {e}")),
+                        Ok(()) => self.notify_fmt("Saved {name}", &[("name", &path.display().to_string())]),
+                        Err(e) => self.notify_fmt("Couldn't save: {e}", &[("e", &e.to_string())]),
                     }
                 }
                 #[cfg(target_arch = "wasm32")]
-                self.notify(format!("Downloading attachments on the web arrives with M3.10 ({} bytes ready)", bytes.len()));
+                self.notify_fmt("Downloading attachments on the web arrives with M3.10 ({n} bytes ready)", &[("n", &bytes.len().to_string())]);
             }
         }
     }
@@ -810,7 +810,7 @@ impl PdfCraftApp {
         let Some(p) = self.password_prompt.take() else { return };
         let Some(pw) = password else { return };
         match self.try_open(&p.name, p.path, p.bytes, Some(&pw)) {
-            Err(e) => self.notify(format!("Couldn't open {}: {e}", p.name)),
+            Err(e) => self.notify_fmt("Couldn't open {name}: {e}", &[("name", &p.name), ("e", &e.to_string())]),
             // A recovered encrypted document is open once the prompt is gone.
             Ok(()) if self.password_prompt.is_none() => {
                 if let Some(meta) = self.pending_recovered.clone() {
@@ -827,10 +827,10 @@ impl PdfCraftApp {
         match std::fs::read(path) {
             Ok(bytes) => {
                 if let Err(e) = self.open_bytes(&name, Some(path.to_string()), bytes) {
-                    self.notify(format!("Couldn't open {name}: {e}"));
+                    self.notify_fmt("Couldn't open {name}: {e}", &[("name", &name), ("e", &e.to_string())]);
                 }
             }
-            Err(e) => self.notify(format!("Couldn't read {name}: {e}")),
+            Err(e) => self.notify_fmt("Couldn't read {name}: {e}", &[("name", &name), ("e", &e.to_string())]),
         }
     }
 
@@ -838,7 +838,7 @@ impl PdfCraftApp {
         #[cfg(not(target_arch = "wasm32"))]
         self.pick(
             pickers::PickFor::Open,
-            rfd::AsyncFileDialog::new().add_filter("PDF", &["pdf"]).add_filter("Images and text (converted to PDF)", &create_ui::CONVERTIBLE),
+            rfd::AsyncFileDialog::new().add_filter("PDF", &["pdf"]).add_filter(tl!("Images and text (converted to PDF)"), &create_ui::CONVERTIBLE),
             false,
         );
         // Browsers pick files asynchronously; the bytes arrive through `inbox`.
@@ -846,8 +846,11 @@ impl PdfCraftApp {
         {
             let inbox = self.inbox.clone();
             wasm_bindgen_futures::spawn_local(async move {
-                if let Some(h) =
-                    rfd::AsyncFileDialog::new().add_filter("PDF", &["pdf"]).add_filter("Images and text", &create_ui::CONVERTIBLE).pick_file().await
+                if let Some(h) = rfd::AsyncFileDialog::new()
+                    .add_filter("PDF", &["pdf"])
+                    .add_filter(tl!("Images and text"), &create_ui::CONVERTIBLE)
+                    .pick_file()
+                    .await
                 {
                     let bytes = h.read().await;
                     if let Ok(mut q) = inbox.lock() {
@@ -904,10 +907,10 @@ impl PdfCraftApp {
                     self.pending_link = Some(PendingLink { url, origin });
                 }
             }
-            Err(e) => self.notify(format!(
-                "{} in this document tried to open an address PdfCraft won't open: {e}. Only web (http, https) and email (mailto) links open from documents.",
-                origin.noun()
-            )),
+            Err(e) => self.notify_fmt(
+                "{who} in this document tried to open an address PdfCraft won't open: {e}. Only web (http, https) and email (mailto) links open from documents.",
+                &[("who", tl!(origin.noun())), ("e", &e.to_string())],
+            ),
         }
     }
 
@@ -922,6 +925,22 @@ impl PdfCraftApp {
 
     pub fn notify(&mut self, msg: impl Into<String>) {
         self.toast = Some((msg.into(), 0.0));
+    }
+
+    /// Notify with a static message in the UI language.
+    pub fn notify_tr(&mut self, text: &str) {
+        self.notify(tl!(text).to_string());
+    }
+
+    /// Notify with an error's own text. Engine and OS messages are not translated: matching their
+    /// English wording would break silently whenever it changes.
+    pub fn notify_error(&mut self, error: impl std::fmt::Display) {
+        self.notify(error.to_string());
+    }
+
+    /// Notify with a `{name}`-style template in the UI language (placeholders filled once).
+    pub fn notify_fmt(&mut self, template: &str, args: &[(&str, &str)]) {
+        self.notify(i18n::fmt(tl!(template), args));
     }
 
     pub fn set_theme(&mut self, ctx: &egui::Context, kind: ThemeKind) {
@@ -941,12 +960,12 @@ impl PdfCraftApp {
             .flat_map(|g| g.sections.iter().flat_map(|s| s.items.iter()))
             .find(|i| i.command == command)
             .map(|i| match i.availability {
-                pdfcraft_engine::catalog::Availability::Planned(m) => format!("ships in milestone {m}"),
-                pdfcraft_engine::catalog::Availability::Provider => "needs an AI provider (off by default)".to_string(),
-                pdfcraft_engine::catalog::Availability::Ready => "is available".to_string(),
+                pdfcraft_engine::catalog::Availability::Planned(m) => crate::i18n::fmt(tl!("ships in milestone {m}"), &[("m", m)]),
+                pdfcraft_engine::catalog::Availability::Provider => tl!("needs an AI provider (off by default)").to_string(),
+                pdfcraft_engine::catalog::Availability::Ready => tl!("is available").to_string(),
             })
-            .unwrap_or_else(|| "is not available yet".into());
-        self.notify(format!("`{command}` {when}"));
+            .unwrap_or_else(|| tl!("is not available yet").to_string());
+        self.notify_fmt("`{command}` {when}", &[("command", command), ("when", &when)]);
     }
 
     /// Select the workspace and its matching tool panel, just like the mode bar.
@@ -1274,6 +1293,8 @@ impl eframe::App for PdfCraftApp {
 
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.ctx = Some(ctx.clone());
+        // Notices raised outside `ui` (opened files, OS events, the control channel) translate too.
+        i18n::set_current(i18n::Lang::from_pref(&self.language));
         if !self.styled {
             egui_extras::install_image_loaders(ctx);
             theme::install_fonts(ctx);
@@ -1300,7 +1321,7 @@ impl eframe::App for PdfCraftApp {
         let arrived: Vec<(String, Vec<u8>)> = self.inbox.lock().map(|mut q| std::mem::take(&mut *q)).unwrap_or_default();
         for (name, bytes) in arrived {
             if let Err(e) = self.open_bytes(&name, None, bytes) {
-                self.notify(format!("Couldn't open {name}: {e}"));
+                self.notify_fmt("Couldn't open {name}: {e}", &[("name", &name), ("e", &e.to_string())]);
             }
         }
         let os_events = self.os_events.as_mut().map(|poll| poll()).unwrap_or_default();

@@ -35,9 +35,21 @@ pub struct Focus {
 pub struct FormView {
     pub focus: Option<Focus>,
     /// A message for the app to show (e.g. "buttons run JavaScript").
-    pub notice: Option<String>,
+    pub notice: Option<FormNotice>,
     /// A push button was clicked: (its field name, what it does).
     pub button: Option<(String, pdfcraft_engine::form_scripts::ButtonAction)>,
+}
+
+/// A form message for the app to show, with document data kept separate so the visible
+/// text follows the UI language.
+#[derive(Clone, Debug)]
+pub enum FormNotice {
+    /// Filling is blocked by the document's security settings.
+    Security,
+    /// A read-only field was clicked (its name).
+    ReadOnly(String),
+    /// A push button with no action was clicked (its name).
+    NoAction(String),
 }
 
 fn widget_rect(xf: &PageXform, info: &DocInfo, page: usize, r: [f64; 4]) -> Rect {
@@ -96,14 +108,14 @@ pub(crate) fn page_input(
         return resp.is_pointer_button_down_on();
     }
     if !allowed {
-        view.forms.notice = Some("The document's security settings don't allow filling in form fields".into());
+        view.forms.notice = Some(FormNotice::Security);
         return true;
     }
     match f.kind {
-        _ if f.read_only() => view.forms.notice = Some(format!("{} is read-only", f.name)),
+        _ if f.read_only() => view.forms.notice = Some(FormNotice::ReadOnly(f.name.clone())),
         FormFieldKind::PushButton => match &f.button {
             Some(a) => view.forms.button = Some((f.name.clone(), a.clone())),
-            None => view.forms.notice = Some(format!("{} has no action", f.name)),
+            None => view.forms.notice = Some(FormNotice::NoAction(f.name.clone())),
         },
         FormFieldKind::Signature => view.sign.field = Some(f.name.clone()),
         FormFieldKind::CheckBox => {
@@ -160,11 +172,17 @@ fn calendar(ctx: &egui::Context, view: &mut DocView, field: egui::Rect, fmt: &st
         .show(ctx, |ui| {
             egui::Frame::popup(ui.style()).show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    if ui.small_button("‹").on_hover_text("Previous month").clicked() {
+                    if ui.small_button("‹").on_hover_text(tl!("Previous month")).clicked() {
                         (y, m) = if m == 1 { (y - 1, 12) } else { (y, m - 1) };
                     }
-                    ui.label(egui::RichText::new(format!("{} {y}", MONTHS[(m.clamp(1, 12) - 1) as usize])).strong());
-                    if ui.small_button("›").on_hover_text("Next month").clicked() {
+                    ui.label(
+                        egui::RichText::new(crate::i18n::fmt(
+                            tl!("{month} {y}"),
+                            &[("month", tl!(MONTHS[(m.clamp(1, 12) - 1) as usize])), ("y", &y.to_string())],
+                        ))
+                        .strong(),
+                    );
+                    if ui.small_button("›").on_hover_text(tl!("Next month")).clicked() {
                         (y, m) = if m == 12 { (y + 1, 1) } else { (y, m + 1) };
                     }
                 });
@@ -192,7 +210,14 @@ fn calendar(ctx: &egui::Context, view: &mut DocView, field: egui::Rect, fmt: &st
                             if is_today {
                                 text = text.strong();
                             }
-                            if ui.selectable_label(selected, text).on_hover_text(format!("{} {day}, {y}", MONTHS[(m - 1) as usize])).clicked() {
+                            if ui
+                                .selectable_label(selected, text)
+                                .on_hover_text(crate::i18n::fmt(
+                                    tl!("{month} {day}, {y}"),
+                                    &[("month", tl!(MONTHS[(m - 1) as usize])), ("day", &day.to_string()), ("y", &y.to_string())],
+                                ))
+                                .clicked()
+                            {
                                 picked = Some(format_date(DateTime { y, m, d: day, hh: 0, mm: 0, ss: 0 }, fmt));
                             }
                         } else {
@@ -334,7 +359,7 @@ pub(crate) fn overlay(ctx: &egui::Context, view: &mut DocView, info: &DocInfo, f
                                 }
                             }
                         });
-                        if multi && ui.button("Done").clicked() {
+                        if multi && ui.button(tl!("Done")).clicked() {
                             commit(view, form);
                         }
                     });

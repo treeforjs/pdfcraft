@@ -162,7 +162,7 @@ impl PdfCraftApp {
             let bytes = match store.read(key) {
                 Ok(b) => b,
                 Err(e) => {
-                    self.notify(format!("Couldn't recover {}: {e}", meta.name));
+                    self.notify_fmt("Couldn't recover {name}: {e}", &[("name", &meta.name), ("e", &e.to_string())]);
                     continue;
                 }
             };
@@ -173,7 +173,7 @@ impl PdfCraftApp {
             match self.open_bytes(&meta.name, None, bytes) {
                 Ok(()) if self.password_prompt.is_none() => self.finish_recovery(&meta),
                 Ok(()) => {}
-                Err(e) => self.notify(format!("Couldn't recover {}: {e}", meta.name)),
+                Err(e) => self.notify_fmt("Couldn't recover {name}: {e}", &[("name", &meta.name), ("e", &e.to_string())]),
             }
         }
         self.recoverable.retain(|m| !keys.contains(&m.key));
