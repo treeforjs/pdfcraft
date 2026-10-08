@@ -221,19 +221,21 @@ pub(crate) fn document_js_body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tok
 
 /// Preferences: interface language, identity and JavaScript. Returns `true` to close.
 pub(crate) fn preferences_body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> bool {
-    ui.label(egui::RichText::new(app.language.tr("Preferences")).font(theme::semibold(18.0)));
+    ui.label(egui::RichText::new(tl!("Preferences")).font(theme::semibold(18.0)));
     ui.horizontal(|ui| {
-        ui.label(app.language.tr("Interface language"));
-        egui::ComboBox::from_id_salt("interface-language").selected_text(app.language.name()).show_ui(ui, |ui| {
-            for language in crate::i18n::Language::ALL {
-                ui.selectable_value(&mut app.language, language, language.name());
+        ui.label(tl!("Interface language"));
+        let selected = crate::i18n::Lang::from_code(&app.language).map_or(tl!("Auto"), crate::i18n::Lang::name);
+        egui::ComboBox::from_id_salt("interface-language").selected_text(selected).show_ui(ui, |ui| {
+            ui.selectable_value(&mut app.language, crate::i18n::AUTO.to_string(), tl!("Auto"));
+            for language in crate::i18n::Lang::all() {
+                ui.selectable_value(&mut app.language, language.code().to_string(), language.name());
             }
         });
     });
     ui.add_space(8.0);
-    ui.label(egui::RichText::new(app.language.tr("Documents and view")).font(theme::semibold(13.0)));
+    ui.label(egui::RichText::new(tl!("Documents and view")).font(theme::semibold(13.0)));
     ui.horizontal(|ui| {
-        ui.label(app.language.tr("Default workspace mode"));
+        ui.label(tl!("Default workspace mode"));
         for (mode, label) in [
             (crate::Mode::AllTools, "All Tools"),
             (crate::Mode::Read, "Read"),
@@ -241,19 +243,19 @@ pub(crate) fn preferences_body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tok
             (crate::Mode::Convert, "Convert"),
             (crate::Mode::Sign, "E-Sign"),
         ] {
-            ui.radio_value(&mut app.default_mode, mode, app.language.tr(label));
+            ui.radio_value(&mut app.default_mode, mode, tl!(label));
         }
     });
     ui.label(
-        egui::RichText::new(app.language.tr("Used when opening PDFs. An explicit launch or control mode takes precedence for the session."))
+        egui::RichText::new(tl!("Used when opening PDFs. An explicit launch or control mode takes precedence for the session."))
             .small()
             .color(t.text_muted),
     );
     ui.add_space(8.0);
     // Identity: the author of new comments (Acrobat: Preferences ▸ Identity).
-    ui.label(egui::RichText::new(app.language.tr("Identity")).font(theme::semibold(13.0)));
+    ui.label(egui::RichText::new(tl!("Identity")).font(theme::semibold(13.0)));
     ui.horizontal(|ui| {
-        let label = ui.label(app.language.tr("Name on new comments"));
+        let label = ui.label(tl!("Name on new comments"));
         ui.add(egui::TextEdit::singleline(&mut app.comment_prefs.author).desired_width(220.0).char_limit(crate::MAX_AUTHOR_CHARS))
             .labelled_by(label.id);
     });
@@ -262,7 +264,7 @@ pub(crate) fn preferences_body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tok
     egui::Frame::new().fill(t.hover).corner_radius(egui::CornerRadius::same(6)).inner_margin(egui::Margin::same(10)).show(ui, |ui| {
         ui.set_width(ui.available_width());
         let mut on = app.session.javascript();
-        if ui.checkbox(&mut on, app.language.tr("Enable Acrobat JavaScript")).changed() {
+        if ui.checkbox(&mut on, tl!("Enable Acrobat JavaScript")).changed() {
             app.session.set_javascript(on);
         }
         ui.label(

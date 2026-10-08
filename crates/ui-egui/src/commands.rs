@@ -505,7 +505,7 @@ pub(crate) fn registry_menu(app: &mut PdfCraftApp, ui: &mut egui::Ui, menu: &str
     let mac = cfg!(target_os = "macos") || cfg!(target_arch = "wasm32");
     for spec in commands::menu(menu) {
         let label = commands::current_label(spec, &app.session, app.active_ids().map(|(_, id)| id));
-        let label = app.language.tr(&label);
+        let label = crate::i18n::tr_id(crate::i18n::current(), spec.id, &label);
         let shortcut = spec.shortcut.map(|s| s.label(mac)).unwrap_or_default();
         let enabled = app.command_enabled(spec);
         let resp = ui.add_enabled(enabled, egui::Button::new(label).shortcut_text(shortcut));

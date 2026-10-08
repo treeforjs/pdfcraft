@@ -4,6 +4,7 @@
 use std::sync::{Arc, Mutex};
 
 use egui_kittest::Harness;
+use egui_kittest::kittest::Queryable;
 use pdfcraft_ui_egui::PdfCraftApp;
 use pdfcraft_ui_egui::control::{ControlClient, Reply};
 use serde_json::{Value, json};
@@ -65,6 +66,40 @@ fn call(h: &mut Harness<'static, PdfCraftApp>, c: &ControlClient, method: &str, 
 
 fn ok(h: &mut Harness<'static, PdfCraftApp>, c: &ControlClient, method: &str, params: Value) -> Value {
     call(h, c, method, params).unwrap_or_else(|e| panic!("{method}: {e}"))
+}
+
+/// Switching the interface language changes labels only: documents, their dirty state and the
+/// command ids agents drive stay exactly the same.
+#[test]
+fn language_switch_preserves_document_and_command_ids() {
+    use pdfcraft_ui_egui::i18n;
+    let (mut h, c) = harness();
+    let doc = h.state().views[0].id;
+    h.state_mut().session.apply(doc, pdfcraft_engine::Edit::RotatePages { pages: vec![0], degrees: 90 }).unwrap();
+    let documents = ok(&mut h, &c, "ui.state", json!({}))["documents"].clone();
+    assert_eq!(documents[0]["dirty"], true);
+    let commands = ok(&mut h, &c, "ui.commands", json!({}));
+    for code in ["ja", "en"] {
+        ok(&mut h, &c, "ui.set", json!({ "key": "language", "value": code }));
+        h.run_steps(2);
+        let state = ok(&mut h, &c, "ui.state", json!({}));
+        assert_eq!(state["language"], code);
+        assert_eq!(state["documents"], documents);
+        assert_eq!(ok(&mut h, &c, "ui.commands", json!({})), commands);
+
+        let lang = i18n::Lang::from_code(code).unwrap();
+        h.get_by_label(i18n::tr(lang, "Menu")).click();
+        h.run_steps(2);
+        h.get_by_label(&format!("{} ⏵", i18n::tr(lang, "File"))).hover();
+        h.run_steps(3);
+        h.get_by_label_contains(i18n::tr(lang, "Open…"));
+        ok(&mut h, &c, "ui.key", json!({ "key": "Escape" }));
+        ok(&mut h, &c, "ui.key", json!({ "key": "Escape" }));
+        h.run_steps(2);
+    }
+    let error = call(&mut h, &c, "ui.set", json!({ "key": "language", "value": "xx" })).unwrap_err();
+    assert!(error.contains("auto, en, ja"), "{error}");
+    assert_eq!(ok(&mut h, &c, "ui.state", json!({}))["language"], "en");
 }
 
 #[cfg(target_os = "linux")]

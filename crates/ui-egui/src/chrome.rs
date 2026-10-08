@@ -146,25 +146,24 @@ pub fn mode_bar(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
 }
 
 fn main_menu(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
-    let language = app.language;
     let t = Tokens::get(ui.ctx());
-    let resp = widgets::ghost_button(ui, "panel-left", language.tr("Menu"));
+    let resp = widgets::ghost_button(ui, "panel-left", tl!("Menu"));
     egui::Popup::menu(&resp).show(|ui| {
         ui.set_min_width(230.0);
-        ui.menu_button(language.tr("File"), |ui| crate::commands::registry_menu(app, ui, "File"));
-        ui.menu_button(language.tr("Edit"), |ui| crate::commands::registry_menu(app, ui, "Edit"));
-        ui.menu_button(language.tr("Pages"), |ui| crate::commands::registry_menu(app, ui, "Pages"));
-        ui.menu_button(language.tr("View"), |ui| {
+        ui.menu_button(tl!("File"), |ui| crate::commands::registry_menu(app, ui, "File"));
+        ui.menu_button(tl!("Edit"), |ui| crate::commands::registry_menu(app, ui, "Edit"));
+        ui.menu_button(tl!("Pages"), |ui| crate::commands::registry_menu(app, ui, "Pages"));
+        ui.menu_button(tl!("View"), |ui| {
             if let Some(i) = app.active {
                 let v = &mut app.views[i];
                 ui.label(egui::RichText::new("Zoom").color(t.text_faint).small());
-                if widgets::menu_item(ui, language.tr("Actual size"), "⌘1").clicked() {
+                if widgets::menu_item(ui, tl!("Actual size"), "⌘1").clicked() {
                     v.set_zoom(1.0);
                 }
-                if widgets::menu_item(ui, language.tr("Zoom to page level"), "⌘0").clicked() {
+                if widgets::menu_item(ui, tl!("Zoom to page level"), "⌘0").clicked() {
                     v.fit = Fit::Page;
                 }
-                if widgets::menu_item(ui, language.tr("Fit to width"), "⌘2").clicked() {
+                if widgets::menu_item(ui, tl!("Fit to width"), "⌘2").clicked() {
                     v.fit = Fit::Width;
                 }
                 if widgets::menu_item(ui, "Fit to height", "").clicked() {
@@ -212,7 +211,7 @@ fn main_menu(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
                 ui.separator();
             }
             crate::commands::registry_menu(app, ui, "View");
-            ui.menu_button(language.tr("Display theme"), |ui| {
+            ui.menu_button(tl!("Display theme"), |ui| {
                 let ctx = ui.ctx().clone();
                 if ui.radio(app.follow_system_theme, "Use system setting").clicked() {
                     app.follow_system_theme = true;
@@ -226,7 +225,7 @@ fn main_menu(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
                     app.set_theme(&ctx, ThemeKind::Dark);
                 }
             });
-            ui.menu_button(language.tr("Side panels"), |ui| {
+            ui.menu_button(tl!("Side panels"), |ui| {
                 for (p, label) in [
                     (RightPanel::Comments, "Comments"),
                     (RightPanel::Bookmarks, "Bookmarks"),
@@ -245,7 +244,7 @@ fn main_menu(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
                 }
             });
         });
-        ui.menu_button(language.tr("Help"), |ui| crate::commands::registry_menu(app, ui, "Help"));
+        ui.menu_button(tl!("Help"), |ui| crate::commands::registry_menu(app, ui, "Help"));
     });
 }
 

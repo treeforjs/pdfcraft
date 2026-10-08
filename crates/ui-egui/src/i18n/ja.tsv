@@ -1,0 +1,67 @@
+# Japanese (ja) catalog. Columns, separated by a TAB:  context <TAB> source <TAB> translation
+#
+#   context  empty                a plain UI string; `source` is the English text in the code
+#            @id                  a command id (e.g. file.saveAs): wins over the English text for
+#                                 that menu item, so one id can read differently from its twin
+#            @plural              `source` is "one|other" (English forms); the translation lists the
+#                                 language's forms separated by "|" (see `plural` in i18n/mod.rs)
+#            anything else        a disambiguating context passed to `tr_ctx`
+#   escapes  \n  \t  \\  inside a column. `{name}` placeholders must appear in both columns.
+#   lines starting with # and blank lines are ignored.
+#
+# Clean-room: every entry was written from the plain meaning of the English label using ordinary
+# Japanese computing vocabulary. No proprietary localisation resource, string table or product UI
+# (Acrobat's included) was consulted or copied; add entries the same way.
+# Product and technology names (PdfCraft, PDF, Acrobat JavaScript ...) stay in Latin letters;
+# the trailing "…" of dialog commands is kept.
+
+	Menu	メニュー
+	File	ファイル
+	Edit	編集
+	Pages	ページ
+	View	表示
+	Help	ヘルプ
+	Preferences	環境設定
+	Preferences…	環境設定…
+	Interface language	表示言語
+	Identity	個人情報
+	Name on new comments	新しい注釈の作成者名
+	Open…	開く…
+	New blank PDF	空白の PDF を作成
+	Create PDF from file…	ファイルから PDF を作成…
+	Create PDF from images…	画像から PDF を作成…
+	Create PDF from clipboard	クリップボードから PDF を作成
+	Combine files…	ファイルを結合…
+	Save	保存
+	Save as…	別名で保存…
+	Close file	ファイルを閉じる
+	Close all	すべて閉じる
+	Revert	保存済みの状態に戻す
+	Print…	印刷…
+	Document properties…	文書のプロパティ…
+	Undo	取り消し
+	Redo	やり直し
+	Find…	検索…
+	Advanced search…	高度な検索…
+	Copy pages	ページをコピー
+	Cut pages	ページを切り取り
+	Paste pages	ページを貼り付け
+	Fit visible	表示範囲に合わせる
+	Marquee zoom	範囲指定ズーム
+	Take a snapshot	スナップショットを作成
+	Full screen mode	全画面表示
+	Read mode	閲覧モード
+	Switch light / dark theme	明るい／暗いテーマを切り替え
+	Comments panel	コメントパネル
+	Form fields panel	フォームフィールドパネル
+	Clear form	フォームをクリア
+	Find tools and commands…	ツールとコマンドを検索…
+	Zoom	ズーム
+	Actual size	実際のサイズ
+	Zoom to page level	ページ全体を表示
+	Fit to width	幅に合わせる
+	Display theme	表示テーマ
+	Side panels	サイドパネル
+	Enable Acrobat JavaScript	Acrobat JavaScript を有効にする
+	OK	OK
+	Auto	自動
