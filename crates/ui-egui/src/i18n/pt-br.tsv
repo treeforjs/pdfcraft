@@ -58,3 +58,5 @@
 	Enable Acrobat JavaScript	Ativar o Acrobat JavaScript
 	OK	OK
 	Auto	Automático
+	Choose a PNG or JPEG image (up to 4 MiB). Transparency is preserved.	Escolha uma imagem PNG ou JPEG (até 4 MiB). A transparência é preservada.
+	Couldn't import the signature image: {e}	Não foi possível importar a imagem da assinatura: {e}

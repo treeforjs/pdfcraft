@@ -493,8 +493,10 @@ pub struct PdfCraftApp {
     pub initials: Option<fill_sign::SavedSig>,
     /// The Create signature / initials dialog, and its typed preview.
     pub signature_draft: fill_sign::SigDraft,
-    pub(crate) signature_preview: Option<(String, egui::TextureHandle)>,
-    pub(crate) saved_signature_previews: [Option<(String, egui::TextureHandle)>; 2],
+    pub(crate) signature_preview: Option<(fill_sign::SavedSig, egui::TextureHandle)>,
+    pub(crate) saved_signature_previews: [Option<(fill_sign::SavedSig, egui::TextureHandle)>; 2],
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) signature_images: fill_sign::ImageInbox,
     /// The Comment Properties dialog's state.
     pub comment_props: Option<comment_props::PropsDraft>,
     pub field_props: Option<prepare::FieldDraft>,
@@ -669,6 +671,8 @@ impl PdfCraftApp {
             signature_draft: Default::default(),
             signature_preview: None,
             saved_signature_previews: [None, None],
+            #[cfg(target_arch = "wasm32")]
+            signature_images: Default::default(),
             comment_props: None,
             field_props: None,
             redact_prefs: RedactPrefs::default(),
@@ -1074,6 +1078,7 @@ impl PdfCraftApp {
             // Drawn signatures keep their original form (older settings read the same).
             "signature": match &self.signature { Some(fill_sign::SavedSig::Drawn(s)) => Some(s), _ => None },
             "signature_text": match &self.signature { Some(fill_sign::SavedSig::Typed(t)) => Some(t), _ => None },
+            "signature_image": match &self.signature { Some(s @ fill_sign::SavedSig::Image(_)) => Some(s), _ => None },
             "initials": self.initials,
             // macOS Keychain and Windows store identities are read from their OS key stores each time.
             "digital_ids": self.digital_ids.iter().filter(|e| !e.path.starts_with("keychain:") && !e.path.starts_with("windows:")).collect::<Vec<_>>(),
@@ -1123,6 +1128,9 @@ impl PdfCraftApp {
         }
         if let Some(t) = v["signature_text"].as_str().filter(|t| !t.trim().is_empty()) {
             self.signature = Some(fill_sign::SavedSig::Typed(t.to_string()));
+        }
+        if let Ok(s @ fill_sign::SavedSig::Image(_)) = serde_json::from_value::<fill_sign::SavedSig>(v["signature_image"].clone()) {
+            self.signature = Some(s);
         }
         if let Ok(i) = serde_json::from_value::<fill_sign::SavedSig>(v["initials"].clone()) {
             self.initials = Some(i);
@@ -1463,6 +1471,8 @@ impl eframe::App for PdfCraftApp {
         if self.active.is_some() {
             self.combine_tab.focused = false;
         }
+        #[cfg(target_arch = "wasm32")]
+        self.process_signature_images();
         let dropped = ctx.input(|i| i.raw.dropped_files.clone());
         for f in dropped {
             // Files dropped on the Combine files tab join its list instead of opening.
