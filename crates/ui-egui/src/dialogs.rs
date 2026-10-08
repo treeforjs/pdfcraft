@@ -1344,18 +1344,24 @@ fn save_prompt(app: &mut PdfCraftApp, ctx: &egui::Context) {
         return;
     };
     let t = Tokens::get(ctx);
+    // Wrapping alone (#161) still let a long enough name (a web `?file=` URL has no limit) grow
+    // the prompt taller than the window (#236); 80 characters wrap to a few lines.
+    let shown = shorten_middle(&name, 80);
     let mut choice: Option<Option<bool>> = None;
     let modal = egui::Modal::new(egui::Id::new("save_prompt")).show(ctx, |ui| {
         ui.set_width(420.0);
         ui.horizontal(|ui| {
             ui.add(crate::icons::image("save", 22.0, t.accent));
-            ui.add(
+            let title = ui.add(
                 egui::Label::new(
-                    egui::RichText::new(crate::i18n::fmt(tl!("Save changes to “{name}” before closing?"), &[("name", &name)]))
+                    egui::RichText::new(crate::i18n::fmt(tl!("Save changes to “{name}” before closing?"), &[("name", &shown)]))
                         .font(theme::semibold(16.0)),
                 )
                 .wrap(),
             );
+            if shown != name {
+                title.on_hover_text(&name);
+            }
         });
         ui.add_space(6.0);
         ui.label(egui::RichText::new(tl!("Your changes will be lost if you don't save them.")).color(t.text_muted));
@@ -1379,6 +1385,19 @@ fn save_prompt(app: &mut PdfCraftApp, ctx: &egui::Context) {
     if let Some(c) = choice {
         app.resolve_close(ctx, c);
     }
+}
+
+/// `name` cut to at most `max` characters by replacing its middle with "…", keeping the start and
+/// the end, where the extension and version suffixes sit. Counts `char`s, so it never splits one.
+fn shorten_middle(name: &str, max: usize) -> String {
+    let count = name.chars().count();
+    if count <= max {
+        return name.to_string();
+    }
+    let tail = max / 4;
+    let head: String = name.chars().take(max.saturating_sub(tail + 1)).collect();
+    let end: String = name.chars().skip(count.saturating_sub(tail)).collect();
+    format!("{head}…{end}")
 }
 
 /// "Open this web page?" when a document's link, button or script asks to open an address

@@ -412,6 +412,46 @@ fn save_prompt_stays_inside_the_screen_for_a_long_filename() {
 }
 
 #[test]
+fn save_prompt_fits_the_smallest_window_whatever_the_name() {
+    // Issue #236: wrapping (#161) kept the prompt narrow, but a long enough name still grew it
+    // taller than the window and pushed the buttons off-screen. On the web a `?file=` URL names
+    // the document, so the name has no length limit. Long names now give way in the middle.
+    let names = [
+        format!("{}.pdf", "a".repeat(400)),
+        format!("{}.pdf", "Quarterly_Report_FY2026_Final_v3_".repeat(12)),
+        format!("{}.pdf", "รายงานประจำปีงบประมาณ".repeat(15)),
+        format!("{}.pdf", "年".repeat(251)),
+        format!("{}.pdf", "W".repeat(2000)),
+    ];
+    // The desktop window's minimum inner size (apps/pdfcraft/src/main.rs).
+    let size = egui::vec2(820.0, 520.0);
+    for name in names {
+        let start: String = name.chars().take(10).collect();
+        let mut h = Harness::builder().with_size(size).build_eframe(move |_cc| {
+            let mut app = PdfCraftApp::new();
+            app.open_bytes(&name, None, fixture(1)).expect("fixture opens");
+            app.close_request = Some(CloseRequest::Tab(app.views[0].id));
+            app
+        });
+        h.run_steps(4);
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, size);
+        let inside = |r: egui::Rect| screen.contains(r.min) && screen.contains(r.max);
+        let title = h.get_by_label_contains("Save changes to");
+        let title_rect = title.rect();
+        assert!(inside(title_rect), "{start}…: the title rect {title_rect:?} leaves the screen");
+        let opening = format!("Save changes to “{start}");
+        assert!(
+            h.query_by(|n| n.value().is_some_and(|l| l.starts_with(&opening) && l.contains('…') && l.contains(".pdf” before closing?"))).is_some(),
+            "{start}…: the title keeps the start and the extension"
+        );
+        for button in ["Save", "Cancel", "Don't save"] {
+            let rect = h.get_by_label(button).rect();
+            assert!(inside(rect), "{start}…: the {button} button rect {rect:?} leaves the screen");
+        }
+    }
+}
+
+#[test]
 fn document_properties_edit_is_one_undoable_step() {
     let mut h = harness(1, |app| app.set_option("dialog", "properties").unwrap());
     let title = h.get_by_role_and_label(Role::TextInput, "Title");
