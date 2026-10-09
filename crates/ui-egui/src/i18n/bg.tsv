@@ -611,6 +611,12 @@
 	Icon	Икона
 	Thickness	Дебелина
 	Line ending	Край на линията
+	Open arrow	Отворена стрелка
+	Closed arrow	Затворена стрелка
+	Butt	Тъп край
+	Reverse open arrow	Обърната отворена стрелка
+	Reverse closed arrow	Обърната затворена стрелка
+	Slash	Наклонена черта
 	Modified	Променено
 	No status has been set.	Не е зададено състояние.
 	Compare Files	Сравняване на файлове

@@ -1974,6 +1974,12 @@
 	Go to page…	轉到頁面…
 	Reopen the files that were open when PdfCraft last closed	重新開啟上次關閉 PdfCraft 時開啟的檔案
 	The standard fonts can't draw “{c}” ({code}). Only Western European characters can be added as text for now.	標準字型無法顯示「{c}」（{code}）。目前只能新增西歐字元作為文字。
+	Open arrow	開口箭頭
+	Closed arrow	閉合箭頭
+	Butt	平頭
+	Reverse open arrow	反向開口箭頭
+	Reverse closed arrow	反向閉合箭頭
+	Slash	斜線
 	Larger pages	放大頁面
 	Smaller pages	縮小頁面
 	Reset page size	重設頁面大小

@@ -2108,6 +2108,12 @@ calendar date	December	грудня
 	H / Space (hold)	H / Пробіл (утримувати)
 	Rotation:	Поворот:
 	Line ending	Закінчення лінії
+	Open arrow	Відкрита стрілка
+	Closed arrow	Закрита стрілка
+	Butt	Торець
+	Reverse open arrow	Зворотна відкрита стрілка
+	Reverse closed arrow	Зворотна закрита стрілка
+	Slash	Коса риска
 	The standard fonts can't draw “{c}” ({code}). Only Western European characters can be added as text for now.	Стандартні шрифти не можуть відобразити «{c}» ({code}). Поки що як текст можна додавати лише західноєвропейські символи.
 	Larger pages	Більші сторінки
 	Smaller pages	Менші сторінки

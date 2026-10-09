@@ -73,3 +73,9 @@
 	PdfCraft is drawing without a graphics processor, so it may be slow. Updating the graphics driver may help.	O PdfCraft está desenhando sem processador gráfico, por isso pode ficar lento. Atualizar o driver de vídeo pode ajudar.
 	Go to page…	Ir para a página…
 	Reopen the files that were open when PdfCraft last closed	Reabrir os arquivos que estavam abertos quando o PdfCraft foi fechado pela última vez
+	Open arrow	Seta aberta
+	Closed arrow	Seta fechada
+	Butt	Topo reto
+	Reverse open arrow	Seta aberta invertida
+	Reverse closed arrow	Seta fechada invertida
+	Slash	Barra

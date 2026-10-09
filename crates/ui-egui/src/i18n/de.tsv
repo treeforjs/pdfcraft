@@ -899,6 +899,12 @@
 	Icon	Symbol
 	Thickness	Stärke
 	Line ending	Linienende
+	Open arrow	Offener Pfeil
+	Closed arrow	Geschlossener Pfeil
+	Butt	Stumpf
+	Reverse open arrow	Offener Pfeil umgekehrt
+	Reverse closed arrow	Geschlossener Pfeil umgekehrt
+	Slash	Schrägstrich
 	Modified	Geändert
 	No status has been set.	Es wurde kein Status festgelegt.
 	Compare Files	Dateien vergleichen

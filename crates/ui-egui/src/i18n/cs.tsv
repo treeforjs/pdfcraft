@@ -119,3 +119,9 @@
 	Portable mode is off: {folder} can't be written ({error}). Settings are kept in your user folder instead.	Přenosný režim je vypnutý: do složky {folder} nelze zapisovat ({error}). Nastavení se místo toho ukládá do vaší uživatelské složky.
 	PdfCraft is drawing without a graphics processor, so it may be slow. Updating the graphics driver may help.	PdfCraft vykresluje bez grafického procesoru, takže může být pomalý. Pomoci může aktualizace grafického ovladače.
 	Go to page…	Přejít na stránku…
+	Open arrow	Otevřená šipka
+	Closed arrow	Zavřená šipka
+	Butt	Tupý konec
+	Reverse open arrow	Otevřená šipka obráceně
+	Reverse closed arrow	Zavřená šipka obráceně
+	Slash	Lomítko

@@ -919,6 +919,12 @@
 	Icon	Значок
 	Thickness	Толщина
 	Line ending	Окончание линии
+	Open arrow	Открытая стрелка
+	Closed arrow	Закрытая стрелка
+	Butt	Торец
+	Reverse open arrow	Обратная открытая стрелка
+	Reverse closed arrow	Обратная закрытая стрелка
+	Slash	Косая черта
 	Modified	Изменено
 	No status has been set.	Статус не установлен.
 	Compare Files	Сравнить файлы

@@ -618,6 +618,12 @@
 	Icon	图标
 	Thickness	粗细
 	Line ending	线条端点
+	Open arrow	开口箭头
+	Closed arrow	闭合箭头
+	Butt	平头
+	Reverse open arrow	反向开口箭头
+	Reverse closed arrow	反向闭合箭头
+	Slash	斜线
 	Modified	修改时间
 	No status has been set.	尚未设置状态。
 	Compare Files	比较文件

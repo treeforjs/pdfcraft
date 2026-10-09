@@ -898,6 +898,12 @@
 	Icon	Icône
 	Thickness	Épaisseur
 	Line ending	Extrémité de ligne
+	Open arrow	Flèche ouverte
+	Closed arrow	Flèche fermée
+	Butt	Extrémité plate
+	Reverse open arrow	Flèche ouverte inversée
+	Reverse closed arrow	Flèche fermée inversée
+	Slash	Barre oblique
 	Modified	Modifié
 	No status has been set.	Aucun état n'a été défini.
 	Compare Files	Comparer des fichiers

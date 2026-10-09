@@ -2084,6 +2084,12 @@ action wizard	Start	Indítás
 	H / Space (hold)	H / szóköz (nyomva tartva)
 	Rotation:	Elforgatás:
 	Line ending	Vonalvég
+	Open arrow	Nyitott nyíl
+	Closed arrow	Zárt nyíl
+	Butt	Tompa
+	Reverse open arrow	Fordított nyitott nyíl
+	Reverse closed arrow	Fordított zárt nyíl
+	Slash	Perjel
 	The standard fonts can't draw “{c}” ({code}). Only Western European characters can be added as text for now.	A szabványos betűtípusok nem tudják megjeleníteni ezt: „{c}” ({code}). Egyelőre csak nyugat-európai karakterek adhatók hozzá szövegként.
 	Larger pages	Nagyobb oldalak
 	Smaller pages	Kisebb oldalak
