@@ -158,6 +158,7 @@ impl<'a> Context<'a> {
         // PdfCraft patch: a page (or other top-level content) starts with fresh budgets.
         NESTED_PAINTS.with(|n| n.set(0));
         CONTENT_LEFT.with(|c| c.set(MAX_PAGE_CONTENT));
+        crate::encode::reset_mesh_budget();
 
         Self::new_with(initial_transform, bbox, cache, xref, settings, state, 0)
     }

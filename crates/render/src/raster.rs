@@ -2053,6 +2053,193 @@ trailer << /Root 1 0 R >>
         assert_eq!(&page.rgba[((38 * 40 + 1) * 4)..][..4], &[255, 0, 0, 255], "the rest of the page draws");
     }
 
+    /// From `cargo xtask fuzz`: a mesh shading whose points lie far off the page (a 147-byte
+    /// Coons patch stream decoded onto ±40000) was sampled pixel by pixel over its whole
+    /// bounding box, up to 65536 × 65536 entries: a synthetic page passed 6 GB in six seconds.
+    /// Vendored hayro-interpret patch: mesh shadings are sampled only where they are drawn,
+    /// within eight visits per pixel of that area plus four per triangle in it.
+    #[test]
+    fn mesh_shadings_far_off_the_page_render() {
+        let render = |shading: Vec<u8>| {
+            let content = b"/Sh0 sh 1 0 0 rg 0 0 4 4 re f";
+            let mut pdf = b"%PDF-1.7\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 40 40] /Contents 4 0 R /Resources << /Shading << /Sh0 5 0 R >> >> >> endobj\n".to_vec();
+            pdf.extend_from_slice(format!("4 0 obj << /Length {} >> stream\n", content.len()).as_bytes());
+            pdf.extend_from_slice(content);
+            pdf.extend_from_slice(b"\nendstream endobj\n5 0 obj ");
+            pdf.extend_from_slice(&shading);
+            pdf.extend_from_slice(b" endobj\ntrailer << /Root 1 0 R >>\n%%EOF\n");
+            let (tx, rx) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
+                let mut r = PageRenderer::new(Arc::new(pdf), RenderConfig::default());
+                let _ = tx.send(r.render(RenderRequest { page: 0, kind: RequestKind::Pixels, tile: None, scale: 1.0, tag: 0 }));
+            });
+            let page = rx.recv_timeout(std::time::Duration::from_secs(60)).expect("a mesh shading must not stall the renderer");
+            assert!(page.error.is_none(), "{:?}", page.error);
+            page
+        };
+        let stream = |dict: &str, data: &[u8]| {
+            let mut s = format!("<< {dict} /Length {} >> stream\n", data.len()).into_bytes();
+            s.extend_from_slice(data);
+            s.extend_from_slice(b"\nendstream");
+            s
+        };
+        // One Coons patch (flag, 12 points, 4 colours) with 8-bit coordinates around its square.
+        let mut coons = vec![0u8];
+        for p in [(0, 0), (0, 85), (0, 170), (0, 255), (85, 255), (170, 255), (255, 255), (255, 170), (255, 85), (255, 0), (170, 0), (85, 0)] {
+            coons.extend_from_slice(&[p.0, p.1]);
+        }
+        coons.extend_from_slice(&[255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 0]);
+        // A free-form triangle mesh: three vertices (flag, x, y, colour).
+        let triangles = [0u8, 0, 0, 255, 0, 0, 0, 255, 0, 0, 255, 0, 0, 0, 255, 0, 0, 255];
+        let mesh = "/ColorSpace /DeviceRGB /BitsPerCoordinate 8 /BitsPerComponent 8 /BitsPerFlag 8";
+        let far = "/Decode [-40000 40000 -40000 40000 0 1 0 1 0 1]";
+        for (what, shading) in [
+            ("a Coons patch", stream(&format!("/ShadingType 6 {mesh} {far}"), &coons)),
+            ("a triangle mesh", stream(&format!("/ShadingType 4 {mesh} {far}"), &triangles)),
+        ] {
+            let page = render(shading);
+            assert_eq!(&page.rgba[((38 * 40 + 1) * 4)..][..4], &[255, 0, 0, 255], "{what} far off the page: the rest of the page draws");
+        }
+        // A patch on the page, and the part of the huge one that covers it, are still shaded:
+        // the centre is neither white nor transparent.
+        for (what, decode) in [("on the page", "[0 40 0 40 0 1 0 1 0 1]"), ("covering the page", "[-40000 40000 -40000 40000 0 1 0 1 0 1]")] {
+            let page = render(stream(&format!("/ShadingType 6 {mesh} /Decode {decode}"), &coons));
+            let centre = &page.rgba[((20 * 40 + 20) * 4)..][..4];
+            assert!(centre != [255, 255, 255, 255] && centre[3] == 255, "a patch {what} is shaded: {centre:?}");
+        }
+        // A patch filling a 4 × 4 pt rectangle as a pattern is 722 triangles of a fraction of a
+        // pixel each: far more visits than its 16 pixels give, which the per-triangle allowance
+        // covers. The rectangle's middle is shaded.
+        let content = b"/Pattern cs /P0 scn 10 10 4 4 re f";
+        let shading = stream(&format!("/ShadingType 6 {mesh} /Decode [10 14 10 14 0 1 0 1 0 1]"), &coons);
+        let mut pdf = b"%PDF-1.7
+1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
+2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj
+3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 40 40] /Contents 4 0 R /Resources << /Pattern << /P0 << /PatternType 2 /Shading 5 0 R >> >> >> >> endobj
+".to_vec();
+        pdf.extend_from_slice(
+            format!(
+                "4 0 obj << /Length {} >> stream
+",
+                content.len()
+            )
+            .as_bytes(),
+        );
+        pdf.extend_from_slice(content);
+        pdf.extend_from_slice(
+            b"
+endstream endobj
+5 0 obj ",
+        );
+        pdf.extend_from_slice(&shading);
+        pdf.extend_from_slice(
+            b" endobj
+trailer << /Root 1 0 R >>
+%%EOF
+",
+        );
+        let mut r = PageRenderer::new(Arc::new(pdf), RenderConfig::default());
+        let page = r.render(RenderRequest { page: 0, kind: RequestKind::Pixels, tile: None, scale: 1.0, tag: 0 });
+        assert!(page.error.is_none(), "{:?}", page.error);
+        let middle = &page.rgba[((28 * 40 + 12) * 4)..][..4];
+        assert!(middle != [255, 255, 255, 255] && middle[3] == 255, "a small patch is shaded: {middle:?}");
+    }
+
+    /// The other half of the mesh-shading patch: ten thousand triangles that each cover half
+    /// of this 1000 × 1000 canvas walked their bounding boxes ten thousand times over (ten
+    /// billion visits). The visit budget stops that work at eight per pixel plus four per
+    /// triangle.
+    #[test]
+    fn many_overlapping_mesh_triangles_finish() {
+        // Each triangle: three vertices of flag, x, y, red, green, blue; half of the page.
+        let one = [0u8, 0, 0, 255, 0, 0, 0, 255, 0, 0, 255, 0, 0, 0, 255, 0, 0, 255];
+        let triangles = one.repeat(10_000);
+        let content = b"/Sh0 sh";
+        let mut pdf = b"%PDF-1.7
+1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
+2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj
+3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 40 40] /Contents 4 0 R /Resources << /Shading << /Sh0 5 0 R >> >> >> endobj
+"
+        .to_vec();
+        pdf.extend_from_slice(
+            format!(
+                "4 0 obj << /Length {} >> stream
+",
+                content.len()
+            )
+            .as_bytes(),
+        );
+        pdf.extend_from_slice(content);
+        pdf.extend_from_slice(
+            format!("
+endstream endobj
+5 0 obj << /ShadingType 4 /ColorSpace /DeviceRGB /BitsPerCoordinate 8 /BitsPerComponent 8 /BitsPerFlag 8 /Decode [0 40 0 40 0 1 0 1 0 1] /Length {} >> stream
+", triangles.len())
+                .as_bytes(),
+        );
+        pdf.extend_from_slice(&triangles);
+        pdf.extend_from_slice(
+            b"
+endstream endobj
+trailer << /Root 1 0 R >>
+%%EOF
+",
+        );
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let mut r = PageRenderer::new(Arc::new(pdf), RenderConfig::default());
+            let _ = tx.send(r.render(RenderRequest { page: 0, kind: RequestKind::Pixels, tile: None, scale: 25.0, tag: 0 }));
+        });
+        let page = rx.recv_timeout(std::time::Duration::from_secs(60)).expect("overlapping mesh triangles must not stall the renderer");
+        assert!(page.error.is_none(), "{:?}", page.error);
+        assert_eq!((page.width, page.height), (1000, 1000));
+        // The triangles cover the lower left half: a pixel there is shaded.
+        let p = &page.rgba[((900 * 1000 + 100) * 4)..][..4];
+        assert!(p != [255, 255, 255, 255] && p[3] == 255, "the triangles are drawn: {p:?}");
+    }
+
+    /// Review of the mesh-shading patch: every patch was cut into 722 triangles before anything
+    /// limited them (about 150 KB per patch), and a lattice mesh with `/VerticesPerRow 0` pushed
+    /// empty rows for ever. Vendored hayro-interpret patch: patches are triangulated one at a
+    /// time, meshes hold at most `MAX_MESH_PATCHES` patches and `MAX_MESH_TRIANGLES` triangles,
+    /// and a lattice needs two vertices per row.
+    #[test]
+    fn mesh_shadings_with_many_patches_or_no_rows_finish() {
+        let render = |shading: Vec<u8>| {
+            let content = b"/Sh0 sh 1 0 0 rg 0 0 4 4 re f";
+            let mut pdf = b"%PDF-1.7\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 40 40] /Contents 4 0 R /Resources << /Shading << /Sh0 5 0 R >> >> >> endobj\n".to_vec();
+            pdf.extend_from_slice(format!("4 0 obj << /Length {} >> stream\n", content.len()).as_bytes());
+            pdf.extend_from_slice(content);
+            pdf.extend_from_slice(b"\nendstream endobj\n5 0 obj ");
+            pdf.extend_from_slice(&shading);
+            pdf.extend_from_slice(b" endobj\ntrailer << /Root 1 0 R >>\n%%EOF\n");
+            let (tx, rx) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
+                let mut r = PageRenderer::new(Arc::new(pdf), RenderConfig::default());
+                let _ = tx.send(r.render(RenderRequest { page: 0, kind: RequestKind::Pixels, tile: None, scale: 1.0, tag: 0 }));
+            });
+            let page = rx.recv_timeout(std::time::Duration::from_secs(60)).expect("a mesh shading must not stall the renderer");
+            assert!(page.error.is_none(), "{:?}", page.error);
+            assert_eq!(&page.rgba[((38 * 40 + 1) * 4)..][..4], &[255, 0, 0, 255], "the rest of the page draws");
+        };
+        let stream = |dict: &str, data: &[u8]| {
+            let mut s = format!("<< {dict} /Length {} >> stream\n", data.len()).into_bytes();
+            s.extend_from_slice(data);
+            s.extend_from_slice(b"\nendstream");
+            s
+        };
+        let mesh = "/ColorSpace /DeviceRGB /BitsPerCoordinate 8 /BitsPerComponent 8";
+        // Forty thousand Coons patches beside the page: 6 GB of triangles if collected first.
+        let mut coons = vec![0u8];
+        for p in [(0, 0), (0, 85), (0, 170), (0, 255), (85, 255), (170, 255), (255, 255), (255, 170), (255, 85), (255, 0), (170, 0), (85, 0)] {
+            coons.extend_from_slice(&[p.0, p.1]);
+        }
+        coons.extend_from_slice(&[255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 0]);
+        render(stream(&format!("/ShadingType 6 {mesh} /BitsPerFlag 8 /Decode [100 140 100 140 0 1 0 1 0 1]"), &coons.repeat(40_000)));
+        // A lattice with no vertices per row.
+        render(stream(&format!("/ShadingType 5 {mesh} /VerticesPerRow 0 /Decode [0 40 0 40 0 1 0 1 0 1]"), &[0u8; 64]));
+    }
+
     /// From the nightly `cargo xtask fuzz`: an embedded Type 1 font program holding a long run of
     /// integers. read-fonts 0.39 (through skrifa 0.42) looked ahead after every integer by
     /// parsing the next token, which looked ahead again, recursing through the whole run: a long
