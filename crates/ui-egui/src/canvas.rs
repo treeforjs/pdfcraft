@@ -1535,6 +1535,9 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
     let mut open_initials = false;
     let author = app.comment_prefs.author.clone();
     let today = app.session.today();
+    // In Preferences ▸ Date format, or why it can't be stamped into the PDF.
+    let date_text = crate::date_text_for_pdf(&app.session);
+    let mut refused: Option<String> = None;
     let by_line = app.session.stamp_by_line(&author);
     let mut stamp_placed = false;
     let mut image_action: Option<crate::edit_text_ui::ImageAction> = None;
@@ -1811,7 +1814,7 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
                     initials.as_ref(),
                     &mut app.signature_preview,
                     &author,
-                    today,
+                    &date_text,
                 ) {
                     Some(crate::fill_sign::FillAction::Edit(e)) => view.pending_edit = Some(*e),
                     Some(crate::fill_sign::FillAction::Signature(e)) => {
@@ -1820,6 +1823,7 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
                     }
                     Some(crate::fill_sign::FillAction::CreateSignature) => open_signature = true,
                     Some(crate::fill_sign::FillAction::CreateInitials) => open_initials = true,
+                    Some(crate::fill_sign::FillAction::Refused(why)) => refused = Some(why),
                     None => {}
                 }
             }
@@ -2344,6 +2348,9 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
         Some(crate::edit_text_ui::ImageAction::Replace(page, index)) => app.replace_page_image_dialog(page, index),
         Some(crate::edit_text_ui::ImageAction::Save(page, index)) => app.save_page_image(page, index),
         None => {}
+    }
+    if let Some(why) = refused {
+        app.notify_error(why);
     }
     if open_signature || open_initials {
         app.signature_draft = crate::fill_sign::SigDraft::new(open_initials, &app.comment_prefs.author);

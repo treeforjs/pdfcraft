@@ -16,6 +16,7 @@ pub mod actions;
 pub mod catalog;
 pub mod commands;
 pub mod compare;
+pub mod dates;
 pub mod export;
 pub mod js;
 pub mod links;
@@ -1898,6 +1899,10 @@ pub struct Session {
     trust: Arc<TrustStore>,
     /// Preferences ▸ JavaScript ▸ Enable Acrobat JavaScript, inverted (on by default).
     js_off: bool,
+    /// Preferences ▸ Date format, when not the default (see [`dates`]).
+    date_format: Option<String>,
+    /// Preferences ▸ Date format ▸ Language, when not following the interface language.
+    date_language: Option<String>,
 }
 
 /// Lay a dynamic XFA form out (pages and fields) and give its widgets appearances.

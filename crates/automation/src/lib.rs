@@ -530,6 +530,7 @@ impl Automation {
             "doc_print" => self.doc_print(&a)?,
             "doc_remove_hidden" => self.doc_remove_hidden(&a)?,
             "fill_sign_add" => self.fill_sign_add(&a)?,
+            "fill_sign_date_format" => self.fill_sign_date_format(&a)?,
             "measure_distance" => self.measurement_add(&a, pdfcraft_engine::measure::Kind::Distance)?,
             "measure_perimeter" => self.measurement_add(&a, pdfcraft_engine::measure::Kind::Perimeter)?,
             "measure_area" => self.measurement_add(&a, pdfcraft_engine::measure::Kind::Area)?,
