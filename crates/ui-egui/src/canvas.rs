@@ -991,21 +991,28 @@ pub struct PageXform {
 }
 
 impl PageXform {
-    /// Draw an image in PDF user space, preserving orientation through both page rotations.
+    /// Draw an image in the PDF user-space `rect` as a custom stamp's appearance draws it: turned
+    /// back by `turn` (the page /Rotate it was placed for), so with the page's own rotation it
+    /// reads upright as displayed.
     pub(crate) fn paint_user_image(
         &self,
         painter: &egui::Painter,
         tex: egui::TextureId,
-        info: &DocInfo,
-        page: usize,
+        p: &pdfcraft_render::PageInfo,
         rect: [f64; 4],
+        turn: i64,
         color: Color32,
     ) {
-        let Some(p) = info.pages.get(page) else { return };
         let mut mesh = egui::Mesh::with_texture(tex);
-        for (x, y, u, v) in [(rect[0], rect[3], 0.0, 0.0), (rect[2], rect[3], 1.0, 0.0), (rect[2], rect[1], 1.0, 1.0), (rect[0], rect[1], 0.0, 1.0)] {
-            let p = p.user_to_view(x as f32, y as f32);
-            mesh.vertices.push(egui::epaint::Vertex { pos: self.norm_to_screen(p[0] / self.pw, p[1] / self.ph), uv: pos2(u, v), color });
+        let (w, h) = (rect[2] - rect[0], rect[3] - rect[1]);
+        let (shown_w, shown_h) = if turn % 180 == 0 { (w, h) } else { (h, w) };
+        let [a, b, c, d, e, f] = pdfcraft_model::view_matrix_for(turn, rect);
+        for (u, v) in [(0.0_f32, 0.0_f32), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)] {
+            // The texture's (u, v), from its top-left, in the picture's upright frame, then in user space.
+            let (dx, dy) = (f64::from(u) * shown_w, f64::from(1.0 - v) * shown_h);
+            let (x, y) = (a * dx + c * dy + e, b * dx + d * dy + f);
+            let q = p.user_to_view(x as f32, y as f32);
+            mesh.vertices.push(egui::epaint::Vertex { pos: self.norm_to_screen(q[0] / self.pw, q[1] / self.ph), uv: pos2(u, v), color });
         }
         mesh.add_triangle(0, 1, 2);
         mesh.add_triangle(0, 2, 3);
