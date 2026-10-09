@@ -1178,6 +1178,195 @@ mod tests {
         }
     }
 
+    /// Public-API regressions run in normal workspace CI; dependency unit tests do not.
+    fn function_limits_calculator_eval(program: &str) -> Option<Vec<f32>> {
+        use hayro::hayro_interpret::Function;
+        use hayro_syntax::object::{FromBytes, Object};
+        let data = format!("<< /FunctionType 4 /Domain [] /Length {} >> stream\n{program}\nendstream", program.len());
+        let object = Object::from_bytes(data.as_bytes()).unwrap();
+        Function::new(&object)?.eval(Default::default()).map(|values| values.to_vec())
+    }
+
+    #[test]
+    fn function_limits_idiv_zero_is_refused() {
+        assert!(function_limits_calculator_eval("{ 1 0 idiv }").is_none());
+    }
+
+    #[test]
+    fn function_limits_idiv_overflow_is_refused() {
+        assert!(function_limits_calculator_eval("{ -2147483648 -1 idiv }").is_none());
+    }
+
+    #[test]
+    fn function_limits_large_logical_shifts_discard_all_bits() {
+        for shift in [32, -32, 2147483647, -2147483648] {
+            assert_eq!(function_limits_calculator_eval(&format!("{{ 7 {shift} bitshift }}")), Some(vec![0.0]));
+        }
+        assert_eq!(function_limits_calculator_eval("{ 1073741824 1 bitshift }"), Some(vec![-2147483648.0]));
+        assert_eq!(function_limits_calculator_eval("{ -2147483648 -1 bitshift }"), Some(vec![1073741824.0]));
+    }
+
+    #[test]
+    fn function_limits_rotation_accepts_the_most_negative_integer() {
+        assert_eq!(function_limits_calculator_eval("{ 1 2 3 3 -2147483648 roll }"), Some(vec![3.0, 1.0, 2.0]));
+    }
+
+    #[test]
+    fn function_limits_large_indices_are_refused() {
+        assert!(function_limits_calculator_eval("{ 1 4294967295 index }").is_none());
+    }
+
+    #[test]
+    fn function_limits_operand_stack_boundary() {
+        assert_eq!(function_limits_calculator_eval(&format!("{{ 1 {} }}", "dup ".repeat(63))).unwrap().len(), 64);
+        assert!(function_limits_calculator_eval(&format!("{{ 1 {} }}", "dup ".repeat(64))).is_none());
+    }
+
+    #[test]
+    fn function_limits_calculator_arithmetic_and_depth() {
+        for (program, expected) in [
+            ("{ -5 2 idiv }", vec![-2.0]),
+            ("{ 7 3 bitshift }", vec![56.0]),
+            ("{ 142 -3 bitshift }", vec![17.0]),
+            ("{ 1 2 3 3 -1 roll }", vec![2.0, 3.0, 1.0]),
+        ] {
+            assert_eq!(function_limits_calculator_eval(program), Some(expected));
+        }
+        let mut program = "{ 0 }".to_owned();
+        for _ in 1..64 {
+            program = format!("{{ true {program} if }}");
+        }
+        assert_eq!(function_limits_calculator_eval(&program), Some(vec![0.0]));
+        assert!(function_limits_calculator_eval(&format!("{{ true {program} if }}")).is_none());
+    }
+
+    #[test]
+    fn function_limits_calculator_work_boundary() {
+        // With no loops, each admitted operator can execute at most once. The exact parse
+        // boundary can be evaluated, while construction rejects the next operator.
+        assert_eq!(function_limits_calculator_eval(&format!("{{ {} }}", "0 pop ".repeat(5000))), Some(vec![]));
+        assert!(function_limits_calculator_eval(&format!("{{ {} 0 }}", "0 pop ".repeat(5000))).is_none());
+    }
+
+    #[test]
+    fn function_limits_calculator_work_counts_unselected_branches() {
+        // 9,996 branch operators + two procedure openings + true + ifelse = 10,000 tokens.
+        let branch = "0 pop ".repeat(2499);
+        assert_eq!(function_limits_calculator_eval(&format!("{{ true {{ {branch} }} {{ {branch} }} ifelse }}")), Some(vec![]));
+        assert!(function_limits_calculator_eval(&format!("{{ true {{ {branch} }} {{ {branch} 0 }} ifelse }}")).is_none());
+    }
+    #[test]
+    fn function_limits_public_construction_work_and_depth() {
+        use hayro::hayro_interpret::Function;
+        use hayro_syntax::object::{FromBytes, Object};
+
+        let mut data = "<< /FunctionType 2 /Domain [0 1] /C0 [0] /C1 [1] /N 1 >>".to_owned();
+        for _ in 1..64 {
+            data = format!("<< /FunctionType 3 /Domain [0 1] /Functions [{data}] /Bounds [] /Encode [0 1] >>");
+        }
+        let object = Object::from_bytes(data.as_bytes()).unwrap();
+        assert_eq!(Function::new(&object).unwrap().eval([0.5].into_iter().collect()).unwrap().as_slice(), &[0.5]);
+        let over = format!("<< /FunctionType 3 /Domain [0 1] /Functions [{data}] /Bounds [] /Encode [0 1] >>");
+        assert!(Function::new(&Object::from_bytes(over.as_bytes()).unwrap()).is_none());
+
+        // One root plus 10,000 leaves is one node past the common budget. This input remains
+        // below a megabyte and does not attempt excessive recursion or an allocation failure.
+        let leaf = "<< /FunctionType 2 /Domain [0 1] /C0 [0] /C1 [1] /N 1 >> ";
+        for children in [9999, 10_000] {
+            let data = format!(
+                "<< /FunctionType 3 /Domain [0 1] /Functions [{}] /Bounds [{}] /Encode [{}] >>",
+                leaf.repeat(children),
+                "0.5 ".repeat(children - 1),
+                "0 1 ".repeat(children)
+            );
+            let object = Object::from_bytes(data.as_bytes()).unwrap();
+            assert_eq!(Function::new(&object).is_some(), children == 9999);
+        }
+    }
+    #[test]
+    fn function_limits_stitching_cycles_are_refused_and_shared_children_work() {
+        use hayro::hayro_interpret::Function;
+        use hayro_syntax::object::{Object, ObjectIdentifier};
+
+        let pdf = |functions: &str| {
+            hayro_syntax::Pdf::new(
+                format!(
+                    "%PDF-1.7\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n\
+             2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n\
+             3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 20 20] >> endobj\n\
+             {functions}\ntrailer << /Root 1 0 R >>\n%%EOF"
+                )
+                .into_bytes(),
+            )
+            .unwrap()
+        };
+        for functions in [
+            "4 0 obj << /FunctionType 3 /Domain [0 1] /Functions [4 0 R] /Bounds [] /Encode [0 1] >> endobj",
+            "4 0 obj << /FunctionType 3 /Domain [0 1] /Functions [5 0 R] /Bounds [] /Encode [0 1] >> endobj\n5 0 obj << /FunctionType 3 /Domain [0 1] /Functions [4 0 R] /Bounds [] /Encode [0 1] >> endobj",
+            "4 0 obj << /FunctionType 3 /Domain [0 1] /Functions [] /Bounds [] /Encode [] >> endobj",
+            "4 0 obj << /FunctionType 3 /Domain [0 1] /Functions [99 0 R] /Bounds [] /Encode [0 1] >> endobj",
+            "4 0 obj << /FunctionType 3 /Domain [0 1] /Functions [5 0 R 99 0 R] /Bounds [0.5] /Encode [0 1 0 1] >> endobj\n5 0 obj << /FunctionType 2 /Domain [0 1] /C0 [0] /C1 [1] /N 1 >> endobj",
+        ] {
+            let parsed = pdf(functions);
+            let object = parsed.xref().get::<Object<'_>>(ObjectIdentifier::new(4, 0)).unwrap();
+            assert!(Function::new(&object).is_none(), "accepted invalid children: {functions}");
+        }
+        let parsed = pdf(
+            "4 0 obj << /FunctionType 3 /Domain [0 1] /Functions [5 0 R 5 0 R] /Bounds [0.5] /Encode [0 1 0 1] >> endobj\n5 0 obj << /FunctionType 2 /Domain [0 1] /C0 [0] /C1 [1] /N 1 >> endobj",
+        );
+        let object = parsed.xref().get::<Object<'_>>(ObjectIdentifier::new(4, 0)).unwrap();
+        let function = Function::new(&object).unwrap();
+        let output = function.eval([0.75].into_iter().collect()).unwrap();
+        assert!((output[0] - 0.5).abs() < 0.001);
+    }
+
+    #[test]
+    fn function_limits_shared_references_count_toward_construction_work() {
+        use hayro::hayro_interpret::Function;
+        use hayro_syntax::object::{Object, ObjectIdentifier};
+        for children in [9999, 10_000] {
+            let bytes = format!(
+                "%PDF-1.7\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n\
+                 2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n\
+                 3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 20 20] >> endobj\n\
+                 4 0 obj << /FunctionType 3 /Domain [0 1] /Functions [{}] /Bounds [{}] /Encode [{}] >> endobj\n\
+                 5 0 obj << /FunctionType 2 /Domain [0 1] /C0 [0] /C1 [1] /N 1 >> endobj\n\
+                 trailer << /Root 1 0 R >>\n%%EOF",
+                "5 0 R ".repeat(children),
+                "0.5 ".repeat(children - 1),
+                "0 1 ".repeat(children)
+            )
+            .into_bytes();
+            let parsed = hayro_syntax::Pdf::new(bytes).unwrap();
+            let object = parsed.xref().get::<Object<'_>>(ObjectIdentifier::new(4, 0)).unwrap();
+            assert_eq!(Function::new(&object).is_some(), children == 9999);
+        }
+    }
+    #[test]
+    fn function_limits_invalid_calculator_keeps_the_page_renderable() {
+        use super::*;
+        let program = "{ pop 1 0 idiv }";
+        let content = "/S sh 0 0 1 rg 0 0 20 20 re f";
+        let bytes = format!(
+            "%PDF-1.7\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n\
+             2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n\
+             3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 20 20] /Resources << /Shading << /S 4 0 R >> >> /Contents 6 0 R >> endobj\n\
+             4 0 obj << /ShadingType 2 /ColorSpace /DeviceRGB /Coords [0 0 20 0] /Function 5 0 R >> endobj\n\
+             5 0 obj << /FunctionType 4 /Domain [0 1] /Range [0 1 0 1 0 1] /Length {} >> stream\n{program}\nendstream endobj\n\
+             6 0 obj << /Length {} >> stream\n{content}\nendstream endobj\n\
+             trailer << /Root 1 0 R >>\n%%EOF",
+            program.len(),
+            content.len()
+        )
+        .into_bytes();
+        let mut renderer = PageRenderer::new(Arc::new(bytes), RenderConfig::default());
+        let page = renderer.render(RenderRequest { page: 0, kind: RequestKind::Pixels, tile: None, scale: 1.0, tag: 0 });
+        assert!(page.error.is_none(), "{:?}", page.error);
+        assert_eq!((page.width, page.height), (20, 20));
+        let (pixels, remainder) = page.rgba.as_chunks::<4>();
+        assert!(remainder.is_empty());
+        assert!(pixels.iter().all(|pixel| *pixel == [0, 0, 255, 255]));
+    }
     #[test]
     fn watchdog_skips_a_stuck_page_and_keeps_rendering() {
         use super::*;
