@@ -3770,8 +3770,8 @@ milestone = "M5"
 status = "partial"
 commands = []
 tools = ["comment_add"]
-evidence = ["crates/annot/src/tests.rs::every_tool_creates_a_drawable_comment"]
-notes = "None, OpenArrow and ClosedArrow are drawn; other endings are kept but not redrawn"
+evidence = ["crates/annot/src/tests.rs::every_line_ending_is_drawn", "crates/automation/tests/automation.rs::line_endings_through_the_tool", "crates/ui-egui/tests/comments.rs::line_ending_properties_change_and_undo"]
+notes = "All ten /LE styles (None, Square, Circle, Diamond, OpenArrow, ClosedArrow, Butt, ROpenArrow, RClosedArrow, Slash) are drawn on lines, polylines and callouts. comment_add endings and Comment properties set them. Dashed borders are drawn. Cloudy borders are still polygon-only."
 
 [[feature]]
 id = "comment.properties-dialog"

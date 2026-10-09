@@ -3487,6 +3487,7 @@ version = "0.4.0"
 dependencies = [
  "base64 0.22.1",
  "image",
+ "pdfcraft-cos",
  "pdfcraft-engine",
  "pdfcraft-organize",
  "pdfcraft-platform",
