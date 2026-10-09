@@ -143,6 +143,17 @@ usage = "Japanese UI strings, compiled in by crates/ui-egui/src/i18n/mod.rs"
 sha256 = "2bfcb94d72df43a6146e45e971950433a13bb008fc18c68463c096089f715466"
 
 [[asset]]
+path = "crates/ui-egui/src/i18n/uk.tsv"
+title = "Ukrainian interface translation catalog"
+author = "PdfCraft contributors"
+source = "Contributor-original: clean-room translations of PdfCraft's English UI labels, no proprietary localisation resources"
+licence = "MIT OR Apache-2.0"
+licence_file = "LICENSE-MIT"
+kind = "translation"
+usage = "Ukrainian UI strings, compiled in by crates/ui-egui/src/i18n/mod.rs"
+sha256 = "6939906a84a2b5b7f5d2ca36c454ed1787751232d435daa30cc62ededbe7c165"
+
+[[asset]]
 path = "assets/icons/accessibility.svg"
 title = "Lucide icon \"accessibility\""
 author = "Lucide Contributors (portions Cole Bemis, Feather)"
