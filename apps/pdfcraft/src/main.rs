@@ -19,6 +19,9 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
+use std::cell::Cell;
+use std::rc::Rc;
+
 use pdfcraft_ui_egui::PdfCraftApp;
 
 #[cfg(target_os = "macos")]
@@ -150,6 +153,85 @@ fn main() -> eframe::Result {
         }
     }
     let integrated = cfg!(target_os = "macos");
+    migrate_legacy_folders();
+    // The log file lives in the settings folder; opened after the arguments (so `--version` leaves
+    // no file behind) and after the PrintCraft migration (which a fresh folder would block).
+    // Records logged until now are written to it first.
+    if let (Some(logger), Some(dir)) = (logger, settings_dir()) {
+        match logger.attach_dir(&dir.join("logs")) {
+            Ok(path) => log::info!("PdfCraft {}, log file {}", env!("CARGO_PKG_VERSION"), path.display()),
+            // Standard error only by now (`attach_dir` gave up on the file); unlike `eprintln!`, never panics.
+            Err(e) => log::warn!("no log file: {e}"),
+        }
+    }
+    let choice = renderer_choice(std::env::var("PDFCRAFT_RENDERER").ok().as_deref());
+    let launch = Launch { files, options, control_file, create_images, integrated };
+    // Finder, Open With and the Dock deliver files as Apple events, not arguments; catch the one
+    // that launched us as well as later ones. Lives until the event loop returns.
+    #[cfg(target_os = "macos")]
+    let apple_events = apple_events::AppleEvents::install();
+    // Set once the app is created, which is after the renderer has started.
+    let started = Rc::new(Cell::new(false));
+    let first = if choice == RendererChoice::Gl { eframe::Renderer::Glow } else { eframe::Renderer::Wgpu };
+    let result = eframe::run_native(
+        "PdfCraft",
+        native_options(integrated, first),
+        app_creator(
+            launch.clone(),
+            Rc::clone(&started),
+            #[cfg(target_os = "macos")]
+            &apple_events,
+        ),
+    );
+    match result {
+        // Only a renderer that couldn't start: without a window or display at all, OpenGL can't
+        // help either, and winit's own error says more.
+        Err(e @ eframe::Error::Wgpu(_)) if retry_with_gl(choice, started.get()) => {
+            // Old or unusual GPUs and drivers (#461, #435, #392) can't give wgpu a device; OpenGL
+            // usually still works there, so that's better than quitting.
+            log::error!("the GPU renderer (wgpu) didn't start: {e}. Starting with OpenGL instead; set PDFCRAFT_RENDERER=gl to skip wgpu.");
+            eframe::run_native(
+                "PdfCraft",
+                native_options(integrated, eframe::Renderer::Glow),
+                app_creator(
+                    launch,
+                    started,
+                    #[cfg(target_os = "macos")]
+                    &apple_events,
+                ),
+            )
+        }
+        other => other,
+    }
+}
+
+/// Which renderer to start with, from `PDFCRAFT_RENDERER`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RendererChoice {
+    /// wgpu, then OpenGL if wgpu can't start (unset, or anything unrecognised).
+    Auto,
+    /// wgpu only (`wgpu`): a failure is reported, not worked around.
+    Wgpu,
+    /// OpenGL only (`gl`, `opengl` or `glow`): for drivers where wgpu starts but misbehaves.
+    Gl,
+}
+
+fn renderer_choice(value: Option<&str>) -> RendererChoice {
+    match value.map(|v| v.trim().to_ascii_lowercase()).as_deref() {
+        Some("wgpu") => RendererChoice::Wgpu,
+        Some("gl" | "opengl" | "glow") => RendererChoice::Gl,
+        _ => RendererChoice::Auto,
+    }
+}
+
+/// Whether a failed run should be retried with OpenGL: only when wgpu was tried first by choice of
+/// nobody, and it failed before the app was created (so while starting the renderer, not later).
+fn retry_with_gl(choice: RendererChoice, app_started: bool) -> bool {
+    choice == RendererChoice::Auto && !app_started
+}
+
+/// The window and renderer settings for one run.
+fn native_options(integrated: bool, renderer: eframe::Renderer) -> eframe::NativeOptions {
     let mut viewport = egui::ViewportBuilder::default()
         .with_title("PdfCraft")
         .with_inner_size([1440.0, 920.0])
@@ -165,80 +247,82 @@ fn main() -> eframe::Result {
     if integrated {
         viewport = viewport.with_fullsize_content_view(true).with_titlebar_shown(false).with_title_shown(false);
     }
-    migrate_legacy_folders();
-    // The log file lives in the settings folder; opened after the arguments (so `--version` leaves
-    // no file behind) and after the PrintCraft migration (which a fresh folder would block).
-    // Records logged until now are written to it first.
-    if let (Some(logger), Some(dir)) = (logger, settings_dir()) {
-        match logger.attach_dir(&dir.join("logs")) {
-            Ok(path) => log::info!("PdfCraft {}, log file {}", env!("CARGO_PKG_VERSION"), path.display()),
-            // Standard error only by now (`attach_dir` gave up on the file); unlike `eprintln!`, never panics.
-            Err(e) => log::warn!("no log file: {e}"),
-        }
-    }
     let persistence_path = settings_dir().map(|d| d.join("app.ron"));
-    let mut native = eframe::NativeOptions { viewport, persistence_path, ..Default::default() };
-    configure_gpu(&mut native);
-    // Finder, Open With and the Dock deliver files as Apple events, not arguments; catch the one
-    // that launched us as well as later ones. Lives until the event loop returns.
-    #[cfg(target_os = "macos")]
-    let apple_events = apple_events::AppleEvents::install();
-    #[cfg(target_os = "macos")]
-    let apple_events = &apple_events;
-    eframe::run_native(
-        "PdfCraft",
-        native,
-        Box::new(move |cc| {
-            let mut app = PdfCraftApp::new();
-            if let Some(json) = cc.storage.and_then(|s| s.get_string("pdfcraft").or_else(|| s.get_string(LEGACY_STORAGE_KEY))) {
-                app.restore(&json);
+    // Set explicitly, so the renderer never depends on which one eframe defaults to.
+    let mut native = eframe::NativeOptions { viewport, persistence_path, renderer, ..Default::default() };
+    if renderer == eframe::Renderer::Wgpu {
+        configure_gpu(&mut native);
+    }
+    native
+}
+
+/// What the command line asked for, kept so a second run (with OpenGL) can start the same way.
+#[derive(Clone)]
+struct Launch {
+    files: Vec<String>,
+    options: Vec<(String, String)>,
+    control_file: Option<String>,
+    create_images: bool,
+    integrated: bool,
+}
+
+fn app_creator<'a>(
+    launch: Launch,
+    started: Rc<Cell<bool>>,
+    #[cfg(target_os = "macos")] apple_events: &'a apple_events::AppleEvents,
+) -> eframe::AppCreator<'a> {
+    let Launch { files, options, control_file, create_images, integrated } = launch;
+    Box::new(move |cc| {
+        started.set(true);
+        let mut app = PdfCraftApp::new();
+        if let Some(json) = cc.storage.and_then(|s| s.get_string("pdfcraft").or_else(|| s.get_string(LEGACY_STORAGE_KEY))) {
+            app.restore(&json);
+        }
+        app.integrated_titlebar = integrated;
+        app.update_source = Some(std::sync::Arc::new(updates::latest_release));
+        app.os_key_store_ids = cfg!(any(target_os = "macos", target_os = "windows"));
+        #[cfg(target_os = "macos")]
+        {
+            app.os_events = Some(apple_events.connect(&cc.egui_ctx));
+        }
+        if let Some(file) = &control_file {
+            let client = app.attach_control(&cc.egui_ctx);
+            match pdfcraft_ui_egui::control::serve(client).and_then(|ep| write_control_file(file, ep.port, &ep.token).map(|()| ep.port)) {
+                // Never the token (AGENTS.md §3): it stays in the owner-only file.
+                Ok(port) => log::info!("UI control channel on 127.0.0.1:{port} (connection details in {file})"),
+                Err(e) => log::error!("--control {file}: {e}"),
             }
-            app.integrated_titlebar = integrated;
-            app.update_source = Some(std::sync::Arc::new(updates::latest_release));
-            app.os_key_store_ids = cfg!(any(target_os = "macos", target_os = "windows"));
-            #[cfg(target_os = "macos")]
-            {
-                app.os_events = Some(apple_events.connect(&cc.egui_ctx));
+        }
+        // Autosave unsaved changes; offer to recover documents a crashed session left behind.
+        if let Some(dir) = pdfcraft_ui_egui::RecoveryStore::default_dir() {
+            app.enable_recovery(pdfcraft_ui_egui::RecoveryStore::new(dir));
+        }
+        // A portable marker whose data folder can't be written (#157): say where settings went.
+        if let Some(w) = &pdfcraft_ui_egui::portable::current().unwritable {
+            app.notify_fmt(
+                "Portable mode is off: {folder} can't be written ({error}). Settings are kept in your user folder instead.",
+                &[("folder", &w.folder.display().to_string()), ("error", &w.error)],
+            );
+        }
+        if create_images {
+            if let Err(e) = app.begin_image_import_paths(&files) {
+                app.notify(e);
             }
-            if let Some(file) = &control_file {
-                let client = app.attach_control(&cc.egui_ctx);
-                match pdfcraft_ui_egui::control::serve(client).and_then(|ep| write_control_file(file, ep.port, &ep.token).map(|()| ep.port)) {
-                    // Never the token (AGENTS.md §3): it stays in the owner-only file.
-                    Ok(port) => log::info!("UI control channel on 127.0.0.1:{port} (connection details in {file})"),
-                    Err(e) => log::error!("--control {file}: {e}"),
-                }
+        } else {
+            // With the preference on, last session's files come back first; files named on
+            // the command line open after them, in front (#442).
+            app.reopen_last_files(&files);
+            for f in files {
+                app.open_path(&f);
             }
-            // Autosave unsaved changes; offer to recover documents a crashed session left behind.
-            if let Some(dir) = pdfcraft_ui_egui::RecoveryStore::default_dir() {
-                app.enable_recovery(pdfcraft_ui_egui::RecoveryStore::new(dir));
+        }
+        for (k, v) in options {
+            if let Err(e) = app.set_option(&k, &v) {
+                log::warn!("--{k} {v}: {e}");
             }
-            // A portable marker whose data folder can't be written (#157): say where settings went.
-            if let Some(w) = &pdfcraft_ui_egui::portable::current().unwritable {
-                app.notify_fmt(
-                    "Portable mode is off: {folder} can't be written ({error}). Settings are kept in your user folder instead.",
-                    &[("folder", &w.folder.display().to_string()), ("error", &w.error)],
-                );
-            }
-            if create_images {
-                if let Err(e) = app.begin_image_import_paths(&files) {
-                    app.notify(e);
-                }
-            } else {
-                // With the preference on, last session's files come back first; files named on
-                // the command line open after them, in front (#442).
-                app.reopen_last_files(&files);
-                for f in files {
-                    app.open_path(&f);
-                }
-            }
-            for (k, v) in options {
-                if let Err(e) = app.set_option(&k, &v) {
-                    log::warn!("--{k} {v}: {e}");
-                }
-            }
-            Ok(Box::new(app))
-        }),
-    )
+        }
+        Ok(Box::new(app))
+    })
 }
 
 /// Write the control endpoint so that only the current user can read the token.
@@ -432,6 +516,26 @@ mod tests {
         assert_eq!(super::path_from_arg("https://example.com/report.pdf".to_string()), "https://example.com/report.pdf");
         assert_eq!(super::path_from_arg("file://server/share/a.pdf".to_string()), "file://server/share/a.pdf");
         assert_eq!(super::path_from_arg("file://".to_string()), "file://");
+    }
+
+    #[test]
+    fn opengl_is_the_fallback_unless_a_renderer_was_chosen() {
+        use super::{RendererChoice, native_options, renderer_choice, retry_with_gl};
+        assert_eq!(renderer_choice(None), RendererChoice::Auto);
+        assert_eq!(renderer_choice(Some("")), RendererChoice::Auto);
+        assert_eq!(renderer_choice(Some("vulkan")), RendererChoice::Auto);
+        assert_eq!(renderer_choice(Some(" WGPU ")), RendererChoice::Wgpu);
+        for gl in ["gl", "OpenGL", "glow"] {
+            assert_eq!(renderer_choice(Some(gl)), RendererChoice::Gl);
+        }
+        // Retried with OpenGL only when wgpu failed to start by default, never after the app ran.
+        assert!(retry_with_gl(RendererChoice::Auto, false));
+        assert!(!retry_with_gl(RendererChoice::Auto, true));
+        assert!(!retry_with_gl(RendererChoice::Wgpu, false));
+        assert!(!retry_with_gl(RendererChoice::Gl, false));
+        // Each run states its renderer rather than relying on eframe's default.
+        assert_eq!(native_options(false, eframe::Renderer::Wgpu).renderer, eframe::Renderer::Wgpu);
+        assert_eq!(native_options(false, eframe::Renderer::Glow).renderer, eframe::Renderer::Glow);
     }
 
     #[test]
