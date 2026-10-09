@@ -1981,3 +1981,6 @@
 	Go to page…	ページへ移動…
 	Reopen the files that were open when PdfCraft last closed	前回 PdfCraft を閉じたときに開いていたファイルを再度開く
 	The standard fonts can't draw “{c}” ({code}). Only Western European characters can be added as text for now.	標準フォントでは「{c}」（{code}）を表示できません。現在、テキストとして追加できるのは西ヨーロッパの文字のみです。
+	Larger pages	ページを大きく表示
+	Smaller pages	ページを小さく表示
+	Reset page size	ページサイズをリセット

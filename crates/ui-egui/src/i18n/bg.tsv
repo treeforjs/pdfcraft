@@ -2049,3 +2049,6 @@ action wizard	Start	Старт
 	Remove from Recent	Премахни от последно отваряните
 	Remove {name} from Recent	Премахни {name} от последно отваряните
 	The standard fonts can't draw “{c}” ({code}). Only Western European characters can be added as text for now.	Стандартните шрифтове не могат да покажат „{c}“ ({code}). Засега като текст могат да се добавят само западноевропейски символи.
+	Larger pages	По-големи страници
+	Smaller pages	По-малки страници
+	Reset page size	Възстанови размера на страниците

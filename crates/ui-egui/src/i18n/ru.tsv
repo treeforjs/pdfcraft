@@ -2001,3 +2001,6 @@
 	Created a PDF from the first {n} files	PDF создан из первых файлов: {n}
 	Go to page…	Перейти на страницу…
 	The standard fonts can't draw “{c}” ({code}). Only Western European characters can be added as text for now.	Стандартные шрифты не могут отобразить «{c}» ({code}). Пока в виде текста можно добавлять только западноевропейские символы.
+	Larger pages	Крупнее страницы
+	Smaller pages	Мельче страницы
+	Reset page size	Сбросить размер страниц

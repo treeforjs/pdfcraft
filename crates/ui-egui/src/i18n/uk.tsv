@@ -2107,3 +2107,6 @@ calendar date	December	грудня
 	Rotation:	Поворот:
 	Line ending	Закінчення лінії
 	The standard fonts can't draw “{c}” ({code}). Only Western European characters can be added as text for now.	Стандартні шрифти не можуть відобразити «{c}» ({code}). Поки що як текст можна додавати лише західноєвропейські символи.
+	Larger pages	Більші сторінки
+	Smaller pages	Менші сторінки
+	Reset page size	Скинути розмір сторінок

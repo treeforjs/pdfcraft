@@ -2087,3 +2087,6 @@ action wizard	Start	Starten
 	Remove from Recent	Aus „Zuletzt geöffnet“ entfernen
 	Remove {name} from Recent	{name} aus „Zuletzt geöffnet“ entfernen
 	The standard fonts can't draw “{c}” ({code}). Only Western European characters can be added as text for now.	Die Standardschriften können „{c}“ ({code}) nicht darstellen. Derzeit lassen sich nur westeuropäische Zeichen als Text hinzufügen.
+	Larger pages	Größere Seiten
+	Smaller pages	Kleinere Seiten
+	Reset page size	Seitengröße zurücksetzen
