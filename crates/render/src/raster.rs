@@ -1493,6 +1493,147 @@ mod tests {
 
     use super::*;
 
+    // Metadata-only: the test budget is 128 pixels and no image buffer is allocated.
+    #[test]
+    fn image_resampling_rejects_anisotropic_target_growth() {
+        assert_eq!(hayro::image_resampling_size(16, 1, 1, 16, 0.5, 32.0, 128), None);
+        assert_eq!(hayro::image_resampling_size(16, 1, 3, 48, 0.5, 32.0, 128), None);
+        assert_eq!(hayro::image_resampling_size(16, 1, 4, 64, 0.5, 32.0, 128), None);
+    }
+
+    #[test]
+    fn image_resampling_bounds_intermediate_before_planning() {
+        // Source and destination are each 128 pixels, but their crossed dimensions are 256.
+        assert_eq!(hayro::image_resampling_size(16, 8, 4, 512, 0.5, 2.0, 128), None);
+    }
+
+    #[test]
+    fn image_resampling_rejects_invalid_sources_and_scales() {
+        assert_eq!(hayro::image_resampling_size(4, 4, 3, 47, 0.5, 0.5, 128), None);
+        assert_eq!(hayro::image_resampling_size(4, 4, 3, 49, 0.5, 0.5, 128), None);
+        for scale in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY, -1.0, 0.0] {
+            assert_eq!(hayro::image_resampling_size(4, 4, 3, 48, 0.5, scale, 128), None);
+        }
+    }
+
+    #[test]
+    fn image_resampling_keeps_valid_sizes_and_exact_limits() {
+        assert_eq!(hayro::image_resampling_size(16, 8, 1, 128, 0.5, 0.5, 128), Some((8, 4)));
+        assert_eq!(hayro::image_resampling_size(16, 1, 3, 48, 0.5, 8.0, 128), Some((8, 8)));
+        assert_eq!(hayro::image_resampling_size(16, 8, 4, 512, 1.0, 1.0, 128), Some((16, 8)));
+        assert_eq!(hayro::image_resampling_size(0, 8, 1, 0, 1.0, 1.0, 128), None);
+        assert_eq!(hayro::image_resampling_size(16, 9, 1, 144, 1.0, 1.0, 128), None);
+        assert_eq!(hayro::image_resampling_size(65_536, 1, 1, 65_536, 1.0, 1.0, u64::MAX), None);
+        for channels in [1, 3, 4] {
+            assert_eq!(hayro::image_resampling_size(65_536, 1, channels, 65_536 * channels, 1.0 / 4096.0, 1.0, 65_536), Some((16, 1)));
+        }
+        assert_eq!(hayro::image_resampling_size(65_535, 1, 1, 65_535, 1.0, 1.0, 65_535), Some((65_535, 1)));
+        assert_eq!(hayro::image_resampling_size((1 << 20) + 1, 1, 1, (1 << 20) + 1, 1.0 / 4096.0, 1.0, 1 << 28), None);
+    }
+
+    #[test]
+    fn image_resampling_padded_backend_dimensions_stay_checked() {
+        // A Type 3 image's two-pixel frame may reach u16::MAX exactly, never wrap to zero.
+        assert_eq!(hayro::image_resampling_size(65_531 + 4, 1 + 4, 4, 65_535 * 5 * 4, 1.0, 1.0, 65_535 * 5), Some((65_535, 5)));
+        assert_eq!(hayro::image_resampling_size(65_531 + 4, 1 + 4, 4, 65_535 * 5 * 4, 1.0, 1.0, 65_535 * 5 - 1), None);
+        assert_eq!(hayro::image_resampling_size(65_532 + 4, 1 + 4, 4, 65_536 * 5 * 4, 1.0, 1.0, 1 << 28), None);
+    }
+    fn strip_image_pdf(width: u32, body: &str, space: &str, encoded: &str, alpha: Option<&str>) -> Vec<u8> {
+        let (mask_ref, mask_obj) = match alpha {
+            Some(data) => (
+                "/SMask 6 0 R",
+                format!(
+                    "6 0 obj << /Type /XObject /Subtype /Image /Width {width} /Height 1 /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /ASCIIHexDecode /Length {} >> stream\n{data}>\nendstream endobj\n",
+                    data.len() + 1
+                ),
+            ),
+            None => ("", String::new()),
+        };
+        format!(
+            "%PDF-1.4\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n\
+             2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n\
+             3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 20 4] /Resources << /XObject << /Im0 5 0 R >> >> /Contents 4 0 R >> endobj\n\
+             4 0 obj << /Length {} >> stream\n{body}endstream endobj\n\
+             5 0 obj << /Type /XObject /Subtype /Image /Width {width} /Height 1 /ColorSpace /{space} /BitsPerComponent 8 {mask_ref} /Filter /ASCIIHexDecode /Length {} >> stream\n{encoded}>\nendstream endobj\n\
+             {mask_obj}trailer << /Root 1 0 R >>\n%%EOF", body.len(), encoded.len() + 1,
+        ).into_bytes()
+    }
+
+    // Safe on the original renderer too: 192 KiB RGB / 64 KiB gray sources shrink to 16 pixels.
+    #[test]
+    fn image_resampling_wide_sources_shrink_before_backend_side_limits() {
+        for (space, encoded, expected) in
+            [("DeviceRGB", "ff0000".repeat(65_536), [255, 0, 0, 255]), ("DeviceGray", "7f".repeat(65_536), [127, 127, 127, 255])]
+        {
+            let pdf = strip_image_pdf(65_536, "q 16 0 0 1 2 2 cm /Im0 Do Q\n", space, &encoded, None);
+            let mut renderer = PageRenderer::new(Arc::new(pdf), RenderConfig::default());
+            let page = renderer.render(RenderRequest { page: 0, kind: RequestKind::Pixels, scale: 1.0, ..Default::default() });
+            assert!(page.error.is_none(), "{space}: {:?}", page.error);
+            assert_eq!((page.width, page.height), (20, 4));
+            let pixel = |x: usize| &page.rgba[(20 + x) * 4..][..4];
+            assert_eq!(pixel(1), &[255, 255, 255, 255], "{space}: left placement");
+            assert_eq!(pixel(3), &expected, "{space}: source image was not dropped");
+            assert_eq!(pixel(17), &expected, "{space}: right placement");
+            assert_eq!(pixel(19), &[255, 255, 255, 255], "{space}: right placement");
+        }
+    }
+
+    #[test]
+    fn image_resampling_wide_transparent_sources_still_shrink() {
+        let data = "ff0000".repeat(65_536);
+        let alpha = "7f".repeat(65_536);
+        let pdf = strip_image_pdf(65_536, "q 16 0 0 1 2 2 cm /Im0 Do Q\n", "DeviceRGB", &data, Some(&alpha));
+        let mut renderer = PageRenderer::new(Arc::new(pdf), RenderConfig::default());
+        let page = renderer.render(RenderRequest { page: 0, kind: RequestKind::Pixels, scale: 1.0, ..Default::default() });
+        assert!(page.error.is_none(), "{:?}", page.error);
+        assert_eq!((page.width, page.height), (20, 4));
+        assert_eq!(&page.rgba[(20 + 3) * 4..][..4], &[255, 128, 128, 255]);
+    }
+
+    #[test]
+    fn image_resampling_mismatched_alpha_mask_keeps_pixels_and_placement() {
+        let data = "ff0000".repeat(16);
+        let alpha = "7f".repeat(8);
+        let pdf = strip_image_pdf(16, "q 16 0 0 1 2 2 cm /Im0 Do Q\n", "DeviceRGB", &data, Some(&alpha));
+        let pdf = String::from_utf8(pdf)
+            .unwrap()
+            .replace("6 0 obj << /Type /XObject /Subtype /Image /Width 16", "6 0 obj << /Type /XObject /Subtype /Image /Width 8");
+        let mut renderer = PageRenderer::new(Arc::new(pdf.into_bytes()), RenderConfig::default());
+        let page = renderer.render(RenderRequest { page: 0, kind: RequestKind::Pixels, scale: 1.0, ..Default::default() });
+        assert!(page.error.is_none(), "{:?}", page.error);
+        assert_eq!((page.width, page.height), (20, 4));
+        let pixel = |x: usize| &page.rgba[(20 + x) * 4..][..4];
+        assert_eq!(pixel(1), &[255, 255, 255, 255]);
+        assert_eq!(pixel(3), &[255, 128, 128, 255]);
+        assert_eq!(pixel(17), &[255, 128, 128, 255]);
+        assert_eq!(pixel(19), &[255, 255, 255, 255]);
+    }
+    // GREEN-only integration: the original renderer would attempt GiB buffers. The source is
+    // only 96 KiB, and the fixed guard rejects the target before the resampling plan/allocation.
+    #[test]
+    fn resampling_fallback_preserves_original_geometry_and_pixels() {
+        let data = "ff0000".repeat(32_767);
+        let body = "q 16383.5 0 0 1000000000 2 2 cm /Im0 Do Q\n";
+        let pdf = format!(
+            "%PDF-1.4\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n\
+             2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n\
+             3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 20 20] /Resources << /XObject << /Im0 5 0 R >> >> /Contents 4 0 R >> endobj\n\
+             4 0 obj << /Length {} >> stream\n{body}endstream endobj\n\
+             5 0 obj << /Type /XObject /Subtype /Image /Width 32767 /Height 1 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Interpolate true /Filter /ASCIIHexDecode /Length {} >> stream\n{data}>\nendstream endobj\n\
+             trailer << /Root 1 0 R >>\n%%EOF",
+            body.len(),
+            data.len() + 1,
+        );
+        let mut renderer = PageRenderer::new(Arc::new(pdf.into_bytes()), RenderConfig::default());
+        let page = renderer.render(RenderRequest { page: 0, kind: RequestKind::Pixels, scale: 1.0, ..Default::default() });
+        assert!(page.error.is_none(), "{:?}", page.error);
+        assert_eq!((page.width, page.height), (20, 20));
+        let pixel = |x: usize, y: usize| &page.rgba[(y * 20 + x) * 4..][..4];
+        assert_eq!(pixel(0, 5), &[255, 255, 255, 255]);
+        assert_eq!(pixel(3, 5), &[255, 0, 0, 255]);
+        assert_eq!(pixel(19, 5), &[255, 0, 0, 255]);
+    }
+
     const ONE_PAGE: &[u8] = b"%PDF-1.4
 1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
 2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj

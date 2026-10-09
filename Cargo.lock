@@ -2285,6 +2285,7 @@ dependencies = [
  "hayro-interpret",
  "image",
  "kurbo 0.13.1",
+ "log",
  "pic-scale",
  "vello_cpu 0.0.8",
 ]
