@@ -3606,6 +3606,7 @@ dependencies = [
  "pdfcraft-render",
  "rustix 1.1.5",
  "serde_json",
+ "winresource",
 ]
 
 [[package]]
