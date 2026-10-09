@@ -605,6 +605,7 @@
 	Bottom:	下:
 	Width:	幅:
 	Height:	高さ:
+	Rotation:	回転:
 	Points from the page's bottom-left corner.	ページの左下隅からの距離（ポイント）。
 	Alignment:	配置:
 	Default Value:	既定値:

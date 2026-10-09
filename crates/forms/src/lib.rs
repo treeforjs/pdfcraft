@@ -101,6 +101,8 @@ pub struct Widget {
     pub locked: bool,
     /// The widget's Hidden or NoView flag (`/F` bit 2 or 6): it isn't shown and takes no input.
     pub hidden: bool,
+    /// `/MK /R` as 0, 90, 180 or 270 degrees counterclockwise. Anything else is stored as 0.
+    pub rotation: i64,
 }
 
 /// A terminal form field.
@@ -702,6 +704,7 @@ fn walk(
                 tab: usize::MAX,
                 locked: annot_flags & 128 != 0,
                 hidden: annot_flags & (2 | 32) != 0,
+                rotation: appearance::mk_rotation(doc, wd),
             })
         })
         .collect();

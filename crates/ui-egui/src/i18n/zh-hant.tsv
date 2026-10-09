@@ -254,6 +254,7 @@
 	Bottom:	下：
 	Width:	寬：
 	Height:	高：
+	Rotation:	旋轉：
 	Points from the page's bottom-left corner.	從頁面左下角算起的點數。
 	Alignment:	對齊：
 	Default Value:	預設值：

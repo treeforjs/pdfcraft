@@ -296,6 +296,7 @@
 	Bottom:	下：
 	Width:	宽：
 	Height:	高：
+	Rotation:	旋转：
 	Points from the page's bottom-left corner.	从页面左下角算起的点数。
 	Alignment:	对齐：
 	Default Value:	默认值：

@@ -3641,6 +3641,7 @@ dependencies = [
  "pdfcraft-cos",
  "pdfcraft-fonts",
  "pdfcraft-model",
+ "pdfcraft-render",
  "thiserror 2.0.21",
 ]
 
