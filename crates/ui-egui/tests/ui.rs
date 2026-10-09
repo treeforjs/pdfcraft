@@ -485,3 +485,94 @@ fn opening_a_pdf_keeps_a_closed_left_panel_and_the_chosen_tool() {
     assert_eq!(app.mode, Mode::AllTools);
     assert_eq!(app.left, LeftPanel::Tool("export"));
 }
+
+fn three_tab_harness() -> Harness<'static, PdfCraftApp> {
+    harness(|app| {
+        for name in ["first.pdf", "middle.pdf", "last.pdf"] {
+            app.open_bytes(name, None, FIXTURE.to_vec()).unwrap();
+        }
+    })
+}
+
+fn close_named_tab(h: &mut Harness<'static, PdfCraftApp>, name: &str) {
+    // The close button has no separate accessible label. Its centre is defined by
+    // chrome::tab relative to the actual accessible tab rectangle, not a viewport guess.
+    let pos = h.get_by_label(name).rect().right_center() - egui::vec2(16.0, 0.0);
+    h.event(egui::Event::PointerMoved(pos));
+    h.event(egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: true, modifiers: egui::Modifiers::NONE });
+    h.run_steps(1);
+    h.event(egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed: false, modifiers: egui::Modifiers::NONE });
+    h.run_steps(3);
+}
+
+#[test]
+fn closing_tabs_keeps_the_selected_document_or_selects_its_neighbor() {
+    for removed in [0, 1, 2] {
+        let mut h = three_tab_harness();
+        let ids: Vec<_> = h.state().views.iter().map(|view| view.id).collect();
+        h.get_by_label("middle.pdf").click();
+        h.run_steps(3);
+        assert_eq!(h.state().active_ids().map(|(_, id)| id), Some(ids[1]));
+        close_named_tab(&mut h, ["first.pdf", "middle.pdf", "last.pdf"][removed]);
+        let expected = if removed == 1 { ids[2] } else { ids[1] };
+        let app = h.state();
+        assert_eq!(app.active_ids().map(|(_, id)| id), Some(expected), "removed tab {removed}");
+        assert_eq!(
+            app.views.iter().map(|view| view.id).collect::<Vec<_>>(),
+            ids.iter().copied().enumerate().filter_map(|(i, id)| (i != removed).then_some(id)).collect::<Vec<_>>()
+        );
+        assert_eq!(app.session.docs().len(), 2);
+        assert!(app.session.get(ids[removed]).is_none());
+        assert!(app.close_request.is_none(), "clean tabs close without a prompt");
+        for doc in app.session.docs() {
+            assert_eq!(doc.bytes.as_slice(), FIXTURE);
+            assert!(!doc.dirty);
+        }
+    }
+}
+
+#[test]
+fn closing_the_last_active_tab_selects_the_previous_one_then_home() {
+    let mut h = three_tab_harness();
+    let ids: Vec<_> = h.state().views.iter().map(|view| view.id).collect();
+    for (removed, name) in [(2usize, "last.pdf"), (1, "middle.pdf"), (0, "first.pdf")] {
+        close_named_tab(&mut h, name);
+        let app = h.state();
+        assert_eq!(app.active_ids().map(|(_, id)| id), removed.checked_sub(1).map(|index| ids[index]));
+        assert_eq!(app.views.len(), removed);
+        assert_eq!(app.session.docs().len(), removed);
+        assert!(app.session.get(ids[removed]).is_none());
+    }
+    assert_eq!(h.state().active, None);
+    h.get_by_label_contains("Welcome to PdfCraft");
+}
+
+#[test]
+fn cancelling_then_discarding_an_earlier_dirty_tab_preserves_the_selected_document() {
+    let mut h = three_tab_harness();
+    let ids: Vec<_> = h.state().views.iter().map(|view| view.id).collect();
+    h.get_by_label("first.pdf").click();
+    h.run_steps(3);
+    assert!(h.state_mut().apply_edit(pdfcraft_engine::Edit::SetInfo { key: "Title".into(), value: "Unsaved title".into() }));
+    h.run_steps(3);
+    h.get_by_label("middle.pdf").click();
+    h.run_steps(3);
+    close_named_tab(&mut h, "first.pdf (edited)");
+    assert_eq!(h.state().close_request, Some(pdfcraft_ui_egui::CloseRequest::Tab(ids[0])));
+    h.get_by_label("Cancel").click();
+    h.run_steps(3);
+    assert_eq!(h.state().views.len(), 3);
+    assert_eq!(h.state().active_ids().map(|(_, id)| id), Some(ids[1]));
+    assert!(h.state().session.get(ids[0]).unwrap().dirty);
+    close_named_tab(&mut h, "first.pdf (edited)");
+    h.get_by_label("Don't save").click();
+    h.run_steps(3);
+    assert_eq!(h.state().active_ids().map(|(_, id)| id), Some(ids[1]));
+    assert_eq!(h.state().views.iter().map(|view| view.id).collect::<Vec<_>>(), [ids[1], ids[2]]);
+    assert!(h.state().session.get(ids[0]).is_none());
+    assert!(h.state().close_request.is_none());
+    for doc in h.state().session.docs() {
+        assert_eq!(doc.bytes.as_slice(), FIXTURE);
+        assert!(!doc.dirty);
+    }
+}
