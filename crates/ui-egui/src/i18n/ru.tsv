@@ -79,6 +79,8 @@
 	Display theme	Тема оформления
 	Side panels	Боковые панели
 	Enable Acrobat JavaScript	Включить Acrobat JavaScript
+	Flatten Fill & Sign when saving	Расплющить «Заполнить и подписать» при сохранении
+	Text, marks and signatures become part of the page. Other comments stay editable.	Текст, пометки и подписи становятся частью страницы. Остальные комментарии можно по-прежнему править.
 	OK	OK
 	Join our Discord	Присоединяйтесь к нашему Discord
 	Close	Закрыть

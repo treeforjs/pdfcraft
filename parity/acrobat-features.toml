@@ -5235,11 +5235,11 @@ title = "Fill & Sign: flatten on save"
 area = "F"
 tier = "P0"
 milestone = "M5"
-status = "partial"
+status = "shipped"
 commands = ["comment.flatten"]
-tools = ["doc_flatten"]
-evidence = ["crates/edit/src/tests.rs::flattening_draws_appearances_into_the_page_and_removes_the_comments", "crates/engine/src/tests.rs::flattening_keeps_the_look_and_drops_the_objects", "crates/automation/tests/automation.rs::flattening_through_tools"]
-notes = "Flatten comments flattens Fill & Sign items; no flatten-on-save option yet"
+tools = ["doc_save", "doc_flatten"]
+evidence = ["crates/edit/src/tests.rs::fill_sign_flatten_bakes_marks_keeps_other_comments_and_does_not_reuse_pcfl0", "crates/engine/src/tests.rs::flattening_fill_and_sign_keeps_other_comments_fields_and_undoes", "crates/engine/src/tests.rs::flattening_fill_and_sign_is_refused_without_permission_to_change", "crates/automation/tests/automation.rs::saving_with_flatten_fill_sign_bakes_marks_and_leaves_other_comments", "crates/ui-egui/tests/fill_sign.rs::saving_flattens_fill_and_sign_only_when_the_preference_is_on"]
+notes = "Preferences ▸ Fill & Sign, and doc_save flatten_fill_sign, bake text, marks and signatures into the page. The option defaults off, so a normal save leaves them editable. Other comments and form fields stay. Flatten comments still flattens every comment."
 
 [[feature]]
 id = "form.autofill-profile"
@@ -9675,7 +9675,7 @@ status = "partial"
 commands = ["app.preferences"]
 tools = ["js_enabled"]
 evidence = ["crates/ui-egui/tests/javascript.rs::document_scripts_and_preferences", "crates/ui-egui/tests/ui.rs::preferences_selects_default_workspace_for_next_open", "crates/ui-egui/tests/control.rs::control_default_workspace_and_session_override"]
-notes = "Preferences dialog with Interface language, Documents and view (persistent default workspace with session override), Identity and JavaScript; other categories still live in their tools, and it isn't generated from a schema yet."
+notes = "Preferences dialog with Interface language, Documents and view (persistent default workspace with session override), Identity, Fill & Sign (flatten on save, off by default) and JavaScript; other categories still live in their tools, and it isn't generated from a schema yet."
 
 [[feature]]
 id = "misc.prefs-general"

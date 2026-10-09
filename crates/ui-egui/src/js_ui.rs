@@ -307,6 +307,12 @@ pub(crate) fn preferences_body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tok
             .labelled_by(label.id);
     });
     ui.add_space(8.0);
+    ui.label(egui::RichText::new(tl!("Fill & Sign")).font(theme::semibold(13.0)));
+    ui.checkbox(&mut app.flatten_fill_sign_on_save, tl!("Flatten Fill & Sign when saving"));
+    ui.label(
+        egui::RichText::new(tl!("Text, marks and signatures become part of the page. Other comments stay editable.")).small().color(t.text_muted),
+    );
+    ui.add_space(8.0);
     ui.label(egui::RichText::new("JavaScript").font(theme::semibold(13.0)));
     egui::Frame::new().fill(t.hover).corner_radius(egui::CornerRadius::same(6)).inner_margin(egui::Margin::same(10)).show(ui, |ui| {
         ui.set_width(ui.available_width());

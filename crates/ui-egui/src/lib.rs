@@ -370,6 +370,8 @@ pub struct PdfCraftApp {
     pub theme_preference: ThemePreference,
     /// Interface language preference: `auto` (follow the system) or a code from [`i18n::LANGUAGES`].
     pub language: String,
+    /// Preferences: bake Fill & Sign marks into the page when saving. Off, so a normal save stays editable.
+    pub flatten_fill_sign_on_save: bool,
     pub dialog: Option<Dialog>,
     /// How to ask for the latest release (the desktop app sets it; see `updates`).
     pub update_source: Option<updates::UpdateSource>,
@@ -620,6 +622,7 @@ impl PdfCraftApp {
             theme: ThemeKind::Light,
             theme_preference: ThemePreference::Light,
             language: i18n::AUTO.to_string(),
+            flatten_fill_sign_on_save: false,
             dialog: None,
             update_source: None,
             updates: updates::Updates::default(),
@@ -1207,6 +1210,7 @@ impl PdfCraftApp {
             "default_zoom": self.view_defaults.zoom_name(),
             "highlight_fields": self.view_defaults.highlight_fields,
             "language": self.language,
+            "flatten_fill_sign": self.flatten_fill_sign_on_save,
             "author": self.comment_prefs.author,
             // Drawn signatures keep their original form (older settings read the same).
             "signature": match &self.signature { Some(fill_sign::SavedSig::Drawn(s)) => Some(s), _ => None },
@@ -1260,6 +1264,9 @@ impl PdfCraftApp {
         }
         if let Some(language) = v["language"].as_str().and_then(i18n::normalize_pref) {
             self.language = language.to_string();
+        }
+        if let Some(on) = v["flatten_fill_sign"].as_bool() {
+            self.flatten_fill_sign_on_save = on;
         }
         // An empty or missing name keeps the login-name default; settings are untrusted, so the
         // name is cut to a sane length.
@@ -1506,6 +1513,13 @@ impl PdfCraftApp {
                 };
             }
             ("author", _) => self.comment_prefs.author = value.to_string(),
+            ("flatten-fill-sign", _) => {
+                self.flatten_fill_sign_on_save = match value {
+                    "true" => true,
+                    "false" => false,
+                    _ => return Err("flatten-fill-sign must be true or false".into()),
+                };
+            }
             ("comment", Some(v)) => {
                 // `--comment 2:4` selects the 4th annotation of page 2 (1-based, as comment_list reports).
                 let (p, i) = value.split_once(':').ok_or("comment: PAGE:INDEX")?;

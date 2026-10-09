@@ -645,6 +645,10 @@ impl Automation {
         let same_file = doc.path.as_deref().is_some_and(|p| Path::new(p) == target);
         // Saving to a new file is a full rewrite unless asked otherwise, like Save As.
         let full = a.opt_bool("full")?.unwrap_or(!same_file);
+        let flatten_fill_sign = a.opt_bool("flatten_fill_sign")?.unwrap_or(false);
+        if flatten_fill_sign {
+            self.apply(a, Edit::FlattenFillSign)?;
+        }
         let bytes = if full { self.session.save_full_bytes(id) } else { self.session.save_bytes(id) }.map_err(failed)?;
         write_atomic(&target, &bytes)?;
         let path = target.to_string_lossy().into_owned();

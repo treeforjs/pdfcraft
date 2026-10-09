@@ -2088,3 +2088,8 @@ action wizard	Start	Indítás
 	Larger pages	Nagyobb oldalak
 	Smaller pages	Kisebb oldalak
 	Reset page size	Oldalméret visszaállítása
+	Larger pages	Nagyobb oldalak
+	Smaller pages	Kisebb oldalak
+	Reset page size	Oldalméret visszaállítása
+	Flatten Fill & Sign when saving	Kitöltés és aláírás beégetése mentéskor
+	Text, marks and signatures become part of the page. Other comments stay editable.	A szöveg, a jelek és az aláírások az oldal részévé válnak. A többi megjegyzés szerkeszthető marad.

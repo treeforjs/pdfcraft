@@ -132,12 +132,17 @@ pub fn tools() -> Vec<ToolDef> {
         t(
             "doc_save",
             "Save a document",
-            "Save to its own file (an incremental update, which keeps signatures valid) or to a new path (a full rewrite). The write is atomic.",
+            "Save to its own file (an incremental update, which keeps signatures valid) or to a new path (a full rewrite). The write is atomic. flatten_fill_sign bakes Fill & Sign text, marks and signatures into the page first and removes those annotations; other comments and form fields stay. Omit it, or pass false, to leave them editable.",
         )
         .destructive()
         .cmd("file.save")
         .with(schema(
-            json!({ "doc": doc(), "path": { "type": "string", "description": "Save as this file. Omit to save in place." }, "full": { "type": "boolean", "description": "Force a full rewrite (or, with false, an incremental update)." } }),
+            json!({
+                "doc": doc(),
+                "path": { "type": "string", "description": "Save as this file. Omit to save in place." },
+                "full": { "type": "boolean", "description": "Force a full rewrite (or, with false, an incremental update)." },
+                "flatten_fill_sign": { "type": "boolean", "description": "Bake Fill & Sign marks into the page before writing. Default false." }
+            }),
             &["doc"],
         )),
         t("doc_set_info", "Set document metadata", "Set a document information entry such as Title, Author, Subject or Keywords. Undoable.")
