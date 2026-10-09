@@ -337,6 +337,11 @@ impl DocView {
         self.auto_scroll.active()
     }
 
+    /// Whether a held middle-button pan is active, outside Linux (tests and automation).
+    pub fn middle_panning(&self) -> bool {
+        self.auto_scroll.panning()
+    }
+
     /// Pages that could not be rendered, with the reason (for automation; 0-based pages).
     pub fn page_errors(&self) -> Vec<(usize, &str)> {
         let mut v: Vec<(usize, &str)> = self.errors.iter().map(|(p, e)| (*p, e.as_str())).collect();
