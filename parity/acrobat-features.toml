@@ -1235,11 +1235,11 @@ title = "Page operations from the thumbnails panel (drag reorder, context menu)"
 area = "B"
 tier = "P1"
 milestone = "M4"
-status = "planned"
+status = "shipped"
 commands = []
 tools = []
-evidence = []
-notes = ""
+evidence = ["crates/ui-egui/tests/editing.rs::dragging_pages_panel_thumbnails_reorders_pages", "crates/ui-egui/tests/viewer.rs::pages_panel_thumbnails_have_a_context_menu"]
+notes = "Drag the selection (or the page grabbed) to reorder, with a drop bar and edge scrolling; right-click offers Extract pages, Cut, Copy and Paste after. Not yet: Rotate, Delete, Insert and Page labels in the menu, dragging pages between documents, or dropping files onto the panel."
 
 [[feature]]
 id = "view.bookmarks-panel"
