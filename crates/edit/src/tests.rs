@@ -336,11 +336,21 @@ fn own(doc: &Document, index: usize) -> Vec<String> {
 fn odd_arabic_text_never_panics() {
     let mut doc = fixture();
     let long = "بسم الله ".repeat(2_000);
-    for s in
-        ["\u{202E}ب\u{064B}\u{064B} (]", "\u{064B}", "ا\u{200F}\u{2067}b\u{2069}", "ا\n\nب\tc", "ا\u{2029}ب\rc\u{85}د\n", "ﷺ ١٢٣ 456", long.as_str()]
-    {
+    for s in ["\u{202E}ب\u{064B}\u{064B} (]", "\u{064B}", "ا\u{200F}\u{2067}b\u{2069}", "ا\n\nب\tc", "ﷺ ١٢٣ 456", long.as_str()] {
         let r = add_content(&mut doc, 0, &Content::Text(AddedText { rect: [0.0, 800.0, 300.0, 780.0], text: s.into(), ..AddedText::default() }));
         assert_eq!(r.is_ok(), pdfcraft_fonts::document_arabic_font().is_some(), "{:?}: {r:?}", s.chars().take(12).collect::<String>());
+    }
+    // U+2029 and U+0085 (paragraph and line separators) have no WinAnsi code, so the standard font
+    // would draw them as `?`: refused, by name, rather than written (#125). Laying it out still
+    // mustn't panic.
+    let r = add_content(
+        &mut doc,
+        0,
+        &Content::Text(AddedText { rect: [0.0, 800.0, 300.0, 780.0], text: "ا\u{2029}ب\rc\u{85}د\n".into(), ..AddedText::default() }),
+    );
+    assert!(r.is_err(), "{r:?}");
+    if pdfcraft_fonts::document_arabic_font().is_some() {
+        assert!(matches!(&r, Err(EditError::Invalid(m)) if m.contains("U+2029") || m.contains("U+0085")), "{r:?}");
     }
     // A character the face lacks is an error that names it, not a box or a crash.
     if pdfcraft_fonts::document_arabic_font().is_some() && !pdfcraft_fonts::arabic_has('\u{FDFD}') {
@@ -1193,4 +1203,68 @@ fn the_graphics_state_carries_over_between_content_streams() {
     let doc = split_page("q 0.5 0 0 0.5 0 0 cm", "Q BT /F1 10 Tf 100 100 Td (Footpath) Tj ET");
     let l = &text::text_lines(&doc, 0).unwrap()[0];
     assert!(close(l.rect[0], 100.0) && close(l.size, 10.0), "{l:?}");
+}
+
+/// #125: page-content tools refuse text the standard fonts can't draw instead of writing `?`,
+/// and leave the document untouched.
+#[test]
+fn page_text_the_standard_fonts_cant_draw_is_refused() {
+    let mut doc = fixture();
+    let before: Vec<Vec<String>> = (0..3).map(|p| streams(&reopen(&doc), p)).collect();
+    let text = AddedText { rect: [72.0, 600.0, 300.0, 700.0], text: "日本語のテキスト".into(), ..AddedText::default() };
+    let err = add_content(&mut doc, 0, &Content::Text(text)).unwrap_err().to_string();
+    assert!(err.contains("\"日\" (U+65E5)"), "{err}");
+    let hf = HeaderFooter {
+        text: ["Ελληνικά".into(), String::new(), String::new(), String::new(), String::new(), String::new()],
+        ..HeaderFooter::default()
+    };
+    assert!(add_header_footer(&mut doc, &[0, 1], &hf, true, &cx()).unwrap_err().to_string().contains("U+0395"));
+    let wm = Watermark { text: "机密".into(), ..Watermark::default() };
+    assert!(add_watermark(&mut doc, &[0], &wm, true).unwrap_err().to_string().contains("U+673A"));
+    let after: Vec<Vec<String>> = (0..3).map(|p| streams(&reopen(&doc), p)).collect();
+    assert_eq!(before, after, "a refused edit changes nothing");
+    // Western European text, including what only WinAnsi (not Latin-1) has, still works.
+    let text = AddedText { rect: [72.0, 600.0, 300.0, 700.0], text: "Café — 5€ ™".into(), ..AddedText::default() };
+    add_content(&mut doc, 0, &Content::Text(text.clone())).unwrap();
+    // Retyping existing text is refused the same way, and the whole document is left as it was.
+    let saved = write_incremental(&doc, &SaveOptions::default()).unwrap();
+    let retyped = AddedText { text: "Café 中".into(), ..text.clone() };
+    assert!(update_content(&mut doc, 0, 0, &Content::Text(retyped)).unwrap_err().to_string().contains("U+4E2D"));
+    assert_eq!(write_incremental(&doc, &SaveOptions::default()).unwrap(), saved, "a refused update changes nothing");
+    // A carriage return is checked where it would be drawn: added text splits on LF only, so
+    // CRLF would leave a `?`; headers and watermarks split CRLF into lines, but not a lone CR.
+    let crlf = AddedText { text: "A\r\nB".into(), ..text };
+    assert!(add_content(&mut doc, 0, &Content::Text(crlf)).unwrap_err().to_string().contains("U+000D"));
+    let hf = |t: &str| HeaderFooter {
+        text: [t.into(), String::new(), String::new(), String::new(), String::new(), String::new()],
+        ..HeaderFooter::default()
+    };
+    add_header_footer(&mut doc, &[0], &hf("Left\r\n<<Bates Number#6#1#ACME-#>>"), true, &cx()).unwrap();
+    assert!(add_header_footer(&mut doc, &[0], &hf("A\rB"), true, &cx()).unwrap_err().to_string().contains("U+000D"));
+    // Arabic is shaped with the craft-fonts Arabic face (#403): drawable when that face is built
+    // in, refused (never written as `?`) when it isn't. Text left to the standard font still counts.
+    let arabic = |text: &str| AddedText { rect: [72.0, 600.0, 300.0, 700.0], text: text.into(), ..AddedText::default() };
+    // U+061C is in the Arabic block but is a direction mark that's dropped, not shaped: it never
+    // makes text drawable, nor (with the face) undrawable.
+    assert!(add_content(&mut doc, 0, &Content::Text(arabic("\u{061C}中"))).is_err());
+    if pdfcraft_fonts::arabic_has('م') {
+        add_content(&mut doc, 0, &Content::Text(arabic("مرحبا Hello"))).unwrap();
+        add_content(&mut doc, 0, &Content::Text(arabic("\u{061C}Hello"))).unwrap();
+        for text in ["مرحبا 中", "\u{061C}中"] {
+            let err = add_content(&mut doc, 0, &Content::Text(arabic(text))).unwrap_err().to_string();
+            assert!(err.contains("U+4E2D"), "{text:?}: {err}");
+        }
+    } else {
+        // #403's own refusal says what's missing; the Add-text editor still keeps the draft.
+        let err = add_content(&mut doc, 0, &Content::Text(arabic("مرحبا Hello"))).unwrap_err().to_string();
+        assert!(err.contains("CRAFT_FONTS_DIR"), "{err}");
+        assert_eq!(first_undrawable(&arabic("مرحبا Hello")), Some('م'));
+        // An existing item may still take Arabic (#403 keeps it movable), but nothing else that
+        // the standard font would write as `?`.
+        let n = list_added(&doc).iter().filter(|a| a.page == 0).count();
+        add_content(&mut doc, 0, &Content::Text(arabic("x"))).unwrap();
+        let err = update_content(&mut doc, 0, n, &Content::Text(arabic("ب中"))).unwrap_err().to_string();
+        assert!(err.contains("U+4E2D"), "{err}");
+        update_content(&mut doc, 0, n, &Content::Text(arabic("ب"))).unwrap();
+    }
 }

@@ -2039,3 +2039,4 @@
 	Pinned {folder} to Home	{folder} épinglé à l'Accueil
 	No recent files	Aucun fichier récent
 	Go to page…	Aller à la page…
+	The standard fonts can't draw “{c}” ({code}). Only Western European characters can be added as text for now.	Les polices standard ne peuvent pas afficher « {c} » ({code}). Pour l'instant, seuls les caractères d'Europe occidentale peuvent être ajoutés comme texte.

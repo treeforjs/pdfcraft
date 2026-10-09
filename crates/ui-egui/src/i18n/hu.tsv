@@ -2084,3 +2084,4 @@ action wizard	Start	Indítás
 	H / Space (hold)	H / szóköz (nyomva tartva)
 	Rotation:	Elforgatás:
 	Line ending	Vonalvég
+	The standard fonts can't draw “{c}” ({code}). Only Western European characters can be added as text for now.	A szabványos betűtípusok nem tudják megjeleníteni ezt: „{c}” ({code}). Egyelőre csak nyugat-európai karakterek adhatók hozzá szövegként.
