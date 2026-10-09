@@ -503,6 +503,37 @@ fn japanese_controls_and_search_keep_command_ids() {
 }
 
 #[test]
+fn german_preferences_and_search_keep_command_ids() {
+    let (mut h, c) = harness();
+    ok(&mut h, &c, "ui.set", json!({ "key": "language", "value": "de" }));
+    ok(&mut h, &c, "ui.click", json!({ "label": "Lesen" }));
+    assert_eq!(ok(&mut h, &c, "ui.state", json!({}))["mode"], "Read");
+    ok(&mut h, &c, "ui.command", json!({ "id": "app.preferences" }));
+    let prefs = ok(&mut h, &c, "ui.inspect", json!({ "query": "Sprache der Oberfläche" }));
+    assert!(prefs["count"].as_u64().unwrap() > 0, "{prefs}");
+    let selector = ok(&mut h, &c, "ui.inspect", json!({ "query": "Deutsch" }));
+    let combo = selector["widgets"].as_array().unwrap().iter().find(|w| w["role"] == "ComboBox").expect("language selector");
+    ok(&mut h, &c, "ui.click", json!({ "id": combo["id"] }));
+    ok(&mut h, &c, "ui.click", json!({ "label": "English" }));
+    assert_eq!(ok(&mut h, &c, "ui.state", json!({}))["language"], "en");
+    let selector = ok(&mut h, &c, "ui.inspect", json!({ "query": "English" }));
+    let combo = selector["widgets"].as_array().unwrap().iter().find(|w| w["role"] == "ComboBox").expect("language selector");
+    ok(&mut h, &c, "ui.click", json!({ "id": combo["id"] }));
+    ok(&mut h, &c, "ui.click", json!({ "label": "Deutsch" }));
+    assert_eq!(ok(&mut h, &c, "ui.state", json!({}))["language"], "de");
+    ok(&mut h, &c, "ui.click", json!({ "label": "OK" }));
+    for query in ["Dokument teilen", "Split document", "page.split"] {
+        ok(&mut h, &c, "ui.command", json!({ "id": "view.palette" }));
+        ok(&mut h, &c, "ui.type", json!({ "text": query }));
+        let hits = ok(&mut h, &c, "ui.inspect", json!({ "query": "Dokument teilen…" }));
+        assert!(hits["count"].as_u64().unwrap() > 0, "{query}: {hits}");
+        ok(&mut h, &c, "ui.key", json!({ "key": "Escape" }));
+        h.state_mut().palette_query.clear();
+    }
+    assert_eq!(ok(&mut h, &c, "ui.state", json!({}))["documents"][0]["name"], "doc.pdf");
+}
+
+#[test]
 fn preferences_menu_and_shortcut_allow_switching_interface_languages() {
     let (mut h, c) = harness();
     ok(&mut h, &c, "ui.set", json!({ "key": "language", "value": "ja" }));

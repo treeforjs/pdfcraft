@@ -290,6 +290,12 @@ pub fn set_current(lang: Lang) {
 }
 
 /// The language the UI is drawn in.
+/// `label` as it reads inside a sentence ("add a text box"): lowercased, except in languages
+/// that capitalise nouns (German), where lowercasing would misspell it.
+pub fn in_sentence(label: &str) -> std::borrow::Cow<'_, str> {
+    if current().code() == "de" { std::borrow::Cow::Borrowed(label) } else { std::borrow::Cow::Owned(label.to_lowercase()) }
+}
+
 pub fn current() -> Lang {
     CURRENT.get()
 }
@@ -1214,6 +1220,24 @@ mod tests {
         assert!(literals.len() > 900, "source scan found only {} literals", literals.len());
         let missing: Vec<_> = literals.iter().filter(|label| !has(de, label)).collect();
         assert!(missing.is_empty(), "untranslated German UI literals: {missing:#?}");
+    }
+
+    #[test]
+    fn tool_names_inside_sentences_are_lowercased_except_in_german() {
+        set_current(Lang::EN);
+        assert_eq!(in_sentence("Text Box"), "text box");
+        set_current(Lang::from_code("de").expect("de registered"));
+        assert_eq!(in_sentence("Textfeld"), "Textfeld");
+        set_current(Lang::EN);
+    }
+
+    #[test]
+    fn german_certificate_subject_has_a_distinct_context() {
+        let de = Lang::from_code("de").expect("de registered");
+        assert_eq!(tr(de, "Subject"), "Thema");
+        assert_eq!(tr_ctx(de, "certificate", "Subject"), "Zertifikatsinhaber");
+        assert_eq!(tr_ctx(de, "certificate", "Issuer"), tr(de, "Issuer"));
+        assert_eq!(tr_ctx(Lang::EN, "certificate", "Subject"), "Subject");
     }
 
     #[test]

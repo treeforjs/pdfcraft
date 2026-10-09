@@ -85,7 +85,7 @@ licence = "MIT OR Apache-2.0"
 licence_file = "LICENSE-MIT"
 kind = "translation"
 usage = "German UI strings, compiled in by crates/ui-egui/src/i18n/mod.rs"
-sha256 = "f46a3815d45c4ffba9690dd8c30c1f799bca1620dc33f242e2d27e805f9747a6"
+sha256 = "ef0c8f5830ecb2950b6956eff50f963282bc607f4aedd98d89b9020a73db53b7"
 
 [[asset]]
 path = "crates/ui-egui/src/i18n/te.tsv"
