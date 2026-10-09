@@ -1379,6 +1379,102 @@ trailer << /Root 1 0 R >>
         assert_eq!(&page.rgba[((38 * 40 + 1) * 4)..][..4], &[255, 0, 0, 255]);
     }
 
+    /// Contributor-original JPEG 2000: one unsigned 8-bit pixel per component, one tile,
+    /// no decomposition, reversible wavelet, and one empty packet per component. Empty
+    /// coefficients decode to the midpoint (128) after the unsigned DC level shift.
+    fn jpx_midpoint_pdf(bpc: u8, components: u16) -> Vec<u8> {
+        let mut codestream = vec![0xff, 0x4f, 0xff, 0x51]; // SOC, SIZ.
+        codestream.extend_from_slice(&(38 + 3 * components).to_be_bytes());
+        codestream.extend_from_slice(&0_u16.to_be_bytes()); // Rsiz.
+        for value in [1_u32, 1, 0, 0, 1, 1, 0, 0] {
+            codestream.extend_from_slice(&value.to_be_bytes());
+        }
+        codestream.extend_from_slice(&components.to_be_bytes());
+        for _ in 0..components {
+            codestream.extend_from_slice(&[7, 1, 1]); // Eight bits, no subsampling.
+        }
+        // COD: LRCP, one layer, no transform between components, 64x64 codeblocks,
+        // zero decomposition levels, reversible wavelet. QCD: no quantization.
+        codestream.extend_from_slice(&[0xff, 0x52, 0, 12, 0, 0, 0, 1, 0, 0, 4, 4, 0, 1]);
+        codestream.extend_from_slice(&[0xff, 0x5c, 0, 4, 0x40, 0x40]);
+        codestream.extend_from_slice(&[0xff, 0x90, 0, 10, 0, 0]); // SOT, tile zero.
+        codestream.extend_from_slice(&(14 + u32::from(components)).to_be_bytes());
+        codestream.extend_from_slice(&[0, 1, 0xff, 0x93]); // One tile part, SOD.
+        codestream.extend(std::iter::repeat_n(0, usize::from(components)));
+        codestream.extend_from_slice(&[0xff, 0xd9]); // EOC.
+
+        let content = "q 20 0 0 20 5 5 cm /Im1 Do Q 1 0 0 rg 0 0 4 4 re f";
+        let mut pdf = format!(
+            "%PDF-1.7\n\
+1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n\
+2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n\
+3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 40 40] /Contents 4 0 R /Resources << /XObject << /Im1 5 0 R >> >> >> endobj\n\
+4 0 obj << /Length {} >> stream\n{content}\nendstream endobj\n\
+5 0 obj << /Type /XObject /Subtype /Image /Width 1 /Height 1 /BitsPerComponent {bpc} /Filter /JPXDecode /Length {} >> stream\n",
+            content.len(),
+            codestream.len()
+        )
+        .into_bytes();
+        pdf.extend_from_slice(&codestream);
+        pdf.extend_from_slice(b"\nendstream endobj\ntrailer << /Root 1 0 R >>\n%%EOF");
+        pdf
+    }
+
+    #[test]
+    fn jpx_stream_bit_depth_boundaries_do_not_panic() {
+        use hayro::hayro_syntax::bit_reader::BitReader;
+        use hayro::hayro_syntax::object::stream::ImageDecodeParams;
+
+        for (bpc, expected) in [(1, 1), (8, 128), (16, 32_896), (31, 1_077_952_576), (32, 2_155_905_152)] {
+            let pdf = Pdf::new(Arc::new(jpx_midpoint_pdf(bpc, 1))).unwrap();
+            let stream = pdf.objects().into_iter().filter_map(|object| object.into_stream()).find(|stream| !stream.filters().is_empty()).unwrap();
+            let decoded = stream.decoded_image(&ImageDecodeParams { bpc: Some(bpc), ..Default::default() }).unwrap();
+            let image = decoded.image_data.unwrap();
+            assert_eq!((image.width, image.height, image.bits_per_component), (1, 1, bpc));
+            assert_eq!(decoded.data.len(), usize::from(bpc).div_ceil(8));
+            assert_eq!(BitReader::new(&decoded.data).read(bpc), Some(expected), "{bpc}-bit midpoint");
+        }
+    }
+
+    #[test]
+    fn jpx_streams_reject_out_of_range_bit_depths() {
+        use hayro::hayro_syntax::object::stream::ImageDecodeParams;
+
+        for bpc in [0, 33, 255] {
+            let pdf = Pdf::new(Arc::new(jpx_midpoint_pdf(bpc, 1))).unwrap();
+            let stream = pdf.objects().into_iter().filter_map(|object| object.into_stream()).find(|stream| !stream.filters().is_empty()).unwrap();
+            assert!(stream.decoded_image(&ImageDecodeParams { bpc: Some(bpc), ..Default::default() }).is_err());
+        }
+    }
+
+    #[test]
+    fn jpx_gray_rgb_and_alpha_keep_eight_bit_samples() {
+        use hayro::hayro_syntax::object::stream::ImageDecodeParams;
+
+        for components in [1, 3, 4] {
+            let pdf = Pdf::new(Arc::new(jpx_midpoint_pdf(8, components))).unwrap();
+            let stream = pdf.objects().into_iter().filter_map(|object| object.into_stream()).find(|stream| !stream.filters().is_empty()).unwrap();
+            let decoded = stream.decoded_image(&ImageDecodeParams::default()).unwrap();
+            let expected_colors = usize::from(components.min(3));
+            assert_eq!(decoded.data.as_ref(), vec![128; expected_colors]);
+            let alpha = decoded.image_data.unwrap().alpha;
+            assert_eq!(alpha, (components == 4).then(|| vec![128]));
+        }
+    }
+
+    #[test]
+    fn jpx_32_bit_image_does_not_prevent_other_page_content_from_rendering() {
+        for bpc in [8, 32] {
+            let mut renderer = PageRenderer::new(Arc::new(jpx_midpoint_pdf(bpc, 1)), RenderConfig::default());
+            let page = renderer.render(RenderRequest { page: 0, kind: RequestKind::Pixels, tile: None, scale: 1.0, tag: 0 });
+            assert!(page.error.is_none(), "{bpc} bits: {:?}", page.error);
+            assert_eq!(&page.rgba[((38 * 40 + 1) * 4)..][..4], &[255, 0, 0, 255], "other page content draws");
+            if bpc == 8 {
+                assert_eq!(&page.rgba[((25 * 40 + 15) * 4)..][..4], &[128, 128, 128, 255], "the valid image paints gray");
+            }
+        }
+    }
+
     /// From the nightly `cargo xtask fuzz` (CI caps each child at 4 GiB): a stencil mask claiming
     /// /W 4294967295 and a CCITT image claiming /Columns 4294967295 each allocated 4 GiB while
     /// decoding (locally: 9.6 GB and 4.3 GB). Vendored hayro patches `image_size_ok` and
