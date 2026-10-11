@@ -103,6 +103,31 @@ fn empty_user_password_opens_but_reports_restrictions() {
 }
 
 #[test]
+fn empty_owner_password_does_not_bypass_the_open_password() {
+    let bytes = Arc::new(protect(Algorithm::Aes256, "user secret", "", -1));
+    assert!(matches!(Document::open(bytes.clone()), Err(CosError::NeedsPassword)));
+    assert!(matches!(Document::open_with_password(bytes.clone(), Some("")), Err(CosError::WrongPassword)));
+    let reopened = Document::open_with_password(bytes.clone(), Some("user secret")).unwrap();
+    assert_eq!(reopened.security().unwrap().auth(), Auth::Owner);
+    assert_eq!(content(&reopened), SECRET);
+    assert!(hayro_syntax::Pdf::new(bytes.as_ref().clone()).is_err());
+    assert!(hayro_syntax::Pdf::new_with_password(bytes.as_ref().clone(), "user secret").is_ok());
+}
+
+#[test]
+fn changed_permission_dictionary_is_rejected_on_reopen() {
+    let bytes = Arc::new(protect(Algorithm::Aes256, "user", "owner", 0b0100));
+    let mut doc = Document::open_with_password(bytes, Some("owner")).unwrap();
+    let encrypt = doc.trailer().reference(b"Encrypt").unwrap();
+    // /P is plaintext: an attacker can edit it without changing the encrypted /Perms block.
+    doc.update_dict(encrypt, |d| d.set(b"P".to_vec(), Object::Int(-4))).unwrap();
+    let tampered = Arc::new(write_incremental(&doc, &SaveOptions::default()).unwrap());
+    for password in ["user", "owner"] {
+        assert!(matches!(Document::open_with_password(tampered.clone(), Some(password)), Err(CosError::Security(_))));
+    }
+}
+
+#[test]
 fn incremental_edits_of_encrypted_documents_stay_encrypted() {
     for alg in ALL {
         let original = protect(alg, "user", "owner", -1);

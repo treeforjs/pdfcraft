@@ -79,6 +79,65 @@ fn empty_user_password_opens_without_asking() {
 }
 
 #[test]
+fn empty_owner_password_uses_the_user_password() {
+    for alg in ALL {
+        let made = new(alg, "user secret", "", -1);
+        let d = made.dict().clone();
+        assert_eq!(SecurityHandler::open(d.clone(), ID, None).unwrap_err(), CryptError::WrongPassword, "{alg:?}");
+        assert_eq!(SecurityHandler::open(d.clone(), ID, Some("")).unwrap_err(), CryptError::WrongPassword, "{alg:?}");
+        let reopened = SecurityHandler::open(d, ID, Some("user secret")).unwrap();
+        assert_eq!(reopened.auth(), Auth::Owner, "{alg:?}");
+        assert_eq!(reopened.file_key(), made.file_key(), "{alg:?}");
+    }
+}
+
+#[test]
+fn r6_rejects_tampered_permissions() {
+    let made = new(Algorithm::Aes256, "user", "owner", 0b0100);
+    for password in ["user", "owner"] {
+        let mut d = made.dict().clone();
+        d.p |= 1 << 4; // Grant copying without knowing the owner password or file key.
+        assert!(matches!(SecurityHandler::open(d, ID, Some(password)), Err(CryptError::Malformed(_))));
+        let mut d = made.dict().clone();
+        d.encrypt_metadata = !d.encrypt_metadata;
+        assert!(matches!(SecurityHandler::open(d, ID, Some(password)), Err(CryptError::Malformed(_))));
+        let mut d = made.dict().clone();
+        d.perms[0] ^= 1;
+        assert!(matches!(SecurityHandler::open(d, ID, Some(password)), Err(CryptError::Malformed(_))));
+        for len in [0, 15, 17] {
+            let mut d = made.dict().clone();
+            d.perms.resize(len, 0);
+            assert!(matches!(SecurityHandler::open(d, ID, Some(password)), Err(CryptError::Malformed(_))));
+        }
+    }
+}
+
+#[test]
+fn r5_validates_permissions_with_both_passwords() {
+    let made = new(Algorithm::Aes256, "user", "owner", 0b0100);
+    let mut d = made.dict().clone();
+    d.r = 5;
+    // R5 uses SHA-256 directly for the credential hashes; the file key and /Perms are
+    // encrypted the same way as R6. Keep the generated salts and wrap that same key.
+    let mut u = hash_r6(5, b"user", &d.u[32..40], &[]);
+    u.extend_from_slice(&d.u[32..48]);
+    d.ue = aes_cbc_encrypt(&hash_r6(5, b"user", &u[40..48], &[]), &[0; 16], made.file_key(), false);
+    d.u = u;
+    let mut o = hash_r6(5, b"owner", &d.o[32..40], &d.u);
+    o.extend_from_slice(&d.o[32..48]);
+    d.oe = aes_cbc_encrypt(&hash_r6(5, b"owner", &o[40..48], &d.u), &[0; 16], made.file_key(), false);
+    d.o = o;
+    for (password, auth) in [("user", Auth::User), ("owner", Auth::Owner)] {
+        let reopened = SecurityHandler::open(d.clone(), ID, Some(password)).unwrap();
+        assert_eq!(reopened.auth(), auth);
+        assert_eq!(reopened.file_key(), made.file_key());
+        let mut tampered = d.clone();
+        tampered.p |= 1 << 4;
+        assert!(matches!(SecurityHandler::open(tampered, ID, Some(password)), Err(CryptError::Malformed(_))));
+    }
+}
+
+#[test]
 fn strings_and_streams_round_trip_and_are_scrambled() {
     for alg in ALL {
         let h = new(alg, "", "o", -1);

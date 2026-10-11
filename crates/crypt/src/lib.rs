@@ -173,6 +173,9 @@ impl SecurityHandler {
             }
             r => return Err(CryptError::Unsupported(format!("revision {r}"))),
         };
+        if dict.r >= 5 {
+            validate_permissions(&dict, &key)?;
+        }
         Ok(Self { dict, key, auth, recovered_user })
     }
 
@@ -469,6 +472,25 @@ fn key_r6(d: &EncryptDict, pw: &[u8], owner: bool) -> Result<Option<Vec<u8>>, Cr
     Ok(Some(aes_cbc_decrypt(&k, &[0; 16], &encrypted[..32], false)))
 }
 
+/// Algorithm 13: the encrypted permissions must agree with the plaintext dictionary.
+/// Otherwise changing `/P` alone could grant permissions without the owner password.
+fn validate_permissions(d: &EncryptDict, key: &[u8]) -> Result<(), CryptError> {
+    if d.perms.len() != 16 {
+        return Err(CryptError::Malformed("/Perms must be 16 bytes for R5/R6".into()));
+    }
+    // One CBC block with a zero IV is exactly AES-ECB, as required for /Perms.
+    let perms = aes_cbc_decrypt(key, &[0; 16], &d.perms, false);
+    let mut expected = [0xFF; 12];
+    expected[..4].copy_from_slice(&d.p.to_le_bytes());
+    expected[8] = if d.encrypt_metadata { b'T' } else { b'F' };
+    expected[9..12].copy_from_slice(b"adb");
+    // Bytes 12–15 are random and have no meaning when validating the dictionary.
+    if perms.get(..12) != Some(expected.as_slice()) {
+        return Err(CryptError::Malformed("/Perms does not match the encryption settings or file key".into()));
+    }
+    Ok(())
+}
+
 // ── Creating encryption ────────────────────────────────────────────────────────────────────────
 
 /// Which encryption to create.
@@ -489,6 +511,7 @@ pub enum Algorithm {
 pub struct NewEncryption<'a> {
     pub algorithm: Algorithm,
     pub user_password: &'a str,
+    /// An empty owner password uses the user password for every algorithm.
     pub owner_password: &'a str,
     pub permissions: i32,
     pub encrypt_metadata: bool,
@@ -556,7 +579,7 @@ pub fn create(params: &NewEncryption, id0: &[u8]) -> Result<SecurityHandler, Cry
             let key = expand(&params.seed, b"file key", 32);
             let salts = expand(&params.seed, b"salts", 32);
             let user = sasl_password(params.user_password);
-            let owner = sasl_password(params.owner_password);
+            let owner = if params.owner_password.is_empty() { user.clone() } else { sasl_password(params.owner_password) };
             // Algorithm 8: /U, /UE
             let mut u = hash_r6(6, &user, &salts[0..8], &[]);
             u.extend_from_slice(&salts[0..16]);
