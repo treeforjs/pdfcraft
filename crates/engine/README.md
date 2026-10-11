@@ -8,6 +8,8 @@ catalogue; frontends never reach past it into the parsing, rendering or editing 
 - The crate denies `unwrap`/`expect`/`panic!`/`todo!`. Entry points that run untrusted-document
   code keep a last-resort `catch_unwind` guard so an escaped panic becomes an error and the user
   keeps their document.
+- Password and encryption-integrity errors refuse opening instead of falling back to a viewer
+  with no permission state. Structural parsing errors retain the read-only viewing fallback.
 
 Two frontends exist on top of it today: `pdfcraft-ui-egui` (desktop and web) and
 `pdfcraft-automation` (headless tools, the CLI and MCP). Anything one can do, the other must be

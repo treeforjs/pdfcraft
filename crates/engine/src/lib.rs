@@ -2087,6 +2087,17 @@ impl Session {
 
     fn open_unguarded(&mut self, name: String, path: Option<String>, bytes: Arc<Vec<u8>>, password: Option<&str>) -> Result<DocId, OpenError> {
         let cos = std::panic::catch_unwind(|| pdfcraft_cos::Document::open_with_password(bytes.clone(), password));
+        // The bootstrap renderer does not validate every encryption setting (including
+        // R5/R6 /Perms). Falling back to a document without an editor would lose its
+        // restrictions, so authentication failures must never use the read-only fallback.
+        match &cos {
+            Ok(Err(pdfcraft_cos::CosError::NeedsPassword)) => return Err(OpenError::NeedsPassword),
+            Ok(Err(pdfcraft_cos::CosError::WrongPassword)) => return Err(OpenError::WrongPassword),
+            Ok(Err(pdfcraft_cos::CosError::Security(message))) => {
+                return Err(OpenError::Invalid(format!("security settings could not be validated: {message}")));
+            }
+            _ => {}
+        }
         // The renderer authenticates on its own. It cannot use the owner password of R2–R4
         // files, so give it the user password that owner authentication recovers.
         let (info, render_password) = match inspect(bytes.clone(), password) {

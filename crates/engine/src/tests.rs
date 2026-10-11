@@ -453,6 +453,24 @@ fn restricted_documents_refuse_changes_unless_opened_by_the_owner() {
 }
 
 #[test]
+fn invalid_encryption_permissions_never_fall_back_to_an_unrestricted_viewer() {
+    let original = protected("user", "owner", 0);
+    let mut cos = pdfcraft_cos::Document::open_with_password(original.clone(), Some("owner")).unwrap();
+    let encryption = cos.trailer().reference(b"Encrypt").unwrap();
+    cos.update_dict(encryption, |dict| dict.set(b"P".to_vec(), pdfcraft_cos::Object::Int(-4))).unwrap();
+    let tampered = Arc::new(pdfcraft_cos::write_incremental(&cos, &Default::default()).unwrap());
+    let mut session = Session::new();
+    let original_id = session.open("original.pdf", None, original, Some("user")).unwrap();
+    assert!(!session.get(original_id).unwrap().allows_printing());
+    for password in ["user", "owner"] {
+        let error = session.open("tampered.pdf", None, tampered.clone(), Some(password)).unwrap_err();
+        assert!(error.to_string().contains("/Perms"), "{error}");
+        assert_eq!(session.docs().len(), 1, "a rejected document must not enter the session");
+        assert!(!session.get(original_id).unwrap().allows_printing());
+    }
+}
+
+#[test]
 fn combining_protected_files_is_refused_clearly() {
     let s = Session::new();
     let err = s.combine(&[("a.pdf".into(), protected("pw", "o", -1)), ("b.pdf".into(), Arc::new(fixture(1)))]).unwrap_err();
