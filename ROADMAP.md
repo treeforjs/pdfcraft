@@ -131,6 +131,8 @@ M0 → M1 → M2 → M3 → M4 must happen in order. After M4, M5–M12 can run 
 
 ## Log
 
+- **2026-10-11 (M0, community links):** Removed chat invitations and their obsolete translations from the desktop, Help commands, CLI, installer metadata and public documentation. Project and source links remain available, and the tab strip uses the space freed by the removed button. Updated the existing community-link and tab-layout tests. Milestone and overall effort estimates unchanged.
+
 - **2026-10-11 (M1/M4/M13, audit hardening):** AES-256 creation now uses the user password when the owner password is empty. R5/R6 opens validate encrypted `/Perms`, and the engine refuses security errors before its read-only renderer fallback can lose permissions. Automation rechecks remembered save paths against `--root`, rejects hostile content-item indices before arithmetic or narrowing, and chooses distinct split outputs without replacing existing files. Desktop bookmark splits include the first page in each filename so duplicate or sanitized titles cannot overwrite earlier parts; all desktop multi-file saves use the same available-name helper as automation to preserve existing files. Synthetic crypto, save, content-edit and split regressions cover these paths. Milestone and overall effort estimates unchanged.
 
 - **2026-10-10 (M6, #95):** Prepare a form edits shared General, Appearance and applicable Options properties in one atomic undo step. Explicit opt-in controls keep mixed values unchanged; partial appearance patches preserve custom font resources, each widget's style, indirect dictionary contents and unknown keys. Ctrl/Command+A selects the current page; rectangle selection and the Fields panel support multi-selection, with panel double-click opening properties. CLI/MCP `form_set_props` accepts a bounded, unique `fields` list. Regression tests cover save/reopen, undo/redo, locked-field rollback, stale dialogs, invalid arguments and selection. Names, positions, choices/defaults and script tabs remain individual GUI edits. Integrated upstream 0.5.0 and completed Portuguese/Italian catalogs without losing translator credit; shared-property labels now cover all 14 bundled translations. Kept the new Italian interface and Fill & Sign date-language registries aligned, including accented date output; the About-dialog regression waits for the larger contributor list to settle before clicking. Milestone and overall effort estimates unchanged (about 30–35%).
@@ -291,7 +293,7 @@ Newest first. One line per session: the date, what moved, and the new overall pe
   - Bookmark editing and page numbering (Number pages), with undo, agent tools and UI.
   - A render watchdog: pathological pages are skipped after 20 s instead of spinning forever.
   - The agent control channel no longer reports success when the window is hidden.
-  - Community links: Discord button in the title bar, plus Home, About, Help menu, CLI and README.
+  - Community links: project and source pages in Home, About, Help menu, CLI and README.
   - Overall ≈ 10%.
 
 - **2026-10-01 (session 6):**
