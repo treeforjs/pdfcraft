@@ -1086,6 +1086,128 @@ fn paragraphs_take_new_formatting() {
 }
 
 #[test]
+fn existing_page_fonts_are_selected_exactly_and_missing_glyphs_are_refused() {
+    let mut doc = text_page("BT /F1 12 Tf 72 700 Td (abba) Tj ET");
+    let fonts = text::page_fonts(&doc, 0, "abba").unwrap();
+    assert!(fonts.iter().find(|f| f.resource == "F2").is_some_and(|f| f.subset && f.encodable));
+    let source = doc.get(pdfcraft_cos::ObjRef::new(6, 0));
+    let style = text::BlockStyle { font_resource: Some("F2".into()), ..Default::default() };
+    assert_eq!(text::rewrite_block(&mut doc, 0, 0, None, &style).unwrap().substituted, None);
+    let mut doc = reopen(&doc);
+    let line = &text::text_lines(&doc, 0).unwrap()[0];
+    assert_eq!((line.text.as_str(), line.font.as_str(), line.base_font.as_str()), ("abba", "F2", "ABCDEF+Arial"));
+    assert!((line.rect[2] - line.rect[0] - 24.48).abs() < 0.001, "the selected subset's own widths");
+    assert_eq!(*doc.get(pdfcraft_cos::ObjRef::new(6, 0)), *source, "no subset expansion or resource mutation");
+    let before = page_content_bytes(&doc, 0);
+    for bad in ["abc", "a😀"] {
+        assert!(text::rewrite_block(&mut doc, 0, 0, Some(bad), &style).is_err());
+        assert_eq!(page_content_bytes(&doc, 0), before);
+    }
+    assert!(!text::page_fonts(&doc, 0, "abc").unwrap().iter().find(|f| f.resource == "F2").unwrap().encodable);
+    assert!(text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { bold: Some(true), ..style.clone() }).is_err());
+    assert!(text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { font_resource: Some("Missing".into()), ..Default::default() }).is_err());
+    text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { size: Some(18.0), color: Some([0.0, 0.0, 1.0]), ..Default::default() }).unwrap();
+    let line = &text::text_lines(&reopen(&doc), 0).unwrap()[0];
+    assert_eq!((line.base_font.as_str(), line.size, line.color), ("ABCDEF+Arial", 18.0, [0.0, 0.0, 1.0]));
+}
+
+#[test]
+fn formatting_uses_exact_advances_and_preserves_independent_face_styles() {
+    let mut doc = text_page("BT /F1 12 Tf 100 700 Td (Wi Mi) Tj ET");
+    let style = text::BlockStyle {
+        family: Some((added::Family::Times, true, false)),
+        width: Some(80.0),
+        align: Some(added::Align::Right),
+        ..Default::default()
+    };
+    text::rewrite_block(&mut doc, 0, 0, None, &style).unwrap();
+    let mut doc = reopen(&doc);
+    let line = &text::text_lines(&doc, 0).unwrap()[0];
+    // Times-Bold W/i/space/M/i: 1000 + 278 + 250 + 944 + 278 = 2750 units.
+    assert!((line.rect[0] - 147.0).abs() < 0.001 && (line.rect[2] - 180.0).abs() < 0.001, "{:?}", line.rect);
+    text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { italic: Some(true), ..Default::default() }).unwrap();
+    assert_eq!(text::text_blocks(&reopen(&doc), 0).unwrap()[0].base_font, "Times-BoldItalic");
+    text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { bold: Some(false), ..Default::default() }).unwrap();
+    assert_eq!(text::text_blocks(&reopen(&doc), 0).unwrap()[0].base_font, "Times-Italic");
+}
+
+#[test]
+fn paragraph_font_resources_never_restyle_other_text_or_shared_pages() {
+    let mut doc = fixture();
+    let resource_ref = pdfcraft_cos::ObjRef::new(6, 0);
+    let original_font = doc.get(pdfcraft_cos::ObjRef::new(8, 0));
+    doc.update_dict(resource_ref, |res| {
+        let mut fonts = res.get(b"Font").unwrap().as_dict().unwrap().clone();
+        fonts.set(b"PCEdHelveticaBold".to_vec(), (*original_font).clone());
+        res.set(b"Font".to_vec(), Object::Dict(fonts));
+    })
+    .unwrap();
+    let contents = b"BT /F1 12 Tf 72 700 Td (Target) Tj ET BT /PCEdHelveticaBold 12 Tf 72 600 Td (Unchanged) Tj ET";
+    doc.set(pdfcraft_cos::ObjRef::new(7, 0), Object::Stream(Stream::flate(Dict::new(), contents)));
+    let before_resources = doc.get(resource_ref);
+    let before_other = text::text_lines(&doc, 1).unwrap();
+    let before_caption = text::text_lines(&doc, 0).unwrap()[1].clone();
+    text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { family: Some((added::Family::Helvetica, true, false)), ..Default::default() })
+        .unwrap();
+    let mut doc = reopen(&doc);
+    assert_eq!(text::text_lines(&doc, 0).unwrap()[0].font, "PCEdHelveticaBold1");
+    let caption = &text::text_lines(&doc, 0).unwrap()[1];
+    assert_eq!(
+        (&caption.text, caption.rect, &caption.base_font, caption.color),
+        (&before_caption.text, before_caption.rect, &before_caption.base_font, before_caption.color)
+    );
+    assert_eq!(text::text_lines(&doc, 1).unwrap(), before_other);
+    assert_eq!(*doc.get(resource_ref), *before_resources);
+    // A second paragraph fallback must also leave the first generated face intact.
+    text::rewrite_block(&mut doc, 0, 1, None, &text::BlockStyle { italic: Some(true), ..Default::default() }).unwrap();
+    let lines = text::text_lines(&reopen(&doc), 0).unwrap();
+    assert_eq!(lines[0].base_font, "Helvetica-Bold");
+    assert_eq!(lines[1].base_font, "Courier-Oblique");
+}
+
+#[test]
+fn independent_paragraph_substitutions_keep_their_own_faces() {
+    let mut doc = text_page("BT /F1 12 Tf 72 700 Td (First) Tj ET BT /F2 12 Tf 72 600 Td (ab) Tj ET");
+    doc.update_dict(pdfcraft_cos::ObjRef::new(6, 0), |font| {
+        font.set(b"BaseFont".to_vec(), Object::name("ABCDEF+Times-Roman"));
+    })
+    .unwrap();
+    text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { bold: Some(true), ..Default::default() }).unwrap();
+    let mut doc = reopen(&doc);
+    text::rewrite_block(&mut doc, 0, 1, None, &text::BlockStyle { italic: Some(true), ..Default::default() }).unwrap();
+    let lines = text::text_lines(&reopen(&doc), 0).unwrap();
+    assert_eq!((lines[0].text.as_str(), lines[0].base_font.as_str()), ("First", "Helvetica-Bold"));
+    assert_eq!((lines[1].text.as_str(), lines[1].base_font.as_str()), ("ab", "Times-Italic"));
+}
+
+#[test]
+fn page_font_coverage_matches_paragraph_whitespace_normalization() {
+    let mut doc = text_page("BT /F1 12 Tf 72 700 Td (First) Tj ET");
+    let fonts = text::page_fonts(&doc, 0, "  AB\n\t BA ").unwrap();
+    assert!(fonts.iter().find(|f| f.resource == "F1").unwrap().encodable);
+    let style = text::BlockStyle { font_resource: Some("F1".into()), ..Default::default() };
+    text::rewrite_block(&mut doc, 0, 0, Some("  AB\n\t BA "), &style).unwrap();
+    assert_eq!(text::text_blocks(&reopen(&doc), 0).unwrap()[0].text, "AB BA");
+    let fonts = text::page_fonts(&doc, 0, "AB\u{3000}BA").unwrap();
+    assert!(!fonts.iter().find(|f| f.resource == "F1").unwrap().encodable, "ideographic space is not silently replaced");
+    assert!(text::rewrite_block(&mut doc, 0, 0, Some("AB\u{3000}BA"), &style).is_err());
+}
+
+#[test]
+fn reflow_and_alignment_keep_source_word_spacing() {
+    for family in [None, Some((added::Family::Times, true, false))] {
+        let mut doc = text_page("BT /F1 12 Tf 9 Tw 72 700 Td (A B) Tj ET");
+        let style = text::BlockStyle { family, width: Some(100.0), align: Some(added::Align::Right), ..Default::default() };
+        text::rewrite_block(&mut doc, 0, 0, None, &style).unwrap();
+        let doc = reopen(&doc);
+        let line = &text::text_lines(&doc, 0).unwrap()[0];
+        let width = pdfcraft_fonts::standard_text_width(&line.base_font, "A B", 12.0).unwrap() + 9.0;
+        assert!((line.rect[2] - line.rect[0] - width).abs() < 0.001, "{:?}", line.rect);
+        assert!((line.rect[2] - 172.0).abs() < 0.001, "source Tw must agree with the alignment measure");
+    }
+}
+
+#[test]
 fn a_new_paragraph_colour_does_not_spill_into_the_text_after_it() {
     let mut doc = text_page("BT /F1 10 Tf 72 700 Td (First paragraph) Tj 0 -40 Td (Second paragraph) Tj ET");
     let style = text::BlockStyle { color: Some([1.0, 0.0, 0.0]), ..Default::default() };

@@ -1876,6 +1876,45 @@ fn the_format_panel_restyles_the_paragraph_being_edited() {
     assert!(s.views[0].line_editor.as_ref().is_some_and(|e| e.extras.underline));
 }
 
+#[test]
+fn the_format_panel_selects_page_fonts_and_keeps_independent_styles() {
+    let mut h = harness(1, |_| {});
+    assert!(h.state_mut().execute("edit.edit_text"));
+    h.run_steps(2);
+    let r = h.state().views[0].page_screen_rect(0).expect("on screen");
+    let at = egui::pos2(r.left() + 40.0 / 200.0 * r.width(), r.top() + (300.0 - 158.0) / 300.0 * r.height());
+    h.hover_at(at);
+    h.run_steps(1);
+    h.drag_at(at);
+    h.run_steps(1);
+    h.drop_at(at);
+    h.run_steps(3);
+    assert!(h.state().views[0].line_editor.is_some());
+    h.get_by_label("B").click();
+    h.run_steps(4);
+    h.get_by_label("I").click();
+    h.run_steps(4);
+    let id = h.state().views[0].id;
+    assert_eq!(h.state().session.get(id).unwrap().text_blocks(0)[0].base_font, "Helvetica-BoldOblique");
+    // The new chooser uses exact resources from this page, not the standard-family list.
+    h.get_by_value("Helvetica-BoldOblique").click();
+    h.run_steps(2);
+    h.get_by_label("Helvetica (/F1)").click();
+    h.run_steps(4);
+    let editor = h.state().views[0].line_editor.as_ref().unwrap();
+    assert!(!editor.look.bold && !editor.look.italic, "choosing a face updates the actual style controls");
+    assert_eq!(h.state().session.get(id).unwrap().text_blocks(0)[0].base_font, "Helvetica");
+    let bytes = h.state_mut().session.save_bytes(id).unwrap();
+    let mut reopened = pdfcraft_engine::Session::new();
+    let saved = reopened.open("selected.pdf", None, bytes, None).unwrap();
+    assert_eq!(reopened.get(saved).unwrap().text_blocks(0)[0].base_font, "Helvetica");
+    h.state_mut().views[0].line_editor = None;
+    h.state_mut().session.undo(id).unwrap();
+    assert_eq!(h.state().session.get(id).unwrap().text_blocks(0)[0].base_font, "Helvetica-BoldOblique");
+    h.state_mut().session.redo(id).unwrap();
+    assert_eq!(h.state().session.get(id).unwrap().text_blocks(0)[0].base_font, "Helvetica");
+}
+
 /// Drag with the pointer from `from` to `to` in a few steps.
 fn drag(h: &mut Harness<'static, PdfCraftApp>, from: egui::Pos2, to: egui::Pos2) {
     h.hover_at(from);

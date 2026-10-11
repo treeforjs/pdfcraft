@@ -1,8 +1,8 @@
 //! What content editing and redaction need from a PDF font: how to split a string into character
 //! codes, each code's advance width, the glyph height (ascent, descent), and what each code means
 //! (Unicode) — and back, which text the font can show. Widths come from the font dictionary
-//! (`/Widths`, `/W`, `/DW`, `/MissingWidth`); the standard 14 fonts without widths use
-//! approximations. Meanings come from `/ToUnicode`, else the encoding (`/Encoding` base and
+//! (`/Widths`, `/W`, `/DW`, `/MissingWidth`); standard Latin fonts without widths use the
+//! specification's face-specific metrics. Meanings come from `/ToUnicode`, else the encoding (`/Encoding` base and
 //! `/Differences` glyph names, ISO 32000-2 Annex D).
 
 use std::collections::HashMap;
@@ -47,6 +47,9 @@ pub struct Metrics {
     pub composite: bool,
     /// Code → Unicode text.
     unicode: HashMap<u32, String>,
+    /// Encoding-derived characters for standard widths; ToUnicode changes extraction, not
+    /// the glyph that a character code draws.
+    width_characters: HashMap<u32, char>,
     /// `/BaseFont` (or Type 3 descriptor's `/FontName`), and whether it is a subset (`ABCDEF+Name`: other glyphs are missing).
     pub base_font: String,
     pub subset: bool,
@@ -282,6 +285,7 @@ impl Metrics {
             descent: -0.25,
             composite: false,
             unicode: (32..127u8).map(|c| (u32::from(c), char::from(c).to_string())).collect(),
+            width_characters: HashMap::new(),
             base_font: "Helvetica".into(),
             subset: false,
             bold: false,
@@ -307,6 +311,12 @@ impl Metrics {
         m.bold |= bold;
         m.italic |= italic;
         m.base_font = base;
+        if m.std14.is_some() {
+            let mut encoding_font = font.clone();
+            encoding_font.remove(b"ToUnicode");
+            m.width_characters =
+                unicode_map(doc, &encoding_font, false).into_iter().filter_map(|(code, text)| text.chars().next().map(|ch| (code, ch))).collect();
+        }
         m.code_len = match &m.codes {
             Codes::One => 1,
             Codes::Two => 2,
@@ -454,6 +464,11 @@ impl Metrics {
         }
         if let Some(w) = code.checked_sub(self.first).and_then(|i| self.widths.get(i as usize)) {
             return w * self.scale;
+        }
+        if self.std14.is_some()
+            && let Some(width) = self.width_characters.get(&code).and_then(|ch| crate::standard_char_width(&self.base_font, *ch))
+        {
+            return width;
         }
         match &self.std14 {
             Some(Std14::Courier) => 0.6,
@@ -706,6 +721,35 @@ mod tests {
         let m = Metrics::from_dict(&doc, &f);
         assert_eq!(m.decode(b"AB"), "éΩ");
         assert_eq!(m.encode("Ω").as_deref(), Some(&b"B"[..]));
+    }
+
+    #[test]
+    fn standard_widths_follow_encoding_but_explicit_widths_keep_precedence() {
+        let mut doc = Document::new_empty();
+        let mut encoding = Dict::new();
+        encoding.set(b"BaseEncoding".to_vec(), Object::name("WinAnsiEncoding"));
+        encoding.set(b"Differences".to_vec(), Object::Array(vec![Object::Int(65), Object::name("W")]));
+        let cmap = doc.add(Object::Stream(Stream::flate(Dict::new(), b"1 beginbfchar <41> <0069> endbfchar")));
+        let mut f = font(
+            &mut doc,
+            vec![
+                ("Subtype", Object::name("Type1")),
+                ("BaseFont", Object::name("Times-Italic")),
+                ("Encoding", Object::Dict(encoding)),
+                ("ToUnicode", Object::Ref(cmap)),
+            ],
+        );
+        let metrics = Metrics::from_dict(&doc, &f);
+        assert_eq!(metrics.decode(b"A"), "i", "ToUnicode controls extraction only");
+        assert_eq!(metrics.width(65), 0.833, "Differences draws W, not A or i");
+        f.set(b"FirstChar".to_vec(), Object::Int(65));
+        f.set(b"Widths".to_vec(), Object::Array(vec![Object::Int(123)]));
+        let mut descriptor = Dict::new();
+        descriptor.set(b"MissingWidth".to_vec(), Object::Int(456));
+        f.set(b"FontDescriptor".to_vec(), Object::Dict(descriptor));
+        let metrics = Metrics::from_dict(&doc, &f);
+        assert_eq!(metrics.width(65), 0.123);
+        assert_eq!(metrics.width(66), 0.456, "outside explicit Widths uses MissingWidth");
     }
 
     #[test]

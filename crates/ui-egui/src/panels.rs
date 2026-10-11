@@ -310,6 +310,25 @@ fn format_section(app: &mut PdfCraftApp, ui: &mut egui::Ui, t: &Tokens) {
             changed = true;
         }
         changed |= crate::edit_text_ui::extras_panel(ui, &mut ed.extras);
+        ui.label(tl!("Fonts"));
+        egui::ComboBox::from_id_salt("existing-page-font").selected_text(&ed.source_font).width(180.0).show_ui(ui, |ui| {
+            if let Some(doc) = app.session.get(app.views[i].id) {
+                match doc.text_fonts(ed.page, &ed.text) {
+                    Ok(fonts) => {
+                        for font in fonts {
+                            let label = format!("{} (/{})", font.base_font, font.resource);
+                            if ui.add_enabled(font.encodable, egui::Button::selectable(false, label)).clicked() {
+                                ed.font_resource = Some(font.resource);
+                                changed = true;
+                            }
+                        }
+                    }
+                    Err(error) => {
+                        ui.label(error);
+                    }
+                }
+            }
+        });
         if changed {
             let edit = pdfcraft_engine::Edit::EditTextBlock { page: ed.page, block: ed.block, text: ed.text.clone(), style: ed.style() };
             if app.apply_edit(edit) {

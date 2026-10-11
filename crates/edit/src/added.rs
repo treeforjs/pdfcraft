@@ -64,7 +64,7 @@ impl Family {
         (family, s.contains("Bold"), s.contains("Italic") || s.contains("Oblique"))
     }
 
-    /// Approximate advance width of `s` (standard-14 metrics are not bundled: Helvetica widths,
+    /// Approximate advance width of `s` (this added-text helper still uses Helvetica estimates,
     /// scaled for Times; Courier is monospaced).
     pub fn width(self, s: &str, size: f64, bold: bool) -> f64 {
         let w = match self {

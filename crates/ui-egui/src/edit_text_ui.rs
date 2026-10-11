@@ -18,6 +18,9 @@ pub struct LineEditor {
     pub page: usize,
     pub block: usize,
     pub text: String,
+    /// An exact page font chosen in the format panel, pending the next apply.
+    pub font_resource: Option<String>,
+    pub source_font: String,
     original: String,
     rect: Rect,
     /// The original PDF rectangle, in user space. It is converted again each frame so the editor
@@ -91,7 +94,10 @@ impl LineEditor {
     pub fn style(&self) -> pdfcraft_engine::BlockStyle {
         let (l, o) = (&self.look, &self.look0);
         pdfcraft_engine::BlockStyle {
-            family: (l.family != o.family || l.bold != o.bold || l.italic != o.italic).then_some((l.family, l.bold, l.italic)),
+            font_resource: self.font_resource.clone(),
+            family: (l.family != o.family).then_some((l.family, l.bold, l.italic)),
+            bold: (l.bold != o.bold).then_some(l.bold),
+            italic: (l.italic != o.italic).then_some(l.italic),
             size: (l.size != o.size).then_some(l.size),
             color: (l.color != o.color).then_some(l.color),
             align: (l.align != o.align).then_some(l.align),
@@ -106,6 +112,7 @@ impl LineEditor {
 
     /// After applying formatting: the paragraph now has it.
     pub fn applied(&mut self) {
+        self.font_resource = None;
         self.look0 = self.look.clone();
         self.extras0 = self.extras;
         self.original = self.text.clone();
@@ -114,6 +121,12 @@ impl LineEditor {
 
     /// Adopt the rewritten paragraph's current geometry before the next overlay frame.
     pub(crate) fn refresh_source(&mut self, block: &pdfcraft_engine::TextBlock) {
+        self.source_font = block.base_font.clone();
+        let actual = look_of(block);
+        self.look.family = actual.family;
+        self.look.bold = actual.bold;
+        self.look.italic = actual.italic;
+        self.look0 = self.look.clone();
         self.source_rect = block.rect.map(|v| v as f32);
         self.multiline = block.lines.len() > 1;
     }
@@ -473,6 +486,8 @@ pub(crate) fn page_input(
             page,
             block: hit,
             text: l.text.clone(),
+            font_resource: None,
+            source_font: l.base_font.clone(),
             original: l.text.clone(),
             rect: boxes[hit],
             source_rect: l.rect.map(|v| v as f32),

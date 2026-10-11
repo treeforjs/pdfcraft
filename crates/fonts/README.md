@@ -4,9 +4,13 @@ Layer L2. Font helpers for the appearance streams PdfCraft generates (comments, 
 
 Today it holds what generated appearances need without a font program:
 
-- `helvetica_width`: an approximation of Helvetica's proportions by character class. No metrics
-  file or font program from any vendor is bundled; widths are PdfCraft's own estimates, good
-  enough for line breaking and alignment, not for typesetting.
+- `standard_glyph_width`, `standard_char_width`, `standard_text_width`: face-specific standard
+  PDF font advances. `build.rs` reads the existing, attributed non-visual metrics in vendored
+  hayro-interpret; no additional font program or asset is introduced. Existing-text reflow uses
+  these widths for all twelve standard Latin faces. Explicit PDF `/Widths` and `/MissingWidth`
+  take precedence; `/Encoding` and `/Differences` determine widths independently of `/ToUnicode`.
+- `helvetica_width`: the older character-class approximation, retained for other generated
+  appearances. This wave does not change those appearances or add shaping/kerning.
 - `wrap`: greedy line breaking with that measure (paragraphs on newlines, long words split).
 - `win_ansi`: Unicode → WinAnsiEncoding bytes (`?` for characters it can't represent), and
   `literal` to write bytes as a PDF literal string.

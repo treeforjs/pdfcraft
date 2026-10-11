@@ -46,7 +46,7 @@ pub use pdfcraft_forms::{
 };
 
 pub use pdfcraft_a11y as a11y;
-pub use pdfcraft_edit::{BlockStyle, PageImage, TextBlock, TextLine, first_undrawable};
+pub use pdfcraft_edit::{BlockStyle, PageFont, PageImage, TextBlock, TextLine, first_undrawable};
 pub use pdfcraft_measure as measure;
 pub use pdfcraft_xfa::Report as XfaLayout;
 
@@ -279,6 +279,12 @@ impl Document {
     /// Edit a PDF ▸ Edit text: the paragraphs on `page` (0-based).
     pub fn text_blocks(&self, page: usize) -> Vec<pdfcraft_edit::TextBlock> {
         self.editor.as_ref().and_then(|e| pdfcraft_edit::text_blocks(&e.cos, page).ok()).unwrap_or_default()
+    }
+
+    /// Existing page font resources and whether they can encode the proposed replacement.
+    pub fn text_fonts(&self, page: usize, text: &str) -> Result<Vec<PageFont>, String> {
+        let e = self.editor.as_ref().ok_or("the document can't be read")?;
+        pdfcraft_edit::page_fonts(&e.cos, page, text).map_err(|e| e.to_string())
     }
 
     /// Saved measurement annotations, calculated from their geometry and PDF scales, plus

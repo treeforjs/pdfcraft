@@ -1367,6 +1367,111 @@ fn editing_existing_text_through_tools() {
     assert_eq!(p["lines"].as_array().map(Vec::len), Some(2), "{p}");
 }
 
+/// An original Type 3 subset: A and B are simple rectangle paths, embedded in this fixture.
+fn embedded_page_font_pdf() -> Vec<u8> {
+    use pdfcraft_cos::{Dict, Document, ObjRef, Object, SaveOptions, Stream, write_incremental};
+    let mut doc = Document::open(std::sync::Arc::new(fixture(1))).unwrap();
+    let mut procedures = Dict::new();
+    for (name, width) in [("A", 600), ("B", 700), ("space", 250)] {
+        let path = if name == "space" { "250 0 d0".into() } else { format!("{width} 0 0 0 500 700 d1 0 0 500 700 re f") };
+        procedures.set(name.as_bytes().to_vec(), Object::Ref(doc.add(Object::Stream(Stream::flate(Dict::new(), path.as_bytes())))));
+    }
+    let mut encoding = Dict::new();
+    encoding.set(
+        b"Differences".to_vec(),
+        Object::Array(vec![Object::Int(32), Object::name("space"), Object::Int(65), Object::name("A"), Object::name("B")]),
+    );
+    let mut descriptor = Dict::new();
+    descriptor.set(b"FontName".to_vec(), Object::name("ABCDEF+ContributorShapes-Bold"));
+    descriptor.set(b"Flags".to_vec(), Object::Int(262148));
+    let descriptor = doc.add(Object::Dict(descriptor));
+    let mut font = Dict::new();
+    font.set(b"Type".to_vec(), Object::name("Font"));
+    font.set(b"Subtype".to_vec(), Object::name("Type3"));
+    font.set(b"FontDescriptor".to_vec(), Object::Ref(descriptor));
+    font.set(b"FontMatrix".to_vec(), Object::Array([0.001, 0.0, 0.0, 0.001, 0.0, 0.0].map(Object::Real).to_vec()));
+    font.set(b"FontBBox".to_vec(), Object::Array([0, 0, 500, 700].map(Object::Int).to_vec()));
+    font.set(b"CharProcs".to_vec(), Object::Dict(procedures));
+    font.set(b"Encoding".to_vec(), Object::Dict(encoding));
+    font.set(b"FirstChar".to_vec(), Object::Int(32));
+    font.set(b"LastChar".to_vec(), Object::Int(66));
+    font.set(
+        b"Widths".to_vec(),
+        Object::Array(
+            (32..=66)
+                .map(|c| {
+                    Object::Int(match c {
+                        32 => 250,
+                        65 => 600,
+                        66 => 700,
+                        _ => 0,
+                    })
+                })
+                .collect(),
+        ),
+    );
+    let font = doc.add(Object::Dict(font));
+    doc.update_dict(ObjRef::new(4, 0), |page| {
+        let mut resources = page.get(b"Resources").unwrap().as_dict().unwrap().clone();
+        let mut fonts = resources.get(b"Font").unwrap().as_dict().unwrap().clone();
+        fonts.set(b"Embedded".to_vec(), Object::Ref(font));
+        resources.set(b"Font".to_vec(), Object::Dict(fonts));
+        page.set(b"Resources".to_vec(), Object::Dict(resources));
+    })
+    .unwrap();
+    write_incremental(&doc, &SaveOptions::default()).unwrap()
+}
+
+#[test]
+fn selecting_embedded_page_fonts_round_trips_and_rejects_without_history_changes() {
+    let dir = workdir("page-font-choice");
+    std::fs::write(dir.join("embedded.pdf"), embedded_page_font_pdf()).unwrap();
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({"path":"embedded.pdf"}))["doc"].as_u64().unwrap();
+    let fonts = ok(&mut a, "text_fonts", json!({"doc":doc,"page":1,"text":"AB\n\t BA"}));
+    let embedded = fonts["fonts"].as_array().unwrap().iter().find(|f| f["resource"] == "Embedded").unwrap();
+    assert_eq!((embedded["subset"].as_bool(), embedded["bold"].as_bool(), embedded["encodable"].as_bool()), (Some(true), Some(true), Some(true)));
+    ok(&mut a, "text_edit", json!({"doc":doc,"page":1,"paragraph":1,"text":"AB BA","font_resource":"Embedded"}));
+    let before = a.session().get(pdfcraft_engine::DocId(doc)).unwrap().bytes.clone();
+    for args in [
+        json!({"text":"ABC","font_resource":"Embedded"}),
+        json!({"font_resource":"Missing"}),
+        json!({"font_resource":"Embedded","italic":true}),
+        json!({"font_resource":"Embedded","bold":false}),
+        json!({"font_resource":"Embedded","font":"times"}),
+    ] {
+        let mut args = args;
+        args["doc"] = json!(doc);
+        args["page"] = json!(1);
+        args["paragraph"] = json!(1);
+        assert!(a.call("text_edit", &args).is_err(), "{args}");
+        let current = a.session().get(pdfcraft_engine::DocId(doc)).unwrap();
+        assert_eq!(current.bytes, before, "failed selection never changes bytes");
+        assert_eq!(current.can_undo(), Some("Edit text"));
+        assert_eq!(current.can_redo(), None);
+    }
+    ok(&mut a, "edit_undo", json!({"doc":doc}));
+    assert_eq!(page_text(&mut a, doc)[0].trim(), "Page 1", "failed edits add no undo step");
+    ok(&mut a, "edit_redo", json!({"doc":doc}));
+    assert_eq!(a.session().get(pdfcraft_engine::DocId(doc)).unwrap().bytes, before);
+    ok(&mut a, "text_edit", json!({"doc":doc,"page":1,"paragraph":1,"size":18,"color":"#0000ff"}));
+    let p = &ok(&mut a, "text_paragraphs", json!({"doc":doc,"page":1}))["paragraphs"][0];
+    assert_eq!(p["font"], "ABCDEF+ContributorShapes-Bold");
+    ok(&mut a, "doc_save", json!({"doc":doc,"path":"selected.pdf"}));
+    let reopened = ok(&mut a, "doc_open", json!({"path":"selected.pdf"}))["doc"].as_u64().unwrap();
+    let p = &ok(&mut a, "text_paragraphs", json!({"doc":reopened,"page":1}))["paragraphs"][0];
+    assert_eq!((p["font"].as_str(), p["text"].as_str(), p["size"].as_f64()), (Some("ABCDEF+ContributorShapes-Bold"), Some("AB BA"), Some(18.0)));
+    let rendered = a.call("page_render", &json!({"doc":reopened,"page":1,"dpi":72})).unwrap();
+    assert!(rendered.iter().any(|c| matches!(c, Content::Png { data, .. } if !data.is_empty())));
+    // Independent italic/bold toggles retain the source family and the other style.
+    ok(&mut a, "text_edit", json!({"doc":reopened,"page":1,"paragraph":1,"font":"times"}));
+    assert_eq!(ok(&mut a, "text_paragraphs", json!({"doc":reopened,"page":1}))["paragraphs"][0]["font"], "Times-Bold");
+    ok(&mut a, "text_edit", json!({"doc":reopened,"page":1,"paragraph":1,"italic":true}));
+    assert_eq!(ok(&mut a, "text_paragraphs", json!({"doc":reopened,"page":1}))["paragraphs"][0]["font"], "Times-BoldItalic");
+    ok(&mut a, "text_edit", json!({"doc":reopened,"page":1,"paragraph":1,"bold":false}));
+    assert_eq!(ok(&mut a, "text_paragraphs", json!({"doc":reopened,"page":1}))["paragraphs"][0]["font"], "Times-Italic");
+}
+
 /// One page whose content is one stream in three pieces (#155): a `TJ` array ends the middle
 /// piece and its operator starts the last one.
 fn split_streams_pdf() -> Vec<u8> {

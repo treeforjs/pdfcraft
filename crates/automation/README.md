@@ -45,6 +45,22 @@ its other colours, fonts, values and unknown PDF dictionary keys. `"none"` remov
 or fill colour. Names, rectangles and rotations require the single-field form. Results keep
 `field` for single edits and return `fields` for batches. CLI and MCP use the same tool.
 
+## Existing text and page fonts
+
+`text_fonts {doc, page, text?}` lists the page's available font resources and tests whether each
+can encode the proposed paragraph. `text_edit {doc, page, paragraph, font_resource: "F2", text?}`
+selects that exact face, including an embedded subset, with its own advances. Missing resources
+or unsupported characters fail without changing the document or its undo history; subsets are
+never expanded. The proposal uses the editor's existing whitespace normalization (newlines/tabs
+become ordinary spaces; ideographic spaces are preserved).
+
+An exact resource cannot be combined with `font`, `bold`, or `italic`: its face fixes those styles.
+Subsequent size/colour changes keep the selected face. Subsequent bold/italic changes select a
+standard face matching the source family and preserve the other style; changing `font` similarly
+keeps weight/slant unless overridden. The UI reflects the actual selected face after applying.
+The Japanese fallback still has no italic outlines. Selection formatting within a mixed-style
+paragraph is not implemented: this remains paragraph-level editing.
+
 ## MCP server
 
 **Opt-in only.** Nothing starts it automatically, and it opens no port. It runs while `pdfcraft-cli mcp [--root DIR]` runs, normally launched by an agent from its MCP configuration. It stops when stdin closes. The CLI's `mcp` Cargo feature (on by default) compiles it out entirely when disabled.

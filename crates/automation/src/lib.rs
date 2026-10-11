@@ -392,6 +392,12 @@ impl Automation {
                     self.apply(&a, Edit::EditPageImage { page, index, change })?
                 }
             }
+            "text_fonts" => {
+                let page = self.page(&a)?;
+                let fonts = self.doc(&a)?.text_fonts(page, a.opt_str("text")?.unwrap_or("")).map_err(failed)?;
+                let fonts: Vec<Value> = fonts.into_iter().map(|f| json!({ "resource": f.resource, "font": f.base_font, "bold": f.bold, "italic": f.italic, "subset": f.subset, "encodable": f.encodable })).collect();
+                json!({ "page": page + 1, "count": fonts.len(), "fonts": fonts })
+            }
             "text_paragraphs" => {
                 let page = self.page(&a)?;
                 let doc = self.doc(&a)?;
@@ -425,7 +431,9 @@ impl Automation {
                 let block = self.doc(&a)?.text_blocks(page)[k as usize - 1].clone();
                 let text = a.opt_str("text")?.map(str::to_owned).unwrap_or(block.text);
                 let mut style = pdfcraft_engine::BlockStyle {
+                    font_resource: a.opt_str("font_resource")?.map(str::to_owned),
                     bold: a.opt_bool("bold")?,
+                    italic: a.opt_bool("italic")?,
                     size: a.opt_num("size")?,
                     underline: a.opt_bool("underline")?,
                     line_spacing: a.opt_num("line_spacing")?,
@@ -445,7 +453,7 @@ impl Automation {
                         "courier" => pdfcraft_engine::FontFamily::Courier,
                         other => return Err(ToolError::InvalidArgs(format!("unknown font {other:?} (helvetica, times, courier)"))),
                     };
-                    style.family = Some((family, a.opt_bool("bold")?.unwrap_or(false), a.opt_bool("italic")?.unwrap_or(false)));
+                    style.family = Some((family, block.bold, block.italic));
                 }
                 if let Some(c) = a.opt_str("color")? {
                     style.color = Some(comments::parse_color(c)?);
@@ -466,6 +474,9 @@ impl Automation {
                 out
             }
             "text_edit" => {
+                if a.get("font_resource").is_some() {
+                    return Err(ToolError::InvalidArgs("font_resource requires paragraph, not line".into()));
+                }
                 let page = self.page(&a)?;
                 let n = self.doc(&a)?.text_lines(page).len();
                 let line = a.int("line")?;
