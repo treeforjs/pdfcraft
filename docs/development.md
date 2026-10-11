@@ -3,6 +3,8 @@
 Working instructions for agents and contributors are in `AGENTS.md` and `CLAUDE.md`. This page
 collects what the desktop app reads from its environment and where it writes its diagnostics.
 
+Platform setup: [Ubuntu 24.04 / 26.04](ubuntu.md) and [Windows 11 graphics drivers](windows-gpu.md).
+
 ## Logs
 
 The desktop app writes its `log` records to standard error and to `logs/pdfcraft.log` in its

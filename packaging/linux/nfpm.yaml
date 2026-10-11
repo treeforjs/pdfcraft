@@ -1,6 +1,6 @@
 # .deb and .rpm packages (nfpm: https://nfpm.goreleaser.com). Run by package.sh, which stages
 # the file tree, substitutes its path for ${STAGE} (nfpm doesn't expand env vars in `src`) and
-# exports VERSION and NFPM_ARCH.
+# exports VERSION, NFPM_ARCH and PDFCRAFT_GLIBC_MIN (from the binaries' required symbols).
 #
 #   nfpm package -f packaging/linux/nfpm.yaml -p deb -t dist/release/
 name: pdfcraft
@@ -29,10 +29,13 @@ description: |-
 overrides:
   deb:
     depends:
-      - libc6 (>= 2.35)
+      - libc6 (>= ${PDFCRAFT_GLIBC_MIN})
       - libgcc-s1
       - libxkbcommon0
-      - libvulkan1 | libegl1
+      - libxkbcommon-x11-0
+      - libvulkan1
+      - libegl1
+      - libgl1
     recommends:
       - cups-client
       - libwayland-client0
@@ -43,10 +46,14 @@ overrides:
       - libxrandr2
       - mesa-vulkan-drivers
       - xdg-desktop-portal
+      - xdg-desktop-portal-gtk
   rpm:
     depends:
       - libxkbcommon
-      - (vulkan-loader or libglvnd-egl)
+      - libxkbcommon-x11
+      - vulkan-loader
+      - libglvnd-egl
+      - libglvnd-glx
     recommends:
       - cups-client
       - libwayland-client

@@ -10,11 +10,13 @@
 #
 # Usage: packaging/linux/package.sh [--skip-build] [--formats "appimage deb rpm tar cli"]
 #
-# Needs: cargo, curl and the network (the OCR models: cargo xtask models); nfpm for deb/rpm (https://nfpm.goreleaser.com); appimagetool for the AppImage
+# Needs: cargo, curl and the network (the OCR models: cargo xtask models); nfpm and binutils for deb/rpm (https://nfpm.goreleaser.com); appimagetool for the AppImage
 # (downloaded into $CARGO_TARGET_DIR if missing). Build on an old distro (CI: Ubuntu 22.04,
 # glibc 2.35) so the binaries run on newer ones. Optional: desktop-file-validate, appstreamcli,
 # zsyncmake (the zsync package) for the AppImage's .zsync.
 set -euo pipefail
+# Packaged files are public, including when the caller's shell uses a private umask.
+umask 022
 # shellcheck source=../env.sh
 . "$(dirname "${BASH_SOURCE[0]}")/../env.sh"
 HERE="$ROOT/packaging/linux"
@@ -65,6 +67,10 @@ mkdir -p "$STAGE/usr/share/doc/pdfcraft"
 copy_docs "$STAGE/usr/share/doc/pdfcraft"
 # OCR models: the app finds them at <bin>/../share/pdfcraft/models, so in every format below.
 stage_models "$STAGE/usr/share/pdfcraft/models"
+# Checkouts and downloaded models can themselves have owner-only permissions. Every staged
+# resource must be readable by the ordinary desktop user after a root-owned system install.
+find "$STAGE" -type d -exec chmod 0755 {} +
+find "$STAGE/usr/share" -type f -exec chmod 0644 {} +
 
 if command -v desktop-file-validate >/dev/null; then
   desktop-file-validate "$STAGE/usr/share/applications/$APP_ID.desktop"
@@ -92,6 +98,7 @@ if has cli; then
   mkdir -p "$CLI_DIR"
   cp "$STAGE/usr/bin/pdfcraft-cli" "$CLI_DIR/"
   copy_docs "$CLI_DIR"
+  find "$CLI_DIR" -type f -exec chmod a+r {} +
   tar -C "$WORK/cli" -czf "$DIST/$CLI_NAME.tar.gz" "$CLI_NAME"
   echo "wrote $DIST/$CLI_NAME.tar.gz"
 fi
@@ -101,6 +108,10 @@ if has deb || has rpm; then
   command -v nfpm >/dev/null || { echo "error: nfpm not found (https://nfpm.goreleaser.com/install/)" >&2; exit 1; }
   export VERSION
   export NFPM_ARCH="$DEB_ARCH"
+  # Local builds may use a newer libc than release CI. Never advertise the older baseline
+  # when either binary needs newer GLIBC symbols: apt must reject incompatible hosts.
+  PDFCRAFT_GLIBC_MIN="$("$HERE/glibc-min.sh" "$BIN/pdfcraft" "$BIN/pdfcraft-cli")"
+  export PDFCRAFT_GLIBC_MIN
   # nfpm expands env vars in fields like `version` and `arch`, but not in `contents[].src`.
   sed "s|\${STAGE}|$STAGE|g" "$HERE/nfpm.yaml" >"$WORK/nfpm.yaml"
   for fmt in deb rpm; do
@@ -114,8 +125,8 @@ if has appimage; then
   cp -R "$STAGE" "$APPDIR"
   mv "$APPDIR/usr/share/doc" "$WORK/doc-unused"
   ln -s usr/bin/pdfcraft "$APPDIR/AppRun"
-  cp "$HERE/$APP_ID.desktop" "$APPDIR/$APP_ID.desktop"
-  cp "$ROOT/assets/app-icon/hicolor/256x256/apps/$APP_ID.png" "$APPDIR/$APP_ID.png"
+  install -m644 "$HERE/$APP_ID.desktop" "$APPDIR/$APP_ID.desktop"
+  install -m644 "$ROOT/assets/app-icon/hicolor/256x256/apps/$APP_ID.png" "$APPDIR/$APP_ID.png"
   ln -s "$APP_ID.png" "$APPDIR/.DirIcon"
 
   TOOL="${APPIMAGETOOL:-$(command -v appimagetool || true)}"

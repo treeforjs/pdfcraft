@@ -1,0 +1,94 @@
+name: Ubuntu compatibility
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ubuntu-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    name: Build Ubuntu x86_64 package
+    runs-on: ubuntu-24.04
+    env:
+      CARGO_TERM_COLOR: always
+      CARGO_PROFILE_RELEASE_LTO: "false"
+      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
+      NFPM_VERSION: 2.47.0
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build tools
+        run: |
+          sudo packaging/linux/install-ubuntu-deps.sh build
+          curl -fsSL -o "$RUNNER_TEMP/nfpm.deb" \
+            "https://github.com/goreleaser/nfpm/releases/download/v${NFPM_VERSION}/nfpm_${NFPM_VERSION}_amd64.deb"
+          sudo dpkg -i "$RUNNER_TEMP/nfpm.deb"
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ubuntu-package
+      - name: Build and package
+        run: |
+          umask 077
+          packaging/linux/package.sh --formats deb
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ubuntu-deb
+          path: dist/release/*.deb
+          if-no-files-found: error
+
+  smoke:
+    name: Ubuntu ${{ matrix.release }} (${{ matrix.renderer }})
+    needs: package
+    runs-on: ubuntu-24.04
+    container: ubuntu:${{ matrix.release }}
+    strategy:
+      fail-fast: false
+      matrix:
+        release: ["24.04", "26.04"]
+        renderer: [auto, gl]
+    env:
+      DEBIAN_FRONTEND: noninteractive
+      PDFCRAFT_RENDERER: ${{ matrix.renderer }}
+      LIBGL_ALWAYS_SOFTWARE: "1"
+      PDFCRAFT_SMOKE_OUTPUT: /tmp/pdfcraft-smoke-output
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: ubuntu-deb
+          path: dist
+      - name: Install the package and display tools
+        run: |
+          packaging/linux/install-ubuntu-deps.sh smoke
+          # Minimal Ubuntu containers normally discard package documentation.
+          printf 'path-include=/usr/share/doc/pdfcraft/*\n' > /etc/dpkg/dpkg.cfg.d/zz-pdfcraft-docs
+          apt-get install -y ./dist/*.deb
+          useradd --create-home --shell /bin/bash craft
+          install -d -o craft -g craft "$PDFCRAFT_SMOKE_OUTPUT"
+      - name: Verify installed resources as an ordinary user
+        run: |
+          for resource in \
+            /usr/share/doc/pdfcraft/README.md \
+            /usr/share/applications/ai.storyteller.pdfcraft.desktop \
+            /usr/share/metainfo/ai.storyteller.pdfcraft.metainfo.xml \
+            /usr/share/mime/packages/ai.storyteller.pdfcraft.xml \
+            /usr/share/icons/hicolor/*/apps/ai.storyteller.pdfcraft.png \
+            /usr/share/pdfcraft/models/*; do
+            runuser -u craft -- test -r "$resource"
+          done
+      - name: Exercise CLI and desktop
+        run: runuser -u craft -- xvfb-run -a dbus-run-session -- packaging/linux/smoke-test.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ubuntu-${{ matrix.release }}-${{ matrix.renderer }}-smoke
+          path: /tmp/pdfcraft-smoke-output
+          if-no-files-found: ignore

@@ -136,6 +136,10 @@ Locally: `dotnet tool install -g wix --version 5.0.2`, then `pwsh packaging/wind
 
 ### Linux
 
+The [Ubuntu guide](ubuntu.md) covers installation and source builds on Ubuntu 24.04 / 26.04 LTS
+x86_64. `ubuntu.yml` installs the same `.deb` in both distributions and checks CLI and desktop
+startup with the automatic renderer and OpenGL.
+
 `packaging/linux/package.sh` stages one FHS tree (both binaries, the desktop entry, hicolor icons,
 AppStream metainfo) and makes every format from it: an **AppImage** (any distribution, nothing to
 install), a **.deb** and an **.rpm** (built with [nfpm](https://nfpm.goreleaser.com) from
@@ -143,8 +147,10 @@ install), a **.deb** and an **.rpm** (built with [nfpm](https://nfpm.goreleaser.
 **`pdfcraft-cli-<v>-linux-<arch>.tar.gz`** (the stripped `pdfcraft-cli` plus the licences and
 README, for servers, CI and agent sandboxes). `--formats` picks a subset (`appimage deb rpm tar cli`).
 
-The binaries are built on Ubuntu 22.04, the oldest GitHub-hosted image, so they need only
-**glibc ≥ 2.35**: Ubuntu 22.04+, Debian 12+, Fedora 36+, RHEL 10. Windowing (X11, Wayland,
+Official release binaries are built on Ubuntu 22.04, so they need only **glibc ≥ 2.35**:
+Ubuntu 22.04+, Debian 12+, Fedora 36+, RHEL 10. Local builds can require a newer glibc; the `.deb`
+dependency is derived from both binaries' required GLIBC symbols, with 2.35 as its minimum.
+Windowing (X11, Wayland,
 xkbcommon) and the GPU (Vulkan, EGL) are loaded at runtime from the system; the .deb and .rpm declare
 them as dependencies (see `nfpm.yaml`).
 

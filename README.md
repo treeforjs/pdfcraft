@@ -347,6 +347,9 @@ PdfCraft is a clean-room implementation. Its behaviour comes from the ISO 32000 
 
 ## Get started
 
+For Ubuntu 24.04 / 26.04 LTS (x86_64), see the [Ubuntu install and build guide](docs/ubuntu.md).
+For Windows 11 graphics setup, see the [NVIDIA and Intel driver guide](docs/windows-gpu.md).
+
 ```sh
 git clone https://github.com/storytold/pdfcraft
 cd pdfcraft
