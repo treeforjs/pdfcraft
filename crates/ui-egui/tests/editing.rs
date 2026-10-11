@@ -1308,7 +1308,15 @@ fn zoomed_pages_in_view_are_rendered_at_the_size_drawn() {
     assert!(sharp(&h, 399).is_none(), "pages out of view have none");
     // Zoomed out again, thumbnails are enough and the sharp renders are dropped.
     h.state_mut().set_option("grid-zoom", "50").unwrap();
-    h.run_steps(3);
+    // Sharp work runs ahead of thumbnails. The first sharp render can arrive before its
+    // thumbnail, so wait for that replacement instead of assuming three UI frames finish it.
+    for _ in 0..200 {
+        h.run_steps(1);
+        if sharp(&h, 0).is_none() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
     assert!(sharp(&h, 0).is_none());
 }
 

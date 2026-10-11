@@ -131,6 +131,8 @@ M0 → M1 → M2 → M3 → M4 must happen in order. After M4, M5–M12 can run 
 
 ## Log
 
+- **2026-10-11 (M4, render-test timing):** The page-grid sharpness test now waits for the asynchronous thumbnail replacement before checking that sharp rasters were released after zooming out. Sharp work is queued ahead of thumbnails, so a fixed number of UI frames could fail under load even when rendering was correct. Production rendering is unchanged. Milestone and overall effort estimates unchanged.
+
 - **2026-10-11 (M0, community links):** Removed chat invitations and their obsolete translations from the desktop, Help commands, CLI, installer metadata and public documentation. Project and source links remain available, and the tab strip uses the space freed by the removed button. Updated the existing community-link and tab-layout tests. Milestone and overall effort estimates unchanged.
 
 - **2026-10-11 (M1/M4/M13, audit hardening):** AES-256 creation now uses the user password when the owner password is empty. R5/R6 opens validate encrypted `/Perms`, and the engine refuses security errors before its read-only renderer fallback can lose permissions. Automation rechecks remembered save paths against `--root`, rejects hostile content-item indices before arithmetic or narrowing, and chooses distinct split outputs without replacing existing files. Desktop bookmark splits include the first page in each filename so duplicate or sanitized titles cannot overwrite earlier parts; all desktop multi-file saves use the same available-name helper as automation to preserve existing files. Synthetic crypto, save, content-edit and split regressions cover these paths. Milestone and overall effort estimates unchanged.
