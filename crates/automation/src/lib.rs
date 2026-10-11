@@ -647,7 +647,9 @@ impl Automation {
         let id = doc.id;
         let target = match a.opt_str("path")? {
             Some(p) => self.resolve(p, true)?,
-            None => PathBuf::from(doc.path.clone().ok_or_else(|| failed("the document has never been saved: pass a path"))?),
+            // The directory or file may have become a symlink since it was opened. Stored
+            // paths must be confined again, just like a path supplied to Save As.
+            None => self.resolve(doc.path.as_deref().ok_or_else(|| failed("the document has never been saved: pass a path"))?, true)?,
         };
         let same_file = doc.path.as_deref().is_some_and(|p| Path::new(p) == target);
         // Saving to a new file is a full rewrite unless asked otherwise, like Save As.
@@ -1212,7 +1214,7 @@ impl Automation {
             out.push(match converted {
                 Ok((pdfcraft_engine::SourceKind::Pdf, ..)) => json!({ "path": p, "skipped": "already a PDF" }),
                 Ok((_, stem, pdf)) => {
-                    let target = unused(&dir, &stem);
+                    let target = unused(&dir, &stem)?;
                     write_atomic(&target, &pdf)?;
                     json!({ "path": p, "output": target.to_string_lossy(), "bytes": pdf.len() })
                 }
@@ -1326,10 +1328,12 @@ impl Automation {
         for (i, (first, last, bytes)) in parts.iter().enumerate() {
             let safe = |t: &str| t.chars().map(|c| if c.is_alphanumeric() || " -_.,()".contains(c) { c } else { '_' }).collect::<String>();
             let file = match titles.iter().find(|t| t.0 + 1 == *first) {
-                Some((_, t)) => format!("{stem}-{}.pdf", safe(t)),
-                None => format!("{stem}-part{}.pdf", i + 1),
+                Some((_, t)) => format!("{stem}-{}", safe(t)),
+                None => format!("{stem}-part{}", i + 1),
             };
-            let path = child(&dir, &file);
+            // Bookmark titles can repeat or sanitize to the same name. Each part needs its
+            // own output, including when an earlier split already populated the folder.
+            let path = unused(&dir, &file)?;
             write_atomic(&path, bytes)?;
             files.push(json!({ "path": path.to_string_lossy(), "first_page": first, "last_page": last }));
         }
@@ -1828,12 +1832,8 @@ fn child(dir: &Path, name: &str) -> PathBuf {
 }
 
 /// `<stem>.pdf` in `dir`, or `<stem> (2).pdf` and so on when that name is taken.
-fn unused(dir: &Path, stem: &str) -> PathBuf {
-    let first = child(dir, &format!("{stem}.pdf"));
-    if !first.exists() {
-        return first;
-    }
-    (2..10_000u32).map(|n| child(dir, &format!("{stem} ({n}).pdf"))).find(|p| !p.exists()).unwrap_or(first)
+fn unused(dir: &Path, stem: &str) -> Result<PathBuf> {
+    pdfcraft_platform::staging::unused_output_path(&child(dir, &format!("{stem}.pdf"))).map_err(failed)
 }
 
 /// Write via a temporary file in the same directory, then rename over the target.

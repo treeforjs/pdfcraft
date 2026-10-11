@@ -1400,6 +1400,39 @@ fn split_before_selected_pages() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+#[test]
+fn bookmark_split_dialog_preserves_parts_with_colliding_titles() {
+    let dir = temp_path("split-bookmark-collisions");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let existing = dir.join("doc - Chapter_One (page 1).pdf");
+    std::fs::write(&existing, b"KEEP EXISTING FILE").unwrap();
+    let mut h = organize(3);
+    h.state_mut().export_dir_override = Some(dir.to_string_lossy().into_owned());
+    for (page, title) in [(0, "Chapter/One"), (1, "Chapter/One"), (2, "Chapter:One")] {
+        assert!(h.state_mut().apply_edit(pdfcraft_engine::Edit::AddBookmark { parent: vec![], index: usize::MAX, title: title.into(), page }));
+    }
+    h.state_mut().split_draft.mode = pdfcraft_ui_egui::SplitMode::Bookmarks;
+    h.state_mut().run_command("page.split");
+    h.run_steps(3);
+    h.get_by_label_contains("Creates 3 files from 3 pages");
+    h.get_by_label("Split").click();
+    h.run_steps(3);
+    assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 4);
+    for page in 1..=3 {
+        let suffix = if page == 1 { " (2)" } else { "" };
+        let path = dir.join(format!("doc - Chapter_One (page {page}){suffix}.pdf"));
+        let mut reopened = PdfCraftApp::new();
+        reopened.open_bytes("part.pdf", None, std::fs::read(path).unwrap()).unwrap();
+        assert_eq!(texts_of(&reopened, 0), [format!("Page {page}")]);
+    }
+    h.state_mut().split_active(&pdfcraft_ui_egui::SplitPlan::Bookmarks);
+    h.run_steps(3);
+    assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 7, "repeating a split must preserve its previous outputs");
+    assert_eq!(std::fs::read(existing).unwrap(), b"KEEP EXISTING FILE");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
 // ── Encrypted documents ───────────────────────────────────────────────────────────────────────
 
 fn protected(user: &str, owner: &str, permissions: i32) -> Vec<u8> {

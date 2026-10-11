@@ -64,6 +64,32 @@ pub fn staging_suffixes() -> impl Iterator<Item = u64> {
     (0u64..).map(move |i| state.hash_one(i))
 }
 
+/// Choose an available output path, adding ` (2)`, ` (3)`, ... before the extension.
+/// Existing files, folders and dangling symlinks reserve their names. Exhausting the bounded
+/// search returns an error, never an existing path. The caller still performs the write.
+pub fn unused_output_path(path: &Path) -> std::io::Result<PathBuf> {
+    let stem = path.file_stem().ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "output needs a file name"))?;
+    for n in 1..10_000u32 {
+        let candidate = if n == 1 {
+            path.to_path_buf()
+        } else {
+            let mut name = stem.to_os_string();
+            name.push(format!(" ({n})"));
+            if let Some(extension) = path.extension() {
+                name.push(".");
+                name.push(extension);
+            }
+            path.with_file_name(name)
+        };
+        match candidate.symlink_metadata() {
+            Ok(_) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(candidate),
+            Err(e) => return Err(e),
+        }
+    }
+    Err(std::io::Error::new(std::io::ErrorKind::AlreadyExists, format!("no unused output name for {}; choose another folder", path.display())))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -125,5 +151,41 @@ mod tests {
         assert!(create_staging(&dir, "out.pdf", StagingName::SuffixThenTag, 1..).is_err());
         assert!(!name(STAGING_ATTEMPTS as u64 + 1).exists(), "a 17th name was tried");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn output_names_keep_the_extension_and_preserve_existing_files() {
+        let dir = test_dir("output-names");
+        for name in ["report.pdf", "report (2).pdf", "archive.tar.gz", "LICENSE"] {
+            std::fs::write(dir.join(name), b"KEEP").unwrap();
+        }
+        for (name, next) in [("report.pdf", "report (3).pdf"), ("archive.tar.gz", "archive.tar (2).gz"), ("LICENSE", "LICENSE (2)")] {
+            assert_eq!(unused_output_path(&dir.join(name)).unwrap(), dir.join(next));
+            assert_eq!(std::fs::read(dir.join(name)).unwrap(), b"KEEP");
+        }
+        assert_eq!(unused_output_path(&dir.join("new.pdf")).unwrap(), dir.join("new.pdf"));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn exhausted_output_names_are_refused() {
+        let dir = test_dir("output-names-exhausted");
+        std::fs::write(dir.join("part.pdf"), b"KEEP").unwrap();
+        for n in 2..10_000u32 {
+            std::fs::File::create(dir.join(format!("part ({n}).pdf"))).unwrap();
+        }
+        assert_eq!(unused_output_path(&dir.join("part.pdf")).unwrap_err().kind(), std::io::ErrorKind::AlreadyExists);
+        assert_eq!(std::fs::read(dir.join("part.pdf")).unwrap(), b"KEEP");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn unused_output_names_preserve_dangling_symlinks() {
+        let dir = test_dir("output-names-symlink");
+        std::os::unix::fs::symlink(dir.join("missing.pdf"), dir.join("part.pdf")).unwrap();
+        assert_eq!(unused_output_path(&dir.join("part.pdf")).unwrap(), dir.join("part (2).pdf"));
+        assert!(dir.join("part.pdf").symlink_metadata().unwrap().file_type().is_symlink());
+        let _ = std::fs::remove_dir_all(dir);
     }
 }

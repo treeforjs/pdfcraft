@@ -257,6 +257,34 @@ fn link_dir(root: &Path, name: &str, target: &Path) {
 }
 
 #[test]
+#[cfg(any(unix, windows))]
+fn saving_to_a_remembered_path_rechecks_the_root() {
+    let (base, root) = sandbox("remembered-save-root");
+    std::fs::create_dir(root.join("documents")).unwrap();
+    let original = fixture(1);
+    std::fs::write(root.join("documents/report.pdf"), &original).unwrap();
+    let mut a = auto(&root);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "documents/report.pdf" }))["doc"].as_u64().unwrap();
+    ok(&mut a, "doc_set_info", json!({ "doc": doc, "key": "Title", "value": "Unsaved" }));
+
+    // Another process can replace a directory after the document was opened. Its stored
+    // canonical path must not bypass the same check used by an explicit Save As path.
+    std::fs::rename(root.join("documents"), root.join("original-documents")).unwrap();
+    link_dir(&root, "documents", &base.join("outside"));
+    std::fs::write(base.join("outside/report.pdf"), b"KEEP OUTSIDE FILE").unwrap();
+    let error = a.call("doc_save", &json!({ "doc": doc })).unwrap_err();
+    assert!(error.to_string().contains("outside the allowed directory"), "{error}");
+    assert_eq!(std::fs::read(base.join("outside/report.pdf")).unwrap(), b"KEEP OUTSIDE FILE");
+    assert_eq!(std::fs::read(root.join("original-documents/report.pdf")).unwrap(), original);
+    assert_eq!(ok(&mut a, "doc_info", json!({ "doc": doc }))["document"]["dirty"], true);
+
+    let saved = ok(&mut a, "doc_save", json!({ "doc": doc, "path": "recovered.pdf" }));
+    assert_eq!(saved["document"]["dirty"], false);
+    assert!(root.join("recovered.pdf").is_file());
+    let _ = std::fs::remove_dir_all(base);
+}
+
+#[test]
 fn root_refusals_do_not_reveal_what_exists_outside() {
     // Regression test for #136: every path outside the root gets the same refusal, whether it
     // exists, is a file or a folder, or passes through a missing folder.
@@ -2218,6 +2246,50 @@ fn organizing_with_filters_bookmark_splits_and_extract_options() {
     assert_eq!(e["files"].as_array().unwrap().len(), 2);
     assert_eq!(e["original"]["pages"], 1);
     assert!(matches!(a.call("page_extract", &json!({ "doc": doc, "pages": [1], "separate": true })), Err(ToolError::InvalidArgs(_))));
+}
+
+#[test]
+fn bookmark_splits_preserve_parts_with_colliding_names() {
+    let dir = workdir("split-name-collisions");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    // Duplicate titles and different titles that sanitize to the same filename must both work.
+    for (page, title) in [(1, "Chapter/One"), (2, "Chapter/One"), (3, "Chapter:One")] {
+        ok(&mut a, "bookmark_add", json!({ "doc": doc, "title": title, "page": page }));
+    }
+    std::fs::create_dir(dir.join("parts")).unwrap();
+    let existing = dir.join("parts/a-Chapter_One.pdf");
+    std::fs::write(&existing, b"KEEP EXISTING FILE").unwrap();
+    let split = ok(&mut a, "doc_split", json!({ "doc": doc, "bookmarks": true, "out_dir": "parts" }));
+    let files = split["files"].as_array().unwrap();
+    assert_eq!(files.len(), 3);
+    let mut paths = std::collections::HashSet::new();
+    for (i, file) in files.iter().enumerate() {
+        let path = file["path"].as_str().unwrap();
+        assert!(paths.insert(path), "split parts reused {path}");
+        let part = ok(&mut a, "doc_open", json!({ "path": path }))["doc"].as_u64().unwrap();
+        assert_eq!(page_text(&mut a, part), [format!("Page {}", i + 1)]);
+    }
+    assert_eq!(std::fs::read(existing).unwrap(), b"KEEP EXISTING FILE");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn content_edits_reject_hostile_indexes_without_changing_the_document() {
+    let dir = workdir("content-hostile-indexes");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    ok(&mut a, "page_add_text", json!({ "doc": doc, "page": 1, "at": [10, 10], "text": "Keep me" }));
+    let before = ok(&mut a, "content_list", json!({ "doc": doc }));
+    for tool in ["content_update", "content_delete"] {
+        for index in [i64::MIN, -1, 0, (1_i64 << 32) + 1, i64::MAX] {
+            assert!(a.call(tool, &json!({ "doc": doc, "page": 1, "index": index })).is_err(), "{tool} accepted {index}");
+            assert_eq!(ok(&mut a, "content_list", json!({ "doc": doc })), before);
+        }
+    }
+    ok(&mut a, "content_delete", json!({ "doc": doc, "page": 1, "index": 1 }));
+    assert_eq!(ok(&mut a, "content_list", json!({ "doc": doc }))["count"], 0);
+    let _ = std::fs::remove_dir_all(dir);
 }
 
 #[test]

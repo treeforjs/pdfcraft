@@ -133,15 +133,18 @@ impl Automation {
         let page = self.page(a)?;
         let doc = self.doc(a)?;
         let index = a.int("index")?;
+        let position = usize::try_from(index)
+            .ok()
+            .and_then(|n| n.checked_sub(1))
+            .ok_or_else(|| bad("index must be a positive item number (see content_list)"))?;
         let ph = doc.info.pages[page].height as f64;
         let it = doc
             .added
             .iter()
             .filter(|x| x.page == page)
-            .nth((index - 1).max(0) as usize)
-            .filter(|_| index >= 1)
+            .nth(position)
             .ok_or_else(|| failed(format!("page {} has no added item {index} (see content_list)", page + 1)))?;
-        Ok((page, index as usize - 1, it.content.clone(), ph))
+        Ok((page, position, it.content.clone(), ph))
     }
 
     pub(crate) fn content_update(&mut self, a: &Args) -> Result<Value> {

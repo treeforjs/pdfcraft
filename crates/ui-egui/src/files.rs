@@ -456,7 +456,9 @@ impl PdfCraftApp {
         {
             let write = move |app: &mut Self, dir: std::path::PathBuf| {
                 for (name, bytes) in &named {
-                    if let Err(e) = crate::editing::write_atomically(&dir.join(name).to_string_lossy(), bytes) {
+                    let written = pdfcraft_platform::staging::unused_output_path(&dir.join(name))
+                        .and_then(|path| crate::editing::write_atomically(&path.to_string_lossy(), bytes));
+                    if let Err(e) = written {
                         app.notify_fmt("Couldn't write {name}: {e}", &[("name", name), ("e", &e.to_string())]);
                         return;
                     }
@@ -539,7 +541,9 @@ impl PdfCraftApp {
                 // Bookmark splits are named after the bookmark that starts the part.
                 let title = titles.iter().find(|(p, _)| *p + 1 == a).map(|(_, t)| safe(t));
                 let name = match title {
-                    Some(t) => format!("{stem} - {t}.pdf"),
+                    // Titles can repeat or sanitize to the same spelling. The distinct
+                    // source page keeps one part from replacing another in the same split.
+                    Some(t) => format!("{stem} - {t} (page {a}).pdf"),
                     None if a == b => format!("{stem} (page {a}).pdf"),
                     None => format!("{stem} (pages {a}-{b}).pdf"),
                 };
