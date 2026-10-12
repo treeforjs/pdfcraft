@@ -1213,7 +1213,7 @@
 	Applied 1 redaction mark. Save to remove the content from the file.	Použita 1 značka začernění. Uložením odeberete obsah ze souboru.
 	Applied {n} redaction marks. Save to remove the content from the file.	Použité značky začernění: {n}. Uložením odeberete obsah ze souboru.
 	JavaScript Console	Konzola JavaScriptu
-	JavaScript is turned off (Preferences ▸ JavaScript).	JavaScript je vypnutý (Předvolby ▸ JavaScript).
+	JavaScript is turned off (Preferences ▸ JavaScript).	JavaScript je vypnutý (Předvolby > JavaScript).
 	Output appears here.	Zde se zobrazí výstup.
 	Script Name:	Název skriptu:
 	This document has no document-level scripts.	Tento dokument nemá žádné skripty na úrovni dokumentu.
