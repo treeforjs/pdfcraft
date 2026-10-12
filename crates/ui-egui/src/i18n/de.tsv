@@ -510,6 +510,7 @@
 	Clean Up	Aufräumen
 	Color Images	Farbbilder
 	Grayscale Images	Graustufenbilder
+	Monochrome Images	Schwarzweißbilder
 	Bicubic downsampling to	Bikubische Neuberechnung auf
 	for images above	für Bilder über
 	Compression	Komprimierung
@@ -533,6 +534,7 @@
 	Discard private data of other applications	Private Daten anderer Anwendungen verwerfen
 	Discard hidden text	Ausgeblendeten Text verwerfen
 	Use Flate to encode streams that are not encoded	Nicht codierte Streams mit Flate codieren
+	In streams that use LZW encoding, use Flate instead	In Streams mit LZW-Codierung stattdessen Flate verwenden
 	Remove invalid links and bookmarks	Ungültige Links und Lesezeichen entfernen
 	Remove unreferenced named destinations	Nicht referenzierte benannte Ziele entfernen
 	Compress document structure (object streams)	Dokumentstruktur komprimieren (Objekt-Streams)

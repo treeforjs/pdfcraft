@@ -510,6 +510,7 @@
 	Clean Up	Nettoyer
 	Color Images	Images couleur
 	Grayscale Images	Images en niveaux de gris
+	Monochrome Images	Images monochromes
 	Bicubic downsampling to	Sous-échantillonnage bicubique à
 	for images above	pour les images au-dessus de
 	Compression	Compression
@@ -533,6 +534,7 @@
 	Discard private data of other applications	Ignorer les données privées d'autres applications
 	Discard hidden text	Ignorer le texte masqué
 	Use Flate to encode streams that are not encoded	Utiliser Flate pour coder les flux qui ne sont pas codés
+	In streams that use LZW encoding, use Flate instead	Dans les flux codés en LZW, utiliser Flate à la place
 	Remove invalid links and bookmarks	Retirer les liens et signets non valides
 	Remove unreferenced named destinations	Retirer les destinations nommées non référencées
 	Compress document structure (object streams)	Compresser la structure du document (flux d'objets)

@@ -227,6 +227,7 @@
 	Clean Up	清理
 	Color Images	彩色图像
 	Grayscale Images	灰度图像
+	Monochrome Images	单色图像
 	Bicubic downsampling to	双三次降采样至
 	for images above	（高于此分辨率的图像）
 	Compression	压缩
@@ -250,6 +251,7 @@
 	Discard private data of other applications	丢弃其他应用程序的私有数据
 	Discard hidden text	丢弃隐藏文本
 	Use Flate to encode streams that are not encoded	使用 Flate 编码未编码的流
+	In streams that use LZW encoding, use Flate instead	在使用 LZW 编码的流中改用 Flate
 	Remove invalid links and bookmarks	删除无效链接和书签
 	Remove unreferenced named destinations	删除未引用的命名目标
 	Compress document structure (object streams)	压缩文档结构（对象流）

@@ -7154,8 +7154,8 @@ milestone = "M11"
 status = "partial"
 commands = ["optimize.advanced"]
 tools = ["doc_optimize"]
-evidence = ["crates/optimize/tests/optimize.rs::images_are_measured_where_drawn_and_downsampled", "crates/optimize/tests/optimize.rs::settings_choose_what_happens", "crates/automation/tests/automation.rs::optimizing_through_tools"]
-notes = "colour and grayscale, bicubic, effective resolution measured where drawn; monochrome not yet"
+evidence = ["crates/optimize/tests/optimize.rs::images_are_measured_where_drawn_and_downsampled", "crates/optimize/tests/optimize.rs::settings_choose_what_happens", "crates/optimize/tests/codecs.rs::mono_settings_choose_flate_retain_and_downsampling", "crates/automation/tests/automation.rs::optimizing_through_tools"]
+notes = "colour and grayscale, bicubic, effective resolution measured where drawn; monochrome (one-bit images and image masks) by area average with majority and ties to ink, not bicubic and not compared with Acrobat output; monochrome images with /SMask or /Mask are not downsampled"
 
 [[feature]]
 id = "optimize.recompress-images"
@@ -7175,11 +7175,11 @@ title = "Monochrome compression (JBIG2, CCITT G4)"
 area = "K"
 tier = "P1"
 milestone = "M11"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["optimize.advanced", "optimize.reduce"]
+tools = ["doc_optimize"]
+evidence = ["crates/filters/src/ccitt.rs::every_small_image_round_trips", "crates/filters/tests/proptests.rs::ccitt_g4_round_trips_arbitrary_bitmaps", "crates/optimize/tests/codecs.rs::one_bit_images_become_ccitt_g4_with_the_same_samples", "crates/optimize/tests/codecs.rs::poppler_decodes_and_renders_the_ccitt_copy_exactly_like_the_original", "crates/optimize/tests/codecs.rs::poppler_decodes_g4_streams_of_awkward_shapes_exactly", "crates/automation/tests/automation.rs::optimizing_scans_with_ccitt_lzw_to_flate_and_object_streams_through_tools"]
+notes = "CCITT Group 4 only: original T.6 encoder (pdfcraft-filters), checked against hayro-ccitt and Poppler (pdfimages decodes the copies to the exact source bitmaps, pdftoppm renders before and after identically); one-bit images whose samples decode completely are recompressed when smaller. No JBIG2; images already in CCITT or JBIG2 and inline images are not touched"
 
 [[feature]]
 id = "optimize.only-if-smaller"
@@ -7428,10 +7428,10 @@ area = "K"
 tier = "P1"
 milestone = "M11"
 status = "partial"
-commands = ["file.save_as"]
-tools = ["doc_save"]
-evidence = ["crates/cos/tests/writer.rs::full_save_packs_objects_into_object_streams"]
-notes = "on by default for full saves; no Optimizer option yet"
+commands = ["file.save_as", "optimize.advanced"]
+tools = ["doc_save", "doc_optimize"]
+evidence = ["crates/cos/tests/writer.rs::full_save_packs_objects_into_object_streams", "crates/automation/tests/automation.rs::optimizing_scans_with_ccitt_lzw_to_flate_and_object_streams_through_tools", "crates/ui-egui/tests/create.rs::the_pdf_optimizer_dialog_saves_an_optimized_copy"]
+notes = "on by default for full saves; the Optimizer Clean Up check box and doc_optimize compress_structure turn it off for the copy. No separate 'compress entire file' versus 'structure only' choice and no 'remove compression'"
 
 [[feature]]
 id = "optimize.flate-unencoded"
@@ -7442,8 +7442,8 @@ milestone = "M11"
 status = "partial"
 commands = ["optimize.advanced"]
 tools = ["doc_optimize"]
-evidence = ["crates/optimize/tests/optimize.rs::discards_and_clean_up"]
-notes = "unencoded streams; LZW not yet re-encoded"
+evidence = ["crates/optimize/tests/optimize.rs::discards_and_clean_up", "crates/optimize/tests/codecs.rs::lzw_streams_become_flate_and_incomplete_ones_are_left_alone", "crates/automation/tests/automation.rs::optimizing_scans_with_ccitt_lzw_to_flate_and_object_streams_through_tools"]
+notes = "unencoded streams (when smaller); LZW streams re-encoded as Flate when they decode completely (strict, end-of-data code required, direct filter description, 32 MiB per stream, 128 MiB per run: the rules preflight fixes use). Truncated, corrupt, indirect, codec-chained or /Crypt LZW streams are left unchanged and counted; inline images are not touched"
 
 [[feature]]
 id = "optimize.remove-invalid-links"

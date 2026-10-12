@@ -304,7 +304,7 @@ fn is_mono(doc: &Document, d: &Dict) -> bool {
 /// source). Each output pixel covers a block of source pixels and takes the majority value;
 /// ties go to `ink` so one-pixel strokes survive a 2:1 reduction.
 fn downsample_bits(bits: &[u8], w: usize, h: usize, nw: usize, nh: usize, ink: bool) -> Option<Vec<u8>> {
-    if nw == 0 || nh == 0 || nw > w || nh > h {
+    if nw == 0 || nh == 0 || nw > w || nh > h || w > 1 << 20 {
         return None;
     }
     let (stride, nstride) = (w.div_ceil(8), nw.div_ceil(8));
@@ -353,7 +353,8 @@ fn downsample_bits(bits: &[u8], w: usize, h: usize, nw: usize, nh: usize, ink: b
 fn process_mono(s: &Stream, ppi: f64, st: &MonoSettings) -> Option<Stream> {
     let d = &s.dict;
     let (w, h) = (usize::try_from(d.int(b"Width")?).ok()?, usize::try_from(d.int(b"Height")?).ok()?);
-    if w == 0 || h == 0 || (w as u64).saturating_mul(h as u64) > MAX_PIXELS {
+    // Group 4 takes at most 2^20 columns; the bound also keeps the per-column tables small.
+    if w == 0 || h == 0 || w > 1 << 20 || (w as u64).saturating_mul(h as u64) > MAX_PIXELS {
         return None;
     }
     let resize = st.downsample && ppi.is_finite() && ppi > st.above_ppi && st.target_ppi > 0.0 && !d.contains(b"SMask") && !d.contains(b"Mask");
@@ -459,7 +460,7 @@ pub(crate) fn run(
             doc.set(r, Object::Stream(new));
             continue;
         }
-        let Some(n) =s.dict.get(b"ColorSpace").and_then(|cs| components(doc, cs)) else { continue };
+        let Some(n) = s.dict.get(b"ColorSpace").and_then(|cs| components(doc, cs)) else { continue };
         let st = if n == 1 { &settings.gray } else { &settings.color };
         let Some((new, smask)) = process(doc, s, ppi, st, n) else { continue };
         let resized = new.dict.int(b"Width") != s.dict.int(b"Width") || new.dict.int(b"Height") != s.dict.int(b"Height");

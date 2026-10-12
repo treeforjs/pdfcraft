@@ -568,6 +568,7 @@
 	Clean Up	Vyčištění
 	Color Images	Barevné obrázky
 	Grayscale Images	Obrázky ve stupních šedi
+	Monochrome Images	Černobílé obrázky
 	Bicubic downsampling to	Bikubické převzorkování na
 	for images above	pro obrázky nad
 	Compression	Komprese
@@ -591,6 +592,7 @@
 	Discard private data of other applications	Zahodit soukromá data jiných aplikací
 	Discard hidden text	Zahodit skrytý text
 	Use Flate to encode streams that are not encoded	Nekódované proudy kódovat pomocí Flate
+	In streams that use LZW encoding, use Flate instead	V proudech s kódováním LZW použít místo něj Flate
 	Remove invalid links and bookmarks	Odebrat neplatné odkazy a záložky
 	Remove unreferenced named destinations	Odebrat neodkazovaná pojmenovaná cíle
 	Compress document structure (object streams)	Komprimovat strukturu dokumentu (proudy objektů)

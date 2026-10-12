@@ -30,8 +30,8 @@ fn scan_bitmap(w: usize, h: usize) -> Vec<bool> {
                 || (g & 8 != 0 && (14..16).contains(&cy))
                 || (g & 16 != 0 && cy >= 22)
                 || (g & 32 != 0 && (cx + 31 - cy) % 19 < 2);
-            let blank = (g >> 8) % 7 == 0; // word spaces
-            px[y * w + x] = (inside && stroke && !blank) || y == h / 2 || hash(x, y) % 1500 == 0;
+            let blank = (g >> 8).is_multiple_of(7); // word spaces
+            px[y * w + x] = (inside && stroke && !blank) || y == h / 2 || hash(x, y).is_multiple_of(1500);
         }
     }
     px
@@ -44,7 +44,7 @@ fn pack(px: &[bool], w: usize, black_bit: bool) -> Vec<u8> {
     let mut out = vec![0u8; stride * h];
     for y in 0..h {
         for x in 0..stride * 8 {
-            let bit = px.get(y * w + x).filter(|_| x < w).map_or(true, |&b| b == black_bit);
+            let bit = px.get(y * w + x).filter(|_| x < w).is_none_or(|&b| b == black_bit);
             if bit {
                 out[y * stride + x / 8] |= 0x80 >> (x % 8);
             }
@@ -386,7 +386,13 @@ fn lzw_streams_become_flate_and_incomplete_ones_are_left_alone() {
     // 4. Indirect filter name. 5. LZW then DCT (an image codec). 6. Corrupt codes.
     let name = doc.add(Object::name("LZWDecode"));
     let indirect = doc.add(Object::Stream(lzw_stream(Dict::new(), &content, Object::Ref(name), None, &Params::default())));
-    let with_dct = doc.add(Object::Stream(lzw_stream(Dict::new(), &content, Object::Array(vec![Object::name("LZWDecode"), Object::name("DCTDecode")]), None, &Params::default())));
+    let with_dct = doc.add(Object::Stream(lzw_stream(
+        Dict::new(),
+        &content,
+        Object::Array(vec![Object::name("LZWDecode"), Object::name("DCTDecode")]),
+        None,
+        &Params::default(),
+    )));
     let mut junk = Dict::new();
     junk.set(b"Filter".to_vec(), Object::name("LZWDecode"));
     let corrupt = doc.add(Object::Stream(Stream::from_raw(junk, vec![0x80, 0x0f, 0xff, 0xff, 0xff, 0x01])));
@@ -398,8 +404,7 @@ fn lzw_streams_become_flate_and_incomplete_ones_are_left_alone() {
 
     // Off: untouched.
     let mut off = doc.clone();
-    let mut s = Settings::default();
-    s.lzw_to_flate = false;
+    let s = Settings { lzw_to_flate: false, ..Settings::default() };
     let r = optimize(&mut off, &s).unwrap();
     assert_eq!((r.lzw_reencoded, r.lzw_skipped), (0, 0));
     for (r, s) in &originals {
@@ -507,9 +512,27 @@ fn poppler_decodes_g4_streams_of_awkward_shapes_exactly() {
         seed
     };
     let mut sources = Vec::new();
-    for (i, &(w, h)) in [(1usize, 1usize), (1, 9), (2, 3), (7, 5), (8, 8), (9, 4), (17, 13), (63, 7), (64, 3), (65, 9), (127, 5), (1727, 3), (1728, 4), (1729, 3), (2561, 3), (5200, 4), (333, 77)]
-        .iter()
-        .enumerate()
+    for (i, &(w, h)) in [
+        (1usize, 1usize),
+        (1, 9),
+        (2, 3),
+        (7, 5),
+        (8, 8),
+        (9, 4),
+        (17, 13),
+        (63, 7),
+        (64, 3),
+        (65, 9),
+        (127, 5),
+        (1727, 3),
+        (1728, 4),
+        (1729, 3),
+        (2561, 3),
+        (5200, 4),
+        (333, 77),
+    ]
+    .iter()
+    .enumerate()
     {
         let density = [0u64, 3, 50, 500, 970, 1000][i % 6];
         let px: Vec<bool> = (0..w * h).map(|j| if i % 4 == 3 { (j % w) < w / 2 + j / w } else { next() % 1000 < density }).collect();

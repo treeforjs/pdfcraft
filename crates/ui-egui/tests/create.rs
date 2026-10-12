@@ -134,6 +134,7 @@ fn the_pdf_optimizer_dialog_saves_an_optimized_copy() {
     h.run_steps(2);
     h.get_by_label("PDF Optimizer");
     h.get_by_label("Color Images");
+    h.get_by_label("Monochrome Images");
     h.get_by_label("Discard Objects").click();
     h.run_steps(2);
     h.get_by_label("Discard document tags").click();
@@ -141,9 +142,17 @@ fn the_pdf_optimizer_dialog_saves_an_optimized_copy() {
     h.run_steps(2);
     h.get_by_label("Discard document information and metadata").click();
     h.run_steps(1);
+    // Clean Up: object streams and LZW re-encoding are both on by default; turn both off.
+    h.get_by_label("Clean Up").click();
+    h.run_steps(2);
+    h.get_by_label("Compress document structure (object streams)").click();
+    h.get_by_label("In streams that use LZW encoding, use Flate instead").click();
+    h.run_steps(1);
     {
         let d = &h.state().optimize_draft;
         assert!(d.settings.discard_tags && d.discard == vec![pdfcraft_engine::Hidden::Metadata]);
+        assert!(!d.settings.compress_structure && !d.settings.lzw_to_flate);
+        assert_eq!(d.settings.mono.compression, pdfcraft_engine::optimize::MonoCompression::CcittG4);
     }
     h.get_by_label("OK").click();
     // The click is handled next frame. The optimization then runs on a worker thread and the
@@ -156,7 +165,9 @@ fn the_pdf_optimizer_dialog_saves_an_optimized_copy() {
     }
     h.run_steps(2);
     assert!(h.state().progress_notice.is_none(), "the progress card is gone");
-    assert!(std::fs::read(&out).unwrap().starts_with(b"%PDF-"));
+    let saved = std::fs::read(&out).unwrap();
+    assert!(saved.starts_with(b"%PDF-"));
+    assert!(!saved.windows(7).any(|w| w == b"/ObjStm"), "object streams were turned off");
     assert_eq!(h.state().dialog, None);
 }
 

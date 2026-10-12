@@ -508,6 +508,7 @@
 	Clean Up	Tisztítás
 	Color Images	Színes képek
 	Grayscale Images	Szürkeárnyalatos képek
+	Monochrome Images	Fekete-fehér képek
 	Bicubic downsampling to	Kettős köbös újramintázás erre
 	for images above	az ennél nagyobb képeknél
 	Compression	Tömörítés
@@ -531,6 +532,7 @@
 	Discard private data of other applications	Más alkalmazások privát adatainak elvetése
 	Discard hidden text	Rejtett szöveg elvetése
 	Use Flate to encode streams that are not encoded	A kódolatlan adatfolyamok Flate kódolása
+	In streams that use LZW encoding, use Flate instead	Az LZW kódolású adatfolyamokban Flate használata helyette
 	Remove invalid links and bookmarks	Érvénytelen hivatkozások és könyvjelzők eltávolítása
 	Remove unreferenced named destinations	Hivatkozás nélküli elnevezett célok eltávolítása
 	Compress document structure (object streams)	Dokumentumszerkezet tömörítése (objektumfolyamok)

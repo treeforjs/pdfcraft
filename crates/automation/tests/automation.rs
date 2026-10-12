@@ -3415,7 +3415,7 @@ fn lzw_scan_pdf() -> Vec<u8> {
             g ^= g >> 32;
             // Stroke widths and positions vary per glyph, and specks of scanner noise.
             let (sw, bar) = (2 + (g >> 8) as usize % 3, 10 + (g >> 12) as usize % 5);
-            let speck = (x as u64).wrapping_mul(0x2545_F491_4F6C_DD1D).wrapping_add((y as u64).wrapping_mul(0x9E37_79B9)) % 211 == 0;
+            let speck = (x as u64).wrapping_mul(0x2545_F491_4F6C_DD1D).wrapping_add((y as u64).wrapping_mul(0x9E37_79B9)).is_multiple_of(211);
             let ink = speck
                 || (3..15).contains(&cx)
                     && (4..22).contains(&cy)
@@ -3486,7 +3486,8 @@ fn optimizing_scans_with_ccitt_lzw_to_flate_and_object_streams_through_tools() {
     };
     let original = preview(&mut a, doc);
     assert_eq!((original.0, original.1), (800, 300));
-    let r = ok(&mut a, "doc_optimize", json!({ "doc": doc, "path": "g4.pdf", "mono": "ccitt-g4", "lzw_to_flate": true, "compress_structure": false }));
+    let r =
+        ok(&mut a, "doc_optimize", json!({ "doc": doc, "path": "g4.pdf", "mono": "ccitt-g4", "lzw_to_flate": true, "compress_structure": false }));
     assert_eq!((r["images_ccitt"].as_u64(), r["images_recompressed"].as_u64()), (Some(1), Some(1)), "{r}");
     assert_eq!((r["lzw_reencoded"].as_u64(), r["lzw_skipped"].as_u64(), r["object_streams"].as_bool()), (Some(1), Some(0), Some(false)), "{r}");
     assert!(r["bytes_after"].as_u64().unwrap() < r["bytes_before"].as_u64().unwrap(), "{r}");
@@ -3496,7 +3497,11 @@ fn optimizing_scans_with_ccitt_lzw_to_flate_and_object_streams_through_tools() {
     let copy = ok(&mut a, "doc_open", json!({ "path": "g4.pdf" }))["doc"].as_u64().unwrap();
     assert!(preview(&mut a, copy) == original, "the optimized copy renders differently");
     // Object streams on (the default); LZW kept when asked; mono as an object.
-    let r = ok(&mut a, "doc_optimize", json!({ "doc": doc, "path": "packed.pdf", "lzw_to_flate": false, "mono": { "compression": "zip", "downsample": false } }));
+    let r = ok(
+        &mut a,
+        "doc_optimize",
+        json!({ "doc": doc, "path": "packed.pdf", "lzw_to_flate": false, "mono": { "compression": "zip", "downsample": false } }),
+    );
     assert_eq!((r["images_ccitt"].as_u64(), r["lzw_reencoded"].as_u64(), r["object_streams"].as_bool()), (Some(0), Some(0), Some(true)), "{r}");
     let packed = std::fs::read(dir.join("packed.pdf")).unwrap();
     assert!(contains(&packed, b"/ObjStm") && !contains(&packed, b"/CCITTFaxDecode"));

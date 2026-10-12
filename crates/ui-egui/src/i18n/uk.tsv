@@ -536,6 +536,7 @@
 	Clean Up	Очищення
 	Color Images	Кольорові зображення
 	Grayscale Images	Зображення у відтінках сірого
+	Monochrome Images	Монохромні зображення
 	Bicubic downsampling to	Бікубічне зниження роздільної здатності до
 	for images above	для зображень із роздільною здатністю понад
 	Compression	Стиснення
@@ -559,6 +560,7 @@
 	Discard private data of other applications	Видалити приватні дані інших застосунків
 	Discard hidden text	Видалити прихований текст
 	Use Flate to encode streams that are not encoded	Кодувати незакодовані потоки за допомогою Flate
+	In streams that use LZW encoding, use Flate instead	У потоках із кодуванням LZW використовувати Flate
 	Remove invalid links and bookmarks	Видалити недійсні посилання й закладки
 	Remove unreferenced named destinations	Видалити іменовані призначення без посилань
 	Compress document structure (object streams)	Стиснути структуру документа (потоки об’єктів)

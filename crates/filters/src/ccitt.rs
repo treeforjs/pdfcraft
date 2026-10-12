@@ -344,7 +344,7 @@ pub(crate) fn encode_g4(rows: &[u8], width: usize, height: usize, black_is_1: bo
             }
             let a1 = at(&coding, ci);
             // b1 changes to the colour opposite a0's: to black at even indices.
-            let bi = if (ri % 2 == 0) != black { ri } else { ri + 1 };
+            let bi = if ri.is_multiple_of(2) != black { ri } else { ri + 1 };
             let (b1, b2) = (at(&reference, bi), at(&reference, bi + 1));
             if b2 < a1 {
                 w.put(PASS)?;
@@ -496,7 +496,7 @@ mod tests {
                 round_trip(&px, width);
             }
             let height = 6;
-            let px: Vec<bool> = (0..width * height).map(|i| ((i % width) / (1 + i / width)) % 2 == 0).collect();
+            let px: Vec<bool> = (0..width * height).map(|i| ((i % width) / (1 + i / width)).is_multiple_of(2)).collect();
             round_trip(&px, width);
         }
     }

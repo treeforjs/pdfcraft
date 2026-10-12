@@ -221,6 +221,7 @@
 	Clean Up	Почистване
 	Color Images	Цветни изображения
 	Grayscale Images	Изображения в сива скала
+	Monochrome Images	Черно-бели изображения
 	Bicubic downsampling to	Бикубично понижаване на резолюцията до
 	for images above	за изображения над
 	Compression	Компресия
@@ -244,6 +245,7 @@
 	Discard private data of other applications	Премахни частните данни на други приложения
 	Discard hidden text	Премахни скрития текст
 	Use Flate to encode streams that are not encoded	Кодирай с Flate некодираните потоци
+	In streams that use LZW encoding, use Flate instead	В потоците с LZW кодиране използвай Flate
 	Remove invalid links and bookmarks	Премахни невалидните връзки и отметки
 	Remove unreferenced named destinations	Премахни неизползваните именувани местоназначения
 	Compress document structure (object streams)	Компресирай структурата на документа (потоци от обекти)

@@ -8,7 +8,9 @@
 use std::sync::{Arc, Mutex};
 
 use egui::{Align, Layout};
-use pdfcraft_engine::optimize::{Compression, EmbeddedFont, ImageSettings, QUALITIES, Settings, SpaceAudit, SpaceCategory, UnembedBlock};
+use pdfcraft_engine::optimize::{
+    Compression, EmbeddedFont, ImageSettings, MonoCompression, MonoSettings, QUALITIES, Settings, SpaceAudit, SpaceCategory, UnembedBlock,
+};
 use pdfcraft_engine::optimizer::{OptimizeStage, Optimized};
 use pdfcraft_engine::{DocId, EditError, Hidden, OptimizeReport};
 
@@ -151,6 +153,34 @@ fn image_row(ui: &mut egui::Ui, id: &str, title: &str, s: &mut ImageSettings) {
     ui.add_space(8.0);
 }
 
+/// Monochrome images: downsampling (area average) and CCITT Group 4, ZIP or the existing
+/// compression.
+fn mono_row(ui: &mut egui::Ui, s: &mut MonoSettings) {
+    ui.label(egui::RichText::new(tl!("Monochrome Images")).font(theme::semibold(13.0)));
+    ui.horizontal(|ui| {
+        ui.checkbox(&mut s.downsample, tl!("Downsample to"));
+        ui.add_enabled(s.downsample, egui::DragValue::new(&mut s.target_ppi).range(9.0..=2400.0).suffix(" ppi"));
+        ui.label(tl!("for images above"));
+        ui.add_enabled(s.downsample, egui::DragValue::new(&mut s.above_ppi).range(9.0..=2400.0).suffix(" ppi"));
+    });
+    s.above_ppi = s.above_ppi.max(s.target_ppi);
+    ui.horizontal(|ui| {
+        ui.label(tl!("Compression"));
+        // "CCITT Group 4" is a standard name and stays untranslated, like "JPEG".
+        let label = match s.compression {
+            MonoCompression::CcittG4 => "CCITT Group 4",
+            MonoCompression::Flate => tl!("ZIP"),
+            MonoCompression::Retain => tl!("Retain existing"),
+        };
+        egui::ComboBox::from_id_salt(("mono", "compression")).selected_text(label).show_ui(ui, |ui| {
+            ui.selectable_value(&mut s.compression, MonoCompression::CcittG4, "CCITT Group 4");
+            ui.selectable_value(&mut s.compression, MonoCompression::Flate, tl!("ZIP"));
+            ui.selectable_value(&mut s.compression, MonoCompression::Retain, tl!("Retain existing"));
+        });
+    });
+    ui.add_space(8.0);
+}
+
 fn discard_box(ui: &mut egui::Ui, list: &mut Vec<Hidden>, h: Hidden, label: &str) {
     let mut on = list.contains(&h);
     if ui.checkbox(&mut on, tl!(label)).changed() {
@@ -245,6 +275,7 @@ pub(crate) fn body(ui: &mut egui::Ui, d: &mut OptimizeDraft, t: &Tokens) -> (boo
         OptimizeTab::Images => {
             image_row(ui, "color", "Color Images", &mut s.color);
             image_row(ui, "gray", "Grayscale Images", &mut s.gray);
+            mono_row(ui, &mut s.mono);
             ui.label(
                 egui::RichText::new(tl!("Each image is measured where pages draw it; an image is replaced only if the result is smaller."))
                     .small()
@@ -271,9 +302,10 @@ pub(crate) fn body(ui: &mut egui::Ui, d: &mut OptimizeDraft, t: &Tokens) -> (boo
         }
         OptimizeTab::CleanUp => {
             ui.checkbox(&mut s.flate_unencoded, tl!("Use Flate to encode streams that are not encoded"));
+            ui.checkbox(&mut s.lzw_to_flate, tl!("In streams that use LZW encoding, use Flate instead"));
             ui.checkbox(&mut s.remove_invalid_links, tl!("Remove invalid links and bookmarks"));
             ui.checkbox(&mut s.remove_unreferenced_dests, tl!("Remove unreferenced named destinations"));
-            ui.add_enabled(false, egui::Checkbox::new(&mut true, tl!("Compress document structure (object streams)")));
+            ui.checkbox(&mut s.compress_structure, tl!("Compress document structure (object streams)"));
             ui.add_enabled(false, egui::Checkbox::new(&mut true, tl!("Remove unused objects and merge identical ones")));
         }
     }
