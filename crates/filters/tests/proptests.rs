@@ -148,3 +148,50 @@ fn flate_bomb_in_chain() {
     assert!(matches!(decode(&chain, &a85, 1 << 20), Err(FilterError::LimitExceeded(_))));
     assert!(matches!(decode_tolerant(&chain, &a85, 1 << 20), Err(FilterError::LimitExceeded(_))));
 }
+
+/// "Is black" pixels of a Group 4 stream, decoded by an independent decoder (hayro-ccitt).
+fn ccitt_pixels(data: &[u8], width: usize, height: usize) -> Option<Vec<bool>> {
+    struct Sink(Vec<bool>);
+    impl hayro_ccitt::Decoder for Sink {
+        fn push_pixel(&mut self, white: bool) {
+            self.0.push(!white);
+        }
+        fn push_pixel_chunk(&mut self, white: bool, chunks: u32) {
+            self.0.extend(std::iter::repeat_n(!white, chunks as usize * 8));
+        }
+        fn next_line(&mut self) {}
+    }
+    let settings = hayro_ccitt::DecodeSettings {
+        columns: width as u32,
+        rows: height as u32,
+        end_of_block: true,
+        end_of_line: false,
+        rows_are_byte_aligned: false,
+        encoding: hayro_ccitt::EncodingMode::Group4,
+        invert_black: false,
+    };
+    let mut sink = Sink(Vec::new());
+    hayro_ccitt::decode(data, &mut sink, &mut hayro_ccitt::DecoderContext::new(settings)).ok()?;
+    Some(sink.0)
+}
+
+proptest! {
+    /// Any bytes as a bitmap of any shape: the Group 4 encoder either refuses (too few
+    /// samples, output limit) or produces a stream that decodes to exactly those samples.
+    #[test]
+    fn ccitt_g4_round_trips_arbitrary_bitmaps(bytes in data(), width in 1usize..300, height in 1usize..40, black_is_1 in any::<bool>(), limit in prop_oneof![Just(usize::MAX), 0usize..400]) {
+        let stride = width.div_ceil(8);
+        match pdfcraft_filters::encode_ccitt_g4(&bytes, width, height, black_is_1, limit) {
+            Err(FilterError::LimitExceeded(l)) => prop_assert_eq!(l, limit),
+            Err(e) => prop_assert!(bytes.len() < stride * height, "{e}"),
+            Ok(enc) => {
+                prop_assert!(enc.len() <= limit);
+                let want: Vec<bool> = (0..height)
+                    .flat_map(|y| (0..width).map(move |x| (y, x)))
+                    .map(|(y, x)| ((bytes[y * stride + x / 8] >> (7 - x % 8)) & 1 == 1) == black_is_1)
+                    .collect();
+                prop_assert_eq!(ccitt_pixels(&enc, width, height), Some(want));
+            }
+        }
+    }
+}

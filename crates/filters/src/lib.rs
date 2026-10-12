@@ -8,6 +8,9 @@
 //! `Crypt` and unknown filters are reported as [`FilterError::Unsupported`] so
 //! callers keep such data encoded.
 //!
+//! Encoding also covers CCITT Group 4 ([`encode_ccitt_g4`]) for bi-level images; there is no
+//! CCITT decoder here.
+//!
 //! Every decoder is bounded by a caller-supplied `max_output` (decompression-bomb
 //! defence) and never panics on malformed input.
 #![forbid(unsafe_code)]
@@ -15,6 +18,7 @@
 
 mod ascii85;
 mod asciihex;
+mod ccitt;
 mod flate;
 mod lzw;
 mod predictor;
@@ -140,26 +144,42 @@ pub(crate) type Step = Result<Vec<u8>, Failure>;
 /// [`FilterError::Unsupported`] (callers keep such data encoded). `max_output` bounds
 /// every intermediate buffer.
 pub fn decode(chain: &[(Filter, Params)], data: &[u8], max_output: usize) -> Result<Vec<u8>, FilterError> {
-    run(chain, data, max_output, true).map(|(v, _)| v)
+    run(chain, data, max_output, Mode::Strict).map(|(v, _)| v)
+}
+
+/// Like [`decode`], and additionally every `LZWDecode` stage must end with its end-of-data
+/// code (ISO 32000-2 §7.4.4.2). The general readers accept LZW data that simply runs out of
+/// bits; that is a repair, and lossless re-encoding (LZW → Flate in preflight fixes and the
+/// Optimizer's Clean Up) must refuse rather than publish a possibly truncated stream.
+pub fn decode_complete(chain: &[(Filter, Params)], data: &[u8], max_output: usize) -> Result<Vec<u8>, FilterError> {
+    run(chain, data, max_output, Mode::Complete).map(|(v, _)| v)
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Mode {
+    Tolerant,
+    Strict,
+    /// Strict, and LZW must end with its end-of-data code.
+    Complete,
 }
 
 /// Like [`decode`], but on corrupt data returns what was decoded before the error and
 /// reports `partial = true` (the behaviour viewers expect). The remaining filters of the
 /// chain still run on the partial data. Limit and unsupported errors are still errors.
 pub fn decode_tolerant(chain: &[(Filter, Params)], data: &[u8], max_output: usize) -> Result<(Vec<u8>, bool), FilterError> {
-    run(chain, data, max_output, false)
+    run(chain, data, max_output, Mode::Tolerant)
 }
 
-fn run(chain: &[(Filter, Params)], data: &[u8], max: usize, strict: bool) -> Result<(Vec<u8>, bool), FilterError> {
+fn run(chain: &[(Filter, Params)], data: &[u8], max: usize, mode: Mode) -> Result<(Vec<u8>, bool), FilterError> {
     if let Some((f, _)) = chain.iter().find(|(f, _)| !f.is_decodable()) {
         return Err(FilterError::Unsupported(f.name().to_owned()));
     }
     let mut cur: Cow<[u8]> = Cow::Borrowed(data);
     let mut partial = false;
     for (filter, params) in chain {
-        cur = Cow::Owned(match decode_one(filter, params, &cur, max) {
+        cur = Cow::Owned(match decode_one(filter, params, &cur, max, mode == Mode::Complete) {
             Ok(v) => v,
-            Err(Failure { error: FilterError::Corrupt { .. }, partial: out }) if !strict => {
+            Err(Failure { error: FilterError::Corrupt { .. }, partial: out }) if mode == Mode::Tolerant => {
                 partial = true;
                 out
             }
@@ -169,9 +189,14 @@ fn run(chain: &[(Filter, Params)], data: &[u8], max: usize, strict: bool) -> Res
     Ok((cur.into_owned(), partial))
 }
 
-fn decode_one(filter: &Filter, params: &Params, data: &[u8], max: usize) -> Step {
+fn decode_one(filter: &Filter, params: &Params, data: &[u8], max: usize, require_eod: bool) -> Step {
     match filter {
         Filter::Flate => with_predictor(flate::decode(data, max), params, "FlateDecode"),
+        Filter::Lzw if require_eod => match lzw::decode_marked(data, params.early_change != 0, max) {
+            Ok((out, true)) => predictor::decode(params, out, "LZWDecode"),
+            Ok((out, false)) => Err(Failure::corrupt("LZWDecode", "missing end-of-data code", out)),
+            Err(f) => Err(f),
+        },
         Filter::Lzw => with_predictor(lzw::decode(data, params.early_change != 0, max), params, "LZWDecode"),
         Filter::AsciiHex => asciihex::decode(data, max),
         Filter::Ascii85 => ascii85::decode(data, max),
@@ -211,6 +236,18 @@ pub fn encode(filter: &Filter, params: &Params, data: &[u8]) -> Result<Vec<u8>, 
 /// zlib (RFC 1950) at compression level 6.
 pub fn encode_flate(data: &[u8]) -> Vec<u8> {
     flate::encode(data)
+}
+
+/// CCITT Group 4 (ITU-T T.6) encoding for `/CCITTFaxDecode` with `/K -1`, `/Columns width`,
+/// `/Rows height` and `/BlackIs1 black_is_1` (EndOfLine, EncodedByteAlign false; the data ends
+/// with an end-of-facsimile-block). `rows` holds `height` rows of `width` one-bit samples, most
+/// significant bit first, each row padded to a whole byte (PDF image layout); padding bits and
+/// any bytes after the last row are ignored. `black_is_1` names the sample value that is black
+/// in fax terms; the samples round-trip exactly either way, so callers may pick whichever
+/// encodes smaller. Errors on an empty or oversized image, too few samples, or output past
+/// `max_output` bytes.
+pub fn encode_ccitt_g4(rows: &[u8], width: usize, height: usize, black_is_1: bool, max_output: usize) -> Result<Vec<u8>, FilterError> {
+    ccitt::encode_g4(rows, width, height, black_is_1, max_output)
 }
 
 /// PDF white-space characters (ISO 32000-2 Table 1).
@@ -322,5 +359,35 @@ mod tests {
         let (out, partial) = decode_tolerant(&[(Filter::Flate, p)], &z, 1 << 20).unwrap();
         assert!(partial);
         assert_eq!(&data[..out.len()], &out[..]);
+    }
+
+    #[test]
+    fn complete_decoding_requires_the_lzw_end_marker() {
+        for early_change in [0, 1] {
+            let p = Params { early_change, predictor: 12, columns: 7, ..Params::default() };
+            let data: Vec<u8> = (0..50_000u32).map(|i| ((i * 31 + i / 257) % 256) as u8).collect();
+            let lzw = encode(&Filter::Lzw, &p, &data).unwrap();
+            assert_eq!(decode_complete(&[(Filter::Lzw, p.clone())], &lzw, 1 << 20).unwrap(), data);
+            // Through another filter first: the marker is checked on the LZW stage's input.
+            let hex = encode(&Filter::AsciiHex, &Params::default(), &lzw).unwrap();
+            let chain = [(Filter::AsciiHex, Params::default()), (Filter::Lzw, p.clone())];
+            assert_eq!(decode_complete(&chain, &hex, 1 << 20).unwrap(), data);
+            // Cut inside the final code: the strict reader accepts it, this does not.
+            let cut = &lzw[..lzw.len() - 1];
+            assert!(decode(&[(Filter::Lzw, p.clone())], cut, 1 << 20).is_ok());
+            assert!(matches!(decode_complete(&[(Filter::Lzw, p.clone())], cut, 1 << 20), Err(FilterError::Corrupt { .. })));
+            // Limits still apply.
+            assert!(matches!(decode_complete(&[(Filter::Lzw, p)], &lzw, 1000), Err(FilterError::LimitExceeded(1000))));
+        }
+        // Clear-table then nothing; a lone literal without EOD; empty data.
+        for bad in [&[0x80, 0x00][..], &[0x80, 0x10, 0x40][..], &[][..]] {
+            assert!(decode_complete(&[(Filter::Lzw, Params::default())], bad, 100).is_err(), "{bad:?}");
+        }
+        // The ISO 32000-2 example ends with EOD; bytes after it are ignored.
+        let mut spec = vec![0x80, 0x0B, 0x60, 0x50, 0x22, 0x0C, 0x0C, 0x85, 0x01];
+        spec.extend([0xff; 3]);
+        assert_eq!(decode_complete(&[(Filter::Lzw, Params::default())], &spec, 100).unwrap(), [45, 45, 45, 45, 45, 65, 45, 45, 45, 66]);
+        // Other unsupported codecs are still refused.
+        assert!(matches!(decode_complete(&[(Filter::Dct, Params::default())], b"x", 10), Err(FilterError::Unsupported(_))));
     }
 }

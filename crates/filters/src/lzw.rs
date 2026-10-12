@@ -50,6 +50,12 @@ impl BitReader<'_> {
 }
 
 pub(crate) fn decode(data: &[u8], early: bool, max: usize) -> Step {
+    decode_marked(data, early, max).map(|(out, _)| out)
+}
+
+/// [`decode`], also reporting whether the data ended with the end-of-data code (rather than
+/// simply running out of bits, which the tolerant reader accepts).
+pub(crate) fn decode_marked(data: &[u8], early: bool, max: usize) -> Result<(Vec<u8>, bool), Failure> {
     // Table entry = (prefix code, last byte, first byte, length).
     let mut prefix = vec![0u16; TABLE];
     let mut last = vec![0u8; TABLE];
@@ -65,6 +71,7 @@ pub(crate) fn decode(data: &[u8], early: bool, max: usize) -> Step {
     let mut prev: Option<usize> = None;
     let mut r = BitReader { data, pos: 0, acc: 0, bits: 0 };
     let mut out = Vec::with_capacity(data.len().saturating_mul(2).min(max));
+    let mut ended = false;
 
     while let Some(code) = r.read(w) {
         match code {
@@ -74,7 +81,10 @@ pub(crate) fn decode(data: &[u8], early: bool, max: usize) -> Step {
                 prev = None;
                 continue;
             }
-            EOD => break,
+            EOD => {
+                ended = true;
+                break;
+            }
             _ => {}
         }
         let code = usize::from(code);
@@ -111,7 +121,7 @@ pub(crate) fn decode(data: &[u8], early: bool, max: usize) -> Step {
         prev = Some(code);
         w = width(next, early);
     }
-    Ok(out)
+    Ok((out, ended))
 }
 
 struct BitWriter {
