@@ -7,6 +7,8 @@
 # localisation or any other product's translation. Terminology: annotations are "komentáře",
 # pages are "stránky", form fields are "formulářová pole". Product and format names (PdfCraft,
 # PDF, Word, HTML…) stay in Latin letters; the trailing "…" of dialog commands is kept.
+# Further terms: redact "začernit", flatten "zploštit", combine "sloučit", text box (comment)
+# "textový rámeček" vs. text field (form) "textové pole", tags "tagy", sentences use formal "vy".
 
 	Menu	Nabídka
 	File	Soubor
@@ -151,3 +153,2020 @@
 
 # Reader selection
 	Select paragraph	Vybrat odstavec
+
+# Full coverage of the complete catalogs (M14): commands, All tools, every tl! literal.
+# Counts in plain strings use a count-neutral form ("Vybrané stránky: {n}") because Czech
+# needs three plural forms; @plural entries give one | few | other.
+	Flatten Fill & Sign when saving	Při ukládání zploštit Vyplnit a podepsat
+	Text, marks and signatures become part of the page. Other comments stay editable.	Text, značky a podpisy se stanou součástí stránky. Ostatní komentáře zůstanou upravitelné.
+	Close	Zavřít
+	Next / previous match	Další / předchozí shoda
+	Copy selected text	Kopírovat vybraný text
+	Double-click	Dvojklik
+	Select a word	Vybrat slovo
+	Clear selection / close find	Zrušit výběr / zavřít hledání
+	Zoom in / out (also pinch or ⌘-scroll)	Zvětšit / zmenšit (také sevřením prstů nebo ⌘ a kolečkem)
+	Rotate view	Otočit zobrazení
+	First / last page	První / poslední stránka
+	Previous / next page	Předchozí / další stránka
+	Delete selected pages (Organize)	Odstranit vybrané stránky (Uspořádat)
+	Select all pages (Organize)	Vybrat všechny stránky (Uspořádat)
+	Home	Úvod
+	Open	Otevřít
+	Open a PDF (⌘O)	Otevřít PDF (⌘O)
+	Dark gray theme	Tmavě šedý motiv
+	Light theme	Světlý motiv
+	All tools	Všechny nástroje
+	Read	Číst
+	Convert	Převést
+	E-Sign	E-podpis
+	Print (⌘P)	Tisk (⌘P)
+	Save (M4)	Uložit (M4)
+	Document properties (⌘D)	Vlastnosti dokumentu (⌘D)
+	Find tools and commands	Najít nástroje a příkazy
+	Fit to height	Přizpůsobit výšce
+	Zoom in	Zvětšit
+	Zoom out	Zmenšit
+	Rotate view clockwise	Otočit zobrazení po směru hodinových ručiček
+	Rotate view counterclockwise	Otočit zobrazení proti směru hodinových ručiček
+	Page navigation	Navigace po stránkách
+	Previous view	Předchozí zobrazení
+	Next view	Další zobrazení
+	Use system setting	Použít nastavení systému
+	Light gray	Světle šedý
+	Dark gray	Tmavě šedý
+	Comments	Komentáře
+	Bookmarks	Záložky
+	Fields	Pole
+	Layers	Vrstvy
+	Attachments	Přílohy
+	Signatures	Podpisy
+	Accessibility Checker	Kontrola přístupnosti
+	Search	Hledat
+	Compare	Porovnat
+	Page thumbnails	Miniatury stránek
+	Form fields	Formulářová pole
+	Zoom out (⌘−)	Zmenšit (⌘−)
+	Zoom in (⌘+)	Zvětšit (⌘+)
+	Rotate view clockwise (⇧⌘+)	Otočit zobrazení po směru hodinových ručiček (⇧⌘+)
+	Toggle fit page / fit width	Přepnout celou stránku / šířku stránky
+	Next page	Další stránka
+	Previous page	Předchozí stránka
+	Current page — type a page number or label (such as iv) and press Enter	Aktuální stránka — zadejte číslo nebo označení stránky (například iv) a stiskněte Enter
+	Welcome to PdfCraft	Vítejte v aplikaci PdfCraft
+	An open-source PDF workbench — local, private, and scriptable.	Open-source pracoviště pro PDF — lokální, soukromé a skriptovatelné.
+	Join the ArtCraft community	Připojte se ke komunitě ArtCraft
+	Recommended tools	Doporučené nástroje
+	Use now	Použít
+	Open file	Otevřít soubor
+	Recent	Nedávné
+	Files you open in PdfCraft appear here. Drop a PDF anywhere to open it.	Zde se zobrazí soubory, které otevřete v aplikaci PdfCraft. PDF otevřete přetažením kamkoli do okna.
+	Privacy	Soukromí
+	PdfCraft works offline. No telemetry, no account, and no cloud processing unless you add a provider.	PdfCraft funguje offline. Žádná telemetrie, žádný účet a žádné zpracování v cloudu, dokud nepřidáte poskytovatele.
+	Scripts run in a sandbox without file or network access. With JavaScript off, Acrobat's standard format, validate and calculate functions still work.	Skripty běží v izolovaném prostředí bez přístupu k souborům a síti. I s vypnutým JavaScriptem fungují standardní funkce Acrobatu pro formátování, ověřování a výpočty.
+	Back to all tools	Zpět na všechny nástroje
+	Close panel	Zavřít panel
+	View less	Zobrazit méně
+	View more	Zobrazit více
+	Available	Dostupné
+	Ready	Připraveno
+	Search tools and commands…	Hledat nástroje a příkazy…
+	No matching tools	Žádné odpovídající nástroje
+	Tool	Nástroj
+	Command	Příkaz
+	Add a sticky note	Přidat poznámku
+	Add a text box	Přidat textový rámeček
+	Highlight text	Zvýraznit text
+	Underline text	Podtrhnout text
+	Strikethrough text	Přeškrtnout text
+	Squiggly underline text	Podtrhnout text vlnovkou
+	Draw freehand	Kreslit od ruky
+	Draw a line	Nakreslit čáru
+	Draw an arrow	Nakreslit šipku
+	Draw a rectangle	Nakreslit obdélník
+	Draw an oval	Nakreslit ovál
+	Draw a polygon	Nakreslit mnohoúhelník
+	Draw connected lines	Nakreslit spojené čáry
+	Draw a cloud	Nakreslit obláček
+	Add a callout	Přidat popisek s odkazovou čárou
+	Insert text	Vložit text
+	Replace text	Nahradit text
+	Attach a file	Připojit soubor
+	Erase drawings	Gumovat kresby
+	Flatten comments	Zploštit komentáře
+	Import comments…	Importovat komentáře…
+	Add a stamp	Přidat razítko
+	Export all comments to data file…	Exportovat všechny komentáře do datového souboru…
+	Hide all comments	Skrýt všechny komentáře
+	Summarize comments	Shrnout komentáře
+	Import form data…	Importovat data formuláře…
+	Export form data…	Exportovat data formuláře…
+	PDF/A…	PDF/A…
+	Action Wizard…	Průvodce akcemi…
+	Prepare for distribution…	Připravit k distribuci…
+	Optimize scanned documents…	Optimalizovat naskenované dokumenty…
+	Compare files…	Porovnat soubory…
+	Detect form fields	Rozpoznat formulářová pole
+	Merge data files into spreadsheet…	Sloučit datové soubory do tabulky…
+	Flatten form fields	Zploštit formulářová pole
+	Prepare a form	Připravit formulář
+	Tab order: by rows	Pořadí tabulátoru: podle řádků
+	Tab order: by columns	Pořadí tabulátoru: podle sloupců
+	Tab order: by document structure	Pořadí tabulátoru: podle struktury dokumentu
+	Add text	Přidat text
+	Edit text & images	Upravit text a obrázky
+	Add or edit links	Přidat nebo upravit odkazy
+	Create links from URLs	Vytvořit odkazy z adres URL
+	Remove all links	Odebrat všechny odkazy
+	Add Bates numbering…	Přidat Batesovo číslování…
+	Add image…	Přidat obrázek…
+	Redact text and images	Začernit text a obrázky
+	Redact pages…	Začernit stránky…
+	Find text and redact…	Najít text a začernit…
+	Redaction properties…	Vlastnosti začernění…
+	Apply redactions…	Použít začernění…
+	Clear redaction marks	Vymazat značky začernění
+	Remove hidden information…	Odebrat skryté informace…
+	Sanitize document…	Vyčistit dokument…
+	Field properties…	Vlastnosti pole…
+	Add a text field	Přidat textové pole
+	Add a checkbox	Přidat zaškrtávací políčko
+	Add a radio button	Přidat přepínač
+	Add a drop-down list	Přidat rozevírací seznam
+	Add a list box	Přidat seznam
+	Add a button	Přidat tlačítko
+	Add an image field	Přidat pole obrázku
+	Add a date field	Přidat pole data
+	Add a digital signature field	Přidat pole digitálního podpisu
+	Digitally sign	Digitálně podepsat
+	Certify (visible signature)	Certifikovat (viditelný podpis)
+	Certify (invisible signature)	Certifikovat (neviditelný podpis)
+	Validate all signatures	Ověřit všechny podpisy
+	Fill & Sign: add text	Vyplnit a podepsat: přidat text
+	Fill & Sign: checkmark	Vyplnit a podepsat: zatržítko
+	Fill & Sign: cross	Vyplnit a podepsat: křížek
+	Fill & Sign: dot	Vyplnit a podepsat: tečka
+	Fill & Sign: line	Vyplnit a podepsat: čára
+	Fill & Sign: date	Vyplnit a podepsat: datum
+	Fill & Sign: sign	Vyplnit a podepsat: podepsat
+	Fill & Sign: initials	Vyplnit a podepsat: iniciály
+	JavaScript console…	Konzola JavaScriptu…
+	Document JavaScripts…	JavaScripty dokumentu…
+	Recognize text…	Rozpoznat text…
+	Recognize text in multiple files…	Rozpoznat text ve více souborech…
+	Check for accessibility…	Zkontrolovat přístupnost…
+	Open accessibility report	Otevřít zprávu o přístupnosti
+	Change reading options…	Změnit možnosti čtení…
+	Add alternate text…	Přidat alternativní text…
+	Add header & footer…	Přidat záhlaví a zápatí…
+	Update header & footer…	Aktualizovat záhlaví a zápatí…
+	Remove header & footer	Odebrat záhlaví a zápatí
+	Add watermark…	Přidat vodoznak…
+	Update watermark…	Aktualizovat vodoznak…
+	Remove watermark	Odebrat vodoznak
+	Add background…	Přidat pozadí…
+	Update background…	Aktualizovat pozadí…
+	Remove background	Odebrat pozadí
+	Export a PDF	Exportovat PDF
+	Export to	Exportovat do
+	Microsoft Word (.docx)	Microsoft Word (.docx)
+	Spreadsheet (.xlsx)	Tabulka (.xlsx)
+	Presentation (.pptx)	Prezentace (.pptx)
+	Image (PNG)	Obrázek (PNG)
+	Export all images	Exportovat všechny obrázky
+	HTML web page	Webová stránka HTML
+	Rich Text Format (.rtf)	Formát RTF (.rtf)
+	Text (plain)	Prostý text
+	PostScript / EPS	PostScript / EPS
+	Fill & Sign	Vyplnit a podepsat
+	Fill	Vyplnit
+	Checkmark	Zatržítko
+	Cross	Křížek
+	Dot	Tečka
+	Line	Čára
+	Date	Datum
+	Signature	Podpis
+	Initials	Iniciály
+	Edit a PDF	Upravit PDF
+	Modify page	Upravit stránku
+	Rotate pages	Otočit stránky
+	Insert pages	Vložit stránky
+	Extract pages	Extrahovat stránky
+	Add content	Přidat obsah
+	Text	Text
+	Image	Obrázek
+	Header and footer	Záhlaví a zápatí
+	Watermark	Vodoznak
+	Link	Odkaz
+	Bates numbering	Batesovo číslování
+	Background	Pozadí
+	Attach file	Připojit soubor
+	Create a PDF	Vytvořit PDF
+	Create from	Vytvořit z
+	Single file	Jeden soubor
+	Multiple files	Více souborů
+	Images	Obrázky
+	Clipboard	Schránka
+	Blank page	Prázdná stránka
+	Combine files	Sloučit soubory
+	Combine	Sloučit
+	Add files to combine	Přidejte soubory ke sloučení
+	Page options	Možnosti stránky
+	Page grid	Mřížka stránek
+	Rotate	Otočit
+	Delete	Odstranit
+	Extract	Extrahovat
+	Insert	Vložit
+	Replace	Nahradit
+	Split	Rozdělit
+	More	Další
+	Set page boxes	Nastavit rámečky stránek
+	Page labels	Označení stránek
+	Page transitions	Přechody stránek
+	Add comments	Přidat komentáře
+	Markup	Značky
+	Sticky note	Poznámka
+	Underline	Podtržení
+	Strikethrough	Přeškrtnutí
+	Squiggly underline	Podtržení vlnovkou
+	Text box	Textový rámeček
+	Drawing	Kreslení
+	Rectangle	Obdélník
+	Oval	Ovál
+	Arrow	Šipka
+	Cloud	Obláček
+	Stamp	Razítko
+	Review	Revize
+	Comment list	Seznam komentářů
+	Scan & OCR	Skenování a OCR
+	Recognize text	Rozpoznat text
+	In this file	V tomto souboru
+	In multiple files	Ve více souborech
+	Enhance scanned file	Vylepšit naskenovaný soubor
+	Correct recognized text	Opravit rozpoznaný text
+	Protect a PDF	Chránit PDF
+	Protect	Chránit
+	Protect with password	Chránit heslem
+	Remove hidden information	Odebrat skryté informace
+	Advanced options	Rozšířené možnosti
+	Encrypt with certificate	Šifrovat certifikátem
+	Security properties	Vlastnosti zabezpečení
+	Redact a PDF	Začernit PDF
+	Redact	Začernit
+	Redact pages	Začernit stránky
+	Find text and redact	Najít text a začernit
+	Set properties	Nastavit vlastnosti
+	Sanitize document	Vyčistit dokument
+	Compress a PDF	Komprimovat PDF
+	Optimize	Optimalizovat
+	Reduce file size	Zmenšit velikost souboru
+	Advanced optimization	Pokročilá optimalizace
+	Audit space usage	Analyzovat využití místa
+	Field list	Seznam polí
+	Field properties	Vlastnosti pole
+	Tab order by rows	Pořadí tabulátoru podle řádků
+	Tab order by columns	Pořadí tabulátoru podle sloupců
+	Import data	Importovat data
+	Export data	Exportovat data
+	Add form components	Přidat prvky formuláře
+	Text field	Textové pole
+	Checkbox	Zaškrtávací políčko
+	Radio button	Přepínač
+	Drop-down list	Rozevírací seznam
+	List box	Seznam
+	Button	Tlačítko
+	Image field	Pole obrázku
+	Date field	Pole data
+	Digital signature	Digitální podpis
+	Stamps	Razítka
+	Stamp palette	Paleta razítek
+	Use a certificate	Použít certifikát
+	Certificates	Certifikáty
+	Timestamp	Časové razítko
+	Use print production	Použít tiskovou produkci
+	Print production	Tisková produkce
+	Output preview	Náhled výstupu
+	Preflight	Předtisková kontrola
+	Convert colors	Převést barvy
+	Add printer marks	Přidat tiskové značky
+	Fix hairlines	Opravit vlasové čáry
+	Measure objects	Měřit objekty
+	Measure	Měřit
+	Measuring tool	Nástroj pro měření
+	Geospatial location	Zeměpisná poloha
+	Compare files	Porovnat soubory
+	Select files to compare	Vyberte soubory k porovnání
+	Use guided actions	Použít řízené akce
+	Actions list	Seznam akcí
+	Action Wizard	Průvodce akcemi
+	Make accessible	Zpřístupnit
+	Prepare for distribution	Připravit k distribuci
+	Optimize scanned documents	Optimalizovat naskenované dokumenty
+	Archive documents	Archivovat dokumenty
+	Prepare for accessibility	Připravit přístupnost
+	Accessibility	Přístupnost
+	Automatically tag PDF	Automaticky označit PDF tagy
+	Change reading options	Změnit možnosti čtení
+	Check for accessibility	Zkontrolovat přístupnost
+	Add alternate text	Přidat alternativní text
+	Fix reading order	Opravit pořadí čtení
+	Apply PDF standards	Použít standardy PDF
+	Standards	Standardy
+	Save as PDF/A	Uložit jako PDF/A
+	Save as PDF/X	Uložit jako PDF/X
+	Save as PDF/UA	Uložit jako PDF/UA
+	Add search index	Přidat vyhledávací index
+	Index	Rejstřík
+	Manage embedded index	Spravovat vložený index
+	Use JavaScript	Použít JavaScript
+	JavaScript	JavaScript
+	Console	Konzola
+	Document JavaScripts	JavaScripty dokumentu
+	Document actions	Akce dokumentu
+	AI assistant	AI asistent
+	Bring your own model (off by default)	Vlastní model (ve výchozím stavu vypnuto)
+	Summarize	Shrnout
+	Ask about this document	Zeptat se na tento dokument
+	Translate	Přeložit
+	pages	stránky
+	Planned	Plánováno
+	Planned for milestone	Plánováno pro milník
+	open to see what it will include	otevřete a podívejte se, co bude obsahovat
+	Optional: needs an AI provider you configure	Volitelné: vyžaduje poskytovatele AI, kterého nastavíte
+	Coming in milestone	Přijde v milníku
+	Items marked Ready work today.	Položky označené „Připraveno“ fungují už dnes.
+	Preview	Náhled
+	Edit fields	Upravit pole
+	Try the form as people filling it in will see it	Vyzkoušejte formulář tak, jak ho uvidí ti, kdo ho budou vyplňovat
+	Redact all	Začernit vše
+	Clear all	Vymazat vše
+	Rotate page	Otočit stránku
+	Delete page	Odstranit stránku
+	Move page	Přesunout stránku
+	Move pages	Přesunout stránky
+	Duplicate page	Duplikovat stránku
+	Replace page	Nahradit stránku
+	Replace pages	Nahradit stránky
+	Crop page	Oříznout stránku
+	Cancel	Zrušit
+	Don't save	Neukládat
+	Apply	Použít
+	Run	Spustit
+	Sanitize	Vyčistit
+	Mark all	Označit vše
+	Save changes to “{name}” before closing?	Uložit změny v „{name}“ před zavřením?
+	Your changes will be lost if you don't save them.	Pokud změny neuložíte, budou ztraceny.
+	Password required	Je vyžadováno heslo
+	“{name}” is protected. Enter a password to open it.	Soubor „{name}“ je chráněný. Chcete-li ho otevřít, zadejte heslo.
+	Password	Heslo
+	Incorrect password. Try again.	Nesprávné heslo. Zkuste to znovu.
+	Recognize Text	Rozpoznat text
+	Password protection will be applied when you save	Ochrana heslem se použije při uložení
+	Saved the print-ready PDF to {path}	PDF připravené k tisku bylo uloženo do {path}
+	Could not save: {e}	Nelze uložit: {e}
+	Earlier in tab order	Dříve v pořadí tabulátoru
+	Later in tab order	Později v pořadí tabulátoru
+	From:	Od:
+	To:	Do:
+	High Resolution	Vysoké rozlišení
+	Print	Tisk
+	Verify to see what the document needs.	Spusťte ověření a zjistěte, co dokument potřebuje.
+	Set Page Boxes	Nastavit rámečky stránek
+	Signature panel	Panel podpisů
+	{month} {day}, {y}	{day}. {month} {y}
+	The document's security settings don't allow filling in form fields	Nastavení zabezpečení dokumentu nepovoluje vyplňování formulářových polí
+	{name} is read-only	{name} je jen pro čtení
+	{name} has no action	{name} nemá žádnou akci
+	Previous month	Předchozí měsíc
+	Next month	Další měsíc
+	January	Leden
+	February	Únor
+	March	Březen
+	April	Duben
+	May	Květen
+	June	Červen
+	July	Červenec
+	August	Srpen
+	September	Září
+	October	Říjen
+	November	Listopad
+	December	Prosinec
+	Done	Hotovo
+	This certificate is in your list of trusted certificates.	Tento certifikát je ve vašem seznamu důvěryhodných certifikátů.
+	This certificate is trusted through a certificate above it in the chain.	Tento certifikát je důvěryhodný díky nadřazenému certifikátu v řetězci.
+	This certificate is not trusted. Signatures made with it show an unknown identity.	Tento certifikát není důvěryhodný. Podpisy vytvořené tímto certifikátem zobrazují neznámou identitu.
+	Add to Trusted Certificates	Přidat mezi důvěryhodné certifikáty
+	Export…	Exportovat…
+	PDF Optimizer	Optimalizace PDF
+	Discard Objects	Zahodit objekty
+	Discard User Data	Zahodit uživatelská data
+	Clean Up	Vyčištění
+	Color Images	Barevné obrázky
+	Grayscale Images	Obrázky ve stupních šedi
+	Bicubic downsampling to	Bikubické převzorkování na
+	for images above	pro obrázky nad
+	Compression	Komprese
+	ZIP	ZIP
+	Retain existing	Zachovat stávající
+	Minimum	Minimální
+	Low	Nízká
+	High	Vysoká
+	Maximum	Maximální
+	Each image is measured where pages draw it; an image is replaced only if the result is smaller.	Každý obrázek se měří ve velikosti, v jaké ho stránky vykreslují; nahradí se jen tehdy, je-li výsledek menší.
+	Discard all links, actions and JavaScript	Zahodit všechny odkazy, akce a JavaScript
+	Discard alternate images	Zahodit alternativní obrázky
+	Discard embedded page thumbnails	Zahodit vložené miniatury stránek
+	Discard document tags	Zahodit tagy dokumentu
+	Discard embedded print settings	Zahodit vložená nastavení tisku
+	Discard bookmarks	Zahodit záložky
+	Discard hidden layer content	Zahodit obsah skrytých vrstev
+	Discard all comments, forms and multimedia	Zahodit všechny komentáře, formuláře a multimédia
+	Discard document information and metadata	Zahodit informace o dokumentu a metadata
+	Discard all object data (file attachments)	Zahodit všechna data objektů (připojené soubory)
+	Discard private data of other applications	Zahodit soukromá data jiných aplikací
+	Discard hidden text	Zahodit skrytý text
+	Use Flate to encode streams that are not encoded	Nekódované proudy kódovat pomocí Flate
+	Remove invalid links and bookmarks	Odebrat neplatné odkazy a záložky
+	Remove unreferenced named destinations	Odebrat neodkazovaná pojmenovaná cíle
+	Compress document structure (object streams)	Komprimovat strukturu dokumentu (proudy objektů)
+	Remove unused objects and merge identical ones	Odebrat nepoužité objekty a sloučit identické
+	Audit space usage…	Analyzovat využití místa…
+	Space Audit	Analýza využití místa
+	Bytes	Bajty
+	Content Streams	Proudy obsahu
+	X Object Forms	Formuláře XObject
+	Structure Info	Strukturní informace
+	Thumbnails	Miniatury
+	Named Destinations	Pojmenovaná cíle
+	Color Spaces	Barevné prostory
+	Shadings	Stínování
+	Patterns (graphics objects)	Vzorky (grafické objekty)
+	Extended Graphics States	Rozšířené grafické stavy
+	Embedded Files	Vložené soubory
+	Document Overhead	Režie dokumentu
+	Total	Celkem
+	Text Field Properties	Vlastnosti textového pole
+	Check Box Properties	Vlastnosti zaškrtávacího políčka
+	Radio Button Properties	Vlastnosti přepínače
+	Dropdown Properties	Vlastnosti rozevíracího seznamu
+	List Box Properties	Vlastnosti seznamu
+	Button Properties	Vlastnosti tlačítka
+	Digital Signature Properties	Vlastnosti digitálního podpisu
+	Position	Poloha
+	Options	Možnosti
+	Validate	Ověření
+	Calculate	Výpočet
+	Actions	Akce
+	This field is locked. Unlock it to change its properties.	Toto pole je zamčené. Chcete-li změnit jeho vlastnosti, odemkněte ho.
+	Tooltip:	Popisek:
+	Common Properties	Společné vlastnosti
+	Read Only	Jen pro čtení
+	Required	Povinné
+	Font Size:	Velikost písma:
+	Text Color:	Barva textu:
+	Borders and Colors	Okraje a barvy
+	Border Color:	Barva okraje:
+	Fill Color:	Barva výplně:
+	No color	Bez barvy
+	Beveled	Zkosený
+	Left:	Vlevo:
+	Bottom:	Dole:
+	Width:	Šířka:
+	Height:	Výška:
+	Points from the page's bottom-left corner.	Body od levého dolního rohu stránky.
+	Alignment:	Zarovnání:
+	Default Value:	Výchozí hodnota:
+	Multi-line	Víceřádkové
+	Scroll long text	Posouvat dlouhý text
+	Allow Rich Text Formatting	Povolit formátování RTF
+	Limit of	Omezit na
+	characters	znaků
+	Field is used for file selection	Pole slouží k výběru souboru
+	Check spelling	Kontrolovat pravopis
+	Comb of	Rozdělit na
+	Export Value: {on}	Hodnota exportu: {on}
+	Check box is checked by default	Zaškrtávací políčko je ve výchozím stavu zaškrtnuté
+	Button is checked by default	Přepínač je ve výchozím stavu vybraný
+	Buttons with the same name and value are selected in unison	Přepínače se stejným názvem a hodnotou se vybírají společně
+	Item:	Položka:
+	Item List	Seznam položek
+	Up	Nahoru
+	Delete {o}	Odstranit {o}
+	Add the choices people pick from.	Přidejte možnosti, ze kterých se bude vybírat.
+	Default:	Výchozí:
+	(none)	(žádné)
+	Sort items	Řadit položky
+	Allow user to enter custom text	Povolit uživateli zadat vlastní text
+	Multiple selection	Vícenásobný výběr
+	Commit selected value immediately	Vybranou hodnotu potvrdit okamžitě
+	Number	Číslo
+	Percentage	Procenta
+	Time	Čas
+	Special	Speciální
+	Select format category:	Vyberte kategorii formátu:
+	The value is shown as typed.	Hodnota se zobrazí tak, jak byla zadána.
+	Decimal places:	Desetinná místa:
+	Separator style:	Styl oddělovačů:
+	Currency symbol:	Symbol měny:
+	Before the number	Před číslem
+	Negative number style:	Styl záporných čísel:
+	Format:	Formát:
+	Custom:	Vlastní:
+	Zip Code	PSČ (USA)
+	Zip Code + 4	PSČ + 4 (USA)
+	Phone Number	Telefonní číslo
+	Social Security Number	Číslo sociálního zabezpečení (USA)
+	Arbitrary Mask	Libovolná maska
+	Mask:	Maska:
+	9 digit, A letter, O letter or digit, X any character	9 číslice, A písmeno, O písmeno nebo číslice, X libovolný znak
+	Example: {sample}	Příklad: {sample}
+	Field value is not validated	Hodnota pole se neověřuje
+	Field value is in range:	Hodnota pole je v rozsahu:
+	Add an Action	Přidat akci
+	Select Trigger:	Vyberte spouštěč:
+	Mouse Up	Uvolnění tlačítka myši
+	Mouse Down	Stisknutí tlačítka myši
+	Mouse Enter	Vstup ukazatele myši
+	Mouse Exit	Opuštění ukazatelem myši
+	On Focus	Při získání fokusu
+	On Blur	Při ztrátě fokusu
+	Select Action:	Vyberte akci:
+	Open a web link	Otevřít webový odkaz
+	Reset a form	Obnovit formulář
+	Execute a menu item	Provést položku nabídky
+	Show a field	Zobrazit pole
+	Hide a field	Skrýt pole
+	Submit a form	Odeslat formulář
+	Fields to reset (comma-separated; empty: all)	Pole k obnovení (oddělená čárkou; prázdné: všechna)
+	Print, NextPage, PrevPage, FirstPage or LastPage	Print, NextPage, PrevPage, FirstPage nebo LastPage
+	Field names (comma-separated)	Názvy polí (oddělené čárkou)
+	URL to submit to	Adresa URL pro odeslání
+	Script:	Skript:
+	Value:	Hodnota:
+	No actions	Žádné akce
+	Value is not calculated	Hodnota se nepočítá
+	Value is the	Hodnota je
+	sum (+)	součet (+)
+	product (x)	součin (x)
+	average	průměr
+	minimum	minimum
+	maximum	maximum
+	of the following fields:	z následujících polí:
+	Simplified field notation:	Zjednodušený zápis polí:
+	Field names with + - * / and parentheses; put \\ before spaces in names.	Názvy polí s + - * / a závorkami; před mezery v názvech vložte \\.
+	Format text	Formátovat text
+	Bold	Tučné
+	Italic	Kurzíva
+	Align left	Zarovnat doleva
+	Centre	Na střed
+	Align right	Zarovnat doprava
+	Justify	Do bloku
+	Standard fonts; text outside Windows-1252 isn't supported yet.	Standardní písma; text mimo Windows-1252 zatím není podporován.
+	Edit image	Upravit obrázek
+	Rotate counterclockwise	Otočit proti směru hodinových ručiček
+	Rotate clockwise	Otočit po směru hodinových ručiček
+	Flip horizontal	Překlopit vodorovně
+	Flip vertical	Překlopit svisle
+	Replace image	Nahradit obrázek
+	Crop (% trimmed from each side)	Oříznout (% z každé strany)
+	Click on the page to add text; each click starts a new box, and ✓ finishes. Drag items to move them, drag a corner to resize, double-click text to edit it.	Kliknutím na stránku přidáte text; každé kliknutí začne nové pole a ✓ úpravy dokončí. Položky přesunete přetažením, velikost změníte tažením za roh a text upravíte dvojklikem.
+	Choose an image	Vyberte obrázek
+	Export to Image	Exportovat jako obrázek
+	Export to Text	Exportovat jako text
+	Export All Images	Exportovat všechny obrázky
+	Resolution	Rozlišení
+	Format	Formát
+	Quality	Kvalita
+	One {f} file per page, named after the document.	Jeden soubor {f} na stránku, pojmenovaný podle dokumentu.
+	Exclude images smaller than	Vynechat obrázky menší než
+	No limit	Bez omezení
+	Each image once, named after the document and page. JPEG images are saved unchanged; others as PNG.	Každý obrázek jednou, pojmenovaný podle dokumentu a stránky. Obrázky JPEG se ukládají beze změny, ostatní jako PNG.
+	Plain text in reading order; pages are separated by form feeds.	Prostý text v pořadí čtení; stránky jsou odděleny znakem nové stránky.
+	Create {what}	Vytvořit {what}
+	initials	iniciály
+	signature	podpis
+	Create Custom Stamp	Vytvořit vlastní razítko
+	From {file}	Ze souboru {file}
+	Category:	Kategorie:
+	e.g. My stamps	např. Moje razítka
+	Name:	Název:
+	Delete stamp	Odstranit razítko
+	Create custom stamp…	Vytvořit vlastní razítko…
+	From a PDF page or an image	Ze stránky PDF nebo z obrázku
+	Line spacing	Řádkování
+	Character spacing	Mezery mezi znaky
+	Horizontal scale	Vodorovné měřítko
+	Rotate Clockwise	Otočit po směru hodinových ručiček
+	Rotate Counterclockwise	Otočit proti směru hodinových ručiček
+	Flip Horizontal	Překlopit vodorovně
+	Flip Vertical	Překlopit svisle
+	Replace Image…	Nahradit obrázek…
+	Save Image As…	Uložit obrázek jako…
+	Check for updates	Zkontrolovat aktualizace
+	No check has run yet.	Kontrola ještě neproběhla.
+	Checking for a newer version…	Hledá se novější verze…
+	PdfCraft {v} is available.	Je k dispozici PdfCraft {v}.
+	You have version {c}. Download the new version from its release page.	Máte verzi {c}. Novou verzi stáhněte ze stránky vydání.
+	PdfCraft {c} is up to date.	PdfCraft {c} je aktuální.
+	Couldn't check for updates: {e}	Aktualizace nelze zkontrolovat: {e}
+	You have version {c}. All releases are listed at {page}.	Máte verzi {c}. Všechna vydání najdete na {page}.
+	Asks GitHub for the latest release. Nothing is downloaded or installed automatically.	Zjistí na GitHubu nejnovější vydání. Nic se automaticky nestahuje ani neinstaluje.
+	Download	Stáhnout
+	Later	Později
+	none	žádná
+	Declared conformance: {shown}	Deklarovaná shoda: {shown}
+	Output intent: {list}	Výstupní záměr: {list}
+	Conformance level:	Úroveň shody:
+	No problems found: the document conforms to {level}.	Nebyly nalezeny žádné problémy: dokument vyhovuje {level}.
+	 (page {p})	 (stránka {p})
+	  · not fixable here	  · zde nelze opravit
+	Verify	Ověřit
+	Box	Rámeček
+	Units	Jednotky
+	Set to zero	Nastavit na nulu
+	Current page ({n})	Aktuální stránka ({n})
+	Subset	Podmnožina
+	Update	Aktualizovat
+	Add	Přidat
+	{verb} Header and Footer	{verb} záhlaví a zápatí
+	{verb} Watermark	{verb} vodoznak
+	{verb} Background	{verb} pozadí
+	Margins (in)	Okraje (palce)
+	Left Header Text	Text záhlaví vlevo
+	Center Header Text	Text záhlaví uprostřed
+	Right Header Text	Text záhlaví vpravo
+	Left Footer Text	Text zápatí vlevo
+	Center Footer Text	Text zápatí uprostřed
+	Right Footer Text	Text zápatí vpravo
+	Insert Page Number	Vložit číslo stránky
+	Insert Date	Vložit datum
+	Start page number	Počáteční číslo stránky
+	Source	Zdroj
+	Fit to page	Přizpůsobit stránce
+	Rotation	Otočení
+	Appear behind page	Zobrazit za stránkou
+	Appear on top of page	Zobrazit nad stránkou
+	From colour	Z barvy
+	Page Range Options	Možnosti rozsahu stránek
+	Preview: page {p} of {n}	Náhled: stránka {p} z {n}
+	Applies to 1 page	Platí pro 1 stránku
+	Applies to {n} pages	Platí pro tento počet stránek: {n}
+	Replaces the existing one on those pages.	Nahradí stávající na těchto stránkách.
+	PDF or image	PDF nebo obrázek
+	No file chosen	Není vybrán žádný soubor
+	Page number	Číslo stránky
+	Scale relative to target page	Měřítko vzhledem k cílové stránce
+	Link Properties	Vlastnosti odkazu
+	Create Link	Vytvořit odkaz
+	Link Appearance	Vzhled odkazu
+	Link Type:	Typ odkazu:
+	Visible Rectangle	Viditelný obdélník
+	Invisible Rectangle	Neviditelný obdélník
+	Highlight Style:	Styl zvýraznění:
+	Invert	Invertovat
+	Outline	Obrys
+	Inset	Vsazený
+	Line Thickness:	Tloušťka čáry:
+	Thin	Tenká
+	Thick	Silná
+	Line Style:	Styl čáry:
+	Solid	Plná
+	Dashed	Přerušovaná
+	Color:	Barva:
+	Link Action	Akce odkazu
+	Open a web page	Otevřít webovou stránku
+	Go to a page view	Přejít na zobrazení stránky
+	Type the web address.	Zadejte webovou adresu.
+	This document has no signatures.	Tento dokument nemá žádné podpisy.
+	The Keychain's digital IDs couldn't be listed: {e}	Digitální ID z Klíčenky nelze vypsat: {e}
+	Signed and saved to {path}	Podepsáno a uloženo do {path}
+	Couldn't open revision {n}: {e}	Revizi {n} nelze otevřít: {e}
+	Couldn't open the signed version: {e}	Podepsanou verzi nelze otevřít: {e}
+	Sign with a Digital ID	Podepsat digitálním ID
+	Choose the digital ID that you want to use for signing:	Vyberte digitální ID, které chcete k podpisu použít:
+	Keychain  ·  	Klíčenka  ·  
+	Windows store  ·  	Úložiště Windows  ·  
+	Issued by: 	Vydal: 
+	, Expires: 	, platnost do: 
+	No digital IDs yet.	Zatím žádná digitální ID.
+	Configure New Digital ID	Nastavit nové digitální ID
+	Continue	Pokračovat
+	Configure a Digital ID for Signing	Nastavit digitální ID pro podepisování
+	Use a Digital ID from a file	Použít digitální ID ze souboru
+	Create a new Digital ID (self-signed, saved to a password-protected file)	Vytvořit nové digitální ID (podepsané sebou samým, uložené do souboru chráněného heslem)
+	Name	Jméno
+	Organizational Unit	Organizační jednotka
+	Organization Name	Název organizace
+	Email Address	E-mailová adresa
+	Country/Region	Země/oblast
+	Key Algorithm	Algoritmus klíče
+	Confirm Password	Potvrdit heslo
+	Valid for 5 years, for digital signatures. Self-signed IDs are usually not trusted by others.	Platné 5 let, pro digitální podpisy. ID podepsaným sebou samým ostatní obvykle nedůvěřují.
+	File (.p12, .pfx)	Soubor (.p12, .pfx)
+	Digital ID	Digitální ID
+	Browse…	Procházet…
+	{verb} as "{name}"	{verb} jako „{name}“
+	Certify	Certifikovat
+	The signature will be invisible.	Podpis bude neviditelný.
+	Distinguished name	Rozlišující název
+	Labels	Popisky
+	Permitted actions after certifying	Povolené akce po certifikaci
+	No changes allowed	Žádné změny nejsou povoleny
+	Annotations, form fill-in, and digital signatures	Poznámky, vyplňování formulářů a digitální podpisy
+	Form fill-in and digital signatures	Vyplňování formulářů a digitální podpisy
+	The key is in the macOS Keychain, which may ask to allow PdfCraft to use it.	Klíč je v Klíčence systému macOS, která se může zeptat, zda smí PdfCraft klíč použít.
+	The key is in the Windows certificate store, which may ask to allow PdfCraft to use it.	Klíč je v úložišti certifikátů Windows, které se může zeptat, zda smí PdfCraft klíč použít.
+	Digital ID password	Heslo digitálního ID
+	Back	Zpět
+	Validate all	Ověřit vše
+	Sign this field…	Podepsat toto pole…
+	Signature is valid:	Podpis je platný:
+	Signature validity is UNKNOWN:	Platnost podpisu je NEZNÁMÁ:
+	Signature is INVALID:	Podpis je NEPLATNÝ:
+	Signature Details	Podrobnosti podpisu
+	Reason	Důvod
+	Signing time	Čas podpisu
+	Algorithm	Algoritmus
+	Signer	Podepisující
+	Issued by	Vydal
+	Valid	Platný
+	Field	Pole
+	Field: {field} on page {p}	Pole: {field} na stránce {p}
+	Add to trusted certificates	Přidat mezi důvěryhodné certifikáty
+	View signed version	Zobrazit podepsanou verzi
+	Show certificate…	Zobrazit certifikát…
+	Export certificate…	Exportovat certifikát…
+	Certificate Viewer	Prohlížeč certifikátů
+	This dialog shows the details of a certificate and its chain.	Toto dialogové okno zobrazuje podrobnosti certifikátu a jeho řetězce.
+	Trust	Důvěra
+	Issued to	Vydáno pro
+	Valid from	Platný od
+	Valid to	Platný do
+	Intended usage	Zamýšlené použití
+	Any	Libovolné
+	Version	Verze
+	Serial number	Sériové číslo
+	Issuer	Vydavatel
+	Validity starts	Začátek platnosti
+	Validity ends	Konec platnosti
+	Public key	Veřejný klíč
+	Key usage	Použití klíče
+	Not present	Není k dispozici
+	Self-signed	Podepsaný sebou samým
+	Edit Action	Upravit akci
+	New Action	Nová akce
+	Action name:	Název akce:
+	Description:	Popis:
+	Steps	Kroky
+	Add the steps this action runs, in order.	Přidejte kroky, které tato akce provede, ve správném pořadí.
+	Add Step	Přidat krok
+	An action with this name already exists.	Akce s tímto názvem již existuje.
+	New Action…	Nová akce…
+	Edit…	Upravit…
+	Add watermark	Přidat vodoznak
+	Add header	Přidat záhlaví
+	Add footer	Přidat zápatí
+	Set document title	Nastavit název dokumentu
+	Run a JavaScript	Spustit JavaScript
+	Prepare for Distribution	Připravit k distribuci
+	Remove hidden information and flatten comments and form fields, so recipients see only the pages.	Odebere skryté informace a zploští komentáře a formulářová pole, takže příjemci uvidí jen stránky.
+	Optimize Scanned Documents	Optimalizovat naskenované dokumenty
+	Make scans searchable, then make them smaller.	Zpřístupní skeny pro vyhledávání a pak je zmenší.
+	Add Page Numbers	Přidat čísla stránek
+	Number every page in the footer.	Očíslovat všechny stránky v zápatí.
+	Mark as Confidential	Označit jako důvěrné
+	A diagonal CONFIDENTIAL watermark on every page.	Diagonální vodoznak CONFIDENTIAL na každé stránce.
+	Sanitize Documents	Vyčistit dokumenty
+	Remove hidden information, metadata, scripts and embedded content, and rewrite the files.	Odebere skryté informace, metadata, skripty a vložený obsah a soubory znovu zapíše.
+	Type text	Napsat text
+	Text to insert	Text k vložení
+	Inserted text	Vložený text
+	Replacement text	Náhradní text
+	Edit text…	Upravit text…
+	Add a sticky note here	Přidat sem poznámku
+	{kind} Properties	Vlastnosti: {kind}
+	Appearance	Vzhled
+	General	Obecné
+	Review History	Historie revizí
+	This comment's appearance can't be changed yet.	Vzhled tohoto komentáře zatím nelze změnit.
+	Icon	Ikona
+	Thickness	Tloušťka
+	Line ending	Zakončení čáry
+	Modified	Změněno
+	No status has been set.	Nebyl nastaven žádný stav.
+	Compare Files	Porovnat soubory
+	Old file:	Starý soubor:
+	Open the older version first	Nejprve otevřete starší verzi
+	New file:	Nový soubor:
+	Text is compared word by word; the differences are shown on the new file.	Text se porovnává po slovech; rozdíly se zobrazí v novém souboru.
+	Compare this file with an older version: Compare files… in All tools.	Porovnejte tento soubor se starší verzí: Porovnat soubory… ve Všech nástrojích.
+	No differences in the text.	V textu nejsou žádné rozdíly.
+	{n} {kind}	{kind}: {n}
+	Inserted	Vloženo
+	Deleted	Odstraněno
+	Replaced	Nahrazeno
+	Visual	Vizuální
+	Mark as comments	Označit jako komentáře
+	Report…	Zpráva…
+	{kind} · page {p}	{kind} · stránka {p}
+	Set Alternate Text	Nastavit alternativní text
+	This document has no tagged figures.	Tento dokument neobsahuje žádné označené obrázky.
+	 on page {p}	 na stránce {p}
+	Figure {i} of {n}{page}	Obrázek {i} z {n}{page}
+	No preview	Bez náhledu
+	Alternate text	Alternativní text
+	Describe the figure	Popište obrázek
+	Decorative figure	Dekorativní obrázek
+	Previous figure	Předchozí obrázek
+	Next figure	Další obrázek
+	Save & Close	Uložit a zavřít
+	Accessibility Checker Options	Možnosti kontroly přístupnosti
+	Report Options	Možnosti zprávy
+	Create accessibility report	Vytvořit zprávu o přístupnosti
+	Page Range	Rozsah stránek
+	All pages in document	Všechny stránky dokumentu
+	Checking Options ({on} of 32 in all categories)	Možnosti kontroly ({on} z 32 ve všech kategoriích)
+	Show this dialog when the Checker starts	Zobrazit toto dialogové okno při spuštění kontroly
+	Select All	Vybrat vše
+	Clear All	Zrušit výběr všech
+	Start Checking	Spustit kontrolu
+	This document hasn't been checked yet.	Tento dokument ještě nebyl zkontrolován.
+	No issues found	Nebyly nalezeny žádné problémy
+	1 issue	1 problém
+	{n} issues	Počet problémů: {n}
+	{label} (1 issue)	{label} (1 problém)
+	{label} ({n} issues)	{label} (problémy: {n})
+	Check again	Zkontrolovat znovu
+	Report	Zpráva
+	Show the accessibility report	Zobrazit zprávu o přístupnosti
+	Collapse	Sbalit
+	Expand	Rozbalit
+	{rule} - {status}	{rule} – {status}
+	Passed	Vyhovuje
+	Failed	Nevyhovuje
+	Needs manual check	Vyžaduje ruční kontrolu
+	Skipped	Přeskočeno
+	Fix	Opravit
+	Skip Rule	Přeskočit pravidlo
+	Explain	Vysvětlit
+	Check Again	Zkontrolovat znovu
+	Show Report	Zobrazit zprávu
+	Options…	Možnosti…
+	Go to the page	Přejít na stránku
+	Page Content	Obsah stránky
+	Forms	Formuláře
+	Alternate Text	Alternativní text
+	Tables	Tabulky
+	Lists	Seznamy
+	Headings	Nadpisy
+	Accessibility permission flag	Příznak oprávnění přístupnosti
+	Accessibility permission flag is set	Příznak oprávnění přístupnosti je nastaven
+	Security settings must allow assistive technology to read the content ("Enable text access for screen reader devices"). Change the document's security to allow it.	Nastavení zabezpečení musí asistenčním technologiím povolit čtení obsahu („Povolit přístup k textu pro čtečky obrazovky“). Změňte zabezpečení dokumentu tak, aby to povolovalo.
+	Image-only PDF	PDF obsahující jen obrázky
+	Document is not image-only PDF	Dokument není PDF obsahující jen obrázky
+	Pages that are only pictures of text can't be read aloud or searched. Recognize text (OCR) to add a text layer.	Stránky, které jsou jen obrázky textu, nelze předčítat ani prohledávat. Rozpoznáním textu (OCR) přidáte textovou vrstvu.
+	Document is tagged PDF	Dokument je PDF s tagy
+	Tags give the document a logical structure that assistive technology follows. Tag the document (Automatically tag PDF).	Tagy dávají dokumentu logickou strukturu, kterou asistenční technologie sledují. Označte dokument tagy (Automaticky označit PDF tagy).
+	Logical Reading Order	Logické pořadí čtení
+	Document structure provides a logical reading order	Struktura dokumentu poskytuje logické pořadí čtení
+	Check that the tags read in the order a sighted reader would. Use the Reading Order tool or the Tags panel to correct it.	Zkontrolujte, zda se tagy čtou v pořadí, v jakém by četl vidící čtenář. Opravte ho nástrojem Pořadí čtení nebo v panelu Tagy.
+	Primary language	Primární jazyk
+	Text language is specified	Jazyk textu je určen
+	Screen readers choose their voice from the document's language. Set it in Document Properties > Advanced > Language.	Čtečky obrazovky volí hlas podle jazyka dokumentu. Nastavte ho ve Vlastnosti dokumentu > Rozšířené > Jazyk.
+	Document title is showing in title bar	Název dokumentu se zobrazuje v záhlaví okna
+	The window should show a meaningful title rather than the file name. Set a title and Initial View > Show: Document Title.	Okno by mělo místo názvu souboru zobrazovat výstižný název. Nastavte název a Úvodní zobrazení > Zobrazit: Název dokumentu.
+	Bookmarks are present in large documents	Velké dokumenty obsahují záložky
+	Documents of more than 20 pages need bookmarks for navigation. Add bookmarks for the main sections.	Dokumenty s více než 20 stránkami potřebují k navigaci záložky. Přidejte záložky pro hlavní oddíly.
+	Color contrast	Barevný kontrast
+	Document has appropriate color contrast	Dokument má odpovídající barevný kontrast
+	Text must contrast enough with its background for people with low vision. Check the colours by eye or with a contrast tool.	Text musí být od pozadí dostatečně kontrastní pro slabozraké. Zkontrolujte barvy okem nebo nástrojem pro kontrast.
+	Tagged content	Obsah s tagy
+	All page content is tagged	Veškerý obsah stránek je označen tagy
+	Everything on a page must be tagged or marked as an artifact (decoration, headers, footers). Tag the untagged content.	Vše na stránce musí být označeno tagem nebo jako artefakt (dekorace, záhlaví, zápatí). Označte neoznačený obsah tagy.
+	Tagged annotations	Poznámky s tagy
+	All annotations are tagged	Všechny poznámky jsou označeny tagy
+	Comments, links and fields must be in the tag tree to be announced. Tag the annotations.	Komentáře, odkazy a pole musí být ve stromu tagů, aby byly ohlášeny. Označte poznámky tagy.
+	Tab order	Pořadí tabulátoru
+	Tab order is consistent with structure order	Pořadí tabulátoru odpovídá pořadí struktury
+	Pages with links, comments or fields should tab in structure order. The fix sets each page's tab order to Use Document Structure.	Stránky s odkazy, komentáři nebo poli by měly procházet tabulátorem v pořadí struktury. Oprava nastaví pořadí tabulátoru každé stránky na Použít strukturu dokumentu.
+	Character encoding	Kódování znaků
+	Reliable character encoding is provided	Je zajištěno spolehlivé kódování znaků
+	Fonts must map their characters to Unicode so text can be read and copied. Fix the fonts or recreate the PDF.	Písma musí mapovat své znaky na Unicode, aby šlo text číst a kopírovat. Opravte písma nebo PDF vytvořte znovu.
+	Tagged multimedia	Multimédia s tagy
+	All multimedia objects are tagged	Všechny multimediální objekty jsou označeny tagy
+	Video, sound and rich media must be tagged to be announced. Tag the multimedia annotations.	Video, zvuk a bohatá média musí být označena tagy, aby byla ohlášena. Označte multimediální poznámky tagy.
+	Screen flicker	Blikání obrazovky
+	Page will not cause screen flicker	Stránka nezpůsobí blikání obrazovky
+	Animation that flashes can cause seizures. Check scripts and media for flicker.	Blikající animace mohou vyvolat záchvaty. Zkontrolujte skripty a média, zda neblikají.
+	Scripts	Skripty
+	No inaccessible scripts	Žádné nepřístupné skripty
+	Timed responses	Časově omezené odpovědi
+	Page does not require timed responses	Stránka nevyžaduje časově omezené odpovědi
+	People may need more time to respond. Check that nothing has a time limit.	Lidé mohou na odpověď potřebovat víc času. Zkontrolujte, že nic nemá časový limit.
+	Navigation links	Navigační odkazy
+	Navigation links are not repetitive	Navigační odkazy se neopakují
+	Repeated navigation links should be skippable. Check links that appear on every page.	Opakované navigační odkazy by mělo jít přeskočit. Zkontrolujte odkazy, které se zobrazují na každé stránce.
+	Tagged form fields	Formulářová pole s tagy
+	All form fields are tagged	Všechna formulářová pole jsou označena tagy
+	Form fields must be in the tag tree (Form tags) to be announced. Tag the form fields.	Formulářová pole musí být ve stromu tagů (tagy Form), aby byla ohlášena. Označte formulářová pole tagy.
+	Field descriptions	Popisy polí
+	All form fields have description	Všechna formulářová pole mají popis
+	Each field needs a tooltip that says what to enter. Add one in Field Properties > General > Tooltip.	Každé pole potřebuje popisek, který říká, co zadat. Přidejte ho ve Vlastnosti pole > Obecné > Popisek.
+	Figures alternate text	Alternativní text obrázků
+	Figures require alternate text	Obrázky vyžadují alternativní text
+	Pictures need alternate text that describes them, or must be marked decorative. Add alternate text to each figure.	Obrázky potřebují alternativní text, který je popisuje, nebo musí být označeny jako dekorativní. Přidejte ke každému obrázku alternativní text.
+	Nested alternate text	Vnořený alternativní text
+	Alternate text that will never be read	Alternativní text, který nebude nikdy přečten
+	Alternate text inside an element that already has alternate text is never read. Remove the inner alternate text.	Alternativní text uvnitř prvku, který již alternativní text má, se nikdy nepřečte. Odeberte vnitřní alternativní text.
+	Associated with content	Přiřazeno k obsahu
+	Alternate text must be associated with some content	Alternativní text musí být přiřazen k nějakému obsahu
+	Alternate text on an element without page content is never reached. Remove it or attach the element to content.	K alternativnímu textu prvku bez obsahu stránky se nikdy nedojde. Odeberte ho nebo prvek připojte k obsahu.
+	Hides annotation	Skrývá poznámku
+	Alternate text should not hide annotation	Alternativní text by neměl skrývat poznámku
+	Alternate text on an element that contains a link or field hides that annotation from assistive technology. Move the alternate text.	Alternativní text prvku, který obsahuje odkaz nebo pole, skrývá tuto poznámku před asistenčními technologiemi. Přesuňte alternativní text.
+	Other elements alternate text	Alternativní text ostatních prvků
+	Other elements that require alternate text	Ostatní prvky, které vyžadují alternativní text
+	Formulas and similar non-text elements need alternate text. Add alternate text to them.	Vzorce a podobné netextové prvky potřebují alternativní text. Přidejte jim alternativní text.
+	Rows	Řádky
+	TR must be a child of Table, THead, TBody, or TFoot	TR musí být podřízeným prvkem Table, THead, TBody nebo TFoot
+	Table cells belong in a row. Fix the table's tags.	Buňky tabulky patří do řádku. Opravte tagy tabulky.
+	Headers	Záhlaví
+	Tables should have headers	Tabulky by měly mít záhlaví
+	Header cells (TH) tell listeners what each column or row holds. Mark the header cells.	Buňky záhlaví (TH) sdělují posluchačům, co obsahuje každý sloupec nebo řádek. Označte buňky záhlaví.
+	Regularity	Pravidelnost
+	Tables must contain the same number of columns in each row and rows in each column	Tabulky musí mít v každém řádku stejný počet sloupců a v každém sloupci stejný počet řádků
+	Irregular tables confuse cell navigation. Give every row the same number of cells (counting spans).	Nepravidelné tabulky ztěžují navigaci po buňkách. Dejte každému řádku stejný počet buněk (včetně sloučených).
+	Summary	Shrnutí
+	Tables must have a summary	Tabulky musí mít shrnutí
+	A summary describes the table's purpose and layout. Add a Summary attribute to each table.	Shrnutí popisuje účel a uspořádání tabulky. Přidejte ke každé tabulce atribut Summary.
+	List items	Položky seznamu
+	LI must be a child of L	LI musí být podřízeným prvkem L
+	List items belong in a list. Fix the list's tags.	Položky seznamu patří do seznamu. Opravte tagy seznamu.
+	Lbl and LBody	Lbl a LBody
+	Lbl and LBody must be children of LI	Lbl a LBody musí být podřízenými prvky LI
+	List labels and bodies belong in a list item. Fix the list's tags.	Označení a obsah položek seznamu patří do položky seznamu. Opravte tagy seznamu.
+	Appropriate nesting	Správné vnoření
+	Heading levels shouldn't skip (an H1 followed by an H3). Retag the headings.	Úrovně nadpisů by se neměly přeskakovat (H1 následovaný H3). Označte nadpisy tagy znovu.
+	TH and TD	TH a TD
+	TH and TD must be children of TR	TH a TD musí být podřízenými prvky TR
+	Mark Page Range	Označit rozsah stránek
+	Pages from	Stránky od
+	Single word or phrase	Jedno slovo nebo fráze
+	Text to find	Hledaný text
+	Patterns	Vzory
+	Phone Numbers	Telefonní čísla
+	Email Addresses	E-mailové adresy
+	Credit Cards	Platební karty
+	Social Security Numbers	Čísla sociálního zabezpečení (USA)
+	Dates	Data
+	Text in images isn't found; recognise text (OCR) first.	Text v obrázcích se nenajde; nejprve rozpoznejte text (OCR).
+	No matches.	Žádné shody.
+	{n} match(es) marked for redaction.	Shody označené k začernění: {n}.
+	Redaction Tool Properties	Vlastnosti nástroje Začernění
+	Redacted area fill colour:	Barva výplně začerněné oblasti:
+	Use overlay text	Použít překryvný text
+	Custom text:	Vlastní text:
+	Font:	Písmo:
+	Font size:	Velikost písma:
+	Auto-size text to fit redaction region	Automaticky přizpůsobit velikost textu oblasti začernění
+	Font colour:	Barva písma:
+	Repeat overlay text	Opakovat překryvný text
+	Text alignment:	Zarovnání textu:
+	Center	Na střed
+	Apply redactions	Použít začernění
+	You are about to apply 1 redaction mark. Text, images and drawings under the marks, and comments and form fields that overlap them, are removed permanently.	Chystáte se použít 1 značku začernění. Text, obrázky a kresby pod značkou a komentáře a formulářová pole, která ji překrývají, budou trvale odebrány.
+	You are about to apply {n} redaction marks. Text, images and drawings under the marks, and comments and form fields that overlap them, are removed permanently.	Chystáte se použít značky začernění (počet: {n}). Text, obrázky a kresby pod značkami a komentáře a formulářová pole, která je překrývají, budou trvale odebrány.
+	Save the document afterwards: saving rewrites the whole file so no trace of the removed content stays in it.	Potom dokument uložte: uložení přepíše celý soubor, takže v něm nezůstane žádná stopa odebraného obsahu.
+	Select the items to remove from this document.	Vyberte položky, které chcete z dokumentu odebrat.
+	Metadata	Metadata
+	File attachments	Připojené soubory
+	Comments and markups	Komentáře a značky
+	Hidden text	Skrytý text
+	Hidden layers	Skryté vrstvy
+	Links, actions and JavaScripts	Odkazy, akce a JavaScripty
+	Private data of other applications	Soukromá data jiných aplikací
+	None found	Nic nenalezeno
+	Form fields are flattened: their values stay visible. Saving rewrites the whole file.	Formulářová pole se zploští: jejich hodnoty zůstanou viditelné. Uložení přepíše celý soubor.
+	Remove	Odebrat
+	Sanitizing removes hidden information from the document: metadata, file attachments, comments, form fields (flattened), hidden text and layers, bookmarks, links, actions and scripts, and private application data.	Vyčištění odebere z dokumentu skryté informace: metadata, připojené soubory, komentáře, formulářová pole (zploštěná), skrytý text a vrstvy, záložky, odkazy, akce a skripty a soukromá data aplikací.
+	Save the document afterwards; saving rewrites the whole file so nothing removed stays in it.	Potom dokument uložte; uložení přepíše celý soubor, takže v něm nezůstane nic odebraného.
+	Printer:	Tiskárna:
+	Save as PDF	Uložit jako PDF
+	{name} (default)	{name} (výchozí)
+	Copies:	Počet kopií:
+	Collate	Kompletovat
+	Print in grayscale	Tisknout ve stupních šedi
+	Two-sided:	Oboustranně:
+	Off	Vypnuto
+	Flip on long edge	Převracet podél delší hrany
+	Flip on short edge	Převracet podél kratší hrany
+	Paper:	Papír:
+	Pages to Print	Stránky k tisku
+	More options:	Další možnosti:
+	All pages in range	Všechny stránky v rozsahu
+	Odd pages only	Jen liché stránky
+	Even pages only	Jen sudé stránky
+	Reverse pages	Obrátit pořadí stránek
+	Page Sizing & Handling	Velikost a zpracování stránek
+	Size	Velikost
+	Poster	Plakát
+	Multiple	Více
+	Booklet	Brožura
+	Fit	Přizpůsobit
+	Shrink oversized pages	Zmenšit nadměrné stránky
+	Custom scale:	Vlastní měřítko:
+	Tile scale:	Měřítko dlaždic:
+	Overlap:	Překryv:
+	Cut marks	Ořezové značky
+	Pages per sheet:	Stránek na list:
+	Page order:	Pořadí stránek:
+	Horizontal	Vodorovně
+	Horizontal reversed	Vodorovně obráceně
+	Vertical	Svisle
+	Vertical reversed	Svisle obráceně
+	Print page border	Tisknout okraj stránky
+	Auto-rotate pages	Automaticky otáčet stránky
+	Booklet subset:	Část brožury:
+	Both sides	Obě strany
+	Front side only	Jen přední strana
+	Back side only	Jen zadní strana
+	Binding:	Vazba:
+	Left	Vlevo
+	Right	Vpravo
+	Orientation:	Orientace:
+	Auto portrait/landscape	Automaticky na výšku / na šířku
+	Portrait	Na výšku
+	Landscape	Na šířku
+	Comments & Forms	Komentáře a formuláře
+	Document	Dokument
+	Document and markups	Dokument a značky
+	Document and stamps	Dokument a razítka
+	Form fields only	Jen formulářová pole
+	Previous sheet	Předchozí list
+	Next sheet	Další list
+	No sheets	Žádné listy
+	Sheet {s} of {n}	List {s} z {n}
+	Removed 1 hidden item. Save to remove them from the file.	Odebrána 1 skrytá položka. Uložením ji odeberete ze souboru.
+	Removed {n} hidden items. Save to remove them from the file.	Odebrané skryté položky: {n}. Uložením je odeberete ze souboru.
+	Document sanitized. Save to finish: saving rewrites the whole file.	Dokument byl vyčištěn. Dokončete ho uložením: uložení přepíše celý soubor.
+	Applied 1 redaction mark. Save to remove the content from the file.	Použita 1 značka začernění. Uložením odeberete obsah ze souboru.
+	Applied {n} redaction marks. Save to remove the content from the file.	Použité značky začernění: {n}. Uložením odeberete obsah ze souboru.
+	JavaScript Console	Konzola JavaScriptu
+	JavaScript is turned off (Preferences ▸ JavaScript).	JavaScript je vypnutý (Předvolby ▸ JavaScript).
+	Output appears here.	Zde se zobrazí výstup.
+	Script Name:	Název skriptu:
+	This document has no document-level scripts.	Tento dokument nemá žádné skripty na úrovni dokumentu.
+	No form fields were detected	Nebyla rozpoznána žádná formulářová pole
+	Detected 1 form field	Rozpoznáno 1 formulářové pole
+	Detected {n} form fields	Rozpoznaná formulářová pole: {n}
+	{field}: {e}	{field}: {e}
+	Current page	Aktuální stránka
+	Selected pages	Vybrané stránky
+	Document language	Jazyk dokumentu
+	Output	Výstup
+	Searchable Image (Exact)	Prohledávatelný obrázek (přesný)
+	Adds invisible text over each word; the page image is not changed	Přidá nad každé slovo neviditelný text; obraz stránky se nemění
+	Downsample to	Převzorkovat na
+	Text recognition isn't installed: its model files are missing. Reinstall PdfCraft, or set PDFCRAFT_MODELS to the folder that holds them.	Rozpoznávání textu není nainstalováno: chybí soubory jeho modelů. Přeinstalujte PdfCraft nebo nastavte PDFCRAFT_MODELS na složku, která je obsahuje.
+	Settings	Nastavení
+	Optional	Volitelné
+	Planned · {m}	Plánováno · {m}
+	Planned for milestone {m} — open to see what it will include	Plánováno pro milník {m} — otevřete a podívejte se, co bude obsahovat
+	Coming in milestone {m}. Items marked Ready work today.	Přijde v milníku {m}. Položky označené „Připraveno“ fungují už dnes.
+	1 mark	1 značka
+	{n} marks	Počet značek: {n}
+	Dynamic	Dynamická
+	Sign Here	Zde podepište
+	Standard Business	Obchodní
+	Choose a stamp, then click on the page to place it.	Vyberte razítko a potom ho kliknutím umístěte na stránku.
+	Note	Poznámka
+	Polyline	Lomená čára
+	Attachment	Příloha
+	Callout	Popisek s odkazovou čárou
+	Typewriter	Psací stroj
+	Checked	Zaškrtnuto
+	Unchecked	Nezaškrtnuto
+	Marked	Označeno
+	Locked	Zamčeno
+	Search comments	Hledat v komentářích
+	Add a comment	Přidat komentář
+	No comments yet.	Zatím žádné komentáře.
+	Pick a tool in the quick bar, or type above.	Vyberte nástroj na rychlé liště nebo pište výše.
+	No comments match.	Žádné odpovídající komentáře.
+	Unknown author	Neznámý autor
+	No colour	Bez barvy
+	Remove checkmark	Odebrat zaškrtnutí
+	Mark with checkmark	Označit zaškrtnutím
+	Reply	Odpovědět
+	Add a reply	Přidat odpověď
+	Post	Odeslat
+	Page {label}	Stránka {label}
+	{kind} — click to show it on the page	{kind} — kliknutím zobrazíte na stránce
+	Set status	Nastavit stav
+	Copy text	Kopírovat text
+	Properties…	Vlastnosti…
+	Make Current Properties Default	Nastavit aktuální vlastnosti jako výchozí
+	More options	Další možnosti
+	Sort by	Řadit podle
+	Author	Autor
+	Type	Typ
+	Colour	Barva
+	Show all comments	Zobrazit všechny komentáře
+	Create PDF comment summary…	Vytvořit souhrn komentářů PDF…
+	Export all to data file…	Exportovat vše do datového souboru…
+	Filter comments	Filtrovat komentáře
+	Status	Stav
+	Accepted	Přijato
+	Rejected	Odmítnuto
+	Cancelled	Zrušeno
+	Completed	Dokončeno
+	Show all	Zobrazit vše
+	Yellow	Žlutá
+	Orange	Oranžová
+	Red	Červená
+	Pink	Růžová
+	Purple	Fialová
+	Blue	Modrá
+	Light blue	Světle modrá
+	Green	Zelená
+	Gray	Šedá
+	Black	Černá
+	Bookmark options	Možnosti záložek
+	Expand all bookmarks	Rozbalit všechny záložky
+	Expand top-level bookmarks	Rozbalit záložky nejvyšší úrovně
+	Collapse all bookmarks	Sbalit všechny záložky
+	New bookmark (⌘B)	Nová záložka (⌘B)
+	This document has no bookmarks.	Tento dokument nemá žádné záložky.
+	This document has no layers.	Tento dokument nemá žádné vrstvy.
+	This document has no attachments.	Tento dokument nemá žádné přílohy.
+	Hide layer	Skrýt vrstvu
+	Show layer	Zobrazit vrstvu
+	on page {label}	na stránce {label}
+	Save attachment…	Uložit přílohu…
+	Open in a new tab	Otevřít na nové kartě
+	This document has no pages.	Tento dokument nemá žádné stránky.
+	Find text	Najít text
+	No matches	Žádné shody
+	Searching… {s}/{p}	Hledá se… {s}/{p}
+	{c} of {n}{more}	{c} z {n}{more}
+	Previous (⇧⌘G)	Předchozí (⇧⌘G)
+	Next (⌘G)	Další (⌘G)
+	Find options	Možnosti hledání
+	Whole words only	Jen celá slova
+	Case-sensitive	Rozlišovat velká a malá písmena
+	Close (Esc)	Zavřít (Esc)
+	Align	Zarovnat
+	Top	Nahoře
+	Bottom	Dole
+	Center horizontally	Zarovnat vodorovně na střed
+	Center vertically	Zarovnat svisle na střed
+	Distribute	Rozmístit
+	Horizontally	Vodorovně
+	Vertically	Svisle
+	Set Fields to Same Size	Nastavit polím stejnou velikost
+	Height	Výška
+	Width	Šířka
+	Both	Obojí
+	Duplicate…	Duplikovat…
+	All pages	Všechny stránky
+	Odd pages	Liché stránky
+	Even pages	Sudé stránky
+	Landscape pages	Stránky na šířku
+	Portrait pages	Stránky na výšku
+	Move earlier	Přesunout dopředu
+	Move later	Přesunout dozadu
+	Back to the document	Zpět do dokumentu
+	Protect Using Password	Chránit heslem
+	Requires user to enter a password for:	Vyžadovat zadání hesla pro:
+	Viewing	Zobrazení
+	Editing	Úpravy
+	Type Password	Zadejte heslo
+	Re-type Password	Zadejte heslo znovu
+	Strength: {s}	Síla: {s}
+	Strong	Silné
+	Medium	Střední
+	Weak	Slabé
+	Advanced Options {chevron}	Rozšířené možnosti {chevron}
+	Compatibility	Kompatibilita
+	Acrobat X and later (256-bit AES)	Acrobat X a novější (256bitové AES)
+	Acrobat 7.0 and later (128-bit AES)	Acrobat 7.0 a novější (128bitové AES)
+	Acrobat 5.0 and later (128-bit RC4)	Acrobat 5.0 a novější (128bitové RC4)
+	Acrobat 3.0 and later (40-bit RC4)	Acrobat 3.0 a novější (40bitové RC4)
+	Encrypt	Šifrovat
+	All document contents	Veškerý obsah dokumentu
+	All document contents except metadata	Veškerý obsah dokumentu kromě metadat
+	Printing allowed	Tisk povolen
+	Low Resolution (150 dpi)	Nízké rozlišení (150 dpi)
+	Changes allowed	Povolené změny
+	Inserting, deleting, and rotating pages	Vkládání, odstraňování a otáčení stránek
+	Filling in form fields and signing existing signature fields	Vyplňování formulářových polí a podepisování existujících podpisových polí
+	Commenting, filling in form fields, and signing existing signature fields	Komentování, vyplňování formulářových polí a podepisování existujících podpisových polí
+	Any except extracting pages	Vše kromě extrahování stránek
+	Enable copying of text, images, and other content	Povolit kopírování textu, obrázků a dalšího obsahu
+	Enable text access for screen reader devices for the visually impaired	Povolit přístup k textu pro čtečky obrazovky pro zrakově postižené
+	Type a password.	Zadejte heslo.
+	The passwords don't match.	Hesla se neshodují.
+	This compatibility level supports only plain ASCII passwords.	Tato úroveň kompatibility podporuje jen hesla z prostých znaků ASCII.
+	Anyone opening the document will need this password. It's applied when you save.	Každý, kdo dokument otevře, bude potřebovat toto heslo. Použije se při uložení.
+	The document opens without a password; this password is needed to change the restrictions. It's applied when you save.	Dokument se otevře bez hesla; toto heslo je potřeba ke změně omezení. Použije se při uložení.
+	Recover unsaved documents?	Obnovit neuložené dokumenty?
+	PdfCraft didn't shut down normally. These documents had changes that were autosaved:	PdfCraft nebyl řádně ukončen. Tyto dokumenty obsahovaly automaticky uložené změny:
+	just now	právě teď
+	{n} min ago	před {n} min
+	{n} h ago	před {n} h
+	 · password-protected	 · chráněno heslem
+	Recover	Obnovit
+	Discard	Zahodit
+	Version {v}	Verze {v}
+	A clean-room, open-source PDF application written in Rust. MIT OR Apache-2.0.	Open-source aplikace pro PDF napsaná v jazyce Rust metodou čisté místnosti (clean-room). MIT OR Apache-2.0.
+	Part of	Součást
+	Summarize Options	Možnosti souhrnu
+	Choose a layout:	Vyberte rozvržení:
+	Comments only	Jen komentáře
+	Sort comments by:	Řadit komentáře podle:
+	Create PDF Comment Summary	Vytvořit souhrn komentářů PDF
+	Revert to the previously saved version of “{name}”? Changes since then can't be undone afterwards.	Vrátit se k naposledy uložené verzi „{name}“? Změny provedené od té doby pak nepůjde vrátit.
+	Number pages	Očíslovat stránky
+	Style	Styl
+	None (prefix only)	Žádný (jen předpona)
+	Prefix	Předpona
+	Start	Začít od
+	Labels: {preview}. Later pages keep their labels.	Označení: {preview}. Další stránky si ponechají svá označení.
+	Even and Odd Pages	Sudé a liché stránky
+	Even Pages Only	Jen sudé stránky
+	Odd Pages Only	Jen liché stránky
+	Landscape and Portrait Pages	Stránky na šířku i na výšku
+	Landscape Pages	Stránky na šířku
+	Portrait Pages	Stránky na výšku
+	Duplicate Field	Duplikovat pole
+	Duplicate "{name}" onto:	Duplikovat „{name}“ na:
+	1 page selected.	Vybrána 1 stránka.
+	{n} pages selected.	Vybrané stránky: {n}.
+	Delete pages after extracting	Po extrahování stránky odstranit
+	Extract pages as separate files	Extrahovat stránky jako samostatné soubory
+	Rotate Pages	Otočit stránky
+	Direction:	Směr:
+	Clockwise 90 degrees	O 90 stupňů po směru hodinových ručiček
+	Counterclockwise 90 degrees	O 90 stupňů proti směru hodinových ručiček
+	180 degrees	O 180 stupňů
+	Pages:	Stránky:
+	All	Vše
+	Selection	Výběr
+	From	Od
+	Rotate:	Otočit:
+	Repairs	Opravy
+	Repair log	Protokol oprav
+	Split document	Rozdělit dokument
+	Number of pages	Počet stránek
+	Pages per file	Stránek na soubor
+	File size	Velikost souboru
+	At most	Nejvýše
+	Top-level bookmarks ({n})	Záložky nejvyšší úrovně ({n})
+	Before each selected page (select pages in Organize)	Před každou vybranou stránkou (stránky vyberte v Uspořádat)
+	Creates 1 file from {n} pages.	Vytvoří 1 soubor ze stránek (počet: {n}).
+	Creates {f} files from {n} pages.	Vytvoří soubory (počet: {f}) ze stránek (počet: {n}).
+	Each file holds as many of the {n} pages as fit.	Každý soubor pojme tolik z {n} stránek, kolik se vejde.
+	Replace Pages	Nahradit stránky
+	Original: replace pages	Originál: nahradit stránky
+	to	až
+	to {n}	až {n}
+	Replacement: pages of {name}	Náhrada: stránky z {name}
+	of {name}	z {name}
+	Only the page content changes: links, comments, form fields and bookmarks on the original pages stay.	Změní se jen obsah stránek: odkazy, komentáře, formulářová pole a záložky na původních stránkách zůstanou.
+	The replacement file doesn't have that many pages.	Náhradní soubor nemá tolik stránek.
+	Tagged PDF	PDF s tagy
+	Document Properties	Vlastnosti dokumentu
+	Description	Popis
+	Initial View	Úvodní zobrazení
+	Security	Zabezpečení
+	Fonts	Písma
+	Advanced	Rozšířené
+	Title	Název
+	Subject	Předmět
+	Keywords	Klíčová slova
+	Application	Aplikace
+	PDF producer	Producent PDF
+	Layout and Magnification	Rozvržení a zvětšení
+	Navigation tab	Navigační panel
+	Page Only	Jen stránka
+	Bookmarks Panel and Page	Panel záložek a stránka
+	Pages Panel and Page	Panel stránek a stránka
+	Attachments Panel and Page	Panel příloh a stránka
+	Layers Panel and Page	Panel vrstev a stránka
+	Page layout	Rozvržení stránky
+	Default	Výchozí
+	Single Page	Jedna stránka
+	Single Page Continuous	Jedna stránka souvisle
+	Two-Up (Facing)	Dvě stránky (protilehlé)
+	Two-Up Continuous (Facing)	Dvě stránky souvisle (protilehlé)
+	Two-Up (Cover Page)	Dvě stránky (titulní stránka)
+	Two-Up Continuous (Cover Page)	Dvě stránky souvisle (titulní stránka)
+	Magnification	Zvětšení
+	Actual Size	Skutečná velikost
+	Fit Page	Celá stránka
+	Fit Width	Šířka stránky
+	Fit Height	Výška stránky
+	Fit Visible	Viditelný obsah
+	Open to page	Otevřít na stránce
+	of {pages}	z {pages}
+	Window Options	Možnosti okna
+	Resize window to initial page	Přizpůsobit velikost okna úvodní stránce
+	Center window on screen	Vystředit okno na obrazovce
+	Open in Full Screen mode	Otevřít v režimu celé obrazovky
+	Show:	Zobrazit:
+	File Name	Název souboru
+	Document Title	Název dokumentu
+	User Interface Options	Možnosti uživatelského rozhraní
+	Hide menu bar	Skrýt panel nabídek
+	Hide toolbars	Skrýt panely nástrojů
+	Hide window controls	Skrýt ovládací prvky okna
+	Security method	Metoda zabezpečení
+	No security	Bez zabezpečení
+	Restrictions	Omezení
+	None — everything is allowed	Žádná — vše je povoleno
+	Password security	Zabezpečení heslem
+	Encryption	Šifrování
+	Opened with	Otevřeno pomocí
+	— (protection is applied when you save)	— (ochrana se použije při uložení)
+	Owner password (no restrictions apply)	Heslo vlastníka (bez omezení)
+	User password	Heslo uživatele
+	Change settings…	Změnit nastavení…
+	Printing	Tisk
+	Not allowed	Nepovoleno
+	Allowed	Povoleno
+	High resolution	Vysoké rozlišení
+	Low resolution	Nízké rozlišení
+	Changing the document	Změny dokumentu
+	Document assembly	Sestavení dokumentu
+	Content copying	Kopírování obsahu
+	Content copying for accessibility	Kopírování obsahu pro zpřístupnění
+	Commenting	Komentování
+	Filling of form fields	Vyplňování formulářových polí
+	No fonts are referenced by the pages.	Stránky neodkazují na žádná písma.
+	PDF version	Verze PDF
+	Location	Umístění
+	Page size	Velikost stránky
+	Yes	Ano
+	No	Ne
+	Revisions	Revize
+	View revision {n}	Zobrazit revizi {n}
+	Open the file as it was saved then	Otevřít soubor tak, jak byl tehdy uložen
+	Binding	Vazba
+	Left Edge	Levý okraj
+	Right Edge	Pravý okraj
+	Language	Jazyk
+	Saved {place}: {before} → {after} ({pct}% smaller){detail}	Uloženo {place}: {before} → {after} (o {pct} % menší){detail}
+	Couldn't save the image: {e}	Obrázek nelze uložit: {e}
+	Adding images arrives on the web with file pickers for images	Přidávání obrázků přijde na web spolu s výběrem souborů obrázků
+	Replacing images on page {p} arrives on the web with image pickers ({i})	Nahrazování obrázků na stránce {p} přijde na web spolu s výběrem obrázků ({i})
+	{name}: choosing images arrives on the web with file pickers for images	{name}: výběr obrázků přijde na web spolu s výběrem souborů obrázků
+	Replacing images arrives on the web with image file pickers	Nahrazování obrázků přijde na web spolu s výběrem souborů obrázků
+	Couldn't create a PDF: {e}	PDF nelze vytvořit: {e}
+	The clipboard has no image or text	Schránka neobsahuje obrázek ani text
+	On the web, open or drop an image to convert it	Na webu obrázek převedete jeho otevřením nebo přetažením
+	Couldn't optimize the file: {e}	Soubor nelze optimalizovat: {e}
+	Couldn't write {path}: {e}	Do {path} nelze zapisovat: {e}
+	The form asks to be submitted to {u}; PdfCraft doesn't send form data. Save the document to keep your entries.	Formulář žádá o odeslání na {u}; PdfCraft data formulářů neodesílá. Své zadané údaje zachováte uložením dokumentu.
+	{s} actions run in the JavaScript engine (M6)	Akce typu {s} běží v jádře JavaScriptu (M6)
+	{name}: the {other} action isn't supported yet	{name}: akce {other} zatím není podporována
+	{name} submits the form to {url}; PdfCraft doesn't send form data. Save the document to keep your entries.	{name} odesílá formulář na {url}; PdfCraft data formulářů neodesílá. Své zadané údaje zachováte uložením dokumentu.
+	Export stopped: {e}	Export byl zastaven: {e}
+	Exported 1 image	Exportován 1 obrázek
+	Exported {n} images	Exportované obrázky: {n}
+	 ({s} not exported: {first})	 (neexportováno: {s}; první: {first})
+	Exported the text of 1 page	Exportován text 1 stránky
+	Exported the text of {n} pages	Exportován text stránek (počet: {n})
+	{msg} to {dir}	{msg} do {dir}
+	Exporting… {d} of {t}	Exportuje se… {d} z {t}
+	Choose a folder for the exported files	Vyberte složku pro exportované soubory
+	New {tool} comments will look like this one	Nové komentáře typu „{tool}“ budou vypadat jako tento
+	This document can't be checked: it couldn't be read for editing	Tento dokument nelze zkontrolovat: nepodařilo se ho načíst pro úpravy
+	The checker found no problems in this document.	Kontrola v tomto dokumentu nenašla žádné problémy.
+	The checker found 1 problem which may prevent the document from being fully accessible.	Kontrola našla 1 problém, který může bránit plné přístupnosti dokumentu.
+	The checker found {n} problems which may prevent the document from being fully accessible.	Kontrola našla problémy (počet: {n}), které mohou bránit plné přístupnosti dokumentu.
+	The text is the same	Text je stejný
+	1 difference found	Nalezen 1 rozdíl
+	{n} differences found	Nalezené rozdíly: {n}
+	Added 1 comment	Přidán 1 komentář
+	Added {n} comments	Přidané komentáře: {n}
+	Choose a folder for the results	Vyberte složku pro výsledky
+	Files for {name}	Soubory pro {name}
+	An action is already running	Již běží jiná akce
+	Running action… file {d} of {t}	Probíhá akce… soubor {d} z {t}
+	No unlinked web addresses were found in the text	V textu nebyly nalezeny žádné webové adresy bez odkazu
+	Created 1 link	Vytvořen 1 odkaz
+	Created {n} links	Vytvořené odkazy: {n}
+	Text recognition is already running	Rozpoznávání textu již běží
+	Optimizing… removing user data	Optimalizace… odebírají se uživatelská data
+	Optimizing… image {d} of {t}	Optimalizace… obrázek {d} z {t}
+	Optimizing… cleaning up	Optimalizace… čištění
+	Optimizing… merging identical objects	Optimalizace… slučují se identické objekty
+	Optimizing… writing the copy	Optimalizace… zapisuje se kopie
+	Cancelling…	Ruší se…
+	Optimization is already running	Optimalizace již běží
+	Optimization cancelled	Optimalizace byla zrušena
+	Couldn't optimize the file	Soubor nelze optimalizovat
+	Recognizing text… file {d} of {t}	Rozpoznává se text… soubor {d} z {t}
+	Recognizing text… page {d} of {t}	Rozpoznává se text… stránka {d} z {t}
+	Recognized 1 word	Rozpoznáno 1 slovo
+	Recognized {n} words	Rozpoznaná slova: {n}
+	{words} on {pages}	{words} na {pages}
+	; 1 page already had text	; 1 stránka již obsahovala text
+	; {n} pages already had text	; stránky, které již obsahovaly text: {n}
+	Recognized {w} words in 1 file	Rozpoznaná slova v 1 souboru: {w}
+	Recognized {w} words in {n} files	Rozpoznaná slova: {w}, souborů: {n}
+	; failed: {list}	; selhalo: {list}
+	1 file done	1 soubor hotov
+	{n} files done	Hotové soubory: {n}
+	The selected area has been copied ({w} × {h} pixels)	Vybraná oblast byla zkopírována ({w} × {h} pixelů)
+	Couldn't take the snapshot: {e}	Snímek nelze pořídit: {e}
+	Couldn't recover {name}: {e}	{name} nelze obnovit: {e}
+	The document now conforms to {level}; save it to keep the changes	Dokument nyní vyhovuje {level}; změny zachováte uložením
+	Fixed what could be fixed; 1 problem remains	Opraveno, co šlo opravit; zbývá 1 problém
+	Fixed what could be fixed; {n} problems remain	Opraveno, co šlo opravit; zbývající problémy: {n}
+	Custom stamps arrive on the web with file pickers for images	Vlastní razítka přijdou na web spolu s výběrem souborů obrázků
+	{file} is too large for a stamp (at most {n} MB)	{file} je pro razítko příliš velký (nejvýše {n} MB)
+	Sent to {printer}	Odesláno na {printer}
+	Sent to {printer}: {msg}	Odesláno na {printer}: {msg}
+	Choose a folder for the searchable files	Vyberte složku pro prohledávatelné soubory
+	Files are combined in this order. Leave Pages empty to take every page.	Soubory se sloučí v tomto pořadí. Ponecháte-li Stránky prázdné, použijí se všechny stránky.
+	Pages of {name} to combine, e.g. 1-3, 6	Stránky z {name} ke sloučení, např. 1-3, 6
+	Remove {name}	Odebrat {name}
+	Add files…	Přidat soubory…
+	Add at least two files	Přidejte alespoň dva soubory
+	Couldn't add {name}: {e}	{name} nelze přidat: {e}
+	Couldn't combine files: {e}	Soubory nelze sloučit: {e}
+	Export comments	Exportovat komentáře
+	Export form data	Exportovat data formuláře
+	Comment and form data	Data komentářů a formulářů
+	Export	Exportovat
+	Select data files to merge	Vyberte datové soubory ke sloučení
+	Form data and PDF forms	Data formulářů a formuláře PDF
+	Save the spreadsheet	Uložit tabulku
+	Save the accessibility report	Uložit zprávu o přístupnosti
+	Save image	Uložit obrázek
+	Export certificate	Exportovat certifikát
+	Choose a folder for the extracted pages	Vyberte složku pro extrahované stránky
+	Choose a folder for the split files	Vyberte složku pro rozdělené soubory
+	Couldn't use {name}: {e}	{name} nelze použít: {e}
+	Couldn't extract pages: {e}	Stránky nelze extrahovat: {e}
+	Couldn't write {name}: {e}	{name} nelze zapsat: {e}
+	Wrote 1 file to {dir}	Do {dir} byl zapsán 1 soubor
+	Wrote {n} files to {dir}	Do {dir} byly zapsány soubory (počet: {n})
+	No pages match those choices	Těmto volbám neodpovídají žádné stránky
+	Couldn't split: {e}	Nelze rozdělit: {e}
+	Couldn't summarize comments: {e}	Komentáře nelze shrnout: {e}
+	Couldn't open the result: {e}	Výsledek nelze otevřít: {e}
+	Importing data arrives on the web with file pickers for data files	Import dat přijde na web spolu s výběrem datových souborů
+	Exported to {path}	Exportováno do {path}
+	Merging data files needs the desktop app	Slučování datových souborů vyžaduje desktopovou aplikaci
+	Merged 1 file into {path}	Do {path} byl sloučen 1 soubor
+	Merged {n} files into {path}	Do {path} byly sloučeny soubory (počet: {n})
+	Combined {n} files	Sloučené soubory: {n}
+	Extracted 1 page	Extrahována 1 stránka
+	Extracted {n} pages	Extrahované stránky: {n}
+	Created a comment summary	Byl vytvořen souhrn komentářů
+	Couldn't open {name}: {e}	{name} nelze otevřít: {e}
+	Couldn't read {name}: {e}	{name} nelze přečíst: {e}
+	Couldn't save: {e}	Nelze uložit: {e}
+	Downloading attachments on the web arrives with M3.10 ({n} bytes ready)	Stahování příloh přijde na web s M3.10 (připraveno bajtů: {n})
+	`{command}` {when}	`{command}` {when}
+	ships in milestone {m}	přijde v milníku {m}
+	needs an AI provider (off by default)	vyžaduje poskytovatele AI (ve výchozím stavu vypnuto)
+	is available	je k dispozici
+	is not available yet	zatím není k dispozici
+	{label} failed: {e}	{label} selhalo: {e}
+	Undid {label}	Vráceno zpět: {label}
+	Redid {label}	Provedeno znovu: {label}
+	A document needs at least one page: copy instead	Dokument musí mít alespoň jednu stránku: místo toho kopírujte
+	Cut {what}	Vyjmuto: {what}
+	Copied {what}	Zkopírováno: {what}
+	1 page	1 stránka
+	{n} pages	{n} str.
+	Copy or cut pages first	Nejprve zkopírujte nebo vyjměte stránky
+	Couldn't save {name}: {e}	{name} nelze uložit: {e}
+	Saved {name}	Uloženo: {name}
+	Saved, but reopening failed: {e}	Uloženo, ale opětovné otevření selhalo: {e}
+	Downloaded {name}	Staženo: {name}
+	Couldn't download {name}: {e}	{name} nelze stáhnout: {e}
+	Reverted to the last saved version	Obnovena naposledy uložená verze
+	That didn't work: an internal error stopped it ({m}). Your documents are unchanged.	To se nepovedlo: zastavila to vnitřní chyba ({m}). Vaše dokumenty zůstaly beze změny.
+	Nothing to undo	Není co vrátit zpět
+	Nothing to redo	Není co provést znovu
+	This document has no form fields you can fill in	Tento dokument nemá žádná formulářová pole k vyplnění
+	This document has no comments to flatten	Tento dokument nemá žádné komentáře ke zploštění
+	This document has no form fields to flatten	Tento dokument nemá žádná formulářová pole ke zploštění
+	There are no redaction marks (mark text, areas or pages first)	Nejsou žádné značky začernění (nejprve označte text, oblasti nebo stránky)
+	This document has no {kind} to change	V tomto dokumentu chybí {kind}, není co měnit
+	header or footer	záhlaví nebo zápatí
+	watermark	vodoznak
+	background	pozadí
+	This document isn't password-protected	Tento dokument není chráněn heslem
+	Only the document's owner can change its security (open it with the permissions password)	Zabezpečení může změnit jen vlastník dokumentu (otevřete ho heslem pro oprávnění)
+	The document's security settings don't allow this change	Nastavení zabezpečení dokumentu tuto změnu nepovoluje
+	Open a document first	Nejprve otevřete dokument
+	Security will be removed when you save	Zabezpečení bude odebráno při uložení
+	Click text or an image to edit it	Klikněte na text nebo obrázek, který chcete upravit
+	Drag a rectangle to create a link; double-click a link to edit it	Tažením obdélníku vytvoříte odkaz; dvojklikem na odkaz ho upravíte
+	There are no redaction marks to apply	Nejsou žádné značky začernění k použití
+	Drag to draw the area where the signature should appear.	Tažením vyznačte oblast, kde se má zobrazit podpis.
+	Couldn't fit the visible content: {e}	Viditelný obsah nelze přizpůsobit: {e}
+	Drag a rectangle around the area to copy	Tažením obdélníku vyznačte oblast ke zkopírování
+	Click on the page to add a {tool}, or drag to set its size	Kliknutím na stránku přidáte prvek „{tool}“, tažením nastavíte jeho velikost
+	Drag a rectangle on a page to crop it; double-click a page for Set Page Boxes	Tažením obdélníku na stránce ji oříznete; dvojklikem na stránku otevřete Nastavit rámečky stránek
+	Keep tool selected: on	Ponechat nástroj vybraný: zapnuto
+	Keep tool selected	Ponechat nástroj vybraný
+	Opacity	Krytí
+	Line thickness	Tloušťka čáry
+	What word or phrase would you like to search for?	Jaké slovo nebo frázi chcete vyhledat?
+	Searching… {s} of {p} pages	Hledá se… {s} z {p} stránek
+	 (searching… {s} of {p} pages)	 (hledá se… {s} z {p} stránek)
+	1 instance	1 výskyt
+	{n} instances	Počet výskytů: {n}
+	Go to this result	Přejít na tento výsledek
+	Highlight	Zvýraznit
+	Draw	Kreslit
+	Polygon	Mnohoúhelník
+	Connected lines	Spojené čáry
+	Eraser	Guma
+	Sign	Podepsat
+	Certified by {by}	Certifikoval(a) {by}
+	At least one signature is invalid.	Nejméně jeden podpis je neplatný.
+	Signed and all signatures are valid.	Podepsáno, všechny podpisy jsou platné.
+	At least one signature has problems.	Nejméně jeden podpis má problémy.
+	This document is secured. Some changes are restricted by its security settings.	Tento dokument je zabezpečený. Některé změny jsou omezeny jeho nastavením zabezpečení.
+	This is a dynamic XFA form, which PdfCraft can't display yet. What you see is the file's placeholder page.	Toto je dynamický formulář XFA, který PdfCraft zatím neumí zobrazit. Vidíte zástupnou stránku souboru.
+	This form also contains XFA data, which PdfCraft doesn't read yet. You can fill its fields, but Acrobat may show the XFA values instead.	Tento formulář obsahuje i data XFA, která PdfCraft zatím nečte. Pole můžete vyplnit, ale Acrobat může místo nich zobrazit hodnoty XFA.
+	This document contains {n} interactive form fields.	Tento dokument obsahuje interaktivní formulářová pole (počet: {n}).
+	This file was damaged and has been repaired. Saving keeps the repaired version.	Tento soubor byl poškozený a byl opraven. Uložením se zachová opravená verze.
+	Dismiss	Zavřít
+	Hide field highlights	Skrýt zvýraznění polí
+	Highlight fields	Zvýraznit pole
+	Security settings	Nastavení zabezpečení
+	Details	Podrobnosti
+	Select (V)	Výběr (V)
+	Hand (H)	Ručička (H)
+	Delete pages (Delete)	Odstranit stránky (Delete)
+	Insert a blank page after the selection	Vložit prázdnou stránku za výběr
+	Insert pages from a file…	Vložit stránky ze souboru…
+	Extract pages to a new document	Extrahovat stránky do nového dokumentu
+	Split into files…	Rozdělit na soubory…
+	Select pages	Vybrat stránky
+	Cut	Vyjmout
+	Copy	Kopírovat
+	Paste after	Vložit za
+	Rename	Přejmenovat
+	Set to current page ({n})	Nastavit na aktuální stránku ({n})
+	Move up	Posunout nahoru
+	Move down	Posunout dolů
+	Indent	Zvětšit odsazení
+	Outdent	Zmenšit odsazení
+	This document has no form fields.	Tento dokument nemá žádná formulářová pole.
+	Tab order: move a field with its arrows.	Pořadí tabulátoru: pole přesunete jeho šipkami.
+	Unplaced	Neumístěno
+	Has JavaScript actions (run in M6)	Má akce JavaScriptu (spuštění v M6)
+	Page	Stránka
+	None	Žádné
+	Delete selected fields	Odstranit vybraná pole
+	Diagnostic details	Diagnostické podrobnosti
+	The operation failed.	Operace se nezdařila.
+	no such document	takový dokument neexistuje
+	nothing to undo	není co vrátit zpět
+	nothing to redo	není co provést znovu
+	this document is signed: rewriting it would invalidate its signatures (save it incrementally instead)	tento dokument je podepsaný: jeho přepsání by zneplatnilo podpisy (uložte ho raději přírůstkově)
+	the document is protected by a password	dokument je chráněn heslem
+	the password is incorrect	heslo je nesprávné
+	the document has no page tree	dokument nemá strom stránek
+	a document must keep at least one page	dokument si musí ponechat alespoň jednu stránku
+	a bookmark cannot be moved inside itself	záložku nelze přesunout do sebe samé
+	the title must not be empty	název nesmí být prázdný
+	the document has no form fields	dokument nemá žádná formulářová pole
+	there are no redaction marks to apply	nejsou žádné značky začernění k použití
+	there are no pages to print	nejsou žádné stránky k tisku
+	the document has no tags	dokument nemá žádné tagy
+	{0}: {1}	{0}: {1}
+	the text recognition models are not installed (reinstall PdfCraft, or set PDFCRAFT_MODELS to the folder that holds them)	modely pro rozpoznávání textu nejsou nainstalovány (přeinstalujte PdfCraft nebo nastavte PDFCRAFT_MODELS na složku, která je obsahuje)
+	the image is empty	obrázek je prázdný
+	this file isn't XFDF, FDF, XML or text form data	tento soubor neobsahuje data formuláře ve formátu XFDF, FDF, XML ani textu
+	nothing in the file matches this document	nic v souboru neodpovídá tomuto dokumentu
+	This page couldn't be displayed.\n{e}	Tuto stránku nelze zobrazit.\n{e}
+	Go to page {p}	Přejít na stránku {p}
+	{s} action	Akce {s}
+	Page {p} of {n}	Stránka {p} z {n}
+	1 page selected	Vybrána 1 stránka
+	{n} pages selected	Vybrané stránky: {n}
+	{name} — unsaved changes	{name} — neuložené změny
+	{kind} field	Pole typu {kind}
+	Select a file for the stamp	Vyberte soubor pro razítko
+	JavaScript, e.g. getField("total").value	JavaScript, např. getField("total").value
+	Font: Helvetica	Písmo: Helvetica
+	e.g. en-US	např. cs-CZ
+	Rendering: hayro (bootstrap) · UI: egui · Icons: Lucide (ISC) · Fonts: Inter, JetBrains Mono, Dancing Script (OFL)	Vykreslování: hayro (bootstrap) · Rozhraní: egui · Ikony: Lucide (ISC) · Písma: Inter, JetBrains Mono, Dancing Script (OFL)
+	CheckBox	Zaškrtávací políčko
+	Radio	Přepínač
+	PushButton	Tlačítko
+	Combo	Pole se seznamem
+	List	Seznam
+	Unknown	Neznámé
+	The document has no XMP metadata	Dokument nemá metadata XMP
+	The title in the metadata and the document information differ	Název v metadatech a v informacích o dokumentu se liší
+	The document is encrypted	Dokument je šifrovaný
+	Device colour is used, but there is no PDF/A output intent	Používají se barvy zařízení, ale chybí výstupní záměr PDF/A
+	DeviceCMYK is used: it needs a CMYK output intent (not added automatically)	Používá se DeviceCMYK: vyžaduje výstupní záměr CMYK (nepřidává se automaticky)
+	The document has additional actions (/AA)	Dokument má doplňkové akce (/AA)
+	The document has document-level JavaScript	Dokument obsahuje JavaScript na úrovni dokumentu
+	The form asks viewers to make appearances (NeedAppearances)	Formulář žádá prohlížeče o vytvoření vzhledů (NeedAppearances)
+	A form field has additional actions	Formulářové pole má doplňkové akce
+	A stream uses LZW compression	Proud používá kompresi LZW
+	A stream refers to an external file	Proud odkazuje na externí soubor
+	An image asks to be interpolated	Obrázek žádá o interpolaci
+	An image has alternates or OPI information	Obrázek má alternativy nebo informace OPI
+	PostScript XObjects aren't allowed	Objekty PostScript XObject nejsou povoleny
+	Embedded files must be PDF/A files themselves (use PDF/A-3 for others)	Vložené soubory musí být samy soubory PDF/A (pro ostatní použijte PDF/A-3)
+	An embedded file has no AFRelationship	Vložený soubor nemá AFRelationship
+	Select Icon	Vybrat ikonu
+	Choose images	Vyberte obrázky
+	{dpi} pixels/inch	{dpi} pixelů/palec
+	Type your {what}.	Napište {what}.
+	Draw your {what} below.	Nakreslete {what} níže.
+	Your name	Vaše jméno
+	Images and text (converted to PDF)	Obrázky a text (převedené do PDF)
+	Images and text	Obrázky a text
+	Check Box Style:	Styl zaškrtávacího políčka:
+	Button Style:	Styl přepínače:
+	Check	Zatržítko
+	Circle	Kruh
+	Diamond	Kosočtverec
+	Square	Čtverec
+	Star	Hvězda
+	{month} {y}	{month} {y}
+	Change {key}	Změnit {key}
+	Insert pages from {name}	Vložit stránky z {name}
+	Fill in {name}	Vyplnit {name}
+	Set the image of {name}	Nastavit obrázek {name}
+	Edit script of {name}	Upravit skript {name}
+	Import {name}	Importovat {name}
+	Add bookmark	Přidat záložku
+	Rename bookmark	Přejmenovat záložku
+	Delete bookmark	Odstranit záložku
+	Move bookmark	Přesunout záložku
+	Set bookmark destination	Nastavit cíl záložky
+	Add stamp	Přidat razítko
+	Delete comment	Odstranit komentář
+	Edit comment	Upravit komentář
+	Erase	Gumovat
+	Lock comment	Zamknout komentář
+	Unlock comment	Odemknout komentář
+	Move comment	Přesunout komentář
+	Resize comment	Změnit velikost komentáře
+	Change comment properties	Změnit vlastnosti komentáře
+	Add field	Přidat pole
+	Change field properties	Změnit vlastnosti pole
+	Delete field	Odstranit pole
+	Duplicate field	Duplikovat pole
+	Set tab order	Nastavit pořadí tabulátoru
+	Change initial view	Změnit úvodní zobrazení
+	Set alternate text	Nastavit alternativní text
+	Mark figure as decorative	Označit obrázek jako dekorativní
+	Run JavaScript	Spustit JavaScript
+	Delete document JavaScript	Odstranit JavaScript dokumentu
+	Edit document JavaScript	Upravit JavaScript dokumentu
+	Edit text	Upravit text
+	Move image	Přesunout obrázek
+	Rotate image	Otočit obrázek
+	Flip image	Překlopit obrázek
+	Delete image	Odstranit obrázek
+	Add header & footer	Přidat záhlaví a zápatí
+	Update header & footer	Aktualizovat záhlaví a zápatí
+	Update watermark	Aktualizovat vodoznak
+	Add background	Přidat pozadí
+	Update background	Aktualizovat pozadí
+	Add image	Přidat obrázek
+	Edit content	Upravit obsah
+	Delete content	Odstranit obsah
+	Remove redaction marks	Odebrat značky začernění
+	Add link	Přidat odkaz
+	Change link properties	Změnit vlastnosti odkazu
+	Delete link	Odstranit odkaz
+	Create link	Vytvořit odkaz
+	Flatten	Zploštit
+	Add sticky note	Přidat poznámku
+	Add highlight	Přidat zvýraznění
+	Add underline	Přidat podtržení
+	Add strikethrough	Přidat přeškrtnutí
+	Add squiggly underline	Přidat podtržení vlnovkou
+	Add rectangle	Přidat obdélník
+	Add oval	Přidat ovál
+	Add arrow	Přidat šipku
+	Add line	Přidat čáru
+	Add drawing	Přidat kresbu
+	Add text box	Přidat textový rámeček
+	Add checkmark	Přidat zatržítko
+	Add cross	Přidat křížek
+	Add dot	Přidat tečku
+	Add signature	Přidat podpis
+	Add redaction mark	Přidat značku začernění
+	Add cloud	Přidat obláček
+	Add polygon	Přidat mnohoúhelník
+	Add connected lines	Přidat spojené čáry
+	Add callout	Přidat popisek s odkazovou čárou
+	Add inserted text	Přidat vložený text
+	Add file attachment	Přidat připojený soubor
+	Set status Accepted	Nastavit stav Přijato
+	Set status Rejected	Nastavit stav Odmítnuto
+	Set status Cancelled	Nastavit stav Zrušeno
+	Set status Completed	Nastavit stav Dokončeno
+	Set status None	Nastavit stav Žádný
+	Set status Unmarked	Nastavit stav Neoznačeno
+	Save as PDF/A-1b	Uložit jako PDF/A-1b
+	Save as PDF/A-2b	Uložit jako PDF/A-2b
+	Save as PDF/A-3b	Uložit jako PDF/A-3b
+	Fill & Sign: change signature	Vyplnit a podepsat: změnit podpis
+	Fill & Sign: change initials	Vyplnit a podepsat: změnit iniciály
+	Fill & Sign: remove saved signature	Vyplnit a podepsat: odebrat uložený podpis
+	Fill & Sign: remove saved initials	Vyplnit a podepsat: odebrat uložené iniciály
+	Change signature	Změnit podpis
+	Change initials	Změnit iniciály
+	Measure distance	Měřit vzdálenost
+	Measure perimeter	Měřit obvod
+	Measure area	Měřit plochu
+	Set measurement scale	Nastavit měřítko měření
+	Measurement information	Informace o měření
+	Measurement snapping	Přichytávání při měření
+	Export measurements as CSV	Exportovat měření jako CSV
+	Distance	Vzdálenost
+	Perimeter	Obvod
+	Area	Plocha
+	Drawing scale	Měřítko výkresu
+	Snapping	Přichytávání
+	Export measurements	Exportovat měření
+	Open a PDF to measure it.	Otevřete PDF, které chcete měřit.
+	Click vertices. Enter or double-click finishes a perimeter or area. Click the first point to close an area.	Klikejte na vrcholy. Enter nebo dvojklik dokončí obvod nebo plochu. Kliknutím na první bod plochu uzavřete.
+	Shift constrains to 45 degrees. Backspace removes a vertex. Escape cancels.	Shift omezí úhel na násobky 45 stupňů. Backspace odebere vrchol. Escape zruší.
+	Angle	Úhel
+	Click the first point to begin.	Kliknutím začněte prvním bodem.
+	Snap to drawing	Přichytávat ke kresbě
+	Endpoints	Koncové body
+	Midpoints	Středy
+	Intersections	Průsečíky
+	Paths	Cesty
+	Sensitivity	Citlivost
+	Unit	Jednotka
+	Decimals	Desetinná místa
+	Calibrate from two points	Kalibrovat podle dvou bodů
+	Entire page	Celá stránka
+	Viewport rectangle in page points (x, y, width, height)	Obdélník výřezu v bodech stránky (x, y, šířka, výška)
+	Viewport	Výřez
+	Apply scale	Použít měřítko
+	Saved measurements	Uložená měření
+	Saved measurements.	Měření byla uložena.
+	Endpoint	Koncový bod
+	Midpoint	Střed
+	Intersection	Průsečík
+	Path	Cesta
+	This drawing exceeds the snapping limit; only the first paths are used.	Tato kresba překračuje limit přichytávání; použijí se jen první cesty.
+	Some page content couldn't be read; snapping uses the rest.	Část obsahu stránky nelze přečíst; přichytávání používá zbytek.
+	Unsupported measurements	Nepodporovaná měření
+	Label	Popisek
+	{n} measurements use an unsupported format and are left out.	Měření v nepodporovaném formátu (počet: {n}) jsou vynechána.
+	This area has too many overlapping paths; intersection snapping is limited.	Tato oblast má příliš mnoho překrývajících se cest; přichytávání k průsečíkům je omezené.
+	This measurement needs at least {n} points.	Toto měření vyžaduje alespoň tento počet bodů: {n}.
+	Change {what}	Změnit {what}
+	Cut and stack	Vyříznout a stohovat
+	Default workspace mode	Výchozí režim pracovního prostoru
+	Documents and view	Dokumenty a zobrazení
+	Open email app	Otevřít e-mailovou aplikaci
+	Open link	Otevřít odkaz
+	Open this web page?	Otevřít tuto webovou stránku?
+	Scripts run in a sandbox without file or network access. A script that asks to open a web page needs your permission first. With JavaScript off, Acrobat's standard format, validate and calculate functions still work.	Skripty běží v izolovaném prostředí bez přístupu k souborům a síti. Skript, který chce otevřít webovou stránku, k tomu nejprve potřebuje vaše svolení. I s vypnutým JavaScriptem fungují standardní funkce Acrobatu pro formátování, ověřování a výpočty.
+	Sign yourself	Podepsat sám
+	Used when opening PDFs. An explicit launch or control mode takes precedence for the session.	Používá se při otevírání PDF. Výslovně zvolený režim spuštění nebo řízení má pro danou relaci přednost.
+	Write this email?	Napsat tento e-mail?
+	{who} in this document wants to open this address in your browser:	{who} v tomto dokumentu chce ve vašem prohlížeči otevřít tuto adresu:
+	{who} in this document wants to open your email app with this address:	{who} v tomto dokumentu chce otevřít vaši e-mailovou aplikaci s touto adresou:
+	This web address mixes letters from different alphabets, a common way to imitate another site's name.	Tato webová adresa kombinuje písmena z různých abeced, což je běžný způsob napodobení názvu jiného webu.
+	This web address uses letters from another alphabet, which can look like familiar ones.	Tato webová adresa používá písmena z jiné abecedy, která mohou vypadat jako známá písmena.
+	Create PDF from images	Vytvořit PDF z obrázků
+	Selected image files: {count}	Vybrané soubory obrázků: {count}
+	Use image resolution	Použít rozlišení obrázku
+	Use each image's embedded DPI; use 72 DPI when it is absent.	Použít DPI vložené v každém obrázku; pokud chybí, použít 72 DPI.
+	Use 72 DPI (one point per pixel)	Použít 72 DPI (jeden bod na pixel)
+	Use custom DPI	Použít vlastní DPI
+	DPI sets the printed page size without resampling the image.	DPI určuje velikost tištěné stránky bez převzorkování obrázku.
+	Create	Vytvořit
+	Dynamic XFA form laid out from its template: {pages}, {fields}.	Dynamický formulář XFA sestavený podle šablony: {pages}, {fields}.
+	XFA form: its fields and its XFA data are kept in step, so other viewers show what you fill in.	Formulář XFA: jeho pole a data XFA se udržují ve shodě, takže ostatní prohlížeče zobrazí, co vyplníte.
+@plural	{n} page|{n} pages	{n} stránka|{n} stránky|{n} stránek
+@plural	{n} field|{n} fields	{n} pole|{n} pole|{n} polí
+	Switch to two-page view first to show the cover page	Chcete-li zobrazit titulní stránku, nejprve přepněte na dvoustránkové zobrazení
+	Show	Zobrazit
+	Sort	Řadit
+	Reverse the order	Obrátit pořadí
+	Grab bag	Namátkový výběr
+	Table	Tabulka
+	Username	Uživatelské jméno
+	Display name	Zobrazované jméno
+	Real name	Skutečné jméno
+	Name (A–Z)	Jméno (A–Z)
+	Merged PRs	Sloučené PR
+	PRs	PR
+	Commits	Commity
+	Lines added	Přidané řádky
+	+LOC	+ř.
+	Lines deleted	Odstraněné řádky
+	−LOC	−ř.
+	Line delta	Rozdíl řádků
+	ΔLOC	Δř.
+	Binary assets added	Přidané binární soubory
+	+Bin	+bin.
+	Binary assets removed	Odebrané binární soubory
+	−Bin	−bin.
+	First commit	První commit
+	First	První
+	Last commit	Poslední commit
+	Last	Poslední
+	No contributor data was built into this copy.	Do této kopie nebyla zabudována žádná data o přispěvatelích.
+	No model credits were built into this copy.	Do této kopie nebyly zabudovány žádné údaje o autorech modelů.
+	{n} contributors · {c} commits	Přispěvatelé: {n} · commity: {c}
+	Company	Společnost
+	Model	Model
+	% of all commits	% všech commitů
+	Lines +/−	Řádky +/−
+	@{login}: {prs} PRs, {commits} commits, +{added} / −{deleted} lines (Δ {delta}), +{bin_added} / −{bin_deleted} binary assets, {first} – {last}	@{login}: PR: {prs}, commity: {commits}, řádky +{added} / −{deleted} (Δ {delta}), binární soubory +{bin_added} / −{bin_deleted}, {first} – {last}
+	Set layer visibility	Nastavit viditelnost vrstvy
+	Created a PDF from {n} files	PDF vytvořeno ze souborů (počet: {n})
+	PDF, images and text	PDF, obrázky a text
+	Insert a file before page {label}	Vložit soubor před stránku {label}
+	Insert a file at the end	Vložit soubor na konec
+	Save pages	Uložit stránky
+	Save these pages as one PDF	Uložit tyto stránky jako jedno PDF
+	No changes to save	Žádné změny k uložení
+	Created a PDF from {n} files; left out: {names}	PDF vytvořeno ze souborů (počet: {n}); vynecháno: {names}
+	Created a PDF from the first {n} files	PDF vytvořeno z prvních souborů (počet: {n})
+	None of those files can be made into a PDF; use PDFs, images or .txt files	Z žádného z těchto souborů nelze vytvořit PDF; použijte soubory PDF, obrázky nebo soubory .txt
+	1 file	1 soubor
+	1 file needs attention	1 soubor vyžaduje pozornost
+	? of {n}	? z {n}
+	Add folder	Přidat složku
+	Add folder and subfolders	Přidat složku a podsložky
+	Add folder and subfolders…	Přidat složku a podsložky…
+	Add folder…	Přidat složku…
+	Add open documents	Přidat otevřené dokumenty
+	Add the PDFs to combine	Přidejte soubory PDF ke sloučení
+	Added more than once	Přidáno vícekrát
+	All open documents	Všechny otevřené dokumenty
+	Can't be read: {e}	Nelze přečíst: {e}
+	Check the pages of {name}: {why}	Zkontrolujte stránky souboru {name}: {why}
+	Click to sort, drag to move the column. Drag its edge to resize it.	Kliknutím seřadíte, tažením přesunete sloupec. Tažením za jeho okraj změníte šířku.
+	Drag to reorder	Přetažením změníte pořadí
+	Drop PDFs or folders here, or choose them.	Přetáhněte sem soubory PDF nebo složky, nebo je vyberte.
+	Enter the password that opens it	Zadejte heslo k otevření
+	Enter the permissions password to allow combining	Zadejte heslo pro oprávnění, abyste povolili sloučení
+	Every PDF in the folder	Všechny soubory PDF ve složce
+	Every PDF in the folder and the folders inside it	Všechny soubory PDF ve složce a jejích podsložkách
+	File name	Název souboru
+	Files are combined from top to bottom. Leave Pages empty to take every page.	Soubory se slučují shora dolů. Ponecháte-li Stránky prázdné, použijí se všechny stránky.
+	Hide password	Skrýt heslo
+	Includes unsaved changes	Obsahuje neuložené změny
+	Its security settings don't allow copying pages	Nastavení zabezpečení nepovoluje kopírování stránek
+	More ways to add files	Další způsoby přidání souborů
+	No documents are open	Nejsou otevřeny žádné dokumenty
+	No pages selected	Nejsou vybrány žádné stránky
+	Opened, but its security settings don't allow combining. Enter the permissions password.	Otevřeno, ale nastavení zabezpečení nepovoluje sloučení. Zadejte heslo pro oprávnění.
+	Password-protected	Chráněno heslem
+	Protected: the combined file won't keep its security settings	Chráněno: sloučený soubor si nezachová nastavení zabezpečení
+	Remove {n} files	Odebrat soubory (počet: {n})
+	Reset columns	Obnovit sloupce
+	Select a file first	Nejprve vyberte soubor
+	Select a password-protected file first	Nejprve vyberte soubor chráněný heslem
+	Show password	Zobrazit heslo
+	The password is only used to read the file; it isn't saved.	Heslo se použije jen ke čtení souboru; neukládá se.
+	The same password is tried on each file.	Stejné heslo se zkusí u každého souboru.
+	Unlock	Odemknout
+	Unlock {name}	Odemknout {name}
+	Unlock {n} files	Odemknout soubory (počet: {n})
+	Unlocked: the combined file won't be password-protected	Odemčeno: sloučený soubor nebude chráněn heslem
+	Unlock…	Odemknout…
+	Warnings	Upozornění
+	Wrong password	Nesprávné heslo
+	sorted ascending	seřazeno vzestupně
+	sorted descending	seřazeno sestupně
+	yesterday	včera
+	{k} of {n}	{k} z {n}
+	{name} can't be combined: {why}	{name} nelze sloučit: {why}
+	{n} days ago	před {n} dny
+	{n} files	Soubory: {n}
+	{n} files need attention	Soubory vyžadující pozornost: {n}
+	{n} selected	Vybráno: {n}
+	Folders	Složky
+	Pin a folder…	Připnout složku…
+	Pin a folder to Home	Připnout složku na úvodní stránku
+	Pin a folder to list its newest PDFs here, such as where your scanner or a synced cloud drive saves them.	Připněte složku a zde se zobrazí její nejnovější soubory PDF — například složku, kam ukládá skener nebo synchronizované cloudové úložiště.
+	Unpin	Odepnout
+	Unpin {folder}	Odepnout {folder}
+	Looking for PDFs…	Hledají se soubory PDF…
+	This folder isn't available right now. It may have moved, or its drive or cloud sync is offline.	Tato složka teď není dostupná. Možná byla přesunuta, nebo je její disk či cloudová synchronizace offline.
+	No PDFs in this folder yet	V této složce zatím nejsou žádné soubory PDF
+	Show less	Zobrazit méně
+	Show {n} more	Zobrazit další ({n})
+	The newest {n} of {total} PDFs	Nejnovější soubory PDF: {n} z {total}
+	Pinned folders need the desktop app	Připnuté složky vyžadují desktopovou aplikaci
+	Choose a folder on this computer to pin	Vyberte složku v tomto počítači, kterou chcete připnout
+	{folder} is already pinned to Home	{folder} je již připnuta na úvodní stránku
+	You can pin up to {n} folders. Unpin one first.	Připnout lze nejvýše tento počet složek: {n}. Nejprve jednu odepněte.
+	Pinned {folder} to Home	{folder} připnuta na úvodní stránku
+	About	O aplikaci
+	Contributors	Přispěvatelé
+	Models	Modely
+	Only continue if you trust this document. An address can carry information from the document, such as what you typed into its form.	Pokračujte, jen pokud tomuto dokumentu důvěřujete. Adresa může přenášet informace z dokumentu, například to, co jste zadali do jeho formuláře.
+	Print single-sided. Keep the sheets in order, cut at the marks, then stack the piles left to right, top to bottom.	Tiskněte jednostranně. Udržujte listy v pořadí, rozřežte je u značek a pak stohy skládejte zleva doprava a shora dolů.
+	Unlocked {n} of {m} files	Odemčeno souborů: {n} z {m}
+	No PDFs found in {folder}	Ve složce {folder} nebyly nalezeny žádné soubory PDF
+	Added the first {n} PDFs in {folder}	Přidány první soubory PDF ze složky {folder} (počet: {n})
+comment menu	Edit	Upravit
+	Undo {action}	Zpět: {action}
+	Redo {action}	Znovu: {action}
+signature pad	Type	Napsat
+certificate	Subject	Subjekt
+action wizard	Start	Spustit
+
+# Labels that reach tl!() through a variable (Fill & Sign buttons, link prompts, notices, history labels, checker and certificate rows)
+	Add {what}	Přidat {what}
+	Use {what}	Použít {what}
+	Place saved {what}	Vložit {what} z uložených
+	Remove saved {what}	Odebrat {what} z uložených
+	A link	Odkaz
+	A button	Tlačítko
+	A script	Skript
+	{who} in this document tried to open an address PdfCraft won't open: {e}.	{who} v tomto dokumentu se pokusil otevřít adresu, kterou PdfCraft neotevře: {e}.
+	{who} in this document tried to open an address PdfCraft won't open: {e}. Only web (http, https) and email (mailto) links open from documents.	{who} v tomto dokumentu se pokusil otevřít adresu, kterou PdfCraft neotevře: {e}. Z dokumentů se otevírají jen webové odkazy (http, https) a e-mailové odkazy (mailto).
+	Another file dialog is still open. Finish with it first.	Je stále otevřeno jiné dialogové okno souboru. Nejprve ho dokončete.
+	Couldn't show the file picker. Please try again.	Výběr souboru nelze zobrazit. Zkuste to prosím znovu.
+	The document changed while you were choosing a file, so nothing was changed.	Dokument se změnil, zatímco jste vybírali soubor, takže se nic nezměnilo.
+	The document was closed before it could be saved.	Dokument byl zavřen dříve, než mohl být uložen.
+	The pages were extracted but not deleted, because the document changed while you were choosing a folder.	Stránky byly extrahovány, ale neodstraněny, protože se dokument změnil, zatímco jste vybírali složku.
+	That didn't work: an internal error stopped it ({m}).	To se nepovedlo: zastavila to vnitřní chyba ({m}).
+	The Windows store's digital IDs couldn't be listed: {e}	Digitální ID z úložiště Windows nelze vypsat: {e}
+	Align fields	Zarovnat pole
+	Distribute fields	Rozmístit pole
+	Match field sizes	Sjednotit velikosti polí
+	Mark for redaction	Označit k začernění
+	Mark pages for redaction	Označit stránky k začernění
+	Change document properties	Změnit vlastnosti dokumentu
+	Mark differences	Označit rozdíly
+	Run form script	Spustit skript formuláře
+	Scripted content must be usable with a keyboard and assistive technology. Check the document's scripts.	Skriptovaný obsah musí být ovladatelný klávesnicí a asistenčními technologiemi. Zkontrolujte skripty dokumentu.
+	Table rows belong directly in a table or its head, body or foot. Fix the table's tags.	Řádky tabulky patří přímo do tabulky nebo do jejího záhlaví, těla či zápatí. Opravte tagy tabulky.
+	Basic constraints	Základní omezení
+	SHA-1 digest	Otisk SHA-1
+	SHA-256 digest	Otisk SHA-256
+	Squiggly	Vlnovka
+	Home / End	Home / End
+	H / Space (hold)	H / mezerník (podržet)
+	The standard fonts can't draw “{c}” ({code}). Only Western European characters can be added as text for now.	Standardní písma nedokážou vykreslit „{c}“ ({code}). Jako text lze zatím přidávat jen západoevropské znaky.
+	Larger pages	Větší stránky
+	Smaller pages	Menší stránky
+	Reset page size	Obnovit velikost stránek
+	Date format	Formát data
+	Fill & Sign dates	Data ve Vyplnit a podepsat
+	Pattern	Vzor
+	Today: {date}	Dnes: {date}
+	yyyy or yy year · m or mm month · mmm or mmmm month name · d or dd day · ddd or dddd weekday. H, h, M, s and t are time letters and can't be used on their own: put {escape} before a letter to show it as is.	yyyy nebo yy rok · m nebo mm měsíc · mmm nebo mmmm název měsíce · d nebo dd den · ddd nebo dddd den v týdnu. H, h, M, s a t jsou písmena času a nelze je použít samostatně: chcete-li písmeno zobrazit tak, jak je, vložte před něj {escape}.
+	Same as interface ({language})	Stejný jako rozhraní ({language})
+	{chars} can't be written into the PDF yet: Fill & Sign text is Western European only. Pick a numeric format such as dd.mm.yyyy.	{chars} zatím nelze zapsat do PDF: text ve Vyplnit a podepsat podporuje jen západoevropské znaky. Zvolte číselný formát, například dd.mm.yyyy.
+	Opens the printer driver's preferences. They are saved for every print from this computer; the copies, two-sided, grayscale and paper chosen here still apply.	Otevře předvolby ovladače tiskárny. Ukládají se pro každý tisk z tohoto počítače; zde zvolené kopie, oboustranný tisk, stupně šedi a papír platí dál.
+	The printer driver's own settings for this print: paper tray, paper type, finishing and more.	Vlastní nastavení ovladače tiskárny pro tento tisk: zásobník papíru, typ papíru, dokončovací úpravy a další.
+	Couldn't open the printer's preferences: {e}	Předvolby tiskárny nelze otevřít: {e}
+	Printer properties	Vlastnosti tiskárny
+	Reset to printer defaults	Obnovit výchozí nastavení tiskárny
+	This printer offers no settings of its own.	Tato tiskárna nenabízí žádná vlastní nastavení.
+
+# Shared field properties (Prepare a form).
+	Comb of characters	Rozdělení na znaky
+	The document changed while you were editing field properties.	Dokument se změnil, zatímco jste upravovali vlastnosti polí.
+	The document is no longer open.	Dokument již není otevřený.
+	The field properties dialog is no longer open.	Dialogové okno vlastností pole již není otevřené.
+	The field properties could not be changed.	Vlastnosti pole nelze změnit.
+	The selected fields could not be found. Select them again.	Vybraná pole nebyla nalezena. Vyberte je znovu.
+	The field {name} no longer exists.	Pole {name} již neexistuje.
+	A selected field has no widget on any page, so the fields can't be edited together.	Vybrané pole nemá na žádné stránce widget, takže pole nelze upravovat společně.
+	 ({n} at {dpi} dpi, the largest size they can be drawn at)	 ({n} při {dpi} dpi, největší velikosti, v jaké je lze vykreslit)
+	Certificate authority	Certifikační autorita
+	End entity	Koncová entita
+
+# Month names inside a date ("11. října 2026") take the genitive.
+calendar date	January	ledna
+calendar date	February	února
+calendar date	March	března
+calendar date	April	dubna
+calendar date	May	května
+calendar date	June	června
+calendar date	July	července
+calendar date	August	srpna
+calendar date	September	září
+calendar date	October	října
+calendar date	November	listopadu
+calendar date	December	prosince
+
+# Preflight (integrated after the catalogs were written).
+	Preflight…	Předtisková kontrola…

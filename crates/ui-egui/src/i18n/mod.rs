@@ -646,7 +646,7 @@ mod tests {
         let error = pdfcraft_engine::ocr::OcrError::NoModels.to_string();
         let notice = "Text recognition isn't installed: its model files are missing. Reinstall PdfCraft, or set PDFCRAFT_MODELS to the folder that holds them.";
         assert!(include_str!("../ocr_ui.rs").contains(notice), "keep in step with ocr_ui.rs");
-        for code in ["bg", "de", "es", "fr", "hu", "ja", "ru", "te", "uk", "zh-hans", "zh-hant"] {
+        for code in ["bg", "cs", "de", "es", "fr", "hu", "ja", "pt-br", "ru", "te", "uk", "zh-hans", "zh-hant"] {
             let lang = Lang::from_code(code).expect("registered");
             assert!(has(lang, notice) && has(lang, &error), "{code}");
         }
@@ -709,7 +709,7 @@ mod tests {
             labels.insert(label.to_string());
         }
         assert!(labels.len() > 20 && labels.contains("Comb of characters"), "the scan found the dialog's labels: {labels:?}");
-        for code in ["bg", "de", "es", "fr", "hu", "it", "ja", "pt-br", "ru", "te", "uk", "zh-hans", "zh-hant"] {
+        for code in ["bg", "cs", "de", "es", "fr", "hu", "it", "ja", "pt-br", "ru", "te", "uk", "zh-hans", "zh-hant"] {
             let lang = Lang::from_code(code).expect("registered");
             let missing: Vec<_> = labels.iter().filter(|l| !has(lang, l)).collect();
             assert!(missing.is_empty(), "{code} lacks Shared Field Properties labels: {missing:#?}");
@@ -1110,13 +1110,45 @@ mod tests {
             assert!(has(cs, menu), "Czech lacks the menu title {menu:?}");
             assert!(has(cs, spec.label), "Czech lacks the {menu} menu label {:?} ({})", spec.label, spec.id);
         }
-        const KEEP_AS_IS: &[&str] = &["OK"];
+        // Product, format and technical names, templates without words, and words spelt the same in Czech.
+        const KEEP_AS_IS: &[&str] = &[
+            "OK",
+            "PDF/A…",
+            "Microsoft Word (.docx)",
+            "PostScript / EPS",
+            "JavaScript",
+            "ZIP",
+            "Text",
+            "Metadata",
+            "Model",
+            "minimum",
+            "maximum",
+            "Home / End",
+            "{field}: {e}",
+            "`{command}` {when}",
+            "{0}: {1}",
+            "{month} {y}",
+        ];
         let (entries, _) = parse_entries(cs.0.source, cs.0.plural_forms());
         for e in &entries {
             assert!(e.source != e.translation || KEEP_AS_IS.contains(&e.source.as_str()), "{:?} is untranslated", e.source);
             assert!(!e.translation.contains("..."), "use … rather than three dots: {:?}", e.translation);
-            assert_eq!(e.translation.trim(), e.translation, "stray whitespace: {:?}", e.translation);
+            // Fragments joined to other text keep the source's leading and trailing spaces.
+            let lead = |s: &str| s.len() - s.trim_start().len();
+            let trail = |s: &str| s.len() - s.trim_end().len();
+            assert!(
+                (lead(&e.translation) > 0) == (lead(&e.source) > 0) && (trail(&e.translation) > 0) == (trail(&e.source) > 0),
+                "stray whitespace: {:?}",
+                e.translation
+            );
         }
+        assert_eq!(trn(cs, 1, "{n} page", "{n} pages"), "1 stránka");
+        assert_eq!(trn(cs, 3, "{n} page", "{n} pages"), "3 stránky");
+        assert_eq!(trn(cs, 5, "{n} page", "{n} pages"), "5 stránek");
+        assert_eq!(trn(cs, 0, "{n} field", "{n} fields"), "0 polí");
+        assert_eq!(tr(cs, "Preflight…"), "Předtisková kontrola…");
+        assert_eq!(tr(cs, "October"), "Říjen");
+        assert_eq!(fmt(tr(cs, "{month} {day}, {y}"), &[("month", tr_ctx(cs, "calendar date", "October")), ("day", "11"), ("y", "2026")]), "11. října 2026");
         let mut app = crate::PdfCraftApp::default();
         app.set_option("language", "cs").unwrap();
         assert!(app.set_option("language", "cz").is_err());
@@ -1124,6 +1156,37 @@ mod tests {
         let mut restored = crate::PdfCraftApp::default();
         restored.restore(&app.persist());
         assert_eq!(restored.language, "cs");
+    }
+
+    /// Czech translates every registered command and every All tools group, section and item.
+    #[test]
+    fn czech_covers_commands_and_catalogue() {
+        let cs = Lang::from_code("cs").expect("cs registered");
+        for command in pdfcraft_engine::commands::COMMANDS {
+            assert!(has(cs, command.label), "missing command: {}", command.label);
+            if let Some(menu) = command.menu {
+                assert!(has(cs, menu), "missing menu: {menu}");
+            }
+        }
+        for group in pdfcraft_engine::catalog::TOOL_GROUPS {
+            assert!(has(cs, group.label), "missing group: {}", group.label);
+            for section in group.sections {
+                assert!(has(cs, section.title), "missing section: {}", section.title);
+                for item in section.items {
+                    assert!(has(cs, item.label), "missing item: {}", item.label);
+                }
+            }
+        }
+    }
+
+    /// New tl!("literal") labels must not silently fall back to English in Czech.
+    #[test]
+    fn czech_covers_ui_literals() {
+        let cs = Lang::from_code("cs").expect("cs registered");
+        let literals = ui_literals();
+        assert!(literals.len() > 900, "source scan found only {} literals", literals.len());
+        let missing: Vec<_> = literals.iter().filter(|label| !has(cs, label)).collect();
+        assert!(missing.is_empty(), "untranslated Czech UI literals: {missing:#?}");
     }
 
     #[test]
