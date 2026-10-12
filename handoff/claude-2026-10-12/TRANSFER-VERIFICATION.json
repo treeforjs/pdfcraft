@@ -1,0 +1,21 @@
+{
+  "purpose": "handoff transfer only; product code unchanged",
+  "application_base": "994698dde20a97cc41eccd17552f1797d7dd2298",
+  "archive_sha256": "243ac04ba3e242d6cdf7af600c5d2ed46db6f93719c15ad062481f27ece33d94",
+  "archive_bytes": 442345,
+  "inner_checksum_entries_verified": 64,
+  "source_hashes_verified": 272,
+  "worktree_snapshots": 10,
+  "main_preflight_files": 26,
+  "lane_handoffs": 7,
+  "independent_review": "No live credential/control-token patterns found in source/evidence payloads; nested archive paths safe. Does not constitute feature validation.",
+  "pdf_plan_files": "None present in retained PDF worktrees or original bundle.",
+  "files_sha256": {
+    "CLAUDE_HANDOFF.md": "33db6a0c14a2c2986d5cb868a7a95b3e14765c5a940c11c14b1b6180f0329a2a",
+    "README.md": "41c3ae12940ac9bbfe8ad1a881a9c3429ed8291d312c86ea3a40e06186a5548e",
+    "RESUME_PROMPT.txt": "b7a2b1fc63e6e9f1d8b2f927e327a4ab5d713492104ffc31d9646caa346ac403",
+    "WORKSPACE-STATE.json": "7ec5501d5c7ab756dc276d354dedd0e7135a6751d9cf4ea54390e306e4763875",
+    "claude-handoff-2026-10-12.tar.gz": "243ac04ba3e242d6cdf7af600c5d2ed46db6f93719c15ad062481f27ece33d94",
+    "claude-handoff-2026-10-12.tar.gz.sha256": "23649d0ca4f9a8681ca532c9eadfff056adbd900bb446a8660bfcd5319765e1a"
+  }
+}

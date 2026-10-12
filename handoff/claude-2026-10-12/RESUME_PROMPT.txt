@@ -1,0 +1,11 @@
+Resume my Artcraft work, prioritizing PdfCraft until feature parity is complete. Keep PhotoCraft and VectorCraft paused for now.
+
+First read /workspace/CLAUDE_HANDOFF.md and all lane handoffs. If this is a fresh environment, use the attached claude-handoff-2026-10-12.tar.gz; read its CLAUDE_HANDOFF.md and WORKSPACE-STATE.json before restoring anything.
+
+Repository: https://github.com/treeforjs/pdfcraft
+Branch: feature/full-parity-2026-10-12
+Last validated pushed commit: 994698dde20a97cc41eccd17552f1797d7dd2298
+
+Preserve all uncommitted work. Preflight is already integrated locally and has focused tests passing; the other feature drafts are mostly uncompiled and untested. Fix the documented blockers, especially OCR permissions, and complete the required validation before committing and pushing. Do not apply recovery patches twice or overwrite shared files wholesale.
+
+Use parallel agents for independent implementation/review, but coordinate shared-file integration and run builds sequentially because disk space is limited. Target Ubuntu 24.04/26.04 LTS x86_64. Follow repository instructions and track parity honestly with actual tests and CLI/UI evidence. I authorize continuing implementation, testing, fixes and pushes without repeated permission requests. Begin by inspecting the handoff and current repository state, then resume the documented next steps.
