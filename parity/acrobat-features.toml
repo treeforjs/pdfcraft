@@ -3115,11 +3115,11 @@ title = "Page transitions"
 area = "D"
 tier = "P2"
 milestone = "M4"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["page_transitions", "page_set_transition"]
+evidence = ["crates/organize/src/tests.rs::page_transitions_write_read_and_round_trip_through_an_independent_parser", "crates/organize/src/tests.rs::page_transitions_read_leniently", "crates/engine/src/tests.rs::page_transitions_are_one_undo_step_saved_and_permission_checked", "crates/automation/tests/automation.rs::page_transitions_through_tools"]
+notes = "engine and tools read/write /Trans (all 12 styles, D, Dm, M, Di, SS, B per ISO 32000-2 Table 164) and /Dur auto-advance; atomic, one undo step, modify permission. Missing: Organize dialog and command, full-screen playback of transitions"
 
 [[feature]]
 id = "organize.page-tab-order"

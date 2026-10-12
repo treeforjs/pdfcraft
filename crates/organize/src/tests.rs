@@ -1159,3 +1159,90 @@ fn extract_keeps_images_type3_glyphs_may_draw() {
     let names = xobject_names(&part, 0);
     assert!(names.iter().any(|n| n.as_slice() == b"ImB"), "pruning must not run through Type 3 resources");
 }
+
+#[test]
+fn page_transitions_write_read_and_round_trip_through_an_independent_parser() {
+    let mut doc = open(fixture());
+    assert!(page_transitions(&doc).unwrap().iter().all(|p| *p == PageTransition::default()));
+    let mut fly = Transition::new(TransitionStyle::Fly);
+    fly.duration = 2.5;
+    fly.motion = Motion::Outward;
+    fly.direction = Direction::None;
+    fly.scale = 0.5;
+    fly.opaque = true;
+    set_page_transition(&mut doc, &[0, 2], &PageTransition { transition: Some(fly), advance: Some(4.0) }).unwrap();
+    let mut wipe = Transition::new(TransitionStyle::Wipe);
+    wipe.direction = Direction::Angle(180);
+    set_page_transition(&mut doc, &[1], &PageTransition { transition: Some(wipe), advance: None }).unwrap();
+    let bytes = write_incremental(&doc, &SaveOptions::default()).unwrap();
+    let back = open(bytes.clone());
+    let t = page_transitions(&back).unwrap();
+    assert_eq!(t[0], PageTransition { transition: Some(fly), advance: Some(4.0) });
+    assert_eq!(t[2], t[0]);
+    assert_eq!(t[1], PageTransition { transition: Some(wipe), advance: None });
+
+    // An independent parser sees the same dictionaries (ISO 32000-2 Table 164 key names).
+    use hayro_syntax::object::{Dict as HDict, Name};
+    let hay = hayro_syntax::Pdf::new(bytes).unwrap();
+    let pages = hay.pages();
+    let p0 = pages.first().unwrap().raw().clone();
+    let tr: HDict = p0.get(b"Trans").unwrap();
+    assert_eq!(tr.get::<Name>(b"S").unwrap().as_str(), "Fly");
+    assert_eq!(tr.get::<Name>(b"M").unwrap().as_str(), "O");
+    assert_eq!(tr.get::<Name>(b"Di").unwrap().as_str(), "None");
+    assert_eq!(tr.get::<f32>(b"D"), Some(2.5));
+    assert_eq!(tr.get::<f32>(b"SS"), Some(0.5));
+    assert_eq!(tr.get::<bool>(b"B"), Some(true));
+    assert_eq!(p0.get::<f32>(b"Dur"), Some(4.0));
+    let tr1: HDict = pages.get(1).unwrap().raw().get(b"Trans").unwrap();
+    assert_eq!(tr1.get::<Name>(b"S").unwrap().as_str(), "Wipe");
+    assert_eq!(tr1.get::<i32>(b"Di"), Some(180));
+    assert!(tr1.get::<Name>(b"M").is_none(), "Wipe has no motion entry");
+    assert!(pages.get(1).unwrap().raw().get::<f32>(b"Dur").is_none());
+
+    // Invalid settings change nothing on any page.
+    let mut doc = back;
+    let before = page_transitions(&doc).unwrap();
+    let mut bad = Transition::new(TransitionStyle::Push);
+    bad.direction = Direction::Angle(90); // 90 is Wipe only
+    assert!(matches!(
+        set_page_transition(&mut doc, &[0, 1], &PageTransition { transition: Some(bad), advance: None }),
+        Err(OrganizeError::Invalid(_))
+    ));
+    let mut slow = Transition::new(TransitionStyle::Dissolve);
+    slow.duration = f64::NAN;
+    assert!(set_page_transition(&mut doc, &[0], &PageTransition { transition: Some(slow), advance: None }).is_err());
+    assert!(set_page_transition(&mut doc, &[0], &PageTransition { transition: None, advance: Some(-1.0) }).is_err());
+    let mut flat = Transition::new(TransitionStyle::Fly);
+    flat.direction = Direction::None; // needs a scale other than 1
+    assert!(set_page_transition(&mut doc, &[0], &PageTransition { transition: Some(flat), advance: None }).is_err());
+    assert_eq!(set_page_transition(&mut doc, &[9], &PageTransition::default()), Err(OrganizeError::NoSuchPage(9)));
+    assert_eq!(page_transitions(&doc).unwrap(), before);
+    // Removing clears both entries.
+    set_page_transition(&mut doc, &[0], &PageTransition::default()).unwrap();
+    let doc = save_and_reopen(&doc);
+    assert_eq!(page_transitions(&doc).unwrap()[0], PageTransition::default());
+}
+
+#[test]
+fn page_transitions_read_leniently() {
+    let b: Vec<String> = vec![
+        "<< /Type /Catalog /Pages 2 0 R >>".into(),
+        "<< /Type /Pages /Kids [3 0 R 4 0 R 5 0 R] /Count 3 /MediaBox [0 0 200 200] >>".into(),
+        "<< /Type /Page /Parent 2 0 R /Trans << /S /Bogus /D -3 /Di 45 >> /Dur (x) >>".into(),
+        "<< /Type /Page /Parent 2 0 R /Trans 6 0 R /Dur 7 >>".into(),
+        "<< /Type /Page /Parent 2 0 R /Trans << /S /Blinds /Dm /V /M /O /Di 450 >> >>".into(),
+        "<< /S /Glitter /Di 315 /D 0.5 /B true >>".into(),
+    ];
+    let doc = open(build(&b, "/Root 1 0 R"));
+    let t = page_transitions(&doc).unwrap();
+    assert_eq!(t[0].transition, Some(Transition::new(TransitionStyle::Replace)), "unknown style and bad numbers fall back to defaults");
+    assert_eq!(t[0].advance, None);
+    let g = t[1].transition.unwrap();
+    assert_eq!((g.style, g.direction, g.duration, g.opaque, t[1].advance), (TransitionStyle::Glitter, Direction::Angle(315), 0.5, true, Some(7.0)));
+    let bl = t[2].transition.unwrap();
+    assert_eq!((bl.dimension, bl.motion, bl.direction), (Dimension::Vertical, Motion::Outward, Direction::Angle(90)));
+    // Writing back what was read only emits the entries that apply to the style.
+    let d = bl.to_dict();
+    assert!(d.contains(b"Dm") && !d.contains(b"M") && !d.contains(b"Di") && !d.contains(b"SS"), "Blinds takes /Dm only (Table 164)");
+}

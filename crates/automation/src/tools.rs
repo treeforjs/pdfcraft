@@ -714,6 +714,29 @@ pub fn tools() -> Vec<ToolDef> {
             }),
             &["doc"],
         )),
+        t("page_transitions", "List page transitions", "Each page's transition (ISO 32000-2 §12.4.4: style Split, Blinds, Box, Wipe, Dissolve, Glitter, R (replace), Fly, Push, Cover, Uncover, Fade, or none; duration in seconds; dimension, motion, direction, scale, opaque) and advance: seconds before a presentation moves on automatically (null = manually). Viewers use them in full-screen mode.")
+            .ro()
+            .with(schema(json!({ "doc": doc() }), &["doc"])),
+        t(
+            "page_set_transition",
+            "Set page transitions",
+            "Set the transition shown when pages appear in full-screen mode (Page Transitions), or style \"none\" to remove it. Options apply by style (ISO 32000-2 Table 164): dimension for Split and Blinds; motion for Split, Box and Fly; direction (degrees counterclockwise from left-to-right) for Wipe (0, 90, 180, 270), Glitter (0, 270, 315), Fly, Cover, Uncover and Push (0, 270; Fly also \"none\" when scale is not 1); scale and opaque for Fly. advance: seconds each page stays before moving on automatically; omit it for manual advance (it is replaced along with the transition). Undoable.",
+        )
+        .with(schema(
+            json!({
+                "doc": doc(),
+                "pages": pages("to change (default: all)"),
+                "style": { "type": "string", "enum": ["none", "Split", "Blinds", "Box", "Wipe", "Dissolve", "Glitter", "R", "Fly", "Push", "Cover", "Uncover", "Fade"] },
+                "duration": { "type": "number", "exclusiveMinimum": 0, "maximum": 3600, "description": "Seconds the effect takes (default 1)." },
+                "dimension": { "type": "string", "enum": ["horizontal", "vertical"] },
+                "motion": { "type": "string", "enum": ["inward", "outward"] },
+                "direction": { "description": "0, 90, 180, 270, 315 or \"none\" (see above)." },
+                "scale": { "type": "number", "exclusiveMinimum": 0, "maximum": 100 },
+                "opaque": { "type": "boolean" },
+                "advance": { "type": "number", "minimum": 0, "maximum": 3600, "description": "Seconds before advancing automatically." },
+            }),
+            &["doc", "style"],
+        )),
         t(
             "doc_header_footer",
             "Add header and footer",

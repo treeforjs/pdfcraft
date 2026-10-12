@@ -32,6 +32,7 @@ pub mod xfa;
 pub use signature_image::{ImageSignaturePreview, SignatureImage};
 
 pub use pdfcraft_organize::{BoxSpec, PageBox, SplitBy, split_ranges};
+pub use pdfcraft_organize::{Dimension, Direction, Motion, PageTransition, Transition, TransitionStyle};
 
 /// One file produced by a split: (1-based first page, last page, PDF bytes).
 pub use pdfcraft_organize::LabelStyle;
@@ -472,6 +473,11 @@ impl Document {
         self.editor.as_ref().and_then(|e| pdfcraft_organize::page_boxes(&e.cos).ok()).unwrap_or_default()
     }
 
+    /// Every page's transition and auto-advance time (Page Transitions, ISO 32000-2 §12.4.4).
+    pub fn page_transitions(&self) -> Vec<PageTransition> {
+        self.editor.as_ref().and_then(|e| pdfcraft_organize::page_transitions(&e.cos).ok()).unwrap_or_default()
+    }
+
     /// Current value of a document-information entry (Title, Author, …).
     pub fn info_value(&self, key: &str) -> Option<String> {
         self.editor.as_ref().and_then(|e| pdfcraft_organize::info(&e.cos, key))
@@ -741,6 +747,11 @@ pub enum Edit {
         pages: Vec<usize>,
         which: PageBox,
         spec: BoxSpec,
+    },
+    /// Page Transitions: set (or remove) the transition and auto-advance time of `pages`.
+    SetPageTransition {
+        pages: Vec<usize>,
+        settings: PageTransition,
     },
     SetInfo {
         key: String,
@@ -1136,6 +1147,7 @@ impl Edit {
             Edit::ReplacePages { pages, .. } => plural("Replace page", pages.len()),
             Edit::SetPageBox { pages, which: PageBox::Crop, .. } => plural("Crop page", pages.len()),
             Edit::SetPageBox { .. } => "Set page boxes".into(),
+            Edit::SetPageTransition { pages, .. } => plural("Set page transition", pages.len()),
             Edit::SetInfo { key, .. } => format!("Change {key}"),
             Edit::InsertPagesFrom { name, .. } => format!("Insert pages from {name}"),
             Edit::AddBookmark { .. } => "Add bookmark".into(),
@@ -1348,6 +1360,8 @@ fn check_permission(edit: &Edit, p: &pdfcraft_cos::Permissions) -> Result<(), Ed
         | Edit::SetTabOrder { .. }
         | Edit::MoveInTabOrder { .. }
         | Edit::SetInitialView(_)
+        // Transitions are page attributes, not assembly (Table 22 bit 11 does not list them): bit 4.
+        | Edit::SetPageTransition { .. }
         | Edit::SetAltText { .. }
         | Edit::MarkDecorative { .. }
         | Edit::AddOcrText { .. }
@@ -1469,6 +1483,7 @@ fn run_edit(doc: &mut pdfcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -> 
             pdfcraft_organize::replace_pages(doc, pages, &src, src_pages)?;
         }
         Edit::SetPageBox { pages, which, spec } => pdfcraft_organize::set_page_box(doc, pages, *which, *spec)?,
+        Edit::SetPageTransition { pages, settings } => pdfcraft_organize::set_page_transition(doc, pages, settings)?,
         Edit::InsertPagesFrom { name, bytes, pages, at } => {
             let src = open_source(name, bytes)?;
             let pages = match pages {

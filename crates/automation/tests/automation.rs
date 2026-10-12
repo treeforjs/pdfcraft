@@ -3854,3 +3854,53 @@ fn command_batch_refuses_more_than_a_thousand_steps() {
     let err = a.call("command_batch", &json!({"steps": steps})).unwrap_err();
     assert!(err.to_string().contains("at most 1000 steps"), "{err}");
 }
+
+#[test]
+fn page_transitions_through_tools() {
+    let dir = workdir("transitions");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    let r = ok(&mut a, "page_transitions", json!({ "doc": doc }));
+    assert!(r["pages"].as_array().unwrap().iter().all(|p| p["style"] == "none" && p["advance"].is_null()), "{r}");
+    // Fly in from nothing on every page, advancing after 5 s.
+    let r = ok(
+        &mut a,
+        "page_set_transition",
+        json!({ "doc": doc, "style": "Fly", "duration": 2, "motion": "outward", "direction": "none", "scale": 0.25, "opaque": true, "advance": 5 }),
+    );
+    assert_eq!(r["pages"].as_array().unwrap().len(), 3);
+    assert_eq!(r["pages"][2]["direction"], "none");
+    // Page 2 gets a vertical Blinds instead and advances manually.
+    ok(&mut a, "page_set_transition", json!({ "doc": doc, "pages": [2], "style": "Blinds", "dimension": "vertical" }));
+    let r = ok(&mut a, "page_transitions", json!({ "doc": doc }));
+    assert_eq!(
+        (r["pages"][0]["style"].as_str(), r["pages"][0]["advance"].as_f64(), r["pages"][0]["scale"].as_f64()),
+        (Some("Fly"), Some(5.0), Some(0.25))
+    );
+    assert_eq!((r["pages"][1]["style"].as_str(), r["pages"][1]["dimension"].as_str()), (Some("Blinds"), Some("vertical")));
+    assert!(r["pages"][1]["advance"].is_null());
+    // Invalid combinations are refused without changing anything.
+    let before = ok(&mut a, "page_transitions", json!({ "doc": doc }));
+    for bad in [
+        json!({ "doc": doc, "style": "Push", "direction": 90 }),
+        json!({ "doc": doc, "style": "Fly", "direction": "none" }),
+        json!({ "doc": doc, "style": "Dissolve", "duration": 0 }),
+        json!({ "doc": doc, "style": "Wipe", "advance": -1 }),
+    ] {
+        assert!(matches!(a.call("page_set_transition", &bad), Err(ToolError::Failed(_))), "{bad}");
+    }
+    assert!(matches!(a.call("page_set_transition", &json!({ "doc": doc, "style": "Spin" })), Err(ToolError::InvalidArgs(_))));
+    assert!(matches!(a.call("page_set_transition", &json!({ "doc": doc, "style": "none", "duration": 2 })), Err(ToolError::InvalidArgs(_))));
+    assert!(matches!(a.call("page_set_transition", &json!({ "doc": doc, "pages": [4], "style": "Fade" })), Err(ToolError::InvalidArgs(_))));
+    assert_eq!(ok(&mut a, "page_transitions", json!({ "doc": doc })), before);
+    // Saved and reopened, the settings and the page text survive; undo is one step.
+    ok(&mut a, "doc_save", json!({ "doc": doc, "path": "transitions.pdf" }));
+    let back = ok(&mut a, "doc_open", json!({ "path": "transitions.pdf" }))["doc"].as_u64().unwrap();
+    assert_eq!(ok(&mut a, "page_transitions", json!({ "doc": back }))["pages"], before["pages"]);
+    assert_eq!(page_text(&mut a, back), ["Page 1", "Page 2", "Page 3"]);
+    ok(&mut a, "page_set_transition", json!({ "doc": back, "pages": [1], "style": "none" }));
+    let r = ok(&mut a, "page_transitions", json!({ "doc": back }));
+    assert_eq!((r["pages"][0]["style"].as_str(), r["pages"][0]["advance"].is_null()), (Some("none"), true));
+    ok(&mut a, "edit_undo", json!({ "doc": back }));
+    assert_eq!(ok(&mut a, "page_transitions", json!({ "doc": back }))["pages"], before["pages"]);
+}

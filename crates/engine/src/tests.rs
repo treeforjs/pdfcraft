@@ -2488,3 +2488,33 @@ fn oversized_exports_clamp_and_report_their_dpi_unless_strict() {
     let err = export::Exporter::from_source(strict).png(0, 600.0).unwrap_err();
     assert!(err.contains("exceeds renderer limits"), "{err}");
 }
+
+#[test]
+fn page_transitions_are_one_undo_step_saved_and_permission_checked() {
+    let (mut s, id) = session_with(3);
+    let mut t = Transition::new(TransitionStyle::Split);
+    t.dimension = Dimension::Vertical;
+    t.motion = Motion::Outward;
+    t.duration = 1.5;
+    let settings = PageTransition { transition: Some(t), advance: Some(3.0) };
+    s.apply(id, Edit::SetPageTransition { pages: vec![0, 2], settings }).unwrap();
+    let d = s.get(id).unwrap();
+    assert_eq!(d.can_undo(), Some("Set page transitions"));
+    assert_eq!(d.page_transitions(), [settings, PageTransition::default(), settings]);
+    // A refused edit leaves the document as it was.
+    let bad = PageTransition { transition: None, advance: Some(f64::INFINITY) };
+    assert!(s.apply(id, Edit::SetPageTransition { pages: vec![1], settings: bad }).is_err());
+    assert_eq!(s.get(id).unwrap().page_transitions()[1], PageTransition::default());
+    let saved = s.save_bytes(id).unwrap();
+    let mut s2 = Session::new();
+    let id2 = s2.open("t.pdf", None, saved, None).unwrap();
+    assert_eq!(s2.get(id2).unwrap().page_transitions()[2], settings);
+    s.undo(id).unwrap();
+    assert!(s.get(id).unwrap().page_transitions().iter().all(|p| *p == PageTransition::default()));
+    s.redo(id).unwrap();
+    assert_eq!(s.get(id).unwrap().page_transitions()[0], settings);
+    // Restricted documents refuse it like other changes to the document (Table 22 bit 4).
+    let mut s3 = Session::new();
+    let id3 = s3.open("r.pdf", None, protected("", "owner", 0b0100), None).unwrap();
+    assert_eq!(s3.apply(id3, Edit::SetPageTransition { pages: vec![0], settings }), Err(EditError::NotPermitted("changes to the document")));
+}

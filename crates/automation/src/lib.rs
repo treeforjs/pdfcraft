@@ -288,6 +288,11 @@ impl Automation {
                 self.apply(&a, Edit::DuplicatePages { pages })?
             }
             "page_set_box" => self.page_set_box(&a)?,
+            "page_transitions" => {
+                let list: Vec<Value> = self.doc(&a)?.page_transitions().iter().enumerate().map(|(i, p)| transition_json(i, p)).collect();
+                json!({ "pages": list })
+            }
+            "page_set_transition" => self.page_set_transition(&a)?,
             "doc_create" => self.doc_create(&a)?,
             "doc_flatten" => {
                 let (comments, fields) = (a.opt_bool("comments")?.unwrap_or(true), a.opt_bool("fields")?.unwrap_or(true));
@@ -1138,6 +1143,67 @@ impl Automation {
         Ok(out)
     }
 
+    fn page_set_transition(&mut self, a: &Args) -> Result<Value> {
+        use pdfcraft_engine::{Dimension, Direction, Motion, PageTransition, Transition, TransitionStyle};
+        let bad = |m: String| ToolError::InvalidArgs(m);
+        let n = self.doc(a)?.info.pages.len();
+        let pages = match a.opt_ints("pages")? {
+            Some(_) => self.pages(a, "pages")?,
+            None => (0..n).collect(),
+        };
+        let style = a.str("style")?;
+        let transition = if style == "none" {
+            let extra = ["duration", "dimension", "motion", "direction", "scale", "opaque"].into_iter().find(|k| a.get(k).is_some());
+            if let Some(k) = extra {
+                return Err(bad(format!("`{k}` needs a transition style other than none")));
+            }
+            None
+        } else {
+            let s = TransitionStyle::from_name(style).ok_or_else(|| bad(format!("unknown style {style:?}")))?;
+            let mut t = Transition::new(s);
+            if let Some(d) = a.opt_num("duration")? {
+                t.duration = d;
+            }
+            if let Some(d) = a.opt_str("dimension")? {
+                t.dimension = match d {
+                    "horizontal" => Dimension::Horizontal,
+                    "vertical" => Dimension::Vertical,
+                    o => return Err(bad(format!("unknown dimension {o:?}"))),
+                };
+            }
+            if let Some(m) = a.opt_str("motion")? {
+                t.motion = match m {
+                    "inward" => Motion::Inward,
+                    "outward" => Motion::Outward,
+                    o => return Err(bad(format!("unknown motion {o:?}"))),
+                };
+            }
+            match a.get("direction") {
+                None => {}
+                Some(Value::String(s)) if s == "none" => t.direction = Direction::None,
+                Some(v) => {
+                    let d = v
+                        .as_u64()
+                        .and_then(|d| u16::try_from(d).ok())
+                        .ok_or_else(|| bad("direction must be 0, 90, 180, 270, 315 or \"none\"".into()))?;
+                    t.direction = Direction::Angle(d);
+                }
+            }
+            if let Some(s) = a.opt_num("scale")? {
+                t.scale = s;
+            }
+            if let Some(b) = a.opt_bool("opaque")? {
+                t.opaque = b;
+            }
+            Some(t)
+        };
+        let settings = PageTransition { transition, advance: a.opt_num("advance")? };
+        let mut out = self.apply(a, Edit::SetPageTransition { pages: pages.clone(), settings })?;
+        let all = self.doc(a)?.page_transitions();
+        out["pages"] = json!(pages.iter().filter_map(|&i| all.get(i).map(|p| transition_json(i, p))).collect::<Vec<_>>());
+        Ok(out)
+    }
+
     fn doc_protect(&mut self, a: &Args) -> Result<Value> {
         use pdfcraft_engine::{Algorithm, Changes, Printing, Protection};
         let d = Protection::default();
@@ -1713,6 +1779,25 @@ fn bookmark_tree(items: &[pdfcraft_render::OutlineItem], parent: &[usize]) -> Ve
             json!({ "path": path, "title": o.title, "page": o.page.map(|p| p + 1), "open": o.open, "children": bookmark_tree(&o.children, &path) })
         })
         .collect()
+}
+
+/// One page's transition settings as tool output (1-based page number).
+fn transition_json(index: usize, p: &pdfcraft_engine::PageTransition) -> Value {
+    use pdfcraft_engine::{Dimension, Direction, Motion};
+    let mut v = json!({ "page": index + 1, "style": "none", "advance": p.advance });
+    if let Some(t) = &p.transition {
+        v["style"] = json!(t.style.pdf_name());
+        v["duration"] = json!(t.duration);
+        v["dimension"] = json!(if t.dimension == Dimension::Vertical { "vertical" } else { "horizontal" });
+        v["motion"] = json!(if t.motion == Motion::Outward { "outward" } else { "inward" });
+        v["direction"] = match t.direction {
+            Direction::Angle(a) => json!(a),
+            Direction::None => json!("none"),
+        };
+        v["scale"] = json!(t.scale);
+        v["opaque"] = json!(t.opaque);
+    }
+    v
 }
 
 fn one_based(pages: &[i64]) -> Result<Vec<usize>> {
