@@ -156,7 +156,15 @@ pub fn tools() -> Vec<ToolDef> {
     vec![
         t("doc_open", "Open a PDF", "Open a PDF file and return its document id, page count and whether it can be edited.")
             .cmd("file.open")
-            .with(schema(json!({ "path": { "type": "string" }, "password": { "type": "string", "description": "User or owner password for encrypted files." } }), &["path"])),
+            .with(schema(
+                json!({
+                    "path": { "type": "string" },
+                    "password": { "type": "string", "description": "User or owner password for encrypted files." },
+                    "certificate": { "type": "string", "description": "A digital ID file (.p12/.pfx) for a certificate-encrypted document: its certificate must be one of the recipients, whose permissions then apply. The private key is not kept." },
+                    "certificate_password": { "type": "string", "description": "The digital ID file password (default empty). Never echoed." },
+                }),
+                &["path"],
+            )),
         t("doc_list", "List open documents", "List the open documents with their ids, page counts and unsaved state.").ro().with(schema(json!({}), &[])),
         t("doc_info", "Inspect a document", "Metadata, page sizes and labels, bookmarks, annotations, form fields, links, layers, attachments, fonts, security and repair notes.")
             .ro()
@@ -785,7 +793,39 @@ pub fn tools() -> Vec<ToolDef> {
             }),
             &["doc"],
         )),
-        t("doc_unprotect", "Remove security", "Remove password security (the document must have been opened with its permissions password, or have none). Applied by the next doc_save. Undoable.")
+        t(
+            "security_protect_certificates",
+            "Protect with certificates",
+            "Encrypt the document for recipient certificates (public-key security, ISO 32000-2 §7.6.5, adbe.pkcs7.s5): it then opens only with a recipient's digital ID (doc_open with certificate). Each recipient is a certificate file (.cer/.crt/.pem/.der) or a digital ID (.p12/.pfx, with password; only its certificate is used) with its own permissions; change_security makes a recipient owner-equivalent (may change or remove security, everything allowed). Include yourself with change_security, or nobody can change the security later. RSA certificates only. Applied by the next doc_save (a full rewrite). Undoable.",
+        )
+        .with(schema(
+            json!({
+                "doc": doc(),
+                "recipients": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 256,
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "certificate": { "type": "string", "description": "Certificate or digital ID file (relative to --root when set)." },
+                            "password": { "type": "string", "description": "Password of a .p12/.pfx file." },
+                            "printing": { "type": "string", "enum": ["none", "low", "high"], "description": "Default high." },
+                            "changes": { "type": "string", "enum": ["none", "pages", "fill-sign", "comment-fill-sign", "any-except-extract"], "description": "Default none." },
+                            "copy": { "type": "boolean", "description": "Allow copying text and images (default false)." },
+                            "accessibility": { "type": "boolean", "description": "Allow screen readers (default true)." },
+                            "change_security": { "type": "boolean", "description": "Owner-equivalent: change or remove security, every permission (default false)." },
+                        },
+                        "required": ["certificate"],
+                        "additionalProperties": false,
+                    },
+                },
+                "compatibility": { "type": "string", "enum": ["aes-256", "aes-128"], "description": "Default aes-256 (Acrobat X and later)." },
+                "encrypt_metadata": { "type": "boolean", "description": "Default true." },
+            }),
+            &["doc", "recipients"],
+        )),
+        t("doc_unprotect", "Remove security", "Remove password or certificate security (the document must have been opened with its permissions password, or have none; certificate security needs a recipient allowed to change security). Applied by the next doc_save. Undoable.")
             .cmd("protect.remove")
             .destructive()
             .with(schema(json!({ "doc": doc() }), &["doc"])),

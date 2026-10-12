@@ -259,11 +259,11 @@ title = "Open certificate-encrypted (public-key handler) documents"
 area = "A"
 tier = "P1"
 milestone = "M8"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["doc_open"]
+evidence = ["crates/crypt/src/tests.rs::public_key_file_keys_follow_the_spec_and_recipients_get_their_permissions", "crates/cos/tests/encryption.rs::certificate_security_round_trips_for_each_recipient", "crates/sign/tests/envelope.rs::openssl_cms_agrees", "crates/engine/src/tests.rs::openssl_recovers_the_seed_and_the_file_key_matches", "crates/automation/tests/automation.rs::certificate_security_through_tools"]
+notes = "Adobe.PubSec opened (adbe.pkcs7.s5 with AES-128/AES-256 tested; s4 and RC4 are read but untested) with a .p12/.pfx digital ID (doc_open certificate): CMS KeyTransRecipientInfo by issuer+serial or SKI, RSA PKCS#1 v1.5 or OAEP-SHA-1 (aws-lc-rs), AES and 3DES content tested (RC2 untested). Viewed through an in-memory decrypted copy (the bootstrap renderer reads only password security); saves re-encrypt. Cross-checked with openssl cms only (no Acrobat-made fixtures). Missing: OS key stores/smart cards, ECDH (KeyAgree) recipients, XFA layout on open, desktop UI."
 
 [[feature]]
 id = "core.incremental-save"
@@ -5395,11 +5395,11 @@ title = "Encrypt with certificates for recipients"
 area = "G"
 tier = "P1"
 milestone = "M8"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["security_protect_certificates"]
+evidence = ["crates/engine/src/tests.rs::certificate_security_protects_saves_and_opens_with_each_recipients_permissions", "crates/sign/tests/envelope.rs::openssl_cms_agrees", "crates/automation/tests/automation.rs::certificate_security_through_tools"]
+notes = "adbe.pkcs7.s5, AES-256 (/V 5) or AES-128 (/V 4), one CMS envelope (AES-256-CBC, RSA PKCS#1 v1.5) per permission set; full rewrite on save. RSA recipient certificates only; no desktop UI, no LDAP."
 
 [[feature]]
 id = "protect.recipient-permissions"
@@ -5407,11 +5407,11 @@ title = "Per-recipient permissions for certificate security"
 area = "G"
 tier = "P1"
 milestone = "M8"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["security_protect_certificates"]
+evidence = ["crates/crypt/src/tests.rs::public_key_file_keys_follow_the_spec_and_recipients_get_their_permissions", "crates/engine/src/tests.rs::certificate_security_protects_saves_and_opens_with_each_recipients_permissions", "crates/automation/tests/automation.rs::certificate_security_through_tools"]
+notes = "Printing/changes/copy/accessibility per recipient (Table 24); change_security (bit 2) makes a recipient owner-equivalent (only such recipients may change or remove certificate security). No desktop UI."
 
 [[feature]]
 id = "protect.recipient-ldap"

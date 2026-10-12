@@ -4693,3 +4693,93 @@ fn replace_text_round_trips_and_summaries_show_the_page() {
     }
     assert!(matches!(a.call("comments_summarize", &json!({ "doc": copy, "layout": "poster" })), Err(ToolError::InvalidArgs(_))));
 }
+
+/// Certificate (public-key) security end to end through the tools: digital IDs made with
+/// sign_id_create (throwaway, generated at run time), protect for two recipients with their own
+/// permissions, save, then open in fresh sessions with each recipient's digital ID.
+#[test]
+fn certificate_security_through_tools() {
+    let dir = workdir("certsec");
+    let mut a = auto(&dir);
+    for (name, file) in [("Boss Test", "boss.p12"), ("Reader Test", "reader.p12"), ("Stranger Test", "stranger.p12")] {
+        ok(&mut a, "sign_id_create", json!({ "name": name, "password": "id-secret", "path": file }));
+    }
+    // One recipient as a PEM certificate file (no private key needed to encrypt for it).
+    let reader = pdfcraft_engine::sign::pkcs12::open(&std::fs::read(dir.join("reader.p12")).unwrap(), "id-secret").unwrap();
+    std::fs::write(dir.join("reader.pem"), pdfcraft_engine::sign::x509::to_pem(&reader.certificate)).unwrap();
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    // Refused: no recipients, a wrong digital ID password, an unknown option.
+    assert!(a.call("security_protect_certificates", &json!({ "doc": doc, "recipients": [] })).is_err());
+    let wrong = a.call("security_protect_certificates", &json!({ "doc": doc, "recipients": [{ "certificate": "boss.p12", "password": "nope" }] }));
+    assert!(matches!(wrong, Err(ToolError::InvalidArgs(m)) if m.contains("recipients[0]")));
+    assert!(
+        a.call("security_protect_certificates", &json!({ "doc": doc, "recipients": [{ "certificate": "reader.pem", "printing": "sometimes" }] }))
+            .is_err()
+    );
+    assert_eq!(ok(&mut a, "doc_info", json!({ "doc": doc }))["security"]["protected"], false, "refused calls change nothing");
+    let r = ok(
+        &mut a,
+        "security_protect_certificates",
+        json!({ "doc": doc, "recipients": [
+            { "certificate": "boss.p12", "password": "id-secret", "change_security": true },
+            { "certificate": "reader.pem", "printing": "low", "changes": "comment-fill-sign" },
+        ] }),
+    );
+    assert!(!r.to_string().contains("id-secret"), "passwords are never echoed");
+    assert_eq!((r["security"]["handler"].as_str(), r["security"]["pending"].as_bool()), (Some("certificate"), Some(true)));
+    assert_eq!(r["security"]["method"], "Certificate security (AES, 256-bit)");
+    assert_eq!(r["recipients"][0]["name"], "Boss Test");
+    assert_eq!(r["recipients"][1]["permissions"]["printing"], "low");
+    assert_eq!(r["recipients"][1]["permissions"]["change_security"], false);
+    assert_eq!(page_text(&mut a, doc), ["Page 1", "Page 2", "Page 3"], "still viewable in this session");
+    ok(&mut a, "doc_save", json!({ "doc": doc, "path": "cert.pdf" }));
+    let raw = std::fs::read(dir.join("cert.pdf")).unwrap();
+    let text = String::from_utf8_lossy(&raw);
+    assert!(text.contains("/Adobe.PubSec") && text.contains("/adbe.pkcs7.s5") && !text.contains("(Page 1)"));
+    // A fresh session: passwords and strangers can't open it.
+    let mut b = auto(&dir);
+    let fail = |r: Result<Vec<pdfcraft_automation::Content>, ToolError>| match r {
+        Err(e) => e.to_string(),
+        Ok(_) => panic!("expected an error"),
+    };
+    assert!(fail(b.call("doc_open", &json!({ "path": "cert.pdf" }))).contains("digital ID"));
+    assert!(
+        fail(b.call("doc_open", &json!({ "path": "cert.pdf", "certificate": "stranger.p12", "certificate_password": "id-secret" })))
+            .contains("not one of the recipients")
+    );
+    assert!(
+        fail(b.call("doc_open", &json!({ "path": "cert.pdf", "certificate": "reader.p12", "certificate_password": "nope" })))
+            .contains("password is incorrect")
+    );
+    assert!(b.call("doc_open", &json!({ "path": "cert.pdf", "certificate": "reader.p12", "password": "x" })).is_err());
+    // The reader: its permissions, nothing more.
+    let re = ok(&mut b, "doc_open", json!({ "path": "cert.pdf", "certificate": "reader.p12", "certificate_password": "id-secret" }));
+    assert!(!re.to_string().contains("id-secret"));
+    let s = &re["security"];
+    assert_eq!(
+        (s["handler"].as_str(), s["printing"].as_str(), s["annotate"].as_bool(), s["copy"].as_bool(), s["assemble"].as_bool()),
+        (Some("certificate"), Some("low"), Some(true), Some(false), Some(false))
+    );
+    let re = re["doc"].as_u64().unwrap();
+    assert_eq!(page_text(&mut b, re), ["Page 1", "Page 2", "Page 3"]);
+    assert!(b.call("page_delete", &json!({ "doc": re, "pages": [1] })).is_err());
+    assert!(b.call("doc_unprotect", &json!({ "doc": re })).is_err());
+    ok(&mut b, "comment_add", json!({ "doc": re, "page": 1, "type": "note", "at": [10, 10], "contents": "reviewed by reader" }));
+    ok(&mut b, "doc_save", json!({ "doc": re, "path": "commented.pdf" }));
+    assert!(
+        !String::from_utf8_lossy(&std::fs::read(dir.join("commented.pdf")).unwrap()).contains("reviewed by reader"),
+        "the comment is encrypted too"
+    );
+    // The boss is owner-equivalent: sees the comment and may remove the security.
+    let boss = ok(&mut b, "doc_open", json!({ "path": "commented.pdf", "certificate": "boss.p12", "certificate_password": "id-secret" }))["doc"]
+        .as_u64()
+        .unwrap();
+    assert!(ok(&mut b, "comment_list", json!({ "doc": boss })).to_string().contains("reviewed by reader"));
+    assert_eq!(ok(&mut b, "doc_unprotect", json!({ "doc": boss }))["security"]["protected"], false);
+    ok(&mut b, "doc_save", json!({ "doc": boss, "path": "open.pdf" }));
+    let mut c = auto(&dir);
+    let plain = ok(&mut c, "doc_open", json!({ "path": "open.pdf" }))["doc"].as_u64().unwrap();
+    assert_eq!(page_text(&mut c, plain), ["Page 1", "Page 2", "Page 3"]);
+    // An ordinary document opened with a digital ID just opens.
+    ok(&mut c, "doc_open", json!({ "path": "b.pdf", "certificate": "boss.p12", "certificate_password": "id-secret" }));
+}

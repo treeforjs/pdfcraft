@@ -12,6 +12,7 @@
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
 mod a11y;
+mod certsec;
 mod comments;
 mod compare;
 mod content;
@@ -286,6 +287,7 @@ impl Automation {
                 self.apply(&a, Edit::SetBookmarkPage { path, page })?
             }
             "doc_protect" => self.doc_protect(&a)?,
+            "security_protect_certificates" => self.protect_certificates(&a)?,
             "page_replace" => {
                 let pages = self.pages(&a, "pages")?;
                 let path = self.resolve(a.str("path")?, false)?;
@@ -751,6 +753,12 @@ impl Automation {
     }
 
     fn doc_open(&mut self, a: &Args) -> Result<Value> {
+        if a.get("certificate").is_some() {
+            return self.open_with_certificate(a);
+        }
+        if a.get("certificate_password").is_some() {
+            return Err(ToolError::InvalidArgs("certificate_password needs certificate".into()));
+        }
         let path = self.resolve(a.str("path")?, false)?;
         let bytes = std::fs::read(&path).map_err(|e| failed(format!("{}: {e}", path.display())))?;
         let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
@@ -1935,6 +1943,7 @@ fn security(d: &Document) -> Value {
             let p = s.permissions;
             json!({
                 "protected": true,
+                "handler": if d.certificate_secured() { "certificate" } else { "password" },
                 "method": s.method,
                 "pending": s.pending,
                 "printing": if !p.print() { "none" } else if p.print_high_quality() { "high" } else { "low" },

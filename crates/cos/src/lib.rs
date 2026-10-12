@@ -25,8 +25,11 @@ pub use bytes::Bytes;
 pub use document::{Document, Revision, SourceIdentity, XrefEntry};
 pub use object::{Dict, MAX_DECODED, Name, ObjRef, Object, PdfString, Stream};
 pub use parser::{Lexer, parse_indirect};
-pub use pdfcraft_crypt::{Algorithm, Auth, Method as CryptMethod, NewEncryption, Permissions, SecurityHandler};
-pub use writer::{SaveOptions, pdf_date, serialize, write_full, write_incremental};
+pub use pdfcraft_crypt::{
+    Algorithm, Auth, Credential, Method as CryptMethod, NewEncryption, NewPublicKeyEncryption, Permissions, RecipientKey, SecurityHandler,
+    envelope_content,
+};
+pub use writer::{SaveOptions, pdf_date, serialize, write_decrypted_view, write_full, write_incremental};
 
 #[derive(Debug, thiserror::Error, Clone, PartialEq)]
 pub enum CosError {
@@ -44,6 +47,10 @@ pub enum CosError {
     NeedsPassword,
     #[error("the password is incorrect")]
     WrongPassword,
+    #[error("the document is encrypted for specific recipients (certificate security); open it with a digital ID")]
+    NeedsCertificate,
+    #[error("the digital ID is not one of the document's recipients")]
+    NotARecipient,
     #[error("unsupported security: {0}")]
     Security(String),
     #[error("internal lock poisoned")]

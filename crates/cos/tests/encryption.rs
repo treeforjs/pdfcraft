@@ -197,6 +197,95 @@ fn unencrypted_metadata_is_left_readable() {
     let _ = ObjRef::new(1, 0);
 }
 
+// ── Certificate (public-key) security, §7.6.5 ─────────────────────────────────────────────────
+
+/// Stand-in recipient keys: "envelopes" are `id || content`. Real CMS envelopes are tested in
+/// pdfcraft-sign and end to end in the engine and automation tests.
+struct FakeKey(u8);
+
+impl pdfcraft_cos::RecipientKey for FakeKey {
+    fn open_envelope(&self, envelope: &[u8]) -> Option<Vec<u8>> {
+        let (&id, content) = envelope.split_first()?;
+        (id == self.0).then(|| content.to_vec())
+    }
+}
+
+fn certificate_protected(algorithm: Algorithm, encrypt_metadata: bool) -> Vec<u8> {
+    use pdfcraft_cos::{NewPublicKeyEncryption, envelope_content};
+    let seed = [5u8; 20];
+    let envelope = |id: u8, p: i32| [vec![id], envelope_content(&seed, p)].concat();
+    let mut doc = Document::open(Arc::new(fixture())).unwrap();
+    // Recipient 1 may do anything (bit 2: owner-equivalent); recipient 2 may only print.
+    let params = NewPublicKeyEncryption { algorithm, encrypt_metadata, seed, recipients: vec![envelope(1, 0b10 | 0xF3C), envelope(2, 0b100)] };
+    doc.set_public_key_encryption(&params).unwrap();
+    write_full(&doc, &SaveOptions::default()).unwrap()
+}
+
+fn replace_bytes(data: &[u8], from: &[u8], to: &[u8]) -> Vec<u8> {
+    let at = data.windows(from.len()).position(|w| w == from).unwrap();
+    [&data[..at], to, &data[at + from.len()..]].concat()
+}
+
+#[test]
+fn certificate_security_round_trips_for_each_recipient() {
+    use pdfcraft_cos::Credential;
+    for (algorithm, encrypt_metadata) in [(Algorithm::Aes256, true), (Algorithm::Aes128, false)] {
+        let bytes = Arc::new(certificate_protected(algorithm, encrypt_metadata));
+        let raw = String::from_utf8_lossy(&bytes);
+        assert!(!raw.contains("Secret page") && !raw.contains("Quarterly"), "{algorithm:?}: plaintext leaked");
+        assert!(raw.contains("/Adobe.PubSec") && raw.contains("/adbe.pkcs7.s5") && raw.contains("/DefaultCryptFilter"));
+        assert_eq!(raw.contains("/EncryptMetadata false"), !encrypt_metadata);
+        // Passwords can't open it; strangers' keys neither.
+        assert!(matches!(Document::open(bytes.clone()), Err(CosError::NeedsCertificate)));
+        assert!(matches!(Document::open_with_password(bytes.clone(), Some("guess")), Err(CosError::NeedsCertificate)));
+        assert!(matches!(Document::open_with_credential(bytes.clone(), Credential::Recipient(&FakeKey(9))), Err(CosError::NotARecipient)));
+        let owner = Document::open_with_credential(bytes.clone(), Credential::Recipient(&FakeKey(1))).unwrap();
+        let user = Document::open_with_credential(bytes.clone(), Credential::Recipient(&FakeKey(2))).unwrap();
+        for doc in [&owner, &user] {
+            assert_eq!(content(doc), SECRET);
+            assert_eq!(title(doc).as_deref(), Some("Quarterly numbers"));
+        }
+        assert_eq!(owner.security().unwrap().auth(), Auth::Owner);
+        let p = user.permissions().unwrap();
+        assert_eq!(user.security().unwrap().auth(), Auth::User);
+        assert!(p.print() && !p.modify() && !p.copy() && !p.annotate());
+        // An incremental edit by a recipient keeps the encryption; the handler reopens it.
+        let mut edited = user.clone();
+        let info = edited.trailer().reference(b"Info").unwrap();
+        edited.update_dict(info, |d| d.set(b"Title".to_vec(), Object::String(PdfString { bytes: b"Revised".to_vec(), hex: false }))).unwrap();
+        let saved = Arc::new(write_incremental(&edited, &SaveOptions::default()).unwrap());
+        assert!(!String::from_utf8_lossy(&saved).contains("Revised"), "the new revision is encrypted too");
+        let again = Document::open_with_credential(saved.clone(), Credential::Handler(user.security().unwrap())).unwrap();
+        assert_eq!(title(&again).as_deref(), Some("Revised"));
+        assert_eq!(again.permissions(), user.permissions());
+        let other = Document::open_with_credential(saved, Credential::Recipient(&FakeKey(1))).unwrap();
+        assert_eq!(title(&other).as_deref(), Some("Revised"));
+        // The decrypted view (for the renderer) opens without any credential, same numbers.
+        let view = Arc::new(pdfcraft_cos::write_decrypted_view(&again).unwrap());
+        let plain = Document::open(view).unwrap();
+        assert!(plain.security().is_none());
+        assert_eq!((content(&plain), title(&plain).as_deref()), (SECRET.to_string(), Some("Revised")));
+        assert_eq!(plain.root(), again.root());
+    }
+}
+
+#[test]
+fn hostile_public_key_dictionaries_fail_cleanly() {
+    use pdfcraft_cos::Credential;
+    let bytes = certificate_protected(Algorithm::Aes256, true);
+    // A missing /Recipients or a bogus /V (same-length edits, so the file still parses):
+    // security errors, no panic.
+    for (from, to) in [(&b"/Recipients"[..], &b"/Nothing123"[..]), (b"/V 5", b"/V 7")] {
+        let tampered = Arc::new(replace_bytes(&bytes, from, to));
+        let r = Document::open_with_credential(tampered, Credential::Recipient(&FakeKey(1)));
+        assert!(matches!(r, Err(CosError::Security(_))), "{from:?} → {to:?}: {r:?}");
+    }
+    // /Recipients that is not an array of strings. This edit shifts every offset after it and
+    // the catalog sits in an encrypted object stream, so it is refused one way or another.
+    let tampered = Arc::new(replace_bytes(&bytes, b"/Recipients [", b"/Recipients 5 /X ["));
+    assert!(Document::open_with_credential(tampered, Credential::Recipient(&FakeKey(1))).is_err());
+}
+
 /// Second independent oracle when qpdf is installed: it must accept both passwords, identify
 /// the owner password, and find no structural errors.
 #[test]

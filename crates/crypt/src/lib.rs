@@ -9,13 +9,24 @@
 //! including `Identity` and embedded-file-only encryption. It can also *create* encryption
 //! dictionaries, which security settings (M8) and our own test fixtures use.
 //!
+//! It also implements the key derivation of the public-key security handler (§7.6.5,
+//! `/Filter /Adobe.PubSec`, SubFilters `adbe.pkcs7.s4` and `adbe.pkcs7.s5`): the caller opens
+//! the PKCS #7 envelopes in `/Recipients` (this crate has no CMS or RSA code; see
+//! [`RecipientKey`]) and the handler derives the file key and the recipient's permissions.
+//!
 //! The crate knows nothing about the COS object model. Callers pass in the values of the
 //! `/Encrypt` dictionary and the first element of the trailer `/ID`.
 
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
 mod aes_cbc;
+mod pubsec;
 mod rc4;
+
+pub use pubsec::{
+    MAX_RECIPIENT_BYTES, MAX_RECIPIENTS, NewPublicKeyEncryption, PUBLIC_KEY_FILTER, RecipientKey, SUBFILTER_S5, create_public_key, envelope_content,
+    permission_bytes,
+};
 
 use md5::{Digest as _, Md5};
 use sha2::{Sha256, Sha384, Sha512};
@@ -31,6 +42,38 @@ pub enum CryptError {
     Unsupported(String),
     #[error("malformed encryption dictionary: {0}")]
     Malformed(String),
+    /// The document is encrypted for certificate holders (public-key security): it opens with
+    /// a recipient's private key, not a password.
+    #[error("the document is encrypted for specific recipients (certificate security); open it with a digital ID")]
+    NeedsCertificate,
+    /// None of the document's `/Recipients` is addressed to the key that was offered.
+    #[error("the digital ID is not one of the document's recipients")]
+    NotRecipient,
+}
+
+/// What opens an encrypted document.
+#[derive(Clone, Copy)]
+pub enum Credential<'a> {
+    /// A user or owner password of the standard handler (`None`: the empty password).
+    Password(Option<&'a str>),
+    /// A recipient's private key, for the public-key handler (§7.6.5).
+    Recipient(&'a dyn RecipientKey),
+    /// A handler already authenticated for the same `/Encrypt` settings (the file was saved
+    /// with them): its key and permissions are reused. Lets an application reopen what it just
+    /// saved without asking for the private key again.
+    Handler(&'a SecurityHandler),
+}
+
+impl std::fmt::Debug for Credential<'_> {
+    // Never print passwords or keys.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Credential::Password(None) => "Password(none)",
+            Credential::Password(Some(_)) => "Password(…)",
+            Credential::Recipient(_) => "Recipient(…)",
+            Credential::Handler(_) => "Handler(…)",
+        })
+    }
 }
 
 /// 32-byte padding string used by revisions 2–4 (§7.6.4.3.2, step a).
@@ -55,8 +98,13 @@ pub enum Method {
 /// The values of an `/Encrypt` dictionary that the handler needs.
 #[derive(Clone, Debug, PartialEq, Default)]
 pub struct EncryptDict {
-    /// `/Filter` (must be `Standard`).
+    /// `/Filter`: `Standard`, or `Adobe.PubSec` for the public-key handler.
     pub filter: Vec<u8>,
+    /// `/SubFilter` (public-key handler: `adbe.pkcs7.s4` or `adbe.pkcs7.s5`).
+    pub sub_filter: Vec<u8>,
+    /// Public-key handler: the PKCS #7 envelopes of `/Recipients`, in file order (for
+    /// `adbe.pkcs7.s5` those of the crypt filter that `/StmF` names).
+    pub recipients: Vec<Vec<u8>>,
     pub v: i64,
     pub r: i64,
     /// Key length in bits (`/Length`; 40 when absent).
@@ -144,6 +192,30 @@ impl SecurityHandler {
     /// Authenticate with `password` (tried as owner password, then user password). `None`
     /// tries the empty password, which opens documents that only have an owner password.
     pub fn open(dict: EncryptDict, id0: &[u8], password: Option<&str>) -> Result<Self, CryptError> {
+        Self::open_with(dict, id0, Credential::Password(password))
+    }
+
+    /// Authenticate with any [`Credential`]. A password on a public-key document fails with
+    /// [`CryptError::NeedsCertificate`]; a recipient key on a password document tries the empty
+    /// password (and otherwise fails with [`CryptError::WrongPassword`]).
+    pub fn open_with(dict: EncryptDict, id0: &[u8], credential: Credential) -> Result<Self, CryptError> {
+        match credential {
+            Credential::Handler(known) if same_encryption(&dict, &known.dict) => Ok(known.clone()),
+            Credential::Handler(_) if dict.filter == PUBLIC_KEY_FILTER => Err(CryptError::NotRecipient),
+            Credential::Handler(_) => Err(CryptError::WrongPassword),
+            Credential::Recipient(key) if dict.filter == PUBLIC_KEY_FILTER => pubsec::open(dict, key),
+            Credential::Password(_) if dict.filter == PUBLIC_KEY_FILTER => Err(CryptError::NeedsCertificate),
+            Credential::Recipient(_) => Self::open_password(dict, id0, None),
+            Credential::Password(password) => Self::open_password(dict, id0, password),
+        }
+    }
+
+    /// Whether this is the public-key handler (`/Filter /Adobe.PubSec`).
+    pub fn is_public_key(&self) -> bool {
+        self.dict.filter == PUBLIC_KEY_FILTER
+    }
+
+    fn open_password(dict: EncryptDict, id0: &[u8], password: Option<&str>) -> Result<Self, CryptError> {
         if !dict.filter.is_empty() && dict.filter != b"Standard" {
             return Err(CryptError::Unsupported(format!("/Filter /{}", String::from_utf8_lossy(&dict.filter))));
         }
@@ -299,6 +371,30 @@ impl SecurityHandler {
     pub fn encrypts_strings(&self) -> bool {
         self.method(None) != Method::Identity
     }
+}
+
+/// Whether two `/Encrypt` dictionaries describe the same encryption (so the same file key).
+/// The public-key handler's `/P` is per recipient (it comes from the envelope, not the file),
+/// so it is not compared there.
+fn same_encryption(a: &EncryptDict, b: &EncryptDict) -> bool {
+    let p_matches = a.filter == PUBLIC_KEY_FILTER || a.p == b.p;
+    p_matches
+        && a.filter == b.filter
+        && a.sub_filter == b.sub_filter
+        && a.v == b.v
+        && a.r == b.r
+        && a.length_bits == b.length_bits
+        && a.o == b.o
+        && a.u == b.u
+        && a.oe == b.oe
+        && a.ue == b.ue
+        && a.perms == b.perms
+        && a.encrypt_metadata == b.encrypt_metadata
+        && a.crypt_filters == b.crypt_filters
+        && a.stm_f == b.stm_f
+        && a.str_f == b.str_f
+        && a.ef_f == b.ef_f
+        && a.recipients == b.recipients
 }
 
 // ── Passwords ──────────────────────────────────────────────────────────────────────────────────

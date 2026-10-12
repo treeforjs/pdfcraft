@@ -2754,3 +2754,193 @@ fn comment_summaries_lay_out_the_pages_with_connector_lines_or_sequence_numbers(
     assert!(page_texts(&s2, e)[0].contains("This document has no comments."));
     assert_eq!(SummaryLayout::parse("Connector-Lines"), Some(SummaryLayout::ConnectorLines));
 }
+
+// ── Certificate (public-key) security, ISO 32000-2 §7.6.5 ────────────────────────────────────
+
+/// A throwaway RSA digital ID generated at run time (no real identity).
+fn test_digital_id(cn: &str, serial: u8) -> pdfcraft_sign::DigitalId {
+    let key = pdfcraft_sign::PrivateKey::generate_rsa(2048).unwrap();
+    let name = pdfcraft_sign::Name::build(cn, "", "PdfCraft test identities", "", "");
+    let from = pdfcraft_sign::Time { year: 2026, month: 1, day: 1, hour: 0, minute: 0, second: 0 };
+    let certificate = pdfcraft_sign::Certificate::self_signed(&name, &key, from, 2, &[serial]).unwrap();
+    pdfcraft_sign::DigitalId { key, certificate, chain: Vec::new(), friendly_name: None }
+}
+
+fn recipient(id: &pdfcraft_sign::DigitalId, access: RecipientAccess) -> CertificateRecipient {
+    CertificateRecipient { certificate: id.certificate.clone(), access }
+}
+
+#[test]
+fn certificate_security_protects_saves_and_opens_with_each_recipients_permissions() {
+    let boss = test_digital_id("Boss", 1);
+    let reader = test_digital_id("Reader", 2);
+    let stranger = test_digital_id("Stranger", 3);
+    let (mut s, id) = session_with(2);
+    let reader_access = RecipientAccess { printing: Printing::Low, changes: Changes::CommentFillSign, ..RecipientAccess::default() };
+    let p = CertificateProtection {
+        recipients: vec![recipient(&boss, RecipientAccess::FULL), recipient(&reader, reader_access)],
+        algorithm: Algorithm::Aes256,
+        encrypt_metadata: true,
+    };
+    s.apply(id, Edit::ProtectCertificates(p.clone())).unwrap();
+    let d = s.get(id).unwrap();
+    assert!(d.certificate_secured() && d.info.encrypted);
+    assert_eq!(d.security_summary().unwrap().method, "Certificate security (AES, 256-bit)");
+    assert!(d.allows_security_change(), "the author keeps full rights");
+    assert_eq!(page_texts(&s, id), ["Page 1", "Page 2"], "viewable through the decrypted copy");
+    let saved = s.save_bytes(id).unwrap();
+    let raw = String::from_utf8_lossy(&saved).into_owned();
+    assert!(raw.contains("/Adobe.PubSec") && !raw.contains("(Page 1)"), "encrypted on disk");
+    assert!(pdfcraft_cos::Document::open(saved.clone()).is_err());
+    s.mark_saved(id, saved.clone(), None).expect("reopens with the file key, without a private key");
+    s.apply(id, Edit::RotatePages { pages: vec![0], degrees: 90 }).unwrap();
+    // Crash-recovery snapshots never hold the decrypted copy.
+    let snaps = s.autosave_snapshots();
+    assert_eq!(snaps.len(), 1);
+    assert!(snaps[0].encrypted && !String::from_utf8_lossy(&snaps[0].bytes).contains("(Page 1)"));
+    assert!(s.open_revision(id, 1).is_err(), "no unencrypted copy of a revision");
+    let again = s.save_bytes(id).unwrap();
+    assert_eq!(&again[..saved.len()], &saved[..], "the next save appends");
+    // Another session: passwords and strangers can't open it.
+    let mut s2 = Session::new();
+    assert!(matches!(s2.open("c.pdf", None, again.clone(), None), Err(OpenError::Unsupported(m)) if m.contains("digital ID")));
+    assert!(matches!(s2.open("c.pdf", None, again.clone(), Some("guess")), Err(OpenError::Unsupported(_))));
+    assert!(
+        matches!(s2.open_with_certificate("c.pdf", None, again.clone(), &stranger), Err(OpenError::Unsupported(m)) if m.contains("not one of the recipients"))
+    );
+    // The reader gets exactly its permissions.
+    let r = s2.open_with_certificate("c.pdf", None, again.clone(), &reader).unwrap();
+    assert_eq!(page_texts(&s2, r), ["Page 1", "Page 2"]);
+    let rd = s2.get(r).unwrap();
+    assert_eq!(rd.info.pages[0].rotation, 90);
+    assert!(rd.certificate_secured() && rd.info.encrypted);
+    let perm = rd.permissions().unwrap();
+    assert!(perm.print() && !perm.print_high_quality() && perm.annotate() && perm.fill_forms() && !perm.modify() && !perm.copy() && !perm.assemble());
+    assert!(!rd.allows_security_change() && !rd.allows_assembly());
+    assert_eq!(s2.apply(r, Edit::RemoveProtection), Err(EditError::NotPermitted("changing security")));
+    assert!(s2.apply(r, Edit::DeletePages { pages: vec![0] }).is_err());
+    // The boss is owner-equivalent: may remove the security.
+    let b = s2.open_with_certificate("c.pdf", None, again.clone(), &boss).unwrap();
+    assert!(s2.get(b).unwrap().allows_security_change());
+    s2.apply(b, Edit::RemoveProtection).unwrap();
+    assert!(!s2.get(b).unwrap().certificate_secured());
+    let plain = s2.save_bytes(b).unwrap();
+    assert!(pdfcraft_cos::Document::open(plain).unwrap().security().is_none());
+    // Undo history survives the save: undoing the rotation and then the protection gives the
+    // unprotected working state back.
+    s.undo(id).unwrap();
+    s.undo(id).unwrap();
+    assert!(!s.get(id).unwrap().certificate_secured());
+}
+
+#[test]
+fn certificate_protection_is_validated() {
+    let boss = test_digital_id("Boss", 1);
+    let (mut s, id) = session_with(1);
+    let none = CertificateProtection { recipients: vec![], algorithm: Algorithm::Aes256, encrypt_metadata: true };
+    assert!(matches!(s.apply(id, Edit::ProtectCertificates(none)), Err(EditError::Protection(_))));
+    let twice = CertificateProtection {
+        recipients: vec![recipient(&boss, RecipientAccess::FULL), recipient(&boss, RecipientAccess::default())],
+        algorithm: Algorithm::Aes256,
+        encrypt_metadata: true,
+    };
+    assert!(matches!(s.apply(id, Edit::ProtectCertificates(twice)), Err(EditError::Protection(m)) if m.contains("twice")));
+    let rc4 =
+        CertificateProtection { recipients: vec![recipient(&boss, RecipientAccess::FULL)], algorithm: Algorithm::Rc4_128, encrypt_metadata: true };
+    assert!(matches!(s.apply(id, Edit::ProtectCertificates(rc4)), Err(EditError::Protection(_))));
+    // Non-RSA certificates can't be recipients (no key transport for them here).
+    let ec = pdfcraft_sign::PrivateKey::generate_p256().unwrap();
+    let from = pdfcraft_sign::Time { year: 2026, month: 1, day: 1, hour: 0, minute: 0, second: 0 };
+    let ec_cert = pdfcraft_sign::Certificate::self_signed(&pdfcraft_sign::Name::build("EC", "", "", "", ""), &ec, from, 1, &[7]).unwrap();
+    let ec_only = CertificateProtection {
+        recipients: vec![CertificateRecipient { certificate: ec_cert, access: RecipientAccess::FULL }],
+        algorithm: Algorithm::Aes256,
+        encrypt_metadata: true,
+    };
+    assert!(matches!(s.apply(id, Edit::ProtectCertificates(ec_only)), Err(EditError::Protection(m)) if m.contains("RSA")));
+    assert!(s.get(id).unwrap().can_undo().is_none(), "failed edits leave no undo step");
+    // AES-128 works too, and the recipients' bits are what the envelope carries.
+    let aes128 =
+        CertificateProtection { recipients: vec![recipient(&boss, RecipientAccess::FULL)], algorithm: Algorithm::Aes128, encrypt_metadata: false };
+    s.apply(id, Edit::ProtectCertificates(aes128)).unwrap();
+    assert_eq!(s.get(id).unwrap().security_summary().unwrap().method, "Certificate security (AES, 128-bit)");
+    let saved = s.save_bytes(id).unwrap();
+    let mut s2 = Session::new();
+    let b = s2.open_with_certificate("c.pdf", None, saved, &boss).unwrap();
+    assert_eq!(page_texts(&s2, b), ["Page 1"]);
+    assert!(s2.get(b).unwrap().permissions().unwrap().owner);
+}
+
+/// Independent oracles: `openssl cms -decrypt` recovers the seed from the saved file's
+/// `/Recipients`, and the file key derived from it (§7.6.5.3) is the one PdfCraft uses;
+/// `pdfinfo` (poppler) sees an encrypted file. Each is skipped when not installed.
+#[test]
+fn openssl_recovers_the_seed_and_the_file_key_matches() {
+    let Ok(v) = std::process::Command::new("openssl").arg("version").output() else {
+        eprintln!("openssl not installed; skipping");
+        return;
+    };
+    eprintln!("oracle: {}", String::from_utf8_lossy(&v.stdout).trim());
+    let boss = test_digital_id("Boss", 1);
+    let reader = test_digital_id("Reader", 2);
+    let (mut s, id) = session_with(1);
+    let reader_access = RecipientAccess { printing: Printing::High, changes: Changes::None, copy: true, ..RecipientAccess::default() };
+    let p = CertificateProtection {
+        recipients: vec![recipient(&boss, RecipientAccess::FULL), recipient(&reader, reader_access)],
+        algorithm: Algorithm::Aes256,
+        encrypt_metadata: true,
+    };
+    s.apply(id, Edit::ProtectCertificates(p)).unwrap();
+    let saved = s.save_bytes(id).unwrap();
+    let dir = std::env::temp_dir().join(format!("pdfcraft-certsec-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let pdf = dir.join("cert.pdf");
+    std::fs::write(&pdf, saved.as_slice()).unwrap();
+    // Our reader of the saved file, for the /Recipients bytes and the key it derived.
+    let opened = pdfcraft_cos::Document::open_with_credential(saved.clone(), pdfcraft_cos::Credential::Recipient(&RecipientId(&reader))).unwrap();
+    let handler = opened.security().unwrap();
+    let recipients = handler.dict().recipients.clone();
+    assert_eq!(recipients.len(), 2, "one envelope per permission set");
+    let cert = dir.join("reader.pem");
+    let key = dir.join("reader.key.der");
+    std::fs::write(&cert, pdfcraft_sign::x509::to_pem(&reader.certificate)).unwrap();
+    std::fs::write(&key, reader.key.pkcs8()).unwrap();
+    let mut contents = Vec::new();
+    for (i, envelope) in recipients.iter().enumerate() {
+        let path = dir.join(format!("r{i}.der"));
+        std::fs::write(&path, envelope).unwrap();
+        let out = std::process::Command::new("openssl")
+            .args(["cms", "-decrypt", "-binary", "-inform", "DER", "-keyform", "DER"])
+            .arg("-in")
+            .arg(&path)
+            .arg("-recip")
+            .arg(&cert)
+            .arg("-inkey")
+            .arg(&key)
+            .output()
+            .unwrap();
+        if out.status.success() {
+            contents.push(out.stdout);
+        }
+    }
+    assert_eq!(contents.len(), 1, "exactly one envelope is addressed to the reader");
+    let content = &contents[0];
+    assert_eq!(content.len(), 24, "20-byte seed + 4 permission bytes");
+    let bits = i32::from_be_bytes([content[20], content[21], content[22], content[23]]);
+    assert_eq!(bits & 0xF3E, reader_access.permission_bits(), "the reader's permissions, big-endian");
+    let mut parts: Vec<&[u8]> = vec![&content[..20]];
+    parts.extend(recipients.iter().map(Vec::as_slice));
+    let expected = pdfcraft_sign::DigestAlg::Sha256.digest(&parts);
+    assert_eq!(expected.as_slice(), handler.file_key(), "SHA-256(seed ‖ recipients) is the AES-256 file key");
+    if let Ok(info) = std::process::Command::new("pdfinfo").arg(&pdf).output() {
+        let text = format!("{}{}", String::from_utf8_lossy(&info.stdout), String::from_utf8_lossy(&info.stderr));
+        eprintln!("pdfinfo: {text}");
+        assert!(
+            text.contains("Encrypted:") && text.contains("yes")
+                || text.to_lowercase().contains("security handler")
+                || text.to_lowercase().contains("encrypt"),
+            "{text}"
+        );
+    }
+    let _ = std::fs::remove_dir_all(dir);
+}

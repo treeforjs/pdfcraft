@@ -353,6 +353,53 @@ pub fn write_full(doc: &Document, opts: &SaveOptions) -> Result<Vec<u8>, CosErro
     Ok(out)
 }
 
+/// The current state of the document (edits included) as an unencrypted file with the same
+/// object numbers and a classic cross-reference table, for readers that cannot decrypt it
+/// themselves (the bootstrap renderer knows only the standard security handler, so it views
+/// certificate-encrypted documents through this). Object and cross-reference streams are
+/// unpacked; objects that cannot be read are left out (they read as null, as before).
+///
+/// It holds the decrypted content: keep it in memory, never save it in place of the document.
+pub fn write_decrypted_view(doc: &Document) -> Result<Vec<u8>, CosError> {
+    if doc.stream_limited() {
+        return Err(CosError::ReadOnlyLimit);
+    }
+    let encrypt = doc.trailer().reference(b"Encrypt").map(|r| r.num);
+    let mut reader = doc.object_reader();
+    let version = doc.version().chars().take(3).collect::<String>();
+    let mut out = Vec::new();
+    let _ = writeln!(out, "%PDF-{version}");
+    out.extend_from_slice(&[b'%', 0xE2, 0xE3, 0xCF, 0xD3, b'\n']);
+    let mut offsets: BTreeMap<u32, (u64, u16, bool)> = BTreeMap::new();
+    for num in doc.object_numbers() {
+        if num == 0 || Some(num) == encrypt {
+            continue;
+        }
+        let generation = doc.generation(num);
+        let Ok(o) = reader.try_get(ObjRef::new(num, generation)) else { continue };
+        let container = matches!(&*o, Object::Stream(s) if matches!(s.dict.name(b"Type"), Some(b"XRef" | b"ObjStm")));
+        if container || matches!(*o, Object::Null) {
+            continue;
+        }
+        offsets.insert(num, (out.len() as u64, generation, true));
+        write_indirect(num, generation, &o, &mut out);
+    }
+    let mut trailer = Dict::new();
+    for key in [&b"Root"[..], b"Info", b"ID"] {
+        if let Some(v) = doc.trailer().get(key) {
+            trailer.set(key.to_vec(), v.clone());
+        }
+    }
+    let size = offsets.keys().next_back().map_or(1, |n| u64::from(*n) + 1);
+    trailer.set(b"Size".to_vec(), Object::Int(size as i64));
+    let xref_at = out.len();
+    write_xref_table(&mut out, &offsets, true);
+    out.extend_from_slice(b"trailer\n");
+    write_dict(&trailer, &mut out);
+    let _ = write!(out, "\nstartxref\n{xref_at}\n%%EOF\n");
+    Ok(out)
+}
+
 /// Object `r` read again for writing. The traversal read it once and only kept its number, so
 /// a second read that fails, finds nothing or finds a different kind of object must fail the
 /// save rather than write `null` in its place.

@@ -32,13 +32,18 @@ pub(crate) fn encrypt_dict(doc: &Document, d: &Dict) -> EncryptDict {
         }
     }
     let v = int(b"V", 0);
+    let stm_f = name(b"StmF");
+    // The crypt filter streams use: `StdCF` for the standard handler, usually
+    // `DefaultCryptFilter` for the public-key handler.
+    let filter_named = |n: &[u8]| -> Option<Dict> {
+        let cf = doc.resolve(d.get(b"CF")?);
+        let f = doc.resolve(cf.as_dict()?.get(n)?);
+        f.as_dict().cloned()
+    };
+    let stream_filter = filter_named(b"StdCF").or_else(|| filter_named(&stm_f));
     // V4: the key length comes from the standard crypt filter's /Length (bytes, or bits in
     // some files); /Length on the dictionary is often a stale 40.
-    let cf_len = d
-        .get(b"CF")
-        .map(|c| doc.resolve(c))
-        .and_then(|c| c.as_dict().and_then(|c| c.get(b"StdCF").map(|f| doc.resolve(f))))
-        .and_then(|f| f.as_dict().and_then(|f| f.int(b"Length")));
+    let cf_len = stream_filter.as_ref().and_then(|f| f.int(b"Length"));
     let length_bits = match (v, cf_len) {
         (5.., _) => 256,
         (4, Some(n)) if n <= 32 => n * 8,
@@ -46,8 +51,29 @@ pub(crate) fn encrypt_dict(doc: &Document, d: &Dict) -> EncryptDict {
         (4, None) => 128,
         _ => int(b"Length", 40),
     };
+    let filter = d.name(b"Filter").map(|n| n.to_vec()).unwrap_or_default();
+    let mut encrypt_metadata = !matches!(d.get(b"EncryptMetadata"), Some(Object::Bool(false)));
+    // Public-key handler (§7.6.5): adbe.pkcs7.s5 keeps /Recipients (and /EncryptMetadata) in
+    // the crypt filter that streams use; adbe.pkcs7.s4 at the top level.
+    let mut recipients = Vec::new();
+    if filter == pdfcraft_crypt::PUBLIC_KEY_FILTER {
+        let in_filter = stream_filter.as_ref().filter(|f| v >= 4 && f.contains(b"Recipients"));
+        if in_filter.is_some_and(|f| matches!(f.get(b"EncryptMetadata"), Some(Object::Bool(false)))) {
+            encrypt_metadata = false;
+        }
+        let source = in_filter.unwrap_or(d);
+        let string = |o: &Object| doc.resolve(o).as_string().map(|s| s.bytes.clone());
+        match source.get(b"Recipients").map(|r| doc.resolve(r)).as_deref() {
+            // One more than the handler accepts, so that too many is reported, not truncated.
+            Some(Object::Array(a)) => recipients = a.iter().take(pdfcraft_crypt::MAX_RECIPIENTS + 1).filter_map(string).collect(),
+            Some(o) => recipients.extend(string(o)),
+            None => {}
+        }
+    }
     EncryptDict {
-        filter: d.name(b"Filter").map(|n| n.to_vec()).unwrap_or_default(),
+        filter,
+        sub_filter: d.name(b"SubFilter").map(|n| n.to_vec()).unwrap_or_default(),
+        recipients,
         v,
         r: int(b"R", 0),
         length_bits,
@@ -57,9 +83,9 @@ pub(crate) fn encrypt_dict(doc: &Document, d: &Dict) -> EncryptDict {
         ue: bytes_of(doc, d, b"UE"),
         perms: bytes_of(doc, d, b"Perms"),
         p: int(b"P", -1) as i32,
-        encrypt_metadata: !matches!(d.get(b"EncryptMetadata"), Some(Object::Bool(false))),
+        encrypt_metadata,
         crypt_filters,
-        stm_f: name(b"StmF"),
+        stm_f,
         str_f: name(b"StrF"),
         ef_f: d.get(b"EFF").and_then(|v| v.as_name()).map(|n| n.to_vec()).unwrap_or_default(),
     }

@@ -184,8 +184,11 @@ fn r6_passwords_are_saslprepped() {
 #[test]
 fn unsupported_handlers_are_reported() {
     let mut d = new(Algorithm::Aes128, "", "o", -1).dict().clone();
-    d.filter = b"Adobe.PubSec".to_vec();
+    d.filter = b"Vendor.Sec".to_vec();
     assert!(matches!(SecurityHandler::open(d.clone(), ID, None), Err(CryptError::Unsupported(_))));
+    // The public-key handler is supported, but a password can't open it.
+    d.filter = b"Adobe.PubSec".to_vec();
+    assert_eq!(SecurityHandler::open(d.clone(), ID, None).unwrap_err(), CryptError::NeedsCertificate);
     d.filter = b"Standard".to_vec();
     d.r = 7;
     assert!(matches!(SecurityHandler::open(d, ID, None), Err(CryptError::Unsupported(_))));
@@ -221,4 +224,118 @@ fn owner_authentication_recovers_the_user_password() {
     }
     let d = new(Algorithm::Rc4_128, "", "owner", -1).dict().clone();
     assert_eq!(SecurityHandler::open(d, ID, Some("owner")).unwrap().recovered_user_password().as_deref(), Some(&b""[..]));
+}
+
+// ── Public-key handler (§7.6.5) ───────────────────────────────────────────────────────────────
+
+/// A stand-in for a recipient's private key: "envelopes" are `id || content`, opened when the
+/// id matches. The CMS side is tested in pdfcraft-sign; here only the key derivation matters.
+struct FakeKey(u8);
+
+impl RecipientKey for FakeKey {
+    fn open_envelope(&self, envelope: &[u8]) -> Option<Vec<u8>> {
+        let (&id, content) = envelope.split_first()?;
+        (id == self.0).then(|| content.to_vec())
+    }
+}
+
+fn fake_envelope(id: u8, seed: &[u8; 20], permissions: i32) -> Vec<u8> {
+    let mut e = vec![id];
+    e.extend(envelope_content(seed, permissions));
+    e
+}
+
+#[test]
+fn public_key_file_keys_follow_the_spec_and_recipients_get_their_permissions() {
+    use sha1::Sha1;
+    let seed = [9u8; 20];
+    let full = fake_envelope(1, &seed, 0b10 | 0xF3C);
+    let print_only = fake_envelope(2, &seed, 0b100);
+    for (algorithm, encrypt_metadata) in
+        [(Algorithm::Aes256, true), (Algorithm::Aes256, false), (Algorithm::Aes128, true), (Algorithm::Aes128, false)]
+    {
+        let params = NewPublicKeyEncryption { algorithm, encrypt_metadata, seed, recipients: vec![full.clone(), print_only.clone()] };
+        let created = create_public_key(&params).unwrap();
+        assert!(created.is_public_key());
+        assert_eq!(created.auth(), Auth::Owner, "whoever encrypts knows the key");
+        // §7.6.5.3: digest of seed, every recipient entry, then FF FF FF FF without metadata encryption.
+        let mut parts = seed.to_vec();
+        parts.extend(&full);
+        parts.extend(&print_only);
+        if !encrypt_metadata {
+            parts.extend([0xFF; 4]);
+        }
+        let expected = if algorithm == Algorithm::Aes256 { Sha256::digest(&parts).to_vec() } else { Sha1::digest(&parts)[..16].to_vec() };
+        assert_eq!(created.file_key(), expected.as_slice(), "{algorithm:?} {encrypt_metadata}");
+        // The full-access recipient is owner-equivalent; the other gets only its bits.
+        let owner = SecurityHandler::open_with(created.dict().clone(), b"", Credential::Recipient(&FakeKey(1))).unwrap();
+        assert_eq!((owner.auth(), owner.file_key()), (Auth::Owner, expected.as_slice()));
+        assert!(owner.permissions().modify() && owner.permissions().copy());
+        let user = SecurityHandler::open_with(created.dict().clone(), b"", Credential::Recipient(&FakeKey(2))).unwrap();
+        assert_eq!((user.auth(), user.file_key()), (Auth::User, expected.as_slice()));
+        let p = user.permissions();
+        assert!(p.print() && !p.modify() && !p.copy() && !p.annotate() && !p.assemble() && !p.print_high_quality());
+        // Data round-trips between the creator and a recipient.
+        let sealed = created.encrypt_stream(7, 0, b"secret page", StreamKind::Normal);
+        assert_ne!(sealed.as_slice(), b"secret page");
+        assert_eq!(user.decrypt_stream(7, 0, &sealed, StreamKind::Normal), b"secret page");
+    }
+}
+
+#[test]
+fn public_key_documents_refuse_passwords_strangers_and_hostile_recipient_data() {
+    let seed = [3u8; 20];
+    let params =
+        NewPublicKeyEncryption { algorithm: Algorithm::Aes256, encrypt_metadata: true, seed, recipients: vec![fake_envelope(1, &seed, 0b100)] };
+    let dict = create_public_key(&params).unwrap().dict().clone();
+    assert_eq!(SecurityHandler::open(dict.clone(), b"", Some("guess")).unwrap_err(), CryptError::NeedsCertificate);
+    assert_eq!(SecurityHandler::open(dict.clone(), b"", None).unwrap_err(), CryptError::NeedsCertificate);
+    assert_eq!(SecurityHandler::open_with(dict.clone(), b"", Credential::Recipient(&FakeKey(5))).unwrap_err(), CryptError::NotRecipient);
+    // Too short to hold a seed and permissions.
+    let short = EncryptDict { recipients: vec![vec![1, 2, 3]], ..dict.clone() };
+    assert!(matches!(SecurityHandler::open_with(short, b"", Credential::Recipient(&FakeKey(1))), Err(CryptError::Malformed(_))));
+    // No recipients, too many, an unknown /V: errors, never panics.
+    let none = EncryptDict { recipients: vec![], ..dict.clone() };
+    assert!(matches!(SecurityHandler::open_with(none, b"", Credential::Recipient(&FakeKey(1))), Err(CryptError::Malformed(_))));
+    let many = EncryptDict { recipients: vec![vec![0]; MAX_RECIPIENTS + 1], ..dict.clone() };
+    assert!(matches!(SecurityHandler::open_with(many, b"", Credential::Recipient(&FakeKey(1))), Err(CryptError::Malformed(_))));
+    let odd = EncryptDict { v: 9, ..dict.clone() };
+    assert!(matches!(SecurityHandler::open_with(odd, b"", Credential::Recipient(&FakeKey(1))), Err(CryptError::Unsupported(_))));
+    // RC4 is never written.
+    let rc4 = NewPublicKeyEncryption { algorithm: Algorithm::Rc4_128, ..params.clone() };
+    assert!(create_public_key(&rc4).is_err());
+    assert!(create_public_key(&NewPublicKeyEncryption { recipients: vec![], ..params }).is_err());
+}
+
+#[test]
+fn a_known_handler_reopens_only_the_same_encryption() {
+    let seed = [4u8; 20];
+    let params =
+        NewPublicKeyEncryption { algorithm: Algorithm::Aes128, encrypt_metadata: true, seed, recipients: vec![fake_envelope(1, &seed, 0b100)] };
+    let created = create_public_key(&params).unwrap();
+    let again = SecurityHandler::open_with(created.dict().clone(), b"", Credential::Handler(&created)).unwrap();
+    assert_eq!((again.file_key(), again.auth()), (created.file_key(), Auth::Owner));
+    let other = EncryptDict { recipients: vec![fake_envelope(2, &seed, 0b100)], ..created.dict().clone() };
+    assert_eq!(SecurityHandler::open_with(other, b"", Credential::Handler(&created)).unwrap_err(), CryptError::NotRecipient);
+    // A recipient key offered for a password document tries the empty password only.
+    let pw = NewEncryption {
+        algorithm: Algorithm::Aes256,
+        user_password: "",
+        owner_password: "boss",
+        permissions: -1,
+        encrypt_metadata: true,
+        seed: [1; 32],
+    };
+    let standard = create(&pw, b"id").unwrap();
+    let opened = SecurityHandler::open_with(standard.dict().clone(), b"id", Credential::Recipient(&FakeKey(1))).unwrap();
+    assert_eq!(opened.auth(), Auth::User);
+    let pw = NewEncryption { user_password: "open", ..pw };
+    let locked = create(&pw, b"id").unwrap();
+    assert_eq!(SecurityHandler::open_with(locked.dict().clone(), b"id", Credential::Recipient(&FakeKey(1))).unwrap_err(), CryptError::WrongPassword);
+}
+
+#[test]
+fn permission_bytes_are_big_endian_with_reserved_bits() {
+    assert_eq!(permission_bytes(0b100), [0xFF, 0xFF, 0xF0, 0xC4]);
+    assert_eq!(permission_bytes(-1), [0xFF, 0xFF, 0xFF, 0xFE], "bit 1 is always clear");
 }
