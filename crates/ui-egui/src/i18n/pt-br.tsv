@@ -2180,3 +2180,28 @@ comment menu	Edit	Editar
 	Apply recognized text	Aplicar texto reconhecido
 	Review recognized text before applying	Revisar o texto reconhecido antes de aplicar
 	Text recognition canceled; no text was applied	Reconhecimento de texto cancelado; nenhum texto foi aplicado
+# Compare Files: page ranges, visual settings, progress, page map and saved results.
+	Old pages:	Páginas do antigo:
+	New pages:	Páginas do novo:
+	Also compare how the pages look	Comparar também a aparência das páginas
+	Colour tolerance	Tolerância de cor
+	A pixel counts as changed when a colour channel differs by more than this (0–255)	Um pixel conta como alterado quando um canal de cor difere mais do que este valor (0–255)
+	Change threshold	Limite de alteração
+	A page looks different only when more than this share of its pixels changed	Uma página só parece diferente quando mais do que esta parcela dos seus pixels mudou
+	Comparing… {d} of {t}	Comparando… {d} de {t}
+	Stopping…	Parando…
+	Stop	Parar
+	{n} page pairs were not compared for looks	{n} pares de páginas não foram comparados visualmente
+	Save JSON report…	Salvar relatório JSON…
+	Save marked-up copy…	Salvar cópia marcada…
+	Page map	Mapa de páginas
+	{i} inserted, {d} deleted, {m} moved, {c} modified pages	Páginas: {i} inseridas, {d} excluídas, {m} movidas, {c} modificadas
+	Old page {o} → new page {n} · {status}	Página antiga {o} → página nova {n} · {status}
+	A comparison is already running	Uma comparação já está em andamento
+	The comparison stopped unexpectedly	A comparação parou inesperadamente
+	Comparison stopped	Comparação interrompida
+compare-page	Same	Igual
+compare-page	Modified	Modificada
+compare-page	Inserted	Inserida
+compare-page	Deleted	Excluída
+compare-page	Moved	Movida

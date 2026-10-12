@@ -3708,6 +3708,7 @@ dependencies = [
  "png 0.18.1",
  "rustls-native-certs",
  "serde",
+ "serde_json",
  "thiserror 2.0.21",
  "ureq",
  "url",

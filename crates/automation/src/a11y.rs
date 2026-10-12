@@ -511,7 +511,7 @@ impl Automation {
         Ok(json!({ "action": action.name, "files": out }))
     }
 
-    fn compare_ids(&self, a: &Args) -> Result<(pdfcraft_engine::DocId, pdfcraft_engine::DocId)> {
+    pub(crate) fn compare_ids(&self, a: &Args) -> Result<(pdfcraft_engine::DocId, pdfcraft_engine::DocId)> {
         let new = self.doc(a)?.id;
         let other = a.int("other")?;
         let old = u64::try_from(other)
@@ -520,37 +520,6 @@ impl Automation {
             .map(|d| d.id)
             .ok_or_else(|| ToolError::InvalidArgs(format!("no open document {other}")))?;
         Ok((old, new))
-    }
-
-    pub(crate) fn doc_compare(&self, a: &Args) -> Result<Value> {
-        use pdfcraft_engine::compare::Kind;
-        let (old, new) = self.compare_ids(a)?;
-        let c = self.session.compare(old, new).map_err(failed)?;
-        let limit = a.opt_int("limit")?.unwrap_or(500).max(1) as usize;
-        let r2 = |r: &[f64; 4]| r.map(|v| (v * 100.0).round() / 100.0);
-        let side =
-            |s: &pdfcraft_engine::compare::Side| json!({ "text": s.text, "page": s.page + 1, "rects": s.rects.iter().map(r2).collect::<Vec<_>>() });
-        let list: Vec<Value> = c
-            .changes
-            .iter()
-            .take(limit)
-            .map(|ch| json!({ "kind": ch.kind.label().to_lowercase(), "old": side(&ch.old), "new": side(&ch.new) }))
-            .collect();
-        let visual: Vec<Value> = if a.opt_bool("visual")?.unwrap_or(false) {
-            self.session.compare_visual(old, new, 72.0).map_err(failed)?.iter().map(|(p, r)| json!({ "page": p + 1, "rect": r2(r) })).collect()
-        } else {
-            Vec::new()
-        };
-        Ok(json!({
-            "visual": visual,
-            "identical": c.identical(),
-            "replaced": c.count(Kind::Replaced),
-            "inserted": c.count(Kind::Inserted),
-            "deleted": c.count(Kind::Deleted),
-            "old_words": c.old_words,
-            "new_words": c.new_words,
-            "changes": list,
-        }))
     }
 
     pub(crate) fn doc_compare_report(&self, a: &Args) -> Result<Value> {

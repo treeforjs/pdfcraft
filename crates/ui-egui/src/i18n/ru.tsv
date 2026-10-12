@@ -2092,3 +2092,28 @@
 	Apply recognized text	Применить распознанный текст
 	Review recognized text before applying	Проверять распознанный текст перед применением
 	Text recognition canceled; no text was applied	Распознавание текста отменено; текст не добавлен
+# Compare Files: page ranges, visual settings, progress, page map and saved results.
+	Old pages:	Страницы старого:
+	New pages:	Страницы нового:
+	Also compare how the pages look	Сравнивать также внешний вид страниц
+	Colour tolerance	Допуск цвета
+	A pixel counts as changed when a colour channel differs by more than this (0–255)	Пиксель считается изменённым, если цветовой канал отличается больше чем на это значение (0–255)
+	Change threshold	Порог изменений
+	A page looks different only when more than this share of its pixels changed	Страница считается отличающейся, только если изменилась бо́льшая доля её пикселей, чем эта
+	Comparing… {d} of {t}	Сравнение… {d} из {t}
+	Stopping…	Остановка…
+	Stop	Остановить
+	{n} page pairs were not compared for looks	Внешний вид {n} пар страниц не сравнивался
+	Save JSON report…	Сохранить отчёт JSON…
+	Save marked-up copy…	Сохранить размеченную копию…
+	Page map	Карта страниц
+	{i} inserted, {d} deleted, {m} moved, {c} modified pages	Страницы: вставлено {i}, удалено {d}, перемещено {m}, изменено {c}
+	Old page {o} → new page {n} · {status}	Старая страница {o} → новая страница {n} · {status}
+	A comparison is already running	Сравнение уже выполняется
+	The comparison stopped unexpectedly	Сравнение неожиданно прервалось
+	Comparison stopped	Сравнение остановлено
+compare-page	Same	Без изменений
+compare-page	Modified	Изменена
+compare-page	Inserted	Вставлена
+compare-page	Deleted	Удалена
+compare-page	Moved	Перемещена

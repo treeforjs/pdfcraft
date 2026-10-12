@@ -2143,3 +2143,28 @@
 	Apply recognized text	应用识别的文本
 	Review recognized text before applying	应用前检查识别的文本
 	Text recognition canceled; no text was applied	文本识别已取消；未应用任何文本
+# Compare Files: page ranges, visual settings, progress, page map and saved results.
+	Old pages:	旧文件页面：
+	New pages:	新文件页面：
+	Also compare how the pages look	同时比较页面外观
+	Colour tolerance	颜色容差
+	A pixel counts as changed when a colour channel differs by more than this (0–255)	颜色通道差异超过此值时，像素视为已更改 (0–255)
+	Change threshold	更改阈值
+	A page looks different only when more than this share of its pixels changed	仅当页面中超过此比例的像素发生变化时，才视为外观不同
+	Comparing… {d} of {t}	正在比较… {d}/{t}
+	Stopping…	正在停止…
+	Stop	停止
+	{n} page pairs were not compared for looks	{n} 对页面未比较外观
+	Save JSON report…	保存 JSON 报告…
+	Save marked-up copy…	保存带标记的副本…
+	Page map	页面对应
+	{i} inserted, {d} deleted, {m} moved, {c} modified pages	页面：插入 {i}，删除 {d}，移动 {m}，修改 {c}
+	Old page {o} → new page {n} · {status}	旧页面 {o} → 新页面 {n} · {status}
+	A comparison is already running	已有比较正在进行
+	The comparison stopped unexpectedly	比较意外停止
+	Comparison stopped	比较已停止
+compare-page	Same	相同
+compare-page	Modified	已修改
+compare-page	Inserted	已插入
+compare-page	Deleted	已删除
+compare-page	Moved	已移动

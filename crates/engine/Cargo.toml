@@ -34,6 +34,8 @@ pdfcraft-create = { workspace = true }
 pdfcraft-model = { workspace = true }
 thiserror = { workspace = true }
 serde = { workspace = true }
+# The structured Compare Files report (compare::report_json); already in the tree.
+serde_json = { workspace = true }
 png = "0.18"
 # Already in the graph (url and idna through webbrowser, icu_properties through boa): they show
 # the host of a document's link the way the browser reads it (links::display_host).

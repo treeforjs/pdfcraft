@@ -1734,6 +1734,149 @@ fn comparing_two_versions_of_a_document() {
 }
 
 #[test]
+fn comparing_files_finds_moved_inserted_deleted_and_shifted_pages() {
+    use compare::{CompareOptions, PageStatus};
+    let mut s = Session::new().with_clock(|| 1_700_000_000);
+    let a = "Alpha page about the lease terms, the monthly rent, the deposit and the dates it is due.";
+    let b = "Bravo page about parking spaces, bicycle storage, the shared laundry room and its hours.";
+    let c = "Charlie page about pets, noise after ten at night, smoking and guests staying over weekends.";
+    let d = "Delta page with the signatures of both parties and the date the agreement was signed.";
+    let v1 = s.create_from_text("t", &[a, b, c, d].join("\u{c}")).unwrap();
+    // Charlie moved to the front with one word changed, Bravo deleted, Echo inserted, and
+    // Delta's text pushed down the page (same words, different look).
+    let c2 = c.replace("pets", "cats");
+    let e = "Echo page about the new garden behind the building and who may use it in summer.";
+    let d2 = format!("\n\n\n\n{d}");
+    let v2 = s.create_from_text("t", &[c2.as_str(), a, e, d2.as_str()].join("\u{c}")).unwrap();
+    let old = s.open("v1.pdf", None, v1.clone(), None).unwrap();
+    let new = s.open("v2.pdf", None, v2, None).unwrap();
+
+    let opts = CompareOptions { visual: true, ..Default::default() };
+    let r = s.compare_files(old, new, &opts).unwrap();
+    let map: Vec<(PageStatus, Option<usize>, Option<usize>)> = r.pages.iter().map(|p| (p.status, p.old, p.new)).collect();
+    assert_eq!(
+        map,
+        [
+            (PageStatus::Moved, Some(2), Some(0)),
+            (PageStatus::Same, Some(0), Some(1)),
+            (PageStatus::Deleted, Some(1), None),
+            (PageStatus::Inserted, None, Some(2)),
+            (PageStatus::Same, Some(3), Some(3)),
+        ]
+    );
+    // The moved page is compared with its counterpart: one word, not a whole page twice.
+    let got: Vec<(compare::Kind, &str, usize)> = r.text.changes.iter().map(|x| (x.kind, x.old.text.as_str(), x.new.page)).collect();
+    assert_eq!(got[0], (compare::Kind::Replaced, "pets,", 0), "{got:?}");
+    assert_eq!(r.text.changes[0].new.text, "cats,");
+    // The rest is Bravo's words against Echo's (word by word), all on the inserted page; the
+    // unchanged Alpha and Delta pages contribute nothing.
+    assert!(got.len() > 1 && got[1..].iter().all(|g| g.2 == 2), "{got:?}");
+    assert_eq!(got[1].1, "Bravo");
+    assert_eq!(r.text.changes[1].new.text, "Echo");
+    // Visually: the edited moved page and the shifted page differ; the unchanged one does not.
+    let looks: Vec<(usize, usize)> = r.visual.iter().map(|v| (v.old_page, v.new_page)).collect();
+    assert_eq!(looks, [(2, 0), (3, 3)], "{:?}", r.visual);
+    assert!(r.visual.iter().all(|v| v.fraction > 0.0 && v.fraction < 0.5 && !v.regions.is_empty()));
+    // A threshold above the shares found ignores them.
+    let high = s.compare_files(old, new, &CompareOptions { visual: true, threshold: 0.5, ..Default::default() }).unwrap();
+    assert!(high.visual.is_empty());
+    assert!(!r.identical());
+
+    // Page ranges: old page 1 against new page 2 (the same Alpha page).
+    let ranged =
+        s.compare_files(old, new, &CompareOptions { old_pages: Some((0, 0)), new_pages: Some((1, 1)), visual: true, ..Default::default() }).unwrap();
+    assert!(ranged.identical(), "{ranged:?}");
+    assert_eq!(ranged.pages[0].old, Some(0));
+    assert_eq!(ranged.pages[0].new, Some(1));
+    assert!(s.compare_files(old, new, &CompareOptions { old_pages: Some((2, 9)), ..Default::default() }).is_err());
+
+    // The report lists the page map.
+    let report = s.compare_files_report(old, new, &r).unwrap();
+    let rid = s.open("report.pdf", None, report, None).unwrap();
+    let text = page_texts(&s, rid).join(" ");
+    assert!(text.contains("1 inserted, 1 deleted, 1 moved") && text.contains("looks different"), "{text}");
+
+    // The results overlay: a marked-up copy; the open document is untouched.
+    let overlay = s.compare_overlay(new, &r).unwrap();
+    assert!(!s.get(new).unwrap().dirty);
+    assert!(s.get(new).unwrap().info.annotations.is_empty());
+    let oid = s.open("overlay.pdf", None, overlay, None).unwrap();
+    let marks: Vec<String> =
+        s.get(oid).unwrap().info.annotations.iter().filter(|a| a.author.as_deref() == Some("Compare")).filter_map(|a| a.contents.clone()).collect();
+    for want in ["Moved page: page 3", "Deleted page: page 2", "Inserted page", "Replaced: \"pets,\"", "Looks different"] {
+        assert!(marks.iter().any(|m| m.starts_with(want)), "{want} missing from {marks:?}");
+    }
+
+    // A blank page (no text) inserted at the front is found by its picture.
+    let blank = s.open("blank.pdf", None, v1, None).unwrap();
+    s.apply(blank, Edit::InsertBlankPage { at: 0, width: 612.0, height: 792.0 }).unwrap();
+    let bytes = s.save_bytes(blank).unwrap();
+    let blank2 = s.open("blank2.pdf", None, bytes, None).unwrap();
+    let r = s.compare_files(old, blank2, &CompareOptions::default()).unwrap();
+    let map: Vec<PageStatus> = r.pages.iter().map(|p| p.status).collect();
+    assert_eq!(map, [PageStatus::Inserted, PageStatus::Same, PageStatus::Same, PageStatus::Same, PageStatus::Same]);
+    assert!(r.text.identical());
+}
+
+#[test]
+fn compare_jobs_report_progress_stop_and_give_the_json_report() {
+    use compare::{CompareOptions, report_json};
+    let mut s = Session::new();
+    let pages: Vec<String> = (0..6).map(|i| format!("Page {i} of the handbook about topic number {i}.")).collect();
+    let v1 = s.create_from_text("t", &pages.join("\u{c}")).unwrap();
+    let mut changed = pages.clone();
+    changed[4] = "Page 4 of the handbook about topic number 44.".into();
+    let v2 = s.create_from_text("t", &changed.join("\u{c}")).unwrap();
+    let old = s.open("v1.pdf", None, v1, None).unwrap();
+    let new = s.open("v2.pdf", None, v2, None).unwrap();
+    let opts = CompareOptions { visual: true, ..Default::default() };
+    let job = s.compare_job(old, new, &opts).unwrap();
+    // Off the session: on another thread, with progress up to the total.
+    let (result, seen) = std::thread::spawn(move || {
+        let mut seen = Vec::new();
+        let r = job.run(|d, t| {
+            seen.push((d, t));
+            true
+        });
+        (r, seen)
+    })
+    .join()
+    .unwrap();
+    let r = result.unwrap();
+    // 6 + 6 pages read, then 6 page pairs rendered.
+    assert_eq!(seen.first(), Some(&(0, 18)));
+    assert_eq!(seen.last(), Some(&(18, 18)));
+    assert!(seen.iter().all(|s| s.1 == 18) && seen.windows(2).all(|w| w[0].0 + 1 == w[1].0), "{seen:?}");
+    assert_eq!(r, s.compare_files(old, new, &opts).unwrap());
+    assert_eq!(r.visual.iter().map(|v| v.new_page).collect::<Vec<_>>(), [4]);
+    // Stopped after three pages: nothing.
+    let job = s.compare_job(old, new, &opts).unwrap();
+    let mut calls = 0;
+    assert!(
+        job.run(|d, _| {
+            calls += 1;
+            d < 3
+        })
+        .is_none()
+    );
+    assert_eq!(calls, 4);
+    // Bad ranges are refused before any work.
+    assert!(s.compare_job(old, new, &CompareOptions { new_pages: Some((3, 6)), ..Default::default() }).is_err());
+    // The structured report, with the files' names.
+    let v = s.compare_json(old, new, &r, &opts, usize::MAX);
+    assert_eq!(v["old"]["name"], "v1.pdf");
+    assert_eq!(v["new"]["pages"], 6);
+    assert_eq!(v["summary"]["pages_modified"], 1);
+    assert_eq!(v["pages"][4]["status"], "modified");
+    assert_eq!(v["visual"][0]["new_page"], 5);
+    assert_eq!(report_json(&r, &opts, 0)["truncated"], true);
+    // Marking: the visual regions the text changes explain aren't marked twice.
+    let n = s.mark_file_differences(new, &r).unwrap();
+    let explained = r.visual[0].regions.iter().filter(|b| compare::explained_by_text(&r.text, 4, b)).count();
+    assert_eq!(n, r.text.changes.len() + r.visual[0].regions.len() - explained);
+}
+
+#[test]
 fn actions_run_their_steps_on_files() {
     let s = Session::new();
     let src = s.create_from_text("t", "Quarterly numbers").unwrap();

@@ -485,6 +485,10 @@ pub struct PdfCraftApp {
     /// Compare files: the chosen older document and the last result.
     pub compare_old: Option<DocId>,
     pub compare: Option<compare_ui::CompareState>,
+    /// The Compare Files dialog's choices (pages, visual settings), kept between runs.
+    pub compare_draft: compare_ui::CompareDraft,
+    /// A comparison running in the background.
+    pub compare_run: Option<compare_ui::CompareRun>,
     /// The JavaScript console and the Document JavaScripts draft.
     pub js_console: js_ui::JsConsole,
     pub doc_js: js_ui::DocJsDraft,
@@ -735,6 +739,8 @@ impl PdfCraftApp {
             preflight: Default::default(),
             compare_old: None,
             compare: None,
+            compare_draft: Default::default(),
+            compare_run: None,
             js_console: Default::default(),
             doc_js: Default::default(),
             a11y: a11y_ui::A11yState::default(),
@@ -1915,6 +1921,7 @@ impl eframe::App for PdfCraftApp {
         self.poll_export();
         self.poll_ocr();
         self.poll_signature_workflow();
+        self.poll_compare();
         self.poll_optimize();
         self.poll_action();
         self.process_file_requests();

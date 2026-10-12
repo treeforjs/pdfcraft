@@ -13,6 +13,7 @@
 
 mod a11y;
 mod comments;
+mod compare;
 mod content;
 mod conventions;
 mod dests;
@@ -648,6 +649,7 @@ impl Automation {
             "form_actions" => self.form_actions(&a)?,
             "form_detect_fields" => self.form_detect_fields(&a)?,
             "doc_compare" => self.doc_compare(&a)?,
+            "compare_files" => self.compare_files(&a)?,
             "action_list" => self.action_list()?,
             "pdfa_verify" => self.pdfa_verify(&a)?,
             "preflight_profiles" => self.preflight_profiles(),

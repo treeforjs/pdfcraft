@@ -51,6 +51,25 @@ fn path(what: &str) -> Value {
     json!({ "type": "array", "items": { "type": "integer", "minimum": 1 }, "description": format!("{what}: 1-based positions from the top level, e.g. [2, 1] = the first child of the second bookmark.") })
 }
 
+/// The Compare Files options shared by `doc_compare` and `compare_files`, added to `props`.
+fn compare_props(mut props: Value) -> Value {
+    let range = |which: &str| json!({ "type": "array", "items": { "type": "integer", "minimum": 1 }, "minItems": 2, "maxItems": 2, "description": format!("[first, last] 1-based pages of the {which} file to compare (default: all).") });
+    let extra = json!({
+        "limit": { "type": "integer", "minimum": 1, "description": "List at most this many text changes (default 500)." },
+        "old_pages": range("old"),
+        "new_pages": range("new"),
+        "dpi": { "type": "number", "minimum": 18, "maximum": 150, "description": "Resolution of the visual compare (default 72)." },
+        "tolerance": { "type": "integer", "minimum": 0, "maximum": 255, "description": "A pixel differs when a colour channel differs by more than this (default 24)." },
+        "threshold": { "type": "number", "minimum": 0, "maximum": 1, "description": "A page looks different when more than this share of its pixels differ (default 0)." },
+    });
+    if let (Some(p), Some(e)) = (props.as_object_mut(), extra.as_object()) {
+        for (k, v) in e {
+            p.insert(k.clone(), v.clone());
+        }
+    }
+    props
+}
+
 fn path_arg() -> Value {
     json!({ "type": "string", "description": "A file path (relative to --root when set)." })
 }
@@ -1000,10 +1019,25 @@ pub fn tools() -> Vec<ToolDef> {
                 }),
                 &["paths", "folder"],
             )),
-        t("doc_compare", "Compare files", "Compare the text of two open documents: other is the older version, doc the newer. Returns counts and each change (replaced, inserted, deleted) with the old and new text, pages (1-based) and rectangles (points, origin bottom-left). Refused unless both documents allow copying text.")
+        t("doc_compare", "Compare files", "Compare two open documents: other is the older version, doc the newer. Returns the page map (each page same, modified, moved, inserted or deleted, 1-based old and new numbers), summary counts and each text change (replaced, inserted, deleted) with the old and new text, pages (1-based) and rectangles (points, origin bottom-left); with visual, the paired pages that look different (changed_percent, regions) and visual_regions as flat {page, rect}. Moved pages are compared with their counterpart.")
             .ro()
             .cmd("doc.compare")
-            .with(schema(json!({ "doc": doc(), "other": { "type": "integer", "description": "The older document (from doc_open)." }, "limit": { "type": "integer", "minimum": 1, "description": "List at most this many changes (default 500)." }, "visual": { "type": "boolean", "description": "Also compare how pages look (page n with page n): regions that differ visually." } }), &["doc", "other"])),
+            .with(schema(compare_props(json!({ "doc": doc(), "other": { "type": "integer", "description": "The older document (from doc_open)." }, "visual": { "type": "boolean", "description": "Also compare how the paired pages look (default false)." } })), &["doc", "other"])),
+        t("compare_files", "Compare two files", "Compare Files on two PDF files (old = the older version, new = the newer): the page map (each page same, modified, moved, inserted or deleted; 1-based old and new numbers), word-level text changes with pages and rectangles (points, origin bottom-left), and pages that look different (rendered at dpi; a page counts when more than threshold of its pixels differ by more than tolerance). Optionally writes the full JSON report to json_path, a summary PDF to report_path and a copy of the new file with every difference marked as comments to overlay_path. The files are opened only for the comparison.")
+            .cmd("doc.compare")
+            .with(schema(
+                compare_props(json!({
+                    "old": path_arg(),
+                    "new": path_arg(),
+                    "old_password": { "type": "string" },
+                    "new_password": { "type": "string" },
+                    "visual": { "type": "boolean", "description": "Also compare how the paired pages look (default true)." },
+                    "json_path": { "type": "string", "description": "A file path (relative to --root when set) for the full JSON report (every change)." },
+                    "report_path": { "type": "string", "description": "A file path (relative to --root when set) for the summary report PDF." },
+                    "overlay_path": { "type": "string", "description": "A file path (relative to --root when set) for a copy of the new file with the differences marked as comments." },
+                })),
+                &["old", "new"],
+            )),
         t("doc_compare_report", "Compare report", "Write the compare summary report (a PDF listing every change) to path. Refused unless both documents allow copying text.")
             .cmd("doc.compare")
             .with(schema(json!({ "doc": doc(), "other": { "type": "integer" }, "path": { "type": "string" } }), &["doc", "other", "path"])),

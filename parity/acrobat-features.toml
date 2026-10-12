@@ -9025,9 +9025,9 @@ tier = "P1"
 milestone = "M12"
 status = "shipped"
 commands = ["doc.compare"]
-tools = ["doc_compare", "doc_compare_mark"]
-evidence = ["crates/compare/src/lib.rs::insertions_deletions_and_replacements", "crates/engine/src/tests.rs::comparing_two_versions_of_a_document", "crates/automation/tests/automation.rs::comparing_documents_through_tools", "crates/ui-egui/tests/compare.rs::compare_two_versions"]
-notes = "Word-level Myers diff with patience anchors for long files; replaced/inserted/deleted shaded on the new file, listed in the Compare panel, or added as comments."
+tools = ["doc_compare", "doc_compare_mark", "compare_files"]
+evidence = ["crates/compare/src/lib.rs::insertions_deletions_and_replacements", "crates/compare/src/pages.rs::moved_pages", "crates/compare/src/lib.rs::moved_pages_are_not_reported_as_deleted_and_inserted_text", "crates/engine/src/tests.rs::comparing_two_versions_of_a_document", "crates/engine/src/tests.rs::comparing_files_finds_moved_inserted_deleted_and_shifted_pages", "crates/automation/tests/automation.rs::comparing_documents_through_tools", "crates/automation/tests/automation.rs::comparing_files_on_disk_through_tools", "crates/ui-egui/tests/compare.rs::compare_two_versions", "crates/ui-egui/tests/compare.rs::compare_page_map_ranges_and_saved_results", "crates/engine/src/tests.rs::compare_jobs_report_progress_stop_and_give_the_json_report"]
+notes = "Word-level Myers diff with patience anchors for long files (≈32 MB worst-case per diff segment); a page map (same/modified/moved/inserted/deleted pages, text fingerprints, picture fingerprints for textless pages) so moved pages are diffed against their counterpart; replaced/inserted/deleted shaded on the new file, listed in the Compare panel, or added as comments. The Compare panel shows the page map (old page → new page with status; a row goes to that page) next to the changes; each page's text is read once per run, on a worker thread with progress and Stop."
 
 [[feature]]
 id = "misc.compare-visual"
@@ -9037,9 +9037,9 @@ tier = "P1"
 milestone = "M12"
 status = "shipped"
 commands = ["doc.compare"]
-tools = ["doc_compare"]
-evidence = ["crates/compare/src/lib.rs::finds_changed_regions", "crates/engine/src/tests.rs::comparing_two_versions_of_a_document", "crates/automation/tests/automation.rs::comparing_documents_through_tools"]
-notes = "Pages rendered at 72 dpi and compared page by page; differing regions shaded orange where no text change explains them."
+tools = ["doc_compare", "compare_files"]
+evidence = ["crates/compare/src/lib.rs::finds_changed_regions", "crates/compare/src/lib.rs::counts_changed_pixels_for_a_threshold", "crates/engine/src/tests.rs::comparing_two_versions_of_a_document", "crates/engine/src/tests.rs::comparing_files_finds_moved_inserted_deleted_and_shifted_pages", "crates/automation/tests/automation.rs::comparing_documents_through_tools", "crates/automation/tests/automation.rs::comparing_files_on_disk_through_tools", "crates/ui-egui/tests/compare.rs::compare_page_map_ranges_and_saved_results", "crates/ui-egui/tests/compare.rs::a_long_comparison_can_be_stopped"]
+notes = "Pages paired by the page map (not page n with page n), rendered at 72 dpi by default (18–150 in the Compare Files dialog and the tools) and compared with a per-channel tolerance and a changed-pixel-share threshold; differing regions shaded orange where no text change explains them. The Compare Files dialog sets resolution, colour tolerance and change threshold (UI test drives the threshold); marking and the marked-up copy skip regions a text change already explains. Synthetic fixtures only."
 
 [[feature]]
 id = "misc.compare-side-by-side"
@@ -9061,9 +9061,9 @@ tier = "P1"
 milestone = "M12"
 status = "shipped"
 commands = ["doc.compare"]
-tools = ["doc_compare_report"]
-evidence = ["crates/engine/src/tests.rs::comparing_two_versions_of_a_document", "crates/automation/tests/automation.rs::comparing_documents_through_tools", "crates/ui-egui/tests/compare.rs::compare_two_versions"]
-notes = "Summary report as a new PDF (counts and every change with pages)."
+tools = ["doc_compare_report", "compare_files"]
+evidence = ["crates/engine/src/tests.rs::comparing_two_versions_of_a_document", "crates/engine/src/tests.rs::comparing_files_finds_moved_inserted_deleted_and_shifted_pages", "crates/automation/tests/automation.rs::comparing_documents_through_tools", "crates/automation/tests/automation.rs::comparing_files_on_disk_through_tools", "crates/ui-egui/tests/compare.rs::compare_two_versions", "crates/ui-egui/tests/compare.rs::compare_page_map_ranges_and_saved_results", "crates/engine/src/tests.rs::compare_jobs_report_progress_stop_and_give_the_json_report"]
+notes = "Summary report as a new PDF (page counts, page map, pages that look different, every change with pages). compare_files also writes the full structured JSON report and a results PDF (a copy of the new file with text, page and visual differences as comments); the Compare panel saves the same JSON report and marked-up copy (Save JSON report…, Save marked-up copy…)."
 
 [[feature]]
 id = "misc.compare-filters"
@@ -9083,11 +9083,11 @@ title = "Compare page ranges"
 area = "N"
 tier = "P2"
 milestone = "M12"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["doc.compare"]
+tools = ["compare_files", "doc_compare"]
+evidence = ["crates/engine/src/tests.rs::comparing_files_finds_moved_inserted_deleted_and_shifted_pages", "crates/automation/tests/automation.rs::comparing_files_on_disk_through_tools", "crates/ui-egui/tests/compare.rs::compare_page_map_ranges_and_saved_results"]
+notes = "old_pages/new_pages [first, last] in the engine and the tools; the Compare Files dialog has All pages / From–to for each file (UI test compares old page 1 with new page 2). Single contiguous range per file; no page-list syntax."
 
 [[feature]]
 id = "misc.compare-scanned"

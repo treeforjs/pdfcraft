@@ -2179,3 +2179,28 @@ action wizard	Start	Starten
 	Apply recognized text	Erkannten Text anwenden
 	Review recognized text before applying	Erkannten Text vor dem Anwenden prüfen
 	Text recognition canceled; no text was applied	Texterkennung abgebrochen; es wurde kein Text hinzugefügt
+# Compare Files: page ranges, visual settings, progress, page map and saved results.
+	Old pages:	Alte Seiten:
+	New pages:	Neue Seiten:
+	Also compare how the pages look	Auch das Aussehen der Seiten vergleichen
+	Colour tolerance	Farbtoleranz
+	A pixel counts as changed when a colour channel differs by more than this (0–255)	Ein Pixel gilt als geändert, wenn ein Farbkanal um mehr als diesen Wert abweicht (0–255)
+	Change threshold	Änderungsschwelle
+	A page looks different only when more than this share of its pixels changed	Eine Seite gilt nur dann als anders, wenn sich mehr als dieser Anteil ihrer Pixel geändert hat
+	Comparing… {d} of {t}	Vergleich läuft… {d} von {t}
+	Stopping…	Wird angehalten…
+	Stop	Anhalten
+	{n} page pairs were not compared for looks	{n} Seitenpaare wurden nicht optisch verglichen
+	Save JSON report…	JSON-Bericht speichern…
+	Save marked-up copy…	Markierte Kopie speichern…
+	Page map	Seitenzuordnung
+	{i} inserted, {d} deleted, {m} moved, {c} modified pages	Seiten: {i} eingefügt, {d} gelöscht, {m} verschoben, {c} geändert
+	Old page {o} → new page {n} · {status}	Alte Seite {o} → neue Seite {n} · {status}
+	A comparison is already running	Ein Vergleich läuft bereits
+	The comparison stopped unexpectedly	Der Vergleich wurde unerwartet beendet
+	Comparison stopped	Vergleich angehalten
+compare-page	Same	Gleich
+compare-page	Modified	Geändert
+compare-page	Inserted	Eingefügt
+compare-page	Deleted	Gelöscht
+compare-page	Moved	Verschoben

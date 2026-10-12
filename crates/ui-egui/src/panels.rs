@@ -442,6 +442,7 @@ pub fn right_panel(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
         let sig_expanded = &mut app.sig_expanded;
         let a11y = &mut app.a11y;
         let compare = &app.compare;
+        let compare_running = app.compare_run.as_ref().filter(|r| r.new == id).and_then(|r| r.snapshot());
         let comment_allowed = doc.allows_annotation();
         // A dialog or the palette owns the keyboard: the panel leaves Escape to it.
         let modal = app.dialog.is_some() || app.palette_open;
@@ -466,7 +467,7 @@ pub fn right_panel(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
                     RightPanel::Signatures => ("Signatures", Some(doc.signatures.iter().filter(|s| s.signed).count())),
                     RightPanel::Accessibility => ("Accessibility Checker", None),
                     RightPanel::Search => ("Search", None),
-                    RightPanel::Compare => ("Compare", compare.as_ref().filter(|c| c.new == id).map(|c| c.result.changes.len())),
+                    RightPanel::Compare => ("Compare", compare.as_ref().filter(|c| c.new == id).map(|c| c.result.text.changes.len())),
                 };
                 ui.horizontal(|ui| {
                     ui.label(egui::RichText::new(tl!(title)).font(theme::semibold(15.5)));
@@ -611,7 +612,7 @@ pub fn right_panel(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
                         a11y_action = crate::a11y_ui::panel(ui, &t, a11y, id);
                     }
                     RightPanel::Search => crate::search_ui::panel(ui, &t, view, info.pages.len()),
-                    RightPanel::Compare => compare_action = crate::compare_ui::panel(ui, &t, compare, id),
+                    RightPanel::Compare => compare_action = crate::compare_ui::panel(ui, &t, compare, compare_running, id),
                     RightPanel::Attachments => {
                         if info.attachments.is_empty() {
                             empty(ui, &t, "paperclip", "This document has no attachments.");

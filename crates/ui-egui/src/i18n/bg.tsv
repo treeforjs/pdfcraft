@@ -2141,3 +2141,28 @@ action wizard	Start	Старт
 	Apply recognized text	Приложи разпознатия текст
 	Review recognized text before applying	Преглед на разпознатия текст преди прилагане
 	Text recognition canceled; no text was applied	Разпознаването на текст е отменено; не е приложен текст
+# Compare Files: page ranges, visual settings, progress, page map and saved results.
+	Old pages:	Страници на стария:
+	New pages:	Страници на новия:
+	Also compare how the pages look	Сравнявай и как изглеждат страниците
+	Colour tolerance	Допуск на цвета
+	A pixel counts as changed when a colour channel differs by more than this (0–255)	Пикселът се смята за променен, когато цветови канал се различава с повече от тази стойност (0–255)
+	Change threshold	Праг на промяна
+	A page looks different only when more than this share of its pixels changed	Страницата изглежда различна само когато е променен по-голям дял от пикселите ѝ от този
+	Comparing… {d} of {t}	Сравняване… {d} от {t}
+	Stopping…	Спиране…
+	Stop	Спри
+	{n} page pairs were not compared for looks	Външният вид на {n} двойки страници не е сравнен
+	Save JSON report…	Запази JSON отчет…
+	Save marked-up copy…	Запази маркирано копие…
+	Page map	Карта на страниците
+	{i} inserted, {d} deleted, {m} moved, {c} modified pages	Страници: {i} вмъкнати, {d} изтрити, {m} преместени, {c} променени
+	Old page {o} → new page {n} · {status}	Стара страница {o} → нова страница {n} · {status}
+	A comparison is already running	Вече се извършва сравнение
+	The comparison stopped unexpectedly	Сравнението спря неочаквано
+	Comparison stopped	Сравнението е спряно
+compare-page	Same	Същата
+compare-page	Modified	Променена
+compare-page	Inserted	Вмъкната
+compare-page	Deleted	Изтрита
+compare-page	Moved	Преместена

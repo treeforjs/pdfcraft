@@ -2110,3 +2110,28 @@ action wizard	Start	ప్రారంభించు
 	Apply recognized text	గుర్తించిన టెక్స్ట్‌ను వర్తింపజేయి
 	Review recognized text before applying	వర్తింపజేసే ముందు గుర్తించిన టెక్స్ట్‌ను సమీక్షించు
 	Text recognition canceled; no text was applied	టెక్స్ట్ గుర్తింపు రద్దు చేయబడింది; ఏ టెక్స్ట్ వర్తింపజేయబడలేదు
+# Compare Files: page ranges, visual settings, progress, page map and saved results.
+	Old pages:	పాత ఫైల్ పేజీలు:
+	New pages:	కొత్త ఫైల్ పేజీలు:
+	Also compare how the pages look	పేజీలు ఎలా కనిపిస్తాయో కూడా పోల్చు
+	Colour tolerance	రంగు సహనం
+	A pixel counts as changed when a colour channel differs by more than this (0–255)	ఒక రంగు ఛానల్ ఈ విలువ కంటే ఎక్కువ తేడా ఉంటే పిక్సెల్ మారినట్లు లెక్కిస్తారు (0–255)
+	Change threshold	మార్పు పరిమితి
+	A page looks different only when more than this share of its pixels changed	పేజీలోని పిక్సెల్‌లలో ఈ వాటా కంటే ఎక్కువ మారినప్పుడే పేజీ భిన్నంగా కనిపిస్తుంది
+	Comparing… {d} of {t}	పోలుస్తోంది… {t}లో {d}
+	Stopping…	ఆపుతోంది…
+	Stop	ఆపు
+	{n} page pairs were not compared for looks	{n} పేజీ జతల రూపం పోల్చబడలేదు
+	Save JSON report…	JSON నివేదికను సేవ్ చేయి…
+	Save marked-up copy…	గుర్తించిన కాపీని సేవ్ చేయి…
+	Page map	పేజీ పటం
+	{i} inserted, {d} deleted, {m} moved, {c} modified pages	పేజీలు: {i} చొప్పించినవి, {d} తొలగించినవి, {m} తరలించినవి, {c} మార్చినవి
+	Old page {o} → new page {n} · {status}	పాత పేజీ {o} → కొత్త పేజీ {n} · {status}
+	A comparison is already running	ఇప్పటికే ఒక పోలిక జరుగుతోంది
+	The comparison stopped unexpectedly	పోలిక అనుకోకుండా ఆగిపోయింది
+	Comparison stopped	పోలిక ఆపబడింది
+compare-page	Same	అదే
+compare-page	Modified	మార్చబడింది
+compare-page	Inserted	చొప్పించబడింది
+compare-page	Deleted	తొలగించబడింది
+compare-page	Moved	తరలించబడింది

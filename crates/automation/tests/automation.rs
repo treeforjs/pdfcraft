@@ -3416,6 +3416,103 @@ fn comparing_documents_through_tools() {
     assert!(std::fs::read(dir.join("report.pdf")).unwrap().starts_with(b"%PDF"));
     assert_eq!(ok(&mut a, "doc_compare_mark", json!({ "doc": v2, "other": v1 }))["comments"], 3);
     assert!(a.call("doc_compare", &json!({ "doc": v2, "other": 999 })).is_err());
+    // The page map comes with it.
+    assert_eq!(r["pages"][0]["status"], "modified", "{r}");
+    assert!(!r["visual_regions"].as_array().unwrap().is_empty(), "{r}");
+}
+
+/// Two versions of a four-page file saved to disk: in the newer one the third page moved to
+/// the front with one word changed, the second page was deleted, a new page was inserted and
+/// the last page's text was pushed down (same words, different look).
+fn save_text_pdf(a: &mut Automation, pages: &[&str], path: &str) {
+    let d = ok(a, "doc_create", json!({ "from": "text", "text": pages.join("\u{c}") }))["doc"].as_u64().unwrap();
+    ok(a, "doc_save", json!({ "doc": d, "path": path }));
+    ok(a, "doc_close", json!({ "doc": d }));
+}
+
+#[test]
+fn comparing_files_on_disk_through_tools() {
+    let dir = workdir("compare-files");
+    let mut a = auto(&dir);
+    let pa = "Alpha page about the lease terms, the monthly rent, the deposit and the dates it is due.";
+    let pb = "Bravo page about parking spaces, bicycle storage, the shared laundry room and its hours.";
+    let pc = "Charlie page about pets, noise after ten at night, smoking and guests staying over weekends.";
+    let pd = "Delta page with the signatures of both parties and the date the agreement was signed.";
+    let pe = "Echo page about the new garden behind the building and who may use it in summer.";
+    save_text_pdf(&mut a, &[pa, pb, pc, pd], "v1.pdf");
+    let pc2 = pc.replace("pets", "cats");
+    let pd2 = format!("\n\n\n\n{pd}");
+    save_text_pdf(&mut a, &[&pc2, pa, pe, &pd2], "v2.pdf");
+
+    let r = ok(
+        &mut a,
+        "compare_files",
+        json!({ "old": "v1.pdf", "new": "v2.pdf", "json_path": "out/report.json", "report_path": "out/report.pdf", "overlay_path": "out/marked.pdf", "limit": 1 }),
+    );
+    let s = &r["summary"];
+    assert_eq!(
+        (s["pages_inserted"].as_u64(), s["pages_deleted"].as_u64(), s["pages_moved"].as_u64(), s["pages_same"].as_u64(), s["visual_pages"].as_u64()),
+        (Some(1), Some(1), Some(1), Some(2), Some(2)),
+        "{r}"
+    );
+    let map: Vec<(String, Value, Value)> =
+        r["pages"].as_array().unwrap().iter().map(|p| (p["status"].as_str().unwrap().to_string(), p["old"].clone(), p["new"].clone())).collect();
+    assert_eq!(
+        map,
+        [
+            ("moved".to_string(), json!(3), json!(1)),
+            ("same".to_string(), json!(1), json!(2)),
+            ("deleted".to_string(), json!(2), Value::Null),
+            ("inserted".to_string(), Value::Null, json!(3)),
+            ("same".to_string(), json!(4), json!(4)),
+        ]
+    );
+    let total = r["changes_total"].as_u64().unwrap();
+    assert!(total > 1 && r["truncated"] == true && r["changes"].as_array().unwrap().len() == 1, "{r}");
+    assert_eq!((r["changes"][0]["old"]["text"].as_str(), r["changes"][0]["new"]["text"].as_str()), (Some("pets,"), Some("cats,")));
+    assert_eq!(r["changes"][0]["new"]["page"], 1);
+    let looks: Vec<(u64, u64)> =
+        r["visual"].as_array().unwrap().iter().map(|v| (v["old_page"].as_u64().unwrap(), v["new_page"].as_u64().unwrap())).collect();
+    assert_eq!(looks, [(3, 1), (4, 4)], "{r}");
+    assert_eq!((r["old"]["pages"].as_u64(), r["new"]["name"].as_str()), (Some(4), Some("v2.pdf")));
+
+    // The JSON file has every change; the report and the marked-up copy are PDFs.
+    let full: Value = serde_json::from_slice(&std::fs::read(dir.join("out/report.json")).unwrap()).unwrap();
+    assert_eq!(full["changes"].as_array().unwrap().len() as u64, total);
+    assert_eq!(full["pages"], r["pages"]);
+    let report = ok(&mut a, "doc_open", json!({ "path": "out/report.pdf" }))["doc"].as_u64().unwrap();
+    let text = page_text(&mut a, report).join(" ");
+    assert!(text.contains("1 inserted, 1 deleted, 1 moved"), "{text}");
+    let marked = ok(&mut a, "doc_open", json!({ "path": "out/marked.pdf" }))["doc"].as_u64().unwrap();
+    let list = ok(&mut a, "comment_list", json!({ "doc": marked }));
+    let contents: Vec<&str> = list["comments"].as_array().unwrap().iter().filter_map(|c| c["contents"].as_str()).collect();
+    for want in ["Moved page: page 3", "Deleted page: page 2", "Inserted page", "Replaced: \"pets,\"", "Looks different"] {
+        assert!(contents.iter().any(|c| c.starts_with(want)), "{want} missing from {contents:?}");
+    }
+    // The compared files were closed again; v2.pdf on disk is unchanged.
+    let open = ok(&mut a, "doc_list", json!({}))["documents"].as_array().unwrap().len();
+    assert_eq!(open, 2, "only the report and the marked copy are open");
+
+    // Threshold, page ranges, text-only.
+    let r = ok(&mut a, "compare_files", json!({ "old": "v1.pdf", "new": "v2.pdf", "threshold": 0.5 }));
+    assert_eq!(r["summary"]["visual_pages"], 0);
+    let r = ok(&mut a, "compare_files", json!({ "old": "v1.pdf", "new": "v2.pdf", "old_pages": [1, 1], "new_pages": [2, 2] }));
+    assert_eq!(r["identical"], true, "{r}");
+    let r = ok(&mut a, "compare_files", json!({ "old": "v1.pdf", "new": "v1.pdf", "visual": false }));
+    assert_eq!(r["identical"], true, "{r}");
+
+    // Bad arguments are refused with a message, and nothing stays open.
+    for bad in [
+        json!({ "old": "v1.pdf", "new": "missing.pdf" }),
+        json!({ "old": "v1.pdf", "new": "v2.pdf", "old_pages": [3, 1] }),
+        json!({ "old": "v1.pdf", "new": "v2.pdf", "old_pages": [2, 9] }),
+        json!({ "old": "v1.pdf", "new": "v2.pdf", "threshold": 2 }),
+        json!({ "old": "v1.pdf", "new": "v2.pdf", "tolerance": 300 }),
+        json!({ "old": "v1.pdf", "new": "v2.pdf", "dpi": 1000 }),
+    ] {
+        assert!(a.call("compare_files", &bad).is_err(), "{bad}");
+    }
+    assert_eq!(ok(&mut a, "doc_list", json!({}))["documents"].as_array().unwrap().len(), 2);
 }
 
 #[test]
