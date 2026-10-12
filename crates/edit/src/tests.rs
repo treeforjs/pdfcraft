@@ -2634,3 +2634,58 @@ fn whole_paragraph_edits_leave_shared_resources_alone_and_transformed_text_on_th
     text::replace_block(&mut rotated, 0, 0, "Turned  text").unwrap();
     assert_eq!(text::text_blocks(&reopen(&rotated), 0).unwrap()[0].text, "Turned text");
 }
+
+#[test]
+fn repeated_spaces_at_a_wrap_point_read_back_unchanged() {
+    let mut doc = text_page("BT /F1 10 Tf 100 700 Td (Alpha beta) Tj ET");
+    for text in ["Alpha  beta  gamma", "Alpha beta gamma", "Alpha   beta gamma"] {
+        text::rewrite_block(&mut doc, 0, 0, Some(text), &text::BlockStyle { width: Some(40.0), ..Default::default() }).unwrap();
+        doc = reopen(&doc);
+        let block = text::text_blocks(&doc, 0).unwrap().remove(0);
+        assert!(block.line_count > 1, "{block:?}");
+        assert_eq!(block.text, text);
+    }
+}
+
+#[test]
+fn whole_paragraph_edits_keep_the_source_rows_they_do_not_reach() {
+    // Three source rows; row 2 is not greedy-full (row 3 starts with a word that would fit).
+    let para = "BT /F1 10 Tf 12 TL 100 700 Td (One two three four five six seven) Tj T* (eight nine) Tj T* (ten eleven twelve) Tj ET";
+    let rows_of = |doc: &Document| -> Vec<(String, f64, f64)> {
+        let lines = text::text_lines(doc, 0).unwrap();
+        let block = text::text_blocks(doc, 0).unwrap().remove(0);
+        block.lines.iter().map(|i| (lines[*i].text.clone(), lines[*i].rect[0], lines[*i].origin_baseline())).collect()
+    };
+    let source = rows_of(&text_page(para));
+    assert_eq!(source.iter().map(|r| r.0.as_str()).collect::<Vec<_>>(), ["One two three four five six seven", "eight nine", "ten eleven twelve"]);
+    for (text, rows) in [
+        // A word changed inside row 2: every row keeps its words and place.
+        (
+            "One two three four five six seven eight NINE ten eleven twelve",
+            vec!["One two three four five six seven", "eight NINE", "ten eleven twelve"],
+        ),
+        // A deletion does not pull the next row up.
+        ("One two three four five six seven eight ten eleven twelve", vec!["One two three four five six seven", "eight", "ten eleven twelve"]),
+        // Text that no longer fits wraps; the rows after it keep their words.
+        (
+            "One two three four five six seven eight nine and a much longer insertion ten eleven twelve",
+            vec!["One two three four five six seven", "eight nine and a much longer", "insertion", "ten eleven twelve"],
+        ),
+    ] {
+        let mut doc = text_page(para);
+        text::replace_block(&mut doc, 0, 0, text).unwrap();
+        let doc = reopen(&doc);
+        assert_eq!(text::text_blocks(&doc, 0).unwrap()[0].text, text);
+        let after = rows_of(&doc);
+        assert_eq!(after.iter().map(|r| r.0.as_str()).collect::<Vec<_>>(), rows, "{text}");
+        assert_eq!(after[0], source[0], "the first row is untouched");
+        let last = after.last().unwrap();
+        assert!((last.1 - 100.0).abs() < 1e-6, "{last:?}");
+        assert!((source[1].2 - after[1].2).abs() < 1e-6, "rows stay on the source leading");
+    }
+    // Removing the space that joins two rows joins their words: no break is forced there.
+    let mut doc = text_page(para);
+    let joined = "One two three four five six seveneight nine ten eleven twelve";
+    text::replace_block(&mut doc, 0, 0, joined).unwrap();
+    assert_eq!(text::text_blocks(&reopen(&doc), 0).unwrap()[0].text, joined);
+}

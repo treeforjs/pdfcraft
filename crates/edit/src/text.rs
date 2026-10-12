@@ -156,6 +156,9 @@ pub struct TextRun {
     pub color: [f64; 3],
     state: TextState,
     glyphs: Vec<SourceGlyph>,
+    /// Whether the run starts one of the paragraph's source rows after the first (its text
+    /// follows the logical space that joins the rows).
+    row_start: bool,
 }
 
 /// A paragraph: adjacent style runs and regularly spaced lines. The top-level style is the
@@ -1304,7 +1307,7 @@ fn group_blocks(lines: &[TextLine], mixed: bool) -> Vec<TextBlock> {
             let part = if next_row && !mixed { l.text.trim_matches(paragraph_separator) } else { &l.text };
             let start = b.runs.last().map_or(0, |r| r.end);
             b.text.push_str(part);
-            b.runs.push(run_of(l, start, start + part.chars().count()));
+            b.runs.push(TextRun { row_start: next_row, ..run_of(l, start, start + part.chars().count()) });
             b.rect = [b.rect[0].min(l.rect[0]), b.rect[1].min(l.rect[1]), b.rect[2].max(l.rect[2]), b.rect[3].max(l.rect[3])];
             b.lines.push(i);
         } else {
@@ -1343,6 +1346,7 @@ fn run_of(l: &TextLine, start: usize, end: usize) -> TextRun {
         color: l.color,
         state: l.origin.state.clone(),
         glyphs: l.glyphs.clone(),
+        row_start: false,
     }
 }
 

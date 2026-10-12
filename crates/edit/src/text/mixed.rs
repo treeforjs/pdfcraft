@@ -27,6 +27,8 @@ const CHUNK_OPS: usize = 2;
 const UNDERLINED_GLYPH_OPS: usize = 4 + 12;
 /// Paragraph framing: `q`, an optional `cm`, `BT`, `ET` and the closing `Q`.
 const FRAME_OPS: usize = 5;
+/// Slack (user space) when fitting a row, far below anything visible.
+const WIDTH_TOLERANCE: f64 = 0.01;
 
 /// Characters a single PDF paragraph cannot represent (line and page breaks, tabs) are shown as
 /// one space each; a CR LF pair is one break. Everything else, including repeated, no-break and
@@ -94,6 +96,8 @@ struct Glyph {
     /// so the rest of `advance` is written as a TJ number.
     shown: f64,
     space: bool,
+    /// The first glyph of a source row after the paragraph's first, kept where it was.
+    row_start: bool,
 }
 
 /// Assign inserted text the style at the insertion point; unchanged prefix/suffix characters
@@ -267,6 +271,8 @@ fn prepare(
                 state.scale = s / 100.0;
             }
         }
+        // Its source row starts here: an untouched row keeps that line break.
+        let starts_row = keep_codes && source.row_start && segment.source_range.as_ref().is_some_and(|r| r.start == 0);
         let source_glyphs = if let Some(range) = &segment.source_range
             && keep_codes
         {
@@ -299,7 +305,7 @@ fn prepare(
                 faces.len() - 1
             }
         };
-        for mut glyph in source_glyphs {
+        for (position, mut glyph) in source_glyphs.into_iter().enumerate() {
             let space = glyph.text == " ";
             let nominal: f64 = m
                 .codes(&glyph.bytes)
@@ -328,17 +334,28 @@ fn prepare(
             if underline && !glyph.bytes.is_empty() {
                 minimum = minimum.checked_add(UNDERLINED_GLYPH_OPS).filter(|n| *n <= MAX_EMITTED_OPS).ok_or_else(over_budget)?;
             }
-            glyphs.push(Glyph { bytes: glyph.bytes, face, advance, shown, space });
+            glyphs.push(Glyph { bytes: glyph.bytes, face, advance, shown, space, row_start: starts_row && position == 0 });
         }
     }
     Ok(Prepared { faces, glyphs, substituted })
 }
 
-fn rows(glyphs: &[Glyph], width: f64) -> Vec<std::ops::Range<usize>> {
+/// Greedy rows of at most `width` (user space), breaking after spaces. With `keep_breaks`, a
+/// source row start that follows a space also ends the row before it, so rows the edit does not
+/// reach keep their words exactly where they were; an edit that overflows its row still wraps.
+fn rows(glyphs: &[Glyph], width: f64, keep_breaks: bool) -> Vec<std::ops::Range<usize>> {
+    // Re-adding the advances of a row the source fitted must not wrap it on rounding.
+    let width = width + WIDTH_TOLERANCE;
     let mut rows = Vec::new();
     let (mut start, mut advance, mut word_break) = (0, 0.0, None);
     let mut index = 0;
     while let Some(glyph) = glyphs.get(index) {
+        if keep_breaks && glyph.row_start && index > start && index.checked_sub(1).and_then(|i| glyphs.get(i)).is_some_and(|g| g.space) {
+            rows.push(start..index);
+            start = index;
+            advance = 0.0;
+            word_break = None;
+        }
         if glyph.space {
             word_break = Some(index + 1);
         }
@@ -379,10 +396,11 @@ impl Item {
     }
 }
 
-/// Place the glyphs of `rows`. A row that wraps drops the one space it wraps at when that space
-/// has the style of the character before it: the reader joins rows with a space in that
-/// character's style, so text and styles read back unchanged. Alignment and justification
-/// measure each row without its trailing spaces.
+/// Place the glyphs of `rows`. A row that wraps at a single space drops that space when it has
+/// the style of the character before it: the reader joins rows with one space in that
+/// character's style, so text and styles read back unchanged. Repeated spaces at a wrap are
+/// all kept (the reader adds no space after them). Alignment and justification measure each
+/// row without its trailing spaces.
 fn plan(glyphs: &[Glyph], faces: &[Face], rows: &[std::ops::Range<usize>], width: f64, horizontal: f64, style: &BlockStyle) -> Vec<Item> {
     let same_face = |a: &Glyph, b: &Glyph| match (faces.get(a.face), faces.get(b.face)) {
         (Some(a), Some(b)) => a.underline == b.underline && a.state == b.state,
@@ -393,7 +411,7 @@ fn plan(glyphs: &[Glyph], faces: &[Face], rows: &[std::ops::Range<usize>], width
         let last_row = row_index + 1 == rows.len();
         let mut end = range.end;
         let wrap_space = end.checked_sub(1).filter(|i| *i > range.start).and_then(|i| Some((glyphs.get(i)?, glyphs.get(i - 1)?)));
-        if !last_row && wrap_space.is_some_and(|(space, before)| space.space && same_face(space, before)) {
+        if !last_row && wrap_space.is_some_and(|(space, before)| space.space && !before.space && same_face(space, before)) {
             end -= 1;
         }
         let line = glyphs.get(range.start..end).unwrap_or_default();
@@ -523,7 +541,17 @@ pub(super) fn rewrite(
         let current = (block.rect[2] - block.rect[0]).max(block.size);
         if block.line_count == 1 { current.max(p.crop(doc)[2] - 36.0 - block.rect[0] - dx) } else { current }
     });
-    let rows = rows(&glyphs, width);
+    // Source line breaks are kept unless the edit changes how wide the text is set.
+    let keep_breaks = style.width.is_none()
+        && style.size.is_none()
+        && style.font_resource.is_none()
+        && style.family.is_none()
+        && style.family_only.is_none()
+        && style.bold.is_none()
+        && style.italic.is_none()
+        && style.char_spacing.is_none()
+        && style.scale.is_none();
+    let rows = rows(&glyphs, width, keep_breaks);
     // Line spacing in text space: requested, else the paragraph's own (or its TL for a single
     // line) scaled with the largest size when sizes change, else 1.2 × the largest size.
     let old_lead = block.lines.iter().filter_map(|i| lines.get(*i)).map(|l| o.baseline - l.origin.baseline).find(|d| *d > block.size * 0.5);
