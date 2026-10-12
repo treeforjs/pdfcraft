@@ -152,16 +152,12 @@ impl Default for Extras {
 
 /// Underline, line spacing, character spacing and horizontal scale for the paragraph being
 /// edited (under Format text). Returns `true` when something changed.
-pub(crate) fn extras_panel(ui: &mut egui::Ui, e: &mut Extras, selected: bool) -> bool {
+pub(crate) fn extras_panel(ui: &mut egui::Ui, e: &mut Extras) -> bool {
     let before = *e;
     ui.horizontal(|ui| {
-        ui.add_enabled_ui(!selected, |ui| {
-            if crate::icons::button(ui, "underline", 26.0, e.underline, tl!("Underline")).clicked() {
-                e.underline = !e.underline;
-            }
-        })
-        .response
-        .on_disabled_hover_text(tl!("Underline is available for whole paragraphs."));
+        if crate::icons::button(ui, "underline", 26.0, e.underline, tl!("Underline")).clicked() {
+            e.underline = !e.underline;
+        }
         let zero = tl!("Line spacing").to_string();
         let label = |v: f64| if v == 0.0 { zero.clone() } else { format!("{v:.2}×") };
         egui::ComboBox::from_id_salt("line-spacing").selected_text(label(e.line_spacing)).width(110.0).show_ui(ui, |ui| {
@@ -253,6 +249,8 @@ impl LineEditor {
             self.look.color = source.color;
             self.look0 = self.look.clone();
             self.source_font = run.base_font.clone();
+            self.extras.underline = run.underline;
+            self.extras0.underline = run.underline;
         }
     }
 }
@@ -328,6 +326,11 @@ fn draft_layout(
                 font_id: editor_font(&look, (look.size as f32 * scale).max(1.0)),
                 color: color32(look.color),
                 italics: look.italic,
+                underline: if index.and_then(|i| runs.get(i)).is_some_and(|run| run.underline) {
+                    egui::Stroke::new(1.0, color32(look.color))
+                } else {
+                    egui::Stroke::NONE
+                },
                 ..Default::default()
             },
         );
@@ -679,8 +682,8 @@ pub(crate) fn page_input(
             focus: true,
             look: look_of(l),
             look0: look_of(l),
-            extras: Extras::default(),
-            extras0: Extras::default(),
+            extras: Extras { underline: l.runs.first().is_some_and(|r| r.underline), ..Default::default() },
+            extras0: Extras { underline: l.runs.first().is_some_and(|r| r.underline), ..Default::default() },
         });
     }
     true

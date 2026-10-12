@@ -1342,6 +1342,34 @@ fn excessive_edit_text_and_source_style_segments_are_refused_atomically() {
 }
 
 #[test]
+fn run_preserving_edits_refuse_operator_expansion_before_emitting_it() {
+    // Within the 1,000,000-character ceiling, per-glyph placement would emit ~10 operators per
+    // plain character and ~24 per underlined one. Preparation counts them before anything is
+    // emitted and refuses the whole edit; nothing is truncated and the document is unchanged.
+    let mut doc = text_page("BT /F1 12 Tf 72 700 Td (Small) Tj ET");
+    let before = write_incremental(&doc, &SaveOptions::default()).unwrap();
+    let plain = "x".repeat(1_000_000);
+    let underlined = "ab ".repeat(30_000);
+    for (text, style) in [
+        (plain.as_str(), text::BlockStyle { range: Some([0, 1]), color: Some([0.0, 0.0, 1.0]), ..Default::default() }),
+        (underlined.as_str(), text::BlockStyle { underline: Some(true), ..Default::default() }),
+    ] {
+        let error = text::rewrite_block(&mut doc, 0, 0, Some(text), &style).unwrap_err();
+        assert!(error.to_string().contains("more than 2000000 PDF operators"), "{error}");
+        assert!(error.to_string().contains("smaller paragraphs"), "{error}");
+        assert_eq!(write_incremental(&doc, &SaveOptions::default()).unwrap(), before);
+        assert_eq!(text::text_blocks(&doc, 0).unwrap()[0].text, "Small");
+    }
+    // The same underline at a size well inside the budget succeeds and reads back.
+    let text = "ab ".repeat(2_000);
+    text::rewrite_block(&mut doc, 0, 0, Some(&text), &text::BlockStyle { underline: Some(true), ..Default::default() }).unwrap();
+    let doc = reopen(&doc);
+    let blocks = text::text_blocks(&doc, 0).unwrap();
+    assert!(blocks.iter().flat_map(|b| &b.runs).all(|r| r.underline));
+    assert_eq!(blocks.iter().map(|b| b.text.split_whitespace().count()).sum::<usize>(), 2_000);
+}
+
+#[test]
 fn selected_subset_and_bad_ranges_fail_without_low_level_mutation() {
     let mut doc = text_page("BT /F1 12 Tf 72 700 Td (A abba Z) Tj ET");
     text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { range: Some([2, 6]), font_resource: Some("F2".into()), ..Default::default() })
@@ -1352,7 +1380,8 @@ fn selected_subset_and_bad_ranges_fail_without_low_level_mutation() {
         text::BlockStyle { range: Some([9, 10]), bold: Some(true), ..Default::default() },
         text::BlockStyle { range: Some([2, 2]), bold: Some(true), ..Default::default() },
         text::BlockStyle { range: Some([0, 1]), size: Some(f64::NAN), ..Default::default() },
-        text::BlockStyle { range: Some([0, 1]), underline: Some(true), ..Default::default() },
+        // Selected underlines are supported now; an invalid range still refuses atomically.
+        text::BlockStyle { range: Some([3, 99]), underline: Some(true), ..Default::default() },
     ] {
         assert!(text::rewrite_block(&mut doc, 0, 0, None, &style).is_err());
         assert_eq!(write_incremental(&doc, &SaveOptions::default()).unwrap(), before);
@@ -1565,6 +1594,429 @@ fn recolouring_a_paragraph_in_a_shared_text_object_keeps_order_and_nesting() {
         }
     }
     assert!(!red.is_empty(), "{ops:?}");
+}
+
+#[test]
+fn selected_underlines_survive_reflow_restyle_and_reopen_without_touching_artwork() {
+    let artwork = "q 0 1 0 RG 1 w 65 695 m 170 695 l S Q";
+    let mut doc = text_page(&format!("{artwork} BT /F1 12 Tf 72 700 Td (Before abba after.) Tj ET"));
+    let style = text::BlockStyle { range: Some([7, 11]), underline: Some(true), ..Default::default() };
+    text::rewrite_block(&mut doc, 0, 0, None, &style).unwrap();
+    let mut doc = reopen(&doc);
+    let block = text::text_blocks(&doc, 0).unwrap().remove(0);
+    assert_eq!(block.text, "Before abba after.");
+    assert_eq!(block.runs.iter().map(|r| (r.start, r.end, r.underline)).collect::<Vec<_>>(), [(0, 7, false), (7, 11, true), (11, 18, false)]);
+    let first = page_content_bytes(&doc, 0);
+    assert!(String::from_utf8_lossy(&first).contains(artwork));
+    assert_eq!(String::from_utf8_lossy(&first).matches("/PdfCraftUnderlinePath ").count(), 4);
+    // Applying the already-present style has no byte-level effect.
+    assert!(text::is_noop(&doc, 0, 0, &block.text, &style).unwrap());
+    text::rewrite_block(&mut doc, 0, 0, None, &style).unwrap();
+    assert_eq!(page_content_bytes(&doc, 0), first);
+    text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { range: Some([7, 11]), italic: Some(true), ..Default::default() }).unwrap();
+    text::rewrite_block(&mut doc, 0, 0, Some("Before added after."), &text::BlockStyle { width: Some(70.0), ..Default::default() }).unwrap();
+    let mut doc = reopen(&doc);
+    let block = text::text_blocks(&doc, 0).unwrap().remove(0);
+    assert_eq!(block.text, "Before added after.");
+    assert!(block.line_count > 1);
+    let selected: Vec<_> = block.runs.iter().filter(|r| r.start >= 7 && r.end <= 12).collect();
+    assert!(!selected.is_empty());
+    assert!(selected.iter().all(|r| r.underline && r.italic));
+    text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { underline: Some(false), ..Default::default() }).unwrap();
+    let doc = reopen(&doc);
+    assert!(text::text_blocks(&doc, 0).unwrap()[0].runs.iter().all(|r| !r.underline));
+    let content = String::from_utf8_lossy(&page_content_bytes(&doc, 0)).into_owned();
+    assert!(!content.contains("/PdfCraftUnderline"), "obsolete paths and text markers were removed: {content}");
+    assert!(content.contains(artwork), "unmarked artwork remains byte-for-byte");
+}
+
+#[test]
+fn editable_underline_associations_refuse_missing_duplicate_and_unrecognized_paths_atomically() {
+    let good = "BT /F1 12 Tf 72 700 Td /PdfCraftUnderlineText << /Version 1 /ID 1 >> BDC (A) Tj EMC ET";
+    let path = "/PdfCraftUnderlinePath << /Version 1 /ID 1 >> BDC q 1 0 0 1 72 700 cm 0 0 0 RG 1 w 0 J [] 0 d 0 -2 m 8 -2 l S Q EMC";
+    for source in [good.to_owned(), format!("{good} {path} {path}"), format!("{good} {}", path.replace(" S Q", " S 0 0 20 20 re f Q"))] {
+        let mut doc = text_page(&source);
+        let original = write_incremental(&doc, &SaveOptions::default()).unwrap();
+        let error = text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { underline: Some(false), ..Default::default() }).unwrap_err();
+        assert!(error.to_string().contains("ambiguous underline"), "{error}");
+        assert_eq!(write_incremental(&doc, &SaveOptions::default()).unwrap(), original);
+    }
+    // q/Q is independent of BDC/EMC.
+    let mut doc = text_page(&format!("{good} {path}"));
+    assert!(text::text_blocks(&doc, 0).unwrap()[0].runs[0].underline);
+    text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { underline: Some(false), ..Default::default() }).unwrap();
+    assert_eq!(text::text_blocks(&reopen(&doc), 0).unwrap()[0].text, "A");
+    assert!(!String::from_utf8_lossy(&page_content_bytes(&doc, 0)).contains("PdfCraftUnderline"));
+}
+
+#[test]
+fn editing_an_overlapping_label_preserves_an_independent_underlined_run() {
+    let mut doc = text_page("BT /F1 12 Tf 72 700 Td (AB) Tj ET BT /F1 12 Tf 76 700 Td (CD) Tj ET");
+    text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { underline: Some(true), ..Default::default() }).unwrap();
+    let before = text::text_blocks(&doc, 0).unwrap()[0].clone();
+    text::replace_block(&mut doc, 0, 1, "EF").unwrap();
+    let mut doc = reopen(&doc);
+    let blocks = text::text_blocks(&doc, 0).unwrap();
+    assert_eq!(blocks.iter().map(|b| b.text.as_str()).collect::<Vec<_>>(), ["AB", "EF"]);
+    assert_eq!(blocks[0].runs, before.runs);
+    assert_eq!(String::from_utf8_lossy(&page_content_bytes(&doc, 0)).matches("/PdfCraftUnderlinePath ").count(), 2);
+    let line = text::text_lines(&doc, 0).unwrap().iter().position(|l| l.text == "EF").unwrap();
+    text::replace_line(&mut doc, 0, line, "GH").unwrap();
+    let blocks = text::text_blocks(&reopen(&doc), 0).unwrap();
+    assert_eq!(blocks.iter().map(|b| b.text.as_str()).collect::<Vec<_>>(), ["AB", "GH"]);
+    assert_eq!(blocks[0].runs, before.runs);
+}
+
+#[test]
+fn underline_metadata_survives_split_streams_and_does_not_change_shared_pages() {
+    let mut doc = text_page("BT /F1 12 Tf 72 700 Td (X) Tj ET");
+    text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { underline: Some(true), ..Default::default() }).unwrap();
+    let bytes = page_content_bytes(&doc, 0);
+    // Streams may be split only between tokens (ISO 32000-2 §7.8.2). Split at whitespace roughly
+    // every 17 bytes so markers, their property dictionaries and bodies span several streams.
+    // The fixture has no literal string containing whitespace, so each split is between tokens.
+    let mut chunks = Vec::new();
+    let mut start = 0;
+    for (i, byte) in bytes.iter().enumerate() {
+        if byte.is_ascii_whitespace() && i - start >= 17 {
+            chunks.push(&bytes[start..i]);
+            start = i;
+        }
+    }
+    chunks.push(&bytes[start..]);
+    assert!(chunks.len() > 10, "{chunks:?}");
+    let pieces: Vec<Object> = chunks.into_iter().map(|chunk| Object::Ref(doc.add(Object::Stream(Stream::flate(Dict::new(), chunk))))).collect();
+    let page = pdfcraft_model::pages(&doc)[0].obj;
+    doc.update_dict(page, |page| page.set(b"Contents".to_vec(), Object::Array(pieces))).unwrap();
+    let mut doc = reopen(&doc);
+    assert!(text::text_blocks(&doc, 0).unwrap()[0].runs[0].underline);
+    text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { underline: Some(false), ..Default::default() }).unwrap();
+    assert!(!text::text_blocks(&reopen(&doc), 0).unwrap()[0].runs[0].underline);
+    assert!(!String::from_utf8_lossy(&page_content_bytes(&doc, 0)).contains("PdfCraftUnderline"));
+
+    let mut doc = fixture();
+    let other = page_content_bytes(&doc, 1);
+    text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { range: Some([0, 1]), underline: Some(true), ..Default::default() }).unwrap();
+    let doc = reopen(&doc);
+    assert_eq!(page_content_bytes(&doc, 1), other, "the other placement of a shared stream is untouched");
+    assert!(text::text_blocks(&doc, 0).unwrap()[0].runs[0].underline);
+    assert!(!text::text_blocks(&doc, 1).unwrap()[0].runs[0].underline);
+}
+
+#[test]
+fn underlining_refuses_active_paths_and_uses_solid_lines_without_changing_stroke_state() {
+    let mut doc = text_page("[3 2] 1 d 2 J BT /F1 12 Tf 72 700 Td (Text) Tj ET 0 650 m 100 650 l S");
+    text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { underline: Some(true), ..Default::default() }).unwrap();
+    let content = String::from_utf8_lossy(&page_content_bytes(&doc, 0)).into_owned();
+    assert!(content.contains("0 J\n[] 0 d\n"), "authored underline uses a solid butt-capped stroke");
+    assert!(content.contains("0 650 m 100 650 l S"), "later artwork remains intact");
+    assert!(text::text_blocks(&reopen(&doc), 0).unwrap()[0].runs[0].underline);
+    for path in ["0 650 m 100 650 l", "0 650 m q 100 650 l Q"] {
+        let mut doc = text_page(&format!("{path} BT /F1 12 Tf 72 700 Td (Text) Tj ET S"));
+        let before = write_incremental(&doc, &SaveOptions::default()).unwrap();
+        let error = text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { underline: Some(true), ..Default::default() }).unwrap_err();
+        assert!(error.to_string().contains("active drawing path"));
+        assert_eq!(write_incremental(&doc, &SaveOptions::default()).unwrap(), before);
+    }
+}
+
+#[test]
+fn underlining_one_of_two_paragraphs_keeps_the_others_paths_and_unique_ids() {
+    let mut doc = text_page("BT /F1 12 Tf 72 700 Td (First) Tj 0 -45 Td (Second) Tj ET");
+    for block in [0, 1] {
+        text::rewrite_block(&mut doc, 0, block, None, &text::BlockStyle { underline: Some(true), ..Default::default() }).unwrap();
+    }
+    let mut doc = reopen(&doc);
+    assert!(text::text_blocks(&doc, 0).unwrap().iter().all(|b| b.runs.iter().all(|r| r.underline)));
+    text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { underline: Some(false), ..Default::default() }).unwrap();
+    let doc = reopen(&doc);
+    let blocks = text::text_blocks(&doc, 0).unwrap();
+    assert_eq!(blocks.iter().map(|b| b.text.as_str()).collect::<Vec<_>>(), ["First", "Second"]);
+    assert!(blocks[0].runs.iter().all(|r| !r.underline));
+    assert!(blocks[1].runs.iter().all(|r| r.underline));
+    assert_eq!(String::from_utf8_lossy(&page_content_bytes(&doc, 0)).matches("/PdfCraftUnderlinePath ").count(), 6);
+}
+
+/// One authored underline association read straight from page 0's content.
+#[derive(Debug)]
+struct Association {
+    id: i64,
+    bytes: Vec<u8>,
+    /// The text matrix the associated glyph is shown with.
+    tm: [f64; 6],
+    /// The path's `cm` and its single horizontal segment in that space.
+    cm: [f64; 6],
+    x0: f64,
+    x1: f64,
+    y: f64,
+}
+
+/// Every text marker paired with exactly one path marker of the same ID (and no orphans), with
+/// geometry checked against its glyph: the path starts where the glyph is placed and lies just
+/// below that glyph's baseline.
+fn underline_associations(doc: &Document) -> Vec<Association> {
+    let ops = pdfcraft_content::parse(&page_content_bytes(doc, 0)).ops;
+    let mut text = Vec::new();
+    let mut paths = std::collections::HashMap::new();
+    let mut tm = [0.0; 6];
+    for (i, op) in ops.iter().enumerate() {
+        if op.is("Tm") {
+            tm = op.nums::<6>().unwrap();
+        }
+        if !op.is("BDC") {
+            continue;
+        }
+        let id = || op.operands[1].as_dict().unwrap().int(b"ID").unwrap();
+        match op.name(0).unwrap_or_default() {
+            b"PdfCraftUnderlineText" => {
+                let show = &ops[i + 1];
+                assert!(show.is("Tj") && ops[i + 2].is("EMC"), "{show:?}");
+                let Some(Object::String(s)) = show.operands.first() else { panic!("{show:?}") };
+                text.push((id(), s.bytes.clone(), tm));
+            }
+            b"PdfCraftUnderlinePath" => {
+                let names: Vec<&[u8]> = ops[i + 1..i + 12].iter().map(|o| o.op.as_slice()).collect();
+                assert_eq!(names, [&b"q"[..], b"cm", b"RG", b"w", b"J", b"d", b"m", b"l", b"S", b"Q", b"EMC"]);
+                let (m, l) = (ops[i + 7].nums::<2>().unwrap(), ops[i + 8].nums::<2>().unwrap());
+                assert_eq!(m[1], l[1], "horizontal");
+                assert!(paths.insert(id(), (ops[i + 2].nums::<6>().unwrap(), m[0], l[0], m[1])).is_none(), "duplicate path ID");
+            }
+            _ => {}
+        }
+    }
+    assert_eq!(text.len(), paths.len(), "no orphan paths");
+    let out: Vec<Association> = text
+        .into_iter()
+        .map(|(id, bytes, tm)| {
+            let (cm, x0, x1, y) = paths.remove(&id).expect("each text marker has its own path");
+            Association { id, bytes, tm, cm, x0, x1, y }
+        })
+        .collect();
+    for a in &out {
+        // Upright, unscaled paragraph fixtures: the glyph's Tm is [1 0 0 1 x y] · cm.
+        assert!((a.cm[4] + a.x0 - a.tm[4]).abs() < 2e-3, "{a:?}");
+        assert!(a.x1 > a.x0, "{a:?}");
+        let below = a.tm[5] - (a.cm[5] + a.y);
+        assert!(below > 0.0 && below < a.tm[0].max(1.0) * 12.0, "{a:?}");
+    }
+    let ids: std::collections::HashSet<i64> = out.iter().map(|a| a.id).collect();
+    assert_eq!(ids.len(), out.len(), "unique IDs");
+    out
+}
+
+/// The x of every non-empty `Tj`'s text matrix on page 0.
+fn shown_x(doc: &Document) -> Vec<f64> {
+    let mut tm = [0.0; 6];
+    let mut out = Vec::new();
+    for op in pdfcraft_content::parse(&page_content_bytes(doc, 0)).ops {
+        if op.is("Tm") {
+            tm = op.nums::<6>().unwrap();
+        }
+        if op.is("Tj") && matches!(op.operands.first(), Some(Object::String(s)) if !s.bytes.is_empty()) {
+            out.push(tm[4]);
+        }
+    }
+    out
+}
+
+#[test]
+fn underlines_keep_tj_adjustments_logical_spaces_and_exact_positions() {
+    // Helvetica 12 pt: A and V advance 8.004. -150 moves right 1.8 (kerning stays a glyph
+    // adjustment), 120 moves left 1.44, and -1000 (12) reads as a logical space without codes.
+    let mut doc = text_page("BT /F1 12 Tf 72 700 Td [(A) -150 (V) 120 (A) -1000 (B)] TJ ET");
+    assert_eq!(text::text_blocks(&doc, 0).unwrap()[0].text, "AVA B");
+    let starts = [72.0, 81.804, 88.368, 96.372, 108.372];
+    let ends = [81.804, 88.368, 96.372, 108.372, 116.376];
+    let close = |a: f64, b: f64| (a - b).abs() < 2e-3;
+    let same = |xs: &[f64], want: &[f64]| xs.len() == want.len() && xs.iter().zip(want).all(|(a, b)| close(*a, *b));
+
+    text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { underline: Some(true), ..Default::default() }).unwrap();
+    let mut doc = reopen(&doc);
+    let block = text::text_blocks(&doc, 0).unwrap().remove(0);
+    assert_eq!(block.text, "AVA B");
+    assert!(block.runs.iter().all(|r| r.underline), "{:?}", block.runs);
+    let a = underline_associations(&doc);
+    assert_eq!(a.len(), 5, "{a:?}");
+    for (i, assoc) in a.iter().enumerate() {
+        assert!(close(assoc.tm[4], starts[i]) && close(assoc.tm[5], 700.0), "{i}: {assoc:?}");
+        assert!(close(assoc.cm[4] + assoc.x1, ends[i]), "{i}: the underline covers the glyph and its adjustment: {assoc:?}");
+    }
+    assert_eq!(a[3].bytes, b" ", "the code-less logical space gained an encodable space to carry its association");
+
+    // Remove the underline from "VA" only: the other three associations stay, nothing moves.
+    text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { range: Some([1, 3]), underline: Some(false), ..Default::default() }).unwrap();
+    let mut doc = reopen(&doc);
+    let block = text::text_blocks(&doc, 0).unwrap().remove(0);
+    assert_eq!(block.text, "AVA B");
+    assert_eq!(block.runs.iter().map(|r| (r.start, r.end, r.underline)).collect::<Vec<_>>(), [(0, 1, true), (1, 3, false), (3, 5, true)]);
+    let a = underline_associations(&doc);
+    assert!(same(&a.iter().map(|a| a.tm[4]).collect::<Vec<_>>(), &[starts[0], starts[3], starts[4]]), "{a:?}");
+    assert!(same(&shown_x(&doc), &starts), "{:?}", shown_x(&doc));
+
+    // And off everywhere: no markers remain and every glyph is still exactly where it was.
+    text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { underline: Some(false), ..Default::default() }).unwrap();
+    let doc = reopen(&doc);
+    assert!(underline_associations(&doc).is_empty());
+    assert_eq!(text::text_blocks(&doc, 0).unwrap()[0].text, "AVA B");
+    assert!(same(&shown_x(&doc), &starts), "{:?}", shown_x(&doc));
+}
+
+#[test]
+fn wrapped_and_partially_restyled_underlines_keep_one_path_per_glyph() {
+    let mut doc = text_page("BT /F1 12 Tf 72 700 Td (Alpha beta gamma delta epsilon) Tj ET");
+    text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { range: Some([6, 22]), underline: Some(true), ..Default::default() }).unwrap();
+    // A different font for part of the underlined range, then a narrow rewrap.
+    text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { range: Some([11, 16]), bold: Some(true), ..Default::default() }).unwrap();
+    text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { width: Some(60.0), ..Default::default() }).unwrap();
+    let doc = reopen(&doc);
+    let block = text::text_blocks(&doc, 0).unwrap().remove(0);
+    assert_eq!(block.text, "Alpha beta gamma delta epsilon");
+    assert!(block.line_count > 2, "{block:?}");
+    let underlined: String = block.runs.iter().filter(|r| r.underline).flat_map(|r| block.text.chars().skip(r.start).take(r.end - r.start)).collect();
+    assert_eq!(underlined, "beta gamma delta");
+    assert!(block.runs.iter().any(|r| r.underline && r.bold), "{:?}", block.runs);
+    let a = underline_associations(&doc);
+    // One association per underlined character (the font maps each code to one character).
+    assert_eq!(a.len(), "beta gamma delta".chars().count(), "{a:?}");
+    let rows: std::collections::BTreeSet<i64> = a.iter().map(|a| (a.tm[5] * 1000.0).round() as i64).collect();
+    assert!(rows.len() > 1, "the underlined range wraps over several rows and each path follows its row");
+}
+
+#[test]
+fn forged_or_malformed_underline_markers_refuse_atomically() {
+    let path =
+        |id: &str| format!("/PdfCraftUnderlinePath << /Version 1 /ID {id} >> BDC q 1 0 0 1 72 700 cm 0 0 0 RG 1 w 0 J [] 0 d 0 -2 m 8 -2 l S Q EMC");
+    let text = |props: &str| format!("BT /F1 12 Tf 72 700 Td /PdfCraftUnderlineText {props} BDC (A) Tj EMC ET");
+    let good = text("<< /Version 1 /ID 1 >>");
+    let cases = [
+        format!("{} {}", text("<< /Version 2 /ID 1 >>"), path("1")),
+        format!("{} {}", text("<< /Version 1 /ID 0 >>"), path("0")),
+        format!("{} {}", text("<< /Version 1 /ID -4 >>"), path("-4")),
+        format!("{} {}", text("<< /Version 1 /ID 1.5 >>"), path("1.5")),
+        format!("{} {}", text("<< /Version 1 >>"), path("1")),
+        format!("{} {}", text("/Props1"), path("1")),
+        format!("BT /F1 12 Tf 72 700 Td /PdfCraftUnderlineText << /Version 1 /ID 1 >> BDC (A) Tj (B) Tj EMC ET {}", path("1")),
+        format!("BT /F1 12 Tf 72 700 Td /PdfCraftUnderlineText << /Version 1 /ID 1 >> BDC (A) Tj ET {}", path("1")),
+        format!("{good} BT /F1 12 Tf 72 680 Td /PdfCraftUnderlineText << /Version 1 /ID 1 >> BDC (B) Tj EMC ET {}", path("1")),
+        format!("{good} {}", path("1").replace("[] 0 d", "[3 2] 0 d")),
+        format!("{good} {}", path("1").replace("0 J", "1 J")),
+        format!("{good} {}", path("1").replace("1 w", "0 w")),
+        format!("{good} {}", path("1").replace("0 0 0 RG", "0 0 2 RG")),
+        format!("{good} {}", path("1").replace("72 700 cm", "72 cm")),
+        format!("{good} {}", path("1").replace("Q EMC", "EMC Q")),
+        good.clone(),
+    ];
+    for source in cases {
+        let mut doc = text_page(&source);
+        let original = write_incremental(&doc, &SaveOptions::default()).unwrap();
+        let blocks = text::text_blocks(&doc, 0).unwrap();
+        assert!(blocks.iter().flat_map(|b| &b.runs).all(|r| !r.underline), "an untrusted association never reads as underlined: {source}");
+        for style in [
+            text::BlockStyle { underline: Some(false), ..Default::default() },
+            text::BlockStyle { underline: Some(true), ..Default::default() },
+            text::BlockStyle { color: Some([1.0, 0.0, 0.0]), ..Default::default() },
+        ] {
+            assert!(!text::is_noop(&doc, 0, 0, &blocks[0].text, &style).unwrap(), "{source}");
+            let error = text::rewrite_block(&mut doc, 0, 0, None, &style).unwrap_err();
+            assert!(error.to_string().contains("ambiguous underline"), "{source}: {error}");
+            assert_eq!(write_incremental(&doc, &SaveOptions::default()).unwrap(), original, "{source}");
+        }
+        let error = text::replace_block(&mut doc, 0, 0, "Changed").unwrap_err();
+        assert!(error.to_string().contains("ambiguous underline"), "{source}: {error}");
+        let error = text::replace_line(&mut doc, 0, 0, "Changed").unwrap_err();
+        assert!(error.to_string().contains("paragraph editing"), "{source}: {error}");
+        assert_eq!(write_incremental(&doc, &SaveOptions::default()).unwrap(), original, "{source}");
+    }
+}
+
+#[test]
+fn orphan_and_nested_markers_are_safe_and_id_exhaustion_refuses() {
+    // A path marker without text is artwork; new IDs never reuse its ID.
+    let orphan = "/PdfCraftUnderlinePath << /Version 1 /ID 41 >> BDC q 1 0 0 1 10 10 cm 0 0 0 RG 1 w 0 J [] 0 d 0 0 m 8 0 l S Q EMC";
+    let mut doc = text_page(&format!("{orphan} BT /F1 12 Tf 72 700 Td (Hi) Tj ET"));
+    text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { underline: Some(true), ..Default::default() }).unwrap();
+    let content = String::from_utf8_lossy(&page_content_bytes(&doc, 0)).into_owned();
+    assert!(content.starts_with(orphan), "{content}");
+    let ops = pdfcraft_content::parse(content.as_bytes()).ops;
+    let ids: Vec<i64> = ops
+        .iter()
+        .filter(|o| o.is("BDC") && o.name(0) == Some(b"PdfCraftUnderlineText"))
+        .map(|o| o.operands[1].as_dict().unwrap().int(b"ID").unwrap())
+        .collect();
+    assert_eq!(ids, [42, 43]);
+    text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { underline: Some(false), ..Default::default() }).unwrap();
+    let content = String::from_utf8_lossy(&page_content_bytes(&doc, 0)).into_owned();
+    assert!(content.starts_with(orphan) && content.matches("PdfCraftUnderline").count() == 1, "{content}");
+
+    // An association nested in other marked content is still recognised and removed cleanly.
+    let nested = "BT /F1 12 Tf 72 700 Td /Span << /Lang (en) >> BDC /PdfCraftUnderlineText << /Version 1 /ID 1 >> BDC (A) Tj EMC EMC ET \
+                  /PdfCraftUnderlinePath << /Version 1 /ID 1 >> BDC q 1 0 0 1 72 700 cm 0 0 0 RG 1 w 0 J [] 0 d 0 -2 m 8 -2 l S Q EMC";
+    let mut doc = text_page(nested);
+    assert!(text::text_blocks(&doc, 0).unwrap()[0].runs[0].underline);
+    text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { underline: Some(false), ..Default::default() }).unwrap();
+    let doc = reopen(&doc);
+    let content = String::from_utf8_lossy(&page_content_bytes(&doc, 0)).into_owned();
+    assert!(!content.contains("PdfCraftUnderline"), "{content}");
+    assert_eq!(content.matches("BDC").count(), content.matches("EMC").count(), "marked content stays balanced: {content}");
+    assert_eq!(text::text_blocks(&doc, 0).unwrap()[0].text, "A");
+
+    // The largest ID is taken: a new association cannot be numbered, so the edit refuses.
+    let mut doc = text_page(&format!("{} BT /F1 12 Tf 72 700 Td (Hi) Tj ET", orphan.replace("/ID 41", "/ID 9223372036854775807")));
+    let before = write_incremental(&doc, &SaveOptions::default()).unwrap();
+    let error = text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { underline: Some(true), ..Default::default() }).unwrap_err();
+    assert!(error.to_string().contains("exhausted underline association IDs"), "{error}");
+    assert_eq!(write_incremental(&doc, &SaveOptions::default()).unwrap(), before);
+    // Edits that add no underline are unaffected by the exhausted ID space.
+    text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { color: Some([0.0, 0.0, 1.0]), ..Default::default() }).unwrap();
+}
+
+#[test]
+fn an_active_path_refuses_every_paragraph_rewrite_conservatively() {
+    // A current path is not saved by q/Q; inserting text and paths before its painting operator
+    // could change what it paints. Any rewrite of such a paragraph is refused, not only
+    // underlines, and refusal leaves the document untouched.
+    let mut doc = text_page("0 650 m 100 650 l BT /F1 12 Tf 72 700 Td (Text) Tj ET S");
+    let before = write_incremental(&doc, &SaveOptions::default()).unwrap();
+    for style in [
+        text::BlockStyle { underline: Some(true), ..Default::default() },
+        text::BlockStyle { color: Some([1.0, 0.0, 0.0]), ..Default::default() },
+        text::BlockStyle { range: Some([0, 2]), bold: Some(true), ..Default::default() },
+        text::BlockStyle { width: Some(30.0), ..Default::default() },
+    ] {
+        let error = text::rewrite_block(&mut doc, 0, 0, None, &style).unwrap_err();
+        assert!(error.to_string().contains("active drawing path"), "{error}");
+        assert_eq!(write_incremental(&doc, &SaveOptions::default()).unwrap(), before);
+    }
+    let error = text::replace_block(&mut doc, 0, 0, "Other").unwrap_err();
+    assert!(error.to_string().contains("active drawing path"), "{error}");
+    assert_eq!(write_incremental(&doc, &SaveOptions::default()).unwrap(), before);
+    // Once the path is painted (or discarded with n) before the text, editing works.
+    for painted in ["0 650 m 100 650 l S", "0 650 m 100 650 l n"] {
+        let mut doc = text_page(&format!("{painted} BT /F1 12 Tf 72 700 Td (Text) Tj ET"));
+        text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { underline: Some(true), color: Some([1.0, 0.0, 0.0]), ..Default::default() })
+            .unwrap();
+        assert!(String::from_utf8_lossy(&page_content_bytes(&doc, 0)).starts_with(painted));
+    }
+}
+
+#[test]
+fn line_editing_refuses_authored_underlines_with_a_paragraph_hint() {
+    let mut doc = text_page("BT /F1 12 Tf 72 700 Td (Under) Tj 0 -40 Td (Plain) Tj ET");
+    text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { underline: Some(true), ..Default::default() }).unwrap();
+    let mut doc = reopen(&doc);
+    let before = write_incremental(&doc, &SaveOptions::default()).unwrap();
+    let lines = text::text_lines(&doc, 0).unwrap();
+    let under = lines.iter().position(|l| l.text == "Under").unwrap();
+    let error = text::replace_line(&mut doc, 0, under, "Over").unwrap_err();
+    assert!(error.to_string().contains("use paragraph editing to preserve this line's editable underlines"), "{error}");
+    assert_eq!(write_incremental(&doc, &SaveOptions::default()).unwrap(), before);
+    // The plain neighbour is still line-editable, and the underlined paragraph keeps its paths.
+    let plain = lines.iter().position(|l| l.text == "Plain").unwrap();
+    text::replace_line(&mut doc, 0, plain, "Other").unwrap();
+    let doc = reopen(&doc);
+    assert_eq!(underline_associations(&doc).len(), 5);
+    let blocks = text::text_blocks(&doc, 0).unwrap();
+    assert_eq!(blocks.iter().map(|b| (b.text.as_str(), b.runs.iter().all(|r| r.underline))).collect::<Vec<_>>(), [("Under", true), ("Other", false)]);
 }
 
 #[test]

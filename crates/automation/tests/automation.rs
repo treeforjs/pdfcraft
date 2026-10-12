@@ -1607,6 +1607,53 @@ fn selected_unsupported_graphics_leave_preview_bytes_and_history_unchanged() {
 }
 
 #[test]
+fn selected_underlines_preview_roundtrip_and_preserve_history() {
+    let dir = workdir("selected-underlines");
+    std::fs::write(dir.join("source.pdf"), fixture(1)).unwrap();
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({"path":"source.pdf"}))["doc"].as_u64().unwrap();
+    let original = a.session().get(pdfcraft_engine::DocId(doc)).unwrap().bytes.clone();
+    let png = |content: Vec<Content>| {
+        content
+            .into_iter()
+            .find_map(|c| match c {
+                Content::Png { data, .. } => Some(data),
+                _ => None,
+            })
+            .unwrap()
+    };
+    let before_pixels = png(a.call("page_render", &json!({"doc":doc,"page":1,"dpi":72})).unwrap());
+    let preview = png(a
+        .call("text_edit", &json!({"doc":doc,"page":1,"paragraph":1,"range_start":0,"range_end":4,"underline":true,"preview":true,"max_side":300}))
+        .unwrap());
+    assert_eq!(a.session().get(pdfcraft_engine::DocId(doc)).unwrap().bytes, original);
+    ok(&mut a, "text_edit", json!({"doc":doc,"page":1,"paragraph":1,"range_start":0,"range_end":4,"underline":true}));
+    let rendered = png(a.call("page_render", &json!({"doc":doc,"page":1,"dpi":72})).unwrap());
+    assert_eq!(preview, rendered, "the real proposed PDF includes its underline paths");
+    assert_ne!(before_pixels, rendered, "the underline is visible");
+    let paragraphs = ok(&mut a, "text_paragraphs", json!({"doc":doc,"page":1}));
+    let runs = paragraphs["paragraphs"][0]["runs"].as_array().unwrap();
+    assert_eq!(runs.len(), 2);
+    assert_eq!((runs[0]["start"].as_u64(), runs[0]["end"].as_u64(), runs[0]["underline"].as_bool()), (Some(0), Some(4), Some(true)));
+    assert_eq!(runs[1]["underline"], false);
+    ok(&mut a, "doc_save", json!({"doc":doc,"path":"underlined.pdf"}));
+    // Saving makes the written file the working bytes, so the undo target is captured after it.
+    let underlined = a.session().get(pdfcraft_engine::DocId(doc)).unwrap().bytes.clone();
+    let reopened = ok(&mut a, "doc_open", json!({"path":"underlined.pdf"}))["doc"].as_u64().unwrap();
+    assert_eq!(ok(&mut a, "text_paragraphs", json!({"doc":reopened,"page":1}))["paragraphs"][0]["runs"], paragraphs["paragraphs"][0]["runs"]);
+    ok(&mut a, "text_edit", json!({"doc":doc,"page":1,"paragraph":1,"range_start":0,"range_end":4,"underline":false}));
+    assert_eq!(png(a.call("page_render", &json!({"doc":doc,"page":1,"dpi":72})).unwrap()), before_pixels);
+    ok(&mut a, "edit_undo", json!({"doc":doc}));
+    assert_eq!(a.session().get(pdfcraft_engine::DocId(doc)).unwrap().bytes, underlined);
+    assert_eq!(ok(&mut a, "text_paragraphs", json!({"doc":doc,"page":1}))["paragraphs"][0]["runs"], paragraphs["paragraphs"][0]["runs"]);
+    // Already underlined: no extra history step and redo remains available.
+    ok(&mut a, "text_edit", json!({"doc":doc,"page":1,"paragraph":1,"range_start":0,"range_end":4,"underline":true}));
+    assert_eq!(a.session().get(pdfcraft_engine::DocId(doc)).unwrap().can_redo(), Some("Edit text"));
+    ok(&mut a, "edit_redo", json!({"doc":doc}));
+    assert_eq!(png(a.call("page_render", &json!({"doc":doc,"page":1,"dpi":72})).unwrap()), before_pixels);
+}
+
+#[test]
 fn selected_character_runs_keep_surroundings_through_reflow_history_and_save() {
     let dir = workdir("character-runs");
     std::fs::write(dir.join("runs.pdf"), embedded_page_font_pdf()).unwrap();

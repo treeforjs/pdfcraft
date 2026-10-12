@@ -5,6 +5,26 @@ use super::*;
 
 pub(super) const MAX_SEGMENTS: usize = 8192;
 const MAX_EDIT_CHARACTERS: usize = 1_000_000;
+/// Run-preserving reflow places every glyph explicitly: each one replays its text state, and an
+/// underlined glyph adds two association markers and its own path. The character ceiling alone
+/// would allow tens of millions of in-memory operators, so the emitted count is budgeted while
+/// the glyphs are prepared, before any of them is emitted. About 150 bytes per operator keeps the
+/// worst case to a few hundred megabytes; ordinary paragraphs use a tiny fraction of it.
+pub(super) const MAX_EMITTED_OPS: usize = 2_000_000;
+/// Operators emitted per glyph besides its state: `Tm` and `Tj`.
+const GLYPH_OPS: usize = 2;
+/// An underlined glyph's text marker pair plus its marked path
+/// (`BDC q cm RG w J d m l S Q EMC`).
+const UNDERLINE_OPS: usize = 2 + 12;
+/// Paragraph framing: `q`, an optional `cm`, `BT`, `ET` and the closing `Q`.
+const FRAME_OPS: usize = 5;
+
+fn over_budget() -> EditError {
+    EditError::Invalid(format!(
+        "this paragraph edit would emit more than {MAX_EMITTED_OPS} PDF operators (each character is placed individually and \
+         underlined characters add a marked path); split the text into smaller paragraphs or remove underlines from part of it"
+    ))
+}
 
 pub(super) fn validate_text(text: &str) -> Result<(), EditError> {
     if text.chars().take(MAX_EDIT_CHARACTERS + 1).count() > MAX_EDIT_CHARACTERS {
@@ -30,6 +50,9 @@ struct Prepared {
     faces: Vec<Face>,
     glyphs: Vec<Glyph>,
     substituted: Option<String>,
+    /// Upper bound on the operators [`rewrite`] emits, already checked against
+    /// [`MAX_EMITTED_OPS`].
+    emitted: usize,
 }
 
 struct Glyph {
@@ -159,6 +182,7 @@ fn prepare(
     let mut glyphs = Vec::new();
     let mut substituted = None;
     let mut metric_cache = HashMap::new();
+    let mut emitted = FRAME_OPS;
     for segment in segments {
         let source = block.runs.get(segment.source).ok_or_else(|| EditError::Invalid("the paragraph has no source style".into()))?;
         let mut state = source.state.clone();
@@ -192,6 +216,9 @@ fn prepare(
         }
         let m = m.ok_or_else(|| EditError::Invalid(format!("font /{name} has no usable metrics")))?;
         let size = if change { style.size.unwrap_or(source.size) / k } else { source.size / k };
+        if !size.is_finite() || size <= 0.0 {
+            return Err(EditError::Invalid("the source font size must be positive and finite for paragraph editing".into()));
+        }
         state.font = Some((name, size));
         if change {
             if let Some(c) = style.color {
@@ -221,7 +248,19 @@ fn prepare(
             }
             mapped
         };
-        for glyph in source_glyphs {
+        let underline = if change { style.underline.unwrap_or(source.underline) } else { source.underline };
+        state.underline = underline;
+        if underline && known_fill_color(&state.fill).is_none() {
+            return Err(EditError::Invalid(
+                "editable underlines currently need a device Gray, RGB or CMYK text color; choose an RGB color first".into(),
+            ));
+        }
+        let state_ops = state.op_count();
+        for mut glyph in source_glyphs {
+            // Budget this glyph before keeping it. Whether it is decorated is decided below by
+            // the same rule `rewrite` uses; counting the larger case keeps this an upper bound.
+            let per_glyph = state_ops.saturating_add(GLYPH_OPS).saturating_add(if underline { UNDERLINE_OPS } else { 0 });
+            emitted = emitted.checked_add(per_glyph).filter(|n| *n <= MAX_EMITTED_OPS).ok_or_else(over_budget)?;
             let space = glyph.text == " ";
             let nominal: f64 = m
                 .codes(&glyph.bytes)
@@ -234,11 +273,16 @@ fn prepare(
             if !advance.is_finite() {
                 return Err(EditError::Invalid("the font has invalid character advances".into()));
             }
+            // A positioned logical space has no original bytes. Give its decoration a real
+            // text association; the following explicit Tm still preserves its exact advance.
+            if underline && space && glyph.bytes.is_empty() {
+                glyph.bytes = m.encode(" ").ok_or_else(|| EditError::Invalid("the font cannot encode an underlined paragraph separator".into()))?;
+            }
             glyphs.push(Glyph { bytes: glyph.bytes, face, advance, space });
         }
-        faces.push(Face { state, metrics: m, underline: change && style.underline == Some(true) });
+        faces.push(Face { state, metrics: m, underline });
     }
-    Ok(Prepared { faces, glyphs, substituted })
+    Ok(Prepared { faces, glyphs, substituted, emitted })
 }
 
 fn rows(glyphs: &[Glyph], width: f64) -> Vec<std::ops::Range<usize>> {
@@ -296,7 +340,13 @@ pub(super) fn rewrite(
     let res = p.dict.get(b"Resources").and_then(|r| doc.resolve(r).as_dict().cloned()).unwrap_or_default();
     let mut fonts = res.get(b"Font").and_then(|f| doc.resolve(f).as_dict().cloned()).unwrap_or_default();
     let segments = segments(block, text, style.range)?;
-    let Prepared { faces, glyphs, substituted } = prepare(doc, &mut fonts, block, &segments, style, k, horizontal)?;
+    let Prepared { faces, glyphs, substituted, emitted } = prepare(doc, &mut fonts, block, &segments, style, k, horizontal)?;
+    let mut next_decoration = if faces.iter().any(|face| face.underline) {
+        let pieces = Pieces::join(&content_streams(doc, &p.dict).into_iter().map(|(_, data)| data).collect::<Vec<_>>());
+        decorations::Index::read(&pieces.parse().ops).next_id()?
+    } else {
+        1
+    };
     let [dx, dy] = style.offset.unwrap_or([0.0, 0.0]);
     let width = style.width.map(|w| w.clamp(block.size, 14_400.0)).unwrap_or_else(|| {
         let current = (block.rect[2] - block.rect[0]).max(block.size);
@@ -307,7 +357,9 @@ pub(super) fn rewrite(
     let max_size = faces.iter().filter_map(|f| f.state.font.as_ref().map(|(_, s)| *s)).fold(block.size / k, f64::max);
     let lead = style.line_spacing.map(|n| n * max_size).or_else(|| old_lead.map(|v| v / k)).unwrap_or(max_size * 1.2);
     let n = pdfcraft_content::num;
-    let mut ops = vec![Op::new("q", vec![])];
+    // `emitted` was bounded by MAX_EMITTED_OPS during preparation.
+    let mut ops = Vec::with_capacity(emitted);
+    ops.push(Op::new("q", vec![]));
     if dx != 0.0 || dy != 0.0 {
         let c = o.ctm;
         let inverse =
@@ -336,30 +388,54 @@ pub(super) fn rewrite(
             ops.extend(face.state.ops());
             let tm = Matrix([1.0, 0.0, 0.0, 1.0, x, -(row_index as f64) * lead]).then(&Matrix(o.tm));
             ops.push(Op::new("Tm", tm.0.into_iter().map(n).collect()));
+            let decoration = (face.underline && !glyph.bytes.is_empty()).then_some(next_decoration);
+            if let Some(id) = decoration {
+                next_decoration =
+                    next_decoration.checked_add(1).ok_or_else(|| EditError::Invalid("the page has exhausted underline association IDs".into()))?;
+                ops.push(decorations::begin(id, false));
+            }
             ops.push(Op::new("Tj", vec![Object::String(PdfString::literal(glyph.bytes.clone()))]));
+            if decoration.is_some() {
+                ops.push(Op::new("EMC", vec![]));
+            }
             let width = glyph.advance / horizontal + if glyph.space { extra } else { 0.0 };
-            if face.underline {
+            if let Some(id) = decoration {
                 let size = face.state.font.as_ref().map_or(max_size, |(_, s)| *s);
                 let y = -(row_index as f64) * lead + face.state.rise + face.metrics.descent * size * 0.5;
-                underlines.push((x, x + width, y, size, fill_color(&face.state.fill)));
+                if ![x, x + width, y].into_iter().all(f64::is_finite) {
+                    return Err(EditError::Invalid("the font has invalid underline geometry".into()));
+                }
+                underlines.push((id, x, x + width, y, size, fill_color(&face.state.fill)));
             }
             x += width;
         }
     }
     ops.push(Op::new("ET", vec![]));
     if !underlines.is_empty() {
-        ops.push(Op::new("q", vec![]));
-        ops.push(Op::new("cm", o.tm.into_iter().map(n).collect()));
-        for (x0, x1, y, size, color) in underlines {
+        for (id, x0, x1, y, size, color) in underlines {
+            ops.push(decorations::begin(id, true));
+            ops.push(Op::new("q", vec![]));
+            ops.push(Op::new("cm", o.tm.into_iter().map(n).collect()));
             ops.push(Op::new("RG", color.into_iter().map(n).collect()));
             ops.push(Op::new("w", vec![n(size * 0.06)]));
+            ops.push(Op::new("J", vec![Object::Int(0)]));
+            ops.push(Op::new("d", vec![Object::Array(Vec::new()), Object::Int(0)]));
             ops.push(Op::new("m", vec![n(x0), n(y)]));
             ops.push(Op::new("l", vec![n(x1), n(y)]));
             ops.push(Op::new("S", vec![]));
+            ops.push(Op::new("Q", vec![]));
+            ops.push(Op::new("EMC", vec![]));
         }
-        ops.push(Op::new("Q", vec![]));
     }
     ops.push(Op::new("Q", vec![]));
+    // The preparation estimate is an upper bound by construction; keep the bound enforced
+    // even if emission and estimate ever drift apart.
+    if ops.len() > emitted {
+        return Err(EditError::Invalid(format!(
+            "internal error: the paragraph emitted {} operators but budgeted {emitted}; the document was not changed",
+            ops.len()
+        )));
+    }
     install_block(doc, page, lines, block, ops, Some(fonts), true)?;
     Ok(LineEdit { substituted })
 }

@@ -316,7 +316,7 @@ fn format_section(app: &mut PdfCraftApp, ui: &mut egui::Ui, t: &Tokens) {
             ed.look = look;
             changed = true;
         }
-        changed |= crate::edit_text_ui::extras_panel(ui, &mut ed.extras, ed.selection.is_some());
+        changed |= crate::edit_text_ui::extras_panel(ui, &mut ed.extras);
         ui.label(tl!("Fonts"));
         egui::ComboBox::from_id_salt("existing-page-font").selected_text(&ed.source_font).width(180.0).show_ui(ui, |ui| {
             if let Some(doc) = app.session.get(app.views[i].id) {

@@ -20,6 +20,7 @@ use pdfcraft_fonts::{CraftFont, GlyphError, japanese_glyph_from};
 
 use crate::EditError;
 
+mod decorations;
 mod mixed;
 
 /// One line of existing text.
@@ -70,6 +71,8 @@ struct TextState {
     rise: f64,
     render_mode: f64,
     complex_graphics: bool,
+    underline: bool,
+    invalid_decorations: bool,
     fill: Vec<Op>,
 }
 
@@ -84,6 +87,8 @@ impl TextState {
             rise: ts.rise,
             render_mode: ts.render_mode,
             complex_graphics: ts.complex_graphics,
+            underline: ts.underline,
+            invalid_decorations: ts.invalid_decorations,
             fill: ts
                 .fill
                 .iter()
@@ -94,6 +99,11 @@ impl TextState {
                 })
                 .collect(),
         }
+    }
+
+    /// How many operators [`TextState::ops`] emits, without allocating them.
+    fn op_count(&self) -> usize {
+        usize::from(self.font.is_some()).saturating_add(6).saturating_add(self.fill.len())
     }
 
     /// Operators that set this state (inside a text object).
@@ -141,6 +151,8 @@ pub struct TextRun {
     pub size: f64,
     pub bold: bool,
     pub italic: bool,
+    /// An editable underline authored by PdfCraft. Unmarked foreign paths are artwork.
+    pub underline: bool,
     pub color: [f64; 3],
     state: TextState,
     glyphs: Vec<SourceGlyph>,
@@ -196,6 +208,9 @@ struct Ts {
     render_mode: f64,
     /// ExtGState and explicit clip paths need a richer graphics-state reconstruction.
     complex_graphics: bool,
+    // Set on a shown fragment from marked content, not carried by q/Q graphics state.
+    underline: bool,
+    invalid_decorations: bool,
 }
 
 fn content_streams(doc: &Document, page: &Dict) -> Vec<(Object, Vec<u8>)> {
@@ -355,6 +370,8 @@ impl Carry {
             rise: 0.0,
             render_mode: 0.0,
             complex_graphics: false,
+            underline: false,
+            invalid_decorations: false,
         };
         Carry { ts, stack: Vec::new() }
     }
@@ -372,13 +389,19 @@ fn interpret(
     mut invoked: Option<&mut Vec<Invocation>>,
 ) -> Vec<Shown> {
     let mut out = Vec::new();
+    let decorations = decorations::Index::read(ops);
     let mut ts = carry.ts.clone();
     let mut at_bt = (0usize, ts.clone());
     let mut stack: Vec<Ts> = std::mem::take(&mut carry.stack);
     let (mut tm, mut tlm) = (Matrix::IDENTITY, Matrix::IDENTITY);
     let mut bt = 0usize;
+    // A PDF current path is not part of q/Q graphics state. Replacing text with decorated
+    // text must not consume a path that its original author intends to paint afterwards.
+    let mut pending_path = false;
     for (i, op) in ops.iter().enumerate() {
         match op.op.as_slice() {
+            b"m" | b"l" | b"c" | b"v" | b"y" | b"h" | b"re" => pending_path = true,
+            b"S" | b"s" | b"f" | b"F" | b"f*" | b"B" | b"B*" | b"b" | b"b*" | b"n" => pending_path = false,
             b"q" => stack.push(ts.clone()),
             b"Q" => {
                 if let Some(s) = stack.pop() {
@@ -525,10 +548,16 @@ fn interpret(
                     .iter()
                     .fold([f64::MAX, f64::MAX, f64::MIN, f64::MIN], |b, p| [b[0].min(p.0), b[1].min(p.1), b[2].max(p.0), b[3].max(p.1)]);
                 let size_user = (trm0.0[2].powi(2) + trm0.0[3].powi(2)).sqrt() * ts.size;
+                let mut shown_state = ts.clone();
+                shown_state.complex_graphics |= pending_path;
+                match decorations.at(i) {
+                    Ok(id) => shown_state.underline = id.is_some(),
+                    Err(()) => shown_state.invalid_decorations = true,
+                }
                 out.push(Shown {
                     op: i,
                     tm: Matrix([tm.0[0], tm.0[1], tm.0[2], tm.0[3], tm.0[4] - x_text * tm.0[0], tm.0[5] - x_text * tm.0[1]]),
-                    state: ts.clone(),
+                    state: shown_state,
                     tlm,
                     bt_op: at_bt.0,
                     bt_state: at_bt.1.clone(),
@@ -1069,6 +1098,9 @@ pub fn replace_line(doc: &mut Document, page: usize, line: usize, text: &str) ->
     let text = text.replace(['\n', '\r'], " ");
     let lines = text_lines(doc, page)?;
     let target = lines.get(line).cloned().ok_or_else(|| EditError::Invalid(format!("page {} has no line {}", page + 1, line + 1)))?;
+    if target.origin.state.underline || target.origin.state.invalid_decorations {
+        return Err(EditError::Invalid("use paragraph editing to preserve this line's editable underlines".into()));
+    }
     let p = page_dict(doc, page)?;
     let mut res = p.dict.get(b"Resources").map(|r| doc.resolve(r)).and_then(|r| r.as_dict().cloned()).unwrap_or_default();
     let mut fonts_res = res.get(b"Font").map(|f| doc.resolve(f)).and_then(|f| f.as_dict().cloned()).unwrap_or_default();
@@ -1124,7 +1156,7 @@ pub fn replace_line(doc: &mut Document, page: usize, line: usize, text: &str) ->
     }
     // Rebuild: the line's first operator becomes the replacement, its others go. Copies of the
     // line drawn in the same area go too, so the replacement is all that shows.
-    let drops = coincident_ops(&lines, std::slice::from_ref(&target.rect));
+    let drops = coincident_ops(&lines, &[&target]);
     let new_data = splice(&pieces, &ops, |i| if i == first { (std::mem::take(&mut replacement), false) } else { (Vec::new(), !drops.contains(&i)) });
     let contents = rewritten_contents(doc, &streams, new_data);
     let page_ref = p.obj;
@@ -1145,19 +1177,19 @@ fn font_size_before(ops: &[Op], at: usize) -> Option<f64> {
     ops[..at].iter().rev().find(|o| o.is("Tf")).and_then(|o| o.num(1))
 }
 
-/// The operators of every line drawn in the same area as one of `rects`. Documents sometimes
-/// draw a line more than once (fake bold, an invisible text layer), and a surviving copy would
-/// show the old text under the replaced line. Copies overlap a member's rect by more than half of
-/// the smaller rect; neighbouring lines share no area.
-fn coincident_ops(lines: &[TextLine], rects: &[[f64; 4]]) -> std::collections::HashSet<usize> {
-    let area = |r: [f64; 4]| ((r[2] - r[0]) * (r[3] - r[1])).max(0.0);
+/// Exact same-style, same-code near-coincident copies are sometimes used for fake bold.
+/// Overlap alone is not enough: an independent label, OCR layer or decorated run must survive.
+fn coincident_ops(lines: &[TextLine], targets: &[&TextLine]) -> std::collections::HashSet<usize> {
     let mut drop = std::collections::HashSet::new();
     for l in lines {
-        let covered = rects.iter().any(|m| {
-            let ix = (m[2].min(l.rect[2]) - m[0].max(l.rect[0])).max(0.0);
-            let iy = (m[3].min(l.rect[3]) - m[1].max(l.rect[1])).max(0.0);
-            let small = area(*m).min(area(l.rect));
-            small > 0.0 && ix * iy / small > 0.5
+        let covered = targets.iter().any(|target| {
+            let tolerance = (target.size.abs() * 0.05).clamp(0.1, 0.75);
+            target.text == l.text
+                && target.glyphs == l.glyphs
+                && target.origin.state == l.origin.state
+                && target.origin.ctm == l.origin.ctm
+                && target.origin.tm.get(..4) == l.origin.tm.get(..4)
+                && target.rect.into_iter().zip(l.rect).all(|(a, b)| (a - b).abs() <= tolerance)
         });
         if covered {
             drop.extend(l.ops.iter().copied());
@@ -1305,6 +1337,7 @@ fn run_of(l: &TextLine, start: usize, end: usize) -> TextRun {
         size: l.size,
         bold: l.bold,
         italic: l.italic,
+        underline: l.origin.state.underline,
         color: l.color,
         state: l.origin.state.clone(),
         glyphs: l.glyphs.clone(),
@@ -1368,7 +1401,8 @@ pub struct BlockStyle {
     /// Fill colour (RGB 0–1).
     pub color: Option<[f64; 3]>,
     pub align: Option<crate::added::Align>,
-    /// Draw a line under each line of text.
+    /// Set editable underline on the selected characters (or the whole paragraph).
+    /// Unmarked foreign drawing paths are preserved as artwork.
     pub underline: Option<bool>,
     /// Line spacing as a multiple of the font size (1.2 is ordinary).
     pub line_spacing: Option<f64>,
@@ -1409,8 +1443,8 @@ pub fn is_noop(doc: &Document, page: usize, block: usize, text: &str, style: &Bl
 
 fn unchanged(b: &TextBlock, text: &str, style: &BlockStyle) -> bool {
     if text != b.text
+        || b.runs.iter().any(|r| r.state.invalid_decorations)
         || style.align.is_some()
-        || style.underline.is_some()
         || style.offset.is_some()
         || style.width.is_some()
         || style.line_spacing.is_some()
@@ -1430,6 +1464,7 @@ fn unchanged(b: &TextBlock, text: &str, style: &BlockStyle) -> bool {
             && style.family_only.is_none_or(|f| source_family(&r.base_font) == f)
             && style.bold.is_none_or(|v| v == r.bold)
             && style.italic.is_none_or(|v| v == r.italic)
+            && style.underline.is_none_or(|v| v == r.underline)
             && style.size.is_none_or(|v| v == r.size)
             && style.color.is_none_or(|v| known_fill_color(&r.state.fill) == Some(v))
             && style.char_spacing.is_none_or(|v| v == r.state.char_spacing * point_scale)
@@ -1438,9 +1473,6 @@ fn unchanged(b: &TextBlock, text: &str, style: &BlockStyle) -> bool {
 }
 
 fn rewrite_block_inner(doc: &mut Document, page: usize, block: usize, text: Option<&str>, style: &BlockStyle) -> Result<LineEdit, EditError> {
-    if style.range.is_some() && style.underline.is_some() {
-        return Err(EditError::Invalid("underline is currently available for whole paragraphs, not selected characters".into()));
-    }
     for (name, value, low, high) in [
         ("size", style.size, 0.1, 14_400.0),
         ("line spacing", style.line_spacing, 0.5, 5.0),
@@ -1473,12 +1505,16 @@ fn rewrite_block_inner(doc: &mut Document, page: usize, block: usize, text: Opti
     if unchanged(b, text.unwrap_or(&b.text), style) {
         return Ok(LineEdit { substituted: None });
     }
+    if b.runs.iter().any(|r| r.state.invalid_decorations) {
+        return Err(EditError::Invalid("this paragraph has an ambiguous underline association; its artwork is preserved unchanged".into()));
+    }
     if b.runs.iter().any(|r| r.state.render_mode != 0.0 || r.state.complex_graphics) {
         return Err(EditError::Invalid(
-            "this paragraph uses stroking, invisible text, clipping or an extended graphics state; its appearance is preserved unchanged".into(),
+            "this paragraph uses stroking, invisible text, clipping, an active drawing path or an extended graphics state; its appearance is preserved unchanged".into(),
         ));
     }
-    if style.range.is_some() || b.runs.windows(2).any(|r| r[0].state != r[1].state) {
+    if style.range.is_some() || style.underline.is_some() || b.runs.iter().any(|r| r.underline) || b.runs.windows(2).any(|r| r[0].state != r[1].state)
+    {
         return mixed::rewrite(doc, page, &lines, b, text.unwrap_or(&b.text), style);
     }
     let members: Vec<&TextLine> = b.lines.iter().map(|i| &lines[*i]).collect();
@@ -1691,15 +1727,16 @@ fn install_block(
     let streams = content_streams(doc, &p.dict);
     let pieces = Pieces::join(&streams.iter().map(|(_, d)| d.as_slice()).collect::<Vec<_>>());
     let ops = pieces.parse().ops;
-    // The paragraph's operators go, and so does anything drawn in the same area (a fake-bold
-    // second copy, an invisible text layer): the new text is all that may show.
-    let member_rects: Vec<[f64; 4]> = members.iter().map(|l| l.rect).collect();
+    // Whole-paragraph legacy edits also remove exact fake-bold copies. Range edits preserve
+    // all other text operations, including overlapping independent artwork and OCR text.
     let mut drop = if precise || b.runs.windows(2).any(|r| r[0].state != r[1].state) {
         std::collections::HashSet::new()
     } else {
-        coincident_ops(lines, &member_rects)
+        coincident_ops(lines, &members)
     };
     drop.extend(members.iter().flat_map(|l| l.ops.iter().copied()));
+    let member_ops = members.iter().flat_map(|l| l.ops.iter().copied()).collect();
+    decorations::Index::read(&ops).remove_for(&member_ops, &mut drop)?;
     // Text shown earlier in the same text object stays first: the paragraph then goes where it
     // was, between two halves of the text object, so it keeps its place in reading order.
     let start = first.ops.first().copied().unwrap_or(o.bt_op);

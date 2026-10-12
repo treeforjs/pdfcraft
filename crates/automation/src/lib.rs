@@ -428,7 +428,7 @@ impl Automation {
                             "runs": b.runs.iter().map(|run| json!({
                                 "start": run.start, "end": run.end, "font_resource": run.font,
                                 "font": run.base_font, "size": run.size, "bold": run.bold,
-                                "italic": run.italic, "color": run.color,
+                                "italic": run.italic, "underline": run.underline, "color": run.color,
                             })).collect::<Vec<_>>(),
                         })
                     })

@@ -59,21 +59,34 @@ Subsequent size/colour changes keep the selected face. Subsequent bold/italic ch
 standard face matching the source family and preserve the other style; changing `font` similarly
 keeps weight/slant unless overridden. The UI reflects the actual selected face after applying.
 `text_paragraphs` also reports `line_count` and `runs`, with `start`/`end`, font resource, face,
-size, bold, italic and RGB colour. Offsets count Unicode scalar values from zero, with an exclusive
+size, bold, italic, editable underline and RGB colour. Offsets count Unicode scalar values from zero, with an exclusive
 end; they are not UTF-8 byte offsets or grapheme indexes. `text_edit` accepts `range_start` and
-`range_end` to format that selection. Font/size/colour/weight/slant affect the selection; width,
+`range_end` to format that selection. Font/size/colour/weight/slant/underline affect the selection; width,
 position, alignment and line spacing affect the paragraph. With no selection, formatting applies
 to the whole paragraph. Unchanged prefix/suffix text keeps its styles when text is replaced.
 
 Selected-range and mixed-run edits retain existing glyph codes, supported Tc/Tw/Tz/Ts state and
 TJ advances for unchanged runs, including multi-scalar ToUnicode mappings. A selection that splits
-one indivisible existing glyph is refused. Paragraphs with active stroking/invisible/clipping text or extended graphics
+one indivisible existing glyph is refused. Paragraphs with active stroking/invisible/clipping text, an unpainted drawing path or extended graphics
 state also refuse edits until their complete graphics state can be preserved. Missing subset
 characters, invalid ranges, unsupported rotated/skewed/reflected
 mixed text and invalid numbers leave bytes and history unchanged. Upright nonuniform scaling is
 supported. Paragraph edits accept at most 1,000,000 Unicode characters and 8,192 style segments;
-exceeding either limit refuses the edit unchanged. A request already satisfied does not add an
+exceeding either limit refuses the edit unchanged. Selected-range/mixed-run edits place each glyph
+explicitly and are also refused unchanged when they would emit more than 2,000,000 PDF operators
+(roughly 200,000 plain or 83,000 underlined characters); text is never truncated. A request already satisfied does not add an
 undo step or clear redo.
+
+Editable underlines use PdfCraft-authored marked-content associations between glyphs and their
+decoration paths. Selected underline on/off survives reflow, other style changes and save/reopen;
+the format panel and `text_paragraphs.runs[].underline` report that state. Duplicate, missing or
+malformed associations refuse atomically. Existing unmarked underline-like paths remain artwork,
+including underlines from earlier PdfCraft versions; they are neither guessed nor removed.
+Use paragraph editing for authored underlines: the legacy `line` interface refuses those lines.
+Underline colors currently follow finite device Gray/RGB/CMYK text colors; choose an RGB color
+before underlining text that uses a custom color space. Ordinary overlapping labels and OCR text
+are preserved; only exact same-code, same-style near-coincident copies qualify as fake bold in
+the legacy whole-paragraph and line interfaces.
 
 Use `text_edit {..., preview: true, max_side: 1024}` to receive the proposed page as a PNG without
 applying or saving it. The desktop's **Preview PDF** uses this same actual PDF rendering path;
@@ -82,8 +95,8 @@ uses interface fonts to show run styling; the rendered preview is authoritative 
 
 The Japanese fallback still has no italic outlines. Whole-paragraph edits of one uniform style
 still use legacy normalization/reflow; their original character-code and spacing preservation is
-not yet equivalent to range/mixed edits. Broader shaping/encodings, transformed text, run decoration
-round-trips, structure tags and complex-layout paragraph detection remain open.
+not yet equivalent to range/mixed edits. Broader shaping/encodings, transformed text, imported
+decoration recognition, structure tags and complex-layout paragraph detection remain open.
 
 ## Reader text selection
 

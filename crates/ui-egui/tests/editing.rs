@@ -1916,6 +1916,50 @@ fn the_format_panel_selects_page_fonts_and_keeps_independent_styles() {
 }
 
 #[test]
+fn selected_underlining_can_be_edited_after_save_and_reopen() {
+    let mut h = harness(1, |_| {});
+    assert!(h.state_mut().execute("edit.edit_text"));
+    h.run_steps(2);
+    let r = h.state().views[0].page_screen_rect(0).unwrap();
+    let at = egui::pos2(r.left() + 40.0 / 200.0 * r.width(), r.top() + (300.0 - 158.0) / 300.0 * r.height());
+    h.hover_at(at);
+    h.run_steps(1);
+    h.drag_at(at);
+    h.run_steps(1);
+    h.drop_at(at);
+    h.run_steps(3);
+    h.key_press(egui::Key::Home);
+    for _ in 0..4 {
+        h.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::ArrowRight);
+    }
+    h.run_steps(2);
+    assert_eq!(h.state().views[0].line_editor.as_ref().unwrap().selection, Some([0, 4]));
+    h.get_by_label("Underline").click();
+    h.run_steps(4);
+    let id = h.state().views[0].id;
+    let b = h.state().session.get(id).unwrap().text_blocks(0).remove(0);
+    assert_eq!(b.runs.iter().map(|r| (r.start, r.end, r.underline)).collect::<Vec<_>>(), [(0, 4, true), (4, 6, false)]);
+    assert!(h.state().views[0].line_editor.as_ref().unwrap().extras.underline);
+    h.get_by_label("I").click();
+    h.run_steps(4);
+    assert!(h.state().session.get(id).unwrap().text_blocks(0)[0].runs[0].underline);
+    h.get_by_label("Underline").click();
+    h.run_steps(4);
+    let b = h.state().session.get(id).unwrap().text_blocks(0).remove(0);
+    assert!(b.runs.iter().all(|r| !r.underline));
+    assert!(b.runs[0].italic && !b.runs[1].italic);
+    h.state_mut().views[0].line_editor = None;
+    h.state_mut().session.undo(id).unwrap();
+    let bytes = h.state_mut().session.save_bytes(id).unwrap();
+    let mut reopened = pdfcraft_engine::Session::new();
+    let saved = reopened.open("underline.pdf", None, bytes, None).unwrap();
+    let b = reopened.get(saved).unwrap().text_blocks(0).remove(0);
+    assert!(b.runs[0].underline && b.runs[0].italic && !b.runs[1].underline);
+    h.state_mut().session.redo(id).unwrap();
+    assert!(h.state().session.get(id).unwrap().text_blocks(0)[0].runs.iter().all(|r| !r.underline));
+}
+
+#[test]
 fn selected_characters_keep_the_rest_of_the_paragraph_style() {
     let mut h = harness(1, |_| {});
     assert!(h.state_mut().execute("edit.edit_text"));
