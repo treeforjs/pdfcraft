@@ -15,6 +15,7 @@ pdfcraft-cos = { workspace = true }
 pdfcraft-content = { workspace = true }
 pdfcraft-model = { workspace = true }
 pdfcraft-annot = { workspace = true }
+pdfcraft-filters = { workspace = true }
 thiserror.workspace = true
 # JPEG decoding (zune-jpeg) and encoding, and bicubic resampling; already in the tree.
 image = { version = "0.25", default-features = false, features = ["jpeg"] }

@@ -7,10 +7,17 @@
 //!   A new image replaces the old one only if it is smaller. Images PdfCraft can't decode
 //!   faithfully (CMYK and other colour spaces, masks, decode arrays, JPEG 2000, JBIG2, CCITT,
 //!   more than 8 bits) are left alone.
+//! - **Monochrome images** (one-bit samples or image masks) are recompressed losslessly as
+//!   CCITT Group 4 (or Flate) when that is smaller, and optionally downsampled first (area
+//!   average, majority with ties to ink). Only samples that decode completely through general
+//!   filters are used; images already in CCITT or JBIG2 are left alone.
 //! - **Discard objects:** page thumbnails, alternate images, document tags (structure tree),
 //!   print settings.
 //! - **Fonts:** unembed chosen embedded fonts where that is safe ([`fonts`]).
-//! - **Clean up:** Flate-compress streams that have no filter.
+//! - **Clean up:** Flate-compress streams that have no filter; re-encode LZW streams as Flate
+//!   (lossless, with the same complete-decoding rules as preflight's fix: see
+//!   [`pdfcraft_cos::Stream::decoded_complete`]). Whether the copy packs objects into object
+//!   streams is [`Settings::compress_structure`] (the engine's writer applies it).
 //!
 //! Metadata, attachments, comments, scripts, private data, hidden layers, bookmarks and form
 //! fields are discarded by `pdfcraft-redact`'s Remove Hidden Information, which the engine
@@ -79,16 +86,48 @@ impl ImageSettings {
     pub const REDUCE: ImageSettings = ImageSettings { downsample: true, target_ppi: 150.0, above_ppi: 225.0, compression: Compression::Jpeg(60) };
 }
 
+/// How monochrome (one-bit) images are stored.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MonoCompression {
+    /// CCITT Group 4 (lossless).
+    CcittG4,
+    /// Flate (lossless).
+    Flate,
+    /// Keep the image's own compression (downsampled images become Flate).
+    Retain,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct MonoSettings {
+    /// Downsample images whose effective resolution is above `above_ppi` to `target_ppi`.
+    pub downsample: bool,
+    pub target_ppi: f64,
+    pub above_ppi: f64,
+    pub compression: MonoCompression,
+}
+
+impl MonoSettings {
+    /// Reduce File Size: 300 ppi above 450 ppi, CCITT Group 4.
+    pub const REDUCE: MonoSettings = MonoSettings { downsample: true, target_ppi: 300.0, above_ppi: 450.0, compression: MonoCompression::CcittG4 };
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Settings {
     pub color: ImageSettings,
     pub gray: ImageSettings,
+    /// One-bit images and image masks.
+    pub mono: MonoSettings,
     pub discard_thumbnails: bool,
     pub discard_alternate_images: bool,
     pub discard_tags: bool,
     pub discard_print_settings: bool,
     /// Flate-compress streams stored without a filter.
     pub flate_unencoded: bool,
+    /// Clean Up: re-encode every LZW stream as Flate ("In streams that use LZW encoding, use
+    /// Flate instead"). Streams that don't decode completely are left as they are.
+    pub lzw_to_flate: bool,
+    /// Clean Up: pack the copy's objects into compressed object streams when it is written.
+    pub compress_structure: bool,
     /// Clean Up: remove links (and bookmark destinations) that point nowhere.
     pub remove_invalid_links: bool,
     /// Clean Up: remove named destinations nothing refers to.
@@ -104,11 +143,14 @@ impl Default for Settings {
         Self {
             color: ImageSettings::REDUCE,
             gray: ImageSettings::REDUCE,
+            mono: MonoSettings::REDUCE,
             discard_thumbnails: true,
             discard_alternate_images: true,
             discard_tags: false,
             discard_print_settings: false,
             flate_unencoded: true,
+            lzw_to_flate: true,
+            compress_structure: true,
             remove_invalid_links: true,
             remove_unreferenced_dests: true,
             unembed_fonts: Vec::new(),
@@ -125,17 +167,71 @@ pub struct Report {
     /// Encoded image bytes before and after (images that changed).
     pub image_bytes_before: usize,
     pub image_bytes_after: usize,
+    /// Monochrome images now stored as CCITT Group 4 (also counted above).
+    pub images_ccitt: usize,
     pub thumbnails: usize,
     pub alternate_images: usize,
     pub tags_removed: bool,
     pub print_settings: usize,
     pub streams_compressed: usize,
+    /// LZW streams re-encoded as Flate, and LZW streams left alone (incomplete or corrupt data,
+    /// an indirect filter description, an image codec in the chain, or over the size limits).
+    pub lzw_reencoded: usize,
+    pub lzw_skipped: usize,
     /// Links removed and bookmarks whose destination was cleared (Clean Up).
     pub invalid_links: usize,
     pub invalid_bookmarks: usize,
     pub unreferenced_dests: usize,
     /// Font dictionaries whose embedded program was removed.
     pub fonts_unembedded: usize,
+}
+
+/// Encoded size limit for one LZW stream, and decoded total for one run (the same limits as
+/// preflight's LZW fix).
+const LZW_STREAM_LIMIT: usize = 32 << 20;
+const LZW_TOTAL_LIMIT: usize = 128 << 20;
+
+/// Whether a stream's `/Filter` names LZW (resolving an indirect filter only to report it).
+fn uses_lzw(doc: &Document, d: &pdfcraft_cos::Dict) -> bool {
+    let is_lzw = |o: &Object| matches!(o.as_name(), Some(b"LZWDecode" | b"LZW"));
+    match d.get(b"Filter").map(|f| doc.resolve(f)) {
+        Some(f) => match &*f {
+            Object::Array(a) => a.iter().take(64).any(|o| is_lzw(&doc.resolve(o))),
+            o => is_lzw(o),
+        },
+        None => false,
+    }
+}
+
+/// Clean Up: every LZW stream that decodes completely ([`Stream::decoded_complete`]: strict,
+/// end-of-data code present, direct filter description, no external data) is replaced by a
+/// Flate stream of the same decoded bytes; any other filters of the chain and their
+/// parameters go with it. Acrobat documents this option as converting LZW streams regardless
+/// of size. A stream that can't be decoded that way, or a chain with an image codec or
+/// `/Crypt`, is left exactly as it was and counted as skipped.
+fn lzw_to_flate(doc: &mut Document, report: &mut Report) {
+    let mut total = 0usize;
+    for num in doc.object_numbers() {
+        let r = ObjRef { num, generation: doc.generation(num) };
+        let obj = doc.get(r);
+        let Object::Stream(s) = &*obj else { continue };
+        if !uses_lzw(doc, &s.dict) {
+            continue;
+        }
+        let crypt = matches!(s.dict.get(b"Filter"), Some(Object::Array(a)) if a.iter().any(|o| o.as_name() == Some(b"Crypt")));
+        let room = LZW_TOTAL_LIMIT.saturating_sub(total).min(LZW_STREAM_LIMIT);
+        let data = if crypt || s.raw.len() > LZW_STREAM_LIMIT || room == 0 { None } else { s.decoded_complete(room).ok() };
+        let Some(data) = data else {
+            report.lzw_skipped += 1;
+            continue;
+        };
+        total = total.saturating_add(data.len());
+        let mut d = s.dict.clone();
+        d.remove(b"Length");
+        let packed = Stream::flate(d, &data);
+        doc.set(r, Object::Stream(packed));
+        report.lzw_reencoded += 1;
+    }
 }
 
 /// Optimize `doc` in place.
@@ -227,6 +323,9 @@ pub fn optimize_with_progress(doc: &mut Document, settings: &Settings, progress:
     }
     if settings.remove_unreferenced_dests {
         report.unreferenced_dests = links::remove_unreferenced_dests(doc)?;
+    }
+    if settings.lzw_to_flate {
+        lzw_to_flate(doc, &mut report);
     }
     if settings.flate_unencoded {
         for num in doc.object_numbers() {

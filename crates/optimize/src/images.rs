@@ -5,7 +5,7 @@ use std::collections::{HashMap, HashSet};
 use pdfcraft_content::Matrix;
 use pdfcraft_cos::{Dict, Document, ObjRef, Object, Stream};
 
-use crate::{Compression, ImageSettings, OptimizeError, Report, Settings, Stage};
+use crate::{Compression, ImageSettings, MonoCompression, MonoSettings, OptimizeError, Report, Settings, Stage};
 
 /// Images with more pixels than this are left alone (memory).
 const MAX_PIXELS: u64 = 80_000_000;
@@ -292,6 +292,131 @@ fn process(doc: &Document, s: &Stream, ppi: f64, settings: &ImageSettings, n: us
     (after < before).then_some((new, smask))
 }
 
+/// A one-bit image: an image mask, or one-bit samples in a one-component colour space.
+fn is_mono(doc: &Document, d: &Dict) -> bool {
+    if matches!(d.get(b"ImageMask"), Some(Object::Bool(true))) {
+        return d.get(b"BitsPerComponent").is_none_or(|b| matches!(b, Object::Int(1)));
+    }
+    d.int(b"BitsPerComponent") == Some(1) && d.get(b"ColorSpace").and_then(|cs| components(doc, cs)) == Some(1)
+}
+
+/// Area-average downsampling of packed one-bit rows to `nw` × `nh` (both no larger than the
+/// source). Each output pixel covers a block of source pixels and takes the majority value;
+/// ties go to `ink` so one-pixel strokes survive a 2:1 reduction.
+fn downsample_bits(bits: &[u8], w: usize, h: usize, nw: usize, nh: usize, ink: bool) -> Option<Vec<u8>> {
+    if nw == 0 || nh == 0 || nw > w || nh > h {
+        return None;
+    }
+    let (stride, nstride) = (w.div_ceil(8), nw.div_ceil(8));
+    // Output column of each source column (a partition: every output column gets at least one).
+    let col: Vec<usize> = (0..w).map(|x| ((x as u64 * nw as u64) / w as u64) as usize).collect();
+    let mut widths = vec![0u32; nw];
+    for &c in &col {
+        *widths.get_mut(c)? += 1;
+    }
+    let mut out = vec![0u8; nstride.checked_mul(nh)?];
+    let mut ink_count = vec![0u32; nw];
+    let mut rows_in_block = 0u32;
+    let mut oy = 0usize;
+    for y in 0..h {
+        let row = bits.get(y * stride..(y + 1) * stride)?;
+        for (x, &c) in col.iter().enumerate() {
+            let bit = (row.get(x / 8)? >> (7 - x % 8)) & 1 == 1;
+            if bit == ink {
+                *ink_count.get_mut(c)? += 1;
+            }
+        }
+        rows_in_block += 1;
+        let next = (((y + 1) as u64 * nh as u64) / h as u64) as usize;
+        if next != oy || y + 1 == h {
+            let orow = out.get_mut(oy * nstride..(oy + 1) * nstride)?;
+            for (ox, (&n, &cw)) in ink_count.iter().zip(&widths).enumerate() {
+                let area = u64::from(cw) * u64::from(rows_in_block);
+                let inked = 2 * u64::from(n) >= area;
+                if inked == ink {
+                    *orow.get_mut(ox / 8)? |= 0x80 >> (ox % 8);
+                }
+            }
+            ink_count.fill(0);
+            rows_in_block = 0;
+            oy = next;
+        }
+    }
+    Some(out)
+}
+
+/// A one-bit image: optionally downsampled, then stored as CCITT Group 4 or Flate. Only
+/// images whose samples decode completely through general filters are touched (images that
+/// are already CCITT or JBIG2, indirect filter descriptions and truncated LZW data are left
+/// alone), and the new stream is returned only if it is smaller. Without downsampling the
+/// samples are unchanged.
+fn process_mono(s: &Stream, ppi: f64, st: &MonoSettings) -> Option<Stream> {
+    let d = &s.dict;
+    let (w, h) = (usize::try_from(d.int(b"Width")?).ok()?, usize::try_from(d.int(b"Height")?).ok()?);
+    if w == 0 || h == 0 || (w as u64).saturating_mul(h as u64) > MAX_PIXELS {
+        return None;
+    }
+    let resize = st.downsample && ppi.is_finite() && ppi > st.above_ppi && st.target_ppi > 0.0 && !d.contains(b"SMask") && !d.contains(b"Mask");
+    if !resize && st.compression == MonoCompression::Retain {
+        return None;
+    }
+    let stride = w.div_ceil(8);
+    let need = stride.checked_mul(h)?;
+    let data = s.decoded_complete(need.saturating_add(1 << 16)).ok()?;
+    let bits = data.get(..need)?;
+    let (nw, nh) = if resize {
+        let k = st.target_ppi / ppi;
+        (((w as f64 * k).round() as usize).clamp(1, w), ((h as f64 * k).round() as usize).clamp(1, h))
+    } else {
+        (w, h)
+    };
+    // Ink is sample value 0 unless a /Decode array inverts the samples.
+    let ink = match d.get(b"Decode").and_then(Object::as_array).and_then(|a| a.first()) {
+        Some(Object::Int(v)) => *v >= 1,
+        Some(Object::Real(v)) => *v > 0.5,
+        _ => false,
+    };
+    let resized;
+    let bits = if (nw, nh) != (w, h) {
+        resized = downsample_bits(bits, w, h, nw, nh, ink)?;
+        &resized[..]
+    } else {
+        bits
+    };
+    let mut nd = d.clone();
+    for k in [&b"Filter"[..], b"DecodeParms", b"Length", b"DL"] {
+        nd.remove(k);
+    }
+    nd.set(b"Width".to_vec(), Object::Int(nw as i64));
+    nd.set(b"Height".to_vec(), Object::Int(nh as i64));
+    let new = match st.compression {
+        MonoCompression::CcittG4 => {
+            // Only a smaller stream is useful, so encoding stops past the current size. Either
+            // polarity round-trips the samples; keep the smaller.
+            let limit = s.raw.len();
+            let plain = pdfcraft_filters::encode_ccitt_g4(bits, nw, nh, false, limit).ok();
+            let inverted = pdfcraft_filters::encode_ccitt_g4(bits, nw, nh, true, plain.as_ref().map_or(limit, |p| p.len().saturating_sub(1))).ok();
+            let (data, black_is_1) = match (plain, inverted) {
+                (_, Some(i)) => (i, true),
+                (Some(p), None) => (p, false),
+                (None, None) => return None,
+            };
+            let mut parms = Dict::new();
+            parms.set(b"K".to_vec(), Object::Int(-1));
+            parms.set(b"Columns".to_vec(), Object::Int(nw as i64));
+            parms.set(b"Rows".to_vec(), Object::Int(nh as i64));
+            if black_is_1 {
+                parms.set(b"BlackIs1".to_vec(), Object::Bool(true));
+            }
+            nd.set(b"Filter".to_vec(), Object::name("CCITTFaxDecode"));
+            nd.set(b"DecodeParms".to_vec(), Object::Dict(parms));
+            Stream::from_raw(nd, data)
+        }
+        MonoCompression::Flate | MonoCompression::Retain => Stream::flate(nd, bits),
+    };
+    (new.raw.len() < s.raw.len()).then_some(new)
+}
+
 pub(crate) fn run(
     doc: &mut Document,
     pages: &[ObjRef],
@@ -318,7 +443,23 @@ pub(crate) fn run(
         let obj = doc.get(r);
         let Object::Stream(s) = &*obj else { continue };
         report.images += 1;
-        let Some(n) = s.dict.get(b"ColorSpace").and_then(|cs| components(doc, cs)) else { continue };
+        if is_mono(doc, &s.dict) {
+            let Some(new) = process_mono(s, ppi, &settings.mono) else { continue };
+            let resized = new.dict.int(b"Width") != s.dict.int(b"Width") || new.dict.int(b"Height") != s.dict.int(b"Height");
+            report.image_bytes_before += s.raw.len();
+            report.image_bytes_after += new.raw.len();
+            if resized {
+                report.images_resampled += 1;
+            } else {
+                report.images_recompressed += 1;
+            }
+            if new.dict.name(b"Filter") == Some(b"CCITTFaxDecode") {
+                report.images_ccitt += 1;
+            }
+            doc.set(r, Object::Stream(new));
+            continue;
+        }
+        let Some(n) =s.dict.get(b"ColorSpace").and_then(|cs| components(doc, cs)) else { continue };
         let st = if n == 1 { &settings.gray } else { &settings.color };
         let Some((new, smask)) = process(doc, s, ppi, st, n) else { continue };
         let resized = new.dict.int(b"Width") != s.dict.int(b"Width") || new.dict.int(b"Height") != s.dict.int(b"Height");
