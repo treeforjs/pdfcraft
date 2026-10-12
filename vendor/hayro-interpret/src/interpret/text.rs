@@ -117,6 +117,16 @@ pub(crate) fn show_glyph<'a>(
         }
         TextRenderingMode::Clip => {
             clip_glyph(ctx, glyph, glyph_transform);
+            // PdfCraft patch: clip-only text (`7 Tr`) paints nothing, but it is still text on the
+            // page (other extractors report it), so report it as invisible like `3 Tr`: renderers
+            // draw nothing for it and text extraction sees it.
+            device.draw_glyph(
+                glyph,
+                ctx.get().ctm,
+                glyph_transform,
+                &get_paint(ctx, false),
+                &GlyphDrawMode::Invisible,
+            );
         }
         TextRenderingMode::FillAndClip => {
             clip_glyph(ctx, glyph, glyph_transform);

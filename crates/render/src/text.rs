@@ -373,7 +373,9 @@ fn union(a: &mut [f32; 4], b: &[f32; 4]) {
 /// numbered in that order, and word gaps are inferred per line.
 ///
 /// Heuristics (documented so they can be tuned and tested; plan/architecture.md §8):
-/// 1. *Segments:* consecutive glyphs (content order) on one baseline with no column-sized gap.
+/// 1. *Segments:* consecutive glyphs (content order) on one baseline with no column-sized gap,
+///    or following straight on from the previous glyph and overlapping it vertically (text rise,
+///    superscripts and subscripts).
 ///    Segments on the same baseline that nearly touch are merged (text drawn out of order).
 /// 2. *Blocks:* segments stacked with line-sized gaps and overlapping horizontally.
 /// 3. *Block order:* repeatedly take the top-most remaining block, preferring a block to its left
@@ -414,7 +416,13 @@ pub fn layout(glyphs: Vec<TextGlyph>) -> PageText {
             let Some(&p) = s.idx.last() else { return false };
             let ph = height(p).min(height(i));
             let gap = g[0] - glyphs[p].rect[2];
-            (cy(i) - cy(p)).abs() < ph * 0.5 && gap < ph * 3.0 && g[0] > glyphs[p].rect[0] - ph * 2.0
+            let same_baseline = (cy(i) - cy(p)).abs() < ph * 0.5 && gap < ph * 3.0 && g[0] > glyphs[p].rect[0] - ph * 2.0;
+            // A glyph that follows straight on from the previous one and still overlaps it
+            // vertically continues the line even when its baseline moved further: text rise
+            // (`Ts`) and superscripts or subscripts that return to the baseline.
+            let overlap = glyphs[p].rect[3].min(g[3]) - glyphs[p].rect[1].max(g[1]);
+            let raised = gap > -ph * 0.3 && gap < ph * 0.5 && overlap > ph * 0.2;
+            same_baseline || raised
         });
         if cont && let Some(s) = segs.last_mut() {
             s.idx.push(i);
@@ -784,6 +792,85 @@ mod tests {
         let mut v = Vec::new();
         word(&mut v, "每个字", 10.0, 10.0, 9.0);
         assert_eq!(layout(v).plain_text(), "每个字");
+    }
+
+    /// A one-page 300 × 300 PDF showing `content` with Helvetica as `/F1`.
+    fn helvetica_page(content: &str) -> Vec<u8> {
+        use lopdf::{Document, Object, Stream, dictionary};
+        let mut doc = Document::with_version("1.7");
+        let font = doc.add_object(dictionary! { "Type" => "Font", "Subtype" => "Type1", "BaseFont" => "Helvetica" });
+        let content = doc.add_object(Stream::new(dictionary! {}, content.as_bytes().to_vec()));
+        let pages = doc.new_object_id();
+        let page = doc.add_object(dictionary! { "Type" => "Page", "Parent" => pages, "MediaBox" => vec![Object::Integer(0), Object::Integer(0), Object::Integer(300), Object::Integer(300)], "Resources" => dictionary! {"Font" => dictionary! {"F1" => font}}, "Contents" => content });
+        doc.objects.insert(pages, dictionary! {"Type" => "Pages", "Kids" => vec![Object::Reference(page)], "Count" => 1}.into());
+        let catalog = doc.add_object(dictionary! {"Type" => "Catalog", "Pages" => pages});
+        doc.trailer.set("Root", catalog);
+        let mut bytes = Vec::new();
+        doc.save_to(&mut bytes).unwrap();
+        bytes
+    }
+
+    fn page_text(bytes: Vec<u8>) -> PageText {
+        let pdf = Pdf::new(std::sync::Arc::new(bytes)).unwrap();
+        extract_page(&pdf, 0, &InterpreterSettings::default()).unwrap()
+    }
+
+    /// Text in every rendering mode is extracted, as Poppler does. Clip-only text (`7 Tr`) used to
+    /// be missing: the interpreter added it to the clip and never showed it to the text device
+    /// (vendored hayro-interpret patch). Invisible text (`3 Tr`, OCR layers) stays extracted.
+    #[test]
+    fn text_in_every_rendering_mode_is_extracted() {
+        let mut ops = String::new();
+        for mode in 0..8 {
+            ops.push_str(&format!("BT /F1 12 Tf {mode} Tr 20 {} Td (Mode{mode} text) Tj ET ", 270 - mode * 20));
+        }
+        let text = page_text(helvetica_page(&ops));
+        let expected: Vec<String> = (0..8).map(|m| format!("Mode{m} text")).collect();
+        assert_eq!(text.plain_text(), expected.join("\n"));
+        for mode in [3, 4, 5, 6, 7] {
+            assert_eq!(text.find(&format!("mode{mode} text")).len(), 1, "find mode {mode}");
+        }
+    }
+
+    /// Clip-only and invisible text paint nothing: reporting them to the text device must not
+    /// draw them. The clip still applies: a fill after `7 Tr` text shows only inside the glyphs.
+    #[test]
+    fn clip_and_invisible_text_still_paint_nothing() {
+        use crate::{PageRenderer, RenderConfig, RenderRequest, RequestKind};
+        let render = |content: &str| {
+            let mut r = PageRenderer::new(std::sync::Arc::new(helvetica_page(content)), RenderConfig::default());
+            let p = r.render(RenderRequest { page: 0, kind: RequestKind::Pixels, tile: None, scale: 1.0, tag: 0 });
+            assert!(p.error.is_none(), "{:?}", p.error);
+            p.rgba.chunks_exact(4).filter(|px| px[..3] != [255, 255, 255]).count()
+        };
+        assert_eq!(render("BT /F1 40 Tf 3 Tr 20 200 Td (Hidden) Tj ET"), 0, "3 Tr");
+        assert_eq!(render("BT /F1 40 Tf 7 Tr 20 200 Td (Clip) Tj ET"), 0, "7 Tr");
+        let clipped = render("BT /F1 40 Tf 7 Tr 20 200 Td (Clip) Tj ET 0 0 1 rg 0 0 300 300 re f");
+        assert!(clipped > 100 && clipped < 300 * 300 / 4, "the fill shows through the glyphs only: {clipped} pixels");
+    }
+
+    /// Text rise (`Ts`) keeps a line together: "falls" (rise −4) after "rises" (rise 5) was cut
+    /// into its own line and read after later lines.
+    #[test]
+    fn raised_and_lowered_text_stays_on_its_line() {
+        let text = page_text(helvetica_page(
+            "BT /F1 12 Tf 20 250 Td (Baseline ) Tj 5 Ts (rises ) Tj -4 Ts (falls ) Tj 0 Ts (back) Tj ET \
+             BT /F1 12 Tf 20 230 Td (Next line) Tj ET BT /F1 12 Tf 20 210 Td (x) Tj 7 Tf 4 Ts (2) Tj 12 Tf -3 Ts (i) Tj 0 Ts ( and more) Tj ET",
+        ));
+        assert_eq!(text.plain_text(), "Baseline rises falls back\nNext line\nx2i and more");
+        assert_eq!(text.find("rises falls back"), vec![9..25]);
+        assert_eq!(text.line_rects(0..25).len(), 1, "one highlight line");
+    }
+
+    #[test]
+    fn layout_keeps_risen_runs_in_line_but_separates_lines() {
+        // Content order: a line whose second word is lowered by 0.6 of its height, then the next
+        // line below. Lowered further, the words would stop overlapping and become two lines.
+        let mut v = Vec::new();
+        word(&mut v, "up", 10.0, 10.0, 6.0);
+        word(&mut v, "down", 22.0, 16.0, 6.0);
+        word(&mut v, "next", 10.0, 28.0, 6.0);
+        assert_eq!(layout(v).plain_text(), "updown\nnext");
     }
 
     /// Two lines, "ab cd" and "e fg": words stop at blank glyphs, word gaps and line ends.
