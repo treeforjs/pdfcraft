@@ -1090,6 +1090,17 @@
 	Credit Cards	クレジットカード番号
 	Social Security Numbers	社会保障番号
 	Dates	日付
+	US ZIP Codes	米国の郵便番号 (ZIP)
+	UK Postcodes	英国の郵便番号
+	UK National Insurance Numbers	英国の国民保険番号
+	Canadian Postal Codes	カナダの郵便番号
+	Canadian Social Insurance Numbers	カナダの社会保険番号
+	French Social Security Numbers (NIR)	フランスの社会保障番号 (NIR)
+	Japanese Postal Codes	日本の郵便番号
+	Japanese Individual Numbers (My Number)	マイナンバー (個人番号)
+	Bank Account Numbers (IBAN)	銀行口座番号 (IBAN)
+	Redaction code:	墨消しコード:
+	Choose a code	コードを選択
 	Text in images isn't found; recognise text (OCR) first.	画像内のテキストは検索できません。先に OCR でテキストを認識してください。
 	No matches.	一致する項目はありません。
 	{n} match(es) marked for redaction.	{n} 件の一致項目に墨消しマークを付けました。

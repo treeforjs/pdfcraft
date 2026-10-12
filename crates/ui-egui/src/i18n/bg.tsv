@@ -784,6 +784,17 @@
 	Credit Cards	Кредитни карти
 	Social Security Numbers	Номера на социално осигуряване (САЩ)
 	Dates	Дати
+	US ZIP Codes	Пощенски кодове (САЩ, ZIP)
+	UK Postcodes	Пощенски кодове (Обединеното кралство)
+	UK National Insurance Numbers	Номера на национално осигуряване (Обединеното кралство)
+	Canadian Postal Codes	Пощенски кодове (Канада)
+	Canadian Social Insurance Numbers	Номера на социално осигуряване (Канада)
+	French Social Security Numbers (NIR)	Номера на социално осигуряване (Франция, NIR)
+	Japanese Postal Codes	Пощенски кодове (Япония)
+	Japanese Individual Numbers (My Number)	Лични номера (Япония, My Number)
+	Bank Account Numbers (IBAN)	Номера на банкови сметки (IBAN)
+	Redaction code:	Код за заличаване:
+	Choose a code	Изберете код
 	Text in images isn't found; recognise text (OCR) first.	Текстът в изображения не се открива; първо разпознайте текста (OCR).
 	No matches.	Няма съвпадения.
 	{n} match(es) marked for redaction.	{n} съвпадение(я) маркирани за заличаване.

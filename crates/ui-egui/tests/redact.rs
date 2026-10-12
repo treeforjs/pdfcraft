@@ -106,3 +106,27 @@ fn removing_hidden_information_and_sanitizing() {
     let s = h.state();
     assert_eq!(s.session.get(s.views[0].id).unwrap().can_undo(), Some("Sanitize document"));
 }
+
+#[test]
+fn redaction_properties_offer_redaction_codes() {
+    let mut h = harness();
+    h.state_mut().redact_prefs.use_overlay = true;
+    assert!(h.state_mut().execute("redact.properties"));
+    h.run_steps(2);
+    h.get_by_label("Redaction code:");
+    // The code list (U.S. FOIA by default); picking a code makes it the overlay text.
+    h.query_all_by(|n| n.value().is_some_and(|v| v == "Choose a code")).next().expect("code list").click();
+    h.run_steps(2);
+    h.get_by_label("(b)(6)").click();
+    h.run_steps(2);
+    assert_eq!(h.state().dialog, Some(Dialog::RedactProps), "picking a code keeps the dialog open");
+    assert_eq!(h.state().redact_prefs.overlay, "(b)(6)");
+    h.get_by_label("OK").click();
+    h.run_steps(2);
+    // The dialog closes and marking still works with the code as the overlay text.
+    h.state_mut().execute("redact.pages");
+    h.run_steps(2);
+    h.get_by_label("OK").click();
+    h.run_steps(3);
+    assert_eq!(marks(&h), 1);
+}

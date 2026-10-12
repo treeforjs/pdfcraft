@@ -1086,6 +1086,17 @@
 	Credit Cards	Carte di credito
 	Social Security Numbers	Numeri di previdenza sociale (USA)
 	Dates	Date
+	US ZIP Codes	Codici postali USA (ZIP)
+	UK Postcodes	Codici postali del Regno Unito
+	UK National Insurance Numbers	Numeri di assicurazione nazionale del Regno Unito
+	Canadian Postal Codes	Codici postali canadesi
+	Canadian Social Insurance Numbers	Numeri di previdenza sociale canadesi (SIN)
+	French Social Security Numbers (NIR)	Numeri di previdenza sociale francesi (NIR)
+	Japanese Postal Codes	Codici postali giapponesi
+	Japanese Individual Numbers (My Number)	Numeri identificativi personali giapponesi (My Number)
+	Bank Account Numbers (IBAN)	Numeri di conto bancario (IBAN)
+	Redaction code:	Codice di oscuramento:
+	Choose a code	Scegli un codice
 	Text in images isn't found; recognise text (OCR) first.	Il testo nelle immagini non viene trovato; esegui prima il riconoscimento del testo (OCR).
 	No matches.	Nessuna corrispondenza.
 	{n} match(es) marked for redaction.	Corrispondenze contrassegnate per l'oscuramento: {n}.

@@ -1071,6 +1071,17 @@
 	Credit Cards	Kreditkarten
 	Social Security Numbers	US-Sozialversicherungsnummern
 	Dates	Datumsangaben
+	US ZIP Codes	US-Postleitzahlen (ZIP)
+	UK Postcodes	Britische Postleitzahlen
+	UK National Insurance Numbers	Britische Sozialversicherungsnummern (NINO)
+	Canadian Postal Codes	Kanadische Postleitzahlen
+	Canadian Social Insurance Numbers	Kanadische Sozialversicherungsnummern (SIN)
+	French Social Security Numbers (NIR)	Französische Sozialversicherungsnummern (NIR)
+	Japanese Postal Codes	Japanische Postleitzahlen
+	Japanese Individual Numbers (My Number)	Japanische persönliche Identifikationsnummern (My Number)
+	Bank Account Numbers (IBAN)	Kontonummern (IBAN)
+	Redaction code:	Schwärzungscode:
+	Choose a code	Code auswählen
 	Text in images isn't found; recognise text (OCR) first.	Text in Bildern wird nicht gefunden; führe zuerst Text erkennen (OCR) aus.
 	No matches.	Keine Treffer.
 	{n} match(es) marked for redaction.	{n} Treffer zum Schwärzen markiert.

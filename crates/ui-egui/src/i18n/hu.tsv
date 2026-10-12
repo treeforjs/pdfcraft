@@ -1060,6 +1060,17 @@
 	Credit Cards	Bankkártyák
 	Social Security Numbers	Társadalombiztosítási számok
 	Dates	Dátumok
+	US ZIP Codes	Amerikai irányítószámok (ZIP)
+	UK Postcodes	Brit irányítószámok
+	UK National Insurance Numbers	Brit társadalombiztosítási számok (NINO)
+	Canadian Postal Codes	Kanadai irányítószámok
+	Canadian Social Insurance Numbers	Kanadai társadalombiztosítási számok (SIN)
+	French Social Security Numbers (NIR)	Francia társadalombiztosítási számok (NIR)
+	Japanese Postal Codes	Japán irányítószámok
+	Japanese Individual Numbers (My Number)	Japán személyi azonosítószámok (My Number)
+	Bank Account Numbers (IBAN)	Bankszámlaszámok (IBAN)
+	Redaction code:	Kitakarási kód:
+	Choose a code	Válasszon kódot
 	Text in images isn't found; recognise text (OCR) first.	A képekben lévő szöveg nem található meg; előbb futtass szövegfelismerést (OCR).
 	No matches.	Nincs találat.
 	{n} match(es) marked for redaction.	{n} találat megjelölve kitakarásra.

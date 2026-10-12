@@ -2171,3 +2171,14 @@ calendar date	December	prosince
 
 # Preflight (integrated after the catalogs were written).
 	Preflight…	Předtisková kontrola…
+	US ZIP Codes	PSČ (USA, ZIP)
+	UK Postcodes	PSČ (Spojené království)
+	UK National Insurance Numbers	Čísla národního pojištění (Spojené království)
+	Canadian Postal Codes	PSČ (Kanada)
+	Canadian Social Insurance Numbers	Čísla sociálního pojištění (Kanada)
+	French Social Security Numbers (NIR)	Čísla sociálního zabezpečení (Francie, NIR)
+	Japanese Postal Codes	PSČ (Japonsko)
+	Japanese Individual Numbers (My Number)	Osobní čísla (Japonsko, My Number)
+	Bank Account Numbers (IBAN)	Čísla bankovních účtů (IBAN)
+	Redaction code:	Kód začernění:
+	Choose a code	Vyberte kód

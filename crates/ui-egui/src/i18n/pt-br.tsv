@@ -728,6 +728,17 @@
 	Credit Cards	Cartões de crédito
 	Social Security Numbers	Números de Seguro Social
 	Dates	Datas
+	US ZIP Codes	CEPs dos EUA (ZIP)
+	UK Postcodes	Códigos postais do Reino Unido
+	UK National Insurance Numbers	Números de seguro nacional do Reino Unido
+	Canadian Postal Codes	Códigos postais canadenses
+	Canadian Social Insurance Numbers	Números de seguro social canadenses
+	French Social Security Numbers (NIR)	Números de seguridade social franceses (NIR)
+	Japanese Postal Codes	Códigos postais japoneses
+	Japanese Individual Numbers (My Number)	Números de identificação pessoal japoneses (My Number)
+	Bank Account Numbers (IBAN)	Números de conta bancária (IBAN)
+	Redaction code:	Código de redação:
+	Choose a code	Escolha um código
 	Text in images isn't found; recognise text (OCR) first.	Texto em imagens não é encontrado; reconheça o texto (OCR) primeiro.
 	No matches.	Nenhuma correspondência.
 	{n} match(es) marked for redaction.	{n} correspondência(s) marcada(s) para ocultação.

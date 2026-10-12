@@ -1065,6 +1065,17 @@ comment menu	Edit	సవరించు
 	Credit Cards	క్రెడిట్ కార్డ్‌లు
 	Social Security Numbers	సోషల్ సెక్యూరిటీ నంబర్‌లు
 	Dates	తేదీలు
+	US ZIP Codes	అమెరికా ZIP కోడ్‌లు
+	UK Postcodes	యూకే పోస్ట్‌కోడ్‌లు
+	UK National Insurance Numbers	యూకే నేషనల్ ఇన్సూరెన్స్ నంబర్‌లు
+	Canadian Postal Codes	కెనడా పోస్టల్ కోడ్‌లు
+	Canadian Social Insurance Numbers	కెనడా సోషల్ ఇన్సూరెన్స్ నంబర్‌లు
+	French Social Security Numbers (NIR)	ఫ్రాన్స్ సామాజిక భద్రతా నంబర్‌లు (NIR)
+	Japanese Postal Codes	జపాన్ పోస్టల్ కోడ్‌లు
+	Japanese Individual Numbers (My Number)	జపాన్ వ్యక్తిగత నంబర్‌లు (My Number)
+	Bank Account Numbers (IBAN)	బ్యాంక్ ఖాతా నంబర్‌లు (IBAN)
+	Redaction code:	రిడాక్షన్ కోడ్:
+	Choose a code	కోడ్‌ను ఎంచుకోండి
 	Text in images isn't found; recognise text (OCR) first.	చిత్రాలలోని టెక్స్ట్ కనుగొనబడదు; ముందుగా టెక్స్ట్‌ను గుర్తించండి (OCR).
 	No matches.	సరిపోలికలు ఏవీ లేవు.
 	{n} match(es) marked for redaction.	రెడాక్షన్ కోసం గుర్తించిన సరిపోలికలు: {n}.

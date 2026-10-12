@@ -1088,6 +1088,17 @@
 	Credit Cards	Кредитні картки
 	Social Security Numbers	Номери соціального страхування
 	Dates	Дати
+	US ZIP Codes	Поштові індекси США (ZIP)
+	UK Postcodes	Поштові індекси Великої Британії
+	UK National Insurance Numbers	Номери національного страхування Великої Британії
+	Canadian Postal Codes	Поштові індекси Канади
+	Canadian Social Insurance Numbers	Номери соціального страхування Канади
+	French Social Security Numbers (NIR)	Номери соціального страхування Франції (NIR)
+	Japanese Postal Codes	Поштові індекси Японії
+	Japanese Individual Numbers (My Number)	Особисті номери Японії (My Number)
+	Bank Account Numbers (IBAN)	Номери банківських рахунків (IBAN)
+	Redaction code:	Код приховування:
+	Choose a code	Виберіть код
 	Text in images isn't found; recognise text (OCR) first.	Текст у зображеннях не знаходиться; спочатку розпізнайте текст (OCR).
 	No matches.	Збігів немає.
 	{n} match(es) marked for redaction.	Збігів, позначених для вилучення: {n}.

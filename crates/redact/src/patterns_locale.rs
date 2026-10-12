@@ -250,7 +250,7 @@ pub(super) fn iban(s: &[char], i: usize) -> Option<usize> {
                 k += 1;
                 ends.push(k);
             }
-            Some(' ') if chars.len() % 4 == 0 && (is_digit(at(s, k + 1)) || upper(at(s, k + 1), "")) => k += 1,
+            Some(' ') if chars.len().is_multiple_of(4) && (is_digit(at(s, k + 1)) || upper(at(s, k + 1), "")) => k += 1,
             _ => break,
         }
     }

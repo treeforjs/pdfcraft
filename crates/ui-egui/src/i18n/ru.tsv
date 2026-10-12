@@ -1091,6 +1091,17 @@
 	Credit Cards	Кредитные карты
 	Social Security Numbers	Номера социального страхования
 	Dates	Даты
+	US ZIP Codes	Почтовые индексы США (ZIP)
+	UK Postcodes	Почтовые индексы Великобритании
+	UK National Insurance Numbers	Номера национального страхования Великобритании
+	Canadian Postal Codes	Почтовые индексы Канады
+	Canadian Social Insurance Numbers	Номера социального страхования Канады
+	French Social Security Numbers (NIR)	Номера социального страхования Франции (NIR)
+	Japanese Postal Codes	Почтовые индексы Японии
+	Japanese Individual Numbers (My Number)	Личные номера Японии (My Number)
+	Bank Account Numbers (IBAN)	Номера банковских счетов (IBAN)
+	Redaction code:	Код скрытия:
+	Choose a code	Выберите код
 	Text in images isn't found; recognise text (OCR) first.	Текст в изображениях не находится; сначала распознайте текст (OCR).
 	No matches.	Совпадений нет.
 	{n} match(es) marked for redaction.	Отмечено для сокрытия: {n} совпад.

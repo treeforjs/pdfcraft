@@ -740,6 +740,17 @@
 	Credit Cards	信用卡
 	Social Security Numbers	社會安全號碼
 	Dates	日期
+	US ZIP Codes	美國郵遞區號 (ZIP)
+	UK Postcodes	英國郵遞區號
+	UK National Insurance Numbers	英國國民保險號碼
+	Canadian Postal Codes	加拿大郵遞區號
+	Canadian Social Insurance Numbers	加拿大社會保險號碼
+	French Social Security Numbers (NIR)	法國社會安全號碼 (NIR)
+	Japanese Postal Codes	日本郵遞區號
+	Japanese Individual Numbers (My Number)	日本個人編號 (My Number)
+	Bank Account Numbers (IBAN)	銀行帳號 (IBAN)
+	Redaction code:	塗黑代碼：
+	Choose a code	選擇代碼
 	Text in images isn't found; recognise text (OCR) first.	圖片中的文字無法找到；請先識別文字（OCR）。
 	No matches.	無匹配。
 	{n} match(es) marked for redaction.	已標記 {n} 個匹配以待遮蔽內容。

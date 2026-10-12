@@ -1,7 +1,8 @@
 //! Redact a PDF (execution plan M8.5–M8.6): mark text and areas with the Redact tool (drag across
 //! text to mark it, drag elsewhere to mark a box), mark whole pages, find text or patterns and
-//! mark every match, set the default box colour and overlay text, and apply all marks (with a
-//! confirmation, as Acrobat asks) or clear them.
+//! mark every match (patterns include locale-specific formats), set the default box colour and
+//! overlay text (custom or a redaction code), and apply all marks (with a confirmation, as Acrobat
+//! asks) or clear them.
 
 use egui::{Color32, CornerRadius, Pos2, Rect, Stroke};
 use pdfcraft_engine::{Edit, NewAnnotation, REDACT_PATTERNS, RedactPattern, Rgb, Shape, Style, rect_quad};
@@ -22,11 +23,13 @@ pub struct RedactPrefs {
     pub overlay: String,
     /// Overlay text font, size (0 = auto), colour, alignment and repetition.
     pub look: pdfcraft_engine::OverlayLook,
+    /// The redaction code set offered (index into `REDACTION_CODE_SETS`).
+    pub code_set: usize,
 }
 
 impl Default for RedactPrefs {
     fn default() -> Self {
-        Self { fill: Some([0.0, 0.0, 0.0]), use_overlay: false, overlay: String::new(), look: Default::default() }
+        Self { fill: Some([0.0, 0.0, 0.0]), use_overlay: false, overlay: String::new(), look: Default::default(), code_set: 0 }
     }
 }
 
@@ -277,6 +280,28 @@ pub(crate) fn props_body(ui: &mut egui::Ui, d: &mut RedactPrefs, _t: &Tokens) ->
         ui.end_row();
         let l = ui.label(tl!("Custom text:"));
         ui.add_enabled(d.use_overlay, egui::TextEdit::singleline(&mut d.overlay).desired_width(220.0)).labelled_by(l.id);
+        ui.end_row();
+        // Redaction codes: picking one makes it the overlay text (set names and descriptions
+        // are the statutes' English names).
+        ui.label(tl!("Redaction code:"));
+        ui.add_enabled_ui(d.use_overlay, |ui| {
+            ui.horizontal(|ui| {
+                let sets = pdfcraft_engine::REDACTION_CODE_SETS;
+                let Some(set) = sets.get(d.code_set).or(sets.first()) else { return };
+                egui::ComboBox::from_id_salt("redact-code-set").selected_text(set.name).show_ui(ui, |ui| {
+                    for (i, s) in sets.iter().enumerate() {
+                        ui.selectable_value(&mut d.code_set, i, s.name);
+                    }
+                });
+                egui::ComboBox::from_id_salt("redact-code").selected_text(tl!("Choose a code")).show_ui(ui, |ui| {
+                    for c in set.codes {
+                        if ui.selectable_label(d.overlay == c.code, c.code).on_hover_text(c.description).clicked() {
+                            d.overlay = c.code.to_string();
+                        }
+                    }
+                });
+            });
+        });
         ui.end_row();
         let on = d.use_overlay;
         let look = &mut d.look;

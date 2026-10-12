@@ -791,6 +791,17 @@
 	Credit Cards	信用卡
 	Social Security Numbers	社会安全号码
 	Dates	日期
+	US ZIP Codes	美国邮政编码 (ZIP)
+	UK Postcodes	英国邮政编码
+	UK National Insurance Numbers	英国国民保险号码
+	Canadian Postal Codes	加拿大邮政编码
+	Canadian Social Insurance Numbers	加拿大社会保险号码
+	French Social Security Numbers (NIR)	法国社会保障号码 (NIR)
+	Japanese Postal Codes	日本邮政编码
+	Japanese Individual Numbers (My Number)	日本个人编号 (My Number)
+	Bank Account Numbers (IBAN)	银行账号 (IBAN)
+	Redaction code:	涂黑代码：
+	Choose a code	选择代码
 	Text in images isn't found; recognise text (OCR) first.	图像中的文本无法找到；请先识别文本（OCR）。
 	No matches.	无匹配。
 	{n} match(es) marked for redaction.	已标记 {n} 个匹配以待密文。

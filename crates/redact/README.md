@@ -47,7 +47,23 @@ values stay visible), hidden text (render modes 3 and 7, or wholly off the page)
 and `/PieceInfo` private data. Both make the next save a full rewrite.
 
 `patterns` finds phone numbers, e-mail addresses, credit card numbers (Luhn-checked), US Social
-Security numbers and dates for Search & Redact.
+Security numbers and dates for Search & Redact, plus locale sets (`patterns::LOCALES`,
+`patterns_for("en-GB")`; each set also includes the `intl` patterns):
 
-Not yet: pattern locales, struct-tree/alt-text cleanup, metadata and hidden-information
-sanitising (M8.4), re-encoding of DCT images (they are removed instead).
+| Locale | Patterns |
+| --- | --- |
+| `intl` | phone, e-mail, credit card (Luhn), dates (numeric and English month names), IBAN (ISO 13616 mod 97, bare or in groups of four) |
+| `en-US` | SSN, ZIP+4 anywhere, five-digit ZIP only after a state abbreviation |
+| `en-GB` | postcodes with their space, National Insurance numbers (HMRC prefix rules, suffix A–D) |
+| `en-CA` | postal codes (`K1A 0B1`), SIN in 3-3-3 groups (Luhn, never 0 or 8 first) |
+| `fr-FR` | NIR with its key (97 − first 13 digits mod 97), Corsica 2A/2B |
+| `ja-JP` | postal codes (`100-0001`), Individual Numbers (My Number) with their check digit |
+
+Test values are synthetic (made up, with valid check digits where needed) or published specimens.
+
+`codes` holds the redaction code sets (U.S. FOIA exemptions, 5 U.S.C. § 552(b); U.S. Privacy Act,
+§ 552a; descriptions are our own summaries) and turns chosen codes, or a custom list, into the
+mark's overlay text (`/OverlayText`; `/DA`, `/Q` and `/Repeat` carry its look).
+
+Not yet: other pattern locales, country-specific IBAN lengths, saved custom code sets,
+re-encoding of DCT images (they are removed instead).

@@ -5539,11 +5539,11 @@ title = "Pattern sets per locale"
 area = "G"
 tier = "P1"
 milestone = "M8"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["redact.search"]
+tools = ["redact_mark", "redact_patterns"]
+evidence = ["crates/redact/src/patterns.rs::uk_postcodes_and_national_insurance_numbers", "crates/redact/src/patterns.rs::french_social_security_numbers", "crates/redact/src/patterns.rs::ibans_need_a_valid_checksum", "crates/automation/tests/automation.rs::redaction_codes_overlay_styles_and_locale_patterns_through_tools"]
+notes = "locale sets intl (phone, e-mail, card, dates, IBAN with mod-97), en-US (SSN, ZIP), en-GB (postcode, NINO), en-CA (postal code, SIN with Luhn), fr-FR (NIR with key, 2A/2B), ja-JP (postal code, My Number with check digit); redact_mark locale marks every pattern of a set. Missing: other locales (e.g. Germany, India, Australia), country-specific IBAN lengths, non-English month names in dates, a locale picker in the UI (the dialog lists every pattern)"
 
 [[feature]]
 id = "protect.redact-partial-words"
@@ -5579,7 +5579,7 @@ status = "partial"
 commands = ["redact.properties"]
 tools = ["redact_mark"]
 evidence = ["crates/ui-egui/tests/redact.rs::marking_applying_and_clearing", "crates/redact/src/tests.rs::overlay_text_takes_its_font_size_colour_alignment_and_repeats"]
-notes = "fill colour or none; overlay text with font, size or auto-size, colour, alignment and repeat; redaction codes pending"
+notes = "fill colour or none; overlay text (custom or redaction codes) with font, size or auto-size, colour, alignment and repeat, stored as /OverlayText, /DA, /Q, /Repeat; redact_mark takes all of them. Missing: overlay text outside WinAnsi (standard fonts only)"
 
 [[feature]]
 id = "protect.redaction-codes"
@@ -5587,11 +5587,11 @@ title = "Redaction code sets (e.g. FOIA exemptions)"
 area = "G"
 tier = "P1"
 milestone = "M8"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["redact.properties"]
+tools = ["redact_mark", "redact_codes"]
+evidence = ["crates/redact/src/codes.rs::codes_become_overlay_text", "crates/automation/tests/automation.rs::redaction_codes_overlay_styles_and_locale_patterns_through_tools", "crates/ui-egui/tests/redact.rs::redaction_properties_offer_redaction_codes"]
+notes = "built-in U.S. FOIA (5 U.S.C. 552(b)) and U.S. Privacy Act (552a) sets; one or more codes become /OverlayText, burned in on apply; codes without a set are a custom set (tool only). Missing: creating, editing, importing and exporting saved custom code sets in the UI; picking several codes at once in the UI; set names and code descriptions are English only"
 
 [[feature]]
 id = "protect.apply-redactions"
