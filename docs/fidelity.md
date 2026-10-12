@@ -121,11 +121,14 @@ after that fix.
    circle should replace the first where they overlap. PdfCraft's overlap pixel is (102, 41, 194),
    the same as the non-knockout group. The expected value is about (102, 102, 255). Poppler has
    the same gap, so the pixel metric does not flag it. It was found from the spec.
-4. **Clip-mode text is not extracted** (`text-operators`). Text drawn with `Tr 7` ("CLIPPED") is
-   missing from `pdfcraft-cli text`. Poppler extracts it.
-5. **Text with a negative rise is moved out of reading order** (`text-operators`). In
-   "Baseline rises falls back", the part with `Ts -4` ("falls back") is emitted several lines
-   later, after unrelated lines.
+4. **Clip-mode text was not extracted** (`text-operators`). Fixed: text drawn with `Tr 7`
+   ("CLIPPED") is now extracted, searched and copied, and still paints nothing (vendored
+   hayro-interpret patch 23; `text::tests::text_in_every_rendering_mode_is_extracted`).
+5. **Text with a negative rise was moved out of reading order** (`text-operators`). Fixed: in
+   "Baseline rises falls back", the part with `Ts -4` ("falls back") now stays on its line
+   (`text::tests::raised_and_lowered_text_stays_on_its_line`). With 4 and 5 fixed, text F1 vs
+   Poppler went from 0.855 to 0.865 (order F1 0.764 to 0.811) and F1 vs truth from 0.990 to 1.000;
+   the rest of the gap is Poppler splitting rotated, mirrored and vertical runs.
 6. **No stroke adjustment for thin lines** (`vector-art`, minor). Hairlines and lines up to 1 px
    come out as two grey rows instead of one solid pixel row, so they look lighter than in Poppler
    or Acrobat.

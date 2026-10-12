@@ -134,8 +134,8 @@
       "truth_f1": 1.0
     },
     "text-operators": {
-      "f1": 0.855,
-      "truth_f1": 0.99
+      "f1": 0.865,
+      "truth_f1": 1.0
     },
     "text-standard-fonts": {
       "f1": 1.0,
