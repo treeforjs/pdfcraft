@@ -96,6 +96,33 @@ fn text_of_a_protected_document_with_the_password_succeeds() {
     assert!(stdout.contains("Page 1") && stdout.contains("Page 3"), "{stdout}");
 }
 
+#[test]
+fn text_of_a_copy_restricted_document_refuses_unless_the_permissions_password_is_given() {
+    let src = tmp("to-restrict.pdf");
+    std::fs::write(&src, fixture(3)).unwrap();
+    let restricted = tmp("copy-restricted.pdf");
+    let script = tmp("restrict.json");
+    let steps = serde_json::json!([
+        { "tool": "doc_open", "args": { "path": src } },
+        { "tool": "doc_protect", "args": { "doc": 1, "open_password": "user-pw", "permissions_password": "owner-pw", "copy": false } },
+        { "tool": "doc_save", "args": { "doc": 1, "path": restricted } },
+    ]);
+    std::fs::write(&script, steps.to_string()).unwrap();
+    let out = Command::new(BIN).args(["run", "--script", script.to_str().unwrap()]).output().unwrap();
+    assert!(out.status.success(), "protecting the fixture failed: {}", String::from_utf8_lossy(&out.stderr));
+    for args in [vec!["--password", "user-pw"], vec!["--page", "2", "--password", "user-pw"]] {
+        let out = Command::new(BIN).arg("text").arg(&restricted).args(&args).output().unwrap();
+        assert!(!out.status.success(), "{args:?}");
+        assert!(out.stdout.is_empty(), "no text may be printed: {}", String::from_utf8_lossy(&out.stdout));
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(stderr.contains("does not allow copying") && !stderr.contains("Page"), "{stderr}");
+    }
+    let out = Command::new(BIN).arg("text").arg(&restricted).args(["--password", "owner-pw"]).output().unwrap();
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("Page 1") && stdout.contains("Page 3"), "{stdout}");
+}
+
 mod page_argument_tests {
     use super::*;
     use std::path::PathBuf;

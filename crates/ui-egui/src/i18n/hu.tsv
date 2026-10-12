@@ -2140,3 +2140,6 @@ action wizard	Start	Indítás
 	Underline is available for whole paragraphs.	Az aláhúzás teljes bekezdésekhez érhető el.
 	Preview PDF	PDF-előnézet
 	{n} selected characters	{n} kijelölt karakter
+
+# Reader selection
+	Select paragraph	Bekezdés kijelölése

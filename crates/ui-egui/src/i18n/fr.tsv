@@ -2142,3 +2142,6 @@ signature pad	Type	Saisir
 	Underline is available for whole paragraphs.	Le soulignement est disponible pour les paragraphes entiers.
 	Preview PDF	Aperçu PDF
 	{n} selected characters	{n} caractères sélectionnés
+
+# Reader selection
+	Select paragraph	Sélectionner le paragraphe

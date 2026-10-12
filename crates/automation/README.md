@@ -85,6 +85,13 @@ still use legacy normalization/reflow; their original character-code and spacing
 not yet equivalent to range/mixed edits. Broader shaping/encodings, transformed text, run decoration
 round-trips, structure tags and complex-layout paragraph detection remain open.
 
+## Reader text selection
+
+`text_selection` copies an inclusive glyph range across pages, a detected paragraph, or all
+document text without editing the PDF. `text_extract` can return endpoint indices and rectangles
+with `include_glyphs: true`. Both honor copy permission. See [reader selection](../../docs/reader-selection.md)
+for exact indices, limits, cancellation and remaining reading-order limitations.
+
 ## MCP server
 
 **Opt-in only.** Nothing starts it automatically, and it opens no port. It runs while `pdfcraft-cli mcp [--root DIR]` runs, normally launched by an agent from its MCP configuration. It stops when stdin closes. The CLI's `mcp` Cargo feature (on by default) compiles it out entirely when disabled.

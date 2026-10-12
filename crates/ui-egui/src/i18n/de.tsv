@@ -2142,3 +2142,6 @@ action wizard	Start	Starten
 	Underline is available for whole paragraphs.	Unterstreichen ist für ganze Absätze verfügbar.
 	Preview PDF	PDF-Vorschau
 	{n} selected characters	{n} ausgewählte Zeichen
+
+# Reader selection
+	Select paragraph	Absatz auswählen

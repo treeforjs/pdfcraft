@@ -2104,3 +2104,6 @@ action wizard	Start	Старт
 	Underline is available for whole paragraphs.	Подчертаването е достъпно за цели абзаци.
 	Preview PDF	Преглед на PDF
 	{n} selected characters	Избрани знаци: {n}
+
+# Reader selection
+	Select paragraph	Избор на абзац

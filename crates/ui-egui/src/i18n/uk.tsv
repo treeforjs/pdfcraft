@@ -2165,3 +2165,6 @@ certificate	Subject	Власник сертифіката
 	Underline is available for whole paragraphs.	Підкреслення доступне для цілих абзаців.
 	Preview PDF	Перегляд PDF
 	{n} selected characters	Вибрано символів: {n}
+
+# Reader selection
+	Select paragraph	Виділити абзац

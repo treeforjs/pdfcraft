@@ -1719,7 +1719,8 @@ impl PdfCraftApp {
                 }
             }
             self.tool_keys(i, ctx);
-            canvas::shortcuts(&mut self.views[i], ctx);
+            let copy_allowed = self.session.get(self.views[i].id).is_some_and(|doc| doc.allows_copying());
+            canvas::shortcuts(&mut self.views[i], ctx, copy_allowed);
         }
     }
 }
@@ -1879,6 +1880,7 @@ impl eframe::App for PdfCraftApp {
         for (index, view) in self.views.iter_mut().enumerate() {
             if blocked || self.active != Some(index) {
                 view.auto_scroll.cancel();
+                view.cancel_reader_input();
             }
         }
         // A field that refused its value this frame keeps the shortcut from saving or printing
@@ -1970,9 +1972,17 @@ impl eframe::App for PdfCraftApp {
 
 impl PdfCraftApp {
     fn finish_render_frame(&mut self, ctx: &egui::Context) {
+        let reader_blocked = self.dialog.is_some()
+            || self.close_request.is_some()
+            || self.palette_open
+            || !ctx.input(|input| input.focused)
+            || ctx.egui_wants_keyboard_input();
         // Retire hidden documents before admitting the visible document's textures, so the
         // three cache limits apply to the application, regardless of how many tabs are open.
         for (i, view) in self.views.iter_mut().enumerate() {
+            if reader_blocked || Some(i) != self.active || view.organize {
+                view.cancel_reader_input();
+            }
             if Some(i) != self.active
                 && let Some(doc) = self.session.get(view.id)
             {
@@ -1983,6 +1993,9 @@ impl PdfCraftApp {
             && let Some(doc) = self.session.get(view.id)
         {
             view.finish_render_frame(ctx, &doc.info, &doc.renderer);
+            if !reader_blocked && !view.organize {
+                view.finish_reader_copy(ctx, doc.allows_copying());
+            }
         }
     }
 }

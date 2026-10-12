@@ -23,6 +23,7 @@ pub mod links;
 pub mod ocr;
 pub mod optimizer;
 pub mod preflight;
+pub mod reader_selection;
 pub mod signature_image;
 pub mod text_preview;
 mod upright_image;

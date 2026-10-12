@@ -22,6 +22,7 @@ pub mod mcp;
 mod measure;
 mod preflight;
 mod printing;
+mod reader_selection;
 mod redact;
 mod signing;
 mod tools;
@@ -159,6 +160,7 @@ impl Automation {
             "page_render" => return self.page_render(&a).map(|c| vec![c]),
             "comment_image_preview" => return self.comment_image_preview(&a),
             "text_extract" => self.text_extract(&a)?,
+            "text_selection" => self.text_selection(&a)?,
             "text_find" => self.text_find(&a)?,
             "page_rotate" => {
                 let degrees = a.int("degrees")?;
@@ -1480,13 +1482,26 @@ impl Automation {
 
     fn text_extract(&mut self, a: &Args) -> Result<Value> {
         let doc = self.doc(a)?;
+        if !doc.allows_copying() {
+            return Err(failed("this document does not allow copying text; open it with the permissions password"));
+        }
         let id = doc.id;
         let pages = match a.opt_ints("pages")? {
             Some(_) => self.pages(a, "pages")?,
             None => (0..doc.info.pages.len()).collect(),
         };
         let texts = self.page_texts(id, &pages)?;
-        let out: Vec<Value> = pages.iter().zip(texts).map(|(p, t)| json!({ "page": p + 1, "text": t.plain_text() })).collect();
+        let include_glyphs = a.opt_bool("include_glyphs")?.unwrap_or(false);
+        if include_glyphs && texts.iter().try_fold(0usize, |n, t| n.checked_add(t.glyphs.len())).is_none_or(|n| n > 200_000) {
+            return Err(failed("glyph inspection exceeds 200000 glyphs; request fewer pages"));
+        }
+        let out: Vec<Value> = pages.iter().zip(texts).map(|(p, t)| {
+            let mut result=json!({ "page": p + 1, "text": t.plain_text() });
+            if include_glyphs {
+                result["glyphs"]=json!(t.glyphs.iter().enumerate().map(|(i,g)| json!({"glyph":i+1,"text":g.text,"rect":g.rect,"line":t.line_of.get(i).map(|line|u64::from(*line)+1),"space_before":t.space_before.get(i).copied().unwrap_or(false)})).collect::<Vec<_>>());
+            }
+            result
+        }).collect();
         Ok(json!({ "pages": out }))
     }
 

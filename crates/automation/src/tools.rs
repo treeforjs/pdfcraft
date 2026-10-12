@@ -152,7 +152,14 @@ pub fn tools() -> Vec<ToolDef> {
             .with(schema(json!({ "doc": doc(), "page": { "type": "integer", "minimum": 1 }, "dpi": { "type": "number", "minimum": 1, "maximum": 600 } }), &["doc", "page"])),
         t("text_extract", "Extract text", "Extract the text of some or all pages, in reading order.")
             .ro()
-            .with(schema(json!({ "doc": doc(), "pages": pages("to extract (default: all)") }), &["doc"])),
+            .with(schema(json!({ "doc": doc(), "pages": pages("to extract (default: all)"), "include_glyphs": {"type":"boolean","description":"Include one-based glyph indices, Unicode mappings and view-space rectangles for text_selection endpoints. At most 200000 glyphs; default false. Copy permission applies."} }), &["doc"])),
+        t("text_selection", "Copy selected text", "Copy a reading-order text range across pages, a detected paragraph, or the whole document. Page and glyph endpoints are one-based and inclusive; glyphs may contain a whole ligature. Reverse ranges are normalized. Line breaks are preserved and pages separated by two newlines, including blank pages. Copy permission is enforced and output is limited to 32 MiB. Read-only; no history changes.")
+            .ro()
+            .with(schema(json!({
+                "doc":doc(), "mode":{"type":"string","enum":["range","paragraph","all"],"default":"range"},
+                "start_page":{"type":"integer","minimum":1}, "start_glyph":{"type":"integer","minimum":1},
+                "end_page":{"type":"integer","minimum":1}, "end_glyph":{"type":"integer","minimum":1}
+            }), &["doc"])),
         t("text_find", "Find text", "Find a phrase (case-insensitive, whitespace-normalised) and return each match with its page and line rectangles in points (origin top-left).")
             .ro()
             .cmd("edit.find")

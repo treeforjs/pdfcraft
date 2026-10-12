@@ -90,19 +90,21 @@ fn view_history_select_all_and_find_options() {
     assert_eq!(h.state().views[0].current, 0);
     assert!(h.state_mut().views[0].view_history(true));
     assert_eq!(h.state().views[0].current, 3, "next view");
-    // Select all on the current page (once its text is known).
-    for _ in 0..40 {
+    // Select all includes offscreen pages, even after navigation.
+    assert!(h.state_mut().views[0].select_all());
+    for _ in 0..100 {
         h.run_steps(2);
-        if h.state_mut().views[0].select_all() {
+        if h.state().views[0].selected_text().is_some() {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(5));
     }
-    assert_eq!(h.state().views[0].selected_text().as_deref(), Some("Page 4 pages PAGE"));
+    let all = (1..=5).map(|p| format!("Page {p} pages PAGE")).collect::<Vec<_>>().join("\n\n");
+    assert_eq!(h.state().views[0].selected_text().as_deref(), Some(all.as_str()));
     h.state_mut().views[0].select_text(3, 0, 0);
     h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::A);
     h.run_steps(2);
-    assert_eq!(h.state().views[0].selected_text().as_deref(), Some("Page 4 pages PAGE"), "the viewer shortcut still selects text");
+    assert_eq!(h.state().views[0].selected_text().as_deref(), Some(all.as_str()), "the viewer shortcut still selects document text");
     assert!(h.state().views[0].selected.is_empty(), "the viewer shortcut doesn't select pages");
     // Find: "page" matches three times a page; whole words, case-sensitive narrows it.
     h.state_mut().views[0].open_find();

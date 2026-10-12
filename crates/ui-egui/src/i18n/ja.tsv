@@ -2142,3 +2142,6 @@ signature pad	Type	入力
 	Underline is available for whole paragraphs.	下線は段落全体に適用できます。
 	Preview PDF	PDFをプレビュー
 	{n} selected characters	{n} 文字を選択中
+
+# Reader selection
+	Select paragraph	段落を選択
