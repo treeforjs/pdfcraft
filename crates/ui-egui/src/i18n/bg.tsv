@@ -2148,7 +2148,7 @@ action wizard	Start	Старт
 	Colour tolerance	Допуск на цвета
 	A pixel counts as changed when a colour channel differs by more than this (0–255)	Пикселът се смята за променен, когато цветови канал се различава с повече от тази стойност (0–255)
 	Change threshold	Праг на промяна
-	A page looks different only when more than this share of its pixels changed	Страницата изглежда различна само когато е променен по-голям дял от пикселите ѝ от този
+	A page looks different only when more than this share of its pixels changed	Страницата се счита за различна само когато е променен по-голям дял от пикселите в нея от този
 	Comparing… {d} of {t}	Сравняване… {d} от {t}
 	Stopping…	Спиране…
 	Stop	Спри
