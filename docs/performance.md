@@ -129,11 +129,28 @@ What the numbers support:
    all annotations (O(pages × annotations)), and calls `replies_of` (a scan of all annotations)
    up to three times per root comment when comments have names, which is quadratic for named
    comments. On `text-500` (500 comments) the panel is most of the 8 ms frame.
-2. **Unbounded text cache in the automation session.** `text_extract`/`text_find` cache every
-   page's `PageText` (with glyph geometry) for the life of the document
-   (`crates/automation/src/lib.rs`, `page_texts`): extracting 5 000 pages raises peak RSS from
-   ~110 MiB to ~873 MiB (≈155 KiB per 40-line page) and it is never released. Long agent sessions
-   on large documents can exhaust memory.
+2. **Unbounded text cache in the automation session (fixed 2026-10-12, wp/hardening).**
+   `text_extract`/`text_find` cached every page's `PageText` (with glyph geometry) for the life of
+   the document: extracting 5 000 pages raised peak RSS from ~110 MiB to ~873 MiB (≈155 KiB per
+   40-line page) and it was never released. The cache (`crates/automation/src/text_cache.rs`) is
+   now bounded at 96 MiB of estimated heap across all documents, evicting the least recently used
+   pages and dropping a document's pages when its working bytes change or it closes; whole-document
+   tools (`text_extract`, `text_find`, `redact_mark`) stream pages from parallel workers through
+   a bounded channel instead of holding them all. Tool results are unchanged
+   (`text_cache::tests::bounded_cache_keeps_tool_results_identical` compares a one-byte budget with
+   an unbounded one, including after an edit). Alongside it, a geometry-free search index
+   (`SearchText`: the exact chars page search runs on, case-folded and original, ~2 bytes per
+   glyph each) has its own 32 MiB LRU budget and the same invalidation. `text_find` and
+   `redact_mark` skip pages the index proves match-free, so only matching pages need their
+   geometry re-extracted (`PageText::search_text` + `find_in_chars` in `pdfcraft-render`; the
+   render test `search_text_agrees_with_page_search` and the automation test, which also runs
+   with only the index enabled, check the results are identical). One dev-profile `perf_probe`
+   run on `text-5000` (logs `~/artcraft/logs/wp-hardening/perf-report-{before,index}.json`):
+   peak RSS after extraction 874 → 369 MiB, whole run 989 → 484 MiB; extraction 2.3 → 2.8 s;
+   `find` after `extract` 167 → 49 ms (geometry-only cache without the index: 2.4 s). `text-500`
+   is unchanged within noise (find 17 ms, peak 120 MiB). The original find budget (830 ms)
+   stands; the `text-5000` RSS budget is now 610 MiB. Most of the remaining extraction peak is
+   the eight extraction workers each parsing the document.
 3. **Whole file in memory** (known, `core.lazy-loading`): `doc_open` reads the entire file and the
    engine keeps it (`crates/cos/src/lib.rs`: no `ByteSource` yet). `images-24` (109 MB) opens at
    ~120 MiB RSS and peaks at ~354 MiB after rendering, extraction and two saves.

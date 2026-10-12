@@ -20,7 +20,7 @@
         "ui.peak_rss_mib": 210
       },
       "text-5000": {
-        "_note": "scaling check; UI budgets record the Comments-panel defect, engine RSS records the unbounded text cache",
+        "_note": "scaling check; UI budgets record the Comments-panel defect. Engine RSS re-set 2026-10-12 (wp/hardening, one dev run) for the bounded automation text cache plus its search index: peak RSS 989 -> 484 MiB, find 167 -> 49 ms",
         "engine.open_ms": 1300,
         "engine.render_first_page_ms": 130,
         "engine.render_last_page_ms": 95,
@@ -28,7 +28,7 @@
         "engine.find_ms": 830,
         "engine.save_incremental_ms": 1900,
         "engine.save_full_ms": 2100,
-        "engine.peak_rss_mib": 1300,
+        "engine.peak_rss_mib": 610,
         "ui.open_ms": 1300,
         "ui.settle_ms": 2800,
         "ui.smooth_scroll.median_ms": 800,

@@ -70,53 +70,47 @@ impl PageText {
 
     /// Search with Acrobat's find options: case-sensitive, whole words only.
     pub fn find_opts(&self, needle: &str, case_sensitive: bool, whole_words: bool) -> Vec<std::ops::Range<usize>> {
-        let fold = |s: &str| if case_sensitive { s.to_string() } else { s.to_lowercase() };
-        let needle: Vec<char> = fold(needle).split_whitespace().collect::<Vec<_>>().join(" ").chars().collect();
-        if needle.is_empty() {
-            return Vec::new();
-        }
-        // Flatten to chars with the glyph index each char came from.
-        let mut chars: Vec<(char, usize)> = Vec::new();
+        let (chars, owner) = self.search_chars(!case_sensitive);
+        find_in_chars(&chars, needle, case_sensitive, whole_words).into_iter().map(|r| owner[r.start]..owner[r.end - 1] + 1).collect()
+    }
+
+    /// The page text as search sees it, with the glyph each char came from: glyph texts in
+    /// reading order, one space between words and lines, whitespace as a space, and each glyph
+    /// lower-cased on its own when `fold`.
+    fn search_chars(&self, fold: bool) -> (Vec<char>, Vec<usize>) {
+        let mut chars: Vec<char> = Vec::new();
+        let mut owner: Vec<usize> = Vec::new();
         for (i, g) in self.glyphs.iter().enumerate() {
-            if i > 0 && (self.space_before[i] || self.line_of[i] != self.line_of[i - 1]) && chars.last().is_some_and(|c| c.0 != ' ') {
-                chars.push((' ', i));
+            let breaks = i > 0 && (self.space_before.get(i).copied().unwrap_or(false) || self.line_of.get(i) != self.line_of.get(i - 1));
+            if breaks && chars.last().is_some_and(|c| *c != ' ') {
+                chars.push(' ');
+                owner.push(i);
             }
-            for c in fold(&g.text).chars() {
-                chars.push((if c.is_whitespace() { ' ' } else { c }, i));
-            }
-        }
-        let word = |k: Option<&(char, usize)>| k.is_some_and(|c| c.0.is_alphanumeric());
-        let mut out = Vec::new();
-        let mut i = 0;
-        while i + needle.len() <= chars.len() {
-            let bounded = !whole_words || (!word(i.checked_sub(1).and_then(|p| chars.get(p))) && !word(chars.get(i + needle.len())));
-            if bounded && chars[i..i + needle.len()].iter().map(|c| c.0).eq(needle.iter().copied()) {
-                let start = chars[i].1;
-                let end = chars[i + needle.len() - 1].1 + 1;
-                out.push(start..end);
-                i += needle.len();
+            let mut push = |c: char| {
+                chars.push(if c.is_whitespace() { ' ' } else { c });
+                owner.push(i);
+            };
+            if fold {
+                g.text.to_lowercase().chars().for_each(&mut push);
             } else {
-                i += 1;
+                g.text.chars().for_each(&mut push);
             }
         }
-        out
+        (chars, owner)
+    }
+
+    /// The chars [`Self::find_opts`] (`fold`: case-insensitive) and [`Self::find_with`]
+    /// (`fold == false`) search, as a string: a compact, geometry-free index of the page. Running
+    /// [`find_in_chars`] or a [`Self::find_with`] matcher on its chars finds a match exactly when
+    /// the page search does (char ranges, not glyph ranges).
+    pub fn search_text(&self, fold: bool) -> String {
+        self.search_chars(fold).0.into_iter().collect()
     }
 
     /// Glyph ranges of the matches a character matcher finds in the page text (words and lines
     /// separated by one space, original case). Used for pattern search (Search & Redact).
     pub fn find_with(&self, matcher: impl Fn(&[char]) -> Vec<std::ops::Range<usize>>) -> Vec<std::ops::Range<usize>> {
-        let mut chars: Vec<char> = Vec::new();
-        let mut owner: Vec<usize> = Vec::new();
-        for (i, g) in self.glyphs.iter().enumerate() {
-            if i > 0 && (self.space_before[i] || self.line_of[i] != self.line_of[i - 1]) && chars.last().is_some_and(|c| *c != ' ') {
-                chars.push(' ');
-                owner.push(i);
-            }
-            for c in g.text.chars() {
-                chars.push(if c.is_whitespace() { ' ' } else { c });
-                owner.push(i);
-            }
-        }
+        let (chars, owner) = self.search_chars(false);
         matcher(&chars).into_iter().filter(|r| r.start < r.end && r.end <= chars.len()).map(|r| owner[r.start]..owner[r.end - 1] + 1).collect()
     }
 
@@ -367,6 +361,30 @@ fn union(a: &mut [f32; 4], b: &[f32; 4]) {
     a[1] = a[1].min(b[1]);
     a[2] = a[2].max(b[2]);
     a[3] = a[3].max(b[3]);
+}
+
+/// Char ranges of `needle` in `chars` (see [`PageText::search_text`]), with Acrobat's find
+/// options; `chars` must be case-folded already when `case_sensitive` is false. Matches do not
+/// overlap; whitespace runs in the needle match one space.
+pub fn find_in_chars(chars: &[char], needle: &str, case_sensitive: bool, whole_words: bool) -> Vec<std::ops::Range<usize>> {
+    let fold = |s: &str| if case_sensitive { s.to_string() } else { s.to_lowercase() };
+    let needle: Vec<char> = fold(needle).split_whitespace().collect::<Vec<_>>().join(" ").chars().collect();
+    if needle.is_empty() {
+        return Vec::new();
+    }
+    let word = |k: Option<&char>| k.is_some_and(|c| c.is_alphanumeric());
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i + needle.len() <= chars.len() {
+        let bounded = !whole_words || (!word(i.checked_sub(1).and_then(|p| chars.get(p))) && !word(chars.get(i + needle.len())));
+        if bounded && chars[i..i + needle.len()] == needle[..] {
+            out.push(i..i + needle.len());
+            i += needle.len();
+        } else {
+            i += 1;
+        }
+    }
+    out
 }
 
 /// Reading-order layout. Glyphs are reordered so that `glyphs` is in reading order, lines are
@@ -722,6 +740,34 @@ mod tests {
 
     fn g(t: &str, x0: f32, y0: f32, x1: f32) -> TextGlyph {
         TextGlyph { text: t.into(), rect: [x0, y0, x1, y0 + 10.0] }
+    }
+
+    /// The geometry-free search text finds a match exactly when the page search does, including
+    /// per-glyph case folding (a capital sigma glyph alone folds to σ, never ς), multi-char
+    /// glyphs and line breaks.
+    #[test]
+    fn search_text_agrees_with_page_search() {
+        let mut v = Vec::new();
+        for (i, c) in ["O", "Δ", "Σ", " ", "ﬁ", "nal", "Ab"].iter().enumerate() {
+            v.push(g(c, 10.0 + i as f32 * 6.0, 10.0, 16.0 + i as f32 * 6.0));
+        }
+        for (i, c) in "Next line".chars().enumerate() {
+            v.push(g(&c.to_string(), 10.0 + i as f32 * 6.0, 30.0, 16.0 + i as f32 * 6.0));
+        }
+        let t = layout(v);
+        let folded: Vec<char> = t.search_text(true).chars().collect();
+        let raw: Vec<char> = t.search_text(false).chars().collect();
+        for needle in ["οδσ", "οδς", "ΟΔΣ", "ﬁnal", "nalab", "ab next", "AB   NEXT", "line", "x", "", "missing", "e"] {
+            let page = t.find(needle);
+            let index = find_in_chars(&folded, needle, false, false);
+            assert_eq!(page.len(), index.len(), "{needle:?}");
+            for (case, whole) in [(true, false), (false, true), (true, true)] {
+                let chars = if case { &raw } else { &folded };
+                assert_eq!(t.find_opts(needle, case, whole).len(), find_in_chars(chars, needle, case, whole).len(), "{needle:?} {case} {whole}");
+            }
+        }
+        let digits = |c: &[char]| (0..c.len()).filter(|i| c[*i].is_uppercase()).map(|i| i..i + 1).collect::<Vec<_>>();
+        assert_eq!(t.find_with(digits).len(), digits(&raw).len());
     }
 
     #[test]

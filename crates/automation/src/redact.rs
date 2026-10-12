@@ -10,6 +10,9 @@ use serde_json::{Value, json};
 use crate::comments::{DEFAULT_AUTHOR, parse_color};
 use crate::{Args, Automation, Result, ToolError, failed};
 
+/// One redaction mark to add: (0-based page, its quadrilaterals).
+type Mark = (usize, Vec<[f64; 8]>);
+
 impl Automation {
     pub(crate) fn redact_mark(&mut self, a: &Args) -> Result<Value> {
         let doc = self.doc(a)?;
@@ -26,7 +29,7 @@ impl Automation {
             style.fill = Some(parse_color(c)?);
         }
         // (page, quads) per mark.
-        let mut marks: Vec<(usize, Vec<[f64; 8]>)> = Vec::new();
+        let mut marks: Vec<Mark> = Vec::new();
         let chosen = [
             a.get("rect").is_some(),
             a.get("find").is_some(),
@@ -64,26 +67,42 @@ impl Automation {
                 patterns =
                     redact_patterns_for(l).ok_or_else(|| ToolError::InvalidArgs(format!("unknown locale {l:?} (one of {})", ids.join(", "))))?;
             }
-            let texts = self.page_texts(id, &pages)?;
             let info = self.doc(a)?.info.clone();
-            for (&p, text) in pages.iter().zip(&texts) {
+            // Pages are streamed (not all held at once) and may arrive out of order: marks are
+            // gathered per position in `pages` and kept in that order.
+            let mut found: std::collections::BTreeMap<usize, Vec<Mark>> = std::collections::BTreeMap::new();
+            // Every pattern's matches, each place once (patterns can overlap).
+            let matcher = |chars: &[char]| {
+                let mut all: Vec<std::ops::Range<usize>> = patterns.iter().flat_map(|pat| find_pattern(*pat, chars)).collect();
+                all.sort_by_key(|r| (r.start, r.end));
+                all.dedup();
+                all
+            };
+            // The search index skips pages that cannot match; only the rest need geometry.
+            let may_match = |s: &crate::text_cache::SearchText| match &find {
+                Some(f) => s.may_find(f),
+                None => s.may_match(matcher),
+            };
+            self.each_matching_page_text(id, &pages, may_match, |pos, text| {
+                let p = pages.get(pos).copied().unwrap_or_default();
                 let hits = match &find {
                     Some(f) => text.find(f),
-                    // Every pattern's matches, each place once (patterns can overlap).
-                    None => text.find_with(|chars| {
-                        let mut all: Vec<std::ops::Range<usize>> = patterns.iter().flat_map(|pat| find_pattern(*pat, chars)).collect();
-                        all.sort_by_key(|r| (r.start, r.end));
-                        all.dedup();
-                        all
-                    }),
+                    None => text.find_with(matcher),
                 };
+                let Some(page) = info.pages.get(p) else { return Ok(()) };
+                let mut on_page = Vec::new();
                 for h in hits {
-                    let quads: Vec<[f64; 8]> = text.line_rects(h).into_iter().map(|r| info.pages[p].view_rect_to_quad(r)).collect();
+                    let quads: Vec<[f64; 8]> = text.line_rects(h).into_iter().map(|r| page.view_rect_to_quad(r)).collect();
                     if !quads.is_empty() {
-                        marks.push((p, quads));
+                        on_page.push((p, quads));
                     }
                 }
-            }
+                if !on_page.is_empty() {
+                    found.insert(pos, on_page);
+                }
+                Ok(())
+            })?;
+            marks.extend(found.into_values().flatten());
             if marks.is_empty() {
                 return Err(failed("nothing matched, so nothing was marked"));
             }

@@ -30,6 +30,7 @@ mod reader_selection;
 mod redact;
 mod signature_workflow;
 mod signing;
+mod text_cache;
 mod tools;
 
 use std::collections::HashMap;
@@ -84,17 +85,18 @@ fn failed(e: impl std::fmt::Display) -> ToolError {
 const DEFAULT_DPI: f64 = 96.0;
 const MAX_DPI: f64 = 600.0;
 
-/// Page texts of one document version: (the working bytes, one slot per page).
-type TextCache = (Arc<Vec<u8>>, Vec<Option<Arc<PageText>>>);
-
 /// A headless PdfCraft session driven by tool calls.
 pub struct Automation {
     session: Session,
     root: Option<PathBuf>,
     /// Synchronous renderers, rebuilt when a document's working bytes change.
     renderers: HashMap<DocId, (Arc<Vec<u8>>, PageRenderer)>,
-    /// Extracted page text per document version (the working bytes it was taken from).
-    texts: HashMap<DocId, TextCache>,
+    /// Extracted page text per document version (the working bytes it was taken from),
+    /// bounded across documents (least recently used pages are evicted).
+    texts: text_cache::TextCache,
+    /// Geometry-free search text per page (its own budget), so searches skip pages that
+    /// cannot match instead of re-extracting them.
+    search: text_cache::SearchCache,
     /// Recognition drafts awaiting explicit correction, apply or cancellation.
     ocr_reviews: HashMap<DocId, pdfcraft_engine::ocr::OcrReview>,
 }
@@ -107,7 +109,14 @@ impl Default for Automation {
 
 impl Automation {
     pub fn new() -> Self {
-        Self { session: Session::new(), root: None, renderers: HashMap::new(), texts: HashMap::new(), ocr_reviews: HashMap::new() }
+        Self {
+            session: Session::new(),
+            root: None,
+            renderers: HashMap::new(),
+            texts: text_cache::TextCache::new(text_cache::DEFAULT_BUDGET),
+            search: text_cache::SearchCache::new(text_cache::SEARCH_BUDGET),
+            ocr_reviews: HashMap::new(),
+        }
     }
 
     /// Confine every path the tools read or write to `root` (relative paths resolve inside it).
@@ -776,7 +785,8 @@ impl Automation {
         }
         self.session.close(id);
         self.renderers.remove(&id);
-        self.texts.remove(&id);
+        self.texts.remove_doc(id);
+        self.search.remove_doc(id);
         self.ocr_reviews.remove(&id);
         Ok(json!({ "closed": id.0 }))
     }
@@ -1625,25 +1635,85 @@ impl Automation {
         Ok(p as usize - 1)
     }
 
-    /// The text of `pages` (0-based), from the cache or extracted in parallel.
-    fn page_texts(&mut self, id: DocId, pages: &[usize]) -> Result<Vec<Arc<PageText>>> {
+    /// Hand the text of each of `pages` (0-based; repeats allowed) to `f` with its position in
+    /// `pages`: cached pages first, then the rest as parallel extraction finishes them (in no
+    /// particular order). Extracted pages go into the bounded cache, so a whole-document scan
+    /// holds only what `f` keeps plus the cache budget, never every page at once.
+    fn each_page_text(&mut self, id: DocId, pages: &[usize], mut f: impl FnMut(usize, &Arc<PageText>) -> Result<()>) -> Result<()> {
         let doc = self.session.get(id).ok_or_else(|| failed("no such document"))?;
         let (bytes, n) = (doc.bytes.clone(), doc.info.pages.len());
-        let password: Option<Arc<str>> = doc.password.as_deref().map(Arc::from);
-        let entry = self.texts.entry(id).or_insert_with(|| (bytes.clone(), Vec::new()));
-        if !Arc::ptr_eq(&entry.0, &bytes) || entry.1.len() != n {
-            *entry = (bytes.clone(), vec![None; n]);
+        if let Some(p) = pages.iter().find(|p| **p >= n) {
+            return Err(failed(format!("page {} has no text", p + 1)));
         }
-        let mut missing: Vec<usize> = pages.iter().copied().filter(|p| entry.1.get(*p).is_some_and(Option::is_none)).collect();
-        missing.sort_unstable();
-        missing.dedup();
-        for (p, text) in extract_parallel(&bytes, password, &missing) {
-            let text = Arc::new(text.map_err(|e| failed(format!("page {}: {e}", p + 1)))?);
-            if let Some(slot) = entry.1.get_mut(p) {
-                *slot = Some(text);
+        let password: Option<Arc<str>> = doc.password.as_deref().map(Arc::from);
+        self.texts.sync(id, &bytes);
+        self.search.sync(id, &bytes);
+        // Positions in `pages` still waiting for each uncached page.
+        let mut wanted: std::collections::BTreeMap<usize, Vec<usize>> = std::collections::BTreeMap::new();
+        for (pos, &p) in pages.iter().enumerate() {
+            match self.texts.get(id, p) {
+                Some(text) => {
+                    if !self.search.contains(id, p) {
+                        self.search.insert(id, p, Arc::new(text_cache::SearchText::of(&text)));
+                    }
+                    f(pos, &text)?
+                }
+                None => wanted.entry(p).or_default().push(pos),
             }
         }
-        pages.iter().map(|p| entry.1.get(*p).cloned().flatten().ok_or_else(|| failed(format!("page {} has no text", p + 1)))).collect()
+        let missing: Vec<usize> = wanted.keys().copied().collect();
+        let (cache, search) = (&mut self.texts, &mut self.search);
+        extract_each(&bytes, password, &missing, |p, text| {
+            let text = Arc::new(text);
+            if !search.contains(id, p) {
+                search.insert(id, p, Arc::new(text_cache::SearchText::of(&text)));
+            }
+            for &pos in wanted.get(&p).map_or(&[][..], Vec::as_slice) {
+                f(pos, &text)?;
+            }
+            cache.insert(id, p, text);
+            Ok(())
+        })
+    }
+
+    /// [`Self::each_page_text`] for a search: pages whose search index proves `may_match` false
+    /// are skipped (they would yield no match), so only pages that match, or are not indexed
+    /// yet, need their geometry. Pages whose geometry is cached are always visited.
+    fn each_matching_page_text(
+        &mut self,
+        id: DocId,
+        pages: &[usize],
+        may_match: impl Fn(&text_cache::SearchText) -> bool,
+        mut f: impl FnMut(usize, &Arc<PageText>) -> Result<()>,
+    ) -> Result<()> {
+        let doc = self.session.get(id).ok_or_else(|| failed("no such document"))?;
+        let bytes = doc.bytes.clone();
+        self.texts.sync(id, &bytes);
+        self.search.sync(id, &bytes);
+        let mut keep: Vec<usize> = Vec::with_capacity(pages.len());
+        for (pos, &p) in pages.iter().enumerate() {
+            if self.texts.contains(id, p) || self.search.get(id, p).is_none_or(|s| may_match(&s)) {
+                keep.push(pos);
+            }
+        }
+        let subset: Vec<usize> = keep.iter().filter_map(|&pos| pages.get(pos).copied()).collect();
+        self.each_page_text(id, &subset, |i, text| match keep.get(i) {
+            Some(&pos) => f(pos, text),
+            None => Ok(()),
+        })
+    }
+
+    /// The text of `pages` (0-based), from the cache or extracted in parallel. For a few pages;
+    /// whole-document tools use [`Self::each_page_text`] so pages are not all held at once.
+    fn page_texts(&mut self, id: DocId, pages: &[usize]) -> Result<Vec<Arc<PageText>>> {
+        let mut out: Vec<Option<Arc<PageText>>> = vec![None; pages.len()];
+        self.each_page_text(id, pages, |pos, text| {
+            if let Some(slot) = out.get_mut(pos) {
+                *slot = Some(text.clone());
+            }
+            Ok(())
+        })?;
+        pages.iter().zip(out).map(|(p, t)| t.ok_or_else(|| failed(format!("page {} has no text", p + 1)))).collect()
     }
 
     fn text_extract(&mut self, a: &Args) -> Result<Value> {
@@ -1654,18 +1724,26 @@ impl Automation {
             Some(_) => self.pages(a, "pages")?,
             None => (0..doc.info.pages.len()).collect(),
         };
-        let texts = self.page_texts(id, &pages)?;
         let include_glyphs = a.opt_bool("include_glyphs")?.unwrap_or(false);
-        if include_glyphs && texts.iter().try_fold(0usize, |n, t| n.checked_add(t.glyphs.len())).is_none_or(|n| n > 200_000) {
-            return Err(failed("glyph inspection exceeds 200000 glyphs; request fewer pages"));
-        }
-        let out: Vec<Value> = pages.iter().zip(texts).map(|(p, t)| {
-            let mut result=json!({ "page": p + 1, "text": t.plain_text() });
+        let mut out: Vec<Value> = vec![Value::Null; pages.len()];
+        let mut glyphs = 0usize;
+        self.each_page_text(id, &pages, |pos, t| {
+            if include_glyphs {
+                glyphs = glyphs.saturating_add(t.glyphs.len());
+                if glyphs > 200_000 {
+                    return Err(failed("glyph inspection exceeds 200000 glyphs; request fewer pages"));
+                }
+            }
+            let page = pages.get(pos).copied().unwrap_or_default();
+            let mut result=json!({ "page": page + 1, "text": t.plain_text() });
             if include_glyphs {
                 result["glyphs"]=json!(t.glyphs.iter().enumerate().map(|(i,g)| json!({"glyph":i+1,"text":g.text,"rect":g.rect,"line":t.line_of.get(i).map(|line|u64::from(*line)+1),"space_before":t.space_before.get(i).copied().unwrap_or(false)})).collect::<Vec<_>>());
             }
-            result
-        }).collect();
+            if let Some(slot) = out.get_mut(pos) {
+                *slot = result;
+            }
+            Ok(())
+        })?;
         Ok(json!({ "pages": out }))
     }
 
@@ -1678,16 +1756,39 @@ impl Automation {
         let (id, n) = (doc.id, doc.info.pages.len());
         let query = a.str("query")?;
         let limit = a.opt_int("limit")?.unwrap_or(500).max(1) as usize;
-        let texts = self.page_texts(id, &(0..n).collect::<Vec<_>>())?;
-        let mut matches = Vec::new();
-        'pages: for (p, text) in texts.iter().enumerate() {
-            for r in text.find(query) {
-                if matches.len() == limit {
-                    break 'pages;
+        // Pages arrive out of order: keep the first `limit` matches in page order seen so far
+        // (later pages' extra matches can never make the cut once `limit` precede them).
+        let mut found: std::collections::BTreeMap<usize, Vec<Value>> = std::collections::BTreeMap::new();
+        let mut kept = 0usize;
+        self.each_matching_page_text(
+            id,
+            &(0..n).collect::<Vec<_>>(),
+            |s| s.may_find(query),
+            |p, text| {
+                let page: Vec<Value> = text
+                    .find(query)
+                    .into_iter()
+                    .take(limit)
+                    .map(|r| json!({ "page": p + 1, "text": copy.then(|| text.text_of(r.clone())), "rects": text.line_rects(r) }))
+                    .collect();
+                kept = kept.saturating_add(page.len());
+                if !page.is_empty() {
+                    found.insert(p, page);
                 }
-                matches.push(json!({ "page": p + 1, "text": copy.then(|| text.text_of(r.clone())), "rects": text.line_rects(r) }));
-            }
-        }
+                while kept > limit {
+                    let Some(mut last) = found.last_entry() else { break };
+                    let excess = (kept - limit).min(last.get().len());
+                    let keep = last.get().len() - excess;
+                    last.get_mut().truncate(keep);
+                    kept -= excess;
+                    if keep == 0 {
+                        last.remove();
+                    }
+                }
+                Ok(())
+            },
+        )?;
+        let matches: Vec<Value> = found.into_values().flatten().collect();
         Ok(withheld(json!({ "query": query, "count": matches.len(), "matches": matches }), copy))
     }
 
@@ -1938,6 +2039,9 @@ fn one_based(pages: &[i64]) -> Result<Vec<usize>> {
 /// The document's security as the next save writes it (never includes passwords).
 fn security(d: &Document) -> Value {
     match d.security_summary() {
+        // Encrypted, but no editor read its security handler: permissions are unknown, and
+        // every permission check fails closed (`Document::allows_printing` and friends).
+        None if d.info.encrypted && !d.editable() => json!({ "protected": true, "permissions_verified": false }),
         None => json!({ "protected": false }),
         Some(s) => {
             let p = s.permissions;
@@ -2075,42 +2179,78 @@ fn encode_png(width: u32, height: u32, premultiplied: &[u8]) -> Result<Vec<u8>> 
     Ok(out)
 }
 
-/// Extract the text of `pages` (0-based) with one renderer per worker thread.
-fn extract_parallel(bytes: &Arc<Vec<u8>>, password: Option<Arc<str>>, pages: &[usize]) -> Vec<(usize, std::result::Result<PageText, String>)> {
+/// Extract the text of `pages` (0-based, distinct) with one renderer per worker thread, handing
+/// each page to `sink` on this thread as soon as it is ready (in no particular order), so
+/// pages are not all held at once. Stops at the first error from extraction or `sink`; a page a
+/// worker could not deliver (a worker panicked) is an error, never silently missing.
+fn extract_each(
+    bytes: &Arc<Vec<u8>>,
+    password: Option<Arc<str>>,
+    pages: &[usize],
+    mut sink: impl FnMut(usize, PageText) -> Result<()>,
+) -> Result<()> {
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     let extract = |r: &mut PageRenderer, p: usize| {
         let out = r.render(RenderRequest { page: p, kind: RequestKind::Text, tile: None, scale: 1.0, tag: 0 });
         match out.error {
             Some(e) => Err(e),
-            None => Ok(out.text.map(|t| (*t).clone()).unwrap_or_default()),
+            None => Ok(out.text.map(Arc::unwrap_or_clone).unwrap_or_default()),
         }
     };
     let config = RenderConfig { password, ..Default::default() };
     let workers = if cfg!(target_arch = "wasm32") { 1 } else { std::thread::available_parallelism().map_or(1, |n| n.get()).min(8) };
     // Small jobs aren't worth a second parse of the document.
     if workers == 1 || pages.len() < 8 {
+        if pages.is_empty() {
+            return Ok(());
+        }
         let mut r = PageRenderer::new(bytes.clone(), config);
-        return pages.iter().map(|p| (*p, extract(&mut r, *p))).collect();
+        for &p in pages {
+            let text = extract(&mut r, p).map_err(|e| failed(format!("page {}: {e}", p + 1)))?;
+            sink(p, text)?;
+        }
+        return Ok(());
     }
-    let next = std::sync::atomic::AtomicUsize::new(0);
-    let mut out: Vec<(usize, std::result::Result<PageText, String>)> = std::thread::scope(|s| {
+    let next = AtomicUsize::new(0);
+    let stop = AtomicBool::new(false);
+    std::thread::scope(|s| {
+        // Bounded: workers wait while `sink` catches up instead of piling pages up.
+        let (tx, rx) = std::sync::mpsc::sync_channel::<(usize, std::result::Result<PageText, String>)>(workers * 2);
         let handles: Vec<_> = (0..workers)
             .map(|_| {
-                s.spawn(|| {
-                    let mut r = PageRenderer::new(bytes.clone(), config.clone());
-                    let mut done = Vec::new();
-                    loop {
-                        let i = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                        let Some(p) = pages.get(i) else { break };
-                        done.push((*p, extract(&mut r, *p)));
+                let (tx, next, stop, config) = (tx.clone(), &next, &stop, config.clone());
+                s.spawn(move || {
+                    let mut r = PageRenderer::new(bytes.clone(), config);
+                    while !stop.load(Ordering::Relaxed) {
+                        let Some(&p) = pages.get(next.fetch_add(1, Ordering::Relaxed)) else { break };
+                        if tx.send((p, extract(&mut r, p))).is_err() {
+                            break;
+                        }
                     }
-                    done
                 })
             })
             .collect();
-        handles.into_iter().flat_map(|h| h.join().unwrap_or_default()).collect()
-    });
-    out.sort_by_key(|(p, _)| *p);
-    out
+        drop(tx);
+        let mut result = Ok(());
+        let mut delivered = 0usize;
+        for (p, text) in rx.iter() {
+            delivered += 1;
+            if let Err(e) = text.map_err(|e| failed(format!("page {}: {e}", p + 1))).and_then(|t| sink(p, t)) {
+                result = Err(e);
+                break;
+            }
+        }
+        stop.store(true, Ordering::Relaxed);
+        // Unblock workers waiting to send, then wait for them (a panic is joined, not rethrown).
+        drop(rx);
+        for h in handles {
+            let _ = h.join();
+        }
+        match result {
+            Ok(()) if delivered < pages.len() => Err(failed("page text could not be extracted (an extraction worker failed)")),
+            other => other,
+        }
+    })
 }
 
 /// The file `name` inside `dir`, where `name` comes from a document or an argument: separators,
