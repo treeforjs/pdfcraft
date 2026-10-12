@@ -2227,3 +2227,4 @@ compare-page	Moved	Verschoben
 	File size: {n} bytes	Dateigröße: {n} Byte
 	{n} objects with unsaved changes are estimated, not measured in the file.	{n} Objekte mit ungespeicherten Änderungen sind geschätzt, nicht in der Datei gemessen.
 	{n} bytes of compressed object streams are shared out among their objects by decoded size.	{n} Byte komprimierter Objektstreams werden nach dekodierter Größe auf ihre Objekte verteilt.
+	This document does not allow copying text, so its paragraphs can't be opened for editing. Open it with the permissions password.	Dieses Dokument erlaubt kein Kopieren von Text, daher können seine Absätze nicht zum Bearbeiten geöffnet werden. Öffne es mit dem Berechtigungspasswort.

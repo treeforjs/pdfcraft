@@ -2309,3 +2309,42 @@ fn the_delete_key_deletes_pages_picked_in_the_pages_panel_but_never_every_page()
     assert_eq!(page_texts(h.state()), ["Page 1"]);
     assert_eq!(h.state().views[0].current, 0);
 }
+
+/// Opening a paragraph puts its text in a selectable, copyable editor, so a document that
+/// allows changes but not copying text (permissions password only) refuses it with a notice;
+/// nothing changes.
+#[test]
+fn edit_text_does_not_open_paragraphs_of_a_copy_denied_document() {
+    use pdfcraft_engine::{Changes, Edit, Protection, Session};
+    let mut s = Session::new();
+    let id = s.open("doc.pdf", None, std::sync::Arc::new(fixture(1)), None).unwrap();
+    let p = Protection { permissions_password: Some("owner".into()), changes: Changes::AnyExceptExtract, copy: false, ..Default::default() };
+    s.apply(id, Edit::Protect(p)).unwrap();
+    let bytes = s.save_bytes(id).unwrap().to_vec();
+    let mut h = Harness::builder().with_size(egui::vec2(1400.0, 900.0)).build_eframe(move |_cc| {
+        let mut app = PdfCraftApp::new();
+        app.set_option("language", "en").unwrap();
+        app.open_bytes("restricted.pdf", None, bytes).expect("opens without a password");
+        app
+    });
+    h.run_steps(4);
+    let doc_id = h.state().views[0].id;
+    let doc = h.state().session.get(doc_id).unwrap();
+    assert!(doc.allows_modification() && !doc.allows_copying());
+    assert!(h.state_mut().execute("edit.edit_text"));
+    h.run_steps(2);
+    let r = h.state().views[0].page_screen_rect(0).expect("on screen");
+    let at = egui::pos2(r.left() + 40.0 / 200.0 * r.width(), r.top() + (300.0 - 158.0) / 300.0 * r.height());
+    h.hover_at(at);
+    h.run_steps(1);
+    h.drag_at(at);
+    h.run_steps(1);
+    h.drop_at(at);
+    h.run_steps(3);
+    assert!(h.state().views[0].line_editor.is_none(), "the paragraph's text must not be opened");
+    let toast = h.state().toast.clone().map(|t| t.0).unwrap_or_default();
+    assert!(toast.contains("does not allow copying text"), "{toast}");
+    assert!(h.query_by_label("FORMAT TEXT").is_none());
+    let doc = h.state().session.get(doc_id).unwrap();
+    assert!(!doc.dirty && doc.can_undo().is_none());
+}

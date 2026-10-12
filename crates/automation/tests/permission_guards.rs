@@ -36,6 +36,33 @@ fn protected_form(a: &mut Automation, file: &str, printing: &str, changes: &str)
     call(a, "doc_close", json!({ "doc": doc, "discard_changes": true }));
 }
 
+/// Field names come from label words (page text): without copy permission detection still
+/// proposes and adds the same fields, named Text1, Text2…; the owner password lifts it.
+#[test]
+fn detected_field_names_withhold_label_text_when_copying_is_denied() {
+    let (mut a, root) = setup("detect");
+    protected_form(&mut a, "form.pdf", "high", "any-except-extract");
+    let user = call(&mut a, "doc_open", json!({ "path": "form.pdf", "password": "Guard-user" }))["doc"].as_u64().unwrap();
+    let proposed = call(&mut a, "form_detect_fields", json!({ "doc": user, "add": false }));
+    let names: Vec<&str> = proposed["fields"].as_array().unwrap().iter().map(|f| f["name"].as_str().unwrap()).collect();
+    assert_eq!(names, ["Text1", "Text2"], "{proposed}");
+    assert!(proposed["names_withheld"].as_str().is_some_and(|w| w.contains("does not allow copying")), "{proposed}");
+    for leaked in ["Quokka", "zone", "Xylo", "code"] {
+        assert!(!proposed.to_string().contains(leaked), "detection leaked {leaked:?}: {proposed}");
+    }
+    call(&mut a, "form_detect_fields", json!({ "doc": user }));
+    let fields = call(&mut a, "form_fields", json!({ "doc": user }));
+    assert_eq!(fields["fields"].as_array().unwrap().len(), 2, "{fields}");
+    assert!(!fields.to_string().contains("Quokka") && !fields.to_string().contains("Xylo"), "{fields}");
+
+    let owner = call(&mut a, "doc_open", json!({ "path": "form.pdf", "password": "Guard-owner" }))["doc"].as_u64().unwrap();
+    let proposed = call(&mut a, "form_detect_fields", json!({ "doc": owner, "add": false }));
+    let names: Vec<&str> = proposed["fields"].as_array().unwrap().iter().map(|f| f["name"].as_str().unwrap()).collect();
+    assert_eq!(names, ["Quokka zone", "Xylo code"], "{proposed}");
+    assert!(proposed.get("names_withheld").is_none());
+    let _ = std::fs::remove_dir_all(root);
+}
+
 /// Make the plaintext `/P` of the encryption dictionary grant everything (-4), as an attacker
 /// editing the file would. AES-256 binds `/P` to `/Perms`, so the engine must refuse the file.
 fn grant_everything_in_plaintext_p(bytes: &mut [u8]) {

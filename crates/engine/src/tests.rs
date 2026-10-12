@@ -1701,6 +1701,33 @@ fn detecting_fields_on_a_printed_form() {
     assert!(s.detect_fields(id, &[]).is_empty(), "nothing left to detect");
 }
 
+/// Field names come from label words, which are page text: a document that allows changes
+/// but not copying gets the same fields with generic names; the owner password lifts it.
+#[test]
+fn detected_field_names_withhold_label_text_when_copying_is_denied() {
+    let mut s = Session::new().with_clock(|| 1_700_000_000);
+    let text = s.create_from_text("t", "Name: ______________________\n\nEmail address: ____________________").unwrap();
+    let form = s.open("form.pdf", None, text, None).unwrap();
+    let p = Protection { changes: Changes::AnyExceptExtract, copy: false, ..protection(Some("user"), Some("owner")) };
+    s.apply(form, Edit::Protect(p)).unwrap();
+    let bytes = s.save_bytes(form).unwrap();
+    let user = s.open("restricted.pdf", None, bytes.clone(), Some("user")).unwrap();
+    let d = s.get(user).unwrap();
+    assert!(d.allows_modification() && !d.allows_copying());
+    let found = s.detect_fields(user, &[]);
+    let names: Vec<&str> = found.iter().map(|(_, c)| c.name.as_str()).collect();
+    assert_eq!(names, ["Text1", "Text2"], "{found:?}");
+    let owner = s.open("owner.pdf", None, bytes, Some("owner")).unwrap();
+    let owner_found = s.detect_fields(owner, &[]);
+    let names: Vec<&str> = owner_found.iter().map(|(_, c)| c.name.as_str()).collect();
+    assert_eq!(names, ["Name", "Email address"]);
+    // The same fields in the same places: only the names differ.
+    let rects = |f: &[(usize, pdfcraft_forms::detect::Candidate)]| f.iter().map(|(p, c)| (*p, c.rect)).collect::<Vec<_>>();
+    assert_eq!(rects(&found), rects(&owner_found));
+    assert_eq!(s.auto_detect_fields(user, &[]).unwrap(), ["Text1", "Text2"]);
+    assert!(s.get(user).unwrap().form.iter().all(|f| !f.name.contains("Name") && !f.name.contains("Email")));
+}
+
 /// The renderer can open files the editor cannot read. Such an encrypted document has no
 /// established permissions, so printing and every change fail closed (as copying does);
 /// an unencrypted document without an editor still prints.

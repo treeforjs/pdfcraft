@@ -2053,6 +2053,9 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
     let mut field_props = false;
     let mut field_placed = false;
     let can_modify = doc.allows_modification();
+    // Opening a paragraph for editing shows its text in a copyable field: copy permission.
+    let can_read_text = doc.allows_copying();
+    let mut edit_text_refused = false;
     if preparing {
         crate::prepare::after_refresh(view, &form);
     } else {
@@ -2397,7 +2400,7 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
                 };
                 // Images first (they can sit under text boxes' corners); then paragraphs.
                 crate::edit_text_ui::image_input(ui, &resp, &xf, i, info, &images, view, &mut image_action)
-                    || crate::edit_text_ui::page_input(ui, &resp, &xf, i, info, &lines, view)
+                    || crate::edit_text_ui::page_input(ui, &resp, &xf, i, info, &lines, view, can_read_text, &mut edit_text_refused)
             };
             let on_link = tool == QuickTool::Link && can_modify && crate::link_ui::page_input(ui, &resp, &xf, i, info, &doc_links, view);
             let consumed = on_edit_text || on_link || on_content || boxing || on_field || comments::page_input(ui, &resp, &pcx, view);
@@ -2934,6 +2937,12 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
     }
     if let Some(why) = refused {
         app.notify_error(why);
+    }
+    if edit_text_refused {
+        app.notify(
+            tl!("This document does not allow copying text, so its paragraphs can't be opened for editing. Open it with the permissions password.")
+                .to_string(),
+        );
     }
     if open_signature || open_initials {
         app.signature_draft = crate::fill_sign::SigDraft::new(open_initials, &app.comment_prefs.author);

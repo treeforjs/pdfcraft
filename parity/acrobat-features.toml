@@ -5022,8 +5022,8 @@ milestone = "M6"
 status = "shipped"
 commands = ["form.detect"]
 tools = ["form_detect_fields"]
-evidence = ["crates/forms/src/tests.rs::detection_finds_blanks_rules_boxes_and_names_them", "crates/engine/src/tests.rs::detecting_fields_on_a_printed_form", "crates/automation/tests/automation.rs::detecting_form_fields_through_tools"]
-notes = "Names come from the label to the left (or above; right of check boxes), unique like Acrobat's (Name2, Text1)."
+evidence = ["crates/forms/src/tests.rs::detection_finds_blanks_rules_boxes_and_names_them", "crates/engine/src/tests.rs::detecting_fields_on_a_printed_form", "crates/automation/tests/automation.rs::detecting_form_fields_through_tools", "crates/engine/src/tests.rs::detected_field_names_withhold_label_text_when_copying_is_denied", "crates/automation/tests/permission_guards.rs::detected_field_names_withhold_label_text_when_copying_is_denied"]
+notes = "Names come from the label to the left (or above; right of check boxes), unique like Acrobat's (Name2, Text1). A document that does not allow copying text gets the same fields named Text1, Check Box1, … (label words are page text; docs/reader-selection.md)."
 
 [[feature]]
 id = "form.document-javascripts"
@@ -5326,8 +5326,8 @@ milestone = "M8"
 status = "shipped"
 commands = ["protect.password"]
 tools = ["doc_protect"]
-evidence = ["crates/ui-egui/tests/protect.rs::editing_restrictions_via_advanced_options", "crates/engine/src/tests.rs::permissions_password_restricts_others_but_not_this_session"]
-notes = "Advanced Options: printing (none/low/high), changes (5 levels), copying, screen readers"
+evidence = ["crates/ui-egui/tests/protect.rs::editing_restrictions_via_advanced_options", "crates/engine/src/tests.rs::permissions_password_restricts_others_but_not_this_session", "crates/engine/src/tests.rs::encrypted_documents_without_an_editor_deny_printing_and_changes", "crates/automation/tests/permission_guards.rs::print_and_modify_fail_closed_on_restricted_and_tampered_permissions"]
+notes = "Advanced Options: printing (none/low/high), changes (5 levels), copying, screen readers. Every permission check fails closed for an encrypted document whose permissions could not be established; a file with a tampered /P is refused."
 
 [[feature]]
 id = "protect.encryption-level"
@@ -9999,7 +9999,7 @@ status = "partial"
 commands = []
 tools = []
 evidence = ["xtask/src/perf.rs::budgets_cover_every_scenario_with_positive_limits", "xtask/src/perf.rs::generated_documents_are_valid_deterministic_and_carry_the_phrase_once", "xtask/src/perf.rs::probe_reports_flatten_into_named_samples"]
-notes = "Harness only: `cargo xtask perf` (docs/performance.md) measures open, first/last page render, all-text extraction, find, incremental/full save and peak RSS through the automation tools, and UI open, time to first page, scroll frame times and navigation through kittest, on four synthetic documents (500 and 5 000 text pages, 24 image pages, a 110 000-path page), and gates medians against xtask/baselines/perf.json. Budgets are dev-profile numbers from one shared, heavily loaded WSL2 Linux machine (2026-10-12); the cited tests check the harness, not the budgets. Not measured: release builds, Windows, macOS, web, multi-GB files. Known defects it found: Comments panel per-frame cost linear in comment count (~200 ms frames at 5 000 comments) and an unbounded automation text cache (~873 MiB after extracting 5 000 pages)."
+notes = "Harness only: `cargo xtask perf` (docs/performance.md) measures open, first/last page render, all-text extraction, find, incremental/full save and peak RSS through the automation tools, and UI open, time to first page, scroll frame times and navigation through kittest, on four synthetic documents (500 and 5 000 text pages, 24 image pages, a 110 000-path page), and gates medians against xtask/baselines/perf.json. Budgets are dev-profile numbers from one shared, heavily loaded WSL2 Linux machine (2026-10-12); the cited tests check the harness, not the budgets. Not measured: release builds, Windows, macOS, web, multi-GB files. Known defects it found: Comments panel per-frame cost linear in comment count (~200 ms frames at 5 000 comments) and an unbounded automation text cache (~873 MiB after extracting 5 000 pages; bounded on 2026-10-12 to a 96 MiB geometry cache plus a 32 MiB geometry-free search index: text-5000 probe peak RSS 989 -> 484 MiB and find 167 -> 49 ms in one dev run)."
 
 [[feature]]
 id = "misc.send-email"

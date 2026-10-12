@@ -383,9 +383,13 @@ pub(crate) fn page_words(text: &pdfcraft_render::PageText, info: &pdfcraft_rende
 
 impl Session {
     /// Prepare a form ▸ automatic field detection: the fields `pages` (0-based; empty = all)
-    /// seem to ask for, named from their labels, as (page, candidate).
+    /// seem to ask for, named from their labels, as (page, candidate). A document that does not
+    /// allow copying text (ISO 32000-2 Table 22 bit 5, see `Document::allows_copying`) gets
+    /// the same fields with generic names: label words are page text, and a field name is
+    /// returned to tools and stored in the file.
     pub fn detect_fields(&self, id: DocId, pages: &[usize]) -> Vec<(usize, pdfcraft_forms::detect::Candidate)> {
         let Some(doc) = self.get(id) else { return Vec::new() };
+        let copy = doc.allows_copying();
         let Some(cos) = doc.editor.as_ref().map(|e| &e.cos) else { return Vec::new() };
         let config = pdfcraft_render::RenderConfig { password: doc.password.as_deref().map(std::sync::Arc::from), ..Default::default() };
         let mut r = pdfcraft_render::PageRenderer::new(doc.bytes.clone(), config);
@@ -395,7 +399,14 @@ impl Session {
         let mut out = Vec::new();
         for page in list {
             let res = r.render(pdfcraft_render::RenderRequest { page, kind: pdfcraft_render::RequestKind::Text, scale: 1.0, ..Default::default() });
-            let words = res.text.map(|t| detection_words(&t, &doc.info.pages[page])).unwrap_or_default();
+            let mut words = res.text.map(|t| detection_words(&t, &doc.info.pages[page])).unwrap_or_default();
+            if !copy {
+                // Labels still place and veto fields (geometry), but their words never become
+                // field names: names are generic (Text1, Check Box1, …).
+                for w in words.iter_mut().filter(|w| !w.text.chars().all(|c| c == '_')) {
+                    w.text.clear();
+                }
+            }
             let shapes = pdfcraft_forms::detect::page_shapes(cos, page);
             let existing: Vec<[f64; 4]> = doc.form.iter().flat_map(|f| f.widgets.iter()).filter(|w| w.page == Some(page)).map(|w| w.rect).collect();
             for c in pdfcraft_forms::detect::detect(&words, &shapes, &existing, &taken) {

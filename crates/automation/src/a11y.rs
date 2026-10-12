@@ -548,7 +548,10 @@ impl Automation {
 
     pub(crate) fn form_detect_fields(&mut self, a: &Args) -> Result<Value> {
         let pages = if a.opt_ints("pages")?.is_some() { self.pages(a, "pages")? } else { Vec::new() };
-        let id = self.doc(a)?.id;
+        let doc = self.doc(a)?;
+        let (id, copy) = (doc.id, doc.allows_copying());
+        // Without copy permission the engine names fields generically (Text1, Check Box1, …)
+        // instead of from their labels' words.
         let found = self.session.detect_fields(id, &pages);
         let list: Vec<Value> = found
             .iter()
@@ -563,7 +566,12 @@ impl Automation {
         if a.opt_bool("add")?.unwrap_or(true) && !found.is_empty() {
             self.session.auto_detect_fields(id, &pages).map_err(failed)?;
         }
-        Ok(json!({ "fields": list }))
+        let mut out = json!({ "fields": list });
+        if !copy {
+            out["names_withheld"] =
+                json!("this document does not allow copying text, so fields are not named from their labels; open it with the permissions password");
+        }
+        Ok(out)
     }
 
     pub(crate) fn form_actions(&self, a: &Args) -> Result<Value> {

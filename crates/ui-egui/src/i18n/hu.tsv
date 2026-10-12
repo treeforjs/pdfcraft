@@ -2225,3 +2225,4 @@ compare-page	Moved	Áthelyezve
 	File size: {n} bytes	Fájlméret: {n} bájt
 	{n} objects with unsaved changes are estimated, not measured in the file.	{n} nem mentett módosítású objektum mérete becsült, nem a fájlban mért.
 	{n} bytes of compressed object streams are shared out among their objects by decoded size.	A tömörített objektumfolyamok {n} bájtja a dekódolt méret szerint oszlik meg az objektumaik között.
+	This document does not allow copying text, so its paragraphs can't be opened for editing. Open it with the permissions password.	Ez a dokumentum nem engedi a szöveg másolását, ezért a bekezdései nem nyithatók meg szerkesztésre. Nyisd meg a jogosultsági jelszóval.

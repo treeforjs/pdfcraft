@@ -47,10 +47,23 @@ edited without its `/Perms` check value), even with the owner password.
 | `doc_export_text`, `doc_export_office` (Word/HTML/RTF) and Export dialogs, `doc_export_all_images` (graphics) | refused before anything is written |
 | `doc_compare`, `doc_compare_report`, `doc_compare_mark` and the Compare panel | refused unless both documents allow copying |
 | `ocr_recognize` and OCR review drafts | copy and change authority required — enforced by the OCR lane (`Session::ocr_authority`), pending integration |
+| `form_detect_fields`, Prepare a form ▸ Detect form fields, the `detect_form_fields` action step | fields are still detected and added in the same places, but named generically (`Text1`, `Check Box1`, …) instead of from their labels' words; the tool result carries `names_withheld` |
+| Edit text & images: opening a paragraph in the in-place editor (its text in a selectable, copyable field) | refused with a notice; paragraph boxes can still be moved and resized, images edited, and `text_edit` can still replace a paragraph headlessly (its echo is withheld, above) |
 | `page_render`, `render_preview`, `doc_export_images`, visual compare, the Find panel's on-screen result context | allowed (viewing) |
 | `doc_info`/`doc_inspect` metadata, bookmarks, comment contents, field values, alt text, `comments_summarize`, `redact_mark` counts | allowed: not page text |
 
 Accessibility permission (bit 10) is not treated as granting extraction to tools or the clipboard.
+
+The other permission checks (`allows_printing`, `allows_assembly`, `allows_modification`,
+`allows_form_filling`, `allows_annotation`, `allows_security_change`) share the same fail-closed
+rule through `Document::permitted`: an encrypted document without established permissions
+denies printing and every change, owner authentication grants everything, and unencrypted
+documents are unaffected. Before this, printing (`print_pdf`, `doc_print`, the Print dialog) was
+allowed for such a document; the change checks already required an editor. `doc_info` reports
+its security as `{"protected": true, "permissions_verified": false}` instead of unprotected.
+Callers audited: the command catalog (`commands::is_enabled`), `Session::apply`, `print_pdf`,
+extract/split/summarize (they need an editor's document, so they refuse without one), OCR
+authority, and the UI's canvas, panels, dialogs and measure tools all go through these checks.
 
 ## Headless use
 
@@ -105,6 +118,13 @@ password lifts): engine `export_text_images_and_office_refuse_copy_denied_docume
 printed the text before this change).
 A headless `pdfcraft-cli run --script` workflow on an original four-page fixture exercised range,
 reverse, paragraph and all modes, glyph inspection, and refusal for copy-restricted files.
+Hardening follow-ups (2026-10-12, wp/hardening), all passing on Ubuntu 24.04: engine
+`detected_field_names_withhold_label_text_when_copying_is_denied` and
+`encrypted_documents_without_an_editor_deny_printing_and_changes`; automation
+`permission_guards.rs` (`detected_field_names_withhold_label_text_when_copying_is_denied`,
+`print_and_modify_fail_closed_on_restricted_and_tampered_permissions`, an AES-256 file whose `/P`
+was edited to grant everything is refused with either password); UI
+`editing.rs::edit_text_does_not_open_paragraphs_of_a_copy_denied_document`.
 Still pending: the full workspace suite, WASM, and acceptance on an installed X11/Wayland
 desktop with the system clipboard. The control channel's `ui.key` does not synthesize an OS
 `Event::Copy` from Ctrl+C, so clipboard checks use the context-menu **Copy**.

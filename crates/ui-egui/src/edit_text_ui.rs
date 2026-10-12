@@ -570,6 +570,11 @@ pub(crate) fn image_input(
 
 /// Lines and their screen boxes for a page; hover outlines, click opens the editor. Returns
 /// `true` when the pointer was used.
+///
+/// `read_text` is the copy permission (ISO 32000-2 Table 22 bit 5): the in-place editor shows
+/// the paragraph's text in a selectable, copyable field, so without it a click does not open
+/// the editor and sets `refused` instead. Moving and resizing boxes reveal no text and stay.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn page_input(
     ui: &egui::Ui,
     resp: &egui::Response,
@@ -578,6 +583,8 @@ pub(crate) fn page_input(
     info: &DocInfo,
     lines: &[pdfcraft_engine::TextBlock],
     view: &mut DocView,
+    read_text: bool,
+    refused: &mut bool,
 ) -> bool {
     let boxes: Vec<Rect> = lines.iter().map(|l| xf.user_rect(info, page, l.rect.map(|v| v as f32)).expand(2.0)).collect();
     let painter = ui.painter();
@@ -656,7 +663,9 @@ pub(crate) fn page_input(
         draw_handles(boxes[hit]);
     }
     ui.ctx().set_cursor_icon(if on_edge { egui::CursorIcon::ResizeHorizontal } else { egui::CursorIcon::Text });
-    if resp.clicked() {
+    if resp.clicked() && !read_text {
+        *refused = true;
+    } else if resp.clicked() {
         let l = &lines[hit];
         // Screen pixels per point, from the box's width.
         let scale = (boxes[hit].width() - 4.0) / ((l.rect[2] - l.rect[0]).max(1.0) as f32);
