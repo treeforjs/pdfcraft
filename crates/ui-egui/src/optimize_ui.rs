@@ -363,12 +363,21 @@ pub(crate) fn audit_body(ui: &mut egui::Ui, audit: Option<&SpaceAudit>, t: &Toke
                 ui.add(egui::Label::new(egui::RichText::new(text).small().color(t.text_muted)).wrap());
             };
             if a.estimated_objects > 0 {
-                note(ui, crate::i18n::fmt(tl!("{n} objects with unsaved changes are estimated, not measured in the file."), &[("n", &a.estimated_objects.to_string())]));
+                note(
+                    ui,
+                    crate::i18n::fmt(
+                        tl!("{n} objects with unsaved changes are estimated, not measured in the file."),
+                        &[("n", &a.estimated_objects.to_string())],
+                    ),
+                );
             }
             if a.apportioned_bytes > 0 {
                 note(
                     ui,
-                    crate::i18n::fmt(tl!("{n} bytes of compressed object streams are shared out among their objects by decoded size."), &[("n", &a.apportioned_bytes.to_string())]),
+                    crate::i18n::fmt(
+                        tl!("{n} bytes of compressed object streams are shared out among their objects by decoded size."),
+                        &[("n", &a.apportioned_bytes.to_string())],
+                    ),
                 );
             }
         }
