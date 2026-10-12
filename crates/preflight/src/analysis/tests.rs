@@ -132,9 +132,15 @@ fn lzw_end_marker_validation_handles_code_width_changes_and_refuses_truncation()
         let data = (0..50_000).map(|i| ((i * 31 + i / 257) % 256) as u8).collect::<Vec<_>>();
         let params = pdfcraft_filters::Params { early_change, ..Default::default() };
         let encoded = pdfcraft_filters::encode(&pdfcraft_filters::Filter::Lzw, &params, &data).unwrap();
-        assert!(lzw_has_eod(&encoded, early_change != 0));
+        let mut parms = Dict::new();
+        parms.set(b"EarlyChange".to_vec(), Object::Int(early_change));
+        let mut dictionary = Dict::new();
+        dictionary.set(b"Filter".to_vec(), Object::name("LZWDecode"));
+        dictionary.set(b"DecodeParms".to_vec(), Object::Dict(parms));
+        assert_eq!(decode_for_fix(&Stream::from_raw(dictionary.clone(), encoded.clone())).unwrap(), data);
+        // Cut inside the end-of-data code: refused, not repaired.
+        assert!(decode_for_fix(&Stream::from_raw(dictionary, encoded[..encoded.len() - 1].to_vec())).unwrap_err().contains("end-of-data"));
     }
-    assert!(!lzw_has_eod(&[0x80, 0x00], true));
     let mut dictionary = Dict::new();
     dictionary.set(b"Filter".to_vec(), Object::name("LZWDecode"));
     assert!(decode_for_fix(&Stream::from_raw(dictionary, vec![0x80, 0x00])).unwrap_err().contains("end-of-data"));

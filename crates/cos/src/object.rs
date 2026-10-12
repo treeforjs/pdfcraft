@@ -244,6 +244,53 @@ impl Stream {
         pdfcraft_filters::decode(&chain, &self.raw, MAX_DECODED).map_err(|e| CosError::Filter(e.to_string()))
     }
 
+    /// Whether the filter description can be read without resolving anything: `/Filter` is a
+    /// name or an array of at most 32 names, and `/DecodeParms` is absent, null, or direct
+    /// dictionaries (or nulls) holding only direct scalar values. [`Stream::filters`] reads
+    /// only direct values, so on other streams it could disagree with readers that resolve
+    /// references; lossless re-encoding must leave those alone.
+    pub fn has_direct_filters(&self) -> bool {
+        let names = match self.dict.get(b"Filter") {
+            Some(Object::Name(_)) => true,
+            Some(Object::Array(a)) => a.len() <= 32 && a.iter().all(|o| matches!(o, Object::Name(_))),
+            _ => false,
+        };
+        let scalar_dict = |d: &Dict| d.iter().all(|(_, v)| !matches!(v, Object::Ref(_) | Object::Array(_) | Object::Dict(_) | Object::Stream(_)));
+        names
+            && match self.dict.get(b"DecodeParms") {
+                None | Some(Object::Null) => true,
+                Some(Object::Dict(d)) => scalar_dict(d),
+                Some(Object::Array(a)) => a.len() <= 32 && a.iter().all(|o| matches!(o, Object::Null) || o.as_dict().is_some_and(scalar_dict)),
+                _ => false,
+            }
+    }
+
+    /// Decoded data for lossless re-encoding: bounded by `max`, any corruption is an error,
+    /// every LZW stage must end with its end-of-data code ([`pdfcraft_filters::decode_complete`]),
+    /// and the stream must have a direct filter description ([`Stream::has_direct_filters`]) or
+    /// none, and no external file (`/F`, `/FFilter`). What this returns is exactly what every
+    /// conforming reader decodes, so re-encoding it changes nothing but the encoding.
+    pub fn decoded_complete(&self, max: usize) -> Result<Vec<u8>, CosError> {
+        if self.dict.contains(b"F") || self.dict.contains(b"FFilter") || self.dict.contains(b"FDecodeParms") {
+            return Err(CosError::Filter("the stream's data is in an external file".into()));
+        }
+        if !self.dict.contains(b"Filter") {
+            return if self.dict.contains(b"DecodeParms") {
+                Err(CosError::Filter("decode parameters without a filter".into()))
+            } else {
+                self.raw_within(max)
+            };
+        }
+        if !self.has_direct_filters() {
+            return Err(CosError::Filter("the filter description uses indirect or unusual values".into()));
+        }
+        let chain = self.filters();
+        if chain.is_empty() {
+            return self.raw_within(max);
+        }
+        pdfcraft_filters::decode_complete(&chain, &self.raw, max.min(MAX_DECODED)).map_err(|e| CosError::Filter(e.to_string()))
+    }
+
     fn raw_within(&self, max: usize) -> Result<Vec<u8>, CosError> {
         let max = max.min(MAX_DECODED);
         // An empty decoder chain still produces an owned output buffer: check its limit
@@ -483,5 +530,45 @@ mod tests {
         assert!(matches!(stream.decoded_within(2), Err(CosError::Filter(_))));
         assert_eq!(stream.decoded_within(3).unwrap(), b"abc");
         assert_eq!(stream.decoded_strict().unwrap(), b"abc");
+    }
+
+    #[test]
+    fn complete_decoding_needs_direct_filters_and_the_lzw_end_marker() {
+        let data = b"complete data, complete data, complete data".repeat(20);
+        let lzw = pdfcraft_filters::encode(&pdfcraft_filters::Filter::Lzw, &pdfcraft_filters::Params::default(), &data).unwrap();
+        let with = |filter: Object, parms: Option<Object>, raw: &[u8]| {
+            let mut d = Dict::new();
+            d.set(b"Filter".to_vec(), filter);
+            if let Some(p) = parms {
+                d.set(b"DecodeParms".to_vec(), p);
+            }
+            Stream::from_raw(d, raw.to_vec())
+        };
+        let ok = with(Object::name("LZWDecode"), None, &lzw);
+        assert!(ok.has_direct_filters());
+        assert_eq!(ok.decoded_complete(1 << 20).unwrap(), data);
+        assert!(ok.decoded_complete(10).is_err(), "limit");
+        let arr = with(Object::Array(vec![Object::name("LZWDecode")]), Some(Object::Array(vec![Object::Null])), &lzw);
+        assert_eq!(arr.decoded_complete(1 << 20).unwrap(), data);
+        // Missing end-of-data: the tolerant and strict readers accept it, this refuses.
+        let cut = with(Object::name("LZWDecode"), None, &lzw[..lzw.len() - 1]);
+        assert!(cut.decoded_strict().is_ok());
+        assert!(cut.decoded_complete(1 << 20).unwrap_err().to_string().contains("end-of-data"));
+        // Indirect filter names or parameters, external data, parameters without a filter.
+        let indirect = with(Object::Ref(ObjRef::new(4, 0)), None, &lzw);
+        assert!(!indirect.has_direct_filters() && indirect.decoded_complete(1 << 20).is_err());
+        let mut parms = Dict::new();
+        parms.set(b"EarlyChange".to_vec(), Object::Ref(ObjRef::new(5, 0)));
+        let indirect = with(Object::name("LZWDecode"), Some(Object::Dict(parms)), &lzw);
+        assert!(!indirect.has_direct_filters() && indirect.decoded_complete(1 << 20).is_err());
+        let mut external = ok.clone();
+        external.dict.set(b"F".to_vec(), Object::name("x.bin"));
+        assert!(external.decoded_complete(1 << 20).is_err());
+        let mut stray = Dict::new();
+        stray.set(b"DecodeParms".to_vec(), Object::Dict(Dict::new()));
+        assert!(Stream::from_raw(stray, b"abc".to_vec()).decoded_complete(10).is_err());
+        // Unfiltered and empty chains honour the limit.
+        assert_eq!(Stream::from_raw(Dict::new(), b"abc".to_vec()).decoded_complete(3).unwrap(), b"abc");
+        assert!(with(Object::Array(Vec::new()), None, b"abcd").decoded_complete(3).is_err());
     }
 }

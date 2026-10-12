@@ -365,31 +365,6 @@ fn lzw(doc: &Document, d: &Dict) -> bool {
     })
 }
 
-// Indirect filter/parameter changes would escape an owner-object binding. Report those
-// streams, but do not offer a fix until dependency binding is implemented.
-fn direct_filter_chain(d: &Dict) -> bool {
-    let filter = match d.get(b"Filter") {
-        Some(Object::Name(_)) => true,
-        Some(Object::Array(a)) => a.len() <= 32 && a.iter().all(|o| matches!(o, Object::Name(_))),
-        _ => false,
-    };
-    let direct_dict = |d: &Dict| d.iter().all(|(_, v)| !matches!(v, Object::Ref(_) | Object::Array(_) | Object::Dict(_) | Object::Stream(_)));
-    filter
-        && match d.get(b"DecodeParms") {
-            None | Some(Object::Null) => true,
-            Some(Object::Dict(d)) => direct_dict(d),
-            Some(Object::Array(a)) => {
-                a.len() <= 32
-                    && a.iter().all(|o| match o {
-                        Object::Null => true,
-                        Object::Dict(d) => direct_dict(d),
-                        _ => false,
-                    })
-            }
-            _ => false,
-        }
-}
-
 /// Page references and inherited resource references. A single global budget applies even
 /// when a malicious page tree reuses large arrays or shares resources across many pages.
 fn page_roots(doc: &Document, truncated: &mut bool) -> Vec<(ObjRef, Arc<Vec<ObjRef>>)> {
@@ -572,11 +547,14 @@ pub fn analyze(doc: &Document, settings: &Settings) -> Result<Report, String> {
                         add(Rule::ExternalStream, Severity::Error, "Stream depends on an external file", None);
                     }
                     if lzw(doc, d) {
+                        // Indirect filter/parameter changes would escape an owner-object binding.
+                        // Report those streams, but do not offer a fix until dependency binding
+                        // is implemented.
                         add(
                             Rule::LzwCompression,
                             Severity::Warning,
                             "Stream uses LZW compression",
-                            if d.get(b"F").is_none() && d.get(b"FFilter").is_none() && direct_filter_chain(d) {
+                            if d.get(b"F").is_none() && d.get(b"FFilter").is_none() && matches!(object, Object::Stream(s) if s.has_direct_filters()) {
                                 Some(Fixup::RecompressLzw)
                             } else {
                                 None
@@ -737,51 +715,15 @@ fn target_mut<'a>(object: &'a mut Object, path: &[PathPart]) -> Result<&'a mut O
     Ok(target)
 }
 
-/// ISO 32000 LZW code framing. The general reader tolerates a missing end-of-data code;
-/// a lossless fix must refuse that repair. Decoding still validates dictionary contents.
-fn lzw_has_eod(data: &[u8], early_change: bool) -> bool {
-    let (mut bit, mut width, mut next, mut previous) = (0usize, 9usize, 258usize, false);
-    loop {
-        let mut code = 0u16;
-        for _ in 0..width {
-            let Some(byte) = data.get(bit / 8) else {
-                return false;
-            };
-            code = (code << 1) | u16::from((byte >> (7 - bit % 8)) & 1);
-            bit += 1;
-        }
-        if code == 257 {
-            return true;
-        }
-        if code == 256 {
-            width = 9;
-            next = 258;
-            previous = false;
-            continue;
-        }
-        if previous && next < 4096 {
-            next += 1;
-        }
-        previous = true;
-        if width < 12 && next + usize::from(early_change) >= (1 << width) {
-            width += 1;
-        }
-    }
-}
-
+/// Strict, complete decoding shared with the Optimizer ([`Stream::decoded_complete`]): the
+/// general reader tolerates LZW data without its end-of-data code, a lossless fix must refuse
+/// that repair, and indirect filter descriptions are refused.
 fn decode_for_fix(stream: &Stream) -> Result<Vec<u8>, String> {
     const LIMIT: usize = 32 << 20;
     if stream.raw.len() > LIMIT {
         return Err("Encoded stream exceeds the 32 MiB fix limit".into());
     }
-    let mut data = stream.raw.to_vec();
-    for (filter, params) in stream.filters() {
-        if filter == pdfcraft_filters::Filter::Lzw && !lzw_has_eod(&data, params.early_change != 0) {
-            return Err("LZW stream is missing its end-of-data code; not recompressed".into());
-        }
-        data = pdfcraft_filters::decode(&[(filter, params)], &data, LIMIT).map_err(|e| format!("Cannot recompress stream: {e}"))?;
-    }
-    Ok(data)
+    stream.decoded_complete(LIMIT).map_err(|e| format!("Cannot recompress stream (not changed): {e}"))
 }
 
 /// Apply selected, value-bound fixes as one transaction. Cancellation never publishes a
