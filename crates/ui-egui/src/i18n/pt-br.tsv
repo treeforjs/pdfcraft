@@ -2205,3 +2205,23 @@ compare-page	Modified	Modificada
 compare-page	Inserted	Inserida
 compare-page	Deleted	Excluída
 compare-page	Moved	Movida
+# PDF Optimizer: Fonts panel and Audit space usage breakdown
+	This document has no embedded fonts.	Este documento não tem fontes incorporadas.
+	Unembedding removes a font's program; viewers then draw its text with an installed or substitute font. Fonts that would not keep their character codes and widths can't be unembedded.	Desincorporar uma fonte remove o programa dela; os visualizadores passam a exibir o texto com uma fonte instalada ou substituta. Fontes que não manteriam seus códigos de caractere e larguras não podem ser desincorporadas.
+	{kind} · {program} · {n} bytes	{kind} · {program} · {n} bytes
+	Can be unembedded	Pode ser desincorporada
+	Fonts to unembed: {n}	Fontes a desincorporar: {n}
+	the document claims PDF/A or PDF/X conformance, which requires embedded fonts	o documento declara conformidade com PDF/A ou PDF/X, que exige fontes incorporadas
+	composite (Type 0) fonts select glyphs by number inside the embedded font program	fontes compostas (Type 0) selecionam glifos por número dentro do programa de fonte incorporado
+	subset fonts contain only some glyphs, chosen and encoded for this document	fontes de subconjunto contêm só alguns glifos, escolhidos e codificados para este documento
+	symbolic fonts choose glyphs through the embedded program's own encoding	fontes simbólicas escolhem glifos pela codificação própria do programa incorporado
+	the font has no explicit standard-based encoding; its program supplies the character mapping	a fonte não tem codificação explícita baseada em uma padrão; o programa dela fornece o mapeamento de caracteres
+	the font has no complete widths array, so text would reflow with another font's metrics	a fonte não tem uma matriz de larguras completa, então o texto seria redistribuído com as métricas de outra fonte
+	Couldn't audit this document.	Não foi possível auditar este documento.
+	Objects	Objetos
+	Cross-reference	Referências cruzadas
+	Unclaimed objects	Objetos não atribuídos
+	Other overhead	Outros dados de estrutura
+	File size: {n} bytes	Tamanho do arquivo: {n} bytes
+	{n} objects with unsaved changes are estimated, not measured in the file.	{n} objetos com alterações não salvas são estimados, não medidos no arquivo.
+	{n} bytes of compressed object streams are shared out among their objects by decoded size.	{n} bytes de fluxos de objetos compactados são repartidos entre seus objetos pelo tamanho decodificado.

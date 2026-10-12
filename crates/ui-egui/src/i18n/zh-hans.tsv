@@ -2168,3 +2168,23 @@ compare-page	Modified	已修改
 compare-page	Inserted	已插入
 compare-page	Deleted	已删除
 compare-page	Moved	已移动
+# PDF Optimizer: Fonts panel and Audit space usage breakdown
+	This document has no embedded fonts.	此文档没有嵌入字体。
+	Unembedding removes a font's program; viewers then draw its text with an installed or substitute font. Fonts that would not keep their character codes and widths can't be unembedded.	取消嵌入会删除字体程序；查看器随后会用已安装字体或替代字体显示其文本。无法保留字符代码和宽度的字体不能取消嵌入。
+	{kind} · {program} · {n} bytes	{kind} · {program} · {n} 字节
+	Can be unembedded	可以取消嵌入
+	Fonts to unembed: {n}	要取消嵌入的字体：{n}
+	the document claims PDF/A or PDF/X conformance, which requires embedded fonts	文档声明符合 PDF/A 或 PDF/X，这些标准要求嵌入字体
+	composite (Type 0) fonts select glyphs by number inside the embedded font program	复合字体（Type 0）按编号在嵌入的字体程序中选择字形
+	subset fonts contain only some glyphs, chosen and encoded for this document	子集字体只包含为本文档选择并编码的部分字形
+	symbolic fonts choose glyphs through the embedded program's own encoding	符号字体通过嵌入程序自身的编码选择字形
+	the font has no explicit standard-based encoding; its program supplies the character mapping	该字体没有基于标准编码的显式编码，字符映射由其程序提供
+	the font has no complete widths array, so text would reflow with another font's metrics	该字体没有完整的宽度数组，文本会按其他字体的度量重新排布
+	Couldn't audit this document.	无法审核此文档。
+	Objects	对象
+	Cross-reference	交叉引用
+	Unclaimed objects	未归类对象
+	Other overhead	其他开销
+	File size: {n} bytes	文件大小：{n} 字节
+	{n} objects with unsaved changes are estimated, not measured in the file.	{n} 个有未保存更改的对象为估算值，并非在文件中测得。
+	{n} bytes of compressed object streams are shared out among their objects by decoded size.	压缩对象流中的 {n} 字节按解码后大小分摊给其中的对象。

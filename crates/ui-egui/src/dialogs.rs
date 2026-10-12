@@ -684,7 +684,7 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
                 optimize_now = ok;
                 close = ok || cancel;
                 if std::mem::take(&mut app.optimize_draft.audit) {
-                    app.space_audit = app.active_ids().and_then(|(_, id)| app.session.get(id)).map(|d| d.audit_space()).unwrap_or_default();
+                    app.load_space_audit(true);
                     next = Dialog::AuditSpace;
                 }
                 return;
@@ -709,8 +709,12 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
                 return;
             }
             Dialog::AuditSpace => {
-                if crate::optimize_ui::audit_body(ui, &app.space_audit, &t) {
-                    next = Dialog::Optimize;
+                if crate::optimize_ui::audit_body(ui, app.space_audit.as_ref(), &t) {
+                    if app.audit_from_optimizer {
+                        next = Dialog::Optimize;
+                    } else {
+                        close = true;
+                    }
                 }
                 return;
             }

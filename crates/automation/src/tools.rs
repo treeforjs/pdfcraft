@@ -1188,7 +1188,11 @@ pub fn tools() -> Vec<ToolDef> {
             }),
             &["doc"],
         )),
-        t("doc_audit_space", "Audit space usage", "How many bytes each kind of content takes and its share of the file (PDF Optimizer ▸ Audit space usage): images, content streams, fonts, forms, comments, structure, bookmarks, … and document overhead.")
+        t("doc_audit_space", "Audit space usage", "How many bytes each kind of content takes and its share of the file (PDF Optimizer ▸ Audit space usage): images, content streams, fonts, forms, comments, structure, bookmarks, … and document overhead, with the object count per category. Sizes are measured in the file (each object from `n g obj` to `endobj`; objects in compressed object streams share that stream's bytes by decoded size: apportioned_bytes); an object reached from several places counts once. The categories add up to total_bytes (the file size; more only when unsaved edits, counted in estimated_objects, are sized as they would be written). overhead splits Document Overhead into cross_reference (tables/streams and trailers of every revision), unclaimed_objects (catalog, page tree, info, metadata, unreachable objects) and other (header, superseded revisions, whitespace).")
+            .ro()
+            .cmd("optimize.advanced")
+            .with(schema(json!({ "doc": doc() }), &["doc"])),
+        t("doc_embedded_fonts", "List embedded fonts", "PDF Optimizer ▸ Fonts: the fonts whose program is embedded (name, subtype, program FontFile/FontFile2/FontFile3, program_bytes, subset) and whether each can_unembed, with the reason when not. Only complete, non-symbolic simple fonts with an explicit standard-based encoding and full widths can be unembedded (codes and layout stay; glyph shapes then come from fonts installed where the file is viewed); composite, subset and symbolic fonts and PDF/A or PDF/X documents are refused. Pass names to doc_optimize's unembed_fonts.")
             .ro()
             .cmd("optimize.advanced")
             .with(schema(json!({ "doc": doc() }), &["doc"])),
@@ -1256,7 +1260,7 @@ pub fn tools() -> Vec<ToolDef> {
             .with(schema(json!({ "doc": doc() }), &["doc"])),
         t("doc_open_revision", "Open a revision", "Open saved revision `revision` (1 = the oldest) of a document as a new, unsaved document, to see the file as it was then.")
             .with(schema(json!({ "doc": doc(), "revision": { "type": "integer", "minimum": 1 } }), &["doc", "revision"])),
-        t("doc_optimize", "Optimize PDF", "Write an optimized copy to `path` (Acrobat's PDF Optimizer). color / gray: { downsample, ppi, above_ppi, compression: jpeg|zip|retain, quality 1–100 } (defaults: downsample to 150 ppi above 225, JPEG 60). Images are measured where pages draw them and replaced only when smaller. discard_*: thumbnails (default true), alternate_images (true), tags, print_settings; flate_unencoded (true); remove_invalid_links and remove_unreferenced_dests (true). discard: Remove Hidden Information categories (metadata, attachments, comments, form-fields, hidden-text, hidden-layers, bookmarks, links-actions-scripts, private-data). Signed documents are refused. The open document is unchanged.")
+        t("doc_optimize", "Optimize PDF", "Write an optimized copy to `path` (Acrobat's PDF Optimizer). color / gray: { downsample, ppi, above_ppi, compression: jpeg|zip|retain, quality 1–100 } (defaults: downsample to 150 ppi above 225, JPEG 60). Images are measured where pages draw them and replaced only when smaller. discard_*: thumbnails (default true), alternate_images (true), tags, print_settings; flate_unencoded (true); remove_invalid_links and remove_unreferenced_dests (true). discard: Remove Hidden Information categories (metadata, attachments, comments, form-fields, hidden-text, hidden-layers, bookmarks, links-actions-scripts, private-data). unembed_fonts: embedded font names (from doc_embedded_fonts) whose program is removed; a name that matches no embedded font or a font that can't be unembedded refuses the whole call. Signed documents are refused. The open document is unchanged.")
             .cmd("optimize.advanced")
             .with(schema(
                 json!({
@@ -1272,6 +1276,7 @@ pub fn tools() -> Vec<ToolDef> {
                     "remove_invalid_links": { "type": "boolean" },
                     "remove_unreferenced_dests": { "type": "boolean" },
                     "discard": { "type": "array", "items": { "type": "string" } },
+                    "unembed_fonts": { "type": "array", "items": { "type": "string" } },
                 }),
                 &["doc", "path"],
             )),

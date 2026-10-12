@@ -2090,3 +2090,23 @@ compare-page	Modified	已修改
 compare-page	Inserted	已插入
 compare-page	Deleted	已刪除
 compare-page	Moved	已移動
+# PDF Optimizer: Fonts panel and Audit space usage breakdown
+	This document has no embedded fonts.	此文件沒有內嵌字型。
+	Unembedding removes a font's program; viewers then draw its text with an installed or substitute font. Fonts that would not keep their character codes and widths can't be unembedded.	取消內嵌會移除字型程式；檢視器隨後會以已安裝字型或替代字型顯示其文字。無法保留字元代碼與寬度的字型不能取消內嵌。
+	{kind} · {program} · {n} bytes	{kind} · {program} · {n} 位元組
+	Can be unembedded	可以取消內嵌
+	Fonts to unembed: {n}	要取消內嵌的字型：{n}
+	the document claims PDF/A or PDF/X conformance, which requires embedded fonts	文件宣告符合 PDF/A 或 PDF/X，這些標準要求內嵌字型
+	composite (Type 0) fonts select glyphs by number inside the embedded font program	複合字型（Type 0）依編號在內嵌的字型程式中選取字符
+	subset fonts contain only some glyphs, chosen and encoded for this document	子集字型只包含為本文件選取並編碼的部分字符
+	symbolic fonts choose glyphs through the embedded program's own encoding	符號字型透過內嵌程式本身的編碼選取字符
+	the font has no explicit standard-based encoding; its program supplies the character mapping	此字型沒有以標準編碼為基礎的明確編碼，字元對應由其程式提供
+	the font has no complete widths array, so text would reflow with another font's metrics	此字型沒有完整的寬度陣列，文字會依其他字型的度量重新排列
+	Couldn't audit this document.	無法稽核此文件。
+	Objects	物件
+	Cross-reference	交互參照
+	Unclaimed objects	未歸類物件
+	Other overhead	其他額外資料
+	File size: {n} bytes	檔案大小：{n} 位元組
+	{n} objects with unsaved changes are estimated, not measured in the file.	{n} 個有未儲存變更的物件為估計值，並非在檔案中測得。
+	{n} bytes of compressed object streams are shared out among their objects by decoded size.	壓縮物件串流中的 {n} 位元組依解碼後大小分攤給其中的物件。

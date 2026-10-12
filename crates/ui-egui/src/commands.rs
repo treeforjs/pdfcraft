@@ -401,7 +401,11 @@ impl PdfCraftApp {
             "sign.timestamp" => self.open_signature_workflow(crate::timestamp_ui::SignatureWorkflowMode::Timestamp),
             "sign.embed_evidence" => self.open_signature_workflow(crate::timestamp_ui::SignatureWorkflowMode::Evidence),
             "sign.verification_options" => self.open_signature_workflow(crate::timestamp_ui::SignatureWorkflowMode::Verify),
-            "optimize.advanced" => self.dialog = Some(Dialog::Optimize),
+            "optimize.advanced" => self.open_optimizer(),
+            "optimize.audit" => {
+                self.load_space_audit(false);
+                self.dialog = Some(Dialog::AuditSpace);
+            }
             "view.fit_visible" => {
                 if let Some(i) = self.active
                     && let Err(e) = self.fit_visible(i)

@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use pdfcraft_cos::{Dict, Document, ObjRef, Object, SaveOptions, Stream, write_full};
-use pdfcraft_optimize::{Compression, ImageSettings, Settings, SpaceCategory, audit_space, effective_resolutions, optimize};
+use pdfcraft_optimize::{Compression, ImageSettings, Settings, SpaceCategory, audit_space, audit_space_detailed, effective_resolutions, optimize};
 
 fn image(doc: &mut Document, w: u32, h: u32, n: usize, jpeg: bool, smask: Option<ObjRef>) -> ObjRef {
     // A smooth gradient with a little texture (photo-like).
@@ -303,4 +303,260 @@ fn progress_is_reported_per_image_and_a_refusal_cancels() {
     });
     assert!(matches!(r, Err(OptimizeError::Cancelled)), "{r:?}");
     assert_eq!(calls, 2, "nothing runs after the refusal");
+}
+
+// ── Space audit measured in the file ─────────────────────────────────────────────────────────
+
+/// The bytes of object `num` in a classic file: from "num 0 obj" through "endobj\n".
+fn object_span(bytes: &[u8], num: u32) -> usize {
+    let head = format!("\n{num} 0 obj");
+    let start = bytes.windows(head.len()).position(|w| w == head.as_bytes()).unwrap() + 1;
+    let end = start + bytes[start..].windows(7).position(|w| w == b"endobj\n").unwrap() + 7;
+    end - start
+}
+
+#[test]
+fn space_audit_measures_each_object_in_the_file() {
+    let mut doc = Document::new_empty();
+    let img = image(&mut doc, 300, 300, 3, false, None);
+    page(&mut doc, &[("Im0", img)], "q 300 0 0 300 0 0 cm /Im0 Do Q BT ET");
+    let bytes = write_full(&doc, &SaveOptions { object_streams: false, ..SaveOptions::default() }).unwrap();
+    let doc = Document::open(Arc::new(bytes.clone())).unwrap();
+    let a = audit_space_detailed(&doc, bytes.len() as u64);
+    assert_eq!(a.estimated_objects, 0, "{a:?}");
+    assert_eq!(a.apportioned_bytes, 0, "no object streams");
+    assert_eq!((a.file_bytes, a.total_bytes), (bytes.len() as u64, bytes.len() as u64));
+    assert_eq!(a.rows.iter().map(|r| r.bytes).sum::<u64>(), bytes.len() as u64);
+    // The image is exactly its bytes in the file, its data included.
+    let image_num =
+        (1..20).find(|n| matches!(&*doc.get(ObjRef::new(*n, 0)), Object::Stream(s) if s.dict.name(b"Subtype") == Some(b"Image"))).unwrap();
+    let images = a.get(SpaceCategory::Images).unwrap();
+    assert_eq!((images.bytes, images.objects), (object_span(&bytes, image_num) as u64, 1), "{a:?}");
+    // The cross-reference table and trailer run from "xref" to the end of the file.
+    let xref = bytes.windows(6).rposition(|w| w == b"\nxref\n").unwrap() + 1;
+    assert_eq!(a.cross_reference_bytes, (bytes.len() - xref) as u64, "{a:?}");
+    // The overhead is the cross-reference, the catalog/page tree/info objects and the header.
+    let overhead = a.get(SpaceCategory::DocumentOverhead).unwrap().bytes;
+    assert_eq!(overhead, a.cross_reference_bytes + a.unclaimed_object_bytes + a.other_overhead_bytes);
+    assert!(a.other_overhead_bytes < 64, "only the header and line ends: {a:?}");
+}
+
+#[test]
+fn space_audit_shares_object_streams_and_counts_every_revision() {
+    let mut doc = Document::new_empty();
+    let img = image(&mut doc, 200, 200, 3, false, None);
+    let p = page(&mut doc, &[("Im0", img)], "q 200 0 0 200 0 0 cm /Im0 Do Q");
+    // A font drawn under two names counts once.
+    let mut f = Dict::new();
+    f.set(b"Type".to_vec(), Object::name("Font"));
+    f.set(b"Subtype".to_vec(), Object::name("Type1"));
+    f.set(b"BaseFont".to_vec(), Object::name("Helvetica"));
+    let font = doc.add(Object::Dict(f));
+    let mut fonts = Dict::new();
+    fonts.set(b"F1".to_vec(), Object::Ref(font));
+    fonts.set(b"F2".to_vec(), Object::Ref(font));
+    doc.update_dict(p, |d| {
+        if let Some(Object::Dict(res)) = d.get_mut(b"Resources") {
+            res.set(b"Font".to_vec(), Object::Dict(fonts));
+        }
+    })
+    .unwrap();
+    let bytes = write_full(&doc, &SaveOptions::default()).unwrap();
+    let mut doc = Document::open(Arc::new(bytes.clone())).unwrap();
+    let a = audit_space_detailed(&doc, bytes.len() as u64);
+    assert_eq!(a.estimated_objects, 0, "{a:?}");
+    assert!(a.apportioned_bytes > 0, "the font and other dictionaries are in an object stream: {a:?}");
+    assert!(a.cross_reference_bytes > 0, "the cross-reference stream: {a:?}");
+    assert_eq!(a.get(SpaceCategory::Fonts).unwrap().objects, 1, "{a:?}");
+    assert_eq!(a.rows.iter().map(|r| r.bytes).sum::<u64>(), bytes.len() as u64);
+    assert!(a.get(SpaceCategory::Images).unwrap().percent > 70.0, "{a:?}");
+
+    // An unsaved edit is estimated; after an incremental update the old content stream stays
+    // in the file as a superseded object.
+    let page_ref = pdfcraft_model::pages(&doc)[0].obj;
+    let c = doc.get(page_ref).as_dict().and_then(|d| d.reference(b"Contents")).unwrap();
+    doc.set(c, Object::Stream(Stream::from_raw(Dict::new(), b"q 100 0 0 100 0 0 cm /Im0 Do Q".to_vec())));
+    let edited = audit_space_detailed(&doc, bytes.len() as u64);
+    assert_eq!(edited.estimated_objects, 1, "{edited:?}");
+    let updated = pdfcraft_cos::write_incremental(&doc, &SaveOptions::default()).unwrap();
+    let doc = Document::open(Arc::new(updated.clone())).unwrap();
+    assert_eq!(doc.revisions().len(), 2);
+    let b = audit_space_detailed(&doc, updated.len() as u64);
+    assert_eq!(b.estimated_objects, 0, "{b:?}");
+    assert_eq!(b.rows.iter().map(|r| r.bytes).sum::<u64>(), updated.len() as u64);
+    assert!(b.cross_reference_bytes > a.cross_reference_bytes, "both revisions' cross-references: {a:?} {b:?}");
+    assert_eq!(b.get(SpaceCategory::Images).unwrap().bytes, a.get(SpaceCategory::Images).unwrap().bytes, "the image did not change");
+}
+
+#[test]
+fn space_audit_survives_deeply_nested_forms() {
+    // A chain of 50,000 forms each drawing the next: claimed iteratively, never recursively.
+    let mut doc = Document::new_empty();
+    let mut inner: Option<ObjRef> = None;
+    for _ in 0..50_000 {
+        let mut d = Dict::new();
+        d.set(b"Type".to_vec(), Object::name("XObject"));
+        d.set(b"Subtype".to_vec(), Object::name("Form"));
+        if let Some(i) = inner {
+            let mut x = Dict::new();
+            x.set(b"X".to_vec(), Object::Ref(i));
+            let mut res = Dict::new();
+            res.set(b"XObject".to_vec(), Object::Dict(x));
+            d.set(b"Resources".to_vec(), Object::Dict(res));
+        }
+        inner = Some(doc.add(Object::Stream(Stream::from_raw(d, b"/X Do".to_vec()))));
+    }
+    page(&mut doc, &[("X", inner.unwrap())], "/X Do");
+    let a = audit_space_detailed(&doc, 0);
+    assert_eq!(a.get(SpaceCategory::XObjectForms).unwrap().objects, 50_000);
+}
+
+// ── Fonts panel: unembedding ─────────────────────────────────────────────────────────────────
+
+/// A TrueType font dictionary embedding an OFL font already in the repository.
+fn truetype(doc: &mut Document, name: &str, flags: i64, encoding: Option<Object>, widths: bool) -> (ObjRef, ObjRef) {
+    let program = include_bytes!("../../../assets/fonts/DancingScript.ttf");
+    let mut fd = Dict::new();
+    fd.set(b"Length1".to_vec(), Object::Int(program.len() as i64));
+    let file = doc.add(Object::Stream(Stream::flate(fd, program)));
+    let mut d = Dict::new();
+    d.set(b"Type".to_vec(), Object::name("FontDescriptor"));
+    d.set(b"FontName".to_vec(), Object::name(name));
+    d.set(b"Flags".to_vec(), Object::Int(flags));
+    d.set(b"FontBBox".to_vec(), Object::Array(vec![0.into(), (-200).into(), 1000.into(), 900.into()]));
+    d.set(b"ItalicAngle".to_vec(), Object::Int(0));
+    d.set(b"Ascent".to_vec(), Object::Int(900));
+    d.set(b"Descent".to_vec(), Object::Int(-200));
+    d.set(b"CapHeight".to_vec(), Object::Int(700));
+    d.set(b"StemV".to_vec(), Object::Int(80));
+    d.set(b"FontFile2".to_vec(), Object::Ref(file));
+    let descriptor = doc.add(Object::Dict(d));
+    let mut f = Dict::new();
+    f.set(b"Type".to_vec(), Object::name("Font"));
+    f.set(b"Subtype".to_vec(), Object::name("TrueType"));
+    f.set(b"BaseFont".to_vec(), Object::name(name));
+    if let Some(e) = encoding {
+        f.set(b"Encoding".to_vec(), e);
+    }
+    if widths {
+        f.set(b"FirstChar".to_vec(), Object::Int(32));
+        f.set(b"LastChar".to_vec(), Object::Int(126));
+        f.set(b"Widths".to_vec(), Object::Array((32..=126).map(|_| Object::Int(500)).collect()));
+    }
+    f.set(b"FontDescriptor".to_vec(), Object::Ref(descriptor));
+    (doc.add(Object::Dict(f)), file)
+}
+
+fn with_fonts(doc: &mut Document, fonts: &[(&str, ObjRef)]) {
+    let mut d = Dict::new();
+    for (n, r) in fonts {
+        d.set(n.as_bytes().to_vec(), Object::Ref(*r));
+    }
+    let content = fonts.iter().map(|(n, _)| format!("BT /{n} 12 Tf 72 700 Td (Hello) Tj ET")).collect::<Vec<_>>().join("\n");
+    let p = page(doc, &[], &content);
+    doc.update_dict(p, |pd| {
+        if let Some(Object::Dict(res)) = pd.get_mut(b"Resources") {
+            res.set(b"Font".to_vec(), Object::Dict(d));
+        }
+    })
+    .unwrap();
+}
+
+#[test]
+fn only_simple_complete_standard_encoded_fonts_can_be_unembedded() {
+    use pdfcraft_optimize::{UnembedBlock, UnembedError, embedded_fonts, fonts::unembed};
+    let mut doc = Document::new_empty();
+    let win = Some(Object::name("WinAnsiEncoding"));
+    let (ok_font, _) = truetype(&mut doc, "DancingScript", 32, win.clone(), true);
+    let (subset, _) = truetype(&mut doc, "ABCDEF+DancingScript", 32, win.clone(), true);
+    let (symbolic, _) = truetype(&mut doc, "SymbolicScript", 4, win.clone(), true);
+    let (no_enc, _) = truetype(&mut doc, "BareScript", 32, None, true);
+    let (no_widths, _) = truetype(&mut doc, "WidthlessScript", 32, win.clone(), false);
+    let mut diffs = Dict::new();
+    diffs.set(b"BaseEncoding".to_vec(), Object::name("WinAnsiEncoding"));
+    diffs.set(b"Differences".to_vec(), Object::Array(vec![Object::Int(65), Object::name("B")]));
+    let (diff_font, _) = truetype(&mut doc, "DiffScript", 32, Some(Object::Dict(diffs)), true);
+    // A composite font whose CIDFont embeds the program (its descriptor is not used elsewhere).
+    let (cid_simple, _) = truetype(&mut doc, "CidScript", 32, win, true);
+    let cid_fd = doc.get(cid_simple).as_dict().and_then(|d| d.reference(b"FontDescriptor")).unwrap();
+    doc.free(cid_simple);
+    let mut cid = Dict::new();
+    cid.set(b"Type".to_vec(), Object::name("Font"));
+    cid.set(b"Subtype".to_vec(), Object::name("CIDFontType2"));
+    cid.set(b"BaseFont".to_vec(), Object::name("CidScript"));
+    cid.set(b"FontDescriptor".to_vec(), Object::Ref(cid_fd));
+    let cid = doc.add(Object::Dict(cid));
+    let mut t0 = Dict::new();
+    t0.set(b"Type".to_vec(), Object::name("Font"));
+    t0.set(b"Subtype".to_vec(), Object::name("Type0"));
+    t0.set(b"BaseFont".to_vec(), Object::name("CidScript-Identity-H"));
+    t0.set(b"Encoding".to_vec(), Object::name("Identity-H"));
+    t0.set(b"DescendantFonts".to_vec(), Object::Array(vec![Object::Ref(cid)]));
+    let t0 = doc.add(Object::Dict(t0));
+    with_fonts(&mut doc, &[("F1", ok_font), ("F2", subset), ("F3", symbolic), ("F4", no_enc), ("F5", no_widths), ("F6", diff_font), ("F7", t0)]);
+
+    let listed = embedded_fonts(&doc);
+    assert_eq!(listed.len(), 7, "{listed:?}");
+    let block = |r: ObjRef| listed.iter().find(|f| f.font == r).unwrap().blocked;
+    assert_eq!(block(ok_font), None);
+    assert_eq!(block(diff_font), None, "differences on a standard base keep codes meaningful");
+    assert_eq!(block(subset), Some(UnembedBlock::Subset));
+    assert_eq!(block(symbolic), Some(UnembedBlock::Symbolic));
+    assert_eq!(block(no_enc), Some(UnembedBlock::Encoding));
+    assert_eq!(block(no_widths), Some(UnembedBlock::Widths));
+    assert_eq!(block(t0), Some(UnembedBlock::Composite));
+    let f = listed.iter().find(|f| f.font == ok_font).unwrap();
+    assert_eq!((f.program, f.subtype.as_str(), f.subset), ("FontFile2", "TrueType", false));
+    assert!(f.program_bytes > 10_000, "{f:?}");
+
+    // Asking for a blocked font changes nothing, even with a safe one alongside.
+    let before = doc.modified_objects();
+    let err = unembed(&mut doc, &["DancingScript".into(), "SymbolicScript".into()]).unwrap_err();
+    assert!(matches!(err, UnembedError::Blocked { ref name, .. } if name == "SymbolicScript"), "{err}");
+    assert!(matches!(unembed(&mut doc, &["Nope".into()]), Err(UnembedError::NotFound(_))));
+    assert_eq!(doc.modified_objects(), before, "refused atomically");
+    assert!(embedded_fonts(&doc).iter().any(|f| f.font == ok_font));
+
+    // Unembedding through the optimizer: the program is gone from the written file.
+    let full = write_full(&doc, &SaveOptions::default()).unwrap();
+    let r = optimize(&mut doc, &Settings { unembed_fonts: vec!["DancingScript".into(), "DiffScript".into()], ..Settings::default() }).unwrap();
+    assert_eq!(r.fonts_unembedded, 2);
+    let fd = doc.get(ok_font).as_dict().and_then(|d| d.reference(b"FontDescriptor")).unwrap();
+    let fd = doc.get(fd).as_dict().cloned().unwrap();
+    assert!(!fd.contains(b"FontFile2") && fd.contains(b"FontName") && fd.contains(b"Flags"), "{fd:?}");
+    let font_dict = doc.get(ok_font).as_dict().cloned().unwrap();
+    assert!(font_dict.contains(b"Widths") && font_dict.contains(b"Encoding"), "metrics and encoding stay");
+    let small = write_full(&doc, &SaveOptions::default()).unwrap();
+    assert!(small.len() + 2 * 50_000 < full.len(), "{} → {}", full.len(), small.len());
+    let reopened = Document::open(Arc::new(small)).unwrap();
+    let names: Vec<String> = embedded_fonts(&reopened).into_iter().map(|f| f.name).collect();
+    assert!(!names.contains(&"DancingScript".to_string()) && names.contains(&"SymbolicScript".to_string()), "{names:?}");
+}
+
+#[test]
+fn a_shared_descriptor_is_copied_and_conformance_blocks_unembedding() {
+    use pdfcraft_optimize::{UnembedBlock, embedded_fonts, fonts::unembed};
+    let mut doc = Document::new_empty();
+    let (a, file) = truetype(&mut doc, "DancingScript", 32, Some(Object::name("WinAnsiEncoding")), true);
+    // A second font dictionary (another name) sharing the descriptor keeps its program.
+    let mut b = doc.get(a).as_dict().cloned().unwrap();
+    b.set(b"BaseFont".to_vec(), Object::name("DancingScriptAlias"));
+    let b = doc.add(Object::Dict(b));
+    with_fonts(&mut doc, &[("F1", a), ("F2", b)]);
+    assert_eq!(unembed(&mut doc, &["DancingScript".into()]).unwrap(), 1);
+    let fd_of = |doc: &Document, f: ObjRef| doc.get(f).as_dict().and_then(|d| d.reference(b"FontDescriptor")).unwrap();
+    assert_ne!(fd_of(&doc, a), fd_of(&doc, b), "a copy for the unembedded font");
+    assert_eq!(doc.get(fd_of(&doc, b)).as_dict().and_then(|d| d.reference(b"FontFile2")), Some(file));
+    assert!(!doc.get(fd_of(&doc, a)).as_dict().unwrap().contains(b"FontFile2"));
+
+    // A PDF/A claim blocks every font.
+    let root = doc.root().unwrap();
+    let xmp = br#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description xmlns:pdfaid="http://www.aiim.org/pdfa/ns/id/" pdfaid:part="2" pdfaid:conformance="B"/></rdf:RDF></x:xmpmeta>"#;
+    let mut md = Dict::new();
+    md.set(b"Type".to_vec(), Object::name("Metadata"));
+    md.set(b"Subtype".to_vec(), Object::name("XML"));
+    let m = doc.add(Object::Stream(Stream::from_raw(md, xmp.to_vec())));
+    doc.update_dict(root, |c| c.set(b"Metadata".to_vec(), Object::Ref(m))).unwrap();
+    assert!(embedded_fonts(&doc).iter().all(|f| f.blocked == Some(UnembedBlock::Conformance)));
+    assert!(unembed(&mut doc, &["DancingScriptAlias".into()]).is_err());
 }

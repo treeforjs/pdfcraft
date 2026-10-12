@@ -2213,3 +2213,23 @@ compare-page	Modified	Modificata
 compare-page	Inserted	Inserita
 compare-page	Deleted	Eliminata
 compare-page	Moved	Spostata
+# PDF Optimizer: Fonts panel and Audit space usage breakdown
+	This document has no embedded fonts.	Questo documento non ha font incorporati.
+	Unembedding removes a font's program; viewers then draw its text with an installed or substitute font. Fonts that would not keep their character codes and widths can't be unembedded.	Annullare l'incorporamento rimuove il programma del font; i visualizzatori mostrano poi il testo con un font installato o sostitutivo. I font che non manterrebbero codici dei caratteri e larghezze non possono essere esclusi dall'incorporamento.
+	{kind} · {program} · {n} bytes	{kind} · {program} · {n} byte
+	Can be unembedded	Incorporamento annullabile
+	Fonts to unembed: {n}	Font da non incorporare: {n}
+	the document claims PDF/A or PDF/X conformance, which requires embedded fonts	il documento dichiara la conformità PDF/A o PDF/X, che richiede font incorporati
+	composite (Type 0) fonts select glyphs by number inside the embedded font program	i font compositi (Type 0) scelgono i glifi per numero all'interno del programma del font incorporato
+	subset fonts contain only some glyphs, chosen and encoded for this document	i font sottoinsieme contengono solo alcuni glifi, scelti e codificati per questo documento
+	symbolic fonts choose glyphs through the embedded program's own encoding	i font simbolici scelgono i glifi tramite la codifica propria del programma incorporato
+	the font has no explicit standard-based encoding; its program supplies the character mapping	il font non ha una codifica esplicita basata su una standard; il suo programma fornisce la corrispondenza dei caratteri
+	the font has no complete widths array, so text would reflow with another font's metrics	il font non ha un array di larghezze completo, quindi il testo si ridistribuirebbe con le metriche di un altro font
+	Couldn't audit this document.	Impossibile analizzare questo documento.
+	Objects	Oggetti
+	Cross-reference	Riferimenti incrociati
+	Unclaimed objects	Oggetti non attribuiti
+	Other overhead	Altri dati di struttura
+	File size: {n} bytes	Dimensione file: {n} byte
+	{n} objects with unsaved changes are estimated, not measured in the file.	{n} oggetti con modifiche non salvate sono stimati, non misurati nel file.
+	{n} bytes of compressed object streams are shared out among their objects by decoded size.	{n} byte di flussi di oggetti compressi sono ripartiti tra i loro oggetti in base alla dimensione decodificata.

@@ -2135,3 +2135,23 @@ compare-page	Modified	మార్చబడింది
 compare-page	Inserted	చొప్పించబడింది
 compare-page	Deleted	తొలగించబడింది
 compare-page	Moved	తరలించబడింది
+# PDF Optimizer: Fonts panel and Audit space usage breakdown
+	This document has no embedded fonts.	ఈ పత్రంలో పొందుపరిచిన ఫాంట్‌లు లేవు.
+	Unembedding removes a font's program; viewers then draw its text with an installed or substitute font. Fonts that would not keep their character codes and widths can't be unembedded.	పొందుపరచడం తొలగిస్తే ఫాంట్ ప్రోగ్రామ్ తీసివేయబడుతుంది; వీక్షకులు దాని పాఠ్యాన్ని ఇన్‌స్టాల్ చేసిన లేదా ప్రత్యామ్నాయ ఫాంట్‌తో చూపుతారు. అక్షర కోడ్‌లు, వెడల్పులు నిలవని ఫాంట్‌ల పొందుపరచడం తొలగించలేరు.
+	{kind} · {program} · {n} bytes	{kind} · {program} · {n} బైట్‌లు
+	Can be unembedded	పొందుపరచడం తొలగించవచ్చు
+	Fonts to unembed: {n}	పొందుపరచడం తొలగించాల్సిన ఫాంట్‌లు: {n}
+	the document claims PDF/A or PDF/X conformance, which requires embedded fonts	పత్రం PDF/A లేదా PDF/X అనుగుణ్యతను ప్రకటిస్తుంది, దానికి పొందుపరిచిన ఫాంట్‌లు అవసరం
+	composite (Type 0) fonts select glyphs by number inside the embedded font program	సంయుక్త (Type 0) ఫాంట్‌లు పొందుపరిచిన ఫాంట్ ప్రోగ్రామ్‌లో సంఖ్య ద్వారా గ్లిఫ్‌లను ఎంచుకుంటాయి
+	subset fonts contain only some glyphs, chosen and encoded for this document	ఉపసమితి ఫాంట్‌లలో ఈ పత్రం కోసం ఎంచుకుని ఎన్‌కోడ్ చేసిన కొన్ని గ్లిఫ్‌లు మాత్రమే ఉంటాయి
+	symbolic fonts choose glyphs through the embedded program's own encoding	సింబాలిక్ ఫాంట్‌లు పొందుపరిచిన ప్రోగ్రామ్ సొంత ఎన్‌కోడింగ్ ద్వారా గ్లిఫ్‌లను ఎంచుకుంటాయి
+	the font has no explicit standard-based encoding; its program supplies the character mapping	ఫాంట్‌కు ప్రామాణిక ఆధారిత స్పష్టమైన ఎన్‌కోడింగ్ లేదు; అక్షర మ్యాపింగ్‌ను దాని ప్రోగ్రామ్ అందిస్తుంది
+	the font has no complete widths array, so text would reflow with another font's metrics	ఫాంట్‌కు పూర్తి వెడల్పుల శ్రేణి లేదు, కాబట్టి పాఠ్యం మరో ఫాంట్ కొలతలతో మళ్లీ అమరుతుంది
+	Couldn't audit this document.	ఈ పత్రాన్ని తనిఖీ చేయలేకపోయాం.
+	Objects	ఆబ్జెక్ట్‌లు
+	Cross-reference	క్రాస్-రిఫరెన్స్
+	Unclaimed objects	కేటాయించని ఆబ్జెక్ట్‌లు
+	Other overhead	ఇతర నిర్వహణ డేటా
+	File size: {n} bytes	ఫైల్ పరిమాణం: {n} బైట్‌లు
+	{n} objects with unsaved changes are estimated, not measured in the file.	సేవ్ చేయని మార్పులున్న {n} ఆబ్జెక్ట్‌లు అంచనా వేయబడ్డాయి, ఫైల్‌లో కొలవబడలేదు.
+	{n} bytes of compressed object streams are shared out among their objects by decoded size.	కుదించిన ఆబ్జెక్ట్ స్ట్రీమ్‌ల {n} బైట్‌లు డీకోడ్ చేసిన పరిమాణం ప్రకారం వాటి ఆబ్జెక్ట్‌లకు పంచబడ్డాయి.

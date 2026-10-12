@@ -2202,3 +2202,23 @@ compare-page	Modified	Módosítva
 compare-page	Inserted	Beszúrva
 compare-page	Deleted	Törölve
 compare-page	Moved	Áthelyezve
+# PDF Optimizer: Fonts panel and Audit space usage breakdown
+	This document has no embedded fonts.	Ez a dokumentum nem tartalmaz beágyazott betűtípust.
+	Unembedding removes a font's program; viewers then draw its text with an installed or substitute font. Fonts that would not keep their character codes and widths can't be unembedded.	A beágyazás megszüntetése eltávolítja a betűtípus programját; a megjelenítők ezután telepített vagy helyettesítő betűtípussal rajzolják a szöveget. Azoknak a betűtípusoknak, amelyek nem őriznék meg karakterkódjaikat és szélességeiket, nem szüntethető meg a beágyazása.
+	{kind} · {program} · {n} bytes	{kind} · {program} · {n} bájt
+	Can be unembedded	Beágyazása megszüntethető
+	Fonts to unembed: {n}	Megszüntetendő beágyazások: {n}
+	the document claims PDF/A or PDF/X conformance, which requires embedded fonts	a dokumentum PDF/A- vagy PDF/X-megfelelőséget állít, amely beágyazott betűtípusokat kíván
+	composite (Type 0) fonts select glyphs by number inside the embedded font program	az összetett (Type 0) betűtípusok szám alapján választanak karakterképet a beágyazott betűtípusprogramban
+	subset fonts contain only some glyphs, chosen and encoded for this document	a részhalmaz-betűtípusok csak néhány, ehhez a dokumentumhoz kiválasztott és kódolt karakterképet tartalmaznak
+	symbolic fonts choose glyphs through the embedded program's own encoding	a szimbolikus betűtípusok a beágyazott program saját kódolásán keresztül választanak karakterképet
+	the font has no explicit standard-based encoding; its program supplies the character mapping	a betűtípusnak nincs szabványos alapú, kifejezett kódolása; a karakterhozzárendelést a programja adja
+	the font has no complete widths array, so text would reflow with another font's metrics	a betűtípusnak nincs teljes szélességtömbje, így a szöveg egy másik betűtípus méreteivel tördelődne újra
+	Couldn't audit this document.	Ez a dokumentum nem vizsgálható meg.
+	Objects	Objektumok
+	Cross-reference	Kereszthivatkozás
+	Unclaimed objects	Hozzá nem rendelt objektumok
+	Other overhead	Egyéb többletadat
+	File size: {n} bytes	Fájlméret: {n} bájt
+	{n} objects with unsaved changes are estimated, not measured in the file.	{n} nem mentett módosítású objektum mérete becsült, nem a fájlban mért.
+	{n} bytes of compressed object streams are shared out among their objects by decoded size.	A tömörített objektumfolyamok {n} bájtja a dekódolt méret szerint oszlik meg az objektumaik között.

@@ -498,8 +498,10 @@ pub struct PdfCraftApp {
     /// List the OS key store's signing identities among the digital IDs (the desktop app).
     pub os_key_store_ids: bool,
     pub cert_viewer: Option<sign_ui::CertViewer>,
-    /// The last space audit.
-    pub space_audit: Vec<pdfcraft_engine::optimize::SpaceUse>,
+    /// The last space audit (`None`: the document could not be measured).
+    pub space_audit: Option<pdfcraft_engine::optimize::SpaceAudit>,
+    /// Audit space usage was opened from the PDF Optimizer, so OK goes back to it.
+    pub audit_from_optimizer: bool,
     /// Combine files: the files staged so far.
     pub combine_draft: Vec<combine_ui::CombineFile>,
     /// The Combine files tab: whether it is open, shown, its selection and undo history.
@@ -748,7 +750,8 @@ impl PdfCraftApp {
             alt_draft: Default::default(),
             os_key_store_ids: false,
             cert_viewer: None,
-            space_audit: Vec::new(),
+            space_audit: None,
+            audit_from_optimizer: false,
             combine_draft: Vec::new(),
             combine_tab: Default::default(),
             combine_columns: Default::default(),
@@ -1552,7 +1555,10 @@ impl PdfCraftApp {
                     "pdfa" => Some(Dialog::PdfA),
                     "preflight" => Some(Dialog::Preflight),
                     "signature" => Some(Dialog::Signature),
-                    "optimize" => Some(Dialog::Optimize),
+                    "optimize" => {
+                        self.open_optimizer();
+                        Some(Dialog::Optimize)
+                    }
                     "sign" | "certify" => {
                         // Sign with a Digital ID for an invisible signature on the current page.
                         let page = self.active.map_or(0, |i| self.views[i].current);

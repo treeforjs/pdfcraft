@@ -1862,6 +1862,106 @@ fn auditing_space_through_tools() {
     assert!((total - 100.0).abs() < 0.1, "{r}");
     let content = rows.iter().find(|x| x["category"] == "Content Streams").unwrap();
     assert!(content["bytes"].as_u64().unwrap() > 0, "{r}");
+    // Measured in the file: the rows add up to its size exactly, nothing estimated.
+    let size = std::fs::metadata(dir.join("a.pdf")).unwrap().len();
+    assert_eq!(rows.iter().map(|x| x["bytes"].as_u64().unwrap()).sum::<u64>(), size, "{r}");
+    assert_eq!((r["file_bytes"].as_u64(), r["total_bytes"].as_u64(), r["estimated_objects"].as_u64()), (Some(size), Some(size), Some(0)), "{r}");
+    // The three pages' content streams, each measured from "n 0 obj" to "endobj".
+    assert_eq!(content["objects"], 3, "{r}");
+    let fonts = rows.iter().find(|x| x["category"] == "Fonts").unwrap();
+    assert_eq!(fonts["objects"], 1, "one Helvetica shared by every page counts once: {r}");
+    let o = &r["overhead"];
+    let overhead = rows.iter().find(|x| x["category"] == "Document Overhead").unwrap()["bytes"].as_u64().unwrap();
+    assert_eq!(o["cross_reference"].as_u64().unwrap() + o["unclaimed_objects"].as_u64().unwrap() + o["other"].as_u64().unwrap(), overhead, "{r}");
+}
+
+/// One page drawing "Hello" in an embedded, complete TrueType font (an OFL font already in the
+/// repository), with a classic cross-reference table.
+fn embedded_font_fixture() -> Vec<u8> {
+    let program: &[u8] = include_bytes!("../../../assets/fonts/DancingScript.ttf");
+    let widths = vec!["500"; 95].join(" ");
+    let body = "BT /F1 24 Tf 20 150 Td (Hello) Tj ET";
+    let mut objs: Vec<Vec<u8>> = vec![
+        b"<< /Type /Catalog /Pages 2 0 R >>".to_vec(),
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 /MediaBox [0 0 200 300] >>".to_vec(),
+        b"<< /Type /Page /Parent 2 0 R /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>".to_vec(),
+        format!("<< /Length {} >>\nstream\n{body}\nendstream", body.len()).into_bytes(),
+        format!("<< /Type /Font /Subtype /TrueType /BaseFont /DancingScript /Encoding /WinAnsiEncoding /FirstChar 32 /LastChar 126 /Widths [{widths}] /FontDescriptor 6 0 R >>").into_bytes(),
+        b"<< /Type /FontDescriptor /FontName /DancingScript /Flags 32 /FontBBox [0 -300 1000 900] /ItalicAngle 0 /Ascent 900 /Descent -300 /CapHeight 700 /StemV 80 /FontFile2 7 0 R >>".to_vec(),
+    ];
+    let mut file = format!("<< /Length {} /Length1 {} >>\nstream\n", program.len(), program.len()).into_bytes();
+    file.extend_from_slice(program);
+    file.extend_from_slice(b"\nendstream");
+    objs.push(file);
+    let mut out = b"%PDF-1.7\n".to_vec();
+    let mut offsets = Vec::new();
+    for (i, o) in objs.iter().enumerate() {
+        offsets.push(out.len());
+        out.extend_from_slice(format!("{} 0 obj\n", i + 1).as_bytes());
+        out.extend_from_slice(o);
+        out.extend_from_slice(b"\nendobj\n");
+    }
+    let xref = out.len();
+    out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objs.len() + 1).as_bytes());
+    for o in offsets {
+        out.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+    }
+    out.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objs.len() + 1).as_bytes());
+    out
+}
+
+#[test]
+fn auditing_fonts_and_unembedding_through_tools() {
+    let dir = workdir("unembed");
+    let fixture = embedded_font_fixture();
+    std::fs::write(dir.join("font.pdf"), &fixture).unwrap();
+    let program_len = include_bytes!("../../../assets/fonts/DancingScript.ttf").len() as u64;
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "font.pdf" }))["doc"].as_u64().unwrap();
+
+    // The audit puts the font program under Fonts, measured to the byte.
+    let r = ok(&mut a, "doc_audit_space", json!({ "doc": doc }));
+    let rows = r["categories"].as_array().unwrap();
+    let fonts = rows.iter().find(|x| x["category"] == "Fonts").unwrap();
+    // Font dictionary, descriptor and program, each as "n 0 obj\n…\nendobj\n" in the file.
+    let span = |n: usize| {
+        let head = format!("\n{n} 0 obj\n");
+        let s = fixture.windows(head.len()).position(|w| w == head.as_bytes()).unwrap() + 1;
+        (s + fixture[s..].windows(7).position(|w| w == b"endobj\n").unwrap() + 7 - s) as u64
+    };
+    assert_eq!(fonts["bytes"].as_u64().unwrap(), span(5) + span(6) + span(7), "{r}");
+    assert!(fonts["bytes"].as_u64().unwrap() > program_len, "{r}");
+    assert_eq!(fonts["objects"], 3, "{r}");
+    assert_eq!(rows.iter().map(|x| x["bytes"].as_u64().unwrap()).sum::<u64>(), fixture.len() as u64);
+
+    let listed = ok(&mut a, "doc_embedded_fonts", json!({ "doc": doc }));
+    assert_eq!(listed["count"], 1, "{listed}");
+    let f = &listed["fonts"][0];
+    assert_eq!(
+        (f["name"].as_str(), f["program"].as_str(), f["can_unembed"].as_bool()),
+        (Some("DancingScript"), Some("FontFile2"), Some(true)),
+        "{listed}"
+    );
+    assert_eq!(f["program_bytes"].as_u64(), Some(program_len));
+
+    // Unknown names are refused with what is embedded.
+    match a.call("doc_optimize", &json!({ "doc": doc, "path": "x.pdf", "unembed_fonts": ["Nope"] })) {
+        Err(ToolError::InvalidArgs(m)) => assert!(m.contains("DancingScript"), "{m}"),
+        other => panic!("{other:?}"),
+    }
+    assert!(!dir.join("x.pdf").exists(), "nothing written");
+
+    let out = ok(&mut a, "doc_optimize", json!({ "doc": doc, "path": "unembedded.pdf", "unembed_fonts": ["DancingScript"] }));
+    assert_eq!(out["fonts_unembedded"], 1, "{out}");
+    assert!(out["bytes_after"].as_u64().unwrap() + program_len / 2 < out["bytes_before"].as_u64().unwrap(), "{out}");
+    let small = ok(&mut a, "doc_open", json!({ "path": "unembedded.pdf" }))["doc"].as_u64().unwrap();
+    assert_eq!(ok(&mut a, "doc_embedded_fonts", json!({ "doc": small }))["count"], 0);
+    // The text keeps its codes: it still extracts the same.
+    assert_eq!(page_text(&mut a, small), vec!["Hello".to_string()]);
+    assert_eq!(page_text(&mut a, doc), vec!["Hello".to_string()]);
+    let after = ok(&mut a, "doc_audit_space", json!({ "doc": small }));
+    let fonts_after = after["categories"].as_array().unwrap().iter().find(|x| x["category"] == "Fonts").unwrap()["bytes"].as_u64().unwrap();
+    assert!(fonts_after < 1_000, "{after}");
 }
 
 #[test]

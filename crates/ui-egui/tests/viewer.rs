@@ -420,6 +420,155 @@ fn optimizer_audits_space_usage() {
     assert_eq!(h.state().dialog, Some(Dialog::Optimize), "back to the optimizer");
 }
 
+/// All tools ▸ Compress a PDF ▸ Audit space usage is its own command: the audit shows object
+/// counts, how the document overhead splits, and the file size; OK closes it.
+#[test]
+fn audit_space_usage_is_a_command_with_the_overhead_breakdown() {
+    let mut h = harness();
+    assert!(h.state_mut().execute("optimize.audit"));
+    h.run_steps(3);
+    assert_eq!(h.state().dialog, Some(Dialog::AuditSpace));
+    let a = h.state().space_audit.clone().expect("the document was measured");
+    assert_eq!(a.file_bytes, fixture(2).len() as u64, "the active document is b.pdf");
+    assert_eq!(a.total_bytes, a.file_bytes, "nothing unsaved: the rows add up to the file");
+    let overhead = a.rows.iter().find(|r| r.category == pdfcraft_engine::optimize::SpaceCategory::DocumentOverhead).unwrap().bytes;
+    assert_eq!(a.cross_reference_bytes + a.unclaimed_object_bytes + a.other_overhead_bytes, overhead);
+    assert!(a.cross_reference_bytes > 0);
+    h.get_by_label("Space Audit");
+    h.get_by_label("Objects");
+    h.get_by_label("Document Overhead");
+    h.get_by_label("Cross-reference");
+    h.get_by_label("Unclaimed objects");
+    h.get_by_label("Other overhead");
+    h.get_by_label(&format!("File size: {} bytes", a.file_bytes));
+    assert!(h.query_all_by_label(&a.cross_reference_bytes.to_string()).count() >= 1);
+    let objects: usize = a.rows.iter().map(|r| r.objects).sum();
+    assert!(objects > 0);
+    assert!(h.query_all_by_label(&objects.to_string()).count() >= 1, "the total object count is shown");
+    assert!(h.query_by_label_contains("estimated").is_none(), "every byte was measured in the file");
+    h.get_by_label("OK").click();
+    h.run_steps(2);
+    assert_eq!(h.state().dialog, None, "opened on its own, OK closes it");
+}
+
+/// The repository's OFL Dancing Script, embedded uncompressed by [`fonts_fixture`].
+const DANCING_SCRIPT: &[u8] = include_bytes!("../../../assets/fonts/DancingScript.ttf");
+
+/// One page drawing text with two embedded TrueType fonts (both Dancing Script):
+/// `DancingScript` (WinAnsi, full widths: can be unembedded) and the subset
+/// `ABCDEF+DancingScript` (refused).
+fn fonts_fixture() -> Vec<u8> {
+    let widths = vec!["500"; 95].join(" ");
+    let font = |name: &str, fd: usize| {
+        format!(
+            "<< /Type /Font /Subtype /TrueType /BaseFont /{name} /FirstChar 32 /LastChar 126 /Widths [{widths}] /Encoding /WinAnsiEncoding /FontDescriptor {fd} 0 R >>"
+        )
+        .into_bytes()
+    };
+    let descriptor = |name: &str, file: usize| {
+        format!(
+            "<< /Type /FontDescriptor /FontName /{name} /Flags 32 /FontBBox [0 -200 1000 900] /ItalicAngle 0 /Ascent 900 /Descent -200 /CapHeight 700 /StemV 80 /FontFile2 {file} 0 R >>"
+        )
+        .into_bytes()
+    };
+    let program = || {
+        let mut s = format!("<< /Length {} /Length1 {} >>\nstream\n", DANCING_SCRIPT.len(), DANCING_SCRIPT.len()).into_bytes();
+        s.extend_from_slice(DANCING_SCRIPT);
+        s.extend_from_slice(b"\nendstream");
+        s
+    };
+    let body = "BT /F1 18 Tf 20 200 Td (Hello) Tj ET BT /F2 18 Tf 20 100 Td (World) Tj ET";
+    let objs: Vec<Vec<u8>> = vec![
+        b"<< /Type /Catalog /Pages 2 0 R >>".to_vec(),
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 /MediaBox [0 0 200 300] >>".to_vec(),
+        b"<< /Type /Page /Parent 2 0 R /Contents 10 0 R /Resources << /Font << /F1 4 0 R /F2 7 0 R >> >> >>".to_vec(),
+        font("DancingScript", 5),
+        descriptor("DancingScript", 6),
+        program(),
+        font("ABCDEF+DancingScript", 8),
+        descriptor("ABCDEF+DancingScript", 9),
+        program(),
+        format!("<< /Length {} >>\nstream\n{body}\nendstream", body.len()).into_bytes(),
+    ];
+    let mut out = b"%PDF-1.7\n".to_vec();
+    let mut offs = Vec::new();
+    for (i, o) in objs.iter().enumerate() {
+        offs.push(out.len());
+        out.extend_from_slice(format!("{} 0 obj\n", i + 1).as_bytes());
+        out.extend_from_slice(o);
+        out.extend_from_slice(b"\nendobj\n");
+    }
+    let x = out.len();
+    out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objs.len() + 1).as_bytes());
+    for o in offs {
+        out.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+    }
+    out.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{x}\n%%EOF\n", objs.len() + 1).as_bytes());
+    out
+}
+
+/// PDF Optimizer ▸ Fonts lists the embedded fonts, refuses the subset with its reason, and
+/// unembeds the chosen font in the saved copy.
+#[test]
+fn optimizer_fonts_panel_unembeds_the_chosen_font() {
+    let dir = std::env::temp_dir().join(format!("pdfcraft-unembed-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let out = dir.join("fonts (optimized).pdf");
+    let _ = std::fs::remove_file(&out);
+    let out2 = out.clone();
+    let mut h = Harness::builder().with_size(egui::vec2(1400.0, 900.0)).build_eframe(move |_cc| {
+        let mut app = PdfCraftApp::new();
+        app.set_option("language", "en").unwrap();
+        app.open_bytes("fonts.pdf", None, fonts_fixture()).unwrap();
+        app.save_override = Some(out2.to_string_lossy().into_owned());
+        // Left over from another document: names not embedded here, or refused here, are dropped.
+        app.optimize_draft.settings.unembed_fonts = vec!["Gone".into(), "ABCDEF+DancingScript".into()];
+        app
+    });
+    h.run_steps(4);
+    assert!(h.state_mut().execute("optimize.advanced"));
+    h.run_steps(2);
+    {
+        let d = &h.state().optimize_draft;
+        assert!(d.settings.unembed_fonts.is_empty(), "stale choices are pruned: {:?}", d.settings.unembed_fonts);
+        let names: Vec<_> = d.fonts.iter().map(|f| (f.name.as_str(), f.blocked.is_none())).collect();
+        assert_eq!(names, [("DancingScript", true), ("ABCDEF+DancingScript", false)]);
+    }
+    h.get_by_label("Fonts").click();
+    h.run_steps(2);
+    h.get_by_label("Can be unembedded");
+    h.get_by_label("subset fonts contain only some glyphs, chosen and encoded for this document");
+    h.get_by_label("Fonts to unembed: 0");
+    assert_eq!(h.query_all_by_label(&format!("TrueType · FontFile2 · {} bytes", DANCING_SCRIPT.len())).count(), 2);
+    // The subset's box is disabled: clicking it changes nothing.
+    h.get_by_label("ABCDEF+DancingScript").click();
+    h.run_steps(2);
+    assert!(h.state().optimize_draft.settings.unembed_fonts.is_empty());
+    h.get_by_label("DancingScript").click();
+    h.run_steps(2);
+    assert_eq!(h.state().optimize_draft.settings.unembed_fonts, ["DancingScript"]);
+    h.get_by_label("Fonts to unembed: 1");
+    if let Ok(path) = std::env::var("PDFCRAFT_OPTIMIZE_FONTS_SHOT") {
+        h.render().unwrap().save(path).unwrap();
+    }
+
+    h.get_by_label("OK").click();
+    h.run_steps(1);
+    let start = std::time::Instant::now();
+    while (h.state().optimize_run.is_some() || !out.exists()) && start.elapsed() < std::time::Duration::from_secs(30) {
+        h.run_steps(1);
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    h.run_steps(2);
+    assert_eq!(h.state().dialog, None);
+    assert!(h.state().toast.as_ref().is_some_and(|t| t.0.contains("1 font unembedded")), "{:?}", h.state().toast);
+    let saved = std::fs::read(&out).unwrap();
+    let mut s = pdfcraft_engine::Session::new();
+    let id = s.open("saved.pdf", None, std::sync::Arc::new(saved), None).unwrap();
+    let left: Vec<_> = s.get(id).unwrap().embedded_fonts().into_iter().map(|f| f.name).collect();
+    assert_eq!(left, ["ABCDEF+DancingScript"], "only the chosen font lost its program");
+}
+
 #[test]
 fn each_document_keeps_its_own_scroll_position() {
     // #189: every document's page view shared one scroll position, so switching tabs showed a

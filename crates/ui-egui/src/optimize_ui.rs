@@ -1,5 +1,5 @@
-//! Optimize PDF ▸ Advanced optimization (Acrobat's PDF Optimizer): Images, Discard Objects,
-//! Discard User Data and Clean Up panels. The result is saved as a copy, like Reduce File Size.
+//! Optimize PDF ▸ Advanced optimization (Acrobat's PDF Optimizer): Images, Fonts, Discard
+//! Objects, Discard User Data and Clean Up panels, and Audit space usage. The result is saved as a copy, like Reduce File Size.
 //!
 //! The optimization (this dialog's, or Reduce File Size's fixed choices) runs on a worker thread
 //! and shows its progress in a notice with a bar and a Cancel button; the copy is saved once it
@@ -8,7 +8,7 @@
 use std::sync::{Arc, Mutex};
 
 use egui::{Align, Layout};
-use pdfcraft_engine::optimize::{Compression, ImageSettings, QUALITIES, Settings};
+use pdfcraft_engine::optimize::{Compression, EmbeddedFont, ImageSettings, QUALITIES, Settings, SpaceAudit, SpaceCategory, UnembedBlock};
 use pdfcraft_engine::optimizer::{OptimizeStage, Optimized};
 use pdfcraft_engine::{DocId, EditError, Hidden, OptimizeReport};
 
@@ -18,6 +18,7 @@ use crate::{PdfCraftApp, widgets};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OptimizeTab {
     Images,
+    Fonts,
     DiscardObjects,
     DiscardUserData,
     CleanUp,
@@ -31,11 +32,13 @@ pub struct OptimizeDraft {
     pub discard: Vec<Hidden>,
     /// "Audit space usage…" was pressed.
     pub audit: bool,
+    /// Fonts panel: the active document's embedded fonts, listed when the dialog opens.
+    pub fonts: Vec<EmbeddedFont>,
 }
 
 impl Default for OptimizeDraft {
     fn default() -> Self {
-        Self { tab: OptimizeTab::Images, settings: Settings::default(), discard: Vec::new(), audit: false }
+        Self { tab: OptimizeTab::Images, settings: Settings::default(), discard: Vec::new(), audit: false, fonts: Vec::new() }
     }
 }
 
@@ -88,7 +91,8 @@ fn stage_label(stage: OptimizeStage) -> String {
     }
 }
 
-/// What the saved notice adds after the size: images optimized and items discarded.
+/// What the saved notice adds after the size: images optimized, fonts unembedded and items
+/// discarded.
 fn summary(r: &OptimizeReport) -> String {
     let o = &r.optimize;
     let mut parts = Vec::new();
@@ -98,6 +102,9 @@ fn summary(r: &OptimizeReport) -> String {
             o.images_resampled + o.images_recompressed,
             if o.images_resampled + o.images_recompressed == 1 { "" } else { "s" }
         ));
+    }
+    if o.fonts_unembedded > 0 {
+        parts.push(format!("{} font{} unembedded", o.fonts_unembedded, if o.fonts_unembedded == 1 { "" } else { "s" }));
     }
     let discarded: usize = r.discarded.iter().map(|(_, n)| n).sum();
     if discarded > 0 {
@@ -155,6 +162,65 @@ fn discard_box(ui: &mut egui::Ui, list: &mut Vec<Hidden>, h: Hidden, label: &str
     }
 }
 
+/// Why fonts named `name` can't be unembedded: unembedding goes by name, so one blocked font
+/// blocks every font of that name.
+fn name_block(fonts: &[EmbeddedFont], name: &str) -> Option<UnembedBlock> {
+    fonts.iter().filter(|f| f.name == name).find_map(|f| f.blocked)
+}
+
+/// Keep only chosen names that are still embedded and can be unembedded in `fonts`.
+pub(crate) fn prune_unembed(fonts: &[EmbeddedFont], chosen: &mut Vec<String>) {
+    chosen.retain(|n| fonts.iter().any(|f| &f.name == n) && name_block(fonts, n).is_none());
+}
+
+/// Fonts: every embedded font, with a check box to unembed it or the reason it can't be.
+fn fonts_panel(ui: &mut egui::Ui, fonts: &[EmbeddedFont], chosen: &mut Vec<String>, t: &Tokens) {
+    if fonts.is_empty() {
+        ui.label(tl!("This document has no embedded fonts."));
+        return;
+    }
+    ui.add(
+        egui::Label::new(
+            egui::RichText::new(tl!(
+                "Unembedding removes a font's program; viewers then draw its text with an installed or substitute font. Fonts that would not keep their character codes and widths can't be unembedded."
+            ))
+            .small()
+            .color(t.text_muted),
+        )
+        .wrap(),
+    );
+    ui.add_space(6.0);
+    egui::ScrollArea::vertical().max_height(280.0).auto_shrink([false, true]).show(ui, |ui| {
+        for (i, f) in fonts.iter().enumerate() {
+            let block = name_block(fonts, &f.name);
+            let mut on = chosen.contains(&f.name);
+            let r = ui.push_id(i, |ui| ui.add_enabled(block.is_none(), egui::Checkbox::new(&mut on, &f.name))).inner;
+            if r.changed() {
+                if on {
+                    chosen.push(f.name.clone());
+                } else {
+                    chosen.retain(|n| *n != f.name);
+                }
+            }
+            let detail = crate::i18n::fmt(
+                tl!("{kind} · {program} · {n} bytes"),
+                &[("kind", &f.subtype), ("program", f.program), ("n", &f.program_bytes.to_string())],
+            );
+            let status = match block {
+                None => tl!("Can be unembedded"),
+                Some(b) => tl!(b.reason()),
+            };
+            ui.indent(("font", i), |ui| {
+                ui.label(egui::RichText::new(detail).small().color(t.text_muted));
+                ui.add(egui::Label::new(egui::RichText::new(status).small().color(if block.is_some() { t.text_muted } else { t.text })).wrap());
+            });
+            ui.add_space(4.0);
+        }
+    });
+    ui.add_space(4.0);
+    ui.label(crate::i18n::fmt(tl!("Fonts to unembed: {n}"), &[("n", &chosen.len().to_string())]));
+}
+
 /// Draw the dialog; returns (ok, cancel).
 pub(crate) fn body(ui: &mut egui::Ui, d: &mut OptimizeDraft, t: &Tokens) -> (bool, bool) {
     ui.label(egui::RichText::new(tl!("PDF Optimizer")).font(theme::semibold(18.0)));
@@ -162,6 +228,7 @@ pub(crate) fn body(ui: &mut egui::Ui, d: &mut OptimizeDraft, t: &Tokens) -> (boo
     ui.horizontal(|ui| {
         for (tab, label) in [
             (OptimizeTab::Images, tl!("Images")),
+            (OptimizeTab::Fonts, tl!("Fonts")),
             (OptimizeTab::DiscardObjects, tl!("Discard Objects")),
             (OptimizeTab::DiscardUserData, tl!("Discard User Data")),
             (OptimizeTab::CleanUp, tl!("Clean Up")),
@@ -184,6 +251,7 @@ pub(crate) fn body(ui: &mut egui::Ui, d: &mut OptimizeDraft, t: &Tokens) -> (boo
                     .color(t.text_muted),
             );
         }
+        OptimizeTab::Fonts => fonts_panel(ui, &d.fonts, &mut s.unembed_fonts, t),
         OptimizeTab::DiscardObjects => {
             discard_box(ui, &mut d.discard, Hidden::LinksActionsScripts, "Discard all links, actions and JavaScript");
             ui.checkbox(&mut s.discard_alternate_images, tl!("Discard alternate images"));
@@ -227,34 +295,84 @@ pub(crate) fn body(ui: &mut egui::Ui, d: &mut OptimizeDraft, t: &Tokens) -> (boo
     (ok, cancel)
 }
 
-/// Audit Space Usage: bytes and share of the file per kind of content.
-pub(crate) fn audit_body(ui: &mut egui::Ui, rows: &[pdfcraft_engine::optimize::SpaceUse], t: &Tokens) -> bool {
+/// The audit's name for a category. "Patterns" also names the redaction search patterns
+/// ("模式"); the audit's PDF graphics objects need their own key.
+fn category_label(c: SpaceCategory) -> &'static str {
+    if c == SpaceCategory::Patterns { tl!("Patterns (graphics objects)") } else { tl!(c.label()) }
+}
+
+fn percent(bytes: u64, total: u64) -> String {
+    if total == 0 { "0.00%".into() } else { format!("{:.2}%", bytes as f64 * 100.0 / total as f64) }
+}
+
+/// Audit Space Usage: objects, bytes and share of the file per kind of content, how the document
+/// overhead breaks down, and how the total relates to the file size. Returns whether OK was
+/// pressed.
+pub(crate) fn audit_body(ui: &mut egui::Ui, audit: Option<&SpaceAudit>, t: &Tokens) -> bool {
     ui.label(egui::RichText::new(tl!("Space Audit")).font(crate::theme::semibold(18.0)));
     ui.add_space(8.0);
-    egui::Grid::new("space-audit").num_columns(3).striped(true).spacing([24.0, 4.0]).show(ui, |ui| {
-        for h in [tl!("Description"), tl!("Bytes"), tl!("Percentage")] {
-            ui.label(egui::RichText::new(h).color(t.text_muted));
+    match audit {
+        None => {
+            ui.label(tl!("Couldn't audit this document."));
         }
-        ui.end_row();
-        let total: u64 = rows.iter().map(|r| r.bytes).sum();
-        for r in rows.iter().filter(|r| r.bytes > 0) {
-            // "Patterns" also names the redaction search patterns ("模式"); the audit's PDF
-            // graphics objects need their own key.
-            let category = if r.category == pdfcraft_engine::optimize::SpaceCategory::Patterns {
-                tl!("Patterns (graphics objects)").to_string()
-            } else {
-                tl!(r.category.label()).to_string()
+        Some(a) => {
+            let right = |ui: &mut egui::Ui, text: egui::RichText| {
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| ui.label(text));
             };
-            ui.label(category);
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| ui.label(r.bytes.to_string()));
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| ui.label(format!("{:.2}%", r.percent)));
-            ui.end_row();
+            egui::ScrollArea::vertical().max_height(420.0).auto_shrink([false, true]).show(ui, |ui| {
+                egui::Grid::new("space-audit").num_columns(4).striped(true).spacing([20.0, 4.0]).show(ui, |ui| {
+                    for h in [tl!("Description"), tl!("Objects"), tl!("Bytes"), tl!("Percentage")] {
+                        ui.label(egui::RichText::new(h).color(t.text_muted));
+                    }
+                    ui.end_row();
+                    for r in a.rows.iter().filter(|r| r.bytes > 0) {
+                        ui.label(category_label(r.category));
+                        let objects = if r.category == SpaceCategory::DocumentOverhead { String::new() } else { r.objects.to_string() };
+                        right(ui, egui::RichText::new(objects));
+                        right(ui, egui::RichText::new(r.bytes.to_string()));
+                        right(ui, egui::RichText::new(percent(r.bytes, a.total_bytes)));
+                        ui.end_row();
+                        if r.category == SpaceCategory::DocumentOverhead {
+                            for (label, bytes) in [
+                                (tl!("Cross-reference"), a.cross_reference_bytes),
+                                (tl!("Unclaimed objects"), a.unclaimed_object_bytes),
+                                (tl!("Other overhead"), a.other_overhead_bytes),
+                            ] {
+                                ui.horizontal(|ui| {
+                                    ui.add_space(16.0);
+                                    ui.label(egui::RichText::new(label).color(t.text_muted));
+                                });
+                                ui.label("");
+                                right(ui, egui::RichText::new(bytes.to_string()).color(t.text_muted));
+                                right(ui, egui::RichText::new(percent(bytes, a.total_bytes)).color(t.text_muted));
+                                ui.end_row();
+                            }
+                        }
+                    }
+                    let objects: usize = a.rows.iter().map(|r| r.objects).fold(0, usize::saturating_add);
+                    ui.label(egui::RichText::new(tl!("Total")).strong());
+                    right(ui, egui::RichText::new(objects.to_string()).strong());
+                    right(ui, egui::RichText::new(a.total_bytes.to_string()).strong());
+                    right(ui, egui::RichText::new("100.00%").strong());
+                    ui.end_row();
+                });
+            });
+            ui.add_space(8.0);
+            ui.label(crate::i18n::fmt(tl!("File size: {n} bytes"), &[("n", &a.file_bytes.to_string())]));
+            let note = |ui: &mut egui::Ui, text: String| {
+                ui.add(egui::Label::new(egui::RichText::new(text).small().color(t.text_muted)).wrap());
+            };
+            if a.estimated_objects > 0 {
+                note(ui, crate::i18n::fmt(tl!("{n} objects with unsaved changes are estimated, not measured in the file."), &[("n", &a.estimated_objects.to_string())]));
+            }
+            if a.apportioned_bytes > 0 {
+                note(
+                    ui,
+                    crate::i18n::fmt(tl!("{n} bytes of compressed object streams are shared out among their objects by decoded size."), &[("n", &a.apportioned_bytes.to_string())]),
+                );
+            }
         }
-        ui.label(egui::RichText::new(tl!("Total")).strong());
-        ui.with_layout(Layout::right_to_left(Align::Center), |ui| ui.label(egui::RichText::new(total.to_string()).strong()));
-        ui.with_layout(Layout::right_to_left(Align::Center), |ui| ui.label(egui::RichText::new("100.00%").strong()));
-        ui.end_row();
-    });
+    }
     ui.add_space(12.0);
     let mut ok = false;
     ui.horizontal(|ui| ui.with_layout(Layout::right_to_left(Align::Center), |ui| ok = widgets::pill_button(ui, tl!("OK"), true).clicked()));
@@ -262,6 +380,21 @@ pub(crate) fn audit_body(ui: &mut egui::Ui, rows: &[pdfcraft_engine::optimize::S
 }
 
 impl PdfCraftApp {
+    /// Open the PDF Optimizer, listing the active document's embedded fonts for the Fonts panel.
+    pub(crate) fn open_optimizer(&mut self) {
+        let fonts = self.active_ids().and_then(|(_, id)| self.session.get(id)).map(|d| d.embedded_fonts()).unwrap_or_default();
+        prune_unembed(&fonts, &mut self.optimize_draft.settings.unembed_fonts);
+        self.optimize_draft.fonts = fonts;
+        self.dialog = Some(crate::Dialog::Optimize);
+    }
+
+    /// Measure the active document for Audit space usage. `from_optimizer`: OK returns to the
+    /// PDF Optimizer instead of closing.
+    pub(crate) fn load_space_audit(&mut self, from_optimizer: bool) {
+        self.space_audit = self.active_ids().and_then(|(_, id)| self.session.get(id)).and_then(|d| d.audit_space_detailed());
+        self.audit_from_optimizer = from_optimizer;
+    }
+
     /// Optimize PDF with the dialog's choices on a worker thread; the copy is saved when done.
     pub fn optimize_with_draft(&mut self) {
         let (settings, discard) = (self.optimize_draft.settings.clone(), self.optimize_draft.discard.clone());

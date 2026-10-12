@@ -7143,7 +7143,7 @@ status = "partial"
 commands = ["optimize.advanced"]
 tools = ["doc_optimize"]
 evidence = ["crates/ui-egui/tests/create.rs::the_pdf_optimizer_dialog_saves_an_optimized_copy", "crates/automation/tests/automation.rs::optimizing_through_tools", "crates/ui-egui/src/optimize_ui.rs::the_progress_card_shows_the_stage_and_cancels", "crates/engine/src/tests.rs::an_optimize_job_reports_its_stages_and_can_be_cancelled"]
-notes = "Images, Discard Objects, Discard User Data, Clean Up; runs in the background with a progress bar (per image) and Cancel; no Fonts or Transparency panels, no space audit"
+notes = "Images, Discard Objects, Discard User Data, Clean Up and Audit space usage; runs in the background with a progress bar (per image) and Cancel. Font unembedding exists headlessly (doc_embedded_fonts, doc_optimize unembed_fonts) but the dialog has no Fonts panel yet; no Transparency panel"
 
 [[feature]]
 id = "optimize.downsample-images"
@@ -7199,11 +7199,11 @@ title = "Unembed fonts"
 area = "K"
 tier = "P2"
 milestone = "M11"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["optimize.advanced"]
+tools = ["doc_embedded_fonts", "doc_optimize"]
+evidence = ["crates/optimize/tests/optimize.rs::only_simple_complete_standard_encoded_fonts_can_be_unembedded", "crates/optimize/tests/optimize.rs::a_shared_descriptor_is_copied_and_conformance_blocks_unembedding", "crates/automation/tests/automation.rs::auditing_fonts_and_unembedding_through_tools", "crates/ui-egui/tests/viewer.rs::optimizer_fonts_panel_unembeds_the_chosen_font"]
+notes = "Headless only: lists embedded fonts and removes the program of complete, non-symbolic simple fonts with an explicit standard-based encoding and full widths (codes, widths and encoding kept; pdffonts reports emb=no and pdftotext is unchanged on the synthetic fixture). Composite, subset and symbolic fonts and PDF/A or PDF/X documents are refused with a reason; a refusal changes nothing. PDF Optimizer ▸ Fonts panel lists the embedded fonts (type, program, stored size) with a check box for each font that can be unembedded and the refusal reason for the others (a name shared with a refused font is refused too, since unembedding goes by name); choices are kept per dialog opening and pruned to the active document's eligible fonts; the saved notice counts unembedded fonts. Missing: Acrobat's two-list Embedded/Unembed layout and its Retain/Unembed buttons, inline (direct) font dictionaries are not listed, and no real-world (non-synthetic) unembedding was checked in the UI"
 
 [[feature]]
 id = "optimize.flatten-transparency"
@@ -7476,10 +7476,10 @@ area = "K"
 tier = "P1"
 milestone = "M11"
 status = "shipped"
-commands = ["optimize.advanced"]
+commands = ["optimize.advanced", "optimize.audit"]
 tools = ["doc_audit_space"]
-evidence = ["crates/optimize/tests/optimize.rs::space_audit_shares_the_file_out_by_kind", "crates/automation/tests/automation.rs::auditing_space_through_tools", "crates/ui-egui/tests/viewer.rs::optimizer_audits_space_usage"]
-notes = "PDF Optimizer ▸ Audit space usage: 16 categories (images, content streams, fonts, X Object forms, structure, bookmarks, thumbnails, comments, forms, named destinations, colour spaces, shadings, patterns, graphics states, embedded files, overhead) with bytes and percentages"
+evidence = ["crates/optimize/tests/optimize.rs::space_audit_shares_the_file_out_by_kind", "crates/optimize/tests/optimize.rs::space_audit_measures_each_object_in_the_file", "crates/optimize/tests/optimize.rs::space_audit_shares_object_streams_and_counts_every_revision", "crates/optimize/tests/optimize.rs::space_audit_survives_deeply_nested_forms", "crates/automation/tests/automation.rs::auditing_space_through_tools", "crates/automation/tests/automation.rs::auditing_fonts_and_unembedding_through_tools", "crates/ui-egui/tests/viewer.rs::optimizer_audits_space_usage", "crates/ui-egui/tests/viewer.rs::audit_space_usage_is_a_command_with_the_overhead_breakdown"]
+notes = "PDF Optimizer ▸ Audit space usage and All tools ▸ Compress a PDF ▸ Audit space usage (command optimize.audit): 16 categories (images, content streams, fonts, X Object forms, structure, bookmarks, thumbnails, comments, forms, named destinations, colour spaces, shadings, patterns, graphics states, embedded files, overhead) with bytes, percentages and object counts. Object sizes are measured in the file through the cross-reference (n g obj … endobj, stream data skipped by length); objects in object streams get an apportioned share by decoded size; unsaved edits are estimated and counted; shared objects count once; traversal is iterative. Overhead is split into cross-reference, unclaimed objects and other. The UI dialog shows objects, bytes and percentage per category, the overhead split as sub-rows, the object total, the file size, and notes when unsaved edits are estimated or object-stream bytes are apportioned"
 
 [[feature]]
 id = "optimize.optimizer-presets"

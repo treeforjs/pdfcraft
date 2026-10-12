@@ -2166,3 +2166,23 @@ compare-page	Modified	Променена
 compare-page	Inserted	Вмъкната
 compare-page	Deleted	Изтрита
 compare-page	Moved	Преместена
+# PDF Optimizer: Fonts panel and Audit space usage breakdown
+	This document has no embedded fonts.	Този документ няма вградени шрифтове.
+	Unembedding removes a font's program; viewers then draw its text with an installed or substitute font. Fonts that would not keep their character codes and widths can't be unembedded.	Премахването на вграждането изтрива програмата на шрифта; програмите за преглед след това показват текста с инсталиран или заместващ шрифт. Шрифтове, които не биха запазили кодовете на знаците и ширините си, не могат да бъдат извадени от вграждане.
+	{kind} · {program} · {n} bytes	{kind} · {program} · {n} байта
+	Can be unembedded	Вграждането може да се премахне
+	Fonts to unembed: {n}	Шрифтове за премахване на вграждането: {n}
+	the document claims PDF/A or PDF/X conformance, which requires embedded fonts	документът заявява съответствие с PDF/A или PDF/X, което изисква вградени шрифтове
+	composite (Type 0) fonts select glyphs by number inside the embedded font program	съставните шрифтове (Type 0) избират глифове по номер във вградената програма на шрифта
+	subset fonts contain only some glyphs, chosen and encoded for this document	шрифтовете-подмножества съдържат само някои глифове, избрани и кодирани за този документ
+	symbolic fonts choose glyphs through the embedded program's own encoding	символните шрифтове избират глифове чрез собственото кодиране на вградената програма
+	the font has no explicit standard-based encoding; its program supplies the character mapping	шрифтът няма изрично кодиране, основано на стандартно; съответствието на знаците идва от програмата му
+	the font has no complete widths array, so text would reflow with another font's metrics	шрифтът няма пълен масив от ширини, затова текстът би се пренаредил по метриките на друг шрифт
+	Couldn't audit this document.	Този документ не може да бъде проверен.
+	Objects	Обекти
+	Cross-reference	Кръстосани препратки
+	Unclaimed objects	Неразпределени обекти
+	Other overhead	Други служебни данни
+	File size: {n} bytes	Размер на файла: {n} байта
+	{n} objects with unsaved changes are estimated, not measured in the file.	Обектите с незапазени промени ({n}) са оценени, а не измерени във файла.
+	{n} bytes of compressed object streams are shared out among their objects by decoded size.	{n} байта от компресирани потоци от обекти са разпределени между обектите им според декодирания размер.

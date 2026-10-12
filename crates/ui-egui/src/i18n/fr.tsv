@@ -2204,3 +2204,23 @@ compare-page	Modified	Modifiée
 compare-page	Inserted	Insérée
 compare-page	Deleted	Supprimée
 compare-page	Moved	Déplacée
+# PDF Optimizer: Fonts panel and Audit space usage breakdown
+	This document has no embedded fonts.	Ce document ne contient aucune police incorporée.
+	Unembedding removes a font's program; viewers then draw its text with an installed or substitute font. Fonts that would not keep their character codes and widths can't be unembedded.	Désincorporer une police supprime son programme ; les visionneuses affichent alors son texte avec une police installée ou de substitution. Les polices qui ne conserveraient pas leurs codes de caractères et leurs largeurs ne peuvent pas être désincorporées.
+	{kind} · {program} · {n} bytes	{kind} · {program} · {n} octets
+	Can be unembedded	Peut être désincorporée
+	Fonts to unembed: {n}	Polices à désincorporer : {n}
+	the document claims PDF/A or PDF/X conformance, which requires embedded fonts	le document revendique la conformité PDF/A ou PDF/X, qui exige des polices incorporées
+	composite (Type 0) fonts select glyphs by number inside the embedded font program	les polices composites (Type 0) choisissent les glyphes par numéro dans le programme de police incorporé
+	subset fonts contain only some glyphs, chosen and encoded for this document	les polices en sous-ensemble ne contiennent que certains glyphes, choisis et codés pour ce document
+	symbolic fonts choose glyphs through the embedded program's own encoding	les polices symboliques choisissent les glyphes via le codage propre du programme incorporé
+	the font has no explicit standard-based encoding; its program supplies the character mapping	la police n'a pas de codage explicite fondé sur un codage standard ; son programme fournit la correspondance des caractères
+	the font has no complete widths array, so text would reflow with another font's metrics	la police n'a pas de tableau de largeurs complet, le texte serait donc recomposé avec les métriques d'une autre police
+	Couldn't audit this document.	Impossible d'analyser ce document.
+	Objects	Objets
+	Cross-reference	Références croisées
+	Unclaimed objects	Objets non attribués
+	Other overhead	Autres données de structure
+	File size: {n} bytes	Taille du fichier : {n} octets
+	{n} objects with unsaved changes are estimated, not measured in the file.	{n} objets modifiés non enregistrés sont estimés, et non mesurés dans le fichier.
+	{n} bytes of compressed object streams are shared out among their objects by decoded size.	{n} octets de flux d'objets compressés sont répartis entre leurs objets selon leur taille décodée.

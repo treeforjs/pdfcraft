@@ -2117,3 +2117,23 @@ compare-page	Modified	Изменена
 compare-page	Inserted	Вставлена
 compare-page	Deleted	Удалена
 compare-page	Moved	Перемещена
+# PDF Optimizer: Fonts panel and Audit space usage breakdown
+	This document has no embedded fonts.	В этом документе нет встроенных шрифтов.
+	Unembedding removes a font's program; viewers then draw its text with an installed or substitute font. Fonts that would not keep their character codes and widths can't be unembedded.	Отмена встраивания удаляет программу шрифта; программы просмотра затем отображают текст установленным или заменяющим шрифтом. Шрифты, которые не сохранили бы коды символов и ширины, нельзя исключить из встраивания.
+	{kind} · {program} · {n} bytes	{kind} · {program} · {n} байт
+	Can be unembedded	Можно отменить встраивание
+	Fonts to unembed: {n}	Шрифтов для отмены встраивания: {n}
+	the document claims PDF/A or PDF/X conformance, which requires embedded fonts	документ заявляет соответствие PDF/A или PDF/X, которое требует встроенных шрифтов
+	composite (Type 0) fonts select glyphs by number inside the embedded font program	составные шрифты (Type 0) выбирают глифы по номеру внутри встроенной программы шрифта
+	subset fonts contain only some glyphs, chosen and encoded for this document	шрифты-подмножества содержат лишь некоторые глифы, выбранные и закодированные для этого документа
+	symbolic fonts choose glyphs through the embedded program's own encoding	символьные шрифты выбирают глифы через собственную кодировку встроенной программы
+	the font has no explicit standard-based encoding; its program supplies the character mapping	у шрифта нет явной кодировки на основе стандартной; сопоставление символов задаёт его программа
+	the font has no complete widths array, so text would reflow with another font's metrics	у шрифта нет полного массива ширин, поэтому текст перераспределился бы по метрикам другого шрифта
+	Couldn't audit this document.	Не удалось проверить этот документ.
+	Objects	Объекты
+	Cross-reference	Перекрёстные ссылки
+	Unclaimed objects	Неотнесённые объекты
+	Other overhead	Прочие служебные данные
+	File size: {n} bytes	Размер файла: {n} байт
+	{n} objects with unsaved changes are estimated, not measured in the file.	Объекты с несохранёнными изменениями ({n}) оценены, а не измерены в файле.
+	{n} bytes of compressed object streams are shared out among their objects by decoded size.	{n} байт сжатых потоков объектов распределены между их объектами по размеру после распаковки.

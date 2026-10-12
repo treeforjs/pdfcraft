@@ -558,13 +558,46 @@ impl Automation {
                 withheld(out, copy)
             }
             "doc_audit_space" => {
-                let rows: Vec<Value> = self
+                let audit = self
                     .doc(&a)?
-                    .audit_space()
+                    .audit_space_detailed()
+                    .ok_or_else(|| failed("the document can't be read for editing, so its objects can't be measured"))?;
+                let rows: Vec<Value> = audit
+                    .rows
                     .iter()
-                    .map(|u| json!({ "category": u.category.label(), "bytes": u.bytes, "percent": (u.percent * 100.0).round() / 100.0 }))
+                    .map(|u| json!({ "category": u.category.label(), "bytes": u.bytes, "percent": (u.percent * 100.0).round() / 100.0, "objects": u.objects }))
                     .collect();
-                json!({ "categories": rows })
+                json!({
+                    "categories": rows,
+                    "file_bytes": audit.file_bytes,
+                    "total_bytes": audit.total_bytes,
+                    "overhead": {
+                        "cross_reference": audit.cross_reference_bytes,
+                        "unclaimed_objects": audit.unclaimed_object_bytes,
+                        "other": audit.other_overhead_bytes,
+                    },
+                    "apportioned_bytes": audit.apportioned_bytes,
+                    "estimated_objects": audit.estimated_objects,
+                })
+            }
+            "doc_embedded_fonts" => {
+                let fonts: Vec<Value> = self
+                    .doc(&a)?
+                    .embedded_fonts()
+                    .iter()
+                    .map(|f| {
+                        json!({
+                            "name": f.name,
+                            "subtype": f.subtype,
+                            "program": f.program,
+                            "program_bytes": f.program_bytes,
+                            "subset": f.subset,
+                            "can_unembed": f.blocked.is_none(),
+                            "reason": f.blocked.map(|b| b.reason()),
+                        })
+                    })
+                    .collect();
+                json!({ "count": fonts.len(), "fonts": fonts })
             }
             "doc_open_revision" => {
                 let id = self.doc(&a)?.id;
@@ -927,6 +960,22 @@ impl Automation {
                 })
                 .collect::<Result<_>>()?,
         };
+        if let Some(v) = a.get("unembed_fonts") {
+            let names = v.as_array().ok_or_else(|| ToolError::InvalidArgs("unembed_fonts must be an array of font names".into()))?;
+            let fonts = self.doc(a)?.embedded_fonts();
+            for n in names {
+                let n = n.as_str().ok_or_else(|| ToolError::InvalidArgs(format!("unembed_fonts: {n} is not a font name")))?;
+                let hits: Vec<_> = fonts.iter().filter(|f| f.name == n).collect();
+                if hits.is_empty() {
+                    let known: Vec<&str> = fonts.iter().map(|f| f.name.as_str()).collect();
+                    return Err(ToolError::InvalidArgs(format!("no embedded font is named {n:?} (embedded: {})", known.join(", "))));
+                }
+                if let Some(b) = hits.iter().find_map(|f| f.blocked) {
+                    return Err(ToolError::InvalidArgs(format!("{n} can't be unembedded: {}", b.reason())));
+                }
+                settings.unembed_fonts.push(n.to_owned());
+            }
+        }
         let (bytes, r) = self.session.optimized_bytes(id, &settings, &discard).map_err(failed)?;
         write_atomic(&path, &bytes)?;
         let o = &r.optimize;
@@ -946,6 +995,7 @@ impl Automation {
             "invalid_links": o.invalid_links,
             "invalid_bookmarks": o.invalid_bookmarks,
             "unreferenced_dests": o.unreferenced_dests,
+            "fonts_unembedded": o.fonts_unembedded,
             "merged_objects": r.merged,
             "discarded": r.discarded.iter().map(|(h, n)| json!({ "category": h.id(), "count": n })).collect::<Vec<_>>(),
         }))

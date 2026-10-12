@@ -274,7 +274,19 @@ impl Document {
 
     /// PDF Optimizer ▸ Audit space usage.
     pub fn audit_space(&self) -> Vec<optimize::SpaceUse> {
-        self.editor.as_ref().map(|e| optimize::audit_space(&e.cos, self.bytes.len() as u64)).unwrap_or_default()
+        self.audit_space_detailed().map(|a| a.rows).unwrap_or_default()
+    }
+
+    /// PDF Optimizer ▸ Audit space usage, with the overhead broken down and how each figure was
+    /// obtained (measured in the file, shared out of object streams, or estimated for unsaved
+    /// edits). `None` if the document can't be read for editing.
+    pub fn audit_space_detailed(&self) -> Option<optimize::SpaceAudit> {
+        self.editor.as_ref().map(|e| optimize::audit_space_detailed(&e.cos, self.bytes.len() as u64))
+    }
+
+    /// PDF Optimizer ▸ Fonts: the embedded fonts and whether each can be unembedded.
+    pub fn embedded_fonts(&self) -> Vec<optimize::EmbeddedFont> {
+        self.editor.as_ref().map(|e| optimize::embedded_fonts(&e.cos)).unwrap_or_default()
     }
 
     /// Edit a PDF: the images `page` draws (0-based).

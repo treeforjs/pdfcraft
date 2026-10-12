@@ -2204,3 +2204,23 @@ compare-page	Modified	Geändert
 compare-page	Inserted	Eingefügt
 compare-page	Deleted	Gelöscht
 compare-page	Moved	Verschoben
+# PDF Optimizer: Fonts panel and Audit space usage breakdown
+	This document has no embedded fonts.	Dieses Dokument enthält keine eingebetteten Schriften.
+	Unembedding removes a font's program; viewers then draw its text with an installed or substitute font. Fonts that would not keep their character codes and widths can't be unembedded.	Beim Aufheben der Einbettung wird das Schriftprogramm entfernt; Anzeigeprogramme stellen den Text dann mit einer installierten oder Ersatzschrift dar. Schriften, deren Zeichencodes und Breiten nicht erhalten blieben, können nicht ausgebettet werden.
+	{kind} · {program} · {n} bytes	{kind} · {program} · {n} Byte
+	Can be unembedded	Einbettung kann aufgehoben werden
+	Fonts to unembed: {n}	Schriften, deren Einbettung aufgehoben wird: {n}
+	the document claims PDF/A or PDF/X conformance, which requires embedded fonts	Das Dokument beansprucht PDF/A- oder PDF/X-Konformität, die eingebettete Schriften verlangt
+	composite (Type 0) fonts select glyphs by number inside the embedded font program	Zusammengesetzte Schriften (Type 0) wählen Glyphen per Nummer im eingebetteten Schriftprogramm aus
+	subset fonts contain only some glyphs, chosen and encoded for this document	Teilmengenschriften enthalten nur einige Glyphen, die für dieses Dokument ausgewählt und codiert wurden
+	symbolic fonts choose glyphs through the embedded program's own encoding	Symbolschriften wählen Glyphen über die eigene Codierung des eingebetteten Programms
+	the font has no explicit standard-based encoding; its program supplies the character mapping	Die Schrift hat keine ausdrückliche, auf einem Standard beruhende Codierung; ihr Programm liefert die Zeichenzuordnung
+	the font has no complete widths array, so text would reflow with another font's metrics	Die Schrift hat kein vollständiges Breiten-Array, daher würde der Text mit den Maßen einer anderen Schrift neu umbrechen
+	Couldn't audit this document.	Dieses Dokument konnte nicht geprüft werden.
+	Objects	Objekte
+	Cross-reference	Querverweise
+	Unclaimed objects	Nicht zugeordnete Objekte
+	Other overhead	Sonstiger Overhead
+	File size: {n} bytes	Dateigröße: {n} Byte
+	{n} objects with unsaved changes are estimated, not measured in the file.	{n} Objekte mit ungespeicherten Änderungen sind geschätzt, nicht in der Datei gemessen.
+	{n} bytes of compressed object streams are shared out among their objects by decoded size.	{n} Byte komprimierter Objektstreams werden nach dekodierter Größe auf ihre Objekte verteilt.

@@ -9,6 +9,7 @@
 //!   more than 8 bits) are left alone.
 //! - **Discard objects:** page thumbnails, alternate images, document tags (structure tree),
 //!   print settings.
+//! - **Fonts:** unembed chosen embedded fonts where that is safe ([`fonts`]).
 //! - **Clean up:** Flate-compress streams that have no filter.
 //!
 //! Metadata, attachments, comments, scripts, private data, hidden layers, bookmarks and form
@@ -18,10 +19,12 @@
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
 mod audit;
+pub mod fonts;
 mod images;
 mod links;
 
-pub use audit::{SpaceCategory, SpaceUse, audit_space};
+pub use audit::{SpaceAudit, SpaceCategory, SpaceUse, audit_space, audit_space_detailed};
+pub use fonts::{EmbeddedFont, UnembedBlock, UnembedError, embedded_fonts};
 
 use pdfcraft_cos::{Document, ObjRef, Object, Stream};
 
@@ -35,6 +38,8 @@ pub enum OptimizeError {
     Cos(#[from] pdfcraft_cos::CosError),
     #[error("the optimization was cancelled")]
     Cancelled,
+    #[error(transparent)]
+    Fonts(#[from] fonts::UnembedError),
 }
 
 /// Where an optimization is, reported to [`optimize_with_progress`]'s callback.
@@ -88,6 +93,9 @@ pub struct Settings {
     pub remove_invalid_links: bool,
     /// Clean Up: remove named destinations nothing refers to.
     pub remove_unreferenced_dests: bool,
+    /// Fonts: unembed the embedded fonts with these `/BaseFont` names. Every name must match an
+    /// embedded font that can safely be unembedded ([`fonts::unembed`]), or nothing is done.
+    pub unembed_fonts: Vec<String>,
 }
 
 impl Default for Settings {
@@ -103,6 +111,7 @@ impl Default for Settings {
             flate_unencoded: true,
             remove_invalid_links: true,
             remove_unreferenced_dests: true,
+            unembed_fonts: Vec::new(),
         }
     }
 }
@@ -125,6 +134,8 @@ pub struct Report {
     pub invalid_links: usize,
     pub invalid_bookmarks: usize,
     pub unreferenced_dests: usize,
+    /// Font dictionaries whose embedded program was removed.
+    pub fonts_unembedded: usize,
 }
 
 /// Optimize `doc` in place.
@@ -137,6 +148,8 @@ pub fn optimize(doc: &mut Document, settings: &Settings) -> Result<Report, Optim
 pub fn optimize_with_progress(doc: &mut Document, settings: &Settings, progress: &mut dyn FnMut(Stage) -> bool) -> Result<Report, OptimizeError> {
     let mut report = Report::default();
     let pages = pdfcraft_annot::page_refs(doc).map_err(|_| OptimizeError::NoPages)?;
+    // First, so a font that can't be unembedded stops the run before anything changed.
+    report.fonts_unembedded = fonts::unembed(doc, &settings.unembed_fonts)?;
     images::run(doc, &pages, settings, &mut report, progress)?;
     if !progress(Stage::CleanUp) {
         return Err(OptimizeError::Cancelled);

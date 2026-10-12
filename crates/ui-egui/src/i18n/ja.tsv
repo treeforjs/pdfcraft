@@ -2204,3 +2204,23 @@ compare-page	Modified	変更
 compare-page	Inserted	挿入
 compare-page	Deleted	削除
 compare-page	Moved	移動
+# PDF Optimizer: Fonts panel and Audit space usage breakdown
+	This document has no embedded fonts.	この文書には埋め込みフォントがありません。
+	Unembedding removes a font's program; viewers then draw its text with an installed or substitute font. Fonts that would not keep their character codes and widths can't be unembedded.	埋め込みを解除するとフォントのプログラムが削除され、ビューアーはインストール済みまたは代替のフォントでテキストを表示します。文字コードと幅を保てないフォントは埋め込みを解除できません。
+	{kind} · {program} · {n} bytes	{kind} · {program} · {n} バイト
+	Can be unembedded	埋め込みを解除できます
+	Fonts to unembed: {n}	埋め込みを解除するフォント: {n}
+	the document claims PDF/A or PDF/X conformance, which requires embedded fonts	文書が PDF/A または PDF/X への準拠を宣言しており、フォントの埋め込みが必要です
+	composite (Type 0) fonts select glyphs by number inside the embedded font program	複合フォント（Type 0）は埋め込まれたフォントプログラム内の番号でグリフを選びます
+	subset fonts contain only some glyphs, chosen and encoded for this document	サブセットフォントには、この文書用に選ばれて符号化された一部のグリフしか含まれません
+	symbolic fonts choose glyphs through the embedded program's own encoding	シンボリックフォントは埋め込みプログラム独自のエンコーディングでグリフを選びます
+	the font has no explicit standard-based encoding; its program supplies the character mapping	フォントに標準ベースの明示的なエンコーディングがなく、文字の対応付けをプログラムが担っています
+	the font has no complete widths array, so text would reflow with another font's metrics	フォントに完全な幅の配列がないため、別のフォントの字幅でテキストが再配置されます
+	Couldn't audit this document.	この文書の容量を確認できませんでした。
+	Objects	オブジェクト
+	Cross-reference	相互参照
+	Unclaimed objects	未分類のオブジェクト
+	Other overhead	その他の管理情報
+	File size: {n} bytes	ファイルサイズ: {n} バイト
+	{n} objects with unsaved changes are estimated, not measured in the file.	未保存の変更がある {n} 個のオブジェクトは、ファイル上で測定せず推定しています。
+	{n} bytes of compressed object streams are shared out among their objects by decoded size.	圧縮されたオブジェクトストリームの {n} バイトは、展開後のサイズに応じて各オブジェクトに配分しています。

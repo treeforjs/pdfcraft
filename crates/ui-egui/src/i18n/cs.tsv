@@ -2228,3 +2228,24 @@ compare-page	Modified	Změněná
 compare-page	Inserted	Vložená
 compare-page	Deleted	Smazaná
 compare-page	Moved	Přesunutá
+# PDF Optimizer: Fonts panel and Audit space usage breakdown
+	This document has no embedded fonts.	Tento dokument nemá žádná vložená písma.
+	Unembedding removes a font's program; viewers then draw its text with an installed or substitute font. Fonts that would not keep their character codes and widths can't be unembedded.	Zrušení vložení odstraní program písma; prohlížeče pak zobrazí text nainstalovaným nebo náhradním písmem. Písma, která by nezachovala kódy znaků a šířky, nelze vyjmout z vložení.
+	{kind} · {program} · {n} bytes	{kind} · {program} · {n} bajtů
+	Can be unembedded	Vložení lze zrušit
+	Fonts to unembed: {n}	Písma ke zrušení vložení: {n}
+	the document claims PDF/A or PDF/X conformance, which requires embedded fonts	dokument deklaruje shodu s PDF/A nebo PDF/X, která vyžaduje vložená písma
+	composite (Type 0) fonts select glyphs by number inside the embedded font program	složená písma (Type 0) vybírají glyfy podle čísla uvnitř vloženého programu písma
+	subset fonts contain only some glyphs, chosen and encoded for this document	podmnožinová písma obsahují jen některé glyfy, vybrané a kódované pro tento dokument
+	symbolic fonts choose glyphs through the embedded program's own encoding	symbolová písma vybírají glyfy pomocí vlastního kódování vloženého programu
+	the font has no explicit standard-based encoding; its program supplies the character mapping	písmo nemá výslovné kódování založené na standardním; mapování znaků poskytuje jeho program
+	the font has no complete widths array, so text would reflow with another font's metrics	písmo nemá úplné pole šířek, takže by se text přeskládal podle metrik jiného písma
+	Couldn't audit this document.	Tento dokument nelze prověřit.
+	Objects	Objekty
+	Cross-reference	Křížové odkazy
+	Unclaimed objects	Nepřiřazené objekty
+	Other overhead	Ostatní režie
+	File size: {n} bytes	Velikost souboru: {n} bajtů
+	{n} objects with unsaved changes are estimated, not measured in the file.	Objekty s neuloženými změnami ({n}) jsou odhadnuty, ne změřeny v souboru.
+	{n} bytes of compressed object streams are shared out among their objects by decoded size.	{n} bajtů komprimovaných proudů objektů je rozděleno mezi jejich objekty podle dekódované velikosti.
+	Audit space usage…	Prověřit využití místa…

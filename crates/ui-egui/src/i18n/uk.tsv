@@ -2227,3 +2227,23 @@ compare-page	Modified	Змінена
 compare-page	Inserted	Вставлена
 compare-page	Deleted	Видалена
 compare-page	Moved	Переміщена
+# PDF Optimizer: Fonts panel and Audit space usage breakdown
+	This document has no embedded fonts.	У цьому документі немає вбудованих шрифтів.
+	Unembedding removes a font's program; viewers then draw its text with an installed or substitute font. Fonts that would not keep their character codes and widths can't be unembedded.	Скасування вбудовування вилучає програму шрифту; засоби перегляду потім показують текст встановленим або замінним шрифтом. Шрифти, які не збережуть коди символів і ширини, не можна вилучити з вбудовування.
+	{kind} · {program} · {n} bytes	{kind} · {program} · {n} байтів
+	Can be unembedded	Можна скасувати вбудовування
+	Fonts to unembed: {n}	Шрифтів для скасування вбудовування: {n}
+	the document claims PDF/A or PDF/X conformance, which requires embedded fonts	документ заявляє відповідність PDF/A або PDF/X, яка вимагає вбудованих шрифтів
+	composite (Type 0) fonts select glyphs by number inside the embedded font program	складені шрифти (Type 0) вибирають гліфи за номером усередині вбудованої програми шрифту
+	subset fonts contain only some glyphs, chosen and encoded for this document	шрифти-підмножини містять лише деякі гліфи, вибрані й закодовані для цього документа
+	symbolic fonts choose glyphs through the embedded program's own encoding	символьні шрифти вибирають гліфи через власне кодування вбудованої програми
+	the font has no explicit standard-based encoding; its program supplies the character mapping	шрифт не має явного кодування на основі стандартного; відповідність символів задає його програма
+	the font has no complete widths array, so text would reflow with another font's metrics	шрифт не має повного масиву ширин, тож текст перерозподілився б за метриками іншого шрифту
+	Couldn't audit this document.	Не вдалося перевірити цей документ.
+	Objects	Об’єкти
+	Cross-reference	Перехресні посилання
+	Unclaimed objects	Невіднесені об’єкти
+	Other overhead	Інші службові дані
+	File size: {n} bytes	Розмір файлу: {n} байтів
+	{n} objects with unsaved changes are estimated, not measured in the file.	Об’єкти з незбереженими змінами ({n}) оцінено, а не виміряно у файлі.
+	{n} bytes of compressed object streams are shared out among their objects by decoded size.	{n} байтів стиснених потоків об’єктів розподілено між їхніми об’єктами за розміром після розпакування.
