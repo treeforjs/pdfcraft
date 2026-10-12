@@ -2131,3 +2131,13 @@ action wizard	Start	Starten
 	The field {name} no longer exists.	Das Feld {name} existiert nicht mehr.
 	A selected field has no widget on any page, so the fields can't be edited together.	Ein ausgewähltes Feld hat auf keiner Seite ein Widget, daher können die Felder nicht gemeinsam bearbeitet werden.
 	 ({n} at {dpi} dpi, the largest size they can be drawn at)	 ({n} mit {dpi} dpi, der größten Auflösung, in der sie gezeichnet werden können)
+
+# Mixed text editing and PDF draft preview
+	The document changed. Continue editing to refresh the preview.	Das Dokument wurde geändert. Bearbeiten Sie es weiter, um die Vorschau zu aktualisieren.
+	Preview edited paragraph	Vorschau des bearbeiteten Absatzes
+	Rendered PDF preview	Gerenderte PDF-Vorschau
+	Continue editing	Weiter bearbeiten
+	Apply and close	Anwenden und schließen
+	Underline is available for whole paragraphs.	Unterstreichen ist für ganze Absätze verfügbar.
+	Preview PDF	PDF-Vorschau
+	{n} selected characters	{n} ausgewählte Zeichen

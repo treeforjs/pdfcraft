@@ -2131,3 +2131,13 @@ signature pad	Type	Saisir
 	The field {name} no longer exists.	Le champ {name} n'existe plus.
 	A selected field has no widget on any page, so the fields can't be edited together.	Un champ sélectionné n'a de widget sur aucune page : les champs ne peuvent pas être modifiés ensemble.
 	 ({n} at {dpi} dpi, the largest size they can be drawn at)	 ({n} à {dpi} ppp, la plus grande taille possible pour les dessiner)
+
+# Mixed text editing and PDF draft preview
+	The document changed. Continue editing to refresh the preview.	Le document a changé. Continuez la modification pour actualiser l’aperçu.
+	Preview edited paragraph	Aperçu du paragraphe modifié
+	Rendered PDF preview	Aperçu PDF rendu
+	Continue editing	Continuer la modification
+	Apply and close	Appliquer et fermer
+	Underline is available for whole paragraphs.	Le soulignement est disponible pour les paragraphes entiers.
+	Preview PDF	Aperçu PDF
+	{n} selected characters	{n} caractères sélectionnés

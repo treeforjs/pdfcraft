@@ -2095,3 +2095,13 @@
 	The field {name} no longer exists.	字段 {name} 已不存在。
 	A selected field has no widget on any page, so the fields can't be edited together.	某个所选字段在任何页面上都没有控件，因此无法一起编辑这些字段。
 	 ({n} at {dpi} dpi, the largest size they can be drawn at)	（{n} 张以可绘制的最大尺寸 {dpi} dpi 导出）
+
+# Mixed text editing and PDF draft preview
+	The document changed. Continue editing to refresh the preview.	文档已更改。请继续编辑以更新预览。
+	Preview edited paragraph	预览编辑后的段落
+	Rendered PDF preview	渲染的 PDF 预览
+	Continue editing	继续编辑
+	Apply and close	应用并关闭
+	Underline is available for whole paragraphs.	下划线可用于整个段落。
+	Preview PDF	预览 PDF
+	{n} selected characters	已选择 {n} 个字符

@@ -2129,3 +2129,13 @@ action wizard	Start	Indítás
 	The field {name} no longer exists.	A(z) {name} mező már nem létezik.
 	A selected field has no widget on any page, so the fields can't be edited together.	Az egyik kijelölt mezőnek egyik oldalon sincs widgetje, ezért a mezők nem szerkeszthetők együtt.
 	 ({n} at {dpi} dpi, the largest size they can be drawn at)	 ({n} {dpi} dpi felbontással, a legnagyobb méretben, amelyben megjeleníthetők)
+
+# Mixed text editing and PDF draft preview
+	The document changed. Continue editing to refresh the preview.	A dokumentum megváltozott. Folytassa a szerkesztést az előnézet frissítéséhez.
+	Preview edited paragraph	A szerkesztett bekezdés előnézete
+	Rendered PDF preview	Renderelt PDF-előnézet
+	Continue editing	Szerkesztés folytatása
+	Apply and close	Alkalmazás és bezárás
+	Underline is available for whole paragraphs.	Az aláhúzás teljes bekezdésekhez érhető el.
+	Preview PDF	PDF-előnézet
+	{n} selected characters	{n} kijelölt karakter

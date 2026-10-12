@@ -23,6 +23,7 @@ pub mod links;
 pub mod ocr;
 pub mod optimizer;
 pub mod signature_image;
+pub mod text_preview;
 mod upright_image;
 pub mod xfa;
 
@@ -46,7 +47,8 @@ pub use pdfcraft_forms::{
 };
 
 pub use pdfcraft_a11y as a11y;
-pub use pdfcraft_edit::{BlockStyle, PageFont, PageImage, TextBlock, TextLine, first_undrawable};
+pub use pdfcraft_edit::text::validate_paragraph_text;
+pub use pdfcraft_edit::{BlockStyle, PageFont, PageImage, TextBlock, TextLine, TextRun, first_undrawable};
 pub use pdfcraft_measure as measure;
 pub use pdfcraft_xfa::Report as XfaLayout;
 
@@ -2351,6 +2353,12 @@ impl Session {
         // Nothing to bake: leave undo history and the dirty flag alone.
         if matches!(&edit, Edit::FlattenFillSign) && !pdfcraft_annot::has_visible_fill_sign(&editor.cos) {
             return Ok(());
+        }
+        if let Edit::EditTextBlock { page, block, text, style } = &edit {
+            let unchanged = guard(|| pdfcraft_edit::text::is_noop(&editor.cos, *page, *block, text, style)).map_err(EditError::Invalid)??;
+            if unchanged {
+                return Ok(());
+            }
         }
         let mut next = editor.cos.clone();
         if !js_off && uses_scripts(&edit) {

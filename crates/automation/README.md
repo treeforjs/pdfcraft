@@ -58,8 +58,32 @@ An exact resource cannot be combined with `font`, `bold`, or `italic`: its face 
 Subsequent size/colour changes keep the selected face. Subsequent bold/italic changes select a
 standard face matching the source family and preserve the other style; changing `font` similarly
 keeps weight/slant unless overridden. The UI reflects the actual selected face after applying.
-The Japanese fallback still has no italic outlines. Selection formatting within a mixed-style
-paragraph is not implemented: this remains paragraph-level editing.
+`text_paragraphs` also reports `line_count` and `runs`, with `start`/`end`, font resource, face,
+size, bold, italic and RGB colour. Offsets count Unicode scalar values from zero, with an exclusive
+end; they are not UTF-8 byte offsets or grapheme indexes. `text_edit` accepts `range_start` and
+`range_end` to format that selection. Font/size/colour/weight/slant affect the selection; width,
+position, alignment and line spacing affect the paragraph. With no selection, formatting applies
+to the whole paragraph. Unchanged prefix/suffix text keeps its styles when text is replaced.
+
+Selected-range and mixed-run edits retain existing glyph codes, supported Tc/Tw/Tz/Ts state and
+TJ advances for unchanged runs, including multi-scalar ToUnicode mappings. A selection that splits
+one indivisible existing glyph is refused. Paragraphs with active stroking/invisible/clipping text or extended graphics
+state also refuse edits until their complete graphics state can be preserved. Missing subset
+characters, invalid ranges, unsupported rotated/skewed/reflected
+mixed text and invalid numbers leave bytes and history unchanged. Upright nonuniform scaling is
+supported. Paragraph edits accept at most 1,000,000 Unicode characters and 8,192 style segments;
+exceeding either limit refuses the edit unchanged. A request already satisfied does not add an
+undo step or clear redo.
+
+Use `text_edit {..., preview: true, max_side: 1024}` to receive the proposed page as a PNG without
+applying or saving it. The desktop's **Preview PDF** uses this same actual PDF rendering path;
+**Continue editing** preserves the draft and **Apply and close** accepts it. The typing surface
+uses interface fonts to show run styling; the rendered preview is authoritative for the PDF face.
+
+The Japanese fallback still has no italic outlines. Whole-paragraph edits of one uniform style
+still use legacy normalization/reflow; their original character-code and spacing preservation is
+not yet equivalent to range/mixed edits. Broader shaping/encodings, transformed text, run decoration
+round-trips, structure tags and complex-layout paragraph detection remain open.
 
 ## MCP server
 

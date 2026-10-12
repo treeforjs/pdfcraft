@@ -138,3 +138,13 @@
 	Character limit:	Limit znaků:
 	Character limit 0 means no limit. A comb of characters needs a limit.	Limit znaků 0 znamená bez omezení. Rozdělení na znaky vyžaduje limit.
 	To change locked fields, also set Locked to No.	Chcete-li změnit zamčená pole, nastavte také „Zamčeno“ na „Ne“.
+
+# Mixed text editing and PDF draft preview
+	The document changed. Continue editing to refresh the preview.	Dokument se změnil. Pokračujte v úpravách a aktualizujte náhled.
+	Preview edited paragraph	Náhled upraveného odstavce
+	Rendered PDF preview	Vykreslený náhled PDF
+	Continue editing	Pokračovat v úpravách
+	Apply and close	Použít a zavřít
+	Underline is available for whole paragraphs.	Podtržení je dostupné pro celé odstavce.
+	Preview PDF	Náhled PDF
+	{n} selected characters	Vybrané znaky: {n}

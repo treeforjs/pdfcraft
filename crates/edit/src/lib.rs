@@ -617,8 +617,8 @@ pub mod images;
 pub use images::{ImageChange, PageImage, change_image, page_images, reading_images, rect_to_rect, turn_about_centre};
 pub mod text;
 pub use text::{
-    BlockStyle, LineEdit, PageFont, TextBlock, TextLine, page_fonts, reading_blocks, replace_block, replace_line, rewrite_block, text_blocks,
-    text_lines,
+    BlockStyle, LineEdit, PageFont, TextBlock, TextLine, TextRun, page_fonts, reading_blocks, replace_block, replace_line, rewrite_block,
+    text_blocks, text_lines,
 };
 pub mod added;
 pub use added::{Added, AddedImage, AddedText, Align, Content, Family, add_content, delete_content, first_undrawable, list_added, update_content};

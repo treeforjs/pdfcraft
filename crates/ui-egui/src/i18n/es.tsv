@@ -2047,3 +2047,13 @@
 	The field {name} no longer exists.	El campo {name} ya no existe.
 	A selected field has no widget on any page, so the fields can't be edited together.	Un campo seleccionado no tiene ningún widget en ninguna página, así que los campos no se pueden editar juntos.
 	 ({n} at {dpi} dpi, the largest size they can be drawn at)	 ({n} a {dpi} ppp, el mayor tamaño al que se pueden dibujar)
+
+# Mixed text editing and PDF draft preview
+	The document changed. Continue editing to refresh the preview.	El documento ha cambiado. Continúa editando para actualizar la vista previa.
+	Preview edited paragraph	Vista previa del párrafo editado
+	Rendered PDF preview	Vista previa renderizada del PDF
+	Continue editing	Continuar editando
+	Apply and close	Aplicar y cerrar
+	Underline is available for whole paragraphs.	El subrayado está disponible para párrafos completos.
+	Preview PDF	Vista previa del PDF
+	{n} selected characters	{n} caracteres seleccionados

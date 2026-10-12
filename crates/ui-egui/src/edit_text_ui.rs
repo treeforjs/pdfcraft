@@ -12,6 +12,97 @@ use crate::canvas::{DocView, PageXform};
 
 const ACCENT: Color32 = Color32::from_rgb(0x14, 0x73, 0xE6);
 
+pub(crate) struct Preview {
+    doc: pdfcraft_engine::DocId,
+    generation: u64,
+    edit: Edit,
+    renderer: pdfcraft_render::RenderPool,
+    texture: Option<egui::TextureHandle>,
+    error: Option<String>,
+}
+
+pub(crate) fn open_preview(app: &mut crate::PdfCraftApp, ed: &LineEditor) {
+    let Some((index, id)) = app.active_ids() else { return };
+    let Some(doc) = app.session.get(id) else { return };
+    match doc.text_edit_preview(ed.page, ed.block, &ed.text, &ed.style(), 1600) {
+        Ok(preview) => {
+            app.text_preview = Some(Preview {
+                doc: id,
+                generation: doc.edit_generation(),
+                edit: Edit::EditTextBlock { page: ed.page, block: ed.block, text: ed.text.clone(), style: ed.style() },
+                renderer: preview.renderer(),
+                texture: None,
+                error: None,
+            });
+            if let Some(editor) = app.views[index].line_editor.as_mut() {
+                editor.preview_open = true;
+            }
+        }
+        Err(error) => {
+            app.notify(error);
+        }
+    }
+}
+
+pub(crate) fn preview_dialog(app: &mut crate::PdfCraftApp, ctx: &egui::Context) {
+    let Some(mut preview) = app.text_preview.take() else { return };
+    let current = app.active_ids().is_some_and(|(_, id)| id == preview.doc)
+        && app.session.get(preview.doc).is_some_and(|doc| doc.edit_generation() == preview.generation);
+    if !current {
+        preview.error = Some(tl!("The document changed. Continue editing to refresh the preview.").to_string());
+    }
+    if let Some(rendered) = preview.renderer.try_recv() {
+        if let Some(error) = rendered.error {
+            preview.error = Some(error);
+        } else {
+            preview.texture = Some(ctx.load_texture(
+                "paragraph-pdf-preview",
+                egui::ColorImage::from_rgba_premultiplied([rendered.width as usize, rendered.height as usize], &rendered.rgba),
+                egui::TextureOptions::LINEAR,
+            ));
+        }
+    }
+    let (mut close, mut apply) = (false, false);
+    let modal = egui::Modal::new(egui::Id::new("paragraph-preview")).show(ctx, |ui| {
+        ui.heading(tl!("Preview edited paragraph"));
+        if let Some(error) = &preview.error {
+            ui.label(error);
+        } else if let Some(texture) = &preview.texture {
+            let limit = egui::vec2(780.0, (ctx.content_rect().height() - 180.0).max(100.0));
+            let scale = (limit.x / texture.size_vec2().x).min(limit.y / texture.size_vec2().y).min(1.0);
+            ui.add(egui::Image::new((texture.id(), texture.size_vec2() * scale)).alt_text(tl!("Rendered PDF preview")));
+        } else {
+            ui.spinner();
+            ctx.request_repaint_after(std::time::Duration::from_millis(16));
+        }
+        ui.horizontal(|ui| {
+            close = ui.button(tl!("Continue editing")).clicked();
+            apply =
+                ui.add_enabled(current && preview.error.is_none() && preview.texture.is_some(), egui::Button::new(tl!("Apply and close"))).clicked();
+        });
+    });
+    if apply && app.apply_edit(preview.edit.clone()) {
+        if let Some(view) = app.views.iter_mut().find(|v| v.id == preview.doc) {
+            view.line_editor = None;
+        }
+        return;
+    }
+    if close || modal.should_close() {
+        if let Some(view) = app.views.iter_mut().find(|v| v.id == preview.doc) {
+            if current {
+                if let Some(editor) = view.line_editor.as_mut() {
+                    editor.preview_open = false;
+                    editor.focus = true;
+                }
+            } else {
+                view.line_editor = None;
+            }
+        }
+    } else {
+        app.text_preview = Some(preview);
+    }
+}
+
 /// A paragraph being edited.
 #[derive(Clone, Debug, PartialEq)]
 pub struct LineEditor {
@@ -21,6 +112,9 @@ pub struct LineEditor {
     /// An exact page font chosen in the format panel, pending the next apply.
     pub font_resource: Option<String>,
     pub source_font: String,
+    pub selection: Option<[usize; 2]>,
+    pub(crate) preview_open: bool,
+    runs: Vec<pdfcraft_engine::TextRun>,
     original: String,
     rect: Rect,
     /// The original PDF rectangle, in user space. It is converted again each frame so the editor
@@ -58,12 +152,16 @@ impl Default for Extras {
 
 /// Underline, line spacing, character spacing and horizontal scale for the paragraph being
 /// edited (under Format text). Returns `true` when something changed.
-pub(crate) fn extras_panel(ui: &mut egui::Ui, e: &mut Extras) -> bool {
+pub(crate) fn extras_panel(ui: &mut egui::Ui, e: &mut Extras, selected: bool) -> bool {
     let before = *e;
     ui.horizontal(|ui| {
-        if crate::icons::button(ui, "underline", 26.0, e.underline, tl!("Underline")).clicked() {
-            e.underline = !e.underline;
-        }
+        ui.add_enabled_ui(!selected, |ui| {
+            if crate::icons::button(ui, "underline", 26.0, e.underline, tl!("Underline")).clicked() {
+                e.underline = !e.underline;
+            }
+        })
+        .response
+        .on_disabled_hover_text(tl!("Underline is available for whole paragraphs."));
         let zero = tl!("Line spacing").to_string();
         let label = |v: f64| if v == 0.0 { zero.clone() } else { format!("{v:.2}×") };
         egui::ComboBox::from_id_salt("line-spacing").selected_text(label(e.line_spacing)).width(110.0).show_ui(ui, |ui| {
@@ -93,9 +191,9 @@ impl LineEditor {
     /// The formatting the panel changed.
     pub fn style(&self) -> pdfcraft_engine::BlockStyle {
         let (l, o) = (&self.look, &self.look0);
-        pdfcraft_engine::BlockStyle {
+        let mut style = pdfcraft_engine::BlockStyle {
             font_resource: self.font_resource.clone(),
-            family: (l.family != o.family).then_some((l.family, l.bold, l.italic)),
+            family_only: (l.family != o.family).then_some(l.family),
             bold: (l.bold != o.bold).then_some(l.bold),
             italic: (l.italic != o.italic).then_some(l.italic),
             size: (l.size != o.size).then_some(l.size),
@@ -107,7 +205,11 @@ impl LineEditor {
             char_spacing: (self.extras.char_spacing != self.extras0.char_spacing).then_some(self.extras.char_spacing),
             scale: (self.extras.scale != self.extras0.scale).then_some(self.extras.scale),
             ..Default::default()
+        };
+        if style != pdfcraft_engine::BlockStyle::default() {
+            style.range = self.selection;
         }
+        style
     }
 
     /// After applying formatting: the paragraph now has it.
@@ -128,7 +230,30 @@ impl LineEditor {
         self.look.italic = actual.italic;
         self.look0 = self.look.clone();
         self.source_rect = block.rect.map(|v| v as f32);
-        self.multiline = block.lines.len() > 1;
+        self.multiline = block.line_count > 1;
+        self.runs = block.runs.clone();
+        self.refresh_selection_look();
+    }
+
+    pub(crate) fn selected_text(&self) -> String {
+        match self.selection {
+            Some([start, end]) => self.text.chars().skip(start).take(end.saturating_sub(start)).collect(),
+            None => self.text.clone(),
+        }
+    }
+
+    fn refresh_selection_look(&mut self) {
+        let at = self.selection.map_or(0, |r| r[0]);
+        if let Some(run) = self.runs.iter().find(|r| r.start <= at && at < r.end) {
+            let source = source_look(&run.base_font, run.size, run.color, run.bold, run.italic);
+            self.look.family = source.family;
+            self.look.bold = source.bold;
+            self.look.italic = source.italic;
+            self.look.size = source.size;
+            self.look.color = source.color;
+            self.look0 = self.look.clone();
+            self.source_font = run.base_font.clone();
+        }
     }
 }
 
@@ -158,6 +283,7 @@ fn look_of(b: &pdfcraft_engine::TextBlock) -> pdfcraft_engine::AddedText {
 }
 
 fn editor_font(look: &pdfcraft_engine::AddedText, size: f32) -> FontId {
+    let size = if size.is_finite() { size.clamp(1.0, 512.0) } else { 12.0 };
     let family = match (look.family, look.bold) {
         (pdfcraft_engine::FontFamily::Courier, _) => FontFamily::Monospace,
         (_, true) => FontFamily::Name("semibold".into()),
@@ -172,6 +298,59 @@ fn color32(color: [f64; 3]) -> Color32 {
         (color[1].clamp(0.0, 1.0) * 255.0).round() as u8,
         (color[2].clamp(0.0, 1.0) * 255.0).round() as u8,
     )
+}
+
+/// The typing surface uses interface fonts; keep the source run styles visible while the PDF
+/// renderer remains authoritative for its exact face and metrics.
+fn draft_layout(
+    text: &str,
+    original: &str,
+    runs: &[pdfcraft_engine::TextRun],
+    fallback: &pdfcraft_engine::AddedText,
+    scale: f32,
+) -> egui::text::LayoutJob {
+    let old: Vec<char> = original.chars().collect();
+    let new: Vec<char> = text.chars().collect();
+    let prefix = old.iter().zip(&new).take_while(|(a, b)| a == b).count();
+    let suffix = old.iter().rev().zip(new.iter().rev()).take(old.len().min(new.len()).saturating_sub(prefix)).take_while(|(a, b)| a == b).count();
+    let mut job = egui::text::LayoutJob::default();
+    let mut chunk = String::new();
+    let mut previous = None;
+    let append = |job: &mut egui::text::LayoutJob, text: &str, index: Option<usize>| {
+        let look = index
+            .and_then(|i| runs.get(i))
+            .map(|run| source_look(&run.base_font, run.size, run.color, run.bold, run.italic))
+            .unwrap_or_else(|| fallback.clone());
+        job.append(
+            text,
+            0.0,
+            egui::TextFormat {
+                font_id: editor_font(&look, (look.size as f32 * scale).max(1.0)),
+                color: color32(look.color),
+                italics: look.italic,
+                ..Default::default()
+            },
+        );
+    };
+    for (index, ch) in new.iter().enumerate() {
+        let source = if index < prefix {
+            index
+        } else if index >= new.len().saturating_sub(suffix) {
+            old.len().saturating_sub(new.len().saturating_sub(index))
+        } else {
+            prefix.min(old.len().saturating_sub(1))
+        };
+        let index = runs.partition_point(|run| run.end <= source);
+        let run = runs.get(index).filter(|run| run.start <= source && source < run.end).map(|_| index);
+        if run != previous && !chunk.is_empty() {
+            append(&mut job, &chunk, previous);
+            chunk.clear();
+        }
+        previous = run;
+        chunk.push(*ch);
+    }
+    append(&mut job, &chunk, previous);
+    job
 }
 
 /// A selected page image, and what the pointer is doing to it.
@@ -481,17 +660,20 @@ pub(crate) fn page_input(
         // How far the editor box may grow: a single-line paragraph's rewrite grows to the
         // page's right edge, a multi-line paragraph rewraps to its own width.
         let right = xf.rect.right().min(view.viewport_rect().right()) - 6.0;
-        let max_width = if l.lines.len() == 1 { (right - boxes[hit].left()).max(boxes[hit].width()) } else { boxes[hit].width() };
+        let max_width = if l.line_count == 1 { (right - boxes[hit].left()).max(boxes[hit].width()) } else { boxes[hit].width() };
         view.line_editor = Some(LineEditor {
             page,
             block: hit,
             text: l.text.clone(),
             font_resource: None,
             source_font: l.base_font.clone(),
+            selection: None,
+            preview_open: false,
+            runs: l.runs.clone(),
             original: l.text.clone(),
             rect: boxes[hit],
             source_rect: l.rect.map(|v| v as f32),
-            multiline: l.lines.len() > 1,
+            multiline: l.line_count > 1,
             max_width,
             size: (l.size as f32 * scale).clamp(8.0, 72.0),
             focus: true,
@@ -512,6 +694,9 @@ pub(crate) fn overlay(ctx: &egui::Context, view: &mut DocView, info: &DocInfo) -
     let xf = view.page_xform(page)?;
     let viewport_right = view.viewport_rect().right();
     let ed = view.line_editor.as_mut()?;
+    if ed.preview_open {
+        return None;
+    }
     // Reproject the source box every frame. The page may have been zoomed, scrolled or rotated
     // while the format panel was open.
     ed.rect = xf.user_rect(info, ed.page, ed.source_rect).expand(2.0);
@@ -537,15 +722,32 @@ pub(crate) fn overlay(ctx: &egui::Context, view: &mut DocView, info: &DocInfo) -
             }
             egui::Frame::NONE.fill(Color32::WHITE).stroke(Stroke::new(1.5, ACCENT)).inner_margin(egui::Margin::symmetric(2, 0)).show(ui, |ui| {
                 let rows = ed.text.lines().count().max(1);
-                let r = ui.add(
-                    egui::TextEdit::multiline(&mut ed.text)
-                        .id(egui::Id::new("edit-text-line-input"))
-                        .font(font.clone())
-                        .text_color(text_color)
-                        .frame(egui::Frame::NONE)
-                        .desired_width(width)
-                        .desired_rows(rows),
-                );
+                let original = &ed.original;
+                let runs = &ed.runs;
+                let look = &ed.look;
+                let mut layouter = |ui: &egui::Ui, text: &dyn egui::TextBuffer, width: f32| {
+                    let mut job = draft_layout(text.as_str(), original, runs, look, scale);
+                    job.wrap.max_width = width;
+                    ui.fonts_mut(|fonts| fonts.layout_job(job))
+                };
+                let output = egui::TextEdit::multiline(&mut ed.text)
+                    .id(egui::Id::new("edit-text-line-input"))
+                    .font(font.clone())
+                    .text_color(text_color)
+                    .layouter(&mut layouter)
+                    .frame(egui::Frame::NONE)
+                    .desired_width(width)
+                    .desired_rows(rows)
+                    .show(ui);
+                let r = output.response;
+                if let Some(range) = output.cursor_range {
+                    let range = range.as_sorted_char_range();
+                    let selection = (!range.is_empty()).then_some([range.start.0, range.end.0]);
+                    if selection != ed.selection {
+                        ed.selection = selection;
+                        ed.refresh_selection_look();
+                    }
+                }
                 if ed.focus {
                     r.request_focus();
                     ed.focus = false;

@@ -1915,6 +1915,56 @@ fn the_format_panel_selects_page_fonts_and_keeps_independent_styles() {
     assert_eq!(h.state().session.get(id).unwrap().text_blocks(0)[0].base_font, "Helvetica");
 }
 
+#[test]
+fn selected_characters_keep_the_rest_of_the_paragraph_style() {
+    let mut h = harness(1, |_| {});
+    assert!(h.state_mut().execute("edit.edit_text"));
+    h.run_steps(2);
+    let r = h.state().views[0].page_screen_rect(0).unwrap();
+    let at = egui::pos2(r.left() + 40.0 / 200.0 * r.width(), r.top() + (300.0 - 158.0) / 300.0 * r.height());
+    h.hover_at(at);
+    h.run_steps(1);
+    h.drag_at(at);
+    h.run_steps(1);
+    h.drop_at(at);
+    h.run_steps(3);
+    h.key_press(egui::Key::Home);
+    for _ in 0..4 {
+        h.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::ArrowRight);
+    }
+    h.run_steps(2);
+    assert_eq!(h.state().views[0].line_editor.as_ref().unwrap().selection, Some([0, 4]));
+    h.get_by_label("B").click();
+    h.run_steps(4);
+    h.get_by_label("I").click();
+    h.run_steps(4);
+    let id = h.state().views[0].id;
+    let block = h.state().session.get(id).unwrap().text_blocks(0).remove(0);
+    assert_eq!(block.text, "Page 1");
+    assert_eq!(block.runs.len(), 2);
+    assert!(block.runs[0].bold && block.runs[0].italic);
+    assert!(!block.runs[1].bold && !block.runs[1].italic);
+    assert_eq!((block.runs[0].start, block.runs[0].end), (0, 4));
+    let before_preview = h.state().session.get(id).unwrap().bytes.clone();
+    h.get_by_label("Preview PDF").click();
+    h.run_steps(4);
+    assert_eq!(h.state().session.get(id).unwrap().bytes, before_preview);
+    h.get_by_label("Continue editing").click();
+    h.run_steps(3);
+    assert!(h.state().views[0].line_editor.is_some());
+    h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::Enter);
+    h.run_steps(3);
+    let bytes = h.state_mut().session.save_bytes(id).unwrap();
+    let mut reopened = pdfcraft_engine::Session::new();
+    let saved = reopened.open("range.pdf", None, bytes, None).unwrap();
+    let saved = &reopened.get(saved).unwrap().text_blocks(0)[0];
+    assert_eq!(saved.runs, block.runs);
+    h.state_mut().session.undo(id).unwrap();
+    assert!(!h.state().session.get(id).unwrap().text_blocks(0)[0].runs[0].italic);
+    h.state_mut().session.redo(id).unwrap();
+    assert!(h.state().session.get(id).unwrap().text_blocks(0)[0].runs[0].italic);
+}
+
 /// Drag with the pointer from `from` to `to` in a few steps.
 fn drag(h: &mut Harness<'static, PdfCraftApp>, from: egui::Pos2, to: egui::Pos2) {
     h.hover_at(from);

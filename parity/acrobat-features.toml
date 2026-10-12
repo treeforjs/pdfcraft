@@ -1806,8 +1806,8 @@ milestone = "M7"
 status = "partial"
 commands = ["edit.edit_text"]
 tools = ["text_lines", "text_paragraphs", "text_edit"]
-evidence = ["crates/edit/src/tests.rs::paragraphs_are_found_and_rewrapped", "crates/edit/src/tests.rs::text_lines_are_found_and_replaced_in_place", "crates/ui-egui/tests/editing.rs::editing_existing_text_in_place", "crates/automation/tests/automation.rs::editing_existing_text_through_tools", "crates/edit/src/tests.rs::a_line_whose_operator_starts_the_next_stream_can_be_edited", "crates/automation/tests/automation.rs::a_line_split_across_content_streams_is_listed_and_edited"]
-notes = "click a paragraph box and retype it in place (font reused or a matching standard face substituted, colour and spacing kept, rewrapped); a page's /Contents pieces are parsed joined, so a line whose operands and operator sit in different pieces is listed and edited (lines and paragraphs still don't join across pieces; Edit image still parses each piece alone); drag a box to move it or its right-edge handle to rewrap it (edit.text-move-resize); exact page-font selection, independent weight/slant, and standard Latin advance fidelity are covered; per-character formatting still needs a run-preserving paragraph model"
+evidence = ["crates/edit/src/tests.rs::paragraphs_are_found_and_rewrapped", "crates/edit/src/tests.rs::text_lines_are_found_and_replaced_in_place", "crates/ui-egui/tests/editing.rs::editing_existing_text_in_place", "crates/automation/tests/automation.rs::editing_existing_text_through_tools", "crates/edit/src/tests.rs::a_line_whose_operator_starts_the_next_stream_can_be_edited", "crates/automation/tests/automation.rs::a_line_split_across_content_streams_is_listed_and_edited", "crates/edit/src/tests.rs::mixed_paragraph_selection_keeps_surrounding_faces_and_reopens", "crates/automation/tests/automation.rs::selected_character_runs_keep_surroundings_through_reflow_history_and_save", "crates/ui-egui/tests/editing.rs::selected_characters_keep_the_rest_of_the_paragraph_style"]
+notes = "Selected-range and mixed-run edits of upright paragraphs preserve source runs, original character codes, supported text state and TJ spacing. Character-range font/size/colour/weight/slant changes are available through the Format panel and text_edit; exact PDF draft preview is nonmutating. Unicode scalar ranges are end-exclusive; splitting an indivisible source glyph refuses. Undo/redo and save/reopen are exercised. Still partial: arbitrary paragraph layouts/stream boundaries, transformed text, broader fonts/shaping, decoration and structure/tag preservation."
 
 [[feature]]
 id = "edit.text-reflow"
@@ -1842,8 +1842,8 @@ milestone = "M7"
 status = "shipped"
 commands = ["edit.edit_text"]
 tools = ["text_paragraphs"]
-evidence = ["crates/edit/src/tests.rs::paragraphs_are_found_and_rewrapped", "crates/edit/src/tests.rs::text_lines_are_found_and_replaced_in_place", "crates/ui-egui/tests/editing.rs::editing_existing_text_in_place", "crates/automation/tests/automation.rs::editing_existing_text_through_tools"]
-notes = "lines grouped into paragraphs by stream, font, size, left alignment and regular baseline spacing; hyphenated line ends are joined"
+evidence = ["crates/edit/src/tests.rs::paragraphs_are_found_and_rewrapped", "crates/edit/src/tests.rs::text_lines_are_found_and_replaced_in_place", "crates/ui-egui/tests/editing.rs::editing_existing_text_in_place", "crates/automation/tests/automation.rs::editing_existing_text_through_tools", "crates/edit/src/tests.rs::mixed_paragraph_selection_keeps_surrounding_faces_and_reopens"]
+notes = "Adjacent upright style runs and regular following rows are grouped into editable paragraphs while retaining each run and a visual line_count. Editable text retains literal hyphens and repeated spaces; read-only export retains its legacy grouping. Complex layouts, columns, transformed baselines and cross-piece paragraph identity remain incomplete."
 
 [[feature]]
 id = "edit.font-reuse-substitution"
@@ -1854,8 +1854,8 @@ milestone = "M7"
 status = "shipped"
 commands = ["edit.edit_text"]
 tools = ["text_fonts", "text_edit"]
-evidence = ["crates/edit/src/tests.rs::existing_page_fonts_are_selected_exactly_and_missing_glyphs_are_refused", "crates/edit/src/tests.rs::missing_glyphs_substitute_helvetica_and_impossible_text_is_refused", "crates/fonts/src/pdf.rs::subset_fonts_only_encode_the_glyphs_they_have", "crates/fonts/src/pdf.rs::composite_fonts_use_to_unicode"]
-notes = "Original font reused when it can encode every character; fallback retains source family, weight and slant. Exact page resource selection through text_fonts/text_edit refuses missing resources and unavailable subset glyphs without mutation. Subsets are not expanded; font coverage outside supported encodings and mixed-style paragraphs remain limited."
+evidence = ["crates/edit/src/tests.rs::existing_page_fonts_are_selected_exactly_and_missing_glyphs_are_refused", "crates/edit/src/tests.rs::missing_glyphs_substitute_helvetica_and_impossible_text_is_refused", "crates/fonts/src/pdf.rs::subset_fonts_only_encode_the_glyphs_they_have", "crates/fonts/src/pdf.rs::composite_fonts_use_to_unicode", "crates/edit/src/tests.rs::mixed_ranges_keep_unicode_glyph_codes_and_refuse_ligature_splits", "crates/fonts/src/pdf.rs::unicode_sequences_choose_the_longest_encodable_suffix"]
+notes = "Original character codes and supported source spacing are retained for unchanged mixed runs, including multi-scalar ToUnicode mappings; exact page-font selection refuses unavailable glyphs without mutation. Standard fallback preserves family/weight/slant. Subsets are not expanded, and broader encodings/shaping remain incomplete."
 
 [[feature]]
 id = "edit.text-format-font"
@@ -1866,8 +1866,8 @@ milestone = "M7"
 status = "shipped"
 commands = ["edit.edit_text", "edit.text"]
 tools = ["text_fonts", "text_edit", "content_update"]
-evidence = ["crates/automation/tests/automation.rs::selecting_embedded_page_fonts_round_trips_and_rejects_without_history_changes", "crates/edit/src/tests.rs::paragraphs_take_new_formatting", "crates/ui-egui/tests/editing.rs::the_format_panel_restyles_the_paragraph_being_edited", "crates/automation/tests/automation.rs::editing_existing_text_through_tools"]
-notes = "Paragraph-level standard family/size/colour plus selecting an existing page font from the Format panel or text_fonts/text_edit. Exact selection keeps embedded/subset resources, checks all proposed characters, and preserves the face through subsequent size/colour edits and save/reopen. Choosing a face fixes weight/slant; later bold/italic toggles choose a standard family counterpart. Standard Latin reflow uses face-specific specification advances. Character-range formatting remains open."
+evidence = ["crates/automation/tests/automation.rs::selecting_embedded_page_fonts_round_trips_and_rejects_without_history_changes", "crates/edit/src/tests.rs::paragraphs_take_new_formatting", "crates/ui-egui/tests/editing.rs::the_format_panel_restyles_the_paragraph_being_edited", "crates/automation/tests/automation.rs::editing_existing_text_through_tools", "crates/automation/tests/automation.rs::selected_character_runs_keep_surroundings_through_reflow_history_and_save", "crates/ui-egui/tests/editing.rs::selected_characters_keep_the_rest_of_the_paragraph_style"]
+notes = "Whole-paragraph or selected Unicode-range family/size/colour/exact resource changes preserve surrounding runs. Existing subset choices refuse missing glyphs. The typing surface shows styles using interface fonts; Preview PDF renders the actual proposed page before acceptance. Upright nonuniform geometry is supported; rotated/skewed/reflected mixed text is refused unchanged."
 
 [[feature]]
 id = "edit.text-format-style"
@@ -1878,8 +1878,8 @@ milestone = "M7"
 status = "shipped"
 commands = ["edit.edit_text"]
 tools = ["text_fonts", "text_edit"]
-evidence = ["crates/ui-egui/tests/editing.rs::the_format_panel_selects_page_fonts_and_keeps_independent_styles", "crates/edit/src/tests.rs::justify_underline_and_spacing", "crates/edit/src/tests.rs::paragraphs_take_new_formatting", "crates/ui-egui/tests/editing.rs::the_format_panel_restyles_the_paragraph_being_edited"]
-notes = "Paragraph-level bold and italic can change independently, preserving the other style and source family; choosing another family retains weight/slant unless overridden. Underline remains per paragraph. Japanese Type3 fallback has no italic outlines. Mixed-style character-range editing remains open."
+evidence = ["crates/ui-egui/tests/editing.rs::the_format_panel_selects_page_fonts_and_keeps_independent_styles", "crates/edit/src/tests.rs::justify_underline_and_spacing", "crates/edit/src/tests.rs::paragraphs_take_new_formatting", "crates/ui-egui/tests/editing.rs::the_format_panel_restyles_the_paragraph_being_edited", "crates/ui-egui/tests/editing.rs::selected_characters_keep_the_rest_of_the_paragraph_style"]
+notes = "Bold and italic can change independently on a paragraph or selected range; choosing a standard family retains each run's other styles. Existing underline paths/decorations are not yet modeled as reusable run properties. Japanese Type3 fallback still has no italic outlines."
 
 [[feature]]
 id = "edit.text-super-subscript"
@@ -1902,8 +1902,8 @@ milestone = "M7"
 status = "shipped"
 commands = ["edit.edit_text", "edit.text"]
 tools = ["text_edit", "content_update"]
-evidence = ["crates/edit/src/tests.rs::formatting_uses_exact_advances_and_preserves_independent_face_styles", "crates/edit/src/tests.rs::justify_underline_and_spacing", "crates/edit/src/tests.rs::paragraphs_take_new_formatting", "crates/ui-egui/tests/editing.rs::the_format_panel_restyles_the_paragraph_being_edited"]
-notes = "Left, centre, right and justify for paragraphs and added text. Existing-text standard Latin reflow/alignment uses exact face-specific advances, with explicit embedded font widths taking precedence. No kerning/shaping or mixed-style run fidelity claim."
+evidence = ["crates/edit/src/tests.rs::formatting_uses_exact_advances_and_preserves_independent_face_styles", "crates/edit/src/tests.rs::justify_underline_and_spacing", "crates/edit/src/tests.rs::paragraphs_take_new_formatting", "crates/ui-egui/tests/editing.rs::the_format_panel_restyles_the_paragraph_being_edited", "crates/edit/src/tests.rs::range_colour_keeps_kerning_spacing_and_nonuniform_geometry"]
+notes = "Left, centre, right and justify for paragraphs and added text. Existing-text standard Latin advances and explicit PDF widths are respected. Mixed source runs retain existing TJ spacing when reused; justification can place non-code-32 spaces explicitly. New kerning/shaping is not generated, and transformed mixed paragraphs remain unsupported."
 
 [[feature]]
 id = "edit.line-paragraph-spacing"

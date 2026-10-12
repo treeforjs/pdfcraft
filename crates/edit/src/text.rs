@@ -20,6 +20,8 @@ use pdfcraft_fonts::{CraftFont, GlyphError, japanese_glyph_from};
 
 use crate::EditError;
 
+mod mixed;
+
 /// One line of existing text.
 #[derive(Clone, Debug, PartialEq)]
 pub struct TextLine {
@@ -44,6 +46,17 @@ pub struct TextLine {
     ops: Vec<usize>,
     /// Where the line starts: text matrix (text space), the state there, and its `BT`.
     origin: Origin,
+    glyphs: Vec<SourceGlyph>,
+}
+
+/// Source character codes and positioning, kept separately from Unicode. Re-encoding Unicode
+/// alone can choose a different glyph when a font maps several character codes to the same text.
+#[derive(Clone, Debug, PartialEq)]
+struct SourceGlyph {
+    text: String,
+    bytes: Vec<u8>,
+    /// Extra advance from TJ or an inferred gap, in scaled text space.
+    adjustment: f64,
 }
 
 /// Text and graphics state captured for rewriting.
@@ -55,6 +68,8 @@ struct TextState {
     scale: f64,
     leading: f64,
     rise: f64,
+    render_mode: f64,
+    complex_graphics: bool,
     fill: Vec<Op>,
 }
 
@@ -67,7 +82,17 @@ impl TextState {
             scale: ts.scale,
             leading: ts.leading,
             rise: ts.rise,
-            fill: ts.fill.clone(),
+            render_mode: ts.render_mode,
+            complex_graphics: ts.complex_graphics,
+            fill: ts
+                .fill
+                .iter()
+                .cloned()
+                .map(|mut op| {
+                    op.span = 0..0;
+                    op
+                })
+                .collect(),
         }
     }
 
@@ -83,6 +108,7 @@ impl TextState {
         v.push(Op::new("Tz", vec![n(self.scale * 100.0)]));
         v.push(Op::new("TL", vec![n(self.leading)]));
         v.push(Op::new("Ts", vec![n(self.rise)]));
+        v.push(Op::new("Tr", vec![n(self.render_mode)]));
         v.extend(self.fill.iter().cloned());
         v
     }
@@ -104,11 +130,27 @@ struct Origin {
     bt_state: TextState,
 }
 
-/// A paragraph: consecutive lines in one stream with the same font and size, aligned on the left
-/// and regularly spaced.
+/// A style run in a paragraph. Offsets count Unicode scalar values, starting at zero; `end`
+/// is exclusive. A PDF glyph may map to several scalars, so these are not glyph indexes.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TextRun {
+    pub start: usize,
+    pub end: usize,
+    pub font: String,
+    pub base_font: String,
+    pub size: f64,
+    pub bold: bool,
+    pub italic: bool,
+    pub color: [f64; 3],
+    state: TextState,
+    glyphs: Vec<SourceGlyph>,
+}
+
+/// A paragraph: adjacent style runs and regularly spaced lines. The top-level style is the
+/// first run's; [`Self::runs`] retains the styles of the rest of the paragraph.
 #[derive(Clone, Debug, PartialEq)]
 pub struct TextBlock {
-    /// The lines' text joined with spaces (lines that ended in a hyphen are joined directly).
+    /// Editable lines joined with logical spaces; source spaces and literal hyphens are kept.
     pub text: String,
     pub rect: [f64; 4],
     pub base_font: String,
@@ -120,6 +162,9 @@ pub struct TextBlock {
     pub color: [f64; 3],
     /// Indexes into [`text_lines`].
     pub lines: Vec<usize>,
+    pub runs: Vec<TextRun>,
+    /// Visual rows, distinct from `lines` (which indexes same-style source fragments).
+    pub line_count: usize,
 }
 
 impl TextLine {
@@ -148,6 +193,9 @@ struct Ts {
     scale: f64,
     leading: f64,
     rise: f64,
+    render_mode: f64,
+    /// ExtGState and explicit clip paths need a richer graphics-state reconstruction.
+    complex_graphics: bool,
 }
 
 fn content_streams(doc: &Document, page: &Dict) -> Vec<(Object, Vec<u8>)> {
@@ -222,28 +270,41 @@ fn page_dict(doc: &Document, page: usize) -> Result<pdfcraft_model::Page, EditEr
     pdfcraft_model::pages(doc).into_iter().nth(page).ok_or(EditError::NoSuchPage(page))
 }
 
+fn fill_space(fill: &[Op]) -> Option<&[u8]> {
+    fill.iter().rev().find_map(|op| match op.op.as_slice() {
+        b"g" => Some(b"DeviceGray".as_slice()),
+        b"rg" => Some(b"DeviceRGB".as_slice()),
+        b"k" => Some(b"DeviceCMYK".as_slice()),
+        b"cs" => op.name(0),
+        _ => None,
+    })
+}
+
 fn fill_color(fill: &[Op]) -> [f64; 3] {
-    let Some(op) = fill.iter().rev().find(|op| matches!(op.op.as_slice(), b"g" | b"rg" | b"k")) else {
-        return [0.0, 0.0, 0.0];
-    };
-    match op.op.as_slice() {
-        b"g" => {
-            let v = op.operands.first().and_then(Object::as_f64).unwrap_or(0.0).clamp(0.0, 1.0);
-            [v, v, v]
+    known_fill_color(fill).unwrap_or([0.0, 0.0, 0.0])
+}
+
+/// Device colors can be inspected as RGB without interpreting a color-space resource. Unknown
+/// spaces still replay exactly, but must never make an explicit recolor look like a no-op.
+fn known_fill_color(fill: &[Op]) -> Option<[f64; 3]> {
+    let Some(op) = fill.last() else { return Some([0.0, 0.0, 0.0]) };
+    let space = fill_space(fill)?;
+    if !matches!(space, b"DeviceGray" | b"DeviceRGB" | b"DeviceCMYK") {
+        return None;
+    }
+    // Selecting a device color space resets its current color to black (ISO 32000-2, 8.6.8).
+    if op.is("cs") {
+        return Some([0.0, 0.0, 0.0]);
+    }
+    let value = |index| op.num(index).filter(|v| v.is_finite()).map(|v| v.clamp(0.0, 1.0));
+    match space {
+        b"DeviceGray" => Some([value(0)?; 3]),
+        b"DeviceRGB" => Some([value(0)?, value(1)?, value(2)?]),
+        b"DeviceCMYK" => {
+            let (c, m, y, k) = (value(0)?, value(1)?, value(2)?, value(3)?);
+            Some([(1.0 - c) * (1.0 - k), (1.0 - m) * (1.0 - k), (1.0 - y) * (1.0 - k)])
         }
-        b"rg" => [
-            op.operands.first().and_then(Object::as_f64).unwrap_or(0.0).clamp(0.0, 1.0),
-            op.operands.get(1).and_then(Object::as_f64).unwrap_or(0.0).clamp(0.0, 1.0),
-            op.operands.get(2).and_then(Object::as_f64).unwrap_or(0.0).clamp(0.0, 1.0),
-        ],
-        b"k" => {
-            let c = op.operands.first().and_then(Object::as_f64).unwrap_or(0.0);
-            let m = op.operands.get(1).and_then(Object::as_f64).unwrap_or(0.0);
-            let y = op.operands.get(2).and_then(Object::as_f64).unwrap_or(0.0);
-            let k = op.operands.get(3).and_then(Object::as_f64).unwrap_or(0.0);
-            [(1.0 - c) * (1.0 - k), (1.0 - m) * (1.0 - k), (1.0 - y) * (1.0 - k)]
-        }
-        _ => [0.0, 0.0, 0.0],
+        _ => None,
     }
 }
 
@@ -268,6 +329,7 @@ struct Shown {
     bold: bool,
     italic: bool,
     decodable: bool,
+    glyphs: Vec<SourceGlyph>,
 }
 
 /// The graphics state carried from one of a page's content streams to the next: the streams
@@ -282,7 +344,8 @@ impl Carry {
     fn new() -> Self {
         let ts = Ts {
             ctm: Matrix::IDENTITY,
-            fill: Vec::new(),
+            // A replayed run must restore default black after a differently colored run.
+            fill: vec![Op::new("g", vec![Object::Int(0)])],
             font: None,
             size: 0.0,
             char_spacing: 0.0,
@@ -290,6 +353,8 @@ impl Carry {
             scale: 1.0,
             leading: 0.0,
             rise: 0.0,
+            render_mode: 0.0,
+            complex_graphics: false,
         };
         Carry { ts, stack: Vec::new() }
     }
@@ -333,7 +398,9 @@ fn interpret(
             }
             b"g" | b"rg" | b"k" | b"cs" => ts.fill = vec![op.clone()],
             b"sc" | b"scn" => {
-                ts.fill.retain(|o| o.is("cs"));
+                // g/rg/k also select their device space. Retain that effective space even
+                // when replacing their color operands with a later sc/scn operation.
+                ts.fill = fill_space(&ts.fill).map(|space| Op::new("cs", vec![Object::Name(space.to_vec())])).into_iter().collect();
                 ts.fill.push(op.clone());
             }
             b"Tf" => {
@@ -356,6 +423,8 @@ fn interpret(
             b"Tz" => ts.scale = op.num(0).unwrap_or(100.0) / 100.0,
             b"TL" => ts.leading = op.num(0).unwrap_or(0.0),
             b"Ts" => ts.rise = op.num(0).unwrap_or(0.0),
+            b"Tr" => ts.render_mode = op.num(0).unwrap_or(-1.0),
+            b"gs" | b"W" | b"W*" => ts.complex_graphics = true,
             b"Do" => {
                 if let (Some(list), Some(name)) = (invoked.as_deref_mut(), op.name(0)) {
                     list.push((i, name.to_vec(), ts.clone()));
@@ -389,6 +458,10 @@ fn interpret(
                     tlm = Matrix([1.0, 0.0, 0.0, 1.0, 0.0, -ts.leading]).then(&tlm);
                     tm = tlm;
                 }
+                // Clipping from modes 4–7 survives ET until the graphics state is restored.
+                if ts.render_mode >= 4.0 {
+                    ts.complex_graphics = true;
+                }
                 let Some((name, m)) = ts.font.clone() else { continue };
                 // Pieces: strings, and TJ number adjustments.
                 let pieces: Vec<Object> = match op.op.as_slice() {
@@ -400,10 +473,20 @@ fn interpret(
                 let mut text = String::new();
                 let mut decodable = true;
                 let mut x_text = 0.0;
+                let mut glyphs: Vec<SourceGlyph> = Vec::new();
                 for p in &pieces {
                     match p {
                         Object::String(s) => {
+                            let mut byte_offset = 0usize;
                             for (code, len) in m.codes(&s.bytes) {
+                                let value = m.text_of(code).unwrap_or("");
+                                let end = byte_offset.saturating_add(len);
+                                glyphs.push(SourceGlyph {
+                                    text: value.into(),
+                                    bytes: s.bytes.get(byte_offset..end).unwrap_or_default().to_vec(),
+                                    adjustment: 0.0,
+                                });
+                                byte_offset = end;
                                 match m.text_of(code) {
                                     Some(t) => text.push_str(t),
                                     None => decodable = false,
@@ -418,6 +501,11 @@ fn interpret(
                                 // A large gap inside TJ reads as a space.
                                 if dx > ts.size * 0.2 && !text.ends_with(' ') {
                                     text.push(' ');
+                                    glyphs.push(SourceGlyph { text: " ".into(), bytes: Vec::new(), adjustment: dx });
+                                } else if let Some(glyph) = glyphs.last_mut() {
+                                    glyph.adjustment += dx;
+                                } else {
+                                    glyphs.push(SourceGlyph { text: String::new(), bytes: Vec::new(), adjustment: dx });
                                 }
                                 x_text += dx;
                             }
@@ -456,6 +544,7 @@ fn interpret(
                     bold: m.bold,
                     italic: m.italic,
                     decodable,
+                    glyphs,
                 });
             }
             _ => {}
@@ -485,26 +574,34 @@ pub fn text_lines(doc: &Document, page: usize) -> Result<Vec<TextLine>, EditErro
         // aren't joined or grouped, as before; editing rewrites every piece an edit touches).
         let si = ops.get(s.op).map_or(0, |op| pieces.pieces_of(op).0);
         let joins = last.is_some_and(|(piece, bt, base, end, size)| {
+            let horizontal = lines.last().map_or(size, horizontal_text_size);
             piece == si
                 && bt == s.bt
                 && lines.last().is_some_and(|l| l.font.as_bytes() == s.font.as_slice())
                 && lines.last().is_some_and(|l| {
-                    (s.size - l.size).abs() < 0.01 && s.bold == l.bold && s.italic == l.italic && fill_color(&s.state.fill) == l.color
+                    (s.size - l.size).abs() < 0.01
+                        && TextState::of(&s.state) == l.origin.state
+                        && s.state.ctm.0 == l.origin.ctm
+                        && s.tm.0.get(..4) == l.origin.tm.get(..4)
                 })
                 && (s.baseline - base).abs() < size * 0.3
-                && s.start_x > end - size
-                && s.start_x - end < size * 3.0
+                && s.start_x > end - horizontal
+                && s.start_x - end < horizontal * 3.0
         });
         if joins && let Some(l) = lines.last_mut() {
             let gap = s.start_x - last.map_or(s.start_x, |x| x.3);
-            if gap > l.size * 0.2 && !l.text.ends_with(' ') && !s.text.starts_with(' ') {
+            if gap > horizontal_text_size(l) * 0.2 && !l.text.ends_with(' ') && !s.text.starts_with(' ') {
                 l.text.push(' ');
+                l.glyphs.push(SourceGlyph { text: " ".into(), bytes: Vec::new(), adjustment: gap / horizontal_scale(&l.origin) });
+            } else if let Some(glyph) = l.glyphs.last_mut() {
+                glyph.adjustment += gap / horizontal_scale(&l.origin);
             }
             l.text.push_str(&s.text);
             l.rect = [l.rect[0].min(s.rect[0]), l.rect[1].min(s.rect[1]), l.rect[2].max(s.rect[2]), l.rect[3].max(s.rect[3])];
             l.ops.push(s.op);
             l.decodable &= s.decodable;
             l.color = fill_color(&s.state.fill);
+            l.glyphs.extend(s.glyphs);
         } else {
             lines.push(TextLine {
                 text: s.text.clone(),
@@ -516,6 +613,7 @@ pub fn text_lines(doc: &Document, page: usize) -> Result<Vec<TextLine>, EditErro
                 italic: s.italic,
                 color: fill_color(&s.state.fill),
                 decodable: s.decodable,
+                glyphs: s.glyphs,
                 stream: si,
                 ops: vec![s.op],
                 origin: Origin {
@@ -534,7 +632,7 @@ pub fn text_lines(doc: &Document, page: usize) -> Result<Vec<TextLine>, EditErro
         last = Some((si, s.bt, s.baseline, s.end_x, s.size.max(1.0)));
     }
     // Lines of only spaces aren't editable text.
-    lines.retain(|l| !l.text.trim().is_empty());
+    lines.retain(|l| !l.text.is_empty());
     Ok(lines)
 }
 
@@ -542,25 +640,33 @@ pub fn text_lines(doc: &Document, page: usize) -> Result<Vec<TextLine>, EditErro
 /// (`bt`, baseline, end x, size).
 fn add_shown(lines: &mut Vec<TextLine>, last: &mut Option<(usize, f64, f64, f64)>, s: Shown, stream: usize) {
     let joins = last.is_some_and(|(bt, base, end, size)| {
+        let horizontal = lines.last().map_or(size, horizontal_text_size);
         bt == s.bt
             && lines.last().is_some_and(|l| l.font.as_bytes() == s.font.as_slice())
-            && lines
-                .last()
-                .is_some_and(|l| (s.size - l.size).abs() < 0.01 && s.bold == l.bold && s.italic == l.italic && fill_color(&s.state.fill) == l.color)
+            && lines.last().is_some_and(|l| {
+                (s.size - l.size).abs() < 0.01
+                    && TextState::of(&s.state) == l.origin.state
+                    && s.state.ctm.0 == l.origin.ctm
+                    && s.tm.0.get(..4) == l.origin.tm.get(..4)
+            })
             && (s.baseline - base).abs() < size * 0.3
-            && s.start_x > end - size
-            && s.start_x - end < size * 3.0
+            && s.start_x > end - horizontal
+            && s.start_x - end < horizontal * 3.0
     });
     if joins && let Some(l) = lines.last_mut() {
         let gap = s.start_x - last.map_or(s.start_x, |x| x.2);
-        if gap > l.size * 0.2 && !l.text.ends_with(' ') && !s.text.starts_with(' ') {
+        if gap > horizontal_text_size(l) * 0.2 && !l.text.ends_with(' ') && !s.text.starts_with(' ') {
             l.text.push(' ');
+            l.glyphs.push(SourceGlyph { text: " ".into(), bytes: Vec::new(), adjustment: gap / horizontal_scale(&l.origin) });
+        } else if let Some(glyph) = l.glyphs.last_mut() {
+            glyph.adjustment += gap / horizontal_scale(&l.origin);
         }
         l.text.push_str(&s.text);
         l.rect = [l.rect[0].min(s.rect[0]), l.rect[1].min(s.rect[1]), l.rect[2].max(s.rect[2]), l.rect[3].max(s.rect[3])];
         l.ops.push(s.op);
         l.decodable &= s.decodable;
         l.color = fill_color(&s.state.fill);
+        l.glyphs.extend(s.glyphs);
     } else {
         lines.push(TextLine {
             text: s.text.clone(),
@@ -572,6 +678,7 @@ fn add_shown(lines: &mut Vec<TextLine>, last: &mut Option<(usize, f64, f64, f64)
             italic: s.italic,
             color: fill_color(&s.state.fill),
             decodable: s.decodable,
+            glyphs: s.glyphs,
             stream,
             ops: vec![s.op],
             origin: Origin {
@@ -1062,7 +1169,7 @@ fn coincident_ops(lines: &[TextLine], rects: &[[f64; 4]]) -> std::collections::H
 /// The paragraphs on a page (0-based).
 pub fn text_blocks(doc: &Document, page: usize) -> Result<Vec<TextBlock>, EditError> {
     let lines = text_lines(doc, page)?;
-    Ok(group_blocks(&lines))
+    Ok(group_blocks(&lines, true))
 }
 
 /// The paragraphs on a page as a reader sees them, including text drawn by form XObjects
@@ -1070,55 +1177,109 @@ pub fn text_blocks(doc: &Document, page: usize) -> Result<Vec<TextBlock>, EditEr
 /// [`text_blocks`] indexes, so they can't be passed to [`replace_block`] or [`rewrite_block`].
 pub fn reading_blocks(doc: &Document, page: usize) -> Result<Vec<TextBlock>, EditError> {
     let lines = reading_lines(doc, page)?;
-    Ok(group_blocks(&lines))
+    Ok(group_blocks(&lines, false))
 }
 
 /// Lines that share a left edge, a centre or a right edge (left, centred or right-aligned text).
 fn aligned(a: &TextLine, b: &TextLine) -> bool {
-    let tol = b.size.max(1.0);
+    let tol = horizontal_text_size(b);
     let centre = |r: [f64; 4]| (r[0] + r[2]) / 2.0;
     (a.origin.x - b.origin.x).abs() < tol || (centre(a.rect) - centre(b.rect)).abs() < tol || (a.rect[2] - b.rect[2]).abs() < tol
 }
 
-fn group_blocks(lines: &[TextLine]) -> Vec<TextBlock> {
+fn horizontal_scale(origin: &Origin) -> f64 {
+    let transform = Matrix(origin.tm).then(&Matrix(origin.ctm)).0;
+    transform[0].hypot(transform[1]).max(1e-6)
+}
+
+// Baseline tolerances use the vertical font size, but X gaps/kerning need the horizontal
+// basis and Tz. A nonuniform transform must not split a paragraph merely when its colour changes.
+fn horizontal_text_size(line: &TextLine) -> f64 {
+    let size = line.origin.state.font.as_ref().map_or(line.size, |(_, size)| *size);
+    (size * horizontal_scale(&line.origin) * line.origin.state.scale.abs()).max(1.0)
+}
+
+fn group_blocks(lines: &[TextLine], mixed: bool) -> Vec<TextBlock> {
     let mut blocks: Vec<TextBlock> = Vec::new();
     let mut gap: Option<f64> = None;
+    let mut row_start = 0;
     for (i, l) in lines.iter().enumerate() {
-        let joins = i > 0
-            && blocks.last().is_some_and(|b| {
-                let Some(&p) = b.lines.last() else { return false };
-                let prev = &lines[p];
-                let g = prev.origin.baseline - l.origin.baseline;
-                prev.stream == l.stream
-                    && prev.font == l.font
-                    && prev.base_font == l.base_font
-                    && prev.bold == l.bold
-                    && prev.italic == l.italic
-                    && prev.color == l.color
-                    && (prev.size - l.size).abs() < 0.01
-                    && aligned(prev, l)
-                    && g > l.size * 0.8
-                    && g < l.size * 2.5
+        let previous = blocks.last().and_then(|b| b.lines.last()).and_then(|p| lines.get(*p));
+        let row = lines.get(row_start);
+        let same_style = |p: &TextLine| {
+            p.font == l.font
+                && p.base_font == l.base_font
+                && p.bold == l.bold
+                && p.italic == l.italic
+                && p.color == l.color
+                && (p.size - l.size).abs() < 0.01
+        };
+        let compatible = previous.is_some_and(|p| {
+            p.stream == l.stream && p.origin.ctm == l.origin.ctm && p.origin.tm.get(..4) == l.origin.tm.get(..4) && (mixed || same_style(p))
+        });
+        let same_row = mixed
+            && compatible
+            && previous.is_some_and(|p| {
+                let size = p.size.max(l.size).max(1.0);
+                let horizontal = horizontal_text_size(p).max(horizontal_text_size(l));
+                (p.origin.baseline - l.origin.baseline).abs() < size * 0.15
+                    && l.origin.x >= p.rect[2] - horizontal * 0.2
+                    && l.origin.x - p.rect[2] < horizontal * 2.0
+            });
+        let next_row = compatible
+            && row.is_some_and(|p| {
+                let g = p.origin.baseline - l.origin.baseline;
+                aligned(p, l)
+                    && g > p.size.max(l.size) * 0.8
+                    && g < p.size.max(l.size) * 2.5
                     && gap.is_none_or(|first| (g - first).abs() < first * 0.2)
             });
-        if joins
+        if (same_row || next_row)
             && let Some(b) = blocks.last_mut()
-            && let Some(&p) = b.lines.last()
         {
-            let prev = &lines[p];
-            gap.get_or_insert(prev.origin.baseline - l.origin.baseline);
-            if b.text.ends_with('-') {
-                b.text.pop();
-            } else {
-                b.text.push(' ');
+            if next_row {
+                if let Some(p) = row {
+                    gap.get_or_insert(p.origin.baseline - l.origin.baseline);
+                }
+                b.line_count += 1;
+                row_start = i;
+                if !mixed && b.text.ends_with('-') {
+                    b.text.pop();
+                    if let Some(run) = b.runs.last_mut() {
+                        run.end = run.end.saturating_sub(1);
+                    }
+                } else if !b.text.ends_with(' ') {
+                    b.text.push(' ');
+                    if let Some(run) = b.runs.last_mut() {
+                        run.end += 1;
+                    }
+                }
+            } else if let Some(previous) = previous {
+                let gap = l.origin.x - previous.rect[2];
+                let adjustment = gap / horizontal_scale(&previous.origin);
+                if gap > horizontal_text_size(l) * 0.2 && !b.text.ends_with(' ') && !l.text.starts_with(' ') {
+                    b.text.push(' ');
+                    if let Some(run) = b.runs.last_mut() {
+                        run.end += 1;
+                        run.glyphs.push(SourceGlyph { text: " ".into(), bytes: Vec::new(), adjustment });
+                    }
+                } else if let Some(glyph) = b.runs.last_mut().and_then(|run| run.glyphs.last_mut()) {
+                    glyph.adjustment += adjustment;
+                }
             }
-            b.text.push_str(l.text.trim_matches(paragraph_separator));
+            let part = if next_row && !mixed { l.text.trim_matches(paragraph_separator) } else { &l.text };
+            let start = b.runs.last().map_or(0, |r| r.end);
+            b.text.push_str(part);
+            b.runs.push(run_of(l, start, start + part.chars().count()));
             b.rect = [b.rect[0].min(l.rect[0]), b.rect[1].min(l.rect[1]), b.rect[2].max(l.rect[2]), b.rect[3].max(l.rect[3])];
             b.lines.push(i);
         } else {
             gap = None;
+            row_start = i;
+            let text = if mixed { l.text.clone() } else { l.text.trim_matches(paragraph_separator).to_string() };
+            let run = run_of(l, 0, text.chars().count());
             blocks.push(TextBlock {
-                text: l.text.trim_matches(paragraph_separator).to_string(),
+                text,
                 rect: l.rect,
                 base_font: l.base_font.clone(),
                 size: l.size,
@@ -1126,10 +1287,28 @@ fn group_blocks(lines: &[TextLine]) -> Vec<TextBlock> {
                 italic: l.italic,
                 color: l.color,
                 lines: vec![i],
+                runs: vec![run],
+                line_count: 1,
             });
         }
     }
+    blocks.retain(|b| !b.text.trim().is_empty());
     blocks
+}
+
+fn run_of(l: &TextLine, start: usize, end: usize) -> TextRun {
+    TextRun {
+        start,
+        end,
+        font: l.font.clone(),
+        base_font: l.base_font.clone(),
+        size: l.size,
+        bold: l.bold,
+        italic: l.italic,
+        color: l.color,
+        state: l.origin.state.clone(),
+        glyphs: l.glyphs.clone(),
+    }
 }
 
 // An ideographic space carries intentional Japanese spacing, including paragraph indentation.
@@ -1171,10 +1350,15 @@ pub fn replace_block(doc: &mut Document, page: usize, block: usize, text: &str) 
 /// Formatting for a rewritten paragraph (`None` keeps the paragraph's own).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct BlockStyle {
+    /// Apply character formatting only within these Unicode scalar offsets (end exclusive).
+    /// Paragraph geometry/alignment continue to apply to the whole paragraph.
+    pub range: Option<[usize; 2]>,
     /// Choose an existing page resource exactly; incompatible with family/bold/italic.
     pub font_resource: Option<String>,
     /// A standard font family, bold, italic.
     pub family: Option<(crate::added::Family, bool, bool)>,
+    /// Change the family while preserving each run's independent weight and slant.
+    pub family_only: Option<crate::added::Family>,
     /// Override weight without choosing a different family (`None` keeps the source weight).
     pub bold: Option<bool>,
     /// Override slant without choosing a different family (`None` keeps the source slant).
@@ -1197,22 +1381,111 @@ pub struct BlockStyle {
     pub width: Option<f64>,
 }
 
+/// Bound replacement text before callers inspect paragraphs or clone a document for an edit.
+pub fn validate_paragraph_text(text: &str) -> Result<(), EditError> {
+    mixed::validate_text(text)
+}
+
 /// Rewrite paragraph `block` with new text (or its own) and formatting, rewrapped to its width.
 pub fn rewrite_block(doc: &mut Document, page: usize, block: usize, text: Option<&str>, style: &BlockStyle) -> Result<LineEdit, EditError> {
-    if style.font_resource.is_some() && (style.family.is_some() || style.bold.is_some() || style.italic.is_some()) {
+    if let Some(text) = text {
+        validate_paragraph_text(text)?;
+    }
+    // Font creation and stream rewriting can fail; even callers below the session façade keep
+    // their complete document unchanged on error.
+    let mut next = doc.clone();
+    let result = rewrite_block_inner(&mut next, page, block, text, style)?;
+    *doc = next;
+    Ok(result)
+}
+
+/// Whether a text edit is already satisfied, without changing bytes or consuming an undo step.
+/// Unknown paragraph properties (such as source underline paths) are deliberately not guessed.
+pub fn is_noop(doc: &Document, page: usize, block: usize, text: &str, style: &BlockStyle) -> Result<bool, EditError> {
+    validate_paragraph_text(text)?;
+    let blocks = text_blocks(doc, page)?;
+    Ok(blocks.get(block).is_some_and(|b| unchanged(b, text, style)))
+}
+
+fn unchanged(b: &TextBlock, text: &str, style: &BlockStyle) -> bool {
+    if text != b.text
+        || style.align.is_some()
+        || style.underline.is_some()
+        || style.offset.is_some()
+        || style.width.is_some()
+        || style.line_spacing.is_some()
+        || (style.font_resource.is_some()
+            && (style.family.is_some() || style.family_only.is_some() || style.bold.is_some() || style.italic.is_some()))
+    {
+        return false;
+    }
+    let [start, end] = style.range.unwrap_or([0, text.chars().count()]);
+    if start >= end || end > text.chars().count() {
+        return false;
+    }
+    b.runs.iter().filter(|r| r.start < end && r.end > start).all(|r| {
+        let point_scale = r.size / r.state.font.as_ref().map_or(r.size, |(_, size)| *size).max(1e-6);
+        style.font_resource.as_ref().is_none_or(|f| f == &r.font)
+            && style.family.is_none_or(|(f, bold, italic)| source_family(&r.base_font) == f && r.bold == bold && r.italic == italic)
+            && style.family_only.is_none_or(|f| source_family(&r.base_font) == f)
+            && style.bold.is_none_or(|v| v == r.bold)
+            && style.italic.is_none_or(|v| v == r.italic)
+            && style.size.is_none_or(|v| v == r.size)
+            && style.color.is_none_or(|v| known_fill_color(&r.state.fill) == Some(v))
+            && style.char_spacing.is_none_or(|v| v == r.state.char_spacing * point_scale)
+            && style.scale.is_none_or(|v| v == r.state.scale * 100.0)
+    })
+}
+
+fn rewrite_block_inner(doc: &mut Document, page: usize, block: usize, text: Option<&str>, style: &BlockStyle) -> Result<LineEdit, EditError> {
+    if style.range.is_some() && style.underline.is_some() {
+        return Err(EditError::Invalid("underline is currently available for whole paragraphs, not selected characters".into()));
+    }
+    for (name, value, low, high) in [
+        ("size", style.size, 0.1, 14_400.0),
+        ("line spacing", style.line_spacing, 0.5, 5.0),
+        ("character spacing", style.char_spacing, -1000.0, 1000.0),
+        ("horizontal scale", style.scale, 10.0, 1000.0),
+    ] {
+        if value.is_some_and(|n| !n.is_finite() || n < low || n > high) {
+            return Err(EditError::Invalid(format!("{name} must be a finite number from {low} to {high}")));
+        }
+    }
+    if style.color.is_some_and(|c| c.into_iter().any(|v| !v.is_finite() || !(0.0..=1.0).contains(&v))) {
+        return Err(EditError::Invalid("colour components must be finite numbers from 0 to 1".into()));
+    }
+    if style.offset.is_some_and(|d| d.into_iter().any(|v| !v.is_finite())) {
+        return Err(EditError::Invalid("paragraph offsets must be finite numbers".into()));
+    }
+    if style.width.is_some_and(|w| !w.is_finite()) {
+        return Err(EditError::Invalid("paragraph width must be finite".into()));
+    }
+    if style.font_resource.is_some() && (style.family.is_some() || style.family_only.is_some() || style.bold.is_some() || style.italic.is_some()) {
         return Err(EditError::Invalid("font_resource selects an exact face; omit font, bold and italic".into()));
     }
     let lines = text_lines(doc, page)?;
-    let blocks = group_blocks(&lines);
-    let b = blocks.get(block).cloned().ok_or_else(|| EditError::Invalid(format!("page {} has no paragraph {}", page + 1, block + 1)))?;
+    let blocks = group_blocks(&lines, true);
+    let b = blocks.get(block).ok_or_else(|| EditError::Invalid(format!("page {} has no paragraph {}", page + 1, block + 1)))?;
+    mixed::validate_text(&b.text)?;
+    if b.runs.len() > mixed::MAX_SEGMENTS {
+        return Err(EditError::Invalid("edit paragraphs with at most 8,192 style segments".into()));
+    }
+    if unchanged(b, text.unwrap_or(&b.text), style) {
+        return Ok(LineEdit { substituted: None });
+    }
+    if b.runs.iter().any(|r| r.state.render_mode != 0.0 || r.state.complex_graphics) {
+        return Err(EditError::Invalid(
+            "this paragraph uses stroking, invisible text, clipping or an extended graphics state; its appearance is preserved unchanged".into(),
+        ));
+    }
+    if style.range.is_some() || b.runs.windows(2).any(|r| r[0].state != r[1].state) {
+        return mixed::rewrite(doc, page, &lines, b, text.unwrap_or(&b.text), style);
+    }
     let members: Vec<&TextLine> = b.lines.iter().map(|i| &lines[*i]).collect();
     let first = members[0];
     let p = page_dict(doc, page)?;
-    let mut res = p.dict.get(b"Resources").map(|r| doc.resolve(r)).and_then(|r| r.as_dict().cloned()).unwrap_or_default();
+    let res = p.dict.get(b"Resources").map(|r| doc.resolve(r)).and_then(|r| r.as_dict().cloned()).unwrap_or_default();
     let mut fonts_res = res.get(b"Font").map(|f| doc.resolve(f)).and_then(|f| f.as_dict().cloned()).unwrap_or_default();
-    let streams = content_streams(doc, &p.dict);
-    let pieces = Pieces::join(&streams.iter().map(|(_, d)| d.as_slice()).collect::<Vec<_>>());
-    let ops = pieces.parse().ops;
     let text = normalized_paragraph(text.unwrap_or(&b.text));
     let o = &first.origin;
     let (font_name, old_size) = o.state.font.clone().ok_or_else(|| EditError::Invalid("the paragraph has no font".into()))?;
@@ -1235,10 +1508,13 @@ pub fn rewrite_block(doc: &mut Document, page: usize, block: usize, text: Option
             "font resource /{chosen_font} is missing or cannot encode every replacement character; choose a compatible font"
         )));
     }
-    let reuse =
-        style.family.is_none() && style.bold.is_none() && style.italic.is_none() && metrics.as_ref().is_some_and(|m| m.encode(&text).is_some());
+    let reuse = style.family.is_none()
+        && style.family_only.is_none()
+        && style.bold.is_none()
+        && style.italic.is_none()
+        && metrics.as_ref().is_some_and(|m| m.encode(&text).is_some());
     // The chosen style also determines the real Japanese fallback outlines and advances.
-    let (family, bold, italic) = style.family.unwrap_or((source_family(&b.base_font), b.bold, b.italic));
+    let (family, bold, italic) = style.family.unwrap_or((style.family_only.unwrap_or_else(|| source_family(&b.base_font)), b.bold, b.italic));
     let bold = style.bold.unwrap_or(bold);
     let italic = style.italic.unwrap_or(italic);
     let type3 = if !reuse && needs_type3(&text) { Some(type3_font(doc, &mut fonts_res, &text, family, bold)?) } else { None };
@@ -1393,10 +1669,36 @@ pub fn rewrite_block(doc: &mut Document, page: usize, block: usize, text: Option
         block_ops.push(Op::new("Q", vec![]));
     }
     block_ops.push(Op::new("Q", vec![]));
+    install_block(doc, page, &lines, b, block_ops, new_font.then_some(fonts_res), false)?;
+    Ok(LineEdit { substituted })
+}
+
+fn install_block(
+    doc: &mut Document,
+    page: usize,
+    lines: &[TextLine],
+    b: &TextBlock,
+    mut block_ops: Vec<Op>,
+    fonts_res: Option<Dict>,
+    precise: bool,
+) -> Result<(), EditError> {
+    let n = pdfcraft_content::num;
+    let p = page_dict(doc, page)?;
+    let mut res = p.dict.get(b"Resources").map(|r| doc.resolve(r)).and_then(|r| r.as_dict().cloned()).unwrap_or_default();
+    let members: Vec<&TextLine> = b.lines.iter().filter_map(|i| lines.get(*i)).collect();
+    let first = members.first().ok_or_else(|| EditError::Invalid("the paragraph has no text runs".into()))?;
+    let o = &first.origin;
+    let streams = content_streams(doc, &p.dict);
+    let pieces = Pieces::join(&streams.iter().map(|(_, d)| d.as_slice()).collect::<Vec<_>>());
+    let ops = pieces.parse().ops;
     // The paragraph's operators go, and so does anything drawn in the same area (a fake-bold
     // second copy, an invisible text layer): the new text is all that may show.
     let member_rects: Vec<[f64; 4]> = members.iter().map(|l| l.rect).collect();
-    let mut drop = coincident_ops(&lines, &member_rects);
+    let mut drop = if precise || b.runs.windows(2).any(|r| r[0].state != r[1].state) {
+        std::collections::HashSet::new()
+    } else {
+        coincident_ops(lines, &member_rects)
+    };
     drop.extend(members.iter().flat_map(|l| l.ops.iter().copied()));
     // Text shown earlier in the same text object stays first: the paragraph then goes where it
     // was, between two halves of the text object, so it keeps its place in reading order.
@@ -1421,7 +1723,8 @@ pub fn rewrite_block(doc: &mut Document, page: usize, block: usize, text: Option
         (insert, !drop.contains(&i))
     });
     let contents = rewritten_contents(doc, &streams, new_data);
-    if new_font {
+    let new_font = fonts_res.is_some();
+    if let Some(fonts_res) = fonts_res {
         res.set(b"Font".to_vec(), Object::Dict(fonts_res));
     }
     let page_ref = p.obj;
@@ -1431,7 +1734,7 @@ pub fn rewrite_block(doc: &mut Document, page: usize, block: usize, text: Option
             d.set(b"Resources".to_vec(), Object::Dict(res));
         }
     })?;
-    Ok(LineEdit { substituted })
+    Ok(())
 }
 
 #[cfg(test)]

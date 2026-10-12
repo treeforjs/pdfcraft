@@ -2140,3 +2140,13 @@ signature pad	Type	Digita
 	The field {name} no longer exists.	Il campo {name} non esiste più.
 	A selected field has no widget on any page, so the fields can't be edited together.	Un campo selezionato non ha widget in nessuna pagina, quindi i campi non possono essere modificati insieme.
 	 ({n} at {dpi} dpi, the largest size they can be drawn at)	 ({n} a {dpi} dpi, la dimensione massima a cui si possono disegnare)
+
+# Mixed text editing and PDF draft preview
+	The document changed. Continue editing to refresh the preview.	Il documento è cambiato. Continua a modificare per aggiornare l’anteprima.
+	Preview edited paragraph	Anteprima del paragrafo modificato
+	Rendered PDF preview	Anteprima PDF renderizzata
+	Continue editing	Continua a modificare
+	Apply and close	Applica e chiudi
+	Underline is available for whole paragraphs.	La sottolineatura è disponibile per interi paragrafi.
+	Preview PDF	Anteprima PDF
+	{n} selected characters	{n} caratteri selezionati

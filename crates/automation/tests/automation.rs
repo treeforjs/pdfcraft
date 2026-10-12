@@ -1472,6 +1472,212 @@ fn selecting_embedded_page_fonts_round_trips_and_rejects_without_history_changes
     assert_eq!(ok(&mut a, "text_paragraphs", json!({"doc":reopened,"page":1}))["paragraphs"][0]["font"], "Times-Italic");
 }
 
+#[test]
+fn excessive_paragraph_apply_and_preview_preserve_bytes_and_redo() {
+    let dir = workdir("paragraph-input-budget");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({"path":"a.pdf"}))["doc"].as_u64().unwrap();
+    ok(&mut a, "text_edit", json!({"doc":doc,"page":1,"paragraph":1,"text":"Changed"}));
+    let changed = a.session().get(pdfcraft_engine::DocId(doc)).unwrap().bytes.clone();
+    ok(&mut a, "edit_undo", json!({"doc":doc}));
+    let original = a.session().get(pdfcraft_engine::DocId(doc)).unwrap().bytes.clone();
+    let text = "x".repeat(1_000_001);
+    for preview in [false, true] {
+        let error = a.call("text_edit", &json!({"doc":doc,"page":1,"paragraph":1,"text":text,"preview":preview})).unwrap_err();
+        assert!(error.to_string().contains("1,000,000 characters"));
+        let current = a.session().get(pdfcraft_engine::DocId(doc)).unwrap();
+        assert_eq!(current.bytes, original);
+        assert_eq!(current.can_undo(), None);
+        assert_eq!(current.can_redo(), Some("Edit text"));
+    }
+    // Direct engine callers get the same early guard before page inspection/private copies.
+    let current = a.session().get(pdfcraft_engine::DocId(doc)).unwrap();
+    let error = current.text_edit_preview(usize::MAX, 0, &text, &Default::default(), 300).err().unwrap();
+    assert!(error.contains("1,000,000 characters"));
+    let mut direct = pdfcraft_engine::Session::new();
+    let direct_id = direct.open("budget.pdf", None, original.clone(), None).unwrap();
+    let error =
+        direct.apply(direct_id, pdfcraft_engine::Edit::EditTextBlock { page: usize::MAX, block: 0, text, style: Default::default() }).unwrap_err();
+    assert!(error.to_string().contains("1,000,000 characters"));
+    assert_eq!(direct.get(direct_id).unwrap().bytes, original);
+    ok(&mut a, "edit_redo", json!({"doc":doc}));
+    assert_eq!(a.session().get(pdfcraft_engine::DocId(doc)).unwrap().bytes, changed);
+}
+
+#[test]
+fn selected_color_keeps_q_restored_black_and_other_visible_glyphs() {
+    use pdfcraft_cos::{Dict, Document, ObjRef, Object, SaveOptions, Stream, write_incremental};
+    let dir = workdir("restored-colors");
+    let mut cos = Document::open(std::sync::Arc::new(fixture(1))).unwrap();
+    let content =
+        "BT /F1 24 Tf 20 150 Td (A) Tj ET q /DeviceRGB cs 1 0 0 scn BT /F1 24 Tf 36.008 150 Td (B) Tj ET Q BT /F1 24 Tf 52.016 150 Td (C) Tj ET";
+    let stream = cos.add(Object::Stream(Stream::flate(Dict::new(), content.as_bytes())));
+    cos.update_dict(ObjRef::new(4, 0), |page| page.set(b"Contents".to_vec(), Object::Ref(stream))).unwrap();
+    std::fs::write(dir.join("colors.pdf"), write_incremental(&cos, &SaveOptions::default()).unwrap()).unwrap();
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({"path":"colors.pdf"}))["doc"].as_u64().unwrap();
+    let pixels = |a: &mut Automation, doc| {
+        let rendered = a.call("page_render", &json!({"doc":doc,"page":1,"dpi":144})).unwrap();
+        let Content::Png { data, .. } = &rendered[0] else { panic!("expected page PNG") };
+        image::load_from_memory(data).unwrap().to_rgba8()
+    };
+    let before = pixels(&mut a, doc);
+    let applied = ok(&mut a, "text_edit", json!({"doc":doc,"page":1,"paragraph":1,"range_start":0,"range_end":1,"color":"#0000ff"}));
+    assert_eq!(applied["paragraph"]["lines"], 1, "style fragments are one visual row");
+    let after = pixels(&mut a, doc);
+    let mut red = 0;
+    let mut black = 0;
+    let mut blue = 0;
+    for (x, y, color) in after.enumerate_pixels() {
+        let [r, g, b, alpha] = color.0;
+        if x >= 73 {
+            assert_eq!(color, before.get_pixel(x, y), "unselected glyph at {x},{y} changed");
+            red += usize::from(r > 150 && g < 60 && b < 60 && alpha > 200);
+            black += usize::from(r < 40 && g < 40 && b < 40 && alpha > 200);
+        } else {
+            blue += usize::from(b > 150 && r < 60 && g < 60 && alpha > 200);
+        }
+    }
+    assert!(red > 5 && black > 5 && blue > 5, "real red B, black C and blue A pixels: {red}, {black}, {blue}");
+    let runs = &ok(&mut a, "text_paragraphs", json!({"doc":doc,"page":1}))["paragraphs"][0]["runs"];
+    assert_eq!(runs[2]["color"], json!([0.0, 0.0, 0.0]));
+    ok(&mut a, "doc_save", json!({"doc":doc,"path":"restyled.pdf"}));
+    let reopened = ok(&mut a, "doc_open", json!({"path":"restyled.pdf"}))["doc"].as_u64().unwrap();
+    assert_eq!(pixels(&mut a, reopened), after);
+}
+
+#[test]
+fn selected_recolor_preserves_other_device_space_pixels() {
+    use pdfcraft_cos::{Dict, Document, ObjRef, Object, SaveOptions, Stream, write_incremental};
+    let dir = workdir("device-space-pixels");
+    for (index, (initial, next)) in [("0.2 g", "0.7 sc"), ("1 0 0 rg", "0 1 0 scn"), ("0 1 1 0 k", "1 0 0 0 sc")].into_iter().enumerate() {
+        let mut cos = Document::open(std::sync::Arc::new(fixture(1))).unwrap();
+        let content = format!(
+            "BT /F1 24 Tf 20 150 Td (A) Tj ET q {initial} BT /F1 24 Tf 36.008 150 Td (B) Tj {next} 1 0 0 1 52.016 150 Tm (C) Tj ET Q BT /F1 24 Tf 69.344 150 Td (D) Tj ET"
+        );
+        let stream = cos.add(Object::Stream(Stream::flate(Dict::new(), content.as_bytes())));
+        cos.update_dict(ObjRef::new(4, 0), |page| page.set(b"Contents".to_vec(), Object::Ref(stream))).unwrap();
+        let path = format!("device-{index}.pdf");
+        std::fs::write(dir.join(&path), write_incremental(&cos, &SaveOptions::default()).unwrap()).unwrap();
+        let mut a = auto(&dir);
+        let doc = ok(&mut a, "doc_open", json!({"path":path}))["doc"].as_u64().unwrap();
+        let pixels = |a: &mut Automation| {
+            let rendered = a.call("page_render", &json!({"doc":doc,"page":1,"dpi":144})).unwrap();
+            let Content::Png { data, .. } = &rendered[0] else { panic!("expected page PNG") };
+            image::load_from_memory(data).unwrap().to_rgba8()
+        };
+        let before = pixels(&mut a);
+        ok(&mut a, "text_edit", json!({"doc":doc,"page":1,"paragraph":1,"range_start":1,"range_end":2,"color":"#0000ff"}));
+        let after = pixels(&mut a);
+        assert_ne!(after, before, "selected B visibly changes");
+        for (x, y, color) in after.enumerate_pixels() {
+            if !(73..104).contains(&x) {
+                assert_eq!(color, before.get_pixel(x, y), "{initial} then {next}: unselected pixel at {x},{y} changed");
+            }
+        }
+    }
+}
+
+#[test]
+fn selected_unsupported_graphics_leave_preview_bytes_and_history_unchanged() {
+    use pdfcraft_cos::{Dict, Document, ObjRef, Object, SaveOptions, Stream, write_incremental};
+    let dir = workdir("unsupported-graphics");
+    let mut cos = Document::open(std::sync::Arc::new(fixture(1))).unwrap();
+    let content = "q BT /F1 12 Tf 1 Tr 1 0 0 RG 2 w 20 200 Td (Special) Tj ET Q BT /F1 12 Tf 20 100 Td (Normal) Tj ET";
+    let stream = cos.add(Object::Stream(Stream::flate(Dict::new(), content.as_bytes())));
+    cos.update_dict(ObjRef::new(4, 0), |page| page.set(b"Contents".to_vec(), Object::Ref(stream))).unwrap();
+    std::fs::write(dir.join("graphics.pdf"), write_incremental(&cos, &SaveOptions::default()).unwrap()).unwrap();
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({"path":"graphics.pdf"}))["doc"].as_u64().unwrap();
+    ok(&mut a, "text_edit", json!({"doc":doc,"page":1,"paragraph":2,"range_start":0,"range_end":1,"color":"#0000ff"}));
+    let before = a.session().get(pdfcraft_engine::DocId(doc)).unwrap().bytes.clone();
+    for preview in [false, true] {
+        let err =
+            a.call("text_edit", &json!({"doc":doc,"page":1,"paragraph":1,"range_start":0,"range_end":1,"size":18,"preview":preview})).unwrap_err();
+        assert!(err.to_string().contains("appearance is preserved unchanged"), "{err}");
+        let current = a.session().get(pdfcraft_engine::DocId(doc)).unwrap();
+        assert_eq!(current.bytes, before);
+        assert_eq!(current.can_undo(), Some("Edit text"));
+        assert_eq!(current.can_redo(), None);
+    }
+    ok(&mut a, "edit_undo", json!({"doc":doc}));
+    assert_eq!(a.session().get(pdfcraft_engine::DocId(doc)).unwrap().can_undo(), None);
+    ok(&mut a, "edit_redo", json!({"doc":doc}));
+    assert_eq!(a.session().get(pdfcraft_engine::DocId(doc)).unwrap().bytes, before);
+}
+
+#[test]
+fn selected_character_runs_keep_surroundings_through_reflow_history_and_save() {
+    let dir = workdir("character-runs");
+    std::fs::write(dir.join("runs.pdf"), embedded_page_font_pdf()).unwrap();
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({"path":"runs.pdf"}))["doc"].as_u64().unwrap();
+    ok(&mut a, "text_edit", json!({"doc":doc,"page":1,"paragraph":1,"text":"Before AB after","font":"times","size":12}));
+    let initial = a.session().get(pdfcraft_engine::DocId(doc)).unwrap().bytes.clone();
+    // Already-satisfied formatting must not consume an undo step or clear redo.
+    ok(&mut a, "text_edit", json!({"doc":doc,"page":1,"paragraph":1,"range_start":0,"range_end":6,"bold":false}));
+    assert_eq!(a.session().get(pdfcraft_engine::DocId(doc)).unwrap().bytes, initial);
+    ok(&mut a, "edit_undo", json!({"doc":doc}));
+    assert_eq!(ok(&mut a, "text_paragraphs", json!({"doc":doc,"page":1}))["paragraphs"][0]["text"], "Page 1");
+    ok(&mut a, "text_edit", json!({"doc":doc,"page":1,"paragraph":1,"bold":false}));
+    assert_eq!(a.session().get(pdfcraft_engine::DocId(doc)).unwrap().can_redo(), Some("Edit text"));
+    ok(&mut a, "edit_redo", json!({"doc":doc}));
+    let side = {
+        let page = &a.session().get(pdfcraft_engine::DocId(doc)).unwrap().info.pages[0];
+        page.width.max(page.height) as u32
+    };
+    let preview = a.call("text_edit", &json!({"doc":doc,"page":1,"paragraph":1,"range_start":7,"range_end":9,"font_resource":"Embedded","color":"#0000ff","preview":true,"max_side":side})).unwrap();
+    assert_eq!(a.session().get(pdfcraft_engine::DocId(doc)).unwrap().bytes, initial);
+    ok(&mut a, "text_edit", json!({"doc":doc,"page":1,"paragraph":1,"range_start":7,"range_end":9,"font_resource":"Embedded","color":"#0000ff"}));
+    let actual = a.call("page_render", &json!({"doc":doc,"page":1,"dpi":72})).unwrap();
+    let png = |content: &[Content]| {
+        content
+            .iter()
+            .find_map(|c| match c {
+                Content::Png { data, .. } => Some(data.clone()),
+                _ => None,
+            })
+            .unwrap()
+    };
+    assert_eq!(png(&preview), png(&actual), "preview pixels equal the accepted PDF pixels");
+    let p = &ok(&mut a, "text_paragraphs", json!({"doc":doc,"page":1}))["paragraphs"][0];
+    assert_eq!(p["runs"].as_array().unwrap().len(), 3);
+    assert_eq!(p["runs"][0]["font"], "Times-Roman");
+    assert_eq!(p["runs"][1]["font"], "ABCDEF+ContributorShapes-Bold");
+    assert_eq!(p["runs"][2]["font"], "Times-Roman");
+    let selected = a.session().get(pdfcraft_engine::DocId(doc)).unwrap().bytes.clone();
+    for range in [
+        json!({"range_start":0,"range_end":6,"font_resource":"Embedded"}),
+        json!({"range_start":7}),
+        json!({"range_start":9,"range_end":8}),
+        json!({"range_start":0,"range_end":1000}),
+    ] {
+        let mut args = range;
+        args["doc"] = json!(doc);
+        args["page"] = json!(1);
+        args["paragraph"] = json!(1);
+        assert!(a.call("text_edit", &args).is_err(), "{args}");
+        assert_eq!(a.session().get(pdfcraft_engine::DocId(doc)).unwrap().bytes, selected);
+    }
+    ok(&mut a, "edit_undo", json!({"doc":doc}));
+    assert_eq!(a.session().get(pdfcraft_engine::DocId(doc)).unwrap().bytes, initial);
+    ok(&mut a, "edit_redo", json!({"doc":doc}));
+    assert_eq!(a.session().get(pdfcraft_engine::DocId(doc)).unwrap().bytes, selected);
+    ok(&mut a, "text_edit", json!({"doc":doc,"page":1,"paragraph":1,"width":65}));
+    ok(&mut a, "doc_save", json!({"doc":doc,"path":"mixed-saved.pdf"}));
+    let saved = ok(&mut a, "doc_open", json!({"path":"mixed-saved.pdf"}))["doc"].as_u64().unwrap();
+    let p = &ok(&mut a, "text_paragraphs", json!({"doc":saved,"page":1}))["paragraphs"][0];
+    assert_eq!(p["text"], "Before AB after");
+    assert!(p["line_count"].as_u64().unwrap() > 1);
+    assert!(p["runs"].as_array().unwrap().iter().any(|r| r["font"] == "ABCDEF+ContributorShapes-Bold"));
+    assert!(
+        a.call("page_render", &json!({"doc":saved,"page":1,"dpi":96}))
+            .unwrap()
+            .iter()
+            .any(|c| matches!(c, Content::Png { data, .. } if !data.is_empty()))
+    );
+}
+
 /// One page whose content is one stream in three pieces (#155): a `TJ` array ends the middle
 /// piece and its operator starts the last one.
 fn split_streams_pdf() -> Vec<u8> {

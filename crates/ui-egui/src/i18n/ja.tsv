@@ -2131,3 +2131,13 @@ signature pad	Type	入力
 	The field {name} no longer exists.	フィールド {name} はもう存在しません。
 	A selected field has no widget on any page, so the fields can't be edited together.	選択したフィールドの一つがどのページにもウィジェットを持たないため、まとめて編集できません。
 	 ({n} at {dpi} dpi, the largest size they can be drawn at)	（{n} 件は描画できる最大サイズの {dpi} dpi で書き出しました）
+
+# Mixed text editing and PDF draft preview
+	The document changed. Continue editing to refresh the preview.	文書が変更されました。編集を続けてプレビューを更新してください。
+	Preview edited paragraph	編集した段落のプレビュー
+	Rendered PDF preview	レンダリングしたPDFプレビュー
+	Continue editing	編集を続ける
+	Apply and close	適用して閉じる
+	Underline is available for whole paragraphs.	下線は段落全体に適用できます。
+	Preview PDF	PDFをプレビュー
+	{n} selected characters	{n} 文字を選択中

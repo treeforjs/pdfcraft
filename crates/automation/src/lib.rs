@@ -416,12 +416,21 @@ impl Automation {
                             "rect": [r(u[0].min(v[0])), r(u[1].min(v[1])), r(u[0].max(v[0])), r(u[1].max(v[1]))],
                             "font": b.base_font,
                             "size": (b.size * 100.0).round() / 100.0,
+                            "line_count": b.line_count,
+                            "runs": b.runs.iter().map(|run| json!({
+                                "start": run.start, "end": run.end, "font_resource": run.font,
+                                "font": run.base_font, "size": run.size, "bold": run.bold,
+                                "italic": run.italic, "color": run.color,
+                            })).collect::<Vec<_>>(),
                         })
                     })
                     .collect();
                 json!({ "page": page + 1, "count": blocks.len(), "paragraphs": blocks })
             }
             "text_edit" if a.get("paragraph").is_some() => {
+                if let Some(text) = a.opt_str("text")? {
+                    pdfcraft_engine::validate_paragraph_text(text).map_err(|error| ToolError::InvalidArgs(error.to_string()))?;
+                }
                 let page = self.page(&a)?;
                 let n = self.doc(&a)?.text_blocks(page).len();
                 let k = a.int("paragraph")?;
@@ -442,6 +451,19 @@ impl Automation {
                     width: a.opt_num("width")?,
                     ..Default::default()
                 };
+                let selection = (a.opt_int("range_start")?, a.opt_int("range_end")?);
+                style.range = match selection {
+                    (None, None) => None,
+                    (Some(start), Some(end)) if start >= 0 && end > start => Some([
+                        usize::try_from(start).map_err(|_| ToolError::InvalidArgs("range_start is too large".into()))?,
+                        usize::try_from(end).map_err(|_| ToolError::InvalidArgs("range_end is too large".into()))?,
+                    ]),
+                    _ => {
+                        return Err(ToolError::InvalidArgs(
+                            "provide both range_start and range_end with 0 <= start < end (Unicode scalar offsets)".into(),
+                        ));
+                    }
+                };
                 let (dx, dy) = (a.opt_num("dx")?, a.opt_num("dy")?);
                 if dx.is_some() || dy.is_some() {
                     style.offset = Some([dx.unwrap_or(0.0), dy.unwrap_or(0.0)]);
@@ -453,7 +475,7 @@ impl Automation {
                         "courier" => pdfcraft_engine::FontFamily::Courier,
                         other => return Err(ToolError::InvalidArgs(format!("unknown font {other:?} (helvetica, times, courier)"))),
                     };
-                    style.family = Some((family, block.bold, block.italic));
+                    style.family_only = Some(family);
                 }
                 if let Some(c) = a.opt_str("color")? {
                     style.color = Some(comments::parse_color(c)?);
@@ -467,13 +489,30 @@ impl Automation {
                         other => return Err(ToolError::InvalidArgs(format!("unknown align {other:?}"))),
                     });
                 }
+                if a.opt_bool("preview")?.unwrap_or(false) {
+                    let side =
+                        u32::try_from(a.opt_int("max_side")?.unwrap_or(1024)).map_err(|_| ToolError::InvalidArgs("invalid max_side".into()))?;
+                    let preview = self.doc(&a)?.text_edit_preview(page, k as usize - 1, &text, &style, side).map_err(failed)?;
+                    let rendered = preview.render().map_err(failed)?;
+                    return Ok(vec![Content::Png {
+                        data: encode_png(rendered.width, rendered.height, &rendered.rgba)?,
+                        width: rendered.width,
+                        height: rendered.height,
+                    }]);
+                }
                 let mut out = self.apply(&a, Edit::EditTextBlock { page, block: k as usize - 1, text, style })?;
                 if let Some(b) = self.doc(&a)?.text_blocks(page).get(k as usize - 1) {
-                    out["paragraph"] = json!({ "text": b.text, "lines": b.lines.len(), "font": b.base_font });
+                    out["paragraph"] = json!({ "text": b.text, "lines": b.line_count, "font": b.base_font });
                 }
                 out
             }
             "text_edit" => {
+                if a.opt_bool("preview")?.unwrap_or(false) {
+                    return Err(ToolError::InvalidArgs("preview requires paragraph, not line".into()));
+                }
+                if a.get("range_start").is_some() || a.get("range_end").is_some() {
+                    return Err(ToolError::InvalidArgs("character ranges require paragraph, not line".into()));
+                }
                 if a.get("font_resource").is_some() {
                     return Err(ToolError::InvalidArgs("font_resource requires paragraph, not line".into()));
                 }

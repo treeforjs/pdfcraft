@@ -514,18 +514,68 @@ impl Metrics {
     /// The bytes that show `text` in this font, or `None` if some character has no code or
     /// no glyph in it (the caller then substitutes another font).
     pub fn encode(&self, text: &str) -> Option<Vec<u8>> {
+        // A single appearance/edit cannot ask this helper to allocate unbounded DP state.
+        // Larger documents remain readable; callers receive the normal unsupported-text error.
+        if text.len() > 16 * 1024 * 1024 {
+            return None;
+        }
         let mut reverse: HashMap<&str, u32> = HashMap::new();
         for (code, t) in &self.unicode {
             if self.has_glyph(*code) {
                 reverse.entry(t.as_str()).and_modify(|c| *c = (*c).min(*code)).or_insert(*code);
             }
         }
-        let mut out = Vec::with_capacity(text.len() * self.code_len);
-        let mut buf = [0u8; 4];
-        for ch in text.chars() {
-            let code = *reverse.get(ch.encode_utf8(&mut buf) as &str)?;
+        // ToUnicode may map one glyph to several scalars (ligatures and combining marks).
+        // Prefer the longest available mapping instead of dropping these reusable glyphs.
+        let mut sequences: HashMap<char, Vec<(&str, u32)>> = HashMap::new();
+        for (&value, &code) in &reverse {
+            if value.chars().count() > 1
+                && let Some(first) = value.chars().next()
+            {
+                sequences.entry(first).or_default().push((value, code));
+            }
+        }
+        for values in sequences.values_mut() {
+            values.sort_unstable_by(|a, b| b.0.len().cmp(&a.0.len()).then(a.1.cmp(&b.1)));
+        }
+        // Work backwards so a longest match is chosen only when the suffix is encodable.
+        // Greedy matching alone would reject `abc` with mappings `a`, `ab`, and `bc`.
+        let count = text.len().checked_add(1)?;
+        let mut choices = Vec::new();
+        choices.try_reserve_exact(count).ok()?;
+        choices.resize(count, None);
+        *choices.last_mut()? = Some((0, text.len()));
+        let mut sequence_budget = 16 * 1024 * 1024usize;
+        for (offset, ch) in text.char_indices().rev() {
+            let remaining = text.get(offset..)?;
+            let mut sequence = None;
+            if let Some(values) = sequences.get(&ch) {
+                for &(value, code) in values {
+                    // Hostile fonts can declare thousands of overlapping ligatures. Bound the
+                    // total byte comparisons instead of allowing quadratic prefix matching.
+                    sequence_budget = sequence_budget.checked_sub(value.len().min(remaining.len()))?;
+                    if remaining.starts_with(value) && choices.get(offset + value.len()).is_some_and(Option::is_some) {
+                        sequence = Some((value, code));
+                        break;
+                    }
+                }
+            }
+            let chosen = sequence.or_else(|| {
+                let value = remaining.get(..ch.len_utf8())?;
+                choices.get(offset + value.len()).filter(|v| v.is_some())?;
+                reverse.get(value).map(|code| (value, *code))
+            });
+            if let Some((value, code)) = chosen {
+                *choices.get_mut(offset)? = Some((code, offset + value.len()));
+            }
+        }
+        let mut out = Vec::with_capacity(text.len());
+        let mut offset = 0;
+        while offset < text.len() {
+            let (code, end) = choices.get(offset).copied().flatten()?;
             let bytes = code.to_be_bytes();
             out.extend_from_slice(&bytes[4 - self.code_len.clamp(1, 4)..]);
+            offset = end;
         }
         Some(out)
     }
@@ -662,6 +712,16 @@ mod tests {
     use pdfcraft_cos::{Dict, Document, Object, Stream};
 
     use super::*;
+
+    #[test]
+    fn unicode_sequences_choose_the_longest_encodable_suffix() {
+        let mut metrics = Metrics::fallback();
+        metrics.unicode = [(1, "a".into()), (2, "ab".into()), (3, "bc".into()), (4, "fi".into()), (5, "e\u{301}".into())].into();
+        assert_eq!(metrics.encode("abc"), Some(vec![1, 3]), "greedy ab would strand c");
+        assert_eq!(metrics.encode("ab"), Some(vec![2]));
+        assert_eq!(metrics.encode("fie\u{301}"), Some(vec![4, 5]));
+        assert_eq!(metrics.encode("abcd"), None);
+    }
 
     fn font(doc: &mut Document, entries: Vec<(&str, Object)>) -> Dict {
         let mut d = Dict::new();

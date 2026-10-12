@@ -2154,3 +2154,13 @@ certificate	Subject	Власник сертифіката
 	The field {name} no longer exists.	Поле {name} більше не існує.
 	A selected field has no widget on any page, so the fields can't be edited together.	Одне з вибраних полів не має віджета на жодній сторінці, тому поля не можна редагувати разом.
 	 ({n} at {dpi} dpi, the largest size they can be drawn at)	 ({n} — з роздільністю {dpi} dpi, найбільшою, з якою їх можна відобразити)
+
+# Mixed text editing and PDF draft preview
+	The document changed. Continue editing to refresh the preview.	Документ змінено. Продовжте редагування, щоб оновити попередній перегляд.
+	Preview edited paragraph	Перегляд відредагованого абзацу
+	Rendered PDF preview	Відтворений попередній перегляд PDF
+	Continue editing	Продовжити редагування
+	Apply and close	Застосувати й закрити
+	Underline is available for whole paragraphs.	Підкреслення доступне для цілих абзаців.
+	Preview PDF	Перегляд PDF
+	{n} selected characters	Вибрано символів: {n}

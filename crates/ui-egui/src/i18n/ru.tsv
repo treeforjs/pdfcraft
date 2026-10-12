@@ -2044,3 +2044,13 @@
 	The field {name} no longer exists.	Поле {name} больше не существует.
 	A selected field has no widget on any page, so the fields can't be edited together.	У одного из выбранных полей нет виджета ни на одной странице, поэтому поля нельзя изменить вместе.
 	 ({n} at {dpi} dpi, the largest size they can be drawn at)	 ({n} — с разрешением {dpi} dpi, максимальным, с каким их можно отрисовать)
+
+# Mixed text editing and PDF draft preview
+	The document changed. Continue editing to refresh the preview.	Документ изменён. Продолжите редактирование, чтобы обновить предпросмотр.
+	Preview edited paragraph	Предпросмотр изменённого абзаца
+	Rendered PDF preview	Отрисованный предпросмотр PDF
+	Continue editing	Продолжить редактирование
+	Apply and close	Применить и закрыть
+	Underline is available for whole paragraphs.	Подчёркивание доступно для целых абзацев.
+	Preview PDF	Предпросмотр PDF
+	{n} selected characters	Выбрано символов: {n}

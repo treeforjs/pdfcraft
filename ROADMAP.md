@@ -83,20 +83,24 @@ The gaps that matter most, in priority order. Agents: prefer these over adding P
 
 Decided against for now (owner, 2026-10-05): self-installing updates and an update check at start. Help ▸ Check for updates is manual only.
 
-## Next M7 parity milestone: rich text within a paragraph
+## M7 current work and remaining text parity
 
-The 2026-10-11 wave completes a bounded paragraph-font workflow: choose an existing page face,
-refuse unavailable glyphs, change size/colour without losing that face, toggle standard bold and
-italic independently, reflow using exact standard Latin advances, undo/redo, and save/reopen.
-Generated font names no longer overwrite other paragraphs or inherited/shared page resources.
-This improves existing-text fidelity; it does not increase the overall effort estimate.
+The 2026-10-11 wave added exact existing-page font selection and paragraph formatting fidelity.
+The 2026-10-12 checkpoint adds a run-preserving editable paragraph model, Unicode-scalar selection
+formatting, source character-code and TJ spacing preservation, independent style changes, and
+an actual-PDF draft preview. Its acceptance covers selecting a word, preserving surrounding
+runs, reflow, no-op/error history, undo/redo and interoperable save/reopen. It keeps the overall
+editing feature **partial**, and does not increase the historical overall effort estimate.
 
-The next milestone is a **run-preserving paragraph model**. Today `TextBlock` records one
-font/size/colour, detection separates style changes, and the inline editor keeps a plain string.
-Character-range formatting requires preserving source run boundaries and Unicode-to-glyph maps,
-paragraph identity across mixed-style reflow, cursor selections, and runs in the UI/automation API.
-Acceptance must cover selecting one word, changing its face/weight/slant/colour while surrounding
-runs remain unchanged, reflow, undo/redo, and interoperable save/reopen. This is not shipped yet.
+Further M7 work includes rotated/skewed/reflected paragraphs, complete text-rendering/stroke/
+ExtGState preservation (currently refused), robust logical paragraph identity
+through complex layouts and content-stream boundaries, uniform-paragraph source preservation, run decorations, tagged-content
+preservation, broader encodings, complex shaping, find/replace and lists. The typing surface still
+uses interface fonts; the explicit rendered preview shows the actual PDF. Character offsets are
+Unicode scalars, and indivisible multi-scalar PDF glyphs are protected against partial selection.
+
+[The 2026-10-12 inventory](docs/parity-inventory-2026-10-12.md) records every area's remaining
+implementation count and the evidence required beyond manifest labels.
 
 ## Milestones
 
@@ -143,6 +147,8 @@ M0 → M1 → M2 → M3 → M4 must happen in order. After M4, M5–M12 can run 
 - Unmeasured fidelity: without an Acrobat comparison harness, quality gaps surface as user reports.
 
 ## Log
+
+- **2026-10-12 (M7, mixed text and PDF draft preview):** Existing paragraphs expose source style runs and accept selected Unicode-scalar ranges in the Format panel and `text_edit`. Unchanged spans retain their original PDF character codes, spacing and TJ advances, including indivisible multi-scalar mappings; range edits keep overlapping independent text. Mixed faces survive text replacement, wrapping, history and save/reopen. Actual PDF draft preview renders a cloned proposal without document/history changes; the typing surface still uses approximate interface fonts. No-op formatting preserves redo. Unsupported subset glyphs, split ligatures, invalid ranges, transformed mixed text and unreconstructed stroke/opacity/clip state refuse atomically. Exact positioned-gap, round-trip, engine automation and real selection controls have synthetic regressions. See the dated parity inventory for all 830 checklist entries and the remaining workflow queue. Existing-text parity and the overall effort estimate remain partial/unchanged.
 
 - **2026-10-11 (M7, paragraph-font parity wave 1):** Existing page-font selection in the Format panel and `text_fonts`/`text_edit`, including embedded subsets with exact glyph coverage checks; unavailable resources/glyphs and conflicting face/style requests refuse without document/history changes. Independent bold/italic and family changes preserve other source style. Reflow uses the already attributed standard Latin face metrics with explicit PDF widths and encoding precedence. New font resources remain isolated from other paragraphs/shared pages. Synthetic engine, automation and UI round-trip checks are cited in parity; rich-text run editing, wider encodings and Japanese italic remain open. Overall effort estimate unchanged.
 

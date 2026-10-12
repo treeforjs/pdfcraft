@@ -2093,3 +2093,13 @@ action wizard	Start	Старт
 	The field {name} no longer exists.	Полето {name} вече не съществува.
 	A selected field has no widget on any page, so the fields can't be edited together.	Едно от избраните полета няма елемент на нито една страница, затова полетата не могат да се редактират заедно.
 	 ({n} at {dpi} dpi, the largest size they can be drawn at)	 ({n} с {dpi} dpi, най-голямата резолюция, с която могат да бъдат изобразени)
+
+# Mixed text editing and PDF draft preview
+	The document changed. Continue editing to refresh the preview.	Документът е променен. Продължете редактирането, за да обновите предварителния преглед.
+	Preview edited paragraph	Преглед на редактирания абзац
+	Rendered PDF preview	Визуализиран PDF преглед
+	Continue editing	Продължаване на редактирането
+	Apply and close	Прилагане и затваряне
+	Underline is available for whole paragraphs.	Подчертаването е достъпно за цели абзаци.
+	Preview PDF	Преглед на PDF
+	{n} selected characters	Избрани знаци: {n}

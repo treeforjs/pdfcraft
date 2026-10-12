@@ -304,16 +304,23 @@ fn format_section(app: &mut PdfCraftApp, ui: &mut egui::Ui, t: &Tokens) {
         && let Some(ed) = app.views[i].line_editor.clone()
     {
         let mut ed = ed;
+        if ed.preview_open {
+            ui.label(tl!("Preview edited paragraph"));
+            return;
+        }
+        if let Some([start, end]) = ed.selection {
+            ui.label(crate::i18n::fmt(tl!("{n} selected characters"), &[("n", &end.saturating_sub(start).to_string())]));
+        }
         let mut changed = false;
         if let Some(look) = crate::content_ui::format_panel(ui, t, &ed.look) {
             ed.look = look;
             changed = true;
         }
-        changed |= crate::edit_text_ui::extras_panel(ui, &mut ed.extras);
+        changed |= crate::edit_text_ui::extras_panel(ui, &mut ed.extras, ed.selection.is_some());
         ui.label(tl!("Fonts"));
         egui::ComboBox::from_id_salt("existing-page-font").selected_text(&ed.source_font).width(180.0).show_ui(ui, |ui| {
             if let Some(doc) = app.session.get(app.views[i].id) {
-                match doc.text_fonts(ed.page, &ed.text) {
+                match doc.text_fonts(ed.page, &ed.selected_text()) {
                     Ok(fonts) => {
                         for font in fonts {
                             let label = format!("{} (/{})", font.base_font, font.resource);
@@ -340,6 +347,11 @@ fn format_section(app: &mut PdfCraftApp, ui: &mut egui::Ui, t: &Tokens) {
                 }
             }
             app.views[i].line_editor = Some(ed);
+        }
+        if ui.button(tl!("Preview PDF")).clicked()
+            && let Some(editor) = app.views[i].line_editor.clone()
+        {
+            crate::edit_text_ui::open_preview(app, &editor);
         }
         ui.add_space(6.0);
         ui.separator();

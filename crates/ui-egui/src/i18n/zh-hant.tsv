@@ -2017,3 +2017,13 @@
 	The field {name} no longer exists.	欄位 {name} 已不存在。
 	A selected field has no widget on any page, so the fields can't be edited together.	某個所選欄位在任何頁面上都沒有控制項，因此無法一起編輯這些欄位。
 	 ({n} at {dpi} dpi, the largest size they can be drawn at)	（{n} 張以可繪製的最大尺寸 {dpi} dpi 匯出）
+
+# Mixed text editing and PDF draft preview
+	The document changed. Continue editing to refresh the preview.	文件已變更。請繼續編輯以更新預覽。
+	Preview edited paragraph	預覽編輯後的段落
+	Rendered PDF preview	已算繪的 PDF 預覽
+	Continue editing	繼續編輯
+	Apply and close	套用並關閉
+	Underline is available for whole paragraphs.	底線可用於整個段落。
+	Preview PDF	預覽 PDF
+	{n} selected characters	已選取 {n} 個字元

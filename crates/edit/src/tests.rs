@@ -712,6 +712,50 @@ fn mixed_font_runs_are_not_merged_into_one_source_style() {
 }
 
 #[test]
+fn unsupported_text_graphics_are_refused_without_touching_supported_neighbours() {
+    for graphics in ["1 Tr 1 0 0 RG 2 w", "2 Tr", "3 Tr", "4 Tr", "5 Tr", "6 Tr", "7 Tr", "/Opacity gs", "0 0 600 800 re W n"] {
+        let source = format!("q BT /F1 12 Tf {graphics} 72 700 Td (Special) Tj ET Q BT /F1 12 Tf 72 600 Td (Normal) Tj ET");
+        let mut doc = text_page(&source);
+        if graphics.contains("gs") {
+            let mut opacity = pdfcraft_cos::Dict::new();
+            opacity.set(b"ca".to_vec(), Object::Real(0.4));
+            let mut states = pdfcraft_cos::Dict::new();
+            states.set(b"Opacity".to_vec(), Object::Dict(opacity));
+            doc.update_dict(pdfcraft_cos::ObjRef::new(3, 0), |page| {
+                let mut resources = page.get(b"Resources").unwrap().as_dict().unwrap().clone();
+                resources.set(b"ExtGState".to_vec(), Object::Dict(states));
+                page.set(b"Resources".to_vec(), Object::Dict(resources));
+            })
+            .unwrap();
+        }
+        let before = write_incremental(&doc, &SaveOptions::default()).unwrap();
+        for range in [None, Some([0, 1])] {
+            let style = text::BlockStyle { range, size: Some(18.0), ..Default::default() };
+            let error = text::rewrite_block(&mut doc, 0, 0, None, &style).unwrap_err();
+            assert!(error.to_string().contains("appearance is preserved unchanged"), "{graphics}: {error}");
+            assert_eq!(write_incremental(&doc, &SaveOptions::default()).unwrap(), before, "{graphics}");
+        }
+        text::rewrite_block(&mut doc, 0, 1, None, &text::BlockStyle { range: Some([0, 1]), color: Some([0.0, 0.0, 1.0]), ..Default::default() })
+            .unwrap();
+        let reopened = reopen(&doc);
+        let content = String::from_utf8_lossy(&page_content_bytes(&reopened, 0)).into_owned();
+        assert!(content.contains(&format!("{graphics} 72 700 Td (Special) Tj ET Q")), "{content}");
+        let blocks = text::text_blocks(&reopened, 0).unwrap();
+        assert_eq!(blocks[0].text, "Special");
+        assert_eq!(blocks[1].text, "Normal");
+        assert_eq!(blocks[1].runs[0].color, [0.0, 0.0, 1.0]);
+    }
+}
+
+#[test]
+fn text_clip_outlives_the_text_object_until_graphics_restore() {
+    let mut doc = text_page("BT /F1 12 Tf 7 Tr 72 700 Td (Clip) Tj ET 0 Tr BT /F1 12 Tf 72 600 Td (Clipped) Tj ET");
+    let before = write_incremental(&doc, &SaveOptions::default()).unwrap();
+    assert!(text::rewrite_block(&mut doc, 0, 1, None, &text::BlockStyle { range: Some([0, 1]), size: Some(20.0), ..Default::default() }).is_err());
+    assert_eq!(write_incremental(&doc, &SaveOptions::default()).unwrap(), before);
+}
+
+#[test]
 fn missing_glyphs_preserve_source_style_in_fallback() {
     let mut doc = descriptor_text_page();
     let result = text::replace_line(&mut doc, 0, 0, "Styled €").unwrap();
@@ -1109,6 +1153,252 @@ fn existing_page_fonts_are_selected_exactly_and_missing_glyphs_are_refused() {
     text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { size: Some(18.0), color: Some([0.0, 0.0, 1.0]), ..Default::default() }).unwrap();
     let line = &text::text_lines(&reopen(&doc), 0).unwrap()[0];
     assert_eq!((line.base_font.as_str(), line.size, line.color), ("ABCDEF+Arial", 18.0, [0.0, 0.0, 1.0]));
+}
+
+#[test]
+fn mixed_paragraph_selection_keeps_surrounding_faces_and_reopens() {
+    let mut doc = text_page("BT /F1 12 Tf 72 700 Td (Before ) Tj /F2 12 Tf (abba) Tj /F1 12 Tf ( after.) Tj ET");
+    let blocks = text::text_blocks(&doc, 0).unwrap();
+    assert_eq!(blocks.len(), 1);
+    assert_eq!(blocks[0].text, "Before abba after.");
+    assert_eq!(blocks[0].runs.iter().map(|r| (r.start, r.end, r.font.as_str())).collect::<Vec<_>>(), [(0, 7, "F1"), (7, 11, "F2"), (11, 18, "F1")]);
+    text::rewrite_block(
+        &mut doc,
+        0,
+        0,
+        None,
+        &text::BlockStyle { range: Some([7, 11]), italic: Some(true), color: Some([1.0, 0.0, 0.0]), ..Default::default() },
+    )
+    .unwrap();
+    let mut doc = reopen(&doc);
+    let b = &text::text_blocks(&doc, 0).unwrap()[0];
+    assert_eq!(b.text, "Before abba after.");
+    assert_eq!(b.runs.len(), 3);
+    assert_eq!((b.runs[0].font.as_str(), b.runs[2].font.as_str()), ("F1", "F1"));
+    assert!(b.runs[1].italic);
+    assert_eq!(b.runs[1].color, [1.0, 0.0, 0.0]);
+    text::rewrite_block(&mut doc, 0, 0, Some("Before edited after."), &text::BlockStyle { width: Some(70.0), ..Default::default() }).unwrap();
+    let b = &text::text_blocks(&reopen(&doc), 0).unwrap()[0];
+    assert_eq!(b.text, "Before edited after.");
+    assert!(b.line_count > 1);
+    assert!(b.runs.iter().filter(|r| r.start >= 7 && r.end <= 14).all(|r| r.italic && r.color == [1.0, 0.0, 0.0]));
+    assert_eq!(b.runs.last().unwrap().font, "F1");
+}
+
+#[test]
+fn range_colour_keeps_kerning_spacing_and_nonuniform_geometry() {
+    for matrix in ["1 0 0 1 72 700 Tm", "2 0 0 1 72 700 Tm", "0.5 0 0 1 72 700 Tm"] {
+        let mut doc = text_page(&format!("BT /F1 12 Tf {matrix} [(A) 120 (V  )] TJ 2 Tc (B) Tj 120 Tz (C) Tj ET"));
+        let before = text::text_blocks(&doc, 0).unwrap();
+        assert_eq!(before.len(), 1);
+        assert_eq!(before[0].text, "AV  BC");
+        assert_eq!(before[0].runs.len(), 3, "Tc/Tz changes retain distinct runs");
+        let rect = before[0].rect;
+        text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { range: Some([0, 1]), color: Some([0.0, 0.0, 1.0]), ..Default::default() })
+            .unwrap();
+        let b = &text::text_blocks(&reopen(&doc), 0).unwrap()[0];
+        assert_eq!(b.text, "AV  BC");
+        assert_eq!(b.runs[0].color, [0.0, 0.0, 1.0]);
+        assert!(b.runs.iter().skip(1).all(|r| r.color == [0.0; 3]));
+        for (a, b) in rect.into_iter().zip(b.rect) {
+            assert!((a - b).abs() < 0.001, "{rect:?} != {:?}", b);
+        }
+    }
+}
+
+#[test]
+fn selected_colour_preserves_positioned_show_gaps_on_each_horizontal_scale() {
+    for scale in [1.0, 2.0] {
+        for middle_font in ["F1", "F2"] {
+            let source = format!(
+                "q {scale} 0 0 1 0 0 cm BT /F1 12 Tf 1 0 0 1 36 700 Tm (A) Tj /{middle_font} 12 Tf 1 0 0 1 52 700 Tm (a) Tj /F1 12 Tf 1 0 0 1 68 700 Tm (Z) Tj ET Q"
+            );
+            let mut doc = text_page(&source);
+            let original = text::text_blocks(&doc, 0).unwrap().remove(0);
+            assert_eq!(original.text, "A a Z");
+            text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { range: Some([0, 1]), color: Some([0.0, 0.0, 1.0]), ..Default::default() })
+                .unwrap();
+            let reopened = reopen(&doc);
+            let edited = text::text_blocks(&reopened, 0).unwrap().remove(0);
+            assert_eq!(edited.text, original.text);
+            for (before, after) in original.rect.into_iter().zip(edited.rect) {
+                assert!((before - after).abs() < 1e-6, "scale {scale}, font {middle_font}: {:?} -> {:?}", original.rect, edited.rect);
+            }
+            // Every emitted glyph gets its own placement. Read the actual Tm at a and Z,
+            // independently of paragraph inference, rather than accepting the new bounding box alone.
+            let (_, ops) = joined_ops(&reopened);
+            let mut tm = [0.0; 6];
+            let (mut a_seen, mut z_seen) = (0, 0);
+            for op in ops {
+                if op.is("Tm") {
+                    tm = op.nums::<6>().unwrap();
+                }
+                if op.is("Tj")
+                    && let Some(Object::String(text)) = op.operands.first()
+                {
+                    match text.bytes.as_slice() {
+                        b"a" => {
+                            a_seen += 1;
+                            assert!((tm[4] - 52.0).abs() < 1e-6);
+                        }
+                        b"Z" => {
+                            z_seen += 1;
+                            assert!((tm[4] - 68.0).abs() < 1e-6);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            assert_eq!((a_seen, z_seen), (1, 1), "both positioned glyphs must be observed exactly once");
+        }
+    }
+}
+
+#[test]
+fn selected_color_restores_default_black_after_q_saved_device_colors() {
+    for red in ["1 0 0 rg", "/DeviceRGB cs 1 0 0 scn", "/DeviceCMYK cs 0 1 1 0 sc"] {
+        let source = format!("BT /F1 12 Tf 72 700 Td (A) Tj ET q {red} BT /F1 12 Tf 80.004 700 Td (B) Tj ET Q BT /F1 12 Tf 88.008 700 Td (C) Tj ET");
+        let mut doc = text_page(&source);
+        let before = text::text_blocks(&doc, 0).unwrap().remove(0);
+        assert_eq!(before.text, "ABC");
+        assert_eq!(before.runs.iter().map(|run| run.color).collect::<Vec<_>>(), [[0.0; 3], [1.0, 0.0, 0.0], [0.0; 3]]);
+        text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { range: Some([0, 1]), color: Some([0.0, 0.0, 1.0]), ..Default::default() })
+            .unwrap();
+        let reopened = reopen(&doc);
+        let after = text::text_blocks(&reopened, 0).unwrap().remove(0);
+        assert_eq!(after.text, before.text);
+        assert_eq!(after.runs.iter().map(|run| run.color).collect::<Vec<_>>(), [[0.0, 0.0, 1.0], [1.0, 0.0, 0.0], [0.0; 3]]);
+        assert_eq!(after.rect, before.rect);
+    }
+}
+
+#[test]
+fn selected_color_preserves_implicitly_selected_device_spaces() {
+    for (initial, next, expected) in
+        [("0.2 g", "0.7 sc", [0.7; 3]), ("1 0 0 rg", "0 1 0 sc", [0.0, 1.0, 0.0]), ("0 1 1 0 k", "1 0 0 0 scn", [0.0, 1.0, 1.0])]
+    {
+        let source = format!(
+            "BT /F1 12 Tf 72 700 Td (A) Tj ET q {initial} BT /F1 12 Tf 80.004 700 Td (B) Tj {next} 1 0 0 1 88.008 700 Tm (C) Tj ET Q BT /F1 12 Tf 96.672 700 Td (D) Tj ET"
+        );
+        let mut doc = text_page(&source);
+        let before = text::text_blocks(&doc, 0).unwrap().remove(0);
+        assert_eq!(before.text, "ABCD");
+        assert_eq!(before.runs[2].color, expected);
+        text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { range: Some([1, 2]), color: Some([0.0, 0.0, 1.0]), ..Default::default() })
+            .unwrap();
+        let after = text::text_blocks(&reopen(&doc), 0).unwrap().remove(0);
+        assert_eq!(after.text, before.text);
+        assert_eq!(after.runs.iter().map(|run| run.color).collect::<Vec<_>>(), [[0.0; 3], [0.0, 0.0, 1.0], expected, [0.0; 3]]);
+    }
+}
+
+#[test]
+fn custom_color_spaces_are_not_assumed_to_be_already_black() {
+    let mut doc = text_page("BT /F1 12 Tf /Spot cs 0.75 scn 72 700 Td (Custom) Tj ET");
+    let mut tint = Dict::new();
+    tint.set(b"FunctionType".to_vec(), Object::Int(2));
+    tint.set(b"Domain".to_vec(), Object::Array(vec![Object::Int(0), Object::Int(1)]));
+    tint.set(b"C0".to_vec(), Object::Array(vec![Object::Int(1); 3]));
+    tint.set(b"C1".to_vec(), Object::Array(vec![Object::Int(1), Object::Int(0), Object::Int(0)]));
+    tint.set(b"N".to_vec(), Object::Int(1));
+    let mut spaces = Dict::new();
+    spaces.set(
+        b"Spot".to_vec(),
+        Object::Array(vec![Object::name("Separation"), Object::name("ContributorSpot"), Object::name("DeviceRGB"), Object::Dict(tint)]),
+    );
+    doc.update_dict(pdfcraft_cos::ObjRef::new(3, 0), |page| {
+        let mut resources = page.get(b"Resources").unwrap().as_dict().unwrap().clone();
+        resources.set(b"ColorSpace".to_vec(), Object::Dict(spaces));
+        page.set(b"Resources".to_vec(), Object::Dict(resources));
+    })
+    .unwrap();
+    let style = text::BlockStyle { range: Some([0, 1]), color: Some([0.0; 3]), ..Default::default() };
+    assert!(!text::is_noop(&doc, 0, 0, "Custom", &style).unwrap());
+    text::rewrite_block(&mut doc, 0, 0, None, &style).unwrap();
+    let (_, ops) = joined_ops(&doc);
+    assert!(ops.iter().any(|op| op.is("rg") && op.nums::<3>() == Some([0.0; 3])));
+    assert!(ops.iter().any(|op| op.is("cs") && op.name(0) == Some(b"Spot")));
+}
+
+#[test]
+fn excessive_edit_text_and_source_style_segments_are_refused_atomically() {
+    let mut doc = text_page("BT /F1 12 Tf 72 700 Td (Small) Tj ET");
+    let before = write_incremental(&doc, &SaveOptions::default()).unwrap();
+    let error = text::replace_block(&mut doc, 0, 0, &"x".repeat(1_000_001)).unwrap_err();
+    assert!(error.to_string().contains("1,000,000 characters"));
+    assert_eq!(write_incremental(&doc, &SaveOptions::default()).unwrap(), before);
+    let mut content = String::from("BT /F1 12 Tf 72 700 Td ");
+    for i in 0..8193 {
+        content.push_str(&format!("{} Tc (a) Tj ", i % 2));
+    }
+    content.push_str("ET");
+    let mut doc = text_page(&content);
+    let before = write_incremental(&doc, &SaveOptions::default()).unwrap();
+    let error =
+        text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { range: Some([0, 1]), color: Some([0.0, 0.0, 1.0]), ..Default::default() })
+            .unwrap_err();
+    assert!(error.to_string().contains("8,192 style segments"), "{error}");
+    assert_eq!(write_incremental(&doc, &SaveOptions::default()).unwrap(), before);
+}
+
+#[test]
+fn selected_subset_and_bad_ranges_fail_without_low_level_mutation() {
+    let mut doc = text_page("BT /F1 12 Tf 72 700 Td (A abba Z) Tj ET");
+    text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { range: Some([2, 6]), font_resource: Some("F2".into()), ..Default::default() })
+        .unwrap();
+    let before = write_incremental(&doc, &SaveOptions::default()).unwrap();
+    for style in [
+        text::BlockStyle { range: Some([0, 1]), font_resource: Some("F2".into()), ..Default::default() },
+        text::BlockStyle { range: Some([9, 10]), bold: Some(true), ..Default::default() },
+        text::BlockStyle { range: Some([2, 2]), bold: Some(true), ..Default::default() },
+        text::BlockStyle { range: Some([0, 1]), size: Some(f64::NAN), ..Default::default() },
+        text::BlockStyle { range: Some([0, 1]), underline: Some(true), ..Default::default() },
+    ] {
+        assert!(text::rewrite_block(&mut doc, 0, 0, None, &style).is_err());
+        assert_eq!(write_incremental(&doc, &SaveOptions::default()).unwrap(), before);
+    }
+    let mut rotated = text_page("BT /F1 12 Tf 0 1 -1 0 100 200 Tm (Rotated) Tj ET");
+    let before = write_incremental(&rotated, &SaveOptions::default()).unwrap();
+    assert!(
+        text::rewrite_block(&mut rotated, 0, 0, None, &text::BlockStyle { range: Some([0, 1]), color: Some([1.0, 0.0, 0.0]), ..Default::default() })
+            .is_err()
+    );
+    assert_eq!(write_incremental(&rotated, &SaveOptions::default()).unwrap(), before);
+}
+
+#[test]
+fn mixed_ranges_keep_unicode_glyph_codes_and_refuse_ligature_splits() {
+    let mut doc = text_page("BT /F1 12 Tf 72 700 Td (AB) Tj ET");
+    let cmap = doc.add(Object::Stream(Stream::flate(
+        Dict::new(),
+        b"1 begincodespacerange <00> <ff> endcodespacerange 2 beginbfchar <41> <00660069> <42> <0058> endbfchar",
+    )));
+    doc.update_dict(pdfcraft_cos::ObjRef::new(5, 0), |d| d.set(b"ToUnicode".to_vec(), Object::Ref(cmap))).unwrap();
+    assert_eq!(text::text_blocks(&doc, 0).unwrap()[0].text, "fiX");
+    text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { range: Some([0, 2]), color: Some([1.0, 0.0, 0.0]), ..Default::default() }).unwrap();
+    let mut doc = reopen(&doc);
+    assert_eq!(text::text_blocks(&doc, 0).unwrap()[0].text, "fiX");
+    let shown: Vec<Vec<u8>> = pdfcraft_content::parse(&page_content_bytes(&doc, 0))
+        .ops
+        .iter()
+        .filter(|op| op.is("Tj"))
+        .filter_map(|op| op.operands.first().and_then(Object::as_string).map(|s| s.bytes.clone()))
+        .collect();
+    assert_eq!(shown, [b"A".to_vec(), b"B".to_vec()], "source character codes preserved");
+    let before = write_incremental(&doc, &SaveOptions::default()).unwrap();
+    assert!(
+        text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { range: Some([0, 1]), color: Some([0.0, 1.0, 0.0]), ..Default::default() })
+            .is_err()
+    );
+    assert_eq!(write_incremental(&doc, &SaveOptions::default()).unwrap(), before);
+}
+
+#[test]
+fn character_formatting_never_removes_an_overlapping_independent_text_object() {
+    let mut doc = text_page("BT /F1 12 Tf 72 700 Td (Target) Tj ET BT /F1 12 Tf 72 700 Td (Overlay) Tj ET");
+    assert_eq!(text::text_blocks(&doc, 0).unwrap().len(), 2);
+    text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { range: Some([0, 1]), color: Some([1.0, 0.0, 0.0]), ..Default::default() }).unwrap();
+    assert_eq!(text::text_blocks(&reopen(&doc), 0).unwrap().iter().map(|b| b.text.as_str()).collect::<Vec<_>>(), ["Target", "Overlay"]);
 }
 
 #[test]
