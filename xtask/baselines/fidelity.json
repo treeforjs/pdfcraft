@@ -4,16 +4,16 @@
   "poppler": "24.02.0",
   "pages": {
     "annotations#1": {
-      "diff_pct": 10.2,
-      "mean_delta": 7.615
+      "diff_pct": 4.426,
+      "mean_delta": 4.297
     },
     "color-spaces#1": {
       "diff_pct": 3.897,
       "mean_delta": 3.763
     },
     "forms#1": {
-      "diff_pct": 6.848,
-      "mean_delta": 5.989
+      "diff_pct": 5.518,
+      "mean_delta": 7.636
     },
     "images#1": {
       "diff_pct": 1.446,
@@ -102,16 +102,16 @@
   },
   "text": {
     "annotations": {
-      "f1": 0.914,
-      "truth_f1": 0.968
+      "f1": 1.0,
+      "truth_f1": 0.882
     },
     "color-spaces": {
       "f1": 1.0,
       "truth_f1": 1.0
     },
     "forms": {
-      "f1": 0.65,
-      "truth_f1": 0.818
+      "f1": 0.857,
+      "truth_f1": 0.581
     },
     "images": {
       "f1": 1.0,

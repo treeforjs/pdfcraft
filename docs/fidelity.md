@@ -93,18 +93,30 @@ For defects, look at the comparison images and at the ground-truth text columns.
 ## Findings (2026-10-12, 96 dpi, tolerance 32, Poppler 24.02.0)
 
 Measured with the run whose numbers are in the committed baseline. These are defects in
-PdfCraft's `page_render` and text paths. The renderer was not changed in this work.
+PdfCraft's `page_render` and text paths. The renderer was not changed in this work. Findings 1
+and 2 were fixed later the same day, outside the renderer. The baseline now holds the numbers
+after that fix.
 
-1. **Widgets without an appearance stream are not drawn** (`forms`). The text field "Lisbon", the
-   multiline field, the comb field and the list box show nothing: no background, border or value.
-   Poppler synthesizes these appearances from `/V`, `/DA` and `/MK`. Acrobat's behaviour was not
-   observed here. The field values are also missing from extracted text.
-2. **Markup annotations without an appearance stream are not drawn** (`annotations`). This
-   affects Square, Circle, Line with line endings, Underline, StrikeOut, Text (note icon),
-   FreeText, Ink and Polygon. Only Highlight gets a synthesized appearance. Annotations that
-   have an `/AP` render correctly. Hidden and NoView annotations are correctly skipped. The
-   desktop app may overlay some of these through `pdfcraft-annot`, but page renders, exports and
-   printing through this path do not show them.
+1. **Fixed 2026-10-12: widgets without an appearance stream were not drawn** (`forms`). The text
+   field "Lisbon", the multiline field, the comb field and the list box showed nothing, and their
+   values were missing from extracted text. They are now drawn, in memory only, by the generators
+   used for filling (`pdfcraft_forms::with_missing_appearances`). `pdfcraft-cli render` and `text`,
+   the page view, `page_render`, exports and printing all show them, and the file is unchanged.
+   `forms` p1 went from 6.85 % to 5.52 % diff, and text F1 against Poppler from 0.650 to 0.857.
+   Mean Δ rose from 5.99 to 7.64 because the styles differ. PdfCraft draws the `/MK /BC` border
+   and a light-blue list selection. Poppler draws no border when the widget has no `/BS` or
+   `/Border`, and its list selection is black. Truth F1 fell from 0.818 to 0.581 only because the
+   ground truth leaves out field text. Poppler scores 0.500 against the same truth.
+2. **Fixed 2026-10-12: markup annotations without an appearance stream were not drawn**
+   (`annotations`). This affected Square, Circle, Line with line endings, Underline, StrikeOut,
+   Text (note icon), FreeText, Ink and Polygon. They are now drawn by
+   `pdfcraft_annot::with_missing_appearances` on the same paths. `annotations` p1 went from
+   10.20 % to 4.43 % diff and mean Δ from 7.62 to 4.30. Text F1 against Poppler went from 0.914 to
+   1.000. Truth F1 fell from 0.968 to 0.882 because of the same truth rule, and Poppler also
+   scores 0.882. Style differences remain:
+   - PdfCraft smooths Ink strokes into curves. Poppler joins the points with straight lines.
+   - PdfCraft draws no FreeText border without `/BS` or `/Border`. Poppler draws a 1 pt border.
+   - The note icons differ: PdfCraft uses its own drawings.
 3. **Knockout groups are not honoured** (`transparency`). Inside a `/K true` group, the second
    circle should replace the first where they overlap. PdfCraft's overlap pixel is (102, 41, 194),
    the same as the non-knockout group. The expected value is about (102, 102, 255). Poppler has

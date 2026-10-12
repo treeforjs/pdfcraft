@@ -782,8 +782,8 @@ milestone = "M2"
 status = "shipped"
 commands = []
 tools = []
-evidence = ["crates/render/src/raster.rs::widget_appearance_states", "crates/render/src/raster.rs::highlights_without_an_appearance_are_drawn", "crates/engine/src/tests.rs::comments_without_appearances_are_drawn_but_not_saved"]
-notes = "comments without /AP (FreeText, Ink, notes, stamps, shapes, markup) are drawn from their dictionaries in the page view, page_render and page images, never saved (a read-only document still gets the renderer's Highlight fallback only); Link borders without /AP and printing are not covered yet"
+evidence = ["crates/render/src/raster.rs::widget_appearance_states", "crates/render/src/raster.rs::highlights_without_an_appearance_are_drawn", "crates/engine/src/tests.rs::comments_without_appearances_are_drawn_but_not_saved", "crates/engine/tests/missing_appearances.rs::comments_without_appearances_are_drawn", "crates/engine/tests/missing_appearances.rs::widgets_without_appearances_are_drawn", "crates/engine/tests/missing_appearances.rs::drawing_appearances_never_changes_the_file", "apps/pdfcraft-cli/tests/render.rs::fields_and_comments_without_appearances_are_shown"]
+notes = "comments and form widgets without /AP are drawn from their dictionaries (Hidden/NoView skipped; text and choice widgets redrawn under NeedAppearances) in the page view, page_render, page images, printing and pdfcraft-cli render/text, never saved (a document that can't be opened for editing still gets the renderer's Highlight fallback only); Link borders without /AP are not covered; styles differ from Poppler (list selection colour, Ink smoothing, FreeText default border)"
 
 [[feature]]
 id = "view.render-error-isolation"
@@ -4326,8 +4326,8 @@ milestone = "M2"
 status = "shipped"
 commands = []
 tools = []
-evidence = ["crates/render/src/raster.rs::widget_appearance_states"]
-notes = ""
+evidence = ["crates/render/src/raster.rs::widget_appearance_states", "crates/engine/tests/missing_appearances.rs::widgets_without_appearances_are_drawn", "crates/forms/src/tests.rs::display_copies_draw_missing_widget_appearances"]
+notes = "widgets without /AP (text, multiline, comb, list, combo, check box, push button) are drawn for display from /V, /DA, /MK, /Q and /BS or /Border; unsigned signature fields without /AP show nothing"
 
 [[feature]]
 id = "form.fill-text"
