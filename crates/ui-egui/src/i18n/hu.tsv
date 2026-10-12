@@ -2176,6 +2176,9 @@ action wizard	Start	Indítás
 	Skipped pages	Kihagyott oldalak
 	Apply recognized text	Felismert szöveg alkalmazása
 	Review recognized text before applying	Felismert szöveg ellenőrzése alkalmazás előtt
+	Detect page rotation	Oldalak elforgatásának felismerése
+	Deskew pages	Ferde oldalak kiegyenesítése
+	Detects turned or skewed pages and reads them upright; the page image is not changed	Felismeri az elforgatott vagy ferde oldalakat, és egyenesen olvassa be őket; az oldal képe nem változik
 	Text recognition canceled; no text was applied	Szövegfelismerés megszakítva; nem került szöveg a dokumentumba
 # Compare Files: page ranges, visual settings, progress, page map and saved results.
 	Old pages:	Régi oldalak:

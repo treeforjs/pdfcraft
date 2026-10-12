@@ -2178,6 +2178,9 @@ signature pad	Type	Saisir
 	Skipped pages	Pages ignorées
 	Apply recognized text	Appliquer le texte reconnu
 	Review recognized text before applying	Vérifier le texte reconnu avant de l’appliquer
+	Detect page rotation	Détecter la rotation des pages
+	Deskew pages	Redresser les pages inclinées
+	Detects turned or skewed pages and reads them upright; the page image is not changed	Détecte les pages pivotées ou inclinées et les lit à l’endroit. L’image de la page n’est pas modifiée
 	Text recognition canceled; no text was applied	Reconnaissance de texte annulée ; aucun texte n’a été appliqué
 # Compare Files: page ranges, visual settings, progress, page map and saved results.
 	Old pages:	Pages de l’ancien :

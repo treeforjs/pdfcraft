@@ -13,6 +13,8 @@
 
 use std::path::{Path, PathBuf};
 
+pub mod orient;
+
 pub use pdfcraft_fonts::helvetica_width;
 
 /// The model files, as named in ATTRIBUTION.toml.

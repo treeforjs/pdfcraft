@@ -2203,6 +2203,9 @@ calendar date	December	prosince
 	Skipped pages	Přeskočené stránky
 	Apply recognized text	Použít rozpoznaný text
 	Review recognized text before applying	Zkontrolovat rozpoznaný text před použitím
+	Detect page rotation	Rozpoznat otočení stránek
+	Deskew pages	Narovnat zkosené stránky
+	Detects turned or skewed pages and reads them upright; the page image is not changed	Rozpozná otočené nebo zkosené stránky a přečte je ve správné poloze; obraz stránky se nemění
 # Compare Files: page ranges, visual settings, progress, page map and saved results.
 	Old pages:	Stránky starého:
 	New pages:	Stránky nového:

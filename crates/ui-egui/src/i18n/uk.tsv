@@ -2201,6 +2201,9 @@ certificate	Subject	Власник сертифіката
 	Skipped pages	Пропущені сторінки
 	Apply recognized text	Застосувати розпізнаний текст
 	Review recognized text before applying	Перевіряти розпізнаний текст перед застосуванням
+	Detect page rotation	Визначати поворот сторінок
+	Deskew pages	Вирівнювати нахил сторінок
+	Detects turned or skewed pages and reads them upright; the page image is not changed	Визначає повернуті або нахилені сторінки й розпізнає їх у правильному положенні; зображення сторінки не змінюється
 	Text recognition canceled; no text was applied	Розпізнавання тексту скасовано; текст не додано
 # Compare Files: page ranges, visual settings, progress, page map and saved results.
 	Old pages:	Сторінки старого:

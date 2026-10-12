@@ -154,6 +154,8 @@ M0 → M1 → M2 → M3 → M4 must happen in order. After M4, M5–M12 can run 
 
 ## Log
 
+- **2026-10-12 (M10, OCR orientation and deskew):** Opt-in `auto_rotate`/`deskew` for Recognize Text (`ocr_recognize`, `ocr_prepare`, `ocr_recognize_files`; dialog "Detect page rotation"/"Deskew pages"; both default off). Original projection-profile skew estimation (±15°) and 0/90/180/270° detection by recognizing at most four reduced candidate readings scored by a documented dictionary-free plausibility proxy (`crates/ocr/src/orient.rs`). Recognition reads a corrected gray copy; word boxes map back through a documented affine transform, so the page image is never altered. Executed with the pinned models on one original 30-word synthetic page: orientation correct at 0/90/180/270/93/173/263°, skew within 0.1° at ±3/±7°, 30/30 words (29/30 at ±7°) with every recognized word over its visible word after save; without the options 90/180/270° gave 0/30. Focused runs pass: ocr lib 16, engine ocr_review 10 + lib recognize 1, automation ocr_orient 2 + ocr_review 3 + automation 118, UI ocr 3 and i18n 74; clippy clean. `ocr.rotation-detection` and `ocr.deskew` moved to partial (recognition only; no visible-page straightening, no real-scan evaluation). Effort estimate unchanged.
+
 - **2026-10-12 (M2/M5/M6, missing appearances):** Form widgets and markup comments without an appearance stream are now drawn for display. This fixes fidelity findings 1 and 2.
   - **Widgets:** text, multiline, comb, list, combo, check box and push button, drawn with the fill generators. Text and choice fields are redrawn when NeedAppearances is set.
   - **Comments:** Square, Circle, Line, Underline, StrikeOut, the Text note, FreeText, Ink and Polygon.

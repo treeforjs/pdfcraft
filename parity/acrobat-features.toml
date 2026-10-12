@@ -6471,11 +6471,11 @@ title = "Detect and fix page rotation"
 area = "I"
 tier = "P1"
 milestone = "M10"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["ocr.recognize"]
+tools = ["ocr_recognize", "ocr_prepare", "ocr_recognize_files"]
+evidence = ["crates/automation/tests/ocr_orient.rs::ocr_auto_rotate_and_deskew_read_turned_and_skewed_scans_onto_the_visible_words", "crates/automation/tests/ocr_orient.rs::ocr_orientation_options_default_off_and_reject_bad_values", "crates/ocr/src/orient.rs::orientation_follows_the_most_plausible_reading", "crates/ocr/src/orient.rs::quarter_turns_copy_pixels_exactly_and_map_back"]
+notes = "Opt-in auto_rotate (Recognize Text dialog 'Detect page rotation', default off) detects 0/90/180/270° text: projection profiles pick the line axis, then at most four reduced (<=1600 px) candidate readings are recognized and compared by a documented dictionary-free plausibility score (crates/ocr/src/orient.rs). Recognition runs on a corrected gray copy; word boxes map back through a documented affine transform so the invisible text lies on the unchanged image (exact mode). Executed with the pinned models on one original synthetic 4-line Helvetica page at 0/90/180/270° and 93/173/263°: rotation detected 7/7, 30/30 words and reading order 1.00 each, every recognized word located on its visible word; without the option 90/180/270 recognized 0/30. Not yet: it only fixes recognition, never the page's displayed rotation (/Rotate) or image; no real scans, other fonts, multi-column, sparse or non-Latin pages measured; no confidence scores from the model."
 
 [[feature]]
 id = "ocr.deskew"
@@ -6483,11 +6483,11 @@ title = "Deskew"
 area = "I"
 tier = "P1"
 milestone = "M10"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["ocr.recognize"]
+tools = ["ocr_recognize", "ocr_prepare", "ocr_recognize_files"]
+evidence = ["crates/automation/tests/ocr_orient.rs::ocr_auto_rotate_and_deskew_read_turned_and_skewed_scans_onto_the_visible_words", "crates/ocr/src/orient.rs::skew_is_found_on_synthetic_lines", "crates/ocr/src/orient.rs::deskew_only_straightens_without_recognition", "crates/ocr/src/orient.rs::transform_maps_corrected_points_onto_the_source"]
+notes = "Opt-in deskew (dialog 'Deskew pages', default off) estimates skew within ±15° with original projection-profile code on a downscaled Otsu-binarized copy (0.5° then 0.1° steps) and recognizes a straightened copy; words map back through the documented affine transform, the page image is never altered. Executed with the pinned models on one original synthetic page skewed ±3/±7° (and 93/173/263°): detected skew within 0.1°, 30/30 words at ±3° and 29/30 at ±7° (one word misread after two resamplings), reading order 0.97–1.00, every recognized word on its visible word; at -7° without deskew 21/30 words, order 0.70. Not yet: visible-page straightening (Acrobat-style deskewed image output), real scans, mixed-skew or curved pages, skew beyond ±15°."
 
 [[feature]]
 id = "ocr.despeckle"

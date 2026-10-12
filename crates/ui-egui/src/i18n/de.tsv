@@ -2178,6 +2178,9 @@ action wizard	Start	Starten
 	Skipped pages	Übersprungene Seiten
 	Apply recognized text	Erkannten Text anwenden
 	Review recognized text before applying	Erkannten Text vor dem Anwenden prüfen
+	Detect page rotation	Seitendrehung erkennen
+	Deskew pages	Schiefe Seiten begradigen
+	Detects turned or skewed pages and reads them upright; the page image is not changed	Erkennt gedrehte oder schiefe Seiten und liest sie aufrecht; das Seitenbild wird nicht verändert
 	Text recognition canceled; no text was applied	Texterkennung abgebrochen; es wurde kein Text hinzugefügt
 # Compare Files: page ranges, visual settings, progress, page map and saved results.
 	Old pages:	Alte Seiten:

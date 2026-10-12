@@ -2178,6 +2178,9 @@ signature pad	Type	入力
 	Skipped pages	スキップしたページ
 	Apply recognized text	認識したテキストを適用
 	Review recognized text before applying	適用する前に認識したテキストを確認
+	Detect page rotation	ページの回転を検出
+	Deskew pages	ページの傾きを補正
+	Detects turned or skewed pages and reads them upright; the page image is not changed	回転または傾いたページを検出して正しい向きで読み取ります。ページの画像は変更されません
 	Text recognition canceled; no text was applied	テキスト認識をキャンセルしました。テキストは適用されていません
 # Compare Files: page ranges, visual settings, progress, page map and saved results.
 	Old pages:	旧ファイルのページ:

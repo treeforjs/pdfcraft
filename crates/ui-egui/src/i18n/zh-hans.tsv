@@ -2142,6 +2142,9 @@
 	Skipped pages	跳过的页面
 	Apply recognized text	应用识别的文本
 	Review recognized text before applying	应用前检查识别的文本
+	Detect page rotation	检测页面旋转
+	Deskew pages	校正页面倾斜
+	Detects turned or skewed pages and reads them upright; the page image is not changed	检测旋转或倾斜的页面并按正确方向识别；页面图像不会改变
 	Text recognition canceled; no text was applied	文本识别已取消；未应用任何文本
 # Compare Files: page ranges, visual settings, progress, page map and saved results.
 	Old pages:	旧文件页面：

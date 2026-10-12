@@ -2140,6 +2140,9 @@ action wizard	Start	Старт
 	Skipped pages	Пропуснати страници
 	Apply recognized text	Приложи разпознатия текст
 	Review recognized text before applying	Преглед на разпознатия текст преди прилагане
+	Detect page rotation	Откриване на завъртането на страниците
+	Deskew pages	Изправяне на наклонени страници
+	Detects turned or skewed pages and reads them upright; the page image is not changed	Открива завъртени или наклонени страници и ги чете изправени; изображението на страницата не се променя
 	Text recognition canceled; no text was applied	Разпознаването на текст е отменено; не е приложен текст
 # Compare Files: page ranges, visual settings, progress, page map and saved results.
 	Old pages:	Страници на стария:

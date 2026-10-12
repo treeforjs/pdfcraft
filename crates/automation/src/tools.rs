@@ -1109,7 +1109,7 @@ pub fn tools() -> Vec<ToolDef> {
             )),
         t("js_enabled", "JavaScript on or off", "Preferences ▸ JavaScript ▸ Enable Acrobat JavaScript: set it with `enabled`, or read it. With JavaScript off, field scripts other than Acrobat's AF calls don't run.")
             .with(schema(json!({ "enabled": { "type": "boolean" } }), &[])),
-        t("ocr_recognize", "Recognize text (OCR)", "Scan & OCR ▸ Recognize text: render pages, read the words in them and add them as invisible text over the page image, so scanned pages become searchable and selectable (a searchable image; the image is not changed). Pages that already have text are skipped unless skip_text_pages is false. Returns each page's recognised text, word count or why it was skipped. Needs the OCR models (ocr_status) and permission both to copy text and to change the document (checked before any page is read). Undoable as one step.")
+        t("ocr_recognize", "Recognize text (OCR)", "Scan & OCR ▸ Recognize text: render pages, read the words in them and add them as invisible text over the page image, so scanned pages become searchable and selectable (a searchable image; the image is not changed). Pages that already have text are skipped unless skip_text_pages is false. Returns each page's recognised text, word count and the orientation corrected for reading (auto_rotate/deskew), or why it was skipped. Needs the OCR models (ocr_status) and permission both to copy text and to change the document (checked before any page is read). Undoable as one step.")
             .cmd("ocr.recognize")
             .with(schema(
                 json!({
@@ -1118,6 +1118,8 @@ pub fn tools() -> Vec<ToolDef> {
                     "dpi": { "type": "number", "minimum": 72, "maximum": 600, "description": "Resolution pages are read at (default 300; a scanned page is read at most at its own resolution)." },
                     "language": { "type": "string", "enum": ["en"], "description": "Document language (default en)." },
                     "skip_text_pages": { "type": "boolean", "description": "Leave pages that already contain text alone (default true)." },
+                    "auto_rotate": { "type": "boolean", "description": "Detect pages turned by 90, 180 or 270 degrees and read them upright (default false). Detection compares recognition of reduced copies; the page image is not changed and the text is placed over the original words." },
+                    "deskew": { "type": "boolean", "description": "Detect skew of up to 15 degrees and read the page straightened (default false). The page image is not changed." },
                 }),
                 &["doc"],
             )),
@@ -1129,6 +1131,8 @@ pub fn tools() -> Vec<ToolDef> {
                     "folder": { "type": "string" },
                     "dpi": { "type": "number", "minimum": 72, "maximum": 600 },
                     "language": { "type": "string", "enum": ["en"] },
+                    "auto_rotate": { "type": "boolean", "description": "Detect pages turned by 90, 180 or 270 degrees and read them upright (default false). Detection compares recognition of reduced copies; the page image is not changed and the text is placed over the original words." },
+                    "deskew": { "type": "boolean", "description": "Detect skew of up to 15 degrees and read the page straightened (default false). The page image is not changed." },
                 }),
                 &["paths", "folder"],
             )),
@@ -1141,7 +1145,9 @@ pub fn tools() -> Vec<ToolDef> {
                 "doc": doc(), "pages": pages("to recognize (default all)"),
                 "dpi": {"type":"number", "minimum":72, "maximum":600},
                 "language": {"type":"string", "enum":["en"]},
-                "skip_text_pages": {"type":"boolean"}
+                "skip_text_pages": {"type":"boolean"},
+                "auto_rotate": {"type":"boolean", "description":"Detect 90/180/270-degree page turns and read pages upright (default false); the image is not changed."},
+                "deskew": {"type":"boolean", "description":"Detect skew up to 15 degrees and read pages straightened (default false); the image is not changed."}
             }), &["doc"])),
         t("ocr_review", "Inspect recognized text draft", "List recognized words, page coordinates and skipped-page reasons. Does not change the PDF. If the document changed, was closed or no longer allows copying and changes, returns an error and discards the draft instead of its words.")
             .ro().cmd("ocr.recognize").with(schema(json!({"doc":doc()}), &["doc"])),

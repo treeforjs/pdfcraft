@@ -159,7 +159,7 @@ fn bad_settings_pages_words_and_corrections_fail_before_mutation() {
         PlacedWord { up: [0.0; 2], ..word.clone() },
         PlacedWord { text: "文字".into(), ..word },
     ] {
-        assert!(session.apply_ocr(id, &[pdfcraft_engine::ocr::OcrPage { page: 0, words: vec![bad], skipped: None }]).is_err());
+        assert!(session.apply_ocr(id, &[pdfcraft_engine::ocr::OcrPage { page: 0, words: vec![bad], skipped: None, orientation: None }]).is_err());
     }
     assert_eq!(session.get(id).unwrap().can_undo(), None);
 }
@@ -238,7 +238,7 @@ fn restricted_documents_refuse_recognition_before_rendering_or_backend_inference
         assert_eq!(reader.calls.get(), 0, "the backend must not run");
         assert_eq!(session.ocr_authority(id).unwrap_err(), error);
         let words = vec![PlacedWord { text: "x".into(), origin: [10.0, 10.0], across: [20.0, 0.0], up: [0.0, 10.0] }];
-        assert!(session.apply_ocr(id, &[pdfcraft_engine::ocr::OcrPage { page: 0, words, skipped: None }]).is_err());
+        assert!(session.apply_ocr(id, &[pdfcraft_engine::ocr::OcrPage { page: 0, words, skipped: None, orientation: None }]).is_err());
         assert_eq!(state(&session, id), before, "no text, data or history change");
         assert_eq!(session.get(id).unwrap().bytes, bytes);
     }

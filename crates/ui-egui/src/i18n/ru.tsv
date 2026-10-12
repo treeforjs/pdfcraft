@@ -2091,6 +2091,9 @@
 	Skipped pages	Пропущенные страницы
 	Apply recognized text	Применить распознанный текст
 	Review recognized text before applying	Проверять распознанный текст перед применением
+	Detect page rotation	Определять поворот страниц
+	Deskew pages	Выравнивать наклон страниц
+	Detects turned or skewed pages and reads them upright; the page image is not changed	Определяет повёрнутые или наклонённые страницы и распознаёт их в правильном положении; изображение страницы не меняется
 	Text recognition canceled; no text was applied	Распознавание текста отменено; текст не добавлен
 # Compare Files: page ranges, visual settings, progress, page map and saved results.
 	Old pages:	Страницы старого:

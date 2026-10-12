@@ -13,6 +13,13 @@ const MAX_DRAFTS: usize = 8;
 const MAX_DRAFT_WORDS: usize = 2_000_000;
 const MAX_DRAFT_TEXT_BYTES: usize = 128 * 1024 * 1024;
 
+/// The text direction corrected for recognition on a page (`null` when auto-rotate and deskew
+/// were off): `rotation` 0/90/180/270 degrees counterclockwise, `skew` degrees counterclockwise.
+pub(crate) fn orientation_json(page: &pdfcraft_engine::ocr::OcrPage) -> Value {
+    page.orientation
+        .map_or(Value::Null, |o| json!({"page": page.page + 1, "rotation": o.rotation, "skew": (f64::from(o.skew) * 10.0).round() / 10.0}))
+}
+
 fn review_json(review: &OcrReview) -> Value {
     let pages: Vec<_> = review
         .pages()
@@ -28,7 +35,7 @@ fn review_json(review: &OcrReview) -> Value {
                     })
                 })
                 .collect();
-            json!({"page": page.page + 1, "text": page.text(), "words": words, "skipped": page.skipped})
+            json!({"page": page.page + 1, "text": page.text(), "words": words, "skipped": page.skipped, "orientation": orientation_json(page)})
         })
         .collect();
     json!({"doc": review.document().0, "generation": review.generation(), "words": review.words(), "pages": pages})

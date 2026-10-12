@@ -306,6 +306,12 @@ impl Automation {
         if let Some(s) = a.opt_bool("skip_text_pages")? {
             settings.skip_text_pages = s;
         }
+        if let Some(s) = a.opt_bool("auto_rotate")? {
+            settings.auto_rotate = s;
+        }
+        if let Some(s) = a.opt_bool("deskew")? {
+            settings.deskew = s;
+        }
         settings.validate().map_err(ToolError::InvalidArgs)?;
         Ok(settings)
     }
@@ -327,7 +333,9 @@ impl Automation {
                     let target = child(&folder, &name);
                     write_atomic(&target, &r.bytes)?;
                     let skipped: Vec<usize> = r.pages.iter().filter(|p| p.skipped.is_some()).map(|p| p.page + 1).collect();
-                    json!({ "path": p, "output": target.to_string_lossy(), "words": r.words(), "skipped_pages": skipped })
+                    let orientation: Vec<Value> =
+                        r.pages.iter().filter(|p| p.orientation.is_some()).map(crate::ocr_review::orientation_json).collect();
+                    json!({ "path": p, "output": target.to_string_lossy(), "words": r.words(), "skipped_pages": skipped, "orientation": orientation })
                 }
                 Err(e) => json!({ "path": p, "error": e }),
             });
@@ -344,7 +352,9 @@ impl Automation {
             .iter()
             .map(|p| match &p.skipped {
                 Some(why) => json!({ "page": p.page + 1, "skipped": why }),
-                None => json!({ "page": p.page + 1, "words": p.word_count(), "text": p.text() }),
+                None => {
+                    json!({ "page": p.page + 1, "words": p.word_count(), "text": p.text(), "orientation": crate::ocr_review::orientation_json(p) })
+                }
             })
             .collect();
         Ok(json!({ "words": found.iter().map(|p| p.word_count()).sum::<usize>(), "pages": list }))

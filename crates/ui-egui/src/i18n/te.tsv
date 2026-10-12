@@ -2109,6 +2109,9 @@ action wizard	Start	ప్రారంభించు
 	Skipped pages	దాటవేసిన పేజీలు
 	Apply recognized text	గుర్తించిన టెక్స్ట్‌ను వర్తింపజేయి
 	Review recognized text before applying	వర్తింపజేసే ముందు గుర్తించిన టెక్స్ట్‌ను సమీక్షించు
+	Detect page rotation	పేజీ భ్రమణాన్ని గుర్తించు
+	Deskew pages	వంగిన పేజీలను సరిచేయి
+	Detects turned or skewed pages and reads them upright; the page image is not changed	తిరిగిన లేదా వంగిన పేజీలను గుర్తించి వాటిని సరైన దిశలో చదువుతుంది; పేజీ చిత్రం మారదు
 	Text recognition canceled; no text was applied	టెక్స్ట్ గుర్తింపు రద్దు చేయబడింది; ఏ టెక్స్ట్ వర్తింపజేయబడలేదు
 # Compare Files: page ranges, visual settings, progress, page map and saved results.
 	Old pages:	పాత ఫైల్ పేజీలు:

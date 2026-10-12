@@ -2064,6 +2064,9 @@
 	Skipped pages	略過的頁面
 	Apply recognized text	應用辨識的文字
 	Review recognized text before applying	應用前檢查辨識的文字
+	Detect page rotation	偵測頁面旋轉
+	Deskew pages	校正頁面傾斜
+	Detects turned or skewed pages and reads them upright; the page image is not changed	偵測旋轉或傾斜的頁面並以正確方向辨識；頁面影像不會變更
 	Text recognition canceled; no text was applied	文字辨識已取消；未應用任何文字
 # Compare Files: page ranges, visual settings, progress, page map and saved results.
 	Old pages:	舊檔案頁面：

@@ -29,11 +29,15 @@ pub struct OcrDraft {
     /// "Downsample to" resolution.
     pub dpi: u32,
     pub review: bool,
+    /// Detect turned pages and read them upright (the page image is not changed).
+    pub auto_rotate: bool,
+    /// Detect skewed pages and read them straightened (the page image is not changed).
+    pub deskew: bool,
 }
 
 impl Default for OcrDraft {
     fn default() -> Self {
-        OcrDraft { pages: OcrPages::All, from: 1, to: 1, language: "en".into(), dpi: 300, review: true }
+        OcrDraft { pages: OcrPages::All, from: 1, to: 1, language: "en".into(), dpi: 300, review: true, auto_rotate: false, deskew: false }
     }
 }
 
@@ -155,6 +159,9 @@ pub(crate) fn body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> (boo
             });
             ui.end_row();
         });
+        let hint = tl!("Detects turned or skewed pages and reads them upright; the page image is not changed");
+        ui.checkbox(&mut d.auto_rotate, tl!("Detect page rotation")).on_hover_text(hint);
+        ui.checkbox(&mut d.deskew, tl!("Deskew pages")).on_hover_text(hint);
         ui.checkbox(&mut d.review, tl!("Review recognized text before applying"));
     });
     if !available {
@@ -199,7 +206,8 @@ impl PdfCraftApp {
             OcrPages::Current => vec![self.views[vi].current],
             OcrPages::Range => (d.from.saturating_sub(1)..d.to).collect(),
         };
-        let settings = OcrSettings { dpi: d.dpi as f32, language: d.language.clone(), ..Default::default() };
+        let settings =
+            OcrSettings { dpi: d.dpi as f32, language: d.language.clone(), auto_rotate: d.auto_rotate, deskew: d.deskew, ..Default::default() };
         let job = match self.session.ocr_job_checked(id, &pages, settings) {
             Ok(job) => job,
             Err(error) => {
@@ -249,7 +257,9 @@ impl PdfCraftApp {
             return;
         }
         // The settings showing now, not when the folder arrives.
-        let settings = OcrSettings { dpi: self.ocr_draft.dpi as f32, language: self.ocr_draft.language.clone(), ..Default::default() };
+        let d = &self.ocr_draft;
+        let settings =
+            OcrSettings { dpi: d.dpi as f32, language: d.language.clone(), auto_rotate: d.auto_rotate, deskew: d.deskew, ..Default::default() };
         #[cfg(not(target_arch = "wasm32"))]
         match self.export_dir_override.clone() {
             Some(d) => self.ocr_files_into(files, settings, d.into()),

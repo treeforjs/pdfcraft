@@ -10,6 +10,7 @@ use std::sync::{Arc, Mutex};
 
 use pdfcraft_render::{PageInfo, PageRenderer, RenderConfig, RenderRequest, RequestKind};
 
+pub use pdfcraft_ocr::orient::Orientation;
 pub use pdfcraft_ocr::{LANGUAGES, Models, Ocr, OcrError, PlacedWord};
 
 use crate::{DocId, Edit, EditError, Session};
@@ -35,11 +36,17 @@ pub struct OcrSettings {
     /// Leave pages that already have text alone (Acrobat reports "page contains renderable
     /// text" and skips them).
     pub skip_text_pages: bool,
+    /// Detect pages turned by a quarter or half turn and read them upright
+    /// ([`pdfcraft_ocr::orient`]). Off by default: it costs up to four extra recognitions of a
+    /// reduced page.
+    pub auto_rotate: bool,
+    /// Detect skew of up to ±15° and read the page straightened. Off by default.
+    pub deskew: bool,
 }
 
 impl Default for OcrSettings {
     fn default() -> Self {
-        OcrSettings { dpi: 300.0, language: "en".into(), skip_text_pages: true }
+        OcrSettings { dpi: 300.0, language: "en".into(), skip_text_pages: true, auto_rotate: false, deskew: false }
     }
 }
 
@@ -131,6 +138,9 @@ pub struct OcrPage {
     pub words: Vec<PlacedWord>,
     /// Why the page was not read, if it was skipped.
     pub skipped: Option<String>,
+    /// The text direction found and corrected for recognition, when auto-rotate or deskew
+    /// was on. The page image itself is never changed.
+    pub orientation: Option<Orientation>,
 }
 
 impl OcrPage {
@@ -202,7 +212,7 @@ impl OcrJob {
                 return Err("text recognition canceled; no text was applied".into());
             }
             let Some(info) = self.infos.get(page) else { continue };
-            let skip = |why: &str| OcrPage { page, words: Vec::new(), skipped: Some(why.into()) };
+            let skip = |why: &str| OcrPage { page, words: Vec::new(), skipped: Some(why.into()), orientation: None };
             if self.settings.skip_text_pages {
                 let t = r.render(RenderRequest { page, kind: RequestKind::Text, scale: 1.0, ..Default::default() });
                 if t.text.as_ref().is_some_and(|t| !t.plain_text().trim().is_empty()) {
@@ -238,7 +248,24 @@ impl OcrJob {
                 out.push(skip(&error.to_string()));
                 continue;
             }
-            let lines = match ocr.recognize(&shot.rgba, shot.width, shot.height) {
+            // Orientation and skew are corrected on a gray copy for recognition only; words are
+            // mapped back through `to_source`, so the text layer lies over the unchanged image.
+            let options = pdfcraft_ocr::orient::Options { auto_rotate: self.settings.auto_rotate, deskew: self.settings.deskew };
+            let corrected = match pdfcraft_ocr::orient::correct(&shot.rgba, shot.width, shot.height, options, |p, w, h| ocr.recognize(p, w, h)) {
+                Ok(c) => c,
+                Err(e) => {
+                    out.push(skip(&e.to_string()));
+                    continue;
+                }
+            };
+            if !progress(done, total) {
+                return Err("text recognition canceled; no text was applied".into());
+            }
+            let read = match &corrected.image {
+                Some(image) => ocr.recognize(&image.pixels, image.width, image.height),
+                None => ocr.recognize(&shot.rgba, shot.width, shot.height),
+            };
+            let lines = match read {
                 Ok(l) => l,
                 Err(e) => {
                     out.push(skip(&e.to_string()));
@@ -257,11 +284,13 @@ impl OcrJob {
             }
             let scale = shot.width as f32 / info.width.max(1e-3);
             let to_user = |x: f32, y: f32| {
-                let [u, v] = info.view_to_user(x / scale, y / scale);
+                let [x, y] = corrected.to_source.apply(f64::from(x), f64::from(y));
+                let [u, v] = info.view_to_user(x as f32 / scale, y as f32 / scale);
                 [u as f64, v as f64]
             };
             let words = lines.iter().flat_map(|l| &l.words).map(|w| PlacedWord::place(w, to_user)).collect();
-            let found = OcrPage { page, words, skipped: None };
+            let orientation = options.any().then_some(corrected.orientation);
+            let found = OcrPage { page, words, skipped: None, orientation };
             if let Err(error) = pdfcraft_ocr::validate_words(&found.words) {
                 out.push(skip(&error.to_string()));
             } else {

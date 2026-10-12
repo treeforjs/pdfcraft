@@ -2094,6 +2094,9 @@
 	Skipped pages	Páginas omitidas
 	Apply recognized text	Aplicar el texto reconocido
 	Review recognized text before applying	Revisar el texto reconocido antes de aplicarlo
+	Detect page rotation	Detectar la rotación de las páginas
+	Deskew pages	Enderezar páginas torcidas
+	Detects turned or skewed pages and reads them upright; the page image is not changed	Detecta páginas giradas o torcidas y las lee derechas; la imagen de la página no se modifica
 	Text recognition canceled; no text was applied	Reconocimiento de texto cancelado; no se ha aplicado ningún texto
 # Compare Files: page ranges, visual settings, progress, page map and saved results.
 	Old pages:	Páginas del antiguo:

@@ -2187,6 +2187,9 @@ signature pad	Type	Digita
 	Skipped pages	Pagine saltate
 	Apply recognized text	Applica il testo riconosciuto
 	Review recognized text before applying	Rivedi il testo riconosciuto prima di applicarlo
+	Detect page rotation	Rileva la rotazione delle pagine
+	Deskew pages	Raddrizza le pagine inclinate
+	Detects turned or skewed pages and reads them upright; the page image is not changed	Rileva le pagine ruotate o inclinate e le legge diritte; l’immagine della pagina non viene modificata
 	Text recognition canceled; no text was applied	Riconoscimento del testo annullato; nessun testo applicato
 # Compare Files: page ranges, visual settings, progress, page map and saved results.
 	Old pages:	Pagine precedenti:
