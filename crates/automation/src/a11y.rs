@@ -1,6 +1,6 @@
 //! Accessibility tools: the full check, the accessibility report, and the automatic fixes.
 
-use pdfcraft_engine::a11y::{Category, Options, Report, Rule, Status};
+use pdfcraft_engine::a11y::{Category, Options, Report, Rule, Status, TagChange, TagKid};
 use serde_json::{Value, json};
 
 use crate::{Args, Automation, Result, ToolError, child, failed, write_atomic};
@@ -133,6 +133,162 @@ impl Automation {
         self.session.apply(id, edit).map_err(failed)?;
         self.accessibility_figures(a)
     }
+
+    pub(crate) fn tags_tree(&self, a: &Args) -> Result<Value> {
+        let doc = self.doc(a)?;
+        let limit = match a.opt_int("limit")? {
+            None => 5000,
+            Some(n) if (1..=100_000).contains(&n) => n as usize,
+            Some(_) => return Err(ToolError::InvalidArgs("limit must be between 1 and 100000".into())),
+        };
+        let t = doc.tags();
+        let kid = |k: &TagKid| match k {
+            TagKid::Element(i) => json!({ "element": i + 1 }),
+            TagKid::Content { page, mcid, stream } => json!({ "mcid": mcid, "page": page.map(|p| p + 1), "stream": stream.map(|s| s.num) }),
+            TagKid::Object { obj, page, subtype } => json!({ "object": obj.num, "subtype": subtype, "page": page.map(|p| p + 1) }),
+        };
+        let elements: Vec<Value> = t
+            .nodes
+            .iter()
+            .take(limit)
+            .enumerate()
+            .map(|(i, n)| {
+                json!({
+                    "element": i + 1,
+                    "obj": n.obj.map(|o| o.num),
+                    "parent": n.parent.map(|p| p + 1),
+                    "depth": n.depth,
+                    "type": n.ty,
+                    "standard": n.standard,
+                    "title": n.title,
+                    "alt": n.alt,
+                    "actual_text": n.actual_text,
+                    "lang": n.lang,
+                    "id": n.id,
+                    "page": n.page.map(|p| p + 1),
+                    "kids": n.kids.iter().map(kid).collect::<Vec<_>>(),
+                })
+            })
+            .collect();
+        let role_map: serde_json::Map<String, Value> = t.role_map.iter().map(|(k, v)| (k.clone(), json!(v))).collect();
+        Ok(json!({
+            "tagged": t.exists,
+            "marked": t.marked,
+            "lang": t.lang,
+            "count": t.nodes.len(),
+            "truncated": t.truncated || t.nodes.len() > limit,
+            "roots": t.roots.iter().map(|r| r + 1).collect::<Vec<_>>(),
+            "role_map": role_map,
+            "types": doc.tag_types(),
+            "elements": elements,
+        }))
+    }
+
+    pub(crate) fn tags_set(&mut self, a: &Args) -> Result<Value> {
+        let element = u32::try_from(a.int("obj")?)
+            .ok()
+            .filter(|n| *n >= 1)
+            .ok_or_else(|| ToolError::InvalidArgs("obj must be an element's object number (obj) from tags_tree".into()))?;
+        let text = |k: &str| -> Result<Option<Option<String>>> { Ok(a.opt_str(k)?.map(|s| Some(s.to_owned()))) };
+        let change = TagChange {
+            ty: a.opt_str("type")?.map(str::to_owned),
+            alt: text("alt")?,
+            actual_text: text("actual_text")?,
+            lang: text("lang")?,
+            title: text("title")?,
+        };
+        if change.is_empty() {
+            return Err(ToolError::InvalidArgs("give at least one of type, alt, actual_text, lang or title".into()));
+        }
+        let id = self.doc(a)?.id;
+        self.session.apply(id, pdfcraft_engine::Edit::SetTag { element, change }).map_err(failed)?;
+        let t = self.doc(a)?.tags();
+        let (i, n) = t
+            .nodes
+            .iter()
+            .enumerate()
+            .find(|(_, n)| n.obj.is_some_and(|o| o.num == element))
+            .ok_or_else(|| failed("the element is no longer in the structure tree"))?;
+        Ok(json!({
+            "element": i + 1, "obj": element, "type": n.ty, "standard": n.standard, "title": n.title,
+            "alt": n.alt, "actual_text": n.actual_text, "lang": n.lang,
+        }))
+    }
+
+    pub(crate) fn alt_text_list(&self, a: &Args) -> Result<Value> {
+        let all = a.opt_bool("all")?.unwrap_or(false);
+        let doc = self.doc(a)?;
+        let targets = doc.alt_targets();
+        let missing = targets.figures.iter().filter(|f| f.needs_alt).count() + targets.images.len();
+        let figures: Vec<Value> = targets
+            .figures
+            .iter()
+            .filter(|f| all || f.needs_alt)
+            .map(|f| {
+                json!({
+                    "figure": f.obj.map(|o| o.num),
+                    "element": f.node + 1,
+                    "page": f.page.map(|p| p + 1),
+                    "alt": f.alt,
+                    "actual_text": f.actual_text,
+                    "needs_alt": f.needs_alt,
+                    "rect": f.page.zip(f.bbox).and_then(|(p, b)| view_rect(doc, p, b)),
+                })
+            })
+            .collect();
+        let images: Vec<Value> = targets
+            .images
+            .iter()
+            .map(|i| json!({ "page": i.page + 1, "image": i.index + 1, "name": i.name, "rect": view_rect(doc, i.page, i.bbox) }))
+            .collect();
+        let check = doc
+            .accessibility_check(&Options { rules: [Rule::FiguresAltText].into(), pages: None })
+            .and_then(|r| r.result(Rule::FiguresAltText).map(|x| status_id(x.status)));
+        Ok(json!({ "missing": missing, "figures": figures, "untagged_images": images, "figures_alt_text": check }))
+    }
+
+    pub(crate) fn alt_text_set(&mut self, a: &Args) -> Result<Value> {
+        let decorative = a.opt_bool("decorative")?.unwrap_or(false);
+        let alt = a.opt_str("alt")?;
+        let edit = match (a.opt_int("figure")?, a.opt_int("image")?) {
+            (Some(f), None) => {
+                let figure = u32::try_from(f)
+                    .ok()
+                    .filter(|n| *n >= 1)
+                    .ok_or_else(|| ToolError::InvalidArgs("figure must be a figure number from alt_text_list".into()))?;
+                if decorative {
+                    pdfcraft_engine::Edit::MarkDecorative { figure }
+                } else {
+                    let alt = alt.ok_or_else(|| ToolError::InvalidArgs("give alt (empty clears it) or decorative: true".into()))?;
+                    pdfcraft_engine::Edit::SetAltText { figure, alt: Some(alt.to_owned()) }
+                }
+            }
+            (None, Some(i)) => {
+                if decorative {
+                    return Err(ToolError::InvalidArgs("decorative applies to tagged figures; give alt for an untagged image".into()));
+                }
+                let page = self.page(a)?;
+                let index = usize::try_from(i)
+                    .ok()
+                    .and_then(|i| i.checked_sub(1))
+                    .ok_or_else(|| ToolError::InvalidArgs("image must be a 1-based image number from alt_text_list".into()))?;
+                let alt = alt.filter(|s| !s.trim().is_empty()).ok_or_else(|| ToolError::InvalidArgs("give the alternate text (alt)".into()))?;
+                pdfcraft_engine::Edit::TagImage { page, index, alt: alt.to_owned() }
+            }
+            _ => return Err(ToolError::InvalidArgs("give either figure, or page and image".into())),
+        };
+        let id = self.doc(a)?.id;
+        self.session.apply(id, edit).map_err(failed)?;
+        self.alt_text_list(a)
+    }
+}
+
+/// Top-left-origin points on the displayed page for a user-space box.
+fn view_rect(doc: &pdfcraft_engine::Document, page: usize, b: [f64; 4]) -> Option<[f64; 4]> {
+    let info = doc.info.pages.get(page)?;
+    let (u, v) = (info.user_to_view(b[0] as f32, b[1] as f32), info.user_to_view(b[2] as f32, b[3] as f32));
+    let r = |x: f32| (x as f64 * 100.0).round() / 100.0;
+    Some([r(u[0].min(v[0])), r(u[1].min(v[1])), r(u[0].max(v[0])), r(u[1].max(v[1]))])
 }
 
 impl Automation {

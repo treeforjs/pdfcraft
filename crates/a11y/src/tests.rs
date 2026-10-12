@@ -279,3 +279,205 @@ fn setting_alt_text_and_marking_decorative() {
     let text = String::from_utf8(c.decoded().unwrap()).unwrap();
     assert!(text.contains("/Artifact BMC") && !text.contains("/MCID 0"), "{text}");
 }
+
+/// A tagged page: Document > H1 (MCID 0), P (an MCR for MCID 1), Photo (role-mapped to
+/// Figure, MCID 2, no alt), Link (an OBJR to the page's link annotation); a cycle back to the
+/// Document element; an image (Im1) painted outside marked content, one inside an Artifact, and
+/// an inline image outside marked content.
+fn tags_doc() -> Document {
+    let content = "/H1 << /MCID 0 >> BDC BT /F1 12 Tf 20 180 Td (Title) Tj ET EMC \
+        /P << /MCID 1 >> BDC BT /F1 10 Tf 20 160 Td (Body) Tj ET EMC \
+        /Figure << /MCID 2 >> BDC q 40 0 0 30 20 100 cm /Im1 Do Q EMC \
+        q 50 0 0 40 100 40 cm /Im1 Do Q \
+        /Artifact BMC q 10 0 0 10 0 0 cm /Im1 Do Q EMC \
+        q 20 0 0 20 150 150 cm BI /W 1 /H 1 /BPC 8 /CS /G ID \x7f EI Q";
+    pdf(
+        &[
+            "<< /Type /Catalog /Pages 2 0 R /MarkInfo << /Marked true >> /StructTreeRoot 6 0 R /Lang (en-US) >>".into(),
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".into(),
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 4 0 R /StructParents 0 /Tabs /S \
+              /Resources << /Font << /F1 5 0 R >> /XObject << /Im1 13 0 R >> >> /Annots [12 0 R] >>"
+                .into(),
+            stream(content),
+            FONT.into(),
+            "<< /Type /StructTreeRoot /K 7 0 R /ParentTree 14 0 R /ParentTreeNextKey 2 /RoleMap << /Photo /Figure /Loop /Loop2 /Loop2 /Loop >> >>"
+                .into(),
+            "<< /Type /StructElem /S /Document /P 6 0 R /K [8 0 R 9 0 R 10 0 R 11 0 R 7 0 R] /Lang (en) >>".into(),
+            "<< /Type /StructElem /S /H1 /P 7 0 R /Pg 3 0 R /K 0 /T (Heading) >>".into(),
+            "<< /Type /StructElem /S /P /P 7 0 R /Pg 3 0 R /K << /Type /MCR /MCID 1 >> >>".into(),
+            "<< /Type /StructElem /S /Photo /P 7 0 R /Pg 3 0 R /K [2] >>".into(),
+            "<< /Type /StructElem /S /Link /P 7 0 R /Pg 3 0 R /K [<< /Type /OBJR /Obj 12 0 R >> 10 0 R] >>".into(),
+            "<< /Type /Annot /Subtype /Link /Rect [20 150 60 170] /StructParent 1 >>".into(),
+            "<< /Type /XObject /Subtype /Image /Width 1 /Height 1 /BitsPerComponent 8 /ColorSpace /DeviceGray /Length 1 >>\nstream\n\x7f\nendstream"
+                .into(),
+            "<< /Nums [0 [8 0 R 9 0 R 10 0 R] 1 11 0 R] >>".into(),
+        ],
+        "",
+    )
+}
+
+fn reopen(doc: &Document) -> Document {
+    let bytes = pdfcraft_cos::write_incremental(doc, &Default::default()).unwrap();
+    assert!(bytes.starts_with(doc.bytes()), "incremental save keeps the original bytes");
+    Document::open(Arc::new(bytes)).unwrap()
+}
+
+#[test]
+fn the_tags_tree_reads_elements_content_and_object_references() {
+    let doc = tags_doc();
+    let t = tags(&doc);
+    assert!(t.exists && t.marked && !t.truncated);
+    assert_eq!(t.lang.as_deref(), Some("en-US"));
+    let types: Vec<(&str, Option<&str>, usize)> = t.nodes.iter().map(|n| (n.ty.as_str(), n.standard.as_deref(), n.depth)).collect();
+    // The Document's kid 7 0 R (itself) and the Link's second reference to the Photo are a
+    // cycle and a repeat: each element is read once.
+    assert_eq!(
+        types,
+        [("Document", Some("Document"), 0), ("H1", Some("H1"), 1), ("P", Some("P"), 1), ("Photo", Some("Figure"), 1), ("Link", Some("Link"), 1)]
+    );
+    assert_eq!(t.roots, [0]);
+    assert_eq!(t.nodes[0].lang.as_deref(), Some("en"));
+    assert_eq!(t.nodes[1].title.as_deref(), Some("Heading"));
+    assert_eq!(t.nodes[1].kids, [TagKid::Content { page: Some(0), mcid: 0, stream: None }]);
+    assert_eq!(t.nodes[2].kids, [TagKid::Content { page: Some(0), mcid: 1, stream: None }]);
+    assert!(matches!(&t.nodes[4].kids[..], [TagKid::Object { subtype: Some(s), page: Some(0), .. }] if s == "Link"));
+    assert_eq!(t.nodes[0].kids.len(), 4);
+    assert_eq!(t.role_map.len(), 3);
+    assert_eq!(t.find(pdfcraft_cos::ObjRef::new(10, 0)), Some(3));
+    assert!(!t.covered_by_alternate(3));
+    // A role-map cycle maps to no standard type, so it can't be chosen.
+    let allowed = allowed_types(&doc);
+    assert!(allowed.iter().any(|a| a == "Photo") && !allowed.iter().any(|a| a == "Loop" || a == "Artifact"));
+    // No tree, no nodes.
+    let untagged = pdf(&["<< /Type /Catalog /Pages 2 0 R >>".into(), "<< /Type /Pages /Kids [] /Count 0 >>".into()], "");
+    assert_eq!(tags(&untagged), Tags::default());
+}
+
+#[test]
+fn a_hostile_tree_is_read_bounded() {
+    // A 3000-deep chain of direct elements, and a kids array that contains itself.
+    let mut deep = String::from("<< /S /Span /K 0 >>");
+    for _ in 0..3000 {
+        deep = format!("<< /S /Span /K {deep} >>");
+    }
+    let doc = pdf(
+        &[
+            "<< /Type /Catalog /Pages 2 0 R /StructTreeRoot 3 0 R >>".into(),
+            "<< /Type /Pages /Kids [] /Count 0 >>".into(),
+            "<< /Type /StructTreeRoot /K [4 0 R 5 0 R] >>".into(),
+            deep,
+            "<< /S /Div /K 6 0 R >>".into(),
+            "[6 0 R 5 0 R << /S /P >>]".into(),
+        ],
+        "",
+    );
+    let t = tags(&doc);
+    assert!(t.nodes.iter().any(|n| n.ty == "Div") && t.nodes.iter().any(|n| n.ty == "P"), "{} nodes", t.nodes.len());
+    assert!(t.nodes.len() <= 1024, "{} nodes", t.nodes.len());
+}
+
+#[test]
+fn tag_properties_change_atomically_and_validate_types() {
+    let mut doc = tags_doc();
+    let photo = pdfcraft_cos::ObjRef::new(10, 0);
+    let p = pdfcraft_cos::ObjRef::new(9, 0);
+    // The checker fails the role-mapped figure without alternate text.
+    assert_eq!(status(&check(&doc, &Options::default()), Rule::FiguresAltText), Status::Failed);
+    // Invalid changes change nothing.
+    let bad_type = TagChange { ty: Some("Bogus".into()), ..Default::default() };
+    assert!(matches!(set_tag(&mut doc, p, &bad_type), Err(TagError::Invalid(_))));
+    let bad_lang = TagChange { alt: Some(Some("x".into())), lang: Some(Some("en US".into())), ..Default::default() };
+    assert!(matches!(set_tag(&mut doc, photo, &bad_lang), Err(TagError::Invalid(_))));
+    assert!(matches!(set_tag(&mut doc, photo, &TagChange { ty: Some("Artifact".into()), ..Default::default() }), Err(TagError::Invalid(_))));
+    assert!(matches!(set_tag(&mut doc, photo, &TagChange::default()), Err(TagError::Invalid(_))));
+    let page = pdfcraft_cos::ObjRef::new(3, 0);
+    assert_eq!(set_tag(&mut doc, page, &TagChange { alt: Some(Some("x".into())), ..Default::default() }), Err(TagError::NotAnElement(3)));
+    let long = "x".repeat(MAX_TEXT + 1);
+    assert!(matches!(set_tag(&mut doc, photo, &TagChange { alt: Some(Some(long)), ..Default::default() }), Err(TagError::Invalid(_))));
+    assert!(!doc.is_modified());
+    // Valid changes.
+    set_tag(&mut doc, p, &TagChange { ty: Some("H2".into()), lang: Some(Some("fr-CA".into())), ..Default::default() }).unwrap();
+    let described = TagChange { alt: Some(Some("  A bar chart ".into())), actual_text: Some(Some("Été".into())), ..Default::default() };
+    set_tag(&mut doc, photo, &described).unwrap();
+    set_tag(&mut doc, pdfcraft_cos::ObjRef::new(8, 0), &TagChange { ty: Some("Photo".into()), title: Some(None), ..Default::default() }).unwrap();
+    let doc = reopen(&doc);
+    let t = tags(&doc);
+    assert_eq!((t.nodes[2].ty.as_str(), t.nodes[2].lang.as_deref()), ("H2", Some("fr-CA")));
+    assert_eq!((t.nodes[3].alt.as_deref(), t.nodes[3].actual_text.as_deref()), (Some("A bar chart"), Some("Été")));
+    assert_eq!((t.nodes[1].ty.as_str(), t.nodes[1].standard.as_deref(), t.nodes[1].title.as_deref()), ("Photo", Some("Figure"), None));
+    // The H1 became a figure without alternate text; the described figure passes.
+    let r = check(&doc, &Options { rules: [Rule::FiguresAltText].into(), pages: None });
+    assert_eq!(r.result(Rule::FiguresAltText).unwrap().findings.len(), 1);
+    // Clearing.
+    let mut doc = doc;
+    set_tag(&mut doc, photo, &TagChange { alt: Some(None), actual_text: Some(Some("  ".into())), ..Default::default() }).unwrap();
+    assert!(!tags(&doc).nodes[3].has_alternate());
+}
+
+#[test]
+fn set_alternate_text_lists_figures_and_untagged_images() {
+    let doc = tags_doc();
+    let a = alt_targets(&doc);
+    assert_eq!(a.figures.len(), 1);
+    let f = &a.figures[0];
+    assert_eq!((f.obj.map(|o| o.num), f.page, f.needs_alt), (Some(10), Some(0), true));
+    assert_eq!(f.bbox, Some([20.0, 100.0, 60.0, 130.0]));
+    // The image outside marked content and the inline image; not the tagged or artifact ones.
+    let imgs: Vec<(usize, usize, Option<&str>, [f64; 4])> = a.images.iter().map(|i| (i.page, i.index, i.name.as_deref(), i.bbox)).collect();
+    assert_eq!(imgs, [(0, 0, Some("Im1"), [100.0, 40.0, 150.0, 80.0]), (0, 1, None, [150.0, 150.0, 170.0, 170.0])]);
+}
+
+#[test]
+fn tagging_an_untagged_image_with_alternate_text() {
+    let mut doc = tags_doc();
+    assert!(matches!(tag_image(&mut doc, 0, 5, "x"), Err(TagError::Invalid(_))));
+    assert!(matches!(tag_image(&mut doc, 3, 0, "x"), Err(TagError::Invalid(_))));
+    assert!(matches!(tag_image(&mut doc, 0, 0, "   "), Err(TagError::Invalid(_))));
+    assert!(!doc.is_modified());
+    let fig = tag_image(&mut doc, 0, 1, "A grey square").unwrap();
+    let fig2 = tag_image(&mut doc, 0, 0, "A photo").unwrap();
+    let doc = reopen(&doc);
+    assert!(untagged_images(&doc).is_empty());
+    let t = tags(&doc);
+    let (i, j) = (t.find(fig).unwrap(), t.find(fig2).unwrap());
+    assert_eq!(t.nodes[i].parent, Some(0), "added to the Document element");
+    assert_eq!(t.nodes[i].kids, [TagKid::Content { page: Some(0), mcid: 3, stream: None }]);
+    assert_eq!(t.nodes[j].kids, [TagKid::Content { page: Some(0), mcid: 4, stream: None }]);
+    assert_eq!(t.nodes[j].alt.as_deref(), Some("A photo"));
+    // The parent tree maps the new MCIDs to the figures.
+    let pt = doc.get(pdfcraft_cos::ObjRef::new(14, 0));
+    let nums = pt.as_dict().unwrap().get(b"Nums").unwrap().as_array().unwrap().clone();
+    let arr = nums[1].as_array().unwrap();
+    assert_eq!((arr.len(), arr[3].as_ref(), arr[4].as_ref()), (5, Some(fig), Some(fig2)));
+    // The checker: the new figures have alternate text; only the role-mapped figure without it
+    // is a finding.
+    let r = check(&doc, &Options::default());
+    assert_eq!(r.result(Rule::FiguresAltText).unwrap().findings.len(), 1);
+    assert_eq!(alt_targets(&doc).figures.iter().filter(|f| f.needs_alt).count(), 1);
+}
+
+#[test]
+fn tagging_an_image_in_an_untagged_document_creates_the_tree() {
+    let mut doc = pdf(
+        &[
+            "<< /Type /Catalog /Pages 2 0 R >>".into(),
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".into(),
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 4 0 R /Resources << /XObject << /Im1 5 0 R >> >> >>".into(),
+            stream("q 50 0 0 50 10 10 cm /Im1 Do Q"),
+            "<< /Type /XObject /Subtype /Image /Width 1 /Height 1 /BitsPerComponent 8 /ColorSpace /DeviceGray /Length 1 >>\nstream\n\x7f\nendstream"
+                .into(),
+        ],
+        "",
+    );
+    assert_eq!(untagged_images(&doc).len(), 1);
+    let fig = tag_image(&mut doc, 0, 0, "A logo").unwrap();
+    let doc = reopen(&doc);
+    let t = tags(&doc);
+    assert!(t.exists);
+    assert_eq!(t.nodes.iter().map(|n| n.ty.as_str()).collect::<Vec<_>>(), ["Document", "Figure"]);
+    assert_eq!(t.find(fig), Some(1));
+    assert!(untagged_images(&doc).is_empty());
+    let r = check(&doc, &Options::default());
+    assert_eq!(status(&r, Rule::FiguresAltText), Status::Passed);
+    assert_eq!(status(&r, Rule::TaggedContent), Status::Passed, "{:?}", r.result(Rule::TaggedContent));
+}

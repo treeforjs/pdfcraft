@@ -8767,11 +8767,11 @@ title = "Tags panel (new, delete, find, change to artifact)"
 area = "M"
 tier = "P1"
 milestone = "M12"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["tags_tree", "tags_set"]
+evidence = ["crates/a11y/src/tests.rs::the_tags_tree_reads_elements_content_and_object_references", "crates/a11y/src/tests.rs::a_hostile_tree_is_read_bounded", "crates/automation/tests/tags.rs::tags_tree_edits_and_alternate_text_through_tools"]
+notes = "headless only: bounded, cycle-safe structure tree (elements with obj numbers, role-mapped standard types, MCID/MCR/OBJR kids, alt/actual text/lang/title) checked against poppler pdfinfo -struct after save; no panel UI and no new/delete/find/change-to-artifact yet"
 
 [[feature]]
 id = "a11y.tag-properties"
@@ -8779,11 +8779,11 @@ title = "Tag properties (type, title, actual text, alternate text, language)"
 area = "M"
 tier = "P1"
 milestone = "M12"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["tags_set"]
+evidence = ["crates/a11y/src/tests.rs::tag_properties_change_atomically_and_validate_types", "crates/automation/tests/tags.rs::tags_tree_edits_and_alternate_text_through_tools"]
+notes = "headless only: type (standard types or role-mapped custom types), title, actual text, alternate text and language set or cleared all-or-nothing as one undo step, saved incrementally; no properties dialog UI, attributes and class map not edited"
 
 [[feature]]
 id = "a11y.role-map"
@@ -8889,9 +8889,9 @@ tier = "P1"
 milestone = "M12"
 status = "shipped"
 commands = ["a11y.alt_text"]
-tools = ["accessibility_figures", "accessibility_set_alt"]
-evidence = ["crates/a11y/src/tests.rs::figures_are_listed_with_their_alt_text_and_place", "crates/a11y/src/tests.rs::setting_alt_text_and_marking_decorative", "crates/ui-egui/tests/accessibility.rs::setting_alternate_text_figure_by_figure", "crates/automation/tests/automation.rs::accessibility_check_report_and_fixes_through_tools"]
-notes = "Set Alternate Text dialog: each tagged figure (role map honoured) with a preview of where it is drawn, its alternate text, Decorative figure (content becomes /Artifact, element leaves the tags and parent tree), Previous/Next, Save & Close as one undo step"
+tools = ["accessibility_figures", "accessibility_set_alt", "alt_text_list", "alt_text_set"]
+evidence = ["crates/a11y/src/tests.rs::figures_are_listed_with_their_alt_text_and_place", "crates/a11y/src/tests.rs::setting_alt_text_and_marking_decorative", "crates/ui-egui/tests/accessibility.rs::setting_alternate_text_figure_by_figure", "crates/automation/tests/automation.rs::accessibility_check_report_and_fixes_through_tools", "crates/a11y/src/tests.rs::set_alternate_text_lists_figures_and_untagged_images", "crates/a11y/src/tests.rs::tagging_an_untagged_image_with_alternate_text", "crates/a11y/src/tests.rs::tagging_an_image_in_an_untagged_document_creates_the_tree", "crates/automation/tests/tags.rs::tags_tree_edits_and_alternate_text_through_tools", "crates/automation/tests/tags.rs::alternate_text_for_an_image_in_an_untagged_document"]
+notes = "Set Alternate Text dialog: each tagged figure (role map honoured) with a preview of where it is drawn, its alternate text, Decorative figure (content becomes /Artifact, element leaves the tags and parent tree), Previous/Next, Save & Close as one undo step. Headless (alt_text_list/alt_text_set): figures lacking alternate text (own or ancestor's, as the checker's figures-alt-text rule) plus images painted on the page outside tagged/artifact content, which are tagged as Figure with alt (minimal tree created for untagged files); images inside form XObjects are not found and the dialog does not list untagged images yet"
 
 [[feature]]
 id = "a11y.alt-text-suggestions"

@@ -885,6 +885,39 @@ pub fn tools() -> Vec<ToolDef> {
         t("accessibility_set_alt", "Set alternate text", "Set a figure's alternate text (alt; empty or omitted clears it), or mark it decorative (decorative: true: its content becomes an artifact and the figure leaves the tags). figure is a number from accessibility_figures. Returns the figures. Undoable.")
             .cmd("a11y.alt_text")
             .with(schema(json!({ "doc": doc(), "figure": { "type": "integer", "minimum": 1 }, "alt": { "type": "string" }, "decorative": { "type": "boolean" } }), &["doc", "figure"])),
+        t("tags_tree", "Show the tags tree", "The logical structure tree (Tags panel), read with cycle and size limits: each element in document order with its 1-based element number, object number (obj, null for an element that can't be edited), parent, depth, type as written and its standard type through the role map, title, alt, actual_text, lang, page, and kids (elements, marked content as mcid + page, object references as object + subtype). Also the catalog language, the role map, and the types tags_set accepts.")
+            .ro()
+            .with(schema(json!({ "doc": doc(), "limit": { "type": "integer", "minimum": 1, "maximum": 100000, "description": "At most this many elements (default 5000)." } }), &["doc"])),
+        t("tags_set", "Change tag properties", "Change one structure element (obj from tags_tree): type (a standard structure type, or a custom type the role map maps to one), alt, actual_text, lang (a language tag such as en-US) or title; an empty string removes that entry. All or nothing, one undo step. Returns the element.")
+            .with(schema(
+                json!({
+                    "doc": doc(),
+                    "obj": { "type": "integer", "minimum": 1, "description": "The element's object number (obj) from tags_tree." },
+                    "type": { "type": "string" },
+                    "alt": { "type": "string" },
+                    "actual_text": { "type": "string" },
+                    "lang": { "type": "string" },
+                    "title": { "type": "string" }
+                }),
+                &["doc", "obj"],
+            )),
+        t("alt_text_list", "List figures needing alternate text", "Set Alternate Text's walk: Figure elements (through the role map) that have no alternate or actual text on themselves or an ancestor (all: true lists every figure), and images painted outside tagged and artifact content (untagged_images: page and 1-based image number). Rects are top-left-origin points. Also the Accessibility Checker's figures-alt-text status.")
+            .ro()
+            .cmd("a11y.alt_text")
+            .with(schema(json!({ "doc": doc(), "all": { "type": "boolean" } }), &["doc"])),
+        t("alt_text_set", "Set alternate text", "Give a figure (figure from alt_text_list) alternate text (alt; empty clears it) or mark it decorative (decorative: true); or tag an untagged image (page and image from alt_text_list) as a Figure with alt, adding a structure tree if the document has none. One undo step. Returns alt_text_list.")
+            .cmd("a11y.alt_text")
+            .with(schema(
+                json!({
+                    "doc": doc(),
+                    "figure": { "type": "integer", "minimum": 1 },
+                    "page": { "type": "integer", "minimum": 1 },
+                    "image": { "type": "integer", "minimum": 1 },
+                    "alt": { "type": "string" },
+                    "decorative": { "type": "boolean" }
+                }),
+                &["doc"],
+            )),
         t("form_merge_data", "Merge data files into spreadsheet", "Collect the field values of form data files (FDF, XFDF) or filled-in PDF forms into one CSV file at path: a column per field name, a row per file. Returns the row and column counts.")
             .cmd("form.merge_data")
             .with(schema(json!({ "paths": { "type": "array", "items": { "type": "string" }, "minItems": 1 }, "path": { "type": "string" } }), &["paths", "path"])),

@@ -9,7 +9,7 @@ use pdfcraft_model::Page;
 use crate::{Finding, Rule};
 
 /// Standard structure types (PDF 1.7 and 2.0); anything else goes through the role map.
-const STANDARD: &[&[u8]] = &[
+pub(crate) const STANDARD: &[&[u8]] = &[
     b"Document",
     b"DocumentFragment",
     b"Part",

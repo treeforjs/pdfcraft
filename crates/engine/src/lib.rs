@@ -340,6 +340,21 @@ impl Document {
         self.editor.as_ref().map(|e| a11y::figures(&e.cos)).unwrap_or_default()
     }
 
+    /// Tags panel: the structure tree.
+    pub fn tags(&self) -> a11y::Tags {
+        self.editor.as_ref().map(|e| a11y::tags(&e.cos)).unwrap_or_default()
+    }
+
+    /// Set Alternate Text: the figures and the untagged images.
+    pub fn alt_targets(&self) -> a11y::AltTargets {
+        self.editor.as_ref().map(|e| a11y::alt_targets(&e.cos)).unwrap_or_default()
+    }
+
+    /// The structure types a tag can be changed to.
+    pub fn tag_types(&self) -> Vec<String> {
+        self.editor.as_ref().map(|e| a11y::allowed_types(&e.cos)).unwrap_or_default()
+    }
+
     /// The edit that fixes `rule`, for the rules with an automatic fix: the document language
     /// (`value` is the language), the title (`value` replaces it; else the current title or the
     /// file name) and the tab order.
@@ -980,6 +995,19 @@ pub enum Edit {
     MarkDecorative {
         figure: u32,
     },
+    /// Tags panel ▸ Properties: change a structure element's type, alternate text, actual text,
+    /// language or title. `element` is the element's object number (from `Document::tags`).
+    SetTag {
+        element: u32,
+        change: a11y::TagChange,
+    },
+    /// Set Alternate Text on an untagged image: tag image `index` (0-based, among the page's
+    /// untagged images) on `page` as a Figure with `alt`.
+    TagImage {
+        page: usize,
+        index: usize,
+        alt: String,
+    },
     /// Document JavaScripts: add, replace (`script`) or remove (`None`) the document-level
     /// script `name`.
     SetDocumentScript {
@@ -1217,6 +1245,8 @@ impl Edit {
             Edit::SetInitialView(_) => "Change initial view".into(),
             Edit::SetAltText { .. } => "Set alternate text".into(),
             Edit::MarkDecorative { .. } => "Mark figure as decorative".into(),
+            Edit::SetTag { .. } => "Change tag properties".into(),
+            Edit::TagImage { .. } => "Set alternate text".into(),
             Edit::AddOcrText { .. } => "Recognize text".into(),
             Edit::ApplyScriptChanges { .. } => "Run JavaScript".into(),
             Edit::XfaEvent { .. } => "Run form script".into(),
@@ -1401,6 +1431,8 @@ fn check_permission(edit: &Edit, p: &pdfcraft_cos::Permissions) -> Result<(), Ed
         | Edit::SetPageTransition { .. }
         | Edit::SetAltText { .. }
         | Edit::MarkDecorative { .. }
+        | Edit::SetTag { .. }
+        | Edit::TagImage { .. }
         | Edit::AddOcrText { .. }
         | Edit::SetDocumentScript { .. }
         | Edit::SetFieldScript { .. }
@@ -1645,6 +1677,13 @@ fn run_edit(doc: &mut pdfcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -> 
         Edit::SetAltText { figure, alt } => {
             let r = pdfcraft_cos::ObjRef::new(*figure, doc.generation(*figure));
             a11y::set_alt(doc, r, alt.as_deref()).map_err(|e| EditError::Accessibility(e.to_string()))?;
+        }
+        Edit::SetTag { element, change } => {
+            let r = pdfcraft_cos::ObjRef::new(*element, doc.generation(*element));
+            a11y::set_tag(doc, r, change).map_err(|e| EditError::Accessibility(e.to_string()))?;
+        }
+        Edit::TagImage { page, index, alt } => {
+            a11y::tag_image(doc, *page, *index, alt).map_err(|e| EditError::Accessibility(e.to_string()))?;
         }
         Edit::EditTextLine { page, line, text } => {
             pdfcraft_edit::replace_line(doc, *page, *line, text)?;

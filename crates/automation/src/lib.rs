@@ -650,6 +650,10 @@ impl Automation {
             "accessibility_fix" => self.a11y_fix(&a)?,
             "accessibility_figures" => self.accessibility_figures(&a)?,
             "accessibility_set_alt" => self.accessibility_set_alt(&a)?,
+            "tags_tree" => self.tags_tree(&a)?,
+            "tags_set" => self.tags_set(&a)?,
+            "alt_text_list" => self.alt_text_list(&a)?,
+            "alt_text_set" => self.alt_text_set(&a)?,
             "sign_id_create" => self.sign_id_create(&a)?,
             "sign_document" => self.sign_document(&a)?,
             "sign_keychain_ids" => {
