@@ -4,12 +4,14 @@
 //! current page; cards grouped by page. Selecting a card selects the comment on the page and
 //! opens its reply box and "…" menu (Edit, Set status, Delete). Status replies show as a badge.
 
+use std::collections::HashMap;
+
 use egui::{Align, Color32, CornerRadius, Layout, Sense, Stroke, vec2};
 use pdfcraft_engine::{Edit, NoteIcon, ReviewState, Shape};
 use pdfcraft_render::{Annotation, DocInfo};
 
 use crate::canvas::DocView;
-use crate::comments::{CommentPrefs, CommentTool, SortBy, color32, status_badge};
+use crate::comments::{CommentPrefs, CommentTool, CommentView, PanelStats, SortBy, color32, status_badge};
 use crate::icons;
 use crate::panels::Nav;
 use crate::theme::{self, Tokens};
@@ -84,26 +86,371 @@ pub fn is_marked(thread: &[&Annotation]) -> bool {
     thread.iter().rev().find(|r| r.is_mark()).is_some_and(|r| r.state.as_deref() == Some("Marked"))
 }
 
-/// The number shown in the header: comments and their replies (not status changes).
-pub fn count(info: &DocInfo) -> usize {
-    info.annotations.iter().filter(|a| a.state.is_none()).count()
-}
-
 fn matches(a: &Annotation, q: &str) -> bool {
     let q = q.to_lowercase();
     [a.author.as_deref(), a.contents.as_deref(), Some(kind_label(a))].into_iter().flatten().any(|s| s.to_lowercase().contains(&q))
 }
 
-/// Draw the panel body. Returns an edit to apply (posting, replying, deleting…).
+// ─────────────────────────────────────────────────────────────── index and card list
+//
+// A document can carry thousands of comments. Every frame the panel used to filter all of them,
+// look up each one's replies with a scan of all annotations, count each page's comments with
+// another scan, and lay out every card. Now the facts that only change with the document are
+// indexed once per annotation revision, the filtered and sorted card list is rebuilt only when
+// the revision, the search or a filter changes, and only the cards in view are laid out (their
+// heights are measured as they are drawn and kept in a Fenwick tree, so finding the first visible
+// card and the space above and below it is O(log n)).
+
+/// Which annotation list an index was built from: the document's edit generation, and the
+/// list's length and address (a new list after any refresh).
+type Revision = (u64, usize, usize);
+
+fn revision(info: &DocInfo, generation: u64) -> Revision {
+    (generation, info.annotations.len(), info.annotations.as_ptr() as usize)
+}
+
+/// What the panel needs about a document's comments, built once per annotation revision.
+#[derive(Clone, Debug, Default)]
+struct CommentIndex {
+    revision: Revision,
+    /// Comments and replies, not status changes (the header number).
+    total: usize,
+    /// Top-level comments (indexes into `info.annotations`), in document order.
+    roots: Vec<usize>,
+    /// Replies (status changes and checkmarks included) to each annotation name, in order.
+    replies: HashMap<String, Vec<usize>>,
+    /// Top-level comments on each page.
+    per_page: Vec<usize>,
+    /// The filter menu's choices: comment types, authors and colours (key, colour).
+    types: Vec<String>,
+    authors: Vec<String>,
+    colors: Vec<(String, Option<[f32; 3]>)>,
+}
+
+impl CommentIndex {
+    fn build(info: &DocInfo, revision: Revision) -> Self {
+        let mut ix = CommentIndex { revision, per_page: vec![0; info.pages.len()], ..Default::default() };
+        for (i, a) in info.annotations.iter().enumerate() {
+            if a.state.is_none() {
+                ix.total += 1;
+            }
+            match &a.in_reply_to {
+                Some(parent) => ix.replies.entry(parent.clone()).or_default().push(i),
+                None => {
+                    ix.roots.push(i);
+                    if let Some(n) = ix.per_page.get_mut(a.page) {
+                        *n += 1;
+                    }
+                }
+            }
+        }
+        let roots = || ix.roots.iter().filter_map(|&i| info.annotations.get(i));
+        let mut types: Vec<String> = roots().map(|a| kind_label(a).to_string()).collect();
+        types.sort();
+        types.dedup();
+        let mut authors: Vec<String> = roots().map(|a| a.author.clone().unwrap_or_default()).collect();
+        authors.sort();
+        authors.dedup();
+        let mut colors: Vec<(String, Option<[f32; 3]>)> = roots().map(|a| (color_key(a), a.color)).collect();
+        colors.sort_by(|a, b| a.0.cmp(&b.0));
+        colors.dedup_by(|a, b| a.0 == b.0);
+        (ix.types, ix.authors, ix.colors) = (types, authors, colors);
+        ix
+    }
+
+    /// The replies to `a` (none if it has no name), in document order.
+    fn thread<'a>(&self, info: &'a DocInfo, a: &Annotation) -> Vec<&'a Annotation> {
+        a.name.as_deref().and_then(|nm| self.replies.get(nm)).map(|r| r.iter().filter_map(|&i| info.annotations.get(i)).collect()).unwrap_or_default()
+    }
+}
+
+/// A group header above a card.
+#[derive(Clone, Debug)]
+enum Header {
+    /// "Page N" with that page's number of comments.
+    Page(usize),
+    /// An author, type or colour; `translate` unless it is an author's own name.
+    Group { title: String, translate: bool },
+}
+
+/// One card of the list (and the header that starts its group, if any).
+#[derive(Clone, Debug)]
+struct Row {
+    /// Index into `info.annotations`.
+    annotation: usize,
+    header: Option<Header>,
+}
+
+/// What the card list was built for: the revision, the search and the filters.
+#[derive(Clone, Debug, Default, PartialEq)]
+struct ListKey {
+    revision: Revision,
+    query: Option<String>,
+    hidden_types: Vec<String>,
+    hidden_authors: Vec<String>,
+    hidden_statuses: Vec<String>,
+    hidden_colors: Vec<String>,
+    hidden_checks: Vec<String>,
+    sort: SortBy,
+}
+
+impl ListKey {
+    fn of(cv: &CommentView, revision: Revision) -> Self {
+        ListKey {
+            revision,
+            query: query_of(cv).map(str::to_string),
+            hidden_types: cv.hidden_types.clone(),
+            hidden_authors: cv.hidden_authors.clone(),
+            hidden_statuses: cv.hidden_statuses.clone(),
+            hidden_colors: cv.hidden_colors.clone(),
+            hidden_checks: cv.hidden_checks.clone(),
+            sort: cv.sort,
+        }
+    }
+
+    /// Compares without allocating (this runs every frame).
+    fn is_for(&self, cv: &CommentView, revision: Revision) -> bool {
+        self.revision == revision
+            && self.query.as_deref() == query_of(cv)
+            && self.hidden_types == cv.hidden_types
+            && self.hidden_authors == cv.hidden_authors
+            && self.hidden_statuses == cv.hidden_statuses
+            && self.hidden_colors == cv.hidden_colors
+            && self.hidden_checks == cv.hidden_checks
+            && self.sort == cv.sort
+    }
+}
+
+fn query_of(cv: &CommentView) -> Option<&str> {
+    cv.search.as_deref().filter(|q| !q.trim().is_empty())
+}
+
+/// Row heights with O(log n) update, prefix sum and lookup by offset (a Fenwick tree).
+#[derive(Clone, Debug, Default)]
+struct Heights {
+    tree: Vec<f64>,
+    value: Vec<f64>,
+}
+
+impl Heights {
+    fn new(value: Vec<f64>) -> Self {
+        let n = value.len();
+        let mut tree = value.clone();
+        for i in 1..=n {
+            let parent = i + (i & i.wrapping_neg());
+            if parent <= n {
+                let v = tree[i - 1];
+                tree[parent - 1] += v;
+            }
+        }
+        Heights { tree, value }
+    }
+
+    fn len(&self) -> usize {
+        self.value.len()
+    }
+
+    fn get(&self, i: usize) -> f64 {
+        self.value.get(i).copied().unwrap_or(0.0)
+    }
+
+    fn set(&mut self, i: usize, h: f64) {
+        let Some(old) = self.value.get_mut(i) else { return };
+        let delta = h - *old;
+        *old = h;
+        let mut j = i + 1;
+        while let Some(t) = self.tree.get_mut(j - 1) {
+            *t += delta;
+            j += j & j.wrapping_neg();
+        }
+    }
+
+    /// The total height of rows `0..i`.
+    fn prefix(&self, i: usize) -> f64 {
+        let mut s = 0.0;
+        let mut j = i.min(self.len());
+        while j > 0 {
+            s += self.tree.get(j - 1).copied().unwrap_or(0.0);
+            j -= j & j.wrapping_neg();
+        }
+        s
+    }
+
+    fn total(&self) -> f64 {
+        self.prefix(self.len())
+    }
+
+    /// The row at offset `y` from the top of the list (the last row when `y` is past the end).
+    fn row_at(&self, y: f64) -> usize {
+        let n = self.len();
+        let (mut pos, mut rest) = (0, y);
+        let mut step = if n == 0 { 0 } else { 1 << (usize::BITS - 1 - n.leading_zeros()) };
+        while step > 0 {
+            if let Some(&t) = self.tree.get(pos + step - 1)
+                && t <= rest
+            {
+                pos += step;
+                rest -= t;
+            }
+            step >>= 1;
+        }
+        pos.min(n.saturating_sub(1))
+    }
+}
+
+/// The panel's cached index, card list and measured card heights (part of a document's
+/// [`CommentView`]).
+#[derive(Clone, Debug, Default)]
+pub struct PanelCache {
+    index: CommentIndex,
+    list: Option<ListKey>,
+    rows: Vec<Row>,
+    /// Where each listed comment is: (page, index in `/Annots`) → row.
+    row_of: HashMap<(usize, usize), usize>,
+    heights: Heights,
+    stats: PanelStats,
+}
+
+impl PanelCache {
+    pub fn stats(&self) -> PanelStats {
+        self.stats
+    }
+
+    /// Comments and replies in the document (the panel header's number).
+    pub fn total(&self) -> usize {
+        self.index.total
+    }
+}
+
+/// Bring the index up to date with the document; nearly free when nothing changed.
+pub(crate) fn refresh(view: &mut DocView, info: &DocInfo, generation: u64) {
+    let cache = &mut view.comments.panel;
+    let rev = revision(info, generation);
+    if cache.stats.index_builds == 0 || cache.index.revision != rev {
+        cache.index = CommentIndex::build(info, rev);
+        cache.stats.index_builds += 1;
+    }
+}
+
+/// Rebuild the filtered, sorted card list when the revision, search or filters changed.
+fn refresh_list(cache: &mut PanelCache, info: &DocInfo, cv: &CommentView) {
+    let rev = cache.index.revision;
+    if cache.list.as_ref().is_some_and(|k| k.is_for(cv, rev)) {
+        return;
+    }
+    let ix = &cache.index;
+    let query = query_of(cv);
+    let status_of =
+        |thread: &[&Annotation]| thread.iter().rev().filter(|r| !r.is_mark()).find_map(|r| r.state.clone()).unwrap_or_else(|| "None".into());
+    let mut roots: Vec<(usize, &Annotation)> = ix
+        .roots
+        .iter()
+        .filter_map(|&i| info.annotations.get(i).map(|a| (i, a)))
+        .filter(|(_, a)| {
+            let thread = ix.thread(info, a);
+            query.is_none_or(|q| matches(a, q) || thread.iter().any(|r| matches(r, q)))
+                && !cv.hidden_types.iter().any(|t| t == kind_label(a))
+                && !cv.hidden_authors.contains(&a.author.clone().unwrap_or_default())
+                && !cv.hidden_statuses.contains(&status_of(&thread))
+                && !cv.hidden_colors.contains(&color_key(a))
+                && !cv.hidden_checks.contains(&check_label(is_marked(&thread)).to_string())
+        })
+        .collect();
+    let sort = cv.sort;
+    match sort {
+        SortBy::Page => {}
+        SortBy::Author => roots.sort_by_key(|(_, a)| a.author.clone().unwrap_or_default().to_lowercase()),
+        SortBy::Date => roots.sort_by(|(_, a), (_, b)| b.modified.cmp(&a.modified)),
+        SortBy::Type => roots.sort_by_key(|(_, a)| kind_label(a).to_string()),
+        SortBy::Color => roots.sort_by_key(|(_, a)| color_key(a)),
+    }
+    // Group headers follow the sort key (no headers when sorted by date).
+    let group_of = |a: &Annotation| -> Option<(String, bool)> {
+        match sort {
+            SortBy::Author => Some(match &a.author {
+                Some(name) => (name.clone(), false),
+                None => ("Unknown author".into(), true),
+            }),
+            SortBy::Type => Some((kind_label(a).to_string(), true)),
+            SortBy::Color => Some((if a.color.is_some() { format!("#{}", color_key(a)) } else { "No colour".into() }, true)),
+            SortBy::Page | SortBy::Date => None,
+        }
+    };
+    let mut rows = Vec::with_capacity(roots.len());
+    let mut estimates = Vec::with_capacity(roots.len());
+    let mut row_of = HashMap::with_capacity(roots.len());
+    let mut page = usize::MAX;
+    let mut group: Option<String> = None;
+    for (i, a) in roots {
+        let header = if sort == SortBy::Page {
+            (a.page != page).then(|| {
+                page = a.page;
+                Header::Page(a.page)
+            })
+        } else {
+            match group_of(a) {
+                Some((title, translate)) if group.as_deref() != Some(title.as_str()) => {
+                    group = Some(title.clone());
+                    Some(Header::Group { title, translate })
+                }
+                _ => None,
+            }
+        };
+        // A first guess until the card is drawn and measured.
+        let replies = a.name.as_deref().and_then(|nm| ix.replies.get(nm)).map_or(0, Vec::len);
+        estimates.push(CARD_ESTIMATE + if header.is_some() { HEADER_ESTIMATE } else { 0.0 } + REPLY_ESTIMATE * replies.min(20) as f64);
+        row_of.insert((a.page, a.index), rows.len());
+        rows.push(Row { annotation: i, header });
+    }
+    cache.heights = Heights::new(estimates);
+    cache.stats.listed = rows.len();
+    cache.stats.list_builds += 1;
+    cache.rows = rows;
+    cache.row_of = row_of;
+    cache.list = Some(ListKey::of(cv, rev));
+}
+
+/// Height guesses for cards not drawn yet (measured heights replace them).
+const CARD_ESTIMATE: f64 = 84.0;
+const HEADER_ESTIMATE: f64 = 26.0;
+const REPLY_ESTIMATE: f64 = 50.0;
+
+/// Draw the panel body inside the panel's scroll area (`viewport`: its visible part, in content
+/// coordinates). Returns an edit to apply (posting, replying, deleting…).
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn show(
     ui: &mut egui::Ui,
+    viewport: egui::Rect,
     t: &Tokens,
     info: &DocInfo,
+    generation: u64,
     view: &mut DocView,
     prefs: &CommentPrefs,
     allowed: bool,
     nav: &mut Option<Nav>,
 ) -> Option<Edit> {
+    refresh(view, info, generation);
+    // The cache is set aside while cards (which change the view) are drawn.
+    let mut cache = std::mem::take(&mut view.comments.panel);
+    let edit = show_cached(ui, viewport, t, info, &mut cache, view, prefs, allowed, nav);
+    view.comments.panel = cache;
+    edit
+}
+
+#[allow(clippy::too_many_arguments)]
+fn show_cached(
+    ui: &mut egui::Ui,
+    viewport: egui::Rect,
+    t: &Tokens,
+    info: &DocInfo,
+    cache: &mut PanelCache,
+    view: &mut DocView,
+    prefs: &CommentPrefs,
+    allowed: bool,
+    nav: &mut Option<Nav>,
+) -> Option<Edit> {
+    let origin = ui.max_rect().top();
+    cache.stats.drawn = 0;
     let mut edit = None;
     // Search (the header's magnifier toggles it).
     if let Some(q) = view.comments.search.as_mut() {
@@ -151,85 +498,74 @@ pub(crate) fn show(
         });
         return edit;
     }
-    let query = view.comments.search.clone().filter(|q| !q.trim().is_empty());
-    let replies_of = |a: &Annotation| -> Vec<&Annotation> {
-        match &a.name {
-            Some(nm) => info.annotations.iter().filter(|r| r.in_reply_to.as_deref() == Some(nm.as_str())).collect(),
-            None => Vec::new(),
-        }
-    };
-    let cv = &view.comments;
-    let status_of =
-        |a: &Annotation| replies_of(a).iter().rev().filter(|r| !r.is_mark()).find_map(|r| r.state.clone()).unwrap_or_else(|| "None".into());
-    let mut roots: Vec<&Annotation> = info
-        .annotations
-        .iter()
-        .filter(|a| a.in_reply_to.is_none())
-        .filter(|a| query.as_deref().is_none_or(|q| matches(a, q) || replies_of(a).iter().any(|r| matches(r, q))))
-        .filter(|a| !cv.hidden_types.iter().any(|t| t == kind_label(a)))
-        .filter(|a| !cv.hidden_authors.contains(&a.author.clone().unwrap_or_default()))
-        .filter(|a| !cv.hidden_statuses.contains(&status_of(a)))
-        .filter(|a| !cv.hidden_colors.contains(&color_key(a)))
-        .filter(|a| !cv.hidden_checks.contains(&check_label(is_marked(&replies_of(a))).to_string()))
-        .collect();
-    let sort = cv.sort;
-    match sort {
-        SortBy::Page => {}
-        SortBy::Author => roots.sort_by_key(|a| a.author.clone().unwrap_or_default().to_lowercase()),
-        SortBy::Date => roots.sort_by(|a, b| b.modified.cmp(&a.modified)),
-        SortBy::Type => roots.sort_by_key(|a| kind_label(a).to_string()),
-        SortBy::Color => roots.sort_by_key(|a| color_key(a)),
-    }
-    if roots.is_empty() {
+    refresh_list(cache, info, &view.comments);
+    if cache.rows.is_empty() {
         ui.label(egui::RichText::new(tl!("No comments match.")).color(t.text_muted));
+        return edit;
     }
-    // Group headers follow the sort key (no headers when sorted by date).
-    // `lang` is copied up front so the closure below never borrows `ui`.
-    let group_of = |a: &Annotation| -> Option<String> {
-        match sort {
-            SortBy::Page => {
-                let label = info.pages.get(a.page).map(|p| p.label.as_str()).unwrap_or("?");
-                Some(crate::i18n::fmt(tl!("Page {label}"), &[("label", label)]))
-            }
-            SortBy::Author => Some(a.author.clone().unwrap_or_else(|| "Unknown author".into())),
-            SortBy::Type => Some(kind_label(a).to_string()),
-            SortBy::Color => Some(if a.color.is_some() { format!("#{}", color_key(a)) } else { "No colour".into() }),
-            SortBy::Date => None,
+    // Only the cards in view are laid out; the space above and below stands in for the rest.
+    let top = f64::from(ui.cursor().top() - origin);
+    let first = cache.heights.row_at(f64::from(viewport.top()) - top);
+    ui.add_space(cache.heights.prefix(first) as f32);
+    let mut row = first;
+    while let Some(r) = cache.rows.get(row) {
+        let start = ui.cursor().top();
+        if f64::from(start - origin) > f64::from(viewport.bottom()) && row > first {
+            break;
         }
-    };
-    let mut page = usize::MAX;
-    let mut group: Option<String> = None;
-    for a in roots {
-        if sort != SortBy::Page {
-            let g = group_of(a);
-            if g.is_some() && g != group {
-                ui.add_space(6.0);
-                let title = g.clone().unwrap_or_default();
-                let shown = if sort == SortBy::Author && a.author.is_some() { title.as_str() } else { tl!(&title) };
-                ui.label(egui::RichText::new(shown).font(theme::semibold(12.5)).color(t.text_muted));
-                group = g;
-            }
-        } else if a.page != page {
-            page = a.page;
-            let n = info.annotations.iter().filter(|x| x.page == page && x.in_reply_to.is_none()).count();
+        let Some(a) = info.annotations.get(r.annotation) else { break };
+        if let Some(h) = &r.header {
+            draw_header(ui, t, info, h, cache.index.per_page.get(a.page).copied().unwrap_or(0));
+        }
+        let thread = cache.index.thread(info, a);
+        if let Some(e) = card(ui, t, a, &thread, view, prefs, allowed, nav) {
+            edit = Some(e);
+        }
+        let measured = f64::from(ui.cursor().top() - start);
+        if (measured - cache.heights.get(row)).abs() > 0.5 {
+            cache.heights.set(row, measured);
+            // The space below (and the scroll bar) follow the measured height next frame.
+            ui.ctx().request_repaint();
+        }
+        cache.stats.drawn += 1;
+        row += 1;
+    }
+    ui.add_space((cache.heights.total() - cache.heights.prefix(row)).max(0.0) as f32);
+    // Scroll a selected card that is out of view to where it will be (the card itself centres
+    // it precisely once drawn).
+    if view.comments.reveal
+        && let Some(&target) = view.comments.selected.and_then(|key| cache.row_of.get(&key))
+        && !(first..row).contains(&target)
+    {
+        let y = origin + (top + cache.heights.prefix(target)) as f32;
+        let rect = egui::Rect::from_min_size(egui::pos2(ui.max_rect().left(), y), vec2(ui.max_rect().width(), cache.heights.get(target) as f32));
+        ui.scroll_to_rect(rect, Some(Align::Center));
+    }
+    edit
+}
+
+fn draw_header(ui: &mut egui::Ui, t: &Tokens, info: &DocInfo, header: &Header, count: usize) {
+    match header {
+        Header::Group { title, translate } => {
+            ui.add_space(6.0);
+            let shown = if *translate { tl!(title) } else { title.as_str() };
+            ui.label(egui::RichText::new(shown).font(theme::semibold(12.5)).color(t.text_muted));
+        }
+        Header::Page(page) => {
+            let label = info.pages.get(*page).map_or("?", |p| p.label.as_str());
             ui.add_space(6.0);
             ui.horizontal(|ui| {
                 ui.add(icons::image("chevron-down", 14.0, t.text_muted));
                 ui.label(
-                    egui::RichText::new(crate::i18n::fmt(tl!("Page {label}"), &[("label", &info.pages[page].label)]))
-                        .font(theme::semibold(12.5))
-                        .color(t.text_muted),
+                    egui::RichText::new(crate::i18n::fmt(tl!("Page {label}"), &[("label", label)])).font(theme::semibold(12.5)).color(t.text_muted),
                 );
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| ui.label(egui::RichText::new(n.to_string()).color(t.text_faint).small()));
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    ui.label(egui::RichText::new(count.to_string()).color(t.text_faint).small())
+                });
             });
             ui.add_space(2.0);
         }
-        let thread = replies_of(a);
-        if let Some(e) = card(ui, t, a, &thread, view, prefs, allowed, nav) {
-            edit = Some(e);
-        }
     }
-    edit
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -475,20 +811,19 @@ fn legible(c: Color32, t: &Tokens) -> Color32 {
 /// The Comments panel header's filter and sort controls (Acrobat: filter funnel and "…").
 /// The header's "…" (sort, hide all, summary, data exchange) and filter menus; returns a
 /// command to run.
-pub(crate) fn header_controls(ui: &mut egui::Ui, info: &DocInfo, view: &mut DocView, hidden: bool) -> Option<&'static str> {
+pub(crate) fn header_controls(ui: &mut egui::Ui, info: &DocInfo, generation: u64, view: &mut DocView, hidden: bool) -> Option<&'static str> {
+    refresh(view, info, generation);
+    // The filter's choices come from the index (set aside while the menus change the view).
+    let cache = std::mem::take(&mut view.comments.panel);
+    let command = header_menus(ui, &cache.index, view, hidden);
+    view.comments.panel = cache;
+    command
+}
+
+fn header_menus(ui: &mut egui::Ui, index: &CommentIndex, view: &mut DocView, hidden: bool) -> Option<&'static str> {
     let mut command = None;
     let cv = &mut view.comments;
-    let mut types: Vec<String> = info.annotations.iter().filter(|a| a.in_reply_to.is_none()).map(|a| kind_label(a).to_string()).collect();
-    types.sort();
-    types.dedup();
-    let mut authors: Vec<String> =
-        info.annotations.iter().filter(|a| a.in_reply_to.is_none()).map(|a| a.author.clone().unwrap_or_default()).collect();
-    authors.sort();
-    authors.dedup();
-    let mut colors: Vec<(String, Option<[f32; 3]>)> =
-        info.annotations.iter().filter(|a| a.in_reply_to.is_none()).map(|a| (color_key(a), a.color)).collect();
-    colors.sort_by(|a, b| a.0.cmp(&b.0));
-    colors.dedup_by(|a, b| a.0 == b.0);
+    let (types, authors, colors) = (&index.types, &index.authors, &index.colors);
     let active = !(cv.hidden_types.is_empty()
         && cv.hidden_authors.is_empty()
         && cv.hidden_statuses.is_empty()
@@ -537,12 +872,12 @@ pub(crate) fn header_controls(ui: &mut egui::Ui, info: &DocInfo, view: &mut DocV
             }
         };
         ui.label(egui::RichText::new(tl!("Type")).small());
-        for ty in &types {
+        for ty in types {
             toggle(ui, &mut cv.hidden_types, ty, tl!(ty));
         }
         ui.separator();
         ui.label(egui::RichText::new(tl!("Author")).small());
-        for a in &authors {
+        for a in authors {
             toggle(ui, &mut cv.hidden_authors, a, if a.is_empty() { tl!("Unknown author") } else { a });
         }
         ui.separator();
@@ -552,7 +887,7 @@ pub(crate) fn header_controls(ui: &mut egui::Ui, info: &DocInfo, view: &mut DocV
         }
         ui.separator();
         ui.label(egui::RichText::new(tl!("Colour")).small());
-        for (key, c) in &colors {
+        for (key, c) in colors {
             ui.horizontal(|ui| {
                 let name = crate::comments::SWATCHES
                     .iter()
@@ -584,4 +919,33 @@ pub(crate) fn header_controls(ui: &mut egui::Ui, info: &DocInfo, view: &mut DocV
         }
     });
     command
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Heights;
+
+    #[test]
+    fn heights_find_rows_and_sum_like_a_plain_scan() {
+        let mut values: Vec<f64> = (0..37).map(|i| 10.0 + (i % 5) as f64 * 7.0).collect();
+        let mut h = Heights::new(values.clone());
+        h.set(3, 100.0);
+        values[3] = 100.0;
+        h.set(36, 1.0);
+        values[36] = 1.0;
+        for i in 0..=values.len() {
+            assert!((h.prefix(i) - values[..i].iter().sum::<f64>()).abs() < 1e-9, "prefix {i}");
+        }
+        assert!((h.total() - values.iter().sum::<f64>()).abs() < 1e-9);
+        for (i, _) in values.iter().enumerate() {
+            let top = values[..i].iter().sum::<f64>();
+            assert_eq!(h.row_at(top), i, "a row's top is in it");
+            assert_eq!(h.row_at(top + values[i] - 0.5), i, "a row's bottom is in it");
+        }
+        assert_eq!(h.row_at(-5.0), 0);
+        assert_eq!(h.row_at(1e9), values.len() - 1);
+        assert_eq!(Heights::new(Vec::new()).row_at(3.0), 0);
+        h.set(99, 5.0); // out of range: ignored
+        assert_eq!(h.len(), values.len());
+    }
 }

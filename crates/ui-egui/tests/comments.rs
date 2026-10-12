@@ -787,3 +787,86 @@ fn a_closed_comments_panel_stays_closed_when_picking_comment_tools() {
     h.run_steps(2);
     assert_eq!(h.state().right, Some(RightPanel::Comments));
 }
+
+/// `n` small pages, each with a named Square comment ("Check i") and a reply to it ("Reply i").
+fn many_comments(n: usize) -> Vec<u8> {
+    let mut objs: Vec<String> = vec!["<< /Type /Catalog /Pages 2 0 R >>".into(), String::new()];
+    let mut kids = Vec::new();
+    for i in 0..n {
+        let page = objs.len() + 1;
+        kids.push(format!("{page} 0 R"));
+        objs.push(format!("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] /Annots [{} 0 R {} 0 R] >>", page + 1, page + 2));
+        objs.push(format!("<< /Type /Annot /Subtype /Square /Rect [40 40 140 140] /C [1 0 0] /T (Ada) /NM (c{i}) /Contents (Check {i}) >>"));
+        objs.push(format!("<< /Type /Annot /Subtype /Text /Rect [150 40 170 60] /T (Bob) /NM (r{i}) /IRT {} 0 R /Contents (Reply {i}) >>", page + 1));
+    }
+    objs[1] = format!("<< /Type /Pages /Kids [{}] /Count {n} >>", kids.join(" "));
+    let mut out = b"%PDF-1.7\n".to_vec();
+    let mut offs = Vec::new();
+    for (i, o) in objs.iter().enumerate() {
+        offs.push(out.len());
+        out.extend_from_slice(format!("{} 0 obj\n{o}\nendobj\n", i + 1).as_bytes());
+    }
+    let x = out.len();
+    out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objs.len() + 1).as_bytes());
+    for o in offs {
+        out.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+    }
+    out.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{x}\n%%EOF\n", objs.len() + 1).as_bytes());
+    out
+}
+
+/// Regression for the panel's per-frame cost (performance defect 1): the comment index is built
+/// once per annotation revision, the card list once per filter change, and only the cards in
+/// view are laid out, however many comments the document has. Structural, not timed.
+#[test]
+fn the_panel_indexes_once_and_lays_out_only_the_cards_in_view() {
+    let bytes = many_comments(300);
+    let mut h = Harness::builder().with_size(egui::vec2(1400.0, 900.0)).build_eframe(move |_cc| {
+        let mut app = PdfCraftApp::new();
+        app.set_option("language", "en").unwrap();
+        app.open_bytes("many.pdf", None, bytes).expect("opens");
+        app.set_option("left", "closed").unwrap();
+        app.set_option("panel", "comments").unwrap();
+        app
+    });
+    h.run_steps(6);
+    let stats = h.state().views[0].comments.panel_stats();
+    assert_eq!((stats.index_builds, stats.list_builds, stats.listed), (1, 1, 300), "{stats:?}");
+    assert!(stats.drawn > 0 && stats.drawn < 30, "only the cards in view are laid out: {stats:?}");
+    h.get_by_label("Check 0");
+    h.get_by_label("Reply 0");
+    assert_eq!(h.query_all_by_label("Check 299").count(), 0, "a card far below is not laid out");
+    // Scrolling the document for many frames rebuilds nothing.
+    for f in 0..30 {
+        h.state_mut().views[0].goto = Some(((f * 7) % 300, 0.3));
+        h.step();
+    }
+    let stats = h.state().views[0].comments.panel_stats();
+    assert_eq!((stats.index_builds, stats.list_builds), (1, 1), "{stats:?}");
+    assert!(stats.drawn < 30, "{stats:?}");
+    // Selecting the last comment (as clicking it on the page does) scrolls its card into view.
+    {
+        let v = &mut h.state_mut().views[0];
+        v.comments.selected = Some((299, 0));
+        v.comments.reveal = true;
+    }
+    h.run_steps(6);
+    h.get_by_label("Check 299");
+    h.get_by_label("Reply 299");
+    assert_eq!(h.query_all_by_label("Check 0").count(), 0, "the first card scrolled out of view");
+    assert!(!h.state().views[0].comments.reveal, "the selected card was revealed");
+    // A search narrows the list (one rebuild) and the count of laid-out cards follows it.
+    h.state_mut().views[0].comments.search = Some("Reply 299".into());
+    h.run_steps(3);
+    let stats = h.state().views[0].comments.panel_stats();
+    assert_eq!((stats.index_builds, stats.list_builds, stats.listed, stats.drawn), (1, 2, 1, 1), "{stats:?}");
+    h.get_by_label("Check 299");
+    h.state_mut().views[0].comments.search = None;
+    // An edit is a new revision: the index is rebuilt once and the panel shows its result.
+    h.state_mut().apply_edit(pdfcraft_engine::Edit::SetAnnotationContents { page: 299, index: 0, text: "Edited last".into() });
+    h.state_mut().views[0].comments.reveal = true;
+    h.run_steps(6);
+    let stats = h.state().views[0].comments.panel_stats();
+    assert_eq!((stats.index_builds, stats.listed), (2, 300), "{stats:?}");
+    h.get_by_label("Edited last");
+}

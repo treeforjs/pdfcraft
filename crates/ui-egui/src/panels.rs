@@ -437,6 +437,7 @@ pub fn right_panel(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
     {
         let Some(doc) = app.session.get(id) else { return };
         let info = &doc.info;
+        let generation = doc.edit_generation();
         let view = &mut app.views[index];
         let prefs = &app.comment_prefs;
         let sig_expanded = &mut app.sig_expanded;
@@ -457,8 +458,11 @@ pub fn right_panel(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
                     .stroke(Stroke::new(1.0, t.divider)),
             )
             .show(ui, |ui| {
+                if panel == RightPanel::Comments {
+                    crate::comments_panel::refresh(view, info, generation);
+                }
                 let (title, count) = match panel {
-                    RightPanel::Comments => ("Comments", Some(crate::comments_panel::count(info))),
+                    RightPanel::Comments => ("Comments", Some(view.comments.panel.total())),
                     RightPanel::Bookmarks => ("Bookmarks", None),
                     RightPanel::Pages => ("Pages", Some(info.pages.len())),
                     RightPanel::Fields => ("Fields", Some(info.fields.len())),
@@ -485,7 +489,7 @@ pub fn right_panel(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
                         }
                         // Right to left: close, "…", filter, search (Acrobat's order left to right).
                         if panel == RightPanel::Comments {
-                            panel_command = crate::comments_panel::header_controls(ui, info, view, doc.comments_hidden());
+                            panel_command = crate::comments_panel::header_controls(ui, info, generation, view, doc.comments_hidden());
                         }
                         if panel == RightPanel::Comments
                             && icons::button(ui, "search", 26.0, view.comments.search.is_some(), tl!("Search comments")).clicked()
@@ -552,9 +556,9 @@ pub fn right_panel(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
                         ancestor.pop();
                     }
                 }
-                egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| match panel {
+                egui::ScrollArea::vertical().auto_shrink([false, false]).show_viewport(ui, |ui, viewport| match panel {
                     RightPanel::Comments => {
-                        if let Some(e) = crate::comments_panel::show(ui, &t, info, view, prefs, comment_allowed, &mut nav) {
+                        if let Some(e) = crate::comments_panel::show(ui, viewport, &t, info, generation, view, prefs, comment_allowed, &mut nav) {
                             panel_edit = Some(e);
                         }
                     }

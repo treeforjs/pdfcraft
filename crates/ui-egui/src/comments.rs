@@ -411,6 +411,31 @@ pub struct CommentView {
     pub context_at: Option<(usize, [f64; 2])>,
     /// A one-shot tool just finished; the app returns to the Select tool unless pinned.
     pub tool_done: bool,
+    /// The Comments panel's index, card list and card heights for this document.
+    pub(crate) panel: crate::comments_panel::PanelCache,
+}
+
+impl CommentView {
+    /// What the Comments panel did, for regression tests of its per-frame cost.
+    pub fn panel_stats(&self) -> PanelStats {
+        self.panel.stats()
+    }
+}
+
+/// Work done by the Comments panel. Per frame it must not grow with the number of comments: the
+/// index and the card list are rebuilt only when the document or the search/filters change, and
+/// only the cards in view are laid out.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct PanelStats {
+    /// Times the comment index (replies by parent, comments per page, filter choices) was built:
+    /// once per annotation revision.
+    pub index_builds: u64,
+    /// Times the filtered and sorted card list was built.
+    pub list_builds: u64,
+    /// Cards in the list after the search and filters.
+    pub listed: usize,
+    /// Cards laid out in the last frame the panel was shown.
+    pub drawn: usize,
 }
 
 /// Comments panel order (Acrobat: Sort by page, author, date, type, colour).
