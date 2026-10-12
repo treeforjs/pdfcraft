@@ -1246,6 +1246,24 @@ pub fn attachment_data(bytes: &[u8], password: Option<&str>, att: &Attachment) -
 
 #[cfg(test)]
 mod tests {
+    /// From `cargo xtask fuzz` (engine round trip, after an edit re-inspected the document): a
+    /// page-tree node claiming `/Count 4294967295` made vendored lopdf's `get_pages` reserve
+    /// 51.5 GB from the page iterator's size hint and abort. The hint no longer trusts `/Count`.
+    #[test]
+    fn a_huge_page_tree_count_is_not_preallocated() {
+        let pdf = b"%PDF-1.7
+1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
+2 0 obj << /Type /Pages /Kids [3 0 R 4 0 R] /Count 1 >> endobj
+3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 40 40] >> endobj
+4 0 obj << /Type /Pages /Parent 2 0 R /Kids [] /Count 4294967295 >> endobj
+trailer << /Root 1 0 R /Size 5 >>
+%%EOF";
+        let doc = lopdf::Document::load_mem(pdf).unwrap();
+        assert_eq!(doc.get_pages().len(), 1);
+        let info = super::inspect(std::sync::Arc::new(pdf.to_vec()), None).unwrap();
+        assert_eq!(info.pages.len(), 1);
+    }
+
     #[test]
     fn png_predictor_rows_longer_than_the_data_are_refused_before_allocating() {
         // Vendored lopdf patch: a fuzzed `/Columns 4294967295` allocated two 4 GiB rows before
