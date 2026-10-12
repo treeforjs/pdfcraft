@@ -4853,9 +4853,9 @@ tier = "P1"
 milestone = "M6"
 status = "shipped"
 commands = ["form.prepare"]
-tools = ["form_actions", "form_set_actions"]
-evidence = ["crates/forms/src/tests.rs::field_actions_round_trip_on_every_trigger", "crates/automation/tests/automation.rs::field_actions_through_tools", "crates/ui-egui/tests/prepare.rs::actions_tab_adds_and_removes_actions"]
-notes = "Six triggers; Run a JavaScript, Open a web link, Reset a form, Execute a menu item, Go to a page view, Show/hide a field, Submit a form. Other action types are kept."
+tools = ["form_actions", "form_set_actions", "form_run_trigger"]
+evidence = ["crates/forms/src/tests.rs::field_actions_round_trip_on_every_trigger", "crates/forms/src/tests.rs::field_action_chains_keep_order_unknown_actions_and_survive_save", "crates/automation/tests/automation.rs::field_actions_through_tools", "crates/automation/tests/automation.rs::field_action_chains_save_reopen_and_run_on_their_triggers", "crates/ui-egui/tests/prepare.rs::actions_tab_adds_and_removes_actions", "crates/ui-egui/tests/prepare.rs::actions_tab_chains_reorders_and_edits_actions"]
+notes = "Six triggers (widget /A and /AA D, E, X, Fo, Bl); several actions per trigger run in order through /Next (read depth first, cycle- and length-bounded, written back as one chain); add, edit, reorder and delete in the Actions tab and form_set_actions. Run a JavaScript, Open a web link, Reset a form, Execute a menu item (new ones only Print, NextPage, PrevPage, FirstPage, LastPage), Go to a page view, Show/hide a field, Submit a form. Unchanged actions keep their original dictionaries (unknown types, named destinations, extra keys) and unchanged triggers are not rewritten. form_run_trigger runs a trigger's chain headlessly (scripts get that event's name). Not yet: the desktop viewer fires only Mouse Up, and only the chain's first action, on push buttons; Enter/Exit/Down/Focus/Blur are not fired by pointer or focus in the UI; field-level /AA K/F/V/C stay on the Format/Validate/Calculate tabs; two kept unknown actions of the same type can't be swapped with each other."
 
 [[feature]]
 id = "form.props-format"
