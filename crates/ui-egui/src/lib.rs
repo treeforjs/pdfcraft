@@ -45,6 +45,7 @@ mod marks_ui;
 mod measure_ui;
 mod ocr_ui;
 mod optimize_ui;
+mod preflight_ui;
 mod search_ui;
 mod sign_ui;
 mod stamps_ui;
@@ -285,6 +286,7 @@ pub enum Dialog {
     ActionWizard,
     /// Standards ▸ PDF/A.
     PdfA,
+    Preflight,
     /// Custom stamps ▸ Create.
     CreateStamp,
     /// Prepare for accessibility ▸ Add alternate text.
@@ -472,6 +474,7 @@ pub struct PdfCraftApp {
     pub action_files_override: Option<Vec<String>>,
     /// Standards ▸ PDF/A: level and last result.
     pub pdfa: standards_ui::PdfaState,
+    pub preflight: preflight_ui::PreflightState,
     /// Compare files: the chosen older document and the last result.
     pub compare_old: Option<DocId>,
     pub compare: Option<compare_ui::CompareState>,
@@ -718,6 +721,7 @@ impl PdfCraftApp {
             action_run: None,
             action_files_override: None,
             pdfa: Default::default(),
+            preflight: Default::default(),
             compare_old: None,
             compare: None,
             js_console: Default::default(),
@@ -1521,6 +1525,7 @@ impl PdfCraftApp {
                     "compare-files" => Some(Dialog::CompareFiles),
                     "action-wizard" => Some(Dialog::ActionWizard),
                     "pdfa" => Some(Dialog::PdfA),
+                    "preflight" => Some(Dialog::Preflight),
                     "signature" => Some(Dialog::Signature),
                     "optimize" => Some(Dialog::Optimize),
                     "sign" | "certify" => {

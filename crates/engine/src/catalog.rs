@@ -389,7 +389,7 @@ pub static TOOL_GROUPS: &[ToolGroup] = &[
             title: "Print production",
             items: &[
                 item("Output preview", "layers", "prepress.output_preview", Planned("M11")),
-                item("Preflight", "file-check", "preflight.run", Planned("M11")),
+                item("Preflight", "file-check", "preflight.run", Ready),
                 item("Convert colors", "palette", "prepress.convert_colors", Planned("M11")),
                 item("Set page boxes", "square-dashed-mouse-pointer", "page.boxes", Ready),
                 item("Add printer marks", "ruler", "prepress.marks", Planned("M11")),
@@ -477,7 +477,7 @@ pub static TOOL_GROUPS: &[ToolGroup] = &[
                 item("Save as PDF/A", "file-check", "standards.pdfa", Ready),
                 item("Save as PDF/X", "file-check", "standards.pdfx", Planned("M11")),
                 item("Save as PDF/UA", "accessibility", "standards.pdfua", Planned("M11")),
-                item("Preflight", "file-check", "preflight.run", Planned("M11")),
+                item("Preflight", "file-check", "preflight.run", Ready),
             ],
         }],
     },

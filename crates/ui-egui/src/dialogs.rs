@@ -870,6 +870,10 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
                 close = crate::standards_ui::body(ui, app, &t);
                 return;
             }
+            Dialog::Preflight => {
+                close = crate::preflight_ui::body(ui, app, &t);
+                return;
+            }
             Dialog::ActionWizard => {
                 ui.set_width(620.0);
                 close = crate::actions_ui::body(ui, app, &t);

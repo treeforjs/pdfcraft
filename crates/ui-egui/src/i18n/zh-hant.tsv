@@ -1726,6 +1726,7 @@
 	PdfCraft works offline. No telemetry, no account, and no cloud processing unless you add a provider.	PdfCraft 可離線使用，不收集遙測資料，也不需要帳號。只有在您新增服務供應商後，才會使用雲端處理。
 	Double-click	滑鼠按兩下
 	PDF/A…	PDF/A…
+	Preflight…	印前偵測…
 	Microsoft Word (.docx)	Microsoft Word（.docx）
 	Spreadsheet (.xlsx)	試算表（.xlsx）
 	Presentation (.pptx)	簡報（.pptx）

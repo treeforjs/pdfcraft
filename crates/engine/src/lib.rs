@@ -22,6 +22,7 @@ pub mod js;
 pub mod links;
 pub mod ocr;
 pub mod optimizer;
+pub mod preflight;
 pub mod signature_image;
 pub mod text_preview;
 mod upright_image;
@@ -956,6 +957,10 @@ pub enum Edit {
     ConvertPdfA {
         level: pdfcraft_preflight::Level,
     },
+    /// Explicit fixes bound to the analyzed object values.
+    PreflightFix {
+        fixes: Vec<pdfcraft_preflight::analysis::FixRequest>,
+    },
     /// What a script (button or console) changed in form fields: values, read-only, required
     /// and visibility.
     ApplyScriptChanges {
@@ -1170,6 +1175,7 @@ impl Edit {
             Edit::ApplyScriptChanges { .. } => "Run JavaScript".into(),
             Edit::XfaEvent { .. } => "Run form script".into(),
             Edit::ConvertPdfA { level } => format!("Save as {}", level.label()),
+            Edit::PreflightFix { .. } => "Apply preflight fixes".into(),
             Edit::SetFieldScript { name, .. } => format!("Edit script of {name}"),
             Edit::SetDocumentScript { script: None, .. } => "Delete document JavaScript".into(),
             Edit::SetDocumentScript { .. } => "Edit document JavaScript".into(),
@@ -1347,6 +1353,7 @@ fn check_permission(edit: &Edit, p: &pdfcraft_cos::Permissions) -> Result<(), Ed
         | Edit::SetDocumentScript { .. }
         | Edit::SetFieldScript { .. }
         | Edit::ConvertPdfA { .. }
+        | Edit::PreflightFix { .. }
         | Edit::EditTextLine { .. }
         | Edit::EditTextBlock { .. }
         | Edit::EditPageImage { .. }
@@ -1588,6 +1595,9 @@ fn run_edit(doc: &mut pdfcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -> 
         }
         Edit::ConvertPdfA { level } => {
             pdfcraft_preflight::convert(doc, *level).map_err(|e| EditError::Invalid(e.to_string()))?;
+        }
+        Edit::PreflightFix { fixes } => {
+            pdfcraft_preflight::analysis::apply_fixes(doc, fixes, || false).map_err(EditError::Invalid)?;
         }
         Edit::SetDocumentScript { name, script } => pdfcraft_forms::set_document_script(doc, name, script.as_deref())?,
         Edit::AddOcrText { page, words } => {

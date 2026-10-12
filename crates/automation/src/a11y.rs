@@ -286,7 +286,11 @@ impl Automation {
         let d = doc.standards();
         Ok(json!({
             "level": level.label(),
-            "compliant": issues.is_empty(),
+            "compliant": false,
+            "no_detected_issues": issues.is_empty(),
+            "validation_complete": false,
+            "conformance": "not-established",
+            "limitations": [pdfcraft_engine::pdfa::analysis::LIMITATION],
             "issues": issues,
             "declared": { "pdfa": d.pdfa.map(|(p, c)| format!("PDF/A-{p}{}", c.to_lowercase())), "pdfua": d.pdfua, "output_intents": d.output_intents },
         }))

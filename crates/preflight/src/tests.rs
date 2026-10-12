@@ -1,6 +1,6 @@
 use super::*;
 
-fn build(objs: &[&str], trailer_extra: &str) -> Document {
+pub(crate) fn build(objs: &[&str], trailer_extra: &str) -> Document {
     let mut out = b"%PDF-1.7\n".to_vec();
     let mut offsets = Vec::new();
     for (i, o) in objs.iter().enumerate() {

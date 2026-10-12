@@ -444,6 +444,11 @@ impl PdfCraftApp {
                 self.pdfa.issues = None;
                 self.dialog = Some(Dialog::PdfA);
             }
+            "preflight.run" => {
+                self.preflight.result = None;
+                self.preflight.selected.clear();
+                self.dialog = Some(Dialog::Preflight);
+            }
             "actions.wizard" | "actions.distribution" | "actions.optimize_scans" => {
                 self.wizard.editing = None;
                 match id {

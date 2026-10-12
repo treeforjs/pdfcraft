@@ -829,7 +829,15 @@ pub fn tools() -> Vec<ToolDef> {
         t("doc_export_office", "Export to Word, HTML or RTF", "Export a PDF ▸ Word (.docx), HTML (.html, one file with images inline) or RTF (.rtf), chosen by path's extension: paragraphs in reading order, headings from larger text, bold and italic, images where they fall, a page break between pages.")
             .cmd("export.docx")
             .with(schema(json!({ "doc": doc(), "path": { "type": "string" } }), &["doc", "path"])),
-        t("pdfa_verify", "Verify PDF/A", "Standards ▸ Verify PDF/A compliance: the PDF/A-2b or 3b rules the document breaks (ISO 19005 clause, message, page, whether Save as PDF/A can fix it), plus what it declares.")
+        t("preflight_profiles", "Preflight profiles and checks", "List built-in structural preflight profiles and supported single checks. These checks do not establish full standards conformance.")
+            .ro().cmd("preflight.run").with(schema(json!({}), &[])),
+        t("preflight_analyze", "Analyze with preflight", "Analyze the working document without edits. Returns supported checks, object/path/page locations, explicit available fixups and a revision binding. No detected issues is not proof of PDF/A, PDF/X or PDF/UA conformance.")
+            .ro().cmd("preflight.run").with(schema(json!({"doc":doc(),"profile":{"type":"string","enum":["general","print","pdfa-2b","pdfa-3b"]},"checks":{"type":"array","minItems":1,"maxItems":9,"items":{"type":"string"}}}), &["doc"])),
+        t("preflight_fix", "Apply selected preflight fixes", "Explicitly apply findings selected from preflight_analyze using its revision and the same profile/checks. Fixes may change interpolation, annotation printing or interactive behavior, or losslessly recompress LZW. Stale/invalid targets fail atomically. One undo step; no automatic save.")
+            .destructive().cmd("preflight.run").with(schema(json!({"doc":doc(),"revision":{"type":"integer","minimum":0},"profile":{"type":"string","enum":["general","print","pdfa-2b","pdfa-3b"]},"checks":{"type":"array","minItems":1,"maxItems":9,"items":{"type":"string"}},"findings":{"type":"array","minItems":1,"maxItems":1000,"uniqueItems":true,"items":{"type":"integer","minimum":1}}}), &["doc","revision","findings"])),
+        t("preflight_report", "Export preflight report", "Write a structural preflight report as text or JSON, atomically replacing path inside --root. Document stays unchanged; reports explain coverage limits.")
+            .destructive().cmd("preflight.run").with(schema(json!({"doc":doc(),"profile":{"type":"string","enum":["general","print","pdfa-2b","pdfa-3b"]},"checks":{"type":"array","minItems":1,"maxItems":9,"items":{"type":"string"}},"path":{"type":"string"},"format":{"type":"string","enum":["text","json"]}}), &["doc","path"])),
+        t("pdfa_verify", "Check PDF/A structure", "Run the implemented subset of PDF/A-2b or 3b structural checks. The legacy compliant boolean is conservatively false: validation_complete is false and conformance is not established even with no detected issues. Reports clauses, messages, pages, supported conversions and declared metadata.")
             .ro()
             .cmd("standards.pdfa")
             .with(schema(json!({ "doc": doc(), "level": { "type": "string", "enum": ["2b", "3b"], "description": "Default 2b." } }), &["doc"])),

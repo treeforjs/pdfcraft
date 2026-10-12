@@ -7511,11 +7511,11 @@ title = "Preflight analysis"
 area = "K"
 tier = "P1"
 milestone = "M11"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["preflight.run"]
+tools = ["preflight_analyze"]
+evidence = ["crates/preflight/src/analysis/tests.rs::profiles_find_inline_objects_and_shared_inherited_resources_without_mutation", "crates/automation/tests/preflight.rs::profiles_analysis_and_reports_expose_honest_coverage_and_confined_outputs"]
+notes = "Bounded structural checks through engine, headless tools and native dialog. Eight general checks plus limited PDF/A identification/encryption checks; no full standards validation."
 
 [[feature]]
 id = "optimize.preflight-fix"
@@ -7523,11 +7523,11 @@ title = "Preflight analyze and fix"
 area = "K"
 tier = "P1"
 milestone = "M11"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["preflight.run"]
+tools = ["preflight_analyze", "preflight_fix"]
+evidence = ["crates/preflight/src/analysis/tests.rs::stale_duplicate_invalid_and_cancelled_fixes_are_atomic", "crates/engine/src/preflight/tests.rs::analysis_is_view_only_and_selected_fixes_are_one_undoable_step", "crates/automation/tests/preflight.rs::headless_selected_fix_is_single_undo_and_preserves_unselected_behavior"]
+notes = "Explicit selected fixes bind document revision and exact object values. One undo step; stale, failed and cancelled fixes preserve document. Four supported fixups only; no blanket standards conversion."
 
 [[feature]]
 id = "optimize.preflight-profiles"
@@ -7535,11 +7535,11 @@ title = "Built-in preflight profiles"
 area = "K"
 tier = "P1"
 milestone = "M11"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["preflight.run"]
+tools = ["preflight_profiles", "preflight_analyze"]
+evidence = ["crates/automation/tests/preflight.rs::profiles_analysis_and_reports_expose_honest_coverage_and_confined_outputs"]
+notes = "Four built-in structural profiles: General, Print, PDF/A-2b and PDF/A-3b. PDF/A profiles are explicitly incomplete; PDF/X and PDF/UA profiles remain unavailable."
 
 [[feature]]
 id = "optimize.preflight-single-checks"
@@ -7547,11 +7547,11 @@ title = "Single checks"
 area = "K"
 tier = "P1"
 milestone = "M11"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["preflight.run"]
+tools = ["preflight_profiles", "preflight_analyze"]
+evidence = ["crates/preflight/src/analysis/tests.rs::profiles_find_inline_objects_and_shared_inherited_resources_without_mutation", "crates/automation/tests/preflight.rs::profiles_analysis_and_reports_expose_honest_coverage_and_confined_outputs"]
+notes = "Single supported checks selectable in native UI and automation; limited to the implemented structural catalog."
 
 [[feature]]
 id = "optimize.preflight-single-fixups"
@@ -7559,11 +7559,11 @@ title = "Single fixups"
 area = "K"
 tier = "P1"
 milestone = "M11"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["preflight.run"]
+tools = ["preflight_fix"]
+evidence = ["crates/preflight/src/analysis/tests.rs::selected_fixes_preserve_unknown_keys_stream_bytes_and_other_flags", "crates/preflight/src/analysis/tests.rs::lzw_fix_preserves_decoded_bytes_and_private_stream_dictionary", "crates/automation/tests/preflight.rs::headless_selected_fix_is_single_undo_and_preserves_unselected_behavior"]
+notes = "Selected interpolation, annotation print-bit, additional-action removal, and bounded lossless LZW-to-Flate fixups. No arbitrary fixup library or automatic embedding/color conversion."
 
 [[feature]]
 id = "optimize.preflight-custom-profiles"
@@ -7595,11 +7595,11 @@ title = "Preflight results tree with object details"
 area = "K"
 tier = "P1"
 milestone = "M11"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["preflight.run"]
+tools = ["preflight_analyze"]
+evidence = ["crates/preflight/src/analysis/tests.rs::profiles_find_inline_objects_and_shared_inherited_resources_without_mutation", "crates/ui-egui/tests/preflight.rs::native_preflight_analyzes_closes_and_exports_without_editing"]
+notes = "Grouped findings with object/generation, direct dictionary/array path and known page references; native page navigation. Coverage and retention budgets disclosed. No object snap view."
 
 [[feature]]
 id = "optimize.preflight-snap-view"
@@ -7619,11 +7619,11 @@ title = "Preflight reports (PDF, XML, text)"
 area = "K"
 tier = "P1"
 milestone = "M11"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["preflight.run"]
+tools = ["preflight_report"]
+evidence = ["crates/automation/tests/preflight.rs::profiles_analysis_and_reports_expose_honest_coverage_and_confined_outputs", "crates/ui-egui/tests/preflight.rs::native_preflight_analyzes_closes_and_exports_without_editing"]
+notes = "Atomic text/JSON reports through headless tools; native text export. PDF/XML report formats remain unavailable; reports explicitly decline full conformance claims."
 
 [[feature]]
 id = "optimize.preflight-droplets"

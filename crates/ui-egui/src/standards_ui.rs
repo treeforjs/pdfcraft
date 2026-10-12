@@ -35,7 +35,7 @@ impl PdfCraftApp {
             self.pdfa_verify();
             let left = self.pdfa.issues.as_ref().map_or(0, Vec::len);
             self.notify(if left == 0 {
-                crate::i18n::fmt(tl!("The document now conforms to {level}; save it to keep the changes"), &[("level", level.label())])
+                "No issues remain in the implemented checks. Full PDF/A conformance is not established; save to keep the changes.".into()
             } else if left == 1 {
                 crate::i18n::fmt(tl!("Fixed what could be fixed; 1 problem remains"), &[])
             } else {
@@ -49,6 +49,7 @@ impl PdfCraftApp {
 pub(crate) fn body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> bool {
     ui.label(egui::RichText::new("PDF/A").font(theme::semibold(18.0)));
     ui.add_space(6.0);
+    ui.label("Structural checks only. An independent full validator is needed to establish PDF/A conformance.");
     let declared = app.active_ids().and_then(|(_, id)| app.session.get(id)).map(|d| d.standards()).unwrap_or_default();
     let shown = declared.pdfa.as_ref().map_or(tl!("none").to_string(), |(p, c)| format!("PDF/A-{p}{}", c.to_lowercase()));
     ui.label(crate::i18n::fmt(tl!("Declared conformance: {shown}"), &[("shown", &shown)]));
@@ -80,7 +81,7 @@ pub(crate) fn body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> bool
                     ui.label(egui::RichText::new(tl!("Verify to see what the document needs.")).color(t.text_muted));
                 }
                 Some(v) if v.is_empty() => {
-                    ui.label(crate::i18n::fmt(tl!("No problems found: the document conforms to {level}."), &[("level", app.pdfa.level.label())]));
+                    ui.label("No issues found in the implemented checks. Full PDF/A conformance is not established.");
                 }
                 Some(v) => {
                     for i in v {

@@ -13,3 +13,4 @@ workspace = true
 [dependencies]
 pdfcraft-cos = { workspace = true }
 pdfcraft-model = { workspace = true }
+pdfcraft-filters = { workspace = true }

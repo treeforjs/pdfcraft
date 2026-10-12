@@ -20,6 +20,7 @@ mod links;
 #[cfg(feature = "mcp")]
 pub mod mcp;
 mod measure;
+mod preflight;
 mod printing;
 mod redact;
 mod signing;
@@ -614,6 +615,10 @@ impl Automation {
             "doc_compare" => self.doc_compare(&a)?,
             "action_list" => self.action_list()?,
             "pdfa_verify" => self.pdfa_verify(&a)?,
+            "preflight_profiles" => self.preflight_profiles(),
+            "preflight_analyze" => self.preflight_analyze(&a)?,
+            "preflight_fix" => self.preflight_fix(&a)?,
+            "preflight_report" => self.preflight_report(&a)?,
             "doc_export_office" => self.doc_export_office(&a)?,
             "pdfa_convert" => self.pdfa_convert(&a)?,
             "action_run" => self.action_run(&a)?,

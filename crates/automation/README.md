@@ -95,6 +95,16 @@ Implemented: `initialize` (protocol 2025-06-18, 2025-03-26, 2024-11-05), `ping`,
 
 ## Adding a tool
 
+Structural preflight is available through `preflight_profiles`, `preflight_analyze`,
+`preflight_fix`, and `preflight_report`. Analysis returns stable finding IDs and a document
+revision; fixing requires that revision and an explicit list of supported findings.
+Reports export text or JSON through an atomic, root-confined path. See
+[`crates/preflight/README.md`](../preflight/README.md) for supported checks and limits.
+The legacy PDF/A tools retain the boolean `compliant` field, now conservatively false;
+`no_detected_issues` reports the limited check result. `validation_complete:false` and
+`conformance:"not-established"` prevent an empty subset from claiming full conformance.
+
+
 1. Add the engine capability first, with its tests (the tool is a thin adapter).
 2. Add a `ToolDef` in `src/tools.rs`: a precise description, the schema, `ro()`/`destructive()`, and `cmd()` if a registry command exists.
 3. Handle it in `Automation::call`, validating pages and positions with the existing helpers.
