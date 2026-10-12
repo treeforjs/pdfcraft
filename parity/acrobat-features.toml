@@ -1311,7 +1311,7 @@ status = "planned"
 commands = []
 tools = []
 evidence = []
-notes = ""
+notes = "No panel yet. The model underneath exists headlessly: dest_list, dest_set, dest_rename and dest_delete read the /Names /Dests tree and legacy /Dests (bounded), create, re-target (XYZ/Fit/FitH/FitV/FitR/FitB/FitBH/FitBV), rename (links and bookmarks follow) and delete, tested in crates/automation/tests/automation.rs::named_destinations_views_and_bookmark_actions_through_tools"
 
 [[feature]]
 id = "view.articles-panel"
@@ -2201,9 +2201,9 @@ tier = "P1"
 milestone = "M7"
 status = "partial"
 commands = ["edit.link"]
-tools = ["link_add"]
-evidence = ["crates/annot/src/tests.rs::links_are_added_edited_listed_and_removed", "crates/ui-egui/tests/pdf_links.rs::drawing_editing_and_deleting_links"]
-notes = "go to a page (Fit view); named destinations and zoom pending"
+tools = ["link_add", "link_edit", "link_list"]
+evidence = ["crates/annot/src/tests.rs::links_are_added_edited_listed_and_removed", "crates/annot/src/tests.rs::links_go_to_views_and_named_destinations", "crates/automation/tests/automation.rs::named_destinations_views_and_bookmark_actions_through_tools", "crates/ui-egui/tests/pdf_links.rs::drawing_editing_and_deleting_links"]
+notes = "Engine and tools: go to a page view with any fit (XYZ position and zoom, Fit, FitH, FitV, FitR, FitB, FitBH, FitBV) or to a named destination (written as a string for the name tree, a name for legacy /Dests); link_list reports the view and resolves named destinations; checked after save/reopen and against pdfinfo -dests. The Link Properties dialog still only offers a page (Fit) or a web address; it keeps an existing view, named destination or other action unless the page is changed. Not yet: choosing a view or named destination in the dialog, Acrobat's 'Set link' from the current view"
 
 [[feature]]
 id = "edit.action-uri"
@@ -3235,11 +3235,11 @@ title = "Bookmark actions"
 area = "D"
 tier = "P1"
 milestone = "M4"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["bookmark_set_action", "bookmark_list"]
+evidence = ["crates/organize/src/tests.rs::bookmark_actions_go_to_views_named_destinations_and_web_pages", "crates/automation/tests/automation.rs::named_destinations_views_and_bookmark_actions_through_tools"]
+notes = "Headless only: a bookmark's action can be set to go to a page view (any fit, with zoom), a named destination or a web address, replacing /Dest or /A (never both); bookmark_list reports each action (goto with view/dest, uri, or other such as JavaScript, kept as is). Not yet: a Bookmark Properties ▸ Actions dialog, creating other action types (JavaScript, open a file, menu items, show/hide), multiple actions per bookmark (/Next chains)"
 
 [[feature]]
 id = "organize.bookmark-expand-collapse"

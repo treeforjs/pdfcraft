@@ -3807,6 +3807,7 @@ dependencies = [
  "hayro-syntax",
  "pdfcraft-content",
  "pdfcraft-cos",
+ "pdfcraft-model",
  "thiserror 2.0.21",
 ]
 

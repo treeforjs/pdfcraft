@@ -32,7 +32,8 @@ pub use import::{
 };
 pub use labels::{LabelRange, LabelStyle, number_pages, page_label_ranges, page_labels, set_page_label_ranges};
 pub use outline::{
-    Bookmark, OutlineError, add_bookmark, bookmarks, delete_bookmark, move_bookmark, rename_bookmark, set_bookmark_open, set_bookmark_page,
+    Bookmark, BookmarkAction, OutlineError, Target, add_bookmark, bookmark_action, bookmark_actions, bookmarks, delete_bookmark, move_bookmark,
+    rename_bookmark, set_bookmark_action, set_bookmark_open, set_bookmark_page,
 };
 pub use transition::{
     Dimension, Direction, MAX_TRANSITION_SECONDS, Motion, PageTransition, Transition, TransitionStyle, page_transitions, set_page_transition,

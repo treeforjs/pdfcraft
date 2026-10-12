@@ -930,3 +930,34 @@ fn non_markup_annotations_are_not_comments() {
         assert!(is_comment_subtype(s), "{s}");
     }
 }
+
+#[test]
+fn links_go_to_views_and_named_destinations() {
+    use pdfcraft_model::dests::{self, Fit, View};
+
+    use crate::links::{self, LinkAction, LinkStyle};
+    let mut doc = fixture();
+    dests::set(&mut doc, "intro", &View { page: 1, fit: Fit::FitH { top: Some(400.0) } }).unwrap();
+    let view = View { page: 1, fit: Fit::Xyz { left: Some(20.0), top: Some(700.0), zoom: Some(2.0) } };
+    let a = links::add(&mut doc, 0, [10.0, 10.0, 110.0, 30.0], &LinkAction::View(view), &LinkStyle::default()).unwrap();
+    let b = links::add(&mut doc, 0, [10.0, 40.0, 110.0, 60.0], &LinkAction::Named("intro".into()), &LinkStyle::default()).unwrap();
+    assert!(links::add(&mut doc, 0, [10.0, 70.0, 110.0, 90.0], &LinkAction::Named("missing".into()), &LinkStyle::default()).is_err());
+    let bad = View { page: 0, fit: Fit::Xyz { left: None, top: None, zoom: Some(1000.0) } };
+    assert!(links::add(&mut doc, 0, [10.0, 70.0, 110.0, 90.0], &LinkAction::View(bad), &LinkStyle::default()).is_err());
+    let doc = reopen(&doc);
+    let all = links::list(&doc);
+    let get = |i: usize| all.iter().find(|l| l.page == 0 && l.index == i).unwrap().action.clone();
+    assert_eq!(get(a), LinkAction::View(view));
+    assert_eq!(get(b), LinkAction::Named("intro".into()));
+    assert_eq!(get(b).page(&doc), Some(1), "named destinations resolve to their page");
+    // Retarget a link from a view to a named destination and back to a plain page.
+    let mut doc = doc;
+    links::set(&mut doc, 0, a, None, Some(&LinkAction::Named("intro".into())), None).unwrap();
+    assert_eq!(dests::references(&doc, "intro"), 2);
+    links::set(&mut doc, 0, b, None, Some(&LinkAction::Page(0)), None).unwrap();
+    let all = links::list(&doc);
+    assert_eq!(all.iter().find(|l| l.page == 0 && l.index == b).unwrap().action, LinkAction::Page(0));
+    // Renaming the destination carries the link along.
+    assert_eq!(dests::rename(&mut doc, "intro", "start").unwrap(), 1);
+    assert_eq!(links::list(&doc).iter().find(|l| l.page == 0 && l.index == a).unwrap().action, LinkAction::Named("start".into()));
+}

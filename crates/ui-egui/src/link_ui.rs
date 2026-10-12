@@ -37,6 +37,9 @@ pub struct LinkDraft {
     /// 1-based target page.
     pub target: usize,
     pub style: LinkStyle,
+    /// An existing link's go-to (or other) action and the target it showed: kept unless the
+    /// page is changed, so a view's zoom, a named destination or a script survive a restyle.
+    pub keep: Option<(LinkAction, usize)>,
 }
 
 fn screen_rect(xf: &PageXform, info: &DocInfo, page: usize, r: [f64; 4]) -> Rect {
@@ -138,21 +141,22 @@ impl PdfCraftApp {
         let Some((_, id)) = self.active_ids() else { return };
         let existing = index.and_then(|i| self.session.get(id).and_then(|d| d.links.iter().find(|l| l.page == page && l.index == i).cloned()));
         let draft = match existing {
-            Some(l) => LinkDraft {
-                page,
-                rect: l.rect,
-                index,
-                web: matches!(l.action, LinkAction::Uri(_)),
-                url: match &l.action {
-                    LinkAction::Uri(u) => u.clone(),
-                    _ => "https://".into(),
-                },
-                target: match l.action {
-                    LinkAction::Page(p) => p + 1,
-                    _ => 1,
-                },
-                style: l.style,
-            },
+            Some(l) => {
+                let target = self.session.link_target_page(id, &l.action).map_or(1, |p| p + 1);
+                LinkDraft {
+                    page,
+                    rect: l.rect,
+                    index,
+                    web: matches!(l.action, LinkAction::Uri(_)),
+                    url: match &l.action {
+                        LinkAction::Uri(u) => u.clone(),
+                        _ => "https://".into(),
+                    },
+                    target,
+                    style: l.style,
+                    keep: (!matches!(l.action, LinkAction::Uri(_))).then(|| (l.action.clone(), target)),
+                }
+            }
             None => LinkDraft {
                 page,
                 rect: rect.unwrap_or_default(),
@@ -161,6 +165,7 @@ impl PdfCraftApp {
                 url: "https://".into(),
                 target: 1,
                 style: LinkStyle::default(),
+                keep: None,
             },
         };
         self.link_draft = Some(draft);
@@ -284,7 +289,11 @@ pub(crate) fn body(ui: &mut egui::Ui, d: &mut LinkDraft, pages: usize, t: &Token
 
 /// The edit for a confirmed draft.
 pub(crate) fn edit_for(d: &LinkDraft) -> Edit {
-    let action = if d.web { LinkAction::Uri(d.url.trim().to_string()) } else { LinkAction::Page(d.target.saturating_sub(1)) };
+    let action = match &d.keep {
+        _ if d.web => LinkAction::Uri(d.url.trim().to_string()),
+        Some((kept, target)) if *target == d.target => kept.clone(),
+        _ => LinkAction::Page(d.target.saturating_sub(1)),
+    };
     match d.index {
         None => Edit::AddLink { page: d.page, rect: d.rect, action, style: d.style },
         Some(index) => Edit::SetLink { page: d.page, index, rect: None, action: Some(action), style: Some(d.style) },

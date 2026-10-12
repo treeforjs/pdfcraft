@@ -1,7 +1,8 @@
 //! Links (ISO 32000-2 §12.5.6.5): create, edit and remove link annotations with Acrobat's Link
-//! Properties (appearance and a go-to-page or open-a-web-page action).
+//! Properties (appearance and a go-to-page-view, go-to-named-destination or open-a-web-page action).
 
 use pdfcraft_cos::{Dict, Document, ObjRef, Object, PdfString};
+use pdfcraft_model::dests::{self, Fit, Target, View};
 
 use crate::{AnnotError, annots, page_ref, page_refs, set_annots};
 
@@ -10,9 +11,34 @@ use crate::{AnnotError, annots, page_ref, page_refs, set_annots};
 pub enum LinkAction {
     /// A page of this document (0-based), shown fitting the window (`/Fit`).
     Page(usize),
+    /// A page shown a specific way (position and zoom, fit width, a rectangle…).
+    View(View),
+    /// A named destination (§12.3.2.3), possibly one that no longer exists.
+    Named(String),
     Uri(String),
-    /// Something PdfCraft doesn't edit yet (named destination, JavaScript…): kept as is.
+    /// Something PdfCraft doesn't edit yet (JavaScript, remote go-to…): kept as is.
     Other(String),
+}
+
+impl LinkAction {
+    fn from_target(t: Option<Target>) -> LinkAction {
+        match t {
+            Some(Target::View(View { page, fit: Fit::Fit })) => LinkAction::Page(page),
+            Some(Target::View(v)) => LinkAction::View(v),
+            Some(Target::Named(n)) => LinkAction::Named(n),
+            None => LinkAction::Other("unresolved destination".into()),
+        }
+    }
+
+    /// The page a go-to action shows (named destinations resolved), if any.
+    pub fn page(&self, doc: &Document) -> Option<usize> {
+        match self {
+            LinkAction::Page(p) => Some(*p),
+            LinkAction::View(v) => Some(v.page),
+            LinkAction::Named(n) => dests::lookup(doc, n).and_then(|d| d.view).map(|v| v.page),
+            LinkAction::Uri(_) | LinkAction::Other(_) => None,
+        }
+    }
 }
 
 /// Acrobat's Link Properties ▸ Appearance.
@@ -83,24 +109,15 @@ fn nums(doc: &Document, o: Option<&Object>) -> Vec<f64> {
 }
 
 fn action_of(doc: &Document, d: &Dict, pages: &[ObjRef]) -> LinkAction {
-    let dest_page = |dest: &Object| -> Option<usize> {
-        let a = doc.resolve(dest);
-        let first = a.as_array()?.first()?.clone();
-        match first {
-            Object::Ref(r) => pages.iter().position(|p| *p == r),
-            Object::Int(i) => usize::try_from(i).ok(),
-            _ => None,
-        }
-    };
     if let Some(dest) = d.get(b"Dest") {
-        return dest_page(dest).map_or_else(|| LinkAction::Other("named destination".into()), LinkAction::Page);
+        return LinkAction::from_target(dests::read_target(doc, dest, pages));
     }
     let Some(a) = d.get(b"A").map(|a| doc.resolve(a)).and_then(|a| a.as_dict().cloned()) else { return LinkAction::Other("no action".into()) };
     match a.name(b"S") {
         Some(b"URI") => LinkAction::Uri(
             a.get(b"URI").and_then(|u| doc.resolve(u).as_string().map(|s| String::from_utf8_lossy(&s.bytes).into_owned())).unwrap_or_default(),
         ),
-        Some(b"GoTo") => a.get(b"D").and_then(dest_page).map_or_else(|| LinkAction::Other("named destination".into()), LinkAction::Page),
+        Some(b"GoTo") => LinkAction::from_target(a.get(b"D").and_then(|dest| dests::read_target(doc, dest, pages))),
         Some(s) => LinkAction::Other(String::from_utf8_lossy(s).into_owned()),
         None => LinkAction::Other("no action".into()),
     }
@@ -185,6 +202,16 @@ fn write_action(doc: &Document, d: &mut Dict, a: &LinkAction) -> Result<(), Anno
             d.remove(b"A");
             d.set(b"Dest".to_vec(), Object::Array(vec![Object::Ref(target), Object::name("Fit")]));
         }
+        LinkAction::View(v) => {
+            let dest = dests::view_object(v, &page_refs(doc)?).map_err(|e| AnnotError::Invalid(e.to_string()))?;
+            d.remove(b"A");
+            d.set(b"Dest".to_vec(), dest);
+        }
+        LinkAction::Named(n) => {
+            let dest = dests::named_ref(doc, n).map_err(|e| AnnotError::Invalid(e.to_string()))?;
+            d.remove(b"A");
+            d.set(b"Dest".to_vec(), dest);
+        }
         LinkAction::Uri(u) => {
             let u = u.trim();
             if u.is_empty() {
@@ -210,7 +237,7 @@ pub fn add(doc: &mut Document, page: usize, rect: [f64; 4], action: &LinkAction,
         return Err(AnnotError::Invalid("the link area is too small".into()));
     }
     if matches!(action, LinkAction::Other(_)) {
-        return Err(AnnotError::Invalid("choose a page or a web address".into()));
+        return Err(AnnotError::Invalid("choose a page, a named destination or a web address".into()));
     }
     let mut d = Dict::new();
     d.set(b"Type".to_vec(), Object::name("Annot"));

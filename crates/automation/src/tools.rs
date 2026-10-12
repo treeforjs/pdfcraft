@@ -230,7 +230,7 @@ pub fn tools() -> Vec<ToolDef> {
                 json!({ "doc": doc(), "every": { "type": "integer", "minimum": 1 }, "before": pages("that start a new part"), "bookmarks": { "type": "boolean" }, "max_mb": { "type": "number", "exclusiveMinimum": 0 }, "out_dir": { "type": "string" } }),
                 &["doc", "out_dir"],
             )),
-        t("bookmark_list", "List bookmarks", "The bookmark tree with each bookmark's path, title, target page and open state.")
+        t("bookmark_list", "List bookmarks", "The bookmark tree with each bookmark's path, title, target page, open state and action: { type: goto, to_page, view, dest? } | { type: uri, url } | { type: other, action } (JavaScript, Launch… kept as is) | { type: none }.")
             .ro()
             .with(schema(json!({ "doc": doc() }), &["doc"])),
         t("bookmark_add", "Add a bookmark", "Add a bookmark that goes to a page, under a parent bookmark (or at the top level), at a position. Undoable.").with(schema(
@@ -248,6 +248,27 @@ pub fn tools() -> Vec<ToolDef> {
         )),
         t("bookmark_set_page", "Set a bookmark's page", "Point a bookmark at another page. Undoable.")
             .with(schema(json!({ "doc": doc(), "path": path("The bookmark"), "page": { "type": "integer", "minimum": 1 } }), &["doc", "path", "page"])),
+        t("bookmark_set_action", "Set a bookmark's action", "Bookmark Properties ▸ Actions: make a bookmark go to to_page (optionally shown as view), go to the named destination dest, or open url. Replaces its go-to or action; other actions (JavaScript…) can't be written here but are kept on other bookmarks. Undoable.").with(schema(
+            json!({ "doc": doc(), "path": path("The bookmark"), "to_page": { "type": "integer", "minimum": 1 }, "view": { "type": "object", "description": "With to_page: how to show the page. { fit: XYZ|Fit|FitH|FitV|FitR|FitB|FitBH|FitBV, left, top, zoom (percent), rect [left, bottom, right, top] }; coordinates are PDF user space as stored in the destination (origin bottom-left of the unrotated page). Default fit: XYZ when left/top/zoom are given, FitR with rect, else Fit." }, "dest": { "type": "string", "description": "A named destination (see dest_list)." }, "url": { "type": "string" } }),
+            &["doc", "path"],
+        )),
+        t("dest_list", "List named destinations", "Every named destination: name, stored_in (names = the /Names /Dests tree, dests = the legacy /Dests dictionary), to_page and view (fit, left, top, zoom percent, rect in PDF user space), or unresolved: true, and how many links and bookmarks reference it.")
+            .ro()
+            .with(schema(json!({ "doc": doc() }), &["doc"])),
+        t("dest_set", "Set a named destination", "Create a named destination, or re-target an existing one (where it is stored), to show page with fit XYZ|Fit|FitH|FitV|FitR|FitB|FitBH|FitBV. left, top and rect [left, bottom, right, top] are PDF user-space coordinates as stored in the destination; zoom is a percentage (XYZ only; omitted keeps the reader's zoom). Default fit: XYZ when left/top/zoom are given, FitR with rect, else Fit. Returns created. Undoable.").with(schema(
+            json!({
+                "doc": doc(), "name": { "type": "string", "minLength": 1 }, "page": { "type": "integer", "minimum": 1 },
+                "fit": { "type": "string", "enum": ["XYZ", "Fit", "FitH", "FitV", "FitR", "FitB", "FitBH", "FitBV"] },
+                "left": { "type": "number" }, "top": { "type": "number" }, "zoom": { "type": "number", "exclusiveMinimum": 0, "maximum": 6400 },
+                "rect": { "type": "array", "items": { "type": "number" }, "minItems": 4, "maxItems": 4 },
+            }),
+            &["doc", "name", "page"],
+        )),
+        t("dest_rename", "Rename a named destination", "Rename a named destination; links and bookmarks that go to it follow (references_updated). Undoable.")
+            .with(schema(json!({ "doc": doc(), "name": { "type": "string", "minLength": 1 }, "new_name": { "type": "string", "minLength": 1 } }), &["doc", "name", "new_name"])),
+        t("dest_delete", "Delete a named destination", "Delete a named destination. Links and bookmarks that went to it keep the name and stop working, as in Acrobat; still_referenced says how many. Undoable.")
+            .destructive()
+            .with(schema(json!({ "doc": doc(), "name": { "type": "string", "minLength": 1 } }), &["doc", "name"])),
         t("page_number", "Number pages", "Label a range of pages (e.g. i, ii, iii for front matter, or A-1, A-2 for an appendix). Later pages keep their labels. Undoable.").with(schema(
             json!({
                 "doc": doc(),
@@ -516,25 +537,25 @@ pub fn tools() -> Vec<ToolDef> {
         t("content_delete", "Delete added content", "Delete an added item (page, index from content_list). Undoable.")
             .destructive()
             .with(schema(json!({ "doc": doc(), "page": { "type": "integer", "minimum": 1 }, "index": { "type": "integer", "minimum": 1 } }), &["doc", "page", "index"])),
-        t("link_list", "List links", "Every link: page, 1-based index (for link_edit/link_delete), rect (points from the top-left of the page), and where it goes (url or to_page).")
+        t("link_list", "List links", "Every link: page, 1-based index (for link_edit/link_delete), rect (points from the top-left of the page), and where it goes: url, to_page (with view when it is not plain Fit), or dest (a named destination, with its resolved to_page and view, or unresolved: true).")
             .ro()
             .with(schema(json!({ "doc": doc() }), &["doc"])),
-        t("link_add", "Add a link", "Add a link over rect on page that opens url or goes to to_page. Appearance: visible (rectangle), color, width 1-3, highlight none/invert/outline/inset. Undoable.")
+        t("link_add", "Add a link", "Add a link over rect on page that opens url, goes to to_page (optionally shown as view: position and zoom, fit width, a rectangle…) or goes to the named destination dest. Appearance: visible (rectangle), color, width 1-3, highlight none/invert/outline/inset. Undoable.")
             .cmd("edit.link")
             .with(schema(
                 json!({
                     "doc": doc(), "page": { "type": "integer", "minimum": 1 }, "rect": { "type": "array", "items": { "type": "number" }, "minItems": 4, "maxItems": 4 },
-                    "url": { "type": "string" }, "to_page": { "type": "integer", "minimum": 1 },
+                    "url": { "type": "string" }, "to_page": { "type": "integer", "minimum": 1 }, "view": { "type": "object", "description": "With to_page: how to show the page. { fit: XYZ|Fit|FitH|FitV|FitR|FitB|FitBH|FitBV, left, top, zoom (percent), rect [left, bottom, right, top] }; coordinates are PDF user space as stored in the destination (origin bottom-left of the unrotated page). Default fit: XYZ when left/top/zoom are given, FitR with rect, else Fit." }, "dest": { "type": "string", "description": "A named destination (see dest_list)." },
                     "visible": { "type": "boolean" }, "color": { "type": "string" }, "width": { "type": "number" }, "highlight": { "type": "string", "enum": ["none", "invert", "outline", "inset"] },
                 }),
                 &["doc", "page", "rect"],
             )),
-        t("link_edit", "Edit a link", "Change a link's rect, destination (url or to_page) or appearance. Undoable.")
+        t("link_edit", "Edit a link", "Change a link's rect, destination (url, to_page with optional view, or dest) or appearance. Undoable.")
             .with(schema(
                 json!({
                     "doc": doc(), "page": { "type": "integer", "minimum": 1 }, "index": { "type": "integer", "minimum": 1 },
                     "rect": { "type": "array", "items": { "type": "number" }, "minItems": 4, "maxItems": 4 },
-                    "url": { "type": "string" }, "to_page": { "type": "integer", "minimum": 1 },
+                    "url": { "type": "string" }, "to_page": { "type": "integer", "minimum": 1 }, "view": { "type": "object", "description": "With to_page: how to show the page. { fit: XYZ|Fit|FitH|FitV|FitR|FitB|FitBH|FitBV, left, top, zoom (percent), rect [left, bottom, right, top] }; coordinates are PDF user space as stored in the destination (origin bottom-left of the unrotated page). Default fit: XYZ when left/top/zoom are given, FitR with rect, else Fit." }, "dest": { "type": "string", "description": "A named destination (see dest_list)." },
                     "visible": { "type": "boolean" }, "color": { "type": "string" }, "width": { "type": "number" }, "highlight": { "type": "string", "enum": ["none", "invert", "outline", "inset"] },
                 }),
                 &["doc", "page", "index"],

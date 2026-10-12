@@ -1,7 +1,7 @@
 //! Link tools: list, add, edit and delete links; create links from URLs in the text; remove
 //! all links. Rectangles are points from the top-left of the displayed page.
 
-use pdfcraft_engine::{Edit, LinkAction, LinkHighlight, LinkStyle};
+use pdfcraft_engine::{DestFit, DestTarget, Edit, LinkAction, LinkHighlight, LinkStyle};
 use serde_json::{Value, json};
 
 use crate::comments::parse_color;
@@ -22,16 +22,12 @@ impl Automation {
     }
 
     fn link_action(&self, a: &Args) -> Result<Option<LinkAction>> {
-        match (a.opt_str("url")?, a.opt_int("to_page")?) {
-            (Some(_), Some(_)) => Err(bad("pass url or to_page, not both")),
+        match (a.opt_str("url")?, self.goto_target(a)?) {
+            (Some(_), Some(_)) => Err(bad("pass url, or to_page/dest, not both")),
             (Some(u), None) => Ok(Some(LinkAction::Uri(u.to_string()))),
-            (None, Some(p)) => {
-                let n = self.doc(a)?.info.pages.len() as i64;
-                if p < 1 || p > n {
-                    return Err(bad(format!("to_page must be 1–{n}")));
-                }
-                Ok(Some(LinkAction::Page(p as usize - 1)))
-            }
+            (None, Some(DestTarget::View(v))) if v.fit == DestFit::Fit => Ok(Some(LinkAction::Page(v.page))),
+            (None, Some(DestTarget::View(v))) => Ok(Some(LinkAction::View(v))),
+            (None, Some(DestTarget::Named(n))) => Ok(Some(LinkAction::Named(n))),
             (None, None) => Ok(None),
         }
     }
@@ -71,6 +67,8 @@ impl Automation {
                 let mut v = json!({ "page": l.page + 1, "index": l.index + 1, "rect": rect, "visible": l.style.visible });
                 match &l.action {
                     LinkAction::Page(p) => v["to_page"] = json!(p + 1),
+                    LinkAction::View(view) => crate::dests::target_json(self, doc.id, &DestTarget::View(*view), &mut v),
+                    LinkAction::Named(n) => crate::dests::target_json(self, doc.id, &DestTarget::Named(n.clone()), &mut v),
                     LinkAction::Uri(u) => v["url"] = json!(u),
                     LinkAction::Other(o) => v["other"] = json!(o),
                 }
@@ -83,7 +81,7 @@ impl Automation {
     pub(crate) fn link_add(&mut self, a: &Args) -> Result<Value> {
         let page = self.page(a)?;
         let rect = self.view_rect(a, page)?.ok_or_else(|| bad("link_add needs rect"))?;
-        let action = self.link_action(a)?.ok_or_else(|| bad("pass url or to_page"))?;
+        let action = self.link_action(a)?.ok_or_else(|| bad("pass url, to_page (optionally with view) or dest"))?;
         let style = self.link_style(a, LinkStyle::default())?;
         self.apply(a, Edit::AddLink { page, rect, action, style })
     }

@@ -12,6 +12,8 @@
 use std::collections::HashSet;
 
 use pdfcraft_cos::{Dict, Document, ObjRef, Object, PdfString};
+use pdfcraft_model::dests;
+pub use pdfcraft_model::dests::Target;
 
 use crate::{OrganizeError, walk};
 
@@ -36,6 +38,8 @@ pub enum OutlineError {
     IntoItself,
     #[error("the title must not be empty")]
     EmptyTitle,
+    #[error("{0}")]
+    Action(String),
     #[error("{0}")]
     Organize(#[from] OrganizeError),
     #[error("{0}")]
@@ -97,7 +101,7 @@ pub fn bookmarks(doc: &Document) -> Vec<Bookmark> {
 }
 
 /// The object of the bookmark at `path`, and its parent object (the outline root for top-level).
-fn resolve_path(doc: &Document, path: &[usize]) -> Result<(ObjRef, ObjRef)> {
+pub(crate) fn resolve_path(doc: &Document, path: &[usize]) -> Result<(ObjRef, ObjRef)> {
     let root = outline_root(doc).ok_or_else(|| OutlineError::NoSuchBookmark(path.to_vec()))?;
     if path.is_empty() {
         return Err(OutlineError::NoSuchBookmark(Vec::new()));
@@ -237,6 +241,93 @@ pub fn set_bookmark_page(doc: &mut Document, path: &[usize], page: usize) -> Res
     let (r, _) = resolve_path(doc, path)?;
     put(doc, r, b"Dest", Some(dest))?;
     put(doc, r, b"A", None) // `/Dest` and `/A` must not both be present (§12.3.3)
+}
+
+/// What a bookmark does when clicked (§12.3.3: a `/Dest` or an `/A` action).
+#[derive(Clone, Debug, PartialEq)]
+pub enum BookmarkAction {
+    /// Go to a page view or a named destination (`/Dest`, or a GoTo action).
+    GoTo(Target),
+    /// Open a web page (a URI action).
+    Uri(String),
+    /// Another action (JavaScript, Launch, Named, a remote go-to…) or a go-to whose destination
+    /// isn't in this document: shown by its action type and kept as is.
+    Other(String),
+    /// Does nothing.
+    None,
+}
+
+fn action_of(doc: &Document, d: &Dict, pages: &[ObjRef]) -> BookmarkAction {
+    if let Some(dest) = d.get(b"Dest") {
+        return dests::read_target(doc, dest, pages).map_or_else(|| BookmarkAction::Other("GoTo".into()), BookmarkAction::GoTo);
+    }
+    let Some(a) = d.get(b"A").and_then(|a| doc.resolve(a).as_dict().cloned()) else { return BookmarkAction::None };
+    match a.name(b"S") {
+        Some(b"URI") => BookmarkAction::Uri(
+            a.get(b"URI").and_then(|u| doc.resolve(u).as_string().map(|s| String::from_utf8_lossy(&s.bytes).into_owned())).unwrap_or_default(),
+        ),
+        Some(b"GoTo") => a
+            .get(b"D")
+            .and_then(|dest| dests::read_target(doc, dest, pages))
+            .map_or_else(|| BookmarkAction::Other("GoTo".into()), BookmarkAction::GoTo),
+        Some(s) => BookmarkAction::Other(String::from_utf8_lossy(s).into_owned()),
+        None => BookmarkAction::Other("unknown".into()),
+    }
+}
+
+/// Every bookmark's path and action, parents before their children. Cycle- and size-safe, and
+/// iterative (no recursion on hostile nesting).
+pub fn bookmark_actions(doc: &Document) -> Vec<(Vec<usize>, BookmarkAction)> {
+    let Some(root) = outline_root(doc) else { return Vec::new() };
+    let pages = dests::page_refs(doc);
+    let mut seen = HashSet::from([root]);
+    let mut out = Vec::new();
+    let mut stack = vec![(root, Vec::new())];
+    while let Some((node, path)) = stack.pop() {
+        let kids = children_of(doc, node, &mut seen);
+        for (i, k) in kids.iter().enumerate().rev() {
+            let mut p = path.clone();
+            p.push(i);
+            stack.push((*k, p));
+        }
+        if node != root {
+            let item = doc.get(node);
+            out.push((path, action_of(doc, item.as_dict().unwrap_or(&Dict::new()), &pages)));
+        }
+    }
+    out
+}
+
+/// The action of the bookmark at `path`.
+pub fn bookmark_action(doc: &Document, path: &[usize]) -> Result<BookmarkAction> {
+    let (r, _) = resolve_path(doc, path)?;
+    let item = doc.get(r);
+    Ok(action_of(doc, item.as_dict().unwrap_or(&Dict::new()), &dests::page_refs(doc)))
+}
+
+/// Bookmark Properties ▸ Actions: make the bookmark go to a view or named destination, or open
+/// a web page. Replaces its `/Dest` or `/A` (never both, §12.3.3); everything else on the item
+/// is kept. Other action types can't be set here.
+pub fn set_bookmark_action(doc: &mut Document, path: &[usize], action: &BookmarkAction) -> Result<()> {
+    let (dest, act) = match action {
+        BookmarkAction::GoTo(t) => (Some(dests::target_object(doc, t).map_err(|e| OutlineError::Action(e.to_string()))?), None),
+        BookmarkAction::Uri(u) => {
+            let u = u.trim();
+            if u.is_empty() {
+                return Err(OutlineError::Action("type the web address first".into()));
+            }
+            let mut a = Dict::new();
+            a.set(b"S".to_vec(), Object::name("URI"));
+            a.set(b"URI".to_vec(), PdfString::literal(u.as_bytes().to_vec()));
+            (None, Some(Object::Dict(a)))
+        }
+        BookmarkAction::Other(_) | BookmarkAction::None => {
+            return Err(OutlineError::Action("a bookmark action can be a page view, a named destination or a web address".into()));
+        }
+    };
+    let (r, _) = resolve_path(doc, path)?;
+    put(doc, r, b"Dest", dest)?;
+    put(doc, r, b"A", act)
 }
 
 /// Remove a bookmark and everything under it. The removed items are unlinked (a full save drops

@@ -15,6 +15,7 @@ mod a11y;
 mod comments;
 mod content;
 mod conventions;
+mod dests;
 mod forms;
 mod links;
 #[cfg(feature = "mcp")]
@@ -245,7 +246,15 @@ impl Automation {
                 out["labels"] = json!(self.doc(&a)?.info.pages.iter().map(|p| p.label.clone()).collect::<Vec<_>>());
                 out
             }
-            "bookmark_list" => json!({ "bookmarks": bookmark_tree(&self.doc(&a)?.info.outline, &[]) }),
+            "bookmark_list" => {
+                let actions = self.bookmark_action_map(&a)?;
+                json!({ "bookmarks": bookmark_tree(&self.doc(&a)?.info.outline, &[], &actions) })
+            }
+            "bookmark_set_action" => self.bookmark_set_action(&a)?,
+            "dest_list" => self.dest_list(&a)?,
+            "dest_set" => self.dest_set(&a)?,
+            "dest_rename" => self.dest_rename(&a)?,
+            "dest_delete" => self.dest_delete(&a)?,
             "bookmark_add" => {
                 let page = self.page(&a)?;
                 let parent = a.opt_path("parent")?.unwrap_or_default();
@@ -1778,14 +1787,19 @@ impl Args<'_> {
 }
 
 /// The bookmark tree as JSON, with 1-based paths and pages.
-fn bookmark_tree(items: &[pdfcraft_render::OutlineItem], parent: &[usize]) -> Vec<Value> {
+fn bookmark_tree(items: &[pdfcraft_render::OutlineItem], parent: &[usize], actions: &std::collections::HashMap<Vec<usize>, Value>) -> Vec<Value> {
     items
         .iter()
         .enumerate()
         .map(|(i, o)| {
             let mut path = parent.to_vec();
             path.push(i + 1);
-            json!({ "path": path, "title": o.title, "page": o.page.map(|p| p + 1), "open": o.open, "children": bookmark_tree(&o.children, &path) })
+            let key: Vec<usize> = path.iter().map(|p| p - 1).collect();
+            let mut v = json!({ "path": path, "title": o.title, "page": o.page.map(|p| p + 1), "open": o.open, "children": bookmark_tree(&o.children, &path, actions) });
+            if let Some(a) = actions.get(&key) {
+                v["action"] = a.clone();
+            }
+            v
         })
         .collect()
 }

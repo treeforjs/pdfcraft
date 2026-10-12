@@ -4332,3 +4332,130 @@ fn combining_forms_keeps_colliding_fields_independent() {
         assert_eq!(def.input_schema["properties"]["field_conflicts"]["enum"], json!(["rename", "merge"]), "{tool}");
     }
 }
+
+/// Named destinations (`dest_*`), links and bookmarks that go to views with zoom or to named
+/// destinations, and bookmark actions, through save and reopen; `pdfinfo -dests` (Poppler, run
+/// only as an external oracle process) must read the same destinations when it is installed.
+#[test]
+fn named_destinations_views_and_bookmark_actions_through_tools() {
+    let dir = workdir("dests");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    assert_eq!(ok(&mut a, "dest_list", json!({ "doc": doc }))["count"], 0);
+    let r = ok(&mut a, "dest_set", json!({ "doc": doc, "name": "intro", "page": 2, "top": 250, "zoom": 150 }));
+    assert_eq!(r["created"], true);
+    assert_eq!(r["destination"]["view"], json!({ "page": 2, "fit": "XYZ", "top": 250.0, "zoom": 150.0 }));
+    ok(&mut a, "dest_set", json!({ "doc": doc, "name": "wide", "page": 3, "fit": "FitH", "top": 100 }));
+    let r = ok(&mut a, "dest_set", json!({ "doc": doc, "name": "box", "page": 1, "rect": [110, 20, 10, 220] }));
+    assert_eq!(r["destination"]["view"], json!({ "page": 1, "fit": "FitR", "rect": [10.0, 20.0, 110.0, 220.0] }));
+    // Re-target an existing destination.
+    let r = ok(&mut a, "dest_set", json!({ "doc": doc, "name": "intro", "page": 3, "fit": "XYZ", "left": 0, "top": 300, "zoom": 125 }));
+    assert_eq!(r["created"], false);
+    // Refusals change nothing.
+    for bad in [
+        json!({ "doc": doc, "name": "x", "page": 1, "fit": "FitH", "zoom": 200 }),
+        json!({ "doc": doc, "name": "x", "page": 1, "fit": "Sideways" }),
+        json!({ "doc": doc, "name": "x", "page": 9 }),
+        json!({ "doc": doc, "name": "x", "page": 1, "fit": "FitR" }),
+    ] {
+        assert!(matches!(a.call("dest_set", &bad), Err(ToolError::InvalidArgs(_))), "{bad}");
+    }
+    for bad in [json!({ "doc": doc, "name": "x", "page": 1, "zoom": 100000 }), json!({ "doc": doc, "name": "x", "page": 1, "rect": [0, 0, 0, 10] })] {
+        assert!(matches!(a.call("dest_set", &bad), Err(ToolError::Failed(_))), "{bad}");
+    }
+    assert!(matches!(a.call("dest_rename", &json!({ "doc": doc, "name": "box", "new_name": "wide" })), Err(ToolError::Failed(_))));
+    assert!(matches!(a.call("dest_delete", &json!({ "doc": doc, "name": "nope" })), Err(ToolError::Failed(_))));
+    assert_eq!(ok(&mut a, "dest_list", json!({ "doc": doc }))["count"], 3);
+
+    // Links: a view with zoom, and a named destination.
+    ok(&mut a, "link_add", json!({ "doc": doc, "page": 1, "rect": [10, 10, 100, 30], "to_page": 2, "view": { "left": 0, "top": 300, "zoom": 200 } }));
+    ok(&mut a, "link_add", json!({ "doc": doc, "page": 1, "rect": [10, 40, 100, 60], "dest": "wide" }));
+    ok(&mut a, "link_add", json!({ "doc": doc, "page": 1, "rect": [10, 70, 100, 90], "to_page": 3 }));
+    assert!(matches!(a.call("link_add", &json!({ "doc": doc, "page": 1, "rect": [10, 70, 100, 90], "dest": "missing" })), Err(ToolError::Failed(_))));
+    assert!(matches!(
+        a.call("link_add", &json!({ "doc": doc, "page": 1, "rect": [10, 70, 100, 90], "dest": "wide", "to_page": 1 })),
+        Err(ToolError::InvalidArgs(_))
+    ));
+    assert!(matches!(
+        a.call("link_add", &json!({ "doc": doc, "page": 1, "rect": [10, 70, 100, 90], "view": { "fit": "Fit" } })),
+        Err(ToolError::InvalidArgs(_))
+    ));
+    assert!(matches!(
+        a.call("link_add", &json!({ "doc": doc, "page": 1, "rect": [10, 70, 100, 90], "to_page": 1, "view": { "fit": "Fit", "zoom": 2 } })),
+        Err(ToolError::InvalidArgs(_))
+    ));
+    assert!(matches!(
+        a.call("link_add", &json!({ "doc": doc, "page": 1, "rect": [10, 70, 100, 90], "to_page": 1, "view": { "scale": 2 } })),
+        Err(ToolError::InvalidArgs(_))
+    ));
+
+    // Bookmarks: a named destination, a web page, a view.
+    ok(&mut a, "bookmark_add", json!({ "doc": doc, "title": "Intro", "page": 1 }));
+    ok(&mut a, "bookmark_add", json!({ "doc": doc, "title": "Web", "page": 1 }));
+    ok(&mut a, "bookmark_add", json!({ "doc": doc, "title": "Zoomed", "page": 1 }));
+    ok(&mut a, "bookmark_set_action", json!({ "doc": doc, "path": [1], "dest": "intro" }));
+    ok(&mut a, "bookmark_set_action", json!({ "doc": doc, "path": [2], "url": "https://example.org/" }));
+    ok(&mut a, "bookmark_set_action", json!({ "doc": doc, "path": [3], "to_page": 2, "view": { "fit": "FitV", "left": 50 } }));
+    assert!(matches!(a.call("bookmark_set_action", &json!({ "doc": doc, "path": [1] })), Err(ToolError::InvalidArgs(_))));
+    assert!(matches!(
+        a.call("bookmark_set_action", &json!({ "doc": doc, "path": [1], "url": "https://x.org", "dest": "intro" })),
+        Err(ToolError::InvalidArgs(_))
+    ));
+    assert!(matches!(a.call("bookmark_set_action", &json!({ "doc": doc, "path": [9], "url": "https://x.org" })), Err(ToolError::Failed(_))));
+
+    // Rename follows references; delete reports what still points at the name; undo restores it.
+    let r = ok(&mut a, "dest_rename", json!({ "doc": doc, "name": "wide", "new_name": "Wide view" }));
+    assert_eq!(r["references_updated"], 1);
+    let r = ok(&mut a, "dest_delete", json!({ "doc": doc, "name": "box" }));
+    assert_eq!(r["still_referenced"], 0);
+    ok(&mut a, "edit_undo", json!({ "doc": doc }));
+    assert_eq!(ok(&mut a, "dest_list", json!({ "doc": doc }))["count"], 3);
+    ok(&mut a, "dest_delete", json!({ "doc": doc, "name": "box" }));
+
+    ok(&mut a, "doc_save", json!({ "doc": doc, "path": "dests.pdf" }));
+    let mut b = auto(&dir);
+    let re = ok(&mut b, "doc_open", json!({ "path": "dests.pdf" }))["doc"].as_u64().unwrap();
+    let dests = ok(&mut b, "dest_list", json!({ "doc": re }));
+    let by_name = |n: &str| dests["destinations"].as_array().unwrap().iter().find(|d| d["name"] == n).cloned().unwrap_or(Value::Null);
+    assert_eq!(dests["count"], 2);
+    assert_eq!(by_name("intro")["view"], json!({ "page": 3, "fit": "XYZ", "left": 0.0, "top": 300.0, "zoom": 125.0 }));
+    assert_eq!(by_name("intro")["references"], 1);
+    assert_eq!(by_name("Wide view")["view"], json!({ "page": 3, "fit": "FitH", "top": 100.0 }));
+    assert_eq!(by_name("Wide view")["references"], 1);
+    assert_eq!(by_name("Wide view")["stored_in"], "names");
+
+    let links = ok(&mut b, "link_list", json!({ "doc": re }))["links"].clone();
+    let link = |i: u64| links.as_array().unwrap().iter().find(|l| l["index"] == i).cloned().unwrap();
+    assert_eq!(link(1)["to_page"], 2);
+    assert_eq!(link(1)["view"], json!({ "page": 2, "fit": "XYZ", "left": 0.0, "top": 300.0, "zoom": 200.0 }));
+    assert_eq!(link(2)["dest"], "Wide view");
+    assert_eq!(link(2)["to_page"], 3);
+    assert_eq!(link(3)["to_page"], 3);
+    assert!(link(3).get("view").is_none(), "a plain page link stays Fit");
+
+    let marks = ok(&mut b, "bookmark_list", json!({ "doc": re }))["bookmarks"].clone();
+    assert_eq!(marks[0]["action"]["type"], "goto");
+    assert_eq!(marks[0]["action"]["dest"], "intro");
+    assert_eq!(marks[0]["action"]["to_page"], 3);
+    assert_eq!(marks[1]["action"], json!({ "type": "uri", "url": "https://example.org/" }));
+    assert_eq!(marks[2]["action"]["view"], json!({ "page": 2, "fit": "FitV", "left": 50.0 }));
+
+    // Re-target a link from its view to a named destination after reopening.
+    ok(&mut b, "link_edit", json!({ "doc": re, "page": 1, "index": 1, "dest": "intro" }));
+    let links = ok(&mut b, "link_list", json!({ "doc": re }))["links"].clone();
+    assert_eq!(links[0]["dest"], "intro");
+
+    // External oracle: Poppler reads the same named destinations.
+    match std::process::Command::new("pdfinfo").arg("-dests").arg(dir.join("dests.pdf")).output() {
+        Ok(out) if out.status.success() => {
+            let text = String::from_utf8_lossy(&out.stdout);
+            let line = |n: &str| text.lines().find(|l| l.contains(&format!("\"{n}\""))).map(str::to_string).unwrap_or_default();
+            let intro = line("intro");
+            assert!(intro.trim_start().starts_with('3') && intro.contains("XYZ"), "pdfinfo -dests: {text}");
+            let wide = line("Wide view");
+            assert!(wide.trim_start().starts_with('3') && wide.contains("FitH"), "pdfinfo -dests: {text}");
+            assert!(!text.contains("\"box\""), "pdfinfo -dests: {text}");
+        }
+        _ => eprintln!("pdfinfo not available: external destination check skipped"),
+    }
+}

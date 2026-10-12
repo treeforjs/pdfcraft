@@ -1431,3 +1431,70 @@ fn inserting_pages_from_a_form_renames_colliding_fields() {
     assert_eq!(top_fields(&d).len(), 8);
     assert!(top_fields(&d).iter().any(|(n, _)| n == "total#2"));
 }
+
+#[test]
+fn bookmark_actions_go_to_views_named_destinations_and_web_pages() {
+    use pdfcraft_model::dests::{self, Fit, View};
+
+    use crate::{BookmarkAction, Target};
+    let mut d = open(fixture());
+    crate::add_bookmark(&mut d, &[], 0, "Intro", 0).unwrap();
+    crate::add_bookmark(&mut d, &[], 1, "Results", 2).unwrap();
+    crate::add_bookmark(&mut d, &[1], 0, "Table", 1).unwrap();
+    dests::set(&mut d, "results", &View { page: 2, fit: Fit::FitR { rect: [10.0, 20.0, 110.0, 220.0] } }).unwrap();
+    // A JavaScript action is reported by type and kept when other bookmarks change.
+    let js = d.add(Object::Dict(
+        [(b"S".to_vec(), Object::name("JavaScript")), (b"JS".to_vec(), Object::String(pdfcraft_cos::PdfString::literal(b"app.alert(1)".to_vec())))]
+            .into_iter()
+            .collect(),
+    ));
+    let (table, _) = crate::outline::resolve_path(&d, &[1, 0]).unwrap();
+    d.update_dict(table, |t| {
+        t.remove(b"Dest");
+        t.set(b"A".to_vec(), Object::Ref(js));
+    })
+    .unwrap();
+    let zoomed = View { page: 1, fit: Fit::Xyz { left: Some(0.0), top: Some(300.0), zoom: Some(1.25) } };
+    crate::set_bookmark_action(&mut d, &[0], &BookmarkAction::GoTo(Target::View(zoomed))).unwrap();
+    crate::set_bookmark_action(&mut d, &[1], &BookmarkAction::GoTo(Target::Named("results".into()))).unwrap();
+    assert!(crate::set_bookmark_action(&mut d, &[1], &BookmarkAction::GoTo(Target::Named("nope".into()))).is_err());
+    assert!(crate::set_bookmark_action(&mut d, &[1], &BookmarkAction::Uri("  ".into())).is_err());
+    assert!(crate::set_bookmark_action(&mut d, &[1], &BookmarkAction::Other("JavaScript".into())).is_err());
+    assert!(crate::set_bookmark_action(&mut d, &[5], &BookmarkAction::Uri("https://example.org".into())).is_err());
+    let d = save_and_reopen(&d);
+    let all = crate::bookmark_actions(&d);
+    assert_eq!(
+        all,
+        [
+            (vec![0], BookmarkAction::GoTo(Target::View(zoomed))),
+            (vec![1], BookmarkAction::GoTo(Target::Named("results".into()))),
+            (vec![1, 0], BookmarkAction::Other("JavaScript".into())),
+        ]
+    );
+    // A web address replaces the go-to; /Dest and /A are never both present.
+    let mut d = d;
+    crate::set_bookmark_action(&mut d, &[0], &BookmarkAction::Uri("https://example.org/a".into())).unwrap();
+    let d = save_and_reopen(&d);
+    assert_eq!(crate::bookmark_action(&d, &[0]).unwrap(), BookmarkAction::Uri("https://example.org/a".into()));
+    let (first, _) = crate::outline::resolve_path(&d, &[0]).unwrap();
+    assert!(!d.get(first).as_dict().unwrap().contains(b"Dest"));
+    // set_bookmark_page still writes a plain go-to, and renaming the destination follows it.
+    let mut d = d;
+    assert_eq!(dests::rename(&mut d, "results", "Results!").unwrap(), 1);
+    assert_eq!(crate::bookmark_action(&d, &[1]).unwrap(), BookmarkAction::GoTo(Target::Named("Results!".into())));
+    crate::set_bookmark_page(&mut d, &[1], 0).unwrap();
+    assert!(matches!(crate::bookmark_action(&d, &[1]).unwrap(), BookmarkAction::GoTo(Target::View(View { page: 0, .. }))));
+    assert_eq!(crate::bookmark_action(&d, &[1, 0]).unwrap(), BookmarkAction::Other("JavaScript".into()));
+}
+
+#[test]
+fn bookmark_actions_survive_a_looping_outline() {
+    let mut d = open(fixture());
+    crate::add_bookmark(&mut d, &[], 0, "A", 0).unwrap();
+    crate::add_bookmark(&mut d, &[0], 0, "B", 1).unwrap();
+    let (a, _) = crate::outline::resolve_path(&d, &[0]).unwrap();
+    let (b, _) = crate::outline::resolve_path(&d, &[0, 0]).unwrap();
+    // B claims A as its first child: a cycle.
+    d.update_dict(b, |t| t.set(b"First".to_vec(), Object::Ref(a))).unwrap();
+    assert_eq!(crate::bookmark_actions(&d).len(), 2);
+}

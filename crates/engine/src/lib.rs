@@ -105,7 +105,10 @@ pub use pdfcraft_annot::{
     Shape, StampGroup, StampKind, Style, rect_quad,
 };
 pub use pdfcraft_forms::detect;
+/// Named destinations and explicit views (go-to targets of links and bookmarks).
+pub use pdfcraft_model::dests::{DestError, DestSource, Fit as DestFit, NamedDest, Target as DestTarget, View as DestView};
 pub use pdfcraft_optimize as optimize;
+pub use pdfcraft_organize::BookmarkAction;
 pub use pdfcraft_preflight as pdfa;
 pub use pdfcraft_print as print;
 pub use pdfcraft_redact::codes as redaction_codes;
@@ -795,6 +798,25 @@ pub enum Edit {
         path: Vec<usize>,
         page: usize,
     },
+    /// Bookmark Properties ▸ Actions: go to a view or named destination, or open a web page.
+    SetBookmarkAction {
+        path: Vec<usize>,
+        action: BookmarkAction,
+    },
+    /// Create the named destination `name`, or re-target it.
+    SetDestination {
+        name: String,
+        view: DestView,
+    },
+    /// Rename a named destination (links and bookmarks that use it follow).
+    RenameDestination {
+        from: String,
+        to: String,
+    },
+    /// Delete a named destination (links and bookmarks keep the dangling name).
+    DeleteDestination {
+        name: String,
+    },
     /// Label pages `from..=to` (0-based) as Acrobat's "Number pages" does; later pages keep their labels.
     NumberPages {
         from: usize,
@@ -1160,6 +1182,10 @@ impl Edit {
             Edit::DeleteBookmark { .. } => "Delete bookmark".into(),
             Edit::MoveBookmark { .. } => "Move bookmark".into(),
             Edit::SetBookmarkPage { .. } => "Set bookmark destination".into(),
+            Edit::SetBookmarkAction { .. } => "Set bookmark action".into(),
+            Edit::SetDestination { .. } => "Set destination".into(),
+            Edit::RenameDestination { .. } => "Rename destination".into(),
+            Edit::DeleteDestination { .. } => "Delete destination".into(),
             Edit::NumberPages { .. } => "Number pages".into(),
             Edit::AddMeasurement(m) => format!("Measure {}", m.kind.name()),
             Edit::SetMeasurementScale { .. } => "Set measurement scale".into(),
@@ -1295,6 +1321,7 @@ fn check_permission(edit: &Edit, p: &pdfcraft_cos::Permissions) -> Result<(), Ed
         | Edit::DeleteBookmark { .. }
         | Edit::MoveBookmark { .. }
         | Edit::SetBookmarkPage { .. }
+        | Edit::SetBookmarkAction { .. }
         | Edit::NumberPages { .. } => {
             if p.assemble() {
                 Ok(())
@@ -1358,6 +1385,9 @@ fn check_permission(edit: &Edit, p: &pdfcraft_cos::Permissions) -> Result<(), Ed
         | Edit::DeleteLink { .. }
         | Edit::RemoveLinks { .. }
         | Edit::AddLinks { .. }
+        | Edit::SetDestination { .. }
+        | Edit::RenameDestination { .. }
+        | Edit::DeleteDestination { .. }
         | Edit::Sanitize
         | Edit::SetFieldProps { .. }
         | Edit::DeleteField { .. }
@@ -1506,6 +1536,16 @@ fn run_edit(doc: &mut pdfcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -> 
             pdfcraft_organize::move_bookmark(doc, from, to_parent, *index)?;
         }
         Edit::SetBookmarkPage { path, page } => pdfcraft_organize::set_bookmark_page(doc, path, *page)?,
+        Edit::SetBookmarkAction { path, action } => pdfcraft_organize::set_bookmark_action(doc, path, action)?,
+        Edit::SetDestination { name, view } => {
+            pdfcraft_model::dests::set(doc, name, view)?;
+        }
+        Edit::RenameDestination { from, to } => {
+            pdfcraft_model::dests::rename(doc, from, to)?;
+        }
+        Edit::DeleteDestination { name } => {
+            pdfcraft_model::dests::delete(doc, name)?;
+        }
         Edit::NumberPages { from, to, style, prefix, first } => pdfcraft_organize::number_pages(doc, *from, *to, *style, prefix, *first)?,
         Edit::AddMeasurement(m) => {
             measure::add(doc, m, &cx.meta())?;
@@ -1899,6 +1939,8 @@ pub enum EditError {
     Organize(#[from] pdfcraft_organize::OrganizeError),
     #[error("{0}")]
     Bookmark(#[from] pdfcraft_organize::OutlineError),
+    #[error("{0}")]
+    Destination(#[from] pdfcraft_model::dests::DestError),
     #[error("{0}")]
     Comment(#[from] pdfcraft_annot::AnnotError),
     #[error(transparent)]
@@ -2905,6 +2947,40 @@ impl Session {
             }
         }
         out
+    }
+
+    /// Named destinations, each with how many links and bookmarks go to it.
+    pub fn destinations(&self, id: DocId) -> Result<Vec<(NamedDest, usize)>, EditError> {
+        let cos = self.cos(id)?;
+        let all = pdfcraft_model::dests::list(cos);
+        let refs = |name: &str| pdfcraft_model::dests::references(cos, name);
+        Ok(all
+            .into_iter()
+            .map(|d| {
+                let n = refs(&d.name);
+                (d, n)
+            })
+            .collect())
+    }
+
+    /// The named destination `name`, if it exists.
+    pub fn destination(&self, id: DocId, name: &str) -> Result<Option<NamedDest>, EditError> {
+        Ok(pdfcraft_model::dests::lookup(self.cos(id)?, name))
+    }
+
+    /// How many links and bookmarks go to the named destination `name`.
+    pub fn destination_references(&self, id: DocId, name: &str) -> Result<usize, EditError> {
+        Ok(pdfcraft_model::dests::references(self.cos(id)?, name))
+    }
+
+    /// Every bookmark's path and action (Bookmark Properties ▸ Actions).
+    pub fn bookmark_actions(&self, id: DocId) -> Result<Vec<(Vec<usize>, BookmarkAction)>, EditError> {
+        Ok(pdfcraft_organize::bookmark_actions(self.cos(id)?))
+    }
+
+    /// The page a link goes to (named destinations resolved), if any.
+    pub fn link_target_page(&self, id: DocId, action: &LinkAction) -> Option<usize> {
+        action.page(self.cos(id).ok()?)
     }
 
     /// Top-level bookmarks as split points: (first page of each part, its bookmark's title).
