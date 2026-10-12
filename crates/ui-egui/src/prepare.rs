@@ -703,15 +703,37 @@ pub struct ActionDraft {
     pub kind: usize,
     /// The script, URL, field names (comma-separated), menu item or page number.
     pub text: String,
+    /// The listed action being edited (its index), which Save replaces; `None`: Add appends.
+    pub editing: Option<usize>,
+    /// Why the last Add or Save was refused.
+    pub error: Option<String>,
 }
 
 impl Default for ActionDraft {
     fn default() -> Self {
-        ActionDraft { trigger: pdfcraft_engine::FieldTrigger::MouseUp, kind: 0, text: String::new() }
+        ActionDraft { trigger: pdfcraft_engine::FieldTrigger::MouseUp, kind: 0, text: String::new(), editing: None, error: None }
     }
 }
 
 impl ActionDraft {
+    /// A draft showing `action` on `trigger` for editing (`None`: an action the tab can only
+    /// keep or delete).
+    pub fn of(trigger: pdfcraft_engine::FieldTrigger, action: &pdfcraft_engine::FieldAction, index: usize) -> Option<ActionDraft> {
+        use pdfcraft_engine::FieldAction as A;
+        let (kind, text) = match action {
+            A::JavaScript(s) => (0, s.clone()),
+            A::Uri(u) => (1, u.clone()),
+            A::Reset(f) => (2, f.join(", ")),
+            A::Named(n) => (3, n.clone()),
+            A::GoTo(p) => (4, p.saturating_add(1).to_string()),
+            A::ShowHide { fields, hide: false } => (5, fields.join(", ")),
+            A::ShowHide { fields, hide: true } => (6, fields.join(", ")),
+            A::Submit(u) => (7, u.clone()),
+            A::Other(_) => return None,
+        };
+        Some(ActionDraft { trigger, kind, text, editing: Some(index), error: None })
+    }
+
     pub fn action(&self) -> Result<pdfcraft_engine::FieldAction, String> {
         use pdfcraft_engine::FieldAction as A;
         let t = self.text.trim();
@@ -720,7 +742,9 @@ impl ActionDraft {
             0 => A::JavaScript(self.text.clone()),
             1 if !t.is_empty() => A::Uri(t.to_string()),
             2 => A::Reset(names()),
-            3 => A::Named(if t.is_empty() { "Print".into() } else { t.to_string() }),
+            3 if t.is_empty() => A::Named("Print".into()),
+            3 if pdfcraft_engine::FORM_MENU_ITEMS.contains(&t) => A::Named(t.to_string()),
+            3 => return Err("Choose Print, NextPage, PrevPage, FirstPage or LastPage".into()),
             4 => A::GoTo(t.parse::<usize>().ok().filter(|p| *p >= 1).ok_or("Enter a page number")? - 1),
             5 if !t.is_empty() => A::ShowHide { fields: names(), hide: false },
             6 if !t.is_empty() => A::ShowHide { fields: names(), hide: true },
@@ -1463,20 +1487,42 @@ fn actions_tab(ui: &mut egui::Ui, d: &mut FieldDraft, t: &crate::theme::Tokens) 
         }
         ui.end_row();
     });
-    let mut error = None;
-    if ui.button(tl!("Add")).clicked() {
+    let editing = d.new_action.editing.filter(|i| *i < d.actions.len());
+    let (add, cancel) = ui
+        .horizontal(|ui| {
+            let add = ui.button(if editing.is_some() { tl!("Save") } else { tl!("Add") }).clicked();
+            let cancel = editing.is_some() && ui.button(tl!("Cancel")).clicked();
+            (add, cancel)
+        })
+        .inner;
+    if cancel {
+        d.new_action = ActionDraft::default();
+    } else if add {
         match d.new_action.action() {
             Ok(act) => {
                 let tr = d.new_action.trigger;
-                d.actions.retain(|(x, _)| *x != tr);
-                d.actions.push((tr, act));
+                // A trigger's actions run in the order listed: a new one goes after the others,
+                // an edited one keeps its place (or goes last under its new trigger).
+                match editing {
+                    Some(i) if d.actions.get(i).is_some_and(|(x, _)| *x == tr) => {
+                        if let Some(slot) = d.actions.get_mut(i) {
+                            *slot = (tr, act);
+                        }
+                    }
+                    Some(i) => {
+                        d.actions.remove(i);
+                        d.actions.push((tr, act));
+                    }
+                    None => d.actions.push((tr, act)),
+                }
+                // Stable: keeps each trigger's order.
                 d.actions.sort_by_key(|(x, _)| T::ALL.iter().position(|y| y == x));
-                d.new_action.text.clear();
+                d.new_action = ActionDraft { trigger: tr, kind: d.new_action.kind, ..ActionDraft::default() };
             }
-            Err(e) => error = Some(e),
+            Err(e) => d.new_action.error = Some(e),
         }
     }
-    if let Some(e) = error {
+    if let Some(e) = &d.new_action.error {
         ui.label(egui::RichText::new(e).small().color(t.text_muted));
     }
     ui.add_space(8.0);
@@ -1486,20 +1532,53 @@ fn actions_tab(ui: &mut egui::Ui, d: &mut FieldDraft, t: &crate::theme::Tokens) 
         if d.actions.is_empty() {
             ui.label(egui::RichText::new(tl!("No actions")).color(t.text_muted));
         }
-        let mut remove = None;
+        enum Op {
+            Remove(usize),
+            Edit(usize),
+            Swap(usize),
+        }
+        let mut op = None;
+        let n = d.actions.len();
         for (i, (tr, act)) in d.actions.iter().enumerate() {
+            // Reordering moves an action within its trigger's list.
+            let up = i > 0 && d.actions.get(i - 1).is_some_and(|(x, _)| x == tr);
+            let down = i + 1 < n && d.actions.get(i + 1).is_some_and(|(x, _)| x == tr);
             ui.horizontal(|ui| {
                 ui.label(egui::RichText::new(tl!(tr.label())).strong());
                 ui.label(act.describe());
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.push_id(i, |ui| ui.button(tl!("Delete"))).inner.clicked() {
-                        remove = Some(i);
-                    }
+                    ui.push_id(i, |ui| {
+                        if ui.button(tl!("Delete")).clicked() {
+                            op = Some(Op::Remove(i));
+                        }
+                        if !matches!(act, pdfcraft_engine::FieldAction::Other(_)) && ui.button(tl!("Edit")).clicked() {
+                            op = Some(Op::Edit(i));
+                        }
+                        if ui.add_enabled(down, egui::Button::new(tl!("Move down"))).clicked() {
+                            op = Some(Op::Swap(i));
+                        }
+                        if ui.add_enabled(up, egui::Button::new(tl!("Move up"))).clicked() {
+                            op = Some(Op::Swap(i - 1));
+                        }
+                    });
                 });
             });
         }
-        if let Some(i) = remove {
-            d.actions.remove(i);
+        match op {
+            Some(Op::Remove(i)) => {
+                d.actions.remove(i);
+                d.new_action.editing = None;
+            }
+            Some(Op::Edit(i)) => {
+                if let Some(draft) = d.actions.get(i).and_then(|(tr, act)| ActionDraft::of(*tr, act, i)) {
+                    d.new_action = draft;
+                }
+            }
+            Some(Op::Swap(i)) if i + 1 < d.actions.len() => {
+                d.actions.swap(i, i + 1);
+                d.new_action.editing = None;
+            }
+            _ => {}
         }
     });
 }

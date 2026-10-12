@@ -475,3 +475,56 @@ fn actions_tab_adds_and_removes_actions() {
         ]
     );
 }
+
+#[test]
+fn actions_tab_chains_reorders_and_edits_actions() {
+    use pdfcraft_engine::{FieldAction, FieldTrigger};
+    let mut h = harness();
+    h.state_mut().execute("form.prepare");
+    h.run_steps(2);
+    h.state_mut().open_field_props("city", 0);
+    h.run_steps(2);
+    h.get_by_label("Actions").click();
+    h.run_steps(2);
+    let add = |h: &mut Harness<'static, PdfCraftApp>, trigger: FieldTrigger, kind: usize, text: &str| {
+        {
+            let d = h.state_mut().field_props.as_mut().unwrap();
+            d.new_action.trigger = trigger;
+            d.new_action.kind = kind;
+            d.new_action.text = text.into();
+        }
+        h.run_steps(3);
+        h.get_by_label("Add").click();
+        h.run_steps(2);
+    };
+    add(&mut h, FieldTrigger::MouseUp, 0, "app.alert('x')");
+    add(&mut h, FieldTrigger::OnBlur, 1, "https://example.org");
+    // A second Mouse Up action runs after the first instead of replacing it.
+    add(&mut h, FieldTrigger::MouseUp, 3, "NextPage");
+    // Menu items off the safe list are refused.
+    add(&mut h, FieldTrigger::MouseUp, 3, "Quit");
+    h.get_by_label("Choose Print, NextPage, PrevPage, FirstPage or LastPage");
+    assert_eq!(h.state().field_props.as_ref().unwrap().actions.len(), 3);
+    // Rows: Mouse Up script, Mouse Up menu item, On Blur link; only the menu item can move up.
+    h.get_all_by_label("Move up").nth(1).unwrap().click();
+    h.run_steps(2);
+    // Edit the link (the last Edit button; the menu bar's Edit comes first) and save it.
+    h.get_all_by_label("Edit").last().unwrap().click();
+    h.run_steps(2);
+    assert_eq!(h.state().field_props.as_ref().unwrap().new_action.editing, Some(2));
+    h.state_mut().field_props.as_mut().unwrap().new_action.text = "https://example.org/2".into();
+    h.run_steps(3);
+    h.get_by_label("Save").click();
+    h.run_steps(2);
+    h.get_by_label("OK").click();
+    h.run_steps(3);
+    let s = h.state();
+    assert_eq!(
+        s.session.get(s.views[0].id).unwrap().field_actions("city"),
+        [
+            (FieldTrigger::MouseUp, FieldAction::Named("NextPage".into())),
+            (FieldTrigger::MouseUp, FieldAction::JavaScript("app.alert('x')".into())),
+            (FieldTrigger::OnBlur, FieldAction::Uri("https://example.org/2".into()))
+        ]
+    );
+}
