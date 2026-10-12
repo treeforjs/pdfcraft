@@ -361,7 +361,7 @@ pub fn tools() -> Vec<ToolDef> {
         t(
             "redact_mark",
             "Mark for redaction",
-            "Mark content for redaction (nothing is removed until redact_apply). One of: rect [x0, y0, x1, y1] (points from the top-left of the displayed page) with page; find (text, every match); pattern (phone, email, credit-card, ssn, date: every match, Acrobat's Search & Redact patterns); whole_pages: true. find, pattern and whole_pages work on pages (default all). overlay: text shown on the box once applied; fill: box colour (default black). Undoable.",
+            "Mark content for redaction (nothing is removed until redact_apply). One of: rect [x0, y0, x1, y1] (points from the top-left of the displayed page) with page; find (text, every match); pattern (one Search & Redact pattern, every match; see redact_patterns); locale (every pattern of a locale set, e.g. en-GB); whole_pages: true. find, pattern, locale and whole_pages work on pages (default all). Overlay text shown on the box once applied: overlay (custom text), or codes from code_set (redaction codes such as us-foia (b)(6); see redact_codes; codes without code_set are a custom set). overlay_font (helvetica, times, courier), overlay_size (points; 0 = auto-size to fit, the default), overlay_color (default red), overlay_align (left, center, right), overlay_repeat (fill the box). Stored as /OverlayText, /DA, /Q and /Repeat. fill: box colour (default black). Undoable.",
         )
         .with(schema(
             json!({
@@ -369,10 +369,18 @@ pub fn tools() -> Vec<ToolDef> {
                 "page": { "type": "integer", "minimum": 1 },
                 "rect": { "type": "array", "items": { "type": "number" }, "minItems": 4, "maxItems": 4 },
                 "find": { "type": "string", "minLength": 1 },
-                "pattern": { "type": "string", "enum": ["phone", "email", "credit-card", "ssn", "date"] },
+                "pattern": { "type": "string", "enum": ["phone", "email", "credit-card", "ssn", "date", "us-zip", "uk-postcode", "uk-nino", "ca-postal", "ca-sin", "fr-nir", "jp-postal", "jp-my-number", "iban"] },
+                "locale": { "type": "string", "enum": ["intl", "en-US", "en-GB", "en-CA", "fr-FR", "ja-JP"] },
                 "whole_pages": { "type": "boolean" },
                 "pages": pages("to search or mark (default: all)"),
-                "overlay": { "type": "string" },
+                "overlay": { "type": "string", "maxLength": 512 },
+                "code_set": { "type": "string", "enum": ["us-foia", "us-privacy-act"] },
+                "codes": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+                "overlay_font": { "type": "string", "enum": ["helvetica", "times", "courier"] },
+                "overlay_size": { "type": "number", "minimum": 0, "maximum": 144 },
+                "overlay_color": { "type": "string", "description": "#RRGGBB or a colour name." },
+                "overlay_align": { "type": "string", "enum": ["left", "center", "right"] },
+                "overlay_repeat": { "type": "boolean" },
                 "fill": { "type": "string", "description": "#RRGGBB or a colour name." },
                 "author": { "type": "string" },
             }),
@@ -385,6 +393,20 @@ pub fn tools() -> Vec<ToolDef> {
         )
         .destructive()
         .with(schema(json!({ "doc": doc(), "pages": pages("whose marks to apply (default: all)") }), &["doc"])),
+        t(
+            "redact_codes",
+            "List redaction codes",
+            "The built-in redaction code sets (us-foia: U.S. FOIA exemptions, 5 U.S.C. 552(b); us-privacy-act: U.S. Privacy Act exemptions, 5 U.S.C. 552a) with each code and a short description. Pass code_set and codes to redact_mark to show codes on the boxes.",
+        )
+        .ro()
+        .with(schema(json!({ "code_set": { "type": "string", "enum": ["us-foia", "us-privacy-act"] } }), &[])),
+        t(
+            "redact_patterns",
+            "List Search & Redact patterns",
+            "The Search & Redact patterns by locale set (intl, en-US, en-GB, en-CA, fr-FR, ja-JP) with their ids and labels. A locale set passed to redact_mark also includes the intl patterns.",
+        )
+        .ro()
+        .with(schema(json!({ "locale": { "type": "string", "enum": ["intl", "en-US", "en-GB", "en-CA", "fr-FR", "ja-JP"] } }), &[])),
         t("redact_clear", "Remove redaction marks", "Remove every redaction mark without applying it. Undoable.")
             .destructive()
             .with(schema(json!({ "doc": doc() }), &["doc"])),

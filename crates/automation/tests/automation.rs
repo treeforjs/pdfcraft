@@ -2285,6 +2285,59 @@ fn redacting_through_tools() {
     assert!(matches!(a.call("redact_mark", &json!({ "doc": doc })), Err(ToolError::InvalidArgs(_))));
 }
 
+/// Redaction codes and styled overlay text are burned into the page; locale pattern sets mark
+/// their formats. All values are synthetic.
+#[test]
+fn redaction_codes_overlay_styles_and_locale_patterns_through_tools() {
+    let dir = workdir("redact-codes");
+    std::fs::write(dir.join("memo.txt"), "Informant Zebulon Quarrytree met us\nOffice SW1A 1AA, NI AB 12 34 56 C\nOpen paragraph").unwrap();
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_create", json!({ "from": "text", "path": "memo.txt" }))["doc"].as_u64().unwrap();
+    let sets = ok(&mut a, "redact_codes", json!({}));
+    let foia = sets["code_sets"].as_array().unwrap().iter().find(|s| s["id"] == "us-foia").unwrap().clone();
+    assert_eq!(foia["codes"].as_array().unwrap().len(), 14);
+    assert!(foia["codes"].as_array().unwrap().iter().any(|c| c["code"] == "(b)(7)(C)"));
+    let gb = ok(&mut a, "redact_patterns", json!({ "locale": "en-GB" }));
+    assert_eq!(gb["locales"][0]["patterns"].as_array().unwrap().len(), 2, "{gb}");
+
+    let r = ok(
+        &mut a,
+        "redact_mark",
+        json!({ "doc": doc, "find": "Zebulon Quarrytree", "code_set": "us-foia", "codes": ["(b)(6)", "(b)(7)(c)"],
+                "overlay_font": "courier", "overlay_size": 9, "overlay_color": "#0000FF", "overlay_align": "left", "fill": "black" }),
+    );
+    assert_eq!(r["overlay"], "(b)(6), (b)(7)(C)", "codes are written in their set's form");
+    let r = ok(&mut a, "redact_mark", json!({ "doc": doc, "locale": "en-GB", "codes": ["PRIV"], "overlay_color": "white" }));
+    assert_eq!(r["marked"].as_u64(), Some(2), "the postcode and the NI number: {r}");
+    // Rejected: unknown codes, both custom text and codes, a set without codes, unknown locales,
+    // sizes out of range. Nothing is marked by a rejected call.
+    for bad in [
+        json!({ "doc": doc, "find": "Open", "code_set": "us-foia", "codes": ["(k)(2)"] }),
+        json!({ "doc": doc, "find": "Open", "overlay": "X", "codes": ["(b)(6)"] }),
+        json!({ "doc": doc, "find": "Open", "code_set": "us-foia" }),
+        json!({ "doc": doc, "find": "Open", "code_set": "nope", "codes": ["1"] }),
+        json!({ "doc": doc, "locale": "xx-YY" }),
+        json!({ "doc": doc, "find": "Open", "overlay": "X", "overlay_size": 1 }),
+        json!({ "doc": doc, "find": "Open", "overlay": "X", "overlay_align": "middle" }),
+        json!({ "doc": doc, "pattern": "uk-postcode", "locale": "en-GB" }),
+    ] {
+        assert!(matches!(a.call("redact_mark", &bad), Err(ToolError::InvalidArgs(_))), "{bad}");
+    }
+    assert!(matches!(a.call("redact_codes", &json!({ "code_set": "nope" })), Err(ToolError::InvalidArgs(_))));
+
+    let r = ok(&mut a, "redact_apply", json!({ "doc": doc }));
+    assert_eq!((r["applied"].as_u64(), r["marks_pending"].as_u64()), (Some(3), Some(0)));
+    let text = page_text(&mut a, doc)[0].clone();
+    for gone in ["Zebulon", "Quarrytree", "SW1A", "1AA", "AB 12", "56 C"] {
+        assert!(!text.contains(gone), "{gone:?} remains: {text}");
+    }
+    assert!(text.contains("(b)(6), (b)(7)(C)") && text.contains("PRIV"), "overlay text is drawn into the page: {text}");
+    assert!(text.contains("Informant") && text.contains("Open paragraph"), "{text}");
+    ok(&mut a, "doc_save", json!({ "doc": doc, "path": "memo.pdf" }));
+    let bytes = std::fs::read(dir.join("memo.pdf")).unwrap();
+    assert!(!bytes.windows(10).any(|w| w == b"Quarrytree"), "the saved file has no trace of the name");
+}
+
 #[test]
 fn removing_hidden_information_through_tools() {
     let dir = workdir("hidden");

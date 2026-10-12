@@ -1,7 +1,10 @@
 //! Redaction tools: mark areas, text, patterns or whole pages for redaction, apply the marks
 //! (removing what they cover for good) or clear them.
 
-use pdfcraft_engine::{Edit, Hidden, NewAnnotation, RedactPattern, Shape, Style, find_pattern, rect_quad};
+use pdfcraft_engine::{
+    Edit, Hidden, NewAnnotation, OverlayFont, OverlayLook, REDACT_PATTERN_LOCALES, REDACT_PATTERNS, REDACTION_CODE_SETS, RedactPattern,
+    RedactionCodeSet, Shape, Style, find_pattern, rect_quad, redact_patterns_for, redaction_codes,
+};
 use serde_json::{Value, json};
 
 use crate::comments::{DEFAULT_AUTHOR, parse_color};
@@ -15,7 +18,8 @@ impl Automation {
             Some(_) => self.pages(a, "pages")?,
             None => (0..n).collect(),
         };
-        let overlay = a.opt_str("overlay")?.unwrap_or("").to_string();
+        let overlay = overlay_text(a)?;
+        let look = overlay_look(a)?;
         let author = a.opt_str("author")?.unwrap_or(DEFAULT_AUTHOR).to_string();
         let mut style = Style::default_for(&Shape::Redact { quads: Vec::new(), overlay: String::new(), look: Default::default() });
         if let Some(c) = a.opt_str("fill")? {
@@ -23,9 +27,15 @@ impl Automation {
         }
         // (page, quads) per mark.
         let mut marks: Vec<(usize, Vec<[f64; 8]>)> = Vec::new();
-        let chosen = [a.get("rect").is_some(), a.get("find").is_some(), a.get("pattern").is_some(), a.opt_bool("whole_pages")?.unwrap_or(false)];
+        let chosen = [
+            a.get("rect").is_some(),
+            a.get("find").is_some(),
+            a.get("pattern").is_some(),
+            a.get("locale").is_some(),
+            a.opt_bool("whole_pages")?.unwrap_or(false),
+        ];
         if chosen.iter().filter(|c| **c).count() != 1 {
-            return Err(ToolError::InvalidArgs("pass exactly one of rect (with page), find, pattern or whole_pages: true".into()));
+            return Err(ToolError::InvalidArgs("pass exactly one of rect (with page), find, pattern, locale or whole_pages: true".into()));
         }
         if a.get("rect").is_some() {
             let page = self.page(a)?;
@@ -42,17 +52,30 @@ impl Automation {
             }
         } else {
             let find = a.opt_str("find")?.map(str::to_owned);
-            let pattern = match a.opt_str("pattern")? {
-                Some(p) => Some(RedactPattern::from_id(p).ok_or_else(|| ToolError::InvalidArgs(format!("unknown pattern {p:?}")))?),
-                None => None,
-            };
+            let mut patterns: Vec<RedactPattern> = Vec::new();
+            if let Some(p) = a.opt_str("pattern")? {
+                let ids: Vec<&str> = REDACT_PATTERNS.iter().map(|p| p.id()).collect();
+                patterns.push(
+                    RedactPattern::from_id(p).ok_or_else(|| ToolError::InvalidArgs(format!("unknown pattern {p:?} (one of {})", ids.join(", "))))?,
+                );
+            }
+            if let Some(l) = a.opt_str("locale")? {
+                let ids: Vec<&str> = REDACT_PATTERN_LOCALES.iter().map(|l| l.0).collect();
+                patterns =
+                    redact_patterns_for(l).ok_or_else(|| ToolError::InvalidArgs(format!("unknown locale {l:?} (one of {})", ids.join(", "))))?;
+            }
             let texts = self.page_texts(id, &pages)?;
             let info = self.doc(a)?.info.clone();
             for (&p, text) in pages.iter().zip(&texts) {
-                let hits = match (&find, pattern) {
-                    (Some(f), _) => text.find(f),
-                    (None, Some(pat)) => text.find_with(|chars| find_pattern(pat, chars)),
-                    _ => Vec::new(),
+                let hits = match &find {
+                    Some(f) => text.find(f),
+                    // Every pattern's matches, each place once (patterns can overlap).
+                    None => text.find_with(|chars| {
+                        let mut all: Vec<std::ops::Range<usize>> = patterns.iter().flat_map(|pat| find_pattern(*pat, chars)).collect();
+                        all.sort_by_key(|r| (r.start, r.end));
+                        all.dedup();
+                        all
+                    }),
                 };
                 for h in hits {
                     let quads: Vec<[f64; 8]> = text.line_rects(h).into_iter().map(|r| info.pages[p].view_rect_to_quad(r)).collect();
@@ -69,7 +92,7 @@ impl Automation {
         let edits: Vec<Edit> = marks
             .iter()
             .map(|(page, quads)| {
-                let shape = Shape::Redact { quads: quads.clone(), overlay: overlay.clone(), look: Default::default() };
+                let shape = Shape::Redact { quads: quads.clone(), overlay: overlay.clone(), look };
                 Edit::AddAnnotation(NewAnnotation { page: *page, shape, style: style.clone(), contents: String::new(), author: author.clone() })
             })
             .collect();
@@ -81,7 +104,43 @@ impl Automation {
         out["marked"] = json!(count);
         out["pages_marked"] = json!(marks.iter().map(|m| m.0 + 1).collect::<std::collections::BTreeSet<_>>());
         out["marks_pending"] = json!(self.doc(a)?.redaction_marks());
+        if !overlay.is_empty() {
+            out["overlay"] = json!(overlay);
+        }
         Ok(out)
+    }
+
+    /// The redaction code sets (Redaction Properties ▸ Redaction Code).
+    pub(crate) fn redact_codes(&self, a: &Args) -> Result<Value> {
+        let sets: Vec<&RedactionCodeSet> = match a.opt_str("code_set")? {
+            Some(id) => vec![code_set(id)?],
+            None => REDACTION_CODE_SETS.iter().collect(),
+        };
+        let sets: Vec<Value> = sets
+            .into_iter()
+            .map(|s| json!({ "id": s.id, "name": s.name, "codes": s.codes.iter().map(|c| json!({ "code": c.code, "description": c.description })).collect::<Vec<_>>() }))
+            .collect();
+        Ok(json!({ "code_sets": sets }))
+    }
+
+    /// The Search & Redact patterns, by locale set.
+    pub(crate) fn redact_patterns(&self, a: &Args) -> Result<Value> {
+        let locales: Vec<(&str, &str)> = match a.opt_str("locale")? {
+            Some(l) => {
+                let found = REDACT_PATTERN_LOCALES.iter().find(|(id, _)| id.eq_ignore_ascii_case(l));
+                vec![*found.ok_or_else(|| ToolError::InvalidArgs(format!("unknown locale {l:?}")))?]
+            }
+            None => REDACT_PATTERN_LOCALES.to_vec(),
+        };
+        let out: Vec<Value> = locales
+            .into_iter()
+            .map(|(id, name)| {
+                let patterns: Vec<Value> =
+                    REDACT_PATTERNS.iter().filter(|p| p.locale() == id).map(|p| json!({ "id": p.id(), "label": p.label() })).collect();
+                json!({ "locale": id, "name": name, "patterns": patterns })
+            })
+            .collect();
+        Ok(json!({ "locales": out, "note": "a locale set also includes the intl patterns" }))
     }
 
     pub(crate) fn redact_apply(&mut self, a: &Args) -> Result<Value> {
@@ -135,4 +194,68 @@ impl Automation {
         out["removed"] = json!(before.saturating_sub(after));
         Ok(out)
     }
+}
+
+fn code_set(id: &str) -> Result<&'static RedactionCodeSet> {
+    RedactionCodeSet::from_id(id).ok_or_else(|| {
+        let ids: Vec<&str> = REDACTION_CODE_SETS.iter().map(|s| s.id).collect();
+        ToolError::InvalidArgs(format!("unknown code_set {id:?} (one of {}; see redact_codes)", ids.join(", ")))
+    })
+}
+
+/// The overlay text of new marks: `overlay` (custom text), or `codes` of `code_set` (a built-in
+/// set; without one the codes are a custom set).
+fn overlay_text(a: &Args) -> Result<String> {
+    let text = a.opt_str("overlay")?;
+    let set = a.opt_str("code_set")?.map(code_set).transpose()?;
+    let codes = if a.get("codes").is_some() { Some(a.strs("codes")?) } else { None };
+    match (text, set, codes) {
+        (Some(_), _, Some(_)) | (Some(_), Some(_), _) => {
+            Err(ToolError::InvalidArgs("pass overlay (custom text) or codes (with code_set), not both".into()))
+        }
+        (None, Some(_), None) => Err(ToolError::InvalidArgs("code_set needs codes: the codes to show (see redact_codes)".into())),
+        (Some(t), None, None) => {
+            if t.chars().count() > redaction_codes::MAX_OVERLAY_CHARS {
+                return Err(ToolError::InvalidArgs(format!("overlay is longer than {} characters", redaction_codes::MAX_OVERLAY_CHARS)));
+            }
+            Ok(t.to_string())
+        }
+        (None, Some(set), Some(codes)) => redaction_codes::overlay_text(set, &codes).map_err(|e| ToolError::InvalidArgs(e.to_string())),
+        (None, None, Some(codes)) => redaction_codes::custom_overlay_text(&codes).map_err(|e| ToolError::InvalidArgs(e.to_string())),
+        (None, None, None) => Ok(String::new()),
+    }
+}
+
+/// How the overlay text is drawn (`/DA`, `/Q`, `/Repeat`).
+fn overlay_look(a: &Args) -> Result<OverlayLook> {
+    let mut look = OverlayLook::default();
+    if let Some(f) = a.opt_str("overlay_font")? {
+        look.font = match f.to_ascii_lowercase().as_str() {
+            "helvetica" => OverlayFont::Helvetica,
+            "times" | "times-roman" => OverlayFont::Times,
+            "courier" => OverlayFont::Courier,
+            _ => return Err(ToolError::InvalidArgs(format!("unknown overlay_font {f:?} (helvetica, times or courier)"))),
+        };
+    }
+    if let Some(size) = a.opt_num("overlay_size")? {
+        if size != 0.0 && !(2.0..=144.0).contains(&size) {
+            return Err(ToolError::InvalidArgs("overlay_size must be 0 (auto-size to fit) or 2 to 144 points".into()));
+        }
+        look.size = size;
+    }
+    if let Some(c) = a.opt_str("overlay_color")? {
+        look.color = parse_color(c)?;
+    }
+    if let Some(al) = a.opt_str("overlay_align")? {
+        look.align = match al {
+            "left" => 0,
+            "center" | "centre" => 1,
+            "right" => 2,
+            _ => return Err(ToolError::InvalidArgs(format!("unknown overlay_align {al:?} (left, center or right)"))),
+        };
+    }
+    if let Some(r) = a.opt_bool("overlay_repeat")? {
+        look.repeat = r;
+    }
+    Ok(look)
 }

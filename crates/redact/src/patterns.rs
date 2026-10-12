@@ -1,8 +1,17 @@
 //! Search & Redact patterns (Acrobat's Find Text ▸ Patterns): phone numbers, email addresses,
-//! credit card numbers, US Social Security numbers and dates. Each matcher works on a page's
-//! text as characters and returns character ranges; callers map them to glyphs and areas.
+//! credit card numbers, US Social Security numbers and dates, plus locale-specific sets (see
+//! [`LOCALES`]): US ZIP codes, UK postcodes and National Insurance numbers, Canadian postal codes
+//! and Social Insurance numbers, French social security numbers (NIR), Japanese postal codes and
+//! Individual Numbers, and IBANs. Each matcher works on a page's text as characters and returns
+//! character ranges; callers map them to glyphs and areas.
+//!
+//! Identifiers with a check digit (credit cards, SIN, NIR, My Number, IBAN) only match when it is
+//! valid. Formats come from the issuing bodies' public descriptions; test values are synthetic.
 
 use std::ops::Range;
+
+#[path = "patterns_locale.rs"]
+mod locale;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Pattern {
@@ -11,9 +20,49 @@ pub enum Pattern {
     CreditCard,
     Ssn,
     Date,
+    UsZip,
+    UkPostcode,
+    UkNino,
+    CaPostal,
+    CaSin,
+    FrNir,
+    JpPostal,
+    JpMyNumber,
+    Iban,
 }
 
-pub const PATTERNS: [Pattern; 5] = [Pattern::Phone, Pattern::Email, Pattern::CreditCard, Pattern::Ssn, Pattern::Date];
+pub const PATTERNS: [Pattern; 14] = [
+    Pattern::Phone,
+    Pattern::Email,
+    Pattern::CreditCard,
+    Pattern::Ssn,
+    Pattern::Date,
+    Pattern::UsZip,
+    Pattern::UkPostcode,
+    Pattern::UkNino,
+    Pattern::CaPostal,
+    Pattern::CaSin,
+    Pattern::FrNir,
+    Pattern::JpPostal,
+    Pattern::JpMyNumber,
+    Pattern::Iban,
+];
+
+/// Pattern sets by locale: (id, name). `intl` patterns apply everywhere and belong to every set.
+pub const LOCALES: [(&str, &str); 6] = [
+    ("intl", "International"),
+    ("en-US", "United States"),
+    ("en-GB", "United Kingdom"),
+    ("en-CA", "Canada"),
+    ("fr-FR", "France"),
+    ("ja-JP", "Japan"),
+];
+
+/// The patterns of a locale set (the international ones first); `None` for an unknown locale.
+pub fn patterns_for(locale: &str) -> Option<Vec<Pattern>> {
+    let (id, _) = LOCALES.iter().find(|(id, _)| id.eq_ignore_ascii_case(locale))?;
+    Some(PATTERNS.into_iter().filter(|p| p.locale() == "intl" || p.locale() == *id).collect())
+}
 
 impl Pattern {
     pub fn label(self) -> &'static str {
@@ -23,6 +72,27 @@ impl Pattern {
             Pattern::CreditCard => "Credit Cards",
             Pattern::Ssn => "Social Security Numbers",
             Pattern::Date => "Dates",
+            Pattern::UsZip => "US ZIP Codes",
+            Pattern::UkPostcode => "UK Postcodes",
+            Pattern::UkNino => "UK National Insurance Numbers",
+            Pattern::CaPostal => "Canadian Postal Codes",
+            Pattern::CaSin => "Canadian Social Insurance Numbers",
+            Pattern::FrNir => "French Social Security Numbers (NIR)",
+            Pattern::JpPostal => "Japanese Postal Codes",
+            Pattern::JpMyNumber => "Japanese Individual Numbers (My Number)",
+            Pattern::Iban => "Bank Account Numbers (IBAN)",
+        }
+    }
+
+    /// The locale set the pattern belongs to (an id of [`LOCALES`]).
+    pub fn locale(self) -> &'static str {
+        match self {
+            Pattern::Phone | Pattern::Email | Pattern::CreditCard | Pattern::Date | Pattern::Iban => "intl",
+            Pattern::Ssn | Pattern::UsZip => "en-US",
+            Pattern::UkPostcode | Pattern::UkNino => "en-GB",
+            Pattern::CaPostal | Pattern::CaSin => "en-CA",
+            Pattern::FrNir => "fr-FR",
+            Pattern::JpPostal | Pattern::JpMyNumber => "ja-JP",
         }
     }
 
@@ -33,6 +103,15 @@ impl Pattern {
             Pattern::CreditCard => "credit-card",
             Pattern::Ssn => "ssn",
             Pattern::Date => "date",
+            Pattern::UsZip => "us-zip",
+            Pattern::UkPostcode => "uk-postcode",
+            Pattern::UkNino => "uk-nino",
+            Pattern::CaPostal => "ca-postal",
+            Pattern::CaSin => "ca-sin",
+            Pattern::FrNir => "fr-nir",
+            Pattern::JpPostal => "jp-postal",
+            Pattern::JpMyNumber => "jp-my-number",
+            Pattern::Iban => "iban",
         }
     }
 
@@ -122,7 +201,7 @@ fn email(s: &[char], i: usize) -> Option<usize> {
     (domain.contains('.') && tld.len() >= 2 && tld.chars().all(|c| c.is_ascii_alphabetic())).then_some(k - i)
 }
 
-fn luhn(digits: &[u32]) -> bool {
+pub(crate) fn luhn(digits: &[u32]) -> bool {
     let sum: u32 = digits
         .iter()
         .rev()
@@ -242,6 +321,15 @@ pub fn find(pattern: Pattern, text: &[char]) -> Vec<Range<usize>> {
         Pattern::CreditCard => credit_card,
         Pattern::Ssn => ssn,
         Pattern::Date => date,
+        Pattern::UsZip => locale::us_zip,
+        Pattern::UkPostcode => locale::uk_postcode,
+        Pattern::UkNino => locale::uk_nino,
+        Pattern::CaPostal => locale::ca_postal,
+        Pattern::CaSin => locale::ca_sin,
+        Pattern::FrNir => locale::fr_nir,
+        Pattern::JpPostal => locale::jp_postal,
+        Pattern::JpMyNumber => locale::jp_my_number,
+        Pattern::Iban => locale::iban,
     };
     let mut out = Vec::new();
     let mut i = 0;
@@ -317,6 +405,75 @@ mod tests {
         assert_eq!(
             found(Pattern::Date, "Due 10/01/2026, 2026-10-01, 1.10.26, March 5, 2024, Jan. 7 2025 and 5 June 2023; not 10/2026 or Mayday 12"),
             ["10/01/2026", "2026-10-01", "1.10.26", "March 5, 2024", "Jan. 7 2025", "5 June 2023"]
+        );
+    }
+
+    // Locale patterns. Every value below is synthetic (made up for these tests, with valid check
+    // digits where the format has them) or a format's published specimen; none identifies anyone.
+
+    #[test]
+    fn locale_sets_group_the_patterns() {
+        for p in PATTERNS {
+            assert_eq!(Pattern::from_id(p.id()), Some(p));
+            assert!(LOCALES.iter().any(|(id, _)| *id == p.locale()), "{p:?}");
+        }
+        let uk = patterns_for("en-gb").unwrap();
+        assert!(uk.contains(&Pattern::UkPostcode) && uk.contains(&Pattern::Email) && !uk.contains(&Pattern::Ssn));
+        assert_eq!(patterns_for("intl").unwrap().len(), 5);
+        assert_eq!(patterns_for("xx-YY"), None);
+    }
+
+    #[test]
+    fn us_zip_codes() {
+        assert_eq!(found(Pattern::UsZip, "Springfield, IL 62704 or 62704-1234; order 12345, ZZ 54321, 123456, 62704-12"), ["62704", "62704-1234"]);
+    }
+
+    #[test]
+    fn uk_postcodes_and_national_insurance_numbers() {
+        assert_eq!(
+            found(Pattern::UkPostcode, "SW1A 1AA, M1 1AE, CR2 6XH, DN55 1PT, W1A 0AX; not SW1A1AA, Q1 1AA, M1 1AI, ABCD 1AA"),
+            ["SW1A 1AA", "M1 1AE", "CR2 6XH", "DN55 1PT", "W1A 0AX"]
+        );
+        assert_eq!(
+            found(Pattern::UkNino, "NI AB 12 34 56 C, JK123456D; not QQ 12 34 56 C, GB 12 34 56 A, AB 12 34 56 E, AB 12 3456 C"),
+            ["AB 12 34 56 C", "JK123456D"]
+        );
+    }
+
+    #[test]
+    fn canadian_postal_codes_and_sins() {
+        assert_eq!(found(Pattern::CaPostal, "K1A 0B1, H0H0H0; not D1A 0B1, W1A 0B1, K1A 0B12"), ["K1A 0B1", "H0H0H0"]);
+        assert_eq!(
+            found(Pattern::CaSin, "SIN 130 692 544 or 130-692-544; bad checksum 130 692 545, mixed 130-692 544, starts with 0: 030 692 544"),
+            ["130 692 544", "130-692-544"]
+        );
+    }
+
+    #[test]
+    fn french_social_security_numbers() {
+        assert_eq!(
+            found(
+                Pattern::FrNir,
+                "NIR 1 99 03 75 123 456 34, 2 90 05 2A 004 012 66, 199037512345634; bad key 1 99 03 75 123 456 35, month 13: 1 99 13 75 123 456 34"
+            ),
+            ["1 99 03 75 123 456 34", "2 90 05 2A 004 012 66", "199037512345634"]
+        );
+    }
+
+    #[test]
+    fn japanese_postal_codes_and_individual_numbers() {
+        assert_eq!(found(Pattern::JpPostal, "〒100-0001 and 530-0001; not 1000-0001, 100-00011 or 555-123-4567"), ["100-0001", "530-0001"]);
+        assert_eq!(
+            found(Pattern::JpMyNumber, "1234 5678 9018, 123456789018; bad check 1234 5678 9017, 13 digits 1234567890185"),
+            ["1234 5678 9018", "123456789018"]
+        );
+    }
+
+    #[test]
+    fn ibans_need_a_valid_checksum() {
+        assert_eq!(
+            found(Pattern::Iban, "Pay DE89 3704 0044 0532 0130 00 or GB82WEST12345698765432 NOW; bad GB82 WEST 1234 5698 7654 33, short DE89 3704"),
+            ["DE89 3704 0044 0532 0130 00", "GB82WEST12345698765432"]
         );
     }
 }
