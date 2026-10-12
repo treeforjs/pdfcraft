@@ -4,8 +4,7 @@
 //! y down. It is converted to PDF user space (crop box, `/Rotate`) here.
 
 use pdfcraft_engine::{
-    Edit, LineEnding, Markup, NOTE_SIZE, NewAnnotation, NoteIcon, ReviewState, Rgb, Shape, StampGroup, StampKind, Style, SummaryLayout,
-    SummarySort,
+    Edit, LineEnding, Markup, NOTE_SIZE, NewAnnotation, NoteIcon, ReviewState, Rgb, Shape, StampGroup, StampKind, Style, SummaryLayout, SummarySort,
 };
 use pdfcraft_render::{Annotation, PageInfo};
 use serde_json::{Value, json};

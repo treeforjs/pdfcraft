@@ -335,7 +335,12 @@ fn unicode_annotation_colours_are_ignored_without_panicking() {
 /// The comment dictionaries of page `page`.
 fn annot_dicts(doc: &Document, page: usize) -> Vec<Dict> {
     let p = pdfcraft_annot::page_refs(doc).unwrap()[page];
-    let list = doc.get(p).as_dict().and_then(|d| d.get(b"Annots").cloned()).map(|a| doc.resolve(&a).as_array().cloned().unwrap_or_default()).unwrap_or_default();
+    let list = doc
+        .get(p)
+        .as_dict()
+        .and_then(|d| d.get(b"Annots").cloned())
+        .map(|a| doc.resolve(&a).as_array().cloned().unwrap_or_default())
+        .unwrap_or_default();
     list.iter().filter_map(|a| doc.resolve(a).as_dict().cloned()).collect()
 }
 
