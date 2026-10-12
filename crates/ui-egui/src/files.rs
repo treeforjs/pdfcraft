@@ -620,7 +620,13 @@ impl PdfCraftApp {
         let Some(doc) = self.session.get(id) else { return };
         let stem = doc.name.trim_end_matches(".pdf").trim_end_matches(".PDF").to_string();
         let ext = format.extension();
-        let bytes = doc.export_office(format);
+        let bytes = match doc.export_office(format) {
+            Ok(bytes) => bytes,
+            Err(e) => {
+                self.notify_fmt("Export stopped: {e}", &[("e", &e)]);
+                return;
+            }
+        };
         #[cfg(not(target_arch = "wasm32"))]
         {
             let write = move |app: &mut Self, path: std::path::PathBuf| match crate::editing::write_atomically(&path.to_string_lossy(), &bytes) {

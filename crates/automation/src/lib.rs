@@ -328,6 +328,7 @@ impl Automation {
             "text_lines" => {
                 let page = self.page(&a)?;
                 let doc = self.doc(&a)?;
+                let copy = doc.allows_copying();
                 let info = &doc.info.pages[page];
                 let r = |x: f32| (x as f64 * 100.0).round() / 100.0;
                 let lines: Vec<Value> = doc
@@ -338,14 +339,14 @@ impl Automation {
                         let (u, v) = (info.user_to_view(l.rect[0] as f32, l.rect[1] as f32), info.user_to_view(l.rect[2] as f32, l.rect[3] as f32));
                         json!({
                             "line": i + 1,
-                            "text": l.text,
+                            "text": copy.then_some(&l.text),
                             "rect": [r(u[0].min(v[0])), r(u[1].min(v[1])), r(u[0].max(v[0])), r(u[1].max(v[1]))],
                             "font": l.base_font,
                             "size": (l.size * 100.0).round() / 100.0,
                         })
                     })
                     .collect();
-                json!({ "page": page + 1, "count": lines.len(), "lines": lines })
+                withheld(json!({ "page": page + 1, "count": lines.len(), "lines": lines }), copy)
             }
             "page_images" => {
                 let page = self.page(&a)?;
@@ -422,6 +423,7 @@ impl Automation {
             "text_paragraphs" => {
                 let page = self.page(&a)?;
                 let doc = self.doc(&a)?;
+                let copy = doc.allows_copying();
                 let info = &doc.info.pages[page];
                 let r = |x: f32| (x as f64 * 100.0).round() / 100.0;
                 let blocks: Vec<Value> = doc
@@ -432,7 +434,7 @@ impl Automation {
                         let (u, v) = (info.user_to_view(b.rect[0] as f32, b.rect[1] as f32), info.user_to_view(b.rect[2] as f32, b.rect[3] as f32));
                         json!({
                             "paragraph": i + 1,
-                            "text": b.text,
+                            "text": copy.then_some(&b.text),
                             "lines": b.lines.iter().map(|l| l + 1).collect::<Vec<_>>(),
                             "rect": [r(u[0].min(v[0])), r(u[1].min(v[1])), r(u[0].max(v[0])), r(u[1].max(v[1]))],
                             "font": b.base_font,
@@ -446,7 +448,7 @@ impl Automation {
                         })
                     })
                     .collect();
-                json!({ "page": page + 1, "count": blocks.len(), "paragraphs": blocks })
+                withheld(json!({ "page": page + 1, "count": blocks.len(), "paragraphs": blocks }), copy)
             }
             "text_edit" if a.get("paragraph").is_some() => {
                 if let Some(text) = a.opt_str("text")? {
@@ -522,10 +524,12 @@ impl Automation {
                     }]);
                 }
                 let mut out = self.apply(&a, Edit::EditTextBlock { page, block: k as usize - 1, text, style })?;
-                if let Some(b) = self.doc(&a)?.text_blocks(page).get(k as usize - 1) {
-                    out["paragraph"] = json!({ "text": b.text, "lines": b.line_count, "font": b.base_font });
+                let doc = self.doc(&a)?;
+                let copy = doc.allows_copying();
+                if let Some(b) = doc.text_blocks(page).get(k as usize - 1) {
+                    out["paragraph"] = json!({ "text": copy.then_some(&b.text), "lines": b.line_count, "font": b.base_font });
                 }
-                out
+                withheld(out, copy)
             }
             "text_edit" => {
                 if a.opt_bool("preview")?.unwrap_or(false) {
@@ -545,11 +549,12 @@ impl Automation {
                 }
                 let text = a.str("text")?.to_owned();
                 let mut out = self.apply(&a, Edit::EditTextLine { page, line: line as usize - 1, text })?;
-                let after = self.doc(&a)?.text_lines(page);
-                if let Some(l) = after.get(line as usize - 1) {
-                    out["line"] = json!({ "text": l.text, "font": l.base_font });
+                let doc = self.doc(&a)?;
+                let copy = doc.allows_copying();
+                if let Some(l) = doc.text_lines(page).get(line as usize - 1) {
+                    out["line"] = json!({ "text": copy.then_some(&l.text), "font": l.base_font });
                 }
-                out
+                withheld(out, copy)
             }
             "doc_audit_space" => {
                 let rows: Vec<Value> = self
@@ -1583,9 +1588,7 @@ impl Automation {
 
     fn text_extract(&mut self, a: &Args) -> Result<Value> {
         let doc = self.doc(a)?;
-        if !doc.allows_copying() {
-            return Err(failed("this document does not allow copying text; open it with the permissions password"));
-        }
+        doc.require_copying().map_err(failed)?;
         let id = doc.id;
         let pages = match a.opt_ints("pages")? {
             Some(_) => self.pages(a, "pages")?,
@@ -1608,6 +1611,10 @@ impl Automation {
 
     fn text_find(&mut self, a: &Args) -> Result<Value> {
         let doc = self.doc(a)?;
+        // Finding is viewing (Acrobat searches documents that forbid copying), but the matched
+        // text can differ from the query (case, whitespace, ligatures), so it is only returned
+        // when the document allows copying; otherwise matches are locations only.
+        let copy = doc.allows_copying();
         let (id, n) = (doc.id, doc.info.pages.len());
         let query = a.str("query")?;
         let limit = a.opt_int("limit")?.unwrap_or(500).max(1) as usize;
@@ -1618,10 +1625,10 @@ impl Automation {
                 if matches.len() == limit {
                     break 'pages;
                 }
-                matches.push(json!({ "page": p + 1, "text": text.text_of(r.clone()), "rects": text.line_rects(r) }));
+                matches.push(json!({ "page": p + 1, "text": copy.then(|| text.text_of(r.clone())), "rects": text.line_rects(r) }));
             }
         }
-        Ok(json!({ "query": query, "count": matches.len(), "matches": matches }))
+        Ok(withheld(json!({ "query": query, "count": matches.len(), "matches": matches }), copy))
     }
 
     fn command_list(&self, a: &Args) -> Result<Value> {
@@ -1884,6 +1891,15 @@ fn security(d: &Document) -> Value {
             })
         }
     }
+}
+
+/// Mark a result whose page-text fields were withheld (set to null) because the document does
+/// not allow copying (ISO 32000-2 Table 22 bit 5); locations, counts and styles remain.
+pub(crate) fn withheld(mut v: Value, copy_allowed: bool) -> Value {
+    if !copy_allowed {
+        v["text_withheld"] = json!("this document does not allow copying text, so text fields are null; open it with the permissions password");
+    }
+    v
 }
 
 /// What every tool that changes a document returns.

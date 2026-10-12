@@ -167,7 +167,7 @@ pub fn tools() -> Vec<ToolDef> {
         t("page_render", "Render a page", "Render one page to a PNG image (default 96 dpi, at most 600).")
             .ro()
             .with(schema(json!({ "doc": doc(), "page": { "type": "integer", "minimum": 1 }, "dpi": { "type": "number", "minimum": 1, "maximum": 600 } }), &["doc", "page"])),
-        t("text_extract", "Extract text", "Extract the text of some or all pages, in reading order.")
+        t("text_extract", "Extract text", "Extract the text of some or all pages, in reading order. Refused when the document does not allow copying text (open it with the permissions password).")
             .ro()
             .with(schema(json!({ "doc": doc(), "pages": pages("to extract (default: all)"), "include_glyphs": {"type":"boolean","description":"Include one-based glyph indices, Unicode mappings and view-space rectangles for text_selection endpoints. At most 200000 glyphs; default false. Copy permission applies."} }), &["doc"])),
         t("text_selection", "Copy selected text", "Copy a reading-order text range across pages, a detected paragraph, or the whole document. Page and glyph endpoints are one-based and inclusive; glyphs may contain a whole ligature. Reverse ranges are normalized. Line breaks are preserved and pages separated by two newlines, including blank pages. Copy permission is enforced and output is limited to 32 MiB. Read-only; no history changes.")
@@ -177,7 +177,7 @@ pub fn tools() -> Vec<ToolDef> {
                 "start_page":{"type":"integer","minimum":1}, "start_glyph":{"type":"integer","minimum":1},
                 "end_page":{"type":"integer","minimum":1}, "end_glyph":{"type":"integer","minimum":1}
             }), &["doc"])),
-        t("text_find", "Find text", "Find a phrase (case-insensitive, whitespace-normalised) and return each match with its page and line rectangles in points (origin top-left).")
+        t("text_find", "Find text", "Find a phrase (case-insensitive, whitespace-normalised) and return each match with its page and line rectangles in points (origin top-left). Searching is allowed on documents that forbid copying, but then matches are locations only: text is null and text_withheld is set (only the query you supplied is echoed).")
             .ro()
             .cmd("edit.find")
             .with(schema(json!({ "doc": doc(), "query": { "type": "string", "minLength": 1 }, "limit": { "type": "integer", "minimum": 1, "description": "Maximum matches (default 500)." } }), &["doc", "query"])),
@@ -506,7 +506,7 @@ pub fn tools() -> Vec<ToolDef> {
             }),
             &["doc"],
         )),
-        t("content_list", "List added content", "Text and images added with page_add_text/page_add_image (or Edit a PDF ▸ Add content), per page with a 1-based index, rect (points from the top-left of the page), and text style.")
+        t("content_list", "List added content", "Text and images added with page_add_text/page_add_image (or Edit a PDF ▸ Add content), per page with a 1-based index, rect (points from the top-left of the page), and text style. When the document does not allow copying text, text fields are null and text_withheld explains why.")
             .ro()
             .with(schema(json!({ "doc": doc() }), &["doc"])),
         t(
@@ -967,7 +967,7 @@ pub fn tools() -> Vec<ToolDef> {
                 json!({ "doc": doc(), "field": { "type": "string" }, "event": { "type": "string", "enum": ["keystroke", "format", "validate", "calculate", "mouse_up"] }, "script": { "type": "string" } }),
                 &["doc", "field", "event"],
             )),
-        t("doc_export_office", "Export to Word, HTML, RTF or Excel", "Export a PDF ▸ Word (.docx), HTML (.html, one file with images inline), RTF (.rtf) or Excel (.xlsx), chosen by path's extension: paragraphs in reading order, headings from larger text, bold and italic, images where they fall, a page break between pages. Excel gets one worksheet per page: paragraphs in column A, tables detected from the text layout as cell grids, unambiguous numbers (1,234.50, (12.00), 12.5%) stored as numbers.")
+        t("doc_export_office", "Export to Word, HTML, RTF or Excel", "Export a PDF ▸ Word (.docx), HTML (.html, one file with images inline), RTF (.rtf) or Excel (.xlsx), chosen by path's extension: paragraphs in reading order, headings from larger text, bold and italic, images where they fall, a page break between pages. Excel gets one worksheet per page: paragraphs in column A, tables detected from the text layout as cell grids, unambiguous numbers (1,234.50, (12.00), 12.5%) stored as numbers. Refused when the document does not allow copying text (open it with the permissions password).")
             .cmd("export.docx")
             .with(schema(json!({ "doc": doc(), "path": { "type": "string" } }), &["doc", "path"])),
         t("preflight_profiles", "Preflight profiles and checks", "List built-in structural preflight profiles and supported single checks. These checks do not establish full standards conformance.")
@@ -1000,14 +1000,14 @@ pub fn tools() -> Vec<ToolDef> {
                 }),
                 &["paths", "folder"],
             )),
-        t("doc_compare", "Compare files", "Compare the text of two open documents: other is the older version, doc the newer. Returns counts and each change (replaced, inserted, deleted) with the old and new text, pages (1-based) and rectangles (points, origin bottom-left).")
+        t("doc_compare", "Compare files", "Compare the text of two open documents: other is the older version, doc the newer. Returns counts and each change (replaced, inserted, deleted) with the old and new text, pages (1-based) and rectangles (points, origin bottom-left). Refused unless both documents allow copying text.")
             .ro()
             .cmd("doc.compare")
             .with(schema(json!({ "doc": doc(), "other": { "type": "integer", "description": "The older document (from doc_open)." }, "limit": { "type": "integer", "minimum": 1, "description": "List at most this many changes (default 500)." }, "visual": { "type": "boolean", "description": "Also compare how pages look (page n with page n): regions that differ visually." } }), &["doc", "other"])),
-        t("doc_compare_report", "Compare report", "Write the compare summary report (a PDF listing every change) to path.")
+        t("doc_compare_report", "Compare report", "Write the compare summary report (a PDF listing every change) to path. Refused unless both documents allow copying text.")
             .cmd("doc.compare")
             .with(schema(json!({ "doc": doc(), "other": { "type": "integer" }, "path": { "type": "string" } }), &["doc", "other", "path"])),
-        t("doc_compare_mark", "Mark differences as comments", "Add the differences from other (older) to doc (newer) as comments in doc: highlights over replaced (blue) and inserted (green) text, notes where text was deleted (red), authored Compare. Undoable.")
+        t("doc_compare_mark", "Mark differences as comments", "Add the differences from other (older) to doc (newer) as comments in doc: highlights over replaced (blue) and inserted (green) text, notes where text was deleted (red), authored Compare. Undoable. Refused unless both documents allow copying text.")
             .cmd("doc.compare")
             .with(schema(json!({ "doc": doc(), "other": { "type": "integer" } }), &["doc", "other"])),
         t("form_detect_fields", "Detect form fields", "Prepare a form ▸ automatic field detection: find the blanks a printed form asks to be filled (underscore runs, lines, empty boxes, small squares for check boxes) and name each field from its label. With add (default true) the fields are created as one undoable step; otherwise they are only proposed. Returns page (1-based), kind, name and rect (points, origin bottom-left).")
@@ -1077,7 +1077,7 @@ pub fn tools() -> Vec<ToolDef> {
             .cmd("ocr.recognize").with(schema(json!({"doc":doc()}), &["doc"])),
         t("ocr_cancel", "Discard recognized text draft", "Discard the pending recognition draft without changing document bytes or history.")
             .cmd("ocr.recognize").with(schema(json!({"doc":doc()}), &["doc"])),
-        t("doc_export_all_images", "Export all images", "Write the images that pages use into a folder (`<name>_Page_<n>_Image_<k>.jpg|png`), each once: JPEG images unchanged, others as PNG with their soft mask as alpha. min_size skips images with fewer pixels on their shorter side. Images that can't be decoded yet (JPEG 2000, JBIG2, CCITT, separations) are listed under skipped. Includes unsaved edits.")
+        t("doc_export_all_images", "Export all images", "Write the images that pages use into a folder (`<name>_Page_<n>_Image_<k>.jpg|png`), each once: JPEG images unchanged, others as PNG with their soft mask as alpha. min_size skips images with fewer pixels on their shorter side. Images that can't be decoded yet (JPEG 2000, JBIG2, CCITT, separations) are listed under skipped. Includes unsaved edits. Refused when the document does not allow copying (extracting graphics); doc_export_images renders pages and stays available.")
             .cmd("export.all_images")
             .with(schema(
                 json!({
@@ -1088,7 +1088,7 @@ pub fn tools() -> Vec<ToolDef> {
                 }),
                 &["doc", "folder"],
             )),
-        t("doc_export_text", "Export text", "Write the reading-order text of pages to a .txt file (pages separated by form feeds).")
+        t("doc_export_text", "Export text", "Write the reading-order text of pages to a .txt file (pages separated by form feeds). Refused when the document does not allow copying text (open it with the permissions password).")
             .cmd("export.text")
             .with(schema(json!({ "doc": doc(), "path": { "type": "string" }, "pages": pages("to export (default: all)") }), &["doc", "path"])),
         t(
@@ -1158,7 +1158,7 @@ pub fn tools() -> Vec<ToolDef> {
             .ro()
             .cmd("optimize.advanced")
             .with(schema(json!({ "doc": doc() }), &["doc"])),
-        t("text_lines", "List text lines", "The lines of existing text on a page (Edit a PDF ▸ Edit text): number, text, box (top-left-origin points), font and size. Use the number with text_edit.")
+        t("text_lines", "List text lines", "The lines of existing text on a page (Edit a PDF ▸ Edit text): number, text, box (top-left-origin points), font and size. Use the number with text_edit. When the document does not allow copying text, text fields are null and text_withheld explains why.")
             .ro()
             .cmd("edit.edit_text")
             .with(schema(json!({ "doc": doc(), "page": { "type": "integer", "minimum": 1 } }), &["doc", "page"])),
@@ -1188,7 +1188,7 @@ pub fn tools() -> Vec<ToolDef> {
             .ro()
             .cmd("edit.edit_text")
             .with(schema(json!({ "doc": doc(), "page": { "type": "integer", "minimum": 1 }, "text": { "type": "string" } }), &["doc", "page"])),
-        t("text_paragraphs", "List paragraphs", "The paragraphs on a page: number, text, source line numbers, visual line_count, box (top-left-origin points), first style and runs. Each run reports zero-based Unicode scalar start/end (end exclusive), font_resource, font, size, bold, italic and RGB color. Use paragraph and selected range offsets with text_edit.")
+        t("text_paragraphs", "List paragraphs", "The paragraphs on a page: number, text, source line numbers, visual line_count, box (top-left-origin points), first style and runs. Each run reports zero-based Unicode scalar start/end (end exclusive), font_resource, font, size, bold, italic and RGB color. Use paragraph and selected range offsets with text_edit. When the document does not allow copying text, text fields are null and text_withheld explains why.")
             .ro()
             .cmd("edit.edit_text")
             .with(schema(json!({ "doc": doc(), "page": { "type": "integer", "minimum": 1 } }), &["doc", "page"])),

@@ -377,6 +377,11 @@ pub fn inspect(bytes: Arc<Vec<u8>>, password: Option<&str>) -> Result<DocInfo, O
     // Geometry no longer needs the renderer parser. Do not overlap its allocations with
     // structural inspection, including the compatibility fallback for damaged files.
     drop(pdf);
+    // When neither structure reader accepts the file (e.g. an AES-256 file whose /Perms no
+    // longer matches /P), the renderer may still have decrypted it. Report it as encrypted then,
+    // so permission checks fail closed instead of treating it as unrestricted. A successful
+    // structure read below replaces this with the parsed answer.
+    info.encrypted = bytes.windows(8).any(|w| w == b"/Encrypt");
     inspect_structure(&mut info, |tmp| {
         // The lazy reader first; lopdf's repair/tolerance path when it can't expose the same
         // page tree or an object a panel needs. No partial result is published.

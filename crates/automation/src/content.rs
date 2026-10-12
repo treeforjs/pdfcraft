@@ -6,7 +6,7 @@ use pdfcraft_engine::{AddedContent, AddedText, Edit, FontFamily, TextAlign};
 use serde_json::{Value, json};
 
 use crate::comments::parse_color;
-use crate::{Args, Automation, Result, ToolError, failed};
+use crate::{Args, Automation, Result, ToolError, failed, withheld};
 
 fn bad(m: impl Into<String>) -> ToolError {
     ToolError::InvalidArgs(m.into())
@@ -67,6 +67,8 @@ fn style(a: &Args, t: &mut AddedText) -> Result<()> {
 impl Automation {
     pub(crate) fn content_list(&self, a: &Args) -> Result<Value> {
         let doc = self.doc(a)?;
+        // Added text is page content: withheld when the document does not allow copying.
+        let copy = doc.allows_copying();
         let mut per_page: std::collections::HashMap<usize, usize> = Default::default();
         let items: Vec<Value> = doc
             .added
@@ -80,7 +82,7 @@ impl Automation {
                 match &it.content {
                     AddedContent::Text(t) => {
                         v["type"] = json!("text");
-                        v["text"] = json!(t.text);
+                        v["text"] = json!(copy.then_some(&t.text));
                         v["font"] = json!(t.family.label());
                         v["size"] = json!(t.size);
                         v["bold"] = json!(t.bold);
@@ -91,7 +93,7 @@ impl Automation {
                 v
             })
             .collect();
-        Ok(json!({ "count": items.len(), "items": items }))
+        Ok(withheld(json!({ "count": items.len(), "items": items }), copy))
     }
 
     pub(crate) fn page_add_text(&mut self, a: &Args) -> Result<Value> {

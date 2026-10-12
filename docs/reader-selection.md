@@ -29,6 +29,29 @@ the UI uses its existing background text cache, progressively stopping selection
 queued at once; an offscreen page that crosses the limit is not retained, and a smaller selection
 can be retried. Already-visible rendering and the separate Find workflow keep their own demand.
 
+## Copy permission on every text-returning path
+
+Bit 5 of `/P` ("copy or otherwise extract text and graphics", ISO 32000-2 Table 22) governs
+every path that hands page text or embedded graphics to the caller; viewing does not need it.
+`Document::allows_copying` is the single check and fails closed: an encrypted document whose
+security handler the editor could not read (the renderer opened it, the editor did not) has no
+established permissions and is treated as copy-denied. `pdfcraft-cli text` likewise refuses an
+encrypted file the engine cannot open (for example an AES-256 file whose plaintext `/P` was
+edited without its `/Perms` check value), even with the owner password.
+
+| Path | Copy denied |
+| --- | --- |
+| `text_selection`, `text_extract`, MCP `pdfcraft://doc/{n}/text` and `/page/{p}/text`, reader copy, `pdfcraft-cli text` | refused |
+| `text_find` | allowed as a search (Acrobat searches such files), but matches are locations only: `text` is null, `text_withheld` says why; only the caller's query is echoed |
+| `text_lines`, `text_paragraphs`, `content_list`, the `text_edit` result echo | locations, fonts and styles only; `text` is null and `text_withheld` is set |
+| `doc_export_text`, `doc_export_office` (Word/HTML/RTF) and Export dialogs, `doc_export_all_images` (graphics) | refused before anything is written |
+| `doc_compare`, `doc_compare_report`, `doc_compare_mark` and the Compare panel | refused unless both documents allow copying |
+| `ocr_recognize` and OCR review drafts | copy and change authority required — enforced by the OCR lane (`Session::ocr_authority`), pending integration |
+| `page_render`, `render_preview`, `doc_export_images`, visual compare, the Find panel's on-screen result context | allowed (viewing) |
+| `doc_info`/`doc_inspect` metadata, bookmarks, comment contents, field values, alt text, `comments_summarize`, `redact_mark` counts | allowed: not page text |
+
+Accessibility permission (bit 10) is not treated as granting extraction to tools or the clipboard.
+
 ## Headless use
 
 `text_extract` accepts `include_glyphs: true` to expose one-based glyph indices, their Unicode
@@ -72,6 +95,14 @@ Focused tests pass on Ubuntu 24.04: engine `reader_selection` unit tests, the au
 with copy denied, where every `text_selection` mode and `text_extract` refuse without echoing
 document text), reader UI unit tests in `canvas.rs`, and `crates/ui-egui/tests/text_select.rs`.
 `pdfcraft-cli text` applies the same copy permission (`apps/pdfcraft-cli/tests/text.rs`).
+The permission table above is covered by passing encrypted regressions (copy denied, owner
+password lifts): engine `export_text_images_and_office_refuse_copy_denied_documents_and_owner_lifts`,
+`compare_refuses_when_either_document_denies_copying` and the synthetic no-editor
+`encrypted_documents_without_an_editor_fail_closed`; automation
+`copy_denied_text_paths_withhold_or_refuse_and_owner_lifts` and
+`mcp_text_resources_refuse_copy_denied_documents_and_owner_lifts`; and the CLI
+`text_fails_closed_when_encryption_permissions_cannot_be_verified` (a tampered `/P`, which
+printed the text before this change).
 A headless `pdfcraft-cli run --script` workflow on an original four-page fixture exercised range,
 reverse, paragraph and all modes, glyph inspection, and refusal for copy-restricted files.
 Still pending: the full workspace suite, WASM, and acceptance on an installed X11/Wayland

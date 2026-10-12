@@ -133,6 +133,12 @@ fn number_pages_dialog_labels_the_selected_pages() {
 fn search_finds_collapsed_bookmarks_and_keeps_original_paths() {
     use pdfcraft_engine::Edit;
     let mut h = harness();
+    // A full save stamps /ModDate from the session clock in whole seconds. With the wall clock
+    // the two saves compared below could straddle a second boundary under machine load and
+    // differ only in /ModDate (observed: D:20261012063115Z vs ...114Z). A fixed clock makes
+    // byte equality mean "search changed nothing".
+    let session = &mut h.state_mut().session;
+    *session = std::mem::take(session).with_clock(|| 1_700_000_000);
     for (parent, index, title, page) in
         [(vec![], 0, "Unrelated", 0), (vec![], 1, "Reports", 0), (vec![1], 0, "Other chapter", 1), (vec![1], 1, "Résumé results", 2)]
     {
@@ -146,6 +152,7 @@ fn search_finds_collapsed_bookmarks_and_keeps_original_paths() {
     assert!(h.query_by_label("Résumé results").is_none());
     let id = h.state().views[0].id;
     let before = h.state().session.save_full_bytes(id).unwrap();
+    let undo_before = h.state().session.get(id).unwrap().can_undo().map(str::to_owned);
     h.get_by_label("Search").click();
     h.run_steps(1);
     h.get_by_label("Search").type_text("RÉSUMÉ");
@@ -157,6 +164,7 @@ fn search_finds_collapsed_bookmarks_and_keeps_original_paths() {
     assert!(h.query_by_label("Unrelated").is_none());
     assert!(h.query_by_label("Other chapter").is_none());
     assert_eq!(h.state().session.save_full_bytes(id).unwrap(), before, "search doesn't edit the PDF");
+    assert_eq!(h.state().session.get(id).unwrap().can_undo().map(str::to_owned), undo_before, "search adds no undo step");
     if let Ok(dir) = std::env::var("PDFCRAFT_BOOKMARK_SHOTS") {
         h.render().unwrap().save(std::path::Path::new(&dir).join("filtered-bookmarks.png")).unwrap();
     }

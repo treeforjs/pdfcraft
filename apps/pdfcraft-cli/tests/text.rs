@@ -123,6 +123,56 @@ fn text_of_a_copy_restricted_document_refuses_unless_the_permissions_password_is
     assert!(stdout.contains("Page 1") && stdout.contains("Page 3"), "{stdout}");
 }
 
+/// Set the copy bit (Table 22 bit 5) in the plaintext `/P` of an encrypted file without
+/// updating the AES-256 `/Perms` check value, keeping every byte offset.
+fn grant_copy_in_plaintext_p(bytes: &mut [u8]) {
+    let at = bytes.windows(3).position(|w| w[0] == b'/' && w[1] == b'P' && (w[2] == b' ' || w[2] == b'-')).expect("/P in the encryption dictionary");
+    let start = at + 2 + bytes[at + 2..].iter().take_while(|b| **b == b' ').count();
+    let end = start + 1 + bytes[start + 1..].iter().take_while(|b| b.is_ascii_digit()).count();
+    let old: i32 = std::str::from_utf8(&bytes[start..end]).unwrap().parse().unwrap();
+    assert_eq!(old & 16, 0, "the fixture must deny copying");
+    let new = (old | 16).to_string();
+    assert!(new.len() <= end - start, "{old} -> {new}");
+    bytes[start..end].fill(b' ');
+    bytes[start..start + new.len()].copy_from_slice(new.as_bytes());
+}
+
+/// The renderer decrypts files whose permissions the engine rejects (here `/P` was edited to
+/// grant copying but `/Perms` no longer matches). `text` used to skip the permission check
+/// whenever the engine could not open the file, printing the text; it now fails closed.
+#[test]
+fn text_fails_closed_when_encryption_permissions_cannot_be_verified() {
+    let src = tmp("to-tamper.pdf");
+    std::fs::write(&src, fixture(3)).unwrap();
+    let restricted = tmp("to-tamper-restricted.pdf");
+    let script = tmp("tamper.json");
+    let steps = serde_json::json!([
+        { "tool": "doc_open", "args": { "path": src } },
+        { "tool": "doc_protect", "args": { "doc": 1, "open_password": "user-pw", "permissions_password": "owner-pw", "copy": false } },
+        { "tool": "doc_save", "args": { "doc": 1, "path": restricted } },
+    ]);
+    std::fs::write(&script, steps.to_string()).unwrap();
+    let out = Command::new(BIN).args(["run", "--script", script.to_str().unwrap()]).output().unwrap();
+    assert!(out.status.success(), "protecting the fixture failed: {}", String::from_utf8_lossy(&out.stderr));
+    let mut bytes = std::fs::read(&restricted).unwrap();
+    grant_copy_in_plaintext_p(&mut bytes);
+    let tampered = tmp("tampered.pdf");
+    std::fs::write(&tampered, &bytes).unwrap();
+    // The renderer still opens the tampered file with the right open password.
+    let png = tmp("tampered.png");
+    let render = Command::new(BIN).arg("render").arg(&tampered).args(["--password", "user-pw", "--out"]).arg(&png).output().unwrap();
+    assert!(render.status.success(), "the renderer opens the tampered file: {}", String::from_utf8_lossy(&render.stderr));
+    for password in ["user-pw", "owner-pw"] {
+        for extra in [vec![], vec!["--page", "2"]] {
+            let out = Command::new(BIN).arg("text").arg(&tampered).args(["--password", password]).args(&extra).output().unwrap();
+            assert!(!out.status.success(), "{password} {extra:?}");
+            assert!(out.stdout.is_empty(), "no text may be printed: {}", String::from_utf8_lossy(&out.stdout));
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            assert!(stderr.contains("could not be verified") && !stderr.contains("Page"), "{stderr}");
+        }
+    }
+}
+
 mod page_argument_tests {
     use super::*;
     use std::path::PathBuf;

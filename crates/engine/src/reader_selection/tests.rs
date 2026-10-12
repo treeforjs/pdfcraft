@@ -130,3 +130,87 @@ fn copy_permission_is_enforced_for_user_and_lifted_for_owner() {
     assert!(doc.allows_copying());
     assert!(doc.selected_reader_text(TextSelection::All).unwrap().contains("first page"));
 }
+
+/// (session, unrestricted id, copy-denied user id, owner id) over one encrypted file.
+fn restricted_session() -> (Session, crate::DocId, crate::DocId, crate::DocId) {
+    let mut session = Session::new();
+    let plain = session.open("selection.pdf", None, Arc::new(fixture()), None).unwrap();
+    let protected = session.open("protect.pdf", None, Arc::new(fixture()), None).unwrap();
+    let protection = Protection {
+        open_password: Some("User-guard-test".into()),
+        permissions_password: Some("Owner-guard-test".into()),
+        copy: false,
+        ..Default::default()
+    };
+    session.apply(protected, Edit::Protect(protection)).unwrap();
+    let bytes = session.save_bytes(protected).unwrap();
+    let user = session.open("restricted.pdf", None, bytes.clone(), Some("User-guard-test")).unwrap();
+    let owner = session.open("owner.pdf", None, bytes, Some("Owner-guard-test")).unwrap();
+    (session, plain, user, owner)
+}
+
+#[test]
+fn export_text_images_and_office_refuse_copy_denied_documents_and_owner_lifts() {
+    use crate::compare::OfficeFormat;
+    use crate::export::{Exporter, extract_images};
+    let (session, _, user, owner) = restricted_session();
+    let doc = session.get(user).unwrap();
+    assert!(doc.info.encrypted && !doc.allows_copying());
+    for result in [
+        Exporter::new(doc).text(0),
+        Exporter::new(doc).text_of(&[0, 2]),
+        extract_images(&doc.export_source(), &[0], 0).map(|_| String::new()),
+        doc.export_office(OfficeFormat::Html).map(|_| String::new()),
+        doc.export_office(OfficeFormat::Docx).map(|_| String::new()),
+        doc.export_office(OfficeFormat::Rtf).map(|_| String::new()),
+    ] {
+        let error = result.unwrap_err();
+        assert!(error.contains("does not allow copying") && !error.contains("first page"), "{error}");
+    }
+    // Rendering a page is viewing, not extraction.
+    assert!(Exporter::new(doc).png(0, 36.0).unwrap().starts_with(b"\x89PNG"));
+    let doc = session.get(owner).unwrap();
+    assert!(doc.allows_copying());
+    assert!(Exporter::new(doc).text_of(&[0, 2]).unwrap().contains("last page"));
+    assert!(extract_images(&doc.export_source(), &[0], 0).is_ok());
+    assert!(String::from_utf8(doc.export_office(OfficeFormat::Html).unwrap()).unwrap().contains("first page"));
+}
+
+#[test]
+fn compare_refuses_when_either_document_denies_copying() {
+    let (mut session, plain, user, owner) = restricted_session();
+    for (old, new) in [(user, plain), (plain, user), (user, user)] {
+        let error = session.compare(old, new).unwrap_err().to_string();
+        assert!(error.contains("restricted.pdf does not allow copying") && !error.contains("page"), "{error}");
+        assert!(session.compare_report(old, new).is_err());
+        assert!(session.mark_differences(old, new).is_err());
+    }
+    assert_eq!(session.get(plain).unwrap().can_undo(), None, "a refused mark adds nothing");
+    assert!(session.compare(owner, plain).unwrap().identical());
+    assert!(session.compare_report(plain, owner).is_ok());
+}
+
+/// The renderer can open files the editor cannot read (the editor parse failed for a reason
+/// other than authentication). Such an encrypted document has no established permissions, so
+/// copying must fail closed; an unencrypted one stays copyable.
+#[test]
+fn encrypted_documents_without_an_editor_fail_closed() {
+    use crate::export::Exporter;
+    let (mut session, plain, _, owner) = restricted_session();
+    for id in [plain, owner] {
+        assert!(session.get(id).unwrap().allows_copying());
+        let doc = session.doc_mut(id).unwrap();
+        doc.editor = None;
+        doc.read_only_reason = Some("synthetic: the document structure could not be read for editing".into());
+    }
+    let doc = session.get(plain).unwrap();
+    assert!(!doc.info.encrypted && doc.permissions().is_none());
+    assert!(doc.allows_copying(), "an unencrypted document has no restrictions to lose");
+    assert!(doc.selected_reader_text(TextSelection::All).unwrap().contains("first page"));
+    let doc = session.get(owner).unwrap();
+    assert!(doc.info.encrypted && doc.permissions().is_none());
+    assert!(!doc.allows_copying(), "unknown permissions on an encrypted document must not allow copying");
+    assert!(doc.selected_reader_text(TextSelection::All).unwrap_err().contains("does not allow copying"));
+    assert!(doc.reader_paragraph_selection(0, 0).is_err());
+    assert!(Exporter::new(doc).text_of(&[0]).unwrap_err().contains("does not allow copying"));
+}

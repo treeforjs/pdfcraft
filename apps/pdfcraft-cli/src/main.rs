@@ -298,12 +298,16 @@ fn text(args: &[String]) -> Result<(), CliError> {
         }
     }
     // Same standard-security copy permission as text_extract/text_selection (ISO 32000-2
-    // Table 22 bit 5); the permissions (owner) password lifts it.
+    // Table 22 bit 5); the permissions (owner) password lifts it. Fail closed: the renderer
+    // decrypts files the engine refuses (e.g. an R6 /P edited without updating /Perms), so an
+    // encrypted file whose permissions the engine could not establish is never extracted.
     let mut session = pdfcraft_engine::Session::new();
-    if let Ok(id) = session.open("text.pdf", None, bytes, password)
-        && session.get(id).is_some_and(|doc| !doc.allows_copying())
-    {
-        return Err("text: this document does not allow copying text; pass the permissions password with --password".into());
+    let copy_allowed = match session.open("text.pdf", None, bytes.clone(), password) {
+        Ok(id) => session.get(id).is_some_and(|doc| doc.allows_copying()),
+        Err(_) => inspect(bytes, password).is_ok_and(|info| !info.encrypted),
+    };
+    if !copy_allowed {
+        return Err("text: this document does not allow copying text (or its encryption permissions could not be verified); pass the permissions password with --password".into());
     }
     let pages: Vec<usize> = match selected_page {
         Some(page) => vec![page],

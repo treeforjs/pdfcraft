@@ -1777,12 +1777,12 @@ fn exporting_office_files_keeps_images() {
     let pid = s.open("p.pdf", None, pic, None).unwrap();
     let d = s.get(pid).unwrap();
     assert_eq!(d.export_pages()[0].images.len(), 1);
-    let docx = d.export_office(compare::OfficeFormat::Docx);
+    let docx = d.export_office(compare::OfficeFormat::Docx).unwrap();
     assert!(docx.windows(16).any(|w| w == b"word/media/image"));
     if let Ok(dir) = std::env::var("PDFCRAFT_EXPORT_DIR") {
         std::fs::write(format!("{dir}/pic.docx"), &docx).unwrap();
     }
-    assert!(String::from_utf8(d.export_office(compare::OfficeFormat::Html)).unwrap().contains("data:image/png;base64,"));
+    assert!(String::from_utf8(d.export_office(compare::OfficeFormat::Html).unwrap()).unwrap().contains("data:image/png;base64,"));
 }
 
 /// #314: a page whose content is drawn through a form XObject exports its text (the file from
@@ -1808,7 +1808,7 @@ trailer <</Root 1 0 R>>
     let d = s.get(id).unwrap();
     let blocks: Vec<String> = d.export_pages()[0].blocks.iter().map(|b| b.text.clone()).collect();
     assert_eq!(blocks, ["Hello from a test invoice"]);
-    assert!(String::from_utf8(d.export_office(compare::OfficeFormat::Html)).unwrap().contains("Hello from a test invoice"));
+    assert!(String::from_utf8(d.export_office(compare::OfficeFormat::Html).unwrap()).unwrap().contains("Hello from a test invoice"));
     // Edit text still offers only what the page's own streams show.
     assert!(d.text_blocks(0).is_empty());
 }
@@ -1840,7 +1840,7 @@ BT /F1 11 Tf 0 g 72 650 Td (Black body text that is long enough to be the body s
     let mut s = Session::new();
     let id = s.open("c.pdf", None, Arc::new(pdf), None).unwrap();
     let d = s.get(id).unwrap();
-    let html = String::from_utf8(d.export_office(compare::OfficeFormat::Html)).unwrap();
+    let html = String::from_utf8(d.export_office(compare::OfficeFormat::Html).unwrap()).unwrap();
     assert!(html.contains("style=\"color:#0D3B2E\">Annual Report"), "{html}");
     let blocks = &d.export_pages()[0].blocks;
     assert!(blocks.iter().any(|b| b.text == "Annual Report" && b.color == [0.05, 0.23, 0.18]), "{blocks:?}");

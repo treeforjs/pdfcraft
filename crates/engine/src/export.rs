@@ -7,10 +7,12 @@
 use pdfcraft_render::{PageRenderer, RenderRequest, RequestKind};
 
 use crate::Document;
+use crate::reader_selection::COPY_DENIED;
 
 /// Renders and extracts pages of one document state.
 pub struct Exporter {
     renderer: PageRenderer,
+    copy_allowed: bool,
     pages: usize,
     /// Each page's displayed size in points, for [`Exporter::dpi_used`].
     sizes: Vec<(f32, f32)>,
@@ -24,6 +26,10 @@ pub struct ExportSource {
     pub pages: usize,
     /// Each page's displayed size in points (after `/Rotate` and `/UserUnit`).
     pub sizes: Vec<(f32, f32)>,
+    /// Text and embedded images may be extracted ([`Document::allows_copying`]; ISO 32000-2
+    /// Table 22 bit 5: "copy or otherwise extract text and graphics"). Rendering pages to
+    /// images is viewing and stays available.
+    pub copy_allowed: bool,
 }
 
 impl Document {
@@ -34,13 +40,18 @@ impl Document {
             config: self.config.clone(),
             pages: self.info.pages.len(),
             sizes: self.info.pages.iter().map(|p| (p.width, p.height)).collect(),
+            copy_allowed: self.allows_copying(),
         }
     }
 }
 
 /// Export all images: the images `pages` (0-based) use, each once, skipping those under
 /// `min_side` pixels on their shorter side. JPEGs come out unchanged, other images as PNG.
+/// Refused when the document does not allow extracting graphics (see [`ExportSource::copy_allowed`]).
 pub fn extract_images(src: &ExportSource, pages: &[usize], min_side: u32) -> Result<pdfcraft_create::ImageExport, String> {
+    if !src.copy_allowed {
+        return Err(COPY_DENIED.into());
+    }
     let doc = pdfcraft_cos::Document::open_with_password(src.bytes.clone(), src.config.password.as_deref()).map_err(|e| e.to_string())?;
     Ok(pdfcraft_create::extract_images(&doc, pages, min_side))
 }
@@ -59,7 +70,7 @@ impl Exporter {
     /// resolution they allow, as the interactive Export does; [`Exporter::dpi_used`] says at what.
     /// A source whose `config.reject_oversize` is set refuses such pages instead.
     pub fn from_source(src: ExportSource) -> Self {
-        Self { renderer: PageRenderer::new(src.bytes, src.config), pages: src.pages, sizes: src.sizes }
+        Self { renderer: PageRenderer::new(src.bytes, src.config), copy_allowed: src.copy_allowed, pages: src.pages, sizes: src.sizes }
     }
 
     /// The resolution page `page` is actually exported at when asked for `dpi`: lower than asked
@@ -97,8 +108,11 @@ impl Exporter {
         encode_image(r.width, r.height, &r.rgba, format)
     }
 
-    /// The reading-order text of a page.
+    /// The reading-order text of a page; refused when the document does not allow copying.
     pub fn text(&mut self, page: usize) -> Result<String, String> {
+        if !self.copy_allowed {
+            return Err(COPY_DENIED.into());
+        }
         self.check(page)?;
         let r = self.renderer.render(RenderRequest { page, kind: RequestKind::Text, scale: 1.0, ..Default::default() });
         match r.text {
@@ -109,6 +123,9 @@ impl Exporter {
 
     /// The text of several pages, separated by form feeds (as `pdftotext` does).
     pub fn text_of(&mut self, pages: &[usize]) -> Result<String, String> {
+        if !self.copy_allowed {
+            return Err(COPY_DENIED.into());
+        }
         let mut out = String::new();
         for (k, p) in pages.iter().enumerate() {
             if k > 0 {

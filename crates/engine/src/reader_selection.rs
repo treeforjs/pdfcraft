@@ -8,6 +8,10 @@ use std::ops::Range;
 /// Maximum UTF-8 text returned by a single clipboard/extraction request.
 pub const MAX_SELECTION_BYTES: usize = 32 * 1024 * 1024;
 
+/// Why text extraction was refused (ISO 32000-2 Table 22 bit 5 is clear, or an encrypted
+/// document's permissions could not be established).
+pub const COPY_DENIED: &str = "this document does not allow copying text; open it with the permissions password";
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct TextPosition {
     pub page: usize,
@@ -129,13 +133,24 @@ pub fn cached_selection_text<'a>(
 
 impl Document {
     /// Standard-security copy permission (Table 22 bit 5); owner authentication lifts it.
+    /// Fails closed: an encrypted document whose security handler could not be read for
+    /// editing (the renderer opened it, the editor did not) has no established permissions,
+    /// so its text is not extractable.
     pub fn allows_copying(&self) -> bool {
-        self.permissions().is_none_or(|p| p.copy())
+        match self.permissions() {
+            Some(p) => p.copy(),
+            None => !(self.info.encrypted && self.editor.is_none()),
+        }
+    }
+
+    /// The copy refusal shared by every text-returning path.
+    pub fn require_copying(&self) -> Result<(), String> {
+        if self.allows_copying() { Ok(()) } else { Err(COPY_DENIED.into()) }
     }
 
     pub fn reader_paragraph_selection(&self, page: usize, glyph: usize) -> Result<TextSelection, String> {
         if !self.allows_copying() {
-            return Err("this document does not allow copying text; open it with the permissions password".into());
+            return Err(COPY_DENIED.into());
         }
         if page >= self.info.pages.len() {
             return Err("paragraph page is out of range".into());
@@ -156,7 +171,7 @@ impl Document {
     /// page's glyph layer in addition to the bounded output.
     pub fn selected_reader_text(&self, selection: TextSelection) -> Result<String, String> {
         if !self.allows_copying() {
-            return Err("this document does not allow copying text; open it with the permissions password".into());
+            return Err(COPY_DENIED.into());
         }
         let count = self.info.pages.len();
         selection.validate_page_count(count)?;

@@ -43,10 +43,20 @@ impl crate::Document {
 }
 
 impl Session {
-    /// Compare files: the text differences from document `old` to document `new`.
+    /// Compare files: the text differences from document `old` to document `new`. The result
+    /// (and the report and comments built from it) carries both documents' text, so both must
+    /// allow copying ([`crate::Document::allows_copying`]).
     pub fn compare(&self, old: DocId, new: DocId) -> Result<Comparison, EditError> {
         let a = self.get(old).ok_or(EditError::NoDocument)?;
         let b = self.get(new).ok_or(EditError::NoDocument)?;
+        for d in [a, b] {
+            if !d.allows_copying() {
+                return Err(EditError::Protection(format!(
+                    "{} does not allow copying text, so its text can't be compared; open it with the permissions password",
+                    d.name
+                )));
+            }
+        }
         Ok(pdfcraft_compare::compare(&a.words(), &b.words()))
     }
 
@@ -192,15 +202,17 @@ impl crate::Document {
             .collect()
     }
 
-    /// The document as a Word, HTML, RTF or Excel file.
-    pub fn export_office(&self, format: OfficeFormat) -> Vec<u8> {
+    /// The document as a Word, HTML, RTF or Excel file. Refused when the document does not allow
+    /// copying: the file carries its text and images.
+    pub fn export_office(&self, format: OfficeFormat) -> Result<Vec<u8>, String> {
+        self.require_copying()?;
         let pages = self.export_pages();
         let title = self.info.title.clone().unwrap_or_else(|| self.name.trim_end_matches(".pdf").to_string());
-        match format {
+        Ok(match format {
             OfficeFormat::Docx => pdfcraft_export::docx(&pages, &title),
             OfficeFormat::Html => pdfcraft_export::html(&pages, &title).into_bytes(),
             OfficeFormat::Rtf => pdfcraft_export::rtf(&pages).into_bytes(),
             OfficeFormat::Xlsx => pdfcraft_export::xlsx(&pages, &title),
-        }
+        })
     }
 }
