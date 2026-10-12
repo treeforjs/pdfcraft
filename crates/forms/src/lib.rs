@@ -21,7 +21,7 @@ pub mod appearance;
 mod author;
 pub mod detect;
 mod scripting;
-pub use actions::{FieldAction, Trigger, field_actions, set_field_actions};
+pub use actions::{FieldAction, MAX_ACTIONS_PER_TRIGGER, MENU_ITEMS, Trigger, field_actions, set_field_actions};
 pub use author::{
     BorderStyle, CheckStyle, FieldFont, FieldProps, Look, LookPatch, NewField, add_field, check_style, delete_field, duplicate_field, look,
     redraw_field, set_button_icon, set_props,

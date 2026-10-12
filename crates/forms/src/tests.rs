@@ -887,6 +887,124 @@ fn field_actions_round_trip_on_every_trigger() {
 }
 
 #[test]
+fn field_action_chains_keep_order_unknown_actions_and_survive_save() {
+    let mut doc = fixture();
+    let go = field(&fields(&doc), "go").obj;
+    // Mouse Enter: a Launch action whose /Next is an array [JavaScript, Named Quit], and the
+    // JavaScript's own /Next is a URI: run order Launch, JS, URI, Quit.
+    let uri = doc.add(Object::Dict({
+        let mut d = Dict::new();
+        d.set(b"S".to_vec(), Object::name("URI"));
+        d.set(b"URI".to_vec(), Object::String(PdfString::literal(b"https://example.org/a".to_vec())));
+        d
+    }));
+    let js = doc.add(Object::Dict({
+        let mut d = Dict::new();
+        d.set(b"S".to_vec(), Object::name("JavaScript"));
+        d.set(b"JS".to_vec(), Object::String(PdfString::text("app.alert(1)")));
+        d.set(b"Next".to_vec(), Object::Ref(uri));
+        d
+    }));
+    let quit = {
+        let mut d = Dict::new();
+        d.set(b"S".to_vec(), Object::name("Named"));
+        d.set(b"N".to_vec(), Object::name("Quit"));
+        Object::Dict(d)
+    };
+    let launch = doc.add(Object::Dict({
+        let mut d = Dict::new();
+        d.set(b"S".to_vec(), Object::name("Launch"));
+        d.set(b"F".to_vec(), Object::String(PdfString::text("calc.exe")));
+        d.set(b"X-Private".to_vec(), Object::Int(7));
+        d.set(b"Next".to_vec(), Object::Array(vec![Object::Ref(js), quit]));
+        d
+    }));
+    // A cycle back to the start is cut, not followed forever.
+    doc.update_dict(uri, |d| d.set(b"Next".to_vec(), Object::Ref(launch))).unwrap();
+    // Mouse Exit: a GoTo to a named destination (not editable here, kept).
+    let named_goto = doc.add(Object::Dict({
+        let mut d = Dict::new();
+        d.set(b"S".to_vec(), Object::name("GoTo"));
+        d.set(b"D".to_vec(), Object::String(PdfString::text("chapter2")));
+        d
+    }));
+    doc.update_dict(go, |d| {
+        let mut aa = Dict::new();
+        aa.set(b"E".to_vec(), Object::Ref(launch));
+        aa.set(b"X".to_vec(), Object::Ref(named_goto));
+        d.set(b"AA".to_vec(), Object::Dict(aa));
+    })
+    .unwrap();
+    let enter = vec![
+        (Trigger::MouseEnter, FieldAction::Other("Launch".into())),
+        (Trigger::MouseEnter, FieldAction::JavaScript("app.alert(1)".into())),
+        (Trigger::MouseEnter, FieldAction::Uri("https://example.org/a".into())),
+        (Trigger::MouseEnter, FieldAction::Named("Quit".into())),
+    ];
+    let exit = (Trigger::MouseExit, FieldAction::Other("GoTo".into()));
+    let mut want = enter.clone();
+    want.push(exit.clone());
+    assert_eq!(field_actions(&doc, "go").unwrap(), want);
+
+    // Writing the same list back leaves the file's actions as they were.
+    let before = doc.get(go).as_dict().unwrap().get(b"AA").cloned();
+    set_field_actions(&mut doc, "go", &want).unwrap();
+    assert_eq!(doc.get(go).as_dict().unwrap().get(b"AA").cloned(), before);
+
+    // Reorder, add two Mouse Up actions and a focus action; the unknown ones are kept with
+    // their data, and the unchanged Mouse Exit trigger is untouched.
+    let new = vec![
+        (Trigger::MouseUp, FieldAction::JavaScript("this.getField('name').value = 'Up';".into())),
+        (Trigger::MouseUp, FieldAction::ShowHide { fields: vec!["notes".into()], hide: true }),
+        (Trigger::MouseEnter, FieldAction::Named("Quit".into())),
+        (Trigger::MouseEnter, FieldAction::Other("Launch".into())),
+        (Trigger::MouseEnter, FieldAction::JavaScript("app.alert(1)".into())),
+        exit.clone(),
+        (Trigger::OnFocus, FieldAction::Named("NextPage".into())),
+    ];
+    set_field_actions(&mut doc, "go", &new).unwrap();
+    let doc = reopen(&doc);
+    assert_eq!(field_actions(&doc, "go").unwrap(), new);
+    let wd = doc.get(go).as_dict().unwrap().clone();
+    let aa = doc.resolve(wd.get(b"AA").unwrap()).as_dict().unwrap().clone();
+    assert_eq!(aa.get(b"X"), Some(&Object::Ref(named_goto)));
+    // The chain is linked through /Next; the Launch action keeps its private key.
+    let first = doc.resolve(aa.get(b"E").unwrap()).as_dict().unwrap().clone();
+    assert_eq!(first.name(b"N"), Some(&b"Quit"[..]));
+    let second = doc.resolve(first.get(b"Next").unwrap()).as_dict().unwrap().clone();
+    assert_eq!(second.name(b"S"), Some(&b"Launch"[..]));
+    assert_eq!(second.get(b"X-Private"), Some(&Object::Int(7)));
+    let third = doc.resolve(second.get(b"Next").unwrap()).as_dict().unwrap().clone();
+    assert_eq!(third.name(b"S"), Some(&b"JavaScript"[..]));
+    assert!(third.get(b"Next").is_none());
+    // Mouse Up's first action is what a push button runs.
+    let up = doc.resolve(wd.get(b"A").unwrap()).as_dict().unwrap().clone();
+    assert_eq!(up.name(b"S"), Some(&b"JavaScript"[..]));
+    assert!(up.get(b"Next").is_some());
+
+    // Refusals change nothing: a menu item off the allowlist, an unknown action that isn't
+    // there, a page that doesn't exist, too many actions.
+    let mut doc = doc;
+    let saved = write_incremental(&doc, &SaveOptions::default()).unwrap();
+    for bad in [
+        vec![(Trigger::MouseUp, FieldAction::Named("Quit".into())), (Trigger::MouseUp, FieldAction::Named("Quit".into()))],
+        vec![(Trigger::MouseDown, FieldAction::Named("SaveAs".into()))],
+        vec![(Trigger::MouseDown, FieldAction::Other("ImportData".into()))],
+        vec![(Trigger::MouseDown, FieldAction::GoTo(9))],
+        vec![(Trigger::OnBlur, FieldAction::Reset(vec![])); MAX_ACTIONS_PER_TRIGGER + 1],
+    ] {
+        assert!(set_field_actions(&mut doc, "go", &bad).is_err(), "{bad:?}");
+        assert_eq!(write_incremental(&doc, &SaveOptions::default()).unwrap(), saved);
+    }
+    assert!(set_field_actions(&mut doc, "nope", &[]).is_err());
+    // Removing everything clears /A and /AA.
+    set_field_actions(&mut doc, "go", &[]).unwrap();
+    assert!(field_actions(&doc, "go").unwrap().is_empty());
+    let wd = doc.get(go).as_dict().unwrap().clone();
+    assert!(wd.get(b"A").is_none() && wd.get(b"AA").is_none());
+}
+
+#[test]
 fn push_buttons_read_hide_actions() {
     let mut doc = fixture();
     let go = field(&fields(&doc), "go").obj;
