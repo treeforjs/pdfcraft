@@ -1343,30 +1343,40 @@ fn excessive_edit_text_and_source_style_segments_are_refused_atomically() {
 
 #[test]
 fn run_preserving_edits_refuse_operator_expansion_before_emitting_it() {
-    // Within the 1,000,000-character ceiling, per-glyph placement would emit ~10 operators per
-    // plain character and ~24 per underlined one. Preparation counts them before anything is
-    // emitted and refuses the whole edit; nothing is truncated and the document is unchanged.
+    // Every underlined character is placed, marked and given its own path: 16 operators. Within
+    // the 1,000,000-character ceiling that can exceed the 2,000,000-operator budget; the count is
+    // checked before anything is emitted and the whole edit is refused, nothing is truncated and
+    // the document is unchanged (whole paragraph and selected range alike).
     let mut doc = text_page("BT /F1 12 Tf 72 700 Td (Small) Tj ET");
     let before = write_incremental(&doc, &SaveOptions::default()).unwrap();
-    let plain = "x".repeat(1_000_000);
-    let underlined = "ab ".repeat(30_000);
-    for (text, style) in [
-        (plain.as_str(), text::BlockStyle { range: Some([0, 1]), color: Some([0.0, 0.0, 1.0]), ..Default::default() }),
-        (underlined.as_str(), text::BlockStyle { underline: Some(true), ..Default::default() }),
+    let underlined = "ab ".repeat(45_000);
+    let all = underlined.chars().count();
+    for style in [
+        text::BlockStyle { underline: Some(true), ..Default::default() },
+        text::BlockStyle { range: Some([0, all]), underline: Some(true), ..Default::default() },
     ] {
-        let error = text::rewrite_block(&mut doc, 0, 0, Some(text), &style).unwrap_err();
+        let error = text::rewrite_block(&mut doc, 0, 0, Some(&underlined), &style).unwrap_err();
         assert!(error.to_string().contains("more than 2000000 PDF operators"), "{error}");
         assert!(error.to_string().contains("smaller paragraphs"), "{error}");
         assert_eq!(write_incremental(&doc, &SaveOptions::default()).unwrap(), before);
         assert_eq!(text::text_blocks(&doc, 0).unwrap()[0].text, "Small");
     }
     // The same underline at a size well inside the budget succeeds and reads back.
+    let mut small = doc.clone();
     let text = "ab ".repeat(2_000);
-    text::rewrite_block(&mut doc, 0, 0, Some(&text), &text::BlockStyle { underline: Some(true), ..Default::default() }).unwrap();
-    let doc = reopen(&doc);
-    let blocks = text::text_blocks(&doc, 0).unwrap();
+    text::rewrite_block(&mut small, 0, 0, Some(&text), &text::BlockStyle { underline: Some(true), ..Default::default() }).unwrap();
+    let small = reopen(&small);
+    let blocks = text::text_blocks(&small, 0).unwrap();
     assert!(blocks.iter().flat_map(|b| &b.runs).all(|r| r.underline));
     assert_eq!(blocks.iter().map(|b| b.text.split_whitespace().count()).sum::<usize>(), 2_000);
+    // Plain characters are shown together, one placement per row and face, so even the
+    // character ceiling stays far inside the budget instead of expanding per glyph.
+    let plain = "x".repeat(1_000_000);
+    text::rewrite_block(&mut doc, 0, 0, Some(&plain), &text::BlockStyle { range: Some([0, 1]), color: Some([0.0, 0.0, 1.0]), ..Default::default() })
+        .unwrap();
+    let ops = pdfcraft_content::parse(&page_content_bytes(&doc, 0)).ops;
+    assert!(ops.len() < 64, "{} operators", ops.len());
+    assert_eq!(shows(&doc).iter().map(|(bytes, _)| bytes.len()).sum::<usize>(), 1_000_000);
 }
 
 #[test]
@@ -1502,11 +1512,12 @@ fn independent_paragraph_substitutions_keep_their_own_faces() {
 #[test]
 fn page_font_coverage_matches_paragraph_whitespace_normalization() {
     let mut doc = text_page("BT /F1 12 Tf 72 700 Td (First) Tj ET");
-    let fonts = text::page_fonts(&doc, 0, "  AB\n\t BA ").unwrap();
+    let fonts = text::page_fonts(&doc, 0, "  AB\r\n\t BA ").unwrap();
     assert!(fonts.iter().find(|f| f.resource == "F1").unwrap().encodable);
     let style = text::BlockStyle { font_resource: Some("F1".into()), ..Default::default() };
-    text::rewrite_block(&mut doc, 0, 0, Some("  AB\n\t BA "), &style).unwrap();
-    assert_eq!(text::text_blocks(&reopen(&doc), 0).unwrap()[0].text, "AB BA");
+    text::rewrite_block(&mut doc, 0, 0, Some("  AB\r\n\t BA "), &style).unwrap();
+    // Typed spaces are kept; a line break (CR LF counts once) and a tab each become one space.
+    assert_eq!(text::text_blocks(&reopen(&doc), 0).unwrap()[0].text, "  AB   BA ");
     let fonts = text::page_fonts(&doc, 0, "AB\u{3000}BA").unwrap();
     assert!(!fonts.iter().find(|f| f.resource == "F1").unwrap().encodable, "ideographic space is not silently replaced");
     assert!(text::rewrite_block(&mut doc, 0, 0, Some("AB\u{3000}BA"), &style).is_err());
@@ -1804,19 +1815,52 @@ fn underline_associations(doc: &Document) -> Vec<Association> {
     out
 }
 
-/// The x of every non-empty `Tj`'s text matrix on page 0.
+/// The x where every glyph shown on page 0 starts, interpreting `Tm`, `Tf`, `Tj` and `TJ`
+/// (Helvetica widths, no Tc/Tw/Tz, unscaled upright text matrices: the fixtures that use it).
 fn shown_x(doc: &Document) -> Vec<f64> {
-    let mut tm = [0.0; 6];
-    let mut out = Vec::new();
+    let (mut tm, mut size, mut out) = ([0.0; 6], 0.0, Vec::new());
     for op in pdfcraft_content::parse(&page_content_bytes(doc, 0)).ops {
-        if op.is("Tm") {
-            tm = op.nums::<6>().unwrap();
-        }
-        if op.is("Tj") && matches!(op.operands.first(), Some(Object::String(s)) if !s.bytes.is_empty()) {
-            out.push(tm[4]);
+        match op.op.as_slice() {
+            b"Tm" => tm = op.nums::<6>().unwrap(),
+            b"Tf" => size = op.num(1).unwrap(),
+            b"Tj" | b"TJ" => {
+                let parts = match op.operands.first() {
+                    Some(Object::Array(parts)) => parts.clone(),
+                    other => other.cloned().into_iter().collect(),
+                };
+                for part in parts {
+                    match part {
+                        Object::String(s) => {
+                            for byte in s.bytes {
+                                out.push(tm[4]);
+                                tm[4] += pdfcraft_fonts::standard_text_width("Helvetica", &char::from(byte).to_string(), size).unwrap();
+                            }
+                        }
+                        number => tm[4] -= number.as_f64().unwrap() / 1000.0 * size,
+                    }
+                }
+            }
+            _ => {}
         }
     }
     out
+}
+
+/// Every `Tj`/`TJ` on page 0 with its strings joined and its TJ numbers, in content order.
+fn shows(doc: &Document) -> Vec<(Vec<u8>, Vec<f64>)> {
+    pdfcraft_content::parse(&page_content_bytes(doc, 0))
+        .ops
+        .iter()
+        .filter(|op| op.is("Tj") || op.is("TJ"))
+        .map(|op| {
+            let parts = match op.operands.first() {
+                Some(Object::Array(parts)) => parts.clone(),
+                other => other.cloned().into_iter().collect(),
+            };
+            let bytes = parts.iter().filter_map(Object::as_string).flat_map(|s| s.bytes.clone()).collect();
+            (bytes, parts.iter().filter_map(Object::as_f64).collect())
+        })
+        .collect()
 }
 
 #[test]
@@ -1876,8 +1920,13 @@ fn wrapped_and_partially_restyled_underlines_keep_one_path_per_glyph() {
     assert_eq!(underlined, "beta gamma delta");
     assert!(block.runs.iter().any(|r| r.underline && r.bold), "{:?}", block.runs);
     let a = underline_associations(&doc);
-    // One association per underlined character (the font maps each code to one character).
-    assert_eq!(a.len(), "beta gamma delta".chars().count(), "{a:?}");
+    // One association per underlined character shown (the font maps each code to one
+    // character). The space a row wraps at is not drawn when it has the style of the character
+    // before it ("beta "), so no underline runs into the margin there; a space whose style
+    // differs (the regular one after bold "gamma") is kept so styles read back unchanged.
+    let letters: Vec<u8> = a.iter().map(|a| a.bytes[0]).filter(|b| *b != b' ').collect();
+    assert_eq!(letters, b"betagammadelta", "{a:?}");
+    assert_eq!(a.len(), "beta gamma delta".chars().count() - 1, "{a:?}");
     let rows: std::collections::BTreeSet<i64> = a.iter().map(|a| (a.tm[5] * 1000.0).round() as i64).collect();
     assert!(rows.len() > 1, "the underlined range wraps over several rows and each path follows its row");
 }
@@ -2437,4 +2486,151 @@ fn hostile_form_xobjects_are_read_once() {
     let texts: Vec<String> = text::reading_blocks(&doc, 0).unwrap().into_iter().map(|b| b.text).collect();
     assert_eq!(texts, ["once", "from b", "from a", "inherited", "bad matrix"]);
     assert!(images::reading_images(&doc, 0).unwrap().is_empty());
+}
+
+// --- M7 (WP5): whole-paragraph edits through the run-preserving path ---
+
+#[test]
+fn whole_paragraph_edits_keep_untouched_codes_tj_kerning_and_repeated_spaces() {
+    // Kerned TJ pairs, a run joined from a following Tj, and doubled spaces.
+    let source = "BT /F1 12 Tf 1 0 0 1 72 700 Tm [(AV) -150 (AW) 80 (ay)] TJ (  double  gap end) Tj ET";
+    let mut doc = text_page(source);
+    let before_x = shown_x(&doc);
+    let block = text::text_blocks(&doc, 0).unwrap().remove(0);
+    assert_eq!(block.text, "AVAWay  double  gap end");
+    let fonts_before = text::page_fonts(&doc, 0, "").unwrap();
+    let edited = "AVAWay  double  gap finish";
+    assert_eq!(text::replace_block(&mut doc, 0, 0, edited).unwrap().substituted, None);
+    let doc = reopen(&doc);
+    assert_eq!(text::text_blocks(&doc, 0).unwrap()[0].text, edited, "repeated spaces survive");
+    // One show in the source font: the original codes, and the source kerning written back as
+    // the same TJ numbers (not re-encoded from Unicode, not one placement per glyph).
+    assert_eq!(shows(&doc), [(edited.as_bytes().to_vec(), vec![-150.0, 80.0])]);
+    // Every untouched glyph starts exactly where it did.
+    let untouched = "AVAWay  double  gap ".len();
+    let after_x = shown_x(&doc);
+    for (i, (a, b)) in before_x.iter().zip(&after_x).take(untouched).enumerate() {
+        assert!((a - b).abs() < 1e-3, "glyph {i} moved from {a} to {b}");
+    }
+    assert_eq!(after_x.len(), edited.len());
+    // No font resource is added or replaced for text the source font can show.
+    assert_eq!(text::page_fonts(&doc, 0, "").unwrap(), fonts_before);
+}
+
+#[test]
+fn whole_paragraph_edits_keep_codes_that_unicode_would_re_encode_differently() {
+    // Code 0x41 shows "fi" (a ligature glyph); re-encoding "fi" from Unicode would draw two
+    // glyphs, or substitute the face. The untouched ligature keeps its single source code.
+    let mut doc = text_page("BT /F1 12 Tf 72 700 Td (AB) Tj ET");
+    let cmap = doc.add(Object::Stream(Stream::flate(
+        Dict::new(),
+        b"1 begincodespacerange <00> <ff> endcodespacerange 2 beginbfchar <41> <00660069> <42> <0058> endbfchar",
+    )));
+    doc.update_dict(pdfcraft_cos::ObjRef::new(5, 0), |d| d.set(b"ToUnicode".to_vec(), Object::Ref(cmap))).unwrap();
+    assert_eq!(text::text_blocks(&doc, 0).unwrap()[0].text, "fiX");
+    text::replace_block(&mut doc, 0, 0, "fiX and more").unwrap();
+    let doc = reopen(&doc);
+    assert_eq!(text::text_blocks(&doc, 0).unwrap()[0].text, "fiX and more");
+    let shown = shows(&doc);
+    assert!(shown.first().is_some_and(|(bytes, _)| bytes.starts_with(b"AB")), "{shown:?}");
+}
+
+#[test]
+fn whole_paragraph_reflow_keeps_leading_scales_it_with_size_and_wraps_cleanly() {
+    let para = "BT /F1 10 Tf 14 TL 100 700 Td (One two three four five six seven) Tj T* (eight nine ten eleven twelve) Tj ET";
+    let mut doc = text_page(para);
+    let width = {
+        let b = &text::text_blocks(&doc, 0).unwrap()[0];
+        b.rect[2] - b.rect[0]
+    };
+    let text = "One two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen";
+    text::replace_block(&mut doc, 0, 0, text).unwrap();
+    let doc = reopen(&doc);
+    let block = text::text_blocks(&doc, 0).unwrap().remove(0);
+    assert_eq!(block.text, text);
+    assert!(block.line_count >= 3, "{block:?}");
+    let lines = text::text_lines(&doc, 0).unwrap();
+    let rows: Vec<&text::TextLine> = block.lines.iter().map(|i| &lines[*i]).collect();
+    for pair in rows.windows(2) {
+        assert!((pair[0].origin_baseline() - pair[1].origin_baseline() - 14.0).abs() < 0.01, "the source leading is kept");
+    }
+    for row in &rows {
+        assert!(row.rect[2] - row.rect[0] <= width + 0.01, "{:?} fits {width}", row.text);
+        assert!((row.rect[0] - 100.0).abs() < 1e-6, "{:?} starts at the left edge", row.text);
+    }
+    // The space a row wraps at is not drawn (the reader joins rows with one space again).
+    assert!(rows.iter().all(|r| !r.text.ends_with(' ')), "{:?}", rows.iter().map(|r| &r.text).collect::<Vec<_>>());
+    // Doubling the size doubles the line spacing; the words stay the same.
+    let mut doc = doc;
+    text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { size: Some(20.0), ..Default::default() }).unwrap();
+    let doc = reopen(&doc);
+    let block = text::text_blocks(&doc, 0).unwrap().remove(0);
+    assert_eq!(block.text, text);
+    let lines = text::text_lines(&doc, 0).unwrap();
+    let (a, b) = (&lines[block.lines[0]], &lines[block.lines[1]]);
+    assert!((a.origin_baseline() - b.origin_baseline() - 28.0).abs() < 0.01, "{} {}", a.origin_baseline(), b.origin_baseline());
+    // A single line with a TL reflows at that TL when it has to wrap.
+    let mut doc = text_page("BT /F1 10 Tf 16 TL 100 700 Td (Short) Tj ET");
+    text::rewrite_block(&mut doc, 0, 0, Some("Short text that now wraps"), &text::BlockStyle { width: Some(60.0), ..Default::default() }).unwrap();
+    let lines = text::text_lines(&reopen(&doc), 0).unwrap();
+    assert!(lines.len() > 1 && (lines[0].origin_baseline() - lines[1].origin_baseline() - 16.0).abs() < 0.01, "{lines:?}");
+}
+
+#[test]
+fn whole_paragraph_edits_remove_only_exact_fake_bold_copies() {
+    // A fake-bold copy (same codes, state and nearly the same place), a red shadow at the same
+    // spot, and an unrelated label drawn over it.
+    let source = "BT /F1 12 Tf 72 700 Td (Hello) Tj ET BT /F1 12 Tf 72.3 700 Td (Hello) Tj ET \
+                  q BT 1 0 0 rg /F1 12 Tf 72.5 699.5 Td (Hello) Tj ET Q BT /F1 12 Tf 72 700 Td (Label) Tj ET";
+    let mut doc = text_page(source);
+    assert_eq!(text::text_blocks(&doc, 0).unwrap().len(), 4);
+    text::replace_block(&mut doc, 0, 0, "Hello world").unwrap();
+    let doc = reopen(&doc);
+    let blocks = text::text_blocks(&doc, 0).unwrap();
+    let texts: Vec<(&str, [f64; 3])> = blocks.iter().map(|b| (b.text.as_str(), b.color)).collect();
+    assert_eq!(texts, [("Hello world", [0.0; 3]), ("Hello", [1.0, 0.0, 0.0]), ("Label", [0.0; 3])], "only the exact copy goes");
+    // A selected-range edit never removes a copy, exact or not.
+    let mut doc = text_page(source);
+    text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { range: Some([0, 1]), color: Some([0.0, 0.0, 1.0]), ..Default::default() }).unwrap();
+    assert_eq!(text::text_blocks(&reopen(&doc), 0).unwrap().len(), 4);
+    // Nor does a whole edit of a paragraph whose runs differ in style.
+    let mut doc = text_page("BT /F1 12 Tf 72 700 Td (Hi) Tj 2 Tc (Yo) Tj ET BT /F1 12 Tf 72 700 Td (Hi) Tj ET");
+    text::replace_block(&mut doc, 0, 0, "Hi there").unwrap();
+    let texts: Vec<String> = text::text_blocks(&reopen(&doc), 0).unwrap().into_iter().map(|b| b.text).collect();
+    assert_eq!(texts, ["Hi there", "Hi"]);
+}
+
+#[test]
+fn whole_paragraph_text_edits_keep_underline_associations_of_untouched_words() {
+    let mut doc = text_page("BT /F1 12 Tf 72 700 Td (Before abba after.) Tj ET");
+    text::rewrite_block(&mut doc, 0, 0, None, &text::BlockStyle { range: Some([7, 11]), underline: Some(true), ..Default::default() }).unwrap();
+    let mut doc = reopen(&doc);
+    let before: Vec<f64> = underline_associations(&doc).iter().map(|a| a.tm[4]).collect();
+    assert_eq!(before.len(), 4);
+    text::replace_block(&mut doc, 0, 0, "Before abba later!").unwrap();
+    let doc = reopen(&doc);
+    let block = text::text_blocks(&doc, 0).unwrap().remove(0);
+    assert_eq!(block.text, "Before abba later!");
+    let underlined: String = block.runs.iter().filter(|r| r.underline).flat_map(|r| block.text.chars().skip(r.start).take(r.end - r.start)).collect();
+    assert_eq!(underlined, "abba");
+    let after = underline_associations(&doc);
+    assert_eq!(after.iter().map(|a| a.bytes.clone()).collect::<Vec<_>>(), [b"a".to_vec(), b"b".to_vec(), b"b".to_vec(), b"a".to_vec()]);
+    for (a, b) in before.iter().zip(after.iter().map(|a| a.tm[4])) {
+        assert!((a - b).abs() < 1e-3, "{before:?} -> {after:?}");
+    }
+}
+
+#[test]
+fn whole_paragraph_edits_leave_shared_resources_alone_and_transformed_text_on_the_legacy_path() {
+    // Page 0 inherits its resources; reusing its own font must not copy them onto the page.
+    let mut doc = fixture();
+    text::replace_block(&mut doc, 0, 0, "Hi  there").unwrap();
+    let doc = reopen(&doc);
+    assert!(doc.get(pdfcraft_cos::ObjRef::new(3, 0)).as_dict().unwrap().get(b"Resources").is_none());
+    assert_eq!(text::text_blocks(&doc, 0).unwrap()[0].text, "Hi  there");
+    // Rotated text cannot be placed by the run path yet: whole edits keep working through the
+    // legacy re-encoding (which still normalizes whitespace), selected ranges refuse.
+    let mut rotated = text_page("BT /F1 12 Tf 0 1 -1 0 100 200 Tm (Rotated) Tj ET");
+    text::replace_block(&mut rotated, 0, 0, "Turned  text").unwrap();
+    assert_eq!(text::text_blocks(&reopen(&rotated), 0).unwrap()[0].text, "Turned text");
 }

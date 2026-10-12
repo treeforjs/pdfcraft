@@ -879,8 +879,10 @@ pub struct PageFont {
     pub encodable: bool,
 }
 
+/// Fonts in the page's resources, and whether each can encode `text` as a whole-paragraph edit
+/// would show it (see [`rewrite_block`]).
 pub fn page_fonts(doc: &Document, page: usize, text: &str) -> Result<Vec<PageFont>, EditError> {
-    let text = normalized_paragraph(text);
+    let text = mixed::typed_text(text);
     let p = page_dict(doc, page)?;
     let res = p.dict.get(b"Resources").map(|r| doc.resolve(r)).and_then(|r| r.as_dict().cloned()).unwrap_or_default();
     let fonts = res.get(b"Font").map(|f| doc.resolve(f)).and_then(|f| f.as_dict().cloned()).unwrap_or_default();
@@ -1375,7 +1377,9 @@ fn wrap(text: &str, width: f64, advance: impl Fn(&str) -> f64) -> Vec<String> {
 
 /// Replace paragraph `block` (an index into [`text_blocks`]) with `text`, rewrapped to the
 /// paragraph's width with its line spacing. The paragraph keeps its first line's position, font
-/// (or a matching fallback when the font can't show the text), size and colour.
+/// (or a matching fallback when the font can't show the text), size and colour. In upright
+/// paragraphs, characters the edit leaves alone keep their source codes, styles and TJ spacing,
+/// and typed repeated spaces are kept.
 pub fn replace_block(doc: &mut Document, page: usize, block: usize, text: &str) -> Result<LineEdit, EditError> {
     rewrite_block(doc, page, block, Some(text), &BlockStyle::default())
 }
@@ -1513,10 +1517,22 @@ fn rewrite_block_inner(doc: &mut Document, page: usize, block: usize, text: Opti
             "this paragraph uses stroking, invisible text, clipping, an active drawing path or an extended graphics state; its appearance is preserved unchanged".into(),
         ));
     }
-    if style.range.is_some() || style.underline.is_some() || b.runs.iter().any(|r| r.underline) || b.runs.windows(2).any(|r| r[0].state != r[1].state)
-    {
-        return mixed::rewrite(doc, page, &lines, b, text.unwrap_or(&b.text), style);
+    let uniform = !b.runs.windows(2).any(|r| r[0].state != r[1].state);
+    let decorated = b.runs.iter().any(|r| r.underline);
+    if mixed::upright(&lines, b) || style.range.is_some() || style.underline.is_some() || decorated || !uniform {
+        // Whole-paragraph text is shown as typed, except for breaks a PDF paragraph cannot
+        // hold; a selected range keeps its offsets (the run path maps those characters itself).
+        let typed = match (text, style.range) {
+            (Some(text), None) => mixed::typed_text(text),
+            (text, _) => text.unwrap_or(&b.text).to_owned(),
+        };
+        // Exact fake-bold copies go only with a whole, uniform, undecorated paragraph, as before.
+        let fake_bold = style.range.is_none() && uniform && !decorated;
+        return mixed::rewrite(doc, page, &lines, b, &typed, style, fake_bold);
     }
+    // Legacy re-encoding, now only for whole edits of uniform transformed (rotated, skewed or
+    // reflected) paragraphs, which the run path cannot place yet. It normalizes whitespace and
+    // re-encodes every word from Unicode.
     let members: Vec<&TextLine> = b.lines.iter().map(|i| &lines[*i]).collect();
     let first = members[0];
     let p = page_dict(doc, page)?;

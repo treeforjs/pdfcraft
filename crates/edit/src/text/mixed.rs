@@ -1,23 +1,56 @@
-//! Run-preserving paragraph reflow. Character offsets refer to Unicode scalars; PDF character
-//! codes are recovered through each run's own encoding, including multi-scalar ToUnicode maps.
+//! Run-preserving paragraph reflow, used for every upright paragraph edit (whole-paragraph
+//! replacement as well as selected ranges). Character offsets refer to Unicode scalars; PDF
+//! character codes are recovered through each run's own encoding, including multi-scalar
+//! ToUnicode maps. Untouched characters keep their source codes and TJ adjustments, and
+//! repeated spaces are shown as typed.
+//!
+//! Emission is compact: consecutive glyphs of one face on one row become a single `Tj`/`TJ`
+//! placed by one `Tm`, with the source adjustments (kerning, positioned gaps) and any
+//! justification written back as TJ numbers. A face's text state is replayed only when the
+//! face changes. A code-less logical space (a gap the source made by repositioning) starts a
+//! new placement instead, and each underlined glyph keeps its own placement, marker and path.
 
 use super::*;
 
 pub(super) const MAX_SEGMENTS: usize = 8192;
 const MAX_EDIT_CHARACTERS: usize = 1_000_000;
-/// Run-preserving reflow places every glyph explicitly: each one replays its text state, and an
-/// underlined glyph adds two association markers and its own path. The character ceiling alone
-/// would allow tens of millions of in-memory operators, so the emitted count is budgeted while
-/// the glyphs are prepared, before any of them is emitted. About 150 bytes per operator keeps the
-/// worst case to a few hundred megabytes; ordinary paragraphs use a tiny fraction of it.
+/// Underlined glyphs are each placed, marked and given their own path, so the character ceiling
+/// alone would allow tens of millions of in-memory operators. The emitted count is budgeted
+/// before anything is emitted: a guaranteed minimum while the glyphs are prepared, then the
+/// exact count of the planned placements. About 150 bytes per operator keeps the worst case to a
+/// few hundred megabytes; ordinary paragraphs use a tiny fraction of it.
 pub(super) const MAX_EMITTED_OPS: usize = 2_000_000;
-/// Operators emitted per glyph besides its state: `Tm` and `Tj`.
-const GLYPH_OPS: usize = 2;
-/// An underlined glyph's text marker pair plus its marked path
+/// One placement of consecutive glyphs: `Tm` and `Tj`/`TJ`.
+const CHUNK_OPS: usize = 2;
+/// An underlined glyph: `Tm`, its text marker pair around `Tj`, and its marked path
 /// (`BDC q cm RG w J d m l S Q EMC`).
-const UNDERLINE_OPS: usize = 2 + 12;
+const UNDERLINED_GLYPH_OPS: usize = 4 + 12;
 /// Paragraph framing: `q`, an optional `cm`, `BT`, `ET` and the closing `Q`.
 const FRAME_OPS: usize = 5;
+
+/// Characters a single PDF paragraph cannot represent (line and page breaks, tabs) are shown as
+/// one space each; a CR LF pair is one break. Everything else, including repeated, no-break and
+/// ideographic spaces, is shown as typed.
+pub(super) fn typed_char(ch: char) -> char {
+    if matches!(ch, '\n' | '\r' | '\t' | '\u{b}' | '\u{c}' | '\u{85}' | '\u{2028}' | '\u{2029}') { ' ' } else { ch }
+}
+
+/// Replacement text for a whole paragraph as it will be shown (see [`typed_char`]).
+pub(super) fn typed_text(text: &str) -> String {
+    text.replace("\r\n", "\n").chars().map(typed_char).collect()
+}
+
+/// Whether a paragraph's text space is upright in page space (no rotation, skew or reflection).
+/// Grouping, gaps and row placement are inferred from page X, which is only valid there.
+pub(super) fn upright(lines: &[TextLine], block: &TextBlock) -> bool {
+    let Some(first) = block.lines.first().and_then(|i| lines.get(*i)) else { return false };
+    let transform = Matrix(first.origin.tm).then(&Matrix(first.origin.ctm)).0;
+    transform[1].abs() <= 1e-8
+        && transform[2].abs() <= 1e-8
+        && transform[0] > 0.0
+        && transform[3] > 0.0
+        && block.runs.iter().all(|r| r.state.scale.is_finite() && r.state.scale > 0.0)
+}
 
 fn over_budget() -> EditError {
     EditError::Invalid(format!(
@@ -50,15 +83,16 @@ struct Prepared {
     faces: Vec<Face>,
     glyphs: Vec<Glyph>,
     substituted: Option<String>,
-    /// Upper bound on the operators [`rewrite`] emits, already checked against
-    /// [`MAX_EMITTED_OPS`].
-    emitted: usize,
 }
 
 struct Glyph {
     bytes: Vec<u8>,
     face: usize,
+    /// Its full advance in user space, including its source adjustment.
     advance: f64,
+    /// The advance a viewer applies when showing its codes (widths, Tc, Tw, Tz) in text space,
+    /// so the rest of `advance` is written as a TJ number.
+    shown: f64,
     space: bool,
 }
 
@@ -98,7 +132,7 @@ fn segments(block: &TextBlock, text: &str, range: Option<[usize; 2]>) -> Result<
         let selected = range.is_none_or(|[start, end]| index >= start && index < end);
         // PDF paragraph editing joins typed line separators; preserve deliberate repeated and
         // ideographic spaces instead of silently renumbering a user's selected characters.
-        let ch = if matches!(ch, '\n' | '\r' | '\t') { ' ' } else { ch };
+        let ch = typed_char(ch);
         if let Some(last) = out.last_mut()
             && last.source == source
             && last.selected == selected
@@ -178,11 +212,13 @@ fn prepare(
     k: f64,
     horizontal: f64,
 ) -> Result<Prepared, EditError> {
-    let mut faces = Vec::new();
+    let mut faces: Vec<Face> = Vec::new();
     let mut glyphs = Vec::new();
     let mut substituted = None;
     let mut metric_cache = HashMap::new();
-    let mut emitted = FRAME_OPS;
+    // Underlined glyphs cost a fixed number of operators however they are placed; refuse an
+    // edit whose decorations alone exceed the budget before building the rest of it.
+    let mut minimum = FRAME_OPS;
     for segment in segments {
         let source = block.runs.get(segment.source).ok_or_else(|| EditError::Invalid("the paragraph has no source style".into()))?;
         let mut state = source.state.clone();
@@ -231,7 +267,6 @@ fn prepare(
                 state.scale = s / 100.0;
             }
         }
-        let face = faces.len();
         let source_glyphs = if let Some(range) = &segment.source_range
             && keep_codes
         {
@@ -255,12 +290,16 @@ fn prepare(
                 "editable underlines currently need a device Gray, RGB or CMYK text color; choose an RGB color first".into(),
             ));
         }
-        let state_ops = state.op_count();
+        // Segments that end up with an identical face (a preserved prefix and the text typed
+        // after it, say) share it, so their glyphs can be shown together.
+        let face = match faces.last() {
+            Some(last) if last.underline == underline && last.state == state => faces.len() - 1,
+            _ => {
+                faces.push(Face { state: state.clone(), metrics: m.clone(), underline });
+                faces.len() - 1
+            }
+        };
         for mut glyph in source_glyphs {
-            // Budget this glyph before keeping it. Whether it is decorated is decided below by
-            // the same rule `rewrite` uses; counting the larger case keeps this an upper bound.
-            let per_glyph = state_ops.saturating_add(GLYPH_OPS).saturating_add(if underline { UNDERLINE_OPS } else { 0 });
-            emitted = emitted.checked_add(per_glyph).filter(|n| *n <= MAX_EMITTED_OPS).ok_or_else(over_budget)?;
             let space = glyph.text == " ";
             let nominal: f64 = m
                 .codes(&glyph.bytes)
@@ -278,11 +317,21 @@ fn prepare(
             if underline && space && glyph.bytes.is_empty() {
                 glyph.bytes = m.encode(" ").ok_or_else(|| EditError::Invalid("the font cannot encode an underlined paragraph separator".into()))?;
             }
-            glyphs.push(Glyph { bytes: glyph.bytes, face, advance, space });
+            // The advance a viewer gives these codes; a separator encoded just above is shown,
+            // so it is measured from its bytes rather than taken from `nominal`.
+            let shown = m
+                .codes(&glyph.bytes)
+                .iter()
+                .map(|(code, len)| m.width(*code) * size + state.char_spacing + if m.is_space(*code, *len) { state.word_spacing } else { 0.0 })
+                .sum::<f64>()
+                * state.scale;
+            if underline && !glyph.bytes.is_empty() {
+                minimum = minimum.checked_add(UNDERLINED_GLYPH_OPS).filter(|n| *n <= MAX_EMITTED_OPS).ok_or_else(over_budget)?;
+            }
+            glyphs.push(Glyph { bytes: glyph.bytes, face, advance, shown, space });
         }
-        faces.push(Face { state, metrics: m, underline });
     }
-    Ok(Prepared { faces, glyphs, substituted, emitted })
+    Ok(Prepared { faces, glyphs, substituted })
 }
 
 fn rows(glyphs: &[Glyph], width: f64) -> Vec<std::ops::Range<usize>> {
@@ -313,6 +362,132 @@ fn rows(glyphs: &[Glyph], width: f64) -> Vec<std::ops::Range<usize>> {
     rows
 }
 
+/// One placement in the planned paragraph.
+enum Item {
+    /// Consecutive glyphs of one face on one row: each glyph with the TJ adjustment (text
+    /// space) that follows it.
+    Chunk { face: usize, x: f64, row: usize, glyphs: Vec<(usize, f64)> },
+    /// An underlined glyph, placed, marked and decorated on its own.
+    Underlined { face: usize, x: f64, row: usize, glyph: usize, width: f64 },
+}
+
+impl Item {
+    fn face(&self) -> usize {
+        match self {
+            Item::Chunk { face, .. } | Item::Underlined { face, .. } => *face,
+        }
+    }
+}
+
+/// Place the glyphs of `rows`. A row that wraps drops the one space it wraps at when that space
+/// has the style of the character before it: the reader joins rows with a space in that
+/// character's style, so text and styles read back unchanged. Alignment and justification
+/// measure each row without its trailing spaces.
+fn plan(glyphs: &[Glyph], faces: &[Face], rows: &[std::ops::Range<usize>], width: f64, horizontal: f64, style: &BlockStyle) -> Vec<Item> {
+    let same_face = |a: &Glyph, b: &Glyph| match (faces.get(a.face), faces.get(b.face)) {
+        (Some(a), Some(b)) => a.underline == b.underline && a.state == b.state,
+        _ => false,
+    };
+    let mut items = Vec::new();
+    for (row_index, range) in rows.iter().enumerate() {
+        let last_row = row_index + 1 == rows.len();
+        let mut end = range.end;
+        let wrap_space = end.checked_sub(1).filter(|i| *i > range.start).and_then(|i| Some((glyphs.get(i)?, glyphs.get(i - 1)?)));
+        if !last_row && wrap_space.is_some_and(|(space, before)| space.space && same_face(space, before)) {
+            end -= 1;
+        }
+        let line = glyphs.get(range.start..end).unwrap_or_default();
+        let trailing = line.iter().rev().take_while(|g| g.space).count();
+        let measured = line.get(..line.len().saturating_sub(trailing)).unwrap_or_default();
+        let advance: f64 = measured.iter().map(|g| g.advance).sum();
+        let free = (width - advance).max(0.0);
+        let mut x = match style.align {
+            Some(crate::added::Align::Center) => free / 2.0,
+            Some(crate::added::Align::Right) => free,
+            _ => 0.0,
+        } / horizontal;
+        let spaces = measured.iter().filter(|g| g.space).count();
+        let justify = style.align == Some(crate::added::Align::Justify) && !last_row && spaces > 0;
+        let extra = if justify { free / horizontal / spaces as f64 } else { 0.0 };
+        let mut chunk: Option<Item> = None;
+        for (offset, glyph) in line.iter().enumerate() {
+            let index = range.start + offset;
+            let width = glyph.advance / horizontal + if glyph.space && offset < measured.len() { extra } else { 0.0 };
+            let underlined = faces.get(glyph.face).is_some_and(|f| f.underline) && !glyph.bytes.is_empty();
+            if underlined || glyph.bytes.is_empty() {
+                // A code-less gap or a decorated glyph ends the current placement.
+                items.extend(chunk.take());
+                if underlined {
+                    items.push(Item::Underlined { face: glyph.face, x, row: row_index, glyph: index, width });
+                }
+            } else {
+                match &mut chunk {
+                    Some(Item::Chunk { face, glyphs, .. }) if *face == glyph.face => glyphs.push((index, width - glyph.shown)),
+                    _ => {
+                        items.extend(chunk.take());
+                        chunk = Some(Item::Chunk { face: glyph.face, x, row: row_index, glyphs: vec![(index, width - glyph.shown)] });
+                    }
+                }
+            }
+            x += width;
+        }
+        items.extend(chunk);
+    }
+    items
+}
+
+/// Exactly how many operators [`rewrite`] emits for `items`.
+fn count(items: &[Item], faces: &[Face]) -> usize {
+    let mut total = FRAME_OPS;
+    let mut current = None;
+    for item in items {
+        if current != Some(item.face()) {
+            current = Some(item.face());
+            total = total.saturating_add(faces.get(item.face()).map_or(0, |f| f.state.op_count()));
+        }
+        total = total.saturating_add(match item {
+            Item::Chunk { .. } => CHUNK_OPS,
+            Item::Underlined { .. } => UNDERLINED_GLYPH_OPS,
+        });
+    }
+    total
+}
+
+/// The `Tj`/`TJ` showing a chunk: its glyphs' codes, with each adjustment (text space) after its
+/// glyph as a TJ number in thousandths of the face's scaled size.
+fn show(glyphs: &[Glyph], chunk: &[(usize, f64)], face: &Face) -> Result<Op, EditError> {
+    let size = face.state.font.as_ref().map_or(0.0, |(_, s)| *s);
+    let unit = size * face.state.scale / 1000.0;
+    if !(unit.is_finite() && unit > 0.0) {
+        return Err(EditError::Invalid("the paragraph font size must be positive and finite".into()));
+    }
+    let mut parts: Vec<Object> = Vec::new();
+    let mut string = Vec::new();
+    for (position, (index, adjustment)) in chunk.iter().enumerate() {
+        let glyph = glyphs.get(*index).ok_or_else(|| EditError::Invalid("the paragraph lost a glyph".into()))?;
+        string.extend_from_slice(&glyph.bytes);
+        // Sub-micro-point residue from rounding is not an adjustment; nothing follows the last.
+        if adjustment.abs() > 1e-7 && position + 1 < chunk.len() {
+            let number = -adjustment / unit;
+            if !number.is_finite() {
+                return Err(EditError::Invalid("the font has invalid character advances".into()));
+            }
+            parts.push(Object::String(PdfString::literal(std::mem::take(&mut string))));
+            parts.push(pdfcraft_content::num(number));
+        }
+    }
+    if parts.is_empty() {
+        return Ok(Op::new("Tj", vec![Object::String(PdfString::literal(string))]));
+    }
+    if !string.is_empty() {
+        parts.push(Object::String(PdfString::literal(string)));
+    }
+    Ok(Op::new("TJ", vec![Object::Array(parts)]))
+}
+
+/// Rewrite `block` with `text` through the run-preserving path. `fake_bold` also removes exact,
+/// near-coincident copies of the paragraph's lines (see [`coincident_ops`]); callers pass it
+/// only for whole-paragraph edits of a uniform, undecorated paragraph.
 pub(super) fn rewrite(
     doc: &mut Document,
     page: usize,
@@ -320,27 +495,23 @@ pub(super) fn rewrite(
     block: &TextBlock,
     text: &str,
     style: &BlockStyle,
+    fake_bold: bool,
 ) -> Result<LineEdit, EditError> {
     let first = block.lines.first().and_then(|i| lines.get(*i)).ok_or_else(|| EditError::Invalid("the paragraph has no source line".into()))?;
     let o = &first.origin;
     let k = o.k.max(1e-6);
-    let transform = Matrix(o.tm).then(&Matrix(o.ctm)).0;
-    if transform[1].abs() > 1e-8
-        || transform[2].abs() > 1e-8
-        || transform[0] <= 0.0
-        || transform[3] <= 0.0
-        || block.runs.iter().any(|r| !r.state.scale.is_finite() || r.state.scale <= 0.0)
-    {
+    if !upright(lines, block) {
         return Err(EditError::Invalid(
             "mixed-run editing currently needs upright text; rotated, reflected or skewed text is preserved unchanged".into(),
         ));
     }
-    let horizontal = transform[0];
+    let horizontal = Matrix(o.tm).then(&Matrix(o.ctm)).0[0];
     let p = page_dict(doc, page)?;
     let res = p.dict.get(b"Resources").and_then(|r| doc.resolve(r).as_dict().cloned()).unwrap_or_default();
-    let mut fonts = res.get(b"Font").and_then(|f| doc.resolve(f).as_dict().cloned()).unwrap_or_default();
+    let original_fonts = res.get(b"Font").and_then(|f| doc.resolve(f).as_dict().cloned()).unwrap_or_default();
+    let mut fonts = original_fonts.clone();
     let segments = segments(block, text, style.range)?;
-    let Prepared { faces, glyphs, substituted, emitted } = prepare(doc, &mut fonts, block, &segments, style, k, horizontal)?;
+    let Prepared { faces, glyphs, substituted } = prepare(doc, &mut fonts, block, &segments, style, k, horizontal)?;
     let mut next_decoration = if faces.iter().any(|face| face.underline) {
         let pieces = Pieces::join(&content_streams(doc, &p.dict).into_iter().map(|(_, data)| data).collect::<Vec<_>>());
         decorations::Index::read(&pieces.parse().ops).next_id()?
@@ -353,11 +524,28 @@ pub(super) fn rewrite(
         if block.line_count == 1 { current.max(p.crop(doc)[2] - 36.0 - block.rect[0] - dx) } else { current }
     });
     let rows = rows(&glyphs, width);
+    // Line spacing in text space: requested, else the paragraph's own (or its TL for a single
+    // line) scaled with the largest size when sizes change, else 1.2 × the largest size.
     let old_lead = block.lines.iter().filter_map(|i| lines.get(*i)).map(|l| o.baseline - l.origin.baseline).find(|d| *d > block.size * 0.5);
-    let max_size = faces.iter().filter_map(|f| f.state.font.as_ref().map(|(_, s)| *s)).fold(block.size / k, f64::max);
-    let lead = style.line_spacing.map(|n| n * max_size).or_else(|| old_lead.map(|v| v / k)).unwrap_or(max_size * 1.2);
+    let max_size = faces.iter().filter_map(|f| f.state.font.as_ref().map(|(_, s)| *s)).fold(0.0, f64::max);
+    let max_size = if max_size > 0.0 { max_size } else { block.size / k };
+    let old_max = block.runs.iter().map(|r| r.size / k).fold(0.0, f64::max);
+    let ratio = if old_max > 0.0 && (max_size / old_max).is_finite() { max_size / old_max } else { 1.0 };
+    let lead = style
+        .line_spacing
+        .map(|n| n * max_size)
+        .or_else(|| old_lead.map(|v| v / k * ratio))
+        .or_else(|| (o.state.leading > 0.0).then_some(o.state.leading * ratio))
+        .unwrap_or(max_size * 1.2);
+    if !lead.is_finite() {
+        return Err(EditError::Invalid("the paragraph has an invalid line spacing".into()));
+    }
+    let items = plan(&glyphs, &faces, &rows, width, horizontal, style);
+    let emitted = count(&items, &faces);
+    if emitted > MAX_EMITTED_OPS {
+        return Err(over_budget());
+    }
     let n = pdfcraft_content::num;
-    // `emitted` was bounded by MAX_EMITTED_OPS during preparation.
     let mut ops = Vec::with_capacity(emitted);
     ops.push(Op::new("q", vec![]));
     if dx != 0.0 || dy != 0.0 {
@@ -369,73 +557,64 @@ pub(super) fn rewrite(
     }
     ops.push(Op::new("BT", vec![]));
     let mut underlines = Vec::new();
-    for (row_index, range) in rows.iter().enumerate() {
-        let line = glyphs.get(range.clone()).unwrap_or_default();
-        let advance: f64 = line.iter().map(|g| g.advance).sum();
-        let free = (width - advance).max(0.0);
-        let mut x = match style.align {
-            Some(crate::added::Align::Center) => free / 2.0,
-            Some(crate::added::Align::Right) => free,
-            _ => 0.0,
-        } / horizontal;
-        let spaces = line.iter().filter(|g| g.space).count();
-        let justify = style.align == Some(crate::added::Align::Justify) && row_index + 1 < rows.len() && spaces > 0;
-        let extra = if justify { free / horizontal / spaces as f64 } else { 0.0 };
-        // Every glyph's placement is explicit. This makes justification work with a Type 3
-        // font whose space code is not 32 and avoids leaking one run's Tz/Tw into another.
-        for glyph in line {
-            let face = faces.get(glyph.face).ok_or_else(|| EditError::Invalid("the run's font was lost".into()))?;
+    let mut current = None;
+    for item in &items {
+        let face = faces.get(item.face()).ok_or_else(|| EditError::Invalid("the run's font was lost".into()))?;
+        if current != Some(item.face()) {
+            current = Some(item.face());
             ops.extend(face.state.ops());
-            let tm = Matrix([1.0, 0.0, 0.0, 1.0, x, -(row_index as f64) * lead]).then(&Matrix(o.tm));
-            ops.push(Op::new("Tm", tm.0.into_iter().map(n).collect()));
-            let decoration = (face.underline && !glyph.bytes.is_empty()).then_some(next_decoration);
-            if let Some(id) = decoration {
+        }
+        let (x, row) = match item {
+            Item::Chunk { x, row, .. } | Item::Underlined { x, row, .. } => (*x, *row),
+        };
+        let tm = Matrix([1.0, 0.0, 0.0, 1.0, x, -(row as f64) * lead]).then(&Matrix(o.tm));
+        ops.push(Op::new("Tm", tm.0.into_iter().map(n).collect()));
+        match item {
+            Item::Chunk { glyphs: chunk, .. } => ops.push(show(&glyphs, chunk, face)?),
+            Item::Underlined { glyph, width, .. } => {
+                let glyph = glyphs.get(*glyph).ok_or_else(|| EditError::Invalid("the paragraph lost a glyph".into()))?;
+                let id = next_decoration;
                 next_decoration =
                     next_decoration.checked_add(1).ok_or_else(|| EditError::Invalid("the page has exhausted underline association IDs".into()))?;
                 ops.push(decorations::begin(id, false));
-            }
-            ops.push(Op::new("Tj", vec![Object::String(PdfString::literal(glyph.bytes.clone()))]));
-            if decoration.is_some() {
+                ops.push(Op::new("Tj", vec![Object::String(PdfString::literal(glyph.bytes.clone()))]));
                 ops.push(Op::new("EMC", vec![]));
-            }
-            let width = glyph.advance / horizontal + if glyph.space { extra } else { 0.0 };
-            if let Some(id) = decoration {
                 let size = face.state.font.as_ref().map_or(max_size, |(_, s)| *s);
-                let y = -(row_index as f64) * lead + face.state.rise + face.metrics.descent * size * 0.5;
+                let y = -(row as f64) * lead + face.state.rise + face.metrics.descent * size * 0.5;
                 if ![x, x + width, y].into_iter().all(f64::is_finite) {
                     return Err(EditError::Invalid("the font has invalid underline geometry".into()));
                 }
                 underlines.push((id, x, x + width, y, size, fill_color(&face.state.fill)));
             }
-            x += width;
         }
     }
     ops.push(Op::new("ET", vec![]));
-    if !underlines.is_empty() {
-        for (id, x0, x1, y, size, color) in underlines {
-            ops.push(decorations::begin(id, true));
-            ops.push(Op::new("q", vec![]));
-            ops.push(Op::new("cm", o.tm.into_iter().map(n).collect()));
-            ops.push(Op::new("RG", color.into_iter().map(n).collect()));
-            ops.push(Op::new("w", vec![n(size * 0.06)]));
-            ops.push(Op::new("J", vec![Object::Int(0)]));
-            ops.push(Op::new("d", vec![Object::Array(Vec::new()), Object::Int(0)]));
-            ops.push(Op::new("m", vec![n(x0), n(y)]));
-            ops.push(Op::new("l", vec![n(x1), n(y)]));
-            ops.push(Op::new("S", vec![]));
-            ops.push(Op::new("Q", vec![]));
-            ops.push(Op::new("EMC", vec![]));
-        }
+    for (id, x0, x1, y, size, color) in underlines {
+        ops.push(decorations::begin(id, true));
+        ops.push(Op::new("q", vec![]));
+        ops.push(Op::new("cm", o.tm.into_iter().map(n).collect()));
+        ops.push(Op::new("RG", color.into_iter().map(n).collect()));
+        ops.push(Op::new("w", vec![n(size * 0.06)]));
+        ops.push(Op::new("J", vec![Object::Int(0)]));
+        ops.push(Op::new("d", vec![Object::Array(Vec::new()), Object::Int(0)]));
+        ops.push(Op::new("m", vec![n(x0), n(y)]));
+        ops.push(Op::new("l", vec![n(x1), n(y)]));
+        ops.push(Op::new("S", vec![]));
+        ops.push(Op::new("Q", vec![]));
+        ops.push(Op::new("EMC", vec![]));
     }
     ops.push(Op::new("Q", vec![]));
-    // The preparation estimate is an upper bound by construction; keep the bound enforced
-    // even if emission and estimate ever drift apart.
+    // The count is exact by construction; keep the bound enforced even if emission and plan
+    // ever drift apart.
     if ops.len() > emitted {
         return Err(EditError::Invalid(format!(
             "internal error: the paragraph emitted {} operators but budgeted {emitted}; the document was not changed",
             ops.len()
         )));
     }
-    install_block(doc, page, lines, block, ops, Some(fonts), true)?;
+    // Only a paragraph that gained a font resource rewrites the page resources; otherwise a
+    // shared or indirect resource dictionary stays exactly as it was.
+    let fonts = (fonts != original_fonts).then_some(fonts);
+    install_block(doc, page, lines, block, ops, fonts, !fake_bold)?;
     Ok(LineEdit { substituted })
 }
