@@ -3554,8 +3554,8 @@ milestone = "M5"
 status = "shipped"
 commands = ["comment.replace"]
 tools = ["comment_add"]
-evidence = ["crates/annot/src/tests.rs::replace_text_groups_a_strikeout_and_a_caret", "crates/ui-egui/tests/comments.rs::replacing_text_strikes_it_and_adds_a_caret", "crates/automation/tests/automation.rs::drawing_comments_through_tools"]
-notes = "strikeout (/IT StrikeOutTextEdit) and a grouped caret (/RT /Group) with the replacement"
+evidence = ["crates/annot/src/tests.rs::replace_text_groups_a_strikeout_and_a_caret", "crates/ui-egui/tests/comments.rs::replacing_text_strikes_it_and_adds_a_caret", "crates/automation/tests/automation.rs::drawing_comments_through_tools", "crates/xfdf/src/tests.rs::replace_text_proposals_round_trip_through_xfdf_and_fdf", "crates/automation/tests/automation.rs::replace_text_round_trips_and_summaries_show_the_page"]
+notes = "strikeout (/IT StrikeOutTextEdit) and a grouped caret (/RT /Group, its own /NM) with the replacement; XFDF keeps the intent (intent attribute) and the group (inreplyto + replyType), FDF keeps both; summaries list it as Replace Text with the Replacement Text"
 
 [[feature]]
 id = "comment.insert-text"
@@ -4071,7 +4071,7 @@ status = "shipped"
 commands = ["comment.import"]
 tools = ["doc_import_data"]
 evidence = ["crates/xfdf/src/tests.rs::xfdf_round_trips_comments_and_values", "crates/xfdf/src/tests.rs::fdf_round_trips_values_and_comments", "crates/automation/tests/automation.rs::comments_and_form_data_travel_as_xfdf_fdf_and_text"]
-notes = "replies, pop-ups, ink, quads, line ends; same /NM replaces"
+notes = "replies, pop-ups, ink, quads, line ends, intents (/IT, e.g. replace-text strikeouts, callouts, clouds); same /NM replaces"
 
 [[feature]]
 id = "comment.export-fdf-xfdf"
@@ -4118,8 +4118,8 @@ milestone = "M5"
 status = "partial"
 commands = ["comment.summarize"]
 tools = ["comments_summarize"]
-evidence = ["crates/engine/src/tests.rs::comments_lock_take_checkmarks_hide_and_summarize", "crates/ui-egui/tests/comments.rs::comments_take_checkmarks_lock_hide_and_summarize", "crates/automation/tests/automation.rs::comment_checkmarks_locks_hiding_and_summaries_through_tools"]
-notes = "Comments only layout, sorted by page, author, date or type; the layouts with the document and connector lines not yet"
+evidence = ["crates/engine/src/tests.rs::comments_lock_take_checkmarks_hide_and_summarize", "crates/ui-egui/tests/comments.rs::comments_take_checkmarks_lock_hide_and_summarize", "crates/automation/tests/automation.rs::comment_checkmarks_locks_hiding_and_summaries_through_tools", "crates/engine/src/tests.rs::comment_summaries_lay_out_the_pages_with_connector_lines_or_sequence_numbers", "crates/automation/tests/automation.rs::replace_text_round_trips_and_summaries_show_the_page"]
+notes = "Layouts: comments only; document and comments with connector lines on single pages (page drawn with its comments flattened in, numbered markers, connector lines to tinted comment boxes); document and comments with sequence numbers on separate pages. Sorted by page, author, date or type; only commented pages; long comments continue on the next page. Not yet: connector lines on separate pages, page range and font size options, text outside WinAnsi (shown as ?)"
 
 [[feature]]
 id = "comment.flatten"
