@@ -166,6 +166,12 @@ fn main() -> eframe::Result {
         }
     }
     let choice = renderer_choice(std::env::var("PDFCRAFT_RENDERER").ok().as_deref());
+    // Opt in to the native vector page renderer (M2, for testing; off by default). Read once at
+    // start-up: every document, export, print and automation render follows it.
+    if pdfcraft_render::native_vector_requested(std::env::var("PDFCRAFT_NATIVE_VECTOR").ok().as_deref()) {
+        pdfcraft_render::set_native_vector_default(true);
+        log::info!("PDFCRAFT_NATIVE_VECTOR: pages made only of solid vector paths use the native renderer");
+    }
     let launch = Launch { files, options, control_file, create_images, integrated };
     // Finder, Open With and the Dock deliver files as Apple events, not arguments; catch the one
     // that launched us as well as later ones. Lives until the event loop returns.

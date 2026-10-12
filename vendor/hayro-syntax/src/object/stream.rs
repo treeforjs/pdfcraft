@@ -133,6 +133,21 @@ impl<'a> Stream<'a> {
         }
     }
 
+    /// PdfCraft patch: the raw, decrypted data, or `None` when the encoded slice (checked before
+    /// decryption allocates its output) or the result is longer than `max`, or decryption failed.
+    /// The dictionary's /Length can be wrong after repair, so it is not a budget.
+    pub fn raw_data_within(&self, max: usize) -> Option<Cow<'a, [u8]>> {
+        if self.data.len() > max {
+            return None;
+        }
+        let data = self.raw_data();
+        if data.len() > max || (!self.data.is_empty() && data.is_empty()) {
+            None
+        } else {
+            Some(data)
+        }
+    }
+
     /// Return the raw, underlying dictionary of the stream.
     pub fn dict(&self) -> &Dict<'a> {
         &self.dict

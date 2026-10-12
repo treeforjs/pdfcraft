@@ -49,8 +49,32 @@ impl Stopwatch {
     }
 }
 
+/// The process-wide value of [`RenderConfig::native_vector`] in `RenderConfig::default()`.
+static NATIVE_VECTOR_DEFAULT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Make every `RenderConfig::default()` created from now on opt in to the native vector path
+/// (or not). Applications call this once at start-up from their own settings (the desktop app
+/// and `pdfcraft-cli` read `PDFCRAFT_NATIVE_VECTOR=1`), so documents opened through the engine,
+/// export, print and automation all follow one choice. The renderer itself never reads the
+/// environment. Off unless an application turns it on.
+pub fn set_native_vector_default(enabled: bool) {
+    NATIVE_VECTOR_DEFAULT.store(enabled, Ordering::Relaxed);
+}
+
+/// The current process-wide default of [`RenderConfig::native_vector`].
+pub fn native_vector_default() -> bool {
+    NATIVE_VECTOR_DEFAULT.load(Ordering::Relaxed)
+}
+
+/// Whether an application setting such as `PDFCRAFT_NATIVE_VECTOR` asks for the native vector
+/// path: `1`, `true`, `yes` or `on` (any case, surrounding spaces ignored). Anything else, and
+/// an unset variable, leaves it off.
+pub fn native_vector_requested(value: Option<&str>) -> bool {
+    value.is_some_and(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"))
+}
+
 /// Per-document rendering configuration.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct RenderConfig {
     /// User or owner password for encrypted documents.
     pub password: Option<Arc<str>>,
@@ -61,6 +85,18 @@ pub struct RenderConfig {
     /// Refuse a whole-page raster that would be reduced by the renderer's hard size caps.
     /// Tiled requests remain available for pages that exceed those caps.
     pub reject_oversize: bool,
+    /// Opt in to the native vector path (M2, `docs/native-vector-rendering.md`): pages made only
+    /// of solid DeviceGray/DeviceRGB paths are drawn by PdfCraft's own interpreter and every
+    /// other page by the bootstrap renderer. Off by default: with `false` the native path is
+    /// never attempted (no content is compiled for it). Applications choose it at start-up
+    /// (`PDFCRAFT_NATIVE_VECTOR=1`, `pdfcraft-cli render --native-vector`), not the renderer.
+    pub native_vector: bool,
+}
+
+impl Default for RenderConfig {
+    fn default() -> Self {
+        Self { password: None, layers: Arc::default(), hide_comments: false, reject_oversize: false, native_vector: native_vector_default() }
+    }
 }
 
 impl RenderConfig {
@@ -212,6 +248,9 @@ pub struct RenderStats {
     pub text_interpretations: u64,
     /// Number of pixel rasterizations.
     pub rasterizations: u64,
+    /// Number of those rasterizations the native vector path drew (the rest used the bootstrap
+    /// renderer).
+    pub native_vector_rasterizations: u64,
 }
 
 #[derive(Default)]
@@ -222,6 +261,7 @@ struct AtomicRenderStats {
     tile_requests: AtomicU64,
     text_interpretations: AtomicU64,
     rasterizations: AtomicU64,
+    native_vector_rasterizations: AtomicU64,
 }
 
 impl AtomicRenderStats {
@@ -249,6 +289,7 @@ impl AtomicRenderStats {
             tile_requests: self.tile_requests.load(Ordering::Relaxed),
             text_interpretations: self.text_interpretations.load(Ordering::Relaxed),
             rasterizations: self.rasterizations.load(Ordering::Relaxed),
+            native_vector_rasterizations: self.native_vector_rasterizations.load(Ordering::Relaxed),
         }
     }
 }
@@ -280,6 +321,7 @@ type Output = (u32, u32, Pixels, Option<Arc<crate::text::PageText>>);
 fn render_page<'a>(
     pdf: &'a Pdf,
     cache: &RenderCache<'a>,
+    vectors: Option<&crate::vector_raster::Cache>,
     settings: &InterpreterSettings,
     reject_oversize: bool,
     req: RenderRequest,
@@ -330,6 +372,9 @@ fn render_page<'a>(
         };
         // Rendered straight into a buffer of whole pixels, which the GUI takes over as is.
         let (w, h) = render_size(page, &rs);
+        if let Some(pixels) = vectors.and_then(|v| v.render(req.page, page, settings, &rs)) {
+            return Ok((w.into(), h.into(), pixels, None));
+        }
         let mut pixels = Pixels::zeroed(w.into(), h.into()).ok_or_else(|| format!("page {} is too large to render", req.page + 1))?;
         render_into(page, cache, settings, &rs, pixels.bytes_mut());
         Ok((w.into(), h.into(), pixels, None))
@@ -377,13 +422,14 @@ pub struct PageRenderer {
     pdf: Option<Pdf>,
     settings: InterpreterSettings,
     stats: RenderStats,
+    vectors: crate::vector_raster::Cache,
 }
 
 impl PageRenderer {
     pub fn new(bytes: Arc<Vec<u8>>, config: RenderConfig) -> Self {
         let pdf = parse(&bytes, config.password.as_deref());
         let settings = config.settings();
-        Self { bytes, config, pdf, settings, stats: RenderStats { parser_builds: 1, ..RenderStats::default() } }
+        Self { bytes, config, pdf, settings, stats: RenderStats { parser_builds: 1, ..RenderStats::default() }, vectors: Default::default() }
     }
 
     pub fn page_count(&self) -> usize {
@@ -393,6 +439,12 @@ impl PageRenderer {
     /// Snapshot the work counters collected by this renderer.
     pub fn stats(&self) -> RenderStats {
         self.stats
+    }
+
+    /// Requests that reached the native vector path (drawn natively or not).
+    #[cfg(test)]
+    pub(crate) fn native_vector_attempts(&self) -> u64 {
+        self.vectors.attempted()
     }
 
     /// Render one page. Never panics.
@@ -417,9 +469,13 @@ impl PageRenderer {
         let cache = RenderCache::new();
         let warnings = Arc::new(Mutex::new(Vec::new()));
         let settings = warning_settings(&self.settings, warnings.clone());
-        let r = render_page(pdf, &cache, &settings, self.config.reject_oversize, req);
+        let native_before = self.vectors.rasterized();
+        let vectors = self.config.native_vector.then_some(&self.vectors);
+        let r = render_page(pdf, &cache, vectors, &settings, self.config.reject_oversize, req);
+        self.stats.native_vector_rasterizations += self.vectors.rasterized().saturating_sub(native_before);
         let warnings = take_warnings(&warnings);
         if matches!(r, Err((_, true))) {
+            self.vectors = Default::default();
             self.pdf = parse(&self.bytes, self.config.password.as_deref());
             self.stats.parser_builds += 1;
         }
@@ -850,7 +906,7 @@ fn worker(
         let reset_result = {
             let parsed = std::cell::OnceCell::new();
             loop {
-                if parsed.get().is_some_and(|(_, _, shared_generation)| *shared_generation) && !shared.parser.valid.load(Ordering::Acquire) {
+                if parsed.get().is_some_and(|(_, _, _, shared_generation)| *shared_generation) && !shared.parser.valid.load(Ordering::Acquire) {
                     break None;
                 }
                 let next = shared.queue.pop();
@@ -884,14 +940,14 @@ fn worker(
                 shared.stats.record_request(req);
                 let stage = parsed.get().map_or(
                     BusyStage::Parsing,
-                    |(_, _, shared_generation)| {
+                    |(_, _, _, shared_generation)| {
                         if *shared_generation { BusyStage::SharedRender } else { BusyStage::Private }
                     },
                 );
                 if let Some(slot) = lock(&shared.busy).get_mut(id) {
                     *slot = Some(Busy { request: req, since: std::time::Instant::now(), stage });
                 }
-                let (pdf, cache, shared_generation) = parsed.get_or_init(|| {
+                let (pdf, cache, vectors, shared_generation) = parsed.get_or_init(|| {
                     let load = || {
                         #[cfg(test)]
                         {
@@ -907,11 +963,11 @@ fn worker(
                     match shared.parser.acquire(load, || matches!(wake.try_recv(), Err(std::sync::mpsc::TryRecvError::Disconnected))) {
                         Some(pdf) => {
                             let shared_generation = pdf.is_some();
-                            (pdf, RenderCache::new(), shared_generation)
+                            (pdf, RenderCache::new(), crate::vector_raster::Cache::default(), shared_generation)
                         }
                         None => {
                             let pdf = if set_busy_stage(&shared, id, BusyStage::Parsing) { load().map(Arc::new) } else { None };
-                            (pdf, RenderCache::new(), false)
+                            (pdf, RenderCache::new(), crate::vector_raster::Cache::default(), false)
                         }
                     }
                 });
@@ -959,7 +1015,14 @@ fn worker(
                         panic!("injected page panic");
                     }
                     match pdf {
-                        Some(pdf) => render_page(pdf, cache, &settings, config.reject_oversize, req),
+                        Some(pdf) => {
+                            let native_before = vectors.rasterized();
+                            let vectors_enabled = config.native_vector.then_some(vectors);
+                            let r = render_page(pdf, cache, vectors_enabled, &settings, config.reject_oversize, req);
+                            let native = vectors.rasterized().saturating_sub(native_before);
+                            shared.stats.native_vector_rasterizations.fetch_add(native, Ordering::Relaxed);
+                            r
+                        }
                         None => Err(("the document could not be parsed".into(), false)),
                     }
                 }))
@@ -1345,37 +1408,42 @@ mod tests {
     #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn worker_reuses_parser_and_releases_source_after_rendering() {
-        let bytes = Arc::new(ONE_PAGE.to_vec());
-        let source = Arc::downgrade(&bytes);
-        let pool = RenderPool::new(bytes, 1, RenderConfig::default());
-        assert!(!pool.is_inline(), "the lifecycle check needs a native worker");
-        for (tag, kind) in [RequestKind::Pixels, RequestKind::Text, RequestKind::Pixels].into_iter().enumerate() {
-            pool.set_queue(vec![RenderRequest { page: 0, kind, scale: 1.0, tag: tag as u64, ..Default::default() }]);
-            let page = pool.results.recv_timeout(std::time::Duration::from_secs(8)).expect("worker result");
-            assert!(page.error.is_none(), "{:?}", page.error);
-            assert_eq!(page.request.tag, tag as u64);
-            match kind {
-                RequestKind::Pixels => assert_eq!((page.width, page.height), (100, 50)),
-                RequestKind::Text => assert!(page.text.is_some()),
+        // The native path is opt-in: the default pool never draws natively; opted in, both
+        // pixel requests of ONE_PAGE (a single filled rectangle) are native.
+        for native_vector in [false, true] {
+            let bytes = Arc::new(ONE_PAGE.to_vec());
+            let source = Arc::downgrade(&bytes);
+            let pool = RenderPool::new(bytes, 1, RenderConfig { native_vector, ..Default::default() });
+            assert!(!pool.is_inline(), "the lifecycle check needs a native worker");
+            for (tag, kind) in [RequestKind::Pixels, RequestKind::Text, RequestKind::Pixels].into_iter().enumerate() {
+                pool.set_queue(vec![RenderRequest { page: 0, kind, scale: 1.0, tag: tag as u64, ..Default::default() }]);
+                let page = pool.results.recv_timeout(std::time::Duration::from_secs(8)).expect("worker result");
+                assert!(page.error.is_none(), "{:?}", page.error);
+                assert_eq!(page.request.tag, tag as u64);
+                match kind {
+                    RequestKind::Pixels => assert_eq!((page.width, page.height), (100, 50)),
+                    RequestKind::Text => assert!(page.text.is_some()),
+                }
+                assert_eq!(pool.shared.parses.load(std::sync::atomic::Ordering::Relaxed), 1, "requests reuse one parser");
             }
-            assert_eq!(pool.shared.parses.load(std::sync::atomic::Ordering::Relaxed), 1, "requests reuse one parser");
-        }
-        assert_eq!(
-            pool.stats(),
-            RenderStats {
-                parser_builds: 1,
-                page_interpretations: 2,
-                render_requests: 3,
-                tile_requests: 0,
-                text_interpretations: 1,
-                rasterizations: 2
+            assert_eq!(
+                pool.stats(),
+                RenderStats {
+                    parser_builds: 1,
+                    page_interpretations: 2,
+                    render_requests: 3,
+                    tile_requests: 0,
+                    text_interpretations: 1,
+                    rasterizations: 2,
+                    native_vector_rasterizations: if native_vector { 2 } else { 0 }
+                }
+            );
+            drop(pool);
+            let until = std::time::Instant::now() + std::time::Duration::from_secs(8);
+            while source.upgrade().is_some() {
+                assert!(std::time::Instant::now() < until, "dropped pools retire their workers and release the source");
+                std::thread::sleep(std::time::Duration::from_millis(5));
             }
-        );
-        drop(pool);
-        let until = std::time::Instant::now() + std::time::Duration::from_secs(8);
-        while source.upgrade().is_some() {
-            assert!(std::time::Instant::now() < until, "dropped pools retire their workers and release the source");
-            std::thread::sleep(std::time::Duration::from_millis(5));
         }
     }
 
@@ -1881,7 +1949,9 @@ trailer << /Root 1 0 R >>
 
     #[test]
     fn heavy_vector_fixture_preserves_trailing_text_and_raster_output() {
-        let mut renderer = PageRenderer::new(Arc::new(heavy_vector_pdf(5_000, true)), RenderConfig::default());
+        // Opted in: the vector prefix compiles natively before the late text rejects the page.
+        let config = RenderConfig { native_vector: true, ..Default::default() };
+        let mut renderer = PageRenderer::new(Arc::new(heavy_vector_pdf(5_000, true)), config);
         let pixels = renderer.render(RenderRequest { page: 0, scale: 1.0, ..Default::default() });
         assert!(pixels.error.is_none(), "heavy vector render failed: {:?}", pixels.error);
         assert!(pixels.rgba.as_chunks::<4>().0.iter().any(|pixel| *pixel != [255, 255, 255, 255]));
@@ -1896,9 +1966,11 @@ trailer << /Root 1 0 R >>
                 render_requests: 2,
                 tile_requests: 0,
                 text_interpretations: 1,
-                rasterizations: 1
+                rasterizations: 1,
+                native_vector_rasterizations: 0
             }
         );
+        assert_eq!(renderer.native_vector_attempts(), 1);
     }
 
     #[test]

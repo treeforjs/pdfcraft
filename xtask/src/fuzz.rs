@@ -5,6 +5,8 @@
 //! `pdfcraft-cli check-one <file> --edit` in a child process with a timeout. That opens,
 //! inspects, renders and extracts text from every page (the bootstrap renderer), then runs our
 //! object layer end to end: decode streams, edit, save incrementally and in full, reopen.
+//! With `PDFCRAFT_NATIVE_VECTOR=1` in the environment the children render with the opt-in
+//! native vector path as well (pages it does not accept still use the bootstrap renderer).
 //!
 //! A child that dies (panic outside a safety net, abort, stack overflow, signal) is a **crash**,
 //! and one that runs past the timeout is a **hang**. Each finding is minimized (chunks are
@@ -164,6 +166,11 @@ fn synthetic_seeds() -> Vec<Vec<u8>> {
     };
     let content = "BT /F1 24 Tf 20 150 Td (Hello) Tj ET 0 0 1 rg 10 10 50 50 re f q 20 0 0 20 100 100 cm BI /W 2 /H 2 /BPC 8 /CS /G ID \u{0}\u{ff}\u{ff}\u{0} EI Q";
     let stream = format!("<< /Length {} >>\nstream\n{content}\nendstream", content.len());
+    // Solid paths only, which the opt-in native vector renderer (PDFCRAFT_NATIVE_VECTOR=1)
+    // draws itself: fills, strokes, dashes, clips, nested states, a rotated crop box.
+    let vector = "q 1 0 0 rg 10 10 80 60 re 30 30 20 20 re f* Q q 20 20 160 120 re W n 0 0 1 RG 4 w 1 J 1 j [6 3] 2 d \
+                  10 150 m 60 190 120 110 190 150 c S Q 0.5 g 2 0 0.5 1 0 0 cm 0 w 5 5 m 90 5 l h B 0 0 0 RG 0 0 m 0 0 l S";
+    let vector_stream = format!("<< /Length {} >>\nstream\n{vector}\nendstream", vector.len());
     vec![
         build(
             &[
@@ -185,6 +192,15 @@ fn synthetic_seeds() -> Vec<Vec<u8>> {
                 "<< /Type /Catalog /Pages 2 0 R >>",
                 "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
                 "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 10 10] >>",
+            ],
+            "/Root 1 0 R",
+        ),
+        build(
+            &[
+                "<< /Type /Catalog /Pages 2 0 R >>",
+                "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+                "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /CropBox [5 5 195 180] /Rotate 90 /Contents 4 0 R >>",
+                &vector_stream,
             ],
             "/Root 1 0 R",
         ),

@@ -117,3 +117,75 @@ fn fields_and_comments_without_appearances_are_shown() {
     assert!(String::from_utf8_lossy(&t.stdout).contains("Lisbon"), "{}", String::from_utf8_lossy(&t.stdout));
     assert_eq!(std::fs::read(&pdf).unwrap(), bytes, "the file is unchanged");
 }
+
+/// A one-page PDF of solid vector paths only, which the native vector path accepts.
+fn vector_fixture(test: &str) -> PathBuf {
+    let content = b"0 0 1 rg 10 10 60 40 re f 1 0 0 RG 4 w 10 70 m 90 90 l S";
+    let mut objects = vec![
+        b"<< /Type /Catalog /Pages 2 0 R >>".to_vec(),
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_vec(),
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Contents 4 0 R >>".to_vec(),
+    ];
+    let mut stream = format!("<< /Length {} >>\nstream\n", content.len()).into_bytes();
+    stream.extend_from_slice(content);
+    stream.extend_from_slice(b"\nendstream");
+    objects.push(stream);
+    let mut bytes = b"%PDF-1.7\n".to_vec();
+    let mut offsets = Vec::new();
+    for (i, object) in objects.iter().enumerate() {
+        offsets.push(bytes.len());
+        bytes.extend_from_slice(format!("{} 0 obj\n", i + 1).as_bytes());
+        bytes.extend_from_slice(object);
+        bytes.extend_from_slice(b"\nendobj\n");
+    }
+    let xref = bytes.len();
+    bytes.extend_from_slice(b"xref\n0 5\n0000000000 65535 f \n");
+    for offset in offsets {
+        bytes.extend_from_slice(format!("{offset:010} 00000 n \n").as_bytes());
+    }
+    bytes.extend_from_slice(format!("trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n").as_bytes());
+    let pdf = tmp(test, "vector.pdf");
+    std::fs::write(&pdf, bytes).unwrap();
+    pdf
+}
+
+fn render_with(pdf: &std::path::Path, out: &std::path::Path, extra: &[&str], env: Option<&str>) -> Output {
+    let mut c = Command::new(BIN);
+    // The flag goes before the file: a switch must not swallow the next argument.
+    c.arg("render").args(extra).args([pdf.to_str().unwrap(), "--page", "1", "--dpi", "72", "--out", out.to_str().unwrap()]);
+    c.env_remove("PDFCRAFT_NATIVE_VECTOR");
+    if let Some(value) = env {
+        c.env("PDFCRAFT_NATIVE_VECTOR", value);
+    }
+    c.output().unwrap()
+}
+
+#[test]
+fn the_native_vector_renderer_is_opt_in() {
+    let pdf = vector_fixture("native");
+    let stderr = |o: &Output| {
+        assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+        String::from_utf8_lossy(&o.stderr).into_owned()
+    };
+    let default_out = tmp("native", "default.pam");
+    let default = stderr(&render_with(&pdf, &default_out, &[], None));
+    assert!(!default.contains("native vector"), "the default must not use the native path: {default}");
+    // `0` or any other value is not an opt-in.
+    assert!(!stderr(&render_with(&pdf, &tmp("native", "zero.pam"), &[], Some("0"))).contains("native vector"));
+    let flag_out = tmp("native", "flag.pam");
+    let flagged = stderr(&render_with(&pdf, &flag_out, &["--native-vector"], None));
+    assert!(flagged.contains("100×100 px") && flagged.contains("(native vector)"), "{flagged}");
+    let env = stderr(&render_with(&pdf, &tmp("native", "env.pam"), &[], Some("1")));
+    assert!(env.contains("(native vector)"), "{env}");
+    // An axis-aligned filled rectangle is the same on both devices.
+    let (a, b) = (std::fs::read(&default_out).unwrap(), std::fs::read(&flag_out).unwrap());
+    assert_eq!(a.len(), b.len());
+    let header = a.len() - 100 * 100 * 4;
+    let at = |img: &[u8], x: usize, y: usize| img[header + (y * 100 + x) * 4..header + (y * 100 + x) * 4 + 4].to_vec();
+    assert_eq!(at(&a, 40, 70), at(&b, 40, 70));
+    assert_eq!(at(&b, 40, 70), vec![0, 0, 255, 255]);
+    // A page with text opted in still renders, through the bootstrap renderer.
+    let text = fixture("native-text");
+    let fallback = stderr(&render_with(&text, &tmp("native-text", "t.png"), &["--native-vector"], None));
+    assert!(fallback.contains("rendered page 1") && !fallback.contains("native vector"), "{fallback}");
+}

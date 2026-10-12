@@ -8,11 +8,13 @@
 
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
+pub mod display_list;
 mod inspect;
 mod pixels;
 mod raster;
 mod structure;
 pub mod text;
+mod vector_raster;
 
 pub use inspect::{
     Annotation, Attachment, AttachmentSource, DestView, DocInfo, Field, FieldKind, FontInfo, Layer, LayerOp, Link, LinkTarget, OutlineItem, PageInfo,
@@ -21,7 +23,7 @@ pub use inspect::{
 pub use pixels::Pixels;
 pub use raster::{
     MAX_PIXELS, MAX_SIDE, PageRenderer, RenderConfig, RenderPool, RenderRequest, RenderStats, RenderWarning, RenderedPage, RequestKind, Tile,
-    device_pixels, effective_scale,
+    device_pixels, effective_scale, native_vector_default, native_vector_requested, set_native_vector_default,
 };
 pub use text::{PageText, TextGlyph};
 

@@ -48,6 +48,7 @@ const USAGE: &str = concat!(
     "\
 pdfcraft-cli info   <file.pdf> [--password PW]            document summary as JSON
 pdfcraft-cli render <file.pdf> --page N [--dpi 96] --out x.png   (.png, .jpg, .tif or .pam)
+                      [--native-vector]  opt in to the native vector renderer (M2, for testing)
 pdfcraft-cli text   <file.pdf> [--page N]                  extracted text (pages separated by form feeds)
 pdfcraft-cli edit   <in.pdf> --out out.pdf [--rotate 1,3:90] [--delete 2,4] [--move 5:1]
                       [--insert-blank 1] [--title T] [--author A] [--full]
@@ -63,10 +64,15 @@ pdfcraft-cli run    --script steps.json [--root DIR]      [{\"tool\": \"doc_open
     "\
 pdfcraft-cli ui     --control FILE <method> [key=value …] [--out shot.png]
                                                            drive a running app started with --control FILE
+PDFCRAFT_NATIVE_VECTOR=1 opts every command in to the native vector renderer (M2, for testing).
 help and feedback: https://github.com/storytold/pdfcraft"
 );
 
 fn main() -> ExitCode {
+    // Read once, here: the renderer never looks at the environment. `check` children inherit it.
+    if pdfcraft_render::native_vector_requested(std::env::var("PDFCRAFT_NATIVE_VECTOR").ok().as_deref()) {
+        pdfcraft_render::set_native_vector_default(true);
+    }
     let args: Vec<String> = std::env::args().skip(1).collect();
     // `<command> --help` too; only right after the command, so a later `-h` (a value) still reaches it.
     let command = match args.get(1).map(String::as_str) {
@@ -192,6 +198,7 @@ const RENDER_OPTIONS: &[OptionSpec] = &[
     OptionSpec { name: "--dpi", takes_value: true },
     OptionSpec { name: "--out", takes_value: true },
     OptionSpec { name: "--password", takes_value: true },
+    OptionSpec { name: "--native-vector", takes_value: false },
 ];
 const CHECK_ONE_OPTIONS: &[OptionSpec] = &[OptionSpec { name: "--dpi", takes_value: true }, OptionSpec { name: "--edit", takes_value: false }];
 const CHECK_OPTIONS: &[OptionSpec] = &[
@@ -209,6 +216,9 @@ const UI_OPTIONS: &[OptionSpec] = &[OptionSpec { name: "--control", takes_value:
 #[cfg(feature = "mcp")]
 const MCP_OPTIONS: &[OptionSpec] = &[OptionSpec { name: "--root", takes_value: true }, OptionSpec { name: "--compact", takes_value: false }];
 
+/// Options that take no value, so the argument after one is not its operand.
+const SWITCHES: &[&str] = &["--edit", "--compact", "--native-vector"];
+
 fn positional(args: &[String]) -> Vec<&str> {
     let mut out = Vec::new();
     let mut skip = false;
@@ -218,7 +228,7 @@ fn positional(args: &[String]) -> Vec<&str> {
             continue;
         }
         if a.starts_with("--") {
-            skip = true;
+            skip = !SWITCHES.contains(&a.as_str());
             continue;
         }
         out.push(a.as_str());
@@ -478,7 +488,15 @@ fn render(args: &[String]) -> Result<(), CliError> {
     // The page as a viewer shows it: comments and form widgets without an appearance stream get
     // one drawn in memory (the file is not changed), as in the app and `page_render`.
     let display = pdfcraft_engine::display_bytes_for(&read(path)?, password);
-    let mut r = PageRenderer::new(display, RenderConfig { password: password.map(Arc::from), reject_oversize: true, ..Default::default() });
+    let mut r = PageRenderer::new(
+        display,
+        RenderConfig {
+            password: password.map(Arc::from),
+            reject_oversize: true,
+            native_vector: args.iter().any(|a| a == "--native-vector") || pdfcraft_render::native_vector_default(),
+            ..Default::default()
+        },
+    );
     let p = r.render(RenderRequest { page: page_index, kind: RequestKind::Pixels, tile: None, scale: dpi / 72.0, tag: 0 });
     if let Some(e) = p.error {
         return Err(e.into());
@@ -493,7 +511,9 @@ fn render(args: &[String]) -> Result<(), CliError> {
         }
     };
     std::fs::write(out, bytes).map_err(|e| format!("{out}: {e}"))?;
-    let _ = writeln!(std::io::stderr().lock(), "rendered page {page} at {dpi} dpi: {}×{} px in {} ms", p.width, p.height, p.millis);
+    // Says which device drew it, so an opted-in run shows whether the page used the native path.
+    let device = if r.stats().native_vector_rasterizations > 0 { " (native vector)" } else { "" };
+    let _ = writeln!(std::io::stderr().lock(), "rendered page {page} at {dpi} dpi: {}×{} px in {} ms{device}", p.width, p.height, p.millis);
     for warning in &p.warnings {
         match warning {
             pdfcraft_render::RenderWarning::ContentTruncated => {
