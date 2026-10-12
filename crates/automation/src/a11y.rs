@@ -482,8 +482,10 @@ impl Automation {
                 A::ShowHide { fields: names(&it["hide"]), hide: true }
             } else if let Some(u) = it["submit"].as_str() {
                 A::Submit(u.into())
+            } else if let Some(k) = it["other"].as_str() {
+                A::Other(k.into())
             } else {
-                return Err(bad(format!("{tid}: give one action (javascript, url, reset, menu, page, show, hide or submit)")));
+                return Err(bad(format!("{tid}: give one action (javascript, url, reset, menu, page, show, hide, submit or other)")));
             };
             acts.push((t, act));
         }
@@ -493,6 +495,18 @@ impl Automation {
         let id = self.doc(a)?.id;
         self.session.apply(id, edit).map_err(failed)?;
         self.form_actions(a)
+    }
+
+    pub(crate) fn form_run_trigger(&mut self, a: &Args) -> Result<Value> {
+        let tid = a.str("trigger")?;
+        let trigger = pdfcraft_engine::FieldTrigger::from_id(tid).ok_or_else(|| ToolError::InvalidArgs(format!("unknown trigger {tid:?}")))?;
+        let id = self.doc(a)?.id;
+        let o = self.session.run_field_trigger(id, a.str("field")?, trigger).map_err(failed)?;
+        let reqs: Vec<Value> = o.requests.iter().map(request_json).collect();
+        Ok(json!({
+            "field": a.str("field")?, "trigger": tid, "ran": o.ran, "skipped": o.skipped, "alerts": o.alerts,
+            "console": o.console, "errors": o.errors, "requests": reqs, "menu": o.menu,
+        }))
     }
 
     pub(crate) fn js_enabled(&mut self, a: &Args) -> Result<Value> {

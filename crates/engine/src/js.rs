@@ -184,6 +184,11 @@ impl Session {
     /// the console (no target). Field changes and `resetForm` are applied as one undoable step;
     /// everything else the script asked for is returned.
     pub fn run_javascript(&mut self, id: DocId, script: &str, target: Option<&str>) -> Result<Outcome, EditError> {
+        self.run_script_event(id, script, target, pdfcraft_forms::Trigger::MouseUp.event_name())
+    }
+
+    /// [`Session::run_javascript`] for a field event named `event` (`event.name`).
+    fn run_script_event(&mut self, id: DocId, script: &str, target: Option<&str>, event: &str) -> Result<Outcome, EditError> {
         if self.js_off {
             return Err(EditError::Invalid("JavaScript is turned off (Preferences ▸ JavaScript)".into()));
         }
@@ -191,6 +196,7 @@ impl Session {
         let cos = doc.editor.as_ref().map(|e| e.cos.clone()).ok_or_else(|| EditError::ReadOnly(doc.read_only_reason.clone().unwrap_or_default()))?;
         // A button PdfCraft generated from an XFA template runs its XFA click script.
         if let Some(t) = target
+            && event == pdfcraft_forms::Trigger::MouseUp.event_name()
             && let Some(tpl) = doc.xfa_template.clone()
             && let Some(som) = crate::xfa::clickable_som(&cos, &tpl, t)
         {
@@ -209,7 +215,7 @@ impl Session {
         let fields = pdfcraft_forms::fields(&cos);
         let states: Vec<_> = fields.iter().map(|f| field_state(&cos, f)).collect();
         let event = match target {
-            Some(t) => pdfcraft_js::Event { will_commit: false, ..pdfcraft_js::Event::field("Mouse Up", t, "") },
+            Some(t) => pdfcraft_js::Event { will_commit: false, ..pdfcraft_js::Event::field(event, t, "") },
             None => pdfcraft_js::Event::doc("Console"),
         };
         let mut o = pdfcraft_js::run(script, &event, &runner.doc, &states, &runner.doc_scripts, Limits::default());
@@ -239,6 +245,92 @@ impl Session {
         }
         Ok(o)
     }
+
+    /// Fire `trigger` on field `field`: run its actions (Field Properties ▸ Actions) in order, as
+    /// the viewer does when the pointer or focus reaches the field. Scripts run with that event's
+    /// name; Reset a form and Show/hide a field change the document (each an undoable step, like
+    /// a script's changes); navigation, links, menu items and submits are returned for the front
+    /// end, never acted on here. Actions PdfCraft can't run are listed in `skipped`.
+    pub fn run_field_trigger(&mut self, id: DocId, field: &str, trigger: pdfcraft_forms::Trigger) -> Result<TriggerOutcome, EditError> {
+        use pdfcraft_forms::FieldAction as A;
+        let doc = self.get(id).ok_or(EditError::NoDocument)?;
+        let cos = doc.editor.as_ref().map(|e| &e.cos).ok_or_else(|| EditError::ReadOnly(doc.read_only_reason.clone().unwrap_or_default()))?;
+        let actions: Vec<A> = pdfcraft_forms::field_actions(cos, field)
+            .map_err(|e| EditError::Invalid(e.to_string()))?
+            .into_iter()
+            .filter(|(t, _)| *t == trigger)
+            .map(|(_, a)| a)
+            .collect();
+        let mut out = TriggerOutcome::default();
+        for a in actions {
+            let names = |list: &[String], this: &Session| -> Vec<String> {
+                let all: Vec<String> = this.get(id).map(|d| d.form.iter().map(|f| f.name.clone()).collect()).unwrap_or_default();
+                all.into_iter().filter(|n| list.iter().any(|x| n == x || n.starts_with(&format!("{x}.")))).collect()
+            };
+            match &a {
+                A::JavaScript(script) => {
+                    if self.js_off {
+                        out.skipped.push(format!("{} (JavaScript is turned off)", a.describe()));
+                        continue;
+                    }
+                    let o = self.run_script_event(id, script, Some(field), trigger.event_name())?;
+                    out.alerts.extend(o.alerts);
+                    out.console.extend(o.console);
+                    out.errors.extend(o.error);
+                    out.requests.extend(o.requests);
+                }
+                A::Reset(list) => {
+                    let targets = (!list.is_empty()).then(|| names(list, self));
+                    self.apply(id, Edit::ResetForm { names: targets })?;
+                }
+                A::ShowHide { fields, hide } => {
+                    let changes: Vec<FieldChange> = names(fields, self)
+                        .into_iter()
+                        .map(|name| FieldChange {
+                            name,
+                            value: None,
+                            read_only: None,
+                            required: None,
+                            display: Some(if *hide { pdfcraft_js::DISPLAY_HIDDEN } else { pdfcraft_js::DISPLAY_VISIBLE }),
+                        })
+                        .collect();
+                    if !changes.is_empty() {
+                        let label = if *hide { "Hide a field" } else { "Show a field" };
+                        self.apply(id, Edit::Batch { label: label.into(), edits: vec![Edit::ApplyScriptChanges { changes }] })?;
+                    }
+                }
+                A::GoTo(p) => out.requests.push(Request::GoToPage(*p)),
+                A::Uri(u) => out.requests.push(Request::LaunchUrl(u.clone())),
+                A::Submit(u) => out.requests.push(Request::Submit(u.clone())),
+                A::Named(n) if n == "Print" => out.requests.push(Request::Print),
+                A::Named(n) if pdfcraft_forms::MENU_ITEMS.contains(&n.as_str()) => out.menu.push(n.clone()),
+                A::Named(_) | A::Other(_) => {
+                    out.skipped.push(a.describe());
+                    continue;
+                }
+            }
+            out.ran.push(a.describe());
+        }
+        Ok(out)
+    }
+}
+
+/// What firing a field trigger did ([`Session::run_field_trigger`]).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct TriggerOutcome {
+    /// The actions that ran, in order (as the Actions tab describes them).
+    pub ran: Vec<String>,
+    /// Actions not run: types PdfCraft doesn't run, menu items off the safe list, and scripts
+    /// while JavaScript is turned off.
+    pub skipped: Vec<String>,
+    pub alerts: Vec<String>,
+    pub console: Vec<String>,
+    /// Script errors.
+    pub errors: Vec<String>,
+    /// What the actions and their scripts ask the viewer for (pages, links, print, submit…).
+    pub requests: Vec<Request>,
+    /// Menu items for the viewer to run (NextPage, PrevPage, FirstPage, LastPage).
+    pub menu: Vec<String>,
 }
 
 /// A page's words for form-field detection, in user space (underscore runs split from the

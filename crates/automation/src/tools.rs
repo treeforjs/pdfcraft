@@ -902,19 +902,25 @@ pub fn tools() -> Vec<ToolDef> {
         t("form_detect_fields", "Detect form fields", "Prepare a form ▸ automatic field detection: find the blanks a printed form asks to be filled (underscore runs, lines, empty boxes, small squares for check boxes) and name each field from its label. With add (default true) the fields are created as one undoable step; otherwise they are only proposed. Returns page (1-based), kind, name and rect (points, origin bottom-left).")
             .cmd("form.detect")
             .with(schema(json!({ "doc": doc(), "pages": pages("to look at (default: all)"), "add": { "type": "boolean" } }), &["doc"])),
-        t("form_actions", "Field actions", "Field Properties ▸ Actions: the field's action for each trigger (mouse_up, mouse_down, mouse_enter, mouse_exit, on_focus, on_blur).")
+        t("form_actions", "Field actions", "Field Properties ▸ Actions: the field's actions, each with its trigger (mouse_up, mouse_down, mouse_enter, mouse_exit, on_focus, on_blur), in the order they run (a trigger's later actions follow its /Next chain). Actions PdfCraft doesn't edit are listed as other (their /S type).")
             .ro()
             .cmd("form.prepare")
             .with(schema(json!({ "doc": doc(), "field": { "type": "string" } }), &["doc", "field"])),
-        t("form_set_actions", "Set field actions", "Field Properties ▸ Actions: replace the field's actions. Each item: trigger (mouse_up, mouse_down, mouse_enter, mouse_exit, on_focus, on_blur) and one of javascript (source), url, reset (field names; [] for all), menu (Print, NextPage, PrevPage, FirstPage, LastPage), page (1-based), show / hide (field names), submit (URL). Triggers not listed lose their action. Undoable.")
+        t("form_set_actions", "Set field actions", "Field Properties ▸ Actions: replace the field's actions (add, edit, reorder or remove by passing the whole list, e.g. form_actions' list changed). Each item: trigger (mouse_up, mouse_down, mouse_enter, mouse_exit, on_focus, on_blur) and one of javascript (source), url, reset (field names; [] for all), menu (Print, NextPage, PrevPage, FirstPage, LastPage), page (1-based), show / hide (field names), submit (URL), or other (an /S type form_actions listed: keeps that existing action). Several items with one trigger run in the order given (linked through /Next). An action equal to an existing one keeps its original data; unchanged triggers are left as they are; triggers not listed lose their actions. Refused without changes if any item is invalid. Undoable.")
             .cmd("form.prepare")
             .with(schema(
                 json!({ "doc": doc(), "field": { "type": "string" }, "actions": { "type": "array", "items": { "type": "object", "properties": {
                     "trigger": { "type": "string", "enum": ["mouse_up", "mouse_down", "mouse_enter", "mouse_exit", "on_focus", "on_blur"] },
                     "javascript": { "type": "string" }, "url": { "type": "string" }, "reset": { "type": "array", "items": { "type": "string" } },
                     "menu": { "type": "string" }, "page": { "type": "integer", "minimum": 1 }, "show": { "type": "array", "items": { "type": "string" } },
-                    "hide": { "type": "array", "items": { "type": "string" } }, "submit": { "type": "string" } }, "required": ["trigger"] } } }),
+                    "hide": { "type": "array", "items": { "type": "string" } }, "submit": { "type": "string" }, "other": { "type": "string" } }, "required": ["trigger"] } } }),
                 &["doc", "field", "actions"],
+            )),
+        t("form_run_trigger", "Run a field trigger", "Fire a field's trigger (mouse_up, mouse_down, mouse_enter, mouse_exit, on_focus, on_blur) as the viewer would: its actions run in order. JavaScript runs with that event's name (needs JavaScript on); reset and show/hide change the form (undoable); pages, links, print, submits and menu items are only returned as requests, never performed. Returns ran, skipped (actions not run), alerts, console, errors, requests and menu.")
+            .cmd("form.prepare")
+            .with(schema(
+                json!({ "doc": doc(), "field": { "type": "string" }, "trigger": { "type": "string", "enum": ["mouse_up", "mouse_down", "mouse_enter", "mouse_exit", "on_focus", "on_blur"] } }),
+                &["doc", "field", "trigger"],
             )),
         t("js_enabled", "JavaScript on or off", "Preferences ▸ JavaScript ▸ Enable Acrobat JavaScript: set it with `enabled`, or read it. With JavaScript off, field scripts other than Acrobat's AF calls don't run.")
             .with(schema(json!({ "enabled": { "type": "boolean" } }), &[])),

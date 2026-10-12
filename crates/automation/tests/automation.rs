@@ -3199,6 +3199,88 @@ fn field_actions_through_tools() {
 }
 
 #[test]
+fn field_action_chains_save_reopen_and_run_on_their_triggers() {
+    let dir = workdir("field-action-chains");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    ok(&mut a, "form_add_field", json!({ "doc": doc, "page": 1, "type": "button", "rect": [20, 20, 120, 42], "name": "Go" }));
+    ok(&mut a, "form_add_field", json!({ "doc": doc, "page": 1, "type": "text", "rect": [20, 60, 180, 82], "name": "Note" }));
+    let actions = json!([
+        { "trigger": "mouse_up", "javascript": "getField('Note').value = 'ran ' + event.name;" },
+        { "trigger": "mouse_up", "page": 2 },
+        { "trigger": "mouse_up", "menu": "NextPage" },
+        { "trigger": "mouse_enter", "hide": ["Note"] },
+        { "trigger": "mouse_exit", "show": ["Note"] },
+        { "trigger": "on_focus", "javascript": "app.alert('focus: ' + event.name);" },
+        { "trigger": "on_blur", "url": "https://example.org/bye" }
+    ]);
+    let r = ok(&mut a, "form_set_actions", json!({ "doc": doc, "field": "Go", "actions": actions }));
+    assert_eq!(r["actions"], actions, "{r}");
+
+    // Saved and reopened, the chains read back in order.
+    ok(&mut a, "doc_save", json!({ "doc": doc, "path": "actions.pdf" }));
+    ok(&mut a, "doc_close", json!({ "doc": doc }));
+    let mut b = auto(&dir);
+    let doc = ok(&mut b, "doc_open", json!({ "path": "actions.pdf" }))["doc"].as_u64().unwrap();
+    assert_eq!(ok(&mut b, "form_actions", json!({ "doc": doc, "field": "Go" }))["actions"], actions);
+
+    // The JavaScript engine runs the configured scripts on their triggers, with the event name.
+    let up = ok(&mut b, "form_run_trigger", json!({ "doc": doc, "field": "Go", "trigger": "mouse_up" }));
+    assert_eq!(up["ran"].as_array().unwrap().len(), 3, "{up}");
+    assert_eq!(up["requests"], json!([{ "page": 2 }]), "{up}");
+    assert_eq!(up["menu"], json!(["NextPage"]));
+    let note = |b: &mut Automation| {
+        ok(b, "form_fields", json!({ "doc": doc }))["fields"].as_array().unwrap().iter().find(|f| f["name"] == "Note").unwrap()["value"].clone()
+    };
+    assert_eq!(note(&mut b), "ran Mouse Up");
+    let focus = ok(&mut b, "form_run_trigger", json!({ "doc": doc, "field": "Go", "trigger": "on_focus" }));
+    assert_eq!(focus["alerts"], json!(["focus: Focus"]), "{focus}");
+    let display = |b: &mut Automation| ok(b, "js_run", json!({ "doc": doc, "script": "getField('Note').display" }))["result"].clone();
+    ok(&mut b, "form_run_trigger", json!({ "doc": doc, "field": "Go", "trigger": "mouse_enter" }));
+    assert_eq!(display(&mut b), "1", "hidden");
+    ok(&mut b, "form_run_trigger", json!({ "doc": doc, "field": "Go", "trigger": "mouse_exit" }));
+    assert_eq!(display(&mut b), "0", "visible");
+    let blur = ok(&mut b, "form_run_trigger", json!({ "doc": doc, "field": "Go", "trigger": "on_blur" }));
+    assert_eq!(blur["requests"], json!([{ "url": "https://example.org/bye" }]), "{blur}");
+    let none = ok(&mut b, "form_run_trigger", json!({ "doc": doc, "field": "Go", "trigger": "mouse_down" }));
+    assert_eq!(none["ran"], json!([]));
+
+    // Reorder Mouse Up and edit its script; the other triggers are untouched.
+    let mut reordered = actions.as_array().unwrap().clone();
+    reordered.swap(0, 2);
+    reordered[2] = json!({ "trigger": "mouse_up", "javascript": "getField('Note').value = 'second';" });
+    let r = ok(&mut b, "form_set_actions", json!({ "doc": doc, "field": "Go", "actions": reordered }));
+    assert_eq!(r["actions"], json!(reordered));
+    let up = ok(&mut b, "form_run_trigger", json!({ "doc": doc, "field": "Go", "trigger": "mouse_up" }));
+    assert_eq!(up["ran"][0], "Execute a menu item: NextPage", "{up}");
+    assert_eq!(note(&mut b), "second");
+
+    // With JavaScript off, scripts are skipped and the rest still runs.
+    ok(&mut b, "js_enabled", json!({ "enabled": false }));
+    let up = ok(&mut b, "form_run_trigger", json!({ "doc": doc, "field": "Go", "trigger": "mouse_up" }));
+    assert_eq!(up["ran"].as_array().unwrap().len(), 2, "{up}");
+    assert_eq!(up["skipped"].as_array().unwrap().len(), 1, "{up}");
+    ok(&mut b, "js_enabled", json!({ "enabled": true }));
+
+    // Refused without changes: an unsafe menu item, an unknown action that isn't there, a bad
+    // trigger; running a missing field or trigger fails.
+    for bad in [
+        json!([{ "trigger": "mouse_up", "menu": "Quit" }]),
+        json!([{ "trigger": "mouse_up", "other": "Launch" }]),
+        json!([{ "trigger": "wave", "url": "https://example.org" }]),
+    ] {
+        assert!(b.call("form_set_actions", &json!({ "doc": doc, "field": "Go", "actions": bad })).is_err(), "{bad}");
+    }
+    assert_eq!(ok(&mut b, "form_actions", json!({ "doc": doc, "field": "Go" }))["actions"], json!(reordered));
+    assert!(b.call("form_run_trigger", &json!({ "doc": doc, "field": "Nope", "trigger": "mouse_up" })).is_err());
+    assert!(b.call("form_run_trigger", &json!({ "doc": doc, "field": "Go", "trigger": "wave" })).is_err());
+
+    // Removing all actions.
+    let r = ok(&mut b, "form_set_actions", json!({ "doc": doc, "field": "Go", "actions": [] }));
+    assert_eq!(r["actions"], json!([]));
+}
+
+#[test]
 fn detecting_form_fields_through_tools() {
     let dir = workdir("detect-fields");
     let mut a = auto(&dir);
