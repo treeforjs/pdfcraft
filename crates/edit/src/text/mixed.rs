@@ -42,16 +42,36 @@ pub(super) fn typed_text(text: &str) -> String {
     text.replace("\r\n", "\n").chars().map(typed_char).collect()
 }
 
-/// Whether a paragraph's text space is upright in page space (no rotation, skew or reflection).
-/// Grouping, gaps and row placement are inferred from page X, which is only valid there.
-pub(super) fn upright(lines: &[TextLine], block: &TextBlock) -> bool {
+/// Largest cosine between a paragraph's text axes in user space still treated as a right angle
+/// (about 0.006°: under a hundredth of a point of skew across a 100 pt line).
+const SKEW_TOLERANCE: f64 = 1e-4;
+
+/// Whether the run path can place a paragraph: its text space, in user space, is upright text
+/// turned by any angle (through `Tm`, the CTM or both), with its own horizontal and vertical
+/// scales along its axes. Grouping, gap advances, row baselines and widths are all measured in
+/// the paragraph's text [`Frame`] (the inverse of its normalized text axes), and glyphs are
+/// placed in text space relative to the first line's text matrix, so turning the paragraph
+/// changes nothing but that frame. Skewed and reflected text space is not placed yet.
+pub(super) fn supported_frame(lines: &[TextLine], block: &TextBlock) -> bool {
     let Some(first) = block.lines.first().and_then(|i| lines.get(*i)) else { return false };
-    let transform = Matrix(first.origin.tm).then(&Matrix(first.origin.ctm)).0;
-    transform[1].abs() <= 1e-8
-        && transform[2].abs() <= 1e-8
-        && transform[0] > 0.0
-        && transform[3] > 0.0
+    let [a, b, c, d, _, _] = Matrix(first.origin.tm).then(&Matrix(first.origin.ctm)).0;
+    let (horizontal, vertical) = (a.hypot(b), c.hypot(d));
+    let skew = (a * c + b * d) / (horizontal * vertical);
+    [a, b, c, d, horizontal, vertical, skew].into_iter().all(f64::is_finite)
+        && horizontal > 1e-9
+        && vertical > 1e-9
+        && skew.abs() <= SKEW_TOLERANCE
+        && a * d - b * c > 0.0
+        // Every line is measured in the first line's frame.
+        && block.lines.iter().filter_map(|i| lines.get(*i)).all(|l| l.origin.ctm == first.origin.ctm && l.origin.tm.get(..4) == first.origin.tm.get(..4))
         && block.runs.iter().all(|r| r.state.scale.is_finite() && r.state.scale > 0.0)
+}
+
+/// A text or path matrix as operands: its linear part exactly as the source has it (rounding a
+/// turned paragraph's axes would turn and scale every glyph slightly), its translation to a
+/// ten-thousandth of a unit like other emitted numbers.
+fn matrix_operands(m: [f64; 6]) -> Vec<Object> {
+    m.into_iter().enumerate().map(|(i, v)| if i < 4 && v.fract() != 0.0 { Object::Real(v) } else { pdfcraft_content::num(v) }).collect()
 }
 
 fn over_budget() -> EditError {
@@ -518,12 +538,16 @@ pub(super) fn rewrite(
     let first = block.lines.first().and_then(|i| lines.get(*i)).ok_or_else(|| EditError::Invalid("the paragraph has no source line".into()))?;
     let o = &first.origin;
     let k = o.k.max(1e-6);
-    if !upright(lines, block) {
+    if !supported_frame(lines, block) {
         return Err(EditError::Invalid(
-            "mixed-run editing currently needs upright text; rotated, reflected or skewed text is preserved unchanged".into(),
+            "mixed-run editing needs upright or rotated text without skew or reflection; skewed or reflected text is preserved unchanged"
+                .into(),
         ));
     }
-    let horizontal = Matrix(o.tm).then(&Matrix(o.ctm)).0[0];
+    // Advances along the writing direction, in user space per text-space unit.
+    let horizontal = horizontal_scale(o);
+    let frame = frame_of(o);
+    let frame_rect = frame_box(lines, block);
     let p = page_dict(doc, page)?;
     let res = p.dict.get(b"Resources").and_then(|r| doc.resolve(r).as_dict().cloned()).unwrap_or_default();
     let original_fonts = res.get(b"Font").and_then(|f| doc.resolve(f).as_dict().cloned()).unwrap_or_default();
@@ -537,9 +561,16 @@ pub(super) fn rewrite(
         1
     };
     let [dx, dy] = style.offset.unwrap_or([0.0, 0.0]);
+    // Widths are measured along the writing direction; a single line grows to the page margin
+    // it runs towards (the right margin for upright text).
     let width = style.width.map(|w| w.clamp(block.size, 14_400.0)).unwrap_or_else(|| {
-        let current = (block.rect[2] - block.rect[0]).max(block.size);
-        if block.line_count == 1 { current.max(p.crop(doc)[2] - 36.0 - block.rect[0] - dx) } else { current }
+        let current = (frame_rect[2] - frame_rect[0]).max(block.size);
+        if block.line_count == 1 {
+            let (x, y) = frame.user((frame_rect[0], o.baseline));
+            current.max(room_to_margin(p.crop(doc), &frame, (x + dx, y + dy)))
+        } else {
+            current
+        }
     });
     // Source line breaks are kept unless the edit changes how wide the text is set.
     let keep_breaks = style.width.is_none()
@@ -596,7 +627,7 @@ pub(super) fn rewrite(
             Item::Chunk { x, row, .. } | Item::Underlined { x, row, .. } => (*x, *row),
         };
         let tm = Matrix([1.0, 0.0, 0.0, 1.0, x, -(row as f64) * lead]).then(&Matrix(o.tm));
-        ops.push(Op::new("Tm", tm.0.into_iter().map(n).collect()));
+        ops.push(Op::new("Tm", matrix_operands(tm.0)));
         match item {
             Item::Chunk { glyphs: chunk, .. } => ops.push(show(&glyphs, chunk, face)?),
             Item::Underlined { glyph, width, .. } => {
@@ -620,7 +651,7 @@ pub(super) fn rewrite(
     for (id, x0, x1, y, size, color) in underlines {
         ops.push(decorations::begin(id, true));
         ops.push(Op::new("q", vec![]));
-        ops.push(Op::new("cm", o.tm.into_iter().map(n).collect()));
+        ops.push(Op::new("cm", matrix_operands(o.tm)));
         ops.push(Op::new("RG", color.into_iter().map(n).collect()));
         ops.push(Op::new("w", vec![n(size * 0.06)]));
         ops.push(Op::new("J", vec![Object::Int(0)]));

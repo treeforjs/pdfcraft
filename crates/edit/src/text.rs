@@ -30,6 +30,8 @@ pub struct TextLine {
     pub text: String,
     /// Its box in user space.
     pub rect: [f64; 4],
+    /// Its box in its text [`Frame`] (the same as `rect` for upright text).
+    frame_rect: [f64; 4],
     /// The font's resource name and `/BaseFont` (or Type 3 descriptor's `/FontName`), and its size in text space.
     pub font: String,
     pub base_font: String,
@@ -133,6 +135,8 @@ struct Origin {
     k: f64,
     /// The CTM there (current space → page space), for moving the paragraph in page space.
     ctm: [f64; 6],
+    /// The start of the line (its rise included) in the line's text [`Frame`]: the baseline's
+    /// height and where along the writing direction it starts. User space for upright text.
     baseline: f64,
     x: f64,
     state: TextState,
@@ -183,7 +187,9 @@ pub struct TextBlock {
 }
 
 impl TextLine {
-    /// The baseline's height in user space.
+    /// The baseline's height in the line's text frame: user space for upright text, and the
+    /// distance along the text's up direction (in user-space units) for rotated text, so the
+    /// difference between two lines of one paragraph is their line spacing either way.
     pub fn origin_baseline(&self) -> f64 {
         self.origin.baseline
     }
@@ -326,6 +332,56 @@ fn known_fill_color(fill: &[Op]) -> Option<[f64; 3]> {
     }
 }
 
+/// A text line's local frame: user space expressed in the unit X/Y basis of its text space
+/// (the text rendering matrix's axes, each normalized to length one). X runs along the
+/// writing direction and Y along the text's up direction, both in user-space units, so a
+/// rotated paragraph is grouped, spaced and measured exactly like an upright one. Upright
+/// text (axes along +x and +y) maps to user space unchanged.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Frame {
+    /// The unit X and Y axes in user space.
+    x: [f64; 2],
+    y: [f64; 2],
+}
+
+impl Frame {
+    const UPRIGHT: Frame = Frame { x: [1.0, 0.0], y: [0.0, 1.0] };
+
+    /// The frame of a text rendering matrix (text space → user space). A degenerate or
+    /// non-finite transform has no basis to invert and keeps user space.
+    fn of(m: &Matrix) -> Frame {
+        let [a, b, c, d, _, _] = m.0;
+        let (hx, hy) = (a.hypot(b), c.hypot(d));
+        if !(hx.is_finite() && hy.is_finite() && hx > 1e-12 && hy > 1e-12) {
+            return Frame::UPRIGHT;
+        }
+        let frame = Frame { x: [a / hx, b / hx], y: [c / hy, d / hy] };
+        let det = frame.x[0] * frame.y[1] - frame.y[0] * frame.x[1];
+        // Axes closer than about half a degree cannot be told apart reliably.
+        if !det.is_finite() || det.abs() < 1e-2 { Frame::UPRIGHT } else { frame }
+    }
+
+    /// A user-space point in this frame (the inverse of the normalized basis).
+    fn local(&self, (px, py): (f64, f64)) -> (f64, f64) {
+        let det = self.x[0] * self.y[1] - self.y[0] * self.x[1];
+        ((self.y[1] * px - self.y[0] * py) / det, (self.x[0] * py - self.x[1] * px) / det)
+    }
+
+    /// A point in this frame back in user space.
+    fn user(&self, (lx, ly): (f64, f64)) -> (f64, f64) {
+        (lx * self.x[0] + ly * self.y[0], lx * self.x[1] + ly * self.y[1])
+    }
+}
+
+fn union(a: [f64; 4], b: [f64; 4]) -> [f64; 4] {
+    [a[0].min(b[0]), a[1].min(b[1]), a[2].max(b[2]), a[3].max(b[3])]
+}
+
+/// The bounding box of `points`.
+fn bounds(points: impl IntoIterator<Item = (f64, f64)>) -> [f64; 4] {
+    points.into_iter().fold([f64::MAX, f64::MAX, f64::MIN, f64::MIN], |b, p| [b[0].min(p.0), b[1].min(p.1), b[2].max(p.0), b[3].max(p.1)])
+}
+
 /// The text-showing operators of one stream with their text, font, box and baseline.
 struct Shown {
     op: usize,
@@ -337,6 +393,8 @@ struct Shown {
     bt_state: Ts,
     text: String,
     rect: [f64; 4],
+    /// Its box, baseline, start and actual end point (after TJ adjustments) in its [`Frame`].
+    frame_rect: [f64; 4],
     baseline: f64,
     start_x: f64,
     end_x: f64,
@@ -495,7 +553,8 @@ fn interpret(
                     _ => op.operands.last().cloned().into_iter().collect(),
                 };
                 let trm0 = tm.then(&ts.ctm);
-                let start = trm0.apply(0.0, ts.rise);
+                let frame = Frame::of(&trm0);
+                let start = frame.local(trm0.apply(0.0, ts.rise));
                 let mut text = String::new();
                 let mut decodable = true;
                 let mut x_text = 0.0;
@@ -539,7 +598,8 @@ fn interpret(
                     }
                 }
                 tm = Matrix([1.0, 0.0, 0.0, 1.0, x_text, 0.0]).then(&tm);
-                let end = tm.then(&ts.ctm).apply(0.0, ts.rise);
+                // The actual end point (its source TJ adjustments included), projected into the frame.
+                let end = frame.local(tm.then(&ts.ctm).apply(0.0, ts.rise));
                 // The box: from descent to ascent along the run.
                 let corners = [
                     trm0.apply(0.0, ts.rise + m.descent * ts.size),
@@ -547,9 +607,8 @@ fn interpret(
                     trm0.apply(0.0, ts.rise + m.ascent * ts.size),
                     trm0.apply(x_text, ts.rise + m.ascent * ts.size),
                 ];
-                let rect = corners
-                    .iter()
-                    .fold([f64::MAX, f64::MAX, f64::MIN, f64::MIN], |b, p| [b[0].min(p.0), b[1].min(p.1), b[2].max(p.0), b[3].max(p.1)]);
+                let rect = bounds(corners);
+                let frame_rect = bounds(corners.map(|p| frame.local(p)));
                 let size_user = (trm0.0[2].powi(2) + trm0.0[3].powi(2)).sqrt() * ts.size;
                 let mut shown_state = ts.clone();
                 shown_state.complex_graphics |= pending_path;
@@ -566,6 +625,7 @@ fn interpret(
                     bt_state: at_bt.1.clone(),
                     text,
                     rect,
+                    frame_rect,
                     baseline: start.1,
                     start_x: start.0,
                     end_x: end.0,
@@ -630,6 +690,7 @@ pub fn text_lines(doc: &Document, page: usize) -> Result<Vec<TextLine>, EditErro
             }
             l.text.push_str(&s.text);
             l.rect = [l.rect[0].min(s.rect[0]), l.rect[1].min(s.rect[1]), l.rect[2].max(s.rect[2]), l.rect[3].max(s.rect[3])];
+            l.frame_rect = union(l.frame_rect, s.frame_rect);
             l.ops.push(s.op);
             l.decodable &= s.decodable;
             l.color = fill_color(&s.state.fill);
@@ -638,6 +699,7 @@ pub fn text_lines(doc: &Document, page: usize) -> Result<Vec<TextLine>, EditErro
             lines.push(TextLine {
                 text: s.text.clone(),
                 rect: s.rect,
+                frame_rect: s.frame_rect,
                 font: String::from_utf8_lossy(&s.font).into_owned(),
                 base_font: s.base_font.clone(),
                 size: s.size,
@@ -695,6 +757,7 @@ fn add_shown(lines: &mut Vec<TextLine>, last: &mut Option<(usize, f64, f64, f64)
         }
         l.text.push_str(&s.text);
         l.rect = [l.rect[0].min(s.rect[0]), l.rect[1].min(s.rect[1]), l.rect[2].max(s.rect[2]), l.rect[3].max(s.rect[3])];
+        l.frame_rect = union(l.frame_rect, s.frame_rect);
         l.ops.push(s.op);
         l.decodable &= s.decodable;
         l.color = fill_color(&s.state.fill);
@@ -703,6 +766,7 @@ fn add_shown(lines: &mut Vec<TextLine>, last: &mut Option<(usize, f64, f64, f64)
         lines.push(TextLine {
             text: s.text.clone(),
             rect: s.rect,
+            frame_rect: s.frame_rect,
             font: String::from_utf8_lossy(&s.font).into_owned(),
             base_font: s.base_font.clone(),
             size: s.size,
@@ -1221,7 +1285,36 @@ pub fn reading_blocks(doc: &Document, page: usize) -> Result<Vec<TextBlock>, Edi
 fn aligned(a: &TextLine, b: &TextLine) -> bool {
     let tol = horizontal_text_size(b);
     let centre = |r: [f64; 4]| (r[0] + r[2]) / 2.0;
-    (a.origin.x - b.origin.x).abs() < tol || (centre(a.rect) - centre(b.rect)).abs() < tol || (a.rect[2] - b.rect[2]).abs() < tol
+    (a.origin.x - b.origin.x).abs() < tol
+        || (centre(a.frame_rect) - centre(b.frame_rect)).abs() < tol
+        || (a.frame_rect[2] - b.frame_rect[2]).abs() < tol
+}
+
+/// The text frame a line starts in.
+fn frame_of(origin: &Origin) -> Frame {
+    Frame::of(&Matrix(origin.tm).then(&Matrix(origin.ctm)))
+}
+
+/// A paragraph's box in its text frame (its lines share one: grouping requires the same text
+/// and graphics matrices).
+fn frame_box(lines: &[TextLine], b: &TextBlock) -> [f64; 4] {
+    b.lines.iter().filter_map(|i| lines.get(*i)).map(|l| l.frame_rect).reduce(union).unwrap_or(b.rect)
+}
+
+/// How far text starting at `start` (user space) can run along `frame`'s writing direction
+/// before it reaches the page margin, 36 pt inside `crop`. For upright text that is the
+/// distance to the right margin. Negative when it starts past the margin.
+fn room_to_margin(crop: [f64; 4], frame: &Frame, start: (f64, f64)) -> f64 {
+    let inside = [crop[0].min(crop[2]) + 36.0, crop[1].min(crop[3]) + 36.0, crop[0].max(crop[2]) - 36.0, crop[1].max(crop[3]) - 36.0];
+    let mut room = f64::INFINITY;
+    for (at, direction, low, high) in [(start.0, frame.x[0], inside[0], inside[2]), (start.1, frame.x[1], inside[1], inside[3])] {
+        if direction > 1e-9 {
+            room = room.min((high - at) / direction);
+        } else if direction < -1e-9 {
+            room = room.min((low - at) / direction);
+        }
+    }
+    if room.is_finite() { room } else { 0.0 }
 }
 
 fn horizontal_scale(origin: &Origin) -> f64 {
@@ -1260,8 +1353,8 @@ fn group_blocks(lines: &[TextLine], mixed: bool) -> Vec<TextBlock> {
                 let size = p.size.max(l.size).max(1.0);
                 let horizontal = horizontal_text_size(p).max(horizontal_text_size(l));
                 (p.origin.baseline - l.origin.baseline).abs() < size * 0.15
-                    && l.origin.x >= p.rect[2] - horizontal * 0.2
-                    && l.origin.x - p.rect[2] < horizontal * 2.0
+                    && l.origin.x >= p.frame_rect[2] - horizontal * 0.2
+                    && l.origin.x - p.frame_rect[2] < horizontal * 2.0
             });
         let next_row = compatible
             && row.is_some_and(|p| {
@@ -1292,7 +1385,7 @@ fn group_blocks(lines: &[TextLine], mixed: bool) -> Vec<TextBlock> {
                     }
                 }
             } else if let Some(previous) = previous {
-                let gap = l.origin.x - previous.rect[2];
+                let gap = l.origin.x - previous.frame_rect[2];
                 let adjustment = gap / horizontal_scale(&previous.origin);
                 if gap > horizontal_text_size(l) * 0.2 && !b.text.ends_with(' ') && !l.text.starts_with(' ') {
                     b.text.push(' ');
@@ -1523,7 +1616,7 @@ fn rewrite_block_inner(doc: &mut Document, page: usize, block: usize, text: Opti
     }
     let uniform = !b.runs.windows(2).any(|r| r[0].state != r[1].state);
     let decorated = b.runs.iter().any(|r| r.underline);
-    if mixed::upright(&lines, b) || style.range.is_some() || style.underline.is_some() || decorated || !uniform {
+    if mixed::supported_frame(&lines, b) || style.range.is_some() || style.underline.is_some() || decorated || !uniform {
         // Whole-paragraph text is shown as typed, except for breaks a PDF paragraph cannot
         // hold; a selected range keeps its offsets (the run path maps those characters itself).
         let typed = match (text, style.range) {
@@ -1534,11 +1627,12 @@ fn rewrite_block_inner(doc: &mut Document, page: usize, block: usize, text: Opti
         let fake_bold = style.range.is_none() && uniform && !decorated;
         return mixed::rewrite(doc, page, &lines, b, &typed, style, fake_bold);
     }
-    // Legacy re-encoding, now only for whole edits of uniform transformed (rotated, skewed or
-    // reflected) paragraphs, which the run path cannot place yet. It normalizes whitespace and
-    // re-encodes every word from Unicode.
+    // Legacy re-encoding, now only for whole edits of uniform skewed or reflected paragraphs,
+    // which the run path does not place yet (upright and rotated text goes through it). It
+    // normalizes whitespace and re-encodes every word from Unicode.
     let members: Vec<&TextLine> = b.lines.iter().map(|i| &lines[*i]).collect();
     let first = members[0];
+    let frame_rect = frame_box(&lines, b);
     let p = page_dict(doc, page)?;
     let res = p.dict.get(b"Resources").map(|r| doc.resolve(r)).and_then(|r| r.as_dict().cloned()).unwrap_or_default();
     let mut fonts_res = res.get(b"Font").map(|f| doc.resolve(f)).and_then(|f| f.as_dict().cloned()).unwrap_or_default();
@@ -1587,8 +1681,13 @@ fn rewrite_block_inner(doc: &mut Document, page: usize, block: usize, text: Opti
         // Capped at the largest page PDF allows (14 400 pt).
         Some(w) if w.is_finite() => w.clamp(size * k, 14_400.0),
         Some(_) => return Err(EditError::Invalid("the paragraph's width must be a number".into())),
-        None if members.len() == 1 => (b.rect[2] - b.rect[0]).max(size * k).max(p.crop(doc)[2] - 36.0 - (b.rect[0] + dx)),
-        None => (b.rect[2] - b.rect[0]).max(size * k),
+        // Measured in the paragraph's text frame (user space for upright text).
+        None if members.len() == 1 => {
+            let frame = frame_of(o);
+            let (x, y) = frame.user((frame_rect[0], o.baseline));
+            (frame_rect[2] - frame_rect[0]).max(size * k).max(room_to_margin(p.crop(doc), &frame, (x + dx, y + dy)))
+        }
+        None => (frame_rect[2] - frame_rect[0]).max(size * k),
     };
     let advance = |s: &str| -> f64 {
         let t = match (&metrics, reuse) {
@@ -1797,6 +1896,33 @@ fn install_block(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn text_frames_are_user_space_for_upright_text_and_invert_turned_axes() {
+        // Upright text, scaled or not, is measured in user space exactly.
+        for m in [[1.0, 0.0, 0.0, 1.0, 5.0, 6.0], [2.0, 0.0, 0.0, 3.0, 0.0, 0.0]] {
+            assert_eq!(Frame::of(&Matrix(m)), Frame::UPRIGHT);
+        }
+        // A quarter turn: X runs up the page and Y to the left, exactly.
+        let quarter = Frame::of(&Matrix([0.0, 2.0, -1.0, 0.0, 0.0, 0.0]));
+        assert_eq!(quarter.local((3.0, 7.0)), (7.0, -3.0));
+        // Any angle and axis scales: a point maps to its distances along the unit axes.
+        let (c, s) = (30f64.to_radians().cos(), 30f64.to_radians().sin());
+        let turned = Frame::of(&Matrix([2.0 * c, 2.0 * s, -1.5 * s, 1.5 * c, 0.0, 0.0]));
+        let p = (c * 4.0 - s * 9.0, s * 4.0 + c * 9.0);
+        let (x, y) = turned.local(p);
+        assert!((x - 4.0).abs() < 1e-12 && (y - 9.0).abs() < 1e-12, "{x} {y}");
+        let back = turned.user((x, y));
+        assert!((back.0 - p.0).abs() < 1e-12 && (back.1 - p.1).abs() < 1e-12);
+        // Degenerate and non-finite transforms fall back to user space.
+        for m in [[0.0, 0.0, 0.0, 1.0, 0.0, 0.0], [1.0, 0.0, 1.0, 0.0, 0.0, 0.0], [f64::NAN, 0.0, 0.0, 1.0, 0.0, 0.0]] {
+            assert_eq!(Frame::of(&Matrix(m)), Frame::UPRIGHT);
+        }
+        // The margin a line runs towards: right for upright text, up for a quarter turn.
+        let crop = [0.0, 0.0, 600.0, 800.0];
+        assert_eq!(room_to_margin(crop, &Frame::UPRIGHT, (100.0, 700.0)), 464.0);
+        assert_eq!(room_to_margin(crop, &quarter, (300.0, 200.0)), 564.0);
+    }
 
     #[test]
     fn paragraph_wrapping_keeps_ideographic_spaces() {

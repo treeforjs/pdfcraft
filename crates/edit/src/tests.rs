@@ -1396,13 +1396,15 @@ fn selected_subset_and_bad_ranges_fail_without_low_level_mutation() {
         assert!(text::rewrite_block(&mut doc, 0, 0, None, &style).is_err());
         assert_eq!(write_incremental(&doc, &SaveOptions::default()).unwrap(), before);
     }
-    let mut rotated = text_page("BT /F1 12 Tf 0 1 -1 0 100 200 Tm (Rotated) Tj ET");
-    let before = write_incremental(&rotated, &SaveOptions::default()).unwrap();
-    assert!(
-        text::rewrite_block(&mut rotated, 0, 0, None, &text::BlockStyle { range: Some([0, 1]), color: Some([1.0, 0.0, 0.0]), ..Default::default() })
-            .is_err()
-    );
-    assert_eq!(write_incremental(&rotated, &SaveOptions::default()).unwrap(), before);
+    // Skewed and reflected text cannot be placed by the run path yet (rotated text can).
+    for transform in ["1 0 0.3 1 100 200 Tm", "1 0 0 -1 100 600 Tm", "-1 0 0 1 300 200 Tm"] {
+        let mut transformed = text_page(&format!("BT /F1 12 Tf {transform} (Turned) Tj ET"));
+        let before = write_incremental(&transformed, &SaveOptions::default()).unwrap();
+        let style = text::BlockStyle { range: Some([0, 1]), color: Some([1.0, 0.0, 0.0]), ..Default::default() };
+        let refused = text::rewrite_block(&mut transformed, 0, 0, None, &style);
+        assert!(matches!(&refused, Err(EditError::Invalid(m)) if m.contains("skewed or reflected")), "{transform}: {refused:?}");
+        assert_eq!(write_incremental(&transformed, &SaveOptions::default()).unwrap(), before);
+    }
 }
 
 #[test]
@@ -1804,11 +1806,14 @@ fn underline_associations(doc: &Document) -> Vec<Association> {
         })
         .collect();
     for a in &out {
-        // Upright, unscaled paragraph fixtures: the glyph's Tm is [1 0 0 1 x y] · cm.
-        assert!((a.cm[4] + a.x0 - a.tm[4]).abs() < 2e-3, "{a:?}");
+        // The glyph's Tm is [1 0 0 1 x y] · cm (cm is the paragraph's text matrix, upright or
+        // turned): the path lies in that glyph's text space, starting where it is placed.
+        assert!(a.tm.iter().zip(&a.cm).take(4).all(|(t, c)| (t - c).abs() < 1e-6), "{a:?}");
+        let (x, y) = pdfcraft_content::Matrix(a.cm).invert().unwrap().apply(a.tm[4], a.tm[5]);
+        assert!((x - a.x0).abs() < 2e-3, "{a:?}");
         assert!(a.x1 > a.x0, "{a:?}");
-        let below = a.tm[5] - (a.cm[5] + a.y);
-        assert!(below > 0.0 && below < a.tm[0].max(1.0) * 12.0, "{a:?}");
+        let below = y - a.y;
+        assert!(below > 0.0 && below < 12.0, "{a:?}");
     }
     let ids: std::collections::HashSet<i64> = out.iter().map(|a| a.id).collect();
     assert_eq!(ids.len(), out.len(), "unique IDs");
@@ -2628,11 +2633,15 @@ fn whole_paragraph_edits_leave_shared_resources_alone_and_transformed_text_on_th
     let doc = reopen(&doc);
     assert!(doc.get(pdfcraft_cos::ObjRef::new(3, 0)).as_dict().unwrap().get(b"Resources").is_none());
     assert_eq!(text::text_blocks(&doc, 0).unwrap()[0].text, "Hi  there");
-    // Rotated text cannot be placed by the run path yet: whole edits keep working through the
-    // legacy re-encoding (which still normalizes whitespace), selected ranges refuse.
+    // Rotated text goes through the run path (typed repeated spaces survive). Skewed text
+    // cannot be placed by it yet: whole edits keep working through the legacy re-encoding
+    // (which still normalizes whitespace), selected ranges refuse.
     let mut rotated = text_page("BT /F1 12 Tf 0 1 -1 0 100 200 Tm (Rotated) Tj ET");
     text::replace_block(&mut rotated, 0, 0, "Turned  text").unwrap();
-    assert_eq!(text::text_blocks(&reopen(&rotated), 0).unwrap()[0].text, "Turned text");
+    assert_eq!(text::text_blocks(&reopen(&rotated), 0).unwrap()[0].text, "Turned  text");
+    let mut skewed = text_page("BT /F1 12 Tf 1 0 0.3 1 100 200 Tm (Slanted) Tj ET");
+    text::replace_block(&mut skewed, 0, 0, "Slanted  text").unwrap();
+    assert_eq!(text::text_blocks(&reopen(&skewed), 0).unwrap()[0].text, "Slanted text");
 }
 
 #[test]
@@ -2688,4 +2697,267 @@ fn whole_paragraph_edits_keep_the_source_rows_they_do_not_reach() {
     let joined = "One two three four five six seveneight nine ten eleven twelve";
     text::replace_block(&mut doc, 0, 0, joined).unwrap();
     assert_eq!(text::text_blocks(&reopen(&doc), 0).unwrap()[0].text, joined);
+}
+
+/// A glyph shown on page 0: its code, where its origin lands in user space (rise included),
+/// the linear part of its text rendering matrix, and its fill operator.
+#[derive(Clone, Debug, PartialEq)]
+struct Placed {
+    byte: u8,
+    at: [f64; 2],
+    trm: [f64; 4],
+    fill: String,
+}
+
+/// An independent interpreter for the fixtures' Helvetica (WinAnsi) text: q/Q, cm, the text
+/// state operators, Td/TD/Tm/T*, Tj/TJ/'. It finds where every glyph lands in user space,
+/// whatever the text or graphics transform.
+fn placed_glyphs(doc: &Document) -> Vec<Placed> {
+    use pdfcraft_content::Matrix;
+    #[derive(Clone)]
+    struct State {
+        ctm: Matrix,
+        size: f64,
+        tc: f64,
+        tw: f64,
+        tz: f64,
+        tl: f64,
+        rise: f64,
+        fill: String,
+    }
+    let mut gs = State { ctm: Matrix::IDENTITY, size: 0.0, tc: 0.0, tw: 0.0, tz: 1.0, tl: 0.0, rise: 0.0, fill: "[0.0] g".into() };
+    let mut stack = Vec::new();
+    let (mut tm, mut tlm) = (Matrix::IDENTITY, Matrix::IDENTITY);
+    let mut out = Vec::new();
+    for op in pdfcraft_content::parse(&page_content_bytes(doc, 0)).ops {
+        let name = String::from_utf8_lossy(&op.op).into_owned();
+        match name.as_str() {
+            "q" => stack.push(gs.clone()),
+            "Q" => gs = stack.pop().unwrap(),
+            "cm" => gs.ctm = Matrix(op.nums::<6>().unwrap()).then(&gs.ctm),
+            "BT" => (tm, tlm) = (Matrix::IDENTITY, Matrix::IDENTITY),
+            "g" | "rg" | "k" => gs.fill = format!("{:?} {name}", op.operands.iter().map(|o| o.as_f64().unwrap()).collect::<Vec<_>>()),
+            "Tf" => gs.size = op.num(1).unwrap(),
+            "Tc" => gs.tc = op.num(0).unwrap(),
+            "Tw" => gs.tw = op.num(0).unwrap(),
+            "Tz" => gs.tz = op.num(0).unwrap() / 100.0,
+            "TL" => gs.tl = op.num(0).unwrap(),
+            "Ts" => gs.rise = op.num(0).unwrap(),
+            "Td" | "TD" => {
+                let [x, y] = op.nums::<2>().unwrap();
+                if name == "TD" {
+                    gs.tl = -y;
+                }
+                tlm = Matrix::translate(x, y).then(&tlm);
+                tm = tlm;
+            }
+            "Tm" => (tm, tlm) = (Matrix(op.nums::<6>().unwrap()), Matrix(op.nums::<6>().unwrap())),
+            "T*" => {
+                tlm = Matrix::translate(0.0, -gs.tl).then(&tlm);
+                tm = tlm;
+            }
+            "Tj" | "TJ" | "'" => {
+                if name == "'" {
+                    tlm = Matrix::translate(0.0, -gs.tl).then(&tlm);
+                    tm = tlm;
+                }
+                let parts = match op.operands.last() {
+                    Some(Object::Array(parts)) => parts.clone(),
+                    other => other.cloned().into_iter().collect(),
+                };
+                for part in parts {
+                    match part {
+                        Object::String(s) => {
+                            for byte in s.bytes {
+                                let trm = tm.then(&gs.ctm);
+                                let (x, y) = trm.apply(0.0, gs.rise);
+                                out.push(Placed { byte, at: [x, y], trm: [trm.0[0], trm.0[1], trm.0[2], trm.0[3]], fill: gs.fill.clone() });
+                                let w = pdfcraft_fonts::standard_text_width("Helvetica", &char::from(byte).to_string(), gs.size).unwrap();
+                                let advance = (w + gs.tc + if byte == b' ' { gs.tw } else { 0.0 }) * gs.tz;
+                                tm = Matrix::translate(advance, 0.0).then(&tm);
+                            }
+                        }
+                        number => tm = Matrix::translate(-number.as_f64().unwrap() / 1000.0 * gs.size * gs.tz, 0.0).then(&tm),
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+/// Glyphs `indexes` of `after` are where the same glyphs of `before` were: same code, same place
+/// (to a thousandth of a point), same orientation and scale.
+fn assert_in_place(before: &[Placed], after: &[Placed], indexes: impl IntoIterator<Item = usize>, label: &str) {
+    for i in indexes {
+        let (a, b) = (&before[i], &after[i]);
+        assert_eq!(a.byte, b.byte, "{label}: glyph {i} changed code");
+        assert!(a.at.iter().zip(&b.at).all(|(p, q)| (p - q).abs() < 1e-3), "{label}: glyph {i} moved from {:?} to {:?}", a.at, b.at);
+        assert!(a.trm.iter().zip(&b.trm).all(|(p, q)| (p - q).abs() < 1e-6), "{label}: glyph {i} turned or scaled: {a:?} {b:?}");
+    }
+}
+
+/// Rotations by quarter turns and arbitrary angles, through the text matrix, the CTM or both,
+/// with different horizontal and vertical scales along the text's own axes:
+/// (label, cm, Tm, vertical scale).
+const TURNED: &[(&str, &str, &str, f64)] = &[
+    ("90° Tm", "1 0 0 1 0 0", "0 1 -1 0 300 200", 1.0),
+    ("180° Tm", "1 0 0 1 0 0", "-1 0 0 -1 450 600", 1.0),
+    ("270° Tm", "1 0 0 1 0 0", "0 -1 1 0 200 650", 1.0),
+    ("30° CTM", "0.866025 0.5 -0.5 0.866025 150 200", "1 0 0 1 10 20", 1.0),
+    ("30° CTM, 2:1 Tm scale", "0.866025 0.5 -0.5 0.866025 100 150", "2 0 0 1 10 20", 1.0),
+    ("-45° Tm, 90° CTM, 1:1.5 scale", "0 1 -1 0 500 100", "0.707107 -0.707107 1.06066 1.06066 100 50", 1.5),
+];
+
+#[test]
+fn turned_paragraph_edits_keep_untouched_glyphs_codes_kerning_and_gaps() {
+    for (label, cm, tm, _) in TURNED {
+        // Kerned TJ pairs, a run joined from a following Tj, doubled spaces, and a word placed
+        // by its own Td (a gap the reader turns into a code-less space).
+        let source = format!("q {cm} cm BT /F1 12 Tf {tm} Tm [(AV) -150 (AW) 80 (ay)] TJ (  double  gap) Tj 130 0 Td (end) Tj ET Q");
+        let mut doc = text_page(&source);
+        let before = placed_glyphs(&doc);
+        let blocks = text::text_blocks(&doc, 0).unwrap();
+        assert_eq!(blocks.len(), 1, "{label}: {blocks:?}");
+        assert_eq!(blocks[0].text, "AVAWay  double  gap end", "{label}");
+        let edited = "AVAWay  double  gap fin";
+        assert_eq!(text::replace_block(&mut doc, 0, 0, edited).unwrap().substituted, None, "{label}");
+        let doc = reopen(&doc);
+        assert_eq!(text::text_blocks(&doc, 0).unwrap()[0].text, edited, "{label}: repeated spaces survive");
+        let after = placed_glyphs(&doc);
+        assert_eq!(after.len(), before.len(), "{label}");
+        // Every untouched glyph, and the first replaced one, starts exactly where it did.
+        let untouched = "AVAWay  double  gap".len();
+        assert_in_place(&before, &after, 0..untouched, label);
+        assert!(before[untouched].at.iter().zip(&after[untouched].at).all(|(p, q)| (p - q).abs() < 1e-3), "{label}: the new word moved");
+        assert_eq!(after[untouched..].iter().map(|g| g.byte).collect::<Vec<_>>(), b"fin");
+        // The source kerning is written back as the same TJ numbers.
+        let shown = shows(&doc);
+        assert_eq!(shown[0], (b"AVAWay  double  gap".to_vec(), vec![-150.0, 80.0]), "{label}: {shown:?}");
+    }
+}
+
+#[test]
+fn turned_paragraphs_group_rows_and_keep_the_rows_an_edit_does_not_reach() {
+    for (label, cm, tm, vertical) in TURNED {
+        let para = format!(
+            "q {cm} cm BT /F1 10 Tf 12 TL {tm} Tm (One two three four five six seven) Tj T* (eight nine) Tj T* (ten eleven twelve) Tj ET Q"
+        );
+        let doc = text_page(&para);
+        let block = text::text_blocks(&doc, 0).unwrap().remove(0);
+        assert_eq!(block.text, "One two three four five six seven eight nine ten eleven twelve", "{label}");
+        assert_eq!(block.line_count, 3, "{label}");
+        // Baselines are measured along the text's own up direction, in user-space units.
+        let lines = text::text_lines(&doc, 0).unwrap();
+        assert!((lines[0].origin_baseline() - lines[1].origin_baseline() - 12.0 * vertical).abs() < 1e-3, "{label}: {lines:?}");
+        let before = placed_glyphs(&doc);
+        // A same-length change: every other glyph keeps its index and its place.
+        let mut changed = doc.clone();
+        let text = "One two three four five six seven eight NINE ten eleven twelve";
+        text::replace_block(&mut changed, 0, 0, text).unwrap();
+        let changed = reopen(&changed);
+        let block = text::text_blocks(&changed, 0).unwrap().remove(0);
+        assert_eq!((block.text.as_str(), block.line_count), (text, 3), "{label}");
+        let after = placed_glyphs(&changed);
+        assert_eq!(after.len(), before.len(), "{label}");
+        let nine = "One two three four five six seven".len() + "eight ".len();
+        assert_in_place(&before, &after, (0..before.len()).filter(|i| !(nine..nine + 4).contains(i)), label);
+        // Text that no longer fits wraps along the text's own axes; later rows keep their words.
+        let mut reflowed = doc.clone();
+        let text = "One two three four five six seven eight nine and a much longer insertion ten eleven twelve";
+        text::replace_block(&mut reflowed, 0, 0, text).unwrap();
+        let reflowed = reopen(&reflowed);
+        assert_eq!(text::text_blocks(&reflowed, 0).unwrap()[0].text, text, "{label}");
+        let rows: Vec<String> = text::text_lines(&reflowed, 0).unwrap().into_iter().map(|l| l.text).collect();
+        assert_eq!(rows, ["One two three four five six seven", "eight nine and a much longer", "insertion", "ten eleven twelve"], "{label}");
+        let after = placed_glyphs(&reflowed);
+        assert_in_place(&before, &after, 0.."One two three four five six seven".len(), label);
+        // Each row starts one line further along the text's own down direction.
+        let t = before[0].trm;
+        for (row, first) in [b'e', b'i', b't'].into_iter().enumerate() {
+            let steps = (row + 1) as f64 * 12.0;
+            let want = [before[0].at[0] - t[2] * steps, before[0].at[1] - t[3] * steps];
+            assert!(
+                after.iter().any(|g| g.byte == first && (g.at[0] - want[0]).abs() < 1e-3 && (g.at[1] - want[1]).abs() < 1e-3),
+                "{label}: row {} does not start at {want:?}",
+                row + 1
+            );
+        }
+    }
+}
+
+#[test]
+fn turned_selections_recolor_and_underline_in_the_text_frame() {
+    for (label, cm, tm, _) in TURNED {
+        let mut doc = text_page(&format!("q {cm} cm BT /F1 12 Tf {tm} Tm (Before abba after.) Tj ET Q"));
+        let before = placed_glyphs(&doc);
+        let style = text::BlockStyle { range: Some([7, 11]), underline: Some(true), color: Some([1.0, 0.0, 0.0]), ..Default::default() };
+        text::rewrite_block(&mut doc, 0, 0, None, &style).unwrap();
+        let doc = reopen(&doc);
+        let block = text::text_blocks(&doc, 0).unwrap().remove(0);
+        assert_eq!(block.text, "Before abba after.", "{label}");
+        let underlined: String = block.runs.iter().filter(|r| r.underline).flat_map(|r| block.text.chars().skip(r.start).take(r.end - r.start)).collect();
+        assert_eq!(underlined, "abba", "{label}");
+        assert!(block.runs.iter().filter(|r| r.underline).all(|r| r.color == [1.0, 0.0, 0.0]), "{label}");
+        // Every glyph, selected or not, stays where it was; only the selection changes colour.
+        let after = placed_glyphs(&doc);
+        assert_eq!(after.len(), before.len(), "{label}");
+        assert_in_place(&before, &after, 0..before.len(), label);
+        for (i, (a, b)) in before.iter().zip(&after).enumerate() {
+            assert_eq!(a.fill == b.fill, !(7..11).contains(&i), "{label}: glyph {i} {a:?} {b:?}");
+        }
+        // Each underline is drawn in its glyph's own (turned) text space, just below it.
+        let associations = underline_associations(&doc);
+        assert_eq!(associations.iter().map(|a| a.bytes.clone()).collect::<Vec<_>>(), [b"a".to_vec(), b"b".to_vec(), b"b".to_vec(), b"a".to_vec()]);
+    }
+}
+
+#[test]
+fn turned_runs_keep_their_own_rises() {
+    for (label, cm, tm, _) in TURNED {
+        let mut doc = text_page(&format!("q {cm} cm BT /F1 12 Tf {tm} Tm (Base ) Tj 0.8 Ts (up) Tj -0.8 Ts (down) Tj 0 Ts ( tail) Tj ET Q"));
+        assert_eq!(text::text_blocks(&doc, 0).unwrap()[0].text, "Base updown tail", "{label}");
+        let before = placed_glyphs(&doc);
+        text::replace_block(&mut doc, 0, 0, "Base updown end").unwrap();
+        let doc = reopen(&doc);
+        assert_eq!(text::text_blocks(&doc, 0).unwrap()[0].text, "Base updown end", "{label}");
+        let after = placed_glyphs(&doc);
+        assert_in_place(&before, &after, 0.."Base updown ".len(), label);
+    }
+}
+
+#[test]
+fn a_turned_single_line_grows_towards_the_margin_it_runs_to() {
+    // About 450 pt of Helvetica 12.
+    let mut text = String::from("Start");
+    while pdfcraft_fonts::standard_text_width("Helvetica", &text, 12.0).unwrap() < 450.0 {
+        text.push_str(" word");
+    }
+    // Running up from y = 200 on an 800 pt page there are 564 pt before the margin: one row.
+    let mut up = text_page("BT /F1 12 Tf 0 1 -1 0 300 200 Tm (Start) Tj ET");
+    text::replace_block(&mut up, 0, 0, &text).unwrap();
+    assert_eq!(text::text_blocks(&reopen(&up), 0).unwrap()[0].line_count, 1);
+    // Running left from x = 450 there are 414 pt: it wraps.
+    let mut left = text_page("BT /F1 12 Tf -1 0 0 -1 450 600 Tm (Start) Tj ET");
+    text::replace_block(&mut left, 0, 0, &text).unwrap();
+    let block = text::text_blocks(&reopen(&left), 0).unwrap().remove(0);
+    assert_eq!((block.text.as_str(), block.line_count), (text.as_str(), 2));
+}
+
+#[test]
+fn skewing_transforms_refuse_selections_and_keep_whole_edits_on_the_legacy_path() {
+    // A nonuniform CTM scale after a rotation skews the text axes; so does a skewed Tm.
+    for source in [
+        "q 2 0 0 1 0 0 cm BT /F1 12 Tf 0.866025 0.5 -0.5 0.866025 100 100 Tm (Skewed by scale) Tj ET Q",
+        "BT /F1 12 Tf 1 0.2 0 1 100 100 Tm (Skewed by scale) Tj ET",
+    ] {
+        let mut doc = text_page(source);
+        let before = write_incremental(&doc, &SaveOptions::default()).unwrap();
+        let style = text::BlockStyle { range: Some([0, 6]), bold: Some(true), ..Default::default() };
+        assert!(text::rewrite_block(&mut doc, 0, 0, None, &style).is_err(), "{source}");
+        assert_eq!(write_incremental(&doc, &SaveOptions::default()).unwrap(), before, "refused atomically");
+        text::replace_block(&mut doc, 0, 0, "Still  editable").unwrap();
+        assert_eq!(text::text_blocks(&reopen(&doc), 0).unwrap()[0].text, "Still editable", "{source}");
+    }
 }
