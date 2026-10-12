@@ -2043,3 +2043,5 @@
 
 # Reader selection
 	Select paragraph	選取段落
+	Document and comments with connector lines on single pages	文件和註解，帶連接線，在同一頁面上
+	Document and comments with sequence numbers on separate pages	文件和註解，帶序號，在不同頁面上

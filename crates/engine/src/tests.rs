@@ -2518,3 +2518,90 @@ fn page_transitions_are_one_undo_step_saved_and_permission_checked() {
     let id3 = s3.open("r.pdf", None, protected("", "owner", 0b0100), None).unwrap();
     assert_eq!(s3.apply(id3, Edit::SetPageTransition { pages: vec![0], settings }), Err(EditError::NotPermitted("changes to the document")));
 }
+
+/// RGBA at PDF point (x, y) of `page`, rendered at 1 px/pt, on a page `height` points high.
+fn pixel_on(s: &Session, id: DocId, page: usize, height: u32, x: u32, y: u32) -> [u8; 4] {
+    let doc = s.get(id).unwrap();
+    let mut r = pdfcraft_render::PageRenderer::new(doc.bytes.clone(), doc.config.clone());
+    let out = r.render(pdfcraft_render::RenderRequest { page, scale: 1.0, ..Default::default() });
+    assert!(out.error.is_none(), "{:?}", out.error);
+    let i = (((height - y) * out.width + x) * 4) as usize;
+    out.rgba[i..i + 4].try_into().unwrap()
+}
+
+#[test]
+fn comment_summaries_lay_out_the_pages_with_connector_lines_or_sequence_numbers() {
+    let (mut s, id) = session_with(3);
+    s.apply(id, rect_comment(1, [80.0, 80.0, 120.0, 120.0])).unwrap();
+    s.apply(id, Edit::ReplyToAnnotation { page: 1, index: 0, text: "Agreed".into(), author: "Ada".into() }).unwrap();
+    let red = Style { color: [0.89, 0.13, 0.13], opacity: 1.0, width: 1.0, fill: None };
+    let blue = Style { color: [0.0, 0.47, 0.84], opacity: 1.0, width: 1.0, fill: None };
+    let quads = vec![[20.0, 172.0, 100.0, 172.0, 20.0, 148.0, 100.0, 148.0]];
+    s.apply(id, Edit::ReplaceText { page: 2, quads, text: "Sheet 3".into(), author: "Bo".into(), strike: red, caret: blue }).unwrap();
+
+    // Comments only: the replacement is listed under its proposal.
+    let text = comment_summary("doc.pdf", &s.get(id).unwrap().info.annotations, SummarySort::Page);
+    assert!(text.contains("Subject: Replace Text") && text.contains("Subject: Replacement Text") && text.contains("    Sheet 3"), "{text}");
+
+    // Connector lines: one landscape page per commented page (page 1 has none).
+    let pdf = s.summarize_comments_with(id, SummarySort::Page, SummaryLayout::ConnectorLines).unwrap();
+    let n = s.open_new("summary.pdf", pdf).unwrap();
+    let pages = &s.get(n).unwrap().info.pages;
+    assert_eq!(pages.len(), 2);
+    assert!(pages.iter().all(|p| (p.width, p.height) == (792.0, 612.0)), "{pages:?}");
+    let texts = page_texts(&s, n);
+    for want in ["Summary of Comments on fixture.pdf", "Page 2", "Rectangle", "Reviewer", "Look here", "Reply", "Agreed"] {
+        assert!(texts[0].contains(want), "{want:?} in {:?}", texts[0]);
+    }
+    for want in ["Page 3", "Replace Text", "Replacement Text", "Sheet 3"] {
+        assert!(texts[1].contains(want), "{want:?} in {:?}", texts[1]);
+    }
+    // The page is drawn at 1.76× in a 360 × 528 area at (40, 36), its comments flattened in:
+    // the rectangle's centre (100, 100) lands at (216, 212).
+    let px = pixel_on(&s, n, 0, 612, 216, 205);
+    assert!(px[0] > 200 && px[1] < 60 && px[2] < 60, "the commented page is drawn with its comment: {px:?}");
+    // The comment box: a light tint of the comment's red at the top of the right column.
+    let px = pixel_on(&s, n, 0, 612, 750, 556);
+    assert!(px[0] > 240 && (200..240).contains(&px[1]) && (200..240).contains(&px[2]), "tinted comment box: {px:?}");
+    // The connector line runs from the marker to the box (red, between the page and the column).
+    let doc = s.get(n).unwrap();
+    let mut r = pdfcraft_render::PageRenderer::new(doc.bytes.clone(), doc.config.clone());
+    let out = r.render(pdfcraft_render::RenderRequest { page: 0, scale: 1.0, ..Default::default() });
+    let column_x = 420u32;
+    let reds = (0..out.height)
+        .filter(|y| {
+            let i = ((y * out.width + column_x) * 4) as usize;
+            let p = &out.rgba[i..i + 4];
+            p[0] > 150 && p[1] < 120 && p[2] < 120
+        })
+        .count();
+    assert!(reds >= 1, "a connector crosses the gap between page and comments");
+
+    // Sequence numbers: the page at its own size with markers, then its comments.
+    let pdf = s.summarize_comments_with(id, SummarySort::Author, SummaryLayout::SequenceNumbers).unwrap();
+    let q = s.open_new("summary2.pdf", pdf).unwrap();
+    let pages = &s.get(q).unwrap().info.pages;
+    let sizes: Vec<(f32, f32)> = pages.iter().map(|p| (p.width, p.height)).collect();
+    assert_eq!(sizes, [(200.0, 300.0), (612.0, 792.0), (200.0, 300.0), (612.0, 792.0)]);
+    let texts = page_texts(&s, q);
+    assert!(texts[0].contains("Page 2") && texts[0].contains("1"), "{:?}", texts[0]);
+    assert!(texts[1].contains("Look here") && texts[3].contains("Sheet 3"), "{texts:?}");
+    assert!(s.summarize_comments_with(id, SummarySort::Page, SummaryLayout::CommentsOnly).is_ok());
+
+    // Long comments continue on the next summary page.
+    let long = (0..120).map(|i| format!("line {i} of a long remark")).collect::<Vec<_>>().join("\n");
+    s.apply(id, Edit::SetAnnotationContents { page: 1, index: 0, text: long }).unwrap();
+    let pdf = s.summarize_comments_with(id, SummarySort::Page, SummaryLayout::ConnectorLines).unwrap();
+    let l = s.open_new("summary3.pdf", pdf).unwrap();
+    let texts = page_texts(&s, l);
+    assert_eq!(texts.len(), 4, "page 2's comment needs three columns, then page 3");
+    assert!(texts[1].contains("1 (continued)") && texts[2].contains("line 119"), "{texts:?}");
+
+    // No comments: the comments-only summary says so.
+    let (s2, id2) = session_with(1);
+    let mut s2 = s2;
+    let pdf = s2.summarize_comments_with(id2, SummarySort::Page, SummaryLayout::ConnectorLines).unwrap();
+    let e = s2.open_new("empty.pdf", pdf).unwrap();
+    assert!(page_texts(&s2, e)[0].contains("This document has no comments."));
+    assert_eq!(SummaryLayout::parse("Connector-Lines"), Some(SummaryLayout::ConnectorLines));
+}

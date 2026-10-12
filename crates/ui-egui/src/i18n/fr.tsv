@@ -2157,3 +2157,5 @@ signature pad	Type	Saisir
 
 # Reader selection
 	Select paragraph	Sélectionner le paragraphe
+	Document and comments with connector lines on single pages	Document et commentaires avec lignes de connexion sur une même page
+	Document and comments with sequence numbers on separate pages	Document et commentaires avec numéros d'ordre sur des pages séparées

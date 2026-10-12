@@ -416,11 +416,16 @@ fn comments_take_checkmarks_lock_hide_and_summarize() {
     h.get_by_label("Create PDF comment summary…").click();
     h.run_steps(2);
     h.get_by_label("Summarize Options");
+    h.get_by_label("Document and comments with connector lines on single pages").click();
+    h.run_steps(2);
+    assert_eq!(h.state().summary_layout, pdfcraft_engine::SummaryLayout::ConnectorLines);
     h.get_by_label("Create PDF Comment Summary").click();
     h.run_steps(3);
     let s = h.state();
     assert_eq!(s.views.len(), 2);
     assert!(s.session.get(s.views[1].id).unwrap().name.starts_with("Summary of comments on text"));
+    let summary = s.session.get(s.views[1].id).unwrap();
+    assert!(summary.info.pages.iter().all(|p| (p.width, p.height) == (792.0, 612.0)), "the page beside its comments");
 }
 
 #[test]

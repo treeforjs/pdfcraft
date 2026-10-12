@@ -4,7 +4,8 @@
 //! y down. It is converted to PDF user space (crop box, `/Rotate`) here.
 
 use pdfcraft_engine::{
-    Edit, LineEnding, Markup, NOTE_SIZE, NewAnnotation, NoteIcon, ReviewState, Rgb, Shape, StampGroup, StampKind, Style, SummarySort,
+    Edit, LineEnding, Markup, NOTE_SIZE, NewAnnotation, NoteIcon, ReviewState, Rgb, Shape, StampGroup, StampKind, Style, SummaryLayout,
+    SummarySort,
 };
 use pdfcraft_render::{Annotation, PageInfo};
 use serde_json::{Value, json};
@@ -550,7 +551,11 @@ impl Automation {
             Some(s) => SummarySort::parse(s).ok_or_else(|| ToolError::InvalidArgs(format!("unknown sort {s:?}")))?,
             None => SummarySort::Page,
         };
-        let bytes = self.session.summarize_comments(id, sort).map_err(failed)?;
+        let layout = match a.opt_str("layout")? {
+            Some(s) => SummaryLayout::parse(s).ok_or_else(|| ToolError::InvalidArgs(format!("unknown layout {s:?}")))?,
+            None => SummaryLayout::CommentsOnly,
+        };
+        let bytes = self.session.summarize_comments_with(id, sort, layout).map_err(failed)?;
         self.deliver(a, &format!("Summary of comments on {stem}.pdf"), bytes)
     }
 

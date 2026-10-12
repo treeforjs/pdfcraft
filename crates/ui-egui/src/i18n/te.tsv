@@ -2088,3 +2088,5 @@ action wizard	Start	ప్రారంభించు
 
 # Reader selection
 	Select paragraph	పేరాను ఎంచుకోండి
+	Document and comments with connector lines on single pages	కనెక్టర్ గీతలతో పత్రం మరియు వ్యాఖ్యలు ఒకే పేజీలో
+	Document and comments with sequence numbers on separate pages	క్రమ సంఖ్యలతో పత్రం మరియు వ్యాఖ్యలు వేర్వేరు పేజీలలో

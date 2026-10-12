@@ -2166,3 +2166,5 @@ signature pad	Type	Digita
 
 # Reader selection
 	Select paragraph	Seleziona paragrafo
+	Document and comments with connector lines on single pages	Documento e commenti con linee di collegamento su un'unica pagina
+	Document and comments with sequence numbers on separate pages	Documento e commenti con numeri progressivi su pagine separate

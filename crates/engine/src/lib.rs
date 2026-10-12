@@ -25,11 +25,13 @@ pub mod optimizer;
 pub mod preflight;
 pub mod reader_selection;
 pub mod signature_image;
+pub mod summary;
 pub mod text_preview;
 mod upright_image;
 pub mod xfa;
 
 pub use signature_image::{ImageSignaturePreview, SignatureImage};
+pub use summary::SummaryLayout;
 
 pub use pdfcraft_organize::{BoxSpec, PageBox, SplitBy, split_ranges};
 pub use pdfcraft_organize::{Dimension, Direction, Motion, PageTransition, Transition, TransitionStyle};
@@ -3089,6 +3091,25 @@ impl Session {
         self.create_from_text(&format!("Summary of Comments on {}", doc.name), &text)
     }
 
+    /// Summarize Comments with a layout: comments only ([`Session::summarize_comments`]), or
+    /// with the commented pages drawn beside or before their comments (see [`summary`]). The
+    /// pages are copied into the new PDF, so an encrypted document must allow copying content.
+    /// A document without comments gets the comments-only summary saying so.
+    pub fn summarize_comments_with(&self, id: DocId, sort: SummarySort, layout: SummaryLayout) -> Result<Arc<Vec<u8>>, EditError> {
+        if layout == SummaryLayout::CommentsOnly {
+            return self.summarize_comments(id, sort);
+        }
+        let doc = self.get(id).ok_or(EditError::NoDocument)?;
+        let src = self.cos(id)?;
+        if src.permissions().is_some_and(|p| !p.copy()) {
+            return Err(EditError::NotPermitted("copying pages into a comment summary"));
+        }
+        match summary::with_pages(src, &doc.info.pages, &doc.info.annotations, &doc.name, sort, layout)? {
+            Some(out) => self.write_new(&out),
+            None => self.summarize_comments(id, sort),
+        }
+    }
+
     /// The certificates trusted for signing.
     pub fn trusted_certificates(&self) -> &[pdfcraft_sign::Certificate] {
         &self.trust.certs
@@ -3285,8 +3306,14 @@ pub fn comment_kind(a: &pdfcraft_render::Annotation) -> &str {
         Some("FreeTextCallout") => "Callout",
         Some("PolygonCloud") => "Cloud",
         Some("FreeTextTypeWriter") => "Typewriter",
+        Some("StrikeOutTextEdit") => "Replace Text",
         _ => comment_type_name(&a.subtype),
     }
+}
+
+/// How a summary labels a reply: the caret of a replace-text proposal holds the replacement.
+pub(crate) fn reply_kind(r: &pdfcraft_render::Annotation) -> &'static str {
+    if r.subtype == "Caret" { "Replacement Text" } else { "Reply" }
 }
 
 /// The text of a comment summary: one block per comment (replies indented under it), with a
@@ -3294,27 +3321,8 @@ pub fn comment_kind(a: &pdfcraft_render::Annotation) -> &str {
 /// pop-ups; the number is the comment's position on its page.
 pub fn comment_summary(name: &str, all: &[pdfcraft_render::Annotation], sort: SummarySort) -> String {
     use std::fmt::Write;
-    let top: Vec<&pdfcraft_render::Annotation> = all.iter().filter(|a| a.in_reply_to.is_none() && a.state.is_none()).collect();
-    let replies_of = |a: &pdfcraft_render::Annotation| -> Vec<&pdfcraft_render::Annotation> {
-        all.iter().filter(|r| r.state.is_none() && r.in_reply_to.is_some() && r.in_reply_to == a.name && a.name.is_some()).collect()
-    };
-    let mut numbered: Vec<(usize, &pdfcraft_render::Annotation)> = Vec::new();
-    let mut last = usize::MAX;
-    let mut n = 0;
-    for a in &top {
-        if a.page != last {
-            last = a.page;
-            n = 0;
-        }
-        n += 1;
-        numbered.push((n, a));
-    }
-    match sort {
-        SummarySort::Page => {}
-        SummarySort::Author => numbered.sort_by(|x, y| x.1.author.cmp(&y.1.author)),
-        SummarySort::Date => numbered.sort_by(|x, y| x.1.modified.cmp(&y.1.modified)),
-        SummarySort::Type => numbered.sort_by(|x, y| comment_kind(x.1).cmp(comment_kind(y.1))),
-    }
+    let replies_of = |a: &pdfcraft_render::Annotation| summary::replies_of(all, a);
+    let numbered = summary::numbered(all, sort);
     let mut out = format!("Summary of Comments on {name}\n\n");
     if numbered.is_empty() {
         out.push_str("This document has no comments.\n");
@@ -3335,7 +3343,13 @@ pub fn comment_summary(name: &str, all: &[pdfcraft_render::Annotation], sort: Su
             let _ = writeln!(out, "{c}");
         }
         for r in replies_of(a) {
-            let _ = writeln!(out, "    Author: {}  Subject: Reply  Date: {}", r.author.as_deref().unwrap_or(""), r.modified.as_deref().unwrap_or(""));
+            let _ = writeln!(
+                out,
+                "    Author: {}  Subject: {}  Date: {}",
+                r.author.as_deref().unwrap_or(""),
+                reply_kind(r),
+                r.modified.as_deref().unwrap_or("")
+            );
             for line in r.contents.as_deref().unwrap_or("").lines() {
                 let _ = writeln!(out, "    {line}");
             }

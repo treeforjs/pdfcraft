@@ -693,10 +693,16 @@ pub fn tools() -> Vec<ToolDef> {
         t("comments_hide", "Hide all comments", "Hide or show every comment on the page (fields and links still draw). A view setting: the file doesn't change.")
             .cmd("comment.hide_all")
             .with(schema(json!({ "doc": doc(), "hidden": { "type": "boolean", "description": "Default true." } }), &["doc"])),
-        t("comments_summarize", "Summarize comments", "Make a PDF summarising every comment (number, author, type, date, text, replies), sorted by page, author, date or type.")
+        t("comments_summarize", "Summarize comments", "Make a PDF summarising every comment (number, author, type, date, text, replies), sorted by page, author, date or type. layout: comments-only (default); connector-lines (each commented page beside its comments, joined by lines from numbered markers); sequence-numbers (each commented page with numbered markers, then its comments).")
             .cmd("comment.summarize")
             .with(schema(
-                json!({ "doc": doc(), "sort": { "type": "string", "enum": ["page", "author", "date", "type"] }, "out": save_out, "open": open }),
+                json!({
+                    "doc": doc(),
+                    "sort": { "type": "string", "enum": ["page", "author", "date", "type"] },
+                    "layout": { "type": "string", "enum": ["comments-only", "connector-lines", "sequence-numbers"] },
+                    "out": save_out,
+                    "open": open
+                }),
                 &["doc"],
             )),
         t("comment_edit", "Edit a comment", "Change a comment's text, colour, opacity, line width, rectangle (rectangle/oval/text box/stamp) or position (`move` [dx, dy] in points). Stamps keep their original appearance when resized. One undo step.").with(schema(

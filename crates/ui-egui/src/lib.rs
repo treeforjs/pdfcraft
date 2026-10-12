@@ -452,6 +452,7 @@ pub struct PdfCraftApp {
     pub rotate_draft: RotateDraft,
     /// Summarize Comments: sort order.
     pub summary_sort: pdfcraft_engine::SummarySort,
+    pub summary_layout: pdfcraft_engine::SummaryLayout,
     /// The signing dialogs' state.
     pub sign_draft: Option<SignDraft>,
     /// Digital ID files the user has created or added.
@@ -708,6 +709,7 @@ impl PdfCraftApp {
             extract_draft: ExtractDraft::default(),
             rotate_draft: RotateDraft::default(),
             summary_sort: Default::default(),
+            summary_layout: Default::default(),
             sign_draft: None,
             digital_ids: Vec::new(),
             sig_expanded: Vec::new(),

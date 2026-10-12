@@ -725,7 +725,13 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
                 ui.label(egui::RichText::new(tl!("Summarize Options")).font(theme::semibold(18.0)));
                 ui.add_space(8.0);
                 ui.label(tl!("Choose a layout:"));
-                let _ = ui.radio(true, tl!("Comments only"));
+                for (layout, label) in [
+                    (pdfcraft_engine::SummaryLayout::ConnectorLines, tl!("Document and comments with connector lines on single pages")),
+                    (pdfcraft_engine::SummaryLayout::CommentsOnly, tl!("Comments only")),
+                    (pdfcraft_engine::SummaryLayout::SequenceNumbers, tl!("Document and comments with sequence numbers on separate pages")),
+                ] {
+                    ui.radio_value(&mut app.summary_layout, layout, label);
+                }
                 ui.add_space(6.0);
                 ui.horizontal(|ui| {
                     ui.label(tl!("Sort comments by:"));

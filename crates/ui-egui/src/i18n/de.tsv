@@ -2157,3 +2157,5 @@ action wizard	Start	Starten
 
 # Reader selection
 	Select paragraph	Absatz auswählen
+	Document and comments with connector lines on single pages	Dokument und Kommentare mit Verbindungslinien auf einer Seite
+	Document and comments with sequence numbers on separate pages	Dokument und Kommentare mit laufenden Nummern auf separaten Seiten

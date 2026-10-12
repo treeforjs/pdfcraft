@@ -2155,3 +2155,5 @@ action wizard	Start	Indítás
 
 # Reader selection
 	Select paragraph	Bekezdés kijelölése
+	Document and comments with connector lines on single pages	Dokumentum és megjegyzések összekötő vonalakkal egy oldalon
+	Document and comments with sequence numbers on separate pages	Dokumentum és megjegyzések sorszámokkal külön oldalakon

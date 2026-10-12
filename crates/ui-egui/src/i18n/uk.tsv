@@ -2180,3 +2180,5 @@ certificate	Subject	Власник сертифіката
 
 # Reader selection
 	Select paragraph	Виділити абзац
+	Document and comments with connector lines on single pages	Документ і коментарі з лініями-з'єднувачами на одній сторінці
+	Document and comments with sequence numbers on separate pages	Документ і коментарі з порядковими номерами на окремих сторінках

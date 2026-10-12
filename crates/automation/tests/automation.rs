@@ -4459,3 +4459,39 @@ fn named_destinations_views_and_bookmark_actions_through_tools() {
         _ => eprintln!("pdfinfo not available: external destination check skipped"),
     }
 }
+
+/// A replace-text proposal made from found text survives an XFDF round trip into another copy
+/// of the file, and summaries lay its page out beside (connector lines) or before (sequence
+/// numbers) the proposal and its replacement.
+#[test]
+fn replace_text_round_trips_and_summaries_show_the_page() {
+    let dir = workdir("replace-summary");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    ok(&mut a, "comment_add", json!({ "doc": doc, "page": 2, "type": "replace", "find": "page 2", "contents": "second page", "author": "Ada" }));
+    ok(&mut a, "doc_export_data", json!({ "doc": doc, "path": "proposal.xfdf", "what": "comments" }));
+    let xfdf = std::fs::read_to_string(dir.join("proposal.xfdf")).unwrap();
+    assert!(xfdf.contains("intent=\"StrikeOutTextEdit\"") && xfdf.contains("replyType=\"Group\""), "{xfdf}");
+
+    std::fs::copy(dir.join("a.pdf"), dir.join("copy.pdf")).unwrap();
+    let copy = ok(&mut a, "doc_open", json!({ "path": "copy.pdf" }))["doc"].as_u64().unwrap();
+    let r = ok(&mut a, "doc_import_data", json!({ "doc": copy, "path": "proposal.xfdf" }));
+    assert_eq!(r["comments"], 2, "{r}");
+    let list = ok(&mut a, "comment_list", json!({ "doc": copy, "page": 2 }));
+    assert_eq!(list["count"], 1, "the caret threads under the strikeout: {list}");
+    let strike = &list["comments"][0];
+    assert_eq!((strike["type"].as_str(), strike["replies"][0]["contents"].as_str()), (Some("StrikeOut"), Some("second page")), "{list}");
+
+    for (layout, pages) in [("connector-lines", 1), ("sequence-numbers", 2)] {
+        let out = format!("{layout}.pdf");
+        ok(&mut a, "comments_summarize", json!({ "doc": copy, "layout": layout, "out": out }));
+        let s = ok(&mut a, "doc_open", json!({ "path": out }))["doc"].as_u64().unwrap();
+        let text = page_text(&mut a, s);
+        assert_eq!(text.len(), pages, "{layout}: {text:?}");
+        let all = text.join("\n");
+        for want in ["Replace Text", "Replacement Text", "second page", "Page 2"] {
+            assert!(all.contains(want), "{layout}: {want:?} in {all:?}");
+        }
+    }
+    assert!(matches!(a.call("comments_summarize", &json!({ "doc": copy, "layout": "poster" })), Err(ToolError::InvalidArgs(_))));
+}

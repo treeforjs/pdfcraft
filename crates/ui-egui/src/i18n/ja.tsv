@@ -2157,3 +2157,5 @@ signature pad	Type	入力
 
 # Reader selection
 	Select paragraph	段落を選択
+	Document and comments with connector lines on single pages	文書と注釈（接続線付き、同じページ）
+	Document and comments with sequence numbers on separate pages	文書と注釈（通し番号付き、別ページ）

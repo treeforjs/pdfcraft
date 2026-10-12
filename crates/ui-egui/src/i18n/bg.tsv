@@ -2119,3 +2119,5 @@ action wizard	Start	Старт
 
 # Reader selection
 	Select paragraph	Избор на абзац
+	Document and comments with connector lines on single pages	Документ и коментари със свързващи линии на една страница
+	Document and comments with sequence numbers on separate pages	Документ и коментари с поредни номера на отделни страници

@@ -2121,3 +2121,5 @@
 
 # Reader selection
 	Select paragraph	选择段落
+	Document and comments with connector lines on single pages	文档和注释，带连接线，在同一页面上
+	Document and comments with sequence numbers on separate pages	文档和注释，带序号，在单独的页面上
