@@ -26,10 +26,20 @@ pub(crate) fn decode(data: &[u8], params: &ImageDecodeParams) -> Option<FilterRe
         target_resolution: params.target_dimension,
     };
 
+    // PdfCraft patch: refuse tiles too large to decode before the decoder allocates them (see
+    // `jpx_size_ok`), and decoded images over `MAX_JPX_SAMPLES` (the decoder's output is a
+    // 32-bit float per sample at the target resolution).
+    if !super::jpx_size_ok(data) {
+        return None;
+    }
     let image = hayro_jpeg2000::Image::new(data, &settings).ok()?;
 
     let width = image.width();
     let height = image.height();
+    let channels = u64::from(image.color_space().num_channels()) + u64::from(image.has_alpha());
+    if u64::from(width) * u64::from(height) * channels.max(1) > super::MAX_JPX_SAMPLES {
+        return None;
+    }
     let bpc = params.bpc.unwrap_or(image.original_bit_depth());
     let cs = match image.color_space() {
         ColorSpace::Gray => ImageColorSpace::Gray,

@@ -2619,10 +2619,15 @@ trailer << /Root 1 0 R >>
     /// no decomposition, reversible wavelet, and one empty packet per component. Empty
     /// coefficients decode to the midpoint (128) after the unsigned DC level shift.
     fn jpx_midpoint_pdf(bpc: u8, components: u16) -> Vec<u8> {
+        jpx_pdf(bpc, components, 1, 1)
+    }
+
+    /// A PDF whose 1 x 1 `/JPXDecode` image holds a codestream of `width` x `height` (one tile).
+    fn jpx_pdf(bpc: u8, components: u16, width: u32, height: u32) -> Vec<u8> {
         let mut codestream = vec![0xff, 0x4f, 0xff, 0x51]; // SOC, SIZ.
         codestream.extend_from_slice(&(38 + 3 * components).to_be_bytes());
         codestream.extend_from_slice(&0_u16.to_be_bytes()); // Rsiz.
-        for value in [1_u32, 1, 0, 0, 1, 1, 0, 0] {
+        for value in [width, height, 0, 0, width, height, 0, 0] {
             codestream.extend_from_slice(&value.to_be_bytes());
         }
         codestream.extend_from_slice(&components.to_be_bytes());
@@ -2708,6 +2713,32 @@ trailer << /Root 1 0 R >>
             if bpc == 8 {
                 assert_eq!(&page.rgba[((25 * 40 + 15) * 4)..][..4], &[128, 128, 128, 255], "the valid image paints gray");
             }
+        }
+    }
+
+    /// From `cargo xtask fuzz` with the pdf.js corpus (issue19517.pdf, a 12608 x 16806 scan in
+    /// one JPEG 2000 tile): the decoder keeps a 32-bit float per sample of a whole tile, whatever
+    /// the target resolution, so it asked for 3.4 GB and aborted under the 4 GiB child cap. The
+    /// image dictionary's `/Width` and `/Height` do not bound it: a 1 x 1 image whose codestream
+    /// declares 60000 x 60000 x 4 asked for 57.6 GB, an abort on any machine. Vendored
+    /// hayro-syntax patch `jpx_size_ok` refuses such codestreams before decoding; the rest of
+    /// the page still draws.
+    #[test]
+    fn huge_jpx_tiles_are_refused_before_decoding() {
+        assert!(hayro::hayro_syntax::jpx_size_ok(&[]), "no SIZ: left to the decoder to reject");
+        assert!(hayro::hayro_syntax::jpx_size_ok(&jpx_pdf(8, 3, 64, 64)), "ordinary sizes still decode");
+        assert!(hayro::hayro_syntax::jpx_size_ok(&jpx_pdf(8, 3, 8000, 8000)), "a 64-megapixel RGB tile still decodes");
+        assert!(!hayro::hayro_syntax::jpx_size_ok(&jpx_pdf(8, 4, 12_608, 16_806)));
+        for (components, width, height) in [(4, 60_000, 60_000), (4, 12_608, 16_806)] {
+            let pdf = jpx_pdf(8, components, width, height);
+            let (tx, rx) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
+                let mut r = PageRenderer::new(Arc::new(pdf), RenderConfig::default());
+                let _ = tx.send(r.render(RenderRequest { page: 0, kind: RequestKind::Pixels, tile: None, scale: 1.0, tag: 0 }));
+            });
+            let page = rx.recv_timeout(std::time::Duration::from_secs(20)).expect("a huge JPX tile must not stall the renderer");
+            assert!(page.error.is_none(), "{width} x {height}: {:?}", page.error);
+            assert_eq!(&page.rgba[((38 * 40 + 1) * 4)..][..4], &[255, 0, 0, 255], "{width} x {height}: the rest of the page draws");
         }
     }
 

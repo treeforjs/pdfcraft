@@ -165,6 +165,52 @@ pub(crate) fn decode_limit(params: &ImageDecodeParams, last: bool) -> usize {
     usize::try_from(image).unwrap_or(MAX_DECODED_STREAM)
 }
 
+/// PdfCraft patch: the most samples (pixels × components, 1 GiB of 32-bit floats) a JPEG 2000
+/// tile, or a decoded JPEG 2000 image, may hold. See [`jpx_size_ok`].
+pub const MAX_JPX_SAMPLES: u64 = 1 << 28;
+
+/// PdfCraft patch: whether the JPEG 2000 codestream in `data` may be decoded. hayro-jpeg2000
+/// keeps a 32-bit float for every sample of a whole tile at full resolution, whatever the target
+/// resolution, so its memory follows the codestream's SIZ marker and not the image dictionary: a
+/// 12608 × 16806 four-component scan in one tile asked for 3.4 GB at once, and a 1 × 1 image whose
+/// codestream declared 60000 × 60000 × 4, 57.6 GB (an abort on any machine). A tile of more than
+/// [`MAX_JPX_SAMPLES`] is refused. Data without a SIZ marker is left to the decoder to reject.
+pub fn jpx_size_ok(data: &[u8]) -> bool {
+    // SIZ directly follows SOC (ISO 15444-1 A.5.1), in a raw codestream and in a JP2 file's
+    // contiguous codestream box alike.
+    let Some(at) = data.windows(4).position(|w| w == [0xff, 0x4f, 0xff, 0x51]) else {
+        return true;
+    };
+    let siz = data.get(at + 4..).unwrap_or_default();
+    let u32_at = |o: usize| siz.get(o..o + 4).map(|b| u32::from_be_bytes([b[0], b[1], b[2], b[3]]));
+    // Lsiz, Rsiz, Xsiz, Ysiz, XOsiz, YOsiz, XTsiz, YTsiz, XTOsiz, YTOsiz, Csiz, then
+    // (Ssiz, XRsiz, YRsiz) per component.
+    let (Some(x), Some(y), Some(x0), Some(y0), Some(tile_w), Some(tile_h), Some(c)) = (
+        u32_at(4),
+        u32_at(8),
+        u32_at(12),
+        u32_at(16),
+        u32_at(20),
+        u32_at(24),
+        siz.get(36..38).map(|b| u16::from_be_bytes([b[0], b[1]])),
+    ) else {
+        // A truncated SIZ marker: the decoder can't use it either.
+        return false;
+    };
+    // The largest tile, clipped to the image area: an upper bound on every tile's size.
+    let tile_w = u64::from(tile_w.min(x.saturating_sub(x0)));
+    let tile_h = u64::from(tile_h.min(y.saturating_sub(y0)));
+    let mut samples: u64 = 0;
+    for i in 0..usize::from(c) {
+        let (Some(&dx), Some(&dy)) = (siz.get(38 + 3 * i + 1), siz.get(38 + 3 * i + 2)) else {
+            return false;
+        };
+        let (dx, dy) = (u64::from(dx.max(1)), u64::from(dy.max(1)));
+        samples = samples.saturating_add(tile_w.div_ceil(dx).saturating_mul(tile_h.div_ceil(dy)));
+    }
+    samples <= MAX_JPX_SAMPLES
+}
+
 /// PdfCraft patch: whether a CCITT image of `columns` × `rows` may be decoded. The decoder sizes
 /// its line buffers from `/Columns`, which a fuzzed file set to 4294967295 (a 4 GiB allocation);
 /// real fax lines are a few thousand pixels wide.
