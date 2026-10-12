@@ -145,7 +145,9 @@ pub(crate) fn get(
     };
 
     let byte_length = length / 8;
-    if byte_length == 0 {
+    // PdfCraft patch: revisions 2–4 derive the key from one MD5 hash (16 bytes); a longer
+    // `/Length` (or `/V 5` with a revision below 5) sliced past the hash and panicked.
+    if byte_length == 0 || (revision <= 4 && byte_length > 16) {
         return Err(InvalidEncryption);
     }
 

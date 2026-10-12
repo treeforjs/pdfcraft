@@ -2716,6 +2716,27 @@ trailer << /Root 1 0 R >>
         }
     }
 
+    /// From `cargo xtask fuzz` (seeded with pdf.js print_protection.pdf): an encryption
+    /// dictionary with `/V 5` but `/R 1`, or `/V 2` with `/Length 256`, made the revision 2–4
+    /// key derivation slice 32 bytes out of a 16-byte MD5 hash and panic while opening. Vendored
+    /// hayro-syntax patch: such dictionaries are invalid encryption, an ordinary error.
+    #[test]
+    fn an_encryption_key_longer_than_md5_is_refused_not_a_panic() {
+        for (v, r, length) in [(5, 1, 256), (2, 3, 256), (4, 4, 4096)] {
+            let pdf = format!(
+                "%PDF-1.7
+1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
+2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj
+3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 40 40] >> endobj
+4 0 obj << /Filter /Standard /V {v} /R {r} /Length {length} /P -3392 /O (0123456789abcdef0123456789abcdef) /U (0123456789abcdef0123456789abcdef) /CF << /StdCF << /CFM /AESV2 /Length 16 >> >> /StmF /StdCF /StrF /StdCF >> endobj
+trailer << /Root 1 0 R /Encrypt 4 0 R /ID [<00112233445566778899aabbccddeeff> <00112233445566778899aabbccddeeff>] >>
+%%EOF"
+            );
+            let opened = std::panic::catch_unwind(|| Pdf::new(Arc::new(pdf.into_bytes())).is_ok());
+            assert!(opened.is_ok(), "/V {v} /R {r} /Length {length}: opening panicked");
+        }
+    }
+
     /// From `cargo xtask fuzz` (seeded with pdf.js issue10572.pdf): a lone `+` in a stitching
     /// function's `/Functions` array was skipped as a zero while validating the array but not
     /// read as one, and the array iterator unwrapped the failed read: the page did not render
