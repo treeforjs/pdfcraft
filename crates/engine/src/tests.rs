@@ -1701,6 +1701,46 @@ fn detecting_fields_on_a_printed_form() {
     assert!(s.detect_fields(id, &[]).is_empty(), "nothing left to detect");
 }
 
+/// The renderer can open files the editor cannot read. Such an encrypted document has no
+/// established permissions, so printing and every change fail closed (as copying does);
+/// an unencrypted document without an editor still prints.
+#[test]
+fn encrypted_documents_without_an_editor_deny_printing_and_changes() {
+    let mut s = Session::new().with_clock(|| 1_700_000_000);
+    let plain = s.open("plain.pdf", None, Arc::new(fixture(2)), None).unwrap();
+    let owner = s.open("owner.pdf", None, protected("user", "owner", -1), Some("owner")).unwrap();
+    let settings = print::Settings { pages: vec![0], ..Default::default() };
+    let d = s.get(owner).unwrap();
+    assert!(d.allows_printing() && d.allows_modification() && d.allows_security_change(), "the owner may do anything");
+    assert!(s.print_pdf(owner, &settings).is_ok());
+    for id in [plain, owner] {
+        let doc = s.doc_mut(id).unwrap();
+        doc.editor = None;
+        doc.read_only_reason = Some("synthetic: the document structure could not be read for editing".into());
+    }
+    let d = s.get(plain).unwrap();
+    assert!(!d.info.encrypted && d.permissions().is_none());
+    assert!(d.allows_printing(), "an unencrypted document has no restrictions to lose");
+    assert!(s.print_pdf(plain, &settings).is_ok());
+    let d = s.get(owner).unwrap();
+    assert!(d.info.encrypted && d.permissions().is_none());
+    assert!(!d.allows_printing(), "unknown permissions on an encrypted document must not allow printing");
+    assert!(!d.allows_modification() && !d.allows_assembly() && !d.allows_annotation());
+    assert!(!d.allows_form_filling() && !d.allows_security_change() && !d.allows_copying());
+    assert_eq!(s.print_pdf(owner, &settings), Err(EditError::NotPermitted("printing")));
+    for edit in [Edit::SetInfo { key: "Title".into(), value: "x".into() }, Edit::DeletePages { pages: vec![0] }, Edit::RemoveProtection] {
+        assert!(matches!(s.apply(owner, edit), Err(EditError::ReadOnly(_))));
+    }
+    assert!(s.extract(owner, &[0]).is_err());
+    assert!(s.split(owner, &pdfcraft_organize::SplitBy::PageCount(1)).is_err());
+    for id in ["page.cut", "form.detect", "edit.edit_text", "measure.distance", "protect.password", "protect.remove"] {
+        let spec = commands::command(id).unwrap();
+        assert!(!commands::is_enabled(spec, &s, Some(owner)), "{id}");
+        assert!(!commands::is_enabled(spec, &s, Some(plain)), "{id}: without an editor nothing changes");
+    }
+    assert!(!s.get(owner).unwrap().dirty);
+}
+
 #[test]
 fn comparing_two_versions_of_a_document() {
     let mut s = Session::new().with_clock(|| 1_700_000_000);

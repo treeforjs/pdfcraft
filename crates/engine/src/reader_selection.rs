@@ -137,10 +137,7 @@ impl Document {
     /// editing (the renderer opened it, the editor did not) has no established permissions,
     /// so its text is not extractable.
     pub fn allows_copying(&self) -> bool {
-        match self.permissions() {
-            Some(p) => p.copy(),
-            None => !(self.info.encrypted && self.editor.is_none()),
-        }
+        self.permitted(|p| p.copy())
     }
 
     /// The copy refusal shared by every text-returning path.

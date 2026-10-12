@@ -479,14 +479,26 @@ impl Document {
         self.editor.as_ref().and_then(|e| e.cos.permissions())
     }
 
-    /// Printing is allowed (Table 22, bit 3).
+    /// Whether the established permissions grant `allowed`; owner authentication grants all
+    /// (the security handler reports every bit set). Fails closed: an encrypted document whose
+    /// security handler no editor could read (the renderer opened it, the editor did not) has
+    /// no established permissions, so nothing that needs a permission is allowed. Unencrypted
+    /// documents have no restrictions.
+    pub(crate) fn permitted(&self, allowed: impl FnOnce(&pdfcraft_cos::Permissions) -> bool) -> bool {
+        match self.permissions() {
+            Some(p) => allowed(&p),
+            None => !(self.info.encrypted && self.editor.is_none()),
+        }
+    }
+
+    /// Printing is allowed (Table 22, bit 3). Fails closed like [`Self::permitted`].
     pub fn allows_printing(&self) -> bool {
-        self.permissions().is_none_or(|p| p.print())
+        self.permitted(|p| p.print())
     }
 
     /// Page changes (insert, delete, rotate, move, extract) are allowed.
     pub fn allows_assembly(&self) -> bool {
-        self.editable() && self.permissions().is_none_or(|p| p.assemble())
+        self.editable() && self.permitted(|p| p.assemble())
     }
 
     /// Redaction marks waiting to be applied.
@@ -496,17 +508,17 @@ impl Document {
 
     /// Changes to content and document information are allowed.
     pub fn allows_modification(&self) -> bool {
-        self.editable() && self.permissions().is_none_or(|p| p.modify())
+        self.editable() && self.permitted(|p| p.modify())
     }
 
     /// Filling in form fields is allowed (Table 22, bits 6 and 9).
     pub fn allows_form_filling(&self) -> bool {
-        self.editable() && self.permissions().is_none_or(|p| p.fill_forms())
+        self.editable() && self.permitted(|p| p.fill_forms())
     }
 
     /// Adding and changing comments is allowed (Table 22, bit 6).
     pub fn allows_annotation(&self) -> bool {
-        self.editable() && self.permissions().is_none_or(|p| p.annotate())
+        self.editable() && self.permitted(|p| p.annotate())
     }
 
     /// The security the next save writes is certificate (public-key) security: opened with a
@@ -520,7 +532,7 @@ impl Document {
     /// recipient allowed to change security, Table 24 bit 2).
     pub fn allows_security_change(&self) -> bool {
         let certificate = self.editor.as_ref().is_some_and(|e| opened_with_certificate(&e.cos));
-        self.editable() && self.permissions().is_none_or(|p| unrestricted(&p) && (p.owner || !certificate))
+        self.editable() && self.permitted(|p| unrestricted(p) && (p.owner || !certificate))
     }
 
     /// A summary of the document's security for Document Properties ▸ Security, including
