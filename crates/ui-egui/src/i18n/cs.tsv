@@ -2184,3 +2184,18 @@ calendar date	December	prosince
 	Choose a code	Vyberte kód
 	Document and comments with connector lines on single pages	Dokument a komentáře se spojovacími čarami na jedné stránce
 	Document and comments with sequence numbers on separate pages	Dokument a komentáře s pořadovými čísly na samostatných stránkách
+
+# OCR review (M10)
+	; 1 page skipped	; 1 stránka přeskočena
+	; {n} pages skipped	; přeskočené stránky: {n}
+	Review recognized text	Zkontrolovat rozpoznaný text
+	Correct the words before adding searchable text. The page image will not change.	Před přidáním prohledávatelného textu opravte slova. Obraz stránky se nezmění.
+	Page {p}, word {w} of {n}	Stránka {p}, slovo {w} z {n}
+	Recognized word	Rozpoznané slovo
+	Leave a word empty to omit it from the searchable text.	Ponechte slovo prázdné, chcete-li ho vynechat z prohledávatelného textu.
+	Previous word	Předchozí slovo
+	Next word	Další slovo
+	No words were recognized.	Nebyla rozpoznána žádná slova.
+	Skipped pages	Přeskočené stránky
+	Apply recognized text	Použít rozpoznaný text
+	Review recognized text before applying	Zkontrolovat rozpoznaný text před použitím
