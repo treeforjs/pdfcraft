@@ -134,3 +134,26 @@ jobs:
           name: fuzz-findings
           path: fuzz-out/findings
           if-no-files-found: ignore
+
+  perf:
+    name: performance and memory budgets (report only)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: perf
+      # Budgets in xtask/baselines/perf.json were measured on a different machine; shared CI
+      # runners only record the numbers (docs/performance.md). Run without --report-only on a
+      # quiet, known machine to gate.
+      - name: Measure
+        run: cargo xtask perf --runs 3 --report-only
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-report
+          path: target/perf/perf-report.json
+          if-no-files-found: ignore

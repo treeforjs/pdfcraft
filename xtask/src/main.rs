@@ -11,6 +11,7 @@ mod gates;
 mod layers;
 mod macos_integration;
 mod parity;
+mod perf;
 mod screenshots;
 mod version;
 
@@ -38,6 +39,7 @@ const COMMANDS: &[(&str, &str, Command)] = &[
         "Render and extract text from synthetic fixtures with PdfCraft and Poppler; pixel and word-F1 report, fails on regression",
         fidelity::run,
     ),
+    ("perf", "Performance and memory budgets on synthetic large documents (docs/performance.md; --runs N, --release, --report-only)", perf::run),
     ("text-oracle", "Compare text extraction with pdftotext over corpus/ (word F1; target median ≥ 0.97)", gates::text_oracle),
     ("screenshots", "Regenerate the README screenshots in docs/images/ and their ATTRIBUTION entries", screenshots::run),
     ("models", "Fetch the OCR models (ATTRIBUTION.toml kind = \"model\") into assets/models/, verified by SHA-256", assets::models),

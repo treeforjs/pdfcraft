@@ -1791,7 +1791,7 @@ status = "shipped"
 commands = []
 tools = []
 evidence = ["crates/ui-egui/tests/perf.rs::scrolling_a_500_page_document_stays_within_the_frame_budget", "crates/ui-egui/tests/perf.rs::panels_with_hundreds_of_items_stay_within_the_frame_budget"]
-notes = "UI work per frame ~6 ms scrolling 500 pages (comments panel with 500 cards ~6 ms, thumbnails ~2 ms); rendering is off-thread and tiled"
+notes = "UI work per frame ~6 ms scrolling 500 pages (comments panel with 500 cards ~6 ms, thumbnails ~2 ms); rendering is off-thread and tiled. The cited tests skip when load average > 2x cores and exclude render completion. `cargo xtask perf` (docs/performance.md, 2026-10-12, dev profile, loaded WSL2 machine) measured on 500 pages: smooth-scroll UI frame median 8.1 ms, p95 ~16.7 ms, first page on screen 53 ms, far-page navigation settled 40 ms (kittest: no GPU present time). At 5 000 commented pages frames are ~200 ms because the Comments panel is not virtualized."
 
 # ==================================================================================================
 # C. Content editing
@@ -9995,11 +9995,11 @@ title = "Meet performance budgets on Tier-1 platforms"
 area = "N"
 tier = "P0"
 milestone = "M14"
-status = "planned"
+status = "partial"
 commands = []
 tools = []
-evidence = []
-notes = ""
+evidence = ["xtask/src/perf.rs::budgets_cover_every_scenario_with_positive_limits", "xtask/src/perf.rs::generated_documents_are_valid_deterministic_and_carry_the_phrase_once", "xtask/src/perf.rs::probe_reports_flatten_into_named_samples"]
+notes = "Harness only: `cargo xtask perf` (docs/performance.md) measures open, first/last page render, all-text extraction, find, incremental/full save and peak RSS through the automation tools, and UI open, time to first page, scroll frame times and navigation through kittest, on four synthetic documents (500 and 5 000 text pages, 24 image pages, a 110 000-path page), and gates medians against xtask/baselines/perf.json. Budgets are dev-profile numbers from one shared, heavily loaded WSL2 Linux machine (2026-10-12); the cited tests check the harness, not the budgets. Not measured: release builds, Windows, macOS, web, multi-GB files. Known defects it found: Comments panel per-frame cost linear in comment count (~200 ms frames at 5 000 comments) and an unbounded automation text cache (~873 MiB after extracting 5 000 pages)."
 
 [[feature]]
 id = "misc.send-email"

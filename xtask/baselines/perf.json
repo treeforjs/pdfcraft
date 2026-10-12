@@ -1,0 +1,75 @@
+{
+  "about": "Budgets for cargo xtask perf (docs/performance.md). A run fails when a metric median over the measured runs exceeds its budget. Set 2026-10-12 from three passes x 3 runs (+1 warm-up) on a shared 8-core WSL2 Ubuntu 24.04 machine (AMD Ryzen 7 9850X3D, load average 6-27 from parallel builds), dev profile, git e00874e+wp/perf. Rule: timings max(4x median, 50 ms); UI frame medians max(4x median, 16.7 ms), except text-500 smooth scrolling which is held to the 60 fps target (16.7 ms); peak RSS 1.25x median (RSS varies <= 12% across runs, so 1.25x catches an extra copy of a large file). Values rounded up to two significant digits. text-5000 UI numbers encode a known defect (Comments panel cost grows with the comment count, docs/performance.md): the budget only stops it getting worse.",
+  "profiles": {
+    "dev": {
+      "text-500": {
+        "_note": "M3 500-page document; smooth scrolling median held to 60 fps",
+        "engine.open_ms": 99,
+        "engine.render_first_page_ms": 110,
+        "engine.render_last_page_ms": 99,
+        "engine.extract_all_text_ms": 2400,
+        "engine.find_ms": 140,
+        "engine.save_incremental_ms": 140,
+        "engine.save_full_ms": 170,
+        "engine.peak_rss_mib": 150,
+        "ui.open_ms": 120,
+        "ui.settle_ms": 220,
+        "ui.smooth_scroll.median_ms": 16.7,
+        "ui.jump_scroll.median_ms": 65,
+        "ui.navigate.median_ms": 170,
+        "ui.peak_rss_mib": 210
+      },
+      "text-5000": {
+        "_note": "scaling check; UI budgets record the Comments-panel defect, engine RSS records the unbounded text cache",
+        "engine.open_ms": 1300,
+        "engine.render_first_page_ms": 130,
+        "engine.render_last_page_ms": 95,
+        "engine.extract_all_text_ms": 21000,
+        "engine.find_ms": 830,
+        "engine.save_incremental_ms": 1900,
+        "engine.save_full_ms": 2100,
+        "engine.peak_rss_mib": 1300,
+        "ui.open_ms": 1300,
+        "ui.settle_ms": 2800,
+        "ui.smooth_scroll.median_ms": 800,
+        "ui.jump_scroll.median_ms": 840,
+        "ui.navigate.median_ms": 2700,
+        "ui.peak_rss_mib": 540
+      },
+      "images-24": {
+        "_note": "image-heavy: decode, render and save of ~109 MB of Flate image data",
+        "engine.open_ms": 160,
+        "engine.render_first_page_ms": 1100,
+        "engine.render_last_page_ms": 1100,
+        "engine.extract_all_text_ms": 50,
+        "engine.find_ms": 50,
+        "engine.save_incremental_ms": 420,
+        "engine.save_full_ms": 290,
+        "engine.peak_rss_mib": 450,
+        "ui.open_ms": 50,
+        "ui.settle_ms": 180,
+        "ui.smooth_scroll.median_ms": 17,
+        "ui.jump_scroll.median_ms": 17,
+        "ui.navigate.median_ms": 200,
+        "ui.peak_rss_mib": 400
+      },
+      "vector-1": {
+        "_note": "one page with 110 000 path objects",
+        "engine.open_ms": 50,
+        "engine.render_first_page_ms": 3000,
+        "engine.render_last_page_ms": 3000,
+        "engine.extract_all_text_ms": 280,
+        "engine.find_ms": 50,
+        "engine.save_incremental_ms": 50,
+        "engine.save_full_ms": 50,
+        "engine.peak_rss_mib": 190,
+        "ui.open_ms": 50,
+        "ui.settle_ms": 3300,
+        "ui.smooth_scroll.median_ms": 17,
+        "ui.jump_scroll.median_ms": 17,
+        "ui.navigate.median_ms": 50,
+        "ui.peak_rss_mib": 230
+      }
+    }
+  }
+}
