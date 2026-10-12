@@ -1,14 +1,17 @@
-//! pdfcraft-export — Export a PDF ▸ Word, HTML, RTF (L4).
+//! pdfcraft-export — Export a PDF ▸ Word, HTML, RTF, Excel (L4).
 //!
 //! The engine reduces each page to [`Page`]: paragraphs (text, box, size, bold/italic) and
 //! images (encoded bytes and box), in reading order. The writers turn that into a flowing
 //! document: headings are the paragraphs set larger than the body text, and images sit where
-//! they fall between paragraphs.
+//! they fall between paragraphs. The Excel writer ([`xlsx`]) puts each page on its own worksheet,
+//! with the detected tables as cell grids.
 
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
+mod xlsx;
 mod zip;
 
+pub use xlsx::{MAX_SHEETS, xlsx};
 pub use zip::Zip;
 
 /// A paragraph of a page.
