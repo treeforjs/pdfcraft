@@ -2716,6 +2716,33 @@ trailer << /Root 1 0 R >>
         }
     }
 
+    /// From `cargo xtask fuzz` (seeded with pdf.js issue10572.pdf): a lone `+` in a stitching
+    /// function's `/Functions` array was skipped as a zero while validating the array but not
+    /// read as one, and the array iterator unwrapped the failed read: the page did not render
+    /// ("renderer crashed"). Vendored hayro-syntax patch: a lone `+` reads as zero like a lone
+    /// `-`, and an array whose item can't be read ends there instead of panicking.
+    #[test]
+    fn a_lone_plus_in_an_array_does_not_crash_the_page() {
+        let pdf = "%PDF-1.7
+1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
+2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj
+3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 40 40] /Contents 4 0 R /Resources << /Shading << /Sh0 5 0 R >> >> >> endobj
+4 0 obj << /Length 29 >> stream
+/Sh0 sh 1 0 0 rg 0 0 4 4 re f
+endstream endobj
+5 0 obj << /ShadingType 2 /ColorSpace /DeviceRGB /Coords [0 0 40 0] /Function 6 0 R >> endobj
+6 0 obj << /FunctionType 3 /Domain [0 1] /Functions [7 0 R + 7 0 R] /Bounds [0.5] /Encode [0 1 0 1] >> endobj
+7 0 obj << /FunctionType 2 /Domain [0 1] /C0 [0 0 1] /C1 [0 1 0] /N 1 >> endobj
+trailer << /Root 1 0 R >>
+%%EOF";
+        let mut r = PageRenderer::new(Arc::new(pdf.as_bytes().to_vec()), RenderConfig::default());
+        let page = r.render(RenderRequest { page: 0, kind: RequestKind::Pixels, tile: None, scale: 1.0, tag: 0 });
+        assert!(page.error.is_none(), "{:?}", page.error);
+        assert_eq!(&page.rgba[((38 * 40 + 1) * 4)..][..4], &[255, 0, 0, 255], "the rest of the page draws");
+        let text = r.render(RenderRequest { page: 0, kind: RequestKind::Text, tile: None, scale: 1.0, tag: 0 });
+        assert!(text.error.is_none(), "{:?}", text.error);
+    }
+
     /// From `cargo xtask fuzz` with the pdf.js corpus (issue19517.pdf, a 12608 x 16806 scan in
     /// one JPEG 2000 tile): the decoder keeps a 32-bit float per sample of a whole tile, whatever
     /// the target resolution, so it asked for 3.4 GB and aborted under the 4 GiB child cap. The

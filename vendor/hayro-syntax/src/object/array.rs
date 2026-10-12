@@ -125,11 +125,16 @@ impl<'a> Iterator for ArrayIter<'a> {
         self.reader.skip_white_spaces_and_comments();
 
         if !self.reader.at_end() {
-            // Objects are already guaranteed to be valid.
-            let item = self
+            // Objects were validated by skipping them. PdfCraft patch: if reading one still
+            // fails (skipping and reading disagreed on a lone `+`), end the array instead of
+            // panicking.
+            let Some(item) = self
                 .reader
                 .read_with_context::<MaybeRef<Object<'_>>>(&self.ctx)
-                .unwrap();
+            else {
+                self.reader = Reader::new(&[]);
+                return None;
+            };
             return Some(item);
         }
 

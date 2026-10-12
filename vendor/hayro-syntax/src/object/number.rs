@@ -113,6 +113,7 @@ impl Readable<'_> for Number {
 
 #[inline(always)]
 fn read_inner(r: &mut Reader<'_>) -> Option<Number> {
+    let has_sign = matches!(r.peek_byte(), Some(b'+' | b'-'));
     let negative = match r.peek_byte()? {
         b'-' => {
             r.forward();
@@ -165,7 +166,9 @@ fn read_inner(r: &mut Reader<'_>) -> Option<Number> {
     }
 
     if !has_digits {
-        if negative || has_dot {
+        // PdfCraft patch: `has_sign`, not `negative`: a lone `+` was skipped as a zero (see
+        // `Skippable for Number`) but not read as one, so an array holding it panicked.
+        if has_sign || has_dot {
             // Treat numbers like just `-`, `+` or `-.` as zero.
             return Some(Number(InternalNumber::Integer(0)));
         }
