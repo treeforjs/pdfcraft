@@ -509,6 +509,10 @@ fn check_one(args: &[String]) -> Result<(), CliError> {
     validate_options("check-one", args, CHECK_ONE_OPTIONS)?;
     let path = *positional(args).first().ok_or("check-one: missing file")?;
     let dpi: f32 = flag(args, "--dpi").unwrap_or("36").parse().map_err(|_| "bad --dpi")?;
+    let fuzzing = args.iter().any(|a| a == "--edit");
+    if fuzzing {
+        abort_on_own_panics();
+    }
     let start = Instant::now();
     let bytes = read(path)?;
     let (status, pages, failed, detail, warnings) = match inspect(bytes.clone(), None) {
@@ -531,8 +535,10 @@ fn check_one(args: &[String]) -> Result<(), CliError> {
     };
     // `--edit` (fuzzing): also run our own object layer end to end, with no panic safety net,
     // so a panic in cos shows up as a crash of this process.
-    if args.iter().any(|a| a == "--edit") {
-        edit_round_trip(&std::fs::read(path).map_err(|e| e.to_string())?);
+    if fuzzing {
+        let original = std::fs::read(path).map_err(|e| e.to_string())?;
+        edit_round_trip(&original);
+        engine_round_trip(original);
     }
     let line = serde_json::json!({ "file": path, "status": status, "pages": pages, "failed_pages": failed, "warnings": warnings,
         "ms": start.elapsed().as_millis() as u64, "detail": detail.chars().take(400).collect::<String>() });
@@ -563,6 +569,60 @@ fn edit_round_trip(bytes: &[u8]) {
         if let Ok(again) = Document::open(Arc::new(out)) {
             let _ = again.root().map(|r| again.get(r));
         }
+    }
+}
+
+/// `check-one --edit` (fuzzing): a panic in our own code (workspace crates and the patched
+/// crates under `vendor/`) is a bug even when a last-resort `catch_unwind` guard would turn it
+/// into an error, so print it and abort, which the fuzzer records as a crash. Panic locations of
+/// our code are workspace-relative paths; those of registry crates and the standard library are
+/// absolute, and stay caught as before.
+fn abort_on_own_panics() {
+    // Fuzzing aborts by design, and a core dump of a child under the 4 GiB cap can be gigabytes
+    // (WSL keeps them on the Windows drive whatever `ulimit -c` says): the exit status is all
+    // the fuzzer needs.
+    #[cfg(target_os = "linux")]
+    let _ = rustix::process::set_dumpable_behavior(rustix::process::DumpableBehavior::NotDumpable);
+    let default = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        default(info);
+        let own = info.location().is_some_and(|l| !l.file().starts_with('/') && !l.file().contains(".cargo") && !l.file().starts_with("library/"));
+        if own {
+            std::process::abort();
+        }
+    }));
+}
+
+/// Open through the engine as the app does (forms, XFA, scripts, signatures, comments), query
+/// the editing views of the first pages, apply page and document edits, save incrementally and
+/// in full, and reopen. Errors are fine; panics, hangs and aborts are bugs.
+fn engine_round_trip(bytes: Vec<u8>) {
+    use pdfcraft_engine::{Edit, Session};
+    let mut session = Session::new();
+    let Ok(id) = session.open("fuzz.pdf", None, Arc::new(bytes), None) else { return };
+    let pages = session.get(id).map_or(0, |d| d.info.pages.len());
+    if let Some(doc) = session.get(id) {
+        for page in 0..pages.min(3) {
+            let _ = doc.text_blocks(page);
+            let _ = doc.text_lines(page);
+            let _ = doc.page_images(page);
+        }
+        let _ = doc.hidden_info();
+        let _ = doc.page_boxes();
+    }
+    let edits = [
+        Edit::SetInfo { key: "Title".into(), value: "Fuzz".into() },
+        Edit::RotatePages { pages: vec![0], degrees: 90 },
+        Edit::DuplicatePages { pages: vec![0] },
+        Edit::AddBookmark { parent: vec![], index: 0, title: "Fuzz".into(), page: 0 },
+        Edit::DeletePages { pages: vec![pages] },
+    ];
+    for edit in edits {
+        let _ = session.apply(id, edit);
+    }
+    for saved in [session.save_bytes(id), session.save_full_bytes(id)].into_iter().flatten() {
+        let mut again = Session::new();
+        let _ = again.open("again.pdf", None, saved, None);
     }
 }
 
