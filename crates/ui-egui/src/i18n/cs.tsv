@@ -2248,4 +2248,3 @@ compare-page	Moved	Přesunutá
 	File size: {n} bytes	Velikost souboru: {n} bajtů
 	{n} objects with unsaved changes are estimated, not measured in the file.	Objekty s neuloženými změnami ({n}) jsou odhadnuty, ne změřeny v souboru.
 	{n} bytes of compressed object streams are shared out among their objects by decoded size.	{n} bajtů komprimovaných proudů objektů je rozděleno mezi jejich objekty podle dekódované velikosti.
-	Audit space usage…	Prověřit využití místa…
