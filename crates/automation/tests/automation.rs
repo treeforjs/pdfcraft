@@ -1504,6 +1504,66 @@ fn excessive_paragraph_apply_and_preview_preserve_bytes_and_redo() {
     assert_eq!(a.session().get(pdfcraft_engine::DocId(doc)).unwrap().bytes, changed);
 }
 
+/// M7: replacing a whole paragraph's text keeps the untouched words' codes, TJ kerning and
+/// repeated spaces, so every pixel outside the changed word is identical, through undo/redo,
+/// save and reopen.
+#[test]
+fn whole_paragraph_text_edits_keep_untouched_words_codes_and_pixels_through_save() {
+    use pdfcraft_cos::{Dict, Document, ObjRef, Object, SaveOptions, Stream, write_incremental};
+    let dir = workdir("whole-paragraph-preserve");
+    let mut cos = Document::open(std::sync::Arc::new(fixture(1))).unwrap();
+    let content = "BT /F1 12 Tf 20 150 Td [(AV) -150 (AW) 80 (ay)] TJ (  double  gap end) Tj ET BT /F1 12 Tf 20 100 Td (Other paragraph) Tj ET";
+    let stream = cos.add(Object::Stream(Stream::flate(Dict::new(), content.as_bytes())));
+    cos.update_dict(ObjRef::new(4, 0), |page| page.set(b"Contents".to_vec(), Object::Ref(stream))).unwrap();
+    std::fs::write(dir.join("kerned.pdf"), write_incremental(&cos, &SaveOptions::default()).unwrap()).unwrap();
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({"path":"kerned.pdf"}))["doc"].as_u64().unwrap();
+    assert_eq!(ok(&mut a, "text_paragraphs", json!({"doc":doc,"page":1}))["paragraphs"][0]["text"], "AVAWay  double  gap end");
+    let pixels = |a: &mut Automation, doc| {
+        let rendered = a.call("page_render", &json!({"doc":doc,"page":1,"dpi":144})).unwrap();
+        let Content::Png { data, .. } = &rendered[0] else { panic!("expected page PNG") };
+        image::load_from_memory(data).unwrap().to_rgba8()
+    };
+    let original = a.session().get(pdfcraft_engine::DocId(doc)).unwrap().bytes.clone();
+    let before = pixels(&mut a, doc);
+    let edited = "AVAWay  double  gap fin";
+    let applied = ok(&mut a, "text_edit", json!({"doc":doc,"page":1,"paragraph":1,"text":edited}));
+    assert_eq!(applied["paragraph"]["text"], edited);
+    let after = pixels(&mut a, doc);
+    // Helvetica 12 pt: "AVAWay  double  gap " ends at 20 + 121.572 pt. Only the changed word, from
+    // there on its own row, may differ (2 px per point at 144 dpi; the row is 138–154 pt down).
+    let changed = |x: u32, y: u32| x >= 2 * 141 && (2 * 135..2 * 158).contains(&y);
+    let mut differing = 0;
+    for (x, y, pixel) in after.enumerate_pixels() {
+        if before.get_pixel(x, y) != pixel {
+            assert!(changed(x, y), "pixel {x},{y} outside the changed word differs");
+            differing += 1;
+        }
+    }
+    assert!(differing > 0, "the changed word is drawn");
+    let changed_bytes = a.session().get(pdfcraft_engine::DocId(doc)).unwrap().bytes.clone();
+    ok(&mut a, "edit_undo", json!({"doc":doc}));
+    assert_eq!(a.session().get(pdfcraft_engine::DocId(doc)).unwrap().bytes, original);
+    ok(&mut a, "edit_redo", json!({"doc":doc}));
+    assert_eq!(a.session().get(pdfcraft_engine::DocId(doc)).unwrap().bytes, changed_bytes);
+    ok(&mut a, "doc_save", json!({"doc":doc,"path":"kerned-saved.pdf"}));
+    let saved = ok(&mut a, "doc_open", json!({"path":"kerned-saved.pdf"}))["doc"].as_u64().unwrap();
+    let paragraphs = ok(&mut a, "text_paragraphs", json!({"doc":saved,"page":1}));
+    assert_eq!(paragraphs["paragraphs"][0]["text"], edited);
+    assert_eq!(paragraphs["paragraphs"][1]["text"], "Other paragraph");
+    // The saved content shows the untouched codes with the source TJ numbers.
+    let reopened = Document::open(std::sync::Arc::new(std::fs::read(dir.join("kerned-saved.pdf")).unwrap())).unwrap();
+    let page = pdfcraft_model::pages(&reopened).swap_remove(0);
+    let data = match &*reopened.resolve(page.dict.get(b"Contents").unwrap()) {
+        Object::Stream(s) => String::from_utf8_lossy(&s.decoded().unwrap()).into_owned(),
+        other => panic!("{other:?}"),
+    };
+    let compact: String = data.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(compact.contains("[(AV) -150 (AW) 80 (ay double gap fin)] TJ"), "{data}");
+    assert!(data.contains("(ay  double  gap fin)"), "repeated spaces are kept: {data}");
+    assert!(!data.contains("(  double  gap end)"), "{data}");
+}
+
 #[test]
 fn selected_color_keeps_q_restored_black_and_other_visible_glyphs() {
     use pdfcraft_cos::{Dict, Document, ObjRef, Object, SaveOptions, Stream, write_incremental};
