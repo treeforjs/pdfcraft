@@ -5,6 +5,7 @@ use std::process::ExitCode;
 mod assets;
 mod corpus;
 mod demo_pdf;
+mod fidelity;
 mod fuzz;
 mod gates;
 mod layers;
@@ -31,6 +32,11 @@ const COMMANDS: &[(&str, &str, Command)] = &[
         "macos-integration",
         "Report macOS bundle, Quick Look, Spotlight and PDF integration diagnostics without mutating system state",
         macos_integration::run,
+    ),
+    (
+        "fidelity",
+        "Render and extract text from synthetic fixtures with PdfCraft and Poppler; pixel and word-F1 report, fails on regression",
+        fidelity::run,
     ),
     ("text-oracle", "Compare text extraction with pdftotext over corpus/ (word F1; target median ≥ 0.97)", gates::text_oracle),
     ("screenshots", "Regenerate the README screenshots in docs/images/ and their ATTRIBUTION entries", screenshots::run),
