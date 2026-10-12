@@ -106,3 +106,19 @@ fn export_to_word_html_and_rtf() {
     }
     assert!(std::fs::read_to_string(dir.join("e.html")).unwrap().contains("Exported words"));
 }
+
+#[test]
+fn export_to_excel_writes_a_workbook() {
+    let doc = Session::new().create_from_text("t", "Exported cells").unwrap().to_vec();
+    let dir = std::env::temp_dir().join(format!("pdfcraft-xlsx-ui-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut app = PdfCraftApp::new();
+    app.set_option("language", "en").unwrap();
+    app.open_bytes("e.pdf", None, doc).unwrap();
+    let out = dir.join("e.xlsx");
+    app.save_override = Some(out.to_string_lossy().into_owned());
+    assert!(app.execute("export.xlsx"));
+    let bytes = std::fs::read(&out).unwrap();
+    assert!(bytes.starts_with(b"PK\x03\x04"));
+    assert!(bytes.windows(b"xl/worksheets/sheet1.xml".len()).any(|w| w == b"xl/worksheets/sheet1.xml"));
+}

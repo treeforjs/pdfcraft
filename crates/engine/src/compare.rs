@@ -122,12 +122,14 @@ impl Session {
     }
 }
 
-/// Export a PDF ▸ Word, HTML or RTF.
+/// Export a PDF ▸ Word, HTML, RTF or Excel.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OfficeFormat {
     Docx,
     Html,
     Rtf,
+    /// One worksheet per page, detected tables as cell grids.
+    Xlsx,
 }
 
 impl OfficeFormat {
@@ -136,6 +138,7 @@ impl OfficeFormat {
             OfficeFormat::Docx => "docx",
             OfficeFormat::Html => "html",
             OfficeFormat::Rtf => "rtf",
+            OfficeFormat::Xlsx => "xlsx",
         }
     }
 
@@ -144,6 +147,7 @@ impl OfficeFormat {
             "docx" => Some(OfficeFormat::Docx),
             "html" | "htm" => Some(OfficeFormat::Html),
             "rtf" => Some(OfficeFormat::Rtf),
+            "xlsx" => Some(OfficeFormat::Xlsx),
             _ => None,
         }
     }
@@ -188,7 +192,7 @@ impl crate::Document {
             .collect()
     }
 
-    /// The document as a Word, HTML or RTF file.
+    /// The document as a Word, HTML, RTF or Excel file.
     pub fn export_office(&self, format: OfficeFormat) -> Vec<u8> {
         let pages = self.export_pages();
         let title = self.info.title.clone().unwrap_or_else(|| self.name.trim_end_matches(".pdf").to_string());
@@ -196,6 +200,7 @@ impl crate::Document {
             OfficeFormat::Docx => pdfcraft_export::docx(&pages, &title),
             OfficeFormat::Html => pdfcraft_export::html(&pages, &title).into_bytes(),
             OfficeFormat::Rtf => pdfcraft_export::rtf(&pages).into_bytes(),
+            OfficeFormat::Xlsx => pdfcraft_export::xlsx(&pages, &title),
         }
     }
 }

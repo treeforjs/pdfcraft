@@ -858,7 +858,7 @@ pub fn tools() -> Vec<ToolDef> {
                 json!({ "doc": doc(), "field": { "type": "string" }, "event": { "type": "string", "enum": ["keystroke", "format", "validate", "calculate", "mouse_up"] }, "script": { "type": "string" } }),
                 &["doc", "field", "event"],
             )),
-        t("doc_export_office", "Export to Word, HTML or RTF", "Export a PDF ▸ Word (.docx), HTML (.html, one file with images inline) or RTF (.rtf), chosen by path's extension: paragraphs in reading order, headings from larger text, bold and italic, images where they fall, a page break between pages.")
+        t("doc_export_office", "Export to Word, HTML, RTF or Excel", "Export a PDF ▸ Word (.docx), HTML (.html, one file with images inline), RTF (.rtf) or Excel (.xlsx), chosen by path's extension: paragraphs in reading order, headings from larger text, bold and italic, images where they fall, a page break between pages. Excel gets one worksheet per page: paragraphs in column A, tables detected from the text layout as cell grids, unambiguous numbers (1,234.50, (12.00), 12.5%) stored as numbers.")
             .cmd("export.docx")
             .with(schema(json!({ "doc": doc(), "path": { "type": "string" } }), &["doc", "path"])),
         t("preflight_profiles", "Preflight profiles and checks", "List built-in structural preflight profiles and supported single checks. These checks do not establish full standards conformance.")

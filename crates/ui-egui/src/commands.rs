@@ -427,6 +427,7 @@ impl PdfCraftApp {
             "export.docx" => self.export_office_dialog(pdfcraft_engine::compare::OfficeFormat::Docx),
             "export.html" => self.export_office_dialog(pdfcraft_engine::compare::OfficeFormat::Html),
             "export.rtf" => self.export_office_dialog(pdfcraft_engine::compare::OfficeFormat::Rtf),
+            "export.xlsx" => self.export_office_dialog(pdfcraft_engine::compare::OfficeFormat::Xlsx),
             "form.prepare" => {
                 self.left = crate::LeftPanel::Tool("form");
                 self.left_open = true;

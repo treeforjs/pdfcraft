@@ -6895,11 +6895,11 @@ title = "Export to Excel (.xlsx) with table detection"
 area = "J"
 tier = "P1"
 milestone = "M10"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["export.xlsx"]
+tools = ["doc_export_office"]
+evidence = ["crates/export/src/xlsx.rs::tables_become_cell_grids_with_numbers_one_sheet_per_page", "crates/export/src/xlsx.rs::only_unambiguous_numbers_become_numbers", "crates/export/src/xlsx.rs::empty_documents_and_huge_page_counts_stay_valid_workbooks", "crates/export/src/xlsx.rs::hostile_text_is_escaped_and_bounded", "crates/automation/tests/automation.rs::exporting_tables_to_excel"]
+notes = "One worksheet per page (pages past 1024 share the last sheet, each after a Page N row): paragraphs in column A, tables detected from text positions by the shared Word/HTML/RTF detector (left-edge column clustering, overlapping rows, at most 63 columns) as cell grids with merged spanning cells and column widths. Unambiguous numbers (., decimal; , thousands; trailing %; negatives as -x or (x)) are stored as numbers with a matching number format; currency symbols, 1.234,56, leading zeros, dates and >15 digits stay text. Inline strings, so no formulas. Package checked by the end-to-end test (unzipped, cell values) and Python zipfile/XML parsing; not yet opened in Excel or LibreOffice. Not yet: images, fonts/colours beyond bold/italic, ruled-line table detection, tables spanning pages, one sheet per table, locale choice, dates and currency."
 
 [[feature]]
 id = "create.export-pptx"

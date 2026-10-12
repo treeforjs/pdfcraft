@@ -292,6 +292,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     c("export.docx", "Export to Word…", FILE, None, Document, "file-text"),
     c("export.html", "Export to HTML…", FILE, None, Document, "file-symlink"),
     c("export.rtf", "Export to RTF…", FILE, None, Document, "file-text"),
+    c("export.xlsx", "Export to Excel…", FILE, None, Document, "grid-3x3"),
     c("app.preferences", "Preferences…", EDIT, Some(Shortcut::cmd(",")), Nothing, "settings"),
     c("tools.js_console", "JavaScript console…", None, Some(Shortcut::cmd("J")), Document, "square-terminal"),
     c("tools.document_js", "Document JavaScripts…", None, None, Modification, "file-code"),

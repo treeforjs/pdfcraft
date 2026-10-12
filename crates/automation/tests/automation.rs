@@ -3364,6 +3364,127 @@ fn exporting_to_word_html_and_rtf() {
     assert!(a.call("doc_export_office", &json!({ "doc": doc, "path": "a.xyz" })).is_err());
 }
 
+/// The inflated parts of a zip archive written with local headers that carry sizes (no data
+/// descriptors), by name.
+fn unzip(zip: &[u8]) -> Vec<(String, String)> {
+    let at = |i: usize, n: usize| zip[i..i + n].iter().rev().fold(0usize, |v, b| v << 8 | *b as usize);
+    let mut parts = Vec::new();
+    let mut i = 0;
+    while zip[i..].starts_with(b"PK\x03\x04") {
+        let (method, size, name_len, extra) = (at(i + 8, 2), at(i + 18, 4), at(i + 26, 2), at(i + 28, 2));
+        let name = String::from_utf8(zip[i + 30..i + 30 + name_len].to_vec()).unwrap();
+        let data = i + 30 + name_len + extra;
+        let raw = &zip[data..data + size];
+        let mut text = String::new();
+        if method == 8 {
+            std::io::Read::read_to_string(&mut flate2::read::DeflateDecoder::new(raw), &mut text).unwrap();
+        } else {
+            text = String::from_utf8_lossy(raw).into_owned();
+        }
+        parts.push((name, text));
+        i = data + size;
+    }
+    parts
+}
+
+#[test]
+fn exporting_tables_to_excel() {
+    // Page 1: a title, then a three-column table drawn as separately positioned text; page 2: prose.
+    let mut page1 = String::from("BT /F1 16 Tf 300 740 Td (Statement) Tj ET\n");
+    let rows = [["Item", "Qty", "Amount"], ["Widgets", "007", "1,234.50"], ["Refund", "2", "(12.00)"], ["Tax", "1", "12.5%"]];
+    for (r, row) in rows.iter().enumerate() {
+        let y = 680 - 24 * r;
+        for (c, text) in row.iter().enumerate() {
+            // Parentheses inside a PDF string are escaped.
+            let text = text.replace('(', "\\(").replace(')', "\\)");
+            page1.push_str(&format!("BT /F1 11 Tf {} {y} Td ({text}) Tj ET\n", 72 + 160 * c));
+        }
+    }
+    let page2 = "BT /F1 11 Tf 72 700 Td (Just a sentence on the second page.) Tj ET";
+    let objs = [
+        "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+        "<< /Type /Pages /Kids [4 0 R 6 0 R] /Count 2 /MediaBox [0 0 612 792] >>".into(),
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".into(),
+        "<< /Type /Page /Parent 2 0 R /Contents 5 0 R /Resources << /Font << /F1 3 0 R >> >> >>".into(),
+        format!("<< /Length {} >>\nstream\n{page1}\nendstream", page1.len()),
+        "<< /Type /Page /Parent 2 0 R /Contents 7 0 R /Resources << /Font << /F1 3 0 R >> >> >>".into(),
+        format!("<< /Length {} >>\nstream\n{page2}\nendstream", page2.len()),
+    ];
+    let mut pdf = b"%PDF-1.7\n".to_vec();
+    let mut offsets = Vec::new();
+    for (i, o) in objs.iter().enumerate() {
+        offsets.push(pdf.len());
+        pdf.extend_from_slice(format!("{} 0 obj\n{o}\nendobj\n", i + 1).as_bytes());
+    }
+    let xref = pdf.len();
+    pdf.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objs.len() + 1).as_bytes());
+    for o in offsets {
+        pdf.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+    }
+    pdf.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objs.len() + 1).as_bytes());
+
+    let dir = workdir("xlsx");
+    std::fs::write(dir.join("table.pdf"), pdf).unwrap();
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "table.pdf" }))["doc"].as_u64().unwrap();
+    let r = ok(&mut a, "doc_export_office", json!({ "doc": doc, "path": "table.xlsx" }));
+    assert_eq!(r["format"], "xlsx", "{r}");
+    let bytes = std::fs::read(dir.join("table.xlsx")).unwrap();
+    assert_eq!(r["bytes"], bytes.len());
+    let parts = unzip(&bytes);
+    let part = |name: &str| parts.iter().find(|p| p.0 == name).map(|p| p.1.clone()).unwrap_or_else(|| panic!("{name} missing: {parts:?}"));
+    let names: Vec<&str> = parts.iter().map(|p| p.0.as_str()).collect();
+    for n in ["[Content_Types].xml", "_rels/.rels", "xl/workbook.xml", "xl/_rels/workbook.xml.rels", "xl/styles.xml", "xl/worksheets/sheet1.xml", "xl/worksheets/sheet2.xml"] {
+        assert!(names.contains(&n), "{n}: {names:?}");
+    }
+    assert!(part("xl/workbook.xml").contains("<sheet name=\"Page 1\" sheetId=\"1\" r:id=\"rId1\"/><sheet name=\"Page 2\" sheetId=\"2\" r:id=\"rId2\"/>"));
+
+    // Every cell of sheet 1 as (reference, inline text or "=number").
+    let sheet = part("xl/worksheets/sheet1.xml");
+    let cells: Vec<(String, String)> = sheet
+        .split("<c r=\"")
+        .skip(1)
+        .map(|c| {
+            let r = c.split('"').next().unwrap().to_string();
+            let v = if c.contains("t=\"inlineStr\"") {
+                c.split("xml:space=\"preserve\">").nth(1).unwrap().split("</t>").next().unwrap().to_string()
+            } else {
+                format!("={}", c.split("<v>").nth(1).unwrap().split("</v>").next().unwrap())
+            };
+            (r, v)
+        })
+        .collect();
+    let expected = [
+        ("A1", "Statement"),
+        ("A2", "Item"),
+        ("B2", "Qty"),
+        ("C2", "Amount"),
+        ("A3", "Widgets"),
+        ("B3", "007"),
+        ("C3", "=1234.5"),
+        ("A4", "Refund"),
+        ("B4", "=2"),
+        ("C4", "=-12"),
+        ("A5", "Tax"),
+        ("B5", "=1"),
+        ("C5", "=0.125"),
+    ];
+    let got: Vec<(&str, &str)> = cells.iter().map(|(r, v)| (r.as_str(), v.as_str())).collect();
+    assert_eq!(got, expected, "{sheet}");
+    let styles = part("xl/styles.xml");
+    assert!(styles.contains("formatCode=\"#,##0.00\"") && styles.contains("formatCode=\"0.0%\""), "{styles}");
+    assert!(part("xl/worksheets/sheet2.xml").contains(">Just a sentence on the second page.</t>"));
+
+    // Python's standard library opens the package and parses every part, when it is installed.
+    if std::process::Command::new("python3").arg("--version").output().is_ok_and(|o| o.status.success()) {
+        let script = "import sys, zipfile, xml.dom.minidom as m\nz = zipfile.ZipFile(sys.argv[1])\nassert z.testzip() is None\n\
+for n in z.namelist(): m.parseString(z.read(n))\nprint(len(z.namelist()))";
+        let out = std::process::Command::new("python3").arg("-c").arg(script).arg(dir.join("table.xlsx")).output().unwrap();
+        assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+        assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), "8", "content types, two rels, core, workbook, styles and two sheets");
+    }
+}
+
 #[test]
 fn dynamic_xfa_forms_open_render_fill_and_save_through_tools() {
     let dir = workdir("xfa");
