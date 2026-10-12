@@ -1306,7 +1306,7 @@ pub fn tools() -> Vec<ToolDef> {
             .with(schema(json!({ "doc": doc() }), &["doc"])),
         t("doc_open_revision", "Open a revision", "Open saved revision `revision` (1 = the oldest) of a document as a new, unsaved document, to see the file as it was then.")
             .with(schema(json!({ "doc": doc(), "revision": { "type": "integer", "minimum": 1 } }), &["doc", "revision"])),
-        t("doc_optimize", "Optimize PDF", "Write an optimized copy to `path` (Acrobat's PDF Optimizer). color / gray: { downsample, ppi, above_ppi, compression: jpeg|zip|retain, quality 1–100 } (defaults: downsample to 150 ppi above 225, JPEG 60). Images are measured where pages draw them and replaced only when smaller. discard_*: thumbnails (default true), alternate_images (true), tags, print_settings; flate_unencoded (true); remove_invalid_links and remove_unreferenced_dests (true). discard: Remove Hidden Information categories (metadata, attachments, comments, form-fields, hidden-text, hidden-layers, bookmarks, links-actions-scripts, private-data). unembed_fonts: embedded font names (from doc_embedded_fonts) whose program is removed; a name that matches no embedded font or a font that can't be unembedded refuses the whole call. Signed documents are refused. The open document is unchanged.")
+        t("doc_optimize", "Optimize PDF", "Write an optimized copy to `path` (Acrobat's PDF Optimizer). color / gray: { downsample, ppi, above_ppi, compression: jpeg|zip|retain, quality 1–100 } (defaults: downsample to 150 ppi above 225, JPEG 60). mono (one-bit images and image masks): { downsample, ppi, above_ppi, compression: ccitt-g4|zip|retain } or just the compression name (defaults: downsample to 300 ppi above 450, CCITT Group 4; without downsampling the samples are unchanged). Images are measured where pages draw them and replaced only when smaller. discard_*: thumbnails (default true), alternate_images (true), tags, print_settings; flate_unencoded (true); lzw_to_flate (true: LZW streams that decode completely are re-encoded as Flate, others are left and counted in lzw_skipped); compress_structure (true: pack objects into object streams); remove_invalid_links and remove_unreferenced_dests (true). discard: Remove Hidden Information categories (metadata, attachments, comments, form-fields, hidden-text, hidden-layers, bookmarks, links-actions-scripts, private-data). unembed_fonts: embedded font names (from doc_embedded_fonts) whose program is removed; a name that matches no embedded font or a font that can't be unembedded refuses the whole call. Signed documents are refused. The open document is unchanged.")
             .cmd("optimize.advanced")
             .with(schema(
                 json!({
@@ -1318,7 +1318,10 @@ pub fn tools() -> Vec<ToolDef> {
                     "discard_alternate_images": { "type": "boolean" },
                     "discard_tags": { "type": "boolean" },
                     "discard_print_settings": { "type": "boolean" },
+                    "mono": { "type": ["object", "string"] },
                     "flate_unencoded": { "type": "boolean" },
+                    "lzw_to_flate": { "type": "boolean" },
+                    "compress_structure": { "type": "boolean" },
                     "remove_invalid_links": { "type": "boolean" },
                     "remove_unreferenced_dests": { "type": "boolean" },
                     "discard": { "type": "array", "items": { "type": "string" } },

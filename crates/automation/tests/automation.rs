@@ -3400,6 +3400,111 @@ fn optimizing_through_tools() {
     assert!(matches!(a.call("doc_optimize", &json!({ "doc": doc, "path": "x.pdf", "discard": ["everything"] })), Err(ToolError::InvalidArgs(_))));
 }
 
+/// A synthetic "scan": an 800 × 300 one-bit page image (Flate) drawn by an LZW content stream.
+fn lzw_scan_pdf() -> Vec<u8> {
+    use pdfcraft_cos::{Dict, Document, Object, SaveOptions, Stream, write_full};
+    let (w, h) = (800usize, 300usize);
+    let stride = w.div_ceil(8);
+    let mut bits = vec![0xffu8; stride * h]; // white
+    for y in 0..h {
+        for x in 0..w {
+            // A different pseudo-random glyph in every 20 × 28 cell, so nothing repeats.
+            let (cx, cy) = (x % 20, y % 28);
+            let mut g = ((x / 20) as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15) ^ ((y / 28) as u64).wrapping_mul(0xC2B2_AE3D_27D4_EB4F);
+            g = (g ^ (g >> 29)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+            g ^= g >> 32;
+            // Stroke widths and positions vary per glyph, and specks of scanner noise.
+            let (sw, bar) = (2 + (g >> 8) as usize % 3, 10 + (g >> 12) as usize % 5);
+            let speck = (x as u64).wrapping_mul(0x2545_F491_4F6C_DD1D).wrapping_add((y as u64).wrapping_mul(0x9E37_79B9)) % 211 == 0;
+            let ink = speck
+                || (3..15).contains(&cx)
+                    && (4..22).contains(&cy)
+                    && ((g & 1 != 0 && cx < 3 + sw)
+                        || (g & 2 != 0 && cx >= 15 - sw)
+                        || (g & 4 != 0 && cy < 4 + sw)
+                        || (g & 8 != 0 && (bar..bar + sw).contains(&cy))
+                        || (g & 16 != 0 && cy >= 22 - sw)
+                        || (g & 32 != 0 && (cx + 28 - cy) % 13 < sw));
+            if ink {
+                bits[y * stride + x / 8] &= !(0x80 >> (x % 8));
+            }
+        }
+    }
+    let mut doc = Document::new_empty();
+    let mut d = Dict::new();
+    d.set(b"Type".to_vec(), Object::name("XObject"));
+    d.set(b"Subtype".to_vec(), Object::name("Image"));
+    d.set(b"Width".to_vec(), Object::Int(w as i64));
+    d.set(b"Height".to_vec(), Object::Int(h as i64));
+    d.set(b"BitsPerComponent".to_vec(), Object::Int(1));
+    d.set(b"ColorSpace".to_vec(), Object::name("DeviceGray"));
+    let img = doc.add(Object::Stream(Stream::flate(d, &bits)));
+    let content = format!("q {w} 0 0 {h} 0 0 cm /Im0 Do Q\n").repeat(3);
+    let mut cd = Dict::new();
+    cd.set(b"Filter".to_vec(), Object::name("LZWDecode"));
+    let lzw = pdfcraft_filters::encode(&pdfcraft_filters::Filter::Lzw, &pdfcraft_filters::Params::default(), content.as_bytes()).unwrap();
+    let c = doc.add(Object::Stream(Stream::from_raw(cd, lzw)));
+    let pages = doc.root().and_then(|r| doc.get(r).as_dict().and_then(|d| d.reference(b"Pages"))).unwrap();
+    let mut x = Dict::new();
+    x.set(b"Im0".to_vec(), Object::Ref(img));
+    let mut res = Dict::new();
+    res.set(b"XObject".to_vec(), Object::Dict(x));
+    let mut p = Dict::new();
+    p.set(b"Type".to_vec(), Object::name("Page"));
+    p.set(b"Parent".to_vec(), Object::Ref(pages));
+    p.set(b"MediaBox".to_vec(), Object::Array(vec![0.into(), 0.into(), (w as i64).into(), (h as i64).into()]));
+    p.set(b"Resources".to_vec(), Object::Dict(res));
+    p.set(b"Contents".to_vec(), Object::Ref(c));
+    let page = doc.add(Object::Dict(p));
+    doc.update_dict(pages, |d| {
+        d.set(b"Kids".to_vec(), Object::Array(vec![Object::Ref(page)]));
+        d.set(b"Count".to_vec(), Object::Int(1));
+    })
+    .unwrap();
+    write_full(&doc, &SaveOptions { object_streams: false, ..SaveOptions::default() }).unwrap()
+}
+
+fn contains(hay: &[u8], needle: &[u8]) -> bool {
+    hay.windows(needle.len()).any(|w| w == needle)
+}
+
+#[test]
+fn optimizing_scans_with_ccitt_lzw_to_flate_and_object_streams_through_tools() {
+    let dir = workdir("optimize-codecs");
+    std::fs::write(dir.join("scan.pdf"), lzw_scan_pdf()).unwrap();
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "scan.pdf" }))["doc"].as_u64().unwrap();
+    // Decoded pixels of page 1 at 72 dpi (one image pixel per device pixel).
+    let preview = |a: &mut Automation, d: u64| {
+        let out = a.call("page_render", &json!({ "doc": d, "page": 1, "dpi": 72 })).unwrap();
+        let Content::Png { data, .. } = &out[0] else { panic!("expected an image") };
+        let mut reader = png::Decoder::new(std::io::Cursor::new(data.as_slice())).read_info().unwrap();
+        let mut buf = vec![0; reader.output_buffer_size().unwrap()];
+        let info = reader.next_frame(&mut buf).unwrap();
+        buf.truncate(info.buffer_size());
+        (info.width, info.height, buf)
+    };
+    let original = preview(&mut a, doc);
+    assert_eq!((original.0, original.1), (800, 300));
+    let r = ok(&mut a, "doc_optimize", json!({ "doc": doc, "path": "g4.pdf", "mono": "ccitt-g4", "lzw_to_flate": true, "compress_structure": false }));
+    assert_eq!((r["images_ccitt"].as_u64(), r["images_recompressed"].as_u64()), (Some(1), Some(1)), "{r}");
+    assert_eq!((r["lzw_reencoded"].as_u64(), r["lzw_skipped"].as_u64(), r["object_streams"].as_bool()), (Some(1), Some(0), Some(false)), "{r}");
+    assert!(r["bytes_after"].as_u64().unwrap() < r["bytes_before"].as_u64().unwrap(), "{r}");
+    let g4 = std::fs::read(dir.join("g4.pdf")).unwrap();
+    assert!(contains(&g4, b"/CCITTFaxDecode") && !contains(&g4, b"/LZWDecode") && !contains(&g4, b"/ObjStm"));
+    // The copy draws the same page.
+    let copy = ok(&mut a, "doc_open", json!({ "path": "g4.pdf" }))["doc"].as_u64().unwrap();
+    assert!(preview(&mut a, copy) == original, "the optimized copy renders differently");
+    // Object streams on (the default); LZW kept when asked; mono as an object.
+    let r = ok(&mut a, "doc_optimize", json!({ "doc": doc, "path": "packed.pdf", "lzw_to_flate": false, "mono": { "compression": "zip", "downsample": false } }));
+    assert_eq!((r["images_ccitt"].as_u64(), r["lzw_reencoded"].as_u64(), r["object_streams"].as_bool()), (Some(0), Some(0), Some(true)), "{r}");
+    let packed = std::fs::read(dir.join("packed.pdf")).unwrap();
+    assert!(contains(&packed, b"/ObjStm") && !contains(&packed, b"/CCITTFaxDecode"));
+    for bad in [json!("jbig2"), json!(7), json!({ "compression": 3 }), json!({ "downsample": "yes" })] {
+        assert!(matches!(a.call("doc_optimize", &json!({ "doc": doc, "path": "x.pdf", "mono": bad })), Err(ToolError::InvalidArgs(_))), "{bad}");
+    }
+}
+
 #[test]
 fn initial_view_through_tools() {
     let dir = workdir("initial-view");

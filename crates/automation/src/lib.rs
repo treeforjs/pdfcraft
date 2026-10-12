@@ -952,12 +952,44 @@ impl Automation {
         };
         settings.color = images("color", settings.color)?;
         settings.gray = images("gray", settings.gray)?;
+        if let Some(v) = a.get("mono") {
+            use pdfcraft_engine::optimize::MonoCompression;
+            let m = &mut settings.mono;
+            let compression = match v {
+                Value::String(s) => Some(s.as_str()),
+                Value::Object(o) => {
+                    if let Some(d) = o.get("downsample") {
+                        m.downsample = d.as_bool().ok_or_else(|| ToolError::InvalidArgs("mono.downsample must be a boolean".into()))?;
+                    }
+                    if let Some(p) = o.get("ppi").and_then(Value::as_f64) {
+                        m.target_ppi = p.clamp(9.0, 2400.0);
+                    }
+                    if let Some(p) = o.get("above_ppi").and_then(Value::as_f64) {
+                        m.above_ppi = p.clamp(9.0, 2400.0);
+                    }
+                    // A non-string compression is reported as unknown below.
+                    o.get("compression").map(|c| c.as_str().unwrap_or(""))
+                }
+                _ => return Err(ToolError::InvalidArgs("mono is an object or a compression name".into())),
+            };
+            m.above_ppi = m.above_ppi.max(m.target_ppi);
+            if let Some(c) = compression {
+                m.compression = match c {
+                    "ccitt-g4" | "ccitt" | "g4" => MonoCompression::CcittG4,
+                    "zip" | "flate" => MonoCompression::Flate,
+                    "retain" => MonoCompression::Retain,
+                    other => return Err(ToolError::InvalidArgs(format!("unknown mono compression {other:?} (ccitt-g4, zip, retain)"))),
+                };
+            }
+        }
         for (key, flag) in [
             ("discard_thumbnails", &mut settings.discard_thumbnails),
             ("discard_alternate_images", &mut settings.discard_alternate_images),
             ("discard_tags", &mut settings.discard_tags),
             ("discard_print_settings", &mut settings.discard_print_settings),
             ("flate_unencoded", &mut settings.flate_unencoded),
+            ("lzw_to_flate", &mut settings.lzw_to_flate),
+            ("compress_structure", &mut settings.compress_structure),
             ("remove_invalid_links", &mut settings.remove_invalid_links),
             ("remove_unreferenced_dests", &mut settings.remove_unreferenced_dests),
         ] {
@@ -1006,10 +1038,14 @@ impl Automation {
             "images_recompressed": o.images_recompressed,
             "image_bytes_before": o.image_bytes_before,
             "image_bytes_after": o.image_bytes_after,
+            "images_ccitt": o.images_ccitt,
             "thumbnails": o.thumbnails,
             "alternate_images": o.alternate_images,
             "tags_removed": o.tags_removed,
             "streams_compressed": o.streams_compressed,
+            "lzw_reencoded": o.lzw_reencoded,
+            "lzw_skipped": o.lzw_skipped,
+            "object_streams": settings.compress_structure,
             "invalid_links": o.invalid_links,
             "invalid_bookmarks": o.invalid_bookmarks,
             "unreferenced_dests": o.unreferenced_dests,

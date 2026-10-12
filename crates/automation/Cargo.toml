@@ -27,6 +27,7 @@ mcp = ["dep:base64"]
 flate2 = { workspace = true }
 pdfcraft-sign = { workspace = true }
 pdfcraft-cos = { workspace = true }
+pdfcraft-filters = { workspace = true }
 pdfcraft-model = { workspace = true }
 pdfcraft-xfa = { workspace = true }
 image = { version = "0.25", default-features = false, features = ["jpeg"] }
