@@ -20,11 +20,15 @@ decode(chain, data, max_output) -> Result<Vec<u8>, FilterError>
 decode_tolerant(chain, data, max_output) -> Result<(Vec<u8>, bool /*partial*/), FilterError>
 encode(filter, params, data) -> Result<Vec<u8>, FilterError>
 encode_flate(data) -> Vec<u8>   // zlib, level 6
+decode_complete(chain, data, max_output) -> Result<Vec<u8>, FilterError>  // strict + LZW EOD required
+encode_ccitt_g4(rows, width, height, black_is_1, max_output) -> Result<Vec<u8>, FilterError>
 ```
 
 - `chain` is applied first to last, as in a `/Filter` array.
 - Image codecs (DCT, JPX, JBIG2, CCITT), `Crypt` and unknown filters anywhere in a chain give `Unsupported`: callers keep such data encoded. Decryption belongs to `crypt`.
 - `max_output` bounds every intermediate buffer (including the pre-predictor buffer) and gives `LimitExceeded(max_output)`.
+- `decode_complete` is `decode` that also refuses LZW data without its end-of-data code: for lossless re-encoding (preflight's LZW fix, the Optimizer), which must not publish a repaired stream.
+- `encode_ccitt_g4` is an original ITU-T T.6 (Group 4, `/K -1`) encoder for one-bit rows in PDF sample layout; output ends with EOFB and is bounded by `max_output`. There is no CCITT decoder here.
 - `decode_tolerant` turns `Corrupt` into "what was decoded so far" plus `partial = true`, then runs the rest of the chain on it (predictors are applied to partial output too). `LimitExceeded` and `Unsupported` are still errors.
 
 ## Behaviour
@@ -42,9 +46,10 @@ encode_flate(data) -> Vec<u8>   // zlib, level 6
 
 - Unit tests per filter with hand-computed vectors (the ISO 32000-2 LZW example, RFC 1951 stored blocks, PNG/TIFF rows).
 - LZW is cross-checked against `weezl` (dev-dependency) in both directions for both early-change settings.
+- The G4 encoder is checked against `hayro-ccitt` (dev-dependency): code tables prefix-free with the expected Kraft sums, a known-answer vector, every bitmap up to 12 pixels in every shape, awkward widths, long runs (make-up and extended make-up codes) and a proptest; `pdfcraft-optimize`'s tests also decode its output with Poppler.
 - `tests/proptests.rs`: encode→decode round trips for every encodable filter × predictor × colors × bpc × columns, two-filter chains, output-limit checks, and fuzz-style no-panic tests (random bytes, random/nonsense params, bit-flipped valid streams).
 - `fuzz/`: a detached cargo-fuzz crate (`cargo +nightly fuzz run decode`, run from `crates/filters/`).
 
 ## Status
 
-M1.1/M1.2 for the general-purpose filters are done. Not yet here: the image codecs (DCT via zune-jpeg, JPX via hayro-jpeg2000, JBIG2, CCITT G3/G4 decode and G4 encode, DCT encode) and Flate encode levels other than 6.
+M1.1/M1.2 for the general-purpose filters are done. Not yet here: the image codecs (DCT via zune-jpeg, JPX via hayro-jpeg2000, JBIG2, CCITT G3/G4 decode, DCT encode) and Flate encode levels other than 6.
