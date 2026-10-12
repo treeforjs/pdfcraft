@@ -303,6 +303,10 @@
 	Certify (visible signature)	Certifikovat (viditelný podpis)
 	Certify (invisible signature)	Certifikovat (neviditelný podpis)
 	Validate all signatures	Ověřit všechny podpisy
+	Timestamp document	Opatřit dokument časovým razítkem
+	Timestamp servers	Servery časových razítek
+	Embed validation evidence	Vložit údaje pro ověření
+	Verification time	Čas ověření
 	Fill & Sign: add text	Vyplnit a podepsat: přidat text
 	Fill & Sign: checkmark	Vyplnit a podepsat: zatržítko
 	Fill & Sign: cross	Vyplnit a podepsat: křížek
