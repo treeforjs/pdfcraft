@@ -646,6 +646,7 @@ fn replace_text_groups_a_strikeout_and_a_caret() {
     let caret = a.iter().find(|d| d.name(b"Subtype") == Some(b"Caret")).unwrap();
     assert_eq!((text(caret, b"Contents").as_str(), caret.name(b"RT")), ("new words", Some(&b"Group"[..])));
     assert!(caret.reference(b"IRT").is_some());
+    assert_ne!(text(strike, b"NM"), text(caret, b"NM"), "each half has its own name");
     let r = rect(caret);
     assert!(r[0] < 200.0 && r[2] > 200.0 && r[1] < 706.0, "at the end of the line, below its baseline: {r:?}");
     // Deleting the strikeout takes the caret with it (the group).

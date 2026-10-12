@@ -205,6 +205,7 @@ fn xfdf_annots(doc: &Document, out: &mut String) {
                 (b"M", "date"),
                 (b"CreationDate", "creationdate"),
                 (b"RT", "replyType"),
+                (b"IT", "intent"),
                 (b"State", "state"),
                 (b"StateModel", "statemodel"),
                 (b"Name", "icon"),
@@ -560,6 +561,11 @@ fn annot_from_xml(node: roxmltree::Node, subtype: &str, page_ref: ObjRef) -> Opt
     }
     if let Some(v) = node.attribute("replyType") {
         d.set(b"RT".to_vec(), Object::name(if v.eq_ignore_ascii_case("group") { "Group" } else { "R" }));
+    }
+    // `/IT` (StrikeOutTextEdit of a replace-text proposal, FreeTextCallout, PolygonCloud…):
+    // a plain name, so only short ASCII alphanumeric values are taken.
+    if let Some(v) = node.attribute("intent").filter(|v| (1..=64).contains(&v.len()) && v.bytes().all(|b| b.is_ascii_alphanumeric())) {
+        d.set(b"IT".to_vec(), Object::name(v));
     }
     if let Some(v) = node.attribute("icon") {
         d.set(b"Name".to_vec(), Object::name(v));

@@ -331,3 +331,52 @@ fn unicode_annotation_colours_are_ignored_without_panicking() {
         assert_eq!(report.comments, 1);
     }
 }
+
+/// The comment dictionaries of page `page`.
+fn annot_dicts(doc: &Document, page: usize) -> Vec<Dict> {
+    let p = pdfcraft_annot::page_refs(doc).unwrap()[page];
+    let list = doc.get(p).as_dict().and_then(|d| d.get(b"Annots").cloned()).map(|a| doc.resolve(&a).as_array().cloned().unwrap_or_default()).unwrap_or_default();
+    list.iter().filter_map(|a| doc.resolve(a).as_dict().cloned()).collect()
+}
+
+/// A replace-text proposal (strikeout with /IT StrikeOutTextEdit and a caret grouped to it by
+/// /IRT and /RT /Group, holding the replacement) survives XFDF and FDF export and import.
+#[test]
+fn replace_text_proposals_round_trip_through_xfdf_and_fdf() {
+    let mut src = blank();
+    let quads = [[100.0, 720.0, 200.0, 720.0, 100.0, 706.0, 200.0, 706.0]];
+    let red = Style { color: [0.89, 0.13, 0.13], opacity: 1.0, width: 1.0, fill: None };
+    let blue = Style { color: [0.0, 0.47, 0.84], opacity: 1.0, width: 1.0, fill: None };
+    let meta = Meta { date: Some("D:20261002120000Z".into()), id: "rt".into() };
+    pdfcraft_annot::add_text_replacement(&mut src, 0, &quads, "new words", "Ada", &red, &blue, &meta).unwrap();
+    let xfdf = export_xfdf(&src, true, false, "form.pdf");
+    assert!(xfdf.contains("intent=\"StrikeOutTextEdit\"") && xfdf.contains("replyType=\"Group\""), "{xfdf}");
+    let fdf = export_fdf(&src, true, false, "form.pdf");
+    for bytes in [xfdf.into_bytes(), fdf] {
+        let mut dst = blank();
+        let r = import(&mut dst, &bytes).unwrap();
+        assert_eq!(r.comments, 2, "{r:?}");
+        let dst = Document::open(Arc::new(write_full(&dst, &SaveOptions::default()).unwrap())).unwrap();
+        let a = annot_dicts(&dst, 0);
+        let strike = a.iter().find(|d| d.name(b"Subtype") == Some(b"StrikeOut")).expect("the strikeout");
+        assert_eq!(strike.name(b"IT"), Some(&b"StrikeOutTextEdit"[..]));
+        let caret = a.iter().find(|d| d.name(b"Subtype") == Some(b"Caret")).expect("the caret");
+        assert_eq!(caret.name(b"RT"), Some(&b"Group"[..]));
+        assert_eq!(caret.get(b"Contents").and_then(|c| c.as_string()).map(|s| s.to_text()).as_deref(), Some("new words"));
+        let parent = caret.reference(b"IRT").map(|r| dst.get(r)).and_then(|p| p.as_dict().cloned()).expect("grouped to a comment");
+        assert_eq!(parent.name(b"Subtype"), Some(&b"StrikeOut"[..]), "grouped with the strikeout");
+        let s = summaries(&dst);
+        assert!(s.iter().any(|c| c.subtype == "Caret" && c.in_reply_to.is_some()));
+    }
+    // Intents that are not plain names are dropped rather than written as odd names.
+    let bad = xfdf_with_intent("Cloud#2F");
+    let mut dst = blank();
+    import(&mut dst, bad.as_bytes()).unwrap();
+    assert!(annot_dicts(&dst, 0).iter().all(|d| d.get(b"IT").is_none()));
+}
+
+fn xfdf_with_intent(intent: &str) -> String {
+    format!(
+        "<?xml version=\"1.0\"?><xfdf xmlns=\"http://ns.adobe.com/xfdf/\"><annots><polygon page=\"0\" rect=\"10,10,50,50\" name=\"p\" intent=\"{intent}\" vertices=\"10,10,50,10,30,50\"/></annots></xfdf>"
+    )
+}

@@ -1988,10 +1988,13 @@ pub fn add_text_replacement(
     let (y0, y1) = (ys.iter().copied().fold(f64::MAX, f64::min), ys.iter().copied().fold(f64::MIN, f64::max));
     let h = ((y1 - y0) * 0.6).clamp(4.0, 24.0);
     let rect = [x - h / 2.0, y0 - h * 0.6, x + h / 2.0, y0 + h * 0.4];
+    // The caret needs its own `/NM`: XFDF threads the group by name (`inreplyto`), and an
+    // import replaces comments that share one.
+    let caret_meta = Meta { date: meta.date.clone(), id: if meta.id.is_empty() { String::new() } else { format!("{}-caret", meta.id) } };
     let c = add_annotation(
         doc,
         &NewAnnotation { page, shape: Shape::Caret { rect }, style: caret.clone(), contents: replacement.into(), author: author.into() },
-        meta,
+        &caret_meta,
     )?;
     let (_, cr) = annot_ref(doc, page, c)?;
     doc.update_dict(cr, |d| {
