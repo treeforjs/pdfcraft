@@ -2,6 +2,8 @@
 
 use std::sync::Arc;
 
+mod support;
+
 use pdfcraft_cos::{Document, Object, PdfString, SaveOptions, write_incremental};
 use pdfcraft_sign::{Modification, SignError, SignOptions, Status, Time, TimestampAuthority, TrustStore, der, pkcs12, signatures};
 
@@ -219,10 +221,7 @@ impl TimestampAuthority for TestTsa {
 #[test]
 fn signing_with_a_timestamp_embeds_a_verified_rfc3161_token() {
     let id = pkcs12::open(&data("ec-p256.p12"), "test").unwrap();
-    let tsa = TestTsa {
-        id: pkcs12::open(&data("rsa-aes.p12"), "test").unwrap(),
-        time: Time { year: 2026, month: 10, day: 6, hour: 12, minute: 0, second: 0 },
-    };
+    let tsa = TestTsa { id: support::timestamp_id(), time: Time { year: 2026, month: 10, day: 6, hour: 12, minute: 0, second: 0 } };
     let signed = pdfcraft_sign::sign_with_timestamp(&open(&fixture()), &id, &opts(), &tsa).unwrap();
     assert!(signed.starts_with(&fixture()), "still an incremental update");
     let anchor = id.chain.first().cloned().unwrap_or_else(|| id.certificate.clone());
@@ -257,11 +256,38 @@ fn a_malformed_timestamp_response_fails_signing_without_a_file() {
 }
 
 #[test]
-fn a_document_timestamp_covers_the_file_and_validates() {
-    let tsa = TestTsa {
-        id: pkcs12::open(&data("rsa-aes.p12"), "test").unwrap(),
-        time: Time { year: 2026, month: 10, day: 6, hour: 12, minute: 0, second: 0 },
+fn verification_time_is_explicit_and_does_not_upgrade_timestamp_trust() {
+    use pdfcraft_sign::{VerificationTime, VerificationTimeSource};
+    let id = pkcs12::open(&data("ec-p256.p12"), "test").unwrap();
+    let tsa = TestTsa { id: support::timestamp_id(), time: Time { year: 2026, month: 10, day: 6, hour: 12, minute: 0, second: 0 } };
+    let signed = pdfcraft_sign::sign_with_timestamp(&open(&fixture()), &id, &opts(), &tsa).unwrap();
+    let doc = open(&signed);
+    let trust = TrustStore { certs: vec![id.certificate.clone(), tsa.id.certificate.clone()] };
+    let check = |trust: &TrustStore, when| {
+        pdfcraft_sign::pdf::list_with_time(&doc, &signed, trust, when).into_iter().find(|signature| signature.signed).unwrap()
     };
+    let automatic = check(&trust, VerificationTime::BestAvailable);
+    assert_eq!(automatic.status, Status::Valid, "{:?}", automatic.details);
+    assert_eq!(automatic.verification_time, Some(tsa.time));
+    assert_eq!(automatic.verification_time_source, VerificationTimeSource::TrustedTimestamp);
+    let claimed = check(&trust, VerificationTime::ClaimedSigningTime);
+    assert_eq!(claimed.verification_time, claimed.signing_time);
+    assert_eq!(claimed.verification_time_source, VerificationTimeSource::ClaimedSigningTime);
+    assert_eq!(claimed.timestamp_time, Some(tsa.time), "policy selection must not mislabel the token itself");
+    let later = Time { year: 2050, month: 1, day: 1, hour: 0, minute: 0, second: 0 };
+    let chosen = check(&trust, VerificationTime::At(later));
+    assert_eq!(chosen.status, Status::Unknown, "expired signer at chosen time: {:?}", chosen.details);
+    assert_eq!(chosen.verification_time, Some(later));
+    assert_eq!(chosen.verification_time_source, VerificationTimeSource::ChosenTime);
+    assert_eq!(chosen.timestamp_time, Some(tsa.time));
+    let untrusted = check(&TrustStore { certs: vec![id.certificate] }, VerificationTime::At(tsa.time));
+    assert_eq!(untrusted.timestamp_time, None, "choosing the timestamp's date cannot confer trust");
+    assert_eq!(untrusted.verification_time_source, VerificationTimeSource::ChosenTime);
+}
+
+#[test]
+fn a_document_timestamp_covers_the_file_and_validates() {
+    let tsa = TestTsa { id: support::timestamp_id(), time: Time { year: 2026, month: 10, day: 6, hour: 12, minute: 0, second: 0 } };
     let stamped = pdfcraft_sign::timestamp_document(&open(&fixture()), &tsa, "D:20261006120000Z").unwrap();
     assert!(stamped.starts_with(&fixture()), "an incremental update");
     let trust_tsa = TrustStore { certs: vec![tsa.id.certificate.clone()] };
@@ -295,10 +321,7 @@ fn a_document_timestamp_covers_the_file_and_validates() {
 
 #[test]
 fn cached_discovery_still_validates_current_timestamp_bytes_ranges_and_trust() {
-    let tsa = TestTsa {
-        id: pkcs12::open(&data("rsa-aes.p12"), "test").unwrap(),
-        time: Time { year: 2026, month: 10, day: 6, hour: 12, minute: 0, second: 0 },
-    };
+    let tsa = TestTsa { id: support::timestamp_id(), time: Time { year: 2026, month: 10, day: 6, hour: 12, minute: 0, second: 0 } };
     let mut source = open(&fixture());
     source
         .update_dict(source.root().unwrap(), |d| {
@@ -374,10 +397,7 @@ fn embedding_ltv_evidence_adds_a_dss_and_keeps_signatures_valid() {
 fn sign_then_ltv_then_timestamp_makes_a_b_lta_file() {
     use pdfcraft_sign::dss::{self, Evidence};
     let id = pkcs12::open(&data("ec-p256.p12"), "test").unwrap();
-    let tsa = TestTsa {
-        id: pkcs12::open(&data("rsa-aes.p12"), "test").unwrap(),
-        time: Time { year: 2026, month: 10, day: 6, hour: 12, minute: 0, second: 0 },
-    };
+    let tsa = TestTsa { id: support::timestamp_id(), time: Time { year: 2026, month: 10, day: 6, hour: 12, minute: 0, second: 0 } };
     let signed = pdfcraft_sign::sign(&open(&fixture()), &id, &opts()).unwrap();
     let ltv = dss::embed(&open(&signed), &Evidence { certs: vec![id.certificate.raw.clone()], ocsps: Vec::new(), crls: Vec::new() }).unwrap();
     let lta = pdfcraft_sign::timestamp_document(&open(&ltv), &tsa, "D:20261006120000Z").unwrap();
@@ -1051,10 +1071,7 @@ fn an_untrusted_timestamp_does_not_set_the_validation_time() {
     let id = pkcs12::open(&data("ec-p256.p12"), "test").unwrap();
     // The TSA claims 2027 (inside the signer's validity) but is not trusted; the signer's own
     // clock says 2040, after the certificate expired.
-    let tsa = TestTsa {
-        id: pkcs12::open(&data("rsa-aes.p12"), "test").unwrap(),
-        time: Time { year: 2027, month: 1, day: 1, hour: 0, minute: 0, second: 0 },
-    };
+    let tsa = TestTsa { id: support::timestamp_id(), time: Time { year: 2027, month: 1, day: 1, hour: 0, minute: 0, second: 0 } };
     let late = SignOptions { date: "D:20400101120000Z".into(), ..opts() };
     let signed = pdfcraft_sign::sign_with_timestamp(&open(&fixture()), &id, &late, &tsa).unwrap();
     let anchor = id.chain.first().cloned().unwrap_or_else(|| id.certificate.clone());
@@ -1073,7 +1090,7 @@ fn an_untrusted_timestamp_does_not_set_the_validation_time() {
 
 #[test]
 fn a_timestamp_token_may_sign_with_a_different_digest_than_its_imprint() {
-    let tsa = pkcs12::open(&data("rsa-aes.p12"), "test").unwrap();
+    let tsa = support::timestamp_id();
     let imprint = pdfcraft_sign::DigestAlg::Sha1.digest(&[b"document"]);
     let q = pdfcraft_sign::timestamp::TimestampQuery::new(pdfcraft_sign::DigestAlg::Sha1, imprint.clone()).unwrap();
     let time = Time { year: 2026, month: 10, day: 6, hour: 12, minute: 0, second: 0 };
@@ -1155,58 +1172,34 @@ fn signing_with_windows_store_identities() {
     }
 }
 
-/// Documenso-style: an AcroForm signature field `Timestamp_1` whose `/V` is the document
-/// timestamp dictionary (`/Type /DocTimeStamp`, `/SubFilter /ETSI.RFC3161`).
+/// A document timestamp held, as ISO 32000-2 §12.8.5 and Documenso's `Timestamp_1` have it, by
+/// an AcroForm signature field whose `/V` is the document timestamp dictionary (`/Type
+/// /DocTimeStamp`, `/SubFilter /ETSI.RFC3161`). `timestamp_document` writes it that way itself
+/// (it used to leave the dictionary unreferenced, which other validators never see).
 fn fixture_timestamped_in_a_field(tsa: &TestTsa) -> Vec<u8> {
-    let mut value_num = 0;
-    let base = edit_after(&fixture(), |doc| {
-        let field = doc.add(Object::Null);
-        // `timestamp_document` adds its dictionary next.
-        value_num = field.num + 1;
-        let at = |num| Object::Ref(pdfcraft_cos::ObjRef { num, generation: 0 });
-        let mut widget = pdfcraft_cos::Dict::new();
-        for (k, v) in [
-            ("Type", Object::name("Annot")),
-            ("Subtype", Object::name("Widget")),
-            ("FT", Object::name("Sig")),
-            ("T", Object::String(PdfString::text("Timestamp_1"))),
-            ("Rect", Object::Array(vec![Object::Int(0), Object::Int(0), Object::Int(0), Object::Int(0)])),
-            ("P", at(3)),
-            ("F", Object::Int(132)),
-            ("V", at(value_num)),
-        ] {
-            widget.set(k.as_bytes().to_vec(), v);
-        }
-        doc.set(field, Object::Dict(widget));
-        let root = doc.root().unwrap();
-        doc.update_dict(root, |c| {
-            if let Some(Object::Dict(form)) = c.get_mut(b"AcroForm")
-                && let Some(Object::Array(fields)) = form.get_mut(b"Fields")
-            {
-                fields.push(Object::Ref(field));
-            }
-        })
-        .unwrap();
+    let stamped = pdfcraft_sign::timestamp_document(&open(&fixture()), tsa, "D:20261006120000Z").unwrap();
+    let doc = open(&stamped);
+    let catalog = doc.get(doc.root().unwrap()).as_dict().cloned().unwrap();
+    let form = doc.resolve(catalog.get(b"AcroForm").unwrap()).as_dict().cloned().unwrap();
+    let fields = doc.resolve(form.get(b"Fields").unwrap()).as_array().cloned().unwrap();
+    let held = fields.iter().filter_map(|f| doc.resolve(f).as_dict().cloned()).find_map(|f| {
+        let value = doc.resolve(f.get(b"V")?).as_dict().cloned()?;
+        (value.name(b"Type") == Some(&b"DocTimeStamp"[..])).then_some(f)
     });
-    let stamped = pdfcraft_sign::timestamp_document(&open(&base), tsa, "D:20261006120000Z").unwrap();
-    let held = open(&stamped).get(pdfcraft_cos::ObjRef { num: value_num, generation: 0 });
-    assert_eq!(held.as_dict().and_then(|d| d.name(b"Type")), Some(&b"DocTimeStamp"[..]), "the field holds the timestamp");
+    assert!(held.is_some(), "the field holds the timestamp");
     stamped
 }
 
 #[test]
 fn a_document_timestamp_held_by_a_signature_field_is_checked_as_a_timestamp() {
-    let tsa = TestTsa {
-        id: pkcs12::open(&data("rsa-aes.p12"), "test").unwrap(),
-        time: Time { year: 2026, month: 10, day: 6, hour: 12, minute: 0, second: 0 },
-    };
+    let tsa = TestTsa { id: support::timestamp_id(), time: Time { year: 2026, month: 10, day: 6, hour: 12, minute: 0, second: 0 } };
     let stamped = fixture_timestamped_in_a_field(&tsa);
     let trust = TrustStore { certs: vec![tsa.id.certificate.clone()] };
     let all = signatures(&open(&stamped), &stamped, &trust);
     let stamps: Vec<_> = all.iter().filter(|s| s.signed).collect();
     assert_eq!(stamps.len(), 1, "listed once, not as field and as standalone: {:?}", all.iter().map(|s| &s.field).collect::<Vec<_>>());
     let s = stamps[0];
-    assert_eq!(s.field, "Timestamp_1");
+    assert_eq!(s.field, "DocumentTimestamp1");
     assert!(s.doc_timestamp && s.timestamp);
     assert_eq!(s.sub_filter.as_deref(), Some("ETSI.RFC3161"));
     assert_eq!(s.timestamp_time, Some(tsa.time));
@@ -1229,7 +1222,7 @@ fn a_document_timestamp_held_by_a_signature_field_is_checked_as_a_timestamp() {
 #[test]
 fn a_field_timestamp_from_a_trusted_tsa_outside_its_validity_is_not_valid() {
     let tsa = TestTsa {
-        id: pkcs12::open(&data("rsa-aes.p12"), "test").unwrap(),
+        id: support::timestamp_id(),
         // Before the TSA certificate's validity (it starts in October 2026).
         time: Time { year: 2020, month: 1, day: 1, hour: 0, minute: 0, second: 0 },
     };
@@ -1244,10 +1237,7 @@ fn a_field_timestamp_from_a_trusted_tsa_outside_its_validity_is_not_valid() {
 
 #[test]
 fn a_standalone_timestamp_typed_sig_by_an_older_writer_is_still_a_timestamp() {
-    let tsa = TestTsa {
-        id: pkcs12::open(&data("rsa-aes.p12"), "test").unwrap(),
-        time: Time { year: 2026, month: 10, day: 6, hour: 12, minute: 0, second: 0 },
-    };
+    let tsa = TestTsa { id: support::timestamp_id(), time: Time { year: 2026, month: 10, day: 6, hour: 12, minute: 0, second: 0 } };
     let stamped = pdfcraft_sign::timestamp_document(&open(&fixture()), &tsa, "D:20261006120000Z").unwrap();
     let s = signatures(&open(&stamped), &stamped, &TrustStore::default()).into_iter().find(|s| s.doc_timestamp).unwrap();
     assert_eq!(s.status, Status::Unknown, "{:?}", s.details);

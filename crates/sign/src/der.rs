@@ -22,6 +22,7 @@ pub mod tag {
     pub const OCTET_STRING_SEGMENTS: u8 = 0x24;
     pub const NULL: u8 = 0x05;
     pub const OID: u8 = 0x06;
+    pub const ENUMERATED: u8 = 0x0A;
     pub const UTF8_STRING: u8 = 0x0C;
     pub const PRINTABLE_STRING: u8 = 0x13;
     pub const T61_STRING: u8 = 0x14;

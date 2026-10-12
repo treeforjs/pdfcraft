@@ -58,6 +58,7 @@ js-sys = "0.3"
 web-sys = { version = "0.3", features = ["Window", "Document", "Element", "HtmlElement", "HtmlAnchorElement", "Blob", "BlobPropertyBag", "Url"] }
 
 [dev-dependencies]
+pdfcraft-sign = { workspace = true }
 pdfcraft-xfa = { workspace = true }
 pdfcraft-cos = { workspace = true }
 egui_kittest = { workspace = true, features = ["eframe", "wgpu"] }

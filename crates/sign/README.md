@@ -24,20 +24,24 @@ for s in signatures(&doc, &bytes, &trust) {                                // li
   with a zero-filled `/Contents` and fixed-width `/ByteRange`, which are then patched in
   place. Encrypted documents are refused for now.
 - **Timestamps (PAdES B-T):** the `timestamp` module builds and parses RFC 3161 requests,
-  responses and TSTInfo tokens (size-capped, imprint- and signature-checked). `sign_with_timestamp`
+  responses and TSTInfo tokens (size-capped, imprint-, nonce-, policy- and signature-checked).
+  TSA certificates need a critical, exclusive timeStamping EKU. Online requests use a fresh
+  random nonce. `sign_with_timestamp`
   attaches the TSA's token as an unsigned attribute over the signature value; the transport is
   the caller's (`TimestampAuthority` — this crate never opens a socket). Validation verifies
   embedded tokens; when the TSA chains to the trust store it reports the trusted time in
   `SignatureInfo::timestamp_time`, which then anchors certificate-validity and revocation
-  checks. An untrusted TSA's time is reported as an unverified timestamp and never used as the
-  validation time (the signer's claimed time is). `timestamp::respond` is the TSA-side signer behind the
+  checks. An untrusted TSA's time never establishes trusted time. `VerificationTime` also
+  supports the claimed signing time or a caller-chosen UTC date; `verification_time_source`
+  distinguishes these from trusted time. `timestamp::respond` is the TSA-side signer behind the
   deterministic test authority.
 - **Document timestamps and LTV:** `timestamp_document` appends a standalone RFC 3161
   document timestamp (`/ETSI.RFC3161`) covering the whole file; validation discovers and
   verifies these dictionaries (imprint over the signed bytes, token signature, TSA cert
   validity). `dss::embed` merges revocation evidence into the catalog's `/DSS` with `/VRI`
   entries keyed per signature (uppercase-hex SHA-1 of `/Contents`), deduplicating
-  byte-identical blobs — sign → DSS → timestamp makes a B-LTA file, and the change classifier
+  byte-identical blobs. Sign → validated DSS → timestamp supplies the building blocks for
+  long-term validation, but is not itself proof of PAdES B-LT/B-LTA compliance. The change classifier
   treats the store as a permitted change: only objects reached through `/Certs`, `/CRLs`,
   `/OCSPs` and `/VRI` with the shape of their role, and new or only grown since the signature,
   count (a `/DSS` entry naming a page's contents, or a `/Type /DSS` label, does not).
@@ -46,8 +50,14 @@ for s in signatures(&doc, &bytes, &trust) {                                // li
   CertID hash matching, validity windows); validation checks embedded evidence against the
   signer's chain and a verified revocation invalidates the signature.
 
-Not yet: revocation fetching (AIA/CRLDP extraction and a fetcher), timestamp-server
-configuration, FieldMDP locks, certificate security, smart cards and PKCS #11 tokens.
+`evidence::check` validates bounded local DER evidence against the document's certificate
+chains and selected verification time before the engine embeds it. Unrelated or unverifiable
+CRLs/OCSP responses are refused; coverage and certificate trust are separate. The engine's
+native HTTP transport, automation tools and desktop dialogs are documented in
+[`docs/signature-workflows.md`](../../docs/signature-workflows.md).
+
+Not yet: revocation fetching (AIA/CRLDP extraction and a fetcher), FieldMDP locks,
+certificate security, smart cards and PKCS #11 tokens.
 macOS Keychain and Windows Current User Personal (My) store identities sign through
 `ExternalKey` without exporting private keys. Windows CNG supports RSA PKCS #1 v1.5 and
 ECDSA P-256/P-384; the store integration is tested with software-backed keys.

@@ -3592,6 +3592,7 @@ dependencies = [
  "pdfcraft-organize",
  "pdfcraft-platform",
  "pdfcraft-render",
+ "pdfcraft-sign",
  "pdfcraft-xfa",
  "png 0.18.1",
  "serde_json",
@@ -3705,7 +3706,10 @@ dependencies = [
  "pdfcraft-xfa",
  "pdfcraft-xfdf",
  "png 0.18.1",
+ "rustls-native-certs",
+ "serde",
  "thiserror 2.0.21",
+ "ureq",
  "url",
 ]
 
@@ -3924,6 +3928,7 @@ dependencies = [
  "pdfcraft-model",
  "pdfcraft-platform",
  "pdfcraft-render",
+ "pdfcraft-sign",
  "pdfcraft-xfa",
  "png 0.18.1",
  "pollster 1.0.1",

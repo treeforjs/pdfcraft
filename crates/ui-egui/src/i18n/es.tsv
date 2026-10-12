@@ -231,6 +231,10 @@
 	Certify (visible signature)	Certificar (firma visible)
 	Certify (invisible signature)	Certificar (firma invisible)
 	Validate all signatures	Validar todas las firmas
+	Timestamp document	Añadir marca de tiempo al documento
+	Timestamp servers	Servidores de marca de tiempo
+	Embed validation evidence	Incrustar pruebas de validación
+	Verification time	Hora de verificación
 	Signatures panel	Panel de firmas
 	Fill & Sign: add text	Rellenar y firmar: añadir texto
 	Fill & Sign: checkmark	Rellenar y firmar: marca de verificación

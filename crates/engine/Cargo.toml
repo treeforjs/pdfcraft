@@ -33,6 +33,7 @@ pdfcraft-fonts = { workspace = true }
 pdfcraft-create = { workspace = true }
 pdfcraft-model = { workspace = true }
 thiserror = { workspace = true }
+serde = { workspace = true }
 png = "0.18"
 # Already in the graph (url and idna through webbrowser, icu_properties through boa): they show
 # the host of a document's link the way the browser reads it (links::display_host).
@@ -43,3 +44,7 @@ icu_properties = "2.3"
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # Already in the graph through lopdf; used only for the local UTC offset ("today").
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
+# Explicitly configured RFC 3161 transport, using the same OS roots and proxy behavior as
+# the desktop update client. No bundled root list or automatic network access.
+ureq = { version = "3.4", default-features = false, features = ["rustls-no-provider", "_ring"] }
+rustls-native-certs = "0.8"

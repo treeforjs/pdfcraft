@@ -998,6 +998,10 @@
 	Stamp palette	Палитра с печати
 	Timestamp	Времеви печат
 	Validate all signatures	Провери всички подписи
+	Timestamp document	Добавяне на времеви печат към документа
+	Timestamp servers	Сървъри за времеви печат
+	Embed validation evidence	Вграждане на данни за валидиране
+	Verification time	Време на проверка
 	Certify (visible signature)	Сертифицирай (видим подпис)
 	Certify (invisible signature)	Сертифицирай (невидим подпис)
 	Output preview	Преглед на изхода

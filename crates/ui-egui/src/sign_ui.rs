@@ -90,6 +90,8 @@ pub struct SignDraft {
     pub appearance: Appearance,
     pub new_id: NewIdDraft,
     pub error: Option<String>,
+    pub timestamp_server: Option<usize>,
+    pub timestamp_network: bool,
 }
 
 impl SignDraft {
@@ -107,6 +109,8 @@ impl SignDraft {
             appearance: Appearance::default(),
             new_id: NewIdDraft::default(),
             error: None,
+            timestamp_server: None,
+            timestamp_network: false,
         }
     }
 }
@@ -348,6 +352,8 @@ impl PdfCraftApp {
             appearance: d.appearance.clone(),
             ..SignOptions::default()
         };
+        let cancellation = pdfcraft_engine::signature_workflow::SignatureCancellation::default();
+        let authority = self.signature_authority(d.timestamp_server, d.timestamp_network, cancellation.clone())?;
         // Signing saves, as in Acrobat: choose where (a cancelled save cancels signing). The
         // document is signed once the user has chosen.
         let name = self.session.get(doc_id).map(|d| d.name.clone()).unwrap_or_default();
@@ -357,6 +363,12 @@ impl PdfCraftApp {
             // has said why already.
             if !app.commit_typing_in(doc_id) {
                 return Err(String::new());
+            }
+            if let Some(authority) = authority {
+                let job = app.session.signature_job(doc_id).map_err(|e| e.to_string())?;
+                return app.spawn_signature_job(doc_id, path, cancellation, move || {
+                    job.sign(&id, opts, Some(&authority)).map(|r| (r, Vec::new())).map_err(|e| e.to_string())
+                });
             }
             let signed = app.session.sign(doc_id, &id, opts).map_err(|e| e.to_string())?;
             crate::editing::write_atomically(&path.to_string_lossy(), signed.as_slice()).map_err(|e| format!("Could not save: {e}"))?;
@@ -743,6 +755,12 @@ fn sign_as(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> bool {
         ui.end_row();
     });
     ui.add_space(6.0);
+    ui.label("Timestamp (optional)");
+    crate::timestamp_ui::server_choice(ui, &app.timestamp_servers, &mut d.timestamp_server, true);
+    if d.timestamp_server.is_some() {
+        ui.checkbox(&mut d.timestamp_network, "Allow a timestamp request to this server");
+    }
+    ui.label("Configure servers in Use a certificate → Timestamp servers.");
     error(ui, &d.error);
     ui.horizontal(|ui| {
         if widgets::pill_button(ui, tl!("Back"), false).clicked() {

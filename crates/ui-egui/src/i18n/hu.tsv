@@ -208,6 +208,10 @@
 	Certify (visible signature)	Hitelesítés (látható aláírás)
 	Certify (invisible signature)	Hitelesítés (láthatatlan aláírás)
 	Validate all signatures	Összes aláírás ellenőrzése
+	Timestamp document	Dokumentum időbélyegzése
+	Timestamp servers	Időbélyeg-kiszolgálók
+	Embed validation evidence	Érvényesítési bizonyítékok beágyazása
+	Verification time	Ellenőrzési időpont
 	Signatures panel	Aláírások panel
 	Fill & Sign: add text	Kitöltés és aláírás: szöveg hozzáadása
 	Fill & Sign: checkmark	Kitöltés és aláírás: pipa

@@ -12,6 +12,8 @@ const MAX_EVIDENCE: usize = 2 * 1024 * 1024;
 
 const ID_PKIX_OCSP_BASIC: &str = "1.3.6.1.5.5.7.48.1.1";
 const EKU_OCSP_SIGNING: &str = "1.3.6.1.5.5.7.3.9";
+/// Real responses embed the responder certificate and perhaps its issuers; more is hostile.
+const MAX_RESPONSE_CERTS: usize = 16;
 
 /// What a piece of revocation evidence says about a certificate at a point in time.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -165,14 +167,15 @@ enum ResponderId {
 }
 
 /// A parsed OCSP response (RFC 6960 §4.2.1): the responder's identity, per-certificate
-/// responses, and the delegated responder's certificate when it is embedded.
+/// responses, and the certificates embedded to identify a delegated responder.
 pub struct OcspResponse {
     tbs: Vec<u8>,
     sig_alg: Vec<u8>,
     signature: Vec<u8>,
     responder_id: ResponderId,
+    pub produced_at: Time,
     pub responses: Vec<SingleResponse>,
-    responder_cert: Option<Certificate>,
+    certs: Vec<Certificate>,
 }
 
 impl OcspResponse {
@@ -181,7 +184,9 @@ impl OcspResponse {
             return Err(bad("OCSP response is empty or exceeds the 2 MiB limit"));
         }
         let resp = Tlv::parse_all(bytes)?.expect(tag::SEQUENCE, "OCSPResponse")?.children()?;
-        let status = resp.first().ok_or_else(|| bad("missing responseStatus"))?.u64()?;
+        let status = resp.first().ok_or_else(|| bad("missing responseStatus"))?.expect(tag::ENUMERATED, "responseStatus")?;
+        let [status] = status.value else { return Err(bad("invalid responseStatus")) };
+        let status = *status;
         if status != 0 {
             return Err(bad(format!("responder reported an error (status {status})")));
         }
@@ -196,16 +201,17 @@ impl OcspResponse {
         let tbs = it.next().ok_or_else(|| bad("BasicOCSPResponse"))?;
         let alg = it.next().ok_or_else(|| bad("BasicOCSPResponse"))?;
         let signature = it.next().ok_or_else(|| bad("BasicOCSPResponse"))?.expect(tag::BIT_STRING, "signature")?.bits()?.to_vec();
-        let mut responder_cert = None;
+        // certs [0] EXPLICIT SEQUENCE OF Certificate OPTIONAL (RFC 6960 §4.2.1): the explicit
+        // tag wraps one SEQUENCE OF, whose children are the certificates.
+        let mut certs = Vec::new();
         for t in it {
             if t.tag == tag::ctx(0) {
-                for c in t.children()? {
-                    if c.tag == tag::SEQUENCE
-                        && let Ok(cert) = Certificate::parse(c.raw)
-                    {
-                        responder_cert.get_or_insert(cert);
-                    }
+                let list = t.inner()?.expect(tag::SEQUENCE, "BasicOCSPResponse certs")?.children()?;
+                if list.len() > MAX_RESPONSE_CERTS {
+                    return Err(bad(format!("OCSP response embeds more than {MAX_RESPONSE_CERTS} certificates")));
                 }
+                // An unreadable certificate cannot identify the responder; it is skipped.
+                certs.extend(list.iter().filter(|c| c.tag == tag::SEQUENCE).filter_map(|c| Certificate::parse(c.raw).ok()));
             }
         }
         let fields = tbs.children()?;
@@ -219,7 +225,7 @@ impl OcspResponse {
             t if t == tag::ctx(2) => ResponderId::ByKey(Tlv::parse_all(rid.value)?.expect(tag::OCTET_STRING, "byKey responderID")?.value.to_vec()),
             _ => return Err(bad("responderID")),
         };
-        let _produced_at = f.next().ok_or_else(|| bad("ResponseData"))?.time()?;
+        let produced_at = f.next().ok_or_else(|| bad("ResponseData"))?.time()?;
         let mut responses = Vec::new();
         for single in f.next().ok_or_else(|| bad("ResponseData"))?.children()? {
             let s = single.children()?;
@@ -250,13 +256,15 @@ impl OcspResponse {
             let next_update = s.get(3).filter(|t| t.tag == tag::ctx(0)).map(|t| t.inner().and_then(|g| g.time())).transpose()?;
             responses.push(SingleResponse { cert_id, status, this_update, next_update });
         }
-        Ok(OcspResponse { tbs: tbs.raw.to_vec(), sig_alg: alg.raw.to_vec(), signature, responder_id, responses, responder_cert })
+        Ok(OcspResponse { tbs: tbs.raw.to_vec(), sig_alg: alg.raw.to_vec(), signature, responder_id, produced_at, responses, certs })
     }
 
     /// Check `cert` (issued by `issuer`) at `at`. The responder must be the issuer itself, or
-    /// a delegated responder with the OCSP-signing EKU whose certificate is issued by the
-    /// issuer; the response signature and CertID must match, and `at` must fall inside the
-    /// response window.
+    /// a delegated responder with the OCSP-signing EKU whose embedded certificate is issued by
+    /// the issuer and valid when the response was produced; the response signature and CertID
+    /// must match, and `at` must fall inside the response window. A response without
+    /// `nextUpdate` has no upper bound here (RFC 6960 §4.2.2.1 leaves freshness to local
+    /// policy, and no maximum-age policy is configured yet).
     pub fn check(&self, cert: &Certificate, issuer: &Certificate, at: Time) -> RevocationStatus {
         // Who signed the response? The issuer identified by responderID, or a delegated,
         // embedded responder identified the same way.
@@ -265,24 +273,29 @@ impl OcspResponse {
                 if *name == issuer.subject.raw {
                     Some(issuer)
                 } else {
-                    self.responder_cert.as_ref().filter(|c| *name == c.subject.raw)
+                    self.certs.iter().find(|c| *name == c.subject.raw)
                 }
             }
             ResponderId::ByKey(hash) => {
                 if *hash == DigestAlg::Sha1.digest(&[&issuer.public_key.key_bits()]) {
                     Some(issuer)
                 } else {
-                    self.responder_cert.as_ref().filter(|c| *hash == DigestAlg::Sha1.digest(&[&c.public_key.key_bits()]))
+                    self.certs.iter().find(|c| *hash == DigestAlg::Sha1.digest(&[&c.public_key.key_bits()]))
                 }
             }
         };
         let Some(responder) = responder else { return RevocationStatus::Unknown };
         // A delegated responder must carry the OCSP-signing EKU and be issued by the issuer.
-        if responder.subject.raw != issuer.subject.raw {
+        // Delegation is decided by which certificate was selected, not by its subject name: an
+        // embedded certificate that merely copies the issuer's name is still a delegate.
+        if !std::ptr::eq(responder, issuer) {
             if responder.issuer.raw != issuer.subject.raw || !responder.signed_by(&issuer.public_key) {
                 return RevocationStatus::Unknown;
             }
             if !responder.extended_key_usage.as_ref().is_some_and(|e| e.iter().any(|o| o == EKU_OCSP_SIGNING)) {
+                return RevocationStatus::Unknown;
+            }
+            if !responder.valid_at(self.produced_at) {
                 return RevocationStatus::Unknown;
             }
         }

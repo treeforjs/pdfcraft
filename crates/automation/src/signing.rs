@@ -33,7 +33,7 @@ pub(crate) fn cert_json(c: &Certificate) -> Value {
 }
 
 impl Automation {
-    fn sig_json(&self, a: &Args, s: &SignatureInfo) -> Result<Value> {
+    pub(crate) fn sig_json(&self, a: &Args, s: &SignatureInfo) -> Result<Value> {
         let doc = self.doc(a)?;
         let rect = match (s.page, s.rect) {
             (Some(p), Some(r)) if s.visible => doc.info.pages.get(p).map(|pi| {
@@ -68,6 +68,13 @@ impl Automation {
             "algorithm": s.algorithm,
             "timestamp": s.timestamp,
             "timestamp_time": s.timestamp_time.map(|t| t.to_string()),
+            "verification_time": s.verification_time.map(|t| t.to_string()),
+            "verification_time_source": match s.verification_time_source {
+                sign::VerificationTimeSource::TrustedTimestamp => "trusted_timestamp",
+                sign::VerificationTimeSource::ClaimedSigningTime => "claimed_signing_time",
+                sign::VerificationTimeSource::ChosenTime => "chosen_time",
+                sign::VerificationTimeSource::Unavailable => "unavailable",
+            },
             "modification": modification,
             "changes": changes,
             "details": s.details,
@@ -182,7 +189,11 @@ impl Automation {
             certify,
             ..SignOptions::default()
         };
-        let signed = self.session.sign(doc_id, &id, opts).map_err(failed)?;
+        let authority = self.timestamp_authority(a)?;
+        let job = self.session.signature_job(doc_id).map_err(failed)?;
+        let result = job.sign(&id, opts, authority.as_ref().map(|a| a as &dyn sign::TimestampAuthority)).map_err(failed)?;
+        self.session.check_signature_result(&result).map_err(failed)?;
+        let signed = result.bytes;
         write_atomic(&out, &signed)?;
         let path = out.to_string_lossy().into_owned();
         self.session.mark_signed(doc_id, signed.clone(), Some(path.clone())).map_err(failed)?;

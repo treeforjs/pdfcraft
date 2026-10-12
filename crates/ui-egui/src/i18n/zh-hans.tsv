@@ -1005,6 +1005,10 @@
 	Stamp palette	图章面板
 	Timestamp	时间戳
 	Validate all signatures	验证所有签名
+	Timestamp document	为文档添加时间戳
+	Timestamp servers	时间戳服务器
+	Embed validation evidence	嵌入验证证据
+	Verification time	验证时间
 	Certify (visible signature)	认证（可见签名）
 	Certify (invisible signature)	认证（不可见签名）
 	Output preview	输出预览

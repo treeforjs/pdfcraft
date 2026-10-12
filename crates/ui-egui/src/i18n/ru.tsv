@@ -231,6 +231,10 @@
 	Certify (visible signature)	Сертификат (видимая подпись)
 	Certify (invisible signature)	Сертификат (невидимая подпись)
 	Validate all signatures	Проверить все подписи
+	Timestamp document	Поставить метку времени на документ
+	Timestamp servers	Серверы меток времени
+	Embed validation evidence	Встроить данные для проверки
+	Verification time	Время проверки
 	Signatures panel	Панель подписей
 	Fill & Sign: add text	Заполнить и подписать: добавить текст
 	Fill & Sign: checkmark	Заполнить и подписать: галочка

@@ -25,6 +25,7 @@ pub mod optimizer;
 pub mod preflight;
 pub mod reader_selection;
 pub mod signature_image;
+pub mod signature_workflow;
 pub mod summary;
 pub mod text_preview;
 mod upright_image;

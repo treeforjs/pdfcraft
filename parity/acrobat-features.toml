@@ -6012,10 +6012,10 @@ area = "H"
 tier = "P1"
 milestone = "M9"
 status = "partial"
-commands = []
-tools = []
-evidence = ["crates/sign/tests/pdf.rs::a_document_timestamp_covers_the_file_and_validates"]
-notes = "timestamp_document appends a standalone /ETSI.RFC3161 signature dictionary over the whole file; validation discovers and verifies these (imprint, token signature, TSA cert validity) and reports the trusted time. Missing: automation tool and timestamp-server configuration (transport is caller-injected)."
+commands = ["sign.timestamp"]
+tools = ["sign_timestamp"]
+evidence = ["crates/sign/tests/pdf.rs::a_document_timestamp_covers_the_file_and_validates", "crates/sign/tests/timestamp_workflow.rs::a_document_timestamp_is_the_value_of_an_invisible_signature_field", "crates/sign/tests/timestamp_workflow.rs::openssl_independently_verifies_the_original_rfc3161_reply", "crates/engine/tests/signature_workflow.rs::timestamp_local_server_saves_reopens_and_reports_trusted_time", "crates/automation/tests/signature_workflow.rs::automation_signature_timestamp_and_document_timestamp_use_opted_in_local_server"]
+notes = "timestamp_document appends an /ETSI.RFC3161 document timestamp as the value of an invisible signature field (DocumentTimestampN, AcroForm /SigFlags 3; it used to be an unreferenced dictionary other validators could not find); validation verifies imprint, token signature, TSA EKU and validity, and reports trusted time only for a trusted TSA. The engine sends the request over a bounded native transport (HTTPS, or HTTP to a literal loopback IP; nonce, policy, 4 MiB, 1-30 s, no redirects, cancellation) and sign_timestamp saves the incremental revision. Checked end to end with pdfcraft-cli run against a loopback OpenSSL TSA, with openssl ts -verify on the reply and on the embedded token. Missing: authenticated TSA profiles, revocation of the TSA chain fetched online, web transport; native UI dialog not yet exercised outside kittest."
 
 [[feature]]
 id = "sign.timestamp-servers"
@@ -6023,11 +6023,11 @@ title = "Configure timestamp servers"
 area = "H"
 tier = "P1"
 milestone = "M9"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["sign.timestamp_servers"]
+tools = ["sign_timestamp"]
+evidence = ["crates/engine/tests/signature_workflow.rs::server_and_verification_dates_are_strictly_validated", "crates/engine/tests/signature_workflow.rs::transport_refuses_untrusted_wrong_mime_and_redirect_responses", "crates/engine/tests/signature_workflow.rs::transport_bounds_response_size_deadline_and_in_flight_cancellation"]
+notes = "Server profiles (name, URL, optional policy OID, 1-30 s timeout, require-trusted-authority) are validated: HTTPS with system roots, HTTP only for literal loopback IPs, no URL credentials, fragments or redirects. No server is configured by default and every request needs explicit consent (allow_network in automation). Missing: authenticated TSA accounts, per-profile TLS pinning."
 
 [[feature]]
 id = "sign.pades-bt"
@@ -6037,9 +6037,9 @@ tier = "P1"
 milestone = "M9"
 status = "partial"
 commands = []
-tools = []
-evidence = ["crates/sign/tests/pdf.rs::signing_with_a_timestamp_embeds_a_verified_rfc3161_token"]
-notes = "Sign with an embedded RFC 3161 token (sign_with_timestamp): imprint and TSA signature verified at signing and validation time, trusted time reported. Missing: timestamp-server configuration and a fetcher (transport is caller-injected), the standalone document timestamp, automation tool."
+tools = ["sign_document"]
+evidence = ["crates/sign/tests/pdf.rs::signing_with_a_timestamp_embeds_a_verified_rfc3161_token", "crates/sign/tests/timestamp_workflow.rs::response_must_match_nonce_and_requested_policy", "crates/sign/tests/timestamp_workflow.rs::tsa_certificate_requires_critical_exclusive_timestamp_usage", "crates/automation/tests/signature_workflow.rs::automation_signature_timestamp_and_document_timestamp_use_opted_in_local_server"]
+notes = "Sign with an embedded RFC 3161 token (sign_with_timestamp, or sign_document with timestamp_server and allow_network): fresh nonce, policy match, critical exclusive timeStamping EKU, imprint and TSA signature verified; trusted time only for a trusted TSA. Missing: online revocation for the TSA chain; no B-T conformance validator has been run."
 
 [[feature]]
 id = "sign.ltv"
@@ -6048,10 +6048,10 @@ area = "H"
 tier = "P1"
 milestone = "M9"
 status = "partial"
-commands = []
-tools = []
-evidence = ["crates/sign/tests/pdf.rs::embedding_ltv_evidence_adds_a_dss_and_keeps_signatures_valid", "crates/sign/tests/pdf.rs::an_embedded_verified_revocation_invalidates_the_signature"]
-notes = "dss::embed merges caller-supplied evidence into the catalog /DSS with /VRI entries per signature, deduplicating blobs, as a permitted incremental change; revocation.rs verifies the embedded CRLs and OCSP responses (signature, responder identity, CertID, window) and a verified revocation invalidates the signature. Missing: fetching evidence, automation tool."
+commands = ["sign.embed_evidence"]
+tools = ["sign_embed_evidence"]
+evidence = ["crates/sign/tests/pdf.rs::embedding_ltv_evidence_adds_a_dss_and_keeps_signatures_valid", "crates/sign/tests/pdf.rs::an_embedded_verified_revocation_invalidates_the_signature", "crates/sign/tests/evidence_workflow.rs::verified_local_evidence_preserves_signature_bytes_and_never_grants_trust", "crates/sign/tests/evidence_workflow.rs::timestamp_authority_chains_are_part_of_revocation_coverage", "crates/sign/tests/evidence_workflow.rs::evidence_limits_and_unsigned_documents_fail_before_embedding", "crates/automation/tests/signature_workflow.rs::sign_evidence_reopen_and_selected_time_tools_preserve_trust_and_signed_prefix"]
+notes = "sign_embed_evidence validates caller-supplied local DER (64 files, 2 MiB each, 32 MiB total): certificate/CRL/OCSP syntax, cryptographic association with signer, signature-timestamp and document-timestamp authority chains, and the selected verification time; unrelated or unverifiable evidence is refused before saving, revocation wins over good data, coverage is reported per certificate and role, and certificates are never trusted by import. dss::embed then writes /DSS and /VRI incrementally. Checked end to end with pdfcraft-cli and OpenSSL-made CRL and delegated OCSP evidence. Missing: fetching evidence (AIA/CRLDP), freshness/maximum-age policy (a response without nextUpdate has no upper bound), and evidence newer than the verification time is only accepted when a time inside its window is selected."
 
 [[feature]]
 id = "sign.pades-blta"
@@ -6061,9 +6061,9 @@ tier = "P1"
 milestone = "M9"
 status = "partial"
 commands = []
-tools = []
-evidence = ["crates/sign/tests/pdf.rs::sign_then_ltv_then_timestamp_makes_a_b_lta_file"]
-notes = "The B-LT/B-LTA chain works with caller-supplied evidence: sign, embed DSS (B-LT), then append a document timestamp over the result (B-LTA); earlier signatures stay valid with the store classified as a permitted change. Missing: OCSP/CRL verification of the evidence, re-timestamping automation."
+tools = ["sign_embed_evidence", "sign_timestamp"]
+evidence = ["crates/sign/tests/pdf.rs::sign_then_ltv_then_timestamp_makes_a_b_lta_file", "crates/automation/tests/signature_workflow.rs::automation_signature_timestamp_and_document_timestamp_use_opted_in_local_server"]
+notes = "Building blocks exist: sign, embed verified local evidence (sign_embed_evidence, optionally followed by a document timestamp), then sign_timestamp; earlier signatures stay valid with the store classified as a permitted change. This is not a B-LT/B-LTA conformance claim: no conformance validator has been run, evidence is not fetched, archive renewal policy is absent, and DSS revisions are also labelled metadata/form-fill changes by the classifier."
 
 [[feature]]
 id = "sign.ocsp-crl"
@@ -6074,8 +6074,8 @@ milestone = "M9"
 status = "partial"
 commands = []
 tools = []
-evidence = ["crates/sign/tests/crypto.rs::crls_verify_and_report_revocation", "crates/sign/tests/crypto.rs::ocsp_responses_verify_and_match_the_certificate", "crates/sign/tests/pdf.rs::an_embedded_verified_revocation_invalidates_the_signature"]
-notes = "RFC 5280 CRLs and RFC 6960 OCSP responses are parsed and verified (issuer/responder signature, delegated responder's OCSP-signing EKU, CertID hash match, validity window) and checked against the DSS during validation. Missing: network fetching of fresh evidence and the OS trust store."
+evidence = ["crates/sign/tests/crypto.rs::crls_verify_and_report_revocation", "crates/sign/tests/crypto.rs::ocsp_responses_verify_and_match_the_certificate", "crates/sign/tests/pdf.rs::an_embedded_verified_revocation_invalidates_the_signature", "crates/sign/tests/evidence_workflow.rs::a_delegated_ocsp_responder_with_the_signing_eku_verifies_by_name_and_by_key", "crates/sign/tests/evidence_workflow.rs::delegated_ocsp_responders_without_eku_from_another_issuer_or_copying_the_issuer_name_are_refused", "crates/sign/tests/evidence_workflow.rs::openssl_verifies_the_original_delegated_ocsp_response", "crates/sign/tests/evidence_workflow.rs::openssl_verifies_original_crl_and_ocsp_evidence"]
+notes = "RFC 5280 CRLs and RFC 6960 OCSP responses are parsed and verified: responseStatus as ENUMERATED, issuer or delegated responder (embedded certs [0] read at the RFC nesting level, CA-issued, id-kp-OCSPSigning, valid at producedAt; a certificate copying the issuer's name is still treated as a delegate), CertID hash match and validity window; checked against the DSS during validation. OpenSSL independently verifies the original CRL, issuer-signed and delegated OCSP fixtures. Missing: network fetching of fresh evidence, maximum-age policy when nextUpdate is absent, and the OS trust store."
 
 [[feature]]
 id = "sign.validate-all"
@@ -6204,10 +6204,10 @@ area = "H"
 tier = "P1"
 milestone = "M9"
 status = "partial"
-commands = []
-tools = []
-evidence = ["crates/sign/tests/pdf.rs::signing_with_a_timestamp_embeds_a_verified_rfc3161_token", "crates/sign/tests/pdf.rs::an_untrusted_timestamp_does_not_set_the_validation_time"]
-notes = "Validation prefers the verified RFC 3161 timestamp time over /M when checking certificate validity and revocation, but only when the TSA chains to the trust store; an untrusted token is reported as an unverified timestamp and its time is not used. Missing: an explicit verification-time option (verify at a chosen date / now) in the validation API."
+commands = ["sign.verification_options"]
+tools = ["sign_verify"]
+evidence = ["crates/sign/tests/pdf.rs::signing_with_a_timestamp_embeds_a_verified_rfc3161_token", "crates/sign/tests/pdf.rs::an_untrusted_timestamp_does_not_set_the_validation_time", "crates/sign/tests/pdf.rs::verification_time_is_explicit_and_does_not_upgrade_timestamp_trust", "crates/automation/tests/signature_workflow.rs::sign_evidence_reopen_and_selected_time_tools_preserve_trust_and_signed_prefix"]
+notes = "VerificationTime selects the best available time (trusted timestamp, else claimed signing time), the claimed signing time, now, or a complete UTC date; results report the time and its provenance (trusted_timestamp, claimed_signing_time, chosen_time). A chosen or claimed date never makes an untrusted token trusted. sign_verify is read-only. The Signatures panel keeps best-available validation."
 
 [[feature]]
 id = "sign.changes-after-signing"

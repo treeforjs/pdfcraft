@@ -214,6 +214,10 @@ comment menu	Edit	సవరించు
 	Certify (visible signature)	సర్టిఫై చేయి (కనిపించే సంతకం)
 	Certify (invisible signature)	సర్టిఫై చేయి (కనిపించని సంతకం)
 	Validate all signatures	అన్ని సంతకాలను ధృవీకరించు
+	Timestamp document	పత్రానికి టైమ్‌స్టాంప్ జోడించు
+	Timestamp servers	టైమ్‌స్టాంప్ సర్వర్లు
+	Embed validation evidence	ధృవీకరణ సాక్ష్యాన్ని పొందుపరచు
+	Verification time	ధృవీకరణ సమయం
 	Signatures panel	సంతకాల ప్యానెల్
 	Fill & Sign: add text	నింపడం & సంతకం: టెక్స్ట్ జోడించు
 	Fill & Sign: checkmark	నింపడం & సంతకం: టిక్ గుర్తు

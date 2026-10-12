@@ -940,6 +940,10 @@
 	Stamp palette	Paleta de carimbos
 	Timestamp	Carimbo de data/hora
 	Validate all signatures	Validar todas as assinaturas
+	Timestamp document	Adicionar carimbo de data/hora ao documento
+	Timestamp servers	Servidores de carimbo de data/hora
+	Embed validation evidence	Incorporar evidências de validação
+	Verification time	Horário de verificação
 	Certify (visible signature)	Certificar (assinatura visível)
 	Certify (invisible signature)	Certificar (assinatura invisível)
 	Output preview	Pré-visualização de saída

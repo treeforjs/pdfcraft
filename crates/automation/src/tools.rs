@@ -26,6 +26,23 @@ fn doc() -> Value {
     json!({ "type": "integer", "minimum": 1, "description": "Document id from doc_open or doc_list." })
 }
 
+fn timestamp_server() -> Value {
+    schema(
+        json!({
+            "name":{"type":"string","minLength":1,"maxLength":200},
+            "url":{"type":"string","maxLength":4096,"description":"HTTPS endpoint; HTTP only for literal loopback IPs. No redirects or URL credentials."},
+            "policy":{"type":["string","null"],"description":"Optional requested policy OID; reply must match."},
+            "timeout_seconds":{"type":"integer","minimum":1,"maximum":30},
+            "require_trusted_authority":{"type":"boolean","description":"Require the TSA chain to reach an explicitly trusted certificate. False permits an untrusted token, never confers trust."}
+        }),
+        &["name", "url", "timeout_seconds", "require_trusted_authority"],
+    )
+}
+
+fn verification_time() -> Value {
+    json!({"type":"string","description":"best (default: trusted timestamp, else claimed signing time), claimed, now, or complete UTC YYYYMMDDHHmmSSZ. Chosen and claimed times are never proof of time."})
+}
+
 fn pages(what: &str) -> Value {
     json!({ "type": "array", "items": { "type": "integer", "minimum": 1 }, "minItems": 1, "description": format!("1-based page numbers {what}.") })
 }
@@ -638,6 +655,14 @@ pub fn tools() -> Vec<ToolDef> {
         t("sign_list", "List and validate signatures", "Every signature field with its validation: status (valid, unknown = intact but the signer isn't trusted, invalid, unsigned), signer and certificate, date, reason, location, certification level, page and rect, the revision it covers and changes made after signing (none, allowed, disallowed), with Acrobat-style explanations.")
             .ro()
             .with(schema(json!({ "doc": doc() }), &["doc"])),
+        t("sign_verify", "Verify signatures at a selected time", "Read-only certificate and revocation validation at an explicit time. Reports trusted, claimed and chosen time separately. Never fetches or changes trust.")
+            .ro().cmd("sign.verification_options").with(schema(json!({"doc":doc(),"verification_time":verification_time()}), &["doc"])),
+        t("sign_timestamp", "Timestamp and save document", "Request an RFC 3161 document timestamp from an explicitly configured server and save an incremental revision. Sends only the digest request. Requires allow_network: true; no redirects; response and time limits. No automatic certificate trust.")
+            .cmd("sign.timestamp").with(schema(json!({"doc":doc(),"out":path_arg(),"timestamp_server":timestamp_server(),"allow_network":{"type":"boolean"}}), &["doc","out","timestamp_server","allow_network"])),
+        t("sign_embed_evidence", "Embed local validation evidence", "Validate supplied DER certificates, CRLs and OCSP responses, then append a DSS and optionally a document timestamp. Rejects unrelated/unverifiable revocation data. Preserves original signed bytes. Reports incomplete coverage; does not declare PAdES B-LT/B-LTA compliance or trust imported certificates.")
+            .cmd("sign.embed_evidence").with(schema(json!({"doc":doc(),"out":path_arg(),"certificates":{"type":"array","items":path_arg(),"maxItems":64},
+                "crls":{"type":"array","items":path_arg(),"maxItems":64},"ocsps":{"type":"array","items":path_arg(),"maxItems":64},
+                "verification_time":verification_time(),"timestamp_server":timestamp_server(),"allow_network":{"type":"boolean"}}), &["doc","out"])),
         t("sign_id_create", "Create a digital ID", "Create a self-signed digital ID and save it as a password-protected .p12 file (Acrobat: Configure a new digital ID ▸ Create a new digital ID ▸ Save to file). Default key: 2048-bit RSA, valid 5 years.").with(schema(
             json!({
                 "name": { "type": "string", "minLength": 1 },
@@ -675,6 +700,8 @@ pub fn tools() -> Vec<ToolDef> {
                     "contact": { "type": "string" },
                     "certify": { "type": "string", "enum": ["no_changes", "form_fill", "comments"] },
                     "out": { "type": "string", "description": "Where to save the signed document." },
+                    "timestamp_server": timestamp_server(),
+                    "allow_network": {"type":"boolean","description":"Required true when timestamp_server is supplied."},
                 }),
                 &["doc", "id", "out"],
             )),

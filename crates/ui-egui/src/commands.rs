@@ -397,6 +397,10 @@ impl PdfCraftApp {
                 self.right = Some(RightPanel::Signatures);
             }
             "sign.panel" => self.right = Some(RightPanel::Signatures),
+            "sign.timestamp_servers" => self.open_signature_workflow(crate::timestamp_ui::SignatureWorkflowMode::Servers),
+            "sign.timestamp" => self.open_signature_workflow(crate::timestamp_ui::SignatureWorkflowMode::Timestamp),
+            "sign.embed_evidence" => self.open_signature_workflow(crate::timestamp_ui::SignatureWorkflowMode::Evidence),
+            "sign.verification_options" => self.open_signature_workflow(crate::timestamp_ui::SignatureWorkflowMode::Verify),
             "optimize.advanced" => self.dialog = Some(Dialog::Optimize),
             "view.fit_visible" => {
                 if let Some(i) = self.active

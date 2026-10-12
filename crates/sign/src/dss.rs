@@ -2,8 +2,9 @@
 //! the catalog holds certificates and revocation evidence (OCSP responses, CRLs) so signatures
 //! stay verifiable offline (PAdES B-LT), and `/VRI` indexes the evidence per signature.
 //!
-//! Evidence is caller-supplied DER for now: validating OCSP responses and CRLs themselves is
-//! the remaining piece of the LTV plan. Embedding never rewrites signed bytes — it appends an
+//! This low-level writer accepts caller-supplied DER; use [`crate::evidence::check`] before
+//! accepting local evidence in a user workflow. A DSS alone is not proof of PAdES compliance.
+//! Embedding never rewrites signed bytes — it appends an
 //! incremental update, which the change classifier treats as a permitted "document security
 //! store" change.
 

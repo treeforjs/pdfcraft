@@ -210,6 +210,10 @@
 	Certify (visible signature)	Certifier (signature visible)
 	Certify (invisible signature)	Certifier (signature invisible)
 	Validate all signatures	Valider toutes les signatures
+	Timestamp document	Horodater le document
+	Timestamp servers	Serveurs d'horodatage
+	Embed validation evidence	Incorporer les preuves de validation
+	Verification time	Heure de vérification
 	Signatures panel	Panneau des signatures
 	Fill & Sign: add text	Remplir et signer : ajouter du texte
 	Fill & Sign: checkmark	Remplir et signer : coche

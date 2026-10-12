@@ -721,6 +721,10 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
                 }
                 return;
             }
+            Dialog::SignatureWorkflow => {
+                close = crate::timestamp_ui::body(ui, app);
+                return;
+            }
             Dialog::SummarizeComments => {
                 ui.label(egui::RichText::new(tl!("Summarize Options")).font(theme::semibold(18.0)));
                 ui.add_space(8.0);

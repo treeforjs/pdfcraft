@@ -26,6 +26,7 @@ mod preflight;
 mod printing;
 mod reader_selection;
 mod redact;
+mod signature_workflow;
 mod signing;
 mod tools;
 
@@ -623,6 +624,9 @@ impl Automation {
             "comment_reply" => self.comment_reply(&a)?,
             "comment_set_status" => self.comment_set_status(&a)?,
             "sign_list" => self.sign_list(&a)?,
+            "sign_verify" => self.sign_verify(&a)?,
+            "sign_timestamp" => self.sign_timestamp(&a)?,
+            "sign_embed_evidence" => self.sign_embed_evidence(&a)?,
             "accessibility_check" => self.a11y_check(&a)?,
             "ocr_recognize" => self.ocr_recognize(&a)?,
             "ocr_prepare" => self.ocr_prepare(&a)?,

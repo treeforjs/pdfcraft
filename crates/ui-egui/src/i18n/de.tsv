@@ -210,6 +210,10 @@
 	Certify (visible signature)	Zertifizieren (sichtbare Signatur)
 	Certify (invisible signature)	Zertifizieren (unsichtbare Signatur)
 	Validate all signatures	Alle Signaturen validieren
+	Timestamp document	Dokument mit Zeitstempel versehen
+	Timestamp servers	Zeitstempelserver
+	Embed validation evidence	Validierungsnachweise einbetten
+	Verification time	Prüfzeitpunkt
 	Signatures panel	Signaturbereich
 	Fill & Sign: add text	Ausfüllen und unterschreiben: Text hinzufügen
 	Fill & Sign: checkmark	Ausfüllen und unterschreiben: Häkchen

@@ -83,6 +83,7 @@ mod pickers;
 pub mod prepare;
 mod print_ui;
 mod signature_drag;
+pub mod timestamp_ui;
 pub use print_ui::{Handling as PrintHandling, PrintDraft, Which as PrintWhich};
 mod redact_ui;
 pub use redact_ui::{HiddenDraft, PagesDraft as RedactPagesDraft, RedactPrefs, SearchDraft as RedactSearchDraft};
@@ -270,6 +271,8 @@ pub enum Dialog {
     Optimize,
     /// Prepare a form ▸ right-click a field ▸ Duplicate.
     DuplicateField,
+    /// Timestamp servers, timestamping, local validation evidence and verification time.
+    SignatureWorkflow,
     /// Check for accessibility ▸ Accessibility Checker Options.
     AccessibilityOptions,
     /// Scan & OCR ▸ Recognize text.
@@ -457,6 +460,9 @@ pub struct PdfCraftApp {
     pub sign_draft: Option<SignDraft>,
     /// Digital ID files the user has created or added.
     pub digital_ids: Vec<DigitalIdEntry>,
+    pub timestamp_servers: Vec<pdfcraft_engine::signature_workflow::TimestampServer>,
+    pub signature_workflow: timestamp_ui::SignatureWorkflowState,
+    pub signature_run: Option<timestamp_ui::SignatureRun>,
     /// Signatures panel: expanded entries (field names).
     pub sig_expanded: Vec<String>,
     /// Accessibility Checker: options, the last check, and rules skipped by hand.
@@ -712,6 +718,9 @@ impl PdfCraftApp {
             summary_layout: Default::default(),
             sign_draft: None,
             digital_ids: Vec::new(),
+            timestamp_servers: Vec::new(),
+            signature_workflow: timestamp_ui::SignatureWorkflowState::default(),
+            signature_run: None,
             sig_expanded: Vec::new(),
             a11y_options: a11y_ui::A11yOptions::default(),
             ocr_draft: ocr_ui::OcrDraft::default(),
@@ -1224,6 +1233,7 @@ impl PdfCraftApp {
 
     /// Draw the running job's progress card and pass a Cancel click on to the job.
     fn show_progress(&mut self, ctx: &egui::Context) {
+        self.signature_progress(ctx);
         if widgets::progress_notice(self, ctx) {
             self.cancel_optimize();
         }
@@ -1327,6 +1337,7 @@ impl PdfCraftApp {
             // macOS Keychain and Windows store identities are read from their OS key stores each time.
             "digital_ids": self.digital_ids.iter().filter(|e| !e.path.starts_with("keychain:") && !e.path.starts_with("windows:")).collect::<Vec<_>>(),
             "trusted": trusted,
+            "timestamp_servers": self.timestamp_servers,
             "custom_stamps": stamps_ui::encode(&self.custom_stamps),
             "javascript": self.session.javascript(),
             "actions": actions_ui::encode(&self.custom_actions),
@@ -1432,6 +1443,9 @@ impl PdfCraftApp {
         if let Ok(ids) = serde_json::from_value::<Vec<DigitalIdEntry>>(v["digital_ids"].clone()) {
             self.digital_ids = ids;
         }
+        if let Ok(servers) = serde_json::from_value::<Vec<pdfcraft_engine::signature_workflow::TimestampServer>>(v["timestamp_servers"].clone()) {
+            self.timestamp_servers = servers.into_iter().take(32).filter(|s| s.validate().is_ok()).collect();
+        }
         self.custom_stamps = stamps_ui::decode(&v["custom_stamps"]);
         self.custom_actions = actions_ui::decode(&v["actions"]);
         if let Some(on) = v["javascript"].as_bool() {
@@ -1452,6 +1466,9 @@ impl PdfCraftApp {
     ///
     /// This is the seed of the UI control channel (M3.9): the same verbs become `ui.set` calls.
     pub fn set_option(&mut self, key: &str, value: &str) -> Result<(), String> {
+        if let Some(result) = self.set_signature_option(key, value) {
+            return result;
+        }
         let view = self.active.and_then(|i| self.views.get_mut(i));
         match (key, view) {
             ("language", _) => {
@@ -1897,6 +1914,7 @@ impl eframe::App for PdfCraftApp {
         }
         self.poll_export();
         self.poll_ocr();
+        self.poll_signature_workflow();
         self.poll_optimize();
         self.poll_action();
         self.process_file_requests();

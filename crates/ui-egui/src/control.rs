@@ -600,6 +600,13 @@ impl Host for crate::PdfCraftApp {
             "progress": self.progress_notice.as_ref().map(|p| json!({ "label": p.label, "fraction": p.fraction })),
             "password_prompt": self.password_prompt.is_some(),
             "close_prompt": self.close_request.is_some(),
+            "timestamp_servers": self.timestamp_servers,
+            "signature_workflow": {"mode":format!("{:?}",self.signature_workflow.mode),"selected":self.signature_workflow.selected,
+                "allow_network":self.signature_workflow.allow_network,"verification_time":self.signature_workflow.verification_time,
+                "certificates":self.signature_workflow.certificates,"crls":self.signature_workflow.crls,"ocsps":self.signature_workflow.ocsps,
+                "error":self.signature_workflow.error,"running":self.signature_run.as_ref().map(|r|serde_json::json!({"doc":r.doc.0,"cancelled":r.cancellation.is_cancelled()})),
+                "results":self.signature_workflow.results.iter().map(|s|json!({"field":s.field,"status":format!("{:?}",s.status),
+                    "verification_time":s.verification_time.map(|t|t.to_string()),"verification_time_source":format!("{:?}",s.verification_time_source),"details":s.details})).collect::<Vec<_>>()},
         })
     }
 

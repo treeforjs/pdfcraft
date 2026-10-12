@@ -954,6 +954,10 @@
 	Stamp palette	印章選擇工具
 	Timestamp	時間戳記
 	Validate all signatures	驗證所有簽章
+	Timestamp document	為文件加上時間戳記
+	Timestamp servers	時間戳記伺服器
+	Embed validation evidence	嵌入驗證證據
+	Verification time	驗證時間
 	Certify (visible signature)	認證（可見簽章）
 	Certify (invisible signature)	認證（不可見簽章）
 	Output preview	輸出預覽

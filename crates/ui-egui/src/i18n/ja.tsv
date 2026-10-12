@@ -237,6 +237,10 @@
 	Certify (visible signature)	証明用署名（表示する署名）
 	Certify (invisible signature)	証明用署名（表示しない署名）
 	Validate all signatures	すべての署名を検証
+	Timestamp document	文書にタイムスタンプを付与
+	Timestamp servers	タイムスタンプサーバー
+	Embed validation evidence	検証情報を埋め込む
+	Verification time	検証時刻
 	Signatures panel	署名パネル
 	Fill & Sign: add text	入力と署名：テキストを追加
 	Fill & Sign: checkmark	入力と署名：チェックマーク

@@ -129,6 +129,8 @@ pub struct Certificate {
     pub authority_key_id: Option<Vec<u8>>,
     /// Extended key usage OIDs (2.5.29.37), when present.
     pub extended_key_usage: Option<Vec<String>>,
+    /// RFC 3161 requires the timestamp-only extended key usage to be critical.
+    pub extended_key_usage_critical: bool,
     /// OCSP responder URLs from the Authority Information Access (1.3.6.1.5.5.7.1.1).
     pub ocsp_urls: Vec<String>,
     /// CRL distribution point URLs (2.5.29.31).
@@ -150,12 +152,13 @@ struct Extensions {
     subject_key_id: Option<Vec<u8>>,
     authority_key_id: Option<Vec<u8>>,
     extended_key_usage: Option<Vec<String>>,
+    extended_key_usage_critical: bool,
     ocsp_urls: Vec<String>,
     crl_urls: Vec<String>,
 }
 
 impl Extensions {
-    fn read(&mut self, oid: &str, value: &Tlv<'_>) {
+    fn read(&mut self, oid: &str, value: &Tlv<'_>, critical: bool) {
         match oid {
             "2.5.29.19" => {
                 // Present at all, even when it doesn't parse: a malformed basicConstraints must
@@ -199,8 +202,19 @@ impl Extensions {
             }
             // ExtendedKeyUsage: a SEQUENCE OF OID.
             "2.5.29.37" => {
-                if let Ok(eku) = Tlv::parse_all(value.value) {
-                    self.extended_key_usage = eku.children().ok().map(|c| c.into_iter().filter_map(|t| t.oid().ok()).collect::<Vec<_>>());
+                // Present but malformed (or repeated) restricts every purpose. In particular,
+                // a broken extension must never turn into an unrestricted timestamp signer.
+                let duplicate = self.extended_key_usage.is_some();
+                self.extended_key_usage = Some(Vec::new());
+                self.extended_key_usage_critical = critical && !duplicate;
+                if duplicate {
+                    return;
+                }
+                let usages = Tlv::parse_all(value.value)
+                    .and_then(|eku| eku.expect(tag::SEQUENCE, "extended key usage")?.children())
+                    .and_then(|fields| fields.iter().map(Tlv::oid).collect::<Result<Vec<_>, _>>());
+                if let Ok(usages) = usages {
+                    self.extended_key_usage = Some(usages);
                 }
             }
             // Authority Information Access: OCSP and CA-issuer locations.
@@ -275,7 +289,8 @@ impl Certificate {
                 let Some(value) = e.last().filter(|v| v.tag == tag::OCTET_STRING) else { continue };
                 // A malformed or unreadable extension must never reject the whole certificate:
                 // unreadable ones are skipped and the fields they carry keep their defaults.
-                ext.read(o.as_str(), value);
+                let critical = e.get(1).is_some_and(|v| v.tag == tag::BOOLEAN && v.value == [0xff]);
+                ext.read(o.as_str(), value, critical);
             }
         }
         let Extensions {
@@ -286,6 +301,7 @@ impl Certificate {
             subject_key_id,
             authority_key_id,
             extended_key_usage,
+            extended_key_usage_critical,
             ocsp_urls,
             crl_urls,
         } = ext;
@@ -307,6 +323,7 @@ impl Certificate {
             subject_key_id,
             authority_key_id,
             extended_key_usage,
+            extended_key_usage_critical,
             ocsp_urls,
             crl_urls,
             version,
@@ -526,7 +543,7 @@ mod xfa_ext_tests {
         let wrapped = der::tlv(tag::OCTET_STRING, &value);
         let extn = Tlv::parse_all(&wrapped).unwrap();
         let mut ext = Extensions::default();
-        ext.read("2.5.29.31", &extn);
+        ext.read("2.5.29.31", &extn, false);
         assert_eq!(ext.crl_urls, vec!["http://crl.entrust.net/2048ca.crl".to_string()]);
         // Two URIs in one full-name run.
         let names = [der::tlv(tag::ctx_prim(6), uri), der::tlv(tag::ctx_prim(6), b"http://crl2.example/x.crl")].concat();
@@ -534,7 +551,7 @@ mod xfa_ext_tests {
         let wrapped = der::tlv(tag::OCTET_STRING, &two);
         let extn = Tlv::parse_all(&wrapped).unwrap();
         let mut ext = Extensions::default();
-        ext.read("2.5.29.31", &extn);
+        ext.read("2.5.29.31", &extn, false);
         assert_eq!(ext.crl_urls.len(), 2);
     }
 
@@ -545,7 +562,7 @@ mod xfa_ext_tests {
             let extn = Tlv::parse_all(&wrapped).unwrap();
             for oid in ["2.5.29.19", "2.5.29.15", "2.5.29.14", "2.5.29.35", "2.5.29.37", "1.3.6.1.5.5.7.1.1", "2.5.29.31"] {
                 let mut ext = Extensions::default();
-                ext.read(oid, &extn); // must not panic and must leave defaults
+                ext.read(oid, &extn, false); // must not panic and must leave defaults
                 assert!(ext.ocsp_urls.is_empty() && ext.crl_urls.is_empty() && !ext.is_ca);
             }
         }

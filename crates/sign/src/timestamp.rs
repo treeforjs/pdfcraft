@@ -12,6 +12,7 @@ use crate::x509::Certificate;
 use crate::{SignError, Time};
 
 const TST_INFO: &str = "1.2.840.113549.1.9.16.1.4";
+const TIMESTAMP_EKU: &str = "1.3.6.1.5.5.7.3.8";
 const MAX_RESPONSE: usize = 4 * 1024 * 1024;
 const MAX_TOKEN: usize = 2 * 1024 * 1024;
 const MAX_REQUEST: usize = 1024 * 1024;
@@ -32,6 +33,15 @@ impl TimestampQuery {
             return Err(SignError::Malformed("RFC 3161 imprint length does not match its digest algorithm".into()));
         }
         Ok(Self { digest, imprint, policy: None, nonce: None, certificate_request: true })
+    }
+
+    /// An online request carries a fresh nonce so a response must belong to this request.
+    pub fn online(digest: DigestAlg, imprint: Vec<u8>) -> Result<Self, SignError> {
+        let mut query = Self::new(digest, imprint)?;
+        let mut nonce = [0u8; 8];
+        getrandom::fill(&mut nonce).map_err(|error| SignError::Crypto(format!("timestamp nonce randomness unavailable: {error}")))?;
+        query.nonce = Some(u64::from_be_bytes(nonce));
+        Ok(query)
     }
 
     /// Encode a DER `TimeStampReq` (RFC 3161 §2.4.1).
@@ -62,6 +72,8 @@ pub struct TimestampToken {
     pub policy: String,
     pub serial: Vec<u8>,
     pub gen_time: Time,
+    /// Unsigned integer bytes, so large nonces in imported tokens remain readable.
+    pub nonce: Option<Vec<u8>>,
 }
 
 impl TimestampToken {
@@ -93,7 +105,9 @@ pub fn parse_request(bytes: &[u8]) -> Result<TimestampQuery, SignError> {
     }
     let fields = Tlv::parse_all(bytes)?.expect(tag::SEQUENCE, "TimeStampReq")?.children()?;
     let mut it = fields.into_iter();
-    let _version = it.next().ok_or_else(|| bad("missing version"))?.u64()?;
+    if it.next().ok_or_else(|| bad("missing version"))?.u64()? != 1 {
+        return Err(bad("unsupported request version"));
+    }
     let imprint = it.next().ok_or_else(|| bad("missing message imprint"))?.children()?;
     let alg_oid =
         imprint.first().ok_or_else(|| bad("missing imprint algorithm"))?.children()?.first().ok_or_else(|| bad("missing algorithm OID"))?.oid()?;
@@ -124,6 +138,9 @@ pub fn parse_token(raw: &[u8]) -> Result<TimestampToken, SignError> {
     }
     let info = token.content.as_deref().ok_or_else(|| bad("token has no TSTInfo content"))?;
     let fields = Tlv::parse_all(info)?.expect(tag::SEQUENCE, "TSTInfo")?.children()?;
+    if fields.first().ok_or_else(|| bad("TSTInfo has no version"))?.u64()? != 1 {
+        return Err(bad("unsupported token version"));
+    }
     let policy = fields.get(1).ok_or_else(|| bad("TSTInfo has no policy"))?.oid()?;
     let imprint_fields = fields.get(2).ok_or_else(|| bad("TSTInfo has no message imprint"))?.children()?;
     let alg_fields = imprint_fields.first().ok_or_else(|| bad("message imprint has no algorithm"))?.children()?;
@@ -138,8 +155,18 @@ pub fn parse_token(raw: &[u8]) -> Result<TimestampToken, SignError> {
         .expect(tag::OCTET_STRING, "message imprint digest")?
         .value
         .to_vec();
+    if imprint.len() != digest.digest(&[&[]]).len() {
+        return Err(bad("token imprint length does not match its digest algorithm"));
+    }
     let serial = fields.get(3).ok_or_else(|| bad("TSTInfo has no serial number"))?.uint_bytes().to_vec();
     let gen_time = fields.get(4).ok_or_else(|| bad("TSTInfo has no generation time"))?.time()?;
+    let mut nonce = None;
+    for field in fields.iter().skip(5).filter(|f| f.tag == tag::INTEGER) {
+        if nonce.is_some() || field.value.first().is_none_or(|b| b & 0x80 != 0) {
+            return Err(bad("token has an invalid or repeated nonce"));
+        }
+        nonce = Some(field.uint_bytes().to_vec());
+    }
     // The signed messageDigest uses the SignerInfo's digest algorithm, which need not be the
     // imprint's (RFC 5652 §5.4).
     let content_digest = token.signer.digest.digest(&[info]);
@@ -147,11 +174,24 @@ pub fn parse_token(raw: &[u8]) -> Result<TimestampToken, SignError> {
         return Err(bad("token signed message digest does not match TSTInfo"));
     }
     let cert = token.signer_certificate().ok_or_else(|| bad("TSA certificate is missing"))?;
+    check_signer_usage(cert)?;
     // An algorithm that can't be checked stays `Unsupported` rather than reading as invalid.
     if !token.verify_signature(cert, &content_digest)? {
         return Err(bad("TSA signature is invalid"));
     }
-    Ok(TimestampToken { raw: raw.to_vec(), digest, imprint, policy, serial, gen_time })
+    Ok(TimestampToken { raw: raw.to_vec(), digest, imprint, policy, serial, gen_time, nonce })
+}
+
+/// A timestamp key is dedicated to that purpose (RFC 3161 §2.3). Trust anchoring and
+/// certificate validity remain separate checks performed by the caller/validator.
+pub fn check_signer_usage(cert: &Certificate) -> Result<(), SignError> {
+    if !cert.extended_key_usage_critical
+        || !cert.extended_key_usage.as_ref().is_some_and(|uses| uses.len() == 1 && uses.first().is_some_and(|oid| oid == TIMESTAMP_EKU))
+        || cert.key_usage.is_some_and(|usage| usage & 3 == 0)
+    {
+        return Err(bad("TSA certificate must have a critical, exclusive timeStamping extended key usage and permit signing"));
+    }
+    Ok(())
 }
 
 /// Parse and validate a `TimeStampResp`, including the CMS signature and message imprint.
@@ -169,6 +209,18 @@ pub fn parse_response(bytes: &[u8], query: &TimestampQuery) -> Result<TimestampT
     let token = parse_token(token.raw)?;
     if token.digest != query.digest || token.imprint != query.imprint {
         return Err(bad("message imprint does not match the requested digest"));
+    }
+    if let Some(policy) = &query.policy
+        && token.policy != *policy
+    {
+        return Err(bad("token policy does not match the requested policy"));
+    }
+    if let Some(nonce) = query.nonce {
+        let expected = der::int(nonce);
+        let expected = Tlv::parse_all(&expected)?;
+        if token.nonce.as_deref() != Some(expected.uint_bytes()) {
+            return Err(bad("token nonce does not match the requested nonce"));
+        }
     }
     Ok(token)
 }
@@ -191,7 +243,8 @@ pub fn respond(
         der::try_oid(policy)?,
         der::seq(&[&query.digest.algorithm(), &der::octets(&query.imprint)]),
         der::int(serial),
-        gen_time.encode(),
+        // RFC 3161 uses GeneralizedTime even for dates before 2050.
+        der::tlv(tag::GENERALIZED_TIME, gen_time.to_pdf().trim_start_matches("D:").as_bytes()),
     ];
     if let Some(nonce) = query.nonce {
         info.push(der::int(nonce));
