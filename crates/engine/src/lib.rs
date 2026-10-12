@@ -544,12 +544,34 @@ fn is_placeholder_title(title: &str) -> bool {
 }
 
 /// What is displayed: the working file, plus (in memory only, never saved) the appearances
-/// PdfCraft draws for comments that have none ([`pdfcraft_annot::with_missing_appearances`]).
+/// PdfCraft draws for comments and form widgets that have none
+/// ([`pdfcraft_annot::with_missing_appearances`], [`pdfcraft_forms::with_missing_appearances`]).
 /// The working file is unchanged, and so is everything that reads it (saving, signatures, …).
 fn display_bytes(editor: Option<&Editor>, bytes: &Arc<Vec<u8>>) -> Arc<Vec<u8>> {
-    let Some(display) = editor.and_then(|e| pdfcraft_annot::with_missing_appearances(&e.cos)) else { return bytes.clone() };
+    let Some(editor) = editor else { return bytes.clone() };
+    with_display_appearances(&editor.cos, bytes)
+}
+
+/// `bytes` (the file `cos` was read from, with its edits) plus the appearances drawn for display
+/// only; `bytes` itself when nothing needs one or the copy can't be written.
+fn with_display_appearances(cos: &pdfcraft_cos::Document, bytes: &Arc<Vec<u8>>) -> Arc<Vec<u8>> {
+    let comments = pdfcraft_annot::with_missing_appearances(cos);
+    let widgets = pdfcraft_forms::with_missing_appearances(comments.as_ref().unwrap_or(cos));
+    let Some(display) = widgets.or(comments) else { return bytes.clone() };
     // Writing fails only as saving the document would; the page then shows as it always did.
     write_incremental(&display, &SaveOptions::default()).map(Arc::new).unwrap_or_else(|_| bytes.clone())
+}
+
+/// The bytes a viewer displays for the PDF `bytes`, as the page view and `page_render` show them:
+/// the file plus appearances drawn, in memory only, for comments and form widgets that have none
+/// (ISO 32000-2 §12.5.5). For tools that render a file without opening it in a [`Session`]
+/// (`pdfcraft-cli render` and `text`). `bytes` itself comes back when nothing needs an appearance
+/// or the file can't be read for editing; it is never modified.
+pub fn display_bytes_for(bytes: &Arc<Vec<u8>>, password: Option<&str>) -> Arc<Vec<u8>> {
+    match guard(|| pdfcraft_cos::Document::open_with_password(bytes.clone(), password).ok()) {
+        Ok(Some(cos)) => guard(|| with_display_appearances(&cos, bytes)).unwrap_or_else(|_| bytes.clone()),
+        _ => bytes.clone(),
+    }
 }
 
 fn render_threads() -> usize {
@@ -2845,6 +2867,10 @@ impl Session {
                 pdfcraft_cos::Document::open_with_password(doc.bytes.clone(), doc.password.as_deref()).map_err(|e| EditError::Write(e.to_string()))?
             }
         };
+        // Printed as displayed: comments and widgets without an appearance get the one drawn for
+        // the page view (in the print copy only).
+        let cos = pdfcraft_annot::with_missing_appearances(&cos).unwrap_or(cos);
+        let cos = pdfcraft_forms::with_missing_appearances(&cos).unwrap_or(cos);
         pdfcraft_print::impose(&cos, settings).map_err(|e| EditError::Print(e.to_string()))
     }
 

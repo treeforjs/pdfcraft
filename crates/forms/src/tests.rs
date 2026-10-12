@@ -1608,3 +1608,85 @@ fn invalid_appearance_patches_are_refused_before_anything_is_written() {
     assert!(set_props(&mut doc, "name", &props).is_err());
     assert_eq!(write_incremental(&doc, &SaveOptions::default()).unwrap(), before);
 }
+
+/// The normal appearance (`/AP /N`, resolved) of widget `num`.
+fn normal_of(doc: &Document, num: u32) -> Option<Arc<Object>> {
+    let w = doc.get(ObjRef::new(num, 0));
+    let ap = doc.resolve(w.as_dict()?.get(b"AP")?);
+    let n = ap.as_dict()?.get(b"N")?.clone();
+    Some(doc.resolve(&n))
+}
+
+fn content_of(doc: &Document, num: u32) -> String {
+    match normal_of(doc, num).as_deref() {
+        Some(Object::Stream(s)) => String::from_utf8_lossy(&s.decoded().unwrap()).into_owned(),
+        other => panic!("widget {num}: no appearance stream, {other:?}"),
+    }
+}
+
+#[test]
+fn display_copies_draw_missing_widget_appearances() {
+    let doc = fixture();
+    let copy = with_missing_appearances(&doc).expect("some widgets have no appearance");
+    assert!(!doc.is_modified(), "the document itself is unchanged");
+    for num in [10, 11, 12, 13, 14, 16, 23, 24, 25] {
+        assert!(normal_of(&doc, num).is_none(), "widget {num} had no appearance");
+        assert!(matches!(normal_of(&copy, num).as_deref(), Some(Object::Stream(_))), "widget {num} gets one");
+    }
+    assert!(content_of(&copy, 10).contains("(Ada) Tj"), "{}", content_of(&copy, 10));
+    assert!(content_of(&copy, 10).contains("1 1 0.9 rg"), "the /MK background");
+    assert!(content_of(&copy, 14).contains("(A-1) Tj"), "read-only fields show their value too");
+    // A check box with appearances keeps them; one without gets on and off states.
+    assert_eq!(normal_of(&copy, 17), normal_of(&doc, 17));
+    let bare = normal_of(&copy, 26).expect("the bare check box gets states");
+    let states = bare.as_dict().expect("a dictionary of states");
+    assert!(states.contains(b"Yes") && states.contains(b"Off"));
+    let as_ = copy.get(ObjRef::new(26, 0)).as_dict().and_then(|d| d.name(b"AS").map(<[u8]>::to_vec));
+    assert_eq!(as_.as_deref(), Some(&b"Off"[..]), "unchecked: shown off");
+    assert!(copy.get(ObjRef::new(26, 0)).as_dict().unwrap().contains(b"Foo"), "other entries are kept");
+    // Nothing missing: no copy.
+    assert!(with_missing_appearances(&copy).is_none());
+}
+
+#[test]
+fn display_copies_skip_hidden_widgets_and_honour_need_appearances() {
+    let page = |annots: &str| format!("<< /Type /Page /Parent 2 0 R /Annots [{annots}] >>");
+    let stream = "<< /Type /XObject /Subtype /Form /BBox [0 0 100 20] /Length 9 >>\nstream\n0 0 1 rg \nendstream";
+    let objs = |need: &str| -> Vec<String> {
+        vec![
+            format!("<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [4 0 R 5 0 R 6 0 R] {need} >> >>"),
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 /MediaBox [0 0 600 800] >>".into(),
+            page("4 0 R 5 0 R 6 0 R"),
+            "<< /Type /Annot /Subtype /Widget /F 2 /FT /Tx /T (hidden) /V (x) /Rect [10 10 110 30] /P 3 0 R >>".into(),
+            "<< /Type /Annot /Subtype /Widget /F 32 /FT /Tx /T (noview) /V (x) /Rect [10 40 110 60] /P 3 0 R >>".into(),
+            "<< /Type /Annot /Subtype /Widget /F 4 /FT /Tx /T (old) /V (Fresh) /Rect [10 70 110 90] /P 3 0 R /AP << /N 7 0 R >> >>".into(),
+            stream.into(),
+        ]
+    };
+    // Hidden and NoView widgets get nothing, and a widget with an appearance keeps it.
+    assert!(with_missing_appearances(&document(&objs(""))).is_none());
+    assert!(with_missing_appearances(&document(&objs("/NeedAppearances false"))).is_none());
+    // NeedAppearances: text fields are drawn afresh from their values.
+    let doc = document(&objs("/NeedAppearances true"));
+    let copy = with_missing_appearances(&doc).expect("NeedAppearances redraws the text field");
+    assert!(content_of(&copy, 6).contains("(Fresh) Tj"));
+    assert!(normal_of(&copy, 4).is_none() && normal_of(&copy, 5).is_none());
+    assert!(content_of(&doc, 6).starts_with("0 0 1 rg"), "the document keeps its own");
+}
+
+#[test]
+fn display_values_are_bounded() {
+    let long = "word ".repeat(40_000);
+    let objs: Vec<String> = vec![
+        "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [4 0 R] >> >>".into(),
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 /MediaBox [0 0 600 800] >>".into(),
+        "<< /Type /Page /Parent 2 0 R /Annots [4 0 R] >>".into(),
+        format!(
+            "<< /Type /Annot /Subtype /Widget /FT /Tx /Ff 4096 /T (big) /V ({long}) /Rect [10 10 300 400] /P 3 0 R /BS << /W 100000000 >> /MK << /BC [0 0 0] >> >>"
+        ),
+    ];
+    let copy = with_missing_appearances(&document(&objs)).expect("drawn");
+    let content = content_of(&copy, 4);
+    assert!(content.len() < 64 * 1024, "only the first part of a huge value is laid out: {} bytes", content.len());
+    assert!(content.contains("145 w"), "a hostile border width is clamped to half the box");
+}

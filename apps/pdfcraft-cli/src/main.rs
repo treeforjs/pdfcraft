@@ -285,7 +285,9 @@ fn text(args: &[String]) -> Result<(), CliError> {
     }
     let password = flag(args, "--password");
     let bytes = read(path)?;
-    let mut r = PageRenderer::new(bytes.clone(), RenderConfig { password: password.map(Arc::from), ..Default::default() });
+    // What a viewer shows: widget values and comments without appearances included (in memory).
+    let display = pdfcraft_engine::display_bytes_for(&bytes, password);
+    let mut r = PageRenderer::new(display, RenderConfig { password: password.map(Arc::from), ..Default::default() });
     // A document the renderer could not open (wrong or missing password, unparseable file) has
     // no pages, and "extract every page" of nothing would print nothing and exit 0 (#132). Ask
     // `inspect` why instead, so a protected file fails the same way `info` does.
@@ -468,10 +470,11 @@ fn render(args: &[String]) -> Result<(), CliError> {
         Some("pam") => None,
         _ => return Err(format!("render: --out {out}: use a .png, .jpg, .tif or .pam name").into()),
     };
-    let mut r = PageRenderer::new(
-        read(path)?,
-        RenderConfig { password: flag(args, "--password").map(Arc::from), reject_oversize: true, ..Default::default() },
-    );
+    let password = flag(args, "--password");
+    // The page as a viewer shows it: comments and form widgets without an appearance stream get
+    // one drawn in memory (the file is not changed), as in the app and `page_render`.
+    let display = pdfcraft_engine::display_bytes_for(&read(path)?, password);
+    let mut r = PageRenderer::new(display, RenderConfig { password: password.map(Arc::from), reject_oversize: true, ..Default::default() });
     let p = r.render(RenderRequest { page: page_index, kind: RequestKind::Pixels, tile: None, scale: dpi / 72.0, tag: 0 });
     if let Some(e) = p.error {
         return Err(e.into());

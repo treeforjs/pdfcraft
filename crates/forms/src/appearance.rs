@@ -194,7 +194,14 @@ fn frame(doc: &Document, wd: &Dict, w: f64, h: f64) -> (String, f64) {
         c.push_str(&format!("{bg}\n0 0 {} {} re f\n", n(w), n(h)));
     }
     let bs = wd.get(b"BS").map(|b| doc.resolve(b)).and_then(|b| b.as_dict().cloned());
-    let bw = bs.as_ref().and_then(|b| b.get(b"W")).and_then(|x| doc.resolve(x).as_f64()).unwrap_or(1.0).max(0.0);
+    // `/BS /W`, else the third number of the older `/Border` array, else 1 (§12.5.2, §12.5.4).
+    let border = || {
+        let b = doc.resolve(wd.get(b"Border")?);
+        doc.resolve(b.as_array()?.get(2)?).as_f64()
+    };
+    let bw = bs.as_ref().and_then(|b| b.get(b"W")).and_then(|x| doc.resolve(x).as_f64()).or_else(border).unwrap_or(1.0);
+    // A hostile width can't swallow the whole box.
+    let bw = if bw.is_finite() { bw.clamp(0.0, w.min(h) / 2.0) } else { 1.0 };
     if let Some(bc) = color_array(doc, mk.as_ref(), b"BC")
         && bw > 0.0
     {

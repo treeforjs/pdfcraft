@@ -1282,13 +1282,22 @@ pub fn set_appearance(doc: &mut Document, r: ObjRef) -> Result<(), AnnotError> {
 /// [`appearance::build`] draws from its dictionary, for displaying the document (`None` when no
 /// annotation needs one). Many files carry comments without appearances (FreeText, Ink, notes,
 /// stamps, …) that viewers draw from the dictionary. `doc` is not changed: saving writes the file
-/// as it was. Links, form fields and pop-ups keep their own handling.
+/// as it was. Links, form fields and pop-ups keep their own handling, and hidden (Hidden or
+/// NoView) comments get nothing. At most [`MAX_DISPLAY_APPEARANCES`] are drawn.
 pub fn with_missing_appearances(doc: &Document) -> Option<Document> {
     let mut copy: Option<Document> = None;
+    let mut drawn = 0usize;
     for page in page_refs(doc).ok()? {
         for r in annots(doc, page).iter().filter_map(Object::as_ref) {
+            if drawn >= MAX_DISPLAY_APPEARANCES {
+                return copy;
+            }
             let d = annot_dict(doc, r);
             if matches!(d.name(b"Subtype"), None | Some(b"Link" | b"Widget" | b"Popup")) {
+                continue;
+            }
+            // Hidden and NoView (`/F` bits 2 and 6) aren't shown, so need nothing drawn.
+            if d.get(b"F").map(|f| doc.resolve(f)).and_then(|f| f.as_int()).is_some_and(|f| f & (2 | 32) != 0) {
                 continue;
             }
             let has_normal = d.get(b"AP").is_some_and(|ap| doc.resolve(ap).as_dict().is_some_and(|ap| ap.contains(b"N")));
@@ -1297,10 +1306,15 @@ pub fn with_missing_appearances(doc: &Document) -> Option<Document> {
             }
             // Fails only when `r` isn't a dictionary, which `build` above has just ruled out.
             set_appearance(copy.get_or_insert_with(|| doc.clone()), r).ok();
+            drawn += 1;
         }
     }
     copy
 }
+
+/// At most this many comments get an appearance drawn for display ([`with_missing_appearances`]);
+/// the rest are shown as before.
+pub const MAX_DISPLAY_APPEARANCES: usize = 10_000;
 
 /// Format a number for content streams and DA strings.
 pub(crate) fn n(v: f64) -> String {

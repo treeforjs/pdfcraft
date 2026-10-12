@@ -77,3 +77,43 @@ fn an_unknown_extension_fails_and_writes_nothing() {
     assert!(stderr.contains(".png, .jpg, .tif or .pam"), "{stderr}");
     assert!(!out.exists());
 }
+
+/// `render` and `text` show a form field and a comment that have no appearance stream, as a
+/// viewer does (ISO 32000-2 §12.5.5), without changing the file.
+#[test]
+fn fields_and_comments_without_appearances_are_shown() {
+    let objs = [
+        "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [4 0 R] /DA (/Helv 12 Tf 0 g) >> >>",
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 /MediaBox [0 0 200 100] >>",
+        "<< /Type /Page /Parent 2 0 R /Annots [4 0 R 5 0 R] >>",
+        "<< /Type /Annot /Subtype /Widget /F 4 /P 3 0 R /FT /Tx /T (city) /V (Lisbon) /Rect [10 60 190 90] /MK << /BG [1 1 0] >> >>",
+        "<< /Type /Annot /Subtype /Square /F 4 /P 3 0 R /Rect [10 10 50 40] /C [0 0 1] /IC [0 0 1] >>",
+    ];
+    let mut bytes = b"%PDF-1.7\n".to_vec();
+    let mut offsets = Vec::new();
+    for (i, o) in objs.iter().enumerate() {
+        offsets.push(bytes.len());
+        bytes.extend_from_slice(format!("{} 0 obj\n{o}\nendobj\n", i + 1).as_bytes());
+    }
+    let xref = bytes.len();
+    bytes.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objs.len() + 1).as_bytes());
+    for o in offsets {
+        bytes.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+    }
+    bytes.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objs.len() + 1).as_bytes());
+    let pdf = tmp("noap", "form.pdf");
+    std::fs::write(&pdf, &bytes).unwrap();
+    let out = tmp("noap", "p1.pam");
+    let r = Command::new(BIN).args(["render", pdf.to_str().unwrap(), "--dpi", "72", "--out", out.to_str().unwrap()]).output().unwrap();
+    assert!(r.status.success(), "{}", String::from_utf8_lossy(&r.stderr));
+    let pam = std::fs::read(&out).unwrap();
+    let header = b"P7\nWIDTH 200\nHEIGHT 100\nDEPTH 4\nMAXVAL 255\nTUPLTYPE RGB_ALPHA\nENDHDR\n";
+    assert!(pam.starts_with(header));
+    let px = |x: usize, y: usize| pam[header.len() + (y * 200 + x) * 4..][..3].to_vec();
+    assert_eq!(px(185, 15), vec![255, 255, 0], "the field background");
+    assert_eq!(px(30, 75), vec![0, 0, 255], "the Square");
+    let t = Command::new(BIN).args(["text", pdf.to_str().unwrap()]).output().unwrap();
+    assert!(t.status.success(), "{}", String::from_utf8_lossy(&t.stderr));
+    assert!(String::from_utf8_lossy(&t.stdout).contains("Lisbon"), "{}", String::from_utf8_lossy(&t.stdout));
+    assert_eq!(std::fs::read(&pdf).unwrap(), bytes, "the file is unchanged");
+}

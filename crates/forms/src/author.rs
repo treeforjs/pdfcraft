@@ -706,6 +706,93 @@ pub fn redraw_field(doc: &mut Document, name: &str) -> Result<(), FormError> {
     Ok(())
 }
 
+/// At most this many widgets get an appearance drawn for display ([`with_missing_appearances`]);
+/// the rest are shown as before (not at all).
+pub const MAX_DISPLAY_APPEARANCES: usize = 10_000;
+
+/// A field value is cut to this many characters when it is drawn for display only.
+const MAX_DISPLAY_CHARS: usize = 8_192;
+
+/// A copy of `doc` in which every visible widget without a usable normal appearance (`/AP /N`)
+/// has the one [`redraw_field`] would draw, for displaying the document; `None` when no widget
+/// needs one. Readers may generate missing appearances (ISO 32000-2 §12.5.5), and with the form's
+/// `NeedAppearances` set they must draw text and choice fields afresh (§12.7.3), so those are
+/// redrawn too. Hidden and NoView widgets, widgets on no page and signature fields without an
+/// appearance (an unsigned field shows nothing) are skipped. `doc` is not changed: saving writes
+/// the file as it was.
+pub fn with_missing_appearances(doc: &Document) -> Option<Document> {
+    let need_all =
+        crate::acroform(doc).and_then(|af| af.get(b"NeedAppearances").map(|o| matches!(&*doc.resolve(o), Object::Bool(true)))).unwrap_or(false);
+    let mut copy: Option<Document> = None;
+    let mut drawn = 0usize;
+    for f in fields(doc) {
+        for w in &f.widgets {
+            if drawn >= MAX_DISPLAY_APPEARANCES {
+                return copy;
+            }
+            if w.hidden || w.page.is_none() || f.kind == FieldKind::Signature {
+                continue;
+            }
+            let normal = doc
+                .get(w.obj)
+                .as_dict()
+                .and_then(|d| d.get(b"AP").map(|ap| doc.resolve(ap)))
+                .and_then(|ap| ap.as_dict().and_then(|ap| ap.get(b"N")).map(|n| doc.resolve(n)));
+            let usable = match normal.as_deref() {
+                Some(Object::Stream(_)) => !(need_all && matches!(f.kind, FieldKind::Text | FieldKind::Combo | FieldKind::List)),
+                // A dictionary of states: check boxes and radio buttons (any state counts).
+                Some(Object::Dict(states)) => matches!(f.kind, FieldKind::CheckBox | FieldKind::Radio) && !states.is_empty(),
+                _ => false,
+            };
+            if usable {
+                continue;
+            }
+            drawn += 1;
+            let target = copy.get_or_insert_with(|| doc.clone());
+            let mut state = None;
+            let ap = match f.kind {
+                FieldKind::Text | FieldKind::Combo | FieldKind::List => {
+                    let values: Vec<String> = f.value.iter().map(|v| v.chars().take(MAX_DISPLAY_CHARS).collect()).collect();
+                    let s = appearance::field_appearance(target, &f, w, &values);
+                    let mut d = Dict::new();
+                    d.set(b"N".to_vec(), Object::Ref(target.add(Object::Stream(s))));
+                    d
+                }
+                FieldKind::CheckBox | FieldKind::Radio => {
+                    // Without appearances the on state has no name of its own: the widget's
+                    // `/AS`, a check box's value, else "Yes".
+                    let on = w
+                        .on_state
+                        .clone()
+                        .or_else(|| w.state.clone().filter(|s| s != "Off"))
+                        .or_else(|| if f.kind == FieldKind::CheckBox { f.value.first().cloned() } else { None })
+                        .unwrap_or_else(|| "Yes".into());
+                    let checked = f.value.iter().any(|v| *v == on || f.export_for_state(&on) == v.as_str());
+                    state = Some(if checked { on.clone() } else { "Off".to_string() });
+                    appearance::check_box_states(target, w, f.kind, &on)
+                }
+                FieldKind::PushButton => {
+                    let s = button_appearance(target, w);
+                    let mut d = Dict::new();
+                    d.set(b"N".to_vec(), Object::Ref(target.add(Object::Stream(s))));
+                    d
+                }
+                // Skipped above.
+                FieldKind::Signature => continue,
+            };
+            let merged = crate::merged_appearance(target, w.obj, &ap);
+            // Fails only when the widget isn't a dictionary, which `fields` has ruled out.
+            let _ = target.update_dict(w.obj, |d| {
+                d.set(b"AP".to_vec(), Object::Dict(merged));
+                if let Some(s) = &state {
+                    d.set(b"AS".to_vec(), Object::Name(crate::name_bytes(s)));
+                }
+            });
+        }
+    }
+    copy
+}
+
 fn frame_only(doc: &Document, w: &Widget) -> (String, crate::appearance::Placement) {
     let (page_w, page_h) = ((w.rect[2] - w.rect[0]).max(1.0), (w.rect[3] - w.rect[1]).max(1.0));
     let wobj = doc.get(w.obj);
