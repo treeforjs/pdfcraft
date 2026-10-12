@@ -54,10 +54,12 @@ or unsupported characters fail without changing the document or its undo history
 never expanded. The proposal is tested as `text_edit` shows it: line breaks (CR LF counts once)
 and tabs become one ordinary space each; repeated, no-break and ideographic spaces are kept.
 
-Replacing a whole paragraph's `text` keeps what the edit leaves alone: in upright paragraphs the
-untouched characters keep their source codes, styles and TJ spacing, and source rows the edit
-does not reach keep their line breaks. Rotated, skewed or reflected paragraphs are still
-re-encoded with whitespace collapsed.
+Replacing a whole paragraph's `text` keeps what the edit leaves alone: in upright and rotated
+paragraphs (any angle, through the text matrix or the CTM, with separate horizontal and vertical
+scales along the text's own axes) the untouched characters keep their source codes, styles and
+TJ spacing, and source rows the edit does not reach keep their line breaks; rows, gaps and widths
+are measured along the paragraph's own axes. Skewed or reflected paragraphs are still re-encoded
+with whitespace collapsed, and selected-range edits of them are refused.
 
 An exact resource cannot be combined with `font`, `bold`, or `italic`: its face fixes those styles.
 Subsequent size/colour changes keep the selected face. Subsequent bold/italic changes select a

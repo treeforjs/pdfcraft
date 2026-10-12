@@ -540,8 +540,7 @@ pub(super) fn rewrite(
     let k = o.k.max(1e-6);
     if !supported_frame(lines, block) {
         return Err(EditError::Invalid(
-            "mixed-run editing needs upright or rotated text without skew or reflection; skewed or reflected text is preserved unchanged"
-                .into(),
+            "mixed-run editing needs upright or rotated text without skew or reflection; skewed or reflected text is preserved unchanged".into(),
         ));
     }
     // Advances along the writing direction, in user space per text-space unit.

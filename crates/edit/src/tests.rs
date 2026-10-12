@@ -2841,9 +2841,8 @@ fn turned_paragraph_edits_keep_untouched_glyphs_codes_kerning_and_gaps() {
 #[test]
 fn turned_paragraphs_group_rows_and_keep_the_rows_an_edit_does_not_reach() {
     for (label, cm, tm, vertical) in TURNED {
-        let para = format!(
-            "q {cm} cm BT /F1 10 Tf 12 TL {tm} Tm (One two three four five six seven) Tj T* (eight nine) Tj T* (ten eleven twelve) Tj ET Q"
-        );
+        let para =
+            format!("q {cm} cm BT /F1 10 Tf 12 TL {tm} Tm (One two three four five six seven) Tj T* (eight nine) Tj T* (ten eleven twelve) Tj ET Q");
         let doc = text_page(&para);
         let block = text::text_blocks(&doc, 0).unwrap().remove(0);
         assert_eq!(block.text, "One two three four five six seven eight nine ten eleven twelve", "{label}");
@@ -2897,7 +2896,8 @@ fn turned_selections_recolor_and_underline_in_the_text_frame() {
         let doc = reopen(&doc);
         let block = text::text_blocks(&doc, 0).unwrap().remove(0);
         assert_eq!(block.text, "Before abba after.", "{label}");
-        let underlined: String = block.runs.iter().filter(|r| r.underline).flat_map(|r| block.text.chars().skip(r.start).take(r.end - r.start)).collect();
+        let underlined: String =
+            block.runs.iter().filter(|r| r.underline).flat_map(|r| block.text.chars().skip(r.start).take(r.end - r.start)).collect();
         assert_eq!(underlined, "abba", "{label}");
         assert!(block.runs.iter().filter(|r| r.underline).all(|r| r.color == [1.0, 0.0, 0.0]), "{label}");
         // Every glyph, selected or not, stays where it was; only the selection changes colour.

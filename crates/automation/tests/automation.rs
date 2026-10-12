@@ -1564,6 +1564,98 @@ fn whole_paragraph_text_edits_keep_untouched_words_codes_and_pixels_through_save
     assert!(!data.contains("(  double  gap end)"), "{data}");
 }
 
+/// M7: paragraphs turned by 90°, 180° (text matrix) and 30° (CTM) are edited through the
+/// run-preserving path: untouched codes and kerning stay, and every pixel outside the changed
+/// word is identical, through undo/redo, save and reopen.
+#[test]
+fn turned_paragraph_edits_keep_every_pixel_outside_the_changed_word() {
+    use pdfcraft_cos::{Dict, Document, ObjRef, Object, SaveOptions, Stream, write_incremental};
+    // (name, cm, Tm): the changed word starts at text x = 110, placed by its own Td.
+    let cases = [
+        ("turn90", [1.0, 0.0, 0.0, 1.0, 0.0, 0.0], [0.0, 1.0, -1.0, 0.0, 100.0, 20.0]),
+        ("turn180", [1.0, 0.0, 0.0, 1.0, 0.0, 0.0], [-1.0, 0.0, 0.0, -1.0, 180.0, 200.0]),
+        ("turn30", [0.866025, 0.5, -0.5, 0.866025, 30.0, 60.0], [1.0, 0.0, 0.0, 1.0, 0.0, 0.0]),
+    ];
+    let then = |m: [f64; 6], n: [f64; 6]| {
+        [
+            m[0] * n[0] + m[1] * n[2],
+            m[0] * n[1] + m[1] * n[3],
+            m[2] * n[0] + m[3] * n[2],
+            m[2] * n[1] + m[3] * n[3],
+            m[4] * n[0] + m[5] * n[2] + n[4],
+            m[4] * n[1] + m[5] * n[3] + n[5],
+        ]
+    };
+    let dir = workdir("turned-paragraph-pixels");
+    for (name, cm, tm) in cases {
+        let numbers = |m: [f64; 6]| m.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(" ");
+        let content = format!(
+            "q {} cm BT /F1 12 Tf {} Tm [(AV) -150 (AW) 80 (ay)] TJ (  turned) Tj 110 0 Td (end) Tj ET Q BT /F1 12 Tf 20 280 Td (Other words) Tj ET",
+            numbers(cm),
+            numbers(tm)
+        );
+        let mut cos = Document::open(std::sync::Arc::new(fixture(1))).unwrap();
+        let stream = cos.add(Object::Stream(Stream::flate(Dict::new(), content.as_bytes())));
+        cos.update_dict(ObjRef::new(4, 0), |page| page.set(b"Contents".to_vec(), Object::Ref(stream))).unwrap();
+        let file = format!("{name}.pdf");
+        std::fs::write(dir.join(&file), write_incremental(&cos, &SaveOptions::default()).unwrap()).unwrap();
+        let mut a = auto(&dir);
+        let doc = ok(&mut a, "doc_open", json!({"path":file}))["doc"].as_u64().unwrap();
+        let paragraphs = ok(&mut a, "text_paragraphs", json!({"doc":doc,"page":1}));
+        assert_eq!(paragraphs["paragraphs"][0]["text"], "AVAWay  turned end", "{name}");
+        let pixels = |a: &mut Automation, doc| {
+            let rendered = a.call("page_render", &json!({"doc":doc,"page":1,"dpi":144})).unwrap();
+            let Content::Png { data, .. } = &rendered[0] else { panic!("expected page PNG") };
+            image::load_from_memory(data).unwrap().to_rgba8()
+        };
+        let original = a.session().get(pdfcraft_engine::DocId(doc)).unwrap().bytes.clone();
+        let before = pixels(&mut a, doc);
+        let edited = "AVAWay  turned fin";
+        let applied = ok(&mut a, "text_edit", json!({"doc":doc,"page":1,"paragraph":1,"text":edited}));
+        assert_eq!(applied["paragraph"]["text"], edited, "{name}");
+        let after = pixels(&mut a, doc);
+        // A pixel may differ only if its centre lies on the changed word: in its text space,
+        // x from 110 to 135 and y from the descent to the ascent, plus a pixel (0.5 pt) of
+        // antialiasing all round.
+        let [a0, b0, c0, d0, e0, f0] = then(tm, cm);
+        let det = a0 * d0 - b0 * c0;
+        let changed = |x: u32, y: u32| {
+            let (px, py) = ((f64::from(x) + 0.5) / 2.0 - e0, 300.0 - (f64::from(y) + 0.5) / 2.0 - f0);
+            let (tx, ty) = ((d0 * px - c0 * py) / det, (a0 * py - b0 * px) / det);
+            (109.0..136.0).contains(&tx) && (-4.0..10.5).contains(&ty)
+        };
+        let mut differing = 0;
+        for (x, y, pixel) in after.enumerate_pixels() {
+            if before.get_pixel(x, y) != pixel {
+                assert!(changed(x, y), "{name}: pixel {x},{y} outside the changed word differs");
+                differing += 1;
+            }
+        }
+        assert!(differing > 0, "{name}: the changed word is drawn");
+        let changed_bytes = a.session().get(pdfcraft_engine::DocId(doc)).unwrap().bytes.clone();
+        ok(&mut a, "edit_undo", json!({"doc":doc}));
+        assert_eq!(a.session().get(pdfcraft_engine::DocId(doc)).unwrap().bytes, original, "{name}");
+        ok(&mut a, "edit_redo", json!({"doc":doc}));
+        assert_eq!(a.session().get(pdfcraft_engine::DocId(doc)).unwrap().bytes, changed_bytes, "{name}");
+        let saved_file = format!("{name}-saved.pdf");
+        ok(&mut a, "doc_save", json!({"doc":doc,"path":saved_file}));
+        let saved = ok(&mut a, "doc_open", json!({"path":saved_file}))["doc"].as_u64().unwrap();
+        let paragraphs = ok(&mut a, "text_paragraphs", json!({"doc":saved,"page":1}));
+        assert_eq!(paragraphs["paragraphs"][0]["text"], edited, "{name}");
+        assert_eq!(paragraphs["paragraphs"][1]["text"], "Other words", "{name}");
+        assert!(pixels(&mut a, saved) == after, "{name}: the saved file renders as edited");
+        // The untouched codes are shown with the source TJ numbers.
+        let reopened = Document::open(std::sync::Arc::new(std::fs::read(dir.join(&saved_file)).unwrap())).unwrap();
+        let page = pdfcraft_model::pages(&reopened).swap_remove(0);
+        let data = match &*reopened.resolve(page.dict.get(b"Contents").unwrap()) {
+            Object::Stream(s) => String::from_utf8_lossy(&s.decoded().unwrap()).into_owned(),
+            other => panic!("{other:?}"),
+        };
+        let compact: String = data.split_whitespace().collect::<Vec<_>>().join(" ");
+        assert!(compact.contains("[(AV) -150 (AW) 80 (ay turned)] TJ"), "{name}: {data}");
+    }
+}
+
 #[test]
 fn selected_color_keeps_q_restored_black_and_other_visible_glyphs() {
     use pdfcraft_cos::{Dict, Document, ObjRef, Object, SaveOptions, Stream, write_incremental};
