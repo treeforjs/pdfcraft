@@ -4761,7 +4761,8 @@ fn certificate_security_through_tools() {
         (Some("certificate"), Some("low"), Some(true), Some(false), Some(false))
     );
     let re = re["doc"].as_u64().unwrap();
-    assert_eq!(page_text(&mut b, re), ["Page 1", "Page 2", "Page 3"]);
+    // Copying is not among the reader's permissions, so its page text is withheld.
+    assert!(fail(b.call("text_extract", &json!({ "doc": re }))).contains("does not allow copying"));
     assert!(b.call("page_delete", &json!({ "doc": re, "pages": [1] })).is_err());
     assert!(b.call("doc_unprotect", &json!({ "doc": re })).is_err());
     ok(&mut b, "comment_add", json!({ "doc": re, "page": 1, "type": "note", "at": [10, 10], "contents": "reviewed by reader" }));
