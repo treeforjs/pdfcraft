@@ -1318,8 +1318,11 @@ impl Automation {
             let title = path.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
             sources.push((title, pdf, range));
         }
-        let bytes = self.session.combine_ranges(&sources).map_err(failed)?;
-        self.deliver(a, "Combined", bytes)
+        let policy = field_conflicts(a)?;
+        let (bytes, report) = self.session.combine_with(&sources, &[], policy).map_err(failed)?;
+        let mut out = self.deliver(a, "Combined", bytes)?;
+        out["fields"] = field_report(&report);
+        Ok(out)
     }
 
     /// One PDF per file, written into `out_dir`; a file that fails doesn't stop the others.
@@ -1409,8 +1412,11 @@ impl Automation {
             sources.push((name, Arc::new(bytes), range));
         }
         let passwords: Vec<Option<&str>> = passwords.iter().map(Option::as_deref).collect();
-        let bytes = self.session.combine_unlocked(&sources, &passwords).map_err(failed)?;
-        self.deliver(a, "Combined", bytes)
+        let policy = field_conflicts(a)?;
+        let (bytes, report) = self.session.combine_with(&sources, &passwords, policy).map_err(failed)?;
+        let mut out = self.deliver(a, "Combined", bytes)?;
+        out["fields"] = field_report(&report);
+        Ok(out)
     }
 
     fn doc_split(&mut self, a: &Args) -> Result<Value> {
@@ -1799,6 +1805,27 @@ fn transition_json(index: usize, p: &pdfcraft_engine::PageTransition) -> Value {
         v["opaque"] = json!(t.opaque);
     }
     v
+}
+
+/// The `field_conflicts` argument of the combine tools ("rename", the default, or "merge").
+fn field_conflicts(a: &Args) -> Result<pdfcraft_organize::FieldConflicts> {
+    match a.opt_str("field_conflicts")? {
+        None | Some("rename") => Ok(pdfcraft_organize::FieldConflicts::Rename),
+        Some("merge") => Ok(pdfcraft_organize::FieldConflicts::Merge),
+        Some(m) => Err(ToolError::InvalidArgs(format!("field_conflicts must be \"rename\" or \"merge\", not {m:?}"))),
+    }
+}
+
+/// What combining did to colliding form fields, for the tool result.
+fn field_report(r: &pdfcraft_organize::FieldReport) -> Value {
+    let pairs = |v: &[(String, String)]| v.iter().map(|(from, to)| json!({ "from": from, "to": to })).collect::<Vec<_>>();
+    json!({
+        "renamed": pairs(&r.renamed),
+        "merged": r.merged,
+        "resources_renamed": pairs(&r.resources_renamed),
+        "scripts_updated": r.scripts_updated,
+        "scripts_dynamic": r.scripts_dynamic,
+    })
 }
 
 fn one_based(pages: &[i64]) -> Result<Vec<usize>> {

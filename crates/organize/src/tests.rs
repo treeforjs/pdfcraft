@@ -1246,3 +1246,188 @@ fn page_transitions_read_leniently() {
     let d = bl.to_dict();
     assert!(d.contains(b"Dm") && !d.contains(b"M") && !d.contains(b"Di") && !d.contains(b"SS"), "Blinds takes /Dm only (Table 164)");
 }
+
+// ---- form-field name conflicts (combine / insert) -----------------------------------------------
+
+/// A one-page form: `person.name` (a text widget under a non-terminal parent), `total` (text,
+/// calculated from `person.name`, with a keystroke script in a stream), `agree` (check box) and
+/// `sig` (a signed signature field). `/Helv` in `/DR` is `font`.
+fn form_doc(name: &str, agree: bool, font: &str, need_appearances: bool) -> Document {
+    let state = if agree { "Yes" } else { "Off" };
+    let need = if need_appearances { " /NeedAppearances true" } else { "" };
+    let js = "var p = this.getField(\"person.name\"); var q = getField(\"per\" + \"son.name\");";
+    let b: Vec<String> = vec![
+        format!("<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [5 0 R 7 0 R 8 0 R 11 0 R] /DR << /Font << /Helv 4 0 R >> >> /DA (/Helv 0 Tf 0 g) /CO [7 0 R] /SigFlags 3{need} >> >>"), // 1
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 /MediaBox [0 0 300 400] >>".into(), // 2
+        "<< /Type /Page /Parent 2 0 R /Contents 12 0 R /Resources << /Font << /F1 4 0 R >> >> /Annots [6 0 R 7 0 R 8 0 R 11 0 R] >>".into(), // 3
+        format!("<< /Type /Font /Subtype /Type1 /BaseFont /{font} >>"), // 4
+        "<< /T (person) /Kids [6 0 R] >>".into(), // 5
+        format!("<< /Type /Annot /Subtype /Widget /Parent 5 0 R /T (name) /FT /Tx /V ({name}) /DA (/Helv 10 Tf 0 g) /Rect [20 300 200 320] /P 3 0 R >>"), // 6
+        "<< /Type /Annot /Subtype /Widget /T (total) /FT /Tx /Rect [20 260 200 280] /P 3 0 R /AA << /C << /S /JavaScript /JS (AFSimple_Calculate(\"SUM\", new Array (\"person.name\"));) >> /K << /S /JavaScript /JS 13 0 R >> >> >>".into(), // 7
+        format!("<< /Type /Annot /Subtype /Widget /T (agree) /FT /Btn /V /{state} /AS /{state} /Rect [20 220 40 240] /P 3 0 R /AP << /N << /Yes 9 0 R /Off 10 0 R >> >> >>"), // 8
+        "<< /Length 18 >>\nstream\n0 g 0 0 20 20 re f\nendstream".into(), // 9
+        "<< /Length 0 >>\nstream\n\nendstream".into(), // 10
+        "<< /Type /Annot /Subtype /Widget /T (sig) /FT /Sig /V << /Type /Sig /Filter /Adobe.PPKLite >> /Rect [0 0 0 0] /P 3 0 R >>".into(), // 11
+        body(name), // 12
+        format!("<< /Length {} >>\nstream\n{js}\nendstream", js.len()), // 13
+    ];
+    open(build(&b, "/Root 1 0 R"))
+}
+
+fn acro(doc: &Document) -> Dict {
+    let cat = doc.get(doc.root().unwrap()).as_dict().cloned().unwrap();
+    doc.resolve(cat.get(b"AcroForm").unwrap()).as_dict().cloned().unwrap()
+}
+
+/// (name, reference) of each top-level field, in `/Fields` order.
+fn top_fields(doc: &Document) -> Vec<(String, ObjRef)> {
+    let list = doc.resolve(acro(doc).get(b"Fields").unwrap()).as_array().cloned().unwrap();
+    list.iter()
+        .map(|f| {
+            let r = f.as_ref().unwrap();
+            let d = doc.get(r).as_dict().cloned().unwrap();
+            (d.get(b"T").and_then(|t| t.as_string()).unwrap().to_text(), r)
+        })
+        .collect()
+}
+
+fn field(doc: &Document, name: &str) -> (ObjRef, Dict) {
+    let r = top_fields(doc).into_iter().find(|(n, _)| n == name).unwrap_or_else(|| panic!("no field {name}")).1;
+    (r, doc.get(r).as_dict().cloned().unwrap())
+}
+
+fn text_of(o: Option<&Object>) -> Option<String> {
+    o.and_then(|v| v.as_string()).map(|s| s.to_text())
+}
+
+fn script(doc: &Document, action: &Object) -> String {
+    let a = doc.resolve(action).as_dict().cloned().unwrap();
+    match doc.resolve(a.get(b"JS").unwrap()).as_ref() {
+        Object::String(s) => s.to_text(),
+        Object::Stream(s) => String::from_utf8(s.decoded().unwrap()).unwrap(),
+        other => panic!("JS is {other:?}"),
+    }
+}
+
+fn names(v: &[(&str, &str)]) -> Vec<(String, String)> {
+    v.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect()
+}
+
+#[test]
+fn combining_forms_renames_colliding_fields_so_values_stay_independent() {
+    let a = form_doc("Ada", true, "Helvetica", false);
+    let b = form_doc("Bob", false, "Courier", true);
+    let (out, report) = crate::combine_selected_with(&[("a", &a, None), ("b", &b, None)], crate::FieldConflicts::Rename).unwrap();
+    assert_eq!(report.renamed, names(&[("person", "person#2"), ("total", "total#2"), ("agree", "agree#2"), ("sig", "sig#2")]));
+    assert!(report.merged.is_empty());
+    assert_eq!(report.resources_renamed, names(&[("Font/Helv", "Font/Helv_2")]), "a different font under the same /DR name");
+    assert_eq!(report.scripts_updated, 2, "the calculation list and the getField literal");
+    assert_eq!(report.scripts_dynamic, 1, "the computed getField name is counted, not rewritten");
+    // The plain wrapper renames too.
+    assert_eq!(top_fields(&crate::combine(&[("a", &a), ("b", &b)]).unwrap()).len(), 8);
+
+    let out = full_roundtrip(&out);
+    let tops: Vec<String> = top_fields(&out).into_iter().map(|(n, _)| n).collect();
+    assert_eq!(tops, ["person", "total", "agree", "sig", "person#2", "total#2", "agree#2", "sig#2"]);
+    // Each copy keeps its own value, kids and parent links.
+    for (top, value) in [("person", "Ada"), ("person#2", "Bob")] {
+        let (r, d) = field(&out, top);
+        let kids = d.get(b"Kids").and_then(|k| k.as_array()).cloned().unwrap();
+        assert_eq!(kids.len(), 1);
+        let kid = out.resolve(&kids[0]).as_dict().cloned().unwrap();
+        assert_eq!(kid.reference(b"Parent"), Some(r));
+        assert_eq!(text_of(kid.get(b"T")).as_deref(), Some("name"), "only the top-level name changes");
+        assert_eq!(text_of(kid.get(b"V")).as_deref(), Some(value));
+    }
+    assert_eq!(field(&out, "agree").1.name(b"V"), Some(&b"Yes"[..]));
+    assert_eq!(field(&out, "agree#2").1.name(b"V"), Some(&b"Off"[..]));
+    // Default resources: both fonts, and the incoming /DA names the renamed one.
+    let form = acro(&out);
+    let dr = out.resolve(form.get(b"DR").unwrap()).as_dict().cloned().unwrap();
+    let fonts = out.resolve(dr.get(b"Font").unwrap()).as_dict().cloned().unwrap();
+    let base = |k: &[u8]| out.resolve(fonts.get(k).unwrap()).as_dict().unwrap().name(b"BaseFont").map(<[u8]>::to_vec);
+    assert_eq!(base(b"Helv").as_deref(), Some(&b"Helvetica"[..]));
+    assert_eq!(base(b"Helv_2").as_deref(), Some(&b"Courier"[..]));
+    assert_eq!(text_of(form.get(b"DA")).as_deref(), Some("/Helv 0 Tf 0 g"), "the first file's form default");
+    let (_, p2) = field(&out, "person#2");
+    let kid2 = out.resolve(&p2.get(b"Kids").and_then(|k| k.as_array()).cloned().unwrap()[0]).as_dict().cloned().unwrap();
+    assert_eq!(text_of(kid2.get(b"DA")).as_deref(), Some("/Helv_2 10 Tf 0 g"));
+    assert_eq!(text_of(p2.get(b"DA")).as_deref(), Some("/Helv_2 0 Tf 0 g"), "the source's form default, pushed down");
+    assert!(!field(&out, "person").1.contains(b"DA"), "the first file's fields keep inheriting");
+    // Scripts follow the rename; the first file's scripts are untouched.
+    let aa = |name: &str| field(&out, name).1.get(b"AA").and_then(|a| a.as_dict()).cloned().unwrap();
+    assert!(script(&out, aa("total").get(b"C").unwrap()).contains("new Array (\"person.name\")"));
+    assert!(script(&out, aa("total#2").get(b"C").unwrap()).contains("new Array (\"person#2.name\")"));
+    assert!(script(&out, aa("total").get(b"K").unwrap()).contains("getField(\"person.name\")"));
+    let k2 = script(&out, aa("total#2").get(b"K").unwrap());
+    assert!(k2.contains("getField(\"person#2.name\")") && k2.contains("getField(\"per\" + \"son.name\")"), "{k2}");
+    // Calculation order: both totals. Flags: NeedAppearances from the second file; only
+    // SignaturesExist (AppendOnly cannot hold for copied signatures).
+    let co = out.resolve(form.get(b"CO").unwrap()).as_array().cloned().unwrap();
+    assert_eq!(co, [Object::Ref(field(&out, "total").0), Object::Ref(field(&out, "total#2").0)]);
+    assert_eq!(form.get(b"NeedAppearances"), Some(&Object::Bool(true)));
+    assert_eq!(form.int(b"SigFlags"), Some(1));
+    // A third copy gets the next free suffix.
+    let (_, third) = crate::combine_selected_with(&[("a", &a, None), ("b", &b, None), ("c", &a, None)], crate::FieldConflicts::Rename).unwrap();
+    assert!(third.renamed.contains(&("person".to_string(), "person#3".to_string())));
+    assert_eq!(third.resources_renamed.len(), 1, "the third file's Helvetica is the first's");
+}
+
+#[test]
+fn combining_forms_can_merge_compatible_fields() {
+    let a = form_doc("Ada", true, "Helvetica", false);
+    let b = form_doc("Bob", false, "Helvetica", false);
+    let (out, report) = crate::combine_selected_with(&[("a", &a, None), ("b", &b, None)], crate::FieldConflicts::Merge).unwrap();
+    assert_eq!(report.merged, ["total", "agree"]);
+    assert_eq!(report.renamed, names(&[("person", "person#2"), ("sig", "sig#2")]), "hierarchies and signatures are never merged");
+    assert!(report.resources_renamed.is_empty(), "the same font under the same name is shared");
+    let out = full_roundtrip(&out);
+    let tops: Vec<String> = top_fields(&out).into_iter().map(|(n, _)| n).collect();
+    assert_eq!(tops, ["person", "total", "agree", "sig", "person#2", "sig#2"]);
+    let page_refs: Vec<ObjRef> = pages(&out).unwrap().iter().map(|p| p.obj).collect();
+    for name in ["total", "agree"] {
+        let (r, d) = field(&out, name);
+        assert!(!d.contains(b"Subtype"), "{name} is a field, its widgets are kids");
+        let kids = d.get(b"Kids").and_then(|k| k.as_array()).cloned().unwrap();
+        assert_eq!(kids.len(), 2, "{name}: one widget per file");
+        for (i, kid) in kids.iter().enumerate() {
+            let w = out.resolve(kid).as_dict().cloned().unwrap();
+            assert_eq!(w.reference(b"Parent"), Some(r));
+            assert!(!w.contains(b"T") && !w.contains(b"FT"), "a widget, not a field");
+            assert_eq!(w.name(b"Subtype"), Some(&b"Widget"[..]));
+            assert_eq!(w.reference(b"P"), Some(page_refs[i]));
+            let annots = page_dict(&out, i).get(b"Annots").cloned().unwrap();
+            assert!(out.resolve(&annots).as_array().unwrap().contains(kid), "{name}: the widget stays on its page");
+        }
+    }
+    // The existing value wins and the incoming check box shows it.
+    let (_, agree) = field(&out, "agree");
+    assert_eq!(agree.name(b"V"), Some(&b"Yes"[..]));
+    for kid in agree.get(b"Kids").and_then(|k| k.as_array()).cloned().unwrap() {
+        assert_eq!(out.resolve(&kid).as_dict().unwrap().name(b"AS"), Some(&b"Yes"[..]));
+    }
+    // The calculation script moved to the field; the order lists it once.
+    let (total, td) = field(&out, "total");
+    assert!(td.get(b"AA").and_then(|a| a.as_dict()).is_some_and(|a| a.contains(b"C")));
+    let co = out.resolve(acro(&out).get(b"CO").unwrap()).as_array().cloned().unwrap();
+    assert_eq!(co, [Object::Ref(total)]);
+}
+
+#[test]
+fn inserting_pages_from_a_form_renames_colliding_fields() {
+    let mut d = form_doc("Ada", true, "Helvetica", false);
+    let (_, report) = crate::import_pages_with(&mut d, &form_doc("Bob", false, "Courier", false), &[0], 1, crate::FieldConflicts::Rename).unwrap();
+    assert_eq!(report.renamed.len(), 4);
+    let d = save_and_reopen(&d);
+    let tops: Vec<String> = top_fields(&d).into_iter().map(|(n, _)| n).collect();
+    assert_eq!(tops, ["person", "total", "agree", "sig", "person#2", "total#2", "agree#2", "sig#2"]);
+    let form = acro(&d);
+    assert_eq!(form.int(b"SigFlags"), Some(3), "the destination's own flags stay");
+    assert!(!form.contains(b"NeedAppearances"));
+    // Duplicating a page with fields gives the copies their own names too.
+    let mut d = form_doc("Ada", true, "Helvetica", false);
+    duplicate_pages(&mut d, &[0]).unwrap();
+    let d = full_roundtrip(&d);
+    assert_eq!(top_fields(&d).len(), 8);
+    assert!(top_fields(&d).iter().any(|(n, _)| n == "total#2"));
+}

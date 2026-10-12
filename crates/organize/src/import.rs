@@ -21,6 +21,7 @@ use std::collections::HashMap;
 
 use pdfcraft_cos::{Dict, Document, ObjRef, Object};
 
+use crate::fields::{FieldConflicts, FieldReport, Incoming};
 use crate::{INHERITABLE, OrganizeError, pages_root, rebuild, walk};
 
 /// Keys that must not be followed when copying: they point back up or across the source
@@ -193,12 +194,28 @@ pub(crate) fn copy_object(dst: &mut Document, src: &Document, o: &Object, map: H
 ///
 /// Resources identical to ones already in `dst` (the same fonts, images, colour profiles) are
 /// shared rather than stored twice (see `dedupe`).
+///
+/// Form fields whose names are already used in `dst` are renamed ([`FieldConflicts::Rename`]);
+/// see [`import_pages_with`].
 pub fn import_pages(dst: &mut Document, src: &Document, src_pages: &[usize], at: usize) -> Result<Vec<ObjRef>, OrganizeError> {
+    import_pages_with(dst, src, src_pages, at, FieldConflicts::Rename).map(|(pages, _)| pages)
+}
+
+/// [`import_pages`] with a policy for form fields whose fully qualified names collide with
+/// fields already in `dst` (Insert Pages from File). Returns the new pages and what happened to
+/// the incoming fields.
+pub fn import_pages_with(
+    dst: &mut Document,
+    src: &Document,
+    src_pages: &[usize],
+    at: usize,
+    fields: FieldConflicts,
+) -> Result<(Vec<ObjRef>, FieldReport), OrganizeError> {
     let first_new = dst.object_numbers().last().map_or(1, |n| n + 1);
-    let pages = import_pages_mapped(dst, src, src_pages, at)?.pages;
+    let imported = import_pages_mapped(dst, src, src_pages, at, fields)?;
     let created: Vec<ObjRef> = dst.object_numbers().into_iter().filter(|n| *n >= first_new).map(|n| ObjRef::new(n, dst.generation(n))).collect();
     crate::dedupe::dedupe_resources(dst, &created, true);
-    Ok(pages)
+    Ok((imported.pages, imported.fields))
 }
 
 /// What `import_pages_mapped` copied.
@@ -209,10 +226,18 @@ struct Imported {
     page_map: HashMap<ObjRef, ObjRef>,
     /// Every source object copied → its copy.
     objects: HashMap<ObjRef, ObjRef>,
+    /// What happened to the incoming form fields.
+    fields: FieldReport,
 }
 
 /// `import_pages`, also returning what was copied from where.
-fn import_pages_mapped(dst: &mut Document, src: &Document, src_pages: &[usize], at: usize) -> Result<Imported, OrganizeError> {
+fn import_pages_mapped(
+    dst: &mut Document,
+    src: &Document,
+    src_pages: &[usize],
+    at: usize,
+    policy: FieldConflicts,
+) -> Result<Imported, OrganizeError> {
     let source = walk(src)?;
     if let Some(bad) = src_pages.iter().find(|i| **i >= source.len()) {
         return Err(OrganizeError::NoSuchPage(*bad));
@@ -284,13 +309,13 @@ fn import_pages_mapped(dst: &mut Document, src: &Document, src_pages: &[usize], 
         new_pages.push(new);
     }
     copier.fix_annotations(dst, &annot_pages)?;
-    register_fields(dst, &copier.fields)?;
+    let fields = register_fields(dst, src, &mut copier, &new_pages, policy)?;
     register_layers(dst, src, &copier.ocgs)?;
     let at = at.min(existing.len());
     let inserted: Vec<(ObjRef, Dict)> = new_pages.iter().map(|r| (*r, Dict::new())).collect();
     existing.splice(at..at, inserted);
     rebuild(dst, &existing)?;
-    Ok(Imported { pages: new_pages, page_map: copier.pages, objects: copier.map })
+    Ok(Imported { pages: new_pages, page_map: copier.pages, objects: copier.map, fields })
 }
 
 /// Look up a named destination in the source (`/Dests` dictionary or `/Names /Dests` tree).
@@ -392,33 +417,43 @@ fn register_layers(dst: &mut Document, src: &Document, ocgs: &[(ObjRef, ObjRef)]
     Ok(())
 }
 
-/// Add top-level fields to the destination's `/AcroForm /Fields` (creating the form if needed).
-fn register_fields(dst: &mut Document, fields: &[ObjRef]) -> Result<(), OrganizeError> {
-    if fields.is_empty() {
-        return Ok(());
+/// Add the copied top-level fields to the destination's `/AcroForm` (creating the form if
+/// needed), with the source form's default resources and calculation order, resolving name
+/// conflicts per `policy` (see `fields`).
+fn register_fields(
+    dst: &mut Document,
+    src: &Document,
+    copier: &mut Copier<'_>,
+    new_pages: &[ObjRef],
+    policy: FieldConflicts,
+) -> Result<FieldReport, OrganizeError> {
+    if copier.fields.is_empty() {
+        return Ok(FieldReport::default());
     }
-    let root = dst.root().ok_or(OrganizeError::NoPageTree)?;
-    let catalog = dst.get(root).as_dict().cloned().ok_or(OrganizeError::NoPageTree)?;
-    let (form_ref, mut form) = match catalog.get(b"AcroForm") {
-        Some(Object::Ref(r)) => (Some(*r), dst.get(*r).as_dict().cloned().unwrap_or_default()),
-        Some(Object::Dict(d)) => (None, d.clone()),
-        _ => (None, Dict::new()),
-    };
-    let mut list = form.get(b"Fields").map(|f| dst.resolve(f)).and_then(|f| f.as_array().cloned()).unwrap_or_default();
-    for f in fields {
-        if !list.contains(&Object::Ref(*f)) {
-            list.push(Object::Ref(*f));
-        }
-    }
-    form.set(b"Fields".to_vec(), Object::Array(list));
-    match form_ref {
-        Some(r) => dst.set(r, Object::Dict(form)),
-        None => {
-            let r = dst.add(form);
-            dst.update_dict(root, |c| c.set(b"AcroForm".to_vec(), Object::Ref(r)))?;
-        }
-    }
-    Ok(())
+    let form = src
+        .root()
+        .and_then(|r| src.get(r).as_dict().cloned())
+        .and_then(|c| c.get(b"AcroForm").map(|f| src.resolve(f)))
+        .and_then(|f| f.as_dict().cloned());
+    let dr = form.as_ref().and_then(|f| f.get(b"DR")).map(|d| copier.copy_value(dst, d, None));
+    let co = form
+        .as_ref()
+        .and_then(|f| f.get(b"CO"))
+        .map(|c| src.resolve(c))
+        .and_then(|c| c.as_array().cloned())
+        .unwrap_or_default()
+        .iter()
+        .filter_map(Object::as_ref)
+        .filter_map(|r| copier.map.get(&r).copied())
+        .collect();
+    let mut created: Vec<ObjRef> = copier.map.values().copied().chain(new_pages.iter().copied()).collect();
+    created.sort_unstable();
+    created.dedup();
+    let fields = std::mem::take(&mut copier.fields);
+    let incoming = Incoming { form, dr, co, fields: &fields, created };
+    let report = crate::fields::register(dst, &incoming, policy);
+    copier.fields = fields;
+    report
 }
 
 /// A new document containing copies of `pages` from `src` (Extract Pages / Split).
@@ -427,7 +462,7 @@ fn register_fields(dst: &mut Document, fields: &[ObjRef]) -> Result<(), Organize
 pub fn extract_pages(src: &Document, pages: &[usize]) -> Result<Document, OrganizeError> {
     let mut out = Document::new_empty();
     // One source: nothing to deduplicate.
-    let imported = import_pages_mapped(&mut out, src, pages, 0)?;
+    let imported = import_pages_mapped(&mut out, src, pages, 0, FieldConflicts::Rename)?;
     for key in crate::INFO_KEYS {
         if let Some(v) = crate::info(src, key) {
             crate::set_info(&mut out, key, &v)?;
@@ -488,6 +523,18 @@ pub fn combine(sources: &[(&str, &Document)]) -> Result<Document, OrganizeError>
 /// Combine Files with chosen pages: each source contributes `pages` (0-based, in that order;
 /// `None` for all of them). Bookmarks that point at pages left out lose their destination.
 pub fn combine_selected(sources: &[(&str, &Document, Option<&[usize]>)]) -> Result<Document, OrganizeError> {
+    combine_selected_with(sources, FieldConflicts::Rename).map(|(doc, _)| doc)
+}
+
+/// [`combine_selected`] with a policy for form fields whose fully qualified names collide across
+/// the sources: by default a later file's field is renamed (`name#2`) so the copies keep
+/// independent values; [`FieldConflicts::Merge`] joins compatible ones. Returns the combined
+/// document and what happened to the fields.
+pub fn combine_selected_with(
+    sources: &[(&str, &Document, Option<&[usize]>)],
+    fields: FieldConflicts,
+) -> Result<(Document, FieldReport), OrganizeError> {
+    let mut report = FieldReport::default();
     let mut out = Document::new_empty();
     let mut marks = Vec::new();
     let mut attachments = Vec::new();
@@ -507,7 +554,8 @@ pub fn combine_selected(sources: &[(&str, &Document, Option<&[usize]>)]) -> Resu
             None => (0..n).collect(),
         };
         let at = crate::page_count(&out)?;
-        let imported = import_pages_mapped(&mut out, src, &pages, at)?;
+        let imported = import_pages_mapped(&mut out, src, &pages, at, fields)?;
+        report.absorb(imported.fields);
         if let Some(first) = imported.pages.first() {
             marks.push((title.to_string(), *first, *src, imported.page_map));
         }
@@ -526,7 +574,7 @@ pub fn combine_selected(sources: &[(&str, &Document, Option<&[usize]>)]) -> Resu
     crate::dedupe::dedupe_resources(&mut out, &all, false);
     add_outline(&mut out, &marks)?;
     set_attachments(&mut out, attachments)?;
-    Ok(out)
+    Ok((out, report))
 }
 
 /// Copy a source's document-level attachments (`/Names /EmbeddedFiles`) into `dst`.

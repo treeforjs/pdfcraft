@@ -197,13 +197,14 @@ pub fn tools() -> Vec<ToolDef> {
                 json!({ "doc": doc(), "pages": pages("to extract"), "out": save_out.clone(), "open": open.clone(), "separate": { "type": "boolean" }, "out_dir": { "type": "string" }, "delete": { "type": "boolean" } }),
                 &["doc", "pages"],
             )),
-        t("doc_combine", "Combine files", "Combine PDFs, in order, into one (bookmarks are kept under one entry per file). pages optionally chooses each file's pages, in step with paths: a range such as \"1-3, 6\" or null for all pages. passwords, also in step with paths, opens encrypted files (the open password, or the permissions password where a file's security doesn't allow copying pages; null for none). The result is not encrypted. Passwords are never echoed back.")
+        t("doc_combine", "Combine files", "Combine PDFs, in order, into one (bookmarks are kept under one entry per file). pages optionally chooses each file's pages, in step with paths: a range such as \"1-3, 6\" or null for all pages. passwords, also in step with paths, opens encrypted files (the open password, or the permissions password where a file's security doesn't allow copying pages; null for none). The result is not encrypted. Passwords are never echoed back. Form fields whose names collide across files are renamed (name#2) so each copy keeps its own value; field_conflicts: \"merge\" instead joins compatible fields (same type, no sub-fields, not signatures) into one shared-value field. The result's fields entry reports what was renamed or merged.")
             .cmd("page.combine")
             .with(schema(
                 json!({
                     "paths": { "type": "array", "items": { "type": "string" }, "minItems": 2 },
                     "pages": { "type": "array", "items": { "type": ["string", "null"] } },
                     "passwords": { "type": "array", "items": { "type": ["string", "null"] } },
+                    "field_conflicts": { "type": "string", "enum": ["rename", "merge"] },
                     "out": save_out,
                     "open": open,
                 }),
@@ -216,6 +217,7 @@ pub fn tools() -> Vec<ToolDef> {
                     "paths": { "type": "array", "items": { "type": "string" }, "minItems": 1, "maxItems": pdfcraft_engine::MAX_CREATE_FILES },
                     "mode": { "type": "string", "enum": ["combine", "separate"] },
                     "pages": { "type": "array", "items": { "type": ["string", "null"] } },
+                    "field_conflicts": { "type": "string", "enum": ["rename", "merge"], "description": "Mode \"combine\": form fields whose names collide across files are renamed (default) or merged when compatible, as in doc_combine." },
                     "out": save_out.clone(),
                     "open": open.clone(),
                     "out_dir": { "type": "string", "description": "Folder for mode \"separate\"." },

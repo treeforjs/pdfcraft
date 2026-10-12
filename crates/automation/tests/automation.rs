@@ -3986,3 +3986,118 @@ fn page_transitions_through_tools() {
     ok(&mut a, "edit_undo", json!({ "doc": back }));
     assert_eq!(ok(&mut a, "page_transitions", json!({ "doc": back }))["pages"], before["pages"]);
 }
+
+/// A one-page form: `person.name` (text under a non-terminal parent) and `agree` (check box), with
+/// `/Helv` in `/DR` being `font`; the page reads `label`.
+fn conflict_form(value: &str, font: &str, label: &str) -> Vec<u8> {
+    let content = format!("BT /F1 18 Tf 20 250 Td ({label}) Tj ET");
+    let objs: Vec<String> = vec![
+        "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [5 0 R 7 0 R] /DR << /Font << /Helv 4 0 R >> >> /DA (/Helv 0 Tf 0 g) >> >>".into(), // 1
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 /MediaBox [0 0 200 300] >>".into(), // 2
+        "<< /Type /Page /Parent 2 0 R /Contents 8 0 R /Resources << /Font << /F1 4 0 R >> >> /Annots [6 0 R 7 0 R] >>".into(), // 3
+        format!("<< /Type /Font /Subtype /Type1 /BaseFont /{font} /Encoding /WinAnsiEncoding >>"), // 4
+        "<< /T (person) /Kids [6 0 R] >>".into(), // 5
+        format!("<< /Type /Annot /Subtype /Widget /Parent 5 0 R /T (name) /FT /Tx /V ({value}) /DA (/Helv 12 Tf 0 g) /Rect [20 180 180 200] /P 3 0 R >>"), // 6
+        "<< /Type /Annot /Subtype /Widget /T (agree) /FT /Btn /V /Off /AS /Off /Rect [20 140 40 160] /P 3 0 R /AP << /N << /Yes 9 0 R /Off 10 0 R >> >> >>".into(), // 7
+        format!("<< /Length {} >>\nstream\n{content}\nendstream", content.len()), // 8
+        "<< /Type /XObject /Subtype /Form /BBox [0 0 20 20] /Length 18 >>\nstream\n0 g 0 0 20 20 re f\nendstream".into(), // 9
+        "<< /Type /XObject /Subtype /Form /BBox [0 0 20 20] /Length 0 >>\nstream\n\nendstream".into(), // 10
+    ];
+    let mut out = b"%PDF-1.7\n".to_vec();
+    let mut offsets = Vec::new();
+    for (i, o) in objs.iter().enumerate() {
+        offsets.push(out.len());
+        out.extend_from_slice(format!("{} 0 obj\n{o}\nendobj\n", i + 1).as_bytes());
+    }
+    let xref = out.len();
+    out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objs.len() + 1).as_bytes());
+    for o in offsets {
+        out.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+    }
+    out.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objs.len() + 1).as_bytes());
+    out
+}
+
+/// name → value of every field of `doc`.
+fn field_values(a: &mut Automation, doc: u64) -> Vec<(String, Value)> {
+    let list = ok(a, "form_fields", json!({ "doc": doc }));
+    list["fields"].as_array().unwrap().iter().map(|f| (f["name"].as_str().unwrap().to_string(), f["value"].clone())).collect()
+}
+
+/// Combining two copies of a form keeps their values apart (colliding names are renamed), the
+/// merge option joins compatible fields instead, and inserting pages from a form behaves the same.
+#[test]
+fn combining_forms_keeps_colliding_fields_independent() {
+    let dir = workdir("field-conflicts");
+    std::fs::write(dir.join("form-a.pdf"), conflict_form("Ada", "Helvetica", "Form A")).unwrap();
+    std::fs::write(dir.join("form-b.pdf"), conflict_form("Bob", "Courier", "Form B")).unwrap();
+    let mut a = auto(&dir);
+    let r = ok(&mut a, "doc_combine", json!({ "paths": ["form-a.pdf", "form-b.pdf"], "open": true }));
+    assert_eq!(r["fields"]["renamed"], json!([{ "from": "person", "to": "person#2" }, { "from": "agree", "to": "agree#2" }]), "{r}");
+    assert_eq!(r["fields"]["resources_renamed"], json!([{ "from": "Font/Helv", "to": "Font/Helv_2" }]));
+    assert_eq!(r["fields"]["merged"], json!([]));
+    let doc = r["document"]["doc"].as_u64().unwrap();
+    let values = field_values(&mut a, doc);
+    assert_eq!(
+        values,
+        [
+            ("person.name".to_string(), json!("Ada")),
+            ("agree".to_string(), json!(false)),
+            ("person#2.name".to_string(), json!("Bob")),
+            ("agree#2".to_string(), json!(false)),
+        ]
+    );
+    // Filling the second file's fields leaves the first file's alone.
+    ok(&mut a, "form_fill", json!({ "doc": doc, "values": { "person#2.name": "Carol", "agree#2": true } }));
+    ok(&mut a, "doc_save", json!({ "doc": doc, "path": "combined-filled.pdf" }));
+    let mut b = auto(&dir);
+    let re = ok(&mut b, "doc_open", json!({ "path": "combined-filled.pdf" }))["doc"].as_u64().unwrap();
+    let values = field_values(&mut b, re);
+    assert_eq!(
+        values,
+        [
+            ("person.name".to_string(), json!("Ada")),
+            ("agree".to_string(), json!(false)),
+            ("person#2.name".to_string(), json!("Carol")),
+            ("agree#2".to_string(), json!(true)),
+        ]
+    );
+    // The new value is drawn on page 2 only, with the second file's font found under its new name.
+    let found = ok(&mut b, "text_find", json!({ "doc": re, "query": "Carol" }));
+    assert_eq!(found["count"], 1, "{found}");
+
+    // Merge: the check boxes become one field with two widgets; the hierarchy is still renamed.
+    let r = ok(&mut a, "doc_combine", json!({ "paths": ["form-a.pdf", "form-b.pdf"], "field_conflicts": "merge", "open": true }));
+    assert_eq!(r["fields"]["merged"], json!(["agree"]), "{r}");
+    assert_eq!(r["fields"]["renamed"], json!([{ "from": "person", "to": "person#2" }]));
+    let merged = r["document"]["doc"].as_u64().unwrap();
+    ok(&mut a, "form_fill", json!({ "doc": merged, "values": { "agree": true } }));
+    let names: Vec<String> = field_values(&mut a, merged).into_iter().map(|(n, _)| n).collect();
+    assert_eq!(names, ["person.name", "agree", "person#2.name"]);
+    assert_eq!(field_values(&mut a, merged)[1].1, json!(true));
+    assert!(matches!(
+        a.call("doc_combine", &json!({ "paths": ["form-a.pdf", "form-b.pdf"], "field_conflicts": "share" })),
+        Err(ToolError::InvalidArgs(m)) if m.contains("field_conflicts")
+    ));
+
+    // Create PDF from multiple files shares the code and the option.
+    let r = ok(&mut a, "doc_create_multiple", json!({ "paths": ["form-a.pdf", "form-b.pdf"], "open": true }));
+    assert_eq!(r["fields"]["renamed"].as_array().map(Vec::len), Some(2), "{r}");
+
+    // Insert Pages from File renames too, and the result saves and reopens.
+    let target = ok(&mut a, "doc_open", json!({ "path": "form-a.pdf" }))["doc"].as_u64().unwrap();
+    ok(&mut a, "page_insert_file", json!({ "doc": target, "path": "form-b.pdf", "at": 2 }));
+    ok(&mut a, "form_fill", json!({ "doc": target, "values": { "person.name": "Dee" } }));
+    ok(&mut a, "doc_save", json!({ "doc": target, "path": "inserted.pdf" }));
+    let mut c = auto(&dir);
+    let re = ok(&mut c, "doc_open", json!({ "path": "inserted.pdf" }))["doc"].as_u64().unwrap();
+    let values = field_values(&mut c, re);
+    assert_eq!(values[0], ("person.name".to_string(), json!("Dee")));
+    assert_eq!(values[2], ("person#2.name".to_string(), json!("Bob")));
+
+    // The schema documents the option.
+    for tool in ["doc_combine", "doc_create_multiple"] {
+        let def = tools().into_iter().find(|t| t.name == tool).unwrap();
+        assert_eq!(def.input_schema["properties"]["field_conflicts"]["enum"], json!(["rename", "merge"]), "{tool}");
+    }
+}

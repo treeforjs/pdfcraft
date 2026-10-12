@@ -2774,6 +2774,18 @@ impl Session {
     /// [`Self::combine_ranges`] with the password each encrypted source is opened with, by
     /// position (missing or `None`: no password). The result is not encrypted.
     pub fn combine_unlocked(&self, sources: &[CombineSource], passwords: &[Option<&str>]) -> Result<Arc<Vec<u8>>, EditError> {
+        self.combine_with(sources, passwords, pdfcraft_organize::FieldConflicts::Rename).map(|(bytes, _)| bytes)
+    }
+
+    /// [`Self::combine_unlocked`] with a policy for form fields whose names collide across the
+    /// files (renamed by default, so each copy keeps its own value; or merged when compatible).
+    /// Returns the bytes and what happened to the fields.
+    pub fn combine_with(
+        &self,
+        sources: &[CombineSource],
+        passwords: &[Option<&str>],
+        fields: pdfcraft_organize::FieldConflicts,
+    ) -> Result<(Arc<Vec<u8>>, pdfcraft_organize::FieldReport), EditError> {
         let docs = sources
             .iter()
             .enumerate()
@@ -2794,8 +2806,8 @@ impl Session {
         }
         let named: Vec<(&str, &pdfcraft_cos::Document, Option<&[usize]>)> =
             sources.iter().zip(docs.iter()).zip(&pages).map(|(((n, _, _), d), p)| (n.as_str(), d, p.as_deref())).collect();
-        let out = pdfcraft_organize::combine_selected(&named)?;
-        self.write_new(&out)
+        let (out, report) = pdfcraft_organize::combine_selected_with(&named, fields)?;
+        Ok((self.write_new(&out)?, report))
     }
 
     /// New PDF bytes containing copies of `pages` of the document (Extract Pages).

@@ -3031,11 +3031,11 @@ title = "Rename or merge colliding field names when combining"
 area = "D"
 tier = "P1"
 milestone = "M4"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["doc_combine", "doc_create_multiple"]
+evidence = ["crates/organize/src/tests.rs::combining_forms_renames_colliding_fields_so_values_stay_independent", "crates/organize/src/tests.rs::combining_forms_can_merge_compatible_fields", "crates/organize/src/tests.rs::inserting_pages_from_a_form_renames_colliding_fields", "crates/organize/src/fields.rs::scripts_update_literal_field_names_only", "crates/automation/tests/automation.rs::combining_forms_keeps_colliding_fields_independent"]
+notes = "Combine, Create from multiple files, Insert Pages from File and Duplicate Pages rename colliding top-level fields (name#2) and merge /DR with collision-safe font renames (/DA rewritten), /CO, NeedAppearances and SigFlags; the tools also offer field_conflicts: merge for compatible terminal fields. The desktop Combine and Insert dialogs have no rename/merge choice yet (always rename); JavaScript is updated only for literal names in getField/AFSimple_Calculate/resetForm."
 
 [[feature]]
 id = "organize.struct-tree-merge"
