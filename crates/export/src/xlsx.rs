@@ -409,8 +409,30 @@ mod tests {
         assert_eq!(number("0"), Some((0.0, look(false, 0, false, false))));
         assert_eq!(number("-0").map(|n| n.0.is_sign_negative()), Some(false));
         for text in [
-            "", "-", "%", "()", "007", "1.234,56", "1,23", "12,3456", ",123", "0,123", "1.2.3", "$12", "12 kg", "1e5", "+5", ".5", "5.",
-            "2026-10-11", "1234567890123456", "NaN", "inf", "--1", "(-1)", "１２",
+            "",
+            "-",
+            "%",
+            "()",
+            "007",
+            "1.234,56",
+            "1,23",
+            "12,3456",
+            ",123",
+            "0,123",
+            "1.2.3",
+            "$12",
+            "12 kg",
+            "1e5",
+            "+5",
+            ".5",
+            "5.",
+            "2026-10-11",
+            "1234567890123456",
+            "NaN",
+            "inf",
+            "--1",
+            "(-1)",
+            "１２",
         ] {
             assert_eq!(number(text), None, "{text:?} must stay text");
         }
@@ -468,10 +490,16 @@ mod tests {
         let x = xlsx(&[statement(), Page::default()], "Statement");
         assert!(x.starts_with(b"PK\x03\x04"));
         let workbook = part(&x, "xl/workbook.xml").unwrap_or_default();
-        assert!(workbook.contains("<sheet name=\"Page 1\" sheetId=\"1\" r:id=\"rId1\"/><sheet name=\"Page 2\" sheetId=\"2\" r:id=\"rId2\"/>"), "{workbook}");
+        assert!(
+            workbook.contains("<sheet name=\"Page 1\" sheetId=\"1\" r:id=\"rId1\"/><sheet name=\"Page 2\" sheetId=\"2\" r:id=\"rId2\"/>"),
+            "{workbook}"
+        );
         let sheet = part(&x, "xl/worksheets/sheet1.xml").unwrap_or_default();
         // The heading paragraph is A1, then the table starts on row 2.
-        assert!(sheet.contains("<c r=\"A1\" t=\"inlineStr\" s=\"1\"><is><t xml:space=\"preserve\">Quarterly statement for the Example &amp; Co. account"), "{sheet}");
+        assert!(
+            sheet.contains("<c r=\"A1\" t=\"inlineStr\" s=\"1\"><is><t xml:space=\"preserve\">Quarterly statement for the Example &amp; Co. account"),
+            "{sheet}"
+        );
         assert!(sheet.contains("<c r=\"C2\" t=\"inlineStr\" s=\"1\"><is><t xml:space=\"preserve\">Amount</t>"), "{sheet}");
         assert!(sheet.contains("<c r=\"A3\" t=\"inlineStr\"><is><t xml:space=\"preserve\">Widgets &lt;A&gt;</t>"), "{sheet}");
         assert!(sheet.contains("<c r=\"B3\" t=\"inlineStr\"><is><t xml:space=\"preserve\">007</t>"), "leading zeros stay text: {sheet}");

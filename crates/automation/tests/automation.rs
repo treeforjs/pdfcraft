@@ -3434,10 +3434,20 @@ fn exporting_tables_to_excel() {
     let parts = unzip(&bytes);
     let part = |name: &str| parts.iter().find(|p| p.0 == name).map(|p| p.1.clone()).unwrap_or_else(|| panic!("{name} missing: {parts:?}"));
     let names: Vec<&str> = parts.iter().map(|p| p.0.as_str()).collect();
-    for n in ["[Content_Types].xml", "_rels/.rels", "xl/workbook.xml", "xl/_rels/workbook.xml.rels", "xl/styles.xml", "xl/worksheets/sheet1.xml", "xl/worksheets/sheet2.xml"] {
+    for n in [
+        "[Content_Types].xml",
+        "_rels/.rels",
+        "xl/workbook.xml",
+        "xl/_rels/workbook.xml.rels",
+        "xl/styles.xml",
+        "xl/worksheets/sheet1.xml",
+        "xl/worksheets/sheet2.xml",
+    ] {
         assert!(names.contains(&n), "{n}: {names:?}");
     }
-    assert!(part("xl/workbook.xml").contains("<sheet name=\"Page 1\" sheetId=\"1\" r:id=\"rId1\"/><sheet name=\"Page 2\" sheetId=\"2\" r:id=\"rId2\"/>"));
+    assert!(
+        part("xl/workbook.xml").contains("<sheet name=\"Page 1\" sheetId=\"1\" r:id=\"rId1\"/><sheet name=\"Page 2\" sheetId=\"2\" r:id=\"rId2\"/>")
+    );
 
     // Every cell of sheet 1 as (reference, inline text or "=number").
     let sheet = part("xl/worksheets/sheet1.xml");

@@ -1148,7 +1148,10 @@ mod tests {
         assert_eq!(trn(cs, 0, "{n} field", "{n} fields"), "0 polí");
         assert_eq!(tr(cs, "Preflight…"), "Předtisková kontrola…");
         assert_eq!(tr(cs, "October"), "Říjen");
-        assert_eq!(fmt(tr(cs, "{month} {day}, {y}"), &[("month", tr_ctx(cs, "calendar date", "October")), ("day", "11"), ("y", "2026")]), "11. října 2026");
+        assert_eq!(
+            fmt(tr(cs, "{month} {day}, {y}"), &[("month", tr_ctx(cs, "calendar date", "October")), ("day", "11"), ("y", "2026")]),
+            "11. října 2026"
+        );
         let mut app = crate::PdfCraftApp::default();
         app.set_option("language", "cs").unwrap();
         assert!(app.set_option("language", "cz").is_err());
