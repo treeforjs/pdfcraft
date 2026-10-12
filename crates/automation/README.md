@@ -51,8 +51,13 @@ or fill colour. Names, rectangles and rotations require the single-field form. R
 can encode the proposed paragraph. `text_edit {doc, page, paragraph, font_resource: "F2", text?}`
 selects that exact face, including an embedded subset, with its own advances. Missing resources
 or unsupported characters fail without changing the document or its undo history; subsets are
-never expanded. The proposal uses the editor's existing whitespace normalization (newlines/tabs
-become ordinary spaces; ideographic spaces are preserved).
+never expanded. The proposal is tested as `text_edit` shows it: line breaks (CR LF counts once)
+and tabs become one ordinary space each; repeated, no-break and ideographic spaces are kept.
+
+Replacing a whole paragraph's `text` keeps what the edit leaves alone: in upright paragraphs the
+untouched characters keep their source codes, styles and TJ spacing, and source rows the edit
+does not reach keep their line breaks. Rotated, skewed or reflected paragraphs are still
+re-encoded with whitespace collapsed.
 
 An exact resource cannot be combined with `font`, `bold`, or `italic`: its face fixes those styles.
 Subsequent size/colour changes keep the selected face. Subsequent bold/italic changes select a
