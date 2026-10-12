@@ -292,10 +292,10 @@ fn view_rect(doc: &pdfcraft_engine::Document, page: usize, b: [f64; 4]) -> Optio
 }
 
 impl Automation {
-    fn ocr_settings(&self, a: &Args) -> Result<pdfcraft_engine::ocr::OcrSettings> {
+    pub(crate) fn ocr_settings(&self, a: &Args) -> Result<pdfcraft_engine::ocr::OcrSettings> {
         let mut settings = pdfcraft_engine::ocr::OcrSettings::default();
         if let Some(d) = a.opt_num("dpi")? {
-            settings.dpi = d.clamp(72.0, 600.0) as f32;
+            settings.dpi = d as f32;
         }
         if let Some(l) = a.opt_str("language")? {
             if !pdfcraft_engine::ocr::LANGUAGES.iter().any(|x| x.0 == l) {
@@ -306,6 +306,7 @@ impl Automation {
         if let Some(s) = a.opt_bool("skip_text_pages")? {
             settings.skip_text_pages = s;
         }
+        settings.validate().map_err(ToolError::InvalidArgs)?;
         Ok(settings)
     }
 
@@ -343,10 +344,10 @@ impl Automation {
             .iter()
             .map(|p| match &p.skipped {
                 Some(why) => json!({ "page": p.page + 1, "skipped": why }),
-                None => json!({ "page": p.page + 1, "words": p.words.len(), "text": p.text() }),
+                None => json!({ "page": p.page + 1, "words": p.word_count(), "text": p.text() }),
             })
             .collect();
-        Ok(json!({ "words": found.iter().map(|p| p.words.len()).sum::<usize>(), "pages": list }))
+        Ok(json!({ "words": found.iter().map(|p| p.word_count()).sum::<usize>(), "pages": list }))
     }
 
     pub(crate) fn ocr_status(&self) -> Result<Value> {

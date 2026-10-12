@@ -2072,3 +2072,19 @@
 	Select paragraph	Выделить абзац
 	Document and comments with connector lines on single pages	Документ и комментарии с соединительными линиями на одной странице
 	Document and comments with sequence numbers on separate pages	Документ и комментарии с порядковыми номерами на отдельных страницах
+
+# OCR review
+	; 1 page skipped	; 1 страница пропущена
+	; {n} pages skipped	; пропущено страниц: {n}
+	Review recognized text	Проверка распознанного текста
+	Correct the words before adding searchable text. The page image will not change.	Исправьте слова перед добавлением текста для поиска. Изображение страницы не изменится.
+	Page {p}, word {w} of {n}	Страница {p}, слово {w} из {n}
+	Recognized word	Распознанное слово
+	Leave a word empty to omit it from the searchable text.	Оставьте слово пустым, чтобы исключить его из текста для поиска.
+	Previous word	Предыдущее слово
+	Next word	Следующее слово
+	No words were recognized.	Слова не распознаны.
+	Skipped pages	Пропущенные страницы
+	Apply recognized text	Применить распознанный текст
+	Review recognized text before applying	Проверять распознанный текст перед применением
+	Text recognition canceled; no text was applied	Распознавание текста отменено; текст не добавлен

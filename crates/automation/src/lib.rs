@@ -21,6 +21,7 @@ mod links;
 #[cfg(feature = "mcp")]
 pub mod mcp;
 mod measure;
+mod ocr_review;
 mod preflight;
 mod printing;
 mod reader_selection;
@@ -91,6 +92,8 @@ pub struct Automation {
     renderers: HashMap<DocId, (Arc<Vec<u8>>, PageRenderer)>,
     /// Extracted page text per document version (the working bytes it was taken from).
     texts: HashMap<DocId, TextCache>,
+    /// Recognition drafts awaiting explicit correction, apply or cancellation.
+    ocr_reviews: HashMap<DocId, pdfcraft_engine::ocr::OcrReview>,
 }
 
 impl Default for Automation {
@@ -101,7 +104,7 @@ impl Default for Automation {
 
 impl Automation {
     pub fn new() -> Self {
-        Self { session: Session::new(), root: None, renderers: HashMap::new(), texts: HashMap::new() }
+        Self { session: Session::new(), root: None, renderers: HashMap::new(), texts: HashMap::new(), ocr_reviews: HashMap::new() }
     }
 
     /// Confine every path the tools read or write to `root` (relative paths resolve inside it).
@@ -622,6 +625,11 @@ impl Automation {
             "sign_list" => self.sign_list(&a)?,
             "accessibility_check" => self.a11y_check(&a)?,
             "ocr_recognize" => self.ocr_recognize(&a)?,
+            "ocr_prepare" => self.ocr_prepare(&a)?,
+            "ocr_review" => self.ocr_review(&a)?,
+            "ocr_correct" => self.ocr_correct(&a)?,
+            "ocr_apply" => self.ocr_apply(&a)?,
+            "ocr_cancel" => self.ocr_cancel(&a)?,
             "js_run" => self.js_run(&a)?,
             "js_document_scripts" => self.js_document_scripts(&a)?,
             "js_set_document_script" => self.js_set_document_script(&a)?,
@@ -717,6 +725,7 @@ impl Automation {
         self.session.close(id);
         self.renderers.remove(&id);
         self.texts.remove(&id);
+        self.ocr_reviews.remove(&id);
         Ok(json!({ "closed": id.0 }))
     }
 

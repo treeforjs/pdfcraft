@@ -2159,3 +2159,19 @@ signature pad	Type	入力
 	Select paragraph	段落を選択
 	Document and comments with connector lines on single pages	文書と注釈（接続線付き、同じページ）
 	Document and comments with sequence numbers on separate pages	文書と注釈（通し番号付き、別ページ）
+
+# OCR review
+	; 1 page skipped	、1 ページをスキップしました
+	; {n} pages skipped	、{n} ページをスキップしました
+	Review recognized text	認識したテキストの確認
+	Correct the words before adding searchable text. The page image will not change.	検索可能なテキストを追加する前に単語を修正します。ページの画像は変更されません。
+	Page {p}, word {w} of {n}	{p} ページ、{n} 語中 {w} 語目
+	Recognized word	認識した単語
+	Leave a word empty to omit it from the searchable text.	単語を空にすると、検索可能なテキストから除外されます。
+	Previous word	前の単語
+	Next word	次の単語
+	No words were recognized.	単語は認識されませんでした。
+	Skipped pages	スキップしたページ
+	Apply recognized text	認識したテキストを適用
+	Review recognized text before applying	適用する前に認識したテキストを確認
+	Text recognition canceled; no text was applied	テキスト認識をキャンセルしました。テキストは適用されていません

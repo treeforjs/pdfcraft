@@ -2121,3 +2121,19 @@ action wizard	Start	Старт
 	Select paragraph	Избор на абзац
 	Document and comments with connector lines on single pages	Документ и коментари със свързващи линии на една страница
 	Document and comments with sequence numbers on separate pages	Документ и коментари с поредни номера на отделни страници
+
+# OCR review
+	; 1 page skipped	; 1 страница е пропусната
+	; {n} pages skipped	; {n} страници са пропуснати
+	Review recognized text	Преглед на разпознатия текст
+	Correct the words before adding searchable text. The page image will not change.	Коригирайте думите, преди да добавите текст с възможност за търсене. Изображението на страницата няма да се промени.
+	Page {p}, word {w} of {n}	Страница {p}, дума {w} от {n}
+	Recognized word	Разпозната дума
+	Leave a word empty to omit it from the searchable text.	Оставете думата празна, за да я пропуснете от текста с възможност за търсене.
+	Previous word	Предишна дума
+	Next word	Следваща дума
+	No words were recognized.	Не бяха разпознати думи.
+	Skipped pages	Пропуснати страници
+	Apply recognized text	Приложи разпознатия текст
+	Review recognized text before applying	Преглед на разпознатия текст преди прилагане
+	Text recognition canceled; no text was applied	Разпознаването на текст е отменено; не е приложен текст

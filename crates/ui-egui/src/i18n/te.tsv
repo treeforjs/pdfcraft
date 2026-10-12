@@ -2090,3 +2090,19 @@ action wizard	Start	ప్రారంభించు
 	Select paragraph	పేరాను ఎంచుకోండి
 	Document and comments with connector lines on single pages	కనెక్టర్ గీతలతో పత్రం మరియు వ్యాఖ్యలు ఒకే పేజీలో
 	Document and comments with sequence numbers on separate pages	క్రమ సంఖ్యలతో పత్రం మరియు వ్యాఖ్యలు వేర్వేరు పేజీలలో
+
+# OCR review
+	; 1 page skipped	; 1 పేజీ దాటవేయబడింది
+	; {n} pages skipped	; {n} పేజీలు దాటవేయబడ్డాయి
+	Review recognized text	గుర్తించిన టెక్స్ట్‌ను సమీక్షించు
+	Correct the words before adding searchable text. The page image will not change.	వెతకగలిగే టెక్స్ట్‌ను జోడించే ముందు పదాలను సరిచేయండి. పేజీ చిత్రం మారదు.
+	Page {p}, word {w} of {n}	పేజీ {p}, {n}లో పదం {w}
+	Recognized word	గుర్తించిన పదం
+	Leave a word empty to omit it from the searchable text.	వెతకగలిగే టెక్స్ట్ నుండి ఒక పదాన్ని వదిలివేయడానికి దాన్ని ఖాళీగా ఉంచండి.
+	Previous word	మునుపటి పదం
+	Next word	తదుపరి పదం
+	No words were recognized.	ఏ పదాలూ గుర్తించబడలేదు.
+	Skipped pages	దాటవేసిన పేజీలు
+	Apply recognized text	గుర్తించిన టెక్స్ట్‌ను వర్తింపజేయి
+	Review recognized text before applying	వర్తింపజేసే ముందు గుర్తించిన టెక్స్ట్‌ను సమీక్షించు
+	Text recognition canceled; no text was applied	టెక్స్ట్ గుర్తింపు రద్దు చేయబడింది; ఏ టెక్స్ట్ వర్తింపజేయబడలేదు

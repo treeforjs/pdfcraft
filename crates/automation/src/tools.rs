@@ -1008,7 +1008,7 @@ pub fn tools() -> Vec<ToolDef> {
             )),
         t("js_enabled", "JavaScript on or off", "Preferences ▸ JavaScript ▸ Enable Acrobat JavaScript: set it with `enabled`, or read it. With JavaScript off, field scripts other than Acrobat's AF calls don't run.")
             .with(schema(json!({ "enabled": { "type": "boolean" } }), &[])),
-        t("ocr_recognize", "Recognize text (OCR)", "Scan & OCR ▸ Recognize text: render pages, read the words in them and add them as invisible text over the page image, so scanned pages become searchable and selectable (a searchable image; the image is not changed). Pages that already have text are skipped unless skip_text_pages is false. Returns each page's recognised text, word count or why it was skipped. Needs the OCR models (ocr_status). Undoable as one step.")
+        t("ocr_recognize", "Recognize text (OCR)", "Scan & OCR ▸ Recognize text: render pages, read the words in them and add them as invisible text over the page image, so scanned pages become searchable and selectable (a searchable image; the image is not changed). Pages that already have text are skipped unless skip_text_pages is false. Returns each page's recognised text, word count or why it was skipped. Needs the OCR models (ocr_status) and permission both to copy text and to change the document (checked before any page is read). Undoable as one step.")
             .cmd("ocr.recognize")
             .with(schema(
                 json!({
@@ -1035,6 +1035,21 @@ pub fn tools() -> Vec<ToolDef> {
             .ro()
             .cmd("ocr.recognize")
             .with(schema(json!({}), &[])),
+        t("ocr_prepare", "Recognize text for review", "Recognize pages into a draft without editing the PDF. Use ocr_review/ocr_correct, then ocr_apply or ocr_cancel. Needs permission both to copy text and to change the document (a restricted encrypted file must be opened with its permissions password); this is checked before any page is read. Drafts are bound to the document version; intervening edits require recognition again. At most eight drafts, two million words and 128 MiB of text are held at once. English recognition only; the original image is preserved.")
+            .ro().cmd("ocr.recognize").with(schema(json!({
+                "doc": doc(), "pages": pages("to recognize (default all)"),
+                "dpi": {"type":"number", "minimum":72, "maximum":600},
+                "language": {"type":"string", "enum":["en"]},
+                "skip_text_pages": {"type":"boolean"}
+            }), &["doc"])),
+        t("ocr_review", "Inspect recognized text draft", "List recognized words, page coordinates and skipped-page reasons. Does not change the PDF. If the document changed, was closed or no longer allows copying and changes, returns an error and discards the draft instead of its words.")
+            .ro().cmd("ocr.recognize").with(schema(json!({"doc":doc()}), &["doc"])),
+        t("ocr_correct", "Correct a recognized word", "Change one word in a recognition draft, preserving its box. Page and word are 1-based indexes from ocr_review. Empty text omits a word. Current searchable text supports WinAnsi characters; other characters are rejected without changing the draft.")
+            .cmd("ocr.recognize").with(schema(json!({"doc":doc(), "page":{"type":"integer", "minimum":1}, "word":{"type":"integer", "minimum":1}, "text":{"type":"string", "maxLength":16384}}), &["doc","page","word","text"])),
+        t("ocr_apply", "Apply recognized text draft", "Add reviewed words as invisible searchable text in one undoable edit. Refuses (and discards the draft for) a changed, closed or restricted document. Preserves original page images and removes the draft after success.")
+            .cmd("ocr.recognize").with(schema(json!({"doc":doc()}), &["doc"])),
+        t("ocr_cancel", "Discard recognized text draft", "Discard the pending recognition draft without changing document bytes or history.")
+            .cmd("ocr.recognize").with(schema(json!({"doc":doc()}), &["doc"])),
         t("doc_export_all_images", "Export all images", "Write the images that pages use into a folder (`<name>_Page_<n>_Image_<k>.jpg|png`), each once: JPEG images unchanged, others as PNG with their soft mask as alpha. min_size skips images with fewer pixels on their shorter side. Images that can't be decoded yet (JPEG 2000, JBIG2, CCITT, separations) are listed under skipped. Includes unsaved edits.")
             .cmd("export.all_images")
             .with(schema(

@@ -2168,3 +2168,19 @@ signature pad	Type	Digita
 	Select paragraph	Seleziona paragrafo
 	Document and comments with connector lines on single pages	Documento e commenti con linee di collegamento su un'unica pagina
 	Document and comments with sequence numbers on separate pages	Documento e commenti con numeri progressivi su pagine separate
+
+# OCR review
+	; 1 page skipped	; 1 pagina saltata
+	; {n} pages skipped	; {n} pagine saltate
+	Review recognized text	Rivedi il testo riconosciuto
+	Correct the words before adding searchable text. The page image will not change.	Correggi le parole prima di aggiungere il testo ricercabile. L’immagine della pagina non cambierà.
+	Page {p}, word {w} of {n}	Pagina {p}, parola {w} di {n}
+	Recognized word	Parola riconosciuta
+	Leave a word empty to omit it from the searchable text.	Lascia vuota una parola per ometterla dal testo ricercabile.
+	Previous word	Parola precedente
+	Next word	Parola successiva
+	No words were recognized.	Nessuna parola riconosciuta.
+	Skipped pages	Pagine saltate
+	Apply recognized text	Applica il testo riconosciuto
+	Review recognized text before applying	Rivedi il testo riconosciuto prima di applicarlo
+	Text recognition canceled; no text was applied	Riconoscimento del testo annullato; nessun testo applicato

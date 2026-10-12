@@ -2182,3 +2182,19 @@ certificate	Subject	Власник сертифіката
 	Select paragraph	Виділити абзац
 	Document and comments with connector lines on single pages	Документ і коментарі з лініями-з'єднувачами на одній сторінці
 	Document and comments with sequence numbers on separate pages	Документ і коментарі з порядковими номерами на окремих сторінках
+
+# OCR review
+	; 1 page skipped	; 1 сторінку пропущено
+	; {n} pages skipped	; пропущено сторінок: {n}
+	Review recognized text	Перевірка розпізнаного тексту
+	Correct the words before adding searchable text. The page image will not change.	Виправте слова перед додаванням тексту для пошуку. Зображення сторінки не зміниться.
+	Page {p}, word {w} of {n}	Сторінка {p}, слово {w} з {n}
+	Recognized word	Розпізнане слово
+	Leave a word empty to omit it from the searchable text.	Залиште слово порожнім, щоб пропустити його в тексті для пошуку.
+	Previous word	Попереднє слово
+	Next word	Наступне слово
+	No words were recognized.	Не розпізнано жодного слова.
+	Skipped pages	Пропущені сторінки
+	Apply recognized text	Застосувати розпізнаний текст
+	Review recognized text before applying	Перевіряти розпізнаний текст перед застосуванням
+	Text recognition canceled; no text was applied	Розпізнавання тексту скасовано; текст не додано

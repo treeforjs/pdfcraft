@@ -2123,3 +2123,19 @@
 	Select paragraph	选择段落
 	Document and comments with connector lines on single pages	文档和注释，带连接线，在同一页面上
 	Document and comments with sequence numbers on separate pages	文档和注释，带序号，在单独的页面上
+
+# OCR review
+	; 1 page skipped	；跳过了 1 页
+	; {n} pages skipped	；跳过了 {n} 页
+	Review recognized text	检查识别的文本
+	Correct the words before adding searchable text. The page image will not change.	在添加可搜索文本之前更正单词。页面图像不会改变。
+	Page {p}, word {w} of {n}	第 {p} 页，第 {w} 个单词，共 {n} 个
+	Recognized word	识别的单词
+	Leave a word empty to omit it from the searchable text.	将单词留空即可从可搜索文本中省略。
+	Previous word	上一个单词
+	Next word	下一个单词
+	No words were recognized.	未识别到任何单词。
+	Skipped pages	跳过的页面
+	Apply recognized text	应用识别的文本
+	Review recognized text before applying	应用前检查识别的文本
+	Text recognition canceled; no text was applied	文本识别已取消；未应用任何文本

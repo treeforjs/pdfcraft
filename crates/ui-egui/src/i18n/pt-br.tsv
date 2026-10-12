@@ -2160,3 +2160,19 @@ comment menu	Edit	Editar
 	Select paragraph	Selecionar parágrafo
 	Document and comments with connector lines on single pages	Documento e comentários com linhas de conexão na mesma página
 	Document and comments with sequence numbers on separate pages	Documento e comentários com números de sequência em páginas separadas
+
+# OCR review
+	; 1 page skipped	; 1 página ignorada
+	; {n} pages skipped	; {n} páginas ignoradas
+	Review recognized text	Revisar texto reconhecido
+	Correct the words before adding searchable text. The page image will not change.	Corrija as palavras antes de adicionar o texto pesquisável. A imagem da página não será alterada.
+	Page {p}, word {w} of {n}	Página {p}, palavra {w} de {n}
+	Recognized word	Palavra reconhecida
+	Leave a word empty to omit it from the searchable text.	Deixe uma palavra vazia para omiti-la do texto pesquisável.
+	Previous word	Palavra anterior
+	Next word	Próxima palavra
+	No words were recognized.	Nenhuma palavra foi reconhecida.
+	Skipped pages	Páginas ignoradas
+	Apply recognized text	Aplicar texto reconhecido
+	Review recognized text before applying	Revisar o texto reconhecido antes de aplicar
+	Text recognition canceled; no text was applied	Reconhecimento de texto cancelado; nenhum texto foi aplicado

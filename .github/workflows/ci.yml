@@ -64,11 +64,19 @@ jobs:
         if: runner.os != 'Linux'
         run: cargo test --workspace
 
-      - name: Test (with craft-fonts)
+      # The OCR models (pinned by SHA-256 in ATTRIBUTION.toml; xtask verifies them), so the
+      # model-backed OCR tests run on Linux. PDFCRAFT_MODELS_REQUIRED turns their skip-without-
+      # models into a failure, so a passing run means they really executed.
+      - name: Fetch the OCR models (Linux)
+        if: runner.os == 'Linux'
+        run: cargo xtask models
+
+      - name: Test (with craft-fonts and OCR models)
         if: runner.os == 'Linux'
         env:
           CRAFT_FONTS_DIR: ${{ github.workspace }}/craft-fonts
           CRAFT_FONTS_REQUIRED: "1"
+          PDFCRAFT_MODELS_REQUIRED: "1"
         run: cargo test --workspace
 
       - name: Layering

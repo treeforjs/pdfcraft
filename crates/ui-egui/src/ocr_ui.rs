@@ -1,12 +1,12 @@
 //! Scan & OCR ▸ Recognize text: the Recognize Text dialog (pages, language, output, resolution)
 //! and the background run with its progress. Recognition happens on a worker thread; the result
-//! is applied as one undoable edit when it is done.
+//! is reviewed by default, then applied to the captured document version as one undoable edit.
 
 use std::sync::{Arc, Mutex};
 
 use egui::{Align, Layout};
 use pdfcraft_engine::DocId;
-use pdfcraft_engine::ocr::{LANGUAGES, OcrPage, OcrSettings};
+use pdfcraft_engine::ocr::{LANGUAGES, OcrReview, OcrSettings};
 
 use crate::theme::{self, Tokens};
 use crate::{PdfCraftApp, widgets};
@@ -28,11 +28,12 @@ pub struct OcrDraft {
     pub language: String,
     /// "Downsample to" resolution.
     pub dpi: u32,
+    pub review: bool,
 }
 
 impl Default for OcrDraft {
     fn default() -> Self {
-        OcrDraft { pages: OcrPages::All, from: 1, to: 1, language: "en".into(), dpi: 300 }
+        OcrDraft { pages: OcrPages::All, from: 1, to: 1, language: "en".into(), dpi: 300, review: true }
     }
 }
 
@@ -41,7 +42,7 @@ impl Default for OcrDraft {
 pub struct OcrProgress {
     pub done: usize,
     pub total: usize,
-    pub result: Option<Result<Vec<OcrPage>, String>>,
+    pub result: Option<Result<OcrReview, String>>,
     pub cancel: bool,
 }
 
@@ -56,6 +57,50 @@ pub struct BatchProgress {
 pub struct OcrRun {
     pub doc: DocId,
     pub progress: Arc<Mutex<OcrProgress>>,
+    review_first: bool,
+    review: Option<ReviewDraft>,
+}
+
+struct ReviewDraft {
+    result: OcrReview,
+    locations: Vec<(usize, usize)>,
+    selected: usize,
+    text: String,
+    error: Option<String>,
+}
+
+impl ReviewDraft {
+    fn new(result: OcrReview) -> Self {
+        let locations = result.pages().iter().enumerate().flat_map(|(p, page)| (0..page.words.len()).map(move |w| (p, w))).collect();
+        let mut draft = Self { result, locations, selected: 0, text: String::new(), error: None };
+        draft.load();
+        draft
+    }
+
+    fn load(&mut self) {
+        self.text = self
+            .locations
+            .get(self.selected)
+            .and_then(|(p, w)| self.result.pages().get(*p)?.words.get(*w))
+            .map(|w| w.text.clone())
+            .unwrap_or_default();
+        self.error = None;
+    }
+
+    fn save(&mut self) -> bool {
+        let Some(&(slot, word)) = self.locations.get(self.selected) else { return true };
+        let Some(page) = self.result.pages().get(slot).map(|p| p.page) else { return false };
+        match self.result.correct(page, word, &self.text) {
+            Ok(()) => {
+                self.error = None;
+                true
+            }
+            Err(error) => {
+                self.error = Some(error);
+                false
+            }
+        }
+    }
 }
 
 pub(crate) fn body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> (bool, bool) {
@@ -110,6 +155,7 @@ pub(crate) fn body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> (boo
             });
             ui.end_row();
         });
+        ui.checkbox(&mut d.review, tl!("Review recognized text before applying"));
     });
     if !available {
         ui.label(
@@ -142,8 +188,9 @@ impl PdfCraftApp {
             self.notify_tr("Text recognition is already running");
             return;
         }
-        if let Some(why) = self.session.get(id).and_then(|d| d.read_only_reason.clone()) {
-            self.notify(why);
+        // Copy and modification authority, before any page is rendered or the models load.
+        if let Err(why) = self.session.ocr_authority(id) {
+            self.notify_error(why);
             return;
         }
         let d = &self.ocr_draft;
@@ -153,18 +200,28 @@ impl PdfCraftApp {
             OcrPages::Range => (d.from.saturating_sub(1)..d.to).collect(),
         };
         let settings = OcrSettings { dpi: d.dpi as f32, language: d.language.clone(), ..Default::default() };
-        let Some(job) = self.session.ocr_job(id, &pages, settings) else { return };
+        let job = match self.session.ocr_job_checked(id, &pages, settings) {
+            Ok(job) => job,
+            Err(error) => {
+                self.notify_error(error);
+                return;
+            }
+        };
+        let review_first = d.review;
         let progress = Arc::new(Mutex::new(OcrProgress { total: job.pages.len(), ..Default::default() }));
         let p = progress.clone();
         let work = move || {
-            let result = pdfcraft_engine::ocr::engine().map(|ocr| {
-                job.run(&ocr, |done, total| {
-                    let Ok(mut s) = p.lock() else { return false };
-                    s.done = done;
-                    s.total = total;
-                    !s.cancel
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                pdfcraft_engine::ocr::engine().and_then(|ocr| {
+                    job.run(ocr.as_ref(), |done, total| {
+                        let Ok(mut s) = p.lock() else { return false };
+                        s.done = done;
+                        s.total = total;
+                        !s.cancel
+                    })
                 })
-            });
+            }))
+            .unwrap_or_else(|_| Err("text recognition failed unexpectedly; no text was applied".into()));
             if let Ok(mut s) = p.lock() {
                 s.result = Some(result);
             }
@@ -173,11 +230,14 @@ impl PdfCraftApp {
         if self.run_inline {
             work();
         } else {
-            std::thread::Builder::new().name("pdfcraft-ocr".into()).spawn(work).ok();
+            if let Err(error) = std::thread::Builder::new().name("pdfcraft-ocr".into()).spawn(work) {
+                self.notify_error(format!("could not start text recognition: {error}"));
+                return;
+            }
         }
         #[cfg(target_arch = "wasm32")]
         work();
-        self.ocr_run = Some(OcrRun { doc: id, progress });
+        self.ocr_run = Some(OcrRun { doc: id, progress, review_first, review: None });
         self.poll_ocr();
     }
 
@@ -267,8 +327,13 @@ impl PdfCraftApp {
         self.poll_ocr();
     }
 
-    /// Stop a running recognition (the pages read so far are kept).
+    /// Stop recognition or discard its draft. Cancellation never applies partial pages.
     pub fn cancel_ocr(&mut self) {
+        if self.ocr_run.as_ref().is_some_and(|r| r.review.is_some()) {
+            self.ocr_run = None;
+            self.notify_tr("Text recognition canceled; no text was applied");
+            return;
+        }
         if let Some(r) = &self.ocr_run
             && let Ok(mut s) = r.progress.lock()
         {
@@ -300,6 +365,10 @@ impl PdfCraftApp {
                 None => self.ocr_batch = None,
             }
         }
+        if self.ocr_run.as_ref().is_some_and(|r| r.review.is_some()) {
+            self.show_ocr_review();
+            return;
+        }
         let Some(run) = self.ocr_run.as_ref() else { return };
         let (doc, progress) = (run.doc, run.progress.clone());
         let Ok(mut s) = progress.lock() else { return };
@@ -317,18 +386,37 @@ impl PdfCraftApp {
             }
             return;
         };
+        let canceled = s.cancel;
         drop(s);
-        self.ocr_run = None;
-        let found = match result {
+        if canceled {
+            self.ocr_run = None;
+            self.notify_tr("Text recognition canceled; no text was applied");
+            return;
+        }
+        let review = match result {
             Ok(f) => f,
             Err(e) => {
+                self.ocr_run = None;
                 self.notify_error(e);
                 return;
             }
         };
+        if self.ocr_run.as_ref().is_some_and(|r| r.review_first) {
+            if let Some(run) = self.ocr_run.as_mut() {
+                run.review = Some(ReviewDraft::new(review));
+            }
+            self.show_ocr_review();
+            return;
+        }
+        self.ocr_run = None;
+        self.finish_ocr_review(doc, &review);
+    }
+
+    fn finish_ocr_review(&mut self, doc: DocId, review: &OcrReview) {
+        let found = review.pages();
         let read = found.iter().filter(|p| p.skipped.is_none()).count();
         let skipped = found.len() - read;
-        match self.session.apply_ocr(doc, &found) {
+        match self.session.apply_ocr_review(review) {
             Ok(words) => {
                 if let Some(info) = self.session.get(doc).map(|d| d.info.clone())
                     && let Some(view) = self.views.iter_mut().find(|v| v.id == doc)
@@ -344,14 +432,93 @@ impl PdfCraftApp {
                 let mut msg = crate::i18n::fmt(tl!("{words} on {pages}"), &[("words", &words_part), ("pages", &pages_part)]);
                 if skipped > 0 {
                     msg.push_str(&if skipped == 1 {
-                        crate::i18n::fmt(tl!("; 1 page already had text"), &[])
+                        crate::i18n::fmt(tl!("; 1 page skipped"), &[])
                     } else {
-                        crate::i18n::fmt(tl!("; {n} pages already had text"), &[("n", &skipped.to_string())])
+                        crate::i18n::fmt(tl!("; {n} pages skipped"), &[("n", &skipped.to_string())])
                     });
                 }
                 self.notify(msg);
             }
             Err(e) => self.notify_error(e),
+        }
+    }
+
+    fn show_ocr_review(&mut self) {
+        let Some(ctx) = self.ctx.clone() else { return };
+        let Some(doc) = self.ocr_run.as_ref().map(|r| r.doc) else { return };
+        // The words are shown only while the document is open and still allows copying and
+        // changes; otherwise the draft is discarded without showing them.
+        if let Err(error) = self.session.ocr_authority(doc) {
+            self.ocr_run = None;
+            self.notify_error(error);
+            return;
+        }
+        let Some(draft) = self.ocr_run.as_mut().and_then(|r| r.review.as_mut()) else { return };
+        let stale = self.session.validate_ocr_review(&draft.result).err();
+        let (mut apply, mut cancel) = (false, ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)));
+        let mut open = true;
+        egui::Window::new(tl!("Review recognized text"))
+            .id(egui::Id::new("ocr-review"))
+            .open(&mut open)
+            .collapsible(false)
+            .default_width(540.0)
+            .show(&ctx, |ui| {
+                ui.label(tl!("Correct the words before adding searchable text. The page image will not change."));
+                if let Some(error) = &stale {
+                    ui.colored_label(ui.visuals().error_fg_color, error);
+                }
+                if let Some(&(slot, word)) = draft.locations.get(draft.selected) {
+                    if let Some(page) = draft.result.pages().get(slot) {
+                        ui.label(crate::i18n::fmt(
+                            tl!("Page {p}, word {w} of {n}"),
+                            &[("p", &(page.page + 1).to_string()), ("w", &(word + 1).to_string()), ("n", &page.words.len().to_string())],
+                        ));
+                    }
+                    let label = ui.label(tl!("Recognized word"));
+                    ui.add_enabled(
+                        stale.is_none(),
+                        egui::TextEdit::singleline(&mut draft.text).id(egui::Id::new("ocr-review-text")).desired_width(f32::INFINITY),
+                    )
+                    .labelled_by(label.id);
+                    ui.label(tl!("Leave a word empty to omit it from the searchable text."));
+                    ui.horizontal(|ui| {
+                        if ui.add_enabled(draft.selected > 0, egui::Button::new(tl!("Previous word"))).clicked() && draft.save() {
+                            draft.selected -= 1;
+                            draft.load();
+                        }
+                        if ui.add_enabled(draft.selected + 1 < draft.locations.len(), egui::Button::new(tl!("Next word"))).clicked() && draft.save() {
+                            draft.selected += 1;
+                            draft.load();
+                        }
+                    });
+                } else {
+                    ui.label(tl!("No words were recognized."));
+                }
+                let skipped = draft.result.pages().iter().filter(|p| p.skipped.is_some()).count();
+                if skipped > 0 {
+                    egui::CollapsingHeader::new(tl!("Skipped pages")).show(ui, |ui| {
+                        for page in draft.result.pages().iter().filter(|p| p.skipped.is_some()) {
+                            if let Some(reason) = &page.skipped {
+                                ui.label(format!("{}: {reason}", page.page + 1));
+                            }
+                        }
+                    });
+                }
+                if let Some(error) = &draft.error {
+                    ui.colored_label(ui.visuals().error_fg_color, error);
+                }
+                ui.horizontal(|ui| {
+                    apply = ui.add_enabled(stale.is_none(), egui::Button::new(tl!("Apply recognized text"))).clicked() && draft.save();
+                    cancel |= ui.button(tl!("Cancel")).clicked();
+                });
+            });
+        if cancel || !open {
+            self.cancel_ocr();
+        } else if apply
+            && let Some(run) = self.ocr_run.take()
+            && let Some(draft) = run.review
+        {
+            self.finish_ocr_review(run.doc, &draft.result);
         }
     }
 }

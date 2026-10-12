@@ -6,7 +6,8 @@
 //! into page content: invisible text (rendering mode 3) over each word, so the page becomes a
 //! searchable image (Acrobat's "Searchable Image (Exact)": the image is left untouched).
 //!
-//! The models read the Latin alphabet (English and other languages written without accents).
+//! The bundled recognition model has an ASCII alphabet. English is the validated language;
+//! corrected searchable text supports WinAnsi accents, not arbitrary Unicode.
 
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
@@ -18,8 +19,12 @@ pub use pdfcraft_fonts::helvetica_width;
 pub const DETECTION_MODEL: &str = "text-detection.rten";
 pub const RECOGNITION_MODEL: &str = "text-recognition.rten";
 
-/// The languages the models read (ISO 639-1); all use the Latin alphabet without accents.
+/// Languages validated against the bundled model (ISO 639-1).
 pub const LANGUAGES: &[(&str, &str)] = &[("en", "English")];
+
+/// Recognition input limits, checked before allocating channel-conversion buffers.
+pub const MAX_IMAGE_PIXELS: u64 = 40_000_000;
+pub const MAX_IMAGE_SIDE: u32 = 16_384;
 
 #[derive(Debug, thiserror::Error)]
 pub enum OcrError {
@@ -33,6 +38,44 @@ pub enum OcrError {
     Recognize(String),
     #[error("the image is empty")]
     EmptyImage,
+    #[error("invalid recognition image: {0}")]
+    InvalidImage(String),
+    #[error("invalid recognized text: {0}")]
+    InvalidText(String),
+}
+
+/// Validate dimensions and packed channel layout without allocating from untrusted sizes.
+pub fn validate_image(pixels: &[u8], width: u32, height: u32) -> Result<usize, OcrError> {
+    if width == 0 || height == 0 || pixels.is_empty() {
+        return Err(OcrError::EmptyImage);
+    }
+    let count = u64::from(width) * u64::from(height);
+    if width > MAX_IMAGE_SIDE || height > MAX_IMAGE_SIDE || count > MAX_IMAGE_PIXELS {
+        return Err(OcrError::InvalidImage(format!("at most {MAX_IMAGE_PIXELS} pixels and {MAX_IMAGE_SIDE} pixels per side are supported")));
+    }
+    let count = usize::try_from(count).map_err(|_| OcrError::InvalidImage("image dimensions exceed this platform's limits".into()))?;
+    [1, 3, 4]
+        .into_iter()
+        .find(|channels| count.checked_mul(*channels) == Some(pixels.len()))
+        .ok_or_else(|| OcrError::InvalidImage("expected exactly one gray, three RGB, or four RGBA bytes per pixel".into()))
+}
+
+fn recognition_pixels(pixels: &[u8], width: u32, height: u32) -> Result<std::borrow::Cow<'_, [u8]>, OcrError> {
+    if validate_image(pixels, width, height)? != 4 {
+        return Ok(pixels.into());
+    }
+    // Transparent image colors are not visible text. Composite RGBA over the white page
+    // used for recognition; this changes only the temporary OCR input, never the PDF image.
+    Ok(pixels
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .flat_map(|p| {
+            let alpha = u32::from(p[3]);
+            [p[0], p[1], p[2]].map(|c| ((u32::from(c) * alpha + 255 * (255 - alpha) + 127) / 255) as u8)
+        })
+        .collect::<Vec<_>>()
+        .into())
 }
 
 /// Where the two model files are.
@@ -53,6 +96,21 @@ impl Models {
     /// beside the executable ([`Models::dirs_beside_exe`]), then the source tree's `assets/models/`.
     pub fn find() -> Option<Models> {
         Self::search_dirs().iter().find_map(|d| Self::in_dir(d))
+    }
+
+    /// For model-backed tests: whether to run them. `Ok(false)` means the models are missing
+    /// and the test may skip; with `PDFCRAFT_MODELS_REQUIRED` set (CI sets it after
+    /// `cargo xtask models`), missing models are an error instead, so a skipped test can never
+    /// be mistaken for executed evidence.
+    pub fn required_for_tests() -> Result<bool, String> {
+        match (Self::find(), std::env::var_os("PDFCRAFT_MODELS_REQUIRED")) {
+            (Some(_), _) => Ok(true),
+            (None, None) => Ok(false),
+            (None, Some(_)) => Err(format!(
+                "PDFCRAFT_MODELS_REQUIRED is set but the OCR models are in none of {:?}; run `cargo xtask models` or set PDFCRAFT_MODELS",
+                Self::search_dirs()
+            )),
+        }
     }
 
     /// The directories [`Models::find`] looks in, in order.
@@ -122,15 +180,7 @@ impl Ocr {
 
     /// Recognise the text in an RGBA (or RGB, or grey) image, `width` × `height` pixels.
     pub fn recognize(&self, pixels: &[u8], width: u32, height: u32) -> Result<Vec<Line>, OcrError> {
-        if width == 0 || height == 0 || pixels.is_empty() {
-            return Err(OcrError::EmptyImage);
-        }
-        // ocrs wants 1 or 3 channels.
-        let rgb: std::borrow::Cow<[u8]> = if pixels.len() == (width * height * 4) as usize {
-            pixels.as_chunks::<4>().0.iter().flat_map(|p| [p[0], p[1], p[2]]).collect::<Vec<u8>>().into()
-        } else {
-            pixels.into()
-        };
+        let rgb = recognition_pixels(pixels, width, height)?;
         let err = |e: &dyn std::fmt::Display| OcrError::Recognize(e.to_string());
         let source = ocrs::ImageSource::from_bytes(&rgb, (width, height)).map_err(|e| err(&e))?;
         let input = self.engine.prepare_input(source).map_err(|e| err(&e))?;
@@ -166,6 +216,40 @@ pub struct PlacedWord {
     pub up: [f64; 2],
 }
 
+/// Validate a correction before replacing the recognized word. Unsupported characters must
+/// never turn silently into question marks in the current WinAnsi searchable-text writer.
+pub fn validate_text(text: &str) -> Result<(), OcrError> {
+    if text.len() > 16_384 {
+        return Err(OcrError::InvalidText("a word or correction must be at most 16384 UTF-8 bytes".into()));
+    }
+    if let Some(c) = text.chars().find(|c| c.is_control() || !pdfcraft_fonts::win_ansi_encodable(*c)) {
+        return Err(OcrError::InvalidText(format!("character U+{:04X} is not supported by the searchable-text font", u32::from(c))));
+    }
+    Ok(())
+}
+
+/// Validate public OCR word data before producing PDF syntax or making any document edit.
+pub fn validate_words(words: &[PlacedWord]) -> Result<(), OcrError> {
+    if words.len() > 200_000 {
+        return Err(OcrError::InvalidText("at most 200000 words per page are supported".into()));
+    }
+    let mut bytes = 0usize;
+    for word in words {
+        validate_text(&word.text)?;
+        bytes = bytes.saturating_add(word.text.len());
+        if bytes > 16 * 1024 * 1024 {
+            return Err(OcrError::InvalidText("a page's recognized text must be at most 16 MiB".into()));
+        }
+        if word.origin.iter().chain(&word.across).chain(&word.up).any(|v| !v.is_finite() || v.abs() > 10_000_000.0)
+            || word.across[0].hypot(word.across[1]) <= 0.0
+            || word.up[0].hypot(word.up[1]) <= 0.0
+        {
+            return Err(OcrError::InvalidText("word boxes must have finite, nonzero edges and coordinates within ten million points".into()));
+        }
+    }
+    Ok(())
+}
+
 impl PlacedWord {
     /// Place a pixel-space word with `to_user`, which maps an image pixel (x right, y down) to
     /// user space.
@@ -191,8 +275,10 @@ fn num(v: f64) -> String {
 /// Page content that writes `words` as invisible text in `/PCHelv` (standard Helvetica,
 /// WinAnsiEncoding), each word stretched to its box so selection and search highlight the
 /// right place. Marked content `/OCR` so it can be told apart from the page's own text.
-pub fn text_layer(words: &[PlacedWord]) -> Vec<u8> {
-    let mut out = b"/OCR BMC\nBT\n3 Tr\n/PCHelv 1 Tf\n".to_vec();
+pub fn text_layer(words: &[PlacedWord]) -> Result<Vec<u8>, OcrError> {
+    validate_words(words)?;
+    // Text rendering mode is graphics state: restore it so later added text stays visible.
+    let mut out = b"q\n/OCR BMC\nBT\n3 Tr\n/PCHelv 1 Tf\n".to_vec();
     for w in words {
         let width = helvetica_width(&w.text, 1.0);
         let height = w.up[0].hypot(w.up[1]);
@@ -210,13 +296,47 @@ pub fn text_layer(words: &[PlacedWord]) -> Vec<u8> {
         out.extend(pdfcraft_fonts::literal(&pdfcraft_fonts::win_ansi(&w.text)));
         out.extend_from_slice(b" Tj\n");
     }
-    out.extend_from_slice(b"ET\nEMC\n");
-    out
+    out.extend_from_slice(b"ET\nEMC\nQ\n");
+    Ok(out)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn hostile_image_dimensions_and_channel_lengths_are_rejected_before_allocation() {
+        for (pixels, width, height) in [(&[0][..], u32::MAX, u32::MAX), (&[0][..], 10_000, 10_000), (&[0][..], 1, 20_000), (&[0, 1][..], 1, 1)] {
+            assert!(matches!(validate_image(pixels, width, height), Err(OcrError::InvalidImage(_))));
+        }
+        assert!(matches!(validate_image(&[], 0, 1), Err(OcrError::EmptyImage)));
+        for channels in [1, 3, 4] {
+            assert_eq!(validate_image(&vec![0; 6 * channels], 2, 3).unwrap(), channels);
+        }
+    }
+
+    #[test]
+    fn transparent_pixels_are_composited_over_white_only_for_recognition() {
+        let pixels = [0, 0, 0, 0, 10, 20, 30, 255, 0, 0, 0, 128];
+        let original = pixels;
+        assert_eq!(recognition_pixels(&pixels, 3, 1).unwrap().as_ref(), &[255, 255, 255, 10, 20, 30, 127, 127, 127]);
+        assert_eq!(pixels, original);
+        assert!(matches!(recognition_pixels(&[5, 6, 7], 1, 1).unwrap(), std::borrow::Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn text_and_geometry_are_validated_before_writing_pdf_syntax() {
+        let word = PlacedWord { text: "café (é) \\".into(), origin: [10.0, 20.0], across: [30.0, 0.0], up: [0.0, 9.3] };
+        let stream = text_layer(std::slice::from_ref(&word)).unwrap();
+        assert!(stream.contains(&0xe9), "WinAnsi accented corrections are encoded without replacement");
+        for text in ["漢字".to_owned(), "bad\0text".into(), "x".repeat(16_385)] {
+            assert!(text_layer(&[PlacedWord { text, ..word.clone() }]).is_err());
+        }
+        for origin in [[f64::NAN, 0.0], [f64::INFINITY, 0.0], [10_000_001.0, 0.0]] {
+            assert!(text_layer(&[PlacedWord { origin, ..word.clone() }]).is_err());
+        }
+        assert!(text_layer(&[PlacedWord { across: [0.0; 2], ..word }]).is_err());
+    }
 
     #[test]
     fn places_words_through_the_mapping() {
@@ -231,11 +351,11 @@ mod tests {
     #[test]
     fn text_layer_is_invisible_text_fitted_to_each_box() {
         let w = PlacedWord { text: "Hi".into(), origin: [10.0, 20.0], across: [30.0, 0.0], up: [0.0, 9.3] };
-        let s = String::from_utf8(text_layer(&[w])).unwrap();
+        let s = String::from_utf8(text_layer(&[w]).unwrap()).unwrap();
         assert!(s.contains("3 Tr") && s.contains("/PCHelv 1 Tf"), "{s}");
         let width = helvetica_width("Hi", 1.0);
         assert!(s.contains(&format!("{} 0 0 10 10 22.1 Tm (Hi) Tj", num(30.0 / width))), "{s}");
-        assert!(s.starts_with("/OCR BMC") && s.ends_with("EMC\n"));
+        assert!(s.starts_with("q\n/OCR BMC") && s.ends_with("EMC\nQ\n"));
     }
 
     #[test]
@@ -287,10 +407,12 @@ mod tests {
     /// End to end on rendered text, when the models are installed (`cargo xtask models`).
     #[test]
     fn reads_rendered_text() {
-        let Some(models) = Models::find() else {
+        if !Models::required_for_tests().unwrap() {
             eprintln!("skipped: OCR models not installed");
             return;
-        };
+        }
+        let models = Models::find().unwrap();
+        eprintln!("running actual OCR models from {}", models.detection.display());
         let ocr = Ocr::load(&models).unwrap();
         let (w, h, px) = test_image::hello();
         let lines = ocr.recognize(&px, w, h).unwrap();

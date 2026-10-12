@@ -1581,14 +1581,17 @@ fn backgrounds_and_watermarks_from_files() {
 /// `cargo xtask models`; skipped without them).
 #[test]
 fn recognize_text_makes_a_scanned_page_searchable() {
-    if !ocr::available() {
+    if !ocr::Models::required_for_tests().unwrap() {
         eprintln!("skipped: OCR models not installed");
         return;
     }
     let mut s = Session::new().with_clock(|| 1_700_000_000);
     let text = s.create_from_text("t", "The quick brown fox jumps over the lazy dog.").unwrap();
     let id = s.open("text.pdf", None, text, None).unwrap();
-    let png = export::Exporter::new(s.get(id).unwrap()).png(0, 150.0).unwrap();
+    // Scanned at 300 dpi, the usual scanning resolution: at 150 dpi the pinned model reads this
+    // Helvetica "quick" as "auick" (observed 2026-10-12), a recognition-accuracy limit
+    // rather than a placement or text-layer defect.
+    let png = export::Exporter::new(s.get(id).unwrap()).png(0, 300.0).unwrap();
     let scan = s.create_from_images(&[("scan.png".into(), png)]).unwrap();
     let id = s.open("scan.pdf", None, scan, None).unwrap();
     assert_eq!(page_texts(&s, id), [""], "a picture has no text");
@@ -1604,8 +1607,11 @@ fn recognize_text_makes_a_scanned_page_searchable() {
     let words = &found[0].words;
     let q = words.iter().find(|w| w.text.to_lowercase().contains("quick")).unwrap();
     let l = words.iter().find(|w| w.text.to_lowercase().contains("lazy")).unwrap();
+    // The image becomes a page at one point per pixel, so the tolerance scales with the text:
+    // tops within a fifth of the word height (3 units at the former 150 dpi scan).
     let top = |w: &ocr::PlacedWord| w.origin[1] + w.up[1];
-    assert!(q.origin[0] < l.origin[0] && (top(q) - top(l)).abs() < 3.0, "{q:?} {l:?}");
+    let tolerance = 0.2 * q.up[1].abs().max(l.up[1].abs());
+    assert!(q.origin[0] < l.origin[0] && (top(q) - top(l)).abs() < tolerance, "{q:?} {l:?}");
 
     // A second pass skips the page: it has text now.
     let again = s.recognize_text(id, &[], ocr::OcrSettings::default()).unwrap();

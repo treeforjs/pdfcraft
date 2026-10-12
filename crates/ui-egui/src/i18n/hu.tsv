@@ -2157,3 +2157,19 @@ action wizard	Start	Indítás
 	Select paragraph	Bekezdés kijelölése
 	Document and comments with connector lines on single pages	Dokumentum és megjegyzések összekötő vonalakkal egy oldalon
 	Document and comments with sequence numbers on separate pages	Dokumentum és megjegyzések sorszámokkal külön oldalakon
+
+# OCR review
+	; 1 page skipped	; 1 oldal kihagyva
+	; {n} pages skipped	; {n} oldal kihagyva
+	Review recognized text	Felismert szöveg ellenőrzése
+	Correct the words before adding searchable text. The page image will not change.	Javítsa a szavakat, mielőtt a kereshető szöveg hozzáadódik. Az oldal képe nem változik.
+	Page {p}, word {w} of {n}	{p}. oldal, {w}/{n}. szó
+	Recognized word	Felismert szó
+	Leave a word empty to omit it from the searchable text.	Hagyja üresen a szót, ha ki szeretné hagyni a kereshető szövegből.
+	Previous word	Előző szó
+	Next word	Következő szó
+	No words were recognized.	Nem sikerült szavakat felismerni.
+	Skipped pages	Kihagyott oldalak
+	Apply recognized text	Felismert szöveg alkalmazása
+	Review recognized text before applying	Felismert szöveg ellenőrzése alkalmazás előtt
+	Text recognition canceled; no text was applied	Szövegfelismerés megszakítva; nem került szöveg a dokumentumba

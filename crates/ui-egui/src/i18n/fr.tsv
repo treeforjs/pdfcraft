@@ -2159,3 +2159,19 @@ signature pad	Type	Saisir
 	Select paragraph	Sélectionner le paragraphe
 	Document and comments with connector lines on single pages	Document et commentaires avec lignes de connexion sur une même page
 	Document and comments with sequence numbers on separate pages	Document et commentaires avec numéros d'ordre sur des pages séparées
+
+# OCR review
+	; 1 page skipped	; 1 page ignorée
+	; {n} pages skipped	; {n} pages ignorées
+	Review recognized text	Vérifier le texte reconnu
+	Correct the words before adding searchable text. The page image will not change.	Corrigez les mots avant d’ajouter le texte recherchable. L’image de la page ne sera pas modifiée.
+	Page {p}, word {w} of {n}	Page {p}, mot {w} sur {n}
+	Recognized word	Mot reconnu
+	Leave a word empty to omit it from the searchable text.	Laissez un mot vide pour l’omettre du texte recherchable.
+	Previous word	Mot précédent
+	Next word	Mot suivant
+	No words were recognized.	Aucun mot n’a été reconnu.
+	Skipped pages	Pages ignorées
+	Apply recognized text	Appliquer le texte reconnu
+	Review recognized text before applying	Vérifier le texte reconnu avant de l’appliquer
+	Text recognition canceled; no text was applied	Reconnaissance de texte annulée ; aucun texte n’a été appliqué

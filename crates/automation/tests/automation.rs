@@ -3174,7 +3174,8 @@ fn ocr_tools_make_a_scan_searchable() {
     let mut a = auto(&dir);
     let status = ok(&mut a, "ocr_status", json!({}));
     assert_eq!(status["languages"][0]["code"], "en");
-    if status["available"] != true {
+    assert_eq!(status["available"] == true, pdfcraft_engine::ocr::Models::find().is_some());
+    if !pdfcraft_engine::ocr::Models::required_for_tests().unwrap() {
         eprintln!("skipped: OCR models not installed");
         return;
     }
@@ -3194,7 +3195,7 @@ fn ocr_tools_make_a_scan_searchable() {
 fn ocr_recognize_files_writes_searchable_copies() {
     let dir = workdir("ocr-files");
     let mut a = auto(&dir);
-    if ok(&mut a, "ocr_status", json!({}))["available"] != true {
+    if !pdfcraft_engine::ocr::Models::required_for_tests().unwrap() {
         eprintln!("skipped: OCR models not installed");
         return;
     }

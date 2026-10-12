@@ -383,3 +383,12 @@ Newest first. One line per session: the date, what moved, and the new overall pe
 - **2026-09-30 (session 1):** planning complete; viewer vertical slice.
 
 - M13: common command, batch, inspection and bounded preview tools share the existing confined automation path. MCP tools carry complete hints and reject unknown top-level keys as invalid parameters.
+
+
+### OCR review and cancellation follow-up (2026-10-12)
+
+Recognition can now remain a document-version-bound draft for word review, correction and explicit apply/cancel. Corrections retain geometry and source pixels, support WinAnsi accents, and commit as one undoable operation. The engine rejects stale revisions, validates image/text/geometry limits and discards all partial results on cancellation. Invisible text state is scoped so later visible text stays visible. The headless workflow is `ocr_prepare` → `ocr_review` / `ocr_correct` → `ocr_apply` or `ocr_cancel`.
+
+This closes part of correction workflow, not multilingual recognition or confidence-based suspects. English remains the only validated recognition language; rotation detection, deskew, existing-layer correction, arbitrary Unicode output, editable-text output and image cleanup remain open. Model-free engine fixtures and model-backed automation/UI cases are listed in `crates/ocr/README.md`; an absent-model skip must not be counted as a recognition pass. Milestone percentage estimates are unchanged.
+
+Recognition now requires both copy and modify permission (the permissions password lifts restrictions), checked before any page is rendered or a model runs, and again whenever a draft is shown, corrected or applied; encrypted synthetic fixtures cover each combination in the engine and automation tools. `PDFCRAFT_MODELS_REQUIRED=1` turns a missing-model skip into a failure, and Linux CI now fetches the pinned models and sets it (not yet observed in a CI run). Executed locally with the pinned models: the review/apply/save/reopen CLI workflow on an original Inter-set scan recognized all 10 words with unchanged page pixels. Running the older engine fixture with the real models for the first time showed the bundled model misreading "quick" as "auick" in a 150 dpi Helvetica scan; that fixture now scans at 300 dpi. These are observations on a few synthetic pages, not accuracy claims.

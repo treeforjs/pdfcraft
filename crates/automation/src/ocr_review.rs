@@ -1,0 +1,105 @@
+//! Recognition drafts: inspect and correct words before a single explicit document edit.
+
+use serde_json::{Value, json};
+
+use pdfcraft_engine::DocId;
+use pdfcraft_engine::ocr::OcrReview;
+
+use crate::{Args, Automation, Result, ToolError, failed};
+
+/// Drafts held at once, and the recognized words and text bytes they may hold together
+/// (each draft is also limited to one million words and 64 MiB by the engine).
+const MAX_DRAFTS: usize = 8;
+const MAX_DRAFT_WORDS: usize = 2_000_000;
+const MAX_DRAFT_TEXT_BYTES: usize = 128 * 1024 * 1024;
+
+fn review_json(review: &OcrReview) -> Value {
+    let pages: Vec<_> = review
+        .pages()
+        .iter()
+        .map(|page| {
+            let words: Vec<_> = page
+                .words
+                .iter()
+                .enumerate()
+                .map(|(index, word)| {
+                    json!({
+                        "word": index + 1, "text": word.text, "origin": word.origin, "across": word.across, "up": word.up
+                    })
+                })
+                .collect();
+            json!({"page": page.page + 1, "text": page.text(), "words": words, "skipped": page.skipped})
+        })
+        .collect();
+    json!({"doc": review.document().0, "generation": review.generation(), "words": review.words(), "pages": pages})
+}
+
+impl Automation {
+    pub(crate) fn ocr_prepare(&mut self, args: &Args) -> Result<Value> {
+        let settings = self.ocr_settings(args)?;
+        let pages = if args.opt_ints("pages")?.is_some() { self.pages(args, "pages")? } else { Vec::new() };
+        let id = self.doc(args)?.id;
+        if self.ocr_reviews.len() >= MAX_DRAFTS && !self.ocr_reviews.contains_key(&id) {
+            return Err(failed("at most eight recognition drafts may be open; apply or cancel a draft first"));
+        }
+        // Copy and modification authority are checked here, before the models load or any
+        // page is rendered.
+        let job = self.session.ocr_job_checked(id, &pages, settings).map_err(failed)?;
+        let recognizer = pdfcraft_engine::ocr::engine().map_err(failed)?;
+        let review = job.run(recognizer.as_ref(), |_, _| true).map_err(failed)?;
+        let others = self.ocr_reviews.iter().filter(|(doc, _)| **doc != id).map(|(_, r)| r);
+        let (words, bytes) =
+            others.fold((review.word_slots(), review.text_bytes()), |(w, b), r| (w.saturating_add(r.word_slots()), b.saturating_add(r.text_bytes())));
+        if words > MAX_DRAFT_WORDS || bytes > MAX_DRAFT_TEXT_BYTES {
+            return Err(failed("open recognition drafts would exceed two million words or 128 MiB of text; apply or cancel other drafts first"));
+        }
+        let reply = review_json(&review);
+        self.ocr_reviews.insert(id, review);
+        Ok(reply)
+    }
+
+    /// The draft for `id`, revalidated against the document as it is now (open, copy and
+    /// modification authority, same revision). A draft that fails can never become valid
+    /// again, so it is discarded and its words are not returned.
+    fn current_ocr_draft(&mut self, id: DocId) -> Result<&mut OcrReview> {
+        let review = self.ocr_reviews.get(&id).ok_or_else(|| failed("no recognition draft; call ocr_prepare first"))?;
+        if let Err(error) = self.session.validate_ocr_review(review) {
+            self.ocr_reviews.remove(&id);
+            return Err(failed(format!("{error}; the recognition draft was discarded")));
+        }
+        self.ocr_reviews.get_mut(&id).ok_or_else(|| failed("no recognition draft; call ocr_prepare first"))
+    }
+
+    pub(crate) fn ocr_review(&mut self, args: &Args) -> Result<Value> {
+        let id = self.doc(args)?.id;
+        Ok(review_json(self.current_ocr_draft(id)?))
+    }
+
+    pub(crate) fn ocr_correct(&mut self, args: &Args) -> Result<Value> {
+        let id = self.doc(args)?.id;
+        let index = |name: &str| -> Result<usize> {
+            args.int(name)?
+                .checked_sub(1)
+                .and_then(|v| usize::try_from(v).ok())
+                .ok_or_else(|| ToolError::InvalidArgs(format!("{name} must be a positive index from ocr_review")))
+        };
+        let (page, word, text) = (index("page")?, index("word")?, args.str("text")?);
+        let review = self.current_ocr_draft(id)?;
+        review.correct(page, word, text).map_err(ToolError::InvalidArgs)?;
+        Ok(review_json(review))
+    }
+
+    pub(crate) fn ocr_apply(&mut self, args: &Args) -> Result<Value> {
+        let id = self.doc(args)?.id;
+        self.current_ocr_draft(id)?;
+        let review = self.ocr_reviews.remove(&id).ok_or_else(|| failed("no recognition draft; call ocr_prepare first"))?;
+        let words = self.session.apply_ocr_review(&review).map_err(|e| failed(format!("{e}; the recognition draft was discarded")))?;
+        Ok(json!({"doc": id.0, "words": words, "applied": true}))
+    }
+
+    pub(crate) fn ocr_cancel(&mut self, args: &Args) -> Result<Value> {
+        let id = self.doc(args)?.id;
+        let canceled = self.ocr_reviews.remove(&id).is_some();
+        Ok(json!({"doc": id.0, "canceled": canceled}))
+    }
+}

@@ -2159,3 +2159,19 @@ action wizard	Start	Starten
 	Select paragraph	Absatz auswählen
 	Document and comments with connector lines on single pages	Dokument und Kommentare mit Verbindungslinien auf einer Seite
 	Document and comments with sequence numbers on separate pages	Dokument und Kommentare mit laufenden Nummern auf separaten Seiten
+
+# OCR review
+	; 1 page skipped	; 1 Seite übersprungen
+	; {n} pages skipped	; {n} Seiten übersprungen
+	Review recognized text	Erkannten Text prüfen
+	Correct the words before adding searchable text. The page image will not change.	Korrigieren Sie die Wörter, bevor durchsuchbarer Text hinzugefügt wird. Das Seitenbild bleibt unverändert.
+	Page {p}, word {w} of {n}	Seite {p}, Wort {w} von {n}
+	Recognized word	Erkanntes Wort
+	Leave a word empty to omit it from the searchable text.	Lassen Sie ein Wort leer, um es aus dem durchsuchbaren Text wegzulassen.
+	Previous word	Vorheriges Wort
+	Next word	Nächstes Wort
+	No words were recognized.	Es wurden keine Wörter erkannt.
+	Skipped pages	Übersprungene Seiten
+	Apply recognized text	Erkannten Text anwenden
+	Review recognized text before applying	Erkannten Text vor dem Anwenden prüfen
+	Text recognition canceled; no text was applied	Texterkennung abgebrochen; es wurde kein Text hinzugefügt

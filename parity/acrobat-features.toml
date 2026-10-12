@@ -6367,7 +6367,7 @@ status = "shipped"
 commands = ["ocr.recognize"]
 tools = ["ocr_recognize", "ocr_status"]
 evidence = ["crates/engine/src/tests.rs::recognize_text_makes_a_scanned_page_searchable", "crates/automation/tests/automation.rs::ocr_tools_make_a_scan_searchable", "crates/ui-egui/tests/ocr.rs::recognize_text_dialog_adds_searchable_text"]
-notes = "ocrs engine (MIT/Apache) with CC-BY-SA models fetched by `cargo xtask models`; the desktop release packages ship them (#103; packaging/env.sh stage_models), the web build does not yet; runs on a worker thread with progress; one undoable step; pages with text are skipped."
+notes = "ocrs engine (MIT/Apache) with CC-BY-SA models fetched by `cargo xtask models`; the desktop release packages ship them (#103; packaging/env.sh stage_models), the web build does not yet; runs on a worker thread with progress; one undoable step; pages with text are skipped. Refuses documents that deny copying or changes (owner password lifts it) before rendering or inference. The cited tests return early without the models unless PDFCRAFT_MODELS_REQUIRED=1 makes that a failure; Linux CI now fetches the pinned models and sets it (workflow change not yet observed in a CI run); executed locally with the actual pinned models on 2026-10-12."
 
 [[feature]]
 id = "ocr.recognize-range"
@@ -6579,11 +6579,11 @@ title = "Correct recognized text (low-confidence suspects)"
 area = "I"
 tier = "P2"
 milestone = "M10"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["ocr.recognize"]
+tools = ["ocr_prepare", "ocr_review", "ocr_correct", "ocr_apply", "ocr_cancel"]
+evidence = ["crates/engine/tests/ocr_review.rs::review_correct_apply_save_reopen_preserves_pixels_and_is_one_undo", "crates/automation/tests/ocr_review.rs::ocr_review_tools_correct_cancel_apply_undo_and_reopen_exact_image", "crates/ui-egui/tests/ocr.rs::recognition_review_corrects_words_and_cancel_or_stale_apply_preserves_the_document", "crates/engine/tests/ocr_review.rs::restricted_documents_refuse_recognition_before_rendering_or_backend_inference", "crates/engine/tests/ocr_review.rs::allowed_drafts_are_refused_when_permissions_or_revision_later_change", "crates/automation/tests/ocr_review.rs::restricted_documents_refuse_every_ocr_tool_before_recognition"]
+notes = "Review every recognized word before applying; correct WinAnsi text or omit words, preserve boxes and original image, one undo. Drafts reject stale document revisions and cancellation never applies partial pages. Recognition needs copy and modify permission (owner password lifts it), checked before rendering/inference and again whenever a draft is shown, corrected or applied; a draft that fails is discarded without returning its words. Bundled model remains English/ASCII; no confidence-based suspect detection and no correction of an already-saved OCR layer yet."
 
 [[feature]]
 id = "ocr.adaptive-compression"

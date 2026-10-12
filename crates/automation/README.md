@@ -155,3 +155,9 @@ Exports complete synchronously. `progressToken` and cancellation notifications a
 ignored; no background-job or cancellation behavior is added.
 
 Session resources `pdfcraft://document` and `pdfcraft://commands`, and the refusal of unknown argument keys, are described in [docs/mcp.md](../../docs/mcp.md).
+
+## Review OCR before applying
+
+`ocr_prepare {doc, pages?, dpi?, language?, skip_text_pages?}` recognizes into a draft without changing the PDF. `ocr_review {doc}` lists words and their user-space geometry and skipped pages; if the document changed, was closed or no longer allows copying and changes, it returns an error and discards the draft instead. Recognition needs copy and modify permission (the permissions password lifts restrictions), checked before any page is rendered. `ocr_correct {doc, page, word, text}` replaces one word using the 1-based indexes from that draft; empty text omits it. `ocr_apply {doc}` commits the corrected invisible layer in one undoable edit, and `ocr_cancel {doc}` discards the draft. Edits, undo/redo, save or closing the source document invalidate its pending result. At most eight drafts (two million words, 128 MiB of text together) are retained; closing a document releases its draft.
+
+Recognition currently validates English with the bundled ASCII model. Corrections support WinAnsi accents, not arbitrary Unicode; invalid characters return an error before changing the draft. There are no fabricated confidence scores. The original image remains unchanged, and the usual `doc_save` root confinement applies. See [the OCR crate](../ocr/README.md) for bounds and remaining OCR gaps. Existing `ocr_recognize` still recognizes and applies synchronously.

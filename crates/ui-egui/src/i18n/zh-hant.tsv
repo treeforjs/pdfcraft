@@ -2045,3 +2045,19 @@
 	Select paragraph	選取段落
 	Document and comments with connector lines on single pages	文件和註解，帶連接線，在同一頁面上
 	Document and comments with sequence numbers on separate pages	文件和註解，帶序號，在不同頁面上
+
+# OCR review
+	; 1 page skipped	；略過了 1 頁
+	; {n} pages skipped	；略過了 {n} 頁
+	Review recognized text	檢查辨識的文字
+	Correct the words before adding searchable text. The page image will not change.	在加入可搜尋文字之前更正單詞。頁面圖片不會改變。
+	Page {p}, word {w} of {n}	第 {p} 頁，第 {w} 個單詞，共 {n} 個
+	Recognized word	辨識的單詞
+	Leave a word empty to omit it from the searchable text.	將單詞留空即可從可搜尋文字中省略。
+	Previous word	上一個單詞
+	Next word	下一個單詞
+	No words were recognized.	未辨識到任何單詞。
+	Skipped pages	略過的頁面
+	Apply recognized text	應用辨識的文字
+	Review recognized text before applying	應用前檢查辨識的文字
+	Text recognition canceled; no text was applied	文字辨識已取消；未應用任何文字
