@@ -9,7 +9,7 @@ version = "0.5.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 rust-version = "1.90"
-repository = "https://github.com/storytold/pdfcraft"
+repository = "https://github.com/treeforjs/pdfcraft"
 
 [workspace.dependencies]
 # internal

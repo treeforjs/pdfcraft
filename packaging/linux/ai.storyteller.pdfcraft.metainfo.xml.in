@@ -19,9 +19,9 @@
   <launchable type="desktop-id">ai.storyteller.pdfcraft.desktop</launchable>
   <icon type="stock">ai.storyteller.pdfcraft</icon>
   <!-- Only url types known to appstream 0.15 (Ubuntu 22.04, where CI validates): no vcs-browser. -->
-  <url type="homepage">https://getartcraft.com/apps/pdfcraft</url>
-  <url type="bugtracker">https://github.com/storytold/pdfcraft/issues</url>
-  <url type="help">https://github.com/storytold/pdfcraft</url>
+  <url type="homepage">https://github.com/treeforjs/pdfcraft</url>
+  <url type="bugtracker">https://github.com/treeforjs/pdfcraft/issues</url>
+  <url type="help">https://github.com/treeforjs/pdfcraft</url>
   <categories>
     <category>Office</category>
     <category>Viewer</category>
@@ -35,7 +35,7 @@
   <screenshots>
     <screenshot type="default">
       <caption>A PDF open with its threaded comments</caption>
-      <image>https://raw.githubusercontent.com/storytold/pdfcraft/main/docs/images/pdfcraft-viewer.png</image>
+      <image>https://raw.githubusercontent.com/treeforjs/pdfcraft/main/docs/images/pdfcraft-viewer.png</image>
     </screenshot>
   </screenshots>
   <branding>

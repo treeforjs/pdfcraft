@@ -149,7 +149,6 @@
 	Current page — type a page number or label (such as iv) and press Enter	現在のページ：ページ番号またはラベル（例：iv）を入力して Enter
 	Welcome to PdfCraft	PdfCraft へようこそ
 	An open-source PDF workbench — local, private, and scriptable.	ローカルで処理し、プライバシーを守る、スクリプト対応のオープンソース PDF ツール。
-	Join the ArtCraft community	ArtCraft コミュニティに参加
 	Recommended tools	おすすめのツール
 	Use now	使用する
 	Open file	ファイルを開く
@@ -295,9 +294,7 @@
 	Split document…	文書を分割…
 	Number pages…	ページ番号を設定…
 	Keyboard shortcuts	キーボードショートカット
-	PdfCraft web page	PdfCraft の Web 版
 	PdfCraft on GitHub	GitHub の PdfCraft
-	ArtCraft website	ArtCraft のウェブサイト
 	Check for updates…	更新を確認…
 	About PdfCraft	PdfCraft について
 	Export a PDF	PDF を書き出す
@@ -1368,7 +1365,6 @@
 	Discard	破棄
 	Version {v}	バージョン {v}
 	A clean-room, open-source PDF application written in Rust. MIT OR Apache-2.0.	Rust で記述したクリーンルーム方式のオープンソース PDF アプリケーション。MIT OR Apache-2.0。
-	Part of	関連プロジェクト
 	Summarize Options	一覧のオプション
 	Choose a layout:	レイアウトを選択:
 	Comments only	注釈のみ

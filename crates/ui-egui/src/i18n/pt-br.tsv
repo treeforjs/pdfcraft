@@ -1264,7 +1264,6 @@
 	Select all pages (Organize)	Selecionar todas as páginas (Organizar)
 	Version {v}	Versão {v}
 	A clean-room, open-source PDF application written in Rust. MIT OR Apache-2.0.	Um aplicativo PDF de código aberto e clean-room escrito em Rust. MIT OU Apache-2.0.
-	Part of	Parte de
 	Summarize Options	Opções de resumo
 	Choose a layout:	Escolha um layout:
 	Comments only	Somente comentários
@@ -1645,10 +1644,7 @@
 	Split document…	Dividir documento…
 	Number pages…	Numerar páginas…
 	Keyboard shortcuts	Atalhos de teclado
-	Join the ArtCraft community	Entrar na comunidade ArtCraft
-	PdfCraft web page	Página da Web do PdfCraft
 	PdfCraft on GitHub	PdfCraft no GitHub
-	ArtCraft website	Site do ArtCraft
 	Check for updates…	Verificar atualizações…
 	About PdfCraft	Sobre o PdfCraft
 	JavaScript console…	Console JavaScript…

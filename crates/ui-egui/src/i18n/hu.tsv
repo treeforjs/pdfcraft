@@ -120,7 +120,6 @@
 	Current page — type a page number or label (such as iv) and press Enter	Aktuális oldal — írj be egy oldalszámot vagy címkét (például iv), majd nyomd meg az Entert
 	Welcome to PdfCraft	Üdvözöljük a PdfCraftban
 	An open-source PDF workbench — local, private, and scriptable.	Nyílt forráskódú PDF-munkapad — helyi, privát és parancsfájlokkal vezérelhető.
-	Join the ArtCraft community	Csatlakozz az ArtCraft közösséghez
 	Recommended tools	Ajánlott eszközök
 	Use now	Használat most
 	Open file	Fájl megnyitása
@@ -266,9 +265,7 @@
 	Split document…	Dokumentum felosztása…
 	Number pages…	Oldalak számozása…
 	Keyboard shortcuts	Billentyűparancsok
-	PdfCraft web page	A PdfCraft weblapja
 	PdfCraft on GitHub	PdfCraft a GitHubon
-	ArtCraft website	Az ArtCraft webhelye
 	Check for updates…	Frissítések keresése…
 	About PdfCraft	A PdfCraftról
 	Export a PDF	PDF exportálása
@@ -1337,7 +1334,6 @@
 	Discard	Elvetés
 	Version {v}	{v} verzió
 	A clean-room, open-source PDF application written in Rust. MIT OR Apache-2.0.	Tiszta szobás, nyílt forráskódú PDF-alkalmazás, Rustban írva. MIT OR Apache-2.0.
-	Part of	Része
 	Summarize Options	Összefoglaló beállításai
 	Choose a layout:	Válassz elrendezést:
 	Comments only	Csak megjegyzések

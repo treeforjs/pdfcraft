@@ -1329,7 +1329,6 @@
 	Select all pages (Organize)	选择所有页面（组织页面）
 	Version {v}	版本{v}
 	A clean-room, open-source PDF application written in Rust. MIT OR Apache-2.0.	用 Rust 从零编写的开源 PDF 应用。MIT OR Apache-2.0 许可。
-	Part of	隶属于
 	Summarize Options	汇总选项
 	Choose a layout:	选择布局：
 	Comments only	仅注释
@@ -1777,10 +1776,7 @@
 	Split document…	拆分文档…
 	Number pages…	页面编号…
 	Keyboard shortcuts	键盘快捷键
-	Join the ArtCraft community	加入 ArtCraft 社区
-	PdfCraft web page	PdfCraft 网页
 	PdfCraft on GitHub	GitHub 上的 PdfCraft
-	ArtCraft website	ArtCraft 官网
 	Check for updates…	检查更新…
 	About PdfCraft	关于 PdfCraft
 	JavaScript console…	JavaScript 控制台…

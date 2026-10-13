@@ -10,7 +10,7 @@ Detailed task lists and acceptance tests are in `plan/execution-plan.md` (local-
 
 ## Estimate summary
 
-The unit is **wall-clock hours of agent work** (Claude Opus 5.5 coding continuously; human review time not included).
+The unit is **wall-clock hours of agent work** (an AI coding agent working continuously; human review time not included).
 
 **Where we are (2026-10-07, measured by `cargo xtask parity` over 806 tracked Acrobat Pro features; 23 more are Adobe-cloud-only and out of scope):**
 

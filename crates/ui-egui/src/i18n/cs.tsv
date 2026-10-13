@@ -97,9 +97,7 @@
 	Split document…	Rozdělit dokument…
 	Number pages…	Očíslovat stránky…
 	Keyboard shortcuts	Klávesové zkratky
-	PdfCraft web page	Webová stránka PdfCraft
 	PdfCraft on GitHub	PdfCraft na GitHubu
-	ArtCraft website	Web ArtCraft
 	Check for updates…	Zkontrolovat aktualizace…
 	About PdfCraft	O aplikaci PdfCraft
 	Auto	Automaticky
@@ -216,7 +214,6 @@
 	Current page — type a page number or label (such as iv) and press Enter	Aktuální stránka — zadejte číslo nebo označení stránky (například iv) a stiskněte Enter
 	Welcome to PdfCraft	Vítejte v aplikaci PdfCraft
 	An open-source PDF workbench — local, private, and scriptable.	Open-source pracoviště pro PDF — lokální, soukromé a skriptovatelné.
-	Join the ArtCraft community	Připojte se ke komunitě ArtCraft
 	Recommended tools	Doporučené nástroje
 	Use now	Použít
 	Open file	Otevřít soubor
@@ -1386,7 +1383,6 @@
 	Discard	Zahodit
 	Version {v}	Verze {v}
 	A clean-room, open-source PDF application written in Rust. MIT OR Apache-2.0.	Open-source aplikace pro PDF napsaná v jazyce Rust metodou čisté místnosti (clean-room). MIT OR Apache-2.0.
-	Part of	Součást
 	Summarize Options	Možnosti souhrnu
 	Choose a layout:	Vyberte rozvržení:
 	Comments only	Jen komentáře

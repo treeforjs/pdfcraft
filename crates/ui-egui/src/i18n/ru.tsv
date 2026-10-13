@@ -143,7 +143,6 @@
 	Current page — type a page number or label (such as iv) and press Enter	Текущая страница — введите номер или метку страницы (например, iv) и нажмите Enter
 	Welcome to PdfCraft	Добро пожаловать в PdfCraft
 	An open-source PDF workbench — local, private, and scriptable.	Открытый PDF-редактор — локальный, приватный и программируемый.
-	Join the ArtCraft community	Присоединяйтесь к сообществу ArtCraft
 	Recommended tools	Рекомендуемые инструменты
 	Use now	Использовать сейчас
 	Open file	Открыть файл
@@ -289,9 +288,7 @@
 	Split document…	Разделить документ…
 	Number pages…	Пронумеровать страницы…
 	Keyboard shortcuts	Горячие клавиши
-	PdfCraft web page	Веб-страница PdfCraft
 	PdfCraft on GitHub	PdfCraft на GitHub
-	ArtCraft website	Веб-сайт ArtCraft
 	Check for updates…	Проверить обновления…
 	About PdfCraft	О программе PdfCraft
 	Export a PDF	Экспортировать PDF
@@ -1369,7 +1366,6 @@
 	Discard	Отклонить
 	Version {v}	Версия {v}
 	A clean-room, open-source PDF application written in Rust. MIT OR Apache-2.0.	Открытое PDF-приложение с чистой комнатой, написанное на Rust. MIT OR Apache-2.0.
-	Part of	Часть
 	Summarize Options	Параметры суммирования
 	Choose a layout:	Выберите макет:
 	Comments only	Только комментарии

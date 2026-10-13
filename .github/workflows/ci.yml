@@ -30,7 +30,7 @@ jobs:
       - uses: actions/checkout@v4
 
       # The optional craft-fonts build input (Japanese fonts), so the Japanese font tests run on
-      # Linux; Windows tests the build without it. See craftrules standards/fonts.md.
+      # Linux; Windows tests the build without it.
       - name: Check out craft-fonts (Linux)
         if: runner.os == 'Linux'
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
