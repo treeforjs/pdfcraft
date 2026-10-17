@@ -692,6 +692,8 @@ impl Automation {
             "js_run" => self.js_run(&a)?,
             "js_document_scripts" => self.js_document_scripts(&a)?,
             "js_set_document_script" => self.js_set_document_script(&a)?,
+            "js_document_actions" => self.js_document_actions(&a)?,
+            "js_set_document_action" => self.js_set_document_action(&a)?,
             "js_enabled" => self.js_enabled(&a)?,
             "form_set_script" => self.form_set_script(&a)?,
             "form_merge_data" => self.form_merge_data(&a)?,
@@ -789,6 +791,8 @@ impl Automation {
         if doc.dirty && !discard_changes {
             return Err(failed("the document has unsaved changes: save it with doc_save, or pass discard_changes: true"));
         }
+        // Document Will Close runs first; what it changes is closed with the document.
+        let _ = self.session.run_document_action(id, pdfcraft_engine::DocTrigger::WillClose);
         self.session.close(id);
         self.renderers.remove(&id);
         self.texts.remove_doc(id);
@@ -813,11 +817,24 @@ impl Automation {
         if flatten_fill_sign {
             self.apply(a, Edit::FlattenFillSign)?;
         }
+        // Document Will Save runs first, so what it changes is saved; Did Save runs after.
+        let mut ran = Vec::new();
+        if self.session.run_document_action(id, pdfcraft_engine::DocTrigger::WillSave).map_err(failed)? {
+            ran.push("will_save");
+        }
         let bytes = if full { self.session.save_full_bytes(id) } else { self.session.save_bytes(id) }.map_err(failed)?;
         write_atomic(&target, &bytes)?;
         let path = target.to_string_lossy().into_owned();
         self.session.mark_saved(id, bytes.clone(), Some(path.clone())).map_err(failed)?;
-        Ok(json!({ "path": path, "bytes": bytes.len(), "incremental": !full, "document": summary(self.doc(a)?) }))
+        if self.session.run_document_action(id, pdfcraft_engine::DocTrigger::DidSave).map_err(failed)? {
+            ran.push("did_save");
+        }
+        let out = self.session.take_js_output(id);
+        let mut result = json!({ "path": path, "bytes": bytes.len(), "incremental": !full, "document": summary(self.doc(a)?) });
+        if !ran.is_empty() {
+            result["document_actions"] = json!({ "ran": ran, "alerts": out.alerts, "console": out.console, "errors": out.errors });
+        }
+        Ok(result)
     }
 
     fn doc_revisions(&mut self, a: &Args) -> Result<Value> {

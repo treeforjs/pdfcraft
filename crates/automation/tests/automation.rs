@@ -3654,6 +3654,47 @@ fn ocr_recognize_files_writes_searchable_copies() {
     assert!(found.to_string().contains("\"page\""), "{found}");
 }
 
+/// Set Document Actions: Will Save stamps a field before the file is written, Did Save and Did
+/// Print report back, Will Print changes what is printed, and the actions survive saving.
+#[test]
+fn document_actions_run_on_save_and_print() {
+    let dir = workdir("doc-actions");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    ok(&mut a, "form_add_field", json!({ "doc": doc, "page": 1, "type": "text", "rect": [20, 20, 220, 42], "name": "Saved" }));
+    let set = |a: &mut Automation, trigger: &str, script: &str| {
+        ok(a, "js_set_document_action", json!({ "doc": doc, "trigger": trigger, "script": script }));
+    };
+    set(&mut a, "will_save", "getField('Saved').value = 'stamped ' + event.name + ' ' + event.type;");
+    set(&mut a, "did_save", "console.println('saved ' + this.numPages);");
+    set(&mut a, "will_print", "getField('Saved').value = 'printed copy'; this.print();");
+    let list = ok(&mut a, "js_document_actions", json!({ "doc": doc }));
+    assert_eq!(list["actions"].as_array().unwrap().iter().filter(|x| x["script"].is_string()).count(), 3, "{list}");
+    assert!(list["actions"][0]["script"].is_null(), "will_close has none: {list}");
+
+    let r = ok(&mut a, "doc_save", json!({ "doc": doc, "path": "out.pdf" }));
+    assert_eq!(r["document_actions"]["ran"], json!(["will_save", "did_save"]), "{r}");
+    assert_eq!(r["document_actions"]["console"][0], "saved 3", "{r}");
+    let saved = ok(&mut a, "doc_open", json!({ "path": "out.pdf" }))["doc"].as_u64().unwrap();
+    let fields = ok(&mut a, "form_fields", json!({ "doc": saved }));
+    assert_eq!(fields["fields"][0]["value"], "stamped WillSave Doc", "the Will Save change is in the file: {fields}");
+    let kept = ok(&mut a, "js_document_actions", json!({ "doc": saved }));
+    assert!(kept["actions"][1]["script"].as_str().unwrap().contains("stamped"), "{kept}");
+
+    // Will Print's change is printed; its own print() request is dropped, not repeated.
+    ok(&mut a, "doc_print", json!({ "doc": doc, "path": "print.pdf" }));
+    let fields = ok(&mut a, "form_fields", json!({ "doc": doc }));
+    assert_eq!(fields["fields"][0]["value"], "printed copy", "{fields}");
+
+    // Removing an action; an unknown trigger is refused; with JavaScript off nothing runs.
+    ok(&mut a, "js_set_document_action", json!({ "doc": doc, "trigger": "did_save" }));
+    assert!(ok(&mut a, "js_document_actions", json!({ "doc": doc }))["actions"][2]["script"].is_null());
+    assert!(matches!(a.call("js_set_document_action", &json!({ "doc": doc, "trigger": "on_open", "script": "1" })), Err(ToolError::InvalidArgs(_))));
+    ok(&mut a, "js_enabled", json!({ "enabled": false }));
+    let r = ok(&mut a, "doc_save", json!({ "doc": doc, "path": "off.pdf" }));
+    assert!(r.get("document_actions").is_none(), "{r}");
+}
+
 #[test]
 fn javascript_through_tools() {
     let dir = workdir("js");

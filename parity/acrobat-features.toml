@@ -5043,11 +5043,11 @@ title = "Document actions (will close, will save, did save, will print, did prin
 area = "F"
 tier = "P1"
 milestone = "M6"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["js_document_actions", "js_set_document_action"]
+evidence = ["crates/automation/tests/automation.rs::document_actions_run_on_save_and_print", "crates/ui-egui/tests/javascript.rs::document_actions_run_when_saving_and_closing"]
+notes = "The catalog /AA scripts (WC, WS, DS, WP, DP) run on close, save and print in the app and through doc_save, doc_print and doc_close; Will Save and Will Print changes are saved or printed. Their print and save requests are dropped (no loops) and dialogs answer Cancel. Set through js_set_document_action; the Set Document Actions dialog itself is still to come (UI redesign)"
 
 [[feature]]
 id = "form.js-host"
