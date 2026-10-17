@@ -332,7 +332,7 @@ fn render(bytes: &Arc<Vec<u8>>, scale: f32, bootstrap: bool, tile: Option<Tile>)
     if let Some(e) = page.error {
         return Err(e.into());
     }
-    let rgb = page.rgba.chunks_exact(4).flat_map(|p| [p[0], p[1], p[2]]).collect();
+    let rgb = page.rgba.as_chunks::<4>().0.iter().flat_map(|p| [p[0], p[1], p[2]]).collect();
     Ok((Image { w: page.width as usize, h: page.height as usize, rgb }, renderer.stats().native_vector_rasterizations > 0))
 }
 
@@ -644,7 +644,7 @@ fn survey(path: &Path, scale: f32, max_pages: usize) -> Result<(), Error> {
             let start = Instant::now();
             let p = r.render(RenderRequest { page, scale, ..Default::default() });
             let ms = start.elapsed().as_secs_f64() * 1000.0;
-            let rgb = p.rgba.chunks_exact(4).flat_map(|p| [p[0], p[1], p[2]]).collect();
+            let rgb = p.rgba.as_chunks::<4>().0.iter().flat_map(|p| [p[0], p[1], p[2]]).collect();
             Ok((Image { w: p.width as usize, h: p.height as usize, rgb }, r.stats().native_vector_rasterizations > 0, ms, p.error))
         };
         let (native, used, native_ms, native_error) = time(true)?;

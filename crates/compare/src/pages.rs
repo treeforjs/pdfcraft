@@ -281,7 +281,7 @@ pub fn picture_tokens(rgba: &[u8], width: u32, height: u32) -> Vec<u64> {
     }
     let mut sum = [[0u64; GRID]; GRID];
     let mut count = [[0u64; GRID]; GRID];
-    for (n, px) in rgba.chunks_exact(4).take(w.saturating_mul(h)).enumerate() {
+    for (n, px) in rgba.as_chunks::<4>().0.iter().take(w.saturating_mul(h)).enumerate() {
         let (x, y) = (n % w, n / w);
         let (cx, cy) = (x * GRID / w, y * GRID / h);
         let l = (u64::from(px[0]) * 30 + u64::from(px[1]) * 59 + u64::from(px[2]) * 11) / 100;
@@ -426,7 +426,7 @@ mod tests {
     fn picture_fingerprints() {
         let white = vec![255u8; 64 * 64 * 4];
         let mut dark = white.clone();
-        for px in dark.chunks_exact_mut(4).take(64 * 32) {
+        for px in dark.as_chunks_mut::<4>().0.iter_mut().take(64 * 32) {
             px[..3].copy_from_slice(&[0, 0, 0]);
         }
         assert_eq!(picture_tokens(&white, 64, 64), picture_tokens(&white, 64, 64));
