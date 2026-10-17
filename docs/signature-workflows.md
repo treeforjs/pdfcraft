@@ -69,7 +69,9 @@ The UI control channel exposes `timestamp_servers` and `signature_workflow` in
 `sign.embed_evidence`, and `sign.verification_options`. `ui.set` keys are
 `timestamp-servers` (JSON array), `timestamp-server` (zero-based index or `none`),
 `timestamp-network` (`true`/`false`), `signature-certificates`, `signature-crls`,
-`signature-ocsps` (newline-separated paths), and `signature-verification-time`.
+`signature-ocsps` (newline-separated paths), `signature-verification-time`,
+`signature-properties` (a signature field's full name: opens Signature Properties) and
+`signature-properties-tab` (`summary`, `document`, `signer`, `date-time` or `legal`).
 Opening a workflow resets network permission. Buttons remain available through
 AccessKit for Save, Verify and Cancel.
 

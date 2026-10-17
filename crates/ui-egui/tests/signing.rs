@@ -297,3 +297,93 @@ fn windows_store_identity_does_not_ask_for_a_file_password() {
     assert_eq!(h.state().dialog, Some(Dialog::Sign));
     assert!(h.state().sign_draft.as_ref().unwrap().error.as_ref().unwrap().contains("Windows certificate store"));
 }
+
+fn button<'a>(h: &'a Harness<'static, PdfCraftApp>, label: &'a str) -> egui_kittest::Node<'a> {
+    h.get_all_by_role_and_label(egui::accesskit::Role::Button, label).last().unwrap_or_else(|| panic!("no {label:?} button"))
+}
+
+#[test]
+fn signature_properties_show_every_tab_and_lead_to_the_certificate() {
+    let dir = dir().join("properties");
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut h = harness(dir.clone());
+    let p12 = concat!(env!("CARGO_MANIFEST_DIR"), "/../sign/tests/data/ec-p256.p12");
+    let id = pdfcraft_engine::sign::pkcs12::open(&std::fs::read(p12).unwrap(), "test").unwrap();
+    let entry = h.state_mut().add_digital_id(p12, &id.certificate);
+    h.state_mut().start_signing(0, None, None, Some(2));
+    {
+        let d = h.state_mut().sign_draft.as_mut().unwrap();
+        d.selected = Some(entry);
+        d.step = SignStep::SignAs;
+        d.password = "test".into();
+    }
+    h.run_steps(2);
+    h.get_by_label("Sign").click();
+    h.run_steps(6);
+    let name = {
+        let s = h.state();
+        s.session.get(s.views[0].id).unwrap().signatures.iter().find(|x| x.signed).expect("certified").field.clone()
+    };
+
+    // An unknown field is refused; the control-channel option opens the dialog.
+    assert!(h.state_mut().set_option("signature-properties", "No such field").is_err());
+    assert_eq!(h.state().dialog, None);
+    assert!(h.state_mut().set_option("signature-properties-tab", "legal").is_err(), "not open yet");
+
+    // The Signatures panel's button opens it on the Summary tab.
+    h.get_by_label_contains("Certified by Test Signer EC").click();
+    h.run_steps(2);
+    h.get_by_label("Signature Properties…").click();
+    h.run_steps(3);
+    assert_eq!(h.state().dialog, Some(Dialog::SignatureProperties));
+    assert_eq!(h.state().sig_props.as_ref().map(|p| (p.field.clone(), p.tab)), Some((name.clone(), pdfcraft_ui_egui::SigPropsTab::Summary)));
+    field(&h, "Signature Properties");
+    field(&h, "Signature validity is UNKNOWN:");
+    assert!(h.get_all_by_label("Test Signer EC").count() >= 1, "signed by");
+
+    for (tab, shows) in [
+        ("Document", "The document has not been modified since this signature was applied."),
+        ("Signer", "Valid from"),
+        ("Date/Time", "Signer's computer clock"),
+        ("Legal", "Certification signature"),
+    ] {
+        button(&h, tab).click();
+        h.run_steps(4);
+        field(&h, shows);
+    }
+    field(&h, "Form fill-in and digital signatures");
+    assert!(h.state_mut().set_option("signature-properties-tab", "signer").is_ok());
+    assert!(h.state_mut().set_option("signature-properties-tab", "nope").is_err());
+    h.run_steps(2);
+    field(&h, "Valid from");
+
+    // Trust from the dialog: the verdict updates in place.
+    button(&h, "Add to trusted certificates").click();
+    h.run_steps(3);
+    assert_eq!(h.state().dialog, Some(Dialog::SignatureProperties));
+    field(&h, "Signature is valid:");
+    button(&h, "Validate Signature").click();
+    h.run_steps(3);
+    field(&h, "Signature is valid:");
+
+    // Show certificate replaces it with the Certificate Viewer.
+    button(&h, "Show certificate…").click();
+    h.run_steps(3);
+    assert_eq!(h.state().dialog, Some(Dialog::CertificateViewer));
+    field(&h, "Certificate Viewer");
+    h.run_steps(4);
+    button(&h, "OK").click();
+    h.run_steps(2);
+    assert_eq!(h.state().dialog, None);
+
+    // Close, and a dialog whose document went away closes itself.
+    h.state_mut().set_option("signature-properties", &name).unwrap();
+    h.run_steps(4);
+    button(&h, "Close").click();
+    h.run_steps(2);
+    assert_eq!(h.state().dialog, None);
+    h.state_mut().set_option("signature-properties", &name).unwrap();
+    h.state_mut().sig_props.as_mut().unwrap().field = "gone".into();
+    h.run_steps(3);
+    assert_eq!(h.state().dialog, None);
+}

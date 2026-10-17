@@ -2188,3 +2188,27 @@ compare-page	Moved	Преместена
 	{n} objects with unsaved changes are estimated, not measured in the file.	Обектите с незапазени промени ({n}) са оценени, а не измерени във файла.
 	{n} bytes of compressed object streams are shared out among their objects by decoded size.	{n} байта от компресирани потоци от обекти са разпределени между обектите им според декодирания размер.
 	This document does not allow copying text, so its paragraphs can't be opened for editing. Open it with the permissions password.	Този документ не позволява копиране на текст, затова абзаците му не могат да се отварят за редактиране. Отворете го с паролата за разрешения.
+	Signature Properties	Свойства на подписа
+	Signature Properties…	Свойства на подписа…
+	Date/Time	Дата и час
+	Legal	Правна информация
+	Revision	Редакция
+	Contact	Контакт
+	Changes after signing	Промени след подписването
+	The document has not been modified since this signature was applied.	Документът не е променян, откакто е положен този подпис.
+	Changes the signer permitted were made: {changes}	Направени са промени, разрешени от подписалия: {changes}
+	Changes the signer did not permit were made: {changes}	Направени са промени, неразрешени от подписалия: {changes}
+	Trusted timestamp	Доверено времево клеймо
+	Untrusted timestamp	Недоверено времево клеймо
+	Signer's computer clock	Часовникът на компютъра на подписалия
+	Time source	Източник на времето
+	Timestamp authority	Орган за времеви клейма
+	Claimed signing time	Заявено време на подписване
+	Chosen time	Избрано време
+	Not available	Не е налично
+	Document timestamp	Времево клеймо на документа
+	Certification signature	Сертифициращ подпис
+	Approval signature	Одобряващ подпис
+	Signature type	Вид подпис
+	This signature field is not signed.	Това поле за подпис не е подписано.
+	Validate Signature	Проверка на подписа

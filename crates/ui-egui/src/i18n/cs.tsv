@@ -2250,3 +2250,27 @@ compare-page	Moved	Přesunutá
 	{n} objects with unsaved changes are estimated, not measured in the file.	Objekty s neuloženými změnami ({n}) jsou odhadnuty, ne změřeny v souboru.
 	{n} bytes of compressed object streams are shared out among their objects by decoded size.	{n} bajtů komprimovaných proudů objektů je rozděleno mezi jejich objekty podle dekódované velikosti.
 	This document does not allow copying text, so its paragraphs can't be opened for editing. Open it with the permissions password.	Tento dokument nepovoluje kopírování textu, proto jeho odstavce nelze otevřít k úpravám. Otevřete ho heslem pro oprávnění.
+	Signature Properties	Vlastnosti podpisu
+	Signature Properties…	Vlastnosti podpisu…
+	Date/Time	Datum a čas
+	Legal	Právní informace
+	Revision	Revize
+	Contact	Kontakt
+	Changes after signing	Změny po podepsání
+	The document has not been modified since this signature was applied.	Dokument nebyl od použití tohoto podpisu změněn.
+	Changes the signer permitted were made: {changes}	Byly provedeny změny povolené podepisujícím: {changes}
+	Changes the signer did not permit were made: {changes}	Byly provedeny změny, které podepisující nepovolil: {changes}
+	Trusted timestamp	Důvěryhodné časové razítko
+	Untrusted timestamp	Nedůvěryhodné časové razítko
+	Signer's computer clock	Hodiny počítače podepisujícího
+	Time source	Zdroj času
+	Timestamp authority	Autorita časových razítek
+	Claimed signing time	Deklarovaný čas podpisu
+	Chosen time	Zvolený čas
+	Not available	Není k dispozici
+	Document timestamp	Časové razítko dokumentu
+	Certification signature	Certifikační podpis
+	Approval signature	Schvalovací podpis
+	Signature type	Typ podpisu
+	This signature field is not signed.	Toto pole podpisu není podepsáno.
+	Validate Signature	Ověřit podpis

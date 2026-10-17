@@ -684,6 +684,11 @@ pub fn right_panel(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
             app.cert_viewer = Some(crate::sign_ui::CertViewer { chain, selected: 0, tab: crate::sign_ui::CertTab::Summary });
             app.dialog = Some(crate::Dialog::CertificateViewer);
         }
+        Some(crate::sign_ui::PanelAction::Properties(field)) => {
+            if let Err(e) = app.open_signature_properties(&field) {
+                app.notify(&e);
+            }
+        }
         Some(crate::sign_ui::PanelAction::ViewSigned(len)) => app.view_signed_version(len),
         Some(crate::sign_ui::PanelAction::Sign(field)) => {
             let page = app.views[index].current;

@@ -2226,3 +2226,27 @@ compare-page	Moved	移動
 	{n} objects with unsaved changes are estimated, not measured in the file.	未保存の変更がある {n} 個のオブジェクトは、ファイル上で測定せず推定しています。
 	{n} bytes of compressed object streams are shared out among their objects by decoded size.	圧縮されたオブジェクトストリームの {n} バイトは、展開後のサイズに応じて各オブジェクトに配分しています。
 	This document does not allow copying text, so its paragraphs can't be opened for editing. Open it with the permissions password.	この文書ではテキストのコピーが許可されていないため、段落を開いて編集することはできません。権限パスワードで開いてください。
+	Signature Properties	署名のプロパティ
+	Signature Properties…	署名のプロパティ…
+	Date/Time	日付/時刻
+	Legal	法的情報
+	Revision	リビジョン
+	Contact	連絡先
+	Changes after signing	署名後の変更
+	The document has not been modified since this signature was applied.	この署名が適用されてから文書は変更されていません。
+	Changes the signer permitted were made: {changes}	署名者が許可した変更が加えられました：{changes}
+	Changes the signer did not permit were made: {changes}	署名者が許可していない変更が加えられました：{changes}
+	Trusted timestamp	信頼済みのタイムスタンプ
+	Untrusted timestamp	信頼されていないタイムスタンプ
+	Signer's computer clock	署名者のコンピューターの時計
+	Time source	時刻の取得元
+	Timestamp authority	タイムスタンプ局
+	Claimed signing time	主張された署名時刻
+	Chosen time	指定した時刻
+	Not available	利用できません
+	Document timestamp	文書のタイムスタンプ
+	Certification signature	証明署名
+	Approval signature	承認署名
+	Signature type	署名の種類
+	This signature field is not signed.	この署名フィールドには署名されていません。
+	Validate Signature	署名を検証

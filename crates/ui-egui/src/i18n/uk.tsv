@@ -2249,3 +2249,27 @@ compare-page	Moved	Переміщена
 	{n} objects with unsaved changes are estimated, not measured in the file.	Об’єкти з незбереженими змінами ({n}) оцінено, а не виміряно у файлі.
 	{n} bytes of compressed object streams are shared out among their objects by decoded size.	{n} байтів стиснених потоків об’єктів розподілено між їхніми об’єктами за розміром після розпакування.
 	This document does not allow copying text, so its paragraphs can't be opened for editing. Open it with the permissions password.	Цей документ не дозволяє копіювати текст, тому його абзаци не можна відкрити для редагування. Відкрийте його з паролем дозволів.
+	Signature Properties	Властивості підпису
+	Signature Properties…	Властивості підпису…
+	Date/Time	Дата й час
+	Legal	Юридичні відомості
+	Revision	Редакція
+	Contact	Контакт
+	Changes after signing	Зміни після підписання
+	The document has not been modified since this signature was applied.	Документ не змінювався відтоді, як застосовано цей підпис.
+	Changes the signer permitted were made: {changes}	Внесено зміни, дозволені підписувачем: {changes}
+	Changes the signer did not permit were made: {changes}	Внесено зміни, не дозволені підписувачем: {changes}
+	Trusted timestamp	Довірена позначка часу
+	Untrusted timestamp	Недовірена позначка часу
+	Signer's computer clock	Годинник комп'ютера підписувача
+	Time source	Джерело часу
+	Timestamp authority	Служба позначок часу
+	Claimed signing time	Заявлений час підписання
+	Chosen time	Вибраний час
+	Not available	Недоступно
+	Document timestamp	Позначка часу документа
+	Certification signature	Сертифікаційний підпис
+	Approval signature	Затверджувальний підпис
+	Signature type	Тип підпису
+	This signature field is not signed.	Це поле підпису не підписано.
+	Validate Signature	Перевірити підпис

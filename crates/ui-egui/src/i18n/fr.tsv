@@ -2226,3 +2226,27 @@ compare-page	Moved	Déplacée
 	{n} objects with unsaved changes are estimated, not measured in the file.	{n} objets modifiés non enregistrés sont estimés, et non mesurés dans le fichier.
 	{n} bytes of compressed object streams are shared out among their objects by decoded size.	{n} octets de flux d'objets compressés sont répartis entre leurs objets selon leur taille décodée.
 	This document does not allow copying text, so its paragraphs can't be opened for editing. Open it with the permissions password.	Ce document n'autorise pas la copie de texte : ses paragraphes ne peuvent donc pas être ouverts pour modification. Ouvrez-le avec le mot de passe des autorisations.
+	Signature Properties	Propriétés de la signature
+	Signature Properties…	Propriétés de la signature…
+	Date/Time	Date et heure
+	Legal	Mentions légales
+	Revision	Révision
+	Contact	Contact
+	Changes after signing	Modifications après la signature
+	The document has not been modified since this signature was applied.	Le document n'a pas été modifié depuis l'application de cette signature.
+	Changes the signer permitted were made: {changes}	Des modifications autorisées par le signataire ont été apportées : {changes}
+	Changes the signer did not permit were made: {changes}	Des modifications non autorisées par le signataire ont été apportées : {changes}
+	Trusted timestamp	Horodatage approuvé
+	Untrusted timestamp	Horodatage non approuvé
+	Signer's computer clock	Horloge de l'ordinateur du signataire
+	Time source	Source de l'heure
+	Timestamp authority	Autorité d'horodatage
+	Claimed signing time	Heure de signature déclarée
+	Chosen time	Heure choisie
+	Not available	Non disponible
+	Document timestamp	Horodatage du document
+	Certification signature	Signature de certification
+	Approval signature	Signature d'approbation
+	Signature type	Type de signature
+	This signature field is not signed.	Ce champ de signature n'est pas signé.
+	Validate Signature	Valider la signature
