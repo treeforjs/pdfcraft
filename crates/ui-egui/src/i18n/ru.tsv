@@ -2182,3 +2182,14 @@ compare-page	Moved	Перемещена
 	Page {p}: {change}	Страница {p}: {change}
 	Document: {change}	Документ: {change}
 	View this version	Просмотреть эту версию
+	Only send form data to sites you trust. Nothing is sent unless you choose Send.	Отправляйте данные форм только на сайты, которым доверяете. Ничего не отправляется, пока вы не выберете «Отправить».
+	Save Data As…	Сохранить данные как…
+	Send	Отправить
+	Sending…	Отправка…
+	Submit Form	Отправить форму
+	The whole document (PDF)	Весь документ (PDF)
+	This form wants to send its data to {host}:	Эта форма хочет отправить свои данные на {host}:
+	This form wants to send its data to:	Эта форма хочет отправить свои данные на:
+	{fields} as {format}	{fields} в формате {format}
+	{host} answered with HTTP {status}; the form may not have been received.	{host} ответил HTTP {status}; возможно, форма не была получена.
+	The form was sent to {host}.	Форма отправлена на {host}.

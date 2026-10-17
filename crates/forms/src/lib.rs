@@ -21,6 +21,7 @@ pub mod appearance;
 mod author;
 pub mod detect;
 mod scripting;
+pub mod submit;
 pub use actions::{FieldAction, MAX_ACTIONS_PER_TRIGGER, MENU_ITEMS, Trigger, field_actions, set_field_actions};
 pub use author::{
     BorderStyle, CheckStyle, FieldFont, FieldProps, Look, LookPatch, MAX_DISPLAY_APPEARANCES, NewField, add_field, check_style, delete_field,
@@ -279,12 +280,7 @@ fn button_action(doc: &Document, d: &Dict, widgets: &[ObjRef]) -> Option<af::But
         }
         b"Named" => af::ButtonAction::Named(String::from_utf8_lossy(a.name(b"N")?).into_owned()),
         b"URI" => af::ButtonAction::Uri(s(b"URI")?),
-        b"SubmitForm" => af::ButtonAction::Submit(
-            a.get(b"F")
-                .map(|f| doc.resolve(f))
-                .and_then(|f| f.as_dict().and_then(|fd| fd.get(b"F").and_then(|x| text_of(&doc.resolve(x)))).or_else(|| text_of(&f)))
-                .unwrap_or_default(),
-        ),
+        b"SubmitForm" => af::ButtonAction::Submit(submit::parse(doc, a)),
         b"GoTo" => {
             let dest = doc.resolve(a.get(b"D")?);
             let target = dest.as_array()?.first()?.as_ref()?;

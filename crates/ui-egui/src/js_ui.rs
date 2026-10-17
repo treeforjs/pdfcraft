@@ -24,8 +24,8 @@ pub struct DocJsDraft {
 
 impl PdfCraftApp {
     /// Act on what scripts produced in document `id`: alerts are shown, console output goes to
-    /// the console, print and page requests are carried out, links wait for the user's permission
-    /// (form submissions are reported, never sent).
+    /// the console, print and page requests are carried out, links and form submissions wait
+    /// for the user's permission.
     pub fn handle_js(&mut self, id: DocId, out: JsOutput) {
         if out.is_empty() {
             return;
@@ -44,10 +44,7 @@ impl PdfCraftApp {
                     }
                 }
                 Request::LaunchUrl(u) => self.request_document_url(&u, crate::LinkOrigin::Script),
-                Request::Submit(u) => self.notify_fmt(
-                    "The form asks to be submitted to {u}; PdfCraft doesn't send form data. Save the document to keep your entries.",
-                    &[("u", &u)],
-                ),
+                Request::Submit(u) => self.start_submit(id, "", pdfcraft_engine::submit::Submission::to_url(&u)),
                 Request::SaveAs => self.run_command("file.save_as"),
                 Request::Focus(_) | Request::Beep | Request::Reset(_) => {}
             }

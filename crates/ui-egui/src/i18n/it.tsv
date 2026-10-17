@@ -2278,3 +2278,14 @@ compare-page	Moved	Spostata
 	Page {p}: {change}	Pagina {p}: {change}
 	Document: {change}	Documento: {change}
 	View this version	Visualizza questa versione
+	Only send form data to sites you trust. Nothing is sent unless you choose Send.	Invia i dati dei moduli solo a siti attendibili. Non viene inviato nulla finché non scegli Invia.
+	Save Data As…	Salva dati con nome…
+	Send	Invia
+	Sending…	Invio in corso…
+	Submit Form	Invia modulo
+	The whole document (PDF)	L’intero documento (PDF)
+	This form wants to send its data to {host}:	Questo modulo vuole inviare i suoi dati a {host}:
+	This form wants to send its data to:	Questo modulo vuole inviare i suoi dati a:
+	{fields} as {format}	{fields} come {format}
+	{host} answered with HTTP {status}; the form may not have been received.	{host} ha risposto con HTTP {status}; il modulo potrebbe non essere stato ricevuto.
+	The form was sent to {host}.	Il modulo è stato inviato a {host}.

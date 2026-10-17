@@ -150,3 +150,130 @@ fn hide_actions_hide_and_show_fields() {
     click_field(&mut h, "show");
     assert!(!name_hidden(&h), "the Hide action with /H false showed it again");
 }
+
+/// A loopback HTTP server answering 200: every request body it gets comes out of the receiver.
+fn form_server() -> (String, std::sync::mpsc::Receiver<(String, Vec<u8>)>) {
+    use std::io::{Read, Write};
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = format!("http://{}", listener.local_addr().unwrap());
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(mut s) = stream else { return };
+            let mut buf = Vec::new();
+            let mut chunk = [0u8; 4096];
+            let (head, mut body) = loop {
+                let n = s.read(&mut chunk).unwrap_or(0);
+                if n == 0 {
+                    return;
+                }
+                buf.extend_from_slice(&chunk[..n]);
+                if let Some(i) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
+                    break (String::from_utf8_lossy(&buf[..i]).into_owned(), buf[i + 4..].to_vec());
+                }
+            };
+            let len = head
+                .lines()
+                .find_map(|l| l.to_ascii_lowercase().strip_prefix("content-length:").map(|v| v.trim().parse::<usize>().unwrap_or(0)))
+                .unwrap_or(0);
+            while body.len() < len {
+                let n = s.read(&mut chunk).unwrap_or(0);
+                if n == 0 {
+                    break;
+                }
+                body.extend_from_slice(&chunk[..n]);
+            }
+            let _ = s.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+            if tx.send((head, body)).is_err() {
+                return;
+            }
+        }
+    });
+    (addr, rx)
+}
+
+/// One page: a filled text field, a NoExport one, an HTML Submit button to `url` and an email
+/// one.
+fn submit_fixture(url: &str) -> Vec<u8> {
+    let objs = [
+        "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [4 0 R 5 0 R 6 0 R 7 0 R] /DA (/Helv 0 Tf 0 g) >> >>".to_string(),
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 /MediaBox [0 0 300 400] >>".into(),
+        "<< /Type /Page /Parent 2 0 R /Annots [4 0 R 5 0 R 6 0 R 7 0 R] >>".into(),
+        "<< /Type /Annot /Subtype /Widget /FT /Tx /T (name) /V (Ada) /Rect [20 340 280 360] /P 3 0 R >>".into(),
+        "<< /Type /Annot /Subtype /Widget /FT /Tx /Ff 4 /T (notes) /V (private) /Rect [20 300 280 320] /P 3 0 R >>".into(),
+        format!("<< /Type /Annot /Subtype /Widget /FT /Btn /Ff 65536 /T (submit) /Rect [20 250 100 270] /P 3 0 R /A << /S /SubmitForm /F ({url}) /Flags 4 >> >>"),
+        "<< /Type /Annot /Subtype /Widget /FT /Btn /Ff 65536 /T (email) /Rect [120 250 200 270] /P 3 0 R /A << /S /SubmitForm /F (mailto:forms@example.org) >> >>".into(),
+    ];
+    let mut out = b"%PDF-1.7\n".to_vec();
+    let mut offs = Vec::new();
+    for (i, o) in objs.iter().enumerate() {
+        offs.push(out.len());
+        out.extend_from_slice(format!("{} 0 obj\n{o}\nendobj\n", i + 1).as_bytes());
+    }
+    let x = out.len();
+    out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objs.len() + 1).as_bytes());
+    for o in offs {
+        out.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+    }
+    out.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{x}\n%%EOF\n", objs.len() + 1).as_bytes());
+    out
+}
+
+#[test]
+fn submit_buttons_ask_then_send_or_save_the_data() {
+    let dir = std::env::temp_dir().join(format!("pdfcraft-submit-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let (server, requests) = form_server();
+    let url = format!("{server}/in");
+    let bytes = submit_fixture(&url);
+    let export = dir.to_string_lossy().into_owned();
+    let mut h = Harness::builder().with_size(egui::vec2(1400.0, 900.0)).build_eframe(move |_cc| {
+        let mut app = PdfCraftApp::new();
+        app.set_option("language", "en").unwrap();
+        app.open_bytes("order.pdf", None, bytes.clone()).unwrap();
+        app.set_option("zoom", "150").unwrap();
+        app.export_dir_override = Some(export.clone());
+        app.run_inline = true;
+        app
+    });
+    h.run_steps(6);
+
+    // The button asks first, naming the address and what goes; nothing is sent yet.
+    click_field(&mut h, "submit");
+    assert_eq!(h.state().dialog, Some(Dialog::SubmitForm));
+    h.get_by_label("This form wants to send its data to 127.0.0.1:");
+    h.get_by_label(&url);
+    h.get_by_label("1 field as HTML");
+    assert!(requests.try_recv().is_err(), "nothing is sent before Send");
+    // Cancel sends nothing.
+    h.get_by_label("Cancel").click();
+    h.run_steps(3);
+    assert_eq!(h.state().dialog, None);
+    assert!(requests.try_recv().is_err());
+
+    // Send posts the exportable fields to the address.
+    click_field(&mut h, "submit");
+    h.get_by_label("Send").click();
+    h.run_steps(4);
+    let (head, body) = requests.recv_timeout(std::time::Duration::from_secs(10)).unwrap();
+    assert!(head.starts_with("POST /in HTTP/1.1"), "{head}");
+    assert_eq!(body, b"name=Ada", "the NoExport field stays");
+    assert_eq!(h.state().dialog, None, "a delivered form closes the dialog");
+
+    // Save Data As writes the same data to a file instead.
+    click_field(&mut h, "submit");
+    h.get_by_label("Save Data As…").click();
+    h.run_steps(4);
+    assert_eq!(std::fs::read_to_string(dir.join("order data.txt")).unwrap(), "name=Ada");
+    assert!(requests.try_recv().is_err());
+
+    // An email address can't be sent to: the dialog says so and only saving is offered.
+    click_field(&mut h, "email");
+    assert_eq!(h.state().dialog, Some(Dialog::SubmitForm));
+    h.get_by_label_contains("PdfCraft doesn't send email");
+    h.get_by_label("Send").click();
+    h.run_steps(3);
+    assert!(requests.try_recv().is_err(), "Send is disabled");
+    assert_eq!(h.state().dialog, Some(Dialog::SubmitForm));
+}
