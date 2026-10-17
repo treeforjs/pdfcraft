@@ -235,6 +235,11 @@ impl crate::Document {
         self.editor.as_ref().map(|e| pdfcraft_forms::document_actions(&e.cos)).unwrap_or_default()
     }
 
+    /// What the unsigned signature field `field` locks when signed (its `/Lock`).
+    pub fn signature_field_lock(&self, field: &str) -> Option<pdfcraft_sign::FieldLock> {
+        self.editor.as_ref().and_then(|e| pdfcraft_sign::lock::field_lock(&e.cos, field))
+    }
+
     /// Document JavaScripts (name, source), in name order.
     pub fn document_scripts(&self) -> Vec<(String, String)> {
         self.editor.as_ref().map(|e| document_scripts(&e.cos)).unwrap_or_default()

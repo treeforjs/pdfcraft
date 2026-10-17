@@ -728,6 +728,7 @@ impl Automation {
             "alt_text_set" => self.alt_text_set(&a)?,
             "sign_id_create" => self.sign_id_create(&a)?,
             "sign_document" => self.sign_document(&a)?,
+            "sign_field_lock" => self.sign_field_lock(&a)?,
             "sign_keychain_ids" => {
                 #[cfg(target_os = "macos")]
                 let ids: Vec<Value> = pdfcraft_engine::sign::keychain::identities(None)

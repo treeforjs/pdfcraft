@@ -1336,3 +1336,75 @@ fn validates_the_legacy_adbe_x509_rsa_sha1_format() {
     let s = signatures(&open(&bad), &bad, &trusted).into_iter().find(|s| s.signed).unwrap();
     assert_eq!(s.status, Status::Invalid, "{:?}", s.details);
 }
+
+/// Two text fields (Name, Amount) and a signature field "Approval" whose /Lock names Name.
+fn fixture_with_lock() -> Vec<u8> {
+    let objs: Vec<&[u8]> = vec![
+        b"<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [6 0 R 7 0 R 8 0 R] >> >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> /Annots [6 0 R 7 0 R 8 0 R] >>",
+        b"<< /Length 44 >>\nstream\nBT /F1 14 Tf 20 250 Td (Contract text) Tj ET\nendstream",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+        b"<< /Type /Annot /Subtype /Widget /FT /Sig /T (Approval) /Rect [150 20 280 70] /P 3 0 R /F 4 /Lock << /Type /SigFieldLock /Action /Include /Fields [(Name)] >> >>",
+        b"<< /Type /Annot /Subtype /Widget /FT /Tx /T (Name) /V (Ada) /Rect [20 200 140 220] /P 3 0 R /F 4 >>",
+        b"<< /Type /Annot /Subtype /Widget /FT /Tx /T (Amount) /V (10) /Rect [20 170 140 190] /P 3 0 R /F 4 >>",
+    ];
+    let mut out = b"%PDF-1.7\n".to_vec();
+    let mut offsets = Vec::new();
+    for (i, o) in objs.iter().enumerate() {
+        offsets.push(out.len());
+        out.extend_from_slice(format!("{} 0 obj\n", i + 1).as_bytes());
+        out.extend_from_slice(o);
+        out.extend_from_slice(b"\nendobj\n");
+    }
+    let xref = out.len();
+    out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objs.len() + 1).as_bytes());
+    for o in offsets {
+        out.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+    }
+    out.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objs.len() + 1).as_bytes());
+    out
+}
+
+fn fill(num: u32, value: &'static str) -> impl FnOnce(&mut Document) {
+    move |doc: &mut Document| doc.update_dict(pdfcraft_cos::ObjRef { num, generation: 0 }, |d| d.set(b"V".to_vec(), PdfString::text(value))).unwrap()
+}
+
+#[test]
+fn signing_a_field_with_a_lock_locks_its_fields() {
+    use pdfcraft_sign::{FieldLock, LockAction};
+    let id = pkcs12::open(&data("rsa-aes.p12"), "test").unwrap();
+    let trust = TrustStore { certs: vec![id.certificate.clone()] };
+    let check = |bytes: &[u8]| signatures(&open(bytes), bytes, &trust).into_iter().find(|s| s.field == "Approval").unwrap();
+    let signed = pdfcraft_sign::sign(&open(&fixture_with_lock()), &id, &SignOptions { field: Some("Approval".into()), ..opts() }).unwrap();
+    let s = check(&signed);
+    assert_eq!(s.status, Status::Valid, "{:?}", s.details);
+    assert_eq!(s.lock, Some(FieldLock { action: LockAction::Include(vec!["Name".into()]), permissions: None }));
+    // The locked field is read-only in the signed revision; the other is not.
+    let doc = open(&signed);
+    let ff = |num| doc.get(pdfcraft_cos::ObjRef { num, generation: 0 }).as_dict().and_then(|d| d.int(b"Ff")).unwrap_or(0);
+    assert_eq!((ff(7) & 1, ff(8) & 1), (1, 0));
+    // Filling the unlocked field afterwards is permitted; changing the locked one is not.
+    let s = check(&edit_after(&signed, fill(8, "20")));
+    assert_eq!((s.status, s.modification), (Status::Valid, Modification::Allowed(vec!["form fill".into()])));
+    let s = check(&edit_after(&signed, fill(7, "Mallory")));
+    assert_eq!(s.status, Status::Invalid);
+    assert_eq!(s.modification, Modification::Disallowed(vec!["changes to locked fields".into()]));
+}
+
+#[test]
+fn locking_the_document_after_signing_permits_no_changes() {
+    use pdfcraft_sign::FieldLock;
+    let id = pkcs12::open(&data("rsa-aes.p12"), "test").unwrap();
+    let trust = TrustStore { certs: vec![id.certificate.clone()] };
+    let check = |bytes: &[u8]| signatures(&open(bytes), bytes, &trust).into_iter().find(|s| s.field == "Signature1").unwrap();
+    let signed = pdfcraft_sign::sign(&open(&fixture_with_lock()), &id, &SignOptions { lock: Some(FieldLock::document()), ..opts() }).unwrap();
+    let s = check(&signed);
+    assert_eq!((s.status, s.lock.clone()), (Status::Valid, Some(FieldLock::document())), "{:?}", s.details);
+    // The new field records its lock, and every other field is read-only.
+    let doc = open(&signed);
+    let ff = |num| doc.get(pdfcraft_cos::ObjRef { num, generation: 0 }).as_dict().and_then(|d| d.int(b"Ff")).unwrap_or(0);
+    assert_eq!((ff(7) & 1, ff(8) & 1, ff(6) & 1), (1, 1, 0), "the unsigned signature field can still be signed");
+    assert_eq!(check(&edit_after(&signed, add_comment)).status, Status::Invalid);
+    assert_eq!(check(&edit_after(&signed, fill(8, "20"))).status, Status::Invalid);
+}

@@ -5387,3 +5387,40 @@ fn hairlines_are_fixed_through_tools() {
         assert!(a.call("doc_fix_hairlines", &bad).is_err(), "{bad}");
     }
 }
+
+/// A signature field's lock makes the fields it names read-only once signed, and later changes
+/// to fields it leaves open keep the signature valid.
+#[test]
+fn signature_field_locks_through_tools() {
+    let dir = workdir("sign-lock");
+    let mut a = auto(&dir);
+    ok(&mut a, "sign_id_create", json!({ "name": "Ada Lovelace", "key": "p256", "password": "secret1", "path": "ada.p12" }));
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    for (name, ty, y) in [("Name", "text", 20), ("Amount", "text", 60), ("Approval", "signature", 100)] {
+        ok(&mut a, "form_add_field", json!({ "doc": doc, "page": 1, "type": ty, "name": name, "rect": [20, y, 180, y + 30] }));
+    }
+    let r = ok(&mut a, "sign_field_lock", json!({ "doc": doc, "field": "Approval", "lock": "include", "lock_fields": ["Name"] }));
+    assert_eq!(r["lock"], json!({ "action": "include", "fields": ["Name"], "lock_document": false, "permissions": null }));
+    let list = ok(&mut a, "sign_list", json!({ "doc": doc }));
+    let approval = list["signatures"].as_array().unwrap().iter().find(|s| s["field"] == "Approval").unwrap().clone();
+    assert_eq!(approval["lock"]["fields"], json!(["Name"]), "{approval}");
+    for bad in [json!({ "doc": doc, "field": "Approval", "lock": "include" }), json!({ "doc": doc, "field": "Approval", "lock": "some" })] {
+        assert!(matches!(a.call("sign_field_lock", &bad), Err(ToolError::InvalidArgs(_))), "{bad}");
+    }
+    assert!(matches!(a.call("sign_field_lock", &json!({ "doc": doc, "field": "Name", "lock": "all" })), Err(ToolError::Failed(_))));
+
+    ok(&mut a, "sign_document", json!({ "doc": doc, "id": "ada.p12", "password": "secret1", "field": "Approval", "out": "signed.pdf" }));
+    let fields = ok(&mut a, "form_fields", json!({ "doc": doc }));
+    let read_only = |n: &str| fields["fields"].as_array().unwrap().iter().find(|f| f["name"] == n).unwrap()["read_only"].clone();
+    assert_eq!((read_only("Name"), read_only("Amount")), (json!(true), json!(false)), "{fields}");
+    ok(&mut a, "sign_trust", json!({ "paths": ["ada.p12"], "password": "secret1" }));
+    ok(&mut a, "form_fill", json!({ "doc": doc, "values": { "Amount": "20" } }));
+    let s =
+        ok(&mut a, "sign_list", json!({ "doc": doc }))["signatures"].as_array().unwrap().iter().find(|s| s["field"] == "Approval").unwrap().clone();
+    assert_eq!((s["status"].as_str(), s["modification"].as_str()), (Some("valid"), Some("allowed")), "{s}");
+    assert_eq!(s["lock"]["action"], "include");
+    assert!(
+        matches!(a.call("sign_field_lock", &json!({ "doc": doc, "field": "Approval", "lock": "none" })), Err(ToolError::Failed(_))),
+        "already signed"
+    );
+}

@@ -4911,11 +4911,11 @@ title = "Field properties: signed (lock fields when signed)"
 area = "F"
 tier = "P1"
 milestone = "M9"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["sign_field_lock"]
+evidence = ["crates/automation/tests/automation.rs::signature_field_locks_through_tools", "crates/sign/tests/pdf.rs::signing_a_field_with_a_lock_locks_its_fields"]
+notes = "sign_field_lock sets what an unsigned signature field locks (all, include or exclude fields, optionally the document). The Signed tab of the signature field properties waits for the UI redesign"
 
 [[feature]]
 id = "form.align-distribute-fields"
@@ -5927,11 +5927,11 @@ title = "Lock document or fields after signing"
 area = "H"
 tier = "P1"
 milestone = "M9"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["sign.digital"]
+tools = ["sign_document"]
+evidence = ["crates/sign/tests/pdf.rs::locking_the_document_after_signing_permits_no_changes", "crates/automation/tests/automation.rs::signature_field_locks_through_tools"]
+notes = "sign_document lock_document: true locks every field and permits no later changes (FieldMDP with P 1); the Lock document after signing checkbox in the sign dialog waits for the UI redesign"
 
 [[feature]]
 id = "sign.pkcs7-detached"
@@ -5999,11 +5999,11 @@ title = "Field locks (FieldMDP)"
 area = "H"
 tier = "P1"
 milestone = "M9"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["sign.digital"]
+tools = ["sign_document", "sign_field_lock"]
+evidence = ["crates/sign/tests/pdf.rs::signing_a_field_with_a_lock_locks_its_fields", "crates/automation/tests/automation.rs::signature_field_locks_through_tools"]
+notes = "Signing applies the field's /Lock (or the lock given): the fields become read-only, the signature records a FieldMDP transform, and validation reports later changes to locked fields as not permitted"
 
 [[feature]]
 id = "sign.document-timestamp"
