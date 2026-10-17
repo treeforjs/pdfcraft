@@ -815,11 +815,11 @@ title = "Tiled rendering keeps deep zoom sharp"
 area = "B"
 tier = "P0"
 milestone = "M3"
-status = "partial"
+status = "shipped"
 commands = []
 tools = []
-evidence = ["crates/render/src/raster.rs::tiles_match_full_render", "crates/render/src/raster.rs::effective_scale_never_exceeds_the_caps"]
-notes = "capped at 8192 px per side (M3.3)"
+evidence = ["crates/render/src/raster.rs::tiles_match_full_render", "crates/render/src/raster.rs::effective_scale_never_exceeds_the_caps", "crates/ui-egui/tests/view.rs::zooming_a_tiled_page_shows_its_earlier_tiles_until_new_ones_arrive"]
+notes = "pages past 4096 device px render as 1024 px tiles of the visible area at full device scale (any zoom, 8-6400 %), over a low-res backdrop; earlier tiles stay until new ones arrive"
 
 [[feature]]
 id = "view.layout-continuous"
