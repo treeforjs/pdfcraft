@@ -387,3 +387,90 @@ fn signature_properties_show_every_tab_and_lead_to_the_certificate() {
     h.run_steps(3);
     assert_eq!(h.state().dialog, None);
 }
+
+/// FIXTURE signed (invisibly), then a comment on page 1, then page 1's text rewritten.
+fn signed_then_changed() -> Vec<u8> {
+    use pdfcraft_cos::{Dict, Document, ObjRef, Object, PdfString, SaveOptions, Stream, write_incremental};
+    let p12 = concat!(env!("CARGO_MANIFEST_DIR"), "/../sign/tests/data/ec-p256.p12");
+    let id = pdfcraft_sign::pkcs12::open(&std::fs::read(p12).unwrap(), "test").unwrap();
+    let open = |b: &[u8]| Document::open(std::sync::Arc::new(b.to_vec())).unwrap();
+    let opts = pdfcraft_sign::SignOptions { date: "D:20261017090000Z".into(), ..Default::default() };
+    // A cross-reference table first: the hand-written FIXTURE has none (it is reconstructed,
+    // and a reconstructed file has no saved revisions to list).
+    let plain = pdfcraft_cos::write_full(&open(FIXTURE), &SaveOptions { object_streams: false, ..SaveOptions::default() }).unwrap();
+    let signed = pdfcraft_sign::sign(&open(&plain), &id, &opts).unwrap();
+    let save = |doc: &Document| write_incremental(doc, &SaveOptions { object_streams: false, ..SaveOptions::default() }).unwrap();
+    // Page 1 and its content stream, wherever the rewrite numbered them.
+    let page_of = |doc: &Document| -> (ObjRef, ObjRef) {
+        let root = doc.get(doc.root().unwrap()).as_dict().unwrap().reference(b"Pages").unwrap();
+        let kids = doc.get(root).as_dict().unwrap().get(b"Kids").cloned().unwrap();
+        let page = kids.as_array().unwrap()[0].as_ref().unwrap();
+        (page, doc.get(page).as_dict().unwrap().reference(b"Contents").unwrap())
+    };
+    let mut doc = open(&signed);
+    let mut note = Dict::new();
+    note.set(b"Type".to_vec(), Object::name("Annot"));
+    note.set(b"Subtype".to_vec(), Object::name("Text"));
+    note.set(b"Rect".to_vec(), Object::Array(vec![Object::Int(10), Object::Int(10), Object::Int(30), Object::Int(30)]));
+    note.set(b"Contents".to_vec(), PdfString::text("Looks good"));
+    let r = doc.add(Object::Dict(note));
+    doc.update_dict(page_of(&doc).0, |p| match p.get_mut(b"Annots") {
+        Some(Object::Array(a)) => a.push(Object::Ref(r)),
+        _ => p.set(b"Annots".to_vec(), Object::Array(vec![Object::Ref(r)])),
+    })
+    .unwrap();
+    let commented = save(&doc);
+    let mut doc = open(&commented);
+    let mut d = Dict::new();
+    d.set(b"Length".to_vec(), Object::Int(40));
+    let contents = page_of(&doc).1;
+    doc.set(contents, Object::Stream(Stream::from_raw(d, b"BT /F1 14 Tf 20 150 Td (Changed text) Tj ET".to_vec())));
+    save(&doc)
+}
+
+#[test]
+fn the_signatures_panel_outlines_each_revision_after_signing() {
+    let mut h = harness(dir());
+    let bytes = signed_then_changed();
+    h.state_mut().open_bytes("changed.pdf", None, bytes.clone()).unwrap();
+    h.state_mut().right = Some(RightPanel::Signatures);
+    h.run_steps(4);
+    let revisions = {
+        let s = h.state();
+        let doc = s.session.get(s.views[s.active.unwrap()].id).unwrap();
+        doc.revisions.iter().map(|r| (r.revision, r.end)).collect::<Vec<_>>()
+    };
+    assert_eq!(revisions.iter().map(|r| r.0).collect::<Vec<_>>(), vec![2, 3, 4]);
+    assert_eq!(revisions.len(), 3, "the signing revision, the comment and the text change: {revisions:?}");
+    assert_eq!(revisions.last().map(|r| r.1), Some(bytes.len()));
+
+    // The signature first, then one node per later revision, collapsed.
+    let sig = h.get_by_label_contains("Signed by Test Signer EC").rect().top();
+    let (r3, r4) =
+        (h.get_by_label("Rev. 3: Changes made after signing").rect().top(), h.get_by_label("Rev. 4: Changes made after signing").rect().top());
+    assert!(sig < r3 && r3 < r4, "revision order: {sig} {r3} {r4}");
+    assert!(h.query_by_label("Page 1: Comments added or changed").is_none());
+
+    // Expanding a revision lists what it changed, page by page.
+    h.get_by_label("Rev. 3: Changes made after signing").click();
+    h.run_steps(2);
+    h.get_by_label("Page 1: Comments added or changed");
+    assert!(h.query_by_label("Page 1: Page content changed").is_none(), "that is revision 4");
+    h.get_by_label("Rev. 4: Changes made after signing").click();
+    h.run_steps(2);
+    h.get_by_label("Page 1: Page content changed");
+    // Collapsing hides it again.
+    h.get_by_label("Rev. 3: Changes made after signing").click();
+    h.run_steps(2);
+    assert!(h.query_by_label("Page 1: Comments added or changed").is_none());
+
+    // View this version opens that revision's bytes as a new document.
+    let before = h.state().views.len();
+    h.get_by_label("View this version").click();
+    h.run_steps(4);
+    let s = h.state();
+    assert_eq!(s.views.len(), before + 1);
+    let opened = s.session.get(s.views[s.active.unwrap()].id).unwrap();
+    assert_eq!(opened.name, "changed (revision 4).pdf");
+    assert_eq!(opened.bytes.len(), bytes.len());
+}

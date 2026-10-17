@@ -2254,3 +2254,18 @@ compare-page	Moved	Verschoben
 	This signature field is not signed.	Dieses Signaturfeld ist nicht signiert.
 	Validate Signature	Signatur validieren
 	Crop Image	Bild zuschneiden
+	Comments added or changed	Kommentare hinzugefügt oder geändert
+	Form fields filled in	Formularfelder ausgefüllt
+	Page content changed	Seiteninhalt geändert
+	Links changed	Links geändert
+	Signature added	Signatur hinzugefügt
+	Validation data added	Validierungsdaten hinzugefügt
+	Document properties changed	Dokumenteigenschaften geändert
+	Document structure changed	Dokumentstruktur geändert
+	Pages added or removed	Seiten hinzugefügt oder entfernt
+	Other changes	Andere Änderungen
+	Rev. {n}: Changes made after signing	Rev. {n}: Änderungen nach dem Signieren
+	No changes were found in this revision.	In dieser Revision wurden keine Änderungen gefunden.
+	Page {p}: {change}	Seite {p}: {change}
+	Document: {change}	Dokument: {change}
+	View this version	Diese Version anzeigen

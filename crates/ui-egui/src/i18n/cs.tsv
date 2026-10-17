@@ -2278,3 +2278,18 @@ compare-page	Moved	Přesunutá
 	This signature field is not signed.	Toto pole podpisu není podepsáno.
 	Validate Signature	Ověřit podpis
 	Crop Image	Oříznout obrázek
+	Comments added or changed	Komentáře přidány nebo změněny
+	Form fields filled in	Pole formuláře vyplněna
+	Page content changed	Obsah stránky změněn
+	Links changed	Odkazy změněny
+	Signature added	Podpis přidán
+	Validation data added	Ověřovací data přidána
+	Document properties changed	Vlastnosti dokumentu změněny
+	Document structure changed	Struktura dokumentu změněna
+	Pages added or removed	Stránky přidány nebo odebrány
+	Other changes	Jiné změny
+	Rev. {n}: Changes made after signing	Rev. {n}: Změny provedené po podepsání
+	No changes were found in this revision.	V této revizi nebyly nalezeny žádné změny.
+	Page {p}: {change}	Stránka {p}: {change}
+	Document: {change}	Dokument: {change}
+	View this version	Zobrazit tuto verzi

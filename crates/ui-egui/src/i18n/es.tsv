@@ -2170,3 +2170,18 @@ compare-page	Moved	Movida
 	This signature field is not signed.	Este campo de firma no está firmado.
 	Validate Signature	Validar firma
 	Crop Image	Recortar imagen
+	Comments added or changed	Comentarios añadidos o modificados
+	Form fields filled in	Campos de formulario rellenados
+	Page content changed	Contenido de la página modificado
+	Links changed	Vínculos modificados
+	Signature added	Firma añadida
+	Validation data added	Datos de validación añadidos
+	Document properties changed	Propiedades del documento modificadas
+	Document structure changed	Estructura del documento modificada
+	Pages added or removed	Páginas añadidas o eliminadas
+	Other changes	Otros cambios
+	Rev. {n}: Changes made after signing	Rev. {n}: cambios realizados después de firmar
+	No changes were found in this revision.	No se encontraron cambios en esta revisión.
+	Page {p}: {change}	Página {p}: {change}
+	Document: {change}	Documento: {change}
+	View this version	Ver esta versión

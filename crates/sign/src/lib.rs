@@ -28,8 +28,8 @@ pub mod x509;
 pub use der::Time;
 pub use keys::{DigestAlg, PrivateKey, PublicKey};
 pub use pdf::{
-    Appearance, DigestCache, Modification, SignOptions, SignatureInfo, Status, TrustStore, VerificationTime, VerificationTimeSource,
-    list as signatures, sign, sign_with_timestamp, timestamp_document, validate,
+    Appearance, DigestCache, MAX_OUTLINE_REVISIONS, Modification, PageChange, RevisionChanges, SignOptions, SignatureInfo, Status, TrustStore,
+    VerificationTime, VerificationTimeSource, list as signatures, revision_changes, sign, sign_with_timestamp, timestamp_document, validate,
 };
 pub use pkcs12::DigitalId;
 pub use timestamp::{TimestampAuthority, TimestampQuery, TimestampToken};

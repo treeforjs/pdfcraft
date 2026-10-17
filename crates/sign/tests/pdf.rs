@@ -163,6 +163,53 @@ fn change_text(doc: &mut Document) {
 }
 
 #[test]
+fn each_revision_lists_what_it_changed_page_by_page() {
+    use pdfcraft_sign::{PageChange, revision_changes};
+    let id = pkcs12::open(&data("rsa-aes.p12"), "test").unwrap();
+    let change = |page: Option<usize>, kind: &str| PageChange { page, kind: kind.into() };
+    // An unsigned file has nothing after its first revision.
+    let plain = fixture();
+    assert!(revision_changes(&open(&plain), &plain).is_empty());
+    // Signing the Approval field, then a comment, then rewritten page text.
+    let signed = pdfcraft_sign::sign(&open(&fixture()), &id, &SignOptions { field: Some("Approval".into()), ..opts() }).unwrap();
+    let commented = edit_after(&signed, add_comment);
+    let rewritten = edit_after(&commented, change_text);
+    let revs = revision_changes(&open(&rewritten), &rewritten);
+    assert_eq!(revs.iter().map(|r| r.revision).collect::<Vec<_>>(), vec![2, 3, 4]);
+    assert_eq!(revs.iter().map(|r| r.end).collect::<Vec<_>>(), vec![signed.len(), commented.len(), rewritten.len()]);
+    let sig = signatures(&open(&rewritten), &rewritten, &TrustStore::default()).into_iter().find(|s| s.signed).unwrap();
+    assert_eq!((sig.revision, sig.signed_len), (revs[0].revision, revs[0].end), "a signature names the revision it saved");
+    assert!(revs[0].changes.contains(&change(Some(0), "signature")), "{:?}", revs[0].changes);
+    assert!(revs[1].changes.contains(&change(Some(0), "comments")), "{:?}", revs[1].changes);
+    assert!(!revs[1].changes.iter().any(|c| c.kind == "page content" || c.kind == "signature"), "{:?}", revs[1].changes);
+    assert_eq!(revs[2].changes, vec![change(Some(0), "page content")]);
+    // Page changes come before document-level ones.
+    let pages_first = revs.iter().all(|r| r.changes.windows(2).all(|w| w[0].page.is_some() || w[1].page.is_none()));
+    assert!(pages_first, "{revs:?}");
+}
+
+#[test]
+fn only_the_latest_revisions_are_compared() {
+    use pdfcraft_sign::{MAX_OUTLINE_REVISIONS, revision_changes};
+    let mut bytes = fixture();
+    for _ in 0..MAX_OUTLINE_REVISIONS + 3 {
+        bytes = edit_after(&bytes, add_comment);
+    }
+    let revs = revision_changes(&open(&bytes), &bytes);
+    assert_eq!(revs.len(), MAX_OUTLINE_REVISIONS);
+    assert_eq!(revs.last().map(|r| (r.revision, r.end)), Some((MAX_OUTLINE_REVISIONS + 4, bytes.len())));
+    // Truncated or garbage input yields no revisions, never a panic.
+    for cut in [0, 10, bytes.len() / 2] {
+        let short = bytes[..cut].to_vec();
+        if let Ok(doc) = Document::open(Arc::new(short.clone())) {
+            let _ = revision_changes(&doc, &short);
+        }
+    }
+    let doc = open(&bytes);
+    assert!(revision_changes(&doc, &bytes[..100]).len() <= 1);
+}
+
+#[test]
 fn later_changes_are_classified_under_the_signature_permissions() {
     let id = pkcs12::open(&data("rsa-aes.p12"), "test").unwrap();
     let trust = TrustStore { certs: vec![id.certificate.clone()] };

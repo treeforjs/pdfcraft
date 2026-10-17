@@ -6095,11 +6095,16 @@ title = "Signatures panel with per-revision tree"
 area = "H"
 tier = "P0"
 milestone = "M9"
-status = "partial"
+status = "shipped"
 commands = ["sign.panel"]
 tools = ["sign_list"]
-evidence = ["crates/ui-egui/tests/signing.rs::drawing_a_signature_creating_an_id_signing_and_trusting"]
-notes = "per-signature tree with details and actions; no per-revision page outline yet"
+evidence = [
+    "crates/ui-egui/tests/signing.rs::drawing_a_signature_creating_an_id_signing_and_trusting",
+    "crates/ui-egui/tests/signing.rs::the_signatures_panel_outlines_each_revision_after_signing",
+    "crates/sign/tests/pdf.rs::each_revision_lists_what_it_changed_page_by_page",
+    "crates/automation/tests/automation.rs::digital_ids_signing_and_validation_through_tools",
+]
+notes = "per-signature tree with details and actions, in revision order with a node for each later revision listing what it changed page by page (comments, form fill, page content, links, …) and View this version; the latest 32 revisions are compared"
 
 [[feature]]
 id = "sign.status-icons"

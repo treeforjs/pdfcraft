@@ -2254,3 +2254,18 @@ compare-page	Moved	移動
 	This signature field is not signed.	この署名フィールドには署名されていません。
 	Validate Signature	署名を検証
 	Crop Image	画像を切り抜き
+	Comments added or changed	注釈の追加または変更
+	Form fields filled in	フォームフィールドへの入力
+	Page content changed	ページ内容の変更
+	Links changed	リンクの変更
+	Signature added	署名の追加
+	Validation data added	検証データの追加
+	Document properties changed	文書のプロパティの変更
+	Document structure changed	文書構造の変更
+	Pages added or removed	ページの追加または削除
+	Other changes	その他の変更
+	Rev. {n}: Changes made after signing	版 {n}: 署名後の変更
+	No changes were found in this revision.	この版では変更は見つかりませんでした。
+	Page {p}: {change}	{p} ページ: {change}
+	Document: {change}	文書: {change}
+	View this version	この版を表示

@@ -442,10 +442,20 @@ impl PdfCraftApp {
 
     /// Open the signed version of a signature as a new document (View signed version).
     pub fn view_signed_version(&mut self, len: usize) {
+        self.view_saved_version(len, "signed version".into());
+    }
+
+    /// Open saved revision `revision` (the file's first `end` bytes) as a new document.
+    pub fn view_revision(&mut self, revision: usize, end: usize) {
+        self.view_saved_version(end, format!("revision {revision}"));
+    }
+
+    /// Open the active document's first `len` bytes (a saved revision) as "<name> (<what>)".
+    fn view_saved_version(&mut self, len: usize, what: String) {
         let Some((_, id)) = self.active_ids() else { return };
         let Some(doc) = self.session.get(id) else { return };
         let bytes = doc.bytes[..len.min(doc.bytes.len())].to_vec();
-        let name = format!("{} (signed version)", doc.name.trim_end_matches(".pdf"));
+        let name = format!("{} ({what})", doc.name.trim_end_matches(".pdf"));
         match self.session.open(format!("{name}.pdf"), None, std::sync::Arc::new(bytes), doc.password.clone().as_deref()) {
             Ok(new) => {
                 let Some(doc) = self.session.get(new) else { return };
@@ -855,10 +865,96 @@ pub enum PanelAction {
     ViewCertificate(Vec<Certificate>),
     /// Signature Properties for the field.
     Properties(String),
+    /// Open saved revision `revision` (the file's first `end` bytes) as a new document.
+    ViewRevision {
+        revision: usize,
+        end: usize,
+    },
+}
+
+/// How the Signatures panel names a kind of change (the kinds [`Modification`] lists).
+fn change_label(kind: &str) -> &'static str {
+    match kind {
+        "comments" => tl!("Comments added or changed"),
+        "form fill" => tl!("Form fields filled in"),
+        "page content" => tl!("Page content changed"),
+        "links" => tl!("Links changed"),
+        "signature" => tl!("Signature added"),
+        "document security store" => tl!("Validation data added"),
+        "metadata" => tl!("Document properties changed"),
+        "document structure" => tl!("Document structure changed"),
+        "pages added or removed" => tl!("Pages added or removed"),
+        _ => tl!("Other changes"),
+    }
+}
+
+/// The panel's key for a revision node's expanded state (never a field name: those have no NUL).
+fn revision_key(revision: usize) -> String {
+    format!("\0rev{revision}")
+}
+
+/// A saved revision that no signature covers: what it changed, page by page.
+fn revision_node(ui: &mut egui::Ui, t: &Tokens, r: &sign::RevisionChanges, expanded: &mut Vec<String>, action: &mut Option<PanelAction>) {
+    let key = revision_key(r.revision);
+    let open = expanded.contains(&key);
+    let head = crate::i18n::fmt(tl!("Rev. {n}: Changes made after signing"), &[("n", &r.revision.to_string())]);
+    let toggled = ui
+        .horizontal(|ui| {
+            let chevron = if open { "chevron-down" } else { "chevron-right" };
+            let toggle = icons::button(ui, chevron, 20.0, false, if open { "Collapse" } else { "Expand" }).clicked();
+            ui.add(icons::image("file-pen-line", 16.0, t.text_muted));
+            let l = ui.add(egui::Label::new(egui::RichText::new(&head).font(theme::semibold(12.5)).color(t.text)).sense(egui::Sense::click()));
+            toggle || l.clicked()
+        })
+        .inner;
+    if toggled {
+        if open {
+            expanded.retain(|f| f != &key);
+        } else {
+            expanded.push(key);
+        }
+    }
+    if !open {
+        return;
+    }
+    egui::Frame::NONE.inner_margin(egui::Margin { left: 44, right: 4, top: 2, bottom: 8 }).show(ui, |ui| {
+        ui.spacing_mut().item_spacing.y = 3.0;
+        if r.changes.is_empty() {
+            ui.label(egui::RichText::new(tl!("No changes were found in this revision.")).font(theme::regular(11.5)).color(t.text_muted));
+        }
+        for c in &r.changes {
+            let what = change_label(&c.kind);
+            match c.page {
+                Some(p) => {
+                    let text = crate::i18n::fmt(tl!("Page {p}: {change}"), &[("p", &(p + 1).to_string()), ("change", what)]);
+                    let link = ui.add(
+                        egui::Label::new(egui::RichText::new(text).font(theme::regular(11.5)).color(t.accent_text).underline())
+                            .sense(egui::Sense::click()),
+                    );
+                    if link.clicked() {
+                        *action = Some(PanelAction::GoTo(p));
+                    }
+                }
+                None => {
+                    ui.label(egui::RichText::new(crate::i18n::fmt(tl!("Document: {change}"), &[("change", what)])).font(theme::regular(11.5)));
+                }
+            }
+        }
+        ui.add_space(4.0);
+        if ui.button(tl!("View this version")).clicked() {
+            *action = Some(PanelAction::ViewRevision { revision: r.revision, end: r.end });
+        }
+    });
 }
 
 /// The Signatures panel body.
-pub(crate) fn panel(ui: &mut egui::Ui, t: &Tokens, sigs: &[SignatureInfo], expanded: &mut Vec<String>) -> Option<PanelAction> {
+pub(crate) fn panel(
+    ui: &mut egui::Ui,
+    t: &Tokens,
+    sigs: &[SignatureInfo],
+    revisions: &[sign::RevisionChanges],
+    expanded: &mut Vec<String>,
+) -> Option<PanelAction> {
     let mut action = None;
     ui.horizontal(|ui| {
         if widgets::pill_button(ui, tl!("Validate all"), false).clicked() {
@@ -877,7 +973,19 @@ pub(crate) fn panel(ui: &mut egui::Ui, t: &Tokens, sigs: &[SignatureInfo], expan
     }
     let mut ordered: Vec<&SignatureInfo> = sigs.iter().collect();
     ordered.sort_by_key(|s| (!s.signed, s.revision));
+    // Revisions saved after the first signature that no signature saved, in revision order
+    // among the signatures (Acrobat lists them as changes made after signing).
+    let first_signed = sigs.iter().filter(|s| s.signed).map(|s| s.revision).min();
+    let mut changes: Vec<&sign::RevisionChanges> = revisions
+        .iter()
+        .filter(|r| first_signed.is_some_and(|f| r.revision > f) && !sigs.iter().any(|s| s.signed && s.revision == r.revision))
+        .collect();
+    changes.sort_by_key(|r| r.revision);
+    let mut changes = changes.into_iter().peekable();
     for s in ordered {
+        while let Some(r) = changes.next_if(|r| !s.signed || r.revision < s.revision) {
+            revision_node(ui, t, r, expanded, &mut action);
+        }
         let open = expanded.contains(&s.field);
         let (icon, color) = status_icon(s);
         let head = if s.signed {
@@ -996,6 +1104,9 @@ pub(crate) fn panel(ui: &mut egui::Ui, t: &Tokens, sigs: &[SignatureInfo], expan
                 }
             });
         });
+    }
+    for r in changes {
+        revision_node(ui, t, r, expanded, &mut action);
     }
     action
 }

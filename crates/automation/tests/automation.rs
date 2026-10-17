@@ -3403,6 +3403,13 @@ fn digital_ids_signing_and_validation_through_tools() {
     let revs = ok(&mut a, "doc_revisions", json!({ "doc": doc }))["revisions"].as_array().cloned().unwrap();
     assert_eq!(revs.len(), 3, "{revs:?}");
     assert!(revs[0]["signed_by"].as_array().unwrap().is_empty() && revs[1]["signed_by"].as_array().unwrap().len() == 1, "{revs:?}");
+    // The Signatures panel outline: the signing revision, then the comment on page 1.
+    let outline = ok(&mut a, "sign_list", json!({ "doc": doc }))["revisions"].as_array().cloned().unwrap();
+    assert_eq!(outline.iter().map(|r| r["revision"].as_u64()).collect::<Vec<_>>(), vec![Some(2), Some(3)], "{outline:?}");
+    assert_eq!(outline[0]["signature"], list["signatures"][0]["field"], "{outline:?}");
+    assert!(outline[0]["changes"].as_array().unwrap().contains(&json!({ "page": 2, "kind": "signature" })), "{outline:?}");
+    assert!(outline[1]["signature"].is_null());
+    assert!(outline[1]["changes"].as_array().unwrap().contains(&json!({ "page": 1, "kind": "comments" })), "{outline:?}");
     let old = ok(&mut a, "doc_open_revision", json!({ "doc": doc, "revision": 2 }))["doc"].as_u64().unwrap();
     assert_eq!(ok(&mut a, "comment_list", json!({ "doc": old }))["comments"].as_array().map(Vec::len), Some(0), "before the comment");
     assert_eq!(ok(&mut a, "sign_list", json!({ "doc": old }))["count"], 1);

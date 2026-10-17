@@ -2167,3 +2167,18 @@ compare-page	Moved	Перемещена
 	This signature field is not signed.	Это поле подписи не подписано.
 	Validate Signature	Проверить подпись
 	Crop Image	Обрезать изображение
+	Comments added or changed	Комментарии добавлены или изменены
+	Form fields filled in	Поля формы заполнены
+	Page content changed	Содержимое страницы изменено
+	Links changed	Ссылки изменены
+	Signature added	Подпись добавлена
+	Validation data added	Данные проверки добавлены
+	Document properties changed	Свойства документа изменены
+	Document structure changed	Структура документа изменена
+	Pages added or removed	Страницы добавлены или удалены
+	Other changes	Другие изменения
+	Rev. {n}: Changes made after signing	Ред. {n}: изменения после подписания
+	No changes were found in this revision.	В этой редакции изменений не найдено.
+	Page {p}: {change}	Страница {p}: {change}
+	Document: {change}	Документ: {change}
+	View this version	Просмотреть эту версию

@@ -2216,3 +2216,18 @@ compare-page	Moved	Преместена
 	This signature field is not signed.	Това поле за подпис не е подписано.
 	Validate Signature	Проверка на подписа
 	Crop Image	Изрязване на изображението
+	Comments added or changed	Добавени или променени коментари
+	Form fields filled in	Попълнени полета на формуляр
+	Page content changed	Променено съдържание на страницата
+	Links changed	Променени връзки
+	Signature added	Добавен подпис
+	Validation data added	Добавени данни за валидиране
+	Document properties changed	Променени свойства на документа
+	Document structure changed	Променена структура на документа
+	Pages added or removed	Добавени или премахнати страници
+	Other changes	Други промени
+	Rev. {n}: Changes made after signing	Ред. {n}: Промени след подписването
+	No changes were found in this revision.	В тази редакция не са открити промени.
+	Page {p}: {change}	Страница {p}: {change}
+	Document: {change}	Документ: {change}
+	View this version	Преглед на тази версия

@@ -2277,3 +2277,18 @@ compare-page	Moved	Переміщена
 	This signature field is not signed.	Це поле підпису не підписано.
 	Validate Signature	Перевірити підпис
 	Crop Image	Обрізати зображення
+	Comments added or changed	Коментарі додано або змінено
+	Form fields filled in	Поля форми заповнено
+	Page content changed	Вміст сторінки змінено
+	Links changed	Посилання змінено
+	Signature added	Підпис додано
+	Validation data added	Дані перевірки додано
+	Document properties changed	Властивості документа змінено
+	Document structure changed	Структуру документа змінено
+	Pages added or removed	Сторінки додано або вилучено
+	Other changes	Інші зміни
+	Rev. {n}: Changes made after signing	Ред. {n}: зміни після підписання
+	No changes were found in this revision.	У цій редакції змін не знайдено.
+	Page {p}: {change}	Сторінка {p}: {change}
+	Document: {change}	Документ: {change}
+	View this version	Переглянути цю версію

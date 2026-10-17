@@ -2140,3 +2140,18 @@ compare-page	Moved	已移動
 	This signature field is not signed.	此簽名欄位尚未簽署。
 	Validate Signature	驗證簽名
 	Crop Image	裁剪影像
+	Comments added or changed	已新增或變更註解
+	Form fields filled in	已填寫表單欄位
+	Page content changed	頁面內容已變更
+	Links changed	連結已變更
+	Signature added	已新增簽名
+	Validation data added	已新增驗證資料
+	Document properties changed	文件內容已變更
+	Document structure changed	文件結構已變更
+	Pages added or removed	已新增或移除頁面
+	Other changes	其他變更
+	Rev. {n}: Changes made after signing	修訂版 {n}：簽署後所做的變更
+	No changes were found in this revision.	此修訂版中未發現變更。
+	Page {p}: {change}	第 {p} 頁：{change}
+	Document: {change}	文件：{change}
+	View this version	檢視此版本

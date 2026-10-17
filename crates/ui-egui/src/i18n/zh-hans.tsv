@@ -2218,3 +2218,18 @@ compare-page	Moved	已移动
 	This signature field is not signed.	此签名域尚未签名。
 	Validate Signature	验证签名
 	Crop Image	裁剪图像
+	Comments added or changed	已添加或更改注释
+	Form fields filled in	已填写表单域
+	Page content changed	页面内容已更改
+	Links changed	链接已更改
+	Signature added	已添加签名
+	Validation data added	已添加验证数据
+	Document properties changed	文档属性已更改
+	Document structure changed	文档结构已更改
+	Pages added or removed	已添加或删除页面
+	Other changes	其他更改
+	Rev. {n}: Changes made after signing	修订版 {n}：签名后所做的更改
+	No changes were found in this revision.	此修订版中未发现更改。
+	Page {p}: {change}	第 {p} 页：{change}
+	Document: {change}	文档：{change}
+	View this version	查看此版本
