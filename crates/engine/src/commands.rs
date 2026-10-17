@@ -199,7 +199,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     c("view.theme", "Switch light / dark theme", None, None, Nothing, "moon"),
     c("view.theme.system", "Use system setting", None, None, Nothing, "settings"),
     c("view.theme.light", "Light gray", None, None, Nothing, "sun"),
-    c("view.theme.cream", "Cream", None, None, Nothing, "palette"),
+    c("view.theme.warm", "Warm", None, None, Nothing, "palette"),
     c("view.theme.dim", "Dim", None, None, Nothing, "contrast"),
     c("view.theme.dark", "Dark gray", None, None, Nothing, "moon"),
     c("comment.list", "Comments panel", VIEW, None, Document, "message-square-text"),

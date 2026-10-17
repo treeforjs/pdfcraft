@@ -1510,8 +1510,8 @@ impl PdfCraftApp {
                 self.language = language.to_string();
             }
             ("theme", _) => {
-                // Ids, plus older craft theme names mapped to the nearest choice ("grey" is Dim, "sepia" Cream).
-                let preference = ThemePreference::parse(value).ok_or("theme must be system, light, cream, dim or dark")?;
+                // Ids, plus older craft theme names mapped to the nearest choice ("grey" is Dim; "cream", "paper" and "sepia" Warm).
+                let preference = ThemePreference::parse(value).ok_or("theme must be system, light, warm, dim or dark")?;
                 self.set_theme_preference(preference);
             }
             ("panel", _) => {

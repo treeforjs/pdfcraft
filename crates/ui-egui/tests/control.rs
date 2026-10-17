@@ -106,7 +106,7 @@ fn theme_commands_and_options_report_preference_and_effective_colours() {
     for (id, preference, effective) in [
         ("view.theme.system", "System", "Dark"),
         ("view.theme.light", "Light", "Light"),
-        ("view.theme.cream", "Cream", "Cream"),
+        ("view.theme.warm", "Warm", "Warm"),
         ("view.theme.dim", "Dim", "Dim"),
         ("view.theme.dark", "Dark", "Dark"),
     ] {
@@ -121,7 +121,7 @@ fn theme_commands_and_options_report_preference_and_effective_colours() {
     let state = ok(&mut h, &c, "ui.state", json!({}));
     assert_eq!(state["theme_preference"], "System");
     assert_eq!(state["theme"], "Light");
-    for (value, preference) in [("cream", "Cream"), ("dim", "Dim"), ("system", "System")] {
+    for (value, preference) in [("warm", "Warm"), ("cream", "Warm"), ("paper", "Warm"), ("dim", "Dim"), ("system", "System")] {
         ok(&mut h, &c, "ui.set", json!({ "key": "theme", "value": value }));
         assert_eq!(ok(&mut h, &c, "ui.state", json!({}))["theme_preference"], preference);
     }

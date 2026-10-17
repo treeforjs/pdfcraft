@@ -1093,7 +1093,7 @@ dependencies = [
 [[package]]
 name = "craft-ui"
 version = "0.1.0"
-source = "git+https://github.com/treeforjs/craftworks?rev=89ec343834e89dff28a4f975beb97e8749e1dcbe#89ec343834e89dff28a4f975beb97e8749e1dcbe"
+source = "git+https://github.com/treeforjs/craftworks?rev=389c91ce90340b1e448bf7f8162bd58778253b6a#389c91ce90340b1e448bf7f8162bd58778253b6a"
 dependencies = [
  "egui",
  "serde",
