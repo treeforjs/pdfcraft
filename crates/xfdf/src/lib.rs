@@ -286,7 +286,7 @@ fn xfdf_annots(doc: &Document, out: &mut String) {
 }
 
 /// Field values as nested XFDF `<field>` elements.
-fn xfdf_fields(doc: &Document, out: &mut String) {
+fn xfdf_fields(doc: &Document, out: &mut String, keep: &dyn Fn(&pdfcraft_forms::Field) -> bool) {
     #[derive(Default)]
     struct Node {
         values: Vec<String>,
@@ -294,7 +294,7 @@ fn xfdf_fields(doc: &Document, out: &mut String) {
     }
     let mut root = Node::default();
     for f in pdfcraft_forms::fields(doc) {
-        if matches!(f.kind, FieldKind::PushButton | FieldKind::Signature) {
+        if matches!(f.kind, FieldKind::PushButton | FieldKind::Signature) || !keep(&f) {
             continue;
         }
         let mut node = &mut root;
@@ -330,6 +330,11 @@ fn xfdf_fields(doc: &Document, out: &mut String) {
 
 /// XFDF with the document's comments and/or field values.
 pub fn export_xfdf(doc: &Document, comments: bool, fields: bool, file: &str) -> String {
+    export_xfdf_with(doc, comments, fields, file, &|_| true)
+}
+
+/// [`export_xfdf`] with only the fields `keep` accepts (a submit-form action's selection).
+pub fn export_xfdf_with(doc: &Document, comments: bool, fields: bool, file: &str, keep: &dyn Fn(&pdfcraft_forms::Field) -> bool) -> String {
     let mut out = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<xfdf xmlns=\"http://ns.adobe.com/xfdf/\" xml:space=\"preserve\">\n");
     if comments {
         out.push_str("<annots>\n");
@@ -338,7 +343,7 @@ pub fn export_xfdf(doc: &Document, comments: bool, fields: bool, file: &str) -> 
     }
     if fields {
         out.push_str("<fields>\n");
-        xfdf_fields(doc, &mut out);
+        xfdf_fields(doc, &mut out, keep);
         out.push_str("</fields>\n");
     }
     let _ = writeln!(out, "<f href=\"{}\"/>", esc(file));
@@ -356,13 +361,18 @@ fn pdf_string(s: &str) -> Vec<u8> {
 /// indirect object of the FDF, so a reply's `/IRT` can point at its parent's object there
 /// (§12.7.8.3.1); nothing else refers back into the source document.
 pub fn export_fdf(doc: &Document, comments: bool, fields: bool, file: &str) -> Vec<u8> {
+    export_fdf_with(doc, comments, fields, file, &|_| true)
+}
+
+/// [`export_fdf`] with only the fields `keep` accepts (a submit-form action's selection).
+pub fn export_fdf_with(doc: &Document, comments: bool, fields: bool, file: &str, keep: &dyn Fn(&pdfcraft_forms::Field) -> bool) -> Vec<u8> {
     let mut body: Vec<u8> = b"<< /FDF << ".to_vec();
     // Comment dictionaries, written after the root as objects 2, 3, …
     let mut annots: Vec<Dict> = Vec::new();
     if fields {
         body.extend_from_slice(b"/Fields [");
         for f in pdfcraft_forms::fields(doc) {
-            if matches!(f.kind, FieldKind::PushButton | FieldKind::Signature) {
+            if matches!(f.kind, FieldKind::PushButton | FieldKind::Signature) || !keep(&f) {
                 continue;
             }
             body.extend_from_slice(b"<< /T ");
@@ -448,6 +458,43 @@ pub fn export_fdf(doc: &Document, comments: bool, fields: bool, file: &str) -> V
     let _ = write!(out, "trailer\n<< /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n");
     out
 }
+/// Field values as an HTML form submission (`application/x-www-form-urlencoded`): `name=value`
+/// pairs joined by `&`, a multiple selection as one pair per value. Check boxes and radio
+/// buttons that are off are left out, as browsers leave out unchecked boxes.
+pub fn export_html_form(doc: &Document, keep: &dyn Fn(&pdfcraft_forms::Field) -> bool) -> String {
+    fn encode(s: &str, out: &mut String) {
+        for b in s.bytes() {
+            match b {
+                b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'*' => out.push(char::from(b)),
+                b' ' => out.push('+'),
+                _ => {
+                    let _ = write!(out, "%{b:02X}");
+                }
+            }
+        }
+    }
+    let mut out = String::new();
+    for f in pdfcraft_forms::fields(doc) {
+        if matches!(f.kind, FieldKind::PushButton | FieldKind::Signature) || !keep(&f) {
+            continue;
+        }
+        let values: Vec<&str> = match f.kind {
+            FieldKind::CheckBox | FieldKind::Radio => f.value.iter().map(String::as_str).filter(|v| *v != "Off").collect(),
+            FieldKind::List | FieldKind::Combo => f.value.iter().map(String::as_str).collect(),
+            _ => vec![f.value.first().map(String::as_str).unwrap_or("")],
+        };
+        for v in values {
+            if !out.is_empty() {
+                out.push('&');
+            }
+            encode(&f.name, &mut out);
+            out.push('=');
+            encode(v, &mut out);
+        }
+    }
+    out
+}
+
 /// The XML element name for a field name (letters, digits, `_`, `-`, `.`).
 fn xml_name(name: &str) -> String {
     let mut s: String = name.chars().map(|c| if c.is_alphanumeric() || matches!(c, '_' | '-' | '.') { c } else { '_' }).collect();

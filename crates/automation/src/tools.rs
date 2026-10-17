@@ -418,6 +418,11 @@ pub fn tools() -> Vec<ToolDef> {
         t("doc_export_data", "Export comments or form data", "Write comments and/or form data to path; the extension picks the format: .xfdf or .fdf (comments and/or fields), .xml, .csv or .txt (form data). what: all (default), comments, fields.")
             .destructive()
             .with(schema(json!({ "doc": doc(), "path": { "type": "string" }, "what": { "type": "string", "enum": ["all", "comments", "fields"] } }), &["doc", "path"])),
+        t("form_submit", "Submit a form", "Run a Submit Form action: field names a push button whose action submits the form (its address, format and field selection are used), or url submits every field as FDF. format overrides it: fdf, xfdf, html (name=value pairs) or pdf (the whole document as Save writes it). Fields marked NoExport, buttons and signatures are never sent. Give path to save the data there, or send: true to send it to the address (http or https only; no redirects). Returns url, format, content_type, method, bytes, the fields sent, and for a send the server's status.")
+            .with(schema(
+                json!({ "doc": doc(), "field": { "type": "string" }, "url": { "type": "string" }, "format": { "type": "string", "enum": ["fdf", "xfdf", "html", "pdf"] }, "path": { "type": "string" }, "send": { "type": "boolean" } }),
+                &["doc"],
+            )),
         t("doc_import_data", "Import comments or form data", "Import comments and/or field values from an XFDF, FDF, XML, CSV or tab-delimited text file (detected from its content). Comments with the same name are replaced; values go through the form's formats and validation. Undoable.")
             .with(schema(json!({ "doc": doc(), "path": { "type": "string" } }), &["doc", "path"])),
         t("form_delete_field", "Delete a field", "Delete a form field and all its widgets. Undoable.")

@@ -1691,6 +1691,54 @@ fn display_values_are_bounded() {
     assert!(content.contains("145 w"), "a hostile border width is clamped to half the box");
 }
 
+/// A submit-form action's flags pick the format and method, and `/Fields` (by name or by
+/// reference) with Include/Exclude picks what is sent; NoExport fields and buttons never are.
+#[test]
+fn submit_actions_read_their_format_and_field_selection() {
+    use crate::af::ButtonAction;
+    use crate::submit::{Submission, SubmitFormat};
+    let button = |name: &str, y: i32, action: &str| {
+        format!("<< /Type /Annot /Subtype /Widget /FT /Btn /Ff 65536 /T ({name}) /Rect [20 {y} 100 {}] /P 3 0 R /A {action} >>", y + 20)
+    };
+    let objs: Vec<String> = vec![
+        "<< /Type /Catalog /Pages 2 0 R /AcroForm 4 0 R >>".into(),
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 /MediaBox [0 0 600 800] >>".into(),
+        "<< /Type /Page /Parent 2 0 R /Annots [5 0 R 6 0 R 7 0 R 8 0 R 9 0 R 10 0 R 11 0 R 12 0 R] >>".into(),
+        "<< /Fields [5 0 R 6 0 R 7 0 R 8 0 R 9 0 R 10 0 R 11 0 R 12 0 R] /DA (/Helv 0 Tf 0 g) >>".into(),
+        "<< /Type /Annot /Subtype /Widget /FT /Tx /T (name) /V (Ada) /Rect [20 700 200 720] /P 3 0 R >>".into(),
+        "<< /Type /Annot /Subtype /Widget /FT /Tx /T (secret) /Ff 4 /V (hidden) /Rect [20 660 200 680] /P 3 0 R >>".into(),
+        "<< /Type /Annot /Subtype /Widget /FT /Tx /T (empty) /Rect [20 620 200 640] /P 3 0 R >>".into(),
+        button("plain", 500, "<< /S /SubmitForm /F (https://example.org/plain) >>"),
+        button("html", 460, "<< /S /SubmitForm /F << /FS /URL /F (https://example.org/h) >> /Flags 12 /Fields [(name) 7 0 R] >>"),
+        button("xfdf", 420, "<< /S /SubmitForm /F (https://example.org/x) /Flags 33 /Fields [(name)] >>"),
+        button("pdf", 380, "<< /S /SubmitForm /F (https://example.org/p) /Flags 256 >>"),
+        button("empties", 340, "<< /S /SubmitForm /F (https://example.org/e) /Flags 2 >>"),
+    ];
+    let doc = document(&objs);
+    let all = fields(&doc);
+    let action = |name: &str| match &field(&all, name).button {
+        Some(ButtonAction::Submit(s)) => s.clone(),
+        other => panic!("{name}: {other:?}"),
+    };
+    let sent = |s: &Submission| all.iter().filter(|f| s.sends(f)).map(|f| f.name.as_str()).collect::<Vec<_>>();
+    let plain = action("plain");
+    assert_eq!(plain, Submission::to_url("https://example.org/plain"));
+    assert_eq!(sent(&plain), ["name"], "no NoExport field, no empty field, no buttons");
+    let html = action("html");
+    assert_eq!((html.url.as_str(), html.format, html.get, html.exclude), ("https://example.org/h", SubmitFormat::Html, true, false));
+    assert_eq!(html.fields, ["name", "empty"], "by name and by reference");
+    assert_eq!(sent(&html), ["name"], "listed, and empty fields only with IncludeNoValueFields");
+    let xfdf = action("xfdf");
+    assert_eq!((xfdf.format, xfdf.get, xfdf.exclude), (SubmitFormat::Xfdf, false, true));
+    assert!(sent(&xfdf).is_empty(), "everything but name, and the rest is empty or NoExport");
+    assert_eq!(action("pdf").format, SubmitFormat::Pdf);
+    assert_eq!(sent(&action("empties")), ["name", "empty"], "IncludeNoValueFields");
+    // A listed parent covers its kids, not fields that merely share a prefix.
+    let mut s = Submission::to_url("https://example.org");
+    s.fields = vec!["na".into()];
+    assert!(sent(&s).is_empty());
+}
+
 /// Right-aligned text lands where the field font's real metrics put it: its own `/Widths`, the
 /// standard font it names (Arial,Bold as Helvetica-Bold), or exact Helvetica.
 #[test]

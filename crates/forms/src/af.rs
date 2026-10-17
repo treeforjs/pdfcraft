@@ -1103,8 +1103,8 @@ pub enum ButtonAction {
     },
     /// `app.alert("…")`.
     Alert(String),
-    /// Submit the form to a URL (not sent: PdfCraft never posts form data on its own).
-    Submit(String),
+    /// Submit the form (§12.7.6.2): sent only once the user confirms it.
+    Submit(crate::submit::Submission),
     /// `event.target.buttonImportIcon()`: choose an image for the button (an image field).
     ImportIcon,
     /// A script PdfCraft can't run yet.

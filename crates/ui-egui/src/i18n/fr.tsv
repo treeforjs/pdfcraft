@@ -2269,3 +2269,14 @@ compare-page	Moved	Déplacée
 	Page {p}: {change}	Page {p} : {change}
 	Document: {change}	Document : {change}
 	View this version	Afficher cette version
+	Only send form data to sites you trust. Nothing is sent unless you choose Send.	N’envoyez des données de formulaire qu’à des sites de confiance. Rien n’est envoyé tant que vous ne choisissez pas Envoyer.
+	Save Data As…	Enregistrer les données sous…
+	Send	Envoyer
+	Sending…	Envoi…
+	Submit Form	Envoyer le formulaire
+	The whole document (PDF)	Le document entier (PDF)
+	This form wants to send its data to {host}:	Ce formulaire veut envoyer ses données à {host} :
+	This form wants to send its data to:	Ce formulaire veut envoyer ses données à :
+	{fields} as {format}	{fields} au format {format}
+	{host} answered with HTTP {status}; the form may not have been received.	{host} a répondu HTTP {status} ; le formulaire n’a peut-être pas été reçu.
+	The form was sent to {host}.	Le formulaire a été envoyé à {host}.

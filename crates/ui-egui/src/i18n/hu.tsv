@@ -2267,3 +2267,14 @@ compare-page	Moved	Áthelyezve
 	Page {p}: {change}	{p}. oldal: {change}
 	Document: {change}	Dokumentum: {change}
 	View this version	Verzió megtekintése
+	Only send form data to sites you trust. Nothing is sent unless you choose Send.	Űrlapadatokat csak megbízható webhelyekre küldjön. Semmi sem kerül elküldésre, amíg nem választja a Küldés lehetőséget.
+	Save Data As…	Adatok mentése másként…
+	Send	Küldés
+	Sending…	Küldés folyamatban…
+	Submit Form	Űrlap elküldése
+	The whole document (PDF)	A teljes dokumentum (PDF)
+	This form wants to send its data to {host}:	Ez az űrlap a(z) {host} címre szeretné küldeni az adatait:
+	This form wants to send its data to:	Ez az űrlap ide szeretné küldeni az adatait:
+	{fields} as {format}	{fields} {format} formátumban
+	{host} answered with HTTP {status}; the form may not have been received.	A(z) {host} HTTP {status} választ adott; lehet, hogy az űrlap nem érkezett meg.
+	The form was sent to {host}.	Az űrlap elküldve ide: {host}.

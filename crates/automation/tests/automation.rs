@@ -5155,3 +5155,93 @@ fn formatting_a_text_box_through_tools() {
     let c = list["comments"].as_array().unwrap().iter().find(|c| c["id"] == id.as_str()).unwrap();
     assert_eq!((c["align"].as_str(), c["runs"][0]["size"].as_f64()), (Some("left"), Some(10.0)));
 }
+
+/// A one-request-at-a-time HTTP server on loopback: every request it gets (head and body) comes
+/// out of the receiver, answered with `status`.
+fn form_server(status: u16) -> (String, std::sync::mpsc::Receiver<(String, Vec<u8>)>) {
+    use std::io::{Read, Write};
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = format!("http://{}", listener.local_addr().unwrap());
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(mut s) = stream else { return };
+            let mut buf = Vec::new();
+            let mut chunk = [0u8; 4096];
+            let (head, mut body) = loop {
+                let n = s.read(&mut chunk).unwrap_or(0);
+                if n == 0 {
+                    return;
+                }
+                buf.extend_from_slice(&chunk[..n]);
+                if let Some(i) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
+                    break (String::from_utf8_lossy(&buf[..i]).into_owned(), buf[i + 4..].to_vec());
+                }
+            };
+            let len = head
+                .lines()
+                .find_map(|l| l.to_ascii_lowercase().strip_prefix("content-length:").map(|v| v.trim().parse::<usize>().unwrap_or(0)))
+                .unwrap_or(0);
+            while body.len() < len {
+                let n = s.read(&mut chunk).unwrap_or(0);
+                if n == 0 {
+                    break;
+                }
+                body.extend_from_slice(&chunk[..n]);
+            }
+            let _ =
+                s.write_all(format!("HTTP/1.1 {status} X\r\nContent-Type: text/html\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok").as_bytes());
+            if tx.send((head, body)).is_err() {
+                return;
+            }
+        }
+    });
+    (addr, rx)
+}
+
+#[test]
+fn submitting_a_form_saves_or_sends_its_data() {
+    let dir = workdir("form-submit");
+    let mut a = auto(&dir);
+    let (server, requests) = form_server(200);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    ok(&mut a, "form_add_field", json!({ "doc": doc, "page": 1, "type": "text", "rect": [20, 60, 180, 82], "name": "Name" }));
+    ok(&mut a, "form_add_field", json!({ "doc": doc, "page": 1, "type": "text", "rect": [20, 100, 180, 122], "name": "Town" }));
+    ok(&mut a, "form_fill", json!({ "doc": doc, "values": { "Name": "Ada Lovelace", "Town": "London & Co" } }));
+    ok(&mut a, "form_add_field", json!({ "doc": doc, "page": 1, "type": "button", "rect": [20, 20, 120, 42], "name": "Send" }));
+    let url = format!("{server}/forms/in");
+    ok(&mut a, "form_set_actions", json!({ "doc": doc, "field": "Send", "actions": [{ "trigger": "mouse_up", "submit": url }] }));
+
+    // Saved instead of sent: the button's HTML format, every filled field, nothing on the wire.
+    let r = ok(&mut a, "form_submit", json!({ "doc": doc, "field": "Send", "path": "data.txt" }));
+    assert_eq!((r["format"].as_str(), r["method"].as_str(), r["fields"].clone()), (Some("HTML"), Some("POST"), json!(["Name", "Town"])), "{r}");
+    assert_eq!(std::fs::read_to_string(dir.join("data.txt")).unwrap(), "Name=Ada+Lovelace&Town=London+%26+Co");
+    assert!(requests.try_recv().is_err(), "saving sends nothing");
+    // As XFDF, to a file.
+    ok(&mut a, "form_submit", json!({ "doc": doc, "field": "Send", "format": "xfdf", "path": "data.xfdf" }));
+    let xfdf = std::fs::read_to_string(dir.join("data.xfdf")).unwrap();
+    assert!(xfdf.contains("<field name=\"Name\"><value>Ada Lovelace</value></field>") && !xfdf.contains("Send"), "{xfdf}");
+
+    // Sent: a POST of the form body to the button's address.
+    let r = ok(&mut a, "form_submit", json!({ "doc": doc, "field": "Send", "send": true }));
+    assert_eq!(r["status"], 200, "{r}");
+    let (head, body) = requests.recv_timeout(std::time::Duration::from_secs(10)).unwrap();
+    assert!(head.starts_with("POST /forms/in HTTP/1.1"), "{head}");
+    assert!(head.to_ascii_lowercase().contains("content-type: application/x-www-form-urlencoded"), "{head}");
+    assert_eq!(body, b"Name=Ada+Lovelace&Town=London+%26+Co");
+    // FDF to a script's address.
+    let r = ok(&mut a, "form_submit", json!({ "doc": doc, "url": format!("{server}/fdf"), "send": true }));
+    assert_eq!((r["format"].as_str(), r["status"].as_u64()), (Some("FDF"), Some(200)));
+    let (head, body) = requests.recv_timeout(std::time::Duration::from_secs(10)).unwrap();
+    assert!(head.to_ascii_lowercase().contains("content-type: application/vnd.fdf") && body.starts_with(b"%FDF-1.2"), "{head}");
+
+    // Addresses that can't be sent to are refused before anything is built or sent.
+    for bad in ["mailto:forms@example.org", "forms/in", "file:///tmp/x"] {
+        let e = a.call("form_submit", &json!({ "doc": doc, "url": bad, "send": true }));
+        assert!(matches!(e, Err(ToolError::InvalidArgs(_))), "{bad}: {e:?}");
+    }
+    assert!(requests.try_recv().is_err());
+    // Exactly one of path and send; a button that doesn't submit is refused.
+    assert!(matches!(a.call("form_submit", &json!({ "doc": doc, "field": "Send" })), Err(ToolError::InvalidArgs(_))));
+    assert!(matches!(a.call("form_submit", &json!({ "doc": doc, "field": "Name", "path": "x.txt" })), Err(ToolError::InvalidArgs(_))));
+}
