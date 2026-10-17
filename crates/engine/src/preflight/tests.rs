@@ -99,3 +99,23 @@ fn stale_invalid_and_denied_fixes_leave_document_and_history_untouched() {
     assert!(session.apply(id, Edit::PreflightFix { fixes: requests }).is_err());
     assert_eq!(session.get(id).unwrap().bytes, before);
 }
+
+#[test]
+fn ink_coverage_reads_the_working_document_without_editing_it() {
+    let mut session = Session::new();
+    let bytes = session.create_blank(200.0, 200.0, 2).unwrap();
+    let mut cos = Document::open(bytes).unwrap();
+    let page = pdfcraft_model::pages(&cos)[0].obj;
+    let content = cos.add(Object::Stream(Stream::from_raw(Dict::new(), b"1 1 1 1 k 10 10 50 50 re f".to_vec())));
+    cos.update_dict(page, |d| d.set(b"Contents".to_vec(), Object::Ref(content))).unwrap();
+    let bytes = Arc::new(pdfcraft_cos::write_full(&cos, &Default::default()).unwrap());
+    let id = session.open("coverage.pdf", None, bytes, None).unwrap();
+    let doc = session.get(id).unwrap();
+    let pages = doc.ink_coverage(&[0, 1], &CoverageOptions::default()).unwrap();
+    assert!(pages[0].flagged());
+    assert_eq!(pages[0].max, 400.0);
+    assert!(!pages[1].flagged());
+    assert!(doc.ink_coverage(&[2], &CoverageOptions::default()).is_err());
+    assert!(doc.ink_coverage(&[0], &CoverageOptions { limit: -1.0, ..CoverageOptions::default() }).is_err());
+    assert!(!doc.dirty && doc.can_undo().is_none());
+}

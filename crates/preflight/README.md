@@ -41,3 +41,15 @@ For the legacy `pdfa_verify`/`pdfa_convert` JSON response, `compliant` remains a
 compatibility but is conservatively `false`. Clients should use `no_detected_issues` for
 the subset result; `validation_complete` is `false` and `conformance` is `not-established`.
 Declaring PDF/A in metadata is not validation.
+
+## Total area coverage
+
+`coverage::page_coverage` is Output Preview's Total Area Coverage check: the highest total
+ink on a page (C+M+Y+K plus spot inks, in percent), the area above a limit (300 % by default)
+and the worst connected regions. The page renderer is RGB-only, so the module interprets the
+content stream itself into a bounded ink grid (forms, fills, strokes, text string boxes,
+sampled images, clip bounding boxes; later objects knock out earlier ones). CMYK, Gray,
+Separation, DeviceN and Indexed colours are exact; RGB and Lab use a naive full-GCR
+conversion without a press profile and are counted separately; patterns, shadings,
+DCT/JPX/JBIG2/CCITT images and annotations are reported as unmeasured. `coverage::METHOD`
+states these limits for reports. Automation exposes it as `print_total_area_coverage`.
