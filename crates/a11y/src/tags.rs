@@ -133,7 +133,7 @@ fn name_text(n: &[u8]) -> String {
     String::from_utf8_lossy(n).into_owned()
 }
 
-fn catalog(doc: &Document) -> Option<(ObjRef, Dict)> {
+pub(crate) fn catalog(doc: &Document) -> Option<(ObjRef, Dict)> {
     let r = doc.root()?;
     let d = doc.get(r).as_dict().cloned()?;
     Some((r, d))
@@ -397,7 +397,7 @@ pub struct UntaggedImage {
     pub bbox: [f64; 4],
 }
 
-fn page_content(doc: &Document, page: &Dict) -> Vec<u8> {
+pub(crate) fn page_content(doc: &Document, page: &Dict) -> Vec<u8> {
     let Some(c) = page.get(b"Contents") else { return Vec::new() };
     match &*doc.resolve(c) {
         Object::Stream(s) => s.decoded().unwrap_or_default(),
@@ -416,7 +416,7 @@ fn page_content(doc: &Document, page: &Dict) -> Vec<u8> {
     }
 }
 
-fn sub_dict(doc: &Document, d: &Dict, key: &[u8]) -> Dict {
+pub(crate) fn sub_dict(doc: &Document, d: &Dict, key: &[u8]) -> Dict {
     d.get(key).map(|o| doc.resolve(o)).and_then(|o| o.as_dict().cloned()).unwrap_or_default()
 }
 
@@ -498,7 +498,7 @@ pub fn untagged_images(doc: &Document) -> Vec<UntaggedImage> {
 }
 
 /// The entries of a number tree that hold `key`: the node and its /Nums, bounded.
-fn number_tree_leaf(doc: &Document, root: ObjRef, key: i64) -> Option<(ObjRef, Vec<Object>)> {
+pub(crate) fn number_tree_leaf(doc: &Document, root: ObjRef, key: i64) -> Option<(ObjRef, Vec<Object>)> {
     let mut stack = vec![root];
     let mut seen = HashSet::new();
     while let Some(r) = stack.pop() {
@@ -542,7 +542,7 @@ fn number_tree_max(doc: &Document, root: ObjRef) -> Option<i64> {
 
 /// The largest MCID a parent-tree array may index is bounded so a hostile MCID can't make a
 /// huge array.
-const MAX_MCID: i64 = 1_000_000;
+pub(crate) const MAX_MCID: i64 = 1_000_000;
 
 /// Set Alternate Text on an untagged image: wrap it in Figure marked content, add a Figure
 /// element with the alternate text to the structure tree (creating a minimal tree for an

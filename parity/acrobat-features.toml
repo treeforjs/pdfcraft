@@ -8856,11 +8856,11 @@ title = "Mark content as artifact"
 area = "M"
 tier = "P1"
 milestone = "M12"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["tags_mark_artifact"]
+evidence = ["crates/automation/tests/tags.rs::a_footer_changed_to_an_artifact_leaves_the_accessible_text", "crates/automation/tests/tags.rs::artifacts_by_element_in_a_looped_tree_and_in_untagged_documents", "crates/engine/src/tests.rs::change_to_artifact_takes_content_out_of_the_accessible_text_and_undoes", "crates/a11y/src/tests.rs::a_footer_inside_a_rectangle_becomes_a_pagination_artifact_and_leaves_the_tags", "crates/a11y/src/tests.rs::artifacts_by_mcid_or_by_element_in_a_looped_tree", "crates/a11y/src/tests.rs::untagged_documents_get_artifacts_from_a_rectangle_only", "crates/a11y/src/tests.rs::bad_artifact_selections_change_nothing", "crates/a11y/src/tests.rs::artifacts_keep_optional_content_and_streams_split_mid_operator"]
+notes = "Engine edit (Edit::MarkArtifact, one undo step; Document::artifact_preview dry-runs it) + agent tool, on pdfcraft_a11y::mark_artifact. Selection: a rectangle on a page (tagged marked content changes as a whole when everything it paints is inside; untagged text runs, paths and images are wrapped one by one, so untagged documents can be marked too), MCIDs on a page, or structure elements (everything they cover, on any page). Content goes into /Artifact marked content with optional /Type Pagination|Layout|Page|Background and /Subtype Header|Footer|Watermark (pagination only); a tagged sequence changes only its opening operator, new sequences never span q/Q, BT/ET, other marked content or a path, optional content markers are kept, split content streams are parsed whole. The MCID references leave the structure tree (bounded, cycle-safe walk; elements left empty, also ones written inside their parents, leave too) and the parent tree. All or nothing: bad selections, missing MCIDs, unreadable content, truncated trees, form XObject (/Stm) content and elements holding annotations (OBJR) are refused with a clear error and no change. Missing: a menu command / Reading Order and Content panel UI (UI is being redesigned), text located by run origin rather than glyph outlines, splitting a text object's single run, content inside form XObjects, PDF 2.0 Artifact structure elements, IDTree clean-up, and the reverse (artifact back to tagged content)."
 
 [[feature]]
 id = "a11y.find-untagged"

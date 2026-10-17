@@ -427,6 +427,14 @@ impl Document {
         self.editor.as_ref().map(|e| a11y::tags(&e.cos)).unwrap_or_default()
     }
 
+    /// Change to Artifact, tried on a copy: what [`Edit::MarkArtifact`] would change, or why it
+    /// is refused. The document itself is left as it is.
+    pub fn artifact_preview(&self, selection: &a11y::ArtifactSelection) -> Result<a11y::ArtifactResult, String> {
+        let editor = self.editor.as_ref().ok_or_else(|| self.read_only_reason.clone().unwrap_or_else(|| "the document can't be edited".into()))?;
+        let mut copy = editor.cos.clone();
+        guard(|| a11y::mark_artifact(&mut copy, selection)).map_err(|e| e.to_string())?.map_err(|e| e.to_string())
+    }
+
     /// New Bookmarks from Structure: one bookmark per heading of the structure tree (H, H1–H6,
     /// Hn), nested by level, titled with the heading's actual or alternate text, else the text
     /// of the marked content it covers, and going to where the heading starts on its page.
@@ -1366,6 +1374,12 @@ pub enum Edit {
     MarkDecorative {
         figure: u32,
     },
+    /// Reading Order / Content panel ▸ Change to Artifact: wrap the selected page content in
+    /// `/Artifact` marked content (with an optional /Type and /Subtype) and take it out of the
+    /// structure tree and the parent tree (see [`a11y::mark_artifact`]).
+    MarkArtifact {
+        selection: a11y::ArtifactSelection,
+    },
     /// Tags panel ▸ Properties: change a structure element's type, alternate text, actual text,
     /// language or title. `element` is the element's object number (from `Document::tags`).
     SetTag {
@@ -1651,6 +1665,7 @@ impl Edit {
             Edit::SetAltText { .. } => "Set alternate text".into(),
             Edit::MarkDecorative { .. } => "Mark figure as decorative".into(),
             Edit::SetTag { .. } => "Change tag properties".into(),
+            Edit::MarkArtifact { .. } => "Change to artifact".into(),
             Edit::TagImage { .. } => "Set alternate text".into(),
             Edit::AddOcrText { .. } => "Recognize text".into(),
             Edit::StraightenPage { .. } => "Straighten page".into(),
@@ -1864,6 +1879,7 @@ fn check_permission(edit: &Edit, p: &pdfcraft_cos::Permissions) -> Result<(), Ed
         | Edit::SetAltText { .. }
         | Edit::MarkDecorative { .. }
         | Edit::SetTag { .. }
+        | Edit::MarkArtifact { .. }
         | Edit::TagImage { .. }
         | Edit::AddOcrText { .. }
         | Edit::StraightenPage { .. }
@@ -2133,6 +2149,9 @@ fn run_edit(doc: &mut pdfcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -> 
         Edit::SetTag { element, change } => {
             let r = pdfcraft_cos::ObjRef::new(*element, doc.generation(*element));
             a11y::set_tag(doc, r, change).map_err(|e| EditError::Accessibility(e.to_string()))?;
+        }
+        Edit::MarkArtifact { selection } => {
+            a11y::mark_artifact(doc, selection).map_err(|e| EditError::Accessibility(e.to_string()))?;
         }
         Edit::TagImage { page, index, alt } => {
             a11y::tag_image(doc, *page, *index, alt).map_err(|e| EditError::Accessibility(e.to_string()))?;

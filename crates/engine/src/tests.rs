@@ -3223,3 +3223,37 @@ fn accessible_text_reads_the_structure_tree_in_logical_order() {
     assert_eq!((got.blocks, got.headings, got.list_items, got.figures, got.table_rows), (5, 1, 2, 1, 0));
     assert_eq!((got.pages_read, got.unreadable_pages, got.truncated), (1, 0, false));
 }
+
+#[test]
+fn change_to_artifact_takes_content_out_of_the_accessible_text_and_undoes() {
+    let (mut s, _) = session_with(1);
+    let elements = [
+        "<< /Type /StructElem /S /Document /P 6 0 R /Pg 3 0 R /K [8 0 R 9 0 R 10 0 R 13 0 R] >>", // 7
+        "<< /Type /StructElem /S /H1 /P 7 0 R /K 0 >>",                                           // 8
+        "<< /Type /StructElem /S /P /P 7 0 R /K 1 >>",                                            // 9
+        "<< /Type /StructElem /S /L /P 7 0 R /K [11 0 R 12 0 R] >>",                              // 10
+        "<< /Type /StructElem /S /LI /P 10 0 R /K [<< /S /Lbl /K 2 >> << /S /LBody /K 3 >>] >>",  // 11
+        "<< /Type /StructElem /S /LI /P 10 0 R /K [4 7 0 R] >>",                                  // 12: loops back to the root
+        "<< /Type /StructElem /S /Figure /P 7 0 R /Alt (A blue square) /K 5 >>",                  // 13
+    ];
+    let id = s.open("t.pdf", None, Arc::new(accessible_pdf("<< /Type /StructTreeRoot /K 7 0 R >>", &elements)), None).unwrap();
+    let before = s.get(id).unwrap().accessible_text().unwrap().text;
+    assert!(before.contains("Second"), "{before}");
+    // The second list item's line (baseline 135), as a layout artifact.
+    let selection =
+        a11y::ArtifactSelection { page: Some(0), rect: Some([0.0, 130.0, 300.0, 145.0]), ty: Some(a11y::ArtifactType::Layout), ..Default::default() };
+    let preview = s.get(id).unwrap().artifact_preview(&selection).unwrap();
+    assert_eq!((preview.marked.clone(), preview.untagged), (vec![(0, 4)], 0));
+    assert_eq!(s.get(id).unwrap().accessible_text().unwrap().text, before, "a preview changes nothing");
+    s.apply(id, Edit::MarkArtifact { selection: selection.clone() }).unwrap();
+    let after = s.get(id).unwrap().accessible_text().unwrap().text;
+    assert_eq!(after, "Title\n\nBody comes after the title.\n\n1. First\n\nA blue square\n");
+    assert!(s.get(id).unwrap().tags().nodes.iter().filter(|n| n.ty == "LI").count() == 1);
+    assert_eq!(s.undo(id).unwrap(), "Change to artifact");
+    assert_eq!(s.get(id).unwrap().accessible_text().unwrap().text, before);
+    // A refused selection is an error and no undo step.
+    let bad = a11y::ArtifactSelection { page: Some(0), mcids: vec![42], ..Default::default() };
+    assert!(s.get(id).unwrap().artifact_preview(&bad).unwrap_err().contains("MCID 42"));
+    assert!(s.apply(id, Edit::MarkArtifact { selection: bad }).is_err());
+    assert!(s.undo(id).is_err(), "the refused edit left no undo step");
+}

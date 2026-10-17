@@ -383,3 +383,125 @@ fn accessible_text_refuses_untagged_documents() {
     }
     assert!(!dir.join("plain.txt").exists(), "nothing is written");
 }
+
+/// One page with a heading, a paragraph and a tagged running footer (MCID 2, near the bottom)
+/// with a rule under it; the footer's P is the last kid of Document.
+fn footer_pdf() -> Vec<u8> {
+    let c = "/H1 << /MCID 0 >> BDC BT /F1 18 Tf 20 170 Td (Report) Tj ET EMC \
+             /P << /MCID 1 >> BDC BT /F1 10 Tf 20 140 Td (Body text.) Tj ET EMC \
+             /P << /MCID 2 >> BDC BT /F1 8 Tf 20 12 Td (Confidential - page 1) Tj ET 20 8 160 0.5 re f EMC";
+    let objs: Vec<Vec<u8>> = vec![
+        b"<< /Type /Catalog /Pages 2 0 R /MarkInfo << /Marked true >> /StructTreeRoot 6 0 R >>".to_vec(), // 1
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 /MediaBox [0 0 200 200] >>".to_vec(),                    // 2
+        b"<< /Type /Page /Parent 2 0 R /Contents 4 0 R /StructParents 0 /Resources << /Font << /F1 5 0 R >> >> >>".to_vec(), // 3
+        format!("<< /Length {} >>\nstream\n{c}\nendstream", c.len()).into_bytes(),                        // 4
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".to_vec(),                               // 5
+        b"<< /Type /StructTreeRoot /K 7 0 R /ParentTree 11 0 R /ParentTreeNextKey 1 >>".to_vec(),         // 6
+        b"<< /Type /StructElem /S /Document /P 6 0 R /Pg 3 0 R /K [8 0 R 9 0 R 10 0 R] >>".to_vec(),      // 7
+        b"<< /Type /StructElem /S /H1 /P 7 0 R /K 0 >>".to_vec(),                                         // 8
+        b"<< /Type /StructElem /S /P /P 7 0 R /K 1 >>".to_vec(),                                          // 9
+        b"<< /Type /StructElem /S /P /P 7 0 R /K 2 >>".to_vec(),                                          // 10: the footer
+        b"<< /Nums [0 [8 0 R 9 0 R 10 0 R]] >>".to_vec(),                                                 // 11
+    ];
+    let mut out = b"%PDF-1.7\n".to_vec();
+    let mut offsets = Vec::new();
+    for (i, o) in objs.iter().enumerate() {
+        offsets.push(out.len());
+        out.extend_from_slice(format!("{} 0 obj\n", i + 1).as_bytes());
+        out.extend_from_slice(o);
+        out.extend_from_slice(b"\nendobj\n");
+    }
+    let xref = out.len();
+    out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objs.len() + 1).as_bytes());
+    for o in offsets {
+        out.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+    }
+    out.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objs.len() + 1).as_bytes());
+    out
+}
+
+fn accessible(a: &mut Automation, doc: u64) -> String {
+    ok(a, "doc_export_accessible_text", json!({ "doc": doc }))["text"].as_str().unwrap().to_owned()
+}
+
+#[test]
+fn a_footer_changed_to_an_artifact_leaves_the_accessible_text() {
+    let dir = workdir("artifact-footer");
+    std::fs::write(dir.join("footer.pdf"), footer_pdf()).unwrap();
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "footer.pdf" }))["doc"].as_u64().unwrap();
+    assert_eq!(accessible(&mut a, doc), "Report\n\nBody text.\n\nConfidential - page 1\n");
+
+    // Bad arguments are refused and change nothing.
+    let bad = [
+        json!({ "doc": doc }),
+        json!({ "doc": doc, "rect": [0, 180, 200, 200] }),
+        json!({ "doc": doc, "page": 2, "rect": [0, 180, 200, 200] }),
+        json!({ "doc": doc, "page": 1, "rect": [0, 180, 200] }),
+        json!({ "doc": doc, "page": 1, "rect": [0, 180, 200, 200], "type": "Decoration" }),
+        json!({ "doc": doc, "page": 1, "rect": [0, 180, 200, 200], "subtype": "Margin" }),
+        json!({ "doc": doc, "elements": [0] }),
+        json!({ "doc": doc, "elements": "10" }),
+        json!({ "doc": doc, "page": 1, "mcids": [2.5] }),
+    ];
+    for b in &bad {
+        assert!(matches!(a.call("tags_mark_artifact", b), Err(ToolError::InvalidArgs(_))), "{b}");
+    }
+    let failed = [
+        json!({ "doc": doc, "page": 1, "mcids": [9] }),
+        json!({ "doc": doc, "elements": [5] }),
+        json!({ "doc": doc, "page": 1, "rect": [0, 0, 200, 20], "type": "Layout", "subtype": "Footer" }),
+        json!({ "doc": doc, "page": 1, "rect": [0, 80, 200, 100] }),
+    ];
+    for b in &failed {
+        assert!(matches!(a.call("tags_mark_artifact", b), Err(ToolError::Failed(_))), "{b}");
+    }
+    assert_eq!(accessible(&mut a, doc), "Report\n\nBody text.\n\nConfidential - page 1\n");
+    assert!(a.call("edit_undo", &json!({ "doc": doc })).is_err(), "no undo step was added");
+
+    // The bottom 20 pt of the page (top-left origin), as a pagination footer.
+    let r = ok(&mut a, "tags_mark_artifact", json!({ "doc": doc, "page": 1, "rect": [0, 180, 200, 200], "subtype": "Footer" }));
+    assert_eq!(r["marked"], json!([{ "page": 1, "mcid": 2 }]), "{r}");
+    assert_eq!((r["untagged"].as_u64(), r["elements_removed"].as_u64(), r["elements"].as_u64()), (Some(0), Some(1), Some(3)), "{r}");
+    assert_eq!(accessible(&mut a, doc), "Report\n\nBody text.\n");
+    let t = ok(&mut a, "tags_tree", json!({ "doc": doc }));
+    assert_eq!(outline(&t), [(0, "Document".to_owned()), (1, "H1".to_owned()), (1, "P".to_owned())]);
+
+    // Undo brings it back; redo and a save keep it out.
+    assert_eq!(ok(&mut a, "edit_undo", json!({ "doc": doc }))["undone"], "Change to artifact");
+    assert_eq!(accessible(&mut a, doc), "Report\n\nBody text.\n\nConfidential - page 1\n");
+    ok(&mut a, "edit_redo", json!({ "doc": doc }));
+    ok(&mut a, "doc_save", json!({ "doc": doc, "path": "out.pdf" }));
+    let again = ok(&mut a, "doc_open", json!({ "path": "out.pdf" }))["doc"].as_u64().unwrap();
+    assert_eq!(accessible(&mut a, again), "Report\n\nBody text.\n");
+    let text = ok(&mut a, "text_extract", json!({ "doc": again, "pages": [1] }));
+    assert!(text.to_string().contains("Confidential"), "the footer is still on the page: {text}");
+}
+
+#[test]
+fn artifacts_by_element_in_a_looped_tree_and_in_untagged_documents() {
+    let dir = workdir("artifact-element");
+    std::fs::write(dir.join("headings.pdf"), headings_pdf()).unwrap();
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "headings.pdf" }))["doc"].as_u64().unwrap();
+    // Element 18 (the H "Appendix" on page 2) loops back to the root; the Sect around it is
+    // left empty and goes too.
+    let r = ok(&mut a, "tags_mark_artifact", json!({ "doc": doc, "elements": [18], "type": "Layout" }));
+    assert_eq!(r["marked"], json!([{ "page": 2, "mcid": 2 }]), "{r}");
+    assert_eq!((r["elements_removed"].as_u64(), r["pages"].clone()), (Some(2), json!([2])), "{r}");
+    assert_eq!(accessible(&mut a, doc), "Introduction\n\nBody text.\n\nBackground\n\nResults\n\nDetail\n");
+    // By MCID on page 1: the Span inside H2 ("ground").
+    let r = ok(&mut a, "tags_mark_artifact", json!({ "doc": doc, "page": 1, "mcids": [3] }));
+    assert_eq!((r["marked"].clone(), r["elements_removed"].as_u64()), (json!([{ "page": 1, "mcid": 3 }]), Some(1)), "{r}");
+    assert_eq!(accessible(&mut a, doc), "Introduction\n\nBody text.\n\nBack\n\nResults\n\nDetail\n");
+
+    // An untagged document: a rectangle marks its painted text; ids need tags.
+    let plain = ok(&mut a, "doc_create", json!({ "from": "text", "text": "Plain words" }))["doc"].as_u64().unwrap();
+    match a.call("tags_mark_artifact", &json!({ "doc": plain, "page": 1, "mcids": [0] })) {
+        Err(ToolError::Failed(m)) => assert!(m.contains("not tagged"), "{m}"),
+        other => panic!("{other:?}"),
+    }
+    let r = ok(&mut a, "tags_mark_artifact", json!({ "doc": plain, "page": 1, "rect": [0, 0, 2000, 2000], "type": "Background" }));
+    assert!(r["untagged"].as_u64().unwrap() >= 1, "{r}");
+    assert_eq!((r["elements_removed"].as_u64(), r["elements"].as_u64()), (Some(0), Some(0)), "{r}");
+}

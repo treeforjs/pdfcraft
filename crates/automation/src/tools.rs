@@ -1046,6 +1046,19 @@ pub fn tools() -> Vec<ToolDef> {
         t("tags_tree", "Show the tags tree", "The logical structure tree (Tags panel), read with cycle and size limits: each element in document order with its 1-based element number, object number (obj, null for an element that can't be edited), parent, depth, type as written and its standard type through the role map, title, alt, actual_text, lang, page, and kids (elements, marked content as mcid + page, object references as object + subtype). Also the catalog language, the role map, and the types tags_set accepts.")
             .ro()
             .with(schema(json!({ "doc": doc(), "limit": { "type": "integer", "minimum": 1, "maximum": 100000, "description": "At most this many elements (default 5000)." } }), &["doc"])),
+        t("tags_mark_artifact", "Change to artifact", "Reading Order / Content panel ▸ Change to Artifact: mark page content as an artifact (running headers and footers, page numbers, rules, backgrounds, watermarks) so assistive technology and accessible-text export skip it. Select it with page plus rect (points from the top-left of the displayed page) and/or mcids (marked-content ids on that page, from tags_tree), or with elements (structure element obj numbers from tags_tree; everything they cover, on any page). Inside rect, tagged marked content changes as a whole when everything it paints is inside (text by where each run starts, paths by their points, images by their boxes), and untagged text runs, paths and images are wrapped one by one, so untagged documents can be marked too. The content is wrapped in /Artifact marked content with the optional type (Pagination, Layout, Page, Background) and subtype (Header, Footer, Watermark; pagination only, implies Pagination); its marked-content references leave the structure tree and the parent tree, and elements left empty leave the tree. q/Q, BT/ET and marked-content nesting are kept. All or nothing, one undo step. Returns marked (page, mcid), untagged (operations wrapped), elements_removed, pages changed and the elements left. mcids and elements need a tagged document; content inside form XObjects and elements holding annotations are refused.")
+            .with(schema(
+                json!({
+                    "doc": doc(),
+                    "page": { "type": "integer", "minimum": 1, "description": "The page of rect and mcids (1-based)." },
+                    "rect": { "type": "array", "items": { "type": "number" }, "minItems": 4, "maxItems": 4, "description": "[x0, y0, x1, y1] in points from the top-left of the displayed page." },
+                    "mcids": { "type": "array", "items": { "type": "integer", "minimum": 0 }, "maxItems": 100000, "description": "Marked-content ids on page." },
+                    "elements": { "type": "array", "items": { "type": "integer", "minimum": 1 }, "maxItems": 100000, "description": "Structure element object numbers (obj) from tags_tree." },
+                    "type": { "type": "string", "enum": ["Pagination", "Layout", "Page", "Background"] },
+                    "subtype": { "type": "string", "enum": ["Header", "Footer", "Watermark"] }
+                }),
+                &["doc"],
+            )),
         t("tags_set", "Change tag properties", "Change one structure element (obj from tags_tree): type (a standard structure type, or a custom type the role map maps to one), alt, actual_text, lang (a language tag such as en-US) or title; an empty string removes that entry. All or nothing, one undo step. Returns the element.")
             .with(schema(
                 json!({

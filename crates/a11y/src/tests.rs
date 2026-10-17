@@ -582,3 +582,223 @@ fn reading_blocks_follow_the_structure_tree() {
     let plain = pdf(&["<< /Type /Catalog /Pages 2 0 R >>".into(), "<< /Type /Pages /Kids [] /Count 0 >>".into()], "");
     assert!(reading_blocks(&super::tags(&plain)).is_empty());
 }
+
+/// A tagged page: a heading (MCID 0), body text (MCID 1) and a footer line with a rule
+/// (MCID 2), and a page number painted untagged. Document → [H1, P, Sect → [P footer]]; the
+/// Sect is left empty when the footer goes, and the last element loops back to the root.
+fn artifact_pdf() -> Document {
+    let content = "/H1 << /MCID 0 >> BDC BT /F1 18 Tf 20 170 Td (Title) Tj ET EMC \
+                   /P << /MCID 1 >> BDC BT /F1 12 Tf 20 140 Td (Body text) Tj ET EMC \
+                   /P << /MCID 2 >> BDC q BT /F1 8 Tf 20 12 Td (Confidential) Tj ET 20 8 160 0.5 re f Q EMC \
+                   BT /F1 8 Tf 170 12 Td (7) Tj ET";
+    pdf(
+        &[
+            "<< /Type /Catalog /Pages 2 0 R /MarkInfo << /Marked true >> /StructTreeRoot 6 0 R >>".into(), // 1
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".into(),                                            // 2
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 4 0 R /StructParents 0 /Resources << /Font << /F1 5 0 R >> >> >>".into(), // 3
+            stream(content),                                                                          // 4
+            FONT.into(),                                                                              // 5
+            "<< /Type /StructTreeRoot /K 7 0 R /ParentTree 12 0 R /ParentTreeNextKey 1 >>".into(),    // 6
+            "<< /Type /StructElem /S /Document /P 6 0 R /Pg 3 0 R /K [8 0 R 9 0 R 10 0 R] >>".into(), // 7
+            "<< /Type /StructElem /S /H1 /P 7 0 R /K 0 >>".into(),                                    // 8
+            "<< /Type /StructElem /S /P /P 7 0 R /K 1 >>".into(),                                     // 9
+            "<< /Type /StructElem /S /Sect /P 7 0 R /K 11 0 R >>".into(),                             // 10
+            "<< /Type /StructElem /S /P /P 10 0 R /K [2 7 0 R] >>".into(),                            // 11: loops back
+            "<< /Nums [0 [8 0 R 9 0 R 11 0 R]] >>".into(),                                            // 12
+        ],
+        "",
+    )
+}
+
+fn page0_content(doc: &Document) -> String {
+    let pages = pdfcraft_model::pages(doc);
+    String::from_utf8_lossy(&crate::tags::page_content(doc, &pages[0].dict)).into_owned()
+}
+
+/// Every q/Q, BT/ET and marked-content pair is balanced and properly nested.
+fn assert_balanced(content: &str) {
+    let ops = pdfcraft_content::parse(content.as_bytes()).ops;
+    let mut stack: Vec<&[u8]> = Vec::new();
+    for op in &ops {
+        match op.op.as_slice() {
+            b"q" => stack.push(b"q"),
+            b"BT" => stack.push(b"BT"),
+            b"BMC" | b"BDC" => stack.push(b"MC"),
+            b"Q" => assert_eq!(stack.pop(), Some(&b"q"[..]), "{content}"),
+            b"ET" => assert_eq!(stack.pop(), Some(&b"BT"[..]), "{content}"),
+            b"EMC" => assert_eq!(stack.pop(), Some(&b"MC"[..]), "{content}"),
+            _ => {}
+        }
+    }
+    assert!(stack.is_empty(), "{content}");
+}
+
+fn types(doc: &Document) -> Vec<String> {
+    super::tags(doc).nodes.iter().map(|n| n.ty.clone()).collect()
+}
+
+#[test]
+fn a_footer_inside_a_rectangle_becomes_a_pagination_artifact_and_leaves_the_tags() {
+    let mut doc = artifact_pdf();
+    let sel = ArtifactSelection {
+        page: Some(0),
+        rect: Some([0.0, 0.0, 200.0, 30.0]),
+        ty: None,
+        subtype: Some(ArtifactSubtype::Footer),
+        ..Default::default()
+    };
+    let r = mark_artifact(&mut doc, &sel).unwrap();
+    assert_eq!((r.marked.clone(), r.untagged, r.elements_removed, r.pages.clone()), (vec![(0, 2)], 1, 2, vec![0]), "{r:?}");
+    let c = page0_content(&doc);
+    assert_balanced(&c);
+    assert!(!c.contains("/MCID 2"), "{c}");
+    assert_eq!(c.matches("/Artifact <</Type /Pagination/Subtype /Footer>> BDC").count(), 2, "{c}");
+    // The untagged page number is wrapped inside its text object.
+    assert!(c.contains("BDC\n(7) Tj\nEMC\nET"), "{c}");
+    // The footer P and the Sect it emptied are gone; the parent tree forgets MCID 2.
+    assert_eq!(types(&doc), ["Document", "H1", "P"]);
+    let pt = doc.get(pdfcraft_cos::ObjRef::new(12, 0));
+    let nums = pt.as_dict().unwrap().get(b"Nums").unwrap().as_array().unwrap().clone();
+    assert_eq!(nums[1].as_array().unwrap()[2], pdfcraft_cos::Object::Null);
+    // The reading order no longer reaches it.
+    let blocks = reading_blocks(&super::tags(&doc));
+    assert_eq!(blocks.len(), 2);
+    // Marking the same place again finds nothing left to change.
+    assert!(matches!(mark_artifact(&mut doc, &sel), Err(TagError::Invalid(m)) if m.contains("nothing on page 1")));
+}
+
+#[test]
+fn artifacts_by_mcid_or_by_element_in_a_looped_tree() {
+    // By MCID: the heading's content.
+    let mut doc = artifact_pdf();
+    let r =
+        mark_artifact(&mut doc, &ArtifactSelection { page: Some(0), mcids: vec![0], ty: Some(ArtifactType::Layout), ..Default::default() }).unwrap();
+    assert_eq!((r.marked, r.untagged, r.elements_removed), (vec![(0, 0)], 0, 1));
+    let c = page0_content(&doc);
+    assert_balanced(&c);
+    assert!(c.starts_with("/Artifact <</Type /Layout>> BDC"), "{c}");
+    assert_eq!(types(&doc), ["Document", "P", "Sect", "P"]);
+
+    // By element: the Sect and the looping P inside it, whatever pages their content is on.
+    let mut doc = artifact_pdf();
+    let r = mark_artifact(&mut doc, &ArtifactSelection { elements: vec![10], ..Default::default() }).unwrap();
+    assert_eq!((r.marked, r.elements_removed), (vec![(0, 2)], 2));
+    let c = page0_content(&doc);
+    assert_balanced(&c);
+    assert!(c.contains("/Artifact BMC\nq\nBT"), "{c}");
+    assert_eq!(types(&doc), ["Document", "H1", "P"]);
+    // The top-level element can go too, out of the tree root's kids.
+    let r = mark_artifact(&mut doc, &ArtifactSelection { elements: vec![7], ..Default::default() }).unwrap();
+    assert_eq!((r.marked, r.elements_removed), (vec![(0, 0), (0, 1)], 3));
+    assert!(super::tags(&doc).nodes.is_empty());
+    assert_balanced(&page0_content(&doc));
+}
+
+#[test]
+fn untagged_documents_get_artifacts_from_a_rectangle_only() {
+    let content =
+        "BT /F1 12 Tf 20 140 Td (Body) Tj ET BT /F1 8 Tf 20 12 Td (Page) Tj 30 0 Td (one) Tj ET 0 5 200 1 re f q 50 0 0 50 0 150 cm /Im Do Q";
+    let mut doc = pdf(
+        &[
+            "<< /Type /Catalog /Pages 2 0 R >>".into(),
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".into(),
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>".into(),
+            stream(content),
+            FONT.into(),
+        ],
+        "",
+    );
+    let err = mark_artifact(&mut doc, &ArtifactSelection { page: Some(0), mcids: vec![0], ..Default::default() }).unwrap_err();
+    assert!(err.to_string().contains("not tagged"), "{err}");
+    let r = mark_artifact(&mut doc, &ArtifactSelection { page: Some(0), rect: Some([0.0, 0.0, 200.0, 20.0]), ..Default::default() }).unwrap();
+    assert_eq!((r.untagged, r.marked.len(), r.elements_removed), (3, 0, 0));
+    let c = page0_content(&doc);
+    assert_balanced(&c);
+    // The two runs of the footer share one artifact (the Td between them stays inside); the
+    // rule is wrapped whole, path and paint together; the body and the image stay as they were.
+    assert!(c.contains("/Artifact BMC\n(Page) Tj\n30 0 Td\n(one) Tj\nEMC\nET\n/Artifact BMC\n0 5 200 1 re\nf\nEMC\n"), "{c}");
+    assert_eq!(c.matches("/Artifact").count(), 2, "{c}");
+    assert!(super::tags(&doc).nodes.is_empty() && !super::tags(&doc).exists);
+}
+
+#[test]
+fn bad_artifact_selections_change_nothing() {
+    let mut doc = artifact_pdf();
+    let before = page0_content(&doc);
+    let tags_before = super::tags(&doc);
+    let cases = [
+        (ArtifactSelection::default(), "select the content"),
+        (ArtifactSelection { rect: Some([0.0, 0.0, 10.0, 10.0]), ..Default::default() }, "give the page"),
+        (ArtifactSelection { page: Some(3), rect: Some([0.0, 0.0, 10.0, 10.0]), ..Default::default() }, "no page 4"),
+        (ArtifactSelection { page: Some(0), rect: Some([5.0, 0.0, 5.0, 10.0]), ..Default::default() }, "width and a height"),
+        (ArtifactSelection { page: Some(0), rect: Some([f64::NAN, 0.0, 5.0, 10.0]), ..Default::default() }, "finite"),
+        (ArtifactSelection { page: Some(0), mcids: vec![9], ..Default::default() }, "no marked content with MCID 9"),
+        (ArtifactSelection { page: Some(0), mcids: vec![-1], ..Default::default() }, "not a marked-content id"),
+        (ArtifactSelection { page: Some(0), mcids: vec![0, 9], ..Default::default() }, "MCID 9"),
+        (
+            ArtifactSelection {
+                page: Some(0),
+                mcids: vec![0],
+                ty: Some(ArtifactType::Layout),
+                subtype: Some(ArtifactSubtype::Header),
+                ..Default::default()
+            },
+            "only pagination",
+        ),
+        (ArtifactSelection { elements: vec![5], ..Default::default() }, "not an element"),
+        (ArtifactSelection { page: Some(0), rect: Some([0.0, 60.0, 200.0, 100.0]), ..Default::default() }, "nothing on page 1"),
+    ];
+    for (sel, want) in cases {
+        let err = mark_artifact(&mut doc, &sel).unwrap_err().to_string();
+        assert!(err.contains(want), "{sel:?}: {err}");
+        assert_eq!(page0_content(&doc), before);
+        assert_eq!(super::tags(&doc), tags_before);
+    }
+    // An element holding an annotation reference is refused.
+    let mut doc = pdf(
+        &[
+            "<< /Type /Catalog /Pages 2 0 R /StructTreeRoot 4 0 R >>".into(),
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".into(),
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Annots [6 0 R] >>".into(),
+            "<< /Type /StructTreeRoot /K 5 0 R >>".into(),
+            "<< /Type /StructElem /S /Link /P 4 0 R /Pg 3 0 R /K << /Type /OBJR /Obj 6 0 R >> >>".into(),
+            "<< /Type /Annot /Subtype /Link /Rect [0 0 10 10] >>".into(),
+        ],
+        "",
+    );
+    let err = mark_artifact(&mut doc, &ArtifactSelection { elements: vec![5], ..Default::default() }).unwrap_err();
+    assert!(err.to_string().contains("annotation"), "{err}");
+}
+
+#[test]
+fn artifacts_keep_optional_content_and_streams_split_mid_operator() {
+    // The page's content is split between two streams in the middle of an operator; inside the
+    // footer's P is optional content holding a nested Span with its own MCID.
+    let mut doc = pdf(
+        &[
+            "<< /Type /Catalog /Pages 2 0 R /StructTreeRoot 6 0 R >>".into(),
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".into(),
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents [4 0 R 5 0 R] /StructParents 0 \
+             /Resources << /Font << /F1 9 0 R >> /Properties << /L1 << /Type /OCG /Name (Layer) >> >> >> >>"
+                .into(),
+            stream("/P << /MCID 0 >> BDC /OC /L1 BDC /Span << /MCID 1 >> BDC BT /F1 8 Tf 20"),
+            stream("12 Td (Footer) Tj ET EMC EMC EMC BT /F1 12 Tf 20 150 Td (Body) Tj ET"),
+            "<< /Type /StructTreeRoot /K 7 0 R /ParentTree 10 0 R >>".into(),
+            "<< /Type /StructElem /S /Document /P 6 0 R /Pg 3 0 R /K [8 0 R] >>".into(),
+            "<< /Type /StructElem /S /P /P 7 0 R /K [0 << /S /Span /K 1 >>] >>".into(),
+            FONT.into(),
+            "<< /Nums [0 10 0 R] >>".into(),
+        ],
+        "",
+    );
+    // pdf() numbers objects in order: object 10 is the parent tree (its array is direct).
+    let r = mark_artifact(&mut doc, &ArtifactSelection { page: Some(0), rect: Some([0.0, 0.0, 200.0, 30.0]), ..Default::default() }).unwrap();
+    assert_eq!(r.marked, [(0, 0), (0, 1)]);
+    let c = page0_content(&doc);
+    assert_balanced(&c);
+    assert!(c.contains("/OC /L1 BDC"), "optional content stays: {c}");
+    assert!(c.contains("20 12 Td"), "the split operator reads whole: {c}");
+    assert_eq!(c.matches("/Artifact BMC").count(), 2, "{c}");
+    assert!(!c.contains("MCID"), "{c}");
+    assert_eq!(types(&doc), ["Document"], "the P and its direct Span leave together");
+}
