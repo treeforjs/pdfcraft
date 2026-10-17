@@ -2249,3 +2249,4 @@ compare-page	Moved	Переміщена
 	{n} objects with unsaved changes are estimated, not measured in the file.	Об’єкти з незбереженими змінами ({n}) оцінено, а не виміряно у файлі.
 	{n} bytes of compressed object streams are shared out among their objects by decoded size.	{n} байтів стиснених потоків об’єктів розподілено між їхніми об’єктами за розміром після розпакування.
 	This document does not allow copying text, so its paragraphs can't be opened for editing. Open it with the permissions password.	Цей документ не дозволяє копіювати текст, тому його абзаци не можна відкрити для редагування. Відкрийте його з паролем дозволів.
+	Crop Image	Обрізати зображення

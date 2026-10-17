@@ -1250,14 +1250,14 @@ pub fn tools() -> Vec<ToolDef> {
             .ro()
             .cmd("edit.edit_text")
             .with(schema(json!({ "doc": doc(), "page": { "type": "integer", "minimum": 1 } }), &["doc", "page"])),
-        t("image_edit", "Edit an image", "Change one of a page's images (number from page_images): action move (rect: new box in top-left-origin points), rotate (quarters clockwise, default 1), flip_horizontal, flip_vertical, replace (path: an image file, drawn in the same place) or delete. Undoable. Form artwork supports move/resize/rotate/flip/delete as a group; replace and image_save only support raster images.")
+        t("image_edit", "Edit an image", "Change one of a page's images (number from page_images): action move (rect: new box in top-left-origin points), crop (rect: the part to keep, in top-left-origin points; the rest is hidden and can be cropped again), rotate (quarters clockwise, default 1), flip_horizontal, flip_vertical, replace (path: an image file, drawn in the same place) or delete. Undoable. Form artwork supports move/resize/rotate/flip/crop/delete as a group; replace and image_save only support raster images.")
             .cmd("edit.edit_text")
             .with(schema(
                 json!({
                     "doc": doc(),
                     "page": { "type": "integer", "minimum": 1 },
                     "image": { "type": "integer", "minimum": 1 },
-                    "action": { "type": "string", "enum": ["move", "rotate", "flip_horizontal", "flip_vertical", "replace", "delete"] },
+                    "action": { "type": "string", "enum": ["move", "crop", "rotate", "flip_horizontal", "flip_vertical", "replace", "delete"] },
                     "rect": { "type": "array", "items": { "type": "number" }, "minItems": 4, "maxItems": 4 },
                     "quarters": { "type": "integer" },
                     "path": { "type": "string" },

@@ -2188,3 +2188,4 @@ compare-page	Moved	Преместена
 	{n} objects with unsaved changes are estimated, not measured in the file.	Обектите с незапазени промени ({n}) са оценени, а не измерени във файла.
 	{n} bytes of compressed object streams are shared out among their objects by decoded size.	{n} байта от компресирани потоци от обекти са разпределени между обектите им според декодирания размер.
 	This document does not allow copying text, so its paragraphs can't be opened for editing. Open it with the permissions password.	Този документ не позволява копиране на текст, затова абзаците му не могат да се отварят за редактиране. Отворете го с паролата за разрешения.
+	Crop Image	Изрязване на изображението

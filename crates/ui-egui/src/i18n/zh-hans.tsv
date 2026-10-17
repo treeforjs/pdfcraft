@@ -2190,3 +2190,4 @@ compare-page	Moved	已移动
 	{n} objects with unsaved changes are estimated, not measured in the file.	{n} 个有未保存更改的对象为估算值，并非在文件中测得。
 	{n} bytes of compressed object streams are shared out among their objects by decoded size.	压缩对象流中的 {n} 字节按解码后大小分摊给其中的对象。
 	This document does not allow copying text, so its paragraphs can't be opened for editing. Open it with the permissions password.	此文档不允许复制文本，因此无法打开其段落进行编辑。请使用权限密码打开。
+	Crop Image	裁剪图像

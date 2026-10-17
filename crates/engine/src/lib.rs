@@ -73,6 +73,8 @@ pub enum ImageEdit {
         name: String,
         bytes: Arc<Vec<u8>>,
     },
+    /// Keep only the part inside this box (user space); the rest is hidden, not discarded.
+    Crop([f64; 4]),
     Delete,
 }
 pub use pdfcraft_fonts::{MAX_SIGNATURE_CHARS, ScriptOutline, script_outline};
@@ -1464,6 +1466,7 @@ impl Edit {
                 ImageEdit::Rotate(_) => "Rotate image".into(),
                 ImageEdit::Flip { .. } => "Flip image".into(),
                 ImageEdit::Replace { .. } => "Replace image".into(),
+                ImageEdit::Crop(_) => "Crop image".into(),
                 ImageEdit::Delete => "Delete image".into(),
             },
             Edit::AddHeaderFooter { replace: false, .. } => "Add header & footer".into(),
@@ -1943,6 +1946,7 @@ fn run_edit(doc: &mut pdfcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -> 
                     }
                     pdfcraft_edit::ImageChange::Replace(embed_image(doc, name, bytes)?.0)
                 }
+                ImageEdit::Crop(keep) => pdfcraft_edit::ImageChange::Crop(*keep),
                 ImageEdit::Delete => pdfcraft_edit::ImageChange::Delete,
             };
             pdfcraft_edit::change_image(doc, *page, *index, &c)?;

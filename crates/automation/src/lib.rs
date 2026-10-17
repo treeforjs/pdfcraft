@@ -399,16 +399,20 @@ impl Automation {
                     json!({ "path": path.to_string_lossy(), "format": ext, "bytes": bytes.len() })
                 } else {
                     use pdfcraft_engine::ImageEdit;
-                    let change = match a.str("action")? {
-                        "move" => {
-                            let r: Vec<f64> =
-                                a.get("rect").and_then(Value::as_array).map(|x| x.iter().filter_map(Value::as_f64).collect()).unwrap_or_default();
-                            let r = <[f64; 4]>::try_from(r).map_err(|_| ToolError::InvalidArgs("move needs rect: 4 numbers".into()))?;
-                            // Top-left-origin points → user space.
-                            let info = &self.doc(&a)?.info.pages[page];
-                            let (u0, u1) = (info.view_to_user(r[0] as f32, r[1] as f32), info.view_to_user(r[2] as f32, r[3] as f32));
-                            ImageEdit::Move([u0[0].min(u1[0]) as f64, u0[1].min(u1[1]) as f64, u0[0].max(u1[0]) as f64, u0[1].max(u1[1]) as f64])
-                        }
+                    let action = a.str("action")?;
+                    // `rect` in top-left-origin points → a user-space box.
+                    let user_rect = || -> Result<[f64; 4]> {
+                        let r: Vec<f64> =
+                            a.get("rect").and_then(Value::as_array).map(|x| x.iter().filter_map(Value::as_f64).collect()).unwrap_or_default();
+                        let r = <[f64; 4]>::try_from(r).map_err(|_| ToolError::InvalidArgs(format!("{action} needs rect: 4 numbers")))?;
+                        let doc = self.doc(&a)?;
+                        let info = doc.info.pages.get(page).ok_or_else(|| ToolError::InvalidArgs(format!("no page {}", page + 1)))?;
+                        let (u0, u1) = (info.view_to_user(r[0] as f32, r[1] as f32), info.view_to_user(r[2] as f32, r[3] as f32));
+                        Ok([u0[0].min(u1[0]) as f64, u0[1].min(u1[1]) as f64, u0[0].max(u1[0]) as f64, u0[1].max(u1[1]) as f64])
+                    };
+                    let change = match action {
+                        "move" => ImageEdit::Move(user_rect()?),
+                        "crop" => ImageEdit::Crop(user_rect()?),
                         "rotate" => ImageEdit::Rotate(a.opt_int("quarters")?.unwrap_or(1) as i32),
                         "flip_horizontal" => ImageEdit::Flip { horizontal: true },
                         "flip_vertical" => ImageEdit::Flip { horizontal: false },
