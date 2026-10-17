@@ -2238,3 +2238,4 @@ compare-page	Moved	Spostata
 	Searchable Image	Immagine ricercabile
 	Adds invisible text, straightens turned or skewed pages and downsamples finer images to the chosen resolution	Aggiunge testo invisibile, raddrizza le pagine ruotate o inclinate e sottocampiona le immagini più fini alla risoluzione scelta
 	Detects turned or skewed pages and straightens them	Rileva le pagine ruotate o inclinate e le raddrizza
+	Crop Image	Ritaglia immagine

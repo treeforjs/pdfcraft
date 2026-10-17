@@ -2142,3 +2142,4 @@ compare-page	Moved	Перемещена
 	Searchable Image	Доступное для поиска изображение
 	Adds invisible text, straightens turned or skewed pages and downsamples finer images to the chosen resolution	Добавляет невидимый текст, выравнивает повёрнутые или наклонённые страницы и уменьшает более детальные изображения до выбранного разрешения
 	Detects turned or skewed pages and straightens them	Находит повёрнутые или наклонённые страницы и выравнивает их
+	Crop Image	Обрезать изображение

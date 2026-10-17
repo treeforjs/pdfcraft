@@ -2229,3 +2229,4 @@ compare-page	Moved	Verschoben
 	Searchable Image	Durchsuchbares Bild
 	Adds invisible text, straightens turned or skewed pages and downsamples finer images to the chosen resolution	Fügt unsichtbaren Text hinzu, richtet gedrehte oder schiefe Seiten gerade aus und rechnet feinere Bilder auf die gewählte Auflösung herunter
 	Detects turned or skewed pages and straightens them	Erkennt gedrehte oder schiefe Seiten und richtet sie gerade aus
+	Crop Image	Bild zuschneiden

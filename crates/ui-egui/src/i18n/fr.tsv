@@ -2229,3 +2229,4 @@ compare-page	Moved	Déplacée
 	Searchable Image	Image recherchable
 	Adds invisible text, straightens turned or skewed pages and downsamples finer images to the chosen resolution	Ajoute du texte invisible, redresse les pages pivotées ou inclinées et sous-échantillonne les images plus fines à la résolution choisie
 	Detects turned or skewed pages and straightens them	Détecte les pages pivotées ou inclinées et les redresse
+	Crop Image	Recadrer l'image

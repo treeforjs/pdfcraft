@@ -2193,3 +2193,4 @@ compare-page	Moved	已移动
 	Searchable Image	可搜索图像
 	Adds invisible text, straightens turned or skewed pages and downsamples finer images to the chosen resolution	添加不可见文本，拉直旋转或倾斜的页面，并将更精细的图像缩减采样到所选分辨率
 	Detects turned or skewed pages and straightens them	检测旋转或倾斜的页面并将其拉直
+	Crop Image	裁剪图像

@@ -2031,11 +2031,11 @@ title = "Crop an image"
 area = "C"
 tier = "P0"
 milestone = "M7"
-status = "partial"
+status = "shipped"
 commands = ["edit.image"]
-tools = ["content_update"]
-evidence = ["crates/engine/src/tests.rs::added_images_rotate_flip_and_crop_as_drawn", "crates/automation/tests/automation.rs::adding_content_through_tools"]
-notes = "for added images: trim each side, clipped"
+tools = ["content_update", "image_edit"]
+evidence = ["crates/edit/src/tests.rs::cropping_a_page_image_hides_the_rest_and_moves_with_it", "crates/automation/tests/automation.rs::cropping_a_page_image_through_tools_hides_the_rest", "crates/ui-egui/tests/editing.rs::cropping_an_existing_image_from_its_handles", "crates/engine/src/tests.rs::added_images_rotate_flip_and_crop_as_drawn", "crates/automation/tests/automation.rs::adding_content_through_tools"]
+notes = "added and existing page images: Crop Image handles on each edge and corner; the rest is clipped, not discarded, and the crop moves, turns, flips and is replaced with the image; Form artwork crops as a group"
 
 [[feature]]
 id = "edit.image-rotate-flip"

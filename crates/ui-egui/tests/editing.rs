@@ -1779,6 +1779,57 @@ fn editing_existing_images_on_the_page() {
 }
 
 #[test]
+fn cropping_an_existing_image_from_its_handles() {
+    let mut png = Vec::new();
+    image::RgbImage::from_pixel(80, 40, image::Rgb([200, 40, 40])).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    let mut h = Harness::builder().with_size(egui::vec2(1400.0, 900.0)).build_eframe(move |_cc| {
+        let mut app = PdfCraftApp::new();
+        app.set_option("language", "en").unwrap();
+        app.open_bytes("picture.png", None, png.clone()).expect("opens");
+        app
+    });
+    h.run_steps(4);
+    let id = h.state().views[0].id;
+    let before = h.state().session.get(id).unwrap().page_images(0)[0].rect;
+    assert!(h.state_mut().execute("edit.edit_text"));
+    h.run_steps(2);
+    let r = h.state().views[0].page_screen_rect(0).expect("on screen");
+    let c = r.center();
+    h.hover_at(c);
+    h.run_steps(1);
+    h.drag_at(c);
+    h.run_steps(1);
+    h.drop_at(c);
+    h.run_steps(2);
+    // Crop Image (the context menu item), then drag the right-edge handle to the middle.
+    h.state_mut().views[0].image_selection.as_mut().expect("selected").crop = true;
+    h.run_steps(1);
+    let grip = egui::pos2(r.right() - 1.0, c.y);
+    h.hover_at(grip);
+    h.run_steps(1);
+    h.drag_at(grip);
+    h.run_steps(1);
+    for k in 1..=4 {
+        h.hover_at(grip + egui::vec2(-(r.width() / 2.0) * k as f32 / 4.0, 0.0));
+        h.run_steps(1);
+    }
+    h.drop_at(egui::pos2(c.x, c.y));
+    h.run_steps(4);
+    let doc = h.state().session.get(id).unwrap();
+    assert_eq!(doc.can_undo(), Some("Crop image"));
+    let cropped = doc.page_images(0)[0].clone();
+    assert!(!cropped.is_form, "still the bitmap");
+    assert!((cropped.rect[0] - before[0]).abs() < 0.5, "{before:?} → {:?}", cropped.rect);
+    let half = (before[2] - before[0]) / 2.0;
+    assert!((cropped.rect[2] - cropped.rect[0] - half).abs() < 1.5, "{before:?} → {:?}", cropped.rect);
+    assert!(h.state().views[0].image_selection.as_ref().is_some_and(|s| s.crop), "still cropping");
+    // Esc leaves Crop Image.
+    h.key_press(egui::Key::Escape);
+    h.run_steps(2);
+    assert!(h.state().views[0].image_selection.as_ref().is_some_and(|s| !s.crop));
+}
+
+#[test]
 fn editing_existing_form_artwork_on_the_page() {
     use pdfcraft_cos::{Dict, Document, Object, SaveOptions, Stream, write_incremental};
     let mut doc = Document::open(std::sync::Arc::new(fixture(1))).unwrap();

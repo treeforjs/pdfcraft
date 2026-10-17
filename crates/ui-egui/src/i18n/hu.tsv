@@ -2227,3 +2227,4 @@ compare-page	Moved	Áthelyezve
 	Searchable Image	Kereshető kép
 	Adds invisible text, straightens turned or skewed pages and downsamples finer images to the chosen resolution	Láthatatlan szöveget ad hozzá, kiegyenesíti az elforgatott vagy ferde oldalakat, és a finomabb képeket a választott felbontásra csökkenti
 	Detects turned or skewed pages and straightens them	Felismeri az elforgatott vagy ferde oldalakat, és kiegyenesíti őket
+	Crop Image	Kép körbevágása

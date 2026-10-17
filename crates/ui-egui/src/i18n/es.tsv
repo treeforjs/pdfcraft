@@ -2145,3 +2145,4 @@ compare-page	Moved	Movida
 	Searchable Image	Imagen con búsqueda
 	Adds invisible text, straightens turned or skewed pages and downsamples finer images to the chosen resolution	Añade texto invisible, endereza las páginas giradas o inclinadas y reduce las imágenes más finas a la resolución elegida
 	Detects turned or skewed pages and straightens them	Detecta páginas giradas o inclinadas y las endereza
+	Crop Image	Recortar imagen

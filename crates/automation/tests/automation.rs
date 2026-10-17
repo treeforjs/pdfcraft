@@ -1946,6 +1946,16 @@ fn editing_page_images_through_tools() {
     assert_eq!(r["undo"], "Move image");
     let moved = ok(&mut a, "page_images", json!({ "doc": made, "page": 1 }))["images"][0]["rect"].clone();
     assert_eq!(moved, json!([5.0, 5.0, 25.0, 35.0]));
+    // Crop to its left half: still the same bitmap, now showing only that part.
+    let r = ok(&mut a, "image_edit", json!({ "doc": made, "page": 1, "image": 1, "action": "crop", "rect": [5, 5, 15, 35] }));
+    assert_eq!(r["undo"], "Crop image");
+    let cropped = ok(&mut a, "page_images", json!({ "doc": made, "page": 1 }))["images"][0].clone();
+    assert_eq!(cropped["kind"], "image");
+    assert_eq!(cropped["rect"], json!([5.0, 5.0, 15.0, 35.0]));
+    assert!(matches!(
+        a.call("image_edit", &json!({ "doc": made, "page": 1, "image": 1, "action": "crop", "rect": [100, 100, 120, 120] })),
+        Err(ToolError::InvalidArgs(_) | ToolError::Failed(_))
+    ));
     ok(&mut a, "image_edit", json!({ "doc": made, "page": 1, "image": 1, "action": "rotate" }));
     ok(&mut a, "image_edit", json!({ "doc": made, "page": 1, "image": 1, "action": "flip_horizontal" }));
     let saved = ok(&mut a, "image_save", json!({ "doc": made, "page": 1, "image": 1, "path": "out/picture" }));
@@ -1956,6 +1966,45 @@ fn editing_page_images_through_tools() {
     ok(&mut a, "image_edit", json!({ "doc": made, "page": 1, "image": 1, "action": "delete" }));
     assert_eq!(ok(&mut a, "page_images", json!({ "doc": made, "page": 1 }))["count"], 0);
     assert!(matches!(a.call("image_edit", &json!({ "doc": made, "page": 1, "image": 1, "action": "delete" })), Err(ToolError::InvalidArgs(_))));
+}
+
+#[test]
+fn cropping_a_page_image_through_tools_hides_the_rest() {
+    let dir = workdir("crop-image");
+    let mut jpeg = Vec::new();
+    image::RgbImage::from_pixel(40, 60, image::Rgb([220, 30, 30])).write_to(&mut std::io::Cursor::new(&mut jpeg), image::ImageFormat::Jpeg).unwrap();
+    std::fs::write(dir.join("red.jpg"), jpeg).unwrap();
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_create", json!({ "from": "images", "paths": ["red.jpg"] }))["doc"].as_u64().unwrap();
+    let rect: Vec<f64> = ok(&mut a, "page_images", json!({ "doc": doc, "page": 1 }))["images"][0]["rect"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_f64().unwrap())
+        .collect();
+    let mid = (rect[0] + rect[2]) / 2.0;
+    let pixels = |a: &mut Automation| {
+        let rendered = a.call("page_render", &json!({ "doc": doc, "page": 1, "dpi": 72 })).unwrap();
+        let Content::Png { data, .. } = &rendered[0] else { panic!("expected page PNG") };
+        image::load_from_memory(data).unwrap().to_rgba8()
+    };
+    let red = |p: &image::Rgba<u8>| p[0] > 150 && p[1] < 100;
+    let (lx, rx, y) = (((rect[0] + mid) / 2.0) as u32, ((mid + rect[2]) / 2.0) as u32, ((rect[1] + rect[3]) / 2.0) as u32);
+    let before = pixels(&mut a);
+    assert!(red(before.get_pixel(lx, y)) && red(before.get_pixel(rx, y)));
+    // Keep the left half.
+    ok(&mut a, "image_edit", json!({ "doc": doc, "page": 1, "image": 1, "action": "crop", "rect": [rect[0], rect[1], mid, rect[3]] }));
+    let after = pixels(&mut a);
+    assert!(red(after.get_pixel(lx, y)), "the kept half still shows");
+    assert!(!red(after.get_pixel(rx, y)), "the cropped half is hidden: {:?}", after.get_pixel(rx, y));
+    // The crop survives saving and reopening, and undo brings the whole image back.
+    ok(&mut a, "doc_save", json!({ "doc": doc, "path": "out/cropped.pdf" }));
+    let re = ok(&mut a, "doc_open", json!({ "path": "out/cropped.pdf" }))["doc"].as_u64().unwrap();
+    let kept = ok(&mut a, "page_images", json!({ "doc": re, "page": 1 }))["images"][0].clone();
+    assert_eq!(kept["kind"], "image");
+    assert!((kept["rect"][2].as_f64().unwrap() - mid).abs() < 0.01, "{kept}");
+    ok(&mut a, "edit_undo", json!({ "doc": doc }));
+    assert!(red(pixels(&mut a).get_pixel(rx, y)));
 }
 
 #[test]
