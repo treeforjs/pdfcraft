@@ -215,6 +215,72 @@ impl Automation {
         }))
     }
 
+    pub(crate) fn tags_mark_artifact(&mut self, a: &Args) -> Result<Value> {
+        use pdfcraft_engine::a11y::{ArtifactSelection, ArtifactSubtype, ArtifactType, MAX_ARTIFACT_SELECTION};
+        let rect = a.nums::<4>("rect")?;
+        let mcids = a.opt_ints("mcids")?.unwrap_or_default();
+        let elements = a.opt_ints("elements")?.unwrap_or_default();
+        if rect.is_none() && mcids.is_empty() && elements.is_empty() {
+            return Err(ToolError::InvalidArgs(
+                "select the content: give page with rect and/or mcids, or elements (obj numbers from tags_tree)".into(),
+            ));
+        }
+        if mcids.len().saturating_add(elements.len()) > MAX_ARTIFACT_SELECTION {
+            return Err(ToolError::InvalidArgs(format!("select at most {MAX_ARTIFACT_SELECTION} mcids and elements at once")));
+        }
+        let page = if a.get("page").is_some() {
+            Some(self.page(a)?)
+        } else if rect.is_some() || !mcids.is_empty() {
+            return Err(ToolError::InvalidArgs("rect and mcids need the page they are on (page, 1-based)".into()));
+        } else {
+            None
+        };
+        let ty = a
+            .opt_str("type")?
+            .map(|t| {
+                ArtifactType::from_name(t)
+                    .ok_or_else(|| ToolError::InvalidArgs(format!("type must be Pagination, Layout, Page or Background, not {t:?}")))
+            })
+            .transpose()?;
+        let subtype = a
+            .opt_str("subtype")?
+            .map(|t| {
+                ArtifactSubtype::from_name(t).ok_or_else(|| ToolError::InvalidArgs(format!("subtype must be Header, Footer or Watermark, not {t:?}")))
+            })
+            .transpose()?;
+        let mut elements_refs = Vec::with_capacity(elements.len());
+        for e in elements {
+            let n = u32::try_from(e)
+                .ok()
+                .filter(|n| *n >= 1)
+                .ok_or_else(|| ToolError::InvalidArgs("elements must be object numbers (obj) from tags_tree".into()))?;
+            elements_refs.push(n);
+        }
+        let doc = self.doc(a)?;
+        // The rectangle is in points from the top-left of the displayed page.
+        let rect = match (rect, page) {
+            (Some(r), Some(p)) => {
+                let info = doc.info.pages.get(p).ok_or_else(|| failed("the page is not in the document"))?;
+                let (u, v) = (info.view_to_user(r[0] as f32, r[1] as f32), info.view_to_user(r[2] as f32, r[3] as f32));
+                let user = [u[0].min(v[0]), u[1].min(v[1]), u[0].max(v[0]), u[1].max(v[1])].map(f64::from);
+                Some(user)
+            }
+            _ => None,
+        };
+        let selection = ArtifactSelection { page, rect, mcids, elements: elements_refs, ty, subtype };
+        let preview = doc.artifact_preview(&selection).map_err(failed)?;
+        let id = doc.id;
+        self.session.apply(id, pdfcraft_engine::Edit::MarkArtifact { selection }).map_err(failed)?;
+        let count = self.doc(a)?.tags().nodes.len();
+        Ok(json!({
+            "marked": preview.marked.iter().map(|(p, m)| json!({ "page": p + 1, "mcid": m })).collect::<Vec<_>>(),
+            "untagged": preview.untagged,
+            "elements_removed": preview.elements_removed,
+            "pages": preview.pages.iter().map(|p| p + 1).collect::<Vec<_>>(),
+            "elements": count,
+        }))
+    }
+
     pub(crate) fn alt_text_list(&self, a: &Args) -> Result<Value> {
         let all = a.opt_bool("all")?.unwrap_or(false);
         let doc = self.doc(a)?;

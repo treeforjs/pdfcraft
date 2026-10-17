@@ -13,6 +13,7 @@ use std::collections::BTreeSet;
 use pdfcraft_cos::Document;
 
 mod alt;
+mod artifact;
 mod content;
 mod headings;
 mod reading;
@@ -21,6 +22,7 @@ mod structure;
 mod tags;
 
 pub use alt::{AltError, Figure, figures, mark_decorative, set_alt};
+pub use artifact::{ArtifactResult, ArtifactSelection, ArtifactSubtype, ArtifactType, MAX_ARTIFACT_SELECTION, mark_artifact};
 pub use headings::{Heading, HeadingKind, MAX_HEADING_LEVEL, heading_level, headings};
 pub use reading::{Block, BlockKind, Piece, reading_blocks};
 pub use report::report_html;
