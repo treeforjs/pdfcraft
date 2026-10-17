@@ -30,6 +30,10 @@ pub enum Step {
     DetectFormFields,
     /// Run a JavaScript (console context).
     RunJavaScript(String),
+    /// Print production ▸ Fix hairlines (0.25 pt).
+    FixHairlines,
+    /// Convert to PDF/A-2b (long-term archiving).
+    SaveAsPdfA,
 }
 
 impl Step {
@@ -48,6 +52,8 @@ impl Step {
             Step::SetTitle(String::new()),
             Step::DetectFormFields,
             Step::RunJavaScript(String::new()),
+            Step::FixHairlines,
+            Step::SaveAsPdfA,
         ]
     }
 
@@ -66,6 +72,8 @@ impl Step {
             Step::SetTitle(_) => "set_title",
             Step::DetectFormFields => "detect_form_fields",
             Step::RunJavaScript(_) => "run_javascript",
+            Step::FixHairlines => "fix_hairlines",
+            Step::SaveAsPdfA => "save_as_pdfa",
         }
     }
 
@@ -83,6 +91,8 @@ impl Step {
             Step::SetTitle(_) => "Set document title",
             Step::DetectFormFields => "Detect form fields",
             Step::RunJavaScript(_) => "Run a JavaScript",
+            Step::FixHairlines => "Fix hairlines",
+            Step::SaveAsPdfA => "Save as PDF/A-2b",
         }
     }
 
@@ -134,6 +144,7 @@ pub fn builtin() -> Vec<Action> {
         a("Add Page Numbers", "Number every page in the footer.", vec![Step::AddFooter("Page <<1>> of <<n>>".into())]),
         a("Mark as Confidential", "A diagonal CONFIDENTIAL watermark on every page.", vec![Step::AddWatermark("CONFIDENTIAL".into())]),
         a("Sanitize Documents", "Remove hidden information, metadata, scripts and embedded content, and rewrite the files.", vec![Step::Sanitize]),
+        a("Archive Documents", "Save as PDF/A-2b for long-term archiving.", vec![Step::SaveAsPdfA]),
     ]
 }
 
@@ -177,6 +188,16 @@ fn apply_step(s: &mut Session, id: DocId, step: &Step, log: &mut Vec<String>) ->
             Edit::AddHeaderFooter { pages: all, settings, replace: false }
         }
         Step::SetTitle(t) => Edit::SetInfo { key: "Title".into(), value: t.clone() },
+        Step::FixHairlines => {
+            let settings = crate::Hairlines::default();
+            let n = s.hairline_count(id, &all, &settings)?;
+            if n > 0 {
+                s.apply(id, Edit::FixHairlines { pages: all, settings })?;
+            }
+            log.push(format!("Fix hairlines: {n}"));
+            return Ok(None);
+        }
+        Step::SaveAsPdfA => Edit::ConvertPdfA { level: pdfcraft_preflight::Level::A2b },
         Step::DetectFormFields => {
             let n = s.auto_detect_fields(id, &[])?.len();
             log.push(format!("Detect form fields: {n}"));

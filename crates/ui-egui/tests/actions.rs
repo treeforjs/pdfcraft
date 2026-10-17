@@ -57,3 +57,31 @@ fn run_and_create_actions() {
     h.run_steps(3);
     assert_eq!(h.state().toast.clone().unwrap().0, "Stamp drafts: 1 file done");
 }
+
+/// Archive documents opens the wizard on its action and writes PDF/A-2b copies.
+#[test]
+fn archive_documents_writes_pdfa() {
+    let dir = std::env::temp_dir().join(format!("pdfcraft-archive-ui-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("out")).unwrap();
+    let src = Session::new().create_from_text("t", "Board minutes").unwrap();
+    std::fs::write(dir.join("m.pdf"), &*src).unwrap();
+    let d = dir.clone();
+    let mut h = Harness::builder().with_size(egui::vec2(1400.0, 900.0)).build_eframe(move |_cc| {
+        let mut app = PdfCraftApp::new();
+        app.set_option("language", "en").unwrap();
+        app.run_inline = true;
+        app.export_dir_override = Some(d.join("out").to_string_lossy().into_owned());
+        app.action_files_override = Some(vec![d.join("m.pdf").to_string_lossy().into_owned()]);
+        app
+    });
+    h.run_steps(2);
+    assert!(h.state_mut().execute("actions.archive"));
+    h.run_steps(2);
+    h.get_by_label("1. Save as PDF/A-2b");
+    h.get_by_label("Start").click();
+    h.run_steps(3);
+    assert_eq!(h.state().toast.clone().unwrap().0, "Archive Documents: 1 file done");
+    let out = std::fs::read(dir.join("out/m.pdf")).unwrap();
+    assert!(out.windows(11).any(|w| w == b"pdfaid:part"));
+}

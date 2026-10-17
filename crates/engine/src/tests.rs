@@ -1978,6 +1978,26 @@ fn actions_run_their_steps_on_files() {
 }
 
 #[test]
+fn the_archive_action_saves_as_pdfa() {
+    let s = Session::new();
+    let src = s.create_from_text("t", "Board minutes").unwrap();
+    let built = actions::builtin();
+    let archive = built.iter().find(|a| a.name == "Archive Documents").unwrap();
+    let r = actions::run_on(archive, "minutes.pdf", src.clone(), |_, _| {}).unwrap();
+    assert_eq!(r.log, ["Save as PDF/A-2b"]);
+    let doc = pdfcraft_cos::Document::open(r.bytes.clone()).unwrap();
+    assert_eq!(pdfcraft_preflight::declared(&doc).pdfa, Some((2, "B".to_string())));
+    // Fix hairlines as a step reports what it found; text pages have none.
+    let custom = actions::Action {
+        name: "Print".into(),
+        description: String::new(),
+        steps: vec![actions::Step::from_id("fix_hairlines", "").unwrap()],
+        builtin: false,
+    };
+    assert_eq!(actions::run_on(&custom, "m.pdf", src, |_, _| {}).unwrap().log, ["Fix hairlines: 0"]);
+}
+
+#[test]
 fn exporting_office_files_keeps_images() {
     let mut s = Session::new();
     let text = s.create_from_text("t", "Picture page").unwrap();
