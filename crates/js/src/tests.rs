@@ -16,7 +16,7 @@ fn fields() -> Vec<FieldState> {
 }
 
 fn doc() -> DocInfo {
-    DocInfo { file_name: "order.pdf".into(), num_pages: 3, page: 0, info: vec![("title".into(), "Order".into())] }
+    DocInfo { file_name: "order.pdf".into(), num_pages: 3, page: 0, info: vec![("title".into(), "Order".into())], ..Default::default() }
 }
 
 fn go(script: &str, event: &Event) -> Outcome {
@@ -830,4 +830,133 @@ $host.gotoURL("https://example.org")"#,
         );
         assert!(o.abandoned || o.error.is_some(), "{o:?}");
     }
+}
+
+fn annotated() -> DocInfo {
+    let note = |index: usize, name: &str, locked: bool| AnnotState {
+        page: 0,
+        index,
+        name: name.into(),
+        kind: "Text".into(),
+        author: "Ann".into(),
+        contents: format!("note {index}"),
+        rect: [10.0, 10.0, 30.0, 30.0],
+        locked,
+    };
+    let mut on_two = note(0, "c", false);
+    on_two.page = 1;
+    DocInfo {
+        annots: vec![note(0, "a", false), note(1, "b", true), on_two],
+        layers: vec![LayerState { name: "Prices".into(), on: true }, LayerState { name: "Notes".into(), on: false }],
+        ..doc()
+    }
+}
+
+fn ask(script: &str, answers: Vec<Answer>) -> Outcome {
+    let dialogs = Dialogs { interactive: true, answers };
+    run_with(script, &Event::doc("Console"), &doc(), &fields(), &[], Limits::default(), &dialogs)
+}
+
+#[test]
+fn scripts_read_and_change_comments() {
+    let d = annotated();
+    let o = run(
+        "var all = this.getAnnots(); var first = this.getAnnots({ nPage: 0 });
+         var a = this.getAnnot(0, 'a'); a.contents = 'edited'; a.author = 'Bo';
+         this.getAnnot(1, 'c').destroy();
+         [all.length, first.length, a.type, a.page, a.rect[2], this.getAnnot(0, 'b').readOnly, this.getAnnots(2)].join('|')",
+        &Event::doc("Console"),
+        &d,
+        &[],
+        &[],
+        Limits::default(),
+    );
+    assert_eq!(o.error, None);
+    assert_eq!(o.result.as_deref(), Some("3|2|Text|0|30|true|"));
+    assert_eq!(
+        o.annots,
+        [
+            AnnotChange::Set { page: 0, index: 0, contents: Some("edited".into()), author: Some("Bo".into()) },
+            AnnotChange::Delete { page: 1, index: 0 },
+        ]
+    );
+    // Locked comments refuse changes; a deleted one is gone.
+    for bad in ["this.getAnnot(0, 'b').contents = 'x'", "this.getAnnot(0, 'b').destroy()", "var c = this.getAnnot(1, 'c'); c.destroy(); c.contents"] {
+        let o = run(bad, &Event::doc("Console"), &d, &[], &[], Limits::default());
+        assert!(o.error.is_some(), "{bad}");
+    }
+    assert_eq!(go("String(this.getAnnots())", &Event::doc("Console")).result.as_deref(), Some("null"));
+}
+
+#[test]
+fn scripts_add_comments() {
+    let o = go(
+        "var n = this.addAnnot({ type: 'Text', page: 1, point: [100, 700], contents: 'Check this', author: 'Bo' });
+         this.addAnnot({ type: 'Square', rect: [50, 60, 10, 20], strokeColor: color.red });
+         this.addAnnot({ type: 'Highlight', quads: [0, 10, 40, 10, 0, 0, 40, 0] });
+         var gone = this.addAnnot({ type: 'Line', points: [[0, 0], [10, 10]] }); gone.destroy();
+         n.contents += '!'; this.getAnnots(1).length",
+        &Event::doc("Console"),
+    );
+    assert_eq!(o.error, None);
+    assert_eq!(o.result.as_deref(), Some("1"));
+    let added: Vec<&NewAnnot> = o.annots.iter().filter_map(|c| if let AnnotChange::Add(a) = c { Some(a) } else { None }).collect();
+    assert_eq!(added.len(), 3);
+    assert_eq!((added[0].page, added[0].rect, added[0].contents.as_str()), (1, [100.0, 680.0, 120.0, 700.0], "Check this!"));
+    assert_eq!((added[1].rect, added[1].color), ([10.0, 20.0, 50.0, 60.0], Some([1.0, 0.0, 0.0])));
+    assert_eq!((added[2].quads.len(), added[2].rect), (1, [0.0, 0.0, 40.0, 10.0]));
+    for bad in [
+        "this.addAnnot({ type: 'Stamp', rect: [0, 0, 10, 10] })",
+        "this.addAnnot({ type: 'Square', page: 3, rect: [0, 0, 10, 10] })",
+        "this.addAnnot({ type: 'Square', rect: [0, 0, 10] })",
+        "this.addAnnot({ type: 'Square', rect: [0, 0, NaN, 10] })",
+        "this.addAnnot({ type: 'Highlight', quads: [1, 2, 3] })",
+        "this.addAnnot({ type: 'Line', points: [[[0, 0]], [1, 1]] })",
+        "var p = [0]; for (var i = 0; i < 100000; i++) p = [p]; this.addAnnot({ type: 'Line', points: p })",
+        "for (var i = 0; i < 1001; i++) this.addAnnot({ type: 'Text', point: [0, 0] })",
+    ] {
+        assert!(go(bad, &Event::doc("Console")).error.is_some(), "{bad}");
+    }
+}
+
+#[test]
+fn scripts_show_and_hide_layers() {
+    let o = run(
+        "var l = this.getOCGs(); l[0].state = false; l[1].state = true; l[1].state = true; l[0].name + ':' + l[0].state",
+        &Event::doc("Console"),
+        &annotated(),
+        &[],
+        &[],
+        Limits::default(),
+    );
+    assert_eq!(o.result.as_deref(), Some("Prices:false"));
+    assert_eq!(o.requests, [Request::SetLayer { index: 0, on: false }, Request::SetLayer { index: 1, on: true }]);
+    assert_eq!(go("String(this.getOCGs())", &Event::doc("Console")).result.as_deref(), Some("null"));
+}
+
+#[test]
+fn dialogs_wait_for_answers() {
+    let script = "var r = app.alert({ cMsg: 'Save?', nType: 2, cTitle: 'Order' });
+                  var name = r == 4 ? app.response('Your name?', 'Order', 'Ann') : 'nobody';
+                  getField('total').value = name; app.alert('Thanks ' + name); name";
+    // The first question stops the run, with nothing done yet.
+    let o = ask(script, vec![]);
+    assert_eq!(o.question, Some(Question::Alert { message: "Save?".into(), title: "Order".into(), icon: 0, buttons: 2 }));
+    assert!(o.changed.is_empty() && o.alerts.is_empty() && o.error.is_none());
+    let o = ask(script, vec![Answer::Button(4)]);
+    assert!(matches!(&o.question, Some(Question::Response { question, default, .. }) if question == "Your name?" && default == "Ann"));
+    let o = ask(script, vec![Answer::Button(4), Answer::Text(Some("Bo".into()))]);
+    assert_eq!((o.question, o.result.as_deref(), o.alerts), (None, Some("Bo"), vec!["Thanks Bo".to_string()]));
+    assert_eq!(o.changed.first().map(|f| f.value.clone()), Some(vec!["Bo".to_string()]));
+    // No, or a button the alert doesn't have, takes the other branch.
+    for no in [Answer::Button(3), Answer::Button(1), Answer::Text(None)] {
+        assert_eq!(ask(script, vec![no]).result.as_deref(), Some("nobody"));
+    }
+    // A script that catches the stop still waits.
+    let o = ask("try { app.response('?') } catch (e) {} getField('total').value = 1;", vec![]);
+    assert!(o.question.is_some() && o.changed.is_empty());
+    // Without anyone to ask, alerts are listed and answer No or Cancel; response is null.
+    let o =
+        go("[app.alert('a', 1, 1), app.alert('b', 2, 2), app.alert('c', 0, 3), app.alert('d'), app.response('?')].join()", &Event::doc("Console"));
+    assert_eq!((o.result.as_deref(), o.alerts.len(), o.question), (Some("2,3,2,1,"), 4, None));
 }

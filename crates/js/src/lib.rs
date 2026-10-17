@@ -16,10 +16,20 @@
 //! - `app` (`alert`, `beep`, `response`, `launchURL`, `viewerType`, `viewerVersion`,
 //!   `platform`, `setTimeOut`), `util` (`printf`, `printd`, `printx`), `console` (`println`,
 //!   `show`, `clear`), `display` and `color`.
+//! - comments: `this.getAnnots`, `getAnnot` and `addAnnot`, and Annotation objects (`type`,
+//!   `page`, `name`, `author`, `contents`, `rect`, `readOnly`, `destroy`).
+//! - layers: `this.getOCGs`, and OCG objects (`name`, `state`).
 //!
 //! The engine is a sandbox: no file, network or timer access exists, and loops and recursion
-//! are bounded. Side effects (alerts, field changes, resets, printing, navigation) are returned
-//! in an [`Outcome`] for the caller to apply.
+//! are bounded. Side effects (alerts, field and comment changes, resets, printing, navigation,
+//! layer visibility) are returned in an [`Outcome`] for the caller to apply.
+//!
+//! Dialogs that need an answer (`app.alert` with Yes/No or OK/Cancel buttons, `app.response`)
+//! can't stop the script while the viewer asks. With [`Dialogs::interactive`], the first
+//! unanswered one ends the run with [`Outcome::question`] and nothing else: the caller asks the
+//! user and runs the script again with the answers so far. A script's only effects are its
+//! outcome, so the next run takes the same path up to the next question (unless the script
+//! reads the clock).
 
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
@@ -141,6 +151,119 @@ pub struct DocInfo {
     pub page: usize,
     /// Document information (`this.info.title` etc.): lower-case key, value.
     pub info: Vec<(String, String)>,
+    /// The document's comments, for `this.getAnnots()`.
+    pub annots: Vec<AnnotState>,
+    /// The document's layers (optional content groups), in the Layers panel's order.
+    pub layers: Vec<LayerState>,
+}
+
+/// A comment as scripts see it.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct AnnotState {
+    /// 0-based page.
+    pub page: usize,
+    /// Position in the page's `/Annots`.
+    pub index: usize,
+    /// `/NM`.
+    pub name: String,
+    /// The subtype: `Text`, `FreeText`, `Square`, `Highlight`, …
+    pub kind: String,
+    pub author: String,
+    pub contents: String,
+    /// In user space: [x0, y0, x1, y1].
+    pub rect: [f64; 4],
+    /// The Locked flag: scripts can't change or delete it.
+    pub locked: bool,
+}
+
+/// A comment a script added with `this.addAnnot`.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct NewAnnot {
+    /// One of [`ADDABLE_ANNOTS`].
+    pub kind: String,
+    pub page: usize,
+    pub rect: [f64; 4],
+    /// A line's two ends.
+    pub points: Vec<[f64; 2]>,
+    /// Text markup quadrilaterals (8 numbers each).
+    pub quads: Vec<[f64; 8]>,
+    pub contents: String,
+    pub author: String,
+    /// `strokeColor` as RGB.
+    pub color: Option<[f64; 3]>,
+    /// A text box's `textSize`.
+    pub text_size: Option<f64>,
+}
+
+/// The types `this.addAnnot` can add.
+pub const ADDABLE_ANNOTS: [&str; 9] = ["Text", "FreeText", "Square", "Circle", "Line", "Highlight", "Underline", "StrikeOut", "Squiggly"];
+
+/// A change a script made to the comments.
+#[derive(Clone, Debug, PartialEq)]
+pub enum AnnotChange {
+    /// A comment's text or author changed (each `None` when unchanged).
+    Set {
+        page: usize,
+        index: usize,
+        contents: Option<String>,
+        author: Option<String>,
+    },
+    /// `annot.destroy()`.
+    Delete {
+        page: usize,
+        index: usize,
+    },
+    Add(NewAnnot),
+}
+
+/// A layer as scripts see it.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct LayerState {
+    pub name: String,
+    pub on: bool,
+}
+
+/// A dialog that waits for the user ([`Dialogs`]).
+#[derive(Clone, Debug, PartialEq)]
+pub enum Question {
+    /// `app.alert` with buttons: `buttons` is `nType` (1 OK/Cancel, 2 Yes/No, 3 Yes/No/Cancel),
+    /// `icon` is `nIcon` (0 error, 1 warning, 2 question, 3 status).
+    Alert { message: String, title: String, icon: i32, buttons: i32 },
+    /// `app.response`: a line of text.
+    Response { question: String, title: String, default: String, label: String, password: bool },
+}
+
+impl Question {
+    /// The button numbers an alert offers, as `app.alert` returns them (1 OK, 2 Cancel, 3 No,
+    /// 4 Yes), in reading order.
+    pub fn buttons(&self) -> &'static [i32] {
+        match self {
+            Question::Alert { buttons: 1, .. } => &[1, 2],
+            Question::Alert { buttons: 2, .. } => &[4, 3],
+            Question::Alert { buttons: 3, .. } => &[4, 3, 2],
+            Question::Alert { .. } => &[1],
+            Question::Response { .. } => &[],
+        }
+    }
+}
+
+/// The user's answer to a [`Question`].
+#[derive(Clone, Debug, PartialEq)]
+pub enum Answer {
+    /// The button pressed (see [`Question::buttons`]).
+    Button(i32),
+    /// The text entered; `None` for Cancel.
+    Text(Option<String>),
+}
+
+/// How dialogs that wait for an answer behave.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Dialogs {
+    /// Stop at the first unanswered question ([`Outcome::question`]). Otherwise every
+    /// question gets the Cancel or No answer and alerts are listed in [`Outcome::alerts`].
+    pub interactive: bool,
+    /// Answers to the questions so far, in the order the script asks them.
+    pub answers: Vec<Answer>,
 }
 
 /// Something a script asked the viewer to do.
@@ -159,6 +282,11 @@ pub enum Request {
     Beep,
     /// `app.execMenuItem("SaveAs")` (XFA forms' Save buttons).
     SaveAs,
+    /// `ocg.state = …`: show or hide layer `index` (in [`DocInfo::layers`]).
+    SetLayer {
+        index: usize,
+        on: bool,
+    },
 }
 
 /// What running a script did.
@@ -178,6 +306,11 @@ pub struct Outcome {
     pub error: Option<String>,
     /// The script's completion value (what the console prints), unless undefined.
     pub result: Option<String>,
+    /// Comments the script changed, deleted or added, in that order.
+    pub annots: Vec<AnnotChange>,
+    /// The dialog the script is waiting on ([`Dialogs::interactive`]); when set, the run did
+    /// nothing else and the rest of the outcome is empty.
+    pub question: Option<Question>,
 }
 
 /// Bounds that keep a script from hanging the viewer.
@@ -200,6 +333,16 @@ struct Host {
     console: Vec<String>,
     requests: Vec<Request>,
     doc: DocInfo,
+    /// Comments as the script left them, and which were destroyed.
+    annots: Vec<AnnotState>,
+    destroyed: BTreeSet<usize>,
+    /// Comments the script added (`None` once destroyed).
+    added: Vec<Option<NewAnnot>>,
+    dialogs: Dialogs,
+    /// How many answers the script has used.
+    answered: usize,
+    /// The question that stopped the script.
+    pending: Option<Question>,
 }
 
 type Shared = RefCell<Host>;
@@ -544,13 +687,6 @@ fn message(v: &JsValue, key: &str, ctx: &mut Context) -> JsResult<String> {
     }
 }
 
-fn alert(_: &JsValue, args: &[JsValue], ctx: &mut Context) -> JsResult<JsValue> {
-    let m = message(&arg(args, 0), "cMsg", ctx)?;
-    host(ctx)?.borrow_mut().alerts.push(m);
-    // The OK button.
-    Ok(JsValue::from(1))
-}
-
 fn beep(_: &JsValue, _: &[JsValue], ctx: &mut Context) -> JsResult<JsValue> {
     host(ctx)?.borrow_mut().requests.push(Request::Beep);
     Ok(JsValue::undefined())
@@ -560,11 +696,6 @@ fn launch_url(_: &JsValue, args: &[JsValue], ctx: &mut Context) -> JsResult<JsVa
     let u = message(&arg(args, 0), "cURL", ctx)?;
     host(ctx)?.borrow_mut().requests.push(Request::LaunchUrl(u));
     Ok(JsValue::undefined())
-}
-
-fn response(_: &JsValue, _: &[JsValue], _: &mut Context) -> JsResult<JsValue> {
-    // No one to answer: as if the dialog was cancelled.
-    Ok(JsValue::null())
 }
 
 fn println(_: &JsValue, args: &[JsValue], ctx: &mut Context) -> JsResult<JsValue> {
@@ -874,7 +1005,11 @@ fn color_object(ctx: &mut Context) -> JsObject {
 }
 
 fn install(ctx: &mut Context) -> JsResult<()> {
-    let globals: [(&str, usize, NativeFunction); 9] = [
+    let globals: [(&str, usize, NativeFunction); 13] = [
+        ("getOCGs", 1, NativeFunction::from_fn_ptr(objects::get_ocgs)),
+        ("getAnnots", 1, NativeFunction::from_fn_ptr(objects::get_annots)),
+        ("getAnnot", 2, NativeFunction::from_fn_ptr(objects::get_annot)),
+        ("addAnnot", 1, NativeFunction::from_fn_ptr(objects::add_annot)),
         ("getField", 1, NativeFunction::from_fn_ptr(get_field)),
         ("getNthFieldName", 1, NativeFunction::from_fn_ptr(get_nth_field_name)),
         ("resetForm", 1, NativeFunction::from_fn_ptr(reset_form)),
@@ -910,9 +1045,9 @@ fn install(ctx: &mut Context) -> JsResult<()> {
     ctx.register_global_property(js_string!("info"), info, rw)?;
 
     let app = ObjectInitializer::new(ctx)
-        .function(NativeFunction::from_fn_ptr(alert), js_string!("alert"), 1)
+        .function(NativeFunction::from_fn_ptr(objects::alert), js_string!("alert"), 4)
         .function(NativeFunction::from_fn_ptr(beep), js_string!("beep"), 0)
-        .function(NativeFunction::from_fn_ptr(response), js_string!("response"), 1)
+        .function(NativeFunction::from_fn_ptr(objects::response), js_string!("response"), 5)
         .function(NativeFunction::from_fn_ptr(launch_url), js_string!("launchURL"), 2)
         .function(NativeFunction::from_fn_ptr(timer), js_string!("setTimeOut"), 2)
         .function(NativeFunction::from_fn_ptr(timer), js_string!("setInterval"), 2)
@@ -1072,8 +1207,22 @@ fn refuse(source: &str) -> Option<String> {
 }
 
 /// Run `script` for `event`, after the document-level scripts (`doc_scripts`, which define the
-/// functions field scripts call), with the form's `fields`.
+/// functions field scripts call), with the form's `fields`. Dialogs that need an answer get
+/// Cancel or No ([`run_with`] can stop for them instead).
 pub fn run(script: &str, event: &Event, doc: &DocInfo, fields: &[FieldState], doc_scripts: &[String], limits: Limits) -> Outcome {
+    run_with(script, event, doc, fields, doc_scripts, limits, &Dialogs::default())
+}
+
+/// [`run`] with `dialogs` deciding how `app.alert` with buttons and `app.response` are answered.
+pub fn run_with(
+    script: &str,
+    event: &Event,
+    doc: &DocInfo,
+    fields: &[FieldState],
+    doc_scripts: &[String],
+    limits: Limits,
+    dialogs: &Dialogs,
+) -> Outcome {
     let failed = |why: String| Outcome { rc: true, value: event.value.clone(), change: event.change.clone(), error: Some(why), ..Default::default() };
     if let Some(why) = std::iter::once(script).chain(doc_scripts.iter().map(String::as_str)).find_map(refuse) {
         return failed(why);
@@ -1084,7 +1233,7 @@ pub fn run(script: &str, event: &Event, doc: &DocInfo, fields: &[FieldState], do
             let spawned = std::thread::Builder::new()
                 .name("pdfcraft-js".into())
                 .stack_size(SCRIPT_STACK)
-                .spawn_scoped(scope, || run_here(script, event, doc, fields, doc_scripts, limits));
+                .spawn_scoped(scope, || run_here(script, event, doc, fields, doc_scripts, limits, dialogs));
             match spawned {
                 Ok(thread) => thread.join().unwrap_or_else(|_| failed("the script stopped with an internal error".into())),
                 Err(e) => failed(format!("the script engine could not start: {e}")),
@@ -1092,10 +1241,10 @@ pub fn run(script: &str, event: &Event, doc: &DocInfo, fields: &[FieldState], do
         })
     }
     #[cfg(target_arch = "wasm32")]
-    run_here(script, event, doc, fields, doc_scripts, limits)
+    run_here(script, event, doc, fields, doc_scripts, limits, dialogs)
 }
 
-fn run_here(script: &str, event: &Event, doc: &DocInfo, fields: &[FieldState], doc_scripts: &[String], limits: Limits) -> Outcome {
+fn run_here(script: &str, event: &Event, doc: &DocInfo, fields: &[FieldState], doc_scripts: &[String], limits: Limits, dialogs: &Dialogs) -> Outcome {
     let mut ctx = Context::default();
     ctx.runtime_limits_mut().set_loop_iteration_limit(limits.loop_iterations);
     ctx.runtime_limits_mut().set_recursion_limit(limits.recursion);
@@ -1106,6 +1255,12 @@ fn run_here(script: &str, event: &Event, doc: &DocInfo, fields: &[FieldState], d
         console: Vec::new(),
         requests: Vec::new(),
         doc: doc.clone(),
+        annots: doc.annots.clone(),
+        destroyed: BTreeSet::new(),
+        added: Vec::new(),
+        dialogs: dialogs.clone(),
+        answered: 0,
+        pending: None,
     }));
     let mut out = Outcome { rc: true, value: event.value.clone(), change: event.change.clone(), ..Default::default() };
     let result = (|| -> JsResult<()> {
@@ -1132,6 +1287,11 @@ fn run_here(script: &str, event: &Event, doc: &DocInfo, fields: &[FieldState], d
     }
     if let Some(h) = ctx.remove_data::<Shared>() {
         let h = h.into_inner();
+        if let Some(q) = h.pending {
+            // Waiting on the user: nothing the script did counts yet.
+            return Outcome { rc: true, value: event.value.clone(), change: event.change.clone(), question: Some(q), ..Default::default() };
+        }
+        out.annots = objects::annot_changes(&doc.annots, &h.annots, &h.destroyed, &h.added);
         out.changed = h.changed.iter().map(|i| h.fields[*i].clone()).collect();
         out.alerts = h.alerts;
         out.console = h.console;
@@ -1141,6 +1301,7 @@ fn run_here(script: &str, event: &Event, doc: &DocInfo, fields: &[FieldState], d
 }
 
 pub mod formcalc;
+mod objects;
 pub mod xfa;
 
 #[cfg(test)]

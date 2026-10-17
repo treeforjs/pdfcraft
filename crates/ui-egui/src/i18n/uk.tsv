@@ -2303,3 +2303,5 @@ compare-page	Moved	Переміщена
 	{fields} as {format}	{fields} у форматі {format}
 	{host} answered with HTTP {status}; the form may not have been received.	{host} відповів HTTP {status}; можливо, форму не отримано.
 	The form was sent to {host}.	Форму надіслано на {host}.
+	Message from the document	Повідомлення від документа
+	Asked by a script in this PDF	Запитання від скрипту в цьому PDF

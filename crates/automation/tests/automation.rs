@@ -3673,6 +3673,23 @@ fn javascript_through_tools() {
     assert_eq!(total["value"], "3750");
     let r = ok(&mut a, "js_run", json!({ "doc": doc, "script": "nope()" }));
     assert!(r["error"].as_str().unwrap().contains("nope"));
+
+    // Scripts add and read comments, and stop on dialogs until they are answered.
+    let script = "if (app.alert({ cMsg: 'Add a note?', nType: 2 }) == 4) \
+                  this.addAnnot({ type: 'Text', point: [30, 200], contents: app.response('Note text?', 'Notes', 'Hi') }); \
+                  var n = this.getAnnots(); n ? n.length : 0";
+    let r = ok(&mut a, "js_run", json!({ "doc": doc, "script": script }));
+    assert_eq!((r["question"]["kind"].as_str(), r["question"]["buttons"].clone()), (Some("alert"), json!(["yes", "no"])));
+    let r = ok(&mut a, "js_run", json!({ "doc": doc, "script": script, "answers": ["yes"] }));
+    assert_eq!((r["question"]["kind"].as_str(), r["question"]["default"].as_str(), r["answered"].as_u64()), (Some("response"), Some("Hi"), Some(1)));
+    let r = ok(&mut a, "js_run", json!({ "doc": doc, "script": script, "answers": ["yes", { "text": "Call back" }] }));
+    assert_eq!((r["result"].as_str(), r.get("question")), (Some("1"), None));
+    let list = ok(&mut a, "comment_list", json!({ "doc": doc }));
+    assert!(list["comments"].as_array().unwrap().iter().any(|c| c["contents"] == "Call back"), "{list}");
+    assert_eq!(ok(&mut a, "js_run", json!({ "doc": doc, "script": script, "answers": ["no"] }))["result"], "1");
+    for bad in [json!(["maybe"]), json!("yes"), json!([3])] {
+        assert!(matches!(a.call("js_run", &json!({ "doc": doc, "script": script, "answers": bad })), Err(ToolError::InvalidArgs(_))), "{bad}");
+    }
     assert_eq!(ok(&mut a, "js_enabled", json!({ "enabled": false }))["enabled"], false);
     assert!(a.call("js_run", &json!({ "doc": doc, "script": "1" })).is_err());
 }

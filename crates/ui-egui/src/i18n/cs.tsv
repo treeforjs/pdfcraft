@@ -2304,3 +2304,5 @@ compare-page	Moved	Přesunutá
 	{fields} as {format}	{fields} jako {format}
 	{host} answered with HTTP {status}; the form may not have been received.	{host} odpověděl HTTP {status}; formulář možná nebyl přijat.
 	The form was sent to {host}.	Formulář byl odeslán na {host}.
+	Message from the document	Zpráva z dokumentu
+	Asked by a script in this PDF	Dotaz skriptu v tomto PDF

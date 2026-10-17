@@ -3011,3 +3011,77 @@ fn openssl_recovers_the_seed_and_the_file_key_matches() {
     }
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn scripts_change_comments_and_layers_and_wait_for_answers() {
+    use pdfcraft_annot::{NewAnnotation, NoteIcon, Shape, Style};
+    let objs = [
+        "<< /Type /Catalog /Pages 2 0 R /OCProperties << /OCGs [5 0 R 6 0 R] /D << /OFF [6 0 R] >> >> >>".to_string(),
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".into(),
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Contents 4 0 R /Resources << /Properties << /R 5 0 R /G 6 0 R >> >> >>".into(),
+        "<< /Length 0 >>\nstream\n\nendstream".into(),
+        "<< /Type /OCG /Name (Prices) >>".into(),
+        "<< /Type /OCG /Name (Notes) >>".into(),
+    ];
+    let mut pdf = b"%PDF-1.7\n".to_vec();
+    let mut offsets = Vec::new();
+    for (i, o) in objs.iter().enumerate() {
+        offsets.push(pdf.len());
+        pdf.extend_from_slice(format!("{} 0 obj\n{o}\nendobj\n", i + 1).as_bytes());
+    }
+    let xref = pdf.len();
+    pdf.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objs.len() + 1).as_bytes());
+    for o in offsets {
+        pdf.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+    }
+    pdf.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objs.len() + 1).as_bytes());
+    let mut s = Session::new().with_clock(|| 1_700_000_000);
+    let id = s.open("layers.pdf", None, Arc::new(pdf), None).unwrap();
+    let shape = Shape::Note { at: [20.0, 280.0], icon: NoteIcon::Comment };
+    let note = NewAnnotation { page: 0, style: Style::default_for(&shape), shape, contents: "first".into(), author: "Ann".into() };
+    s.apply(id, Edit::AddAnnotation(note)).unwrap();
+    let comments = |s: &Session| {
+        s.get(id)
+            .unwrap()
+            .info
+            .annotations
+            .iter()
+            .map(|a| (a.subtype.clone(), a.contents.clone().unwrap_or_default()))
+            .collect::<std::collections::BTreeSet<_>>()
+    };
+
+    // Change a comment, add two and hide a layer, as one undoable step (the layer aside).
+    let o = s
+        .run_javascript(
+            id,
+            "var a = this.getAnnots(0)[0]; a.contents = a.contents + ' (seen)';
+             this.addAnnot({ type: 'Square', rect: [50, 50, 120, 90], contents: 'box' });
+             this.addAnnot({ type: 'FreeText', rect: [50, 150, 200, 190], contents: 'Hello', textSize: 14 });
+             var l = this.getOCGs(); l[0].state = false; l[1].state = true; l.length",
+            None,
+        )
+        .unwrap();
+    assert_eq!((o.error.as_deref(), o.result.as_deref()), (None, Some("2")));
+    let want = [("FreeText", "Hello"), ("Square", "box"), ("Text", "first (seen)")];
+    assert_eq!(comments(&s), want.map(|(a, b)| (a.to_string(), b.to_string())).into());
+    assert_eq!(s.get(id).unwrap().info.layers.iter().map(|l| l.visible).collect::<Vec<_>>(), [false, true]);
+    assert_eq!(s.get(id).unwrap().can_undo(), Some("Run JavaScript"));
+    s.undo(id).unwrap();
+    assert_eq!(comments(&s), [("Text".to_string(), "first".to_string())].into());
+
+    // Deleting a comment.
+    s.run_javascript(id, "this.getAnnots()[0].destroy()", None).unwrap();
+    assert!(comments(&s).is_empty());
+
+    // A question stops the script with nothing done; the answer runs it to the end.
+    let script = "if (app.alert('Add a note?', 2, 2) == 4) this.addAnnot({ type: 'Text', point: [10, 290], contents: app.response('Text?') });";
+    let dialogs = |answers: Vec<js::Answer>| js::Dialogs { interactive: true, answers };
+    let o = s.run_javascript_with(id, script, None, &dialogs(vec![])).unwrap();
+    assert!(matches!(o.question, Some(js::Question::Alert { buttons: 2, .. })), "{o:?}");
+    let o = s.run_javascript_with(id, script, None, &dialogs(vec![js::Answer::Button(4)])).unwrap();
+    assert!(matches!(o.question, Some(js::Question::Response { .. })), "{o:?}");
+    assert!(comments(&s).is_empty());
+    let o = s.run_javascript_with(id, script, None, &dialogs(vec![js::Answer::Button(4), js::Answer::Text(Some("Call back".into()))])).unwrap();
+    assert_eq!(o.question, None);
+    assert_eq!(comments(&s), [("Text".to_string(), "Call back".to_string())].into());
+}

@@ -2280,3 +2280,5 @@ compare-page	Moved	Verschoben
 	{fields} as {format}	{fields} als {format}
 	{host} answered with HTTP {status}; the form may not have been received.	{host} hat mit HTTP {status} geantwortet; das Formular wurde möglicherweise nicht empfangen.
 	The form was sent to {host}.	Das Formular wurde an {host} gesendet.
+	Message from the document	Nachricht aus dem Dokument
+	Asked by a script in this PDF	Gefragt von einem Skript in diesem PDF
