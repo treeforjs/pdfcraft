@@ -2142,3 +2142,6 @@ compare-page	Moved	Movida
 	{n} objects with unsaved changes are estimated, not measured in the file.	{n} objetos con cambios sin guardar se estiman, no se miden en el archivo.
 	{n} bytes of compressed object streams are shared out among their objects by decoded size.	{n} bytes de flujos de objetos comprimidos se reparten entre sus objetos según su tamaño descodificado.
 	This document does not allow copying text, so its paragraphs can't be opened for editing. Open it with the permissions password.	Este documento no permite copiar texto, así que sus párrafos no se pueden abrir para editarlos. Ábrelo con la contraseña de permisos.
+	Searchable Image	Imagen con búsqueda
+	Adds invisible text and straightens turned or skewed pages; the image is turned, not resampled	Añade texto invisible y endereza las páginas giradas o inclinadas; la imagen se gira, no se remuestrea
+	Detects turned or skewed pages and straightens them	Detecta páginas giradas o inclinadas y las endereza

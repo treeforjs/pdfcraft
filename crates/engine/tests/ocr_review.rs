@@ -159,7 +159,11 @@ fn bad_settings_pages_words_and_corrections_fail_before_mutation() {
         PlacedWord { up: [0.0; 2], ..word.clone() },
         PlacedWord { text: "文字".into(), ..word },
     ] {
-        assert!(session.apply_ocr(id, &[pdfcraft_engine::ocr::OcrPage { page: 0, words: vec![bad], skipped: None, orientation: None }]).is_err());
+        assert!(
+            session
+                .apply_ocr(id, &[pdfcraft_engine::ocr::OcrPage { page: 0, words: vec![bad], skipped: None, orientation: None, straighten: false }])
+                .is_err()
+        );
     }
     assert_eq!(session.get(id).unwrap().can_undo(), None);
 }
@@ -238,7 +242,9 @@ fn restricted_documents_refuse_recognition_before_rendering_or_backend_inference
         assert_eq!(reader.calls.get(), 0, "the backend must not run");
         assert_eq!(session.ocr_authority(id).unwrap_err(), error);
         let words = vec![PlacedWord { text: "x".into(), origin: [10.0, 10.0], across: [20.0, 0.0], up: [0.0, 10.0] }];
-        assert!(session.apply_ocr(id, &[pdfcraft_engine::ocr::OcrPage { page: 0, words, skipped: None, orientation: None }]).is_err());
+        assert!(
+            session.apply_ocr(id, &[pdfcraft_engine::ocr::OcrPage { page: 0, words, skipped: None, orientation: None, straighten: false }]).is_err()
+        );
         assert_eq!(state(&session, id), before, "no text, data or history change");
         assert_eq!(session.get(id).unwrap().bytes, bytes);
     }
@@ -293,4 +299,86 @@ fn allowed_drafts_are_refused_when_permissions_or_revision_later_change() {
     assert!(owner.validate_ocr_review(&review).unwrap_err().contains("changed"));
     assert!(owner.apply_ocr_review(&review).is_err());
     assert_eq!(state(&owner, id), before);
+}
+
+/// A 300 × 200 pt page with `/Rotate rotate` of dark bars (text lines), drawn turned `degrees`
+/// counterclockwise in user space.
+fn skewed_scan(degrees: f64, rotate: i64) -> Arc<Vec<u8>> {
+    let (s, c) = degrees.to_radians().sin_cos();
+    let mut content = format!("q {c:.6} {s:.6} {:.6} {c:.6} 150 100 cm 0 g\n", -s);
+    for line in 0..7 {
+        content.push_str(&format!("-85 {} {} 6 re f\n", 60 - line * 20, 150 + (line * 13) % 30));
+    }
+    content.push_str("Q\n");
+    let objs = [
+        "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".into(),
+        format!("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] /Rotate {rotate} /Contents 4 0 R /Resources << >> >>"),
+        format!("<< /Length {} >>\nstream\n{content}\nendstream", content.len()),
+    ];
+    let mut out = b"%PDF-1.7\n".to_vec();
+    let mut offs = Vec::new();
+    for (i, o) in objs.iter().enumerate() {
+        offs.push(out.len());
+        out.extend_from_slice(format!("{} 0 obj\n{o}\nendobj\n", i + 1).as_bytes());
+    }
+    let x = out.len();
+    out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objs.len() + 1).as_bytes());
+    for o in offs {
+        out.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+    }
+    out.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{x}\n%%EOF\n", objs.len() + 1).as_bytes());
+    Arc::new(out)
+}
+
+/// The skew `orient::correct` finds on a rendering of `bytes`.
+fn skew_of(bytes: Arc<Vec<u8>>) -> f32 {
+    let shot = PageRenderer::new(bytes, RenderConfig::default()).render(RenderRequest { scale: 2.0, ..Default::default() });
+    let options = pdfcraft_ocr::orient::Options { auto_rotate: false, deskew: true };
+    pdfcraft_ocr::orient::correct(&shot.rgba, shot.width, shot.height, options, |_, _, _| Ok(Vec::new())).unwrap().orientation.skew
+}
+
+#[test]
+fn searchable_image_straightens_a_skewed_page_with_its_text_layer() {
+    for rotate in [0, 90] {
+        let mut session = Session::new().with_clock(|| 1_700_000_000);
+        // Seen on the turned page, the lines rise 6° to the right.
+        let bytes = skewed_scan(6.0 + rotate as f64, rotate);
+        let found = skew_of(bytes.clone());
+        assert!((found - 6.0).abs() < 1.0, "the fixture reads as skewed: {found}");
+        let id = session.open("scan.pdf", None, bytes.clone(), None).unwrap();
+        let straight = OcrSettings { deskew: true, straighten: true, ..settings() };
+        let review = session.ocr_job_checked(id, &[], straight).unwrap().run(&Reader::new(), |_, _| true).unwrap();
+        assert!(review.pages()[0].straighten, "{:?}", review.pages()[0].orientation);
+        assert_eq!(session.apply_ocr_review(&review).unwrap(), 2);
+        let doc = session.get(id).unwrap();
+        assert_eq!(doc.can_undo(), Some("Recognize text"), "one step");
+        assert_eq!(doc.info.pages[0].rotation, rotate as u16, "no quarter turn");
+        let saved = session.save_bytes(id).unwrap();
+        let after = skew_of(saved.clone());
+        assert!(after.abs() < 0.5, "straightened (/Rotate {rotate}): {after}");
+        assert_eq!(text(saved).split_whitespace().collect::<Vec<_>>(), ["Cafe", "extra"], "the text layer is kept");
+        // Exact (the default) leaves the page as it was.
+        let mut exact = Session::new().with_clock(|| 1_700_000_000);
+        let id = exact.open("scan.pdf", None, bytes.clone(), None).unwrap();
+        let review = exact.ocr_job_checked(id, &[], OcrSettings { deskew: true, ..settings() }).unwrap().run(&Reader::new(), |_, _| true).unwrap();
+        assert!(!review.pages()[0].straighten);
+        exact.apply_ocr_review(&review).unwrap();
+        assert!((skew_of(exact.save_bytes(id).unwrap()) - found).abs() < 0.2);
+    }
+}
+
+#[test]
+fn straightening_a_page_turns_its_content_and_rotate() {
+    let mut session = Session::new().with_clock(|| 1_700_000_000);
+    let id = session.open("scan.pdf", None, skewed_scan(0.0, 0), None).unwrap();
+    let identity = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
+    session.apply(id, Edit::StraightenPage { page: 0, matrix: identity, quarter_turns: 3 }).unwrap();
+    assert_eq!(session.get(id).unwrap().info.pages[0].rotation, 270);
+    for bad in [[0.0; 6], [f64::NAN, 0.0, 0.0, 1.0, 0.0, 0.0]] {
+        assert!(session.apply(id, Edit::StraightenPage { page: 0, matrix: bad, quarter_turns: 0 }).is_err());
+    }
+    assert!(session.apply(id, Edit::StraightenPage { page: 5, matrix: identity, quarter_turns: 0 }).is_err());
+    session.undo(id).unwrap();
+    assert_eq!(session.get(id).unwrap().info.pages[0].rotation, 0);
 }

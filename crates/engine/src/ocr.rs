@@ -42,11 +42,15 @@ pub struct OcrSettings {
     pub auto_rotate: bool,
     /// Detect skew of up to ±15° and read the page straightened. Off by default.
     pub deskew: bool,
+    /// Output Searchable Image instead of Searchable Image (Exact): the rotation and skew found
+    /// by `auto_rotate`/`deskew` are also corrected on the page itself, which is turned (in its
+    /// content and `/Rotate`, never resampled) so its text reads straight. Off by default.
+    pub straighten: bool,
 }
 
 impl Default for OcrSettings {
     fn default() -> Self {
-        OcrSettings { dpi: 300.0, language: "en".into(), skip_text_pages: true, auto_rotate: false, deskew: false }
+        OcrSettings { dpi: 300.0, language: "en".into(), skip_text_pages: true, auto_rotate: false, deskew: false, straighten: false }
     }
 }
 
@@ -139,8 +143,11 @@ pub struct OcrPage {
     /// Why the page was not read, if it was skipped.
     pub skipped: Option<String>,
     /// The text direction found and corrected for recognition, when auto-rotate or deskew
-    /// was on. The page image itself is never changed.
+    /// was on. The page image itself is changed only with `straighten`.
     pub orientation: Option<Orientation>,
+    /// Turn the page so that `orientation` reads straight when the text is applied
+    /// ([`OcrSettings::straighten`]).
+    pub straighten: bool,
 }
 
 impl OcrPage {
@@ -154,6 +161,30 @@ impl OcrPage {
     pub fn word_count(&self) -> usize {
         self.words.iter().filter(|w| !w.text.trim().is_empty()).count()
     }
+}
+
+/// The edit that turns page `page` so text found running at `o` reads straight: the skew is
+/// undone about the visible page's centre in its content, the quarter turns through `/Rotate`.
+fn straighten(info: &PageInfo, page: usize, o: Orientation) -> Result<Edit, EditError> {
+    if !o.skew.is_finite() || o.skew.abs() > pdfcraft_ocr::orient::MAX_SKEW as f32 || !o.rotation.is_multiple_of(90) {
+        return Err(EditError::Invalid("the page orientation to correct is out of range".into()));
+    }
+    // In view space (y down), turn clockwise as seen by the skew, about the page centre.
+    let (sin, cos) = f64::from(o.skew).to_radians().sin_cos();
+    let (cx, cy) = (f64::from(info.width) / 2.0, f64::from(info.height) / 2.0);
+    let map = |x: f64, y: f64| {
+        let v = info.user_to_view(x as f32, y as f32);
+        let (dx, dy) = (f64::from(v[0]) - cx, f64::from(v[1]) - cy);
+        let u = info.view_to_user((cx + cos * dx - sin * dy) as f32, (cy + sin * dx + cos * dy) as f32);
+        [f64::from(u[0]), f64::from(u[1])]
+    };
+    // The map is affine: read its matrix from three points, around the crop box for precision.
+    let [x0, y0, x1, y1] = info.crop.map(f64::from);
+    let (w, h) = ((x1 - x0).max(1.0), (y1 - y0).max(1.0));
+    let (p, px, py) = (map(x0, y0), map(x0 + w, y0), map(x0, y0 + h));
+    let (a, b, c, d) = ((px[0] - p[0]) / w, (px[1] - p[1]) / w, (py[0] - p[0]) / h, (py[1] - p[1]) / h);
+    let matrix = [a, b, c, d, p[0] - a * x0 - c * y0, p[1] - b * x0 - d * y0];
+    Ok(Edit::StraightenPage { page, matrix, quarter_turns: i64::from(o.rotation / 90) })
 }
 
 /// The recogniser, loaded once (it takes a moment) and shared.
@@ -212,7 +243,7 @@ impl OcrJob {
                 return Err("text recognition canceled; no text was applied".into());
             }
             let Some(info) = self.infos.get(page) else { continue };
-            let skip = |why: &str| OcrPage { page, words: Vec::new(), skipped: Some(why.into()), orientation: None };
+            let skip = |why: &str| OcrPage { page, words: Vec::new(), skipped: Some(why.into()), orientation: None, straighten: false };
             if self.settings.skip_text_pages {
                 let t = r.render(RenderRequest { page, kind: RequestKind::Text, scale: 1.0, ..Default::default() });
                 if t.text.as_ref().is_some_and(|t| !t.plain_text().trim().is_empty()) {
@@ -290,7 +321,8 @@ impl OcrJob {
             };
             let words = lines.iter().flat_map(|l| &l.words).map(|w| PlacedWord::place(w, to_user)).collect();
             let orientation = options.any().then_some(corrected.orientation);
-            let found = OcrPage { page, words, skipped: None, orientation };
+            let straighten = self.settings.straighten && orientation.is_some_and(|o| o.rotation != 0 || o.skew != 0.0);
+            let found = OcrPage { page, words, skipped: None, orientation, straighten };
             if let Err(error) = pdfcraft_ocr::validate_words(&found.words) {
                 out.push(skip(&error.to_string()));
             } else {
@@ -391,13 +423,18 @@ impl Session {
             }
             pdfcraft_ocr::validate_words(&page.words).map_err(|e| EditError::Invalid(e.to_string()))?;
         }
-        let edits: Vec<Edit> = found
-            .iter()
-            .filter_map(|p| {
-                let words: Vec<_> = p.words.iter().filter(|w| !w.text.trim().is_empty()).cloned().collect();
-                (!words.is_empty()).then_some(Edit::AddOcrText { page: p.page, words })
-            })
-            .collect();
+        let infos = self.get(id).map(|d| d.info.pages.clone()).unwrap_or_default();
+        let mut edits = Vec::new();
+        for p in found {
+            let words: Vec<_> = p.words.iter().filter(|w| !w.text.trim().is_empty()).cloned().collect();
+            if !words.is_empty() {
+                edits.push(Edit::AddOcrText { page: p.page, words });
+            }
+            // After the text layer, so the words turn with the image they lie over.
+            if let (true, Some(o), Some(info)) = (p.straighten, p.orientation, infos.get(p.page)) {
+                edits.push(straighten(info, p.page, o)?);
+            }
+        }
         let words = found.iter().map(OcrPage::word_count).sum();
         if !edits.is_empty() {
             self.apply(id, Edit::Batch { label: "Recognize text".into(), edits })?;
