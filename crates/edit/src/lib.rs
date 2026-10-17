@@ -235,11 +235,37 @@ pub fn expand(template: &str, page_number: u32, count: usize, bates: u64, cx: &C
 }
 
 /// The Bates start number in a template (`<<Bates Number#digits#start#…>>`), if any.
-fn bates_start(template: &str) -> Option<u64> {
+pub fn bates_start(template: &str) -> Option<u64> {
     let i = template.find("<<Bates Number")?;
     let t = &template[i + 2..];
     let t = &t[..t.find(">>")?];
     t.split('#').nth(2).and_then(|s| s.parse().ok()).or(Some(1))
+}
+
+/// `template` with every Bates number starting at `start`: numbering that continues from an
+/// earlier file (Acrobat's Bates Numbering across a list of files).
+pub fn with_bates_start(template: &str, start: u64) -> String {
+    let mut out = String::with_capacity(template.len());
+    let mut rest = template;
+    while let Some(i) = rest.find("<<Bates Number") {
+        let after = &rest[i + 2..];
+        let Some(end) = after.find(">>") else { break };
+        out.push_str(&rest[..i + 2]);
+        let mut parts: Vec<String> = after[..end].split('#').map(str::to_owned).collect();
+        if parts.len() < 2 {
+            parts.push("6".into());
+        }
+        let start = start.to_string();
+        match parts.get_mut(2) {
+            Some(p) => *p = start,
+            None => parts.push(start),
+        }
+        out.push_str(&parts.join("#"));
+        out.push_str(">>");
+        rest = &after[end + 2..];
+    }
+    out.push_str(rest);
+    out
 }
 
 fn page_list(doc: &Document) -> Vec<pdfcraft_model::Page> {
@@ -454,8 +480,8 @@ pub fn add_header_footer(doc: &mut Document, pages: &[usize], hf: &HeaderFooter,
     for (k, &i) in pages.iter().enumerate() {
         let page = &all[i];
         let (w, h) = page.display_size(doc);
-        let number = hf.start_number + k as u32;
-        let bates = bates0 + k as u64;
+        let number = hf.start_number.saturating_add(k as u32);
+        let bates = bates0.saturating_add(k as u64);
         let size = hf.font_size;
         let [top, bottom, left, right] = hf.margins;
         let mut body: Vec<u8> = format!("BT\n/PCHelv {} Tf\n{}\n", n(size), rgb(hf.color)).into_bytes();

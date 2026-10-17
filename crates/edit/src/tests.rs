@@ -3035,3 +3035,17 @@ fn bates_numbers_are_kept_and_removed_apart_from_headers_and_footers() {
     assert_eq!(remove_marks(&mut doc, &[0, 1], MarkKind::HeaderFooter).unwrap(), 2);
     assert_eq!(streams(&reopen(&doc), 0), original);
 }
+
+#[test]
+fn bates_numbering_continues_from_a_given_start() {
+    assert_eq!(with_bates_start("Ref <<Bates Number#6#1#ACME-#>> p<<1>>", 41), "Ref <<Bates Number#6#41#ACME-#>> p<<1>>");
+    assert_eq!(with_bates_start("<<Bates Number>> <<Bates Number#4>>", 7), "<<Bates Number#6#7>> <<Bates Number#4#7>>");
+    assert_eq!(with_bates_start("no tokens <<1>> <<Bates Number", 3), "no tokens <<1>> <<Bates Number");
+    assert_eq!(bates_start(&with_bates_start("<<Bates Number#6#1#A#B>>", u64::MAX)), Some(u64::MAX));
+    // A start at the top of the range doesn't overflow on later pages.
+    let mut doc = fixture();
+    let mut bates = HeaderFooter::default();
+    bates.text[5] = with_bates_start("<<Bates Number#6#1#>>", u64::MAX);
+    add_header_footer(&mut doc, &[0, 1], &bates, false, &cx()).unwrap();
+    assert!(streams(&doc, 1).iter().any(|s| s.contains(&format!("({}) Tj", u64::MAX))));
+}

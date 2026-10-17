@@ -5327,3 +5327,39 @@ fn submitting_a_form_saves_or_sends_its_data() {
     assert!(matches!(a.call("form_submit", &json!({ "doc": doc, "field": "Send" })), Err(ToolError::InvalidArgs(_))));
     assert!(matches!(a.call("form_submit", &json!({ "doc": doc, "field": "Name", "path": "x.txt" })), Err(ToolError::InvalidArgs(_))));
 }
+
+/// Bates numbers run on from one file to the next, each numbered copy written beside the others
+/// without touching the originals or overwriting anything.
+#[test]
+fn bates_numbering_continues_across_files() {
+    let dir = workdir("bates-files");
+    let original = std::fs::read(dir.join("a.pdf")).unwrap();
+    let mut a = auto(&dir);
+    let args = json!({ "paths": ["a.pdf", "b.pdf"], "out_dir": "numbered", "footer_right": "<<Bates Number#6#40#CASE-#>>" });
+    let r = ok(&mut a, "doc_bates_files", args.clone());
+    let files = r["files"].as_array().unwrap();
+    assert_eq!((files[0]["first"].as_u64(), files[0]["last"].as_u64()), (Some(40), Some(42)), "{r}");
+    assert_eq!((files[1]["first"].as_u64(), files[1]["last"].as_u64()), (Some(43), Some(44)), "{r}");
+    assert_eq!(r["next"].as_u64(), Some(45));
+    assert_eq!(std::fs::read(dir.join("a.pdf")).unwrap(), original);
+    let b = ok(&mut a, "doc_open", json!({ "path": "numbered/b_bates.pdf" }))["doc"].as_u64().unwrap();
+    let text = page_text(&mut a, b);
+    assert!(text[0].contains("CASE-000043") && text[1].contains("CASE-000044"), "{text:?}");
+    // A second batch picks up where the first stopped, and never overwrites the first.
+    let again = ok(
+        &mut a,
+        "doc_bates_files",
+        json!({ "paths": ["b.pdf"], "out_dir": "numbered", "start": 45, "footer_right": "<<Bates Number#6#1#CASE-#>>" }),
+    );
+    assert!(again["files"][0]["output"].as_str().unwrap().ends_with("b_bates (2).pdf"), "{again}");
+    assert_eq!(again["files"][0]["first"].as_u64(), Some(45));
+    for bad in [
+        json!({ "paths": [], "out_dir": "numbered", "footer_right": "<<Bates Number>>" }),
+        json!({ "paths": ["a.pdf"], "out_dir": "numbered", "footer_right": "Page <<1>>" }),
+        json!({ "paths": ["a.pdf"], "out_dir": "numbered", "footer_right": "<<Bates Number>>", "start": -1 }),
+        json!({ "paths": ["a.pdf"], "out_dir": "numbered", "footer_right": "<<Bates Number>>", "passwords": [] }),
+    ] {
+        assert!(matches!(a.call("doc_bates_files", &bad), Err(ToolError::InvalidArgs(_))), "{bad}");
+    }
+    assert!(a.call("doc_bates_files", &json!({ "paths": ["missing.pdf"], "out_dir": "numbered", "footer_right": "<<Bates Number>>" })).is_err());
+}

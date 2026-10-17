@@ -254,6 +254,25 @@ pub fn tools() -> Vec<ToolDef> {
                 }),
                 &["paths"],
             )),
+        t("doc_bates_files", "Bates numbering across files", "Add Bates numbers to a list of PDFs, numbered on from one file to the next (the first page of each file follows the last page of the one before). Put a <<Bates Number#digits#start#prefix#suffix>> token in one of the header and footer boxes (as in doc_header_footer, which takes the same text, font, colour and margin options); start overrides the token's start number. Each numbered copy is written into out_dir as <name><suffix>.pdf (suffix default \"_bates\"; existing files are never overwritten) and the originals are left as they are. replace: true swaps out Bates numbers a file already has. passwords, in step with paths, opens encrypted files. A file that fails stops the run so the numbering stays unbroken; the result lists each file's output and first and last number, and next, the number the following batch would start at.")
+            .cmd("edit.bates")
+            .with(schema(
+                json!({
+                    "paths": { "type": "array", "items": { "type": "string" }, "minItems": 1, "maxItems": pdfcraft_engine::MAX_CREATE_FILES },
+                    "out_dir": { "type": "string" },
+                    "suffix": { "type": "string" },
+                    "start": { "type": "integer", "minimum": 0 },
+                    "header_left": { "type": "string" }, "header_center": { "type": "string" }, "header_right": { "type": "string" },
+                    "footer_left": { "type": "string" }, "footer_center": { "type": "string" }, "footer_right": { "type": "string" },
+                    "font_size": { "type": "number", "exclusiveMinimum": 0 },
+                    "color": { "type": "string" },
+                    "margins": { "type": "array", "items": { "type": "number", "minimum": 0 }, "minItems": 4, "maxItems": 4 },
+                    "start_number": { "type": "integer", "minimum": 1 },
+                    "replace": { "type": "boolean" },
+                    "passwords": { "type": "array", "items": { "type": ["string", "null"] } },
+                }),
+                &["paths", "out_dir"],
+            )),
         t("doc_create_multiple", "Create PDF from multiple files", "Convert several files (PDFs, PNG/JPEG/JPEG 2000/TIFF/GIF/BMP images, .txt files) to PDF in one run. mode \"combine\" (default) joins them, in order, into one PDF with a bookmark per file; pages optionally chooses each file's pages, in step with paths (a range such as \"1-3, 6\" or null). mode \"separate\" writes one PDF per file into out_dir (files that are already PDFs are skipped; existing files are never overwritten) and reports each file's result.")
             .cmd("create.multiple")
             .with(schema(

@@ -46,6 +46,7 @@ pub use pdfcraft_cos::Algorithm;
 pub use pdfcraft_create::{CONVERTIBLE, ImageResolution, SourceKind, source_kind};
 pub use pdfcraft_edit::{
     Added, AddedImage, AddedText, Align as TextAlign, Background, Content as AddedContent, Family as FontFamily, HeaderFooter, MarkKind, Watermark,
+    bates_start, with_bates_start,
 };
 pub use pdfcraft_forms::{
     BorderStyle, CheckStyle, DocTrigger, Field as FormField, FieldAction, FieldChange, FieldFont, FieldKind as FormFieldKind, FieldProps, FieldValue,
