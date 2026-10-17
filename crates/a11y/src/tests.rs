@@ -532,3 +532,53 @@ fn headings_in_document_order_with_levels_text_and_content() {
     let plain = pdf(&["<< /Type /Catalog /Pages 2 0 R >>".into(), "<< /Type /Pages /Kids [] /Count 0 >>".into()], "");
     assert!(headings(&super::tags(&plain)).is_empty());
 }
+
+#[test]
+fn reading_blocks_follow_the_structure_tree() {
+    let doc = pdf(
+        &[
+            "<< /Type /Catalog /Pages 2 0 R /StructTreeRoot 4 0 R /MarkInfo << /Marked true >> >>".into(), // 1
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".into(),                                            // 2
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] >>".into(),                              // 3
+            "<< /Type /StructTreeRoot /K 5 0 R /RoleMap << /Para /P >> >>".into(),                         // 4
+            "<< /S /Document /Pg 3 0 R /K [6 0 R 7 0 R 8 0 R 9 0 R 10 0 R 13 0 R 20 0 R] >>".into(),       // 5
+            "<< /S /H1 /K [0 << /Type /MCR /MCID 9 /Stm 3 0 R >>] >>".into(),                              // 6: /Stm left out
+            "<< /S /Para /K [1 << /S /Span /ActualText (two) /K 2 >>] >>".into(),                          // 7
+            "<< /S /Figure /Alt (A chart) /K 3 >>".into(),                                                 // 8
+            "<< /S /Artifact /K 4 >>".into(),                                                              // 9: left out
+            "<< /S /L /K [11 0 R 12 0 R] >>".into(),                                                       // 10
+            "<< /S /LI /K [<< /S /Lbl /K 5 >> << /S /LBody /K << /S /P /K 6 >> >>] >>".into(),             // 11: a P inside reads inline
+            "<< /S /LI /K [7 << /S /L /K << /S /LI /K 8 >> >>] >>".into(),                                 // 12: a nested list
+            "<< /S /Table /K << /S /TR /K [<< /S /TH /K 10 >> << /S /TD /K 11 >> << /S /TD >>] >> >>".into(), // 13
+            "".into(),
+            "".into(),
+            "".into(),
+            "".into(),
+            "".into(),
+            "".into(),
+            "<< /S /Sect /K [12 << /S /Span /K 13 >> 5 0 R << /S /Figure >>] >>".into(), // 20: loops back; an empty figure
+        ],
+        "",
+    );
+    let t = super::tags(&doc);
+    let blocks = reading_blocks(&t);
+    let c = |m: i64| Piece::Content { page: 0, mcid: m };
+    let got: Vec<(BlockKind, Vec<Piece>)> = blocks.iter().map(|b| (b.kind, b.pieces.clone())).collect();
+    assert_eq!(
+        got,
+        vec![
+            (BlockKind::Heading(1), vec![c(0)]),
+            (BlockKind::Paragraph, vec![c(1), Piece::Text("two".into())]),
+            (BlockKind::Figure, vec![Piece::Text("A chart".into())]),
+            (BlockKind::ListItem, vec![c(5), c(6)]),
+            (BlockKind::ListItem, vec![c(7)]),
+            (BlockKind::ListItem, vec![c(8)]),
+            (BlockKind::TableRow, vec![c(10), Piece::Cell, c(11)]),
+            (BlockKind::Paragraph, vec![c(12), c(13)]), // content directly in a Sect
+        ]
+    );
+    assert!(blocks.iter().all(|b| b.node.is_some()));
+    // An untagged document has none.
+    let plain = pdf(&["<< /Type /Catalog /Pages 2 0 R >>".into(), "<< /Type /Pages /Kids [] /Count 0 >>".into()], "");
+    assert!(reading_blocks(&super::tags(&plain)).is_empty());
+}

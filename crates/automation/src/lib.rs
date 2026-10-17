@@ -84,6 +84,8 @@ fn failed(e: impl std::fmt::Display) -> ToolError {
 /// Default and maximum resolution for `page_render`.
 const DEFAULT_DPI: f64 = 96.0;
 const MAX_DPI: f64 = 600.0;
+/// The most accessible text `doc_export_accessible_text` returns inline (bytes).
+const MAX_INLINE_ACCESSIBLE_TEXT: usize = 1 << 20;
 
 /// A headless PdfCraft session driven by tool calls.
 pub struct Automation {
@@ -308,6 +310,36 @@ impl Automation {
                 out["truncated"] = json!(found.truncated);
                 let actions = self.bookmark_action_map(&a)?;
                 out["bookmarks"] = json!(bookmark_tree(&self.doc(&a)?.info.outline, &[], &actions));
+                out
+            }
+            "doc_export_accessible_text" => {
+                let found = self.doc(&a)?.accessible_text().map_err(failed)?;
+                let mut out = json!({
+                    "bytes": found.text.len(),
+                    "blocks": found.blocks,
+                    "headings": found.headings,
+                    "list_items": found.list_items,
+                    "table_rows": found.table_rows,
+                    "figures": found.figures,
+                    "pages_read": found.pages_read,
+                    "unreadable_pages": found.unreadable_pages,
+                    "truncated": found.truncated,
+                });
+                match a.opt_str("path")? {
+                    Some(p) => {
+                        let path = self.resolve(p, true)?;
+                        write_atomic(&path, found.text.as_bytes())?;
+                        out["path"] = json!(path.to_string_lossy());
+                    }
+                    None => {
+                        let mut end = found.text.len().min(MAX_INLINE_ACCESSIBLE_TEXT);
+                        while !found.text.is_char_boundary(end) {
+                            end = end.saturating_sub(1);
+                        }
+                        out["text"] = json!(found.text.get(..end).unwrap_or_default());
+                        out["text_truncated"] = json!(end < found.text.len());
+                    }
+                }
                 out
             }
             "bookmark_set_page" => {

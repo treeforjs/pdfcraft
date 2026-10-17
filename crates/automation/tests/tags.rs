@@ -332,3 +332,54 @@ fn bookmarks_from_structure_refuse_untagged_documents_and_documents_without_head
     }
     assert!(marks(&ok(&mut a, "bookmark_list", json!({ "doc": untagged }))["bookmarks"]).is_empty());
 }
+
+#[test]
+fn accessible_text_in_structure_order_through_tools() {
+    let dir = workdir("accessible-text");
+    std::fs::write(dir.join("headings.pdf"), headings_pdf()).unwrap();
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "headings.pdf" }))["doc"].as_u64().unwrap();
+
+    // Page 2's painted "Painted" is replaced by the heading's actual text; the element that loops
+    // back to the root is read once; the empty H2 adds nothing.
+    let want = "Introduction\n\nBody text.\n\nBackground\n\nResults\n\nDetail\n\nAppendix\n";
+    let r = ok(&mut a, "doc_export_accessible_text", json!({ "doc": doc, "path": "out/accessible.txt" }));
+    assert_eq!(std::fs::read_to_string(dir.join("out/accessible.txt")).unwrap(), want);
+    assert_eq!(
+        (r["blocks"].as_u64(), r["headings"].as_u64(), r["figures"].as_u64(), r["pages_read"].as_u64(), r["truncated"].as_bool()),
+        (Some(6), Some(5), Some(0), Some(2), Some(false)),
+        "{r}"
+    );
+    assert_eq!(r["bytes"].as_u64(), Some(want.len() as u64));
+    // Written again, the file is replaced; without a path the text comes back.
+    ok(&mut a, "doc_export_accessible_text", json!({ "doc": doc, "path": "out/accessible.txt" }));
+    let r = ok(&mut a, "doc_export_accessible_text", json!({ "doc": doc }));
+    assert_eq!((r["text"].as_str(), r["text_truncated"].as_bool()), (Some(want), Some(false)));
+    assert!(r.get("path").is_none());
+    // Paths stay inside the root.
+    assert!(a.call("doc_export_accessible_text", &json!({ "doc": doc, "path": "../escape.txt" })).is_err());
+    assert!(!dir.parent().unwrap().join("escape.txt").exists());
+    assert!(matches!(a.call("doc_export_accessible_text", &json!({ "doc": doc, "path": 3 })), Err(ToolError::InvalidArgs(_))));
+
+    // tagged.pdf: the heading, and a figure with neither alternate text nor text inside adds nothing.
+    let tagged = ok(&mut a, "doc_open", json!({ "path": "tagged.pdf" }))["doc"].as_u64().unwrap();
+    let r = ok(&mut a, "doc_export_accessible_text", json!({ "doc": tagged }));
+    assert_eq!(r["text"], "Introduction\n");
+    // Given alternate text, the figure reads as it.
+    let t = ok(&mut a, "tags_tree", json!({ "doc": tagged }));
+    ok(&mut a, "tags_set", json!({ "doc": tagged, "obj": obj_of(&t, "Photo"), "alt": "A grey square" }));
+    let r = ok(&mut a, "doc_export_accessible_text", json!({ "doc": tagged }));
+    assert_eq!((r["text"].as_str(), r["figures"].as_u64()), (Some("Introduction\n\nA grey square\n"), Some(1)));
+}
+
+#[test]
+fn accessible_text_refuses_untagged_documents() {
+    let dir = workdir("accessible-untagged");
+    let mut a = auto(&dir);
+    let untagged = ok(&mut a, "doc_create", json!({ "from": "text", "text": "Plain words" }))["doc"].as_u64().unwrap();
+    match a.call("doc_export_accessible_text", &json!({ "doc": untagged, "path": "plain.txt" })) {
+        Err(ToolError::Failed(m)) => assert!(m.contains("not tagged"), "{m}"),
+        other => panic!("{other:?}"),
+    }
+    assert!(!dir.join("plain.txt").exists(), "nothing is written");
+}

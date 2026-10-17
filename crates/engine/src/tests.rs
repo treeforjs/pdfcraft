@@ -3162,3 +3162,64 @@ fn heading_bookmarks_come_from_tagged_headings_only() {
     let top = s.get(id).unwrap().heading_bookmarks(None).unwrap().entries[0].top.unwrap();
     assert!((160.0..=172.0).contains(&top), "{top}");
 }
+
+/// One page painted out of logical order (body, then title), with a running header and a page
+/// number marked as artifacts, a list and a figure; `tree` is the /StructTreeRoot (object 6),
+/// `elements` objects 7….
+fn accessible_pdf(tree: &str, elements: &[&str]) -> Vec<u8> {
+    let body = "/Artifact << /Type /Pagination >> BDC BT /F1 10 Tf 20 280 Td (Running header) Tj ET EMC \
+                /P << /MCID 1 >> BDC BT /F1 12 Tf 20 200 Td (Body   comes) Tj 0 -14 Td (after the title.) Tj ET EMC \
+                /H1 << /MCID 0 >> BDC BT /F1 18 Tf 20 240 Td (Title) Tj ET EMC \
+                /Lbl << /MCID 2 >> BDC BT /F1 12 Tf 20 150 Td (1.) Tj ET EMC \
+                /LBody << /MCID 3 >> BDC BT /F1 12 Tf 40 150 Td (First) Tj ET EMC \
+                /LI << /MCID 4 >> BDC BT /F1 12 Tf 20 135 Td (Second) Tj ET EMC \
+                /Figure << /MCID 5 >> BDC q 10 0 0 10 20 100 cm 0 0 1 1 re f Q EMC \
+                /Artifact BMC BT /F1 10 Tf 90 20 Td (7) Tj ET EMC";
+    let mut objs: Vec<String> = vec![
+        "<< /Type /Catalog /Pages 2 0 R /MarkInfo << /Marked true >> /StructTreeRoot 6 0 R >>".into(),
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 /MediaBox [0 0 300 300] >>".into(),
+        "<< /Type /Page /Parent 2 0 R /Contents 4 0 R /StructParents 0 /Resources << /Font << /F1 5 0 R >> >> >>".into(),
+        format!("<< /Length {} >>\nstream\n{body}\nendstream", body.len()),
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".into(),
+        tree.into(),
+    ];
+    objs.extend(elements.iter().map(|e| e.to_string()));
+    let mut out = b"%PDF-1.7\n".to_vec();
+    let mut offsets = Vec::new();
+    for (i, o) in objs.iter().enumerate() {
+        offsets.push(out.len());
+        out.extend_from_slice(format!("{} 0 obj\n{o}\nendobj\n", i + 1).as_bytes());
+    }
+    let xref = out.len();
+    out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objs.len() + 1).as_bytes());
+    for o in offsets {
+        out.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+    }
+    out.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objs.len() + 1).as_bytes());
+    out
+}
+
+#[test]
+fn accessible_text_reads_the_structure_tree_in_logical_order() {
+    let (mut s, plain) = session_with(1);
+    let err = s.get(plain).unwrap().accessible_text().unwrap_err();
+    assert!(err.contains("not tagged"), "{err}");
+    let empty = s.open("e.pdf", None, Arc::new(accessible_pdf("<< /Type /StructTreeRoot >>", &[])), None).unwrap();
+    let err = s.get(empty).unwrap().accessible_text().unwrap_err();
+    assert!(err.contains("empty"), "{err}");
+
+    let elements = [
+        "<< /Type /StructElem /S /Document /P 6 0 R /Pg 3 0 R /K [8 0 R 9 0 R 10 0 R 13 0 R] >>", // 7
+        "<< /Type /StructElem /S /H1 /P 7 0 R /K 0 >>",                                           // 8
+        "<< /Type /StructElem /S /P /P 7 0 R /K 1 >>",                                            // 9
+        "<< /Type /StructElem /S /L /P 7 0 R /K [11 0 R 12 0 R] >>",                              // 10
+        "<< /Type /StructElem /S /LI /P 10 0 R /K [<< /S /Lbl /K 2 >> << /S /LBody /K 3 >>] >>",  // 11
+        "<< /Type /StructElem /S /LI /P 10 0 R /K [4 7 0 R] >>",                                  // 12: loops back to the root
+        "<< /Type /StructElem /S /Figure /P 7 0 R /Alt (A blue square) /K 5 >>",                  // 13
+    ];
+    let id = s.open("t.pdf", None, Arc::new(accessible_pdf("<< /Type /StructTreeRoot /K 7 0 R >>", &elements)), None).unwrap();
+    let got = s.get(id).unwrap().accessible_text().unwrap();
+    assert_eq!(got.text, "Title\n\nBody comes after the title.\n\n1. First\nSecond\n\nA blue square\n");
+    assert_eq!((got.blocks, got.headings, got.list_items, got.figures, got.table_rows), (5, 1, 2, 1, 0));
+    assert_eq!((got.pages_read, got.unreadable_pages, got.truncated), (1, 0, false));
+}

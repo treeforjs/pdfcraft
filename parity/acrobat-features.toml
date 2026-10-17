@@ -6996,11 +6996,11 @@ title = "Export accessible text (from tags)"
 area = "J"
 tier = "P1"
 milestone = "M12"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["doc_export_accessible_text"]
+evidence = ["crates/automation/tests/tags.rs::accessible_text_in_structure_order_through_tools", "crates/automation/tests/tags.rs::accessible_text_refuses_untagged_documents", "crates/engine/src/tests.rs::accessible_text_reads_the_structure_tree_in_logical_order", "crates/a11y/src/tests.rs::reading_blocks_follow_the_structure_tree", "crates/render/src/text.rs::glyphs_carry_the_mcid_of_their_marked_content"]
+notes = "Engine (Document::accessible_text) + agent tool: walks the bounded, cycle-safe structure tree in logical order (pdfcraft_a11y::reading_blocks) and writes each element's /ActualText, else /Alt, else the text of its marked content (per-glyph MCID), with a blank line between blocks (P, headings, figures, captions), a line break between consecutive list items and table rows, tabs between cells; nested P inside LI/TD read inline, nested lists stay items. Artifacts are left out (/Artifact marked content, also inside tagged content, and PDF 2.0 Artifact elements), as is untagged content. Output capped at 64 MiB (truncated flag); written atomically inside the root, or returned inline up to 1 MiB. Untagged files, empty trees and copy-restricted files get a clear error. Missing: a menu command / Save As entry (UI is being redesigned), text inside form XObjects referenced by MCRs with /Stm, form field values of Form elements (OBJR widgets), hyphenation joining across lines, empty table cells keeping their column."
 
 [[feature]]
 id = "create.export-xml"

@@ -280,12 +280,14 @@ impl<'a> Device<'a> for TextDevice {
     fn draw_image(&mut self, _: Image<'a, '_>, _: Affine) {}
     fn pop_clip_path(&mut self) {}
     fn pop_transparency_group(&mut self) {}
-    fn begin_marked_content(&mut self, _tag: &[u8], mcid: Option<i32>) {
+    fn begin_marked_content(&mut self, tag: &[u8], mcid: Option<i32>) {
         if self.marked.len() >= MAX_MARKED_DEPTH {
             self.marked_overflow = self.marked_overflow.saturating_add(1);
             return;
         }
-        let inherited = self.marked.last().copied().flatten();
+        // An artifact (a running header, a page number …) belongs to no structure element,
+        // even inside tagged content.
+        let inherited = if tag == b"Artifact" { None } else { self.marked.last().copied().flatten() };
         self.marked.push(mcid.or(inherited));
     }
     fn end_marked_content(&mut self) {
@@ -979,10 +981,12 @@ mod tests {
         let mut doc = Document::with_version("1.7");
         let font = doc.add_object(dictionary! { "Type" => "Font", "Subtype" => "Type1", "BaseFont" => "Helvetica" });
         // MCID 0 around "Ab"; MCID 1 around a nested BMC (inherits 1) holding "Cd"; "Ef" outside
-        // any; an unbalanced EMC at the end is ignored.
+        // any; "Gh" in an artifact inside MCID 2 (belongs to none); an unbalanced EMC at the end
+        // is ignored.
         let ops = "/H1 <</MCID 0>> BDC BT /F1 20 Tf 1 0 0 1 20 250 Tm (Ab) Tj ET EMC \
                    /P <</MCID 1>> BDC /Span BMC BT /F1 12 Tf 1 0 0 1 20 200 Tm (Cd) Tj ET EMC EMC \
-                   BT /F1 12 Tf 1 0 0 1 20 150 Tm (Ef) Tj ET EMC";
+                   BT /F1 12 Tf 1 0 0 1 20 150 Tm (Ef) Tj ET \
+                   /P <</MCID 2>> BDC /Artifact BMC BT /F1 12 Tf 1 0 0 1 20 100 Tm (Gh) Tj ET EMC EMC EMC";
         let content = doc.add_object(Stream::new(dictionary! {}, ops.as_bytes().to_vec()));
         let pages = doc.new_object_id();
         let page = doc.add_object(dictionary! { "Type" => "Page", "Parent" => pages, "MediaBox" => vec![Object::Integer(0), Object::Integer(0), Object::Integer(300), Object::Integer(300)], "Resources" => dictionary! {"Font" => dictionary! {"F1" => font}}, "Contents" => content });
@@ -995,7 +999,9 @@ mod tests {
         let text = extract_page(&pdf, 0, &InterpreterSettings::default()).unwrap();
         let got: Vec<(String, Option<i32>)> = text.glyphs.iter().map(|g| (g.text.clone(), g.mcid)).collect();
         let want: Vec<(String, Option<i32>)> =
-            [("A", Some(0)), ("b", Some(0)), ("C", Some(1)), ("d", Some(1)), ("E", None), ("f", None)].map(|(t, m)| (t.to_string(), m)).to_vec();
+            [("A", Some(0)), ("b", Some(0)), ("C", Some(1)), ("d", Some(1)), ("E", None), ("f", None), ("G", None), ("h", None)]
+                .map(|(t, m)| (t.to_string(), m))
+                .to_vec();
         assert_eq!(got, want);
     }
 
