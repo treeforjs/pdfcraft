@@ -2115,4 +2115,28 @@ compare-page	Moved	已移動
 	Searchable Image	可搜尋圖片
 	Adds invisible text, straightens turned or skewed pages and downsamples finer images to the chosen resolution	加入不可見文字，拉直旋轉或傾斜的頁面，並將更精細的圖片降低取樣至所選解析度
 	Detects turned or skewed pages and straightens them	偵測旋轉或傾斜的頁面並將其拉直
+	Signature Properties	簽名屬性
+	Signature Properties…	簽名屬性…
+	Date/Time	日期/時間
+	Legal	法律
+	Revision	修訂版本
+	Contact	聯絡方式
+	Changes after signing	簽名後的變更
+	The document has not been modified since this signature was applied.	自套用此簽名以來，文件未曾修改。
+	Changes the signer permitted were made: {changes}	已進行簽署者允許的變更：{changes}
+	Changes the signer did not permit were made: {changes}	已進行簽署者不允許的變更：{changes}
+	Trusted timestamp	受信任的時間戳記
+	Untrusted timestamp	不受信任的時間戳記
+	Signer's computer clock	簽署者電腦的時鐘
+	Time source	時間來源
+	Timestamp authority	時間戳記授權單位
+	Claimed signing time	聲明的簽名時間
+	Chosen time	選定的時間
+	Not available	無法使用
+	Document timestamp	文件時間戳記
+	Certification signature	認證簽名
+	Approval signature	核准簽名
+	Signature type	簽名類型
+	This signature field is not signed.	此簽名欄位尚未簽署。
+	Validate Signature	驗證簽名
 	Crop Image	裁剪影像

@@ -2229,4 +2229,28 @@ compare-page	Moved	Déplacée
 	Searchable Image	Image recherchable
 	Adds invisible text, straightens turned or skewed pages and downsamples finer images to the chosen resolution	Ajoute du texte invisible, redresse les pages pivotées ou inclinées et sous-échantillonne les images plus fines à la résolution choisie
 	Detects turned or skewed pages and straightens them	Détecte les pages pivotées ou inclinées et les redresse
+	Signature Properties	Propriétés de la signature
+	Signature Properties…	Propriétés de la signature…
+	Date/Time	Date et heure
+	Legal	Mentions légales
+	Revision	Révision
+	Contact	Contact
+	Changes after signing	Modifications après la signature
+	The document has not been modified since this signature was applied.	Le document n'a pas été modifié depuis l'application de cette signature.
+	Changes the signer permitted were made: {changes}	Des modifications autorisées par le signataire ont été apportées : {changes}
+	Changes the signer did not permit were made: {changes}	Des modifications non autorisées par le signataire ont été apportées : {changes}
+	Trusted timestamp	Horodatage approuvé
+	Untrusted timestamp	Horodatage non approuvé
+	Signer's computer clock	Horloge de l'ordinateur du signataire
+	Time source	Source de l'heure
+	Timestamp authority	Autorité d'horodatage
+	Claimed signing time	Heure de signature déclarée
+	Chosen time	Heure choisie
+	Not available	Non disponible
+	Document timestamp	Horodatage du document
+	Certification signature	Signature de certification
+	Approval signature	Signature d'approbation
+	Signature type	Type de signature
+	This signature field is not signed.	Ce champ de signature n'est pas signé.
+	Validate Signature	Valider la signature
 	Crop Image	Recadrer l'image

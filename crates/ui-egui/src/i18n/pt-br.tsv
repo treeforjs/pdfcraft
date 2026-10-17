@@ -2230,4 +2230,28 @@ compare-page	Moved	Movida
 	Searchable Image	Imagem pesquisável
 	Adds invisible text, straightens turned or skewed pages and downsamples finer images to the chosen resolution	Adiciona texto invisível, endireita páginas giradas ou inclinadas e reduz imagens mais finas à resolução escolhida
 	Detects turned or skewed pages and straightens them	Detecta páginas giradas ou inclinadas e as endireita
+	Signature Properties	Propriedades da assinatura
+	Signature Properties…	Propriedades da assinatura…
+	Date/Time	Data/hora
+	Legal	Jurídico
+	Revision	Revisão
+	Contact	Contato
+	Changes after signing	Alterações após a assinatura
+	The document has not been modified since this signature was applied.	O documento não foi modificado desde que esta assinatura foi aplicada.
+	Changes the signer permitted were made: {changes}	Foram feitas alterações permitidas pelo signatário: {changes}
+	Changes the signer did not permit were made: {changes}	Foram feitas alterações não permitidas pelo signatário: {changes}
+	Trusted timestamp	Carimbo de data/hora confiável
+	Untrusted timestamp	Carimbo de data/hora não confiável
+	Signer's computer clock	Relógio do computador do signatário
+	Time source	Origem da hora
+	Timestamp authority	Autoridade de carimbo de data/hora
+	Claimed signing time	Hora de assinatura declarada
+	Chosen time	Hora escolhida
+	Not available	Não disponível
+	Document timestamp	Carimbo de data/hora do documento
+	Certification signature	Assinatura de certificação
+	Approval signature	Assinatura de aprovação
+	Signature type	Tipo de assinatura
+	This signature field is not signed.	Este campo de assinatura não está assinado.
+	Validate Signature	Validar assinatura
 	Crop Image	Cortar imagem

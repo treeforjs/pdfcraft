@@ -2229,4 +2229,28 @@ compare-page	Moved	Verschoben
 	Searchable Image	Durchsuchbares Bild
 	Adds invisible text, straightens turned or skewed pages and downsamples finer images to the chosen resolution	Fügt unsichtbaren Text hinzu, richtet gedrehte oder schiefe Seiten gerade aus und rechnet feinere Bilder auf die gewählte Auflösung herunter
 	Detects turned or skewed pages and straightens them	Erkennt gedrehte oder schiefe Seiten und richtet sie gerade aus
+	Signature Properties	Signatureigenschaften
+	Signature Properties…	Signatureigenschaften…
+	Date/Time	Datum/Uhrzeit
+	Legal	Rechtliches
+	Revision	Revision
+	Contact	Kontakt
+	Changes after signing	Änderungen nach dem Signieren
+	The document has not been modified since this signature was applied.	Das Dokument wurde seit dem Anbringen dieser Signatur nicht geändert.
+	Changes the signer permitted were made: {changes}	Vom Unterzeichner erlaubte Änderungen wurden vorgenommen: {changes}
+	Changes the signer did not permit were made: {changes}	Vom Unterzeichner nicht erlaubte Änderungen wurden vorgenommen: {changes}
+	Trusted timestamp	Vertrauenswürdiger Zeitstempel
+	Untrusted timestamp	Nicht vertrauenswürdiger Zeitstempel
+	Signer's computer clock	Uhr des Computers des Unterzeichners
+	Time source	Zeitquelle
+	Timestamp authority	Zeitstempelstelle
+	Claimed signing time	Angegebene Signaturzeit
+	Chosen time	Gewählte Zeit
+	Not available	Nicht verfügbar
+	Document timestamp	Dokumentzeitstempel
+	Certification signature	Zertifizierungssignatur
+	Approval signature	Genehmigungssignatur
+	Signature type	Signaturtyp
+	This signature field is not signed.	Dieses Signaturfeld ist nicht signiert.
+	Validate Signature	Signatur validieren
 	Crop Image	Bild zuschneiden

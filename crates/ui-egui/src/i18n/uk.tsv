@@ -2252,4 +2252,28 @@ compare-page	Moved	Переміщена
 	Searchable Image	Зображення з пошуком
 	Adds invisible text, straightens turned or skewed pages and downsamples finer images to the chosen resolution	Додає невидимий текст, вирівнює повернуті або нахилені сторінки та зменшує детальніші зображення до вибраної роздільної здатності
 	Detects turned or skewed pages and straightens them	Виявляє повернуті або нахилені сторінки та вирівнює їх
+	Signature Properties	Властивості підпису
+	Signature Properties…	Властивості підпису…
+	Date/Time	Дата й час
+	Legal	Юридичні відомості
+	Revision	Редакція
+	Contact	Контакт
+	Changes after signing	Зміни після підписання
+	The document has not been modified since this signature was applied.	Документ не змінювався відтоді, як застосовано цей підпис.
+	Changes the signer permitted were made: {changes}	Внесено зміни, дозволені підписувачем: {changes}
+	Changes the signer did not permit were made: {changes}	Внесено зміни, не дозволені підписувачем: {changes}
+	Trusted timestamp	Довірена позначка часу
+	Untrusted timestamp	Недовірена позначка часу
+	Signer's computer clock	Годинник комп'ютера підписувача
+	Time source	Джерело часу
+	Timestamp authority	Служба позначок часу
+	Claimed signing time	Заявлений час підписання
+	Chosen time	Вибраний час
+	Not available	Недоступно
+	Document timestamp	Позначка часу документа
+	Certification signature	Сертифікаційний підпис
+	Approval signature	Затверджувальний підпис
+	Signature type	Тип підпису
+	This signature field is not signed.	Це поле підпису не підписано.
+	Validate Signature	Перевірити підпис
 	Crop Image	Обрізати зображення

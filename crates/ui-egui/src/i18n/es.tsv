@@ -2145,4 +2145,28 @@ compare-page	Moved	Movida
 	Searchable Image	Imagen con búsqueda
 	Adds invisible text, straightens turned or skewed pages and downsamples finer images to the chosen resolution	Añade texto invisible, endereza las páginas giradas o inclinadas y reduce las imágenes más finas a la resolución elegida
 	Detects turned or skewed pages and straightens them	Detecta páginas giradas o inclinadas y las endereza
+	Signature Properties	Propiedades de la firma
+	Signature Properties…	Propiedades de la firma…
+	Date/Time	Fecha y hora
+	Legal	Legal
+	Revision	Revisión
+	Contact	Contacto
+	Changes after signing	Cambios tras la firma
+	The document has not been modified since this signature was applied.	El documento no se ha modificado desde que se aplicó esta firma.
+	Changes the signer permitted were made: {changes}	Se han hecho cambios permitidos por el firmante: {changes}
+	Changes the signer did not permit were made: {changes}	Se han hecho cambios no permitidos por el firmante: {changes}
+	Trusted timestamp	Marca de hora de confianza
+	Untrusted timestamp	Marca de hora que no es de confianza
+	Signer's computer clock	Reloj del equipo del firmante
+	Time source	Origen de la hora
+	Timestamp authority	Autoridad de marca de hora
+	Claimed signing time	Hora de firma declarada
+	Chosen time	Hora elegida
+	Not available	No disponible
+	Document timestamp	Marca de hora del documento
+	Certification signature	Firma de certificación
+	Approval signature	Firma de aprobación
+	Signature type	Tipo de firma
+	This signature field is not signed.	Este campo de firma no está firmado.
+	Validate Signature	Validar firma
 	Crop Image	Recortar imagen

@@ -2227,4 +2227,28 @@ compare-page	Moved	Áthelyezve
 	Searchable Image	Kereshető kép
 	Adds invisible text, straightens turned or skewed pages and downsamples finer images to the chosen resolution	Láthatatlan szöveget ad hozzá, kiegyenesíti az elforgatott vagy ferde oldalakat, és a finomabb képeket a választott felbontásra csökkenti
 	Detects turned or skewed pages and straightens them	Felismeri az elforgatott vagy ferde oldalakat, és kiegyenesíti őket
+	Signature Properties	Aláírás tulajdonságai
+	Signature Properties…	Aláírás tulajdonságai…
+	Date/Time	Dátum/idő
+	Legal	Jogi információk
+	Revision	Változat
+	Contact	Kapcsolat
+	Changes after signing	Aláírás utáni módosítások
+	The document has not been modified since this signature was applied.	A dokumentumot az aláírás alkalmazása óta nem módosították.
+	Changes the signer permitted were made: {changes}	Az aláíró által engedélyezett módosítások történtek: {changes}
+	Changes the signer did not permit were made: {changes}	Az aláíró által nem engedélyezett módosítások történtek: {changes}
+	Trusted timestamp	Megbízható időbélyeg
+	Untrusted timestamp	Nem megbízható időbélyeg
+	Signer's computer clock	Az aláíró számítógépének órája
+	Time source	Időforrás
+	Timestamp authority	Időbélyeg-szolgáltató
+	Claimed signing time	Megadott aláírási idő
+	Chosen time	Választott idő
+	Not available	Nem érhető el
+	Document timestamp	Dokumentum-időbélyeg
+	Certification signature	Tanúsító aláírás
+	Approval signature	Jóváhagyó aláírás
+	Signature type	Aláírás típusa
+	This signature field is not signed.	Ez az aláírásmező nincs aláírva.
+	Validate Signature	Aláírás ellenőrzése
 	Crop Image	Kép körbevágása
