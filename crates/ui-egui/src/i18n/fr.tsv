@@ -2226,6 +2226,9 @@ compare-page	Moved	Déplacée
 	{n} objects with unsaved changes are estimated, not measured in the file.	{n} objets modifiés non enregistrés sont estimés, et non mesurés dans le fichier.
 	{n} bytes of compressed object streams are shared out among their objects by decoded size.	{n} octets de flux d'objets compressés sont répartis entre leurs objets selon leur taille décodée.
 	This document does not allow copying text, so its paragraphs can't be opened for editing. Open it with the permissions password.	Ce document n'autorise pas la copie de texte : ses paragraphes ne peuvent donc pas être ouverts pour modification. Ouvrez-le avec le mot de passe des autorisations.
+	Searchable Image	Image recherchable
+	Adds invisible text, straightens turned or skewed pages and downsamples finer images to the chosen resolution	Ajoute du texte invisible, redresse les pages pivotées ou inclinées et sous-échantillonne les images plus fines à la résolution choisie
+	Detects turned or skewed pages and straightens them	Détecte les pages pivotées ou inclinées et les redresse
 	Signature Properties	Propriétés de la signature
 	Signature Properties…	Propriétés de la signature…
 	Date/Time	Date et heure

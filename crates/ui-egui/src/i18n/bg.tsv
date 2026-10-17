@@ -2188,6 +2188,9 @@ compare-page	Moved	Преместена
 	{n} objects with unsaved changes are estimated, not measured in the file.	Обектите с незапазени промени ({n}) са оценени, а не измерени във файла.
 	{n} bytes of compressed object streams are shared out among their objects by decoded size.	{n} байта от компресирани потоци от обекти са разпределени между обектите им според декодирания размер.
 	This document does not allow copying text, so its paragraphs can't be opened for editing. Open it with the permissions password.	Този документ не позволява копиране на текст, затова абзаците му не могат да се отварят за редактиране. Отворете го с паролата за разрешения.
+	Searchable Image	Изображение с възможност за търсене
+	Adds invisible text, straightens turned or skewed pages and downsamples finer images to the chosen resolution	Добавя невидим текст, изправя завъртени или наклонени страници и намалява по-подробните изображения до избраната разделителна способност
+	Detects turned or skewed pages and straightens them	Открива завъртени или наклонени страници и ги изправя
 	Signature Properties	Свойства на подписа
 	Signature Properties…	Свойства на подписа…
 	Date/Time	Дата и час

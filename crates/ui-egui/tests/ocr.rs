@@ -120,3 +120,28 @@ fn recognition_review_corrects_words_and_cancel_or_stale_apply_preserves_the_doc
         assert_eq!(h.state().session.get(id).unwrap().bytes, before);
     }
 }
+
+#[test]
+fn choosing_searchable_image_straightens_pages() {
+    let mut h = Harness::builder().with_size(egui::vec2(1400.0, 900.0)).build_eframe(|_cc| {
+        let mut app = PdfCraftApp::new();
+        app.set_option("language", "en").unwrap();
+        app.open_bytes("scan.pdf", None, scan()).unwrap();
+        app
+    });
+    h.run_steps(4);
+    assert!(h.state_mut().execute("ocr.recognize"));
+    h.run_steps(2);
+    assert!(!h.state().ocr_draft.straighten, "Exact by default");
+    h.get_by_value("Searchable Image (Exact)").click();
+    h.run_steps(2);
+    h.get_by_label("Searchable Image").click();
+    h.run_steps(2);
+    let d = &h.state().ocr_draft;
+    assert!(d.straighten && d.deskew, "Searchable Image straightens and turns on deskew");
+    h.get_by_value("Searchable Image").click();
+    h.run_steps(2);
+    h.get_by_label("Searchable Image (Exact)").click();
+    h.run_steps(2);
+    assert!(!h.state().ocr_draft.straighten);
+}

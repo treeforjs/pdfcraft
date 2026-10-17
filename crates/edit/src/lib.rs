@@ -360,6 +360,31 @@ pub fn stamp(doc: &mut Document, page: usize, tag: &str, content: Vec<u8>) -> Re
     place_tagged(doc, &p, tag, content, false)
 }
 
+/// Transform everything page `page` (0-based) draws by `matrix` (user space), as Searchable
+/// Image straightening does: the whole content, marks included, is wrapped in `q … cm` / `Q`
+/// streams tagged `Straighten`. Content added later goes after the wrapper, so it is not turned.
+pub fn transform_page(doc: &mut Document, page: usize, matrix: [f64; 6]) -> Result<(), EditError> {
+    let all = page_list(doc);
+    check(&[page], all.len())?;
+    let [a, b, c, d, _, _] = matrix;
+    if !matrix.iter().all(|v| v.is_finite() && v.abs() < 1e7) || (a * d - b * c).abs() < 1e-9 {
+        return Err(EditError::Invalid("the page transform must be finite and invertible".into()));
+    }
+    let p = page_list(doc).swap_remove(page);
+    let mut list = contents(doc, &p)?;
+    if list.is_empty() {
+        return Ok(());
+    }
+    let nums: Vec<String> = matrix.iter().map(|v| format!("{v:.6}").trim_end_matches('0').trim_end_matches('.').to_string()).collect();
+    let open = format!("q {} cm\n", nums.join(" "));
+    let open = Object::Ref(doc.add(Object::Stream(Stream::from_raw(tagged("Straighten"), open.into_bytes()))));
+    let close = Object::Ref(doc.add(Object::Stream(Stream::from_raw(tagged("Straighten"), b"Q\n".to_vec()))));
+    list.insert(0, open);
+    list.push(close);
+    doc.update_dict(p.obj, |d| d.set(b"Contents".to_vec(), Object::Array(list)))?;
+    Ok(())
+}
+
 fn begin(kind: MarkKind, subtype: &str, matrix: [f64; 6]) -> String {
     format!(
         "q\n/Artifact <</Type /Pagination /Subtype /{subtype} /PCMark /{}>> BDC\n{} {} {} {} {} {} cm\n",

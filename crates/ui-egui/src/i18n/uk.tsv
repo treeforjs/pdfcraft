@@ -2249,6 +2249,9 @@ compare-page	Moved	Переміщена
 	{n} objects with unsaved changes are estimated, not measured in the file.	Об’єкти з незбереженими змінами ({n}) оцінено, а не виміряно у файлі.
 	{n} bytes of compressed object streams are shared out among their objects by decoded size.	{n} байтів стиснених потоків об’єктів розподілено між їхніми об’єктами за розміром після розпакування.
 	This document does not allow copying text, so its paragraphs can't be opened for editing. Open it with the permissions password.	Цей документ не дозволяє копіювати текст, тому його абзаци не можна відкрити для редагування. Відкрийте його з паролем дозволів.
+	Searchable Image	Зображення з пошуком
+	Adds invisible text, straightens turned or skewed pages and downsamples finer images to the chosen resolution	Додає невидимий текст, вирівнює повернуті або нахилені сторінки та зменшує детальніші зображення до вибраної роздільної здатності
+	Detects turned or skewed pages and straightens them	Виявляє повернуті або нахилені сторінки та вирівнює їх
 	Signature Properties	Властивості підпису
 	Signature Properties…	Властивості підпису…
 	Date/Time	Дата й час
