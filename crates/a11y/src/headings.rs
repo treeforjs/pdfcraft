@@ -48,7 +48,19 @@ pub enum HeadingKind {
     Nested,
 }
 
-fn non_blank(s: &Option<String>) -> Option<String> {
+/// The level of heading node `i` of `kind`: its number, or for a plain `H` one per Sect, Part
+/// or Art around it (at least 1).
+pub(crate) fn level_of(tags: &Tags, i: usize, kind: HeadingKind) -> usize {
+    match kind {
+        HeadingKind::Numbered(n) => n,
+        HeadingKind::Nested => {
+            let sections = tags.ancestors(i).filter(|a| tags.nodes.get(*a).is_some_and(|n| matches!(n.role(), "Sect" | "Part" | "Art"))).count();
+            sections.clamp(1, MAX_HEADING_LEVEL)
+        }
+    }
+}
+
+pub(crate) fn non_blank(s: &Option<String>) -> Option<String> {
     s.as_deref().map(str::trim).filter(|t| !t.is_empty()).map(str::to_string)
 }
 
@@ -57,13 +69,7 @@ pub fn headings(tags: &Tags) -> Vec<Heading> {
     let mut out = Vec::new();
     for (i, node) in tags.nodes.iter().enumerate() {
         let Some(kind) = heading_level(node.role()) else { continue };
-        let level = match kind {
-            HeadingKind::Numbered(n) => n,
-            HeadingKind::Nested => {
-                let sections = tags.ancestors(i).filter(|a| tags.nodes.get(*a).is_some_and(|n| matches!(n.role(), "Sect" | "Part" | "Art"))).count();
-                sections.clamp(1, MAX_HEADING_LEVEL)
-            }
-        };
+        let level = level_of(tags, i, kind);
         let content = content_of(tags, i);
         let page = content.first().map(|c| c.0).or(node.page);
         out.push(Heading { node: i, level, text: non_blank(&node.actual_text).or_else(|| non_blank(&node.alt)), page, content });
