@@ -63,7 +63,7 @@ proptest = "1"
 
 # ui
 # The design system shared by every craft app (tokens, theme, palette, toasts).
-craft-ui = { git = "https://github.com/treeforjs/craftworks", rev = "fe21697406cbb4058b7e566a6615a4e5da24a2b5", version = "0.1.0" }
+craft-ui = { git = "https://github.com/treeforjs/craftworks", rev = "89ec343834e89dff28a4f975beb97e8749e1dcbe", version = "0.1.0" }
 egui = "0.36"
 egui_extras = { version = "0.36", default-features = false, features = ["svg"] }
 eframe = { version = "0.36", default-features = false }
