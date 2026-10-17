@@ -44,7 +44,8 @@ pub struct OcrSettings {
     pub deskew: bool,
     /// Output Searchable Image instead of Searchable Image (Exact): the rotation and skew found
     /// by `auto_rotate`/`deskew` are also corrected on the page itself, which is turned (in its
-    /// content and `/Rotate`, never resampled) so its text reads straight. Off by default.
+    /// content and `/Rotate`, not resampled) so its text reads straight, and the recognized
+    /// pages' images are downsampled to `dpi` when finer. Off by default.
     pub straighten: bool,
 }
 
@@ -79,6 +80,8 @@ struct Source {
 pub struct OcrReview {
     source: Source,
     pages: Vec<OcrPage>,
+    /// Searchable Image: downsample the recognized pages' images to this resolution.
+    downsample: Option<f32>,
 }
 
 impl OcrReview {
@@ -332,7 +335,8 @@ impl OcrJob {
         if !progress(total, total) {
             return Err("text recognition canceled; no text was applied".into());
         }
-        Ok(OcrReview { source: self.source, pages: out })
+        let downsample = self.settings.straighten.then_some(self.settings.dpi);
+        Ok(OcrReview { source: self.source, pages: out, downsample })
     }
 }
 
@@ -409,11 +413,16 @@ impl Session {
 
     pub fn apply_ocr_review(&mut self, review: &OcrReview) -> Result<usize, String> {
         self.validate_ocr_review(review)?;
-        self.apply_ocr(review.source.doc, &review.pages).map_err(|e| e.to_string())
+        self.apply_ocr_with(review.source.doc, &review.pages, review.downsample).map_err(|e| e.to_string())
     }
 
     /// Add the words found by [`OcrJob::run`] as one undoable step. Returns the number of words.
     pub fn apply_ocr(&mut self, id: DocId, found: &[OcrPage]) -> Result<usize, EditError> {
+        self.apply_ocr_with(id, found, None)
+    }
+
+    /// [`Self::apply_ocr`], also downsampling the recognized pages' images to `downsample` dpi.
+    fn apply_ocr_with(&mut self, id: DocId, found: &[OcrPage], downsample: Option<f32>) -> Result<usize, EditError> {
         let count = self.get(id).ok_or_else(|| EditError::Invalid("no such document".into()))?.info.pages.len();
         self.ocr_authority(id).map_err(EditError::Invalid)?;
         let mut pages = std::collections::BTreeSet::new();
@@ -434,6 +443,10 @@ impl Session {
             if let (true, Some(o), Some(info)) = (p.straighten, p.orientation, infos.get(p.page)) {
                 edits.push(straighten(info, p.page, o)?);
             }
+        }
+        let read: Vec<usize> = found.iter().filter(|p| p.skipped.is_none()).map(|p| p.page).collect();
+        if let Some(ppi) = downsample.filter(|_| !read.is_empty()) {
+            edits.push(Edit::DownsamplePageImages { pages: read, ppi: f64::from(ppi) });
         }
         let words = found.iter().map(OcrPage::word_count).sum();
         if !edits.is_empty() {

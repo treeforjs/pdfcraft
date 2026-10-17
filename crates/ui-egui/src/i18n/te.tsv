@@ -2158,5 +2158,5 @@ compare-page	Moved	తరలించబడింది
 	{n} bytes of compressed object streams are shared out among their objects by decoded size.	కుదించిన ఆబ్జెక్ట్ స్ట్రీమ్‌ల {n} బైట్‌లు డీకోడ్ చేసిన పరిమాణం ప్రకారం వాటి ఆబ్జెక్ట్‌లకు పంచబడ్డాయి.
 	This document does not allow copying text, so its paragraphs can't be opened for editing. Open it with the permissions password.	ఈ పత్రం వచనాన్ని కాపీ చేయడానికి అనుమతించదు, కాబట్టి దాని పేరాలను సవరించడానికి తెరవలేరు. అనుమతుల పాస్‌వర్డ్‌తో దాన్ని తెరవండి.
 	Searchable Image	వెతకగలిగే చిత్రం
-	Adds invisible text and straightens turned or skewed pages; the image is turned, not resampled	కనిపించని పాఠ్యాన్ని జోడించి, తిరిగిన లేదా వంగిన పేజీలను సరిచేస్తుంది; చిత్రం తిప్పబడుతుంది, మళ్లీ నమూనా చేయబడదు
+	Adds invisible text, straightens turned or skewed pages and downsamples finer images to the chosen resolution	కనిపించని పాఠ్యాన్ని జోడించి, తిరిగిన లేదా వంగిన పేజీలను సరిచేసి, ఎక్కువ రిజల్యూషన్ చిత్రాలను ఎంచుకున్న రిజల్యూషన్‌కు తగ్గిస్తుంది
 	Detects turned or skewed pages and straightens them	తిరిగిన లేదా వంగిన పేజీలను గుర్తించి సరిచేస్తుంది

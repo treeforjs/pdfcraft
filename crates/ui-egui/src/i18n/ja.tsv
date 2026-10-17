@@ -2227,5 +2227,5 @@ compare-page	Moved	移動
 	{n} bytes of compressed object streams are shared out among their objects by decoded size.	圧縮されたオブジェクトストリームの {n} バイトは、展開後のサイズに応じて各オブジェクトに配分しています。
 	This document does not allow copying text, so its paragraphs can't be opened for editing. Open it with the permissions password.	この文書ではテキストのコピーが許可されていないため、段落を開いて編集することはできません。権限パスワードで開いてください。
 	Searchable Image	検索可能な画像
-	Adds invisible text and straightens turned or skewed pages; the image is turned, not resampled	透明テキストを追加し、回転または傾いたページをまっすぐにします。画像は回転するだけで再サンプリングされません
+	Adds invisible text, straightens turned or skewed pages and downsamples finer images to the chosen resolution	透明テキストを追加し、回転または傾いたページをまっすぐにして、より高解像度の画像を選択した解像度にダウンサンプルします
 	Detects turned or skewed pages and straightens them	回転または傾いたページを検出してまっすぐにします

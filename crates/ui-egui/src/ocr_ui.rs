@@ -161,7 +161,9 @@ pub(crate) fn body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> (boo
             egui::ComboBox::from_id_salt("ocr-output").selected_text(output).width(220.0).show_ui(ui, |ui| {
                 if ui
                     .selectable_label(d.straighten, tl!("Searchable Image"))
-                    .on_hover_text(tl!("Adds invisible text and straightens turned or skewed pages; the image is turned, not resampled"))
+                    .on_hover_text(tl!(
+                        "Adds invisible text, straightens turned or skewed pages and downsamples finer images to the chosen resolution"
+                    ))
                     .clicked()
                     && !d.straighten
                 {

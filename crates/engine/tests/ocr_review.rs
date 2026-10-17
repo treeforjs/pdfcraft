@@ -382,3 +382,39 @@ fn straightening_a_page_turns_its_content_and_rotate() {
     session.undo(id).unwrap();
     assert_eq!(session.get(id).unwrap().info.pages[0].rotation, 0);
 }
+
+#[test]
+fn searchable_image_downsamples_finer_page_images_and_exact_keeps_them() {
+    // A 400 × 200 px picture shown 100 pt wide: 288 ppi.
+    let mut png = Vec::new();
+    image::RgbImage::from_fn(400, 200, |x, y| image::Rgb([(x % 256) as u8, (y % 256) as u8, 90]))
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .unwrap();
+    let make = || {
+        let mut session = Session::new().with_clock(|| 1_700_000_000);
+        let bytes = session.create_from_images(&[("scan.png".into(), png.clone())]).unwrap();
+        let id = session.open("scan.pdf", None, bytes, None).unwrap();
+        let change = pdfcraft_engine::ImageEdit::Move([0.0, 0.0, 100.0, 50.0]);
+        session.apply(id, Edit::EditPageImage { page: 0, index: 0, change }).unwrap();
+        let bytes = session.save_bytes(id).unwrap();
+        let mut session = Session::new().with_clock(|| 1_700_000_000);
+        let id = session.open("scan.pdf", None, bytes, None).unwrap();
+        (session, id)
+    };
+    let pixels_of = |session: &Session, id| {
+        let image = &session.get(id).unwrap().page_images(0)[0];
+        (image.width, image.height)
+    };
+    let (mut session, id) = make();
+    assert_eq!(pixels_of(&session, id), (400, 200));
+    let review = session.ocr_job_checked(id, &[], OcrSettings { straighten: true, ..settings() }).unwrap().run(&Reader::new(), |_, _| true).unwrap();
+    session.apply_ocr_review(&review).unwrap();
+    assert_eq!(pixels_of(&session, id), (100, 50), "down to 72 ppi");
+    assert_eq!(session.get(id).unwrap().can_undo(), Some("Recognize text"), "one step");
+    session.undo(id).unwrap();
+    assert_eq!(pixels_of(&session, id), (400, 200));
+    let (mut exact, id) = make();
+    let review = exact.ocr_job_checked(id, &[], settings()).unwrap().run(&Reader::new(), |_, _| true).unwrap();
+    exact.apply_ocr_review(&review).unwrap();
+    assert_eq!(pixels_of(&exact, id), (400, 200), "Exact keeps the image");
+}

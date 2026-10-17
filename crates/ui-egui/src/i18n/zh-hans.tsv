@@ -2191,5 +2191,5 @@ compare-page	Moved	已移动
 	{n} bytes of compressed object streams are shared out among their objects by decoded size.	压缩对象流中的 {n} 字节按解码后大小分摊给其中的对象。
 	This document does not allow copying text, so its paragraphs can't be opened for editing. Open it with the permissions password.	此文档不允许复制文本，因此无法打开其段落进行编辑。请使用权限密码打开。
 	Searchable Image	可搜索图像
-	Adds invisible text and straightens turned or skewed pages; the image is turned, not resampled	添加不可见文本并拉直旋转或倾斜的页面；图像只旋转，不重新采样
+	Adds invisible text, straightens turned or skewed pages and downsamples finer images to the chosen resolution	添加不可见文本，拉直旋转或倾斜的页面，并将更精细的图像缩减采样到所选分辨率
 	Detects turned or skewed pages and straightens them	检测旋转或倾斜的页面并将其拉直

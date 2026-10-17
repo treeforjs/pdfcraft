@@ -1120,7 +1120,7 @@ pub fn tools() -> Vec<ToolDef> {
                     "skip_text_pages": { "type": "boolean", "description": "Leave pages that already contain text alone (default true)." },
                     "auto_rotate": { "type": "boolean", "description": "Detect pages turned by 90, 180 or 270 degrees and read them upright (default false). Detection compares recognition of reduced copies; the page image is not changed and the text is placed over the original words." },
                     "deskew": { "type": "boolean", "description": "Detect skew of up to 15 degrees and read the page straightened (default false). The page image is not changed unless output is straighten." },
-                    "output": { "type": "string", "enum": ["exact", "straighten"], "description": "exact (default): Searchable Image (Exact), the page is not changed. straighten: Searchable Image, pages found turned or skewed by auto_rotate/deskew are also turned straight (content and /Rotate; nothing is resampled)." },
+                    "output": { "type": "string", "enum": ["exact", "straighten"], "description": "exact (default): Searchable Image (Exact), the page is not changed. straighten: Searchable Image, pages found turned or skewed by auto_rotate/deskew are also turned straight (content and /Rotate), and the recognized pages' images finer than dpi are downsampled to it." },
                 }),
                 &["doc"],
             )),
@@ -1134,7 +1134,7 @@ pub fn tools() -> Vec<ToolDef> {
                     "language": { "type": "string", "enum": ["en"] },
                     "auto_rotate": { "type": "boolean", "description": "Detect pages turned by 90, 180 or 270 degrees and read them upright (default false). Detection compares recognition of reduced copies; the page image is not changed and the text is placed over the original words." },
                     "deskew": { "type": "boolean", "description": "Detect skew of up to 15 degrees and read the page straightened (default false). The page image is not changed unless output is straighten." },
-                    "output": { "type": "string", "enum": ["exact", "straighten"], "description": "exact (default): Searchable Image (Exact), the page is not changed. straighten: Searchable Image, pages found turned or skewed by auto_rotate/deskew are also turned straight (content and /Rotate; nothing is resampled)." },
+                    "output": { "type": "string", "enum": ["exact", "straighten"], "description": "exact (default): Searchable Image (Exact), the page is not changed. straighten: Searchable Image, pages found turned or skewed by auto_rotate/deskew are also turned straight (content and /Rotate), and the recognized pages' images finer than dpi are downsampled to it." },
                 }),
                 &["paths", "folder"],
             )),
@@ -1150,7 +1150,7 @@ pub fn tools() -> Vec<ToolDef> {
                 "skip_text_pages": {"type":"boolean"},
                 "auto_rotate": {"type":"boolean", "description":"Detect 90/180/270-degree page turns and read pages upright (default false); the image is not changed."},
                 "deskew": {"type":"boolean", "description":"Detect skew up to 15 degrees and read pages straightened (default false); the image is not changed unless output is straighten."},
-                "output": { "type": "string", "enum": ["exact", "straighten"], "description": "exact (default): Searchable Image (Exact), the page is not changed. straighten: Searchable Image, pages found turned or skewed by auto_rotate/deskew are also turned straight (content and /Rotate; nothing is resampled)." }
+                "output": { "type": "string", "enum": ["exact", "straighten"], "description": "exact (default): Searchable Image (Exact), the page is not changed. straighten: Searchable Image, pages found turned or skewed by auto_rotate/deskew are also turned straight (content and /Rotate), and the recognized pages' images finer than dpi are downsampled to it." }
             }), &["doc"])),
         t("ocr_review", "Inspect recognized text draft", "List recognized words, page coordinates and skipped-page reasons. Does not change the PDF. If the document changed, was closed or no longer allows copying and changes, returns an error and discards the draft instead of its words.")
             .ro().cmd("ocr.recognize").with(schema(json!({"doc":doc()}), &["doc"])),

@@ -2140,5 +2140,5 @@ compare-page	Moved	Перемещена
 	{n} bytes of compressed object streams are shared out among their objects by decoded size.	{n} байт сжатых потоков объектов распределены между их объектами по размеру после распаковки.
 	This document does not allow copying text, so its paragraphs can't be opened for editing. Open it with the permissions password.	Этот документ не разрешает копировать текст, поэтому его абзацы нельзя открыть для редактирования. Откройте его с паролем разрешений.
 	Searchable Image	Доступное для поиска изображение
-	Adds invisible text and straightens turned or skewed pages; the image is turned, not resampled	Добавляет невидимый текст и выравнивает повёрнутые или наклонённые страницы; изображение поворачивается без передискретизации
+	Adds invisible text, straightens turned or skewed pages and downsamples finer images to the chosen resolution	Добавляет невидимый текст, выравнивает повёрнутые или наклонённые страницы и уменьшает более детальные изображения до выбранного разрешения
 	Detects turned or skewed pages and straightens them	Находит повёрнутые или наклонённые страницы и выравнивает их

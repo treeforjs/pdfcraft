@@ -2113,5 +2113,5 @@ compare-page	Moved	已移動
 	{n} bytes of compressed object streams are shared out among their objects by decoded size.	壓縮物件串流中的 {n} 位元組依解碼後大小分攤給其中的物件。
 	This document does not allow copying text, so its paragraphs can't be opened for editing. Open it with the permissions password.	此文件不允許複製文字，因此無法開啟其段落進行編輯。請使用許可權密碼開啟。
 	Searchable Image	可搜尋圖片
-	Adds invisible text and straightens turned or skewed pages; the image is turned, not resampled	加入不可見文字並拉直旋轉或傾斜的頁面；圖片只旋轉，不重新取樣
+	Adds invisible text, straightens turned or skewed pages and downsamples finer images to the chosen resolution	加入不可見文字，拉直旋轉或傾斜的頁面，並將更精細的圖片降低取樣至所選解析度
 	Detects turned or skewed pages and straightens them	偵測旋轉或傾斜的頁面並將其拉直

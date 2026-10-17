@@ -2227,5 +2227,5 @@ compare-page	Moved	Verschoben
 	{n} bytes of compressed object streams are shared out among their objects by decoded size.	{n} Byte komprimierter Objektstreams werden nach dekodierter Größe auf ihre Objekte verteilt.
 	This document does not allow copying text, so its paragraphs can't be opened for editing. Open it with the permissions password.	Dieses Dokument erlaubt kein Kopieren von Text, daher können seine Absätze nicht zum Bearbeiten geöffnet werden. Öffne es mit dem Berechtigungspasswort.
 	Searchable Image	Durchsuchbares Bild
-	Adds invisible text and straightens turned or skewed pages; the image is turned, not resampled	Fügt unsichtbaren Text hinzu und richtet gedrehte oder schiefe Seiten gerade aus; das Bild wird gedreht, nicht neu berechnet
+	Adds invisible text, straightens turned or skewed pages and downsamples finer images to the chosen resolution	Fügt unsichtbaren Text hinzu, richtet gedrehte oder schiefe Seiten gerade aus und rechnet feinere Bilder auf die gewählte Auflösung herunter
 	Detects turned or skewed pages and straightens them	Erkennt gedrehte oder schiefe Seiten und richtet sie gerade aus
