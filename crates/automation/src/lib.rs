@@ -222,6 +222,7 @@ impl Automation {
             "page_insert_file" => self.insert_file(&a)?,
             "page_extract" => self.page_extract(&a)?,
             "doc_combine" => self.doc_combine(&a)?,
+            "doc_bates_files" => self.doc_bates_files(&a)?,
             "doc_create_multiple" => self.doc_create_multiple(&a)?,
             "doc_split" => self.doc_split(&a)?,
             "edit_undo" => {
@@ -1098,7 +1099,7 @@ impl Automation {
     }
 
     fn marks(&mut self, tool: &str, a: &Args) -> Result<Value> {
-        use pdfcraft_engine::{Background, HeaderFooter, MarkKind, Watermark};
+        use pdfcraft_engine::{Background, MarkKind, Watermark};
         let n = self.doc(a)?.info.pages.len();
         let pages = match a.opt_ints("pages")? {
             Some(_) => self.pages(a, "pages")?,
@@ -1108,24 +1109,7 @@ impl Automation {
             |key: &str, default: [f64; 3]| -> Result<[f64; 3]> { Ok(a.opt_str(key)?.map(comments::parse_color).transpose()?.unwrap_or(default)) };
         let replace = a.opt_bool("replace")?.unwrap_or(false);
         let edit = match tool {
-            "doc_header_footer" => {
-                let mut hf = HeaderFooter::default();
-                for (k, key) in ["header_left", "header_center", "header_right", "footer_left", "footer_center", "footer_right"].iter().enumerate() {
-                    hf.text[k] = a.opt_str(key)?.unwrap_or_default().to_string();
-                }
-                if let Some(s) = a.opt_num("font_size")? {
-                    hf.font_size = s;
-                }
-                hf.color = color("color", hf.color)?;
-                if let Some(m) = a.get("margins").and_then(Value::as_array) {
-                    let m: Vec<f64> = m.iter().filter_map(Value::as_f64).collect();
-                    hf.margins = <[f64; 4]>::try_from(m).map_err(|_| ToolError::InvalidArgs("margins must be 4 numbers".into()))?;
-                }
-                if let Some(s) = a.opt_int("start_number")? {
-                    hf.start_number = s.clamp(1, u32::MAX as i64) as u32;
-                }
-                Edit::AddHeaderFooter { pages, settings: hf, replace }
-            }
+            "doc_header_footer" => Edit::AddHeaderFooter { pages, settings: header_footer(a)?, replace },
             "doc_watermark" => {
                 let d = Watermark::default();
                 let file = self.mark_file(a)?;
@@ -1540,6 +1524,63 @@ impl Automation {
             out["original"] = deleted;
         }
         Ok(out)
+    }
+
+    /// Bates numbers across a list of files, continuing from one file to the next (Acrobat's
+    /// Bates Numbering ▸ Add with several files). Each numbered copy is written into `out_dir`
+    /// as `<name><suffix>.pdf`, never over an existing file; the originals are left alone. A file
+    /// that can't be opened or numbered is reported and stops the run, so the numbers stay
+    /// unbroken.
+    fn doc_bates_files(&mut self, a: &Args) -> Result<Value> {
+        let paths = a.strs("paths")?;
+        if paths.is_empty() || paths.len() > pdfcraft_engine::MAX_CREATE_FILES {
+            return Err(ToolError::InvalidArgs(format!("paths must list 1 to {} files", pdfcraft_engine::MAX_CREATE_FILES)));
+        }
+        let passwords: Vec<Option<String>> = match a.get("passwords") {
+            None | Some(Value::Null) => vec![None; paths.len()],
+            Some(Value::Array(v)) if v.len() == paths.len() && v.iter().all(|x| x.is_string() || x.is_null()) => {
+                v.iter().map(|x| x.as_str().map(str::to_owned)).collect()
+            }
+            Some(_) => return Err(ToolError::InvalidArgs("passwords must list a password (or null) for each path".into())),
+        };
+        let mut hf = header_footer(a)?;
+        let Some(first) = hf.text.iter().find_map(|t| pdfcraft_engine::bates_start(t)) else {
+            return Err(ToolError::InvalidArgs("put a <<Bates Number#digits#start#prefix#suffix>> token in a header or footer".into()));
+        };
+        let mut next = match a.opt_int("start")? {
+            Some(n) if n >= 0 => n as u64,
+            Some(_) => return Err(ToolError::InvalidArgs("start must not be negative".into())),
+            None => first,
+        };
+        let replace = a.opt_bool("replace")?.unwrap_or(false);
+        let suffix = a.opt_str("suffix")?.unwrap_or("_bates").to_string();
+        let templates = hf.text.clone();
+        let dir = self.resolve(a.str("out_dir")?, true)?;
+        std::fs::create_dir_all(&dir).map_err(|e| failed(format!("{}: {e}", dir.display())))?;
+        let mut files = Vec::new();
+        for (p, password) in paths.into_iter().zip(passwords) {
+            let src = self.resolve(p, false)?;
+            let bytes = std::fs::read(&src).map_err(|e| failed(format!("{}: {e}", src.display())))?;
+            let name = src.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            let stem = src.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "document".into());
+            let id = self.session.open(name, None, Arc::new(bytes), password.as_deref()).map_err(|e| failed(format!("{p}: {e}")))?;
+            let numbered = (|| {
+                let count = self.session.get(id).map(|d| d.info.pages.len()).unwrap_or(0);
+                for (t, template) in hf.text.iter_mut().zip(&templates) {
+                    *t = pdfcraft_engine::with_bates_start(template, next);
+                }
+                self.session.apply(id, Edit::AddHeaderFooter { pages: (0..count).collect(), settings: hf.clone(), replace })?;
+                Ok::<_, pdfcraft_engine::EditError>((count, self.session.save_bytes(id)?))
+            })();
+            self.session.close(id);
+            let (count, pdf) = numbered.map_err(|e| failed(format!("{p}: {e}")))?;
+            let target = unused(&dir, &format!("{stem}{suffix}"))?;
+            write_atomic(&target, &pdf)?;
+            let last = next.saturating_add((count as u64).saturating_sub(1));
+            files.push(json!({ "path": p, "output": target.to_string_lossy(), "pages": count, "first": next, "last": last }));
+            next = last.saturating_add(1);
+        }
+        Ok(json!({ "files": files, "next": next }))
     }
 
     fn doc_combine(&mut self, a: &Args) -> Result<Value> {
@@ -2316,6 +2357,28 @@ fn extract_each(
 /// The file `name` inside `dir`, where `name` comes from a document or an argument: separators,
 /// colons (a Windows drive or stream) and control characters become `_`, and a name of only dots
 /// gets a leading `_`, so it is one plain file name and can't lead out of `dir`.
+/// Header and footer settings from `doc_header_footer`'s arguments.
+fn header_footer(a: &Args) -> Result<pdfcraft_engine::HeaderFooter> {
+    let mut hf = pdfcraft_engine::HeaderFooter::default();
+    for (k, key) in ["header_left", "header_center", "header_right", "footer_left", "footer_center", "footer_right"].iter().enumerate() {
+        hf.text[k] = a.opt_str(key)?.unwrap_or_default().to_string();
+    }
+    if let Some(s) = a.opt_num("font_size")? {
+        hf.font_size = s;
+    }
+    if let Some(c) = a.opt_str("color")? {
+        hf.color = comments::parse_color(c)?;
+    }
+    if let Some(m) = a.get("margins").and_then(Value::as_array) {
+        let m: Vec<f64> = m.iter().filter_map(Value::as_f64).collect();
+        hf.margins = <[f64; 4]>::try_from(m).map_err(|_| ToolError::InvalidArgs("margins must be 4 numbers".into()))?;
+    }
+    if let Some(s) = a.opt_int("start_number")? {
+        hf.start_number = s.clamp(1, u32::MAX as i64) as u32;
+    }
+    Ok(hf)
+}
+
 fn child(dir: &Path, name: &str) -> PathBuf {
     let mut safe: String = name.chars().map(|c| if matches!(c, '/' | '\\' | ':') || c.is_control() { '_' } else { c }).collect();
     if safe.chars().all(|c| c == '.') {
