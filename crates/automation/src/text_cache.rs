@@ -205,7 +205,7 @@ mod tests {
     use serde_json::json;
 
     fn page(glyphs: usize) -> Arc<PageText> {
-        let glyphs = (0..glyphs).map(|i| TextGlyph { text: "x".into(), rect: [i as f32, 0.0, i as f32 + 1.0, 1.0] }).collect();
+        let glyphs = (0..glyphs).map(|i| TextGlyph { text: "x".into(), rect: [i as f32, 0.0, i as f32 + 1.0, 1.0], mcid: None }).collect();
         Arc::new(pdfcraft_render::text::layout(glyphs))
     }
 

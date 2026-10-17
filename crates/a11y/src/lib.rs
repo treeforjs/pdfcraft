@@ -14,11 +14,13 @@ use pdfcraft_cos::Document;
 
 mod alt;
 mod content;
+mod headings;
 mod report;
 mod structure;
 mod tags;
 
 pub use alt::{AltError, Figure, figures, mark_decorative, set_alt};
+pub use headings::{Heading, HeadingKind, MAX_HEADING_LEVEL, heading_level, headings};
 pub use report::report_html;
 pub use tags::{
     AltTargets, FigureTarget, MAX_TEXT, TagChange, TagError, TagKid, TagNode, Tags, UntaggedImage, allowed_types, alt_targets, set_tag, tag_image,

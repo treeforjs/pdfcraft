@@ -1498,3 +1498,89 @@ fn bookmark_actions_survive_a_looping_outline() {
     d.update_dict(b, |t| t.set(b"First".to_vec(), Object::Ref(a))).unwrap();
     assert_eq!(crate::bookmark_actions(&d).len(), 2);
 }
+
+fn entry(title: &str, level: usize, page: usize, top: Option<f64>) -> OutlineEntry {
+    OutlineEntry { title: title.into(), level, page, top }
+}
+
+/// Titles by path, for comparing trees.
+fn tree(marks: &[Bookmark]) -> Vec<(usize, String, bool)> {
+    let mut out = Vec::new();
+    fn go(marks: &[Bookmark], depth: usize, out: &mut Vec<(usize, String, bool)>) {
+        for m in marks {
+            out.push((depth, m.title.clone(), m.open));
+            go(&m.children, depth + 1, out);
+        }
+    }
+    go(marks, 0, &mut out);
+    out
+}
+
+#[test]
+fn bookmark_trees_nest_by_level_and_append_or_replace() {
+    let mut doc = open(fixture());
+    add_bookmark(&mut doc, &[], 0, "Existing", 0).unwrap();
+    let entries = [
+        entry("Intro", 1, 0, Some(380.0)),
+        entry("Background", 2, 0, None),
+        entry("Detail", 4, 1, Some(f64::NAN)), // skips a level: still nests under Background
+        entry("Method", 2, 1, None),
+        entry("Results", 1, 2, Some(100.0)),
+    ];
+    assert_eq!(add_bookmark_tree(&mut doc, &entries, false).unwrap(), 5);
+    let doc = save_and_reopen(&doc);
+    let t = tree(&bookmarks(&doc));
+    let want: Vec<(usize, String, bool)> =
+        [(0, "Existing", false), (0, "Intro", true), (1, "Background", true), (2, "Detail", false), (1, "Method", false), (0, "Results", false)]
+            .map(|(d, s, o)| (d, s.to_string(), o))
+            .to_vec();
+    assert_eq!(t, want);
+    // Destinations: XYZ with the top when it is known (and finite).
+    let marks = bookmarks(&doc);
+    let dest = |r: ObjRef| doc.get(r).as_dict().and_then(|d| d.get(b"Dest").cloned()).unwrap();
+    let pages = pages(&doc).unwrap();
+    let Object::Array(intro) = dest(marks[1].obj) else { panic!() };
+    assert_eq!(intro[0], Object::Ref(pages[0].obj));
+    assert_eq!(intro[3].as_f64(), Some(380.0));
+    let detail = marks[1].children[0].children[0].obj;
+    let Object::Array(d) = dest(detail) else { panic!() };
+    assert_eq!((d[0].clone(), d[3].clone()), (Object::Ref(pages[1].obj), Object::Null));
+    // Counts: the root sees all six; Intro's three descendants are visible.
+    let root = doc.get(doc.root().unwrap()).as_dict().unwrap().reference(b"Outlines").unwrap();
+    assert_eq!(doc.get(root).as_dict().unwrap().int(b"Count"), Some(6));
+    assert_eq!(doc.get(marks[1].obj).as_dict().unwrap().int(b"Count"), Some(3));
+    // Edits through paths still work on the generated tree.
+    let mut doc = doc;
+    rename_bookmark(&mut doc, &[1, 0, 0], "Details").unwrap();
+    assert_eq!(bookmarks(&doc)[1].children[0].children[0].title, "Details");
+
+    // Replace: only the new tree remains.
+    assert_eq!(add_bookmark_tree(&mut doc, &[entry("Only", 1, 2, None)], true).unwrap(), 1);
+    let doc = save_and_reopen(&doc);
+    assert_eq!(tree(&bookmarks(&doc)), vec![(0, "Only".to_string(), false)]);
+}
+
+#[test]
+fn bookmark_trees_refuse_missing_pages_and_blank_titles_without_changing_anything() {
+    let mut doc = open(fixture());
+    let before = bookmarks(&doc);
+    assert_eq!(
+        add_bookmark_tree(&mut doc, &[entry("A", 1, 0, None), entry("B", 1, 9, None)], false),
+        Err(OutlineError::Organize(OrganizeError::NoSuchPage(9)))
+    );
+    assert_eq!(add_bookmark_tree(&mut doc, &[entry("  ", 1, 0, None)], true), Err(OutlineError::EmptyTitle));
+    assert_eq!(bookmarks(&doc), before);
+    assert!(doc.get(doc.root().unwrap()).as_dict().unwrap().get(b"Outlines").is_none());
+    // Nothing to add is fine, and hostile levels (0, huge) neither panic nor nest past the cap.
+    assert_eq!(add_bookmark_tree(&mut doc, &[], false).unwrap(), 0);
+    let deep: Vec<OutlineEntry> = (0..100).map(|i| entry(&format!("L{i}"), if i == 99 { 0 } else { i + 1 }, 0, None)).collect();
+    assert_eq!(add_bookmark_tree(&mut doc, &deep, true).unwrap(), 100);
+    let mut depth = 0;
+    let mut level = bookmarks(&doc);
+    while let Some(first) = level.first().cloned() {
+        depth += 1;
+        level = first.children;
+    }
+    assert_eq!(depth, MAX_TREE_DEPTH);
+    assert_eq!(bookmarks(&doc).last().map(|b| b.title.clone()), Some("L99".into()));
+}

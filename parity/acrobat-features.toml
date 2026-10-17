@@ -3259,11 +3259,11 @@ title = "Generate bookmarks from headings or tags"
 area = "D"
 tier = "P1"
 milestone = "M4"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["bookmark_from_structure"]
+evidence = ["crates/automation/tests/tags.rs::bookmarks_from_structure_headings_through_tools", "crates/automation/tests/tags.rs::bookmarks_from_structure_refuse_untagged_documents_and_documents_without_headings", "crates/engine/src/tests.rs::heading_bookmarks_come_from_tagged_headings_only", "crates/organize/src/tests.rs::bookmark_trees_nest_by_level_and_append_or_replace", "crates/organize/src/tests.rs::bookmark_trees_refuse_missing_pages_and_blank_titles_without_changing_anything", "crates/a11y/src/tests.rs::headings_in_document_order_with_levels_text_and_content", "crates/render/src/text.rs::glyphs_carry_the_mcid_of_their_marked_content"]
+notes = "Engine + agent tool (undoable Edit::AddBookmarkTree): one bookmark per structure heading (H1–H6, Hn, and H leveled by Sect/Part/Art nesting; role-mapped types count), nested by level, titled from /ActualText, else /Alt, else the text of the marked content it covers (glyphs now carry their MCID), going to /XYZ at the heading's top (page only on rotated pages); append or replace, max_level filter; untagged files and files without headings get a clear error. Missing: a menu command and dialog (UI is being redesigned), Acrobat's choice of other structure types than headings (e.g. Figure, Table, P), nesting the new bookmarks under one parent, text inside form XObjects referenced by MCRs with /Stm."
 
 [[feature]]
 id = "organize.attachments-add"

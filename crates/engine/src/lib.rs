@@ -117,7 +117,7 @@ pub use pdfcraft_forms::detect;
 /// Named destinations and explicit views (go-to targets of links and bookmarks).
 pub use pdfcraft_model::dests::{DestError, DestSource, Fit as DestFit, NamedDest, Target as DestTarget, View as DestView};
 pub use pdfcraft_optimize as optimize;
-pub use pdfcraft_organize::BookmarkAction;
+pub use pdfcraft_organize::{BookmarkAction, OutlineEntry};
 pub use pdfcraft_preflight as pdfa;
 pub use pdfcraft_print as print;
 pub use pdfcraft_redact::codes as redaction_codes;
@@ -424,6 +424,98 @@ impl Document {
     /// Tags panel: the structure tree.
     pub fn tags(&self) -> a11y::Tags {
         self.editor.as_ref().map(|e| a11y::tags(&e.cos)).unwrap_or_default()
+    }
+
+    /// New Bookmarks from Structure: one bookmark per heading of the structure tree (H, H1–H6,
+    /// Hn), nested by level, titled with the heading's actual or alternate text, else the text
+    /// of the marked content it covers, and going to where the heading starts on its page.
+    /// `max_level` leaves out deeper headings. Apply the result with [`Edit::AddBookmarkTree`].
+    /// Errors when the document has no structure tree or no heading to make a bookmark from.
+    pub fn heading_bookmarks(&self, max_level: Option<usize>) -> Result<HeadingBookmarks, String> {
+        let tags = self.tags();
+        if !tags.exists {
+            return Err("the document is not tagged: it has no structure tree to make bookmarks from (add tags first)".into());
+        }
+        let all = a11y::headings(&tags);
+        if all.is_empty() {
+            return Err("the structure tree has no headings (H, H1–H6) to make bookmarks from".into());
+        }
+        let list: Vec<&a11y::Heading> = all.iter().filter(|h| max_level.is_none_or(|m| h.level <= m)).collect();
+        if list.is_empty() {
+            return Err(format!("no heading is at level {} or above", max_level.unwrap_or(0)));
+        }
+        // The text of each page a heading needs, extracted once.
+        let config = RenderConfig { password: self.password.as_deref().map(Arc::from), ..Default::default() };
+        let mut renderer: Option<pdfcraft_render::PageRenderer> = None;
+        let mut texts: std::collections::HashMap<usize, Option<Arc<pdfcraft_render::PageText>>> = std::collections::HashMap::new();
+        let mut page_text = |page: usize| -> Option<Arc<pdfcraft_render::PageText>> {
+            texts
+                .entry(page)
+                .or_insert_with(|| {
+                    let r = renderer.get_or_insert_with(|| pdfcraft_render::PageRenderer::new(self.bytes.clone(), config.clone()));
+                    r.render(pdfcraft_render::RenderRequest { page, kind: pdfcraft_render::RequestKind::Text, scale: 1.0, ..Default::default() }).text
+                })
+                .clone()
+        };
+        let mut out = HeadingBookmarks::default();
+        for h in list {
+            let Some(page) = h.page.filter(|p| *p < self.info.pages.len()) else {
+                out.unplaced += 1;
+                continue;
+            };
+            // The heading's glyphs, page by page in the order its content first reaches them.
+            let mut pages: Vec<usize> = Vec::new();
+            for (p, _) in &h.content {
+                if !pages.contains(p) {
+                    pages.push(*p);
+                }
+            }
+            let mut words = String::new();
+            let mut top_rect: Option<[f32; 4]> = None;
+            for p in pages.iter().take(MAX_HEADING_PAGES) {
+                let Some(text) = page_text(*p) else { continue };
+                let mcids: std::collections::HashSet<i64> = h.content.iter().filter(|c| c.0 == *p).map(|c| c.1).collect();
+                let mut last_line = None;
+                for (i, g) in text.glyphs.iter().enumerate() {
+                    if !g.mcid.is_some_and(|m| mcids.contains(&i64::from(m))) {
+                        continue;
+                    }
+                    let line = text.line_of.get(i).copied();
+                    let gap = text.space_before.get(i).copied().unwrap_or(false) || (last_line.is_some() && line != last_line);
+                    if words.len() < MAX_HEADING_BYTES {
+                        if gap || (!words.is_empty() && last_line.is_none()) {
+                            words.push(' ');
+                        }
+                        words.push_str(&g.text);
+                    }
+                    last_line = line;
+                    if *p == page {
+                        top_rect = Some(match top_rect {
+                            Some(r) => [r[0].min(g.rect[0]), r[1].min(g.rect[1]), r[2].max(g.rect[2]), r[3].max(g.rect[3])],
+                            None => g.rect,
+                        });
+                    }
+                }
+            }
+            let title = h.text.clone().unwrap_or(words);
+            let title: String = title.split_whitespace().collect::<Vec<_>>().join(" ").chars().take(MAX_TITLE_CHARS).collect();
+            if title.is_empty() {
+                out.untitled += 1;
+                continue;
+            }
+            // `/XYZ left top zoom` takes a user-space y; on a turned page that is not the
+            // displayed top, so go to the page itself there.
+            let top = match (self.info.pages.get(page), top_rect) {
+                (Some(info), Some(r)) if info.rotation == 0 => Some(f64::from(info.view_to_user(r[0], r[1])[1])),
+                _ => None,
+            };
+            out.entries.push(OutlineEntry { title, level: h.level, page, top });
+        }
+        if out.entries.is_empty() {
+            return Err("no heading has text to use as a bookmark title (nor actual or alternate text)".into());
+        }
+        out.truncated = tags.truncated;
+        Ok(out)
     }
 
     /// Set Alternate Text: the figures and the untagged images.
@@ -961,6 +1053,26 @@ fn restriction_bits(printing: Printing, changes: Changes, copy: bool, accessibil
     p
 }
 
+/// The longest bookmark title made from a heading (characters).
+const MAX_TITLE_CHARS: usize = 512;
+/// Text gathered for one heading stops growing past this many bytes.
+const MAX_HEADING_BYTES: usize = 4096;
+/// A heading's text is read from at most this many pages.
+const MAX_HEADING_PAGES: usize = 4;
+
+/// The bookmarks New Bookmarks from Structure would add ([`Document::heading_bookmarks`]).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct HeadingBookmarks {
+    /// In document order, with their levels.
+    pub entries: Vec<OutlineEntry>,
+    /// Headings left out because they have no text (and no actual or alternate text).
+    pub untitled: usize,
+    /// Headings left out because they are on no page.
+    pub unplaced: usize,
+    /// The structure tree was too large to read in full: later headings may be missing.
+    pub truncated: bool,
+}
+
 /// Edits that can be applied to a document. Page indices are 0-based.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Edit {
@@ -1039,6 +1151,12 @@ pub enum Edit {
     SetBookmarkPage {
         path: Vec<usize>,
         page: usize,
+    },
+    /// New Bookmarks from Structure: add a bookmark tree (from [`Document::heading_bookmarks`])
+    /// after the existing bookmarks, or in place of them all when `replace` is set.
+    AddBookmarkTree {
+        entries: Vec<OutlineEntry>,
+        replace: bool,
     },
     /// Bookmark Properties ▸ Actions: go to a view or named destination, or open a web page.
     SetBookmarkAction {
@@ -1495,6 +1613,7 @@ impl Edit {
             Edit::MoveBookmark { .. } => "Move bookmark".into(),
             Edit::SetBookmarkPage { .. } => "Set bookmark destination".into(),
             Edit::SetBookmarkAction { .. } => "Set bookmark action".into(),
+            Edit::AddBookmarkTree { .. } => "New bookmarks from structure".into(),
             Edit::SetDestination { .. } => "Set destination".into(),
             Edit::RenameDestination { .. } => "Rename destination".into(),
             Edit::DeleteDestination { .. } => "Delete destination".into(),
@@ -1660,6 +1779,7 @@ fn check_permission(edit: &Edit, p: &pdfcraft_cos::Permissions) -> Result<(), Ed
         | Edit::MoveBookmark { .. }
         | Edit::SetBookmarkPage { .. }
         | Edit::SetBookmarkAction { .. }
+        | Edit::AddBookmarkTree { .. }
         | Edit::NumberPages { .. } => {
             if p.assemble() {
                 Ok(())
@@ -1885,6 +2005,9 @@ fn run_edit(doc: &mut pdfcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -> 
         }
         Edit::SetBookmarkPage { path, page } => pdfcraft_organize::set_bookmark_page(doc, path, *page)?,
         Edit::SetBookmarkAction { path, action } => pdfcraft_organize::set_bookmark_action(doc, path, action)?,
+        Edit::AddBookmarkTree { entries, replace } => {
+            pdfcraft_organize::add_bookmark_tree(doc, entries, *replace)?;
+        }
         Edit::SetDestination { name, view } => {
             pdfcraft_model::dests::set(doc, name, view)?;
         }

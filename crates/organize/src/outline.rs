@@ -376,3 +376,91 @@ pub fn set_bookmark_open(doc: &mut Document, path: &[usize], open: bool) -> Resu
     }
     Ok(())
 }
+
+/// One bookmark of a generated outline (New Bookmarks from Structure): a title, its nesting
+/// level (1 = top level of the new bookmarks), and where it goes.
+#[derive(Clone, Debug, PartialEq)]
+pub struct OutlineEntry {
+    pub title: String,
+    /// 1-based level; an entry nests under the nearest earlier entry with a lower level.
+    pub level: usize,
+    /// 0-based page.
+    pub page: usize,
+    /// The user-space y to scroll to (`/XYZ null top null`), or `None` for the top of the page.
+    pub top: Option<f64>,
+}
+
+/// The deepest nesting [`add_bookmark_tree`] writes; deeper entries become children of the
+/// bookmark at this depth.
+pub const MAX_TREE_DEPTH: usize = 32;
+
+/// Add `entries`, in order, as a bookmark tree after the existing top-level bookmarks, or in
+/// place of every bookmark when `replace` is set (the old items are unlinked, as by
+/// [`delete_bookmark`]). Levels need not be consecutive: an H3 right after an H1 nests under it.
+/// New bookmarks with children are shown expanded. Returns the number of bookmarks added.
+pub fn add_bookmark_tree(doc: &mut Document, entries: &[OutlineEntry], replace: bool) -> Result<usize> {
+    let pages = walk(doc)?;
+    // Resolve every destination first, so a bad page leaves the document untouched.
+    let mut dests = Vec::with_capacity(entries.len().min(MAX_ITEMS));
+    for e in entries.iter().take(MAX_ITEMS) {
+        if e.title.trim().is_empty() {
+            return Err(OutlineError::EmptyTitle);
+        }
+        let (p, _) = pages.get(e.page).ok_or(OrganizeError::NoSuchPage(e.page))?;
+        let top = e.top.filter(|t| t.is_finite()).map_or(Object::Null, Object::Real);
+        dests.push(Object::Array(vec![Object::Ref(*p), Object::name("XYZ"), Object::Null, top, Object::Null]));
+    }
+    let root = container(doc, &[])?;
+    let mut top_level = if replace { Vec::new() } else { children_of(doc, root, &mut HashSet::from([root])) };
+    // Parents (index into `made`, or `None` for the top level), in entry order.
+    let mut made: Vec<ObjRef> = Vec::with_capacity(dests.len());
+    let mut kids: Vec<Vec<usize>> = Vec::with_capacity(dests.len());
+    let mut new_top: Vec<usize> = Vec::new();
+    // Open ancestors: (level, index into `made`).
+    let mut stack: Vec<(usize, usize)> = Vec::new();
+    for (i, (e, dest)) in entries.iter().zip(dests).enumerate() {
+        while stack.last().is_some_and(|(level, _)| *level >= e.level) {
+            stack.pop();
+        }
+        if stack.len() >= MAX_TREE_DEPTH {
+            stack.truncate(MAX_TREE_DEPTH - 1);
+        }
+        let mut d = Dict::new();
+        d.set(b"Title".to_vec(), Object::String(PdfString::text(e.title.trim())));
+        d.set(b"Dest".to_vec(), dest);
+        made.push(doc.add(Object::Dict(d)));
+        kids.push(Vec::new());
+        match stack.last() {
+            Some((_, parent)) => {
+                if let Some(k) = kids.get_mut(*parent) {
+                    k.push(i);
+                }
+            }
+            None => new_top.push(i),
+        }
+        stack.push((e.level, i));
+    }
+    // Link each new parent's children; every new parent is open, so its /Count is the number of
+    // its descendants. Children come after their parent, so a reverse pass sees them first.
+    let mut descendants = vec![0i64; made.len()];
+    for i in (0..made.len()).rev() {
+        let (Some(&item), Some(children)) = (made.get(i), kids.get(i)) else { continue };
+        let refs: Vec<ObjRef> = children.iter().filter_map(|c| made.get(*c).copied()).collect();
+        relink(doc, item, &refs)?;
+        let below: i64 = children.iter().map(|c| 1 + descendants.get(*c).copied().unwrap_or(0)).sum();
+        if let Some(slot) = descendants.get_mut(i) {
+            *slot = below;
+        }
+        put(doc, item, b"Count", (below > 0).then_some(Object::Int(below)))?;
+    }
+    top_level.extend(new_top.iter().filter_map(|i| made.get(*i).copied()));
+    relink(doc, root, &top_level)?;
+    // The root counts every visible item: each top-level item plus, when it is open, what its
+    // own (positive) /Count says is visible beneath it. Existing items keep their counts.
+    let visible: i64 = top_level
+        .iter()
+        .map(|k| 1i64.saturating_add(doc.get(*k).as_dict().and_then(|d| d.int(b"Count")).unwrap_or(0).max(0)))
+        .fold(0i64, i64::saturating_add);
+    put(doc, root, b"Count", (visible > 0).then_some(Object::Int(visible)))?;
+    Ok(made.len())
+}

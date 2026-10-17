@@ -293,6 +293,23 @@ impl Automation {
                 let index = a.opt_int("position")?.map_or(usize::MAX, |p| (p.max(1) - 1) as usize);
                 self.apply(&a, Edit::MoveBookmark { from, to_parent, index })?
             }
+            "bookmark_from_structure" => {
+                let replace = a.opt_bool("replace")?.unwrap_or(false);
+                let max_level = match a.opt_int("max_level")? {
+                    Some(m) if !(1..=64).contains(&m) => return Err(ToolError::InvalidArgs("max_level must be between 1 and 64".into())),
+                    m => m.map(|m| m as usize),
+                };
+                let found = self.doc(&a)?.heading_bookmarks(max_level).map_err(failed)?;
+                let added = found.entries.len();
+                let mut out = self.apply(&a, Edit::AddBookmarkTree { entries: found.entries, replace })?;
+                out["added"] = json!(added);
+                out["untitled"] = json!(found.untitled);
+                out["unplaced"] = json!(found.unplaced);
+                out["truncated"] = json!(found.truncated);
+                let actions = self.bookmark_action_map(&a)?;
+                out["bookmarks"] = json!(bookmark_tree(&self.doc(&a)?.info.outline, &[], &actions));
+                out
+            }
             "bookmark_set_page" => {
                 let (path, page) = (a.path("path")?, self.page(&a)?);
                 self.apply(&a, Edit::SetBookmarkPage { path, page })?
