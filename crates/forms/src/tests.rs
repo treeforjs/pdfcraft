@@ -647,6 +647,7 @@ fn tab_order_follows_the_page_setting() {
     let doc = reopen(&doc);
     assert_eq!(order(&doc), "ACBD", "saved as /Tabs");
     assert!(set_tab_order(&mut doc.clone(), &[3], TabOrder::Row).is_err());
+    assert_eq!(tab_orders(&doc), [TabOrder::Column]);
 }
 
 #[test]

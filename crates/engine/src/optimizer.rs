@@ -67,7 +67,7 @@ impl Session {
             discard: discard.to_vec(),
             opts: SaveOptions {
                 mod_date: self.now().map(pdfcraft_cos::pdf_date),
-                object_streams: settings.compress_structure,
+                object_streams: settings.object_streams(),
                 ..SaveOptions::default()
             },
         })

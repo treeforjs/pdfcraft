@@ -3127,11 +3127,11 @@ title = "Page tab order property"
 area = "D"
 tier = "P1"
 milestone = "M6"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["form.tab_order.row", "form.tab_order.column", "form.tab_order.structure"]
+tools = ["form_tab_order"]
+evidence = ["crates/forms/src/tests.rs::tab_order_follows_the_page_setting", "crates/automation/tests/automation.rs::tab_order_and_field_appearance_through_tools"]
+notes = "each page's /Tabs (row, column, structure, unspecified) read and set per page by engine and tools, one undo step. Missing: Page Properties dialog Tab Order tab (waits for the UI redesign)"
 
 [[feature]]
 id = "organize.page-actions"
@@ -4911,11 +4911,11 @@ title = "Field properties: signed (lock fields when signed)"
 area = "F"
 tier = "P1"
 milestone = "M9"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["sign_field_lock"]
+evidence = ["crates/automation/tests/automation.rs::signature_field_locks_through_tools", "crates/sign/tests/pdf.rs::signing_a_field_with_a_lock_locks_its_fields"]
+notes = "sign_field_lock sets what an unsigned signature field locks (all, include or exclude fields, optionally the document). The Signed tab of the signature field properties waits for the UI redesign"
 
 [[feature]]
 id = "form.align-distribute-fields"
@@ -5927,11 +5927,11 @@ title = "Lock document or fields after signing"
 area = "H"
 tier = "P1"
 milestone = "M9"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["sign.digital"]
+tools = ["sign_document"]
+evidence = ["crates/sign/tests/pdf.rs::locking_the_document_after_signing_permits_no_changes", "crates/automation/tests/automation.rs::signature_field_locks_through_tools"]
+notes = "sign_document lock_document: true locks every field and permits no later changes (FieldMDP with P 1); the Lock document after signing checkbox in the sign dialog waits for the UI redesign"
 
 [[feature]]
 id = "sign.pkcs7-detached"
@@ -5999,11 +5999,11 @@ title = "Field locks (FieldMDP)"
 area = "H"
 tier = "P1"
 milestone = "M9"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["sign.digital"]
+tools = ["sign_document", "sign_field_lock"]
+evidence = ["crates/sign/tests/pdf.rs::signing_a_field_with_a_lock_locks_its_fields", "crates/automation/tests/automation.rs::signature_field_locks_through_tools"]
+notes = "Signing applies the field's /Lock (or the lock given): the fields become read-only, the signature records a FieldMDP transform, and validation reports later changes to locked fields as not permitted"
 
 [[feature]]
 id = "sign.document-timestamp"
@@ -7132,11 +7132,11 @@ title = "Make compatible with a chosen PDF version"
 area = "K"
 tier = "P1"
 milestone = "M11"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["optimize.advanced"]
+tools = ["doc_optimize"]
+evidence = ["crates/optimize/tests/optimize.rs::made_compatible_with_an_older_version", "crates/automation/tests/automation.rs::optimizing_through_tools"]
+notes = "the optimized copy is written as PDF 1.3–2.0 (header set, catalog /Version dropped, no object streams below 1.5) and features the version doesn't define are reported (transparency, JBIG2, JPEG 2000, 16-bit images, optional content, AES, AES-256). Missing: converting those features down (transparency flattening, JPEG 2000 to JPEG), the Make compatible with menu in the Optimize dialog (waits for the UI redesign)"
 
 [[feature]]
 id = "optimize.optimizer"
@@ -9172,11 +9172,11 @@ title = "Built-in action: archive documents"
 area = "N"
 tier = "P1"
 milestone = "M13"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["actions.archive"]
+tools = ["action_run"]
+evidence = ["crates/engine/src/tests.rs::the_archive_action_saves_as_pdfa", "crates/ui-egui/tests/actions.rs::archive_documents_writes_pdfa"]
+notes = "Archive Documents saves each file as PDF/A-2b; Save as PDF/A-2b and Fix hairlines are also steps for custom actions"
 
 [[feature]]
 id = "misc.action-publish-web"

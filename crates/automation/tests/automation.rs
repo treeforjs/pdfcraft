@@ -2846,6 +2846,16 @@ fn tab_order_and_field_appearance_through_tools() {
     assert_eq!(r["tab_order"], json!(["A", "B", "C"]), "ordered manually");
     let r = ok(&mut a, "form_tab_order", json!({ "doc": doc, "order": "column" }));
     assert_eq!(r["tab_order"], json!(["A", "C", "B"]));
+    // Each page keeps its own tab order (Page Properties ▸ Tab Order).
+    ok(&mut a, "form_tab_order", json!({ "doc": doc, "order": "structure", "pages": [3] }));
+    let r = ok(&mut a, "form_tab_order", json!({ "doc": doc }));
+    assert_eq!(
+        r["pages"],
+        json!([{ "page": 1, "order": "column" }, { "page": 2, "order": "column" }, { "page": 3, "order": "structure" }]),
+        "read per page"
+    );
+    let r = ok(&mut a, "form_tab_order", json!({ "doc": doc, "pages": [2] }));
+    assert_eq!(r["pages"], json!([{ "page": 2, "order": "column" }]));
     ok(
         &mut a,
         "form_set_props",
@@ -3478,6 +3488,12 @@ fn optimizing_through_tools() {
         Err(ToolError::InvalidArgs(_))
     ));
     assert!(matches!(a.call("doc_optimize", &json!({ "doc": doc, "path": "x.pdf", "discard": ["everything"] })), Err(ToolError::InvalidArgs(_))));
+    // Make compatible with PDF 1.4: a classic cross-reference table and a 1.4 header.
+    let r = ok(&mut a, "doc_optimize", json!({ "doc": doc, "path": "old.pdf", "compatibility": "1.4" }));
+    assert_eq!((r["version"].as_str(), r["object_streams"].as_bool()), (Some("1.4"), Some(false)), "{r}");
+    assert_eq!(r["newer_features"], json!([]));
+    assert!(std::fs::read(dir.join("old.pdf")).unwrap().starts_with(b"%PDF-1.4\n"));
+    assert!(matches!(a.call("doc_optimize", &json!({ "doc": doc, "path": "x.pdf", "compatibility": "1.9" })), Err(ToolError::InvalidArgs(_))));
 }
 
 /// A synthetic "scan": an 800 × 300 one-bit page image (Flate) drawn by an LZW content stream.
@@ -5386,4 +5402,41 @@ fn hairlines_are_fixed_through_tools() {
     for bad in [json!({ "doc": doc, "thinner_than": 0 }), json!({ "doc": doc, "replace_with": 500 }), json!({ "doc": doc, "pages": [9] })] {
         assert!(a.call("doc_fix_hairlines", &bad).is_err(), "{bad}");
     }
+}
+
+/// A signature field's lock makes the fields it names read-only once signed, and later changes
+/// to fields it leaves open keep the signature valid.
+#[test]
+fn signature_field_locks_through_tools() {
+    let dir = workdir("sign-lock");
+    let mut a = auto(&dir);
+    ok(&mut a, "sign_id_create", json!({ "name": "Ada Lovelace", "key": "p256", "password": "secret1", "path": "ada.p12" }));
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    for (name, ty, y) in [("Name", "text", 20), ("Amount", "text", 60), ("Approval", "signature", 100)] {
+        ok(&mut a, "form_add_field", json!({ "doc": doc, "page": 1, "type": ty, "name": name, "rect": [20, y, 180, y + 30] }));
+    }
+    let r = ok(&mut a, "sign_field_lock", json!({ "doc": doc, "field": "Approval", "lock": "include", "lock_fields": ["Name"] }));
+    assert_eq!(r["lock"], json!({ "action": "include", "fields": ["Name"], "lock_document": false, "permissions": null }));
+    let list = ok(&mut a, "sign_list", json!({ "doc": doc }));
+    let approval = list["signatures"].as_array().unwrap().iter().find(|s| s["field"] == "Approval").unwrap().clone();
+    assert_eq!(approval["lock"]["fields"], json!(["Name"]), "{approval}");
+    for bad in [json!({ "doc": doc, "field": "Approval", "lock": "include" }), json!({ "doc": doc, "field": "Approval", "lock": "some" })] {
+        assert!(matches!(a.call("sign_field_lock", &bad), Err(ToolError::InvalidArgs(_))), "{bad}");
+    }
+    assert!(matches!(a.call("sign_field_lock", &json!({ "doc": doc, "field": "Name", "lock": "all" })), Err(ToolError::Failed(_))));
+
+    ok(&mut a, "sign_document", json!({ "doc": doc, "id": "ada.p12", "password": "secret1", "field": "Approval", "out": "signed.pdf" }));
+    let fields = ok(&mut a, "form_fields", json!({ "doc": doc }));
+    let read_only = |n: &str| fields["fields"].as_array().unwrap().iter().find(|f| f["name"] == n).unwrap()["read_only"].clone();
+    assert_eq!((read_only("Name"), read_only("Amount")), (json!(true), json!(false)), "{fields}");
+    ok(&mut a, "sign_trust", json!({ "paths": ["ada.p12"], "password": "secret1" }));
+    ok(&mut a, "form_fill", json!({ "doc": doc, "values": { "Amount": "20" } }));
+    let s =
+        ok(&mut a, "sign_list", json!({ "doc": doc }))["signatures"].as_array().unwrap().iter().find(|s| s["field"] == "Approval").unwrap().clone();
+    assert_eq!((s["status"].as_str(), s["modification"].as_str()), (Some("valid"), Some("allowed")), "{s}");
+    assert_eq!(s["lock"]["action"], "include");
+    assert!(
+        matches!(a.call("sign_field_lock", &json!({ "doc": doc, "field": "Approval", "lock": "none" })), Err(ToolError::Failed(_))),
+        "already signed"
+    );
 }

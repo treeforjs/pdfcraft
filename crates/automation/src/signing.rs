@@ -33,6 +33,16 @@ pub(crate) fn cert_json(c: &Certificate) -> Value {
 }
 
 impl Automation {
+    /// Signature field properties ▸ Signed: what an unsigned signature field locks when signed.
+    pub(crate) fn sign_field_lock(&mut self, a: &Args) -> Result<Value> {
+        let field = a.str("field")?.to_string();
+        let lock = field_lock(a)?;
+        let id = self.doc(a)?.id;
+        self.session.apply(id, pdfcraft_engine::Edit::SetSignatureLock { field: field.clone(), lock }).map_err(failed)?;
+        let lock = self.doc(a)?.signature_field_lock(&field);
+        Ok(json!({ "field": field, "lock": lock.as_ref().map(lock_json) }))
+    }
+
     pub(crate) fn sig_json(&self, a: &Args, s: &SignatureInfo) -> Result<Value> {
         let doc = self.doc(a)?;
         let rect = match (s.page, s.rect) {
@@ -60,6 +70,7 @@ impl Automation {
             "location": s.location,
             "contact": s.contact,
             "certify": s.certify,
+            "lock": if s.signed { s.lock.as_ref().map(lock_json) } else { doc.signature_field_lock(&s.field).as_ref().map(lock_json) },
             "page": s.page.map(|p| p + 1),
             "rect": rect,
             "visible": s.visible,
@@ -197,6 +208,7 @@ impl Automation {
             location: a.opt_str("location")?.map(str::to_string),
             contact: a.opt_str("contact")?.map(str::to_string),
             certify,
+            lock: field_lock(a)?,
             ..SignOptions::default()
         };
         let authority = self.timestamp_authority(a)?;
@@ -243,4 +255,40 @@ impl Automation {
         self.session.set_trusted_certificates(certs);
         Ok(json!({ "trusted": self.session.trusted_certificates().iter().map(cert_json).collect::<Vec<_>>() }))
     }
+}
+
+fn lock_json(l: &sign::FieldLock) -> Value {
+    let (action, fields) = match &l.action {
+        sign::LockAction::All => ("all", Vec::new()),
+        sign::LockAction::Include(f) => ("include", f.clone()),
+        sign::LockAction::Exclude(f) => ("exclude", f.clone()),
+    };
+    json!({ "action": action, "fields": fields, "lock_document": l.permissions == Some(1), "permissions": l.permissions })
+}
+
+/// A field lock from `lock` (all, include or exclude, with `lock_fields` naming the fields) and
+/// `lock_document` (no changes after signing). `lock: "none"` (or nothing) is no lock.
+fn field_lock(a: &Args) -> Result<Option<sign::FieldLock>> {
+    let fields = || -> Result<Vec<String>> {
+        let names: Vec<String> = match a.get("lock_fields") {
+            None | Some(Value::Null) => Vec::new(),
+            Some(_) => a.strs("lock_fields")?.into_iter().map(str::to_string).collect(),
+        };
+        if names.is_empty() {
+            return Err(bad("lock include and exclude need lock_fields"));
+        }
+        Ok(names)
+    };
+    let action = match a.opt_str("lock")?.unwrap_or("none") {
+        "none" => None,
+        "all" => Some(sign::LockAction::All),
+        "include" => Some(sign::LockAction::Include(fields()?)),
+        "exclude" => Some(sign::LockAction::Exclude(fields()?)),
+        other => return Err(bad(format!("unknown lock {other:?} (none, all, include, exclude)"))),
+    };
+    let document = a.opt_bool("lock_document")?.unwrap_or(false);
+    Ok(match (action, document) {
+        (None, false) => None,
+        (action, document) => Some(sign::FieldLock { action: action.unwrap_or(sign::LockAction::All), permissions: document.then_some(1) }),
+    })
 }

@@ -440,7 +440,7 @@ pub fn tools() -> Vec<ToolDef> {
             input["oneOf"] = json!([{ "required": ["field"] }, { "required": ["fields"] }]);
             input
         }),
-        t("form_tab_order", "Set the tab order", "Set the tab order of pages (default all): row (top to bottom, left to right), column, structure, or annotations (unspecified). Or order tabs manually: `field` with `move` earlier|later moves that field one place on its page. Returns the resulting order of fields. Undoable.")
+        t("form_tab_order", "Set the tab order", "Read or set the tab order of pages (default all). Without order or field, returns each page's order (pages: [{page, order}]). Set: row (top to bottom, left to right), column, structure, or annotations (unspecified). Or order tabs manually: `field` with `move` earlier|later moves that field one place on its page. Returns the resulting order of fields. Undoable.")
             .with(schema(
                 json!({ "doc": doc(), "order": { "type": "string", "enum": ["row", "column", "structure", "annotations"] }, "pages": pages("to set (default: all)"), "field": { "type": "string" }, "move": { "type": "string", "enum": ["earlier", "later"] } }),
                 &["doc"],
@@ -751,7 +751,7 @@ pub fn tools() -> Vec<ToolDef> {
             .ro()
             .cmd("sign.digital")
             .with(schema(json!({}), &[])),
-        t("sign_document", "Sign a document", "Sign with a digital ID (a .p12/.pfx path, or on macOS a Keychain identity: \"keychain:<common name or fingerprint>\" from sign_keychain_ids, or on Windows a store identity: \"windows:<common name or fingerprint>\" from sign_windows_ids) and save the signed file to `out` (signing always saves, as in Acrobat; the document then shows the signed file). Sign an existing empty signature field (`field`), or a new one on `page` at `rect` (omit rect for an invisible signature). certify: no_changes, form_fill or comments makes a certification signature. PAdES B-B, SHA-256 (SHA-384 for P-384 keys).")
+        t("sign_document", "Sign a document", "Sign with a digital ID (a .p12/.pfx path, or on macOS a Keychain identity: \"keychain:<common name or fingerprint>\" from sign_keychain_ids, or on Windows a store identity: \"windows:<common name or fingerprint>\" from sign_windows_ids) and save the signed file to `out` (signing always saves, as in Acrobat; the document then shows the signed file). Sign an existing empty signature field (`field`), or a new one on `page` at `rect` (omit rect for an invisible signature). certify: no_changes, form_fill or comments makes a certification signature. lock (all, include or exclude, with lock_fields) makes the fields read-only once signed and records a FieldMDP lock, so later changes to them invalidate the signature; without it, a field's own lock (sign_field_lock) applies. lock_document: true permits no changes after signing. PAdES B-B, SHA-256 (SHA-384 for P-384 keys).")
             .cmd("sign.digital")
             .with(schema(
                 json!({
@@ -765,11 +765,25 @@ pub fn tools() -> Vec<ToolDef> {
                     "location": { "type": "string" },
                     "contact": { "type": "string" },
                     "certify": { "type": "string", "enum": ["no_changes", "form_fill", "comments"] },
+                    "lock": lock_schema(),
+                    "lock_fields": { "type": "array", "items": { "type": "string" }, "description": "The fields lock include or exclude names." },
+                    "lock_document": { "type": "boolean", "description": "Lock the document after signing: no further changes are permitted." },
                     "out": { "type": "string", "description": "Where to save the signed document." },
                     "timestamp_server": timestamp_server(),
                     "allow_network": {"type":"boolean","description":"Required true when timestamp_server is supplied."},
                 }),
                 &["doc", "id", "out"],
+            )),
+        t("sign_field_lock", "Set what a signature field locks", "Signature field properties ▸ Signed: choose the fields an unsigned signature field `field` makes read-only when it is signed: lock all, include or exclude (with lock_fields), or none to clear it. lock_document: true also permits no changes to the document after signing. Signature fields are never locked, so they can still be signed. Undoable.")
+            .with(schema(
+                json!({
+                    "doc": doc(),
+                    "field": { "type": "string" },
+                    "lock": lock_schema(),
+                    "lock_fields": { "type": "array", "items": { "type": "string" } },
+                    "lock_document": { "type": "boolean" },
+                }),
+                &["doc", "field"],
             )),
         t("sign_trust", "Trust certificates", "Add certificates (.cer/.crt/.pem/.der, or the certificates in a .p12 with `password`) to the trusted certificates used to validate signatures, or clear the list (clear: true). Every open document is revalidated. Returns the trusted list.").with(schema(
             json!({ "paths": { "type": "array", "items": { "type": "string" } }, "password": { "type": "string" }, "clear": { "type": "boolean" } }),
@@ -1377,7 +1391,7 @@ pub fn tools() -> Vec<ToolDef> {
             .with(schema(json!({ "doc": doc() }), &["doc"])),
         t("doc_open_revision", "Open a revision", "Open saved revision `revision` (1 = the oldest) of a document as a new, unsaved document, to see the file as it was then.")
             .with(schema(json!({ "doc": doc(), "revision": { "type": "integer", "minimum": 1 } }), &["doc", "revision"])),
-        t("doc_optimize", "Optimize PDF", "Write an optimized copy to `path` (Acrobat's PDF Optimizer). color / gray: { downsample, ppi, above_ppi, compression: jpeg|zip|retain, quality 1–100 } (defaults: downsample to 150 ppi above 225, JPEG 60). mono (one-bit images and image masks): { downsample, ppi, above_ppi, compression: ccitt-g4|zip|retain } or just the compression name (defaults: downsample to 300 ppi above 450, CCITT Group 4; without downsampling the samples are unchanged). Images are measured where pages draw them and replaced only when smaller. discard_*: thumbnails (default true), alternate_images (true), tags, print_settings; flate_unencoded (true); lzw_to_flate (true: LZW streams that decode completely are re-encoded as Flate, others are left and counted in lzw_skipped); compress_structure (true: pack objects into object streams); remove_invalid_links and remove_unreferenced_dests (true). discard: Remove Hidden Information categories (metadata, attachments, comments, form-fields, hidden-text, hidden-layers, bookmarks, links-actions-scripts, private-data). unembed_fonts: embedded font names (from doc_embedded_fonts) whose program is removed; a name that matches no embedded font or a font that can't be unembedded refuses the whole call. Signed documents are refused. The open document is unchanged.")
+        t("doc_optimize", "Optimize PDF", "Write an optimized copy to `path` (Acrobat's PDF Optimizer). color / gray: { downsample, ppi, above_ppi, compression: jpeg|zip|retain, quality 1–100 } (defaults: downsample to 150 ppi above 225, JPEG 60). mono (one-bit images and image masks): { downsample, ppi, above_ppi, compression: ccitt-g4|zip|retain } or just the compression name (defaults: downsample to 300 ppi above 450, CCITT Group 4; without downsampling the samples are unchanged). Images are measured where pages draw them and replaced only when smaller. discard_*: thumbnails (default true), alternate_images (true), tags, print_settings; flate_unencoded (true); lzw_to_flate (true: LZW streams that decode completely are re-encoded as Flate, others are left and counted in lzw_skipped); compress_structure (true: pack objects into object streams); remove_invalid_links and remove_unreferenced_dests (true). compatibility: retain (default) or a PDF version (1.3, 1.4, 1.5, 1.6, 1.7, 2.0) to write; below 1.5 there are no object streams, and features the version doesn't define are kept and listed in newer_features (feature, needs, count). discard: Remove Hidden Information categories (metadata, attachments, comments, form-fields, hidden-text, hidden-layers, bookmarks, links-actions-scripts, private-data). unembed_fonts: embedded font names (from doc_embedded_fonts) whose program is removed; a name that matches no embedded font or a font that can't be unembedded refuses the whole call. Signed documents are refused. The open document is unchanged.")
             .cmd("optimize.advanced")
             .with(schema(
                 json!({
@@ -1395,6 +1409,7 @@ pub fn tools() -> Vec<ToolDef> {
                     "compress_structure": { "type": "boolean" },
                     "remove_invalid_links": { "type": "boolean" },
                     "remove_unreferenced_dests": { "type": "boolean" },
+                    "compatibility": { "type": "string", "enum": ["retain", "1.3", "1.4", "1.5", "1.6", "1.7", "2.0"] },
                     "discard": { "type": "array", "items": { "type": "string" } },
                     "unembed_fonts": { "type": "array", "items": { "type": "string" } },
                 }),
@@ -1443,4 +1458,8 @@ pub(crate) fn check_args(def: &ToolDef, args: &Value) -> Result<(), ToolError> {
         }
     }
     Ok(())
+}
+
+fn lock_schema() -> Value {
+    json!({ "type": "string", "enum": ["none", "all", "include", "exclude"], "description": "Which fields signing makes read-only: all, only lock_fields (include), all but lock_fields (exclude), or none." })
 }

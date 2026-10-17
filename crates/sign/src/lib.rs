@@ -16,6 +16,7 @@ pub mod evidence;
 #[cfg(target_os = "macos")]
 pub mod keychain;
 pub mod keys;
+pub mod lock;
 pub mod pdf;
 pub mod pkcs12;
 pub mod revocation;
@@ -27,6 +28,7 @@ pub mod x509;
 
 pub use der::Time;
 pub use keys::{DigestAlg, PrivateKey, PublicKey};
+pub use lock::{FieldLock, LockAction};
 pub use pdf::{
     Appearance, DigestCache, MAX_OUTLINE_REVISIONS, Modification, PageChange, RevisionChanges, SignOptions, SignatureInfo, Status, TrustStore,
     VerificationTime, VerificationTimeSource, list as signatures, revision_changes, sign, sign_with_timestamp, timestamp_document, validate,

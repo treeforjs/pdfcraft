@@ -238,6 +238,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     c("actions.wizard", "Action Wizard…", None, None, Nothing, "list-checks"),
     c("actions.distribution", "Prepare for distribution…", None, None, Nothing, "send"),
     c("actions.optimize_scans", "Optimize scanned documents…", None, None, Nothing, "scan-text"),
+    c("actions.archive", "Archive documents…", None, None, Nothing, "file-check"),
     c("doc.compare", "Compare files…", None, None, Document, "git-compare"),
     c("form.detect", "Detect form fields", None, None, Modification, "scan"),
     c("form.merge_data", "Merge data files into spreadsheet…", None, None, Nothing, "file-spreadsheet"),

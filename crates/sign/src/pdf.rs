@@ -270,6 +270,8 @@ pub struct SignatureInfo {
     pub doc_timestamp: bool,
     /// DocMDP permissions when this is a certification signature (1–3).
     pub certify: Option<u8>,
+    /// The fields (and, with permissions, the document) this signature locks (FieldMDP).
+    pub lock: Option<crate::FieldLock>,
     /// 1-based revision the signature covers.
     pub revision: usize,
     /// Length of the signed revision (bytes) — "View signed version".
@@ -517,6 +519,7 @@ pub fn list_cached_with_time(doc: &Document, bytes: &[u8], trust: &TrustStore, c
             sub_filter: None,
             doc_timestamp: false,
             certify: None,
+            lock: None,
             revision: 0,
             signed_len: 0,
             digest: None,
@@ -563,6 +566,7 @@ pub fn list_cached_with_time(doc: &Document, bytes: &[u8], trust: &TrustStore, c
             sub_filter: Some("ETSI.RFC3161".to_string()),
             doc_timestamp: true,
             certify: None,
+            lock: None,
             revision: 0,
             signed_len: 0,
             digest: None,
@@ -629,6 +633,15 @@ fn validate_into(doc: &Document, bytes: &[u8], trust: &TrustStore, v: &Dict, inf
         .map(|r| {
             r.get(b"TransformParams").map(|p| doc.resolve(p)).and_then(|p| p.as_dict().and_then(|p| p.int(b"P"))).unwrap_or(2).clamp(1, 3) as u8
         });
+    info.lock = v
+        .get(b"Reference")
+        .map(|r| doc.resolve(r))
+        .and_then(|r| r.as_array().cloned())
+        .into_iter()
+        .flatten()
+        .filter_map(|r| doc.resolve(&r).as_dict().cloned())
+        .filter(|r| r.name(b"TransformMethod") == Some(b"FieldMDP"))
+        .find_map(|r| r.get(b"TransformParams").map(|p| doc.resolve(p)).and_then(|p| p.as_dict().and_then(|p| crate::FieldLock::read(doc, p))));
     let invalid = |info: &mut SignatureInfo, why: &str| {
         info.status = Status::Invalid;
         info.details.push(why.to_string());
@@ -797,7 +810,7 @@ fn finish_validation(
     info.modification = if covered == bytes.len() || bytes[covered..].iter().all(|b| b.is_ascii_whitespace() || *b == 0) {
         Modification::None
     } else {
-        classify_changes(doc, cache.revision(bytes, covered), info.certify)
+        classify_changes(doc, cache.revision(bytes, covered), info.certify, info.lock.as_ref())
     };
     let mut problems = false;
     match &info.modification {
@@ -973,7 +986,7 @@ fn validate_doc_timestamp(
     info.modification = if covered == bytes.len() || bytes[covered..].iter().all(|b| b.is_ascii_whitespace() || *b == 0) {
         Modification::None
     } else {
-        classify_changes(doc, cache.revision(bytes, covered), None)
+        classify_changes(doc, cache.revision(bytes, covered), None, None)
     };
     match &info.modification {
         Modification::None => info.details.push("This document has not been modified since this timestamp was applied.".into()),
@@ -1119,13 +1132,20 @@ fn validate_x509_rsa_sha1(
 }
 
 /// What later revisions changed, classified as Acrobat reports it, under DocMDP `p` (or none:
-/// an approval signature permits form fill, comments and further signatures).
-fn classify_changes(doc: &Document, old: Option<Document>, p: Option<u8>) -> Modification {
+/// an approval signature permits form fill, comments and further signatures) and a field
+/// `lock` (changes to locked fields are never permitted; its permissions tighten `p`).
+fn classify_changes(doc: &Document, old: Option<Document>, p: Option<u8>, lock: Option<&crate::FieldLock>) -> Modification {
     let Some(old) = old else {
         return Modification::Disallowed(vec!["the signed version could not be read".into()]);
     };
+    let p = match (p, lock.and_then(|l| l.permissions)) {
+        (Some(a), Some(b)) => Some(a.min(b)),
+        (a, b) => a.or(b),
+    };
+    let locked = lock.map(|l| crate::lock::locked_objects(&old, l)).unwrap_or_default();
     let (mut allowed, mut disallowed): (Vec<&str>, Vec<&str>) = (Vec::new(), Vec::new());
-    for (_, kind) in changed_objects(doc, &old) {
+    for (r, kind) in changed_objects(doc, &old) {
+        let kind = if kind == "form fill" && locked.contains(&r) { "changes to locked fields" } else { kind };
         let ok = match (kind, p) {
             ("signature" | "document security store", _) => true,
             ("form fill", Some(2 | 3) | None) => true,
@@ -1485,6 +1505,9 @@ pub struct SignOptions {
     pub date: String,
     /// Certify with these DocMDP permissions (1 no changes, 2 form fill and signing, 3 also comments).
     pub certify: Option<u8>,
+    /// Lock these fields (and, with permissions, the document) on signing. `None` uses the
+    /// field's own `/Lock`, if it has one.
+    pub lock: Option<crate::FieldLock>,
     pub appearance: Appearance,
 }
 
@@ -1582,6 +1605,13 @@ fn sign_inner(
     let reserve =
         8192 + id.certificate.raw.len() + id.chain.iter().map(|c| c.raw.len()).sum::<usize>() + if tsa.is_some() { TOKEN_RESERVE } else { 0 };
     let name = id.certificate.display_name();
+    // The field lock: the caller's, else the field's own.
+    let lock = opts.lock.clone().or_else(|| {
+        let n = opts.field.as_deref()?;
+        let f = sig_fields(&doc).into_iter().find(|f| f.name == n)?;
+        let l = doc.resolve(f.dict.get(b"Lock")?);
+        crate::FieldLock::read(&doc, l.as_dict()?)
+    });
     // The signature dictionary.
     let mut v = Dict::new();
     v.set(b"Type".to_vec(), Object::name("Sig"));
@@ -1601,6 +1631,7 @@ fn sign_inner(
     let mut build = Dict::new();
     build.set(b"App".to_vec(), Object::Dict(app));
     v.set(b"Prop_Build".to_vec(), Object::Dict(build));
+    let mut references = Vec::new();
     if let Some(p) = opts.certify {
         let mut tp = Dict::new();
         tp.set(b"Type".to_vec(), Object::name("TransformParams"));
@@ -1610,7 +1641,17 @@ fn sign_inner(
         sr.set(b"Type".to_vec(), Object::name("SigRef"));
         sr.set(b"TransformMethod".to_vec(), Object::name("DocMDP"));
         sr.set(b"TransformParams".to_vec(), Object::Dict(tp));
-        v.set(b"Reference".to_vec(), Object::Array(vec![Object::Dict(sr)]));
+        references.push(Object::Dict(sr));
+    }
+    if let Some(l) = &lock {
+        let mut sr = Dict::new();
+        sr.set(b"Type".to_vec(), Object::name("SigRef"));
+        sr.set(b"TransformMethod".to_vec(), Object::name("FieldMDP"));
+        sr.set(b"TransformParams".to_vec(), Object::Dict(l.to_dict("TransformParams")));
+        references.push(Object::Dict(sr));
+    }
+    if !references.is_empty() {
+        v.set(b"Reference".to_vec(), Object::Array(references));
     }
     let sig = doc.add(Object::Dict(v.clone()));
     if opts.certify.is_some() {
@@ -1646,9 +1687,16 @@ fn sign_inner(
                 .unwrap_or_else(|| (1..).map(|i| format!("Signature{i}")).find(|n| !taken.contains(n)).unwrap_or_default());
             let rect = opts.rect.unwrap_or([0.0; 4]);
             let wr = add_signature_field(&mut doc, root, Some(page), &fname, rect, sig)?;
+            if let Some(l) = &lock {
+                doc.update_dict(wr, |w| w.set(b"Lock".to_vec(), Object::Dict(l.to_dict("SigFieldLock"))))?;
+            }
             (wr, rect)
         }
     };
+    // Locked fields become read-only in the signed revision.
+    if let Some(l) = &lock {
+        crate::lock::lock_fields(&mut doc, l)?;
+    }
     if opts.field.is_some() {
         doc.update_dict(root, |c| {
             if let Some(Object::Dict(af)) = c.get_mut(b"AcroForm") {
