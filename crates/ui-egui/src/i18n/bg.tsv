@@ -2249,3 +2249,5 @@ compare-page	Moved	Преместена
 	Import list…	Импортиране на списък…
 	The list is too long: at most {n} entries of up to {m} characters each.	Списъкът е твърде дълъг: най-много {n} записа с до {m} знака всеки.
 	Remove Bates numbering	Премахване на номерацията на Бейтс
+	No hairlines to fix	Няма тънки линии за поправяне
+	Hairlines fixed: {n}	Поправени тънки линии: {n}

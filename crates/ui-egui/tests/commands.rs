@@ -325,3 +325,25 @@ fn the_about_dialog_shows_the_running_version() {
     h.run_steps(3);
     h.get_by_label_contains(&format!("Version {}", env!("CARGO_PKG_VERSION")));
 }
+
+/// Fix hairlines thickens a hairline with the default settings, says how many it fixed, and
+/// leaves a page without hairlines (and its undo history) alone.
+#[test]
+fn fix_hairlines_reports_what_it_changed() {
+    let text = String::from_utf8(fixture(1)).unwrap();
+    let body = "BT /F1 24 Tf 20 150 Td (Page 1) Tj ET";
+    assert!(text.contains(body));
+    let thin = text.replace(body, &format!("{:width$}", "0 w 10 10 m 100 10 l S", width = body.len()));
+    let mut app = PdfCraftApp::new();
+    app.set_option("language", "en").unwrap();
+    app.open_bytes("thin.pdf", None, thin.into_bytes()).unwrap();
+    assert!(app.execute("prepress.hairlines"));
+    assert_eq!(app.toast.as_ref().map(|t| t.0.as_str()), Some("Hairlines fixed: 1"));
+    let id = app.views[0].id;
+    assert_eq!(app.session.get(id).unwrap().can_undo(), Some("Fix hairlines"));
+    app.undo();
+    assert!(app.execute("prepress.hairlines"));
+    assert!(app.execute("prepress.hairlines"));
+    assert_eq!(app.toast.as_ref().map(|t| t.0.as_str()), Some("No hairlines to fix"));
+    assert_eq!(app.session.get(id).unwrap().can_undo(), Some("Fix hairlines"), "the second run added no undo step");
+}

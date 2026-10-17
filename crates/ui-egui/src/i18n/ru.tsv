@@ -2200,3 +2200,5 @@ compare-page	Moved	Перемещена
 	Import list…	Импортировать список…
 	The list is too long: at most {n} entries of up to {m} characters each.	Список слишком длинный: не более {n} записей длиной до {m} символов каждая.
 	Remove Bates numbering	Удалить нумерацию Бейтса
+	No hairlines to fix	Нет тонких линий для исправления
+	Hairlines fixed: {n}	Исправлено тонких линий: {n}

@@ -3049,3 +3049,58 @@ fn bates_numbering_continues_from_a_given_start() {
     add_header_footer(&mut doc, &[0, 1], &bates, false, &cx()).unwrap();
     assert!(streams(&doc, 1).iter().any(|s| s.contains(&format!("({}) Tj", u64::MAX))));
 }
+
+fn doc_of(objs: &[&str]) -> Document {
+    let mut out = b"%PDF-1.7\n".to_vec();
+    let mut offs = Vec::new();
+    for (i, o) in objs.iter().enumerate() {
+        offs.push(out.len());
+        out.extend_from_slice(format!("{} 0 obj\n{o}\nendobj\n", i + 1).as_bytes());
+    }
+    let x = out.len();
+    out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objs.len() + 1).as_bytes());
+    for o in offs {
+        out.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+    }
+    out.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{x}\n%%EOF\n", objs.len() + 1).as_bytes());
+    Document::open(Arc::new(out)).unwrap()
+}
+
+/// Strokes thinner than the threshold as printed (width × transform scale, from `w` or an
+/// ExtGState, in the page and in the forms it draws) are thickened; the rest draws as before.
+#[test]
+fn hairlines_are_thickened_as_printed() {
+    let page = "0 w 0 0 m 10 10 l S 2 w 0 0 m 5 5 l S 0.5 0 0 0.5 0 0 cm 0.4 w 1 1 10 10 re S q /GS1 gs 0 0 m 1 1 l S Q /Fm Do 1 1 m 2 2 l f";
+    let form = "1 w 0 0 m 9 9 l S";
+    let objs = [
+        "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 /MediaBox [0 0 200 200] >>".into(),
+        "<< /Type /Page /Parent 2 0 R /Contents 4 0 R /Resources << /ExtGState << /GS1 << /LW 0.1 >> >> /XObject << /Fm 5 0 R >> >> >>".into(),
+        format!("<< /Length {} >>\nstream\n{page}\nendstream", page.len()),
+        format!(
+            "<< /Type /XObject /Subtype /Form /BBox [0 0 100 100] /Matrix [0.1 0 0 0.1 0 0] /Length {} >>\nstream\n{form}\nendstream",
+            form.len()
+        ),
+    ];
+    let mut doc = doc_of(&objs.iter().map(String::as_str).collect::<Vec<_>>());
+    assert_eq!(fix_hairlines(&mut doc, &[0], &Hairlines::default()).unwrap(), 4);
+    let doc = reopen(&doc);
+    let s = streams(&doc, 0).join("");
+    let words: Vec<&str> = s.split_whitespace().collect();
+    let expected = "0 w 0.25 w 0 0 m 10 10 l S 0 w 2 w 0 0 m 5 5 l S 0.5 0 0 0.5 0 0 cm 0.4 w 0.5 w 1 1 10 10 re S 0.4 w q /GS1 gs 0.5 w 0 0 m 1 1 l S 0.1 w Q /Fm Do 1 1 m 2 2 l f";
+    assert_eq!(words.join(" "), expected);
+    let form = String::from_utf8(stream_bytes(&doc, &Object::Ref(pdfcraft_cos::ObjRef { num: 5, generation: 0 })).unwrap()).unwrap();
+    assert_eq!(form.split_whitespace().collect::<Vec<_>>().join(" "), "1 w 5 w 0 0 m 9 9 l S");
+    // Nothing thin is left, so a second pass changes nothing.
+    let mut again = reopen(&doc);
+    assert_eq!(fix_hairlines(&mut again, &[0], &Hairlines::default()).unwrap(), 0);
+    let mut bad = reopen(&doc);
+    for s in [
+        Hairlines { thinner_than: 0.0, replace_with: 1.0 },
+        Hairlines { thinner_than: 1.0, replace_with: f64::NAN },
+        Hairlines { thinner_than: 1.0, replace_with: 100.0 },
+    ] {
+        assert!(fix_hairlines(&mut bad, &[0], &s).is_err());
+    }
+    assert!(matches!(fix_hairlines(&mut bad, &[3], &Hairlines::default()), Err(EditError::NoSuchPage(3))));
+}

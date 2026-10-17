@@ -2203,3 +2203,5 @@ compare-page	Moved	Movida
 	Import list…	Importar lista…
 	The list is too long: at most {n} entries of up to {m} characters each.	La lista es demasiado larga: como máximo {n} entradas de hasta {m} caracteres cada una.
 	Remove Bates numbering	Quitar numeración Bates
+	No hairlines to fix	No hay líneas finas que corregir
+	Hairlines fixed: {n}	Líneas finas corregidas: {n}

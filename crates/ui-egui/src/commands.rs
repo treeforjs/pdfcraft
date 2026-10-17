@@ -455,6 +455,21 @@ impl PdfCraftApp {
                 self.pdfa.issues = None;
                 self.dialog = Some(Dialog::PdfA);
             }
+            "prepress.hairlines" => {
+                if let Some((_, id)) = self.active_ids() {
+                    let pages: Vec<usize> = (0..self.session.get(id).map_or(0, |d| d.info.pages.len())).collect();
+                    let settings = pdfcraft_engine::Hairlines::default();
+                    match self.session.hairline_count(id, &pages, &settings) {
+                        Ok(0) => self.notify_tr("No hairlines to fix"),
+                        Ok(n) => {
+                            if self.apply_edit(Edit::FixHairlines { pages, settings }) {
+                                self.notify_fmt("Hairlines fixed: {n}", &[("n", &n.to_string())]);
+                            }
+                        }
+                        Err(e) => self.notify_error(e),
+                    }
+                }
+            }
             "preflight.run" => {
                 self.preflight.result = None;
                 self.preflight.selected.clear();

@@ -5363,3 +5363,27 @@ fn bates_numbering_continues_across_files() {
     }
     assert!(a.call("doc_bates_files", &json!({ "paths": ["missing.pdf"], "out_dir": "numbered", "footer_right": "<<Bates Number>>" })).is_err());
 }
+
+/// A hairline stroke is thickened (and reported), a second pass finds nothing, and undo puts
+/// the original back.
+#[test]
+fn hairlines_are_fixed_through_tools() {
+    let dir = workdir("hairlines");
+    let text = "BT /F1 24 Tf 20 150 Td (Page 1) Tj ET";
+    let line = format!("{:width$}", "0 w 10 10 m 100 10 l S", width = text.len());
+    let bytes = String::from_utf8(fixture(1)).unwrap().replace(text, &line);
+    std::fs::write(dir.join("thin.pdf"), bytes).unwrap();
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "thin.pdf" }))["doc"].as_u64().unwrap();
+    let r = ok(&mut a, "doc_fix_hairlines", json!({ "doc": doc, "replace_with": 0.5 }));
+    assert_eq!(r["fixed"].as_u64(), Some(1), "{r}");
+    assert_eq!(ok(&mut a, "doc_fix_hairlines", json!({ "doc": doc }))["fixed"].as_u64(), Some(0));
+    // Thinner than 1 pt now includes the 0.5 pt line.
+    assert_eq!(ok(&mut a, "doc_fix_hairlines", json!({ "doc": doc, "thinner_than": 1, "replace_with": 1 }))["fixed"].as_u64(), Some(1));
+    ok(&mut a, "edit_undo", json!({ "doc": doc }));
+    ok(&mut a, "edit_undo", json!({ "doc": doc }));
+    assert_eq!(ok(&mut a, "doc_fix_hairlines", json!({ "doc": doc, "replace_with": 0.5 }))["fixed"].as_u64(), Some(1), "undo restored the hairline");
+    for bad in [json!({ "doc": doc, "thinner_than": 0 }), json!({ "doc": doc, "replace_with": 500 }), json!({ "doc": doc, "pages": [9] })] {
+        assert!(a.call("doc_fix_hairlines", &bad).is_err(), "{bad}");
+    }
+}

@@ -273,6 +273,17 @@ pub fn tools() -> Vec<ToolDef> {
                 }),
                 &["paths", "out_dir"],
             )),
+        t("doc_fix_hairlines", "Fix hairlines", "Thicken strokes that would print thinner than thinner_than points (default 0.25) to replace_with points (default 0.25), measured as printed: the line width times the page's transform, in page content and the forms it draws. Other lines are left as they are. Reports how many strokes were fixed (fixed: 0 changes nothing). Undoable.")
+            .cmd("prepress.hairlines")
+            .with(schema(
+                json!({
+                    "doc": doc(),
+                    "pages": pages("to fix (default: all)"),
+                    "thinner_than": { "type": "number", "exclusiveMinimum": 0, "maximum": 72 },
+                    "replace_with": { "type": "number", "exclusiveMinimum": 0, "maximum": 72 },
+                }),
+                &["doc"],
+            )),
         t("doc_create_multiple", "Create PDF from multiple files", "Convert several files (PDFs, PNG/JPEG/JPEG 2000/TIFF/GIF/BMP images, .txt files) to PDF in one run. mode \"combine\" (default) joins them, in order, into one PDF with a bookmark per file; pages optionally chooses each file's pages, in step with paths (a range such as \"1-3, 6\" or null). mode \"separate\" writes one PDF per file into out_dir (files that are already PDFs are skipped; existing files are never overwritten) and reports each file's result.")
             .cmd("create.multiple")
             .with(schema(

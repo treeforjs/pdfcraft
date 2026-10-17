@@ -2311,3 +2311,5 @@ compare-page	Moved	Přesunutá
 	Import list…	Importovat seznam…
 	The list is too long: at most {n} entries of up to {m} characters each.	Seznam je příliš dlouhý: nejvýše {n} položek po nejvýše {m} znacích.
 	Remove Bates numbering	Odebrat Batesovo číslování
+	No hairlines to fix	Žádné vlasové čáry k opravě
+	Hairlines fixed: {n}	Opravené vlasové čáry: {n}

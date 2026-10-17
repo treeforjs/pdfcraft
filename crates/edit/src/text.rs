@@ -222,7 +222,7 @@ struct Ts {
     invalid_decorations: bool,
 }
 
-fn content_streams(doc: &Document, page: &Dict) -> Vec<(Object, Vec<u8>)> {
+pub(crate) fn content_streams(doc: &Document, page: &Dict) -> Vec<(Object, Vec<u8>)> {
     let list: Vec<Object> = match page.get(b"Contents") {
         None => Vec::new(),
         Some(c) => match &*doc.resolve(c) {
@@ -247,7 +247,7 @@ fn content_streams(doc: &Document, page: &Dict) -> Vec<(Object, Vec<u8>)> {
 /// between any two tokens (ISO 32000-2 §7.8.2), so an operator's operands can end one piece and
 /// its keyword start the next; removing or replacing it rewrites every piece it spans. Returns
 /// each piece's new bytes.
-fn splice(pieces: &Pieces, ops: &[Op], mut edit: impl FnMut(usize) -> (Vec<Op>, bool)) -> Vec<Vec<u8>> {
+pub(crate) fn splice(pieces: &Pieces, ops: &[Op], mut edit: impl FnMut(usize) -> (Vec<Op>, bool)) -> Vec<Vec<u8>> {
     let data = pieces.data();
     let mut edits = Vec::new();
     for (i, op) in ops.iter().enumerate() {
@@ -270,7 +270,7 @@ fn splice(pieces: &Pieces, ops: &[Op], mut edit: impl FnMut(usize) -> (Vec<Op>, 
 
 /// The page's `/Contents` after a [`splice`]: pieces whose bytes changed become new streams
 /// (keeping their dictionaries), the others stay as they were.
-fn rewritten_contents(doc: &mut Document, streams: &[(Object, Vec<u8>)], new: Vec<Vec<u8>>) -> Object {
+pub(crate) fn rewritten_contents(doc: &mut Document, streams: &[(Object, Vec<u8>)], new: Vec<Vec<u8>>) -> Object {
     let mut contents: Vec<Object> = Vec::with_capacity(streams.len());
     for ((obj, old), data) in streams.iter().zip(new) {
         if *old == data {

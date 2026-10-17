@@ -45,8 +45,8 @@ pub use pdfcraft_organize::view::{InitialView, Layout as InitialLayout, Magnific
 pub use pdfcraft_cos::Algorithm;
 pub use pdfcraft_create::{CONVERTIBLE, ImageResolution, SourceKind, source_kind};
 pub use pdfcraft_edit::{
-    Added, AddedImage, AddedText, Align as TextAlign, Background, Content as AddedContent, Family as FontFamily, HeaderFooter, MarkKind, Watermark,
-    bates_start, with_bates_start,
+    Added, AddedImage, AddedText, Align as TextAlign, Background, Content as AddedContent, Family as FontFamily, Hairlines, HeaderFooter, MarkKind,
+    Watermark, bates_start, with_bates_start,
 };
 pub use pdfcraft_forms::{
     BorderStyle, CheckStyle, DocTrigger, Field as FormField, FieldAction, FieldChange, FieldFont, FieldKind as FormFieldKind, FieldProps, FieldValue,
@@ -1335,6 +1335,12 @@ pub enum Edit {
         name: String,
         earlier: bool,
     },
+    /// Thicken strokes thinner than a width as printed (Print Production ▸ Fix Hairlines). A
+    /// no-op (no undo step) when the pages have none.
+    FixHairlines {
+        pages: Vec<usize>,
+        settings: Hairlines,
+    },
     /// Add a header and footer (with `replace`, existing ones on those pages go first).
     AddHeaderFooter {
         pages: Vec<usize>,
@@ -1534,6 +1540,7 @@ impl Edit {
                 ImageEdit::Crop(_) => "Crop image".into(),
                 ImageEdit::Delete => "Delete image".into(),
             },
+            Edit::FixHairlines { .. } => "Fix hairlines".into(),
             Edit::AddHeaderFooter { replace: false, .. } => "Add header & footer".into(),
             Edit::AddHeaderFooter { .. } => "Update header & footer".into(),
             Edit::AddWatermark { replace: false, .. } => "Add watermark".into(),
@@ -1688,6 +1695,7 @@ fn check_permission(edit: &Edit, p: &pdfcraft_cos::Permissions) -> Result<(), Ed
             }
         }
         Edit::SetInfo { .. }
+        | Edit::FixHairlines { .. }
         | Edit::AddHeaderFooter { .. }
         | Edit::AddWatermark { .. }
         | Edit::AddBackground { .. }
@@ -2053,6 +2061,9 @@ fn run_edit(doc: &mut pdfcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -> 
             let r = pdfcraft_cos::ObjRef::new(*figure, doc.generation(*figure));
             a11y::mark_decorative(doc, r).map_err(|e| EditError::Accessibility(e.to_string()))?;
         }
+        Edit::FixHairlines { pages, settings } => {
+            pdfcraft_edit::fix_hairlines(doc, pages, settings)?;
+        }
         Edit::AddHeaderFooter { pages, settings, replace } => {
             let date = cx.today;
             pdfcraft_edit::add_header_footer(doc, pages, settings, *replace, &pdfcraft_edit::Context { date })?;
@@ -2248,6 +2259,12 @@ fn keys_after(edit: &Edit, cos: &pdfcraft_cos::Document) -> Option<Keys> {
 /// The last-resort guard (AGENTS.md §4): run `f`, turning a panic that escapes it into an error
 /// message, so one bad file or edit can't take the app and its other documents down. It is a
 /// safety net for bugs, not a substitute for returning errors.
+/// How many strokes [`Edit::FixHairlines`] would thicken on `pages` of `doc`.
+pub fn hairline_count(doc: &pdfcraft_cos::Document, pages: &[usize], settings: &Hairlines) -> Result<usize, EditError> {
+    let mut probe = doc.clone();
+    Ok(guard(|| pdfcraft_edit::fix_hairlines(&mut probe, pages, settings)).map_err(EditError::Invalid)??)
+}
+
 pub fn guard<T>(f: impl FnOnce() -> T) -> Result<T, String> {
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)).map_err(|p| {
         p.downcast_ref::<&str>().map(|s| (*s).to_string()).or_else(|| p.downcast_ref::<String>().cloned()).unwrap_or_else(|| "unknown error".into())
@@ -2887,6 +2904,11 @@ impl Session {
         if matches!(&edit, Edit::FlattenFillSign) && !pdfcraft_annot::has_visible_fill_sign(&editor.cos) {
             return Ok(());
         }
+        if let Edit::FixHairlines { pages, settings } = &edit
+            && hairline_count(&editor.cos, pages, settings)? == 0
+        {
+            return Ok(());
+        }
         if let Edit::EditTextBlock { page, block, text, style } = &edit {
             let unchanged = guard(|| pdfcraft_edit::text::is_noop(&editor.cos, *page, *block, text, style)).map_err(EditError::Invalid)??;
             if unchanged {
@@ -3112,6 +3134,16 @@ impl Session {
         doc.renderer = RenderPool::new(doc.display.clone(), render_threads(), doc.config.clone());
         doc.bytes = bytes;
         Ok(())
+    }
+
+    /// How many strokes on `pages` are thinner than `settings` allows (what Fix Hairlines would
+    /// thicken). Read-only documents have none to fix.
+    pub fn hairline_count(&self, id: DocId, pages: &[usize], settings: &Hairlines) -> Result<usize, EditError> {
+        let doc = self.get(id).ok_or(EditError::NoDocument)?;
+        match doc.editor.as_ref() {
+            Some(editor) => hairline_count(&editor.cos, pages, settings),
+            None => Ok(0),
+        }
     }
 
     /// The bytes to write for Save: an incremental update of the file as opened/last saved,

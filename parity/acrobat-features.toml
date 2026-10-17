@@ -8204,11 +8204,11 @@ title = "Fix hairlines"
 area = "L"
 tier = "P1"
 milestone = "M11"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["prepress.hairlines"]
+tools = ["doc_fix_hairlines"]
+evidence = ["crates/edit/src/tests.rs::hairlines_are_thickened_as_printed", "crates/automation/tests/automation.rs::hairlines_are_fixed_through_tools", "crates/ui-egui/tests/commands.rs::fix_hairlines_reports_what_it_changed"]
+notes = "Widths are measured as printed (line width times the transform scale and UserUnit), in page content and the form XObjects it draws (at their first use). Fix hairlines in Print production runs with 0.25 pt for both widths; doc_fix_hairlines takes any widths, and the options dialog waits for the UI redesign. Stroked text, Type 3 glyphs and patterns are not changed"
 
 [[feature]]
 id = "print.flattener-preview"

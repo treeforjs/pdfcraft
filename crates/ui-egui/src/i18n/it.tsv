@@ -2296,3 +2296,5 @@ compare-page	Moved	Spostata
 	Import list…	Importa elenco…
 	The list is too long: at most {n} entries of up to {m} characters each.	L'elenco è troppo lungo: al massimo {n} voci di non più di {m} caratteri ciascuna.
 	Remove Bates numbering	Rimuovi numerazione Bates
+	No hairlines to fix	Nessuna linea sottilissima da correggere
+	Hairlines fixed: {n}	Linee sottilissime corrette: {n}

@@ -2287,3 +2287,5 @@ compare-page	Moved	Déplacée
 	Import list…	Importer une liste…
 	The list is too long: at most {n} entries of up to {m} characters each.	La liste est trop longue : au plus {n} entrées de {m} caractères chacune au maximum.
 	Remove Bates numbering	Supprimer la numérotation Bates
+	No hairlines to fix	Aucun filet à corriger
+	Hairlines fixed: {n}	Filets corrigés : {n}
