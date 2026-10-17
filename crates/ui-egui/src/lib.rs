@@ -697,7 +697,7 @@ impl PdfCraftApp {
             space_hand: None,
             comment_prefs: Default::default(),
             theme: ThemeKind::Light,
-            theme_preference: ThemePreference::Light,
+            theme_preference: ThemePreference::System,
             language: i18n::AUTO.to_string(),
             flatten_fill_sign_on_save: false,
             dialog: None,

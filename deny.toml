@@ -32,6 +32,8 @@ allow-wildcard-paths = true
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
+# craft-ui, the design system all craft apps share.
+allow-git = ["https://github.com/treeforjs/craftworks"]
 
 [advisories]
 yanked = "warn"
