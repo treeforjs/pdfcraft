@@ -8192,11 +8192,11 @@ title = "Add printer marks (crop, bleed, registration, colour bars)"
 area = "L"
 tier = "P1"
 milestone = "M11"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["print_add_printer_marks"]
+evidence = ["crates/edit/src/printer_marks/tests.rs::marks_are_drawn_outside_the_trim_and_the_media_box_grows", "crates/edit/src/printer_marks/tests.rs::the_bleed_pushes_the_marks_out_and_the_trim_box_is_used", "crates/edit/src/printer_marks/tests.rs::rotated_pages_get_their_bars_on_top_as_displayed", "crates/edit/src/printer_marks/tests.rs::user_units_scale_the_marks_to_points", "crates/edit/src/printer_marks/tests.rs::adding_marks_again_replaces_them", "crates/edit/src/printer_marks/tests.rs::eastern_style_draws_double_corner_lines_and_centre_crosses", "crates/edit/src/printer_marks/tests.rs::marks_survive_save_and_reopen", "crates/edit/src/printer_marks/tests.rs::bad_settings_and_pages_change_nothing", "crates/edit/src/printer_marks/tests.rs::a_page_at_the_size_limit_is_refused_whole", "crates/edit/src/printer_marks/tests.rs::hostile_boxes_fall_back_without_panicking", "crates/engine/src/tests.rs::printer_marks_are_one_undo_step_and_keep_the_text", "crates/automation/tests/printer_marks.rs::printer_marks_grow_the_media_box_and_survive_save", "crates/automation/tests/printer_marks.rs::undo_restores_the_page", "crates/automation/tests/printer_marks.rs::bad_arguments_are_rejected_without_change"]
+notes = "Headless only (the dialog waits for the UI redesign). On the chosen pages the media box grows round the trim box (the crop box when there is none) by offset (default 6 pt, pushed past a wider bleed) + 18 pt marks + the line weight (default 0.25 pt); the crop box becomes the new media box and the trim, bleed and art boxes are pinned to their old rectangles. Trim marks, bleed marks, registration targets (/Separation /All), CMYK solids and overprints plus a 10-100% black tint bar, and a page information line (file name, page number, date) are drawn in display orientation (rotated pages, UserUnit) as one appended stream: /Artifact /Type /Page marked content (ISO 32000-2 page artifacts) inside an optional content group named Printer marks. The information line is Inter outlines, so text extraction, search and accessible text skip it. Styles Western and Eastern (tombo: double corner lines, centre crosses). Adding marks again replaces them. Missing: Acrobat's time of day in the page information, per-ink colour bars for spot colours, Acrobat's exact mark geometry, a Remove printer marks command, and the dialog."
 
 [[feature]]
 id = "print.fix-hairlines"

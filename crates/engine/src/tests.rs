@@ -3257,3 +3257,26 @@ fn change_to_artifact_takes_content_out_of_the_accessible_text_and_undoes() {
     assert!(s.apply(id, Edit::MarkArtifact { selection: bad }).is_err());
     assert!(s.undo(id).is_err(), "the refused edit left no undo step");
 }
+
+#[test]
+fn printer_marks_are_one_undo_step_and_keep_the_text() {
+    let (mut s, id) = session_with(2);
+    let before = s.get(id).unwrap().info.pages.clone();
+    let settings = PrinterMarks { file_name: "fixture.pdf".into(), ..Default::default() };
+    let plan = s.printer_marks_preview(id, &[1], &settings).unwrap();
+    assert_eq!(plan.len(), 1);
+    assert!(!s.get(id).unwrap().dirty, "the preview changes nothing");
+    s.apply(id, Edit::AddPrinterMarks { pages: vec![1], settings }).unwrap();
+    let doc = s.get(id).unwrap();
+    assert_eq!(doc.can_undo(), Some("Add printer marks"));
+    let m = plan[0].margin;
+    assert!((doc.info.pages[1].width as f64 - (200.0 + 2.0 * m)).abs() < 0.01);
+    assert_eq!(doc.info.pages[0].width, before[0].width, "page 1 untouched");
+    assert_eq!(page_texts(&s, id), ["Page 1", "Page 2"], "the page information is not text");
+    s.undo(id).unwrap();
+    assert_eq!(s.get(id).unwrap().info.pages[1].width, before[1].width);
+    // Bad settings are refused before anything changes.
+    let bad = PrinterMarks { offset: f64::NAN, ..Default::default() };
+    assert!(s.apply(id, Edit::AddPrinterMarks { pages: vec![0], settings: bad }).is_err());
+    assert_eq!(s.get(id).unwrap().can_undo(), None);
+}

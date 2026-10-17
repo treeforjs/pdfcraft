@@ -203,5 +203,56 @@ impl Automation {
     }
 }
 
+/// The mark names `print_add_printer_marks` takes.
+const MARK_NAMES: [&str; 5] = ["trim", "bleed", "registration", "color_bars", "page_info"];
+
+impl Automation {
+    /// Print Production ▸ Add Printer Marks.
+    pub(crate) fn add_printer_marks(&mut self, a: &Args) -> Result<Value> {
+        use pdfcraft_engine::{Edit, MarkStyle, PrinterMarks};
+        let doc = self.doc(a)?;
+        let id = doc.id;
+        let pages = match a.get("pages") {
+            Some(_) => self.pages(a, "pages")?,
+            None => (0..doc.info.pages.len()).collect(),
+        };
+        let d = PrinterMarks::default();
+        let mut settings = PrinterMarks { file_name: doc.name.clone(), ..d.clone() };
+        if a.get("marks").is_some() {
+            let names = a.strs("marks")?;
+            if names.is_empty() {
+                return Err(bad(format!("marks must list at least one of {}", MARK_NAMES.join(", "))));
+            }
+            if let Some(n) = names.iter().find(|n| **n != "all" && !MARK_NAMES.contains(n)) {
+                return Err(bad(format!("unknown mark {n:?} (all, {})", MARK_NAMES.join(", "))));
+            }
+            let all = names.contains(&"all");
+            let has = |m: &str| all || names.contains(&m);
+            settings.trim = has("trim");
+            settings.bleed = has("bleed");
+            settings.registration = has("registration");
+            settings.color_bars = has("color_bars");
+            settings.page_info = has("page_info");
+        }
+        settings.line_weight = a.opt_num("line_weight")?.unwrap_or(d.line_weight);
+        settings.offset = a.opt_num("offset")?.unwrap_or(d.offset);
+        if let Some(s) = a.opt_str("style")? {
+            settings.style = MarkStyle::from_name(s).ok_or_else(|| bad(format!("unknown style {s:?} (western, eastern)")))?;
+        }
+        if let Some(f) = a.opt_str("file_name")? {
+            settings.file_name = f.to_string();
+        }
+        settings.validate().map_err(|e| bad(e.to_string()))?;
+        let plan = self.session.printer_marks_preview(id, &pages, &settings).map_err(failed)?;
+        let mut out = self.apply(a, Edit::AddPrinterMarks { pages, settings })?;
+        out["marked"] = json!(
+            plan.iter()
+                .map(|p| json!({ "page": p.page + 1, "trim": p.trim, "bleed": p.bleed, "media": p.media, "margin": p.margin }))
+                .collect::<Vec<_>>()
+        );
+        Ok(out)
+    }
+}
+
 /// Pages `print_total_area_coverage` measures per call.
 const MAX_COVERAGE_PAGES: usize = 200;

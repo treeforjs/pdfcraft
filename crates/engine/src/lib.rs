@@ -47,7 +47,7 @@ pub use pdfcraft_cos::Algorithm;
 pub use pdfcraft_create::{CONVERTIBLE, ImageResolution, SourceKind, source_kind};
 pub use pdfcraft_edit::{
     Added, AddedImage, AddedText, Align as TextAlign, Background, Content as AddedContent, Family as FontFamily, Hairlines, HeaderFooter, MarkKind,
-    Watermark, bates_start, with_bates_start,
+    MarkStyle, MarkedPage, PrinterMarks, Watermark, bates_start, with_bates_start,
 };
 pub use pdfcraft_forms::{
     BorderStyle, CheckStyle, DocTrigger, Field as FormField, FieldAction, FieldChange, FieldFont, FieldKind as FormFieldKind, FieldProps, FieldValue,
@@ -1485,6 +1485,13 @@ pub enum Edit {
         pages: Vec<usize>,
         settings: Hairlines,
     },
+    /// Print Production ▸ Add Printer Marks: enlarge the media box around the trim and draw trim,
+    /// bleed and registration marks, colour bars and page information outside it (replacing
+    /// marks added before). The file name shown is in `settings`.
+    AddPrinterMarks {
+        pages: Vec<usize>,
+        settings: PrinterMarks,
+    },
     /// Add a header and footer (with `replace`, existing ones on those pages go first).
     AddHeaderFooter {
         pages: Vec<usize>,
@@ -1688,6 +1695,7 @@ impl Edit {
                 ImageEdit::Delete => "Delete image".into(),
             },
             Edit::FixHairlines { .. } => "Fix hairlines".into(),
+            Edit::AddPrinterMarks { .. } => "Add printer marks".into(),
             Edit::AddHeaderFooter { replace: false, .. } => "Add header & footer".into(),
             Edit::AddHeaderFooter { .. } => "Update header & footer".into(),
             Edit::AddWatermark { replace: false, .. } => "Add watermark".into(),
@@ -1844,6 +1852,7 @@ fn check_permission(edit: &Edit, p: &pdfcraft_cos::Permissions) -> Result<(), Ed
         }
         Edit::SetInfo { .. }
         | Edit::FixHairlines { .. }
+        | Edit::AddPrinterMarks { .. }
         | Edit::AddHeaderFooter { .. }
         | Edit::AddWatermark { .. }
         | Edit::AddBackground { .. }
@@ -2222,6 +2231,9 @@ fn run_edit(doc: &mut pdfcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -> 
         }
         Edit::FixHairlines { pages, settings } => {
             pdfcraft_edit::fix_hairlines(doc, pages, settings)?;
+        }
+        Edit::AddPrinterMarks { pages, settings } => {
+            pdfcraft_edit::add_printer_marks(doc, pages, settings, cx.today)?;
         }
         Edit::AddHeaderFooter { pages, settings, replace } => {
             let date = cx.today;
@@ -3303,6 +3315,16 @@ impl Session {
             Some(editor) => hairline_count(&editor.cos, pages, settings),
             None => Ok(0),
         }
+    }
+
+    /// What Add Printer Marks would do on `pages`, tried on a copy: each page's trim, bleed and
+    /// enlarged media box, or why the marks can't be added.
+    pub fn printer_marks_preview(&self, id: DocId, pages: &[usize], settings: &PrinterMarks) -> Result<Vec<MarkedPage>, EditError> {
+        let doc = self.get(id).ok_or(EditError::NoDocument)?;
+        let editor = doc.editor.as_ref().ok_or_else(|| EditError::ReadOnly(doc.read_only_reason.clone().unwrap_or_default()))?;
+        let mut probe = editor.cos.clone();
+        let today = self.today();
+        Ok(guard(|| pdfcraft_edit::add_printer_marks(&mut probe, pages, settings, today)).map_err(EditError::Invalid)??)
     }
 
     /// The bytes to write for Save: an incremental update of the file as opened/last saved,
