@@ -3488,6 +3488,12 @@ fn optimizing_through_tools() {
         Err(ToolError::InvalidArgs(_))
     ));
     assert!(matches!(a.call("doc_optimize", &json!({ "doc": doc, "path": "x.pdf", "discard": ["everything"] })), Err(ToolError::InvalidArgs(_))));
+    // Make compatible with PDF 1.4: a classic cross-reference table and a 1.4 header.
+    let r = ok(&mut a, "doc_optimize", json!({ "doc": doc, "path": "old.pdf", "compatibility": "1.4" }));
+    assert_eq!((r["version"].as_str(), r["object_streams"].as_bool()), (Some("1.4"), Some(false)), "{r}");
+    assert_eq!(r["newer_features"], json!([]));
+    assert!(std::fs::read(dir.join("old.pdf")).unwrap().starts_with(b"%PDF-1.4\n"));
+    assert!(matches!(a.call("doc_optimize", &json!({ "doc": doc, "path": "x.pdf", "compatibility": "1.9" })), Err(ToolError::InvalidArgs(_))));
 }
 
 /// A synthetic "scan": an 800 × 300 one-bit page image (Flate) drawn by an LZW content stream.

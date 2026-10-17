@@ -7132,11 +7132,11 @@ title = "Make compatible with a chosen PDF version"
 area = "K"
 tier = "P1"
 milestone = "M11"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["optimize.advanced"]
+tools = ["doc_optimize"]
+evidence = ["crates/optimize/tests/optimize.rs::made_compatible_with_an_older_version", "crates/automation/tests/automation.rs::optimizing_through_tools"]
+notes = "the optimized copy is written as PDF 1.3–2.0 (header set, catalog /Version dropped, no object streams below 1.5) and features the version doesn't define are reported (transparency, JBIG2, JPEG 2000, 16-bit images, optional content, AES, AES-256). Missing: converting those features down (transparency flattening, JPEG 2000 to JPEG), the Make compatible with menu in the Optimize dialog (waits for the UI redesign)"
 
 [[feature]]
 id = "optimize.optimizer"

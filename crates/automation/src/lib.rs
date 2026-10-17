@@ -1023,6 +1023,17 @@ impl Automation {
                 *flag = b;
             }
         }
+        match a.opt_str("compatibility")? {
+            None | Some("retain") => {}
+            Some(v) => {
+                settings.compatibility = Some(pdfcraft_engine::optimize::parse_version(v).ok_or_else(|| {
+                    ToolError::InvalidArgs(format!(
+                        "compatibility must be retain or one of {}, not {v:?}",
+                        pdfcraft_engine::optimize::VERSIONS.map(pdfcraft_engine::optimize::version_name).join(", ")
+                    ))
+                })?);
+            }
+        }
         let discard: Vec<pdfcraft_engine::Hidden> = match a.get("discard") {
             None => Vec::new(),
             Some(v) => v
@@ -1071,7 +1082,9 @@ impl Automation {
             "streams_compressed": o.streams_compressed,
             "lzw_reencoded": o.lzw_reencoded,
             "lzw_skipped": o.lzw_skipped,
-            "object_streams": settings.compress_structure,
+            "object_streams": settings.object_streams(),
+            "version": settings.compatibility.map(pdfcraft_engine::optimize::version_name),
+            "newer_features": o.newer_features.iter().map(|f| json!({ "feature": f.feature, "needs": pdfcraft_engine::optimize::version_name(f.needs), "count": f.count })).collect::<Vec<_>>(),
             "invalid_links": o.invalid_links,
             "invalid_bookmarks": o.invalid_bookmarks,
             "unreferenced_dests": o.unreferenced_dests,

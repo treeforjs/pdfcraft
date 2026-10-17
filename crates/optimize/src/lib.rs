@@ -26,11 +26,13 @@
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
 mod audit;
+pub mod compat;
 pub mod fonts;
 mod images;
 mod links;
 
 pub use audit::{SpaceAudit, SpaceCategory, SpaceUse, audit_space, audit_space_detailed};
+pub use compat::{NewerFeature, VERSIONS, newer_features, parse_version, version_name};
 pub use fonts::{EmbeddedFont, UnembedBlock, UnembedError, embedded_fonts};
 
 use pdfcraft_cos::{Document, ObjRef, Object, Stream};
@@ -137,6 +139,17 @@ pub struct Settings {
     /// Fonts: unembed the embedded fonts with these `/BaseFont` names. Every name must match an
     /// embedded font that can safely be unembedded ([`fonts::unembed`]), or nothing is done.
     pub unembed_fonts: Vec<String>,
+    /// Make compatible with this PDF version (one of [`VERSIONS`]); `None` retains the
+    /// document's own.
+    pub compatibility: Option<(u8, u8)>,
+}
+
+impl Settings {
+    /// Whether the copy is written with object streams: asked for, and defined by the version
+    /// it is made compatible with (PDF 1.5 and later).
+    pub fn object_streams(&self) -> bool {
+        self.compress_structure && self.compatibility.is_none_or(|v| v >= (1, 5))
+    }
 }
 
 impl Default for Settings {
@@ -156,6 +169,7 @@ impl Default for Settings {
             remove_invalid_links: true,
             remove_unreferenced_dests: true,
             unembed_fonts: Vec::new(),
+            compatibility: None,
         }
     }
 }
@@ -186,6 +200,8 @@ pub struct Report {
     pub unreferenced_dests: usize,
     /// Font dictionaries whose embedded program was removed.
     pub fonts_unembedded: usize,
+    /// Features the copy keeps that the version it was made compatible with doesn't define.
+    pub newer_features: Vec<NewerFeature>,
 }
 
 /// Encoded size limit for one LZW stream, and decoded total for one run (the same limits as
@@ -266,6 +282,9 @@ pub fn downsample_page_images(doc: &mut Document, pages: &[usize], ppi: f64) -> 
 pub fn optimize_with_progress(doc: &mut Document, settings: &Settings, progress: &mut dyn FnMut(Stage) -> bool) -> Result<Report, OptimizeError> {
     let mut report = Report::default();
     let pages = pdfcraft_annot::page_refs(doc).map_err(|_| OptimizeError::NoPages)?;
+    if settings.compatibility.is_some_and(|v| !VERSIONS.contains(&v)) {
+        return Err(OptimizeError::Invalid(format!("PDF versions to make compatible with are {}", VERSIONS.map(version_name).join(", "))));
+    }
     // First, so a font that can't be unembedded stops the run before anything changed.
     report.fonts_unembedded = fonts::unembed(doc, &settings.unembed_fonts)?;
     images::run(doc, &pages, settings, &mut report, progress)?;
@@ -366,6 +385,10 @@ pub fn optimize_with_progress(doc: &mut Document, settings: &Settings, progress:
                 report.streams_compressed += 1;
             }
         }
+    }
+    if let Some(v) = settings.compatibility {
+        compat::apply(doc, v)?;
+        report.newer_features = newer_features(doc, v);
     }
     Ok(report)
 }
