@@ -2195,3 +2195,7 @@ compare-page	Moved	Перемещена
 	The form was sent to {host}.	Форма отправлена на {host}.
 	Message from the document	Сообщение от документа
 	Asked by a script in this PDF	Вопрос от скрипта в этом PDF
+	Multiple words or phrases	Несколько слов или фраз
+	One word or phrase per line	По одному слову или фразе в строке
+	Import list…	Импортировать список…
+	The list is too long: at most {n} entries of up to {m} characters each.	Список слишком длинный: не более {n} записей длиной до {m} символов каждая.

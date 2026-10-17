@@ -431,7 +431,7 @@ pub fn tools() -> Vec<ToolDef> {
         t(
             "redact_mark",
             "Mark for redaction",
-            "Mark content for redaction (nothing is removed until redact_apply). One of: rect [x0, y0, x1, y1] (points from the top-left of the displayed page) with page; find (text, every match); pattern (one Search & Redact pattern, every match; see redact_patterns); locale (every pattern of a locale set, e.g. en-GB); whole_pages: true. find, pattern, locale and whole_pages work on pages (default all). Overlay text shown on the box once applied: overlay (custom text), or codes from code_set (redaction codes such as us-foia (b)(6); see redact_codes; codes without code_set are a custom set). overlay_font (helvetica, times, courier), overlay_size (points; 0 = auto-size to fit, the default), overlay_color (default red), overlay_align (left, center, right), overlay_repeat (fill the box). Stored as /OverlayText, /DA, /Q and /Repeat. fill: box colour (default black). Undoable.",
+            "Mark content for redaction (nothing is removed until redact_apply). One of: rect [x0, y0, x1, y1] (points from the top-left of the displayed page) with page; find (text, every match); pattern (one Search & Redact pattern, every match; see redact_patterns); locale (every pattern of a locale set, e.g. en-GB); words (a list of words or phrases, every match of any) or words_file (a UTF-8 text file, one word or phrase per line), with match_case and whole_words; whole_pages: true. find, pattern, locale, words and whole_pages work on pages (default all). Overlay text shown on the box once applied: overlay (custom text), or codes from code_set (redaction codes such as us-foia (b)(6); see redact_codes; codes without code_set are a custom set). overlay_font (helvetica, times, courier), overlay_size (points; 0 = auto-size to fit, the default), overlay_color (default red), overlay_align (left, center, right), overlay_repeat (fill the box). Stored as /OverlayText, /DA, /Q and /Repeat. fill: box colour (default black). Undoable.",
         )
         .with(schema(
             json!({
@@ -441,6 +441,10 @@ pub fn tools() -> Vec<ToolDef> {
                 "find": { "type": "string", "minLength": 1 },
                 "pattern": { "type": "string", "enum": ["phone", "email", "credit-card", "ssn", "date", "us-zip", "uk-postcode", "uk-nino", "ca-postal", "ca-sin", "fr-nir", "jp-postal", "jp-my-number", "iban"] },
                 "locale": { "type": "string", "enum": ["intl", "en-US", "en-GB", "en-CA", "fr-FR", "ja-JP"] },
+                "words": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 256 }, "minItems": 1, "maxItems": 1000 },
+                "words_file": { "type": "string", "description": "A UTF-8 text file with one word or phrase per line (at most 1 MiB)." },
+                "match_case": { "type": "boolean", "description": "words: match upper and lower case exactly (default false)." },
+                "whole_words": { "type": "boolean", "description": "words: only whole words (default false)." },
                 "whole_pages": { "type": "boolean" },
                 "pages": pages("to search or mark (default: all)"),
                 "overlay": { "type": "string", "maxLength": 512 },

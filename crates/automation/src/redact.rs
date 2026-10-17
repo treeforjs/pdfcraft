@@ -3,7 +3,7 @@
 
 use pdfcraft_engine::{
     Edit, Hidden, NewAnnotation, OverlayFont, OverlayLook, REDACT_PATTERN_LOCALES, REDACT_PATTERNS, REDACTION_CODE_SETS, RedactPattern,
-    RedactionCodeSet, Shape, Style, find_pattern, rect_quad, redact_patterns_for, redaction_codes,
+    RedactWordList, RedactionCodeSet, Shape, Style, find_pattern, rect_quad, redact_patterns_for, redaction_codes,
 };
 use serde_json::{Value, json};
 
@@ -14,6 +14,32 @@ use crate::{Args, Automation, Result, ToolError, failed};
 type Mark = (usize, Vec<[f64; 8]>);
 
 impl Automation {
+    /// The word list of `words` (an array of words or phrases) or `words_file` (a UTF-8 text file,
+    /// one per line), with the `match_case` and `whole_words` options; `None` without either.
+    fn word_list(&self, a: &Args) -> Result<Option<RedactWordList>> {
+        let (case, whole) = (a.opt_bool("match_case")?.unwrap_or(false), a.opt_bool("whole_words")?.unwrap_or(false));
+        let list = if let Some(w) = a.get("words") {
+            let items = w.as_array().ok_or_else(|| ToolError::InvalidArgs("words must be an array of strings".into()))?;
+            let words: Vec<&str> = items
+                .iter()
+                .map(|v| v.as_str().ok_or_else(|| ToolError::InvalidArgs("words must be an array of strings".into())))
+                .collect::<Result<_>>()?;
+            RedactWordList::new(words, case, whole)
+        } else if let Some(p) = a.opt_str("words_file")? {
+            let path = self.resolve(p, false)?;
+            let size = std::fs::metadata(&path).map_err(|e| failed(format!("{}: {e}", path.display())))?.len();
+            if size > pdfcraft_engine::MAX_REDACT_LIST_BYTES as u64 {
+                return Err(ToolError::InvalidArgs("the word list is larger than 1 MiB".into()));
+            }
+            let bytes = std::fs::read(&path).map_err(|e| failed(format!("{}: {e}", path.display())))?;
+            let text = String::from_utf8(bytes).map_err(|_| ToolError::InvalidArgs(format!("{} is not UTF-8 text", path.display())))?;
+            RedactWordList::parse(&text, case, whole)
+        } else {
+            return Ok(None);
+        };
+        list.map(Some).map_err(|e| ToolError::InvalidArgs(e.to_string()))
+    }
+
     pub(crate) fn redact_mark(&mut self, a: &Args) -> Result<Value> {
         let doc = self.doc(a)?;
         let (id, n) = (doc.id, doc.info.pages.len());
@@ -35,11 +61,15 @@ impl Automation {
             a.get("find").is_some(),
             a.get("pattern").is_some(),
             a.get("locale").is_some(),
+            a.get("words").is_some() || a.get("words_file").is_some(),
             a.opt_bool("whole_pages")?.unwrap_or(false),
         ];
-        if chosen.iter().filter(|c| **c).count() != 1 {
-            return Err(ToolError::InvalidArgs("pass exactly one of rect (with page), find, pattern, locale or whole_pages: true".into()));
+        if chosen.iter().filter(|c| **c).count() != 1 || (a.get("words").is_some() && a.get("words_file").is_some()) {
+            return Err(ToolError::InvalidArgs(
+                "pass exactly one of rect (with page), find, pattern, locale, words, words_file or whole_pages: true".into(),
+            ));
         }
+        let words = self.word_list(a)?;
         if a.get("rect").is_some() {
             let page = self.page(a)?;
             let info = &self.doc(a)?.info.pages[page];
@@ -73,6 +103,9 @@ impl Automation {
             let mut found: std::collections::BTreeMap<usize, Vec<Mark>> = std::collections::BTreeMap::new();
             // Every pattern's matches, each place once (patterns can overlap).
             let matcher = |chars: &[char]| {
+                if let Some(w) = &words {
+                    return w.find(chars);
+                }
                 let mut all: Vec<std::ops::Range<usize>> = patterns.iter().flat_map(|pat| find_pattern(*pat, chars)).collect();
                 all.sort_by_key(|r| (r.start, r.end));
                 all.dedup();

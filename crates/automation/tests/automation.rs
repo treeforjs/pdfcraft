@@ -2633,6 +2633,30 @@ fn redacting_through_tools() {
     assert!(matches!(a.call("redact_mark", &json!({ "doc": doc })), Err(ToolError::InvalidArgs(_))));
 }
 
+/// A list of words and phrases, given inline or as a file, is marked and removed everywhere it
+/// appears; the case and whole-word options narrow it. All names are synthetic.
+#[test]
+fn redacting_a_word_list_through_tools() {
+    let dir = workdir("redact-words");
+    std::fs::write(dir.join("memo.txt"), "Zebulon Quarrytree met ZEBULON at Larkspur Mill\nlarkspur grows by the millpond\nOpen paragraph").unwrap();
+    std::fs::write(dir.join("names.txt"), "\u{FEFF}Zebulon\n\nlarkspur mill\n").unwrap();
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_create", json!({ "from": "text", "path": "memo.txt" }))["doc"].as_u64().unwrap();
+    let r = ok(&mut a, "redact_mark", json!({ "doc": doc, "words_file": "names.txt" }));
+    assert_eq!(r["marked"].as_u64(), Some(3), "{r}");
+    let r = ok(&mut a, "redact_mark", json!({ "doc": doc, "words": ["Quarrytree", "mill"], "match_case": true, "whole_words": true }));
+    assert_eq!(r["marked"].as_u64(), Some(1), "only the whole, lower-case word is left to match: {r}");
+    ok(&mut a, "redact_apply", json!({ "doc": doc }));
+    let text = page_text(&mut a, doc)[0].clone();
+    assert!(!text.to_lowercase().contains("zebulon") && !text.contains("Quarrytree") && !text.contains("Larkspur"), "{text}");
+    assert!(text.contains("larkspur grows") && text.contains("millpond") && text.contains("Open paragraph"), "{text}");
+    for bad in [json!({ "doc": doc, "words": [] }), json!({ "doc": doc, "words": [" "] }), json!({ "doc": doc, "words": [1] })] {
+        assert!(matches!(a.call("redact_mark", &bad), Err(ToolError::InvalidArgs(_))), "{bad}");
+    }
+    assert!(matches!(a.call("redact_mark", &json!({ "doc": doc, "words": ["x"], "find": "x" })), Err(ToolError::InvalidArgs(_))));
+    assert!(matches!(a.call("redact_mark", &json!({ "doc": doc, "words": ["nowhere"] })), Err(ToolError::Failed(_))));
+}
+
 /// Redaction codes and styled overlay text are burned into the page; locale pattern sets mark
 /// their formats. All values are synthetic.
 #[test]

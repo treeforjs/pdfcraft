@@ -59,16 +59,43 @@ impl Default for PagesDraft {
 /// Find text and redact.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SearchDraft {
-    pub patterns: bool,
+    pub mode: SearchMode,
     pub text: String,
+    /// Multiple words or phrases, one per line.
+    pub list: String,
+    /// For the list: match upper and lower case exactly, and only whole words.
+    pub case_sensitive: bool,
+    pub whole_words: bool,
     pub pattern: RedactPattern,
     /// The result of the last search (matches marked), shown in the dialog.
     pub found: Option<usize>,
+    /// Why the list couldn't be searched, shown in the dialog.
+    pub error: Option<String>,
+    /// Import list… was pressed (handled by the app, which picks the file).
+    pub import: bool,
+}
+
+/// What Find text and redact looks for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SearchMode {
+    Phrase,
+    Words,
+    Patterns,
 }
 
 impl Default for SearchDraft {
     fn default() -> Self {
-        Self { patterns: false, text: String::new(), pattern: RedactPattern::Phone, found: None }
+        Self {
+            mode: SearchMode::Phrase,
+            text: String::new(),
+            list: String::new(),
+            case_sensitive: false,
+            whole_words: false,
+            pattern: RedactPattern::Phone,
+            found: None,
+            error: None,
+            import: false,
+        }
     }
 }
 
@@ -150,9 +177,24 @@ impl PdfCraftApp {
         let Some((_, id)) = self.active_ids() else { return 0 };
         let Some(doc) = self.session.get(id) else { return 0 };
         let d = self.redact_search.clone();
-        if !d.patterns && d.text.trim().is_empty() {
+        if d.mode == SearchMode::Phrase && d.text.trim().is_empty() {
             return 0;
         }
+        self.redact_search.error = None;
+        let words = match d.mode {
+            SearchMode::Words => match pdfcraft_engine::RedactWordList::parse(&d.list, d.case_sensitive, d.whole_words) {
+                Ok(w) => Some(w),
+                Err(pdfcraft_engine::RedactWordListError::Empty) => return 0,
+                Err(_) => {
+                    self.redact_search.error = Some(crate::i18n::fmt(
+                        tl!("The list is too long: at most {n} entries of up to {m} characters each."),
+                        &[("n", &pdfcraft_engine::MAX_REDACT_WORDS.to_string()), ("m", &pdfcraft_engine::MAX_REDACT_WORD_CHARS.to_string())],
+                    ));
+                    return 0;
+                }
+            },
+            _ => None,
+        };
         let config = pdfcraft_render::RenderConfig { password: doc.password.as_deref().map(std::sync::Arc::from), ..Default::default() };
         let mut r = pdfcraft_render::PageRenderer::new(doc.bytes.clone(), config);
         let mut edits = Vec::new();
@@ -160,7 +202,11 @@ impl PdfCraftApp {
         for page in 0..doc.info.pages.len() {
             let out = r.render(pdfcraft_render::RenderRequest { page, kind: pdfcraft_render::RequestKind::Text, scale: 1.0, ..Default::default() });
             let Some(text) = out.text else { continue };
-            let hits = if d.patterns { text.find_with(|c| pdfcraft_engine::find_pattern(d.pattern, c)) } else { text.find(&d.text) };
+            let hits = match (d.mode, &words) {
+                (SearchMode::Patterns, _) => text.find_with(|c| pdfcraft_engine::find_pattern(d.pattern, c)),
+                (SearchMode::Words, Some(w)) => text.find_with(|c| w.find(c)),
+                _ => text.find(&d.text),
+            };
             for h in hits {
                 let quads: Vec<[f64; 8]> = text.line_rects(h).into_iter().map(|r| doc.info.pages[page].view_rect_to_quad(r)).collect();
                 if !quads.is_empty() {
@@ -173,6 +219,33 @@ impl PdfCraftApp {
             self.apply_edit(Edit::Batch { label: "Mark for redaction".into(), edits });
         }
         n
+    }
+
+    /// Import list…: read a text file (one word or phrase per line) into the list.
+    pub(crate) fn import_redact_words(&mut self) {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let dialog = rfd::AsyncFileDialog::new().set_title(tl!("Import list…")).add_filter("Text", &["txt", "csv"]);
+            self.ask_one(crate::pickers::Ask::File(dialog), None, |app, p| {
+                let read = std::fs::metadata(&p).and_then(|m| {
+                    if m.len() > pdfcraft_engine::MAX_REDACT_LIST_BYTES as u64 {
+                        Err(std::io::Error::other("larger than 1 MiB"))
+                    } else {
+                        std::fs::read(&p)
+                    }
+                });
+                match read {
+                    Ok(bytes) => {
+                        let d = &mut app.redact_search;
+                        d.list = String::from_utf8_lossy(&bytes).trim_start_matches('\u{FEFF}').to_string();
+                        d.mode = SearchMode::Words;
+                        d.found = None;
+                        d.error = None;
+                    }
+                    Err(e) => app.notify_fmt("Couldn't read {name}: {e}", &[("name", &p.display().to_string()), ("e", &e.to_string())]),
+                }
+            });
+        }
     }
 
     /// Mark the pages of the Redact pages draft.
@@ -224,15 +297,31 @@ pub(crate) fn search_body(ui: &mut egui::Ui, d: &mut SearchDraft, t: &Tokens) ->
     ui.set_width(420.0);
     ui.label(egui::RichText::new(tl!("Find text and redact")).font(crate::theme::semibold(18.0)));
     ui.add_space(8.0);
-    ui.radio_value(&mut d.patterns, false, tl!("Single word or phrase"));
+    ui.radio_value(&mut d.mode, SearchMode::Phrase, tl!("Single word or phrase"));
     let mut enter = false;
-    ui.add_enabled_ui(!d.patterns, |ui| {
+    ui.add_enabled_ui(d.mode == SearchMode::Phrase, |ui| {
         let r = ui.add(egui::TextEdit::singleline(&mut d.text).hint_text(tl!("Text to find")).desired_width(380.0));
         enter = r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
     });
     ui.add_space(6.0);
-    ui.radio_value(&mut d.patterns, true, tl!("Patterns"));
-    ui.add_enabled_ui(d.patterns, |ui| {
+    ui.radio_value(&mut d.mode, SearchMode::Words, tl!("Multiple words or phrases"));
+    ui.add_enabled_ui(d.mode == SearchMode::Words, |ui| {
+        // A long imported list scrolls rather than pushing the buttons off the dialog.
+        egui::ScrollArea::vertical().id_salt("redact-word-list").max_height(120.0).show(ui, |ui| {
+            ui.add(egui::TextEdit::multiline(&mut d.list).hint_text(tl!("One word or phrase per line")).desired_rows(4).desired_width(370.0));
+        });
+        ui.horizontal(|ui| {
+            ui.checkbox(&mut d.case_sensitive, tl!("Case-sensitive"));
+            ui.checkbox(&mut d.whole_words, tl!("Whole words only"));
+            #[cfg(not(target_arch = "wasm32"))]
+            if ui.button(tl!("Import list…")).clicked() {
+                d.import = true;
+            }
+        });
+    });
+    ui.add_space(6.0);
+    ui.radio_value(&mut d.mode, SearchMode::Patterns, tl!("Patterns"));
+    ui.add_enabled_ui(d.mode == SearchMode::Patterns, |ui| {
         egui::ComboBox::from_id_salt("redact-pattern").selected_text(tl!(d.pattern.label())).width(240.0).show_ui(ui, |ui| {
             for p in REDACT_PATTERNS {
                 ui.selectable_value(&mut d.pattern, p, tl!(p.label()));
@@ -241,7 +330,9 @@ pub(crate) fn search_body(ui: &mut egui::Ui, d: &mut SearchDraft, t: &Tokens) ->
     });
     ui.add_space(6.0);
     ui.label(egui::RichText::new(tl!("Text in images isn't found; recognise text (OCR) first.")).small().color(t.text_faint));
-    if let Some(n) = d.found {
+    if let Some(e) = &d.error {
+        ui.label(egui::RichText::new(e.as_str()).color(Color32::from_rgb(0xC8, 0x3A, 0x3A)));
+    } else if let Some(n) = d.found {
         ui.label(
             egui::RichText::new(if n == 0 {
                 tl!("No matches.").to_string()

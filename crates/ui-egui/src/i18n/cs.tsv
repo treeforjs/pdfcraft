@@ -2306,3 +2306,7 @@ compare-page	Moved	Přesunutá
 	The form was sent to {host}.	Formulář byl odeslán na {host}.
 	Message from the document	Zpráva z dokumentu
 	Asked by a script in this PDF	Dotaz skriptu v tomto PDF
+	Multiple words or phrases	Více slov nebo frází
+	One word or phrase per line	Jedno slovo nebo fráze na řádek
+	Import list…	Importovat seznam…
+	The list is too long: at most {n} entries of up to {m} characters each.	Seznam je příliš dlouhý: nejvýše {n} položek po nejvýše {m} znacích.

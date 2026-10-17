@@ -2213,3 +2213,7 @@ compare-page	Moved	తరలించబడింది
 	The form was sent to {host}.	ఫారం {host}కి పంపబడింది.
 	Message from the document	పత్రం నుండి సందేశం
 	Asked by a script in this PDF	ఈ PDF లోని స్క్రిప్ట్ అడుగుతోంది
+	Multiple words or phrases	అనేక పదాలు లేదా పదబంధాలు
+	One word or phrase per line	ప్రతి వరుసకు ఒక పదం లేదా పదబంధం
+	Import list…	జాబితాను దిగుమతి చేయి…
+	The list is too long: at most {n} entries of up to {m} characters each.	జాబితా చాలా పెద్దది: గరిష్ఠంగా {n} ఎంట్రీలు, ఒక్కొక్కటి {m} అక్షరాల వరకు.

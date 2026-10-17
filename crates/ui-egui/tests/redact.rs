@@ -130,3 +130,52 @@ fn redaction_properties_offer_redaction_codes() {
     h.run_steps(3);
     assert_eq!(marks(&h), 1);
 }
+
+#[test]
+fn find_text_and_redact_marks_every_word_of_a_list() {
+    let content = "BT /F1 14 Tf 40 700 Td (Zebulon met ZEBULON at Larkspur Mill) Tj 0 -24 Td (larkspur grows by the millpond) Tj ET";
+    let pdf = format!(
+        "%PDF-1.7
+1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
+2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj
+3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >> endobj
+4 0 obj << /Length {} >> stream
+{content}
+endstream endobj
+5 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj
+trailer << /Root 1 0 R >>
+%%EOF",
+        content.len()
+    )
+    .into_bytes();
+    let mut h = Harness::builder().with_size(egui::vec2(1400.0, 900.0)).build_eframe(move |_cc| {
+        let mut app = PdfCraftApp::new();
+        app.set_option("language", "en").unwrap();
+        app.open_bytes("names.pdf", None, pdf.clone()).unwrap();
+        app
+    });
+    h.run_steps(4);
+    assert!(h.state_mut().execute("redact.search"));
+    h.run_steps(2);
+    h.get_by_label("Multiple words or phrases").click();
+    h.run_steps(2);
+    h.state_mut().redact_search.list = "zebulon\n\nLarkspur Mill\n".into();
+    h.get_by_label("Mark all").click();
+    h.run_steps(3);
+    assert_eq!(marks(&h), 3, "both spellings of the name and the phrase");
+    h.get_by_label("3 match(es) marked for redaction.");
+    // Case and whole words narrow the list; a list that is too long says so and marks nothing.
+    h.state_mut().redact_search.list = "mill\nlarkspur".into();
+    h.get_by_label("Case-sensitive").click();
+    h.get_by_label("Whole words only").click();
+    h.run_steps(2);
+    h.get_by_label("Mark all").click();
+    h.run_steps(3);
+    assert_eq!(marks(&h), 4, "only the lower-case whole word larkspur");
+    h.state_mut().redact_search.list = (0..=1000).map(|i| format!("w{i}\n")).collect();
+    h.run_steps(2);
+    h.get_by_label("Mark all").click();
+    h.run_steps(3);
+    assert_eq!(marks(&h), 4);
+    h.get_by_label("The list is too long: at most 1000 entries of up to 256 characters each.");
+}

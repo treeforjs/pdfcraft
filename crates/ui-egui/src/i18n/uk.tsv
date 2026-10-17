@@ -2305,3 +2305,7 @@ compare-page	Moved	Переміщена
 	The form was sent to {host}.	Форму надіслано на {host}.
 	Message from the document	Повідомлення від документа
 	Asked by a script in this PDF	Запитання від скрипту в цьому PDF
+	Multiple words or phrases	Кілька слів або фраз
+	One word or phrase per line	По одному слову або фразі в рядку
+	Import list…	Імпортувати список…
+	The list is too long: at most {n} entries of up to {m} characters each.	Список задовгий: не більше {n} записів до {m} символів кожен.
