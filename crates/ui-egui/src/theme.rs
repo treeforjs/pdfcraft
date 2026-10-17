@@ -1,5 +1,6 @@
-//! Design tokens and egui style (plan/acrobat/02-ui-ux.md §1: neutral chrome, white panels,
-//! one blue accent; Dark Gray keeps pages white). Every custom widget reads `Tokens::get`.
+//! Design tokens and egui style. The colours come from craft-ui, the design system all craft
+//! apps share (its `DESIGN.md`); this module maps them onto PdfCraft's surfaces (the dark theme
+//! keeps pages white). Every custom widget reads `Tokens::get`.
 
 use std::sync::Arc;
 
@@ -15,8 +16,8 @@ pub enum ThemeKind {
 /// The saved user choice, independent of the light/dark colours currently displayed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub enum ThemePreference {
-    System,
     #[default]
+    System,
     Light,
     Dark,
 }
@@ -66,55 +67,30 @@ pub struct Tokens {
 
 impl Tokens {
     pub fn for_kind(kind: ThemeKind) -> Self {
-        match kind {
-            ThemeKind::Light => Self {
-                kind,
-                titlebar: Color32::from_rgb(0xE9, 0xE9, 0xEB),
-                chrome: Color32::from_rgb(0xFF, 0xFF, 0xFF),
-                panel: Color32::from_rgb(0xFF, 0xFF, 0xFF),
-                pasteboard: Color32::from_rgb(0xF1, 0xF1, 0xF3),
-                card: Color32::from_rgb(0xFF, 0xFF, 0xFF),
-                border: Color32::from_rgb(0xDA, 0xDA, 0xDE),
-                divider: Color32::from_rgb(0xE8, 0xE8, 0xEB),
-                text: Color32::from_rgb(0x22, 0x22, 0x26),
-                text_muted: Color32::from_rgb(0x5E, 0x5E, 0x66),
-                text_faint: Color32::from_rgb(0x6B, 0x6B, 0x73),
-                icon: Color32::from_rgb(0x44, 0x44, 0x4B),
-                hover: Color32::from_rgb(0xF0, 0xF0, 0xF3),
-                pressed: Color32::from_rgb(0xE4, 0xE4, 0xE9),
-                selected: Color32::from_rgb(0xE6, 0xEE, 0xFD),
-                accent: Color32::from_rgb(0x1B, 0x63, 0xE0),
-                accent_text: Color32::from_rgb(0x17, 0x55, 0xC4),
-                accent_soft: Color32::from_rgb(0xE3, 0xEC, 0xFD),
-                field: Color32::from_rgb(0xFF, 0xFF, 0xFF),
-                badge_new: Color32::from_rgb(0x1B, 0x63, 0xE0),
-                page_shadow: Color32::from_black_alpha(34),
-                radius: 6,
-            },
-            ThemeKind::Dark => Self {
-                kind,
-                titlebar: Color32::from_rgb(0x1B, 0x1B, 0x1E),
-                chrome: Color32::from_rgb(0x26, 0x26, 0x2A),
-                panel: Color32::from_rgb(0x26, 0x26, 0x2A),
-                pasteboard: Color32::from_rgb(0x19, 0x19, 0x1C),
-                card: Color32::from_rgb(0x2E, 0x2E, 0x33),
-                border: Color32::from_rgb(0x3C, 0x3C, 0x43),
-                divider: Color32::from_rgb(0x33, 0x33, 0x39),
-                text: Color32::from_rgb(0xEC, 0xEC, 0xEF),
-                text_muted: Color32::from_rgb(0xAE, 0xAE, 0xB6),
-                text_faint: Color32::from_rgb(0x97, 0x97, 0x9E),
-                icon: Color32::from_rgb(0xD4, 0xD4, 0xDA),
-                hover: Color32::from_rgb(0x34, 0x34, 0x3A),
-                pressed: Color32::from_rgb(0x3E, 0x3E, 0x45),
-                selected: Color32::from_rgb(0x23, 0x3A, 0x63),
-                accent: Color32::from_rgb(0x4B, 0x8B, 0xF5),
-                accent_text: Color32::from_rgb(0x8C, 0xB6, 0xFA),
-                accent_soft: Color32::from_rgb(0x24, 0x36, 0x57),
-                field: Color32::from_rgb(0x1E, 0x1E, 0x22),
-                badge_new: Color32::from_rgb(0x3D, 0x7D, 0xEE),
-                page_shadow: Color32::from_black_alpha(120),
-                radius: 6,
-            },
+        let c = craft(kind);
+        Self {
+            kind,
+            titlebar: c.bg,
+            chrome: c.surface,
+            panel: c.surface,
+            pasteboard: c.bg,
+            card: c.surface_raised,
+            border: c.border,
+            divider: c.divider,
+            text: c.text,
+            text_muted: c.text_muted,
+            text_faint: c.text_faint,
+            icon: c.icon,
+            hover: c.hover,
+            pressed: c.pressed,
+            selected: c.accent_soft,
+            accent: c.accent,
+            accent_text: c.accent_text,
+            accent_soft: c.accent_soft,
+            field: c.field,
+            badge_new: c.accent,
+            page_shadow: Color32::from_black_alpha(if c.is_dark() { 120 } else { 34 }),
+            radius: craft_ui::tokens::radius::MD,
         }
     }
 
@@ -125,6 +101,15 @@ impl Tokens {
     pub fn dark(&self) -> bool {
         self.kind == ThemeKind::Dark
     }
+}
+
+/// The shared craft-ui tokens PdfCraft draws with in `kind`.
+pub fn craft(kind: ThemeKind) -> craft_ui::Tokens {
+    let mode = match kind {
+        ThemeKind::Light => craft_ui::Mode::Light,
+        ThemeKind::Dark => craft_ui::Mode::Dark,
+    };
+    craft_ui::Tokens::new(mode, craft_ui::Density::Comfortable)
 }
 
 pub fn install_fonts(ctx: &egui::Context) {
@@ -229,6 +214,10 @@ pub fn apply(ctx: &egui::Context, kind: ThemeKind) {
     ctx.set_theme(if kind == ThemeKind::Dark { egui::Theme::Dark } else { egui::Theme::Light });
     let t = Tokens::for_kind(kind);
     ctx.data_mut(|d| d.insert_temp(egui::Id::new("pdfcraft-theme"), t));
+    // craft-ui stores its tokens for its own components (palette, toasts, sections); PdfCraft's
+    // visuals below then refine its style.
+    let appearance = if t.dark() { craft_ui::Appearance::Dark } else { craft_ui::Appearance::Light };
+    craft_ui::apply(ctx, &craft_ui::Theme { appearance, ..Default::default() });
     let mut v = if t.dark() { Visuals::dark() } else { Visuals::light() };
     v.panel_fill = t.panel;
     v.window_fill = t.card;
@@ -239,8 +228,8 @@ pub fn apply(ctx: &egui::Context, kind: ThemeKind) {
     v.selection.stroke = Stroke::new(1.0, t.accent);
     v.hyperlink_color = t.accent_text;
     v.override_text_color = Some(t.text);
-    v.window_corner_radius = CornerRadius::same(10);
-    v.menu_corner_radius = CornerRadius::same(8);
+    v.window_corner_radius = CornerRadius::same(craft_ui::tokens::radius::XL);
+    v.menu_corner_radius = CornerRadius::same(craft_ui::tokens::radius::LG);
     v.window_shadow = egui::Shadow { offset: [0, 8], blur: 28, spread: 0, color: Color32::from_black_alpha(if t.dark() { 110 } else { 38 }) };
     v.popup_shadow = egui::Shadow { offset: [0, 4], blur: 16, spread: 0, color: Color32::from_black_alpha(if t.dark() { 90 } else { 30 }) };
     for w in [&mut v.widgets.noninteractive, &mut v.widgets.inactive, &mut v.widgets.hovered, &mut v.widgets.active, &mut v.widgets.open] {
@@ -268,6 +257,11 @@ pub fn apply(ctx: &egui::Context, kind: ThemeKind) {
     }
     ctx.set_visuals(v);
     ctx.global_style_mut(|s| {
+        // PdfCraft's own control sizes stay until its shell moves to craft-ui's (DESIGN.md, phase 4).
+        let defaults = egui::style::Spacing::default();
+        s.spacing.interact_size = defaults.interact_size;
+        s.spacing.window_margin = defaults.window_margin;
+        s.animation_time = egui::Style::default().animation_time;
         s.spacing.item_spacing = egui::vec2(8.0, 6.0);
         s.spacing.button_padding = egui::vec2(10.0, 5.0);
         s.spacing.menu_margin = egui::Margin::same(6);
