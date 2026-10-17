@@ -4,16 +4,9 @@
 name: Windows ARM64
 
 on:
+  # Not on pull requests for now (Linux-only PR CI); main pushes and manual runs still build it.
   push:
     branches: [main]
-  pull_request:
-    paths:
-      - Cargo.toml
-      - Cargo.lock
-      - "**/Cargo.toml"
-      - "**/build.rs"
-      - .github/workflows/windows-arm64.yml
-      - packaging/windows/**
   schedule:
     - cron: "41 4 * * 1" # weekly, so drift in the runner images shows up
   workflow_dispatch:
