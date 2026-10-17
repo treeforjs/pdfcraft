@@ -26,8 +26,8 @@
 //! - `ui.set {key, value}`: view options (`--page`, `--zoom`, …), plus persistent preferences.
 //!   `default-mode=all|read|edit|convert|sign` applies to future PDF opens; `mode` overrides it
 //!   for this session without changing the saved preference. `ui.state.default_mode` reports it.
-//!   `theme=light|dark|system` changes the saved theme preference; `ui.state.theme_preference`
-//!   reports the choice and `ui.state.theme` reports the resolved light/dark colours.
+//!   `theme=system|light|cream|dim|dark` changes the saved theme preference; `ui.state.theme_preference`
+//!   reports the choice and `ui.state.theme` reports the resolved colours (`Light`, `Cream`, `Dim`, `Dark`).
 //! - `ui.open {path}`: open a file.
 //! - `ui.screenshot {region?}`: PNG of the window (base64), optionally cropped to a rect.
 

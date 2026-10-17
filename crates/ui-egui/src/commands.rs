@@ -7,11 +7,7 @@
 use pdfcraft_engine::Edit;
 use pdfcraft_engine::commands::{self, COMMANDS, CommandSpec};
 
-use crate::{
-    Dialog, Mode, PdfCraftApp, PropsTab, RightPanel, SaveTarget,
-    theme::{ThemeKind, ThemePreference},
-    widgets,
-};
+use crate::{Dialog, Mode, PdfCraftApp, PropsTab, RightPanel, SaveTarget, theme::ThemePreference, widgets};
 
 impl PdfCraftApp {
     /// Whether a registered command can run now. The engine judges the document (security,
@@ -176,12 +172,15 @@ impl PdfCraftApp {
             }
             "view.read_mode" => self.mode = if self.mode == Mode::Read { Mode::AllTools } else { Mode::Read },
             "view.theme" => {
-                let next = if self.theme == ThemeKind::Light { ThemePreference::Dark } else { ThemePreference::Light };
+                // Cream counts as light (to Dark), Dim as dark (to Light).
+                let next = if self.theme.is_dark() { ThemePreference::Light } else { ThemePreference::Dark };
                 self.set_theme_preference(next);
             }
             command if command.starts_with("measure.") => crate::measure_ui::command(self, command),
             "view.theme.system" => self.set_theme_preference(ThemePreference::System),
             "view.theme.light" => self.set_theme_preference(ThemePreference::Light),
+            "view.theme.cream" => self.set_theme_preference(ThemePreference::Cream),
+            "view.theme.dim" => self.set_theme_preference(ThemePreference::Dim),
             "view.theme.dark" => self.set_theme_preference(ThemePreference::Dark),
             "comment.list" => self.choose_right_panel(Some(RightPanel::Comments)),
             tool if crate::comments::CommentTool::from_command(tool).is_some() => {

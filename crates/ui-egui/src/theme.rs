@@ -10,22 +10,64 @@ use egui::{Color32, CornerRadius, FontData, FontDefinitions, FontFamily, FontId,
 pub enum ThemeKind {
     #[default]
     Light,
+    /// Warm paper surfaces with a red accent (craft-ui `Mode::Cream`); a light theme.
+    Cream,
+    /// Mid-grey surfaces between Light and Dark (craft-ui `Mode::Dim`); a dark theme.
+    Dim,
     Dark,
 }
 
-/// The saved user choice, independent of the light/dark colours currently displayed.
+impl ThemeKind {
+    /// True for the themes drawn on dark surfaces (Dim and Dark).
+    pub fn is_dark(self) -> bool {
+        craft_mode(self).is_dark()
+    }
+}
+
+/// The saved user choice, independent of the colours currently displayed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub enum ThemePreference {
     #[default]
     System,
     Light,
+    Cream,
+    Dim,
     Dark,
 }
 
 impl ThemePreference {
+    /// Every choice, in the order the toolbar, View menu and Preferences list them.
+    pub const ALL: [ThemePreference; 5] = [Self::System, Self::Light, Self::Cream, Self::Dim, Self::Dark];
+
+    /// The stable id used by `--theme`, `ui.set theme` and the `view.theme.<id>` commands.
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::System => "system",
+            Self::Light => "light",
+            Self::Cream => "cream",
+            Self::Dim => "dim",
+            Self::Dark => "dark",
+        }
+    }
+
+    /// Parse an id, or a theme name from an older craft build mapped to the nearest choice
+    /// (craft-ui's `Appearance::parse`: "medium"/"grey" are Dim, "sepia"/"paper" are Cream).
+    /// PdfCraft has no high-contrast theme, so that name maps to Dark. Unknown names give `None`.
+    pub fn parse(name: &str) -> Option<Self> {
+        Some(match craft_ui::Appearance::parse(name)? {
+            craft_ui::Appearance::System => Self::System,
+            craft_ui::Appearance::Light => Self::Light,
+            craft_ui::Appearance::Cream => Self::Cream,
+            craft_ui::Appearance::Dim => Self::Dim,
+            craft_ui::Appearance::Dark | craft_ui::Appearance::HighContrast => Self::Dark,
+        })
+    }
+
     pub fn resolve(self, system: Option<egui::Theme>, fallback: ThemeKind) -> ThemeKind {
         match self {
             Self::Light => ThemeKind::Light,
+            Self::Cream => ThemeKind::Cream,
+            Self::Dim => ThemeKind::Dim,
             Self::Dark => ThemeKind::Dark,
             Self::System => match system {
                 Some(egui::Theme::Light) => ThemeKind::Light,
@@ -98,18 +140,35 @@ impl Tokens {
         ctx.data(|d| d.get_temp::<Tokens>(egui::Id::new("pdfcraft-theme"))).unwrap_or_else(|| Self::for_kind(ThemeKind::Light))
     }
 
+    /// True when drawn on dark surfaces (Dim and Dark); Cream counts as light.
     pub fn dark(&self) -> bool {
-        self.kind == ThemeKind::Dark
+        self.kind.is_dark()
+    }
+}
+
+/// The craft-ui mode PdfCraft draws `kind` with.
+pub fn craft_mode(kind: ThemeKind) -> craft_ui::Mode {
+    match kind {
+        ThemeKind::Light => craft_ui::Mode::Light,
+        ThemeKind::Cream => craft_ui::Mode::Cream,
+        ThemeKind::Dim => craft_ui::Mode::Dim,
+        ThemeKind::Dark => craft_ui::Mode::Dark,
+    }
+}
+
+/// The craft-ui appearance matching `kind`, for craft-ui's own components.
+pub fn craft_appearance(kind: ThemeKind) -> craft_ui::Appearance {
+    match kind {
+        ThemeKind::Light => craft_ui::Appearance::Light,
+        ThemeKind::Cream => craft_ui::Appearance::Cream,
+        ThemeKind::Dim => craft_ui::Appearance::Dim,
+        ThemeKind::Dark => craft_ui::Appearance::Dark,
     }
 }
 
 /// The shared craft-ui tokens PdfCraft draws with in `kind`.
 pub fn craft(kind: ThemeKind) -> craft_ui::Tokens {
-    let mode = match kind {
-        ThemeKind::Light => craft_ui::Mode::Light,
-        ThemeKind::Dark => craft_ui::Mode::Dark,
-    };
-    craft_ui::Tokens::new(mode, craft_ui::Density::Comfortable)
+    craft_ui::Tokens::new(craft_mode(kind), craft_ui::Density::Comfortable)
 }
 
 pub fn install_fonts(ctx: &egui::Context) {
@@ -211,13 +270,12 @@ pub fn semibold(size: f32) -> FontId {
 
 pub fn apply(ctx: &egui::Context, kind: ThemeKind) {
     // egui must use the same theme for popup/menu styles as our custom chrome.
-    ctx.set_theme(if kind == ThemeKind::Dark { egui::Theme::Dark } else { egui::Theme::Light });
+    ctx.set_theme(if kind.is_dark() { egui::Theme::Dark } else { egui::Theme::Light });
     let t = Tokens::for_kind(kind);
     ctx.data_mut(|d| d.insert_temp(egui::Id::new("pdfcraft-theme"), t));
     // craft-ui stores its tokens for its own components (palette, toasts, sections); PdfCraft's
     // visuals below then refine its style.
-    let appearance = if t.dark() { craft_ui::Appearance::Dark } else { craft_ui::Appearance::Light };
-    craft_ui::apply(ctx, &craft_ui::Theme { appearance, ..Default::default() });
+    craft_ui::apply(ctx, &craft_ui::Theme { appearance: craft_appearance(kind), ..Default::default() });
     let mut v = if t.dark() { Visuals::dark() } else { Visuals::light() };
     v.panel_fill = t.panel;
     v.window_fill = t.card;
@@ -295,7 +353,7 @@ mod tests {
     #[test]
     fn text_is_readable_on_every_surface() {
         // #76: the faintest text (hints, zoom level, captions) was 3.3:1 in the light theme.
-        for kind in [ThemeKind::Light, ThemeKind::Dark] {
+        for kind in [ThemeKind::Light, ThemeKind::Cream, ThemeKind::Dim, ThemeKind::Dark] {
             let t = Tokens::for_kind(kind);
             for (name, fg) in [("text", t.text), ("text_muted", t.text_muted), ("text_faint", t.text_faint)] {
                 for bg in [t.chrome, t.panel, t.card, t.pasteboard] {
@@ -304,5 +362,48 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn cream_is_light_and_dim_is_dark() {
+        assert!(!ThemeKind::Light.is_dark());
+        assert!(!ThemeKind::Cream.is_dark());
+        assert!(ThemeKind::Dim.is_dark());
+        assert!(ThemeKind::Dark.is_dark());
+        assert!(!Tokens::for_kind(ThemeKind::Cream).dark());
+        assert!(Tokens::for_kind(ThemeKind::Dim).dark());
+        assert_eq!(craft_mode(ThemeKind::Cream), craft_ui::Mode::Cream);
+        assert_eq!(craft_appearance(ThemeKind::Dim), craft_ui::Appearance::Dim);
+        // Cream and Dim draw their own colours, not Light's or Dark's.
+        assert_ne!(Tokens::for_kind(ThemeKind::Cream).panel, Tokens::for_kind(ThemeKind::Light).panel);
+        assert_ne!(Tokens::for_kind(ThemeKind::Dim).panel, Tokens::for_kind(ThemeKind::Dark).panel);
+    }
+
+    #[test]
+    fn preferences_parse_and_round_trip() {
+        let ids: Vec<_> = ThemePreference::ALL.iter().map(|p| p.id()).collect();
+        assert_eq!(ids, ["system", "light", "cream", "dim", "dark"]);
+        for p in ThemePreference::ALL {
+            assert_eq!(ThemePreference::parse(p.id()), Some(p));
+            assert_eq!(ThemePreference::parse(&p.id().to_uppercase()), Some(p));
+            let json = serde_json::to_string(&p).unwrap();
+            assert_eq!(serde_json::from_str::<ThemePreference>(&json).unwrap(), p);
+        }
+        for (legacy, p) in [
+            ("medium", ThemePreference::Dim),
+            ("grey", ThemePreference::Dim),
+            ("dusk", ThemePreference::Dim),
+            ("sepia", ThemePreference::Cream),
+            ("warm", ThemePreference::Cream),
+            ("paper", ThemePreference::Cream),
+            ("high-contrast", ThemePreference::Dark),
+            ("auto", ThemePreference::System),
+        ] {
+            assert_eq!(ThemePreference::parse(legacy), Some(p), "{legacy}");
+        }
+        assert_eq!(ThemePreference::parse("purple"), None);
+        assert_eq!(ThemePreference::parse(""), None);
+        assert_eq!(ThemePreference::Cream.resolve(Some(egui::Theme::Dark), ThemeKind::Light), ThemeKind::Cream);
+        assert_eq!(ThemePreference::Dim.resolve(Some(egui::Theme::Light), ThemeKind::Light), ThemeKind::Dim);
     }
 }

@@ -328,6 +328,8 @@ Newest first. One line per session: the date, what moved, and the new overall pe
 
 - **2026-10-08 (M14, Windows Chinese Auto):** Auto now reads the Windows display language after locale environment overrides, selecting Simplified or Traditional Chinese through the existing locale mapping. Added Chinese region/script and Windows query regressions. Chinese font delivery remains incomplete. Localization remains partial; overall ≈ 30–35% (unchanged).
 
+- **2026-10-17 (UX2, themes):** Two in-between themes from the shared craft-ui design: Cream (warm paper surfaces, red accent) and Dim (mid grey, softer than Dark), offered in the toolbar, View ▸ Display theme, `--theme`, `ui.set theme` and the `view.theme.cream` / `view.theme.dim` commands; Light is now off-white. Older craft theme names ("sepia", "grey", "medium") map to the nearest choice. Overall estimate unchanged (about 30–35%).
+
 - **2026-10-08 (M3, themes):** Toolbar and Display theme now share System, Light and Dark preferences, one command path and persistent settings; the duplicate View toggle is removed. Effective colours track the OS only in System mode, with egui popup styles kept in sync. Overall estimate unchanged (about 30–35%).
 
 - **2026-10-08 (M14, Simplified Chinese):** Added 208 translations, bringing the catalog from 1,625 to 1,833 entries. PhotoCraft-style coverage checks protect registered commands, All tools labels and UI `tl!` literals; generated history and diagnostic regressions preserve user values. Chinese font delivery remains incomplete: the release-pinned craft-fonts input has no Hans face and the web build only embeds the Japanese UI face (see #112 and #140). Localization remains partial; overall ≈ 30–35% (unchanged).

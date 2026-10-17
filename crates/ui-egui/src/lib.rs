@@ -1390,7 +1390,10 @@ impl PdfCraftApp {
         }
         self.last_session = last_session::LastSession::from_json(&v["last_session"]);
         self.pinned.restore(&v["pinned_folders"]);
-        if let Ok(preference) = serde_json::from_value::<ThemePreference>(v["theme"].clone()) {
+        // A saved variant name, or a theme name from another craft build ("Medium", "Sepia").
+        let theme =
+            serde_json::from_value::<ThemePreference>(v["theme"].clone()).ok().or_else(|| v["theme"].as_str().and_then(ThemePreference::parse));
+        if let Some(preference) = theme {
             self.set_theme_preference(preference);
         }
         if let Ok(mode) = serde_json::from_value::<Mode>(v["default_mode"].clone()) {
@@ -1507,12 +1510,8 @@ impl PdfCraftApp {
                 self.language = language.to_string();
             }
             ("theme", _) => {
-                let preference = match value {
-                    "system" => ThemePreference::System,
-                    "light" => ThemePreference::Light,
-                    "dark" => ThemePreference::Dark,
-                    _ => return Err("theme must be light, dark, or system".into()),
-                };
+                // Ids, plus older craft theme names mapped to the nearest choice ("grey" is Dim, "sepia" Cream).
+                let preference = ThemePreference::parse(value).ok_or("theme must be system, light, cream, dim or dark")?;
                 self.set_theme_preference(preference);
             }
             ("panel", _) => {
