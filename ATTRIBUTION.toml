@@ -3095,7 +3095,7 @@ licence_url = "https://creativecommons.org/licenses/by-sa/4.0/legalcode.txt"
 licence_sha256 = "28a9529c7d0bb4dc51f4bf5c116a3d16ef247a052f7591466768ddf563fd1cf5"
 kind = "model"
 usage = "Scan & OCR: finds words on page images (cargo xtask models)"
-sha256 = "f46881724a6621f3686a612a79dbdce4f7dbe9e2025610e44c9a094341334c2c"
+sha256 = "f15cfb56bd02c4bf478a20343986504a1f01e1665c2b3a0ad66340f054b1b5ca"
 
 [[fetched]]
 file = "text-recognition.rten"
@@ -3108,7 +3108,7 @@ licence_url = "https://creativecommons.org/licenses/by-sa/4.0/legalcode.txt"
 licence_sha256 = "28a9529c7d0bb4dc51f4bf5c116a3d16ef247a052f7591466768ddf563fd1cf5"
 kind = "model"
 usage = "Scan & OCR: reads the words it finds (cargo xtask models)"
-sha256 = "f46881724a6621f3686a612a79dbdce4f7dbe9e2025610e44c9a094341334c2c"
+sha256 = "e484866d4cce403175bd8d00b128feb08ab42e208de30e42cd9889d8f1735a6e"
 
 [[build_input]]
 name = "craft-fonts"
