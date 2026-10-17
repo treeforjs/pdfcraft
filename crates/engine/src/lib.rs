@@ -1536,6 +1536,7 @@ impl Edit {
             Edit::RemoveMarks { kind: MarkKind::HeaderFooter } => "Remove header & footer".into(),
             Edit::RemoveMarks { kind: MarkKind::Watermark } => "Remove watermark".into(),
             Edit::RemoveMarks { kind: MarkKind::Background } => "Remove background".into(),
+            Edit::RemoveMarks { kind: MarkKind::Bates } => "Remove Bates numbering".into(),
             Edit::AddText { .. } => "Add text".into(),
             Edit::AddImage { .. } => "Add image".into(),
             Edit::UpdateContent { .. } => "Edit content".into(),

@@ -2487,11 +2487,11 @@ title = "Remove Bates numbering"
 area = "C"
 tier = "P1"
 milestone = "M7"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["edit.bates.remove"]
+tools = ["doc_remove_marks"]
+evidence = ["crates/edit/src/tests.rs::bates_numbers_are_kept_and_removed_apart_from_headers_and_footers", "crates/ui-egui/tests/marks.rs::bates_numbering_is_removed_on_its_own"]
+notes = "Bates numbers are their own kind of mark (/PCMark /Bates): adding or replacing headers and footers leaves them, and Remove Bates numbering leaves other headers and footers. Bates numbers added before this release are tagged as headers and footers"
 
 [[feature]]
 id = "edit.spell-check"

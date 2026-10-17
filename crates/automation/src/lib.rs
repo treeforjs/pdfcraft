@@ -1145,6 +1145,7 @@ impl Automation {
                     "header_footer" => MarkKind::HeaderFooter,
                     "watermark" => MarkKind::Watermark,
                     "background" => MarkKind::Background,
+                    "bates" => MarkKind::Bates,
                     other => return Err(ToolError::InvalidArgs(format!("unknown kind {other:?}"))),
                 };
                 Edit::RemoveMarks { kind }

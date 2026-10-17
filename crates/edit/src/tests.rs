@@ -3009,3 +3009,29 @@ fn skewing_transforms_refuse_selections_and_keep_whole_edits_on_the_legacy_path(
         assert_eq!(text::text_blocks(&reopen(&doc), 0).unwrap()[0].text, "Still editable", "{source}");
     }
 }
+
+#[test]
+fn bates_numbers_are_kept_and_removed_apart_from_headers_and_footers() {
+    let mut doc = fixture();
+    let original = streams(&doc, 0);
+    let mut header = HeaderFooter::default();
+    header.text[1] = "Confidential".into();
+    add_header_footer(&mut doc, &[0, 1], &header, false, &cx()).unwrap();
+    let mut bates = HeaderFooter::default();
+    bates.text[5] = "<<Bates Number#6#40#ACME-#>>".into();
+    add_header_footer(&mut doc, &[0, 1], &bates, false, &cx()).unwrap();
+    assert!(streams(&doc, 1).iter().any(|s| s.contains("/PCMark /Bates") && s.contains("(ACME-000041) Tj")));
+    assert_eq!(marks_present(&doc), [MarkKind::HeaderFooter, MarkKind::Bates]);
+    // Replacing the header leaves the Bates numbers, and the other way round.
+    header.text[1] = "Public".into();
+    add_header_footer(&mut doc, &[0, 1], &header, true, &cx()).unwrap();
+    bates.text[5] = "<<Bates Number#4#1#X-#>>".into();
+    add_header_footer(&mut doc, &[0, 1], &bates, true, &cx()).unwrap();
+    let s = streams(&doc, 0);
+    assert_eq!(s.iter().filter(|x| x.contains("/PCMark")).count(), 2, "{s:?}");
+    assert!(s.iter().any(|x| x.contains("(Public) Tj")) && s.iter().any(|x| x.contains("(X-0001) Tj")), "{s:?}");
+    assert_eq!(remove_marks(&mut doc, &[0, 1], MarkKind::Bates).unwrap(), 2);
+    assert_eq!(marks_present(&doc), [MarkKind::HeaderFooter]);
+    assert_eq!(remove_marks(&mut doc, &[0, 1], MarkKind::HeaderFooter).unwrap(), 2);
+    assert_eq!(streams(&reopen(&doc), 0), original);
+}
