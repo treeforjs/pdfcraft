@@ -3,15 +3,9 @@
 name: FreeBSD
 
 on:
+  # Not on pull requests for now (Linux-only PR CI); main pushes and manual runs still build it.
   push:
     branches: [main]
-  pull_request:
-    paths:
-      - Cargo.toml
-      - Cargo.lock
-      - "**/Cargo.toml"
-      - .github/workflows/freebsd.yml
-      - packaging/freebsd/**
   workflow_dispatch:
 
 concurrency:
