@@ -60,7 +60,7 @@ mod link_ui;
 pub use create_ui::Clip;
 pub use link_ui::LinkDraft;
 pub use optimize_ui::{OptimizeDraft, OptimizeTab};
-pub use sign_ui::{DigitalIdEntry, SignDraft, SignStep};
+pub use sign_ui::{DigitalIdEntry, SigProps, SigPropsTab, SignDraft, SignStep, property_rows as signature_property_rows};
 mod autoscroll;
 mod bidi;
 pub mod bulk_fields;
@@ -298,6 +298,8 @@ pub enum Dialog {
     AuditSpace,
     /// Signatures ▸ Show certificate.
     CertificateViewer,
+    /// Signatures ▸ Signature Properties.
+    SignatureProperties,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -498,6 +500,7 @@ pub struct PdfCraftApp {
     /// List the OS key store's signing identities among the digital IDs (the desktop app).
     pub os_key_store_ids: bool,
     pub cert_viewer: Option<sign_ui::CertViewer>,
+    pub sig_props: Option<sign_ui::SigProps>,
     /// The last space audit (`None`: the document could not be measured).
     pub space_audit: Option<pdfcraft_engine::optimize::SpaceAudit>,
     /// Audit space usage was opened from the PDF Optimizer, so OK goes back to it.
@@ -750,6 +753,7 @@ impl PdfCraftApp {
             alt_draft: Default::default(),
             os_key_store_ids: false,
             cert_viewer: None,
+            sig_props: None,
             space_audit: None,
             audit_from_optimizer: false,
             combine_draft: Vec::new(),

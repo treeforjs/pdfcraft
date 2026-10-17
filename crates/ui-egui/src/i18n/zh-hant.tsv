@@ -2112,4 +2112,28 @@ compare-page	Moved	已移動
 	{n} objects with unsaved changes are estimated, not measured in the file.	{n} 個有未儲存變更的物件為估計值，並非在檔案中測得。
 	{n} bytes of compressed object streams are shared out among their objects by decoded size.	壓縮物件串流中的 {n} 位元組依解碼後大小分攤給其中的物件。
 	This document does not allow copying text, so its paragraphs can't be opened for editing. Open it with the permissions password.	此文件不允許複製文字，因此無法開啟其段落進行編輯。請使用許可權密碼開啟。
+	Signature Properties	簽名屬性
+	Signature Properties…	簽名屬性…
+	Date/Time	日期/時間
+	Legal	法律
+	Revision	修訂版本
+	Contact	聯絡方式
+	Changes after signing	簽名後的變更
+	The document has not been modified since this signature was applied.	自套用此簽名以來，文件未曾修改。
+	Changes the signer permitted were made: {changes}	已進行簽署者允許的變更：{changes}
+	Changes the signer did not permit were made: {changes}	已進行簽署者不允許的變更：{changes}
+	Trusted timestamp	受信任的時間戳記
+	Untrusted timestamp	不受信任的時間戳記
+	Signer's computer clock	簽署者電腦的時鐘
+	Time source	時間來源
+	Timestamp authority	時間戳記授權單位
+	Claimed signing time	聲明的簽名時間
+	Chosen time	選定的時間
+	Not available	無法使用
+	Document timestamp	文件時間戳記
+	Certification signature	認證簽名
+	Approval signature	核准簽名
+	Signature type	簽名類型
+	This signature field is not signed.	此簽名欄位尚未簽署。
+	Validate Signature	驗證簽名
 	Crop Image	裁剪影像

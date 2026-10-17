@@ -2190,4 +2190,28 @@ compare-page	Moved	已移动
 	{n} objects with unsaved changes are estimated, not measured in the file.	{n} 个有未保存更改的对象为估算值，并非在文件中测得。
 	{n} bytes of compressed object streams are shared out among their objects by decoded size.	压缩对象流中的 {n} 字节按解码后大小分摊给其中的对象。
 	This document does not allow copying text, so its paragraphs can't be opened for editing. Open it with the permissions password.	此文档不允许复制文本，因此无法打开其段落进行编辑。请使用权限密码打开。
+	Signature Properties	签名属性
+	Signature Properties…	签名属性…
+	Date/Time	日期/时间
+	Legal	法律
+	Revision	修订版本
+	Contact	联系方式
+	Changes after signing	签名后的更改
+	The document has not been modified since this signature was applied.	自应用此签名以来，文档未被修改。
+	Changes the signer permitted were made: {changes}	已进行签名者允许的更改：{changes}
+	Changes the signer did not permit were made: {changes}	已进行签名者不允许的更改：{changes}
+	Trusted timestamp	受信任的时间戳
+	Untrusted timestamp	不受信任的时间戳
+	Signer's computer clock	签名者计算机的时钟
+	Time source	时间来源
+	Timestamp authority	时间戳颁发机构
+	Claimed signing time	声明的签名时间
+	Chosen time	选定的时间
+	Not available	不可用
+	Document timestamp	文档时间戳
+	Certification signature	认证签名
+	Approval signature	批准签名
+	Signature type	签名类型
+	This signature field is not signed.	此签名域尚未签名。
+	Validate Signature	验证签名
 	Crop Image	裁剪图像

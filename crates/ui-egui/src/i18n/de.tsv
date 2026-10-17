@@ -2226,4 +2226,28 @@ compare-page	Moved	Verschoben
 	{n} objects with unsaved changes are estimated, not measured in the file.	{n} Objekte mit ungespeicherten Änderungen sind geschätzt, nicht in der Datei gemessen.
 	{n} bytes of compressed object streams are shared out among their objects by decoded size.	{n} Byte komprimierter Objektstreams werden nach dekodierter Größe auf ihre Objekte verteilt.
 	This document does not allow copying text, so its paragraphs can't be opened for editing. Open it with the permissions password.	Dieses Dokument erlaubt kein Kopieren von Text, daher können seine Absätze nicht zum Bearbeiten geöffnet werden. Öffne es mit dem Berechtigungspasswort.
+	Signature Properties	Signatureigenschaften
+	Signature Properties…	Signatureigenschaften…
+	Date/Time	Datum/Uhrzeit
+	Legal	Rechtliches
+	Revision	Revision
+	Contact	Kontakt
+	Changes after signing	Änderungen nach dem Signieren
+	The document has not been modified since this signature was applied.	Das Dokument wurde seit dem Anbringen dieser Signatur nicht geändert.
+	Changes the signer permitted were made: {changes}	Vom Unterzeichner erlaubte Änderungen wurden vorgenommen: {changes}
+	Changes the signer did not permit were made: {changes}	Vom Unterzeichner nicht erlaubte Änderungen wurden vorgenommen: {changes}
+	Trusted timestamp	Vertrauenswürdiger Zeitstempel
+	Untrusted timestamp	Nicht vertrauenswürdiger Zeitstempel
+	Signer's computer clock	Uhr des Computers des Unterzeichners
+	Time source	Zeitquelle
+	Timestamp authority	Zeitstempelstelle
+	Claimed signing time	Angegebene Signaturzeit
+	Chosen time	Gewählte Zeit
+	Not available	Nicht verfügbar
+	Document timestamp	Dokumentzeitstempel
+	Certification signature	Zertifizierungssignatur
+	Approval signature	Genehmigungssignatur
+	Signature type	Signaturtyp
+	This signature field is not signed.	Dieses Signaturfeld ist nicht signiert.
+	Validate Signature	Signatur validieren
 	Crop Image	Bild zuschneiden

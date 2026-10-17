@@ -2227,4 +2227,28 @@ compare-page	Moved	Movida
 	{n} objects with unsaved changes are estimated, not measured in the file.	{n} objetos com alterações não salvas são estimados, não medidos no arquivo.
 	{n} bytes of compressed object streams are shared out among their objects by decoded size.	{n} bytes de fluxos de objetos compactados são repartidos entre seus objetos pelo tamanho decodificado.
 	This document does not allow copying text, so its paragraphs can't be opened for editing. Open it with the permissions password.	Este documento não permite copiar texto, por isso seus parágrafos não podem ser abertos para edição. Abra-o com a senha de permissões.
+	Signature Properties	Propriedades da assinatura
+	Signature Properties…	Propriedades da assinatura…
+	Date/Time	Data/hora
+	Legal	Jurídico
+	Revision	Revisão
+	Contact	Contato
+	Changes after signing	Alterações após a assinatura
+	The document has not been modified since this signature was applied.	O documento não foi modificado desde que esta assinatura foi aplicada.
+	Changes the signer permitted were made: {changes}	Foram feitas alterações permitidas pelo signatário: {changes}
+	Changes the signer did not permit were made: {changes}	Foram feitas alterações não permitidas pelo signatário: {changes}
+	Trusted timestamp	Carimbo de data/hora confiável
+	Untrusted timestamp	Carimbo de data/hora não confiável
+	Signer's computer clock	Relógio do computador do signatário
+	Time source	Origem da hora
+	Timestamp authority	Autoridade de carimbo de data/hora
+	Claimed signing time	Hora de assinatura declarada
+	Chosen time	Hora escolhida
+	Not available	Não disponível
+	Document timestamp	Carimbo de data/hora do documento
+	Certification signature	Assinatura de certificação
+	Approval signature	Assinatura de aprovação
+	Signature type	Tipo de assinatura
+	This signature field is not signed.	Este campo de assinatura não está assinado.
+	Validate Signature	Validar assinatura
 	Crop Image	Cortar imagem

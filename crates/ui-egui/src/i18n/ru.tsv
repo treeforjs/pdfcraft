@@ -2139,4 +2139,28 @@ compare-page	Moved	Перемещена
 	{n} objects with unsaved changes are estimated, not measured in the file.	Объекты с несохранёнными изменениями ({n}) оценены, а не измерены в файле.
 	{n} bytes of compressed object streams are shared out among their objects by decoded size.	{n} байт сжатых потоков объектов распределены между их объектами по размеру после распаковки.
 	This document does not allow copying text, so its paragraphs can't be opened for editing. Open it with the permissions password.	Этот документ не разрешает копировать текст, поэтому его абзацы нельзя открыть для редактирования. Откройте его с паролем разрешений.
+	Signature Properties	Свойства подписи
+	Signature Properties…	Свойства подписи…
+	Date/Time	Дата и время
+	Legal	Юридические сведения
+	Revision	Редакция
+	Contact	Контакт
+	Changes after signing	Изменения после подписания
+	The document has not been modified since this signature was applied.	Документ не изменялся с момента применения этой подписи.
+	Changes the signer permitted were made: {changes}	Внесены изменения, разрешённые подписавшим: {changes}
+	Changes the signer did not permit were made: {changes}	Внесены изменения, не разрешённые подписавшим: {changes}
+	Trusted timestamp	Доверенная метка времени
+	Untrusted timestamp	Недоверенная метка времени
+	Signer's computer clock	Часы компьютера подписавшего
+	Time source	Источник времени
+	Timestamp authority	Служба меток времени
+	Claimed signing time	Заявленное время подписания
+	Chosen time	Выбранное время
+	Not available	Недоступно
+	Document timestamp	Метка времени документа
+	Certification signature	Сертифицирующая подпись
+	Approval signature	Утверждающая подпись
+	Signature type	Тип подписи
+	This signature field is not signed.	Это поле подписи не подписано.
+	Validate Signature	Проверить подпись
 	Crop Image	Обрезать изображение

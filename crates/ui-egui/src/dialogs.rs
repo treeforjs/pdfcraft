@@ -708,6 +708,33 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
                 }
                 return;
             }
+            Dialog::SignatureProperties => {
+                ui.set_width(620.0);
+                let sig = app.active_ids().and_then(|(_, id)| app.session.get(id)).and_then(|d| {
+                    let field = &app.sig_props.as_ref()?.field;
+                    d.signatures.iter().find(|s| &s.field == field).cloned()
+                });
+                let (Some(sig), Some(p)) = (sig, app.sig_props.as_mut()) else {
+                    close = true;
+                    return;
+                };
+                let (done, action) = crate::sign_ui::properties_dialog(ui, p, &sig, &t);
+                close = done;
+                match action {
+                    Some(crate::sign_ui::SigPropsAction::Validate) => app.run_command("sign.validate"),
+                    Some(crate::sign_ui::SigPropsAction::Trust(c)) => app.trust_certificate(*c),
+                    Some(crate::sign_ui::SigPropsAction::ViewSigned(len)) => {
+                        app.view_signed_version(len);
+                        close = true;
+                    }
+                    Some(crate::sign_ui::SigPropsAction::ViewCertificate(chain)) => {
+                        app.cert_viewer = Some(crate::sign_ui::CertViewer { chain, selected: 0, tab: crate::sign_ui::CertTab::Summary });
+                        next = Dialog::CertificateViewer;
+                    }
+                    None => {}
+                }
+                return;
+            }
             Dialog::AuditSpace => {
                 if crate::optimize_ui::audit_body(ui, app.space_audit.as_ref(), &t) {
                     if app.audit_from_optimizer {

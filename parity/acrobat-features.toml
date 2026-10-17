@@ -6131,11 +6131,11 @@ title = "Signature properties (validity summary, signer, time)"
 area = "H"
 tier = "P0"
 milestone = "M9"
-status = "partial"
+status = "shipped"
 commands = ["sign.panel"]
 tools = ["sign_list"]
-evidence = ["crates/ui-egui/tests/signing.rs::drawing_a_signature_creating_an_id_signing_and_trusting"]
-notes = "validity summary, signer, issuer, time, algorithm in the panel; no separate properties dialog"
+evidence = ["crates/ui-egui/tests/signing.rs::drawing_a_signature_creating_an_id_signing_and_trusting", "crates/ui-egui/tests/signing.rs::signature_properties_show_every_tab_and_lead_to_the_certificate"]
+notes = "validity summary in the panel, and a Signature Properties dialog (Signatures panel ▸ Signature Properties…, or ui.set signature-properties) with Summary, Document (revision, changes after signing, View signed version), Signer, Date/Time (time source, timestamp authority, verification time) and Legal (approval/certification/document timestamp, DocMDP level, format, algorithm) tabs; Validate Signature, Show certificate and Add to trusted certificates from the dialog. Revocation status is not shown (no LTV yet)"
 
 [[feature]]
 id = "sign.certificate-viewer"

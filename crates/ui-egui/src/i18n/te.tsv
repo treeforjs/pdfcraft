@@ -2157,4 +2157,28 @@ compare-page	Moved	తరలించబడింది
 	{n} objects with unsaved changes are estimated, not measured in the file.	సేవ్ చేయని మార్పులున్న {n} ఆబ్జెక్ట్‌లు అంచనా వేయబడ్డాయి, ఫైల్‌లో కొలవబడలేదు.
 	{n} bytes of compressed object streams are shared out among their objects by decoded size.	కుదించిన ఆబ్జెక్ట్ స్ట్రీమ్‌ల {n} బైట్‌లు డీకోడ్ చేసిన పరిమాణం ప్రకారం వాటి ఆబ్జెక్ట్‌లకు పంచబడ్డాయి.
 	This document does not allow copying text, so its paragraphs can't be opened for editing. Open it with the permissions password.	ఈ పత్రం వచనాన్ని కాపీ చేయడానికి అనుమతించదు, కాబట్టి దాని పేరాలను సవరించడానికి తెరవలేరు. అనుమతుల పాస్‌వర్డ్‌తో దాన్ని తెరవండి.
+	Signature Properties	సంతకం లక్షణాలు
+	Signature Properties…	సంతకం లక్షణాలు…
+	Date/Time	తేదీ/సమయం
+	Legal	చట్టపరమైనవి
+	Revision	సంస్కరణ
+	Contact	సంప్రదింపు
+	Changes after signing	సంతకం చేసిన తర్వాత మార్పులు
+	The document has not been modified since this signature was applied.	ఈ సంతకం చేసినప్పటి నుండి పత్రం మార్చబడలేదు.
+	Changes the signer permitted were made: {changes}	సంతకందారు అనుమతించిన మార్పులు చేయబడ్డాయి: {changes}
+	Changes the signer did not permit were made: {changes}	సంతకందారు అనుమతించని మార్పులు చేయబడ్డాయి: {changes}
+	Trusted timestamp	విశ్వసనీయ టైమ్‌స్టాంప్
+	Untrusted timestamp	విశ్వసనీయం కాని టైమ్‌స్టాంప్
+	Signer's computer clock	సంతకందారు కంప్యూటర్ గడియారం
+	Time source	సమయ మూలం
+	Timestamp authority	టైమ్‌స్టాంప్ అధికార సంస్థ
+	Claimed signing time	ప్రకటించిన సంతకం సమయం
+	Chosen time	ఎంచుకున్న సమయం
+	Not available	అందుబాటులో లేదు
+	Document timestamp	పత్రం టైమ్‌స్టాంప్
+	Certification signature	ధృవీకరణ సంతకం
+	Approval signature	ఆమోద సంతకం
+	Signature type	సంతకం రకం
+	This signature field is not signed.	ఈ సంతకం ఫీల్డ్‌పై సంతకం చేయలేదు.
+	Validate Signature	సంతకాన్ని ధృవీకరించండి
 	Crop Image	చిత్రాన్ని కత్తిరించు

@@ -194,6 +194,16 @@ fn servers(ui: &mut egui::Ui, app: &mut PdfCraftApp) {
 impl PdfCraftApp {
     pub(crate) fn set_signature_option(&mut self, key: &str, value: &str) -> Option<Result<(), String>> {
         let result = match key {
+            // Signature Properties for a signature field (by its full name), and its tab.
+            "signature-properties" => self.open_signature_properties(value),
+            "signature-properties-tab" => match (crate::sign_ui::SigPropsTab::parse(value), self.sig_props.as_mut()) {
+                (Some(tab), Some(p)) => {
+                    p.tab = tab;
+                    Ok(())
+                }
+                (None, _) => Err("signature-properties-tab must be summary, document, signer, date-time or legal".into()),
+                (_, None) => Err("Signature Properties is not open.".into()),
+            },
             "timestamp-servers" => serde_json::from_str::<Vec<TimestampServer>>(value).map_err(|e| e.to_string()).and_then(|servers| {
                 if servers.len() > 32 {
                     return Err("At most 32 timestamp servers may be configured.".into());
