@@ -2112,6 +2112,9 @@ compare-page	Moved	已移動
 	{n} objects with unsaved changes are estimated, not measured in the file.	{n} 個有未儲存變更的物件為估計值，並非在檔案中測得。
 	{n} bytes of compressed object streams are shared out among their objects by decoded size.	壓縮物件串流中的 {n} 位元組依解碼後大小分攤給其中的物件。
 	This document does not allow copying text, so its paragraphs can't be opened for editing. Open it with the permissions password.	此文件不允許複製文字，因此無法開啟其段落進行編輯。請使用許可權密碼開啟。
+	Searchable Image	可搜尋圖片
+	Adds invisible text, straightens turned or skewed pages and downsamples finer images to the chosen resolution	加入不可見文字，拉直旋轉或傾斜的頁面，並將更精細的圖片降低取樣至所選解析度
+	Detects turned or skewed pages and straightens them	偵測旋轉或傾斜的頁面並將其拉直
 	Signature Properties	簽名屬性
 	Signature Properties…	簽名屬性…
 	Date/Time	日期/時間

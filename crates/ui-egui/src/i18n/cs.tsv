@@ -2250,6 +2250,9 @@ compare-page	Moved	Přesunutá
 	{n} objects with unsaved changes are estimated, not measured in the file.	Objekty s neuloženými změnami ({n}) jsou odhadnuty, ne změřeny v souboru.
 	{n} bytes of compressed object streams are shared out among their objects by decoded size.	{n} bajtů komprimovaných proudů objektů je rozděleno mezi jejich objekty podle dekódované velikosti.
 	This document does not allow copying text, so its paragraphs can't be opened for editing. Open it with the permissions password.	Tento dokument nepovoluje kopírování textu, proto jeho odstavce nelze otevřít k úpravám. Otevřete ho heslem pro oprávnění.
+	Searchable Image	Prohledávatelný obrázek
+	Adds invisible text, straightens turned or skewed pages and downsamples finer images to the chosen resolution	Přidá neviditelný text, narovná otočené nebo zkosené stránky a převzorkuje jemnější obrázky na zvolené rozlišení
+	Detects turned or skewed pages and straightens them	Rozpozná otočené nebo zkosené stránky a narovná je
 	Signature Properties	Vlastnosti podpisu
 	Signature Properties…	Vlastnosti podpisu…
 	Date/Time	Datum a čas

@@ -1251,6 +1251,20 @@ pub enum Edit {
         page: usize,
         words: Vec<pdfcraft_ocr::PlacedWord>,
     },
+    /// Scan & OCR ▸ Searchable Image: turn everything `page` draws by `matrix` (user space; the
+    /// deskew), then turn the page by `quarter_turns` clockwise (`/Rotate`), so the text found
+    /// by recognition reads straight. Nothing is resampled.
+    StraightenPage {
+        page: usize,
+        matrix: [f64; 6],
+        quarter_turns: i64,
+    },
+    /// Scan & OCR ▸ Searchable Image: resample the images `pages` draw above `ppi` down to it
+    /// ([`optimize::downsample_page_images`]).
+    DownsamplePageImages {
+        pages: Vec<usize>,
+        ppi: f64,
+    },
     /// Edit a PDF ▸ Edit text: replace the text of line `line` (from `Document::text_lines`) on
     /// `page`, in its own font when it can show it, else in Helvetica.
     EditTextLine {
@@ -1456,6 +1470,8 @@ impl Edit {
             Edit::SetTag { .. } => "Change tag properties".into(),
             Edit::TagImage { .. } => "Set alternate text".into(),
             Edit::AddOcrText { .. } => "Recognize text".into(),
+            Edit::StraightenPage { .. } => "Straighten page".into(),
+            Edit::DownsamplePageImages { .. } => "Downsample images".into(),
             Edit::ApplyScriptChanges { .. } => "Run JavaScript".into(),
             Edit::XfaEvent { .. } => "Run form script".into(),
             Edit::ConvertPdfA { level } => format!("Save as {}", level.label()),
@@ -1658,6 +1674,8 @@ fn check_permission(edit: &Edit, p: &pdfcraft_cos::Permissions) -> Result<(), Ed
         | Edit::SetTag { .. }
         | Edit::TagImage { .. }
         | Edit::AddOcrText { .. }
+        | Edit::StraightenPage { .. }
+        | Edit::DownsamplePageImages { .. }
         | Edit::SetDocumentScript { .. }
         | Edit::SetFieldScript { .. }
         | Edit::ConvertPdfA { .. }
@@ -1929,6 +1947,15 @@ fn run_edit(doc: &mut pdfcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -> 
         Edit::AddOcrText { page, words } => {
             let content = pdfcraft_ocr::text_layer(words).map_err(|e| EditError::Invalid(e.to_string()))?;
             pdfcraft_edit::stamp(doc, *page, "OCR", content)?;
+        }
+        Edit::StraightenPage { page, matrix, quarter_turns } => {
+            pdfcraft_edit::transform_page(doc, *page, *matrix)?;
+            if quarter_turns.rem_euclid(4) != 0 {
+                pdfcraft_organize::rotate_pages(doc, &[*page], quarter_turns.rem_euclid(4) * 90)?;
+            }
+        }
+        Edit::DownsamplePageImages { pages, ppi } => {
+            pdfcraft_optimize::downsample_page_images(doc, pages, *ppi).map_err(|e| EditError::Optimize(e.to_string()))?;
         }
         Edit::EditPageImage { page, index, change } => {
             let img = pdfcraft_edit::page_images(doc, *page)?

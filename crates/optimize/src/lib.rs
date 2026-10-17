@@ -45,6 +45,8 @@ pub enum OptimizeError {
     Cos(#[from] pdfcraft_cos::CosError),
     #[error("the optimization was cancelled")]
     Cancelled,
+    #[error("{0}")]
+    Invalid(String),
     #[error(transparent)]
     Fonts(#[from] fonts::UnembedError),
 }
@@ -241,6 +243,26 @@ pub fn optimize(doc: &mut Document, settings: &Settings) -> Result<Report, Optim
 
 /// [`optimize`], calling `progress` before each image and before the clean-up. Returning `false`
 /// stops with [`OptimizeError::Cancelled`]; `doc` is then partly optimized and should be dropped.
+/// Searchable Image: resample the images pages `pages` (0-based) draw above `ppi` (with 10 %
+/// slack) down to `ppi`, keeping each image's own compression. Only the images change: an image
+/// those pages share with others is smaller there too. Returns what was done.
+pub fn downsample_page_images(doc: &mut Document, pages: &[usize], ppi: f64) -> Result<Report, OptimizeError> {
+    let all = pdfcraft_annot::page_refs(doc).map_err(|_| OptimizeError::NoPages)?;
+    let chosen: Vec<ObjRef> = pages.iter().filter_map(|p| all.get(*p).copied()).collect();
+    if chosen.len() != pages.len() {
+        return Err(OptimizeError::Invalid("downsampling pages must be in the document".into()));
+    }
+    if !(ppi.is_finite() && (36.0..=2400.0).contains(&ppi)) {
+        return Err(OptimizeError::Invalid("the downsampling resolution must be between 36 and 2400 ppi".into()));
+    }
+    let image = ImageSettings { downsample: true, target_ppi: ppi, above_ppi: ppi * 1.1, compression: Compression::Retain };
+    let mono = MonoSettings { downsample: true, target_ppi: ppi, above_ppi: ppi * 1.1, compression: MonoCompression::Retain };
+    let settings = Settings { color: image, gray: image, mono, ..Settings::default() };
+    let mut report = Report::default();
+    images::run(doc, &chosen, &settings, &mut report, &mut |_| true)?;
+    Ok(report)
+}
+
 pub fn optimize_with_progress(doc: &mut Document, settings: &Settings, progress: &mut dyn FnMut(Stage) -> bool) -> Result<Report, OptimizeError> {
     let mut report = Report::default();
     let pages = pdfcraft_annot::page_refs(doc).map_err(|_| OptimizeError::NoPages)?;

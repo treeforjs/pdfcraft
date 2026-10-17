@@ -5102,3 +5102,17 @@ fn certificate_security_through_tools() {
     // An ordinary document opened with a digital ID just opens.
     ok(&mut c, "doc_open", json!({ "path": "b.pdf", "certificate": "boss.p12", "certificate_password": "id-secret" }));
 }
+
+#[test]
+fn ocr_output_choice_is_validated_before_recognition() {
+    let dir = workdir("ocr-output");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    for tool in ["ocr_recognize", "ocr_prepare"] {
+        assert!(matches!(a.call(tool, &json!({ "doc": doc, "output": "resampled" })), Err(ToolError::InvalidArgs(_))), "{tool}");
+    }
+    assert!(matches!(
+        a.call("ocr_recognize_files", &json!({ "paths": ["a.pdf"], "folder": "out", "output": "resampled" })),
+        Err(ToolError::InvalidArgs(_))
+    ));
+}

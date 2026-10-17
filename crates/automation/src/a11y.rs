@@ -312,6 +312,11 @@ impl Automation {
         if let Some(s) = a.opt_bool("deskew")? {
             settings.deskew = s;
         }
+        match a.opt_str("output")? {
+            None | Some("exact") => {}
+            Some("straighten") => settings.straighten = true,
+            Some(other) => return Err(ToolError::InvalidArgs(format!("unknown output {other:?}; use exact or straighten"))),
+        }
         settings.validate().map_err(ToolError::InvalidArgs)?;
         Ok(settings)
     }

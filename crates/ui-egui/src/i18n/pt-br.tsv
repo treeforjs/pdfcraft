@@ -2227,6 +2227,9 @@ compare-page	Moved	Movida
 	{n} objects with unsaved changes are estimated, not measured in the file.	{n} objetos com alterações não salvas são estimados, não medidos no arquivo.
 	{n} bytes of compressed object streams are shared out among their objects by decoded size.	{n} bytes de fluxos de objetos compactados são repartidos entre seus objetos pelo tamanho decodificado.
 	This document does not allow copying text, so its paragraphs can't be opened for editing. Open it with the permissions password.	Este documento não permite copiar texto, por isso seus parágrafos não podem ser abertos para edição. Abra-o com a senha de permissões.
+	Searchable Image	Imagem pesquisável
+	Adds invisible text, straightens turned or skewed pages and downsamples finer images to the chosen resolution	Adiciona texto invisível, endireita páginas giradas ou inclinadas e reduz imagens mais finas à resolução escolhida
+	Detects turned or skewed pages and straightens them	Detecta páginas giradas ou inclinadas e as endireita
 	Signature Properties	Propriedades da assinatura
 	Signature Properties…	Propriedades da assinatura…
 	Date/Time	Data/hora
