@@ -2244,3 +2244,7 @@ compare-page	Moved	Преместена
 	The form was sent to {host}.	Формулярът е изпратен до {host}.
 	Message from the document	Съобщение от документа
 	Asked by a script in this PDF	Зададено от скрипт в този PDF
+	Multiple words or phrases	Няколко думи или фрази
+	One word or phrase per line	По една дума или фраза на ред
+	Import list…	Импортиране на списък…
+	The list is too long: at most {n} entries of up to {m} characters each.	Списъкът е твърде дълъг: най-много {n} записа с до {m} знака всеки.

@@ -2283,3 +2283,7 @@ compare-page	Moved	Movida
 	The form was sent to {host}.	O formulário foi enviado para {host}.
 	Message from the document	Mensagem do documento
 	Asked by a script in this PDF	Pergunta de um script deste PDF
+	Multiple words or phrases	Várias palavras ou frases
+	One word or phrase per line	Uma palavra ou frase por linha
+	Import list…	Importar lista…
+	The list is too long: at most {n} entries of up to {m} characters each.	A lista é longa demais: no máximo {n} entradas de até {m} caracteres cada.

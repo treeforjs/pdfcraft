@@ -2291,3 +2291,7 @@ compare-page	Moved	Spostata
 	The form was sent to {host}.	Il modulo è stato inviato a {host}.
 	Message from the document	Messaggio dal documento
 	Asked by a script in this PDF	Richiesto da uno script in questo PDF
+	Multiple words or phrases	Più parole o frasi
+	One word or phrase per line	Una parola o frase per riga
+	Import list…	Importa elenco…
+	The list is too long: at most {n} entries of up to {m} characters each.	L'elenco è troppo lungo: al massimo {n} voci di non più di {m} caratteri ciascuna.

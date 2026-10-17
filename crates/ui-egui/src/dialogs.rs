@@ -517,6 +517,9 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
             }
             Dialog::RedactSearch => {
                 let (go, cancel) = crate::redact_ui::search_body(ui, &mut app.redact_search, &t);
+                if std::mem::take(&mut app.redact_search.import) {
+                    app.import_redact_words();
+                }
                 if go {
                     redact_now = Some(dialog);
                 }

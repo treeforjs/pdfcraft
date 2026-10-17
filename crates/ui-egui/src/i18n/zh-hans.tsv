@@ -2246,3 +2246,7 @@ compare-page	Moved	已移动
 	The form was sent to {host}.	表单已发送到 {host}。
 	Message from the document	来自文档的消息
 	Asked by a script in this PDF	由此 PDF 中的脚本提出
+	Multiple words or phrases	多个单词或短语
+	One word or phrase per line	每行一个单词或短语
+	Import list…	导入列表…
+	The list is too long: at most {n} entries of up to {m} characters each.	列表过长：最多 {n} 项，每项最多 {m} 个字符。

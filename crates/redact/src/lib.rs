@@ -24,6 +24,7 @@ pub mod sanitize;
 mod tags;
 #[cfg(test)]
 mod tests;
+pub mod words;
 
 use interp::{Mode, Scope, process};
 

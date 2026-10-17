@@ -2168,3 +2168,7 @@ compare-page	Moved	已移動
 	The form was sent to {host}.	表單已傳送到 {host}。
 	Message from the document	來自文件的訊息
 	Asked by a script in this PDF	由此 PDF 中的指令碼提出
+	Multiple words or phrases	多個單字或片語
+	One word or phrase per line	每行一個單字或片語
+	Import list…	匯入清單…
+	The list is too long: at most {n} entries of up to {m} characters each.	清單過長：最多 {n} 項，每項最多 {m} 個字元。

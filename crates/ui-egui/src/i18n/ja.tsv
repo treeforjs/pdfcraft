@@ -2282,3 +2282,7 @@ compare-page	Moved	移動
 	The form was sent to {host}.	フォームを {host} に送信しました。
 	Message from the document	文書からのメッセージ
 	Asked by a script in this PDF	この PDF のスクリプトからの確認です
+	Multiple words or phrases	複数の単語または語句
+	One word or phrase per line	1 行に 1 つの単語または語句
+	Import list…	リストを読み込む…
+	The list is too long: at most {n} entries of up to {m} characters each.	リストが長すぎます。最大 {n} 件、各 {m} 文字までです。

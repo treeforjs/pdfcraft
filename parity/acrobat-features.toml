@@ -403,11 +403,11 @@ title = "PDF 2.0 UTF-8 text strings"
 area = "A"
 tier = "P1"
 milestone = "M2"
-status = "planned"
+status = "shipped"
 commands = []
 tools = []
-evidence = []
-notes = ""
+evidence = ["crates/cos/src/object.rs::text_string_encodings"]
+notes = "UTF-8 text strings with the PDF 2.0 byte-order mark (and BOM-less UTF-8) decode everywhere through PdfString::to_text; the panels use the same rules. Strings are written as PDFDocEncoding or UTF-16BE, which PDF 2.0 also accepts"
 
 [[feature]]
 id = "core.pdf20-associated-files"
@@ -5515,11 +5515,11 @@ title = "Redact lists of words or phrases"
 area = "G"
 tier = "P1"
 milestone = "M8"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["redact.search"]
+tools = ["redact_mark"]
+evidence = ["crates/redact/src/words.rs::every_listed_word_and_phrase_is_found", "crates/redact/src/words.rs::bad_lists_are_refused", "crates/automation/tests/automation.rs::redacting_a_word_list_through_tools", "crates/ui-egui/tests/redact.rs::find_text_and_redact_marks_every_word_of_a_list"]
+notes = "Find text and redact ▸ Multiple words or phrases: one per line, typed or imported from a text file (up to 1000 entries of 256 characters, 1 MiB), with case-sensitive and whole-word options; redact_mark words / words_file"
 
 [[feature]]
 id = "protect.redact-patterns"
