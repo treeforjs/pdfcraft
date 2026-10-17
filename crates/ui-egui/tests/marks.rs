@@ -95,3 +95,26 @@ fn backgrounds_and_watermarks_from_a_file() {
     let s = h.state();
     assert_eq!(s.session.get(s.views[0].id).unwrap().can_undo(), Some("Add background"));
 }
+
+#[test]
+fn bates_numbering_is_removed_on_its_own() {
+    let mut h = harness();
+    assert!(!h.state_mut().execute("edit.bates.remove"), "nothing to remove yet");
+    h.state_mut().marks_draft.hf.text[1] = "Confidential".into();
+    assert!(h.state_mut().execute("edit.header_footer"));
+    h.run_steps(3);
+    h.get_by_label("OK").click();
+    h.run_steps(4);
+    h.state_mut().marks_draft.hf.text[1].clear();
+    assert!(h.state_mut().execute("edit.bates"));
+    h.run_steps(3);
+    assert_eq!(h.state().marks_draft.hf.text[5], "<<Bates Number#6#1##>>");
+    h.get_by_label("OK").click();
+    h.run_steps(4);
+    assert_eq!(marks(&h), [MarkKind::HeaderFooter, MarkKind::Bates]);
+    assert!(h.state_mut().execute("edit.bates.remove"));
+    h.run_steps(2);
+    assert_eq!(marks(&h), [MarkKind::HeaderFooter], "the header stays");
+    let s = h.state();
+    assert_eq!(s.session.get(s.views[0].id).unwrap().can_undo(), Some("Remove Bates numbering"));
+}

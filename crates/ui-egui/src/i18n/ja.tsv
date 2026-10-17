@@ -2286,3 +2286,4 @@ compare-page	Moved	移動
 	One word or phrase per line	1 行に 1 つの単語または語句
 	Import list…	リストを読み込む…
 	The list is too long: at most {n} entries of up to {m} characters each.	リストが長すぎます。最大 {n} 件、各 {m} 文字までです。
+	Remove Bates numbering	ベイツ番号を削除

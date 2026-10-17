@@ -2199,3 +2199,4 @@ compare-page	Moved	Перемещена
 	One word or phrase per line	По одному слову или фразе в строке
 	Import list…	Импортировать список…
 	The list is too long: at most {n} entries of up to {m} characters each.	Список слишком длинный: не более {n} записей длиной до {m} символов каждая.
+	Remove Bates numbering	Удалить нумерацию Бейтса

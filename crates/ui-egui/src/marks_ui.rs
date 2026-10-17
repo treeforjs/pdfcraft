@@ -148,14 +148,14 @@ pub(crate) fn body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens, kind: M
     let mut browse = false;
     let verb = if d.replace { tl!("Update") } else { tl!("Add") };
     let title = match kind {
-        MarkKind::HeaderFooter => crate::i18n::fmt(tl!("{verb} Header and Footer"), &[("verb", verb)]),
+        MarkKind::HeaderFooter | MarkKind::Bates => crate::i18n::fmt(tl!("{verb} Header and Footer"), &[("verb", verb)]),
         MarkKind::Watermark => crate::i18n::fmt(tl!("{verb} Watermark"), &[("verb", verb)]),
         MarkKind::Background => crate::i18n::fmt(tl!("{verb} Background"), &[("verb", verb)]),
     };
     ui.label(egui::RichText::new(title).font(theme::semibold(18.0)));
     ui.add_space(8.0);
     match kind {
-        MarkKind::HeaderFooter => {
+        MarkKind::HeaderFooter | MarkKind::Bates => {
             ui.horizontal(|ui| {
                 ui.label(tl!("Font: Helvetica"));
                 ui.label(tl!("Size"));
@@ -301,7 +301,7 @@ pub(crate) fn body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens, kind: M
     let file_name = d.use_file.then(|| d.file.as_ref().map(|f| f.0.clone())).flatten();
     ui.horizontal(|ui| {
         preview(ui, t, page, |p, r, s| match kind {
-            MarkKind::HeaderFooter => {
+            MarkKind::HeaderFooter | MarkKind::Bates => {
                 for (k, text) in hf.text.iter().enumerate() {
                     if text.trim().is_empty() {
                         continue;
@@ -382,7 +382,7 @@ pub(crate) fn body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens, kind: M
     let (mut apply, mut cancel) = (false, false);
     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
         let ready = match kind {
-            MarkKind::HeaderFooter => d.hf.text.iter().any(|x| !x.trim().is_empty()),
+            MarkKind::HeaderFooter | MarkKind::Bates => d.hf.text.iter().any(|x| !x.trim().is_empty()),
             MarkKind::Watermark => {
                 if d.use_file {
                     d.file.is_some()
@@ -456,7 +456,7 @@ fn file_source(ui: &mut egui::Ui, d: &mut MarksDraft, kind: MarkKind) -> bool {
 pub fn edit(d: &MarksDraft, kind: MarkKind, count: usize) -> Edit {
     let pages = d.range.pages(count);
     match kind {
-        MarkKind::HeaderFooter => Edit::AddHeaderFooter { pages, settings: d.hf.clone(), replace: d.replace },
+        MarkKind::HeaderFooter | MarkKind::Bates => Edit::AddHeaderFooter { pages, settings: d.hf.clone(), replace: d.replace },
         MarkKind::Watermark => {
             let mut wm = d.wm.clone();
             if d.fit {

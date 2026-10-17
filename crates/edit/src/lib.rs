@@ -33,6 +33,9 @@ pub enum MarkKind {
     HeaderFooter,
     Watermark,
     Background,
+    /// A header or footer with a Bates number: added, kept and removed apart from other headers
+    /// and footers (Acrobat's Bates Numbering ▸ Remove).
+    Bates,
 }
 
 impl MarkKind {
@@ -41,6 +44,7 @@ impl MarkKind {
             MarkKind::HeaderFooter => "HeaderFooter",
             MarkKind::Watermark => "Watermark",
             MarkKind::Background => "Background",
+            MarkKind::Bates => "Bates",
         }
     }
 }
@@ -426,7 +430,8 @@ fn text_op(x: f64, y: f64, text: &str) -> Vec<u8> {
 }
 
 /// Add a header and footer to `pages` (0-based). With `replace`, existing headers and footers on
-/// those pages are removed first (Acrobat's Replace Existing).
+/// those pages are removed first (Acrobat's Replace Existing). One with a Bates number is a
+/// [`MarkKind::Bates`] mark: it replaces, and is replaced by, only other Bates numbers.
 pub fn add_header_footer(doc: &mut Document, pages: &[usize], hf: &HeaderFooter, replace: bool, cx: &Context) -> Result<(), EditError> {
     let all = page_list(doc);
     check(pages, all.len())?;
@@ -439,8 +444,9 @@ pub fn add_header_footer(doc: &mut Document, pages: &[usize], hf: &HeaderFooter,
     if !(hf.font_size.is_finite() && hf.font_size > 0.0 && hf.font_size <= 200.0 && hf.margins.iter().all(|m| m.is_finite() && *m >= 0.0)) {
         return Err(EditError::Invalid("invalid font size or margins".into()));
     }
+    let kind = if hf.text.iter().any(|t| bates_start(t).is_some()) { MarkKind::Bates } else { MarkKind::HeaderFooter };
     if replace {
-        remove_marks(doc, pages, MarkKind::HeaderFooter)?;
+        remove_marks(doc, pages, kind)?;
     }
     let all = page_list(doc);
     let count = all.len();
@@ -480,12 +486,12 @@ pub fn add_header_footer(doc: &mut Document, pages: &[usize], hf: &HeaderFooter,
         if !underlines.is_empty() {
             body.extend(format!("{}\n{underlines}", rgb(hf.color)).bytes());
         }
-        let mut content = begin(MarkKind::HeaderFooter, "Header", page.view_matrix(doc)).into_bytes();
+        let mut content = begin(kind, "Header", page.view_matrix(doc)).into_bytes();
         content.extend(body);
         content.extend_from_slice(END.as_bytes());
         add_resources(doc, page, None, None)?;
         let page = &page_list(doc)[i];
-        place(doc, page, MarkKind::HeaderFooter, content, false)?;
+        place(doc, page, kind, content, false)?;
     }
     Ok(())
 }
@@ -626,7 +632,8 @@ pub fn marks_present(doc: &Document) -> Vec<MarkKind> {
         };
         for o in list {
             if let Some(t) = stream_tag(doc, &o)
-                && let Some(kind) = [MarkKind::HeaderFooter, MarkKind::Watermark, MarkKind::Background].into_iter().find(|m| m.tag() == t)
+                && let Some(kind) =
+                    [MarkKind::HeaderFooter, MarkKind::Watermark, MarkKind::Background, MarkKind::Bates].into_iter().find(|m| m.tag() == t)
                 && !found.contains(&kind)
             {
                 found.push(kind);

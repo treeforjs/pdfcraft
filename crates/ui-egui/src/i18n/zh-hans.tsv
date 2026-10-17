@@ -2250,3 +2250,4 @@ compare-page	Moved	已移动
 	One word or phrase per line	每行一个单词或短语
 	Import list…	导入列表…
 	The list is too long: at most {n} entries of up to {m} characters each.	列表过长：最多 {n} 项，每项最多 {m} 个字符。
+	Remove Bates numbering	删除贝茨编号
