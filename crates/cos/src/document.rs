@@ -555,6 +555,11 @@ impl Document {
         &self.version
     }
 
+    /// Set the version a full save writes in the header (`1.4`, `2.0`, …).
+    pub fn set_version(&mut self, version: &str) {
+        self.version = version.to_owned();
+    }
+
     pub fn trailer(&self) -> &Dict {
         &self.trailer
     }

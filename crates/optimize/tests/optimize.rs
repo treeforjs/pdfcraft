@@ -560,3 +560,48 @@ fn a_shared_descriptor_is_copied_and_conformance_blocks_unembedding() {
     assert!(embedded_fonts(&doc).iter().all(|f| f.blocked == Some(UnembedBlock::Conformance)));
     assert!(unembed(&mut doc, &["DancingScriptAlias".into()]).is_err());
 }
+
+#[test]
+fn made_compatible_with_an_older_version() {
+    use pdfcraft_optimize::{NewerFeature, parse_version};
+    let build = || {
+        let mut doc = Document::new_empty();
+        let mask = image(&mut doc, 8, 8, 1, false, None);
+        let img = image(&mut doc, 8, 8, 3, false, Some(mask));
+        page(&mut doc, &[("Im1", img)], "q 72 0 0 72 0 0 cm /Im1 Do Q");
+        let mut jpx = Dict::new();
+        jpx.set(b"Subtype".to_vec(), Object::name("Image"));
+        jpx.set(b"Filter".to_vec(), Object::Array(vec![Object::name("JPXDecode")]));
+        doc.add(Object::Stream(Stream::from_raw(jpx, vec![0; 16])));
+        let mut gs = Dict::new();
+        gs.set(b"Type".to_vec(), Object::name("ExtGState"));
+        gs.set(b"ca".to_vec(), Object::Real(0.5));
+        doc.add(Object::Dict(gs));
+        let root = doc.root().unwrap();
+        doc.update_dict(root, |c| c.set(b"Version".to_vec(), Object::name("1.7"))).unwrap();
+        doc
+    };
+    assert_eq!(parse_version("PDF 1.4"), Some((1, 4)));
+    assert_eq!(parse_version("1.8"), None);
+
+    let mut doc = build();
+    let settings = Settings { compatibility: Some((1, 4)), ..Settings::default() };
+    assert!(!settings.object_streams(), "object streams need PDF 1.5");
+    let r = optimize(&mut doc, &settings).unwrap();
+    assert_eq!(r.newer_features, [NewerFeature { feature: "JPEG 2000 images", needs: (1, 5), count: 1 }]);
+    assert_eq!(doc.version(), "1.4");
+    assert!(!doc.get(doc.root().unwrap()).as_dict().unwrap().contains(b"Version"), "the catalog no longer claims 1.7");
+    let bytes = write_full(&doc, &SaveOptions { object_streams: settings.object_streams(), ..SaveOptions::default() }).unwrap();
+    assert!(bytes.starts_with(b"%PDF-1.4\n"));
+    let reopened = Document::open(Arc::new(bytes)).unwrap();
+    assert_eq!(reopened.version(), "1.4");
+
+    let mut doc = build();
+    let r = optimize(&mut doc, &Settings { compatibility: Some((1, 3)), ..Settings::default() }).unwrap();
+    let found: Vec<(&str, usize)> = r.newer_features.iter().map(|f| (f.feature, f.count)).collect();
+    assert_eq!(found, [("transparency", 2), ("JPEG 2000 images", 1)], "a soft-masked image and a translucent graphics state");
+
+    let mut doc = build();
+    assert!(optimize(&mut doc, &Settings { compatibility: Some((1, 1)), ..Settings::default() }).is_err());
+    assert!(Settings { compatibility: Some((1, 7)), ..Settings::default() }.object_streams());
+}
