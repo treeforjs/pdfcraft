@@ -193,6 +193,8 @@ impl PdfCraftApp {
             return false;
         }
         let Some((_, id)) = self.active_ids() else { return false };
+        // Document Will Print runs first, so what it changes is printed.
+        self.run_document_action(id, pdfcraft_engine::DocTrigger::WillPrint);
         let Some(doc) = self.session.get(id) else { return false };
         let labels: Vec<String> = doc.info.pages.iter().map(|p| p.label.clone()).collect();
         let settings = match self.print_draft.settings(doc.info.pages.len(), &labels) {
@@ -210,7 +212,7 @@ impl PdfCraftApp {
                 return false;
             }
         };
-        match self.print_draft.printer.clone() {
+        let printed = match self.print_draft.printer.clone() {
             Some(printer) => match spool::submit(&bytes, &self.print_draft.job(&name)) {
                 Ok(msg) => {
                     self.notify(if msg.is_empty() {
@@ -226,7 +228,11 @@ impl PdfCraftApp {
                 }
             },
             None => self.save_print_pdf(&name, bytes),
+        };
+        if printed {
+            self.run_document_action(id, pdfcraft_engine::DocTrigger::DidPrint);
         }
+        printed
     }
 
     /// Print ▸ Save as PDF on the desktop: write to `save_override` (tests and automation), or

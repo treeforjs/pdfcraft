@@ -1164,6 +1164,9 @@ impl PdfCraftApp {
         if index >= self.views.len() {
             return;
         }
+        let Some(id) = self.views.get(index).map(|v| v.id) else { return };
+        // Document Will Close runs first; what it changes is closed with the document.
+        self.run_document_action(id, pdfcraft_engine::DocTrigger::WillClose);
         let id = self.views.remove(index).id;
         self.forget_recovery(id);
         self.session.close(id);

@@ -22,7 +22,9 @@ mod author;
 pub mod detect;
 mod scripting;
 pub mod submit;
-pub use actions::{FieldAction, MAX_ACTIONS_PER_TRIGGER, MENU_ITEMS, Trigger, field_actions, set_field_actions};
+pub use actions::{
+    DocTrigger, FieldAction, MAX_ACTIONS_PER_TRIGGER, MENU_ITEMS, Trigger, document_actions, field_actions, set_document_action, set_field_actions,
+};
 pub use author::{
     BorderStyle, CheckStyle, FieldFont, FieldProps, Look, LookPatch, MAX_DISPLAY_APPEARANCES, NewField, add_field, check_style, delete_field,
     duplicate_field, look, redraw_field, set_button_icon, set_props, with_missing_appearances,

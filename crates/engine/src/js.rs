@@ -230,6 +230,11 @@ impl crate::Document {
         self.editor.as_ref().and_then(|e| pdfcraft_forms::field_actions(&e.cos, name).ok()).unwrap_or_default()
     }
 
+    /// Set Document Actions: each document trigger's JavaScript.
+    pub fn document_actions(&self) -> Vec<(pdfcraft_forms::DocTrigger, String)> {
+        self.editor.as_ref().map(|e| pdfcraft_forms::document_actions(&e.cos)).unwrap_or_default()
+    }
+
     /// Document JavaScripts (name, source), in name order.
     pub fn document_scripts(&self) -> Vec<(String, String)> {
         self.editor.as_ref().map(|e| document_scripts(&e.cos)).unwrap_or_default()
@@ -263,10 +268,32 @@ impl Session {
     /// `app.response`. When the script stops on a question ([`Outcome::question`]) nothing is
     /// applied: ask the user and run it again with the answer added.
     pub fn run_javascript_with(&mut self, id: DocId, script: &str, target: Option<&str>, dialogs: &Dialogs) -> Result<Outcome, EditError> {
-        self.run_script_event(id, script, target, pdfcraft_forms::Trigger::MouseUp.event_name(), dialogs)
+        let event = if target.is_some() { pdfcraft_forms::Trigger::MouseUp.event_name() } else { "Console" };
+        self.run_script_event(id, script, target, event, dialogs)
     }
 
-    /// [`Session::run_javascript`] for a field event named `event` (`event.name`).
+    /// Run the JavaScript of document trigger `trigger` (Set Document Actions), if it has one
+    /// and JavaScript is on: its field changes are one undoable step, and what it printed or
+    /// asked for joins the document's script output ([`Session::take_js_output`]). Requests to
+    /// print or save are dropped, so a Will Print or Will Save script can't start another one.
+    /// Dialogs get Cancel or No. Returns whether a script ran.
+    pub fn run_document_action(&mut self, id: DocId, trigger: pdfcraft_forms::DocTrigger) -> Result<bool, EditError> {
+        if self.js_off {
+            return Ok(false);
+        }
+        let Some(script) = self.get(id).and_then(|d| d.document_actions().into_iter().find(|(t, _)| *t == trigger)).map(|(_, s)| s) else {
+            return Ok(false);
+        };
+        let mut o = self.run_script_event(id, &script, None, trigger.event_name(), &Dialogs::default())?;
+        o.requests.retain(|r| !matches!(r, Request::Print | Request::SaveAs | Request::SetLayer { .. }));
+        if let Some(d) = self.docs.iter_mut().find(|d| d.id == id) {
+            d.js_output.absorb(&o);
+        }
+        Ok(true)
+    }
+
+    /// [`Session::run_javascript`] for a field event named `event` (`event.name`); without a
+    /// target, a document event of that name.
     fn run_script_event(&mut self, id: DocId, script: &str, target: Option<&str>, event: &str, dialogs: &Dialogs) -> Result<Outcome, EditError> {
         if self.js_off {
             return Err(EditError::Invalid("JavaScript is turned off (Preferences ▸ JavaScript)".into()));
@@ -297,7 +324,7 @@ impl Session {
         let states: Vec<_> = fields.iter().map(|f| field_state(&cos, f)).collect();
         let event = match target {
             Some(t) => pdfcraft_js::Event { will_commit: false, ..pdfcraft_js::Event::field(event, t, "") },
-            None => pdfcraft_js::Event::doc("Console"),
+            None => pdfcraft_js::Event::doc(event),
         };
         let mut o = pdfcraft_js::run_with(script, &event, &runner.doc, &states, &runner.doc_scripts, Limits::default(), dialogs);
         if o.question.is_some() {

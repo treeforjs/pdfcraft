@@ -407,6 +407,7 @@ impl PdfCraftApp {
             if !self.flatten_fill_sign_for_save(id) {
                 return false;
             }
+            self.run_document_action(id, pdfcraft_engine::DocTrigger::WillSave);
             let bytes = match self.session.save_bytes(id) {
                 Ok(b) => b,
                 Err(e) => {
@@ -421,6 +422,7 @@ impl PdfCraftApp {
                         self.views[index].document_changed(&doc.info);
                     }
                     self.notify_fmt("Downloaded {name}", &[("name", &name)]);
+                    self.run_document_action(id, pdfcraft_engine::DocTrigger::DidSave);
                     after(self);
                     true
                 }
@@ -432,6 +434,22 @@ impl PdfCraftApp {
         }
     }
 
+    /// Run document `id`'s action for `trigger` (Set Document Actions); a script error is shown
+    /// with the document's other script output, a failure to run as a notice.
+    pub(crate) fn run_document_action(&mut self, id: pdfcraft_engine::DocId, trigger: pdfcraft_engine::DocTrigger) {
+        match self.session.run_document_action(id, trigger) {
+            Ok(true) => {
+                if let Some(doc) = self.session.get(id)
+                    && let Some(view) = self.views.iter_mut().find(|v| v.id == id)
+                {
+                    view.document_changed(&doc.info);
+                }
+            }
+            Ok(false) => {}
+            Err(e) => self.notify_error(e),
+        }
+    }
+
     /// Write document `id` to `dest` and make it the document's file. Returns `true` if written.
     #[cfg(not(target_arch = "wasm32"))]
     fn save_doc_to(&mut self, id: pdfcraft_engine::DocId, dest: &str) -> bool {
@@ -440,6 +458,8 @@ impl PdfCraftApp {
         if !self.commit_typing_in(id) || !self.flatten_fill_sign_for_save(id) {
             return false;
         }
+        // Document Will Save runs first, so what it changes is saved.
+        self.run_document_action(id, pdfcraft_engine::DocTrigger::WillSave);
         let Some(name) = self.session.get(id).map(|d| d.name.clone()) else {
             self.notify_tr("The document was closed before it could be saved.");
             return false;
@@ -464,6 +484,7 @@ impl PdfCraftApp {
                     view.document_changed(&doc.info);
                 }
                 self.notify_fmt("Saved {name}", &[("name", &short_name(dest))]);
+                self.run_document_action(id, pdfcraft_engine::DocTrigger::DidSave);
                 true
             }
             Err(e) => {

@@ -176,3 +176,28 @@ fn script_dialogs_wait_for_the_user() {
     assert_eq!(h.state().dialog, Some(Dialog::JsConsole));
     assert_eq!(value(&h, "greeting"), ["Welcome"]);
 }
+
+#[test]
+fn document_actions_run_when_saving_and_closing() {
+    use pdfcraft_engine::{DocTrigger, Edit};
+    let mut h = harness();
+    let set = |h: &mut Harness<'static, PdfCraftApp>, trigger, script: &str| {
+        assert!(h.state_mut().apply_edit(Edit::SetDocumentAction { trigger, script: Some(script.into()) }));
+    };
+    set(&mut h, DocTrigger::WillSave, "getField('greeting').value = 'Saved by ' + event.name;");
+    set(&mut h, DocTrigger::DidSave, "app.alert('All saved');");
+    let out = std::env::temp_dir().join(format!("pdfcraft-doc-actions-{}.pdf", std::process::id()));
+    h.state_mut().save_override = Some(out.to_string_lossy().into_owned());
+    assert!(h.state_mut().execute("file.save_as"));
+    h.run_steps(3);
+    assert_eq!(value(&h, "greeting"), ["Saved by WillSave"]);
+    let saved = std::fs::read(&out).unwrap();
+    assert!(saved.windows(17).any(|w| w == b"Saved by WillSave"), "the Will Save change is in the file");
+    assert_eq!(h.state().toast.clone().unwrap().0, "All saved");
+    // Will Close runs as the tab closes.
+    set(&mut h, DocTrigger::WillClose, "console.println('bye');");
+    let id = h.state().active_ids().unwrap().1;
+    h.state_mut().close_tab(0);
+    assert!(h.state().session.get(id).is_none());
+    let _ = std::fs::remove_file(out);
+}

@@ -406,3 +406,116 @@ pub fn set_field_actions(doc: &mut Document, name: &str, actions: &[(Trigger, Fi
     }
     Ok(())
 }
+
+/// Set Document Actions: the document's own triggers (§12.6.3, Table 199: the catalog's `/AA`
+/// WC, WS, DS, WP and DP). Like Acrobat's dialog, they run JavaScript.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum DocTrigger {
+    WillClose,
+    WillSave,
+    DidSave,
+    WillPrint,
+    DidPrint,
+}
+
+impl DocTrigger {
+    pub const ALL: [DocTrigger; 5] = [DocTrigger::WillClose, DocTrigger::WillSave, DocTrigger::DidSave, DocTrigger::WillPrint, DocTrigger::DidPrint];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            DocTrigger::WillClose => "Document Will Close",
+            DocTrigger::WillSave => "Document Will Save",
+            DocTrigger::DidSave => "Document Did Save",
+            DocTrigger::WillPrint => "Document Will Print",
+            DocTrigger::DidPrint => "Document Did Print",
+        }
+    }
+
+    /// Snake-case id (agents).
+    pub fn id(self) -> &'static str {
+        match self {
+            DocTrigger::WillClose => "will_close",
+            DocTrigger::WillSave => "will_save",
+            DocTrigger::DidSave => "did_save",
+            DocTrigger::WillPrint => "will_print",
+            DocTrigger::DidPrint => "did_print",
+        }
+    }
+
+    pub fn from_id(id: &str) -> Option<DocTrigger> {
+        DocTrigger::ALL.into_iter().find(|t| t.id() == id)
+    }
+
+    /// `event.name` for its script (`event.type` is "Doc").
+    pub fn event_name(self) -> &'static str {
+        match self {
+            DocTrigger::WillClose => "WillClose",
+            DocTrigger::WillSave => "WillSave",
+            DocTrigger::DidSave => "DidSave",
+            DocTrigger::WillPrint => "WillPrint",
+            DocTrigger::DidPrint => "DidPrint",
+        }
+    }
+
+    fn key(self) -> &'static [u8] {
+        match self {
+            DocTrigger::WillClose => b"WC",
+            DocTrigger::WillSave => b"WS",
+            DocTrigger::DidSave => b"DS",
+            DocTrigger::WillPrint => b"WP",
+            DocTrigger::DidPrint => b"DP",
+        }
+    }
+}
+
+/// The catalog's `/AA`, resolved.
+fn catalog_aa(doc: &Document) -> Option<(ObjRef, Dict)> {
+    let root = doc.root()?;
+    let cat = doc.get(root);
+    let aa = cat.as_dict()?.get(b"AA").map(|a| doc.resolve(a)).and_then(|a| a.as_dict().cloned()).unwrap_or_default();
+    Some((root, aa))
+}
+
+/// The document's actions: for each trigger that has any, its JavaScripts joined in the order
+/// they run (other action types on these triggers are left out: they don't run here).
+pub fn document_actions(doc: &Document) -> Vec<(DocTrigger, String)> {
+    let Some((_, aa)) = catalog_aa(doc) else { return Vec::new() };
+    let pages = crate::page_refs(doc);
+    DocTrigger::ALL
+        .into_iter()
+        .filter_map(|t| {
+            let entry = aa.get(t.key())?;
+            let scripts: Vec<String> = chain(doc, entry, &pages)
+                .into_iter()
+                .filter_map(|r| match r.action {
+                    FieldAction::JavaScript(js) => Some(js),
+                    _ => None,
+                })
+                .collect();
+            (!scripts.is_empty()).then(|| (t, scripts.join("\n")))
+        })
+        .collect()
+}
+
+/// Set (or with `None` or blank, remove) the JavaScript `trigger` runs, replacing what it ran.
+pub fn set_document_action(doc: &mut Document, trigger: DocTrigger, script: Option<&str>) -> Result<(), FormError> {
+    let (root, mut aa) = catalog_aa(doc).ok_or_else(|| FormError::Invalid("the document has no catalog".into()))?;
+    match script.filter(|s| !s.trim().is_empty()) {
+        Some(js) => {
+            let action = fresh(&FieldAction::JavaScript(js.to_string()), &[])?;
+            let r = doc.add(action);
+            aa.set(trigger.key().to_vec(), Object::Ref(r));
+        }
+        None => {
+            aa.remove(trigger.key());
+        }
+    }
+    doc.update_dict(root, |d| {
+        if aa.is_empty() {
+            d.remove(b"AA");
+        } else {
+            d.set(b"AA".to_vec(), Object::Dict(aa.clone()));
+        }
+    })?;
+    Ok(())
+}

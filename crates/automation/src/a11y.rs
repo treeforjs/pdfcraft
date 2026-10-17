@@ -461,6 +461,29 @@ impl Automation {
         self.js_document_scripts(a)
     }
 
+    pub(crate) fn js_document_actions(&self, a: &Args) -> Result<Value> {
+        let actions = self.doc(a)?.document_actions();
+        let list: Vec<Value> = pdfcraft_engine::DocTrigger::ALL
+            .iter()
+            .map(|t| {
+                let script = actions.iter().find(|(x, _)| x == t).map(|(_, s)| s.as_str());
+                json!({ "trigger": t.id(), "label": t.label(), "script": script })
+            })
+            .collect();
+        Ok(json!({ "actions": list }))
+    }
+
+    pub(crate) fn js_set_document_action(&mut self, a: &Args) -> Result<Value> {
+        let ids: Vec<&str> = pdfcraft_engine::DocTrigger::ALL.iter().map(|t| t.id()).collect();
+        let t = a.str("trigger")?;
+        let trigger = pdfcraft_engine::DocTrigger::from_id(t)
+            .ok_or_else(|| crate::ToolError::InvalidArgs(format!("unknown trigger {t:?} (one of {})", ids.join(", "))))?;
+        let edit = pdfcraft_engine::Edit::SetDocumentAction { trigger, script: a.opt_str("script")?.map(str::to_string) };
+        let id = self.doc(a)?.id;
+        self.session.apply(id, edit).map_err(failed)?;
+        self.js_document_actions(a)
+    }
+
     pub(crate) fn form_set_script(&mut self, a: &Args) -> Result<Value> {
         let edit = pdfcraft_engine::Edit::SetFieldScript {
             name: a.str("field")?.into(),

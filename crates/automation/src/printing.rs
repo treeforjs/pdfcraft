@@ -112,6 +112,8 @@ impl Automation {
         let settings = print::Settings { pages, paper, orientation, layout, content };
         let sizes: Vec<(f64, f64)> = self.doc(a)?.info.pages.iter().map(|p| (p.width as f64, p.height as f64)).collect();
         let sheets = print::layout(&sizes, &settings).map_err(|e| bad(e.to_string()))?.len();
+        // Document Will Print runs first (what it changes is printed); Did Print once it's out.
+        self.session.run_document_action(id, pdfcraft_engine::DocTrigger::WillPrint).map_err(failed)?;
         let bytes = self.session.print_pdf(id, &settings).map_err(failed)?;
         let mut out = json!({ "sheets": sheets, "pages": settings.pages.len(), "bytes": bytes.len() });
         match (a.opt_str("path")?, a.opt_str("printer")?) {
@@ -150,6 +152,7 @@ impl Automation {
             }
             _ => return Err(bad("pass either path (save the print-ready PDF) or printer (a name from printers, or \"default\")")),
         }
+        self.session.run_document_action(id, pdfcraft_engine::DocTrigger::DidPrint).map_err(failed)?;
         Ok(out)
     }
 }

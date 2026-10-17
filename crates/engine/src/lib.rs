@@ -48,7 +48,7 @@ pub use pdfcraft_edit::{
     Added, AddedImage, AddedText, Align as TextAlign, Background, Content as AddedContent, Family as FontFamily, HeaderFooter, MarkKind, Watermark,
 };
 pub use pdfcraft_forms::{
-    BorderStyle, CheckStyle, Field as FormField, FieldAction, FieldChange, FieldFont, FieldKind as FormFieldKind, FieldProps, FieldValue,
+    BorderStyle, CheckStyle, DocTrigger, Field as FormField, FieldAction, FieldChange, FieldFont, FieldKind as FormFieldKind, FieldProps, FieldValue,
     Look as FieldLook, LookPatch as FieldLookPatch, MENU_ITEMS as FORM_MENU_ITEMS, NewField, TabOrder, Trigger as FieldTrigger, Widget as FormWidget,
     af as form_scripts, flags as field_flags,
 };
@@ -1201,6 +1201,11 @@ pub enum Edit {
         kind: NewField,
         name: Option<String>,
     },
+    /// Set Document Actions: the JavaScript a document trigger runs (`None` removes it).
+    SetDocumentAction {
+        trigger: pdfcraft_forms::DocTrigger,
+        script: Option<String>,
+    },
     /// Field Properties ▸ General / Options.
     SetFieldProps {
         name: String,
@@ -1500,6 +1505,7 @@ impl Edit {
             Edit::ResetForm { .. } => "Clear form".into(),
             Edit::AddField { .. } => "Add field".into(),
             Edit::SetFieldProps { .. } => "Change field properties".into(),
+            Edit::SetDocumentAction { .. } => "Set document actions".into(),
             Edit::DeleteField { .. } => "Delete field".into(),
             Edit::DuplicateField { .. } => "Duplicate field".into(),
             Edit::SetTabOrder { .. } | Edit::MoveInTabOrder { .. } => "Set tab order".into(),
@@ -1705,6 +1711,7 @@ fn check_permission(edit: &Edit, p: &pdfcraft_cos::Permissions) -> Result<(), Ed
         | Edit::DeleteDestination { .. }
         | Edit::Sanitize
         | Edit::SetFieldProps { .. }
+        | Edit::SetDocumentAction { .. }
         | Edit::DeleteField { .. }
         | Edit::DuplicateField { .. }
         | Edit::SetTabOrder { .. }
@@ -1960,6 +1967,9 @@ fn run_edit(doc: &mut pdfcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -> 
         }
         Edit::SetFieldProps { name, props } => {
             pdfcraft_forms::set_props(doc, name, props)?;
+        }
+        Edit::SetDocumentAction { trigger, script } => {
+            pdfcraft_forms::set_document_action(doc, *trigger, script.as_deref())?;
         }
         Edit::DuplicateField { name, pages } => {
             if pdfcraft_forms::duplicate_field(doc, name, pages)? == 0 {
