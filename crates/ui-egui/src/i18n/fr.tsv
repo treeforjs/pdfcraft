@@ -2251,3 +2251,18 @@ compare-page	Moved	Déplacée
 	This signature field is not signed.	Ce champ de signature n'est pas signé.
 	Validate Signature	Valider la signature
 	Crop Image	Recadrer l'image
+	Comments added or changed	Commentaires ajoutés ou modifiés
+	Form fields filled in	Champs de formulaire remplis
+	Page content changed	Contenu de la page modifié
+	Links changed	Liens modifiés
+	Signature added	Signature ajoutée
+	Validation data added	Données de validation ajoutées
+	Document properties changed	Propriétés du document modifiées
+	Document structure changed	Structure du document modifiée
+	Pages added or removed	Pages ajoutées ou supprimées
+	Other changes	Autres modifications
+	Rev. {n}: Changes made after signing	Rév. {n} : modifications apportées après la signature
+	No changes were found in this revision.	Aucune modification n’a été trouvée dans cette révision.
+	Page {p}: {change}	Page {p} : {change}
+	Document: {change}	Document : {change}
+	View this version	Afficher cette version

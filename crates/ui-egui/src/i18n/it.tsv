@@ -2260,3 +2260,18 @@ compare-page	Moved	Spostata
 	This signature field is not signed.	Questo campo firma non è firmato.
 	Validate Signature	Convalida firma
 	Crop Image	Ritaglia immagine
+	Comments added or changed	Commenti aggiunti o modificati
+	Form fields filled in	Campi modulo compilati
+	Page content changed	Contenuto della pagina modificato
+	Links changed	Collegamenti modificati
+	Signature added	Firma aggiunta
+	Validation data added	Dati di convalida aggiunti
+	Document properties changed	Proprietà del documento modificate
+	Document structure changed	Struttura del documento modificata
+	Pages added or removed	Pagine aggiunte o rimosse
+	Other changes	Altre modifiche
+	Rev. {n}: Changes made after signing	Rev. {n}: modifiche apportate dopo la firma
+	No changes were found in this revision.	In questa revisione non sono state trovate modifiche.
+	Page {p}: {change}	Pagina {p}: {change}
+	Document: {change}	Documento: {change}
+	View this version	Visualizza questa versione

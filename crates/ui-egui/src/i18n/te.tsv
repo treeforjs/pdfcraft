@@ -2182,3 +2182,18 @@ compare-page	Moved	తరలించబడింది
 	This signature field is not signed.	ఈ సంతకం ఫీల్డ్‌పై సంతకం చేయలేదు.
 	Validate Signature	సంతకాన్ని ధృవీకరించండి
 	Crop Image	చిత్రాన్ని కత్తిరించు
+	Comments added or changed	వ్యాఖ్యలు జోడించబడ్డాయి లేదా మార్చబడ్డాయి
+	Form fields filled in	ఫారం ఫీల్డ్‌లు నింపబడ్డాయి
+	Page content changed	పేజీ కంటెంట్ మార్చబడింది
+	Links changed	లింక్‌లు మార్చబడ్డాయి
+	Signature added	సంతకం జోడించబడింది
+	Validation data added	ధృవీకరణ డేటా జోడించబడింది
+	Document properties changed	పత్రం లక్షణాలు మార్చబడ్డాయి
+	Document structure changed	పత్రం నిర్మాణం మార్చబడింది
+	Pages added or removed	పేజీలు జోడించబడ్డాయి లేదా తీసివేయబడ్డాయి
+	Other changes	ఇతర మార్పులు
+	Rev. {n}: Changes made after signing	పునర్విమర్శ {n}: సంతకం తర్వాత చేసిన మార్పులు
+	No changes were found in this revision.	ఈ పునర్విమర్శలో మార్పులు కనుగొనబడలేదు.
+	Page {p}: {change}	పేజీ {p}: {change}
+	Document: {change}	పత్రం: {change}
+	View this version	ఈ సంస్కరణను చూడండి

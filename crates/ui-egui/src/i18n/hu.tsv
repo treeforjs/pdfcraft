@@ -2249,3 +2249,18 @@ compare-page	Moved	Áthelyezve
 	This signature field is not signed.	Ez az aláírásmező nincs aláírva.
 	Validate Signature	Aláírás ellenőrzése
 	Crop Image	Kép körbevágása
+	Comments added or changed	Megjegyzések hozzáadva vagy módosítva
+	Form fields filled in	Űrlapmezők kitöltve
+	Page content changed	Oldal tartalma módosítva
+	Links changed	Hivatkozások módosítva
+	Signature added	Aláírás hozzáadva
+	Validation data added	Érvényesítési adatok hozzáadva
+	Document properties changed	Dokumentum tulajdonságai módosítva
+	Document structure changed	Dokumentum szerkezete módosítva
+	Pages added or removed	Oldalak hozzáadva vagy eltávolítva
+	Other changes	Egyéb módosítások
+	Rev. {n}: Changes made after signing	{n}. rev.: Aláírás után végzett módosítások
+	No changes were found in this revision.	Ebben a revízióban nem található módosítás.
+	Page {p}: {change}	{p}. oldal: {change}
+	Document: {change}	Dokumentum: {change}
+	View this version	Verzió megtekintése

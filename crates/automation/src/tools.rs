@@ -679,7 +679,7 @@ pub fn tools() -> Vec<ToolDef> {
             comment_ref(json!({ "status": { "type": "string", "enum": ["none", "accepted", "rejected", "cancelled", "completed"] }, "author": { "type": "string" } })),
             &["doc", "status"],
         )),
-        t("sign_list", "List and validate signatures", "Every signature field with its validation: status (valid, unknown = intact but the signer isn't trusted, invalid, unsigned), signer and certificate, date, reason, location, certification level, page and rect, the revision it covers and changes made after signing (none, allowed, disallowed), with Acrobat-style explanations.")
+        t("sign_list", "List and validate signatures", "Every signature field with its validation: status (valid, unknown = intact but the signer isn't trusted, invalid, unsigned), signer and certificate, date, reason, location, certification level, page and rect, the revision it covers and changes made after signing (none, allowed, disallowed), with Acrobat-style explanations. `revisions` outlines every saved revision after the first: its number, length in bytes, the signature field that saved it (or null) and what it changed, as {page (1-based, null for the whole document), kind}.")
             .ro()
             .with(schema(json!({ "doc": doc() }), &["doc"])),
         t("sign_verify", "Verify signatures at a selected time", "Read-only certificate and revocation validation at an explicit time. Reports trusted, claimed and chosen time separately. Never fetches or changes trust.")
