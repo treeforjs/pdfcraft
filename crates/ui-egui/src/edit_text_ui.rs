@@ -2,7 +2,8 @@
 //! Click a paragraph to edit it in place (⌘Enter or clicking away applies and rewraps it to the
 //! box, Esc cancels); drag it to move it, or drag the handle on its left or right edge to rewrap
 //! it to a new width. Click an image to select it: drag to move, drag a corner to resize (keeping
-//! its proportions), right-click for rotate, flip, replace, save and delete; Delete removes it.
+//! its proportions), right-click for rotate, flip, crop, replace, save and delete; Delete removes
+//! it. Crop Image shows crop handles on its edges and corners: drag one to hide that side.
 
 use egui::{Color32, CornerRadius, FontFamily, FontId, Pos2, Rect, Stroke};
 use pdfcraft_engine::Edit;
@@ -363,6 +364,50 @@ pub struct ImageSelection {
     pub index: usize,
     /// Dragging: the start point and, for a corner, the opposite corner (screen).
     drag: Option<(Pos2, Option<Pos2>)>,
+    /// Crop Image: the handles crop instead of move and resize (Esc or Crop Image ends it).
+    pub crop: bool,
+    /// Cropping: the start point and the sides that move (left, top, right, bottom on screen).
+    crop_drag: Option<(Pos2, [bool; 4])>,
+}
+
+impl ImageSelection {
+    pub fn new(page: usize, index: usize) -> Self {
+        ImageSelection { page, index, drag: None, crop: false, crop_drag: None }
+    }
+}
+
+/// The crop handles of screen box `b` (corners, then edge midpoints) and the sides each moves.
+fn crop_handles(b: Rect) -> [(Pos2, [bool; 4]); 8] {
+    let (l, t, r, bo) = (true, true, true, true);
+    let f = false;
+    [
+        (b.left_top(), [l, t, f, f]),
+        (b.right_top(), [f, t, r, f]),
+        (b.left_bottom(), [l, f, f, bo]),
+        (b.right_bottom(), [f, f, r, bo]),
+        (b.left_center(), [l, f, f, f]),
+        (b.center_top(), [f, t, f, f]),
+        (b.right_center(), [f, f, r, f]),
+        (b.center_bottom(), [f, f, f, bo]),
+    ]
+}
+
+/// The box `b` keeps after moving `sides` by `delta`: never larger than `b`, never under 4 px.
+fn crop_preview(b: Rect, sides: [bool; 4], delta: egui::Vec2) -> Rect {
+    let mut r = b;
+    if sides[0] {
+        r.min.x = (b.min.x + delta.x).clamp(b.min.x, (b.max.x - 4.0).max(b.min.x));
+    }
+    if sides[1] {
+        r.min.y = (b.min.y + delta.y).clamp(b.min.y, (b.max.y - 4.0).max(b.min.y));
+    }
+    if sides[2] {
+        r.max.x = (b.max.x + delta.x).clamp((r.min.x + 4.0).min(b.max.x), b.max.x);
+    }
+    if sides[3] {
+        r.max.y = (b.max.y + delta.y).clamp((r.min.y + 4.0).min(b.max.y), b.max.y);
+    }
+    r
 }
 
 /// What a drag on a paragraph box takes hold of.
@@ -465,6 +510,77 @@ pub(crate) fn image_input(
         }
         painter.rect_stroke(*b, CornerRadius::ZERO, stroke, egui::StrokeKind::Outside);
     }
+    // Crop Image on the selected image: edge and corner handles hide that side.
+    if let Some(i) = selected
+        && let Some(b) = boxes.get(i).copied()
+        && view.image_selection.as_ref().is_some_and(|s| s.crop)
+    {
+        if ui.input(|inp| inp.key_pressed(egui::Key::Escape)) {
+            if let Some(s) = view.image_selection.as_mut() {
+                s.crop = false;
+                s.crop_drag = None;
+            }
+            return true;
+        }
+        let handles = crop_handles(b);
+        let origin = ui.input(|i| i.pointer.press_origin());
+        if resp.drag_started()
+            && let Some(o) = origin
+            && let Some((_, sides)) = handles.iter().min_by(|x, y| x.0.distance(o).total_cmp(&y.0.distance(o))).filter(|h| h.0.distance(o) < 10.0)
+            && let Some(s) = view.image_selection.as_mut()
+        {
+            s.crop_drag = Some((o, *sides));
+        }
+        let kept = match (view.image_selection.as_ref().and_then(|s| s.crop_drag), pointer) {
+            (Some((start, sides)), Some(p)) => crop_preview(b, sides, p - start),
+            _ => b,
+        };
+        // Shade what the crop hides, outline what it keeps.
+        let shade = Color32::from_black_alpha(110);
+        for r in [
+            Rect::from_min_max(b.min, Pos2::new(b.max.x, kept.min.y)),
+            Rect::from_min_max(Pos2::new(b.min.x, kept.max.y), b.max),
+            Rect::from_min_max(Pos2::new(b.min.x, kept.min.y), Pos2::new(kept.min.x, kept.max.y)),
+            Rect::from_min_max(Pos2::new(kept.max.x, kept.min.y), Pos2::new(b.max.x, kept.max.y)),
+        ] {
+            if r.is_positive() {
+                painter.rect_filled(r, CornerRadius::ZERO, shade);
+            }
+        }
+        painter.rect_stroke(kept, CornerRadius::ZERO, Stroke::new(1.5, ACCENT), egui::StrokeKind::Middle);
+        for (c, _) in crop_handles(kept) {
+            painter.rect(
+                Rect::from_center_size(c, egui::vec2(7.0, 7.0)),
+                CornerRadius::ZERO,
+                Color32::BLACK,
+                Stroke::new(1.0, Color32::WHITE),
+                egui::StrokeKind::Middle,
+            );
+        }
+        if let Some(p) = pointer.filter(|p| b.expand(10.0).contains(*p)) {
+            let near = handles.iter().find(|h| h.0.distance(p) < 10.0).map(|h| h.1);
+            ui.ctx().set_cursor_icon(match near {
+                Some([true, true, false, false] | [false, false, true, true]) => egui::CursorIcon::ResizeNwSe,
+                Some([false, true, true, false] | [true, false, false, true]) => egui::CursorIcon::ResizeNeSw,
+                Some([true, false, false, false] | [false, false, true, false]) => egui::CursorIcon::ResizeHorizontal,
+                Some(_) => egui::CursorIcon::ResizeVertical,
+                None => egui::CursorIcon::Crosshair,
+            });
+        }
+        if resp.drag_stopped() && view.image_selection.as_ref().is_some_and(|s| s.crop_drag.is_some()) {
+            if let Some(s) = view.image_selection.as_mut() {
+                s.crop_drag = None;
+            }
+            if kept != b {
+                view.pending_edit =
+                    Some(Edit::EditPageImage { page, index: i, change: pdfcraft_engine::ImageEdit::Crop(user_box(xf, info, page, kept)) });
+            }
+            return true;
+        }
+        if view.image_selection.as_ref().is_some_and(|s| s.crop_drag.is_some()) || pointer.is_some_and(|p| b.expand(10.0).contains(p)) {
+            return true;
+        }
+    }
     // The selected image: frame, corner handles, dragging.
     if let Some(i) = selected {
         let b = boxes[i];
@@ -531,7 +647,10 @@ pub(crate) fn image_input(
     }
     ui.ctx().set_cursor_icon(if selected == Some(hit) { egui::CursorIcon::Move } else { egui::CursorIcon::PointingHand });
     if resp.clicked() || resp.secondary_clicked() {
-        view.image_selection = Some(ImageSelection { page, index: hit, drag: None });
+        let same = view.image_selection.as_ref().is_some_and(|s| s.page == page && s.index == hit);
+        if !same {
+            view.image_selection = Some(ImageSelection::new(page, hit));
+        }
     }
     if selected == Some(hit) {
         resp.context_menu(|ui| {
@@ -547,6 +666,14 @@ pub(crate) fn image_input(
                     view.pending_edit = change.map(|c| Edit::EditPageImage { page, index: hit, change: c });
                     ui.close();
                 }
+            }
+            let cropping = view.image_selection.as_ref().is_some_and(|s| s.crop);
+            if ui.selectable_label(cropping, tl!("Crop Image")).clicked() {
+                if let Some(s) = view.image_selection.as_mut() {
+                    s.crop = !cropping;
+                    s.crop_drag = None;
+                }
+                ui.close();
             }
             let raster = images.get(hit).is_some_and(|image| !image.is_form);
             if ui.add_enabled(raster, egui::Button::new(tl!("Replace Image…"))).clicked() {
