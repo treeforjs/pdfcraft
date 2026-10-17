@@ -6,15 +6,25 @@
 //! It returns `None` for anything it cannot draw faithfully (cloudy borders, unknown line
 //! endings, indirect geometry), so callers never replace an appearance with a worse one.
 //!
-//! The note icons are PdfCraft's own drawings (AGENTS.md §1). Text boxes use the standard
-//! Helvetica font with WinAnsi encoding; line breaking uses [`text_width`], an approximation of
-//! Helvetica's proportions by character class (no font program or metrics file is bundled).
+//! The note icons are PdfCraft's own drawings (AGENTS.md §1). Text boxes use the
+//! standard fonts with WinAnsi encoding, laid out with their exact metrics ([`crate::rich`]).
 
 use pdfcraft_cos::{Dict, Object, PdfString, Stream};
-pub use pdfcraft_fonts::{helvetica_width as text_width, wrap};
 use pdfcraft_fonts::{literal, win_ansi};
 
 use crate::{NOTE_SIZE, Rgb, n};
+
+/// The advance of `s` in Helvetica at `size` points (exact for WinAnsi characters).
+pub fn text_width(s: &str, size: f64) -> f64 {
+    let f = crate::rich::TextFormat { size, ..Default::default() };
+    s.chars().map(|c| f.char_width(c)).sum()
+}
+
+/// Greedy line breaking of Helvetica text within `width` points ([`pdfcraft_fonts::wrap_with`]
+/// measured with [`text_width`]).
+pub fn wrap(text: &str, size: f64, width: f64) -> Vec<String> {
+    pdfcraft_fonts::wrap_with(text, size, width, text_width)
+}
 
 /// Length of an arrowhead for a line of width `w`.
 pub fn arrow_size(w: f64) -> f64 {
@@ -664,44 +674,89 @@ pub fn build(d: &Dict) -> Option<Stream> {
                     n(rect[3] - rect[1] - bw)
                 ));
             }
-            let text = d.get(b"Contents").and_then(|o| o.as_string()).map(PdfString::to_text).unwrap_or_default();
+            let text = crate::rich::of_dict(d);
+            let base = text.base(crate::rich::TextFormat { size, color: text_color, ..Default::default() });
             let pad = 2.0 + bw;
             let width = (rect[2] - rect[0] - 2.0 * pad).max(1.0);
-            let q = d.int(b"Q").unwrap_or(0);
+            let align = text.align;
+            let base_font = base.family.resource(base.bold, base.italic);
             c.push_str(&format!(
-                "{} {} {} {} re W n\nBT\n/Helv {} Tf\n{}",
+                "{} {} {} {} re W n\nBT\n/{base_font} {} Tf\n{}",
                 n(rect[0]),
                 n(rect[1]),
                 n(rect[2] - rect[0]),
                 n(rect[3] - rect[1]),
-                n(size),
-                rg(text_color)
+                n(base.size),
+                rg(base.color)
             ));
             let mut out = c.into_bytes();
-            let mut y = rect[3] - pad - size * 0.9;
-            for line in wrap(&text, size, width) {
-                if y < rect[1] - size {
+            // Fonts in use (resource name, base font), the current font and colour, and the
+            // underlines and strikethroughs to draw after the text.
+            let mut fonts_used: Vec<(&'static str, &'static str)> = vec![(base_font, base.base_font())];
+            let (mut font, mut colour) = ((base_font, base.size), base.color);
+            let mut lines_after = String::new();
+            let mut y = rect[3] - pad;
+            for (i, line) in crate::rich::layout(&text, width).iter().enumerate() {
+                y -= if i == 0 { line.size * 0.9 } else { line.size * 1.2 };
+                if y < rect[1] - line.size {
                     break;
                 }
-                let lw = text_width(&line, size);
-                let x = match q {
-                    1 => rect[0] + pad + (width - lw) / 2.0,
-                    2 => rect[2] - pad - lw,
-                    _ => rect[0] + pad,
+                let mut x = match align {
+                    crate::rich::Align::Center => rect[0] + pad + (width - line.width) / 2.0,
+                    crate::rich::Align::Right => rect[2] - pad - line.width,
+                    crate::rich::Align::Left => rect[0] + pad,
                 };
                 out.extend(format!("1 0 0 1 {} {} Tm ", n(x), n(y)).bytes());
-                out.extend(literal(&win_ansi(&line)));
-                out.extend_from_slice(b" Tj\n");
-                y -= size * 1.2;
+                if line.chars.is_empty() {
+                    out.extend_from_slice(b"() Tj\n");
+                    continue;
+                }
+                for run in line.chars.chunk_by(|a, b| a.1 == b.1) {
+                    let Some(f) = run.first().map(|(_, f)| *f) else { continue };
+                    let res = f.family.resource(f.bold, f.italic);
+                    if !fonts_used.iter().any(|(r, _)| *r == res) {
+                        fonts_used.push((res, f.base_font()));
+                    }
+                    if font != (res, f.size) {
+                        out.extend(format!("/{res} {} Tf ", n(f.size)).bytes());
+                        font = (res, f.size);
+                    }
+                    if colour != f.color {
+                        out.extend(rg(f.color).trim_end().bytes());
+                        out.push(b' ');
+                        colour = f.color;
+                    }
+                    let s: String = run.iter().map(|(c, _)| *c).collect();
+                    out.extend(literal(&win_ansi(&s)));
+                    out.extend_from_slice(b" Tj\n");
+                    let w: f64 = run.iter().map(|(c, f)| f.char_width(*c)).sum();
+                    let thick = (f.size * 0.05).max(0.5);
+                    for (on, at) in [(f.underline, -0.12), (f.strike, 0.26)] {
+                        if on {
+                            lines_after.push_str(&format!(
+                                "{}{} {} {} {} re f\n",
+                                rg(f.color),
+                                n(x),
+                                n(y + at * f.size - thick / 2.0),
+                                n(w),
+                                n(thick)
+                            ));
+                        }
+                    }
+                    x += w;
+                }
             }
             out.extend_from_slice(b"ET\n");
-            let mut font = Dict::new();
-            font.set(b"Type".to_vec(), Object::name("Font"));
-            font.set(b"Subtype".to_vec(), Object::name("Type1"));
-            font.set(b"BaseFont".to_vec(), Object::name("Helvetica"));
-            font.set(b"Encoding".to_vec(), Object::name("WinAnsiEncoding"));
+            out.extend(lines_after.bytes());
             let mut fonts = Dict::new();
-            fonts.set(b"Helv".to_vec(), Object::Dict(font));
+            for (res, base_name) in fonts_used {
+                let mut font = Dict::new();
+                font.set(b"Type".to_vec(), Object::name("Font"));
+                font.set(b"Subtype".to_vec(), Object::name("Type1"));
+                font.set(b"BaseFont".to_vec(), Object::name(base_name));
+                font.set(b"Encoding".to_vec(), Object::name("WinAnsiEncoding"));
+                fonts.set(res.as_bytes().to_vec(), Object::Dict(font));
+            }
             res.set(b"Font".to_vec(), Object::Dict(fonts));
             return Some(form(full, &out, res));
         }

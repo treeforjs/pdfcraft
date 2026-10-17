@@ -870,3 +870,48 @@ fn the_panel_indexes_once_and_lays_out_only_the_cards_in_view() {
     assert_eq!((stats.index_builds, stats.listed), (2, 300), "{stats:?}");
     h.get_by_label("Edited last");
 }
+
+/// The text box composer's format bar formats the selected characters (or the whole text) and
+/// sets the alignment; editing the box later keeps the formatting and can change it.
+#[test]
+fn text_box_composer_formats_selected_text() {
+    let mut h = harness(|app| app.set_option("quick", "freetext").unwrap());
+    click_pt(&mut h, (40.0, 120.0));
+    field(&h, "Type text").type_text("Hello world");
+    h.run_steps(2);
+    // Select "world" with Shift+←, then make it bold.
+    for _ in 0..5 {
+        h.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::ArrowLeft);
+        h.run_steps(1);
+    }
+    h.get_by_label("B").click();
+    h.run_steps(2);
+    h.get_by_label("Centre").click();
+    h.run_steps(2);
+    h.get_by_label("Post").click();
+    h.run_steps(3);
+    let id = h.state().views[0].id;
+    let rich = h.state().session.get(id).unwrap().comment_rich_text(0, 0).expect("a text box");
+    assert_eq!(rich.spans.iter().map(|s| (s.text.as_str(), s.format.bold)).collect::<Vec<_>>(), [("Hello ", false), ("world", true)]);
+    assert_eq!(rich.align, pdfcraft_engine::BoxAlign::Center);
+    assert_eq!(h.state().session.get(id).unwrap().can_undo(), Some("Add text box"));
+    // Edit it: typed text keeps the bold run, and Italic applies to everything when nothing is selected.
+    h.state_mut().views[0].comments.composer =
+        Some(pdfcraft_ui_egui::comments::Composer::new(0, [200.0, 120.0], pdfcraft_ui_egui::comments::ComposerKind::Edit(0), "Hello world".into()));
+    h.run_steps(3);
+    h.key_press(egui::Key::End);
+    h.run_steps(1);
+    h.get_by(|n| n.role() == egui::accesskit::Role::MultilineTextInput && n.value().as_deref() == Some("Hello world")).type_text("!");
+    h.run_steps(2);
+    h.state_mut().views[0].comments.composer.as_mut().unwrap().selection = None;
+    h.get_by_label("I").click();
+    h.run_steps(2);
+    h.get_by_label("Post").click();
+    h.run_steps(3);
+    let rich = h.state().session.get(id).unwrap().comment_rich_text(0, 0).unwrap();
+    assert_eq!(
+        rich.spans.iter().map(|s| (s.text.as_str(), s.format.bold, s.format.italic)).collect::<Vec<_>>(),
+        [("Hello ", false, true), ("world!", true, true)]
+    );
+    assert_eq!(h.state().session.get(id).unwrap().can_undo(), Some("Edit comment"));
+}

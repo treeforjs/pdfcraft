@@ -962,3 +962,113 @@ fn links_go_to_views_and_named_destinations() {
     assert_eq!(dests::rename(&mut doc, "intro", "start").unwrap(), 1);
     assert_eq!(links::list(&doc).iter().find(|l| l.page == 0 && l.index == a).unwrap().action, LinkAction::Named("start".into()));
 }
+
+fn ap_of(doc: &Document, d: &Dict) -> String {
+    let n = d.get(b"AP").unwrap().as_dict().unwrap().reference(b"N").unwrap();
+    let Object::Stream(s) = &*doc.get(n) else { panic!() };
+    String::from_utf8_lossy(&s.decoded().unwrap()).into_owned()
+}
+
+/// Acrobat-style `/RC` (a body style, paragraphs, styled spans, `<b>`/`<i>` and entities) is
+/// read into runs, drawn with the matching standard fonts, and written back.
+#[test]
+fn rich_text_is_read_drawn_and_written_back() {
+    use rich::{Align, Family, RichText, TextFormat};
+    let base = TextFormat::default();
+    let rc = r#"<?xml version="1.0"?><body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/" xfa:spec="2.0.2" style="font-size:10.0pt;text-align:right;color:#000000;font-family:Helvetica,sans-serif">
+<p dir="ltr"><span style="font-weight:bold">Bold</span> and <i>italic</i>&nbsp;text</p>
+<p dir="ltr"><span style="font-family:Times New Roman;font-size:14pt;color:#FF0000;text-decoration:underline">Red</span></p></body>"#;
+    let r = rich::parse_rc(rc, base, Align::Left).unwrap();
+    assert_eq!(r.text(), "Bold and italic\u{a0}text\nRed");
+    assert_eq!(r.align, Align::Right);
+    let fmt = |i: usize| r.spans[i].format;
+    assert_eq!((r.spans[0].text.as_str(), fmt(0).bold, fmt(0).size), ("Bold", true, 10.0));
+    assert_eq!((r.spans[2].text.as_str(), fmt(2).italic), ("italic", true));
+    let red = r.spans.last().unwrap();
+    assert_eq!(red.text, "Red");
+    assert_eq!((red.format.family, red.format.size, red.format.color, red.format.underline), (Family::Times, 14.0, [1.0, 0.0, 0.0], true));
+    // Malformed markup isn't guessed at.
+    assert_eq!(rich::parse_rc("<body><p>open", base, Align::Left), None);
+
+    // A text box with that rich text (and matching /Contents) draws it run by run.
+    let mut doc = fixture();
+    let t = add_annotation(&mut doc, &new(0, Shape::TextBox { rect: [0.0, 600.0, 300.0, 700.0], font_size: 10.0 }), &meta("t")).unwrap();
+    set_rich_text(&mut doc, 0, t, &r, false, &meta("")).unwrap();
+    let doc = reopen(&doc);
+    let d = &list(&doc, 0)[t];
+    assert_eq!(text(d, b"Contents"), "Bold and italic\u{a0}text\nRed");
+    assert_eq!(d.get(b"Q").and_then(|q| q.as_int()), Some(2));
+    let ap = ap_of(&doc, d);
+    for needle in ["BT\n/HeBo 10 Tf\n", "(Bold) Tj", "/Helv 10 Tf ( and ) Tj", "/HeOb 10 Tf (italic) Tj", "/TiRo 14 Tf 1 0 0 rg (Red) Tj"] {
+        assert!(ap.contains(needle), "{needle:?} in {ap}");
+    }
+    let after_text = ap.split("ET\n").nth(1).unwrap_or_default();
+    assert!(after_text.starts_with("1 0 0 rg\n") && after_text.trim_end().ends_with("re f"), "the red run is underlined: {ap}");
+    let fonts = d.get(b"AP").unwrap().as_dict().unwrap().reference(b"N").map(|n| doc.get(n)).unwrap();
+    let Object::Stream(s) = &*fonts else { panic!() };
+    let res = s.dict.get(b"Resources").and_then(|r| r.as_dict()).and_then(|r| r.get(b"Font")).and_then(|f| f.as_dict()).unwrap();
+    let base_font =
+        |k: &[u8]| res.get(k).and_then(|f| f.as_dict()).and_then(|f| f.name(b"BaseFont")).map(|n| String::from_utf8_lossy(n).into_owned());
+    assert_eq!(base_font(b"HeBo").as_deref(), Some("Helvetica-Bold"));
+    assert_eq!(base_font(b"TiRo").as_deref(), Some("Times-Roman"));
+    // Right-aligned: the last line ends at the padded right edge (300 − 2 pad − 2 border).
+    let red_width = TextFormat { family: Family::Times, size: 14.0, ..base };
+    let w: f64 = "Red".chars().map(|c| red_width.char_width(c)).sum();
+    assert!(ap.contains(&format!("1 0 0 1 {} ", n(296.0 - w))), "{ap}");
+    // Read back: the same runs.
+    let back = rich_text_of(&doc, 0, t).unwrap();
+    assert_eq!(back.spans.len(), r.spans.len());
+    assert_eq!(back.spans.last().unwrap().format, red.format);
+    assert_eq!(RichText::plain("x", base, Align::Center).to_rc().matches("text-align:center").count(), 1);
+}
+
+/// Editing a formatted text box keeps each character's format; typed text takes the format
+/// before it; formatting a range splits the runs; the box grows to fit bigger text.
+#[test]
+fn formatted_text_survives_edits_and_ranges_reformat() {
+    use rich::FormatChange;
+    let mut doc = fixture();
+    let t = add_annotation(&mut doc, &new(0, Shape::TextBox { rect: [0.0, 600.0, 300.0, 620.0], font_size: 12.0 }), &meta("t")).unwrap();
+    set_contents(&mut doc, 0, t, "one two three", &meta("")).unwrap();
+    let bold = FormatChange { bold: Some(true), ..Default::default() };
+    format_text(&mut doc, 0, t, (4, 7), &bold, None, &meta("")).unwrap();
+    let r = rich_text_of(&doc, 0, t).unwrap();
+    assert_eq!(r.spans.iter().map(|s| (s.text.as_str(), s.format.bold)).collect::<Vec<_>>(), [("one ", false), ("two", true), (" three", false)]);
+    // Typing inside the bold word keeps it bold; the rest keeps its format.
+    set_contents(&mut doc, 0, t, "zero one two three", &meta("")).unwrap();
+    set_contents(&mut doc, 0, t, "zero one twoo three", &meta("")).unwrap();
+    let r = rich_text_of(&doc, 0, t).unwrap();
+    assert_eq!(
+        r.spans.iter().map(|s| (s.text.as_str(), s.format.bold)).collect::<Vec<_>>(),
+        [("zero one ", false), ("twoo", true), (" three", false)]
+    );
+    let before = rect(&list(&doc, 0)[t]);
+    // The whole box at 24 pt (an empty range), centred: it grows down from its top edge.
+    format_text(&mut doc, 0, t, (0, 0), &FormatChange { size: Some(24.0), ..Default::default() }, Some(rich::Align::Center), &meta("")).unwrap();
+    let d = &list(&doc, 0)[t];
+    let after = rect(d);
+    assert_eq!((after[0], after[2], after[3]), (before[0], before[2], before[3]));
+    assert!(after[3] - after[1] >= (before[3] - before[1]) + 14.0, "one line, twice as tall: {before:?} → {after:?}");
+    assert!(ap_of(&doc, d).contains("/HeBo 24 Tf (twoo) Tj"));
+    assert_eq!(text(d, b"DA"), "0 0.4 1 rg /Helv 24 Tf");
+    // Hostile sizes are clamped, other comments refused, and locked boxes keep their format.
+    format_text(&mut doc, 0, t, (0, 4), &FormatChange { size: Some(1e9), ..Default::default() }, None, &meta("")).unwrap();
+    assert_eq!(rich_text_of(&doc, 0, t).unwrap().spans[0].format.size, 400.0);
+    assert!(format_text(&mut doc, 0, 0, (0, 1), &bold, None, &meta("")).is_err(), "a square has no text formatting");
+    set_locked(&mut doc, 0, t, true).unwrap();
+    assert!(format_text(&mut doc, 0, t, (0, 1), &bold, None, &meta("")).is_err());
+}
+
+/// `/RC` that disagrees with `/Contents` (edited by a tool that ignores rich text) loses to it.
+#[test]
+fn contents_wins_over_stale_rich_text() {
+    let mut d = Dict::new();
+    d.set(b"Subtype".to_vec(), Object::name("FreeText"));
+    d.set(b"Contents".to_vec(), PdfString::text("new"));
+    d.set(b"DA".to_vec(), PdfString::literal(b"0 g /Helv 9 Tf".to_vec()));
+    d.set(b"RC".to_vec(), PdfString::text("<body><p><b>old</b></p></body>"));
+    let r = rich::of_dict(&d);
+    assert_eq!((r.text().as_str(), r.spans.len(), r.spans[0].format.bold, r.spans[0].format.size), ("new", 1, false, 9.0));
+    d.set(b"Contents".to_vec(), PdfString::text("old"));
+    assert!(rich::of_dict(&d).spans[0].format.bold);
+}

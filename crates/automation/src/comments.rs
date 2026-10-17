@@ -174,7 +174,7 @@ impl Automation {
         let all = self.comments(a)?;
         let view = |c: &Annotation| -> Value {
             let p = &doc.info.pages[c.page.min(doc.info.pages.len().saturating_sub(1))];
-            json!({
+            let v = json!({
                 "id": c.name,
                 "page": c.page + 1,
                 "index": c.index + 1,
@@ -184,7 +184,13 @@ impl Automation {
                 "modified": c.modified,
                 "rect": rect_to_view(p, c.rect),
                 "color": c.color.map(hex),
-            })
+            });
+            let mut v = v;
+            if let Some(rich) = doc.comment_rich_text(c.page, c.index) {
+                v["align"] = json!(rich.align.name());
+                v["runs"] = runs(&rich);
+            }
+            v
         };
         let roots: Vec<Value> = all
             .iter()
@@ -583,6 +589,66 @@ impl Automation {
         self.apply(a, edit)
     }
 
+    /// Format a text box's characters `start..end` (0-based, end exclusive; all of them when
+    /// both are left out) and set its alignment.
+    pub(crate) fn comment_format_text(&mut self, a: &Args) -> Result<Value> {
+        use pdfcraft_engine::{BoxAlign, BoxFont, FormatChange};
+        let (page, index) = self.comment_target(a)?;
+        let Some(rich) = self.doc(a)?.comment_rich_text(page, index) else {
+            return Err(ToolError::InvalidArgs("only text boxes and callouts have formatted text".into()));
+        };
+        let len = rich.char_count();
+        let pos = |key: &str| -> Result<Option<usize>> {
+            a.opt_int(key)?
+                .map(|v| {
+                    usize::try_from(v).ok().filter(|v| *v <= len).ok_or_else(|| ToolError::InvalidArgs(format!("{key} must be between 0 and {len}")))
+                })
+                .transpose()
+        };
+        let (start, end) = (pos("start")?.unwrap_or(0), pos("end")?.unwrap_or(len));
+        if start > end {
+            return Err(ToolError::InvalidArgs("start must not be after end".into()));
+        }
+        let family = match a.opt_str("font")? {
+            Some(f) => Some(
+                BoxFont::ALL
+                    .into_iter()
+                    .find(|x| x.name().eq_ignore_ascii_case(f))
+                    .ok_or_else(|| ToolError::InvalidArgs(format!("unknown font {f:?}")))?,
+            ),
+            None => None,
+        };
+        let size = a.opt_num("size")?;
+        if size.is_some_and(|s| !s.is_finite() || !(1.0..=400.0).contains(&s)) {
+            return Err(ToolError::InvalidArgs("size must be between 1 and 400 points".into()));
+        }
+        let change = FormatChange {
+            family,
+            size,
+            color: a.color("color")?,
+            bold: a.opt_bool("bold")?,
+            italic: a.opt_bool("italic")?,
+            underline: a.opt_bool("underline")?,
+            strike: a.opt_bool("strikethrough")?,
+        };
+        let align = match a.opt_str("align")? {
+            Some(s) => Some(BoxAlign::parse(s).ok_or_else(|| ToolError::InvalidArgs(format!("unknown align {s:?}")))?),
+            None => None,
+        };
+        if change.is_empty() && align.is_none() {
+            return Err(ToolError::InvalidArgs("nothing to change: pass font, size, color, bold, italic, underline, strikethrough or align".into()));
+        }
+        if start == end && len > 0 && (a.opt_int("start")?.is_some() || a.opt_int("end")?.is_some()) && !change.is_empty() {
+            return Err(ToolError::InvalidArgs("the range is empty: leave out start and end to format the whole text".into()));
+        }
+        let mut out = self.apply(a, Edit::FormatAnnotationText { page, index, start, end, change, align })?;
+        if let Some(rich) = self.doc(a)?.comment_rich_text(page, index) {
+            out["align"] = json!(rich.align.name());
+            out["runs"] = runs(&rich);
+        }
+        Ok(out)
+    }
+
     pub(crate) fn comment_delete(&mut self, a: &Args) -> Result<Value> {
         let (page, index) = self.comment_target(a)?;
         self.apply(a, Edit::DeleteAnnotation { page, index })
@@ -614,6 +680,26 @@ impl Automation {
         };
         self.apply(a, edit)
     }
+}
+
+/// A text box's runs for agents: each with its text and format.
+fn runs(rich: &pdfcraft_engine::RichText) -> Value {
+    rich.spans
+        .iter()
+        .map(|s| {
+            let f = &s.format;
+            json!({
+                "text": s.text,
+                "font": f.family.name(),
+                "size": f.size,
+                "color": hex([f.color[0] as f32, f.color[1] as f32, f.color[2] as f32]),
+                "bold": f.bold,
+                "italic": f.italic,
+                "underline": f.underline,
+                "strikethrough": f.strike,
+            })
+        })
+        .collect()
 }
 
 #[cfg(test)]
