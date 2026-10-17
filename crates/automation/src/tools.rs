@@ -775,6 +775,21 @@ pub fn tools() -> Vec<ToolDef> {
             })),
             &["doc"],
         )),
+        t("comment_format_text", "Format a text box's text", "Format characters start..end (0-based, end exclusive; the whole text when both are left out) of a text box or callout: font (Helvetica, Times or Courier), size, color, bold, italic, underline, strikethrough; align sets the box's alignment. The box keeps its width and fits the text. Returns the text's runs (comment_list lists them too). One undo step.").with(schema(
+            comment_ref(json!({
+                "start": { "type": "integer", "minimum": 0 },
+                "end": { "type": "integer", "minimum": 0 },
+                "font": { "type": "string", "enum": ["Helvetica", "Times", "Courier"] },
+                "size": { "type": "number", "minimum": 1, "maximum": 400 },
+                "color": color(),
+                "bold": { "type": "boolean" },
+                "italic": { "type": "boolean" },
+                "underline": { "type": "boolean" },
+                "strikethrough": { "type": "boolean" },
+                "align": { "type": "string", "enum": ["left", "center", "right"] },
+            })),
+            &["doc"],
+        )),
         t("comment_image_preview", "Preview image signature layers", "Return a PNG of the page without the selected image signature/initials (layer=background, default), or its embedded image with alpha (layer=image). Includes the displayed rectangle, document rotation, image_rotation (how far clockwise the image is shown turned) and annotation opacity. Cache these layers for live placement/resizing; commit once with comment_edit. Does not change the document or undo history.")
             .ro().with(schema(comment_ref(json!({ "layer": { "type": "string", "enum": ["background", "image"], "default": "background" }, "dpi": { "type": "number", "minimum": 1, "maximum": 600, "default": 96 } })), &["doc"])),
         t("comment_delete", "Delete a comment", "Delete a comment with its pop-up and replies. Undoable.").destructive().with(schema(comment_ref(json!({})), &["doc"])),

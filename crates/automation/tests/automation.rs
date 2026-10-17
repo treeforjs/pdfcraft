@@ -5117,6 +5117,45 @@ fn ocr_output_choice_is_validated_before_recognition() {
     ));
 }
 
+#[test]
+fn formatting_a_text_box_through_tools() {
+    let dir = workdir("rich-text");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    let added = ok(
+        &mut a,
+        "comment_add",
+        json!({ "doc": doc, "page": 1, "type": "textbox", "rect": [10, 200, 190, 240], "contents": "Hello world", "font_size": 10 }),
+    );
+    let id = added["comment"]["id"].as_str().unwrap().to_string();
+    let r =
+        ok(&mut a, "comment_format_text", json!({ "doc": doc, "id": id, "start": 6, "end": 11, "bold": true, "color": "#FF0000", "font": "Times" }));
+    assert_eq!(r["runs"][0]["text"], "Hello ");
+    assert_eq!(
+        (r["runs"][1]["text"].as_str(), r["runs"][1]["bold"].as_bool(), r["runs"][1]["font"].as_str()),
+        (Some("world"), Some(true), Some("Times"))
+    );
+    assert_eq!(r["runs"][1]["color"], "#FF0000");
+    let r = ok(&mut a, "comment_format_text", json!({ "doc": doc, "id": id, "size": 18, "align": "center" }));
+    assert_eq!((r["align"].as_str(), r["runs"][0]["size"].as_f64(), r["runs"][1]["size"].as_f64()), (Some("center"), Some(18.0), Some(18.0)));
+    let list = ok(&mut a, "comment_list", json!({ "doc": doc }));
+    let c = list["comments"].as_array().unwrap().iter().find(|c| c["id"] == id.as_str()).unwrap();
+    assert_eq!(c["runs"].as_array().map(Vec::len), Some(2));
+    // Ranges past the text, nothing to change and other comments are refused.
+    for bad in [json!({ "doc": doc, "id": id, "end": 99, "bold": true }), json!({ "doc": doc, "id": id }), json!({ "doc": doc, "id": id, "size": 0 })]
+    {
+        assert!(matches!(a.call("comment_format_text", &bad), Err(ToolError::InvalidArgs(_))), "{bad}");
+    }
+    ok(&mut a, "comment_add", json!({ "doc": doc, "page": 1, "type": "rectangle", "rect": [10, 10, 60, 40] }));
+    assert!(matches!(a.call("comment_format_text", &json!({ "doc": doc, "page": 1, "index": 2, "bold": true })), Err(ToolError::InvalidArgs(_))));
+    // Undo takes the formatting back in one step.
+    ok(&mut a, "edit_undo", json!({ "doc": doc }));
+    ok(&mut a, "edit_undo", json!({ "doc": doc }));
+    let list = ok(&mut a, "comment_list", json!({ "doc": doc }));
+    let c = list["comments"].as_array().unwrap().iter().find(|c| c["id"] == id.as_str()).unwrap();
+    assert_eq!((c["align"].as_str(), c["runs"][0]["size"].as_f64()), (Some("left"), Some(10.0)));
+}
+
 /// A one-request-at-a-time HTTP server on loopback: every request it gets (head and body) comes
 /// out of the receiver, answered with `status`.
 fn form_server(status: u16) -> (String, std::sync::mpsc::Receiver<(String, Vec<u8>)>) {

@@ -13,7 +13,9 @@
 //! applied by the app, so each change is one undo step.
 
 use egui::{Color32, CornerRadius, Pos2, Rect, Sense, Stroke, pos2, vec2};
-use pdfcraft_engine::{Edit, LineEnding, Markup, NewAnnotation, NoteIcon, ReviewState, Rgb, Shape, Style};
+use pdfcraft_engine::{
+    BoxAlign, BoxFont, Edit, FormatChange, LineEnding, Markup, NewAnnotation, NoteIcon, ReviewState, Rgb, RichText, Shape, Style, TextFormat,
+};
 use pdfcraft_render::{Annotation, DocInfo};
 
 use crate::canvas::{DocView, PageXform};
@@ -368,6 +370,20 @@ pub struct Composer {
     pub kind: ComposerKind,
     pub text: String,
     pub focus: bool,
+    /// A text box's formatted text, kept in step with `text` (`None` for other comments).
+    pub rich: Option<RichText>,
+    /// `rich` has been read from the document (edits) or started (new text boxes).
+    pub rich_loaded: bool,
+    /// The formatting was changed, so posting writes it.
+    pub formatted: bool,
+    /// The last selected characters of `text` (sorted), which the format bar changes.
+    pub selection: Option<(usize, usize)>,
+}
+
+impl Composer {
+    pub fn new(page: usize, at: [f64; 2], kind: ComposerKind, text: String) -> Composer {
+        Composer { page, at, kind, text, focus: true, rich: None, rich_loaded: false, formatted: false, selection: None }
+    }
 }
 
 /// Per-document commenting state.
@@ -738,7 +754,7 @@ pub(crate) fn page_input(ui: &egui::Ui, resp: &egui::Response, cx: &PageCx<'_>, 
                 if let [point, at] = points[..]
                     && (point[0] - at[0]).hypot(point[1] - at[1]) >= 8.0
                 {
-                    cv.composer = Some(Composer { page, at, kind: ComposerKind::Callout { point }, text: String::new(), focus: true });
+                    cv.composer = Some(Composer::new(page, at, ComposerKind::Callout { point }, String::new()));
                 }
             }
             true
@@ -770,7 +786,7 @@ pub(crate) fn page_input(ui: &egui::Ui, resp: &egui::Response, cx: &PageCx<'_>, 
                 && over_page
                 && let Some(p) = pointer
             {
-                cv.composer = Some(Composer { page: cx.page, at: cx.to_user(p), kind: ComposerKind::Caret, text: String::new(), focus: true });
+                cv.composer = Some(Composer::new(cx.page, cx.to_user(p), ComposerKind::Caret, String::new()));
                 cv.selected = None;
             }
             true
@@ -787,7 +803,7 @@ pub(crate) fn page_input(ui: &egui::Ui, resp: &egui::Response, cx: &PageCx<'_>, 
                 && let Some(p) = pointer
             {
                 let kind = if tool == CommentTool::Note { ComposerKind::Note } else { ComposerKind::TextBox };
-                cv.composer = Some(Composer { page: cx.page, at: cx.to_user(p), kind, text: String::new(), focus: true });
+                cv.composer = Some(Composer::new(cx.page, cx.to_user(p), kind, String::new()));
                 cv.selected = None;
             }
             true
@@ -900,13 +916,8 @@ fn select_input(
         && let Some(a) = pointer.and_then(|p| cx.hit(p))
     {
         cv.selected = Some((cx.page, a.index));
-        cv.composer = Some(Composer {
-            page: cx.page,
-            at: [a.rect[2] as f64, a.rect[3] as f64],
-            kind: ComposerKind::Edit(a.index),
-            text: a.contents.clone().unwrap_or_default(),
-            focus: true,
-        });
+        cv.composer =
+            Some(Composer::new(cx.page, [a.rect[2] as f64, a.rect[3] as f64], ComposerKind::Edit(a.index), a.contents.clone().unwrap_or_default()));
         consumed = true;
     }
     consumed
@@ -922,7 +933,7 @@ pub(crate) fn page_after_text(resp: &egui::Response, cx: &PageCx<'_>, view: &mut
             let last = quads.last().copied().unwrap_or_default();
             let at = [last[2].max(last[6]), last[1].max(last[3])];
             view.comments.replace = Some(quads);
-            view.comments.composer = Some(Composer { page, at, kind: ComposerKind::Replace, text: String::new(), focus: true });
+            view.comments.composer = Some(Composer::new(page, at, ComposerKind::Replace, String::new()));
         }
         return;
     }
@@ -1097,6 +1108,20 @@ pub(crate) fn composer(ctx: &egui::Context, view: &mut DocView, info: &DocInfo, 
     let mut post = false;
     let mut cancel = false;
     let c = view.comments.composer.as_mut()?;
+    if !c.rich_loaded {
+        // New text boxes start in the tool's colour and size; edits read theirs (`load_rich`).
+        let size = match c.kind {
+            ComposerKind::TextBox => Some(12.0),
+            ComposerKind::Callout { .. } => Some(10.0),
+            _ => None,
+        };
+        if let Some(size) = size {
+            let tool = if size == 12.0 { CommentTool::TextBox } else { CommentTool::Callout };
+            let format = TextFormat { size, color: prefs.style(tool).color, ..TextFormat::default() };
+            c.rich = Some(RichText::plain(&c.text, format, BoxAlign::Left));
+        }
+        c.rich_loaded = true;
+    }
     let title = match c.kind {
         ComposerKind::Note => "Sticky note",
         ComposerKind::TextBox => "Text box",
@@ -1120,8 +1145,30 @@ pub(crate) fn composer(ctx: &egui::Context, view: &mut DocView, info: &DocInfo, 
                 ComposerKind::Replace => tl!("Replacement text"),
                 _ => tl!("Add a comment"),
             };
-            let edit =
-                ui.add(egui::TextEdit::multiline(&mut c.text).hint_text(hint).desired_rows(3).desired_width(f32::INFINITY).id_salt("composer-text"));
+            if let Some(rich) = c.rich.as_mut()
+                && let Some((change, align)) = format_bar(ui, rich, c.selection)
+            {
+                let (start, end) = c.selection.unwrap_or((0, 0));
+                let mut next = rich.format_range(start, end, &change);
+                next.align = align.unwrap_or(rich.align);
+                *rich = next;
+                c.formatted = true;
+                c.focus = true;
+            }
+            let out =
+                egui::TextEdit::multiline(&mut c.text).hint_text(hint).desired_rows(3).desired_width(f32::INFINITY).id_salt("composer-text").show(ui);
+            let edit = out.response.clone();
+            if edit.changed()
+                && let Some(rich) = c.rich.as_mut()
+            {
+                *rich = rich.retext(&c.text);
+            }
+            if edit.has_focus()
+                && let Some(range) = out.cursor_range
+            {
+                let r = range.as_sorted_char_range();
+                c.selection = Some((r.start.into(), r.end.into()));
+            }
             if c.focus {
                 edit.request_focus();
                 c.focus = false;
@@ -1160,6 +1207,30 @@ pub(crate) fn composer(ctx: &egui::Context, view: &mut DocView, info: &DocInfo, 
     }
     let c = view.comments.composer.take()?;
     let text = c.text.trim_end().to_string();
+    // Formatted text goes in with its runs; otherwise the plain text (which keeps a box's runs).
+    let rich = c.rich.filter(|_| c.formatted).map(|r| r.retext(&text));
+    if let Some(rich) = rich {
+        let new_box = |shape: Shape, tool: CommentTool, view: &mut DocView| {
+            view.comments.tool_done = true;
+            let Edit::AddAnnotation(annotation) = new_comment(&cx, tool, shape, text.clone()) else { return None };
+            Some(Edit::AddFormattedText { annotation, text: rich.clone() })
+        };
+        match c.kind {
+            ComposerKind::Edit(index) => return Some(Edit::SetAnnotationRichText { page, index, text: rich }),
+            ComposerKind::TextBox => {
+                let size = rich.base(TextFormat::default()).size;
+                return new_box(Shape::TextBox { rect: text_box_rect(c.at, &text, size), font_size: size }, CommentTool::TextBox, view);
+            }
+            ComposerKind::Callout { point } => {
+                let size = rich.base(TextFormat::default()).size;
+                let rect = text_box_rect(c.at, &text, size);
+                let knee = callout_knee(rect, point);
+                let shape = Shape::Callout { rect, knee, point, font_size: size, ending: LineEnding::OpenArrow };
+                return new_box(shape, CommentTool::Callout, view);
+            }
+            _ => {}
+        }
+    }
     match c.kind {
         ComposerKind::Edit(index) => Some(Edit::SetAnnotationContents { page, index, text }),
         ComposerKind::Note => {
@@ -1173,14 +1244,7 @@ pub(crate) fn composer(ctx: &egui::Context, view: &mut DocView, info: &DocInfo, 
         ComposerKind::Callout { point } => {
             view.comments.tool_done = true;
             let rect = text_box_rect(c.at, &text, 10.0);
-            let side = if point[0] < rect[0] {
-                rect[0]
-            } else if point[0] > rect[2] {
-                rect[2]
-            } else {
-                (rect[0] + rect[2]) / 2.0
-            };
-            let knee = [(point[0] + side) / 2.0, (rect[1] + rect[3]) / 2.0];
+            let knee = callout_knee(rect, point);
             Some(new_comment(&cx, CommentTool::Callout, Shape::Callout { rect, knee, point, font_size: 10.0, ending: LineEnding::OpenArrow }, text))
         }
         ComposerKind::Replace => {
@@ -1201,6 +1265,86 @@ pub(crate) fn composer(ctx: &egui::Context, view: &mut DocView, info: &DocInfo, 
             Some(new_comment(&cx, CommentTool::Caret, Shape::Caret { rect: [x - 4.0, y - 8.0, x + 4.0, y] }, text))
         }
     }
+}
+
+/// Where a new callout's leader line bends: halfway to the side of the box facing `point`.
+fn callout_knee(rect: [f64; 4], point: [f64; 2]) -> [f64; 2] {
+    let side = if point[0] < rect[0] {
+        rect[0]
+    } else if point[0] > rect[2] {
+        rect[2]
+    } else {
+        (rect[0] + rect[2]) / 2.0
+    };
+    [(point[0] + side) / 2.0, (rect[1] + rect[3]) / 2.0]
+}
+
+/// Read the formatted text of the text box an edit composer is open on.
+pub(crate) fn load_rich(view: &mut DocView, doc: &pdfcraft_engine::Document) {
+    if let Some(c) = view.comments.composer.as_mut()
+        && !c.rich_loaded
+        && let ComposerKind::Edit(index) = c.kind
+    {
+        c.rich = doc.comment_rich_text(c.page, index).map(|r| r.retext(&c.text));
+        c.rich_loaded = true;
+    }
+}
+
+/// The text box format bar: font, size, colour, bold, italic, underline, strikethrough and
+/// alignment, showing the format at the start of `selection`. Returns what was changed.
+fn format_bar(ui: &mut egui::Ui, rich: &RichText, selection: Option<(usize, usize)>) -> Option<(FormatChange, Option<BoxAlign>)> {
+    let at = selection.map(|(s, e)| if s == e { s } else { s + 1 }).unwrap_or(0);
+    let f = rich.format_at(at).unwrap_or(rich.base(TextFormat::default()));
+    let mut change = FormatChange::default();
+    let mut align = None;
+    ui.horizontal(|ui| {
+        egui::ComboBox::from_id_salt("composer-font").selected_text(f.family.name()).width(96.0).show_ui(ui, |ui| {
+            for family in BoxFont::ALL {
+                if ui.selectable_label(f.family == family, family.name()).clicked() {
+                    change.family = Some(family);
+                }
+            }
+        });
+        egui::ComboBox::from_id_salt("composer-size").selected_text(format!("{} pt", f.size)).width(64.0).show_ui(ui, |ui| {
+            for size in [8.0, 9.0, 10.0, 11.0, 12.0, 14.0, 16.0, 18.0, 20.0, 24.0, 28.0, 36.0, 48.0, 72.0] {
+                if ui.selectable_label(f.size == size, format!("{size} pt")).clicked() {
+                    change.size = Some(size);
+                }
+            }
+        });
+        ui.menu_button(egui::RichText::new("■").color(color32(f.color)), |ui| {
+            if let Some(c) = swatch_grid(ui, Some(f.color)) {
+                change.color = Some(c);
+                ui.close();
+            }
+        })
+        .response
+        .on_hover_text(tl!("Colour"));
+    });
+    ui.horizontal(|ui| {
+        for (on, label, tip, set) in [
+            (f.bold, egui::RichText::new("B").strong(), tl!("Bold"), &mut change.bold),
+            (f.italic, egui::RichText::new("I").italics(), tl!("Italic"), &mut change.italic),
+            (f.underline, egui::RichText::new("U").underline(), tl!("Underline"), &mut change.underline),
+            (f.strike, egui::RichText::new("S").strikethrough(), tl!("Strikethrough"), &mut change.strike),
+        ] {
+            if ui.selectable_label(on, label).on_hover_text(tip).clicked() {
+                *set = Some(!on);
+            }
+        }
+        ui.separator();
+        for (a, icon, tip) in [
+            (BoxAlign::Left, "align-left", tl!("Align left")),
+            (BoxAlign::Center, "align-center", tl!("Centre")),
+            (BoxAlign::Right, "align-right", tl!("Align right")),
+        ] {
+            if icons::button(ui, icon, 24.0, rich.align == a, tip).clicked() {
+                align = Some(a);
+            }
+        }
+    });
+    ui.add_space(4.0);
+    (!change.is_empty() || align.is_some_and(|a| a != rich.align)).then_some((change, align))
 }
 
 /// A text box sized to its text (at most 300 pt wide), hanging from its top-left corner.
@@ -1247,13 +1391,12 @@ pub(crate) fn context_menu(ui: &mut egui::Ui, view: &mut DocView, info: &DocInfo
         Some(a) => {
             let (page, index) = (a.page, a.index);
             if ui.add_enabled(allowed, egui::Button::new(tl!("Edit text…"))).clicked() {
-                view.comments.composer = Some(Composer {
+                view.comments.composer = Some(Composer::new(
                     page,
-                    at: [a.rect[2] as f64, a.rect[3] as f64],
-                    kind: ComposerKind::Edit(index),
-                    text: a.contents.clone().unwrap_or_default(),
-                    focus: true,
-                });
+                    [a.rect[2] as f64, a.rect[3] as f64],
+                    ComposerKind::Edit(index),
+                    a.contents.clone().unwrap_or_default(),
+                ));
                 ui.close();
             }
             if ui.add_enabled(allowed, egui::Button::new(tl!("Reply"))).clicked() {
@@ -1314,7 +1457,7 @@ pub(crate) fn context_menu(ui: &mut egui::Ui, view: &mut DocView, info: &DocInfo
             if let Some((page, at)) = view.comments.context_at
                 && ui.add_enabled(allowed, egui::Button::new(tl!("Add a sticky note here"))).clicked()
             {
-                view.comments.composer = Some(Composer { page, at, kind: ComposerKind::Note, text: String::new(), focus: true });
+                view.comments.composer = Some(Composer::new(page, at, ComposerKind::Note, String::new()));
                 ui.close();
             }
             if ui.button(tl!("Comments panel")).clicked() {

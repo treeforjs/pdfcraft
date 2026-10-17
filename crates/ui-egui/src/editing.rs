@@ -60,7 +60,7 @@ impl PdfCraftApp {
                     {
                         view.comments.selected = None;
                     }
-                    Edit::AddAnnotation(a) => {
+                    Edit::AddAnnotation(a) | Edit::AddFormattedText { annotation: a, .. } => {
                         // Select the new comment (appended last among the page's comments).
                         let newest = info.annotations.iter().filter(|x| x.page == a.page && x.in_reply_to.is_none()).map(|x| x.index).max();
                         view.comments.selected = newest.map(|n| (a.page, n));
@@ -608,9 +608,11 @@ impl PdfCraftApp {
 /// The page a comment edit changes (`None` for other edits).
 fn comment_page(edit: &Edit) -> Option<usize> {
     match edit {
-        Edit::AddAnnotation(a) => Some(a.page),
+        Edit::AddAnnotation(a) | Edit::AddFormattedText { annotation: a, .. } => Some(a.page),
         Edit::DeleteAnnotation { page, .. }
         | Edit::SetAnnotationContents { page, .. }
+        | Edit::SetAnnotationRichText { page, .. }
+        | Edit::FormatAnnotationText { page, .. }
         | Edit::ReplyToAnnotation { page, .. }
         | Edit::SetAnnotationStatus { page, .. }
         | Edit::MoveAnnotation { page, .. }

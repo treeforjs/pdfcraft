@@ -18,6 +18,7 @@ use pdfcraft_cos::{Dict, Document, ObjRef, Object, PdfString};
 
 pub mod appearance;
 pub mod links;
+pub mod rich;
 
 #[cfg(test)]
 mod tests;
@@ -1325,33 +1326,11 @@ pub(crate) fn n(v: f64) -> String {
 
 // ── edits ───────────────────────────────────────────────────────────────────────────────────
 
-/// A text box's rich text (§12.7.4.3): `/DS` (default style) and `/RC` (XHTML) written from its
-/// plain `/Contents`, `/DA` and `/Q`, so viewers that edit rich text show the same thing.
+/// A text box's rich text (§12.7.4.3): `/DS` (default style) and `/RC` (XHTML) written from what
+/// it shows, so viewers that edit rich text show the same thing.
 fn rich_text(d: &mut Dict) {
-    let text = d.get(b"Contents").and_then(|c| c.as_string()).map(PdfString::to_text).unwrap_or_default();
-    let (col, size) = appearance::parse_da(d);
-    let hex = format!(
-        "#{:02X}{:02X}{:02X}",
-        (col[0].clamp(0.0, 1.0) * 255.0).round() as u8,
-        (col[1].clamp(0.0, 1.0) * 255.0).round() as u8,
-        (col[2].clamp(0.0, 1.0) * 255.0).round() as u8
-    );
-    let align = match d.get(b"Q").and_then(Object::as_int) {
-        Some(1) => "center",
-        Some(2) => "right",
-        _ => "left",
-    };
-    let esc = |s: &str| s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;");
-    let body: String = text.split('\n').map(|line| format!("<p dir=\"ltr\">{}</p>", esc(line.trim_end_matches('\r')))).collect();
-    let style = format!(
-        "font-size:{}pt;text-align:{align};color:{hex};font-weight:normal;font-style:normal;font-family:Helvetica;font-stretch:normal",
-        n(size)
-    );
-    let rc = format!(
-        "<?xml version=\"1.0\"?><body xmlns=\"http://www.w3.org/1999/xhtml\" xmlns:xfa=\"http://www.xfa.org/schema/xfa-data/1.0/\" xfa:spec=\"2.0.2\" style=\"{style}\">{body}</body>"
-    );
-    d.set(b"DS".to_vec(), PdfString::text(&format!("font: Helvetica {}pt; text-align:{align}; color:{hex}", n(size))));
-    d.set(b"RC".to_vec(), PdfString::text(&rc));
+    let text = rich::of_dict(d);
+    rich::write(d, &text);
 }
 
 fn touch(d: &mut Dict, meta: &Meta) {
@@ -1405,34 +1384,97 @@ pub fn delete_annotation(doc: &mut Document, page: usize, index: usize) -> Resul
 pub fn set_contents(doc: &mut Document, page: usize, index: usize, text: &str, meta: &Meta) -> Result<(), AnnotError> {
     let (_, r) = annot_ref(doc, page, index)?;
     let free_text = annot_dict(doc, r).name(b"Subtype") == Some(b"FreeText");
+    if free_text {
+        // The formatting follows the text: unchanged characters keep theirs, typed ones take
+        // the format before them.
+        let rich = rich::of_dict(&annot_dict(doc, r)).retext(text);
+        return write_rich(doc, r, &rich, false, meta);
+    }
     doc.update_dict(r, |d| {
         d.set(b"Contents".to_vec(), PdfString::text(text));
-        // The rich-text version follows the new plain text (text boxes), or would contradict it.
-        if free_text {
-            rich_text(d);
-        } else {
-            d.remove(b"RC");
-        }
+        // The rich-text version would contradict the new plain text.
+        d.remove(b"RC");
         touch(d, meta);
     })?;
-    if free_text {
-        // The box grows and shrinks with the text instead of clipping it. A locked box keeps its
-        // text editable (as in Acrobat), so the re-fit ignores the lock.
-        match fitted_box(doc, r, text) {
-            Some(rect) => apply_text_box(doc, r, rect, meta)?,
-            None => set_appearance(doc, r)?,
-        }
-    }
     Ok(())
 }
 
-/// The rectangle a FreeText annotation's text box needs for `text`: the current wrap width and
-/// top edge stay and the height fits the wrapped lines, as at creation. `None` keeps the old
-/// rectangle (the box can't be measured, so only the appearance is redrawn).
-fn fitted_box(doc: &Document, r: ObjRef, text: &str) -> Option<[f64; 4]> {
+/// The rich text of the text box at `(page, index)` (`None` for other comments).
+pub fn rich_text_of(doc: &Document, page: usize, index: usize) -> Option<rich::RichText> {
+    let p = page_ref(doc, page).ok()?;
+    let entry = annots(doc, p).get(index).cloned()?;
+    let obj = doc.resolve(&entry);
+    let d = obj.as_dict()?;
+    (d.name(b"Subtype") == Some(b"FreeText")).then(|| rich::of_dict(d))
+}
+
+/// Replace a text box's text and formatting. The box keeps its width (or, with `natural_width`,
+/// takes the width of its longest paragraph, at most 300 pt, as a new box does) and its top
+/// edge, and its height fits the text.
+pub fn set_rich_text(
+    doc: &mut Document,
+    page: usize,
+    index: usize,
+    text: &rich::RichText,
+    natural_width: bool,
+    meta: &Meta,
+) -> Result<(), AnnotError> {
+    let (_, r) = annot_ref(doc, page, index)?;
+    if annot_dict(doc, r).name(b"Subtype") != Some(b"FreeText") {
+        return Err(AnnotError::Invalid("only text boxes have formatted text".into()));
+    }
+    if text.char_count() > rich::MAX_RICH_CHARS {
+        return Err(AnnotError::Invalid(format!("text boxes hold at most {} characters", rich::MAX_RICH_CHARS)));
+    }
+    let mut text = text.clone();
+    text.normalize();
+    for s in &mut text.spans {
+        rich::FormatChange { size: Some(s.format.size), color: Some(s.format.color), ..Default::default() }.apply(&mut s.format);
+    }
+    write_rich(doc, r, &text, natural_width, meta)
+}
+
+/// Change the format of characters `start..end` of a text box (all of it when the range is
+/// empty), or with `align` its alignment.
+pub fn format_text(
+    doc: &mut Document,
+    page: usize,
+    index: usize,
+    range: (usize, usize),
+    change: &rich::FormatChange,
+    align: Option<rich::Align>,
+    meta: &Meta,
+) -> Result<(), AnnotError> {
+    let (_, r) = annot_ref(doc, page, index)?;
+    unlocked(doc, r)?;
+    let current = rich_text_of(doc, page, index).ok_or_else(|| AnnotError::Invalid("only text boxes have formatted text".into()))?;
+    let mut text = current.format_range(range.0, range.1, change);
+    if let Some(a) = align {
+        text.align = a;
+    }
+    set_rich_text(doc, page, index, &text, false, meta)
+}
+
+fn write_rich(doc: &mut Document, r: ObjRef, text: &rich::RichText, natural_width: bool, meta: &Meta) -> Result<(), AnnotError> {
+    doc.update_dict(r, |d| {
+        rich::write(d, text);
+        touch(d, meta);
+    })?;
+    // The box grows and shrinks with the text instead of clipping it. A locked box keeps its
+    // text editable (as in Acrobat), so the re-fit ignores the lock.
+    match fitted_box(doc, r, text, natural_width) {
+        Some(rect) => apply_text_box(doc, r, rect, meta),
+        None => set_appearance(doc, r),
+    }
+}
+
+/// The rectangle a FreeText annotation's text box needs for `text`: the current wrap width
+/// (or the natural one) and top edge stay and the height fits the wrapped lines, as at
+/// creation. `None` keeps the old rectangle (the box can't be measured, so only the appearance
+/// is redrawn).
+fn fitted_box(doc: &Document, r: ObjRef, text: &rich::RichText, natural_width: bool) -> Option<[f64; 4]> {
     let d = annot_dict(doc, r);
     let nums = |key: &[u8]| -> Option<Vec<f64>> { d.get(key)?.as_array()?.iter().map(|o| o.as_f64()).collect() };
-    let (_, size) = appearance::parse_da(&d);
     let pad = 2.0 + border_width_of(&d);
     let rect = nums(b"Rect").filter(|v| v.len() == 4 && v.iter().all(|x| x.is_finite()))?;
     let rect = [rect[0], rect[1], rect[2], rect[3]];
@@ -1445,15 +1487,15 @@ fn fitted_box(doc: &Document, r: ObjRef, text: &str) -> Option<[f64; 4]> {
     };
     let (x0, top) = (tb[0].min(tb[2]), tb[1].max(tb[3]));
     let w = tb[2] - tb[0];
-    let w = if w.is_finite() && w >= 1.0 {
+    let w = if w.is_finite() && w >= 1.0 && !natural_width {
         w
     } else {
-        // No usable old width: fall back to the creation-time width (at most 300 pt).
-        let longest = text.lines().map(|l| appearance::text_width(l, size)).fold(0.0, f64::max);
-        (longest + 2.0 * pad + 4.0).clamp(40.0, 300.0)
+        // No usable old width: the creation-time width (at most 300 pt).
+        (rich::widest_paragraph(text) + 2.0 * pad + 4.0).clamp(40.0, 300.0)
     };
-    let lines = appearance::wrap(text, size, (w - 2.0 * pad).max(1.0)).len().max(1) as f64;
-    Some([x0, top - lines * size * 1.2 - 2.0 * pad - 2.0, x0 + w, top])
+    let lines = rich::layout(text, (w - 2.0 * pad).max(1.0));
+    let height: f64 = if lines.is_empty() { text.base(rich::TextFormat::default()).size * 1.2 } else { lines.iter().map(|l| l.size * 1.2).sum() };
+    Some([x0, top - height - 2.0 * pad - 2.0, x0 + w, top])
 }
 
 /// Reply to a comment; returns the reply's index in the page's `/Annots`.
@@ -1701,10 +1743,9 @@ pub fn set_style(
     doc.update_dict(r, |d| {
         if let Some(c) = color {
             if free_text {
-                let (_, size) = appearance::parse_da(d);
-                let [r, g, b] = c.map(|x| x.clamp(0.0, 1.0));
-                d.set(b"DA".to_vec(), PdfString::literal(format!("{} {} {} rg /Helv {} Tf", n(r), n(g), n(b), n(size)).into_bytes()));
-                rich_text(d);
+                // The whole box takes the colour.
+                let text = rich::of_dict(d).format_range(0, 0, &rich::FormatChange { color: Some(c), ..Default::default() });
+                rich::write(d, &text);
             } else {
                 d.set(b"C".to_vec(), rgb(c));
             }

@@ -2801,6 +2801,7 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
         });
     }
     find_bar(view, info.pages.len(), avail, ui, &t);
+    comments::load_rich(view, doc);
     if let Some(e) = comments::composer(ui.ctx(), view, info, prefs) {
         view.pending_edit = Some(e);
     }

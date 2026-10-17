@@ -106,6 +106,8 @@ pub fn typed_signature_shape(at: [f64; 2], text: &str, height: f64, rotation: i6
 /// Comment geometry helpers (text-box line breaking) for frontends.
 pub use pdfcraft_annot::appearance as annot_text;
 pub use pdfcraft_annot::links::{Highlight as LinkHighlight, LinkAction, LinkItem, LinkStyle};
+/// Text box rich text: formatted runs, alignment and range formatting.
+pub use pdfcraft_annot::rich::{Align as BoxAlign, Family as BoxFont, FormatChange, RichText, Span as TextSpan, TextFormat};
 pub use pdfcraft_annot::{
     AttachIcon, FillMark, LineEnding, Markup, NOTE_SIZE, NewAnnotation, NoteIcon, OverlayFont, OverlayLook, Props as CommentProps, ReviewState, Rgb,
     Shape, StampGroup, StampKind, Style, rect_quad,
@@ -240,6 +242,9 @@ fn scope_of(edit: &Edit) -> Scope {
         | Edit::AddCustomStamp { .. }
         | Edit::DeleteAnnotation { .. }
         | Edit::SetAnnotationContents { .. }
+        | Edit::SetAnnotationRichText { .. }
+        | Edit::FormatAnnotationText { .. }
+        | Edit::AddFormattedText { .. }
         | Edit::ReplyToAnnotation { .. }
         | Edit::SetAnnotationStatus { .. }
         | Edit::MarkAnnotation { .. }
@@ -564,6 +569,11 @@ impl Document {
     /// Comment properties of the comment at `(page, index)` (Comment Properties dialog).
     pub fn comment_props(&self, page: usize, index: usize) -> Option<pdfcraft_annot::Props> {
         self.editor.as_ref().and_then(|e| pdfcraft_annot::props(&e.cos, page, index))
+    }
+
+    /// The formatted text of the text box at `(page, index)` (`None` for other comments).
+    pub fn comment_rich_text(&self, page: usize, index: usize) -> Option<RichText> {
+        self.editor.as_ref().and_then(|e| pdfcraft_annot::rich_text_of(&e.cos, page, index))
     }
 
     /// A form field's Appearance-tab look (borders, colours, font).
@@ -1077,6 +1087,28 @@ pub enum Edit {
         index: usize,
         text: String,
     },
+    /// Replace a text box's text and formatting; the box keeps its width and fits the text.
+    SetAnnotationRichText {
+        page: usize,
+        index: usize,
+        text: RichText,
+    },
+    /// Format characters `start..end` of a text box (all of it when the range is empty), and
+    /// optionally set its alignment.
+    FormatAnnotationText {
+        page: usize,
+        index: usize,
+        start: usize,
+        end: usize,
+        change: FormatChange,
+        align: Option<BoxAlign>,
+    },
+    /// Add a text box (or callout) with formatted text; it takes the width of its longest
+    /// paragraph (at most 300 pt) and fits the text.
+    AddFormattedText {
+        annotation: NewAnnotation,
+        text: RichText,
+    },
     ReplyToAnnotation {
         page: usize,
         index: usize,
@@ -1445,7 +1477,9 @@ impl Edit {
             Edit::AddAnnotation(a) => format!("Add {}", annotation_noun(&a.shape)),
             Edit::AddCustomStamp { .. } => "Add stamp".into(),
             Edit::DeleteAnnotation { .. } => "Delete comment".into(),
-            Edit::SetAnnotationContents { .. } => "Edit comment".into(),
+            Edit::SetAnnotationContents { .. } | Edit::SetAnnotationRichText { .. } => "Edit comment".into(),
+            Edit::FormatAnnotationText { .. } => "Format text".into(),
+            Edit::AddFormattedText { annotation, .. } => format!("Add {}", annotation_noun(&annotation.shape)),
             Edit::ReplyToAnnotation { .. } => "Reply".into(),
             Edit::SetAnnotationStatus { state, .. } => format!("Set status {}", state.name()),
             Edit::ReplaceText { .. } => "Replace text".into(),
@@ -1607,6 +1641,9 @@ fn check_permission(edit: &Edit, p: &pdfcraft_cos::Permissions) -> Result<(), Ed
         | Edit::AddCustomStamp { .. }
         | Edit::DeleteAnnotation { .. }
         | Edit::SetAnnotationContents { .. }
+        | Edit::SetAnnotationRichText { .. }
+        | Edit::FormatAnnotationText { .. }
+        | Edit::AddFormattedText { .. }
         | Edit::ReplyToAnnotation { .. }
         | Edit::SetAnnotationStatus { .. }
         | Edit::MarkAnnotation { .. }
@@ -1851,6 +1888,17 @@ fn run_edit(doc: &mut pdfcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -> 
         }
         Edit::DeleteAnnotation { page, index } => pdfcraft_annot::delete_annotation(doc, *page, *index)?,
         Edit::SetAnnotationContents { page, index, text } => pdfcraft_annot::set_contents(doc, *page, *index, text, &cx.meta())?,
+        Edit::SetAnnotationRichText { page, index, text } => pdfcraft_annot::set_rich_text(doc, *page, *index, text, false, &cx.meta())?,
+        Edit::FormatAnnotationText { page, index, start, end, change, align } => {
+            pdfcraft_annot::format_text(doc, *page, *index, (*start, *end), change, *align, &cx.meta())?;
+        }
+        Edit::AddFormattedText { annotation, text } => {
+            if !matches!(annotation.shape, Shape::TextBox { .. } | Shape::Callout { .. } | Shape::Typewriter { .. }) {
+                return Err(EditError::Invalid("only text boxes and callouts have formatted text".into()));
+            }
+            let index = pdfcraft_annot::add_annotation(doc, annotation, &cx.meta())?;
+            pdfcraft_annot::set_rich_text(doc, annotation.page, index, text, true, &cx.meta())?;
+        }
         Edit::ReplyToAnnotation { page, index, text, author } => {
             pdfcraft_annot::add_reply(doc, *page, *index, text, author, &cx.meta())?;
         }

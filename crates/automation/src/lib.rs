@@ -752,6 +752,7 @@ impl Automation {
             "comments_hide" => self.comments_hide(&a)?,
             "comments_summarize" => self.comments_summarize(&a)?,
             "comment_edit" => self.comment_edit(&a)?,
+            "comment_format_text" => self.comment_format_text(&a)?,
             "comment_delete" => self.comment_delete(&a)?,
             other => return Err(ToolError::UnknownTool(other.into())),
         };

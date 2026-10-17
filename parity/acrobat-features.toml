@@ -3479,11 +3479,11 @@ title = "Generate correct appearances for every markup type"
 area = "E"
 tier = "P0"
 milestone = "M5"
-status = "partial"
+status = "shipped"
 commands = []
 tools = ["comment_add"]
-evidence = ["crates/annot/src/tests.rs::every_tool_creates_a_drawable_comment", "crates/engine/src/tests.rs::highlight_multiplies_over_text", "crates/annot/src/tests.rs::polygons_clouds_connected_lines_callouts_and_carets_are_drawn"]
-notes = "appearances for every type PdfCraft creates (highlight multiplies; clouds, callouts, stamps, polygons, carets); rich text not yet"
+evidence = ["crates/annot/src/tests.rs::every_tool_creates_a_drawable_comment", "crates/engine/src/tests.rs::highlight_multiplies_over_text", "crates/annot/src/tests.rs::polygons_clouds_connected_lines_callouts_and_carets_are_drawn", "crates/annot/src/tests.rs::rich_text_is_read_drawn_and_written_back"]
+notes = "appearances for every type PdfCraft creates (highlight multiplies; clouds, callouts, stamps, polygons, carets), and rich text boxes drawn run by run in the standard fonts with exact metrics, underlines and strikethroughs"
 
 [[feature]]
 id = "comment.sticky-note"
@@ -3587,11 +3587,11 @@ title = "Text box comment with rich text"
 area = "E"
 tier = "P0"
 milestone = "M5"
-status = "partial"
+status = "shipped"
 commands = ["comment.freetext"]
-tools = ["comment_add"]
-evidence = ["crates/ui-egui/tests/comments.rs::sticky_note_composer_posts_and_returns_to_select", "crates/annot/src/tests.rs::text_box_text_and_colour_changes_are_drawn"]
-notes = "Helvetica text with colour, size and alignment; /RC (XHTML) and /DS are written and kept in step with edits; per-run formatting (bold/italic spans) is not yet"
+tools = ["comment_add", "comment_format_text"]
+evidence = ["crates/ui-egui/tests/comments.rs::sticky_note_composer_posts_and_returns_to_select", "crates/annot/src/tests.rs::text_box_text_and_colour_changes_are_drawn", "crates/ui-egui/tests/comments.rs::text_box_composer_formats_selected_text", "crates/annot/src/tests.rs::rich_text_is_read_drawn_and_written_back", "crates/annot/src/tests.rs::formatted_text_survives_edits_and_ranges_reformat", "crates/automation/tests/automation.rs::formatting_a_text_box_through_tools"]
+notes = "Runs of formatted text (Helvetica, Times or Courier; size, colour, bold, italic, underline, strikethrough) and the box's alignment, from the composer's format bar on the selected characters or comment_format_text; /RC (XHTML) and /DS are read (Acrobat's included) and written, and edits keep each character's format. Standard fonts only (WinAnsi text)."
 
 [[feature]]
 id = "comment.callout"
