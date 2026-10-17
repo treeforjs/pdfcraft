@@ -1,7 +1,8 @@
 //! Edit a PDF ▸ edit existing images and grouped artwork (Image/Form XObjects painted by `Do`
 //! in its own content streams), and changing one: move/resize/rotate/flip (the `Do` is wrapped in
 //! `q … cm … Q` with the extra transform), replace (it draws another XObject in the same place),
-//! or delete. Only the stream that draws it is rewritten, as a new object.
+//! crop (the `Do` draws a new Form XObject whose clip keeps part of it, so the crop moves with
+//! later edits), or delete. Only the stream that draws it is rewritten, as a new object.
 
 use pdfcraft_content::{Matrix, Op, parse, serialize_ops};
 use pdfcraft_cos::{Dict, Document, ObjRef, Object, Stream};
@@ -59,6 +60,21 @@ fn xobjects(doc: &Document, page: &Dict) -> Dict {
         .unwrap_or_default()
 }
 
+/// The marker a crop wrapper carries: the bitmap it clips (Replace and Save Image As use it).
+const CROP_OF: &[u8] = b"PCCropOf";
+
+fn pixels(d: &Dict, key: &[u8]) -> u32 {
+    d.int(key).unwrap_or(0).clamp(0, u32::MAX as i64) as u32
+}
+
+/// For a crop wrapper made by [`change_image`] around a bitmap: that bitmap and its pixel size.
+fn cropped_image(doc: &Document, form: &Dict) -> Option<(ObjRef, u32, u32)> {
+    let inner = form.get(CROP_OF)?.as_ref()?;
+    let obj = doc.get(inner);
+    let Object::Stream(s) = &*obj else { return None };
+    (s.dict.name(b"Subtype") == Some(b"Image")).then(|| (inner, pixels(&s.dict, b"Width"), pixels(&s.dict, b"Height")))
+}
+
 /// The images and Form artwork page `page` (0-based) draws, in drawing order.
 /// Forms stay intact: no traversal or rewriting of their internal objects is needed.
 pub fn page_images(doc: &Document, page: usize) -> Result<Vec<PageImage>, EditError> {
@@ -83,7 +99,9 @@ pub fn page_images(doc: &Document, page: usize) -> Result<Vec<PageImage>, EditEr
                     let Some(resource) = xo.get(name) else { continue };
                     let obj = doc.resolve(resource);
                     let Object::Stream(s) = &*obj else { continue };
-                    let is_form = s.dict.name(b"Subtype") == Some(b"Form");
+                    let mut is_form = s.dict.name(b"Subtype") == Some(b"Form");
+                    // A crop wrapper around a bitmap is still that bitmap (Replace, Save Image As).
+                    let cropped = if is_form { cropped_image(doc, &s.dict) } else { None };
                     let (matrix, bounds) = if is_form {
                         let Some(bounds) = s.dict.get(b"BBox").map(|v| doc.resolve(v)).and_then(|v| {
                             v.as_array().and_then(|a| {
@@ -122,14 +140,22 @@ pub fn page_images(doc: &Document, page: usize) -> Result<Vec<PageImage>, EditEr
                     {
                         continue;
                     }
+                    let (object, pixels) = match &cropped {
+                        Some((inner, w, h)) => {
+                            is_form = false;
+                            (Some(*inner), [*w, *h])
+                        }
+                        None if is_form => (resource.as_ref(), [0, 0]),
+                        None => (resource.as_ref(), [pixels(&s.dict, b"Width"), pixels(&s.dict, b"Height")]),
+                    };
                     out.push(PageImage {
                         rect,
                         matrix: matrix.0,
                         name: String::from_utf8_lossy(name).into_owned(),
-                        object: resource.as_ref(),
+                        object,
                         is_form,
-                        width: if is_form { 0 } else { s.dict.int(b"Width").unwrap_or(0).clamp(0, u32::MAX as i64) as u32 },
-                        height: if is_form { 0 } else { s.dict.int(b"Height").unwrap_or(0).clamp(0, u32::MAX as i64) as u32 },
+                        width: pixels[0],
+                        height: pixels[1],
                         stream: si,
                         op: i,
                         draw_matrix: ctm.0,
@@ -223,6 +249,9 @@ pub enum ImageChange {
     Transform([f64; 6]),
     /// Draw this image XObject instead, in the same place.
     Replace(ObjRef),
+    /// Keep only the part inside this user-space box (Acrobat: Crop Image). The rest is
+    /// clipped, not discarded, and the clip moves, turns and flips with later edits.
+    Crop([f64; 4]),
     Delete,
 }
 
@@ -246,6 +275,36 @@ pub fn turn_about_centre(rect: [f64; 4], quarters: i32, flip_h: bool, flip_v: bo
     let (a, b, c, d) = (a * fx, b * fy, c * fx, d * fy);
     // Translate the centre to the origin, turn, translate back.
     [a, b, c, d, cx - a * cx - c * cy, cy - b * cx - d * cy]
+}
+
+/// The XObject name the last `Do` in `ops` paints.
+fn op_name(ops: &[Op]) -> Option<String> {
+    ops.iter().rev().find(|o| o.op.as_slice() == b"Do").and_then(|o| o.name(0)).map(|n| String::from_utf8_lossy(n).into_owned())
+}
+
+/// The crop wrapper page resource `name` is, if it is one: its dictionary, content and resources.
+fn crop_wrapper(doc: &Document, page: &Dict, name: &str) -> Option<(Dict, Vec<Op>, Dict)> {
+    let resource = xobjects(doc, page).get(name.as_bytes()).cloned()?;
+    let obj = doc.resolve(&resource);
+    let Object::Stream(s) = &*obj else { return None };
+    cropped_image(doc, &s.dict)?;
+    let res = s.dict.get(b"Resources").map(|x| doc.resolve(x)).and_then(|x| x.as_dict().cloned()).unwrap_or_default();
+    Some((s.dict.clone(), parse(&s.decoded().ok()?).ops, res))
+}
+
+/// The page's resources with `target` added under `name`.
+fn add_xobject_ref(doc: &Document, page: &Dict, name: &str, target: ObjRef) -> (Dict, String) {
+    let mut res = page.get(b"Resources").map(|x| doc.resolve(x)).and_then(|x| x.as_dict().cloned()).unwrap_or_default();
+    let mut xo = res.get(b"XObject").map(|x| doc.resolve(x)).and_then(|x| x.as_dict().cloned()).unwrap_or_default();
+    xo.set(name.as_bytes().to_vec(), Object::Ref(target));
+    res.set(b"XObject".to_vec(), Object::Dict(xo));
+    (res, name.to_string())
+}
+
+/// Add `object` to the document and the page's resources as `{prefix}{number}`.
+fn add_xobject(doc: &mut Document, page: &Dict, prefix: &str, object: Object) -> (Dict, String) {
+    let r = doc.add(object);
+    add_xobject_ref(doc, page, &format!("{prefix}{}", r.num), r)
 }
 
 /// Change image `index` (from [`page_images`]) on `page`.
@@ -273,17 +332,76 @@ pub fn change_image(doc: &mut Document, page: usize, index: usize, change: &Imag
             }
             vec![Op::new("q", vec![]), Op::new("cm", m.0.iter().map(|v| pdfcraft_content::num(*v)).collect()), original, Op::new("Q", vec![])]
         }
+        ImageChange::Crop(keep) => {
+            let [x0, y0, x1, y1] = [keep[0].max(img.rect[0]), keep[1].max(img.rect[1]), keep[2].min(img.rect[2]), keep[3].min(img.rect[3])];
+            if !(x0.is_finite() && y0.is_finite() && x1.is_finite() && y1.is_finite()) || x1 - x0 < 0.01 || y1 - y0 < 0.01 {
+                return Err(EditError::Invalid("the crop must keep part of the image".into()));
+            }
+            // The kept box in the space the `Do` draws in (the wrapper's own space, as its
+            // Matrix is the identity), so it follows any later transform of the wrapper.
+            let inv = Matrix(img.draw_matrix).invert().ok_or_else(|| EditError::Invalid("the image has no area".into()))?;
+            let corners = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)].map(|(x, y)| inv.apply(x, y));
+            if !corners.iter().all(|(x, y)| x.is_finite() && y.is_finite()) {
+                return Err(EditError::Invalid("the image transform is too large".into()));
+            }
+            let fold = |f: fn(f64, f64) -> f64, k: fn(&(f64, f64)) -> f64| corners.iter().map(k).fold(k(&corners[0]), f);
+            let bbox = [fold(f64::min, |c| c.0), fold(f64::min, |c| c.1), fold(f64::max, |c| c.0), fold(f64::max, |c| c.1)];
+            let mut path = Vec::new();
+            for (i, (x, y)) in corners.iter().enumerate() {
+                path.push(Op::new(if i == 0 { "m" } else { "l" }, vec![pdfcraft_content::num(*x), pdfcraft_content::num(*y)]));
+            }
+            path.extend([Op::new("h", vec![]), Op::new("W", vec![]), Op::new("n", vec![])]);
+            // Cropping a crop again adds its clip to the existing wrapper's content, so there
+            // is only ever one wrapper around the bitmap.
+            let (body, inner_res) = match crop_wrapper(doc, &p.dict, &img.name) {
+                Some((_, ops, res)) => (ops, res),
+                None => {
+                    let target = xobjects(doc, &p.dict)
+                        .get(img.name.as_bytes())
+                        .cloned()
+                        .ok_or_else(|| EditError::Invalid("the image resource is missing".into()))?;
+                    let mut xo = Dict::new();
+                    xo.set(img.name.clone().into_bytes(), target);
+                    let mut res = Dict::new();
+                    res.set(b"XObject".to_vec(), Object::Dict(xo));
+                    (vec![original], res)
+                }
+            };
+            path.extend(body);
+            let mut form = Dict::new();
+            form.set(b"Type".to_vec(), Object::name("XObject"));
+            form.set(b"Subtype".to_vec(), Object::name("Form"));
+            form.set(b"BBox".to_vec(), Object::Array(bbox.iter().map(|v| pdfcraft_content::num(*v)).collect()));
+            form.set(b"Resources".to_vec(), Object::Dict(inner_res));
+            if let Some(bitmap) = img.object.filter(|_| !img.is_form) {
+                form.set(CROP_OF.to_vec(), Object::Ref(bitmap));
+            }
+            let (res, name) = add_xobject(doc, &p.dict, "PCCrop", Object::Stream(Stream::flate(form, &serialize_ops(&path))));
+            resources = Some(res);
+            vec![Op::new("Do", vec![Object::name(&name)])]
+        }
         ImageChange::Replace(r) => {
             if img.is_form {
                 return Err(EditError::Invalid(
                     "grouped Form artwork can be moved, resized, rotated, flipped or deleted; replacing it with a bitmap is not supported".into(),
                 ));
             }
-            let name = format!("PCImg{}", r.num);
-            let mut res = p.dict.get(b"Resources").map(|x| doc.resolve(x)).and_then(|x| x.as_dict().cloned()).unwrap_or_default();
-            let mut xo = res.get(b"XObject").map(|x| doc.resolve(x)).and_then(|x| x.as_dict().cloned()).unwrap_or_default();
-            xo.set(name.clone().into_bytes(), Object::Ref(*r));
-            res.set(b"XObject".to_vec(), Object::Dict(xo));
+            // A cropped bitmap keeps its crop: a copy of the wrapper draws the new bitmap.
+            let (res, name) = match crop_wrapper(doc, &p.dict, &img.name) {
+                Some((mut form, ops, mut inner_res)) => {
+                    let inner = op_name(&ops).ok_or_else(|| EditError::Invalid("the cropped image is missing".into()))?;
+                    let mut xo = inner_res.get(b"XObject").map(|x| doc.resolve(x)).and_then(|x| x.as_dict().cloned()).unwrap_or_default();
+                    xo.set(inner.into_bytes(), Object::Ref(*r));
+                    inner_res.set(b"XObject".to_vec(), Object::Dict(xo));
+                    form.set(b"Resources".to_vec(), Object::Dict(inner_res));
+                    form.set(CROP_OF.to_vec(), Object::Ref(*r));
+                    form.remove(b"Length");
+                    form.remove(b"Filter");
+                    form.remove(b"DecodeParms");
+                    add_xobject(doc, &p.dict, "PCCrop", Object::Stream(Stream::flate(form, &serialize_ops(&ops))))
+                }
+                None => add_xobject_ref(doc, &p.dict, &format!("PCImg{}", r.num), *r),
+            };
             resources = Some(res);
             vec![Op::new("Do", vec![Object::name(&name)])]
         }

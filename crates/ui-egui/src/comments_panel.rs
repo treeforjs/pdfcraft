@@ -237,7 +237,7 @@ impl Heights {
         let n = value.len();
         let mut tree = value.clone();
         for i in 1..=n {
-            let parent = i + (i & i.wrapping_neg());
+            let parent = i + i.isolate_lowest_one();
             if parent <= n {
                 let v = tree[i - 1];
                 tree[parent - 1] += v;
@@ -261,7 +261,7 @@ impl Heights {
         let mut j = i + 1;
         while let Some(t) = self.tree.get_mut(j - 1) {
             *t += delta;
-            j += j & j.wrapping_neg();
+            j += j.isolate_lowest_one();
         }
     }
 
@@ -271,7 +271,7 @@ impl Heights {
         let mut j = i.min(self.len());
         while j > 0 {
             s += self.tree.get(j - 1).copied().unwrap_or(0.0);
-            j -= j & j.wrapping_neg();
+            j -= j.isolate_lowest_one();
         }
         s
     }

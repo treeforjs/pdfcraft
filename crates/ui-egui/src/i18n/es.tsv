@@ -2142,3 +2142,4 @@ compare-page	Moved	Movida
 	{n} objects with unsaved changes are estimated, not measured in the file.	{n} objetos con cambios sin guardar se estiman, no se miden en el archivo.
 	{n} bytes of compressed object streams are shared out among their objects by decoded size.	{n} bytes de flujos de objetos comprimidos se reparten entre sus objetos según su tamaño descodificado.
 	This document does not allow copying text, so its paragraphs can't be opened for editing. Open it with the permissions password.	Este documento no permite copiar texto, así que sus párrafos no se pueden abrir para editarlos. Ábrelo con la contraseña de permisos.
+	Crop Image	Recortar imagen

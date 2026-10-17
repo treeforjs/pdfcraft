@@ -205,6 +205,15 @@ fn a_long_comparison_can_be_stopped() {
         app.run_compare();
     }
     h.run_steps(1);
+    // The worker reports its page count once it starts, which a slow machine may not have done
+    // after one frame.
+    for _ in 0..500 {
+        if h.state().compare_run.as_ref().and_then(|r| r.snapshot()).is_some_and(|(_, total, _)| total > 0) {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        h.run_steps(1);
+    }
     assert!(h.state().compare_run.is_some(), "still running");
     let (done, total, _) = h.state().compare_run.as_ref().unwrap().snapshot().unwrap();
     assert!(done < total, "{done} of {total}");

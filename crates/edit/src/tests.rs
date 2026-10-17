@@ -1046,6 +1046,54 @@ fn page_images_move_turn_replace_and_delete() {
 }
 
 #[test]
+fn cropping_a_page_image_hides_the_rest_and_moves_with_it() {
+    let mut doc = image_page();
+    images::change_image(&mut doc, 0, 0, &images::ImageChange::Crop([150.0, 120.0, 250.0, 500.0])).unwrap();
+    let doc = reopen(&doc);
+    let imgs = images::page_images(&doc, 0).unwrap();
+    assert_eq!(imgs.len(), 1);
+    // Clamped to the image; still the same 4 × 2 bitmap (Replace and Save Image As work).
+    assert!(close(imgs[0].rect, [150.0, 120.0, 250.0, 200.0]), "{:?}", imgs[0].rect);
+    assert!(!imgs[0].is_form);
+    assert_eq!((imgs[0].object, imgs[0].width, imgs[0].height), (Some(pdfcraft_cos::ObjRef::new(6, 0)), 4, 2));
+    assert_eq!(text::text_lines(&doc, 0).unwrap()[0].text, "Caption");
+    // Moving it moves the crop too.
+    let mut doc = doc;
+    let t = images::rect_to_rect(imgs[0].rect, [0.0, 0.0, 50.0, 40.0]);
+    images::change_image(&mut doc, 0, 0, &images::ImageChange::Transform(t)).unwrap();
+    let r = images::page_images(&doc, 0).unwrap()[0].rect;
+    assert!(close(r, [0.0, 0.0, 50.0, 40.0]), "{r:?}");
+    // Cropping again narrows the same wrapper rather than nesting another one.
+    images::change_image(&mut doc, 0, 0, &images::ImageChange::Crop([10.0, 0.0, 40.0, 40.0])).unwrap();
+    let doc = reopen(&doc);
+    let imgs = images::page_images(&doc, 0).unwrap();
+    assert!(close(imgs[0].rect, [10.0, 0.0, 40.0, 40.0]), "{:?}", imgs[0].rect);
+    let page = pdfcraft_model::pages(&doc)[0].clone();
+    let res = doc.resolve(page.dict.get(b"Resources").unwrap()).as_dict().cloned().unwrap();
+    let xo = doc.resolve(res.get(b"XObject").unwrap()).as_dict().cloned().unwrap();
+    let wrapper = doc.resolve(xo.get(imgs[0].name.as_bytes()).unwrap());
+    let Object::Stream(w) = &*wrapper else { panic!("a wrapper stream") };
+    let inner = doc.resolve(w.dict.get(b"Resources").unwrap()).as_dict().cloned().unwrap();
+    let inner = doc.resolve(inner.get(b"XObject").unwrap()).as_dict().cloned().unwrap();
+    assert_eq!(inner.get(b"Im0").and_then(|o| o.as_ref()), Some(pdfcraft_cos::ObjRef::new(6, 0)), "draws the bitmap directly");
+    // Replacing a cropped image keeps the crop.
+    let mut doc = doc;
+    let mut d = Dict::new();
+    for (k, v) in [(&b"Subtype"[..], Object::name("Image")), (b"Width", Object::Int(1)), (b"Height", Object::Int(1))] {
+        d.set(k.to_vec(), v);
+    }
+    let other = doc.add(Object::Stream(Stream::from_raw(d, vec![0])));
+    images::change_image(&mut doc, 0, 0, &images::ImageChange::Replace(other)).unwrap();
+    let imgs = images::page_images(&doc, 0).unwrap();
+    assert_eq!((imgs[0].object, imgs[0].width), (Some(other), 1));
+    assert!(close(imgs[0].rect, [10.0, 0.0, 40.0, 40.0]), "{:?}", imgs[0].rect);
+    // A crop that keeps nothing is refused and changes nothing.
+    assert!(images::change_image(&mut doc, 0, 0, &images::ImageChange::Crop([300.0, 300.0, 400.0, 400.0])).is_err());
+    assert!(images::change_image(&mut doc, 0, 0, &images::ImageChange::Crop([f64::NAN, 0.0, 1.0, 1.0])).is_err());
+    assert_eq!(images::page_images(&doc, 0).unwrap().len(), 1);
+}
+
+#[test]
 fn form_artwork_edits_only_the_selected_placement() {
     let mut doc = fixture(); // three pages share resources; pages 0 and 1 also share contents
     let mut form = Dict::new();
@@ -2874,7 +2922,7 @@ fn turned_paragraphs_group_rows_and_keep_the_rows_an_edit_does_not_reach() {
         assert_in_place(&before, &after, 0.."One two three four five six seven".len(), label);
         // Each row starts one line further along the text's own down direction.
         let t = before[0].trm;
-        for (row, first) in [b'e', b'i', b't'].into_iter().enumerate() {
+        for (row, first) in b"eit".iter().copied().enumerate() {
             let steps = (row + 1) as f64 * 12.0;
             let want = [before[0].at[0] - t[2] * steps, before[0].at[1] - t[3] * steps];
             assert!(
