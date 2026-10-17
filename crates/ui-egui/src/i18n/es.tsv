@@ -2185,3 +2185,14 @@ compare-page	Moved	Movida
 	Page {p}: {change}	Página {p}: {change}
 	Document: {change}	Documento: {change}
 	View this version	Ver esta versión
+	Only send form data to sites you trust. Nothing is sent unless you choose Send.	Envíe datos de formulario solo a sitios de confianza. No se envía nada a menos que elija Enviar.
+	Save Data As…	Guardar datos como…
+	Send	Enviar
+	Sending…	Enviando…
+	Submit Form	Enviar formulario
+	The whole document (PDF)	El documento completo (PDF)
+	This form wants to send its data to {host}:	Este formulario quiere enviar sus datos a {host}:
+	This form wants to send its data to:	Este formulario quiere enviar sus datos a:
+	{fields} as {format}	{fields} como {format}
+	{host} answered with HTTP {status}; the form may not have been received.	{host} respondió con HTTP {status}; puede que el formulario no se haya recibido.
+	The form was sent to {host}.	El formulario se envió a {host}.

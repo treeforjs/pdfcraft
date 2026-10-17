@@ -2292,3 +2292,14 @@ compare-page	Moved	Переміщена
 	Page {p}: {change}	Сторінка {p}: {change}
 	Document: {change}	Документ: {change}
 	View this version	Переглянути цю версію
+	Only send form data to sites you trust. Nothing is sent unless you choose Send.	Надсилайте дані форм лише на сайти, яким довіряєте. Нічого не надсилається, доки ви не виберете «Надіслати».
+	Save Data As…	Зберегти дані як…
+	Send	Надіслати
+	Sending…	Надсилання…
+	Submit Form	Надіслати форму
+	The whole document (PDF)	Увесь документ (PDF)
+	This form wants to send its data to {host}:	Ця форма хоче надіслати свої дані на {host}:
+	This form wants to send its data to:	Ця форма хоче надіслати свої дані на:
+	{fields} as {format}	{fields} у форматі {format}
+	{host} answered with HTTP {status}; the form may not have been received.	{host} відповів HTTP {status}; можливо, форму не отримано.
+	The form was sent to {host}.	Форму надіслано на {host}.

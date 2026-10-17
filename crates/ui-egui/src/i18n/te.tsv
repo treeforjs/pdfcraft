@@ -2200,3 +2200,14 @@ compare-page	Moved	తరలించబడింది
 	Page {p}: {change}	పేజీ {p}: {change}
 	Document: {change}	పత్రం: {change}
 	View this version	ఈ సంస్కరణను చూడండి
+	Only send form data to sites you trust. Nothing is sent unless you choose Send.	మీరు నమ్మే సైట్‌లకు మాత్రమే ఫారం డేటాను పంపండి. మీరు పంపు ఎంచుకునే వరకు ఏదీ పంపబడదు.
+	Save Data As…	డేటాను ఇలా సేవ్ చేయండి…
+	Send	పంపు
+	Sending…	పంపుతోంది…
+	Submit Form	ఫారంను సమర్పించు
+	The whole document (PDF)	మొత్తం పత్రం (PDF)
+	This form wants to send its data to {host}:	ఈ ఫారం తన డేటాను {host}కి పంపాలనుకుంటోంది:
+	This form wants to send its data to:	ఈ ఫారం తన డేటాను దీనికి పంపాలనుకుంటోంది:
+	{fields} as {format}	{format}గా {fields}
+	{host} answered with HTTP {status}; the form may not have been received.	{host} HTTP {status}తో సమాధానం ఇచ్చింది; ఫారం అందకపోయి ఉండవచ్చు.
+	The form was sent to {host}.	ఫారం {host}కి పంపబడింది.

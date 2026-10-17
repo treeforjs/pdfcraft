@@ -2155,3 +2155,14 @@ compare-page	Moved	已移動
 	Page {p}: {change}	第 {p} 頁：{change}
 	Document: {change}	文件：{change}
 	View this version	檢視此版本
+	Only send form data to sites you trust. Nothing is sent unless you choose Send.	僅將表單資料傳送到您信任的網站。除非您選擇「傳送」，否則不會傳送任何內容。
+	Save Data As…	將資料另存為…
+	Send	傳送
+	Sending…	正在傳送…
+	Submit Form	提交表單
+	The whole document (PDF)	整份文件 (PDF)
+	This form wants to send its data to {host}:	此表單要將其資料傳送到 {host}：
+	This form wants to send its data to:	此表單要將其資料傳送到：
+	{fields} as {format}	{fields}，格式為 {format}
+	{host} answered with HTTP {status}; the form may not have been received.	{host} 回應了 HTTP {status}；表單可能未被接收。
+	The form was sent to {host}.	表單已傳送到 {host}。

@@ -2231,3 +2231,14 @@ compare-page	Moved	Преместена
 	Page {p}: {change}	Страница {p}: {change}
 	Document: {change}	Документ: {change}
 	View this version	Преглед на тази версия
+	Only send form data to sites you trust. Nothing is sent unless you choose Send.	Изпращайте данни от формуляри само до сайтове, на които имате доверие. Нищо не се изпраща, докато не изберете „Изпращане“.
+	Save Data As…	Запазване на данните като…
+	Send	Изпращане
+	Sending…	Изпращане…
+	Submit Form	Изпращане на формуляра
+	The whole document (PDF)	Целият документ (PDF)
+	This form wants to send its data to {host}:	Този формуляр иска да изпрати данните си до {host}:
+	This form wants to send its data to:	Този формуляр иска да изпрати данните си до:
+	{fields} as {format}	{fields} като {format}
+	{host} answered with HTTP {status}; the form may not have been received.	{host} отговори с HTTP {status}; формулярът може да не е получен.
+	The form was sent to {host}.	Формулярът е изпратен до {host}.

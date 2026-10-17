@@ -2293,3 +2293,14 @@ compare-page	Moved	Přesunutá
 	Page {p}: {change}	Stránka {p}: {change}
 	Document: {change}	Dokument: {change}
 	View this version	Zobrazit tuto verzi
+	Only send form data to sites you trust. Nothing is sent unless you choose Send.	Data formulářů odesílejte jen na weby, kterým důvěřujete. Nic se neodešle, dokud nezvolíte Odeslat.
+	Save Data As…	Uložit data jako…
+	Send	Odeslat
+	Sending…	Odesílání…
+	Submit Form	Odeslat formulář
+	The whole document (PDF)	Celý dokument (PDF)
+	This form wants to send its data to {host}:	Tento formulář chce odeslat svá data na {host}:
+	This form wants to send its data to:	Tento formulář chce odeslat svá data na:
+	{fields} as {format}	{fields} jako {format}
+	{host} answered with HTTP {status}; the form may not have been received.	{host} odpověděl HTTP {status}; formulář možná nebyl přijat.
+	The form was sent to {host}.	Formulář byl odeslán na {host}.

@@ -2269,3 +2269,14 @@ compare-page	Moved	移動
 	Page {p}: {change}	{p} ページ: {change}
 	Document: {change}	文書: {change}
 	View this version	この版を表示
+	Only send form data to sites you trust. Nothing is sent unless you choose Send.	フォームのデータは信頼できるサイトにのみ送信してください。「送信」を選ぶまで何も送信されません。
+	Save Data As…	データに名前を付けて保存…
+	Send	送信
+	Sending…	送信中…
+	Submit Form	フォームを送信
+	The whole document (PDF)	文書全体 (PDF)
+	This form wants to send its data to {host}:	このフォームはデータを {host} に送信しようとしています:
+	This form wants to send its data to:	このフォームはデータを次に送信しようとしています:
+	{fields} as {format}	{format} 形式の {fields}
+	{host} answered with HTTP {status}; the form may not have been received.	{host} から HTTP {status} が返されました。フォームが受信されていない可能性があります。
+	The form was sent to {host}.	フォームを {host} に送信しました。

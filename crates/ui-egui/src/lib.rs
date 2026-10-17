@@ -50,6 +50,7 @@ mod search_ui;
 mod sign_ui;
 mod stamps_ui;
 mod standards_ui;
+mod submit_ui;
 mod zoom_snap;
 /// Header & footer / watermark / background dialog types (tests and automation).
 pub mod marks {
@@ -61,6 +62,7 @@ pub use create_ui::Clip;
 pub use link_ui::LinkDraft;
 pub use optimize_ui::{OptimizeDraft, OptimizeTab};
 pub use sign_ui::{DigitalIdEntry, SigProps, SigPropsTab, SignDraft, SignStep, property_rows as signature_property_rows};
+pub use submit_ui::SubmitDraft;
 mod autoscroll;
 mod bidi;
 pub mod bulk_fields;
@@ -300,6 +302,8 @@ pub enum Dialog {
     CertificateViewer,
     /// Signatures ▸ Signature Properties.
     SignatureProperties,
+    /// A Submit Form button asks before sending.
+    SubmitForm,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -501,6 +505,8 @@ pub struct PdfCraftApp {
     pub os_key_store_ids: bool,
     pub cert_viewer: Option<sign_ui::CertViewer>,
     pub sig_props: Option<sign_ui::SigProps>,
+    /// The pending Submit Form request (its dialog).
+    pub submit_draft: Option<submit_ui::SubmitDraft>,
     /// The last space audit (`None`: the document could not be measured).
     pub space_audit: Option<pdfcraft_engine::optimize::SpaceAudit>,
     /// Audit space usage was opened from the PDF Optimizer, so OK goes back to it.
@@ -754,6 +760,7 @@ impl PdfCraftApp {
             os_key_store_ids: false,
             cert_viewer: None,
             sig_props: None,
+            submit_draft: None,
             space_audit: None,
             audit_from_optimizer: false,
             combine_draft: Vec::new(),
@@ -1931,6 +1938,7 @@ impl eframe::App for PdfCraftApp {
         self.poll_export();
         self.poll_ocr();
         self.poll_signature_workflow();
+        self.poll_submit();
         self.poll_compare();
         self.poll_optimize();
         self.poll_action();

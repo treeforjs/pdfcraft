@@ -4371,11 +4371,11 @@ title = "Push buttons run their actions"
 area = "F"
 tier = "P0"
 milestone = "M6"
-status = "partial"
+status = "shipped"
 commands = ["form.fields"]
-tools = []
-evidence = ["crates/ui-egui/tests/buttons.rs::buttons_reset_navigate_and_print", "crates/forms/src/af.rs::common_button_scripts_are_recognised", "crates/ui-egui/tests/javascript.rs::button_scripts_run_and_alert"]
-notes = "Reset form, Named (print, page navigation), URI, Go to, and any JavaScript (run in the sandboxed engine); submit explained, not sent"
+tools = ["form_submit"]
+evidence = ["crates/ui-egui/tests/buttons.rs::buttons_reset_navigate_and_print", "crates/forms/src/af.rs::common_button_scripts_are_recognised", "crates/ui-egui/tests/javascript.rs::button_scripts_run_and_alert", "crates/ui-egui/tests/buttons.rs::submit_buttons_ask_then_send_or_save_the_data", "crates/automation/tests/automation.rs::submitting_a_form_saves_or_sends_its_data", "crates/forms/src/tests.rs::submit_actions_read_their_format_and_field_selection"]
+notes = "Reset form, Named (print, page navigation), URI, Go to, and any JavaScript (run in the sandboxed engine); Submit Form sends FDF, XFDF, HTML or PDF data to an http(s) URL after the user confirms, or saves it to a file"
 
 [[feature]]
 id = "form.field-navigation"

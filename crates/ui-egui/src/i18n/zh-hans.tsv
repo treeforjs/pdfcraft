@@ -2233,3 +2233,14 @@ compare-page	Moved	已移动
 	Page {p}: {change}	第 {p} 页：{change}
 	Document: {change}	文档：{change}
 	View this version	查看此版本
+	Only send form data to sites you trust. Nothing is sent unless you choose Send.	仅将表单数据发送到您信任的网站。除非您选择“发送”，否则不会发送任何内容。
+	Save Data As…	将数据另存为…
+	Send	发送
+	Sending…	正在发送…
+	Submit Form	提交表单
+	The whole document (PDF)	整个文档 (PDF)
+	This form wants to send its data to {host}:	此表单要将其数据发送到 {host}：
+	This form wants to send its data to:	此表单要将其数据发送到：
+	{fields} as {format}	{fields}，格式为 {format}
+	{host} answered with HTTP {status}; the form may not have been received.	{host} 返回了 HTTP {status}；表单可能未被接收。
+	The form was sent to {host}.	表单已发送到 {host}。

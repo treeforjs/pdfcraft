@@ -708,6 +708,10 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
                 }
                 return;
             }
+            Dialog::SubmitForm => {
+                close = crate::submit_ui::dialog(ui, app, &t);
+                return;
+            }
             Dialog::SignatureProperties => {
                 ui.set_width(620.0);
                 let sig = app.active_ids().and_then(|(_, id)| app.session.get(id)).and_then(|d| {
