@@ -610,7 +610,7 @@ pub fn right_panel(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
                         }
                     }
                     RightPanel::Signatures => {
-                        sig_action = crate::sign_ui::panel(ui, &t, &doc.signatures, sig_expanded);
+                        sig_action = crate::sign_ui::panel(ui, &t, &doc.signatures, &doc.revisions, sig_expanded);
                     }
                     RightPanel::Accessibility => {
                         a11y_action = crate::a11y_ui::panel(ui, &t, a11y, id);
@@ -690,6 +690,7 @@ pub fn right_panel(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
             }
         }
         Some(crate::sign_ui::PanelAction::ViewSigned(len)) => app.view_signed_version(len),
+        Some(crate::sign_ui::PanelAction::ViewRevision { revision, end }) => app.view_revision(revision, end),
         Some(crate::sign_ui::PanelAction::Sign(field)) => {
             let page = app.views[index].current;
             app.start_signing(page, None, Some(field), None);

@@ -86,7 +86,17 @@ impl Automation {
         let list: Vec<Value> = doc.signatures.iter().map(|s| self.sig_json(a, s)).collect::<Result<_>>()?;
         let signed = doc.signatures.iter().filter(|s| s.signed).count();
         let all_valid = signed > 0 && doc.signatures.iter().filter(|s| s.signed).all(|s| s.status == SignatureStatus::Valid);
-        Ok(json!({ "count": list.len(), "signed": signed, "all_valid": all_valid, "signatures": list }))
+        // The per-revision outline: what each saved revision changed, page by page.
+        let revisions: Vec<Value> = doc
+            .revisions
+            .iter()
+            .map(|r| {
+                let by = doc.signatures.iter().find(|s| s.signed && s.revision == r.revision).map(|s| s.field.as_str());
+                let changes: Vec<Value> = r.changes.iter().map(|c| json!({ "page": c.page.map(|p| p + 1), "kind": c.kind })).collect();
+                json!({ "revision": r.revision, "length": r.end, "signature": by, "changes": changes })
+            })
+            .collect();
+        Ok(json!({ "count": list.len(), "signed": signed, "all_valid": all_valid, "signatures": list, "revisions": revisions }))
     }
 
     pub(crate) fn sign_id_create(&mut self, a: &Args) -> Result<Value> {

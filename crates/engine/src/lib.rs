@@ -302,6 +302,9 @@ pub struct Document {
     pub links: Vec<pdfcraft_annot::links::LinkItem>,
     /// Signature fields, validated against the session's trust store (Signatures panel).
     pub signatures: Arc<Vec<SignatureInfo>>,
+    /// What each saved revision changed, page by page (the Signatures panel's per-revision
+    /// outline). Only listed for signed documents.
+    pub revisions: Arc<Vec<pdfcraft_sign::RevisionChanges>>,
     trust: Arc<TrustStore>,
     sig_cache: Arc<pdfcraft_sign::DigestCache>,
     editor: Option<Editor>,
@@ -2410,6 +2413,15 @@ fn xfa_values_from_datasets(doc: &mut pdfcraft_cos::Document) -> Result<Vec<Stri
     Ok(changed)
 }
 
+/// What each saved revision of a signed `cos` (written as `bytes`) changed; empty unless
+/// something in it is signed.
+fn revisions_of(cos: &pdfcraft_cos::Document, bytes: &[u8], signatures: &[SignatureInfo]) -> Arc<Vec<pdfcraft_sign::RevisionChanges>> {
+    if !signatures.iter().any(|s| s.signed) {
+        return Arc::default();
+    }
+    Arc::new(pdfcraft_sign::revision_changes(cos, bytes))
+}
+
 /// Validate the signature fields of `cos` (written as `bytes`).
 fn signatures_of(cos: &pdfcraft_cos::Document, bytes: &[u8], trust: &TrustStore, cache: &pdfcraft_sign::DigestCache) -> Arc<Vec<SignatureInfo>> {
     Arc::new(pdfcraft_sign::pdf::list_cached(cos, bytes, trust, cache))
@@ -2735,11 +2747,13 @@ impl Session {
         let added = editor.as_ref().map(|e| pdfcraft_edit::list_added(&e.cos)).unwrap_or_default();
         let links = editor.as_ref().map(|e| pdfcraft_annot::links::list(&e.cos)).unwrap_or_default();
         let sig_cache = Arc::new(pdfcraft_sign::DigestCache::default());
-        let signatures = editor
+        let (signatures, revisions) = editor
             .as_ref()
             .map(|e| {
                 let real = if certificate_secured(&e.cos) { e.cos.bytes() } else { &bytes };
-                signatures_of(&e.cos, real, &self.trust, &sig_cache)
+                let signatures = signatures_of(&e.cos, real, &self.trust, &sig_cache);
+                let revisions = revisions_of(&e.cos, real, &signatures);
+                (signatures, revisions)
             })
             .unwrap_or_default();
         self.next_id += 1;
@@ -2762,6 +2776,7 @@ impl Session {
             added,
             links,
             signatures,
+            revisions,
             trust: self.trust.clone(),
             sig_cache,
             editor,
@@ -2983,6 +2998,7 @@ impl Session {
         doc.form = form;
         if !doc.signatures.is_empty() {
             doc.signatures = signatures_of(&editor.cos, &real, &doc.trust, &doc.sig_cache);
+            doc.revisions = revisions_of(&editor.cos, &real, &doc.signatures);
         }
         doc.display = display_bytes(Some(editor), &bytes);
         doc.renderer = RenderPool::new(doc.display.clone(), render_threads(), doc.config.clone());
@@ -3026,6 +3042,7 @@ impl Session {
         doc.added = pdfcraft_edit::list_added(&editor.cos);
         doc.links = pdfcraft_annot::links::list(&editor.cos);
         doc.signatures = signatures_of(&editor.cos, &real, &doc.trust, &doc.sig_cache);
+        doc.revisions = revisions_of(&editor.cos, &real, &doc.signatures);
         doc.display = display_bytes(Some(editor), &bytes);
         doc.renderer = RenderPool::new(doc.display.clone(), render_threads(), doc.config.clone());
         doc.bytes = bytes;

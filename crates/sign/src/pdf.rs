@@ -306,6 +306,88 @@ impl SignatureInfo {
     }
 }
 
+/// At most this many of the latest revisions are compared for [`revision_changes`]: each
+/// comparison parses two revisions, and a hostile file can hold thousands.
+pub const MAX_OUTLINE_REVISIONS: usize = 32;
+
+/// One saved revision of a file and what it changed since the one before (the Signatures
+/// panel's per-revision outline).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RevisionChanges {
+    /// 1-based, counted as [`SignatureInfo::revision`] counts them.
+    pub revision: usize,
+    /// `bytes[..end]` is the file as this revision saved it ([`SignatureInfo::signed_len`] of
+    /// the signature that saved it).
+    pub end: usize,
+    /// What changed, page by page (document-level changes have no page), in page order.
+    pub changes: Vec<PageChange>,
+}
+
+/// One kind of change on one page (or to the document as a whole).
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct PageChange {
+    /// 0-based page, or `None` for the document as a whole.
+    pub page: Option<usize>,
+    /// The change as [`Modification`] names it ("comments", "form fill", "page content", …).
+    pub kind: String,
+}
+
+/// Every saved revision of `doc` (written as `bytes`) after the first, with what it changed,
+/// oldest first. Only the latest [`MAX_OUTLINE_REVISIONS`] are compared. A revision that
+/// can't be parsed is left out.
+pub fn revision_changes(doc: &Document, bytes: &[u8]) -> Vec<RevisionChanges> {
+    let ends: Vec<usize> = doc.revision_ends().into_iter().filter(|e| *e <= bytes.len()).collect();
+    let first = ends.len().saturating_sub(MAX_OUTLINE_REVISIONS + 1);
+    let open = |end: usize| bytes.get(..end).and_then(|b| Document::open(Arc::new(b.to_vec())).ok());
+    let mut out = Vec::new();
+    let mut prev = ends.get(first).and_then(|e| open(*e));
+    for end in ends.iter().skip(first + 1) {
+        let now = open(*end);
+        if let (Some(old), Some(new)) = (&prev, &now) {
+            // Numbered as signatures number the revision they sign: its cross-reference sections.
+            out.push(RevisionChanges { revision: new.revisions().len().max(1), end: *end, changes: page_changes(new, old) });
+        }
+        prev = now;
+    }
+    out
+}
+
+/// What `doc` changed since `old`, grouped by page.
+fn page_changes(doc: &Document, old: &Document) -> Vec<PageChange> {
+    // The page each page object, content stream and annotation belongs to.
+    let mut on_page: HashMap<ObjRef, usize> = annot_pages(doc);
+    for (i, p) in pdfcraft_annot::page_refs(doc).unwrap_or_default().into_iter().enumerate() {
+        on_page.insert(p, i);
+        match doc.get(p).as_dict().and_then(|d| d.get(b"Contents").cloned()) {
+            Some(Object::Ref(r)) => {
+                on_page.insert(r, i);
+                if let Object::Array(a) = &*doc.get(r) {
+                    for c in a.iter().filter_map(Object::as_ref) {
+                        on_page.insert(c, i);
+                    }
+                }
+            }
+            Some(Object::Array(a)) => {
+                for c in a.iter().filter_map(Object::as_ref) {
+                    on_page.insert(c, i);
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut out: Vec<PageChange> = Vec::new();
+    for (r, kind) in changed_objects(doc, old) {
+        let page = on_page.get(&r).copied().or_else(|| doc.get(r).as_dict().and_then(|d| d.reference(b"P")).and_then(|p| on_page.get(&p).copied()));
+        let change = PageChange { page, kind: kind.to_string() };
+        if !out.contains(&change) {
+            out.push(change);
+        }
+    }
+    // Page order, document-level changes last.
+    out.sort_by_key(|c| (c.page.is_none(), c.page, c.kind.clone()));
+    out
+}
+
 fn text(doc: &Document, d: &Dict, key: &[u8]) -> Option<String> {
     let o = doc.resolve(d.get(key)?);
     let s = match &*o {
@@ -1042,7 +1124,28 @@ fn classify_changes(doc: &Document, old: Option<Document>, p: Option<u8>) -> Mod
     let Some(old) = old else {
         return Modification::Disallowed(vec!["the signed version could not be read".into()]);
     };
-    let old_content: HashSet<ObjRef> = pdfcraft_annot::page_refs(&old)
+    let (mut allowed, mut disallowed): (Vec<&str>, Vec<&str>) = (Vec::new(), Vec::new());
+    for (_, kind) in changed_objects(doc, &old) {
+        let ok = match (kind, p) {
+            ("signature" | "document security store", _) => true,
+            ("form fill", Some(2 | 3) | None) => true,
+            ("comments", Some(3) | None) => true,
+            // Every save updates /Info (ModDate), signing included.
+            ("metadata", _) => true,
+            _ => false,
+        };
+        let list = if ok { &mut allowed } else { &mut disallowed };
+        if !list.contains(&kind) {
+            list.push(kind);
+        }
+    }
+    let own = |v: Vec<&str>| v.into_iter().map(str::to_string).collect::<Vec<_>>();
+    if disallowed.is_empty() { Modification::Allowed(own(allowed)) } else { Modification::Disallowed(own(disallowed)) }
+}
+
+/// Every object `doc` changed or added since `old`, with the kind of change it is.
+fn changed_objects(doc: &Document, old: &Document) -> Vec<(ObjRef, &'static str)> {
+    let old_content: HashSet<ObjRef> = pdfcraft_annot::page_refs(old)
         .unwrap_or_default()
         .into_iter()
         .flat_map(|pg| {
@@ -1059,8 +1162,8 @@ fn classify_changes(doc: &Document, old: Option<Document>, p: Option<u8>) -> Mod
         .collect();
     // The signed revision's document-level XMP stream.
     let old_metadata = old.root().and_then(|root| old.get(root).as_dict().and_then(|c| c.get(b"Metadata").and_then(Object::as_ref)));
-    let (mut allowed, mut disallowed): (Vec<&str>, Vec<&str>) = (Vec::new(), Vec::new());
-    let dss = dss_parts(doc, &old);
+    let mut out = Vec::new();
+    let dss = dss_parts(doc, old);
     // Stored at the same place in both (and not edited since): the same bytes, unchanged.
     let same_place = |num: u32| -> bool {
         use pdfcraft_cos::XrefEntry;
@@ -1088,7 +1191,7 @@ fn classify_changes(doc: &Document, old: Option<Document>, p: Option<u8>) -> Mod
         let kind = match &*new {
             // The Document Security Store's own arrays and dictionaries, when they only grew.
             _ if dss.contains(&num) => "document security store",
-            Object::Dict(d) => change_kind(doc, &old, d, before.as_deref().and_then(Object::as_dict)),
+            Object::Dict(d) => change_kind(doc, old, d, before.as_deref().and_then(Object::as_dict)),
             Object::Stream(s) => {
                 if old_content.contains(&r) {
                     "page content"
@@ -1106,21 +1209,9 @@ fn classify_changes(doc: &Document, old: Option<Document>, p: Option<u8>) -> Mod
             _ if before.is_none() => continue,
             _ => "other changes",
         };
-        let ok = match (kind, p) {
-            ("signature" | "document security store", _) => true,
-            ("form fill", Some(2 | 3) | None) => true,
-            ("comments", Some(3) | None) => true,
-            // Every save updates /Info (ModDate), signing included.
-            ("metadata", _) => true,
-            _ => false,
-        };
-        let list = if ok { &mut allowed } else { &mut disallowed };
-        if !list.contains(&kind) {
-            list.push(kind);
-        }
+        out.push((r, kind));
     }
-    let own = |v: Vec<&str>| v.into_iter().map(str::to_string).collect::<Vec<_>>();
-    if disallowed.is_empty() { Modification::Allowed(own(allowed)) } else { Modification::Disallowed(own(disallowed)) }
+    out
 }
 
 /// Where an object sits in the Document Security Store (ISO 32000-2 §12.8.4.3).
