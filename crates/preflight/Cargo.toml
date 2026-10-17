@@ -11,6 +11,7 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
+pdfcraft-content = { workspace = true }
 pdfcraft-cos = { workspace = true }
 pdfcraft-model = { workspace = true }
 pdfcraft-filters = { workspace = true }

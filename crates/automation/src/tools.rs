@@ -538,6 +538,22 @@ pub fn tools() -> Vec<ToolDef> {
             }),
             &["doc"],
         )),
+        t(
+            "print_total_area_coverage",
+            "Total area coverage",
+            "Output Preview's Total Area Coverage check: per page, the highest total ink (C+M+Y+K plus spot inks, 0-400%+), the area above limit (points² and % of the page) and the worst regions (rect from the top-left of the displayed page, plus pdf_rect in user space). Measured on a grid at dpi (lowered on very large pages). CMYK, Gray, Separation, DeviceN and Indexed colours are exact; RGB/Lab use a naive conversion without a press profile (converted_paints counts them); patterns, shadings, JPEG/JPX images and annotations are listed under unmeasured. Read-only.",
+        )
+        .ro()
+        .with(schema(
+            json!({
+                "doc": doc(),
+                "pages": { "type": "array", "items": { "type": "integer", "minimum": 1 }, "minItems": 1, "maxItems": 200, "description": "1-based pages to check (default: all, at most the first 200)." },
+                "limit": { "type": "number", "minimum": 1, "maximum": 2000, "description": "Total area coverage limit in percent (default 300)." },
+                "dpi": { "type": "number", "minimum": 9, "maximum": 300, "description": "Grid resolution in cells per inch (default 72)." },
+                "max_regions": { "type": "integer", "minimum": 1, "maximum": 50, "description": "Worst regions to list per page (default 5)." },
+            }),
+            &["doc"],
+        )),
         t("printers", "List printers", "The printers the system's print spooler knows (CUPS on macOS and Linux), with the default marked.").ro().with(schema(json!({}), &[])),
         t("printer_options", "List printer options", "A printer driver's own job options (CUPS: from its PPD), such as the paper tray, paper type or finishing: key, label, group, default and choices. Pass chosen values to doc_print as options. Empty on Windows, where the driver's preferences window holds them.")
             .ro()

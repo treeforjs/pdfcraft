@@ -3839,6 +3839,7 @@ version = "0.5.0"
 name = "pdfcraft-preflight"
 version = "0.5.0"
 dependencies = [
+ "pdfcraft-content",
  "pdfcraft-cos",
  "pdfcraft-filters",
  "pdfcraft-model",

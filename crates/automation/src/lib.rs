@@ -700,6 +700,7 @@ impl Automation {
             "redact_patterns" => self.redact_patterns(&a)?,
             "doc_hidden_info" => self.doc_hidden_info(&a)?,
             "printers" => self.printers()?,
+            "print_total_area_coverage" => self.total_area_coverage(&a)?,
             "printer_options" => self.printer_options(&a)?,
             "link_list" => self.link_list(&a)?,
             "link_add" => self.link_add(&a)?,

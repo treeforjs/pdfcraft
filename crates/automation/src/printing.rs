@@ -155,4 +155,53 @@ impl Automation {
         self.session.run_document_action(id, pdfcraft_engine::DocTrigger::DidPrint).map_err(failed)?;
         Ok(out)
     }
+
+    /// Output Preview's Total Area Coverage check (read-only).
+    pub(crate) fn total_area_coverage(&self, a: &Args) -> Result<Value> {
+        use pdfcraft_engine::preflight::CoverageOptions;
+        let doc = self.doc(a)?;
+        let defaults = CoverageOptions::default();
+        let max_regions = match a.opt_int("max_regions")? {
+            Some(n) => usize::try_from(n).map_err(|_| bad("max_regions must be between 1 and 50"))?,
+            None => defaults.max_regions,
+        };
+        let options =
+            CoverageOptions { limit: a.opt_num("limit")?.unwrap_or(defaults.limit), dpi: a.opt_num("dpi")?.unwrap_or(defaults.dpi), max_regions };
+        options.validate().map_err(bad)?;
+        let count = doc.info.pages.len();
+        let (pages, pages_truncated) = if a.get("pages").is_some() {
+            let pages = self.pages(a, "pages")?;
+            if pages.len() > MAX_COVERAGE_PAGES {
+                return Err(bad(format!("pages may list at most {MAX_COVERAGE_PAGES} pages per call")));
+            }
+            (pages, false)
+        } else {
+            ((0..count.min(MAX_COVERAGE_PAGES)).collect(), count > MAX_COVERAGE_PAGES)
+        };
+        let results = doc.ink_coverage(&pages, &options).map_err(failed)?;
+        let rect = |page: usize, r: [f64; 4]| -> Value {
+            let r32 = r.map(|v| v as f32);
+            json!(doc.info.pages.get(page).map_or(r32, |p| crate::comments::rect_to_view(p, r32)))
+        };
+        let list: Vec<Value> = results
+            .iter()
+            .map(|c| {
+                json!({
+                    "page": c.page + 1, "max": c.max, "flagged": c.flagged(), "over_area": c.over_area, "over_percent": c.over_percent,
+                    "region_count": c.region_count,
+                    "regions": c.regions.iter().map(|r| json!({ "rect": rect(c.page, r.bbox), "pdf_rect": r.bbox, "max": r.max, "area": r.area })).collect::<Vec<_>>(),
+                    "dpi": c.dpi, "exact_paints": c.exact_paints, "converted_paints": c.converted_paints,
+                    "unmeasured": c.unmeasured, "truncated": c.truncated,
+                })
+            })
+            .collect();
+        let flagged: Vec<usize> = results.iter().filter(|c| c.flagged()).map(|c| c.page + 1).collect();
+        Ok(json!({
+            "doc": doc.id.0, "limit": options.limit, "flagged_pages": flagged, "pages": list, "pages_truncated": pages_truncated,
+            "method": pdfcraft_engine::pdfa::coverage::METHOD,
+        }))
+    }
 }
+
+/// Pages `print_total_area_coverage` measures per call.
+const MAX_COVERAGE_PAGES: usize = 200;

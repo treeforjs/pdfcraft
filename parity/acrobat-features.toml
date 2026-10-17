@@ -8096,11 +8096,11 @@ title = "Total area coverage warning"
 area = "L"
 tier = "P1"
 milestone = "M11"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["print_total_area_coverage"]
+evidence = ["crates/preflight/src/coverage/tests.rs::rich_black_box_is_flagged_with_its_region", "crates/preflight/src/coverage/tests.rs::black_text_is_not_flagged", "crates/preflight/src/coverage/tests.rs::the_limit_decides_what_is_flagged", "crates/preflight/src/coverage/tests.rs::spot_and_devicen_inks_add_to_the_total", "crates/preflight/src/coverage/tests.rs::cmyk_and_indexed_images_are_sampled", "crates/preflight/src/coverage/tests.rs::huge_pages_and_resolutions_are_capped", "crates/engine/src/preflight/tests.rs::ink_coverage_reads_the_working_document_without_editing_it", "crates/automation/tests/coverage.rs::rich_black_is_flagged_with_regions_in_tool_coordinates", "crates/automation/tests/coverage.rs::black_text_page_is_not_flagged", "crates/automation/tests/coverage.rs::the_limit_and_region_count_are_parameters", "crates/automation/tests/coverage.rs::bad_arguments_are_rejected", "crates/automation/tests/coverage.rs::huge_pages_are_measured_at_a_capped_resolution"]
+notes = "Headless only: per page the maximum total ink (C+M+Y+K plus spot inks), the area over a limit (default 300%) in points² and % of the page, and the worst regions (capped), from PdfCraft's own bounded ink rasterizer on a grid (default 72 cells/inch, lowered to 4M cells on huge pages) because the renderer is RGB-only. Exact for DeviceCMYK, DeviceGray (as K), Separation (All = four plates), DeviceN, ICCBased with 1/4 components and Indexed over those, including uncompressed/Flate images; RGB, CalRGB and Lab use a naive full-GCR conversion with no press profile (never above 200%, so RGB rich blacks are under-reported; counted as converted_paints). Missing: the Output Preview panel and its on-page highlight, ICC/output-intent based conversion, overprint and transparency simulation (objects knock out), patterns, shadings, DCT/JPX/JBIG2/CCITT images and annotations (listed as unmeasured), exact clipping paths (bounding boxes) and glyph outlines (string boxes)."
 
 [[feature]]
 id = "print.color-warnings"

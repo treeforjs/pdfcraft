@@ -2,6 +2,7 @@
 
 use crate::{DocId, Edit, EditError, Session};
 pub use pdfcraft_preflight::analysis::{Finding, Fixup, Location, Profile, Report, Rule, Settings, Severity};
+pub use pdfcraft_preflight::coverage::{Options as CoverageOptions, PageCoverage, Region as CoverageRegion};
 
 #[derive(Clone, Debug)]
 pub struct ResultSet {
@@ -17,6 +18,22 @@ impl crate::Document {
             .map_err(|e| EditError::Invalid(format!("Preflight failed: {e}")))?
             .map_err(EditError::Invalid)?;
         Ok(ResultSet { document: self.id, revision: self.generation, report })
+    }
+
+    /// Total area coverage (Output Preview): the most ink each of `pages` (0-based) puts down
+    /// and where it exceeds `options.limit`. Read-only; see [`pdfcraft_preflight::coverage`]
+    /// for what is exact, what is converted from RGB and what is not measured.
+    pub fn ink_coverage(&self, pages: &[usize], options: &CoverageOptions) -> Result<Vec<PageCoverage>, EditError> {
+        options.validate().map_err(EditError::Invalid)?;
+        let editor = self.editor.as_ref().ok_or_else(|| EditError::ReadOnly(self.read_only_reason.clone().unwrap_or_default()))?;
+        pages
+            .iter()
+            .map(|&page| {
+                crate::guard(|| pdfcraft_preflight::coverage::page_coverage(&editor.cos, page, options))
+                    .map_err(|e| EditError::Invalid(format!("Ink coverage failed on page {}: {e}", page.saturating_add(1))))?
+                    .map_err(EditError::Invalid)
+            })
+            .collect()
     }
 }
 
