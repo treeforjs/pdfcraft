@@ -2285,3 +2285,5 @@ compare-page	Moved	Áthelyezve
 	Import list…	Lista importálása…
 	The list is too long: at most {n} entries of up to {m} characters each.	A lista túl hosszú: legfeljebb {n} bejegyzés, egyenként legfeljebb {m} karakter.
 	Remove Bates numbering	Bates-számozás eltávolítása
+	No hairlines to fix	Nincs javítandó hajszálvonal
+	Hairlines fixed: {n}	Javított hajszálvonalak: {n}

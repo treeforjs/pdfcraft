@@ -670,7 +670,9 @@ pub fn marks_present(doc: &Document) -> Vec<MarkKind> {
 }
 
 mod flatten;
+pub mod hairlines;
 pub use flatten::{flatten, flatten_fill_sign};
+pub use hairlines::{Hairlines, fix_hairlines};
 pub mod images;
 pub use images::{ImageChange, PageImage, change_image, page_images, reading_images, rect_to_rect, turn_about_centre};
 pub mod text;

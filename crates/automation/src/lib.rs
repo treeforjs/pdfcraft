@@ -223,6 +223,7 @@ impl Automation {
             "page_extract" => self.page_extract(&a)?,
             "doc_combine" => self.doc_combine(&a)?,
             "doc_bates_files" => self.doc_bates_files(&a)?,
+            "doc_fix_hairlines" => self.doc_fix_hairlines(&a)?,
             "doc_create_multiple" => self.doc_create_multiple(&a)?,
             "doc_split" => self.doc_split(&a)?,
             "edit_undo" => {
@@ -1581,6 +1582,25 @@ impl Automation {
             next = last.saturating_add(1);
         }
         Ok(json!({ "files": files, "next": next }))
+    }
+
+    /// Thicken strokes thinner than `thinner_than` points as printed to `replace_with` points.
+    fn doc_fix_hairlines(&mut self, a: &Args) -> Result<Value> {
+        let doc = self.doc(a)?;
+        let id = doc.id;
+        let pages = match a.opt_ints("pages")? {
+            Some(_) => self.pages(a, "pages")?,
+            None => (0..doc.info.pages.len()).collect(),
+        };
+        let d = pdfcraft_engine::Hairlines::default();
+        let settings = pdfcraft_engine::Hairlines {
+            thinner_than: a.opt_num("thinner_than")?.unwrap_or(d.thinner_than),
+            replace_with: a.opt_num("replace_with")?.unwrap_or(d.replace_with),
+        };
+        let fixed = self.session.hairline_count(id, &pages, &settings).map_err(failed)?;
+        let mut out = self.apply(a, Edit::FixHairlines { pages, settings })?;
+        out["fixed"] = json!(fixed);
+        Ok(out)
     }
 
     fn doc_combine(&mut self, a: &Args) -> Result<Value> {

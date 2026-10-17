@@ -2173,3 +2173,5 @@ compare-page	Moved	已移動
 	Import list…	匯入清單…
 	The list is too long: at most {n} entries of up to {m} characters each.	清單過長：最多 {n} 項，每項最多 {m} 個字元。
 	Remove Bates numbering	移除貝茨編號
+	No hairlines to fix	沒有需要修正的極細線
+	Hairlines fixed: {n}	已修正極細線：{n}

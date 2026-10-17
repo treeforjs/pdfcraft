@@ -2218,3 +2218,5 @@ compare-page	Moved	తరలించబడింది
 	Import list…	జాబితాను దిగుమతి చేయి…
 	The list is too long: at most {n} entries of up to {m} characters each.	జాబితా చాలా పెద్దది: గరిష్ఠంగా {n} ఎంట్రీలు, ఒక్కొక్కటి {m} అక్షరాల వరకు.
 	Remove Bates numbering	బేట్స్ సంఖ్యలను తీసివేయి
+	No hairlines to fix	సరిచేయాల్సిన అతి సన్నని గీతలు లేవు
+	Hairlines fixed: {n}	సరిచేసిన అతి సన్నని గీతలు: {n}
