@@ -26,8 +26,17 @@ jobs:
         # No macOS on PRs, main or nightly: the org's 5 macOS slots are kept for release builds,
         # and release.yml builds macOS (a failing release is fixed and rebuilt).
         os: [ubuntu-latest, windows-latest]
+    env:
+      # Full debug info for ~60 test binaries fills the hosted runner's disk; line tables keep
+      # backtraces readable at a fraction of the size.
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      CARGO_INCREMENTAL: 0
     steps:
       - uses: actions/checkout@v4
+
+      - name: Free disk space (Linux)
+        if: runner.os == 'Linux'
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
 
       # The optional craft-fonts build input (Japanese fonts), so the Japanese font tests run on
       # Linux; Windows tests the build without it.
