@@ -440,7 +440,7 @@ pub fn tools() -> Vec<ToolDef> {
             input["oneOf"] = json!([{ "required": ["field"] }, { "required": ["fields"] }]);
             input
         }),
-        t("form_tab_order", "Set the tab order", "Set the tab order of pages (default all): row (top to bottom, left to right), column, structure, or annotations (unspecified). Or order tabs manually: `field` with `move` earlier|later moves that field one place on its page. Returns the resulting order of fields. Undoable.")
+        t("form_tab_order", "Set the tab order", "Read or set the tab order of pages (default all). Without order or field, returns each page's order (pages: [{page, order}]). Set: row (top to bottom, left to right), column, structure, or annotations (unspecified). Or order tabs manually: `field` with `move` earlier|later moves that field one place on its page. Returns the resulting order of fields. Undoable.")
             .with(schema(
                 json!({ "doc": doc(), "order": { "type": "string", "enum": ["row", "column", "structure", "annotations"] }, "pages": pages("to set (default: all)"), "field": { "type": "string" }, "move": { "type": "string", "enum": ["earlier", "later"] } }),
                 &["doc"],

@@ -3127,11 +3127,11 @@ title = "Page tab order property"
 area = "D"
 tier = "P1"
 milestone = "M6"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["form.tab_order.row", "form.tab_order.column", "form.tab_order.structure"]
+tools = ["form_tab_order"]
+evidence = ["crates/forms/src/tests.rs::tab_order_follows_the_page_setting", "crates/automation/tests/automation.rs::tab_order_and_field_appearance_through_tools"]
+notes = "each page's /Tabs (row, column, structure, unspecified) read and set per page by engine and tools, one undo step. Missing: Page Properties dialog Tab Order tab (waits for the UI redesign)"
 
 [[feature]]
 id = "organize.page-actions"

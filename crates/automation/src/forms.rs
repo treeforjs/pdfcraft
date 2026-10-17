@@ -487,7 +487,19 @@ impl Automation {
             out["tab_order"] = self.tab_sequence(a)?;
             return Ok(out);
         }
-        let order = match a.str("order")? {
+        // Without an order, report each page's.
+        let Some(order) = a.opt_str("order")? else {
+            let label = |o: &pdfcraft_engine::TabOrder| match o {
+                pdfcraft_engine::TabOrder::Row => "row",
+                pdfcraft_engine::TabOrder::Column => "column",
+                pdfcraft_engine::TabOrder::Structure => "structure",
+                pdfcraft_engine::TabOrder::Annotations => "annotations",
+            };
+            let orders = self.doc(a)?.tab_orders();
+            let pages: Vec<Value> = pages.iter().filter_map(|&p| orders.get(p).map(|o| json!({ "page": p + 1, "order": label(o) }))).collect();
+            return Ok(json!({ "pages": pages, "tab_order": self.tab_sequence(a)? }));
+        };
+        let order = match order {
             "row" | "rows" => pdfcraft_engine::TabOrder::Row,
             "column" | "columns" => pdfcraft_engine::TabOrder::Column,
             "structure" => pdfcraft_engine::TabOrder::Structure,

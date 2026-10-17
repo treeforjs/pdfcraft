@@ -2846,6 +2846,16 @@ fn tab_order_and_field_appearance_through_tools() {
     assert_eq!(r["tab_order"], json!(["A", "B", "C"]), "ordered manually");
     let r = ok(&mut a, "form_tab_order", json!({ "doc": doc, "order": "column" }));
     assert_eq!(r["tab_order"], json!(["A", "C", "B"]));
+    // Each page keeps its own tab order (Page Properties ▸ Tab Order).
+    ok(&mut a, "form_tab_order", json!({ "doc": doc, "order": "structure", "pages": [3] }));
+    let r = ok(&mut a, "form_tab_order", json!({ "doc": doc }));
+    assert_eq!(
+        r["pages"],
+        json!([{ "page": 1, "order": "column" }, { "page": 2, "order": "column" }, { "page": 3, "order": "structure" }]),
+        "read per page"
+    );
+    let r = ok(&mut a, "form_tab_order", json!({ "doc": doc, "pages": [2] }));
+    assert_eq!(r["pages"], json!([{ "page": 2, "order": "column" }]));
     ok(
         &mut a,
         "form_set_props",
