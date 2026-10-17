@@ -675,6 +675,11 @@ fn rank_tabs(doc: &Document, pages: &[ObjRef], annot_index: &std::collections::H
     }
 }
 
+/// Each page's tab order (Page Properties ▸ Tab Order), in page order.
+pub fn tab_orders(doc: &Document) -> Vec<TabOrder> {
+    page_refs(doc).iter().map(|r| TabOrder::of(doc.get(*r).as_dict().and_then(|d| d.name(b"Tabs")))).collect()
+}
+
 /// Set the tab order of pages (0-based).
 pub fn set_tab_order(doc: &mut Document, pages: &[usize], order: TabOrder) -> Result<(), FormError> {
     let refs = page_refs(doc);

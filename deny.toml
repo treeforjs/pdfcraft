@@ -43,6 +43,13 @@ ignore = [
     # private-key operations use aws-lc-rs on native targets and are refused in the browser
     # (ADR-0009). Revisit when a fixed `rsa` ships.
     { id = "RUSTSEC-2023-0071", reason = "rsa is used for verification only (ADR-0009)" },
+    # zvariant, zbus_names and zvariant_derive were folded into zbus 6 and are no longer
+    # published on their own. They come in through eframe's Linux accessibility support
+    # (accesskit_unix, atspi), which has no zbus 6 release yet. Unmaintained, not vulnerable;
+    # revisit when egui moves to zbus 6.
+    { id = "RUSTSEC-2026-0370", reason = "zvariant via eframe/accesskit; no zbus 6 release of atspi yet" },
+    { id = "RUSTSEC-2026-0371", reason = "zbus_names via eframe/accesskit; no zbus 6 release of atspi yet" },
+    { id = "RUSTSEC-2026-0372", reason = "zvariant_derive via eframe/accesskit; no zbus 6 release of atspi yet" },
 ]
 
 # egui's default UI fonts (Ubuntu-Light, Hack, emoji-icon-font): font licences on the AGENTS.md

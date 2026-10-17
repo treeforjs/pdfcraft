@@ -610,6 +610,11 @@ impl Document {
         self.editor.as_ref().and_then(|e| pdfcraft_organize::page_transitions(&e.cos).ok()).unwrap_or_default()
     }
 
+    /// Each page's tab order (`/Tabs`), in page order.
+    pub fn tab_orders(&self) -> Vec<TabOrder> {
+        self.editor.as_ref().map(|e| pdfcraft_forms::tab_orders(&e.cos)).unwrap_or_default()
+    }
+
     /// Current value of a document-information entry (Title, Author, …).
     pub fn info_value(&self, key: &str) -> Option<String> {
         self.editor.as_ref().and_then(|e| pdfcraft_organize::info(&e.cos, key))
