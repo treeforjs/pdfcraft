@@ -751,7 +751,7 @@ pub fn tools() -> Vec<ToolDef> {
             .ro()
             .cmd("sign.digital")
             .with(schema(json!({}), &[])),
-        t("sign_document", "Sign a document", "Sign with a digital ID (a .p12/.pfx path, or on macOS a Keychain identity: \"keychain:<common name or fingerprint>\" from sign_keychain_ids, or on Windows a store identity: \"windows:<common name or fingerprint>\" from sign_windows_ids) and save the signed file to `out` (signing always saves, as in Acrobat; the document then shows the signed file). Sign an existing empty signature field (`field`), or a new one on `page` at `rect` (omit rect for an invisible signature). certify: no_changes, form_fill or comments makes a certification signature. PAdES B-B, SHA-256 (SHA-384 for P-384 keys).")
+        t("sign_document", "Sign a document", "Sign with a digital ID (a .p12/.pfx path, or on macOS a Keychain identity: \"keychain:<common name or fingerprint>\" from sign_keychain_ids, or on Windows a store identity: \"windows:<common name or fingerprint>\" from sign_windows_ids) and save the signed file to `out` (signing always saves, as in Acrobat; the document then shows the signed file). Sign an existing empty signature field (`field`), or a new one on `page` at `rect` (omit rect for an invisible signature). certify: no_changes, form_fill or comments makes a certification signature. lock (all, include or exclude, with lock_fields) makes the fields read-only once signed and records a FieldMDP lock, so later changes to them invalidate the signature; without it, a field's own lock (sign_field_lock) applies. lock_document: true permits no changes after signing. PAdES B-B, SHA-256 (SHA-384 for P-384 keys).")
             .cmd("sign.digital")
             .with(schema(
                 json!({
@@ -765,11 +765,25 @@ pub fn tools() -> Vec<ToolDef> {
                     "location": { "type": "string" },
                     "contact": { "type": "string" },
                     "certify": { "type": "string", "enum": ["no_changes", "form_fill", "comments"] },
+                    "lock": lock_schema(),
+                    "lock_fields": { "type": "array", "items": { "type": "string" }, "description": "The fields lock include or exclude names." },
+                    "lock_document": { "type": "boolean", "description": "Lock the document after signing: no further changes are permitted." },
                     "out": { "type": "string", "description": "Where to save the signed document." },
                     "timestamp_server": timestamp_server(),
                     "allow_network": {"type":"boolean","description":"Required true when timestamp_server is supplied."},
                 }),
                 &["doc", "id", "out"],
+            )),
+        t("sign_field_lock", "Set what a signature field locks", "Signature field properties ▸ Signed: choose the fields an unsigned signature field `field` makes read-only when it is signed: lock all, include or exclude (with lock_fields), or none to clear it. lock_document: true also permits no changes to the document after signing. Signature fields are never locked, so they can still be signed. Undoable.")
+            .with(schema(
+                json!({
+                    "doc": doc(),
+                    "field": { "type": "string" },
+                    "lock": lock_schema(),
+                    "lock_fields": { "type": "array", "items": { "type": "string" } },
+                    "lock_document": { "type": "boolean" },
+                }),
+                &["doc", "field"],
             )),
         t("sign_trust", "Trust certificates", "Add certificates (.cer/.crt/.pem/.der, or the certificates in a .p12 with `password`) to the trusted certificates used to validate signatures, or clear the list (clear: true). Every open document is revalidated. Returns the trusted list.").with(schema(
             json!({ "paths": { "type": "array", "items": { "type": "string" } }, "password": { "type": "string" }, "clear": { "type": "boolean" } }),
@@ -1443,4 +1457,8 @@ pub(crate) fn check_args(def: &ToolDef, args: &Value) -> Result<(), ToolError> {
         }
     }
     Ok(())
+}
+
+fn lock_schema() -> Value {
+    json!({ "type": "string", "enum": ["none", "all", "include", "exclude"], "description": "Which fields signing makes read-only: all, only lock_fields (include), all but lock_fields (exclude), or none." })
 }

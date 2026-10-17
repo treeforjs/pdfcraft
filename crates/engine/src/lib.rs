@@ -1261,6 +1261,12 @@ pub enum Edit {
         name: String,
         script: Option<String>,
     },
+    /// Signature field properties ▸ Signed: the fields (and, with permissions, the document) the
+    /// unsigned signature field `field` locks when signed; `None` clears it.
+    SetSignatureLock {
+        field: String,
+        lock: Option<pdfcraft_sign::FieldLock>,
+    },
     /// Field Properties ▸ a custom script: set or remove field `name`'s JavaScript for `event`
     /// (keystroke, format, validate, calculate or mouse_up).
     SetFieldScript {
@@ -1529,6 +1535,7 @@ impl Edit {
             Edit::ConvertPdfA { level } => format!("Save as {}", level.label()),
             Edit::PreflightFix { .. } => "Apply preflight fixes".into(),
             Edit::SetFieldScript { name, .. } => format!("Edit script of {name}"),
+            Edit::SetSignatureLock { field, .. } => format!("Set what {field} locks"),
             Edit::SetDocumentScript { script: None, .. } => "Delete document JavaScript".into(),
             Edit::SetDocumentScript { .. } => "Edit document JavaScript".into(),
             Edit::EditTextLine { .. } | Edit::EditTextBlock { .. } => "Edit text".into(),
@@ -1737,6 +1744,7 @@ fn check_permission(edit: &Edit, p: &pdfcraft_cos::Permissions) -> Result<(), Ed
         | Edit::DownsamplePageImages { .. }
         | Edit::SetDocumentScript { .. }
         | Edit::SetFieldScript { .. }
+        | Edit::SetSignatureLock { .. }
         | Edit::ConvertPdfA { .. }
         | Edit::PreflightFix { .. }
         | Edit::EditTextLine { .. }
@@ -2002,6 +2010,9 @@ fn run_edit(doc: &mut pdfcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -> 
         }
         Edit::EditTextLine { page, line, text } => {
             pdfcraft_edit::replace_line(doc, *page, *line, text)?;
+        }
+        Edit::SetSignatureLock { field, lock } => {
+            pdfcraft_sign::lock::set_field_lock(doc, field, lock.as_ref())?;
         }
         Edit::SetFieldScript { name, event, script } => {
             pdfcraft_forms::set_field_script(doc, name, event, script.as_deref())?;
