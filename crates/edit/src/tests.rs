@@ -2874,7 +2874,7 @@ fn turned_paragraphs_group_rows_and_keep_the_rows_an_edit_does_not_reach() {
         assert_in_place(&before, &after, 0.."One two three four five six seven".len(), label);
         // Each row starts one line further along the text's own down direction.
         let t = before[0].trm;
-        for (row, first) in [b'e', b'i', b't'].into_iter().enumerate() {
+        for (row, first) in b"eit".iter().copied().enumerate() {
             let steps = (row + 1) as f64 * 12.0;
             let want = [before[0].at[0] - t[2] * steps, before[0].at[1] - t[3] * steps];
             assert!(

@@ -280,7 +280,7 @@ fn objstm_members(stream: &Object) -> Option<(HashMap<u32, u64>, u64)> {
         .take(n.saturating_mul(2))
         .map(|t| std::str::from_utf8(t).ok()?.parse().ok())
         .collect::<Option<_>>()?;
-    let mut entries: Vec<(u32, u64)> = ints.chunks_exact(2).filter_map(|p| Some((u32::try_from(*p.first()?).ok()?, *p.get(1)?))).collect();
+    let mut entries: Vec<(u32, u64)> = ints.as_chunks::<2>().0.iter().filter_map(|p| Some((u32::try_from(*p.first()?).ok()?, *p.get(1)?))).collect();
     entries.sort_by_key(|e| e.1);
     let body = data.len().saturating_sub(first) as u64;
     let mut sizes = HashMap::new();

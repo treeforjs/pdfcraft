@@ -887,7 +887,7 @@ mod tests {
             let mut r = PageRenderer::new(std::sync::Arc::new(helvetica_page(content)), RenderConfig::default());
             let p = r.render(RenderRequest { page: 0, kind: RequestKind::Pixels, tile: None, scale: 1.0, tag: 0 });
             assert!(p.error.is_none(), "{:?}", p.error);
-            p.rgba.chunks_exact(4).filter(|px| px[..3] != [255, 255, 255]).count()
+            p.rgba.as_chunks::<4>().0.iter().filter(|px| px[..3] != [255, 255, 255]).count()
         };
         assert_eq!(render("BT /F1 40 Tf 3 Tr 20 200 Td (Hidden) Tj ET"), 0, "3 Tr");
         assert_eq!(render("BT /F1 40 Tf 7 Tr 20 200 Td (Clip) Tj ET"), 0, "7 Tr");

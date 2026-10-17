@@ -233,7 +233,7 @@ fn stroke_setup(style: &Stroke, pen: Affine, transform: Affine, canvas: Rect) ->
         if pattern.len() % 2 == 1 {
             pattern.extend_from_within(..);
         }
-        for pair in pattern.chunks_exact_mut(2) {
+        for pair in pattern.as_chunks_mut::<2>().0 {
             if let [on, off] = pair
                 && *on < DOT
                 && *off > 2.0 * DOT

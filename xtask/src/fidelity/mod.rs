@@ -474,7 +474,7 @@ pub fn parse_pam(d: &[u8]) -> Result<Rgb> {
     let data = d.get(end + 7..).context("PAM data")?;
     let len = checked_len(w, h, 4)?;
     let data = data.get(..len).context("PAM: truncated data")?;
-    let px = data.chunks_exact(4).flat_map(|p| [0, 1, 2].map(|c| p[c].saturating_add(255 - p[3]))).collect();
+    let px = data.as_chunks::<4>().0.iter().flat_map(|p| [0, 1, 2].map(|c| p[c].saturating_add(255 - p[3]))).collect();
     Ok(Rgb { w, h, px })
 }
 
