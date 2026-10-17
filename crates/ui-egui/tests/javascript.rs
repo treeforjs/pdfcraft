@@ -137,3 +137,42 @@ fn prepare_a_form_detects_fields_on_a_paper_form() {
     assert_eq!(names, ["Name", "Phone"]);
     assert_eq!(app.toast.clone().unwrap().0, "Detected 2 form fields");
 }
+
+#[test]
+fn script_dialogs_wait_for_the_user() {
+    let mut h = harness();
+    let id = h.state().active_ids().unwrap().1;
+    let script = "if (app.alert({ cMsg: 'Fill in the greeting?', nType: 2, cTitle: 'Greeting' }) == 4) \
+                  getField('greeting').value = app.response({ cQuestion: 'Greeting text', cDefault: 'Hi' });";
+    h.state_mut().run_button_script(id, "hello", script);
+    h.run_steps(2);
+    assert_eq!(h.state().dialog, Some(Dialog::JsQuestion));
+    h.get_by_label("Fill in the greeting?");
+    h.get_by_label("No");
+    h.get_by_label("Yes").click();
+    h.run_steps(2);
+    // The answer reran the script up to its next question.
+    assert_eq!(h.state().dialog, Some(Dialog::JsQuestion));
+    h.get_by_label("Greeting text");
+    assert_eq!(h.state().js_question.as_ref().unwrap().text, "Hi");
+    h.state_mut().js_question.as_mut().unwrap().text = "Welcome".into();
+    h.run_steps(2);
+    h.get_by_label("OK").click();
+    h.run_steps(2);
+    assert_eq!(h.state().dialog, None, "{:?}", h.state().js_question);
+    assert_eq!(value(&h, "greeting"), ["Welcome"]);
+
+    // Asked from the console, the dialog goes back to the console; No changes nothing.
+    assert!(h.state_mut().execute("tools.js_console"));
+    h.run_steps(2);
+    assert_eq!(h.state().dialog, Some(Dialog::JsConsole));
+    h.state_mut().js_console.input = script.into();
+    h.run_steps(2);
+    h.get_by_label("Run").click();
+    h.run_steps(2);
+    assert_eq!(h.state().dialog, Some(Dialog::JsQuestion), "{:?} {:?}", h.state().js_console.log, h.state().js_question);
+    h.get_by_label("No").click();
+    h.run_steps(2);
+    assert_eq!(h.state().dialog, Some(Dialog::JsConsole));
+    assert_eq!(value(&h, "greeting"), ["Welcome"]);
+}

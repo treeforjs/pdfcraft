@@ -2166,3 +2166,5 @@ compare-page	Moved	已移動
 	{fields} as {format}	{fields}，格式為 {format}
 	{host} answered with HTTP {status}; the form may not have been received.	{host} 回應了 HTTP {status}；表單可能未被接收。
 	The form was sent to {host}.	表單已傳送到 {host}。
+	Message from the document	來自文件的訊息
+	Asked by a script in this PDF	由此 PDF 中的指令碼提出

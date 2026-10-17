@@ -2,7 +2,7 @@
 //! the JavaScript console (⌘J), Document JavaScripts, and Preferences ▸ JavaScript.
 
 use egui::{Align, Layout};
-use pdfcraft_engine::js::{JsOutput, Request};
+use pdfcraft_engine::js::{Answer, Dialogs, JsOutput, Question, Request};
 use pdfcraft_engine::{DocId, Edit};
 
 use crate::theme::{self, Tokens};
@@ -13,6 +13,29 @@ use crate::{PdfCraftApp, widgets};
 pub struct JsConsole {
     pub input: String,
     pub log: Vec<String>,
+}
+
+/// A script stopped on a dialog: what to run again once the user answers.
+#[derive(Clone, Debug, PartialEq)]
+pub struct JsQuestion {
+    pub doc: DocId,
+    pub script: String,
+    /// The button the script belongs to (`None`: the console).
+    pub target: Option<String>,
+    pub answers: Vec<Answer>,
+    pub question: Question,
+    /// What is typed for `app.response`.
+    pub text: String,
+    /// The dialog to go back to afterwards (the console).
+    pub back: Option<crate::Dialog>,
+}
+
+/// The answer when a script's dialog is dismissed: Cancel, or No when there is no Cancel.
+pub fn cancel_answer(q: &Question) -> Answer {
+    match q {
+        Question::Response { .. } => Answer::Text(None),
+        Question::Alert { .. } => Answer::Button(if q.buttons().contains(&2) { 2 } else { 3 }),
+    }
 }
 
 /// Document JavaScripts: the script being edited.
@@ -37,6 +60,12 @@ impl PdfCraftApp {
         let view = self.views.iter().position(|v| v.id == id);
         for r in out.requests {
             match r {
+                // The engine has shown or hidden the layer already.
+                Request::SetLayer { .. } => {
+                    if let Some(i) = view {
+                        self.views[i].invalidate_content();
+                    }
+                }
                 Request::Print => self.open_print(),
                 Request::GoToPage(p) => {
                     if let Some(i) = view {
@@ -60,17 +89,64 @@ impl PdfCraftApp {
         if !self.commit_form_typing() {
             return;
         }
-        match self.session.run_javascript(id, script, Some(field)) {
+        self.run_script(id, script, Some(field), Vec::new());
+    }
+
+    /// Run `script` (a button's, or the console's when `target` is `None`) with the answers its
+    /// dialogs have had so far; a new question opens its dialog and waits.
+    fn run_script(&mut self, id: DocId, script: &str, target: Option<&str>, answers: Vec<Answer>) {
+        let dialogs = Dialogs { interactive: true, answers };
+        match self.session.run_javascript_with(id, script, target, &dialogs) {
             Ok(o) => {
+                if let Some(question) = o.question {
+                    let text = match &question {
+                        Question::Response { default, .. } => default.clone(),
+                        Question::Alert { .. } => String::new(),
+                    };
+                    let back = self.dialog.filter(|d| *d != crate::Dialog::JsQuestion);
+                    self.js_question = Some(JsQuestion {
+                        doc: id,
+                        script: script.to_string(),
+                        target: target.map(str::to_string),
+                        answers: dialogs.answers,
+                        question,
+                        text,
+                        back,
+                    });
+                    self.dialog = Some(crate::Dialog::JsQuestion);
+                    return;
+                }
                 if let Some(i) = self.views.iter().position(|v| v.id == id)
                     && let Some(info) = self.session.get(id).map(|d| d.info.clone())
                 {
                     self.views[i].document_changed(&info);
                 }
-                let out = JsOutput { alerts: o.alerts, console: o.console, requests: o.requests, errors: o.error.into_iter().collect() };
-                self.handle_js(id, out);
+                let console = target.is_none();
+                let (error, result) = (o.error.clone(), o.result.clone());
+                let errors = if console { Vec::new() } else { o.error.into_iter().collect() };
+                self.handle_js(id, JsOutput { alerts: o.alerts, console: o.console, requests: o.requests, errors });
+                if console {
+                    match error {
+                        Some(e) => self.js_console.log.push(format!("Error: {e}")),
+                        None => self.js_console.log.extend(result),
+                    }
+                }
             }
-            Err(e) => self.notify_fmt("{field}: {e}", &[("field", field), ("e", &e.to_string())]),
+            Err(e) => match target {
+                Some(field) => self.notify_fmt("{field}: {e}", &[("field", field), ("e", &e.to_string())]),
+                None => self.js_console.log.push(format!("Error: {e}")),
+            },
+        }
+    }
+
+    /// The user answered the dialog a script is waiting on: go back to where it was asked
+    /// from and run the script again with the answer.
+    pub fn answer_js_question(&mut self, answer: Answer) {
+        let Some(mut q) = self.js_question.take() else { return };
+        self.dialog = q.back;
+        q.answers.push(answer);
+        if self.session.get(q.doc).is_some() {
+            self.run_script(q.doc, &q.script, q.target.as_deref(), q.answers);
         }
     }
 
@@ -95,27 +171,13 @@ impl PdfCraftApp {
 
     /// The console's Run: evaluate the input in the active document.
     pub fn run_console(&mut self) {
-        let Some((i, id)) = self.active_ids() else { return };
+        let Some((_, id)) = self.active_ids() else { return };
         let script = self.js_console.input.clone();
         if script.trim().is_empty() {
             return;
         }
         self.js_console.log.push(format!("> {}", script.trim()));
-        match self.session.run_javascript(id, &script, None) {
-            Ok(o) => {
-                if let Some(info) = self.session.get(id).map(|d| d.info.clone()) {
-                    self.views[i].document_changed(&info);
-                }
-                let (error, result) = (o.error.clone(), o.result.clone());
-                let out = JsOutput { alerts: o.alerts, console: o.console, requests: o.requests, errors: Vec::new() };
-                self.handle_js(id, out);
-                match error {
-                    Some(e) => self.js_console.log.push(format!("Error: {e}")),
-                    None => self.js_console.log.extend(result),
-                }
-            }
-            Err(e) => self.js_console.log.push(format!("Error: {e}")),
-        }
+        self.run_script(id, &script, None, Vec::new());
     }
 }
 
@@ -136,6 +198,73 @@ fn buttons(ui: &mut egui::Ui, primary: &str, others: &[&str]) -> Option<String> 
         })
     });
     clicked
+}
+
+/// A script's dialog: its message and buttons, or a line to type for `app.response`. Returns
+/// the answer once one is given.
+pub(crate) fn question_body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> Option<Answer> {
+    let Some(q) = app.js_question.as_mut() else { return Some(Answer::Text(None)) };
+    let (title, message) = match &q.question {
+        Question::Alert { title, message, .. } | Question::Response { title, question: message, .. } => (title.clone(), message.clone()),
+    };
+    // Scripts name the dialog; one that doesn't is labelled for what asked.
+    let title = if title.trim().is_empty() { tl!("Message from the document").to_string() } else { title };
+    ui.label(egui::RichText::new(title).font(theme::semibold(18.0)));
+    ui.label(egui::RichText::new(tl!("Asked by a script in this PDF")).small().color(t.text_muted));
+    ui.add_space(8.0);
+    ui.label(message);
+    ui.add_space(10.0);
+    let mut answer = None;
+    match q.question.clone() {
+        Question::Response { label, password, .. } => {
+            let mut submit = false;
+            ui.horizontal(|ui| {
+                if !label.is_empty() {
+                    ui.label(&label);
+                }
+                let edit = ui.add(
+                    egui::TextEdit::singleline(&mut q.text)
+                        .password(password)
+                        .desired_width(ui.available_width())
+                        .id_salt("js-response")
+                        .char_limit(4096),
+                );
+                // Ready to type into when it opens, without holding focus against the buttons.
+                if ui.memory(|m| m.focused().is_none()) {
+                    edit.request_focus();
+                }
+                submit = edit.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+            });
+            ui.add_space(10.0);
+            match buttons(ui, "OK", &["Cancel"]).as_deref() {
+                Some("OK") => answer = Some(Answer::Text(Some(q.text.clone()))),
+                Some("Cancel") => answer = Some(Answer::Text(None)),
+                _ if submit => answer = Some(Answer::Text(Some(q.text.clone()))),
+                _ => {}
+            }
+        }
+        Question::Alert { .. } => {
+            let names: Vec<(&str, i32)> = q
+                .question
+                .buttons()
+                .iter()
+                .map(|b| match b {
+                    1 => ("OK", 1),
+                    2 => ("Cancel", 2),
+                    3 => ("No", 3),
+                    _ => ("Yes", 4),
+                })
+                .collect();
+            // The first button (OK or Yes) is the primary one; the rest follow it.
+            if let Some(((primary, _), rest)) = names.split_first() {
+                let others: Vec<&str> = rest.iter().rev().map(|(n, _)| *n).collect();
+                if let Some(clicked) = buttons(ui, primary, &others) {
+                    answer = names.iter().find(|(n, _)| *n == clicked).map(|(_, b)| Answer::Button(*b));
+                }
+            }
+        }
+    }
+    answer
 }
 
 /// The JavaScript console. Returns `true` to close.

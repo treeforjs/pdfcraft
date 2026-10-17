@@ -2196,3 +2196,5 @@ compare-page	Moved	Movida
 	{fields} as {format}	{fields} como {format}
 	{host} answered with HTTP {status}; the form may not have been received.	{host} respondió con HTTP {status}; puede que el formulario no se haya recibido.
 	The form was sent to {host}.	El formulario se envió a {host}.
+	Message from the document	Mensaje del documento
+	Asked by a script in this PDF	Lo pregunta un script de este PDF

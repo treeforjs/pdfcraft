@@ -2244,3 +2244,5 @@ compare-page	Moved	已移动
 	{fields} as {format}	{fields}，格式为 {format}
 	{host} answered with HTTP {status}; the form may not have been received.	{host} 返回了 HTTP {status}；表单可能未被接收。
 	The form was sent to {host}.	表单已发送到 {host}。
+	Message from the document	来自文档的消息
+	Asked by a script in this PDF	由此 PDF 中的脚本提出

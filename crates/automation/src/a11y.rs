@@ -386,13 +386,65 @@ fn request_json(r: &pdfcraft_engine::js::Request) -> Value {
         R::Focus(f) => json!({ "focus": f }),
         R::Beep => json!({ "beep": true }),
         R::SaveAs => json!({ "save_as": true }),
+        R::SetLayer { index, on } => json!({ "layer": index, "visible": on }),
     }
+}
+
+/// A dialog a script waits on, for `js_run`.
+fn question_json(q: &pdfcraft_engine::js::Question) -> Value {
+    use pdfcraft_engine::js::Question as Q;
+    let buttons: Vec<&str> = q
+        .buttons()
+        .iter()
+        .map(|b| match b {
+            1 => "ok",
+            2 => "cancel",
+            3 => "no",
+            _ => "yes",
+        })
+        .collect();
+    match q {
+        Q::Alert { message, title, .. } => json!({ "kind": "alert", "message": message, "title": title, "buttons": buttons }),
+        Q::Response { question, title, default, label, password } => {
+            json!({ "kind": "response", "message": question, "title": title, "default": default, "label": label, "password": password })
+        }
+    }
+}
+
+/// `js_run`'s `answers`: a button name (yes, no, ok, cancel) for an alert, text or null for
+/// app.response.
+fn answers(a: &Args) -> Result<Vec<pdfcraft_engine::js::Answer>> {
+    use pdfcraft_engine::js::Answer;
+    let Some(list) = a.get("answers") else { return Ok(Vec::new()) };
+    let list = list.as_array().ok_or_else(|| Args::wrong("answers", "an array"))?;
+    list.iter()
+        .map(|v| match v {
+            Value::Null => Ok(Answer::Text(None)),
+            Value::Object(o) => match o.get("text") {
+                Some(Value::String(t)) => Ok(Answer::Text(Some(t.clone()))),
+                Some(Value::Null) => Ok(Answer::Text(None)),
+                _ => Err(Args::wrong("answers", "button names, {\"text\": …} objects or null")),
+            },
+            Value::String(b) => match b.to_ascii_lowercase().as_str() {
+                "ok" => Ok(Answer::Button(1)),
+                "cancel" => Ok(Answer::Button(2)),
+                "no" => Ok(Answer::Button(3)),
+                "yes" => Ok(Answer::Button(4)),
+                _ => Err(Args::wrong("answers", "button names (yes, no, ok, cancel), {\"text\": …} objects or null")),
+            },
+            _ => Err(Args::wrong("answers", "button names, {\"text\": …} objects or null")),
+        })
+        .collect()
 }
 
 impl Automation {
     pub(crate) fn js_run(&mut self, a: &Args) -> Result<Value> {
         let id = self.doc(a)?.id;
-        let o = self.session.run_javascript(id, a.str("script")?, a.opt_str("field")?).map_err(failed)?;
+        let dialogs = pdfcraft_engine::js::Dialogs { interactive: true, answers: answers(a)? };
+        let o = self.session.run_javascript_with(id, a.str("script")?, a.opt_str("field")?, &dialogs).map_err(failed)?;
+        if let Some(q) = &o.question {
+            return Ok(json!({ "question": question_json(q), "answered": dialogs.answers.len() }));
+        }
         let reqs: Vec<Value> = o.requests.iter().map(request_json).collect();
         Ok(json!({ "alerts": o.alerts, "console": o.console, "requests": reqs, "error": o.error, "result": o.result }))
     }

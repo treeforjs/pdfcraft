@@ -3,11 +3,15 @@
 //! input run on request ([`Session::run_javascript`]). What scripts ask of the viewer (alerts,
 //! printing, navigation, links) is kept for the front end in [`JsOutput`].
 //!
+//! Button actions and console input can change comments (`getAnnots`, `addAnnot`) and show or
+//! hide layers (`getOCGs`), and can stop on a dialog that needs an answer
+//! ([`Session::run_javascript_with`]).
+//!
 //! Preferences ▸ JavaScript ▸ Enable Acrobat JavaScript is [`Session::set_javascript`]; with it
 //! off, scripts don't run and AF calls keep working natively.
 
 use pdfcraft_forms::{Field, FieldChange, FieldEvent, FieldKind, ScriptResult, Scripts};
-pub use pdfcraft_js::{Limits, Outcome, Request};
+pub use pdfcraft_js::{Answer, Dialogs, Limits, Outcome, Question, Request};
 
 use crate::{DocId, Edit, EditError, Session};
 
@@ -112,7 +116,13 @@ pub struct JsRunner {
 
 impl JsRunner {
     pub fn new(cos: &pdfcraft_cos::Document, file_name: &str) -> JsRunner {
-        let doc = pdfcraft_js::DocInfo { file_name: file_name.to_string(), num_pages: pdfcraft_model::pages(cos).len(), page: 0, info: info(cos) };
+        let doc = pdfcraft_js::DocInfo {
+            file_name: file_name.to_string(),
+            num_pages: pdfcraft_model::pages(cos).len(),
+            page: 0,
+            info: info(cos),
+            ..Default::default()
+        };
         JsRunner { doc, doc_scripts: pdfcraft_forms::document_scripts(cos), output: JsOutput::default(), cos: cos.clone() }
     }
 }
@@ -144,6 +154,67 @@ impl Scripts for JsRunner {
             value: o.value.clone(),
             changes: changes(&states, &after),
             message: (!o.rc).then(|| o.alerts.last().cloned()).flatten(),
+        }
+    }
+}
+
+/// The comments as `this.getAnnots()` lists them.
+fn annot_states(cos: &pdfcraft_cos::Document) -> Vec<pdfcraft_js::AnnotState> {
+    pdfcraft_annot::summaries(cos)
+        .into_iter()
+        .map(|a| pdfcraft_js::AnnotState {
+            page: a.page,
+            index: a.index,
+            name: a.name.unwrap_or_default(),
+            kind: a.subtype,
+            author: a.author.unwrap_or_default(),
+            contents: a.contents.unwrap_or_default(),
+            rect: a.rect.map(f64::from),
+            locked: a.locked,
+        })
+        .collect()
+}
+
+/// The edits for a comment change a script made.
+fn annot_edits(c: &pdfcraft_js::AnnotChange) -> Vec<Edit> {
+    use pdfcraft_annot::{LineEnding, Markup, NewAnnotation, NoteIcon, Shape, Style};
+    use pdfcraft_js::AnnotChange as C;
+    match c {
+        C::Set { page, index, contents, author } => {
+            let mut edits = Vec::new();
+            if let Some(text) = contents {
+                edits.push(Edit::SetAnnotationContents { page: *page, index: *index, text: text.clone() });
+            }
+            if author.is_some() {
+                edits.push(Edit::SetAnnotationInfo { page: *page, index: *index, author: author.clone(), subject: None, icon: None });
+            }
+            edits
+        }
+        C::Delete { page, index } => vec![Edit::DeleteAnnotation { page: *page, index: *index }],
+        C::Add(a) => {
+            let r = a.rect;
+            let shape = match a.kind.as_str() {
+                "Text" => Shape::Note { at: [r[0], r[3]], icon: NoteIcon::default() },
+                "FreeText" => Shape::TextBox { rect: r, font_size: a.text_size.unwrap_or(12.0) },
+                "Circle" => Shape::Oval { rect: r },
+                "Line" => {
+                    let (from, to) = match a.points[..] {
+                        [from, to] => (from, to),
+                        _ => ([r[0], r[1]], [r[2], r[3]]),
+                    };
+                    Shape::Line { from, to, start: LineEnding::None, end: LineEnding::None }
+                }
+                "Highlight" => Shape::TextMarkup { kind: Markup::Highlight, quads: a.quads.clone() },
+                "Underline" => Shape::TextMarkup { kind: Markup::Underline, quads: a.quads.clone() },
+                "StrikeOut" => Shape::TextMarkup { kind: Markup::StrikeOut, quads: a.quads.clone() },
+                "Squiggly" => Shape::TextMarkup { kind: Markup::Squiggly, quads: a.quads.clone() },
+                _ => Shape::Rectangle { rect: r },
+            };
+            let mut style = Style::default_for(&shape);
+            if let Some(c) = a.color {
+                style.color = c;
+            }
+            vec![Edit::AddAnnotation(NewAnnotation { page: a.page, shape, style, contents: a.contents.clone(), author: a.author.clone() })]
         }
     }
 }
@@ -183,12 +254,20 @@ impl Session {
     /// Run `script` in document `id`, for a button (`target`: the field, event "Mouse Up") or
     /// the console (no target). Field changes and `resetForm` are applied as one undoable step;
     /// everything else the script asked for is returned.
+    /// Dialogs that need an answer get Cancel or No.
     pub fn run_javascript(&mut self, id: DocId, script: &str, target: Option<&str>) -> Result<Outcome, EditError> {
-        self.run_script_event(id, script, target, pdfcraft_forms::Trigger::MouseUp.event_name())
+        self.run_javascript_with(id, script, target, &Dialogs::default())
+    }
+
+    /// [`Session::run_javascript`] with `dialogs` answering `app.alert` buttons and
+    /// `app.response`. When the script stops on a question ([`Outcome::question`]) nothing is
+    /// applied: ask the user and run it again with the answer added.
+    pub fn run_javascript_with(&mut self, id: DocId, script: &str, target: Option<&str>, dialogs: &Dialogs) -> Result<Outcome, EditError> {
+        self.run_script_event(id, script, target, pdfcraft_forms::Trigger::MouseUp.event_name(), dialogs)
     }
 
     /// [`Session::run_javascript`] for a field event named `event` (`event.name`).
-    fn run_script_event(&mut self, id: DocId, script: &str, target: Option<&str>, event: &str) -> Result<Outcome, EditError> {
+    fn run_script_event(&mut self, id: DocId, script: &str, target: Option<&str>, event: &str, dialogs: &Dialogs) -> Result<Outcome, EditError> {
         if self.js_off {
             return Err(EditError::Invalid("JavaScript is turned off (Preferences ▸ JavaScript)".into()));
         }
@@ -211,14 +290,19 @@ impl Session {
                 ..Default::default()
             });
         }
-        let runner = JsRunner::new(&cos, &doc.name);
+        let mut runner = JsRunner::new(&cos, &doc.name);
+        runner.doc.annots = annot_states(&cos);
+        runner.doc.layers = doc.info.layers.iter().map(|l| pdfcraft_js::LayerState { name: l.name.clone(), on: l.visible }).collect();
         let fields = pdfcraft_forms::fields(&cos);
         let states: Vec<_> = fields.iter().map(|f| field_state(&cos, f)).collect();
         let event = match target {
             Some(t) => pdfcraft_js::Event { will_commit: false, ..pdfcraft_js::Event::field(event, t, "") },
             None => pdfcraft_js::Event::doc("Console"),
         };
-        let mut o = pdfcraft_js::run(script, &event, &runner.doc, &states, &runner.doc_scripts, Limits::default());
+        let mut o = pdfcraft_js::run_with(script, &event, &runner.doc, &states, &runner.doc_scripts, Limits::default(), dialogs);
+        if o.question.is_some() {
+            return Ok(o);
+        }
         let after: Vec<_> = states.iter().map(|s| o.changed.iter().find(|c| c.name == s.name).unwrap_or(s).clone()).collect();
         let changes = changes(&states, &after);
         let resets: Vec<Vec<String>> = o
@@ -240,8 +324,15 @@ impl Session {
                 .then(|| all.iter().filter(|n| names.iter().any(|x| *n == x || n.starts_with(&format!("{x}.")))).cloned().collect());
             edits.push(Edit::ResetForm { names });
         }
+        edits.extend(o.annots.iter().flat_map(annot_edits));
         if !edits.is_empty() {
             self.apply(id, Edit::Batch { label: "Run JavaScript".into(), edits })?;
+        }
+        // Layer visibility is a view setting, as in the Layers panel: not part of the undo step.
+        for r in &o.requests {
+            if let Request::SetLayer { index, on } = r {
+                self.set_layer_visible(id, *index, *on);
+            }
         }
         Ok(o)
     }
@@ -273,7 +364,7 @@ impl Session {
                         out.skipped.push(format!("{} (JavaScript is turned off)", a.describe()));
                         continue;
                     }
-                    let o = self.run_script_event(id, script, Some(field), trigger.event_name())?;
+                    let o = self.run_script_event(id, script, Some(field), trigger.event_name(), &Dialogs::default())?;
                     out.alerts.extend(o.alerts);
                     out.console.extend(o.console);
                     out.errors.extend(o.error);

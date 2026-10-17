@@ -2278,3 +2278,5 @@ compare-page	Moved	Áthelyezve
 	{fields} as {format}	{fields} {format} formátumban
 	{host} answered with HTTP {status}; the form may not have been received.	A(z) {host} HTTP {status} választ adott; lehet, hogy az űrlap nem érkezett meg.
 	The form was sent to {host}.	Az űrlap elküldve ide: {host}.
+	Message from the document	Üzenet a dokumentumból
+	Asked by a script in this PDF	A PDF egyik szkriptje kérdezi

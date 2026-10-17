@@ -298,6 +298,8 @@ pub enum Dialog {
     AltText,
     /// PDF Optimizer ▸ Audit space usage (then back to the optimizer).
     AuditSpace,
+    /// A script's `app.alert` with buttons or `app.response`, waiting for an answer.
+    JsQuestion,
     /// Signatures ▸ Show certificate.
     CertificateViewer,
     /// Signatures ▸ Signature Properties.
@@ -498,6 +500,8 @@ pub struct PdfCraftApp {
     /// The JavaScript console and the Document JavaScripts draft.
     pub js_console: js_ui::JsConsole,
     pub doc_js: js_ui::DocJsDraft,
+    /// The dialog a script is waiting on.
+    pub js_question: Option<js_ui::JsQuestion>,
     pub a11y: a11y_ui::A11yState,
     pub a11y_skipped: std::collections::BTreeSet<pdfcraft_engine::a11y::Rule>,
     pub alt_draft: a11y_ui::AltDraft,
@@ -754,6 +758,7 @@ impl PdfCraftApp {
             compare_run: None,
             js_console: Default::default(),
             doc_js: Default::default(),
+            js_question: None,
             a11y: a11y_ui::A11yState::default(),
             a11y_skipped: Default::default(),
             alt_draft: Default::default(),

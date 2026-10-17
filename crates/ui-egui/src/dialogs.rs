@@ -58,6 +58,7 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
     let mut images_now = false;
     let mut stamp_now = false;
     let mut alt_now = false;
+    let mut js_answer: Option<pdfcraft_engine::js::Answer> = None;
     let t = Tokens::get(ctx);
     let mut close = false;
     let mut next = dialog;
@@ -930,6 +931,11 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
                 close = go || cancel;
                 return;
             }
+            Dialog::JsQuestion => {
+                js_answer = crate::js_ui::question_body(ui, app, &t);
+                close = js_answer.is_some();
+                return;
+            }
             Dialog::JsConsole => {
                 ui.set_width(640.0);
                 close = crate::js_ui::console_body(ui, app, &t);
@@ -1322,16 +1328,24 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
     }
     // Protect / Remove security replace the Properties dialog.
     let replaces = link_command.is_some_and(|c| c.starts_with("protect.")) || open_revision.is_some();
+    // Escape or a click outside a script's dialog answers Cancel.
+    if dialog == Dialog::JsQuestion && modal.should_close() && js_answer.is_none() {
+        js_answer = app.js_question.as_ref().map(|q| crate::js_ui::cancel_answer(&q.question));
+    }
     if modal.should_close() || close || replaces {
         app.dialog = None;
         app.props_draft = None;
         app.view_draft = None;
         app.bulk_field_props = None;
-    } else {
+    } else if dialog == Dialog::JsQuestion || app.dialog != Some(Dialog::JsQuestion) {
+        // A script run from this dialog (the console) may have opened its own dialog instead.
         app.dialog = Some(next);
     }
     if let Some(cmd) = link_command {
         app.execute(cmd);
+    }
+    if let Some(a) = js_answer {
+        app.answer_js_question(a);
     }
     if let Some(n) = open_revision {
         app.open_revision(n);

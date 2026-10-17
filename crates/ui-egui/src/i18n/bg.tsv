@@ -2242,3 +2242,5 @@ compare-page	Moved	Преместена
 	{fields} as {format}	{fields} като {format}
 	{host} answered with HTTP {status}; the form may not have been received.	{host} отговори с HTTP {status}; формулярът може да не е получен.
 	The form was sent to {host}.	Формулярът е изпратен до {host}.
+	Message from the document	Съобщение от документа
+	Asked by a script in this PDF	Зададено от скрипт в този PDF

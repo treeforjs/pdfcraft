@@ -1027,10 +1027,19 @@ pub fn tools() -> Vec<ToolDef> {
         t("form_merge_data", "Merge data files into spreadsheet", "Collect the field values of form data files (FDF, XFDF) or filled-in PDF forms into one CSV file at path: a column per field name, a row per file. Returns the row and column counts.")
             .cmd("form.merge_data")
             .with(schema(json!({ "paths": { "type": "array", "items": { "type": "string" }, "minItems": 1 }, "path": { "type": "string" } }), &["paths", "path"])),
-        t("js_run", "Run JavaScript", "Run Acrobat JavaScript in the document, as the JavaScript console does (or as push button `field`'s Mouse Up script when field is given; on a laid-out XFA form, `field` runs that button's XFA click script instead, JavaScript or FormCalc, which can add and remove rows and show or hide subforms). The form object model is available: this/getField, event, app, util, console, display, color, and the document-level scripts. Field changes and resetForm are applied as one undoable step; returns the script's alerts, console output, requests (print, page, url, submit) and error.")
+        t("js_run", "Run JavaScript", "Run Acrobat JavaScript in the document, as the JavaScript console does (or as push button `field`'s Mouse Up script when field is given; on a laid-out XFA form, `field` runs that button's XFA click script instead, JavaScript or FormCalc, which can add and remove rows and show or hide subforms). The form object model is available: this/getField, event, app, util, console, display, color, comments (getAnnots, getAnnot, addAnnot), layers (getOCGs), and the document-level scripts. Field, comment and resetForm changes are applied as one undoable step and layers shown or hidden; returns the script's alerts, console output, requests (print, page, url, submit, layer) and error. A dialog that needs an answer (app.alert with buttons, app.response) stops the script with nothing applied and returns `question` (kind, message, title, buttons or default): run it again with the answers so far in `answers`.")
             .cmd("tools.js_console")
             .with(schema(
-                json!({ "doc": doc(), "script": { "type": "string" }, "field": { "type": "string", "description": "Run as this button's Mouse Up event." } }),
+                json!({
+                    "doc": doc(),
+                    "script": { "type": "string" },
+                    "field": { "type": "string", "description": "Run as this button's Mouse Up event." },
+                    "answers": {
+                        "type": "array",
+                        "description": "Answers to the script's dialogs in the order it asks: \"yes\", \"no\", \"ok\" or \"cancel\" for app.alert; {\"text\": \"…\"} or null (Cancel) for app.response.",
+                        "items": { "type": ["string", "object", "null"] }
+                    }
+                }),
                 &["doc", "script"],
             )),
         t("js_document_scripts", "Document JavaScripts", "List the document-level JavaScripts (name and source), which define functions field scripts use.")

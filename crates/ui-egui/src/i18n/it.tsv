@@ -2289,3 +2289,5 @@ compare-page	Moved	Spostata
 	{fields} as {format}	{fields} come {format}
 	{host} answered with HTTP {status}; the form may not have been received.	{host} ha risposto con HTTP {status}; il modulo potrebbe non essere stato ricevuto.
 	The form was sent to {host}.	Il modulo è stato inviato a {host}.
+	Message from the document	Messaggio dal documento
+	Asked by a script in this PDF	Richiesto da uno script in questo PDF

@@ -2280,3 +2280,5 @@ compare-page	Moved	移動
 	{fields} as {format}	{format} 形式の {fields}
 	{host} answered with HTTP {status}; the form may not have been received.	{host} から HTTP {status} が返されました。フォームが受信されていない可能性があります。
 	The form was sent to {host}.	フォームを {host} に送信しました。
+	Message from the document	文書からのメッセージ
+	Asked by a script in this PDF	この PDF のスクリプトからの確認です
