@@ -8,15 +8,17 @@
 //! The `/DA` font is used when the form's `/DR` defines it as a simple font (text encoded in
 //! WinAnsi) or as a composite font with a predefined Unicode CMap such as `UniJIS-UTF16-H`, as
 //! Japanese forms use (text encoded in that CMap). Otherwise (other composite fonts, missing
-//! resources) Helvetica is used, so text is always visible. Widths use the approximate metrics
-//! of `pdfcraft-fonts` (Helvetica, or one em per full-width character in composite fonts).
+//! resources) Helvetica is used, so text is always visible. Text is measured with the font's own
+//! `/Widths`, else the exact metrics of the standard font it names (Arial as Helvetica, Times New
+//! Roman as Times, Courier New as Courier, bold and italic faces included), else Helvetica's;
+//! composite fonts take one em per full-width character.
 //!
 //! `/MK /R` (0, 90, 180, 270, counterclockwise) lays the content out in the upright box and sets
 //! the appearance `/Matrix` so that box lands on the widget rectangle. Any other value is 0, and
 //! rotation 0 leaves `/Matrix` off.
 
 use pdfcraft_cos::{Dict, Document, Object, Stream};
-use pdfcraft_fonts::{UnicodeCMap, cjk_width, helvetica_width, literal, win_ansi, wrap_with};
+use pdfcraft_fonts::{UnicodeCMap, cjk_width, literal, standard_char_width, win_ansi, win_ansi_byte, wrap_with};
 
 use crate::{Field, FieldKind, Widget, acroform, flags};
 
@@ -111,27 +113,104 @@ pub fn parse_da(da: &str) -> Da {
 }
 
 /// How a field font's text is encoded and measured.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 enum FontText {
-    WinAnsi,
+    WinAnsi(Metrics),
     /// A composite font with a predefined Unicode CMap.
     Unicode(UnicodeCMap),
 }
 
-impl FontText {
-    fn encode(self, s: &str) -> Vec<u8> {
+/// How a simple font's WinAnsi text is measured.
+#[derive(Clone, Debug, PartialEq)]
+enum Metrics {
+    /// A standard font's exact metrics, by its name (`Helvetica-Bold`, `Times-Roman`, …).
+    Standard(&'static str),
+    /// The font's own `/Widths` (em units) from code `first`; `missing` for codes outside them.
+    Widths { first: usize, widths: Vec<f64>, missing: f64 },
+}
+
+/// At most this many `/Widths` entries are read: a simple font has 256 codes.
+const MAX_WIDTHS: usize = 256;
+
+impl Metrics {
+    /// Advance of `c` in em units, as WinAnsi encodes it (unmappable characters show `?`).
+    fn advance(&self, c: char) -> f64 {
+        let c = if c == '\t' { ' ' } else { c };
+        let (c, code) = match win_ansi_byte(c) {
+            Some(b) => (c, b),
+            None => ('?', b'?'),
+        };
         match self {
-            Self::WinAnsi => win_ansi(s),
+            Self::Standard(base) => standard_char_width(base, c).or_else(|| standard_char_width("Helvetica", c)).unwrap_or(0.556),
+            Self::Widths { first, widths, missing } => usize::from(code).checked_sub(*first).and_then(|i| widths.get(i)).copied().unwrap_or(*missing),
+        }
+    }
+}
+
+impl FontText {
+    fn encode(&self, s: &str) -> Vec<u8> {
+        match self {
+            Self::WinAnsi(_) => win_ansi(s),
             Self::Unicode(cmap) => cmap.encode(s),
         }
     }
 
-    fn width(self, s: &str, size: f64) -> f64 {
+    fn width(&self, s: &str, size: f64) -> f64 {
         match self {
-            Self::WinAnsi => helvetica_width(s, size),
+            Self::WinAnsi(m) => s.chars().map(|c| m.advance(c)).sum::<f64>() * size,
             Self::Unicode(_) => cjk_width(s, size),
         }
     }
+}
+
+/// The standard font whose metrics a simple font's `/BaseFont` stands for: the standard names
+/// themselves and their common TrueType equivalents (Arial, Times New Roman, Courier New, with
+/// `,Bold`, `-BoldMT`, `-ItalicMT`… style suffixes), after any subset prefix (`ABCDEF+`).
+pub(crate) fn standard_font_for(base: &[u8]) -> Option<&'static str> {
+    let base = std::str::from_utf8(base).ok()?;
+    let base = match base.split_once('+') {
+        Some((tag, rest)) if tag.len() == 6 && tag.bytes().all(|b| b.is_ascii_uppercase()) => rest,
+        _ => base,
+    };
+    let flat: String = base.chars().filter(|c| c.is_ascii_alphanumeric()).collect::<String>().to_ascii_lowercase();
+    let family = if flat.starts_with("helvetica") || flat.starts_with("arial") {
+        0
+    } else if flat.starts_with("times") {
+        1
+    } else if flat.starts_with("courier") {
+        2
+    } else {
+        return None;
+    };
+    let bold = flat.contains("bold");
+    let italic = flat.contains("italic") || flat.contains("oblique");
+    let names = [
+        ["Helvetica", "Helvetica-Bold", "Helvetica-Oblique", "Helvetica-BoldOblique"],
+        ["Times-Roman", "Times-Bold", "Times-Italic", "Times-BoldItalic"],
+        ["Courier", "Courier-Bold", "Courier-Oblique", "Courier-BoldOblique"],
+    ];
+    names.get(family)?.get(usize::from(bold) + 2 * usize::from(italic)).copied()
+}
+
+/// A simple font's metrics: its own `/Widths` when they are there, else the standard font it
+/// names, else Helvetica's.
+fn simple_metrics(doc: &Document, fd: &Dict) -> Metrics {
+    let num = |o: &Object| doc.resolve(o).as_f64().filter(|v| v.is_finite());
+    let first = fd.get(b"FirstChar").and_then(|o| doc.resolve(o).as_int()).and_then(|v| usize::try_from(v).ok()).filter(|v| *v < MAX_WIDTHS);
+    let widths = fd.get(b"Widths").map(|o| doc.resolve(o)).and_then(|o| {
+        o.as_array().map(|a| a.iter().take(MAX_WIDTHS).map(|w| num(w).map_or(0.0, |w| w.clamp(0.0, 10_000.0) / 1000.0)).collect::<Vec<f64>>())
+    });
+    if let (Some(first), Some(widths)) = (first, widths)
+        && !widths.is_empty()
+    {
+        let missing = fd
+            .get(b"FontDescriptor")
+            .map(|o| doc.resolve(o))
+            .and_then(|d| d.as_dict().and_then(|d| d.get(b"MissingWidth")).and_then(num))
+            .map_or(0.0, |w| w.clamp(0.0, 10_000.0) / 1000.0);
+        return Metrics::Widths { first, widths, missing };
+    }
+    Metrics::Standard(fd.name(b"BaseFont").and_then(standard_font_for).unwrap_or("Helvetica"))
 }
 
 /// The font resource for `name` from the form's `/DR`, if it is a font we can encode for.
@@ -154,7 +233,8 @@ fn dr_font(doc: &Document, name: &str) -> Option<(Object, FontText)> {
     if matches!(fd.name(b"BaseFont"), Some(b"ZapfDingbats" | b"Symbol")) {
         return None;
     }
-    Some((entry, FontText::WinAnsi))
+    let metrics = simple_metrics(doc, fd);
+    Some((entry, FontText::WinAnsi(metrics)))
 }
 
 fn helvetica() -> Object {
@@ -290,7 +370,7 @@ pub fn field_appearance_as(doc: &Document, f: &Field, w: &Widget, values: &[Stri
     let da = parse_da(wd.get(b"DA").and_then(|o| doc.resolve(o).as_string().map(|s| s.to_text())).as_deref().unwrap_or(&f.da));
     let (font_name, font_obj, enc) = match dr_font(doc, &da.font) {
         Some((o, enc)) => (da.font.clone(), o, enc),
-        None => ("Helv".to_string(), helvetica(), FontText::WinAnsi),
+        None => ("Helv".to_string(), helvetica(), FontText::WinAnsi(Metrics::Standard("Helvetica"))),
     };
     let width_of = |text: &str, size: f64| enc.width(text, size);
     let (mut c, bw) = frame(doc, &wd, width, height);

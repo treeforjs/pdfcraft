@@ -1690,3 +1690,74 @@ fn display_values_are_bounded() {
     assert!(content.len() < 64 * 1024, "only the first part of a huge value is laid out: {} bytes", content.len());
     assert!(content.contains("145 w"), "a hostile border width is clamped to half the box");
 }
+
+/// Right-aligned text lands where the field font's real metrics put it: its own `/Widths`, the
+/// standard font it names (Arial,Bold as Helvetica-Bold), or exact Helvetica.
+#[test]
+fn field_text_is_measured_with_the_fonts_metrics() {
+    let widget = |n: usize, name: &str, font: &str| {
+        format!(
+            "<< /Type /Annot /Subtype /Widget /FT /Tx /T ({name}) /DA (/{font} 10 Tf 0 g) /Q 2 /Rect [100 {y} 300 {top}] /P 3 0 R >>",
+            y = 700 - 40 * n,
+            top = 720 - 40 * n
+        )
+    };
+    let objs: Vec<String> = vec![
+        "<< /Type /Catalog /Pages 2 0 R /AcroForm 4 0 R >>".into(),
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 /MediaBox [0 0 600 800] >>".into(),
+        "<< /Type /Page /Parent 2 0 R /Annots [9 0 R 10 0 R 11 0 R 12 0 R 13 0 R] >>".into(),
+        "<< /Fields [9 0 R 10 0 R 11 0 R 12 0 R 13 0 R] /DA (/Helv 0 Tf 0 g) /DR << /Font << /Helv 5 0 R /TiBo 6 0 R /Emb 7 0 R /Arl 8 0 R >> >> >>"
+            .into(),
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>".into(),
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Times-Bold /Encoding /WinAnsiEncoding >>".into(),
+        // Every code one em wide, except `i` (code 105), and nothing past 120.
+        format!(
+            "<< /Type /Font /Subtype /TrueType /BaseFont /ABCDEF+Custom /FirstChar 32 /LastChar 120 /Widths [{}] /FontDescriptor << /MissingWidth 250 >> /Encoding /WinAnsiEncoding >>",
+            (32..=120).map(|c| if c == 105 { "500" } else { "1000" }).collect::<Vec<_>>().join(" ")
+        ),
+        "<< /Type /Font /Subtype /TrueType /BaseFont /Arial,Bold /Encoding /WinAnsiEncoding >>".into(),
+        widget(0, "helv", "Helv"),
+        widget(1, "times", "TiBo"),
+        widget(2, "embedded", "Emb"),
+        widget(3, "arial", "Arl"),
+        widget(4, "missing", "Emb"),
+    ];
+    let mut doc = document(&objs);
+    for (name, value) in [("helv", "Wide"), ("times", "Wide"), ("embedded", "Wide"), ("arial", "Wide"), ("missing", "Wz")] {
+        set_value(&mut doc, name, &FieldValue::Text(value.into())).unwrap();
+    }
+    let all = fields(&doc);
+    // The text starts at width − padding (2, no border drawn) − its width at 10 pt.
+    for (name, text_width) in [
+        ("helv", 22.78),    // Helvetica W 944 i 222 d 556 e 556
+        ("times", 22.78),   // Times-Bold W 1000 i 278 d 556 e 444
+        ("embedded", 35.0), // its /Widths: 1 + 0.5 + 1 + 1 em
+        ("arial", 23.89),   // as Helvetica-Bold: W 944 i 278 d 611 e 556
+        ("missing", 12.5),  // W 1 em, z (122) past /LastChar: /MissingWidth 0.25 em
+    ] {
+        let s = ap(&doc, &field(&all, name).widgets[0]);
+        let x = 200.0 - 2.0 - text_width;
+        let at = format!("1 0 0 1 {} ", crate::appearance::fmt(x));
+        assert!(s.contains(&at), "{name}: expected {at:?} in {s}");
+    }
+}
+
+#[test]
+fn standard_font_names_cover_common_truetype_equivalents() {
+    use crate::appearance::standard_font_for;
+    for (base, want) in [
+        ("Helvetica", Some("Helvetica")),
+        ("ArialMT", Some("Helvetica")),
+        ("Arial-BoldItalicMT", Some("Helvetica-BoldOblique")),
+        ("ABCDEF+Arial,Bold", Some("Helvetica-Bold")),
+        ("TimesNewRomanPS-ItalicMT", Some("Times-Italic")),
+        ("Times-Roman", Some("Times-Roman")),
+        ("CourierNewPS-BoldMT", Some("Courier-Bold")),
+        ("Courier-Oblique", Some("Courier-Oblique")),
+        ("Verdana", None),
+        ("abcdef+Arial", None),
+        ("", None),
+    ] {
+        assert_eq!(standard_font_for(base.as_bytes()), want, "{base}");
+    }
+}
