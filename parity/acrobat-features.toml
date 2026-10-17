@@ -9172,11 +9172,11 @@ title = "Built-in action: archive documents"
 area = "N"
 tier = "P1"
 milestone = "M13"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["actions.archive"]
+tools = ["action_run"]
+evidence = ["crates/engine/src/tests.rs::the_archive_action_saves_as_pdfa", "crates/ui-egui/tests/actions.rs::archive_documents_writes_pdfa"]
+notes = "Archive Documents saves each file as PDF/A-2b; Save as PDF/A-2b and Fix hairlines are also steps for custom actions"
 
 [[feature]]
 id = "misc.action-publish-web"

@@ -475,11 +475,12 @@ impl PdfCraftApp {
                 self.preflight.selected.clear();
                 self.dialog = Some(Dialog::Preflight);
             }
-            "actions.wizard" | "actions.distribution" | "actions.optimize_scans" => {
+            "actions.wizard" | "actions.distribution" | "actions.optimize_scans" | "actions.archive" => {
                 self.wizard.editing = None;
                 match id {
                     "actions.distribution" => self.wizard.selected = Some("Prepare for Distribution".into()),
                     "actions.optimize_scans" => self.wizard.selected = Some("Optimize Scanned Documents".into()),
+                    "actions.archive" => self.wizard.selected = Some("Archive Documents".into()),
                     _ => {}
                 }
                 self.dialog = Some(Dialog::ActionWizard);

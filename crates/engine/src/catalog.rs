@@ -444,7 +444,7 @@ pub static TOOL_GROUPS: &[ToolGroup] = &[
                 item("Make accessible", "accessibility", "actions.make_accessible", Planned("M13")),
                 item("Prepare for distribution", "send", "actions.distribution", Ready),
                 item("Optimize scanned documents", "scan-text", "actions.optimize_scans", Ready),
-                item("Archive documents", "file-check", "actions.archive", Planned("M13")),
+                item("Archive documents", "file-check", "actions.archive", Ready),
             ],
         }],
     },
