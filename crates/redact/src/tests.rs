@@ -431,6 +431,29 @@ fn overlay_text_takes_its_font_size_colour_alignment_and_repeats() {
 }
 
 #[test]
+fn overlay_text_outside_the_standard_fonts_is_drawn_as_outlines() {
+    let mut doc = one_page(b"BT /F1 12 Tf 20 250 Td (Secret salary figures) Tj ET", "", Vec::new());
+    let look = pdfcraft_annot::OverlayLook { size: 10.0, color: [1.0, 1.0, 1.0], repeat: true, ..Default::default() };
+    let shape = Shape::Redact { quads: vec![rect_quad([10.0, 200.0, 290.0, 270.0])], overlay: "Секретно".into(), look };
+    let style = Style::default_for(&shape);
+    add_annotation(&mut doc, &NewAnnotation { page: 0, shape, style, contents: String::new(), author: "T".into() }, &Meta::default()).unwrap();
+    assert_eq!(marks(&doc)[0].overlay, "Секретно", "the text is kept as typed");
+    apply(&mut doc, None).unwrap();
+    let doc = reopen(&doc);
+    let c = content(&doc, 0);
+    // No "?" text: filled outlines in the overlay colour, the word repeated across the area.
+    assert!(!c.contains("(?") && !c.contains(" Tj"), "{c}");
+    assert!(c.contains("1 1 1 rg") && c.matches(" cm ").count() >= 10 && c.contains(" h f"), "{c}");
+
+    // Characters no face has are refused when the mark is made.
+    let shape = Shape::Redact { quads: vec![rect_quad([10.0, 10.0, 90.0, 30.0])], overlay: "a\u{F8FF}".into(), look: Default::default() };
+    let style = Style::default_for(&shape);
+    let err =
+        add_annotation(&mut doc.clone(), &NewAnnotation { page: 0, shape, style, contents: String::new(), author: "T".into() }, &Meta::default());
+    assert!(matches!(err, Err(pdfcraft_annot::AnnotError::Invalid(_))), "{err:?}");
+}
+
+#[test]
 fn tags_lose_what_redaction_removed() {
     let content = b"/P <</MCID 0>> BDC BT /F1 10 Tf 10 200 Td (SECRET) Tj ET EMC /P <</MCID 1>> BDC BT /F1 10 Tf 10 100 Td (Public) Tj ET EMC";
     let mut doc = pdf(vec![

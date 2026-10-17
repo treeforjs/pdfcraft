@@ -1040,6 +1040,16 @@ pub fn add_annotation(doc: &mut Document, new: &NewAnnotation, meta: &Meta) -> R
             d.set(b"IC".to_vec(), rgb(style.fill.unwrap_or([0.0, 0.0, 0.0])));
             d.set(b"QuadPoints".to_vec(), num_array(&quads.concat()));
             if !overlay.is_empty() {
+                // Text a standard font can't show is drawn as outlines when the redaction is
+                // applied; refuse what no available face has rather than print "?".
+                if let Some(c) = pdfcraft_fonts::first_non_win_ansi(overlay)
+                    && pdfcraft_fonts::text_outline(overlay).is_none()
+                {
+                    return Err(AnnotError::Invalid(format!(
+                        "the overlay text can't be drawn: no available font has {c:?} (or it is longer than {} characters)",
+                        pdfcraft_fonts::MAX_OUTLINE_CHARS
+                    )));
+                }
                 d.set(b"OverlayText".to_vec(), PdfString::text(overlay));
                 let [r, g, b] = look.color.map(|x| x.clamp(0.0, 1.0));
                 let size = if look.size > 0.0 { look.size.min(400.0) } else { 0.0 };

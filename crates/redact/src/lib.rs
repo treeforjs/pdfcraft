@@ -221,6 +221,16 @@ fn overlay_content(marks: &[&Mark]) -> Vec<u8> {
             pdfcraft_annot::OverlayFont::Courier => ("PCCour", |s, size| s.chars().count() as f64 * size * 0.6),
         };
         let [cr, cg, cb] = look.color.map(|v| v.clamp(0.0, 1.0));
+        // Characters outside the standard fonts' encoding: the text is drawn as filled outlines.
+        let outlined = pdfcraft_fonts::first_non_win_ansi(&m.overlay).and_then(|_| {
+            let unit = pdfcraft_fonts::text_outline(&m.overlay)?;
+            let space = pdfcraft_fonts::text_outline(" ").map_or(0.25, |o| o.width);
+            Some((unit, space))
+        });
+        if let Some((unit, space)) = &outlined {
+            c.extend(outlined_overlay(m, unit, *space, [cr, cg, cb]));
+            continue;
+        }
         for r in &m.rects {
             let (w, h) = (r[2] - r[0], r[3] - r[1]);
             let mut size = if look.size > 0.0 { look.size } else { (h * 0.7).min(12.0) };
@@ -259,6 +269,76 @@ fn overlay_content(marks: &[&Mark]) -> Vec<u8> {
             }
             c.extend_from_slice(b"ET Q\n");
         }
+    }
+    c
+}
+
+/// Most copies of the overlay text one repeated area draws as outlines, and most bytes of
+/// outline content one area adds.
+const MAX_OUTLINED_COPIES: usize = 400;
+const MAX_OUTLINED_BYTES: usize = 4 << 20;
+
+/// The overlay text of mark `m` drawn as outlines (`unit`, at a font size of 1, and the width of
+/// a space between repeats), laid out as [`overlay_content`] lays out text.
+fn outlined_overlay(m: &Mark, unit: &pdfcraft_fonts::ScriptOutline, space: f64, colour: [f64; 3]) -> Vec<u8> {
+    let n = |v: f64| {
+        let s = format!("{:.3}", v);
+        s.trim_end_matches('0').trim_end_matches('.').to_string()
+    };
+    let look = &m.look;
+    // The glyph path once, in em units; each copy places it with a matrix.
+    let mut path = String::new();
+    for contour in &unit.contours {
+        for (i, p) in contour.iter().enumerate() {
+            path.push_str(&format!("{} {} {} ", n(p[0]), n(p[1]), if i == 0 { "m" } else { "l" }));
+        }
+        path.push_str("h ");
+    }
+    if path.is_empty() {
+        return Vec::new();
+    }
+    path.push_str("f\n");
+    let mut c: Vec<u8> = Vec::new();
+    for r in &m.rects {
+        let (w, h) = (r[2] - r[0], r[3] - r[1]);
+        let mut size = if look.size > 0.0 { look.size } else { (h * 0.7).min(12.0) };
+        let tw = unit.width * size;
+        if look.size <= 0.0 && tw > w - 2.0 && tw > 0.0 {
+            size *= (w - 2.0).max(0.0) / tw;
+        }
+        if size < 2.0 || !size.is_finite() {
+            continue;
+        }
+        let step = (unit.width + space) * size;
+        let (per_line, count) = if look.repeat {
+            let per_line = ((w - 2.0 + space * size) / step.max(0.01)).floor().max(1.0) as usize;
+            (per_line, ((h / (size * 1.2)).floor() as usize).max(1))
+        } else {
+            (1, 1)
+        };
+        let lw = per_line as f64 * step - space * size;
+        let block = count as f64 * size * 1.2;
+        let mut y = r[1] + (h + block) / 2.0 - size * 0.95;
+        c.extend(format!("q {} {} {} {} re W n {} {} {} rg\n", n(r[0]), n(r[1]), n(w), n(h), n(colour[0]), n(colour[1]), n(colour[2])).bytes());
+        let mut copies = 0;
+        let most = MAX_OUTLINED_COPIES.min((MAX_OUTLINED_BYTES / path.len().max(1)).max(1));
+        'lines: for _ in 0..count {
+            let x0 = match look.align {
+                0 => r[0] + 1.0,
+                2 => r[2] - 1.0 - lw,
+                _ => r[0] + (w - lw) / 2.0,
+            };
+            for k in 0..per_line {
+                if copies >= most {
+                    break 'lines;
+                }
+                copies += 1;
+                let x = x0 + k as f64 * step;
+                c.extend(format!("q {} 0 0 {} {} {} cm {path}Q\n", n(size), n(size), n(x), n(y)).bytes());
+            }
+            y -= size * 1.2;
+        }
+        c.extend_from_slice(b"Q\n");
     }
     c
 }

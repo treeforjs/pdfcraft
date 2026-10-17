@@ -5,6 +5,11 @@ use skrifa::outline::{DrawSettings, OutlinePen};
 use skrifa::{FontRef, GlyphId, MetadataProvider};
 
 static FONT: &[u8] = include_bytes!("../../../assets/fonts/DancingScript.ttf");
+/// Inter Regular (OFL, `assets/fonts`): Latin, Greek and Cyrillic, for text drawn as outlines.
+pub static INTER_REGULAR: &[u8] = include_bytes!("../../../assets/fonts/Inter-Regular.ttf");
+
+/// Longest text [`text_outline`] draws.
+pub const MAX_OUTLINE_CHARS: usize = 1024;
 
 /// Bound signature work while allowing long personal names.
 pub const MAX_SIGNATURE_CHARS: usize = 256;
@@ -210,8 +215,64 @@ pub fn script_outline(text: &str) -> ScriptOutline {
     ScriptOutline { contours: pen.contours, width: pen.dx, ascent: metrics.ascent as f64 * scale, descent: metrics.descent as f64 * scale }
 }
 
+/// The outlines of `text` at a font size of 1 in a plain face: Inter for Latin, Greek and
+/// Cyrillic, then the craft-fonts faces (Japanese, Chinese, Arabic, Telugu…) when the build has
+/// them, each character from the first face that has it. For text a standard PDF font can't
+/// show. `None` when a character other than a space is in none of the faces (or the text is
+/// longer than [`MAX_OUTLINE_CHARS`]), so callers can refuse instead of dropping it.
+pub fn text_outline(text: &str) -> Option<ScriptOutline> {
+    if text.chars().take(MAX_OUTLINE_CHARS + 1).count() > MAX_OUTLINE_CHARS {
+        return None;
+    }
+    let faces: Vec<FontRef> =
+        std::iter::once(INTER_REGULAR).chain(crate::CRAFT_FONTS.iter().map(|f| f.bytes)).filter_map(|b| FontRef::new(b).ok()).collect();
+    let loc = LocationRef::default();
+    let first = faces.first()?;
+    let metrics = first.metrics(Size::unscaled(), loc);
+    let base = 1.0 / metrics.units_per_em.max(1) as f64;
+    let mut pen = Flatten::new(base);
+    pen.max_points = 262_144;
+    for ch in text.chars() {
+        let found = faces.iter().find_map(|f| f.charmap().map(ch).map(|gid| (f, gid)));
+        let Some((face, gid)) = found else {
+            if ch.is_whitespace() {
+                pen.dx += 0.25;
+                continue;
+            }
+            return None;
+        };
+        pen.scale = 1.0 / face.metrics(Size::unscaled(), loc).units_per_em.max(1) as f64;
+        if let Some(g) = face.outline_glyphs().get(gid) {
+            let _ = g.draw(DrawSettings::unhinted(Size::unscaled(), loc), &mut pen);
+            pen.close();
+        }
+        pen.dx += face.glyph_metrics(Size::unscaled(), loc).advance_width(gid).unwrap_or(0.0) as f64 * pen.scale;
+    }
+    pen.close();
+    if pen.too_complex {
+        return None;
+    }
+    Some(ScriptOutline { contours: pen.contours, width: pen.dx, ascent: metrics.ascent as f64 * base, descent: metrics.descent as f64 * base })
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn text_outlines_cover_cyrillic_and_greek_and_refuse_missing_characters() {
+        let latin = super::text_outline("Secret").unwrap();
+        let cyrillic = super::text_outline("Секретно").unwrap();
+        assert!(latin.contours.len() >= 6 && cyrillic.contours.len() >= 8, "{} {}", latin.contours.len(), cyrillic.contours.len());
+        assert!(cyrillic.width > latin.width && latin.width > 2.0, "{} {}", cyrillic.width, latin.width);
+        assert!(super::text_outline("Ωμέγα x").is_some());
+        assert_eq!(super::text_outline("").map(|o| o.contours.len()), Some(0));
+        assert!(super::text_outline(&"a".repeat(super::MAX_OUTLINE_CHARS + 1)).is_none());
+        // A private-use character no face has.
+        assert!(super::text_outline("a\u{F8FF}").is_none());
+        if crate::document_japanese_font().is_some() {
+            assert!(super::text_outline("機密").is_some_and(|o| o.contours.len() > 4));
+        }
+    }
+
     #[test]
     fn long_names_keep_every_glyph_with_bounded_outline_work() {
         let text = "Alexandria Catherine Elizabeth Montgomery-Wellington";

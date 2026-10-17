@@ -5575,11 +5575,11 @@ title = "Redaction fill colour and overlay text"
 area = "G"
 tier = "P0"
 milestone = "M8"
-status = "partial"
+status = "shipped"
 commands = ["redact.properties"]
 tools = ["redact_mark"]
-evidence = ["crates/ui-egui/tests/redact.rs::marking_applying_and_clearing", "crates/redact/src/tests.rs::overlay_text_takes_its_font_size_colour_alignment_and_repeats"]
-notes = "fill colour or none; overlay text (custom or redaction codes) with font, size or auto-size, colour, alignment and repeat, stored as /OverlayText, /DA, /Q, /Repeat; redact_mark takes all of them. Missing: overlay text outside WinAnsi (standard fonts only)"
+evidence = ["crates/ui-egui/tests/redact.rs::marking_applying_and_clearing", "crates/redact/src/tests.rs::overlay_text_takes_its_font_size_colour_alignment_and_repeats", "crates/redact/src/tests.rs::overlay_text_outside_the_standard_fonts_is_drawn_as_outlines", "crates/fonts/src/script.rs::text_outlines_cover_cyrillic_and_greek_and_refuse_missing_characters"]
+notes = "fill colour or none; overlay text (custom or redaction codes) with font, size or auto-size, colour, alignment and repeat, stored as /OverlayText, /DA, /Q, /Repeat; redact_mark takes all of them.. Text the standard fonts can't show (Cyrillic, Greek, and Japanese, Chinese and other scripts when built with craft-fonts) is drawn as filled outlines in Inter or a craft-fonts face, so it is not searchable text; characters no face has are refused when the mark is made."
 
 [[feature]]
 id = "protect.redaction-codes"
