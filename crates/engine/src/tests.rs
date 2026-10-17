@@ -3105,3 +3105,60 @@ fn scripts_change_comments_and_layers_and_wait_for_answers() {
     assert_eq!(o.question, None);
     assert_eq!(comments(&s), [("Text".to_string(), "Call back".to_string())].into());
 }
+
+/// One page (turned by `rotate`) whose structure tree holds a single element of type `ty` over
+/// the text "Rotated  heading" (MCID 0).
+fn tagged_one(ty: &str, rotate: i64) -> Vec<u8> {
+    let body = "/P << /MCID 0 >> BDC BT /F1 20 Tf 20 150 Td (Rotated  heading) Tj ET EMC";
+    let objs: Vec<String> = vec![
+        "<< /Type /Catalog /Pages 2 0 R /MarkInfo << /Marked true >> /StructTreeRoot 6 0 R >>".into(),
+        format!("<< /Type /Pages /Kids [3 0 R] /Count 1 /MediaBox [0 0 300 300] /Rotate {rotate} >>"),
+        "<< /Type /Page /Parent 2 0 R /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>".into(),
+        format!("<< /Length {} >>\nstream\n{body}\nendstream", body.len()),
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".into(),
+        "<< /Type /StructTreeRoot /K 7 0 R >>".into(),
+        format!("<< /Type /StructElem /S /{ty} /P 6 0 R /Pg 3 0 R /K 0 >>"),
+    ];
+    let mut out = b"%PDF-1.7\n".to_vec();
+    let mut offsets = Vec::new();
+    for (i, o) in objs.iter().enumerate() {
+        offsets.push(out.len());
+        out.extend_from_slice(format!("{} 0 obj\n{o}\nendobj\n", i + 1).as_bytes());
+    }
+    let xref = out.len();
+    out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objs.len() + 1).as_bytes());
+    for o in offsets {
+        out.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+    }
+    out.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objs.len() + 1).as_bytes());
+    out
+}
+
+#[test]
+fn heading_bookmarks_come_from_tagged_headings_only() {
+    let (mut s, plain) = session_with(2);
+    let err = s.get(plain).unwrap().heading_bookmarks(None).unwrap_err();
+    assert!(err.contains("not tagged"), "{err}");
+    let p = s.open("p.pdf", None, Arc::new(tagged_one("P", 0)), None).unwrap();
+    let err = s.get(p).unwrap().heading_bookmarks(None).unwrap_err();
+    assert!(err.contains("no headings"), "{err}");
+
+    // An H2 on a page turned a quarter: its text (spaces collapsed), level, and the page alone
+    // (a user-space top would not be the displayed top).
+    let id = s.open("h.pdf", None, Arc::new(tagged_one("H2", 90)), None).unwrap();
+    let found = s.get(id).unwrap().heading_bookmarks(None).unwrap();
+    assert_eq!(found.entries, vec![OutlineEntry { title: "Rotated heading".into(), level: 2, page: 0, top: None }]);
+    assert_eq!((found.untitled, found.unplaced, found.truncated), (0, 0, false));
+    let err = s.get(id).unwrap().heading_bookmarks(Some(1)).unwrap_err();
+    assert!(err.contains("level 1"), "{err}");
+    s.apply(id, Edit::AddBookmarkTree { entries: found.entries, replace: false }).unwrap();
+    let d = s.get(id).unwrap();
+    assert_eq!(d.info.outline.iter().map(|o| (o.title.as_str(), o.page)).collect::<Vec<_>>(), [("Rotated heading", Some(0))]);
+    assert_eq!(s.undo(id).unwrap(), "New bookmarks from structure");
+    assert!(s.get(id).unwrap().info.outline.is_empty());
+
+    // Upright, the bookmark goes to the heading's top (20 pt text on a 150 pt baseline).
+    let id = s.open("u.pdf", None, Arc::new(tagged_one("H1", 0)), None).unwrap();
+    let top = s.get(id).unwrap().heading_bookmarks(None).unwrap().entries[0].top.unwrap();
+    assert!((160.0..=172.0).contains(&top), "{top}");
+}

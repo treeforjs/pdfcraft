@@ -481,3 +481,54 @@ fn tagging_an_image_in_an_untagged_document_creates_the_tree() {
     assert_eq!(status(&r, Rule::FiguresAltText), Status::Passed);
     assert_eq!(status(&r, Rule::TaggedContent), Status::Passed, "{:?}", r.result(Rule::TaggedContent));
 }
+
+#[test]
+fn heading_levels_from_type_names() {
+    assert_eq!(heading_level("H1"), Some(HeadingKind::Numbered(1)));
+    assert_eq!(heading_level("H6"), Some(HeadingKind::Numbered(6)));
+    assert_eq!(heading_level("H12"), Some(HeadingKind::Numbered(12)));
+    assert_eq!(heading_level("H99999999999999999999999"), Some(HeadingKind::Numbered(MAX_HEADING_LEVEL)));
+    assert_eq!(heading_level("H"), Some(HeadingKind::Nested));
+    for not in ["H0", "H01", "Hx", "Header", "P", "", "h1", "H-1"] {
+        assert_eq!(heading_level(not), None, "{not}");
+    }
+}
+
+#[test]
+fn headings_in_document_order_with_levels_text_and_content() {
+    let doc = pdf(
+        &[
+            "<< /Type /Catalog /Pages 2 0 R /StructTreeRoot 5 0 R /MarkInfo << /Marked true >> >>".into(), // 1
+            "<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>".into(),                                      // 2
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] >>".into(),                              // 3
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] >>".into(),                              // 4
+            "<< /Type /StructTreeRoot /K 6 0 R /RoleMap << /MyHead /H2 >> >>".into(),                      // 5
+            "<< /S /Document /K [7 0 R 8 0 R 9 0 R 10 0 R] >>".into(),                                     // 6
+            "<< /S /H1 /Pg 3 0 R /K [0 << /Type /MCR /Pg 3 0 R /MCID 1 >>] >>".into(),                     // 7
+            "<< /S /Sect /K [11 0 R 12 0 R] >>".into(),                                                    // 8
+            "<< /S /MyHead /Pg 3 0 R /Alt (Alt title) /K 2 >>".into(),                                     // 9
+            "<< /S /P /Pg 3 0 R /K [3 6 0 R] >>".into(),                                                   // 10: loops back
+            "<< /S /H /Pg 4 0 R /ActualText (  Plain  ) /K 0 >>".into(),                                   // 11
+            "<< /S /Sect /K 13 0 R >>".into(),                                                             // 12
+            "<< /S /H /Pg 4 0 R /K [14 0 R << /Type /MCR /Pg 4 0 R /MCID 5 /Stm 3 0 R >>] >>".into(),      // 13
+            "<< /S /Span /Pg 4 0 R /K 1 >>".into(),                                                        // 14
+        ],
+        "",
+    );
+    let tags = tags(&doc);
+    let h = headings(&tags);
+    type Row<'a> = (usize, Option<&'a str>, Option<usize>, Vec<(usize, i64)>);
+    let summary: Vec<Row> = h.iter().map(|x| (x.level, x.text.as_deref(), x.page, x.content.clone())).collect();
+    assert_eq!(
+        summary,
+        vec![
+            (1, None, Some(0), vec![(0, 0), (0, 1)]),
+            (1, Some("Plain"), Some(1), vec![(1, 0)]),
+            (2, None, Some(1), vec![(1, 1)]), // H inside two sections; the /Stm content is left out
+            (2, Some("Alt title"), Some(0), vec![(0, 2)]),
+        ]
+    );
+    // An untagged document has none.
+    let plain = pdf(&["<< /Type /Catalog /Pages 2 0 R >>".into(), "<< /Type /Pages /Kids [] /Count 0 >>".into()], "");
+    assert!(headings(&super::tags(&plain)).is_empty());
+}

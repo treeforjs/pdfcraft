@@ -210,3 +210,125 @@ fn alternate_text_for_an_image_in_an_untagged_document() {
     assert_eq!(outline(&t), [(0, "Document".to_owned()), (1, "Figure".to_owned())]);
     assert_eq!(t["elements"][1]["alt"], "A logo");
 }
+
+/// Two pages of headings. Page 1: H1 "Introduction" (MCID 0, at the top), a paragraph, and an H2
+/// whose text is split between its own MCID 2 and a Span's MCID 3 ("Back" + "ground"). Page 2:
+/// an H1 with /ActualText (its painted text is ignored), a custom type mapped to H3, and an H2
+/// with no text at all (skipped). The page has a second H1 nested in a Sect as plain H.
+fn headings_pdf() -> Vec<u8> {
+    let c1 = "/H1 << /MCID 0 >> BDC BT /F1 18 Tf 20 360 Td (Introduction) Tj ET EMC \
+              /P << /MCID 1 >> BDC BT /F1 10 Tf 20 330 Td (Body text.) Tj ET EMC \
+              /H2 << /MCID 2 >> BDC BT /F1 14 Tf 20 300 Td (Back) Tj ET EMC \
+              /Span << /MCID 3 >> BDC BT /F1 14 Tf 52 300 Td (ground) Tj ET EMC";
+    let c2 = "/H1 << /MCID 0 >> BDC BT /F1 18 Tf 20 360 Td (Painted) Tj ET EMC \
+              /Subhead << /MCID 1 >> BDC BT /F1 12 Tf 20 200 Td (Detail) Tj ET EMC \
+              /H << /MCID 2 >> BDC BT /F1 12 Tf 20 100 Td (Appendix) Tj ET EMC";
+    let objs: Vec<Vec<u8>> = vec![
+        b"<< /Type /Catalog /Pages 2 0 R /MarkInfo << /Marked true >> /StructTreeRoot 6 0 R >>".to_vec(), // 1
+        b"<< /Type /Pages /Kids [3 0 R 12 0 R] /Count 2 /MediaBox [0 0 300 400] >>".to_vec(),             // 2
+        b"<< /Type /Page /Parent 2 0 R /Contents 4 0 R /StructParents 0 /Resources << /Font << /F1 5 0 R >> >> >>".to_vec(), // 3
+        format!("<< /Length {} >>\nstream\n{c1}\nendstream", c1.len()).into_bytes(),                      // 4
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".to_vec(),                               // 5
+        b"<< /Type /StructTreeRoot /K 7 0 R /RoleMap << /Subhead /H3 >> >>".to_vec(),                     // 6
+        b"<< /Type /StructElem /S /Document /P 6 0 R /K [8 0 R 9 0 R 10 0 R 14 0 R 15 0 R 16 0 R 11 0 R] >>".to_vec(), // 7
+        b"<< /Type /StructElem /S /H1 /P 7 0 R /Pg 3 0 R /K 0 >>".to_vec(),                               // 8
+        b"<< /Type /StructElem /S /P /P 7 0 R /Pg 3 0 R /K 1 >>".to_vec(),                                // 9
+        b"<< /Type /StructElem /S /H2 /P 7 0 R /Pg 3 0 R /K [2 17 0 R] >>".to_vec(),                      // 10
+        b"<< /Type /StructElem /S /Sect /P 7 0 R /K 18 0 R >>".to_vec(),                                  // 11
+        b"<< /Type /Page /Parent 2 0 R /Contents 13 0 R /StructParents 1 /Resources << /Font << /F1 5 0 R >> >> >>".to_vec(), // 12
+        format!("<< /Length {} >>\nstream\n{c2}\nendstream", c2.len()).into_bytes(),                      // 13
+        b"<< /Type /StructElem /S /H1 /P 7 0 R /Pg 12 0 R /ActualText (Results) /K 0 >>".to_vec(),        // 14
+        b"<< /Type /StructElem /S /Subhead /P 7 0 R /Pg 12 0 R /K 1 >>".to_vec(),                         // 15
+        b"<< /Type /StructElem /S /H2 /P 7 0 R /Pg 12 0 R >>".to_vec(),                                   // 16: no text
+        b"<< /Type /StructElem /S /Span /P 10 0 R /Pg 3 0 R /K 3 >>".to_vec(),                            // 17
+        b"<< /Type /StructElem /S /H /P 11 0 R /Pg 12 0 R /K [2 7 0 R] >>".to_vec(),                      // 18: loops back to the root
+    ];
+    let mut out = b"%PDF-1.7\n".to_vec();
+    let mut offsets = Vec::new();
+    for (i, o) in objs.iter().enumerate() {
+        offsets.push(out.len());
+        out.extend_from_slice(format!("{} 0 obj\n", i + 1).as_bytes());
+        out.extend_from_slice(o);
+        out.extend_from_slice(b"\nendobj\n");
+    }
+    let xref = out.len();
+    out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objs.len() + 1).as_bytes());
+    for o in offsets {
+        out.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+    }
+    out.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objs.len() + 1).as_bytes());
+    out
+}
+
+/// (depth, title, 1-based page) of every bookmark in a `bookmark_list`-style tree.
+fn marks(tree: &Value) -> Vec<(usize, String, u64)> {
+    fn go(items: &Value, depth: usize, out: &mut Vec<(usize, String, u64)>) {
+        for b in items.as_array().unwrap() {
+            out.push((depth, b["title"].as_str().unwrap().to_owned(), b["page"].as_u64().unwrap_or(0)));
+            go(&b["children"], depth + 1, out);
+        }
+    }
+    let mut out = Vec::new();
+    go(tree, 0, &mut out);
+    out
+}
+
+#[test]
+fn bookmarks_from_structure_headings_through_tools() {
+    let dir = workdir("headings");
+    std::fs::write(dir.join("headings.pdf"), headings_pdf()).unwrap();
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "headings.pdf" }))["doc"].as_u64().unwrap();
+    ok(&mut a, "bookmark_add", json!({ "doc": doc, "title": "Cover", "page": 1 }));
+
+    let r = ok(&mut a, "bookmark_from_structure", json!({ "doc": doc }));
+    assert_eq!(
+        (r["added"].as_u64(), r["untitled"].as_u64(), r["unplaced"].as_u64(), r["truncated"].as_bool()),
+        (Some(5), Some(1), Some(0), Some(false)),
+        "{r}"
+    );
+    let want = |v: &[(usize, &str, u64)]| v.iter().map(|(d, t, p)| (*d, t.to_string(), *p)).collect::<Vec<_>>();
+    let expected = want(&[(0, "Cover", 1), (0, "Introduction", 1), (1, "Background", 1), (0, "Results", 2), (1, "Detail", 2), (0, "Appendix", 2)]);
+    assert_eq!(marks(&r["bookmarks"]), expected);
+    // Each goes to its heading's top, not just the page.
+    let listed = ok(&mut a, "bookmark_list", json!({ "doc": doc }));
+    assert_eq!(marks(&listed["bookmarks"]), expected);
+    let intro = &listed["bookmarks"][1]["action"];
+    assert_eq!(intro["type"], "goto", "{intro}");
+    let top = intro["view"]["top"].as_f64().unwrap();
+    assert!((370.0..=385.0).contains(&top), "the top of 18 pt text at y 360: {intro}");
+
+    // Saved and reopened, the tree is the same.
+    ok(&mut a, "doc_save", json!({ "doc": doc, "path": "out.pdf" }));
+    let reopened = ok(&mut a, "doc_open", json!({ "path": "out.pdf" }))["doc"].as_u64().unwrap();
+    assert_eq!(marks(&ok(&mut a, "bookmark_list", json!({ "doc": reopened }))["bookmarks"]), expected);
+
+    // Undo, then replace the existing bookmarks with the top level only.
+    ok(&mut a, "edit_undo", json!({ "doc": doc }));
+    assert_eq!(marks(&ok(&mut a, "bookmark_list", json!({ "doc": doc }))["bookmarks"]), want(&[(0, "Cover", 1)]));
+    let r = ok(&mut a, "bookmark_from_structure", json!({ "doc": doc, "replace": true, "max_level": 1 }));
+    assert_eq!(marks(&r["bookmarks"]), want(&[(0, "Introduction", 1), (0, "Results", 2), (0, "Appendix", 2)]));
+
+    // Bad arguments are refused before anything changes.
+    for bad in [json!({ "doc": doc, "max_level": 0 }), json!({ "doc": doc, "max_level": 65 }), json!({ "doc": doc, "replace": "yes" })] {
+        assert!(matches!(a.call("bookmark_from_structure", &bad), Err(ToolError::InvalidArgs(_))), "{bad}");
+    }
+    assert_eq!(marks(&ok(&mut a, "bookmark_list", json!({ "doc": doc }))["bookmarks"]).len(), 3);
+}
+
+#[test]
+fn bookmarks_from_structure_refuse_untagged_documents_and_documents_without_headings() {
+    let dir = workdir("no-headings");
+    let mut a = auto(&dir);
+    // tagged.pdf has one H1 (and a figure).
+    let tagged = ok(&mut a, "doc_open", json!({ "path": "tagged.pdf" }))["doc"].as_u64().unwrap();
+    let r = ok(&mut a, "bookmark_from_structure", json!({ "doc": tagged }));
+    assert_eq!(marks(&r["bookmarks"]), [(0, "Introduction".to_owned(), 1)]);
+    // An untagged document: a clear error, no change.
+    let untagged = ok(&mut a, "doc_create", json!({ "from": "blank", "pages": 1 }))["doc"].as_u64().unwrap();
+    match a.call("bookmark_from_structure", &json!({ "doc": untagged })) {
+        Err(ToolError::Failed(m)) => assert!(m.contains("not tagged"), "{m}"),
+        other => panic!("{other:?}"),
+    }
+    assert!(marks(&ok(&mut a, "bookmark_list", json!({ "doc": untagged }))["bookmarks"]).is_empty());
+}

@@ -7,7 +7,10 @@ fn selection(a: (usize, usize), b: (usize, usize)) -> TextSelection {
     TextSelection::Range { anchor: TextPosition { page: a.0, glyph: a.1 }, head: TextPosition { page: b.0, glyph: b.1 } }
 }
 fn line(s: &str, x: f32, y: f32) -> Vec<TextGlyph> {
-    s.chars().enumerate().map(|(i, c)| TextGlyph { text: c.to_string(), rect: [x + i as f32 * 8.0, y, x + i as f32 * 8.0 + 7.0, y + 10.0] }).collect()
+    s.chars()
+        .enumerate()
+        .map(|(i, c)| TextGlyph { text: c.to_string(), rect: [x + i as f32 * 8.0, y, x + i as f32 * 8.0 + 7.0, y + 10.0], mcid: None })
+        .collect()
 }
 fn page(s: &str) -> PageText {
     layout(line(s, 0.0, 0.0))
@@ -37,7 +40,7 @@ fn out_of_range_endpoints_fail_without_overflow() {
 #[test]
 fn glyph_mappings_remain_indivisible_and_metadata_is_defensive() {
     let p = PageText {
-        glyphs: vec![TextGlyph { text: "ffi".into(), rect: [0.0; 4] }, TextGlyph { text: "λ".into(), rect: [0.0; 4] }],
+        glyphs: vec![TextGlyph { text: "ffi".into(), rect: [0.0; 4], mcid: None }, TextGlyph { text: "λ".into(), rect: [0.0; 4], mcid: None }],
         line_of: vec![],
         space_before: vec![],
     };

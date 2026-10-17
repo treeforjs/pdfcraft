@@ -3871,7 +3871,7 @@ trailer << /Root 1 0 R >>
         let mut v = view(2, PageLayout::Single);
         v.copy_allowed = true;
         let tiny = Arc::new(PageText {
-            glyphs: vec![pdfcraft_render::TextGlyph { text: "a".into(), rect: [0.0, 0.0, 8.0, 10.0] }],
+            glyphs: vec![pdfcraft_render::TextGlyph { text: "a".into(), rect: [0.0, 0.0, 8.0, 10.0], mcid: None }],
             line_of: vec![0],
             space_before: vec![false],
         });
@@ -3884,7 +3884,11 @@ trailer << /Root 1 0 R >>
         v.last_queue = vec![request];
         let mut result = solid_result(request, 1, 1);
         result.text = Some(Arc::new(PageText {
-            glyphs: vec![pdfcraft_render::TextGlyph { text: "x".repeat(pdfcraft_engine::reader_selection::MAX_SELECTION_BYTES), rect: [0.0; 4] }],
+            glyphs: vec![pdfcraft_render::TextGlyph {
+                text: "x".repeat(pdfcraft_engine::reader_selection::MAX_SELECTION_BYTES),
+                rect: [0.0; 4],
+                mcid: None,
+            }],
             line_of: vec![0],
             space_before: vec![false],
         }));
@@ -3918,7 +3922,7 @@ trailer << /Root 1 0 R >>
         v.texts.insert(
             0,
             Arc::new(PageText {
-                glyphs: vec![pdfcraft_render::TextGlyph { text: "new selection".into(), rect: [0.0; 4] }],
+                glyphs: vec![pdfcraft_render::TextGlyph { text: "new selection".into(), rect: [0.0; 4], mcid: None }],
                 line_of: vec![0],
                 space_before: vec![false],
             }),
@@ -3951,7 +3955,7 @@ trailer << /Root 1 0 R >>
             view.texts.insert(
                 0,
                 Arc::new(PageText {
-                    glyphs: vec![pdfcraft_render::TextGlyph { text: "pending reader copy".into(), rect: [0.0; 4] }],
+                    glyphs: vec![pdfcraft_render::TextGlyph { text: "pending reader copy".into(), rect: [0.0; 4], mcid: None }],
                     line_of: vec![0],
                     space_before: vec![false],
                 }),

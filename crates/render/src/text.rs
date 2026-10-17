@@ -22,6 +22,9 @@ pub struct TextGlyph {
     pub text: String,
     /// Box in page view space (points, y down): [x0, y0, x1, y1].
     pub rect: [f32; 4],
+    /// The marked-content identifier (`/MCID`) of the innermost marked-content sequence around
+    /// the glyph that has one, which links it to a structure element (ISO 32000-2 §14.7.5).
+    pub mcid: Option<i32>,
 }
 
 /// The text of one page, in content order, with line structure.
@@ -196,9 +199,23 @@ impl PageText {
     }
 }
 
+/// Marked-content sequences nested deeper than this are counted but not tracked.
+const MAX_MARKED_DEPTH: usize = 1024;
+
 struct TextDevice {
     /// Separate flows by writing direction: right, down, left, up.
     glyphs: [Vec<TextGlyph>; 4],
+    /// For each open marked-content sequence: the MCID in effect inside it (its own, else the
+    /// enclosing one's).
+    marked: Vec<Option<i32>>,
+    /// Open sequences beyond [`MAX_MARKED_DEPTH`].
+    marked_overflow: usize,
+}
+
+impl TextDevice {
+    fn new() -> Self {
+        Self { glyphs: Default::default(), marked: Vec::new(), marked_overflow: 0 }
+    }
 }
 
 impl<'a> Device<'a> for TextDevice {
@@ -257,11 +274,28 @@ impl<'a> Device<'a> for TextDevice {
         }
         // A glyph whose Unicode is several characters (a ligature such as "ffi") stays one glyph
         // with its own box: the PDF gives no position for the characters inside it.
-        self.glyphs[dir].push(TextGlyph { text, rect: [b.x0 as f32, b.y0 as f32, b.x1 as f32, b.y1 as f32] });
+        let mcid = self.marked.last().copied().flatten();
+        self.glyphs[dir].push(TextGlyph { text, rect: [b.x0 as f32, b.y0 as f32, b.x1 as f32, b.y1 as f32], mcid });
     }
     fn draw_image(&mut self, _: Image<'a, '_>, _: Affine) {}
     fn pop_clip_path(&mut self) {}
     fn pop_transparency_group(&mut self) {}
+    fn begin_marked_content(&mut self, _tag: &[u8], mcid: Option<i32>) {
+        if self.marked.len() >= MAX_MARKED_DEPTH {
+            self.marked_overflow = self.marked_overflow.saturating_add(1);
+            return;
+        }
+        let inherited = self.marked.last().copied().flatten();
+        self.marked.push(mcid.or(inherited));
+    }
+    fn end_marked_content(&mut self) {
+        if self.marked_overflow > 0 {
+            self.marked_overflow -= 1;
+        } else {
+            // An unbalanced EMC is ignored.
+            self.marked.pop();
+        }
+    }
 }
 
 /// Extract the text of one page. Panics inside the interpreter are the caller's to catch.
@@ -275,7 +309,7 @@ pub(crate) fn extract_page(pdf: &Pdf, page: usize, settings: &InterpreterSetting
     let settings = settings.clone();
     let initial = p.initial_transform(true).to_kurbo();
     let mut ctx = Context::new(initial, Rect::new(0.0, 0.0, w as f64, h as f64), &cache, p.xref(), settings);
-    let mut dev = TextDevice { glyphs: Default::default() };
+    let mut dev = TextDevice::new();
     interpret_page(p, &mut ctx, &mut dev);
     // A horizontal heading must not force a vertical body back into horizontal line grouping.
     // Group each writing direction independently, then join flows from their topmost position.
@@ -739,7 +773,7 @@ mod tests {
     }
 
     fn g(t: &str, x0: f32, y0: f32, x1: f32) -> TextGlyph {
-        TextGlyph { text: t.into(), rect: [x0, y0, x1, y0 + 10.0] }
+        TextGlyph { text: t.into(), rect: [x0, y0, x1, y0 + 10.0], mcid: None }
     }
 
     /// The geometry-free search text finds a match exactly when the page search does, including
@@ -923,7 +957,7 @@ mod tests {
     #[test]
     fn words_and_lines_around_a_glyph() {
         let t = PageText {
-            glyphs: Vec::from(["a", "b", " ", "c", "d", "e", "f", "g"].map(|s| TextGlyph { text: s.into(), rect: [0.0; 4] })),
+            glyphs: Vec::from(["a", "b", " ", "c", "d", "e", "f", "g"].map(|s| TextGlyph { text: s.into(), rect: [0.0; 4], mcid: None })),
             line_of: vec![0, 0, 0, 0, 0, 1, 1, 1],
             space_before: vec![false, false, false, false, false, false, true, false],
         };
@@ -937,5 +971,46 @@ mod tests {
         assert_eq!(t.word_at(8), None);
         assert_eq!(t.line_at(8), None);
         assert_eq!(PageText::default().line_at(0), None);
+    }
+
+    #[test]
+    fn glyphs_carry_the_mcid_of_their_marked_content() {
+        use lopdf::{Document, Object, Stream, dictionary};
+        let mut doc = Document::with_version("1.7");
+        let font = doc.add_object(dictionary! { "Type" => "Font", "Subtype" => "Type1", "BaseFont" => "Helvetica" });
+        // MCID 0 around "Ab"; MCID 1 around a nested BMC (inherits 1) holding "Cd"; "Ef" outside
+        // any; an unbalanced EMC at the end is ignored.
+        let ops = "/H1 <</MCID 0>> BDC BT /F1 20 Tf 1 0 0 1 20 250 Tm (Ab) Tj ET EMC \
+                   /P <</MCID 1>> BDC /Span BMC BT /F1 12 Tf 1 0 0 1 20 200 Tm (Cd) Tj ET EMC EMC \
+                   BT /F1 12 Tf 1 0 0 1 20 150 Tm (Ef) Tj ET EMC";
+        let content = doc.add_object(Stream::new(dictionary! {}, ops.as_bytes().to_vec()));
+        let pages = doc.new_object_id();
+        let page = doc.add_object(dictionary! { "Type" => "Page", "Parent" => pages, "MediaBox" => vec![Object::Integer(0), Object::Integer(0), Object::Integer(300), Object::Integer(300)], "Resources" => dictionary! {"Font" => dictionary! {"F1" => font}}, "Contents" => content });
+        doc.objects.insert(pages, dictionary! {"Type" => "Pages", "Kids" => vec![Object::Reference(page)], "Count" => 1}.into());
+        let catalog = doc.add_object(dictionary! {"Type" => "Catalog", "Pages" => pages});
+        doc.trailer.set("Root", catalog);
+        let mut bytes = Vec::new();
+        doc.save_to(&mut bytes).unwrap();
+        let pdf = Pdf::new(std::sync::Arc::new(bytes)).unwrap();
+        let text = extract_page(&pdf, 0, &InterpreterSettings::default()).unwrap();
+        let got: Vec<(String, Option<i32>)> = text.glyphs.iter().map(|g| (g.text.clone(), g.mcid)).collect();
+        let want: Vec<(String, Option<i32>)> =
+            [("A", Some(0)), ("b", Some(0)), ("C", Some(1)), ("d", Some(1)), ("E", None), ("f", None)].map(|(t, m)| (t.to_string(), m)).to_vec();
+        assert_eq!(got, want);
+    }
+
+    #[test]
+    fn deeply_nested_marked_content_is_bounded() {
+        let mut dev = TextDevice::new();
+        for i in 0..(MAX_MARKED_DEPTH + 10) {
+            dev.begin_marked_content(b"Span", Some(i as i32));
+        }
+        assert_eq!(dev.marked.len(), MAX_MARKED_DEPTH);
+        assert_eq!(dev.marked.last().copied().flatten(), Some(MAX_MARKED_DEPTH as i32 - 1));
+        for _ in 0..(MAX_MARKED_DEPTH + 20) {
+            dev.end_marked_content();
+        }
+        assert!(dev.marked.is_empty());
+        assert_eq!(dev.marked_overflow, 0);
     }
 }
