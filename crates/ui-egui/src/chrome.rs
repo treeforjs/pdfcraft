@@ -124,6 +124,8 @@ pub fn tab_strip(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
                     let (icon, label) = match app.theme_preference {
                         ThemePreference::System => ("settings", tl!("Use system setting")),
                         ThemePreference::Light => ("sun", tl!("Light gray")),
+                        ThemePreference::Cream => ("palette", tl!("Cream")),
+                        ThemePreference::Dim => ("contrast", tl!("Dim")),
                         ThemePreference::Dark => ("moon", tl!("Dark gray")),
                     };
                     let tip = format!("{}: {label}", tl!("Display theme"));
@@ -142,6 +144,8 @@ fn theme_menu(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
     for (preference, command, label) in [
         (ThemePreference::System, "view.theme.system", "Use system setting"),
         (ThemePreference::Light, "view.theme.light", "Light gray"),
+        (ThemePreference::Cream, "view.theme.cream", "Cream"),
+        (ThemePreference::Dim, "view.theme.dim", "Dim"),
         (ThemePreference::Dark, "view.theme.dark", "Dark gray"),
     ] {
         if ui.radio(app.theme_preference == preference, tl!(label)).clicked() {

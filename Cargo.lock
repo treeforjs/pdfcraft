@@ -1093,7 +1093,7 @@ dependencies = [
 [[package]]
 name = "craft-ui"
 version = "0.1.0"
-source = "git+https://github.com/treeforjs/craftworks?rev=f9d8e268bb4136c068c569862a584c26bd6e0f79#f9d8e268bb4136c068c569862a584c26bd6e0f79"
+source = "git+https://github.com/treeforjs/craftworks?rev=fe21697406cbb4058b7e566a6615a4e5da24a2b5#fe21697406cbb4058b7e566a6615a4e5da24a2b5"
 dependencies = [
  "egui",
  "serde",
@@ -5514,7 +5514,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.3.4",
+ "getrandom 0.4.3",
  "once_cell",
  "rustix 1.1.5",
  "windows-sys 0.61.2",

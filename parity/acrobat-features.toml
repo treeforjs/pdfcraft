@@ -1596,10 +1596,10 @@ area = "B"
 tier = "P1"
 milestone = "M3"
 status = "shipped"
-commands = ["view.theme", "view.theme.light", "view.theme.dark"]
+commands = ["view.theme", "view.theme.light", "view.theme.cream", "view.theme.dim", "view.theme.dark"]
 tools = []
-evidence = ["crates/ui-egui/tests/theme.rs::toolbar_and_view_menu_share_three_state_preferences", "crates/ui-egui/src/theme.rs::text_is_readable_on_every_surface"]
-notes = "Toolbar and Display theme share three choices and a preference setter; manual choices exit system mode. Every text colour meets WCAG AA (4.5:1) on every surface in both themes; glyphs are pixel-aligned for sharper text at 100–150 % scaling."
+evidence = ["crates/ui-egui/tests/theme.rs::toolbar_and_view_menu_share_three_state_preferences", "crates/ui-egui/tests/theme.rs::cream_and_dim_are_offered_in_the_toolbar_and_view_menu", "crates/ui-egui/src/theme.rs::text_is_readable_on_every_surface"]
+notes = "Toolbar and Display theme share five choices (System, Light gray, Cream, Dim, Dark gray; Cream is warm paper with a red accent and Dim a mid grey, both beyond Acrobat) and a preference setter; manual choices exit system mode. Every text colour meets WCAG AA (4.5:1) on every surface in every theme; glyphs are pixel-aligned for sharper text at 100–150 % scaling."
 
 [[feature]]
 id = "view.theme-system"

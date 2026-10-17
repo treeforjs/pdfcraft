@@ -103,9 +103,13 @@ fn theme_commands_and_options_report_preference_and_effective_colours() {
     let (mut h, c) = harness();
     h.input_mut().system_theme = Some(egui::Theme::Dark);
     h.run_steps(2);
-    for (id, preference, effective) in
-        [("view.theme.system", "System", "Dark"), ("view.theme.light", "Light", "Light"), ("view.theme.dark", "Dark", "Dark")]
-    {
+    for (id, preference, effective) in [
+        ("view.theme.system", "System", "Dark"),
+        ("view.theme.light", "Light", "Light"),
+        ("view.theme.cream", "Cream", "Cream"),
+        ("view.theme.dim", "Dim", "Dim"),
+        ("view.theme.dark", "Dark", "Dark"),
+    ] {
         ok(&mut h, &c, "ui.command", json!({ "id": id }));
         let state = ok(&mut h, &c, "ui.state", json!({}));
         assert_eq!(state["theme_preference"], preference);
@@ -117,6 +121,10 @@ fn theme_commands_and_options_report_preference_and_effective_colours() {
     let state = ok(&mut h, &c, "ui.state", json!({}));
     assert_eq!(state["theme_preference"], "System");
     assert_eq!(state["theme"], "Light");
+    for (value, preference) in [("cream", "Cream"), ("dim", "Dim"), ("system", "System")] {
+        ok(&mut h, &c, "ui.set", json!({ "key": "theme", "value": value }));
+        assert_eq!(ok(&mut h, &c, "ui.state", json!({}))["theme_preference"], preference);
+    }
     assert!(call(&mut h, &c, "ui.set", json!({ "key": "theme", "value": "purple" })).is_err());
     assert_eq!(ok(&mut h, &c, "ui.state", json!({}))["theme_preference"], "System");
 }
