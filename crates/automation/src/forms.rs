@@ -576,8 +576,16 @@ impl Automation {
         if send == path.is_some() {
             return Err(bad("give path (save the data) or send: true (send it), not both"));
         }
+        let access = send.then(|| self.session.check_url(&submission.url));
         if send {
             pdfcraft_engine::submit::destination(&submission.url).map_err(bad)?;
+            if let Some(c) = access.as_ref().filter(|c| c.decision == pdfcraft_engine::url_access::UrlDecision::Block) {
+                return Err(failed(format!(
+                    "blocked: the form wasn't sent to {}: {} (see trust_urls_get; save the data with path instead)",
+                    submission.url.trim(),
+                    c.reason
+                )));
+            }
         }
         let payload = self.session.submission(id, &submission).map_err(failed)?;
         let doc = self.doc(a)?;
@@ -590,6 +598,9 @@ impl Automation {
             crate::write_atomic(&path, &payload.body)?;
             out["path"] = json!(path.to_string_lossy());
         } else {
+            if let Some(c) = &access {
+                out["url_access"] = crate::url_access::check_json(&submission.url, c);
+            }
             let reply = pdfcraft_engine::submit::send(&payload).map_err(failed)?;
             out["status"] = json!(reply.status);
             out["reply_content_type"] = json!(reply.content_type);

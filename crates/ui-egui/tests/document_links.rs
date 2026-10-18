@@ -233,3 +233,52 @@ fn a_numeric_host_is_shown_as_the_address_it_goes_to() {
     h.get_by_label("192.168.1.1");
     assert!(h.query_by_label_contains("alphabet").is_none());
 }
+
+/// Set the internet access settings (Trust Manager) on the app.
+fn set_policy(h: &mut Harness<'static, PdfCraftApp>, policy: serde_json::Value) {
+    let policy: pdfcraft_engine::url_access::UrlPolicy = serde_json::from_value(policy).unwrap();
+    h.state_mut().session.set_url_policy(&policy);
+}
+
+#[test]
+fn a_blocked_site_is_refused_with_the_reason() {
+    let _gpu = gpu();
+    let mut h = harness();
+    set_policy(&mut h, serde_json::json!({ "mode": "custom", "rules": [{ "host": "example.org", "action": "block" }] }));
+    click_link(&mut h);
+    assert_eq!(h.state().pending_link, None, "nothing is offered");
+    assert_eq!(h.state().last_opened_url, None);
+    let toast = h.state().toast.clone().expect("the user is told").0;
+    assert!(toast.contains("block example.org"), "{toast}");
+}
+
+#[test]
+fn an_allowed_site_opens_without_asking_and_block_all_refuses_it() {
+    let _gpu = gpu();
+    let mut h = harness();
+    set_policy(&mut h, serde_json::json!({ "mode": "custom", "rules": [{ "host": "EXAMPLE.org.", "action": "allow" }] }));
+    click_link(&mut h);
+    assert_eq!(h.state().pending_link, None);
+    assert_eq!(h.state().last_opened_url.as_deref(), Some(LINK_URL));
+    // The setting survives a restart.
+    let saved = h.state().persist();
+    let mut fresh = PdfCraftApp::new();
+    fresh.restore(&saved);
+    assert_eq!(fresh.session.url_policy().rules[0].host, "example.org");
+    // Block all overrides the list.
+    let mut h = harness();
+    set_policy(&mut h, serde_json::json!({ "mode": "block-all", "rules": [{ "host": "example.org", "action": "allow" }] }));
+    click_link(&mut h);
+    assert_eq!((h.state().pending_link.clone(), h.state().last_opened_url.clone()), (None, None));
+}
+
+#[test]
+fn a_blocked_site_is_not_offered_for_a_form_submission() {
+    let _gpu = gpu();
+    let mut h = harness();
+    set_policy(&mut h, serde_json::json!({ "mode": "block-all" }));
+    let id = h.state().views[0].id;
+    h.state_mut().start_submit(id, "", pdfcraft_engine::submit::Submission::to_url("https://example.org/forms"));
+    let problem = h.state().submit_draft.as_ref().and_then(|d| d.problem.clone()).expect("the dialog says why");
+    assert!(problem.contains("block every web site"), "{problem}");
+}

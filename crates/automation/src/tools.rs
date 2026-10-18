@@ -22,6 +22,15 @@ pub struct ToolDef {
     pub command: Option<&'static str>,
 }
 
+/// A list of internet access rules (`trust_urls_set`).
+fn url_rules() -> Value {
+    json!({ "type": "array", "maxItems": 1000, "items": { "type": "object", "properties": {
+        "host": { "type": "string" },
+        "action": { "type": "string", "enum": ["allow", "block", "ask"] },
+        "subdomains": { "type": "boolean", "description": "Also match subdomains (default true; never for an IP literal)." },
+    }, "required": ["host", "action"] } })
+}
+
 fn doc() -> Value {
     json!({ "type": "integer", "minimum": 1, "description": "Document id from doc_open or doc_list." })
 }
@@ -481,7 +490,7 @@ pub fn tools() -> Vec<ToolDef> {
         t("doc_export_data", "Export comments or form data", "Write comments and/or form data to path; the extension picks the format: .xfdf or .fdf (comments and/or fields), .xml, .csv or .txt (form data). what: all (default), comments, fields.")
             .destructive()
             .with(schema(json!({ "doc": doc(), "path": { "type": "string" }, "what": { "type": "string", "enum": ["all", "comments", "fields"] } }), &["doc", "path"])),
-        t("form_submit", "Submit a form", "Run a Submit Form action: field names a push button whose action submits the form (its address, format and field selection are used), or url submits every field as FDF. format overrides it: fdf, xfdf, html (name=value pairs) or pdf (the whole document as Save writes it). Fields marked NoExport, buttons and signatures are never sent. Give path to save the data there, or send: true to send it to the address (http or https only; no redirects). Returns url, format, content_type, method, bytes, the fields sent, and for a send the server's status.")
+        t("form_submit", "Submit a form", "Run a Submit Form action: field names a push button whose action submits the form (its address, format and field selection are used), or url submits every field as FDF. format overrides it: fdf, xfdf, html (name=value pairs) or pdf (the whole document as Save writes it). Fields marked NoExport, buttons and signatures are never sent. Give path to save the data there, or send: true to send it to the address (http or https only; no redirects; refused when the internet access settings block the host, see trust_urls_get, and the decision is returned as url_access). Returns url, format, content_type, method, bytes, the fields sent, and for a send the server's status.")
             .with(schema(
                 json!({ "doc": doc(), "field": { "type": "string" }, "url": { "type": "string" }, "format": { "type": "string", "enum": ["fdf", "xfdf", "html", "pdf"] }, "path": { "type": "string" }, "send": { "type": "boolean" } }),
                 &["doc"],
@@ -937,6 +946,22 @@ pub fn tools() -> Vec<ToolDef> {
             json!({ "paths": { "type": "array", "items": { "type": "string" } }, "password": { "type": "string" }, "clear": { "type": "boolean" } }),
             &[],
         )),
+        t("trust_urls_get", "Internet access settings", "Read the policy for internet access from PDFs (Acrobat: Trust Manager ▸ Internet Access from PDF Files): mode (allow-all, block-all or custom), default_action for hosts on no rule in custom mode (allow, block or ask), and rules [{host, action, subdomains}]. It governs links' URI actions, Submit Form and scripts' app.launchURL/submitForm. The desktop app keeps it with its settings; here it lasts for the session.")
+            .ro()
+            .with(schema(json!({}), &[])),
+        t("trust_urls_set", "Change internet access settings", "Change the internet access policy: mode (allow-all, block-all, custom), default_action (allow, block, ask), rules (replace the whole list), remove (hosts to drop), then add (rules to add or replace). A rule's host is a name (matches its subdomains unless subdomains: false), *.name, an IP literal (matches only itself) or a whole address; it is stored lowercase, without a trailing dot, port or user name, internationalised names in their xn-- form. Nothing changes unless every argument is valid. Returns the policy and the hosts removed.").with(schema(
+            json!({
+                "mode": { "type": "string", "enum": ["allow-all", "block-all", "custom"] },
+                "default_action": { "type": "string", "enum": ["allow", "block", "ask"] },
+                "rules": url_rules(),
+                "add": url_rules(),
+                "remove": { "type": "array", "maxItems": 1000, "items": { "type": "string" } },
+            }),
+            &[],
+        )),
+        t("trust_url_check", "Check an address against internet access settings", "Evaluate url (or up to 100 urls) the way a link, Submit Form or script request is: decision allow, block or prompt (ask first), kind web (governed by the policy), mail (mailto: opens the email app; always prompt) or refused (any other scheme, hidden characters, too long: always block), the scheme, the normalised host, the rule that decided and the reason. Reaches nothing.")
+            .ro()
+            .with(schema(json!({ "url": { "type": "string" }, "urls": { "type": "array", "minItems": 1, "maxItems": 100, "items": { "type": "string" } } }), &[])),
         t("comment_mark", "Mark a comment with a checkmark", "Mark or unmark a comment with a checkmark (Acrobat: Mark with checkmark), recorded as a private reply. Undoable.").with(schema(
             comment_ref(json!({ "marked": { "type": "boolean", "description": "Default true." }, "author": { "type": "string" } })),
             &["doc"],
