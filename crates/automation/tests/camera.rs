@@ -66,7 +66,8 @@ fn table(x: f64, y: f64) -> [f64; 3] {
 /// A pinhole camera (focal length `f` pixels, principal point at the centre) looking at a page
 /// of `pw`×`ph` units, tilted by `rx`, `ry` and turned by `rz` (radians) at distance `z`.
 /// Returns the page (u, v in 0..1) → photo pixel map.
-fn camera(pw: f64, ph: f64, rx: f64, ry: f64, rz: f64, z: f64, f: f64) -> impl Fn(f64, f64) -> [f64; 2] {
+#[allow(clippy::too_many_arguments)]
+fn camera(w: usize, h: usize, pw: f64, ph: f64, rx: f64, ry: f64, rz: f64, z: f64, f: f64) -> impl Fn(f64, f64) -> [f64; 2] {
     let (sx, cx) = rx.sin_cos();
     let (sy, cy) = ry.sin_cos();
     let (sz, cz) = rz.sin_cos();
@@ -75,7 +76,7 @@ fn camera(pw: f64, ph: f64, rx: f64, ry: f64, rz: f64, z: f64, f: f64) -> impl F
         let p = [p[0] * cz - p[1] * sz, p[0] * sz + p[1] * cz, p[2]];
         let p = [p[0], p[1] * cx - p[2] * sx, p[1] * sx + p[2] * cx];
         let p = [p[0] * cy + p[2] * sy, p[1], -p[0] * sy + p[2] * cy];
-        [W as f64 / 2.0 + f * p[0] / (p[2] + z), H as f64 / 2.0 + f * p[1] / (p[2] + z)]
+        [w as f64 / 2.0 + f * p[0] / (p[2] + z), h as f64 / 2.0 + f * p[1] / (p[2] + z)]
     }
 }
 
@@ -114,15 +115,24 @@ fn homography(q: [[f64; 2]; 4]) -> ([[f64; 3]; 3], [[f64; 3]; 3]) {
     (h, inv)
 }
 
-/// The photo (RGB) of the source page, and the page's corners in it.
+/// The `W`×`H` photo (RGB) of the source page, and the page's corners in it.
 fn photograph(src: &(usize, usize, Vec<u8>)) -> (Vec<u8>, [[f64; 2]; 4]) {
+    photograph_sized(src, W, H)
+}
+
+/// A `w`×`h` photo (RGB) of the source page: the same view as [`photograph`], scaled with
+/// the photo's size (the focal length grows with it), and the page's corners in it.
+fn photograph_sized(src: &(usize, usize, Vec<u8>), w: usize, h: usize) -> (Vec<u8>, [[f64; 2]; 4]) {
     let (sw, sh, luma) = src;
-    let project = camera(*sw as f64, *sh as f64, 0.33, -0.27, 0.07, 2300.0, 1500.0);
+    // The page is as large in the photo whatever the source page's resolution.
+    let k = w as f64 / W as f64;
+    let page = 765.0 * k / *sw as f64;
+    let project = camera(w, h, *sw as f64 * page, *sh as f64 * page, 0.33, -0.27, 0.07, 2300.0 * k, 1500.0 * k);
     let truth = [project(0.0, 0.0), project(1.0, 0.0), project(1.0, 1.0), project(0.0, 1.0)];
     let (_, inv) = homography(truth);
-    let mut px = Vec::with_capacity(W * H * 3);
-    for y in 0..H {
-        for x in 0..W {
+    let mut px = Vec::with_capacity(w * h * 3);
+    for y in 0..h {
+        for x in 0..w {
             let mut sum = [0.0; 3];
             for (ox, oy) in [(0.25, 0.25), (0.75, 0.25), (0.25, 0.75), (0.75, 0.75)] {
                 let (fx, fy) = (x as f64 + ox, y as f64 + oy);
@@ -145,10 +155,10 @@ fn photograph(src: &(usize, usize, Vec<u8>)) -> (Vec<u8>, [[f64; 2]; 4]) {
     (px, truth)
 }
 
-/// An image-only page dictionary drawing `img` over a `W`×`H` media box.
-fn photo_page(doc: &mut Document, pages: pdfcraft_cos::ObjRef, img: Stream, rotate: i64) -> pdfcraft_cos::ObjRef {
+/// An image-only page dictionary drawing `img` over a `w`×`h` media box.
+fn photo_page(doc: &mut Document, pages: pdfcraft_cos::ObjRef, img: Stream, rotate: i64, (w, h): (usize, usize)) -> pdfcraft_cos::ObjRef {
     let img = doc.add(Object::Stream(img));
-    let c = doc.add(Object::Stream(Stream::from_raw(Dict::new(), format!("q {W} 0 0 {H} 0 0 cm /Im0 Do Q").into_bytes())));
+    let c = doc.add(Object::Stream(Stream::from_raw(Dict::new(), format!("q {w} 0 0 {h} 0 0 cm /Im0 Do Q").into_bytes())));
     let mut x = Dict::new();
     x.set(b"Im0".to_vec(), Object::Ref(img));
     let mut res = Dict::new();
@@ -156,7 +166,7 @@ fn photo_page(doc: &mut Document, pages: pdfcraft_cos::ObjRef, img: Stream, rota
     let mut p = Dict::new();
     p.set(b"Type".to_vec(), Object::name("Page"));
     p.set(b"Parent".to_vec(), Object::Ref(pages));
-    p.set(b"MediaBox".to_vec(), Object::Array(vec![0.into(), 0.into(), (W as i64).into(), (H as i64).into()]));
+    p.set(b"MediaBox".to_vec(), Object::Array(vec![0.into(), 0.into(), (w as i64).into(), (h as i64).into()]));
     p.set(b"Resources".to_vec(), Object::Dict(res));
     p.set(b"Contents".to_vec(), Object::Ref(c));
     if rotate != 0 {
@@ -165,12 +175,12 @@ fn photo_page(doc: &mut Document, pages: pdfcraft_cos::ObjRef, img: Stream, rota
     doc.add(Object::Dict(p))
 }
 
-fn image_dict() -> Dict {
+fn image_dict((w, h): (usize, usize)) -> Dict {
     let mut d = Dict::new();
     d.set(b"Type".to_vec(), Object::name("XObject"));
     d.set(b"Subtype".to_vec(), Object::name("Image"));
-    d.set(b"Width".to_vec(), Object::Int(W as i64));
-    d.set(b"Height".to_vec(), Object::Int(H as i64));
+    d.set(b"Width".to_vec(), Object::Int(w as i64));
+    d.set(b"Height".to_vec(), Object::Int(h as i64));
     d.set(b"BitsPerComponent".to_vec(), Object::Int(8));
     d.set(b"ColorSpace".to_vec(), Object::name("DeviceRGB"));
     d
@@ -179,14 +189,21 @@ fn image_dict() -> Dict {
 /// Page 1: the photo (Flate). Page 2: the same photo as JPEG on a page turned 90°. Page 3: a
 /// page without an image.
 fn camera_pdf(photo: &[u8]) -> Vec<u8> {
+    camera_pdf_sized(photo, (W, H))
+}
+
+/// [`camera_pdf`] for a `size` photo.
+fn camera_pdf_sized(photo: &[u8], size: (usize, usize)) -> Vec<u8> {
     let mut doc = Document::new_empty();
     let pages = doc.root().and_then(|r| doc.get(r).as_dict().and_then(|d| d.reference(b"Pages"))).unwrap();
-    let p1 = photo_page(&mut doc, pages, Stream::flate(image_dict(), photo), 0);
+    let p1 = photo_page(&mut doc, pages, Stream::flate(image_dict(size), photo), 0, size);
     let mut jpeg = Vec::new();
-    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg, 92).encode(photo, W as u32, H as u32, image::ExtendedColorType::Rgb8).unwrap();
-    let mut d = image_dict();
+    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg, 92)
+        .encode(photo, size.0 as u32, size.1 as u32, image::ExtendedColorType::Rgb8)
+        .unwrap();
+    let mut d = image_dict(size);
     d.set(b"Filter".to_vec(), Object::name("DCTDecode"));
-    let p2 = photo_page(&mut doc, pages, Stream::from_raw(d, jpeg), 90);
+    let p2 = photo_page(&mut doc, pages, Stream::from_raw(d, jpeg), 90, size);
     let c = doc.add(Object::Stream(Stream::from_raw(Dict::new(), b"0 0 1 rg 10 10 100 100 re f".to_vec())));
     let mut p = Dict::new();
     p.set(b"Type".to_vec(), Object::name("Page"));
@@ -360,12 +377,23 @@ fn camera_photos_without_a_page_are_only_enhanced_or_skipped() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// The share of `TEXT`'s words found in `text` (lower-case letters and digits compared).
+fn recall(text: &str) -> f64 {
+    let norm = |w: &str| w.chars().filter(char::is_ascii_alphanumeric).flat_map(char::to_lowercase).collect::<String>();
+    let found: std::collections::HashSet<String> = text.split_whitespace().map(norm).collect();
+    let words: Vec<String> = TEXT.split_whitespace().map(norm).filter(|w| !w.is_empty()).collect();
+    words.iter().filter(|w| found.contains(*w)).count() as f64 / words.len() as f64
+}
+
 #[test]
 fn recognize_text_can_correct_camera_photos_first() {
-    let src = source(1.25);
-    let (photo, _) = photograph(&src);
+    // A photo at phone-camera detail: twice the size of the other tests' (the page about 1000 by
+    // 1300 pixels in it, letters some 10 pixels high), the page rendered finer to match.
+    let size = (2 * W, 2 * H);
+    let src = source(2.5);
+    let (photo, _) = photograph_sized(&src, size.0, size.1);
     let dir = root("ocr");
-    std::fs::write(dir.join("photo.pdf"), camera_pdf(&photo)).unwrap();
+    std::fs::write(dir.join("photo.pdf"), camera_pdf_sized(&photo, size)).unwrap();
     let mut a = Automation::new().with_root(&dir).unwrap();
     let doc = ok(&mut a, "doc_open", json!({ "path": "photo.pdf" }))["doc"].as_u64().unwrap();
     for bad in [json!({ "doc": doc, "camera": "yes" }), json!({ "doc": doc, "camera": true, "output": "loud" })] {
@@ -378,10 +406,17 @@ fn recognize_text_can_correct_camera_photos_first() {
         assert!(a.call("edit_undo", &json!({ "doc": doc })).is_err(), "nothing was changed");
         return;
     }
+    // The photo as it is, for comparison (a second copy of the file).
+    let plain = ok(&mut a, "doc_open", json!({ "path": "photo.pdf" }))["doc"].as_u64().unwrap();
+    let raw = ok(&mut a, "ocr_recognize", json!({ "doc": plain, "pages": [1] }));
+    let raw_text = raw["pages"][0]["text"].as_str().unwrap().to_lowercase();
     let r = ok(&mut a, "ocr_recognize", json!({ "doc": doc, "pages": [1], "camera": true }));
     assert_eq!(r["camera"][0]["found"].as_bool(), Some(true), "{r}");
     let text = r["pages"][0]["text"].as_str().unwrap().to_lowercase();
-    assert!(text.contains("perspective") && text.contains("outline"), "{text}");
+    let (before, after) = (recall(&raw_text), recall(&text));
+    eprintln!("recall without correction {before:.2}: {raw_text:?}\nrecall with correction {after:.2}: {text:?}");
+    assert!(after >= 0.9, "corrected page read {after:.2} of the words: {text}");
+    assert!(after >= before + 0.1, "the correction did not help: {before:.2} -> {after:.2}");
     assert_eq!(ok(&mut a, "edit_undo", json!({ "doc": doc }))["undone"], "Recognize text");
     assert!(a.call("edit_undo", &json!({ "doc": doc })).is_err(), "one step");
     let _ = std::fs::remove_dir_all(dir);
