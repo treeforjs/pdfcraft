@@ -415,6 +415,21 @@ fn an_icc_destination_converts_through_its_tables_and_becomes_the_output_intent(
 }
 
 #[test]
+fn device_output_converts_through_the_profile_but_writes_device_cmyk() {
+    let bytes = Arc::new(black_only_profile());
+    let settings = ColorConversion { destination: Destination::Icc(bytes), device_output: true, ..cmyk() };
+    let mut doc = doc_with("<< >>", &["0.5 0.5 0.5 rg 0 0 1 1 re f 0 0 0 1 k 0 0 2 2 re f"], &[]);
+    let r = convert_colors(&mut doc, &[0], &settings).unwrap();
+    assert!(!r.approximate, "{r:?}");
+    let c = content(&doc, 0);
+    let p = paints(&c);
+    assert!(p[0].1.starts_with("k 0 0 0 0.4"), "the profile's numbers, as DeviceCMYK: {c}");
+    assert_eq!(p[1].1, "k 0 0 0 1", "DeviceCMYK stays as it was: {c}");
+    let res = doc.dict(pdfcraft_model::pages(&doc)[0].dict.get(b"Resources").unwrap()).unwrap();
+    assert!(res.get(b"ColorSpace").is_none(), "no ICCBased space is added: {res:?}");
+}
+
+#[test]
 fn conversion_survives_save_and_reopen() {
     let img = binary_stream("/Type /XObject /Subtype /Image /Width 1 /Height 1 /ColorSpace /DeviceRGB /BitsPerComponent 8", &[0, 0, 255]);
     let mut doc = doc_with("<< /XObject << /Im 5 0 R >> >>", &["1 0 0 rg 0 0 1 1 re f /Im Do"], &[img]);

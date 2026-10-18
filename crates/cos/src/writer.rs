@@ -241,6 +241,10 @@ pub fn write_full(doc: &Document, opts: &SaveOptions) -> Result<Vec<u8>, CosErro
     if doc.stream_limited() {
         return Err(CosError::ReadOnlyLimit);
     }
+    // A file that declares a PDF/X part based on PDF 1.3 or 1.4 must keep its version: no
+    // object streams (which need 1.5), so the header isn't raised.
+    let classic = SaveOptions { object_streams: opts.object_streams && !keeps_pre_15_version(doc), ..opts.clone() };
+    let opts = &classic;
     // A full traversal must not fill the editor's shared caches (which undo snapshots also
     // own). Parsed objects and decoded object streams are temporary working data here.
     let mut reader = doc.object_reader();
@@ -565,6 +569,20 @@ pub(crate) fn stamp_mod_date(doc: &mut Document, opts: &SaveOptions) {
     }
 }
 
+/// Whether the document information declares a PDF/X part that is based on PDF 1.3 or 1.4
+/// (`GTS_PDFXVersion` `PDF/X-1…` or `PDF/X-3…`), whose version a save must not raise.
+fn keeps_pre_15_version(doc: &Document) -> bool {
+    let Some(info) = doc.trailer().get(b"Info").map(|i| doc.resolve(i)) else { return false };
+    let Some(v) = info.as_dict().and_then(|d| d.get(b"GTS_PDFXVersion")).map(|v| doc.resolve(v)) else { return false };
+    let text = match &*v {
+        Object::String(s) => s.to_text(),
+        Object::Name(n) => String::from_utf8_lossy(n).into_owned(),
+        _ => return false,
+    };
+    let t = text.trim();
+    (t.starts_with("PDF/X-1") || t.starts_with("PDF/X-3")) && doc.version().get(..3).is_some_and(|v| v < "1.5")
+}
+
 /// Keep an existing `/ID`, or create one (two equal 16-byte strings, §14.4).
 pub(crate) fn ensure_id(trailer: &mut Dict, opts: &SaveOptions, content: &[u8]) {
     if matches!(trailer.get(b"ID"), Some(Object::Array(a)) if a.len() == 2) {
@@ -661,6 +679,23 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn pdfx_1a_and_3_files_keep_their_version_on_a_full_save() {
+        let mut doc = Document::new_empty();
+        doc.set_version("1.4");
+        let mut info = Dict::new();
+        info.set(b"GTS_PDFXVersion".to_vec(), Object::String(PdfString::literal(b"PDF/X-1a:2003".to_vec())));
+        let i = doc.add(Object::Dict(info.clone()));
+        doc.trailer_mut().set(b"Info".to_vec(), Object::Ref(i));
+        let saved = write_full(&doc, &SaveOptions::default()).unwrap();
+        assert!(saved.starts_with(b"%PDF-1.4"), "{:?}", String::from_utf8_lossy(&saved[..8]));
+        assert!(!saved.windows(6).any(|w| w == b"ObjStm"), "no object streams below PDF 1.5");
+        assert!(Document::open(std::sync::Arc::new(saved)).is_ok());
+        info.set(b"GTS_PDFXVersion".to_vec(), Object::String(PdfString::literal(b"PDF/X-4".to_vec())));
+        doc.set(i, Object::Dict(info));
+        assert!(write_full(&doc, &SaveOptions::default()).unwrap().starts_with(b"%PDF-1.5"), "other files still get object streams");
     }
 
     #[test]

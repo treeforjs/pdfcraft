@@ -780,6 +780,7 @@ impl Automation {
             "pdfa_verify" => self.pdfa_verify(&a)?,
             "pdfua_verify" => self.pdfua_verify(&a)?,
             "pdfx_verify" => self.pdfx_verify(&a)?,
+            "pdfx_convert" => self.pdfx_convert(&a)?,
             "preflight_profiles" => self.preflight_profiles(),
             "preflight_analyze" => self.preflight_analyze(&a)?,
             "preflight_fix" => self.preflight_fix(&a)?,

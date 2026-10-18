@@ -27,6 +27,7 @@ pub mod coverage;
 pub mod flatten;
 pub mod icc;
 pub mod pdfx;
+pub mod pdfx_convert;
 pub mod separations;
 mod unicode;
 mod xmp;
@@ -35,6 +36,7 @@ pub use flatten::{
     FlattenPreset, FlattenReport, FlattenSettings, PageAction, PageFlatten, PageRaster, flatten_transparency, rasterize_pages, transparent_pages,
 };
 pub use pdfx::{MAX_X_FINDINGS, X_NOT_CHECKED, X_RULES, XFinding, XOptions, XPart, XReport, XRule, XSeverity, declared_pdfx, verify_pdfx};
+pub use pdfx_convert::{ICC_REGISTRY, IccHeader, MAX_PROFILE_BYTES, XConvertOptions, XIntent, pdfx_finish, pdfx_prepare};
 
 use pdfcraft_cos::{Dict, Document, ObjRef, Object, PdfString, Stream};
 

@@ -96,6 +96,19 @@ for fonts, colour spaces, transparency, transfer functions, halftones and PostSc
 Rules whose ISO wording we are not certain of report warnings, which don't affect
 `conforms`; `X_NOT_CHECKED` lists what isn't decided. It reads the document only.
 
+## Convert to PDF/X
+
+`pdfx_convert` holds the document-level steps of Convert to PDF/X (tool `pdfx_convert`; the
+engine's `Session::pdfx_convert` runs them with the annotation flattener, the transparency
+flattener and Convert Colors as one undoable edit, then `verify_pdfx` again).
+`pdfx_prepare` removes encryption, JavaScript, additional actions, non-printing annotations,
+transfer functions, bad halftones and OPI, and embeds unembedded standard-14 Type 1 fonts with
+the renderer's Foxit substitutes (standard widths, approximate descriptor metrics);
+`pdfx_finish` removes the form and writes the GTS_PDFX output intent, TrimBox/BleedBox, the
+PDF version, the document information, X-4 XMP and the file ID. Each step changes only what
+needs changing, so a second conversion changes nothing. `XConvertOptions::validate` refuses
+bad options (a non-prtr profile, RGB for X-1a, X-4 without a profile, bad boxes).
+
 ## Overprint, rich-black and registration warnings
 
 `colour_warnings::check` (tool `print_color_warnings`) reports Output Preview's colour

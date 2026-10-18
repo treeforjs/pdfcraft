@@ -29,6 +29,34 @@ pub use raster::{
 pub use svg::{SvgOptions, SvgPage, SvgStats};
 pub use text::{PageText, TextGlyph, find_in_chars};
 
+/// The program of the substitute the renderer draws a standard-14 font with when a PDF doesn't
+/// embed it (the BSD-3-Clause Foxit/PDFium faces vendored in hayro-interpret, `ATTRIBUTION.toml`),
+/// as bare CFF data (`FontFile3 /Subtype /Type1C`). `base_font` is one of the fourteen exact
+/// standard names (`Helvetica`, `Times-BoldItalic`, `ZapfDingbats`, …); anything else is `None`.
+/// Convert to PDF/X embeds them so that unembedded standard fonts print as they display.
+pub fn standard_font_program(base_font: &str) -> Option<Vec<u8>> {
+    use hayro::hayro_interpret::font::StandardFont as S;
+    let font = match base_font {
+        "Helvetica" => S::Helvetica,
+        "Helvetica-Bold" => S::HelveticaBold,
+        "Helvetica-Oblique" => S::HelveticaOblique,
+        "Helvetica-BoldOblique" => S::HelveticaBoldOblique,
+        "Courier" => S::Courier,
+        "Courier-Bold" => S::CourierBold,
+        "Courier-Oblique" => S::CourierOblique,
+        "Courier-BoldOblique" => S::CourierBoldOblique,
+        "Times-Roman" => S::TimesRoman,
+        "Times-Bold" => S::TimesBold,
+        "Times-Italic" => S::TimesItalic,
+        "Times-BoldItalic" => S::TimesBoldItalic,
+        "Symbol" => S::Symbol,
+        "ZapfDingbats" => S::ZapfDingBats,
+        _ => return None,
+    };
+    let (data, _) = font.get_font_data();
+    Some((*data).as_ref().to_vec())
+}
+
 /// Errors surfaced to the user when a document cannot be opened.
 #[derive(Debug, thiserror::Error)]
 pub enum OpenError {

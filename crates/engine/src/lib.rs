@@ -25,6 +25,7 @@ pub mod js;
 pub mod links;
 pub mod ocr;
 pub mod optimizer;
+pub mod pdfx;
 pub mod pptx_export;
 pub mod preflight;
 pub mod reader_selection;
@@ -1499,6 +1500,11 @@ pub enum Edit {
     ConvertPdfA {
         level: pdfcraft_preflight::Level,
     },
+    /// Preflight ▸ Convert to PDF/X: the fixes for `options.part` (see [`pdfx`]); run it through
+    /// [`Session::pdfx_convert`], which checks the result first.
+    ConvertPdfX {
+        options: Box<pdfcraft_preflight::XConvertOptions>,
+    },
     /// Explicit fixes bound to the analyzed object values.
     PreflightFix {
         fixes: Vec<pdfcraft_preflight::analysis::FixRequest>,
@@ -1806,6 +1812,7 @@ impl Edit {
             Edit::ApplyScriptChanges { .. } => "Run JavaScript".into(),
             Edit::XfaEvent { .. } => "Run form script".into(),
             Edit::ConvertPdfA { level } => format!("Save as {}", level.label()),
+            Edit::ConvertPdfX { options } => format!("Convert to {}", options.part.label()),
             Edit::PreflightFix { .. } => "Apply preflight fixes".into(),
             Edit::SetFieldScript { name, .. } => format!("Edit script of {name}"),
             Edit::SetSignatureLock { field, .. } => format!("Set what {field} locks"),
@@ -2035,6 +2042,7 @@ fn check_permission(edit: &Edit, p: &pdfcraft_cos::Permissions) -> Result<(), Ed
         | Edit::SetFieldScript { .. }
         | Edit::SetSignatureLock { .. }
         | Edit::ConvertPdfA { .. }
+        | Edit::ConvertPdfX { .. }
         | Edit::PreflightFix { .. }
         | Edit::EditTextLine { .. }
         | Edit::EditTextBlock { .. }
@@ -2328,6 +2336,10 @@ fn run_edit(doc: &mut pdfcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -> 
         }
         Edit::ConvertPdfA { level } => {
             pdfcraft_a11y::convert_pdfa(doc, *level).map_err(|e| EditError::Invalid(e.to_string()))?;
+        }
+        Edit::ConvertPdfX { options } => {
+            let date = cx.date.clone().unwrap_or_else(|| "D:19700101000000Z".into());
+            pdfx::run(doc, options, &date)?;
         }
         Edit::PreflightFix { fixes } => {
             pdfcraft_preflight::analysis::apply_fixes(doc, fixes, || false).map_err(EditError::Invalid)?;

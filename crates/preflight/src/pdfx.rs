@@ -90,7 +90,8 @@ impl XPart {
         }
     }
 
-    fn is_x1a(self) -> bool {
+    /// PDF/X-1a (either edition): CMYK, gray and spot colour only.
+    pub fn is_x1a(self) -> bool {
         matches!(self, XPart::X1a2001 | XPart::X1a2003)
     }
 

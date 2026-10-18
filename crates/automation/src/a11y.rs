@@ -818,7 +818,7 @@ impl Automation {
     }
 
     pub(crate) fn pdfx_verify(&self, a: &Args) -> Result<Value> {
-        use pdfcraft_engine::pdfa::{MAX_X_FINDINGS, X_NOT_CHECKED, X_RULES, XOptions, XPart};
+        use pdfcraft_engine::pdfa::{MAX_X_FINDINGS, XOptions, XPart};
         let part = match a.opt_str("standard")? {
             None => None,
             Some(s) => Some(XPart::from_id(s).ok_or_else(|| {
@@ -834,6 +834,12 @@ impl Automation {
                 .ok_or_else(|| ToolError::InvalidArgs(format!("max_findings must be 1 to {MAX_X_FINDINGS}, not {n}")))?,
         };
         let r = self.doc(a)?.pdfx_verify(&XOptions { part, max_findings }).ok_or_else(|| failed("the document can't be read for checking"))?;
+        Ok(Self::pdfx_report_json(&r))
+    }
+
+    /// A PDF/X verification as `pdfx_verify` returns it.
+    pub(crate) fn pdfx_report_json(r: &pdfcraft_engine::pdfa::XReport) -> Value {
+        use pdfcraft_engine::pdfa::{X_NOT_CHECKED, X_RULES};
         let counts: serde_json::Map<String, Value> = r.checked.iter().map(|id| ((*id).to_owned(), json!(r.count(id)))).collect();
         let kept = |id: &str| r.findings.iter().filter(|f| f.rule == id).count();
         let truncated = r.counts.iter().any(|(id, n)| *n > kept(id));
@@ -848,7 +854,7 @@ impl Automation {
             .map(|x| json!({ "rule": x.id, "severity": x.severity(r.part).id(), "description": x.description }))
             .collect();
         let errors = r.findings.iter().filter(|f| f.severity == pdfcraft_engine::pdfa::XSeverity::Error).count();
-        Ok(json!({
+        json!({
             "standard": r.part.label(),
             "conforms": r.conforms(),
             "declared": r.declared,
@@ -861,7 +867,85 @@ impl Automation {
             "findings_truncated": truncated,
             "checked": rules,
             "not_checked": X_NOT_CHECKED,
-        }))
+        })
+    }
+
+    /// Preflight ▸ Convert to PDF/X.
+    pub(crate) fn pdfx_convert(&mut self, a: &Args) -> Result<Value> {
+        use pdfcraft_engine::pdfa::{FlattenPreset, FlattenSettings, XConvertOptions, XIntent, XPart};
+        let bad = |m: String| ToolError::InvalidArgs(m);
+        let level = a.str("level")?;
+        let part = XPart::from_level(level).ok_or_else(|| bad(format!("unknown level {level:?} (x1a, x3, x4, or X-1a:2001, X-3:2002)")))?;
+        let profile = match a.opt_str("profile")? {
+            Some(p) => {
+                let path = self.resolve(p, false)?;
+                let max = pdfcraft_engine::pdfa::MAX_PROFILE_BYTES;
+                let size = std::fs::metadata(&path).map_err(|e| failed(format!("{}: {e}", path.display())))?.len();
+                if size > max as u64 {
+                    return Err(bad(format!("profile is larger than {} MB", max >> 20)));
+                }
+                Some(std::sync::Arc::new(std::fs::read(&path).map_err(|e| failed(format!("{}: {e}", path.display())))?))
+            }
+            None => None,
+        };
+        let condition = a.opt_str("output_condition")?.map(str::to_owned);
+        let info = a.opt_str("output_info")?.map(str::to_owned);
+        let intent = match (condition, profile) {
+            (Some(condition), profile) => Some(XIntent { condition, info, profile }),
+            (None, Some(profile)) => Some(XIntent { condition: "Custom".into(), info, profile: Some(profile) }),
+            (None, None) => None,
+        };
+        let mut flatten = FlattenSettings::default();
+        if let Some(p) = a.opt_str("flatten_preset")? {
+            flatten =
+                FlattenSettings::preset(FlattenPreset::from_id(p).ok_or_else(|| bad(format!("unknown flatten_preset {p:?} (low, medium, high)")))?);
+        }
+        let options = XConvertOptions {
+            part,
+            intent,
+            trim: a.nums::<4>("trim")?,
+            bleed: a.nums::<4>("bleed")?,
+            title: a.opt_str("title")?.map(str::to_owned),
+            flatten,
+            allow_partial: a.opt_bool("allow_partial")?.unwrap_or(false),
+        };
+        let id = self.doc(a)?.id;
+        let r = self.session.pdfx_convert(id, options).map_err(|e| match e {
+            pdfcraft_engine::EditError::Invalid(m) => ToolError::InvalidArgs(m),
+            e => failed(e),
+        })?;
+        let brief = |x: &pdfcraft_engine::pdfa::XReport| {
+            let full = Self::pdfx_report_json(x);
+            json!({
+                "conforms": full["conforms"],
+                "failed_rules": full["failed_rules"],
+                "errors": full["errors"],
+                "warnings": full["warnings"],
+                "findings": full["findings"],
+            })
+        };
+        let unfixable: Vec<Value> = r
+            .unfixable()
+            .iter()
+            .map(|f| json!({ "rule": f.rule, "message": f.message, "page": f.page.map(|p| p + 1), "object": f.object.map(|o| o.num) }))
+            .collect();
+        let mut out = crate::summary(self.doc(a)?);
+        out["standard"] = json!(r.part.label());
+        out["converted"] = json!(r.converted);
+        out["conforms"] = json!(r.after.conforms());
+        out["changed"] = json!(r.converted && !r.fixed.is_empty());
+        out["fixed"] = json!(r.fixed);
+        out["notes"] = json!(r.notes);
+        out["unfixable"] = json!(unfixable);
+        out["before"] = brief(&r.before);
+        out["after"] = brief(&r.after);
+        if !r.converted {
+            out["refused"] = json!(format!(
+                "Can't reach {} automatically: nothing was changed. Fix what unfixable lists, or pass allow_partial to convert anyway.",
+                r.part.label()
+            ));
+        }
+        Ok(out)
     }
 
     pub(crate) fn pdfa_convert(&mut self, a: &Args) -> Result<Value> {

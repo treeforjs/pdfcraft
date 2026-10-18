@@ -221,6 +221,10 @@ pub struct ColorConversion {
     pub output_intent: bool,
     /// The output intent's printing condition (default: the profile's description).
     pub output_condition: Option<String>,
+    /// With an ICC destination, compute colours through the profile but write them in its
+    /// device space (DeviceCMYK, DeviceGray, DeviceRGB) rather than as ICCBased colour: what a
+    /// PDF/X output intent stands for (PDF/X-1a allows no ICCBased colour).
+    pub device_output: bool,
 }
 
 impl Default for ColorConversion {
@@ -234,6 +238,7 @@ impl Default for ColorConversion {
             convert_spots: false,
             output_intent: false,
             output_condition: None,
+            device_output: false,
         }
     }
 }
@@ -519,8 +524,9 @@ impl Cx<'_> {
         }
     }
 
+    /// Whether converted colours are written as ICCBased colour in the destination profile.
     fn icc_dest(&self) -> bool {
-        self.profile_bytes.is_some()
+        self.profile_bytes.is_some() && !self.s.device_output
     }
 
     /// Whether colours in `sp` are converted.
