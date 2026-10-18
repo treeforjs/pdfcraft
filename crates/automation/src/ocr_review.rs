@@ -28,6 +28,14 @@ pub(crate) fn despeckle_json(stats: Option<&pdfcraft_engine::ocr::DespeckleStats
     )
 }
 
+/// What background removal found and changed on the recognition copy (`null` when it was off).
+pub(crate) fn background_json(stats: Option<&pdfcraft_engine::ocr::BackgroundStats>) -> Value {
+    stats.map_or(
+        Value::Null,
+        |s| json!({"background": s.background, "white_point": s.white_point, "pixels_whitened": s.pixels_whitened, "pixels_changed": s.pixels_changed}),
+    )
+}
+
 fn review_json(review: &OcrReview) -> Value {
     let pages: Vec<_> = review
         .pages()
@@ -43,7 +51,7 @@ fn review_json(review: &OcrReview) -> Value {
                     })
                 })
                 .collect();
-            json!({"page": page.page + 1, "text": page.text(), "words": words, "skipped": page.skipped, "orientation": orientation_json(page), "despeckle": despeckle_json(page.despeckle.as_ref())})
+            json!({"page": page.page + 1, "text": page.text(), "words": words, "skipped": page.skipped, "orientation": orientation_json(page), "despeckle": despeckle_json(page.despeckle.as_ref()), "background": background_json(page.background.as_ref())})
         })
         .collect();
     json!({"doc": review.document().0, "generation": review.generation(), "words": review.words(), "pages": pages})

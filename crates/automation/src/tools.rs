@@ -1439,6 +1439,8 @@ pub fn tools() -> Vec<ToolDef> {
                     "despeckle": { "type": "string", "enum": ["off", "low", "medium", "high"], "description": "Remove isolated dark specks before reading (default off): low up to 0.13 mm, medium 0.21 mm, high 0.34 mm across, sized by the page's resolution; specks within about 1 mm of text (periods, i-dots) are kept. The page image changes only with output straighten." },
                     "despeckle_light": { "type": "boolean", "description": "With despeckle: also fill small light holes inside solid ink (default false)." },
                     "despeckle_median": { "type": "boolean", "description": "Also replace single-pixel impulses in gray/colour scans by their 3x3 median (default false; ignores the punctuation rule)." },
+                    "background": { "type": "string", "enum": ["off", "low", "medium", "high"], "description": "Whiten the off-white, grey or yellowed paper before reading (default off): the paper level is estimated from the page's luma histogram and pixels within a margin of it (low, medium, high reach further) become white; ink and mid-greys keep their values. Runs before despeckle. The page image changes only with output straighten." },
+                    "background_white_point": { "type": "integer", "minimum": 128, "maximum": 255, "description": "With background (or alone): an explicit white point instead of the estimate; pixels at least this light become white." },
                 }),
                 &["doc"],
             )),
@@ -1456,8 +1458,20 @@ pub fn tools() -> Vec<ToolDef> {
                     "despeckle": { "type": "string", "enum": ["off", "low", "medium", "high"], "description": "Remove isolated dark specks before reading (default off): low up to 0.13 mm, medium 0.21 mm, high 0.34 mm across, sized by the page's resolution; specks within about 1 mm of text (periods, i-dots) are kept. The page image changes only with output straighten." },
                     "despeckle_light": { "type": "boolean", "description": "With despeckle: also fill small light holes inside solid ink (default false)." },
                     "despeckle_median": { "type": "boolean", "description": "Also replace single-pixel impulses in gray/colour scans by their 3x3 median (default false; ignores the punctuation rule)." },
+                    "background": { "type": "string", "enum": ["off", "low", "medium", "high"], "description": "Whiten the off-white, grey or yellowed paper before reading (default off): the paper level is estimated from the page's luma histogram and pixels within a margin of it (low, medium, high reach further) become white; ink and mid-greys keep their values. Runs before despeckle. The page image changes only with output straighten." },
+                    "background_white_point": { "type": "integer", "minimum": 128, "maximum": 255, "description": "With background (or alone): an explicit white point instead of the estimate; pixels at least this light become white." },
                 }),
                 &["paths", "folder"],
+            )),
+        t("scan_remove_background", "Remove scan background", "Scan & OCR ▸ Enhance scan ▸ Remove background: whiten the off-white, grey or yellowed paper of the images the pages draw, as one undoable step. Each image's paper level is the main light peak of its luma histogram (at least 30 % of the pixels within 16 levels of it; photographs, dark and inverted scans are left alone); pixels within a margin below it (low, medium (default) or high, widened by the paper's measured noise; never below 128) become white, and a levels curve keeps ink and mid-greys at their values. Colour scans are neutralised per channel from the paper's own colour. 8-bit gray and RGB images are rewritten (JPEG at quality 90 when they were JPEG); one-bit images already have white paper and are counted in images_unchanged; JPEG 2000, CMYK and other images it cannot decode faithfully are left alone and counted in images_skipped. Images shared with other pages change there too. Returns images, images_changed, images_skipped, images_unchanged, pixels_whitened and pixels_changed; when nothing changed no step is added.")
+            .with(schema(
+                json!({
+                    "doc": doc(),
+                    "pages": pages("to clean (default: all)"),
+                    "strength": { "type": "string", "enum": ["off", "low", "medium", "high"], "description": "How far below the paper level pixels become white (default medium, or off when only white_point is given)." },
+                    "white_point": { "type": "integer", "minimum": 128, "maximum": 255, "description": "An explicit white point instead of the estimate: pixels at least this light (luma) become white." },
+                }),
+                &["doc"],
             )),
         t("scan_despeckle", "Despeckle scanned pages", "Scan & OCR ▸ Enhance scan ▸ Despeckle: remove isolated dark specks (scanner dust, noise) from the images the pages draw, as one undoable step. Each image is sized by its effective resolution where it is drawn: level low removes specks up to 0.13 mm across, medium (default) 0.21 mm, high 0.34 mm; a speck within about 1 mm of text-sized ink is kept, so periods, commas and i-dots survive. One-bit scans (CCITT fax, Flate, LZW) stay one-bit; 8-bit gray and RGB images are rewritten (JPEG at quality 90 when they were JPEG). JBIG2, JPEG 2000, CMYK and other images it cannot decode faithfully are left alone and counted in images_skipped. Images shared with other pages change there too. Returns images, images_changed, images_skipped, dark_specks, light_specks, impulses and pixels_changed; when nothing changed no step is added.")
             .with(schema(
@@ -1485,7 +1499,9 @@ pub fn tools() -> Vec<ToolDef> {
                 "output": { "type": "string", "enum": ["exact", "straighten"], "description": "exact (default): Searchable Image (Exact), the page is not changed. straighten: Searchable Image, pages found turned or skewed by auto_rotate/deskew are also turned straight (content and /Rotate), and the recognized pages' images finer than dpi are downsampled to it." },
                 "despeckle": {"type":"string", "enum":["off", "low", "medium", "high"], "description":"Remove isolated dark specks before reading (default off); with output straighten the page images are despeckled too."},
                 "despeckle_light": {"type":"boolean", "description":"With despeckle: also fill small light holes inside solid ink (default false)."},
-                "despeckle_median": {"type":"boolean", "description":"Also median-filter single-pixel impulses in gray/colour scans (default false)."}
+                "despeckle_median": {"type":"boolean", "description":"Also median-filter single-pixel impulses in gray/colour scans (default false)."},
+                "background": {"type":"string", "enum":["off", "low", "medium", "high"], "description":"Whiten the paper background before reading (default off); with output straighten the page images get a white background too."},
+                "background_white_point": {"type":"integer", "minimum":128, "maximum":255, "description":"An explicit white point for background removal instead of the estimate."}
             }), &["doc"])),
         t("ocr_review", "Inspect recognized text draft", "List recognized words, page coordinates and skipped-page reasons. Does not change the PDF. If the document changed, was closed or no longer allows copying and changes, returns an error and discards the draft instead of its words.")
             .ro().cmd("ocr.recognize").with(schema(json!({"doc":doc()}), &["doc"])),

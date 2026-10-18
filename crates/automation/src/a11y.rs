@@ -427,6 +427,7 @@ impl Automation {
             settings.deskew = s;
         }
         settings.despeckle = despeckle_options(a, "despeckle", "despeckle_light", "despeckle_median")?;
+        settings.background = background_options(a, "background", "background_white_point")?;
         match a.opt_str("output")? {
             None | Some("exact") => {}
             Some("straighten") => settings.straighten = true,
@@ -477,6 +478,7 @@ impl Automation {
                 None => json!({
                     "page": p.page + 1, "words": p.word_count(), "text": p.text(),
                     "orientation": crate::ocr_review::orientation_json(p), "despeckle": crate::ocr_review::despeckle_json(p.despeckle.as_ref()),
+                    "background": crate::ocr_review::background_json(p.background.as_ref()),
                 }),
             })
             .collect();
@@ -501,6 +503,27 @@ impl Automation {
             "images": r.images, "images_changed": r.images_changed, "images_skipped": r.images_skipped,
             "dark_specks": r.stats.dark_specks, "light_specks": r.stats.light_specks, "impulses": r.stats.impulses,
             "pixels_changed": r.stats.pixels_changed, "undoable": r.images_changed > 0,
+        }))
+    }
+
+    /// Scan & OCR ▸ Enhance scan ▸ Remove background (`scan_remove_background`).
+    pub(crate) fn scan_remove_background(&mut self, a: &Args) -> Result<Value> {
+        let mut options = background_options(a, "strength", "white_point")?;
+        if a.opt_str("strength")?.is_none() && options.white_point.is_none() {
+            options.strength = pdfcraft_engine::ocr::BackgroundStrength::Medium;
+        }
+        if !options.any() {
+            return Err(ToolError::InvalidArgs(
+                "strength off without a white_point would change nothing; choose strength low, medium or high, or give white_point".into(),
+            ));
+        }
+        let pages = if a.opt_ints("pages")?.is_some() { self.pages(a, "pages")? } else { Vec::new() };
+        let id = self.doc(a)?.id;
+        let r = self.session.remove_scan_backgrounds(id, &pages, options).map_err(|e| failed(e.to_string()))?;
+        Ok(json!({
+            "images": r.images, "images_changed": r.images_changed, "images_skipped": r.images_skipped,
+            "images_unchanged": r.images_unchanged, "pixels_whitened": r.pixels_whitened,
+            "pixels_changed": r.pixels_changed, "undoable": r.images_changed > 0,
         }))
     }
 
@@ -1056,6 +1079,28 @@ impl Automation {
         }
         Ok(json!({ "enabled": self.session.javascript() }))
     }
+}
+
+/// Background-removal options from tool arguments: `strength` off/low/medium/high (default
+/// off) and an optional integer `white_point` (128–255).
+fn background_options(a: &Args, strength: &str, white_point: &str) -> Result<pdfcraft_engine::ocr::BackgroundOptions> {
+    use pdfcraft_engine::ocr::{BackgroundOptions, BackgroundStrength};
+    let min = pdfcraft_engine::optimize::background::MIN_WHITE_POINT;
+    let strength = match a.opt_str(strength)? {
+        None => BackgroundStrength::Off,
+        Some(name) => BackgroundStrength::parse(name)
+            .ok_or_else(|| ToolError::InvalidArgs(format!("unknown {strength} {name:?}; use {}", BackgroundStrength::NAMES.join(", "))))?,
+    };
+    let white_point = match a.opt_int(white_point)? {
+        None => None,
+        Some(v) => Some(
+            u8::try_from(v)
+                .ok()
+                .filter(|w| *w >= min)
+                .ok_or_else(|| ToolError::InvalidArgs(format!("{white_point} must be an integer from {min} to 255, got {v}")))?,
+        ),
+    };
+    Ok(BackgroundOptions { strength, white_point })
 }
 
 /// Despeckle options from tool arguments: `level` off/low/medium/high (default off), and the

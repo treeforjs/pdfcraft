@@ -169,7 +169,8 @@ fn bad_settings_pages_words_and_corrections_fail_before_mutation() {
                         skipped: None,
                         orientation: None,
                         straighten: false,
-                        despeckle: None
+                        despeckle: None,
+                        background: None
                     }]
                 )
                 .is_err()
@@ -256,7 +257,15 @@ fn restricted_documents_refuse_recognition_before_rendering_or_backend_inference
             session
                 .apply_ocr(
                     id,
-                    &[pdfcraft_engine::ocr::OcrPage { page: 0, words, skipped: None, orientation: None, straighten: false, despeckle: None }]
+                    &[pdfcraft_engine::ocr::OcrPage {
+                        page: 0,
+                        words,
+                        skipped: None,
+                        orientation: None,
+                        straighten: false,
+                        despeckle: None,
+                        background: None
+                    }]
                 )
                 .is_err()
         );

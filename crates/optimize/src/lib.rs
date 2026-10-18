@@ -26,6 +26,7 @@
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
 mod audit;
+pub mod background;
 pub mod compat;
 pub mod despeckle;
 pub mod fonts;
@@ -38,7 +39,7 @@ pub use fonts::{EmbeddedFont, UnembedBlock, UnembedError, embedded_fonts};
 
 use pdfcraft_cos::{Document, ObjRef, Object, Stream};
 
-pub use images::{DespeckleReport, effective_resolutions};
+pub use images::{BackgroundReport, DespeckleReport, effective_resolutions};
 
 #[derive(Debug, thiserror::Error)]
 pub enum OptimizeError {
@@ -296,6 +297,28 @@ pub fn despeckle_page_images(doc: &mut Document, pages: &[usize], options: despe
         return Ok(DespeckleReport::default());
     }
     Ok(images::despeckle(doc, &chosen, options))
+}
+
+/// Scan & OCR ▸ Enhance ▸ Remove background: whiten the paper background of the 8-bit gray
+/// and RGB images `pages` draw ([`background`]). Images shared with other pages change there
+/// too. Images are rewritten with Flate, or JPEG at quality 90 when they were JPEG; one-bit
+/// images already have a white background and are left as they are. Images that cannot be
+/// decoded faithfully are left alone and counted in [`BackgroundReport::images_skipped`].
+pub fn remove_page_image_backgrounds(doc: &mut Document, pages: &[usize], options: background::Options) -> Result<BackgroundReport, OptimizeError> {
+    let all = pdfcraft_annot::page_refs(doc).map_err(|_| OptimizeError::NoPages)?;
+    let chosen: Vec<ObjRef> = pages.iter().filter_map(|p| all.get(*p).copied()).collect();
+    if chosen.len() != pages.len() {
+        return Err(OptimizeError::Invalid("background removal pages must be in the document".into()));
+    }
+    if let Some(w) = options.white_point
+        && w < background::MIN_WHITE_POINT
+    {
+        return Err(OptimizeError::Invalid(format!("the white point must be between {} and 255", background::MIN_WHITE_POINT)));
+    }
+    if !options.any() {
+        return Ok(BackgroundReport::default());
+    }
+    Ok(images::remove_backgrounds(doc, &chosen, options))
 }
 
 pub fn optimize_with_progress(doc: &mut Document, settings: &Settings, progress: &mut dyn FnMut(Stage) -> bool) -> Result<Report, OptimizeError> {
