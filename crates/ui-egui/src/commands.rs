@@ -172,14 +172,14 @@ impl PdfCraftApp {
             }
             "view.read_mode" => self.mode = if self.mode == Mode::Read { Mode::AllTools } else { Mode::Read },
             "view.theme" => {
-                // Cream counts as light (to Dark), Dim as dark (to Light).
+                // Warm counts as light (to Dark), Dim as dark (to Light).
                 let next = if self.theme.is_dark() { ThemePreference::Light } else { ThemePreference::Dark };
                 self.set_theme_preference(next);
             }
             command if command.starts_with("measure.") => crate::measure_ui::command(self, command),
             "view.theme.system" => self.set_theme_preference(ThemePreference::System),
             "view.theme.light" => self.set_theme_preference(ThemePreference::Light),
-            "view.theme.cream" => self.set_theme_preference(ThemePreference::Cream),
+            "view.theme.warm" => self.set_theme_preference(ThemePreference::Warm),
             "view.theme.dim" => self.set_theme_preference(ThemePreference::Dim),
             "view.theme.dark" => self.set_theme_preference(ThemePreference::Dark),
             "comment.list" => self.choose_right_panel(Some(RightPanel::Comments)),
