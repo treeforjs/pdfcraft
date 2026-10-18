@@ -13,6 +13,7 @@
 
 mod a11y;
 mod associated;
+mod attachment_trust;
 mod autotag;
 mod certsec;
 mod comments;
@@ -713,6 +714,11 @@ impl Automation {
             "associated_file_add" => self.associated_file_add(&a)?,
             "associated_file_remove" => self.associated_file_remove(&a)?,
             "associated_file_extract" => self.associated_file_extract(&a)?,
+            "attachment_list" => self.attachment_list(&a)?,
+            "attachment_open" => self.attachment_open(&a)?,
+            "attachment_extract" => self.attachment_extract(&a)?,
+            "trust_attachments_get" => self.trust_attachments_get(&a)?,
+            "trust_attachments_set" => self.trust_attachments_set(&a)?,
             "printer_options" => self.printer_options(&a)?,
             "link_list" => self.link_list(&a)?,
             "link_add" => self.link_add(&a)?,

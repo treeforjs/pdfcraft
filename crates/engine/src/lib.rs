@@ -14,6 +14,7 @@
 
 pub mod accessible_text;
 pub mod actions;
+pub mod attachment_trust;
 pub mod autotag;
 pub mod catalog;
 pub mod commands;
@@ -2752,6 +2753,8 @@ pub struct Session {
     date_language: Option<String>,
     /// Preferences ▸ Trust Manager ▸ Internet access from PDFs (see [`url_access`]).
     url_policy: url_access::UrlPolicy,
+    /// Trust Manager ▸ attachments: the user's allow/deny overrides (see [`attachment_trust`]).
+    attachment_trust: attachment_trust::AttachmentTrust,
 }
 
 /// Lay a dynamic XFA form out (pages and fields) and give its widgets appearances.

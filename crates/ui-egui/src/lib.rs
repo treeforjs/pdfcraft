@@ -1054,11 +1054,22 @@ impl PdfCraftApp {
         self.dialog_epoch
     }
 
-    /// Save an attachment to disk, or open a PDF attachment in a new tab.
+    /// Save an attachment to disk, or open a PDF attachment in a new tab. Opening checks the
+    /// attachment trust policy first (a blocked type never opens); saving is always allowed and
+    /// warns when the file would not be safe to open.
     pub fn attachment_action(&mut self, doc: DocId, index: usize, open: bool) {
+        use pdfcraft_engine::attachment_trust::Decision;
         let Some(d) = self.session.get(doc) else { return };
         let Some(att) = d.info.attachments.get(index).cloned() else { return };
+        let check = self.session.check_attachment(&att.name);
+        // The panel offers Open only for PDFs, which open here rather than in another app; a PDF
+        // on the user's deny list is still refused.
+        if open && check.decision == Decision::Block {
+            self.notify_fmt("{name} was not opened: {reason}", &[("name", &att.name), ("reason", &check.reason)]);
+            return;
+        }
         let data = pdfcraft_render::attachment_data(&d.bytes, d.password.as_deref(), &att);
+        let risky = (check.decision != Decision::Allow).then(|| check.reason.clone());
         match (data, open) {
             (Err(e), _) => self.notify_fmt("Couldn't read {name}: {e}", &[("name", &att.name), ("e", &e.to_string())]),
             (Ok(bytes), true) => {
@@ -1070,12 +1081,21 @@ impl PdfCraftApp {
                 #[cfg(not(target_arch = "wasm32"))]
                 self.ask_one(pickers::Ask::Save(rfd::AsyncFileDialog::new().set_file_name(&att.name)), None, move |app, path| {
                     match crate::editing::write_atomically(&path.to_string_lossy(), &bytes) {
-                        Ok(()) => app.notify_fmt("Saved {name}", &[("name", &path.display().to_string())]),
+                        Ok(()) => match &risky {
+                            Some(reason) => app.notify_fmt(
+                                "Saved {name}. Don't open it unless you trust its source: {reason}",
+                                &[("name", &path.display().to_string()), ("reason", reason)],
+                            ),
+                            None => app.notify_fmt("Saved {name}", &[("name", &path.display().to_string())]),
+                        },
                         Err(e) => app.notify_fmt("Couldn't save: {e}", &[("e", &e.to_string())]),
                     }
                 });
                 #[cfg(target_arch = "wasm32")]
-                self.notify_fmt("Downloading attachments on the web arrives with M3.10 ({n} bytes ready)", &[("n", &bytes.len().to_string())]);
+                {
+                    let _ = &risky;
+                    self.notify_fmt("Downloading attachments on the web arrives with M3.10 ({n} bytes ready)", &[("n", &bytes.len().to_string())]);
+                }
             }
         }
     }
@@ -1381,6 +1401,8 @@ impl PdfCraftApp {
             "timestamp_servers": self.timestamp_servers,
             "custom_stamps": stamps_ui::encode(&self.custom_stamps),
             "javascript": self.session.javascript(),
+            // Trust Manager ▸ attachments: the user's allow/deny lists.
+            "attachment_trust": self.session.attachment_trust().to_settings(),
             "actions": actions_ui::encode(&self.custom_actions),
             "combine_columns": self.combine_columns.to_json(),
             "comments_panel_closed": self.comments_panel_closed,
@@ -1501,6 +1523,10 @@ impl PdfCraftApp {
             if dropped > 0 {
                 log::warn!("internet access settings: {dropped} host rules couldn't be read and were dropped");
             }
+        }
+        // Untrusted settings: bad entries are skipped and the lists capped.
+        if v.get("attachment_trust").is_some() {
+            self.session.set_attachment_trust(pdfcraft_engine::attachment_trust::AttachmentTrust::from_settings(&v["attachment_trust"]));
         }
         if let Ok(pems) = serde_json::from_value::<Vec<String>>(v["trusted"].clone()) {
             let certs = pems.iter().filter_map(|p| pdfcraft_engine::sign::x509::load_certificates(p.as_bytes()).ok()).flatten().collect();
