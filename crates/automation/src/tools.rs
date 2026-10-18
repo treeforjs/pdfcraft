@@ -254,16 +254,19 @@ pub fn tools() -> Vec<ToolDef> {
                 json!({ "doc": doc(), "at": { "type": "integer", "minimum": 1 }, "width": { "type": "number", "description": "Points." }, "height": { "type": "number", "description": "Points." } }),
                 &["doc", "at"],
             )),
-        t("page_insert_file", "Insert pages from a file", "Insert pages of another PDF so the first becomes page `at`. Undoable.")
+        t("page_insert_file", "Insert pages from a file", "Insert pages of another PDF so the first becomes page `at`. Undoable. The file's tags (structure tree) are merged into the document's (merge_tags, default true): the inserted elements go under the one Document element by page, with role maps, class maps, IDs and PDF 2.0 namespaces merged and the parent tree rebuilt. The result's tags entry reports it: tagged and untagged parts, role-map conflicts (the document's mapping is kept), whether the result stays marked as tagged (only when both sides were) or is partially tagged, and the element count.")
             .cmd("page.insert")
-            .with(schema(json!({ "doc": doc(), "path": { "type": "string" }, "at": { "type": "integer", "minimum": 1 }, "pages": pages("of the source file (default: all)") }), &["doc", "path", "at"])),
-        t("page_extract", "Extract pages", "Copy pages into a new PDF (links, bookmarks, fields and layers that belong to them come along). separate: true writes each page as its own file into out_dir; delete: true removes the pages from this document afterwards (undoable).")
+            .with(schema(
+                json!({ "doc": doc(), "path": { "type": "string" }, "at": { "type": "integer", "minimum": 1 }, "pages": pages("of the source file (default: all)"), "merge_tags": { "type": "boolean", "description": "Merge the file's structure tree (default true); false inserts the pages untagged." } }),
+                &["doc", "path", "at"],
+            )),
+        t("page_extract", "Extract pages", "Copy pages into a new PDF (links, bookmarks, fields, layers and the tags (structure elements) that belong to them come along). separate: true writes each page as its own file into out_dir; delete: true removes the pages from this document afterwards (undoable).")
             .cmd("page.extract")
             .with(schema(
                 json!({ "doc": doc(), "pages": pages("to extract"), "out": save_out.clone(), "open": open.clone(), "separate": { "type": "boolean" }, "out_dir": { "type": "string" }, "delete": { "type": "boolean" } }),
                 &["doc", "pages"],
             )),
-        t("doc_combine", "Combine files", "Combine PDFs, in order, into one (bookmarks are kept under one entry per file). pages optionally chooses each file's pages, in step with paths: a range such as \"1-3, 6\" or null for all pages. passwords, also in step with paths, opens encrypted files (the open password, or the permissions password where a file's security doesn't allow copying pages; null for none). The result is not encrypted. Passwords are never echoed back. Form fields whose names collide across files are renamed (name#2) so each copy keeps its own value; field_conflicts: \"merge\" instead joins compatible fields (same type, no sub-fields, not signatures) into one shared-value field. The result's fields entry reports what was renamed or merged.")
+        t("doc_combine", "Combine files", "Combine PDFs, in order, into one (bookmarks are kept under one entry per file). pages optionally chooses each file's pages, in step with paths: a range such as \"1-3, 6\" or null for all pages. passwords, also in step with paths, opens encrypted files (the open password, or the permissions password where a file's security doesn't allow copying pages; null for none). The result is not encrypted. Passwords are never echoed back. Form fields whose names collide across files are renamed (name#2) so each copy keeps its own value; field_conflicts: \"merge\" instead joins compatible fields (same type, no sub-fields, not signatures) into one shared-value field. The result's fields entry reports what was renamed or merged. The files' tags (structure trees) are merged (merge_tags, default true): one Document element holding each file's elements in page order, role maps (a conflicting mapping keeps the first file's and is reported), class maps, IDs (made unique) and PDF 2.0 namespaces merged, the parent tree rebuilt; the result is marked tagged only when every file was, and the tags entry reports elements, conflicts, renamed IDs and classes, and partial tagging.")
             .cmd("page.combine")
             .with(schema(
                 json!({
@@ -271,6 +274,7 @@ pub fn tools() -> Vec<ToolDef> {
                     "pages": { "type": "array", "items": { "type": ["string", "null"] } },
                     "passwords": { "type": "array", "items": { "type": ["string", "null"] } },
                     "field_conflicts": { "type": "string", "enum": ["rename", "merge"] },
+                    "merge_tags": { "type": "boolean", "description": "Merge the files' structure trees (default true); false drops the tags." },
                     "out": save_out,
                     "open": open,
                 }),

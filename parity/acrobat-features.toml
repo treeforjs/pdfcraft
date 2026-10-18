@@ -3043,11 +3043,11 @@ title = "Merge structure trees when combining"
 area = "D"
 tier = "P1"
 milestone = "M12"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["page.combine", "page.insert", "page.extract"]
+tools = ["doc_combine", "page_insert_file", "page_extract", "doc_split"]
+evidence = ["crates/organize/src/structure_tests.rs::combining_two_tagged_documents_merges_their_trees", "crates/organize/src/structure_tests.rs::identical_class_maps_and_namespaces_are_shared", "crates/organize/src/structure_tests.rs::tagged_with_untagged_is_partially_tagged", "crates/organize/src/structure_tests.rs::merging_can_be_turned_off", "crates/organize/src/structure_tests.rs::extracting_keeps_only_the_elements_on_the_kept_pages", "crates/organize/src/structure_tests.rs::inserting_places_the_elements_by_page_and_keeps_the_tree_valid", "crates/organize/src/structure_tests.rs::duplicate_and_replace_keep_a_valid_tree", "crates/organize/src/structure_tests.rs::hostile_trees_merge_without_panicking", "crates/automation/tests/struct_merge.rs::combined_tagged_files_keep_a_valid_tree_and_pass_the_same_checks", "crates/automation/tests/struct_merge.rs::tagged_with_untagged_and_inserted_pages_report_partial_tagging", "crates/automation/tests/struct_merge.rs::extracting_pages_keeps_only_their_elements"]
+notes = "Headless: Combine Files, Insert Pages from File, Duplicate, Extract and Split copy the structure tree with the pages (merge_tags, default on, for doc_combine and page_insert_file). Each source's top-level elements go under one Document element in page order (a plain source Document is dissolved, its Lang moving onto its kids; an existing multi-root tree is wrapped); MCIDs stay per content stream, StructParents/StructParent keys, the ParentTree (flat number tree) and ParentTreeNextKey are rebuilt for the copied pages, form XObjects and annotations (OBJR); RoleMap merged with the first mapping kept and conflicts reported; ClassMap merged (a different class under a used name is renamed and /C follows); IDTree merged with IDs made unique; PDF 2.0 Namespaces merged (same URI and role mapping shared). MarkInfo /Marked only when every part was tagged, otherwise the report says partially tagged. A subset keeps only elements with content on the kept pages. Bounded and cycle-safe. Not yet: a dialog option (UI redesign); a conflicting role mapping is kept-first rather than resolved by renaming the incoming type; root /AF, /PronunciationLexicon and attribute-owner revisions are not carried over; Delete Pages does not prune the tree; a page inserted twice tags only its first copy; not compared against Acrobat's output."
 
 [[feature]]
 id = "organize.page-labels-edit"

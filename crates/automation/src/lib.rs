@@ -1591,7 +1591,31 @@ impl Automation {
         let bytes = std::fs::read(&path).map_err(|e| failed(format!("{}: {e}", path.display())))?;
         let pages = a.opt_ints("pages")?.map(|p| one_based(&p)).transpose()?;
         let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-        self.apply(a, Edit::InsertPagesFrom { name, bytes: Arc::new(bytes), pages, at })
+        let merge_tags = a.opt_bool("merge_tags")?.unwrap_or(true);
+        let bytes = Arc::new(bytes);
+        let id = self.doc(a)?.id;
+        // What the merge will report (conflicts, tagged parts) is worked out before the edit.
+        let preview = if merge_tags { self.session.tag_merge_preview(id, &name, &bytes).ok() } else { None };
+        let mut out = self.apply(a, Edit::InsertPagesFrom { name, bytes, pages, at, merge_tags })?;
+        let tags = self.doc(a)?.tags();
+        out["tags"] = match preview {
+            Some(p) => {
+                let mut v = tag_report(&p);
+                // The preview doesn't copy anything, so it can't count what was copied.
+                if let Some(o) = v.as_object_mut() {
+                    for k in ["elements", "elements_dropped", "ids_renamed", "classes_renamed", "namespaces_added", "truncated"] {
+                        o.remove(k);
+                    }
+                }
+                v["elements_in_document"] = json!(tags.nodes.len());
+                v["tree"] = json!(tags.exists);
+                v["marked"] = json!(tags.marked);
+                v["partially_tagged"] = json!(tags.exists && !tags.marked);
+                v
+            }
+            None => json!({ "merged": false, "tree": tags.exists, "marked": tags.marked, "elements_in_document": tags.nodes.len() }),
+        };
+        Ok(out)
     }
 
     /// Write freshly created bytes to `out` and/or open them as a new document.
@@ -1855,10 +1879,11 @@ impl Automation {
             sources.push((name, Arc::new(bytes), range));
         }
         let passwords: Vec<Option<&str>> = passwords.iter().map(Option::as_deref).collect();
-        let policy = field_conflicts(a)?;
-        let (bytes, report) = self.session.combine_with(&sources, &passwords, policy).map_err(failed)?;
+        let options = pdfcraft_organize::ImportOptions { fields: field_conflicts(a)?, merge_tags: a.opt_bool("merge_tags")?.unwrap_or(true) };
+        let (bytes, report) = self.session.combine_with_options(&sources, &passwords, &options).map_err(failed)?;
         let mut out = self.deliver(a, "Combined", bytes)?;
-        out["fields"] = field_report(&report);
+        out["fields"] = field_report(&report.fields);
+        out["tags"] = if options.merge_tags { tag_report(&report.tags) } else { json!({ "merged": false }) };
         Ok(out)
     }
 
@@ -2355,6 +2380,27 @@ fn field_conflicts(a: &Args) -> Result<pdfcraft_organize::FieldConflicts> {
         Some("merge") => Ok(pdfcraft_organize::FieldConflicts::Merge),
         Some(m) => Err(ToolError::InvalidArgs(format!("field_conflicts must be \"rename\" or \"merge\", not {m:?}"))),
     }
+}
+
+/// What merging structure trees did, for the tool result.
+fn tag_report(r: &pdfcraft_organize::TagMergeReport) -> Value {
+    let pairs = |v: &[(String, String)]| v.iter().map(|(from, to)| json!({ "from": from, "to": to })).collect::<Vec<_>>();
+    json!({
+        "merged": true,
+        "tree": r.tree,
+        "marked": r.marked,
+        "partially_tagged": r.partially_tagged,
+        "tagged_parts": r.tagged_sources,
+        "untagged_parts": r.untagged_sources,
+        "elements": r.elements,
+        "elements_dropped": r.elements_dropped,
+        "role_map_conflicts": r.role_map_conflicts.iter().map(|c| json!({ "role": c.role, "kept": c.kept, "ignored": c.ignored, "source": c.source })).collect::<Vec<_>>(),
+        "ids_renamed": pairs(&r.ids_renamed),
+        "classes_renamed": pairs(&r.classes_renamed),
+        "namespaces_added": r.namespaces_added,
+        "truncated": r.truncated,
+        "warnings": r.warnings,
+    })
 }
 
 /// What combining did to colliding form fields, for the tool result.

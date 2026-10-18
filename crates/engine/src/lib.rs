@@ -1196,11 +1196,13 @@ pub enum Edit {
         value: String,
     },
     /// Insert pages from another PDF (all pages when `pages` is `None`) at position `at`.
+    /// `merge_tags` merges the file's structure tree (tags) into the document's.
     InsertPagesFrom {
         name: String,
         bytes: Arc<Vec<u8>>,
         pages: Option<Vec<usize>>,
         at: usize,
+        merge_tags: bool,
     },
     /// Add a bookmark to `page` as child `index` of the bookmark at `parent` (`[]` = top level).
     AddBookmark {
@@ -2151,13 +2153,14 @@ fn run_edit(doc: &mut pdfcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -> 
         }
         Edit::SetPageBox { pages, which, spec } => pdfcraft_organize::set_page_box(doc, pages, *which, *spec)?,
         Edit::SetPageTransition { pages, settings } => pdfcraft_organize::set_page_transition(doc, pages, settings)?,
-        Edit::InsertPagesFrom { name, bytes, pages, at } => {
+        Edit::InsertPagesFrom { name, bytes, pages, at, merge_tags } => {
             let src = open_source(name, bytes)?;
             let pages = match pages {
                 Some(p) => p.clone(),
                 None => (0..pdfcraft_organize::page_count(&src)?).collect(),
             };
-            pdfcraft_organize::import_pages(doc, &src, &pages, *at)?;
+            let options = pdfcraft_organize::ImportOptions { merge_tags: *merge_tags, ..Default::default() };
+            pdfcraft_organize::import_pages_with_options(doc, &src, &pages, *at, &options)?;
         }
         Edit::AddBookmark { parent, index, title, page } => {
             pdfcraft_organize::add_bookmark(doc, parent, *index, title, *page)?;
@@ -3765,6 +3768,18 @@ impl Session {
         passwords: &[Option<&str>],
         fields: pdfcraft_organize::FieldConflicts,
     ) -> Result<(Arc<Vec<u8>>, pdfcraft_organize::FieldReport), EditError> {
+        let options = pdfcraft_organize::ImportOptions { fields, merge_tags: true };
+        self.combine_with_options(sources, passwords, &options).map(|(bytes, report)| (bytes, report.fields))
+    }
+
+    /// [`Self::combine_with`] with every option (form-field conflicts, merging the files'
+    /// structure trees). Returns the bytes and what happened to the fields and the tags.
+    pub fn combine_with_options(
+        &self,
+        sources: &[CombineSource],
+        passwords: &[Option<&str>],
+        options: &pdfcraft_organize::ImportOptions,
+    ) -> Result<(Arc<Vec<u8>>, pdfcraft_organize::ImportReport), EditError> {
         let docs = sources
             .iter()
             .enumerate()
@@ -3785,8 +3800,16 @@ impl Session {
         }
         let named: Vec<(&str, &pdfcraft_cos::Document, Option<&[usize]>)> =
             sources.iter().zip(docs.iter()).zip(&pages).map(|(((n, _, _), d), p)| (n.as_str(), d, p.as_deref())).collect();
-        let (out, report) = pdfcraft_organize::combine_selected_with(&named, fields)?;
+        let (out, report) = pdfcraft_organize::combine_with_options(&named, options)?;
         Ok((self.write_new(&out)?, report))
+    }
+
+    /// What inserting the PDF `bytes` into the document would do to its tags (which side is
+    /// tagged, role-map conflicts, whether the result stays marked as tagged), without changing
+    /// anything.
+    pub fn tag_merge_preview(&self, id: DocId, name: &str, bytes: &Arc<Vec<u8>>) -> Result<pdfcraft_organize::TagMergeReport, EditError> {
+        let src = open_source(name, bytes)?;
+        Ok(pdfcraft_organize::tag_merge_preview(self.cos(id)?, &src))
     }
 
     /// New PDF bytes containing copies of `pages` of the document (Extract Pages).
