@@ -9240,11 +9240,11 @@ title = "Custom commands"
 area = "N"
 tier = "P1"
 milestone = "M13"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["custom_command_list", "custom_command_get", "custom_command_create", "custom_command_edit", "custom_command_delete", "custom_command_export", "custom_command_import", "custom_command_run"]
+evidence = ["crates/automation/tests/custom_commands.rs::create_list_get_edit_delete", "crates/automation/tests/custom_commands.rs::params_are_validated_against_the_tool_schema", "crates/automation/tests/custom_commands.rs::run_on_a_document_and_prompt_for_options", "crates/automation/tests/custom_commands.rs::run_on_files_under_the_root", "crates/automation/tests/custom_commands.rs::export_and_import"]
+notes = "Headless: one document tool (OCR, optimize, watermark, remove hidden information, …) bundled with preset options validated against its schema and a prompt-user flag; stored as one JSON file per command in a root-confined library folder; create, list, edit, delete, import and export; run on an open document or on files into a folder. Missing: no menu, dialog or command registry entry (UI redesign pending), no interactive prompt dialog (prompt_user means the caller passes params), schema pattern constraints are left to the tool, and file runs save with a full rewrite."
 
 [[feature]]
 id = "misc.custom-tools"

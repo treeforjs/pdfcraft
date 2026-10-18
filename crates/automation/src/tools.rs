@@ -36,6 +36,14 @@ fn overprint_preview() -> Value {
     json!({ "type": "string", "enum": ["never", "always", "pdfx", "automatic"], "description": "Simulate overprint: never, always, pdfx (only PDF/X files) or automatic (pages with overprinting objects). Default: the print_overprint_preview preference (pdfx)." })
 }
 
+fn custom_id() -> Value {
+    json!({ "type": "string", "minLength": 1, "maxLength": 64, "description": "Custom command id: a–z, 0–9, - and _." })
+}
+
+fn custom_library() -> Value {
+    json!({ "type": "string", "description": "A file path: the custom command library folder (default custom-commands, inside the root)." })
+}
+
 fn doc() -> Value {
     json!({ "type": "integer", "minimum": 1, "description": "Document id from doc_open or doc_list." })
 }
@@ -2140,6 +2148,65 @@ pub fn tools() -> Vec<ToolDef> {
             .destructive().with(schema(json!({"id":{"type":"string"},"params":{"type":"object"}}), &["id"])),
         t("command_batch", "Run several commands", "Run steps in order (at most 1000). Returns completed/failed counts and per-step ok/result/error; stop_on_error defaults to true.")
             .destructive().with(schema(json!({"steps":{"type":"array","items":schema(json!({"id":{"type":"string"},"params":{"type":"object"}}), &["id"])},"stop_on_error":{"type":"boolean"}}), &["steps"])),
+        t("custom_command_list", "List custom commands", "Custom Commands: the commands in the library folder (library, default custom-commands inside the root; one <id>.json per command) with id, label, description, tool, preset params and prompt_user; files that can't be read as commands are listed under skipped with the reason. tools lists the document tools a custom command can wrap.")
+            .ro()
+            .with(schema(json!({ "library": custom_library() }), &[])),
+        t("custom_command_get", "Show a custom command", "One custom command, with its tool's title and description, needs (required options its presets leave to the run) and, when prompt_user is on, options: the tool's parameter schema without doc, i.e. what may be asked for and passed as params to custom_command_run.")
+            .ro()
+            .with(schema(json!({ "id": custom_id(), "library": custom_library() }), &["id"])),
+        t("custom_command_create", "Create a custom command", "New Custom Command: bundle one document tool (tool, e.g. ocr_recognize, doc_optimize, doc_watermark, doc_remove_hidden; see custom_command_list's tools) with preset options (params, checked against that tool's schema: known options, types, ranges, lengths; never doc). prompt_user lets the caller supply options when it runs (Acrobat's Prompt User); without it every required option must be preset. String options may use {file} and {stem}, replaced by the document's file name and its name without extension when it runs. Written atomically as <id>.json in the library; an existing id is refused.")
+            .with(schema(
+                json!({
+                    "id": custom_id(),
+                    "label": { "type": "string", "minLength": 1, "maxLength": 200 },
+                    "description": { "type": "string", "maxLength": 4000 },
+                    "tool": { "type": "string" },
+                    "params": { "type": "object", "description": "Preset options for the tool (not doc)." },
+                    "prompt_user": { "type": "boolean", "description": "Ask for options at run time (default false)." },
+                    "library": custom_library(),
+                }),
+                &["id", "label", "tool"],
+            )),
+        t("custom_command_edit", "Edit a custom command", "Change a custom command's label, description, tool, params (replaces the whole preset object) or prompt_user; the result is validated against the tool's schema again before it is written. Returns the command and whether anything changed.")
+            .with(schema(
+                json!({
+                    "id": custom_id(),
+                    "label": { "type": "string", "minLength": 1, "maxLength": 200 },
+                    "description": { "type": "string", "maxLength": 4000 },
+                    "tool": { "type": "string" },
+                    "params": { "type": "object", "description": "The new preset options (replace the old ones)." },
+                    "prompt_user": { "type": "boolean" },
+                    "library": custom_library(),
+                }),
+                &["id"],
+            )),
+        t("custom_command_delete", "Delete a custom command", "Remove a custom command's file from the library.")
+            .destructive()
+            .with(schema(json!({ "id": custom_id(), "library": custom_library() }), &["id"])),
+        t("custom_command_export", "Export custom commands", "Write custom commands (ids, default all) to path as one JSON bundle (format pdfcraft-custom-commands), atomically, to share or back up.")
+            .destructive()
+            .with(schema(
+                json!({ "path": { "type": "string" }, "ids": { "type": "array", "items": custom_id(), "maxItems": 500 }, "library": custom_library() }),
+                &["path"],
+            )),
+        t("custom_command_import", "Import custom commands", "Read custom commands from path (a bundle from custom_command_export, or one command's JSON) into the library. Every command is validated first and nothing is written if any is invalid; ids already in the library are refused unless replace is true.")
+            .destructive()
+            .with(schema(json!({ "path": { "type": "string" }, "replace": { "type": "boolean" }, "library": custom_library() }), &["path"])),
+        t("custom_command_run", "Run a custom command", "Run a custom command's tool with its presets in one step: on an open document (doc; the edit is undoable and nothing is saved) or on files (paths, 1–1000, each opened, run and, when it changed, saved under its own name into folder; the input is never replaced; password opens encrypted files; stop_on_error stops at the first failing file, default false). params (only when the command has prompt_user) adds or overrides options and must supply any it asks for; they are validated against the tool's schema. Returns the tool's result (per file: path, output or unchanged, result or error).")
+            .destructive()
+            .with(schema(
+                json!({
+                    "id": custom_id(),
+                    "doc": doc(),
+                    "paths": { "type": "array", "items": { "type": "string" }, "minItems": 1, "maxItems": 1000 },
+                    "folder": { "type": "string" },
+                    "params": { "type": "object", "description": "Options asked for at run time (prompt_user commands only)." },
+                    "password": { "type": "string" },
+                    "stop_on_error": { "type": "boolean" },
+                    "library": custom_library(),
+                }),
+                &["id"],
+            )),
         t("doc_inspect", "Inspect open documents", "With doc, return doc_info; otherwise return information for every open document (empty documents array when none are open).")
             .ro().with(schema(json!({"doc":doc()}), &[])),
         t("render_preview", "Render a preview", "Render a PNG bounded by max_side (default 1024), without changing or saving the document. Page defaults to 1; doc may be omitted when exactly one document is open. overprint_preview as for page_render.")
@@ -2148,6 +2215,11 @@ pub fn tools() -> Vec<ToolDef> {
 }
 
 static TOOLS: std::sync::LazyLock<Vec<ToolDef>> = std::sync::LazyLock::new(tools);
+
+/// The tool table, built once.
+pub(crate) fn all() -> &'static [ToolDef] {
+    &TOOLS
+}
 
 pub(crate) fn find(name: &str) -> Option<&'static ToolDef> {
     TOOLS.iter().find(|t| t.name == name)

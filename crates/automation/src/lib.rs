@@ -21,6 +21,7 @@ mod comments;
 mod compare;
 mod content;
 mod conventions;
+mod custom_commands;
 mod dests;
 mod forms;
 mod ink_manager;
@@ -821,6 +822,14 @@ impl Automation {
             "doc_export_pptx" => self.doc_export_pptx(&a)?,
             "pdfa_convert" => self.pdfa_convert(&a)?,
             "action_run" => self.action_run(&a)?,
+            "custom_command_list" => self.custom_command_list(&a)?,
+            "custom_command_get" => self.custom_command_get(&a)?,
+            "custom_command_create" => self.custom_command_create(&a)?,
+            "custom_command_edit" => self.custom_command_edit(&a)?,
+            "custom_command_delete" => self.custom_command_delete(&a)?,
+            "custom_command_export" => self.custom_command_export(&a)?,
+            "custom_command_import" => self.custom_command_import(&a)?,
+            "custom_command_run" => return self.custom_command_run(&a),
             "doc_compare_report" => self.doc_compare_report(&a)?,
             "doc_compare_mark" => self.doc_compare_mark(&a)?,
             "form_set_actions" => self.form_set_actions(&a)?,
