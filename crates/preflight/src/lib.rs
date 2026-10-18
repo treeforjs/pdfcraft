@@ -28,6 +28,7 @@ pub mod coverage;
 pub mod flatten;
 pub mod icc;
 pub mod ink_manager;
+pub mod inspector;
 pub mod overprint;
 pub mod pdfx;
 pub mod pdfx_convert;

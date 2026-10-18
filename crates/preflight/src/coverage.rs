@@ -52,8 +52,11 @@ use pdfcraft_cos::{Dict, Document, ObjRef, Object, Stream};
 pub use crate::ink_manager::InkManager;
 use crate::ink_manager::Route;
 
+mod probe;
 #[cfg(test)]
 mod tests;
+
+pub(crate) use probe::Probe;
 
 /// The default press limit, in percent.
 pub const DEFAULT_LIMIT: f64 = 300.0;
@@ -532,17 +535,38 @@ pub fn kind_names(bits: u8) -> Vec<&'static str> {
 /// would exceed the cell budget), simulating overprint when `overprint` is set and converting
 /// RGB and Lab colours with `conversion`.
 pub fn rasterize(doc: &Document, index: usize, dpi: f64, overprint: bool, conversion: &dyn Conversion) -> Result<Raster, String> {
-    rasterize_page(doc, index, dpi, overprint, false, conversion)
+    rasterize_page(doc, index, dpi, overprint, false, conversion, None).map(|(raster, _)| raster)
 }
 
 /// [`rasterize`] with every object painted with overprint on left out (the backdrop that
 /// overprinting objects print over, for overprint preview). Overprint is simulated for the
 /// rest, which then can't overprint anything; `overprint_paints` counts what was left out.
 pub fn rasterize_without_overprinting(doc: &Document, index: usize, dpi: f64, conversion: &dyn Conversion) -> Result<Raster, String> {
-    rasterize_page(doc, index, dpi, true, true, conversion)
+    rasterize_page(doc, index, dpi, true, true, conversion, None).map(|(raster, _)| raster)
 }
 
-fn rasterize_page(doc: &Document, index: usize, dpi: f64, overprint: bool, omit: bool, conversion: &dyn Conversion) -> Result<Raster, String> {
+/// [`rasterize`], also listing in `probe` every object painted at its point (the Object
+/// Inspector).
+pub(crate) fn rasterize_probed(
+    doc: &Document,
+    index: usize,
+    dpi: f64,
+    overprint: bool,
+    conversion: &dyn Conversion,
+    probe: Option<Box<Probe>>,
+) -> Result<(Raster, Option<Box<Probe>>), String> {
+    rasterize_page(doc, index, dpi, overprint, false, conversion, probe)
+}
+
+fn rasterize_page(
+    doc: &Document,
+    index: usize,
+    dpi: f64,
+    overprint: bool,
+    omit: bool,
+    conversion: &dyn Conversion,
+    probe: Option<Box<Probe>>,
+) -> Result<(Raster, Option<Box<Probe>>), String> {
     check_dpi(dpi)?;
     let pages = pdfcraft_model::pages(doc);
     let page = pages.get(index).ok_or_else(|| format!("page {} does not exist; the document has {} pages", index.saturating_add(1), pages.len()))?;
@@ -576,6 +600,10 @@ fn rasterize_page(doc: &Document, index: usize, dpi: f64, overprint: bool, omit:
     walker.grid.h = gh;
     walker.cell = cell;
     walker.to_grid = Matrix([1.0 / cell, 0.0, 0.0, 1.0 / cell, -crop[0] / cell, -crop[1] / cell]);
+    walker.probe = probe;
+    if let Some(p) = walker.probe.as_mut() {
+        p.place(&walker.to_grid, cell);
+    }
     let gs = Gs::new([0.0, 0.0, gw as f64, gh as f64]);
     if let Some(contents) = page.dict.get(b"Contents") {
         let data = walker.content(contents);
@@ -588,7 +616,8 @@ fn rasterize_page(doc: &Document, index: usize, dpi: f64, overprint: bool, omit:
     if walker.grid.over_budget {
         walker.unmeasure("inks beyond the plate memory budget");
     }
-    Ok(Raster {
+    let probe = walker.probe.take();
+    let raster = Raster {
         page: index,
         crop,
         dpi,
@@ -608,7 +637,8 @@ fn rasterize_page(doc: &Document, index: usize, dpi: f64, overprint: bool, omit:
         overprint_paints: walker.overprint_paints,
         conversion: conversion.describe(),
         conversion_from_profile: conversion.uses_profile(),
-    })
+    };
+    Ok((raster, probe))
 }
 
 /// Connected (8-neighbour) regions of cells above `limit`: the worst `keep`, the number of
@@ -906,11 +936,14 @@ struct Paint {
     comps: Vec<f64>,
     /// A pattern colour (`/P scn`): not measured.
     pattern: bool,
+    /// For the Object Inspector: the colour space as named (`cs`), and the pattern's name.
+    label: Option<Rc<str>>,
+    pattern_name: Option<Rc<[u8]>>,
 }
 
 impl Paint {
     fn device(space: Space, comps: Vec<f64>) -> Self {
-        Self { space: Rc::new(space), comps, pattern: false }
+        Self { space: Rc::new(space), comps, pattern: false, label: None, pattern_name: None }
     }
 }
 
@@ -927,11 +960,28 @@ struct Font {
     scale: f64,
     ascent: f64,
     descent: f64,
+    /// For the Object Inspector: `BaseFont`, `Subtype` and whether the font program is
+    /// embedded.
+    base_font: String,
+    subtype: String,
+    embedded: bool,
 }
 
 impl Font {
     fn fallback() -> Self {
-        Self { two_byte: false, first: 0, widths: Vec::new(), ranges: Vec::new(), default_width: 500.0, scale: 0.001, ascent: 0.8, descent: -0.2 }
+        Self {
+            two_byte: false,
+            first: 0,
+            widths: Vec::new(),
+            ranges: Vec::new(),
+            default_width: 500.0,
+            scale: 0.001,
+            ascent: 0.8,
+            descent: -0.2,
+            base_font: String::new(),
+            subtype: String::new(),
+            embedded: false,
+        }
     }
 
     fn width(&self, code: u32) -> f64 {
@@ -1189,6 +1239,8 @@ struct Gs {
     leading: f64,
     rise: f64,
     render: i64,
+    /// Transparency and rendering intent, for the Object Inspector.
+    look: Rc<probe::Look>,
 }
 
 impl Gs {
@@ -1210,6 +1262,7 @@ impl Gs {
             leading: 0.0,
             rise: 0.0,
             render: 0,
+            look: Rc::new(probe::Look::default()),
         }
     }
 }
@@ -1219,6 +1272,8 @@ struct Walker<'a> {
     conversion: &'a dyn Conversion,
     overprint: bool,
     grid: Grid,
+    /// The Object Inspector's point and what it found there.
+    probe: Option<Box<Probe>>,
     inks: Vec<InkInfo>,
     ink_index: HashMap<Vec<u8>, usize>,
     to_grid: Matrix,
@@ -1300,6 +1355,7 @@ impl<'a> Walker<'a> {
             conversion,
             overprint,
             grid: Grid::new(),
+            probe: None,
             inks: (0..PROCESS_INKS.len()).map(InkInfo::process).collect(),
             ink_index: HashMap::new(),
             to_grid: Matrix::IDENTITY,
@@ -1750,6 +1806,9 @@ impl Walker<'_> {
         if alpha(b"CA") || alpha(b"ca") || smask || blend {
             self.approximate("transparency painted as opaque");
         }
+        if self.probe.is_some() {
+            probe::apply_ext_gstate(self.doc, d, Rc::make_mut(&mut gs.look));
+        }
     }
 
     fn font(&mut self, name: &[u8], resources: &Dict) -> Rc<Font> {
@@ -1829,6 +1888,10 @@ impl Walker<'_> {
             }
             descriptor_of(d)
         };
+        font.base_font = d.name(b"BaseFont").map(|n| String::from_utf8_lossy(n).into_owned()).unwrap_or_default();
+        font.subtype = d.name(b"Subtype").map(|n| String::from_utf8_lossy(n).into_owned()).unwrap_or_default();
+        font.embedded = font.subtype == "Type3"
+            || descriptor.as_ref().is_some_and(|fd| [b"FontFile".as_slice(), b"FontFile2", b"FontFile3"].iter().any(|k| fd.get(k).is_some()));
         if let Some(desc) = descriptor {
             if let Some(m) = desc.get(b"MissingWidth").and_then(num)
                 && !font.two_byte
@@ -1987,6 +2050,9 @@ impl Walker<'_> {
                     {
                         self.stroke(&path, &closed, &gs, &w);
                     }
+                    if self.probe.is_some() && name != b"n" {
+                        self.probe_path(&path, &closed, name, &gs, resources);
+                    }
                     if pending_clip {
                         let mut bbox = [f64::MAX, f64::MAX, f64::MIN, f64::MIN];
                         for &(x, y) in path.iter().flatten() {
@@ -2019,7 +2085,8 @@ impl Walker<'_> {
                     if let Some(o) = op.operands.first() {
                         let space = self.colour_space(o, resources, 0);
                         let comps = space.initial();
-                        let paint = Paint { space: Rc::new(space), comps, pattern: false };
+                        let label = self.probe.is_some().then(|| Rc::from(probe::space_label(self.doc, o, resources, 0)));
+                        let paint = Paint { space: Rc::new(space), comps, pattern: false, label, pattern_name: None };
                         if op.is("cs") {
                             gs.fill = paint;
                         } else {
@@ -2033,6 +2100,7 @@ impl Walker<'_> {
                     let n = target.space.components().min(MAX_COMPONENTS);
                     target.comps = op.operands.iter().filter_map(Object::as_f64).take(n).collect();
                     target.pattern = pattern;
+                    target.pattern_name = op.operands.last().and_then(Object::as_name).map(Rc::from);
                 }
                 // Text.
                 b"BT" => {
@@ -2042,6 +2110,9 @@ impl Walker<'_> {
                 b"Tf" => {
                     if let Some(name) = op.name(0) {
                         gs.font = Some(self.font(name, resources));
+                        if self.probe.is_some() {
+                            Rc::make_mut(&mut gs.look).font_resource = String::from_utf8_lossy(name).into_owned();
+                        }
                     }
                     if let Some(size) = op.num(1).filter(|s| s.is_finite()) {
                         gs.size = size.clamp(-1e5, 1e5);
@@ -2084,7 +2155,7 @@ impl Walker<'_> {
                         tlm = Matrix::translate(0.0, -gs.leading).then(&tlm);
                         tm = tlm;
                     }
-                    tm = self.show(&op, &gs, tm);
+                    tm = self.show(&op, &gs, tm, resources);
                 }
                 b"Do" => {
                     if let Some(name) = op.name(0) {
@@ -2103,6 +2174,18 @@ impl Walker<'_> {
                 }
                 b"sh" => {
                     self.unmeasure("shadings");
+                    if self.probe.is_some()
+                        && let Some(name) = op.name(0)
+                    {
+                        self.probe_shading(name, resources, &gs);
+                    }
+                }
+                b"ri" => {
+                    if self.probe.is_some()
+                        && let Some(intent) = op.name(0)
+                    {
+                        Rc::make_mut(&mut gs.look).intent = String::from_utf8_lossy(intent).into_owned();
+                    }
                 }
                 _ => {}
             }
@@ -2145,7 +2228,7 @@ impl Walker<'_> {
     }
 
     /// Paint the box of a text-showing operator and return the advanced text matrix.
-    fn show(&mut self, op: &Op, gs: &Gs, tm: Matrix) -> Matrix {
+    fn show(&mut self, op: &Op, gs: &Gs, tm: Matrix, resources: &Dict) -> Matrix {
         self.grid.kind = TEXT;
         let font = gs.font.clone().unwrap_or_else(|| Rc::new(Font::fallback()));
         let mut x = 0.0f64;
@@ -2193,12 +2276,18 @@ impl Walker<'_> {
             2 | 6 => (true, true),
             _ => (false, false),
         };
-        if !shown || hi - lo <= 0.0 || (!paints.0 && !paints.1) {
+        if !shown || hi - lo <= 0.0 {
             return next;
         }
         let (y0, y1) = (font.descent * gs.size + gs.rise, font.ascent * gs.size + gs.rise);
         let device = tm.then(&gs.ctm).then(&self.to_grid);
         let quad = vec![device.apply(lo, y0), device.apply(hi, y0), device.apply(hi, y1), device.apply(lo, y1)];
+        if self.probe.is_some() {
+            self.probe_text(&quad, gs, &font, tm.then(&gs.ctm), paints, resources);
+        }
+        if !paints.0 && !paints.1 {
+            return next;
+        }
         // Stroked text paints last, so its ink is what the box shows.
         let (paint, overprint) = if paints.1 { (&gs.stroke, gs.op_stroke) } else { (&gs.fill, gs.op_fill) };
         if paints.0 && paints.1 {
@@ -2265,13 +2354,20 @@ impl Walker<'_> {
                 if let Some(r) = reference {
                     self.seen.insert(r);
                 }
+                let probed = self.probe.is_some() && self.probe_form(name, &stream.dict, &inner, bbox);
                 self.run(&data, res, inner, depth + 1);
+                if probed && let Some(p) = self.probe.as_mut() {
+                    p.forms.pop();
+                }
                 if let Some(r) = reference {
                     self.seen.remove(&r);
                 }
             }
             Some(b"Image") => {
                 let dict = stream.dict.clone();
+                if self.probe.is_some() {
+                    self.probe_image(Some(name), &dict, resources, gs);
+                }
                 self.image(&dict, stream, resources, gs);
             }
             _ => {}
@@ -2294,6 +2390,9 @@ impl Walker<'_> {
                 other => other,
             };
             full.set(key.to_vec(), v.clone());
+        }
+        if self.probe.is_some() {
+            self.probe_image(None, &full, resources, gs);
         }
         let stream = Stream::from_raw(full.clone(), data.to_vec());
         self.image(&full, &stream, resources, gs);
@@ -2332,7 +2431,7 @@ impl Walker<'_> {
         };
         let n = space.components();
         if n == 0 || n > MAX_COMPONENTS || matches!(space, Space::Unknown(_) | Space::Pattern) {
-            let _ = self.paint(&Paint { space: Rc::new(Space::Unknown(1)), comps: Vec::new(), pattern: false }, false, 0);
+            let _ = self.paint(&Paint::device(Space::Unknown(1), Vec::new()), false, 0);
             return;
         }
         let Some(row_bytes) = w.checked_mul(n).and_then(|v| v.checked_mul(bpc)).map(|bits| bits.div_ceil(8)) else {

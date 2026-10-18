@@ -97,6 +97,17 @@ Files, Automatic) and `overprint::objects` lists the objects painted with overpr
 `print_overprint_preview`, `print_overprint_objects`, and `overprint_preview` on
 `page_render` / `render_preview`).
 
+`inspector` is Output Preview's Object Inspector: `inspector::inspect` runs the same
+rasterizer with a probe (`coverage/probe.rs`) that tests one point against every painted
+object's geometry (fills by winding rule, strokes within half the line width or 0.5 pt, text
+string boxes, image unit squares, shading clips, form boxes) and describes the ones there,
+topmost first, annotations by their rectangle above: fill/stroke colour space, components and
+inks (Ink Manager routing applied), overprint (`OP`/`op`/`OPM`), blend mode, alpha and soft
+mask, rendering intent, line width, font name/type/size/embedding, image size, bits, colour
+space and effective ppi, shading type, form transparency group; plus the separations sample at
+the point (tool `print_object_inspector`). Clips are bounding boxes and optional content is not
+hidden.
+
 ## PDF/X verification
 
 `pdfx::verify_pdfx` (tool `pdfx_verify`) checks the machine-checkable requirements of

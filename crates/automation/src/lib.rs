@@ -28,6 +28,7 @@ mod make_accessible;
 #[cfg(feature = "mcp")]
 pub mod mcp;
 mod measure;
+mod object_inspector;
 mod objects;
 mod ocr_review;
 mod overprint;
@@ -721,6 +722,7 @@ impl Automation {
             "print_separations_list" => self.separations_list(&a)?,
             "print_separations_render" => return self.separations_render(&a),
             "print_separations_sample" => self.separations_sample(&a)?,
+            "print_object_inspector" => self.object_inspector(&a)?,
             "print_ink_manager_list" => self.ink_manager_list(&a)?,
             "print_ink_manager_set" => self.ink_manager_set(&a)?,
             "print_ink_manager_apply" => self.ink_manager_apply(&a)?,
