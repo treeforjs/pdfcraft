@@ -3590,3 +3590,136 @@ fn structure_namespaces_edit_undo_redo_and_save_round_trip() {
     assert_eq!((t.nodes[0].standard.as_deref(), t.nodes[0].namespace.as_deref()), (Some("H1"), Some(custom)));
     assert_eq!(t.namespaces[0].role_map, [a11y::NsMapping { from: "Callout".into(), to: "H1".into(), namespace: Some(a11y::NS_PDF20.into()) }]);
 }
+
+/// A header-only ICC output profile (no conversion tables: colours use the approximation).
+fn output_profile(major: u8, space: &[u8; 4]) -> Arc<Vec<u8>> {
+    let mut h = vec![0u8; 256];
+    h[0..4].copy_from_slice(&256u32.to_be_bytes());
+    h[8] = major;
+    h[12..16].copy_from_slice(b"prtr");
+    h[16..20].copy_from_slice(space);
+    h[20..24].copy_from_slice(b"Lab ");
+    h[36..40].copy_from_slice(b"acsp");
+    Arc::new(h)
+}
+
+fn pdfx_options(level: &str) -> pdfcraft_preflight::XConvertOptions {
+    let part = pdfcraft_preflight::XPart::from_level(level).unwrap();
+    let major = if part == pdfcraft_preflight::XPart::X4 { 4 } else { 2 };
+    pdfcraft_preflight::XConvertOptions {
+        intent: Some(pdfcraft_preflight::XIntent { condition: "FOGRA39".into(), info: None, profile: Some(output_profile(major, b"CMYK")) }),
+        ..pdfcraft_preflight::XConvertOptions::new(part)
+    }
+}
+
+fn pdfx_report(bytes: &Arc<Vec<u8>>, part: pdfcraft_preflight::XPart) -> pdfcraft_preflight::XReport {
+    let doc = pdfcraft_cos::Document::open(bytes.clone()).unwrap();
+    pdfcraft_preflight::verify_pdfx(&doc, &pdfcraft_preflight::XOptions { part: Some(part), max_findings: 100 })
+}
+
+#[test]
+fn convert_to_pdfx_reaches_each_level_as_one_undo_step_and_is_idempotent() {
+    for level in ["x1a", "x3", "x4"] {
+        let mut s = Session::new().with_clock(|| 1_700_000_000);
+        let original = Arc::new(transparency_fixture());
+        let id = s.open("t.pdf", None, original.clone(), None).unwrap();
+        let options = pdfx_options(level);
+        let part = options.part;
+        let r = s.pdfx_convert(id, options.clone()).unwrap();
+        assert!(!r.before.conforms(), "{level}: {:?}", r.before.findings);
+        assert!(r.converted && r.after.conforms(), "{level}: {:?} {:?} {:?}", r.after.findings, r.fixed, r.notes);
+        assert!(r.unfixable().is_empty());
+        assert!(r.fixed.iter().any(|f| f.contains("Embedded 1 standard font: Helvetica")), "{level}: {:?}", r.fixed);
+        assert!(r.fixed.iter().any(|f| f.starts_with("Converted ")), "{level}: {:?}", r.fixed);
+        assert_eq!(r.fixed.iter().any(|f| f.starts_with("Flattened transparency")), level != "x4", "{level}: {:?}", r.fixed);
+        assert!(r.notes.iter().any(|n| n.contains("built-in approximation")), "{level}: {:?}", r.notes);
+        let label = format!("Convert to {}", part.label());
+        assert_eq!(s.get(id).unwrap().can_undo(), Some(label.as_str()));
+        // Saved and reopened, it still conforms (PDF/X-1a and X-3 stay at PDF 1.4).
+        let saved = s.save_bytes(id).unwrap();
+        let reread = pdfx_report(&saved, part);
+        assert!(reread.conforms(), "{level}: {:?}", reread.findings);
+        let max = part.max_pdf_version();
+        assert!(saved.starts_with(format!("%PDF-{}.{}", max.0, max.1).as_bytes()), "{level}");
+        // The text stays text.
+        let id2 = s.open("saved.pdf", None, saved, None).unwrap();
+        assert!(s.get(id2).unwrap().text_lines(0).iter().any(|l| l.text.contains("Flatten me")), "{level}");
+        // Again: nothing to do, no new undo step.
+        let generation = s.get(id).unwrap().generation;
+        let again = s.pdfx_convert(id, options.clone()).unwrap();
+        assert!(again.converted && again.fixed.is_empty() && again.before.conforms(), "{level}: {:?}", again.fixed);
+        assert_eq!(s.get(id).unwrap().generation, generation);
+        // Undo restores the original.
+        s.undo(id).unwrap();
+        assert!(s.get(id).unwrap().can_undo().is_none());
+        assert!(!pdfx_report(&s.get(id).unwrap().bytes, part).conforms());
+        assert_eq!(page_pixels(&s.get(id).unwrap().bytes, 1), page_pixels(&original, 1), "{level}");
+    }
+}
+
+#[test]
+fn convert_to_pdfx_refuses_what_it_cannot_fix_unless_partial() {
+    let page = "BT /F1 12 Tf 20 20 Td (Hi) Tj ET 0 0 0 1 k 0 0 10 10 re f";
+    let bodies = [
+        "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>".to_string(),
+        format!("<< /Length {} >>\nstream\n{page}\nendstream", page.len()),
+        "<< /Type /Font /Subtype /TrueType /BaseFont /Arial /FirstChar 32 /LastChar 32 /Widths [278] >>".to_string(),
+    ];
+    let mut out = b"%PDF-1.4\n".to_vec();
+    let mut offsets = Vec::new();
+    for (i, b) in bodies.iter().enumerate() {
+        offsets.push(out.len());
+        out.extend_from_slice(format!("{} 0 obj\n{b}\nendobj\n", i + 1).as_bytes());
+    }
+    let xref = out.len();
+    out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", bodies.len() + 1).as_bytes());
+    for o in offsets {
+        out.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+    }
+    out.extend_from_slice(format!("trailer << /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", bodies.len() + 1).as_bytes());
+    let mut s = Session::new().with_clock(|| 1_700_000_000);
+    let id = s.open("arial.pdf", None, Arc::new(out), None).unwrap();
+    let r = s.pdfx_convert(id, pdfx_options("x1a")).unwrap();
+    assert!(!r.converted, "{:?}", r.after.findings);
+    assert_eq!(r.unfixable().iter().map(|f| f.rule).collect::<Vec<_>>(), vec!["fonts-embedded"]);
+    assert!(s.get(id).unwrap().can_undo().is_none() && !s.get(id).unwrap().dirty, "nothing changed");
+    let partial = pdfcraft_preflight::XConvertOptions { allow_partial: true, ..pdfx_options("x1a") };
+    let r = s.pdfx_convert(id, partial).unwrap();
+    assert!(r.converted && !r.after.conforms());
+    assert_eq!(r.after.failed(), vec!["fonts-embedded"]);
+    assert_eq!(s.get(id).unwrap().can_undo(), Some("Convert to PDF/X-1a:2003"));
+    // Bad options are errors and change nothing more.
+    let generation = s.get(id).unwrap().generation;
+    for bad in [
+        pdfcraft_preflight::XConvertOptions {
+            intent: Some(pdfcraft_preflight::XIntent { condition: "FOGRA39".into(), info: None, profile: None }),
+            ..pdfx_options("x4")
+        },
+        pdfcraft_preflight::XConvertOptions { trim: Some([0.0, 0.0, 500.0, 500.0]), ..pdfx_options("x3") },
+        pdfcraft_preflight::XConvertOptions { bleed: Some([0.0, 0.0, -1.0, 5.0]), ..pdfx_options("x3") },
+    ] {
+        assert!(matches!(s.pdfx_convert(id, bad), Err(EditError::Invalid(_))));
+    }
+    assert_eq!(s.get(id).unwrap().generation, generation);
+}
+
+#[test]
+fn convert_to_pdfx_survives_hostile_documents() {
+    let docs = [
+        "%PDF-1.7\n1 0 obj << /Type /Catalog /Pages 1 0 R /AcroForm 1 0 R /OutputIntents [1 0 R] >> endobj\ntrailer << /Root 1 0 R /Info 1 0 R >>\n%%EOF\n".to_string(),
+        "%PDF-1.7\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n2 0 obj << /Type /Pages /Kids [3 0 R 3 0 R] /Count 2 >> endobj\n\
+         3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 -5 1e308] /Annots [3 0 R] /Resources << /Font << /F 3 0 R >> >> /Contents 3 0 R >> endobj\n\
+         trailer << /Root 1 0 R >>\n%%EOF\n"
+            .to_string(),
+    ];
+    for d in docs {
+        for level in ["x1a", "x3", "x4"] {
+            let mut s = Session::new().with_clock(|| 1_700_000_000);
+            let Ok(id) = s.open("h.pdf", None, Arc::new(d.clone().into_bytes()), None) else { continue };
+            let _ = s.pdfx_convert(id, pdfx_options(level));
+            let _ = s.pdfx_convert(id, pdfcraft_preflight::XConvertOptions { allow_partial: true, ..pdfx_options(level) });
+        }
+    }
+}

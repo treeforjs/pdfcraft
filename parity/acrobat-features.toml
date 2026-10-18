@@ -7708,11 +7708,11 @@ title = "Save as PDF/X (1a, 3, 4)"
 area = "K"
 tier = "P1"
 milestone = "M11"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["pdfx_convert"]
+evidence = ["crates/engine/src/tests.rs::convert_to_pdfx_reaches_each_level_as_one_undo_step_and_is_idempotent", "crates/engine/src/tests.rs::convert_to_pdfx_refuses_what_it_cannot_fix_unless_partial", "crates/engine/src/tests.rs::convert_to_pdfx_survives_hostile_documents", "crates/preflight/src/pdfx_convert_tests.rs::structural_fixes_leave_only_colour_and_transparency_for_the_engine", "crates/preflight/src/pdfx_convert_tests.rs::a_second_run_changes_nothing", "crates/preflight/src/pdfx_convert_tests.rs::bad_options_are_refused", "crates/preflight/src/pdfx_convert_tests.rs::hostile_documents_do_not_panic", "crates/edit/src/convert_colors/tests.rs::device_output_converts_through_the_profile_but_writes_device_cmyk", "crates/automation/tests/automation.rs::pdfx_convert_through_tools"]
+notes = "PDF/X-1a:2003, X-3:2003 and X-4 (also X-1a:2001, X-3:2002) as one undoable edit, then pdfx_verify again (before/after, fixed, notes, unfixable); refuses (changing nothing) when the result wouldn't conform unless allow_partial; idempotent. Fixes: encryption, JavaScript and additional actions, non-printing annotations (links kept, not printing), printing annotations and form fields flattened and the AcroForm removed, transfer functions, bad halftones, OPI, X-4 optional content names, unembedded standard-14 Type 1 fonts embedded with the renderer's Foxit substitutes (BSD-3-Clause, standard widths, approximate descriptor metrics), transparency flattened for X-1a/X-3, colour converted to the output intent (X-1a: RGB/ICC/Cal/Lab to CMYK; X-3/X-4: DeviceRGB) through the profile's tables written as device colour, else a built-in approximation, the GTS_PDFX output intent (registered condition and/or ICC prtr profile; X-4 requires the profile), TrimBox/BleedBox, PDF version, GTS_PDFXVersion/Conformance, Title, dates, Trapped False, X-4 XMP, file ID. Not fixed: non-standard unembedded fonts, PostScript, reference XObjects, external streams, images Convert Colors can't decode, inline fonts; embedded files stay (warning). No bundled CMYK profile, no UI, not compared with Acrobat's output or another validator."
 
 [[feature]]
 id = "optimize.output-intents"

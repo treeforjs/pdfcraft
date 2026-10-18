@@ -4595,6 +4595,63 @@ fn pdfx_verify_through_tools() {
     assert!(a.call("pdfx_verify", &json!({})).is_err());
 }
 
+#[test]
+fn pdfx_convert_through_tools() {
+    let dir = workdir("pdfxconv");
+    let mut a = auto(&dir);
+    let mut icc = vec![0u8; 256];
+    icc[0..4].copy_from_slice(&256u32.to_be_bytes());
+    icc[8] = 2;
+    icc[12..16].copy_from_slice(b"prtr");
+    icc[16..20].copy_from_slice(b"CMYK");
+    icc[20..24].copy_from_slice(b"Lab ");
+    icc[36..40].copy_from_slice(b"acsp");
+    std::fs::write(dir.join("press.icc"), &icc).unwrap();
+    let resources = "<< /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Times-Roman >> >> /ExtGState << /A << /ca 0.5 >> >> >>";
+    std::fs::write(
+        dir.join("rgb.pdf"),
+        colour_doc(resources, "1 0 0 rg /A gs 10 10 80 80 re f BT /F1 12 Tf 20 20 Td (Press) Tj ET", "0 0 1 rg 0 0 5 5 re f"),
+    )
+    .unwrap();
+    let doc = ok(&mut a, "doc_open", json!({ "path": "rgb.pdf" }))["doc"].as_u64().unwrap();
+    let r = ok(
+        &mut a,
+        "pdfx_convert",
+        json!({ "doc": doc, "level": "x1a", "output_condition": "FOGRA39", "profile": "press.icc", "bleed": [5, 5, 195, 195] }),
+    );
+    assert_eq!((r["standard"].as_str(), r["converted"].as_bool(), r["conforms"].as_bool()), (Some("PDF/X-1a:2003"), Some(true), Some(true)), "{r}");
+    assert_eq!(r["before"]["conforms"], false);
+    assert!(r["before"]["failed_rules"].as_array().unwrap().iter().any(|f| f == "transparency"), "{r}");
+    assert_eq!(r["after"]["errors"], 0, "{r}");
+    assert_eq!(r["unfixable"], json!([]));
+    assert!(r["fixed"].as_array().unwrap().iter().any(|f| f.as_str().unwrap().contains("Times-Roman")), "{r}");
+    let v = ok(&mut a, "pdfx_verify", json!({ "doc": doc }));
+    assert_eq!((v["declared_standard"].as_str(), v["conforms"].as_bool()), (Some("PDF/X-1a:2003"), Some(true)), "{v}");
+    // Saved and reopened it still conforms; converting again changes nothing.
+    ok(&mut a, "doc_save", json!({ "doc": doc, "path": "press.pdf" }));
+    let again = ok(&mut a, "pdfx_convert", json!({ "doc": doc, "level": "x1a" }));
+    assert_eq!((again["converted"].as_bool(), again["changed"].as_bool()), (Some(true), Some(false)), "{again}");
+    let re = ok(&mut a, "doc_open", json!({ "path": "press.pdf" }))["doc"].as_u64().unwrap();
+    let v = ok(&mut a, "pdfx_verify", json!({ "doc": re }));
+    assert_eq!(v["conforms"], true, "{v}");
+    // X-4 needs the profile; a level it doesn't know, bad boxes and a missing profile are refused.
+    let fresh = ok(&mut a, "doc_open", json!({ "path": "rgb.pdf" }))["doc"].as_u64().unwrap();
+    for bad in [
+        json!({ "doc": fresh, "level": "x4", "output_condition": "FOGRA39" }),
+        json!({ "doc": fresh, "level": "x5", "profile": "press.icc" }),
+        json!({ "doc": fresh, "level": "x3" }),
+        json!({ "doc": fresh, "level": "x3", "profile": "press.icc", "trim": [0, 0, 10] }),
+        json!({ "doc": fresh, "level": "x3", "profile": "press.icc", "trim": [0, 0, 900, 900] }),
+        json!({ "doc": fresh, "level": "x3", "profile": "press.icc", "flatten_preset": "huge" }),
+        json!({ "doc": fresh, "level": 3 }),
+    ] {
+        assert!(matches!(a.call("pdfx_convert", &bad), Err(ToolError::InvalidArgs(_))), "{bad}");
+    }
+    assert!(a.call("pdfx_convert", &json!({ "doc": fresh, "level": "x3", "profile": "missing.icc" })).is_err());
+    let r = ok(&mut a, "pdfx_convert", json!({ "doc": fresh, "level": "x4", "profile": "press.icc", "output_condition": "Press" }));
+    assert_eq!((r["converted"].as_bool(), r["conforms"].as_bool()), (Some(true), Some(true)), "{r}");
+}
+
 /// Two pages with the given resources and contents (objects 3/4 and 5/6).
 fn colour_doc(resources: &str, first: &str, second: &str) -> Vec<u8> {
     let stream = |d: &str| format!("<< /Length {} >>\nstream\n{d}\nendstream", d.len());
