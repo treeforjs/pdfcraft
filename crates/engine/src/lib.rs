@@ -347,6 +347,12 @@ impl Document {
         self.editor.as_ref().map(|e| a11y::verify_pdfua(&e.cos, options))
     }
 
+    /// Preflight ▸ Verify PDF/X: the machine-checkable PDF/X-1a, PDF/X-3 or PDF/X-4
+    /// requirements the document breaks (`None` if the document can't be read for editing).
+    pub fn pdfx_verify(&self, options: &pdfa::XOptions) -> Option<pdfa::XReport> {
+        self.editor.as_ref().map(|e| pdfa::verify_pdfx(&e.cos, options))
+    }
+
     /// PDF Optimizer ▸ Audit space usage.
     pub fn audit_space(&self) -> Vec<optimize::SpaceUse> {
         self.audit_space_detailed().map(|a| a.rows).unwrap_or_default()

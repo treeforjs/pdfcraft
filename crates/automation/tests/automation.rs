@@ -4162,6 +4162,104 @@ fn pdfua_verify_through_tools() {
     assert!(a.call("pdfua_verify", &json!({})).is_err());
 }
 
+/// A small PDF/X-4 file drawing `content` (CMYK output intent, transparency allowed).
+fn pdfx_doc(content: &str) -> Vec<u8> {
+    let xmp = "<x:xmpmeta xmlns:x=\"adobe:ns:meta/\"><rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">\
+         <rdf:Description rdf:about=\"\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:xmp=\"http://ns.adobe.com/xap/1.0/\" \
+         xmlns:pdf=\"http://ns.adobe.com/pdf/1.3/\" xmlns:pdfxid=\"http://www.npes.org/pdfx/ns/id/\">\
+         <dc:title><rdf:Alt><rdf:li xml:lang=\"x-default\">Job</rdf:li></rdf:Alt></dc:title>\
+         <xmp:CreateDate>2026-01-01T12:00:00Z</xmp:CreateDate><xmp:ModifyDate>2026-01-01T12:00:00Z</xmp:ModifyDate>\
+         <pdf:Trapped>False</pdf:Trapped><pdfxid:GTS_PDFXVersion>PDF/X-4</pdfxid:GTS_PDFXVersion></rdf:Description></rdf:RDF></x:xmpmeta>";
+    // An ICC header: 256 bytes, version 4, output class, CMYK (all ASCII bytes).
+    let mut icc = vec![0u8; 256];
+    icc[2] = 1;
+    icc[8] = 4;
+    icc[12..16].copy_from_slice(b"prtr");
+    icc[16..20].copy_from_slice(b"CMYK");
+    icc[36..40].copy_from_slice(b"acsp");
+    let icc: String = icc.into_iter().map(char::from).collect();
+    let stream = |dict: &str, d: &str| format!("<< {dict} /Length {} >>\nstream\n{d}\nendstream", d.len());
+    let bodies = [
+        "<< /Type /Catalog /Pages 2 0 R /Metadata 5 0 R /OutputIntents [<< /Type /OutputIntent /S /GTS_PDFX \
+         /OutputConditionIdentifier (FOGRA39) /DestOutputProfile 6 0 R >>] >>"
+            .to_string(),
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".into(),
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /TrimBox [10 10 190 190] /Contents 4 0 R \
+         /Group << /S /Transparency >> /Resources << /ExtGState << /GS << /ca 0.5 >> >> >> >>"
+            .into(),
+        stream("", content),
+        stream("/Type /Metadata /Subtype /XML", xmp),
+        stream("/N 4", &icc),
+        "<< /Title (Job) /Trapped /False >>".into(),
+    ];
+    let mut out = b"%PDF-1.6\n".to_vec();
+    let mut offsets = Vec::new();
+    for (i, b) in bodies.iter().enumerate() {
+        offsets.push(out.len());
+        out.extend_from_slice(format!("{} 0 obj\n{b}\nendobj\n", i + 1).as_bytes());
+    }
+    let xref = out.len();
+    out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", bodies.len() + 1).as_bytes());
+    for o in offsets {
+        out.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+    }
+    out.extend_from_slice(
+        format!("trailer << /Size {} /Root 1 0 R /Info 7 0 R /ID [<0a0b> <0a0b>] >>\nstartxref\n{xref}\n%%EOF\n", bodies.len() + 1).as_bytes(),
+    );
+    out
+}
+
+#[test]
+fn pdfx_verify_through_tools() {
+    let dir = workdir("pdfx");
+    let mut a = auto(&dir);
+    std::fs::write(dir.join("x4.pdf"), pdfx_doc("/GS gs 0 0 0 1 k 20 20 50 50 re f")).unwrap();
+    let doc = ok(&mut a, "doc_open", json!({ "path": "x4.pdf" }))["doc"].as_u64().unwrap();
+    let r = ok(&mut a, "pdfx_verify", json!({ "doc": doc }));
+    assert_eq!(
+        (r["standard"].as_str(), r["conforms"].as_bool(), r["declared_standard"].as_str()),
+        (Some("PDF/X-4"), Some(true), Some("PDF/X-4")),
+        "{r}"
+    );
+    assert_eq!(r["declared"], "PDF/X-4");
+    assert_eq!(r["findings"].as_array().unwrap().len(), 0, "{r}");
+    assert_eq!(r["counts"]["output-intent"], 0);
+    assert!(r["checked"].as_array().unwrap().iter().any(|c| c["rule"] == "optional-content"));
+    assert!(!r["not_checked"].as_array().unwrap().is_empty());
+    // The same file as PDF/X-1a:2001: identification, version, information keys, transparency.
+    let r = ok(&mut a, "pdfx_verify", json!({ "doc": doc, "standard": "X-1a:2001" }));
+    assert_eq!(r["conforms"], false);
+    let failed = r["failed_rules"].as_array().unwrap();
+    for rule in ["version-key", "conformance-key", "pdf-version", "info-keys", "transparency"] {
+        assert!(failed.iter().any(|f| f == rule), "{rule}: {r}");
+    }
+    let f = r["findings"].as_array().unwrap().iter().find(|f| f["rule"] == "transparency").unwrap().clone();
+    assert_eq!((f["severity"].as_str(), f["page"].as_u64(), f["object"].as_u64()), (Some("error"), Some(1), Some(3)), "{f}");
+    // RGB with a CMYK printing condition, no trim box.
+    std::fs::write(dir.join("rgb.pdf"), String::from_utf8(pdfx_doc("1 0 0 rg 0 0 5 5 re f")).unwrap().replace("/TrimBox [10 10 190 190] ", ""))
+        .unwrap();
+    let rgb = ok(&mut a, "doc_open", json!({ "path": "rgb.pdf" }))["doc"].as_u64().unwrap();
+    let rgb = ok(&mut a, "pdfx_verify", json!({ "doc": rgb, "max_findings": 1 }));
+    assert_eq!(rgb["failed_rules"], json!(["page-trim", "colour-rgb"]), "{rgb}");
+    // An undeclared document is checked as X-4.
+    let plain = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    let r = ok(&mut a, "pdfx_verify", json!({ "doc": plain }));
+    assert_eq!((r["standard"].as_str(), r["conforms"].as_bool()), (Some("PDF/X-4"), Some(false)));
+    assert!(r["declared"].is_null());
+    // Bad arguments.
+    for bad in [
+        json!({ "doc": doc, "standard": "X-5" }),
+        json!({ "doc": doc, "standard": 4 }),
+        json!({ "doc": doc, "max_findings": 0 }),
+        json!({ "doc": doc, "max_findings": 10001 }),
+        json!({ "doc": doc, "part": 1 }),
+    ] {
+        assert!(matches!(a.call("pdfx_verify", &bad), Err(ToolError::InvalidArgs(_))), "{bad}");
+    }
+    assert!(a.call("pdfx_verify", &json!({ "doc": 999 })).is_err());
+    assert!(a.call("pdfx_verify", &json!({})).is_err());
+}
+
 #[test]
 fn exporting_to_word_html_and_rtf() {
     let dir = workdir("office");

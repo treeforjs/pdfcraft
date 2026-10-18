@@ -654,6 +654,53 @@ impl Automation {
         }))
     }
 
+    pub(crate) fn pdfx_verify(&self, a: &Args) -> Result<Value> {
+        use pdfcraft_engine::pdfa::{MAX_X_FINDINGS, X_NOT_CHECKED, X_RULES, XOptions, XPart};
+        let part = match a.opt_str("standard")? {
+            None => None,
+            Some(s) => Some(XPart::from_id(s).ok_or_else(|| {
+                let ids: Vec<&str> = XPart::ALL.iter().map(|p| p.id()).collect();
+                ToolError::InvalidArgs(format!("unknown PDF/X standard {s:?} ({})", ids.join(", ")))
+            })?),
+        };
+        let max_findings = match a.opt_int("max_findings")? {
+            None => 100,
+            Some(n) => usize::try_from(n)
+                .ok()
+                .filter(|n| (1..=MAX_X_FINDINGS).contains(n))
+                .ok_or_else(|| ToolError::InvalidArgs(format!("max_findings must be 1 to {MAX_X_FINDINGS}, not {n}")))?,
+        };
+        let r = self.doc(a)?.pdfx_verify(&XOptions { part, max_findings }).ok_or_else(|| failed("the document can't be read for checking"))?;
+        let counts: serde_json::Map<String, Value> = r.checked.iter().map(|id| ((*id).to_owned(), json!(r.count(id)))).collect();
+        let kept = |id: &str| r.findings.iter().filter(|f| f.rule == id).count();
+        let truncated = r.counts.iter().any(|(id, n)| *n > kept(id));
+        let findings: Vec<Value> = r
+            .findings
+            .iter()
+            .map(|f| json!({ "rule": f.rule, "severity": f.severity.id(), "message": f.message, "page": f.page.map(|p| p + 1), "object": f.object.map(|o| o.num) }))
+            .collect();
+        let rules: Vec<Value> = X_RULES
+            .iter()
+            .filter(|x| x.applies(r.part))
+            .map(|x| json!({ "rule": x.id, "severity": x.severity(r.part).id(), "description": x.description }))
+            .collect();
+        let errors = r.findings.iter().filter(|f| f.severity == pdfcraft_engine::pdfa::XSeverity::Error).count();
+        Ok(json!({
+            "standard": r.part.label(),
+            "conforms": r.conforms(),
+            "declared": r.declared,
+            "declared_standard": r.declared_part.map(|p| p.label()),
+            "failed_rules": r.failed(),
+            "errors": errors,
+            "warnings": r.findings.len().saturating_sub(errors),
+            "counts": counts,
+            "findings": findings,
+            "findings_truncated": truncated,
+            "checked": rules,
+            "not_checked": X_NOT_CHECKED,
+        }))
+    }
+
     pub(crate) fn pdfa_convert(&mut self, a: &Args) -> Result<Value> {
         let level = self.pdfa_level(a)?;
         let id = self.doc(a)?.id;
