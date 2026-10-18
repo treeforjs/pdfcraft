@@ -32,6 +32,7 @@ mod preflight;
 mod printing;
 mod reader_selection;
 mod redact;
+mod search_folder;
 mod separations;
 mod signature_workflow;
 mod signing;
@@ -186,6 +187,7 @@ impl Automation {
             "text_extract" => self.text_extract(&a)?,
             "text_selection" => self.text_selection(&a)?,
             "text_find" => self.text_find(&a)?,
+            "search_folder" => self.search_folder(&a)?,
             "page_rotate" => {
                 let degrees = a.int("degrees")?;
                 if degrees % 90 != 0 {
