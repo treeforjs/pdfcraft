@@ -49,4 +49,15 @@ let html = report_html(&report, "file.pdf", "2026-10-02");
   are reported with a suggestion, which `FieldTooltips::Fill` writes as `/TU`. Not yet:
   unruled tables, captions, vector figures, splitting a text run between elements.
 
+- **Keep tags on edit** (`snapshot` + `keep_tags`, `pages_snapshot` + `drop_page_tags`, `keep.rs`):
+  the engine snapshots a tagged page's marked content before a content edit and brings the tree
+  back in step after it, in the same undo step. Content changed in place keeps its MCID (stale
+  ActualText goes; changed figures are reported for an alt review); new untagged content takes
+  over the MCID of emptied content of the same kind, else gets a new `P`/`Figure` next to the
+  nearest tagged content; new vector-only content becomes an artifact; emptied or deleted
+  content leaves its elements, empty elements are unlinked, and the page's parent-tree entry is
+  rebuilt (deleted pages' entries removed). Content streams are spliced in place per stream.
+  Returns a `TagUpdate` report. Not followed: form XObject content, edits other than text,
+  images, added items and page deletion.
+
 Not yet: the Tags/Order/Content panels, the Reading Order tool (M12.1–M12.2).

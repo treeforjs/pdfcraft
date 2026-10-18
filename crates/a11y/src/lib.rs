@@ -17,6 +17,7 @@ mod artifact;
 mod autotag;
 mod content;
 mod headings;
+mod keep;
 mod namespace;
 mod pdfa;
 mod pdfua;
@@ -32,6 +33,7 @@ pub use autotag::{
     MAX_AUTOTAG_PAGES, autotag,
 };
 pub use headings::{Heading, HeadingKind, MAX_HEADING_LEVEL, heading_level, headings};
+pub use keep::{AddedTag, PagesSnapshot, Snapshot, TagUpdate, drop_page_tags, keep_tags, pages_snapshot, snapshot};
 pub use namespace::{
     MAX_NAMESPACES, MAX_NS_MAPPINGS, NS_MATHML, NS_PDF17, NS_PDF20, Namespace, NamespaceKind, NamespaceSpec, NsMapping, add_namespace, namespace_uri,
     namespaces,
@@ -516,5 +518,7 @@ pub fn check(doc: &Document, options: &Options) -> Report {
     Report { results }
 }
 
+#[cfg(test)]
+mod keep_tests;
 #[cfg(test)]
 mod tests;

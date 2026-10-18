@@ -779,6 +779,12 @@ impl Automation {
             "js_document_actions" => self.js_document_actions(&a)?,
             "js_set_document_action" => self.js_set_document_action(&a)?,
             "js_enabled" => self.js_enabled(&a)?,
+            "edit_keep_tags" => {
+                if let Some(on) = a.opt_bool("enabled")? {
+                    self.session.set_keep_tags_on_edit(on);
+                }
+                json!({ "enabled": self.session.keep_tags_on_edit() })
+            }
             "form_set_script" => self.form_set_script(&a)?,
             "form_merge_data" => self.form_merge_data(&a)?,
             "form_actions" => self.form_actions(&a)?,
@@ -1256,7 +1262,12 @@ impl Automation {
     fn apply(&mut self, a: &Args, edit: Edit) -> Result<Value> {
         let id = self.doc(a)?.id;
         self.session.apply(id, edit).map_err(failed)?;
-        Ok(summary(self.doc(a)?))
+        let doc = self.doc(a)?;
+        let mut out = summary(doc);
+        if let Some(u) = &doc.tag_update {
+            out["tags"] = tag_update_json(u);
+        }
+        Ok(out)
     }
 
     fn marks(&mut self, tool: &str, a: &Args) -> Result<Value> {
@@ -2477,6 +2488,24 @@ pub(crate) fn withheld(mut v: Value, copy_allowed: bool) -> Value {
 }
 
 /// What every tool that changes a document returns.
+/// What keeping the tags in step with an edit did (`edit_keep_tags`); pages are 1-based and
+/// elements are object numbers, as `tags_tree` lists them.
+fn tag_update_json(u: &pdfcraft_engine::a11y::TagUpdate) -> Value {
+    json!({
+        "pages": u.pages.iter().map(|p| p.saturating_add(1)).collect::<Vec<_>>(),
+        "kept": u.kept,
+        "adopted": u.adopted,
+        "added": u.added.iter().map(|t| json!({ "page": t.page.saturating_add(1), "element": t.element.num, "role": t.role, "mcid": t.mcid })).collect::<Vec<_>>(),
+        "artifacts": u.artifacts,
+        "removed": u.removed,
+        "pruned": u.pruned,
+        "actual_text_cleared": u.actual_text_cleared,
+        "review_alt": u.review_alt.iter().map(|r| r.num).collect::<Vec<_>>(),
+        "parent_tree": u.parent_tree,
+        "warnings": u.warnings,
+    })
+}
+
 pub(crate) fn summary(d: &Document) -> Value {
     json!({
         "doc": d.id.0,

@@ -352,6 +352,9 @@ pub struct Document {
     pub flatten_report: Option<FlattenReport>,
     /// The Ink Manager's settings (session only; see [`Session::set_ink_manager`]).
     ink_manager: preflight::InkManager,
+    /// How the last edit kept a tagged document's structure tree in step with its content
+    /// (`None`: the edit changed no tagged content, or keeping tags on edit is off).
+    pub tag_update: Option<a11y::TagUpdate>,
 }
 
 impl Document {
@@ -2109,6 +2112,10 @@ struct EditCtx {
     count: u64,
     /// What [`Edit::FlattenTransparency`] did.
     flatten: Option<FlattenReport>,
+    /// Keep a tagged document's structure tree in step with content edits.
+    keep_tags: bool,
+    /// What keeping the tags in step did.
+    tags: Option<a11y::TagUpdate>,
 }
 
 impl EditCtx {
@@ -2134,6 +2141,8 @@ impl EditCtx {
             seed,
             count: 0,
             flatten: None,
+            keep_tags: true,
+            tags: None,
         }
     }
 
@@ -2174,8 +2183,65 @@ impl EditCtx {
     }
 }
 
-/// Perform an edit on a working copy (the caller discards it on error).
+/// Which tagged content an edit changes, for keeping the structure tree in step.
+enum TagScope {
+    None,
+    /// The content of these pages (0-based).
+    Content(usize),
+    /// These pages go.
+    Deleted(Vec<usize>),
+}
+
+fn tag_scope(edit: &Edit) -> TagScope {
+    match edit {
+        Edit::EditTextLine { page, .. }
+        | Edit::EditTextBlock { page, .. }
+        | Edit::EditPageImage { page, .. }
+        | Edit::AddText { page, .. }
+        | Edit::AddImage { page, .. }
+        | Edit::UpdateContent { page, .. }
+        | Edit::DeleteContent { page, .. }
+        | Edit::ReplaceImage { page, .. } => TagScope::Content(*page),
+        Edit::DeletePages { pages } => TagScope::Deleted(pages.clone()),
+        _ => TagScope::None,
+    }
+}
+
+/// Perform an edit on a working copy (the caller discards it on error). With keep tags on edit,
+/// a tagged document's structure tree follows content edits and page deletions (see
+/// [`a11y::keep_tags`]); the tree's update is part of the same edit, so one undo step.
 fn run_edit(doc: &mut pdfcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -> Result<(), EditError> {
+    let scope = if cx.keep_tags { tag_scope(edit) } else { TagScope::None };
+    let note = |cx: &mut EditCtx, r: Result<a11y::TagUpdate, a11y::TagError>| {
+        let u = r.unwrap_or_else(|e| a11y::TagUpdate { warnings: vec![format!("the tags were not updated: {e}")], ..Default::default() });
+        if !u.is_empty() {
+            cx.tags.get_or_insert_with(Default::default).merge(u);
+        }
+    };
+    match scope {
+        TagScope::None => run_edit_inner(doc, edit, cx),
+        TagScope::Content(page) => {
+            let before = a11y::snapshot(doc, page);
+            run_edit_inner(doc, edit, cx)?;
+            if let Some(before) = before {
+                let r = a11y::keep_tags(doc, &before);
+                note(cx, r);
+            }
+            Ok(())
+        }
+        TagScope::Deleted(pages) => {
+            let before = a11y::pages_snapshot(doc, &pages);
+            run_edit_inner(doc, edit, cx)?;
+            if let Some(before) = before {
+                let r = a11y::drop_page_tags(doc, &before);
+                note(cx, r);
+            }
+            Ok(())
+        }
+    }
+}
+
+fn run_edit_inner(doc: &mut pdfcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -> Result<(), EditError> {
     match edit {
         Edit::RotatePages { pages, degrees } => pdfcraft_organize::rotate_pages(doc, pages, *degrees)?,
         Edit::DeletePages { pages } => pdfcraft_organize::delete_pages(doc, pages)?,
@@ -2811,6 +2877,8 @@ pub struct Session {
     url_policy: url_access::UrlPolicy,
     /// Trust Manager ▸ attachments: the user's allow/deny overrides (see [`attachment_trust`]).
     attachment_trust: attachment_trust::AttachmentTrust,
+    /// Keep tags on edit, inverted (on by default; see [`Session::set_keep_tags_on_edit`]).
+    keep_tags_off: bool,
 }
 
 /// Lay a dynamic XFA form out (pages and fields) and give its widgets appearances.
@@ -3276,6 +3344,7 @@ impl Session {
             xfa_warnings: Vec::new(),
             flatten_report: None,
             ink_manager: preflight::InkManager::default(),
+            tag_update: None,
         });
         Ok(id)
     }
@@ -3289,7 +3358,9 @@ impl Session {
         let now = self.now();
         let today = self.today();
         let js_off = self.js_off;
+        let keep_tags = !self.keep_tags_off;
         let doc = self.doc_mut(id)?;
+        doc.tag_update = None;
         let name = doc.name.clone();
         let is_xfa = doc.info.xfa.is_some();
         let mut cx = EditCtx::new(now, doc.generation ^ (id.0 << 48));
@@ -3298,6 +3369,7 @@ impl Session {
         }
         cx.pages = doc.info.pages.len();
         cx.today = today;
+        cx.keep_tags = keep_tags;
         let reason = doc.read_only_reason.clone().unwrap_or_default();
         let signed = doc.is_signed();
         let editor = doc.editor.as_mut().ok_or(EditError::ReadOnly(reason))?;
@@ -3428,11 +3500,24 @@ impl Session {
         if cx.flatten.is_some() {
             doc.flatten_report = cx.flatten;
         }
+        doc.tag_update = cx.tags;
         if cx.xfa_ran_away {
             doc.xfa_template = None;
             doc.js_output.errors.push(XFA_SCRIPTS_OFF.into());
         }
         Ok(())
+    }
+
+    /// Keep tags on edit (on by default): when text or images are edited, added or deleted on a
+    /// tagged document's pages, or pages are deleted, the structure tree and parent tree follow
+    /// (see [`a11y::keep_tags`]), as part of the same undo step, and
+    /// [`Document::tag_update`] says what changed. Off, edits leave the tree as it was.
+    pub fn set_keep_tags_on_edit(&mut self, on: bool) {
+        self.keep_tags_off = !on;
+    }
+
+    pub fn keep_tags_on_edit(&self) -> bool {
+        !self.keep_tags_off
     }
 
     pub fn undo(&mut self, id: DocId) -> Result<String, EditError> {
@@ -4409,6 +4494,8 @@ pub fn comment_summary(name: &str, all: &[pdfcraft_render::Annotation], sort: Su
     out
 }
 
+#[cfg(test)]
+mod keep_tags_tests;
 #[cfg(test)]
 mod tests;
 
