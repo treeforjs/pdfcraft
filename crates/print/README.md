@@ -38,5 +38,8 @@ destinations no queue exists for; CUPS builds a temporary one when the job arriv
 never written to a temp file, where another local user could read or swap it. Other platforms
 report that printing to a printer isn't available yet; the print-ready PDF can always be saved.
 
-Not yet: Windows and web spoolers, print as image, poster labels, PostScript output, colour
+Print as image (`Session::print_pdf_as_image`, `doc_print as_image`) rasterizes the imposed sheets through
+`pdfcraft_preflight::rasterize_pages`.
+
+Not yet: Windows and web spoolers, poster labels, PostScript output, colour
 conversion for grayscale.

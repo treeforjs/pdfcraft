@@ -110,12 +110,36 @@ impl Automation {
                 .ok_or_else(|| bad(format!("unknown paper {p:?} (Letter, Legal, Tabloid, A3, A4, A5)")))?,
         };
         let settings = print::Settings { pages, paper, orientation, layout, content };
+        // Advanced ▸ Print As Image: each sheet goes to the printer as one picture.
+        let as_image = match (a.opt_bool("as_image")?.unwrap_or(false), a.opt_num("dpi")?) {
+            (true, dpi) => {
+                let dpi = dpi.unwrap_or(PRINT_AS_IMAGE_DPI);
+                if !(dpi.is_finite() && (MIN_PRINT_DPI..=MAX_PRINT_DPI).contains(&dpi)) {
+                    return Err(bad(format!("dpi must be between {MIN_PRINT_DPI} and {MAX_PRINT_DPI}, not {dpi}")));
+                }
+                Some(dpi)
+            }
+            (false, Some(_)) => return Err(bad("dpi goes with as_image true (print as image)")),
+            (false, None) => None,
+        };
         let sizes: Vec<(f64, f64)> = self.doc(a)?.info.pages.iter().map(|p| (p.width as f64, p.height as f64)).collect();
         let sheets = print::layout(&sizes, &settings).map_err(|e| bad(e.to_string()))?.len();
         // Document Will Print runs first (what it changes is printed); Did Print once it's out.
         self.session.run_document_action(id, pdfcraft_engine::DocTrigger::WillPrint).map_err(failed)?;
-        let bytes = self.session.print_pdf(id, &settings).map_err(failed)?;
+        let (bytes, rasters) = match as_image {
+            Some(dpi) => {
+                let (bytes, r) = self.session.print_pdf_as_image(id, &settings, dpi).map_err(failed)?;
+                (bytes, Some((dpi, r)))
+            }
+            None => (self.session.print_pdf(id, &settings).map_err(failed)?, None),
+        };
         let mut out = json!({ "sheets": sheets, "pages": settings.pages.len(), "bytes": bytes.len() });
+        if let Some((dpi, r)) = rasters {
+            out["as_image"] = json!({
+                "dpi": dpi,
+                "sheets": r.iter().map(|p| json!({ "sheet": p.page + 1, "width": p.width, "height": p.height, "dpi": p.resolution, "images": p.images })).collect::<Vec<_>>(),
+            });
+        }
         match (a.opt_str("path")?, a.opt_str("printer")?) {
             (Some(p), None) => {
                 let path = self.resolve(p, true)?;
@@ -269,6 +293,12 @@ impl Automation {
         }))
     }
 }
+
+/// `doc_print`'s print-as-image resolution: the default and the accepted range (the
+/// rasterizer's, shared with flatten transparency).
+const PRINT_AS_IMAGE_DPI: f64 = 300.0;
+const MIN_PRINT_DPI: f64 = pdfcraft_engine::preflight::RASTER_MIN_RESOLUTION;
+const MAX_PRINT_DPI: f64 = pdfcraft_engine::preflight::RASTER_MAX_RESOLUTION;
 
 /// The mark names `print_add_printer_marks` takes.
 const MARK_NAMES: [&str; 5] = ["trim", "bleed", "registration", "color_bars", "page_info"];

@@ -921,6 +921,98 @@ pub fn flatten_transparency(doc: &mut Document, pages: &[usize], settings: &Flat
     Ok(report)
 }
 
+/// The most pixels all the pages of one [`rasterize_pages`] call may have together (about 3 GB
+/// of uncompressed RGB): 1 000 Letter pages at 300 ppi fit, 10 000 do not.
+pub const MAX_RASTER_PIXELS: f64 = 1.0e9;
+
+/// What [`rasterize_pages`] did to one page.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PageRaster {
+    /// 0-based page.
+    pub page: usize,
+    /// The picture's size in pixels.
+    pub width: usize,
+    pub height: usize,
+    /// Images (tiles of at most 2048 pixels) the picture is made of.
+    pub images: usize,
+    /// Pixels per inch (per 72 user units) the picture was made at: the requested resolution,
+    /// or less when the page is larger than [`MAX_PAGE_PIXELS`] allows at it.
+    pub resolution: f64,
+}
+
+/// Print as image: replace each of `pages` (0-based; every page when empty) by one opaque
+/// DeviceRGB picture of itself at `resolution` pixels per inch, so a printer receives no fonts,
+/// vectors or transparency. The picture covers the media box (unrotated, white where nothing is
+/// drawn); the boxes, `/Rotate` and annotations stay, so annotations are not part of the picture
+/// (impose them into the page first, as printing does). The page's transparency group is removed.
+///
+/// All or nothing: on an error `doc` may be partly changed, so call it on a copy.
+pub fn rasterize_pages(doc: &mut Document, pages: &[usize], resolution: f64) -> Result<Vec<PageRaster>, String> {
+    if !(resolution.is_finite() && (MIN_RESOLUTION..=MAX_RESOLUTION).contains(&resolution)) {
+        return Err(format!("the resolution must be between {MIN_RESOLUTION} and {MAX_RESOLUTION} pixels per inch"));
+    }
+    let all = pdfcraft_model::pages(doc);
+    if all.is_empty() {
+        return Err("the document has no pages".into());
+    }
+    if let Some(p) = pages.iter().find(|p| **p >= all.len()) {
+        return Err(format!("page {} is out of range: the document has {} pages", p.saturating_add(1), all.len()));
+    }
+    let mut wanted: Vec<usize> = if pages.is_empty() { (0..all.len()).collect() } else { pages.to_vec() };
+    wanted.sort_unstable();
+    wanted.dedup();
+    let render: Vec<(usize, ObjRef, [f64; 4])> = wanted.iter().filter_map(|&i| all.get(i).map(|p| (i, p.obj, media(doc, p)))).collect();
+    // Pixel sizes first, so an oversized job fails before anything is rendered.
+    let mut plan = Vec::with_capacity(render.len());
+    let mut total = 0.0;
+    for &(i, obj, m) in &render {
+        let (w_pt, h_pt) = (m[2] - m[0], m[3] - m[1]);
+        let mut scale = resolution / 72.0;
+        let pixels = (w_pt * scale).ceil().max(1.0) * (h_pt * scale).ceil().max(1.0);
+        if !pixels.is_finite() {
+            return Err(format!("page {} is too large to print as an image", i + 1));
+        }
+        if pixels > MAX_PAGE_PIXELS {
+            scale *= (MAX_PAGE_PIXELS / pixels).sqrt() * 0.99;
+        }
+        if !(scale.is_finite() && scale >= 0.01) {
+            return Err(format!("page {} is too large to print as an image", i + 1));
+        }
+        let (pw, ph) = ((w_pt * scale).ceil().max(1.0) as usize, (h_pt * scale).ceil().max(1.0) as usize);
+        total += pw as f64 * ph as f64;
+        if total > MAX_RASTER_PIXELS {
+            return Err(format!(
+                "printing these pages as images at {resolution} ppi needs more than {} million pixels: lower the resolution or print fewer pages",
+                MAX_RASTER_PIXELS / 1.0e6
+            ));
+        }
+        plan.push((i, obj, m, scale, pw, ph));
+    }
+    let mut r = renderer(render_bytes(doc, &render)?);
+    let mut out = Vec::with_capacity(plan.len());
+    for (i, obj, m, scale, pw, ph) in plan {
+        let images = patches(doc, &mut r, i, m, scale, &[[0, 0, pw, ph]])?;
+        let mut xobjects = Dict::new();
+        let mut draw = String::new();
+        for (k, (img, place)) in images.iter().enumerate() {
+            let name = format!("PcImg{k}");
+            xobjects.set(name.as_bytes().to_vec(), Object::Ref(*img));
+            draw.push_str(&format!("{place} /{name} Do Q\n"));
+        }
+        let mut res = Dict::new();
+        res.set(b"XObject".to_vec(), Object::Dict(xobjects));
+        let contents = doc.add(Object::Stream(Stream::flate(Dict::new(), draw.as_bytes())));
+        doc.update_dict(obj, |d| {
+            d.set(b"Resources".to_vec(), Object::Dict(res));
+            d.set(b"Contents".to_vec(), Object::Ref(contents));
+            d.remove(b"Group");
+        })
+        .map_err(|e| e.to_string())?;
+        out.push(PageRaster { page: i, width: pw, height: ph, images: images.len(), resolution: scale * 72.0 });
+    }
+    Ok(out)
+}
+
 #[cfg(test)]
 #[path = "flatten_tests.rs"]
 mod tests;

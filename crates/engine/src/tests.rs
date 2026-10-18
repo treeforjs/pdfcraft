@@ -1005,6 +1005,42 @@ fn printing_lays_out_sheets_that_render() {
 }
 
 #[test]
+fn printing_as_an_image_leaves_one_picture_per_sheet() {
+    let (s, id) = session_with(3);
+    let settings = print::Settings { pages: vec![0, 1, 2], layout: print::Layout::Size(print::SizeMode::Actual), ..Default::default() };
+    let plain = s.print_pdf(id, &settings).unwrap();
+    let (bytes, report) = s.print_pdf_as_image(id, &settings, 100.0).unwrap();
+    assert_eq!(report.len(), 3);
+    let mut s2 = Session::new();
+    let id2 = s2.open("print.pdf", None, Arc::new(bytes.clone()), None).unwrap();
+    let mut s3 = Session::new();
+    let id3 = s3.open("plain.pdf", None, Arc::new(plain), None).unwrap();
+    let (img, vec) = (&s2.get(id2).unwrap().info.pages, &s3.get(id3).unwrap().info.pages);
+    assert_eq!(img.len(), 3);
+    for (a, b) in img.iter().zip(vec.iter()) {
+        assert_eq!((a.width, a.height), (b.width, b.height));
+    }
+    // Letter sheets at 100 dpi.
+    for r in &report {
+        assert_eq!((r.width, r.height, r.images), (850, 1100, 1), "{r:?}");
+        assert!((r.resolution - 100.0).abs() < 1e-9);
+    }
+    // No text is left to extract.
+    assert!(page_texts(&s2, id2).iter().all(|t| t.trim().is_empty()), "{:?}", page_texts(&s2, id2));
+    assert!(page_texts(&s3, id3)[1].contains("Page 2"));
+    let cos = pdfcraft_cos::Document::open(Arc::new(bytes)).unwrap();
+    for p in pdfcraft_model::pages(&cos) {
+        let c = cos.resolve(p.dict.get(b"Contents").unwrap());
+        let pdfcraft_cos::Object::Stream(st) = &*c else { panic!("{c:?}") };
+        let text = String::from_utf8_lossy(&st.decoded().unwrap()).into_owned();
+        assert!(!text.contains("BT") && !text.contains("Tf"), "{text}");
+    }
+    for bad in [0.0, 35.0, 1201.0, f64::NAN] {
+        assert!(matches!(s.print_pdf_as_image(id, &settings, bad), Err(EditError::Invalid(_))), "{bad}");
+    }
+}
+
+#[test]
 fn crop_and_duplicate_pages_show_in_the_viewer() {
     let (mut s, id) = session_with(2);
     s.apply(id, Edit::SetPageBox { pages: vec![0], which: PageBox::Crop, spec: BoxSpec::Margins([10.0, 20.0, 30.0, 40.0]) }).unwrap();

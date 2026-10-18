@@ -8012,11 +8012,11 @@ title = "Print as image"
 area = "L"
 tier = "P1"
 milestone = "M10"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["doc_print"]
+evidence = ["crates/preflight/src/flatten_tests.rs::rasterize_pages_makes_one_picture_per_page_at_the_resolution", "crates/preflight/src/flatten_tests.rs::rasterize_pages_honours_pages_and_refuses_bad_resolutions", "crates/preflight/src/flatten_tests.rs::rasterize_pages_caps_pixels", "crates/engine/src/tests.rs::printing_as_an_image_leaves_one_picture_per_sheet", "crates/automation/tests/automation.rs::printing_as_an_image_through_tools"]
+notes = "Headless: doc_print as_image true with dpi (36-1200, default 300; dpi alone is refused) works with every layout and with path or printer, and reports each sheet's pixel size and dpi. Engine Session::print_pdf_as_image imposes the sheets, then pdfcraft_preflight::rasterize_pages (the flatten-transparency renderer and tiling) replaces each sheet's content by one opaque DeviceRGB picture (2048 px tiles): no fonts, text operators, vectors or transparency group reach the printer; sheet count and size are kept. A sheet above 64 MP gets a lower dpi (reported); a job above 1 billion pixels is refused before rendering. Missing: no Print dialog Advanced checkbox in the UI, RGB only (no grayscale or CMYK raster for the printer), no comparison with Acrobat's rasterized output"
 
 [[feature]]
 id = "print.page-setup"
