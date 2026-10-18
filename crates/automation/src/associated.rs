@@ -173,6 +173,18 @@ impl Automation {
         let doc = self.doc(a)?;
         let (info, data) = doc.associated_file_data(&t, &sel, MAX_FILE_BYTES.saturating_mul(4)).map_err(failed)?;
         let written = self.write_output(out, &data)?;
-        Ok(json!({ "path": written.display().to_string(), "bytes": data.len(), "file": file_json(&info) }))
+        // Saving is allowed whatever the type; the result says whether opening it would be.
+        let check = self.session.check_attachment(&info.name);
+        let mut v = json!({
+            "path": written.display().to_string(),
+            "bytes": data.len(),
+            "file": file_json(&info),
+            "risk": check.decision.as_str(),
+            "trust": crate::attachment_trust::check_json(&check),
+        });
+        if check.decision != pdfcraft_engine::attachment_trust::Decision::Allow {
+            v["warning"] = json!(format!("Saved, but don't open it unless you trust its source: {}", check.reason));
+        }
+        Ok(v)
     }
 }

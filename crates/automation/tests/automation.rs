@@ -6649,3 +6649,130 @@ fn tags_autotag_tags_form_fields_and_fills_tooltips() {
     let r = ok(&mut a, "tags_autotag", json!({ "doc": doc, "detect_fields": false }));
     assert!(r["counts"].get("Form").is_none() && r["fields"].as_array().unwrap().is_empty(), "{r}");
 }
+
+#[test]
+fn attachment_trust_through_tools() {
+    use base64::Engine as _;
+    let b64 = |b: &[u8]| base64::engine::general_purpose::STANDARD.encode(b);
+    let dir = workdir("attachment-trust");
+    std::fs::write(dir.join("run.bat"), b"@echo off\r\n").unwrap();
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    let pdf = fixture(1);
+    for (name, data) in [
+        ("inner.pdf", pdf.clone()),
+        ("invoice.pdf.exe", b"MZ".to_vec()),
+        ("Payload.JS. .", b"app.alert(1)".to_vec()),
+        ("design.sketchfile", b"sketch".to_vec()),
+        ("data.csv", b"a,b\n".to_vec()),
+    ] {
+        ok(&mut a, "associated_file_add", json!({ "doc": doc, "data_base64": b64(&data), "name": name }));
+    }
+    // A FileAttachment comment is an attachment too.
+    ok(&mut a, "comment_add", json!({ "doc": doc, "page": 1, "type": "attachment", "path": "run.bat", "at": [250, 20] }));
+
+    let list = ok(&mut a, "attachment_list", json!({ "doc": doc }));
+    assert_eq!(list["count"], 6, "{list}");
+    let by_name = |n: &str| list["attachments"].as_array().unwrap().iter().find(|x| x["name"] == n).unwrap().clone();
+    assert_eq!(by_name("inner.pdf")["trust"]["decision"], "allow");
+    let exe = by_name("invoice.pdf.exe");
+    assert_eq!(exe["trust"]["decision"], "block");
+    assert_eq!(exe["trust"]["extension"], "exe");
+    assert_eq!(exe["trust"]["disguised"], true);
+    assert_eq!(by_name("Payload.JS. .")["trust"]["extension"], "js");
+    assert_eq!(by_name("Payload.JS. .")["trust"]["decision"], "block");
+    assert_eq!(by_name("design.sketchfile")["trust"]["decision"], "prompt");
+    let bat = by_name("run.bat");
+    assert_eq!(bat["source"], json!({ "page": 1, "annotation": 1 }));
+    assert_eq!(bat["trust"]["basis"], "builtin_deny");
+
+    // Blocked types are refused, even with confirm, and nothing is written.
+    for name in ["invoice.pdf.exe", "Payload.JS. .", "run.bat"] {
+        let r = ok(&mut a, "attachment_open", json!({ "doc": doc, "name": name, "confirm": true, "path": "launch.bin" }));
+        assert_eq!(r["status"], "blocked", "{r}");
+        assert_eq!(r["opened"], false);
+        assert!(r["reason"].as_str().unwrap().contains("never opened"), "{r}");
+    }
+    assert!(!dir.join("launch.bin").exists());
+
+    // Unknown types prompt first, then open once confirmed.
+    let r = ok(&mut a, "attachment_open", json!({ "doc": doc, "name": "design.sketchfile", "path": "design.sketchfile" }));
+    assert_eq!(r["status"], "prompt", "{r}");
+    assert!(r["question"].as_str().unwrap().contains("confirm: true"));
+    assert!(!dir.join("design.sketchfile").exists());
+    let r = ok(&mut a, "attachment_open", json!({ "doc": doc, "name": "design.sketchfile", "path": "design.sketchfile", "confirm": true }));
+    assert_eq!((r["status"].as_str(), r["launched"].as_bool()), (Some("ready"), Some(false)), "{r}");
+    assert_eq!(std::fs::read(dir.join("design.sketchfile")).unwrap(), b"sketch");
+    // A non-PDF needs somewhere to go.
+    assert!(matches!(a.call("attachment_open", &json!({ "doc": doc, "name": "data.csv" })), Err(ToolError::InvalidArgs(_))));
+
+    // An allowed PDF opens as a new document.
+    let r = ok(&mut a, "attachment_open", json!({ "doc": doc, "name": "inner.pdf" }));
+    assert_eq!(r["status"], "opened", "{r}");
+    assert_eq!(r["document"]["pages"], 1);
+
+    // Plain extraction is allowed but reports the risk.
+    let x = ok(&mut a, "attachment_extract", json!({ "doc": doc, "name": "invoice.pdf.exe", "path": "saved.exe" }));
+    assert_eq!(x["risk"], "block");
+    assert!(x["warning"].as_str().unwrap().contains("don't open it"), "{x}");
+    assert_eq!(std::fs::read(dir.join("saved.exe")).unwrap(), b"MZ");
+    let x = ok(&mut a, "attachment_extract", json!({ "doc": doc, "name": "data.csv", "path": "data.csv" }));
+    assert_eq!(x["risk"], "allow");
+    assert!(x.get("warning").is_none());
+    let af = ok(&mut a, "associated_file_extract", json!({ "doc": doc, "name": "invoice.pdf.exe", "path": "af.exe" }));
+    assert_eq!(af["risk"], "block", "{af}");
+
+    // The policy: read, check names, override.
+    let p = ok(&mut a, "trust_attachments_get", json!({ "names": ["A.EXE", "x.pdf.vbs", "ok.pdf", "README"] }));
+    assert_eq!(p["allow"], json!([]));
+    assert!(p["builtin_deny"].as_array().unwrap().iter().any(|e| e == "exe"));
+    let decisions: Vec<&str> = p["checks"].as_array().unwrap().iter().map(|c| c["decision"].as_str().unwrap()).collect();
+    assert_eq!(decisions, ["block", "block", "allow", "prompt"]);
+    let p = ok(&mut a, "trust_attachments_set", json!({ "add_allow": [".SketchFile"], "add_deny": ["*.csv"] }));
+    assert_eq!((p["allow"].clone(), p["deny"].clone()), (json!(["sketchfile"]), json!(["csv"])));
+    let r = ok(&mut a, "attachment_open", json!({ "doc": doc, "name": "design.sketchfile", "path": "again.sketchfile" }));
+    assert_eq!(r["status"], "ready", "user-allowed types open without a prompt: {r}");
+    let r = ok(&mut a, "attachment_open", json!({ "doc": doc, "name": "data.csv", "path": "x.csv" }));
+    assert_eq!(r["status"], "blocked");
+    assert!(r["reason"].as_str().unwrap().contains("your list"), "{r}");
+    // Moving an extension to the other list, removing, resetting.
+    let p = ok(&mut a, "trust_attachments_set", json!({ "add_allow": ["csv"] }));
+    assert_eq!(p["allow"], json!(["csv", "sketchfile"]));
+    assert_eq!(p["deny"], json!([]));
+    let p = ok(&mut a, "trust_attachments_set", json!({ "remove": ["CSV"] }));
+    assert_eq!(p["allow"], json!(["sketchfile"]));
+    let p = ok(&mut a, "trust_attachments_set", json!({ "reset": true, "deny": ["pdf"] }));
+    assert_eq!((p["allow"].clone(), p["deny"].clone()), (json!([]), json!(["pdf"])));
+    assert_eq!(ok(&mut a, "attachment_open", json!({ "doc": doc, "name": "inner.pdf" }))["status"], "blocked");
+
+    // Bad arguments are refused with a reason and change nothing.
+    for args in [
+        json!({ "allow": ["exe"], "deny": ["EXE"] }),
+        json!({ "add_allow": ["exe"], "add_deny": ["exe"] }),
+        json!({ "allow": ["a.b"] }),
+        json!({ "allow": [""] }),
+        json!({ "deny": ["x".repeat(33)] }),
+        json!({ "allow": "exe" }),
+        json!({ "allow": [7] }),
+        json!({ "colour": true }),
+    ] {
+        assert!(matches!(a.call("trust_attachments_set", &args), Err(ToolError::InvalidArgs(_))), "{args}");
+    }
+    assert_eq!(ok(&mut a, "trust_attachments_get", json!({}))["deny"], json!(["pdf"]), "unchanged");
+    for args in [
+        json!({ "doc": doc }),
+        json!({ "doc": doc, "name": "data.csv", "index": 1 }),
+        json!({ "doc": doc, "index": 0 }),
+        json!({ "doc": doc, "index": 99 }),
+        json!({ "doc": doc, "index": u64::MAX }),
+        json!({ "doc": doc, "name": "missing.txt" }),
+        json!({ "doc": 999, "index": 1 }),
+    ] {
+        assert!(a.call("attachment_open", &args).is_err(), "{args}");
+        let mut with_path = args.clone();
+        with_path["path"] = json!("out.bin");
+        assert!(a.call("attachment_extract", &with_path).is_err(), "{with_path}");
+    }
+    assert!(a.call("attachment_extract", &json!({ "doc": doc, "index": 1, "path": "../outside.bin" })).is_err());
+    assert!(a.call("attachment_extract", &json!({ "doc": doc, "index": 1 })).is_err(), "path is required");
+}

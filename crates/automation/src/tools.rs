@@ -682,12 +682,69 @@ pub fn tools() -> Vec<ToolDef> {
         t(
             "associated_file_extract",
             "Save an associated file",
-            "Write one associated file's embedded data (by name or 1-based index, in target, default the document) to path. Returns {path, bytes, file}.",
+            "Write one associated file's embedded data (by name or 1-based index, in target, default the document) to path. Saving is allowed for any type; risk (allow, prompt or block) and trust (as trust_attachments_get checks) say whether opening it would be, with a warning when it isn't plainly safe. Returns {path, bytes, file, risk, trust, warning?}.",
         )
         .destructive()
         .with(schema(
             json!({ "doc": doc(), "target": af_target(), "name": { "type": "string" }, "index": { "type": "integer", "minimum": 1 }, "path": { "type": "string", "description": "Where to write the file." } }),
             &["doc", "path"],
+        )),
+        t(
+            "attachment_list",
+            "List attachments",
+            "The document's file attachments as the Attachments panel lists them: the EmbeddedFiles name tree, then FileAttachment comments by page. Returns {count, attachments: [{index (1-based), name, description, size, source (\"document\" or {page, annotation}), trust}]}, where trust is the attachment trust policy's verdict on opening it (decision allow, prompt or block, with extension, basis and reason; see trust_attachments_get).",
+        )
+        .ro()
+        .with(schema(json!({ "doc": doc() }), &["doc"])),
+        t(
+            "attachment_open",
+            "Open an attachment",
+            "Open a file attachment (by name or 1-based index from attachment_list) the way double-clicking it in the Attachments panel does, after checking the attachment trust policy (Trust Manager ▸ attachments). A blocked type (programs and scripts such as .exe, .bat, .js, .vbs, or one on your deny list) is never opened: returns {status: \"blocked\", opened: false, reason, trust}, even with confirm. An unknown type (or no extension) returns {status: \"prompt\", question, trust} until called again with confirm: true. An allowed (or confirmed) PDF opens as a new document: {status: \"opened\", document}. Any other type opens in another application, which nothing headless launches: it is written to path for launching, {status: \"ready\", path, bytes, launched: false}. To save a file without opening it, use attachment_extract.",
+        )
+        .destructive()
+        .with(schema(
+            json!({
+                "doc": doc(),
+                "name": { "type": "string" },
+                "index": { "type": "integer", "minimum": 1 },
+                "confirm": { "type": "boolean", "description": "Answer Open to the prompt for an unknown type (default false). Has no effect on blocked types." },
+                "path": { "type": "string", "description": "A non-PDF attachment: where to write it for launching." },
+                "password": { "type": "string", "description": "An encrypted PDF attachment's password." },
+            }),
+            &["doc"],
+        )),
+        t(
+            "attachment_extract",
+            "Save an attachment",
+            "Save a file attachment (by name or 1-based index from attachment_list) to path, without opening it. Allowed for any type, as saving to a chosen place is; risk (allow, prompt or block) and trust say whether opening it would be, with a warning when it isn't plainly safe. Returns {path, bytes, attachment, risk, trust, warning?}.",
+        )
+        .destructive()
+        .with(schema(
+            json!({ "doc": doc(), "name": { "type": "string" }, "index": { "type": "integer", "minimum": 1 }, "path": { "type": "string", "description": "Where to write the file." } }),
+            &["doc", "path"],
+        )),
+        t(
+            "trust_attachments_get",
+            "Attachment trust policy",
+            "Trust Manager ▸ attachments: which attachment types may be opened. Returns {allow, deny (your lists of extensions, lower case without the dot), builtin_deny (programs, scripts, installers, shortcuts, disk images and macro documents: never opened), builtin_allow (plain documents and images), unknown: \"prompt\", order}. Your deny list wins, then your allow list, then the built-in lists; anything else (or a name with no extension) prompts. With names, also checks each name as it would be launched (last path component, case folded, trailing dots and spaces and invisible or direction-changing characters removed, an NTFS stream suffix read both ways; the last extension decides, so report.pdf.exe is an .exe and is flagged disguised): checks [{name, normalized, extension, inner_extensions, decision (allow, prompt, block), basis (user_deny, user_allow, builtin_deny, builtin_allow, unknown, no_extension), disguised, reason}].",
+        )
+        .ro()
+        .with(schema(json!({ "names": { "type": "array", "items": { "type": "string" }, "maxItems": 1024, "description": "File names to check." } }), &[])),
+        t(
+            "trust_attachments_set",
+            "Change the attachment trust policy",
+            "Change your attachment allow and deny lists (Trust Manager ▸ attachments). allow / deny replace a list; add_allow / add_deny add extensions (taking them off the other list); remove takes extensions off both; reset starts from empty lists first. Extensions may be written .EXE, exe or *.exe; letters, digits and - _ + ~ $ only, at most 32 characters and 256 per list; one extension can't be in both. Allowing a built-in blocked type such as exe makes it open. The desktop app keeps the lists in its settings; a headless session keeps them until it ends. Returns the policy as trust_attachments_get does.",
+        )
+        .with(schema(
+            json!({
+                "allow": { "type": "array", "items": { "type": "string" }, "maxItems": 256 },
+                "deny": { "type": "array", "items": { "type": "string" }, "maxItems": 256 },
+                "add_allow": { "type": "array", "items": { "type": "string" }, "maxItems": 256 },
+                "add_deny": { "type": "array", "items": { "type": "string" }, "maxItems": 256 },
+                "remove": { "type": "array", "items": { "type": "string" }, "maxItems": 256 },
+                "reset": { "type": "boolean", "description": "Clear both lists before applying the rest (default false)." },
+            }),
+            &[],
         )),
         t("printers", "List printers", "The printers the system's print spooler knows (CUPS on macOS and Linux), with the default marked.").ro().with(schema(json!({}), &[])),
         t("printer_options", "List printer options", "A printer driver's own job options (CUPS: from its PPD), such as the paper tray, paper type or finishing: key, label, group, default and choices. Pass chosen values to doc_print as options. Empty on Windows, where the driver's preferences window holds them.")

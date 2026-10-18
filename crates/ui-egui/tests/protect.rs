@@ -82,3 +82,49 @@ fn editing_restrictions_via_advanced_options() {
     // Remove security is disabled for nobody here: this session set it.
     assert!(h.state().session.get(id).unwrap().allows_security_change());
 }
+
+/// A document with one attachment, `inner.pdf` (not really a PDF: opening it fails after the
+/// trust check, which is how the test tells a refusal from an attempt).
+const WITH_ATTACHMENT: &[u8] = b"%PDF-1.7
+1 0 obj << /Type /Catalog /Pages 2 0 R /Names << /EmbeddedFiles << /Names [(inner.pdf) 5 0 R] >> >> >> endobj
+2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj
+3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] >> endobj
+4 0 obj << /Type /EmbeddedFile /Length 11 >> stream
+not a pdf!!
+endstream endobj
+5 0 obj << /Type /Filespec /F (inner.pdf) /UF (inner.pdf) /EF << /F 4 0 R >> >> endobj
+trailer << /Root 1 0 R >>
+%%EOF";
+
+#[test]
+fn attachment_trust_is_saved_and_refuses_denied_types() {
+    use pdfcraft_engine::attachment_trust::{AttachmentTrust, Decision};
+    let mut app = PdfCraftApp::new();
+    app.set_option("language", "en").unwrap();
+    app.open_bytes("doc.pdf", None, WITH_ATTACHMENT.to_vec()).unwrap();
+    let id = app.views[0].id;
+    assert_eq!(app.session.get(id).unwrap().info.attachments.len(), 1);
+
+    // Denied: refused before anything is read or opened.
+    app.session.set_attachment_trust(AttachmentTrust::new(&["docx".into()], &["PDF".into()]).unwrap());
+    app.attachment_action(id, 0, true);
+    let toast = app.toast.as_ref().map(|(m, _)| m.clone()).unwrap_or_default();
+    assert!(toast.contains("was not opened") && toast.contains("your list"), "{toast}");
+    assert_eq!(app.views.len(), 1);
+
+    // The lists survive a restart; hostile settings are tamed.
+    let mut restarted = PdfCraftApp::new();
+    restarted.restore(&app.persist());
+    assert_eq!(restarted.session.attachment_trust(), app.session.attachment_trust());
+    assert_eq!(restarted.session.check_attachment("a.pdf").decision, Decision::Block);
+    let mut hostile = PdfCraftApp::new();
+    hostile.restore(r#"{"attachment_trust": {"allow": ["exe", "a/b", 5], "deny": "everything"}}"#);
+    assert_eq!(hostile.session.attachment_trust().allow, vec!["exe"]);
+    assert!(hostile.session.attachment_trust().deny.is_empty());
+
+    // Allowed again: the open is attempted (and fails, as the bytes aren't a PDF).
+    app.session.set_attachment_trust(AttachmentTrust::default());
+    app.attachment_action(id, 0, true);
+    let toast = app.toast.as_ref().map(|(m, _)| m.clone()).unwrap_or_default();
+    assert!(toast.contains("Couldn't open inner.pdf"), "{toast}");
+}
