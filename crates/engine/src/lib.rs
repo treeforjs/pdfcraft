@@ -341,6 +341,12 @@ impl Document {
         self.editor.as_ref().map(|e| a11y::check(&e.cos, options))
     }
 
+    /// Standards ▸ Verify PDF/UA: the machine-checkable PDF/UA-1 or PDF/UA-2 requirements the
+    /// document breaks (`None` if the document can't be read for editing).
+    pub fn pdfua_verify(&self, options: &a11y::UaOptions) -> Option<a11y::UaReport> {
+        self.editor.as_ref().map(|e| a11y::verify_pdfua(&e.cos, options))
+    }
+
     /// PDF Optimizer ▸ Audit space usage.
     pub fn audit_space(&self) -> Vec<optimize::SpaceUse> {
         self.audit_space_detailed().map(|a| a.rows).unwrap_or_default()

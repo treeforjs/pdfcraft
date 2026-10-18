@@ -21,4 +21,7 @@ let html = report_html(&report, "file.pdf", "2026-10-02");
 - The report is a self-contained HTML page. Fixes that edit the document (language, title, tab
   order) live in the engine (`Document::accessibility_fix`).
 
+- **PDF/UA** (`verify_pdfua`): the machine-checkable PDF/UA-1 and PDF/UA-2 requirements by
+  Matterhorn checkpoint (`UA_CHECKPOINTS`); what needs a person is listed in `UA_NOT_CHECKED`.
+
 Not yet: autotagging, the Tags/Order/Content panels, the Reading Order tool (M12.1–M12.2).
