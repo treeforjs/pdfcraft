@@ -8128,11 +8128,11 @@ title = "Object inspector"
 area = "L"
 tier = "P1"
 milestone = "M11"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["print_object_inspector"]
+evidence = ["crates/preflight/src/inspector/tests.rs::stacked_objects_are_listed_topmost_first_with_their_colours", "crates/preflight/src/inspector/tests.rs::transparency_intent_and_fill_rules_are_reported", "crates/preflight/src/inspector/tests.rs::images_report_size_bits_space_and_effective_resolution", "crates/preflight/src/inspector/tests.rs::text_reports_its_font_size_and_embedding", "crates/preflight/src/inspector/tests.rs::forms_shadings_and_annotations_are_listed_in_order", "crates/preflight/src/inspector/tests.rs::ink_manager_routes_are_reflected", "crates/preflight/src/inspector/tests.rs::hostile_input_does_not_panic", "crates/preflight/src/inspector/tests.rs::many_objects_keep_the_topmost", "crates/automation/tests/object_inspector.rs::stacked_objects_list_topmost_first_with_colours_overprint_and_inks", "crates/automation/tests/object_inspector.rs::transparency_images_and_text_are_described", "crates/automation/tests/object_inspector.rs::rotated_pages_and_the_ink_manager_are_honoured", "crates/automation/tests/object_inspector.rs::bad_arguments_are_refused"]
+notes = "Headless only (no Output Preview panel or click-to-inspect in the UI yet). print_object_inspector lists every object at a point topmost first (text, path, image, shading, form XObject, annotation by its rectangle) with fill/stroke colour space, components and the inks they put down after Ink Manager routing, overprint OP/op/OPM, blend mode, constant alpha, soft mask, rendering intent, line width, fill rule, font name/type/size/effective size/embedded/subset and render mode, image size/bits/colour space/filters/effective ppi/mask/intent, shading type and colour space, form transparency group, enclosing forms, plus every plate's ink at the point (print_separations_sample's values, respecting the Ink Manager). Built on the ink rasterizer's interpreter with a point probe. Missing: exact clipping (clips are bounding boxes) and per-glyph text hits (string boxes), optional content visibility (hidden layers are listed), annotation appearance contents, Type 3 glyph and pattern cell contents, image pixel values at the point, ICC profile names/descriptions, output intent per object, and comparison against Acrobat's panel."
 
 [[feature]]
 id = "print.simulate-paper-ink"

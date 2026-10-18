@@ -665,6 +665,24 @@ pub fn tools() -> Vec<ToolDef> {
             &["doc", "page", "x", "y"],
         )),
         t(
+            "print_object_inspector",
+            "Object Inspector",
+            "Output Preview's Object Inspector: every object painted at point (x, y) of a page, topmost first (annotations above page content): type (text, path, image, shading, form, annotation), order (painting order), rect (top-left of the displayed page; pdf_rect in user space), painted (fill/stroke covering the point), fill and stroke colour (space such as DeviceCMYK, ICCBased (4), Separation (Gold), DeviceN (...), Indexed (...); components; inks with percentages after the Ink Manager's routing, converted when from RGB/Lab or a spot converted to process; pattern), overprint (op, OP, OPM), transparency (blend_mode, fill_alpha ca, stroke_alpha CA, soft_mask, alpha_is_shape), rendering_intent, line_width (points on the page), fill_rule, forms (enclosing form XObjects); text: font, resource, font_type, embedded, subset, size, effective_size, render_mode, invisible; image: name (null for inline), width, height, bits_per_component, colour_space, filters, ppi [horizontal, vertical] and effective_ppi, mask, interpolate, intent; shading: shading_type and colour_space; form: name and transparency group; annotation: subtype, name, hidden, printed. separations holds every plate's ink at the point as print_separations_sample does (at dpi, default 72, overprint simulated unless overprint is false). units: view (default, points from the top-left of the displayed page) or pdf (user space). Geometry: fills by winding rule, strokes within half the line width (at least 0.5 pt), clipping paths as bounding boxes, text as string boxes; optional content is not hidden. Read-only.",
+        )
+        .ro()
+        .with(schema(
+            json!({
+                "doc": doc(),
+                "page": { "type": "integer", "minimum": 1 },
+                "x": { "type": "number" },
+                "y": { "type": "number" },
+                "units": { "type": "string", "enum": ["view", "pdf"], "description": "view (default): points from the top-left of the displayed page; pdf: PDF user space." },
+                "dpi": { "type": "number", "minimum": 9, "maximum": 300, "description": "Separation grid resolution for the ink values, in cells per inch (default 72)." },
+                "overprint": { "type": "boolean", "description": "Simulate overprint in the ink values (default true)." },
+            }),
+            &["doc", "page", "x", "y"],
+        )),
+        t(
             "print_ink_manager_list",
             "Ink Manager",
             "Ink Manager's list: every ink the document (or pages) uses - the four process inks and each spot colorant of Separation and DeviceN colour spaces (forms, images, patterns and shadings included), as print_separations_list describes them, ignoring the Ink Manager settings - with its usage (pages where it is painted, pages that declare it, objects: the kinds of object that put it down: text, vector, image; shadings and patterns are not measured) and where it prints under the session's Ink Manager settings: route own (its own plate), alias (prints_on another ink's plate, aliased_to the ink it was aliased to) or process (converted to CMYK). settings holds the current settings. Read-only.",

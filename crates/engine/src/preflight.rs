@@ -12,6 +12,10 @@ pub use pdfcraft_preflight::coverage::{Options as CoverageOptions, PageCoverage,
 pub use pdfcraft_preflight::flatten::{MAX_RESOLUTION as RASTER_MAX_RESOLUTION, MIN_RESOLUTION as RASTER_MIN_RESOLUTION};
 use pdfcraft_preflight::ink_manager::Managed;
 pub use pdfcraft_preflight::ink_manager::{InkManager, Route as InkRoute};
+pub use pdfcraft_preflight::inspector::{
+    AnnotationInfo, FormInfo, ImageInfo, Inspected, Inspection, ObjectColour, ObjectKind, Overprint as ObjectOverprint, ShadingInfo, TextInfo,
+    Transparency,
+};
 pub use pdfcraft_preflight::overprint::{
     DEFAULT_MAX_OBJECTS as OVERPRINT_DEFAULT_MAX_OBJECTS, DEFAULT_OBJECTS_DPI as OVERPRINT_DEFAULT_DPI, MAX_OBJECTS as OVERPRINT_MAX_OBJECTS,
     Mode as OverprintPreview, OverprintObject, OverprintObjects, Simulation as OverprintSimulation,
@@ -137,6 +141,19 @@ impl crate::Document {
         let conversion = Managed { conversion: base.as_ref(), inks: &self.ink_manager };
         crate::guard(|| pdfcraft_preflight::overprint::objects(&editor.cos, page, dpi, max_objects, &conversion))
             .map_err(|e| EditError::Invalid(format!("Listing overprinting objects failed: {e}")))?
+            .map_err(EditError::Invalid)
+    }
+
+    /// Output Preview's Object Inspector: every object painted at user-space point (`x`, `y`)
+    /// of 0-based `page`, topmost first, with its colour, overprint, transparency, font or image
+    /// details, and every ink at the point (separated at `dpi`, overprint simulated when
+    /// `overprint`), with the session's Ink Manager settings applied. Read-only.
+    pub fn inspect_objects(&self, page: usize, x: f64, y: f64, dpi: f64, overprint: bool) -> Result<Inspection, EditError> {
+        let editor = self.editor.as_ref().ok_or_else(|| EditError::ReadOnly(self.read_only_reason.clone().unwrap_or_default()))?;
+        let base = press_conversion(&editor.cos);
+        let conversion = Managed { conversion: base.as_ref(), inks: &self.ink_manager };
+        crate::guard(|| pdfcraft_preflight::inspector::inspect(&editor.cos, page, x, y, dpi, overprint, &conversion))
+            .map_err(|e| EditError::Invalid(format!("Inspecting page {} failed: {e}", page.saturating_add(1))))?
             .map_err(EditError::Invalid)
     }
 
