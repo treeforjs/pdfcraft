@@ -213,6 +213,30 @@ fn full_save_is_readable_and_smaller_after_deletes() {
 }
 
 #[test]
+fn linearized_save_is_fast_web_view_until_saved_incrementally() {
+    let (mut s, id) = session_with(4);
+    assert!(!s.get(id).unwrap().linearization().linearized);
+    s.apply(id, Edit::DeletePages { pages: vec![1] }).unwrap();
+    let lin = s.save_linearized_bytes(id).unwrap();
+    let report = pdfcraft_cos::check_linearization(&lin, None);
+    assert!(report.valid, "{:?}", report.problems);
+    assert_eq!(report.params.unwrap().page_count, Some(3));
+    s.mark_saved(id, lin.clone(), None).unwrap();
+    let doc = s.get(id).unwrap();
+    assert!(doc.fast_web_view() && doc.linearization().valid);
+    assert_eq!(page_texts(&s, id), ["Page 1", "Page 3", "Page 4"]);
+    // An unsaved edit doesn't change what the file is; saving it incrementally ends Fast Web View.
+    s.apply(id, Edit::RotatePages { pages: vec![0], degrees: 90 }).unwrap();
+    assert!(s.get(id).unwrap().linearization().valid);
+    let updated = s.save_bytes(id).unwrap();
+    s.mark_saved(id, updated, None).unwrap();
+    let doc = s.get(id).unwrap();
+    assert!(!doc.fast_web_view());
+    let report = doc.linearization();
+    assert!(report.linearized && !report.valid);
+}
+
+#[test]
 fn layer_choices_survive_edits() {
     // No layers in the fixture: just make sure refresh keeps working with an empty list and
     // that unknown layers are rejected.
@@ -1465,6 +1489,7 @@ fn signing_saving_trusting_and_commenting_afterwards() {
     let sig = &doc.signatures[0];
     assert_eq!((sig.status, sig.page, sig.date.as_deref()), (SignatureStatus::Unknown, Some(1), Some("D:20270115080000Z")));
     assert_eq!(s.save_full_bytes(id).unwrap_err(), EditError::Signed);
+    assert_eq!(s.save_linearized_bytes(id).unwrap_err(), EditError::Signed);
     // Trusting the signer makes it valid; a later comment is permitted.
     s.set_trusted_certificates(vec![digital_id.certificate.clone()]);
     assert_eq!(s.get(id).unwrap().signatures[0].status, SignatureStatus::Valid);

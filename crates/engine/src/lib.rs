@@ -46,6 +46,7 @@ pub use pdfcraft_organize::view::{InitialView, Layout as InitialLayout, Magnific
 pub use pdfcraft_organize::{AfSelector, AfTarget, AssociatedFile, AssociatedFiles, NewAssociatedFile, Relationship as AfRelationship};
 
 pub use pdfcraft_cos::Algorithm;
+pub use pdfcraft_cos::{LinearizationParams, LinearizationReport};
 pub use pdfcraft_create::{CONVERTIBLE, ImageResolution, SourceKind, source_kind};
 pub use pdfcraft_edit::{
     Added, AddedImage, AddedText, Align as TextAlign, Background, Content as AddedContent, Family as FontFamily, Hairlines, HeaderFooter, MarkKind,
@@ -769,6 +770,26 @@ impl Document {
     /// revision). Unsaved edits aren't a revision yet.
     pub fn revision_ends(&self) -> Vec<usize> {
         self.editor.as_ref().map(|e| e.cos.revision_ends()).unwrap_or_default()
+    }
+
+    /// Whether the file as saved (or opened) is linearized for Fast Web View, and whether its
+    /// linearization is consistent. Unsaved edits don't count: they aren't in the file yet.
+    pub fn linearization(&self) -> pdfcraft_cos::LinearizationReport {
+        let report = match self.editor.as_ref() {
+            Some(e) => guard(|| pdfcraft_cos::check_linearization(e.cos.bytes(), Some(&e.cos))),
+            None => guard(|| pdfcraft_cos::check_linearization(&self.bytes, None)),
+        };
+        report.unwrap_or_else(|m| pdfcraft_cos::LinearizationReport {
+            problems: vec![format!("checking failed unexpectedly ({m})")],
+            file_length: self.bytes.len(),
+            ..Default::default()
+        })
+    }
+
+    /// Fast Web View as Document Properties shows it: linearized, and not changed since.
+    pub fn fast_web_view(&self) -> bool {
+        let bytes = self.editor.as_ref().map_or(&self.bytes, |e| e.cos.bytes());
+        pdfcraft_cos::fast_web_view(bytes)
     }
 
     /// Notes about damage repaired while opening (Document Properties ▸ Advanced, notices).
@@ -2496,6 +2517,16 @@ pub fn guard<T>(f: impl FnOnce() -> T) -> Result<T, String> {
     })
 }
 
+/// Check a PDF file's linearization (Fast Web View) without opening it as a document:
+/// the report, and whether it is linearized and unchanged since. `password` opens an encrypted
+/// file so its hint stream can be read; without it everything else is still checked.
+pub fn check_linearization_file(bytes: &Arc<Vec<u8>>, password: Option<&str>) -> Result<(LinearizationReport, bool), String> {
+    guard(|| {
+        let doc = pdfcraft_cos::Document::open_with_password(bytes.clone(), password).ok();
+        (pdfcraft_cos::check_linearization(bytes, doc.as_ref()), pdfcraft_cos::fast_web_view(bytes))
+    })
+}
+
 /// The most files Create ▸ Multiple files takes in one run.
 pub const MAX_CREATE_FILES: usize = 1000;
 
@@ -3402,6 +3433,23 @@ impl Session {
         let editor = doc.editor.as_ref().ok_or_else(|| EditError::ReadOnly(doc.read_only_reason.clone().unwrap_or_default()))?;
         let opts = SaveOptions { mod_date: self.now().map(pdfcraft_cos::pdf_date), ..SaveOptions::default() };
         guard(|| write_full(&editor.cos, &opts)).map_err(EditError::Write)?.map(Arc::new).map_err(|e| EditError::Write(e.to_string()))
+    }
+
+    /// A linearized rewrite (Save As with Fast Web View, ISO 32000 Annex F): page 1 and what
+    /// opening the document needs come first, with hint tables, so a viewer reading it over a
+    /// network shows page 1 before the rest has arrived. Signed documents are refused, like any
+    /// full rewrite; so is a document without pages.
+    pub fn save_linearized_bytes(&self, id: DocId) -> Result<Arc<Vec<u8>>, EditError> {
+        let doc = self.get(id).ok_or(EditError::NoDocument)?;
+        if doc.is_signed() {
+            return Err(EditError::Signed);
+        }
+        let editor = doc.editor.as_ref().ok_or_else(|| EditError::ReadOnly(doc.read_only_reason.clone().unwrap_or_default()))?;
+        let opts = SaveOptions { mod_date: self.now().map(pdfcraft_cos::pdf_date), ..SaveOptions::default() };
+        guard(|| pdfcraft_cos::write_linearized(&editor.cos, &opts))
+            .map_err(EditError::Write)?
+            .map(Arc::new)
+            .map_err(|e| EditError::Write(e.to_string()))
     }
 
     /// Record a successful save of `bytes` (to `path`, if any): rebase editing on the saved file

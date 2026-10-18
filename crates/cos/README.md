@@ -75,16 +75,35 @@ classic table any reader accepts.
 Dictionaries keep their key order and streams keep their *encoded* bytes, so rewritten objects stay
 recognisable in a diff and byte-stable when re-serialized.
 
+## Linearized output (Fast Web View)
+
+`write_linearized(&doc, &opts)` writes the document per ISO 32000 Annex F: the linearization
+parameter dictionary first (`/L /H /O /E /N /T`), the first-page cross-reference section with
+`/Prev` to the main one, the catalog and what opening needs (`/ViewerPreferences`, `/OpenAction`,
+`/AcroForm`, `/Threads`, `/Encrypt`), the primary hint stream (page offset and shared object hint
+tables, plus the outline hint table when `/PageMode /UseOutlines` puts the outlines with page 1),
+page 1 and everything it uses, every other page with its private objects, objects shared by later
+pages, then the rest and the main cross-reference section. Classic tables only, no object streams
+(hint tables locate objects by byte position). Attributes inherited from page tree nodes are copied
+into the pages (shared dictionaries become one indirect object). Encrypted documents keep their
+security; the hint stream is encrypted like any stream. Documents without pages, or whose page tree
+repeats a page or loops, are refused with `CosError::Linearize`.
+
+`check_linearization(bytes, doc)` reports whether a file is linearized and whether every parameter
+and hint table entry matches the file (problems listed, never a panic on damaged input);
+`fast_web_view(bytes)` is the cheap "linearized and unchanged" test. Pass the opened `Document` to
+read an encrypted hint stream. The tests check our output with qpdf's `--check-linearization` when
+qpdf is installed, and qpdf's own linearized output (tables or streams) passes our checker.
+
 ## Errors
 
 `CosError`: `NotPdf`, `Syntax { offset, detail }`, `MissingObject`, `NotADictionary`, `Filter`,
-`NeedsPassword`, `WrongPassword`, `Security`, `Poisoned`.
+`NeedsPassword`, `WrongPassword`, `Security`, `Poisoned`, `ReadOnlyLimit`, `Linearize`.
 
 ## Not done here
 
 - Streaming very large files within a memory budget (`ByteSource`, `core.lazy-loading`); files are
   read whole today.
-- Linearized output, Fast Web View (`core.linearization`, M11).
 - Structural validation against the Arlington model (`core.arlington-validation`), which will live
   in the reserved `arlington` crate.
 - Image codecs. `pdfcraft-filters` carries the non-image filters; DCT, JPX, JBIG2 and CCITT are

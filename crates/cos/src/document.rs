@@ -981,104 +981,15 @@ impl Document {
 
     /// Read one section at `off`, adding entries not already known (newer sections win).
     fn read_section(&self, off: usize, entries: &mut BTreeMap<u32, XrefEntry>) -> Result<(Dict, bool), CosError> {
-        let data = &self.data;
-        let mut lx = Lexer::new(data, off);
-        if lx.eat_keyword(b"xref") {
-            loop {
-                lx.skip_ws();
-                if lx.eat_keyword(b"trailer") {
-                    let t = lx.object()?;
-                    let d = t.as_dict().cloned().ok_or(CosError::Syntax { offset: lx.pos, detail: "trailer is not a dictionary".into() })?;
-                    return Ok((d, false));
-                }
-                let (Ok(Object::Int(start)), Ok(Object::Int(count))) = (lx.object(), lx.object()) else {
-                    return Err(CosError::Syntax { offset: lx.pos, detail: "bad xref subsection header".into() });
-                };
-                if !valid_xref_range(start, count) || count > 10_000_000 {
-                    return Err(CosError::Syntax { offset: lx.pos, detail: "invalid xref object range".into() });
-                }
-                for i in 0..count {
-                    lx.skip_ws();
-                    let o = lx.token();
-                    lx.skip_ws();
-                    let g = lx.token();
-                    lx.skip_ws();
-                    let kind = lx.token();
-                    let num = (start + i) as u32;
-                    let offset = std::str::from_utf8(o).ok().and_then(|s| s.parse::<u64>().ok());
-                    let generation = std::str::from_utf8(g).ok().and_then(|s| s.parse::<u32>().ok()).unwrap_or(0).min(u16::MAX as u32) as u16;
-                    let entry = match (kind, offset) {
-                        (b"n", Some(offset)) => XrefEntry::InFile { offset, generation },
-                        (b"f", _) => XrefEntry::Free { next_generation: generation },
-                        _ => return Err(CosError::Syntax { offset: lx.pos, detail: "bad xref entry".into() }),
-                    };
-                    // Offset 0 "in use" entries are a known producer bug: ignore them.
-                    if matches!(entry, XrefEntry::InFile { offset: 0, .. }) {
-                        continue;
-                    }
-                    entries.entry(num).or_insert(entry);
-                }
-            }
-        }
-        // Cross-reference stream.
-        let (_, obj) = parse_indirect(data, off, &|_| None)?;
-        let Object::Stream(s) = obj else { return Err(CosError::Syntax { offset: off, detail: "expected xref table or stream".into() }) };
-        if s.dict.name(b"Type") != Some(b"XRef") {
-            return Err(CosError::Syntax { offset: off, detail: "stream at startxref is not /Type /XRef".into() });
-        }
-        let w: Vec<usize> = s
-            .dict
-            .get(b"W")
-            .and_then(Object::as_array)
-            .map(|a| a.iter().map(|x| x.as_int().unwrap_or(0).clamp(0, 8) as usize).collect())
-            .unwrap_or_default();
-        if w.len() < 3 {
-            return Err(CosError::Syntax { offset: off, detail: "xref stream /W invalid".into() });
-        }
-        let size = s.dict.int(b"Size").unwrap_or(0).max(0);
-        let index: Vec<i64> = match s.dict.get(b"Index").and_then(Object::as_array) {
-            Some(a) => a.iter().filter_map(Object::as_int).collect(),
-            None => vec![0, size],
-        };
-        let row = w[0] + w[1] + w[2];
-        if row == 0 {
-            return Err(CosError::Syntax { offset: off, detail: "xref stream row width 0".into() });
-        }
-        // One row per object, and a document has at most 8,388,607 indirect objects (the classic
-        // implementation limit): decoding more than that (about 200 MB at the widest rows) is a
-        // decompression bomb, not cross-reference data. The section is then reconstructed.
-        let raw = s.decoded_within(MAX_XREF_OBJECTS.saturating_mul(row).min(self.stream_limit))?;
-        let field = |r: &[u8], from: usize, len: usize, default: u64| -> u64 {
-            if len == 0 {
-                return default;
-            }
-            r[from..from + len].iter().fold(0u64, |acc, b| acc << 8 | *b as u64)
-        };
-        let mut rows = raw.chunks_exact(row);
-        for pair in index.chunks(2) {
-            let [start, count] = pair else { break };
-            if !valid_xref_range(*start, *count) {
-                return Err(CosError::Syntax { offset: off, detail: "invalid xref object range".into() });
-            }
-            for i in 0..*count {
-                let Some(r) = rows.next() else { break };
-                let t = field(r, 0, w[0], 1);
-                let a = field(r, w[0], w[1], 0);
-                let b = field(r, w[0] + w[1], w[2], 0);
-                let num = (*start + i) as u32;
-                let entry = match t {
-                    0 => XrefEntry::Free { next_generation: b.min(u16::MAX as u64) as u16 },
-                    1 => XrefEntry::InFile { offset: a, generation: b.min(u16::MAX as u64) as u16 },
-                    2 => XrefEntry::InStream { stream: a.min(u32::MAX as u64) as u32, index: b.min(u32::MAX as u64) as u32 },
-                    _ => continue, // reserved types are treated as null references (§7.5.8.3)
-                };
-                if matches!(entry, XrefEntry::InFile { offset: 0, .. }) {
-                    continue;
-                }
-                entries.entry(num).or_insert(entry);
-            }
-        }
-        Ok((s.dict.clone(), true))
+        read_xref_section(&self.data, off, self.stream_limit, entries)
+    }
+
+    /// A reader over the objects as the file holds them (unsaved edits ignored), with caches of
+    /// its own, for checks of the saved file such as [`crate::check_linearization`].
+    pub(crate) fn original_reader(&self) -> ObjectReader {
+        let mut reader = self.object_reader();
+        reader.document.overlay.clear();
+        reader
     }
 
     /// Rebuild the cross-reference index by scanning for `N G obj` headers (§7.5.4 recovery).
@@ -1189,6 +1100,114 @@ fn generated_id(seed: &[u8; 32]) -> Vec<u8> {
         out.extend_from_slice(&h.finish().to_be_bytes());
     }
     out
+}
+
+/// Read one cross-reference section (classic table or stream) at `off` into `entries` (entries
+/// already present win, as newer sections are read first). Returns its trailer dictionary and
+/// whether it was a stream.
+pub(crate) fn read_xref_section(
+    data: &[u8],
+    off: usize,
+    stream_limit: usize,
+    entries: &mut BTreeMap<u32, XrefEntry>,
+) -> Result<(Dict, bool), CosError> {
+    let mut lx = Lexer::new(data, off);
+    if lx.eat_keyword(b"xref") {
+        loop {
+            lx.skip_ws();
+            if lx.eat_keyword(b"trailer") {
+                let t = lx.object()?;
+                let d = t.as_dict().cloned().ok_or(CosError::Syntax { offset: lx.pos, detail: "trailer is not a dictionary".into() })?;
+                return Ok((d, false));
+            }
+            let (Ok(Object::Int(start)), Ok(Object::Int(count))) = (lx.object(), lx.object()) else {
+                return Err(CosError::Syntax { offset: lx.pos, detail: "bad xref subsection header".into() });
+            };
+            if !valid_xref_range(start, count) || count > 10_000_000 {
+                return Err(CosError::Syntax { offset: lx.pos, detail: "invalid xref object range".into() });
+            }
+            for i in 0..count {
+                lx.skip_ws();
+                let o = lx.token();
+                lx.skip_ws();
+                let g = lx.token();
+                lx.skip_ws();
+                let kind = lx.token();
+                let num = (start + i) as u32;
+                let offset = std::str::from_utf8(o).ok().and_then(|s| s.parse::<u64>().ok());
+                let generation = std::str::from_utf8(g).ok().and_then(|s| s.parse::<u32>().ok()).unwrap_or(0).min(u16::MAX as u32) as u16;
+                let entry = match (kind, offset) {
+                    (b"n", Some(offset)) => XrefEntry::InFile { offset, generation },
+                    (b"f", _) => XrefEntry::Free { next_generation: generation },
+                    _ => return Err(CosError::Syntax { offset: lx.pos, detail: "bad xref entry".into() }),
+                };
+                // Offset 0 "in use" entries are a known producer bug: ignore them.
+                if matches!(entry, XrefEntry::InFile { offset: 0, .. }) {
+                    continue;
+                }
+                entries.entry(num).or_insert(entry);
+            }
+        }
+    }
+    // Cross-reference stream.
+    let (_, obj) = parse_indirect(data, off, &|_| None)?;
+    let Object::Stream(s) = obj else { return Err(CosError::Syntax { offset: off, detail: "expected xref table or stream".into() }) };
+    if s.dict.name(b"Type") != Some(b"XRef") {
+        return Err(CosError::Syntax { offset: off, detail: "stream at startxref is not /Type /XRef".into() });
+    }
+    let w: Vec<usize> = s
+        .dict
+        .get(b"W")
+        .and_then(Object::as_array)
+        .map(|a| a.iter().map(|x| x.as_int().unwrap_or(0).clamp(0, 8) as usize).collect())
+        .unwrap_or_default();
+    if w.len() < 3 {
+        return Err(CosError::Syntax { offset: off, detail: "xref stream /W invalid".into() });
+    }
+    let size = s.dict.int(b"Size").unwrap_or(0).max(0);
+    let index: Vec<i64> = match s.dict.get(b"Index").and_then(Object::as_array) {
+        Some(a) => a.iter().filter_map(Object::as_int).collect(),
+        None => vec![0, size],
+    };
+    let row = w[0] + w[1] + w[2];
+    if row == 0 {
+        return Err(CosError::Syntax { offset: off, detail: "xref stream row width 0".into() });
+    }
+    // One row per object, and a document has at most 8,388,607 indirect objects (the classic
+    // implementation limit): decoding more than that (about 200 MB at the widest rows) is a
+    // decompression bomb, not cross-reference data. The section is then reconstructed.
+    let raw = s.decoded_within(MAX_XREF_OBJECTS.saturating_mul(row).min(stream_limit))?;
+    let field = |r: &[u8], from: usize, len: usize, default: u64| -> u64 {
+        if len == 0 {
+            return default;
+        }
+        r[from..from + len].iter().fold(0u64, |acc, b| acc << 8 | *b as u64)
+    };
+    let mut rows = raw.chunks_exact(row);
+    for pair in index.chunks(2) {
+        let [start, count] = pair else { break };
+        if !valid_xref_range(*start, *count) {
+            return Err(CosError::Syntax { offset: off, detail: "invalid xref object range".into() });
+        }
+        for i in 0..*count {
+            let Some(r) = rows.next() else { break };
+            let t = field(r, 0, w[0], 1);
+            let a = field(r, w[0], w[1], 0);
+            let b = field(r, w[0] + w[1], w[2], 0);
+            let num = (*start + i) as u32;
+            let entry = match t {
+                0 => XrefEntry::Free { next_generation: b.min(u16::MAX as u64) as u16 },
+                1 => XrefEntry::InFile { offset: a, generation: b.min(u16::MAX as u64) as u16 },
+                2 => XrefEntry::InStream { stream: a.min(u32::MAX as u64) as u32, index: b.min(u32::MAX as u64) as u32 },
+                _ => continue, // reserved types are treated as null references (§7.5.8.3)
+            };
+            if matches!(entry, XrefEntry::InFile { offset: 0, .. }) {
+                continue;
+            }
+            entries.entry(num).or_insert(entry);
+        }
+    }
+    Ok((s.dict.clone(), true))
 }
 
 /// Object numbers must fit the representation used by references and the xref map.

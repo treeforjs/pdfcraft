@@ -188,7 +188,7 @@ pub fn tools() -> Vec<ToolDef> {
         t(
             "doc_save",
             "Save a document",
-            "Save to its own file (an incremental update, which keeps signatures valid) or to a new path (a full rewrite). The write is atomic. flatten_fill_sign bakes Fill & Sign text, marks and signatures into the page first and removes those annotations; other comments and form fields stay. Omit it, or pass false, to leave them editable.",
+            "Save to its own file (an incremental update, which keeps signatures valid) or to a new path (a full rewrite). The write is atomic. linearize writes a linearized file (Fast Web View, ISO 32000 Annex F): a full rewrite that puts page 1 first with hint tables, so viewers show it before the rest downloads; it uses classic cross-reference tables without object streams, keeps encryption, and is refused for signed documents. A later incremental save ends Fast Web View. flatten_fill_sign bakes Fill & Sign text, marks and signatures into the page first and removes those annotations; other comments and form fields stay. Omit it, or pass false, to leave them editable.",
         )
         .destructive()
         .cmd("file.save")
@@ -197,6 +197,7 @@ pub fn tools() -> Vec<ToolDef> {
                 "doc": doc(),
                 "path": { "type": "string", "description": "Save as this file. Omit to save in place." },
                 "full": { "type": "boolean", "description": "Force a full rewrite (or, with false, an incremental update)." },
+                "linearize": { "type": "boolean", "description": "Fast Web View: write a linearized full rewrite. Can't be combined with full: false. Default false." },
                 "flatten_fill_sign": { "type": "boolean", "description": "Bake Fill & Sign marks into the page before writing. Default false." }
             }),
             &["doc"],
@@ -1542,6 +1543,20 @@ pub fn tools() -> Vec<ToolDef> {
                     "scale": { "type": "number", "description": "Horizontal scale in percent." } }),
                 &["doc", "page"],
             )),
+        t(
+            "doc_linearization_check",
+            "Check Fast Web View",
+            "Report whether a PDF is linearized (Fast Web View) and whether its linearization is consistent: the parameter dictionary comes first, /L is the file length, /O the first page, /N the page count, /E the end of the first-page section, /T the main cross-reference section, /H the hint stream, and the hint tables match where the pages and shared objects are. Give doc (the file as last saved or opened; unsaved edits are ignored) or path (with password for an encrypted file, so its hint stream can be read). Returns linearized, valid, fast_web_view, problems, notes (checks that could not be made), params and file_size. Read-only.",
+        )
+        .ro()
+        .with(schema(
+            json!({
+                "doc": doc(),
+                "path": { "type": "string", "description": "A PDF file to check instead of an open document." },
+                "password": { "type": "string", "description": "With path: the password of an encrypted file." }
+            }),
+            &[],
+        )),
         t("doc_revisions", "List revisions", "List the document's saved revisions (oldest first): each incremental update is one. Returns revision number, where it ends in the file and its size, and which signatures sign exactly that revision.")
             .with(schema(json!({ "doc": doc() }), &["doc"])),
         t("doc_open_revision", "Open a revision", "Open saved revision `revision` (1 = the oldest) of a document as a new, unsaved document, to see the file as it was then.")

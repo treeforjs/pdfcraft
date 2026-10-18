@@ -355,11 +355,11 @@ title = "Linearized save (Fast Web View)"
 area = "A"
 tier = "P1"
 milestone = "M11"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["file.save_as"]
+tools = ["doc_save", "doc_linearization_check", "doc_info"]
+evidence = ["crates/cos/tests/linearize.rs::multi_page_document_with_shared_resources_is_linearized", "crates/cos/tests/linearize.rs::encrypted_documents_are_linearized_with_their_security", "crates/cos/tests/linearize.rs::the_checker_survives_truncation_and_damage", "crates/engine/src/tests.rs::linearized_save_is_fast_web_view_until_saved_incrementally", "crates/automation/tests/automation.rs::linearized_save_and_fast_web_view_check"]
+notes = "Annex F writer (pdfcraft_cos::write_linearized): parameter dictionary, first-page xref/trailer, part 4 open-document objects, primary hint stream with page offset, shared object and (UseOutlines) outline hint tables, page 1 section, per-page groups, shared objects, main xref; classic tables, no object streams; inherited page attributes pushed to pages; encryption kept. Checker (check_linearization) verifies /L /O /E /N /T /H and the hint tables; qpdf --check-linearization accepts our output (6 synthetic layouts incl. encrypted, when installed) and qpdf's output passes our checker. doc_save linearize:true, doc_linearization_check, doc_info fast_web_view. Missing: no Save As ▸ Fast Web View option or preference in the UI (UI redesign) and no Document Properties row; thumbnail and thread/named-destination/interactive-form/embedded-file hint tables not written (optional in Annex F); overflow hint streams not checked; object streams can't be combined with linearization; no Acrobat comparison."
 
 [[feature]]
 id = "core.revision-list"

@@ -389,6 +389,7 @@ impl Automation {
             "doc_optimize" => self.doc_optimize(&a)?,
             "doc_initial_view" => self.doc_initial_view(&a)?,
             "doc_revisions" => self.doc_revisions(&a)?,
+            "doc_linearization_check" => self.doc_linearization_check(&a)?,
             "text_lines" => {
                 let page = self.page(&a)?;
                 let doc = self.doc(&a)?;
@@ -875,7 +876,11 @@ impl Automation {
         };
         let same_file = doc.path.as_deref().is_some_and(|p| Path::new(p) == target);
         // Saving to a new file is a full rewrite unless asked otherwise, like Save As.
-        let full = a.opt_bool("full")?.unwrap_or(!same_file);
+        let linearize = a.opt_bool("linearize")?.unwrap_or(false);
+        if linearize && a.opt_bool("full")? == Some(false) {
+            return Err(ToolError::InvalidArgs("linearize writes a full rewrite: it can't be combined with full: false".into()));
+        }
+        let full = linearize || a.opt_bool("full")?.unwrap_or(!same_file);
         let flatten_fill_sign = a.opt_bool("flatten_fill_sign")?.unwrap_or(false);
         if flatten_fill_sign {
             self.apply(a, Edit::FlattenFillSign)?;
@@ -885,7 +890,14 @@ impl Automation {
         if self.session.run_document_action(id, pdfcraft_engine::DocTrigger::WillSave).map_err(failed)? {
             ran.push("will_save");
         }
-        let bytes = if full { self.session.save_full_bytes(id) } else { self.session.save_bytes(id) }.map_err(failed)?;
+        let bytes = if linearize {
+            self.session.save_linearized_bytes(id)
+        } else if full {
+            self.session.save_full_bytes(id)
+        } else {
+            self.session.save_bytes(id)
+        }
+        .map_err(failed)?;
         write_atomic(&target, &bytes)?;
         let path = target.to_string_lossy().into_owned();
         self.session.mark_saved(id, bytes.clone(), Some(path.clone())).map_err(failed)?;
@@ -893,11 +905,50 @@ impl Automation {
             ran.push("did_save");
         }
         let out = self.session.take_js_output(id);
-        let mut result = json!({ "path": path, "bytes": bytes.len(), "incremental": !full, "document": summary(self.doc(a)?) });
+        let mut result =
+            json!({ "path": path, "bytes": bytes.len(), "incremental": !full, "linearized": linearize, "document": summary(self.doc(a)?) });
         if !ran.is_empty() {
             result["document_actions"] = json!({ "ran": ran, "alerts": out.alerts, "console": out.console, "errors": out.errors });
         }
         Ok(result)
+    }
+
+    fn doc_linearization_check(&mut self, a: &Args) -> Result<Value> {
+        let (report, fast, source) = match (a.get("doc").is_some(), a.opt_str("path")?) {
+            (true, None) => {
+                if a.get("password").is_some() {
+                    return Err(ToolError::InvalidArgs("password goes with path; an open document already has its password".into()));
+                }
+                let doc = self.doc(a)?;
+                let mut source = json!({ "doc": doc.id.0, "unsaved_changes": doc.dirty });
+                if doc.dirty {
+                    source["note"] = json!("unsaved edits are not checked: this is the file as last saved");
+                }
+                (doc.linearization(), doc.fast_web_view(), source)
+            }
+            (false, Some(p)) => {
+                let path = self.resolve(p, false)?;
+                let bytes = Arc::new(std::fs::read(&path).map_err(|e| failed(format!("{}: {e}", path.display())))?);
+                let password = a.opt_str("password")?;
+                let (report, fast) =
+                    pdfcraft_engine::check_linearization_file(&bytes, password).map_err(|m| failed(format!("checking failed unexpectedly ({m})")))?;
+                (report, fast, json!({ "path": path.to_string_lossy() }))
+            }
+            (true, Some(_)) => return Err(ToolError::InvalidArgs("give doc or path, not both".into())),
+            (false, None) => return Err(ToolError::InvalidArgs("give doc (an open document id) or path (a PDF file)".into())),
+        };
+        let params = report.params.as_ref().map(|p| {
+            json!({
+                "linearized": p.version, "file_length": p.file_length, "hint_offset": p.hint_offset, "hint_length": p.hint_length,
+                "overflow_hint": p.overflow_hint.map(|(o, l)| json!([o, l])), "first_page_object": p.first_page_object,
+                "first_page_end": p.first_page_end, "page_count": p.page_count, "main_xref_first_entry": p.main_xref_first_entry,
+            })
+        });
+        Ok(json!({
+            "linearized": report.linearized, "valid": report.valid, "fast_web_view": fast,
+            "problems": report.problems, "notes": report.notes, "params": params,
+            "file_size": report.file_length, "pages_found": report.pages_found, "source": source,
+        }))
     }
 
     fn doc_revisions(&mut self, a: &Args) -> Result<Value> {
@@ -2323,6 +2374,8 @@ fn info(d: &Document) -> Value {
         "document": summary(d),
         "pdf_version": i.pdf_version,
         "file_size": i.file_size,
+        // Document Properties ▸ Fast Web View: linearized, and unchanged since (doc_linearization_check has the details).
+        "fast_web_view": d.fast_web_view(),
         "title": i.title, "author": i.author, "subject": i.subject, "keywords": i.keywords,
         "creator": i.creator, "producer": i.producer,
         "tagged": i.tagged,
