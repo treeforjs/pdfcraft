@@ -376,12 +376,12 @@ fn combine_extract_split_and_insert_from_file() {
     let parts = s.split(id, &pdfcraft_organize::SplitBy::PageCount(2)).unwrap();
     assert_eq!(parts.iter().map(|(a, b, _)| (*a, *b)).collect::<Vec<_>>(), [(1, 2), (3, 3)]);
     // Insert pages from a file, undoably, into the open document.
-    s.apply(id, Edit::InsertPagesFrom { name: "b.pdf".into(), bytes: other, pages: Some(vec![1]), at: 1 }).unwrap();
+    s.apply(id, Edit::InsertPagesFrom { name: "b.pdf".into(), bytes: other, pages: Some(vec![1]), at: 1, merge_tags: true }).unwrap();
     assert_eq!(page_texts(&s, id), ["Page 1", "Page 2", "Page 2", "Page 3"]);
     assert_eq!(s.undo(id).unwrap(), "Insert pages from b.pdf");
     assert_eq!(page_texts(&s, id).len(), 3);
     // Garbage sources fail cleanly.
-    let bad = s.apply(id, Edit::InsertPagesFrom { name: "junk.pdf".into(), bytes: Arc::new(b"nope".to_vec()), pages: None, at: 0 });
+    let bad = s.apply(id, Edit::InsertPagesFrom { name: "junk.pdf".into(), bytes: Arc::new(b"nope".to_vec()), pages: None, at: 0, merge_tags: true });
     assert!(matches!(bad, Err(EditError::Source(_))));
 }
 
@@ -1133,7 +1133,7 @@ fn create_and_reduce() {
     // A file with the same page imported twice shares nothing until reduced.
     let (mut s2, id2) = session_with(1);
     let src = Arc::new(fixture(1));
-    s2.apply(id2, Edit::InsertPagesFrom { name: "x".into(), bytes: src.clone(), pages: None, at: 1 }).unwrap();
+    s2.apply(id2, Edit::InsertPagesFrom { name: "x".into(), bytes: src.clone(), pages: None, at: 1, merge_tags: true }).unwrap();
     let full = s2.save_full_bytes(id2).unwrap();
     let (reduced, _) = s2.reduced_bytes(id2).unwrap();
     assert!(reduced.len() <= full.len(), "{} > {}", reduced.len(), full.len());

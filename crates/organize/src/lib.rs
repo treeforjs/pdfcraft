@@ -22,6 +22,7 @@ mod labels;
 mod outline;
 mod pdfx;
 mod prune;
+mod structure;
 mod transition;
 pub mod view;
 
@@ -33,13 +34,15 @@ pub use boxes::{BoxSpec, PageBox, page_boxes, set_page_box};
 pub use dedupe::dedupe_resources;
 pub use fields::{FieldConflicts, FieldReport};
 pub use import::{
-    SplitBy, combine, combine_selected, combine_selected_with, extract_pages, import_pages, import_pages_with, page_as_form, split, split_ranges,
+    ImportOptions, ImportReport, SplitBy, combine, combine_selected, combine_selected_with, combine_with_options, extract_pages, extract_pages_with,
+    import_pages, import_pages_with, import_pages_with_options, page_as_form, split, split_ranges,
 };
 pub use labels::{LabelRange, LabelStyle, number_pages, page_label_ranges, page_labels, set_page_label_ranges};
 pub use outline::{
     Bookmark, BookmarkAction, MAX_TREE_DEPTH, OutlineEntry, OutlineError, Target, add_bookmark, add_bookmark_tree, bookmark_action, bookmark_actions,
     bookmarks, delete_bookmark, move_bookmark, rename_bookmark, set_bookmark_action, set_bookmark_open, set_bookmark_page,
 };
+pub use structure::{RoleMapConflict, TagMergeReport, is_tagged, tag_merge_preview};
 pub use transition::{
     Dimension, Direction, MAX_TRANSITION_SECONDS, Motion, PageTransition, Transition, TransitionStyle, page_transitions, set_page_transition,
 };
@@ -314,7 +317,9 @@ pub fn replace_pages(doc: &mut Document, targets: &[usize], src: &Document, src_
     if targets.len() != src_pages.len() || targets.is_empty() {
         return Err(OrganizeError::Invalid(format!("{} pages can't replace {}", src_pages.len(), targets.len())));
     }
-    let imported = import_pages(doc, src, src_pages, n)?;
+    // The temporary copies go again below, so their tags must not join the tree.
+    let options = ImportOptions { merge_tags: false, ..ImportOptions::default() };
+    let imported = import_pages_with_options(doc, src, src_pages, n, &options)?.pages;
     let all = walk(doc)?;
     const SHOWN: [&[u8]; 8] = [b"Contents", b"Resources", b"MediaBox", b"CropBox", b"BleedBox", b"TrimBox", b"ArtBox", b"Rotate"];
     for (t, new) in targets.iter().zip(&imported) {
