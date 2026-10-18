@@ -1810,3 +1810,45 @@ fn standard_font_names_cover_common_truetype_equivalents() {
         assert_eq!(standard_font_for(base.as_bytes()), want, "{base}");
     }
 }
+
+#[test]
+fn submit_flags_follow_the_format_precedence_and_round_trip() {
+    use crate::submit::{Submission, SubmitFormat, flag};
+    // SubmitPDF wins and every other flag is ignored.
+    let s = Submission::with_flags("https://e.org", flag::ALL, vec!["a".into()]);
+    assert_eq!((s.format, s.flags(), s.fields.len()), (SubmitFormat::Pdf, flag::SUBMIT_PDF, 0));
+    // XFDF over ExportFormat; the FDF-only and HTML-only flags are dropped.
+    let s = Submission::with_flags("u", flag::XFDF | flag::EXPORT_FORMAT | flag::GET_METHOD | flag::EXCL_F_KEY | flag::INCLUDE_ANNOTATIONS, vec![]);
+    assert_eq!((s.format, s.get, s.no_file_key, s.annotations), (SubmitFormat::Xfdf, false, false, true));
+    // Every FDF flag survives a round trip.
+    let fdf = flag::EXCLUDE
+        | flag::INCLUDE_NO_VALUE_FIELDS
+        | flag::INCLUDE_APPEND_SAVES
+        | flag::INCLUDE_ANNOTATIONS
+        | flag::CANONICAL_FORMAT
+        | flag::EXCL_NON_USER_ANNOTS
+        | flag::EXCL_F_KEY
+        | flag::EMBED_FORM;
+    assert_eq!(Submission::with_flags("u", fdf, vec![]).flags(), fdf);
+    let html = flag::EXPORT_FORMAT | flag::GET_METHOD | flag::SUBMIT_COORDINATES;
+    assert_eq!(Submission::with_flags("u", html, vec![]).flags(), html);
+    // ExclNonUserAnnots means nothing without IncludeAnnotations.
+    assert!(!Submission::with_flags("u", flag::EXCL_NON_USER_ANNOTS, vec![]).user_annotations_only);
+    assert_eq!(Submission::with_flags("u", html, vec![]).in_format(SubmitFormat::Fdf).flags(), 0, "GET and coordinates are HTML-only");
+    assert_eq!(flag::by_name("exclfkey"), Some(flag::EXCL_F_KEY));
+    // Hostile /Flags values (negative, beyond 32 bits) read as their low bits, never panic.
+    for flags in ["-1", "9223372036854775807", "4294967552", "1e300"] {
+        let objs: Vec<String> = vec![
+            "<< /Type /Catalog /Pages 2 0 R /AcroForm 4 0 R >>".into(),
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 /MediaBox [0 0 600 800] >>".into(),
+            "<< /Type /Page /Parent 2 0 R /Annots [5 0 R] >>".into(),
+            "<< /Fields [5 0 R] >>".into(),
+            format!(
+                "<< /Type /Annot /Subtype /Widget /FT /Btn /Ff 65536 /T (b) /Rect [0 0 9 9] /P 3 0 R /A << /S /SubmitForm /F (u) /Flags {flags} >> >>"
+            ),
+        ];
+        let doc = document(&objs);
+        let all = fields(&doc);
+        assert!(matches!(&field(&all, "b").button, Some(crate::af::ButtonAction::Submit(_))), "{flags}");
+    }
+}

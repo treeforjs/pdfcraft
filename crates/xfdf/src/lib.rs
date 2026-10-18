@@ -167,8 +167,8 @@ fn arr(v: &[f64]) -> Object {
 
 // ── export ──────────────────────────────────────────────────────────────────────────────────
 
-/// Every comment as an XFDF element (one line per comment, replies included).
-fn xfdf_annots(doc: &Document, out: &mut String) {
+/// Every comment `keep` accepts as an XFDF element (one line per comment, replies included).
+fn xfdf_annots(doc: &Document, out: &mut String, keep: &dyn Fn(&Dict) -> bool) {
     let pages = pdfcraft_model::pages(doc);
     // NM of every annotation, for inreplyto.
     let mut names: HashMap<ObjRef, String> = HashMap::new();
@@ -186,6 +186,9 @@ fn xfdf_annots(doc: &Document, out: &mut String) {
             let Some(d) = doc.resolve(&a).as_dict().cloned() else { continue };
             let Some(sub) = d.name(b"Subtype") else { continue };
             let Some((_, tag)) = SUBTYPES.iter().find(|(s, _)| s.as_bytes() == sub) else { continue };
+            if !keep(&d) {
+                continue;
+            }
             let mut attrs = format!(" page=\"{pi}\"");
             let rect = nums_of(doc, d.get(b"Rect"));
             if rect.len() == 4 {
@@ -286,7 +289,12 @@ fn xfdf_annots(doc: &Document, out: &mut String) {
 }
 
 /// Field values as nested XFDF `<field>` elements.
-fn xfdf_fields(doc: &Document, out: &mut String, keep: &dyn Fn(&pdfcraft_forms::Field) -> bool) {
+fn xfdf_fields(
+    doc: &Document,
+    out: &mut String,
+    keep: &dyn Fn(&pdfcraft_forms::Field) -> bool,
+    value: &dyn Fn(&pdfcraft_forms::Field) -> Vec<String>,
+) {
     #[derive(Default)]
     struct Node {
         values: Vec<String>,
@@ -308,9 +316,10 @@ fn xfdf_fields(doc: &Document, out: &mut String, keep: &dyn Fn(&pdfcraft_forms::
             };
             node = &mut node.kids[i].1;
         }
+        let values = value(&f);
         node.values = match f.kind {
-            FieldKind::CheckBox | FieldKind::Radio if f.value.is_empty() => vec!["Off".into()],
-            _ => f.value.clone(),
+            FieldKind::CheckBox | FieldKind::Radio if values.is_empty() => vec!["Off".into()],
+            _ => values,
         };
     }
     fn write_node(name: &str, node: &Node, out: &mut String) {
@@ -335,18 +344,65 @@ pub fn export_xfdf(doc: &Document, comments: bool, fields: bool, file: &str) -> 
 
 /// [`export_xfdf`] with only the fields `keep` accepts (a submit-form action's selection).
 pub fn export_xfdf_with(doc: &Document, comments: bool, fields: bool, file: &str, keep: &dyn Fn(&pdfcraft_forms::Field) -> bool) -> String {
+    let all = |_: &Dict| true;
+    let data = SubmitData { keep, comments: comments.then_some(&all as &dyn Fn(&Dict) -> bool), file: Some(file), ..SubmitData::default() };
+    xfdf(doc, fields, &data)
+}
+
+/// What a submit-form action (ISO 32000-2 §12.7.6.2) sends, for [`submit_fdf`],
+/// [`submit_xfdf`] and [`submit_html`]. Push buttons and signature fields are never sent.
+pub struct SubmitData<'a> {
+    /// The fields sent.
+    pub keep: &'a dyn Fn(&pdfcraft_forms::Field) -> bool,
+    /// The values sent for a field: its value, or for example a date in canonical form.
+    pub value: &'a dyn Fn(&pdfcraft_forms::Field) -> Vec<String>,
+    /// The markup annotations sent (IncludeAnnotations), as filtered (ExclNonUserAnnots). None:
+    /// no annotations.
+    pub comments: Option<&'a dyn Fn(&Dict) -> bool>,
+    /// The source file named (FDF `/F`, XFDF `<f href>`). None leaves it out (ExclFKey).
+    pub file: Option<&'a str>,
+    /// FDF only: the bytes of the incremental updates since the file was opened, sent as
+    /// `/Differences` (IncludeAppendSaves).
+    pub differences: Option<&'a [u8]>,
+    /// FDF only: the whole document, embedded as the `/F` file specification's `/EF` stream
+    /// (EmbedForm). `/F` is then written even without `file`.
+    pub embedded_pdf: Option<&'a [u8]>,
+}
+
+fn send_all(_: &pdfcraft_forms::Field) -> bool {
+    true
+}
+
+fn own_value(f: &pdfcraft_forms::Field) -> Vec<String> {
+    f.value.clone()
+}
+
+impl Default for SubmitData<'_> {
+    fn default() -> Self {
+        Self { keep: &send_all, value: &own_value, comments: None, file: None, differences: None, embedded_pdf: None }
+    }
+}
+
+/// A submission as XFDF (the action's `XFDF` flag).
+pub fn submit_xfdf(doc: &Document, data: &SubmitData) -> String {
+    xfdf(doc, true, data)
+}
+
+fn xfdf(doc: &Document, fields: bool, data: &SubmitData) -> String {
     let mut out = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<xfdf xmlns=\"http://ns.adobe.com/xfdf/\" xml:space=\"preserve\">\n");
-    if comments {
+    if let Some(keep) = data.comments {
         out.push_str("<annots>\n");
-        xfdf_annots(doc, &mut out);
+        xfdf_annots(doc, &mut out, keep);
         out.push_str("</annots>\n");
     }
     if fields {
         out.push_str("<fields>\n");
-        xfdf_fields(doc, &mut out, keep);
+        xfdf_fields(doc, &mut out, data.keep, data.value);
         out.push_str("</fields>\n");
     }
-    let _ = writeln!(out, "<f href=\"{}\"/>", esc(file));
+    if let Some(file) = data.file {
+        let _ = writeln!(out, "<f href=\"{}\"/>", esc(file));
+    }
     out.push_str("</xfdf>\n");
     out
 }
@@ -366,6 +422,18 @@ pub fn export_fdf(doc: &Document, comments: bool, fields: bool, file: &str) -> V
 
 /// [`export_fdf`] with only the fields `keep` accepts (a submit-form action's selection).
 pub fn export_fdf_with(doc: &Document, comments: bool, fields: bool, file: &str, keep: &dyn Fn(&pdfcraft_forms::Field) -> bool) -> Vec<u8> {
+    let all = |_: &Dict| true;
+    let data = SubmitData { keep, comments: comments.then_some(&all as &dyn Fn(&Dict) -> bool), file: Some(file), ..SubmitData::default() };
+    fdf(doc, fields, &data)
+}
+
+/// A submission as FDF (the action's default format).
+pub fn submit_fdf(doc: &Document, data: &SubmitData) -> Vec<u8> {
+    fdf(doc, true, data)
+}
+
+fn fdf(doc: &Document, fields: bool, data: &SubmitData) -> Vec<u8> {
+    let keep = data.keep;
     let mut body: Vec<u8> = b"<< /FDF << ".to_vec();
     // Comment dictionaries, written after the root as objects 2, 3, …
     let mut annots: Vec<Dict> = Vec::new();
@@ -378,27 +446,28 @@ pub fn export_fdf_with(doc: &Document, comments: bool, fields: bool, file: &str,
             body.extend_from_slice(b"<< /T ");
             body.extend(pdf_string(&f.name));
             body.extend_from_slice(b" /V ");
+            let values = (data.value)(&f);
             match f.kind {
                 FieldKind::CheckBox | FieldKind::Radio => {
-                    let v = f.value.first().cloned().unwrap_or_else(|| "Off".into());
+                    let v = values.first().cloned().unwrap_or_else(|| "Off".into());
                     pdfcraft_cos::serialize(&Object::Name(pdfcraft_forms::name_bytes(&v)), &mut body);
                 }
-                FieldKind::List if f.value.len() > 1 => {
-                    pdfcraft_cos::serialize(&Object::Array(f.value.iter().map(|v| Object::String(PdfString::text(v))).collect()), &mut body);
+                FieldKind::List if values.len() > 1 => {
+                    pdfcraft_cos::serialize(&Object::Array(values.iter().map(|v| Object::String(PdfString::text(v))).collect()), &mut body);
                 }
-                _ => body.extend(pdf_string(f.value.first().map(String::as_str).unwrap_or(""))),
+                _ => body.extend(pdf_string(values.first().map(String::as_str).unwrap_or(""))),
             }
             body.extend_from_slice(b" >> ");
         }
         body.extend_from_slice(b"] ");
     }
-    if comments {
+    if let Some(keep_comment) = data.comments {
         // Every exported comment with its source reference, numbered in export order.
         let mut picked: Vec<(Option<ObjRef>, Dict, usize)> = Vec::new();
         for (pi, p) in pdfcraft_model::pages(doc).iter().enumerate() {
             for a in p.dict.get(b"Annots").map(|a| doc.resolve(a)).and_then(|a| a.as_array().cloned()).unwrap_or_default() {
                 let Some(d) = doc.resolve(&a).as_dict().cloned() else { continue };
-                if d.name(b"Subtype").is_some_and(|sub| SUBTYPES.iter().any(|(s, _)| s.as_bytes() == sub)) {
+                if d.name(b"Subtype").is_some_and(|sub| SUBTYPES.iter().any(|(s, _)| s.as_bytes() == sub)) && keep_comment(&d) {
                     picked.push((a.as_ref(), d, pi));
                 }
             }
@@ -435,19 +504,51 @@ pub fn export_fdf_with(doc: &Document, comments: bool, fields: bool, file: &str,
         }
         body.extend_from_slice(b"] ");
     }
-    body.extend_from_slice(b"/F ");
-    body.extend(pdf_string(file));
+    // Streams (Differences, the embedded document) follow the comments as objects.
+    let mut streams: Vec<pdfcraft_cos::Stream> = Vec::new();
+    let mut next = annots.len().saturating_add(2);
+    if let Some(diff) = data.differences {
+        let _ = write!(body, "/Differences {next} 0 R ");
+        streams.push(pdfcraft_cos::Stream::from_raw(Dict::new(), diff.to_vec()));
+        next = next.saturating_add(1);
+    }
+    if let Some(pdf) = data.embedded_pdf {
+        let mut ef = Dict::new();
+        ef.set(b"Type".to_vec(), Object::name("EmbeddedFile"));
+        ef.set(b"Subtype".to_vec(), Object::name("application/pdf"));
+        let mut params = Dict::new();
+        params.set(b"Size".to_vec(), Object::Int(i64::try_from(pdf.len()).unwrap_or(i64::MAX)));
+        ef.set(b"Params".to_vec(), Object::Dict(params));
+        streams.push(pdfcraft_cos::Stream::from_raw(ef, pdf.to_vec()));
+        let name = data.file.unwrap_or("form.pdf");
+        body.extend_from_slice(b"/F << /Type /Filespec /F ");
+        body.extend(pdf_string(name));
+        body.extend_from_slice(b" /UF ");
+        body.extend(pdf_string(name));
+        let _ = write!(body, " /EF << /F {next} 0 R >> >>");
+    } else if let Some(file) = data.file {
+        body.extend_from_slice(b"/F ");
+        body.extend(pdf_string(file));
+    }
     body.extend_from_slice(b" >> >>");
     let mut out = b"%FDF-1.2\n%\xE2\xE3\xCF\xD3\n".to_vec();
-    let mut offsets = Vec::with_capacity(annots.len() + 1);
+    let mut offsets = Vec::with_capacity(annots.len().saturating_add(streams.len()).saturating_add(1));
     offsets.push(out.len());
     out.extend_from_slice(b"1 0 obj\n");
     out.extend(body);
     out.extend_from_slice(b"\nendobj\n");
+    let annots_len = annots.len();
     for (i, d) in annots.into_iter().enumerate() {
         offsets.push(out.len());
         let _ = writeln!(out, "{} 0 obj", i + 2);
         pdfcraft_cos::serialize(&Object::Dict(d), &mut out);
+        out.extend_from_slice(b"\nendobj\n");
+    }
+    let first = annots_len.saturating_add(2);
+    for (i, st) in streams.into_iter().enumerate() {
+        offsets.push(out.len());
+        let _ = writeln!(out, "{} 0 obj", first.saturating_add(i));
+        pdfcraft_cos::serialize(&Object::Stream(st), &mut out);
         out.extend_from_slice(b"\nendobj\n");
     }
     let xref = out.len();
@@ -462,26 +563,39 @@ pub fn export_fdf_with(doc: &Document, comments: bool, fields: bool, file: &str,
 /// pairs joined by `&`, a multiple selection as one pair per value. Check boxes and radio
 /// buttons that are off are left out, as browsers leave out unchecked boxes.
 pub fn export_html_form(doc: &Document, keep: &dyn Fn(&pdfcraft_forms::Field) -> bool) -> String {
-    fn encode(s: &str, out: &mut String) {
-        for b in s.bytes() {
-            match b {
-                b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'*' => out.push(char::from(b)),
-                b' ' => out.push('+'),
-                _ => {
-                    let _ = write!(out, "%{b:02X}");
-                }
+    submit_html(doc, &SubmitData { keep, ..SubmitData::default() })
+}
+
+/// Percent-encode `s` for `application/x-www-form-urlencoded` (space as `+`).
+pub fn form_urlencode(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for b in s.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'*' => out.push(char::from(b)),
+            b' ' => out.push('+'),
+            _ => {
+                let _ = write!(out, "%{b:02X}");
             }
         }
     }
+    out
+}
+
+/// A submission as an HTML form (the action's `ExportFormat` flag): [`export_html_form`] with
+/// the selection and values of `data` (comments and files are not part of an HTML form).
+pub fn submit_html(doc: &Document, data: &SubmitData) -> String {
+    let keep = data.keep;
+    let encode = |s: &str, out: &mut String| out.push_str(&form_urlencode(s));
     let mut out = String::new();
     for f in pdfcraft_forms::fields(doc) {
         if matches!(f.kind, FieldKind::PushButton | FieldKind::Signature) || !keep(&f) {
             continue;
         }
+        let own = (data.value)(&f);
         let values: Vec<&str> = match f.kind {
-            FieldKind::CheckBox | FieldKind::Radio => f.value.iter().map(String::as_str).filter(|v| *v != "Off").collect(),
-            FieldKind::List | FieldKind::Combo => f.value.iter().map(String::as_str).collect(),
-            _ => vec![f.value.first().map(String::as_str).unwrap_or("")],
+            FieldKind::CheckBox | FieldKind::Radio => own.iter().map(String::as_str).filter(|v| *v != "Off").collect(),
+            FieldKind::List | FieldKind::Combo => own.iter().map(String::as_str).collect(),
+            _ => vec![own.first().map(String::as_str).unwrap_or("")],
         };
         for v in values {
             if !out.is_empty() {
