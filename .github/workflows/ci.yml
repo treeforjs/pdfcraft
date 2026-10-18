@@ -12,9 +12,11 @@ env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
 
+# A newer push to a PR branch cancels its older run. Runs on main are never cancelled, so they
+# finish and save the dependency cache that PR runs restore.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:
@@ -36,9 +38,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Unused toolchains in the image are deleted in the background: it took 1.5 minutes in the
+      # foreground, and the space is free long before the test build needs it.
       - name: Free disk space (Linux)
         if: runner.os == 'Linux'
-        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+        run: |
+          nohup sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL \
+            </dev/null >/dev/null 2>&1 &
 
       # The optional craft-fonts build input (Japanese fonts), so the Japanese font tests run on
       # Linux; Windows tests the build without it.
@@ -62,7 +68,12 @@ jobs:
         with:
           components: clippy, rustfmt
 
+      # Only main saves caches; PRs restore main's. A save per PR branch (about 1 GB each, usable
+      # by that branch only) fills the repo's 10 GB cache budget and evicts main's.
       - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+          cache-on-failure: true
 
       - name: Format
         if: runner.os == 'Linux'
@@ -112,6 +123,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: wasm32
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Check library crates for wasm32
         run: cargo xtask wasm
 
