@@ -84,6 +84,19 @@ connected regions (tool `print_total_area_coverage`). `separations` lists a docu
 with their alternates and pages, samples every plate at a point and finds the output intent
 (tools `print_separations_list`, `print_separations_render`, `print_separations_sample`).
 
+`overprint` is Overprint Preview on top of those plates: `overprint::simulate` corrects a
+normal (knockout) RGB render of a page where overprinting objects change some plate. The page
+is separated with overprint, knocked out and without its overprinting objects
+(`coverage::rasterize_without_overprinting`); changed cells are composited (process inks
+through the renderer's own CMYK conversion, `pdfcraft_render::device_cmyk_to_rgb`, spot inks
+multiplied by their preview) and each pixel moves from the knocked-out to the overprinted
+colour by the object's coverage, read from the rendered pixel between the backdrop and the
+knocked-out colour. `overprint::Mode` is Acrobat's preference (Never, Always, Only For PDF/X
+Files, Automatic) and `overprint::objects` lists the objects painted with overprint on (from
+`colour_warnings`) with whether overprinting changes the page in their box (tools
+`print_overprint_preview`, `print_overprint_objects`, and `overprint_preview` on
+`page_render` / `render_preview`).
+
 ## PDF/X verification
 
 `pdfx::verify_pdfx` (tool `pdfx_verify`) checks the machine-checkable requirements of

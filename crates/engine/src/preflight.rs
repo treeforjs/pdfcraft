@@ -12,6 +12,10 @@ pub use pdfcraft_preflight::coverage::{Options as CoverageOptions, PageCoverage,
 pub use pdfcraft_preflight::flatten::{MAX_RESOLUTION as RASTER_MAX_RESOLUTION, MIN_RESOLUTION as RASTER_MIN_RESOLUTION};
 use pdfcraft_preflight::ink_manager::Managed;
 pub use pdfcraft_preflight::ink_manager::{InkManager, Route as InkRoute};
+pub use pdfcraft_preflight::overprint::{
+    DEFAULT_MAX_OBJECTS as OVERPRINT_DEFAULT_MAX_OBJECTS, DEFAULT_OBJECTS_DPI as OVERPRINT_DEFAULT_DPI, MAX_OBJECTS as OVERPRINT_MAX_OBJECTS,
+    Mode as OverprintPreview, OverprintObject, OverprintObjects, Simulation as OverprintSimulation,
+};
 pub use pdfcraft_preflight::separations::{InkInfo, InkList, InkUse, OutputIntent, Raster as Separations, Sample as InkSample};
 
 #[derive(Clone, Debug)]
@@ -95,6 +99,44 @@ impl crate::Document {
         let conversion = Managed { conversion: base.as_ref(), inks: &self.ink_manager };
         crate::guard(|| pdfcraft_preflight::separations::rasterize(&editor.cos, page, dpi, overprint, &conversion))
             .map_err(|e| EditError::Invalid(format!("Separating page {} failed: {e}", page.saturating_add(1))))?
+            .map_err(EditError::Invalid)
+    }
+
+    /// Whether overprint preview `mode` simulates overprint on this document's pages (for
+    /// Only For PDF/X Files: whether it is a PDF/X file).
+    pub fn overprint_preview_applies(&self, mode: OverprintPreview) -> Result<bool, EditError> {
+        let editor = self.editor.as_ref().ok_or_else(|| EditError::ReadOnly(self.read_only_reason.clone().unwrap_or_default()))?;
+        Ok(crate::guard(|| mode.applies(&editor.cos)).unwrap_or(false))
+    }
+
+    /// Whether this document is a PDF/X file (it declares a PDF/X version or has a `GTS_PDFX`
+    /// output intent).
+    pub fn is_pdfx(&self) -> Result<bool, EditError> {
+        self.overprint_preview_applies(OverprintPreview::PdfX)
+    }
+
+    /// Overprint Preview: simulate overprint on a normal render of 0-based `page` (`rgba`,
+    /// `width × height` RGBA pixels as displayed, after `/Rotate`), in place. Only the areas
+    /// where overprinting objects change the ink plates change; RGB and Lab colours separate
+    /// through [`Self::press_conversion`], with the session's Ink Manager settings. See [`pdfcraft_preflight::overprint`].
+    pub fn simulate_overprint(&self, page: usize, rgba: &mut [u8], width: usize, height: usize) -> Result<OverprintSimulation, EditError> {
+        let editor = self.editor.as_ref().ok_or_else(|| EditError::ReadOnly(self.read_only_reason.clone().unwrap_or_default()))?;
+        let rotation = self.info.pages.get(page).map_or(0, |p| p.rotation);
+        let base = press_conversion(&editor.cos);
+        let conversion = Managed { conversion: base.as_ref(), inks: &self.ink_manager };
+        crate::guard(|| pdfcraft_preflight::overprint::simulate(&editor.cos, page, rotation, rgba, width, height, &conversion))
+            .map_err(|e| EditError::Invalid(format!("Overprint preview failed on page {}: {e}", page.saturating_add(1))))?
+            .map_err(EditError::Invalid)
+    }
+
+    /// The objects of 0-based `page` painted with overprint on (at most `max_objects`), each
+    /// with whether overprinting changes the page inside its box (separated at `dpi`). Read-only.
+    pub fn overprinting_objects(&self, page: usize, dpi: f64, max_objects: usize) -> Result<OverprintObjects, EditError> {
+        let editor = self.editor.as_ref().ok_or_else(|| EditError::ReadOnly(self.read_only_reason.clone().unwrap_or_default()))?;
+        let base = press_conversion(&editor.cos);
+        let conversion = Managed { conversion: base.as_ref(), inks: &self.ink_manager };
+        crate::guard(|| pdfcraft_preflight::overprint::objects(&editor.cos, page, dpi, max_objects, &conversion))
+            .map_err(|e| EditError::Invalid(format!("Listing overprinting objects failed: {e}")))?
             .map_err(EditError::Invalid)
     }
 
@@ -279,6 +321,16 @@ impl Session {
             self.apply(id, edit)?;
         }
         Ok(report)
+    }
+
+    /// Preferences ▸ Page Display ▸ Use Overprint Preview: when page renders simulate overprint
+    /// (Only For PDF/X Files by default, as in Acrobat).
+    pub fn overprint_preview(&self) -> OverprintPreview {
+        self.overprint_preview
+    }
+
+    pub fn set_overprint_preview(&mut self, mode: OverprintPreview) {
+        self.overprint_preview = mode;
     }
 
     /// Apply exactly the findings selected from this document version. No selection, an

@@ -1067,6 +1067,16 @@ static CMYK_TRANSFORM: LazyLock<ICCProfile> = LazyLock::new(|| {
     ICCProfile::new(include_bytes!("../assets/CGATS001Compat-v2-micro.icc"), 4).unwrap()
 });
 
+/// PdfCraft patch (24): DeviceCMYK to RGB through the same CMYK profile pages render with.
+/// `input` holds CMYK quadruples (0–255 each), `output` the RGB triples; `None` when the
+/// lengths don't match or the conversion fails.
+pub fn device_cmyk_to_rgb8(input: &[u8], output: &mut [u8]) -> Option<()> {
+    if input.len() % 4 != 0 || output.len() != input.len() / 4 * 3 {
+        return None;
+    }
+    CMYK_TRANSFORM.convert_u8(input, output)
+}
+
 pub(crate) trait ToRgb {
     fn convert_sample(&self, input: &[f32], output: &mut [u8], manual_scale: bool) -> Option<()> {
         // We prefer using the u8 variant for single samples, which is especially

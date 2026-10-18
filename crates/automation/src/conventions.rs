@@ -1,8 +1,7 @@
 //! Shared command/inspection/preview entry points, using the existing confined tool path.
 use serde_json::{Value, json};
 
-use crate::{Args, Automation, Content, Result, ToolError, encode_png, failed, info, tools};
-use pdfcraft_render::{RenderRequest, RequestKind};
+use crate::{Args, Automation, Content, Result, ToolError, failed, info, tools};
 
 /// The most steps one `command_batch` runs.
 pub(crate) const MAX_BATCH_STEPS: usize = 1000;
@@ -114,11 +113,7 @@ impl Automation {
             return Err(failed("page has invalid dimensions"));
         }
         let scale = (max as f32 / side).min(1.0);
-        let out = self.renderer(id)?.render(RenderRequest { page, kind: RequestKind::Pixels, tile: None, scale, tag: 0 });
-        if let Some(error) = out.error {
-            return Err(failed(error));
-        }
-        let data = encode_png(out.width, out.height, &out.rgba)?;
-        Ok(Content::Png { data, width: out.width, height: out.height })
+        let mode = crate::overprint::mode_arg(args, "overprint_preview")?;
+        self.render_png(id, page, scale, mode)
     }
 }

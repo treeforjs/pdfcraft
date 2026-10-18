@@ -2879,6 +2879,8 @@ pub struct Session {
     attachment_trust: attachment_trust::AttachmentTrust,
     /// Keep tags on edit, inverted (on by default; see [`Session::set_keep_tags_on_edit`]).
     keep_tags_off: bool,
+    /// Preferences ▸ Page Display ▸ Use Overprint Preview (see [`preflight::OverprintPreview`]).
+    overprint_preview: preflight::OverprintPreview,
 }
 
 /// Lay a dynamic XFA form out (pages and fields) and give its widgets appearances.
