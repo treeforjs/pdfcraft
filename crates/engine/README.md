@@ -71,6 +71,7 @@ family (`sign`, `sign_with_timestamp`, `timestamp_document`, `embed_ltv`).
 | `links` | Link creation, properties, and finding URLs in page text |
 | `js` | The bridge to `pdfcraft-js`. `forms` never depends on `js` directly; the engine injects it, so a build without JavaScript is possible |
 | `xfa`, `ocr`, `compare`, `export` | Façades over the L3/L4 crates of the same names |
+| `color_settings` | Preferences ▸ Color Management for the session: RGB, CMYK and gray working spaces (built-in profiles written in code, plus ICC profiles loaded with `Session::load_color_profile`), rendering intent, black point compensation and the untagged-colour policy (`output_intent`, `working_space`, `unmanaged`). `Session::set_color_settings` re-resolves every open document (its output intent can replace a working space) and restarts its renderer with a `pdfcraft_render::ColourProfiles`; Output Preview's press conversion (`Document::press_conversion`) and overprint compositing follow the same resolution |
 
 ## Not done here
 

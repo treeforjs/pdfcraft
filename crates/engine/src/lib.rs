@@ -18,6 +18,7 @@ pub mod attachment_trust;
 pub mod autotag;
 pub mod camera;
 pub mod catalog;
+pub mod color_settings;
 pub mod commands;
 pub mod compare;
 pub mod dates;
@@ -359,6 +360,10 @@ pub struct Document {
     pub flatten_report: Option<FlattenReport>,
     /// The Ink Manager's settings (session only; see [`Session::set_ink_manager`]).
     ink_manager: preflight::InkManager,
+    /// The session's colour settings when the document was last resolved against them, and
+    /// what they resolved to (see [`color_settings`]).
+    color_management: Arc<color_settings::ColorManagement>,
+    color: color_settings::Resolved,
     /// How the last edit kept a tagged document's structure tree in step with its content
     /// (`None`: the edit changed no tagged content, or keeping tags on edit is off).
     pub tag_update: Option<a11y::TagUpdate>,
@@ -648,6 +653,23 @@ impl Document {
         self.signatures.iter().any(|s| s.signed)
     }
 
+    /// The renderer's colour configuration under the session's colour settings (`None`: the
+    /// settings could not be prepared, so the built-in conversions are used).
+    pub fn render_colour(&self) -> Option<pdfcraft_render::ColourProfiles> {
+        self.config.colour.clone()
+    }
+
+    /// How the session's colour settings resolve for this document: per colour family, what
+    /// untagged colour is read in.
+    pub fn color_spaces(&self) -> &[color_settings::SpaceUse] {
+        &self.color.spaces
+    }
+
+    /// Why rendering uses the built-in conversions despite the colour settings, if it does.
+    pub fn color_problem(&self) -> Option<&str> {
+        self.color.problem.as_deref()
+    }
+
     /// Whether comments are hidden (Comments ▸ Hide all comments).
     pub fn comments_hidden(&self) -> bool {
         self.config.hide_comments
@@ -884,6 +906,16 @@ pub fn display_bytes_for(bytes: &Arc<Vec<u8>>, password: Option<&str>) -> Arc<Ve
         Ok(Some(cos)) => guard(|| with_display_appearances(&cos, bytes)).unwrap_or_else(|_| bytes.clone()),
         _ => bytes.clone(),
     }
+}
+
+/// Resolve `doc`'s colour settings against its current content (its output intent) and put
+/// the result in its render configuration. The caller restarts the renderer.
+fn resolve_doc_color(doc: &mut Document) {
+    let cos = doc.editor.as_ref().map(|e| &e.cos);
+    let previous = doc.config.colour.clone();
+    let resolved = guard(|| doc.color_management.resolve(cos, previous.as_ref())).unwrap_or_default();
+    doc.config.colour = resolved.render.clone();
+    doc.color = resolved;
 }
 
 fn render_threads() -> usize {
@@ -2944,6 +2976,8 @@ pub struct Session {
     keep_tags_off: bool,
     /// Preferences ▸ Page Display ▸ Use Overprint Preview (see [`preflight::OverprintPreview`]).
     overprint_preview: preflight::OverprintPreview,
+    /// Preferences ▸ Color Management (see [`color_settings`]).
+    color: color_settings::ColorManagement,
 }
 
 /// Lay a dynamic XFA form out (pages and fields) and give its widgets appearances.
@@ -3347,6 +3381,10 @@ impl Session {
             Err(_) => (None, Some("the document structure could not be read for editing".into())),
         };
         let display = display_bytes(editor.as_ref(), &bytes);
+        let color_management = Arc::new(self.color.clone());
+        let color = guard(|| color_management.resolve(editor.as_ref().map(|e| &e.cos), None)).unwrap_or_default();
+        let mut config = config;
+        config.colour = color.render.clone();
         let renderer = RenderPool::new(display.clone(), render_threads(), config.clone());
         let mut form = editor.as_ref().map(|e| pdfcraft_forms::fields(&e.cos)).unwrap_or_default();
         let mut adopted = 0;
@@ -3409,6 +3447,8 @@ impl Session {
             xfa_warnings: Vec::new(),
             flatten_report: None,
             ink_manager: preflight::InkManager::default(),
+            color_management,
+            color,
             tag_update: None,
         });
         Ok(id)
@@ -3739,6 +3779,7 @@ impl Session {
         doc.signatures = signatures_of(&editor.cos, &real, &doc.trust, &doc.sig_cache);
         doc.revisions = revisions_of(&editor.cos, &real, &doc.signatures);
         doc.display = display_bytes(Some(editor), &bytes);
+        resolve_doc_color(doc);
         doc.renderer = RenderPool::new(doc.display.clone(), render_threads(), doc.config.clone());
         doc.bytes = bytes;
         Ok(())

@@ -169,6 +169,8 @@ impl<'a> Context<'a> {
         CONTENT_LEFT.with(|c| c.set(MAX_PAGE_CONTENT));
         CONTENT_TRUNCATED.with(|truncated| truncated.set(false));
         crate::encode::reset_mesh_budget();
+        // PdfCraft patch (25): the page's device colour settings.
+        crate::color::set_device_color(settings.device_color.clone());
 
         Self::new_with(initial_transform, bbox, cache, xref, settings, state, 0)
     }

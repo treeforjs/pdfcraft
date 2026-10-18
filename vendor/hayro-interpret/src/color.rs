@@ -10,13 +10,14 @@ use hayro_syntax::object::Object;
 use hayro_syntax::object::Stream;
 use hayro_syntax::object::dict::keys::*;
 use moxcms::{
-    ColorProfile, DataColorSpace, Layout, Transform8BitExecutor, TransformF32Executor,
-    TransformOptions, Xyzd,
+    ColorProfile, DataColorSpace, Layout, RenderingIntent, Transform8BitExecutor,
+    TransformF32Executor, TransformOptions, Xyzd,
 };
 use smallvec::{SmallVec, ToSmallVec, smallvec};
 use std::borrow::Cow;
 use std::fmt::{Debug, Formatter};
 use std::ops::Deref;
+use std::cell::RefCell;
 use std::sync::{Arc, LazyLock, OnceLock};
 
 /// A storage for the components of colors.
@@ -344,26 +345,19 @@ impl ToRgb for ColorSpace {
                         f32_to_u8(input[2]),
                         f32_to_u8(input[3]),
                     ];
-                    CMYK_TRANSFORM.convert_u8(&converted, output)
+                    device_cmyk_u8(&converted, output)
                 } else {
                     let converted = input.iter().copied().map(f32_to_u8).collect::<Vec<_>>();
-                    CMYK_TRANSFORM.convert_u8(&converted, output)
+                    device_cmyk_u8(&converted, output)
                 }
             }
             ColorSpaceType::DeviceGray => {
-                for (gray, output) in input.iter().zip(output.chunks_exact_mut(3)) {
-                    let gray = f32_to_u8(*gray);
-                    output.copy_from_slice(&[gray, gray, gray]);
-                }
-
-                Some(())
+                let converted = input.iter().copied().map(f32_to_u8).collect::<SmallVec<[u8; 4]>>();
+                device_gray_u8(&converted, output)
             }
             ColorSpaceType::DeviceRgb => {
-                for (input, output) in input.iter().copied().zip(output) {
-                    *output = f32_to_u8(input);
-                }
-
-                Some(())
+                let converted = input.iter().copied().map(f32_to_u8).collect::<SmallVec<[u8; 4]>>();
+                device_rgb_u8(&converted, output)
             }
             ColorSpaceType::Pattern(i) => i.convert_f32(input, output, manual_scale),
             ColorSpaceType::Indexed(i) => i.convert_f32(input, output, manual_scale),
@@ -394,21 +388,9 @@ impl ToRgb for ColorSpace {
 
     fn convert_u8(&self, input: &[u8], output: &mut [u8]) -> Option<()> {
         match self.0.as_ref() {
-            ColorSpaceType::DeviceCmyk => CMYK_TRANSFORM.convert_u8(input, output),
-            ColorSpaceType::DeviceGray => {
-                for (input, output) in input.iter().zip(output.chunks_exact_mut(3)) {
-                    output.copy_from_slice(&[*input, *input, *input]);
-                }
-
-                Some(())
-            }
-            ColorSpaceType::DeviceRgb => {
-                for (input, output) in input.iter().zip(output.iter_mut()) {
-                    *output = *input;
-                }
-
-                Some(())
-            }
+            ColorSpaceType::DeviceCmyk => device_cmyk_u8(input, output),
+            ColorSpaceType::DeviceGray => device_gray_u8(input, output),
+            ColorSpaceType::DeviceRgb => device_rgb_u8(input, output),
             ColorSpaceType::Pattern(i) => i.convert_u8(input, output),
             ColorSpaceType::Indexed(i) => i.convert_u8(input, output),
             ColorSpaceType::ICCBased(i) => i.convert_u8(input, output),
@@ -882,7 +864,11 @@ struct ICCColorRepr {
     is_srgb: bool,
     is_lab: bool,
     transform_u8: Arc<Transform8BitExecutor>,
-    transform_f32: OnceLock<Arc<TransformF32Executor>>,
+    transform_f32: OnceLock<Option<Arc<TransformF32Executor>>>,
+    /// PdfCraft patch (25): the rendering intent the transforms were made for.
+    options: TransformOptions,
+    /// PdfCraft patch (25): black point compensation, as one lookup table per output channel.
+    bpc: Option<Box<[[u8; 256]; 3]>>,
 }
 
 #[derive(Clone)]
@@ -906,7 +892,11 @@ impl ICCProfile {
             .unwrap_or(false);
         let is_lab = src_profile.color_space == DataColorSpace::Lab;
 
-        Self::new_from_src_profile(src_profile, is_srgb, is_lab, number_components)
+        // PdfCraft patch (25): the colour settings' intent and black point compensation.
+        let (intent, bpc) = current_device_color()
+            .map(|d| (d.0.intent, d.0.black_point_compensation))
+            .unwrap_or((RenderingIntent::Perceptual, false));
+        Self::new_with_options(src_profile, is_srgb, is_lab, number_components, intent, bpc && !is_lab)
     }
 
     fn new_from_src_profile(
@@ -914,6 +904,27 @@ impl ICCProfile {
         is_srgb: bool,
         is_lab: bool,
         number_components: usize,
+    ) -> Option<Self> {
+        Self::new_with_options(
+            src_profile,
+            is_srgb,
+            is_lab,
+            number_components,
+            RenderingIntent::Perceptual,
+            false,
+        )
+    }
+
+    /// PdfCraft patch (25): a profile converted to sRGB with `intent` (the profile's default
+    /// table, then any other, when it has none for the intent), with black point compensation
+    /// when `bpc` is set.
+    fn new_with_options(
+        src_profile: ColorProfile,
+        is_srgb: bool,
+        is_lab: bool,
+        number_components: usize,
+        intent: RenderingIntent,
+        bpc: bool,
     ) -> Option<Self> {
         let src_layout = match number_components {
             1 => Layout::Gray,
@@ -927,15 +938,33 @@ impl ICCProfile {
         };
 
         let dest_profile = ColorProfile::new_srgb();
-        let transform_u8 = src_profile
-            .clone()
-            .create_transform_8bit(
+        let mut chosen = None;
+        for intent in [
+            intent,
+            RenderingIntent::Perceptual,
+            RenderingIntent::RelativeColorimetric,
+            RenderingIntent::Saturation,
+        ] {
+            let options = TransformOptions {
+                rendering_intent: intent,
+                ..TransformOptions::default()
+            };
+            if let Ok(t) = src_profile.clone().create_transform_8bit(
                 src_layout,
                 &dest_profile,
                 Layout::Rgb,
-                TransformOptions::default(),
-            )
-            .ok()?;
+                options,
+            ) {
+                chosen = Some((t, options));
+                break;
+            }
+        }
+        let (transform_u8, options) = chosen?;
+        let bpc = if bpc && !is_srgb {
+            black_point_tables(&transform_u8, number_components)
+        } else {
+            None
+        };
 
         Some(Self(Arc::new(ICCColorRepr {
             src_profile,
@@ -945,6 +974,8 @@ impl ICCProfile {
             is_lab,
             transform_u8,
             transform_f32: OnceLock::new(),
+            options,
+            bpc,
         })))
     }
 
@@ -960,24 +991,39 @@ impl ICCProfile {
         &self.0.transform_u8
     }
 
-    fn transform_f32(&self) -> &Arc<TransformF32Executor> {
+    fn transform_f32(&self) -> Option<&Arc<TransformF32Executor>> {
         // From my benchmarking, creating the f32 transforms is usually much
         // more expensive than u8. Therefore, we only create it lazily when
         // really needed.
-        self.0.transform_f32.get_or_init(|| {
-            let dest_profile = ColorProfile::new_srgb();
-            self.0
-                .src_profile
-                .clone()
-                .create_transform_f32(
-                    self.0.src_layout,
-                    &dest_profile,
-                    Layout::Rgb,
-                    TransformOptions::default(),
-                )
-                // Since the u8 version was valid, hopefully this should never panic?
-                .unwrap()
-        })
+        // PdfCraft patch (25): with the intent the u8 transform was made with, and no panic
+        // when the f32 transform can't be made.
+        self.0
+            .transform_f32
+            .get_or_init(|| {
+                let dest_profile = ColorProfile::new_srgb();
+                self.0
+                    .src_profile
+                    .clone()
+                    .create_transform_f32(
+                        self.0.src_layout,
+                        &dest_profile,
+                        Layout::Rgb,
+                        self.0.options,
+                    )
+                    .ok()
+            })
+            .as_ref()
+    }
+
+    /// PdfCraft patch (25): black point compensation on converted RGB triples.
+    fn compensate(&self, output: &mut [u8]) {
+        if let Some(tables) = &self.0.bpc {
+            for px in output.chunks_exact_mut(3) {
+                for (v, table) in px.iter_mut().zip(tables.iter()) {
+                    *v = table[usize::from(*v)];
+                }
+            }
+        }
     }
 }
 
@@ -997,14 +1043,15 @@ impl ToRgb for ICCProfile {
                     ]
                 })
                 .collect::<Vec<_>>();
-            self.transform_f32().transform(&scaled, &mut temp).ok()?;
+            self.transform_f32()?.transform(&scaled, &mut temp).ok()?;
         } else {
-            self.transform_f32().transform(input, &mut temp).ok()?;
+            self.transform_f32()?.transform(input, &mut temp).ok()?;
         };
 
         for (input, output) in temp.iter().zip(output.iter_mut()) {
             *output = (input * 255.0 + 0.5) as u8;
         }
+        self.compensate(output);
 
         Some(())
     }
@@ -1015,9 +1062,14 @@ impl ToRgb for ICCProfile {
 
     fn convert_u8(&self, input: &[u8], output: &mut [u8]) -> Option<()> {
         if self.is_srgb() {
+            // PdfCraft patch (25): mismatched lengths are refused rather than panicking.
+            if input.len() != output.len() {
+                return None;
+            }
             output.copy_from_slice(input);
         } else {
             self.transform_u8().transform(input, output).ok()?;
+            self.compensate(output);
         }
 
         Some(())
@@ -1075,6 +1127,254 @@ pub fn device_cmyk_to_rgb8(input: &[u8], output: &mut [u8]) -> Option<()> {
         return None;
     }
     CMYK_TRANSFORM.convert_u8(input, output)
+}
+
+/// PdfCraft patch (25): the bytes of the CMYK profile DeviceCMYK renders through by default.
+pub fn default_cmyk_profile() -> &'static [u8] {
+    include_bytes!("../assets/CGATS001Compat-v2-micro.icc")
+}
+
+/// PdfCraft patch (25): how DeviceCMYK becomes RGB under [`DeviceColor`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CmykConversion {
+    /// Through the CMYK profile ([`DeviceColorSettings::cmyk`], else the default one).
+    Profile,
+    /// Without colour management: R = (1 − C)(1 − K), and so on.
+    Naive,
+}
+
+/// PdfCraft patch (25): colour management settings for the device colour spaces, the input
+/// of [`DeviceColor::new`].
+#[derive(Clone, Debug)]
+pub struct DeviceColorSettings {
+    /// The profile DeviceGray is read in (a gray ICC profile); `None`: gray is sRGB gray.
+    pub gray: Option<Arc<Vec<u8>>>,
+    /// The profile DeviceRGB is read in (an RGB ICC profile); `None`: sRGB.
+    pub rgb: Option<Arc<Vec<u8>>>,
+    /// The profile DeviceCMYK is read in (a CMYK ICC profile); `None`: [`default_cmyk_profile`].
+    pub cmyk: Option<Arc<Vec<u8>>>,
+    /// Whether DeviceCMYK goes through a profile or the naive conversion.
+    pub cmyk_conversion: CmykConversion,
+    /// ICC rendering intent: 0 perceptual, 1 relative colorimetric, 2 saturation,
+    /// 3 absolute colorimetric. A profile without a table for it uses its default table.
+    pub intent: u8,
+    /// Map the source black point to the display's black (on ICC profiles of the document
+    /// too). Done on the converted sRGB values in linear light.
+    pub black_point_compensation: bool,
+}
+
+struct DeviceColorRepr {
+    gray: Option<ICCProfile>,
+    rgb: Option<ICCProfile>,
+    cmyk: Option<ICCProfile>,
+    intent: RenderingIntent,
+    black_point_compensation: bool,
+}
+
+/// PdfCraft patch (25): prepared colour management settings for the device colour spaces
+/// ([`crate::InterpreterSettings::device_color`]): DeviceGray, DeviceRGB and DeviceCMYK are
+/// converted to sRGB through the given profiles with the intent, and ICC-based colour of the
+/// document with the intent and black point compensation.
+#[derive(Clone)]
+pub struct DeviceColor(Arc<DeviceColorRepr>);
+
+impl Debug for DeviceColor {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "DeviceColor {{ intent: {:?}, bpc: {} }}", self.0.intent, self.0.black_point_compensation)
+    }
+}
+
+fn intent_from_u8(intent: u8) -> RenderingIntent {
+    match intent {
+        1 => RenderingIntent::RelativeColorimetric,
+        2 => RenderingIntent::Saturation,
+        3 => RenderingIntent::AbsoluteColorimetric,
+        _ => RenderingIntent::Perceptual,
+    }
+}
+
+impl DeviceColor {
+    /// Prepare `settings`. An error names the profile that can't be used and why.
+    pub fn new(settings: &DeviceColorSettings) -> Result<Self, String> {
+        let intent = intent_from_u8(settings.intent);
+        let bpc = settings.black_point_compensation;
+        let load = |bytes: &[u8], n: usize, what: &str| -> Result<ICCProfile, String> {
+            let profile = ColorProfile::new_from_slice(bytes)
+                .map_err(|e| format!("the {what} profile can't be read: {e}"))?;
+            let space_ok = matches!(
+                (n, profile.color_space),
+                (1, DataColorSpace::Gray) | (3, DataColorSpace::Rgb) | (4, DataColorSpace::Cmyk)
+            );
+            if !space_ok {
+                return Err(format!("the {what} profile is not a {what} profile"));
+            }
+            let is_srgb = bytes.get(52..56).is_some_and(|m| m == b"sRGB");
+            ICCProfile::new_with_options(profile, is_srgb, false, n, intent, bpc).ok_or_else(|| {
+                format!("the {what} profile has no table that converts its colours to the display")
+            })
+        };
+        let gray = settings.gray.as_deref().map(|b| load(b, 1, "gray")).transpose()?;
+        let rgb = settings.rgb.as_deref().map(|b| load(b, 3, "RGB")).transpose()?;
+        let cmyk = match settings.cmyk_conversion {
+            CmykConversion::Naive => None,
+            CmykConversion::Profile => Some(load(
+                settings.cmyk.as_deref().map_or(default_cmyk_profile(), |b| b.as_slice()),
+                4,
+                "CMYK",
+            )?),
+        };
+        Ok(Self(Arc::new(DeviceColorRepr {
+            gray,
+            rgb,
+            cmyk,
+            intent,
+            black_point_compensation: bpc,
+        })))
+    }
+
+    /// DeviceCMYK quadruples (0–255) to RGB triples as pages render them with these settings;
+    /// `None` when the lengths don't match or the conversion fails.
+    pub fn cmyk_to_rgb8(&self, input: &[u8], output: &mut [u8]) -> Option<()> {
+        if input.len() % 4 != 0 || output.len() != input.len() / 4 * 3 {
+            return None;
+        }
+        self.cmyk_u8(input, output)
+    }
+
+    /// DeviceRGB triples to sRGB triples with these settings.
+    pub fn rgb_to_rgb8(&self, input: &[u8], output: &mut [u8]) -> Option<()> {
+        if input.len() % 3 != 0 || output.len() != input.len() {
+            return None;
+        }
+        self.rgb_u8(input, output)
+    }
+
+    /// DeviceGray values to sRGB triples with these settings.
+    pub fn gray_to_rgb8(&self, input: &[u8], output: &mut [u8]) -> Option<()> {
+        if output.len() != input.len().checked_mul(3)? {
+            return None;
+        }
+        self.gray_u8(input, output)
+    }
+
+    fn cmyk_u8(&self, input: &[u8], output: &mut [u8]) -> Option<()> {
+        match &self.0.cmyk {
+            Some(p) => p.convert_u8(input, output),
+            None => {
+                for (q, o) in input.chunks_exact(4).zip(output.chunks_exact_mut(3)) {
+                    let k = 255 - u16::from(q[3]);
+                    for (c, v) in q.iter().take(3).zip(o.iter_mut()) {
+                        *v = ((255 - u16::from(*c)) * k / 255) as u8;
+                    }
+                }
+                Some(())
+            }
+        }
+    }
+
+    fn rgb_u8(&self, input: &[u8], output: &mut [u8]) -> Option<()> {
+        match &self.0.rgb {
+            Some(p) => p.convert_u8(input, output),
+            None => identity_rgb(input, output),
+        }
+    }
+
+    fn gray_u8(&self, input: &[u8], output: &mut [u8]) -> Option<()> {
+        match &self.0.gray {
+            Some(p) => p.convert_u8(input, output),
+            None => identity_gray(input, output),
+        }
+    }
+}
+
+thread_local! {
+    /// PdfCraft patch (25): the device colour settings of the page being interpreted on this
+    /// thread, set by [`crate::Context::new`].
+    static DEVICE_COLOR: RefCell<Option<DeviceColor>> = const { RefCell::new(None) };
+}
+
+pub(crate) fn set_device_color(color: Option<DeviceColor>) {
+    DEVICE_COLOR.with(|d| {
+        if let Ok(mut d) = d.try_borrow_mut() {
+            *d = color;
+        }
+    });
+}
+
+fn current_device_color() -> Option<DeviceColor> {
+    DEVICE_COLOR.with(|d| d.try_borrow().ok().and_then(|d| d.clone()))
+}
+
+fn identity_rgb(input: &[u8], output: &mut [u8]) -> Option<()> {
+    for (input, output) in input.iter().zip(output.iter_mut()) {
+        *output = *input;
+    }
+    Some(())
+}
+
+fn identity_gray(input: &[u8], output: &mut [u8]) -> Option<()> {
+    for (input, output) in input.iter().zip(output.chunks_exact_mut(3)) {
+        output.copy_from_slice(&[*input, *input, *input]);
+    }
+    Some(())
+}
+
+fn device_cmyk_u8(input: &[u8], output: &mut [u8]) -> Option<()> {
+    match current_device_color() {
+        Some(d) => d.cmyk_u8(input, output),
+        None => CMYK_TRANSFORM.convert_u8(input, output),
+    }
+}
+
+fn device_rgb_u8(input: &[u8], output: &mut [u8]) -> Option<()> {
+    match current_device_color() {
+        Some(d) => d.rgb_u8(input, output),
+        None => identity_rgb(input, output),
+    }
+}
+
+fn device_gray_u8(input: &[u8], output: &mut [u8]) -> Option<()> {
+    match current_device_color() {
+        Some(d) => d.gray_u8(input, output),
+        None => identity_gray(input, output),
+    }
+}
+
+fn srgb_to_linear(v: f32) -> f32 {
+    if v <= 0.04045 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) }
+}
+
+fn linear_to_srgb(v: f32) -> f32 {
+    if v <= 0.003_130_8 { v * 12.92 } else { 1.055 * v.powf(1.0 / 2.4) - 0.055 }
+}
+
+/// PdfCraft patch (25): black point compensation tables: the sRGB value the profile gives its
+/// darkest colour (no light for gray and RGB, all four inks for CMYK) is mapped to black, the
+/// rest scaled in linear light so white stays white. `None` when the black is already black.
+fn black_point_tables(
+    transform: &Arc<Transform8BitExecutor>,
+    number_components: usize,
+) -> Option<Box<[[u8; 256]; 3]>> {
+    let darkest: SmallVec<[u8; 4]> = match number_components {
+        4 => smallvec![255, 255, 255, 255],
+        n => smallvec![0; n],
+    };
+    let mut black = [0u8; 3];
+    transform.transform(&darkest, &mut black).ok()?;
+    let bp = black.map(|v| srgb_to_linear(f32::from(v) / 255.0));
+    if bp.iter().all(|v| *v < 1e-4) {
+        return None;
+    }
+    let mut tables = Box::new([[0u8; 256]; 3]);
+    for (table, bp) in tables.iter_mut().zip(bp) {
+        let span = (1.0 - bp).max(1e-3);
+        for (i, out) in table.iter_mut().enumerate() {
+            let lin = srgb_to_linear(i as f32 / 255.0);
+            let v = ((lin - bp) / span).clamp(0.0, 1.0);
+            *out = (linear_to_srgb(v) * 255.0 + 0.5).clamp(0.0, 255.0) as u8;
+        }
+    }
+    Some(tables)
 }
 
 pub(crate) trait ToRgb {

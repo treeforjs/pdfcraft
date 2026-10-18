@@ -8,6 +8,7 @@
 
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
+pub mod colour;
 pub mod display_list;
 mod inspect;
 mod pixels;
@@ -17,6 +18,7 @@ pub mod svg;
 pub mod text;
 mod vector_raster;
 
+pub use colour::{ColourProfiles, ColourSpec, default_cmyk_profile};
 pub use inspect::{
     Annotation, Attachment, AttachmentSource, DestView, DocInfo, Field, FieldKind, FontInfo, Layer, LayerOp, Link, LinkTarget, OutlineItem, PageInfo,
     Xfa, attachment_data, inspect, pretty_date,

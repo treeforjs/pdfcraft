@@ -45,7 +45,7 @@ impl crate::Document {
     pub fn ink_coverage(&self, pages: &[usize], options: &CoverageOptions) -> Result<Vec<PageCoverage>, EditError> {
         options.validate().map_err(EditError::Invalid)?;
         let editor = self.editor.as_ref().ok_or_else(|| EditError::ReadOnly(self.read_only_reason.clone().unwrap_or_default()))?;
-        let base = press_conversion(&editor.cos);
+        let base = self.press(&editor.cos);
         let conversion = Managed { conversion: base.as_ref(), inks: &self.ink_manager };
         pages
             .iter()
@@ -62,7 +62,13 @@ impl crate::Document {
     /// conversion, whose description says why.
     pub fn press_conversion(&self) -> Result<Box<dyn Conversion>, EditError> {
         let editor = self.editor.as_ref().ok_or_else(|| EditError::ReadOnly(self.read_only_reason.clone().unwrap_or_default()))?;
-        Ok(press_conversion(&editor.cos))
+        Ok(self.press(&editor.cos))
+    }
+
+    /// RGB and Lab to process inks under the colour settings, displayed (overprint preview)
+    /// through the renderer's resolved CMYK conversion.
+    fn press(&self, cos: &pdfcraft_cos::Document) -> Box<dyn Conversion> {
+        Box::new(Displayed { inner: press_conversion(cos, &self.color_management), display: self.color.render.clone() })
     }
 
     /// Output Preview's separations list: the process and spot inks of `pages` (0-based; all
@@ -81,7 +87,7 @@ impl crate::Document {
 
     fn list_inks(&self, pages: &[usize], managed: bool) -> Result<InkList, EditError> {
         let editor = self.editor.as_ref().ok_or_else(|| EditError::ReadOnly(self.read_only_reason.clone().unwrap_or_default()))?;
-        let base = press_conversion(&editor.cos);
+        let base = self.press(&editor.cos);
         let none = InkManager::default();
         let conversion = Managed { conversion: base.as_ref(), inks: if managed { &self.ink_manager } else { &none } };
         crate::guard(|| pdfcraft_preflight::separations::list_inks(&editor.cos, pages, &conversion))
@@ -99,7 +105,7 @@ impl crate::Document {
     /// settings applied. Read-only.
     pub fn separations(&self, page: usize, dpi: f64, overprint: bool) -> Result<Separations, EditError> {
         let editor = self.editor.as_ref().ok_or_else(|| EditError::ReadOnly(self.read_only_reason.clone().unwrap_or_default()))?;
-        let base = press_conversion(&editor.cos);
+        let base = self.press(&editor.cos);
         let conversion = Managed { conversion: base.as_ref(), inks: &self.ink_manager };
         crate::guard(|| pdfcraft_preflight::separations::rasterize(&editor.cos, page, dpi, overprint, &conversion))
             .map_err(|e| EditError::Invalid(format!("Separating page {} failed: {e}", page.saturating_add(1))))?
@@ -126,7 +132,7 @@ impl crate::Document {
     pub fn simulate_overprint(&self, page: usize, rgba: &mut [u8], width: usize, height: usize) -> Result<OverprintSimulation, EditError> {
         let editor = self.editor.as_ref().ok_or_else(|| EditError::ReadOnly(self.read_only_reason.clone().unwrap_or_default()))?;
         let rotation = self.info.pages.get(page).map_or(0, |p| p.rotation);
-        let base = press_conversion(&editor.cos);
+        let base = self.press(&editor.cos);
         let conversion = Managed { conversion: base.as_ref(), inks: &self.ink_manager };
         crate::guard(|| pdfcraft_preflight::overprint::simulate(&editor.cos, page, rotation, rgba, width, height, &conversion))
             .map_err(|e| EditError::Invalid(format!("Overprint preview failed on page {}: {e}", page.saturating_add(1))))?
@@ -137,7 +143,7 @@ impl crate::Document {
     /// with whether overprinting changes the page inside its box (separated at `dpi`). Read-only.
     pub fn overprinting_objects(&self, page: usize, dpi: f64, max_objects: usize) -> Result<OverprintObjects, EditError> {
         let editor = self.editor.as_ref().ok_or_else(|| EditError::ReadOnly(self.read_only_reason.clone().unwrap_or_default()))?;
-        let base = press_conversion(&editor.cos);
+        let base = self.press(&editor.cos);
         let conversion = Managed { conversion: base.as_ref(), inks: &self.ink_manager };
         crate::guard(|| pdfcraft_preflight::overprint::objects(&editor.cos, page, dpi, max_objects, &conversion))
             .map_err(|e| EditError::Invalid(format!("Listing overprinting objects failed: {e}")))?
@@ -150,7 +156,7 @@ impl crate::Document {
     /// `overprint`), with the session's Ink Manager settings applied. Read-only.
     pub fn inspect_objects(&self, page: usize, x: f64, y: f64, dpi: f64, overprint: bool) -> Result<Inspection, EditError> {
         let editor = self.editor.as_ref().ok_or_else(|| EditError::ReadOnly(self.read_only_reason.clone().unwrap_or_default()))?;
-        let base = press_conversion(&editor.cos);
+        let base = self.press(&editor.cos);
         let conversion = Managed { conversion: base.as_ref(), inks: &self.ink_manager };
         crate::guard(|| pdfcraft_preflight::inspector::inspect(&editor.cos, page, x, y, dpi, overprint, &conversion))
             .map_err(|e| EditError::Invalid(format!("Inspecting page {} failed: {e}", page.saturating_add(1))))?
@@ -193,6 +199,36 @@ impl Conversion for ProfileConversion {
     }
 }
 
+/// A press conversion whose CMYK displays through the document's resolved colour settings.
+struct Displayed {
+    inner: Box<dyn Conversion>,
+    display: Option<pdfcraft_render::ColourProfiles>,
+}
+
+impl Conversion for Displayed {
+    fn describe(&self) -> String {
+        self.inner.describe()
+    }
+    fn uses_profile(&self) -> bool {
+        self.inner.uses_profile()
+    }
+    fn rgb(&self, rgb: [f64; 3]) -> [f64; 4] {
+        self.inner.rgb(rgb)
+    }
+    fn lab(&self, lab: [f64; 3]) -> [f64; 4] {
+        self.inner.lab(lab)
+    }
+    fn tint_function(&self, doc: &pdfcraft_cos::Document, f: &pdfcraft_cos::Object, inputs: usize, outputs: usize) -> Option<Box<dyn TintFunction>> {
+        self.inner.tint_function(doc, f, inputs, outputs)
+    }
+    fn display_cmyk(&self, quads: &[u8]) -> Option<Vec<u8>> {
+        match &self.display {
+            Some(d) => d.cmyk_to_rgb(quads),
+            None => pdfcraft_render::device_cmyk_to_rgb(quads),
+        }
+    }
+}
+
 /// A tint transform read by Convert Colors' function reader (Types 0, 2, 3 and 4).
 struct EditTint(pdfcraft_edit::convert_colors::Function);
 
@@ -226,11 +262,10 @@ impl Conversion for Fallback {
     }
 }
 
-/// The output intent's CMYK profile, when press conversion uses one.
-fn press_profile(doc: &pdfcraft_cos::Document) -> Option<Vec<u8>> {
-    use pdfcraft_edit::convert_colors::{Family, Profile};
-    let bytes = pdfcraft_preflight::separations::output_intent(doc)?.profile?;
-    Profile::parse(&bytes, 1).ok().filter(|p| p.family == Family::Cmyk && p.exact()).map(|_| bytes)
+/// The CMYK profile press conversion uses (the output intent's or the working space's), when
+/// it uses one, and its label.
+fn press_profile(doc: &pdfcraft_cos::Document, color: &crate::color_settings::ColorManagement) -> Option<(Vec<u8>, String)> {
+    color.press_profile(doc).ok().map(|(_, bytes, label)| (bytes.to_vec(), label))
 }
 
 /// What [`Session::apply_ink_manager`] changed (or would change).
@@ -256,7 +291,7 @@ impl InkManagerReport {
 
 /// The edit that makes `inks` permanent in `doc`: aliases renamed, then the inks set to process
 /// converted (through the output intent's CMYK profile when it has a usable one).
-fn ink_manager_edit(doc: &pdfcraft_cos::Document, inks: &InkManager) -> (Edit, InkManagerReport) {
+fn ink_manager_edit(doc: &pdfcraft_cos::Document, inks: &InkManager, color: &crate::color_settings::ColorManagement) -> (Edit, InkManagerReport) {
     let aliases = inks.final_aliases();
     let bytes: BTreeMap<Vec<u8>, Vec<u8>> = aliases.iter().map(|(k, v)| (k.as_bytes().to_vec(), v.as_bytes().to_vec())).collect();
     let mut report = InkManagerReport { aliases, ..Default::default() };
@@ -265,11 +300,12 @@ fn ink_manager_edit(doc: &pdfcraft_cos::Document, inks: &InkManager) -> (Edit, I
         report.to_process = (!inks.all_to_process).then(|| inks.to_process.clone());
         let mut c =
             pdfcraft_edit::ColorConversion { sources: pdfcraft_edit::SourceSpaces::NONE, convert_spots: true, spot_names, ..Default::default() };
-        match press_profile(doc) {
-            Some(profile) => {
+        c.intent = color.settings().intent;
+        match press_profile(doc, color) {
+            Some((profile, label)) => {
                 c.destination = pdfcraft_edit::Destination::Icc(std::sync::Arc::new(profile));
                 c.device_output = true;
-                report.destination = Some("DeviceCMYK, through the output intent's CMYK profile (relative colorimetric)".into());
+                report.destination = Some(format!("DeviceCMYK, through {label}"));
             }
             None => report.destination = Some("DeviceCMYK, through the built-in conversion (no usable CMYK output intent)".into()),
         }
@@ -280,27 +316,13 @@ fn ink_manager_edit(doc: &pdfcraft_cos::Document, inks: &InkManager) -> (Edit, I
     (Edit::ApplyInkManager { aliases: bytes, conversion }, report)
 }
 
-fn press_conversion(doc: &pdfcraft_cos::Document) -> Box<dyn Conversion> {
-    use pdfcraft_edit::convert_colors::{Family, Profile};
-    let Some(intent) = pdfcraft_preflight::separations::output_intent(doc) else {
-        return Box::new(Fallback("the document has no output intent".into()));
-    };
-    let name = match &intent.condition {
-        Some(c) => format!("{} output intent {c:?}", intent.subtype),
-        None => format!("{} output intent", intent.subtype),
-    };
-    let Some(bytes) = intent.profile else {
-        let why = intent.problem.unwrap_or_else(|| "it has no DestOutputProfile".into());
-        return Box::new(Fallback(format!("the {name} is not used: {why}")));
-    };
-    match Profile::parse(&bytes, 1) {
-        Ok(p) if p.family == Family::Cmyk && p.exact() => {
-            let described = if p.description.is_empty() { String::new() } else { format!(" ({})", p.description) };
-            Box::new(ProfileConversion { label: format!("the {name}'s CMYK profile{described}, relative colorimetric"), profile: p })
-        }
-        Ok(p) if p.family != Family::Cmyk => Box::new(Fallback(format!("the {name}'s profile is not a CMYK profile"))),
-        Ok(_) => Box::new(Fallback(format!("the {name}'s profile has no BToA tables PdfCraft can use"))),
-        Err(e) => Box::new(Fallback(format!("the {name}'s profile could not be read: {e}"))),
+/// RGB and Lab to CMYK under the colour settings `color`: through the output intent's CMYK
+/// profile (unless the settings say otherwise) or the working CMYK profile when it has tables
+/// PdfCraft can use, else the built-in conversion, whose description says why.
+fn press_conversion(doc: &pdfcraft_cos::Document, color: &crate::color_settings::ColorManagement) -> Box<dyn Conversion> {
+    match color.press_profile(doc) {
+        Ok((profile, _, label)) => Box::new(ProfileConversion { label, profile }),
+        Err(why) => Box::new(Fallback(why)),
     }
 }
 
@@ -317,7 +339,7 @@ impl Session {
     pub fn apply_ink_manager_preview(&self, id: DocId) -> Result<InkManagerReport, EditError> {
         let doc = self.get(id).ok_or(EditError::NoDocument)?;
         let editor = doc.editor.as_ref().ok_or_else(|| EditError::ReadOnly(doc.read_only_reason.clone().unwrap_or_default()))?;
-        let (edit, mut report) = ink_manager_edit(&editor.cos, &doc.ink_manager);
+        let (edit, mut report) = ink_manager_edit(&editor.cos, &doc.ink_manager, &doc.color_management);
         let Edit::ApplyInkManager { aliases, conversion } = &edit else { return Ok(report) };
         let mut probe = editor.cos.clone();
         let (renamed, converted) = crate::guard(|| apply_ink_manager_to(&mut probe, aliases, conversion.as_ref())).map_err(EditError::Invalid)??;
@@ -334,7 +356,7 @@ impl Session {
         if report.changed() {
             let doc = self.get(id).ok_or(EditError::NoDocument)?;
             let editor = doc.editor.as_ref().ok_or_else(|| EditError::ReadOnly(doc.read_only_reason.clone().unwrap_or_default()))?;
-            let (edit, _) = ink_manager_edit(&editor.cos, &doc.ink_manager);
+            let (edit, _) = ink_manager_edit(&editor.cos, &doc.ink_manager, &doc.color_management);
             self.apply(id, edit)?;
         }
         Ok(report)

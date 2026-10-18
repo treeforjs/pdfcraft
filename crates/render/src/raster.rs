@@ -91,21 +91,39 @@ pub struct RenderConfig {
     /// never attempted (no content is compiled for it). Applications choose it at start-up
     /// (`PDFCRAFT_NATIVE_VECTOR=1`, `pdfcraft-cli render --native-vector`), not the renderer.
     pub native_vector: bool,
+    /// Colour management (working spaces, rendering intent, black point compensation) for
+    /// DeviceGray, DeviceRGB and DeviceCMYK, and the intent and black point compensation for
+    /// the document's ICC colour. `None`: the built-in conversions. Pages whose gray or RGB
+    /// is managed always take the bootstrap renderer (the native vector path paints sRGB).
+    pub colour: Option<crate::colour::ColourProfiles>,
 }
 
 impl Default for RenderConfig {
     fn default() -> Self {
-        Self { password: None, layers: Arc::default(), hide_comments: false, reject_oversize: false, native_vector: native_vector_default() }
+        Self {
+            password: None,
+            layers: Arc::default(),
+            hide_comments: false,
+            reject_oversize: false,
+            native_vector: native_vector_default(),
+            colour: None,
+        }
     }
 }
 
 impl RenderConfig {
+    /// Whether the native vector path may draw pages: opted in, and gray and RGB unmanaged.
+    fn native_path(&self) -> bool {
+        self.native_vector && self.colour.as_ref().is_none_or(|c| !c.manages_gray_or_rgb())
+    }
+
     fn settings(&self) -> InterpreterSettings {
         let standard = InterpreterSettings::default().font_resolver;
         InterpreterSettings {
             ocg_overrides: self.layers.clone(),
             hide_comments: self.hide_comments,
             font_resolver: Arc::new(move |query| japanese_fallback(query).or_else(|| standard(query))),
+            device_color: self.colour.as_ref().map(|c| c.device().clone()),
             ..InterpreterSettings::default()
         }
     }
@@ -479,7 +497,7 @@ impl PageRenderer {
         let warnings = Arc::new(Mutex::new(Vec::new()));
         let settings = warning_settings(&self.settings, warnings.clone());
         let native_before = self.vectors.rasterized();
-        let vectors = self.config.native_vector.then_some(&self.vectors);
+        let vectors = self.config.native_path().then_some(&self.vectors);
         let r = render_page(pdf, &cache, vectors, &settings, self.config.reject_oversize, req);
         self.stats.native_vector_rasterizations += self.vectors.rasterized().saturating_sub(native_before);
         let warnings = take_warnings(&warnings);
@@ -1026,7 +1044,7 @@ fn worker(
                     match pdf {
                         Some(pdf) => {
                             let native_before = vectors.rasterized();
-                            let vectors_enabled = config.native_vector.then_some(vectors);
+                            let vectors_enabled = config.native_path().then_some(vectors);
                             let r = render_page(pdf, cache, vectors_enabled, &settings, config.reject_oversize, req);
                             let native = vectors.rasterized().saturating_sub(native_before);
                             shared.stats.native_vector_rasterizations.fetch_add(native, Ordering::Relaxed);

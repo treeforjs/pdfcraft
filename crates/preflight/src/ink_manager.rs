@@ -172,6 +172,9 @@ impl Conversion for Managed<'_> {
     fn ink_manager(&self) -> Option<&InkManager> {
         (!self.inks.is_default()).then_some(self.inks)
     }
+    fn display_cmyk(&self, quads: &[u8]) -> Option<Vec<u8>> {
+        self.conversion.display_cmyk(quads)
+    }
 }
 
 #[cfg(test)]

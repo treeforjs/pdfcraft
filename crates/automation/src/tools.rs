@@ -756,6 +756,51 @@ pub fn tools() -> Vec<ToolDef> {
             &[],
         )),
         t(
+            "color_settings_get",
+            "Colour management settings",
+            "Preferences ▸ Color Management: the session's colour settings — working spaces rgb, cmyk and gray (profile ids from color_profiles_list), the rendering intent, black_point_compensation and the policy for untagged (DeviceGray/RGB/CMYK) colour: output_intent (the default: a document's output intent profile replaces the working space of its family, Acrobat's Output Intent Overrides Working Spaces), working_space (always the working spaces) or unmanaged (no colour management: gray and RGB as sRGB numbers, CMYK naively, separations through the built-in conversion). With doc also says, per family, what that document's untagged colour is read in (source working_space, output_intent or unmanaged, with a note when the output intent can't be used) and how RGB and Lab separate into process inks (separation.conversion). page_render, render_preview, print_separations_*, print_total_area_coverage, print_overprint_*, print_object_inspector and the Ink Manager follow the settings; print_convert_colors and pdfx_convert take defaults from them. Read-only.",
+        )
+        .ro()
+        .with(schema(json!({ "doc": { "type": "integer", "minimum": 1, "description": "Also report how the settings resolve for this document." } }), &[])),
+        t(
+            "color_settings_set",
+            "Set colour management settings",
+            "Change the colour settings for this session (not saved with documents, not an undo step); open documents re-render with them. rgb, cmyk, gray: working space profile ids (built-in or user:<name> from color_profile_load; each must be a profile of that family). intent: rendering intent for display conversions of untagged and ICC colour (a profile without that intent's table uses its default one), for RGB/Lab separation through a CMYK profile and the default of print_convert_colors (default relative_colorimetric). black_point_compensation maps a profile's darkest colour to display black, scaling the rest in linear light (default false). untagged: output_intent, working_space or unmanaged. reset starts from the defaults (sRGB, CGATS001Compat CMYK, sRGB-curve gray, relative colorimetric, no BPC, output_intent), which render untagged colour exactly as before colour settings existed. Returns the settings (and with doc, how they resolve for it).",
+        )
+        .with(schema(
+            json!({
+                "rgb": { "type": "string", "description": "RGB working space profile id." },
+                "cmyk": { "type": "string", "description": "CMYK working space profile id." },
+                "gray": { "type": "string", "description": "Gray working space profile id." },
+                "intent": { "type": "string", "enum": ["perceptual", "relative_colorimetric", "saturation", "absolute_colorimetric"] },
+                "black_point_compensation": { "type": "boolean" },
+                "untagged": { "type": "string", "enum": ["output_intent", "working_space", "unmanaged"] },
+                "reset": { "type": "boolean", "description": "Start from the default settings before applying the rest." },
+                "doc": { "type": "integer", "minimum": 1, "description": "Also report how the settings resolve for this document." },
+            }),
+            &[],
+        )),
+        t(
+            "color_profiles_list",
+            "Colour profiles",
+            "The ICC profiles the colour settings can name: built-in ones (RGB: srgb, display-p3, a98-rgb, romm-rgb, matrix/TRC profiles written from published primaries; gray: sgray, gray-gamma-2.2, gray-gamma-1.8, dot-gain-15, dot-gain-20; CMYK: cgats001, the renderer's CC0 coated-press profile with a display table only) and user:<name> profiles from color_profile_load. Each says its family, description, whether it displays (the renderer can convert its colours to the screen), whether PdfCraft converts into it (converts_into: BToA tables or gray/RGB matrix/TRC; a CMYK working space without them separates RGB with the built-in conversion) and whether it is a working space now. family filters the list. Read-only.",
+        )
+        .ro()
+        .with(schema(json!({ "family": { "type": "string", "enum": ["rgb", "cmyk", "gray"] } }), &[])),
+        t(
+            "color_profile_load",
+            "Load a colour profile",
+            "Load an ICC profile (gray, RGB or CMYK; output, display, input or colour-space class; at most 32 MB) from a file under --root for this session, as user:<name> (name: letters, digits, spaces and . _ -; default the file name; loading the same name again replaces it, at most 32 profiles). Refused when no table converts its colours (neither to the display nor into it). working makes it the working space of its family at once. Returns the profile and the settings.",
+        )
+        .with(schema(
+            json!({
+                "path": { "type": "string", "description": "Path of the .icc/.icm file (relative to --root)." },
+                "name": { "type": "string", "maxLength": 64 },
+                "working": { "type": "boolean", "description": "Make it the working space of its family." },
+            }),
+            &["path"],
+        )),
+        t(
             "print_overprint_objects",
             "Overprinting objects",
             "The objects of a page painted with overprint on: fills, strokes, text and images (paint), with their colour (space, components, CMYK when known), overprint mode, rect (top-left of the displayed page; pdf_rect in user space), object (the form or page whose content paints them) and occurrences (identical objects merge, as in print_color_warnings: kind overprint-paint, or overprint-white for a white or zero-tint object that may disappear on press). changes_appearance says whether overprinting changes the page inside the object's rect (changed_cells: separation grid cells, at dpi, default 72, where a plate differs from knockout); visible_objects counts those. states lists the ExtGStates that turn overprint on or set OPM 1. changed_percent is the share of the page that overprint preview changes; preference and preview_applies say whether page_render simulates it. Read-only.",
@@ -800,7 +845,8 @@ pub fn tools() -> Vec<ToolDef> {
                 "profile": { "type": "string", "description": "Path to the destination ICC profile (.icc/.icm, at most 32 MB), for ICCBased." },
                 "sources": { "type": "array", "items": { "type": "string", "enum": ["all", "DeviceGray", "DeviceRGB", "DeviceCMYK", "ICCBased", "CalGray", "CalRGB", "Lab"] }, "minItems": 1, "description": "Source spaces to convert (default: all; the destination's own device space is never converted)." },
                 "objects": { "type": "array", "items": { "type": "string", "enum": ["all", "text", "vector", "images"] }, "minItems": 1, "description": "Object types to convert (default: all)." },
-                "intent": { "type": "string", "enum": ["perceptual", "relative_colorimetric", "saturation", "absolute_colorimetric"], "description": "Rendering intent: which profile table is used (default relative_colorimetric; absolute is converted as relative)." },
+                "intent": { "type": "string", "enum": ["perceptual", "relative_colorimetric", "saturation", "absolute_colorimetric"], "description": "Rendering intent: which profile table is used (default: the colour settings' intent, relative_colorimetric unless changed; absolute is converted as relative)." },
+                "use_working_space": { "type": "boolean", "description": "DeviceCMYK, DeviceGray and DeviceRGB destinations convert through the colour settings' working space of that family when it isn't the factory one and PdfCraft can convert into it (through says which); the colours are written as device colour. Default true." },
                 "preserve_black": { "type": "boolean", "description": "Pure black becomes pure black (100% K) (default true)." },
                 "spots": { "type": "string", "enum": ["preserve", "convert"], "description": "Keep spot colours (default) or convert them to the destination." },
                 "output_intent": { "type": "boolean", "description": "Make the destination profile the PDF/X output intent (needs profile; default false)." },
@@ -1675,7 +1721,7 @@ pub fn tools() -> Vec<ToolDef> {
                 }),
                 &["doc"],
             )),
-        t("pdfx_convert", "Convert to PDF/X", "Preflight ▸ Convert to PDF/X: fix the document for level x1a (PDF/X-1a:2003), x3 (PDF/X-3:2003) or x4 (PDF/X-4); X-1a:2001 and X-3:2002 are accepted too. As one undoable edit: encryption, JavaScript and additional actions removed; annotations that don't print removed (links kept, not printing) and printing annotations and form fields flattened into the page, then the form removed; transfer functions, bad halftones and OPI removed; unembedded standard-14 fonts embedded (the renderer's BSD-licensed substitute programs, with standard widths; other fonts can't be embedded); X-1a and X-3: transparency flattened (flatten_preset low/medium/high, default medium); colour converted to the output intent (X-1a: RGB, ICC, calibrated and Lab colour to CMYK, or gray with a gray profile; X-3/X-4: DeviceRGB unless the intent is RGB), through the profile's tables when it has them, else a built-in approximation (notes says which); the one GTS_PDFX output intent (output_condition: a registered condition such as FOGRA39, and/or profile: an ICC output (prtr) profile file; X-4 needs the profile; without either the document's own intent is kept); TrimBox (trim, default the page's TrimBox, ArtBox, CropBox or MediaBox) and BleedBox (bleed, default BleedBox or CropBox, always containing the trim) in points of default user space; the PDF version (1.3/1.4/1.6; a lower version is saved in full); GTS_PDFXVersion, Title (title, default existing or Untitled), CreationDate, ModDate, Trapped False; XMP for X-4; file ID. Then pdfx_verify runs again: before and after hold both results and unfixable the errors left. When the result wouldn't conform nothing changes (converted false, refused says why) unless allow_partial. Converting a conforming document again changes nothing (changed false). Bad arguments are errors. Save the document to keep it.")
+        t("pdfx_convert", "Convert to PDF/X", "Preflight ▸ Convert to PDF/X: fix the document for level x1a (PDF/X-1a:2003), x3 (PDF/X-3:2003) or x4 (PDF/X-4); X-1a:2001 and X-3:2002 are accepted too. As one undoable edit: encryption, JavaScript and additional actions removed; annotations that don't print removed (links kept, not printing) and printing annotations and form fields flattened into the page, then the form removed; transfer functions, bad halftones and OPI removed; unembedded standard-14 fonts embedded (the renderer's BSD-licensed substitute programs, with standard widths; other fonts can't be embedded); X-1a and X-3: transparency flattened (flatten_preset low/medium/high, default medium); colour converted to the output intent (X-1a: RGB, ICC, calibrated and Lab colour to CMYK, or gray with a gray profile; X-3/X-4: DeviceRGB unless the intent is RGB), through the profile's tables when it has them, else a built-in approximation (notes says which); the one GTS_PDFX output intent (output_condition: a registered condition such as FOGRA39, and/or profile: an ICC output (prtr) profile file; X-4 needs the profile; without either the document's own intent is kept, or, when it has none, the colour settings' working CMYK space when that is an output (prtr) profile other than the factory one: output_intent_from_settings names it); TrimBox (trim, default the page's TrimBox, ArtBox, CropBox or MediaBox) and BleedBox (bleed, default BleedBox or CropBox, always containing the trim) in points of default user space; the PDF version (1.3/1.4/1.6; a lower version is saved in full); GTS_PDFXVersion, Title (title, default existing or Untitled), CreationDate, ModDate, Trapped False; XMP for X-4; file ID. Then pdfx_verify runs again: before and after hold both results and unfixable the errors left. When the result wouldn't conform nothing changes (converted false, refused says why) unless allow_partial. Converting a conforming document again changes nothing (changed false). Bad arguments are errors. Save the document to keep it.")
             .with(schema(
                 json!({
                     "doc": doc(),

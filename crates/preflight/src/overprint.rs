@@ -8,8 +8,9 @@
 //! about the render's resolution — with overprint simulated, with every object knocked out, and
 //! without the overprinting objects (their backdrop) — and only the cells where overprint
 //! changes some plate are touched. There each plate set is composited to RGB (process inks
-//! through the renderer's own CMYK conversion, [`pdfcraft_render::device_cmyk_to_rgb`], so the
-//! result matches the rest of the page; spot inks multiply the paper by their preview colour).
+//! through the conversion's [`Conversion::display_cmyk`] — the renderer's CMYK conversion, under
+//! the engine's colour settings — so the result matches the rest of the page; spot inks
+//! multiply the paper by their preview colour).
 //! For every pixel of such a cell the rendered colour gives the overprinting object's coverage
 //! (its position between the backdrop and the knocked-out colour), so anti-aliased edges and
 //! text glyphs keep the renderer's geometry: the pixel moves by that coverage times the
@@ -185,12 +186,12 @@ impl Difference {
 /// The sRGB preview of each ink for compositing: process inks go through the renderer's CMYK
 /// conversion as a whole, so only spot inks need one (their CMYK alternate at 100 % converted
 /// the same way, else [`InkInfo::preview`]).
-fn spot_previews(inks: &[InkInfo]) -> Vec<[f32; 3]> {
+fn spot_previews(inks: &[InkInfo], conversion: &dyn Conversion) -> Vec<[f32; 3]> {
     inks.iter()
         .map(|info| {
             if let Some([c, m, y, k]) = info.alternate_value.as_deref() {
                 let q = [*c, *m, *y, *k].map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8);
-                if let Some(rgb) = pdfcraft_render::device_cmyk_to_rgb(&q)
+                if let Some(rgb) = conversion.display_cmyk(&q)
                     && let [r, g, b] = rgb.as_slice()
                 {
                     return [*r, *g, *b].map(|v| f32::from(v) / 255.0);
@@ -202,9 +203,9 @@ fn spot_previews(inks: &[InkInfo]) -> Vec<[f32; 3]> {
 }
 
 /// The composite colour of `raster` at each of `cells`.
-fn composite(raster: &Raster, cells: &[u32]) -> Result<Vec<[f32; 3]>, String> {
+fn composite(raster: &Raster, cells: &[u32], conversion: &dyn Conversion) -> Result<Vec<[f32; 3]>, String> {
     let w = raster.width.max(1);
-    let previews = spot_previews(&raster.inks);
+    let previews = spot_previews(&raster.inks, conversion);
     let mut quads: Vec<u8> = Vec::new();
     quads.try_reserve_exact(cells.len().saturating_mul(4)).map_err(|_| "not enough memory for the overprint preview".to_string())?;
     for &i in cells {
@@ -213,7 +214,7 @@ fn composite(raster: &Raster, cells: &[u32]) -> Result<Vec<[f32; 3]>, String> {
             quads.push((raster.value(ink, col, row) / 100.0 * 255.0).round().clamp(0.0, 255.0) as u8);
         }
     }
-    let rgb = pdfcraft_render::device_cmyk_to_rgb(&quads).ok_or("the CMYK conversion failed")?;
+    let rgb = conversion.display_cmyk(&quads).ok_or("the CMYK conversion failed")?;
     let mut out = Vec::new();
     out.try_reserve_exact(cells.len()).map_err(|_| "not enough memory for the overprint preview".to_string())?;
     for (n, &i) in cells.iter().enumerate() {
@@ -280,9 +281,9 @@ pub fn difference(doc: &Document, page: usize, dpi: f64, backdrop: bool, convers
     if out.cells.is_empty() {
         return Ok(out);
     }
-    out.knocked_out = composite(&ko, &out.cells)?;
+    out.knocked_out = composite(&ko, &out.cells, conversion)?;
     drop(ko);
-    out.overprinted = composite(&op, &out.cells)?;
+    out.overprinted = composite(&op, &out.cells, conversion)?;
     drop(op);
     if backdrop {
         let under = rasterize_without_overprinting(doc, page, out.dpi, conversion)?;
@@ -290,7 +291,7 @@ pub fn difference(doc: &Document, page: usize, dpi: f64, backdrop: bool, convers
             return Err("the page separated differently without its overprinting objects".into());
         }
         out.truncated |= under.truncated;
-        out.backdrop = composite(&under, &out.cells)?;
+        out.backdrop = composite(&under, &out.cells, conversion)?;
     }
     Ok(out)
 }
