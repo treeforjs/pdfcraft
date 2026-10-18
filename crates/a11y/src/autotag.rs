@@ -32,6 +32,9 @@
 //!    parent tree maps each page's MCIDs and each tagged annotation back, pages get
 //!    `/StructParents` and `/Tabs /S`, annotations `/StructParent`, and the catalog
 //!    `/MarkInfo << /Marked true >>` (and `/Lang` when given and missing).
+//! 7. Form fields (`detect_fields`): every widget becomes a Form element with an object
+//!    reference, next to its label in reading order, with alternate text from its tooltip, name
+//!    or label; fields without a tooltip are reported with a suggestion (see `autotag_fields.rs`).
 //!
 //! Everything is bounded (pages, units, glyphs, rules, cells, recursion) and nothing changes
 //! unless the whole document can be tagged; pages that can't be read are left untagged and
@@ -86,12 +89,74 @@ pub struct AutotagOptions {
     pub detect_tables: bool,
     /// Find bulleted and numbered lists (L > LI > Lbl/LBody).
     pub detect_lists: bool,
+    /// Tag form fields: each widget becomes a Form element next to its label (otherwise
+    /// widgets are left untagged).
+    pub detect_fields: bool,
+    /// What to do about fields without a tooltip (`/TU`).
+    pub field_tooltips: FieldTooltips,
 }
 
 impl Default for AutotagOptions {
     fn default() -> Self {
-        Self { pages: None, replace_existing: false, lang: None, detect_tables: true, detect_lists: true }
+        Self {
+            pages: None,
+            replace_existing: false,
+            lang: None,
+            detect_tables: true,
+            detect_lists: true,
+            detect_fields: true,
+            field_tooltips: FieldTooltips::Report,
+        }
     }
+}
+
+/// Fields without a tooltip: report them with a suggestion, or also write it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum FieldTooltips {
+    /// List them in [`AutotagReport::fields_needing_tooltip`] with a suggested tooltip.
+    #[default]
+    Report,
+    /// Also write the suggestion as the field's `/TU` (and use it as alternate text).
+    Fill,
+}
+
+/// A form field widget the autotagger tagged.
+#[derive(Clone, Debug, PartialEq)]
+pub struct AutotagField {
+    /// 0-based page.
+    pub page: usize,
+    /// The widget annotation.
+    pub widget: ObjRef,
+    /// Its field (the widget itself when they are merged).
+    pub field: ObjRef,
+    /// The Form element holding it.
+    pub element: ObjRef,
+    /// The field's full name (`/T` of it and its ancestors, joined with dots).
+    pub name: String,
+    /// text, checkbox, radio, button, combo, list, signature or unknown.
+    pub kind: String,
+    /// Where it is, in points from the top-left of the displayed page.
+    pub rect: [f64; 4],
+    /// The alternate text given to the Form element.
+    pub alt: Option<String>,
+    /// Where it came from: tooltip, suggested (written by `fill`), name or label.
+    pub alt_source: Option<String>,
+    /// The label text it was placed next to.
+    pub label: Option<String>,
+}
+
+/// A field without a tooltip.
+#[derive(Clone, Debug, PartialEq)]
+pub struct AutotagFieldTooltip {
+    /// 0-based page of its first widget.
+    pub page: usize,
+    pub field: ObjRef,
+    /// Its full name.
+    pub name: String,
+    /// A tooltip from its label (else its name).
+    pub suggested: Option<String>,
+    /// The suggestion was written as `/TU` (`fill`).
+    pub filled: bool,
 }
 
 /// One glyph the text extractor found inside a provisional unit.
@@ -128,7 +193,7 @@ pub struct AutotagReport {
     /// Pages left untagged, with the reason.
     pub skipped: Vec<(usize, String)>,
     /// Structure elements made, by type (Document, H1, P, L, LI, Lbl, LBody, Table, TR, TH, TD,
-    /// Figure, Link, Annot).
+    /// Figure, Link, Annot, Form).
     pub counts: BTreeMap<String, usize>,
     /// Artifact marked-content sequences written (running headers and footers, page numbers,
     /// decoration).
@@ -143,6 +208,12 @@ pub struct AutotagReport {
     pub link_descriptions: usize,
     /// Other annotations tagged (inside Annot elements).
     pub annotations: usize,
+    /// Form field widgets tagged (each in a Form element), in page order.
+    pub fields: Vec<AutotagField>,
+    /// Fields that have no tooltip (`/TU`), with a suggested one.
+    pub fields_needing_tooltip: Vec<AutotagFieldTooltip>,
+    /// Tooltips written (`fill`).
+    pub tooltips_filled: usize,
     /// The language set on the catalog, when one was missing and given.
     pub lang: Option<String>,
     /// An existing structure tree was replaced.
@@ -1451,6 +1522,8 @@ struct Elem {
     bbox: Option<[f64; 4]>,
     /// View-space box of a figure.
     view: Option<[f64; 4]>,
+    /// Alternate text (a form field's).
+    alt: Option<String>,
 }
 
 #[derive(Default)]
@@ -1461,7 +1534,16 @@ struct Tree {
 impl Tree {
     fn add(&mut self, ty: &str, parent: usize, page: usize, rank: Rank) -> usize {
         let i = self.elems.len();
-        self.elems.push(Elem { ty: ty.into(), parent: Some(parent), page: Some(page), kids: Vec::new(), attrs: None, bbox: None, view: None });
+        self.elems.push(Elem {
+            ty: ty.into(),
+            parent: Some(parent),
+            page: Some(page),
+            kids: Vec::new(),
+            attrs: None,
+            bbox: None,
+            view: None,
+            alt: None,
+        });
         if let Some(p) = self.elems.get_mut(parent) {
             p.kids.push((rank, Kid::Elem(i)));
         }
@@ -1500,7 +1582,15 @@ struct PagePlan {
     untag: Vec<ObjRef>,
 }
 
-fn plan_page(doc: &Document, pg: &pdfcraft_model::Page, l: &Layout, tree: &mut Tree, report: &mut AutotagReport) -> PagePlan {
+fn plan_page(
+    doc: &Document,
+    pg: &pdfcraft_model::Page,
+    l: &Layout,
+    tree: &mut Tree,
+    options: &AutotagOptions,
+    field_state: &mut fields::FieldState,
+    report: &mut AutotagReport,
+) -> PagePlan {
     let n = l.scan.units.len();
     let mut targets = vec![Target::None; n];
     let mut ranks: Vec<Rank> = vec![(l.page, usize::MAX, 0, 0); n];
@@ -1516,6 +1606,8 @@ fn plan_page(doc: &Document, pg: &pdfcraft_model::Page, l: &Layout, tree: &mut T
     }
     let page = l.page;
     let mut list: Option<(usize, f64)> = None;
+    // Where each piece of text went (labels place the form fields).
+    let mut home: Vec<Option<fields::Home>> = vec![None; l.pieces.len()];
     for (pos, &b) in l.order.iter().enumerate() {
         let Some(block) = l.blocks.get(b) else { continue };
         let rank = (page, pos, 0, 0);
@@ -1549,13 +1641,11 @@ fn plan_page(doc: &Document, pg: &pdfcraft_model::Page, l: &Layout, tree: &mut T
                         let members = table.cells.get(r.saturating_mul(table.cols).saturating_add(c)).cloned().unwrap_or_default();
                         for (k, p) in members.iter().enumerate() {
                             if let Some(piece) = l.pieces.get(*p) {
-                                set(
-                                    piece.unit,
-                                    Target::Elem(cell),
-                                    (page, pos, r.saturating_mul(table.cols).saturating_add(c), k),
-                                    &mut targets,
-                                    &mut ranks,
-                                );
+                                let rk = (page, pos, r.saturating_mul(table.cols).saturating_add(c), k);
+                                set(piece.unit, Target::Elem(cell), rk, &mut targets, &mut ranks);
+                                if let Some(h) = home.get_mut(*p) {
+                                    *h = Some(fields::Home { elem: cell, rank: rk, heading: false });
+                                }
                             }
                         }
                     }
@@ -1586,10 +1676,15 @@ fn plan_page(doc: &Document, pg: &pdfcraft_model::Page, l: &Layout, tree: &mut T
                     Role::Heading(level) => tree.add(&format!("H{}", level.clamp(1, 6)), 0, page, rank),
                     _ => tree.add("P", 0, page, rank),
                 };
+                let heading = matches!(role, Role::Heading(_));
                 for (li, line) in lines.iter().enumerate() {
                     for (k, p) in line.pieces.iter().enumerate() {
                         if let Some(piece) = l.pieces.get(*p) {
-                            set(piece.unit, Target::Elem(container), (page, pos, li.saturating_add(1), k), &mut targets, &mut ranks);
+                            let rk = (page, pos, li.saturating_add(1), k);
+                            set(piece.unit, Target::Elem(container), rk, &mut targets, &mut ranks);
+                            if let Some(h) = home.get_mut(*p) {
+                                *h = Some(fields::Home { elem: container, rank: rk, heading });
+                            }
                         }
                     }
                 }
@@ -1641,6 +1736,7 @@ fn plan_page(doc: &Document, pg: &pdfcraft_model::Page, l: &Layout, tree: &mut T
     let annot_list = pg.dict.get(b"Annots").map(|o| doc.resolve(o)).and_then(|a| a.as_array().cloned()).unwrap_or_default();
     let mut loose: Vec<([f64; 4], ObjRef, &'static str, Option<String>)> = Vec::new();
     let mut inline = 0usize;
+    let mut widgets: Vec<(ObjRef, Dict)> = Vec::new();
     for a in annot_list.iter().take(MAX_ANNOTS_PER_PAGE) {
         let Some(r) = a.as_ref() else {
             if a.as_dict().is_some() {
@@ -1650,6 +1746,10 @@ fn plan_page(doc: &Document, pg: &pdfcraft_model::Page, l: &Layout, tree: &mut T
         };
         let Some(d) = doc.get(r).as_dict().cloned() else { continue };
         let subtype = d.name(b"Subtype").unwrap_or(b"");
+        if subtype == b"Widget" && options.detect_fields {
+            widgets.push((r, d));
+            continue;
+        }
         if matches!(subtype, b"Popup" | b"Widget" | b"PrinterMark" | b"TrapNet") {
             if d.contains(b"StructParent") {
                 untag.push(r);
@@ -1728,6 +1828,10 @@ fn plan_page(doc: &Document, pg: &pdfcraft_model::Page, l: &Layout, tree: &mut T
             "page {}: {inline} annotation(s) written inside the page's /Annots array can't be referenced from the tags and were left untagged",
             page.saturating_add(1)
         ));
+    }
+    // Form fields next to their labels.
+    if !widgets.is_empty() {
+        fields::tag_widgets(doc, l, widgets, &home, tree, options.field_tooltips, field_state, &mut annots, &mut untag);
     }
     // Annotations with no text under them go after the page's blocks, top to bottom.
     loose.sort_by(|a, b| a.0[1].total_cmp(&b.0[1]).then(a.0[0].total_cmp(&b.0[0])));
@@ -1920,7 +2024,7 @@ pub fn autotag(doc: &mut Document, options: &AutotagOptions, text: &mut AutotagT
 
     // 5. Elements and the rewritten pages.
     let mut tree = Tree::default();
-    tree.elems.push(Elem { ty: "Document".into(), parent: None, page: None, kids: Vec::new(), attrs: None, bbox: None, view: None });
+    tree.elems.push(Elem { ty: "Document".into(), parent: None, page: None, kids: Vec::new(), attrs: None, bbox: None, view: None, alt: None });
     struct Done {
         page: usize,
         obj: ObjRef,
@@ -1930,9 +2034,10 @@ pub fn autotag(doc: &mut Document, options: &AutotagOptions, text: &mut AutotagT
         untag: Vec<ObjRef>,
     }
     let mut done: Vec<Done> = Vec::new();
+    let mut field_state = fields::FieldState::default();
     for l in &layouts {
         let Some(pg) = pages.get(l.page) else { continue };
-        let plan = plan_page(doc, pg, l, &mut tree, &mut report);
+        let plan = plan_page(doc, pg, l, &mut tree, options, &mut field_state, &mut report);
         let (ops, mcids) = emit(l, &plan, &mut tree, &mut report);
         done.push(Done { page: l.page, obj: l.obj, ops, mcids, annots: plan.annots, untag: plan.untag });
     }
@@ -2016,6 +2121,9 @@ pub fn autotag(doc: &mut Document, options: &AutotagOptions, text: &mut AutotagT
         if let Some(a) = &el.attrs {
             d.set(b"A".to_vec(), Object::Dict(a.clone()));
         }
+        if let Some(alt) = &el.alt {
+            d.set(b"Alt".to_vec(), Object::String(PdfString::text(alt)));
+        }
         doc.set(*r, Object::Dict(d));
         *report.counts.entry(el.ty.clone()).or_default() += 1;
         if el.ty == "Figure"
@@ -2025,6 +2133,41 @@ pub fn autotag(doc: &mut Document, options: &AutotagOptions, text: &mut AutotagT
         }
     }
     report.figures_needing_alt.sort_by(|a, b| a.page.cmp(&b.page).then(a.element.num.cmp(&b.element.num)));
+    for f in std::mem::take(&mut field_state.pending) {
+        let Some(Some(element)) = refs.get(f.elem).copied() else { continue };
+        report.fields.push(AutotagField {
+            page: f.page,
+            widget: f.widget,
+            field: f.field,
+            element,
+            name: f.name,
+            kind: f.kind.into(),
+            rect: f.rect,
+            alt: f.alt,
+            alt_source: f.alt_source.map(str::to_owned),
+            label: f.label,
+        });
+    }
+    report.fields_needing_tooltip = std::mem::take(&mut field_state.needing);
+    for (field, tu) in &field_state.fills {
+        doc.update_dict(*field, |d| d.set(b"TU".to_vec(), Object::String(PdfString::text(tu))))?;
+        report.tooltips_filled = report.tooltips_filled.saturating_add(1);
+    }
+    if field_state.over_limit > 0 {
+        report.warnings.push(format!("{} form field widget(s) beyond the first {} were left untagged", field_state.over_limit, fields::MAX_FIELDS));
+    }
+    for p in &field_state.unlabelled_pages {
+        report.warnings.push(format!(
+            "page {}: too many form fields and text pieces to look for labels; its fields were placed by position only",
+            p.saturating_add(1)
+        ));
+    }
+    if !report.fields_needing_tooltip.is_empty() && options.field_tooltips == FieldTooltips::Report {
+        report.warnings.push(format!(
+            "{} form field(s) have no tooltip (TU): see fields_needing_tooltip, or pass field_tooltips fill to write the suggestions",
+            report.fields_needing_tooltip.len()
+        ));
+    }
 
     // The parent tree: pages first, then annotations.
     let mut nums: Vec<Object> = Vec::new();
@@ -2128,6 +2271,9 @@ pub fn autotag(doc: &mut Document, options: &AutotagOptions, text: &mut AutotagT
     }
     Ok(report)
 }
+
+#[path = "autotag_fields.rs"]
+mod fields;
 
 #[cfg(test)]
 #[path = "autotag_tests.rs"]

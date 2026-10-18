@@ -180,3 +180,16 @@ fn refusals_change_nothing() {
     let r = autotag(&mut d, &AutotagOptions::default(), &mut hostile).unwrap();
     assert_eq!(r.count("P"), 0, "no readable text: the run is an artifact");
 }
+
+#[test]
+fn field_labels_and_names_become_tooltips() {
+    use super::fields::{clean_label, humanize_name};
+    assert_eq!(clean_label("  Email address:  ").as_deref(), Some("Email address"));
+    assert_eq!(clean_label("Signature: ________").as_deref(), Some("Signature"));
+    assert_eq!(clean_label("Name *").as_deref(), Some("Name"));
+    assert_eq!(clean_label("____ : *"), None);
+    assert_eq!(clean_label(&"x".repeat(10_000)).map(|s| s.chars().count()), Some(120));
+    assert_eq!(humanize_name("first_name").as_deref(), Some("First name"));
+    assert_eq!(humanize_name("ünits-sold").as_deref(), Some("Ünits sold"));
+    assert_eq!(humanize_name("__"), None);
+}

@@ -1,7 +1,7 @@
 //! `tags_autotag`: Accessibility ▸ Autotag Document, with the PDF/UA and checker results
 //! before and after.
 
-use pdfcraft_engine::a11y::{AutotagOptions, Options, Status, UaOptions};
+use pdfcraft_engine::a11y::{AutotagOptions, FieldTooltips, Options, Status, UaOptions};
 use serde_json::{Value, json};
 
 use crate::{Args, Automation, Result, ToolError, failed};
@@ -15,7 +15,16 @@ fn valid_lang(l: &str) -> bool {
 }
 
 /// The checker rules autotagging is about.
-const RULES: [&str; 6] = ["tagged-pdf", "tagged-content", "tagged-annotations", "tab-order", "figures-alt-text", "heading-nesting"];
+const RULES: [&str; 8] = [
+    "tagged-pdf",
+    "tagged-content",
+    "tagged-annotations",
+    "tagged-form-fields",
+    "field-descriptions",
+    "tab-order",
+    "figures-alt-text",
+    "heading-nesting",
+];
 
 fn summary(doc: &pdfcraft_engine::Document) -> Value {
     let ua = doc.pdfua_verify(&UaOptions::default());
@@ -50,12 +59,21 @@ impl Automation {
             }
             other => other.map(str::to_owned),
         };
+        let field_tooltips = match a.opt_str("field_tooltips")? {
+            None | Some("report") => FieldTooltips::Report,
+            Some("fill") => FieldTooltips::Fill,
+            Some(other) => {
+                return Err(ToolError::InvalidArgs(format!("field_tooltips must be \"report\" or \"fill\", not {other:?}")));
+            }
+        };
         let options = AutotagOptions {
             pages,
             replace_existing: a.opt_bool("replace_existing")?.unwrap_or(false),
             lang,
             detect_tables: a.opt_bool("detect_tables")?.unwrap_or(true),
             detect_lists: a.opt_bool("detect_lists")?.unwrap_or(true),
+            detect_fields: a.opt_bool("detect_fields")?.unwrap_or(true),
+            field_tooltips,
         };
         let doc = self.doc(a)?;
         let before = summary(doc);
@@ -79,6 +97,30 @@ impl Automation {
             "links": r.links,
             "link_descriptions": r.link_descriptions,
             "annotations": r.annotations,
+            "fields": r
+                .fields
+                .iter()
+                .map(|f| {
+                    json!({
+                        "page": f.page + 1,
+                        "name": f.name,
+                        "kind": f.kind,
+                        "widget": f.widget.num,
+                        "field": f.field.num,
+                        "element": f.element.num,
+                        "rect": f.rect.map(round),
+                        "alt": f.alt,
+                        "alt_source": f.alt_source,
+                        "label": f.label,
+                    })
+                })
+                .collect::<Vec<_>>(),
+            "fields_needing_tooltip": r
+                .fields_needing_tooltip
+                .iter()
+                .map(|f| json!({ "page": f.page + 1, "name": f.name, "field": f.field.num, "suggested": f.suggested, "filled": f.filled }))
+                .collect::<Vec<_>>(),
+            "tooltips_filled": r.tooltips_filled,
             "lang": r.lang,
             "replaced": r.replaced,
             "warnings": r.warnings,
