@@ -3293,3 +3293,54 @@ fn printer_marks_are_one_undo_step_and_keep_the_text() {
     assert!(s.apply(id, Edit::AddPrinterMarks { pages: vec![0], settings: bad }).is_err());
     assert_eq!(s.get(id).unwrap().can_undo(), None);
 }
+
+#[test]
+fn associated_files_are_one_undo_step_each_and_survive_save() {
+    let (mut s, id) = session_with(2);
+    let file = NewAssociatedFile {
+        name: "data.csv".into(),
+        data: Arc::new(b"a,b\n1,2\n".to_vec()),
+        mime: Some("text/csv".into()),
+        relationship: AfRelationship::Data,
+        description: Some("The figures".into()),
+    };
+    s.apply(id, Edit::AddAssociatedFile { target: AfTarget::Document, file: file.clone() }).unwrap();
+    s.apply(
+        id,
+        Edit::AddAssociatedFile { target: AfTarget::Page(1), file: NewAssociatedFile { relationship: AfRelationship::Source, ..file.clone() } },
+    )
+    .unwrap();
+    let doc = s.get(id).unwrap();
+    assert_eq!(doc.can_undo(), Some("Add associated file"));
+    let list = doc.associated_files(&AfTarget::Document).unwrap();
+    assert_eq!(list.files.len(), 1);
+    assert_eq!(list.files[0].mod_date.as_deref(), Some(pdfcraft_cos::pdf_date(1_700_000_000).as_str()));
+    assert!(doc.info.attachments.iter().any(|a| a.name == "data.csv"), "a document-level file is an attachment");
+    assert_eq!(doc.all_associated_files().unwrap().len(), 2);
+    // Save and reopen.
+    let bytes = s.save_bytes(id).unwrap();
+    let mut s2 = Session::new();
+    let id2 = s2.open("saved.pdf", None, bytes, None).unwrap();
+    let page = s2.get(id2).unwrap().associated_files(&AfTarget::Page(1)).unwrap();
+    assert_eq!(page.files[0].relationship.as_deref(), Some("Source"));
+    let (_, data) = s2.get(id2).unwrap().associated_file_data(&AfTarget::Page(1), &AfSelector::Index(0), 1 << 20).unwrap();
+    assert_eq!(data, b"a,b\n1,2\n");
+    // Remove, undo, redo.
+    s.apply(id, Edit::RemoveAssociatedFile { target: AfTarget::Document, select: AfSelector::Name("data.csv".into()) }).unwrap();
+    let doc = s.get(id).unwrap();
+    assert_eq!(doc.can_undo(), Some("Remove associated file"));
+    assert!(doc.associated_files(&AfTarget::Document).unwrap().files.is_empty());
+    assert!(doc.info.attachments.is_empty(), "the attachment goes too");
+    s.undo(id).unwrap();
+    assert_eq!(s.get(id).unwrap().associated_files(&AfTarget::Document).unwrap().files.len(), 1);
+    s.redo(id).unwrap();
+    assert!(s.get(id).unwrap().associated_files(&AfTarget::Document).unwrap().files.is_empty());
+    s.undo(id).unwrap();
+    s.undo(id).unwrap();
+    assert!(s.get(id).unwrap().associated_files(&AfTarget::Page(1)).unwrap().files.is_empty());
+    // A refused edit leaves no undo step.
+    let before = s.get(id).unwrap().can_undo().map(str::to_owned);
+    assert!(s.apply(id, Edit::AddAssociatedFile { target: AfTarget::Page(7), file: file.clone() }).is_err());
+    assert!(s.apply(id, Edit::RemoveAssociatedFile { target: AfTarget::Page(0), select: AfSelector::Index(0) }).is_err());
+    assert_eq!(s.get(id).unwrap().can_undo().map(str::to_owned), before);
+}

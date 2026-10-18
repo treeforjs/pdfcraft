@@ -13,6 +13,7 @@
 
 use pdfcraft_cos::{Dict, Document, ObjRef, Object, PdfString};
 
+pub mod associated;
 mod boxes;
 mod dedupe;
 mod fields;
@@ -24,6 +25,10 @@ mod prune;
 mod transition;
 pub mod view;
 
+pub use associated::{
+    AfSelector, AfTarget, AssociatedFile, AssociatedFiles, NewAssociatedFile, Relationship, add_associated_file, all_associated_files,
+    associated_file_data, associated_files, remove_associated_file,
+};
 pub use boxes::{BoxSpec, PageBox, page_boxes, set_page_box};
 pub use dedupe::dedupe_resources;
 pub use fields::{FieldConflicts, FieldReport};

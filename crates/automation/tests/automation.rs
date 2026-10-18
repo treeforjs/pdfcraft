@@ -5735,3 +5735,103 @@ fn signature_field_locks_through_tools() {
         "already signed"
     );
 }
+
+#[test]
+fn associated_files_through_tools() {
+    let dir = workdir("associated-files");
+    std::fs::write(dir.join("data.csv"), b"a,b\n1,2\n").unwrap();
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    assert_eq!(ok(&mut a, "associated_files_list", json!({ "doc": doc }))["count"], 0);
+
+    // Document level, from a file: also an attachment.
+    let added = ok(&mut a, "associated_file_add", json!({ "doc": doc, "path": "data.csv", "relationship": "data", "description": "Figures" }));
+    assert_eq!(added["undo"], "Add associated file");
+    let f = &added["added"]["file"];
+    assert_eq!(f["name"], "data.csv");
+    assert_eq!(f["relationship"], "Data");
+    assert_eq!(f["mime"], "text/csv", "guessed from the extension");
+    assert_eq!(f["size"], 8);
+    assert_eq!(f["attachment"], true);
+    let info = ok(&mut a, "doc_info", json!({ "doc": doc }));
+    assert!(info["attachments"].as_array().unwrap().iter().any(|x| x["name"] == "data.csv"));
+
+    // Page and annotation level, from base64.
+    ok(
+        &mut a,
+        "associated_file_add",
+        json!({ "doc": doc, "target": { "page": 2 }, "data_base64": "PHg+PC94Pg==", "name": "schema.xml", "relationship": "Schema" }),
+    );
+    ok(&mut a, "comment_add", json!({ "doc": doc, "page": 1, "type": "note", "at": [20, 20], "contents": "See data" }));
+    ok(
+        &mut a,
+        "associated_file_add",
+        json!({ "doc": doc, "target": { "page": 1, "annotation": 1 }, "data_base64": "aGk=", "name": "note.txt", "mime": "text/plain" }),
+    );
+    let list = ok(&mut a, "associated_files_list", json!({ "doc": doc }));
+    assert_eq!(list["count"], 3);
+    let owners: Vec<Value> = list["owners"].as_array().unwrap().iter().map(|o| o["target"].clone()).collect();
+    assert_eq!(owners, [json!("document"), json!({ "page": 1, "annotation": 1 }), json!({ "page": 2 })]);
+    let page = ok(&mut a, "associated_files_list", json!({ "doc": doc, "target": { "page": 2 } }));
+    assert_eq!(page["owners"][0]["files"][0]["mime"], "application/xml");
+    assert_eq!(page["owners"][0]["files"][0]["attachment"], false);
+    assert_eq!(
+        ok(&mut a, "associated_files_list", json!({ "doc": doc, "target": { "page": 1, "annotation": 1 } }))["owners"][0]["files"][0]["relationship"],
+        "Unspecified"
+    );
+
+    // Save, reopen, extract.
+    ok(&mut a, "doc_save", json!({ "doc": doc, "path": "out.pdf" }));
+    let doc2 = ok(&mut a, "doc_open", json!({ "path": "out.pdf" }))["doc"].as_u64().unwrap();
+    let x = ok(&mut a, "associated_file_extract", json!({ "doc": doc2, "target": { "page": 2 }, "index": 1, "path": "schema-out.xml" }));
+    assert_eq!(x["bytes"], 7);
+    assert_eq!(std::fs::read(dir.join("schema-out.xml")).unwrap(), b"<x></x>");
+    assert_eq!(ok(&mut a, "associated_files_list", json!({ "doc": doc2 }))["count"], 3);
+
+    // Remove, undo.
+    let removed = ok(&mut a, "associated_file_remove", json!({ "doc": doc2, "name": "data.csv" }));
+    assert_eq!(removed["removed"]["file"]["name"], "data.csv");
+    assert_eq!(removed["undo"], "Remove associated file");
+    assert!(ok(&mut a, "doc_info", json!({ "doc": doc2 }))["attachments"].as_array().unwrap().is_empty());
+    ok(&mut a, "edit_undo", json!({ "doc": doc2 }));
+    assert_eq!(ok(&mut a, "associated_files_list", json!({ "doc": doc2, "target": "document" }))["count"], 1);
+
+    // Bad arguments: refused with a reason, nothing changes.
+    let bad = [
+        json!({ "doc": doc2, "path": "data.csv", "relationship": "Original" }),
+        json!({ "doc": doc2, "path": "data.csv", "data_base64": "aGk=" }),
+        json!({ "doc": doc2 }),
+        json!({ "doc": doc2, "data_base64": "aGk=" }),
+        json!({ "doc": doc2, "data_base64": "not base64!", "name": "x" }),
+        json!({ "doc": doc2, "path": "missing.csv" }),
+        json!({ "doc": doc2, "path": "../outside.csv" }),
+        json!({ "doc": doc2, "path": "data.csv", "mime": "text plain" }),
+        json!({ "doc": doc2, "path": "data.csv", "name": " " }),
+        json!({ "doc": doc2, "path": "data.csv", "target": "page" }),
+        json!({ "doc": doc2, "path": "data.csv", "target": { "page": 0 } }),
+        json!({ "doc": doc2, "path": "data.csv", "target": { "page": 9 } }),
+        json!({ "doc": doc2, "path": "data.csv", "target": { "page": 1, "annotation": 5 } }),
+        json!({ "doc": doc2, "path": "data.csv", "target": { "annotation": 1 } }),
+        json!({ "doc": doc2, "path": "data.csv", "target": { "object": 1 } }),
+        json!({ "doc": doc2, "path": "data.csv", "target": { "object": -3 } }),
+        json!({ "doc": doc2, "path": "data.csv", "target": { "page": 1, "extra": 1 } }),
+        json!({ "doc": doc2, "path": "data.csv", "target": 7 }),
+        json!({ "doc": doc2, "path": "data.csv", "colour": "red" }),
+    ];
+    for args in bad {
+        assert!(a.call("associated_file_add", &args).is_err(), "{args}");
+    }
+    for args in [
+        json!({ "doc": doc2 }),
+        json!({ "doc": doc2, "name": "data.csv", "index": 1 }),
+        json!({ "doc": doc2, "index": 0 }),
+        json!({ "doc": doc2, "index": 9 }),
+        json!({ "doc": doc2, "name": "nope" }),
+        json!({ "doc": doc2, "target": { "page": 3 }, "index": 1 }),
+    ] {
+        assert!(a.call("associated_file_remove", &args).is_err(), "{args}");
+    }
+    assert!(a.call("associated_file_extract", &json!({ "doc": doc2, "index": 1 })).is_err(), "path is required");
+    assert!(a.call("associated_files_list", &json!({ "doc": doc2, "target": { "object": 4000000000u64 } })).is_err());
+    assert_eq!(ok(&mut a, "associated_files_list", json!({ "doc": doc2 }))["count"], 3, "nothing changed");
+}
