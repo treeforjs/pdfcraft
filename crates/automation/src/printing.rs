@@ -426,9 +426,27 @@ impl Automation {
             let has = |m: &str| all || names.contains(&m);
             settings.objects = ColorObjects { text: has("text"), vector: has("vector"), images: has("images") };
         }
+        // The colour settings give the default intent, and a device destination converts
+        // through the working space of its family when that isn't the factory one.
+        let colour = self.session.color_management();
+        settings.intent = colour.settings().intent;
         if let Some(i) = a.opt_str("intent")? {
             settings.intent =
                 RenderingIntent::from_name(i).ok_or_else(|| bad(format!("unknown intent {i:?} ({})", RenderingIntent::NAMES.join(", "))))?;
+        }
+        let family = match settings.destination {
+            ColorDestination::DeviceCmyk => Some(pdfcraft_engine::color_settings::ProfileFamily::Cmyk),
+            ColorDestination::DeviceGray => Some(pdfcraft_engine::color_settings::ProfileFamily::Gray),
+            ColorDestination::DeviceRgb => Some(pdfcraft_engine::color_settings::ProfileFamily::Rgb),
+            ColorDestination::Icc(_) => None,
+        };
+        let mut through = None;
+        if a.opt_bool("use_working_space")?.unwrap_or(true)
+            && let Some((bytes, label)) = family.and_then(|f| colour.working_destination(f))
+        {
+            settings.destination = ColorDestination::Icc(bytes);
+            settings.device_output = true;
+            through = Some(label);
         }
         settings.preserve_black = a.opt_bool("preserve_black")?.unwrap_or(true);
         settings.convert_spots = match a.opt_str("spots")?.unwrap_or("preserve") {
@@ -440,11 +458,22 @@ impl Automation {
         settings.output_condition = a.opt_str("output_condition")?.map(str::to_string);
         settings.validate().map_err(|e| bad(e.to_string()))?;
         let sources = settings.sources.names();
-        let destination = settings.destination.name();
+        let destination = if settings.device_output {
+            match family {
+                Some(pdfcraft_engine::color_settings::ProfileFamily::Gray) => "DeviceGray",
+                Some(pdfcraft_engine::color_settings::ProfileFamily::Rgb) => "DeviceRGB",
+                _ => "DeviceCMYK",
+            }
+        } else {
+            settings.destination.name()
+        };
+        let intent = settings.intent.name();
         let report = self.session.convert_colors(id, pages, settings).map_err(failed)?;
         let mut out = crate::summary(self.doc(a)?);
         out["changed"] = json!(report.changed());
         out["destination"] = json!(destination);
+        out["through"] = json!(through);
+        out["intent"] = json!(intent);
         out["sources"] = json!(sources);
         out["pages_changed"] = json!(report.pages.iter().map(|p| p + 1).collect::<Vec<_>>());
         out["converted"] = json!({

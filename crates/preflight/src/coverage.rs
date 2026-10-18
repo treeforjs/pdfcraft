@@ -132,6 +132,12 @@ pub trait Conversion {
     fn ink_manager(&self) -> Option<&InkManager> {
         None
     }
+    /// DeviceCMYK quadruples (0–255 each) as the RGB triples pages display them with: overprint
+    /// preview composites its plates with it. The default is the renderer's built-in CMYK
+    /// conversion; the engine's conversions follow the colour settings.
+    fn display_cmyk(&self, quads: &[u8]) -> Option<Vec<u8>> {
+        pdfcraft_render::device_cmyk_to_rgb(quads)
+    }
 }
 
 /// A tint transform read for evaluation.

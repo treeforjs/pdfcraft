@@ -114,6 +114,10 @@ pub struct InterpreterSettings {
     /// operator. What was drawn is then incomplete, so only set it when the output will be
     /// thrown away (a viewer's render whose result nobody can receive any more).
     pub cancelled: Option<Arc<AtomicBool>>,
+    /// PdfCraft patch (25): colour management settings for DeviceGray, DeviceRGB and
+    /// DeviceCMYK (working spaces, rendering intent, black point compensation). `None`: the
+    /// built-in conversions (gray and RGB as sRGB, CMYK through the default CMYK profile).
+    pub device_color: Option<crate::color::DeviceColor>,
 }
 
 impl Default for InterpreterSettings {
@@ -135,6 +139,7 @@ impl Default for InterpreterSettings {
             hide_comments: false,
             ocg_overrides: Arc::new(Vec::new()),
             cancelled: None,
+            device_color: None,
         }
     }
 }

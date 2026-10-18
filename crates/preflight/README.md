@@ -74,7 +74,8 @@ grids (forms, fills, strokes, text string boxes, sampled images, clip bounding b
 objects knock out earlier ones unless overprint is simulated (`OP`/`op`, and the `OPM 1`
 nonzero rule for DeviceCMYK). CMYK, Gray, Separation, DeviceN and Indexed colours are exact;
 RGB and Lab go through a `coverage::Conversion` (the engine passes the output intent's CMYK
-profile when usable, else `BuiltIn`, the Convert Colors approximation) and are counted
+profile or the working CMYK profile of its colour settings when usable, with their rendering
+intent, else `BuiltIn`, the Convert Colors approximation) and are counted
 separately; patterns, shadings, DCT/JPX/JBIG2/CCITT images and annotations are reported as
 unmeasured and transparency as approximated. `coverage::METHOD` states these limits.
 
@@ -88,8 +89,9 @@ with their alternates and pages, samples every plate at a point and finds the ou
 normal (knockout) RGB render of a page where overprinting objects change some plate. The page
 is separated with overprint, knocked out and without its overprinting objects
 (`coverage::rasterize_without_overprinting`); changed cells are composited (process inks
-through the renderer's own CMYK conversion, `pdfcraft_render::device_cmyk_to_rgb`, spot inks
-multiplied by their preview) and each pixel moves from the knocked-out to the overprinted
+through `Conversion::display_cmyk`: the renderer's CMYK conversion, `pdfcraft_render::device_cmyk_to_rgb`
+by default, the engine's colour settings when it passes them; spot inks multiplied by their
+preview) and each pixel moves from the knocked-out to the overprinted
 colour by the object's coverage, read from the rendered pixel between the backdrop and the
 knocked-out colour. `overprint::Mode` is Acrobat's preference (Never, Always, Only For PDF/X
 Files, Automatic) and `overprint::objects` lists the objects painted with overprint on (from
@@ -187,3 +189,10 @@ checks every indirect object once per type (seen-set, so cycles end), at most 25
 512 links deep and 50 000 elements per array, and reports reaching a limit. Kept findings are
 errors first, then warnings, then information, at most `max_findings` (default 1000).
 
+## ICC profiles written in code
+
+`icc` writes small version 2 display profiles from published colorimetry: `srgb` (the PDF/A
+output intent's profile), `rgb_matrix_trc` (an RGB matrix/TRC profile from colorants that
+`d50_colorants` computes from the chromaticities of the primaries and white, Bradford-adapted
+to D50) and `gray_trc` (a gray profile from a tone curve). The engine's colour settings use
+them for their built-in RGB and gray working spaces.

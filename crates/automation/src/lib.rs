@@ -17,6 +17,7 @@ mod attachment_trust;
 mod autotag;
 mod camera;
 mod certsec;
+mod color_settings;
 mod comments;
 mod compare;
 mod content;
@@ -101,12 +102,15 @@ const MAX_DPI: f64 = 600.0;
 /// The most accessible text `doc_export_accessible_text` returns inline (bytes).
 const MAX_INLINE_ACCESSIBLE_TEXT: usize = 1 << 20;
 
+/// A document's page renderer, for the display bytes and colour configuration it was made for.
+type CachedRenderer = (Arc<Vec<u8>>, Option<pdfcraft_render::ColourProfiles>, PageRenderer);
+
 /// A headless PdfCraft session driven by tool calls.
 pub struct Automation {
     session: Session,
     root: Option<PathBuf>,
     /// Synchronous renderers, rebuilt when a document's working bytes change.
-    renderers: HashMap<DocId, (Arc<Vec<u8>>, PageRenderer)>,
+    renderers: HashMap<DocId, CachedRenderer>,
     /// Extracted page text per document version (the working bytes it was taken from),
     /// bounded across documents (least recently used pages are evicted).
     texts: text_cache::TextCache,
@@ -730,6 +734,10 @@ impl Automation {
             "print_ink_manager_set" => self.ink_manager_set(&a)?,
             "print_ink_manager_apply" => self.ink_manager_apply(&a)?,
             "print_overprint_preview" => self.overprint_preview(&a)?,
+            "color_settings_get" => self.color_settings_get(&a)?,
+            "color_settings_set" => self.color_settings_set(&a)?,
+            "color_profiles_list" => self.color_profiles_list(&a)?,
+            "color_profile_load" => self.color_profile_load(&a)?,
             "print_overprint_objects" => self.overprint_objects(&a)?,
             "print_add_printer_marks" => self.add_printer_marks(&a)?,
             "print_convert_colors" => self.convert_colors(&a)?,
@@ -2025,15 +2033,16 @@ impl Automation {
 
     fn renderer(&mut self, id: DocId) -> Result<&mut PageRenderer> {
         let doc = self.session.get(id).ok_or_else(|| failed("no such document"))?;
+        let colour = doc.render_colour();
         let fresh = || {
-            let config = RenderConfig { password: doc.password.as_deref().map(Arc::from), ..Default::default() };
-            (doc.display.clone(), PageRenderer::new(doc.display.clone(), config))
+            let config = RenderConfig { password: doc.password.as_deref().map(Arc::from), colour: colour.clone(), ..Default::default() };
+            (doc.display.clone(), colour.clone(), PageRenderer::new(doc.display.clone(), config))
         };
         let entry = self.renderers.entry(id).or_insert_with(fresh);
-        if !Arc::ptr_eq(&entry.0, &doc.display) {
+        if !Arc::ptr_eq(&entry.0, &doc.display) || entry.1 != colour {
             *entry = fresh();
         }
-        Ok(&mut entry.1)
+        Ok(&mut entry.2)
     }
 
     fn page_render(&mut self, a: &Args) -> Result<Content> {

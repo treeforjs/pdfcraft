@@ -1015,10 +1015,20 @@ impl Automation {
         };
         let condition = a.opt_str("output_condition")?.map(str::to_owned);
         let info = a.opt_str("output_info")?.map(str::to_owned);
+        let id = self.doc(a)?.id;
+        let mut from_settings = None;
         let intent = match (condition, profile) {
             (Some(condition), profile) => Some(XIntent { condition, info, profile }),
             (None, Some(profile)) => Some(XIntent { condition: "Custom".into(), info, profile: Some(profile) }),
-            (None, None) => None,
+            // No intent given and none in the document: the working CMYK space, when it is an
+            // output profile (Preferences ▸ Color Management).
+            (None, None) => match self.session.color_management().working_output_profile() {
+                Some((profile, description)) if !self.session.has_pdfx_output_intent(id).map_err(failed)? => {
+                    from_settings = Some(description.clone());
+                    Some(XIntent { condition: "Custom".into(), info: info.or(Some(description)), profile: Some(profile) })
+                }
+                _ => None,
+            },
         };
         let mut flatten = FlattenSettings::default();
         if let Some(p) = a.opt_str("flatten_preset")? {
@@ -1034,7 +1044,6 @@ impl Automation {
             flatten,
             allow_partial: a.opt_bool("allow_partial")?.unwrap_or(false),
         };
-        let id = self.doc(a)?.id;
         let r = self.session.pdfx_convert(id, options).map_err(|e| match e {
             pdfcraft_engine::EditError::Invalid(m) => ToolError::InvalidArgs(m),
             e => failed(e),
@@ -1061,6 +1070,7 @@ impl Automation {
         out["changed"] = json!(r.converted && !r.fixed.is_empty());
         out["fixed"] = json!(r.fixed);
         out["notes"] = json!(r.notes);
+        out["output_intent_from_settings"] = json!(from_settings);
         out["unfixable"] = json!(unfixable);
         out["before"] = brief(&r.before);
         out["after"] = brief(&r.after);
