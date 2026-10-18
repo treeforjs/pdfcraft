@@ -27,6 +27,7 @@ pub mod coverage;
 pub mod flatten;
 pub mod icc;
 pub mod pdfx;
+pub mod separations;
 mod unicode;
 mod xmp;
 

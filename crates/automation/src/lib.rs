@@ -31,6 +31,7 @@ mod preflight;
 mod printing;
 mod reader_selection;
 mod redact;
+mod separations;
 mod signature_workflow;
 mod signing;
 mod text_cache;
@@ -708,6 +709,9 @@ impl Automation {
             "printers" => self.printers()?,
             "print_total_area_coverage" => self.total_area_coverage(&a)?,
             "print_color_warnings" => self.colour_warnings(&a)?,
+            "print_separations_list" => self.separations_list(&a)?,
+            "print_separations_render" => return self.separations_render(&a),
+            "print_separations_sample" => self.separations_sample(&a)?,
             "print_add_printer_marks" => self.add_printer_marks(&a)?,
             "print_convert_colors" => self.convert_colors(&a)?,
             "associated_files_list" => self.associated_files_list(&a)?,

@@ -65,17 +65,24 @@ sets `pdfaid:conformance` to the level's letter. Not yet: Type 3 glyph procedure
 patterns, per-character ActualText for Private Use Area text, the PDF 1.4 limits of
 PDF/A-1, PDF/A-4.
 
-## Total area coverage
+## Separations and total area coverage
 
-`coverage::page_coverage` is Output Preview's Total Area Coverage check: the highest total
-ink on a page (C+M+Y+K plus spot inks, in percent), the area above a limit (300 % by default)
-and the worst connected regions. The page renderer is RGB-only, so the module interprets the
-content stream itself into a bounded ink grid (forms, fills, strokes, text string boxes,
-sampled images, clip bounding boxes; later objects knock out earlier ones). CMYK, Gray,
-Separation, DeviceN and Indexed colours are exact; RGB and Lab use a naive full-GCR
-conversion without a press profile and are counted separately; patterns, shadings,
-DCT/JPX/JBIG2/CCITT images and annotations are reported as unmeasured. `coverage::METHOD`
-states these limits for reports. Automation exposes it as `print_total_area_coverage`.
+`coverage::rasterize` separates a page into one plate per ink (the four process inks, then
+every Separation and DeviceN spot colorant its resources define, at most 64): the page
+renderer is RGB-only, so the module interprets the content stream itself into bounded ink
+grids (forms, fills, strokes, text string boxes, sampled images, clip bounding boxes). Later
+objects knock out earlier ones unless overprint is simulated (`OP`/`op`, and the `OPM 1`
+nonzero rule for DeviceCMYK). CMYK, Gray, Separation, DeviceN and Indexed colours are exact;
+RGB and Lab go through a `coverage::Conversion` (the engine passes the output intent's CMYK
+profile when usable, else `BuiltIn`, the Convert Colors approximation) and are counted
+separately; patterns, shadings, DCT/JPX/JBIG2/CCITT images and annotations are reported as
+unmeasured and transparency as approximated. `coverage::METHOD` states these limits.
+
+`coverage::page_coverage` is Output Preview's Total Area Coverage check on those plates: the
+highest total ink and where it is, the area above a limit (300 % by default) and the worst
+connected regions (tool `print_total_area_coverage`). `separations` lists a document's inks
+with their alternates and pages, samples every plate at a point and finds the output intent
+(tools `print_separations_list`, `print_separations_render`, `print_separations_sample`).
 
 ## PDF/X verification
 
