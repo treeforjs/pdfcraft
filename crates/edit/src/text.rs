@@ -187,6 +187,11 @@ pub struct TextBlock {
 }
 
 impl TextLine {
+    /// The operators that show the line (indices into the page's streams parsed joined).
+    pub(crate) fn source_ops(&self) -> &[usize] {
+        &self.ops
+    }
+
     /// The baseline's height in the line's text frame: user space for upright text, and the
     /// distance along the text's up direction (in user-space units) for rotated text, so the
     /// difference between two lines of one paragraph is their line spacing either way.

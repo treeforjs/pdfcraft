@@ -28,6 +28,7 @@ mod make_accessible;
 #[cfg(feature = "mcp")]
 pub mod mcp;
 mod measure;
+mod objects;
 mod ocr_review;
 mod overprint;
 mod preflight;
@@ -494,6 +495,8 @@ impl Automation {
                     self.apply(&a, Edit::EditPageImage { page, index, change })?
                 }
             }
+            "page_objects" => self.page_objects(&a)?,
+            "objects_arrange" | "objects_align" | "objects_distribute" | "objects_transform" => self.objects_edit(name, &a)?,
             "text_fonts" => {
                 let page = self.page(&a)?;
                 let fonts = self.doc(&a)?.text_fonts(page, a.opt_str("text")?.unwrap_or("")).map_err(failed)?;

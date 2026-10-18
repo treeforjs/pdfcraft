@@ -2099,11 +2099,11 @@ title = "Arrange objects (bring forward, send backward)"
 area = "C"
 tier = "P1"
 milestone = "M7"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["edit.edit_text"]
+tools = ["page_objects", "objects_arrange"]
+evidence = ["crates/edit/src/objects/tests.rs::arranging_reorders_paint_and_keeps_each_objects_state", "crates/edit/src/objects/tests.rs::several_objects_keep_their_relative_order", "crates/edit/src/objects/tests.rs::clips_transforms_and_nesting_carry_over", "crates/edit/src/objects/tests.rs::tagged_content_moves_as_one_object_and_keeps_its_mcid", "crates/edit/src/objects/tests.rs::added_items_and_marks_are_left_alone", "crates/edit/src/objects/tests.rs::bad_requests_are_refused_and_change_nothing", "crates/edit/src/objects/tests.rs::hostile_content_never_panics", "crates/automation/tests/arrange_objects.rs::arranging_objects_changes_what_is_on_top", "crates/automation/tests/arrange_objects.rs::tagged_objects_keep_their_structure_when_arranged_and_moved"]
+notes = "headless only (no UI yet): page_objects lists text objects, paths, images, Forms, inline images and shadings of the page's own content in paint order (one object per MCID-tagged sequence); objects_arrange does Bring to Front, Bring Forward / Send Backward (past the next overlapping object), Send to Back, one undo step, with keep-tags-on-edit following the page. The original content is rewritten as one stream with each object wrapped in q/Q and its graphics state (cm, clips, colours, text state, gs) replayed, marked content reopened as needed. Missing: UI menu/context-menu items and shortcuts; arranging added items and page marks (kept in their own streams) against page content; objects inside Form XObjects; pages using text as a clip or with stray q/cm inside text objects are refused; MCIDs inside a text object don't group objects"
 
 [[feature]]
 id = "edit.align-distribute-objects"
@@ -2111,11 +2111,11 @@ title = "Align and distribute objects"
 area = "C"
 tier = "P1"
 milestone = "M7"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["edit.edit_text"]
+tools = ["page_objects", "objects_align", "objects_distribute", "objects_transform"]
+evidence = ["crates/edit/src/objects/tests.rs::aligning_and_distributing_move_objects_as_displayed", "crates/edit/src/objects/tests.rs::text_moves_turns_and_flips_in_place_and_stays_text", "crates/edit/src/objects/tests.rs::stray_operators_in_a_text_object_stop_rewrites", "crates/automation/tests/arrange_objects.rs::aligning_distributing_and_turning_objects_moves_them_as_displayed"]
+notes = "headless only (no UI yet): objects_align aligns left / horizontal centre / right / top / vertical centre / bottom as displayed (after /Rotate) to the selection's box, or to the crop box for one object; objects_distribute gives three or more objects equal gaps (outermost stay); objects_transform rotates (quarters), flips and moves text, paths, images and Forms about their own centres. Each is one undo step; objects get a q/cm/Q wrapper plus the state they leave for later content, everything else stays byte for byte, and text stays editable. Missing: UI, distribute by centres or fixed spacing, aligning to a key object, free-angle rotation, objects without a measurable box (shadings, unmeasurable text) can only be moved or arranged"
 
 [[feature]]
 id = "edit.vector-edit"
