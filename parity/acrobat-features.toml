@@ -1427,11 +1427,11 @@ title = "Search all PDFs in a folder"
 area = "B"
 tier = "P1"
 milestone = "M12"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["search_folder"]
+evidence = ["crates/automation/tests/search_folder.rs::matches_across_files_and_pages_like_text_find", "crates/automation/tests/search_folder.rs::whole_words_and_case_options", "crates/automation/tests/search_folder.rs::subfolders_only_when_recursive", "crates/automation/tests/search_folder.rs::bookmarks_comments_and_attachments_on_request", "crates/automation/tests/search_folder.rs::corrupt_and_encrypted_files_are_skipped_with_reasons", "crates/automation/tests/search_folder.rs::symlink_loops_and_links_out_of_the_root_are_not_followed", "crates/automation/tests/search_folder.rs::caps_truncate_and_say_so", "crates/automation/tests/search_folder.rs::the_folder_must_be_inside_the_root"]
+notes = "Headless only: search_folder searches every .pdf in a folder (optionally its subfolders) with text_find's extraction and matcher, whole words / case-sensitive, and optionally bookmark titles, comment text, attachment names/descriptions and the page text of attached PDFs; results grouped by file with page, match, context and found_in; damaged, encrypted (without the right password) or oversized files are skipped with reasons; bounded walk (32 levels, 200000 entries, max_files, max_results, folder links never followed, file links only inside the root), 512 MB and 60 s per file (checked between pages, so one very slow page is not interrupted). Missing: the Advanced Search window in the UI (folder picker, results tree, open a result at its match), searching in a PDF Portfolio, Acrobat's further options (stemming, proximity, Boolean: view.search-boolean) and document properties/metadata search."
 
 [[feature]]
 id = "view.search-boolean"

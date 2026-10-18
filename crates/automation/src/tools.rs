@@ -230,6 +230,24 @@ pub fn tools() -> Vec<ToolDef> {
             .ro()
             .cmd("edit.find")
             .with(schema(json!({ "doc": doc(), "query": { "type": "string", "minLength": 1 }, "limit": { "type": "integer", "minimum": 1, "description": "Maximum matches (default 500)." } }), &["doc", "query"])),
+        t("search_folder", "Search all PDFs in a folder", "Advanced Search ▸ All PDF documents in a folder: search every .pdf in folder (with recursive, its subfolders too) for a word or phrase and return the matches grouped by file, each with its page (1-based), the matched text with up to 36 characters of context before and after, and where it was found (found_in): text (page text, with rects as text_find gives them), bookmark (title; bookmark is its 1-based path), comment (its text; subtype, author), attachment (its name or description) or attachment_text (page text of an attached PDF). Page text is matched exactly as text_find matches it: case-insensitive and whitespace-normalised unless case_sensitive / whole_words. Files that can't be searched (not a PDF, damaged, password-protected without the right password, over 512 MB) are listed in skipped with the reason and the search goes on; a file is searched for at most 60 s (incomplete says so). Links to folders are never followed, links to files only inside the allowed directory; folders are followed at most 32 levels deep. truncated and truncated_by (max_files, max_results, max_entries) say when the walk or the results were cut short. Read-only: no document is opened in the session.")
+            .ro()
+            .with(schema(
+                json!({
+                    "folder": { "type": "string", "description": "The folder to search (inside the root when one is set)." },
+                    "query": { "type": "string", "minLength": 1, "maxLength": 1000, "description": "The word or phrase." },
+                    "recursive": { "type": "boolean", "description": "Also search subfolders (default false)." },
+                    "whole_words": { "type": "boolean", "description": "Whole words only (default false)." },
+                    "case_sensitive": { "type": "boolean", "description": "Match case (default false)." },
+                    "include_bookmarks": { "type": "boolean", "description": "Also search bookmark titles (default false)." },
+                    "include_comments": { "type": "boolean", "description": "Also search comment text (default false)." },
+                    "include_attachments": { "type": "boolean", "description": "Also search attachment names and descriptions, and the pages of attached PDFs (default false)." },
+                    "password": { "type": "string", "description": "Tried on every password-protected file; files it doesn't open are skipped. Never echoed back." },
+                    "max_files": { "type": "integer", "minimum": 1, "maximum": 10000, "description": "Search at most this many PDFs (default 1000)." },
+                    "max_results": { "type": "integer", "minimum": 1, "maximum": 100000, "description": "Return at most this many matches in all (default 1000)." },
+                }),
+                &["folder", "query"],
+            )),
         t("page_rotate", "Rotate pages", "Rotate pages by a multiple of 90 degrees (positive is clockwise): the listed pages (default all), filtered like Acrobat's Rotate Pages by subset (all, even, odd page numbers) and orientation (all, landscape, portrait). Undoable.")
             .cmd("page.rotate")
             .with(schema(
