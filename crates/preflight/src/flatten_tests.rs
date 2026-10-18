@@ -347,3 +347,97 @@ fn hostile_documents_do_not_panic() {
     assert_eq!(report.pages[0].action, PageAction::Rasterized);
     assert!(transparent_pages(&doc, &[]).is_empty());
 }
+
+fn page_content(doc: &Document, page: usize) -> String {
+    let p = &pdfcraft_model::pages(doc)[page];
+    let mut all = Vec::new();
+    match &*doc.resolve(p.dict.get(b"Contents").unwrap()) {
+        Object::Stream(s) => all.extend(s.decoded().unwrap()),
+        Object::Array(items) => {
+            for i in items {
+                let Object::Stream(s) = &*doc.resolve(i) else { panic!() };
+                all.extend(s.decoded().unwrap());
+            }
+        }
+        o => panic!("contents are {o:?}"),
+    }
+    String::from_utf8_lossy(&all).into_owned()
+}
+
+#[test]
+fn rasterize_pages_makes_one_picture_per_page_at_the_resolution() {
+    let original = alpha_over_text();
+    for (dpi, side) in [(72.0, 300), (150.0, 625), (36.0, 150)] {
+        let mut doc = original.clone();
+        let report = rasterize_pages(&mut doc, &[], dpi).unwrap();
+        let [p] = report.as_slice() else { panic!("{report:?}") };
+        assert_eq!((p.page, p.width, p.height, p.images), (0, side, side, 1));
+        assert!((p.resolution - dpi).abs() < 1e-9, "{report:?}");
+        let back = reopened(&doc);
+        let pages = pdfcraft_model::pages(&back);
+        assert_eq!(pages.len(), 1);
+        assert_eq!(pages[0].display_size(&back), (300.0, 300.0));
+        let text = page_content(&back, 0);
+        assert!(!text.contains("BT") && !text.contains("Tj") && !text.contains(" re"), "{text}");
+        assert!(text.contains("/PcImg0 Do"), "{text}");
+        // Only the picture is left: no fonts, no graphics states, no transparency.
+        let res = back.resolve(pages[0].dict.get(b"Resources").unwrap()).as_dict().cloned().unwrap();
+        assert!(res.len() == 1 && res.contains(b"XObject"), "{res:?}");
+        let xo = back.resolve(res.get(b"XObject").unwrap()).as_dict().cloned().unwrap();
+        let Object::Stream(img) = &*back.resolve(xo.get(b"PcImg0").unwrap()) else { panic!() };
+        assert_eq!(img.dict.get(b"Width").and_then(Object::as_int), Some(side as i64));
+        assert_eq!(img.dict.get(b"Height").and_then(Object::as_int), Some(side as i64));
+        assert!(transparent_pages(&back, &[]).is_empty());
+        assert_eq!(x1a_transparency(&back), 0);
+        // It looks the same.
+        assert!(differing(&render(&original, 0), &render(&back, 0), 60) < 0.05);
+    }
+}
+
+#[test]
+fn rasterize_pages_honours_pages_and_refuses_bad_resolutions() {
+    let two = pdf(&[
+        "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+        "<< /Type /Pages /Kids [3 0 R 5 0 R] /Count 2 >>".to_string(),
+        format!("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 100] /Contents 4 0 R /Resources << {FONT} >> >>"),
+        stream("", "BT /F1 12 Tf 10 50 Td (One) Tj ET"),
+        format!("<< /Type /Page /Parent 2 0 R /MediaBox [10 20 110 220] /Rotate 90 /Contents 6 0 R /Resources << {FONT} >> >>"),
+        stream("", "BT /F1 12 Tf 20 50 Td (Two) Tj ET"),
+    ]);
+    let mut doc = two.clone();
+    let r = rasterize_pages(&mut doc, &[1], 144.0).unwrap();
+    assert_eq!(r.iter().map(|p| (p.page, p.width, p.height, p.images)).collect::<Vec<_>>(), vec![(1, 200, 400, 1)]);
+    let back = reopened(&doc);
+    assert!(page_content(&back, 0).contains("(One) Tj"));
+    let second = page_content(&back, 1);
+    assert!(!second.contains("Tj"), "{second}");
+    // Placed over the media box, which (like the rotation) is kept.
+    assert!(second.contains("q 100 0 0 200 10 20 cm /PcImg0 Do Q"), "{second}");
+    assert_eq!(pdfcraft_model::pages(&back)[1].display_size(&back), (200.0, 100.0));
+
+    let mut doc = two.clone();
+    for bad in [0.0, 10.0, -300.0, f64::NAN, f64::INFINITY, 5000.0] {
+        assert!(rasterize_pages(&mut doc, &[], bad).unwrap_err().contains("resolution"), "{bad}");
+    }
+    assert!(rasterize_pages(&mut doc, &[2], 300.0).unwrap_err().contains("out of range"));
+    assert!(!doc.is_modified());
+}
+
+#[test]
+fn rasterize_pages_caps_pixels() {
+    // One huge page: the resolution is lowered to the page budget.
+    let mut big = one_page("0 0 1 rg 0 0 100 100 re f", "<< >>", "", &[]);
+    let obj = pdfcraft_model::pages(&big)[0].obj;
+    big.update_dict(obj, |d| d.set(b"MediaBox".to_vec(), rect_object([0.0, 0.0, 14_400.0, 14_400.0]))).unwrap();
+    let r = rasterize_pages(&mut big.clone(), &[], 600.0).unwrap();
+    assert!(r[0].resolution < 600.0 && (r[0].width * r[0].height) as f64 <= MAX_PAGE_PIXELS, "{r:?}");
+    assert!(r[0].images > 1);
+    // Many pages at a high resolution: refused before rendering anything.
+    let kids: Vec<String> = (0..20).map(|i| format!("{} 0 R", i + 3)).collect();
+    let mut bodies = vec!["<< /Type /Catalog /Pages 2 0 R >>".to_string(), format!("<< /Type /Pages /Kids [{}] /Count 20 >>", kids.join(" "))];
+    bodies.extend((0..20).map(|_| "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 2000 2000] >>".to_string()));
+    let mut many = pdf(&bodies);
+    let e = rasterize_pages(&mut many, &[], 1200.0).unwrap_err();
+    assert!(e.contains("lower the resolution"), "{e}");
+    assert!(!many.is_modified());
+}

@@ -133,7 +133,7 @@ pub use pdfcraft_model::dests::{DestError, DestSource, Fit as DestFit, NamedDest
 pub use pdfcraft_optimize as optimize;
 pub use pdfcraft_organize::{BookmarkAction, OutlineEntry};
 pub use pdfcraft_preflight as pdfa;
-pub use pdfcraft_preflight::{FlattenPreset, FlattenReport, FlattenSettings, PageAction, PageFlatten};
+pub use pdfcraft_preflight::{FlattenPreset, FlattenReport, FlattenSettings, PageAction, PageFlatten, PageRaster};
 pub use pdfcraft_print as print;
 pub use pdfcraft_redact::codes as redaction_codes;
 pub use pdfcraft_redact::codes::{CODE_SETS as REDACTION_CODE_SETS, CodeSet as RedactionCodeSet};
@@ -3698,6 +3698,28 @@ impl Session {
         let cos = pdfcraft_annot::with_missing_appearances(&cos).unwrap_or(cos);
         let cos = pdfcraft_forms::with_missing_appearances(&cos).unwrap_or(cos);
         pdfcraft_print::impose(&cos, settings).map_err(|e| EditError::Print(e.to_string()))
+    }
+
+    /// Print as image (Acrobat: Print ▸ Advanced ▸ Print As Image): the print-ready PDF of
+    /// [`Session::print_pdf`] with every sheet replaced by one opaque picture of itself at `dpi`
+    /// pixels per inch (36 to 1200), so the printer gets no fonts, vectors or transparency. Each
+    /// sheet's resolution is lowered when its pixels would exceed
+    /// [`pdfcraft_preflight::flatten::MAX_PAGE_PIXELS`]; the job is refused above
+    /// [`pdfcraft_preflight::flatten::MAX_RASTER_PIXELS`]. Returns the bytes and, per sheet, what
+    /// was made.
+    pub fn print_pdf_as_image(&self, id: DocId, settings: &print::Settings, dpi: f64) -> Result<(Vec<u8>, Vec<PageRaster>), EditError> {
+        use pdfcraft_preflight::flatten::{MAX_RESOLUTION, MIN_RESOLUTION};
+        if !(dpi.is_finite() && (MIN_RESOLUTION..=MAX_RESOLUTION).contains(&dpi)) {
+            return Err(EditError::Invalid(format!("the print resolution must be between {MIN_RESOLUTION} and {MAX_RESOLUTION} dpi")));
+        }
+        let sheets = self.print_pdf(id, settings)?;
+        guard(|| -> Result<(Vec<u8>, Vec<PageRaster>), EditError> {
+            let mut doc = pdfcraft_cos::Document::open(Arc::new(sheets)).map_err(|e| EditError::Print(e.to_string()))?;
+            let report = pdfcraft_preflight::rasterize_pages(&mut doc, &[], dpi).map_err(EditError::Print)?;
+            let bytes = pdfcraft_cos::write_full(&doc, &pdfcraft_cos::SaveOptions::default()).map_err(|e| EditError::Print(e.to_string()))?;
+            Ok((bytes, report))
+        })
+        .map_err(|e| EditError::Print(format!("printing as an image failed: {e}")))?
     }
 
     /// Combine whole files, in order, into new PDF bytes (one bookmark per file).

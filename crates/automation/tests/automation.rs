@@ -2835,6 +2835,49 @@ fn printing_through_tools() {
 }
 
 #[test]
+fn printing_as_an_image_through_tools() {
+    let dir = workdir("print-as-image");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    assert!(page_text(&mut a, doc).iter().all(|t| !t.is_empty()));
+    let r = ok(&mut a, "doc_print", json!({ "doc": doc, "layout": "actual", "as_image": true, "dpi": 72, "path": "image.pdf" }));
+    assert_eq!(r["sheets"].as_u64(), Some(3));
+    let sheets = r["as_image"]["sheets"].as_array().unwrap();
+    assert_eq!(sheets.len(), 3);
+    assert_eq!(r["as_image"]["dpi"].as_f64(), Some(72.0));
+    // Letter sheets: 612 × 792 points, one pixel per point at 72 dpi.
+    for s in sheets {
+        assert_eq!((s["width"].as_u64(), s["height"].as_u64(), s["images"].as_u64()), (Some(612), Some(792), Some(1)), "{s}");
+    }
+    ok(&mut a, "doc_print", json!({ "doc": doc, "layout": "actual", "path": "plain.pdf" }));
+    let image = ok(&mut a, "doc_open", json!({ "path": "image.pdf" }))["doc"].as_u64().unwrap();
+    let plain = ok(&mut a, "doc_open", json!({ "path": "plain.pdf" }))["doc"].as_u64().unwrap();
+    let info = |a: &mut Automation, d: u64| ok(a, "doc_info", json!({ "doc": d }));
+    let (pi, pp) = (info(&mut a, image), info(&mut a, plain));
+    assert_eq!(pi["pages"].as_array().map(Vec::len), Some(3));
+    for (x, y) in pi["pages"].as_array().unwrap().iter().zip(pp["pages"].as_array().unwrap()) {
+        assert_eq!((&x["width"], &x["height"]), (&y["width"], &y["height"]));
+    }
+    // No text is left in the pictures; the vector print still has it.
+    assert!(page_text(&mut a, image).iter().all(String::is_empty), "{:?}", page_text(&mut a, image));
+    assert!(page_text(&mut a, plain).iter().all(|t| !t.is_empty()));
+    let bytes = std::fs::read(dir.join("image.pdf")).unwrap();
+    assert!(!bytes.windows(5).any(|w| w == b"/Font"), "no fonts reach the printer");
+    // Higher dpi, bigger pictures; the default is 300.
+    let r = ok(&mut a, "doc_print", json!({ "doc": doc, "pages": "1", "layout": "actual", "as_image": true, "path": "p300.pdf" }));
+    assert_eq!((r["as_image"]["sheets"][0]["width"].as_u64(), r["as_image"]["dpi"].as_f64()), (Some(2550), Some(300.0)));
+    for bad in [json!(0), json!(-72), json!(35), json!(5000), json!("high")] {
+        let e = a.call("doc_print", &json!({ "doc": doc, "as_image": true, "dpi": bad, "path": "bad.pdf" }));
+        assert!(matches!(e, Err(ToolError::InvalidArgs(_))), "{bad}: {e:?}");
+    }
+    assert!(matches!(
+        a.call("doc_print", &json!({ "doc": doc, "dpi": 300, "path": "bad.pdf" })),
+        Err(ToolError::InvalidArgs(m)) if m.contains("as_image")
+    ));
+    assert!(!dir.join("bad.pdf").exists());
+}
+
+#[test]
 fn adding_content_through_tools() {
     let dir = workdir("content");
     let mut png = Vec::new();

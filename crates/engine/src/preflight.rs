@@ -6,6 +6,7 @@ pub use pdfcraft_preflight::colour_warnings::{
     Colour as WarningColour, Finding as ColourFinding, Kind as ColourWarningKind, Options as ColourWarningOptions, Report as ColourWarnings,
 };
 pub use pdfcraft_preflight::coverage::{Options as CoverageOptions, PageCoverage, Region as CoverageRegion};
+pub use pdfcraft_preflight::flatten::{MAX_RESOLUTION as RASTER_MAX_RESOLUTION, MIN_RESOLUTION as RASTER_MIN_RESOLUTION};
 
 #[derive(Clone, Debug)]
 pub struct ResultSet {
