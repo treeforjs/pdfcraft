@@ -186,6 +186,8 @@ all four annotation hints. Unknown top-level argument keys return JSON-RPC `-326
 accepted keys; failures in the invoked tool remain `isError` results. An escaped tool panic is
 reported as an internal tool error, and the server continues serving.
 
+Export tools that write text (`doc_export_office`, `doc_export_pptx` in editable mode, `doc_export_text`) take `ocr` (`auto` default, `on`, `off`) and `ocr_language`: scanned pages are recognized on a temporary copy before exporting, so the output holds their text while the document stays unchanged; the result's `ocr` reports what was recognized or why it was not (see [the OCR crate](../ocr/README.md#run-ocr-when-exporting)).
+
 Exports complete synchronously. `progressToken` and cancellation notifications are harmlessly
 ignored; no background-job or cancellation behavior is added.
 

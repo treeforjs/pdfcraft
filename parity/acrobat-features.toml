@@ -7064,11 +7064,11 @@ title = "Run OCR automatically when exporting scans"
 area = "J"
 tier = "P1"
 milestone = "M10"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["doc_export_office", "doc_export_pptx", "doc_export_text"]
+evidence = ["crates/automation/tests/export_ocr.rs::export_ocr_puts_recognized_text_in_every_text_format_and_off_leaves_it_out", "crates/automation/tests/export_ocr.rs::export_ocr_auto_recognizes_only_the_scanned_pages", "crates/automation/tests/export_ocr.rs::export_ocr_arguments_are_in_the_schemas_and_validated", "crates/automation/tests/export_ocr.rs::export_ocr_auto_without_models_exports_and_says_why_and_on_fails", "crates/engine/tests/export_ocr.rs::auto_recognizes_only_scans_into_a_copy", "crates/engine/tests/export_ocr.rs::on_recognizes_every_page_without_text_and_off_none", "crates/engine/tests/export_ocr.rs::without_models_auto_exports_as_is_and_on_fails", "crates/engine/tests/export_ocr.rs::a_document_that_forbids_changes_is_not_recognized_in_auto_and_refused_when_on"]
+notes = "Export to Word, HTML, RTF, Excel, PowerPoint (editable mode) and text takes ocr auto (default, as Acrobat's export setting)/on/off and ocr_language (en). Session::with_export_ocr recognizes the exported pages that need it (auto: scans, pages with an image and no text; on: every page without text) on a temporary copy of the working file and exports that copy; the document, its history and dirty state never change. auto exports without recognition, saying why (no models, or the document's permissions forbid recognition); on fails instead. Each export reports pages without text, scanned pages, recognized pages, skipped pages and words. Recognized text is the invisible Searchable Image (Exact) layer, so the exports hold the recognized paragraphs and also the scan image itself (Acrobat drops the text from the picture); fonts, sizes and styles are not recovered from the scan. Real-model test on one original 200 dpi synthetic page per format (recall >= 80%, none of the words with ocr off); English only; no export dialog setting yet (the UI is being redesigned)."
 
 [[feature]]
 id = "create.export-settings"
