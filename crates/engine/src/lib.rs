@@ -350,6 +350,8 @@ pub struct Document {
     pub xfa_warnings: Vec<String>,
     /// What the last [`Edit::FlattenTransparency`] did, page by page.
     pub flatten_report: Option<FlattenReport>,
+    /// The Ink Manager's settings (session only; see [`Session::set_ink_manager`]).
+    ink_manager: preflight::InkManager,
 }
 
 impl Document {
@@ -1625,6 +1627,13 @@ pub enum Edit {
         pages: Vec<usize>,
         settings: ColorConversion,
     },
+    /// Ink Manager, made permanent: spot inks in `aliases` (colorant → the ink it finally
+    /// prints on) are renamed in every colour space, then `conversion` turns the spot inks set
+    /// to process into CMYK on every page. Built by [`Session::apply_ink_manager`].
+    ApplyInkManager {
+        aliases: std::collections::BTreeMap<Vec<u8>, Vec<u8>>,
+        conversion: Option<ColorConversion>,
+    },
     /// PDF 2.0 associated files (ISO 32000-2 §14.13): embed `file` and list it in `target`'s
     /// `/AF` (a document-level file is also an attachment in `/Names /EmbeddedFiles`).
     AddAssociatedFile {
@@ -1848,6 +1857,7 @@ impl Edit {
             Edit::FlattenTransparency { .. } => "Flatten transparency".into(),
             Edit::AddPrinterMarks { .. } => "Add printer marks".into(),
             Edit::ConvertColors { .. } => "Convert colors".into(),
+            Edit::ApplyInkManager { .. } => "Apply Ink Manager".into(),
             Edit::AddAssociatedFile { .. } => "Add associated file".into(),
             Edit::RemoveAssociatedFile { .. } => "Remove associated file".into(),
             Edit::AddHeaderFooter { replace: false, .. } => "Add header & footer".into(),
@@ -2009,6 +2019,7 @@ fn check_permission(edit: &Edit, p: &pdfcraft_cos::Permissions) -> Result<(), Ed
         | Edit::FlattenTransparency { .. }
         | Edit::AddPrinterMarks { .. }
         | Edit::ConvertColors { .. }
+        | Edit::ApplyInkManager { .. }
         | Edit::AddAssociatedFile { .. }
         | Edit::RemoveAssociatedFile { .. }
         | Edit::AddHeaderFooter { .. }
@@ -2436,6 +2447,9 @@ fn run_edit(doc: &mut pdfcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -> 
         }
         Edit::ConvertColors { pages, settings } => {
             pdfcraft_edit::convert_colors(doc, pages, settings)?;
+        }
+        Edit::ApplyInkManager { aliases, conversion } => {
+            preflight::apply_ink_manager_to(doc, aliases, conversion.as_ref())?;
         }
         Edit::AddAssociatedFile { target, file } => {
             pdfcraft_organize::add_associated_file(doc, target, file, cx.date.as_deref())?;
@@ -3261,6 +3275,7 @@ impl Session {
             xfa_template: None,
             xfa_warnings: Vec::new(),
             flatten_report: None,
+            ink_manager: preflight::InkManager::default(),
         });
         Ok(id)
     }

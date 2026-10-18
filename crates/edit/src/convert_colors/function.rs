@@ -49,6 +49,24 @@ pub(super) enum Func {
     Array(Vec<Func>),
 }
 
+/// A PDF function read for evaluation, for callers outside Convert Colors (the Ink Manager's
+/// spot-to-process preview evaluates tint transforms with it).
+#[derive(Clone, Debug)]
+pub struct Function(Func);
+
+impl Function {
+    /// Read a function object (Types 0, 2, 3, 4, or an array of them); `None` when it can't be
+    /// evaluated.
+    pub fn parse(doc: &Document, o: &Object) -> Option<Self> {
+        Func::parse(doc, o, 0).map(Function)
+    }
+
+    /// Its outputs for `input` (clipped to its domain and range); `None` when evaluation fails.
+    pub fn eval(&self, input: &[f64]) -> Option<Vec<f64>> {
+        self.0.eval(input)
+    }
+}
+
 fn finite(v: f64) -> f64 {
     if v.is_finite() { v } else { 0.0 }
 }

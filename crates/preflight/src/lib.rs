@@ -27,6 +27,7 @@ pub mod colour_warnings;
 pub mod coverage;
 pub mod flatten;
 pub mod icc;
+pub mod ink_manager;
 pub mod pdfx;
 pub mod pdfx_convert;
 pub mod separations;

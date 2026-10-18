@@ -47,6 +47,7 @@ mod space;
 #[cfg(test)]
 mod tests;
 
+pub use function::Function;
 use function::{Func, sampled_stream};
 pub use icc::{Family, Profile};
 use space::{Dest, Space};
@@ -217,6 +218,10 @@ pub struct ColorConversion {
     pub preserve_black: bool,
     /// Spot colours (Separation, DeviceN) are converted to the destination too.
     pub convert_spots: bool,
+    /// With `convert_spots`, only these spot colorants (Ink Manager ▸ convert to process): a
+    /// Separation is converted when its colorant is listed, a DeviceN when every colorant of it
+    /// that isn't a process ink or `None` is. `None` converts every spot colour.
+    pub spot_names: Option<BTreeSet<Vec<u8>>>,
     /// Make the destination profile the document's PDF/X output intent (ICC destinations).
     pub output_intent: bool,
     /// The output intent's printing condition (default: the profile's description).
@@ -236,6 +241,7 @@ impl Default for ColorConversion {
             intent: Intent::default(),
             preserve_black: true,
             convert_spots: false,
+            spot_names: None,
             output_intent: false,
             output_condition: None,
             device_output: false,
@@ -541,16 +547,38 @@ impl Cx<'_> {
             Space::CalGray { .. } => s.cal_gray,
             Space::CalRgb { .. } => s.cal_rgb,
             Space::Lab { .. } => s.lab,
-            Space::Separation { .. } | Space::DeviceN { .. } => self.s.convert_spots && sp.spot_convertible(),
+            Space::Separation { .. } | Space::DeviceN { .. } => self.s.convert_spots && self.spot_chosen(sp) && sp.spot_convertible(),
             Space::Indexed { base, .. } => self.managed(base),
             Space::Pattern(Some(base)) => self.managed(base),
             Space::Pattern(None) | Space::Unknown(_) => false,
         }
     }
 
+    /// Whether spot space `sp` is among the spot colours chosen for conversion.
+    fn spot_chosen(&self, sp: &Space) -> bool {
+        let Some(chosen) = &self.s.spot_names else { return true };
+        const PROCESS: [&[u8]; 5] = [b"Cyan", b"Magenta", b"Yellow", b"Black", b"None"];
+        match sp {
+            Space::Separation { name, .. } => chosen.contains(name),
+            Space::DeviceN { names, .. } => {
+                let mut spots = names.iter().filter(|n| !PROCESS.contains(&n.as_slice())).peekable();
+                spots.peek().is_some() && spots.all(|n| chosen.contains(n))
+            }
+            _ => false,
+        }
+    }
+
     /// Note spot colours that were to be converted but can't be.
     fn note(&mut self, sp: &Space) {
-        if self.s.convert_spots && sp.is_spot() && !sp.spot_convertible() {
+        if self.s.convert_spots
+            && self.s.spot_names.is_some()
+            && let Space::DeviceN { names, .. } = sp
+            && !self.spot_chosen(sp)
+            && names.iter().any(|n| self.s.spot_names.as_ref().is_some_and(|c| c.contains(n)))
+        {
+            self.skip("DeviceN colours mixing spot inks converted to process with inks kept (left as they were)");
+        }
+        if self.s.convert_spots && sp.is_spot() && self.spot_chosen(sp) && !sp.spot_convertible() {
             let registration = match sp {
                 Space::Separation { name, .. } => name == b"All" || name == b"None",
                 Space::DeviceN { names, .. } => names.iter().any(|n| n == b"All"),
