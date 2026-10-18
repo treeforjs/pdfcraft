@@ -27,6 +27,8 @@
 
 mod audit;
 pub mod background;
+pub mod camera;
+mod camera_page;
 pub mod compat;
 pub mod despeckle;
 pub mod fonts;
@@ -40,6 +42,7 @@ pub use fonts::{EmbeddedFont, UnembedBlock, UnembedError, embedded_fonts};
 
 use pdfcraft_cos::{Document, ObjRef, Object, Stream};
 
+pub use camera_page::{CameraImage, CameraReport, CameraSettings, camera_image, page_size};
 pub use images::{BackgroundReport, DespeckleReport, effective_resolutions};
 
 #[derive(Debug, thiserror::Error)]
@@ -320,6 +323,17 @@ pub fn remove_page_image_backgrounds(doc: &mut Document, pages: &[usize], option
         return Ok(BackgroundReport::default());
     }
     Ok(images::remove_backgrounds(doc, &chosen, options))
+}
+
+/// Scan & OCR ▸ Enhance ▸ Camera Image: replace page `page` (0-based) by the page photographed
+/// in the image it draws ([`camera_image`]): the image is resampled from the outline
+/// `settings.quad` to an upright rectangle ([`camera::warp`]), optionally enhanced
+/// ([`camera::enhance`]), and becomes a new image XObject (JPEG at quality 90 when the photo
+/// was JPEG, else Flate) that the page draws alone on a new media box of the estimated aspect
+/// ratio (other content, page boxes and `/Rotate` are dropped; annotations are kept). The
+/// original image object is left for pages sharing it.
+pub fn correct_camera_page(doc: &mut Document, page: usize, settings: &CameraSettings) -> Result<CameraReport, OptimizeError> {
+    camera_page::correct(doc, page, settings)
 }
 
 /// Recognize Text ▸ Editable Text and Images: fill `regions` (quadrilaterals in page `page`'s

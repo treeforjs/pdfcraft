@@ -16,6 +16,7 @@ pub mod accessible_text;
 pub mod actions;
 pub mod attachment_trust;
 pub mod autotag;
+pub mod camera;
 pub mod catalog;
 pub mod commands;
 pub mod compare;
@@ -1606,6 +1607,12 @@ pub enum Edit {
         objects: Vec<usize>,
         change: pdfcraft_edit::objects::ObjectsEdit,
     },
+    /// Scan & OCR ▸ Enhance ▸ Camera Image: replace each page by the page photographed in its
+    /// image, straightened and (optionally) enhanced ([`camera::CameraFix`],
+    /// [`pdfcraft_optimize::correct_camera_page`]).
+    CorrectCameraImages {
+        fixes: Vec<camera::CameraFix>,
+    },
     /// Edit text in a paragraph box: replace paragraph `block` (from `Document::text_blocks`),
     /// rewrapped to the box's width.
     EditTextBlock {
@@ -1855,6 +1862,7 @@ impl Edit {
             Edit::DownsamplePageImages { .. } => "Downsample images".into(),
             Edit::DespecklePageImages { .. } => "Despeckle".into(),
             Edit::RemovePageImageBackgrounds { .. } => "Remove background".into(),
+            Edit::CorrectCameraImages { .. } => "Correct camera image".into(),
             Edit::ApplyScriptChanges { .. } => "Run JavaScript".into(),
             Edit::XfaEvent { .. } => "Run form script".into(),
             Edit::ConvertPdfA { level } => format!("Save as {}", level.label()),
@@ -2088,6 +2096,7 @@ fn check_permission(edit: &Edit, p: &pdfcraft_cos::Permissions) -> Result<(), Ed
         | Edit::DownsamplePageImages { .. }
         | Edit::DespecklePageImages { .. }
         | Edit::RemovePageImageBackgrounds { .. }
+        | Edit::CorrectCameraImages { .. }
         | Edit::SetDocumentScript { .. }
         | Edit::SetFieldScript { .. }
         | Edit::SetSignatureLock { .. }
@@ -2516,6 +2525,7 @@ fn run_edit_inner(doc: &mut pdfcraft_cos::Document, edit: &Edit, cx: &mut EditCt
         Edit::EditPageObjects { page, objects, change } => {
             pdfcraft_edit::objects::edit_objects(doc, *page, objects, change)?;
         }
+        Edit::CorrectCameraImages { fixes } => camera::apply(doc, fixes)?,
         Edit::EditPageImage { page, index, change } => {
             let img = pdfcraft_edit::page_images(doc, *page)?
                 .into_iter()
