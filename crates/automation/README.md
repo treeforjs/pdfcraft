@@ -139,6 +139,33 @@ The legacy PDF/A tools retain the boolean `compliant` field, now conservatively 
 4. Add an end-to-end test in `tests/automation.rs`. `tool_table_is_well_formed` checks names, schemas and command links.
 
 
+## Custom commands
+
+Acrobat's Custom Commands: one document tool with preset options, run in one step.
+`custom_command_create {id, label, tool, params?, prompt_user?, description?, library?}` stores
+`<id>.json` (`{"format": "pdfcraft-custom-command", "version": 1, id, label, description, tool,
+params, prompt_user}`) in the library folder (`library`, default `custom-commands`, resolved like any
+path, so inside `--root`). `tool` is any tool that takes `doc` except the session and meta tools
+(`custom_command_list` returns the allowed `tools`). `params` is checked against that tool's input
+schema: known options only, never `doc`, with types, enums, ranges, lengths and array items. Without
+`prompt_user`, every required option must be preset and the presets are fixed. With it, the run may
+pass `params` that add or override options, and must pass any required ones the presets leave out.
+`custom_command_get` reports these as `needs`, and the tool's schema without `doc` as `options`.
+String options may use `{file}` and `{stem}`, which are replaced by the document's file name and its
+name without the extension (for example, `doc_optimize` with `path: "small/{stem}.pdf"`).
+
+`custom_command_run {id, doc}` runs the tool on an open document: the result is one undo step and
+nothing is saved. `custom_command_run {id, paths, folder, password?, stop_on_error?}` opens each file,
+runs the tool, saves the result under the file's own name in `folder` when the document changed
+(otherwise it reports `unchanged`), and closes the file. It refuses to replace an input or to write
+the same output twice. `custom_command_edit` replaces the given fields and validates again before
+writing. `custom_command_delete` removes the file. `custom_command_export {path, ids?}` writes a
+`pdfcraft-custom-commands` bundle. `custom_command_import {path, replace?}` reads a bundle or a single
+command, validates every command before writing any, and refuses ids that already exist unless
+`replace` is set. Bounds: 500 commands, 256 KiB per command file, 4 MiB per import, 64 KiB and 64 keys
+of params, 1000 files per run. Unreadable library files are listed under `skipped`, never fatal.
+There is no menu or dialog yet.
+
 ## Common command tools
 
 Following FilmCraft's MCP conventions, `command_list {doc?, filter?, enabled_only?}` keeps its
