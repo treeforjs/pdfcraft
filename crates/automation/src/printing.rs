@@ -323,3 +323,102 @@ impl Automation {
 
 /// Pages `print_total_area_coverage` measures per call.
 const MAX_COVERAGE_PAGES: usize = 200;
+
+/// The object type names `print_convert_colors` takes.
+const COLOR_OBJECTS: [&str; 3] = ["text", "vector", "images"];
+
+impl Automation {
+    /// Print Production ▸ Convert Colors.
+    pub(crate) fn convert_colors(&mut self, a: &Args) -> Result<Value> {
+        use pdfcraft_engine::{ColorConversion, ColorDestination, ColorObjects, ColorSources, RenderingIntent};
+        let doc = self.doc(a)?;
+        let id = doc.id;
+        let pages = match a.get("pages") {
+            Some(_) => self.pages(a, "pages")?,
+            None => (0..doc.info.pages.len()).collect(),
+        };
+        let mut settings = ColorConversion::default();
+        let profile = match a.opt_str("profile")? {
+            Some(p) => {
+                let path = self.resolve(p, false)?;
+                let max = pdfcraft_engine::color_profile_limit();
+                let size = std::fs::metadata(&path).map_err(|e| failed(format!("{}: {e}", path.display())))?.len();
+                if size > max as u64 {
+                    return Err(bad(format!("profile is larger than {} MB", max >> 20)));
+                }
+                Some(std::fs::read(&path).map_err(|e| failed(format!("{}: {e}", path.display())))?)
+            }
+            None => None,
+        };
+        settings.destination = match (a.opt_str("destination")?, profile) {
+            (None | Some("ICCBased"), Some(bytes)) => ColorDestination::Icc(std::sync::Arc::new(bytes)),
+            (Some("ICCBased"), None) => return Err(bad("destination ICCBased needs profile (an ICC profile file)")),
+            (Some(_), Some(_)) => return Err(bad("profile goes with destination ICCBased only")),
+            (None | Some("DeviceCMYK"), None) => ColorDestination::DeviceCmyk,
+            (Some("DeviceGray"), None) => ColorDestination::DeviceGray,
+            (Some("DeviceRGB"), None) => ColorDestination::DeviceRgb,
+            (Some(d), None) => return Err(bad(format!("unknown destination {d:?} (DeviceCMYK, DeviceGray, DeviceRGB, ICCBased)"))),
+        };
+        if a.get("sources").is_some() {
+            let names = a.strs("sources")?;
+            if names.is_empty() {
+                return Err(bad(format!("sources must list at least one of all, {}", ColorSources::NAMES.join(", "))));
+            }
+            let mut sources = ColorSources::NONE;
+            for n in names {
+                if n == "all" {
+                    sources = ColorSources::ALL;
+                } else if !sources.set(n) {
+                    return Err(bad(format!("unknown source space {n:?} (all, {})", ColorSources::NAMES.join(", "))));
+                }
+            }
+            settings.sources = sources;
+        }
+        if a.get("objects").is_some() {
+            let names = a.strs("objects")?;
+            if names.is_empty() {
+                return Err(bad(format!("objects must list at least one of all, {}", COLOR_OBJECTS.join(", "))));
+            }
+            if let Some(n) = names.iter().find(|n| **n != "all" && !COLOR_OBJECTS.contains(n)) {
+                return Err(bad(format!("unknown object type {n:?} (all, {})", COLOR_OBJECTS.join(", "))));
+            }
+            let all = names.contains(&"all");
+            let has = |m: &str| all || names.contains(&m);
+            settings.objects = ColorObjects { text: has("text"), vector: has("vector"), images: has("images") };
+        }
+        if let Some(i) = a.opt_str("intent")? {
+            settings.intent =
+                RenderingIntent::from_name(i).ok_or_else(|| bad(format!("unknown intent {i:?} ({})", RenderingIntent::NAMES.join(", "))))?;
+        }
+        settings.preserve_black = a.opt_bool("preserve_black")?.unwrap_or(true);
+        settings.convert_spots = match a.opt_str("spots")?.unwrap_or("preserve") {
+            "preserve" => false,
+            "convert" => true,
+            s => return Err(bad(format!("unknown spots {s:?} (preserve, convert)"))),
+        };
+        settings.output_intent = a.opt_bool("output_intent")?.unwrap_or(false);
+        settings.output_condition = a.opt_str("output_condition")?.map(str::to_string);
+        settings.validate().map_err(|e| bad(e.to_string()))?;
+        let sources = settings.sources.names();
+        let destination = settings.destination.name();
+        let report = self.session.convert_colors(id, pages, settings).map_err(failed)?;
+        let mut out = crate::summary(self.doc(a)?);
+        out["changed"] = json!(report.changed());
+        out["destination"] = json!(destination);
+        out["sources"] = json!(sources);
+        out["pages_changed"] = json!(report.pages.iter().map(|p| p + 1).collect::<Vec<_>>());
+        out["converted"] = json!({
+            "colors": report.colors,
+            "images": report.images,
+            "inline_images": report.inline_images,
+            "shadings": report.shadings,
+            "forms": report.forms,
+            "patterns": report.patterns,
+            "annotations": report.annotations,
+        });
+        out["approximate"] = json!(report.approximate);
+        out["output_intent"] = json!(report.output_intent);
+        out["skipped"] = json!(report.skipped);
+        Ok(out)
+    }
+}

@@ -49,6 +49,14 @@ pub use pdfcraft_organize::{AfSelector, AfTarget, AssociatedFile, AssociatedFile
 pub use pdfcraft_cos::Algorithm;
 pub use pdfcraft_cos::{LinearizationParams, LinearizationReport};
 pub use pdfcraft_create::{CONVERTIBLE, ImageResolution, SourceKind, source_kind};
+pub use pdfcraft_edit::convert_colors::{
+    ColorConversion, ConversionReport, Destination as ColorDestination, Intent as RenderingIntent, ObjectKinds as ColorObjects,
+    SourceSpaces as ColorSources,
+};
+/// The largest destination ICC profile Convert Colors reads, in bytes.
+pub fn color_profile_limit() -> usize {
+    pdfcraft_edit::convert_colors::icc::MAX_PROFILE
+}
 pub use pdfcraft_edit::{
     Added, AddedImage, AddedText, Align as TextAlign, Background, Content as AddedContent, Family as FontFamily, Hairlines, HeaderFooter, MarkKind,
     MarkStyle, MarkedPage, PrinterMarks, Watermark, bates_start, with_bates_start,
@@ -1553,6 +1561,13 @@ pub enum Edit {
         pages: Vec<usize>,
         settings: PrinterMarks,
     },
+    /// Print Production ▸ Convert Colors: colours of `pages` in the chosen source spaces become
+    /// the destination space (see [`pdfcraft_edit::convert_colors`]). [`Session::convert_colors`]
+    /// tries it first and records no undo step when nothing would change.
+    ConvertColors {
+        pages: Vec<usize>,
+        settings: ColorConversion,
+    },
     /// PDF 2.0 associated files (ISO 32000-2 §14.13): embed `file` and list it in `target`'s
     /// `/AF` (a document-level file is also an attachment in `/Names /EmbeddedFiles`).
     AddAssociatedFile {
@@ -1770,6 +1785,7 @@ impl Edit {
             },
             Edit::FixHairlines { .. } => "Fix hairlines".into(),
             Edit::AddPrinterMarks { .. } => "Add printer marks".into(),
+            Edit::ConvertColors { .. } => "Convert colors".into(),
             Edit::AddAssociatedFile { .. } => "Add associated file".into(),
             Edit::RemoveAssociatedFile { .. } => "Remove associated file".into(),
             Edit::AddHeaderFooter { replace: false, .. } => "Add header & footer".into(),
@@ -1929,6 +1945,7 @@ fn check_permission(edit: &Edit, p: &pdfcraft_cos::Permissions) -> Result<(), Ed
         Edit::SetInfo { .. }
         | Edit::FixHairlines { .. }
         | Edit::AddPrinterMarks { .. }
+        | Edit::ConvertColors { .. }
         | Edit::AddAssociatedFile { .. }
         | Edit::RemoveAssociatedFile { .. }
         | Edit::AddHeaderFooter { .. }
@@ -2316,6 +2333,9 @@ fn run_edit(doc: &mut pdfcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -> 
         }
         Edit::AddPrinterMarks { pages, settings } => {
             pdfcraft_edit::add_printer_marks(doc, pages, settings, cx.today)?;
+        }
+        Edit::ConvertColors { pages, settings } => {
+            pdfcraft_edit::convert_colors(doc, pages, settings)?;
         }
         Edit::AddAssociatedFile { target, file } => {
             pdfcraft_organize::add_associated_file(doc, target, file, cx.date.as_deref())?;
@@ -3413,6 +3433,24 @@ impl Session {
             Some(editor) => hairline_count(&editor.cos, pages, settings),
             None => Ok(0),
         }
+    }
+
+    /// What Convert Colors would change on `pages`, tried on a copy of the document.
+    pub fn convert_colors_preview(&self, id: DocId, pages: &[usize], settings: &ColorConversion) -> Result<ConversionReport, EditError> {
+        let doc = self.get(id).ok_or(EditError::NoDocument)?;
+        let editor = doc.editor.as_ref().ok_or_else(|| EditError::ReadOnly(doc.read_only_reason.clone().unwrap_or_default()))?;
+        let mut probe = editor.cos.clone();
+        Ok(guard(|| pdfcraft_edit::convert_colors(&mut probe, pages, settings)).map_err(EditError::Invalid)??)
+    }
+
+    /// Print Production ▸ Convert Colors as one undo step, returning what changed. When nothing
+    /// would change, the document is left alone (no undo step, not dirty).
+    pub fn convert_colors(&mut self, id: DocId, pages: Vec<usize>, settings: ColorConversion) -> Result<ConversionReport, EditError> {
+        let report = self.convert_colors_preview(id, &pages, &settings)?;
+        if report.changed() {
+            self.apply(id, Edit::ConvertColors { pages, settings })?;
+        }
+        Ok(report)
     }
 
     /// What Add Printer Marks would do on `pages`, tried on a copy: each page's trim, bleed and

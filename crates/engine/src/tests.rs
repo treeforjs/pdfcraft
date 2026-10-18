@@ -3369,3 +3369,29 @@ fn associated_files_are_one_undo_step_each_and_survive_save() {
     assert!(s.apply(id, Edit::RemoveAssociatedFile { target: AfTarget::Page(0), select: AfSelector::Index(0) }).is_err());
     assert_eq!(s.get(id).unwrap().can_undo().map(str::to_owned), before);
 }
+
+#[test]
+fn convert_colors_is_one_undo_step_and_a_noop_records_none() {
+    let (mut s, id) = session_with(2);
+    let settings = ColorConversion::default();
+    let preview = s.convert_colors_preview(id, &[1], &settings).unwrap();
+    assert!(preview.changed(), "{preview:?}");
+    assert!(!s.get(id).unwrap().dirty, "the preview changes nothing");
+    let report = s.convert_colors(id, vec![1], settings.clone()).unwrap();
+    assert_eq!(report.pages, vec![1]);
+    let doc = s.get(id).unwrap();
+    assert_eq!(doc.can_undo(), Some("Convert colors"));
+    assert_eq!(page_texts(&s, id), ["Page 1", "Page 2"], "the text stays");
+    // Again: the text is already CMYK; nothing changes and no second undo step is recorded.
+    let again = s.convert_colors(id, vec![1], settings.clone()).unwrap();
+    assert!(!again.changed(), "{again:?}");
+    s.undo(id).unwrap();
+    assert_eq!(s.get(id).unwrap().can_undo(), None);
+    assert!(s.convert_colors_preview(id, &[1], &settings).unwrap().changed(), "undo put the gray back");
+    s.redo(id).unwrap();
+    assert!(!s.convert_colors_preview(id, &[1], &settings).unwrap().changed(), "redo converted it again");
+    // Bad settings are refused before anything changes.
+    let bad = ColorConversion { output_intent: true, ..Default::default() };
+    assert!(s.convert_colors(id, vec![0], bad).is_err());
+    assert!(s.convert_colors(id, vec![5], ColorConversion::default()).is_err());
+}

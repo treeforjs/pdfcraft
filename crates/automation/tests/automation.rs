@@ -6118,3 +6118,129 @@ fn associated_files_through_tools() {
     assert!(a.call("associated_files_list", &json!({ "doc": doc2, "target": { "object": 4000000000u64 } })).is_err());
     assert_eq!(ok(&mut a, "associated_files_list", json!({ "doc": doc2 }))["count"], 3, "nothing changed");
 }
+
+/// A gray display profile (gamma 2.2 TRC) for `print_convert_colors`.
+fn gray_profile() -> Vec<u8> {
+    let mut trc = b"curv\0\0\0\0".to_vec();
+    trc.extend(1u32.to_be_bytes());
+    trc.extend(((2.2f64 * 256.0) as u16).to_be_bytes());
+    trc.extend([0u8; 2]);
+    let mut desc = b"desc\0\0\0\0".to_vec();
+    desc.extend(10u32.to_be_bytes());
+    desc.extend(b"Gray 2.2\0\0");
+    desc.extend([0u8; 79]);
+    desc.resize(desc.len().div_ceil(4) * 4, 0);
+    let tags: [(&[u8; 4], &Vec<u8>); 2] = [(b"desc", &desc), (b"kTRC", &trc)];
+    let mut table = 2u32.to_be_bytes().to_vec();
+    let mut data: Vec<u8> = Vec::new();
+    let mut off = 128 + 4 + 24;
+    for (sig, body) in tags {
+        table.extend(sig);
+        table.extend((off as u32).to_be_bytes());
+        table.extend((body.len() as u32).to_be_bytes());
+        data.extend(body);
+        off += body.len();
+    }
+    let size = 128 + table.len() + data.len();
+    let mut h = (size as u32).to_be_bytes().to_vec();
+    h.extend([0u8; 4]);
+    h.extend([2, 0x10, 0, 0]);
+    h.extend(b"mntrGRAYXYZ ");
+    h.extend([0u8; 12]);
+    h.extend(b"acsp");
+    h.resize(128, 0);
+    h.extend(table);
+    h.extend(data);
+    h
+}
+
+#[test]
+fn print_convert_colors_through_tools() {
+    let dir = workdir("convert-colors");
+    let mut a = auto(&dir);
+    let resources = "<< /ColorSpace << /Spot [/Separation /Gold /DeviceCMYK << /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] /C1 [0 0.2 1 0.1] /N 1 >>] >> \
+        /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >> >>";
+    let first = "1 0 0 rg 20 20 30 30 re f 0 0 0 rg BT /F1 9 Tf 30 150 Td (Black text) Tj ET /Spot cs 1 scn 60 60 10 10 re f";
+    let second = "0 0 1 RG 1 1 m 50 50 l S";
+    std::fs::write(dir.join("colours.pdf"), colour_doc(resources, first, second)).unwrap();
+    std::fs::write(dir.join("gray.icc"), gray_profile()).unwrap();
+    std::fs::write(dir.join("junk.icc"), b"not a profile").unwrap();
+    let doc = ok(&mut a, "doc_open", json!({ "path": "colours.pdf" }))["doc"].as_u64().unwrap();
+    let before = ok(&mut a, "doc_info", json!({ "doc": doc }));
+
+    // Bad arguments change nothing.
+    for bad in [
+        json!({ "doc": doc, "pages": [3] }),
+        json!({ "doc": doc, "pages": [0] }),
+        json!({ "doc": doc, "pages": [] }),
+        json!({ "doc": doc, "destination": "Pantone" }),
+        json!({ "doc": doc, "destination": "ICCBased" }),
+        json!({ "doc": doc, "destination": "DeviceGray", "profile": "gray.icc" }),
+        json!({ "doc": doc, "profile": "junk.icc" }),
+        json!({ "doc": doc, "profile": "missing.icc" }),
+        json!({ "doc": doc, "profile": "../outside.icc" }),
+        json!({ "doc": doc, "sources": [] }),
+        json!({ "doc": doc, "sources": ["DeviceRGB", "HSV"] }),
+        json!({ "doc": doc, "sources": "DeviceRGB" }),
+        json!({ "doc": doc, "objects": [] }),
+        json!({ "doc": doc, "objects": ["sprites"] }),
+        json!({ "doc": doc, "intent": "vivid" }),
+        json!({ "doc": doc, "spots": "maybe" }),
+        json!({ "doc": doc, "preserve_black": "yes" }),
+        json!({ "doc": doc, "output_intent": true }),
+        json!({ "doc": doc, "output_condition": "a\nb", "profile": "gray.icc", "output_intent": true }),
+    ] {
+        assert!(a.call("print_convert_colors", &bad).is_err(), "{bad}");
+    }
+    let after = ok(&mut a, "doc_info", json!({ "doc": doc }));
+    assert_eq!(after["document"]["dirty"], before["document"]["dirty"]);
+    assert!(after["document"]["undo"].is_null(), "{after}");
+
+    // Page 1 to CMYK: RGB red, rich-free black text; the spot stays.
+    let r = ok(&mut a, "print_convert_colors", json!({ "doc": doc, "pages": [1] }));
+    assert_eq!((r["changed"].as_bool(), r["destination"].as_str()), (Some(true), Some("DeviceCMYK")), "{r}");
+    assert_eq!(r["pages_changed"], json!([1]));
+    assert_eq!(r["converted"]["colors"], 2, "{r}");
+    assert_eq!(r["approximate"], true);
+    let saved = dir.join("cmyk.pdf");
+    ok(&mut a, "doc_save", json!({ "doc": doc, "path": "cmyk.pdf" }));
+    let reopened = pdfcraft_cos::Document::open(std::sync::Arc::new(std::fs::read(&saved).unwrap())).unwrap();
+    let page = &pdfcraft_model::pages(&reopened)[0];
+    let content: Vec<u8> = match &*reopened.resolve(page.dict.get(b"Contents").unwrap()) {
+        pdfcraft_cos::Object::Stream(s) => s.decoded().unwrap(),
+        pdfcraft_cos::Object::Array(list) => list
+            .iter()
+            .flat_map(|o| match &*reopened.resolve(o) {
+                pdfcraft_cos::Object::Stream(s) => s.decoded().unwrap(),
+                _ => vec![],
+            })
+            .collect(),
+        _ => vec![],
+    };
+    let content = String::from_utf8(content).unwrap();
+    assert!(content.contains("0 1 1 0 k") && content.contains("0 0 0 1 k") && content.contains("/Spot cs") && !content.contains(" rg"), "{content}");
+    // Again: nothing to do, no undo step added.
+    let again = ok(&mut a, "print_convert_colors", json!({ "doc": doc, "pages": [1] }));
+    assert_eq!(again["changed"], false, "{again}");
+    // Undo puts the RGB back; redo converts it again.
+    ok(&mut a, "edit_undo", json!({ "doc": doc }));
+    assert_eq!(ok(&mut a, "print_convert_colors", json!({ "doc": doc, "pages": [1], "objects": ["images"] }))["changed"], false);
+    ok(&mut a, "edit_redo", json!({ "doc": doc }));
+
+    // Spots converted to an ICC gray destination with an output intent.
+    let r = ok(
+        &mut a,
+        "print_convert_colors",
+        json!({ "doc": doc, "profile": "gray.icc", "spots": "convert", "intent": "perceptual", "output_intent": true, "sources": ["all"] }),
+    );
+    assert_eq!(
+        (r["destination"].as_str(), r["approximate"].as_bool(), r["output_intent"].as_bool()),
+        (Some("ICCBased"), Some(false), Some(true)),
+        "{r}"
+    );
+    assert_eq!(r["pages_changed"], json!([1, 2]));
+    ok(&mut a, "doc_save", json!({ "doc": doc, "path": "gray.pdf" }));
+    let gray = pdfcraft_cos::Document::open(std::sync::Arc::new(std::fs::read(dir.join("gray.pdf")).unwrap())).unwrap();
+    let catalog = gray.dict(&pdfcraft_cos::Object::Ref(gray.root().unwrap())).unwrap();
+    assert!(catalog.get(b"OutputIntents").is_some());
+}
