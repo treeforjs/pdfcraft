@@ -36,6 +36,7 @@ mod redact;
 mod search_folder;
 mod separations;
 mod signature_workflow;
+mod signed_version;
 mod signing;
 mod text_cache;
 mod tools;
@@ -761,6 +762,8 @@ impl Automation {
             "comment_set_status" => self.comment_set_status(&a)?,
             "sign_list" => self.sign_list(&a)?,
             "sign_verify" => self.sign_verify(&a)?,
+            "sign_signed_version" => self.sign_signed_version(&a)?,
+            "sign_compare_signed_version" => self.sign_compare_signed_version(&a)?,
             "sign_timestamp" => self.sign_timestamp(&a)?,
             "sign_embed_evidence" => self.sign_embed_evidence(&a)?,
             "accessibility_check" => self.a11y_check(&a)?,
@@ -2474,7 +2477,7 @@ pub(crate) fn withheld(mut v: Value, copy_allowed: bool) -> Value {
 }
 
 /// What every tool that changes a document returns.
-fn summary(d: &Document) -> Value {
+pub(crate) fn summary(d: &Document) -> Value {
     json!({
         "doc": d.id.0,
         "name": d.name,

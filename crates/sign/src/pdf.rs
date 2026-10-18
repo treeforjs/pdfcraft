@@ -354,9 +354,8 @@ pub fn revision_changes(doc: &Document, bytes: &[u8]) -> Vec<RevisionChanges> {
     out
 }
 
-/// What `doc` changed since `old`, grouped by page.
-fn page_changes(doc: &Document, old: &Document) -> Vec<PageChange> {
-    // The page each page object, content stream and annotation belongs to.
+/// The page each page object, content stream and annotation of `doc` belongs to (0-based).
+pub(crate) fn object_pages(doc: &Document) -> HashMap<ObjRef, usize> {
     let mut on_page: HashMap<ObjRef, usize> = annot_pages(doc);
     for (i, p) in pdfcraft_annot::page_refs(doc).unwrap_or_default().into_iter().enumerate() {
         on_page.insert(p, i);
@@ -377,6 +376,12 @@ fn page_changes(doc: &Document, old: &Document) -> Vec<PageChange> {
             _ => {}
         }
     }
+    on_page
+}
+
+/// What `doc` changed since `old`, grouped by page.
+fn page_changes(doc: &Document, old: &Document) -> Vec<PageChange> {
+    let on_page = object_pages(doc);
     let mut out: Vec<PageChange> = Vec::new();
     for (r, kind) in changed_objects(doc, old) {
         let page = on_page.get(&r).copied().or_else(|| doc.get(r).as_dict().and_then(|d| d.reference(b"P")).and_then(|p| on_page.get(&p).copied()));
@@ -390,7 +395,7 @@ fn page_changes(doc: &Document, old: &Document) -> Vec<PageChange> {
     out
 }
 
-fn text(doc: &Document, d: &Dict, key: &[u8]) -> Option<String> {
+pub(crate) fn text(doc: &Document, d: &Dict, key: &[u8]) -> Option<String> {
     let o = doc.resolve(d.get(key)?);
     let s = match &*o {
         Object::String(s) => s.to_text(),
@@ -452,7 +457,7 @@ fn sig_fields(doc: &Document) -> Vec<Field> {
 }
 
 /// Which page holds each annotation.
-fn annot_pages(doc: &Document) -> HashMap<ObjRef, usize> {
+pub(crate) fn annot_pages(doc: &Document) -> HashMap<ObjRef, usize> {
     let mut map = HashMap::new();
     for (i, p) in pdfcraft_annot::page_refs(doc).unwrap_or_default().into_iter().enumerate() {
         if let Some(a) = doc.get(p).as_dict().and_then(|d| d.get(b"Annots").map(|a| doc.resolve(a))).and_then(|a| a.as_array().cloned()) {
@@ -1138,22 +1143,8 @@ fn classify_changes(doc: &Document, old: Option<Document>, p: Option<u8>, lock: 
     let Some(old) = old else {
         return Modification::Disallowed(vec!["the signed version could not be read".into()]);
     };
-    let p = match (p, lock.and_then(|l| l.permissions)) {
-        (Some(a), Some(b)) => Some(a.min(b)),
-        (a, b) => a.or(b),
-    };
-    let locked = lock.map(|l| crate::lock::locked_objects(&old, l)).unwrap_or_default();
     let (mut allowed, mut disallowed): (Vec<&str>, Vec<&str>) = (Vec::new(), Vec::new());
-    for (r, kind) in changed_objects(doc, &old) {
-        let kind = if kind == "form fill" && locked.contains(&r) { "changes to locked fields" } else { kind };
-        let ok = match (kind, p) {
-            ("signature" | "document security store", _) => true,
-            ("form fill", Some(2 | 3) | None) => true,
-            ("comments", Some(3) | None) => true,
-            // Every save updates /Info (ModDate), signing included.
-            ("metadata", _) => true,
-            _ => false,
-        };
+    for (_, kind, ok) in judged_changes(doc, &old, p, lock) {
         let list = if ok { &mut allowed } else { &mut disallowed };
         if !list.contains(&kind) {
             list.push(kind);
@@ -1161,6 +1152,42 @@ fn classify_changes(doc: &Document, old: Option<Document>, p: Option<u8>, lock: 
     }
     let own = |v: Vec<&str>| v.into_iter().map(str::to_string).collect::<Vec<_>>();
     if disallowed.is_empty() { Modification::Allowed(own(allowed)) } else { Modification::Disallowed(own(disallowed)) }
+}
+
+/// The DocMDP permissions that apply: the certification level `p` tightened by a field lock's.
+pub(crate) fn effective_permissions(p: Option<u8>, lock: Option<&crate::FieldLock>) -> Option<u8> {
+    match (p, lock.and_then(|l| l.permissions)) {
+        (Some(a), Some(b)) => Some(a.min(b)),
+        (a, b) => a.or(b),
+    }
+}
+
+/// Whether a change of `kind` is permitted under DocMDP `p` (`None`: an approval signature,
+/// which permits form fill, comments and further signatures).
+pub(crate) fn kind_permitted(kind: &str, p: Option<u8>) -> bool {
+    match (kind, p) {
+        ("signature" | "document security store", _) => true,
+        ("form fill", Some(2 | 3) | None) => true,
+        ("comments", Some(3) | None) => true,
+        // Every save updates /Info (ModDate), signing included.
+        ("metadata", _) => true,
+        _ => false,
+    }
+}
+
+/// Every object `doc` changed or added since `old`, with the kind of change it is and whether
+/// it is permitted under DocMDP `p` and the field `lock` (changes to locked fields are never
+/// permitted; its permissions tighten `p`).
+pub(crate) fn judged_changes(doc: &Document, old: &Document, p: Option<u8>, lock: Option<&crate::FieldLock>) -> Vec<(ObjRef, &'static str, bool)> {
+    let p = effective_permissions(p, lock);
+    let locked = lock.map(|l| crate::lock::locked_objects(old, l)).unwrap_or_default();
+    changed_objects(doc, old)
+        .into_iter()
+        .map(|(r, kind)| {
+            let kind = if kind == "form fill" && locked.contains(&r) { "changes to locked fields" } else { kind };
+            (r, kind, kind_permitted(kind, p))
+        })
+        .collect()
 }
 
 /// Every object `doc` changed or added since `old`, with the kind of change it is.

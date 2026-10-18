@@ -1408,3 +1408,130 @@ fn locking_the_document_after_signing_permits_no_changes() {
     assert_eq!(check(&edit_after(&signed, add_comment)).status, Status::Invalid);
     assert_eq!(check(&edit_after(&signed, fill(8, "20"))).status, Status::Invalid);
 }
+
+// ── View Signed Version / Compare Signed Version to Current Version ─────────────────────────
+
+/// Add a text field "Name" (value `Alice`) to the fixture's page and form.
+fn add_text_field(doc: &mut Document) {
+    let mut d = pdfcraft_cos::Dict::new();
+    d.set(b"Type".to_vec(), Object::name("Annot"));
+    d.set(b"Subtype".to_vec(), Object::name("Widget"));
+    d.set(b"FT".to_vec(), Object::name("Tx"));
+    d.set(b"T".to_vec(), PdfString::text("Name"));
+    d.set(b"V".to_vec(), PdfString::text("Alice"));
+    d.set(b"Rect".to_vec(), Object::Array(vec![Object::Int(20), Object::Int(200), Object::Int(200), Object::Int(220)]));
+    d.set(b"P".to_vec(), Object::Ref(pdfcraft_cos::ObjRef { num: 3, generation: 0 }));
+    let r = doc.add(Object::Dict(d));
+    doc.update_dict(pdfcraft_cos::ObjRef { num: 3, generation: 0 }, |p| {
+        if let Some(Object::Array(a)) = p.get_mut(b"Annots") {
+            a.push(Object::Ref(r));
+        }
+    })
+    .unwrap();
+    doc.update_dict(doc.root().unwrap(), |c| {
+        if let Some(Object::Dict(af)) = c.get_mut(b"AcroForm")
+            && let Some(Object::Array(f)) = af.get_mut(b"Fields")
+        {
+            f.push(Object::Ref(r));
+        }
+    })
+    .unwrap();
+}
+
+fn find_field(doc: &Document, name: &str) -> pdfcraft_cos::ObjRef {
+    let page = doc.get(pdfcraft_cos::ObjRef { num: 3, generation: 0 });
+    let annots = page.as_dict().unwrap().get(b"Annots").unwrap().as_array().unwrap().clone();
+    annots
+        .iter()
+        .filter_map(Object::as_ref)
+        .find(|r| doc.get(*r).as_dict().and_then(|d| d.get(b"T").and_then(|t| t.as_string().map(|s| s.to_text()))).as_deref() == Some(name))
+        .unwrap()
+}
+
+fn signed_info(bytes: &[u8], field: &str) -> pdfcraft_sign::SignatureInfo {
+    signatures(&open(bytes), bytes, &TrustStore::default()).into_iter().find(|s| s.field == field && s.signed).unwrap()
+}
+
+#[test]
+fn the_signed_version_is_the_bytes_the_signature_covers() {
+    use pdfcraft_sign::signed_version;
+    let id = pkcs12::open(&data("rsa-aes.p12"), "test").unwrap();
+    let signed = pdfcraft_sign::sign(&open(&fixture()), &id, &opts()).unwrap();
+    let later = edit_after(&signed, change_text);
+    let s = signed_info(&later, "Signature1");
+    assert_eq!(signed_version(&later, &s).unwrap(), &signed[..]);
+    // Hostile or missing ranges are errors, never a panic or an out-of-bounds slice.
+    for len in [0, later.len() + 1, usize::MAX] {
+        let bad = pdfcraft_sign::SignatureInfo { signed_len: len, ..s.clone() };
+        assert!(signed_version(&later, &bad).is_err());
+        assert!(pdfcraft_sign::compare_signed_version(&open(&later), &later, &bad, None).is_err());
+    }
+    let unsigned = signatures(&open(&later), &later, &TrustStore::default()).into_iter().find(|s| !s.signed).unwrap();
+    assert!(signed_version(&later, &unsigned).is_err());
+}
+
+#[test]
+fn comparing_the_signed_version_lists_each_change_and_whether_it_is_permitted() {
+    use pdfcraft_sign::{ChangeAction, compare_signed_version};
+    let id = pkcs12::open(&data("rsa-aes.p12"), "test").unwrap();
+    // Nothing after signing: no changes.
+    let signed = pdfcraft_sign::sign(&open(&fixture()), &id, &opts()).unwrap();
+    let c = compare_signed_version(&open(&signed), &signed, &signed_info(&signed, "Signature1"), None).unwrap();
+    assert!(!c.modified() && c.permitted() && c.changes.is_empty(), "{c:?}");
+    assert_eq!((c.signed_pages, c.current_pages, c.permissions), (1, 1, None));
+
+    // Approval signature, then a comment and rewritten page text.
+    let later = edit_after(&edit_after(&signed, add_comment), change_text);
+    let s = signed_info(&later, "Signature1");
+    let c = compare_signed_version(&open(&later), &later, &s, None).unwrap();
+    assert!(c.modified() && !c.permitted());
+    let comment = c.changes.iter().find(|ch| ch.subject == "Text").expect("the comment");
+    assert_eq!((comment.kind.as_str(), comment.action, comment.page, comment.permitted), ("comments", ChangeAction::Added, Some(0), true));
+    let content = c.changes.iter().find(|ch| ch.kind == "page content").expect("the page content");
+    assert_eq!((content.action, content.page, content.permitted), (ChangeAction::Modified, Some(0), false));
+    // The verdict is the one validation reports.
+    let Modification::Disallowed(bad) = &s.modification else { panic!("{:?}", s.modification) };
+    let not_permitted: Vec<String> = c.kinds().into_iter().filter(|(_, ok)| !ok).map(|(k, _)| k).collect();
+    assert_eq!(&not_permitted, bad);
+
+    // Certified for form fill only (P=2): the field change is permitted, a comment is not.
+    let base = edit_after(&fixture(), add_text_field);
+    let certified = pdfcraft_sign::sign(&open(&base), &id, &SignOptions { certify: Some(2), ..opts() }).unwrap();
+    let filled = edit_after(&certified, |doc| {
+        let r = find_field(doc, "Name");
+        doc.update_dict(r, |d| d.set(b"V".to_vec(), PdfString::text("Bob"))).unwrap();
+    });
+    let s = signed_info(&filled, "Signature1");
+    let c = compare_signed_version(&open(&filled), &filled, &s, None).unwrap();
+    assert_eq!((c.certify, c.permissions), (Some(2), Some(2)));
+    let fill = c.changes.iter().find(|ch| ch.field.as_deref() == Some("Name")).expect("the field change");
+    assert_eq!((fill.kind.as_str(), fill.before.as_deref(), fill.after.as_deref(), fill.permitted), ("form fill", Some("Alice"), Some("Bob"), true));
+    assert!(c.permitted() && matches!(s.modification, Modification::Allowed(_)), "{c:?}");
+    let commented = edit_after(&filled, add_comment);
+    let c = compare_signed_version(&open(&commented), &commented, &signed_info(&commented, "Signature1"), None).unwrap();
+    assert!(c.changes.iter().any(|ch| ch.kind == "comments" && !ch.permitted) && !c.permitted());
+
+    // A page added after signing, and a comment removed.
+    let with_note = pdfcraft_sign::sign(&open(&edit_after(&fixture(), add_comment)), &id, &opts()).unwrap();
+    let changed = edit_after(&with_note, |doc| {
+        let page = pdfcraft_cos::ObjRef { num: 3, generation: 0 };
+        let mut p = doc.get(page).as_dict().unwrap().clone();
+        p.remove(b"Annots");
+        let new_page = doc.add(Object::Dict(p));
+        doc.update_dict(pdfcraft_cos::ObjRef { num: 2, generation: 0 }, |pages| {
+            pages.set(b"Kids".to_vec(), Object::Array(vec![Object::Ref(page), Object::Ref(new_page)]));
+            pages.set(b"Count".to_vec(), Object::Int(2));
+        })
+        .unwrap();
+        let annots = doc.get(page).as_dict().unwrap().get(b"Annots").unwrap().as_array().unwrap().clone();
+        let widgets: Vec<Object> =
+            annots.into_iter().filter(|o| o.as_ref().is_some_and(|r| doc.get(r).as_dict().unwrap().name(b"Subtype") == Some(b"Widget"))).collect();
+        doc.update_dict(page, |d| d.set(b"Annots".to_vec(), Object::Array(widgets))).unwrap();
+    });
+    let c = compare_signed_version(&open(&changed), &changed, &signed_info(&changed, "Signature1"), None).unwrap();
+    assert_eq!((c.signed_pages, c.current_pages), (1, 2));
+    let added = c.changes.iter().find(|ch| ch.subject == "page" && ch.action == ChangeAction::Added).expect("the new page");
+    assert_eq!((added.kind.as_str(), added.page, added.permitted), ("pages added or removed", Some(1), false));
+    let removed = c.changes.iter().find(|ch| ch.action == ChangeAction::Removed && ch.subject == "Text").expect("the removed comment");
+    assert_eq!(removed.page, Some(0));
+}

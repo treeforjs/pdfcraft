@@ -3570,6 +3570,77 @@ fn digital_ids_signing_and_validation_through_tools() {
 }
 
 #[test]
+fn view_and_compare_the_signed_version_through_tools() {
+    let dir = workdir("signed-version");
+    let mut a = auto(&dir);
+    ok(&mut a, "sign_id_create", json!({ "name": "Ada Lovelace", "key": "p256", "password": "secret1", "path": "ada.p12" }));
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    let r = ok(
+        &mut a,
+        "sign_document",
+        json!({ "doc": doc, "id": "ada.p12", "password": "secret1", "page": 1, "rect": [20, 200, 180, 250], "out": "signed.pdf" }),
+    );
+    let field = r["signature"]["field"].as_str().unwrap().to_string();
+    let signed = std::fs::read(dir.join("signed.pdf")).unwrap();
+    // Straight after signing: nothing changed.
+    let c = ok(&mut a, "sign_compare_signed_version", json!({ "doc": doc, "field": field }));
+    assert_eq!((c["modified"].as_bool(), c["permitted"].as_bool(), c["total_changes"].as_u64()), (Some(false), Some(true), Some(0)), "{c}");
+    assert!(c.get("text").is_none(), "no text comparison without changes: {c}");
+    let v = ok(&mut a, "sign_signed_version", json!({ "doc": doc, "field": field, "open": false }));
+    assert_eq!((v["whole_file"].as_bool(), v["length"].as_u64()), (Some(true), Some(signed.len() as u64)), "{v}");
+
+    // A comment (permitted by an approval signature) and a new page (not permitted).
+    ok(&mut a, "comment_add", json!({ "doc": doc, "page": 2, "type": "note", "at": [20, 20], "contents": "later" }));
+    ok(&mut a, "page_insert_blank", json!({ "doc": doc, "at": 4 }));
+    let c = ok(&mut a, "sign_compare_signed_version", json!({ "doc": doc, "field": field }));
+    assert_eq!((c["modified"].as_bool(), c["permitted"].as_bool()), (Some(true), Some(false)), "{c}");
+    assert_eq!((c["signed_pages"].as_u64(), c["current_pages"].as_u64(), c["pages_added"].clone()), (Some(3), Some(4), json!([4])), "{c}");
+    assert!(c["permissions"].is_null() && c["permissions_text"].as_str().unwrap().contains("approval"), "{c}");
+    let changes = c["changes"].as_array().unwrap();
+    let note = changes.iter().find(|ch| ch["subject"] == "Text").unwrap_or_else(|| panic!("{c}"));
+    assert_eq!(
+        (note["kind"].as_str(), note["action"].as_str(), note["page"].as_u64(), note["permitted"].as_bool()),
+        (Some("comments"), Some("added"), Some(2), Some(true))
+    );
+    let page = changes.iter().find(|ch| ch["kind"] == "pages added or removed").unwrap_or_else(|| panic!("{c}"));
+    assert_eq!((page["action"].as_str(), page["page"].as_u64(), page["permitted"].as_bool()), (Some("added"), Some(4), Some(false)));
+    assert!(c["kinds"].as_array().unwrap().contains(&json!({ "kind": "pages added or removed", "permitted": false })), "{c}");
+    // The same verdict as validation.
+    let s = ok(&mut a, "sign_list", json!({ "doc": doc }))["signatures"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["field"] == field.as_str())
+        .cloned()
+        .unwrap();
+    assert_eq!(s["modification"], "disallowed");
+    // The text comparison sees the inserted page.
+    let pages = c["text"]["pages"].as_array().unwrap_or_else(|| panic!("{c}"));
+    assert!(pages.iter().any(|p| p["status"] == "inserted"), "{c}");
+    // limit caps the list, not the totals.
+    let short = ok(&mut a, "sign_compare_signed_version", json!({ "doc": doc, "field": field, "limit": 1, "text": false }));
+    assert_eq!(short["changes"].as_array().map(Vec::len), Some(1));
+    assert_eq!((short["truncated"].as_bool(), short["total_changes"].clone()), (Some(true), c["total_changes"].clone()));
+    assert!(short.get("text").is_none());
+
+    // View Signed Version: written to a file and opened as a new document, as it was signed.
+    let v = ok(&mut a, "sign_signed_version", json!({ "doc": doc, "field": field, "out": "as-signed.pdf", "open": true }));
+    assert_eq!(v["whole_file"].as_bool(), Some(false), "{v}");
+    assert_eq!(std::fs::read(dir.join("as-signed.pdf")).unwrap(), signed);
+    let old = v["doc"].as_u64().unwrap();
+    assert_eq!(v["opened"]["pages"].as_u64(), Some(3));
+    assert_eq!(ok(&mut a, "comment_list", json!({ "doc": old }))["comments"].as_array().map(Vec::len), Some(0));
+    let s = &ok(&mut a, "sign_list", json!({ "doc": old }))["signatures"][0];
+    assert_eq!(s["modification"], "none", "{s}");
+
+    // Refusals an agent can act on.
+    assert!(matches!(a.call("sign_compare_signed_version", &json!({ "doc": doc })), Err(ToolError::InvalidArgs(_))));
+    assert!(matches!(a.call("sign_compare_signed_version", &json!({ "doc": doc, "field": "Nope" })), Err(ToolError::Failed(_))));
+    let unsigned = ok(&mut a, "doc_open", json!({ "path": "b.pdf" }))["doc"].as_u64().unwrap();
+    assert!(matches!(a.call("sign_signed_version", &json!({ "doc": unsigned, "field": "Signature1" })), Err(ToolError::Failed(_))));
+}
+
+#[test]
 fn optimizing_through_tools() {
     let dir = workdir("optimize");
     // A 2400 × 1600 photo-like JPEG at 600 dpi: a 4 × 2.67 inch page.

@@ -256,6 +256,56 @@ impl Session {
         }
         Ok(())
     }
+    /// The signature in field `field` (the first signed one of that name).
+    fn signed_signature(&self, id: DocId, field: &str) -> Result<SignatureInfo, String> {
+        let doc = self.get(id).ok_or("no such document")?;
+        let Some(sig) = doc.signatures.iter().find(|s| s.field == field && s.signed) else {
+            let names: Vec<&str> = doc.signatures.iter().filter(|s| s.signed).map(|s| s.field.as_str()).collect();
+            return Err(if names.is_empty() {
+                "the document has no signed signatures".into()
+            } else {
+                format!("no signed signature named {field:?} (signed: {})", names.join(", "))
+            });
+        };
+        Ok(sig.clone())
+    }
+
+    /// View Signed Version: the bytes the signature in `field` covers (the file as it was
+    /// signed), with the signature.
+    pub fn signed_version_bytes(&self, id: DocId, field: &str) -> Result<(SignatureInfo, Vec<u8>), String> {
+        let doc = self.get(id).ok_or("no such document")?;
+        if doc.certificate_secured() {
+            return Err("the signed version of a certificate-encrypted document can't be extracted separately".into());
+        }
+        let sig = self.signed_signature(id, field)?;
+        let bytes = pdfcraft_sign::signed_version(&doc.bytes, &sig).map_err(|e| e.to_string())?.to_vec();
+        Ok((sig, bytes))
+    }
+
+    /// View Signed Version: open the revision the signature in `field` covers as a new,
+    /// unsaved document named "<name> (signed version)".
+    pub fn open_signed_version(&mut self, id: DocId, field: &str) -> Result<DocId, String> {
+        let (_, bytes) = self.signed_version_bytes(id, field)?;
+        let doc = self.get(id).ok_or("no such document")?;
+        let name = format!("{} (signed version).pdf", doc.name.trim_end_matches(".pdf"));
+        let password = doc.password.clone();
+        self.open(name, None, Arc::new(bytes), password.as_deref()).map_err(|e| e.to_string())
+    }
+
+    /// Compare Signed Version to Current Version: every change made after the signature in
+    /// `field` was applied, each with whether its DocMDP/FieldMDP permissions allow it.
+    pub fn compare_signed_version(&self, id: DocId, field: &str) -> Result<pdfcraft_sign::SignedVersionComparison, String> {
+        let doc = self.get(id).ok_or("no such document")?;
+        if doc.certificate_secured() {
+            return Err("the signed version of a certificate-encrypted document can't be compared separately".into());
+        }
+        let editor = doc.editor.as_ref().ok_or_else(|| doc.read_only_reason.clone().unwrap_or_else(|| "the document can't be read".into()))?;
+        let sig = self.signed_signature(id, field)?;
+        crate::guard(|| pdfcraft_sign::compare_signed_version(&editor.cos, &doc.bytes, &sig, doc.password.as_deref()))
+            .map_err(|m| format!("comparing failed unexpectedly ({m})"))?
+            .map_err(|e| e.to_string())
+    }
+
     /// Read-only validation at an explicit time; signatures and trust are never changed.
     pub fn verify_signatures_at(&self, id: DocId, when: pdfcraft_sign::VerificationTime) -> Result<Vec<SignatureInfo>, EditError> {
         let doc = self.get(id).ok_or(EditError::NoDocument)?;

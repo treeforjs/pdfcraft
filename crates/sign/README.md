@@ -66,6 +66,11 @@ ECDSA P-256/P-384; the store integration is tested with software-backed keys.
   revisions are diffed against the signed one, and the changes are classified (signing, form
   fill, comments, metadata, page content, document structure) under the DocMDP permissions.
   The verdict follows Acrobat: valid, unknown (intact but the identity isn't trusted) or invalid.
+- **Signed version and its comparison** (`signed_version`): `signed_version` returns the bytes a
+  signature covers (View Signed Version); `compare_signed_version` itemises every change since
+  (page content, comments, form fields with old and new values, pages added or removed,
+  signatures, metadata…) with whether the DocMDP/FieldMDP permissions allow it, through the same
+  classifier validation uses (`pdf::judged_changes`), so its verdict matches `modification`.
 - **Chains are checked, not just linked.** `x509::build_chain` only takes an issuer whose key
   verifies the certificate below it *and* that may issue: `basicConstraints` CA:TRUE (an old v1
   self-signed root without constraints counts), `keyCertSign` when it has a key usage, a

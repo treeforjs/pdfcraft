@@ -4,6 +4,7 @@
 //!   primitives (RSA private-key operations use aws-lc-rs on native targets, ADR-0009).
 //! - [`pdf`]: signature fields in a document — listing and validating them, and signing
 //!   (PAdES B-B, `ETSI.CAdES.detached`) with an incremental save.
+//! - [`signed_version`]: a signature's signed version, and what changed since it was signed.
 
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
@@ -21,6 +22,7 @@ pub mod pdf;
 pub mod pkcs12;
 pub mod revocation;
 mod rsa_pad;
+pub mod signed_version;
 pub mod timestamp;
 #[cfg(target_os = "windows")]
 pub mod windows;
@@ -34,6 +36,7 @@ pub use pdf::{
     VerificationTime, VerificationTimeSource, list as signatures, revision_changes, sign, sign_with_timestamp, timestamp_document, validate,
 };
 pub use pkcs12::DigitalId;
+pub use signed_version::{ChangeAction, SignedVersionComparison, VersionChange, compare_signed_version, signed_version};
 pub use timestamp::{TimestampAuthority, TimestampQuery, TimestampToken};
 pub use x509::{Certificate, Name};
 
