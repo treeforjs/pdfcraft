@@ -27,6 +27,7 @@
 
 mod audit;
 pub mod compat;
+pub mod despeckle;
 pub mod fonts;
 mod images;
 mod links;
@@ -37,7 +38,7 @@ pub use fonts::{EmbeddedFont, UnembedBlock, UnembedError, embedded_fonts};
 
 use pdfcraft_cos::{Document, ObjRef, Object, Stream};
 
-pub use images::effective_resolutions;
+pub use images::{DespeckleReport, effective_resolutions};
 
 #[derive(Debug, thiserror::Error)]
 pub enum OptimizeError {
@@ -277,6 +278,24 @@ pub fn downsample_page_images(doc: &mut Document, pages: &[usize], ppi: f64) -> 
     let mut report = Report::default();
     images::run(doc, &chosen, &settings, &mut report, &mut |_| true)?;
     Ok(report)
+}
+
+/// Scan & OCR ▸ Enhance ▸ Despeckle: remove isolated specks from the images `pages` draw
+/// ([`despeckle`]), each sized by its effective resolution where it is drawn. Images shared
+/// with other pages change there too. One-bit images (including CCITT fax) keep one bit per
+/// pixel (CCITT is re-encoded as Group 4); 8-bit gray and RGB images are rewritten with Flate,
+/// or JPEG at quality 90 when they were JPEG. Images that cannot be decoded faithfully are
+/// left alone and counted in [`DespeckleReport::images_skipped`].
+pub fn despeckle_page_images(doc: &mut Document, pages: &[usize], options: despeckle::Options) -> Result<DespeckleReport, OptimizeError> {
+    let all = pdfcraft_annot::page_refs(doc).map_err(|_| OptimizeError::NoPages)?;
+    let chosen: Vec<ObjRef> = pages.iter().filter_map(|p| all.get(*p).copied()).collect();
+    if chosen.len() != pages.len() {
+        return Err(OptimizeError::Invalid("despeckle pages must be in the document".into()));
+    }
+    if !options.any() {
+        return Ok(DespeckleReport::default());
+    }
+    Ok(images::despeckle(doc, &chosen, options))
 }
 
 pub fn optimize_with_progress(doc: &mut Document, settings: &Settings, progress: &mut dyn FnMut(Stage) -> bool) -> Result<Report, OptimizeError> {

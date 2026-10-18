@@ -12,6 +12,8 @@ use pdfcraft_render::{PageInfo, PageRenderer, RenderConfig, RenderRequest, Reque
 
 pub use pdfcraft_ocr::orient::Orientation;
 pub use pdfcraft_ocr::{LANGUAGES, Models, Ocr, OcrError, PlacedWord};
+pub use pdfcraft_optimize::DespeckleReport;
+pub use pdfcraft_optimize::despeckle::{Level as DespeckleLevel, Options as DespeckleOptions, Stats as DespeckleStats};
 
 use crate::{DocId, Edit, EditError, Session};
 
@@ -47,11 +49,23 @@ pub struct OcrSettings {
     /// content and `/Rotate`, not resampled) so its text reads straight, and the recognized
     /// pages' images are downsampled to `dpi` when finer. Off by default.
     pub straighten: bool,
+    /// Remove isolated specks before recognition ([`pdfcraft_optimize::despeckle`]), on the
+    /// temporary recognition copy. With `straighten` (Searchable Image) the recognized pages'
+    /// images are despeckled too, in the same undoable step. Off by default.
+    pub despeckle: DespeckleOptions,
 }
 
 impl Default for OcrSettings {
     fn default() -> Self {
-        OcrSettings { dpi: 300.0, language: "en".into(), skip_text_pages: true, auto_rotate: false, deskew: false, straighten: false }
+        OcrSettings {
+            dpi: 300.0,
+            language: "en".into(),
+            skip_text_pages: true,
+            auto_rotate: false,
+            deskew: false,
+            straighten: false,
+            despeckle: DespeckleOptions::default(),
+        }
     }
 }
 
@@ -82,6 +96,8 @@ pub struct OcrReview {
     pages: Vec<OcrPage>,
     /// Searchable Image: downsample the recognized pages' images to this resolution.
     downsample: Option<f32>,
+    /// Searchable Image: despeckle the recognized pages' images first.
+    despeckle: Option<DespeckleOptions>,
 }
 
 impl OcrReview {
@@ -151,6 +167,8 @@ pub struct OcrPage {
     /// Turn the page so that `orientation` reads straight when the text is applied
     /// ([`OcrSettings::straighten`]).
     pub straighten: bool,
+    /// What despeckling the recognition copy removed, when despeckle was on.
+    pub despeckle: Option<DespeckleStats>,
 }
 
 impl OcrPage {
@@ -246,7 +264,8 @@ impl OcrJob {
                 return Err("text recognition canceled; no text was applied".into());
             }
             let Some(info) = self.infos.get(page) else { continue };
-            let skip = |why: &str| OcrPage { page, words: Vec::new(), skipped: Some(why.into()), orientation: None, straighten: false };
+            let skip =
+                |why: &str| OcrPage { page, words: Vec::new(), skipped: Some(why.into()), orientation: None, straighten: false, despeckle: None };
             if self.settings.skip_text_pages {
                 let t = r.render(RenderRequest { page, kind: RequestKind::Text, scale: 1.0, ..Default::default() });
                 if t.text.as_ref().is_some_and(|t| !t.plain_text().trim().is_empty()) {
@@ -282,10 +301,33 @@ impl OcrJob {
                 out.push(skip(&error.to_string()));
                 continue;
             }
+            // Specks are removed from a gray copy for recognition (the page itself changes only
+            // with Searchable Image, through `Edit::DespecklePageImages` when applied).
+            let mut cleaned = None;
+            if self.settings.despeckle.any() {
+                let gray = pdfcraft_ocr::orient::Gray::from_pixels(&shot.rgba, shot.width, shot.height).map_err(|e| e.to_string());
+                let done = gray.and_then(|mut g| {
+                    let dpi = f64::from(shot.width) / f64::from(info.width.max(1e-3)) * 72.0;
+                    let stats = pdfcraft_optimize::despeckle::despeckle_pixels(&mut g.pixels, g.width, g.height, 1, dpi, self.settings.despeckle)
+                        .map_err(|e| e.to_string())?;
+                    Ok((g, stats))
+                });
+                match done {
+                    Ok(d) => cleaned = Some(d),
+                    Err(e) => {
+                        out.push(skip(&format!("despeckling failed: {e}; recognize this page with despeckle off")));
+                        continue;
+                    }
+                }
+            }
+            let (input, input_w, input_h) = match &cleaned {
+                Some((g, _)) => (&g.pixels[..], g.width, g.height),
+                None => (&shot.rgba[..], shot.width, shot.height),
+            };
             // Orientation and skew are corrected on a gray copy for recognition only; words are
             // mapped back through `to_source`, so the text layer lies over the unchanged image.
             let options = pdfcraft_ocr::orient::Options { auto_rotate: self.settings.auto_rotate, deskew: self.settings.deskew };
-            let corrected = match pdfcraft_ocr::orient::correct(&shot.rgba, shot.width, shot.height, options, |p, w, h| ocr.recognize(p, w, h)) {
+            let corrected = match pdfcraft_ocr::orient::correct(input, input_w, input_h, options, |p, w, h| ocr.recognize(p, w, h)) {
                 Ok(c) => c,
                 Err(e) => {
                     out.push(skip(&e.to_string()));
@@ -297,7 +339,7 @@ impl OcrJob {
             }
             let read = match &corrected.image {
                 Some(image) => ocr.recognize(&image.pixels, image.width, image.height),
-                None => ocr.recognize(&shot.rgba, shot.width, shot.height),
+                None => ocr.recognize(input, input_w, input_h),
             };
             let lines = match read {
                 Ok(l) => l,
@@ -325,7 +367,8 @@ impl OcrJob {
             let words = lines.iter().flat_map(|l| &l.words).map(|w| PlacedWord::place(w, to_user)).collect();
             let orientation = options.any().then_some(corrected.orientation);
             let straighten = self.settings.straighten && orientation.is_some_and(|o| o.rotation != 0 || o.skew != 0.0);
-            let found = OcrPage { page, words, skipped: None, orientation, straighten };
+            let despeckle = cleaned.as_ref().map(|(_, stats)| *stats);
+            let found = OcrPage { page, words, skipped: None, orientation, straighten, despeckle };
             if let Err(error) = pdfcraft_ocr::validate_words(&found.words) {
                 out.push(skip(&error.to_string()));
             } else {
@@ -336,7 +379,8 @@ impl OcrJob {
             return Err("text recognition canceled; no text was applied".into());
         }
         let downsample = self.settings.straighten.then_some(self.settings.dpi);
-        Ok(OcrReview { source: self.source, pages: out, downsample })
+        let despeckle = (self.settings.straighten && self.settings.despeckle.any()).then_some(self.settings.despeckle);
+        Ok(OcrReview { source: self.source, pages: out, downsample, despeckle })
     }
 }
 
@@ -413,16 +457,23 @@ impl Session {
 
     pub fn apply_ocr_review(&mut self, review: &OcrReview) -> Result<usize, String> {
         self.validate_ocr_review(review)?;
-        self.apply_ocr_with(review.source.doc, &review.pages, review.downsample).map_err(|e| e.to_string())
+        self.apply_ocr_with(review.source.doc, &review.pages, review.downsample, review.despeckle).map_err(|e| e.to_string())
     }
 
     /// Add the words found by [`OcrJob::run`] as one undoable step. Returns the number of words.
     pub fn apply_ocr(&mut self, id: DocId, found: &[OcrPage]) -> Result<usize, EditError> {
-        self.apply_ocr_with(id, found, None)
+        self.apply_ocr_with(id, found, None, None)
     }
 
-    /// [`Self::apply_ocr`], also downsampling the recognized pages' images to `downsample` dpi.
-    fn apply_ocr_with(&mut self, id: DocId, found: &[OcrPage], downsample: Option<f32>) -> Result<usize, EditError> {
+    /// [`Self::apply_ocr`], also despeckling the recognized pages' images and downsampling them
+    /// to `downsample` dpi (Searchable Image).
+    fn apply_ocr_with(
+        &mut self,
+        id: DocId,
+        found: &[OcrPage],
+        downsample: Option<f32>,
+        despeckle: Option<DespeckleOptions>,
+    ) -> Result<usize, EditError> {
         let count = self.get(id).ok_or_else(|| EditError::Invalid("no such document".into()))?.info.pages.len();
         self.ocr_authority(id).map_err(EditError::Invalid)?;
         let mut pages = std::collections::BTreeSet::new();
@@ -445,6 +496,10 @@ impl Session {
             }
         }
         let read: Vec<usize> = found.iter().filter(|p| p.skipped.is_none()).map(|p| p.page).collect();
+        // At the images' own resolution, before any downsampling.
+        if let Some(options) = despeckle.filter(|o| o.any() && !read.is_empty()) {
+            edits.push(Edit::DespecklePageImages { pages: read.clone(), options });
+        }
         if let Some(ppi) = downsample.filter(|_| !read.is_empty()) {
             edits.push(Edit::DownsamplePageImages { pages: read, ppi: f64::from(ppi) });
         }
@@ -462,6 +517,39 @@ impl Session {
         let review = job.run(ocr.as_ref(), |_, _| true)?;
         self.apply_ocr_review(&review)?;
         Ok(review.pages)
+    }
+}
+
+impl Session {
+    /// Scan & OCR ▸ Enhance scan ▸ Despeckle: remove isolated specks from the images `pages`
+    /// (0-based; empty = all) of document `id` draw, as one undoable step
+    /// ([`Edit::DespecklePageImages`]). Returns what changed; when nothing does, no step is
+    /// added. The work is done on a copy first (to report it), then applied.
+    pub fn despeckle_scans(&mut self, id: DocId, pages: &[usize], options: DespeckleOptions) -> Result<DespeckleReport, EditError> {
+        let doc = self.get(id).ok_or_else(|| EditError::Invalid("no such document".into()))?;
+        let all = doc.info.pages.len();
+        let mut unique = std::collections::BTreeSet::new();
+        if pages.iter().any(|p| *p >= all || !unique.insert(*p)) {
+            return Err(EditError::Invalid(format!("despeckle pages must be unique page indexes below {all}")));
+        }
+        if let Some(why) = &doc.read_only_reason {
+            return Err(EditError::ReadOnly(why.clone()));
+        }
+        if !doc.allows_modification() {
+            return Err(EditError::NotPermitted("changes to the document"));
+        }
+        let pages: Vec<usize> = if pages.is_empty() { (0..all).collect() } else { pages.to_vec() };
+        if !options.any() {
+            return Ok(DespeckleReport::default());
+        }
+        let mut copy = doc.editor.as_ref().ok_or_else(|| EditError::ReadOnly(String::new()))?.cos.clone();
+        let report = crate::guard(|| pdfcraft_optimize::despeckle_page_images(&mut copy, &pages, options))
+            .map_err(|m| EditError::Invalid(format!("despeckling failed unexpectedly ({m}); the document was not changed")))?
+            .map_err(|e| EditError::Optimize(e.to_string()))?;
+        if report.images_changed > 0 {
+            self.apply(id, Edit::DespecklePageImages { pages, options })?;
+        }
+        Ok(report)
     }
 }
 

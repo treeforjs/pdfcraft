@@ -378,6 +378,7 @@ impl Automation {
         if let Some(s) = a.opt_bool("deskew")? {
             settings.deskew = s;
         }
+        settings.despeckle = despeckle_options(a, "despeckle", "despeckle_light", "despeckle_median")?;
         match a.opt_str("output")? {
             None | Some("exact") => {}
             Some("straighten") => settings.straighten = true,
@@ -425,12 +426,34 @@ impl Automation {
             .iter()
             .map(|p| match &p.skipped {
                 Some(why) => json!({ "page": p.page + 1, "skipped": why }),
-                None => {
-                    json!({ "page": p.page + 1, "words": p.word_count(), "text": p.text(), "orientation": crate::ocr_review::orientation_json(p) })
-                }
+                None => json!({
+                    "page": p.page + 1, "words": p.word_count(), "text": p.text(),
+                    "orientation": crate::ocr_review::orientation_json(p), "despeckle": crate::ocr_review::despeckle_json(p.despeckle.as_ref()),
+                }),
             })
             .collect();
         Ok(json!({ "words": found.iter().map(|p| p.word_count()).sum::<usize>(), "pages": list }))
+    }
+
+    /// Scan & OCR ▸ Enhance scan ▸ Despeckle (`scan_despeckle`).
+    pub(crate) fn scan_despeckle(&mut self, a: &Args) -> Result<Value> {
+        let mut options = despeckle_options(a, "level", "light", "median")?;
+        if a.opt_str("level")?.is_none() {
+            options.level = pdfcraft_engine::ocr::DespeckleLevel::Medium;
+        }
+        if !options.any() {
+            return Err(ToolError::InvalidArgs(
+                "level off with median false would change nothing; choose level low, medium or high, or median true".into(),
+            ));
+        }
+        let pages = if a.opt_ints("pages")?.is_some() { self.pages(a, "pages")? } else { Vec::new() };
+        let id = self.doc(a)?.id;
+        let r = self.session.despeckle_scans(id, &pages, options).map_err(|e| failed(e.to_string()))?;
+        Ok(json!({
+            "images": r.images, "images_changed": r.images_changed, "images_skipped": r.images_skipped,
+            "dark_specks": r.stats.dark_specks, "light_specks": r.stats.light_specks, "impulses": r.stats.impulses,
+            "pixels_changed": r.stats.pixels_changed, "undoable": r.images_changed > 0,
+        }))
     }
 
     pub(crate) fn ocr_status(&self) -> Result<Value> {
@@ -985,4 +1008,16 @@ impl Automation {
         }
         Ok(json!({ "enabled": self.session.javascript() }))
     }
+}
+
+/// Despeckle options from tool arguments: `level` off/low/medium/high (default off), and the
+/// booleans `light` (also fill light holes) and `median` (impulse median filter).
+fn despeckle_options(a: &Args, level: &str, light: &str, median: &str) -> Result<pdfcraft_engine::ocr::DespeckleOptions> {
+    use pdfcraft_engine::ocr::{DespeckleLevel, DespeckleOptions};
+    let level = match a.opt_str(level)? {
+        None => DespeckleLevel::Off,
+        Some(name) => DespeckleLevel::parse(name)
+            .ok_or_else(|| ToolError::InvalidArgs(format!("unknown {level} {name:?}; use {}", DespeckleLevel::NAMES.join(", "))))?,
+    };
+    Ok(DespeckleOptions { level, light: a.opt_bool(light)?.unwrap_or(false), median: a.opt_bool(median)?.unwrap_or(false) })
 }

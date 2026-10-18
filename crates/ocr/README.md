@@ -32,9 +32,13 @@ The method is original code, documented in `src/orient.rs`: Otsu-binarized proje
 
 Measured with the pinned models (`crates/automation/tests/ocr_orient.rs`, one original 4-line, 30-word Helvetica page rendered at 150 dpi): orientation detected correctly at 0/90/180/270° and 93/173/263°; skew within 0.1° at ±3/±7°; 30/30 words except 29/30 at ±7°, and every recognized word located on its visible word. Without the options, 90/180/270° pages yielded 0 correct words. These are observations on synthetic fixtures, not general accuracy claims.
 
+## Despeckle
+
+`OcrSettings::despeckle` (tool argument `despeckle: off|low|medium|high`, plus `despeckle_light` and `despeckle_median`; default off) removes isolated specks from a gray copy of the rendered page before orientation detection and recognition (`pdfcraft_optimize::despeckle`, sized by the rendered resolution; specks near text-sized ink are kept so punctuation survives). Each read page reports what was removed (`despeckle`). In Exact mode the page image is unchanged; with Searchable Image (`straighten`) the recognized pages' images are despeckled too (`Edit::DespecklePageImages`, before downsampling) in the same undo step. `Session::despeckle_scans` / `scan_despeckle` does the same as a standalone undoable edit. No dialog option yet; measured on synthetic fixtures only.
+
 ## Remaining OCR work
 
-This workflow does not complete Acrobat OCR parity. Turning or straightening the visible page (rather than only reading it corrected), image cleanup, confidence-based suspects, correction of an already-saved OCR layer, arbitrary Unicode text layers, editable-text reconstruction, multilingual recognition, scanner capture and MRC compression remain separate tasks. Existing PDF `/Rotate` and crop geometry are respected when placing recognized words; that is not automatic orientation detection.
+This workflow does not complete Acrobat OCR parity. Image cleanup beyond despeckle (background removal, descreen, halo and edge-shadow removal), confidence-based suspects, correction of an already-saved OCR layer, arbitrary Unicode text layers, editable-text reconstruction, multilingual recognition, scanner capture and MRC compression remain separate tasks. Existing PDF `/Rotate` and crop geometry are respected when placing recognized words; that is not automatic orientation detection.
 
 For multilingual work, both the recognition model and searchable-text font/encoding must support the target script. An independently licensed model with verified trained alphabets, reproducible original fixtures and a compatible Rust/WASM runtime is required. Tesseract and its official trained data offer an Apache-2.0 native reference/backend option, but a system executable alone does not satisfy this application's Rust/WASM deployment. Paddle-family models require model-specific license and runtime compatibility verification. No new model or backend is bundled by this change.
 

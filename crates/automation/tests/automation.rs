@@ -3681,6 +3681,66 @@ fn optimizing_scans_with_ccitt_lzw_to_flate_and_object_streams_through_tools() {
 }
 
 #[test]
+fn scan_despeckle_removes_specks_as_one_undoable_step_and_rejects_bad_arguments() {
+    let dir = workdir("despeckle");
+    std::fs::write(dir.join("scan.pdf"), lzw_scan_pdf()).unwrap();
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "scan.pdf" }))["doc"].as_u64().unwrap();
+    let dark = |a: &mut Automation| {
+        let out = a.call("page_render", &json!({ "doc": doc, "page": 1, "dpi": 72 })).unwrap();
+        let Content::Png { data, .. } = &out[0] else { panic!("expected an image") };
+        let mut reader = png::Decoder::new(std::io::Cursor::new(data.as_slice())).read_info().unwrap();
+        let mut buf = vec![0; reader.output_buffer_size().unwrap()];
+        let info = reader.next_frame(&mut buf).unwrap();
+        let channels = info.color_type.samples();
+        buf[..info.buffer_size()].chunks(channels).filter(|p| p[0] < 128).count()
+    };
+    let before = dark(&mut a);
+    // Bad arguments change nothing.
+    for bad in [
+        json!({ "doc": doc, "level": "extreme" }),
+        json!({ "doc": doc, "level": 3 }),
+        json!({ "doc": doc, "level": "off" }),
+        json!({ "doc": doc, "light": "yes" }),
+        json!({ "doc": doc, "median": 1 }),
+        json!({ "doc": doc, "pages": [9] }),
+        json!({ "doc": doc, "pages": [0] }),
+    ] {
+        assert!(matches!(a.call("scan_despeckle", &bad), Err(ToolError::InvalidArgs(_))), "{bad}");
+    }
+    assert!(a.call("scan_despeckle", &json!({ "doc": 999 })).is_err());
+    assert!(a.call("edit_undo", &json!({ "doc": doc })).is_err(), "nothing was changed");
+    // The 72 ppi scan's one-pixel specks away from the glyphs go; the glyphs stay.
+    let r = ok(&mut a, "scan_despeckle", json!({ "doc": doc, "level": "low" }));
+    assert_eq!((r["images"].as_u64(), r["images_changed"].as_u64(), r["images_skipped"].as_u64()), (Some(1), Some(1), Some(0)), "{r}");
+    let removed = r["dark_specks"].as_u64().unwrap();
+    assert!(removed > 50, "{r}");
+    assert_eq!(r["pixels_changed"].as_u64(), Some(removed), "one pixel each at 72 ppi: {r}");
+    let after = dark(&mut a);
+    assert!(after < before && after + removed as usize >= before, "{before} -> {after}");
+    assert!(after > before / 2, "glyphs were removed: {before} -> {after}");
+    // Nothing more to remove: no second step.
+    assert_eq!(ok(&mut a, "scan_despeckle", json!({ "doc": doc, "level": "low", "pages": [1] }))["undoable"], false);
+    assert_eq!(ok(&mut a, "edit_undo", json!({ "doc": doc }))["undone"], "Despeckle");
+    assert_eq!(dark(&mut a), before);
+    // The OCR tools take the same options and validate them before any model is needed.
+    for bad in [json!({ "doc": doc, "despeckle": "max" }), json!({ "doc": doc, "despeckle": true }), json!({ "doc": doc, "despeckle_light": "no" })] {
+        for tool in ["ocr_recognize", "ocr_prepare"] {
+            assert!(matches!(a.call(tool, &bad), Err(ToolError::InvalidArgs(_))), "{tool} {bad}");
+        }
+    }
+    let files = json!({ "paths": ["scan.pdf"], "folder": "out", "despeckle": "loud" });
+    assert!(matches!(a.call("ocr_recognize_files", &files), Err(ToolError::InvalidArgs(_))));
+    if pdfcraft_engine::ocr::Models::required_for_tests().unwrap() {
+        let r = ok(&mut a, "ocr_recognize", json!({ "doc": doc, "despeckle": "medium" }));
+        assert!(r["pages"][0]["despeckle"]["dark_specks"].as_u64().unwrap() > 0, "{r}");
+        assert_eq!(dark(&mut a), before, "Exact keeps the page image");
+    } else {
+        eprintln!("skipped (recognition part): OCR models not installed");
+    }
+}
+
+#[test]
 fn initial_view_through_tools() {
     let dir = workdir("initial-view");
     let mut a = auto(&dir);

@@ -481,3 +481,236 @@ pub(crate) fn run(
     }
     Ok(())
 }
+
+/// What [`crate::despeckle_page_images`] did.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct DespeckleReport {
+    /// Images the pages draw (soft masks excluded).
+    pub images: usize,
+    /// Images rewritten because despeckling changed them.
+    pub images_changed: usize,
+    /// Images left alone because PdfCraft can't decode or re-encode them faithfully (JBIG2,
+    /// JPEG 2000, CMYK and other colour spaces, decode arrays, more than 8 bits, an effective
+    /// resolution outside 36–4800 ppi) or they were too large or fragmented.
+    pub images_skipped: usize,
+    /// The specks and pixels changed over all images.
+    pub stats: crate::despeckle::Stats,
+}
+
+/// The single `/CCITTFaxDecode` filter's parameters, when that is the image's only filter.
+fn ccitt_params(s: &Stream) -> Option<Option<Dict>> {
+    let single = match s.dict.get(b"Filter")? {
+        Object::Name(n) => n.as_slice(),
+        Object::Array(a) if a.len() == 1 => a.first()?.as_name()?,
+        _ => return Some(None),
+    };
+    if !matches!(single, b"CCITTFaxDecode" | b"CCF") {
+        return Some(None);
+    }
+    let parms = match s.dict.get(b"DecodeParms") {
+        None | Some(Object::Null) => Dict::new(),
+        Some(Object::Dict(d)) => d.clone(),
+        Some(Object::Array(a)) if a.len() == 1 => match a.first()? {
+            Object::Dict(d) => d.clone(),
+            Object::Null => Dict::new(),
+            _ => return None,
+        },
+        _ => return None,
+    };
+    Some(Some(parms))
+}
+
+/// Packed one-bit rows decoded from CCITT fax data, as a PDF reader sees the samples.
+fn ccitt_samples(data: &[u8], parms: &Dict, w: usize, h: usize) -> Option<Vec<u8>> {
+    let flag = |k: &[u8], default: bool| match parms.get(k) {
+        Some(Object::Bool(b)) => Some(*b),
+        None => Some(default),
+        _ => None,
+    };
+    let k = parms.int(b"K").unwrap_or(0);
+    let columns = parms.int(b"Columns").unwrap_or(1728);
+    let rows = parms.int(b"Rows").unwrap_or(0);
+    if usize::try_from(columns).ok()? != w || (rows != 0 && usize::try_from(rows).ok()? != h) {
+        return None;
+    }
+    let black_is_1 = flag(b"BlackIs1", false)?;
+    let encoding = match k {
+        k if k < 0 => hayro_ccitt::EncodingMode::Group4,
+        0 => hayro_ccitt::EncodingMode::Group3_1D,
+        k => hayro_ccitt::EncodingMode::Group3_2D { k: u32::try_from(k).ok()? },
+    };
+    let settings = hayro_ccitt::DecodeSettings {
+        columns: u32::try_from(w).ok()?,
+        rows: u32::try_from(h).ok()?,
+        end_of_block: flag(b"EndOfBlock", true)?,
+        end_of_line: flag(b"EndOfLine", false)?,
+        rows_are_byte_aligned: flag(b"EncodedByteAlign", false)?,
+        encoding,
+        invert_black: false,
+    };
+    /// Writes pixels into packed rows; anything past the image is ignored.
+    struct Sink {
+        out: Vec<u8>,
+        stride: usize,
+        w: usize,
+        h: usize,
+        x: usize,
+        y: usize,
+        black_is_1: bool,
+    }
+    impl Sink {
+        fn pixel(&mut self, white: bool) {
+            if self.x < self.w && self.y < self.h {
+                // A PDF sample is 1 for white unless /BlackIs1, when black is 1.
+                if white != self.black_is_1
+                    && let Some(b) = self.out.get_mut(self.y * self.stride + self.x / 8)
+                {
+                    *b |= 0x80 >> (self.x % 8);
+                }
+            }
+            self.x = self.x.saturating_add(1);
+        }
+    }
+    impl hayro_ccitt::Decoder for Sink {
+        fn push_pixel(&mut self, white: bool) {
+            self.pixel(white);
+        }
+        fn push_pixel_chunk(&mut self, white: bool, chunks: u32) {
+            for _ in 0..(chunks as usize).saturating_mul(8).min(self.w.saturating_sub(self.x).saturating_add(8)) {
+                self.pixel(white);
+            }
+        }
+        fn next_line(&mut self) {
+            self.x = 0;
+            self.y = self.y.saturating_add(1);
+        }
+    }
+    let stride = w.div_ceil(8);
+    let mut sink = Sink { out: vec![0; stride.checked_mul(h)?], stride, w, h, x: 0, y: 0, black_is_1 };
+    hayro_ccitt::decode(data, &mut sink, &mut hayro_ccitt::DecoderContext::new(settings)).ok()?;
+    // Only a complete image is rewritten; a truncated one would lose rows.
+    (sink.y >= h).then_some(sink.out)
+}
+
+/// One one-bit image, despeckled: the new stream, or `Ok(None)` when nothing changed.
+fn despeckle_mono(s: &Stream, ppi: f64, options: crate::despeckle::Options) -> Result<Option<(Stream, crate::despeckle::Stats)>, ()> {
+    let d = &s.dict;
+    let (w, h) = (usize::try_from(d.int(b"Width").ok_or(())?).map_err(|_| ())?, usize::try_from(d.int(b"Height").ok_or(())?).map_err(|_| ())?);
+    if w == 0 || h == 0 || w > 1 << 20 || (w as u64).saturating_mul(h as u64) > crate::despeckle::MAX_PIXELS {
+        return Err(());
+    }
+    let stride = w.div_ceil(8);
+    let need = stride.checked_mul(h).ok_or(())?;
+    let ccitt = ccitt_params(s).ok_or(())?;
+    let mut bits = match &ccitt {
+        Some(parms) => {
+            if d.contains(b"F") || d.contains(b"FFilter") {
+                return Err(());
+            }
+            ccitt_samples(&s.raw, parms, w, h).ok_or(())?
+        }
+        None => s.decoded_complete(need.saturating_add(1 << 16)).map_err(|_| ())?.get(..need).ok_or(())?.to_vec(),
+    };
+    let ink_is_one = match d.get(b"Decode").and_then(Object::as_array).and_then(|a| a.first()) {
+        Some(Object::Int(v)) => *v >= 1,
+        Some(Object::Real(v)) => *v > 0.5,
+        _ => false,
+    };
+    let (Ok(width), Ok(height)) = (u32::try_from(w), u32::try_from(h)) else { return Err(()) };
+    let stats = crate::despeckle::despeckle_bits(&mut bits, width, height, ink_is_one, ppi, options).map_err(|_| ())?;
+    if !stats.changed() {
+        return Ok(None);
+    }
+    let mut nd = d.clone();
+    for k in [&b"Filter"[..], b"DecodeParms", b"Length", b"DL"] {
+        nd.remove(k);
+    }
+    let new = match ccitt {
+        Some(parms) => {
+            let black_is_1 = matches!(parms.get(b"BlackIs1"), Some(Object::Bool(true)));
+            let data = pdfcraft_filters::encode_ccitt_g4(&bits, w, h, black_is_1, need.saturating_mul(4).saturating_add(1 << 16)).map_err(|_| ())?;
+            let mut p = Dict::new();
+            p.set(b"K".to_vec(), Object::Int(-1));
+            p.set(b"Columns".to_vec(), Object::Int(w as i64));
+            p.set(b"Rows".to_vec(), Object::Int(h as i64));
+            if black_is_1 {
+                p.set(b"BlackIs1".to_vec(), Object::Bool(true));
+            }
+            nd.set(b"Filter".to_vec(), Object::name("CCITTFaxDecode"));
+            nd.set(b"DecodeParms".to_vec(), Object::Dict(p));
+            Stream::from_raw(nd, data)
+        }
+        None => Stream::flate(nd, &bits),
+    };
+    Ok(Some((new, stats)))
+}
+
+/// One 8-bit gray or RGB image, despeckled (JPEG images are re-encoded at quality 90, others
+/// with Flate); `Ok(None)` when nothing changed.
+fn despeckle_colour(
+    doc: &Document,
+    s: &Stream,
+    ppi: f64,
+    options: crate::despeckle::Options,
+) -> Result<Option<(Stream, crate::despeckle::Stats)>, ()> {
+    let d = &s.dict;
+    if d.contains(b"Decode") || d.contains(b"Mask") || d.int(b"BitsPerComponent") != Some(8) {
+        return Err(());
+    }
+    let n = d.get(b"ColorSpace").and_then(|cs| components(doc, cs)).ok_or(())?;
+    let was_dct = is_dct(s).ok_or(())?;
+    let (w, h) = (u32::try_from(d.int(b"Width").ok_or(())?).map_err(|_| ())?, u32::try_from(d.int(b"Height").ok_or(())?).map_err(|_| ())?);
+    if w == 0 || h == 0 || u64::from(w) * u64::from(h) > crate::despeckle::MAX_PIXELS {
+        return Err(());
+    }
+    let need = (w as usize).checked_mul(h as usize).and_then(|p| p.checked_mul(n)).ok_or(())?;
+    let mut px = if was_dct {
+        pixels(s, n).ok_or(())?
+    } else {
+        // Lossless rewriting: the samples must decode completely (no truncated data published).
+        s.decoded_complete(need.saturating_add(1 << 16)).map_err(|_| ())?.get(..need).ok_or(())?.to_vec()
+    };
+    if px.len() != need {
+        return Err(());
+    }
+    let stats = crate::despeckle::despeckle_pixels(&mut px, w, h, n, ppi, options).map_err(|_| ())?;
+    if !stats.changed() {
+        return Ok(None);
+    }
+    let compression = if was_dct { Compression::Jpeg(90) } else { Compression::Flate };
+    Ok(Some((image_stream(d, &px, n, w, h, compression, was_dct).ok_or(())?, stats)))
+}
+
+pub(crate) fn despeckle(doc: &mut Document, pages: &[ObjRef], options: crate::despeckle::Options) -> DespeckleReport {
+    let mut report = DespeckleReport::default();
+    let ppi = effective_resolutions(doc, pages);
+    let masks: HashSet<ObjRef> = ppi
+        .keys()
+        .filter_map(|r| match &*doc.get(*r) {
+            Object::Stream(s) => s.dict.reference(b"SMask"),
+            _ => None,
+        })
+        .collect();
+    let mut refs: Vec<(ObjRef, f64)> = ppi.into_iter().filter(|(r, _)| !masks.contains(r)).collect();
+    refs.sort_by_key(|(r, _)| r.num);
+    for (r, ppi) in refs {
+        let obj = doc.get(r);
+        let Object::Stream(s) = &*obj else { continue };
+        report.images += 1;
+        if !(crate::despeckle::MIN_DPI..=crate::despeckle::MAX_DPI).contains(&ppi) {
+            report.images_skipped += 1;
+            continue;
+        }
+        let done = if is_mono(doc, &s.dict) { despeckle_mono(s, ppi, options) } else { despeckle_colour(doc, s, ppi, options) };
+        match done {
+            Ok(Some((new, stats))) => {
+                report.images_changed += 1;
+                report.stats.add(&stats);
+                doc.set(r, Object::Stream(new));
+            }
+            Ok(None) => {}
+            Err(()) => report.images_skipped += 1,
+        }
+    }
+    report
+}

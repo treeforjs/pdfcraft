@@ -19,6 +19,8 @@ pdfcraft-filters = { workspace = true }
 thiserror.workspace = true
 # JPEG decoding (zune-jpeg) and encoding, and bicubic resampling; already in the tree.
 image = { version = "0.25", default-features = false, features = ["jpeg"] }
+# CCITT fax decoding for despeckling bilevel scans (MIT/Apache-2.0, already in the tree through hayro).
+hayro-ccitt = "0.3.0"
 
 [dev-dependencies]
 pdfcraft-render = { workspace = true }
