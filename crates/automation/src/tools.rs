@@ -555,6 +555,23 @@ pub fn tools() -> Vec<ToolDef> {
             &["doc"],
         )),
         t(
+            "print_color_warnings",
+            "Overprint and rich-black warnings",
+            "Output Preview's colour warnings, per page: overprint-state (an ExtGState sets OP/op true or OPM 1; object is the ExtGState), overprint-paint (fills, strokes, text or images painted with overprint on), overprint-white (warning: a white or zero-tint object set to overprint, which disappears on press for DeviceCMYK with OPM 1 and for spot colours), rich-black (K at or above rich_black_k with C+M+Y at or above rich_black_cmy_total; colour.total is the summed ink), rich-black-small-text (warning: rich-black text below small_text_pt, using font size × text and current matrices) and registration-colour (warning: Separation /All outside printer marks, recognised by Artifact PrinterMarks marked content, a \"Printer marks\" layer, or lying outside the TrimBox). DeviceCMYK, four-component ICC, Indexed, DeviceN process colorants and spot colours with Type 0/Type 2 tint transforms are resolved to C, M, Y, K (via_alternate marks spot alternates); RGB/Lab, image pixels, shadings and other tint transforms are counted under unresolved. Follows forms and coloured tiling patterns (loops and depth capped). Identical findings merge, with occurrences and a union rect (top-left of the displayed page; pdf_rect in user space). counts has every kind; findings keep at most max_findings per kind. Read-only.",
+        )
+        .ro()
+        .with(schema(
+            json!({
+                "doc": doc(),
+                "pages": { "type": "array", "items": { "type": "integer", "minimum": 1 }, "minItems": 1, "description": "1-based pages to check (default: all)." },
+                "rich_black_k": { "type": "number", "minimum": 1, "maximum": 100, "description": "Percent black at or above which a colour counts as black (default 95)." },
+                "rich_black_cmy_total": { "type": "number", "minimum": 1, "maximum": 300, "description": "Percent C+M+Y at or above which a black is rich (default 10)." },
+                "small_text_pt": { "type": "number", "minimum": 1, "maximum": 144, "description": "Rich-black text below this effective size in points is a warning (default 12)." },
+                "max_findings": { "type": "integer", "minimum": 1, "maximum": 10000, "description": "Findings kept per kind (default 100); counts include the rest." },
+            }),
+            &["doc"],
+        )),
+        t(
             "print_add_printer_marks",
             "Add printer marks",
             "Print Production ▸ Add Printer Marks: enlarge each page's media box around its trim box (the crop box when there is none) and draw printer marks outside it: trim (crop) marks at the corners, bleed marks on the bleed box edges, registration targets in the /Separation /All colour, CMYK colour bars and a black tint bar along the top, and a page information line (file name, page number, date) along the bottom, as the page is displayed. Marks start offset points outside the trim (further out when the bleed is wider) and run 18 pt. The crop box becomes the new media box; the trim, bleed and art boxes keep their old rectangles. Marks are drawn as page artifacts in an optional content group named \"Printer marks\" (hide it to hide them), and the page information is outlines, so text extraction ignores it. Adding marks again replaces them. Returns each page's trim, bleed and new media box (user space) and the margin added (points). Undoable.",

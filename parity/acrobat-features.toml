@@ -8108,11 +8108,11 @@ title = "Overprint and rich-black warnings"
 area = "L"
 tier = "P1"
 milestone = "M11"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["print_color_warnings"]
+evidence = ["crates/preflight/src/colour_warnings/tests.rs::a_clean_page_has_no_findings", "crates/preflight/src/colour_warnings/tests.rs::overprint_states_and_overprinted_paint_are_reported", "crates/preflight/src/colour_warnings/tests.rs::op_only_sets_stroke_overprint_when_fill_is_given", "crates/preflight/src/colour_warnings/tests.rs::white_objects_set_to_overprint_are_warnings", "crates/preflight/src/colour_warnings/tests.rs::rich_black_is_reported_with_its_coverage", "crates/preflight/src/colour_warnings/tests.rs::small_rich_black_text_uses_the_effective_size", "crates/preflight/src/colour_warnings/tests.rs::spot_and_devicen_colours_resolve_to_process_inks", "crates/preflight/src/colour_warnings/tests.rs::registration_colour_outside_printer_marks_is_a_warning", "crates/preflight/src/colour_warnings/tests.rs::forms_and_patterns_are_followed_and_loops_stop", "crates/preflight/src/colour_warnings/tests.rs::findings_are_capped_per_kind", "crates/preflight/src/colour_warnings/tests.rs::hostile_content_does_not_panic", "crates/engine/src/preflight/tests.rs::colour_warnings_read_the_working_document_without_editing_it", "crates/automation/tests/automation.rs::print_color_warnings_through_tools"]
+notes = "Headless only: per page, ExtGStates that turn overprint on or set OPM 1 (with their object), fills/strokes/text/images painted with overprint on, white or zero-tint objects set to overprint (warning; flagged as disappearing for DeviceCMYK with OPM 1 and spot colours), rich black (K >= 95% and C+M+Y >= 10% by default, with the summed ink), rich-black text below 12 pt effective size (font size x text and current matrices; warning) and the Separation /All registration colour outside printer marks (marked-content PrinterMarks artifacts, a Printer marks layer, or outside the TrimBox; warning), from PdfCraft's own bounded content walk through forms and coloured tiling patterns (seen-set, depth, byte and operator caps). DeviceCMYK, 4-component ICC, Indexed, DeviceN process colorants and spot colours with Type 0 (one input) or Type 2 tint transforms are resolved to CMYK. Missing: the Output Preview panel and on-page highlight, overprint simulation and what overlaps what, RGB/Lab separation through an output profile, image pixels, shadings, Type 4 and stitching tint transforms, annotation appearances, Type 3 glyphs, optional-content visibility and thin rich-black strokes."
 
 [[feature]]
 id = "print.object-inspector"
