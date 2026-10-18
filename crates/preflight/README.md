@@ -42,6 +42,29 @@ compatibility but is conservatively `false`. Clients should use `no_detected_iss
 the subset result; `validation_complete` is `false` and `conformance` is `not-established`.
 Declaring PDF/A in metadata is not validation.
 
+## PDF/A conformance levels a, b and u
+
+`Level` covers PDF/A-1a, 1b, 2a, 2b, 2u, 3a, 3b and 3u (`Level::from_id("2u")`,
+`declared_level` reads `pdfaid:part`/`pdfaid:conformance`). `verify` runs the shared rules
+for every level, reports ISO 19005-1 clause numbers for PDF/A-1 (plus its own rules: no
+embedded files, transparency or optional content) and, for levels a and u, checks that every
+glyph shown by page content, form XObjects and annotation appearances maps to Unicode
+(`unicode.rs`; ISO 19005-1 §6.3.8, ISO 19005-2 §6.2.11.7): a ToUnicode entry, else a
+predefined encoding or a known `/Differences` glyph name, else an Adobe CJK character
+collection. Missing mappings, U+0000/U+FEFF/U+FFFE and U+FFFD are errors; Private Use Area
+values and, for level a, word breaks made only by `TJ` positioning are warnings. Each
+`Issue` has a `severity` (error or warning).
+
+The logical-structure rules of level a live one layer up, in `pdfcraft-a11y`
+(`verify_pdfa`, `convert_pdfa`), which reuses the PDF/UA checker; `convert_with` takes that
+check as a callback. `convert` refuses (`ConvertError::Refused`, nothing changed) when a
+used glyph's meaning can't be derived (composite fonts without a usable CMap, symbolic fonts
+without an encoding) and, without a structure check, for level a. Otherwise it writes
+ToUnicode CMaps from the encoding for simple fonts whose mappings are missing or bad, and
+sets `pdfaid:conformance` to the level's letter. Not yet: Type 3 glyph procedures and
+patterns, per-character ActualText for Private Use Area text, the PDF 1.4 limits of
+PDF/A-1, PDF/A-4.
+
 ## Total area coverage
 
 `coverage::page_coverage` is Output Preview's Total Area Coverage check: the highest total

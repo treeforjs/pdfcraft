@@ -26,39 +26,147 @@ pub mod colour_warnings;
 pub mod coverage;
 pub mod icc;
 pub mod pdfx;
+mod unicode;
 mod xmp;
 
 pub use pdfx::{MAX_X_FINDINGS, X_NOT_CHECKED, X_RULES, XFinding, XOptions, XPart, XReport, XRule, XSeverity, declared_pdfx, verify_pdfx};
 
 use pdfcraft_cos::{Dict, Document, ObjRef, Object, PdfString, Stream};
 
+/// The PDF/A conformance level (ISO 19005): `B` (basic: visual appearance), `U` (B plus
+/// Unicode for every glyph, PDF/A-2 and -3 only) and `A` (accessible: U plus a tagged
+/// logical structure, natural language and alternate descriptions).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Conformance {
+    A,
+    B,
+    U,
+}
+
+impl Conformance {
+    /// The `pdfaid:conformance` letter.
+    pub fn letter(self) -> &'static str {
+        match self {
+            Conformance::A => "A",
+            Conformance::B => "B",
+            Conformance::U => "U",
+        }
+    }
+
+    pub fn from_letter(s: &str) -> Option<Conformance> {
+        match s.trim().to_ascii_uppercase().as_str() {
+            "A" => Some(Conformance::A),
+            "B" => Some(Conformance::B),
+            "U" => Some(Conformance::U),
+            _ => None,
+        }
+    }
+}
+
 /// The PDF/A part and conformance level.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Level {
+    A1a,
+    A1b,
+    A2a,
     A2b,
+    A2u,
+    A3a,
     A3b,
+    A3u,
 }
 
 impl Level {
+    pub const ALL: [Level; 8] = [Level::A1a, Level::A1b, Level::A2a, Level::A2b, Level::A2u, Level::A3a, Level::A3b, Level::A3u];
+
+    /// The level for a part and conformance (`None` for combinations ISO 19005 doesn't define,
+    /// such as PDF/A-1u, and for parts not supported here).
+    pub fn new(part: u8, conformance: Conformance) -> Option<Level> {
+        Level::ALL.into_iter().find(|l| l.part() == part && l.conformance() == conformance)
+    }
+
     pub fn part(self) -> u8 {
         match self {
-            Level::A2b => 2,
-            Level::A3b => 3,
+            Level::A1a | Level::A1b => 1,
+            Level::A2a | Level::A2b | Level::A2u => 2,
+            Level::A3a | Level::A3b | Level::A3u => 3,
+        }
+    }
+
+    pub fn conformance(self) -> Conformance {
+        match self {
+            Level::A1a | Level::A2a | Level::A3a => Conformance::A,
+            Level::A1b | Level::A2b | Level::A3b => Conformance::B,
+            Level::A2u | Level::A3u => Conformance::U,
+        }
+    }
+
+    /// Whether every glyph must map to Unicode (levels a and u).
+    pub fn needs_unicode(self) -> bool {
+        self.conformance() != Conformance::B
+    }
+
+    /// Whether the document must be tagged (level a).
+    pub fn needs_structure(self) -> bool {
+        self.conformance() == Conformance::A
+    }
+
+    /// The short id: `2b`, `3u`, `1a`, …
+    pub fn id(self) -> &'static str {
+        match self {
+            Level::A1a => "1a",
+            Level::A1b => "1b",
+            Level::A2a => "2a",
+            Level::A2b => "2b",
+            Level::A2u => "2u",
+            Level::A3a => "3a",
+            Level::A3b => "3b",
+            Level::A3u => "3u",
         }
     }
 
     pub fn label(self) -> &'static str {
         match self {
+            Level::A1a => "PDF/A-1a",
+            Level::A1b => "PDF/A-1b",
+            Level::A2a => "PDF/A-2a",
             Level::A2b => "PDF/A-2b",
+            Level::A2u => "PDF/A-2u",
+            Level::A3a => "PDF/A-3a",
             Level::A3b => "PDF/A-3b",
+            Level::A3u => "PDF/A-3u",
         }
     }
 
+    /// `2b`, `PDF/A-2b`, `pdfa-3u`, `A1a`, … (case and `/`, `-`, spaces ignored).
     pub fn from_id(id: &str) -> Option<Level> {
-        match id.to_ascii_lowercase().replace(['/', '-', ' '], "").as_str() {
-            "pdfa2b" | "a2b" | "2b" => Some(Level::A2b),
-            "pdfa3b" | "a3b" | "3b" => Some(Level::A3b),
-            _ => None,
+        let s = id.to_ascii_lowercase().replace(['/', '-', ' ', '_'], "");
+        let s = s.strip_prefix("pdfa").or_else(|| s.strip_prefix('a')).unwrap_or(&s);
+        Level::ALL.into_iter().find(|l| l.id() == s)
+    }
+}
+
+/// The level the document declares in its XMP metadata, when it is one supported here.
+pub fn declared_level(doc: &Document) -> Option<Level> {
+    let (part, conformance) = declared(doc).pdfa?;
+    Level::new(part, Conformance::from_letter(&conformance)?)
+}
+
+/// How much an [`Issue`] matters.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Severity {
+    /// Breaks a requirement: the document does not conform.
+    Error,
+    /// A check whose wording we aren't certain of, a heuristic, or a limit reached; it doesn't
+    /// decide conformance on its own.
+    Warning,
+}
+
+impl Severity {
+    pub fn id(self) -> &'static str {
+        match self {
+            Severity::Error => "error",
+            Severity::Warning => "warning",
         }
     }
 }
@@ -66,13 +174,28 @@ impl Level {
 /// A rule a document breaks.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Issue {
-    /// The ISO 19005-2 clause.
+    /// The ISO 19005 clause of the part checked (19005-1 for PDF/A-1, 19005-2/-3 otherwise).
     pub clause: &'static str,
     pub message: String,
     /// 0-based page, when the problem is on a page.
     pub page: Option<usize>,
     /// Whether [`convert`] can fix it.
     pub fixable: bool,
+    pub severity: Severity,
+}
+
+impl Issue {
+    pub fn error(clause: &'static str, message: String, page: Option<usize>, fixable: bool) -> Issue {
+        Issue { clause, message, page, fixable, severity: Severity::Error }
+    }
+
+    pub fn warning(clause: &'static str, message: String, page: Option<usize>) -> Issue {
+        Issue { clause, message, page, fixable: false, severity: Severity::Warning }
+    }
+
+    pub fn is_error(&self) -> bool {
+        self.severity == Severity::Error
+    }
 }
 
 /// What a document declares (the Standards panel).
@@ -197,7 +320,8 @@ fn uses_device_colour(doc: &Document, objs: &[(ObjRef, std::sync::Arc<Object>)])
 /// Check `doc` against `level`.
 pub fn verify(doc: &Document, level: Level) -> Vec<Issue> {
     let mut out = Vec::new();
-    let mut issue = |clause: &'static str, message: String, page: Option<usize>, fixable: bool| out.push(Issue { clause, message, page, fixable });
+    let mut issue =
+        |clause: &'static str, message: String, page: Option<usize>, fixable: bool| out.push(Issue::error(clause, message, page, fixable));
     let cat = catalog(doc);
     // 6.1.3 / 6.6: identification and metadata.
     match metadata(doc) {
@@ -205,7 +329,9 @@ pub fn verify(doc: &Document, level: Level) -> Vec<Issue> {
         Some(x) => {
             let part = xmp::value(&x, "pdfaid:part");
             let conf = xmp::value(&x, "pdfaid:conformance");
-            if part.as_deref() != Some(&level.part().to_string()) || conf.as_deref().map(str::to_uppercase).as_deref() != Some("B") {
+            if part.as_deref().map(str::trim) != Some(&level.part().to_string())
+                || conf.as_deref().and_then(Conformance::from_letter) != Some(level.conformance())
+            {
                 issue("6.6.4", format!("The metadata doesn't identify the file as {}", level.label()), None, true);
             }
             if let Some(title) = info(doc, "Title")
@@ -335,9 +461,10 @@ pub fn verify(doc: &Document, level: Level) -> Vec<Issue> {
         }
         // Embedded files.
         if ty == Some(b"Filespec") && d.get(b"EF").is_some() {
-            match level {
-                Level::A2b => issue("6.8", "Embedded files must be PDF/A files themselves (use PDF/A-3 for others)".into(), None, false),
-                Level::A3b => {
+            match level.part() {
+                1 => issue("6.8", "PDF/A-1 doesn't allow embedded files".into(), None, false),
+                2 => issue("6.8", "Embedded files must be PDF/A files themselves (use PDF/A-3 for others)".into(), None, false),
+                _ => {
                     if d.get(b"AFRelationship").is_none() {
                         issue("6.8", "An embedded file has no AFRelationship".into(), None, true);
                     }
@@ -345,10 +472,101 @@ pub fn verify(doc: &Document, level: Level) -> Vec<Issue> {
             }
         }
     }
+    if level.part() == 1 {
+        part1(doc, &cat, &objs, &pages, &mut out);
+        for i in &mut out {
+            i.clause = part1_clause(i.clause);
+        }
+    }
+    if level.needs_unicode() {
+        out.extend(unicode::check(doc, level).issues);
+    }
     // One message per kind of problem is enough for repeated ones (as preflight summaries do).
     let mut seen = std::collections::HashSet::new();
     out.retain(|i| seen.insert((i.clause, i.message.clone(), i.page)));
     out
+}
+
+/// The ISO 19005-1 clause for a rule [`verify`] words with its ISO 19005-2 clause.
+fn part1_clause(c: &'static str) -> &'static str {
+    match c {
+        "6.6.2.1" => "6.7.2",
+        "6.6.4" => "6.7.11",
+        "6.6.3" => "6.7.3",
+        "6.2.3" => "6.2.2",
+        "6.2.4.3" => "6.2.3.3",
+        "6.5.2" => "6.6.2",
+        "6.5.1" => "6.6.1",
+        "6.4.1" => "6.9",
+        "6.3.1" => "6.5.2",
+        "6.3.2" | "6.3.3" => "6.5.3",
+        "6.2.11.4" => "6.3.4",
+        "6.1.7.2" => "6.1.10",
+        "6.1.7.1" => "6.1.7",
+        "6.2.8" => "6.2.4",
+        "6.2.9" => "6.2.7",
+        "6.8" => "6.1.11",
+        other => other,
+    }
+}
+
+/// The PDF/A-1 rules that PDF/A-2 relaxed: no transparency, no optional content. Clauses are
+/// already ISO 19005-1's (they pass through [`part1_clause`] unchanged).
+fn part1(doc: &Document, cat: &Dict, objs: &[(ObjRef, std::sync::Arc<Object>)], pages: &[pdfcraft_model::Page], out: &mut Vec<Issue>) {
+    if cat.get(b"OCProperties").is_some() {
+        out.push(Issue::error("6.1.13", "PDF/A-1 doesn't allow optional content (layers)".into(), None, false));
+    }
+    let transparent = |d: &Dict| -> Option<&'static str> {
+        if d.name(b"S") == Some(b"Transparency") && d.get(b"P").is_none() {
+            return Some("a transparency group");
+        }
+        if let Some(sm) = d.get(b"SMask").map(|s| doc.resolve(s))
+            && !matches!(&*sm, Object::Name(n) if n == b"None")
+        {
+            return Some("a soft mask");
+        }
+        for k in [&b"CA"[..], b"ca"] {
+            if d.get(k).and_then(|v| doc.resolve(v).as_f64()).is_some_and(|v| v < 1.0) {
+                return Some("constant opacity below 1");
+            }
+        }
+        match d.get(b"BM").map(|b| doc.resolve(b)).as_deref() {
+            Some(Object::Name(n)) if n != b"Normal" && n != b"Compatible" => Some("a blend mode other than Normal"),
+            _ => None,
+        }
+    };
+    let mut found =
+        |what: &str, page: Option<usize>| out.push(Issue::error("6.4", format!("PDF/A-1 doesn't allow transparency: {what} is used"), page, false));
+    for (_, o) in objs {
+        let Some(d) = dict_of(o) else { continue };
+        if let Some(w) = transparent(d) {
+            found(w, None);
+        }
+        if let Some(g) = d.get(b"Group").map(|g| doc.resolve(g)).and_then(|g| g.as_dict().cloned())
+            && g.name(b"S") == Some(b"Transparency")
+        {
+            found("a transparency group", None);
+        }
+    }
+    for (i, p) in pages.iter().enumerate() {
+        if let Some(g) = p.dict.get(b"Group").map(|g| doc.resolve(g)).and_then(|g| g.as_dict().cloned())
+            && g.name(b"S") == Some(b"Transparency")
+        {
+            found("a page transparency group", Some(i));
+        }
+        let res = p.dict.get(b"Resources").map(|r| doc.resolve(r)).and_then(|r| r.as_dict().cloned()).unwrap_or_default();
+        let gs = res.get(b"ExtGState").map(|g| doc.resolve(g)).and_then(|g| g.as_dict().cloned()).unwrap_or_default();
+        for (_, v) in gs.iter().take(10_000) {
+            if let Some(w) = doc.resolve(v).as_dict().and_then(transparent) {
+                found(w, Some(i));
+            }
+        }
+    }
+    out.push(Issue::warning(
+        "6.1",
+        "PDF/A-1 is checked with the shared PDF/A rules plus embedded files, transparency and optional content; the PDF 1.4 implementation limits (6.1.12) and other PDF/A-1-only rules aren't checked".into(),
+        None,
+    ));
 }
 
 fn check_font(doc: &Document, d: &Dict, issue: &mut impl FnMut(&'static str, String, Option<usize>, bool)) {
@@ -414,8 +632,84 @@ fn strip_actions(doc: &Document, d: &mut Dict) -> bool {
     changed
 }
 
-/// Make `doc` conform to `level` as far as possible, then re-check it.
-pub fn convert(doc: &mut Document, level: Level) -> Result<Report, pdfcraft_cos::CosError> {
+/// Why [`convert`] didn't convert.
+#[derive(Debug)]
+pub enum ConvertError {
+    /// The document can't be changed (no catalog, a damaged object).
+    Cos(pdfcraft_cos::CosError),
+    /// The level can't be reached without changes made elsewhere first (glyphs whose meaning
+    /// isn't known, an untagged document for level a). Nothing was changed.
+    Refused { level: Level, blocking: Vec<Issue> },
+}
+
+impl std::fmt::Display for ConvertError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ConvertError::Cos(e) => write!(f, "{e}"),
+            ConvertError::Refused { level, blocking } => {
+                write!(f, "Can't save as {}: ", level.label())?;
+                for (i, b) in blocking.iter().take(5).enumerate() {
+                    if i > 0 {
+                        f.write_str("; ")?;
+                    }
+                    write!(f, "{} ({})", b.message, b.clause)?;
+                }
+                if blocking.len() > 5 {
+                    write!(f, "; and {} more", blocking.len() - 5)?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+impl std::error::Error for ConvertError {}
+
+impl From<pdfcraft_cos::CosError> for ConvertError {
+    fn from(e: pdfcraft_cos::CosError) -> Self {
+        ConvertError::Cos(e)
+    }
+}
+
+/// The problems that stop a conversion to `level` before anything changes: Unicode mappings
+/// that can't be generated (levels a and u) and the errors `structure` reports (level a).
+pub fn conversion_blockers(doc: &Document, level: Level, structure: impl Fn(&Document) -> Vec<Issue>) -> Vec<Issue> {
+    let mut blocking = Vec::new();
+    if level.needs_unicode() {
+        blocking.extend(unicode::check(doc, level).issues.into_iter().filter(|i| i.is_error() && !i.fixable));
+    }
+    if level.needs_structure() {
+        blocking.extend(structure(doc).into_iter().filter(Issue::is_error));
+    }
+    blocking
+}
+
+/// The structure check used when none is given: level a can't be claimed without one.
+fn no_structure_check(_: &Document) -> Vec<Issue> {
+    vec![Issue::error(
+        "6.7.3",
+        "The logical structure wasn't checked: convert to level a through the accessibility checker (pdfcraft-a11y)".into(),
+        None,
+        false,
+    )]
+}
+
+/// Make `doc` conform to `level` as far as possible, then re-check it. Levels a and u refuse
+/// (changing nothing) when some glyph's Unicode meaning can't be generated; level a always
+/// refuses here, since the logical structure is checked by [`convert_with`]'s caller
+/// (`pdfcraft_a11y::convert_pdfa`).
+pub fn convert(doc: &mut Document, level: Level) -> Result<Report, ConvertError> {
+    convert_with(doc, level, no_structure_check)
+}
+
+/// [`convert`] with the logical-structure check for level a (`structure` returns its findings;
+/// any error refuses the conversion, and they're part of what remains afterwards).
+pub fn convert_with(doc: &mut Document, level: Level, structure: impl Fn(&Document) -> Vec<Issue>) -> Result<Report, ConvertError> {
+    let blocking = conversion_blockers(doc, level, &structure);
+    if !blocking.is_empty() {
+        return Err(ConvertError::Refused { level, blocking });
+    }
+    let to_unicode = if level.needs_unicode() { unicode::check(doc, level).fixes } else { Vec::new() };
     let mut fixed = Vec::new();
     if doc.trailer().get(b"Encrypt").is_some() {
         doc.remove_encryption();
@@ -536,7 +830,7 @@ pub fn convert(doc: &mut Document, level: Level) -> Result<Report, pdfcraft_cos:
             }
             continue;
         }
-        if level == Level::A3b && ty.as_deref() == Some(b"Filespec") && d.get(b"EF").is_some() && d.get(b"AFRelationship").is_none() {
+        if level.part() == 3 && ty.as_deref() == Some(b"Filespec") && d.get(b"EF").is_some() && d.get(b"AFRelationship").is_none() {
             let mut nd = d.clone();
             nd.set(b"AFRelationship".to_vec(), Object::name("Unspecified"));
             doc.set(r, Object::Dict(nd));
@@ -564,7 +858,20 @@ pub fn convert(doc: &mut Document, level: Level) -> Result<Report, pdfcraft_cos:
             fixed.push(format!("{n}: {what}"));
         }
     }
-    let remaining = verify(doc, level);
+    let mut fonts = 0;
+    for (r, map) in to_unicode {
+        let cmap = unicode::to_unicode_cmap(&map);
+        let s = doc.add(Object::Stream(Stream::flate(Dict::new(), &cmap)));
+        doc.update_dict(r, |f| f.set(b"ToUnicode".to_vec(), Object::Ref(s)))?;
+        fonts += 1;
+    }
+    if fonts > 0 {
+        fixed.push(format!("{fonts}: wrote ToUnicode maps for fonts from their encodings"));
+    }
+    let mut remaining = verify(doc, level);
+    if level.needs_structure() {
+        remaining.extend(structure(doc));
+    }
     Ok(Report { fixed, remaining })
 }
 

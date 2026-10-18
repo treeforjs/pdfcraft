@@ -7664,7 +7664,7 @@ status = "partial"
 commands = ["standards.pdfa"]
 tools = ["pdfa_verify"]
 evidence = ["crates/preflight/src/tests.rs::verify_reports_what_breaks_pdfa", "crates/preflight/src/tests.rs::convert_fixes_all_but_fonts", "crates/automation/tests/automation.rs::pdfa_through_tools", "crates/ui-egui/tests/compare.rs::pdfa_dialog_verifies_and_converts"]
-notes = "PDF/A-2b/3b structural rules: identification, encryption, output intent, fonts embedded, annotations, actions, images, embedded files. Not yet: content-stream operator checks, transparency details, PDF/A-1 and -4, a veraPDF comparison."
+notes = "PDF/A-2b/3b structural rules: identification, encryption, output intent, fonts embedded, annotations, actions, images, embedded files. PDF/A-1b uses them with ISO 19005-1 clauses plus no embedded files, transparency or optional content (levels a and u: optimize.pdfa-accessible-levels). Not yet: content-stream operator checks, transparency details for -2/-3, the PDF 1.4 limits of PDF/A-1, PDF/A-4, a veraPDF comparison."
 
 [[feature]]
 id = "optimize.pdfa-convert"
@@ -7684,11 +7684,11 @@ title = "PDF/A conformance levels a and u"
 area = "K"
 tier = "P1"
 milestone = "M11"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["standards.pdfa"]
+tools = ["pdfa_verify", "pdfa_convert"]
+evidence = ["crates/preflight/src/tests.rs::a_clean_2u_file_conforms", "crates/preflight/src/tests.rs::an_unmapped_glyph_fails_level_u_and_conversion_refuses", "crates/preflight/src/tests.rs::conversion_to_2u_writes_tounicode_from_the_encoding", "crates/preflight/src/tests.rs::hostile_fonts_and_content_do_not_panic", "crates/a11y/src/pdfa_tests.rs::a_clean_2a_file_conforms", "crates/a11y/src/pdfa_tests.rs::untagged_content_fails_level_a", "crates/a11y/src/pdfa_tests.rs::missing_language_fails_level_a", "crates/a11y/src/pdfa_tests.rs::a_figure_without_alt_fails_level_a", "crates/a11y/src/pdfa_tests.rs::conversion_to_2a_needs_tags", "crates/automation/tests/automation.rs::pdfa_levels_a_and_u_through_tools"]
+notes = "Levels 1a, 2a, 2u, 3a, 3u (and 1b) verified and converted headlessly; default level is the declared one. u: every glyph shown by page content, form XObjects and annotation appearances maps to Unicode (ToUnicode, predefined encodings, known glyph names, Adobe CJK collections; U+0000/FEFF/FFFE/FFFD fail, PUA warns); conversion writes ToUnicode from the encoding or refuses. a: MarkInfo, structure tree, all content tagged or artifact, role mapping, Lang, figure Alt via the PDF/UA checker; conversion refuses untagged documents (no autotagging). Not yet: Type 3 glyph procedures and patterns, per-character ActualText for PUA text, a precise word-break check (positioning heuristic only), the UI level picker (2b/3b only), a veraPDF comparison."
 
 [[feature]]
 id = "optimize.pdfx-validate"

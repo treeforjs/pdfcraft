@@ -1,6 +1,6 @@
 [package]
 name = "pdfcraft-preflight"
-description = "Standards: verify PDF/A (ISO 19005) conformance and convert documents to PDF/A-2b or 3b"
+description = "Standards: verify PDF/A (ISO 19005) conformance and convert documents to PDF/A (levels a, b and u)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -15,3 +15,4 @@ pdfcraft-content = { workspace = true }
 pdfcraft-cos = { workspace = true }
 pdfcraft-model = { workspace = true }
 pdfcraft-filters = { workspace = true }
+pdfcraft-fonts = { workspace = true }

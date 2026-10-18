@@ -23,5 +23,10 @@ let html = report_html(&report, "file.pdf", "2026-10-02");
 
 - **PDF/UA** (`verify_pdfua`): the machine-checkable PDF/UA-1 and PDF/UA-2 requirements by
   Matterhorn checkpoint (`UA_CHECKPOINTS`); what needs a person is listed in `UA_NOT_CHECKED`.
+- **PDF/A level a** (`pdfa_structure`, `verify_pdfa`, `pdfa_blockers`, `convert_pdfa`): the
+  PDF/UA structure checks mapped to ISO 19005-1 §6.8 / ISO 19005-2 §6.7 clauses (MarkInfo,
+  structure tree, tagged-or-artifact content, role mapping, Lang, figure alternate text;
+  formulas warn), combined with `pdfcraft-preflight`'s level-b and Unicode rules. Conversion
+  to level a never tags: it refuses with the findings until the document is tagged.
 
 Not yet: autotagging, the Tags/Order/Content panels, the Reading Order tool (M12.1–M12.2).

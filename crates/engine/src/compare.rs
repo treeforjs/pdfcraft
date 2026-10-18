@@ -18,9 +18,21 @@ pub fn colour(kind: Kind) -> crate::Rgb {
 }
 
 impl crate::Document {
-    /// Standards ▸ Verify PDF/A: the rules the document breaks for `level`.
+    /// Standards ▸ Verify PDF/A: the rules the document breaks for `level` (levels a and u
+    /// include Unicode mappings; level a the logical structure, language and alternate text).
     pub fn pdfa_verify(&self, level: pdfcraft_preflight::Level) -> Vec<pdfcraft_preflight::Issue> {
-        self.editor.as_ref().map(|e| pdfcraft_preflight::verify(&e.cos, level)).unwrap_or_default()
+        self.editor.as_ref().map(|e| pdfcraft_a11y::verify_pdfa(&e.cos, level)).unwrap_or_default()
+    }
+
+    /// What stops Save as PDF/A for `level` before anything changes (glyphs whose meaning
+    /// can't be known for levels a and u, missing tags for level a); empty when it can go ahead.
+    pub fn pdfa_blockers(&self, level: pdfcraft_preflight::Level) -> Vec<pdfcraft_preflight::Issue> {
+        self.editor.as_ref().map(|e| pdfcraft_a11y::pdfa_blockers(&e.cos, level)).unwrap_or_default()
+    }
+
+    /// The PDF/A level the document declares in its XMP metadata, when supported here.
+    pub fn pdfa_declared_level(&self) -> Option<pdfcraft_preflight::Level> {
+        self.editor.as_ref().and_then(|e| pdfcraft_preflight::declared_level(&e.cos))
     }
 
     /// The standards the document declares (Standards panel).
