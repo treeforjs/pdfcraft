@@ -44,6 +44,7 @@ mod separations;
 mod signature_workflow;
 mod signed_version;
 mod signing;
+mod submit_form;
 mod text_cache;
 mod tools;
 mod url_access;
@@ -716,6 +717,8 @@ impl Automation {
             "form_tab_order" => self.form_tab_order(&a)?,
             "doc_export_data" => self.doc_export_data(&a)?,
             "form_submit" => self.form_submit(&a)?,
+            "form_submit_prepare" => self.form_submit_prepare(&a)?,
+            "form_submit_send" => self.form_submit_send(&a)?,
             "doc_import_data" => self.doc_import_data(&a)?,
             "redact_mark" => self.redact_mark(&a)?,
             "redact_apply" => self.redact_apply(&a)?,

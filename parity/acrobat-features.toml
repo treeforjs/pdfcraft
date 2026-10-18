@@ -4595,11 +4595,11 @@ title = "Submit form to a URL or email (with a prompt)"
 area = "F"
 tier = "P1"
 milestone = "M6"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["form_submit_prepare", "form_submit_send", "form_submit"]
+evidence = ["crates/automation/tests/submit_form.rs::prepare_builds_each_format_and_flag_without_sending", "crates/automation/tests/submit_form.rs::send_needs_confirmation_and_reports_the_answer", "crates/forms/src/tests.rs::submit_flags_follow_the_format_precedence_and_round_trip", "crates/forms/src/tests.rs::submit_actions_read_their_format_and_field_selection", "crates/automation/tests/automation.rs::submitting_a_form_saves_or_sends_its_data"]
+notes = "ISO 32000-2 §12.7.6.2 SubmitForm, headless: every flag (Include/Exclude with /Fields, IncludeNoValueFields, ExportFormat, GetMethod, SubmitCoordinates with the button's /TM, XFDF, IncludeAppendSaves as FDF /Differences, IncludeAnnotations, SubmitPDF, CanonicalFormat for AFDate fields, ExclNonUserAnnots by a given user name, ExclFKey, EmbedForm as an embedded file) with the spec's format precedence; payloads as FDF, XFDF, HTML urlencoded (POST body or GET query) or the whole PDF. form_submit_prepare is pure (url, method, content type, body); form_submit_send needs confirm: true (the prompt), sends only to http(s) without credentials, follows no redirects, has a time limit (default 30 s) and a capped reply (default 1 MiB), honours the internet access settings, reports status and reply, and can import an FDF/XFDF answer. mailto: returns a prepared email (to, cc, bcc, subject, attachment as base64 or a file); nothing sends email. The desktop Submit Form dialog predates these tools. Missing: sending email, the /CharSet entry (always UTF-8), /TM mapping names for field values (only for coordinates), and a desktop dialog for the mailto hand-off and reply import (UI redesign)."
 
 [[feature]]
 id = "form.import-data"

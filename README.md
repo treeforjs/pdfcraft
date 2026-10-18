@@ -241,7 +241,7 @@ pdfcraft-cli edit  in.pdf --rotate 1,2:90 --delete 5 --title "Q3" --out out.pdf
 
 ## Built for agents, too
 
-Every engine feature is reachable without the GUI, through one table of JSON-Schema-described tools: open, inspect, render pages to PNG, extract and find text, rotate, delete, move and insert pages, edit bookmarks and page labels, add, reply to, restyle and delete comments (highlight a phrase just by naming it), list and fill in form fields, protect with passwords, set metadata, undo and redo, save, combine, extract and split. Three front doors share it:
+Every engine feature is reachable without the GUI, through one table of JSON-Schema-described tools: open, inspect, render pages to PNG, extract and find text, rotate, delete, move and insert pages, edit bookmarks and page labels, add, reply to, restyle and delete comments (highlight a phrase just by naming it), list and fill in form fields, submit a form (prepare the exact FDF, XFDF, HTML or PDF request a Submit Form button would send, then send it only with an explicit `confirm: true`), protect with passwords, set metadata, undo and redo, save, combine, extract and split. Three front doors share it:
 
 - **`pdfcraft-cli run`**, for one-off calls and JSON scripts:
 

@@ -548,29 +548,8 @@ impl Automation {
     }
 
     pub(crate) fn form_submit(&mut self, a: &Args) -> Result<Value> {
-        use pdfcraft_engine::submit::{Submission, SubmitFormat};
-        let doc = self.doc(a)?;
-        let id = doc.id;
-        let mut submission = match (a.opt_str("field")?, a.opt_str("url")?) {
-            (Some(name), None) => {
-                let f = doc.form.iter().find(|f| f.name == name).ok_or_else(|| bad(format!("no field {name:?}")))?;
-                match &f.button {
-                    Some(pdfcraft_engine::form_scripts::ButtonAction::Submit(s)) => s.clone(),
-                    _ => return Err(bad(format!("{name:?} is not a button that submits the form"))),
-                }
-            }
-            (None, Some(url)) => Submission::to_url(url),
-            _ => return Err(bad("give field (a Submit Form button) or url")),
-        };
-        if let Some(format) = a.opt_str("format")? {
-            submission.format = match format {
-                "fdf" => SubmitFormat::Fdf,
-                "xfdf" => SubmitFormat::Xfdf,
-                "html" => SubmitFormat::Html,
-                "pdf" => SubmitFormat::Pdf,
-                f => return Err(bad(format!("unknown format {f:?} (fdf, xfdf, html, pdf)"))),
-            };
-        }
+        let (submission, cx) = self.submission_args(a)?;
+        let id = self.doc(a)?.id;
         let send = a.opt_bool("send")?.unwrap_or(false);
         let path = a.opt_str("path")?.map(|p| self.resolve(p, true)).transpose()?;
         if send == path.is_some() {
@@ -587,12 +566,11 @@ impl Automation {
                 )));
             }
         }
-        let payload = self.session.submission(id, &submission).map_err(failed)?;
-        let doc = self.doc(a)?;
-        let sent: Vec<&str> = doc.form.iter().filter(|f| submission.sends(f)).map(|f| f.name.as_str()).collect();
+        let payload = self.session.submission_in(id, &submission, &cx).map_err(failed)?;
         let mut out = json!({
             "url": payload.url, "format": submission.format.label(), "content_type": payload.content_type,
-            "method": if payload.get { "GET" } else { "POST" }, "bytes": payload.body.len(), "fields": sent,
+            "method": if payload.get { "GET" } else { "POST" }, "bytes": payload.body.len(), "fields": payload.fields,
+            "notes": payload.notes,
         });
         if let Some(path) = path {
             crate::write_atomic(&path, &payload.body)?;
