@@ -676,6 +676,8 @@ pub fn marks_present(doc: &Document) -> Vec<MarkKind> {
     found
 }
 
+pub mod ink_aliases;
+pub use ink_aliases::{AliasReport, alias_inks};
 pub mod convert_colors;
 pub use convert_colors::{ColorConversion, ConversionReport, Destination, Intent, ObjectKinds, SourceSpaces, convert_colors};
 mod flatten;

@@ -660,6 +660,48 @@ pub fn tools() -> Vec<ToolDef> {
             &["doc", "page", "x", "y"],
         )),
         t(
+            "print_ink_manager_list",
+            "Ink Manager",
+            "Ink Manager's list: every ink the document (or pages) uses - the four process inks and each spot colorant of Separation and DeviceN colour spaces (forms, images, patterns and shadings included), as print_separations_list describes them, ignoring the Ink Manager settings - with its usage (pages where it is painted, pages that declare it, objects: the kinds of object that put it down: text, vector, image; shadings and patterns are not measured) and where it prints under the session's Ink Manager settings: route own (its own plate), alias (prints_on another ink's plate, aliased_to the ink it was aliased to) or process (converted to CMYK). settings holds the current settings. Read-only.",
+        )
+        .ro()
+        .with(schema(
+            json!({
+                "doc": doc(),
+                "pages": { "type": "array", "items": { "type": "integer", "minimum": 1 }, "minItems": 1, "maxItems": 500, "description": "1-based pages (default: all, at most the first 500)." },
+            }),
+            &["doc"],
+        )),
+        t(
+            "print_ink_manager_set",
+            "Set Ink Manager",
+            "Change the Ink Manager settings of an open document for this session (not saved with the document, not an undo step): aliases maps a spot ink to the ink (process or spot) it prints on instead (null or \"\" removes an alias; aliases chain, cycles are refused); to_process adds spot inks converted to process (CMYK through their tint transform and alternate colour: gray to black, CMYK as is, RGB and Lab through the output intent's CMYK profile or the built-in conversion); own_plate puts inks back on their own plate (removing their alias and to-process setting); all_to_process converts every spot ink not aliased to a process ink; use_lab previews spot inks with a Lab alternate from their Lab values (otherwise mid gray); reset starts from the defaults. An aliased ink follows the ink it is aliased to (converted when that one is). Names must be inks of the document (checked for documents of at most 500 pages). print_separations_list, print_separations_render, print_separations_sample and print_total_area_coverage honour the settings (routed lists the inks moved); print_ink_manager_apply makes them permanent. Returns the settings and each spot ink's route.",
+        )
+        .with(schema(
+            json!({
+                "doc": doc(),
+                "aliases": { "type": "object", "additionalProperties": { "type": ["string", "null"] }, "description": "Spot ink name to the ink it prints on (null or empty removes the alias)." },
+                "to_process": { "type": "array", "items": { "type": "string" }, "description": "Spot inks to convert to process." },
+                "own_plate": { "type": "array", "items": { "type": "string" }, "description": "Inks to print on their own plate again (alias and to-process removed)." },
+                "all_to_process": { "type": "boolean", "description": "Convert every spot ink to process (Acrobat's All Spots to Process)." },
+                "use_lab": { "type": "boolean", "description": "Preview Lab-defined spot inks from their Lab values." },
+                "reset": { "type": "boolean", "description": "Start from the default settings (every ink on its own plate) before applying the rest." },
+            }),
+            &["doc"],
+        )),
+        t(
+            "print_ink_manager_apply",
+            "Apply Ink Manager",
+            "Make the session's Ink Manager settings permanent, as one undoable edit: every Separation and DeviceN colour space naming an aliased spot ink names the ink it finally prints on instead, in every object of the document (pages, forms, images, shadings, patterns, annotation appearances; DeviceN Colorants entries too; each keeps its own alternate and tint transform, so composite viewing is unchanged), then the spot inks set to process are converted to DeviceCMYK on every page through their tint transforms (Convert Colors' spot conversion: through the output intent's CMYK profile when it has a usable one, else the built-in conversion; destination says which). A DeviceN colour space in which an alias would repeat an ink, or which mixes inks converted to process with inks kept, is left as it was and listed in skipped. dry_run reports what would change without changing anything. changed false means nothing would change (no undo step). The settings stay set. Save the document to keep it.",
+        )
+        .with(schema(
+            json!({
+                "doc": doc(),
+                "dry_run": { "type": "boolean", "description": "Only report what would change (default false)." },
+            }),
+            &["doc"],
+        )),
+        t(
             "print_color_warnings",
             "Overprint and rich-black warnings",
             "Output Preview's colour warnings, per page: overprint-state (an ExtGState sets OP/op true or OPM 1; object is the ExtGState), overprint-paint (fills, strokes, text or images painted with overprint on), overprint-white (warning: a white or zero-tint object set to overprint, which disappears on press for DeviceCMYK with OPM 1 and for spot colours), rich-black (K at or above rich_black_k with C+M+Y at or above rich_black_cmy_total; colour.total is the summed ink), rich-black-small-text (warning: rich-black text below small_text_pt, using font size × text and current matrices) and registration-colour (warning: Separation /All outside printer marks, recognised by Artifact PrinterMarks marked content, a \"Printer marks\" layer, or lying outside the TrimBox). DeviceCMYK, four-component ICC, Indexed, DeviceN process colorants and spot colours with Type 0/Type 2 tint transforms are resolved to C, M, Y, K (via_alternate marks spot alternates); RGB/Lab, image pixels, shadings and other tint transforms are counted under unresolved. Follows forms and coloured tiling patterns (loops and depth capped). Identical findings merge, with occurrences and a union rect (top-left of the displayed page; pdf_rect in user space). counts has every kind; findings keep at most max_findings per kind. Read-only.",

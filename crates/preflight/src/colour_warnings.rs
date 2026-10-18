@@ -398,12 +398,18 @@ pub(crate) enum Tint {
 
 impl Tint {
     pub(crate) fn eval(&self, t: f64) -> Vec<f64> {
+        self.eval_raw(t).into_iter().map(clamp01).collect()
+    }
+
+    /// The outputs at `t` without clamping them to 0–1 (Lab alternates reach 100).
+    pub(crate) fn eval_raw(&self, t: f64) -> Vec<f64> {
+        let finite = |v: f64| if v.is_finite() { v } else { 0.0 };
         match self {
             Tint::Exponential { domain, c0, c1, n } => {
                 let t = if t.is_finite() { t.clamp(domain[0].min(domain[1]), domain[0].max(domain[1])) } else { domain[0] };
                 let p = t.powf(*n);
                 let p = if p.is_finite() { p } else { 0.0 };
-                c0.iter().zip(c1).map(|(a, b)| clamp01(a + p * (b - a))).collect()
+                c0.iter().zip(c1).map(|(a, b)| finite(a + p * (b - a))).collect()
             }
             Tint::Sampled { domain, encode, samples } => {
                 let t = if t.is_finite() { t.clamp(domain[0].min(domain[1]), domain[0].max(domain[1])) } else { domain[0] };
@@ -414,7 +420,7 @@ impl Tint {
                 let (lo, hi) = (e.floor() as usize, e.ceil() as usize);
                 let f = e - e.floor();
                 let (Some(a), Some(b)) = (samples.get(lo), samples.get(hi)) else { return Vec::new() };
-                a.iter().zip(b).map(|(a, b)| clamp01(a + f * (b - a))).collect()
+                a.iter().zip(b).map(|(a, b)| finite(a + f * (b - a))).collect()
             }
         }
     }

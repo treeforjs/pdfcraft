@@ -15,7 +15,10 @@ use std::collections::BTreeMap;
 
 use pdfcraft_cos::{Document, Object};
 
-pub use crate::coverage::{BuiltIn, Conversion, InkInfo, MAX_DPI, MAX_INKS, MIN_DPI, PROCESS_INKS, Raster, rasterize};
+pub use crate::coverage::{
+    BuiltIn, Conversion, IMAGE, InkInfo, MAX_DPI, MAX_INKS, MIN_DPI, PROCESS_INKS, Raster, TEXT, TintFunction, VECTOR, kind_names, rasterize,
+};
+pub use crate::ink_manager::{InkManager, Managed, Route};
 
 /// The resolution inks are listed at (cells per inch).
 pub const LIST_DPI: f64 = MIN_DPI;
@@ -32,6 +35,8 @@ pub struct InkUse {
     pub pages: Vec<usize>,
     /// 0-based pages whose resources define it (spot inks; empty for process inks).
     pub declared_pages: Vec<usize>,
+    /// The kinds of object that put it down ([`kind_names`] bits).
+    pub kinds: u8,
 }
 
 /// The inks of the listed pages.
@@ -49,6 +54,9 @@ pub struct InkList {
     pub truncated_pages: Vec<usize>,
     /// How RGB and Lab colours were converted.
     pub conversion: String,
+    /// Inks the Ink Manager moved off their own plate: ink → the plate it went to (another
+    /// ink, or `process`), over all pages.
+    pub routes: BTreeMap<String, String>,
 }
 
 /// List the inks used on 0-based `pages` (all pages when empty, at most [`MAX_LIST_PAGES`]).
@@ -62,7 +70,7 @@ pub fn list_inks(doc: &Document, pages: &[usize], conversion: &dyn Conversion) -
         return Err(format!("page {} does not exist; the document has {count} pages", p.saturating_add(1)));
     }
     let mut inks: Vec<InkUse> =
-        (0..PROCESS_INKS.len()).map(|i| InkUse { info: InkInfo::process(i), pages: Vec::new(), declared_pages: Vec::new() }).collect();
+        (0..PROCESS_INKS.len()).map(|i| InkUse { info: InkInfo::process(i), pages: Vec::new(), declared_pages: Vec::new(), kinds: 0 }).collect();
     let mut out = InkList {
         inks: Vec::new(),
         pages: pages.clone(),
@@ -70,6 +78,7 @@ pub fn list_inks(doc: &Document, pages: &[usize], conversion: &dyn Conversion) -
         unmeasured: BTreeMap::new(),
         truncated_pages: Vec::new(),
         conversion: conversion.describe(),
+        routes: BTreeMap::new(),
     };
     for &page in &pages {
         let r = rasterize(doc, page, LIST_DPI, true, conversion)?;
@@ -77,7 +86,7 @@ pub fn list_inks(doc: &Document, pages: &[usize], conversion: &dyn Conversion) -
             let slot = match inks.iter().position(|u| u.info.name == info.name) {
                 Some(slot) => slot,
                 None => {
-                    inks.push(InkUse { info: info.clone(), pages: Vec::new(), declared_pages: Vec::new() });
+                    inks.push(InkUse { info: info.clone(), pages: Vec::new(), declared_pages: Vec::new(), kinds: 0 });
                     inks.len() - 1
                 }
             };
@@ -88,6 +97,7 @@ pub fn list_inks(doc: &Document, pages: &[usize], conversion: &dyn Conversion) -
             if r.painted.get(i).copied().unwrap_or(false) && !u.pages.contains(&page) {
                 u.pages.push(page);
             }
+            u.kinds |= r.painted_kinds.get(i).copied().unwrap_or(0);
         }
         if r.converted_paints > 0 {
             out.converted_pages.push(page);
@@ -99,6 +109,7 @@ pub fn list_inks(doc: &Document, pages: &[usize], conversion: &dyn Conversion) -
         if r.truncated {
             out.truncated_pages.push(page);
         }
+        out.routes.extend(r.routes);
     }
     out.inks = inks;
     Ok(out)

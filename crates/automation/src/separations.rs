@@ -77,7 +77,7 @@ fn encode(data: &[u8], w: usize, h: usize, color: png::ColorType) -> Result<Vec<
     Ok(out)
 }
 
-fn ink_json(info: &pdfcraft_engine::preflight::InkInfo) -> Value {
+pub(crate) fn ink_json(info: &pdfcraft_engine::preflight::InkInfo) -> Value {
     json!({
         "name": info.name,
         "kind": if info.process { "process" } else { "spot" },
@@ -142,6 +142,8 @@ impl Automation {
             "unmeasured": list.unmeasured,
             "truncated_pages": one_based(&list.truncated_pages),
             "method": pdfcraft_engine::pdfa::coverage::METHOD,
+            "ink_manager": crate::ink_manager::settings_json(doc.ink_manager()),
+            "routed": list.routes,
         }))
     }
 
@@ -247,6 +249,8 @@ impl Automation {
             "unmeasured": seps.unmeasured,
             "approximated": seps.approximated,
             "truncated": seps.truncated,
+            "ink_manager": crate::ink_manager::settings_json(doc.ink_manager()),
+            "routed": seps.routes,
         }))];
         out.extend(images);
         Ok(out)
@@ -287,6 +291,7 @@ impl Automation {
             "conversion": seps.conversion,
             "unmeasured": seps.unmeasured,
             "truncated": seps.truncated,
+            "routed": seps.routes,
         }))
     }
 }

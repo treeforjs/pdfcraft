@@ -595,3 +595,24 @@ fn a_cmyk_profile_separates_srgb_and_lab_colours() {
     assert!(p.cmyk_from_lab([f64::NAN, 0.0, 0.0]).is_none());
     assert!(p.cmyk_from_srgb([f64::NAN, 2.0, -1.0]).is_some());
 }
+
+#[test]
+fn only_the_chosen_spot_inks_convert_and_mixed_devicen_is_kept() {
+    let tint = |c1: &str| format!("<< /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] /C1 [{c1}] /N 1 >>");
+    let res = format!(
+        "<< /ColorSpace << /A [/Separation /Orange /DeviceCMYK {}] /B [/Separation /Green /DeviceCMYK {}] /D [/DeviceN [/Orange /Green] /DeviceCMYK 5 0 R] >> >>",
+        tint("0 0.5 1 0"),
+        tint("1 0 1 0")
+    );
+    let ps = stream("/FunctionType 4 /Domain [0 1 0 1] /Range [0 1 0 1 0 1 0 1]", "{ 0 0 4 2 roll }");
+    let page = "/A cs 1 scn 0 0 10 10 re f /B cs 1 scn 0 0 1 1 re f /D cs 1 1 scn 0 0 2 2 re f";
+    let mut doc = doc_with(&res, &[page], &[ps]);
+    let only: BTreeSet<Vec<u8>> = [b"Orange".to_vec()].into_iter().collect();
+    let settings = ColorConversion { sources: SourceSpaces::NONE, convert_spots: true, spot_names: Some(only), ..cmyk() };
+    let r = convert_colors(&mut doc, &[0], &settings).unwrap();
+    let p = paints(&content(&doc, 0));
+    assert_eq!(p[0].1, "k 0 0.5 1 0", "{p:?}");
+    assert_eq!(p[1].1, "/B 1", "Green is kept: {p:?}");
+    assert_eq!(p[2].1, "/D 1 1", "the DeviceN mixes a kept ink: {p:?}");
+    assert!(r.skipped.iter().any(|s| s.contains("DeviceN")), "{r:?}");
+}

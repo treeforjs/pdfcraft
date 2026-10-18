@@ -22,6 +22,7 @@ mod content;
 mod conventions;
 mod dests;
 mod forms;
+mod ink_manager;
 mod links;
 mod make_accessible;
 #[cfg(feature = "mcp")]
@@ -715,6 +716,9 @@ impl Automation {
             "print_separations_list" => self.separations_list(&a)?,
             "print_separations_render" => return self.separations_render(&a),
             "print_separations_sample" => self.separations_sample(&a)?,
+            "print_ink_manager_list" => self.ink_manager_list(&a)?,
+            "print_ink_manager_set" => self.ink_manager_set(&a)?,
+            "print_ink_manager_apply" => self.ink_manager_apply(&a)?,
             "print_add_printer_marks" => self.add_printer_marks(&a)?,
             "print_convert_colors" => self.convert_colors(&a)?,
             "associated_files_list" => self.associated_files_list(&a)?,
