@@ -585,6 +585,41 @@ impl Automation {
         Ok(json!({ "path": path.to_string_lossy(), "bytes": bytes.len(), "format": format.extension() }))
     }
 
+    pub(crate) fn doc_export_pptx(&self, a: &Args) -> Result<Value> {
+        use pdfcraft_engine::pptx_export::{PptxMode, PptxOptions};
+        let path = self.resolve(a.str("path")?, true)?;
+        let ext = path.extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
+        if ext != "pptx" {
+            return Err(ToolError::InvalidArgs(format!("path must end in .pptx, not {:?}", ext)));
+        }
+        let mode = match a.opt_str("mode")? {
+            None => PptxMode::Editable,
+            Some(m) => PptxMode::from_id(m).ok_or_else(|| ToolError::InvalidArgs(format!("unknown mode {m:?} (editable or image)")))?,
+        };
+        let dpi = a.opt_num("dpi")?.unwrap_or(150.0);
+        if !(36.0..=600.0).contains(&dpi) {
+            return Err(ToolError::InvalidArgs(format!("dpi must be between 36 and 600, not {dpi}")));
+        }
+        let pages = match a.opt_ints("pages")? {
+            Some(_) => self.pages(a, "pages")?,
+            None => Vec::new(),
+        };
+        let out = self.doc(a)?.export_pptx(&PptxOptions { pages, mode, dpi }).map_err(failed)?;
+        write_atomic(&path, &out.bytes)?;
+        let s = out.stats;
+        Ok(json!({
+            "path": path.to_string_lossy(),
+            "bytes": out.bytes.len(),
+            "mode": mode.id(),
+            "slides": s.slides,
+            "text_boxes": s.text_boxes,
+            "pictures": s.pictures,
+            "backgrounds": s.backgrounds,
+            "omitted": s.omitted,
+            "warnings": out.warnings,
+        }))
+    }
+
     /// The level asked for, else the one the document declares, else 2b; and where it came from.
     fn pdfa_level(&self, a: &Args) -> Result<(pdfcraft_engine::pdfa::Level, &'static str)> {
         use pdfcraft_engine::pdfa::Level;

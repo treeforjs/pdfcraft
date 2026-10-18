@@ -1281,6 +1281,40 @@ pub fn reading_blocks(doc: &Document, page: usize) -> Result<Vec<TextBlock>, Edi
     Ok(group_blocks(&lines, false))
 }
 
+/// Where a paragraph sits in its own text frame, for placing it as a box that may be turned
+/// (Export to PowerPoint): the writing direction's angle in degrees counterclockwise from the
+/// user-space x axis, the box's extent along and across that direction (user-space units), and
+/// its centre in user space. Upright text has angle 0 and the size of [`TextBlock::rect`].
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct BlockFrame {
+    pub angle: f64,
+    pub width: f64,
+    pub height: f64,
+    pub centre: [f64; 2],
+}
+
+/// [`reading_blocks`], each with its [`BlockFrame`].
+pub fn reading_blocks_framed(doc: &Document, page: usize) -> Result<Vec<(TextBlock, BlockFrame)>, EditError> {
+    let lines = reading_lines(doc, page)?;
+    let blocks = group_blocks(&lines, false);
+    Ok(blocks
+        .into_iter()
+        .map(|b| {
+            let frame = b.lines.first().and_then(|i| lines.get(*i)).map_or(Frame::UPRIGHT, |l| frame_of(&l.origin));
+            let fb = frame_box(&lines, &b);
+            let (cx, cy) = frame.user(((fb[0] + fb[2]) / 2.0, (fb[1] + fb[3]) / 2.0));
+            let angle = frame.x[1].atan2(frame.x[0]).to_degrees();
+            let bf = BlockFrame {
+                angle: if angle.is_finite() { angle } else { 0.0 },
+                width: (fb[2] - fb[0]).abs(),
+                height: (fb[3] - fb[1]).abs(),
+                centre: [cx, cy],
+            };
+            (b, bf)
+        })
+        .collect())
+}
+
 /// Lines that share a left edge, a centre or a right edge (left, centred or right-aligned text).
 fn aligned(a: &TextLine, b: &TextLine) -> bool {
     let tol = horizontal_text_size(b);

@@ -4518,6 +4518,107 @@ fn unzip(zip: &[u8]) -> Vec<(String, String)> {
     parts
 }
 
+/// The parts of a PowerPoint package, each slide's XML parsed back, and its relationship ids
+/// checked against the relationships part.
+fn pptx_slides(bytes: &[u8]) -> Vec<String> {
+    let parts = unzip(bytes);
+    let part = |name: &str| parts.iter().find(|p| p.0 == name).map(|p| p.1.clone()).unwrap_or_else(|| panic!("{name} missing"));
+    for p in &parts {
+        if p.0.ends_with(".xml") || p.0.ends_with(".rels") {
+            roxmltree::Document::parse(&p.1).unwrap_or_else(|e| panic!("{}: {e}", p.0));
+        }
+    }
+    let pres = part("ppt/presentation.xml");
+    let rels = part("ppt/_rels/presentation.xml.rels");
+    let rels = roxmltree::Document::parse(&rels).unwrap();
+    let target = |id: &str| rels.descendants().find(|n| n.attribute("Id") == Some(id)).and_then(|n| n.attribute("Target")).map(str::to_string);
+    let doc = roxmltree::Document::parse(&pres).unwrap();
+    let mut slides = Vec::new();
+    for id in doc.descendants().filter(|n| n.has_tag_name("sldId")) {
+        let rid = id.attributes().find(|a| a.name() == "id" && a.namespace().is_some()).unwrap().value();
+        let t = target(rid).unwrap_or_else(|| panic!("{rid} has no relationship"));
+        let xml = part(&format!("ppt/{t}"));
+        let file = t.rsplit('/').next().unwrap();
+        let srels = part(&format!("ppt/slides/_rels/{file}.rels"));
+        let sdoc = roxmltree::Document::parse(&xml).unwrap();
+        for n in sdoc.descendants() {
+            for a in n.attributes().filter(|a| a.namespace() == Some("http://schemas.openxmlformats.org/officeDocument/2006/relationships")) {
+                assert!(srels.contains(&format!("Id=\"{}\"", a.value())), "{file}: {} not in {srels}", a.value());
+            }
+        }
+        slides.push(xml);
+    }
+    slides
+}
+
+#[test]
+fn exporting_to_powerpoint() {
+    let dir = workdir("pptx");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    let r = ok(&mut a, "doc_export_pptx", json!({ "doc": doc, "path": "deck.pptx" }));
+    assert_eq!((r["mode"].as_str(), r["slides"].as_u64(), r["omitted"].as_u64()), (Some("editable"), Some(3), Some(0)), "{r}");
+    assert!(r["text_boxes"].as_u64().unwrap() >= 3, "{r}");
+    let bytes = std::fs::read(dir.join("deck.pptx")).unwrap();
+    assert_eq!(r["bytes"], bytes.len());
+    let slides = pptx_slides(&bytes);
+    assert_eq!(slides.len(), 3);
+    for (i, s) in slides.iter().enumerate() {
+        assert!(s.contains(&format!("Page {}", i + 1)) && s.contains("txBox=\"1\""), "slide {}: {s}", i + 1);
+    }
+
+    // Two pages in the order asked, as pictures.
+    let r = ok(&mut a, "doc_export_pptx", json!({ "doc": doc, "path": "pictures.pptx", "pages": [3, 1], "mode": "image", "dpi": 36 }));
+    assert_eq!((r["slides"].as_u64(), r["backgrounds"].as_u64(), r["text_boxes"].as_u64()), (Some(2), Some(2), Some(0)), "{r}");
+    let slides = pptx_slides(&std::fs::read(dir.join("pictures.pptx")).unwrap());
+    assert!(slides.iter().all(|s| s.contains("name=\"Page background\"") && !s.contains("txBox")));
+
+    for bad in [
+        json!({ "doc": doc, "path": "deck.ppt" }),
+        json!({ "doc": doc, "path": "deck" }),
+        json!({ "doc": doc, "path": "x.pptx", "mode": "outline" }),
+        json!({ "doc": doc, "path": "x.pptx", "mode": 3 }),
+        json!({ "doc": doc, "path": "x.pptx", "dpi": 0 }),
+        json!({ "doc": doc, "path": "x.pptx", "dpi": 1e9 }),
+        json!({ "doc": doc, "path": "x.pptx", "dpi": "high" }),
+        json!({ "doc": doc, "path": "x.pptx", "pages": [] }),
+        json!({ "doc": doc, "path": "x.pptx", "pages": [0] }),
+        json!({ "doc": doc, "path": "x.pptx", "pages": [4] }),
+        json!({ "doc": doc, "path": "x.pptx", "pages": [-1] }),
+        json!({ "doc": doc, "path": "x.pptx", "pages": [9223372036854775807u64] }),
+        json!({ "doc": doc, "path": "x.pptx", "pages": "1-2" }),
+        json!({ "doc": doc }),
+        json!({ "doc": doc, "path": 7 }),
+    ] {
+        assert!(matches!(a.call("doc_export_pptx", &bad), Err(ToolError::InvalidArgs(_))), "{bad}");
+    }
+    assert!(a.call("doc_export_pptx", &json!({ "doc": 999, "path": "x.pptx" })).is_err());
+    // Root confinement: nothing is written outside the allowed directory.
+    assert!(a.call("doc_export_pptx", &json!({ "doc": doc, "path": "../outside.pptx" })).is_err());
+    assert!(a.call("doc_export_pptx", &json!({ "doc": doc, "path": "/tmp/outside-pdfcraft.pptx" })).is_err());
+    assert!(!dir.join("x.pptx").exists() && !dir.parent().unwrap().join("outside.pptx").exists());
+
+    // LibreOffice, when installed, opens the package and converts it back to PDF.
+    let soffice = std::process::Command::new("soffice")
+        .args(["--headless", "--convert-to", "pdf", "--outdir"])
+        .arg(&dir)
+        .arg(dir.join("deck.pptx"))
+        .env("HOME", &dir)
+        .output();
+    match soffice {
+        Ok(out) if out.status.success() => {
+            let pdf = std::fs::read(dir.join("deck.pdf")).unwrap_or_default();
+            assert!(pdf.starts_with(b"%PDF"), "LibreOffice did not convert the deck: {}", String::from_utf8_lossy(&out.stderr));
+            let opened = ok(&mut a, "doc_open", json!({ "path": "deck.pdf" }));
+            assert_eq!(opened["pages"], 3);
+            let doc = opened["doc"].as_u64().unwrap();
+            assert!(page_text(&mut a, doc)[1].contains("Page 2"));
+        }
+        _ => eprintln!("soffice not available; skipping the LibreOffice round trip"),
+    }
+    let _ = std::fs::remove_dir_all(dir);
+}
+
 #[test]
 fn exporting_tables_to_excel() {
     // Page 1: a title, then a three-column table drawn as separately positioned text; page 2: prose.

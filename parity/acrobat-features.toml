@@ -6912,11 +6912,11 @@ title = "Export to PowerPoint (.pptx)"
 area = "J"
 tier = "P1"
 milestone = "M10"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["doc_export_pptx"]
+evidence = ["crates/export/src/pptx.rs::package_has_every_part_and_consistent_relationships", "crates/export/src/pptx.rs::text_boxes_carry_position_font_and_style", "crates/export/src/pptx.rs::rotation_flip_and_line_pitch", "crates/export/src/pptx.rs::hostile_values_neither_panic_nor_break_the_package", "crates/engine/src/pptx_export.rs::pages_become_text_boxes_pictures_and_backgrounds", "crates/engine/src/pptx_export.rs::image_mode_and_page_choice", "crates/engine/src/pptx_export.rs::hostile_pages_export_without_panicking", "crates/automation/tests/automation.rs::exporting_to_powerpoint", "crates/automation/tests/reader_selection.rs::encrypted_copy_denied_refuses_every_reader_path_without_leaking_text"]
+notes = "One slide per page; slide size from the first exported page as displayed (other sizes scaled to fit and centred). Editable mode: each paragraph is a text box placed and turned as displayed (/Rotate and rotated text), with font family (subset tag and style suffixes dropped, standard 14 mapped to Arial/Times New Roman/Courier New), size, bold/italic, colour and line pitch; extractable image XObjects are pictures (rotation and vertical flip kept); everything else (vector art, shadings, inline images, fields, comments) is one background picture rendered without the text and those images, left out when blank. Image mode: one picture per page (allowed on copy-restricted documents, as Export ▸ Image). Package (ECMA-376: master, blank layout, theme, props) opened and converted by LibreOffice 24.2 in the end-to-end test; not yet opened in PowerPoint. Not yet: vector paths as native shapes, per-run styles within a paragraph, tables, links, speaker notes, a menu command/dialog."
 
 [[feature]]
 id = "create.export-png"

@@ -4,13 +4,16 @@
 //! images (encoded bytes and box), in reading order. The writers turn that into a flowing
 //! document: headings are the paragraphs set larger than the body text, and images sit where
 //! they fall between paragraphs. The Excel writer ([`xlsx`]) puts each page on its own worksheet,
-//! with the detected tables as cell grids.
+//! with the detected tables as cell grids. The PowerPoint writer ([`pptx`]) is positional
+//! instead: one slide per page, text boxes and pictures where they sit on the page.
 
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
+mod pptx;
 mod xlsx;
 mod zip;
 
+pub use pptx::{MAX_SHAPES, MAX_SLIDES, Placement, PptxStats, Slide, SlidePicture, SlideText, font_family, pptx};
 pub use xlsx::{MAX_SHEETS, xlsx};
 pub use zip::Zip;
 
