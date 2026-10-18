@@ -20,6 +20,15 @@ let report = optimize_with_progress(&mut doc, &settings, &mut |stage| keep_going
   optionally downsampled first by area average (majority, ties to ink; not bicubic). Only
   samples that decode completely through general filters are used; CCITT/JBIG2 images, inline
   images and images with indirect filter descriptions are left alone.
+- **Despeckle** (`despeckle_page_images`, module `despeckle`; Scan & OCR's despeckle): isolated
+  dark specks that fit a square sized by each image's effective resolution (low 0.13 mm,
+  medium 0.21 mm, high 0.34 mm) are removed unless text-sized ink lies within 3 pt, so
+  periods and i-dots stay; optional light-hole filling and impulse median. Original
+  connected-component code over a bit mask and runs (at most 80 M pixels, 8 M runs). One-bit
+  images stay one-bit (CCITT fax is decoded with `hayro-ccitt` and re-encoded as Group 4);
+  8-bit gray/RGB are rewritten (JPEG at quality 90 when they were JPEG). JBIG2, JPEG 2000,
+  CMYK, decode arrays and masks are left alone and counted as skipped. The method and its
+  thresholds are documented in `src/despeckle.rs`.
 - **Discard objects:** thumbnails, alternate images, document tags, print settings.
 - **Clean up:** Flate for streams with no filter (when smaller); LZW streams re-encoded as Flate
   when they decode completely (`Stream::decoded_complete`: strict, end-of-data code required,

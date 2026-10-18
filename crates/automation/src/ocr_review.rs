@@ -20,6 +20,14 @@ pub(crate) fn orientation_json(page: &pdfcraft_engine::ocr::OcrPage) -> Value {
         .map_or(Value::Null, |o| json!({"page": page.page + 1, "rotation": o.rotation, "skew": (f64::from(o.skew) * 10.0).round() / 10.0}))
 }
 
+/// What despeckling the recognition copy removed (`null` when despeckle was off).
+pub(crate) fn despeckle_json(stats: Option<&pdfcraft_engine::ocr::DespeckleStats>) -> Value {
+    stats.map_or(
+        Value::Null,
+        |s| json!({"dark_specks": s.dark_specks, "light_specks": s.light_specks, "impulses": s.impulses, "pixels_changed": s.pixels_changed}),
+    )
+}
+
 fn review_json(review: &OcrReview) -> Value {
     let pages: Vec<_> = review
         .pages()
@@ -35,7 +43,7 @@ fn review_json(review: &OcrReview) -> Value {
                     })
                 })
                 .collect();
-            json!({"page": page.page + 1, "text": page.text(), "words": words, "skipped": page.skipped, "orientation": orientation_json(page)})
+            json!({"page": page.page + 1, "text": page.text(), "words": words, "skipped": page.skipped, "orientation": orientation_json(page), "despeckle": despeckle_json(page.despeckle.as_ref())})
         })
         .collect();
     json!({"doc": review.document().0, "generation": review.generation(), "words": review.words(), "pages": pages})

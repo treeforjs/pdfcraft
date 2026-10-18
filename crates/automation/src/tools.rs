@@ -1370,6 +1370,9 @@ pub fn tools() -> Vec<ToolDef> {
                     "auto_rotate": { "type": "boolean", "description": "Detect pages turned by 90, 180 or 270 degrees and read them upright (default false). Detection compares recognition of reduced copies; the page image is not changed and the text is placed over the original words." },
                     "deskew": { "type": "boolean", "description": "Detect skew of up to 15 degrees and read the page straightened (default false). The page image is not changed unless output is straighten." },
                     "output": { "type": "string", "enum": ["exact", "straighten"], "description": "exact (default): Searchable Image (Exact), the page is not changed. straighten: Searchable Image, pages found turned or skewed by auto_rotate/deskew are also turned straight (content and /Rotate), and the recognized pages' images finer than dpi are downsampled to it." },
+                    "despeckle": { "type": "string", "enum": ["off", "low", "medium", "high"], "description": "Remove isolated dark specks before reading (default off): low up to 0.13 mm, medium 0.21 mm, high 0.34 mm across, sized by the page's resolution; specks within about 1 mm of text (periods, i-dots) are kept. The page image changes only with output straighten." },
+                    "despeckle_light": { "type": "boolean", "description": "With despeckle: also fill small light holes inside solid ink (default false)." },
+                    "despeckle_median": { "type": "boolean", "description": "Also replace single-pixel impulses in gray/colour scans by their 3x3 median (default false; ignores the punctuation rule)." },
                 }),
                 &["doc"],
             )),
@@ -1384,8 +1387,22 @@ pub fn tools() -> Vec<ToolDef> {
                     "auto_rotate": { "type": "boolean", "description": "Detect pages turned by 90, 180 or 270 degrees and read them upright (default false). Detection compares recognition of reduced copies; the page image is not changed and the text is placed over the original words." },
                     "deskew": { "type": "boolean", "description": "Detect skew of up to 15 degrees and read the page straightened (default false). The page image is not changed unless output is straighten." },
                     "output": { "type": "string", "enum": ["exact", "straighten"], "description": "exact (default): Searchable Image (Exact), the page is not changed. straighten: Searchable Image, pages found turned or skewed by auto_rotate/deskew are also turned straight (content and /Rotate), and the recognized pages' images finer than dpi are downsampled to it." },
+                    "despeckle": { "type": "string", "enum": ["off", "low", "medium", "high"], "description": "Remove isolated dark specks before reading (default off): low up to 0.13 mm, medium 0.21 mm, high 0.34 mm across, sized by the page's resolution; specks within about 1 mm of text (periods, i-dots) are kept. The page image changes only with output straighten." },
+                    "despeckle_light": { "type": "boolean", "description": "With despeckle: also fill small light holes inside solid ink (default false)." },
+                    "despeckle_median": { "type": "boolean", "description": "Also replace single-pixel impulses in gray/colour scans by their 3x3 median (default false; ignores the punctuation rule)." },
                 }),
                 &["paths", "folder"],
+            )),
+        t("scan_despeckle", "Despeckle scanned pages", "Scan & OCR ▸ Enhance scan ▸ Despeckle: remove isolated dark specks (scanner dust, noise) from the images the pages draw, as one undoable step. Each image is sized by its effective resolution where it is drawn: level low removes specks up to 0.13 mm across, medium (default) 0.21 mm, high 0.34 mm; a speck within about 1 mm of text-sized ink is kept, so periods, commas and i-dots survive. One-bit scans (CCITT fax, Flate, LZW) stay one-bit; 8-bit gray and RGB images are rewritten (JPEG at quality 90 when they were JPEG). JBIG2, JPEG 2000, CMYK and other images it cannot decode faithfully are left alone and counted in images_skipped. Images shared with other pages change there too. Returns images, images_changed, images_skipped, dark_specks, light_specks, impulses and pixels_changed; when nothing changed no step is added.")
+            .with(schema(
+                json!({
+                    "doc": doc(),
+                    "pages": pages("to despeckle (default: all)"),
+                    "level": { "type": "string", "enum": ["off", "low", "medium", "high"], "description": "Largest speck removed (default medium); off with median true only median-filters." },
+                    "light": { "type": "boolean", "description": "Also fill small light holes inside solid ink (default false)." },
+                    "median": { "type": "boolean", "description": "Also replace single-pixel impulses in gray/colour images by their 3x3 median (default false; ignores the punctuation rule)." },
+                }),
+                &["doc"],
             )),
         t("ocr_status", "OCR status", "Whether text recognition is available (its models are installed: release packages include them; a source build fetches them with `cargo xtask models`; PDFCRAFT_MODELS overrides), where it looks for them, and the languages it reads.")
             .ro()
@@ -1399,7 +1416,10 @@ pub fn tools() -> Vec<ToolDef> {
                 "skip_text_pages": {"type":"boolean"},
                 "auto_rotate": {"type":"boolean", "description":"Detect 90/180/270-degree page turns and read pages upright (default false); the image is not changed."},
                 "deskew": {"type":"boolean", "description":"Detect skew up to 15 degrees and read pages straightened (default false); the image is not changed unless output is straighten."},
-                "output": { "type": "string", "enum": ["exact", "straighten"], "description": "exact (default): Searchable Image (Exact), the page is not changed. straighten: Searchable Image, pages found turned or skewed by auto_rotate/deskew are also turned straight (content and /Rotate), and the recognized pages' images finer than dpi are downsampled to it." }
+                "output": { "type": "string", "enum": ["exact", "straighten"], "description": "exact (default): Searchable Image (Exact), the page is not changed. straighten: Searchable Image, pages found turned or skewed by auto_rotate/deskew are also turned straight (content and /Rotate), and the recognized pages' images finer than dpi are downsampled to it." },
+                "despeckle": {"type":"string", "enum":["off", "low", "medium", "high"], "description":"Remove isolated dark specks before reading (default off); with output straighten the page images are despeckled too."},
+                "despeckle_light": {"type":"boolean", "description":"With despeckle: also fill small light holes inside solid ink (default false)."},
+                "despeckle_median": {"type":"boolean", "description":"Also median-filter single-pixel impulses in gray/colour scans (default false)."}
             }), &["doc"])),
         t("ocr_review", "Inspect recognized text draft", "List recognized words, page coordinates and skipped-page reasons. Does not change the PDF. If the document changed, was closed or no longer allows copying and changes, returns an error and discards the draft instead of its words.")
             .ro().cmd("ocr.recognize").with(schema(json!({"doc":doc()}), &["doc"])),

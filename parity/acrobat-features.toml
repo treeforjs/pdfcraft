@@ -6500,11 +6500,11 @@ title = "Despeckle"
 area = "I"
 tier = "P1"
 milestone = "M10"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["scan_despeckle", "ocr_recognize", "ocr_prepare", "ocr_recognize_files"]
+evidence = ["crates/optimize/src/despeckle.rs::specks_are_removed_and_text_strokes_and_dots_kept", "crates/optimize/src/despeckle.rs::levels_remove_only_specks_up_to_their_size", "crates/optimize/src/despeckle.rs::work_is_capped_on_pathological_noise", "crates/optimize/tests/despeckle.rs::scans_lose_their_specks_and_keep_text_and_punctuation", "crates/engine/tests/despeckle.rs::recognition_reads_a_despeckled_copy_and_exact_keeps_the_page", "crates/engine/tests/despeckle.rs::searchable_image_despeckles_the_page_in_the_recognition_step", "crates/engine/tests/despeckle.rs::despeckle_scans_is_one_undoable_step_reporting_what_changed", "crates/automation/tests/automation.rs::scan_despeckle_removes_specks_as_one_undoable_step_and_rejects_bad_arguments"]
+notes = "Original connected-component despeckle (crates/optimize/src/despeckle.rs): dark specks that fit a square sized by the image's resolution (low 0.13 mm, medium 0.21 mm, high 0.34 mm; 2/3/4 px at 300 dpi) are removed unless text-sized ink lies within dpi/24 (3 pt) of them, which keeps periods, commas and i-dots; optional light-hole filling (pinholes in solid ink, not letter counters) and an opt-in impulse median for gray/colour. Recognize Text takes despeckle off|low|medium|high (+ despeckle_light, despeckle_median): recognition reads a despeckled copy; with output straighten (Searchable Image) the recognized pages' images are despeckled too in the same undo step. scan_despeckle is the standalone Enhance-scan operation (one undoable Edit::DespecklePageImages): one-bit images (CCITT fax re-encoded as G4, Flate/LZW) stay one-bit; 8-bit gray/RGB are rewritten (JPEG at q90). Measured only on synthetic fixtures. Not yet: a dialog/UI option, JBIG2/JPEG 2000/CMYK images (left alone, counted as skipped), real scans, ellipses at high level on small type (a trailing dot farther than ~3-6 pt from a letter can go), the other Enhance filters."
 
 [[feature]]
 id = "ocr.background-removal"

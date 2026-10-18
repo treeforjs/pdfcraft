@@ -161,7 +161,17 @@ fn bad_settings_pages_words_and_corrections_fail_before_mutation() {
     ] {
         assert!(
             session
-                .apply_ocr(id, &[pdfcraft_engine::ocr::OcrPage { page: 0, words: vec![bad], skipped: None, orientation: None, straighten: false }])
+                .apply_ocr(
+                    id,
+                    &[pdfcraft_engine::ocr::OcrPage {
+                        page: 0,
+                        words: vec![bad],
+                        skipped: None,
+                        orientation: None,
+                        straighten: false,
+                        despeckle: None
+                    }]
+                )
                 .is_err()
         );
     }
@@ -243,7 +253,12 @@ fn restricted_documents_refuse_recognition_before_rendering_or_backend_inference
         assert_eq!(session.ocr_authority(id).unwrap_err(), error);
         let words = vec![PlacedWord { text: "x".into(), origin: [10.0, 10.0], across: [20.0, 0.0], up: [0.0, 10.0] }];
         assert!(
-            session.apply_ocr(id, &[pdfcraft_engine::ocr::OcrPage { page: 0, words, skipped: None, orientation: None, straighten: false }]).is_err()
+            session
+                .apply_ocr(
+                    id,
+                    &[pdfcraft_engine::ocr::OcrPage { page: 0, words, skipped: None, orientation: None, straighten: false, despeckle: None }]
+                )
+                .is_err()
         );
         assert_eq!(state(&session, id), before, "no text, data or history change");
         assert_eq!(session.get(id).unwrap().bytes, bytes);

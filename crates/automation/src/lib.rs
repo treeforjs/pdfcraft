@@ -778,6 +778,7 @@ impl Automation {
             "form_set_actions" => self.form_set_actions(&a)?,
             "form_run_trigger" => self.form_run_trigger(&a)?,
             "ocr_status" => self.ocr_status()?,
+            "scan_despeckle" => self.scan_despeckle(&a)?,
             "ocr_recognize_files" => self.ocr_recognize_files(&a)?,
             "accessibility_report" => self.a11y_report(&a)?,
             "accessibility_fix" => self.a11y_fix(&a)?,

@@ -3813,6 +3813,7 @@ dependencies = [
 name = "pdfcraft-optimize"
 version = "0.5.0"
 dependencies = [
+ "hayro-ccitt",
  "image",
  "pdfcraft-annot",
  "pdfcraft-content",

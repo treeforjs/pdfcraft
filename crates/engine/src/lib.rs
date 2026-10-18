@@ -1506,6 +1506,13 @@ pub enum Edit {
         pages: Vec<usize>,
         ppi: f64,
     },
+    /// Scan & OCR ▸ Enhance ▸ Despeckle (and Recognize text's despeckle with Searchable Image):
+    /// remove isolated specks from the images `pages` draw
+    /// ([`optimize::despeckle_page_images`]).
+    DespecklePageImages {
+        pages: Vec<usize>,
+        options: optimize::despeckle::Options,
+    },
     /// Edit a PDF ▸ Edit text: replace the text of line `line` (from `Document::text_lines`) on
     /// `page`, in its own font when it can show it, else in Helvetica.
     EditTextLine {
@@ -1743,6 +1750,7 @@ impl Edit {
             Edit::AddOcrText { .. } => "Recognize text".into(),
             Edit::StraightenPage { .. } => "Straighten page".into(),
             Edit::DownsamplePageImages { .. } => "Downsample images".into(),
+            Edit::DespecklePageImages { .. } => "Despeckle".into(),
             Edit::ApplyScriptChanges { .. } => "Run JavaScript".into(),
             Edit::XfaEvent { .. } => "Run form script".into(),
             Edit::ConvertPdfA { level } => format!("Save as {}", level.label()),
@@ -1963,6 +1971,7 @@ fn check_permission(edit: &Edit, p: &pdfcraft_cos::Permissions) -> Result<(), Ed
         | Edit::AddOcrText { .. }
         | Edit::StraightenPage { .. }
         | Edit::DownsamplePageImages { .. }
+        | Edit::DespecklePageImages { .. }
         | Edit::SetDocumentScript { .. }
         | Edit::SetFieldScript { .. }
         | Edit::SetSignatureLock { .. }
@@ -2267,6 +2276,9 @@ fn run_edit(doc: &mut pdfcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -> 
         }
         Edit::DownsamplePageImages { pages, ppi } => {
             pdfcraft_optimize::downsample_page_images(doc, pages, *ppi).map_err(|e| EditError::Optimize(e.to_string()))?;
+        }
+        Edit::DespecklePageImages { pages, options } => {
+            pdfcraft_optimize::despeckle_page_images(doc, pages, *options).map_err(|e| EditError::Optimize(e.to_string()))?;
         }
         Edit::EditPageImage { page, index, change } => {
             let img = pdfcraft_edit::page_images(doc, *page)?
