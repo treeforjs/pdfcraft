@@ -31,6 +31,7 @@ pub mod compat;
 pub mod despeckle;
 pub mod fonts;
 mod images;
+pub mod inpaint;
 mod links;
 
 pub use audit::{SpaceAudit, SpaceCategory, SpaceUse, audit_space, audit_space_detailed};
@@ -319,6 +320,22 @@ pub fn remove_page_image_backgrounds(doc: &mut Document, pages: &[usize], option
         return Ok(BackgroundReport::default());
     }
     Ok(images::remove_backgrounds(doc, &chosen, options))
+}
+
+/// Recognize Text ▸ Editable Text and Images: fill `regions` (quadrilaterals in page `page`'s
+/// user space, 0-based page) of the images that page draws with the local paper colour
+/// ([`inpaint`]). Images shared with other pages change there too. Returns what changed and
+/// which regions were wholly cleaned.
+pub fn inpaint_page_image_regions(doc: &mut Document, page: usize, regions: &[[[f64; 2]; 4]]) -> Result<inpaint::InpaintReport, OptimizeError> {
+    let all = pdfcraft_annot::page_refs(doc).map_err(|_| OptimizeError::NoPages)?;
+    let r = *all.get(page).ok_or_else(|| OptimizeError::Invalid("the page to clean must be in the document".into()))?;
+    if regions.len() > inpaint::MAX_REGIONS {
+        return Err(OptimizeError::Invalid(format!("at most {} regions per page can be cleaned", inpaint::MAX_REGIONS)));
+    }
+    if regions.iter().any(|q| q.iter().flatten().any(|v| !v.is_finite() || v.abs() > 10_000_000.0)) {
+        return Err(OptimizeError::Invalid("regions must have finite coordinates within ten million points".into()));
+    }
+    Ok(inpaint::inpaint(doc, r, regions))
 }
 
 pub fn optimize_with_progress(doc: &mut Document, settings: &Settings, progress: &mut dyn FnMut(Stage) -> bool) -> Result<Report, OptimizeError> {

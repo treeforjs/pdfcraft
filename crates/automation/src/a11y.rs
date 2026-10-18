@@ -431,7 +431,17 @@ impl Automation {
         match a.opt_str("output")? {
             None | Some("exact") => {}
             Some("straighten") => settings.straighten = true,
-            Some(other) => return Err(ToolError::InvalidArgs(format!("unknown output {other:?}; use exact or straighten"))),
+            Some("editable") => settings.editable = Some(pdfcraft_engine::ocr::EditableOptions::default()),
+            Some(other) => return Err(ToolError::InvalidArgs(format!("unknown output {other:?}; use exact, straighten or editable"))),
+        }
+        if let Some(c) = a.opt_num("min_confidence")? {
+            let Some(e) = settings.editable.as_mut() else {
+                return Err(ToolError::InvalidArgs("min_confidence applies to output editable".into()));
+            };
+            if !(c.is_finite() && (0.0..=1.0).contains(&c)) {
+                return Err(ToolError::InvalidArgs("min_confidence must be between 0 and 1".into()));
+            }
+            e.min_confidence = c as f32;
         }
         settings.validate().map_err(ToolError::InvalidArgs)?;
         Ok(settings)
@@ -458,7 +468,13 @@ impl Automation {
                     let skipped: Vec<usize> = r.pages.iter().filter(|p| p.skipped.is_some()).map(|p| p.page + 1).collect();
                     let orientation: Vec<Value> =
                         r.pages.iter().filter(|p| p.orientation.is_some()).map(crate::ocr_review::orientation_json).collect();
-                    json!({ "path": p, "output": target.to_string_lossy(), "words": r.words(), "skipped_pages": skipped, "orientation": orientation })
+                    let editable: Vec<Value> = r
+                        .pages
+                        .iter()
+                        .filter(|p| p.editable.is_some())
+                        .map(|p| json!({ "page": p.page + 1, "editable": crate::ocr_review::editable_json(p) }))
+                        .collect();
+                    json!({ "path": p, "output": target.to_string_lossy(), "words": r.words(), "skipped_pages": skipped, "orientation": orientation, "editable": editable })
                 }
                 Err(e) => json!({ "path": p, "error": e }),
             });
@@ -479,6 +495,7 @@ impl Automation {
                     "page": p.page + 1, "words": p.word_count(), "text": p.text(),
                     "orientation": crate::ocr_review::orientation_json(p), "despeckle": crate::ocr_review::despeckle_json(p.despeckle.as_ref()),
                     "background": crate::ocr_review::background_json(p.background.as_ref()),
+                    "editable": crate::ocr_review::editable_json(p),
                 }),
             })
             .collect();

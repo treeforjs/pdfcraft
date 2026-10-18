@@ -8,10 +8,10 @@ use pdfcraft_cos::{Dict, Document, ObjRef, Object, Stream};
 use crate::{Compression, ImageSettings, MonoCompression, MonoSettings, OptimizeError, Report, Settings, Stage};
 
 /// Images with more pixels than this are left alone (memory).
-const MAX_PIXELS: u64 = 80_000_000;
+pub(crate) const MAX_PIXELS: u64 = 80_000_000;
 
 /// The resources of a page, inherited from the page tree if the page has none.
-fn page_resources(doc: &Document, page: ObjRef) -> Option<Dict> {
+pub(crate) fn page_resources(doc: &Document, page: ObjRef) -> Option<Dict> {
     let mut node = Some(page);
     for _ in 0..64 {
         let d = doc.get(node?).as_dict()?.clone();
@@ -23,7 +23,7 @@ fn page_resources(doc: &Document, page: ObjRef) -> Option<Dict> {
     None
 }
 
-fn content_bytes(doc: &Document, contents: &Object) -> Vec<u8> {
+pub(crate) fn content_bytes(doc: &Document, contents: &Object) -> Vec<u8> {
     match &*doc.resolve(contents) {
         Object::Stream(s) => s.decoded().unwrap_or_default(),
         Object::Array(a) => a
@@ -111,7 +111,7 @@ pub fn effective_resolutions(doc: &Document, pages: &[ObjRef]) -> HashMap<ObjRef
 }
 
 /// Colour components of a colour space PdfCraft resamples: gray (1) or RGB (3).
-fn components(doc: &Document, cs: &Object) -> Option<usize> {
+pub(crate) fn components(doc: &Document, cs: &Object) -> Option<usize> {
     let cs = doc.resolve(cs);
     match &*cs {
         Object::Name(n) => match n.as_slice() {
@@ -136,7 +136,7 @@ fn components(doc: &Document, cs: &Object) -> Option<usize> {
     }
 }
 
-fn is_dct(s: &Stream) -> Option<bool> {
+pub(crate) fn is_dct(s: &Stream) -> Option<bool> {
     match s.dict.get(b"Filter") {
         None => Some(false),
         Some(Object::Name(n)) => match n.as_slice() {
@@ -179,7 +179,7 @@ fn is_dct(s: &Stream) -> Option<bool> {
 }
 
 /// 8-bit samples of an image (`n` components), decoded.
-fn pixels(s: &Stream, n: usize) -> Option<Vec<u8>> {
+pub(crate) fn pixels(s: &Stream, n: usize) -> Option<Vec<u8>> {
     let (w, h) = (s.dict.int(b"Width")? as usize, s.dict.int(b"Height")? as usize);
     if is_dct(s)? {
         let img = image::load_from_memory_with_format(&s.raw, image::ImageFormat::Jpeg).ok()?;
@@ -209,7 +209,7 @@ fn jpeg(px: &[u8], n: usize, w: u32, h: u32, quality: u8) -> Option<Vec<u8>> {
 }
 
 /// A new image stream from 8-bit samples: the original dictionary with the new size and filter.
-fn image_stream(old: &Dict, px: &[u8], n: usize, w: u32, h: u32, compression: Compression, was_dct: bool) -> Option<Stream> {
+pub(crate) fn image_stream(old: &Dict, px: &[u8], n: usize, w: u32, h: u32, compression: Compression, was_dct: bool) -> Option<Stream> {
     let mut d = old.clone();
     for k in [&b"Filter"[..], b"DecodeParms", b"Length", b"DL"] {
         d.remove(k);
@@ -293,7 +293,7 @@ fn process(doc: &Document, s: &Stream, ppi: f64, settings: &ImageSettings, n: us
 }
 
 /// A one-bit image: an image mask, or one-bit samples in a one-component colour space.
-fn is_mono(doc: &Document, d: &Dict) -> bool {
+pub(crate) fn is_mono(doc: &Document, d: &Dict) -> bool {
     if matches!(d.get(b"ImageMask"), Some(Object::Bool(true))) {
         return d.get(b"BitsPerComponent").is_none_or(|b| matches!(b, Object::Int(1)));
     }
@@ -592,17 +592,20 @@ fn ccitt_samples(data: &[u8], parms: &Dict, w: usize, h: usize) -> Option<Vec<u8
     (sink.y >= h).then_some(sink.out)
 }
 
-/// One one-bit image, despeckled: the new stream, or `Ok(None)` when nothing changed.
-fn despeckle_mono(s: &Stream, ppi: f64, options: crate::despeckle::Options) -> Result<Option<(Stream, crate::despeckle::Stats)>, ()> {
+/// The packed one-bit samples of a mono image: `(bits, width, height, ink_is_one, ccitt)`,
+/// where `ccitt` holds the CCITT parameters when the image was fax-encoded.
+pub(crate) type MonoBits = (Vec<u8>, usize, usize, bool, Option<Dict>);
+
+pub(crate) fn mono_bits(s: &Stream, max_pixels: u64) -> Result<MonoBits, ()> {
     let d = &s.dict;
     let (w, h) = (usize::try_from(d.int(b"Width").ok_or(())?).map_err(|_| ())?, usize::try_from(d.int(b"Height").ok_or(())?).map_err(|_| ())?);
-    if w == 0 || h == 0 || w > 1 << 20 || (w as u64).saturating_mul(h as u64) > crate::despeckle::MAX_PIXELS {
+    if w == 0 || h == 0 || w > 1 << 20 || (w as u64).saturating_mul(h as u64) > max_pixels {
         return Err(());
     }
     let stride = w.div_ceil(8);
     let need = stride.checked_mul(h).ok_or(())?;
     let ccitt = ccitt_params(s).ok_or(())?;
-    let mut bits = match &ccitt {
+    let bits = match &ccitt {
         Some(parms) => {
             if d.contains(b"F") || d.contains(b"FFilter") {
                 return Err(());
@@ -616,19 +619,20 @@ fn despeckle_mono(s: &Stream, ppi: f64, options: crate::despeckle::Options) -> R
         Some(Object::Real(v)) => *v > 0.5,
         _ => false,
     };
-    let (Ok(width), Ok(height)) = (u32::try_from(w), u32::try_from(h)) else { return Err(()) };
-    let stats = crate::despeckle::despeckle_bits(&mut bits, width, height, ink_is_one, ppi, options).map_err(|_| ())?;
-    if !stats.changed() {
-        return Ok(None);
-    }
+    Ok((bits, w, h, ink_is_one, ccitt))
+}
+
+/// A mono image stream with new samples, re-encoded as it was (CCITT Group 4 or Flate).
+pub(crate) fn mono_stream(d: &Dict, bits: &[u8], w: usize, h: usize, ccitt: Option<Dict>) -> Result<Stream, ()> {
+    let need = w.div_ceil(8).checked_mul(h).ok_or(())?;
     let mut nd = d.clone();
     for k in [&b"Filter"[..], b"DecodeParms", b"Length", b"DL"] {
         nd.remove(k);
     }
-    let new = match ccitt {
+    Ok(match ccitt {
         Some(parms) => {
             let black_is_1 = matches!(parms.get(b"BlackIs1"), Some(Object::Bool(true)));
-            let data = pdfcraft_filters::encode_ccitt_g4(&bits, w, h, black_is_1, need.saturating_mul(4).saturating_add(1 << 16)).map_err(|_| ())?;
+            let data = pdfcraft_filters::encode_ccitt_g4(bits, w, h, black_is_1, need.saturating_mul(4).saturating_add(1 << 16)).map_err(|_| ())?;
             let mut p = Dict::new();
             p.set(b"K".to_vec(), Object::Int(-1));
             p.set(b"Columns".to_vec(), Object::Int(w as i64));
@@ -640,9 +644,19 @@ fn despeckle_mono(s: &Stream, ppi: f64, options: crate::despeckle::Options) -> R
             nd.set(b"DecodeParms".to_vec(), Object::Dict(p));
             Stream::from_raw(nd, data)
         }
-        None => Stream::flate(nd, &bits),
-    };
-    Ok(Some((new, stats)))
+        None => Stream::flate(nd, bits),
+    })
+}
+
+/// One one-bit image, despeckled: the new stream, or `Ok(None)` when nothing changed.
+fn despeckle_mono(s: &Stream, ppi: f64, options: crate::despeckle::Options) -> Result<Option<(Stream, crate::despeckle::Stats)>, ()> {
+    let (mut bits, w, h, ink_is_one, ccitt) = mono_bits(s, crate::despeckle::MAX_PIXELS)?;
+    let (Ok(width), Ok(height)) = (u32::try_from(w), u32::try_from(h)) else { return Err(()) };
+    let stats = crate::despeckle::despeckle_bits(&mut bits, width, height, ink_is_one, ppi, options).map_err(|_| ())?;
+    if !stats.changed() {
+        return Ok(None);
+    }
+    Ok(Some((mono_stream(&s.dict, &bits, w, h, ccitt)?, stats)))
 }
 
 /// One 8-bit gray or RGB image, despeckled (JPEG images are re-encoded at quality 90, others

@@ -36,6 +36,42 @@ pub(crate) fn background_json(stats: Option<&pdfcraft_engine::ocr::BackgroundSta
     )
 }
 
+/// Editable Text and Images on a page (`null` for the searchable outputs): the line count,
+/// how many lines use each font, each line's text, font, size (points), colour and horizontal
+/// scaling, and the words kept as image with invisible text (1-based word, text, the backend's
+/// confidence or `null`, and why).
+pub(crate) fn editable_json(page: &pdfcraft_engine::ocr::OcrPage) -> Value {
+    let Some(layout) = &page.editable else { return Value::Null };
+    let round = |v: f64| (v * 100.0).round() / 100.0;
+    let hex = |c: [u8; 3]| format!("#{:02x}{:02x}{:02x}", c[0], c[1], c[2]);
+    let lines: Vec<Value> = layout
+        .lines
+        .iter()
+        .map(|l| {
+            let text =
+                l.words.iter().filter_map(|w| page.words.get(w.index)).map(|w| w.text.trim()).filter(|t| !t.is_empty()).collect::<Vec<_>>().join(" ");
+            let words = l.words.iter().filter_map(|w| Some((page.words.get(w.index)?.text.as_str(), w.width))).filter(|(t, _)| !t.trim().is_empty());
+            let scale = pdfcraft_engine::ocr::horizontal_scale(l.font, words, l.size);
+            json!({
+                "text": text, "font": l.font.base_font(), "family": l.font.family.name(), "bold": l.font.bold,
+                "size": round(l.size), "color": hex(l.color), "paper": hex(l.paper), "horizontal_scale": scale.map(round),
+                "words": l.words.iter().map(|w| w.index + 1).collect::<Vec<_>>(),
+            })
+        })
+        .collect();
+    let low: Vec<Value> = layout
+        .suspects
+        .iter()
+        .map(|s| {
+            json!({
+                "word": s.word + 1, "text": page.words.get(s.word).map(|w| w.text.as_str()), "confidence": s.confidence,
+                "reason": s.reason.name(),
+            })
+        })
+        .collect();
+    json!({ "lines": layout.lines.len(), "fonts": layout.fonts(), "line_styles": lines, "low_confidence": low })
+}
+
 fn review_json(review: &OcrReview) -> Value {
     let pages: Vec<_> = review
         .pages()
@@ -51,7 +87,7 @@ fn review_json(review: &OcrReview) -> Value {
                     })
                 })
                 .collect();
-            json!({"page": page.page + 1, "text": page.text(), "words": words, "skipped": page.skipped, "orientation": orientation_json(page), "despeckle": despeckle_json(page.despeckle.as_ref()), "background": background_json(page.background.as_ref())})
+            json!({"page": page.page + 1, "text": page.text(), "words": words, "skipped": page.skipped, "orientation": orientation_json(page), "despeckle": despeckle_json(page.despeckle.as_ref()), "background": background_json(page.background.as_ref()), "editable": editable_json(page)})
         })
         .collect();
     json!({"doc": review.document().0, "generation": review.generation(), "words": review.words(), "pages": pages})

@@ -10,6 +10,7 @@ use std::sync::{Arc, Mutex};
 
 use pdfcraft_render::{PageInfo, PageRenderer, RenderConfig, RenderRequest, RequestKind};
 
+pub use pdfcraft_ocr::editable::{Family as FontFamily, Font as StandardFont, Suspect, SuspectReason, horizontal_scale};
 pub use pdfcraft_ocr::orient::Orientation;
 pub use pdfcraft_ocr::{LANGUAGES, Models, Ocr, OcrError, PlacedWord};
 pub use pdfcraft_optimize::background::{Options as BackgroundOptions, Stats as BackgroundStats, Strength as BackgroundStrength};
@@ -59,6 +60,190 @@ pub struct OcrSettings {
     /// the recognized pages' images get a white background too, in the same undoable step.
     /// Off by default.
     pub background: BackgroundOptions,
+    /// Output Editable Text and Images instead of a searchable image: recognized lines become
+    /// visible text in a matching standard font, size and colour, and the text areas are
+    /// cleaned out of the page image, which stays as the background ([`EditableOptions`]).
+    /// Not with `straighten`. With `background`/`despeckle` the page images are cleaned too.
+    /// Off by default.
+    pub editable: Option<EditableOptions>,
+}
+
+/// Editable Text and Images options.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct EditableOptions {
+    /// Words the backend is less sure of than this (0–1) stay as image with invisible text
+    /// over them. When the backend reports no confidence (the bundled engine), words whose
+    /// text doesn't look like a word are kept instead, unless this is 0.
+    pub min_confidence: f32,
+}
+
+impl Default for EditableOptions {
+    fn default() -> Self {
+        EditableOptions { min_confidence: 0.5 }
+    }
+}
+
+/// One word of an editable line: its index in [`OcrPage::words`], where it starts along the
+/// line and how long it is (user units), and the area of the page image it was read from.
+#[derive(Clone, Debug, PartialEq)]
+pub struct EditableWord {
+    pub index: usize,
+    /// Kept as image (a suspect): written invisibly in its place in the line.
+    pub image: bool,
+    pub offset: f64,
+    pub width: f64,
+    pub region: [[f64; 2]; 4],
+}
+
+/// A recognized line to be written as visible text (user space): the start of its baseline,
+/// unit vectors along and across it, and the font, size and colours measured for it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct EditableLine {
+    pub font: StandardFont,
+    pub size: f64,
+    pub origin: [f64; 2],
+    pub direction: [f64; 2],
+    pub up: [f64; 2],
+    pub color: [u8; 3],
+    pub paper: [u8; 3],
+    pub words: Vec<EditableWord>,
+}
+
+/// Editable Text and Images for one page: the lines that become text, and the words kept as
+/// image (with invisible text) and why.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct EditableLayout {
+    pub lines: Vec<EditableLine>,
+    pub suspects: Vec<Suspect>,
+}
+
+impl EditableLayout {
+    /// How many lines use each standard font.
+    pub fn fonts(&self) -> std::collections::BTreeMap<&'static str, usize> {
+        let mut out = std::collections::BTreeMap::new();
+        for l in &self.lines {
+            *out.entry(l.font.base_font()).or_insert(0) += 1;
+        }
+        out
+    }
+
+    /// The visible lines as they will be written, with the words' current (corrected) text;
+    /// words left empty by a correction stay as image. Also returns the image regions to clean
+    /// and which words became visible.
+    fn resolve(&self, words: &[PlacedWord]) -> (Vec<pdfcraft_ocr::editable::TextLine>, Vec<pdfcraft_ocr::editable::Region>, Vec<bool>) {
+        let mut used = vec![false; words.len()];
+        let (mut lines, mut regions) = (Vec::new(), Vec::new());
+        for l in &self.lines {
+            let kept: Vec<(&EditableWord, &str)> = l
+                .words
+                .iter()
+                .filter_map(|w| Some((w, words.get(w.index)?.text.trim())))
+                .filter(|(_, t)| !t.is_empty() && l.font.em_width(t).is_some())
+                .collect();
+            if kept.iter().all(|(w, _)| w.image) {
+                continue;
+            }
+            let Some((first, _)) = kept.first() else { continue };
+            let base = first.offset;
+            let origin = [l.origin[0] + l.direction[0] * base, l.origin[1] + l.direction[1] * base];
+            let mut line_words = Vec::new();
+            for (w, text) in &kept {
+                line_words.push(pdfcraft_ocr::editable::LineWord {
+                    text: (*text).to_owned(),
+                    offset: w.offset - base,
+                    width: w.width,
+                    hidden: w.image,
+                });
+                if !w.image {
+                    regions.push(pdfcraft_ocr::editable::Region { quad: w.region, paper: l.paper });
+                }
+                if let Some(u) = used.get_mut(w.index) {
+                    *u = true;
+                }
+            }
+            lines.push(pdfcraft_ocr::editable::TextLine {
+                font: l.font,
+                size: l.size,
+                origin,
+                direction: l.direction,
+                up: l.up,
+                color: l.color,
+                words: line_words,
+            });
+        }
+        (lines, regions, used)
+    }
+}
+
+/// Map a page's measured lines from recognition pixels to user space.
+fn editable_layout(
+    analysis: pdfcraft_ocr::editable::Analysis,
+    words: &[pdfcraft_ocr::Word],
+    to_user: &dyn Fn(f32, f32) -> [f64; 2],
+) -> EditableLayout {
+    let mut out = EditableLayout { lines: Vec::new(), suspects: analysis.suspects };
+    let map = |x: f64, y: f64| to_user(x as f32, y as f32);
+    for s in analysis.lines {
+        let o = map(s.left, s.baseline);
+        let e = map(s.right, s.baseline);
+        let u = map(s.left, s.baseline - s.size);
+        let along = [e[0] - o[0], e[1] - o[1]];
+        let upv = [u[0] - o[0], u[1] - o[1]];
+        let (length, size) = (along[0].hypot(along[1]), upv[0].hypot(upv[1]));
+        let span = s.right - s.left;
+        let usable = length.is_finite()
+            && length > 0.0
+            && span > 0.0
+            && size.is_finite()
+            && (pdfcraft_ocr::editable::MIN_SIZE..=pdfcraft_ocr::editable::MAX_SIZE).contains(&size)
+            && o.iter().all(|v| v.is_finite());
+        if !usable {
+            out.suspects.extend(s.words.iter().map(|i| Suspect {
+                word: *i,
+                confidence: words.get(*i).and_then(|w| w.confidence),
+                reason: SuspectReason::NoInk,
+            }));
+            continue;
+        }
+        let direction = [along[0] / length, along[1] / length];
+        let up = [upv[0] / size, upv[1] / size];
+        // Anti-aliased edges reach a little beyond the box the backend reports.
+        let pad = (0.06 * s.size).max(1.0);
+        let mut line_words = Vec::new();
+        let mut members: Vec<(usize, bool)> = s.words.iter().map(|i| (*i, false)).chain(s.kept.iter().map(|i| (*i, true))).collect();
+        members.sort_by(|a, b| {
+            let x = |i: usize| words.get(i).map_or(0.0, |w| w.rect[0]);
+            x(a.0).total_cmp(&x(b.0))
+        });
+        for (i, image) in &members {
+            let Some(w) = words.get(*i) else { continue };
+            let [l, t, r, b] = w.rect.map(f64::from);
+            let (t, b) = (t.min(s.top) - pad, b.max(s.bottom) + pad);
+            let (l2, r2) = (l - pad, r + pad);
+            line_words.push(EditableWord {
+                index: *i,
+                image: *image,
+                offset: (l - s.left) / span * length,
+                width: (r - l).max(0.0) / span * length,
+                region: [map(l2, t), map(r2, t), map(r2, b), map(l2, b)],
+            });
+        }
+        out.lines.push(EditableLine { font: s.font, size, origin: o, direction, up, color: s.color, paper: s.paper, words: line_words });
+    }
+    out.suspects.sort_by_key(|s| s.word);
+    out
+}
+
+/// The colour of the rendered page at a pixel (RGBA composited over white).
+fn colour_at(rgba: &[u8], width: u32, height: u32, x: f64, y: f64) -> Option<[u8; 3]> {
+    if !(x.is_finite() && y.is_finite() && x >= 0.0 && y >= 0.0 && x < f64::from(width) && y < f64::from(height)) {
+        return None;
+    }
+    let i = (y as usize).checked_mul(width as usize)?.checked_add(x as usize)?.checked_mul(4)?;
+    let p = rgba.get(i..i + 4)?;
+    let alpha = u32::from(p[3]);
+    let over = |c: u8| ((u32::from(c) * alpha + 255 * (255 - alpha) + 127) / 255) as u8;
+    Some([over(p[0]), over(p[1]), over(p[2])])
 }
 
 impl Default for OcrSettings {
@@ -72,6 +257,7 @@ impl Default for OcrSettings {
             straighten: false,
             despeckle: DespeckleOptions::default(),
             background: BackgroundOptions::default(),
+            editable: None,
         }
     }
 }
@@ -83,6 +269,14 @@ impl OcrSettings {
         }
         if self.background.white_point.is_some_and(|w| w < pdfcraft_optimize::background::MIN_WHITE_POINT) {
             return Err(format!("the background white point must be between {} and 255", pdfcraft_optimize::background::MIN_WHITE_POINT));
+        }
+        if let Some(e) = self.editable {
+            if self.straighten {
+                return Err("choose either the Searchable Image (straighten) or the Editable Text and Images output, not both".into());
+            }
+            if !(e.min_confidence.is_finite() && (0.0..=1.0).contains(&e.min_confidence)) {
+                return Err("the minimum confidence must be between 0 and 1".into());
+            }
         }
         if !LANGUAGES.iter().any(|(code, _)| *code == self.language) {
             return Err(format!("unsupported recognition language {:?}; the installed recognizer currently supports English", self.language));
@@ -183,6 +377,9 @@ pub struct OcrPage {
     pub despeckle: Option<DespeckleStats>,
     /// What background removal found and changed on the recognition copy, when it was on.
     pub background: Option<BackgroundStats>,
+    /// Editable Text and Images: the lines that become visible text and the words kept as
+    /// image ([`OcrSettings::editable`]).
+    pub editable: Option<EditableLayout>,
 }
 
 impl OcrPage {
@@ -286,6 +483,7 @@ impl OcrJob {
                 straighten: false,
                 despeckle: None,
                 background: None,
+                editable: None,
             };
             if self.settings.skip_text_pages {
                 let t = r.render(RenderRequest { page, kind: RequestKind::Text, scale: 1.0, ..Default::default() });
@@ -398,11 +596,34 @@ impl OcrJob {
                 [u as f64, v as f64]
             };
             let words = lines.iter().flat_map(|l| &l.words).map(|w| PlacedWord::place(w, to_user)).collect();
+            let editable = self.settings.editable.and_then(|options| {
+                // Measured in the image that was read (the corrected copy, if any); colours come
+                // from the rendered page through the same back-mapping as the words.
+                let flat: Vec<pdfcraft_ocr::Word> = lines.iter().flat_map(|l| l.words.iter().cloned()).collect();
+                let owned;
+                let gray = match &corrected.image {
+                    Some(image) => image,
+                    None => {
+                        owned = pdfcraft_ocr::orient::Gray::from_pixels(input, input_w, input_h).ok()?;
+                        &owned
+                    }
+                };
+                let rgb = |x: f64, y: f64| {
+                    let [sx, sy] = corrected.to_source.apply(x, y);
+                    colour_at(&shot.rgba, shot.width, shot.height, sx, sy)
+                };
+                let analysis = pdfcraft_ocr::editable::analyze(gray, &rgb, &flat, options.min_confidence);
+                Some(editable_layout(analysis, &flat, &to_user))
+            });
             let orientation = options.any().then_some(corrected.orientation);
             let straighten = self.settings.straighten && orientation.is_some_and(|o| o.rotation != 0 || o.skew != 0.0);
             let despeckle = cleaned.as_ref().and_then(|(_, stats, _)| *stats);
             let background = cleaned.as_ref().and_then(|(_, _, stats)| *stats);
-            let found = OcrPage { page, words, skipped: None, orientation, straighten, despeckle, background };
+            if self.settings.editable.is_some() && editable.is_none() {
+                out.push(skip("the page could not be measured for editable text"));
+                continue;
+            }
+            let found = OcrPage { page, words, skipped: None, orientation, straighten, despeckle, background, editable };
             if let Err(error) = pdfcraft_ocr::validate_words(&found.words) {
                 out.push(skip(&error.to_string()));
             } else {
@@ -413,8 +634,9 @@ impl OcrJob {
             return Err("text recognition canceled; no text was applied".into());
         }
         let downsample = self.settings.straighten.then_some(self.settings.dpi);
-        let despeckle = (self.settings.straighten && self.settings.despeckle.any()).then_some(self.settings.despeckle);
-        let background = (self.settings.straighten && self.settings.background.any()).then_some(self.settings.background);
+        let rewrite = self.settings.straighten || self.settings.editable.is_some();
+        let despeckle = (rewrite && self.settings.despeckle.any()).then_some(self.settings.despeckle);
+        let background = (rewrite && self.settings.background.any()).then_some(self.settings.background);
         Ok(OcrReview { source: self.source, pages: out, downsample, despeckle, background })
     }
 }
@@ -508,14 +730,38 @@ impl Session {
         self.ocr_authority(id).map_err(EditError::Invalid)?;
         let mut pages = std::collections::BTreeSet::new();
         for page in found {
-            if page.page >= count || !pages.insert(page.page) || (page.skipped.is_some() && !page.words.is_empty()) {
+            if page.page >= count || !pages.insert(page.page) || (page.skipped.is_some() && (!page.words.is_empty() || page.editable.is_some())) {
                 return Err(EditError::Invalid("recognized pages must be unique, present in the document, and empty when skipped".into()));
             }
             pdfcraft_ocr::validate_words(&page.words).map_err(|e| EditError::Invalid(e.to_string()))?;
+            if let Some(layout) = &page.editable {
+                if layout.lines.iter().flat_map(|l| &l.words).any(|w| w.index >= page.words.len())
+                    || layout.suspects.iter().any(|s| s.word >= page.words.len())
+                {
+                    return Err(EditError::Invalid("editable lines must refer to the page's recognized words".into()));
+                }
+                let (lines, regions, _) = layout.resolve(&page.words);
+                pdfcraft_ocr::editable::validate(&lines, &regions).map_err(|e| EditError::Invalid(e.to_string()))?;
+            }
         }
         let infos = self.get(id).map(|d| d.info.pages.clone()).unwrap_or_default();
         let mut edits = Vec::new();
         for p in found {
+            if let Some(layout) = &p.editable {
+                // Visible lines; everything else recognized stays as image with invisible text.
+                let (lines, regions, used) = layout.resolve(&p.words);
+                let hidden: Vec<_> = p
+                    .words
+                    .iter()
+                    .zip(used.iter().chain(std::iter::repeat(&false)))
+                    .filter(|(w, u)| !**u && !w.text.trim().is_empty())
+                    .map(|(w, _)| w.clone())
+                    .collect();
+                if !lines.is_empty() || !hidden.is_empty() {
+                    edits.push(Edit::AddEditableOcrText { page: p.page, lines, regions, hidden });
+                }
+                continue;
+            }
             let words: Vec<_> = p.words.iter().filter(|w| !w.text.trim().is_empty()).cloned().collect();
             if !words.is_empty() {
                 edits.push(Edit::AddOcrText { page: p.page, words });

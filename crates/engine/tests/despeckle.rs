@@ -17,7 +17,7 @@ impl Recognizer for Spy {
     fn recognize(&self, pixels: &[u8], width: u32, height: u32) -> Result<Vec<Line>, OcrError> {
         pdfcraft_ocr::validate_image(pixels, width, height)?;
         *self.0.borrow_mut() = Some((pixels.to_vec(), width, height));
-        Ok(vec![Line { words: vec![Word { text: "Scan".into(), rect: [10.0, 10.0, 50.0, 25.0] }] }])
+        Ok(vec![Line { words: vec![Word { text: "Scan".into(), rect: [10.0, 10.0, 50.0, 25.0], confidence: None }] }])
     }
 }
 

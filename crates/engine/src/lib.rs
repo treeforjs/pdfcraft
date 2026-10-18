@@ -1533,6 +1533,16 @@ pub enum Edit {
         page: usize,
         words: Vec<pdfcraft_ocr::PlacedWord>,
     },
+    /// Scan & OCR ▸ Recognize text ▸ Editable Text and Images: clean `regions` out of the images
+    /// `page` draws (filled with the paper around them; regions no image covers are painted with
+    /// that colour instead), then write `lines` as visible text and `hidden` (words kept as
+    /// image) as invisible text (from [`ocr::OcrJob::run`]).
+    AddEditableOcrText {
+        page: usize,
+        lines: Vec<pdfcraft_ocr::editable::TextLine>,
+        regions: Vec<pdfcraft_ocr::editable::Region>,
+        hidden: Vec<pdfcraft_ocr::PlacedWord>,
+    },
     /// Scan & OCR ▸ Searchable Image: turn everything `page` draws by `matrix` (user space; the
     /// deskew), then turn the page by `quarter_turns` clockwise (`/Rotate`), so the text found
     /// by recognition reads straight. Nothing is resampled.
@@ -1811,7 +1821,7 @@ impl Edit {
             Edit::MarkArtifact { .. } => "Change to artifact".into(),
             Edit::TagImage { .. } => "Set alternate text".into(),
             Edit::Autotag { .. } => "Autotag document".into(),
-            Edit::AddOcrText { .. } => "Recognize text".into(),
+            Edit::AddOcrText { .. } | Edit::AddEditableOcrText { .. } => "Recognize text".into(),
             Edit::StraightenPage { .. } => "Straighten page".into(),
             Edit::DownsamplePageImages { .. } => "Downsample images".into(),
             Edit::DespecklePageImages { .. } => "Despeckle".into(),
@@ -2041,6 +2051,7 @@ fn check_permission(edit: &Edit, p: &pdfcraft_cos::Permissions) -> Result<(), Ed
         | Edit::TagImage { .. }
         | Edit::Autotag { .. }
         | Edit::AddOcrText { .. }
+        | Edit::AddEditableOcrText { .. }
         | Edit::StraightenPage { .. }
         | Edit::DownsamplePageImages { .. }
         | Edit::DespecklePageImages { .. }
@@ -2354,6 +2365,18 @@ fn run_edit(doc: &mut pdfcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -> 
         Edit::SetDocumentScript { name, script } => pdfcraft_forms::set_document_script(doc, name, script.as_deref())?,
         Edit::AddOcrText { page, words } => {
             let content = pdfcraft_ocr::text_layer(words).map_err(|e| EditError::Invalid(e.to_string()))?;
+            pdfcraft_edit::stamp(doc, *page, "OCR", content)?;
+        }
+        Edit::AddEditableOcrText { page, lines, regions, hidden } => {
+            pdfcraft_ocr::editable::validate(lines, regions).map_err(|e| EditError::Invalid(e.to_string()))?;
+            pdfcraft_ocr::validate_words(hidden).map_err(|e| EditError::Invalid(e.to_string()))?;
+            let quads: Vec<[[f64; 2]; 4]> = regions.iter().map(|r| r.quad).collect();
+            let cleaned = pdfcraft_optimize::inpaint_page_image_regions(doc, *page, &quads).map_err(|e| EditError::Optimize(e.to_string()))?;
+            // Whatever no image could be cleaned under (vector art, an image PdfCraft can't
+            // rewrite) is painted over with the paper colour, so old ink never shows through.
+            let covers: Vec<_> =
+                regions.iter().zip(cleaned.covered.iter().chain(std::iter::repeat(&false))).filter(|(_, c)| !**c).map(|(r, _)| r.clone()).collect();
+            let content = pdfcraft_ocr::editable::content(lines, &covers, hidden).map_err(|e| EditError::Invalid(e.to_string()))?;
             pdfcraft_edit::stamp(doc, *page, "OCR", content)?;
         }
         Edit::StraightenPage { page, matrix, quarter_turns } => {
