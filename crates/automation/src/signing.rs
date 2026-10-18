@@ -65,6 +65,10 @@ impl Automation {
             "signer": s.signer,
             "certificate": s.certificate.as_ref().map(cert_json),
             "chain": s.chain.iter().skip(1).map(cert_json).collect::<Vec<_>>(),
+            "trust_source": s.trust_source.map(|t| match t {
+                sign::TrustSource::TrustedCertificates => "trusted_certificates",
+                sign::TrustSource::OperatingSystem => "operating_system",
+            }),
             "date": s.date,
             "reason": s.reason,
             "location": s.location,
@@ -254,6 +258,99 @@ impl Automation {
         }
         self.session.set_trusted_certificates(certs);
         Ok(json!({ "trusted": self.session.trusted_certificates().iter().map(cert_json).collect::<Vec<_>>() }))
+    }
+}
+
+/// At most this many roots are listed per `sign_os_roots` call.
+const MAX_LISTED_ROOTS: usize = 1000;
+
+impl Automation {
+    fn os_trust_json(&self) -> Value {
+        let s = self.session.os_trust_settings();
+        json!({
+            "signatures": s.signatures,
+            "certified_documents": s.certified_documents,
+            // As in Acrobat, trusting them for certified documents needs the signatures box too.
+            "certified_documents_effective": s.signatures && s.certified_documents,
+            "source": self.session.os_trust_source().describe(),
+        })
+    }
+
+    /// Preferences ▸ Signatures: trust the operating system's root certificates.
+    pub(crate) fn sign_os_trust_get(&self) -> Result<Value> {
+        Ok(self.os_trust_json())
+    }
+
+    pub(crate) fn sign_os_trust_set(&mut self, a: &Args) -> Result<Value> {
+        use pdfcraft_engine::os_trust::{OsRootSource, OsTrustSettings};
+        let source = match a.opt_str("source")? {
+            None => None,
+            Some("system") => {
+                if a.get("path").is_some_and(|v| !v.is_null()) {
+                    return Err(bad("path is only for source bundle or directory"));
+                }
+                Some(OsRootSource::System)
+            }
+            Some(kind @ ("bundle" | "directory")) => {
+                let path = self.resolve(a.opt_str("path")?.ok_or_else(|| bad(format!("source {kind} needs path")))?, false)?;
+                Some(if kind == "bundle" { OsRootSource::Bundle(path) } else { OsRootSource::Directory(path) })
+            }
+            Some(other) => return Err(bad(format!("unknown source {other:?} (system, bundle, directory)"))),
+        };
+        if source.is_none() && a.get("path").is_some_and(|v| !v.is_null()) {
+            return Err(bad("path needs source bundle or directory"));
+        }
+        let current = self.session.os_trust_settings();
+        let settings = OsTrustSettings {
+            signatures: a.opt_bool("signatures")?.unwrap_or(current.signatures),
+            certified_documents: a.opt_bool("certified_documents")?.unwrap_or(current.certified_documents),
+        };
+        if let Some(source) = source {
+            self.session.set_os_trust_source(source).map_err(failed)?;
+        }
+        self.session.set_os_trust(settings).map_err(failed)?;
+        let mut out = self.os_trust_json();
+        if settings.signatures || settings.certified_documents {
+            let roots = self.session.os_roots(false).map_err(failed)?;
+            out["roots"] = json!(roots.certificates.len());
+            out["skipped"] = json!(roots.skipped);
+        }
+        Ok(out)
+    }
+
+    /// The operating system's root certificates as read from the configured source.
+    pub(crate) fn sign_os_roots(&mut self, a: &Args) -> Result<Value> {
+        let reload = a.opt_bool("reload")?.unwrap_or(false);
+        let query = a.opt_str("query")?.map(str::to_lowercase);
+        let offset = usize::try_from(a.opt_int("offset")?.unwrap_or(0)).map_err(|_| bad("offset must be 0 or more"))?;
+        let limit = a.opt_int("limit")?.unwrap_or(100);
+        if !(1..=MAX_LISTED_ROOTS as i64).contains(&limit) {
+            return Err(bad(format!("limit must be 1 to {MAX_LISTED_ROOTS}")));
+        }
+        let roots = self.session.os_roots(reload).map_err(failed)?;
+        let matching: Vec<&Certificate> = roots
+            .certificates
+            .iter()
+            .filter(|c| {
+                query.as_deref().is_none_or(|q| {
+                    c.subject.display().to_lowercase().contains(q)
+                        || c.display_name().to_lowercase().contains(q)
+                        || c.fingerprint().to_lowercase().contains(q)
+                })
+            })
+            .collect();
+        let listed: Vec<Value> = matching.iter().skip(offset).take(limit as usize).map(|c| cert_json(c)).collect();
+        let mut out = self.os_trust_json();
+        out["supported"] = json!(roots.supported);
+        out["count"] = json!(roots.certificates.len());
+        out["matching"] = json!(matching.len());
+        out["offset"] = json!(offset);
+        out["skipped"] = json!(roots.skipped);
+        out["duplicates"] = json!(roots.duplicates);
+        out["truncated"] = json!(roots.truncated);
+        out["errors"] = json!(roots.errors);
+        out["roots"] = json!(listed);
+        Ok(out)
     }
 }
 

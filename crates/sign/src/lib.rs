@@ -5,6 +5,7 @@
 //! - [`pdf`]: signature fields in a document — listing and validating them, and signing
 //!   (PAdES B-B, `ETSI.CAdES.detached`) with an incremental save.
 //! - [`signed_version`]: a signature's signed version, and what changed since it was signed.
+//! - [`os_trust`]: the operating system's root certificates, trusted only when the user opts in.
 
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
@@ -18,6 +19,7 @@ pub mod evidence;
 pub mod keychain;
 pub mod keys;
 pub mod lock;
+pub mod os_trust;
 pub mod pdf;
 pub mod pkcs12;
 pub mod revocation;
@@ -32,8 +34,9 @@ pub use der::Time;
 pub use keys::{DigestAlg, PrivateKey, PublicKey};
 pub use lock::{FieldLock, LockAction};
 pub use pdf::{
-    Appearance, DigestCache, MAX_OUTLINE_REVISIONS, Modification, PageChange, RevisionChanges, SignOptions, SignatureInfo, Status, TrustStore,
-    VerificationTime, VerificationTimeSource, list as signatures, revision_changes, sign, sign_with_timestamp, timestamp_document, validate,
+    Appearance, DigestCache, MAX_OUTLINE_REVISIONS, Modification, PageChange, RevisionChanges, SignOptions, SignatureInfo, Status, TrustPurpose,
+    TrustSource, TrustStore, VerificationTime, VerificationTimeSource, list as signatures, revision_changes, sign, sign_with_timestamp,
+    timestamp_document, validate,
 };
 pub use pkcs12::DigitalId;
 pub use signed_version::{ChangeAction, SignedVersionComparison, VersionChange, compare_signed_version, signed_version};

@@ -188,10 +188,38 @@ impl DigestCache {
     }
 }
 
-/// Certificates the user trusts for signing (Acrobat: Trusted Certificates).
+/// Certificates the user trusts for signing (Acrobat: Trusted Certificates), plus the
+/// operating system's root certificates when the user chose to trust them (Acrobat:
+/// Preferences ▸ Signatures ▸ Windows Integration / macOS Keychain integration).
 #[derive(Clone, Debug, Default)]
 pub struct TrustStore {
+    /// The user's trusted certificates: anchors for every purpose.
     pub certs: Vec<Certificate>,
+    /// Root certificates read from the operating system's store ([`crate::os_trust`]). They
+    /// anchor a chain only for the purposes switched on below; otherwise they are ignored.
+    pub os_roots: Arc<Vec<Certificate>>,
+    /// Trust `os_roots` for validating signatures (approval signatures and timestamps).
+    pub os_for_signatures: bool,
+    /// Trust `os_roots` for validating certification signatures. As in Acrobat, this applies
+    /// only while `os_for_signatures` is on too.
+    pub os_for_certified: bool,
+}
+
+/// What a chain is being validated for: an approval signature (or a timestamp) or a
+/// certification signature. The operating system's roots are trusted separately for each.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TrustPurpose {
+    Signatures,
+    CertifiedDocuments,
+}
+
+/// Which trust source anchored a signer's (or timestamp authority's) chain.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TrustSource {
+    /// A certificate in the user's trusted certificates.
+    TrustedCertificates,
+    /// A root certificate from the operating system's certificate store.
+    OperatingSystem,
 }
 
 /// Which time to use for certificate validity and embedded revocation evidence. This
@@ -214,8 +242,64 @@ pub enum VerificationTimeSource {
 }
 
 impl TrustStore {
-    fn trusts(&self, c: &Certificate) -> bool {
-        self.certs.iter().any(|t| t.raw == c.raw)
+    /// A store trusting only `certs` (the operating system's roots off).
+    pub fn new(certs: Vec<Certificate>) -> Self {
+        Self { certs, ..Self::default() }
+    }
+
+    /// Whether the operating system's roots are trusted for `purpose`.
+    pub fn os_trusted_for(&self, purpose: TrustPurpose) -> bool {
+        match purpose {
+            TrustPurpose::Signatures => self.os_for_signatures,
+            TrustPurpose::CertifiedDocuments => self.os_for_signatures && self.os_for_certified,
+        }
+    }
+
+    /// The trust source that makes `c` an anchor for `purpose`, if any. The user's own trusted
+    /// certificates win over the operating system's roots.
+    pub fn anchor(&self, c: &Certificate, purpose: TrustPurpose) -> Option<TrustSource> {
+        if self.certs.iter().any(|t| t.raw == c.raw) {
+            Some(TrustSource::TrustedCertificates)
+        } else if self.os_trusted_for(purpose) && self.os_roots.iter().any(|t| t.raw == c.raw) {
+            Some(TrustSource::OperatingSystem)
+        } else {
+            None
+        }
+    }
+
+    /// The trust source anchoring `chain` (the first anchored certificate, leaf first).
+    pub fn chain_anchor(&self, chain: &[Certificate], purpose: TrustPurpose) -> Option<TrustSource> {
+        chain.iter().find_map(|c| self.anchor(c, purpose))
+    }
+
+    /// Add the anchors for `purpose` to a chain-building pool.
+    pub fn extend_pool(&self, pool: &mut Vec<Certificate>, purpose: TrustPurpose) {
+        pool.extend(self.certs.iter().cloned());
+        if self.os_trusted_for(purpose) {
+            pool.extend(self.os_roots.iter().cloned());
+        }
+    }
+
+    /// When `leaf` is not trusted for `purpose` but would chain to one of the operating
+    /// system's roots: the reason it is not used (the matching setting is off).
+    fn os_hint(&self, leaf: &Certificate, embedded: &[Certificate], at: Option<Time>, purpose: TrustPurpose) -> Option<String> {
+        if self.os_roots.is_empty() || self.os_trusted_for(purpose) {
+            return None;
+        }
+        let mut pool = embedded.to_vec();
+        pool.extend(self.certs.iter().cloned());
+        pool.extend(self.os_roots.iter().cloned());
+        let chain = build_chain(leaf, &pool, at);
+        let root = chain.iter().find(|c| self.os_roots.iter().any(|t| t.raw == c.raw))?;
+        let setting = match purpose {
+            TrustPurpose::Signatures => "for validating signatures",
+            TrustPurpose::CertifiedDocuments if !self.os_for_signatures => "for validating signatures and certified documents",
+            TrustPurpose::CertifiedDocuments => "for validating certified documents",
+        };
+        Some(format!(
+            "The signer's certificate chains to {}, a root certificate in the operating system's certificate store, but the operating system's root certificates are not trusted {setting}.",
+            root.display_name()
+        ))
     }
 }
 
@@ -257,6 +341,9 @@ pub struct SignatureInfo {
     pub certificate: Option<Certificate>,
     /// The chain as built (signer first).
     pub chain: Vec<Certificate>,
+    /// The trust source that anchored `chain` (for a document timestamp, the authority's
+    /// chain), or `None` when nothing in it is trusted.
+    pub trust_source: Option<TrustSource>,
     /// `/M` as written, and the signing time used for checks.
     pub date: Option<String>,
     pub signing_time: Option<Time>,
@@ -514,6 +601,7 @@ pub fn list_cached_with_time(doc: &Document, bytes: &[u8], trust: &TrustStore, c
             signer: None,
             certificate: None,
             chain: Vec::new(),
+            trust_source: None,
             date: None,
             signing_time: None,
             verification_time: None,
@@ -561,6 +649,7 @@ pub fn list_cached_with_time(doc: &Document, bytes: &[u8], trust: &TrustStore, c
             signer: None,
             certificate: None,
             chain: Vec::new(),
+            trust_source: None,
             date: None,
             signing_time: None,
             verification_time: None,
@@ -698,11 +787,11 @@ fn validate_into(doc: &Document, bytes: &[u8], trust: &TrustStore, v: &Dict, inf
                     // time; otherwise its time is reported but validation uses the signer's
                     // own claimed time, as without a timestamp.
                     let mut pool = crate::timestamp::token_certs(raw);
-                    pool.extend(trust.certs.iter().cloned());
+                    trust.extend_pool(&mut pool, TrustPurpose::Signatures);
                     let mut trusted_tsa = false;
                     if let Some(c) = t.signer_certificate() {
                         let chain: Vec<Certificate> = build_chain(&c, &pool, Some(t.gen_time)).into_iter().cloned().collect();
-                        trusted_tsa = c.valid_at(t.gen_time) && chain.iter().any(|x| trust.trusts(x));
+                        trusted_tsa = c.valid_at(t.gen_time) && trust.chain_anchor(&chain, TrustPurpose::Signatures).is_some();
                         info.timestamp_chain = chain;
                     }
                     if trusted_tsa {
@@ -793,14 +882,19 @@ fn finish_validation(
     when: VerificationTime,
 ) {
     info.signing_time = cms_time.or_else(|| info.date.as_deref().and_then(Time::from_pdf));
+    // A certification signature is anchored by the roots trusted for certified documents.
+    let purpose = if info.certify.is_some() { TrustPurpose::CertifiedDocuments } else { TrustPurpose::Signatures };
     let mut pool = embedded.to_vec();
-    pool.extend(trust.certs.iter().cloned());
+    trust.extend_pool(&mut pool, purpose);
     // The time the chain is judged at: trusted timestamp, else the signer's claimed time.
     let at = select_verification_time(info, when);
     let (chain, refused) = build_chain_noted(&cert, &pool, at);
     let chain: Vec<Certificate> = chain.into_iter().cloned().collect();
-    let trusted = chain.iter().any(|c| trust.trusts(c));
+    let source = trust.chain_anchor(&chain, purpose);
+    let trusted = source.is_some();
+    let os_hint = if trusted { None } else { trust.os_hint(&cert, embedded, at, purpose) };
     info.chain = chain;
+    info.trust_source = source;
     info.certificate = Some(cert.clone());
     if let Some(why) = refused
         && !trusted
@@ -849,10 +943,17 @@ fn finish_validation(
             "The signer's identity is unknown because it has not been included in your list of trusted certificates and none of its parent certificates are trusted certificates."
                 .into(),
         );
+        if let Some(hint) = os_hint {
+            info.details.push(hint);
+        }
         if !problems && !revoked {
             info.status = Status::Unknown;
         }
     } else {
+        if source == Some(TrustSource::OperatingSystem) {
+            info.details
+                .push("The signer's certificate chains to a root certificate trusted through the operating system's certificate store.".into());
+        }
         info.details.push("The signer's identity is valid.".into());
         if !problems && !revoked {
             info.status = Status::Valid;
@@ -1008,11 +1109,14 @@ fn validate_doc_timestamp(
         // An untrusted TSA is not proof of anything: the verdict stays Unknown, like an
         // ordinary signature from an unknown signer.
         let mut pool = crate::timestamp::token_certs(&contents);
-        pool.extend(trust.certs.iter().cloned());
+        trust.extend_pool(&mut pool, TrustPurpose::Signatures);
         // A trusted authority whose certificate was not valid at the time it stamped proves
         // nothing either (its detail is already recorded above): never upgrade that to Valid.
         let in_validity = token.signer_certificate().is_some_and(|c| c.valid_at(token.gen_time));
-        let trusted_tsa = token.signer_certificate().is_some_and(|c| build_chain(&c, &pool, Some(token.gen_time)).iter().any(|x| trust.trusts(x)));
+        let trusted_tsa = token.signer_certificate().is_some_and(|c| {
+            let chain: Vec<Certificate> = build_chain(&c, &pool, Some(token.gen_time)).into_iter().cloned().collect();
+            trust.chain_anchor(&chain, TrustPurpose::Signatures).is_some()
+        });
         if trusted_tsa && in_validity {
             info.timestamp_time = Some(token.gen_time);
             info.status = Status::Valid;
@@ -1027,9 +1131,10 @@ fn validate_doc_timestamp(
     let at = select_verification_time(info, when);
     if let Some(cert) = token.signer_certificate() {
         let mut pool = crate::timestamp::token_certs(&contents);
-        pool.extend(trust.certs.iter().cloned());
+        trust.extend_pool(&mut pool, TrustPurpose::Signatures);
         info.chain = build_chain(&cert, &pool, at).into_iter().cloned().collect();
-        if info.status != Status::Invalid && (at.is_some_and(|at| !cert.valid_at(at)) || !info.chain.iter().any(|cert| trust.trusts(cert))) {
+        info.trust_source = trust.chain_anchor(&info.chain, TrustPurpose::Signatures);
+        if info.status != Status::Invalid && (at.is_some_and(|at| !cert.valid_at(at)) || info.trust_source.is_none()) {
             info.status = Status::Unknown;
             info.details.push("The timestamp authority's certificate chain is not trusted and valid at the selected verification time.".into());
         }

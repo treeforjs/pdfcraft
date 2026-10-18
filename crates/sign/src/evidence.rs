@@ -146,12 +146,17 @@ impl Checks<'_> {
     fn chain(&mut self, signature: &SignatureInfo, role: CoverageRole, leaf: &Certificate, known: &[Certificate]) {
         let mut pool = known.to_vec();
         pool.extend_from_slice(self.certificates);
-        pool.extend_from_slice(&self.trust.certs);
+        let purpose = if signature.certify.is_some() && role == CoverageRole::Signer {
+            crate::pdf::TrustPurpose::CertifiedDocuments
+        } else {
+            crate::pdf::TrustPurpose::Signatures
+        };
+        self.trust.extend_pool(&mut pool, purpose);
         let chain = crate::x509::build_chain(leaf, &pool, signature.verification_time);
         for (index, certificate) in chain.iter().enumerate() {
             // A configured trust anchor has no issuing authority whose revocation can be
             // checked here. Merely being self-signed does not make a certificate an anchor.
-            if self.trust.certs.iter().any(|trusted| trusted.raw == certificate.raw) {
+            if self.trust.anchor(certificate, purpose).is_some() {
                 continue;
             }
             let mut status = RevocationStatus::Unknown;

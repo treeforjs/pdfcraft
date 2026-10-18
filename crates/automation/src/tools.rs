@@ -1167,6 +1167,29 @@ pub fn tools() -> Vec<ToolDef> {
             json!({ "paths": { "type": "array", "items": { "type": "string" } }, "password": { "type": "string" }, "clear": { "type": "boolean" } }),
             &[],
         )),
+        t("sign_os_trust_get", "Operating system trust settings", "Read whether the operating system's root certificates are trusted (Acrobat: Preferences ▸ Signatures ▸ Identities & Trusted Certificates ▸ Windows Integration / macOS Keychain): signatures (for validating signatures and timestamps), certified_documents (for validating certification signatures; effective only while signatures is on, reported as certified_documents_effective) and source (system, bundle:<path> or directory:<path>). Both are off by default. Here they last for the session.")
+            .ro()
+            .with(schema(json!({}), &[])),
+        t("sign_os_trust_set", "Trust operating system root certificates", "Turn trusting the operating system's root certificates on or off for validating signatures (signatures) and certified documents (certified_documents; needs signatures on, as in Acrobat), and optionally choose where they are read from: source system (the platform store: macOS keychains, Windows certificate stores, the Linux/BSD system CA bundle and directory, honouring SSL_CERT_FILE/SSL_CERT_DIR), bundle (a PEM/DER file at path) or directory (PEM/DER files at path). Turning one on reads the roots once (malformed entries are skipped and counted); every open document is revalidated, and sign_list reports trust_source operating_system for a chain anchored by one of them. Nothing changes if the source can't be read. Returns the settings, and roots and skipped counts when on.").with(schema(
+            json!({
+                "signatures": { "type": "boolean" },
+                "certified_documents": { "type": "boolean" },
+                "source": { "type": "string", "enum": ["system", "bundle", "directory"] },
+                "path": { "type": "string", "description": "The bundle file or certificate directory, for source bundle or directory." },
+            }),
+            &[],
+        )),
+        t("sign_os_roots", "List operating system root certificates", "The operating system's root certificates as read from the configured source (sign_os_trust_set), whether or not they are trusted: count, skipped (unreadable entries), duplicates, truncated (capped), supported (false in the browser), up to 16 errors, and roots (certificate details, filtered by query on subject, name or SHA-256 fingerprint; offset and limit, default 100, at most 1000). reload: true reads the source again and revalidates open documents.")
+            .ro()
+            .with(schema(
+                json!({
+                    "reload": { "type": "boolean" },
+                    "query": { "type": "string" },
+                    "offset": { "type": "integer", "minimum": 0 },
+                    "limit": { "type": "integer", "minimum": 1, "maximum": 1000 },
+                }),
+                &[],
+            )),
         t("trust_urls_get", "Internet access settings", "Read the policy for internet access from PDFs (Acrobat: Trust Manager ▸ Internet Access from PDF Files): mode (allow-all, block-all or custom), default_action for hosts on no rule in custom mode (allow, block or ask), and rules [{host, action, subdomains}]. It governs links' URI actions, Submit Form and scripts' app.launchURL/submitForm. The desktop app keeps it with its settings; here it lasts for the session.")
             .ro()
             .with(schema(json!({}), &[])),

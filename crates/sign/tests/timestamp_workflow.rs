@@ -85,7 +85,7 @@ fn a_document_timestamp_is_the_value_of_an_invisible_signature_field() {
     let twice = pdfcraft_sign::timestamp_document(&open(&once), &tsa, "D:20261012120000Z").unwrap();
     assert!(twice.starts_with(&once));
     let doc = open(&twice);
-    let trust = pdfcraft_sign::TrustStore { certs: vec![tsa.0.certificate.clone()] };
+    let trust = pdfcraft_sign::TrustStore::new(vec![tsa.0.certificate.clone()]);
     let listed = pdfcraft_sign::signatures(&doc, &twice, &trust);
     let names: Vec<_> = listed.iter().map(|s| (s.field.as_str(), s.doc_timestamp, s.visible, s.status)).collect();
     assert_eq!(

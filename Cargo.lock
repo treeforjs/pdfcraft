@@ -3933,6 +3933,7 @@ dependencies = [
  "ripemd",
  "rsa",
  "rustls-cng",
+ "rustls-native-certs",
  "security-framework",
  "sha1",
  "sha2",

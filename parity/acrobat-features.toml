@@ -6204,11 +6204,11 @@ title = "Trust the operating system's root certificates"
 area = "H"
 tier = "P1"
 milestone = "M9"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["sign_os_trust_get", "sign_os_trust_set", "sign_os_roots", "sign_list"]
+evidence = ["crates/automation/tests/os_trust.rs::os_roots_anchor_signatures_and_certified_documents_only_when_switched_on", "crates/sign/src/os_trust.rs::bundle_skips_malformed_blocks_and_dedupes", "crates/sign/src/os_trust.rs::directory_reads_pem_and_der_skips_bad_and_huge_files", "crates/sign/src/os_trust.rs::an_unterminated_huge_block_is_dropped_not_grown"]
+notes = "Headless. Two settings, off by default as in Acrobat: trust the OS roots for validating signatures (approval signatures, embedded and document timestamps) and for certified documents (certification signatures; effective only with the first on). Roots come from the platform store via rustls-native-certs (macOS keychains, Windows Current User/Local Machine stores, Linux/BSD system CA bundle and directory, SSL_CERT_FILE/SSL_CERT_DIR) or an explicit PEM/DER bundle or directory; malformed entries are skipped and counted, at most 4096 roots, 32 MB bundle, 1 MB per file. Validation builds chains through the enabled roots and reports trust_source (trusted_certificates or operating_system), and says when a chain ends at an OS root whose setting is off. Missing: no Preferences UI and the settings are not persisted (session only); the OS store's per-certificate trust settings and distrust (macOS trust settings purposes, Windows disallowed store, EKU constraints on roots) are not read separately: every root rustls-native-certs returns (those trusted for TLS) is treated alike; not available in the browser (wasm); the RFC 3161 client's require_trusted_authority still uses only the trusted certificates; real Windows/macOS stores untested in CI (tests inject a bundle)."
 
 [[feature]]
 id = "sign.verification-time"
