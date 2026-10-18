@@ -1040,6 +1040,17 @@ pub fn tools() -> Vec<ToolDef> {
                 }),
                 &["doc", "folder"],
             )),
+        t("doc_export_svg", "Export pages as SVG", "Save As ▸ SVG: write pages as standalone SVG files (`<name>_page_<n>.svg`) into a folder, one per page, sized to the page as displayed (crop box after rotation, in points). Vector where possible: paths with fill rule, line width, caps, joins and dashes; clipping; colours converted to sRGB with their opacity; text as glyph outlines (fonts are not embedded) plus a transparent text layer for searching and selecting (text_layer false leaves it out); images as embedded PNG (downsampled above 4 megapixels); nested forms flattened; tiling patterns, soft masks and blend modes kept as SVG patterns, masks and mix-blend-mode. Shadings are rasterised over the region they paint. Each file reports what it holds and `omitted` (content it could not express) and `truncated` (the 128 MiB page limit was reached). transparent leaves out the white paper. Includes unsaved edits. Refused when the document does not allow copying (extracting text and graphics).")
+            .with(schema(
+                json!({
+                    "doc": doc(),
+                    "folder": { "type": "string" },
+                    "pages": pages("to export (default: all)"),
+                    "text_layer": { "type": "boolean", "description": "Add a transparent, selectable text layer (default true)." },
+                    "transparent": { "type": "boolean", "description": "Leave the page background transparent instead of white (default false)." },
+                }),
+                &["doc", "folder"],
+            )),
         t("accessibility_check", "Check for accessibility", "Run the Accessibility Checker's full check (32 rules in 7 categories: document, page_content, forms, alternate_text, tables, lists, headings). Each rule is passed, failed (with findings and pages), manual (needs a person) or skipped. Colour contrast is off unless all is true; rules (ids such as tagged-pdf, figures-alt-text) or categories narrow the check; pages limit the page rules.")
             .ro()
             .cmd("a11y.check")

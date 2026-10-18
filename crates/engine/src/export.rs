@@ -1,10 +1,11 @@
 //! Export a PDF ▸ Image and Text (execution plan M10.3, the first formats).
 //!
-//! [`Exporter`] renders pages to PNG, JPEG or TIFF at a resolution and extracts reading-order
-//! text, from a
+//! [`Exporter`] renders pages to PNG, JPEG or TIFF at a resolution, writes them as SVG, and
+//! extracts reading-order text, from a
 //! document's working file (so unsaved edits and hidden layers are respected, as on screen).
 
 use pdfcraft_render::{PageRenderer, RenderRequest, RequestKind};
+pub use pdfcraft_render::{SvgOptions, SvgPage, SvgStats};
 
 use crate::Document;
 use crate::reader_selection::COPY_DENIED;
@@ -106,6 +107,19 @@ impl Exporter {
             return Err(format!("page {}: {e}", page + 1));
         }
         encode_image(r.width, r.height, &r.rgba, format)
+    }
+
+    /// Page `page` (0-based) as a standalone SVG document: vector paths, clips, sRGB colours,
+    /// glyph outlines (plus a transparent text layer unless `options.text_layer` is off), PNG
+    /// images, tiling patterns, soft masks and blend modes; shadings rasterised over the region
+    /// they paint (see [`pdfcraft_render::svg`]). SVG hands out the page's text and graphics, so
+    /// it is refused when the document does not allow copying.
+    pub fn svg(&mut self, page: usize, options: &SvgOptions) -> Result<SvgPage, String> {
+        if !self.copy_allowed {
+            return Err(COPY_DENIED.into());
+        }
+        self.check(page)?;
+        self.renderer.svg(page, options).map_err(|e| format!("page {}: {e}", page + 1))
     }
 
     /// The reading-order text of a page; refused when the document does not allow copying.

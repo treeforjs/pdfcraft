@@ -13,6 +13,7 @@ mod inspect;
 mod pixels;
 mod raster;
 mod structure;
+pub mod svg;
 pub mod text;
 mod vector_raster;
 
@@ -25,6 +26,7 @@ pub use raster::{
     MAX_PIXELS, MAX_SIDE, PageRenderer, RenderConfig, RenderPool, RenderRequest, RenderStats, RenderWarning, RenderedPage, RequestKind, Tile,
     device_pixels, effective_scale, native_vector_default, native_vector_requested, set_native_vector_default,
 };
+pub use svg::{SvgOptions, SvgPage, SvgStats};
 pub use text::{PageText, TextGlyph, find_in_chars};
 
 /// Errors surfaced to the user when a document cannot be opened.

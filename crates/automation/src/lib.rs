@@ -671,7 +671,7 @@ impl Automation {
                 let new = self.session.open_revision(id, n).map_err(failed)?;
                 summary(self.session.get(new).ok_or_else(|| failed("the document vanished"))?)
             }
-            "doc_export_images" | "doc_export_text" | "doc_export_all_images" => self.export(name, &a)?,
+            "doc_export_images" | "doc_export_text" | "doc_export_all_images" | "doc_export_svg" => self.export(name, &a)?,
             "doc_header_footer" | "doc_watermark" | "doc_background" | "doc_remove_marks" => self.marks(name, &a)?,
             "doc_unprotect" => {
                 let mut out = self.apply(&a, Edit::RemoveProtection)?;
@@ -1249,6 +1249,40 @@ impl Automation {
             }
             let skipped: Vec<Value> = out.skipped.iter().map(|(p, r, why)| json!({ "page": p + 1, "object": r.num, "reason": why })).collect();
             return Ok(json!({ "count": files.len(), "files": files, "skipped": skipped }));
+        }
+        if tool == "doc_export_svg" {
+            let options = pdfcraft_engine::export::SvgOptions {
+                text_layer: a.opt_bool("text_layer")?.unwrap_or(true),
+                transparent: a.opt_bool("transparent")?.unwrap_or(false),
+            };
+            let mut files = Vec::new();
+            for p in pages {
+                let page = ex.svg(p, &options).map_err(failed)?;
+                let path = child(&folder, &format!("{stem}_page_{}.svg", p + 1));
+                write_atomic(&path, page.svg.as_bytes())?;
+                let s = &page.stats;
+                files.push(json!({
+                    "path": path.to_string_lossy(),
+                    "page": p + 1,
+                    "bytes": page.svg.len(),
+                    "width": page.width,
+                    "height": page.height,
+                    "paths": s.paths,
+                    "glyphs": s.glyphs,
+                    "images": s.images,
+                    "images_downsampled": s.images_downsampled,
+                    "clips": s.clips,
+                    "tiling_patterns": s.tiling_patterns,
+                    "shadings_rasterized": s.shadings_rasterized,
+                    "soft_masks": s.soft_masks,
+                    "blend_modes": s.blend_modes,
+                    "text_lines": s.text_lines,
+                    "omitted": s.omitted,
+                    "mask_transfer_functions_ignored": s.mask_transfer_functions_ignored,
+                    "truncated": s.truncated,
+                }));
+            }
+            return Ok(json!({ "count": files.len(), "files": files }));
         }
         let dpi = a.opt_num("dpi")?.unwrap_or(150.0);
         let quality = a.opt_int("quality")?.unwrap_or(85).clamp(1, 100) as u8;

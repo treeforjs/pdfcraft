@@ -447,6 +447,15 @@ impl PageRenderer {
         self.vectors.attempted()
     }
 
+    /// Page `page` (0-based) as a standalone SVG document (see [`crate::svg`]). Never panics.
+    pub fn svg(&self, page: usize, options: &crate::svg::SvgOptions) -> Result<crate::svg::SvgPage, String> {
+        let pdf = self.pdf.as_ref().ok_or_else(|| "the document could not be parsed".to_string())?;
+        match catch_unwind(AssertUnwindSafe(|| crate::svg::page_svg(pdf, page, &self.settings, options))) {
+            Ok(result) => result,
+            Err(panic) => Err(format!("SVG export crashed on page {}: {}", page.saturating_add(1), panic_message(&panic))),
+        }
+    }
+
     /// Render one page. Never panics.
     pub fn render(&mut self, req: RenderRequest) -> RenderedPage {
         let start = Stopwatch::start();

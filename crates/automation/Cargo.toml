@@ -31,3 +31,5 @@ pdfcraft-filters = { workspace = true }
 pdfcraft-model = { workspace = true }
 pdfcraft-xfa = { workspace = true }
 image = { version = "0.25", default-features = false, features = ["jpeg"] }
+# Parses exported SVG (the version pdfcraft-annot already uses).
+roxmltree = "0.20"
