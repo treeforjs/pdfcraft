@@ -412,3 +412,261 @@ fn hostile_content_never_panics() {
         }
     }
 }
+
+// ---- Form fields (a11y.autotag-fields) ------------------------------------------------------
+
+/// A one-page form (objects 8…): `name` (text, with a tooltip), `email` (text, none), `agree`
+/// (a checkbox labelled on its right) and `pay` (two radio buttons labelled on their right,
+/// with a caption on the left), then a paragraph.
+fn form_pdf() -> Vec<u8> {
+    let c = "BT /F1 11 Tf 72 700 Td (Name:) Tj ET \
+             BT /F1 11 Tf 72 670 Td (Email:) Tj ET \
+             BT /F1 11 Tf 90 638 Td (I agree to the terms) Tj ET \
+             BT /F1 11 Tf 72 608 Td (Payment:) Tj ET \
+             BT /F1 11 Tf 156 608 Td (Card) Tj ET \
+             BT /F1 11 Tf 216 608 Td (Cash) Tj ET \
+             BT /F1 11 Tf 72 560 Td (After the form.) Tj ET";
+    let extra = [
+        "<< /Type /Annot /Subtype /Widget /FT /Tx /T (name) /TU (Your full name) /Rect [120 695 300 712] /P 6 0 R >>".to_string(), // 8
+        "<< /Type /Annot /Subtype /Widget /FT /Tx /T (email) /Rect [120 665 300 682] /P 6 0 R >>".to_string(),                     // 9
+        "<< /Type /Annot /Subtype /Widget /FT /Btn /T (agree) /Rect [72 636 84 648] /AS /Off /AP << /N << /Yes 13 0 R /Off 13 0 R >> >> /P 6 0 R >>"
+            .to_string(), // 10
+        "<< /FT /Btn /Ff 49152 /T (pay) /Kids [12 0 R 14 0 R] >>".to_string(),                                                     // 11
+        "<< /Type /Annot /Subtype /Widget /Parent 11 0 R /Rect [140 606 152 618] /AS /Off /AP << /N << /Card 13 0 R /Off 13 0 R >> >> /P 6 0 R >>"
+            .to_string(), // 12
+        "<< /Type /XObject /Subtype /Form /BBox [0 0 12 12] /Length 0 >>\nstream\n\nendstream".to_string(),                        // 13
+        "<< /Type /Annot /Subtype /Widget /Parent 11 0 R /Rect [200 606 212 618] /AS /Off /AP << /N << /Cash 13 0 R /Off 13 0 R >> >> /P 6 0 R >>"
+            .to_string(), // 14
+    ];
+    // Listed out of reading order.
+    let p = Page { content: c, extra: "/Annots [14 0 R 10 0 R 8 0 R 12 0 R 9 0 R]" };
+    pdf(&[p], &extra, "/Lang (en) /AcroForm << /Fields [8 0 R 9 0 R 10 0 R 11 0 R] >>")
+}
+
+/// The alternate text of each Form element, in document order.
+fn form_alts(s: &Session, id: DocId) -> Vec<String> {
+    s.get(id).unwrap().tags().nodes.iter().filter(|n| n.ty == "Form").map(|n| n.alt.clone().unwrap_or_default()).collect()
+}
+
+/// The structure type of each Form element's parent.
+fn form_parents(s: &Session, id: DocId) -> Vec<String> {
+    let tags = s.get(id).unwrap().tags();
+    tags.nodes.iter().filter(|n| n.ty == "Form").map(|n| n.parent.map(|p| tags.nodes[p].ty.clone()).unwrap_or_default()).collect()
+}
+
+#[test]
+fn form_fields_become_form_elements_next_to_their_labels() {
+    let (mut s, id) = open(form_pdf());
+    for r in [Rule::TaggedFormFields, Rule::FieldDescriptions] {
+        assert_eq!(rule(&s, id, r), Status::Failed, "{r:?} before");
+    }
+    assert!(ua_count(&s, id, "28-010") > 0);
+    let r = autotag(&mut s, id, AutotagOptions::default());
+    assert_eq!(r.count("Form"), 5);
+    assert_eq!(r.fields.len(), 5);
+    // Each widget sits with its label: after "Name:" and "Email:", before "I agree…", "Card", "Cash".
+    assert_eq!(
+        types(&s, id),
+        ["Document", "P", "Form", "P", "Form", "P", "Form", "P", "P", "Form", "P", "Form", "P"],
+        "{:?}",
+        s.get(id).unwrap().tags().nodes
+    );
+    assert_eq!(form_alts(&s, id), ["Your full name", "email", "agree", "pay: Card", "pay: Cash"]);
+    let by_name = |n: &str| r.fields.iter().find(|f| f.name == n).unwrap();
+    assert_eq!((by_name("name").kind.as_str(), by_name("name").alt_source.as_deref()), ("text", Some("tooltip")));
+    assert_eq!((by_name("email").alt_source.as_deref(), by_name("email").label.as_deref()), (Some("name"), Some("Email")));
+    assert_eq!((by_name("agree").kind.as_str(), by_name("agree").label.as_deref()), ("checkbox", Some("I agree to the terms")));
+    let radios: Vec<_> = r.fields.iter().filter(|f| f.name == "pay").collect();
+    assert_eq!(radios.len(), 2);
+    assert!(radios.iter().all(|f| f.kind == "radio" && f.field.num == 11), "{radios:?}");
+    // Fields without a tooltip, with suggestions from their labels.
+    let needing: Vec<(&str, Option<&str>, bool)> =
+        r.fields_needing_tooltip.iter().map(|f| (f.name.as_str(), f.suggested.as_deref(), f.filled)).collect();
+    assert_eq!(needing, [("email", Some("Email"), false), ("agree", Some("I agree to the terms"), false), ("pay", Some("Payment"), false)]);
+    assert_eq!(r.tooltips_filled, 0);
+    assert!(r.warnings.iter().any(|w| w.contains("no tooltip")), "{:?}", r.warnings);
+    // The reading order holds each field's description right next to its label.
+    in_order(
+        &text(&s, id),
+        &["Name:", "Your full name", "Email:", "email", "agree", "I agree", "Payment", "pay: Card", "Card", "pay: Cash", "Cash", "After the form."],
+    );
+    // The checker: fields are tagged and tab in structure order; descriptions are still missing.
+    for r in [Rule::TaggedFormFields, Rule::TaggedAnnotations, Rule::TabOrder, Rule::TaggedContent] {
+        assert_eq!(rule(&s, id, r), Status::Passed, "{r:?}");
+    }
+    assert_eq!(rule(&s, id, Rule::FieldDescriptions), Status::Failed);
+    // PDF/UA: widgets in Form elements, with alternate text, in the parent tree.
+    for cp in ["28-005", "28-008", "28-009", "28-010", "parent-tree", "01-005", "struct-tree-shape"] {
+        assert_eq!(ua_count(&s, id, cp), 0, "{cp}");
+    }
+    // Every widget has a StructParent, and the field tree is untouched.
+    let doc = s.get(id).unwrap();
+    for f in &r.fields {
+        assert!(doc.form.iter().any(|x| x.name == f.name), "{} lost from the form", f.name);
+    }
+}
+
+#[test]
+fn fill_writes_suggested_tooltips() {
+    let (mut s, id) = open(form_pdf());
+    let r = autotag(&mut s, id, AutotagOptions { field_tooltips: a11y::FieldTooltips::Fill, ..Default::default() });
+    assert_eq!(r.tooltips_filled, 3);
+    assert!(r.fields_needing_tooltip.iter().all(|f| f.filled));
+    assert_eq!(form_alts(&s, id), ["Your full name", "Email", "I agree to the terms", "Payment: Card", "Payment: Cash"]);
+    assert!(r.fields.iter().filter(|f| f.name != "name").all(|f| f.alt_source.as_deref() == Some("suggested")));
+    for r in [Rule::FieldDescriptions, Rule::TaggedFormFields] {
+        assert_eq!(rule(&s, id, r), Status::Passed, "{r:?}");
+    }
+    let tips: Vec<(String, Option<String>)> = s.get(id).unwrap().form.iter().map(|f| (f.name.clone(), f.tooltip.clone())).collect();
+    assert!(tips.contains(&("email".into(), Some("Email".into()))), "{tips:?}");
+    assert!(tips.contains(&("pay".into(), Some("Payment".into()))), "{tips:?}");
+    // Undo takes the tooltips back with the tags.
+    s.undo(id).unwrap();
+    assert_eq!(rule(&s, id, Rule::FieldDescriptions), Status::Failed);
+    assert!(!s.get(id).unwrap().tags().exists);
+}
+
+#[test]
+fn form_tags_survive_undo_redo_save_and_reload() {
+    let (mut s, id) = open(form_pdf());
+    autotag(&mut s, id, AutotagOptions::default());
+    let (tys, alts) = (types(&s, id), form_alts(&s, id));
+    s.undo(id).unwrap();
+    assert_eq!(rule(&s, id, Rule::TaggedFormFields), Status::Failed);
+    s.redo(id).unwrap();
+    assert_eq!((types(&s, id), form_alts(&s, id)), (tys.clone(), alts.clone()));
+    let saved = s.save_bytes(id).unwrap();
+    let (mut s2, id2) = open(saved.to_vec());
+    assert_eq!((types(&s2, id2), form_alts(&s2, id2)), (tys, alts));
+    assert_eq!(rule(&s2, id2, Rule::TaggedFormFields), Status::Passed);
+    for cp in ["28-010", "parent-tree"] {
+        assert_eq!(ua_count(&s2, id2, cp), 0, "{cp}");
+    }
+    // Retagging the reloaded document replaces the widgets' StructParents cleanly.
+    let r = autotag(&mut s2, id2, AutotagOptions { replace_existing: true, ..Default::default() });
+    assert_eq!(r.count("Form"), 5);
+    assert_eq!(ua_count(&s2, id2, "parent-tree"), 0);
+    // Without field detection the widgets are left untagged (and lose their old StructParent).
+    let r = autotag(&mut s2, id2, AutotagOptions { replace_existing: true, detect_fields: false, ..Default::default() });
+    assert_eq!((r.count("Form"), r.fields.len()), (0, 0));
+    assert_eq!(rule(&s2, id2, Rule::TaggedFormFields), Status::Failed);
+    assert_eq!(ua_count(&s2, id2, "parent-tree"), 0);
+}
+
+#[test]
+fn fields_in_two_columns_read_down_each_column() {
+    // Labels above their fields, in two columns; one unlabelled field at the top of the page and
+    // one at the bottom of the right column.
+    let c = "BT /F1 18 Tf 72 730 Td (Two Column Form) Tj ET \
+             BT /F1 11 Tf 320 700 Td (City) Tj ET \
+             BT /F1 11 Tf 320 660 Td (Country) Tj ET \
+             BT /F1 11 Tf 72 700 Td (First name) Tj ET \
+             BT /F1 11 Tf 72 660 Td (Last name) Tj ET";
+    let w = |t: &str, tu: &str, r: &str| format!("<< /Type /Annot /Subtype /Widget /FT /Tx /T ({t}) /TU ({tu}) /Rect [{r}] /P 6 0 R >>");
+    let extra = [
+        w("city", "City field", "320 680 500 696"),       // 8
+        w("country", "Country field", "320 640 500 656"), // 9
+        w("first", "First name field", "72 680 250 696"), // 10
+        w("last", "Last name field", "72 640 250 656"),   // 11
+        w("notes", "Notes field", "320 560 500 576"),     // 12: below Country, nothing near
+        w("stamp", "Stamp field", "72 770 200 786"),      // 13: above everything
+    ];
+    let p = Page { content: c, extra: "/Annots [8 0 R 9 0 R 10 0 R 11 0 R 12 0 R 13 0 R]" };
+    let (mut s, id) = open(pdf(&[p], &extra, "/Lang (en) /AcroForm << /Fields [8 0 R 9 0 R 10 0 R 11 0 R 12 0 R 13 0 R] >>"));
+    let r = autotag(&mut s, id, AutotagOptions::default());
+    assert_eq!(r.count("Form"), 6);
+    assert!(r.fields_needing_tooltip.is_empty());
+    assert_eq!(
+        form_alts(&s, id),
+        ["Stamp field", "First name field", "Last name field", "City field", "Country field", "Notes field"],
+        "{:?}",
+        s.get(id).unwrap().tags().nodes
+    );
+    // Labelled fields go inside their label's paragraph; the others stand on their own.
+    assert_eq!(form_parents(&s, id), ["Document", "P", "P", "P", "P", "Document"]);
+    in_order(
+        &text(&s, id),
+        &[
+            "Stamp field",
+            "Two Column Form",
+            "First name",
+            "First name field",
+            "Last name",
+            "Last name field",
+            "City",
+            "City field",
+            "Country",
+            "Country field",
+            "Notes field",
+        ],
+    );
+    let label = |n: &str| r.fields.iter().find(|f| f.name == n).and_then(|f| f.label.clone());
+    assert_eq!((label("first").as_deref(), label("notes")), (Some("First name"), None));
+    assert_eq!(rule(&s, id, Rule::TabOrder), Status::Passed);
+    assert_eq!(ua_count(&s, id, "28-010"), 0);
+}
+
+#[test]
+fn a_field_labelled_by_a_heading_goes_after_it() {
+    let c = "BT /F1 20 Tf 72 700 Td (Comments) Tj ET BT /F1 11 Tf 72 600 Td (Thank you.) Tj ET";
+    let extra = ["<< /Type /Annot /Subtype /Widget /FT /Tx /T (comments) /Rect [72 640 400 690] /P 6 0 R >>".to_string()];
+    let p = Page { content: c, extra: "/Annots [8 0 R]" };
+    let (mut s, id) = open(pdf(&[p], &extra, "/AcroForm << /Fields [8 0 R] >>"));
+    let r = autotag(&mut s, id, AutotagOptions::default());
+    assert_eq!(types(&s, id), ["Document", "H1", "Form", "P"]);
+    assert_eq!(r.fields_needing_tooltip.first().and_then(|f| f.suggested.as_deref()), Some("Comments"));
+}
+
+#[test]
+fn hostile_field_trees_never_panic() {
+    let c = "BT /F1 11 Tf 72 700 Td (Label:) Tj ET";
+    // Two pages, so the extra objects start at 10. 10 ↔ 11: a /Parent cycle; 12 ↔ 13: a /Kids
+    // cycle (13 is also a widget); 14: junk Rect, T, TU and FT, and a font as its Parent; 10 is listed
+    // twice and also on page 2.
+    let extra = [
+        "<< /Type /Annot /Subtype /Widget /Parent 11 0 R /Rect [120 695 300 712] /StructParent 7 >>".to_string(), // 10
+        "<< /Parent 10 0 R /Kids [10 0 R 11 0 R] >>".to_string(),                                                 // 11
+        "<< /FT /Btn /Ff 32768 /T (loop) /Kids [13 0 R] /Parent 13 0 R >>".to_string(),                           // 12
+        "<< /Type /Annot /Subtype /Widget /Parent 12 0 R /Kids [12 0 R] /Rect [72 600 84 612] /AP << /N 5 >> >>".to_string(), // 13
+        "<< /Type /Annot /Subtype /Widget /Parent 3 0 R /T 7 /TU [1 2] /Rect [(a) /b 1e400 null] /FT 4 >>".to_string(), // 14
+    ];
+    let annots = "/Annots [10 0 R 10 0 R 11 0 R 12 0 R 13 0 R 14 0 R 99 0 R << /Subtype /Widget /Rect [0 0 1 1] >>]";
+    let catalog = "/AcroForm << /Fields [11 0 R 12 0 R 14 0 R 12 0 R] >>";
+    for fill in [a11y::FieldTooltips::Report, a11y::FieldTooltips::Fill] {
+        let p = Page { content: c, extra: annots };
+        let p2 = Page { content: "BT /F1 11 Tf 72 700 Td (Second page.) Tj ET", extra: "/Annots [10 0 R 13 0 R]" };
+        let (mut s, id) = open(pdf(&[p, p2], &extra, catalog));
+        let r = autotag(&mut s, id, AutotagOptions { field_tooltips: fill, ..Default::default() });
+        // Each widget once, wherever it is listed.
+        let mut widgets: Vec<u32> = r.fields.iter().map(|f| f.widget.num).collect();
+        widgets.sort_unstable();
+        assert_eq!(widgets, [10, 13, 14], "{r:?}");
+        assert!(r.warnings.iter().any(|w| w.contains("inside the page's /Annots")), "{:?}", r.warnings);
+        let _ = s.get(id).unwrap().pdfua_verify(&UaOptions::default());
+        let _ = s.get(id).unwrap().accessibility_check(&Options::default());
+        let _ = s.get(id).unwrap().accessible_text();
+        assert_eq!(ua_count(&s, id, "parent-tree"), 0);
+        let saved = s.save_bytes(id).unwrap();
+        let (s2, id2) = open(saved.to_vec());
+        assert_eq!(s2.get(id2).unwrap().tags().nodes.iter().filter(|n| n.ty == "Form").count(), 3);
+    }
+}
+
+#[test]
+fn thousands_of_widgets_are_tagged_within_bounds() {
+    let n = 3000;
+    let mut extra = Vec::new();
+    let mut refs = Vec::new();
+    for i in 0..n {
+        let (x, y) = (20 + (i % 50) * 11, 20 + (i / 50) * 11);
+        extra.push(format!("<< /Type /Annot /Subtype /Widget /FT /Btn /T (c{i}) /Rect [{x} {y} {} {}] >>", x + 10, y + 10));
+        refs.push(format!("{} 0 R", 8 + i));
+    }
+    let annots = format!("/Annots [{}]", refs.join(" "));
+    let p = Page { content: "BT /F1 11 Tf 72 760 Td (Many boxes) Tj ET", extra: &annots };
+    let (mut s, id) = open(pdf(&[p], &extra, ""));
+    let r = autotag(&mut s, id, AutotagOptions::default());
+    assert_eq!((r.count("Form"), r.fields.len(), r.fields_needing_tooltip.len()), (n, n, n));
+    assert_eq!(ua_count(&s, id, "28-010"), 0);
+    assert_eq!(ua_count(&s, id, "parent-tree"), 0);
+}

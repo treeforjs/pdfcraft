@@ -6615,3 +6615,37 @@ fn tags_autotag_through_tools_with_bad_arguments() {
     assert_eq!(ok(&mut a, "edit_undo", json!({ "doc": doc }))["undone"], "Autotag document");
     assert!(a.call("tags_autotag", &json!({ "doc": doc, "pages": [2] })).is_ok(), "untagged again after undo");
 }
+
+#[test]
+fn tags_autotag_tags_form_fields_and_fills_tooltips() {
+    let dir = workdir("autotag-fields");
+    std::fs::write(dir.join("form.pdf"), conflict_form("Ann", "Helvetica", "Name")).unwrap();
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "form.pdf" }))["doc"].as_u64().unwrap();
+    assert!(
+        matches!(a.call("tags_autotag", &json!({ "doc": doc, "field_tooltips": "write" })), Err(ToolError::InvalidArgs(m)) if m.contains("report"))
+    );
+    assert!(matches!(a.call("tags_autotag", &json!({ "doc": doc, "detect_fields": "no" })), Err(ToolError::InvalidArgs(_))));
+    let r = ok(&mut a, "tags_autotag", json!({ "doc": doc, "lang": "en" }));
+    assert_eq!(r["counts"]["Form"], 2, "{r}");
+    let names: Vec<&str> = r["fields"].as_array().unwrap().iter().map(|f| f["name"].as_str().unwrap()).collect();
+    assert_eq!(names, ["person.name", "agree"]);
+    assert_eq!(r["fields"][1]["kind"], "checkbox");
+    assert_eq!(r["fields_needing_tooltip"].as_array().unwrap().len(), 2);
+    assert_eq!(r["tooltips_filled"], 0);
+    assert_eq!(r["before"]["checker"]["rules"]["tagged-form-fields"], "failed");
+    assert_eq!(r["after"]["checker"]["rules"]["tagged-form-fields"], "passed");
+    assert_eq!(r["after"]["checker"]["rules"]["tab-order"], "passed");
+    assert_eq!(r["after"]["checker"]["rules"]["field-descriptions"], "failed");
+    let failed: Vec<String> = serde_json::from_value(r["after"]["pdfua"]["failed"].clone()).unwrap();
+    assert!(!failed.iter().any(|f| f == "28-010" || f == "28-005"), "{failed:?}");
+    // Again, writing the suggested tooltips.
+    ok(&mut a, "edit_undo", json!({ "doc": doc }));
+    let r = ok(&mut a, "tags_autotag", json!({ "doc": doc, "field_tooltips": "fill" }));
+    assert_eq!(r["tooltips_filled"], 2, "{r}");
+    assert_eq!(r["after"]["checker"]["rules"]["field-descriptions"], "passed");
+    // Or leaving fields out.
+    ok(&mut a, "edit_undo", json!({ "doc": doc }));
+    let r = ok(&mut a, "tags_autotag", json!({ "doc": doc, "detect_fields": false }));
+    assert!(r["counts"].get("Form").is_none() && r["fields"].as_array().unwrap().is_empty(), "{r}");
+}

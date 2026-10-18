@@ -43,7 +43,10 @@ let html = report_html(&report, "file.pdf", "2026-10-02");
   figures, links and annotations, running headers/footers/page numbers as artifacts, and a
   row/column reading order. The content is rewritten with balanced marked content and the tree,
   parent tree, StructParents, Tabs and MarkInfo are written. Bounded throughout; a tagged
-  document is refused unless `replace_existing`. Not yet: unruled tables, captions, vector
-  figures, splitting a text run between elements.
+  document is refused unless `replace_existing`. Form fields (`detect_fields`,
+  `autotag_fields.rs`): each widget becomes a Form element (OBJR, StructParent) next to its
+  label in reading order, with Alt from its tooltip, name or label; fields without a tooltip
+  are reported with a suggestion, which `FieldTooltips::Fill` writes as `/TU`. Not yet:
+  unruled tables, captions, vector figures, splitting a text run between elements.
 
 Not yet: the Tags/Order/Content panels, the Reading Order tool (M12.1–M12.2).
