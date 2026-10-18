@@ -6242,9 +6242,9 @@ tier = "P1"
 milestone = "M9"
 status = "shipped"
 commands = ["sign.panel"]
-tools = []
-evidence = ["crates/ui-egui/tests/signing.rs::drawing_a_signature_creating_an_id_signing_and_trusting"]
-notes = ""
+tools = ["sign_signed_version"]
+evidence = ["crates/ui-egui/tests/signing.rs::drawing_a_signature_creating_an_id_signing_and_trusting", "crates/automation/tests/automation.rs::view_and_compare_the_signed_version_through_tools"]
+notes = "headless: sign_signed_version writes and/or opens the bytes the signature covers"
 
 [[feature]]
 id = "sign.compare-signed-version"
@@ -6252,11 +6252,11 @@ title = "Compare signed version with the current one"
 area = "H"
 tier = "P1"
 milestone = "M12"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["sign_signed_version", "sign_compare_signed_version"]
+evidence = ["crates/sign/tests/pdf.rs::the_signed_version_is_the_bytes_the_signature_covers", "crates/sign/tests/pdf.rs::comparing_the_signed_version_lists_each_change_and_whether_it_is_permitted", "crates/automation/tests/automation.rs::view_and_compare_the_signed_version_through_tools"]
+notes = "Headless only. sign_signed_version writes and/or opens the bytes up to the signature's ByteRange end (View Signed Version; the UI's View signed version button already existed). sign_compare_signed_version lists every object changed or added after signing (the diff validation uses), categorised (page content, comments, form fill with field name and old/new value, changes to locked fields, pages added/removed, signature, metadata, DSS, structure) with added/modified/removed, page and permitted/not permitted under DocMDP P1-3 tightened by FieldMDP, the overall verdict (matches sign_list), plus a word-level Compare Files report between the two versions. Missing: a UI for the comparison (waits for the redesign), removed form fields/objects other than annotations are not itemised, pages are matched by object (a replaced page reads as removed + added), and certificate-encrypted documents are refused."
 
 [[feature]]
 id = "sign.verify-on-open"
