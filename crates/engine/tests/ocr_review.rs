@@ -23,7 +23,10 @@ impl Recognizer for Reader {
         self.calls.set(self.calls.get() + 1);
         assert!(!self.panic, "synthetic backend failure");
         Ok(vec![Line {
-            words: vec![Word { text: "Cafe".into(), rect: [10.0, 10.0, 50.0, 25.0] }, Word { text: "extra".into(), rect: [55.0, 10.0, 90.0, 25.0] }],
+            words: vec![
+                Word { text: "Cafe".into(), rect: [10.0, 10.0, 50.0, 25.0], confidence: None },
+                Word { text: "extra".into(), rect: [55.0, 10.0, 90.0, 25.0], confidence: None },
+            ],
         }])
     }
 }
@@ -170,7 +173,8 @@ fn bad_settings_pages_words_and_corrections_fail_before_mutation() {
                         orientation: None,
                         straighten: false,
                         despeckle: None,
-                        background: None
+                        background: None,
+                        editable: None
                     }]
                 )
                 .is_err()
@@ -264,7 +268,8 @@ fn restricted_documents_refuse_recognition_before_rendering_or_backend_inference
                         orientation: None,
                         straighten: false,
                         despeckle: None,
-                        background: None
+                        background: None,
+                        editable: None
                     }]
                 )
                 .is_err()

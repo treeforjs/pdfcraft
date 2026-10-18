@@ -320,24 +320,32 @@ fn best_direction(points: &[(f32, f32)], axis: f64) -> (f64, f64, f64) {
 pub fn plausibility(lines: &[Line]) -> f64 {
     let mut score = 0.0;
     for word in lines.iter().flat_map(|l| &l.words) {
-        let chars: Vec<char> = word.text.trim().chars().collect();
-        if chars.is_empty() {
+        let chars = word.text.trim().chars().count();
+        if chars == 0 {
             continue;
         }
-        let core: Vec<char> = chars.iter().copied().filter(char::is_ascii_alphanumeric).collect();
-        let letters: Vec<char> = core.iter().copied().filter(char::is_ascii_alphabetic).collect();
-        let case_ok = letters.iter().all(char::is_ascii_lowercase)
-            || letters.iter().all(char::is_ascii_uppercase)
-            || letters.iter().skip(1).all(char::is_ascii_lowercase);
-        let switches = core.windows(2).filter(|p| p[0].is_ascii_alphabetic() != p[1].is_ascii_alphabetic()).count();
-        let vowel = letters.len() < 4 || letters.iter().any(|c| "aeiouyAEIOUY".contains(*c));
-        if !core.is_empty() && core.len() * 10 >= chars.len() * 6 && case_ok && switches <= 1 && vowel {
-            score += core.len() as f64;
+        if word_shaped(&word.text) {
+            score += word.text.chars().filter(char::is_ascii_alphanumeric).count() as f64;
         } else {
-            score -= chars.len() as f64 / 2.0;
+            score -= chars as f64 / 2.0;
         }
     }
     score
+}
+
+/// Whether recognized text looks like a word by the rules [`plausibility`] documents (at least
+/// 60 % letters or digits, consistent case, at most one letter/digit switch, a vowel in words of
+/// four or more letters). Empty text is not word-shaped.
+pub fn word_shaped(text: &str) -> bool {
+    let chars: Vec<char> = text.trim().chars().collect();
+    let core: Vec<char> = chars.iter().copied().filter(char::is_ascii_alphanumeric).collect();
+    let letters: Vec<char> = core.iter().copied().filter(char::is_ascii_alphabetic).collect();
+    let case_ok = letters.iter().all(char::is_ascii_lowercase)
+        || letters.iter().all(char::is_ascii_uppercase)
+        || letters.iter().skip(1).all(char::is_ascii_lowercase);
+    let switches = core.windows(2).filter(|p| p[0].is_ascii_alphabetic() != p[1].is_ascii_alphabetic()).count();
+    let vowel = letters.len() < 4 || letters.iter().any(|c| "aeiouyAEIOUY".contains(*c));
+    !core.is_empty() && core.len() * 10 >= chars.len() * 6 && case_ok && switches <= 1 && vowel
 }
 
 /// A corrected copy of a page for recognition, and how to map its pixels back.
@@ -522,7 +530,7 @@ mod tests {
             let left_ink = px.chunks(w as usize).any(|row| row.get(55).is_some_and(|v| *v < 128));
             seen.push(left_ink);
             let text = if left_ink { "Plain words" } else { "pIq" };
-            Ok(vec![Line { words: vec![Word { text: text.into(), rect: [0.0, 0.0, 1.0, 1.0] }; 10] }])
+            Ok(vec![Line { words: vec![Word { text: text.into(), rect: [0.0, 0.0, 1.0, 1.0], confidence: None }; 10] }])
         })
         .unwrap();
         assert_eq!(seen.len(), 2, "one axis: two candidate readings");
@@ -545,7 +553,7 @@ mod tests {
 
     #[test]
     fn plausibility_prefers_word_shaped_text() {
-        let line = |words: &[&str]| Line { words: words.iter().map(|t| Word { text: (*t).into(), rect: [0.0; 4] }).collect() };
+        let line = |words: &[&str]| Line { words: words.iter().map(|t| Word { text: (*t).into(), rect: [0.0; 4], confidence: None }).collect() };
         let good = plausibility(&[line(&["Searchable", "scans", "with", "M10", "words."])]);
         let bad = plausibility(&[line(&["sMoP", "l0l", "pxqrst", "'!:"])]);
         assert!(good > 20.0 && bad < 0.0, "{good} {bad}");

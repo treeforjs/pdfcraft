@@ -298,7 +298,14 @@ fn contents(doc: &mut Document, page: &pdfcraft_model::Page) -> Result<Vec<Objec
 fn add_resources(doc: &mut Document, page: &pdfcraft_model::Page, opacity: Option<f64>, content: Option<&[u8]>) -> Result<(), EditError> {
     let mut res = page.dict.get(b"Resources").map(|r| doc.resolve(r)).and_then(|r| r.as_dict().cloned()).unwrap_or_default();
     let mut fonts = res.get(b"Font").map(|f| doc.resolve(f)).and_then(|f| f.as_dict().cloned()).unwrap_or_default();
-    for (name, base) in [(&b"PCHelv"[..], "Helvetica"), (b"PCTimes", "Times-Roman"), (b"PCCour", "Courier")] {
+    for (name, base) in [
+        (&b"PCHelv"[..], "Helvetica"),
+        (b"PCTimes", "Times-Roman"),
+        (b"PCCour", "Courier"),
+        (b"PCHelvB", "Helvetica-Bold"),
+        (b"PCTimesB", "Times-Bold"),
+        (b"PCCourB", "Courier-Bold"),
+    ] {
         // Helvetica always (marks use it); the others only when the content names them.
         if name != b"PCHelv" && !content.is_some_and(|c| c.windows(name.len() + 1).any(|w| w[0] == b'/' && &w[1..] == name)) {
             continue;

@@ -3936,6 +3936,44 @@ fn ocr_tools_make_a_scan_searchable() {
 }
 
 #[test]
+fn ocr_editable_output_is_validated_before_models_and_reports_lines() {
+    let dir = workdir("ocr-editable");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    for bad in [
+        json!({ "doc": doc, "output": "clearscan" }),
+        json!({ "doc": doc, "min_confidence": 0.5 }),
+        json!({ "doc": doc, "output": "straighten", "min_confidence": 0.5 }),
+        json!({ "doc": doc, "output": "editable", "min_confidence": 1.5 }),
+        json!({ "doc": doc, "output": "editable", "min_confidence": -0.01 }),
+        json!({ "doc": doc, "output": "editable", "min_confidence": "high" }),
+        json!({ "doc": doc, "output": "editable", "min_confidence": null, "dpi": 9000 }),
+    ] {
+        for tool in ["ocr_recognize", "ocr_prepare"] {
+            assert!(matches!(a.call(tool, &bad), Err(ToolError::InvalidArgs(_))), "{tool} {bad}");
+        }
+    }
+    let files = json!({ "paths": ["a.pdf"], "folder": "out", "output": "editable", "min_confidence": 2 });
+    assert!(matches!(a.call("ocr_recognize_files", &files), Err(ToolError::InvalidArgs(_))));
+    assert!(a.call("edit_undo", &json!({ "doc": doc })).is_err(), "nothing was changed");
+    if !pdfcraft_engine::ocr::Models::required_for_tests().unwrap() {
+        eprintln!("skipped (recognition part): OCR models not installed");
+        return;
+    }
+    let text = ok(&mut a, "doc_create", json!({ "from": "text", "text": "Editable scans with recognised words" }))["doc"].as_u64().unwrap();
+    ok(&mut a, "doc_export_images", json!({ "doc": text, "folder": "scan", "dpi": 200, "pages": [1] }));
+    let png = std::fs::read_dir(dir.join("scan")).unwrap().next().unwrap().unwrap().path();
+    let scan = ok(&mut a, "doc_create", json!({ "from": "images", "paths": [png.to_string_lossy()] }))["doc"].as_u64().unwrap();
+    let r = ok(&mut a, "ocr_recognize", json!({ "doc": scan, "output": "editable" }));
+    let editable = &r["pages"][0]["editable"];
+    assert!(editable["lines"].as_u64().unwrap() >= 1, "{r}");
+    assert!(editable["fonts"].as_object().is_some_and(|f| !f.is_empty()), "{r}");
+    assert!(editable["line_styles"][0]["size"].as_f64().unwrap() > 4.0, "{r}");
+    assert!(editable["low_confidence"].is_array(), "{r}");
+    assert_eq!(ok(&mut a, "edit_undo", json!({ "doc": scan }))["undone"], "Recognize text");
+}
+
+#[test]
 fn ocr_recognize_files_writes_searchable_copies() {
     let dir = workdir("ocr-files");
     let mut a = auto(&dir);

@@ -13,6 +13,7 @@
 
 use std::path::{Path, PathBuf};
 
+pub mod editable;
 pub mod orient;
 
 pub use pdfcraft_fonts::helvetica_width;
@@ -144,6 +145,9 @@ impl Models {
 pub struct Word {
     pub text: String,
     pub rect: [f32; 4],
+    /// The backend's confidence in the reading, 0–1, when it reports one. The bundled `ocrs`
+    /// engine does not expose calibrated word confidence, so its words carry `None`.
+    pub confidence: Option<f32>,
 }
 
 /// A recognised line of words, in reading order.
@@ -198,7 +202,7 @@ impl Ocr {
                     .words()
                     .map(|w| {
                         let r = w.bounding_rect();
-                        Word { text: w.to_string(), rect: [r.left() as f32, r.top() as f32, r.right() as f32, r.bottom() as f32] }
+                        Word { text: w.to_string(), rect: [r.left() as f32, r.top() as f32, r.right() as f32, r.bottom() as f32], confidence: None }
                     })
                     .filter(|w| !w.text.trim().is_empty())
                     .collect(),
@@ -344,7 +348,7 @@ mod tests {
     fn places_words_through_the_mapping() {
         // 2 pixels per point, page 612 × 792, y flipped.
         let to_user = |x: f32, y: f32| [x as f64 / 2.0, 792.0 - y as f64 / 2.0];
-        let w = PlacedWord::place(&Word { text: "Hello".into(), rect: [100.0, 200.0, 300.0, 240.0] }, to_user);
+        let w = PlacedWord::place(&Word { text: "Hello".into(), rect: [100.0, 200.0, 300.0, 240.0], confidence: None }, to_user);
         assert_eq!(w.origin, [50.0, 672.0]);
         assert_eq!(w.across, [100.0, 0.0]);
         assert_eq!(w.up, [0.0, 20.0]);
@@ -364,7 +368,7 @@ mod tests {
     fn rotated_pages_keep_the_reading_direction() {
         // A page turned 90°: image x runs up the page.
         let to_user = |x: f32, y: f32| [y as f64, x as f64];
-        let w = PlacedWord::place(&Word { text: "Up".into(), rect: [0.0, 0.0, 50.0, 10.0] }, to_user);
+        let w = PlacedWord::place(&Word { text: "Up".into(), rect: [0.0, 0.0, 50.0, 10.0], confidence: None }, to_user);
         assert_eq!(w.across, [0.0, 50.0]);
         assert_eq!(w.up, [-10.0, 0.0]);
     }
