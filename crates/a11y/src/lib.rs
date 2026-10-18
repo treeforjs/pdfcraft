@@ -16,6 +16,7 @@ mod alt;
 mod artifact;
 mod content;
 mod headings;
+mod pdfua;
 mod reading;
 mod report;
 mod structure;
@@ -24,6 +25,7 @@ mod tags;
 pub use alt::{AltError, Figure, figures, mark_decorative, set_alt};
 pub use artifact::{ArtifactResult, ArtifactSelection, ArtifactSubtype, ArtifactType, MAX_ARTIFACT_SELECTION, mark_artifact};
 pub use headings::{Heading, HeadingKind, MAX_HEADING_LEVEL, heading_level, headings};
+pub use pdfua::{MAX_UA_FINDINGS, UA_CHECKPOINTS, UA_NOT_CHECKED, UaCheckpoint, UaFinding, UaOptions, UaPart, UaReport, UaSeverity, verify_pdfua};
 pub use reading::{Block, BlockKind, Piece, reading_blocks};
 pub use report::report_html;
 pub use tags::{

@@ -99,6 +99,17 @@ fn metadata(doc: &Document) -> Option<String> {
     }
 }
 
+/// The catalog's XMP metadata stream, as text (`None` when there is none or it can't be decoded).
+pub fn xmp_metadata(doc: &Document) -> Option<String> {
+    metadata(doc)
+}
+
+/// The value of a simple XMP property (`pdfuaid:part`, `dc:title`, …), written as an attribute
+/// or an element (the first `rdf:li` of an `rdf:Alt` or `rdf:Seq`).
+pub fn xmp_value(xmp: &str, key: &str) -> Option<String> {
+    xmp::value(xmp, key)
+}
+
 /// What the document declares about its standards.
 pub fn declared(doc: &Document) -> Declared {
     let mut d = Declared::default();

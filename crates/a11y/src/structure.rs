@@ -90,6 +90,18 @@ pub(crate) struct Elem {
     pub annots: Vec<ObjRef>,
     pub page: Option<usize>,
     pub attrs: Vec<Dict>,
+    /// The type as written (before the role map).
+    pub raw: Vec<u8>,
+    /// The element's own object, when it is indirect.
+    pub obj: Option<ObjRef>,
+    /// Has a non-empty /Lang.
+    pub lang: bool,
+    /// The /ID entry, if any.
+    pub id: Option<Vec<u8>>,
+    /// The /NS entry (a namespace dictionary), if any.
+    pub ns: Option<ObjRef>,
+    /// Marked-content ids in page content streams it references: (page, MCID).
+    pub mcids: Vec<(Option<usize>, i64)>,
 }
 
 #[derive(Debug, Default)]
@@ -99,6 +111,14 @@ pub(crate) struct Tree {
     pub elems: Vec<Elem>,
     /// Top-level elements in order.
     pub roots: Vec<usize>,
+    /// Elements met a second time while reading (a loop, or an element with two parents),
+    /// with the first such object.
+    pub revisits: usize,
+    pub first_revisit: Option<ObjRef>,
+    /// Reading stopped early (too deep or too many elements).
+    pub truncated: bool,
+    /// MCIDs recorded so far (capped).
+    mcid_count: usize,
 }
 
 impl Tree {
@@ -120,7 +140,7 @@ impl Tree {
     }
 
     /// Elements in document (pre-)order.
-    fn preorder(&self) -> Vec<usize> {
+    pub(crate) fn preorder(&self) -> Vec<usize> {
         let mut out = Vec::with_capacity(self.elems.len());
         let mut stack: Vec<usize> = self.roots.iter().rev().copied().collect();
         while let Some(i) = stack.pop() {
@@ -130,7 +150,7 @@ impl Tree {
         out
     }
 
-    fn ancestors(&self, i: usize) -> impl Iterator<Item = usize> + '_ {
+    pub(crate) fn ancestors(&self, i: usize) -> impl Iterator<Item = usize> + '_ {
         std::iter::successors(self.elems[i].parent, move |p| self.elems[*p].parent)
     }
 
@@ -275,7 +295,7 @@ impl Tree {
     }
 
     /// An attribute from the element's attribute objects (/A), any owner.
-    fn attr(&self, i: usize, key: &[u8]) -> Option<&Object> {
+    pub(crate) fn attr(&self, i: usize, key: &[u8]) -> Option<&Object> {
         self.elems[i].attrs.iter().find_map(|d| d.get(key))
     }
 
@@ -284,7 +304,7 @@ impl Tree {
     }
 
     /// The rows of a table (through THead/TBody/TFoot, not into nested tables) and their cells.
-    fn table_cells(&self, table: usize) -> Vec<(usize, usize)> {
+    pub(crate) fn table_cells(&self, table: usize) -> Vec<(usize, usize)> {
         let mut out = Vec::new();
         for (r, row) in self.table_rows(table).into_iter().enumerate() {
             for &c in &self.elems[row].children {
@@ -344,6 +364,22 @@ impl Tree {
     }
 }
 
+/// MCIDs beyond this many are not recorded (a guard against absurd trees).
+const MAX_MCIDS: usize = 4_000_000;
+
+impl Tree {
+    fn add_mcid(&mut self, elem: usize, page: Option<usize>, mcid: i64) {
+        if self.mcid_count >= MAX_MCIDS {
+            self.truncated = true;
+            return;
+        }
+        if let Some(e) = self.elems.get_mut(elem) {
+            e.mcids.push((page, mcid));
+            self.mcid_count += 1;
+        }
+    }
+}
+
 struct Reader<'a> {
     doc: &'a Document,
     role_map: &'a Dict,
@@ -373,6 +409,7 @@ impl Reader<'_> {
     /// Read the kids `k` of `parent` (or of the root), appending element indexes to `out`.
     fn kids(&mut self, t: &mut Tree, k: &Object, parent: Option<usize>, page: Option<usize>, out: &mut Vec<usize>, depth: usize) {
         if depth > 256 || t.elems.len() >= MAX_ELEMENTS {
+            t.truncated = true;
             return;
         }
         match k {
@@ -381,30 +418,40 @@ impl Reader<'_> {
                     self.kids(t, x, parent, page, out, depth + 1);
                 }
             }
-            Object::Int(_) => {
+            Object::Int(n) => {
                 if let Some(p) = parent {
                     t.elems[p].content = true;
+                    t.add_mcid(p, page, *n);
                 }
             }
             Object::Ref(r) => {
                 if !self.seen.insert(*r) {
+                    t.revisits = t.revisits.saturating_add(1);
+                    t.first_revisit.get_or_insert(*r);
                     return;
                 }
                 let obj = self.doc.get(*r);
                 if let Some(d) = obj.as_dict() {
-                    self.dict(t, d, parent, page, out, depth);
+                    self.dict(t, d, Some(*r), parent, page, out, depth);
                 }
             }
-            Object::Dict(d) => self.dict(t, d, parent, page, out, depth),
+            Object::Dict(d) => self.dict(t, d, None, parent, page, out, depth),
             _ => {}
         }
     }
 
-    fn dict(&mut self, t: &mut Tree, d: &Dict, parent: Option<usize>, page: Option<usize>, out: &mut Vec<usize>, depth: usize) {
+    #[allow(clippy::too_many_arguments)]
+    fn dict(&mut self, t: &mut Tree, d: &Dict, obj: Option<ObjRef>, parent: Option<usize>, page: Option<usize>, out: &mut Vec<usize>, depth: usize) {
         match d.name(b"Type") {
             Some(b"MCR") => {
                 if let Some(p) = parent {
                     t.elems[p].content = true;
+                    // Content in a form XObject (Stm) is not page content.
+                    if !d.contains(b"Stm")
+                        && let Some(n) = d.get(b"MCID").map(|o| self.doc.resolve(o)).and_then(|o| o.as_int())
+                    {
+                        t.add_mcid(p, self.page_of(d).or(page), n);
+                    }
                 }
                 return;
             }
@@ -438,7 +485,20 @@ impl Reader<'_> {
             }
         }
         let i = t.elems.len();
-        t.elems.push(Elem { ty: self.standard(s), parent, alt: text(b"Alt") || text(b"ActualText"), page, attrs, ..Elem::default() });
+        let id = d.get(b"ID").map(|o| self.doc.resolve(o)).and_then(|o| o.as_string().map(|s| s.bytes.clone()));
+        t.elems.push(Elem {
+            ty: self.standard(s),
+            parent,
+            alt: text(b"Alt") || text(b"ActualText"),
+            page,
+            attrs,
+            raw: s.to_vec(),
+            obj,
+            lang: text(b"Lang"),
+            id,
+            ns: d.get(b"NS").and_then(Object::as_ref),
+            ..Elem::default()
+        });
         if let Some(p) = parent {
             t.elems[p].children.push(i);
         }

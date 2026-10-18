@@ -756,6 +756,7 @@ impl Automation {
             "compare_files" => self.compare_files(&a)?,
             "action_list" => self.action_list()?,
             "pdfa_verify" => self.pdfa_verify(&a)?,
+            "pdfua_verify" => self.pdfua_verify(&a)?,
             "preflight_profiles" => self.preflight_profiles(),
             "preflight_analyze" => self.preflight_analyze(&a)?,
             "preflight_fix" => self.preflight_fix(&a)?,

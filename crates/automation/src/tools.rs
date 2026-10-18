@@ -1184,6 +1184,16 @@ pub fn tools() -> Vec<ToolDef> {
             .ro()
             .cmd("standards.pdfa")
             .with(schema(json!({ "doc": doc(), "level": { "type": "string", "enum": ["2b", "3b"], "description": "Default 2b." } }), &["doc"])),
+        t("pdfua_verify", "Verify PDF/UA", "Verify the machine-checkable requirements of PDF/UA-1 (ISO 14289-1, part 1, the default) or PDF/UA-2 (ISO 14289-2, part 2), reported by Matterhorn Protocol checkpoint (06-002, 28-011, …) or a short code where none applies (struct-tree-root, fonts-embedded, ua2-namespace): identification and dc:title in XMP, DisplayDocTitle, MarkInfo, the structure tree (loops, role mapping, namespaces, tables, lists, headings, figure and formula alternate text, notes), content tagged or artifact with every MCID in the structure and parent tree, fonts embedded and mapped to Unicode, language, annotations and fields (tags, Contents, TU, Tabs), optional content, embedded files, XFA, encryption, reference and PostScript XObjects. conforms is true when no checked requirement fails; checkpoints that need a person are listed in not_checked and are not part of it. counts has every checked checkpoint; findings keep at most max_findings per checkpoint (default 100), with 1-based page and object number.")
+            .ro()
+            .with(schema(
+                json!({
+                    "doc": doc(),
+                    "part": { "type": "integer", "enum": [1, 2], "description": "1 for PDF/UA-1 (default), 2 for PDF/UA-2." },
+                    "max_findings": { "type": "integer", "minimum": 1, "maximum": 10000, "description": "Findings kept per checkpoint (default 100); counts include the rest." },
+                }),
+                &["doc"],
+            )),
         t("pdfa_convert", "Save as PDF/A", "Standards ▸ Save as PDF/A: fix what can be fixed for PDF/A-2b or 3b (XMP identification and metadata, an sRGB output intent, forbidden actions and JavaScript, annotation print flags, image interpolation, encryption). Returns what was fixed and what remains (e.g. fonts that aren't embedded). Undoable; save the document to keep it.")
             .cmd("standards.pdfa")
             .with(schema(json!({ "doc": doc(), "level": { "type": "string", "enum": ["2b", "3b"] } }), &["doc"])),

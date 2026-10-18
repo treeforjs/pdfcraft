@@ -611,6 +611,49 @@ impl Automation {
         }))
     }
 
+    pub(crate) fn pdfua_verify(&self, a: &Args) -> Result<Value> {
+        use pdfcraft_engine::a11y::{MAX_UA_FINDINGS, UA_NOT_CHECKED, UaOptions, UaPart};
+        let part = match a.opt_int("part")? {
+            None => UaPart::Ua1,
+            Some(n) => UaPart::from_number(n).ok_or_else(|| ToolError::InvalidArgs(format!("part must be 1 (PDF/UA-1) or 2 (PDF/UA-2), not {n}")))?,
+        };
+        let max_findings = match a.opt_int("max_findings")? {
+            None => UaOptions::default().max_findings,
+            Some(n) => usize::try_from(n)
+                .ok()
+                .filter(|n| (1..=MAX_UA_FINDINGS).contains(n))
+                .ok_or_else(|| ToolError::InvalidArgs(format!("max_findings must be 1 to {MAX_UA_FINDINGS}, not {n}")))?,
+        };
+        let r = self.doc(a)?.pdfua_verify(&UaOptions { part, max_findings }).ok_or_else(|| failed("the document can't be read for checking"))?;
+        let counts: serde_json::Map<String, Value> = r.checked.iter().map(|id| ((*id).to_owned(), json!(r.count(id)))).collect();
+        let kept = |id: &str| r.findings.iter().filter(|f| f.checkpoint == id).count();
+        let truncated = r.counts.iter().any(|(id, n)| *n > kept(id));
+        let findings: Vec<Value> = r
+            .findings
+            .iter()
+            .map(|f| {
+                json!({
+                    "checkpoint": f.checkpoint,
+                    "severity": f.severity.id(),
+                    "message": f.message,
+                    "page": f.page.map(|p| p + 1),
+                    "object": f.object.map(|o| o.num),
+                })
+            })
+            .collect();
+        Ok(json!({
+            "part": part.label(),
+            "conforms": r.conforms(),
+            "declared_part": r.declared,
+            "failed_checkpoints": r.failed(),
+            "counts": counts,
+            "findings": findings,
+            "findings_truncated": truncated,
+            "checked": r.checked,
+            "not_checked": UA_NOT_CHECKED,
+        }))
+    }
+
     pub(crate) fn pdfa_convert(&mut self, a: &Args) -> Result<Value> {
         let level = self.pdfa_level(a)?;
         let id = self.doc(a)?.id;

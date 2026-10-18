@@ -4062,6 +4062,106 @@ fn pdfa_through_tools() {
     assert!(a.call("pdfa_verify", &json!({ "doc": doc, "level": "9z" })).is_err());
 }
 
+/// A one-paragraph PDF/UA-1 document; `catalog_extra` goes into the catalog.
+fn pdfua_doc(catalog_extra: &str, part: u8) -> Vec<u8> {
+    let xmp = format!(
+        "<x:xmpmeta xmlns:x=\"adobe:ns:meta/\"><rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">\
+         <rdf:Description rdf:about=\"\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:pdfuaid=\"http://www.aiim.org/pdfua/ns/id/\">\
+         <pdfuaid:part>{part}</pdfuaid:part><dc:title><rdf:Alt><rdf:li xml:lang=\"x-default\">Hello</rdf:li></rdf:Alt></dc:title>\
+         </rdf:Description></rdf:RDF></x:xmpmeta>"
+    );
+    let content = "/P << /MCID 0 >> BDC BT /F1 12 Tf 20 100 Td (Hello) Tj ET EMC";
+    let stream = |d: &str| format!("<< /Length {} >>\nstream\n{d}\nendstream", d.len());
+    let bodies = [
+        format!(
+            "<< /Type /Catalog /Pages 2 0 R /Lang (en) /MarkInfo << /Marked true >> /StructTreeRoot 5 0 R \
+             /ViewerPreferences << /DisplayDocTitle true >> /Metadata 10 0 R {catalog_extra} >>"
+        ),
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".into(),
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 4 0 R /StructParents 0 /Resources << /Font << /F1 8 0 R >> >> >>".into(),
+        stream(content),
+        "<< /Type /StructTreeRoot /K 6 0 R /ParentTree 7 0 R >>".into(),
+        "<< /Type /StructElem /S /Document /P 5 0 R /K [11 0 R] >>".into(),
+        "<< /Nums [0 [11 0 R]] >>".into(),
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /FontDescriptor 9 0 R >>".into(),
+        "<< /Type /FontDescriptor /FontName /Helvetica /Flags 32 /FontFile 12 0 R >>".into(),
+        stream(&xmp),
+        "<< /Type /StructElem /S /P /P 6 0 R /Pg 3 0 R /K 0 >>".into(),
+        stream("font program"),
+    ];
+    let mut out = b"%PDF-1.7\n".to_vec();
+    let mut offsets = Vec::new();
+    for (i, b) in bodies.iter().enumerate() {
+        offsets.push(out.len());
+        out.extend_from_slice(format!("{} 0 obj\n{b}\nendobj\n", i + 1).as_bytes());
+    }
+    let xref = out.len();
+    out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", bodies.len() + 1).as_bytes());
+    for o in offsets {
+        out.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+    }
+    out.extend_from_slice(format!("trailer << /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", bodies.len() + 1).as_bytes());
+    out
+}
+
+#[test]
+fn pdfua_verify_through_tools() {
+    let dir = workdir("pdfua");
+    let mut a = auto(&dir);
+    std::fs::write(dir.join("ua.pdf"), pdfua_doc("", 1)).unwrap();
+    let doc = ok(&mut a, "doc_open", json!({ "path": "ua.pdf" }))["doc"].as_u64().unwrap();
+    let r = ok(&mut a, "pdfua_verify", json!({ "doc": doc }));
+    assert_eq!((r["part"].as_str(), r["conforms"].as_bool(), r["declared_part"].as_u64()), (Some("PDF/UA-1"), Some(true), Some(1)), "{r}");
+    assert_eq!(r["counts"]["06-002"], 0);
+    assert_eq!(r["findings"].as_array().unwrap().len(), 0, "{r}");
+    assert!(!r["not_checked"].as_array().unwrap().is_empty());
+    // The same file as PDF/UA-2.
+    let r = ok(&mut a, "pdfua_verify", json!({ "doc": doc, "part": 2 }));
+    assert_eq!(r["conforms"], false);
+    assert_eq!(r["failed_checkpoints"], json!(["06-002", "ua2-rev", "ua2-version"]), "{r}");
+    assert!(r["checked"].as_array().unwrap().iter().any(|c| c == "ua2-namespace"));
+    // Broken: a link that isn't tagged and has no description, on a page without Tabs.
+    std::fs::write(
+        dir.join("link.pdf"),
+        pdfua_doc("", 1)
+            .iter()
+            .map(|b| *b as char)
+            .collect::<String>()
+            .replace("/StructParents 0 /Resources", "/StructParents 0 /Annots [<< /Type /Annot /Subtype /Link /Rect [0 0 10 10] >>] /Resources")
+            .into_bytes(),
+    )
+    .unwrap();
+    let link = ok(&mut a, "doc_open", json!({ "path": "link.pdf" }))["doc"].as_u64().unwrap();
+    let r = ok(&mut a, "pdfua_verify", json!({ "doc": link }));
+    assert_eq!(r["conforms"], false);
+    assert_eq!(r["failed_checkpoints"], json!(["28-008", "28-011", "28-012"]), "{r}");
+    // An untagged document fails cleanly, and max_findings caps the list but not the counts.
+    let plain = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    let r = ok(&mut a, "pdfua_verify", json!({ "doc": plain, "max_findings": 1 }));
+    assert_eq!(r["conforms"], false);
+    let failed = r["failed_checkpoints"].as_array().unwrap();
+    assert!(["struct-tree-root", "mark-info", "06-001", "01-005"].iter().all(|c| failed.iter().any(|f| f == c)), "{r}");
+    assert!(r["counts"]["01-005"].as_u64().unwrap() >= 3, "three untagged pages: {r}");
+    let kept = r["findings"].as_array().unwrap().iter().filter(|f| f["checkpoint"] == "01-005").count();
+    assert_eq!(kept, 1);
+    assert_eq!(r["findings_truncated"], true);
+    let f = r["findings"].as_array().unwrap().iter().find(|f| f["checkpoint"] == "01-005").unwrap().clone();
+    assert_eq!((f["severity"].as_str(), f["page"].as_u64()), (Some("error"), Some(1)), "{f}");
+    // Bad arguments.
+    for bad in [
+        json!({ "doc": doc, "part": 3 }),
+        json!({ "doc": doc, "part": "1" }),
+        json!({ "doc": doc, "max_findings": 0 }),
+        json!({ "doc": doc, "max_findings": -5 }),
+        json!({ "doc": doc, "max_findings": 10001 }),
+        json!({ "doc": doc, "level": 1 }),
+    ] {
+        assert!(matches!(a.call("pdfua_verify", &bad), Err(ToolError::InvalidArgs(_))), "{bad}");
+    }
+    assert!(a.call("pdfua_verify", &json!({ "doc": 999 })).is_err());
+    assert!(a.call("pdfua_verify", &json!({})).is_err());
+}
+
 #[test]
 fn exporting_to_word_html_and_rtf() {
     let dir = workdir("office");

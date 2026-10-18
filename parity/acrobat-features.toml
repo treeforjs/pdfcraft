@@ -7756,11 +7756,11 @@ title = "Verify PDF/UA-1 and PDF/UA-2"
 area = "K"
 tier = "P1"
 milestone = "M11"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["pdfua_verify"]
+evidence = ["crates/a11y/src/pdfua_tests.rs::a_well_tagged_ua1_document_conforms", "crates/a11y/src/pdfua_tests.rs::a_well_tagged_ua2_document_conforms_and_namespaces_are_checked", "crates/a11y/src/pdfua_tests.rs::each_broken_variant_fails_with_its_checkpoint", "crates/a11y/src/pdfua_tests.rs::a_looped_structure_tree_is_reported_not_followed", "crates/a11y/src/pdfua_tests.rs::an_untagged_document_fails_cleanly", "crates/a11y/src/pdfua_tests.rs::encryption_must_let_assistive_technology_read", "crates/automation/tests/automation.rs::pdfua_verify_through_tools"]
+notes = "Machine-checkable PDF/UA-1 and -2 rules by Matterhorn checkpoint (06-001/002/003, 07-001/002, 01-003/004/005/007, 02-001/002/003, 09-004/005/006, 10-001, 11-001, 13-003, 14-002/003/006/007, 15-003, 17-002, 19-003/004, 20-001/002/003, 21-001, 25-001, 26-001/002, 28-002/004/005/007/008/009/010/011/012, 30-001) plus short codes: struct-tree-root, mark-info, struct-tree-shape (loops), MCIDs against the structure and parent tree, fonts embedded, PostScript XObjects; UA-2: pdfuaid:rev, PDF 2.0, namespaces and RoleMapNS. Not checked: the human-judgement checkpoints (reading order, appropriate tags and alt text, colour, flicker, headers/footers, …), 09-007/008 Ruby/Warichu, 11-002 to 11-006, 15-005, 30-002, the detailed 31 font checks, UA-2 heading and MathML rules; no UI yet and no veraPDF comparison."
 
 [[feature]]
 id = "optimize.standards-panel"
