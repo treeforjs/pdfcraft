@@ -498,7 +498,8 @@ impl Automation {
                 }
             }
             "page_objects" => self.page_objects(&a)?,
-            "objects_arrange" | "objects_align" | "objects_distribute" | "objects_transform" => self.objects_edit(name, &a)?,
+            "objects_arrange" | "objects_align" | "objects_distribute" | "objects_transform" | "objects_resize" | "objects_style"
+            | "objects_delete" => self.objects_edit(name, &a)?,
             "text_fonts" => {
                 let page = self.page(&a)?;
                 let fonts = self.doc(&a)?.text_fonts(page, a.opt_str("text")?.unwrap_or("")).map_err(failed)?;

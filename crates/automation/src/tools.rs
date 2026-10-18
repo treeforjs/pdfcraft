@@ -2007,6 +2007,51 @@ pub fn tools() -> Vec<ToolDef> {
                 }),
                 &["doc", "page", "objects", "action"],
             )),
+        t("objects_resize", "Resize objects", "Scale page objects (numbers from page_objects) in place, each about an anchor of its own displayed box (default center; top_left, top, top_right, left, right, bottom_left, bottom, bottom_right): give width and/or height (displayed points; with only one, the other scales in proportion), or scale (both directions), or scale_x / scale_y (factors, 0.001 to 1000). Line widths, text and images scale with the object; text stays editable text. One undo step; objects without a box (null rect) can't be resized.")
+            .cmd("edit.edit_text")
+            .with(schema(
+                json!({
+                    "doc": doc(),
+                    "page": { "type": "integer", "minimum": 1 },
+                    "objects": { "type": "array", "items": { "type": "integer", "minimum": 1 }, "minItems": 1, "description": "Object numbers from page_objects." },
+                    "width": { "type": "number", "exclusiveMinimum": 0, "description": "New displayed width in points." },
+                    "height": { "type": "number", "exclusiveMinimum": 0, "description": "New displayed height in points." },
+                    "scale": { "type": "number", "exclusiveMinimum": 0, "description": "Scale factor in both directions." },
+                    "scale_x": { "type": "number", "exclusiveMinimum": 0 },
+                    "scale_y": { "type": "number", "exclusiveMinimum": 0 },
+                    "anchor": { "type": "string", "enum": ["center", "top_left", "top", "top_right", "left", "right", "bottom_left", "bottom", "bottom_right"] },
+                }),
+                &["doc", "page", "objects"],
+            )),
+        t("objects_style", "Change path appearance", "Change how vector paths (numbers from page_objects; kind path, or the paths inside a tagged group) are painted, as Edit PDF's object properties do: fill and stroke colour (\"none\" turns the fill or stroke off, a colour turns it on; \"#RRGGBB\", [gray], [r, g, b] or [c, m, y, k] with components 0-1 write DeviceGray/RGB/CMYK, { space: current, components } keeps the colour space the path already paints with, e.g. a spot colour or ICC space, components checked against it), line_width (displayed points, 0 = thinnest), dash (lengths in displayed points, [] = solid; dash_phase), cap (butt, round, square), join (miter, round, bevel) and opacity (0-1, fill and stroke: a new ExtGState). Fields left out stay as they are. Each path is wrapped in q … Q with the new state, so nothing else on the page changes; a path left with neither fill nor stroke is refused (use objects_delete). Text, images and other objects are refused. One undo step; tagged content keeps its MCIDs.")
+            .cmd("edit.edit_text")
+            .with(schema(
+                json!({
+                    "doc": doc(),
+                    "page": { "type": "integer", "minimum": 1 },
+                    "objects": { "type": "array", "items": { "type": "integer", "minimum": 1 }, "minItems": 1, "description": "Object numbers from page_objects." },
+                    "fill": { "description": "\"none\", \"#RRGGBB\", [gray], [r, g, b], [c, m, y, k] or { space: gray|rgb|cmyk|current, components }." },
+                    "stroke": { "description": "As fill." },
+                    "line_width": { "type": "number", "minimum": 0, "maximum": 10000 },
+                    "dash": { "type": "array", "items": { "type": "number", "minimum": 0 }, "maxItems": 16, "description": "Dash and gap lengths in points; [] for a solid line." },
+                    "dash_phase": { "type": "number", "minimum": 0 },
+                    "cap": { "type": "string", "enum": ["butt", "round", "square"] },
+                    "join": { "type": "string", "enum": ["miter", "round", "bevel"] },
+                    "opacity": { "type": "number", "minimum": 0, "maximum": 1 },
+                }),
+                &["doc", "page", "objects"],
+            )),
+        t("objects_delete", "Delete objects", "Delete page objects (numbers from page_objects) from the page's own content: their painting operators go, and the state they leave for later content (a clip, text state set inside a text object) stays, so everything else looks the same. In a tagged PDF the emptied structure elements leave the tag tree. Added items and page marks are deleted with content_delete and the header/footer/watermark tools. One undo step.")
+            .destructive()
+            .cmd("edit.edit_text")
+            .with(schema(
+                json!({
+                    "doc": doc(),
+                    "page": { "type": "integer", "minimum": 1 },
+                    "objects": { "type": "array", "items": { "type": "integer", "minimum": 1 }, "minItems": 1, "description": "Object numbers from page_objects." },
+                }),
+                &["doc", "page", "objects"],
+            )),
         t("text_fonts", "List page fonts", "List the fonts available in a page's resources, with exact resource names, face, weight/slant, subset status and whether each can encode the optional proposed text. Pass resource as text_edit's font_resource to select that exact face. Subsets are never expanded; unavailable characters are refused.")
             .ro()
             .cmd("edit.edit_text")

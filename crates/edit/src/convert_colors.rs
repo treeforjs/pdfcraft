@@ -52,6 +52,18 @@ use function::{Func, sampled_stream};
 pub use icc::{Family, Profile};
 use space::{Dest, Space};
 
+/// What a colour in colour space `cs` (a family name, an array, or the name of a `/ColorSpace`
+/// resource of `res`) is made of: each component's valid range (Indexed: 0 to `hival`; Lab: its
+/// `/Range`). `None` for patterns and spaces that can't be read.
+pub(crate) fn color_ranges(doc: &Document, cs: &Object, res: &Dict) -> Option<Vec<[f64; 2]>> {
+    let space = Space::parse(doc, cs, res, 0, None);
+    match &space {
+        Space::Pattern(_) | Space::Unknown(_) => None,
+        Space::Indexed { hival, .. } => Some(vec![[0.0, *hival as f64]]),
+        _ => Some(space.ranges()),
+    }
+}
+
 /// Forms drawn inside forms, at most this deep.
 const MAX_DEPTH: usize = 16;
 const MAX_STACK: usize = 256;

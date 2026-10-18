@@ -1,6 +1,7 @@
 //! Edit a PDF ▸ selected page objects: Arrange (Bring to Front, Bring Forward, Send Backward,
 //! Send to Back), Align (left, horizontal centre, right, top, vertical centre, bottom),
-//! Distribute (horizontally, vertically), and Rotate / Flip / Move.
+//! Distribute (horizontally, vertically), Rotate / Flip / Move, Resize, Delete, and the
+//! appearance of vector paths (fill and stroke colour, line width, dash, cap, join, opacity).
 //!
 //! **Objects.** [`page_objects`] lists what the page's own content draws, in paint order: each
 //! text object (`BT … ET`), painted path, image or Form XObject (`Do`), inline image and shading
@@ -21,7 +22,18 @@
 //! is wrapped in `q <cm> … Q`, the `cm` adding a user-space transform after its own, followed by
 //! the state the object left behind for later content (text state and colours set inside a text
 //! object, a path's clip), so nothing else moves or changes. Everything else is copied byte for
-//! byte. Directions are as displayed (after `/Rotate`).
+//! byte. Directions are as displayed (after `/Rotate`). **Resize** is the same, with a scale
+//! about an anchor of each object's displayed box.
+//!
+//! **Style** (vector paths only) wraps each selected painted path in `q <state> … Q`: an opacity
+//! ExtGState (`/CA` and `/ca`, a new page resource), line width / dash / cap / join (widths and
+//! dash lengths in displayed points, divided by the path's CTM scale), and fill / stroke colours
+//! in DeviceGray, DeviceRGB or DeviceCMYK, or in the colour space the path already paints with
+//! (`scn`, components checked against that space). Turning fill or stroke on or off changes the
+//! painting operator (`f` → `B`, `B` → `S`, …); a path left painting nothing is refused. In a
+//! tagged object of several kinds only its paths change. **Delete** removes the selected
+//! objects' painting operators and keeps the state they leave for later content (a clip, text
+//! state), so nothing else changes; keep-tags-on-edit then drops emptied structure elements.
 
 use std::collections::HashMap;
 use std::ops::Range;
@@ -115,8 +127,104 @@ pub enum Axis {
     Vertical,
 }
 
-/// What to do with the selected objects.
+/// A colour for a path's fill or stroke.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Paint {
+    /// No fill (or no stroke): the painting operator stops filling (stroking).
+    None,
+    Gray(f64),
+    Rgb([f64; 3]),
+    Cmyk([f64; 4]),
+    /// Components in the colour space the path already paints with (spot, ICC, Lab, Indexed…).
+    Current(Vec<f64>),
+}
+
+/// A dash pattern in displayed points: dashes and gaps (empty: solid), and the phase.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Dash {
+    pub pattern: Vec<f64>,
+    pub phase: f64,
+}
+
+/// Line cap style (`J`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LineCap {
+    Butt,
+    Round,
+    Square,
+}
+
+/// Line join style (`j`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LineJoin {
+    Miter,
+    Round,
+    Bevel,
+}
+
+/// The appearance of vector paths; `None` fields are left as they are.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct PathStyle {
+    pub fill: Option<Paint>,
+    pub stroke: Option<Paint>,
+    /// Displayed points (0: the thinnest line the device can draw).
+    pub line_width: Option<f64>,
+    pub dash: Option<Dash>,
+    pub cap: Option<LineCap>,
+    pub join: Option<LineJoin>,
+    /// 0 (transparent) to 1, for fill and stroke alike.
+    pub opacity: Option<f64>,
+}
+
+/// The point of an object's displayed box that stays put when it is resized.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Anchor {
+    Center,
+    TopLeft,
+    Top,
+    TopRight,
+    Left,
+    Right,
+    BottomLeft,
+    Bottom,
+    BottomRight,
+}
+
+impl Anchor {
+    /// Fractions of the box from its left and bottom edges.
+    fn fractions(self) -> (f64, f64) {
+        match self {
+            Anchor::Center => (0.5, 0.5),
+            Anchor::TopLeft => (0.0, 1.0),
+            Anchor::Top => (0.5, 1.0),
+            Anchor::TopRight => (1.0, 1.0),
+            Anchor::Left => (0.0, 0.5),
+            Anchor::Right => (1.0, 0.5),
+            Anchor::BottomLeft => (0.0, 0.0),
+            Anchor::Bottom => (0.5, 0.0),
+            Anchor::BottomRight => (1.0, 0.0),
+        }
+    }
+}
+
+/// How big a resized object becomes.
 #[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Size {
+    /// Scale factors across and up the displayed page.
+    Scale { sx: f64, sy: f64 },
+    /// A displayed width and/or height in points; with only one, the other scales in proportion.
+    To { width: Option<f64>, height: Option<f64> },
+}
+
+/// Scale factors accepted by Resize.
+const MIN_SCALE: f64 = 1e-3;
+const MAX_SCALE: f64 = 1e3;
+/// The longest dash pattern accepted, and the largest width or dash length (points).
+const MAX_DASH: usize = 16;
+const MAX_LENGTH: f64 = 10_000.0;
+
+/// What to do with the selected objects.
+#[derive(Clone, Debug, PartialEq)]
 pub enum ObjectsEdit {
     Arrange(Arrange),
     /// Align to the selection's box, or to the page (its crop box) when one object is selected.
@@ -134,6 +242,15 @@ pub enum ObjectsEdit {
         dx: f64,
         dy: f64,
     },
+    /// Scale each object about an anchor of its own displayed box.
+    Resize {
+        size: Size,
+        anchor: Anchor,
+    },
+    /// Change the appearance of the selected vector paths.
+    Style(PathStyle),
+    /// Remove the objects from the page.
+    Delete,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -173,6 +290,8 @@ struct Unit {
     text: String,
     /// Why it can't be rewritten, if it can't.
     problem: Option<String>,
+    /// For a path: the fill and stroke colour spaces it paints with.
+    spaces: Option<(Object, Object)>,
 }
 
 #[derive(Clone, Debug)]
@@ -200,16 +319,42 @@ struct Scan {
     problem: Option<String>,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 struct Gs {
     ctm: Matrix,
     line_width: f64,
     render_mode: f64,
+    fill_cs: Object,
+    stroke_cs: Object,
 }
 
 impl Default for Gs {
     fn default() -> Self {
-        Gs { ctm: Matrix::IDENTITY, line_width: 1.0, render_mode: 0.0 }
+        Gs { ctm: Matrix::IDENTITY, line_width: 1.0, render_mode: 0.0, fill_cs: Object::name("DeviceGray"), stroke_cs: Object::name("DeviceGray") }
+    }
+}
+
+impl Gs {
+    /// Follow the colour spaces colour operators select.
+    fn track_color(&mut self, op: &Op) {
+        let (fill, space) = match op.op.as_slice() {
+            b"g" => (true, Object::name("DeviceGray")),
+            b"rg" => (true, Object::name("DeviceRGB")),
+            b"k" => (true, Object::name("DeviceCMYK")),
+            b"G" => (false, Object::name("DeviceGray")),
+            b"RG" => (false, Object::name("DeviceRGB")),
+            b"K" => (false, Object::name("DeviceCMYK")),
+            b"cs" | b"CS" => match op.operands.first() {
+                Some(o) => (op.is("cs"), o.clone()),
+                None => return,
+            },
+            _ => return,
+        };
+        if fill {
+            self.fill_cs = space;
+        } else {
+            self.stroke_cs = space;
+        }
     }
 }
 
@@ -362,7 +507,7 @@ fn scan(doc: &Document, page: usize, with_prefix: bool) -> Result<Scan, EditErro
             problem = Some("an operator runs from a stream PdfCraft added into the page content".to_string());
         }
         match op.op.as_slice() {
-            b"q" => gstack.push(gs),
+            b"q" => gstack.push(gs.clone()),
             b"Q" => gs = gstack.pop().unwrap_or(gs),
             b"cm" => {
                 if let Some(m) = op.nums::<6>() {
@@ -425,6 +570,7 @@ fn scan(doc: &Document, page: usize, with_prefix: bool) -> Result<Scan, EditErro
         rect: rect.and_then(finite_rect),
         text: String::new(),
         problem: None,
+        spaces: None,
     };
 
     for (i, op) in ops.iter().enumerate().take(last).skip(first) {
@@ -470,6 +616,7 @@ fn scan(doc: &Document, page: usize, with_prefix: bool) -> Result<Scan, EditErro
                         gs.render_mode = v;
                         t.render_mode = t.render_mode.max(v);
                     }
+                    gs.track_color(op);
                     if kw == b"w"
                         && let Some(v) = op.num(0)
                     {
@@ -516,6 +663,7 @@ fn scan(doc: &Document, page: usize, with_prefix: bool) -> Result<Scan, EditErro
                     let rect = rect.map(|r| [r[0] - grow, r[1] - grow, r[2] + grow, r[3] + grow]);
                     let mut u = unit(UnitKind::Path, start..i.saturating_add(1), gs.ctm, rect);
                     u.residue = residue.clone();
+                    u.spaces = Some((gs.fill_cs.clone(), gs.stroke_cs.clone()));
                     // The unit's own state ops apply before it at this level for later units.
                     if let Some(level) = levels.last_mut() {
                         for r in residue {
@@ -537,6 +685,7 @@ fn scan(doc: &Document, page: usize, with_prefix: bool) -> Result<Scan, EditErro
             if state_class(kw).is_some() {
                 // Not allowed inside a path, but kept: it applies after the path's object.
                 inner.push(op.clone());
+                gs.track_color(op);
                 if kw == b"w"
                     && let Some(v) = op.num(0)
                 {
@@ -550,7 +699,7 @@ fn scan(doc: &Document, page: usize, with_prefix: bool) -> Result<Scan, EditErro
         match kw {
             b"q" => {
                 levels.push(Vec::new());
-                gstack.push(gs);
+                gstack.push(gs.clone());
             }
             b"Q" => {
                 if levels.len() > 1 {
@@ -625,6 +774,7 @@ fn scan(doc: &Document, page: usize, with_prefix: bool) -> Result<Scan, EditErro
                 {
                     gs.render_mode = v;
                 }
+                gs.track_color(op);
                 if let Some(level) = levels.last_mut() {
                     if level.len() >= MAX_LEVEL {
                         problem.get_or_insert_with(|| "the page is too complex to rearrange".to_string());
@@ -748,10 +898,20 @@ fn display(page: &pdfcraft_model::Page) -> Matrix {
     }
 }
 
-/// What an edit does: a new paint order of the groups, or a user-space transform per group.
+/// What an edit does: a new paint order of the groups, a user-space transform per group, new
+/// state for path units, or units to remove.
 enum Plan {
     Order(Vec<usize>),
     Transform(Vec<(usize, [f64; 6])>),
+    Style(Styled),
+    Delete(Vec<usize>),
+}
+
+/// Restyled path units: (unit index, state operators to set first, the new painting operator),
+/// and the opacity ExtGState to add to the page's resources (its name and value).
+struct Styled {
+    units: Vec<(usize, Vec<u8>, &'static str)>,
+    opacity: Option<(Vec<u8>, f64)>,
 }
 
 fn is_identity(t: &[f64; 6]) -> bool {
@@ -818,7 +978,7 @@ fn plan(doc: &Document, s: &Scan, objects: &[usize], edit: &ObjectsEdit) -> Resu
         [1.0, 0.0, 0.0, 1.0, x, y]
     };
     let shown = |g: usize| -> Result<[f64; 4], EditError> { Ok(d.bbox(rect_of(g)?)) };
-    let transforms: Vec<(usize, [f64; 6])> = match *edit {
+    let transforms: Vec<(usize, [f64; 6])> = match edit {
         ObjectsEdit::Arrange(a) => {
             let mut order: Vec<usize> = (0..s.groups.len()).collect();
             let mut mask = vec![false; s.groups.len()];
@@ -828,7 +988,7 @@ fn plan(doc: &Document, s: &Scan, objects: &[usize], edit: &ObjectsEdit) -> Resu
                 }
             }
             let is_sel = |g: &usize| mask.get(*g).copied().unwrap_or(false);
-            match a {
+            match *a {
                 Arrange::Front => {
                     let (mut rest, sel): (Vec<usize>, Vec<usize>) = order.iter().partition(|g| !is_sel(g));
                     rest.extend(sel);
@@ -899,12 +1059,12 @@ fn plan(doc: &Document, s: &Scan, objects: &[usize], edit: &ObjectsEdit) -> Resu
             out
         }
         ObjectsEdit::Rotate(quarters) => {
-            selected.iter().map(|g| Ok((*g, crate::turn_about_centre(rect_of(*g)?, quarters, false, false)))).collect::<Result<_, EditError>>()?
+            selected.iter().map(|g| Ok((*g, crate::turn_about_centre(rect_of(*g)?, *quarters, false, false)))).collect::<Result<_, EditError>>()?
         }
         ObjectsEdit::Flip { horizontal } => {
             // Left–right as displayed is top–bottom in user space on a page turned a quarter.
             let turned = d.0.first().is_some_and(|a| a.abs() < 0.5);
-            let user_horizontal = horizontal != turned;
+            let user_horizontal = *horizontal != turned;
             selected
                 .iter()
                 .map(|g| Ok((*g, crate::turn_about_centre(rect_of(*g)?, 0, user_horizontal, !user_horizontal))))
@@ -914,10 +1074,243 @@ fn plan(doc: &Document, s: &Scan, objects: &[usize], edit: &ObjectsEdit) -> Resu
             if !(dx.is_finite() && dy.is_finite()) || dx.abs() > 1e6 || dy.abs() > 1e6 {
                 return Err(EditError::Invalid("the offset must be finite and at most 1,000,000 points".into()));
             }
-            selected.iter().map(|g| (*g, shift(dx, dy))).collect()
+            selected.iter().map(|g| (*g, shift(*dx, *dy))).collect()
+        }
+        ObjectsEdit::Resize { size, anchor } => selected
+            .iter()
+            .map(|g| {
+                let r = shown(*g)?;
+                let (sx, sy) = scale_factors(size, r[2] - r[0], r[3] - r[1], number(*g))?;
+                let (fx, fy) = anchor.fractions();
+                let (ax, ay) = (r[0] + (r[2] - r[0]) * fx, r[1] + (r[3] - r[1]) * fy);
+                let scale = Matrix([sx, 0.0, 0.0, sy, ax - sx * ax, ay - sy * ay]);
+                Ok((*g, d.then(&scale).then(&inv).0))
+            })
+            .collect::<Result<_, EditError>>()?,
+        ObjectsEdit::Style(style) => return Ok(Plan::Style(style_plan(doc, s, &selected, style, number)?)),
+        ObjectsEdit::Delete => {
+            let units = selected
+                .iter()
+                .filter_map(|g| s.groups.get(*g))
+                .flat_map(|g| g.units.clone())
+                .filter(|u| s.units.get(*u).is_some_and(|u| u.kind.paints()))
+                .collect::<Vec<_>>();
+            if let Some(p) = units.iter().filter_map(|u| s.units.get(*u)).find_map(|u| u.problem.as_ref()) {
+                return Err(EditError::Invalid(format!("this object can't be deleted: {p}")));
+            }
+            return Ok(Plan::Delete(units));
         }
     };
     Ok(Plan::Transform(transforms.into_iter().filter(|(_, t)| !is_identity(t)).collect()))
+}
+
+/// The display-space scale factors that resize a `w`×`h` box (object number `n`) as `size` asks.
+fn scale_factors(size: &Size, w: f64, h: f64, n: usize) -> Result<(f64, f64), EditError> {
+    let (sx, sy) = match *size {
+        Size::Scale { sx, sy } => (sx, sy),
+        Size::To { width, height } => {
+            let factor = |target: Option<f64>, have: f64, what: &str| -> Result<Option<f64>, EditError> {
+                let Some(t) = target else { return Ok(None) };
+                if !(t.is_finite() && t > 0.0 && t <= 1e6) {
+                    return Err(EditError::Invalid(format!("the {what} must be more than 0 and at most 1,000,000 points")));
+                }
+                if !(have.is_finite() && have > 1e-6) {
+                    return Err(EditError::Invalid(format!("object {n} has no {what} to resize")));
+                }
+                Ok(Some(t / have))
+            };
+            match (factor(width, w, "width")?, factor(height, h, "height")?) {
+                (Some(x), Some(y)) => (x, y),
+                (Some(x), None) => (x, x),
+                (None, Some(y)) => (y, y),
+                (None, None) => return Err(EditError::Invalid("give a width, a height or scale factors".into())),
+            }
+        }
+    };
+    if ![sx, sy].iter().all(|v| v.is_finite() && (MIN_SCALE..=MAX_SCALE).contains(v)) {
+        return Err(EditError::Invalid(format!(
+            "object {n} would be scaled by {sx} × {sy}: scale factors must be between {MIN_SCALE} and {MAX_SCALE}"
+        )));
+    }
+    Ok((sx, sy))
+}
+
+fn check_paint(paint: Option<&Paint>, what: &str) -> Result<(), EditError> {
+    let unit = |v: &[f64]| v.iter().all(|c| c.is_finite() && (0.0..=1.0).contains(c));
+    let ok = match paint {
+        None | Some(Paint::None) => true,
+        Some(Paint::Gray(g)) => unit(&[*g]),
+        Some(Paint::Rgb(c)) => unit(c),
+        Some(Paint::Cmyk(c)) => unit(c),
+        Some(Paint::Current(c)) => {
+            if c.is_empty() || c.len() > 32 || !c.iter().all(|v| v.is_finite()) {
+                return Err(EditError::Invalid(format!("the {what} colour needs 1 to 32 finite components")));
+            }
+            true
+        }
+    };
+    if ok { Ok(()) } else { Err(EditError::Invalid(format!("the {what} colour's components must be between 0 and 1"))) }
+}
+
+/// The painting operator a path gets when its fill and/or stroke are turned on or off; `None`
+/// when it would paint nothing.
+fn new_paint_op(op: &[u8], fill: Option<&Paint>, stroke: Option<&Paint>) -> Option<&'static str> {
+    let close = matches!(op, b"s" | b"b" | b"b*");
+    let even_odd = matches!(op, b"f*" | b"B*" | b"b*");
+    let fills = match fill {
+        Some(Paint::None) => false,
+        Some(_) => true,
+        None => matches!(op, b"f" | b"F" | b"f*" | b"B" | b"B*" | b"b" | b"b*"),
+    };
+    let stroked = match stroke {
+        Some(Paint::None) => false,
+        Some(_) => true,
+        None => strokes(op),
+    };
+    Some(match (fills, stroked, close, even_odd) {
+        (true, true, true, false) => "b",
+        (true, true, true, true) => "b*",
+        (true, true, false, false) => "B",
+        (true, true, false, true) => "B*",
+        (true, false, _, false) => "f",
+        (true, false, _, true) => "f*",
+        (false, true, true, _) => "s",
+        (false, true, false, _) => "S",
+        (false, false, _, _) => return None,
+    })
+}
+
+/// The operators that set a fill (`fill`) or stroke colour, appended to `out`.
+fn paint_ops(doc: &Document, res: &Dict, paint: &Paint, space: Option<&Object>, fill: bool, n: usize, out: &mut String) -> Result<(), EditError> {
+    let what = if fill { "fill" } else { "stroke" };
+    let join = |c: &[f64]| c.iter().map(|v| number(*v)).collect::<Vec<_>>().join(" ");
+    let op = |o: &str| if fill { o.to_string() } else { o.to_uppercase() };
+    let line = match paint {
+        Paint::None => return Ok(()),
+        Paint::Gray(g) => format!("{} {}", number(*g), op("g")),
+        Paint::Rgb(c) => format!("{} {}", join(c), op("rg")),
+        Paint::Cmyk(c) => format!("{} {}", join(c), op("k")),
+        Paint::Current(c) => {
+            let ranges = space.and_then(|cs| crate::convert_colors::color_ranges(doc, cs, res)).ok_or_else(|| {
+                EditError::Invalid(format!(
+                    "object {n} paints its {what} with a pattern or a colour space PdfCraft can't read: give a gray, RGB or CMYK colour"
+                ))
+            })?;
+            if ranges.len() != c.len() {
+                return Err(EditError::Invalid(format!("object {n}'s {what} colour space has {} components, not {}", ranges.len(), c.len())));
+            }
+            if let Some((v, r)) = c.iter().zip(&ranges).find(|(v, r)| !(r[0] - 1e-9..=r[1] + 1e-9).contains(*v)) {
+                return Err(EditError::Invalid(format!("object {n}'s {what} component {v} is outside its range {} to {}", r[0], r[1])));
+            }
+            format!("{} {}", join(c), op("scn"))
+        }
+    };
+    out.push_str(&line);
+    out.push(' ');
+    Ok(())
+}
+
+/// A name for a new opacity ExtGState that the page's resources don't use yet.
+fn opacity_name(doc: &Document, res: &Dict, opacity: f64) -> Vec<u8> {
+    let states = sub_dict(doc, res, b"ExtGState");
+    let base = format!("PCOpacity{}", (opacity * 1000.0).round() as i64);
+    let mut name = base.clone();
+    let mut k = 1u32;
+    while states.contains(name.as_bytes()) && k < 100_000 {
+        name = format!("{base}_{k}");
+        k = k.saturating_add(1);
+    }
+    name.into_bytes()
+}
+
+/// Check a style and work out what it writes for each selected path.
+fn style_plan(doc: &Document, s: &Scan, selected: &[usize], style: &PathStyle, number_of: impl Fn(usize) -> usize) -> Result<Styled, EditError> {
+    if *style == PathStyle::default() {
+        return Err(EditError::Invalid("give at least one of fill, stroke, line width, dash, cap, join or opacity".into()));
+    }
+    check_paint(style.fill.as_ref(), "fill")?;
+    check_paint(style.stroke.as_ref(), "stroke")?;
+    let length = |v: &f64| v.is_finite() && (0.0..=MAX_LENGTH).contains(v);
+    if style.line_width.is_some_and(|w| !length(&w)) {
+        return Err(EditError::Invalid(format!("the line width must be between 0 and {MAX_LENGTH} points")));
+    }
+    if let Some(d) = &style.dash {
+        if d.pattern.len() > MAX_DASH || !d.pattern.iter().chain([&d.phase]).all(length) {
+            return Err(EditError::Invalid(format!(
+                "a dash pattern has at most {MAX_DASH} lengths, each (and the phase) between 0 and {MAX_LENGTH} points"
+            )));
+        }
+        if !d.pattern.is_empty() && d.pattern.iter().all(|v| *v == 0.0) {
+            return Err(EditError::Invalid("a dash pattern's lengths can't all be zero".into()));
+        }
+    }
+    if style.opacity.is_some_and(|o| !(o.is_finite() && (0.0..=1.0).contains(&o))) {
+        return Err(EditError::Invalid("the opacity must be between 0 and 1".into()));
+    }
+    let res = resources(doc, &s.page.dict);
+    let opacity = style.opacity.map(|o| (opacity_name(doc, &res, o), o));
+    let mut units = Vec::new();
+    for g in selected {
+        let Some(group) = s.groups.get(*g) else { continue };
+        let n = number_of(*g);
+        let paths: Vec<usize> = group.units.clone().filter(|u| s.units.get(*u).is_some_and(|u| u.kind == UnitKind::Path)).collect();
+        if paths.is_empty() {
+            return Err(EditError::Invalid(format!("object {n} is not a vector path")));
+        }
+        for k in paths {
+            let Some(u) = s.units.get(k) else { continue };
+            if let Some(p) = &u.problem {
+                return Err(EditError::Invalid(format!("object {n} can't be changed: {p}")));
+            }
+            let Some(paint) = u.ops.end.checked_sub(1).and_then(|e| s.ops.get(e)) else { continue };
+            let op = new_paint_op(&paint.op, style.fill.as_ref(), style.stroke.as_ref())
+                .ok_or_else(|| EditError::Invalid(format!("object {n} would paint nothing without fill and stroke: delete it instead")))?;
+            let mut out = String::new();
+            if let Some((name, _)) = &opacity {
+                out.push('/');
+                out.push_str(&String::from_utf8_lossy(name));
+                out.push_str(" gs ");
+            }
+            if style.line_width.is_some() || style.dash.is_some() {
+                // Displayed points → the path's user space.
+                let [a, b, c, d, _, _] = u.ctm.0;
+                let scale = (a * d - b * c).abs().sqrt();
+                if !(scale.is_finite() && scale > 1e-9) {
+                    return Err(EditError::Invalid(format!("object {n} is drawn with no area")));
+                }
+                if let Some(w) = style.line_width {
+                    out.push_str(&format!("{} w ", number(w / scale)));
+                }
+                if let Some(dash) = &style.dash {
+                    let pattern = dash.pattern.iter().map(|v| number(v / scale)).collect::<Vec<_>>().join(" ");
+                    out.push_str(&format!("[{pattern}] {} d ", number(dash.phase / scale)));
+                }
+            }
+            if let Some(cap) = style.cap {
+                out.push_str(match cap {
+                    LineCap::Butt => "0 J ",
+                    LineCap::Round => "1 J ",
+                    LineCap::Square => "2 J ",
+                });
+            }
+            if let Some(join) = style.join {
+                out.push_str(match join {
+                    LineJoin::Miter => "0 j ",
+                    LineJoin::Round => "1 j ",
+                    LineJoin::Bevel => "2 j ",
+                });
+            }
+            let spaces = u.spaces.as_ref();
+            if let Some(p) = &style.fill {
+                paint_ops(doc, &res, p, spaces.map(|s| &s.0), true, n, &mut out)?;
+            }
+            if let Some(p) = &style.stroke {
+                paint_ops(doc, &res, p, spaces.map(|s| &s.1), false, n, &mut out)?;
+            }
+            units.push((k, out.into_bytes(), op));
+        }
+    }
+    Ok(Styled { units, opacity })
 }
 
 /// Whether [`edit_objects`] would change the page (it refuses what it can't do either way).
@@ -926,11 +1319,13 @@ pub fn objects_edit_changes(doc: &Document, page: usize, objects: &[usize], edit
     Ok(match plan(doc, &s, objects, edit)? {
         Plan::Order(order) => order.iter().enumerate().any(|(i, g)| i != *g),
         Plan::Transform(list) => !list.is_empty(),
+        Plan::Style(styled) => !styled.units.is_empty(),
+        Plan::Delete(units) => !units.is_empty(),
     })
 }
 
-/// Arrange, align, distribute, rotate, flip or move objects `objects` (indexes into
-/// [`page_objects`]) of page `page` (0-based). Returns whether anything changed; when nothing
+/// Arrange, align, distribute, rotate, flip, move, resize, restyle or delete objects `objects`
+/// (indexes into [`page_objects`]) of page `page` (0-based). Returns whether anything changed; when nothing
 /// would (already in front, already aligned), the document is left untouched.
 pub fn edit_objects(doc: &mut Document, page: usize, objects: &[usize], edit: &ObjectsEdit) -> Result<bool, EditError> {
     let arranging = matches!(edit, ObjectsEdit::Arrange(_));
@@ -947,6 +1342,18 @@ pub fn edit_objects(doc: &mut Document, page: usize, objects: &[usize], edit: &O
                 return Ok(false);
             }
             write_transforms(doc, &s, &list)?;
+        }
+        Plan::Style(styled) => {
+            if styled.units.is_empty() {
+                return Ok(false);
+            }
+            write_styles(doc, &s, &styled)?;
+        }
+        Plan::Delete(units) => {
+            if units.is_empty() {
+                return Ok(false);
+            }
+            write_deletes(doc, &s, &units)?;
         }
     }
     Ok(true)
@@ -992,6 +1399,64 @@ fn write_transforms(doc: &mut Document, s: &Scan, list: &[(usize, [f64; 6])]) ->
     }
     edits.sort_by_key(|e| (e.0, e.1));
     let new = s.pieces.splice(edits.into_iter().map(|(at, _, bytes)| (at..at, bytes)));
+    let contents = rewritten_contents(doc, &s.streams, new);
+    doc.update_dict(s.page.obj, |d| d.set(b"Contents".to_vec(), contents))?;
+    Ok(())
+}
+
+fn write_styles(doc: &mut Document, s: &Scan, styled: &Styled) -> Result<(), EditError> {
+    let mut edits: Vec<(Range<usize>, Vec<u8>)> = Vec::new();
+    for (k, state, paint) in &styled.units {
+        let Some(u) = s.units.get(*k) else { continue };
+        let ops = s.ops.get(u.ops.clone()).unwrap_or_default();
+        let (Some(first), Some((last, body))) = (ops.first(), ops.split_last()) else { continue };
+        let mut out = b"\nq ".to_vec();
+        out.extend_from_slice(state);
+        out.push(b'\n');
+        for op in body {
+            s.op_bytes(op, &mut out);
+        }
+        out.extend_from_slice(paint.as_bytes());
+        out.extend_from_slice(b"\nQ\n");
+        for op in &u.residue {
+            s.op_bytes(op, &mut out);
+        }
+        edits.push((first.span.start..last.span.end, out));
+    }
+    edits.sort_by_key(|e| e.0.start);
+    let new = s.pieces.splice(edits);
+    let contents = rewritten_contents(doc, &s.streams, new);
+    doc.update_dict(s.page.obj, |d| d.set(b"Contents".to_vec(), contents))?;
+    if let Some((name, opacity)) = &styled.opacity {
+        // The page gets its own (possibly copied) resources; shared dictionaries stay untouched.
+        let mut res = resources(doc, &s.page.dict);
+        let mut states = sub_dict(doc, &res, b"ExtGState");
+        let mut state = Dict::new();
+        state.set(b"Type".to_vec(), Object::name("ExtGState"));
+        state.set(b"CA".to_vec(), Object::Real(*opacity));
+        state.set(b"ca".to_vec(), Object::Real(*opacity));
+        states.set(name.clone(), Object::Dict(state));
+        res.set(b"ExtGState".to_vec(), Object::Dict(states));
+        doc.update_dict(s.page.obj, |d| d.set(b"Resources".to_vec(), Object::Dict(res)))?;
+    }
+    Ok(())
+}
+
+fn write_deletes(doc: &mut Document, s: &Scan, units: &[usize]) -> Result<(), EditError> {
+    let mut edits: Vec<(Range<usize>, Vec<u8>)> = Vec::new();
+    for k in units {
+        let Some(u) = s.units.get(*k) else { continue };
+        let ops = s.ops.get(u.ops.clone()).unwrap_or_default();
+        let (Some(first), Some(last)) = (ops.first(), ops.last()) else { continue };
+        // What it leaves for later content (a clip, text state) stays.
+        let mut out = b"\n".to_vec();
+        for op in &u.residue {
+            s.op_bytes(op, &mut out);
+        }
+        edits.push((first.span.start..last.span.end, out));
+    }
+    edits.sort_by_key(|e| e.0.start);
+    let new = s.pieces.splice(edits);
     let contents = rewritten_contents(doc, &s.streams, new);
     doc.update_dict(s.page.obj, |d| d.set(b"Contents".to_vec(), contents))?;
     Ok(())

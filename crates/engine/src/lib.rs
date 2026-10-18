@@ -75,7 +75,9 @@ pub use pdfcraft_forms::{
 
 pub use pdfcraft_a11y as a11y;
 /// Edit a PDF ▸ arrange, align, distribute, rotate, flip and move page objects.
-pub use pdfcraft_edit::objects::{AlignTo, Arrange, Axis, ObjectKind, ObjectsEdit, PageObject};
+pub use pdfcraft_edit::objects::{
+    AlignTo, Anchor, Arrange, Axis, Dash, LineCap, LineJoin, ObjectKind, ObjectsEdit, PageObject, Paint, PathStyle, Size as ObjectSize,
+};
 pub use pdfcraft_edit::text::validate_paragraph_text;
 pub use pdfcraft_edit::{BlockStyle, PageFont, PageImage, TextBlock, TextLine, TextRun, first_undrawable};
 pub use pdfcraft_measure as measure;
@@ -2138,6 +2140,9 @@ fn objects_label(change: &pdfcraft_edit::objects::ObjectsEdit) -> &'static str {
         ObjectsEdit::Rotate(_) => "Rotate objects",
         ObjectsEdit::Flip { .. } => "Flip objects",
         ObjectsEdit::Move { .. } => "Move objects",
+        ObjectsEdit::Resize { .. } => "Resize objects",
+        ObjectsEdit::Style(_) => "Change path appearance",
+        ObjectsEdit::Delete => "Delete objects",
     }
 }
 
