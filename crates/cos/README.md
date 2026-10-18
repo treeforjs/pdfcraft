@@ -104,7 +104,8 @@ qpdf is installed, and qpdf's own linearized output (tables or streams) passes o
 
 - Streaming very large files within a memory budget (`ByteSource`, `core.lazy-loading`); files are
   read whole today.
-- Structural validation against the Arlington model (`core.arlington-validation`), which will live
-  in the reserved `arlington` crate.
+- Structural validation against the Arlington model (`core.arlington-validation`): the model is the
+  standalone `arlington` crate, the walk over this crate's objects is `pdfcraft-preflight`'s
+  `arlington` module.
 - Image codecs. `pdfcraft-filters` carries the non-image filters; DCT, JPX, JBIG2 and CCITT are
   still decoded through the bootstrap renderer (`core.image-filters`, M2.6).

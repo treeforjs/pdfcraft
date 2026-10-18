@@ -22,6 +22,7 @@
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
 pub mod analysis;
+pub mod arlington;
 pub mod colour_warnings;
 pub mod coverage;
 pub mod flatten;
@@ -32,6 +33,9 @@ pub mod separations;
 mod unicode;
 mod xmp;
 
+pub use arlington::{
+    ARL_NOT_CHECKED, ArlFinding, ArlOptions, ArlReport, ArlSeverity, DEFAULT_ARL_FINDINGS, MAX_ARL_FINDINGS, PdfVersion, validate_arlington,
+};
 pub use flatten::{
     FlattenPreset, FlattenReport, FlattenSettings, PageAction, PageFlatten, PageRaster, flatten_transparency, rasterize_pages, transparent_pages,
 };

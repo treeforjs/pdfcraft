@@ -372,6 +372,13 @@ impl Document {
         self.editor.as_ref().map(|e| pdfa::verify_pdfx(&e.cos, options))
     }
 
+    /// Structural validation against the Arlington PDF Model: missing required keys, wrong types,
+    /// values outside the allowed set, keys newer than the PDF version or deprecated, unknown keys
+    /// (`None` if the document can't be read for editing; an escaped panic becomes an error).
+    pub fn validate_arlington(&self, options: &pdfa::ArlOptions) -> Option<Result<pdfa::ArlReport, String>> {
+        self.editor.as_ref().map(|e| guard(|| pdfa::validate_arlington(&e.cos, options)))
+    }
+
     /// PDF Optimizer ▸ Audit space usage.
     pub fn audit_space(&self) -> Vec<optimize::SpaceUse> {
         self.audit_space_detailed().map(|a| a.rows).unwrap_or_default()

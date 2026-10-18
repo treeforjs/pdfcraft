@@ -817,6 +817,61 @@ impl Automation {
         }))
     }
 
+    pub(crate) fn doc_validate_arlington(&self, a: &Args) -> Result<Value> {
+        use pdfcraft_engine::pdfa::{ARL_NOT_CHECKED, ArlOptions, ArlSeverity, DEFAULT_ARL_FINDINGS, MAX_ARL_FINDINGS, PdfVersion};
+        let version = match a.opt_str("version")? {
+            None => None,
+            Some(s) => Some(
+                PdfVersion::parse(s)
+                    .filter(|v| (v.major == 1 && v.minor <= 7) || (v.major == 2 && v.minor == 0))
+                    .ok_or_else(|| ToolError::InvalidArgs(format!("version must be a PDF version from 1.0 to 1.7 or 2.0, not {s:?}")))?,
+            ),
+        };
+        let max_findings = match a.opt_int("max_findings")? {
+            None => DEFAULT_ARL_FINDINGS,
+            Some(n) => usize::try_from(n)
+                .ok()
+                .filter(|n| (1..=MAX_ARL_FINDINGS).contains(n))
+                .ok_or_else(|| ToolError::InvalidArgs(format!("max_findings must be 1 to {MAX_ARL_FINDINGS}, not {n}")))?,
+        };
+        let doc = self.doc(a)?;
+        let r = doc
+            .validate_arlington(&ArlOptions { version, max_findings })
+            .ok_or_else(|| failed("the document can't be read for checking"))?
+            .map_err(|m| failed(format!("validation failed unexpectedly ({m})")))?;
+        let findings: Vec<Value> = r
+            .findings
+            .iter()
+            .map(|f| {
+                json!({
+                    "severity": f.severity.id(), "code": f.code, "object": f.object, "path": f.path, "key": f.key,
+                    "object_type": f.object_type, "message": f.message,
+                })
+            })
+            .collect();
+        let kept = |s: ArlSeverity| r.findings.iter().filter(|f| f.severity == s).count();
+        Ok(json!({
+            "valid": r.valid(),
+            "pdf_version": r.version.to_string(),
+            "version_source": r.version_source,
+            "errors": r.errors,
+            "warnings": r.warnings,
+            "infos": r.infos,
+            "findings": findings,
+            "kept": { "errors": kept(ArlSeverity::Error), "warnings": kept(ArlSeverity::Warning), "infos": kept(ArlSeverity::Info) },
+            "truncated": r.truncated,
+            "objects_checked": r.objects_checked,
+            "indirect_objects": r.indirect_objects,
+            "types": r.types,
+            "limit_reached": r.limit_reached,
+            "predicates_evaluated": pdfcraft_engine::pdfa::arlington::EVALUATED_PREDICATES,
+            "not_evaluated": r.not_checked,
+            "not_checked": ARL_NOT_CHECKED,
+            "model": { "source": pdfcraft_engine::pdfa::arlington::MODEL_SOURCE, "commit": pdfcraft_engine::pdfa::arlington::MODEL_COMMIT },
+            "unsaved_changes_included": doc.dirty,
+        }))
+    }
+
     pub(crate) fn pdfx_verify(&self, a: &Args) -> Result<Value> {
         use pdfcraft_engine::pdfa::{MAX_X_FINDINGS, XOptions, XPart};
         let part = match a.opt_str("standard")? {

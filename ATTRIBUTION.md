@@ -4,7 +4,7 @@
 
 Every asset PdfCraft includes, bundles or uses to build its published material, with its author, source and licence. The policy is in [AGENTS.md](AGENTS.md) §1. The machine-readable list, with SHA-256 hashes, is [ATTRIBUTION.toml](ATTRIBUTION.toml). Licence texts are kept beside the assets and summarised in [NOTICE](NOTICE).
 
-## In this repository (250)
+## In this repository (251)
 
 | Asset | Title | Author | Licence | Source | Used for |
 |---|---|---|---|---|---|
@@ -216,6 +216,7 @@ Every asset PdfCraft includes, bundles or uses to build its published material, 
 | `vendor/hayro-interpret/assets/FoxitSymbol.pfb` | FoxitSymbol (standard-14 substitute font) | Foxit Software Inc. / PDFium Authors | BSD-3-Clause | https://pdfium.googlesource.com/pdfium (via hayro-interpret 0.7.0 assets/) | Renders non-embedded standard-14 fonts (vendored hayro-interpret); embedded into documents by Convert to PDF/X for unembedded standard fonts |
 | `vendor/hayro-interpret/assets/CGATS001Compat-v2-micro.icc` | CGATS001Compat v2 micro ICC profile | Clinton Ingram (saucecontrol/Compact-ICC-Profiles) | CC0-1.0 | https://github.com/saucecontrol/Compact-ICC-Profiles | Default CMYK colour conversion (vendored hayro-interpret) |
 | `vendor/hayro-interpret/assets/LAB.icc` | Lab abstract ICC profile | The Hayro Authors (generated with LittleCMS 2) | MIT OR Apache-2.0 | https://github.com/LaurenzV/hayro (hayro-interpret 0.7.0 assets/) | Lab colour space conversion (vendored hayro-interpret) |
+| `crates/arlington/data/arlington-model.tsv` | Arlington PDF Model (tsv/latest), concatenated with the Note column removed | PDF Association, Inc. and the Arlington PDF Model contributors | Apache-2.0 | https://github.com/pdf-association/arlington-pdf-model (commit d37f4c8b11f54ae0d81a278bdeb91d00d6ccde26, tsv/latest/*.tsv; regenerated as described in crates/arlington/README.md) | Machine-readable PDF object definitions for structural validation (core.arlington-validation), compiled in by crates/arlington/src/lib.rs; upstream NOTICE in crates/arlington/data/NOTICE-arlington.txt |
 | `assets/app-icon/pdfcraft.svg` | PdfCraft app icon (master vector) | PdfCraft contributors (drawn by the project owner in ArtCraft; vectorised with craftrules vectorize_tile.py) | MIT OR Apache-2.0 | Contributor-original (see assets/app-icon/README.md) | Master artwork; every other app-icon file is rendered from it (packaging/icons.sh) |
 | `assets/app-icon/pdfcraft-small.svg` | PdfCraft app icon (light vector) | PdfCraft contributors (drawn by the project owner in ArtCraft; vectorised with craftrules vectorize_tile.py) | MIT OR Apache-2.0 | Contributor-original (see assets/app-icon/README.md) | README header and assets/app-icon/README.md |
 | `assets/app-icon/pdfcraft-1024.png` | PdfCraft app icon, 1024 px on Apple's icon grid | PdfCraft contributors (drawn by the project owner in ArtCraft; vectorised with craftrules vectorize_tile.py) | MIT OR Apache-2.0 | Contributor-original (see assets/app-icon/README.md) | Runtime window/Dock icon on macOS (apps/pdfcraft/src/main.rs) |

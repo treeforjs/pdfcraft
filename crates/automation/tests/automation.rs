@@ -6833,3 +6833,62 @@ fn attachment_trust_through_tools() {
     assert!(a.call("attachment_extract", &json!({ "doc": doc, "index": 1, "path": "../outside.bin" })).is_err());
     assert!(a.call("attachment_extract", &json!({ "doc": doc, "index": 1 })).is_err(), "path is required");
 }
+
+/// A PDF from object bodies (object n = bodies[n - 1]).
+fn arlington_pdf(version: &str, bodies: &[&str]) -> Vec<u8> {
+    let mut out = format!("%PDF-{version}\n").into_bytes();
+    let mut offsets = Vec::new();
+    for (i, b) in bodies.iter().enumerate() {
+        offsets.push(out.len());
+        out.extend_from_slice(format!("{} 0 obj\n{b}\nendobj\n", i + 1).as_bytes());
+    }
+    let xref = out.len();
+    out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", bodies.len() + 1).as_bytes());
+    for o in offsets {
+        out.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+    }
+    out.extend_from_slice(format!("trailer << /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", bodies.len() + 1).as_bytes());
+    out
+}
+
+#[test]
+fn doc_validate_arlington_through_tools() {
+    let dir = workdir("arlington");
+    let mut a = auto(&dir);
+    let good = [
+        "<< /Type /Catalog /Pages 2 0 R >>",
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> >>",
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    ];
+    std::fs::write(dir.join("good.pdf"), arlington_pdf("1.4", &good)).unwrap();
+    let doc = ok(&mut a, "doc_open", json!({ "path": "good.pdf" }))["doc"].as_u64().unwrap();
+    let r = ok(&mut a, "doc_validate_arlington", json!({ "doc": doc }));
+    assert_eq!((r["valid"].as_bool(), r["errors"].as_u64(), r["pdf_version"].as_str()), (Some(true), Some(0), Some("1.4")), "{r}");
+    assert_eq!(r["types"]["FontType1"], 1, "{r}");
+    assert!(r["predicates_evaluated"].as_array().unwrap().iter().any(|p| p == "fn:SinceVersion"));
+    assert_eq!(r["model"]["commit"].as_str().map(str::len), Some(40));
+
+    // Pages without /Type, a font with a /BaseFont string, a PDF 2.0 page key in a 1.4 file.
+    let mut bad = good;
+    bad[1] = "<< /Kids [3 0 R] /Count 1 >>";
+    bad[2] = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /OutputIntents [] /Resources << /Font << /F1 4 0 R >> >> >>";
+    bad[3] = "<< /Type /Font /Subtype /Type1 /BaseFont (Helvetica) >>";
+    std::fs::write(dir.join("bad.pdf"), arlington_pdf("1.4", &bad)).unwrap();
+    let doc = ok(&mut a, "doc_open", json!({ "path": "bad.pdf" }))["doc"].as_u64().unwrap();
+    let r = ok(&mut a, "doc_validate_arlington", json!({ "doc": doc }));
+    assert_eq!((r["valid"].as_bool(), r["errors"].as_u64(), r["warnings"].as_u64()), (Some(false), Some(2), Some(1)), "{r}");
+    let findings = r["findings"].as_array().unwrap();
+    let at = |path: &str| findings.iter().find(|f| f["path"] == path).unwrap_or_else(|| panic!("{path}: {r}")).clone();
+    let f = at("Trailer/Root/Pages/Type");
+    assert_eq!((f["code"].as_str(), f["object"].as_u64(), f["severity"].as_str()), (Some("missing-required"), Some(2), Some("error")));
+    let f = at("Trailer/Root/Pages/Kids[0]/Resources/Font/F1/BaseFont");
+    assert_eq!((f["code"].as_str(), f["object"].as_u64(), f["object_type"].as_str()), (Some("wrong-type"), Some(4), Some("FontType1")));
+    assert_eq!(at("Trailer/Root/Pages/Kids[0]/OutputIntents")["code"], "introduced-later");
+    // Checked as PDF 2.0 the new key is fine; max_findings caps what is returned.
+    let r = ok(&mut a, "doc_validate_arlington", json!({ "doc": doc, "version": "2.0", "max_findings": 1 }));
+    assert_eq!((r["warnings"].as_u64(), r["findings"].as_array().unwrap().len(), r["truncated"].as_bool()), (Some(0), 1, Some(true)), "{r}");
+    for args in [json!({ "doc": doc, "version": "3.1" }), json!({ "doc": doc, "max_findings": 0 }), json!({ "doc": doc, "version": "x" })] {
+        assert!(matches!(a.call("doc_validate_arlington", &args), Err(ToolError::InvalidArgs(_))), "{args}");
+    }
+}

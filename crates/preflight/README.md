@@ -146,3 +146,20 @@ shading patterns and Type 3 fonts (seen-sets, depth and visit limits). For each 
 Not handled: annotation appearances (flatten comments first), clipping to object outlines,
 text to outlines, CMYK images for PDF/X-1a, optional content other than its default view.
 
+## Arlington model validation
+
+`arlington::validate_arlington(doc, &ArlOptions { version, max_findings })` checks the object graph
+against the Arlington PDF Model (`pdfcraft-arlington`; tool `doc_validate_arlington`). It walks
+breadth-first from the trailer, gives each value reached the Arlington type its key links to
+(choosing among alternatives by `/Type`, `/Subtype`, `/S`, other fixed values and keys; a field
+merged with its widget is checked as both), and reports missing required keys (inheritable ones
+looked up through `/Parent`, `/DA` and `/Q` also in the AcroForm), wrong types, values outside the
+possible values or failing their conditions, keys, types and values newer than the PDF version
+(the header, or the catalog `/Version` when later, or `version`), deprecated ones, direct/indirect
+rules and unknown keys (information). Each finding carries the object number and a path such as
+`Trailer/Root/Pages/Kids[0]/Resources/Font/F1/BaseFont`. Rules that need an unevaluated predicate
+are counted in `not_checked`, never reported (`ARL_NOT_CHECKED` lists what isn't covered). The walk
+checks every indirect object once per type (seen-set, so cycles end), at most 250 000 objects,
+512 links deep and 50 000 elements per array, and reports reaching a limit. Kept findings are
+errors first, then warnings, then information, at most `max_findings` (default 1000).
+

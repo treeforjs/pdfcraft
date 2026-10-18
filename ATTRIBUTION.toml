@@ -2298,6 +2298,17 @@ kind = "data"
 usage = "Lab colour space conversion (vendored hayro-interpret)"
 sha256 = "a6efc5c30ece826eba2a83ddf5aa7026289b0c5ffa90acb129bc59ab8d7f5c59"
 
+[[asset]]
+path = "crates/arlington/data/arlington-model.tsv"
+title = "Arlington PDF Model (tsv/latest), concatenated with the Note column removed"
+author = "PDF Association, Inc. and the Arlington PDF Model contributors"
+source = "https://github.com/pdf-association/arlington-pdf-model (commit d37f4c8b11f54ae0d81a278bdeb91d00d6ccde26, tsv/latest/*.tsv; regenerated as described in crates/arlington/README.md)"
+licence = "Apache-2.0"
+licence_file = "crates/arlington/data/LICENSE-arlington.txt"
+kind = "data"
+usage = "Machine-readable PDF object definitions for structural validation (core.arlington-validation), compiled in by crates/arlington/src/lib.rs; upstream NOTICE in crates/arlington/data/NOTICE-arlington.txt"
+sha256 = "267a740f59d3d82a89e15ea153f58a68e675612929c2c8279d02b1c0d1553a92"
+
 [[bundled]]
 crate = "epaint_default_fonts"
 version = "0.36.2"
