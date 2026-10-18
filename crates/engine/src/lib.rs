@@ -22,6 +22,7 @@ pub mod commands;
 pub mod compare;
 pub mod dates;
 pub mod export;
+pub mod export_ocr;
 pub mod js;
 pub mod links;
 pub mod ocr;

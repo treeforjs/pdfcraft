@@ -1363,13 +1363,10 @@ impl Automation {
             None => (0..doc.info.pages.len()).collect(),
         };
         let stem = doc.name.trim_end_matches(".pdf").trim_end_matches(".PDF").to_string();
-        let mut ex = pdfcraft_engine::export::Exporter::new(doc);
         if tool == "doc_export_text" {
-            let path = self.resolve(a.str("path")?, true)?;
-            let text = ex.text_of(&pages).map_err(failed)?;
-            write_atomic(&path, text.as_bytes())?;
-            return Ok(json!({ "path": path.to_string_lossy(), "pages": pages.len(), "bytes": text.len() }));
+            return self.doc_export_text(a, &pages);
         }
+        let mut ex = pdfcraft_engine::export::Exporter::new(doc);
         let folder = self.resolve(a.str("folder")?, true)?;
         std::fs::create_dir_all(&folder).map_err(|e| failed(format!("{}: {e}", folder.display())))?;
         if tool == "doc_export_all_images" {

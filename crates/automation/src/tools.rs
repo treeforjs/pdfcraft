@@ -69,6 +69,17 @@ fn pages(what: &str) -> Value {
     json!({ "type": "array", "items": { "type": "integer", "minimum": 1 }, "minItems": 1, "description": format!("1-based page numbers {what}.") })
 }
 
+/// Export ▸ Run OCR: when an export recognizes text first.
+fn export_ocr_arg() -> Value {
+    json!({ "type": "string", "enum": ["auto", "on", "off"], "description": "Run OCR first: auto (default) recognizes scanned pages when the OCR models are installed; on recognizes every page without text, failing without models; off never." })
+}
+
+/// Export ▸ Run OCR: the recognition language.
+fn export_ocr_language_arg() -> Value {
+    let codes: Vec<&str> = pdfcraft_engine::ocr::LANGUAGES.iter().map(|(c, _)| *c).collect();
+    json!({ "type": "string", "enum": codes, "description": "Recognition language for ocr (default en)." })
+}
+
 fn path(what: &str) -> Value {
     json!({ "type": "array", "items": { "type": "integer", "minimum": 1 }, "description": format!("{what}: 1-based positions from the top level, e.g. [2, 1] = the first child of the second bookmark.") })
 }
@@ -1603,17 +1614,19 @@ pub fn tools() -> Vec<ToolDef> {
                 json!({ "doc": doc(), "field": { "type": "string" }, "event": { "type": "string", "enum": ["keystroke", "format", "validate", "calculate", "mouse_up"] }, "script": { "type": "string" } }),
                 &["doc", "field", "event"],
             )),
-        t("doc_export_office", "Export to Word, HTML, RTF or Excel", "Export a PDF ▸ Word (.docx), HTML (.html, one file with images inline), RTF (.rtf) or Excel (.xlsx), chosen by path's extension: paragraphs in reading order, headings from larger text, bold and italic, images where they fall, a page break between pages. Excel gets one worksheet per page: paragraphs in column A, tables detected from the text layout as cell grids, unambiguous numbers (1,234.50, (12.00), 12.5%) stored as numbers. Refused when the document does not allow copying text (open it with the permissions password).")
+        t("doc_export_office", "Export to Word, HTML, RTF or Excel", "Export a PDF ▸ Word (.docx), HTML (.html, one file with images inline), RTF (.rtf) or Excel (.xlsx), chosen by path's extension: paragraphs in reading order, headings from larger text, bold and italic, images where they fall, a page break between pages. Excel gets one worksheet per page: paragraphs in column A, tables detected from the text layout as cell grids, unambiguous numbers (1,234.50, (12.00), 12.5%) stored as numbers. Refused when the document does not allow copying text (open it with the permissions password). Run OCR (ocr, default auto, as in Acrobat): scanned pages (an image and no text) are recognized first on a temporary copy, so the export carries their text; the document itself is not changed. auto needs the OCR models (ocr_status) and goes ahead without recognition, saying why in the result's ocr, when they are missing or the document's permissions don't allow recognition; on recognizes every exported page without text and fails instead; off never recognizes. ocr_language picks the recognition language (default en). Returns ocr: mode, language, ran, pages_without_text, scanned_pages, recognized_pages, skipped_pages, words and not_run.")
             .cmd("export.docx")
-            .with(schema(json!({ "doc": doc(), "path": { "type": "string" } }), &["doc", "path"])),
-        t("doc_export_pptx", "Export to PowerPoint", "Export a PDF ▸ Microsoft PowerPoint (.pptx): one slide per page, the slide size from the first exported page as displayed (crop box after rotation, within PowerPoint's 1–56 in; other page sizes are scaled to fit and centred). mode editable (default): each paragraph becomes an editable text box placed and turned as on the page (font family, size, bold, italic, colour), each extractable image a picture, and the rest of the page (vector art, shadings, inline images, form fields, comments) one background picture rendered at dpi without the text and those images (left out when it is blank). Vector shapes are not rebuilt as PowerPoint shapes. mode image: each slide is one picture of its page. Returns counts (slides, text_boxes, pictures, backgrounds, omitted) and warnings. Includes unsaved edits. Editable mode is refused when the document does not allow copying (open it with the permissions password); image mode only renders.")
+            .with(schema(json!({ "doc": doc(), "path": { "type": "string" }, "ocr": export_ocr_arg(), "ocr_language": export_ocr_language_arg() }), &["doc", "path"])),
+        t("doc_export_pptx", "Export to PowerPoint", "Export a PDF ▸ Microsoft PowerPoint (.pptx): one slide per page, the slide size from the first exported page as displayed (crop box after rotation, within PowerPoint's 1–56 in; other page sizes are scaled to fit and centred). mode editable (default): each paragraph becomes an editable text box placed and turned as on the page (font family, size, bold, italic, colour), each extractable image a picture, and the rest of the page (vector art, shadings, inline images, form fields, comments) one background picture rendered at dpi without the text and those images (left out when it is blank). Vector shapes are not rebuilt as PowerPoint shapes. mode image: each slide is one picture of its page. Returns counts (slides, text_boxes, pictures, backgrounds, omitted) and warnings. Includes unsaved edits. Editable mode is refused when the document does not allow copying (open it with the permissions password); image mode only renders. Run OCR (ocr, default auto, as in Acrobat): scanned pages (an image and no text) are recognized first on a temporary copy, so the export carries their text; the document itself is not changed. auto needs the OCR models (ocr_status) and goes ahead without recognition, saying why in the result's ocr, when they are missing or the document's permissions don't allow recognition; on recognizes every exported page without text and fails instead; off never recognizes. ocr_language picks the recognition language (default en). Returns ocr: mode, language, ran, pages_without_text, scanned_pages, recognized_pages, skipped_pages, words and not_run. Image mode never recognizes.")
             .with(schema(
                 json!({
                     "doc": doc(),
                     "path": { "type": "string", "description": "The .pptx file to write." },
                     "pages": pages("to export, in slide order (default: all)"),
                     "mode": { "type": "string", "enum": ["editable", "image"], "description": "editable (default): text boxes, pictures and a background picture; image: one picture per slide." },
-                    "dpi": { "type": "number", "minimum": 36, "maximum": 600, "description": "Resolution of the rendered pictures (default 150)." }
+                    "dpi": { "type": "number", "minimum": 36, "maximum": 600, "description": "Resolution of the rendered pictures (default 150)." },
+                    "ocr": export_ocr_arg(),
+                    "ocr_language": export_ocr_language_arg()
                 }),
                 &["doc", "path"],
             )),
@@ -1861,9 +1874,9 @@ pub fn tools() -> Vec<ToolDef> {
                 }),
                 &["doc", "folder"],
             )),
-        t("doc_export_text", "Export text", "Write the reading-order text of pages to a .txt file (pages separated by form feeds). Refused when the document does not allow copying text (open it with the permissions password).")
+        t("doc_export_text", "Export text", "Write the reading-order text of pages to a .txt file (pages separated by form feeds). Refused when the document does not allow copying text (open it with the permissions password). Run OCR (ocr, default auto, as in Acrobat): scanned pages (an image and no text) are recognized first on a temporary copy, so the export carries their text; the document itself is not changed. auto needs the OCR models (ocr_status) and goes ahead without recognition, saying why in the result's ocr, when they are missing or the document's permissions don't allow recognition; on recognizes every exported page without text and fails instead; off never recognizes. ocr_language picks the recognition language (default en). Returns ocr: mode, language, ran, pages_without_text, scanned_pages, recognized_pages, skipped_pages, words and not_run.")
             .cmd("export.text")
-            .with(schema(json!({ "doc": doc(), "path": { "type": "string" }, "pages": pages("to export (default: all)") }), &["doc", "path"])),
+            .with(schema(json!({ "doc": doc(), "path": { "type": "string" }, "pages": pages("to export (default: all)"), "ocr": export_ocr_arg(), "ocr_language": export_ocr_language_arg() }), &["doc", "path"])),
         t("doc_export_accessible_text", "Export accessible text", "Save As ▸ Accessible Text: write a tagged PDF's text in logical structure order, as a screen reader reads it, to a .txt file (atomically replacing path). Each structure element gives its /ActualText, else its /Alt (a figure's alternate text), else the text of the marked content it covers; paragraphs, headings, figures and captions are separated by a blank line, consecutive list items and table rows by a line break, table cells by tabs. Artifacts (running headers, footers, page numbers marked /Artifact) are left out, and so is untagged content. Without path, returns the text instead (up to 1 MiB, then text_truncated). Returns counts of blocks, headings, list items, table rows and figures, and truncated when the structure tree or the text was too large to read in full. Untagged documents, empty structure trees and documents that do not allow copying text are refused.")
             .cmd("export.text")
             .with(schema(json!({ "doc": doc(), "path": { "type": "string", "description": "The .txt file to write (default: return the text)." } }), &["doc"])),

@@ -552,6 +552,38 @@ impl Automation {
     }
 }
 
+/// The export tools' text recognition arguments: `ocr` (auto, on, off; default auto) and
+/// `ocr_language` (default en).
+pub(crate) fn export_ocr_options(a: &Args) -> Result<pdfcraft_engine::export_ocr::ExportOcr> {
+    use pdfcraft_engine::export_ocr::{ExportOcr, ExportOcrMode};
+    let mut options = ExportOcr::default();
+    if let Some(m) = a.opt_str("ocr")? {
+        options.mode = ExportOcrMode::from_id(m).ok_or_else(|| ToolError::InvalidArgs(format!("ocr must be auto, on or off, not {m:?}")))?;
+    }
+    if let Some(l) = a.opt_str("ocr_language")? {
+        options.language = l.into();
+    }
+    options.validate().map_err(ToolError::InvalidArgs)?;
+    Ok(options)
+}
+
+/// What text recognition did for an export (1-based pages).
+pub(crate) fn export_ocr_json(r: &pdfcraft_engine::export_ocr::ExportOcrReport) -> Value {
+    let one = |v: &[usize]| v.iter().map(|p| p + 1).collect::<Vec<_>>();
+    let skipped: Vec<Value> = r.skipped_pages.iter().map(|(p, why)| json!({ "page": p + 1, "reason": why })).collect();
+    json!({
+        "mode": r.mode.id(),
+        "language": r.language,
+        "ran": r.ran(),
+        "pages_without_text": one(&r.pages_without_text),
+        "scanned_pages": one(&r.scanned_pages),
+        "recognized_pages": one(&r.recognized),
+        "skipped_pages": skipped,
+        "words": r.words,
+        "not_run": r.not_run,
+    })
+}
+
 /// A script's request; an address carries the internet access decision for it (`url_access`).
 fn request_json(session: &pdfcraft_engine::Session, r: &pdfcraft_engine::js::Request) -> Value {
     use pdfcraft_engine::js::Request as R;
@@ -693,9 +725,22 @@ impl Automation {
         let ext = path.extension().map(|e| e.to_string_lossy().into_owned()).unwrap_or_default();
         let format = pdfcraft_engine::compare::OfficeFormat::from_extension(&ext)
             .ok_or_else(|| ToolError::InvalidArgs(format!("unsupported extension {ext:?} (docx, html, rtf or xlsx)")))?;
-        let bytes = self.doc(a)?.export_office(format).map_err(failed)?;
+        let options = export_ocr_options(a)?;
+        let id = self.doc(a)?.id;
+        let (bytes, report) = self.session.with_export_ocr(id, &[], &options, |d| d.export_office(format)).map_err(failed)?;
         write_atomic(&path, &bytes)?;
-        Ok(json!({ "path": path.to_string_lossy(), "bytes": bytes.len(), "format": format.extension() }))
+        Ok(json!({ "path": path.to_string_lossy(), "bytes": bytes.len(), "format": format.extension(), "ocr": export_ocr_json(&report) }))
+    }
+
+    /// `doc_export_text` (with `ocr`/`ocr_language`).
+    pub(crate) fn doc_export_text(&self, a: &Args, pages: &[usize]) -> Result<Value> {
+        let path = self.resolve(a.str("path")?, true)?;
+        let options = export_ocr_options(a)?;
+        let id = self.doc(a)?.id;
+        let (text, report) =
+            self.session.with_export_ocr(id, pages, &options, |d| pdfcraft_engine::export::Exporter::new(d).text_of(pages)).map_err(failed)?;
+        write_atomic(&path, text.as_bytes())?;
+        Ok(json!({ "path": path.to_string_lossy(), "pages": pages.len(), "bytes": text.len(), "ocr": export_ocr_json(&report) }))
     }
 
     pub(crate) fn doc_export_pptx(&self, a: &Args) -> Result<Value> {
@@ -717,7 +762,14 @@ impl Automation {
             Some(_) => self.pages(a, "pages")?,
             None => Vec::new(),
         };
-        let out = self.doc(a)?.export_pptx(&PptxOptions { pages, mode, dpi }).map_err(failed)?;
+        let mut ocr = export_ocr_options(a)?;
+        if mode == PptxMode::Image {
+            // Pictures of the pages carry no text to recognize.
+            ocr.mode = pdfcraft_engine::export_ocr::ExportOcrMode::Off;
+        }
+        let id = self.doc(a)?.id;
+        let options = PptxOptions { pages, mode, dpi };
+        let (out, report) = self.session.with_export_ocr(id, &options.pages, &ocr, |d| d.export_pptx(&options)).map_err(failed)?;
         write_atomic(&path, &out.bytes)?;
         let s = out.stats;
         Ok(json!({
@@ -730,6 +782,7 @@ impl Automation {
             "backgrounds": s.backgrounds,
             "omitted": s.omitted,
             "warnings": out.warnings,
+            "ocr": export_ocr_json(&report),
         }))
     }
 
