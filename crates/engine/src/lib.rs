@@ -2248,7 +2248,7 @@ fn run_edit(doc: &mut pdfcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -> 
             };
         }
         Edit::ConvertPdfA { level } => {
-            pdfcraft_preflight::convert(doc, *level).map_err(|e| EditError::Invalid(e.to_string()))?;
+            pdfcraft_a11y::convert_pdfa(doc, *level).map_err(|e| EditError::Invalid(e.to_string()))?;
         }
         Edit::PreflightFix { fixes } => {
             pdfcraft_preflight::analysis::apply_fixes(doc, fixes, || false).map_err(EditError::Invalid)?;

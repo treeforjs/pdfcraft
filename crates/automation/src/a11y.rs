@@ -585,27 +585,59 @@ impl Automation {
         Ok(json!({ "path": path.to_string_lossy(), "bytes": bytes.len(), "format": format.extension() }))
     }
 
-    fn pdfa_level(&self, a: &Args) -> Result<pdfcraft_engine::pdfa::Level> {
-        let l = a.opt_str("level")?.unwrap_or("2b");
-        pdfcraft_engine::pdfa::Level::from_id(l).ok_or_else(|| ToolError::InvalidArgs(format!("unknown PDF/A level {l:?} (2b or 3b)")))
+    /// The level asked for, else the one the document declares, else 2b; and where it came from.
+    fn pdfa_level(&self, a: &Args) -> Result<(pdfcraft_engine::pdfa::Level, &'static str)> {
+        use pdfcraft_engine::pdfa::Level;
+        match a.opt_str("level")? {
+            Some(l) => {
+                let level = Level::from_id(l).ok_or_else(|| {
+                    let ids: Vec<&str> = Level::ALL.iter().map(|l| l.id()).collect();
+                    let hint = if l.trim().eq_ignore_ascii_case("1u") { " (PDF/A-1 has no level u)" } else { "" };
+                    ToolError::InvalidArgs(format!("unknown PDF/A level {l:?}{hint}: use one of {}", ids.join(", ")))
+                })?;
+                Ok((level, "argument"))
+            }
+            None => Ok(match self.doc(a)?.pdfa_declared_level() {
+                Some(level) => (level, "declared"),
+                None => (Level::A2b, "default"),
+            }),
+        }
+    }
+
+    fn pdfa_issue_json(i: &pdfcraft_engine::pdfa::Issue) -> Value {
+        json!({ "clause": i.clause, "message": i.message, "page": i.page.map(|p| p + 1), "fixable": i.fixable, "severity": i.severity.id() })
     }
 
     pub(crate) fn pdfa_verify(&self, a: &Args) -> Result<Value> {
-        let level = self.pdfa_level(a)?;
+        let (level, source) = self.pdfa_level(a)?;
+        self.pdfa_verify_at(a, level, source)
+    }
+
+    fn pdfa_verify_at(&self, a: &Args, level: pdfcraft_engine::pdfa::Level, source: &str) -> Result<Value> {
         let doc = self.doc(a)?;
-        let issues: Vec<Value> = doc
-            .pdfa_verify(level)
-            .iter()
-            .map(|i| json!({ "clause": i.clause, "message": i.message, "page": i.page.map(|p| p + 1), "fixable": i.fixable }))
-            .collect();
+        let found = doc.pdfa_verify(level);
+        let errors = found.iter().filter(|i| i.is_error()).count();
+        let issues: Vec<Value> = found.iter().map(Self::pdfa_issue_json).collect();
         let d = doc.standards();
+        let mut limitations = vec![pdfcraft_engine::pdfa::analysis::LIMITATION];
+        if level.needs_unicode() {
+            limitations.push("Unicode: glyphs shown by page content, form XObjects and annotation appearances are checked; Type 3 glyph procedures, patterns and per-character ActualText are not.");
+        }
+        if level.needs_structure() {
+            limitations.push("Level a: structure, tagging, role mapping, language and figure alternate text are machine-checked; whether tags, reading order and alternate text are appropriate needs a person.");
+        }
         Ok(json!({
             "level": level.label(),
+            "level_id": level.id(),
+            "level_source": source,
+            "conformance_level": level.conformance().letter(),
             "compliant": false,
-            "no_detected_issues": issues.is_empty(),
+            "no_detected_issues": errors == 0,
+            "errors": errors,
+            "warnings": found.len() - errors,
             "validation_complete": false,
             "conformance": "not-established",
-            "limitations": [pdfcraft_engine::pdfa::analysis::LIMITATION],
+            "limitations": limitations,
             "issues": issues,
             "declared": { "pdfa": d.pdfa.map(|(p, c)| format!("PDF/A-{p}{}", c.to_lowercase())), "pdfua": d.pdfua, "output_intents": d.output_intents },
         }))
@@ -702,10 +734,31 @@ impl Automation {
     }
 
     pub(crate) fn pdfa_convert(&mut self, a: &Args) -> Result<Value> {
-        let level = self.pdfa_level(a)?;
-        let id = self.doc(a)?.id;
+        let (level, source) = self.pdfa_level(a)?;
+        let doc = self.doc(a)?;
+        let id = doc.id;
+        let blocking = doc.pdfa_blockers(level);
+        if !blocking.is_empty() {
+            let hint = if level.needs_structure() && blocking.iter().any(|i| !i.clause.starts_with("6.2.11") && !i.clause.starts_with("6.3.8")) {
+                "Tag the document first (structure tree, tagged content, Lang, alternate text), or choose level u or b."
+            } else {
+                "Some glyphs' Unicode meaning can't be derived from their fonts: fix or replace those fonts, or choose level b."
+            };
+            return Ok(json!({
+                "level": level.label(),
+                "level_id": level.id(),
+                "level_source": source,
+                "converted": false,
+                "blocking": blocking.iter().map(Self::pdfa_issue_json).collect::<Vec<_>>(),
+                "hint": hint,
+            }));
+        }
         self.session.apply(id, pdfcraft_engine::Edit::ConvertPdfA { level }).map_err(failed)?;
-        self.pdfa_verify(a)
+        let mut r = self.pdfa_verify_at(a, level, source)?;
+        if let Some(o) = r.as_object_mut() {
+            o.insert("converted".into(), json!(true));
+        }
+        Ok(r)
     }
 
     pub(crate) fn action_list(&self) -> Result<Value> {

@@ -662,6 +662,7 @@ pub fn analyze(doc: &Document, settings: &Settings) -> Result<Report, String> {
             });
             if !identified {
                 issues.push(crate::Issue {
+                    severity: crate::Severity::Error,
                     clause: "6.6.4",
                     message: format!("Readable XMP (up to 1 MiB) does not identify the document as {}", level.label()),
                     page: None,
@@ -669,7 +670,7 @@ pub fn analyze(doc: &Document, settings: &Settings) -> Result<Report, String> {
                 });
             }
             if doc.trailer().get(b"Encrypt").is_some() {
-                issues.push(crate::Issue { clause: "6.1.3", message: "Document is encrypted".into(), page: None, fixable: false });
+                issues.push(crate::Issue::error("6.1.3", "Document is encrypted".into(), None, false));
             }
             for issue in issues {
                 if report.findings.len() >= MAX_FINDINGS {

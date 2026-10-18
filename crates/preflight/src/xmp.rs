@@ -101,12 +101,13 @@ pub fn packet(doc: &Document, level: crate::Level) -> String {
     xmlns:xmp=\"http://ns.adobe.com/xap/1.0/\"\n\
     xmlns:pdfaid=\"http://www.aiim.org/pdfa/ns/id/\">\n\
    <pdfaid:part>{}</pdfaid:part>\n\
-   <pdfaid:conformance>B</pdfaid:conformance>\n\
+   <pdfaid:conformance>{}</pdfaid:conformance>\n\
 {props}  </rdf:Description>\n\
  </rdf:RDF>\n\
 </x:xmpmeta>\n\
 <?xpacket end=\"w\"?>",
-        level.part()
+        level.part(),
+        level.conformance().letter()
     )
 }
 

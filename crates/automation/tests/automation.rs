@@ -4136,6 +4136,54 @@ fn pdfa_through_tools() {
     assert!(a.call("pdfa_verify", &json!({ "doc": doc, "level": "9z" })).is_err());
 }
 
+#[test]
+fn pdfa_levels_a_and_u_through_tools() {
+    let dir = workdir("pdfa-levels");
+    let mut a = auto(&dir);
+    std::fs::write(dir.join("tagged.pdf"), pdfua_doc("", 1)).unwrap();
+    let doc = ok(&mut a, "doc_open", json!({ "path": "tagged.pdf" }))["doc"].as_u64().unwrap();
+    // Nothing declared: 2b.
+    let r = ok(&mut a, "pdfa_verify", json!({ "doc": doc }));
+    assert_eq!((r["level"].as_str(), r["level_source"].as_str()), (Some("PDF/A-2b"), Some("default")), "{r}");
+    // Tagged, Unicode-mapped: only the identification is missing for 2a.
+    let r = ok(&mut a, "pdfa_verify", json!({ "doc": doc, "level": "2a" }));
+    assert_eq!(r["conformance_level"], "A");
+    let errs: Vec<&Value> = r["issues"].as_array().unwrap().iter().filter(|i| i["severity"] == "error").collect();
+    assert!(errs.iter().all(|i| i["clause"] == "6.6.4" || i["clause"] == "6.6.2.1"), "{r}");
+    let r = ok(&mut a, "pdfa_convert", json!({ "doc": doc, "level": "2a" }));
+    assert_eq!((r["converted"].as_bool(), r["declared"]["pdfa"].as_str()), (Some(true), Some("PDF/A-2a")), "{r}");
+    assert_eq!(r["errors"], 0, "{r}");
+    assert_eq!(r["no_detected_issues"], true);
+    // Now the declared level is the default.
+    let r = ok(&mut a, "pdfa_verify", json!({ "doc": doc }));
+    assert_eq!((r["level"].as_str(), r["level_source"].as_str()), (Some("PDF/A-2a"), Some("declared")), "{r}");
+
+    // An untagged document can't become 2a, but can become 2u.
+    let doc = ok(&mut a, "doc_create", json!({ "from": "text", "text": "Archive me" }))["doc"].as_u64().unwrap();
+    let r = ok(&mut a, "pdfa_verify", json!({ "doc": doc, "level": "3a" }));
+    assert!(r["issues"].as_array().unwrap().iter().any(|i| i["clause"] == "6.7.3.3" && i["severity"] == "error"), "{r}");
+    let r = ok(&mut a, "pdfa_convert", json!({ "doc": doc, "level": "2a" }));
+    assert_eq!(r["converted"], false, "{r}");
+    assert!(r["hint"].as_str().unwrap().contains("Tag the document"), "{r}");
+    assert!(r["blocking"].as_array().unwrap().iter().any(|i| i["clause"] == "6.7.2.2"), "{r}");
+    let r = ok(&mut a, "pdfa_verify", json!({ "doc": doc }));
+    assert_eq!(r["declared"]["pdfa"], Value::Null, "a refused conversion changes nothing: {r}");
+    let r = ok(&mut a, "pdfa_convert", json!({ "doc": doc, "level": "2u" }));
+    assert_eq!((r["converted"].as_bool(), r["declared"]["pdfa"].as_str()), (Some(true), Some("PDF/A-2u")), "{r}");
+    assert!(r["issues"].as_array().unwrap().iter().all(|i| i["clause"] != "6.2.11.7.2"), "{r}");
+
+    // Bad arguments.
+    for bad in [
+        json!({ "doc": doc, "level": "1u" }),
+        json!({ "doc": doc, "level": "4" }),
+        json!({ "doc": doc, "level": 2 }),
+        json!({ "doc": 999, "level": "2a" }),
+    ] {
+        assert!(a.call("pdfa_verify", &bad).is_err(), "{bad}");
+        assert!(a.call("pdfa_convert", &bad).is_err(), "{bad}");
+    }
+}
+
 /// A one-paragraph PDF/UA-1 document; `catalog_extra` goes into the catalog.
 fn pdfua_doc(catalog_extra: &str, part: u8) -> Vec<u8> {
     let xmp = format!(

@@ -659,6 +659,82 @@ pub fn glyph_unicode(name: &str) -> Option<char> {
     u32::from_str_radix(hex, 16).ok().and_then(char::from_u32)
 }
 
+/// A font's ToUnicode CMap as code → text, or `None` when it has none or it can't be decoded.
+/// Unlike [`Metrics::text_of`], nothing comes from the encoding.
+pub fn to_unicode_map(doc: &Document, font: &Dict) -> Option<HashMap<u32, String>> {
+    let t = font.get(b"ToUnicode").map(|t| doc.resolve(t))?;
+    let Object::Stream(s) = &*t else { return None };
+    let data = s.decoded().ok()?;
+    let mut out = HashMap::new();
+    parse_to_unicode(&data, &mut out);
+    Some(out)
+}
+
+/// What a simple font's encoding says each code means, from the predefined encodings
+/// (Standard, WinAnsi, MacRoman) and `/Differences` glyph names (ISO 32000-2 §9.10.2 methods
+/// b–c), without the ToUnicode CMap. `None` when the meaning can't be known this way: composite
+/// fonts, symbolic fonts that rely on their built-in encoding, unknown encoding names. Codes
+/// whose glyph name is unknown are left out.
+pub fn encoding_unicode_map(doc: &Document, font: &Dict) -> Option<HashMap<u32, String>> {
+    let subtype = font.name(b"Subtype").unwrap_or(b"Type1");
+    if subtype == b"Type0" {
+        return None;
+    }
+    let type3 = subtype == b"Type3";
+    let flags = dict(doc, font.get(b"FontDescriptor")).and_then(|d| d.get(b"Flags").and_then(|f| doc.resolve(f).as_int()));
+    let base_font = font.name(b"BaseFont").unwrap_or(b"");
+    let std_symbolic = matches!(base_font, b"Symbol" | b"ZapfDingbats");
+    // Without a descriptor, only the standard symbolic faces use a built-in encoding.
+    let symbolic = flags.map_or(std_symbolic, |f| f & 4 != 0) || std_symbolic;
+    let table = |n: &[u8]| -> Option<&'static [u32; 256]> {
+        match n {
+            b"WinAnsiEncoding" => Some(&crate::encodings::WIN_ANSI),
+            b"MacRomanEncoding" => Some(&crate::encodings::MAC_ROMAN),
+            b"StandardEncoding" => Some(&crate::encodings::STANDARD),
+            _ => None,
+        }
+    };
+    let enc = font.get(b"Encoding").map(|e| doc.resolve(e));
+    let (base, diffs): (Option<&[u32; 256]>, Option<Vec<Object>>) = match enc.as_deref() {
+        Some(Object::Name(n)) => (Some(table(n)?), None),
+        Some(Object::Dict(d)) => {
+            let base = match d.name(b"BaseEncoding") {
+                Some(n) => Some(table(n)?),
+                // A Type 3 font has no built-in encoding; symbolic fonts' built-in one is unknown.
+                None if type3 || symbolic => None,
+                None => Some(&crate::encodings::STANDARD),
+            };
+            (base, d.get(b"Differences").map(|x| doc.resolve(x)).and_then(|x| x.as_array().cloned()))
+        }
+        Some(_) => return None,
+        None if type3 || symbolic => return None,
+        None => (Some(&crate::encodings::STANDARD), None),
+    };
+    let mut out = HashMap::new();
+    if let Some(table) = base {
+        for (code, u) in table.iter().enumerate() {
+            if let (Ok(code), Some(c)) = (u32::try_from(code), char::from_u32(*u).filter(|_| *u != 0)) {
+                out.insert(code, c.to_string());
+            }
+        }
+    }
+    let mut code = 0u32;
+    for item in diffs.unwrap_or_default().iter().take(4096) {
+        match item {
+            Object::Int(n) => code = u32::try_from((*n).max(0)).unwrap_or(u32::MAX),
+            Object::Name(n) => {
+                match glyph_unicode(&String::from_utf8_lossy(n)) {
+                    Some(c) => out.insert(code, c.to_string()),
+                    None => out.remove(&code),
+                };
+                code = code.saturating_add(1);
+            }
+            _ => {}
+        }
+    }
+    Some(out)
+}
+
 /// Code → Unicode for a font: its ToUnicode CMap, else (simple fonts) its encoding.
 fn unicode_map(doc: &Document, font: &Dict, composite: bool) -> HashMap<u32, String> {
     let mut out = HashMap::new();

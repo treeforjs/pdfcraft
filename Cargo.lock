@@ -3845,6 +3845,7 @@ dependencies = [
  "pdfcraft-content",
  "pdfcraft-cos",
  "pdfcraft-filters",
+ "pdfcraft-fonts",
  "pdfcraft-model",
 ]
 
