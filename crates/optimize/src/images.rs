@@ -714,3 +714,93 @@ pub(crate) fn despeckle(doc: &mut Document, pages: &[ObjRef], options: crate::de
     }
     report
 }
+
+/// What [`crate::remove_page_image_backgrounds`] did.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct BackgroundReport {
+    /// Images the pages draw (soft masks excluded).
+    pub images: usize,
+    /// Images rewritten because their background was whitened.
+    pub images_changed: usize,
+    /// Images left alone because PdfCraft can't decode or re-encode them faithfully (JBIG2,
+    /// JPEG 2000, CMYK and other colour spaces, decode arrays, colour-key masks, more than 8
+    /// bits) or they were too large.
+    pub images_skipped: usize,
+    /// Images decoded but left alone because they have no light paper background
+    /// (photographs, dark or inverted scans) or it was already white. One-bit images are
+    /// counted here: their background is already white.
+    pub images_unchanged: usize,
+    /// Pixels that became white, over all images.
+    pub pixels_whitened: u64,
+    /// Pixels whose value changed, over all images.
+    pub pixels_changed: u64,
+}
+
+/// One 8-bit gray or RGB image with its background whitened (JPEG images are re-encoded at
+/// quality 90, others with Flate); `Ok(None)` when nothing changed.
+fn remove_background_colour(
+    doc: &Document,
+    s: &Stream,
+    options: crate::background::Options,
+) -> Result<Option<(Stream, crate::background::Stats)>, ()> {
+    let d = &s.dict;
+    if d.contains(b"Decode") || d.contains(b"Mask") || d.int(b"BitsPerComponent") != Some(8) {
+        return Err(());
+    }
+    let n = d.get(b"ColorSpace").and_then(|cs| components(doc, cs)).ok_or(())?;
+    let was_dct = is_dct(s).ok_or(())?;
+    let (w, h) = (u32::try_from(d.int(b"Width").ok_or(())?).map_err(|_| ())?, u32::try_from(d.int(b"Height").ok_or(())?).map_err(|_| ())?);
+    if w == 0 || h == 0 || u64::from(w) * u64::from(h) > MAX_PIXELS {
+        return Err(());
+    }
+    let need = (w as usize).checked_mul(h as usize).and_then(|p| p.checked_mul(n)).ok_or(())?;
+    let mut px = if was_dct {
+        pixels(s, n).ok_or(())?
+    } else {
+        // Lossless rewriting: the samples must decode completely (no truncated data published).
+        s.decoded_complete(need.saturating_add(1 << 16)).map_err(|_| ())?.get(..need).ok_or(())?.to_vec()
+    };
+    if px.len() != need {
+        return Err(());
+    }
+    let stats = crate::background::remove_background_pixels(&mut px, w, h, n, options).map_err(|_| ())?;
+    if !stats.changed() {
+        return Ok(None);
+    }
+    let compression = if was_dct { Compression::Jpeg(90) } else { Compression::Flate };
+    Ok(Some((image_stream(d, &px, n, w, h, compression, was_dct).ok_or(())?, stats)))
+}
+
+pub(crate) fn remove_backgrounds(doc: &mut Document, pages: &[ObjRef], options: crate::background::Options) -> BackgroundReport {
+    let mut report = BackgroundReport::default();
+    let ppi = effective_resolutions(doc, pages);
+    let masks: HashSet<ObjRef> = ppi
+        .keys()
+        .filter_map(|r| match &*doc.get(*r) {
+            Object::Stream(s) => s.dict.reference(b"SMask"),
+            _ => None,
+        })
+        .collect();
+    let mut refs: Vec<ObjRef> = ppi.into_keys().filter(|r| !masks.contains(r)).collect();
+    refs.sort_by_key(|r| (r.num, r.generation));
+    for r in refs {
+        let obj = doc.get(r);
+        let Object::Stream(s) = &*obj else { continue };
+        report.images += 1;
+        if is_mono(doc, &s.dict) {
+            report.images_unchanged += 1;
+            continue;
+        }
+        match remove_background_colour(doc, s, options) {
+            Ok(Some((new, stats))) => {
+                report.images_changed += 1;
+                report.pixels_whitened = report.pixels_whitened.saturating_add(stats.pixels_whitened);
+                report.pixels_changed = report.pixels_changed.saturating_add(stats.pixels_changed);
+                doc.set(r, Object::Stream(new));
+            }
+            Ok(None) => report.images_unchanged += 1,
+            Err(()) => report.images_skipped += 1,
+        }
+    }
+    report
+}

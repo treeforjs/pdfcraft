@@ -3783,6 +3783,115 @@ fn scan_despeckle_removes_specks_as_one_undoable_step_and_rejects_bad_arguments(
     }
 }
 
+/// A one-page 400 × 200 pt scan drawn at 72 ppi: 8-bit gray Flate, grey dithered paper (luma
+/// about 200) with dark text-like bars.
+fn grey_paper_scan_pdf() -> Vec<u8> {
+    use pdfcraft_cos::{Dict, Document, Object, SaveOptions, Stream, write_full};
+    let (w, h) = (400usize, 200usize);
+    let px: Vec<u8> = (0..w * h)
+        .map(|i| {
+            let (x, y) = (i % w, i / w);
+            if (x % 20 < 4) && (60..140).contains(&y) && (40..360).contains(&x) { 12 } else { (196 + (x * 3 + y * 5) % 9) as u8 }
+        })
+        .collect();
+    let mut doc = Document::new_empty();
+    let mut d = Dict::new();
+    d.set(b"Type".to_vec(), Object::name("XObject"));
+    d.set(b"Subtype".to_vec(), Object::name("Image"));
+    d.set(b"Width".to_vec(), Object::Int(w as i64));
+    d.set(b"Height".to_vec(), Object::Int(h as i64));
+    d.set(b"BitsPerComponent".to_vec(), Object::Int(8));
+    d.set(b"ColorSpace".to_vec(), Object::name("DeviceGray"));
+    let img = doc.add(Object::Stream(Stream::flate(d, &px)));
+    let c = doc.add(Object::Stream(Stream::from_raw(Dict::new(), format!("q {w} 0 0 {h} 0 0 cm /Im0 Do Q").into_bytes())));
+    let pages = doc.root().and_then(|r| doc.get(r).as_dict().and_then(|d| d.reference(b"Pages"))).unwrap();
+    let mut x = Dict::new();
+    x.set(b"Im0".to_vec(), Object::Ref(img));
+    let mut res = Dict::new();
+    res.set(b"XObject".to_vec(), Object::Dict(x));
+    let mut p = Dict::new();
+    p.set(b"Type".to_vec(), Object::name("Page"));
+    p.set(b"Parent".to_vec(), Object::Ref(pages));
+    p.set(b"MediaBox".to_vec(), Object::Array(vec![0.into(), 0.into(), (w as i64).into(), (h as i64).into()]));
+    p.set(b"Resources".to_vec(), Object::Dict(res));
+    p.set(b"Contents".to_vec(), Object::Ref(c));
+    let page = doc.add(Object::Dict(p));
+    doc.update_dict(pages, |d| {
+        d.set(b"Kids".to_vec(), Object::Array(vec![Object::Ref(page)]));
+        d.set(b"Count".to_vec(), Object::Int(1));
+    })
+    .unwrap();
+    write_full(&doc, &SaveOptions { object_streams: false, ..SaveOptions::default() }).unwrap()
+}
+
+#[test]
+fn scan_remove_background_whitens_paper_as_one_undoable_step_and_rejects_bad_arguments() {
+    let dir = workdir("background");
+    std::fs::write(dir.join("scan.pdf"), grey_paper_scan_pdf()).unwrap();
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "scan.pdf" }))["doc"].as_u64().unwrap();
+    // (pixels lighter than 250, pixels darker than 64) of the rendered page.
+    let tones = |a: &mut Automation| {
+        let out = a.call("page_render", &json!({ "doc": doc, "page": 1, "dpi": 72 })).unwrap();
+        let Content::Png { data, .. } = &out[0] else { panic!("expected an image") };
+        let mut reader = png::Decoder::new(std::io::Cursor::new(data.as_slice())).read_info().unwrap();
+        let mut buf = vec![0; reader.output_buffer_size().unwrap()];
+        let info = reader.next_frame(&mut buf).unwrap();
+        let channels = info.color_type.samples();
+        let px: Vec<u8> = buf[..info.buffer_size()].chunks(channels).map(|p| p[0]).collect();
+        (px.iter().filter(|v| **v < 250).count(), px.iter().filter(|v| **v < 64).count())
+    };
+    let (grey_before, ink_before) = tones(&mut a);
+    assert!(grey_before > 70_000 && ink_before > 5_000, "{grey_before} {ink_before}");
+    // Bad arguments change nothing.
+    for bad in [
+        json!({ "doc": doc, "strength": "max" }),
+        json!({ "doc": doc, "strength": 2 }),
+        json!({ "doc": doc, "strength": "off" }),
+        json!({ "doc": doc, "white_point": 40 }),
+        json!({ "doc": doc, "white_point": 300 }),
+        json!({ "doc": doc, "white_point": "light" }),
+        json!({ "doc": doc, "pages": [9] }),
+        json!({ "doc": doc, "pages": [0] }),
+    ] {
+        assert!(matches!(a.call("scan_remove_background", &bad), Err(ToolError::InvalidArgs(_))), "{bad}");
+    }
+    assert!(a.call("scan_remove_background", &json!({ "doc": 999 })).is_err());
+    assert!(a.call("edit_undo", &json!({ "doc": doc })).is_err(), "nothing was changed");
+    let r = ok(&mut a, "scan_remove_background", json!({ "doc": doc }));
+    assert_eq!((r["images"].as_u64(), r["images_changed"].as_u64(), r["images_skipped"].as_u64()), (Some(1), Some(1), Some(0)), "{r}");
+    assert!(r["pixels_whitened"].as_u64().unwrap() > 70_000, "{r}");
+    assert_eq!(r["undoable"], true);
+    let (grey_after, ink_after) = tones(&mut a);
+    assert!(grey_after < grey_before / 4, "paper still grey: {grey_before} -> {grey_after}");
+    assert_eq!(ink_after, ink_before, "text changed");
+    // White paper now: no second step.
+    assert_eq!(ok(&mut a, "scan_remove_background", json!({ "doc": doc, "strength": "high", "pages": [1] }))["undoable"], false);
+    assert_eq!(ok(&mut a, "edit_undo", json!({ "doc": doc }))["undone"], "Remove background");
+    assert_eq!(tones(&mut a), (grey_before, ink_before));
+    // An explicit white point alone.
+    let r = ok(&mut a, "scan_remove_background", json!({ "doc": doc, "white_point": 190 }));
+    assert_eq!(r["images_changed"].as_u64(), Some(1), "{r}");
+    assert_eq!(ok(&mut a, "edit_undo", json!({ "doc": doc }))["undone"], "Remove background");
+    // The OCR tools take the same option and validate it before any model is needed.
+    for bad in
+        [json!({ "doc": doc, "background": "max" }), json!({ "doc": doc, "background": true }), json!({ "doc": doc, "background_white_point": 12 })]
+    {
+        for tool in ["ocr_recognize", "ocr_prepare"] {
+            assert!(matches!(a.call(tool, &bad), Err(ToolError::InvalidArgs(_))), "{tool} {bad}");
+        }
+    }
+    let files = json!({ "paths": ["scan.pdf"], "folder": "out", "background": "loud" });
+    assert!(matches!(a.call("ocr_recognize_files", &files), Err(ToolError::InvalidArgs(_))));
+    if pdfcraft_engine::ocr::Models::required_for_tests().unwrap() {
+        let r = ok(&mut a, "ocr_recognize", json!({ "doc": doc, "background": "medium" }));
+        assert!(r["pages"][0]["background"]["pixels_whitened"].as_u64().unwrap() > 0, "{r}");
+        assert_eq!(tones(&mut a).0, grey_before, "Exact keeps the page image");
+    } else {
+        eprintln!("skipped (recognition part): OCR models not installed");
+    }
+}
+
 #[test]
 fn initial_view_through_tools() {
     let dir = workdir("initial-view");

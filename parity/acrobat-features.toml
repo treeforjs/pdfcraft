@@ -6512,11 +6512,11 @@ title = "Background removal"
 area = "I"
 tier = "P1"
 milestone = "M10"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["scan_remove_background", "ocr_recognize", "ocr_prepare", "ocr_recognize_files"]
+evidence = ["crates/optimize/src/background.rs::grey_paper_becomes_white_and_ink_and_pencil_stay", "crates/optimize/src/background.rs::yellowed_colour_paper_turns_neutral_white_and_colour_ink_stays", "crates/optimize/src/background.rs::photographs_and_dark_pages_are_left_alone", "crates/optimize/tests/background.rs::scans_get_white_paper_and_keep_their_text", "crates/engine/tests/background.rs::recognition_reads_a_whitened_copy_and_exact_keeps_the_page", "crates/engine/tests/background.rs::searchable_image_whitens_the_page_in_the_recognition_step", "crates/engine/tests/background.rs::remove_scan_backgrounds_is_one_undoable_step_reporting_what_changed", "crates/automation/tests/automation.rs::scan_remove_background_whitens_paper_as_one_undoable_step_and_rejects_bad_arguments"]
+notes = "Original histogram method (crates/optimize/src/background.rs): the paper level is the main light peak (luma >= 128) of the image's smoothed luma histogram, refused when fewer than 30 % of the pixels lie within 16 levels of it (photographs, dark and inverted scans are left alone); the white point is paper - (base + k*sigma) with the paper noise sigma measured on the ink-free light side (low 6+1.5 sigma, medium 12+2.5 sigma, high 20+3.5 sigma, margin capped at 64, never below 128) or an explicit white_point; a levels curve keeps [0, white-64], stretches up to white and maps the rest to 255, so ink and mid-greys keep their values; colour scans use per-channel white points from the paper's own colour (yellowed paper becomes neutral white). scan_remove_background is the standalone Enhance-scan operation (one undoable Edit::RemovePageImageBackgrounds): 8-bit gray/RGB images are rewritten (JPEG at q90); one-bit images are left as they are. Recognize Text takes background off|low|medium|high (+ background_white_point): recognition reads a whitened copy (before despeckle); with output straighten (Searchable Image) the recognized pages' images are whitened too in the same undo step. Measured only on synthetic fixtures. Not yet: a dialog/UI option, JPEG 2000/JBIG2/CMYK/Indexed images (left alone, counted as skipped), uneven backgrounds (shadows, gradients across the page: one global level per image, no local/adaptive estimate), bleed-through removal, real scans."
 
 [[feature]]
 id = "ocr.descreen"

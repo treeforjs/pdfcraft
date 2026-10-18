@@ -782,6 +782,7 @@ impl Automation {
             "form_run_trigger" => self.form_run_trigger(&a)?,
             "ocr_status" => self.ocr_status()?,
             "scan_despeckle" => self.scan_despeckle(&a)?,
+            "scan_remove_background" => self.scan_remove_background(&a)?,
             "ocr_recognize_files" => self.ocr_recognize_files(&a)?,
             "accessibility_report" => self.a11y_report(&a)?,
             "accessibility_fix" => self.a11y_fix(&a)?,

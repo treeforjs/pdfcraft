@@ -1537,6 +1537,13 @@ pub enum Edit {
         pages: Vec<usize>,
         options: optimize::despeckle::Options,
     },
+    /// Scan & OCR ▸ Enhance ▸ Remove background (and Recognize text's background option with
+    /// Searchable Image): whiten the paper background of the images `pages` draw
+    /// ([`optimize::remove_page_image_backgrounds`]).
+    RemovePageImageBackgrounds {
+        pages: Vec<usize>,
+        options: optimize::background::Options,
+    },
     /// Edit a PDF ▸ Edit text: replace the text of line `line` (from `Document::text_lines`) on
     /// `page`, in its own font when it can show it, else in Helvetica.
     EditTextLine {
@@ -1791,6 +1798,7 @@ impl Edit {
             Edit::StraightenPage { .. } => "Straighten page".into(),
             Edit::DownsamplePageImages { .. } => "Downsample images".into(),
             Edit::DespecklePageImages { .. } => "Despeckle".into(),
+            Edit::RemovePageImageBackgrounds { .. } => "Remove background".into(),
             Edit::ApplyScriptChanges { .. } => "Run JavaScript".into(),
             Edit::XfaEvent { .. } => "Run form script".into(),
             Edit::ConvertPdfA { level } => format!("Save as {}", level.label()),
@@ -2018,6 +2026,7 @@ fn check_permission(edit: &Edit, p: &pdfcraft_cos::Permissions) -> Result<(), Ed
         | Edit::StraightenPage { .. }
         | Edit::DownsamplePageImages { .. }
         | Edit::DespecklePageImages { .. }
+        | Edit::RemovePageImageBackgrounds { .. }
         | Edit::SetDocumentScript { .. }
         | Edit::SetFieldScript { .. }
         | Edit::SetSignatureLock { .. }
@@ -2334,6 +2343,9 @@ fn run_edit(doc: &mut pdfcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -> 
         }
         Edit::DespecklePageImages { pages, options } => {
             pdfcraft_optimize::despeckle_page_images(doc, pages, *options).map_err(|e| EditError::Optimize(e.to_string()))?;
+        }
+        Edit::RemovePageImageBackgrounds { pages, options } => {
+            pdfcraft_optimize::remove_page_image_backgrounds(doc, pages, *options).map_err(|e| EditError::Optimize(e.to_string()))?;
         }
         Edit::EditPageImage { page, index, change } => {
             let img = pdfcraft_edit::page_images(doc, *page)?
