@@ -1194,6 +1194,16 @@ pub fn tools() -> Vec<ToolDef> {
                 }),
                 &["doc"],
             )),
+        t("pdfx_verify", "Verify PDF/X", "Verify the machine-checkable requirements of PDF/X-1a:2001, PDF/X-1a:2003, PDF/X-3:2002, PDF/X-3:2003 or PDF/X-4 (ISO 15930-1/-4/-3/-6/-7), like Acrobat Preflight's PDF/X profiles. standard defaults to the one the document declares (GTS_PDFXVersion), else X-4. Rules by id: GTS_PDFXVersion (document information; XMP pdfxid for X-4), PDF version limit, information and XMP keys, Trapped True/False, file ID, encryption, exactly one GTS_PDFX output intent with OutputConditionIdentifier and an ICC output (prtr) profile or RegistryName, TrimBox or ArtBox on every page and box nesting, printing annotations in the bleed area, fonts embedded, X-1a colour (CMYK, gray, spot only), DeviceRGB/DeviceCMYK against the output intent for X-3/X-4, no transparency for X-1a/X-3, X-4 optional content names, transfer functions, halftone types, PostScript, OPI, external content, embedded files, JavaScript. Severity error breaks conformance; warning marks a rule whose wording we are not certain of or a limit reached. conforms is true when no error is found; not_checked lists what isn't decided. counts has every checked rule; findings keep at most max_findings per rule (default 100), with 1-based page and object number.")
+            .ro()
+            .with(schema(
+                json!({
+                    "doc": doc(),
+                    "standard": { "type": "string", "enum": ["X-1a:2001", "X-1a:2003", "X-3:2002", "X-3:2003", "X-4"], "description": "Default: the declared standard, else X-4." },
+                    "max_findings": { "type": "integer", "minimum": 1, "maximum": 10000, "description": "Findings kept per rule (default 100); counts include the rest." },
+                }),
+                &["doc"],
+            )),
         t("pdfa_convert", "Save as PDF/A", "Standards ▸ Save as PDF/A: fix what can be fixed for PDF/A-2b or 3b (XMP identification and metadata, an sRGB output intent, forbidden actions and JavaScript, annotation print flags, image interpolation, encryption). Returns what was fixed and what remains (e.g. fonts that aren't embedded). Undoable; save the document to keep it.")
             .cmd("standards.pdfa")
             .with(schema(json!({ "doc": doc(), "level": { "type": "string", "enum": ["2b", "3b"] } }), &["doc"])),

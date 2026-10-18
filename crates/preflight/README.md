@@ -53,3 +53,15 @@ Separation, DeviceN and Indexed colours are exact; RGB and Lab use a naive full-
 conversion without a press profile and are counted separately; patterns, shadings,
 DCT/JPX/JBIG2/CCITT images and annotations are reported as unmeasured. `coverage::METHOD`
 states these limits for reports. Automation exposes it as `print_total_area_coverage`.
+
+## PDF/X verification
+
+`pdfx::verify_pdfx` (tool `pdfx_verify`) checks the machine-checkable requirements of
+PDF/X-1a:2001, PDF/X-1a:2003, PDF/X-3:2002, PDF/X-3:2003 and PDF/X-4 by rule id (`X_RULES`):
+identification, PDF version, document information and XMP keys, Trapped, file ID,
+encryption, the GTS_PDFX output intent and its ICC profile header, page boxes, printing
+annotations in the bleed area, and a bounded walk of page content (forms, patterns,
+shadings, Type 3 glyphs, annotation appearances; seen-set, depth, byte and operator caps)
+for fonts, colour spaces, transparency, transfer functions, halftones and PostScript.
+Rules whose ISO wording we are not certain of report warnings, which don't affect
+`conforms`; `X_NOT_CHECKED` lists what isn't decided. It reads the document only.

@@ -7696,11 +7696,11 @@ title = "Verify PDF/X compliance"
 area = "K"
 tier = "P1"
 milestone = "M11"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["pdfx_verify"]
+evidence = ["crates/preflight/src/pdfx_tests.rs::a_valid_x1a_file_conforms_and_is_detected", "crates/preflight/src/pdfx_tests.rs::a_valid_x4_file_with_transparency_conforms", "crates/preflight/src/pdfx_tests.rs::an_undeclared_file_is_checked_as_x4", "crates/preflight/src/pdfx_tests.rs::each_broken_x1a_variant_fails_with_its_rule", "crates/preflight/src/pdfx_tests.rs::output_profiles_are_checked", "crates/preflight/src/pdfx_tests.rs::warnings_do_not_break_conformance", "crates/preflight/src/pdfx_tests.rs::pdf_versions_are_limited_per_part", "crates/preflight/src/pdfx_tests.rs::x3_allows_device_independent_colour_but_not_rgb_with_a_cmyk_intent", "crates/preflight/src/pdfx_tests.rs::x4_rules", "crates/preflight/src/pdfx_tests.rs::looped_and_deep_forms_are_bounded", "crates/preflight/src/pdfx_tests.rs::findings_are_capped_but_counted", "crates/preflight/src/pdfx_tests.rs::hostile_documents_do_not_panic", "crates/automation/tests/automation.rs::pdfx_verify_through_tools"]
+notes = "PDF/X-1a:2001, X-1a:2003, X-3:2002, X-3:2003 and X-4 (ISO 15930-1/-4/-3/-6/-7) by rule id; the standard defaults to the declared one, else X-4. Errors: GTS_PDFXVersion (information; XMP pdfxid for X-4), GTS_PDFXConformance for X-1a:2001, PDF version limit (1.3/1.4/1.6, header and catalog), information Title/CreationDate/ModDate (X-1a/X-3), XMP and its dates (X-4), Trapped True/False (XMP pdf:Trapped agreeing with the information for X-4), file ID (2003 and X-4), encryption, exactly one GTS_PDFX output intent with OutputConditionIdentifier and a DestOutputProfile or RegistryName, ICC output (prtr) class and N (CMYK/gray for X-1a), TrimBox or ArtBox per page, boxes inside the MediaBox and TrimBox inside the BleedBox, printing non-PrinterMark/TrapNet annotations in the bleed area, fonts embedded, X-1a colour (no RGB, ICCBased, Cal or Lab, through Default spaces, inline images, shadings, patterns, Type 3 glyphs and annotation appearances), DeviceRGB only with an RGB intent (X-3/X-4), no transparency for X-1a/X-3 (SMask, CA/ca, blend modes, groups, image soft masks), X-4 optional content Name/AS, TR/TR2, halftone types outside 1/5/6/10/16, PostScript XObjects and PS, OPI, reference XObjects and external streams. Warnings, where we are not certain of the standard's wording: TrimBox and ArtBox together, spot alternates other than CMYK/gray in X-1a, DeviceCMYK with a non-CMYK intent, halftone types 6/10/16, ICC profile version, embedded files, JavaScript and additional actions, the file ID for 2001/2002, the X-4 information/XMP version agreement and dc:title. Not checked: the ICC characterization registry, an intent's colour space without a profile, font programs, LZW, 16-bit/JPX image details, TrapNet consistency, page-level output intents, X-4p/X-5, optional content Order, OPM. No UI yet (UI redesign) and no comparison with Acrobat Preflight or another validator."
 
 [[feature]]
 id = "optimize.pdfx-convert"

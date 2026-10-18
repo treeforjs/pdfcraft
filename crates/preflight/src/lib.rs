@@ -24,7 +24,10 @@
 pub mod analysis;
 pub mod coverage;
 pub mod icc;
+pub mod pdfx;
 mod xmp;
+
+pub use pdfx::{MAX_X_FINDINGS, X_NOT_CHECKED, X_RULES, XFinding, XOptions, XPart, XReport, XRule, XSeverity, declared_pdfx, verify_pdfx};
 
 use pdfcraft_cos::{Dict, Document, ObjRef, Object, PdfString, Stream};
 
