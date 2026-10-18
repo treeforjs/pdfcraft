@@ -188,7 +188,13 @@ impl PdfCraftApp {
         let Some(i) = self.active else { return };
         let at = self.views[i].target_pages().into_iter().max().map_or(0, |p| p + 1);
         let count = clip.pages.len();
-        if self.apply_edit(Edit::InsertPagesFrom { name: clip.name.clone(), bytes: clip.bytes.clone(), pages: Some(clip.pages.clone()), at }) {
+        if self.apply_edit(Edit::InsertPagesFrom {
+            name: clip.name.clone(),
+            bytes: clip.bytes.clone(),
+            pages: Some(clip.pages.clone()),
+            at,
+            merge_tags: true,
+        }) {
             self.views[i].select_pages(&(at..at + count).collect::<Vec<_>>());
         }
     }

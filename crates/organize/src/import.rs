@@ -11,8 +11,9 @@
 //!   were not copied are dropped, so they don't dangle;
 //! - form-field widgets keep their field hierarchy, and the top-level fields are registered in the
 //!   destination `/AcroForm`;
-//! - structure-tree links (`/StructParent(s)`) and article beads (`/B`) are removed, because the
-//!   source structure tree is not copied;
+//! - structure-tree links (`/StructParent(s)`) and article beads (`/B`) are removed while copying;
+//!   the structure tree is then merged separately (see `structure`), which links the copies to
+//!   their elements again under new parent-tree keys;
 //! - named destinations are resolved against the source's name tree and become explicit ones;
 //! - layers (optional content groups) used by the pages are registered in the destination's
 //!   `/OCProperties`, keeping their default on/off state.
@@ -22,6 +23,7 @@ use std::collections::HashMap;
 use pdfcraft_cos::{Dict, Document, ObjRef, Object};
 
 use crate::fields::{FieldConflicts, FieldReport, Incoming};
+use crate::structure::{TagMergeReport, Tally};
 use crate::{INHERITABLE, OrganizeError, pages_root, rebuild, walk};
 
 /// Keys that must not be followed when copying: they point back up or across the source
@@ -29,7 +31,7 @@ use crate::{INHERITABLE, OrganizeError, pages_root, rebuild, walk};
 const SKIP_ON_PAGE: &[&[u8]] = &[b"Parent", b"B", b"StructParents", b"Thumb", b"PieceInfo"];
 const SKIP_ON_ANNOT: &[&[u8]] = &[b"StructParent", b"P"];
 
-struct Copier<'a> {
+pub(crate) struct Copier<'a> {
     src: &'a Document,
     map: HashMap<ObjRef, ObjRef>,
     /// Source page → destination page, for rewriting `/P` and destinations.
@@ -42,9 +44,24 @@ struct Copier<'a> {
     ocgs: Vec<(ObjRef, ObjRef)>,
 }
 
-impl Copier<'_> {
+impl<'a> Copier<'a> {
+    /// A copier from `src` that reuses the copies in `map` (source → destination).
+    pub(crate) fn with_map(src: &'a Document, map: HashMap<ObjRef, ObjRef>) -> Copier<'a> {
+        Copier { src, map, pages: HashMap::new(), annots: Vec::new(), fields: Vec::new(), ocgs: Vec::new() }
+    }
+
+    /// Record that source object `from` is (already) `to` in the destination.
+    pub(crate) fn seed(&mut self, from: ObjRef, to: ObjRef) {
+        self.map.insert(from, to);
+    }
+
+    /// Whether source object `r` has been copied (or seeded).
+    pub(crate) fn copied(&self, r: ObjRef) -> Option<ObjRef> {
+        self.map.get(&r).copied()
+    }
+
     /// Copy an indirect object (once), returning its destination reference.
-    fn copy_ref(&mut self, dst: &mut Document, r: ObjRef) -> ObjRef {
+    pub(crate) fn copy_ref(&mut self, dst: &mut Document, r: ObjRef) -> ObjRef {
         if let Some(d) = self.map.get(&r) {
             return *d;
         }
@@ -60,7 +77,7 @@ impl Copier<'_> {
         new
     }
 
-    fn copy_value(&mut self, dst: &mut Document, o: &Object, this: Option<ObjRef>) -> Object {
+    pub(crate) fn copy_value(&mut self, dst: &mut Document, o: &Object, this: Option<ObjRef>) -> Object {
         match o {
             Object::Ref(r) => Object::Ref(self.copy_ref(dst, *r)),
             Object::Array(a) => Object::Array(a.iter().map(|x| self.copy_value(dst, x, None)).collect()),
@@ -211,23 +228,67 @@ pub fn import_pages_with(
     at: usize,
     fields: FieldConflicts,
 ) -> Result<(Vec<ObjRef>, FieldReport), OrganizeError> {
+    let report = import_pages_with_options(dst, src, src_pages, at, &ImportOptions { fields, merge_tags: true })?;
+    Ok((report.pages, report.fields))
+}
+
+/// Options for copying pages between documents (Insert Pages, Combine Files).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ImportOptions {
+    /// What to do with form fields whose names collide.
+    pub fields: FieldConflicts,
+    /// Merge the sources' logical structure trees (tags) into the result (on by default). Off,
+    /// the copied pages arrive untagged, as before structure merging existed.
+    pub merge_tags: bool,
+}
+
+impl Default for ImportOptions {
+    fn default() -> Self {
+        ImportOptions { fields: FieldConflicts::Rename, merge_tags: true }
+    }
+}
+
+/// What an import or a combine did.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ImportReport {
+    /// The new pages, in order (for a combine: every page of the result).
+    pub pages: Vec<ObjRef>,
+    /// What happened to the incoming form fields.
+    pub fields: FieldReport,
+    /// What happened to the structure trees.
+    pub tags: TagMergeReport,
+}
+
+/// [`import_pages_with`] with every option, also reporting how the structure trees were merged.
+pub fn import_pages_with_options(
+    dst: &mut Document,
+    src: &Document,
+    src_pages: &[usize],
+    at: usize,
+    options: &ImportOptions,
+) -> Result<ImportReport, OrganizeError> {
     let first_new = dst.object_numbers().last().map_or(1, |n| n + 1);
-    let imported = import_pages_mapped(dst, src, src_pages, at, fields)?;
+    let before = crate::structure::Before::of(dst)?;
+    let imported = import_pages_mapped(dst, src, src_pages, at, options.fields)?;
+    let mut tags = TagMergeReport::default();
+    if options.merge_tags {
+        crate::structure::merge_import(dst, src, &imported, &before, &mut tags)?;
+    }
     let created: Vec<ObjRef> = dst.object_numbers().into_iter().filter(|n| *n >= first_new).map(|n| ObjRef::new(n, dst.generation(n))).collect();
     crate::dedupe::dedupe_resources(dst, &created, true);
-    Ok((imported.pages, imported.fields))
+    Ok(ImportReport { pages: imported.pages, fields: imported.fields, tags })
 }
 
 /// What `import_pages_mapped` copied.
-struct Imported {
+pub(crate) struct Imported {
     /// The new pages, in order.
-    pages: Vec<ObjRef>,
+    pub(crate) pages: Vec<ObjRef>,
     /// Source page → destination page.
-    page_map: HashMap<ObjRef, ObjRef>,
+    pub(crate) page_map: HashMap<ObjRef, ObjRef>,
     /// Every source object copied → its copy.
-    objects: HashMap<ObjRef, ObjRef>,
+    pub(crate) objects: HashMap<ObjRef, ObjRef>,
     /// What happened to the incoming form fields.
-    fields: FieldReport,
+    pub(crate) fields: FieldReport,
 }
 
 /// `import_pages`, also returning what was copied from where.
@@ -309,6 +370,7 @@ fn import_pages_mapped(
         new_pages.push(new);
     }
     copier.fix_annotations(dst, &annot_pages)?;
+    strip_struct_keys(dst, &copier.map)?;
     let fields = register_fields(dst, src, &mut copier, &new_pages, policy)?;
     register_layers(dst, src, &copier.ocgs)?;
     let at = at.min(existing.len());
@@ -316,6 +378,24 @@ fn import_pages_mapped(
     existing.splice(at..at, inserted);
     rebuild(dst, &existing)?;
     Ok(Imported { pages: new_pages, page_map: copier.pages, objects: copier.map, fields })
+}
+
+/// Copied objects other than pages and annotations (form XObjects) keep their
+/// `/StructParent(s)` keys, which index the *source* parent tree and would point at unrelated
+/// entries of the destination's. Drop them; a structure merge assigns new keys.
+fn strip_struct_keys(dst: &mut Document, copied: &HashMap<ObjRef, ObjRef>) -> Result<(), OrganizeError> {
+    let stale: Vec<ObjRef> = copied
+        .values()
+        .copied()
+        .filter(|r| dst.get(*r).as_dict().is_some_and(|d| d.contains(b"StructParents") || d.contains(b"StructParent")))
+        .collect();
+    for r in stale {
+        dst.update_dict(r, |d| {
+            d.remove(b"StructParents");
+            d.remove(b"StructParent");
+        })?;
+    }
+    Ok(())
 }
 
 /// Look up a named destination in the source (`/Dests` dictionary or `/Names /Dests` tree).
@@ -460,9 +540,20 @@ fn register_fields(
 /// Document information (title, author…) is carried over, and so is the print standard the
 /// source declares (PDF/X: its output intents and identification, #263).
 pub fn extract_pages(src: &Document, pages: &[usize]) -> Result<Document, OrganizeError> {
+    extract_pages_with(src, pages, true).map(|(doc, _)| doc)
+}
+
+/// [`extract_pages`], keeping (`merge_tags`) only the part of the structure tree whose content
+/// is on the extracted pages, and reporting it.
+pub fn extract_pages_with(src: &Document, pages: &[usize], merge_tags: bool) -> Result<(Document, TagMergeReport), OrganizeError> {
     let mut out = Document::new_empty();
     // One source: nothing to deduplicate.
+    let before = crate::structure::Before::of(&out)?;
     let imported = import_pages_mapped(&mut out, src, pages, 0, FieldConflicts::Rename)?;
+    let mut tags = TagMergeReport::default();
+    if merge_tags {
+        crate::structure::merge_import(&mut out, src, &imported, &before, &mut tags)?;
+    }
     for key in crate::INFO_KEYS {
         if let Some(v) = crate::info(src, key) {
             crate::set_info(&mut out, key, &v)?;
@@ -473,7 +564,7 @@ pub fn extract_pages(src: &Document, pages: &[usize]) -> Result<Document, Organi
     // The pages share their source's resource dictionary, so the part would otherwise carry every
     // XObject the source lists — images and all (#204). Keep only what these pages draw.
     crate::prune::prune_unused_xobjects(&mut out)?;
-    Ok(out)
+    Ok((out, tags))
 }
 
 /// How to split a document.
@@ -534,7 +625,21 @@ pub fn combine_selected_with(
     sources: &[(&str, &Document, Option<&[usize]>)],
     fields: FieldConflicts,
 ) -> Result<(Document, FieldReport), OrganizeError> {
+    combine_with_options(sources, &ImportOptions { fields, merge_tags: true }).map(|(doc, report)| (doc, report.fields))
+}
+
+/// [`combine_selected_with`] with every option. With `merge_tags` (the default), the sources'
+/// structure trees become one: each source's elements go under one Document element in page
+/// order, with their role maps, class maps, IDs and namespaces merged and the parent tree
+/// rebuilt; the result is marked tagged only when every source was (see `structure`).
+pub fn combine_with_options(
+    sources: &[(&str, &Document, Option<&[usize]>)],
+    options: &ImportOptions,
+) -> Result<(Document, ImportReport), OrganizeError> {
+    let fields = options.fields;
     let mut report = FieldReport::default();
+    let mut tags = TagMergeReport::default();
+    let mut tally = Tally::default();
     let mut out = Document::new_empty();
     let mut marks = Vec::new();
     let mut attachments = Vec::new();
@@ -554,8 +659,13 @@ pub fn combine_selected_with(
             None => (0..n).collect(),
         };
         let at = crate::page_count(&out)?;
-        let imported = import_pages_mapped(&mut out, src, &pages, at, fields)?;
-        report.absorb(imported.fields);
+        let before = crate::structure::Before::of(&out)?;
+        let mut imported = import_pages_mapped(&mut out, src, &pages, at, fields)?;
+        if options.merge_tags && !imported.pages.is_empty() {
+            crate::structure::merge_source(&mut out, src, title, &imported, &before, &mut tags)?;
+            tally.add(src, title);
+        }
+        report.absorb(std::mem::take(&mut imported.fields));
         if let Some(first) = imported.pages.first() {
             marks.push((title.to_string(), *first, *src, imported.page_map));
         }
@@ -574,7 +684,11 @@ pub fn combine_selected_with(
     crate::dedupe::dedupe_resources(&mut out, &all, false);
     add_outline(&mut out, &marks)?;
     set_attachments(&mut out, attachments)?;
-    Ok((out, report))
+    if options.merge_tags {
+        tally.finish(&mut out, &mut tags)?;
+    }
+    let pages = crate::pages(&out)?.into_iter().map(|p| p.obj).collect();
+    Ok((out, ImportReport { pages, fields: report, tags }))
 }
 
 /// Copy a source's document-level attachments (`/Names /EmbeddedFiles`) into `dst`.
