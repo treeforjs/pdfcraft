@@ -29,6 +29,7 @@ mod make_accessible;
 pub mod mcp;
 mod measure;
 mod ocr_review;
+mod overprint;
 mod preflight;
 mod printing;
 mod reader_selection;
@@ -720,6 +721,8 @@ impl Automation {
             "print_ink_manager_list" => self.ink_manager_list(&a)?,
             "print_ink_manager_set" => self.ink_manager_set(&a)?,
             "print_ink_manager_apply" => self.ink_manager_apply(&a)?,
+            "print_overprint_preview" => self.overprint_preview(&a)?,
+            "print_overprint_objects" => self.overprint_objects(&a)?,
             "print_add_printer_marks" => self.add_printer_marks(&a)?,
             "print_convert_colors" => self.convert_colors(&a)?,
             "associated_files_list" => self.associated_files_list(&a)?,
@@ -2017,12 +2020,8 @@ impl Automation {
         if !(1.0..=MAX_DPI).contains(&dpi) {
             return Err(ToolError::InvalidArgs(format!("dpi must be between 1 and {MAX_DPI}")));
         }
-        let out = self.renderer(id)?.render(RenderRequest { page, kind: RequestKind::Pixels, tile: None, scale: (dpi / 72.0) as f32, tag: 0 });
-        if let Some(e) = out.error {
-            return Err(failed(format!("page {} could not be rendered: {e}", page + 1)));
-        }
-        let data = encode_png(out.width, out.height, &out.rgba)?;
-        Ok(Content::Png { data, width: out.width, height: out.height })
+        let mode = overprint::mode_arg(a, "overprint_preview")?;
+        self.render_png(id, page, (dpi / 72.0) as f32, mode)
     }
 
     fn page(&self, a: &Args) -> Result<usize> {

@@ -31,6 +31,11 @@ fn url_rules() -> Value {
     }, "required": ["host", "action"] } })
 }
 
+/// The `overprint_preview` option of the page render tools.
+fn overprint_preview() -> Value {
+    json!({ "type": "string", "enum": ["never", "always", "pdfx", "automatic"], "description": "Simulate overprint: never, always, pdfx (only PDF/X files) or automatic (pages with overprinting objects). Default: the print_overprint_preview preference (pdfx)." })
+}
+
 fn doc() -> Value {
     json!({ "type": "integer", "minimum": 1, "description": "Document id from doc_open or doc_list." })
 }
@@ -213,9 +218,9 @@ pub fn tools() -> Vec<ToolDef> {
         )),
         t("doc_set_info", "Set document metadata", "Set a document information entry such as Title, Author, Subject or Keywords. Undoable.")
             .with(schema(json!({ "doc": doc(), "key": { "type": "string" }, "value": { "type": "string" } }), &["doc", "key", "value"])),
-        t("page_render", "Render a page", "Render one page to a PNG image (default 96 dpi, at most 600).")
+        t("page_render", "Render a page", "Render one page to a PNG image (default 96 dpi, at most 600). overprint_preview (never, always, pdfx, automatic; default the print_overprint_preview preference, Only For PDF/X Files) simulates how objects painted with overprint on combine with the inks below them on press instead of knocking them out (see print_overprint_preview).")
             .ro()
-            .with(schema(json!({ "doc": doc(), "page": { "type": "integer", "minimum": 1 }, "dpi": { "type": "number", "minimum": 1, "maximum": 600 } }), &["doc", "page"])),
+            .with(schema(json!({ "doc": doc(), "page": { "type": "integer", "minimum": 1 }, "dpi": { "type": "number", "minimum": 1, "maximum": 600 }, "overprint_preview": overprint_preview() }), &["doc", "page"])),
         t("text_extract", "Extract text", "Extract the text of some or all pages, in reading order. Refused when the document does not allow copying text (open it with the permissions password).")
             .ro()
             .with(schema(json!({ "doc": doc(), "pages": pages("to extract (default: all)"), "include_glyphs": {"type":"boolean","description":"Include one-based glyph indices, Unicode mappings and view-space rectangles for text_selection endpoints. At most 200000 glyphs; default false. Copy permission applies."} }), &["doc"])),
@@ -700,6 +705,33 @@ pub fn tools() -> Vec<ToolDef> {
                 "dry_run": { "type": "boolean", "description": "Only report what would change (default false)." },
             }),
             &["doc"],
+        )),
+        t(
+            "print_overprint_preview",
+            "Overprint preview preference",
+            "Preferences ▸ Page Display ▸ Use Overprint Preview: when page_render and render_preview simulate overprint. Modes: never; always; pdfx (Only For PDF/X Files, the default: documents declaring GTS_PDFXVersion or with a GTS_PDFX output intent); automatic (pages with objects painted with overprint on; pages without them render as usual, so it shows the same as always). Set it with mode (for this session), or read it; with doc also says whether that document is PDF/X and whether the preference applies to it. Simulation: the page is separated into ink plates by PdfCraft's ink rasterizer (as print_separations_render) with and without overprint (OP/op, OPM 1 nonzero rule) and without the overprinting objects; where overprint changes a plate, the render's pixels move from the knocked-out colour to the overprinted one by the object's coverage (process inks through the renderer's own CMYK conversion, spot inks multiplied by their preview colour, RGB/Lab separated through the output intent's CMYK profile when usable). Patterns, shadings, DCT/JPX/JBIG2/CCITT images and annotations are not simulated; transparency is painted opaque.",
+        )
+        .with(schema(
+            json!({
+                "mode": { "type": "string", "enum": ["never", "always", "pdfx", "automatic"], "description": "Set the preference (default pdfx)." },
+                "doc": { "type": "integer", "minimum": 1, "description": "Also report whether this document is PDF/X and the preference applies to it." },
+            }),
+            &[],
+        )),
+        t(
+            "print_overprint_objects",
+            "Overprinting objects",
+            "The objects of a page painted with overprint on: fills, strokes, text and images (paint), with their colour (space, components, CMYK when known), overprint mode, rect (top-left of the displayed page; pdf_rect in user space), object (the form or page whose content paints them) and occurrences (identical objects merge, as in print_color_warnings: kind overprint-paint, or overprint-white for a white or zero-tint object that may disappear on press). changes_appearance says whether overprinting changes the page inside the object's rect (changed_cells: separation grid cells, at dpi, default 72, where a plate differs from knockout); visible_objects counts those. states lists the ExtGStates that turn overprint on or set OPM 1. changed_percent is the share of the page that overprint preview changes; preference and preview_applies say whether page_render simulates it. Read-only.",
+        )
+        .ro()
+        .with(schema(
+            json!({
+                "doc": doc(),
+                "page": { "type": "integer", "minimum": 1 },
+                "dpi": { "type": "number", "minimum": 9, "maximum": 300, "description": "Separation grid resolution in cells per inch (default 72)." },
+                "max_objects": { "type": "integer", "minimum": 1, "maximum": 10000, "description": "Objects listed at most (default 100)." },
+            }),
+            &["doc", "page"],
         )),
         t(
             "print_color_warnings",
@@ -1961,8 +1993,8 @@ pub fn tools() -> Vec<ToolDef> {
             .destructive().with(schema(json!({"steps":{"type":"array","items":schema(json!({"id":{"type":"string"},"params":{"type":"object"}}), &["id"])},"stop_on_error":{"type":"boolean"}}), &["steps"])),
         t("doc_inspect", "Inspect open documents", "With doc, return doc_info; otherwise return information for every open document (empty documents array when none are open).")
             .ro().with(schema(json!({"doc":doc()}), &[])),
-        t("render_preview", "Render a preview", "Render a PNG bounded by max_side (default 1024), without changing or saving the document. Page defaults to 1; doc may be omitted when exactly one document is open.")
-            .ro().with(schema(json!({"doc":doc(),"page":{"type":"integer","minimum":1},"max_side":{"type":"integer","minimum":1,"maximum":4096}}), &[])),
+        t("render_preview", "Render a preview", "Render a PNG bounded by max_side (default 1024), without changing or saving the document. Page defaults to 1; doc may be omitted when exactly one document is open. overprint_preview as for page_render.")
+            .ro().with(schema(json!({"doc":doc(),"page":{"type":"integer","minimum":1},"max_side":{"type":"integer","minimum":1,"maximum":4096},"overprint_preview":overprint_preview()}), &[])),
     ]
 }
 

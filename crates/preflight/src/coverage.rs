@@ -414,6 +414,9 @@ pub struct Raster {
     pub truncated: bool,
     /// Overprint was simulated.
     pub overprint: bool,
+    /// Painted objects with overprint on (`OP` for strokes, `op` for fills, text and images),
+    /// whether or not that changes any plate.
+    pub overprint_paints: usize,
     /// How RGB and Lab colours were converted.
     pub conversion: String,
     pub conversion_from_profile: bool,
@@ -529,6 +532,17 @@ pub fn kind_names(bits: u8) -> Vec<&'static str> {
 /// would exceed the cell budget), simulating overprint when `overprint` is set and converting
 /// RGB and Lab colours with `conversion`.
 pub fn rasterize(doc: &Document, index: usize, dpi: f64, overprint: bool, conversion: &dyn Conversion) -> Result<Raster, String> {
+    rasterize_page(doc, index, dpi, overprint, false, conversion)
+}
+
+/// [`rasterize`] with every object painted with overprint on left out (the backdrop that
+/// overprinting objects print over, for overprint preview). Overprint is simulated for the
+/// rest, which then can't overprint anything; `overprint_paints` counts what was left out.
+pub fn rasterize_without_overprinting(doc: &Document, index: usize, dpi: f64, conversion: &dyn Conversion) -> Result<Raster, String> {
+    rasterize_page(doc, index, dpi, true, true, conversion)
+}
+
+fn rasterize_page(doc: &Document, index: usize, dpi: f64, overprint: bool, omit: bool, conversion: &dyn Conversion) -> Result<Raster, String> {
     check_dpi(dpi)?;
     let pages = pdfcraft_model::pages(doc);
     let page = pages.get(index).ok_or_else(|| format!("page {} does not exist; the document has {} pages", index.saturating_add(1), pages.len()))?;
@@ -538,6 +552,7 @@ pub fn rasterize(doc: &Document, index: usize, dpi: f64, overprint: bool, conver
         return Err("the page has an empty or invalid crop box".into());
     }
     let mut walker = Walker::new(doc, conversion, overprint);
+    walker.omit_overprinting = omit;
     let resources = page.dict.get(b"Resources").map(|o| doc.resolve(o));
     let empty = Dict::new();
     let resources = resources.as_ref().and_then(|o| o.as_dict()).unwrap_or(&empty);
@@ -590,6 +605,7 @@ pub fn rasterize(doc: &Document, index: usize, dpi: f64, overprint: bool, conver
         approximated: walker.approximated,
         truncated,
         overprint,
+        overprint_paints: walker.overprint_paints,
         conversion: conversion.describe(),
         conversion_from_profile: conversion.uses_profile(),
     })
@@ -1225,6 +1241,9 @@ struct Walker<'a> {
     spots: Vec<SpotProcess>,
     spot_keys: HashMap<String, usize>,
     routes: BTreeMap<String, String>,
+    /// Objects painted with overprint on, and whether they are left out.
+    overprint_paints: usize,
+    omit_overprinting: bool,
 }
 
 fn intersect(a: [f64; 4], b: [f64; 4]) -> [f64; 4] {
@@ -1302,6 +1321,8 @@ impl<'a> Walker<'a> {
             spots: Vec::new(),
             spot_keys: HashMap::new(),
             routes: BTreeMap::new(),
+            overprint_paints: 0,
+            omit_overprinting: false,
         }
     }
 }
@@ -1310,6 +1331,12 @@ impl Walker<'_> {
     fn unmeasure(&mut self, why: &'static str) {
         let n = self.unmeasured.entry(why).or_insert(0);
         *n = n.saturating_add(1);
+    }
+
+    /// Count an object painted with overprint on; whether to leave it out.
+    fn overprinting(&mut self) -> bool {
+        self.overprint_paints = self.overprint_paints.saturating_add(1);
+        self.omit_overprinting
     }
 
     fn approximate(&mut self, why: &'static str) {
@@ -1360,6 +1387,9 @@ impl Walker<'_> {
         self.paints = self.paints.saturating_add(1);
         if self.paints > MAX_PAINTS {
             self.truncated = true;
+            return None;
+        }
+        if overprint && self.overprinting() {
             return None;
         }
         if paint.pattern {
@@ -2336,6 +2366,9 @@ impl Walker<'_> {
                 }
             });
         let overprint = gs.op_fill && self.overprint;
+        if !mask && gs.op_fill && self.overprinting() {
+            return;
+        }
         // A stencil mask paints the fill colour; other images their own pixels, all counted as
         // one painted object (converted when the space is).
         let fill_writes = if mask {
