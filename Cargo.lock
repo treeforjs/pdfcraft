@@ -3851,6 +3851,7 @@ dependencies = [
  "pdfcraft-filters",
  "pdfcraft-fonts",
  "pdfcraft-model",
+ "pdfcraft-render",
 ]
 
 [[package]]

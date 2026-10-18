@@ -227,6 +227,7 @@ impl Automation {
             "doc_combine" => self.doc_combine(&a)?,
             "doc_bates_files" => self.doc_bates_files(&a)?,
             "doc_fix_hairlines" => self.doc_fix_hairlines(&a)?,
+            "optimize_flatten_transparency" => self.optimize_flatten_transparency(&a)?,
             "doc_create_multiple" => self.doc_create_multiple(&a)?,
             "doc_split" => self.doc_split(&a)?,
             "edit_undo" => {
@@ -1744,6 +1745,54 @@ impl Automation {
             next = last.saturating_add(1);
         }
         Ok(json!({ "files": files, "next": next }))
+    }
+
+    /// Flatten transparency on the chosen pages and report what happened to each.
+    fn optimize_flatten_transparency(&mut self, a: &Args) -> Result<Value> {
+        use pdfcraft_engine::{FlattenPreset, FlattenSettings};
+        let n = self.doc(a)?.info.pages.len();
+        let pages = match a.opt_ints("pages")? {
+            Some(_) => self.pages(a, "pages")?,
+            None => (0..n).collect(),
+        };
+        let preset = match a.opt_str("preset")? {
+            None => FlattenPreset::default(),
+            Some(p) => {
+                FlattenPreset::from_id(p).ok_or_else(|| ToolError::InvalidArgs(format!("unknown preset {p:?} (expected low, medium or high)")))?
+            }
+        };
+        let mut settings = FlattenSettings::preset(preset);
+        if let Some(r) = a.opt_num("resolution")? {
+            settings.resolution = r;
+        }
+        if let Some(b) = a.opt_int("raster_vector_balance")? {
+            settings.balance = u8::try_from(b)
+                .ok()
+                .filter(|b| *b <= 100)
+                .ok_or_else(|| ToolError::InvalidArgs("raster_vector_balance must be between 0 and 100".into()))?;
+        }
+        settings.validate().map_err(ToolError::InvalidArgs)?;
+        let id = self.doc(a)?.id;
+        let mut out = self.apply(a, Edit::FlattenTransparency { pages, settings })?;
+        let report = self.session.get(id).and_then(|d| d.flatten_report.clone()).unwrap_or_default();
+        let pages: Vec<Value> = report
+            .pages
+            .iter()
+            .map(|p| {
+                json!({
+                    "page": p.page + 1,
+                    "action": p.action.id(),
+                    "regions": p.regions,
+                    "images": p.images,
+                    "raster_fraction": (p.raster_fraction * 1000.0).round() / 1000.0,
+                    "resolution": (p.resolution * 10.0).round() / 10.0,
+                })
+            })
+            .collect();
+        out["flattened"] = json!(pages.len());
+        out["results"] = json!(pages);
+        out["untouched"] = json!(report.untouched.iter().map(|p| p + 1).collect::<Vec<_>>());
+        Ok(out)
     }
 
     /// Thicken strokes thinner than `thinner_than` points as printed to `replace_with` points.

@@ -5982,6 +5982,74 @@ fn hairlines_are_fixed_through_tools() {
     }
 }
 
+/// A two-page PDF: page 1 draws half-transparent red over text, page 2 is opaque.
+fn transparent_pdf() -> Vec<u8> {
+    let page1 = "BT /F1 24 Tf 20 200 Td (Flatten me) Tj ET /A gs 1 0 0 rg 10 190 180 40 re f";
+    let page2 = "0 0 1 rg 20 20 100 100 re f";
+    let bodies = [
+        "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+        "<< /Type /Pages /Kids [3 0 R 5 0 R] /Count 2 /MediaBox [0 0 200 300] >>".to_string(),
+        "<< /Type /Page /Parent 2 0 R /Contents 4 0 R /Resources << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >> \
+         /ExtGState << /A << /ca 0.5 >> >> >> >>"
+            .to_string(),
+        format!("<< /Length {} >>\nstream\n{page1}\nendstream", page1.len()),
+        "<< /Type /Page /Parent 2 0 R /Contents 6 0 R >>".to_string(),
+        format!("<< /Length {} >>\nstream\n{page2}\nendstream", page2.len()),
+    ];
+    let mut out = b"%PDF-1.7\n".to_vec();
+    let mut offsets = Vec::new();
+    for (i, b) in bodies.iter().enumerate() {
+        offsets.push(out.len());
+        out.extend_from_slice(format!("{} 0 obj\n{b}\nendobj\n", i + 1).as_bytes());
+    }
+    let xref = out.len();
+    out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", bodies.len() + 1).as_bytes());
+    for o in offsets {
+        out.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+    }
+    out.extend_from_slice(format!("trailer << /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", bodies.len() + 1).as_bytes());
+    out
+}
+
+/// Flatten transparency: the transparent page is patched, the opaque one left alone, the saved
+/// file has no transparency (PDF/X-1a's rule), undo brings it back, and bad arguments are refused.
+#[test]
+fn flattening_transparency_through_tools() {
+    let dir = workdir("flatten-transparency");
+    std::fs::write(dir.join("t.pdf"), transparent_pdf()).unwrap();
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "t.pdf" }))["doc"].as_u64().unwrap();
+    for bad in [
+        json!({ "doc": doc, "pages": [9] }),
+        json!({ "doc": doc, "pages": [] }),
+        json!({ "doc": doc, "preset": "ultra" }),
+        json!({ "doc": doc, "resolution": 5 }),
+        json!({ "doc": doc, "resolution": 100000 }),
+        json!({ "doc": doc, "raster_vector_balance": 101 }),
+        json!({ "doc": doc, "raster_vector_balance": -1 }),
+        json!({ "doc": doc, "raster_vector_balance": "half" }),
+        json!({ "doc": doc, "clip_complex_regions": true }),
+    ] {
+        assert!(matches!(a.call("optimize_flatten_transparency", &bad), Err(ToolError::InvalidArgs(_))), "{bad}");
+    }
+    assert_eq!(ok(&mut a, "doc_inspect", json!({ "doc": doc }))["undo"], Value::Null);
+    let r = ok(&mut a, "optimize_flatten_transparency", json!({ "doc": doc, "pages": [2] }));
+    assert_eq!((r["flattened"].as_u64(), &r["untouched"]), (Some(0), &json!([2])), "{r}");
+    let r = ok(&mut a, "optimize_flatten_transparency", json!({ "doc": doc, "preset": "low", "raster_vector_balance": 100 }));
+    assert_eq!(r["flattened"].as_u64(), Some(1), "{r}");
+    assert_eq!(r["results"][0]["page"].as_u64(), Some(1));
+    assert_eq!(r["results"][0]["action"], "patched");
+    assert_eq!(r["results"][0]["resolution"].as_f64(), Some(150.0));
+    assert_eq!(r["untouched"], json!([2]));
+    ok(&mut a, "doc_save", json!({ "doc": doc, "path": "flat.pdf" }));
+    let flat = pdfcraft_cos::Document::open(std::sync::Arc::new(std::fs::read(dir.join("flat.pdf")).unwrap())).unwrap();
+    let x1a = pdfcraft_engine::pdfa::XOptions { part: Some(pdfcraft_engine::pdfa::XPart::X1a2001), max_findings: 0 };
+    assert_eq!(pdfcraft_engine::pdfa::verify_pdfx(&flat, &x1a).count("transparency"), 0);
+    ok(&mut a, "edit_undo", json!({ "doc": doc }));
+    let r = ok(&mut a, "optimize_flatten_transparency", json!({ "doc": doc, "raster_vector_balance": 0, "resolution": 72 }));
+    assert_eq!(r["results"][0]["action"], "rasterized", "{r}");
+}
+
 /// A signature field's lock makes the fields it names read-only once signed, and later changes
 /// to fields it leaves open keep the signature valid.
 #[test]

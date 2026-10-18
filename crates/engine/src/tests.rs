@@ -3395,3 +3395,105 @@ fn convert_colors_is_one_undo_step_and_a_noop_records_none() {
     assert!(s.convert_colors(id, vec![0], bad).is_err());
     assert!(s.convert_colors(id, vec![5], ColorConversion::default()).is_err());
 }
+
+/// Two pages: page 1 has half-transparent red over text and a Multiply square, page 2 is opaque.
+pub(crate) fn transparency_fixture() -> Vec<u8> {
+    let page1 = "BT /F1 24 Tf 20 200 Td (Flatten me) Tj ET /A gs 1 0 0 rg 10 190 180 40 re f /M gs 0 1 0 rg 120 20 60 60 re f";
+    let page2 = "0 0 1 rg 20 20 100 100 re f";
+    let bodies = [
+        "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+        "<< /Type /Pages /Kids [3 0 R 5 0 R] /Count 2 /MediaBox [0 0 200 300] >>".to_string(),
+        "<< /Type /Page /Parent 2 0 R /Contents 4 0 R /Group << /S /Transparency >> /Resources << /Font << /F1 7 0 R >> \
+         /ExtGState << /A << /ca 0.5 >> /M << /BM /Multiply >> >> >> >>"
+            .to_string(),
+        format!("<< /Length {} >>\nstream\n{page1}\nendstream", page1.len()),
+        "<< /Type /Page /Parent 2 0 R /Contents 6 0 R >>".to_string(),
+        format!("<< /Length {} >>\nstream\n{page2}\nendstream", page2.len()),
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".to_string(),
+    ];
+    let mut out = b"%PDF-1.7\n".to_vec();
+    let mut offsets = Vec::new();
+    for (i, b) in bodies.iter().enumerate() {
+        offsets.push(out.len());
+        out.extend_from_slice(format!("{} 0 obj\n{b}\nendobj\n", i + 1).as_bytes());
+    }
+    let xref = out.len();
+    out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", bodies.len() + 1).as_bytes());
+    for o in offsets {
+        out.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+    }
+    out.extend_from_slice(format!("trailer << /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", bodies.len() + 1).as_bytes());
+    out
+}
+
+fn x1a_transparency(bytes: &Arc<Vec<u8>>) -> usize {
+    let doc = pdfcraft_cos::Document::open(bytes.clone()).unwrap();
+    let options = pdfcraft_preflight::XOptions { part: Some(pdfcraft_preflight::XPart::X1a2001), max_findings: 0 };
+    pdfcraft_preflight::verify_pdfx(&doc, &options).count("transparency")
+}
+
+fn page_pixels(bytes: &Arc<Vec<u8>>, page: usize) -> Vec<u8> {
+    let mut r = pdfcraft_render::PageRenderer::new(bytes.clone(), pdfcraft_render::RenderConfig::default());
+    let out = r.render(pdfcraft_render::RenderRequest { page, scale: 1.0, ..Default::default() });
+    assert!(out.error.is_none(), "{:?}", out.error);
+    out.rgba.to_vec()
+}
+
+#[test]
+fn flattening_transparency_is_one_undo_step_and_survives_saving() {
+    let mut s = Session::new().with_clock(|| 1_700_000_000);
+    let original = Arc::new(transparency_fixture());
+    assert!(x1a_transparency(&original) > 0);
+    let id = s.open("t.pdf", None, original.clone(), None).unwrap();
+    let edit = |pages: Vec<usize>| Edit::FlattenTransparency { pages, settings: FlattenSettings::default() };
+    // Only the opaque page: nothing to do, no undo step.
+    s.apply(id, edit(vec![1])).unwrap();
+    let d = s.get(id).unwrap();
+    assert!(d.can_undo().is_none() && !d.dirty);
+    assert_eq!(d.flatten_report.as_ref().map(|r| r.untouched.clone()), Some(vec![1]));
+
+    s.apply(id, edit(Vec::new())).unwrap();
+    let d = s.get(id).unwrap();
+    assert_eq!(d.can_undo(), Some("Flatten transparency"));
+    let report = d.flatten_report.clone().unwrap();
+    assert_eq!(report.pages.len(), 1);
+    assert_eq!(report.pages[0].action, PageAction::Patched, "{report:?}");
+    assert_eq!(report.untouched, vec![1]);
+
+    let saved = s.save_bytes(id).unwrap();
+    assert_eq!(x1a_transparency(&saved), 0, "PDF/X-1a's transparency rule passes");
+    let reopened = pdfcraft_cos::Document::open(saved.clone()).unwrap();
+    assert!(pdfcraft_preflight::transparent_pages(&reopened, &[]).is_empty());
+    // The look is kept (within the patch edges' resampling), and the opaque page is identical.
+    for page in 0..2 {
+        let (a, b) = (page_pixels(&original, page), page_pixels(&saved, page));
+        let off = a
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(b.as_chunks::<4>().0.iter())
+            .filter(|(x, y)| x.iter().zip(y.iter()).any(|(p, q)| p.abs_diff(*q) > 40))
+            .count();
+        assert!(off * 100 < a.len() / 4, "page {}: {off} pixels differ", page + 1);
+        if page == 1 {
+            assert_eq!(a, b);
+        }
+    }
+    // The text stays text.
+    let id2 = s.open("saved.pdf", None, saved, None).unwrap();
+    assert!(s.get(id2).unwrap().text_lines(0).iter().any(|l| l.text.contains("Flatten me")));
+
+    s.undo(id).unwrap();
+    assert!(x1a_transparency(&s.get(id).unwrap().bytes) > 0);
+    s.redo(id).unwrap();
+    assert_eq!(x1a_transparency(&s.get(id).unwrap().bytes), 0);
+    // Bad settings and pages are refused and change nothing.
+    for bad in [
+        Edit::FlattenTransparency { pages: vec![5], settings: FlattenSettings::default() },
+        Edit::FlattenTransparency { pages: Vec::new(), settings: FlattenSettings { resolution: 0.0, balance: 50 } },
+        Edit::FlattenTransparency { pages: Vec::new(), settings: FlattenSettings { resolution: 300.0, balance: 200 } },
+    ] {
+        assert!(s.apply(id, bad).is_err());
+    }
+    assert_eq!(s.get(id).unwrap().can_undo(), Some("Flatten transparency"));
+}

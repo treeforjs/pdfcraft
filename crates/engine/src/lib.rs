@@ -132,6 +132,7 @@ pub use pdfcraft_model::dests::{DestError, DestSource, Fit as DestFit, NamedDest
 pub use pdfcraft_optimize as optimize;
 pub use pdfcraft_organize::{BookmarkAction, OutlineEntry};
 pub use pdfcraft_preflight as pdfa;
+pub use pdfcraft_preflight::{FlattenPreset, FlattenReport, FlattenSettings, PageAction, PageFlatten};
 pub use pdfcraft_print as print;
 pub use pdfcraft_redact::codes as redaction_codes;
 pub use pdfcraft_redact::codes::{CODE_SETS as REDACTION_CODE_SETS, CodeSet as RedactionCodeSet};
@@ -343,6 +344,8 @@ pub struct Document {
     /// XFA forms: what was approximated, rewritten or could not be written to the XFA data
     /// (also in `info.warnings`, kept there when the document is re-read).
     pub xfa_warnings: Vec<String>,
+    /// What the last [`Edit::FlattenTransparency`] did, page by page.
+    pub flatten_report: Option<FlattenReport>,
 }
 
 impl Document {
@@ -1554,6 +1557,13 @@ pub enum Edit {
         pages: Vec<usize>,
         settings: Hairlines,
     },
+    /// Print Production ▸ Flatten transparency: give `pages` (every page when empty) that use
+    /// transparency an opaque equivalent (`pdfcraft_preflight::flatten`). A no-op (no undo step)
+    /// when none of them uses transparency; the report lands in `Document::flatten_report`.
+    FlattenTransparency {
+        pages: Vec<usize>,
+        settings: FlattenSettings,
+    },
     /// Print Production ▸ Add Printer Marks: enlarge the media box around the trim and draw trim,
     /// bleed and registration marks, colour bars and page information outside it (replacing
     /// marks added before). The file name shown is in `settings`.
@@ -1784,6 +1794,7 @@ impl Edit {
                 ImageEdit::Delete => "Delete image".into(),
             },
             Edit::FixHairlines { .. } => "Fix hairlines".into(),
+            Edit::FlattenTransparency { .. } => "Flatten transparency".into(),
             Edit::AddPrinterMarks { .. } => "Add printer marks".into(),
             Edit::ConvertColors { .. } => "Convert colors".into(),
             Edit::AddAssociatedFile { .. } => "Add associated file".into(),
@@ -1944,6 +1955,7 @@ fn check_permission(edit: &Edit, p: &pdfcraft_cos::Permissions) -> Result<(), Ed
         }
         Edit::SetInfo { .. }
         | Edit::FixHairlines { .. }
+        | Edit::FlattenTransparency { .. }
         | Edit::AddPrinterMarks { .. }
         | Edit::ConvertColors { .. }
         | Edit::AddAssociatedFile { .. }
@@ -2028,6 +2040,8 @@ struct EditCtx {
     today: (i64, u32, u32),
     seed: u64,
     count: u64,
+    /// What [`Edit::FlattenTransparency`] did.
+    flatten: Option<FlattenReport>,
 }
 
 impl EditCtx {
@@ -2052,6 +2066,7 @@ impl EditCtx {
             today: (1970, 1, 1),
             seed,
             count: 0,
+            flatten: None,
         }
     }
 
@@ -2330,6 +2345,9 @@ fn run_edit(doc: &mut pdfcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -> 
         }
         Edit::FixHairlines { pages, settings } => {
             pdfcraft_edit::fix_hairlines(doc, pages, settings)?;
+        }
+        Edit::FlattenTransparency { pages, settings } => {
+            cx.flatten = Some(pdfcraft_preflight::flatten_transparency(doc, pages, settings).map_err(EditError::Invalid)?);
         }
         Edit::AddPrinterMarks { pages, settings } => {
             pdfcraft_edit::add_printer_marks(doc, pages, settings, cx.today)?;
@@ -3156,6 +3174,7 @@ impl Session {
             xfa,
             xfa_template: None,
             xfa_warnings: Vec::new(),
+            flatten_report: None,
         });
         Ok(id)
     }
@@ -3197,6 +3216,19 @@ impl Session {
             && hairline_count(&editor.cos, pages, settings)? == 0
         {
             return Ok(());
+        }
+        if let Edit::FlattenTransparency { pages, settings } = &edit {
+            settings.validate().map_err(EditError::Invalid)?;
+            let n = pdfcraft_model::pages(&editor.cos).len();
+            if let Some(p) = pages.iter().find(|p| **p >= n) {
+                return Err(EditError::Invalid(format!("page {} is out of range: the document has {n} pages", p.saturating_add(1))));
+            }
+            let found = guard(|| pdfcraft_preflight::transparent_pages(&editor.cos, pages)).map_err(EditError::Invalid)?;
+            if found.is_empty() {
+                let untouched = if pages.is_empty() { (0..n).collect() } else { pages.clone() };
+                doc.flatten_report = Some(FlattenReport { pages: Vec::new(), untouched });
+                return Ok(());
+            }
         }
         if let Edit::EditTextBlock { page, block, text, style } = &edit {
             let unchanged = guard(|| pdfcraft_edit::text::is_noop(&editor.cos, *page, *block, text, style)).map_err(EditError::Invalid)??;
@@ -3292,6 +3324,9 @@ impl Session {
             doc.js_output.append(js.output);
         }
         doc.js_output.append(cx.xfa_out);
+        if cx.flatten.is_some() {
+            doc.flatten_report = cx.flatten;
+        }
         if cx.xfa_ran_away {
             doc.xfa_template = None;
             doc.js_output.errors.push(XFA_SCRIPTS_OFF.into());

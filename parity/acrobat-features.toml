@@ -7216,11 +7216,11 @@ title = "Flatten transparency"
 area = "K"
 tier = "P1"
 milestone = "M11"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["optimize_flatten_transparency"]
+evidence = ["crates/preflight/src/flatten_tests.rs::alpha_over_text_is_patched_and_keeps_its_look", "crates/preflight/src/flatten_tests.rs::soft_masked_images_and_blend_modes_are_flattened", "crates/preflight/src/flatten_tests.rs::a_shared_form_is_copied_and_page_subsets_are_honoured", "crates/preflight/src/flatten_tests.rs::balance_zero_rasterizes_the_whole_page", "crates/preflight/src/flatten_tests.rs::a_large_transparent_area_rasterizes_the_page_unless_balance_keeps_vectors", "crates/preflight/src/flatten_tests.rs::group_only_and_invisible_transparency_need_no_image", "crates/preflight/src/flatten_tests.rs::pages_without_transparency_are_left_alone", "crates/preflight/src/flatten_tests.rs::unbalanced_content_is_closed_before_the_images", "crates/preflight/src/flatten_tests.rs::settings_and_pages_are_checked", "crates/preflight/src/flatten_tests.rs::hostile_documents_do_not_panic", "crates/engine/src/tests.rs::flattening_transparency_is_one_undo_step_and_survives_saving", "crates/automation/tests/automation.rs::flattening_transparency_through_tools"]
+notes = "Headless (optimize_flatten_transparency; engine Edit::FlattenTransparency, one undo step, none when nothing uses transparency). Transparency is found with the PDF/X verifier's criteria (soft masks, CA/ca < 1, non-Normal blend modes, transparency groups, image soft masks) in the resources the content uses, through forms, patterns and Type 3 fonts. Resources are replaced by opaque copies (shared objects copied, so other pages keep theirs), the page /Group is removed, and only the rectangles where the rendered look changed are rasterized from the original at the preset's resolution (low 150, medium 300, high 600 ppi, or 36–1200) and drawn as opaque RGB images over the kept vector content; everything outside them stays vector and text stays searchable. raster_vector_balance 0 or regions above balance % of the page rasterize the whole page (64 MP budget). Saved files pass the PDF/X-1a transparency rule; renders before/after match within resampling at patch edges. Missing: annotation appearances are not flattened, regions are rectangles (no clipping to object outlines, no Clip Complex Regions, no text/strokes to outlines), images are DeviceRGB (no CMYK for PDF/X-1a), optional content is rasterized as shown by default, no comparison with Acrobat's flattener output, no Flattener Preview or Optimizer Transparency panel (UI redesign)"
 
 [[feature]]
 id = "optimize.discard-javascript"
