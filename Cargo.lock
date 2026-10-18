@@ -3827,6 +3827,7 @@ name = "pdfcraft-organize"
 version = "0.5.0"
 dependencies = [
  "hayro-syntax",
+ "md-5",
  "pdfcraft-content",
  "pdfcraft-cos",
  "pdfcraft-model",

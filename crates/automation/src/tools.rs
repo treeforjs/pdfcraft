@@ -106,6 +106,18 @@ fn comment_ref(mut extra: Value) -> Value {
     extra
 }
 
+/// The owner of PDF 2.0 associated files.
+fn af_target() -> Value {
+    json!({
+        "description": "\"document\" (default), {page: n}, {page: n, annotation: i} (1-based position in the page's annotations, as comment_list's index), or {object: n} (a structure element, XObject or annotation by object number).",
+        "oneOf": [
+            { "type": "string", "enum": ["document"] },
+            { "type": "object", "properties": { "page": { "type": "integer", "minimum": 1 }, "annotation": { "type": "integer", "minimum": 1 } }, "required": ["page"], "additionalProperties": false },
+            { "type": "object", "properties": { "object": { "type": "integer", "minimum": 1 } }, "required": ["object"], "additionalProperties": false },
+        ],
+    })
+}
+
 fn schema(props: Value, required: &[&str]) -> Value {
     json!({ "type": "object", "properties": props, "required": required, "additionalProperties": false })
 }
@@ -587,6 +599,48 @@ pub fn tools() -> Vec<ToolDef> {
                 "file_name": { "type": "string", "maxLength": 256, "description": "Name the page information shows (default: the document's file name)." },
             }),
             &["doc"],
+        )),
+        t(
+            "associated_files_list",
+            "List associated files",
+            "PDF 2.0 associated files (/AF, ISO 32000-2 §14.13): file specifications with a relationship (Source, Data, Alternative, Supplement, EncryptedPayload, FormData, Schema, Unspecified) that belong to the document, a page, an annotation, a structure element or an XObject. Without target: the document's files, then every page's and annotation's that has any (structure elements and XObjects only by target object). Returns {count, owners: [{target, files: [{index (1-based), name, description, relationship, mime, size, embedded, creation_date, mod_date, checksum (MD5 hex), object, attachment (also in the EmbeddedFiles name tree), problem}], issues}]}.",
+        )
+        .ro()
+        .with(schema(json!({ "doc": doc(), "target": af_target() }), &["doc"])),
+        t(
+            "associated_file_add",
+            "Add an associated file",
+            "Embed a file (path, or data_base64 with name) and associate it with target (default the document): an EmbeddedFile stream with its MIME type (mime, else guessed from the name's extension) and Size, CheckSum, CreationDate and ModDate, in a file specification with /F, /UF, /Desc (description) and /AFRelationship (relationship, default Unspecified), appended to the target's /AF. A document-level file is also added to the EmbeddedFiles name tree, so it is an attachment too (as PDF/A-3 expects); a name already taken there gets \" (2)\". At most 64 MiB. Returns the document summary and added {target, file}. Undoable.",
+        )
+        .with(schema(
+            json!({
+                "doc": doc(),
+                "target": af_target(),
+                "path": { "type": "string", "description": "The file to embed." },
+                "data_base64": { "type": "string", "description": "The file's bytes in base64, instead of path (needs name)." },
+                "name": { "type": "string", "maxLength": 255, "description": "File name (default: path's file name)." },
+                "mime": { "type": "string", "description": "MIME type such as text/csv (default: guessed from the name; none when unknown)." },
+                "relationship": { "type": "string", "enum": ["Source", "Data", "Alternative", "Supplement", "EncryptedPayload", "FormData", "Schema", "Unspecified"], "description": "How the file relates to the target (case-insensitive; default Unspecified)." },
+                "description": { "type": "string", "maxLength": 4096, "description": "/Desc." },
+            }),
+            &["doc"],
+        )),
+        t(
+            "associated_file_remove",
+            "Remove an associated file",
+            "Take one associated file (by name, or 1-based index as associated_files_list reports) out of target's /AF (default the document); a document-level file also leaves the EmbeddedFiles name tree. A name that several files share is refused (pass index). Entries that aren't file specifications can be removed by index. Returns the document summary and removed {target, file}. Undoable.",
+        )
+        .destructive()
+        .with(schema(json!({ "doc": doc(), "target": af_target(), "name": { "type": "string" }, "index": { "type": "integer", "minimum": 1 } }), &["doc"])),
+        t(
+            "associated_file_extract",
+            "Save an associated file",
+            "Write one associated file's embedded data (by name or 1-based index, in target, default the document) to path. Returns {path, bytes, file}.",
+        )
+        .destructive()
+        .with(schema(
+            json!({ "doc": doc(), "target": af_target(), "name": { "type": "string" }, "index": { "type": "integer", "minimum": 1 }, "path": { "type": "string", "description": "Where to write the file." } }),
+            &["doc", "path"],
         )),
         t("printers", "List printers", "The printers the system's print spooler knows (CUPS on macOS and Linux), with the default marked.").ro().with(schema(json!({}), &[])),
         t("printer_options", "List printer options", "A printer driver's own job options (CUPS: from its PPD), such as the paper tray, paper type or finishing: key, label, group, default and choices. Pass chosen values to doc_print as options. Empty on Windows, where the driver's preferences window holds them.")

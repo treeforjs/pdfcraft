@@ -41,7 +41,9 @@ pub use pdfcraft_organize::{Dimension, Direction, Motion, PageTransition, Transi
 
 /// One file produced by a split: (1-based first page, last page, PDF bytes).
 pub use pdfcraft_organize::LabelStyle;
+pub use pdfcraft_organize::associated as associated_files;
 pub use pdfcraft_organize::view::{InitialView, Layout as InitialLayout, Magnification, Navigation};
+pub use pdfcraft_organize::{AfSelector, AfTarget, AssociatedFile, AssociatedFiles, NewAssociatedFile, Relationship as AfRelationship};
 
 pub use pdfcraft_cos::Algorithm;
 pub use pdfcraft_create::{CONVERTIBLE, ImageResolution, SourceKind, source_kind};
@@ -432,6 +434,24 @@ impl Document {
     /// Add alternate text: the figures, in document order.
     pub fn figures(&self) -> Vec<a11y::Figure> {
         self.editor.as_ref().map(|e| a11y::figures(&e.cos)).unwrap_or_default()
+    }
+
+    /// PDF 2.0 associated files of one owner (`/AF`), see [`associated_files`].
+    pub fn associated_files(&self, target: &AfTarget) -> Result<AssociatedFiles, EditError> {
+        let editor = self.editor.as_ref().ok_or_else(|| EditError::ReadOnly(self.read_only_reason.clone().unwrap_or_default()))?;
+        Ok(pdfcraft_organize::associated_files(&editor.cos, target)?)
+    }
+
+    /// The associated files of the document, then of every page and annotation that has any.
+    pub fn all_associated_files(&self) -> Result<Vec<(AfTarget, AssociatedFiles)>, EditError> {
+        let editor = self.editor.as_ref().ok_or_else(|| EditError::ReadOnly(self.read_only_reason.clone().unwrap_or_default()))?;
+        Ok(pdfcraft_organize::all_associated_files(&editor.cos)?)
+    }
+
+    /// One associated file's information and decoded data (at most `limit` bytes).
+    pub fn associated_file_data(&self, target: &AfTarget, select: &AfSelector, limit: usize) -> Result<(AssociatedFile, Vec<u8>), EditError> {
+        let editor = self.editor.as_ref().ok_or_else(|| EditError::ReadOnly(self.read_only_reason.clone().unwrap_or_default()))?;
+        Ok(pdfcraft_organize::associated_file_data(&editor.cos, target, select, limit)?)
     }
 
     /// Tags panel: the structure tree.
@@ -1504,6 +1524,18 @@ pub enum Edit {
         pages: Vec<usize>,
         settings: PrinterMarks,
     },
+    /// PDF 2.0 associated files (ISO 32000-2 §14.13): embed `file` and list it in `target`'s
+    /// `/AF` (a document-level file is also an attachment in `/Names /EmbeddedFiles`).
+    AddAssociatedFile {
+        target: AfTarget,
+        file: NewAssociatedFile,
+    },
+    /// Take one associated file out of `target`'s `/AF` (and, for the document, out of
+    /// `/Names /EmbeddedFiles`).
+    RemoveAssociatedFile {
+        target: AfTarget,
+        select: AfSelector,
+    },
     /// Add a header and footer (with `replace`, existing ones on those pages go first).
     AddHeaderFooter {
         pages: Vec<usize>,
@@ -1708,6 +1740,8 @@ impl Edit {
             },
             Edit::FixHairlines { .. } => "Fix hairlines".into(),
             Edit::AddPrinterMarks { .. } => "Add printer marks".into(),
+            Edit::AddAssociatedFile { .. } => "Add associated file".into(),
+            Edit::RemoveAssociatedFile { .. } => "Remove associated file".into(),
             Edit::AddHeaderFooter { replace: false, .. } => "Add header & footer".into(),
             Edit::AddHeaderFooter { .. } => "Update header & footer".into(),
             Edit::AddWatermark { replace: false, .. } => "Add watermark".into(),
@@ -1865,6 +1899,8 @@ fn check_permission(edit: &Edit, p: &pdfcraft_cos::Permissions) -> Result<(), Ed
         Edit::SetInfo { .. }
         | Edit::FixHairlines { .. }
         | Edit::AddPrinterMarks { .. }
+        | Edit::AddAssociatedFile { .. }
+        | Edit::RemoveAssociatedFile { .. }
         | Edit::AddHeaderFooter { .. }
         | Edit::AddWatermark { .. }
         | Edit::AddBackground { .. }
@@ -2246,6 +2282,12 @@ fn run_edit(doc: &mut pdfcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -> 
         }
         Edit::AddPrinterMarks { pages, settings } => {
             pdfcraft_edit::add_printer_marks(doc, pages, settings, cx.today)?;
+        }
+        Edit::AddAssociatedFile { target, file } => {
+            pdfcraft_organize::add_associated_file(doc, target, file, cx.date.as_deref())?;
+        }
+        Edit::RemoveAssociatedFile { target, select } => {
+            pdfcraft_organize::remove_associated_file(doc, target, select)?;
         }
         Edit::AddHeaderFooter { pages, settings, replace } => {
             let date = cx.today;

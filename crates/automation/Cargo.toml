@@ -15,13 +15,14 @@ pdfcraft-organize = { workspace = true }
 pdfcraft-platform = { workspace = true }
 serde_json = { workspace = true }
 png = "0.18"
-base64 = { version = "0.22", optional = true }
+# MCP image content, and associated_file_add's data_base64.
+base64 = "0.22"
 
 
 [features]
 default = ["mcp"]
 # The MCP server module. Opt-in at run time either way; disable to leave it out of the build.
-mcp = ["dep:base64"]
+mcp = []
 
 [dev-dependencies]
 flate2 = { workspace = true }

@@ -12,6 +12,7 @@
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
 mod a11y;
+mod associated;
 mod certsec;
 mod comments;
 mod compare;
@@ -703,6 +704,10 @@ impl Automation {
             "print_total_area_coverage" => self.total_area_coverage(&a)?,
             "print_color_warnings" => self.colour_warnings(&a)?,
             "print_add_printer_marks" => self.add_printer_marks(&a)?,
+            "associated_files_list" => self.associated_files_list(&a)?,
+            "associated_file_add" => self.associated_file_add(&a)?,
+            "associated_file_remove" => self.associated_file_remove(&a)?,
+            "associated_file_extract" => self.associated_file_extract(&a)?,
             "printer_options" => self.printer_options(&a)?,
             "link_list" => self.link_list(&a)?,
             "link_add" => self.link_add(&a)?,

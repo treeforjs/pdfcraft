@@ -415,11 +415,11 @@ title = "PDF 2.0 associated files (/AF)"
 area = "A"
 tier = "P1"
 milestone = "M2"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["associated_files_list", "associated_file_add", "associated_file_remove", "associated_file_extract"]
+evidence = ["crates/organize/src/associated/tests.rs::a_document_file_is_embedded_associated_and_an_attachment", "crates/organize/src/associated/tests.rs::page_annotation_structure_and_xobject_files_stay_out_of_the_name_tree", "crates/organize/src/associated/tests.rs::removing_drops_the_entry_and_its_attachment", "crates/organize/src/associated/tests.rs::bad_selectors_targets_and_files_are_refused", "crates/organize/src/associated/tests.rs::relationship_names_parse_case_insensitively_and_reject_others", "crates/organize/src/associated/tests.rs::hostile_af_arrays_are_reported_not_fatal", "crates/organize/src/associated/tests.rs::huge_af_arrays_are_capped", "crates/organize/src/associated/tests.rs::a_cyclic_embedded_files_tree_is_never_rewritten", "crates/engine/src/tests.rs::associated_files_are_one_undo_step_each_and_survive_save", "crates/automation/tests/automation.rs::associated_files_through_tools"]
+notes = "Headless only (no panel yet; UI redesign in progress). List, add, remove and extract ISO 32000-2 §14.13 associated files on the document (catalog /AF), a page, an annotation (page + /Annots position; a direct annotation dictionary is made indirect), or by object number a structure element, form/image XObject, annotation or DPart. Adding embeds an /EmbeddedFile stream (Flate, /Subtype MIME type given or guessed from the extension, /Params Size, MD5 CheckSum, CreationDate, ModDate) in a /Filespec with /F, /UF, /EF (F and UF), /Desc and /AFRelationship (Source, Data, Alternative, Supplement, EncryptedPayload, FormData, Schema, Unspecified; default Unspecified), max 64 MiB. Document-level files are also registered in /Names /EmbeddedFiles (as PDF/A-3 expects, so they appear as attachments; duplicate names get \" (2)\"), and removing takes them out again; the tree is rewritten flat and sorted, and a cyclic, too deep or malformed tree refuses the edit instead of losing entries. Other owners' files are only in their /AF. Hostile /AF (not an array, self-references, missing objects, strings, >4096 entries) is reported as issues/problems, never fatal. Each add/remove is one undo step (Edit::AddAssociatedFile / RemoveAssociatedFile). Missing: an Attachments-panel UI showing relationships, editing an existing entry's relationship/description, scanning structure elements and XObjects in the no-target listing, second-class relationship names on add, freeing the removed filespec on incremental save (a full save drops it), and the document /Version is not raised to 2.0."
 
 [[feature]]
 id = "core.pdf20-dpart"

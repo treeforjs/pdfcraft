@@ -13,6 +13,8 @@ pdfcraft-content = { workspace = true }
 pdfcraft-cos = { workspace = true }
 pdfcraft-model = { workspace = true }
 thiserror = { workspace = true }
+# Already in the graph through pdfcraft-crypt: /Params /CheckSum of associated files.
+md-5 = "0.11"
 
 [dev-dependencies]
 hayro-syntax = { workspace = true }
