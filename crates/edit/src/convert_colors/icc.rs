@@ -211,6 +211,30 @@ impl Profile {
         self.transform.is_some()
     }
 
+    /// CMYK (0–1) for an sRGB colour, through this CMYK profile's tables (`None` for another
+    /// family or a profile without usable tables).
+    pub fn cmyk_from_srgb(&self, rgb: [f64; 3]) -> Option<[f64; 4]> {
+        self.cmyk_from_xyz(srgb_to_xyz(rgb.map(|v| if v.is_finite() { v.clamp(0.0, 1.0) } else { 0.0 })))
+    }
+
+    /// CMYK (0–1) for a D50 CIE L*a*b* colour, through this CMYK profile's tables.
+    pub fn cmyk_from_lab(&self, lab: [f64; 3]) -> Option<[f64; 4]> {
+        if !lab.iter().all(|v| v.is_finite()) {
+            return None;
+        }
+        self.cmyk_from_xyz(lab_to_xyz(lab))
+    }
+
+    fn cmyk_from_xyz(&self, xyz: [f64; 3]) -> Option<[f64; 4]> {
+        if self.family != Family::Cmyk {
+            return None;
+        }
+        match self.device_from_xyz(xyz)?.as_slice() {
+            [c, m, y, k] => Some([*c, *m, *y, *k].map(|v| if v.is_finite() { v.clamp(0.0, 1.0) } else { 0.0 })),
+            _ => None,
+        }
+    }
+
     /// Device values (0–1) for a PCS colour given as D50-relative XYZ.
     pub(super) fn device_from_xyz(&self, xyz: [f64; 3]) -> Option<Vec<f64>> {
         match self.transform.as_ref()? {

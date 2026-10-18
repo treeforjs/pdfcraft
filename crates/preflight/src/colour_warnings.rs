@@ -389,7 +389,7 @@ impl Out {
 
 /// A tint transform into the alternate space.
 #[derive(Clone, Debug)]
-enum Tint {
+pub(crate) enum Tint {
     /// Type 2: `C0 + t^N (C1 − C0)`.
     Exponential { domain: [f64; 2], c0: Vec<f64>, c1: Vec<f64>, n: f64 },
     /// Type 0 with one input, linearly interpolated.
@@ -397,7 +397,7 @@ enum Tint {
 }
 
 impl Tint {
-    fn eval(&self, t: f64) -> Vec<f64> {
+    pub(crate) fn eval(&self, t: f64) -> Vec<f64> {
         match self {
             Tint::Exponential { domain, c0, c1, n } => {
                 let t = if t.is_finite() { t.clamp(domain[0].min(domain[1]), domain[0].max(domain[1])) } else { domain[0] };
@@ -418,6 +418,75 @@ impl Tint {
             }
         }
     }
+}
+
+/// A one-input tint transform (Type 2, or Type 0 with one input) with `outputs` outputs.
+pub(crate) fn parse_tint(doc: &Document, function: &Object, outputs: usize) -> Option<Tint> {
+    let f = doc.resolve(function);
+    let d = f.as_dict()?;
+    let nums = |key: &[u8]| -> Option<Vec<f64>> {
+        let a = doc.resolve(d.get(key)?);
+        let v: Vec<f64> = a.as_array()?.iter().take(64).filter_map(|x| doc.resolve(x).as_f64()).filter(|x| x.is_finite()).collect();
+        Some(v)
+    };
+    let domain = match nums(b"Domain").as_deref() {
+        Some([a, b, ..]) => [*a, *b],
+        _ => [0.0, 1.0],
+    };
+    let tint = match d.get(b"FunctionType").and_then(|t| doc.resolve(t).as_int()) {
+        Some(2) => {
+            let c0 = nums(b"C0").unwrap_or_else(|| vec![0.0]);
+            let c1 = nums(b"C1").unwrap_or_else(|| vec![1.0]);
+            let n = d.get(b"N").and_then(|n| doc.resolve(n).as_f64()).filter(|n| n.is_finite())?;
+            if c0.len() != outputs || c1.len() != outputs {
+                return None;
+            }
+            Tint::Exponential { domain, c0, c1, n }
+        }
+        Some(0) => {
+            let Object::Stream(s) = f.as_ref() else { return None };
+            let size = match nums(b"Size").as_deref() {
+                Some([n]) if *n >= 1.0 && *n <= MAX_SAMPLES as f64 => *n as usize,
+                _ => return None,
+            };
+            let bps = d.get(b"BitsPerSample").and_then(|b| doc.resolve(b).as_int())?;
+            let bytes = match bps {
+                8 => 1usize,
+                16 => 2,
+                _ => return None,
+            };
+            let range = nums(b"Range")?;
+            if range.len() != outputs.saturating_mul(2) {
+                return None;
+            }
+            let decode = nums(b"Decode").filter(|v| v.len() == range.len()).unwrap_or_else(|| range.clone());
+            let encode = match nums(b"Encode").as_deref() {
+                Some([a, b]) => [*a, *b],
+                _ => [0.0, size.saturating_sub(1) as f64],
+            };
+            let need = size.checked_mul(outputs)?.checked_mul(bytes)?;
+            let data = s.decoded_within(need.saturating_add(16)).ok()?;
+            let max = if bytes == 1 { 255.0 } else { 65535.0 };
+            let mut samples = Vec::with_capacity(size);
+            for i in 0..size {
+                let mut row = Vec::with_capacity(outputs);
+                for j in 0..outputs {
+                    let at = i.checked_mul(outputs)?.checked_add(j)?.checked_mul(bytes)?;
+                    let raw = if bytes == 1 {
+                        f64::from(*data.get(at)?)
+                    } else {
+                        f64::from(u16::from_be_bytes([*data.get(at)?, *data.get(at.checked_add(1)?)?]))
+                    };
+                    let (d0, d1) = (decode.get(2 * j).copied().unwrap_or(0.0), decode.get(2 * j + 1).copied().unwrap_or(1.0));
+                    row.push(d0 + raw * (d1 - d0) / max);
+                }
+                samples.push(row);
+            }
+            Tint::Sampled { domain, encode, samples }
+        }
+        _ => return None,
+    };
+    Some(tint)
 }
 
 /// How a spot colour's alternate gives process inks.
@@ -853,70 +922,7 @@ impl Walk<'_> {
             Cs::Gray => (true, 1),
             _ => return None,
         };
-        let f = self.doc.resolve(function?);
-        let d = f.as_dict()?;
-        let nums = |key: &[u8]| -> Option<Vec<f64>> {
-            let a = self.doc.resolve(d.get(key)?);
-            let v: Vec<f64> = a.as_array()?.iter().take(64).filter_map(|x| self.doc.resolve(x).as_f64()).filter(|x| x.is_finite()).collect();
-            Some(v)
-        };
-        let domain = match nums(b"Domain").as_deref() {
-            Some([a, b, ..]) => [*a, *b],
-            _ => [0.0, 1.0],
-        };
-        let tint = match d.get(b"FunctionType").and_then(|t| self.doc.resolve(t).as_int()) {
-            Some(2) => {
-                let c0 = nums(b"C0").unwrap_or_else(|| vec![0.0]);
-                let c1 = nums(b"C1").unwrap_or_else(|| vec![1.0]);
-                let n = d.get(b"N").and_then(|n| self.doc.resolve(n).as_f64()).filter(|n| n.is_finite())?;
-                if c0.len() != outputs || c1.len() != outputs {
-                    return None;
-                }
-                Tint::Exponential { domain, c0, c1, n }
-            }
-            Some(0) => {
-                let Object::Stream(s) = f.as_ref() else { return None };
-                let size = match nums(b"Size").as_deref() {
-                    Some([n]) if *n >= 1.0 && *n <= MAX_SAMPLES as f64 => *n as usize,
-                    _ => return None,
-                };
-                let bps = d.get(b"BitsPerSample").and_then(|b| self.doc.resolve(b).as_int())?;
-                let bytes = match bps {
-                    8 => 1usize,
-                    16 => 2,
-                    _ => return None,
-                };
-                let range = nums(b"Range")?;
-                if range.len() != outputs.saturating_mul(2) {
-                    return None;
-                }
-                let decode = nums(b"Decode").filter(|v| v.len() == range.len()).unwrap_or_else(|| range.clone());
-                let encode = match nums(b"Encode").as_deref() {
-                    Some([a, b]) => [*a, *b],
-                    _ => [0.0, size.saturating_sub(1) as f64],
-                };
-                let need = size.checked_mul(outputs)?.checked_mul(bytes)?;
-                let data = s.decoded_within(need.saturating_add(16)).ok()?;
-                let max = if bytes == 1 { 255.0 } else { 65535.0 };
-                let mut samples = Vec::with_capacity(size);
-                for i in 0..size {
-                    let mut row = Vec::with_capacity(outputs);
-                    for j in 0..outputs {
-                        let at = i.checked_mul(outputs)?.checked_add(j)?.checked_mul(bytes)?;
-                        let raw = if bytes == 1 {
-                            f64::from(*data.get(at)?)
-                        } else {
-                            f64::from(u16::from_be_bytes([*data.get(at)?, *data.get(at.checked_add(1)?)?]))
-                        };
-                        let (d0, d1) = (decode.get(2 * j).copied().unwrap_or(0.0), decode.get(2 * j + 1).copied().unwrap_or(1.0));
-                        row.push(d0 + raw * (d1 - d0) / max);
-                    }
-                    samples.push(row);
-                }
-                Tint::Sampled { domain, encode, samples }
-            }
-            _ => return None,
-        };
+        let tint = parse_tint(self.doc, function?, outputs)?;
         Some(Alternate { tint, gray })
     }
 

@@ -579,7 +579,7 @@ pub fn tools() -> Vec<ToolDef> {
         t(
             "print_total_area_coverage",
             "Total area coverage",
-            "Output Preview's Total Area Coverage check: per page, the highest total ink (C+M+Y+K plus spot inks, 0-400%+), the area above limit (points² and % of the page) and the worst regions (rect from the top-left of the displayed page, plus pdf_rect in user space). Measured on a grid at dpi (lowered on very large pages). CMYK, Gray, Separation, DeviceN and Indexed colours are exact; RGB/Lab use a naive conversion without a press profile (converted_paints counts them); patterns, shadings, JPEG/JPX images and annotations are listed under unmeasured. Read-only.",
+            "Output Preview's Total Area Coverage check: per page, the highest total ink (C+M+Y+K plus spot inks, 0-400%+) and where it is (max_at, a point from the top-left of the displayed page; pdf_max_at in user space), whether it is within limit, the area above limit (points² and % of the page) and the worst regions (rect from the top-left of the displayed page, plus pdf_rect in user space). Measured per plate on a grid at dpi (lowered on very large pages or with many inks), simulating overprint unless overprint is false. CMYK, Gray, Separation, DeviceN and Indexed colours are exact; RGB/Lab convert through the document's output intent CMYK profile, else a built-in approximation without a press profile (conversion says which; converted_paints counts them); patterns, shadings, JPEG/JPX images and annotations are listed under unmeasured, transparency painted opaque under approximated. Read-only.",
         )
         .ro()
         .with(schema(
@@ -589,8 +589,57 @@ pub fn tools() -> Vec<ToolDef> {
                 "limit": { "type": "number", "minimum": 1, "maximum": 2000, "description": "Total area coverage limit in percent (default 300)." },
                 "dpi": { "type": "number", "minimum": 9, "maximum": 300, "description": "Grid resolution in cells per inch (default 72)." },
                 "max_regions": { "type": "integer", "minimum": 1, "maximum": 50, "description": "Worst regions to list per page (default 5)." },
+                "overprint": { "type": "boolean", "description": "Simulate overprint (OP/op/OPM), as a press does (default true); false knocks every object out." },
             }),
             &["doc"],
+        )),
+        t(
+            "print_separations_list",
+            "Separations",
+            "Output Preview's separations list: the inks of the document (or pages) - the four process inks (Cyan, Magenta, Yellow, Black) and every spot colorant of Separation and DeviceN colour spaces (forms, images, patterns and shadings included), each with kind, defined_by, its alternate colour space, tint transform function type, alternate_value (the alternate's components at 100% tint, for Type 2 and one-input Type 0 transforms into gray, RGB or CMYK), a preview colour, the 1-based pages where it is painted (non-zero ink) and the pages that declare it. Registration (All) and None are not inks. RGB/Lab content puts ink on the process plates through conversion (the output intent's CMYK profile, else the built-in approximation; converted_pages lists where). Read-only.",
+        )
+        .ro()
+        .with(schema(
+            json!({
+                "doc": doc(),
+                "pages": { "type": "array", "items": { "type": "integer", "minimum": 1 }, "minItems": 1, "maxItems": 500, "description": "1-based pages (default: all, at most the first 500)." },
+            }),
+            &["doc"],
+        )),
+        t(
+            "print_separations_render",
+            "Render separations",
+            "Render a page's separations as PNG: one 8-bit grayscale plate per ink (0 = 100% ink, 255 = none, like film), or with composite true one RGB preview of only the inks listed (the others hidden, as Output Preview's checkboxes do; each ink multiplies the paper by its preview colour). Images are in the displayed orientation (after /Rotate). Without path the images are returned inline (at most 8 plates); with path they are written as <path>-<ink>.png (composite: path itself). The result lists each plate's maximum and inked area. Ink is measured per plate on a grid at dpi (lowered on large pages or with many inks; see print_total_area_coverage for what is exact and what is not measured). Read-only.",
+        )
+        .ro()
+        .with(schema(
+            json!({
+                "doc": doc(),
+                "page": { "type": "integer", "minimum": 1 },
+                "inks": { "type": "array", "items": { "type": "string" }, "minItems": 1, "description": "Ink names from print_separations_list (default: every ink of the page)." },
+                "dpi": { "type": "number", "minimum": 9, "maximum": 300, "description": "Resolution in pixels per inch (default 72)." },
+                "overprint": { "type": "boolean", "description": "Simulate overprint (default true)." },
+                "composite": { "type": "boolean", "description": "One colour preview of the listed inks instead of a plate per ink (default false)." },
+                "path": { "type": "string", "description": "Write the PNGs here instead of returning them: a file name prefix for plates, the file for a composite." },
+            }),
+            &["doc", "page"],
+        )),
+        t(
+            "print_separations_sample",
+            "Ink at a point",
+            "Output Preview's ink readout: the percentage of every ink of the page at point (x, y) (points from the top-left of the displayed page), their total, and the sampled grid cell (cell, pdf_cell). Measured at dpi (default 72) with overprint simulated unless overprint is false; RGB/Lab convert as conversion says. Read-only.",
+        )
+        .ro()
+        .with(schema(
+            json!({
+                "doc": doc(),
+                "page": { "type": "integer", "minimum": 1 },
+                "x": { "type": "number", "minimum": 0 },
+                "y": { "type": "number", "minimum": 0 },
+                "dpi": { "type": "number", "minimum": 9, "maximum": 300, "description": "Grid resolution in cells per inch (default 72)." },
+                "overprint": { "type": "boolean", "description": "Simulate overprint (default true)." },
+            }),
+            &["doc", "page", "x", "y"],
         )),
         t(
             "print_color_warnings",

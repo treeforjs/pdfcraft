@@ -1,31 +1,39 @@
-//! Total area coverage (TAC): the most ink a page puts down at one spot, as the sum of its
-//! process (C, M, Y, K) and spot ink percentages (0–400 %, more with spot inks), and the
-//! regions where that sum exceeds a press limit (Acrobat's Output Preview "Total Area
-//! Coverage" warning; 300 % by default).
+//! Ink separations and total area coverage (TAC): what each printing plate (process C, M, Y,
+//! K and every spot or DeviceN colorant) receives at each spot of a page, and the sum of
+//! those inks (0–400 %, more with spot inks), with the regions where it exceeds a press limit
+//! (Acrobat's Output Preview: the separations list, the ink percentages under the cursor and
+//! the "Total Area Coverage" warning; 300 % by default).
 //!
 //! The page renderer only produces RGB, so this module has its own small, bounded ink
-//! rasterizer: it interprets the page's content stream (and the forms it draws) and paints
-//! each object's ink total into a coverage grid at a chosen resolution, opaquely, later
-//! objects replacing earlier ones (knockout, no overprint).
+//! rasterizer ([`rasterize`]): it interprets the page's content stream (and the forms it
+//! draws) and paints each object's ink into one plate per ink on a grid at a chosen
+//! resolution. Later objects knock out earlier ones on every plate, unless overprint is on
+//! (`OP`/`op`/`OPM` from `gs`, simulated by default): then a Separation or DeviceN colour
+//! paints only its own plates, a process colour only the four process plates, and DeviceCMYK
+//! with overprint mode 1 only its non-zero components (ISO 32000-2 §8.6.7).
 //!
 //! - **Exact** for colours given in DeviceCMYK, DeviceGray (black ink), Separation, DeviceN,
 //!   ICCBased with 1 or 4 components, and Indexed over those: their component values *are*
-//!   ink percentages.
-//! - **Converted** for DeviceRGB, CalRGB, three-component ICCBased and Lab: a documented
-//!   naive conversion without a press profile (full grey-component replacement:
-//!   `K = 1 − max(R, G, B)`, `C = (1 − R − K)/(1 − K)` …, Lab via its lightness as grey). It
-//!   never reaches more than 200 %, so RGB artwork that a press profile would separate into a
-//!   rich black is under-reported. Each page says how many painted objects were converted.
+//!   ink percentages. Process colorant names (Cyan, Magenta, Yellow, Black) in Separation and
+//!   DeviceN spaces are the process plates; `All` (registration) is every plate; `None` marks
+//!   nothing.
+//! - **Converted** for DeviceRGB, CalRGB, three-component ICCBased and Lab, through a
+//!   [`Conversion`]: the document's output intent profile when the caller supplies one, else
+//!   [`BuiltIn`] (no press profile; full black generation with 70 % under-colour removal, the
+//!   same approximation as Convert Colors, so RGB black is 190 %). Each page says how many
+//!   painted objects were converted and with what.
 //! - **Not measured** (counted per reason): pattern and shading fills, images in codecs the
 //!   filters don't decode (DCT, JPX, JBIG2, CCITT), oversized images, unknown colour spaces
-//!   and annotations. Transparency, blend modes, soft masks and overprint are ignored.
+//!   and annotations. Transparency (soft masks, constant alpha, blend modes) is painted
+//!   opaque and counted under `approximated`.
 //!
 //! Geometry is approximate at the grid's resolution: fills use the real outline (non-zero or
 //! even-odd), strokes are covered segment by segment with square ends, text is measured as
 //! the box of each shown string (font widths, ascent and descent), images are sampled per
 //! cell and clipping paths count as their bounding boxes. A cell is painted when its centre
-//! is inside. All work is capped (grid cells, content bytes, operators, painted objects,
-//! rasterization work and nesting); a page that hits a cap says so with `truncated`.
+//! is inside. All work is capped (grid cells across all plates, content bytes, operators,
+//! painted objects, rasterization work, tracked inks and nesting); a page that hits a cap
+//! says so with `truncated`.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::rc::Rc;
@@ -46,8 +54,15 @@ pub const MIN_DPI: f64 = 9.0;
 pub const MAX_DPI: f64 = 300.0;
 /// Grid cells per page; a larger page or resolution is measured at a lower resolution.
 pub const MAX_CELLS: usize = 4_000_000;
+/// Grid cells across all plates of a page (2 bytes each): a page with many inks is measured
+/// at a lower resolution.
+pub const MAX_PLATE_CELLS: usize = 32_000_000;
+/// Inks tracked per page (the four process inks included); more are counted as unmeasured.
+pub const MAX_INKS: usize = 64;
 pub const DEFAULT_REGIONS: usize = 5;
 pub const MAX_REGIONS: usize = 50;
+/// The process inks, in plate order.
+pub const PROCESS_INKS: [&str; 4] = ["Cyan", "Magenta", "Yellow", "Black"];
 
 const MAX_CONTENT: usize = 16 << 20;
 const MAX_STREAMS: usize = 4096;
@@ -61,13 +76,77 @@ const MAX_IMAGE_BYTES: usize = 64 << 20;
 const MAX_COMPONENTS: usize = 32;
 const MAX_WIDTH_RANGES: usize = 8192;
 const MAX_CURVE_STEPS: usize = 32;
+/// Resource entries looked at while collecting a page's inks.
+const MAX_DECLARED: usize = 20_000;
+/// Plate values are hundredths of a percent.
+const FULL: f64 = 10_000.0;
 
 /// How the measurement works and what it can't see, for reports.
-pub const METHOD: &str = "Ink coverage is rasterized by PdfCraft's own content interpreter (the page renderer is RGB-only). \
-CMYK, Gray (as black), Separation, DeviceN and Indexed colours are exact ink values; RGB and Lab colours use a naive \
-full-GCR conversion without a press profile (never above 200%, so RGB rich blacks are under-reported). Patterns, \
-shadings, DCT/JPX/JBIG2/CCITT images and annotations are not measured; transparency and overprint are ignored; \
-clipping paths count as their bounding boxes and text as string boxes.";
+pub const METHOD: &str = "Ink coverage is rasterized per plate by PdfCraft's own content interpreter (the page renderer is RGB-only). \
+CMYK, Gray (as black), Separation, DeviceN and Indexed colours are exact ink values; RGB and Lab colours are converted to CMYK \
+through the document's output intent profile when it has a usable CMYK one, else a built-in approximation without a press \
+profile (full black generation, 70% under-colour removal; RGB black is 190%). Overprint (OP/op/OPM) is simulated; transparency \
+is painted opaque. Patterns, shadings, DCT/JPX/JBIG2/CCITT images and annotations are not measured; clipping paths count as \
+their bounding boxes and text as string boxes.";
+
+/// The built-in conversion's description, for reports.
+pub const BUILT_IN: &str = "built-in RGB to CMYK without a press profile: full black generation with 70% under-colour removal \
+(RGB black becomes 30/30/30/100, 190% total); Lab and CalRGB are read through sRGB";
+
+/// How RGB and Lab colours become process inks (0–1 each).
+pub trait Conversion {
+    /// What converts, for reports.
+    fn describe(&self) -> String;
+    /// Whether an ICC output profile does the conversion.
+    fn uses_profile(&self) -> bool {
+        false
+    }
+    /// CMYK for an sRGB colour (components 0–1).
+    fn rgb(&self, rgb: [f64; 3]) -> [f64; 4];
+    /// CMYK for a CIE L*a*b* colour (D50; L* 0–100).
+    fn lab(&self, lab: [f64; 3]) -> [f64; 4];
+}
+
+/// The press-agnostic conversion: full black generation with 70 % under-colour removal.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct BuiltIn;
+
+impl Conversion for BuiltIn {
+    fn describe(&self) -> String {
+        BUILT_IN.into()
+    }
+    fn rgb(&self, rgb: [f64; 3]) -> [f64; 4] {
+        rgb_to_cmyk(rgb)
+    }
+    fn lab(&self, lab: [f64; 3]) -> [f64; 4] {
+        rgb_to_cmyk(lab_to_srgb(lab))
+    }
+}
+
+/// RGB → CMYK without a press profile (as Convert Colors' built-in conversion).
+pub fn rgb_to_cmyk([r, g, b]: [f64; 3]) -> [f64; 4] {
+    let (c, m, y) = (1.0 - clamp01(r), 1.0 - clamp01(g), 1.0 - clamp01(b));
+    let k = c.min(m).min(y);
+    let ucr = 0.7 * k;
+    [clamp01(c - ucr), clamp01(m - ucr), clamp01(y - ucr), k]
+}
+
+/// D50 L*a*b* → sRGB (0–1), through the D50-adapted sRGB matrix.
+pub fn lab_to_srgb([l, a, b]: [f64; 3]) -> [f64; 3] {
+    let fy = (l + 16.0) / 116.0;
+    let (fx, fz) = (fy + a / 500.0, fy - b / 200.0);
+    let g = |t: f64| if t > 6.0 / 29.0 { t * t * t } else { 108.0 / 841.0 * (t - 4.0 / 29.0) };
+    let (x, y, z) = (g(fx) * 0.9642, g(fy), g(fz) * 0.8249);
+    let lin = [
+        3.1338561 * x - 1.6168667 * y - 0.4906146 * z,
+        -0.9787684 * x + 1.9161415 * y + 0.0334540 * z,
+        0.0719453 * x - 0.2289914 * y + 1.4052427 * z,
+    ];
+    lin.map(|v| {
+        let v = clamp01(v);
+        clamp01(if v <= 0.003_130_8 { 12.92 * v } else { 1.055 * v.powf(1.0 / 2.4) - 0.055 })
+    })
+}
 
 /// What to measure.
 #[derive(Clone, Debug, PartialEq)]
@@ -78,12 +157,21 @@ pub struct Options {
     pub dpi: f64,
     /// How many of the worst regions to return per page.
     pub max_regions: usize,
+    /// Simulate overprint (`OP`, `op`, `OPM`); off, every object knocks out what is below.
+    pub overprint: bool,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Self { limit: DEFAULT_LIMIT, dpi: DEFAULT_DPI, max_regions: DEFAULT_REGIONS }
+        Self { limit: DEFAULT_LIMIT, dpi: DEFAULT_DPI, max_regions: DEFAULT_REGIONS, overprint: true }
     }
+}
+
+fn check_dpi(dpi: f64) -> Result<(), String> {
+    if !dpi.is_finite() || !(MIN_DPI..=MAX_DPI).contains(&dpi) {
+        return Err(format!("dpi must be between {MIN_DPI} and {MAX_DPI}"));
+    }
+    Ok(())
 }
 
 impl Options {
@@ -91,9 +179,7 @@ impl Options {
         if !self.limit.is_finite() || !(MIN_LIMIT..=MAX_LIMIT).contains(&self.limit) {
             return Err(format!("limit must be a percentage between {MIN_LIMIT} and {MAX_LIMIT}"));
         }
-        if !self.dpi.is_finite() || !(MIN_DPI..=MAX_DPI).contains(&self.dpi) {
-            return Err(format!("dpi must be between {MIN_DPI} and {MAX_DPI}"));
-        }
+        check_dpi(self.dpi)?;
         if !(1..=MAX_REGIONS).contains(&self.max_regions) {
             return Err(format!("max_regions must be between 1 and {MAX_REGIONS}"));
         }
@@ -121,6 +207,9 @@ pub struct PageCoverage {
     pub crop: [f64; 4],
     /// The highest total coverage on the page, in percent.
     pub max: f64,
+    /// Where it is: the centre of the topmost, then leftmost, cell with the highest total, in
+    /// user space (`None` on a page without ink).
+    pub max_at: Option<[f64; 2]>,
     /// Area above the limit, in square points.
     pub over_area: f64,
     /// That area as a percentage of the page area.
@@ -129,14 +218,18 @@ pub struct PageCoverage {
     pub regions: Vec<Region>,
     /// How many separate regions exceed the limit.
     pub region_count: usize,
-    /// The resolution used (lower than requested when the page would exceed [`MAX_CELLS`]).
+    /// The resolution used (lower than requested when the page would exceed the cell budget).
     pub dpi: f64,
     /// Painted objects whose ink is exact (CMYK, Gray, Separation, DeviceN, Indexed of those).
     pub exact_paints: usize,
-    /// Painted objects whose ink came from the RGB/Lab → CMYK approximation.
+    /// Painted objects whose ink came from the RGB/Lab → CMYK conversion.
     pub converted_paints: usize,
+    /// The conversion used for them.
+    pub conversion: String,
     /// Objects that could not be measured, by reason.
     pub unmeasured: BTreeMap<&'static str, usize>,
+    /// Objects measured with a simplification (transparency painted opaque), by reason.
+    pub approximated: BTreeMap<&'static str, usize>,
     /// A cap was reached; part of the page was not measured.
     pub truncated: bool,
 }
@@ -148,67 +241,32 @@ impl PageCoverage {
     }
 }
 
-/// Measure 0-based page `index`.
+/// Measure 0-based page `index` with the built-in RGB conversion.
 pub fn page_coverage(doc: &Document, index: usize, options: &Options) -> Result<PageCoverage, String> {
+    page_coverage_with(doc, index, options, &BuiltIn)
+}
+
+/// Measure 0-based page `index`, converting RGB and Lab colours with `conversion`.
+pub fn page_coverage_with(doc: &Document, index: usize, options: &Options, conversion: &dyn Conversion) -> Result<PageCoverage, String> {
     options.validate()?;
-    let pages = pdfcraft_model::pages(doc);
-    let page = pages.get(index).ok_or_else(|| format!("page {} does not exist; the document has {} pages", index.saturating_add(1), pages.len()))?;
-    let crop = page.crop(doc);
-    let (width, height) = (crop[2] - crop[0], crop[3] - crop[1]);
-    if !(width.is_finite() && height.is_finite() && width > 0.0 && height > 0.0) {
-        return Err("the page has an empty or invalid crop box".into());
+    let raster = rasterize(doc, index, options.dpi, options.overprint, conversion)?;
+    let totals = raster.totals();
+    let (mut max, mut max_cell) = (0.0f32, None);
+    // Rows run bottom-up, so scan from the top row for the topmost, leftmost maximum.
+    for row in (0..raster.height).rev() {
+        for col in 0..raster.width {
+            let v = totals.get(row * raster.width + col).copied().unwrap_or(0.0);
+            if v > max {
+                max = v;
+                max_cell = Some((col, row));
+            }
+        }
     }
-    // Choose the resolution: requested, lowered until the grid fits the cell budget.
-    let mut dpi = options.dpi;
-    let cells_at = |dpi: f64| ((width * dpi / 72.0).ceil().max(1.0), (height * dpi / 72.0).ceil().max(1.0));
-    let (w, h) = cells_at(dpi);
-    if w * h > MAX_CELLS as f64 {
-        dpi *= (MAX_CELLS as f64 / (w * h)).sqrt() * 0.999;
-    }
-    let (mut w, mut h) = cells_at(dpi);
-    // Extremely thin pages: keep each side within the budget too.
-    w = w.min(MAX_CELLS as f64);
-    h = h.min((MAX_CELLS as f64 / w).floor().max(1.0));
-    let (gw, gh) = (w as usize, h as usize);
-    let cell = 72.0 / dpi;
-    let mut grid = Grid { w: gw, h: gh, cells: vec![0.0; gw.saturating_mul(gh)], work: 0, truncated: false, crossings: Vec::new() };
-    let to_grid = Matrix([1.0 / cell, 0.0, 0.0, 1.0 / cell, -crop[0] / cell, -crop[1] / cell]);
-
-    let mut walker = Walker {
-        doc,
-        grid: &mut grid,
-        to_grid,
-        cell,
-        seen: HashSet::new(),
-        bytes: 0,
-        streams: 0,
-        operators: 0,
-        paints: 0,
-        exact: 0,
-        converted: 0,
-        unmeasured: BTreeMap::new(),
-        truncated: false,
-        fonts: HashMap::new(),
-    };
-    let resources = page.dict.get(b"Resources").map(|o| doc.resolve(o));
-    let empty = Dict::new();
-    let resources = resources.as_ref().and_then(|o| o.as_dict()).unwrap_or(&empty);
-    let gs = Gs::new([0.0, 0.0, gw as f64, gh as f64]);
-    if let Some(contents) = page.dict.get(b"Contents") {
-        let data = walker.content(contents);
-        walker.run(&data, resources, gs, 0);
-    }
-    if page.dict.get(b"Annots").map(|o| doc.resolve(o)).and_then(|o| o.as_array().map(Vec::len)).is_some_and(|n| n > 0) {
-        walker.unmeasure("annotations");
-    }
-    let (exact, converted, unmeasured, mut truncated) = (walker.exact, walker.converted, walker.unmeasured, walker.truncated);
-    truncated |= grid.truncated;
-
-    let max = grid.cells.iter().copied().fold(0.0f32, f32::max);
-    let (regions, region_count, over_cells) = regions(&grid, options.limit as f32, options.max_regions);
+    let (regions, region_count, over_cells) = regions(&totals, raster.width, raster.height, options.limit as f32, options.max_regions);
+    let (crop, cell) = (raster.crop, raster.cell());
     let cell_area = cell * cell;
     let over_area = over_cells as f64 * cell_area;
-    let page_area = width * height;
+    let page_area = (crop[2] - crop[0]) * (crop[3] - crop[1]);
     let to_user = |r: [usize; 4]| {
         [
             crop[0] + r[0] as f64 * cell,
@@ -221,6 +279,7 @@ pub fn page_coverage(doc: &Document, index: usize, options: &Options) -> Result<
         page: index,
         crop,
         max: round(f64::from(max)),
+        max_at: max_cell.map(|(c, r)| raster.centre(c, r)),
         over_area: round(over_area),
         over_percent: round((over_area / page_area * 100.0).min(100.0)),
         regions: regions
@@ -228,11 +287,13 @@ pub fn page_coverage(doc: &Document, index: usize, options: &Options) -> Result<
             .map(|(bbox, max, cells)| Region { bbox: to_user(bbox), max: round(f64::from(max)), area: round(cells as f64 * cell_area) })
             .collect(),
         region_count,
-        dpi: round(dpi),
-        exact_paints: exact,
-        converted_paints: converted,
-        unmeasured,
-        truncated,
+        dpi: round(raster.dpi),
+        exact_paints: raster.exact_paints,
+        converted_paints: raster.converted_paints,
+        conversion: raster.conversion.clone(),
+        unmeasured: raster.unmeasured.clone(),
+        approximated: raster.approximated.clone(),
+        truncated: raster.truncated,
     })
 }
 
@@ -240,32 +301,268 @@ fn round(v: f64) -> f64 {
     (v * 100.0).round() / 100.0
 }
 
+// ---- separations ----------------------------------------------------------------------------
+
+/// One ink (printing plate).
+#[derive(Clone, Debug, PartialEq)]
+pub struct InkInfo {
+    /// The colorant name (`Cyan` … `Black` for the process inks).
+    pub name: String,
+    /// A process ink (C, M, Y or K), else a spot colorant.
+    pub process: bool,
+    /// Where the spot colorant was defined: `Separation` or `DeviceN` (`None` for process inks).
+    pub defined_by: Option<&'static str>,
+    /// The alternate colour space's family (`DeviceCMYK`, `ICCBased (4)` …).
+    pub alternate: Option<String>,
+    /// The tint transform's function type (0, 2, 3 or 4).
+    pub tint_transform: Option<i64>,
+    /// The alternate's components at 100 % tint, when the tint transform is a Type 2 or a
+    /// one-input Type 0 function into a gray, RGB or CMYK alternate.
+    pub alternate_value: Option<Vec<f64>>,
+    /// An sRGB colour to preview the ink with (0–1): the process colour, the alternate at
+    /// 100 % tint, or mid gray when that can't be evaluated.
+    pub preview: [f64; 3],
+    /// Whether `preview` comes from the ink itself (process or evaluated alternate).
+    pub preview_exact: bool,
+}
+
+impl InkInfo {
+    pub(crate) fn process(i: usize) -> Self {
+        let preview = match i {
+            0 => [0.0, 1.0, 1.0],
+            1 => [1.0, 0.0, 1.0],
+            2 => [1.0, 1.0, 0.0],
+            _ => [0.0, 0.0, 0.0],
+        };
+        Self {
+            name: PROCESS_INKS.get(i).copied().unwrap_or("Black").into(),
+            process: true,
+            defined_by: None,
+            alternate: None,
+            tint_transform: None,
+            alternate_value: None,
+            preview,
+            preview_exact: true,
+        }
+    }
+}
+
+/// A page separated into plates, one per ink.
+#[derive(Clone, Debug)]
+pub struct Raster {
+    /// 0-based page index.
+    pub page: usize,
+    /// The measured area (the crop box) in user space.
+    pub crop: [f64; 4],
+    /// The resolution used, in cells per inch.
+    pub dpi: f64,
+    /// Grid size in cells; row 0 is the bottom of the crop box.
+    pub width: usize,
+    pub height: usize,
+    /// The page's inks: the four process inks, then spot colorants in the order met.
+    pub inks: Vec<InkInfo>,
+    /// Whether each ink puts any ink on the page (spot inks can be declared but unused).
+    pub painted: Vec<bool>,
+    plates: Vec<Vec<u16>>,
+    pub exact_paints: usize,
+    pub converted_paints: usize,
+    pub unmeasured: BTreeMap<&'static str, usize>,
+    pub approximated: BTreeMap<&'static str, usize>,
+    pub truncated: bool,
+    /// Overprint was simulated.
+    pub overprint: bool,
+    /// How RGB and Lab colours were converted.
+    pub conversion: String,
+    pub conversion_from_profile: bool,
+}
+
+impl Raster {
+    /// The size of a cell, in points.
+    pub fn cell(&self) -> f64 {
+        72.0 / self.dpi
+    }
+
+    /// The ink named `name` (exact colorant name).
+    pub fn ink(&self, name: &str) -> Option<usize> {
+        self.inks.iter().position(|i| i.name == name)
+    }
+
+    /// Ink `ink` at cell (`col`, `row`), in percent.
+    pub fn value(&self, ink: usize, col: usize, row: usize) -> f64 {
+        if col >= self.width || row >= self.height {
+            return 0.0;
+        }
+        let at = row.saturating_mul(self.width).saturating_add(col);
+        self.plates.get(ink).and_then(|p| p.get(at)).map_or(0.0, |v| f64::from(*v) / 100.0)
+    }
+
+    /// The sum of every ink at cell (`col`, `row`), in percent.
+    pub fn total(&self, col: usize, row: usize) -> f64 {
+        (0..self.plates.len()).map(|i| self.value(i, col, row)).sum()
+    }
+
+    /// The cell holding the user-space point (`x`, `y`), when it is inside the crop box.
+    pub fn cell_of(&self, x: f64, y: f64) -> Option<(usize, usize)> {
+        let [x0, y0, x1, y1] = self.crop;
+        if !(x.is_finite() && y.is_finite()) || x < x0 || x > x1 || y < y0 || y > y1 || self.width == 0 || self.height == 0 {
+            return None;
+        }
+        let cell = self.cell();
+        let col = (((x - x0) / cell).floor().max(0.0) as usize).min(self.width - 1);
+        let row = (((y - y0) / cell).floor().max(0.0) as usize).min(self.height - 1);
+        Some((col, row))
+    }
+
+    /// The user-space centre of cell (`col`, `row`).
+    pub fn centre(&self, col: usize, row: usize) -> [f64; 2] {
+        let cell = self.cell();
+        let x = (self.crop[0] + (col as f64 + 0.5) * cell).min(self.crop[2]);
+        let y = (self.crop[1] + (row as f64 + 0.5) * cell).min(self.crop[3]);
+        [round(x), round(y)]
+    }
+
+    /// The total ink of every cell, in percent (row 0 at the bottom).
+    pub fn totals(&self) -> Vec<f32> {
+        let cells = self.width.saturating_mul(self.height);
+        let mut out = vec![0.0f32; cells];
+        for plate in self.plates.iter().filter(|p| p.len() == cells) {
+            for (t, v) in out.iter_mut().zip(plate) {
+                *t += f32::from(*v) / 100.0;
+            }
+        }
+        out
+    }
+
+    /// Plate `ink` as an 8-bit grayscale image, top row first, the way a film separation
+    /// looks: 0 (black) is 100 % ink, 255 (white) none.
+    pub fn plate_gray(&self, ink: usize) -> Option<Vec<u8>> {
+        if ink >= self.inks.len() {
+            return None;
+        }
+        let mut out = Vec::with_capacity(self.width.saturating_mul(self.height));
+        for row in (0..self.height).rev() {
+            for col in 0..self.width {
+                let v = self.value(ink, col, row) / 100.0;
+                out.push((255.0 - (v.clamp(0.0, 1.0) * 255.0)).round() as u8);
+            }
+        }
+        Some(out)
+    }
+
+    /// A colour preview of the inks in `shown` (others hidden), as 8-bit RGB, top row first:
+    /// each ink darkens the paper towards its preview colour by its percentage (multiply).
+    pub fn composite(&self, shown: &[usize]) -> Vec<u8> {
+        let mut out = Vec::with_capacity(self.width.saturating_mul(self.height).saturating_mul(3));
+        for row in (0..self.height).rev() {
+            for col in 0..self.width {
+                let mut rgb = [1.0f64; 3];
+                for &ink in shown {
+                    let Some(info) = self.inks.get(ink) else { continue };
+                    let t = (self.value(ink, col, row) / 100.0).clamp(0.0, 1.0);
+                    for (c, p) in rgb.iter_mut().zip(info.preview) {
+                        *c *= 1.0 - t * (1.0 - clamp01(p));
+                    }
+                }
+                out.extend(rgb.map(|c| (clamp01(c) * 255.0).round() as u8));
+            }
+        }
+        out
+    }
+}
+
+/// Separate 0-based page `index` into plates at `dpi` (lowered when the page, times its inks,
+/// would exceed the cell budget), simulating overprint when `overprint` is set and converting
+/// RGB and Lab colours with `conversion`.
+pub fn rasterize(doc: &Document, index: usize, dpi: f64, overprint: bool, conversion: &dyn Conversion) -> Result<Raster, String> {
+    check_dpi(dpi)?;
+    let pages = pdfcraft_model::pages(doc);
+    let page = pages.get(index).ok_or_else(|| format!("page {} does not exist; the document has {} pages", index.saturating_add(1), pages.len()))?;
+    let crop = page.crop(doc);
+    let (width, height) = (crop[2] - crop[0], crop[3] - crop[1]);
+    if !(width.is_finite() && height.is_finite() && width > 0.0 && height > 0.0) {
+        return Err("the page has an empty or invalid crop box".into());
+    }
+    let mut walker = Walker::new(doc, conversion, overprint);
+    let resources = page.dict.get(b"Resources").map(|o| doc.resolve(o));
+    let empty = Dict::new();
+    let resources = resources.as_ref().and_then(|o| o.as_dict()).unwrap_or(&empty);
+    // Collect the page's inks first: the cell budget is shared by their plates.
+    walker.declare(resources, 0);
+    let budget = (MAX_PLATE_CELLS / walker.grid.plates.len().max(PROCESS_INKS.len())).clamp(1, MAX_CELLS);
+    // Choose the resolution: requested, lowered until the grid fits the cell budget.
+    let mut dpi = dpi;
+    let cells_at = |dpi: f64| ((width * dpi / 72.0).ceil().max(1.0), (height * dpi / 72.0).ceil().max(1.0));
+    let (w, h) = cells_at(dpi);
+    if w * h > budget as f64 {
+        dpi *= (budget as f64 / (w * h)).sqrt() * 0.999;
+    }
+    let (mut w, mut h) = cells_at(dpi);
+    // Extremely thin pages: keep each side within the budget too.
+    w = w.min(budget as f64);
+    h = h.min((budget as f64 / w).floor().max(1.0));
+    let (gw, gh) = (w as usize, h as usize);
+    let cell = 72.0 / dpi;
+    walker.grid.w = gw;
+    walker.grid.h = gh;
+    walker.cell = cell;
+    walker.to_grid = Matrix([1.0 / cell, 0.0, 0.0, 1.0 / cell, -crop[0] / cell, -crop[1] / cell]);
+    let gs = Gs::new([0.0, 0.0, gw as f64, gh as f64]);
+    if let Some(contents) = page.dict.get(b"Contents") {
+        let data = walker.content(contents);
+        walker.run(&data, resources, gs, 0);
+    }
+    if page.dict.get(b"Annots").map(|o| doc.resolve(o)).and_then(|o| o.as_array().map(Vec::len)).is_some_and(|n| n > 0) {
+        walker.unmeasure("annotations");
+    }
+    let truncated = walker.truncated || walker.grid.truncated;
+    if walker.grid.over_budget {
+        walker.unmeasure("inks beyond the plate memory budget");
+    }
+    Ok(Raster {
+        page: index,
+        crop,
+        dpi,
+        width: gw,
+        height: gh,
+        inks: walker.inks,
+        painted: walker.grid.painted,
+        plates: walker.grid.plates,
+        exact_paints: walker.exact,
+        converted_paints: walker.converted,
+        unmeasured: walker.unmeasured,
+        approximated: walker.approximated,
+        truncated,
+        overprint,
+        conversion: conversion.describe(),
+        conversion_from_profile: conversion.uses_profile(),
+    })
+}
+
 /// Connected (8-neighbour) regions of cells above `limit`: the worst `keep`, the number of
 /// regions and the number of cells above the limit.
 /// A found region: cell bounds, highest value, cell count.
 type Found = ([usize; 4], f32, usize);
 
-fn regions(grid: &Grid, limit: f32, keep: usize) -> (Vec<Found>, usize, usize) {
-    let (w, h) = (grid.w, grid.h);
-    let mut visited = vec![false; grid.cells.len()];
+fn regions(cells: &[f32], w: usize, h: usize, limit: f32, keep: usize) -> (Vec<Found>, usize, usize) {
+    let mut visited = vec![false; cells.len()];
     let mut out: Vec<Found> = Vec::new();
     let (mut count, mut over) = (0usize, 0usize);
     let mut stack = Vec::new();
     let order = |a: &Found, b: &Found| b.1.total_cmp(&a.1).then(b.2.cmp(&a.2));
-    for start in 0..grid.cells.len() {
-        if grid.cells.get(start).is_none_or(|v| *v <= limit) || visited.get(start).copied().unwrap_or(true) {
+    for start in 0..cells.len() {
+        if cells.get(start).is_none_or(|v| *v <= limit) || visited.get(start).copied().unwrap_or(true) {
             continue;
         }
         count += 1;
-        let (mut bbox, mut max, mut cells) = ([usize::MAX, usize::MAX, 0, 0], 0.0f32, 0usize);
+        let (mut bbox, mut max, mut count_cells) = ([usize::MAX, usize::MAX, 0, 0], 0.0f32, 0usize);
         if let Some(v) = visited.get_mut(start) {
             *v = true;
         }
         stack.push(start);
         while let Some(at) = stack.pop() {
             let (x, y) = (at % w, at / w);
-            let value = grid.cells.get(at).copied().unwrap_or(0.0);
-            cells += 1;
+            let value = cells.get(at).copied().unwrap_or(0.0);
+            count_cells += 1;
             max = max.max(value);
             bbox = [bbox[0].min(x), bbox[1].min(y), bbox[2].max(x + 1), bbox[3].max(y + 1)];
             for (dx, dy) in [(-1i64, -1i64), (0, -1), (1, -1), (-1, 0), (1, 0), (-1, 1), (0, 1), (1, 1)] {
@@ -274,7 +571,7 @@ fn regions(grid: &Grid, limit: f32, keep: usize) -> (Vec<Found>, usize, usize) {
                     continue;
                 }
                 let next = ny as usize * w + nx as usize;
-                if grid.cells.get(next).is_some_and(|v| *v > limit)
+                if cells.get(next).is_some_and(|v| *v > limit)
                     && let Some(seen) = visited.get_mut(next)
                     && !*seen
                 {
@@ -283,8 +580,8 @@ fn regions(grid: &Grid, limit: f32, keep: usize) -> (Vec<Found>, usize, usize) {
                 }
             }
         }
-        over += cells;
-        out.push((bbox, max, cells));
+        over += count_cells;
+        out.push((bbox, max, count_cells));
         if out.len() > keep.saturating_mul(4).max(64) {
             out.sort_by(order);
             out.truncate(keep);
@@ -297,23 +594,46 @@ fn regions(grid: &Grid, limit: f32, keep: usize) -> (Vec<Found>, usize, usize) {
 
 // ---- colour ---------------------------------------------------------------------------------
 
-/// An object's ink total in percent, and whether it came from a colour conversion.
+/// Which plate a colorant puts its ink on.
 #[derive(Clone, Copy, Debug, PartialEq)]
-struct Ink {
-    total: f32,
+enum Target {
+    /// `None`: marks nothing.
+    Nothing,
+    /// `All`: every plate (registration).
+    All,
+    Plate(usize),
+    /// A colorant beyond [`MAX_INKS`].
+    Untracked,
+}
+
+/// Which plates an overprinting object paints.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Scope {
+    /// The four process plates (all of them, or with overprint mode 1 in DeviceCMYK only the
+    /// non-zero components).
+    Process { device_cmyk: bool },
+    /// Only the named colorants (Separation, DeviceN).
+    Listed,
+}
+
+/// How an object's ink was found.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Kind {
     converted: bool,
+    scope: Scope,
 }
 
 #[derive(Clone, Debug)]
 enum Space {
     Gray,
     Rgb,
-    Cmyk,
+    /// `device`: DeviceCMYK itself (overprint mode 1 applies), not a four-component ICC space.
+    Cmyk {
+        device: bool,
+    },
     Lab,
-    /// Ink weight per unit tint: 0 for `None`, 4 for `All` (every process plate), else 1.
-    Separation(f64),
-    /// Per-component weights (0 for `None` colorants).
-    DeviceN(Vec<f64>),
+    Separation(Target),
+    DeviceN(Vec<Target>),
     Indexed {
         base: Box<Space>,
         hival: usize,
@@ -327,13 +647,15 @@ fn clamp01(v: f64) -> f64 {
     if v.is_finite() { v.clamp(0.0, 1.0) } else { 0.0 }
 }
 
+const PROCESS: Scope = Scope::Process { device_cmyk: false };
+
 impl Space {
     fn components(&self) -> usize {
         match self {
             Space::Gray | Space::Separation(_) | Space::Indexed { .. } => 1,
             Space::Rgb | Space::Lab => 3,
-            Space::Cmyk => 4,
-            Space::DeviceN(w) => w.len(),
+            Space::Cmyk { .. } => 4,
+            Space::DeviceN(t) => t.len(),
             Space::Pattern => 0,
             Space::Unknown(n) => *n,
         }
@@ -343,23 +665,48 @@ impl Space {
         match self {
             Space::Gray | Space::Rgb | Space::Indexed { .. } => vec![0.0; self.components()],
             Space::Lab => vec![0.0, 0.0, 0.0],
-            Space::Cmyk => vec![0.0, 0.0, 0.0, 1.0],
+            Space::Cmyk { .. } => vec![0.0, 0.0, 0.0, 1.0],
             Space::Separation(_) | Space::DeviceN(_) => vec![1.0; self.components()],
             Space::Pattern | Space::Unknown(_) => Vec::new(),
         }
     }
 
-    /// Ink for colour components `c`, or `None` when this space can't be measured.
-    fn ink(&self, c: &[f64]) -> Option<Ink> {
+    /// The colorants of colour `c` (each with its tint, 0–1) into `out`, or `None` when this
+    /// space can't be measured.
+    fn ink_into(&self, c: &[f64], conversion: &dyn Conversion, out: &mut Vec<(Target, f64)>) -> Option<Kind> {
+        out.clear();
         let at = |i: usize| c.get(i).copied().unwrap_or(0.0);
-        let exact = |total: f64| Some(Ink { total: (total * 100.0) as f32, converted: false });
+        let process = |out: &mut Vec<(Target, f64)>, cmyk: [f64; 4]| {
+            out.extend(cmyk.iter().enumerate().map(|(i, v)| (Target::Plate(i), clamp01(*v))));
+        };
+        let exact = Kind { converted: false, scope: PROCESS };
         match self {
-            Space::Gray => exact(1.0 - clamp01(at(0))),
-            Space::Cmyk => exact((0..4).map(|i| clamp01(at(i))).sum()),
-            Space::Separation(weight) => exact(clamp01(at(0)) * weight),
-            Space::DeviceN(weights) => exact(weights.iter().enumerate().map(|(i, w)| clamp01(at(i)) * w).sum()),
-            Space::Rgb => Some(Ink { total: (rgb_ink([clamp01(at(0)), clamp01(at(1)), clamp01(at(2))]) * 100.0) as f32, converted: true }),
-            Space::Lab => Some(Ink { total: ((1.0 - clamp01(at(0) / 100.0)) * 100.0) as f32, converted: true }),
+            Space::Gray => {
+                process(out, [0.0, 0.0, 0.0, 1.0 - clamp01(at(0))]);
+                Some(exact)
+            }
+            Space::Cmyk { device } => {
+                process(out, [at(0), at(1), at(2), at(3)]);
+                Some(Kind { converted: false, scope: Scope::Process { device_cmyk: *device } })
+            }
+            Space::Rgb => {
+                process(out, conversion.rgb([clamp01(at(0)), clamp01(at(1)), clamp01(at(2))]));
+                Some(Kind { converted: true, scope: PROCESS })
+            }
+            Space::Lab => {
+                let l = if at(0).is_finite() { at(0).clamp(0.0, 100.0) } else { 0.0 };
+                let ab = |v: f64| if v.is_finite() { v.clamp(-128.0, 128.0) } else { 0.0 };
+                process(out, conversion.lab([l, ab(at(1)), ab(at(2))]));
+                Some(Kind { converted: true, scope: PROCESS })
+            }
+            Space::Separation(t) => {
+                out.push((*t, clamp01(at(0))));
+                Some(Kind { converted: false, scope: Scope::Listed })
+            }
+            Space::DeviceN(targets) => {
+                out.extend(targets.iter().enumerate().map(|(i, t)| (*t, clamp01(at(i)))));
+                Some(Kind { converted: false, scope: Scope::Listed })
+            }
             Space::Indexed { base, hival, lookup } => {
                 let index = at(0);
                 let index = if index.is_finite() { index.round().clamp(0.0, *hival as f64) as usize } else { 0 };
@@ -372,22 +719,23 @@ impl Space {
                 }
                 if matches!(**base, Space::Lab) {
                     comps[0] *= 100.0;
+                    comps[1] = comps[1] * 200.0 - 100.0;
+                    comps[2] = comps[2] * 200.0 - 100.0;
                 }
-                base.ink(comps.get(..n)?)
+                base.ink_into(comps.get(..n)?, conversion, out)
             }
             Space::Pattern | Space::Unknown(_) => None,
         }
     }
-}
 
-/// The naive RGB → CMYK conversion (full grey-component replacement), as a 0–2 total.
-fn rgb_ink([r, g, b]: [f64; 3]) -> f64 {
-    let k = 1.0 - r.max(g).max(b);
-    if k >= 1.0 - 1e-9 {
-        return 1.0;
+    fn untracked(&self) -> bool {
+        match self {
+            Space::Separation(t) => *t == Target::Untracked,
+            Space::DeviceN(t) => t.contains(&Target::Untracked),
+            Space::Indexed { base, .. } => base.untracked(),
+            _ => false,
+        }
     }
-    let ink = |v: f64| (1.0 - v - k) / (1.0 - k);
-    ink(r) + ink(g) + ink(b) + k
 }
 
 #[derive(Clone, Debug)]
@@ -401,9 +749,6 @@ struct Paint {
 impl Paint {
     fn device(space: Space, comps: Vec<f64>) -> Self {
         Self { space: Rc::new(space), comps, pattern: false }
-    }
-    fn ink(&self) -> Option<Ink> {
-        if self.pattern { None } else { self.space.ink(&self.comps) }
     }
 }
 
@@ -445,13 +790,34 @@ type P = (f64, f64);
 struct Grid {
     w: usize,
     h: usize,
-    cells: Vec<f32>,
+    /// One plate per ink, `w × h` values in hundredths of a percent; empty until inked.
+    plates: Vec<Vec<u16>>,
+    painted: Vec<bool>,
+    allocated: usize,
+    over_budget: bool,
     work: u64,
     truncated: bool,
     crossings: Vec<(f64, i32)>,
+    /// Per-plate tint while building writes (NaN: not named).
+    scratch: Vec<f64>,
 }
 
 impl Grid {
+    fn new() -> Self {
+        Self {
+            w: 0,
+            h: 0,
+            plates: vec![Vec::new(); PROCESS_INKS.len()],
+            painted: vec![false; PROCESS_INKS.len()],
+            allocated: 0,
+            over_budget: false,
+            work: 0,
+            truncated: false,
+            crossings: Vec::new(),
+            scratch: Vec::new(),
+        }
+    }
+
     fn spend(&mut self, cost: u64) -> bool {
         self.work = self.work.saturating_add(cost);
         if self.work > MAX_WORK {
@@ -459,6 +825,93 @@ impl Grid {
             false
         } else {
             true
+        }
+    }
+
+    fn cells(&self) -> usize {
+        self.w.saturating_mul(self.h)
+    }
+
+    /// Give plate `p` its cells, within the budget shared by all plates.
+    fn allocate(&mut self, p: usize) -> bool {
+        let cells = self.cells();
+        if self.plates.get(p).is_some_and(|plate| plate.len() == cells) {
+            return true;
+        }
+        if cells == 0 || self.allocated.saturating_add(1).saturating_mul(cells) > MAX_PLATE_CELLS.saturating_add(MAX_PLATE_CELLS / 2) {
+            self.over_budget = true;
+            return false;
+        }
+        let Some(plate) = self.plates.get_mut(p) else { return false };
+        *plate = vec![0; cells];
+        self.allocated = self.allocated.saturating_add(1);
+        true
+    }
+
+    /// The plate writes (plate, value) for an object whose colorants are `values`: with
+    /// overprint off every plate (unnamed ones become 0), with it on only the plates `scope`
+    /// covers. Empty when the colour marks nothing (`None` colorants).
+    fn build(&mut self, values: &[(Target, f64)], scope: Scope, overprint: bool, opm: i64, out: &mut Vec<(usize, u16)>) {
+        out.clear();
+        let n = self.plates.len();
+        let mut scratch = std::mem::take(&mut self.scratch);
+        scratch.clear();
+        scratch.resize(n, f64::NAN);
+        let mut marks = false;
+        let name = |s: &mut f64, v: f64| *s = if s.is_nan() { v } else { s.max(v) };
+        for &(t, v) in values {
+            match t {
+                Target::Nothing | Target::Untracked => {}
+                Target::All => {
+                    marks = true;
+                    for s in scratch.iter_mut() {
+                        name(s, v);
+                    }
+                }
+                Target::Plate(p) => {
+                    marks = true;
+                    if let Some(s) = scratch.get_mut(p) {
+                        name(s, v);
+                    }
+                }
+            }
+        }
+        if marks {
+            for (p, s) in scratch.iter().enumerate() {
+                let named = !s.is_nan();
+                let touched = !overprint
+                    || match scope {
+                        Scope::Listed => named,
+                        Scope::Process { device_cmyk } => p < PROCESS_INKS.len() && (!(device_cmyk && opm == 1) || (named && *s > 0.0)),
+                    };
+                if !touched {
+                    continue;
+                }
+                let q = if named { (clamp01(*s) * FULL).round() as u16 } else { 0 };
+                let have = self.plates.get(p).is_some_and(|plate| !plate.is_empty());
+                if q == 0 && !have {
+                    continue;
+                }
+                if q > 0 && !have && !self.allocate(p) {
+                    continue;
+                }
+                if q > 0
+                    && let Some(painted) = self.painted.get_mut(p)
+                {
+                    *painted = true;
+                }
+                out.push((p, q));
+            }
+        }
+        self.scratch = scratch;
+    }
+
+    /// Write one cell.
+    fn put(&mut self, at: usize, writes: &[(usize, u16)]) {
+        for &(p, v) in writes {
+            if let Some(cell) = self.plates.get_mut(p).and_then(|plate| plate.get_mut(at)) {
+                *cell = v;
+            }
         }
     }
 
@@ -471,7 +924,10 @@ impl Grid {
     }
 
     /// Fill the closed polygons `subpaths` (grid coordinates) inside `clip`.
-    fn fill(&mut self, subpaths: &[Vec<P>], even_odd: bool, clip: [f64; 4], value: f32) {
+    fn fill(&mut self, subpaths: &[Vec<P>], even_odd: bool, clip: [f64; 4], writes: &[(usize, u16)]) {
+        if writes.is_empty() {
+            return;
+        }
         let mut bbox = [f64::MAX, f64::MAX, f64::MIN, f64::MIN];
         let mut edges = 0u64;
         for sp in subpaths {
@@ -489,7 +945,7 @@ impl Grid {
             return;
         }
         let (cx0, cx1) = (x0, x1);
-        if !self.spend(((y1 - y0) as u64).saturating_mul(edges.saturating_add(1))) {
+        if !self.spend(((y1 - y0) as u64).saturating_mul(edges.saturating_add(writes.len() as u64))) {
             return;
         }
         let mut crossings = std::mem::take(&mut self.crossings);
@@ -526,10 +982,12 @@ impl Grid {
                     let (a, b) = Self::span(start, x, self.w);
                     let (a, b) = (a.max(cx0), b.min(cx1));
                     if a < b {
-                        self.work = self.work.saturating_add((b - a) as u64);
+                        self.work = self.work.saturating_add(((b - a) as u64).saturating_mul(writes.len() as u64));
                         let base = row * self.w;
-                        if let Some(cells) = self.cells.get_mut(base + a..base + b) {
-                            cells.fill(value);
+                        for &(p, v) in writes {
+                            if let Some(cells) = self.plates.get_mut(p).and_then(|plate| plate.get_mut(base + a..base + b)) {
+                                cells.fill(v);
+                            }
                         }
                     }
                 }
@@ -548,6 +1006,10 @@ struct Gs {
     clip: [f64; 4],
     fill: Paint,
     stroke: Paint,
+    /// Overprint for fills (`op`) and strokes (`OP`), and the overprint mode.
+    op_fill: bool,
+    op_stroke: bool,
+    opm: i64,
     line_width: f64,
     font: Option<Rc<Font>>,
     size: f64,
@@ -566,6 +1028,9 @@ impl Gs {
             clip,
             fill: Paint::device(Space::Gray, vec![0.0]),
             stroke: Paint::device(Space::Gray, vec![0.0]),
+            op_fill: false,
+            op_stroke: false,
+            opm: 0,
             line_width: 1.0,
             font: None,
             size: 0.0,
@@ -581,10 +1046,16 @@ impl Gs {
 
 struct Walker<'a> {
     doc: &'a Document,
-    grid: &'a mut Grid,
+    conversion: &'a dyn Conversion,
+    overprint: bool,
+    grid: Grid,
+    inks: Vec<InkInfo>,
+    ink_index: HashMap<Vec<u8>, usize>,
     to_grid: Matrix,
     cell: f64,
     seen: HashSet<ObjRef>,
+    declared: HashSet<ObjRef>,
+    declared_entries: usize,
     bytes: usize,
     streams: usize,
     operators: usize,
@@ -592,8 +1063,10 @@ struct Walker<'a> {
     exact: usize,
     converted: usize,
     unmeasured: BTreeMap<&'static str, usize>,
+    approximated: BTreeMap<&'static str, usize>,
     truncated: bool,
     fonts: HashMap<ObjRef, Rc<Font>>,
+    values: Vec<(Target, f64)>,
 }
 
 fn intersect(a: [f64; 4], b: [f64; 4]) -> [f64; 4] {
@@ -604,9 +1077,82 @@ fn finite(m: &Matrix) -> bool {
     m.0.iter().all(|v| v.is_finite() && v.abs() < 1e12)
 }
 
+/// A colour space family's name and component count, for describing alternates.
+fn family(doc: &Document, o: &Object) -> (String, usize) {
+    let o = doc.resolve(o);
+    let (name, arg) = match o.as_ref() {
+        Object::Name(n) => (n.clone(), None),
+        Object::Array(a) => (a.first().and_then(|f| doc.resolve(f).as_name().map(<[u8]>::to_vec)).unwrap_or_default(), a.get(1).cloned()),
+        _ => (Vec::new(), None),
+    };
+    let text = String::from_utf8_lossy(&name).into_owned();
+    match name.as_slice() {
+        b"DeviceGray" | b"CalGray" | b"G" => (text, 1),
+        b"DeviceRGB" | b"CalRGB" | b"RGB" | b"Lab" => (text, 3),
+        b"DeviceCMYK" | b"CMYK" => (text, 4),
+        b"ICCBased" => {
+            let n = arg.map(|s| doc.resolve(&s)).and_then(|s| match s.as_ref() {
+                Object::Stream(s) => s.dict.get(b"N").and_then(|n| doc.resolve(n).as_int()),
+                _ => None,
+            });
+            let n = n.and_then(|n| usize::try_from(n).ok()).filter(|n| (1..=MAX_COMPONENTS).contains(n)).unwrap_or(0);
+            (format!("ICCBased ({n})"), n)
+        }
+        _ if text.is_empty() => ("unknown".into(), 0),
+        _ => (text, 0),
+    }
+}
+
+/// An sRGB preview of alternate components: gray, RGB or CMYK.
+fn preview_of(values: &[f64]) -> Option<[f64; 3]> {
+    match *values {
+        [g] => Some([clamp01(g); 3]),
+        [r, g, b] => Some([clamp01(r), clamp01(g), clamp01(b)]),
+        [c, m, y, k] => {
+            let k = clamp01(k);
+            Some([(1.0 - clamp01(c)) * (1.0 - k), (1.0 - clamp01(m)) * (1.0 - k), (1.0 - clamp01(y)) * (1.0 - k)])
+        }
+        _ => None,
+    }
+}
+
+impl<'a> Walker<'a> {
+    fn new(doc: &'a Document, conversion: &'a dyn Conversion, overprint: bool) -> Self {
+        Self {
+            doc,
+            conversion,
+            overprint,
+            grid: Grid::new(),
+            inks: (0..PROCESS_INKS.len()).map(InkInfo::process).collect(),
+            ink_index: HashMap::new(),
+            to_grid: Matrix::IDENTITY,
+            cell: 1.0,
+            seen: HashSet::new(),
+            declared: HashSet::new(),
+            declared_entries: 0,
+            bytes: 0,
+            streams: 0,
+            operators: 0,
+            paints: 0,
+            exact: 0,
+            converted: 0,
+            unmeasured: BTreeMap::new(),
+            approximated: BTreeMap::new(),
+            truncated: false,
+            fonts: HashMap::new(),
+            values: Vec::new(),
+        }
+    }
+}
+
 impl Walker<'_> {
     fn unmeasure(&mut self, why: &'static str) {
         let n = self.unmeasured.entry(why).or_insert(0);
+        *n = n.saturating_add(1);
+    }
+
+    fn approximate(&mut self, why: &'static str) {
+        let n = self.approximated.entry(why).or_insert(0);
         *n = n.saturating_add(1);
     }
 
@@ -647,26 +1193,41 @@ impl Walker<'_> {
         }
     }
 
-    fn paint_counted(&mut self, ink: Option<Ink>, why: &'static str) -> Option<f32> {
+    /// Count a painted object and return its plate writes, or `None` when it can't be measured
+    /// (counted by reason) or a cap was reached.
+    fn paint(&mut self, paint: &Paint, overprint: bool, opm: i64) -> Option<Vec<(usize, u16)>> {
         self.paints = self.paints.saturating_add(1);
         if self.paints > MAX_PAINTS {
             self.truncated = true;
             return None;
         }
-        match ink {
-            Some(i) => {
-                if i.converted {
+        if paint.pattern {
+            self.unmeasure(Self::paint_reason(paint));
+            return None;
+        }
+        let mut values = std::mem::take(&mut self.values);
+        let kind = paint.space.ink_into(&paint.comps, self.conversion, &mut values);
+        let out = match kind {
+            Some(kind) => {
+                if kind.converted {
                     self.converted = self.converted.saturating_add(1);
                 } else {
                     self.exact = self.exact.saturating_add(1);
                 }
-                Some(if i.total.is_finite() { i.total.max(0.0) } else { 0.0 })
+                if paint.space.untracked() {
+                    self.unmeasure("inks beyond the tracked limit");
+                }
+                let mut writes = Vec::new();
+                self.grid.build(&values, kind.scope, overprint && self.overprint, opm, &mut writes);
+                Some(writes)
             }
             None => {
-                self.unmeasure(why);
+                self.unmeasure(Self::paint_reason(paint));
                 None
             }
-        }
+        };
+        self.values = values;
+        out
     }
 
     fn paint_reason(paint: &Paint) -> &'static str {
@@ -677,20 +1238,75 @@ impl Walker<'_> {
         gs.ctm.then(&self.to_grid)
     }
 
-    fn colour_space(&self, o: &Object, resources: &Dict, depth: usize) -> Space {
+    /// The plate of colorant `name`, registering a new spot ink (described by `describe`).
+    fn target(&mut self, name: &[u8], describe: impl FnOnce(&mut Self) -> InkInfo) -> Target {
+        match name {
+            b"None" => return Target::Nothing,
+            b"All" => return Target::All,
+            _ => {}
+        }
+        if let Some(i) = PROCESS_INKS.iter().position(|p| p.as_bytes() == name) {
+            return Target::Plate(i);
+        }
+        if let Some(&i) = self.ink_index.get(name) {
+            return Target::Plate(i);
+        }
+        if self.inks.len() >= MAX_INKS {
+            return Target::Untracked;
+        }
+        let mut info = describe(self);
+        info.name = String::from_utf8_lossy(name).into_owned();
+        let i = self.inks.len();
+        self.inks.push(info);
+        self.ink_index.insert(name.to_vec(), i);
+        self.grid.plates.push(Vec::new());
+        self.grid.painted.push(false);
+        Target::Plate(i)
+    }
+
+    /// Describe a spot colorant from its alternate space and tint transform (a Separation's,
+    /// or a DeviceN's when `defined_by` is DeviceN; its tint transform takes all colorants, so
+    /// it is only evaluated for a Separation).
+    fn spot(&self, defined_by: &'static str, alternate: Option<&Object>, function: Option<&Object>) -> InkInfo {
+        let (alt_name, outputs) = alternate.map_or(("unknown".into(), 0), |a| family(self.doc, a));
+        let function_type = function.and_then(|f| {
+            let f = self.doc.resolve(f);
+            f.as_dict().and_then(|d| d.get(b"FunctionType")).and_then(|t| self.doc.resolve(t).as_int())
+        });
+        let lab = alt_name == "Lab";
+        let value = match (function, defined_by) {
+            (Some(f), "Separation") if matches!(outputs, 1 | 3 | 4) && !lab => {
+                crate::colour_warnings::parse_tint(self.doc, f, outputs).map(|t| t.eval(1.0)).filter(|v| v.len() == outputs)
+            }
+            _ => None,
+        };
+        let preview = value.as_deref().and_then(preview_of);
+        InkInfo {
+            name: String::new(),
+            process: false,
+            defined_by: Some(defined_by),
+            alternate: Some(alt_name),
+            tint_transform: function_type,
+            alternate_value: value.map(|v| v.into_iter().map(round_tint).collect()),
+            preview: preview.unwrap_or([0.5, 0.5, 0.5]),
+            preview_exact: preview.is_some(),
+        }
+    }
+
+    fn colour_space(&mut self, o: &Object, resources: &Dict, depth: usize) -> Space {
         if depth > 4 {
             return Space::Unknown(1);
         }
-        let o = self.doc.resolve(o);
+        let doc = self.doc;
+        let o = doc.resolve(o);
         match o.as_ref() {
             Object::Name(n) => match n.as_slice() {
                 b"DeviceGray" | b"G" | b"CalGray" => Space::Gray,
                 b"DeviceRGB" | b"RGB" | b"CalRGB" => Space::Rgb,
-                b"DeviceCMYK" | b"CMYK" => Space::Cmyk,
+                b"DeviceCMYK" | b"CMYK" => Space::Cmyk { device: true },
                 b"Pattern" => Space::Pattern,
                 other => {
-                    let named =
-                        resources.get(b"ColorSpace").map(|d| self.doc.resolve(d)).and_then(|d| d.as_dict().and_then(|d| d.get(other).cloned()));
+                    let named = resources.get(b"ColorSpace").map(|d| doc.resolve(d)).and_then(|d| d.as_dict().and_then(|d| d.get(other).cloned()));
                     match named {
                         Some(v) => self.colour_space(&v, &Dict::new(), depth + 1),
                         None => Space::Unknown(1),
@@ -698,34 +1314,56 @@ impl Walker<'_> {
                 }
             },
             Object::Array(a) => {
-                let family = a.first().map(|f| self.doc.resolve(f)).and_then(|f| f.as_name().map(<[u8]>::to_vec)).unwrap_or_default();
-                let arg = |i: usize| a.get(i).map(|o| self.doc.resolve(o));
+                let family = a.first().map(|f| doc.resolve(f)).and_then(|f| f.as_name().map(<[u8]>::to_vec)).unwrap_or_default();
+                let arg = |i: usize| a.get(i).map(|o| doc.resolve(o));
                 match family.as_slice() {
                     b"DeviceGray" | b"CalGray" | b"G" => Space::Gray,
                     b"DeviceRGB" | b"CalRGB" | b"RGB" => Space::Rgb,
-                    b"DeviceCMYK" | b"CMYK" => Space::Cmyk,
+                    b"DeviceCMYK" | b"CMYK" => Space::Cmyk { device: true },
                     b"Lab" => Space::Lab,
                     b"ICCBased" => {
                         let n = arg(1).and_then(|s| match s.as_ref() {
-                            Object::Stream(s) => s.dict.get(b"N").and_then(|n| self.doc.resolve(n).as_int()),
+                            Object::Stream(s) => s.dict.get(b"N").and_then(|n| doc.resolve(n).as_int()),
                             _ => None,
                         });
                         match n {
                             Some(1) => Space::Gray,
                             Some(3) => Space::Rgb,
-                            Some(4) => Space::Cmyk,
+                            Some(4) => Space::Cmyk { device: false },
                             Some(n) => Space::Unknown(usize::try_from(n).unwrap_or(1).clamp(1, MAX_COMPONENTS)),
                             None => Space::Unknown(1),
                         }
                     }
-                    b"Separation" => match arg(1).as_deref().and_then(Object::as_name) {
-                        Some(b"None") => Space::Separation(0.0),
-                        Some(b"All") => Space::Separation(4.0),
-                        _ => Space::Separation(1.0),
-                    },
+                    b"Separation" => {
+                        let Some(name) = arg(1).and_then(|n| n.as_name().map(<[u8]>::to_vec)) else { return Space::Unknown(1) };
+                        let (alt, func) = (a.get(2).cloned(), a.get(3).cloned());
+                        Space::Separation(self.target(&name, |w| w.spot("Separation", alt.as_ref(), func.as_ref())))
+                    }
                     b"DeviceN" => match arg(1).as_deref().and_then(Object::as_array) {
                         Some(names) if !names.is_empty() && names.len() <= MAX_COMPONENTS => {
-                            Space::DeviceN(names.iter().map(|n| if self.doc.resolve(n).as_name() == Some(b"None") { 0.0 } else { 1.0 }).collect())
+                            let names: Vec<Vec<u8>> =
+                                names.iter().map(|n| doc.resolve(n).as_name().map(<[u8]>::to_vec).unwrap_or_default()).collect();
+                            let (alt, func) = (a.get(2).cloned(), a.get(3).cloned());
+                            // The attributes' Colorants dictionary defines spot colorants as Separations.
+                            let colorants = arg(4)
+                                .and_then(|attrs| attrs.as_dict().and_then(|d| d.get(b"Colorants").cloned()))
+                                .map(|c| doc.resolve(&c))
+                                .and_then(|c| c.as_dict().cloned());
+                            let mut targets = Vec::with_capacity(names.len());
+                            for name in &names {
+                                let own = colorants.as_ref().and_then(|c| c.get(name).cloned()).map(|s| doc.resolve(&s)).and_then(|s| {
+                                    let s = s.as_array()?;
+                                    (s.first().map(|f| doc.resolve(f)).and_then(|f| f.as_name().map(<[u8]>::to_vec)).as_deref()
+                                        == Some(b"Separation".as_slice()))
+                                    .then(|| (s.get(2).cloned(), s.get(3).cloned()))
+                                });
+                                let target = match own {
+                                    Some((alt, func)) => self.target(name, |w| w.spot("Separation", alt.as_ref(), func.as_ref())),
+                                    None => self.target(name, |w| w.spot("DeviceN", alt.as_ref(), func.as_ref())),
+                                };
+                                targets.push(target);
+                            }
+                            Space::DeviceN(targets)
                         }
                         _ => Space::Unknown(1),
                     },
@@ -745,11 +1383,120 @@ impl Walker<'_> {
                         };
                         Space::Indexed { base: Box::new(base), hival, lookup }
                     }
-                    b"Pattern" => Space::Pattern,
+                    b"Pattern" => {
+                        // An uncoloured pattern's underlying space still names inks.
+                        if let Some(under) = a.get(1) {
+                            let _ = self.colour_space(under, resources, depth + 1);
+                        }
+                        Space::Pattern
+                    }
                     _ => Space::Unknown(1),
                 }
             }
             _ => Space::Unknown(1),
+        }
+    }
+
+    /// Register the inks that `resources` (and the forms, images, patterns and shadings it
+    /// names) define, before painting: they decide how the cell budget is shared.
+    fn declare(&mut self, resources: &Dict, depth: usize) {
+        if depth >= MAX_DEPTH {
+            return;
+        }
+        let doc = self.doc;
+        let category = |key: &[u8]| -> Vec<Object> {
+            resources
+                .get(key)
+                .map(|d| doc.resolve(d))
+                .and_then(|d| d.as_dict().map(|d| d.iter().map(|(_, v)| v.clone()).take(MAX_DECLARED).collect()))
+                .unwrap_or_default()
+        };
+        for cs in category(b"ColorSpace") {
+            match self.declare_entry(&cs) {
+                None => return,
+                Some(false) => continue,
+                Some(true) => {}
+            }
+            let _ = self.colour_space(&cs, &Dict::new(), 0);
+        }
+        let mut nested: Vec<Object> = Vec::new();
+        for entry in category(b"XObject").into_iter().chain(category(b"Pattern")).chain(category(b"Shading")) {
+            match self.declare_entry(&entry) {
+                None => return,
+                Some(false) => continue,
+                Some(true) => {}
+            }
+            let object = doc.resolve(&entry);
+            let dict = match object.as_ref() {
+                Object::Stream(s) => &s.dict,
+                Object::Dict(d) => d,
+                _ => continue,
+            };
+            if let Some(cs) = dict.get(b"ColorSpace").cloned() {
+                let _ = self.colour_space(&cs, resources, 0);
+            }
+            if let Some(shading) = dict.get(b"Shading").map(|s| doc.resolve(s))
+                && let Some(cs) = match shading.as_ref() {
+                    Object::Stream(s) => s.dict.get(b"ColorSpace").cloned(),
+                    Object::Dict(d) => d.get(b"ColorSpace").cloned(),
+                    _ => None,
+                }
+            {
+                let _ = self.colour_space(&cs, resources, 0);
+            }
+            if let Some(r) = dict.get(b"Resources").cloned() {
+                nested.push(r);
+            }
+        }
+        for r in nested {
+            let r = doc.resolve(&r);
+            if let Some(d) = r.as_dict() {
+                self.declare(d, depth + 1);
+            }
+        }
+    }
+
+    /// Count a resource entry while declaring: `None` once the budget is spent, `Some(false)`
+    /// for an object already looked at (by reference), else `Some(true)`.
+    fn declare_entry(&mut self, entry: &Object) -> Option<bool> {
+        self.declared_entries = self.declared_entries.saturating_add(1);
+        if self.declared_entries > MAX_DECLARED {
+            self.truncated = true;
+            return None;
+        }
+        Some(entry.as_ref().is_none_or(|r| self.declared.insert(r)))
+    }
+
+    /// Apply the overprint parameters of ExtGState `name`; note transparency it sets.
+    fn ext_gstate(&mut self, name: &[u8], resources: &Dict, gs: &mut Gs) {
+        let entry = resources.get(b"ExtGState").map(|d| self.doc.resolve(d)).and_then(|d| d.as_dict().and_then(|d| d.get(name).cloned()));
+        let Some(entry) = entry else { return };
+        let d = self.doc.resolve(&entry);
+        let Some(d) = d.as_dict() else { return };
+        let flag = |k: &[u8]| d.get(k).map(|v| matches!(self.doc.resolve(v).as_ref(), Object::Bool(true)));
+        let (stroke, fill) = (flag(b"OP"), flag(b"op"));
+        if let Some(s) = stroke {
+            gs.op_stroke = s;
+            // Without `op`, `OP` sets both.
+            if fill.is_none() {
+                gs.op_fill = s;
+            }
+        }
+        if let Some(f) = fill {
+            gs.op_fill = f;
+        }
+        if let Some(m) = d.get(b"OPM").and_then(|v| self.doc.resolve(v).as_int()) {
+            gs.opm = if m == 1 { 1 } else { 0 };
+        }
+        let alpha = |k: &[u8]| d.get(k).and_then(|v| self.doc.resolve(v).as_f64()).is_some_and(|a| a < 1.0);
+        let smask = d.get(b"SMask").is_some_and(|m| self.doc.resolve(m).as_name() != Some(b"None"));
+        let blend = d.get(b"BM").map(|b| self.doc.resolve(b)).is_some_and(|b| match b.as_ref() {
+            Object::Name(n) => !matches!(n.as_slice(), b"Normal" | b"Compatible"),
+            Object::Array(a) => a.first().and_then(Object::as_name).is_some_and(|n| !matches!(n, b"Normal" | b"Compatible")),
+            _ => false,
+        });
+        if alpha(b"CA") || alpha(b"ca") || smask || blend {
+            self.approximate("transparency painted as opaque");
         }
     }
 
@@ -978,14 +1725,14 @@ impl Walker<'_> {
                     }
                     if matches!(name, b"f" | b"F" | b"f*" | b"B" | b"B*" | b"b" | b"b*") {
                         let even_odd = matches!(name, b"f*" | b"B*" | b"b*");
-                        if let Some(v) = self.paint_counted(gs.fill.ink(), Self::paint_reason(&gs.fill)) {
-                            self.grid.fill(&path, even_odd, gs.clip, v);
+                        if let Some(w) = self.paint(&gs.fill, gs.op_fill, gs.opm) {
+                            self.grid.fill(&path, even_odd, gs.clip, &w);
                         }
                     }
                     if matches!(name, b"S" | b"s" | b"B" | b"B*" | b"b" | b"b*")
-                        && let Some(v) = self.paint_counted(gs.stroke.ink(), Self::paint_reason(&gs.stroke))
+                        && let Some(w) = self.paint(&gs.stroke, gs.op_stroke, gs.opm)
                     {
-                        self.stroke(&path, &closed, &gs, v);
+                        self.stroke(&path, &closed, &gs, &w);
                     }
                     if pending_clip {
                         let mut bbox = [f64::MAX, f64::MAX, f64::MIN, f64::MIN];
@@ -1005,7 +1752,7 @@ impl Walker<'_> {
                     let (space, n) = match op.op.as_slice() {
                         b"g" | b"G" => (Space::Gray, 1),
                         b"rg" | b"RG" => (Space::Rgb, 3),
-                        _ => (Space::Cmyk, 4),
+                        _ => (Space::Cmyk { device: true }, 4),
                     };
                     let comps: Vec<f64> = op.operands.iter().take(n).map(|o| o.as_f64().unwrap_or(0.0)).collect();
                     let paint = Paint::device(space, comps);
@@ -1096,6 +1843,11 @@ impl Walker<'_> {
                         self.inline_image(dict, data, resources, &gs);
                     }
                 }
+                b"gs" => {
+                    if let Some(name) = op.name(0) {
+                        self.ext_gstate(name, resources, &mut gs);
+                    }
+                }
                 b"sh" => {
                     self.unmeasure("shadings");
                 }
@@ -1105,7 +1857,7 @@ impl Walker<'_> {
     }
 
     /// Cover the stroke of `path` with one rectangle per segment (square ends).
-    fn stroke(&mut self, path: &[Vec<P>], closed: &[bool], gs: &Gs, value: f32) {
+    fn stroke(&mut self, path: &[Vec<P>], closed: &[bool], gs: &Gs, writes: &[(usize, u16)]) {
         let [a, b, c, d, ..] = gs.ctm.0;
         let scale = (a * d - b * c).abs().sqrt();
         let width = gs.line_width * scale / self.cell;
@@ -1117,7 +1869,7 @@ impl Walker<'_> {
                 && let Some(&p) = sp.first()
             {
                 let square = vec![(p.0 - half, p.1 - half), (p.0 + half, p.1 - half), (p.0 + half, p.1 + half), (p.0 - half, p.1 + half)];
-                self.grid.fill(&[square], false, gs.clip, value);
+                self.grid.fill(&[square], false, gs.clip, writes);
             }
             for s in 0..segments {
                 let (Some(&p), Some(&q)) = (sp.get(s), sp.get((s + 1) % n)) else { continue };
@@ -1131,7 +1883,7 @@ impl Walker<'_> {
                     (q.0 + ux - nx, q.1 + uy - ny),
                     (p.0 - ux - nx, p.1 - uy - ny),
                 ];
-                self.grid.fill(&[quad], false, gs.clip, value);
+                self.grid.fill(&[quad], false, gs.clip, writes);
                 if self.grid.truncated {
                     return;
                 }
@@ -1194,13 +1946,13 @@ impl Walker<'_> {
         let device = tm.then(&gs.ctm).then(&self.to_grid);
         let quad = vec![device.apply(lo, y0), device.apply(hi, y0), device.apply(hi, y1), device.apply(lo, y1)];
         // Stroked text paints last, so its ink is what the box shows.
-        let paint = if paints.1 { &gs.stroke } else { &gs.fill };
+        let (paint, overprint) = if paints.1 { (&gs.stroke, gs.op_stroke) } else { (&gs.fill, gs.op_fill) };
         if paints.0 && paints.1 {
             // Count the fill too, so exact/converted totals cover both inks.
-            let _ = self.paint_counted(gs.fill.ink(), Self::paint_reason(&gs.fill));
+            let _ = self.paint(&gs.fill, gs.op_fill, gs.opm);
         }
-        if let Some(v) = self.paint_counted(paint.ink(), Self::paint_reason(paint)) {
-            self.grid.fill(&[quad], false, gs.clip, v);
+        if let Some(w) = self.paint(paint, overprint, gs.opm) {
+            self.grid.fill(&[quad], false, gs.clip, &w);
         }
         next
     }
@@ -1294,8 +2046,9 @@ impl Walker<'_> {
 
     /// Sample an image into the cells it covers.
     fn image(&mut self, dict: &Dict, stream: &Stream, resources: &Dict, gs: &Gs) {
-        let int = |k: &[u8]| dict.get(k).and_then(|o| self.doc.resolve(o).as_int());
-        let mask = dict.get(b"ImageMask").is_some_and(|o| matches!(self.doc.resolve(o).as_ref(), Object::Bool(true)));
+        let doc = self.doc;
+        let int = |k: &[u8]| dict.get(k).and_then(|o| doc.resolve(o).as_int());
+        let mask = dict.get(b"ImageMask").is_some_and(|o| matches!(doc.resolve(o).as_ref(), Object::Bool(true)));
         let (Some(w), Some(h)) = (int(b"Width"), int(b"Height")) else {
             self.unmeasure("unreadable images");
             return;
@@ -1323,7 +2076,7 @@ impl Walker<'_> {
         };
         let n = space.components();
         if n == 0 || n > MAX_COMPONENTS || matches!(space, Space::Unknown(_) | Space::Pattern) {
-            let _ = self.paint_counted(None, "unsupported colour spaces");
+            let _ = self.paint(&Paint { space: Rc::new(Space::Unknown(1)), comps: Vec::new(), pattern: false }, false, 0);
             return;
         }
         let Some(row_bytes) = w.checked_mul(n).and_then(|v| v.checked_mul(bpc)).map(|bits| bits.div_ceil(8)) else {
@@ -1344,7 +2097,7 @@ impl Walker<'_> {
         let max_sample = ((1u32 << bpc) - 1) as f64;
         let decode: Vec<f64> = dict
             .get(b"Decode")
-            .map(|o| self.doc.resolve(o))
+            .map(|o| doc.resolve(o))
             .and_then(|o| o.as_array().map(|a| a.iter().filter_map(Object::as_f64).filter(|v| v.is_finite()).collect()))
             .filter(|d: &Vec<f64>| d.len() == 2 * n)
             .unwrap_or_else(|| {
@@ -1356,14 +2109,32 @@ impl Walker<'_> {
                     (0..n).flat_map(|_| [0.0, 1.0]).collect()
                 }
             });
-        let ink_of = |comps: &[f64]| space.ink(comps);
-        let fill_ink = if mask { gs.fill.ink() } else { None };
-        if mask && fill_ink.is_none() {
-            let _ = self.paint_counted(None, Self::paint_reason(&gs.fill));
-            return;
-        }
-        let converted = if mask { fill_ink.is_some_and(|i| i.converted) } else { ink_of(&space.initial()).is_some_and(|i| i.converted) };
-        let Some(_) = self.paint_counted(Some(Ink { total: 0.0, converted }), "unreadable images") else { return };
+        let overprint = gs.op_fill && self.overprint;
+        // A stencil mask paints the fill colour; other images their own pixels, all counted as
+        // one painted object (converted when the space is).
+        let fill_writes = if mask {
+            match self.paint(&gs.fill, gs.op_fill, gs.opm) {
+                Some(w) => w,
+                None => return,
+            }
+        } else {
+            let mut probe = Vec::new();
+            let Some(kind) = space.ink_into(&space.initial(), self.conversion, &mut probe) else { return };
+            self.paints = self.paints.saturating_add(1);
+            if self.paints > MAX_PAINTS {
+                self.truncated = true;
+                return;
+            }
+            if kind.converted {
+                self.converted = self.converted.saturating_add(1);
+            } else {
+                self.exact = self.exact.saturating_add(1);
+            }
+            if space.untracked() {
+                self.unmeasure("inks beyond the tracked limit");
+            }
+            Vec::new()
+        };
         let device = gs.ctm.then(&self.to_grid);
         let Some(inverse) = device.invert() else { return };
         let bbox = intersect(device.bbox([0.0, 0.0, 1.0, 1.0]), gs.clip);
@@ -1372,7 +2143,8 @@ impl Walker<'_> {
         }
         let (x0, x1) = Grid::span(bbox[0], bbox[2], self.grid.w);
         let (y0, y1) = Grid::span(bbox[1], bbox[3], self.grid.h);
-        if x0 >= x1 || y0 >= y1 || !self.grid.spend(((x1 - x0) as u64).saturating_mul((y1 - y0) as u64)) {
+        let plates = self.grid.plates.len().max(1) as u64;
+        if x0 >= x1 || y0 >= y1 || !self.grid.spend(((x1 - x0) as u64).saturating_mul((y1 - y0) as u64).saturating_mul(plates)) {
             return;
         }
         let sample = |px: usize, py: usize, c: usize| -> Option<f64> {
@@ -1387,6 +2159,8 @@ impl Walker<'_> {
             Some(d0 + f64::from(raw) * (d1 - d0) / max_sample)
         };
         let mut comps = [0.0f64; MAX_COMPONENTS];
+        let mut values = std::mem::take(&mut self.values);
+        let mut writes: Vec<(usize, u16)> = Vec::new();
         for row in y0..y1 {
             for col in x0..x1 {
                 let (u, v) = inverse.apply(col as f64 + 0.5, row as f64 + 0.5);
@@ -1395,31 +2169,35 @@ impl Walker<'_> {
                 }
                 let px = ((u * w as f64) as usize).min(w - 1);
                 let py = (((1.0 - v) * h as f64) as usize).min(h - 1);
-                let value = if mask {
+                let at = row * self.grid.w + col;
+                if mask {
                     // A stencil mask paints the fill colour where the sample decodes to 0.
                     let Some(s) = sample(px, py, 0) else { continue };
                     if s >= 0.5 {
                         continue;
                     }
-                    fill_ink.map_or(0.0, |i| i.total)
-                } else {
-                    let mut ok = true;
-                    for (c, slot) in comps.iter_mut().enumerate().take(n) {
-                        match sample(px, py, c) {
-                            Some(s) => *slot = s,
-                            None => ok = false,
-                        }
-                    }
-                    if !ok {
-                        continue;
-                    }
-                    let Some(ink) = comps.get(..n).and_then(ink_of) else { continue };
-                    ink.total
-                };
-                if let Some(cell) = self.grid.cells.get_mut(row * self.grid.w + col) {
-                    *cell = if value.is_finite() { value.max(0.0) } else { 0.0 };
+                    self.grid.put(at, &fill_writes);
+                    continue;
                 }
+                let mut ok = true;
+                for (c, slot) in comps.iter_mut().enumerate().take(n) {
+                    match sample(px, py, c) {
+                        Some(s) => *slot = s,
+                        None => ok = false,
+                    }
+                }
+                if !ok {
+                    continue;
+                }
+                let Some(kind) = comps.get(..n).and_then(|c| space.ink_into(c, self.conversion, &mut values)) else { continue };
+                self.grid.build(&values, kind.scope, overprint, gs.opm, &mut writes);
+                self.grid.put(at, &writes);
             }
         }
+        self.values = values;
     }
+}
+
+fn round_tint(v: f64) -> f64 {
+    (v * 10_000.0).round() / 10_000.0
 }

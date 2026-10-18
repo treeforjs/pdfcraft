@@ -189,8 +189,12 @@ impl Automation {
             Some(n) => usize::try_from(n).map_err(|_| bad("max_regions must be between 1 and 50"))?,
             None => defaults.max_regions,
         };
-        let options =
-            CoverageOptions { limit: a.opt_num("limit")?.unwrap_or(defaults.limit), dpi: a.opt_num("dpi")?.unwrap_or(defaults.dpi), max_regions };
+        let options = CoverageOptions {
+            limit: a.opt_num("limit")?.unwrap_or(defaults.limit),
+            dpi: a.opt_num("dpi")?.unwrap_or(defaults.dpi),
+            max_regions,
+            overprint: a.opt_bool("overprint")?.unwrap_or(defaults.overprint),
+        };
         options.validate().map_err(bad)?;
         let count = doc.info.pages.len();
         let (pages, pages_truncated) = if a.get("pages").is_some() {
@@ -207,21 +211,27 @@ impl Automation {
             let r32 = r.map(|v| v as f32);
             json!(doc.info.pages.get(page).map_or(r32, |p| crate::comments::rect_to_view(p, r32)))
         };
+        let point = |page: usize, p: [f64; 2]| -> Value { crate::separations::view_point(doc.info.pages.get(page), p) };
         let list: Vec<Value> = results
             .iter()
             .map(|c| {
                 json!({
                     "page": c.page + 1, "max": c.max, "flagged": c.flagged(), "over_area": c.over_area, "over_percent": c.over_percent,
                     "region_count": c.region_count,
+                    "max_at": c.max_at.map(|p| point(c.page, p)), "pdf_max_at": c.max_at,
+                    "within_limit": c.max <= options.limit,
                     "regions": c.regions.iter().map(|r| json!({ "rect": rect(c.page, r.bbox), "pdf_rect": r.bbox, "max": r.max, "area": r.area })).collect::<Vec<_>>(),
                     "dpi": c.dpi, "exact_paints": c.exact_paints, "converted_paints": c.converted_paints,
-                    "unmeasured": c.unmeasured, "truncated": c.truncated,
+                    "unmeasured": c.unmeasured, "approximated": c.approximated, "truncated": c.truncated,
                 })
             })
             .collect();
         let flagged: Vec<usize> = results.iter().filter(|c| c.flagged()).map(|c| c.page + 1).collect();
         Ok(json!({
             "doc": doc.id.0, "limit": options.limit, "flagged_pages": flagged, "pages": list, "pages_truncated": pages_truncated,
+            "max": results.iter().map(|c| c.max).fold(0.0, f64::max),
+            "overprint": options.overprint,
+            "conversion": results.first().map(|c| c.conversion.clone()),
             "method": pdfcraft_engine::pdfa::coverage::METHOD,
         }))
     }

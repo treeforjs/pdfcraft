@@ -141,3 +141,108 @@ fn colour_warnings_read_the_working_document_without_editing_it() {
     assert!(doc.colour_warnings(&ColourWarningOptions { rich_black_k: 0.0, ..ColourWarningOptions::default() }).is_err());
     assert!(!doc.dirty && doc.can_undo().is_none());
 }
+
+/// A CMYK output profile (lut16, Lab PCS) that prints everything on black: K = 1 − L*/100.
+fn black_only_profile() -> Vec<u8> {
+    let grid = 9usize;
+    let mut lut = b"mft2\0\0\0\0".to_vec();
+    lut.extend([3u8, 4, grid as u8, 0]);
+    for v in [1i32, 0, 0, 0, 1, 0, 0, 0, 1] {
+        lut.extend((v << 16).to_be_bytes());
+    }
+    lut.extend(2u16.to_be_bytes());
+    lut.extend(2u16.to_be_bytes());
+    for _ in 0..3 {
+        lut.extend(0u16.to_be_bytes());
+        lut.extend(65535u16.to_be_bytes());
+    }
+    for l in 0..grid {
+        let ll = (l as f64 / (grid - 1) as f64) * 65535.0 / 652.8;
+        let k = (1.0 - ll / 100.0).clamp(0.0, 1.0);
+        for _ in 0..grid * grid {
+            for v in [0.0, 0.0, 0.0, k] {
+                lut.extend(((v * 65535.0f64).round() as u16).to_be_bytes());
+            }
+        }
+    }
+    for _ in 0..4 {
+        lut.extend(0u16.to_be_bytes());
+        lut.extend(65535u16.to_be_bytes());
+    }
+    let tags: [(&[u8; 4], Vec<u8>); 2] = [(b"B2A0", lut.clone()), (b"B2A1", lut)];
+    let mut table = (tags.len() as u32).to_be_bytes().to_vec();
+    let mut data: Vec<u8> = Vec::new();
+    let mut offset = 128 + 4 + tags.len() * 12;
+    for (sig, body) in &tags {
+        table.extend(*sig);
+        table.extend((offset as u32).to_be_bytes());
+        table.extend((body.len() as u32).to_be_bytes());
+        data.extend(body);
+        offset += body.len();
+    }
+    let size = 128 + table.len() + data.len();
+    let mut h = (size as u32).to_be_bytes().to_vec();
+    h.extend([0u8; 4]);
+    h.extend([2, 0x10, 0, 0]);
+    h.extend(b"prtrCMYKLab ");
+    h.extend([0u8; 12]);
+    h.extend(b"acsp");
+    h.resize(128, 0);
+    h.extend(table);
+    h.extend(data);
+    h
+}
+
+/// A one-page document painting RGB black over 10..60, with an output intent profile.
+fn press_doc(profile: Option<Vec<u8>>) -> (Session, DocId) {
+    let mut session = Session::new();
+    let bytes = session.create_blank(200.0, 200.0, 1).unwrap();
+    let mut cos = Document::open(bytes).unwrap();
+    let page = pdfcraft_model::pages(&cos)[0].obj;
+    let content = cos.add(Object::Stream(Stream::from_raw(Dict::new(), b"0 0 0 rg 10 10 50 50 re f 0.2 0 0 0 k 100 100 50 50 re f".to_vec())));
+    cos.update_dict(page, |d| d.set(b"Contents".to_vec(), Object::Ref(content))).unwrap();
+    if let Some(profile) = profile {
+        let mut pd = Dict::new();
+        pd.set(b"N".to_vec(), Object::Int(4));
+        let p = cos.add(Object::Stream(Stream::from_raw(pd, profile)));
+        let mut oi = Dict::new();
+        oi.set(b"Type".to_vec(), Object::name("OutputIntent"));
+        oi.set(b"S".to_vec(), Object::name("GTS_PDFX"));
+        oi.set(b"DestOutputProfile".to_vec(), Object::Ref(p));
+        let root = cos.root().unwrap();
+        cos.update_dict(root, |d| d.set(b"OutputIntents".to_vec(), Object::Array(vec![Object::Dict(oi)]))).unwrap();
+    }
+    let bytes = Arc::new(pdfcraft_cos::write_full(&cos, &Default::default()).unwrap());
+    let id = session.open("press.pdf", None, bytes, None).unwrap();
+    (session, id)
+}
+
+#[test]
+fn separations_convert_rgb_through_the_output_intent_and_say_so() {
+    let (session, id) = press_doc(Some(black_only_profile()));
+    let doc = session.get(id).unwrap();
+    let seps = doc.separations(0, 72.0, true).unwrap();
+    assert!(seps.conversion_from_profile, "{}", seps.conversion);
+    assert!(seps.conversion.contains("GTS_PDFX output intent"), "{}", seps.conversion);
+    let black = pdfcraft_preflight::separations::sample(&seps, 30.0, 30.0).unwrap();
+    assert_eq!(black.inks[0], ("Cyan".to_string(), 0.0));
+    assert!((black.total - 100.0).abs() < 1.0, "{black:?}");
+    let tac = doc.ink_coverage(&[0], &CoverageOptions::default()).unwrap();
+    assert!((tac[0].max - 100.0).abs() < 1.0 && tac[0].conversion.contains("output intent"), "{:?}", tac[0]);
+    let inks = doc.separation_inks(&[]).unwrap();
+    assert_eq!(inks.inks.iter().find(|i| i.info.name == "Black").unwrap().pages, vec![0]);
+    assert!(doc.separations(1, 72.0, true).is_err());
+    assert!(doc.separations(0, 1000.0, true).is_err());
+    assert!(!doc.dirty && doc.can_undo().is_none());
+
+    // Without an output intent, or with one that can't separate, the built-in conversion
+    // says why.
+    let (session, id) = press_doc(None);
+    let seps = session.get(id).unwrap().separations(0, 72.0, true).unwrap();
+    assert!(!seps.conversion_from_profile && seps.conversion.contains("no output intent"), "{}", seps.conversion);
+    let black = pdfcraft_preflight::separations::sample(&seps, 30.0, 30.0).unwrap();
+    assert_eq!(black.total, 190.0);
+    let (session, id) = press_doc(Some(b"garbage".to_vec()));
+    let seps = session.get(id).unwrap().separations(0, 72.0, true).unwrap();
+    assert!(seps.conversion.contains("could not be read"), "{}", seps.conversion);
+}

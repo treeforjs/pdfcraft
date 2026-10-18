@@ -567,3 +567,16 @@ fn jpeg_images_are_decoded_and_re_encoded() {
     assert_eq!(s.dict.name(b"Filter"), Some(b"FlateDecode".as_slice()));
     assert_eq!(s.decoded().unwrap().len(), 16 * 16 * 4);
 }
+
+#[test]
+fn a_cmyk_profile_separates_srgb_and_lab_colours() {
+    let p = Profile::parse(&black_only_profile(), 1).unwrap();
+    let black = p.cmyk_from_srgb([0.0, 0.0, 0.0]).unwrap();
+    assert!(black[..3].iter().all(|v| *v == 0.0) && (black[3] - 1.0).abs() < 0.01, "{black:?}");
+    let white = p.cmyk_from_srgb([1.0, 1.0, 1.0]).unwrap();
+    assert!(white[3] < 0.01, "{white:?}");
+    let mid = p.cmyk_from_lab([50.0, 0.0, 0.0]).unwrap();
+    assert!((mid[3] - 0.5).abs() < 0.02, "{mid:?}");
+    assert!(p.cmyk_from_lab([f64::NAN, 0.0, 0.0]).is_none());
+    assert!(p.cmyk_from_srgb([f64::NAN, 2.0, -1.0]).is_some());
+}
