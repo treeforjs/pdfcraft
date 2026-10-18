@@ -6422,3 +6422,43 @@ fn structure_namespaces_through_tools() {
     assert!(b.call("tags_set", &json!({ "doc": re, "obj": obj, "namespace": "" })).is_err());
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn tags_autotag_through_tools_with_bad_arguments() {
+    let dir = workdir("autotag");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    let invalid = |a: &mut Automation, args: Value| matches!(a.call("tags_autotag", &args), Err(ToolError::InvalidArgs(_)));
+    assert!(invalid(&mut a, json!({ "doc": doc, "pages": [9] })));
+    assert!(invalid(&mut a, json!({ "doc": doc, "pages": [0] })));
+    assert!(invalid(&mut a, json!({ "doc": doc, "pages": [] })));
+    assert!(invalid(&mut a, json!({ "doc": doc, "lang": "en US" })));
+    assert!(invalid(&mut a, json!({ "doc": doc, "lang": 7 })));
+    assert!(invalid(&mut a, json!({ "doc": doc, "replace_existing": "yes" })));
+    assert!(invalid(&mut a, json!({ "doc": doc, "detect_tables": 3 })));
+    assert!(a.call("tags_autotag", &json!({})).is_err());
+    assert!(a.call("tags_autotag", &json!({ "doc": 999 })).is_err());
+
+    let r = ok(&mut a, "tags_autotag", json!({ "doc": doc, "lang": "en-US" }));
+    assert_eq!(r["pages"], json!([1, 2, 3]));
+    assert_eq!(r["lang"], "en-US");
+    assert_eq!(r["counts"]["Document"], 1);
+    assert!(r["elements"].as_u64().unwrap() >= 2, "{r}");
+    assert_eq!(r["before"]["checker"]["rules"]["tagged-pdf"], "failed");
+    assert_eq!(r["after"]["checker"]["rules"]["tagged-pdf"], "passed");
+    assert_eq!(r["after"]["checker"]["rules"]["tagged-content"], "passed");
+    let failed_after: Vec<String> = serde_json::from_value(r["after"]["pdfua"]["failed"].clone()).unwrap();
+    for cp in ["struct-tree-root", "mark-info", "01-005", "parent-tree", "11-001"] {
+        assert!(!failed_after.iter().any(|f| f == cp), "{cp} still fails: {failed_after:?}");
+    }
+    let tree = ok(&mut a, "tags_tree", json!({ "doc": doc }));
+    assert!(!tree["elements"].as_array().unwrap().is_empty(), "{tree}");
+    // Tagged now: refused unless replaced; replacing can't be limited to some pages.
+    assert!(matches!(a.call("tags_autotag", &json!({ "doc": doc })), Err(ToolError::Failed(m)) if m.contains("replace_existing")));
+    assert!(matches!(a.call("tags_autotag", &json!({ "doc": doc, "replace_existing": true, "pages": [1] })), Err(ToolError::Failed(_))));
+    let again = ok(&mut a, "tags_autotag", json!({ "doc": doc, "replace_existing": true, "detect_tables": false, "detect_lists": false }));
+    assert_eq!(again["replaced"], true);
+    assert_eq!(ok(&mut a, "edit_undo", json!({ "doc": doc }))["undone"], "Autotag document");
+    assert_eq!(ok(&mut a, "edit_undo", json!({ "doc": doc }))["undone"], "Autotag document");
+    assert!(a.call("tags_autotag", &json!({ "doc": doc, "pages": [2] })).is_ok(), "untagged again after undo");
+}
