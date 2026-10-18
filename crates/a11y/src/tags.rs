@@ -13,6 +13,7 @@ use std::collections::{HashMap, HashSet};
 use pdfcraft_content::Matrix;
 use pdfcraft_cos::{Dict, Document, ObjRef, Object, PdfString, Stream};
 
+use crate::namespace::{Mode, Namespace, NsRef, Outcome, Resolver, ns_of, read_namespaces};
 use crate::structure::is_standard;
 
 /// Elements beyond this are not read.
@@ -58,8 +59,16 @@ pub struct TagNode {
     pub depth: usize,
     /// /S as written.
     pub ty: String,
-    /// The standard type /S maps to through the role map (`None`: it maps to none).
+    /// The standard type /S maps to through the role map and namespaces (`None`: it maps to
+    /// none).
     pub standard: Option<String>,
+    /// The URI of the element's namespace (/NS); `None`: the default (PDF 1.7) namespace.
+    pub namespace: Option<String>,
+    /// The URI of the namespace the standard type is in; `None`: the default namespace.
+    pub standard_namespace: Option<String>,
+    /// /NS is there but doesn't lead to a namespace dictionary (the element is read in the
+    /// default namespace).
+    pub namespace_missing: bool,
     /// /T.
     pub title: Option<String>,
     /// /Alt.
@@ -103,6 +112,9 @@ pub struct Tags {
     pub roots: Vec<usize>,
     /// The role map: (custom type, the type it maps to), sorted.
     pub role_map: Vec<(String, String)>,
+    /// The PDF 2.0 namespaces: those in the root's /Namespaces, then any other an element
+    /// names.
+    pub namespaces: Vec<Namespace>,
     /// A limit stopped the walk: some of the tree was not read.
     pub truncated: bool,
 }
@@ -172,6 +184,8 @@ pub fn tags(doc: &Document) -> Tags {
     let Some(root) = cat.get(b"StructTreeRoot").map(|o| doc.resolve(o)).and_then(|o| o.as_dict().cloned()) else { return t };
     t.exists = true;
     let rm = role_map(doc, &root);
+    let resolver = Resolver::new(doc, &root);
+    let mut extra_ns: Vec<ObjRef> = Vec::new();
     let mut roles: Vec<(String, String)> = rm.iter().filter_map(|(k, v)| doc.resolve(v).as_name().map(|n| (name_text(k), name_text(n)))).collect();
     roles.sort();
     t.role_map = roles;
@@ -236,12 +250,25 @@ pub fn tags(doc: &Document) -> Tags {
                     }
                     let i = t.nodes.len();
                     let page = page_of(&d).or(page);
+                    let ns = ns_of(&d);
+                    let res = resolver.resolve(doc, s, ns, Mode::Any);
+                    let namespace = resolver.uri(doc, ns).map(|(u, _)| u);
+                    if let NsRef::Obj(r) = ns
+                        && namespace.is_some()
+                        && extra_ns.len() < crate::namespace::MAX_NAMESPACES
+                        && !extra_ns.contains(&r)
+                    {
+                        extra_ns.push(r);
+                    }
                     t.nodes.push(TagNode {
                         obj,
                         parent,
                         depth,
                         ty: name_text(s),
-                        standard: standard_type(doc, &rm, s).map(|v| name_text(&v)),
+                        standard: res.standard().map(name_text),
+                        namespace_missing: ns != NsRef::Default && namespace.is_none(),
+                        namespace,
+                        standard_namespace: res.standard().and(res.uri.clone()),
                         title: text(doc, &d, b"T"),
                         alt: text(doc, &d, b"Alt"),
                         actual_text: text(doc, &d, b"ActualText"),
@@ -262,6 +289,7 @@ pub fn tags(doc: &Document) -> Tags {
             _ => {}
         }
     }
+    t.namespaces = read_namespaces(doc, &root, &extra_ns);
     t
 }
 
@@ -275,11 +303,20 @@ pub struct TagChange {
     pub actual_text: Option<Option<String>>,
     pub lang: Option<Option<String>>,
     pub title: Option<Option<String>>,
+    /// A new /NS: a namespace URI (or short name: `pdf-2.0`, `pdf-1.7`, `mathml`), added to
+    /// /Namespaces when the document has none with that URI; `Some(None)` (or blank) puts the
+    /// element back in the default namespace.
+    pub namespace: Option<Option<String>>,
 }
 
 impl TagChange {
     pub fn is_empty(&self) -> bool {
-        self.ty.is_none() && self.alt.is_none() && self.actual_text.is_none() && self.lang.is_none() && self.title.is_none()
+        self.ty.is_none()
+            && self.alt.is_none()
+            && self.actual_text.is_none()
+            && self.lang.is_none()
+            && self.title.is_none()
+            && self.namespace.is_none()
     }
 }
 
@@ -329,7 +366,7 @@ pub fn allowed_types(doc: &Document) -> Vec<String> {
 /// Change an element's properties, all or nothing.
 pub fn set_tag(doc: &mut Document, element: ObjRef, change: &TagChange) -> Result<(), TagError> {
     if change.is_empty() {
-        return Err(TagError::Invalid("nothing to change: give a type, alt, actual_text, lang or title".into()));
+        return Err(TagError::Invalid("nothing to change: give a type, namespace, alt, actual_text, lang or title".into()));
     }
     let tree = tags(doc);
     if !tree.exists {
@@ -338,11 +375,24 @@ pub fn set_tag(doc: &mut Document, element: ObjRef, change: &TagChange) -> Resul
     if tree.find(element).is_none() {
         return Err(TagError::NotAnElement(element.num));
     }
+    let namespace = match &change.namespace {
+        None => None,
+        Some(v) => match v.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+            None => Some(None),
+            Some(u) => Some(Some(crate::namespace::valid_uri(u)?)),
+        },
+    };
+    // The element's namespace after the change: the type is judged in it.
+    let current = doc.get(element).as_dict().map(ns_of).unwrap_or_default();
+    let in_default = match &namespace {
+        Some(n) => n.is_none(),
+        None => current == NsRef::Default,
+    };
     let ty = match change.ty.as_deref().map(str::trim) {
         None => None,
         Some(t) => {
-            let ok = !t.is_empty() && t != "Artifact" && allowed_types(doc).iter().any(|a| a == t);
-            if !ok {
+            let ok = !t.is_empty() && (!in_default || (t != "Artifact" && allowed_types(doc).iter().any(|a| a == t)));
+            if !ok || t.len() > 127 || t.chars().any(|c| c.is_control() || c.is_whitespace() || c == '/') {
                 return Err(TagError::Invalid(format!(
                     "{t:?} is not a structure type: use a standard type (P, H1–H6, Figure, Table, L, LI, Span …) or a type in the role map"
                 )));
@@ -365,9 +415,23 @@ pub fn set_tag(doc: &mut Document, element: ObjRef, change: &TagChange) -> Resul
             Some(l)
         }
     };
-    doc.update_dict(element, |d| {
+    // The namespace change and the type are checked together, on a copy.
+    let mut copy = doc.clone();
+    let ns_obj = match &namespace {
+        Some(Some(u)) => Some(Some(crate::namespace::find_or_add(&mut copy, u)?)),
+        Some(None) => Some(None),
+        None => None,
+    };
+    copy.update_dict(element, |d| {
         if let Some(t) = &ty {
             d.set(b"S".to_vec(), Object::name(t));
+        }
+        match ns_obj {
+            Some(Some(r)) => d.set(b"NS".to_vec(), Object::Ref(r)),
+            Some(None) => {
+                d.remove(b"NS");
+            }
+            None => {}
         }
         let mut put = |key: &[u8], v: &Option<Option<String>>| match v {
             Some(Some(s)) => d.set(key.to_vec(), Object::String(PdfString::text(s))),
@@ -381,6 +445,25 @@ pub fn set_tag(doc: &mut Document, element: ObjRef, change: &TagChange) -> Resul
         put(b"T", &title);
         put(b"Lang", &lang);
     })?;
+    if ty.is_some() || namespace.is_some() {
+        let d = copy.get(element).as_dict().cloned().unwrap_or_default();
+        let s = d.name(b"S").map(<[u8]>::to_vec).unwrap_or_default();
+        let r = Resolver::for_doc(&copy).resolve(&copy, &s, ns_of(&d), Mode::Any);
+        if r.standard().is_none() || r.broken {
+            let s = name_text(&s);
+            let ns = match &namespace {
+                Some(Some(u)) => u.clone(),
+                _ => Resolver::for_doc(&copy).uri(&copy, ns_of(&d)).map_or_else(|| "the default namespace".to_owned(), |(u, _)| u),
+            };
+            return Err(TagError::Invalid(match r.outcome {
+                Outcome::Cycle => format!("the role mapping of {s} in {ns} is circular"),
+                _ => format!(
+                    "{s} isn't a standard structure type in {ns} and isn't role-mapped to one there (add a role mapping to the namespace first)"
+                ),
+            }));
+        }
+    }
+    *doc = copy;
     Ok(())
 }
 

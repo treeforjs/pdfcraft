@@ -1192,7 +1192,7 @@ pub fn tools() -> Vec<ToolDef> {
         t("accessibility_set_alt", "Set alternate text", "Set a figure's alternate text (alt; empty or omitted clears it), or mark it decorative (decorative: true: its content becomes an artifact and the figure leaves the tags). figure is a number from accessibility_figures. Returns the figures. Undoable.")
             .cmd("a11y.alt_text")
             .with(schema(json!({ "doc": doc(), "figure": { "type": "integer", "minimum": 1 }, "alt": { "type": "string" }, "decorative": { "type": "boolean" } }), &["doc", "figure"])),
-        t("tags_tree", "Show the tags tree", "The logical structure tree (Tags panel), read with cycle and size limits: each element in document order with its 1-based element number, object number (obj, null for an element that can't be edited), parent, depth, type as written and its standard type through the role map, title, alt, actual_text, lang, page, and kids (elements, marked content as mcid + page, object references as object + subtype). Also the catalog language, the role map, and the types tags_set accepts.")
+        t("tags_tree", "Show the tags tree", "The logical structure tree (Tags panel), read with cycle and size limits: each element in document order with its 1-based element number, object number (obj, null for an element that can't be edited), parent, depth, type as written and its standard type through the role map and PDF 2.0 namespaces (RoleMapNS), its namespace and the standard type's namespace (URIs; null: the default PDF 1.7 namespace; namespace_missing when /NS leads to no namespace dictionary), title, alt, actual_text, lang, page, and kids (elements, marked content as mcid + page, object references as object + subtype). Also the catalog language, the role map, the namespaces (obj, uri, kind pdf-1.7/pdf-2.0/mathml/other, schema, listed in /Namespaces, role_map), and the types tags_set accepts.")
             .ro()
             .with(schema(json!({ "doc": doc(), "limit": { "type": "integer", "minimum": 1, "maximum": 100000, "description": "At most this many elements (default 5000)." } }), &["doc"])),
         t("tags_mark_artifact", "Change to artifact", "Reading Order / Content panel ▸ Change to Artifact: mark page content as an artifact (running headers and footers, page numbers, rules, backgrounds, watermarks) so assistive technology and accessible-text export skip it. Select it with page plus rect (points from the top-left of the displayed page) and/or mcids (marked-content ids on that page, from tags_tree), or with elements (structure element obj numbers from tags_tree; everything they cover, on any page). Inside rect, tagged marked content changes as a whole when everything it paints is inside (text by where each run starts, paths by their points, images by their boxes), and untagged text runs, paths and images are wrapped one by one, so untagged documents can be marked too. The content is wrapped in /Artifact marked content with the optional type (Pagination, Layout, Page, Background) and subtype (Header, Footer, Watermark; pagination only, implies Pagination); its marked-content references leave the structure tree and the parent tree, and elements left empty leave the tree. q/Q, BT/ET and marked-content nesting are kept. All or nothing, one undo step. Returns marked (page, mcid), untagged (operations wrapped), elements_removed, pages changed and the elements left. mcids and elements need a tagged document; content inside form XObjects and elements holding annotations are refused.")
@@ -1208,18 +1208,37 @@ pub fn tools() -> Vec<ToolDef> {
                 }),
                 &["doc"],
             )),
-        t("tags_set", "Change tag properties", "Change one structure element (obj from tags_tree): type (a standard structure type, or a custom type the role map maps to one), alt, actual_text, lang (a language tag such as en-US) or title; an empty string removes that entry. All or nothing, one undo step. Returns the element.")
+        t("tags_set", "Change tag properties", "Change one structure element (obj from tags_tree): type (a standard structure type, or a custom type the role map maps to one), namespace (a PDF 2.0 structure namespace URI, or pdf-2.0, pdf-1.7 or mathml; added to the structure tree's /Namespaces if missing; empty puts the element back in the default PDF 1.7 namespace), alt, actual_text, lang (a language tag such as en-US) or title; an empty string removes that entry. The type must be standard in the element's namespace or role-mapped from it to a standard type. All or nothing, one undo step. Returns the element.")
             .with(schema(
                 json!({
                     "doc": doc(),
                     "obj": { "type": "integer", "minimum": 1, "description": "The element's object number (obj) from tags_tree." },
                     "type": { "type": "string" },
+                    "namespace": { "type": "string", "description": "Namespace URI or pdf-2.0 / pdf-1.7 / mathml; empty: the default namespace." },
                     "alt": { "type": "string" },
                     "actual_text": { "type": "string" },
                     "lang": { "type": "string" },
                     "title": { "type": "string" }
                 }),
                 &["doc", "obj"],
+            )),
+        t("tags_add_namespace", "Add structure namespace", "PDF 2.0 structure namespaces (ISO 32000-2 §14.7.4): add a namespace (uri, or pdf-2.0, pdf-1.7, mathml) to the structure tree's /Namespaces, or change the one there: its schema (a file name or URL) and role mappings (role_map: [{type, maps_to, namespace}], /RoleMapNS; namespace is the target's URI or short name, omitted for the default namespace; an empty maps_to removes that mapping). Every mapped type must then reach a standard type: circular or dead-end chains are refused, and standard PDF 2.0 types can't be remapped in the PDF 2.0 namespace. Then put elements in it with tags_set namespace. All or nothing, one undo step. Returns the namespace.")
+            .with(schema(
+                json!({
+                    "doc": doc(),
+                    "uri": { "type": "string", "description": "Namespace URI or pdf-2.0 / pdf-1.7 / mathml." },
+                    "schema": { "type": "string" },
+                    "role_map": {
+                        "type": "array",
+                        "maxItems": 1000,
+                        "items": {
+                            "type": "object",
+                            "properties": { "type": { "type": "string" }, "maps_to": { "type": "string" }, "namespace": { "type": "string" } },
+                            "required": ["type", "maps_to"]
+                        }
+                    }
+                }),
+                &["doc", "uri"],
             )),
         t("alt_text_list", "List figures needing alternate text", "Set Alternate Text's walk: Figure elements (through the role map) that have no alternate or actual text on themselves or an ancestor (all: true lists every figure), and images painted outside tagged and artifact content (untagged_images: page and 1-based image number). Rects are top-left-origin points. Also the Accessibility Checker's figures-alt-text status.")
             .ro()

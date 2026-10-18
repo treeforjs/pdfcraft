@@ -6,6 +6,8 @@ use std::collections::{HashMap, HashSet};
 use pdfcraft_content::Matrix;
 use pdfcraft_cos::{Dict, Document, ObjRef, Object, PdfString, Stream};
 
+use crate::namespace::{Mode, Resolver, ns_of};
+
 /// A Figure element (after the role map).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Figure {
@@ -32,19 +34,11 @@ fn tree_root(doc: &Document) -> Option<Dict> {
     cat.get(b"StructTreeRoot").map(|o| doc.resolve(o)).and_then(|o| o.as_dict().cloned())
 }
 
-/// The standard type of a structure type through the role map.
-fn standard(doc: &Document, role_map: &Dict, s: &[u8]) -> Vec<u8> {
-    let mut t = s.to_vec();
-    for _ in 0..12 {
-        if crate::structure::is_standard(&t) {
-            break;
-        }
-        match role_map.get(&t).map(|o| doc.resolve(o)).and_then(|o| o.as_name().map(<[u8]>::to_vec)) {
-            Some(n) if n != t => t = n,
-            _ => break,
-        }
-    }
-    t
+/// The standard type of an element through the role map and its namespace.
+fn standard(doc: &Document, resolver: &Resolver, d: &Dict) -> Vec<u8> {
+    let Some(s) = d.name(b"S") else { return Vec::new() };
+    let r = resolver.resolve(doc, s, ns_of(d), Mode::Any);
+    r.standard().map_or_else(|| s.to_vec(), <[u8]>::to_vec)
 }
 
 /// Indirect structure elements in document order, with their page.
@@ -213,12 +207,12 @@ pub(crate) fn content_bbox(doc: &Document, page: &Dict, ids: &HashSet<i64>) -> O
 /// The figures, in document order.
 pub fn figures(doc: &Document) -> Vec<Figure> {
     let Some(root) = tree_root(doc) else { return Vec::new() };
-    let role_map = root.get(b"RoleMap").map(|o| doc.resolve(o)).and_then(|o| o.as_dict().cloned()).unwrap_or_default();
+    let resolver = Resolver::new(doc, &root);
     let pages = pdfcraft_model::pages(doc);
     let index: HashMap<ObjRef, usize> = pages.iter().enumerate().map(|(i, p)| (p.obj, i)).collect();
     elements(doc)
         .into_iter()
-        .filter(|(_, d, _)| d.name(b"S").is_some_and(|s| standard(doc, &role_map, s) == b"Figure"))
+        .filter(|(_, d, _)| standard(doc, &resolver, d) == b"Figure")
         .map(|(obj, d, pg)| {
             let page = pg.and_then(|p| index.get(&p).copied());
             let alt = d.get(b"Alt").map(|o| doc.resolve(o)).and_then(|o| o.as_string().map(|s| s.to_text()));
@@ -231,12 +225,9 @@ pub fn figures(doc: &Document) -> Vec<Figure> {
 
 fn check_figure(doc: &Document, obj: ObjRef) -> Result<Dict, AltError> {
     let root = tree_root(doc).ok_or(AltError::Untagged)?;
-    let role_map = root.get(b"RoleMap").map(|o| doc.resolve(o)).and_then(|o| o.as_dict().cloned()).unwrap_or_default();
+    let resolver = Resolver::new(doc, &root);
     let d = doc.get(obj).as_dict().cloned().ok_or(AltError::NotAFigure(obj.num))?;
-    match d.name(b"S") {
-        Some(s) if standard(doc, &role_map, s) == b"Figure" => Ok(d),
-        _ => Err(AltError::NotAFigure(obj.num)),
-    }
+    if standard(doc, &resolver, &d) == b"Figure" { Ok(d) } else { Err(AltError::NotAFigure(obj.num)) }
 }
 
 /// Set (or, with `None` or blank text, remove) a figure's alternate text.

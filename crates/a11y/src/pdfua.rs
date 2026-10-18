@@ -13,6 +13,7 @@ use pdfcraft_cos::{Dict, Document, ObjRef, Object};
 
 use crate::Rule;
 use crate::content::{Scan, catalog, full_name, maps_to_unicode, text_of};
+use crate::namespace::{Mode, NsRef, Outcome, Resolver, in_pdf17};
 use crate::structure::Tree;
 
 /// The PDF/UA part to verify.
@@ -234,78 +235,6 @@ impl Out {
     }
 }
 
-/// Standard structure types of PDF 1.7 (ISO 32000-1 §14.8.4), the set PDF/UA-1 uses.
-const STANDARD_17: &[&[u8]] = &[
-    b"Document",
-    b"Part",
-    b"Art",
-    b"Sect",
-    b"Div",
-    b"BlockQuote",
-    b"Caption",
-    b"TOC",
-    b"TOCI",
-    b"Index",
-    b"NonStruct",
-    b"Private",
-    b"P",
-    b"H",
-    b"H1",
-    b"H2",
-    b"H3",
-    b"H4",
-    b"H5",
-    b"H6",
-    b"L",
-    b"LI",
-    b"Lbl",
-    b"LBody",
-    b"Table",
-    b"TR",
-    b"TH",
-    b"TD",
-    b"THead",
-    b"TBody",
-    b"TFoot",
-    b"Span",
-    b"Quote",
-    b"Note",
-    b"Reference",
-    b"BibEntry",
-    b"Code",
-    b"Link",
-    b"Annot",
-    b"Ruby",
-    b"RB",
-    b"RT",
-    b"RP",
-    b"Warichu",
-    b"WT",
-    b"WP",
-    b"Figure",
-    b"Formula",
-    b"Form",
-];
-
-/// PDF 1.7 types with no PDF 2.0 counterpart (ISO 32000-2 dropped them from its namespace).
-const NOT_IN_PDF20: &[&[u8]] = &[b"Art", b"BlockQuote", b"Private", b"Quote", b"Note", b"Reference", b"BibEntry", b"Code"];
-
-const NS_PDF17: &[u8] = b"http://iso.org/pdf/ssn";
-const NS_PDF20: &[u8] = b"http://iso.org/pdf2/ssn";
-const NS_MATHML: &[u8] = b"http://www.w3.org/1998/Math/MathML";
-
-/// A type of the PDF 2.0 standard structure namespace.
-fn in_pdf20(t: &[u8]) -> bool {
-    if let [b'H', digits @ ..] = t
-        && !digits.is_empty()
-        && digits.iter().all(u8::is_ascii_digit)
-        && digits.first() != Some(&b'0')
-    {
-        return true;
-    }
-    crate::structure::is_standard(t) && !NOT_IN_PDF20.contains(&t)
-}
-
 fn name_text(n: &[u8]) -> String {
     String::from_utf8_lossy(n).into_owned()
 }
@@ -470,9 +399,13 @@ enum Resolved {
     Ok,
     /// A PDF 1.7 type with no PDF 2.0 counterpart (UA-2).
     NotInPdf20(Vec<u8>),
+    /// A PDF 2.0-only type in the default (PDF 1.7) namespace (UA-2).
+    Pdf20InDefault(Vec<u8>),
     /// Mapping ends at a type that isn't standard.
     Dead(Vec<u8>),
     Cycle,
+    /// A namespace on the way is missing or isn't a namespace dictionary (UA-2).
+    MissingNamespace(NsRef),
 }
 
 /// PDF/UA-1: follow the role map to a PDF 1.7 standard type.
@@ -480,7 +413,7 @@ fn resolve_17(doc: &Document, role_map: &Dict, ty: &[u8]) -> Resolved {
     let mut t = ty.to_vec();
     let mut seen = HashSet::new();
     for _ in 0..64 {
-        if STANDARD_17.contains(&t.as_slice()) {
+        if in_pdf17(&t) {
             return Resolved::Ok;
         }
         if !seen.insert(t.clone()) {
@@ -494,49 +427,18 @@ fn resolve_17(doc: &Document, role_map: &Dict, ty: &[u8]) -> Resolved {
     Resolved::Cycle
 }
 
-/// A namespace dictionary: its URI and role map.
-fn namespace(doc: &Document, r: ObjRef) -> (Vec<u8>, Dict) {
-    let d = doc.get(r).as_dict().cloned().unwrap_or_default();
-    let uri = d.get(b"NS").map(|o| doc.resolve(o)).and_then(|o| o.as_string().map(|s| s.bytes.clone())).unwrap_or_default();
-    let map = dict_of(doc, &d, b"RoleMapNS").unwrap_or_default();
-    (uri, map)
-}
-
 /// PDF/UA-2: follow namespace role maps (and the root role map for the default namespace) to
 /// the PDF 2.0 or MathML namespace.
-fn resolve_20(doc: &Document, role_map: &Dict, ty: &[u8], ns: Option<ObjRef>) -> Resolved {
-    let (mut t, mut ns) = (ty.to_vec(), ns);
-    let mut seen = HashSet::new();
-    for _ in 0..64 {
-        if !seen.insert((t.clone(), ns)) {
-            return Resolved::Cycle;
-        }
-        let (uri, map) = match ns {
-            Some(r) => namespace(doc, r),
-            None => (NS_PDF17.to_vec(), role_map.clone()),
-        };
-        if uri == NS_MATHML || (uri == NS_PDF20 && in_pdf20(&t)) {
-            return Resolved::Ok;
-        }
-        let pdf17 = uri == NS_PDF17;
-        if pdf17 && in_pdf20(&t) {
-            return Resolved::Ok;
-        }
-        let next = map.get(&t).map(|o| doc.resolve(o)).and_then(|o| match &*o {
-            Object::Name(n) => Some((n.to_vec(), None)),
-            Object::Array(a) => {
-                let n = a.first().and_then(Object::as_name).map(<[u8]>::to_vec)?;
-                Some((n, a.get(1).and_then(Object::as_ref)))
-            }
-            _ => None,
-        });
-        match next {
-            Some((n, next_ns)) => (t, ns) = (n, next_ns),
-            None if pdf17 && STANDARD_17.contains(&t.as_slice()) => return Resolved::NotInPdf20(t),
-            None => return Resolved::Dead(t),
-        }
+fn resolve_20(doc: &Document, resolver: &Resolver, ty: &[u8], ns: NsRef) -> Resolved {
+    let r = resolver.resolve(doc, ty, ns, Mode::Pdf20);
+    match r.outcome {
+        Outcome::Standard => Resolved::Ok,
+        Outcome::Unmapped => Resolved::Dead(r.ty),
+        Outcome::Cycle => Resolved::Cycle,
+        Outcome::MissingNamespace(n) => Resolved::MissingNamespace(n),
+        Outcome::NotInPdf20 => Resolved::NotInPdf20(r.ty),
+        Outcome::Pdf20InDefault => Resolved::Pdf20InDefault(r.ty),
     }
-    Resolved::Cycle
 }
 
 fn elem_label(tree: &Tree, i: usize) -> String {
@@ -567,21 +469,22 @@ fn structure(doc: &Document, cat: &Dict, tree: &Tree, part: UaPart, out: &mut Ou
     // Role mapping, once per distinct type (and namespace).
     if part == UaPart::Ua1 {
         for (k, _) in role_map.iter().take(10_000) {
-            if STANDARD_17.contains(&k.as_slice()) {
+            if in_pdf17(k) {
                 let k = name_text(k);
                 out.add("02-003", None, None, || format!("The role map remaps the standard type {k}"));
             }
         }
     }
-    let mut types: BTreeMap<(Vec<u8>, Option<ObjRef>), usize> = BTreeMap::new();
+    let resolver = Resolver::new(doc, &root);
+    let mut types: BTreeMap<(Vec<u8>, NsRef), usize> = BTreeMap::new();
     for (i, e) in tree.elems.iter().enumerate() {
-        let ns = if part == UaPart::Ua2 { e.ns } else { None };
+        let ns = if part == UaPart::Ua2 { e.ns } else { NsRef::Default };
         types.entry((e.raw.clone(), ns)).or_insert(i);
     }
     for ((ty, ns), first) in &types {
         let r = match part {
             UaPart::Ua1 => resolve_17(doc, &role_map, ty),
-            UaPart::Ua2 => resolve_20(doc, &role_map, ty, *ns),
+            UaPart::Ua2 => resolve_20(doc, &resolver, ty, *ns),
         };
         let e = tree.elems.get(*first);
         let (page, obj) = (e.and_then(|e| e.page), e.and_then(|e| e.obj));
@@ -601,6 +504,39 @@ fn structure(doc: &Document, cat: &Dict, tree: &Tree, part: UaPart, out: &mut Ou
             Resolved::NotInPdf20(end) => {
                 let end = name_text(&end);
                 out.add("ua2-namespace", page, obj, || format!("{t} resolves to {end}, a PDF 1.7 type with no PDF 2.0 counterpart"));
+            }
+            Resolved::Pdf20InDefault(end) => {
+                let end = name_text(&end);
+                out.add("ua2-namespace", page, obj, || {
+                    format!(
+                        "{t} resolves to {end}, a PDF 2.0 type, but in the default (PDF 1.7) namespace: give the element /NS the PDF 2.0 namespace"
+                    )
+                });
+            }
+            Resolved::MissingNamespace(n) => {
+                let which = match n {
+                    NsRef::Obj(r) => format!("namespace object {}", r.num),
+                    _ => "a namespace that isn't an indirect reference".to_owned(),
+                };
+                out.add("ua2-namespace", page, obj, || format!("{t} is in (or maps into) {which}, which isn't a namespace dictionary"));
+            }
+        }
+    }
+
+    // Namespaces elements use must be listed in the root's /Namespaces (ISO 32000-2 Table 355).
+    if part == UaPart::Ua2 {
+        let listed: HashSet<ObjRef> = crate::namespace::listed(doc, &root).into_iter().collect();
+        let mut reported = HashSet::new();
+        for e in &tree.elems {
+            if let NsRef::Obj(r) = e.ns
+                && !listed.contains(&r)
+                && resolver.uri(doc, e.ns).is_some()
+                && reported.insert(r)
+            {
+                let what = name_text(&e.raw);
+                out.add("ua2-namespace", e.page, e.obj, || {
+                    format!("A {what} element uses namespace object {}, which the structure tree root's /Namespaces doesn't list", r.num)
+                });
             }
         }
     }

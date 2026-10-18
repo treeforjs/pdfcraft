@@ -1451,6 +1451,12 @@ pub enum Edit {
         element: u32,
         change: a11y::TagChange,
     },
+    /// Tags panel ▸ Namespaces: add a PDF 2.0 structure namespace (ISO 32000-2 §14.7.4) to the
+    /// structure tree, or change one's schema and role mappings (`/RoleMapNS`), see
+    /// [`a11y::add_namespace`].
+    AddNamespace {
+        spec: a11y::NamespaceSpec,
+    },
     /// Set Alternate Text on an untagged image: tag image `index` (0-based, among the page's
     /// untagged images) on `page` as a Figure with `alt`.
     TagImage {
@@ -1770,6 +1776,7 @@ impl Edit {
             Edit::SetAltText { .. } => "Set alternate text".into(),
             Edit::MarkDecorative { .. } => "Mark figure as decorative".into(),
             Edit::SetTag { .. } => "Change tag properties".into(),
+            Edit::AddNamespace { .. } => "Add structure namespace".into(),
             Edit::MarkArtifact { .. } => "Change to artifact".into(),
             Edit::TagImage { .. } => "Set alternate text".into(),
             Edit::AddOcrText { .. } => "Recognize text".into(),
@@ -1995,6 +2002,7 @@ fn check_permission(edit: &Edit, p: &pdfcraft_cos::Permissions) -> Result<(), Ed
         | Edit::SetAltText { .. }
         | Edit::MarkDecorative { .. }
         | Edit::SetTag { .. }
+        | Edit::AddNamespace { .. }
         | Edit::MarkArtifact { .. }
         | Edit::TagImage { .. }
         | Edit::AddOcrText { .. }
@@ -2269,6 +2277,9 @@ fn run_edit(doc: &mut pdfcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -> 
         Edit::SetTag { element, change } => {
             let r = pdfcraft_cos::ObjRef::new(*element, doc.generation(*element));
             a11y::set_tag(doc, r, change).map_err(|e| EditError::Accessibility(e.to_string()))?;
+        }
+        Edit::AddNamespace { spec } => {
+            a11y::add_namespace(doc, spec).map_err(|e| EditError::Accessibility(e.to_string()))?;
         }
         Edit::MarkArtifact { selection } => {
             a11y::mark_artifact(doc, selection).map_err(|e| EditError::Accessibility(e.to_string()))?;
