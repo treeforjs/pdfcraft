@@ -1903,6 +1903,57 @@ pub fn tools() -> Vec<ToolDef> {
             .destructive()
             .cmd("edit.edit_text")
             .with(schema(json!({ "doc": doc(), "page": { "type": "integer", "minimum": 1 }, "image": { "type": "integer", "minimum": 1 }, "path": { "type": "string" } }), &["doc", "page", "image", "path"])),
+        t("page_objects", "List page objects", "The objects a page's own content draws, in paint order from back to front (Edit a PDF ▸ select objects): number, kind (text, path, image, form, inline_image, shading, or group for tagged content of several kinds), box (top-left-origin points; null when it can't be measured, e.g. a shading), the MCID that makes tagged content one object, and the text a text object shows. Everything inside one marked-content sequence with an MCID is one object. Added text and images and page marks (headers, watermarks) are not listed: edit them with content_update / doc_header_footer and friends. Numbers change when the order changes: take them from a fresh call. When the document does not allow copying text, text fields are null and text_withheld explains why.")
+            .ro()
+            .cmd("edit.edit_text")
+            .with(schema(json!({ "doc": doc(), "page": { "type": "integer", "minimum": 1 } }), &["doc", "page"])),
+        t("objects_arrange", "Arrange objects", "Change the paint order of page objects (numbers from page_objects): order front (Bring to Front), forward (Bring Forward: above the next object up that overlaps them, or the next one up when none does), backward (Send Backward, the same downwards) or back (Send to Back). Several objects keep their relative order. Each object keeps its look (graphics state, clip, colours, tags and optional content). One undo step; a no-op when nothing would change. Pages that use text as a clipping path, or whose text objects hold stray graphics-state operators, are refused.")
+            .cmd("edit.edit_text")
+            .with(schema(
+                json!({
+                    "doc": doc(),
+                    "page": { "type": "integer", "minimum": 1 },
+                    "objects": { "type": "array", "items": { "type": "integer", "minimum": 1 }, "minItems": 1, "description": "Object numbers from page_objects." },
+                    "order": { "type": "string", "enum": ["front", "forward", "backward", "back"] },
+                }),
+                &["doc", "page", "objects", "order"],
+            )),
+        t("objects_align", "Align objects", "Align page objects (numbers from page_objects) as displayed: left, right, top or bottom edges, horizontal_center (centres on one vertical line) or vertical_center (centres on one horizontal line). Several objects align to their combined box; a single object aligns to the page (crop box). Objects move by a translation of their own drawing, so text stays editable text. One undo step; a no-op when already aligned. Objects without a box (null rect) can't be aligned.")
+            .cmd("edit.edit_text")
+            .with(schema(
+                json!({
+                    "doc": doc(),
+                    "page": { "type": "integer", "minimum": 1 },
+                    "objects": { "type": "array", "items": { "type": "integer", "minimum": 1 }, "minItems": 1, "description": "Object numbers from page_objects." },
+                    "align": { "type": "string", "enum": ["left", "horizontal_center", "right", "top", "vertical_center", "bottom"] },
+                }),
+                &["doc", "page", "objects", "align"],
+            )),
+        t("objects_distribute", "Distribute objects", "Space three or more page objects (numbers from page_objects) evenly as displayed: axis horizontal or vertical. The two outermost objects (by centre) stay where they are and the others move so the gaps between neighbours are equal. One undo step.")
+            .cmd("edit.edit_text")
+            .with(schema(
+                json!({
+                    "doc": doc(),
+                    "page": { "type": "integer", "minimum": 1 },
+                    "objects": { "type": "array", "items": { "type": "integer", "minimum": 1 }, "minItems": 3, "description": "Object numbers from page_objects." },
+                    "axis": { "type": "string", "enum": ["horizontal", "vertical"] },
+                }),
+                &["doc", "page", "objects", "axis"],
+            )),
+        t("objects_transform", "Rotate, flip or move objects", "Change page objects (numbers from page_objects) in place: action rotate (quarters clockwise, default 1, each about its own centre), flip_horizontal / flip_vertical (as displayed, each about its own centre) or move (dx right, dy down, in points). Text stays editable text; everything else on the page is untouched. One undo step.")
+            .cmd("edit.edit_text")
+            .with(schema(
+                json!({
+                    "doc": doc(),
+                    "page": { "type": "integer", "minimum": 1 },
+                    "objects": { "type": "array", "items": { "type": "integer", "minimum": 1 }, "minItems": 1, "description": "Object numbers from page_objects." },
+                    "action": { "type": "string", "enum": ["rotate", "flip_horizontal", "flip_vertical", "move"] },
+                    "quarters": { "type": "integer" },
+                    "dx": { "type": "number" },
+                    "dy": { "type": "number" },
+                }),
+                &["doc", "page", "objects", "action"],
+            )),
         t("text_fonts", "List page fonts", "List the fonts available in a page's resources, with exact resource names, face, weight/slant, subset status and whether each can encode the optional proposed text. Pass resource as text_edit's font_resource to select that exact face. Subsets are never expanded; unavailable characters are refused.")
             .ro()
             .cmd("edit.edit_text")

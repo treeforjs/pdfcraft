@@ -43,3 +43,15 @@ let report = convert_colors(&mut doc, &[0, 1, 2], &settings)?;
   colour-key masks, images over 40 million pixels, mesh shadings with per-vertex colours,
   unevaluable tint transforms. Not visited: Type 3 glyph procedures and soft-mask groups.
 - `output_intent` makes the destination profile the catalog's `GTS_PDFX` output intent.
+
+## Page objects: arrange, align, distribute
+
+`objects::page_objects(doc, page)` lists what the page's own content draws, in paint order:
+text objects, paths, images, Forms, inline images and shadings (everything inside one
+marked-content sequence with an MCID is one object). `objects::edit_objects(doc, page,
+&[indexes], &ObjectsEdit::…)` arranges them (`Arrange::{Front, Forward, Backward, Back}`: the
+original, untagged content becomes one stream where each object is wrapped in `q … Q` after
+replaying the graphics state it was painted with, and marked content is reopened as needed),
+or aligns, distributes, rotates, flips or moves them (each selected object gets a `q <cm> … Q`
+wrapper followed by the state it leaves for later content; everything else is copied byte for
+byte). Directions are as displayed, after `/Rotate`. Added items and page marks are not listed.

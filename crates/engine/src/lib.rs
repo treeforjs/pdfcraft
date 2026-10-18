@@ -72,6 +72,8 @@ pub use pdfcraft_forms::{
 };
 
 pub use pdfcraft_a11y as a11y;
+/// Edit a PDF ▸ arrange, align, distribute, rotate, flip and move page objects.
+pub use pdfcraft_edit::objects::{AlignTo, Arrange, Axis, ObjectKind, ObjectsEdit, PageObject};
 pub use pdfcraft_edit::text::validate_paragraph_text;
 pub use pdfcraft_edit::{BlockStyle, PageFont, PageImage, TextBlock, TextLine, TextRun, first_undrawable};
 pub use pdfcraft_measure as measure;
@@ -414,6 +416,12 @@ impl Document {
             return Err("grouped Form artwork is not a bitmap; Save Image As is only available for raster images".into());
         }
         pdfcraft_create::image_file(&editor.cos, img.object.ok_or("the image has no object")?)
+    }
+
+    /// Edit a PDF: the objects `page` (0-based) draws in its own content, in paint order
+    /// (indexes for [`Edit::EditPageObjects`]).
+    pub fn page_objects(&self, page: usize) -> Vec<pdfcraft_edit::objects::PageObject> {
+        self.editor.as_ref().and_then(|e| pdfcraft_edit::objects::page_objects(&e.cos, page).ok()).unwrap_or_default()
     }
 
     /// Edit a PDF ▸ Edit text: the paragraphs on `page` (0-based).
@@ -1589,6 +1597,14 @@ pub enum Edit {
         index: usize,
         change: ImageEdit,
     },
+    /// Edit a PDF ▸ selected page objects (indexes from `Document::page_objects`): arrange,
+    /// align, distribute, rotate, flip or move them. A no-op (no undo step) when nothing would
+    /// change.
+    EditPageObjects {
+        page: usize,
+        objects: Vec<usize>,
+        change: pdfcraft_edit::objects::ObjectsEdit,
+    },
     /// Edit text in a paragraph box: replace paragraph `block` (from `Document::text_blocks`),
     /// rewrapped to the box's width.
     EditTextBlock {
@@ -1856,6 +1872,7 @@ impl Edit {
                 ImageEdit::Crop(_) => "Crop image".into(),
                 ImageEdit::Delete => "Delete image".into(),
             },
+            Edit::EditPageObjects { change, .. } => objects_label(change).into(),
             Edit::FixHairlines { .. } => "Fix hairlines".into(),
             Edit::FlattenTransparency { .. } => "Flatten transparency".into(),
             Edit::AddPrinterMarks { .. } => "Add printer marks".into(),
@@ -2079,6 +2096,7 @@ fn check_permission(edit: &Edit, p: &pdfcraft_cos::Permissions) -> Result<(), Ed
         | Edit::EditTextLine { .. }
         | Edit::EditTextBlock { .. }
         | Edit::EditPageImage { .. }
+        | Edit::EditPageObjects { .. }
         | Edit::Flatten { .. }
         | Edit::FlattenFillSign => {
             if p.modify() {
@@ -2088,6 +2106,28 @@ fn check_permission(edit: &Edit, p: &pdfcraft_cos::Permissions) -> Result<(), Ed
             }
         }
         Edit::Batch { edits, .. } => edits.iter().try_for_each(|e| check_permission(e, p)),
+    }
+}
+
+/// The undo label of a page-object edit.
+fn objects_label(change: &pdfcraft_edit::objects::ObjectsEdit) -> &'static str {
+    use pdfcraft_edit::objects::{AlignTo, Arrange, Axis, ObjectsEdit};
+    match change {
+        ObjectsEdit::Arrange(Arrange::Front) => "Bring to front",
+        ObjectsEdit::Arrange(Arrange::Forward) => "Bring forward",
+        ObjectsEdit::Arrange(Arrange::Backward) => "Send backward",
+        ObjectsEdit::Arrange(Arrange::Back) => "Send to back",
+        ObjectsEdit::Align(AlignTo::Left) => "Align left",
+        ObjectsEdit::Align(AlignTo::HorizontalCenter) => "Align horizontal centers",
+        ObjectsEdit::Align(AlignTo::Right) => "Align right",
+        ObjectsEdit::Align(AlignTo::Top) => "Align top",
+        ObjectsEdit::Align(AlignTo::VerticalCenter) => "Align vertical centers",
+        ObjectsEdit::Align(AlignTo::Bottom) => "Align bottom",
+        ObjectsEdit::Distribute(Axis::Horizontal) => "Distribute horizontally",
+        ObjectsEdit::Distribute(Axis::Vertical) => "Distribute vertically",
+        ObjectsEdit::Rotate(_) => "Rotate objects",
+        ObjectsEdit::Flip { .. } => "Flip objects",
+        ObjectsEdit::Move { .. } => "Move objects",
     }
 }
 
@@ -2197,6 +2237,7 @@ fn tag_scope(edit: &Edit) -> TagScope {
         Edit::EditTextLine { page, .. }
         | Edit::EditTextBlock { page, .. }
         | Edit::EditPageImage { page, .. }
+        | Edit::EditPageObjects { page, .. }
         | Edit::AddText { page, .. }
         | Edit::AddImage { page, .. }
         | Edit::UpdateContent { page, .. }
@@ -2470,6 +2511,9 @@ fn run_edit_inner(doc: &mut pdfcraft_cos::Document, edit: &Edit, cx: &mut EditCt
         }
         Edit::RemovePageImageBackgrounds { pages, options } => {
             pdfcraft_optimize::remove_page_image_backgrounds(doc, pages, *options).map_err(|e| EditError::Optimize(e.to_string()))?;
+        }
+        Edit::EditPageObjects { page, objects, change } => {
+            pdfcraft_edit::objects::edit_objects(doc, *page, objects, change)?;
         }
         Edit::EditPageImage { page, index, change } => {
             let img = pdfcraft_edit::page_images(doc, *page)?
@@ -3402,6 +3446,13 @@ impl Session {
             if found.is_empty() {
                 let untouched = if pages.is_empty() { (0..n).collect() } else { pages.clone() };
                 doc.flatten_report = Some(FlattenReport { pages: Vec::new(), untouched });
+                return Ok(());
+            }
+        }
+        if let Edit::EditPageObjects { page, objects, change } = &edit {
+            let changes =
+                guard(|| pdfcraft_edit::objects::objects_edit_changes(&editor.cos, *page, objects, change)).map_err(EditError::Invalid)??;
+            if !changes {
                 return Ok(());
             }
         }

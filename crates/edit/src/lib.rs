@@ -687,6 +687,7 @@ pub use flatten::{flatten, flatten_fill_sign};
 pub use hairlines::{Hairlines, fix_hairlines};
 pub use printer_marks::{MarkStyle, MarkedPage, PrinterMarks, add_printer_marks};
 pub mod images;
+pub mod objects;
 pub use images::{ImageChange, PageImage, change_image, page_images, reading_images, rect_to_rect, turn_about_centre};
 pub mod text;
 pub use text::{
