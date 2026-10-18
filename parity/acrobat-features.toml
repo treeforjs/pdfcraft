@@ -5755,11 +5755,11 @@ title = "Control internet access from PDFs"
 area = "G"
 tier = "P1"
 milestone = "M6"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["trust_urls_get", "trust_urls_set", "trust_url_check"]
+evidence = ["crates/engine/src/url_access.rs::hosts_normalise_case_dots_ports_userinfo_and_idna", "crates/engine/src/url_access.rs::rules_match_subdomains_unless_exact_and_never_by_suffix_alone", "crates/engine/src/url_access.rs::the_three_modes", "crates/engine/src/url_access.rs::other_schemes_are_refused_and_email_is_reported_apart", "crates/automation/tests/url_access.rs::the_policy_is_read_changed_and_evaluated", "crates/automation/tests/url_access.rs::a_blocked_host_is_not_submitted_to_and_requests_report_the_decision", "crates/ui-egui/tests/document_links.rs::a_blocked_site_is_refused_with_the_reason", "crates/ui-egui/tests/document_links.rs::a_blocked_site_is_not_offered_for_a_form_submission"]
+notes = "Trust Manager's Internet Access policy (allow-all, block-all, custom host list with allow/block/ask and a default), headless and enforced: link URI actions, button URI actions and app.launchURL in the desktop app (blocked: notice; allowed: opens without asking; ask: the existing confirmation), Submit Form and this.submitForm (blocked: the dialog says why and offers Save Data As only; form_submit send refuses), and js_run/form_run_trigger/link_list report the decision. Hosts are normalised (case, trailing dot, IDNA via the url crate, ports and userinfo stripped, IP literals canonical) and rules match subdomains unless exact. mailto is reported apart (always asks) and other schemes are refused. Persisted with the desktop app's settings; the CLI/MCP keep it per session. Missing: a Preferences ▸ Trust Manager pane to edit the list (UI redesign), per-document exceptions, and network calls beyond links and form submission (scripts have no Net.HTTP/SOAP)."
 
 [[feature]]
 id = "protect.protected-view"

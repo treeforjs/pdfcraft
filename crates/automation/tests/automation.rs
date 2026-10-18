@@ -4144,7 +4144,8 @@ fn field_action_chains_save_reopen_and_run_on_their_triggers() {
     ok(&mut b, "form_run_trigger", json!({ "doc": doc, "field": "Go", "trigger": "mouse_exit" }));
     assert_eq!(display(&mut b), "0", "visible");
     let blur = ok(&mut b, "form_run_trigger", json!({ "doc": doc, "field": "Go", "trigger": "on_blur" }));
-    assert_eq!(blur["requests"], json!([{ "url": "https://example.org/bye" }]), "{blur}");
+    assert_eq!(blur["requests"][0]["url"], "https://example.org/bye", "{blur}");
+    assert_eq!(blur["requests"][0]["url_access"]["decision"], "prompt", "{blur}");
     let none = ok(&mut b, "form_run_trigger", json!({ "doc": doc, "field": "Go", "trigger": "mouse_down" }));
     assert_eq!(none["ran"], json!([]));
 

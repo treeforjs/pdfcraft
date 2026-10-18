@@ -69,7 +69,10 @@ impl Automation {
                     LinkAction::Page(p) => v["to_page"] = json!(p + 1),
                     LinkAction::View(view) => crate::dests::target_json(self, doc.id, &DestTarget::View(*view), &mut v),
                     LinkAction::Named(n) => crate::dests::target_json(self, doc.id, &DestTarget::Named(n.clone()), &mut v),
-                    LinkAction::Uri(u) => v["url"] = json!(u),
+                    LinkAction::Uri(u) => {
+                        v["url"] = json!(u);
+                        v["url_access"] = crate::url_access::check_json(u, &self.session.check_url(u));
+                    }
                     LinkAction::Other(o) => v["other"] = json!(o),
                 }
                 v

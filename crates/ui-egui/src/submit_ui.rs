@@ -32,7 +32,11 @@ pub struct SubmitDraft {
 impl PdfCraftApp {
     /// Ask whether to submit document `doc`'s form as `submission` (from `button`, or a script).
     pub fn start_submit(&mut self, doc: DocId, button: &str, submission: Submission) {
-        let problem = pdfcraft_engine::submit::destination(&submission.url).err();
+        let problem = pdfcraft_engine::submit::destination(&submission.url).err().or_else(|| {
+            // Internet access settings that block the host: Save Data As still works.
+            let access = self.session.check_url(&submission.url);
+            (access.decision == pdfcraft_engine::url_access::UrlDecision::Block).then(|| format!("Not sent: {}.", access.reason))
+        });
         #[cfg(target_arch = "wasm32")]
         let problem = problem.or_else(|| Some("Sending forms isn't available in the browser version. Save the data instead.".to_string()));
         let fields =

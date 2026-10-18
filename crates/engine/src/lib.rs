@@ -33,6 +33,7 @@ pub mod submit;
 pub mod summary;
 pub mod text_preview;
 mod upright_image;
+pub mod url_access;
 pub mod xfa;
 
 pub use signature_image::{ImageSignaturePreview, SignatureImage};
@@ -2746,6 +2747,8 @@ pub struct Session {
     date_format: Option<String>,
     /// Preferences ▸ Date format ▸ Language, when not following the interface language.
     date_language: Option<String>,
+    /// Preferences ▸ Trust Manager ▸ Internet access from PDFs (see [`url_access`]).
+    url_policy: url_access::UrlPolicy,
 }
 
 /// Lay a dynamic XFA form out (pages and fields) and give its widgets appearances.

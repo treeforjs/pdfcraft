@@ -1206,8 +1206,20 @@ impl PdfCraftApp {
     pub fn request_document_url(&mut self, url: &str, origin: LinkOrigin) {
         match pdfcraft_engine::links::document_url(url) {
             Ok(url) => {
-                if self.pending_link.is_none() {
-                    self.pending_link = Some(PendingLink { url, origin });
+                use pdfcraft_engine::url_access::{UrlDecision, UrlKind};
+                let access = self.session.check_url(&url);
+                match (access.decision, access.kind) {
+                    (UrlDecision::Block, _) => {
+                        let template = "{who} in this document tried to open an address PdfCraft won't open: {e}.";
+                        self.notify_fmt(template, &[("who", tl!(origin.noun())), ("e", &access.reason)]);
+                    }
+                    // The user allowed this site in the internet access settings: no question.
+                    (UrlDecision::Allow, UrlKind::Web) => self.open_url(&url),
+                    _ => {
+                        if self.pending_link.is_none() {
+                            self.pending_link = Some(PendingLink { url, origin });
+                        }
+                    }
                 }
             }
             Err(e) => {
@@ -1365,6 +1377,7 @@ impl PdfCraftApp {
             // macOS Keychain and Windows store identities are read from their OS key stores each time.
             "digital_ids": self.digital_ids.iter().filter(|e| !e.path.starts_with("keychain:") && !e.path.starts_with("windows:")).collect::<Vec<_>>(),
             "trusted": trusted,
+            "url_access": self.session.url_policy(),
             "timestamp_servers": self.timestamp_servers,
             "custom_stamps": stamps_ui::encode(&self.custom_stamps),
             "javascript": self.session.javascript(),
@@ -1481,6 +1494,13 @@ impl PdfCraftApp {
         self.custom_actions = actions_ui::decode(&v["actions"]);
         if let Some(on) = v["javascript"].as_bool() {
             self.session.set_javascript(on);
+        }
+        // A settings value that can't be read keeps the default (ask about every site).
+        if let Ok(policy) = serde_json::from_value::<pdfcraft_engine::url_access::UrlPolicy>(v["url_access"].clone()) {
+            let dropped = self.session.set_url_policy(&policy);
+            if dropped > 0 {
+                log::warn!("internet access settings: {dropped} host rules couldn't be read and were dropped");
+            }
         }
         if let Ok(pems) = serde_json::from_value::<Vec<String>>(v["trusted"].clone()) {
             let certs = pems.iter().filter_map(|p| pdfcraft_engine::sign::x509::load_certificates(p.as_bytes()).ok()).flatten().collect();

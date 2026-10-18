@@ -535,14 +535,16 @@ impl Automation {
     }
 }
 
-fn request_json(r: &pdfcraft_engine::js::Request) -> Value {
+/// A script's request; an address carries the internet access decision for it (`url_access`).
+fn request_json(session: &pdfcraft_engine::Session, r: &pdfcraft_engine::js::Request) -> Value {
     use pdfcraft_engine::js::Request as R;
+    let access = |u: &str| crate::url_access::check_json(u, &session.check_url(u));
     match r {
         R::Reset(n) => json!({ "reset": n }),
         R::Print => json!({ "print": true }),
         R::GoToPage(p) => json!({ "page": p + 1 }),
-        R::LaunchUrl(u) => json!({ "url": u }),
-        R::Submit(u) => json!({ "submit": u }),
+        R::LaunchUrl(u) => json!({ "url": u, "url_access": access(u) }),
+        R::Submit(u) => json!({ "submit": u, "url_access": access(u) }),
         R::Focus(f) => json!({ "focus": f }),
         R::Beep => json!({ "beep": true }),
         R::SaveAs => json!({ "save_as": true }),
@@ -605,7 +607,7 @@ impl Automation {
         if let Some(q) = &o.question {
             return Ok(json!({ "question": question_json(q), "answered": dialogs.answers.len() }));
         }
-        let reqs: Vec<Value> = o.requests.iter().map(request_json).collect();
+        let reqs: Vec<Value> = o.requests.iter().map(|r| request_json(&self.session, r)).collect();
         Ok(json!({ "alerts": o.alerts, "console": o.console, "requests": reqs, "error": o.error, "result": o.result }))
     }
 
@@ -1066,7 +1068,7 @@ impl Automation {
         let trigger = pdfcraft_engine::FieldTrigger::from_id(tid).ok_or_else(|| ToolError::InvalidArgs(format!("unknown trigger {tid:?}")))?;
         let id = self.doc(a)?.id;
         let o = self.session.run_field_trigger(id, a.str("field")?, trigger).map_err(failed)?;
-        let reqs: Vec<Value> = o.requests.iter().map(request_json).collect();
+        let reqs: Vec<Value> = o.requests.iter().map(|r| request_json(&self.session, r)).collect();
         Ok(json!({
             "field": a.str("field")?, "trigger": tid, "ran": o.ran, "skipped": o.skipped, "alerts": o.alerts,
             "console": o.console, "errors": o.errors, "requests": reqs, "menu": o.menu,
