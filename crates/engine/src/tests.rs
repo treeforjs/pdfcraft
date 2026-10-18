@@ -3497,3 +3497,60 @@ fn flattening_transparency_is_one_undo_step_and_survives_saving() {
     }
     assert_eq!(s.get(id).unwrap().can_undo(), Some("Flatten transparency"));
 }
+
+#[test]
+fn structure_namespaces_edit_undo_redo_and_save_round_trip() {
+    let mut s = Session::new();
+    let id = s.open("ns.pdf", None, Arc::new(tagged_one("Callout", 0)), None).unwrap();
+    assert!(s.get(id).unwrap().heading_bookmarks(None).unwrap_err().contains("no headings"));
+    let custom = "http://example.com/report";
+    let spec = a11y::NamespaceSpec {
+        uri: custom.into(),
+        schema: None,
+        role_map: vec![a11y::NsMapping { from: "Callout".into(), to: "H1".into(), namespace: Some("pdf-2.0".into()) }],
+    };
+    s.apply(id, Edit::AddNamespace { spec }).unwrap();
+    let element = s.get(id).unwrap().tags().nodes[0].obj.unwrap().num;
+    let change = a11y::TagChange { namespace: Some(Some(custom.into())), ..Default::default() };
+    s.apply(id, Edit::SetTag { element, change }).unwrap();
+    let check = |s: &Session| {
+        let t = s.get(id).unwrap().tags();
+        let n = &t.nodes[0];
+        assert_eq!(
+            (n.standard.as_deref(), n.namespace.as_deref(), n.standard_namespace.as_deref()),
+            (Some("H1"), Some(custom), Some(a11y::NS_PDF20))
+        );
+        assert_eq!(t.namespaces.iter().map(|n| n.uri.as_str()).collect::<Vec<_>>(), [custom, a11y::NS_PDF20]);
+        assert_eq!(s.get(id).unwrap().heading_bookmarks(None).unwrap().entries[0].title, "Rotated heading");
+    };
+    check(&s);
+
+    // A refused namespace change leaves the document and its history alone.
+    let bad = a11y::TagChange { namespace: Some(Some("http://example.com/unmapped".into())), ..Default::default() };
+    assert!(matches!(s.apply(id, Edit::SetTag { element, change: bad }), Err(EditError::Accessibility(_))));
+    let cycle = a11y::NamespaceSpec {
+        uri: custom.into(),
+        schema: None,
+        role_map: vec![
+            a11y::NsMapping { from: "X".into(), to: "Y".into(), namespace: Some(custom.into()) },
+            a11y::NsMapping { from: "Y".into(), to: "X".into(), namespace: Some(custom.into()) },
+        ],
+    };
+    assert!(matches!(s.apply(id, Edit::AddNamespace { spec: cycle }), Err(EditError::Accessibility(_))));
+    check(&s);
+
+    assert_eq!(s.undo(id).unwrap(), "Change tag properties");
+    let t = s.get(id).unwrap().tags();
+    assert_eq!((t.nodes[0].standard.as_deref(), t.nodes[0].namespace.as_deref()), (None, None));
+    assert_eq!(s.undo(id).unwrap(), "Add structure namespace");
+    assert!(s.get(id).unwrap().tags().namespaces.is_empty());
+    s.redo(id).unwrap();
+    s.redo(id).unwrap();
+    check(&s);
+
+    let saved = s.save_full_bytes(id).unwrap();
+    let re = s.open("re.pdf", None, saved, None).unwrap();
+    let t = s.get(re).unwrap().tags();
+    assert_eq!((t.nodes[0].standard.as_deref(), t.nodes[0].namespace.as_deref()), (Some("H1"), Some(custom)));
+    assert_eq!(t.namespaces[0].role_map, [a11y::NsMapping { from: "Callout".into(), to: "H1".into(), namespace: Some(a11y::NS_PDF20.into()) }]);
+}

@@ -137,6 +137,10 @@ fn a_well_tagged_ua2_document_conforms_and_namespaces_are_checked() {
     objs.push("<< /Type /Namespace /NS (http://iso.org/pdf/ssn) /RoleMapNS << /Note [/FENote 32 0 R] >> >>".into());
     objs.push("<< /Type /Namespace /NS (http://iso.org/pdf2/ssn) >>".into());
     edit(&mut objs, 7, "/S /Note", "/S /Note /NS 31 0 R");
+    // Namespaces in use must be listed in the root's /Namespaces.
+    let r = ua2(&pdf_v("2.0", &objs, "/Info 8 0 R"));
+    assert_eq!(r.failed(), ["ua2-namespace"], "{:#?}", r.findings);
+    edit(&mut objs, 6, "/RoleMap", "/Namespaces [31 0 R 32 0 R] /RoleMap");
     let r = ua2(&pdf_v("2.0", &objs, "/Info 8 0 R"));
     assert!(r.conforms(), "{:#?}", r.findings);
     // A custom namespace type with no mapping.
@@ -348,4 +352,105 @@ fn language_on_the_structure_is_enough() {
     edit(&mut objs, 17, "/S /Table", "/S /Table /Lang (fr)");
     let r = ua1(&pdf(&objs));
     assert_eq!(r.count("11-001"), 4, "H1, Figure, Lbl and LBody; the table cells inherit fr: {:#?}", r.findings);
+}
+
+/// The good document as PDF/UA-2 with namespaces 31 (PDF 2.0), 32 (MathML), 33 (a custom
+/// namespace mapped to PDF 2.0 types) and 34 (a custom namespace whose mappings are circular),
+/// all listed in /Namespaces, and `extra` added to the Document element's kids.
+fn ua2_with(extra: &str) -> UaReport {
+    let mut objs = good();
+    objs[11] = xmp(2, Some("2024"));
+    objs.push("<< /Type /Namespace /NS (http://iso.org/pdf2/ssn) >>".into());
+    objs.push("<< /Type /Namespace /NS (http://www.w3.org/1998/Math/MathML) >>".into());
+    objs.push(
+        "<< /Type /Namespace /NS (http://example.com/report) /RoleMapNS << /Callout [/Aside 31 0 R] /Box [/Panel 33 0 R] /Panel [/Sect 31 0 R] >> >>"
+            .into(),
+    );
+    objs.push("<< /Type /Namespace /NS (http://example.com/loop) /RoleMapNS << /A [/B 34 0 R] /B [/A 34 0 R] >> >>".into());
+    objs.push("<< /Type /Namespace /NS (http://iso.org/pdf2/ssn) >>".into()); // 35: not listed
+    edit(&mut objs, 6, "/RoleMap", "/Namespaces [31 0 R 32 0 R 33 0 R 34 0 R] /RoleMap");
+    edit(&mut objs, 7, "27 0 R]", &format!("27 0 R {extra}]"));
+    ua2(&pdf_v("2.0", &objs, "/Info 8 0 R"))
+}
+
+#[test]
+fn ua2_namespaces_standard_types_mathml_and_role_maps_across_namespaces() {
+    // PDF 2.0 types are valid in the PDF 2.0 namespace.
+    let types = ["DocumentFragment", "Aside", "Title", "FENote", "Sub", "Em", "Strong", "Artifact", "H7", "P", "Sect"];
+    let extra: String = types.iter().map(|t| format!("<< /S /{t} /NS 31 0 R >> ")).collect();
+    let r = ua2_with(&extra);
+    assert!(r.conforms(), "{:#?}", r.findings);
+    // MathML inside a formula.
+    let r = ua2_with("<< /S /Formula /NS 31 0 R /Alt (x squared) /K [<< /S /math /NS 32 0 R /K [<< /S /msup /NS 32 0 R >>] >>] >>");
+    assert!(r.conforms(), "{:#?}", r.findings);
+    // A custom namespace mapped to PDF 2.0, directly and through a second step.
+    let r = ua2_with("<< /S /Callout /NS 33 0 R >> << /S /Box /NS 33 0 R >>");
+    assert!(r.conforms(), "{:#?}", r.findings);
+
+    // PDF 2.0-only types in the default namespace aren't PDF 2.0 elements.
+    let r = ua2_with("<< /S /Aside >>");
+    assert_eq!(r.failed(), ["ua2-namespace"], "{:#?}", r.findings);
+    assert!(r.findings.iter().any(|f| f.message.contains("default (PDF 1.7) namespace")), "{:#?}", r.findings);
+    // A PDF 1.7-only type in the PDF 2.0 namespace isn't standard there.
+    assert_eq!(ua2_with("<< /S /Quote /NS 31 0 R >>").failed(), ["02-001"]);
+    // An unknown type in a custom namespace must be role-mapped.
+    let r = ua2_with("<< /S /Sidebar /NS 33 0 R >>");
+    assert_eq!(r.failed(), ["02-001"], "{:#?}", r.findings);
+    // A RoleMapNS cycle.
+    let r = ua2_with("<< /S /A /NS 34 0 R >>");
+    assert_eq!(r.failed(), ["02-002"], "{:#?}", r.findings);
+    // A missing namespace object, a non-reference /NS and an unlisted namespace.
+    for extra in ["<< /S /P /NS 99 0 R >>", "<< /S /P /NS (http://iso.org/pdf2/ssn) >>", "<< /S /P /NS 35 0 R >>"] {
+        let r = ua2_with(extra);
+        assert_eq!(r.failed(), ["ua2-namespace"], "{extra}: {:#?}", r.findings);
+    }
+}
+
+#[test]
+fn ua1_ignores_namespaces_and_judges_pdf17_types() {
+    let mut objs = good();
+    objs.push("<< /Type /Namespace /NS (http://iso.org/pdf2/ssn) >>".into());
+    edit(&mut objs, 6, "/RoleMap", "/Namespaces [31 0 R] /RoleMap");
+    edit(&mut objs, 7, "27 0 R]", "27 0 R << /S /Aside /NS 31 0 R >>]");
+    let r = ua1(&pdf(&objs));
+    assert_eq!(r.failed(), ["02-001"], "{:#?}", r.findings);
+}
+
+#[test]
+fn hostile_namespaces_do_not_panic() {
+    let cases = [
+        "<< /S /P /NS 1 0 R >>",
+        "<< /S /X /NS 2 0 R >>",
+        "<< /S /X /NS [1 2 3] >>",
+        "<< /S /X /NS null >>",
+        "<< /S /Box /NS 33 0 R /K [<< /S /Box /NS 33 0 R >>] >>",
+    ];
+    for extra in cases {
+        let _ = ua2_with(extra);
+    }
+    // Long chains through many namespaces end as circular, not as a hang.
+    let mut objs = good();
+    objs[11] = xmp(2, Some("2024"));
+    for i in 0..200 {
+        objs.push(format!("<< /Type /Namespace /NS (http://example.com/n{i}) /RoleMapNS << /T [/T {} 0 R] >> >>", 32 + i));
+    }
+    let list: String = (31..231).map(|n| format!("{n} 0 R ")).collect();
+    edit(&mut objs, 6, "/RoleMap", &format!("/Namespaces [{list}] /RoleMap"));
+    edit(&mut objs, 7, "27 0 R]", "27 0 R << /S /T /NS 31 0 R >>]");
+    let r = ua2(&pdf_v("2.0", &objs, "/Info 8 0 R"));
+    assert!(r.failed().contains(&"02-002") || r.failed().contains(&"ua2-namespace"), "{:#?}", r.failed());
+    // Garbage in /Namespaces and RoleMapNS.
+    let mut objs = good();
+    objs[11] = xmp(2, Some("2024"));
+    objs.push("<< /Type /Namespace /NS 5 /RoleMapNS 7 >>".into());
+    objs.push("<< /Type /Namespace /NS (http://example.com/g) /RoleMapNS << /X 3 /Y [] /Z [/P 9999 0 R] /W [/P (str)] >> >>".into());
+    edit(&mut objs, 6, "/RoleMap", "/Namespaces [31 0 R 32 0 R 1 0 R null 7] /RoleMap");
+    edit(
+        &mut objs,
+        7,
+        "27 0 R]",
+        "27 0 R << /S /X /NS 31 0 R >> << /S /X /NS 32 0 R >> << /S /Y /NS 32 0 R >> << /S /Z /NS 32 0 R >> << /S /W /NS 32 0 R >>]",
+    );
+    let r = ua2(&pdf_v("2.0", &objs, "/Info 8 0 R"));
+    assert!(!r.conforms());
 }

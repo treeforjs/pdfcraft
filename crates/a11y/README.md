@@ -29,4 +29,11 @@ let html = report_html(&report, "file.pdf", "2026-10-02");
   formulas warn), combined with `pdfcraft-preflight`'s level-b and Unicode rules. Conversion
   to level a never tags: it refuses with the findings until the document is tagged.
 
+- **PDF 2.0 structure namespaces** (`namespaces`, `add_namespace`, `TagChange::namespace`):
+  `/Namespaces` and `/NS`, namespace dictionaries (`/NS`, `/Schema`, `/RoleMapNS`), the PDF 1.7
+  (default), PDF 2.0 and MathML namespaces. One resolver maps an element's type to a standard
+  type across namespaces (bounded chains, cycle detection, missing namespaces reported) for the
+  Tags listing, the full check, PDF/UA, reading order, figures and headings. Adding a namespace
+  refuses mappings that are circular, end at a non-standard type, or remap PDF 2.0 types.
+
 Not yet: autotagging, the Tags/Order/Content panels, the Reading Order tool (M12.1–M12.2).

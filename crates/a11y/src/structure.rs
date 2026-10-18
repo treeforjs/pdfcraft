@@ -6,6 +6,7 @@ use std::collections::{HashMap, HashSet};
 use pdfcraft_cos::{Dict, Document, ObjRef, Object};
 use pdfcraft_model::Page;
 
+use crate::namespace::{Mode, NsRef, Resolver, ns_of};
 use crate::{Finding, Rule};
 
 /// Standard structure types (PDF 1.7 and 2.0); anything else goes through the role map.
@@ -99,7 +100,7 @@ pub(crate) struct Elem {
     /// The /ID entry, if any.
     pub id: Option<Vec<u8>>,
     /// The /NS entry (a namespace dictionary), if any.
-    pub ns: Option<ObjRef>,
+    pub ns: NsRef,
     /// Marked-content ids in page content streams it references: (page, MCID).
     pub mcids: Vec<(Option<usize>, i64)>,
 }
@@ -127,10 +128,10 @@ impl Tree {
         let Some(cat) = doc.root().and_then(|r| doc.get(r).as_dict().cloned()) else { return t };
         let Some(root) = cat.get(b"StructTreeRoot").map(|o| doc.resolve(o)).and_then(|o| o.as_dict().cloned()) else { return t };
         t.exists = true;
-        let role_map = root.get(b"RoleMap").map(|o| doc.resolve(o)).and_then(|o| o.as_dict().cloned()).unwrap_or_default();
+        let resolver = Resolver::new(doc, &root);
         let page_index: HashMap<ObjRef, usize> = pages.iter().enumerate().map(|(i, p)| (p.obj, i)).collect();
         let mut seen = HashSet::new();
-        let mut reader = Reader { doc, role_map: &role_map, page_index: &page_index, seen: &mut seen };
+        let mut reader = Reader { doc, resolver: &resolver, page_index: &page_index, seen: &mut seen };
         if let Some(k) = root.get(b"K") {
             let mut roots = Vec::new();
             reader.kids(&mut t, k, None, None, &mut roots, 0);
@@ -382,24 +383,20 @@ impl Tree {
 
 struct Reader<'a> {
     doc: &'a Document,
-    role_map: &'a Dict,
+    resolver: &'a Resolver,
     page_index: &'a HashMap<ObjRef, usize>,
     seen: &'a mut HashSet<ObjRef>,
 }
 
 impl Reader<'_> {
-    fn standard(&self, ty: &[u8]) -> Vec<u8> {
-        let mut t = ty.to_vec();
-        for _ in 0..12 {
-            if STANDARD.contains(&t.as_slice()) {
-                return t;
-            }
-            match self.role_map.get(&t).map(|o| self.doc.resolve(o)).and_then(|o| o.as_name().map(<[u8]>::to_vec)) {
-                Some(n) if n != t => t = n,
-                _ => break,
-            }
+    /// The standard type through the role map and namespaces (the type as written when it
+    /// maps to none).
+    fn standard(&self, ty: &[u8], ns: NsRef) -> Vec<u8> {
+        let r = self.resolver.resolve(self.doc, ty, ns, Mode::Any);
+        match r.standard() {
+            Some(t) => t.to_vec(),
+            None => ty.to_vec(),
         }
-        t
     }
 
     fn page_of(&self, d: &Dict) -> Option<usize> {
@@ -486,8 +483,9 @@ impl Reader<'_> {
         }
         let i = t.elems.len();
         let id = d.get(b"ID").map(|o| self.doc.resolve(o)).and_then(|o| o.as_string().map(|s| s.bytes.clone()));
+        let ns = ns_of(d);
         t.elems.push(Elem {
-            ty: self.standard(s),
+            ty: self.standard(s, ns),
             parent,
             alt: text(b"Alt") || text(b"ActualText"),
             page,
@@ -496,7 +494,7 @@ impl Reader<'_> {
             obj,
             lang: text(b"Lang"),
             id,
-            ns: d.get(b"NS").and_then(Object::as_ref),
+            ns,
             ..Elem::default()
         });
         if let Some(p) = parent {

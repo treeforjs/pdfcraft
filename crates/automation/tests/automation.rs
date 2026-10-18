@@ -6312,3 +6312,113 @@ fn print_convert_colors_through_tools() {
     let catalog = gray.dict(&pdfcraft_cos::Object::Ref(gray.root().unwrap())).unwrap();
     assert!(catalog.get(b"OutputIntents").is_some());
 }
+
+/// One page tagged Document > [P (MCID 0), Callout (MCID 1)], with no namespaces.
+fn namespaced_pdf() -> Vec<u8> {
+    let body = "/P << /MCID 0 >> BDC EMC /Callout << /MCID 1 >> BDC EMC";
+    let objs: Vec<String> = vec![
+        "<< /Type /Catalog /Pages 2 0 R /MarkInfo << /Marked true >> /StructTreeRoot 5 0 R /Lang (en) >>".into(),
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 /MediaBox [0 0 200 200] >>".into(),
+        "<< /Type /Page /Parent 2 0 R /Contents 4 0 R /StructParents 0 >>".into(),
+        format!("<< /Length {} >>\nstream\n{body}\nendstream", body.len()),
+        "<< /Type /StructTreeRoot /K 6 0 R /ParentTree 9 0 R /ParentTreeNextKey 1 >>".into(),
+        "<< /Type /StructElem /S /Document /P 5 0 R /K [7 0 R 8 0 R] >>".into(),
+        "<< /Type /StructElem /S /P /P 6 0 R /Pg 3 0 R /K 0 >>".into(),
+        "<< /Type /StructElem /S /Callout /P 6 0 R /Pg 3 0 R /K 1 >>".into(),
+        "<< /Nums [0 [7 0 R 8 0 R]] >>".into(),
+    ];
+    let mut out = b"%PDF-2.0\n".to_vec();
+    let mut offsets = Vec::new();
+    for (i, o) in objs.iter().enumerate() {
+        offsets.push(out.len());
+        out.extend_from_slice(format!("{} 0 obj\n{o}\nendobj\n", i + 1).as_bytes());
+    }
+    let xref = out.len();
+    out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objs.len() + 1).as_bytes());
+    for o in offsets {
+        out.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+    }
+    out.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objs.len() + 1).as_bytes());
+    out
+}
+
+#[test]
+fn structure_namespaces_through_tools() {
+    let dir = workdir("namespaces");
+    std::fs::write(dir.join("ns.pdf"), namespaced_pdf()).unwrap();
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "ns.pdf" }))["doc"].as_u64().unwrap();
+    let custom = "http://example.com/report";
+    let callout = |t: &Value| t["elements"].as_array().unwrap().iter().find(|e| e["type"] == "Callout").cloned().unwrap();
+    let t = ok(&mut a, "tags_tree", json!({ "doc": doc }));
+    assert_eq!((callout(&t)["standard"].clone(), callout(&t)["namespace"].clone()), (Value::Null, Value::Null));
+    assert_eq!(t["namespaces"], json!([]));
+    let obj = callout(&t)["obj"].as_u64().unwrap();
+    let ua2 = |a: &mut Automation| ok(a, "pdfua_verify", json!({ "doc": doc, "part": 2 }))["counts"]["02-001"].as_u64().unwrap();
+    assert_eq!(ua2(&mut a), 1, "Callout isn't mapped to a standard type");
+
+    // Bad arguments are refused and change nothing.
+    let bad_ns = [
+        json!({ "doc": doc }),
+        json!({ "doc": doc, "uri": "" }),
+        json!({ "doc": doc, "uri": 7 }),
+        json!({ "doc": doc, "uri": "http://a b" }),
+        json!({ "doc": doc, "uri": custom, "role_map": "Callout" }),
+        json!({ "doc": doc, "uri": custom, "role_map": [5] }),
+        json!({ "doc": doc, "uri": custom, "role_map": [] }),
+        json!({ "doc": doc, "uri": custom, "role_map": [{ "type": "Callout" }] }),
+        json!({ "doc": doc, "uri": custom, "role_map": [{ "type": 1, "maps_to": "P" }] }),
+        json!({ "doc": doc, "uri": custom, "role_map": [{ "type": "Callout", "maps_to": "Aside", "namespace": 3 }] }),
+        json!({ "doc": doc, "uri": custom, "role_map": [{ "type": "Callout", "maps_to": "Nowhere" }] }),
+        json!({ "doc": doc, "uri": custom, "role_map": [{ "type": "X", "maps_to": "Y", "namespace": custom }, { "type": "Y", "maps_to": "X", "namespace": custom }] }),
+        json!({ "doc": doc, "uri": "pdf-2.0", "role_map": [{ "type": "P", "maps_to": "Span", "namespace": "pdf-2.0" }] }),
+        json!({ "doc": doc, "uri": custom, "role_map": (0..1001).map(|i| json!({ "type": format!("T{i}"), "maps_to": "P" })).collect::<Vec<_>>() }),
+        json!({ "doc": 999, "uri": custom }),
+    ];
+    for args in bad_ns {
+        assert!(a.call("tags_add_namespace", &args).is_err(), "{args}");
+    }
+    for args in [
+        json!({ "doc": doc, "obj": obj, "namespace": custom }),
+        json!({ "doc": doc, "obj": obj, "namespace": "bad uri" }),
+        json!({ "doc": doc, "obj": obj, "namespace": 5 }),
+        json!({ "doc": doc, "obj": 2, "namespace": "pdf-2.0" }),
+        json!({ "doc": doc, "obj": obj, "type": "Callout", "namespace": "pdf-2.0" }),
+    ] {
+        assert!(a.call("tags_set", &args).is_err(), "{args}");
+    }
+    assert_eq!(ok(&mut a, "doc_list", json!({}))["documents"][0]["dirty"], false);
+
+    // A custom namespace mapped to PDF 2.0, and the element moved into it.
+    let r = ok(
+        &mut a,
+        "tags_add_namespace",
+        json!({ "doc": doc, "uri": custom, "schema": "report.xsd", "role_map": [{ "type": "Callout", "maps_to": "Aside", "namespace": "pdf-2.0" }] }),
+    );
+    assert_eq!(r["namespace"]["kind"], "other");
+    assert_eq!(r["namespace"]["schema"], "report.xsd");
+    assert_eq!(r["namespace"]["role_map"], json!([{ "type": "Callout", "maps_to": "Aside", "namespace": "http://iso.org/pdf2/ssn" }]));
+    let r = ok(&mut a, "tags_set", json!({ "doc": doc, "obj": obj, "namespace": custom }));
+    assert_eq!(
+        (r["standard"].as_str(), r["namespace"].as_str(), r["standard_namespace"].as_str()),
+        (Some("Aside"), Some(custom), Some("http://iso.org/pdf2/ssn"))
+    );
+    assert_eq!(ua2(&mut a), 0);
+    let t = ok(&mut a, "tags_tree", json!({ "doc": doc }));
+    let kinds: Vec<&str> = t["namespaces"].as_array().unwrap().iter().map(|n| n["kind"].as_str().unwrap()).collect();
+    assert_eq!(kinds, ["other", "pdf-2.0"]);
+
+    // Undo and redo, then save and reopen.
+    ok(&mut a, "edit_undo", json!({ "doc": doc }));
+    assert_eq!(callout(&ok(&mut a, "tags_tree", json!({ "doc": doc })))["namespace"], Value::Null);
+    ok(&mut a, "edit_redo", json!({ "doc": doc }));
+    ok(&mut a, "doc_save", json!({ "doc": doc, "path": "out/ns.pdf" }));
+    let mut b = auto(&dir);
+    let re = ok(&mut b, "doc_open", json!({ "path": "out/ns.pdf" }))["doc"].as_u64().unwrap();
+    let t = ok(&mut b, "tags_tree", json!({ "doc": re }));
+    assert_eq!((callout(&t)["standard"].as_str(), callout(&t)["namespace"].as_str()), (Some("Aside"), Some(custom)));
+    assert_eq!(t["namespaces"][0]["role_map"][0]["maps_to"], "Aside");
+    // Back to the default namespace: Callout is unmapped there again.
+    assert!(b.call("tags_set", &json!({ "doc": re, "obj": obj, "namespace": "" })).is_err());
+    let _ = std::fs::remove_dir_all(dir);
+}

@@ -1,6 +1,6 @@
 //! Accessibility tools: the full check, the accessibility report, and the automatic fixes.
 
-use pdfcraft_engine::a11y::{Category, Options, Report, Rule, Status, TagChange, TagKid};
+use pdfcraft_engine::a11y::{Category, MAX_NS_MAPPINGS, Namespace, NamespaceSpec, NsMapping, Options, Report, Rule, Status, TagChange, TagKid};
 use serde_json::{Value, json};
 
 use crate::{Args, Automation, Result, ToolError, child, failed, write_atomic};
@@ -24,6 +24,11 @@ fn category_id(c: Category) -> &'static str {
         Category::Lists => "lists",
         Category::Headings => "headings",
     }
+}
+
+fn namespace_json(n: &Namespace) -> Value {
+    let role_map: Vec<Value> = n.role_map.iter().map(|m| json!({ "type": m.from, "maps_to": m.to, "namespace": m.namespace })).collect();
+    json!({ "obj": n.obj.num, "uri": n.uri, "kind": n.kind.id(), "schema": n.schema, "listed": n.listed, "role_map": role_map })
 }
 
 pub(crate) fn report_json(r: &Report) -> Value {
@@ -160,6 +165,9 @@ impl Automation {
                     "depth": n.depth,
                     "type": n.ty,
                     "standard": n.standard,
+                    "namespace": n.namespace,
+                    "standard_namespace": n.standard_namespace,
+                    "namespace_missing": n.namespace_missing,
                     "title": n.title,
                     "alt": n.alt,
                     "actual_text": n.actual_text,
@@ -179,6 +187,7 @@ impl Automation {
             "truncated": t.truncated || t.nodes.len() > limit,
             "roots": t.roots.iter().map(|r| r + 1).collect::<Vec<_>>(),
             "role_map": role_map,
+            "namespaces": t.namespaces.iter().map(namespace_json).collect::<Vec<_>>(),
             "types": doc.tag_types(),
             "elements": elements,
         }))
@@ -196,9 +205,10 @@ impl Automation {
             actual_text: text("actual_text")?,
             lang: text("lang")?,
             title: text("title")?,
+            namespace: text("namespace")?,
         };
         if change.is_empty() {
-            return Err(ToolError::InvalidArgs("give at least one of type, alt, actual_text, lang or title".into()));
+            return Err(ToolError::InvalidArgs("give at least one of type, namespace, alt, actual_text, lang or title".into()));
         }
         let id = self.doc(a)?.id;
         self.session.apply(id, pdfcraft_engine::Edit::SetTag { element, change }).map_err(failed)?;
@@ -210,9 +220,47 @@ impl Automation {
             .find(|(_, n)| n.obj.is_some_and(|o| o.num == element))
             .ok_or_else(|| failed("the element is no longer in the structure tree"))?;
         Ok(json!({
-            "element": i + 1, "obj": element, "type": n.ty, "standard": n.standard, "title": n.title,
-            "alt": n.alt, "actual_text": n.actual_text, "lang": n.lang,
+            "element": i + 1, "obj": element, "type": n.ty, "standard": n.standard, "namespace": n.namespace,
+            "standard_namespace": n.standard_namespace, "title": n.title, "alt": n.alt, "actual_text": n.actual_text, "lang": n.lang,
         }))
+    }
+
+    pub(crate) fn tags_add_namespace(&mut self, a: &Args) -> Result<Value> {
+        let uri = a.str("uri")?.to_owned();
+        let schema = a.opt_str("schema")?.map(str::to_owned);
+        let mut role_map = Vec::new();
+        if let Some(v) = a.get("role_map") {
+            let list = v.as_array().ok_or_else(|| ToolError::InvalidArgs("role_map must be an array of {type, maps_to, namespace}".into()))?;
+            if list.len() > MAX_NS_MAPPINGS {
+                return Err(ToolError::InvalidArgs(format!("give at most {MAX_NS_MAPPINGS} role mappings at once")));
+            }
+            for m in list {
+                let field = |k: &str| -> Result<Option<String>> {
+                    match m.get(k) {
+                        None | Some(Value::Null) => Ok(None),
+                        Some(Value::String(s)) => Ok(Some(s.clone())),
+                        Some(_) => Err(ToolError::InvalidArgs(format!("role_map {k} must be a string"))),
+                    }
+                };
+                if !m.is_object() {
+                    return Err(ToolError::InvalidArgs("each role_map entry must be an object {type, maps_to, namespace}".into()));
+                }
+                let from =
+                    field("type")?.ok_or_else(|| ToolError::InvalidArgs("each role_map entry needs type (the namespace's type to map)".into()))?;
+                let to = field("maps_to")?
+                    .ok_or_else(|| ToolError::InvalidArgs("each role_map entry needs maps_to (empty removes the mapping)".into()))?;
+                role_map.push(NsMapping { from, to, namespace: field("namespace")? });
+            }
+        }
+        if role_map.is_empty() && schema.is_none() && a.get("role_map").is_some() {
+            return Err(ToolError::InvalidArgs("role_map is empty: give at least one mapping, or leave it out".into()));
+        }
+        let id = self.doc(a)?.id;
+        self.session.apply(id, pdfcraft_engine::Edit::AddNamespace { spec: NamespaceSpec { uri: uri.clone(), schema, role_map } }).map_err(failed)?;
+        let uri = pdfcraft_engine::a11y::namespace_uri(&uri);
+        let t = self.doc(a)?.tags();
+        let ns = t.namespaces.iter().find(|n| n.uri == uri).ok_or_else(|| failed("the namespace is not in the structure tree"))?;
+        Ok(json!({ "namespace": namespace_json(ns), "namespaces": t.namespaces.len() }))
     }
 
     pub(crate) fn tags_mark_artifact(&mut self, a: &Args) -> Result<Value> {

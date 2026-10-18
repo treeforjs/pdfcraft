@@ -439,11 +439,11 @@ title = "PDF 2.0 structure namespaces"
 area = "A"
 tier = "P1"
 milestone = "M12"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["tags_tree", "tags_set", "tags_add_namespace", "pdfua_verify"]
+evidence = ["crates/a11y/src/namespace_tests.rs::tags_report_namespaces_and_standard_types_across_namespaces", "crates/a11y/src/namespace_tests.rs::headings_reading_order_and_figures_honour_namespaces", "crates/a11y/src/namespace_tests.rs::add_namespace_with_role_mappings_and_round_trip", "crates/a11y/src/namespace_tests.rs::add_namespace_refuses_cycles_dead_ends_and_hostile_input", "crates/a11y/src/namespace_tests.rs::hostile_namespace_structures_do_not_panic", "crates/a11y/src/pdfua_tests.rs::ua2_namespaces_standard_types_mathml_and_role_maps_across_namespaces", "crates/engine/src/tests.rs::structure_namespaces_edit_undo_redo_and_save_round_trip", "crates/automation/tests/automation.rs::structure_namespaces_through_tools"]
+notes = "ISO 32000-2 §14.7.4, headless: /Namespaces and /NS read and written, namespace dictionaries (/NS URI, /Schema, /RoleMapNS), the PDF 1.7 (default), PDF 2.0 and MathML namespaces, and role mapping across namespaces (bounded, cycle-checked; missing or non-indirect namespaces reported). One resolver feeds the Tags listing, the full check, the PDF/UA checker, reading order / accessible text, figures and bookmarks from structure. tags_add_namespace adds a namespace or changes its schema and mappings; tags_set namespace moves an element (each one undo step). PDF/UA-2: PDF 2.0 types must be in the PDF 2.0 namespace, other namespaces must map to it or MathML, used namespaces must be listed. Not yet: a Tags panel namespace view (UI redesign), raising the file version to 2.0, embedding schema files, checking other mappings that depended on one removed."
 
 [[feature]]
 id = "core.arlington-validation"
