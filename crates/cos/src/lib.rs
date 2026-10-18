@@ -7,14 +7,16 @@
 //!
 //! Done: every cross-reference form (tables, streams, hybrid `/XRefStm`), object streams, repair
 //! by scanning, encryption on load and save (R2–R6, crypt filters, `/EFF`), incremental writing,
-//! and full saves that pack objects into compressed object streams with a cross-reference stream.
+//! full saves that pack objects into compressed object streams with a cross-reference stream, and
+//! linearized output with its checker (`core.linearization`, Annex F).
 //! Not yet: streaming very large files within a memory budget (`ByteSource`,
-//! `core.lazy-loading`), and linearized output (`core.linearization`, M11). See the README.
+//! `core.lazy-loading`). See the README.
 
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
 mod bytes;
 mod document;
+mod linearize;
 mod object;
 pub mod page_labels;
 mod parser;
@@ -23,6 +25,7 @@ mod writer;
 
 pub use bytes::Bytes;
 pub use document::{Document, Revision, SourceIdentity, XrefEntry};
+pub use linearize::{LinearizationParams, LinearizationReport, check_linearization, fast_web_view, write_linearized};
 pub use object::{Dict, MAX_DECODED, Name, ObjRef, Object, PdfString, Stream};
 pub use parser::{Lexer, parse_indirect};
 pub use pdfcraft_crypt::{
@@ -57,4 +60,6 @@ pub enum CosError {
     Poisoned,
     #[error("this document was opened read-only with a decode limit and cannot be saved")]
     ReadOnlyLimit,
+    #[error("the document can't be linearized: {0}")]
+    Linearize(String),
 }

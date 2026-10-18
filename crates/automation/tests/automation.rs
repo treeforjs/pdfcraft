@@ -168,6 +168,80 @@ fn edit_undo_redo_and_save_round_trip() {
 }
 
 #[test]
+fn linearized_save_and_fast_web_view_check() {
+    let dir = workdir("linearize");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    let before = ok(&mut a, "doc_linearization_check", json!({ "doc": doc }));
+    assert_eq!((before["linearized"].clone(), before["valid"].clone(), before["fast_web_view"].clone()), (json!(false), json!(false), json!(false)));
+    assert_eq!(ok(&mut a, "doc_info", json!({ "doc": doc }))["fast_web_view"], false);
+
+    ok(&mut a, "doc_set_info", json!({ "doc": doc, "key": "Title", "value": "Web" }));
+    let saved = ok(&mut a, "doc_save", json!({ "doc": doc, "path": "web.pdf", "linearize": true }));
+    assert_eq!((saved["linearized"].clone(), saved["incremental"].clone()), (json!(true), json!(false)));
+    let check = ok(&mut a, "doc_linearization_check", json!({ "doc": doc }));
+    assert_eq!(check["valid"], true, "{check}");
+    assert_eq!(check["fast_web_view"], true);
+    assert_eq!(check["problems"], json!([]));
+    assert_eq!(check["params"]["page_count"], 3);
+    assert_eq!(check["params"]["file_length"], std::fs::metadata(dir.join("web.pdf")).unwrap().len());
+    assert_eq!(ok(&mut a, "doc_info", json!({ "doc": doc }))["fast_web_view"], true);
+
+    // The same file by path, reopened: same pages, same text.
+    let by_path = ok(&mut a, "doc_linearization_check", json!({ "path": "web.pdf" }));
+    assert_eq!(by_path["valid"], true);
+    assert_eq!(by_path["source"]["path"].as_str().map(|p| p.ends_with("web.pdf")), Some(true));
+    let mut b = auto(&dir);
+    let re = ok(&mut b, "doc_open", json!({ "path": "web.pdf" }))["doc"].as_u64().unwrap();
+    assert_eq!(page_text(&mut b, re), ["Page 1", "Page 2", "Page 3"]);
+    assert_eq!(ok(&mut b, "doc_info", json!({ "doc": re }))["title"], "Web");
+
+    // An unsaved edit is not part of the file; saving it in place (incrementally) ends Fast Web View.
+    ok(&mut b, "page_rotate", json!({ "doc": re, "pages": [1], "degrees": 90 }));
+    let dirty = ok(&mut b, "doc_linearization_check", json!({ "doc": re }));
+    assert_eq!((dirty["valid"].clone(), dirty["source"]["unsaved_changes"].clone()), (json!(true), json!(true)));
+    ok(&mut b, "doc_save", json!({ "doc": re }));
+    let after = ok(&mut b, "doc_linearization_check", json!({ "doc": re }));
+    assert_eq!((after["linearized"].clone(), after["valid"].clone(), after["fast_web_view"].clone()), (json!(true), json!(false), json!(false)));
+    assert!(after["problems"][0].as_str().unwrap().contains("/L"), "{after}");
+    // Saving it linearized again in place restores it.
+    ok(&mut b, "doc_save", json!({ "doc": re, "linearize": true }));
+    assert_eq!(ok(&mut b, "doc_linearization_check", json!({ "path": "web.pdf" }))["valid"], true);
+
+    // Encrypted documents keep their password; the hint stream is checked with it.
+    ok(&mut a, "doc_protect", json!({ "doc": doc, "open_password": "open" }));
+    ok(&mut a, "doc_save", json!({ "doc": doc, "path": "locked-web.pdf", "linearize": true }));
+    let locked = ok(&mut a, "doc_linearization_check", json!({ "path": "locked-web.pdf", "password": "open" }));
+    assert_eq!((locked["valid"].clone(), locked["notes"].clone()), (json!(true), json!([])), "{locked}");
+    let no_password = ok(&mut a, "doc_linearization_check", json!({ "path": "locked-web.pdf" }));
+    assert_eq!(no_password["valid"], true);
+    assert!(no_password["notes"][0].as_str().unwrap().contains("encrypted"));
+    assert!(!no_password.to_string().contains("\"open\""), "passwords are never echoed");
+
+    // Bad arguments.
+    let err = |a: &mut Automation, args: Value| a.call("doc_linearization_check", &args).unwrap_err();
+    assert!(matches!(err(&mut a, json!({})), ToolError::InvalidArgs(m) if m.contains("doc") && m.contains("path")));
+    assert!(matches!(err(&mut a, json!({ "doc": doc, "path": "web.pdf" })), ToolError::InvalidArgs(m) if m.contains("not both")));
+    assert!(matches!(err(&mut a, json!({ "doc": doc, "password": "x" })), ToolError::InvalidArgs(_)));
+    assert!(matches!(err(&mut a, json!({ "doc": "one" })), ToolError::InvalidArgs(_)));
+    assert!(matches!(err(&mut a, json!({ "doc": 999 })), ToolError::Failed(_)));
+    assert!(err(&mut a, json!({ "path": "missing.pdf" })).to_string().contains("missing.pdf"));
+    assert!(a.call("doc_linearization_check", &json!({ "path": "../outside.pdf" })).is_err(), "--root confines paths");
+    let bad_save = a.call("doc_save", &json!({ "doc": doc, "path": "x.pdf", "linearize": true, "full": false })).unwrap_err();
+    assert!(matches!(bad_save, ToolError::InvalidArgs(m) if m.contains("full")));
+    assert!(matches!(a.call("doc_save", &json!({ "doc": doc, "linearize": "yes" })), Err(ToolError::InvalidArgs(_))));
+    // Damaged and non-PDF files are reported, not fatal.
+    let web = std::fs::read(dir.join("web.pdf")).unwrap();
+    std::fs::write(dir.join("cut.pdf"), &web[..web.len() / 2]).unwrap();
+    let cut = ok(&mut a, "doc_linearization_check", json!({ "path": "cut.pdf" }));
+    assert_eq!((cut["linearized"].clone(), cut["valid"].clone()), (json!(true), json!(false)));
+    std::fs::write(dir.join("junk.pdf"), b"%PDF-1.7\n1 0 obj << /Linearized 1 /L 5 /H [9999999 1] >> endobj").unwrap();
+    let junk = ok(&mut a, "doc_linearization_check", json!({ "path": "junk.pdf" }));
+    assert_eq!(junk["valid"], false);
+    assert!(!junk["problems"].as_array().unwrap().is_empty());
+}
+
+#[test]
 fn combine_extract_and_split() {
     let dir = workdir("organize");
     let mut a = auto(&dir);
