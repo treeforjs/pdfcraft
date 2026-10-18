@@ -1758,6 +1758,7 @@ pub fn tools() -> Vec<ToolDef> {
                     "despeckle_median": { "type": "boolean", "description": "Also replace single-pixel impulses in gray/colour scans by their 3x3 median (default false; ignores the punctuation rule)." },
                     "background": { "type": "string", "enum": ["off", "low", "medium", "high"], "description": "Whiten the off-white, grey or yellowed paper before reading (default off): the paper level is estimated from the page's luma histogram and pixels within a margin of it (low, medium, high reach further) become white; ink and mid-greys keep their values. Runs before despeckle. The page image changes only with output straighten." },
                     "background_white_point": { "type": "integer", "minimum": 128, "maximum": 255, "description": "With background (or alone): an explicit white point instead of the estimate; pixels at least this light become white." },
+                    "camera": { "type": "boolean", "description": "First correct camera photos (as scan_camera_image with its defaults, but only on pages where a photographed page's outline is found): the page becomes the straightened, enhanced page. Default false. The correction and the recognized text undo as one step; the result lists what was corrected under camera." },
                 }),
                 &["doc"],
             )),
@@ -1788,6 +1789,17 @@ pub fn tools() -> Vec<ToolDef> {
                     "pages": pages("to clean (default: all)"),
                     "strength": { "type": "string", "enum": ["off", "low", "medium", "high"], "description": "How far below the paper level pixels become white (default medium, or off when only white_point is given)." },
                     "white_point": { "type": "integer", "minimum": 128, "maximum": 255, "description": "An explicit white point instead of the estimate: pixels at least this light (luma) become white." },
+                }),
+                &["doc"],
+            )),
+        t("scan_camera_image", "Enhance camera images", "Scan & OCR ▸ Enhance ▸ Camera Image: for a page that is a photo of a document (a skewed page against a background), find the page's outline in the largest image the page draws (edge detection, line fitting and the best-supported convex quadrilateral, refined to sub-pixel at full resolution), correct the perspective to an upright rectangle at the page's estimated aspect ratio (single-view rectangle geometry, bilinear resampling), and even out the lighting (deshadow, white balance, contrast stretch, paper whitening). The page is replaced by the corrected image on a page of that aspect ratio whose longer side is the old page's (other page content, page boxes and rotation are dropped; annotations are kept), as one undoable step for all pages. Returns per page found, confidence (0-1), corners (points from the top-left of the displayed page, top-left/top-right/bottom-right/bottom-left), image_corners (photo pixels), image_size, aspect (width/height), output_size (pixels) and page_size (points), or skipped with the reason (no image, an image it cannot decode: only 8-bit gray/RGB JPEG or Flate). Where no outline is found (confidence below 0.45) the whole photo is only enhanced, or skipped with enhance false; give corners to set the outline yourself. dry_run reports without changing anything.")
+            .with(schema(
+                json!({
+                    "doc": doc(),
+                    "pages": pages("to correct (default: all)"),
+                    "corners": { "type": "array", "items": point(), "minItems": 4, "maxItems": 4, "description": "The page's four corners in the photo, in points from the top-left of the displayed page, in any order, instead of detecting them (applies to every page given). They must outline a convex quadrilateral covering at least 1 % of the photo." },
+                    "enhance": { "type": "boolean", "description": "Even out lighting and shadows, neutralise the paper colour, stretch contrast and whiten the paper (default true)." },
+                    "dry_run": { "type": "boolean", "description": "Only report what would be found and done (default false)." },
                 }),
                 &["doc"],
             )),

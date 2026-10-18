@@ -6568,11 +6568,11 @@ title = "Enhance camera images (edges, perspective, contrast)"
 area = "I"
 tier = "P1"
 milestone = "M10"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["scan_camera_image", "ocr_recognize"]
+evidence = ["crates/optimize/src/camera.rs::a_photographed_page_is_found_straightened_and_measured", "crates/optimize/src/camera.rs::square_to_quad_maps_the_corners_exactly", "crates/optimize/src/camera.rs::degenerate_corners_are_refused", "crates/optimize/src/camera.rs::hostile_images_are_refused_without_panicking", "crates/automation/tests/camera.rs::camera_photos_are_found_straightened_and_enhanced_as_one_undoable_step", "crates/automation/tests/camera.rs::camera_photos_without_a_page_are_only_enhanced_or_skipped", "crates/automation/tests/camera.rs::recognize_text_can_correct_camera_photos_first"]
+notes = "Headless only (no Enhance dialog yet; UI redesign in progress). scan_camera_image {doc, pages, corners?, enhance (default true), dry_run} works on the largest image each page draws (8-bit gray/RGB, JPEG or Flate): original pure-Rust detection in crates/optimize/src/camera.rs (area-reduced luma at <=640 px, blur, Sobel + non-maximum suppression, orientation-restricted Hough lines, best-supported convex quadrilateral from two near-parallel line pairs scored by edge support along its sides; sub-pixel refinement at full resolution by total-least-squares side fits), confidence 0-1 with the whole image as fallback below 0.45; aspect ratio from Zhang & He's single-view rectangle method (centred principal point, square pixels; falls back to mean side lengths); Heckbert square-to-quad homography with bilinear sampling (output capped at 40 M pixels, 16384 px a side); enhance = per-channel block-percentile illumination division (deshadow + white balance), 1 % black-point stretch and the low background-removal pass. The page is replaced by the corrected image on a page of the estimated aspect ratio whose longer side is the old page's (contents, page boxes and /Rotate dropped, annotations kept), all pages as one undo step; corners are reported/accepted in displayed-page points (/Rotate aware) and photo pixels; degenerate, non-convex, tiny or outside corners are refused. ocr_recognize camera: true corrects pages where an outline is found first and undoes with the recognized text as one step. Measured only on synthetic photos (a rendered PdfCraft text page through a pinhole camera onto a value-noise table, Flate and JPEG, with /Rotate 90): corners within 2.5 px, aspect within 2 %, mean luma difference under 10 against the source page. Not yet: real camera photos, cluttered backgrounds with strong straight edges, pages running off the photo (an image border as a side), curved/folded pages (dewarping), lens distortion, automatic orientation of the result, document-type presets (whiteboard, card, form: ocr.camera-document-type), choosing the page size (standard sizes), keeping a page's other content or text layer, CMYK/JPEG 2000/16-bit photos, a UI."
 
 [[feature]]
 id = "ocr.camera-document-type"

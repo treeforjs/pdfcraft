@@ -15,6 +15,7 @@ mod a11y;
 mod associated;
 mod attachment_trust;
 mod autotag;
+mod camera;
 mod certsec;
 mod comments;
 mod compare;
@@ -775,6 +776,12 @@ impl Automation {
             "sign_timestamp" => self.sign_timestamp(&a)?,
             "sign_embed_evidence" => self.sign_embed_evidence(&a)?,
             "accessibility_check" => self.a11y_check(&a)?,
+            "ocr_recognize" if a.opt_bool("camera")? == Some(true) => {
+                // Every argument is checked, and the models found, before the page changes.
+                self.ocr_settings(&a)?;
+                pdfcraft_engine::ocr::engine().map_err(failed)?;
+                self.camera_then_recognize(&a, |s| s.ocr_recognize(&a))?
+            }
             "ocr_recognize" => self.ocr_recognize(&a)?,
             "ocr_prepare" => self.ocr_prepare(&a)?,
             "ocr_review" => self.ocr_review(&a)?,
@@ -819,6 +826,7 @@ impl Automation {
             "form_run_trigger" => self.form_run_trigger(&a)?,
             "ocr_status" => self.ocr_status()?,
             "scan_despeckle" => self.scan_despeckle(&a)?,
+            "scan_camera_image" => self.scan_camera_image(&a)?,
             "scan_remove_background" => self.scan_remove_background(&a)?,
             "ocr_recognize_files" => self.ocr_recognize_files(&a)?,
             "accessibility_report" => self.a11y_report(&a)?,
