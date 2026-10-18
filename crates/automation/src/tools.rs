@@ -554,6 +554,23 @@ pub fn tools() -> Vec<ToolDef> {
             }),
             &["doc"],
         )),
+        t(
+            "print_add_printer_marks",
+            "Add printer marks",
+            "Print Production ▸ Add Printer Marks: enlarge each page's media box around its trim box (the crop box when there is none) and draw printer marks outside it: trim (crop) marks at the corners, bleed marks on the bleed box edges, registration targets in the /Separation /All colour, CMYK colour bars and a black tint bar along the top, and a page information line (file name, page number, date) along the bottom, as the page is displayed. Marks start offset points outside the trim (further out when the bleed is wider) and run 18 pt. The crop box becomes the new media box; the trim, bleed and art boxes keep their old rectangles. Marks are drawn as page artifacts in an optional content group named \"Printer marks\" (hide it to hide them), and the page information is outlines, so text extraction ignores it. Adding marks again replaces them. Returns each page's trim, bleed and new media box (user space) and the margin added (points). Undoable.",
+        )
+        .with(schema(
+            json!({
+                "doc": doc(),
+                "pages": pages("to mark (default: all)"),
+                "marks": { "type": "array", "items": { "type": "string", "enum": ["all", "trim", "bleed", "registration", "color_bars", "page_info"] }, "minItems": 1, "description": "Marks to draw (default: all)." },
+                "line_weight": { "type": "number", "exclusiveMinimum": 0, "maximum": 4, "description": "Mark line weight in points (default 0.25)." },
+                "offset": { "type": "number", "minimum": 0, "maximum": 72, "description": "Distance of the marks from the trim, in points (default 6)." },
+                "style": { "type": "string", "enum": ["western", "eastern"], "description": "Western (default) or Eastern (Japanese tombo: double corner lines, centre crosses)." },
+                "file_name": { "type": "string", "maxLength": 256, "description": "Name the page information shows (default: the document's file name)." },
+            }),
+            &["doc"],
+        )),
         t("printers", "List printers", "The printers the system's print spooler knows (CUPS on macOS and Linux), with the default marked.").ro().with(schema(json!({}), &[])),
         t("printer_options", "List printer options", "A printer driver's own job options (CUPS: from its PPD), such as the paper tray, paper type or finishing: key, label, group, default and choices. Pass chosen values to doc_print as options. Empty on Windows, where the driver's preferences window holds them.")
             .ro()
