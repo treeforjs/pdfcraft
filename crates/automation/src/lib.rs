@@ -13,6 +13,7 @@
 
 mod a11y;
 mod associated;
+mod autotag;
 mod certsec;
 mod comments;
 mod compare;
@@ -790,6 +791,7 @@ impl Automation {
             "tags_set" => self.tags_set(&a)?,
             "tags_add_namespace" => self.tags_add_namespace(&a)?,
             "tags_mark_artifact" => self.tags_mark_artifact(&a)?,
+            "tags_autotag" => self.tags_autotag(&a)?,
             "alt_text_list" => self.alt_text_list(&a)?,
             "alt_text_set" => self.alt_text_set(&a)?,
             "sign_id_create" => self.sign_id_create(&a)?,

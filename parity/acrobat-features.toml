@@ -8736,11 +8736,11 @@ title = "Automatically tag a document"
 area = "M"
 tier = "P1"
 milestone = "M12"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["tags_autotag"]
+evidence = ["crates/engine/tests/autotag.rs::a_single_column_gets_headings_and_paragraphs_in_order", "crates/engine/tests/autotag.rs::two_columns_read_down_the_left_then_the_right", "crates/engine/tests/autotag.rs::bulleted_and_numbered_lists", "crates/engine/tests/autotag.rs::a_ruled_table_becomes_rows_of_header_and_data_cells", "crates/engine/tests/autotag.rs::images_become_figures_flagged_for_alternate_text", "crates/engine/tests/autotag.rs::running_headers_footers_and_page_numbers_become_artifacts", "crates/engine/tests/autotag.rs::links_become_link_elements_with_object_references", "crates/engine/tests/autotag.rs::an_already_tagged_document_is_refused_unless_replaced", "crates/engine/tests/autotag.rs::the_pdfua_checker_improves_and_the_result_survives_save_and_undo", "crates/engine/tests/autotag.rs::hostile_content_never_panics", "crates/a11y/src/autotag_tests.rs::reading_order_follows_columns_and_rows", "crates/automation/tests/automation.rs::tags_autotag_through_tools_with_bad_arguments"]
+notes = "headless only (no menu or dialog yet): layout-based tags from the renderer's glyphs per painting operation: headings by size and bold weight (levels never skip), paragraphs, bullet/number lists with Lbl when the marker is drawn alone, ruled grid tables (TH first row with Scope), figures (all flagged for alt text), Link + OBJR and Annot elements, running headers/footers/page numbers and decoration as artifacts, row/column reading order; MCIDs, ParentTree, StructParents, Tabs /S, MarkInfo and Lang written; refuses tagged documents unless replace_existing. Not yet: unruled or spanned tables, captions, TOC, vector-graphic figures, splitting text runs (a marker inside the same run as its text gets no Lbl; a form XObject is tagged whole), form fields (a11y.autotag-fields), comparison with Acrobat's output on real documents"
 
 [[feature]]
 id = "a11y.autotag-fields"

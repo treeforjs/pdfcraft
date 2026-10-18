@@ -36,4 +36,14 @@ let html = report_html(&report, "file.pdf", "2026-10-02");
   Tags listing, the full check, PDF/UA, reading order, figures and headings. Adding a namespace
   refuses mappings that are circular, end at a non-standard type, or remap PDF 2.0 types.
 
-Not yet: autotagging, the Tags/Order/Content panels, the Reading Order tool (M12.1–M12.2).
+- **Autotag** (`autotag`): tags an untagged document from its layout. Each painting
+  operation is a unit; a provisional copy puts each unit in its own MCID and the caller's text
+  extractor ([`AutotagText`]; the engine passes the renderer's) returns glyphs per unit, so this
+  crate only does layout: lines and blocks, headings by size and weight, lists, ruled tables,
+  figures, links and annotations, running headers/footers/page numbers as artifacts, and a
+  row/column reading order. The content is rewritten with balanced marked content and the tree,
+  parent tree, StructParents, Tabs and MarkInfo are written. Bounded throughout; a tagged
+  document is refused unless `replace_existing`. Not yet: unruled tables, captions, vector
+  figures, splitting a text run between elements.
+
+Not yet: the Tags/Order/Content panels, the Reading Order tool (M12.1–M12.2).

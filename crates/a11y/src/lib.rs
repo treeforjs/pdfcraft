@@ -14,6 +14,7 @@ use pdfcraft_cos::Document;
 
 mod alt;
 mod artifact;
+mod autotag;
 mod content;
 mod headings;
 mod namespace;
@@ -26,6 +27,7 @@ mod tags;
 
 pub use alt::{AltError, Figure, figures, mark_decorative, set_alt};
 pub use artifact::{ArtifactResult, ArtifactSelection, ArtifactSubtype, ArtifactType, MAX_ARTIFACT_SELECTION, mark_artifact};
+pub use autotag::{AutotagError, AutotagFigure, AutotagGlyph, AutotagOptions, AutotagReport, AutotagText, MAX_AUTOTAG_PAGES, autotag};
 pub use headings::{Heading, HeadingKind, MAX_HEADING_LEVEL, heading_level, headings};
 pub use namespace::{
     MAX_NAMESPACES, MAX_NS_MAPPINGS, NS_MATHML, NS_PDF17, NS_PDF20, Namespace, NamespaceKind, NamespaceSpec, NsMapping, add_namespace, namespace_uri,

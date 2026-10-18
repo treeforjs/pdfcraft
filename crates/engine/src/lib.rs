@@ -14,6 +14,7 @@
 
 pub mod accessible_text;
 pub mod actions;
+pub mod autotag;
 pub mod catalog;
 pub mod commands;
 pub mod compare;
@@ -1457,6 +1458,12 @@ pub enum Edit {
     AddNamespace {
         spec: a11y::NamespaceSpec,
     },
+    /// Accessibility ▸ Autotag Document: give an untagged document a structure tree from its
+    /// layout (headings, paragraphs, lists, tables, figures, links; running headers, footers and
+    /// decoration as artifacts), see [`a11y::autotag`].
+    Autotag {
+        options: a11y::AutotagOptions,
+    },
     /// Set Alternate Text on an untagged image: tag image `index` (0-based, among the page's
     /// untagged images) on `page` as a Figure with `alt`.
     TagImage {
@@ -1779,6 +1786,7 @@ impl Edit {
             Edit::AddNamespace { .. } => "Add structure namespace".into(),
             Edit::MarkArtifact { .. } => "Change to artifact".into(),
             Edit::TagImage { .. } => "Set alternate text".into(),
+            Edit::Autotag { .. } => "Autotag document".into(),
             Edit::AddOcrText { .. } => "Recognize text".into(),
             Edit::StraightenPage { .. } => "Straighten page".into(),
             Edit::DownsamplePageImages { .. } => "Downsample images".into(),
@@ -2005,6 +2013,7 @@ fn check_permission(edit: &Edit, p: &pdfcraft_cos::Permissions) -> Result<(), Ed
         | Edit::AddNamespace { .. }
         | Edit::MarkArtifact { .. }
         | Edit::TagImage { .. }
+        | Edit::Autotag { .. }
         | Edit::AddOcrText { .. }
         | Edit::StraightenPage { .. }
         | Edit::DownsamplePageImages { .. }
@@ -2286,6 +2295,9 @@ fn run_edit(doc: &mut pdfcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -> 
         }
         Edit::TagImage { page, index, alt } => {
             a11y::tag_image(doc, *page, *index, alt).map_err(|e| EditError::Accessibility(e.to_string()))?;
+        }
+        Edit::Autotag { options } => {
+            autotag::run(doc, options).map_err(EditError::Accessibility)?;
         }
         Edit::EditTextLine { page, line, text } => {
             pdfcraft_edit::replace_line(doc, *page, *line, text)?;
