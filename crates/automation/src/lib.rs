@@ -859,6 +859,9 @@ impl Automation {
                 json!({ "count": ids.len(), "ids": ids })
             }
             "sign_trust" => self.sign_trust(&a)?,
+            "sign_os_trust_get" => self.sign_os_trust_get()?,
+            "sign_os_trust_set" => self.sign_os_trust_set(&a)?,
+            "sign_os_roots" => self.sign_os_roots(&a)?,
             "trust_urls_get" => self.trust_urls_get()?,
             "trust_urls_set" => self.trust_urls_set(&a)?,
             "trust_url_check" => self.trust_url_check(&a)?,

@@ -41,6 +41,10 @@ ed25519-dalek = "3.0.0"
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 aws-lc-rs = { version = "1.18", default-features = false, features = ["aws-lc-sys", "prebuilt-nasm"] }
 getrandom = "0.4"
+# The operating system's root certificates (sign.os-trust); already in the graph through the
+# engine's HTTPS clients. Pure Rust on Linux/BSD; safe security-framework/schannel wrappers
+# on macOS/Windows (MIT OR Apache-2.0 OR ISC).
+rustls-native-certs = "0.8"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 # Safe Windows certificate store and CNG signing wrappers (MIT OR Apache-2.0).

@@ -15,7 +15,7 @@ fn verified_local_evidence_preserves_signature_bytes_and_never_grants_trust() {
         crls: vec![support::crl(&issuer, None)],
         ocsps: vec![support::ocsp(&issuer, &leaf.certificate)],
     };
-    let trust = TrustStore { certs: vec![issuer.certificate.clone()] };
+    let trust = TrustStore::new(vec![issuer.certificate.clone()]);
     let report = sign::evidence::check(&doc, &signed, &evidence, &trust, VerificationTime::BestAvailable).unwrap();
     assert!(report.has_complete_coverage());
     assert_eq!(report.coverage.len(), 1);
@@ -144,7 +144,7 @@ fn a_delegated_ocsp_responder_with_the_signing_eku_verifies_by_name_and_by_key()
     let doc = pdfcraft_cos::Document::open(Arc::new(signed.clone())).unwrap();
     let raw = support::ocsp_signed_by(&issuer, &leaf.certificate, &support::responder_key(), &responder, ResponderIdForm::Name, true);
     let evidence = sign::dss::Evidence { certs: Vec::new(), crls: Vec::new(), ocsps: vec![raw] };
-    let trust = TrustStore { certs: vec![issuer.certificate.clone()] };
+    let trust = TrustStore::new(vec![issuer.certificate.clone()]);
     let report = sign::evidence::check(&doc, &signed, &evidence, &trust, VerificationTime::BestAvailable).unwrap();
     assert!(report.has_complete_coverage(), "{report:?}");
 }
@@ -267,7 +267,7 @@ fn timestamp_authority_chains_are_part_of_revocation_coverage() {
     let options = sign::SignOptions { date: "D:20261012120000Z".into(), ..Default::default() };
     let signed = sign::sign_with_timestamp(&pdfcraft_cos::Document::open(Arc::new(support::pdf())).unwrap(), &leaf, &options, &tsa).unwrap();
     let doc = pdfcraft_cos::Document::open(Arc::new(signed.clone())).unwrap();
-    let trust = TrustStore { certs: vec![issuer.certificate.clone()] };
+    let trust = TrustStore::new(vec![issuer.certificate.clone()]);
     let listed = sign::signatures(&doc, &signed, &trust);
     assert!(listed[0].timestamp_time.is_some(), "{:?}", listed[0].details);
     assert_eq!(listed[0].timestamp_chain.first(), Some(&tsa.certificate));

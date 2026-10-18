@@ -83,7 +83,7 @@ impl HttpTimestampAuthority {
     /// an explicit user action or an automation call with network access opted in.
     pub fn new(server: TimestampServer, certificates: Vec<Certificate>, cancellation: SignatureCancellation) -> Result<Self, String> {
         server.validate()?;
-        Ok(Self { server, trust: TrustStore { certs: certificates }, cancellation })
+        Ok(Self { server, trust: TrustStore::new(certificates), cancellation })
     }
 
     #[cfg(not(target_arch = "wasm32"))]

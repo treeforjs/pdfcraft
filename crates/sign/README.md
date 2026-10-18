@@ -66,6 +66,13 @@ ECDSA P-256/P-384; the store integration is tested with software-backed keys.
   revisions are diffed against the signed one, and the changes are classified (signing, form
   fill, comments, metadata, page content, document structure) under the DocMDP permissions.
   The verdict follows Acrobat: valid, unknown (intact but the identity isn't trusted) or invalid.
+- **Operating system roots** (`os_trust`): `os_trust::load` reads the platform's root
+  certificates (`rustls-native-certs`: macOS keychains, Windows stores, the Linux/BSD CA bundle
+  and directory) or an explicit PEM/DER bundle or directory, skipping malformed entries and
+  capping what it reads. In a `TrustStore` they anchor chains only for the enabled purposes
+  (`os_for_signatures`, `os_for_certified`; `TrustPurpose`), off by default as in Acrobat;
+  `SignatureInfo::trust_source` says whether the user's trusted certificates or the OS anchored
+  the chain.
 - **Signed version and its comparison** (`signed_version`): `signed_version` returns the bytes a
   signature covers (View Signed Version); `compare_signed_version` itemises every change since
   (page content, comments, form fields with old and new values, pages added or removed,

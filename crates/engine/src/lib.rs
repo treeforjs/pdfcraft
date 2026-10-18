@@ -25,6 +25,7 @@ pub mod js;
 pub mod links;
 pub mod ocr;
 pub mod optimizer;
+pub mod os_trust;
 pub mod pdfx;
 pub mod pptx_export;
 pub mod preflight;
@@ -2921,6 +2922,8 @@ pub struct Session {
     url_policy: url_access::UrlPolicy,
     /// Trust Manager ▸ attachments: the user's allow/deny overrides (see [`attachment_trust`]).
     attachment_trust: attachment_trust::AttachmentTrust,
+    /// Trust the operating system's root certificates for signatures (see [`os_trust`]).
+    os_trust: os_trust::OsTrust,
     /// Keep tags on edit, inverted (on by default; see [`Session::set_keep_tags_on_edit`]).
     keep_tags_off: bool,
     /// Preferences ▸ Page Display ▸ Use Overprint Preview (see [`preflight::OverprintPreview`]).
@@ -4303,7 +4306,67 @@ impl Session {
 
     /// Replace the trusted certificates and revalidate every open document's signatures.
     pub fn set_trusted_certificates(&mut self, certs: Vec<pdfcraft_sign::Certificate>) {
-        self.trust = Arc::new(TrustStore { certs });
+        let mut trust = (*self.trust).clone();
+        trust.certs = certs;
+        self.replace_trust(trust);
+    }
+
+    /// Whether the operating system's root certificates are trusted, and for what.
+    pub fn os_trust_settings(&self) -> os_trust::OsTrustSettings {
+        self.os_trust.settings
+    }
+
+    /// Where the operating system's roots are read from.
+    pub fn os_trust_source(&self) -> &os_trust::OsRootSource {
+        &self.os_trust.source
+    }
+
+    /// Change the settings and revalidate every open document. Turning one on reads the roots
+    /// from the source first (once); if that fails nothing changes.
+    pub fn set_os_trust(&mut self, settings: os_trust::OsTrustSettings) -> Result<(), EditError> {
+        let roots = if settings.signatures || settings.certified_documents { Some(self.os_trust.roots()?) } else { self.os_trust.roots.clone() };
+        self.os_trust.settings = settings;
+        self.apply_os_trust(roots);
+        Ok(())
+    }
+
+    /// Read the operating system's roots from `source` from now on (an explicit bundle file or
+    /// directory replaces the platform store, e.g. a custom CA bundle, or a test's fake store).
+    /// The roots are read again now; if that fails nothing changes.
+    pub fn set_os_trust_source(&mut self, source: os_trust::OsRootSource) -> Result<(), EditError> {
+        let mut next = os_trust::OsTrust { settings: self.os_trust.settings, source, roots: None };
+        let roots = next.roots()?;
+        self.os_trust = next;
+        self.apply_os_trust(Some(roots));
+        Ok(())
+    }
+
+    /// The operating system's roots (read from the source if not read yet; `reload` reads
+    /// them again, e.g. after the store changed). Reading never changes the settings.
+    pub fn os_roots(&mut self, reload: bool) -> Result<Arc<os_trust::OsRoots>, EditError> {
+        if reload {
+            let mut next = os_trust::OsTrust { settings: self.os_trust.settings, source: self.os_trust.source.clone(), roots: None };
+            let roots = next.roots()?;
+            self.os_trust = next;
+            self.apply_os_trust(Some(roots.clone()));
+            return Ok(roots);
+        }
+        Ok(self.os_trust.roots()?)
+    }
+
+    fn apply_os_trust(&mut self, roots: Option<Arc<os_trust::OsRoots>>) {
+        let mut trust = (*self.trust).clone();
+        let s = self.os_trust.settings;
+        trust.os_for_signatures = s.signatures;
+        trust.os_for_certified = s.certified_documents;
+        // Roots already read stay in the store even with both settings off: they anchor nothing
+        // then, but validation can say that a chain would end at one.
+        trust.os_roots = Arc::new(roots.map(|r| r.certificates.clone()).unwrap_or_default());
+        self.replace_trust(trust);
+    }
+
+    fn replace_trust(&mut self, trust: TrustStore) {
+        self.trust = Arc::new(trust);
         for doc in &mut self.docs {
             doc.trust = self.trust.clone();
             if let Some(e) = doc.editor.as_ref() {
