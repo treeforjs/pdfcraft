@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 
 use crate::{Args, Automation, Result, ToolError, child, failed, write_atomic};
 
-fn status_id(s: Status) -> &'static str {
+pub(crate) fn status_id(s: Status) -> &'static str {
     match s {
         Status::Passed => "passed",
         Status::Failed => "failed",
