@@ -34,12 +34,23 @@
 //! is inside. All work is capped (grid cells across all plates, content bytes, operators,
 //! painted objects, rasterization work, tracked inks and nesting); a page that hits a cap
 //! says so with `truncated`.
+//!
+//! **Ink Manager.** When the conversion carries [`InkManager`] settings, aliased spot inks paint
+//! the plate of the ink they are aliased to, and spot inks set to process paint the process
+//! plates: their tint transform (read by [`Conversion::tint_function`]) gives the alternate
+//! colour, which becomes CMYK (gray to K, CMYK as is, RGB and Lab through the conversion);
+//! process parts of one DeviceN colour add up. A spot ink whose tint transform or alternate can't
+//! be evaluated stays on its own plate (counted under `approximated`).
 
+use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::rc::Rc;
 
 use pdfcraft_content::{Matrix, Op, parse};
 use pdfcraft_cos::{Dict, Document, ObjRef, Object, Stream};
+
+pub use crate::ink_manager::InkManager;
+use crate::ink_manager::Route;
 
 #[cfg(test)]
 mod tests;
@@ -105,6 +116,33 @@ pub trait Conversion {
     fn rgb(&self, rgb: [f64; 3]) -> [f64; 4];
     /// CMYK for a CIE L*a*b* colour (D50; L* 0–100).
     fn lab(&self, lab: [f64; 3]) -> [f64; 4];
+    /// Read the tint transform `function` (`inputs` inputs, `outputs` outputs) to convert spot
+    /// inks to process. The default reads one-input Type 0 and Type 2 functions; the engine's
+    /// conversions read every function type.
+    fn tint_function(&self, doc: &Document, function: &Object, inputs: usize, outputs: usize) -> Option<Box<dyn TintFunction>> {
+        if inputs != 1 {
+            return None;
+        }
+        crate::colour_warnings::parse_tint(doc, function, outputs).map(|t| Box::new(BuiltInTint(t)) as Box<dyn TintFunction>)
+    }
+    /// The Ink Manager settings to separate with (none by default).
+    fn ink_manager(&self) -> Option<&InkManager> {
+        None
+    }
+}
+
+/// A tint transform read for evaluation.
+pub trait TintFunction {
+    /// The alternate colour's components for colorant tints `input` (not clamped to 0–1: Lab).
+    fn eval(&self, input: &[f64]) -> Option<Vec<f64>>;
+}
+
+struct BuiltInTint(crate::colour_warnings::Tint);
+
+impl TintFunction for BuiltInTint {
+    fn eval(&self, input: &[f64]) -> Option<Vec<f64>> {
+        Some(self.0.eval_raw(*input.first()?))
+    }
 }
 
 /// The press-agnostic conversion: full black generation with 70 % under-colour removal.
@@ -363,6 +401,11 @@ pub struct Raster {
     pub inks: Vec<InkInfo>,
     /// Whether each ink puts any ink on the page (spot inks can be declared but unused).
     pub painted: Vec<bool>,
+    /// The kinds of object that put each ink down ([`TEXT`], [`VECTOR`], [`IMAGE`] bits).
+    pub painted_kinds: Vec<u8>,
+    /// Inks the Ink Manager moved off their own plate on this page: ink → the plate it went to
+    /// (another ink's name, or `process`).
+    pub routes: BTreeMap<String, String>,
     plates: Vec<Vec<u16>>,
     pub exact_paints: usize,
     pub converted_paints: usize,
@@ -470,6 +513,18 @@ impl Raster {
     }
 }
 
+/// Object-kind bits of [`Raster::painted_kinds`]: text.
+pub const TEXT: u8 = 1;
+/// Paths: fills and strokes.
+pub const VECTOR: u8 = 2;
+/// Images, inline images and stencil masks.
+pub const IMAGE: u8 = 4;
+
+/// The names of the object kinds in `bits` (`text`, `vector`, `image`).
+pub fn kind_names(bits: u8) -> Vec<&'static str> {
+    [(TEXT, "text"), (VECTOR, "vector"), (IMAGE, "image")].into_iter().filter(|(b, _)| bits & b != 0).map(|(_, n)| n).collect()
+}
+
 /// Separate 0-based page `index` into plates at `dpi` (lowered when the page, times its inks,
 /// would exceed the cell budget), simulating overprint when `overprint` is set and converting
 /// RGB and Lab colours with `conversion`.
@@ -526,6 +581,8 @@ pub fn rasterize(doc: &Document, index: usize, dpi: f64, overprint: bool, conver
         height: gh,
         inks: walker.inks,
         painted: walker.grid.painted,
+        painted_kinds: walker.grid.kinds,
+        routes: walker.routes,
         plates: walker.grid.plates,
         exact_paints: walker.exact,
         converted_paints: walker.converted,
@@ -602,8 +659,95 @@ enum Target {
     /// `All`: every plate (registration).
     All,
     Plate(usize),
+    /// A spot ink converted to process ([`Walker::spots`] index).
+    Spot(usize),
     /// A colorant beyond [`MAX_INKS`].
     Untracked,
+}
+
+/// Spot inks converted to process per page, at most.
+const MAX_SPOTS: usize = 256;
+
+/// How a spot ink's alternate colour becomes process inks.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Alt {
+    Gray,
+    Rgb,
+    Cmyk,
+    Lab,
+}
+
+/// A spot ink converted to process: its tint transform, the input it is, its alternate.
+struct SpotProcess {
+    function: Box<dyn TintFunction>,
+    inputs: usize,
+    slot: usize,
+    alt: Alt,
+    /// CMYK per tint (in hundredths of a percent).
+    cache: RefCell<HashMap<u16, [f64; 4]>>,
+}
+
+impl SpotProcess {
+    fn cmyk(&self, t: f64, conversion: &dyn Conversion) -> Option<[f64; 4]> {
+        let q = (clamp01(t) * FULL).round() as u16;
+        if let Ok(cache) = self.cache.try_borrow()
+            && let Some(v) = cache.get(&q)
+        {
+            return Some(*v);
+        }
+        let mut input = vec![0.0; self.inputs];
+        *input.get_mut(self.slot)? = f64::from(q) / FULL;
+        let out = self.function.eval(&input)?;
+        let at = |i: usize| out.get(i).copied().filter(|v| v.is_finite()).unwrap_or(0.0);
+        let cmyk = match self.alt {
+            Alt::Gray => [0.0, 0.0, 0.0, 1.0 - clamp01(at(0))],
+            Alt::Rgb => conversion.rgb([clamp01(at(0)), clamp01(at(1)), clamp01(at(2))]),
+            Alt::Cmyk => [clamp01(at(0)), clamp01(at(1)), clamp01(at(2)), clamp01(at(3))],
+            Alt::Lab => conversion.lab([at(0).clamp(0.0, 100.0), at(1).clamp(-128.0, 128.0), at(2).clamp(-128.0, 128.0)]),
+        };
+        if let Ok(mut cache) = self.cache.try_borrow_mut() {
+            cache.insert(q, cmyk);
+        }
+        Some(cmyk)
+    }
+}
+
+/// Replace the converted spot inks of `out` (and the process inks beside them) by their summed
+/// process inks; whether there were any.
+fn fold_spots(out: &mut Vec<(Target, f64)>, spots: &[SpotProcess], conversion: &dyn Conversion) -> bool {
+    if !out.iter().any(|(t, _)| matches!(t, Target::Spot(_))) {
+        return false;
+    }
+    let mut cmyk = [0.0f64; 4];
+    out.retain(|&(t, v)| match t {
+        Target::Spot(k) => {
+            if let Some(c) = spots.get(k).and_then(|s| s.cmyk(v, conversion)) {
+                for (a, b) in cmyk.iter_mut().zip(c) {
+                    *a += b;
+                }
+            }
+            false
+        }
+        Target::Plate(p) if p < PROCESS_INKS.len() => {
+            if let Some(a) = cmyk.get_mut(p) {
+                *a += v;
+            }
+            false
+        }
+        _ => true,
+    });
+    out.extend(cmyk.iter().enumerate().map(|(i, v)| (Target::Plate(i), clamp01(*v))));
+    true
+}
+
+/// How a spot colorant is defined: by a Separation (its own, or a DeviceN's `Colorants` entry)
+/// or as input `slot` of a DeviceN's `inputs`.
+struct SpotDef {
+    defined_by: &'static str,
+    alt: Option<Object>,
+    func: Option<Object>,
+    inputs: usize,
+    slot: usize,
 }
 
 /// Which plates an overprinting object paints.
@@ -673,7 +817,7 @@ impl Space {
 
     /// The colorants of colour `c` (each with its tint, 0–1) into `out`, or `None` when this
     /// space can't be measured.
-    fn ink_into(&self, c: &[f64], conversion: &dyn Conversion, out: &mut Vec<(Target, f64)>) -> Option<Kind> {
+    fn ink_into(&self, c: &[f64], conversion: &dyn Conversion, spots: &[SpotProcess], out: &mut Vec<(Target, f64)>) -> Option<Kind> {
         out.clear();
         let at = |i: usize| c.get(i).copied().unwrap_or(0.0);
         let process = |out: &mut Vec<(Target, f64)>, cmyk: [f64; 4]| {
@@ -701,11 +845,13 @@ impl Space {
             }
             Space::Separation(t) => {
                 out.push((*t, clamp01(at(0))));
-                Some(Kind { converted: false, scope: Scope::Listed })
+                let converted = fold_spots(out, spots, conversion);
+                Some(Kind { converted, scope: Scope::Listed })
             }
             Space::DeviceN(targets) => {
                 out.extend(targets.iter().enumerate().map(|(i, t)| (*t, clamp01(at(i)))));
-                Some(Kind { converted: false, scope: Scope::Listed })
+                let converted = fold_spots(out, spots, conversion);
+                Some(Kind { converted, scope: Scope::Listed })
             }
             Space::Indexed { base, hival, lookup } => {
                 let index = at(0);
@@ -722,7 +868,7 @@ impl Space {
                     comps[1] = comps[1] * 200.0 - 100.0;
                     comps[2] = comps[2] * 200.0 - 100.0;
                 }
-                base.ink_into(comps.get(..n)?, conversion, out)
+                base.ink_into(comps.get(..n)?, conversion, spots, out)
             }
             Space::Pattern | Space::Unknown(_) => None,
         }
@@ -793,6 +939,9 @@ struct Grid {
     /// One plate per ink, `w × h` values in hundredths of a percent; empty until inked.
     plates: Vec<Vec<u16>>,
     painted: Vec<bool>,
+    /// Per plate, the object kinds that inked it; `kind` is the object being painted.
+    kinds: Vec<u8>,
+    kind: u8,
     allocated: usize,
     over_budget: bool,
     work: u64,
@@ -809,6 +958,8 @@ impl Grid {
             h: 0,
             plates: vec![Vec::new(); PROCESS_INKS.len()],
             painted: vec![false; PROCESS_INKS.len()],
+            kinds: vec![0; PROCESS_INKS.len()],
+            kind: VECTOR,
             allocated: 0,
             over_budget: false,
             work: 0,
@@ -861,7 +1012,7 @@ impl Grid {
         let name = |s: &mut f64, v: f64| *s = if s.is_nan() { v } else { s.max(v) };
         for &(t, v) in values {
             match t {
-                Target::Nothing | Target::Untracked => {}
+                Target::Nothing | Target::Untracked | Target::Spot(_) => {}
                 Target::All => {
                     marks = true;
                     for s in scratch.iter_mut() {
@@ -899,6 +1050,9 @@ impl Grid {
                     && let Some(painted) = self.painted.get_mut(p)
                 {
                     *painted = true;
+                    if let Some(k) = self.kinds.get_mut(p) {
+                        *k |= self.kind;
+                    }
                 }
                 out.push((p, q));
             }
@@ -1067,6 +1221,10 @@ struct Walker<'a> {
     truncated: bool,
     fonts: HashMap<ObjRef, Rc<Font>>,
     values: Vec<(Target, f64)>,
+    /// Spot inks converted to process, and their keys (colorant and definition).
+    spots: Vec<SpotProcess>,
+    spot_keys: HashMap<String, usize>,
+    routes: BTreeMap<String, String>,
 }
 
 fn intersect(a: [f64; 4], b: [f64; 4]) -> [f64; 4] {
@@ -1141,6 +1299,9 @@ impl<'a> Walker<'a> {
             truncated: false,
             fonts: HashMap::new(),
             values: Vec::new(),
+            spots: Vec::new(),
+            spot_keys: HashMap::new(),
+            routes: BTreeMap::new(),
         }
     }
 }
@@ -1206,7 +1367,7 @@ impl Walker<'_> {
             return None;
         }
         let mut values = std::mem::take(&mut self.values);
-        let kind = paint.space.ink_into(&paint.comps, self.conversion, &mut values);
+        let kind = paint.space.ink_into(&paint.comps, self.conversion, &self.spots, &mut values);
         let out = match kind {
             Some(kind) => {
                 if kind.converted {
@@ -1238,8 +1399,8 @@ impl Walker<'_> {
         gs.ctm.then(&self.to_grid)
     }
 
-    /// The plate of colorant `name`, registering a new spot ink (described by `describe`).
-    fn target(&mut self, name: &[u8], describe: impl FnOnce(&mut Self) -> InkInfo) -> Target {
+    /// The plate of colorant `name` (defined by `def`), as the Ink Manager routes it.
+    fn target(&mut self, name: &[u8], def: &SpotDef) -> Target {
         match name {
             b"None" => return Target::Nothing,
             b"All" => return Target::All,
@@ -1248,20 +1409,73 @@ impl Walker<'_> {
         if let Some(i) = PROCESS_INKS.iter().position(|p| p.as_bytes() == name) {
             return Target::Plate(i);
         }
+        let text = String::from_utf8_lossy(name).into_owned();
+        let route = self.conversion.ink_manager().map_or(Route::Own, |m| m.route(&text));
+        match route {
+            Route::Own => self.plate(name, def),
+            Route::Ink(to) => {
+                let target = match PROCESS_INKS.iter().position(|p| *p == to) {
+                    Some(i) => Target::Plate(i),
+                    None => self.plate(to.as_bytes(), def),
+                };
+                self.routes.insert(text, to);
+                target
+            }
+            Route::Process => match self.spot_process(name, def) {
+                Some(k) => {
+                    self.routes.insert(text, "process".into());
+                    Target::Spot(k)
+                }
+                None => {
+                    self.approximate("spot inks that could not be converted to process (kept on their own plates)");
+                    self.plate(name, def)
+                }
+            },
+        }
+    }
+
+    /// The plate of ink `name`, registering a new spot ink described by `def`.
+    fn plate(&mut self, name: &[u8], def: &SpotDef) -> Target {
         if let Some(&i) = self.ink_index.get(name) {
             return Target::Plate(i);
         }
         if self.inks.len() >= MAX_INKS {
             return Target::Untracked;
         }
-        let mut info = describe(self);
+        let mut info = self.spot(def.defined_by, def.alt.as_ref(), def.func.as_ref());
         info.name = String::from_utf8_lossy(name).into_owned();
         let i = self.inks.len();
         self.inks.push(info);
         self.ink_index.insert(name.to_vec(), i);
         self.grid.plates.push(Vec::new());
         self.grid.painted.push(false);
+        self.grid.kinds.push(0);
         Target::Plate(i)
+    }
+
+    /// Spot ink `name` converted to process through `def`, or `None` when its tint transform
+    /// or alternate can't be evaluated.
+    fn spot_process(&mut self, name: &[u8], def: &SpotDef) -> Option<usize> {
+        let key = format!("{name:?}|{}|{}|{:?}|{:?}", def.inputs, def.slot, def.alt, def.func);
+        if let Some(&k) = self.spot_keys.get(&key) {
+            return Some(k);
+        }
+        if self.spots.len() >= MAX_SPOTS {
+            return None;
+        }
+        let (alt_name, outputs) = family(self.doc, def.alt.as_ref()?);
+        let alt = match (alt_name.as_str(), outputs) {
+            ("Lab", _) => Alt::Lab,
+            (_, 1) => Alt::Gray,
+            (_, 3) => Alt::Rgb,
+            (_, 4) => Alt::Cmyk,
+            _ => return None,
+        };
+        let function = self.conversion.tint_function(self.doc, def.func.as_ref()?, def.inputs, outputs)?;
+        let k = self.spots.len();
+        self.spots.push(SpotProcess { function, inputs: def.inputs, slot: def.slot, alt, cache: RefCell::new(HashMap::new()) });
+        self.spot_keys.insert(key, k);
+        Some(k)
     }
 
     /// Describe a spot colorant from its alternate space and tint transform (a Separation's,
@@ -1274,13 +1488,20 @@ impl Walker<'_> {
             f.as_dict().and_then(|d| d.get(b"FunctionType")).and_then(|t| self.doc.resolve(t).as_int())
         });
         let lab = alt_name == "Lab";
+        let use_lab = lab && self.conversion.ink_manager().is_some_and(|m| m.use_lab);
         let value = match (function, defined_by) {
             (Some(f), "Separation") if matches!(outputs, 1 | 3 | 4) && !lab => {
                 crate::colour_warnings::parse_tint(self.doc, f, outputs).map(|t| t.eval(1.0)).filter(|v| v.len() == outputs)
             }
+            (Some(f), "Separation") if use_lab => {
+                self.conversion.tint_function(self.doc, f, 1, 3).and_then(|t| t.eval(&[1.0])).filter(|v| v.len() == 3)
+            }
             _ => None,
         };
-        let preview = value.as_deref().and_then(preview_of);
+        let preview = match value.as_deref() {
+            Some(&[l, a, b]) if use_lab => Some(lab_to_srgb([l.clamp(0.0, 100.0), a.clamp(-128.0, 128.0), b.clamp(-128.0, 128.0)])),
+            v => v.and_then(preview_of),
+        };
         InkInfo {
             name: String::new(),
             process: false,
@@ -1337,7 +1558,7 @@ impl Walker<'_> {
                     b"Separation" => {
                         let Some(name) = arg(1).and_then(|n| n.as_name().map(<[u8]>::to_vec)) else { return Space::Unknown(1) };
                         let (alt, func) = (a.get(2).cloned(), a.get(3).cloned());
-                        Space::Separation(self.target(&name, |w| w.spot("Separation", alt.as_ref(), func.as_ref())))
+                        Space::Separation(self.target(&name, &SpotDef { defined_by: "Separation", alt, func, inputs: 1, slot: 0 }))
                     }
                     b"DeviceN" => match arg(1).as_deref().and_then(Object::as_array) {
                         Some(names) if !names.is_empty() && names.len() <= MAX_COMPONENTS => {
@@ -1350,17 +1571,18 @@ impl Walker<'_> {
                                 .map(|c| doc.resolve(&c))
                                 .and_then(|c| c.as_dict().cloned());
                             let mut targets = Vec::with_capacity(names.len());
-                            for name in &names {
+                            for (slot, name) in names.iter().enumerate() {
                                 let own = colorants.as_ref().and_then(|c| c.get(name).cloned()).map(|s| doc.resolve(&s)).and_then(|s| {
                                     let s = s.as_array()?;
                                     (s.first().map(|f| doc.resolve(f)).and_then(|f| f.as_name().map(<[u8]>::to_vec)).as_deref()
                                         == Some(b"Separation".as_slice()))
                                     .then(|| (s.get(2).cloned(), s.get(3).cloned()))
                                 });
-                                let target = match own {
-                                    Some((alt, func)) => self.target(name, |w| w.spot("Separation", alt.as_ref(), func.as_ref())),
-                                    None => self.target(name, |w| w.spot("DeviceN", alt.as_ref(), func.as_ref())),
+                                let def = match own {
+                                    Some((alt, func)) => SpotDef { defined_by: "Separation", alt, func, inputs: 1, slot: 0 },
+                                    None => SpotDef { defined_by: "DeviceN", alt: alt.clone(), func: func.clone(), inputs: names.len(), slot },
                                 };
+                                let target = self.target(name, &def);
                                 targets.push(target);
                             }
                             Space::DeviceN(targets)
@@ -1714,6 +1936,7 @@ impl Walker<'_> {
                 }
                 b"W" | b"W*" => pending_clip = true,
                 b"f" | b"F" | b"f*" | b"B" | b"B*" | b"b" | b"b*" | b"S" | b"s" | b"n" => {
+                    self.grid.kind = VECTOR;
                     if points > MAX_PATH_POINTS {
                         self.truncated = true;
                     }
@@ -1893,6 +2116,7 @@ impl Walker<'_> {
 
     /// Paint the box of a text-showing operator and return the advanced text matrix.
     fn show(&mut self, op: &Op, gs: &Gs, tm: Matrix) -> Matrix {
+        self.grid.kind = TEXT;
         let font = gs.font.clone().unwrap_or_else(|| Rc::new(Font::fallback()));
         let mut x = 0.0f64;
         let (mut lo, mut hi) = (0.0f64, 0.0f64);
@@ -2025,6 +2249,7 @@ impl Walker<'_> {
     }
 
     fn inline_image(&mut self, dict: &Dict, data: &[u8], resources: &Dict, gs: &Gs) {
+        self.grid.kind = IMAGE;
         let mut full = Dict::new();
         for (k, v) in dict.iter() {
             let key: &[u8] = match k.as_slice() {
@@ -2046,6 +2271,7 @@ impl Walker<'_> {
 
     /// Sample an image into the cells it covers.
     fn image(&mut self, dict: &Dict, stream: &Stream, resources: &Dict, gs: &Gs) {
+        self.grid.kind = IMAGE;
         let doc = self.doc;
         let int = |k: &[u8]| dict.get(k).and_then(|o| doc.resolve(o).as_int());
         let mask = dict.get(b"ImageMask").is_some_and(|o| matches!(doc.resolve(o).as_ref(), Object::Bool(true)));
@@ -2119,7 +2345,7 @@ impl Walker<'_> {
             }
         } else {
             let mut probe = Vec::new();
-            let Some(kind) = space.ink_into(&space.initial(), self.conversion, &mut probe) else { return };
+            let Some(kind) = space.ink_into(&space.initial(), self.conversion, &self.spots, &mut probe) else { return };
             self.paints = self.paints.saturating_add(1);
             if self.paints > MAX_PAINTS {
                 self.truncated = true;
@@ -2189,7 +2415,7 @@ impl Walker<'_> {
                 if !ok {
                     continue;
                 }
-                let Some(kind) = comps.get(..n).and_then(|c| space.ink_into(c, self.conversion, &mut values)) else { continue };
+                let Some(kind) = comps.get(..n).and_then(|c| space.ink_into(c, self.conversion, &self.spots, &mut values)) else { continue };
                 self.grid.build(&values, kind.scope, overprint, gs.opm, &mut writes);
                 self.grid.put(at, &writes);
             }

@@ -311,3 +311,34 @@ fn the_output_intent_is_found() {
     assert_eq!(oi.profile.as_deref(), Some(b"not really a profile".as_slice()));
     assert!(output_intent(&pdf("<< >>", &[b""], &[], "")).is_none());
 }
+
+#[test]
+fn the_ink_manager_routes_inks_with_the_built_in_tint_reader() {
+    // Gold 50 %, DeviceN Cyan 20 + Teal 100 (Teal from its Colorants Separation, RGB alternate),
+    // and a DeviceN Duo2 with a PostScript transform the built-in reader can't evaluate.
+    let res = SPOTS
+        .replace(">> /ExtGState", "/Duo2 [/DeviceN [/Mauve] /DeviceCMYK << /FunctionType 4 /Domain [0 1] /Range [0 1 0 1 0 1 0 1] >>] >> /ExtGState");
+    let d = pdf(&res, &[b"/Gold cs 0.5 scn 0 0 50 50 re f /Duo cs 0.2 1 scn 100 0 50 50 re f /Duo2 cs 1 scn 0 100 50 50 re f"], &[], "");
+    let inks = InkManager {
+        aliases: [("Silver".to_string(), "Black".to_string())].into_iter().collect(),
+        to_process: ["Gold", "Teal", "Mauve"].into_iter().map(String::from).collect(),
+        ..InkManager::default()
+    };
+    let managed = Managed { conversion: &BuiltIn, inks: &inks };
+    let r = rasterize(&d, 0, 72.0, false, &managed).unwrap();
+    let names: Vec<&str> = r.inks.iter().map(|i| i.name.as_str()).collect();
+    assert_eq!(names, ["Cyan", "Magenta", "Yellow", "Black", "Mauve"], "Gold, Teal and Silver have no plate of their own");
+    let s = sample(&r, 25.0, 25.0).unwrap();
+    assert_eq!(s.inks.get(1..3), Some(&[("Magenta".to_string(), 10.0), ("Yellow".to_string(), 50.0)][..]));
+    // Teal: RGB (0, 0.5, 0.5) built in → C 65, M 15, Y 15, K 50, plus the process Cyan 20.
+    let s = sample(&r, 125.0, 25.0).unwrap();
+    let values: Vec<f64> = s.inks.iter().map(|i| i.1).collect();
+    assert_eq!(values, [85.0, 15.0, 15.0, 50.0, 0.0], "{s:?}");
+    // Mauve's transform can't be read: it stays on its plate, and says so.
+    assert_eq!(sample(&r, 25.0, 125.0).unwrap().inks.get(4).map(|i| i.1), Some(100.0));
+    assert!(r.approximated.keys().any(|k| k.contains("could not be converted")), "{:?}", r.approximated);
+    assert_eq!(r.routes.get("Gold").map(String::as_str), Some("process"));
+    assert_eq!(r.routes.get("Silver").map(String::as_str), Some("Black"));
+    // Kinds: everything here is vector.
+    assert_eq!(kind_names(r.painted_kinds.get(1).copied().unwrap_or(0)), ["vector"]);
+}
