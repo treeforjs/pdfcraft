@@ -146,6 +146,7 @@ fn copy_denied_text_paths_withhold_or_refuse_and_owner_lifts() {
     let refusals = [
         ("doc_export_text", json!({"doc":user,"path":"out.txt"})),
         ("doc_export_all_images", json!({"doc":user,"folder":"images"})),
+        ("doc_export_svg", json!({"doc":user,"folder":"svg"})),
         ("doc_export_office", json!({"doc":user,"path":"out.html"})),
         ("doc_export_office", json!({"doc":user,"path":"out.docx"})),
         ("doc_compare", json!({"doc":plain,"other":user})),
@@ -162,6 +163,7 @@ fn copy_denied_text_paths_withhold_or_refuse_and_owner_lifts() {
         assert!(!root.join(file).exists(), "{file} must not be written");
     }
     assert!(std::fs::read_dir(root.join("images")).into_iter().flatten().next().is_none(), "no image is extracted");
+    assert!(std::fs::read_dir(root.join("svg")).into_iter().flatten().next().is_none(), "no SVG is written");
     assert_eq!(call(&mut a, "doc_info", json!({"doc":plain}))["document"]["undo"], Value::Null, "a refused mark adds nothing");
 
     let found = call(&mut a, "text_find", json!({"doc":owner,"query":"first ROW"}));
@@ -176,6 +178,8 @@ fn copy_denied_text_paths_withhold_or_refuse_and_owner_lifts() {
     call(&mut a, "doc_export_office", json!({"doc":owner,"path":"owner.html"}));
     assert!(std::fs::read_to_string(root.join("owner.html")).unwrap().contains("First row"));
     call(&mut a, "doc_export_all_images", json!({"doc":owner,"folder":"owner-images"}));
+    let svg = call(&mut a, "doc_export_svg", json!({"doc":owner,"folder":"owner-svg","pages":[1]}));
+    assert!(std::fs::read_to_string(svg["files"][0]["path"].as_str().unwrap()).unwrap().contains("First row"), "{svg}");
     call(&mut a, "doc_compare", json!({"doc":owner,"other":plain}));
     let _ = std::fs::remove_dir_all(root);
 }

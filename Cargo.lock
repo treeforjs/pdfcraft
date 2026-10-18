@@ -3607,6 +3607,7 @@ dependencies = [
  "pdfcraft-sign",
  "pdfcraft-xfa",
  "png 0.18.1",
+ "roxmltree",
  "serde_json",
 ]
 
@@ -3873,6 +3874,7 @@ dependencies = [
 name = "pdfcraft-render"
 version = "0.5.0"
 dependencies = [
+ "base64 0.22.1",
  "bytemuck",
  "flate2",
  "getrandom 0.4.3",
@@ -3885,6 +3887,8 @@ dependencies = [
  "pdfcraft-cos",
  "pdfcraft-filters",
  "pdfcraft-fonts",
+ "png 0.18.1",
+ "roxmltree",
  "skrifa 0.44.0",
  "thiserror 2.0.21",
 ]

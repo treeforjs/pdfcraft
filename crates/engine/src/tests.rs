@@ -1049,6 +1049,19 @@ fn export_images_and_text_follow_the_working_file() {
 }
 
 #[test]
+fn svg_export_follows_the_working_file() {
+    let (mut s, id) = session_with(2);
+    s.apply(id, Edit::RotatePages { pages: vec![1], degrees: 90 }).unwrap();
+    let doc = s.get(id).unwrap();
+    let mut ex = export::Exporter::new(doc);
+    let page = ex.svg(1, &pdfcraft_render::SvgOptions::default()).unwrap();
+    // The unsaved rotation: 200×300 pt shown as 300×200.
+    assert!(page.svg.contains("viewBox=\"0 0 300 200\""), "{}", &page.svg[..300.min(page.svg.len())]);
+    assert!(page.stats.glyphs == 5 && page.svg.contains(">Page 2</text>"), "{:?}", page.stats);
+    assert!(ex.svg(5, &pdfcraft_render::SvgOptions::default()).unwrap_err().contains("does not exist"));
+}
+
+#[test]
 fn create_and_reduce() {
     let mut s = Session::new();
     let blank = s.create_blank(612.0, 792.0, 2).unwrap();

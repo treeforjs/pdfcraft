@@ -7020,11 +7020,11 @@ title = "Export to SVG"
 area = "J"
 tier = "P1"
 milestone = "M10"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["doc_export_svg"]
+evidence = ["crates/render/src/svg/tests.rs::paths_keep_colour_fill_rule_and_stroke_style", "crates/render/src/svg/tests.rs::colours_are_converted_to_srgb", "crates/render/src/svg/tests.rs::rotated_and_cropped_pages_use_the_displayed_box", "crates/render/src/svg/tests.rs::images_are_embedded_as_png", "crates/render/src/svg/tests.rs::text_is_drawn_as_glyph_outlines_with_a_transparent_text_layer", "crates/render/src/svg/tests.rs::nested_forms_are_flattened_and_looping_forms_end", "crates/render/src/svg/tests.rs::tiling_patterns_become_svg_patterns", "crates/render/src/svg/tests.rs::shadings_are_rasterised_under_the_painted_shape", "crates/render/src/svg/tests.rs::soft_masks_become_svg_masks", "crates/render/src/svg/tests.rs::hostile_pages_and_arguments_are_errors", "crates/engine/src/tests.rs::svg_export_follows_the_working_file", "crates/automation/tests/svg_export.rs::exporting_pages_to_svg_through_tools", "crates/automation/tests/svg_export.rs::svg_export_rejects_bad_arguments", "crates/automation/tests/reader_selection.rs::copy_denied_text_paths_withhold_or_refuse_and_owner_lifts"]
+notes = "One standalone SVG per page (`<name>_page_<n>.svg`), viewBox = crop box as displayed (after /Rotate), in points. Written by an original hayro-interpret Device (pdfcraft_render::svg), so fonts, colour spaces, forms, annotations and layers come out as on screen. Vector: paths with fill rule, width, caps, joins, miter limit, dashes (strokes keep the CTM as transform), hairlines as non-scaling 1 px, nested clipPath groups, colours converted to sRGB with constant alpha, glyphs as outlines defined once and placed with <use> (fonts not embedded) plus a transparent per-line <text> layer (optional) for search/selection, nested and looping forms flattened within the interpreter's nesting limit, tiling patterns as SVG <pattern>, soft masks as <mask> (luminosity/alpha; transfer functions ignored and counted), blend modes as CSS mix-blend-mode, groups with opacity. Images and stencil masks re-encoded as base64 PNG with their soft mask as alpha, box-downsampled above 4 MP. Shadings (sh and shading patterns, fills and strokes) are rasterised over the painted region at up to 2 px/pt (1 MP each, 16 MP per page) and masked by the painted shape. 128 MiB per page, then truncated (still well-formed). Each file reports counts, omitted (stencils painted with a pattern, undecodable images, budget overflow) and truncated. Output checked by parsing with roxmltree; not yet compared visually against Acrobat's SVG export or a browser render. Not yet: a menu command (UI redesign), embedded fonts / real <text> with font-family, knockout groups and non-isolated group semantics, shading as native SVG gradients, overprint, one-file multi-page output."
 
 [[feature]]
 id = "create.export-ps"

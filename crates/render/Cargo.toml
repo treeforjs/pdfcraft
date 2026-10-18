@@ -21,6 +21,9 @@ thiserror = { workspace = true }
 log = { workspace = true }
 # Reads rendered pixel words as bytes; already in the tree through hayro.
 bytemuck = { version = "1" }
+# SVG export: images are embedded as base64 PNG (the versions the workspace already uses).
+png = "0.18"
+base64 = "0.22"
 
 # lopdf (bootstrap) draws random bytes for encryption; on the web they come from the browser.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -31,3 +34,5 @@ getrandom = { version = "0.4", features = ["wasm_js"] }
 skrifa = "0.44"
 # Builds the decompression-bomb streams in the raster tests.
 flate2 = { workspace = true }
+# Parses exported SVG in the tests (the version pdfcraft-annot already uses).
+roxmltree = "0.20"
