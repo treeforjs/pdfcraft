@@ -766,7 +766,7 @@ impl Walk<'_> {
 
     /// Transparency group attributes (and the group's colour space).
     fn group(&mut self, g: &Dict, at: At, what: &str) {
-        if name_of(self.doc, g, b"S").as_deref() == Some(b"Transparency") {
+        if is_transparency_group(self.doc, g) {
             let what = what.to_owned();
             self.out.once("transparency", at.page, at.object, "group", || format!("{what} is a transparency group"));
         }
@@ -970,26 +970,15 @@ impl Walk<'_> {
 
     fn ext_gstate(&mut self, g: &Dict, res: &Dict, at: At, depth: usize) {
         let doc = self.doc;
-        if let Some(sm) = g.get(b"SMask")
-            && !matches!(&*doc.resolve(sm), Object::Name(n) if n == b"None")
-        {
+        if gstate_soft_mask(doc, g) {
             self.out.once("transparency", at.page, at.object, "smask", || "A graphics state sets a soft mask (SMask)".into());
         }
-        for key in [b"CA".as_slice(), b"ca"] {
-            if num_of(doc, g, key).is_some_and(|v| v < 1.0) {
-                self.out.once("transparency", at.page, at.object, "alpha", || "A graphics state sets constant alpha (CA or ca) below 1".into());
-            }
+        if gstate_alpha(doc, g) {
+            self.out.once("transparency", at.page, at.object, "alpha", || "A graphics state sets constant alpha (CA or ca) below 1".into());
         }
-        if let Some(bm) = g.get(b"BM") {
-            let modes: Vec<Vec<u8>> = match &*doc.resolve(bm) {
-                Object::Name(n) => vec![n.clone()],
-                Object::Array(a) => a.iter().take(64).filter_map(|m| doc.resolve(m).as_name().map(<[u8]>::to_vec)).collect(),
-                _ => Vec::new(),
-            };
-            if let Some(m) = modes.iter().find(|m| !matches!(m.as_slice(), b"Normal" | b"Compatible")) {
-                let m = name_text(m);
-                self.out.once("transparency", at.page, at.object, "blend", || format!("A graphics state uses the {m} blend mode"));
-            }
+        if let Some(m) = gstate_blend(doc, g) {
+            let m = name_text(&m);
+            self.out.once("transparency", at.page, at.object, "blend", || format!("A graphics state uses the {m} blend mode"));
         }
         if let Some(tr) = g.get(b"TR")
             && !matches!(&*doc.resolve(tr), Object::Name(n) if n == b"Identity")
@@ -1080,10 +1069,10 @@ impl Walk<'_> {
                 if !mask && let Some(cs) = s.dict.get(b"ColorSpace") {
                     self.colour_space(cs, res, at, 0, false);
                 }
-                if s.dict.get(b"SMask").is_some_and(|m| matches!(&*doc.resolve(m), Object::Stream(_))) {
+                if image_soft_mask(doc, &s.dict) {
                     self.out.once("transparency", at.page, at.object, "image-smask", || "An image has a soft mask (SMask)".into());
                 }
-                if s.dict.get(b"SMaskInData").and_then(|v| doc.resolve(v).as_int()).is_some_and(|v| v > 0) {
+                if image_soft_mask_in_data(doc, &s.dict) {
                     self.out.once("transparency", at.page, at.object, "image-smask", || "A JPEG 2000 image has soft-mask data (SMaskInData)".into());
                 }
             }
@@ -1157,6 +1146,42 @@ impl Walk<'_> {
             self.out.add("fonts-embedded", at.page, at.object, || format!("The font {name} isn't embedded"));
         }
     }
+}
+
+/// A transparency group attributes dictionary (`/S /Transparency`).
+pub(crate) fn is_transparency_group(doc: &Document, g: &Dict) -> bool {
+    name_of(doc, g, b"S").as_deref() == Some(b"Transparency")
+}
+
+/// A graphics state that sets a soft mask (`/SMask` other than `/None`).
+pub(crate) fn gstate_soft_mask(doc: &Document, g: &Dict) -> bool {
+    g.get(b"SMask").is_some_and(|sm| !matches!(&*doc.resolve(sm), Object::Name(n) if n == b"None"))
+}
+
+/// A graphics state that sets constant alpha (`/CA` or `/ca`) below 1.
+pub(crate) fn gstate_alpha(doc: &Document, g: &Dict) -> bool {
+    [b"CA".as_slice(), b"ca"].into_iter().any(|key| num_of(doc, g, key).is_some_and(|v| v < 1.0))
+}
+
+/// The first blend mode other than Normal (or Compatible) a graphics state names.
+pub(crate) fn gstate_blend(doc: &Document, g: &Dict) -> Option<Vec<u8>> {
+    let bm = g.get(b"BM")?;
+    let modes: Vec<Vec<u8>> = match &*doc.resolve(bm) {
+        Object::Name(n) => vec![n.clone()],
+        Object::Array(a) => a.iter().take(64).filter_map(|m| doc.resolve(m).as_name().map(<[u8]>::to_vec)).collect(),
+        _ => Vec::new(),
+    };
+    modes.into_iter().find(|m| !matches!(m.as_slice(), b"Normal" | b"Compatible"))
+}
+
+/// An image with a soft-mask image (`/SMask` stream).
+pub(crate) fn image_soft_mask(doc: &Document, d: &Dict) -> bool {
+    d.get(b"SMask").is_some_and(|m| matches!(&*doc.resolve(m), Object::Stream(_)))
+}
+
+/// A JPEG 2000 image with soft-mask data (`/SMaskInData` above 0).
+pub(crate) fn image_soft_mask_in_data(doc: &Document, d: &Dict) -> bool {
+    d.get(b"SMaskInData").and_then(|v| doc.resolve(v).as_int()).is_some_and(|v| v > 0)
 }
 
 /// Whether a dictionary with an `/S` entry is an action (not a structure element).

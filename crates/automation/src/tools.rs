@@ -286,6 +286,18 @@ pub fn tools() -> Vec<ToolDef> {
                 }),
                 &["paths", "out_dir"],
             )),
+        t("optimize_flatten_transparency", "Flatten transparency", "Give pages that use transparency (soft masks, constant alpha below 1, blend modes other than Normal, transparency groups, image soft masks: what PDF/X-1a forbids) an opaque equivalent. Transparent resources are made opaque and the areas where that changes the look are replaced by opaque RGB images rendered from the original at the preset's resolution (low 150, medium 300, high 600 ppi; resolution overrides it); everything outside them stays vector. raster_vector_balance (0-100, default 75): 0 turns each such page into one image; otherwise a page becomes one image when the areas cover more than that percentage of it. Pages without transparency are left alone (flattened: 0 changes nothing); results lists each flattened page with its action (group_removed, cleaned, patched, rasterized), regions, images, raster_fraction and resolution. Annotations are not flattened. One undo step.")
+            .destructive()
+            .with(schema(
+                json!({
+                    "doc": doc(),
+                    "pages": pages("to flatten (default: all)"),
+                    "preset": { "type": "string", "enum": ["low", "medium", "high"], "description": "Default medium (300 ppi)." },
+                    "resolution": { "type": "number", "minimum": 36, "maximum": 1200, "description": "Raster resolution in pixels per inch; overrides the preset's." },
+                    "raster_vector_balance": { "type": "integer", "minimum": 0, "maximum": 100 },
+                }),
+                &["doc"],
+            )),
         t("doc_fix_hairlines", "Fix hairlines", "Thicken strokes that would print thinner than thinner_than points (default 0.25) to replace_with points (default 0.25), measured as printed: the line width times the page's transform, in page content and the forms it draws. Other lines are left as they are. Reports how many strokes were fixed (fixed: 0 changes nothing). Undoable.")
             .cmd("prepress.hairlines")
             .with(schema(

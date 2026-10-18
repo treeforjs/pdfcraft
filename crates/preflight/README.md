@@ -103,3 +103,26 @@ byte and operator caps). DeviceCMYK, four-component ICC, Indexed, DeviceN proces
 and spot colours with Type 0 (one input) or Type 2 tint transforms resolve to CMYK; RGB and
 Lab colours, image pixels and shadings are counted as unresolved, and overprint is not
 simulated. `colour_warnings::NOT_CHECKED` lists the limits. It reads the document only.
+
+## Flatten transparency
+
+`flatten::flatten_transparency(doc, pages, settings)` (engine `Edit::FlattenTransparency`,
+automation `optimize_flatten_transparency`) gives pages that use transparency an opaque
+equivalent. Transparency is what the PDF/X transparency rule looks for (the same predicates
+as `pdfx`): soft masks, `CA`/`ca` below 1, blend modes other than Normal, transparency groups
+and image soft masks, in the resources page content actually names, through forms, tiling and
+shading patterns and Type 3 fonts (seen-sets, depth and visit limits). For each such page:
+
+1. resources are replaced by opaque copies (shared objects are copied, never changed) and the
+   page `/Group` is removed;
+2. the page is rendered before and after at 72 px per unit; the pixels that changed are grouped
+   into rectangles (8-px cells, 2-px margin), merged when closer than `(100 - balance)`% of 18 pt;
+3. each rectangle is rendered from the original at `resolution` (presets: low 150, medium 300,
+   high 600 ppi; 36–1200, 64 MP per page) and drawn on top as an opaque DeviceRGB image in tiles
+   of at most 2048 px. Everything else stays vector; text under the images stays searchable;
+4. a balance of 0, regions over `balance`% of the page, or content that can't be read or is
+   nested too deep make the whole page one image (its text is then gone).
+
+Not handled: annotation appearances (flatten comments first), clipping to object outlines,
+text to outlines, CMYK images for PDF/X-1a, optional content other than its default view.
+

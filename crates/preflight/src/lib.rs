@@ -24,11 +24,13 @@
 pub mod analysis;
 pub mod colour_warnings;
 pub mod coverage;
+pub mod flatten;
 pub mod icc;
 pub mod pdfx;
 mod unicode;
 mod xmp;
 
+pub use flatten::{FlattenPreset, FlattenReport, FlattenSettings, PageAction, PageFlatten, flatten_transparency, transparent_pages};
 pub use pdfx::{MAX_X_FINDINGS, X_NOT_CHECKED, X_RULES, XFinding, XOptions, XPart, XReport, XRule, XSeverity, declared_pdfx, verify_pdfx};
 
 use pdfcraft_cos::{Dict, Document, ObjRef, Object, PdfString, Stream};
