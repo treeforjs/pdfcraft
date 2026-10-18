@@ -23,6 +23,7 @@ mod conventions;
 mod dests;
 mod forms;
 mod links;
+mod make_accessible;
 #[cfg(feature = "mcp")]
 pub mod mcp;
 mod measure;
@@ -800,6 +801,7 @@ impl Automation {
             "tags_add_namespace" => self.tags_add_namespace(&a)?,
             "tags_mark_artifact" => self.tags_mark_artifact(&a)?,
             "tags_autotag" => self.tags_autotag(&a)?,
+            "accessibility_make_accessible" => self.a11y_make_accessible(&a)?,
             "alt_text_list" => self.alt_text_list(&a)?,
             "alt_text_set" => self.alt_text_set(&a)?,
             "sign_id_create" => self.sign_id_create(&a)?,

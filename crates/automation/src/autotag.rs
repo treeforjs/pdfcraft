@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 use crate::{Args, Automation, Result, ToolError, failed};
 
 /// A language tag (BCP 47 shape): letters, digits and hyphens, starting with a letter.
-fn valid_lang(l: &str) -> bool {
+pub(crate) fn valid_lang(l: &str) -> bool {
     !l.is_empty()
         && l.len() <= 35
         && l.split('-').all(|p| !p.is_empty() && p.len() <= 8 && p.bytes().all(|b| b.is_ascii_alphanumeric()))
@@ -26,7 +26,7 @@ const RULES: [&str; 8] = [
     "heading-nesting",
 ];
 
-fn summary(doc: &pdfcraft_engine::Document) -> Value {
+pub(crate) fn summary(doc: &pdfcraft_engine::Document) -> Value {
     let ua = doc.pdfua_verify(&UaOptions::default());
     let check = doc.accessibility_check(&Options::default());
     let rules: serde_json::Map<String, Value> = RULES

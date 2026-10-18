@@ -3392,6 +3392,32 @@ impl Session {
         Ok(label)
     }
 
+    /// Merge every undo step document `id` gained since [`Document::edit_generation`] was
+    /// `since` into one step labelled `label`, so a guided sequence of edits (each applied, and
+    /// checked, on its own) undoes and redoes as one. Only edits may have happened since then
+    /// (no undo, redo or save): each of them added one step. Returns the steps merged (0 or 1
+    /// leaves the history as it is, apart from the label of a single step).
+    pub fn group_undo(&mut self, id: DocId, since: u64, label: &str) -> Result<usize, EditError> {
+        let doc = self.doc_mut(id)?;
+        let steps = usize::try_from(doc.generation.saturating_sub(since)).unwrap_or(usize::MAX);
+        let editor = doc.editor.as_mut().ok_or(EditError::NothingToUndo)?;
+        // The history keeps at most MAX_UNDO steps: older ones are already gone.
+        let steps = steps.min(editor.undo.len());
+        if steps == 0 {
+            return Ok(0);
+        }
+        let keep = editor.undo.len().saturating_sub(steps);
+        let mut merged = editor.undo.split_off(keep);
+        if merged.is_empty() {
+            return Ok(0);
+        }
+        // The oldest step holds the state before the whole sequence.
+        let (_, prev, keys, first_scope) = merged.swap_remove(0);
+        let scope = if merged.iter().all(|(.., s)| *s == first_scope) { first_scope } else { Scope::Full };
+        editor.undo.push((label.to_owned(), prev, keys, scope));
+        Ok(steps)
+    }
+
     pub fn redo(&mut self, id: DocId) -> Result<String, EditError> {
         let doc = self.doc_mut(id)?;
         let editor = doc.editor.as_mut().ok_or(EditError::NothingToRedo)?;

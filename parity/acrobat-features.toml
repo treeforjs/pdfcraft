@@ -8940,11 +8940,11 @@ title = "Make Accessible guided action"
 area = "M"
 tier = "P1"
 milestone = "M13"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["accessibility_make_accessible"]
+evidence = ["crates/automation/tests/make_accessible.rs::an_untagged_text_pdf_becomes_tagged_titled_and_in_structure_order", "crates/automation/tests/make_accessible.rs::a_tagged_pdf_keeps_its_tags_with_autotag_auto_and_takes_alt_text", "crates/automation/tests/make_accessible.rs::ocr_auto_skips_scans_when_no_models_are_installed", "crates/automation/tests/make_accessible.rs::bad_arguments_change_nothing"]
+notes = "headless only (no menu, dialog or interactive prompts: alt text and tooltips are given as maps, and what still needs a person is returned in needs_review): language (refused when missing, never guessed), OCR of image-only pages when models are installed (skipped with the reason otherwise; English only), field tooltips written before Autotag Document so Form elements take them, Autotag Document (auto leaves tagged documents alone; ruled tables, lists and form fields, fields still without tooltips listed with suggestions), title (given, existing, first H1 or file name) with DisplayDocTitle then figure alt text, tables reported for review, tab order by structure, Full Check and PDF/UA before/after; per-step done/skipped/failed with later steps continuing; one undo step (Session::group_undo). Not yet: no table editor or reading-order review, no comparison with Acrobat output on real documents"
 
 [[feature]]
 id = "a11y.setup-assistant"
