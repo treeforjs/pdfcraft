@@ -451,11 +451,19 @@ title = "Structural validation against the Arlington PDF model"
 area = "A"
 tier = "P1"
 milestone = "M2"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["doc_validate_arlington"]
+evidence = [
+    "crates/preflight/src/arlington_tests.rs::valid_document_has_no_errors",
+    "crates/preflight/src/arlington_tests.rs::injected_problems_are_found_with_their_paths",
+    "crates/preflight/src/arlington_tests.rs::keys_newer_than_the_file_and_deprecated_keys",
+    "crates/preflight/src/arlington_tests.rs::cycles_and_deep_graphs_terminate",
+    "crates/preflight/src/arlington_tests.rs::max_findings_caps_the_output",
+    "crates/arlington/src/lib.rs::vendored_model_parses_completely",
+    "crates/automation/tests/automation.rs::doc_validate_arlington_through_tools",
+]
+notes = "Vendored Arlington model (tsv/latest at d37f4c8, Apache-2.0, ~390 KB) in the standalone arlington crate; the walk from the trailer types objects by the model's links and reports missing required keys (with /Parent inheritance), wrong types, values outside PossibleValues, keys/types/values newer than the PDF version, deprecated keys, direct/indirect rules and unknown keys (info), each with object number and path. Evaluated predicates: version predicates, fn:IsPresent/NotPresent/Not/Eval/ArrayLength/Contains/RectWidth/RectHeight/FileSize/StringLength/RequiredValue, @key comparisons and arithmetic. Missing: the SpecialCase column, predicates such as fn:NotStandard14Font, fn:InNameTree, fn:BitsClear and parent:: paths (counted as not checked), array-valued PossibleValues and DefaultValue, date/text-string format checks, objects not reachable from the trailer, content streams, no comparison yet against veraPDF or the Arlington TestGrammar oracle on a corpus, no UI panel."
 
 [[feature]]
 id = "core.undo-redo"

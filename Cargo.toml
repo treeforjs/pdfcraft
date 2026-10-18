@@ -17,6 +17,7 @@ pdfcraft-geom = { path = "crates/geom", version = "0.5.0" }
 pdfcraft-filters = { path = "crates/filters", version = "0.5.0" }
 pdfcraft-cos = { path = "crates/cos", version = "0.5.0" }
 pdfcraft-crypt = { path = "crates/crypt", version = "0.5.0" }
+pdfcraft-arlington = { path = "crates/arlington", version = "0.5.0" }
 pdfcraft-organize = { path = "crates/organize", version = "0.5.0" }
 pdfcraft-measure = { path = "crates/measure", version = "0.5.0" }
 pdfcraft-annot = { path = "crates/annot", version = "0.5.0" }

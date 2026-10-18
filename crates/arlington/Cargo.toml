@@ -1,0 +1,15 @@
+[package]
+name = "pdfcraft-arlington"
+description = "The Arlington PDF Model (PDF Association) as data, with its predicate language, for structural validation"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+# The vendored model data is Apache-2.0 (crates/arlington/data/LICENSE-arlington.txt).
+include = ["src/**", "data/**", "README.md", "Cargo.toml"]
+
+[lints]
+workspace = true
+
+[dependencies]

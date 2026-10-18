@@ -3592,6 +3592,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "pdfcraft-arlington"
+version = "0.5.0"
+
+[[package]]
 name = "pdfcraft-automation"
 version = "0.5.0"
 dependencies = [
@@ -3846,6 +3850,7 @@ version = "0.5.0"
 name = "pdfcraft-preflight"
 version = "0.5.0"
 dependencies = [
+ "pdfcraft-arlington",
  "pdfcraft-content",
  "pdfcraft-cos",
  "pdfcraft-filters",
