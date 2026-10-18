@@ -770,6 +770,7 @@ impl Automation {
             "preflight_fix" => self.preflight_fix(&a)?,
             "preflight_report" => self.preflight_report(&a)?,
             "doc_export_office" => self.doc_export_office(&a)?,
+            "doc_export_pptx" => self.doc_export_pptx(&a)?,
             "pdfa_convert" => self.pdfa_convert(&a)?,
             "action_run" => self.action_run(&a)?,
             "doc_compare_report" => self.doc_compare_report(&a)?,

@@ -1244,6 +1244,17 @@ pub fn tools() -> Vec<ToolDef> {
         t("doc_export_office", "Export to Word, HTML, RTF or Excel", "Export a PDF ▸ Word (.docx), HTML (.html, one file with images inline), RTF (.rtf) or Excel (.xlsx), chosen by path's extension: paragraphs in reading order, headings from larger text, bold and italic, images where they fall, a page break between pages. Excel gets one worksheet per page: paragraphs in column A, tables detected from the text layout as cell grids, unambiguous numbers (1,234.50, (12.00), 12.5%) stored as numbers. Refused when the document does not allow copying text (open it with the permissions password).")
             .cmd("export.docx")
             .with(schema(json!({ "doc": doc(), "path": { "type": "string" } }), &["doc", "path"])),
+        t("doc_export_pptx", "Export to PowerPoint", "Export a PDF ▸ Microsoft PowerPoint (.pptx): one slide per page, the slide size from the first exported page as displayed (crop box after rotation, within PowerPoint's 1–56 in; other page sizes are scaled to fit and centred). mode editable (default): each paragraph becomes an editable text box placed and turned as on the page (font family, size, bold, italic, colour), each extractable image a picture, and the rest of the page (vector art, shadings, inline images, form fields, comments) one background picture rendered at dpi without the text and those images (left out when it is blank). Vector shapes are not rebuilt as PowerPoint shapes. mode image: each slide is one picture of its page. Returns counts (slides, text_boxes, pictures, backgrounds, omitted) and warnings. Includes unsaved edits. Editable mode is refused when the document does not allow copying (open it with the permissions password); image mode only renders.")
+            .with(schema(
+                json!({
+                    "doc": doc(),
+                    "path": { "type": "string", "description": "The .pptx file to write." },
+                    "pages": pages("to export, in slide order (default: all)"),
+                    "mode": { "type": "string", "enum": ["editable", "image"], "description": "editable (default): text boxes, pictures and a background picture; image: one picture per slide." },
+                    "dpi": { "type": "number", "minimum": 36, "maximum": 600, "description": "Resolution of the rendered pictures (default 150)." }
+                }),
+                &["doc", "path"],
+            )),
         t("preflight_profiles", "Preflight profiles and checks", "List built-in structural preflight profiles and supported single checks. These checks do not establish full standards conformance.")
             .ro().cmd("preflight.run").with(schema(json!({}), &[])),
         t("preflight_analyze", "Analyze with preflight", "Analyze the working document without edits. Returns supported checks, object/path/page locations, explicit available fixups and a revision binding. No detected issues is not proof of PDF/A, PDF/X or PDF/UA conformance.")

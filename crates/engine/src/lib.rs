@@ -23,6 +23,7 @@ pub mod js;
 pub mod links;
 pub mod ocr;
 pub mod optimizer;
+pub mod pptx_export;
 pub mod preflight;
 pub mod reader_selection;
 pub mod signature_image;

@@ -1,6 +1,6 @@
 [package]
 name = "pdfcraft-export"
-description = "Export a PDF to HTML, Word (.docx), RTF and Excel (.xlsx) from its paragraphs, tables and images"
+description = "Export a PDF to HTML, Word (.docx), RTF and Excel (.xlsx) and PowerPoint (.pptx) from its paragraphs, tables and images"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -12,3 +12,7 @@ workspace = true
 
 [dependencies]
 flate2.workspace = true
+
+[dev-dependencies]
+# Parses the exported packages back in tests (the version pdfcraft-annot already uses).
+roxmltree = "0.20"

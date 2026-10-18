@@ -2,7 +2,7 @@
 
 use std::io::Write;
 
-fn crc32(data: &[u8]) -> u32 {
+pub(crate) fn crc32(data: &[u8]) -> u32 {
     static TABLE: std::sync::OnceLock<[u32; 256]> = std::sync::OnceLock::new();
     let table = TABLE.get_or_init(|| {
         let mut t = [0u32; 256];
@@ -70,7 +70,7 @@ impl Zip {
         self.out.extend(header(0x0403_4b50, false));
         self.out.extend(&body);
         self.central.extend(header(0x0201_4b50, true));
-        self.count += 1;
+        self.count = self.count.saturating_add(1);
     }
 
     pub fn finish(mut self) -> Vec<u8> {
