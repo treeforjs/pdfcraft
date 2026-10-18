@@ -2123,11 +2123,11 @@ title = "Select, move, scale, recolour and delete vector paths"
 area = "C"
 tier = "P1"
 milestone = "M7"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["edit.edit_text"]
+tools = ["page_objects", "objects_style", "objects_resize", "objects_delete", "objects_transform"]
+evidence = ["crates/edit/src/objects/tests.rs::styling_paths_rewrites_only_their_paint_and_line_state", "crates/edit/src/objects/tests.rs::opacity_adds_an_ext_g_state_and_current_space_colours_are_checked", "crates/edit/src/objects/tests.rs::bad_styles_are_refused_and_change_nothing", "crates/edit/src/objects/tests.rs::resizing_scales_about_the_anchor_as_displayed", "crates/edit/src/objects/tests.rs::deleting_objects_keeps_the_state_they_leave", "crates/edit/src/objects/tests.rs::hostile_styles_and_resizes_never_panic", "crates/automation/tests/vector_edit.rs::styling_paths_changes_colour_width_dash_and_opacity", "crates/automation/tests/vector_edit.rs::resizing_and_deleting_objects", "crates/automation/tests/vector_edit.rs::tagged_paths_keep_their_mcids_when_styled_and_resized"]
+notes = "headless only (no UI yet): page_objects selects paths (and every other page object); objects_style changes a path's fill and stroke (none turns either off, a colour turns it on: #RRGGBB, gray/RGB/CMYK components, or components in the colour space the path already paints with, checked for count and range; patterns refused), line width and dash (displayed points, divided by the path's CTM scale), cap, join and opacity (a new ExtGState with CA/ca in the page's own resources); objects_resize scales objects about an anchor of their displayed box (width/height in proportion, or scale factors); objects_delete removes objects keeping the clip/text state they leave; objects_transform moves, rotates and flips. Each path is wrapped in q … Q with the new state, everything else byte for byte; one undo step each, keep-tags-on-edit keeps MCIDs (deleted content leaves the tree). Missing: UI (selection handles, properties panel), editing anchor points and path geometry, free-angle rotation, miter limit and separate fill/stroke opacity, blend modes, choosing an ICC or spot colour space for the new colour, paths inside Form XObjects, added items and page marks (own tools), text and images refused by objects_style"
 
 [[feature]]
 id = "edit.edit-object-tool"

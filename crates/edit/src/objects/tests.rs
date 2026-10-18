@@ -285,3 +285,164 @@ fn stray_operators_in_a_text_object_stop_rewrites() {
     assert!(matches!(joined(&doc).as_str(), c if c.contains("Q\n")));
     let _ = Object::Null;
 }
+
+fn style(f: impl FnOnce(&mut PathStyle)) -> ObjectsEdit {
+    let mut s = PathStyle::default();
+    f(&mut s);
+    ObjectsEdit::Style(s)
+}
+
+#[test]
+fn styling_paths_rewrites_only_their_paint_and_line_state() {
+    // A stroked line under a 2× CTM, a filled square, then text that inherits the square's fill.
+    let content = "q 2 0 0 2 0 0 cm 1 0 0 RG 10 10 m 100 10 l S Q 0 0 1 rg 300 300 50 50 re f BT /F1 12 Tf 300 400 Td (Hi) Tj ET";
+    let mut doc = page_with(content, "");
+    let edit = style(|s| {
+        s.stroke = Some(Paint::Cmyk([0.0, 1.0, 1.0, 0.0]));
+        s.line_width = Some(4.0);
+        s.dash = Some(Dash { pattern: vec![6.0, 2.0], phase: 0.0 });
+        s.cap = Some(LineCap::Round);
+        s.join = Some(LineJoin::Bevel);
+    });
+    assert!(edit_objects(&mut doc, 0, &[0], &edit).unwrap());
+    let c = joined(&doc);
+    // Displayed points over the CTM's scale of 2.
+    assert!(c.contains("q 2 w [3 1] 0 d 1 J 2 j 0 1 1 0 K \n10 10 m\n100 10 l\nS\nQ"), "{c}");
+    // Fill a stroke-only path: S becomes B; turn the square's fill off and stroke it: f becomes S.
+    edit_objects(&mut doc, 0, &[0], &style(|s| s.fill = Some(Paint::Gray(0.5)))).unwrap();
+    assert!(joined(&doc).contains("0.5 g \n10 10 m\n100 10 l\nB\nQ"), "{}", joined(&doc));
+    edit_objects(&mut doc, 0, &[1], &style(|s| (s.fill, s.stroke) = (Some(Paint::None), Some(Paint::Rgb([0.0, 1.0, 0.0]))))).unwrap();
+    let c = joined(&doc);
+    assert!(c.contains("q 0 1 0 RG \n300 300 50 50 re\nS\nQ"), "{c}");
+    // The text still paints with the blue the square set.
+    assert!(c.ends_with("BT /F1 12 Tf 300 400 Td (Hi) Tj ET") || c.contains("BT /F1 12 Tf 300 400 Td (Hi) Tj ET"), "{c}");
+    assert_eq!(texts(&doc), ["Hi"]);
+    // Nothing painted is refused; text isn't a path.
+    assert!(edit_objects(&mut doc, 0, &[1], &style(|s| s.stroke = Some(Paint::None))).is_err());
+    assert!(edit_objects(&mut doc, 0, &[2], &style(|s| s.fill = Some(Paint::Gray(0.0)))).is_err());
+    assert_eq!(page_objects(&reopen(&doc), 0).unwrap().len(), 3);
+}
+
+#[test]
+fn opacity_adds_an_ext_g_state_and_current_space_colours_are_checked() {
+    let content = "/CS0 cs 0.5 scn 10 10 100 100 re f";
+    let mut doc = page_with(content, "");
+    // A Separation colour space resource on the page.
+    let page = pdfcraft_model::pages(&doc)[0].obj;
+    let mut res = resources(&doc, &pdfcraft_model::pages(&doc)[0].dict);
+    let mut spaces = Dict::new();
+    spaces.set(b"CS0".to_vec(), Object::Array(vec![Object::name("Separation"), Object::name("Spot"), Object::name("DeviceCMYK"), Object::Null]));
+    res.set(b"ColorSpace".to_vec(), Object::Dict(spaces));
+    doc.update_dict(page, |d| d.set(b"Resources".to_vec(), Object::Dict(res))).unwrap();
+
+    assert!(edit_objects(&mut doc, 0, &[0], &style(|s| s.fill = Some(Paint::Current(vec![0.2, 0.3])))).is_err(), "one component");
+    assert!(edit_objects(&mut doc, 0, &[0], &style(|s| s.fill = Some(Paint::Current(vec![1.5])))).is_err(), "out of range");
+    edit_objects(&mut doc, 0, &[0], &style(|s| (s.fill, s.opacity) = (Some(Paint::Current(vec![0.8])), Some(0.25)))).unwrap();
+    let c = joined(&doc);
+    assert!(c.contains("q /PCOpacity250 gs 0.8 scn \n"), "{c}");
+    let doc = reopen(&doc);
+    let p = pdfcraft_model::pages(&doc).swap_remove(0);
+    let res = resources(&doc, &p.dict);
+    let gs = sub_dict(&doc, &res, b"ExtGState");
+    let state = gs.get(b"PCOpacity250").and_then(|s| s.as_dict().cloned()).unwrap();
+    assert_eq!((state.get(b"ca").and_then(Object::as_f64), state.get(b"CA").and_then(Object::as_f64)), (Some(0.25), Some(0.25)));
+    assert!(sub_dict(&doc, &res, b"ColorSpace").contains(b"CS0"), "other resources kept");
+}
+
+#[test]
+fn bad_styles_are_refused_and_change_nothing() {
+    let mut doc = page_with(THREE, "");
+    let original = joined(&doc);
+    for edit in [
+        style(|_| {}),
+        style(|s| s.fill = Some(Paint::Rgb([1.0, f64::NAN, 0.0]))),
+        style(|s| s.fill = Some(Paint::Gray(2.0))),
+        style(|s| s.stroke = Some(Paint::Cmyk([0.0, 0.0, 0.0, -1.0]))),
+        style(|s| s.fill = Some(Paint::Current(vec![]))),
+        style(|s| s.fill = Some(Paint::Current(vec![0.5]))),
+        style(|s| s.line_width = Some(f64::INFINITY)),
+        style(|s| s.line_width = Some(-1.0)),
+        style(|s| s.dash = Some(Dash { pattern: vec![0.0, 0.0], phase: 0.0 })),
+        style(|s| s.dash = Some(Dash { pattern: vec![1.0; 17], phase: 0.0 })),
+        style(|s| s.dash = Some(Dash { pattern: vec![1.0], phase: f64::NAN })),
+        style(|s| s.opacity = Some(1.5)),
+        ObjectsEdit::Resize { size: Size::Scale { sx: 0.0, sy: 1.0 }, anchor: Anchor::Center },
+        ObjectsEdit::Resize { size: Size::Scale { sx: f64::NAN, sy: 1.0 }, anchor: Anchor::Center },
+        ObjectsEdit::Resize { size: Size::To { width: None, height: None }, anchor: Anchor::Center },
+        ObjectsEdit::Resize { size: Size::To { width: Some(-5.0), height: None }, anchor: Anchor::Center },
+    ] {
+        assert!(edit_objects(&mut doc, 0, &[0], &edit).is_err(), "{edit:?}");
+    }
+    assert_eq!(joined(&doc), original);
+}
+
+#[test]
+fn resizing_scales_about_the_anchor_as_displayed() {
+    let mut doc = page_with("0 g 100 100 50 20 re f BT /F1 12 Tf 300 400 Td (Hi) Tj ET", "");
+    let edit = ObjectsEdit::Resize { size: Size::Scale { sx: 2.0, sy: 3.0 }, anchor: Anchor::BottomLeft };
+    edit_objects(&mut doc, 0, &[0], &edit).unwrap();
+    assert_eq!(kinds(&doc)[0], (ObjectKind::Path, [100, 100, 200, 160]));
+    let edit = ObjectsEdit::Resize { size: Size::To { width: Some(50.0), height: None }, anchor: Anchor::Center };
+    edit_objects(&mut doc, 0, &[0], &edit).unwrap();
+    assert_eq!(kinds(&doc)[0], (ObjectKind::Path, [125, 115, 175, 145]), "in proportion about the centre");
+    // Text scales and stays text.
+    let before = page_objects(&doc, 0).unwrap()[1].rect.unwrap();
+    edit_objects(&mut doc, 0, &[1], &ObjectsEdit::Resize { size: Size::Scale { sx: 2.0, sy: 2.0 }, anchor: Anchor::TopLeft }).unwrap();
+    let after = page_objects(&doc, 0).unwrap()[1].rect.unwrap();
+    assert!(((after[2] - after[0]) - 2.0 * (before[2] - before[0])).abs() < 0.5, "{before:?} → {after:?}");
+    assert!((after[0] - before[0]).abs() < 0.01 && (after[3] - before[3]).abs() < 0.01, "top-left stays: {before:?} → {after:?}");
+    assert_eq!(texts(&doc), ["Hi"]);
+    // On a page turned a quarter, "top" is the displayed top.
+    let mut turned = page_with("0 g 100 100 50 20 re f", "/Rotate 90");
+    let edit = ObjectsEdit::Resize { size: Size::Scale { sx: 1.0, sy: 2.0 }, anchor: Anchor::Top };
+    edit_objects(&mut turned, 0, &[0], &edit).unwrap();
+    // Displayed height is user width; displayed top (Rotate 90) is user left (x = 100).
+    assert_eq!(kinds(&turned)[0], (ObjectKind::Path, [100, 100, 200, 120]));
+}
+
+#[test]
+fn deleting_objects_keeps_the_state_they_leave() {
+    // The first square sets the blue the text paints with and clips nothing; the second clips.
+    let content = "0 0 1 rg 10 10 50 50 re f 100 100 200 200 re W f BT /F1 12 Tf 150 150 Td (In) Tj ET";
+    let mut doc = page_with(content, "");
+    edit_objects(&mut doc, 0, &[0, 1], &ObjectsEdit::Delete).unwrap();
+    let objects = page_objects(&doc, 0).unwrap();
+    assert_eq!(objects.len(), 1);
+    assert_eq!(objects[0].kind, ObjectKind::Text);
+    let c = joined(&doc);
+    assert!(c.starts_with("0 0 1 rg") && c.contains("100 100 200 200 re\nW\nn\n"), "colour and clip stay: {c}");
+    assert_eq!(texts(&reopen(&doc)), ["In"]);
+    // Tagged: the sequence empties and stays balanced.
+    let mut tagged = page_with("/P <</MCID 0>> BDC 0 g 0 0 5 5 re f EMC 0 g 9 9 5 5 re f", "/StructParents 0");
+    edit_objects(&mut tagged, 0, &[0], &ObjectsEdit::Delete).unwrap();
+    let c = joined(&tagged);
+    assert_eq!(page_objects(&tagged, 0).unwrap().len(), 1, "{c}");
+    assert_eq!(c.matches("BDC").count(), c.matches("EMC").count(), "{c}");
+}
+
+#[test]
+fn hostile_styles_and_resizes_never_panic() {
+    for content in [
+        "",
+        "1 2 re W f* /Nope cs 1 2 3 scn 0 0 m 1 1 l B",
+        "/Pattern cs /P1 scn 0 0 10 10 re f",
+        "1e308 1e308 1e308 1e308 1e308 1e308 cm 0 0 10 10 re S",
+        "0 0 0 0 0 0 cm 0 0 10 10 re S",
+        "cs CS 0 0 m S q Q Q",
+    ] {
+        let mut doc = page_with(content, "");
+        let n = page_objects(&doc, 0).map(|o| o.len()).unwrap_or(0);
+        let all: Vec<usize> = (0..n).collect();
+        for edit in [
+            style(|s| s.fill = Some(Paint::Current(vec![0.5, 0.5, 0.5]))),
+            style(|s| (s.line_width, s.dash) = (Some(3.0), Some(Dash { pattern: vec![1.0, 2.0], phase: 1.0 }))),
+            style(|s| s.opacity = Some(0.5)),
+            ObjectsEdit::Resize { size: Size::Scale { sx: 1000.0, sy: 0.001 }, anchor: Anchor::BottomRight },
+            ObjectsEdit::Resize { size: Size::To { width: Some(1e6), height: Some(1e-300) }, anchor: Anchor::Center },
+            ObjectsEdit::Delete,
+        ] {
+            let _ = edit_objects(&mut doc, 0, &all, &edit);
+            let _ = page_objects(&doc, 0);
+        }
+    }
+}
