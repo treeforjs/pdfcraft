@@ -701,6 +701,7 @@ impl Automation {
             "doc_hidden_info" => self.doc_hidden_info(&a)?,
             "printers" => self.printers()?,
             "print_total_area_coverage" => self.total_area_coverage(&a)?,
+            "print_color_warnings" => self.colour_warnings(&a)?,
             "print_add_printer_marks" => self.add_printer_marks(&a)?,
             "printer_options" => self.printer_options(&a)?,
             "link_list" => self.link_list(&a)?,

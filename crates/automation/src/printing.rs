@@ -203,6 +203,73 @@ impl Automation {
     }
 }
 
+impl Automation {
+    /// Output Preview's overprint, rich-black and registration-colour warnings.
+    pub(crate) fn colour_warnings(&self, a: &Args) -> Result<Value> {
+        use pdfcraft_engine::pdfa::colour_warnings::{MAX_FINDINGS, NOT_CHECKED};
+        use pdfcraft_engine::preflight::ColourWarningOptions;
+        let doc = self.doc(a)?;
+        let d = ColourWarningOptions::default();
+        let pages = if a.get("pages").is_some() { self.pages(a, "pages")? } else { Vec::new() };
+        let max_findings = match a.opt_int("max_findings")? {
+            None => d.max_findings,
+            Some(n) => usize::try_from(n)
+                .ok()
+                .filter(|n| (1..=MAX_FINDINGS).contains(n))
+                .ok_or_else(|| bad(format!("max_findings must be 1 to {MAX_FINDINGS}, not {n}")))?,
+        };
+        let options = ColourWarningOptions {
+            pages,
+            rich_black_k: a.opt_num("rich_black_k")?.unwrap_or(d.rich_black_k),
+            rich_black_cmy: a.opt_num("rich_black_cmy_total")?.unwrap_or(d.rich_black_cmy),
+            small_text_pt: a.opt_num("small_text_pt")?.unwrap_or(d.small_text_pt),
+            max_findings,
+        };
+        options.validate().map_err(bad)?;
+        let r = doc.colour_warnings(&options).map_err(failed)?;
+        let rect = |page: usize, r: [f64; 4]| -> Value {
+            let r32 = r.map(|v| v as f32);
+            json!(doc.info.pages.get(page).map_or(r32, |p| crate::comments::rect_to_view(p, r32)))
+        };
+        let findings: Vec<Value> = r
+            .findings
+            .iter()
+            .map(|f| {
+                json!({
+                    "kind": f.kind.id(),
+                    "severity": f.severity.id(),
+                    "page": f.page + 1,
+                    "object": f.object.map(|o| o.num),
+                    "message": f.message,
+                    "paint": f.paint.map(|p| p.id()),
+                    "colour": f.colour.as_ref().map(|c| json!({
+                        "space": c.space, "components": c.components, "cmyk": c.cmyk, "total": c.total(), "via_alternate": c.via_alternate,
+                    })),
+                    "text_size": f.text_size,
+                    "overprint_mode": f.overprint_mode,
+                    "rect": f.bbox.map(|b| rect(f.page, b)),
+                    "pdf_rect": f.bbox,
+                    "occurrences": f.occurrences,
+                })
+            })
+            .collect();
+        Ok(json!({
+            "doc": doc.id.0,
+            "pages_checked": r.pages.iter().map(|p| p + 1).collect::<Vec<_>>(),
+            "thresholds": { "rich_black_k": options.rich_black_k, "rich_black_cmy_total": options.rich_black_cmy, "small_text_pt": options.small_text_pt },
+            "warnings": r.warnings(),
+            "counts": r.counts,
+            "occurrences": r.occurrences,
+            "findings": findings,
+            "findings_truncated": r.findings_truncated,
+            "unresolved": r.unresolved,
+            "complete": r.limits.is_empty(),
+            "limits": r.limits,
+            "not_checked": NOT_CHECKED,
+        }))
+    }
+}
+
 /// The mark names `print_add_printer_marks` takes.
 const MARK_NAMES: [&str; 5] = ["trim", "bleed", "registration", "color_bars", "page_info"];
 

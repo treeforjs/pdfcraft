@@ -65,3 +65,18 @@ shadings, Type 3 glyphs, annotation appearances; seen-set, depth, byte and opera
 for fonts, colour spaces, transparency, transfer functions, halftones and PostScript.
 Rules whose ISO wording we are not certain of report warnings, which don't affect
 `conforms`; `X_NOT_CHECKED` lists what isn't decided. It reads the document only.
+
+## Overprint, rich-black and registration warnings
+
+`colour_warnings::check` (tool `print_color_warnings`) reports Output Preview's colour
+warnings per page: ExtGStates that turn overprint on or set `OPM 1`, objects painted with
+overprint on, white or zero-tint objects set to overprint (they disappear on press for
+DeviceCMYK with `OPM 1` and for spot colours), rich black (K at or above 95 % with C+M+Y at
+or above 10 % by default, with the summed ink), rich-black text below 12 pt effective size
+(font size × text and current matrices), and the `/Separation /All` registration colour
+outside printer marks (PrinterMarks artifacts, a "Printer marks" layer, or outside the
+TrimBox). Its own bounded walk follows forms and coloured tiling patterns (seen-set, depth,
+byte and operator caps). DeviceCMYK, four-component ICC, Indexed, DeviceN process colorants
+and spot colours with Type 0 (one input) or Type 2 tint transforms resolve to CMYK; RGB and
+Lab colours, image pixels and shadings are counted as unresolved, and overprint is not
+simulated. `colour_warnings::NOT_CHECKED` lists the limits. It reads the document only.

@@ -2,6 +2,9 @@
 
 use crate::{DocId, Edit, EditError, Session};
 pub use pdfcraft_preflight::analysis::{Finding, Fixup, Location, Profile, Report, Rule, Settings, Severity};
+pub use pdfcraft_preflight::colour_warnings::{
+    Colour as WarningColour, Finding as ColourFinding, Kind as ColourWarningKind, Options as ColourWarningOptions, Report as ColourWarnings,
+};
 pub use pdfcraft_preflight::coverage::{Options as CoverageOptions, PageCoverage, Region as CoverageRegion};
 
 #[derive(Clone, Debug)]
@@ -34,6 +37,17 @@ impl crate::Document {
                     .map_err(EditError::Invalid)
             })
             .collect()
+    }
+
+    /// Output Preview's overprint, rich-black and registration-colour warnings for
+    /// `options.pages` (0-based; all when empty). Read-only; see
+    /// [`pdfcraft_preflight::colour_warnings`] for what is classified and what isn't.
+    pub fn colour_warnings(&self, options: &ColourWarningOptions) -> Result<ColourWarnings, EditError> {
+        options.validate().map_err(EditError::Invalid)?;
+        let editor = self.editor.as_ref().ok_or_else(|| EditError::ReadOnly(self.read_only_reason.clone().unwrap_or_default()))?;
+        crate::guard(|| pdfcraft_preflight::colour_warnings::check(&editor.cos, options))
+            .map_err(|e| EditError::Invalid(format!("The colour warning check failed: {e}")))?
+            .map_err(EditError::Invalid)
     }
 }
 

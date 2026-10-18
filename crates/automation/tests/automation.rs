@@ -4260,6 +4260,103 @@ fn pdfx_verify_through_tools() {
     assert!(a.call("pdfx_verify", &json!({})).is_err());
 }
 
+/// Two pages with the given resources and contents (objects 3/4 and 5/6).
+fn colour_doc(resources: &str, first: &str, second: &str) -> Vec<u8> {
+    let stream = |d: &str| format!("<< /Length {} >>\nstream\n{d}\nendstream", d.len());
+    let page = |content: u32| {
+        format!("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /TrimBox [10 10 190 190] /Resources {resources} /Contents {content} 0 R >>")
+    };
+    let bodies = [
+        "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+        "<< /Type /Pages /Kids [3 0 R 5 0 R] /Count 2 >>".into(),
+        page(4),
+        stream(first),
+        page(6),
+        stream(second),
+        "<< /Type /ExtGState /OP true /OPM 1 >>".into(),
+    ];
+    let mut out = b"%PDF-1.7\n".to_vec();
+    let mut offsets = Vec::new();
+    for (i, b) in bodies.iter().enumerate() {
+        offsets.push(out.len());
+        out.extend_from_slice(format!("{} 0 obj\n{b}\nendobj\n", i + 1).as_bytes());
+    }
+    let xref = out.len();
+    out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", bodies.len() + 1).as_bytes());
+    for o in offsets {
+        out.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+    }
+    out.extend_from_slice(format!("trailer << /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", bodies.len() + 1).as_bytes());
+    out
+}
+
+#[test]
+fn print_color_warnings_through_tools() {
+    let dir = workdir("colour-warnings");
+    let mut a = auto(&dir);
+    let resources = "<< /ExtGState << /OP 7 0 R >> /ColorSpace << /Reg [/Separation /All /DeviceCMYK << /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] /C1 [1 1 1 1] /N 1 >>] >> \
+        /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >> >>";
+    let first = "/OP gs 0 0 0 0 k 20 20 30 30 re f 0.6 0.4 0.4 1 k 60 60 40 40 re f BT /F1 7 Tf 30 150 Td (Fine print) Tj ET";
+    let second = "/Reg cs 1 scn 50 50 10 10 re f 0.6 0.4 0.4 1 k 20 20 10 10 re f /Reg CS 1 SCN 1 1 m 5 5 l S";
+    std::fs::write(dir.join("colours.pdf"), colour_doc(resources, first, second)).unwrap();
+    let doc = ok(&mut a, "doc_open", json!({ "path": "colours.pdf" }))["doc"].as_u64().unwrap();
+    let r = ok(&mut a, "print_color_warnings", json!({ "doc": doc }));
+    assert_eq!(r["pages_checked"], json!([1, 2]), "{r}");
+    for (kind, n) in [
+        ("overprint-state", 1),
+        ("overprint-white", 1),
+        ("overprint-paint", 2),
+        ("rich-black", 2),
+        ("rich-black-small-text", 1),
+        ("registration-colour", 1),
+    ] {
+        assert_eq!(r["counts"][kind], n, "{kind}: {r}");
+    }
+    assert_eq!(r["warnings"], 3);
+    assert_eq!((r["complete"].as_bool(), r["findings_truncated"].as_bool()), (Some(true), Some(false)));
+    assert!(!r["not_checked"].as_array().unwrap().is_empty());
+    let findings = r["findings"].as_array().unwrap();
+    let find = |kind: &str| findings.iter().find(|f| f["kind"] == kind).unwrap().clone();
+    let state = find("overprint-state");
+    assert_eq!((state["page"].as_u64(), state["object"].as_u64(), state["overprint_mode"].as_i64()), (Some(1), Some(7), Some(1)), "{state}");
+    let white = find("overprint-white");
+    assert_eq!((white["severity"].as_str(), white["paint"].as_str()), (Some("warning"), Some("fill")));
+    assert_eq!(white["pdf_rect"], json!([20.0, 20.0, 50.0, 50.0]));
+    // The view rect is measured from the top-left of the displayed page.
+    assert_eq!(white["rect"], json!([20.0, 150.0, 50.0, 180.0]));
+    let rich = find("rich-black");
+    assert_eq!(rich["colour"]["cmyk"], json!([60.0, 40.0, 40.0, 100.0]));
+    assert_eq!(rich["colour"]["total"], 240.0);
+    let small = find("rich-black-small-text");
+    assert_eq!((small["text_size"].as_f64(), small["paint"].as_str()), (Some(7.0), Some("text")));
+    let reg = find("registration-colour");
+    assert_eq!((reg["page"].as_u64(), reg["object"].as_u64()), (Some(2), Some(5)), "{reg}");
+    // Thresholds, page selection and the findings cap are parameters.
+    let r =
+        ok(&mut a, "print_color_warnings", json!({ "doc": doc, "pages": [2], "rich_black_k": 100, "rich_black_cmy_total": 250, "max_findings": 1 }));
+    assert_eq!(r["pages_checked"], json!([2]));
+    assert_eq!(r["counts"]["rich-black"], 0);
+    assert_eq!(r["thresholds"]["rich_black_cmy_total"], 250.0);
+    let r = ok(&mut a, "print_color_warnings", json!({ "doc": doc, "small_text_pt": 6 }));
+    assert_eq!((r["counts"]["rich-black-small-text"].as_u64(), r["counts"]["rich-black"].as_u64()), (Some(0), Some(3)));
+    // Bad arguments.
+    for bad in [
+        json!({ "doc": doc, "pages": [3] }),
+        json!({ "doc": doc, "pages": [0] }),
+        json!({ "doc": doc, "pages": [] }),
+        json!({ "doc": doc, "rich_black_k": 0 }),
+        json!({ "doc": doc, "rich_black_k": "95" }),
+        json!({ "doc": doc, "rich_black_cmy_total": 400 }),
+        json!({ "doc": doc, "small_text_pt": -1 }),
+        json!({ "doc": doc, "max_findings": 0 }),
+        json!({ "doc": doc, "max_findings": 10001 }),
+    ] {
+        assert!(matches!(a.call("print_color_warnings", &bad), Err(ToolError::InvalidArgs(_))), "{bad}");
+    }
+    assert!(a.call("print_color_warnings", &json!({ "doc": 999 })).is_err());
+    assert!(a.call("print_color_warnings", &json!({})).is_err());
+}
+
 #[test]
 fn exporting_to_word_html_and_rtf() {
     let dir = workdir("office");

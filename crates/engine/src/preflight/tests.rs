@@ -119,3 +119,25 @@ fn ink_coverage_reads_the_working_document_without_editing_it() {
     assert!(doc.ink_coverage(&[0], &CoverageOptions { limit: -1.0, ..CoverageOptions::default() }).is_err());
     assert!(!doc.dirty && doc.can_undo().is_none());
 }
+
+#[test]
+fn colour_warnings_read_the_working_document_without_editing_it() {
+    let mut session = Session::new();
+    let bytes = session.create_blank(200.0, 200.0, 2).unwrap();
+    let mut cos = Document::open(bytes).unwrap();
+    let page = pdfcraft_model::pages(&cos)[1].obj;
+    let content = cos.add(Object::Stream(Stream::from_raw(Dict::new(), b"0.6 0.4 0.4 1 k 10 10 50 50 re f".to_vec())));
+    cos.update_dict(page, |d| d.set(b"Contents".to_vec(), Object::Ref(content))).unwrap();
+    let bytes = Arc::new(pdfcraft_cos::write_full(&cos, &Default::default()).unwrap());
+    let id = session.open("colour.pdf", None, bytes, None).unwrap();
+    let doc = session.get(id).unwrap();
+    let r = doc.colour_warnings(&ColourWarningOptions::default()).unwrap();
+    assert_eq!(r.pages, vec![0, 1]);
+    assert_eq!(r.count(ColourWarningKind::RichBlack), 1);
+    assert_eq!(r.findings[0].page, 1);
+    let first = doc.colour_warnings(&ColourWarningOptions { pages: vec![0], ..ColourWarningOptions::default() }).unwrap();
+    assert!(first.findings.is_empty());
+    assert!(doc.colour_warnings(&ColourWarningOptions { pages: vec![2], ..ColourWarningOptions::default() }).is_err());
+    assert!(doc.colour_warnings(&ColourWarningOptions { rich_black_k: 0.0, ..ColourWarningOptions::default() }).is_err());
+    assert!(!doc.dirty && doc.can_undo().is_none());
+}
