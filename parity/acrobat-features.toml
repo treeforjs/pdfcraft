@@ -2003,11 +2003,11 @@ title = "Keep structure tags when editing"
 area = "C"
 tier = "P1"
 milestone = "M7"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["edit_keep_tags", "text_edit", "image_edit", "page_add_text", "page_add_image", "content_update", "content_delete", "page_delete"]
+evidence = ["crates/a11y/src/keep_tests.rs::a_rewritten_paragraph_takes_over_the_tag_of_the_lines_it_replaced", "crates/a11y/src/keep_tests.rs::added_text_and_images_get_new_elements_after_the_nearest_tagged_content", "crates/a11y/src/keep_tests.rs::a_deleted_image_leaves_the_tree_and_its_empty_figure_goes", "crates/a11y/src/keep_tests.rs::deleted_pages_leave_the_tree_and_the_parent_tree", "crates/a11y/src/keep_tests.rs::hostile_trees_and_ids_do_not_crash", "crates/engine/src/keep_tags_tests.rs::editing_a_line_keeps_its_tag_in_one_undo_step", "crates/engine/src/keep_tags_tests.rs::rewriting_a_paragraph_keeps_it_in_its_element", "crates/engine/src/keep_tags_tests.rs::added_text_and_images_are_tagged_and_follow_later_edits", "crates/engine/src/keep_tags_tests.rs::page_images_deleted_or_replaced_update_their_figure", "crates/engine/src/keep_tags_tests.rs::deleting_a_page_removes_its_tags", "crates/engine/src/keep_tags_tests.rs::with_keep_tags_off_edits_leave_the_tree_alone", "crates/automation/tests/tags.rs::keep_tags_on_edit_through_tools"]
+notes = "Headless: on by default (Session::set_keep_tags_on_edit, tool edit_keep_tags; a session switch, not persisted). Edit text line/paragraph, Edit image (move/rotate/flip/crop/replace/delete), Add text/image, update/delete added items and Delete pages compare the page's marked content before and after (a11y::keep_tags / drop_page_tags) inside the same undo step: content changed in place keeps its MCID and element (stale element and BDC ActualText removed; figures whose image changed keep Alt and are listed in review_alt); new untagged content takes over the MCID of emptied content of the same kind (rewritten paragraph, moved/retyped added item) or gets a new P/Figure element beside the nearest tagged content's block (inside the grouping element); new vector-only content becomes /Artifact; emptied MCRs/OBJRs leave the tree, empty elements are unlinked, the page's parent-tree array is rebuilt (deleted pages' entries removed). Tool results carry a tags report. Missing: other content edits are not followed (header/footer/watermark/background/Bates marks, OCR text layers, flatten, Convert Colors, printer marks, straighten, insert/replace/duplicate pages; links and comments added as annotations get no OBJR); content inside form XObjects (MCR /Stm) is not followed; new content is only ever P or Figure (no heading/list/table inference) and new figures get no alternate text; ActualText is dropped, not rewritten; unlinked elements stay in the file and in the IDTree; content split across content streams is left untagged with a warning; no Preferences UI; not compared against Acrobat output on real tagged files."
 
 [[feature]]
 id = "edit.image-add"

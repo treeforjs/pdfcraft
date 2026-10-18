@@ -505,3 +505,50 @@ fn artifacts_by_element_in_a_looped_tree_and_in_untagged_documents() {
     assert!(r["untagged"].as_u64().unwrap() >= 1, "{r}");
     assert_eq!((r["elements_removed"].as_u64(), r["elements"].as_u64()), (Some(0), Some(0)), "{r}");
 }
+
+/// Keep tags on edit: text, added content, image and page edits keep the tree in step, each in
+/// one undo step, and say what they changed; off, edits leave the tree alone.
+#[test]
+fn keep_tags_on_edit_through_tools() {
+    let dir = workdir("keep");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "tagged.pdf" }))["doc"].as_u64().unwrap();
+    assert_eq!(ok(&mut a, "edit_keep_tags", json!({})), json!({ "enabled": true }));
+
+    // The heading's text changes inside its marked content: same element.
+    let out = ok(&mut a, "text_edit", json!({ "doc": doc, "page": 1, "line": 1, "text": "Overview" }));
+    assert_eq!((out["tags"]["kept"].as_u64(), out["tags"]["pages"].clone()), (Some(1), json!([1])), "{out}");
+    let t = ok(&mut a, "tags_tree", json!({ "doc": doc }));
+    assert_eq!(outline(&t), [(0, "Document".to_owned()), (1, "H1".to_owned()), (1, "Figure".to_owned())]);
+
+    // Added text gets a paragraph after the figure.
+    let out = ok(&mut a, "page_add_text", json!({ "doc": doc, "page": 1, "at": [20, 150], "text": "Added later" }));
+    let added = &out["tags"]["added"][0];
+    assert_eq!((added["role"].as_str(), added["page"].as_u64(), added["mcid"].as_u64()), (Some("P"), Some(1), Some(2)), "{out}");
+    let t = ok(&mut a, "tags_tree", json!({ "doc": doc }));
+    assert_eq!(outline(&t), [(0, "Document".to_owned()), (1, "H1".to_owned()), (1, "Figure".to_owned()), (1, "P".to_owned())]);
+
+    // Deleting the tagged figure's image removes the figure; undo brings it back in one step.
+    let out = ok(&mut a, "image_edit", json!({ "doc": doc, "page": 1, "image": 1, "action": "delete" }));
+    assert_eq!((out["tags"]["removed"].as_u64(), out["tags"]["pruned"].as_u64()), (Some(1), Some(1)), "{out}");
+    let t = ok(&mut a, "tags_tree", json!({ "doc": doc }));
+    assert_eq!(outline(&t), [(0, "Document".to_owned()), (1, "H1".to_owned()), (1, "P".to_owned())]);
+    ok(&mut a, "edit_undo", json!({ "doc": doc }));
+    let t = ok(&mut a, "tags_tree", json!({ "doc": doc }));
+    assert_eq!(outline(&t).len(), 4, "the figure is back");
+
+    // Through save and reopen.
+    ok(&mut a, "doc_save", json!({ "doc": doc, "path": "kept.pdf" }));
+    let again = ok(&mut a, "doc_open", json!({ "path": "kept.pdf" }))["doc"].as_u64().unwrap();
+    let t = ok(&mut a, "tags_tree", json!({ "doc": again }));
+    assert_eq!(outline(&t), [(0, "Document".to_owned()), (1, "H1".to_owned()), (1, "Figure".to_owned()), (1, "P".to_owned())]);
+    let p = &t["elements"][3];
+    assert_eq!(p["kids"], json!([{ "mcid": 2, "page": 1, "stream": null }]));
+
+    // Off: an edit leaves the tree and says nothing about tags.
+    assert_eq!(ok(&mut a, "edit_keep_tags", json!({ "enabled": false })), json!({ "enabled": false }));
+    let out = ok(&mut a, "page_add_text", json!({ "doc": again, "page": 1, "at": [20, 170], "text": "Untagged" }));
+    assert!(out.get("tags").is_none(), "{out}");
+    assert_eq!(outline(&ok(&mut a, "tags_tree", json!({ "doc": again }))).len(), 4);
+    let _ = std::fs::remove_dir_all(&dir);
+}
