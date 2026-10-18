@@ -3681,9 +3681,11 @@ name = "pdfcraft-edit"
 version = "0.5.0"
 dependencies = [
  "hayro-syntax",
+ "image",
  "pdfcraft-annot",
  "pdfcraft-content",
  "pdfcraft-cos",
+ "pdfcraft-filters",
  "pdfcraft-fonts",
  "pdfcraft-model",
  "thiserror 2.0.21",

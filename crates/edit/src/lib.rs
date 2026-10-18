@@ -669,6 +669,8 @@ pub fn marks_present(doc: &Document) -> Vec<MarkKind> {
     found
 }
 
+pub mod convert_colors;
+pub use convert_colors::{ColorConversion, ConversionReport, Destination, Intent, ObjectKinds, SourceSpaces, convert_colors};
 mod flatten;
 pub mod hairlines;
 pub mod printer_marks;

@@ -705,6 +705,7 @@ impl Automation {
             "print_total_area_coverage" => self.total_area_coverage(&a)?,
             "print_color_warnings" => self.colour_warnings(&a)?,
             "print_add_printer_marks" => self.add_printer_marks(&a)?,
+            "print_convert_colors" => self.convert_colors(&a)?,
             "associated_files_list" => self.associated_files_list(&a)?,
             "associated_file_add" => self.associated_file_add(&a)?,
             "associated_file_remove" => self.associated_file_remove(&a)?,

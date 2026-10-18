@@ -585,6 +585,27 @@ pub fn tools() -> Vec<ToolDef> {
             &["doc"],
         )),
         t(
+            "print_convert_colors",
+            "Convert colors",
+            "Print Production ▸ Convert Colors: colours of the chosen pages in the chosen source spaces become the destination space: DeviceCMYK (default), DeviceGray, DeviceRGB, or ICCBased with an ICC profile file (gray, RGB or CMYK). Converts fill and stroke colours of page content, the forms it draws (each once, even when pages share them), coloured tiling patterns, shadings (functions resampled), image XObjects and inline images (pixels re-encoded; Indexed images get a new palette), and annotation appearances; objects limits it to text, vector (paths, shadings, patterns) and/or images. With a profile its BToA table for the intent (lut8/lut16) or its matrix/TRC is used from CIE XYZ (DeviceRGB and 3-component ICC read as sRGB, CalRGB/CalGray/Lab colorimetrically); otherwise (and for v4-only profiles: approximate true) a built-in approximation: RGB to CMYK with full black generation and 70% under-colour removal. Gray always goes to the black plate and CMYK numbers carry over between CMYK spaces. preserve_black (default true) makes pure black (RGB 0 0 0, gray 0, 100% K, Lab L* 0) the destination's pure black (100% K). Spot colours (Separation, DeviceN) are kept unless spots is convert (through their tint transforms); /All registration colour never changes. output_intent makes the profile the PDF/X output intent. Images in JPX, JBIG2, CCITT or CMYK JPEG, with colour-key masks or over 40 million pixels are left and listed in skipped. Returns counts of what changed (colors = colour operators written) and changed false when nothing would change (no undo step). Undoable as one step.",
+        )
+        .with(schema(
+            json!({
+                "doc": doc(),
+                "pages": pages("to convert (default: all)"),
+                "destination": { "type": "string", "enum": ["DeviceCMYK", "DeviceGray", "DeviceRGB", "ICCBased"], "description": "Destination space (default DeviceCMYK, or ICCBased when profile is given)." },
+                "profile": { "type": "string", "description": "Path to the destination ICC profile (.icc/.icm, at most 32 MB), for ICCBased." },
+                "sources": { "type": "array", "items": { "type": "string", "enum": ["all", "DeviceGray", "DeviceRGB", "DeviceCMYK", "ICCBased", "CalGray", "CalRGB", "Lab"] }, "minItems": 1, "description": "Source spaces to convert (default: all; the destination's own device space is never converted)." },
+                "objects": { "type": "array", "items": { "type": "string", "enum": ["all", "text", "vector", "images"] }, "minItems": 1, "description": "Object types to convert (default: all)." },
+                "intent": { "type": "string", "enum": ["perceptual", "relative_colorimetric", "saturation", "absolute_colorimetric"], "description": "Rendering intent: which profile table is used (default relative_colorimetric; absolute is converted as relative)." },
+                "preserve_black": { "type": "boolean", "description": "Pure black becomes pure black (100% K) (default true)." },
+                "spots": { "type": "string", "enum": ["preserve", "convert"], "description": "Keep spot colours (default) or convert them to the destination." },
+                "output_intent": { "type": "boolean", "description": "Make the destination profile the PDF/X output intent (needs profile; default false)." },
+                "output_condition": { "type": "string", "maxLength": 256, "description": "The output intent's printing condition (default: the profile's description)." },
+            }),
+            &["doc"],
+        )),
+        t(
             "print_add_printer_marks",
             "Add printer marks",
             "Print Production ▸ Add Printer Marks: enlarge each page's media box around its trim box (the crop box when there is none) and draw printer marks outside it: trim (crop) marks at the corners, bleed marks on the bleed box edges, registration targets in the /Separation /All colour, CMYK colour bars and a black tint bar along the top, and a page information line (file name, page number, date) along the bottom, as the page is displayed. Marks start offset points outside the trim (further out when the bleed is wider) and run 18 pt. The crop box becomes the new media box; the trim, bleed and art boxes keep their old rectangles. Marks are drawn as page artifacts in an optional content group named \"Printer marks\" (hide it to hide them), and the page information is outlines, so text extraction ignores it. Adding marks again replaces them. Returns each page's trim, bleed and new media box (user space) and the margin added (points). Undoable.",

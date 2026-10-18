@@ -17,6 +17,9 @@ pdfcraft-model = { workspace = true }
 thiserror = { workspace = true }
 # Display order of right-to-left lines in added text; already in the tree via the interface.
 unicode-bidi = "0.3"
+# JPEG decoding and encoding for Convert Colors (zune-jpeg); already in the tree via pdfcraft-optimize.
+image = { version = "0.25", default-features = false, features = ["jpeg"] }
+pdfcraft-filters = { workspace = true }
 
 [dev-dependencies]
 hayro-syntax = { workspace = true }
