@@ -104,8 +104,7 @@ impl Automation {
         // Copy and modification authority are checked here, before the models load or any
         // page is rendered.
         let job = self.session.ocr_job_checked(id, &pages, settings).map_err(failed)?;
-        let recognizer = pdfcraft_engine::ocr::engine().map_err(failed)?;
-        let review = job.run(recognizer.as_ref(), |_, _| true).map_err(failed)?;
+        let review = job.run_selected(|_, _| true).map_err(failed)?;
         let others = self.ocr_reviews.iter().filter(|(doc, _)| **doc != id).map(|(_, r)| r);
         let (words, bytes) =
             others.fold((review.word_slots(), review.text_bytes()), |(w, b), r| (w.saturating_add(r.word_slots()), b.saturating_add(r.text_bytes())));

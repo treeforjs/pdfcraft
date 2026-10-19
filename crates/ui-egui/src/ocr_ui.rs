@@ -258,13 +258,11 @@ impl PdfCraftApp {
         let p = progress.clone();
         let work = move || {
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                pdfcraft_engine::ocr::engine().and_then(|ocr| {
-                    job.run(ocr.as_ref(), |done, total| {
-                        let Ok(mut s) = p.lock() else { return false };
-                        s.done = done;
-                        s.total = total;
-                        !s.cancel
-                    })
+                job.run_selected(|done, total| {
+                    let Ok(mut s) = p.lock() else { return false };
+                    s.done = done;
+                    s.total = total;
+                    !s.cancel
                 })
             }))
             .unwrap_or_else(|_| Err("text recognition failed unexpectedly; no text was applied".into()));
@@ -325,12 +323,15 @@ impl PdfCraftApp {
         }
         let progress = Arc::new(Mutex::new(BatchProgress { total: files.len(), ..Default::default() }));
         let p = progress.clone();
+        // The session's selected engine, readied on the worker thread.
+        let engine = self.session.ocr_engine_for(&settings);
         // The summary is written on the worker thread: draw it in the UI's language.
         let lang = crate::i18n::current();
         let work = move || {
             crate::i18n::set_current(lang);
             let (mut ok, mut words, mut failed) = (0, 0, Vec::new());
-            match pdfcraft_engine::ocr::engine() {
+            let language = settings.language.clone();
+            match engine.and_then(|e| e.prepare(&language).map(|_| e).map_err(|e| e.to_string())) {
                 Err(e) => failed.push(e),
                 Ok(ocr) => {
                     for (i, (name, bytes)) in files.into_iter().enumerate() {

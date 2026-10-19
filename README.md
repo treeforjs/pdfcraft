@@ -299,6 +299,7 @@ PdfCraft is a Cargo workspace of focused crates, layered so the core never depen
 | `pdfcraft-annot` | Comments: builders and appearance streams for notes, text markup, shapes, ink and text boxes; replies, status, edits |
 | `pdfcraft-forms` | Interactive forms: the field model, filling with regenerated appearances, Clear form |
 | `pdfcraft-render` | Rendering, inspection and text extraction with reading order |
+| `pdfcraft-ocr` | Text recognition: pluggable engines (the built-in pure-Rust ocrs engine by default; an installed Tesseract program, optionally), searchable and editable text layers |
 | `pdfcraft-engine` | The façade every frontend uses: sessions, edits, undo, saving, the tool catalogue |
 | `pdfcraft-automation` | Agent control: the headless tool table, `pdfcraft-cli run`, and the opt-in MCP server |
 | `pdfcraft-ui-egui` | The desktop and web interface |
@@ -314,6 +315,8 @@ On top of those, two corpus sweeps run over real-world files:
 - **Open, edit and save round trips:** 958 succeed.
 
 The output is verified with independent tools: hayro, qpdf and poppler.
+
+Text recognition runs inside PdfCraft with the pure-Rust ocrs engine. If you have Tesseract installed, you can choose it instead (`ocr_engines_list`, `ocr_engine_set`, or `engine` on the OCR tools): PdfCraft runs it as a separate program, with a time limit and capped output, and never links or ships it.
 
 PdfCraft is a clean-room implementation. Its behaviour comes from the ISO 32000 specification and black-box observation, never from anyone else's code. Every icon, font and image is openly licensed and listed in [ATTRIBUTION.md](ATTRIBUTION.md).
 
