@@ -49,7 +49,7 @@ impl Automation {
         };
         let overlay = overlay_text(a)?;
         let look = overlay_look(a)?;
-        let author = a.opt_str("author")?.unwrap_or(DEFAULT_AUTHOR).to_string();
+        let author = a.opt_str("author")?.unwrap_or(self.session.author_or(DEFAULT_AUTHOR)).to_string();
         let mut style = Style::default_for(&Shape::Redact { quads: Vec::new(), overlay: String::new(), look: Default::default() });
         if let Some(c) = a.opt_str("fill")? {
             style.fill = Some(parse_color(c)?);

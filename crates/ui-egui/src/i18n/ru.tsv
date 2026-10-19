@@ -2245,3 +2245,61 @@ compare-page	Moved	Перемещена
 	Region capture	Снимок области
 	Insert from clipboard	Вставить из буфера обмена
 	No screen capture tool was found. Capture with your system's tool, then use Create PDF from clipboard.	Не найдено средство для снимков экрана. Сделайте снимок средством системы, затем используйте «Создать PDF из буфера обмена».
+# Preferences window (M14)
+	min	мин
+	Absolute colorimetric	Абсолютный колориметрический
+	Allow	Разрешить
+	Allow all sites	Разрешить все сайты
+	Always	Всегда
+	Always use the working spaces	Всегда использовать рабочие пространства
+	Ask each time	Спрашивать каждый раз
+	Automatic	Автоматически
+	Black point compensation	Компенсация точки чёрного
+	Block	Блокировать
+	Block all sites	Блокировать все сайты
+	CMYK working space	Рабочее пространство CMYK
+	Color management	Управление цветом
+	Default location	Место по умолчанию
+	Default reason	Причина по умолчанию
+	Documents	Документы
+	Don't color-manage untagged color	Не управлять цветом без профиля
+	Each document's own Highlight fields button still turns them on and off.	Кнопка «Выделить поля» каждого документа по-прежнему включает и выключает их.
+	Field highlight color	Цвет выделения полей
+	Gray working space	Рабочее пространство серого
+	High contrast	Высокая контрастность
+	Highlight form fields in documents that open	Выделять поля форм в открываемых документах
+	Internet access from PDFs	Доступ PDF к интернету
+	Keep the comment tool selected after adding a comment	Оставлять инструмент комментариев выбранным после добавления
+	Makes all interface text and controls larger or smaller.	Увеличивает или уменьшает весь текст и элементы управления интерфейса.
+	Never	Никогда
+	New signatures start with these; you can change them when signing.	Новые подписи начинаются с этих значений; их можно изменить при подписании.
+	No preferences match “{query}”.	Нет настроек, соответствующих «{query}».
+	Off: after one comment, the Select tool comes back.	Выключено: после одного комментария возвращается инструмент выделения.
+	Only for PDF/X files	Только для файлов PDF/X
+	Open the Comments panel when a comment tool is chosen	Открывать панель комментариев при выборе инструмента комментариев
+	Output intent overrides working spaces	Цель вывода заменяет рабочие пространства
+	Perceptual	Перцепционный
+	RGB working space	Рабочее пространство RGB
+	Recent files to remember	Сколько последних файлов запоминать
+	Reduce motion	Уменьшить движение
+	Relative colorimetric	Относительный колориметрический
+	Rendering intent	Метод рендеринга
+	Required field border color	Цвет рамки обязательных полей
+	Saturation	Насыщенность
+	Save recovery copies of unsaved changes every	Сохранять копии несохранённых изменений для восстановления каждые
+	Search preferences	Поиск в настройках
+	Shown on Home and in File ▸ Open Recent. 0 keeps no list.	Показываются на главной и в меню Файл ▸ Открыть недавние. 0 — не вести список.
+	Signs new comments. Empty uses your login name.	Подписывает новые комментарии. Если пусто, используется имя для входа.
+	Sites without a rule	Сайты без правила
+	Stronger text, borders and outlines in every theme.	Более чёткий текст, рамки и контуры в любой теме.
+	Text size	Размер текста
+	Theme	Тема
+	Turns off animations and smooth scrolling.	Отключает анимацию и плавную прокрутку.
+	Unsaved changes are kept in a recovery folder so they survive a crash. 0 turns autosave off.	Несохранённые изменения хранятся в папке восстановления, чтобы пережить сбой. 0 отключает автосохранение.
+	Untagged color	Цвет без профиля
+	Untagged gray, RGB and CMYK color is shown through these profiles.	Серый, RGB и CMYK без профиля отображаются через эти профили.
+	Use overprint preview	Использовать просмотр наложения
+	Use the site rules	Использовать правила для сайтов
+	Used by Output Preview and page images made for print checks.	Используется в просмотре вывода и в изображениях страниц для проверки печати.
+	Whether links and scripts in PDFs may reach web sites.	Могут ли ссылки и скрипты в PDF обращаться к веб-сайтам.
+	Your identity is suggested when you create a digital ID.	Ваши данные предлагаются при создании цифрового удостоверения.

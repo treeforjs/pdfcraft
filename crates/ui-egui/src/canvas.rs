@@ -2018,6 +2018,11 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
     let tag = scale_tag(scale);
     let hand = app.quick_tool == QuickTool::Hand;
     let tool = app.quick_tool;
+    // Preferences ▸ Forms: the field highlight colours.
+    let (field_tint, required_tint) = {
+        let p = app.session.prefs();
+        (p.field_highlight, p.required_highlight)
+    };
     // Text selection runs for the Select tool and for the markup tools (highlight…).
     let selects_text = match tool {
         QuickTool::Comment(t) => t.markup().is_some() || t == comments::CommentTool::ReplaceText,
@@ -2565,9 +2570,10 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
                     for w in f.widgets.iter().filter(|w| w.page == Some(i) && !w.hidden) {
                         let r = w.rect;
                         let sr = xf.user_rect(info, i, [r[0] as f32, r[1] as f32, r[2] as f32, r[3] as f32]);
-                        let tint = Color32::from_rgba_unmultiplied(0x6E, 0x8E, 0xF5, 48);
-                        let (width, color) =
-                            if required { (2.0, Color32::from_rgb(0xE3, 0x22, 0x22)) } else { (1.0, Color32::from_rgb(0x6E, 0x8E, 0xF5)) };
+                        let [r, g, b] = field_tint;
+                        let tint = Color32::from_rgba_unmultiplied(r, g, b, 48);
+                        let [rr, rg, rb] = required_tint;
+                        let (width, color) = if required { (2.0, Color32::from_rgb(rr, rg, rb)) } else { (1.0, Color32::from_rgb(r, g, b)) };
                         if round {
                             let radius = sr.width().min(sr.height()) / 2.0;
                             painter.circle_filled(sr.center(), radius, tint);

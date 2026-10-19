@@ -2332,3 +2332,61 @@ compare-page	Moved	Déplacée
 	Region capture	Capture de zone
 	Insert from clipboard	Insérer depuis le presse-papiers
 	No screen capture tool was found. Capture with your system's tool, then use Create PDF from clipboard.	Aucun outil de capture d'écran n'a été trouvé. Faites la capture avec l'outil de votre système, puis utilisez Créer un PDF à partir du presse-papiers.
+# Preferences window (M14)
+	min	min
+	Absolute colorimetric	Colorimétrie absolue
+	Allow	Autoriser
+	Allow all sites	Autoriser tous les sites
+	Always	Toujours
+	Always use the working spaces	Toujours utiliser les espaces de travail
+	Ask each time	Demander à chaque fois
+	Automatic	Automatique
+	Black point compensation	Compensation du point noir
+	Block	Bloquer
+	Block all sites	Bloquer tous les sites
+	CMYK working space	Espace de travail CMJN
+	Color management	Gestion des couleurs
+	Default location	Lieu par défaut
+	Default reason	Motif par défaut
+	Documents	Documents
+	Don't color-manage untagged color	Ne pas gérer les couleurs non balisées
+	Each document's own Highlight fields button still turns them on and off.	Le bouton Surligner les champs de chaque document les active et les désactive toujours.
+	Field highlight color	Couleur de surbrillance des champs
+	Gray working space	Espace de travail Niveaux de gris
+	High contrast	Contraste élevé
+	Highlight form fields in documents that open	Surligner les champs de formulaire des documents ouverts
+	Internet access from PDFs	Accès à Internet depuis les PDF
+	Keep the comment tool selected after adding a comment	Garder l’outil de commentaire sélectionné après l’ajout d’un commentaire
+	Makes all interface text and controls larger or smaller.	Agrandit ou réduit tout le texte et les commandes de l’interface.
+	Never	Jamais
+	New signatures start with these; you can change them when signing.	Les nouvelles signatures commencent avec ces valeurs ; vous pouvez les modifier lors de la signature.
+	No preferences match “{query}”.	Aucune préférence ne correspond à « {query} ».
+	Off: after one comment, the Select tool comes back.	Désactivé : après un commentaire, l’outil Sélection revient.
+	Only for PDF/X files	Uniquement pour les fichiers PDF/X
+	Open the Comments panel when a comment tool is chosen	Ouvrir le panneau Commentaires quand un outil de commentaire est choisi
+	Output intent overrides working spaces	La mode de sortie remplace les espaces de travail
+	Perceptual	Perception
+	RGB working space	Espace de travail RVB
+	Recent files to remember	Nombre de fichiers récents mémorisés
+	Reduce motion	Réduire les animations
+	Relative colorimetric	Colorimétrie relative
+	Rendering intent	Mode de rendu
+	Required field border color	Couleur de bordure des champs obligatoires
+	Saturation	Saturation
+	Save recovery copies of unsaved changes every	Enregistrer des copies de récupération des modifications non enregistrées toutes les
+	Search preferences	Rechercher dans les préférences
+	Shown on Home and in File ▸ Open Recent. 0 keeps no list.	Affichés dans Accueil et dans Fichier ▸ Ouvrir un fichier récent. 0 ne garde aucune liste.
+	Signs new comments. Empty uses your login name.	Signe les nouveaux commentaires. Vide utilise votre nom de connexion.
+	Sites without a rule	Sites sans règle
+	Stronger text, borders and outlines in every theme.	Texte, bordures et contours plus marqués dans chaque thème.
+	Text size	Taille du texte
+	Theme	Thème
+	Turns off animations and smooth scrolling.	Désactive les animations et le défilement fluide.
+	Unsaved changes are kept in a recovery folder so they survive a crash. 0 turns autosave off.	Les modifications non enregistrées sont conservées dans un dossier de récupération pour survivre à un plantage. 0 désactive l’enregistrement automatique.
+	Untagged color	Couleur non balisée
+	Untagged gray, RGB and CMYK color is shown through these profiles.	Le gris, le RVB et le CMJN non balisés sont affichés via ces profils.
+	Use overprint preview	Utiliser l’aperçu de la surimpression
+	Use the site rules	Utiliser les règles des sites
+	Used by Output Preview and page images made for print checks.	Utilisé par l’aperçu de sortie et les images de page destinées aux contrôles d’impression.
+	Whether links and scripts in PDFs may reach web sites.	Si les liens et scripts des PDF peuvent accéder à des sites web.
+	Your identity is suggested when you create a digital ID.	Votre identité est proposée lorsque vous créez une identité numérique.

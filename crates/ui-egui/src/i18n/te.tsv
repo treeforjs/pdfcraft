@@ -2263,3 +2263,61 @@ compare-page	Moved	తరలించబడింది
 	Region capture	ప్రాంతం క్యాప్చర్
 	Insert from clipboard	క్లిప్‌బోర్డ్ నుండి చొప్పించు
 	No screen capture tool was found. Capture with your system's tool, then use Create PDF from clipboard.	స్క్రీన్ క్యాప్చర్ సాధనం కనబడలేదు. మీ సిస్టమ్ సాధనంతో క్యాప్చర్ చేసి, తర్వాత క్లిప్‌బోర్డ్ నుండి PDF సృష్టించు ఉపయోగించండి.
+# Preferences window (M14)
+	min	నిమి
+	Absolute colorimetric	సంపూర్ణ కలరిమెట్రిక్
+	Allow	అనుమతించు
+	Allow all sites	అన్ని సైట్‌లను అనుమతించు
+	Always	ఎల్లప్పుడూ
+	Always use the working spaces	ఎల్లప్పుడూ వర్కింగ్ స్పేస్‌లను వాడు
+	Ask each time	ప్రతిసారీ అడుగు
+	Automatic	స్వయంచాలకం
+	Black point compensation	బ్లాక్ పాయింట్ పరిహారం
+	Block	నిరోధించు
+	Block all sites	అన్ని సైట్‌లను నిరోధించు
+	CMYK working space	CMYK వర్కింగ్ స్పేస్
+	Color management	రంగు నిర్వహణ
+	Default location	డిఫాల్ట్ స్థానం
+	Default reason	డిఫాల్ట్ కారణం
+	Documents	పత్రాలు
+	Don't color-manage untagged color	ట్యాగ్ లేని రంగును నిర్వహించవద్దు
+	Each document's own Highlight fields button still turns them on and off.	ప్రతి పత్రంలోని ఫీల్డ్‌లను హైలైట్ చేయి బటన్ వాటిని ఆన్ మరియు ఆఫ్ చేస్తూనే ఉంటుంది.
+	Field highlight color	ఫీల్డ్ హైలైట్ రంగు
+	Gray working space	గ్రే వర్కింగ్ స్పేస్
+	High contrast	అధిక కాంట్రాస్ట్
+	Highlight form fields in documents that open	తెరిచే పత్రాల్లో ఫారమ్ ఫీల్డ్‌లను హైలైట్ చేయి
+	Internet access from PDFs	PDFల నుండి ఇంటర్నెట్ యాక్సెస్
+	Keep the comment tool selected after adding a comment	వ్యాఖ్యను జోడించిన తర్వాత వ్యాఖ్య సాధనాన్ని ఎంచుకున్నట్లే ఉంచు
+	Makes all interface text and controls larger or smaller.	ఇంటర్‌ఫేస్‌లోని మొత్తం వచనం మరియు నియంత్రణలను పెద్దవి లేదా చిన్నవి చేస్తుంది.
+	Never	ఎప్పుడూ వద్దు
+	New signatures start with these; you can change them when signing.	కొత్త సంతకాలు వీటితో ప్రారంభమవుతాయి; సంతకం చేసేటప్పుడు మీరు వాటిని మార్చవచ్చు.
+	No preferences match “{query}”.	“{query}”కి సరిపోయే ప్రాధాన్యతలు లేవు.
+	Off: after one comment, the Select tool comes back.	ఆఫ్: ఒక వ్యాఖ్య తర్వాత ఎంపిక సాధనం తిరిగి వస్తుంది.
+	Only for PDF/X files	PDF/X ఫైళ్లకు మాత్రమే
+	Open the Comments panel when a comment tool is chosen	వ్యాఖ్య సాధనాన్ని ఎంచుకున్నప్పుడు వ్యాఖ్యల ప్యానెల్‌ను తెరువు
+	Output intent overrides working spaces	అవుట్‌పుట్ ఇంటెంట్ వర్కింగ్ స్పేస్‌లను భర్తీ చేస్తుంది
+	Perceptual	గ్రహణాత్మక
+	RGB working space	RGB వర్కింగ్ స్పేస్
+	Recent files to remember	గుర్తుంచుకోవలసిన ఇటీవలి ఫైళ్లు
+	Reduce motion	కదలికను తగ్గించు
+	Relative colorimetric	సాపేక్ష కలరిమెట్రిక్
+	Rendering intent	రెండరింగ్ ఇంటెంట్
+	Required field border color	తప్పనిసరి ఫీల్డ్ అంచు రంగు
+	Saturation	సంతృప్తత
+	Save recovery copies of unsaved changes every	సేవ్ చేయని మార్పుల పునరుద్ధరణ కాపీలను ప్రతి ఇంత సమయానికి సేవ్ చేయి
+	Search preferences	ప్రాధాన్యతలను శోధించు
+	Shown on Home and in File ▸ Open Recent. 0 keeps no list.	హోమ్‌లో మరియు ఫైల్ ▸ ఇటీవలివి తెరువులో చూపబడతాయి. 0 అయితే జాబితా ఉంచదు.
+	Signs new comments. Empty uses your login name.	కొత్త వ్యాఖ్యలపై సంతకం చేస్తుంది. ఖాళీగా ఉంటే మీ లాగిన్ పేరు వాడబడుతుంది.
+	Sites without a rule	నియమం లేని సైట్‌లు
+	Stronger text, borders and outlines in every theme.	ప్రతి థీమ్‌లో గాఢమైన వచనం, అంచులు మరియు రూపురేఖలు.
+	Text size	వచన పరిమాణం
+	Theme	థీమ్
+	Turns off animations and smooth scrolling.	యానిమేషన్‌లు మరియు సున్నితమైన స్క్రోలింగ్‌ను ఆఫ్ చేస్తుంది.
+	Unsaved changes are kept in a recovery folder so they survive a crash. 0 turns autosave off.	సేవ్ చేయని మార్పులు క్రాష్ తర్వాత కూడా ఉండేలా పునరుద్ధరణ ఫోల్డర్‌లో ఉంచబడతాయి. 0 ఆటోసేవ్‌ను ఆఫ్ చేస్తుంది.
+	Untagged color	ట్యాగ్ లేని రంగు
+	Untagged gray, RGB and CMYK color is shown through these profiles.	ట్యాగ్ లేని గ్రే, RGB మరియు CMYK రంగులు ఈ ప్రొఫైల్‌ల ద్వారా చూపబడతాయి.
+	Use overprint preview	ఓవర్‌ప్రింట్ ప్రివ్యూ వాడు
+	Use the site rules	సైట్ నియమాలను వాడు
+	Used by Output Preview and page images made for print checks.	అవుట్‌పుట్ ప్రివ్యూ మరియు ప్రింట్ తనిఖీల కోసం చేసిన పేజీ చిత్రాలు దీన్ని వాడతాయి.
+	Whether links and scripts in PDFs may reach web sites.	PDFలలోని లింక్‌లు మరియు స్క్రిప్ట్‌లు వెబ్‌సైట్‌లను చేరవచ్చో లేదో.
+	Your identity is suggested when you create a digital ID.	డిజిటల్ IDని సృష్టించినప్పుడు మీ గుర్తింపు సూచించబడుతుంది.

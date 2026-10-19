@@ -228,10 +228,33 @@ pub fn entry_for(path: &str, c: &Certificate) -> DigitalIdEntry {
 }
 
 impl PdfCraftApp {
+    /// A new digital ID's fields, suggested from Preferences ▸ Identity.
+    pub(crate) fn new_id_draft(&self) -> NewIdDraft {
+        let id = &self.session.prefs().identity;
+        NewIdDraft {
+            name: id.name.clone(),
+            organization: id.organization.clone(),
+            unit: id.unit.clone(),
+            email: id.email.clone(),
+            ..NewIdDraft::default()
+        }
+    }
+
+    /// Preferences ▸ Signatures and Identity: the reason and location a signature starts with,
+    /// and the suggested fields of a new digital ID.
+    fn prefill_sign_draft(&self, draft: &mut SignDraft) {
+        let p = self.session.prefs();
+        draft.reason = p.signing_reason.clone();
+        draft.location = p.signing_location.clone();
+        draft.new_id = self.new_id_draft();
+    }
+
     /// Start signing: the rectangle (or field) is known; show Sign with a Digital ID.
     pub fn start_signing(&mut self, page: usize, rect: Option<[f64; 4]>, field: Option<String>, certify: Option<u8>) {
         self.refresh_os_key_store_ids();
-        self.sign_draft = Some(SignDraft::new(page, rect, field, certify, self.digital_ids.len()));
+        let mut draft = SignDraft::new(page, rect, field, certify, self.digital_ids.len());
+        self.prefill_sign_draft(&mut draft);
+        self.sign_draft = Some(draft);
         self.dialog = Some(crate::Dialog::Sign);
     }
 
@@ -640,13 +663,14 @@ fn configure(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> bool {
     if go {
         let create = app.sign_draft.as_ref().is_some_and(|d| d.new_id.create);
         let result = if create { app.create_digital_id() } else { app.import_digital_id() };
+        let fresh = app.new_id_draft();
         let Some(d) = app.sign_draft.as_mut() else { return true };
         match result {
             Ok(i) => {
                 d.selected = Some(i);
                 d.step = SignStep::Choose;
                 d.error = None;
-                d.new_id = NewIdDraft::default();
+                d.new_id = fresh;
             }
             Err(e) => d.error = Some(e),
         }

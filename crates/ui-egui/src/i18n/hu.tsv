@@ -2330,3 +2330,61 @@ compare-page	Moved	Áthelyezve
 	Region capture	Területkép
 	Insert from clipboard	Beszúrás a vágólapról
 	No screen capture tool was found. Capture with your system's tool, then use Create PDF from clipboard.	Nem található képernyőkép-készítő eszköz. Készítse el a képet a rendszer eszközével, majd használja a PDF létrehozása vágólapról parancsot.
+# Preferences window (M14)
+	min	perc
+	Absolute colorimetric	Abszolút kolorimetrikus
+	Allow	Engedélyezés
+	Allow all sites	Minden webhely engedélyezése
+	Always	Mindig
+	Always use the working spaces	Mindig a munkaterek használata
+	Ask each time	Rákérdezés minden alkalommal
+	Automatic	Automatikus
+	Black point compensation	Feketepont-kompenzáció
+	Block	Tiltás
+	Block all sites	Minden webhely tiltása
+	CMYK working space	CMYK munkatér
+	Color management	Színkezelés
+	Default location	Alapértelmezett hely
+	Default reason	Alapértelmezett ok
+	Documents	Dokumentumok
+	Don't color-manage untagged color	Címkézetlen színek kezelése nélkül
+	Each document's own Highlight fields button still turns them on and off.	Az egyes dokumentumok Mezők kiemelése gombja továbbra is be- és kikapcsolja őket.
+	Field highlight color	Mezőkiemelés színe
+	Gray working space	Szürke munkatér
+	High contrast	Nagy kontraszt
+	Highlight form fields in documents that open	Űrlapmezők kiemelése a megnyitott dokumentumokban
+	Internet access from PDFs	Internet-hozzáférés PDF-ekből
+	Keep the comment tool selected after adding a comment	A megjegyzéseszköz kijelölve marad megjegyzés hozzáadása után
+	Makes all interface text and controls larger or smaller.	Nagyobbra vagy kisebbre állítja a felület összes szövegét és vezérlőjét.
+	Never	Soha
+	New signatures start with these; you can change them when signing.	Az új aláírások ezekkel indulnak; aláíráskor módosíthatja őket.
+	No preferences match “{query}”.	Egy beállítás sem felel meg ennek: „{query}”.
+	Off: after one comment, the Select tool comes back.	Kikapcsolva: egy megjegyzés után visszaáll a Kijelölés eszköz.
+	Only for PDF/X files	Csak PDF/X fájlokhoz
+	Open the Comments panel when a comment tool is chosen	A Megjegyzések panel megnyitása megjegyzéseszköz választásakor
+	Output intent overrides working spaces	A kimeneti szándék felülírja a munkatereket
+	Perceptual	Perceptuális
+	RGB working space	RGB munkatér
+	Recent files to remember	Megjegyzett legutóbbi fájlok száma
+	Reduce motion	Mozgás csökkentése
+	Relative colorimetric	Relatív kolorimetrikus
+	Rendering intent	Megjelenítési szándék
+	Required field border color	Kötelező mezők szegélyszíne
+	Saturation	Telítettség
+	Save recovery copies of unsaved changes every	Nem mentett módosítások helyreállítási másolatának mentése ennyi időnként:
+	Search preferences	Keresés a beállításokban
+	Shown on Home and in File ▸ Open Recent. 0 keeps no list.	A Kezdőlapon és a Fájl ▸ Legutóbbi megnyitása menüben látható. 0: nincs lista.
+	Signs new comments. Empty uses your login name.	Az új megjegyzések szerzője. Üresen a bejelentkezési nevet használja.
+	Sites without a rule	Szabály nélküli webhelyek
+	Stronger text, borders and outlines in every theme.	Erősebb szöveg, szegélyek és körvonalak minden témában.
+	Text size	Szövegméret
+	Theme	Téma
+	Turns off animations and smooth scrolling.	Kikapcsolja az animációkat és a finom görgetést.
+	Unsaved changes are kept in a recovery folder so they survive a crash. 0 turns autosave off.	A nem mentett módosítások egy helyreállítási mappába kerülnek, így egy összeomlás után is megmaradnak. 0: az automatikus mentés kikapcsolva.
+	Untagged color	Címkézetlen szín
+	Untagged gray, RGB and CMYK color is shown through these profiles.	A címkézetlen szürke, RGB és CMYK színek ezeken a profilokon át jelennek meg.
+	Use overprint preview	Felülnyomás előnézetének használata
+	Use the site rules	A webhelyszabályok használata
+	Used by Output Preview and page images made for print checks.	A Kimenet előnézete és a nyomtatási ellenőrzéshez készült oldalképek használják.
+	Whether links and scripts in PDFs may reach web sites.	Elérhetik-e a PDF-ek hivatkozásai és szkriptjei a webhelyeket.
+	Your identity is suggested when you create a digital ID.	Digitális azonosító létrehozásakor a rendszer felajánlja az identitását.

@@ -1,7 +1,7 @@
 //! Autosave and crash recovery.
 //!
 //! While documents have unsaved changes, their working file is written every
-//! `AUTOSAVE_SECS` to a recovery folder in the user's data directory. Each entry is
+//! `AUTOSAVE_SECS` (Preferences ▸ Documents changes it, or turns autosave off) to a recovery folder in the user's data directory. Each entry is
 //! `<key>.pdf` plus `<key>.json` (name, original path, time). Saving, discarding or closing a
 //! document removes its entry, and a clean quit leaves the folder empty. If entries are found at
 //! startup, the previous session ended unexpectedly and the app offers to recover them.
@@ -147,12 +147,20 @@ impl PdfCraftApp {
         }
     }
 
+    /// Seconds between autosaves (Preferences ▸ Documents; [`AUTOSAVE_SECS`] by default), or
+    /// `None` when autosave is turned off.
+    pub fn autosave_interval(&self) -> Option<f64> {
+        let minutes = self.session.prefs().autosave_minutes;
+        (minutes > 0).then(|| f64::from(minutes) * 60.0)
+    }
+
     /// Autosave when the interval has passed (called every frame).
     pub(crate) fn autosave_tick(&mut self, now: f64) {
         if self.recovery.is_none() {
             return;
         }
-        if now - self.last_autosave >= AUTOSAVE_SECS {
+        let Some(interval) = self.autosave_interval() else { return };
+        if now - self.last_autosave >= interval {
             self.last_autosave = now;
             self.autosave_now();
         }

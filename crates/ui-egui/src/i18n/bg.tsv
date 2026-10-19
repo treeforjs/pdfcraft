@@ -2294,3 +2294,61 @@ compare-page	Moved	Преместена
 	Region capture	Снимка на област
 	Insert from clipboard	Вмъкни от клипборда
 	No screen capture tool was found. Capture with your system's tool, then use Create PDF from clipboard.	Не е намерен инструмент за снимки на екрана. Заснемете с инструмента на системата, след което използвайте Създай PDF от клипборда.
+# Preferences window (M14)
+	min	мин
+	Absolute colorimetric	Абсолютно колориметрично
+	Allow	Разреши
+	Allow all sites	Разреши всички сайтове
+	Always	Винаги
+	Always use the working spaces	Винаги използвай работните пространства
+	Ask each time	Питай всеки път
+	Automatic	Автоматично
+	Black point compensation	Компенсация на черната точка
+	Block	Блокирай
+	Block all sites	Блокирай всички сайтове
+	CMYK working space	Работно пространство CMYK
+	Color management	Управление на цветовете
+	Default location	Местоположение по подразбиране
+	Default reason	Причина по подразбиране
+	Documents	Документи
+	Don't color-manage untagged color	Без управление на цветовете без профил
+	Each document's own Highlight fields button still turns them on and off.	Бутонът „Маркирай полетата“ на всеки документ продължава да ги включва и изключва.
+	Field highlight color	Цвят на маркирането на полетата
+	Gray working space	Работно пространство в сиво
+	High contrast	Висок контраст
+	Highlight form fields in documents that open	Маркирай полетата на формулярите в отваряните документи
+	Internet access from PDFs	Достъп до интернет от PDF файлове
+	Keep the comment tool selected after adding a comment	Запази инструмента за коментари избран след добавяне на коментар
+	Makes all interface text and controls larger or smaller.	Прави целия текст и контролите на интерфейса по-големи или по-малки.
+	Never	Никога
+	New signatures start with these; you can change them when signing.	Новите подписи започват с тях; можете да ги промените при подписване.
+	No preferences match “{query}”.	Няма настройки, отговарящи на „{query}“.
+	Off: after one comment, the Select tool comes back.	Изключено: след един коментар се връща инструментът за избор.
+	Only for PDF/X files	Само за PDF/X файлове
+	Open the Comments panel when a comment tool is chosen	Отваряй панела „Коментари“ при избор на инструмент за коментари
+	Output intent overrides working spaces	Изходното предназначение замества работните пространства
+	Perceptual	Перцептивно
+	RGB working space	Работно пространство RGB
+	Recent files to remember	Брой запомняни последни файлове
+	Reduce motion	Намаляване на движението
+	Relative colorimetric	Относително колориметрично
+	Rendering intent	Метод на възпроизвеждане
+	Required field border color	Цвят на рамката на задължителните полета
+	Saturation	Наситеност
+	Save recovery copies of unsaved changes every	Запазвай копия за възстановяване на незапазените промени на всеки
+	Search preferences	Търсене в настройките
+	Shown on Home and in File ▸ Open Recent. 0 keeps no list.	Показват се в „Начало“ и във Файл ▸ Отваряне на последни. 0 не пази списък.
+	Signs new comments. Empty uses your login name.	Подписва новите коментари. Празно използва потребителското ви име.
+	Sites without a rule	Сайтове без правило
+	Stronger text, borders and outlines in every theme.	По-ясен текст, рамки и контури във всяка тема.
+	Text size	Размер на текста
+	Theme	Тема
+	Turns off animations and smooth scrolling.	Изключва анимациите и плавното превъртане.
+	Unsaved changes are kept in a recovery folder so they survive a crash. 0 turns autosave off.	Незапазените промени се пазят в папка за възстановяване, за да оцелеят при срив. 0 изключва автоматичното запазване.
+	Untagged color	Цвят без профил
+	Untagged gray, RGB and CMYK color is shown through these profiles.	Сивото, RGB и CMYK без профил се показват чрез тези профили.
+	Use overprint preview	Използвай преглед на надпечатването
+	Use the site rules	Използвай правилата за сайтове
+	Used by Output Preview and page images made for print checks.	Използва се от „Преглед на изхода“ и от изображенията на страници за проверка на печата.
+	Whether links and scripts in PDFs may reach web sites.	Дали връзките и скриптовете в PDF файловете могат да достъпват уеб сайтове.
+	Your identity is suggested when you create a digital ID.	Самоличността ви се предлага при създаване на цифров идентификатор.

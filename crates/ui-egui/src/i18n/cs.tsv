@@ -2356,3 +2356,61 @@ compare-page	Moved	Přesunutá
 	Region capture	Snímek oblasti
 	Insert from clipboard	Vložit ze schránky
 	No screen capture tool was found. Capture with your system's tool, then use Create PDF from clipboard.	Nebyl nalezen žádný nástroj pro snímky obrazovky. Pořiďte snímek nástrojem systému a pak použijte Vytvořit PDF ze schránky.
+# Preferences window (M14)
+	min	minut
+	Absolute colorimetric	Absolutní kolorimetrický
+	Allow	Povolit
+	Allow all sites	Povolit všechny weby
+	Always	Vždy
+	Always use the working spaces	Vždy používat pracovní prostory
+	Ask each time	Pokaždé se zeptat
+	Automatic	Automaticky
+	Black point compensation	Kompenzace černého bodu
+	Block	Blokovat
+	Block all sites	Blokovat všechny weby
+	CMYK working space	Pracovní prostor CMYK
+	Color management	Správa barev
+	Default location	Výchozí umístění
+	Default reason	Výchozí důvod
+	Documents	Dokumenty
+	Don't color-manage untagged color	Nespravovat barvy bez profilu
+	Each document's own Highlight fields button still turns them on and off.	Tlačítko Zvýraznit pole v každém dokumentu je stále zapíná a vypíná.
+	Field highlight color	Barva zvýraznění polí
+	Gray working space	Pracovní prostor šedé
+	High contrast	Vysoký kontrast
+	Highlight form fields in documents that open	Zvýraznit pole formulářů v otevíraných dokumentech
+	Internet access from PDFs	Přístup PDF k internetu
+	Keep the comment tool selected after adding a comment	Po přidání komentáře ponechat nástroj vybraný
+	Makes all interface text and controls larger or smaller.	Zvětší nebo zmenší veškerý text a ovládací prvky rozhraní.
+	Never	Nikdy
+	New signatures start with these; you can change them when signing.	Nové podpisy začínají s těmito hodnotami; při podepisování je můžete změnit.
+	No preferences match “{query}”.	Hledanému výrazu „{query}“ neodpovídá žádné nastavení.
+	Off: after one comment, the Select tool comes back.	Vypnuto: po jednom komentáři se vrátí nástroj Výběr.
+	Only for PDF/X files	Pouze pro soubory PDF/X
+	Open the Comments panel when a comment tool is chosen	Při výběru nástroje komentáře otevřít panel Komentáře
+	Output intent overrides working spaces	Výstupní záměr přepisuje pracovní prostory
+	Perceptual	Perceptuální
+	RGB working space	Pracovní prostor RGB
+	Recent files to remember	Počet zapamatovaných posledních souborů
+	Reduce motion	Omezit pohyb
+	Relative colorimetric	Relativní kolorimetrický
+	Rendering intent	Způsob vykreslení
+	Required field border color	Barva ohraničení povinných polí
+	Saturation	Sytost
+	Save recovery copies of unsaved changes every	Ukládat kopie pro obnovení neuložených změn každých
+	Search preferences	Hledat v nastavení
+	Shown on Home and in File ▸ Open Recent. 0 keeps no list.	Zobrazují se na Domů a v nabídce Soubor ▸ Otevřít nedávné. 0 seznam nevede.
+	Signs new comments. Empty uses your login name.	Podepisuje nové komentáře. Prázdné použije vaše přihlašovací jméno.
+	Sites without a rule	Weby bez pravidla
+	Stronger text, borders and outlines in every theme.	Výraznější text, ohraničení a obrysy v každém motivu.
+	Text size	Velikost textu
+	Theme	Motiv
+	Turns off animations and smooth scrolling.	Vypne animace a plynulé posouvání.
+	Unsaved changes are kept in a recovery folder so they survive a crash. 0 turns autosave off.	Neuložené změny se uchovávají ve složce pro obnovení, aby přežily pád. 0 automatické ukládání vypne.
+	Untagged color	Barva bez profilu
+	Untagged gray, RGB and CMYK color is shown through these profiles.	Šedá, RGB a CMYK bez profilu se zobrazují přes tyto profily.
+	Use overprint preview	Použít náhled přetisku
+	Use the site rules	Použít pravidla webů
+	Used by Output Preview and page images made for print checks.	Používá ho Náhled výstupu a obrázky stránek pro kontrolu tisku.
+	Whether links and scripts in PDFs may reach web sites.	Zda odkazy a skripty v PDF smějí přistupovat na weby.
+	Your identity is suggested when you create a digital ID.	Vaše identita se nabídne při vytváření digitálního ID.

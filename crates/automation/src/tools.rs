@@ -850,6 +850,34 @@ pub fn tools() -> Vec<ToolDef> {
             &[],
         )),
         t(
+            "prefs_get",
+            "Read preferences",
+            "Preferences by key, the same ones the desktop app's Preferences window shows: documents.autosave_minutes, documents.recent_files, forms.highlight_color, forms.required_color, forms.date_format, identity.name/organization/unit/email, signatures.reason/location, security.javascript, security.internet_access, security.unlisted_sites, accessibility.text_scale/reduce_motion/high_contrast and color.rgb/cmyk/gray/intent/black_point_compensation/untagged/overprint_preview. Without key returns values (all, or one category: general, documents, commenting, forms, identity, signatures, security, accessibility, color); with key its value. schema adds, per key, its category, type (boolean, integer, number, string, color), range or enum, default, description and applies: session keys change what other tools do (identity.name is the default author of new comments, signatures.reason/location the defaults of sign, the security and color keys the session's JavaScript, internet access and colour settings); app keys are kept for the desktop app (autosave, recent files, field highlight colours, accessibility, identity details for new digital IDs). The app's own window settings (theme, language, workspace, page display) are set through its control channel (ui.set pref.<key>). Read-only.",
+        )
+        .ro()
+        .with(schema(
+            json!({
+                "key": { "type": "string", "description": "One preference key." },
+                "category": { "type": "string", "enum": ["general", "documents", "commenting", "forms", "identity", "signatures", "security", "accessibility", "color"] },
+                "schema": { "type": "boolean", "description": "Also return the schema (types, ranges, defaults)." },
+            }),
+            &[],
+        )),
+        t(
+            "prefs_set",
+            "Set preferences",
+            "Change preferences for this session (not saved with documents, not an undo step): key and value for one, values (an object of key: value) for several, reset (true, or an array of keys) to put keys back to their defaults first. All or none: when one value is refused nothing changes. Values are validated against the schema (prefs_get with schema): booleans take true/false (or \"on\"/\"off\"), integers and numbers are clamped into their range (the clamped list names them), text is cut to its length without control characters, colours are \"#RRGGBB\" or [r, g, b], enums and colour profile ids must be one listed. Returns the values stored.",
+        )
+        .with(schema(
+            json!({
+                "key": { "type": "string", "description": "The preference to set." },
+                "value": { "description": "Its new value (with key)." },
+                "values": { "type": "object", "description": "Several preferences: key → value." },
+                "reset": { "type": ["boolean", "array"], "items": { "type": "string" }, "description": "true resets every preference; an array resets those keys." },
+            }),
+            &[],
+        )),
+        t(
             "color_settings_get",
             "Colour management settings",
             "Preferences ▸ Color Management: the session's colour settings — working spaces rgb, cmyk and gray (profile ids from color_profiles_list), the rendering intent, black_point_compensation and the policy for untagged (DeviceGray/RGB/CMYK) colour: output_intent (the default: a document's output intent profile replaces the working space of its family, Acrobat's Output Intent Overrides Working Spaces), working_space (always the working spaces) or unmanaged (no colour management: gray and RGB as sRGB numbers, CMYK naively, separations through the built-in conversion). With doc also says, per family, what that document's untagged colour is read in (source working_space, output_intent or unmanaged, with a note when the output intent can't be used) and how RGB and Lab separate into process inks (separation.conversion). page_render, render_preview, print_separations_*, print_total_area_coverage, print_overprint_*, print_object_inspector and the Ink Manager follow the settings; print_convert_colors and pdfx_convert take defaults from them. Read-only.",

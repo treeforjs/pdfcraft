@@ -324,6 +324,7 @@ fn preferences_set_the_default_zoom() {
     use egui_kittest::kittest::Queryable;
     let mut h = harness(&[]);
     assert!(h.state_mut().execute("app.preferences"));
+    h.state_mut().set_option("preferences-page", "documents").unwrap();
     h.run_steps(3);
     h.get_by_label("Zoom to page level").click();
     h.run_steps(2);

@@ -34,6 +34,7 @@ pub mod output_preview;
 pub mod pdfx;
 pub mod pptx_export;
 pub mod preflight;
+pub mod prefs;
 pub mod reader_selection;
 pub mod reading_order;
 pub mod signature_image;
@@ -3100,6 +3101,8 @@ pub struct Session {
     color: color_settings::ColorManagement,
     /// Scan & OCR: the recognition engines and the one chosen (see [`ocr`]).
     ocr_engines: ocr::Engines,
+    /// Preferences held by the session (autosave, identity, accessibility…; see [`prefs`]).
+    prefs: prefs::Preferences,
 }
 
 /// Lay a dynamic XFA form out (pages and fields) and give its widgets appearances.

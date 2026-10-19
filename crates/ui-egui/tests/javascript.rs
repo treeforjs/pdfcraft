@@ -93,6 +93,7 @@ fn document_scripts_and_preferences() {
     let id = h.state().active_ids().unwrap().1;
     assert_eq!(h.state().session.get(id).unwrap().document_scripts()[0].0, "init");
     h.state_mut().dialog = Some(Dialog::Preferences);
+    h.state_mut().set_option("preferences-page", "security").unwrap();
     h.run_steps(2);
     h.get_by_label("Enable Acrobat JavaScript").click();
     h.run_steps(2);

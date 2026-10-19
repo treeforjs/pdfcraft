@@ -85,6 +85,7 @@ pub use panels::BmAction;
 #[cfg(not(target_arch = "wasm32"))]
 mod pickers;
 mod popup_notes;
+pub mod prefs_ui;
 pub mod prepare;
 mod print_ui;
 mod signature_drag;
@@ -563,6 +564,10 @@ pub struct PdfCraftApp {
     pub recoverable: Vec<RecoveryMeta>,
     recovery_keys: std::collections::HashMap<DocId, String>,
     last_autosave: f64,
+    /// The Preferences window: its page, search text and text boxes being typed in.
+    pub prefs_ui: prefs_ui::PrefsUi,
+    /// The accessibility preferences last laid over the theme (see [`PdfCraftApp::restyle`]).
+    styled_a11y: Option<theme::Accessibility>,
     pending_recovered: Option<RecoveryMeta>,
     allow_quit: bool,
     /// Shortcuts pressed while a text field had the keyboard, run on the next frame (see
@@ -802,6 +807,8 @@ impl PdfCraftApp {
             recoverable: Vec::new(),
             recovery_keys: Default::default(),
             last_autosave: 0.0,
+            prefs_ui: Default::default(),
+            styled_a11y: None,
             pending_recovered: None,
             allow_quit: false,
             deferred_commands: Vec::new(),
@@ -958,7 +965,7 @@ impl PdfCraftApp {
         if let Some(p) = path {
             self.recent.retain(|r| r.path != p);
             self.recent.insert(0, RecentFile { name: name.to_string(), path: p, pages, size });
-            self.recent.truncate(12);
+            self.recent.truncate(self.session.prefs().recent_files as usize);
         }
         // What the form's scripts said while it opened (messages, errors) shows now, not with
         // the next edit.
@@ -1299,9 +1306,27 @@ impl PdfCraftApp {
     pub fn set_theme_preference(&mut self, preference: ThemePreference) {
         self.theme_preference = preference;
         self.theme = preference.resolve(self.ctx.as_ref().and_then(egui::Context::system_theme), self.theme);
-        if let Some(ctx) = &self.ctx {
-            theme::apply(ctx, self.theme);
+        if let Some(ctx) = self.ctx.clone() {
+            self.restyle(&ctx);
         }
+    }
+
+    /// The accessibility preferences (Preferences ▸ Accessibility).
+    pub fn accessibility(&self) -> theme::Accessibility {
+        let p = self.session.prefs();
+        theme::Accessibility { text_scale: p.text_scale, reduce_motion: p.reduce_motion, high_contrast: p.high_contrast }
+    }
+
+    /// Apply the theme with the accessibility preferences over it. The text size changes only
+    /// when its preference does, so a zoom the user made with the keyboard stays otherwise.
+    fn restyle(&mut self, ctx: &egui::Context) {
+        let a = self.accessibility();
+        theme::apply(ctx, self.theme);
+        theme::apply_accessibility(ctx, a);
+        if self.styled_a11y.is_none_or(|old| old.text_scale != a.text_scale) {
+            ctx.set_zoom_factor(a.text_scale);
+        }
+        self.styled_a11y = Some(a);
     }
 
     /// Draw the running job's progress card and pass a Cancel click on to the job.
@@ -1316,7 +1341,10 @@ impl PdfCraftApp {
         let kind = self.theme_preference.resolve(ctx.system_theme(), self.theme);
         if kind != self.theme {
             self.theme = kind;
-            theme::apply(ctx, kind);
+            self.restyle(ctx);
+        } else if self.styled_a11y != Some(self.accessibility()) {
+            // Preferences ▸ Accessibility changed (a cheap comparison each frame).
+            self.restyle(ctx);
         }
     }
 
@@ -1419,6 +1447,10 @@ impl PdfCraftApp {
             "actions": actions_ui::encode(&self.custom_actions),
             "combine_columns": self.combine_columns.to_json(),
             "comments_panel_closed": self.comments_panel_closed,
+            "comment_tool_pinned": self.comment_prefs.pinned,
+            // Preferences by key (autosave, recent files, identity, field highlights, signing
+            // defaults, accessibility, colour management; see `pdfcraft_engine::prefs`).
+            "prefs": self.session.saved_prefs(),
         })
         .to_string()
     }
@@ -1426,12 +1458,21 @@ impl PdfCraftApp {
     /// Restore state written by `persist`. Unknown or malformed data is ignored.
     pub fn restore(&mut self, json: &str) {
         let Ok(v) = serde_json::from_str::<serde_json::Value>(json) else { return };
+        // Untrusted: unknown keys and unusable values keep the defaults.
+        let skipped = self.session.load_prefs(&v["prefs"]);
+        if !skipped.is_empty() {
+            log::warn!("preferences that couldn't be read kept their defaults: {}", skipped.join(", "));
+        }
+        if let Some(on) = v["comment_tool_pinned"].as_bool() {
+            self.comment_prefs.pinned = on;
+        }
         self.combine_columns = combine_ui::Columns::from_json(&v["combine_columns"]);
         if let Ok(r) = serde_json::from_value::<Vec<RecentFile>>(v["recent"].clone()) {
             // Only keep entries whose files still exist.
             #[cfg(not(target_arch = "wasm32"))]
             let r: Vec<RecentFile> = r.into_iter().filter(|f| std::path::Path::new(&f.path).exists()).collect();
             self.recent = r;
+            self.recent.truncate(self.session.prefs().recent_files as usize);
         }
         if let Some(on) = v["reopen_last_session"].as_bool() {
             self.reopen_last_session = on;
@@ -1477,6 +1518,8 @@ impl PdfCraftApp {
         if let Some(author) = v["author"].as_str().map(str::trim).filter(|a| !a.is_empty()) {
             self.comment_prefs.author = author.chars().take(MAX_AUTHOR_CHARS).collect();
         }
+        // The session's identity follows the saved author, so automation agrees with the app.
+        self.sync_identity_name();
         // Per-tool comment styles (#340): each field goes through its clamping setter, so a
         // malformed or hostile entry is clamped or ignored rather than trusted.
         if let Some(styles) = v["comment_styles"].as_array() {
@@ -1559,8 +1602,24 @@ impl PdfCraftApp {
         if let Some(result) = self.set_signature_option(key, value) {
             return result;
         }
+        // `pref.<key>`: any preference by key (see `prefs_ui`); a value starting with `[` is read
+        // as JSON (a colour as [r, g, b]), anything else as text, which numbers and booleans
+        // accept too.
+        if let Some(pref) = key.strip_prefix("pref.") {
+            let v = if value.trim_start().starts_with('[') {
+                serde_json::from_str(value).unwrap_or_else(|_| serde_json::Value::String(value.to_string()))
+            } else {
+                serde_json::Value::String(value.to_string())
+            };
+            return self.set_pref(pref, &v).map(|_| ());
+        }
         let view = self.active.and_then(|i| self.views.get_mut(i));
         match (key, view) {
+            ("preferences-page", _) => {
+                let ids: Vec<&str> = prefs_ui::Page::ALL.iter().map(|p| p.id()).collect();
+                self.prefs_ui.page = prefs_ui::Page::from_id(value).ok_or_else(|| format!("preferences-page must be one of {}", ids.join(", ")))?;
+                self.prefs_ui.query.clear();
+            }
             ("language", _) => {
                 let language = i18n::normalize_pref(value).ok_or_else(|| {
                     let codes: Vec<&str> = std::iter::once(i18n::AUTO).chain(i18n::Lang::all().map(i18n::Lang::code)).collect();
@@ -1897,7 +1956,7 @@ impl eframe::App for PdfCraftApp {
             egui_extras::install_image_loaders(ctx);
             theme::install_fonts_for(ctx, hans);
             self.fonts_hans = hans;
-            theme::apply(ctx, self.theme);
+            self.restyle(ctx);
             self.styled = true;
         } else {
             self.fonts_ready = true;

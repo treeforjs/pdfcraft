@@ -2296,3 +2296,61 @@ compare-page	Moved	已移动
 	Region capture	区域截图
 	Insert from clipboard	从剪贴板插入
 	No screen capture tool was found. Capture with your system's tool, then use Create PDF from clipboard.	未找到屏幕截图工具。请用系统自带的工具截图，然后使用“从剪贴板创建 PDF”。
+# Preferences window (M14)
+	min	分钟
+	Absolute colorimetric	绝对比色
+	Allow	允许
+	Allow all sites	允许所有网站
+	Always	始终
+	Always use the working spaces	始终使用工作空间
+	Ask each time	每次询问
+	Automatic	自动
+	Black point compensation	黑场补偿
+	Block	阻止
+	Block all sites	阻止所有网站
+	CMYK working space	CMYK 工作空间
+	Color management	颜色管理
+	Default location	默认位置
+	Default reason	默认原因
+	Documents	文档
+	Don't color-manage untagged color	不管理未标记的颜色
+	Each document's own Highlight fields button still turns them on and off.	每个文档自己的“突出显示字段”按钮仍可开关它们。
+	Field highlight color	字段突出显示颜色
+	Gray working space	灰度工作空间
+	High contrast	高对比度
+	Highlight form fields in documents that open	在打开的文档中突出显示表单字段
+	Internet access from PDFs	PDF 访问互联网
+	Keep the comment tool selected after adding a comment	添加注释后保持选中注释工具
+	Makes all interface text and controls larger or smaller.	放大或缩小界面中的所有文字和控件。
+	Never	从不
+	New signatures start with these; you can change them when signing.	新签名以这些值开始；签名时可以更改。
+	No preferences match “{query}”.	没有与“{query}”匹配的首选项。
+	Off: after one comment, the Select tool comes back.	关闭：添加一条注释后回到选择工具。
+	Only for PDF/X files	仅限 PDF/X 文件
+	Open the Comments panel when a comment tool is chosen	选择注释工具时打开注释面板
+	Output intent overrides working spaces	输出方法覆盖工作空间
+	Perceptual	可感知
+	RGB working space	RGB 工作空间
+	Recent files to remember	记住的最近文件数
+	Reduce motion	减弱动态效果
+	Relative colorimetric	相对比色
+	Rendering intent	渲染方法
+	Required field border color	必填字段边框颜色
+	Saturation	饱和度
+	Save recovery copies of unsaved changes every	每隔以下时间保存未保存更改的恢复副本
+	Search preferences	搜索首选项
+	Shown on Home and in File ▸ Open Recent. 0 keeps no list.	显示在主页和“文件 ▸ 打开最近使用的文件”中。0 表示不保留列表。
+	Signs new comments. Empty uses your login name.	用于新注释的作者。留空则使用登录名。
+	Sites without a rule	没有规则的网站
+	Stronger text, borders and outlines in every theme.	在所有主题中加深文字、边框和轮廓。
+	Text size	文字大小
+	Theme	主题
+	Turns off animations and smooth scrolling.	关闭动画和平滑滚动。
+	Unsaved changes are kept in a recovery folder so they survive a crash. 0 turns autosave off.	未保存的更改保存在恢复文件夹中，以便在崩溃后保留。0 表示关闭自动保存。
+	Untagged color	未标记的颜色
+	Untagged gray, RGB and CMYK color is shown through these profiles.	未标记的灰度、RGB 和 CMYK 颜色通过这些配置文件显示。
+	Use overprint preview	使用叠印预览
+	Use the site rules	使用网站规则
+	Used by Output Preview and page images made for print checks.	用于输出预览和打印检查的页面图像。
+	Whether links and scripts in PDFs may reach web sites.	PDF 中的链接和脚本是否可以访问网站。
+	Your identity is suggested when you create a digital ID.	创建数字身份证时会建议使用您的身份信息。

@@ -2218,3 +2218,61 @@ compare-page	Moved	已移動
 	Region capture	區域擷取
 	Insert from clipboard	從剪貼簿插入
 	No screen capture tool was found. Capture with your system's tool, then use Create PDF from clipboard.	找不到螢幕擷取工具。請用系統內建的工具擷取，然後使用「從剪貼簿建立 PDF」。
+# Preferences window (M14)
+	min	分鐘
+	Absolute colorimetric	絕對比色
+	Allow	允許
+	Allow all sites	允許所有網站
+	Always	一律
+	Always use the working spaces	一律使用工作空間
+	Ask each time	每次詢問
+	Automatic	自動
+	Black point compensation	黑場補償
+	Block	封鎖
+	Block all sites	封鎖所有網站
+	CMYK working space	CMYK 工作空間
+	Color management	色彩管理
+	Default location	預設位置
+	Default reason	預設原因
+	Documents	文件
+	Don't color-manage untagged color	不管理未標記的色彩
+	Each document's own Highlight fields button still turns them on and off.	每份文件自己的「醒目提示欄位」按鈕仍可開關它們。
+	Field highlight color	欄位醒目提示色彩
+	Gray working space	灰階工作空間
+	High contrast	高對比
+	Highlight form fields in documents that open	在開啟的文件中醒目提示表單欄位
+	Internet access from PDFs	PDF 存取網際網路
+	Keep the comment tool selected after adding a comment	新增註解後保持選取註解工具
+	Makes all interface text and controls larger or smaller.	放大或縮小介面中的所有文字和控制項。
+	Never	永不
+	New signatures start with these; you can change them when signing.	新簽名以這些值開始；簽署時可以變更。
+	No preferences match “{query}”.	沒有符合「{query}」的偏好設定。
+	Off: after one comment, the Select tool comes back.	關閉：新增一則註解後回到選取工具。
+	Only for PDF/X files	僅限 PDF/X 檔案
+	Open the Comments panel when a comment tool is chosen	選擇註解工具時開啟註解面板
+	Output intent overrides working spaces	輸出方式覆寫工作空間
+	Perceptual	感應式
+	RGB working space	RGB 工作空間
+	Recent files to remember	記住的最近檔案數
+	Reduce motion	減少動態效果
+	Relative colorimetric	相對比色
+	Rendering intent	演算方式
+	Required field border color	必填欄位框線色彩
+	Saturation	飽和度
+	Save recovery copies of unsaved changes every	每隔以下時間儲存未儲存變更的復原副本
+	Search preferences	搜尋偏好設定
+	Shown on Home and in File ▸ Open Recent. 0 keeps no list.	顯示在首頁和「檔案 ▸ 開啟最近使用的檔案」中。0 表示不保留清單。
+	Signs new comments. Empty uses your login name.	用於新註解的作者。留空則使用登入名稱。
+	Sites without a rule	沒有規則的網站
+	Stronger text, borders and outlines in every theme.	在所有佈景主題中加深文字、框線和外框。
+	Text size	文字大小
+	Theme	佈景主題
+	Turns off animations and smooth scrolling.	關閉動畫和平滑捲動。
+	Unsaved changes are kept in a recovery folder so they survive a crash. 0 turns autosave off.	未儲存的變更會保留在復原資料夾中，以便在當機後保留。0 表示關閉自動儲存。
+	Untagged color	未標記的色彩
+	Untagged gray, RGB and CMYK color is shown through these profiles.	未標記的灰階、RGB 和 CMYK 色彩會透過這些描述檔顯示。
+	Use overprint preview	使用疊印預覽
+	Use the site rules	使用網站規則
+	Used by Output Preview and page images made for print checks.	用於輸出預覽和列印檢查的頁面影像。
+	Whether links and scripts in PDFs may reach web sites.	PDF 中的連結和指令碼是否可以存取網站。
+	Your identity is suggested when you create a digital ID.	建立數位識別碼時會建議使用您的身分資訊。

@@ -38,6 +38,7 @@ mod ocr_review;
 mod output_preview;
 mod overprint;
 mod preflight;
+mod prefs;
 mod printing;
 mod reader_selection;
 mod reading_order;
@@ -751,6 +752,8 @@ impl Automation {
             "print_ink_manager_set" => self.ink_manager_set(&a)?,
             "print_ink_manager_apply" => self.ink_manager_apply(&a)?,
             "print_overprint_preview" => self.overprint_preview(&a)?,
+            "prefs_get" => self.prefs_get(&a)?,
+            "prefs_set" => self.prefs_set(&a)?,
             "color_settings_get" => self.color_settings_get(&a)?,
             "color_settings_set" => self.color_settings_set(&a)?,
             "color_profiles_list" => self.color_profiles_list(&a)?,

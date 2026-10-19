@@ -2332,3 +2332,61 @@ compare-page	Moved	移動
 	Region capture	範囲キャプチャ
 	Insert from clipboard	クリップボードから挿入
 	No screen capture tool was found. Capture with your system's tool, then use Create PDF from clipboard.	画面キャプチャツールが見つかりません。システムのツールでキャプチャしてから、「クリップボードから PDF を作成」を使ってください。
+# Preferences window (M14)
+	min	分
+	Absolute colorimetric	絶対的な色域を維持
+	Allow	許可
+	Allow all sites	すべてのサイトを許可
+	Always	常に
+	Always use the working spaces	常に作業用スペースを使用
+	Ask each time	毎回確認
+	Automatic	自動
+	Black point compensation	黒点の補正
+	Block	ブロック
+	Block all sites	すべてのサイトをブロック
+	CMYK working space	CMYK 作業用スペース
+	Color management	カラーマネジメント
+	Default location	既定の場所
+	Default reason	既定の理由
+	Documents	文書
+	Don't color-manage untagged color	タグなしのカラーを管理しない
+	Each document's own Highlight fields button still turns them on and off.	各文書の「フィールドをハイライト」ボタンで個別にオン／オフできます。
+	Field highlight color	フィールドのハイライト色
+	Gray working space	グレー作業用スペース
+	High contrast	ハイコントラスト
+	Highlight form fields in documents that open	開いた文書のフォームフィールドをハイライト
+	Internet access from PDFs	PDF からのインターネットアクセス
+	Keep the comment tool selected after adding a comment	注釈の追加後も注釈ツールを選択したままにする
+	Makes all interface text and controls larger or smaller.	インターフェイスのすべての文字とコントロールを拡大・縮小します。
+	Never	しない
+	New signatures start with these; you can change them when signing.	新しい署名はこれらの値で始まります。署名時に変更できます。
+	No preferences match “{query}”.	「{query}」に一致する環境設定はありません。
+	Off: after one comment, the Select tool comes back.	オフ：注釈を 1 つ追加すると選択ツールに戻ります。
+	Only for PDF/X files	PDF/X ファイルのみ
+	Open the Comments panel when a comment tool is chosen	注釈ツールを選んだら注釈パネルを開く
+	Output intent overrides working spaces	出力インテントで作業用スペースを上書き
+	Perceptual	知覚的
+	RGB working space	RGB 作業用スペース
+	Recent files to remember	記憶する最近使用したファイルの数
+	Reduce motion	視差効果を減らす
+	Relative colorimetric	相対的な色域を維持
+	Rendering intent	レンダリングインテント
+	Required field border color	必須フィールドの境界線の色
+	Saturation	彩度
+	Save recovery copies of unsaved changes every	未保存の変更の復元用コピーを保存する間隔
+	Search preferences	環境設定を検索
+	Shown on Home and in File ▸ Open Recent. 0 keeps no list.	ホームと「ファイル ▸ 最近使用したファイルを開く」に表示されます。0 にすると一覧を残しません。
+	Signs new comments. Empty uses your login name.	新しい注釈の作成者名です。空欄の場合はログイン名を使用します。
+	Sites without a rule	ルールのないサイト
+	Stronger text, borders and outlines in every theme.	どのテーマでも文字・境界線・輪郭を濃くします。
+	Text size	文字サイズ
+	Theme	テーマ
+	Turns off animations and smooth scrolling.	アニメーションとスムーズスクロールをオフにします。
+	Unsaved changes are kept in a recovery folder so they survive a crash. 0 turns autosave off.	未保存の変更はクラッシュに備えて復元用フォルダーに保存されます。0 にすると自動保存はオフになります。
+	Untagged color	タグなしのカラー
+	Untagged gray, RGB and CMYK color is shown through these profiles.	タグなしのグレー、RGB、CMYK はこれらのプロファイルで表示されます。
+	Use overprint preview	オーバープリントプレビューを使用
+	Use the site rules	サイトのルールを使用
+	Used by Output Preview and page images made for print checks.	出力プレビューと印刷チェック用のページ画像で使用されます。
+	Whether links and scripts in PDFs may reach web sites.	PDF 内のリンクやスクリプトが Web サイトにアクセスできるかどうか。
+	Your identity is suggested when you create a digital ID.	デジタル ID を作成するときに ID 情報が提案されます。

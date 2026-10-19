@@ -283,7 +283,7 @@ impl Automation {
                     let (w, h) = stamp.size();
                     let [x, y] = a.need::<2>("at", "a stamp (its centre)")?;
                     let rect = rect_to_user(&info, [x - w / 2.0, y - h / 2.0, x + w / 2.0, y + h / 2.0]);
-                    let author = a.opt_str("author")?.unwrap_or(DEFAULT_AUTHOR).to_string();
+                    let author = a.opt_str("author")?.unwrap_or(self.session.author_or(DEFAULT_AUTHOR)).to_string();
                     let by = dynamic.then(|| self.session.stamp_by_line(&author));
                     Shape::Stamp { rect, stamp, by }
                 }
@@ -398,7 +398,7 @@ impl Automation {
             style.width = w.max(0.0);
         }
         let contents = a.opt_str("contents")?.unwrap_or_default().to_string();
-        let author = a.opt_str("author")?.unwrap_or(DEFAULT_AUTHOR).to_string();
+        let author = a.opt_str("author")?.unwrap_or(self.session.author_or(DEFAULT_AUTHOR)).to_string();
         // Replace Text: the struck-out text and a grouped caret holding `contents`.
         if kind == "replace" {
             let Shape::TextMarkup { quads, .. } = shape else {
@@ -462,7 +462,7 @@ impl Automation {
         let info = self.doc(a)?.info.pages[page].clone();
         let [x, y] = a.need::<2>("at", "Fill & Sign")?;
         let at = to_user(&info, x, y);
-        let author = a.opt_str("author")?.unwrap_or(DEFAULT_AUTHOR).to_string();
+        let author = a.opt_str("author")?.unwrap_or(self.session.author_or(DEFAULT_AUTHOR)).to_string();
         let kind = a.str("type")?;
         if let Some(path) = a.opt_str("path")? {
             if !matches!(kind, "signature" | "initials") || a.opt_str("text")?.is_some() {
@@ -519,7 +519,7 @@ impl Automation {
 
     pub(crate) fn comment_reply(&mut self, a: &Args) -> Result<Value> {
         let (page, index) = self.comment_target(a)?;
-        let author = a.opt_str("author")?.unwrap_or(DEFAULT_AUTHOR).to_string();
+        let author = a.opt_str("author")?.unwrap_or(self.session.author_or(DEFAULT_AUTHOR)).to_string();
         self.apply(a, Edit::ReplyToAnnotation { page, index, text: a.str("text")?.to_string(), author })
     }
 
@@ -527,14 +527,14 @@ impl Automation {
         let (page, index) = self.comment_target(a)?;
         let status = a.str("status")?;
         let state = ReviewState::from_name(status).ok_or_else(|| ToolError::InvalidArgs(format!("unknown status {status:?}")))?;
-        let author = a.opt_str("author")?.unwrap_or(DEFAULT_AUTHOR).to_string();
+        let author = a.opt_str("author")?.unwrap_or(self.session.author_or(DEFAULT_AUTHOR)).to_string();
         self.apply(a, Edit::SetAnnotationStatus { page, index, state, author })
     }
 
     pub(crate) fn comment_mark(&mut self, a: &Args) -> Result<Value> {
         let (page, index) = self.comment_target(a)?;
         let marked = a.opt_bool("marked")?.unwrap_or(true);
-        let author = a.opt_str("author")?.unwrap_or(DEFAULT_AUTHOR).to_string();
+        let author = a.opt_str("author")?.unwrap_or(self.session.author_or(DEFAULT_AUTHOR)).to_string();
         self.apply(a, Edit::MarkAnnotation { page, index, marked, author })
     }
 
@@ -733,7 +733,7 @@ impl Automation {
                 bytes: std::sync::Arc::new(bytes),
                 page: a.opt_int("file_page")?.unwrap_or(1).max(1) as usize - 1,
             },
-            author: a.opt_str("author")?.unwrap_or(DEFAULT_AUTHOR).to_string(),
+            author: a.opt_str("author")?.unwrap_or(self.session.author_or(DEFAULT_AUTHOR)).to_string(),
         };
         self.apply(a, edit)
     }

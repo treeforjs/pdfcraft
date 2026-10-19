@@ -9686,9 +9686,9 @@ tier = "P1"
 milestone = "M14"
 status = "partial"
 commands = ["app.preferences"]
-tools = ["js_enabled"]
-evidence = ["crates/ui-egui/tests/javascript.rs::document_scripts_and_preferences", "crates/ui-egui/tests/ui.rs::preferences_selects_default_workspace_for_next_open", "crates/ui-egui/tests/control.rs::control_default_workspace_and_session_override"]
-notes = "Preferences dialog with Interface language, Documents and view (persistent default workspace with session override), Identity, Fill & Sign (flatten on save, off by default) and JavaScript; other categories still live in their tools, and it isn't generated from a schema yet."
+tools = ["js_enabled", "prefs_get", "prefs_set"]
+evidence = ["crates/ui-egui/tests/javascript.rs::document_scripts_and_preferences", "crates/ui-egui/tests/ui.rs::preferences_selects_default_workspace_for_next_open", "crates/ui-egui/tests/control.rs::control_default_workspace_and_session_override", "crates/ui-egui/tests/preferences.rs::categories_search_and_accessibility_settings", "crates/automation/tests/prefs.rs::prefs_read_set_and_reach_the_other_tools"]
+notes = "One Preferences window: categories on the left (General, Documents, Commenting, Forms, Identity, Signatures, Security, Accessibility, Color management), the page on the right and a search box that filters settings across pages. Session preferences come from one schema (pdfcraft_engine::prefs: key, category, type, range, default) shared with prefs_get/prefs_set and ui.set pref.<key>; values are validated and clamped and a corrupt settings file loads with defaults. Rows are still hand-written per key rather than generated from the schema."
 
 [[feature]]
 id = "misc.prefs-general"
@@ -9696,11 +9696,11 @@ title = "Preferences: general"
 area = "N"
 tier = "P1"
 milestone = "M14"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["app.preferences"]
+tools = ["prefs_get", "prefs_set"]
+evidence = ["crates/ui-egui/tests/preferences.rs::categories_search_and_accessibility_settings", "crates/ui-egui/tests/preferences.rs::hostile_values_and_corrupt_settings_keep_defaults", "crates/ui-egui/tests/ui.rs::preferences_selects_default_workspace_for_next_open"]
+notes = "Preferences ▸ General: interface language, theme (system, light, warm, dim, dark), default workspace mode and reopening the last session's files, all persisted and settable as ui.set pref.general.<key>. Missing: Acrobat's single-key accelerators, show Home on startup, tab and messaging options."
 
 [[feature]]
 id = "misc.prefs-page-display"
@@ -9720,11 +9720,11 @@ title = "Preferences: documents (autosave interval, recent count)"
 area = "N"
 tier = "P1"
 milestone = "M14"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["app.preferences"]
+tools = ["prefs_get", "prefs_set"]
+evidence = ["crates/ui-egui/tests/preferences.rs::documents_identity_and_signing_preferences_take_effect", "crates/engine/src/prefs.rs::hostile_values_are_clamped_or_refused", "crates/automation/tests/prefs.rs::prefs_read_set_and_reach_the_other_tools"]
+notes = "Preferences ▸ Documents: autosave interval for recovery copies (minutes, 0 off, default 1; documents.autosave_minutes), recent files kept on Home and File ▸ Open Recent (0–50, default 12; lowering trims the list), default page display and zoom. Clamped and persisted; a corrupt value keeps the default. Missing: Acrobat's save-as and PDF/A view mode options."
 
 [[feature]]
 id = "misc.prefs-commenting"
@@ -9732,11 +9732,11 @@ title = "Preferences: commenting"
 area = "N"
 tier = "P1"
 milestone = "M14"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["app.preferences"]
+tools = ["prefs_get", "prefs_set"]
+evidence = ["crates/ui-egui/tests/preferences.rs::documents_identity_and_signing_preferences_take_effect", "crates/ui-egui/tests/preferences.rs::hostile_values_and_corrupt_settings_keep_defaults"]
+notes = "Preferences ▸ Commenting: keep the comment tool selected after use (now remembered) and open the Comments panel when a comment tool is chosen; the author name is on the Identity page and per-tool styles come from Make Current Properties Default. Missing: pop-up font and size, opacity default, connector lines and the other display options."
 
 [[feature]]
 id = "misc.prefs-forms"
@@ -9744,11 +9744,11 @@ title = "Preferences: forms"
 area = "N"
 tier = "P1"
 milestone = "M14"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["app.preferences"]
+tools = ["prefs_get", "prefs_set"]
+evidence = ["crates/ui-egui/tests/preferences.rs::documents_identity_and_signing_preferences_take_effect", "crates/engine/src/prefs.rs::hostile_values_are_clamped_or_refused", "crates/ui-egui/tests/date_format.rs::fill_and_sign_dates_follow_the_date_format_preference_and_it_is_remembered"]
+notes = "Preferences ▸ Forms: highlight fields in documents that open, the field highlight colour and the required-field border colour (used by the canvas highlight), flatten Fill & Sign on save and the Fill & Sign date format. Missing: auto-complete, the automatic-calculation toggle, focus rectangle and overflow indicator."
 
 [[feature]]
 id = "misc.prefs-identity"
@@ -9756,11 +9756,11 @@ title = "Preferences: identity"
 area = "N"
 tier = "P1"
 milestone = "M14"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["app.preferences"]
+tools = ["prefs_get", "prefs_set"]
+evidence = ["crates/ui-egui/tests/identity.rs::the_identity_name_signs_new_comments_and_is_remembered", "crates/ui-egui/tests/preferences.rs::documents_identity_and_signing_preferences_take_effect", "crates/automation/tests/prefs.rs::prefs_read_set_and_reach_the_other_tools"]
+notes = "Preferences ▸ Identity: name (author of new comments in the app; the default author of comment, markup and redaction tools in automation; empty uses the login name), organization, organizational unit and email, suggested when creating a self-signed digital ID. Missing: Acrobat's Title field."
 
 [[feature]]
 id = "misc.prefs-full-screen"
@@ -9792,11 +9792,11 @@ title = "Preferences: signatures"
 area = "N"
 tier = "P1"
 milestone = "M14"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["app.preferences"]
+tools = ["prefs_get", "prefs_set"]
+evidence = ["crates/ui-egui/tests/preferences.rs::documents_identity_and_signing_preferences_take_effect", "crates/ui-egui/tests/preferences.rs::hostile_values_and_corrupt_settings_keep_defaults"]
+notes = "Preferences ▸ Signatures: the reason and location a new signature starts with (sign dialog, and sign_document when they aren't given). Timestamp servers stay in the signing dialog and OS root trust in its tools (os_trust_*; not persisted, since reading the roots at startup would slow it). Missing: verification preferences (verify on open, verification time), appearance defaults."
 
 [[feature]]
 id = "misc.prefs-security"
@@ -9804,11 +9804,11 @@ title = "Preferences: security and trust"
 area = "N"
 tier = "P1"
 milestone = "M14"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["app.preferences"]
+tools = ["prefs_get", "prefs_set"]
+evidence = ["crates/ui-egui/tests/preferences.rs::categories_search_and_accessibility_settings", "crates/automation/tests/prefs.rs::prefs_read_set_and_reach_the_other_tools", "crates/engine/src/prefs.rs::session_settings_follow_their_keys"]
+notes = "Preferences ▸ Security: Enable Acrobat JavaScript, internet access from PDFs (site rules, allow all, block all) and what happens with sites that have no rule (ask, allow, block); the site and attachment lists stay with their Trust Manager tools. Missing: protected view, enhanced security, privileged locations."
 
 [[feature]]
 id = "misc.prefs-spelling"
@@ -9852,11 +9852,11 @@ title = "Preferences: accessibility"
 area = "N"
 tier = "P1"
 milestone = "M14"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["app.preferences"]
+tools = ["prefs_get", "prefs_set"]
+evidence = ["crates/ui-egui/tests/preferences.rs::categories_search_and_accessibility_settings", "crates/ui-egui/tests/preferences.rs::hostile_values_and_corrupt_settings_keep_defaults"]
+notes = "Preferences ▸ Accessibility: interface text size (75–200 %, egui zoom), reduce motion (no animations or smooth scrolling) and high contrast (stronger text, borders and outlines in every theme), applied at once and kept across theme changes. Missing: Acrobat's replace document colours, override page layout and zoom, reading-order and tab-order options."
 
 [[feature]]
 id = "misc.prefs-color-management"
@@ -9864,11 +9864,11 @@ title = "Preferences: colour management"
 area = "N"
 tier = "P1"
 milestone = "M14"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["app.preferences"]
+tools = ["prefs_get", "prefs_set", "color_settings_get", "color_settings_set", "print_overprint_preview"]
+evidence = ["crates/automation/tests/prefs.rs::prefs_read_set_and_reach_the_other_tools", "crates/engine/src/prefs.rs::session_settings_follow_their_keys", "crates/ui-egui/tests/preferences.rs::documents_identity_and_signing_preferences_take_effect"]
+notes = "Preferences ▸ Color management: RGB, CMYK and gray working spaces, rendering intent, black point compensation, the untagged-colour policy and overprint preview, now in the window and persisted (the same settings color_settings_set and print_overprint_preview change). Missing: Acrobat's named colour-settings presets; loading user ICC profiles is through color_profile_load only, and they aren't remembered."
 
 [[feature]]
 id = "misc.prefs-javascript"

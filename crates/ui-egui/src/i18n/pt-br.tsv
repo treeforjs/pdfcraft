@@ -2333,3 +2333,61 @@ compare-page	Moved	Movida
 	Region capture	Captura de região
 	Insert from clipboard	Inserir da área de transferência
 	No screen capture tool was found. Capture with your system's tool, then use Create PDF from clipboard.	Nenhuma ferramenta de captura de tela foi encontrada. Capture com a ferramenta do seu sistema e depois use Criar PDF da área de transferência.
+# Preferences window (M14)
+	min	min
+	Absolute colorimetric	Colorimétrico absoluto
+	Allow	Permitir
+	Allow all sites	Permitir todos os sites
+	Always	Sempre
+	Always use the working spaces	Usar sempre os espaços de trabalho
+	Ask each time	Perguntar sempre
+	Automatic	Automático
+	Black point compensation	Compensação de ponto preto
+	Block	Bloquear
+	Block all sites	Bloquear todos os sites
+	CMYK working space	Espaço de trabalho CMYK
+	Color management	Gerenciamento de cores
+	Default location	Local padrão
+	Default reason	Motivo padrão
+	Documents	Documentos
+	Don't color-manage untagged color	Não gerenciar cores sem perfil
+	Each document's own Highlight fields button still turns them on and off.	O botão Destacar campos de cada documento continua ligando e desligando-os.
+	Field highlight color	Cor de destaque dos campos
+	Gray working space	Espaço de trabalho de cinza
+	High contrast	Alto contraste
+	Highlight form fields in documents that open	Destacar campos de formulário nos documentos abertos
+	Internet access from PDFs	Acesso à internet a partir de PDFs
+	Keep the comment tool selected after adding a comment	Manter a ferramenta de comentário selecionada após adicionar um comentário
+	Makes all interface text and controls larger or smaller.	Aumenta ou diminui todo o texto e os controles da interface.
+	Never	Nunca
+	New signatures start with these; you can change them when signing.	Novas assinaturas começam com estes valores; você pode alterá-los ao assinar.
+	No preferences match “{query}”.	Nenhuma preferência corresponde a “{query}”.
+	Off: after one comment, the Select tool comes back.	Desligado: após um comentário, a ferramenta Selecionar volta.
+	Only for PDF/X files	Somente para arquivos PDF/X
+	Open the Comments panel when a comment tool is chosen	Abrir o painel Comentários ao escolher uma ferramenta de comentário
+	Output intent overrides working spaces	A intenção de saída substitui os espaços de trabalho
+	Perceptual	Perceptivo
+	RGB working space	Espaço de trabalho RGB
+	Recent files to remember	Arquivos recentes a lembrar
+	Reduce motion	Reduzir movimento
+	Relative colorimetric	Colorimétrico relativo
+	Rendering intent	Tipo de renderização
+	Required field border color	Cor da borda dos campos obrigatórios
+	Saturation	Saturação
+	Save recovery copies of unsaved changes every	Salvar cópias de recuperação das alterações não salvas a cada
+	Search preferences	Pesquisar preferências
+	Shown on Home and in File ▸ Open Recent. 0 keeps no list.	Mostrados no Início e em Arquivo ▸ Abrir recente. 0 não mantém lista.
+	Signs new comments. Empty uses your login name.	Assina os novos comentários. Vazio usa seu nome de login.
+	Sites without a rule	Sites sem regra
+	Stronger text, borders and outlines in every theme.	Texto, bordas e contornos mais fortes em todos os temas.
+	Text size	Tamanho do texto
+	Theme	Tema
+	Turns off animations and smooth scrolling.	Desliga as animações e a rolagem suave.
+	Unsaved changes are kept in a recovery folder so they survive a crash. 0 turns autosave off.	Alterações não salvas ficam numa pasta de recuperação para sobreviver a uma falha. 0 desliga o salvamento automático.
+	Untagged color	Cor sem perfil
+	Untagged gray, RGB and CMYK color is shown through these profiles.	Cinza, RGB e CMYK sem perfil são exibidos por meio destes perfis.
+	Use overprint preview	Usar visualização de superimpressão
+	Use the site rules	Usar as regras de sites
+	Used by Output Preview and page images made for print checks.	Usado pela Visualização de saída e pelas imagens de página para verificações de impressão.
+	Whether links and scripts in PDFs may reach web sites.	Se links e scripts em PDFs podem acessar sites.
+	Your identity is suggested when you create a digital ID.	Sua identidade é sugerida ao criar um ID digital.

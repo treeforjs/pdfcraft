@@ -2332,3 +2332,61 @@ compare-page	Moved	Verschoben
 	Region capture	Bereichsaufnahme
 	Insert from clipboard	Aus Zwischenablage einfügen
 	No screen capture tool was found. Capture with your system's tool, then use Create PDF from clipboard.	Kein Werkzeug für Bildschirmaufnahmen gefunden. Nehmen Sie mit dem Werkzeug Ihres Systems auf und verwenden Sie dann „PDF aus Zwischenablage erstellen“.
+# Preferences window (M14)
+	min	Min.
+	Absolute colorimetric	Absolut farbmetrisch
+	Allow	Zulassen
+	Allow all sites	Alle Websites zulassen
+	Always	Immer
+	Always use the working spaces	Immer die Arbeitsfarbräume verwenden
+	Ask each time	Jedes Mal fragen
+	Automatic	Automatisch
+	Black point compensation	Tiefenkompensierung
+	Block	Blockieren
+	Block all sites	Alle Websites blockieren
+	CMYK working space	CMYK-Arbeitsfarbraum
+	Color management	Farbmanagement
+	Default location	Standardort
+	Default reason	Standardgrund
+	Documents	Dokumente
+	Don't color-manage untagged color	Farben ohne Profil nicht verwalten
+	Each document's own Highlight fields button still turns them on and off.	Die Schaltfläche „Felder hervorheben“ jedes Dokuments schaltet sie weiterhin ein und aus.
+	Field highlight color	Farbe der Feldhervorhebung
+	Gray working space	Graustufen-Arbeitsfarbraum
+	High contrast	Hoher Kontrast
+	Highlight form fields in documents that open	Formularfelder in geöffneten Dokumenten hervorheben
+	Internet access from PDFs	Internetzugriff aus PDFs
+	Keep the comment tool selected after adding a comment	Kommentarwerkzeug nach dem Hinzufügen eines Kommentars ausgewählt lassen
+	Makes all interface text and controls larger or smaller.	Macht alle Texte und Bedienelemente der Oberfläche größer oder kleiner.
+	Never	Nie
+	New signatures start with these; you can change them when signing.	Neue Signaturen beginnen damit; Sie können sie beim Signieren ändern.
+	No preferences match “{query}”.	Keine Einstellungen passen zu „{query}“.
+	Off: after one comment, the Select tool comes back.	Aus: Nach einem Kommentar kehrt das Auswahlwerkzeug zurück.
+	Only for PDF/X files	Nur für PDF/X-Dateien
+	Open the Comments panel when a comment tool is chosen	Kommentarbereich öffnen, wenn ein Kommentarwerkzeug gewählt wird
+	Output intent overrides working spaces	Ausgabemethode ersetzt Arbeitsfarbräume
+	Perceptual	Perzeptiv
+	RGB working space	RGB-Arbeitsfarbraum
+	Recent files to remember	Anzahl gemerkter zuletzt verwendeter Dateien
+	Reduce motion	Bewegung reduzieren
+	Relative colorimetric	Relativ farbmetrisch
+	Rendering intent	Renderpriorität
+	Required field border color	Rahmenfarbe für Pflichtfelder
+	Saturation	Sättigung
+	Save recovery copies of unsaved changes every	Wiederherstellungskopien ungespeicherter Änderungen speichern alle
+	Search preferences	Einstellungen durchsuchen
+	Shown on Home and in File ▸ Open Recent. 0 keeps no list.	Werden auf der Startseite und unter Datei ▸ Zuletzt verwendet angezeigt. 0 führt keine Liste.
+	Signs new comments. Empty uses your login name.	Unterzeichnet neue Kommentare. Leer verwendet Ihren Anmeldenamen.
+	Sites without a rule	Websites ohne Regel
+	Stronger text, borders and outlines in every theme.	Kräftigere Texte, Rahmen und Umrisse in jedem Design.
+	Text size	Textgröße
+	Theme	Design
+	Turns off animations and smooth scrolling.	Schaltet Animationen und weiches Scrollen aus.
+	Unsaved changes are kept in a recovery folder so they survive a crash. 0 turns autosave off.	Ungespeicherte Änderungen werden in einem Wiederherstellungsordner aufbewahrt, damit sie einen Absturz überstehen. 0 schaltet das automatische Speichern aus.
+	Untagged color	Farbe ohne Profil
+	Untagged gray, RGB and CMYK color is shown through these profiles.	Grau-, RGB- und CMYK-Farben ohne Profil werden über diese Profile dargestellt.
+	Use overprint preview	Überdruckenvorschau verwenden
+	Use the site rules	Website-Regeln verwenden
+	Used by Output Preview and page images made for print checks.	Wird von der Ausgabevorschau und von Seitenbildern für Druckprüfungen verwendet.
+	Whether links and scripts in PDFs may reach web sites.	Ob Links und Skripte in PDFs Websites erreichen dürfen.
+	Your identity is suggested when you create a digital ID.	Ihre Identität wird beim Erstellen einer digitalen ID vorgeschlagen.

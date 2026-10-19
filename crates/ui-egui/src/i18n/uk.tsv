@@ -2355,3 +2355,61 @@ compare-page	Moved	Переміщена
 	Region capture	Знімок області
 	Insert from clipboard	Вставити з буфера обміну
 	No screen capture tool was found. Capture with your system's tool, then use Create PDF from clipboard.	Не знайдено засобу для знімків екрана. Зробіть знімок засобом системи, потім скористайтеся «Створити PDF з буфера обміну».
+# Preferences window (M14)
+	min	хв
+	Absolute colorimetric	Абсолютний колориметричний
+	Allow	Дозволити
+	Allow all sites	Дозволити всі сайти
+	Always	Завжди
+	Always use the working spaces	Завжди використовувати робочі простори
+	Ask each time	Питати щоразу
+	Automatic	Автоматично
+	Black point compensation	Компенсація точки чорного
+	Block	Блокувати
+	Block all sites	Блокувати всі сайти
+	CMYK working space	Робочий простір CMYK
+	Color management	Керування кольором
+	Default location	Типове місце
+	Default reason	Типова причина
+	Documents	Документи
+	Don't color-manage untagged color	Не керувати кольором без профілю
+	Each document's own Highlight fields button still turns them on and off.	Кнопка «Виділити поля» кожного документа й надалі вмикає та вимикає їх.
+	Field highlight color	Колір виділення полів
+	Gray working space	Робочий простір сірого
+	High contrast	Висока контрастність
+	Highlight form fields in documents that open	Виділяти поля форм у відкритих документах
+	Internet access from PDFs	Доступ PDF до інтернету
+	Keep the comment tool selected after adding a comment	Залишати інструмент коментарів вибраним після додавання коментаря
+	Makes all interface text and controls larger or smaller.	Збільшує або зменшує весь текст і елементи керування інтерфейсу.
+	Never	Ніколи
+	New signatures start with these; you can change them when signing.	Нові підписи починаються з цих значень; їх можна змінити під час підписання.
+	No preferences match “{query}”.	Немає налаштувань, що відповідають «{query}».
+	Off: after one comment, the Select tool comes back.	Вимкнено: після одного коментаря повертається інструмент вибору.
+	Only for PDF/X files	Лише для файлів PDF/X
+	Open the Comments panel when a comment tool is chosen	Відкривати панель коментарів під час вибору інструмента коментарів
+	Output intent overrides working spaces	Ціль виводу замінює робочі простори
+	Perceptual	Перцептивний
+	RGB working space	Робочий простір RGB
+	Recent files to remember	Скільки останніх файлів запам’ятовувати
+	Reduce motion	Зменшити рух
+	Relative colorimetric	Відносний колориметричний
+	Rendering intent	Метод відтворення
+	Required field border color	Колір рамки обов’язкових полів
+	Saturation	Насиченість
+	Save recovery copies of unsaved changes every	Зберігати копії незбережених змін для відновлення кожні
+	Search preferences	Пошук у налаштуваннях
+	Shown on Home and in File ▸ Open Recent. 0 keeps no list.	Показуються на головній і в меню Файл ▸ Відкрити нещодавні. 0 — не вести список.
+	Signs new comments. Empty uses your login name.	Підписує нові коментарі. Якщо порожньо, використовується ім’я для входу.
+	Sites without a rule	Сайти без правила
+	Stronger text, borders and outlines in every theme.	Чіткіший текст, рамки й контури в кожній темі.
+	Text size	Розмір тексту
+	Theme	Тема
+	Turns off animations and smooth scrolling.	Вимикає анімацію та плавне прокручування.
+	Unsaved changes are kept in a recovery folder so they survive a crash. 0 turns autosave off.	Незбережені зміни зберігаються в теці відновлення, щоб пережити збій. 0 вимикає автозбереження.
+	Untagged color	Колір без профілю
+	Untagged gray, RGB and CMYK color is shown through these profiles.	Сірий, RGB і CMYK без профілю відображаються через ці профілі.
+	Use overprint preview	Використовувати перегляд накладання
+	Use the site rules	Використовувати правила для сайтів
+	Used by Output Preview and page images made for print checks.	Використовується переглядом виводу та зображеннями сторінок для перевірки друку.
+	Whether links and scripts in PDFs may reach web sites.	Чи можуть посилання та скрипти в PDF звертатися до вебсайтів.
+	Your identity is suggested when you create a digital ID.	Ваші дані пропонуються під час створення цифрового ідентифікатора.

@@ -2341,3 +2341,61 @@ compare-page	Moved	Spostata
 	Region capture	Cattura di un'area
 	Insert from clipboard	Inserisci dagli appunti
 	No screen capture tool was found. Capture with your system's tool, then use Create PDF from clipboard.	Nessuno strumento di cattura dello schermo trovato. Cattura con lo strumento del sistema, poi usa Crea PDF dagli appunti.
+# Preferences window (M14)
+	min	min
+	Absolute colorimetric	Colorimetrico assoluto
+	Allow	Consenti
+	Allow all sites	Consenti tutti i siti
+	Always	Sempre
+	Always use the working spaces	Usa sempre gli spazi di lavoro
+	Ask each time	Chiedi ogni volta
+	Automatic	Automatico
+	Black point compensation	Compensazione del punto nero
+	Block	Blocca
+	Block all sites	Blocca tutti i siti
+	CMYK working space	Spazio di lavoro CMYK
+	Color management	Gestione del colore
+	Default location	Luogo predefinito
+	Default reason	Motivo predefinito
+	Documents	Documenti
+	Don't color-manage untagged color	Non gestire i colori senza profilo
+	Each document's own Highlight fields button still turns them on and off.	Il pulsante Evidenzia campi di ogni documento continua ad attivarli e disattivarli.
+	Field highlight color	Colore di evidenziazione dei campi
+	Gray working space	Spazio di lavoro grigio
+	High contrast	Contrasto elevato
+	Highlight form fields in documents that open	Evidenzia i campi modulo nei documenti aperti
+	Internet access from PDFs	Accesso a Internet dai PDF
+	Keep the comment tool selected after adding a comment	Mantieni selezionato lo strumento commento dopo aver aggiunto un commento
+	Makes all interface text and controls larger or smaller.	Ingrandisce o riduce tutto il testo e i controlli dell’interfaccia.
+	Never	Mai
+	New signatures start with these; you can change them when signing.	Le nuove firme iniziano con questi valori; puoi cambiarli durante la firma.
+	No preferences match “{query}”.	Nessuna preferenza corrisponde a «{query}».
+	Off: after one comment, the Select tool comes back.	Disattivato: dopo un commento torna lo strumento Selezione.
+	Only for PDF/X files	Solo per i file PDF/X
+	Open the Comments panel when a comment tool is chosen	Apri il pannello Commenti quando si sceglie uno strumento commento
+	Output intent overrides working spaces	Lo scopo di output sostituisce gli spazi di lavoro
+	Perceptual	Percettivo
+	RGB working space	Spazio di lavoro RGB
+	Recent files to remember	File recenti da ricordare
+	Reduce motion	Riduci il movimento
+	Relative colorimetric	Colorimetrico relativo
+	Rendering intent	Intento di rendering
+	Required field border color	Colore del bordo dei campi obbligatori
+	Saturation	Saturazione
+	Save recovery copies of unsaved changes every	Salva copie di ripristino delle modifiche non salvate ogni
+	Search preferences	Cerca nelle preferenze
+	Shown on Home and in File ▸ Open Recent. 0 keeps no list.	Mostrati nella Home e in File ▸ Apri recenti. 0 non tiene alcun elenco.
+	Signs new comments. Empty uses your login name.	Firma i nuovi commenti. Vuoto usa il tuo nome di accesso.
+	Sites without a rule	Siti senza regola
+	Stronger text, borders and outlines in every theme.	Testo, bordi e contorni più marcati in ogni tema.
+	Text size	Dimensione del testo
+	Theme	Tema
+	Turns off animations and smooth scrolling.	Disattiva le animazioni e lo scorrimento fluido.
+	Unsaved changes are kept in a recovery folder so they survive a crash. 0 turns autosave off.	Le modifiche non salvate vengono conservate in una cartella di ripristino per sopravvivere a un arresto anomalo. 0 disattiva il salvataggio automatico.
+	Untagged color	Colore senza profilo
+	Untagged gray, RGB and CMYK color is shown through these profiles.	Grigio, RGB e CMYK senza profilo vengono mostrati tramite questi profili.
+	Use overprint preview	Usa anteprima sovrastampa
+	Use the site rules	Usa le regole dei siti
+	Used by Output Preview and page images made for print checks.	Usato dall’Anteprima output e dalle immagini delle pagine per i controlli di stampa.
+	Whether links and scripts in PDFs may reach web sites.	Se i collegamenti e gli script nei PDF possono raggiungere i siti web.
+	Your identity is suggested when you create a digital ID.	La tua identità viene suggerita quando crei un ID digitale.

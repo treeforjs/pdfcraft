@@ -68,6 +68,7 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
             Dialog::Print => 820.0,
             Dialog::FieldProps | Dialog::BulkFieldProps => 600.0,
             Dialog::About => 780.0,
+            Dialog::Preferences => 800.0,
             _ => 520.0,
         });
         // Dialog controls are outlined (radio buttons, check boxes, combo boxes and number fields
@@ -955,7 +956,7 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
                 return;
             }
             Dialog::Preferences => {
-                close = crate::js_ui::preferences_body(ui, app, &t);
+                close = crate::prefs_ui::body(ui, app, &t);
                 return;
             }
             Dialog::RecognizeText => {

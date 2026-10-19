@@ -208,8 +208,9 @@ impl Automation {
             field,
             page,
             rect,
-            reason: a.opt_str("reason")?.map(str::to_string),
-            location: a.opt_str("location")?.map(str::to_string),
+            // Preferences ▸ Signatures: the default reason and location, when not given.
+            reason: a.opt_str("reason")?.map(str::to_string).or_else(|| nonempty(&self.session.prefs().signing_reason)),
+            location: a.opt_str("location")?.map(str::to_string).or_else(|| nonempty(&self.session.prefs().signing_location)),
             contact: a.opt_str("contact")?.map(str::to_string),
             certify,
             lock: field_lock(a)?,
@@ -388,4 +389,9 @@ fn field_lock(a: &Args) -> Result<Option<sign::FieldLock>> {
         (None, false) => None,
         (action, document) => Some(sign::FieldLock { action: action.unwrap_or(sign::LockAction::All), permissions: document.then_some(1) }),
     })
+}
+
+/// `s`, unless it is empty.
+fn nonempty(s: &str) -> Option<String> {
+    (!s.is_empty()).then(|| s.to_string())
 }

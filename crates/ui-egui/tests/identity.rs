@@ -25,6 +25,7 @@ fn the_identity_name_signs_new_comments_and_is_remembered() {
         app.open_bytes("doc.pdf", None, PDF.to_vec()).expect("opens");
         app.set_option("author", "Tester").unwrap();
         app.set_option("dialog", "preferences").unwrap();
+        app.set_option("preferences-page", "identity").unwrap();
         app
     });
     h.run_steps(4);

@@ -2248,3 +2248,61 @@ compare-page	Moved	Movida
 	Region capture	Captura de región
 	Insert from clipboard	Insertar desde el portapapeles
 	No screen capture tool was found. Capture with your system's tool, then use Create PDF from clipboard.	No se encontró ninguna herramienta de captura de pantalla. Capture con la herramienta de su sistema y luego use Crear PDF desde el portapapeles.
+# Preferences window (M14)
+	min	min
+	Absolute colorimetric	Colorimétrico absoluto
+	Allow	Permitir
+	Allow all sites	Permitir todos los sitios
+	Always	Siempre
+	Always use the working spaces	Usar siempre los espacios de trabajo
+	Ask each time	Preguntar cada vez
+	Automatic	Automático
+	Black point compensation	Compensación de punto negro
+	Block	Bloquear
+	Block all sites	Bloquear todos los sitios
+	CMYK working space	Espacio de trabajo CMYK
+	Color management	Gestión del color
+	Default location	Ubicación predeterminada
+	Default reason	Motivo predeterminado
+	Documents	Documentos
+	Don't color-manage untagged color	No gestionar el color sin etiquetar
+	Each document's own Highlight fields button still turns them on and off.	El botón Resaltar campos de cada documento sigue activándolos y desactivándolos.
+	Field highlight color	Color de resaltado de campos
+	Gray working space	Espacio de trabajo de grises
+	High contrast	Alto contraste
+	Highlight form fields in documents that open	Resaltar los campos de formulario en los documentos que se abren
+	Internet access from PDFs	Acceso a Internet desde los PDF
+	Keep the comment tool selected after adding a comment	Mantener seleccionada la herramienta de comentario tras añadir un comentario
+	Makes all interface text and controls larger or smaller.	Agranda o reduce todo el texto y los controles de la interfaz.
+	Never	Nunca
+	New signatures start with these; you can change them when signing.	Las firmas nuevas empiezan con estos valores; puede cambiarlos al firmar.
+	No preferences match “{query}”.	Ninguna preferencia coincide con «{query}».
+	Off: after one comment, the Select tool comes back.	Desactivado: tras un comentario, vuelve la herramienta Seleccionar.
+	Only for PDF/X files	Solo para archivos PDF/X
+	Open the Comments panel when a comment tool is chosen	Abrir el panel Comentarios al elegir una herramienta de comentario
+	Output intent overrides working spaces	La intención de salida reemplaza los espacios de trabajo
+	Perceptual	Perceptual
+	RGB working space	Espacio de trabajo RGB
+	Recent files to remember	Archivos recientes que recordar
+	Reduce motion	Reducir el movimiento
+	Relative colorimetric	Colorimétrico relativo
+	Rendering intent	Propósito de interpretación
+	Required field border color	Color del borde de los campos obligatorios
+	Saturation	Saturación
+	Save recovery copies of unsaved changes every	Guardar copias de recuperación de los cambios sin guardar cada
+	Search preferences	Buscar en las preferencias
+	Shown on Home and in File ▸ Open Recent. 0 keeps no list.	Se muestran en Inicio y en Archivo ▸ Abrir reciente. 0 no guarda ninguna lista.
+	Signs new comments. Empty uses your login name.	Firma los comentarios nuevos. Vacío usa su nombre de inicio de sesión.
+	Sites without a rule	Sitios sin regla
+	Stronger text, borders and outlines in every theme.	Texto, bordes y contornos más marcados en todos los temas.
+	Text size	Tamaño del texto
+	Theme	Tema
+	Turns off animations and smooth scrolling.	Desactiva las animaciones y el desplazamiento suave.
+	Unsaved changes are kept in a recovery folder so they survive a crash. 0 turns autosave off.	Los cambios sin guardar se conservan en una carpeta de recuperación para que sobrevivan a un bloqueo. 0 desactiva el guardado automático.
+	Untagged color	Color sin etiquetar
+	Untagged gray, RGB and CMYK color is shown through these profiles.	El gris, RGB y CMYK sin etiquetar se muestran a través de estos perfiles.
+	Use overprint preview	Usar previsualización de sobreimpresión
+	Use the site rules	Usar las reglas de sitios
+	Used by Output Preview and page images made for print checks.	Lo usan la Previsualización de salida y las imágenes de página para comprobar la impresión.
+	Whether links and scripts in PDFs may reach web sites.	Si los enlaces y scripts de los PDF pueden acceder a sitios web.
+	Your identity is suggested when you create a digital ID.	Su identidad se sugiere al crear un ID digital.
