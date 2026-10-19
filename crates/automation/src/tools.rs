@@ -723,6 +723,53 @@ pub fn tools() -> Vec<ToolDef> {
             &["doc", "page", "x", "y"],
         )),
         t(
+            "print_output_preview_get",
+            "Output Preview settings",
+            "Output Preview's session settings for an open document (not saved with it): simulation_profile (id output_intent, the default: the document's output intent profile when the colour settings let output intents override the working spaces, else the working CMYK space; working: the working CMYK space; or the id of a CMYK profile from color_profiles_list), simulate_overprint (default true), simulate_paper and simulate_black (paper implies black ink), show (the Show filter: all, device_cmyk, not_device_cmyk, spot, rgb, gray, icc_based, images, solid_color, text, line_art; show_options lists them), hidden_inks (separations switched off), coverage_warning with coverage_limit (total area coverage, default 300%) and warning_color. simulation says what the profile resolved to: used (output_intent, working, profile, or none when untagged colour is unmanaged in the colour settings), name, profile_used (whether a profile displays the inks, so paper and black ink can be simulated), display, conversion (how RGB and Lab separate: the colour settings' press conversion, or a chosen profile's BToA table with the settings' intent) and problem (e.g. no output intent, so the working space is simulated). inks is the separations list (print_separations_list's inks after the Ink Manager, with shown; null for documents over 500 pages). Read-only.",
+        )
+        .ro()
+        .with(schema(json!({ "doc": doc() }), &["doc"])),
+        t(
+            "print_output_preview_set",
+            "Set Output Preview",
+            "Change Output Preview's session settings for an open document (not saved, not an undo step); unspecified settings stay. simulation_profile: output_intent (the default: the output intent's profile when the colour settings let it override the working spaces, else the working CMYK space), working (the colour settings' working CMYK space) or the id of a CMYK profile the colour settings hold (color_profiles_list; load a file with color_profile_load first): process inks display through its AToB table and, for a chosen id, RGB/Lab colours separate through its BToA table with the colour settings' intent (else the colour settings' press conversion). simulate_paper (Simulate Paper Color: absolute colorimetric, the paper shows the profile's media white; turns simulate_black on unless given), simulate_black (Simulate Black Ink: no black point compensation, black ink shows as the gray it prints; can't be off while simulate_paper is on), simulate_overprint, show (all, device_cmyk, not_device_cmyk, spot, rgb, gray, icc_based, images, solid_color, text, line_art; labels such as \"Spot Color\" work too), hide_inks / show_inks switch separations off and on (names from print_output_preview_get; checked for documents of at most 500 pages), show_all_inks, coverage_warning, coverage_limit (1-2000%), warning_color (#RRGGBB), reset (start from the defaults). Returns the same as print_output_preview_get.",
+        )
+        .with(schema(
+            json!({
+                "doc": doc(),
+                "simulation_profile": { "type": "string", "description": "output_intent (default), working, or a CMYK profile id from color_profiles_list (such as cgats001 or user:<name>)." },
+                "simulate_overprint": { "type": "boolean" },
+                "simulate_paper": { "type": "boolean", "description": "Simulate Paper Color (implies black ink)." },
+                "simulate_black": { "type": "boolean", "description": "Simulate Black Ink." },
+                "show": { "type": "string", "description": "The Show filter: all, device_cmyk, not_device_cmyk, spot, rgb, gray, icc_based, images, solid_color, text, line_art." },
+                "hide_inks": { "type": "array", "items": { "type": "string" }, "description": "Separations to switch off." },
+                "show_inks": { "type": "array", "items": { "type": "string" }, "description": "Separations to switch on again." },
+                "show_all_inks": { "type": "boolean", "description": "Switch every separation on (before hide_inks)." },
+                "coverage_warning": { "type": "boolean", "description": "Show areas over coverage_limit in warning_color." },
+                "coverage_limit": { "type": "number", "minimum": 1, "maximum": 2000, "description": "Total area coverage limit in percent (default 300)." },
+                "warning_color": { "type": "string", "description": "#RRGGBB for areas over the limit (default #00FF00)." },
+                "reset": { "type": "boolean", "description": "Start from the default settings before applying the rest." },
+            }),
+            &["doc"],
+        )),
+        t(
+            "print_output_preview_render",
+            "Render Output Preview",
+            "Render a page as Output Preview shows it, as an RGB PNG in the displayed orientation (after /Rotate): inline, or written to path. The page is separated into ink plates by PdfCraft's ink rasterizer (as print_separations_render, at dpi, default 72, lowered on large pages or with many inks; overprint simulated when simulate_overprint), keeping only the objects the Show filter selects (hidden_objects counts the others); the separations switched on are composited: process inks through the simulation profile (relative colorimetric with black point compensation; simulate_black without it; simulate_paper absolute colorimetric with the paper's media white) or, without a profile, the renderer's CMYK conversion (simulated says what was simulated); spot inks multiply by their CMYK alternate at 100% (else their preview colour). The Ink Manager's session settings apply. inks gives each ink's shown flag, max, inked_percent (share of the page with any of it) and mean_percent (mean coverage). coverage is the total area coverage of every ink of the shown objects: max and max_at (top-left of the displayed page; pdf_max_at in user space), limit, over_limit, over_cells, over_percent, over_area (points²) and warned_pixels (painted warning_color when coverage_warning is on). With x and y (points from the top-left of the displayed page) sample gives every ink's percentage and the total there. Patterns, shadings, DCT/JPX/JBIG2/CCITT images and annotations are not shown (unmeasured); transparency is painted opaque. Read-only.",
+        )
+        .ro()
+        .with(schema(
+            json!({
+                "doc": doc(),
+                "page": { "type": "integer", "minimum": 1 },
+                "dpi": { "type": "number", "minimum": 9, "maximum": 300, "description": "Resolution in pixels per inch (default 72)." },
+                "x": { "type": "number", "minimum": 0, "description": "Read the inks at this point (with y)." },
+                "y": { "type": "number", "minimum": 0 },
+                "path": { "type": "string", "description": "Write the PNG here instead of returning it." },
+            }),
+            &["doc", "page"],
+        )),
+        t(
             "print_ink_manager_list",
             "Ink Manager",
             "Ink Manager's list: every ink the document (or pages) uses - the four process inks and each spot colorant of Separation and DeviceN colour spaces (forms, images, patterns and shadings included), as print_separations_list describes them, ignoring the Ink Manager settings - with its usage (pages where it is painted, pages that declare it, objects: the kinds of object that put it down: text, vector, image; shadings and patterns are not measured) and where it prints under the session's Ink Manager settings: route own (its own plate), alias (prints_on another ink's plate, aliased_to the ink it was aliased to) or process (converted to CMYK). settings holds the current settings. Read-only.",

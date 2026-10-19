@@ -8080,11 +8080,11 @@ title = "Output preview"
 area = "L"
 tier = "P1"
 milestone = "M11"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["print_output_preview_get", "print_output_preview_set", "print_output_preview_render", "print_separations_list", "print_separations_sample", "print_object_inspector", "print_ink_manager_set"]
+evidence = ["crates/preflight/src/output_preview/tests.rs::show_filters_keep_only_the_matching_objects", "crates/preflight/src/output_preview/tests.rs::hidden_separations_leave_their_ink_out_but_count_for_coverage", "crates/preflight/src/output_preview/tests.rs::coverage_warnings_paint_what_is_over_the_limit", "crates/preflight/src/output_preview/tests.rs::a_simulation_profile_shows_paper_and_black_ink", "crates/preflight/src/output_preview/tests.rs::spot_inks_multiply_their_alternate", "crates/preflight/src/output_preview/tests.rs::bad_settings_and_profiles_are_refused", "crates/preflight/src/output_preview/tests.rs::hostile_spaces_classify_without_panicking", "crates/engine/src/output_preview.rs::settings_validate_and_paper_implies_black", "crates/automation/tests/output_preview.rs::settings_round_trip_and_are_checked", "crates/automation/tests/output_preview.rs::show_filters_and_separations_change_the_pixels", "crates/automation/tests/output_preview.rs::total_area_coverage_is_measured_flagged_and_read_at_a_point", "crates/automation/tests/output_preview.rs::the_output_intent_simulates_paper_colour_and_black_ink", "crates/automation/tests/output_preview.rs::simulation_profiles_come_from_the_colour_settings", "crates/automation/tests/output_preview.rs::rotated_pages_render_and_sample_as_displayed_and_files_are_written", "crates/automation/tests/output_preview.rs::bad_arguments_and_hostile_pages_are_refused_without_panicking"]
+notes = "Headless only (the Output Preview panel waits for the UI redesign). Per-document session settings (not saved, not undo steps): simulation profile from the colour settings (output_intent, the default: the output intent's DestOutputProfile when the untagged-colour policy lets it override the working spaces, else the working CMYK space; working; or any CMYK profile id the colour settings hold, built-in or loaded with color_profile_load), Simulate Overprinting, Simulate Paper Color (implies black ink), Simulate Black Ink, the Show filter (all, DeviceCMYK, not DeviceCMYK, spot colour, RGB, gray, ICC-based, images, solid colour, text, line art), separations switched off, and the Total Area Coverage warning (limit 1-2000%, default 300%, warning colour). print_output_preview_render separates the page with PdfCraft's ink rasterizer keeping only the objects the filter shows, composites the separations switched on (process inks through the simulation profile's AToB table read by moxcms, relative colorimetric or else the profile's own table: with black point compensation, without it for black ink, absolute with the media white for paper; with untagged colour unmanaged no profile, the colour-settings display conversion and no paper/black simulation; spot inks multiply by their CMYK alternate), RGB/Lab separating through the colour settings' press conversion (a chosen profile id through its own BToA table with the settings' intent) and the Ink Manager applied; returns a PNG in display orientation, each ink's max, inked area and mean coverage, total area coverage (max and where, cells/area/% over the limit, painted in the warning colour when on) and the inks at a point. The Object Inspector is print_object_inspector. Missing: the panel, its cursor readout and on-page highlight, the Smooth Shades filter and everything the ink rasterizer can't see (patterns, shadings, DCT/JPX/JBIG2/CCITT images and annotations are not shown; transparency painted opaque), geometry at grid resolution (cell centres, clip bounding boxes, text string boxes) instead of the renderer's, black point compensation estimated from 100% of all four inks and applied on Y only, the Object Inspector and separations list ignoring the simulation profile and Show filter, the colour settings' intent and black point compensation for the display side (Output Preview always uses its own relative/BPC, black-ink and paper modes), settings not saved with the document, and comparison against Acrobat's numbers and pixels."
 
 [[feature]]
 id = "print.separations"
@@ -8140,11 +8140,11 @@ title = "Simulate paper colour and black ink"
 area = "L"
 tier = "P2"
 milestone = "M11"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["print_output_preview_set", "print_output_preview_render"]
+evidence = ["crates/preflight/src/output_preview/tests.rs::a_simulation_profile_shows_paper_and_black_ink", "crates/engine/src/output_preview.rs::settings_validate_and_paper_implies_black", "crates/automation/tests/output_preview.rs::the_output_intent_simulates_paper_colour_and_black_ink", "crates/automation/tests/output_preview.rs::simulation_profiles_come_from_the_colour_settings"]
+notes = "Headless only, in Output Preview (see print.output-preview): with a CMYK simulation profile from the colour settings (the output intent's, the working CMYK space or a held profile id), simulate_black shows black ink as the profile prints it (relative colorimetric without black point compensation) and simulate_paper the paper's media white point (absolute colorimetric; implies black ink); off, the profile's paper is screen white and its black screen black. Missing: the check boxes in the UI, simulation in page_render and the page view (only print_output_preview_render simulates), a simulation when untagged colour is unmanaged (no profile: nothing is simulated and simulated says so), the factory working CMYK profile has a D50 media white so paper colour shows white with it, Acrobat's exact black point estimate (PdfCraft uses 100% of all four inks, on Y only), and comparison against Acrobat."
 
 [[feature]]
 id = "print.overprint-preview"
