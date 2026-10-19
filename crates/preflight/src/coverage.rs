@@ -429,6 +429,8 @@ pub struct Raster {
     /// How RGB and Lab colours were converted.
     pub conversion: String,
     pub conversion_from_profile: bool,
+    /// Objects left out by Output Preview's Show filter ([`rasterize_shown`]).
+    pub hidden_paints: usize,
 }
 
 impl Raster {
@@ -541,14 +543,14 @@ pub fn kind_names(bits: u8) -> Vec<&'static str> {
 /// would exceed the cell budget), simulating overprint when `overprint` is set and converting
 /// RGB and Lab colours with `conversion`.
 pub fn rasterize(doc: &Document, index: usize, dpi: f64, overprint: bool, conversion: &dyn Conversion) -> Result<Raster, String> {
-    rasterize_page(doc, index, dpi, overprint, false, conversion, None).map(|(raster, _)| raster)
+    rasterize_page(doc, index, dpi, overprint, false, conversion, None, Default::default()).map(|(raster, _)| raster)
 }
 
 /// [`rasterize`] with every object painted with overprint on left out (the backdrop that
 /// overprinting objects print over, for overprint preview). Overprint is simulated for the
 /// rest, which then can't overprint anything; `overprint_paints` counts what was left out.
 pub fn rasterize_without_overprinting(doc: &Document, index: usize, dpi: f64, conversion: &dyn Conversion) -> Result<Raster, String> {
-    rasterize_page(doc, index, dpi, true, true, conversion, None).map(|(raster, _)| raster)
+    rasterize_page(doc, index, dpi, true, true, conversion, None, Default::default()).map(|(raster, _)| raster)
 }
 
 /// [`rasterize`], also listing in `probe` every object painted at its point (the Object
@@ -561,9 +563,23 @@ pub(crate) fn rasterize_probed(
     conversion: &dyn Conversion,
     probe: Option<Box<Probe>>,
 ) -> Result<(Raster, Option<Box<Probe>>), String> {
-    rasterize_page(doc, index, dpi, overprint, false, conversion, probe)
+    rasterize_page(doc, index, dpi, overprint, false, conversion, probe, Default::default())
 }
 
+/// [`rasterize`] showing only the objects Output Preview's Show filter `show` selects: the
+/// others are left out (counted in [`Raster::hidden_paints`]).
+pub fn rasterize_shown(
+    doc: &Document,
+    index: usize,
+    dpi: f64,
+    overprint: bool,
+    conversion: &dyn Conversion,
+    show: crate::output_preview::Show,
+) -> Result<Raster, String> {
+    rasterize_page(doc, index, dpi, overprint, false, conversion, None, show).map(|(raster, _)| raster)
+}
+
+#[allow(clippy::too_many_arguments)]
 fn rasterize_page(
     doc: &Document,
     index: usize,
@@ -572,6 +588,7 @@ fn rasterize_page(
     omit: bool,
     conversion: &dyn Conversion,
     probe: Option<Box<Probe>>,
+    show: crate::output_preview::Show,
 ) -> Result<(Raster, Option<Box<Probe>>), String> {
     check_dpi(dpi)?;
     let pages = pdfcraft_model::pages(doc);
@@ -583,6 +600,7 @@ fn rasterize_page(
     }
     let mut walker = Walker::new(doc, conversion, overprint);
     walker.omit_overprinting = omit;
+    walker.show = show;
     let resources = page.dict.get(b"Resources").map(|o| doc.resolve(o));
     let empty = Dict::new();
     let resources = resources.as_ref().and_then(|o| o.as_dict()).unwrap_or(&empty);
@@ -643,6 +661,7 @@ fn rasterize_page(
         overprint_paints: walker.overprint_paints,
         conversion: conversion.describe(),
         conversion_from_profile: conversion.uses_profile(),
+        hidden_paints: walker.hidden,
     };
     Ok((raster, probe))
 }
@@ -945,11 +964,15 @@ struct Paint {
     /// For the Object Inspector: the colour space as named (`cs`), and the pattern's name.
     label: Option<Rc<str>>,
     pattern_name: Option<Rc<[u8]>>,
+    /// The colour space family as Output Preview's Show filter sees it ([`crate::output_preview::family`] bits).
+    family: u16,
 }
 
 impl Paint {
     fn device(space: Space, comps: Vec<f64>) -> Self {
-        Self { space: Rc::new(space), comps, pattern: false, label: None, pattern_name: None }
+        let family =
+            crate::output_preview::family::device(matches!(space, Space::Gray), matches!(space, Space::Rgb), matches!(space, Space::Cmyk { .. }));
+        Self { space: Rc::new(space), comps, pattern: false, label: None, pattern_name: None, family }
     }
 }
 
@@ -1305,6 +1328,9 @@ struct Walker<'a> {
     /// Objects painted with overprint on, and whether they are left out.
     overprint_paints: usize,
     omit_overprinting: bool,
+    /// Output Preview's Show filter: objects it doesn't show are left out (and counted).
+    show: crate::output_preview::Show,
+    hidden: usize,
 }
 
 fn intersect(a: [f64; 4], b: [f64; 4]) -> [f64; 4] {
@@ -1385,6 +1411,8 @@ impl<'a> Walker<'a> {
             routes: BTreeMap::new(),
             overprint_paints: 0,
             omit_overprinting: false,
+            show: crate::output_preview::Show::All,
+            hidden: 0,
         }
     }
 }
@@ -1396,6 +1424,16 @@ impl Walker<'_> {
     }
 
     /// Count an object painted with overprint on; whether to leave it out.
+    /// Whether the Show filter leaves out an object of colour space `family` and `kind`
+    /// (counted).
+    fn hides(&mut self, family: u16, kind: u8) -> bool {
+        if self.show.shows(family, kind) {
+            return false;
+        }
+        self.hidden = self.hidden.saturating_add(1);
+        true
+    }
+
     fn overprinting(&mut self) -> bool {
         self.overprint_paints = self.overprint_paints.saturating_add(1);
         self.omit_overprinting
@@ -1449,6 +1487,9 @@ impl Walker<'_> {
         self.paints = self.paints.saturating_add(1);
         if self.paints > MAX_PAINTS {
             self.truncated = true;
+            return None;
+        }
+        if self.hides(paint.family, self.grid.kind) {
             return None;
         }
         if overprint && self.overprinting() {
@@ -2092,7 +2133,8 @@ impl Walker<'_> {
                         let space = self.colour_space(o, resources, 0);
                         let comps = space.initial();
                         let label = self.probe.is_some().then(|| Rc::from(probe::space_label(self.doc, o, resources, 0)));
-                        let paint = Paint { space: Rc::new(space), comps, pattern: false, label, pattern_name: None };
+                        let family = if self.show.filters() { crate::output_preview::space_family(self.doc, o, resources, 0) } else { 0 };
+                        let paint = Paint { space: Rc::new(space), comps, pattern: false, label, pattern_name: None, family };
                         if op.is("cs") {
                             gs.fill = paint;
                         } else {
@@ -2410,6 +2452,16 @@ impl Walker<'_> {
         let doc = self.doc;
         let int = |k: &[u8]| dict.get(k).and_then(|o| doc.resolve(o).as_int());
         let mask = dict.get(b"ImageMask").is_some_and(|o| matches!(doc.resolve(o).as_ref(), Object::Bool(true)));
+        if self.show.filters() {
+            let family = match dict.get(b"ColorSpace") {
+                _ if mask => gs.fill.family,
+                Some(cs) => crate::output_preview::space_family(doc, cs, resources, 0),
+                None => 0,
+            };
+            if self.hides(family, IMAGE) {
+                return;
+            }
+        }
         let (Some(w), Some(h)) = (int(b"Width"), int(b"Height")) else {
             self.unmeasure("unreadable images");
             return;

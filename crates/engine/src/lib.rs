@@ -29,6 +29,7 @@ pub mod links;
 pub mod ocr;
 pub mod optimizer;
 pub mod os_trust;
+pub mod output_preview;
 pub mod pdfx;
 pub mod pptx_export;
 pub mod preflight;
@@ -356,6 +357,8 @@ pub struct Document {
     /// XFA forms: what was approximated, rewritten or could not be written to the XFA data
     /// (also in `info.warnings`, kept there when the document is re-read).
     pub xfa_warnings: Vec<String>,
+    /// Output Preview's settings (session only; see [`Session::set_output_preview`]).
+    output_preview: output_preview::OutputPreview,
     /// What the last [`Edit::FlattenTransparency`] did, page by page.
     pub flatten_report: Option<FlattenReport>,
     /// The Ink Manager's settings (session only; see [`Session::set_ink_manager`]).
@@ -3445,6 +3448,7 @@ impl Session {
             xfa,
             xfa_template: None,
             xfa_warnings: Vec::new(),
+            output_preview: output_preview::OutputPreview::default(),
             flatten_report: None,
             ink_manager: preflight::InkManager::default(),
             color_management,

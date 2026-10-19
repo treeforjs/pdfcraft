@@ -20,3 +20,5 @@ pdfcraft-filters = { workspace = true }
 pdfcraft-fonts = { workspace = true }
 # Flatten transparency renders the transparent areas.
 pdfcraft-render = { workspace = true }
+# Output Preview shows process inks through a CMYK simulation profile (pure Rust; also used by the renderer).
+moxcms = "0.8.1"
