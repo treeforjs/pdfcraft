@@ -71,13 +71,13 @@ fn pages(what: &str) -> Value {
 
 /// Export ▸ Run OCR: when an export recognizes text first.
 fn export_ocr_arg() -> Value {
-    json!({ "type": "string", "enum": ["auto", "on", "off"], "description": "Run OCR first: auto (default) recognizes scanned pages when the OCR models are installed; on recognizes every page without text, failing without models; off never." })
+    json!({ "type": "string", "enum": ["auto", "on", "off"], "description": "Run OCR first: auto (default) recognizes scanned pages when the selected OCR engine can run (ocr_engines_list); on recognizes every page without text, failing when it can't; off never." })
 }
 
 /// Export ▸ Run OCR: the recognition language.
 fn export_ocr_language_arg() -> Value {
-    let codes: Vec<&str> = pdfcraft_engine::ocr::LANGUAGES.iter().map(|(c, _)| *c).collect();
-    json!({ "type": "string", "enum": codes, "description": "Recognition language for ocr (default en)." })
+    let codes: Vec<&str> = pdfcraft_engine::ocr::KNOWN_LANGUAGES.iter().map(|l| l.0).collect();
+    json!({ "type": "string", "enum": codes, "description": "Recognition language for ocr, ISO 639-1 (default en): one the selected OCR engine reads (ocr_engines_list; the built-in engine reads en)." })
 }
 
 fn path(what: &str) -> Value {
@@ -149,6 +149,17 @@ fn af_target() -> Value {
             { "type": "object", "properties": { "object": { "type": "integer", "minimum": 1 } }, "required": ["object"], "additionalProperties": false },
         ],
     })
+}
+
+/// The OCR `language` argument: the languages any engine may read.
+fn ocr_language() -> Value {
+    let codes: Vec<&str> = pdfcraft_engine::ocr::KNOWN_LANGUAGES.iter().map(|l| l.0).collect();
+    json!({ "type": "string", "enum": codes, "description": "Document language, ISO 639-1 (default en). The built-in ocrs engine reads en; Tesseract the languages whose data is installed for it (ocr_engines_list)." })
+}
+
+/// The OCR `engine` argument.
+fn ocr_engine() -> Value {
+    json!({ "type": "string", "minLength": 1, "maxLength": 32, "description": "Recognition engine id for this call (default: the selected one, see ocr_engines_list and ocr_engine_set): ocrs (built-in), tesseract (an installed Tesseract program, run as a separate process)." })
 }
 
 fn schema(props: Value, required: &[&str]) -> Value {
@@ -1759,10 +1770,10 @@ pub fn tools() -> Vec<ToolDef> {
                 json!({ "doc": doc(), "field": { "type": "string" }, "event": { "type": "string", "enum": ["keystroke", "format", "validate", "calculate", "mouse_up"] }, "script": { "type": "string" } }),
                 &["doc", "field", "event"],
             )),
-        t("doc_export_office", "Export to Word, HTML, RTF or Excel", "Export a PDF ▸ Word (.docx), HTML (.html, one file with images inline), RTF (.rtf) or Excel (.xlsx), chosen by path's extension: paragraphs in reading order, headings from larger text, bold and italic, images where they fall, a page break between pages. Excel gets one worksheet per page: paragraphs in column A, tables detected from the text layout as cell grids, unambiguous numbers (1,234.50, (12.00), 12.5%) stored as numbers. Refused when the document does not allow copying text (open it with the permissions password). Run OCR (ocr, default auto, as in Acrobat): scanned pages (an image and no text) are recognized first on a temporary copy, so the export carries their text; the document itself is not changed. auto needs the OCR models (ocr_status) and goes ahead without recognition, saying why in the result's ocr, when they are missing or the document's permissions don't allow recognition; on recognizes every exported page without text and fails instead; off never recognizes. ocr_language picks the recognition language (default en). Returns ocr: mode, language, ran, pages_without_text, scanned_pages, recognized_pages, skipped_pages, words and not_run.")
+        t("doc_export_office", "Export to Word, HTML, RTF or Excel", "Export a PDF ▸ Word (.docx), HTML (.html, one file with images inline), RTF (.rtf) or Excel (.xlsx), chosen by path's extension: paragraphs in reading order, headings from larger text, bold and italic, images where they fall, a page break between pages. Excel gets one worksheet per page: paragraphs in column A, tables detected from the text layout as cell grids, unambiguous numbers (1,234.50, (12.00), 12.5%) stored as numbers. Refused when the document does not allow copying text (open it with the permissions password). Run OCR (ocr, default auto, as in Acrobat): scanned pages (an image and no text) are recognized first on a temporary copy, so the export carries their text; the document itself is not changed. auto reads with the selected OCR engine (ocr_engines_list) and goes ahead without recognition, saying why in the result's ocr, when it can't run or doesn't read the language, or when the document's permissions don't allow recognition; on recognizes every exported page without text and fails instead; off never recognizes. ocr_language picks the recognition language (default en; one the engine reads). Returns ocr: mode, language, ran, pages_without_text, scanned_pages, recognized_pages, skipped_pages, words and not_run.")
             .cmd("export.docx")
             .with(schema(json!({ "doc": doc(), "path": { "type": "string" }, "ocr": export_ocr_arg(), "ocr_language": export_ocr_language_arg() }), &["doc", "path"])),
-        t("doc_export_pptx", "Export to PowerPoint", "Export a PDF ▸ Microsoft PowerPoint (.pptx): one slide per page, the slide size from the first exported page as displayed (crop box after rotation, within PowerPoint's 1–56 in; other page sizes are scaled to fit and centred). mode editable (default): each paragraph becomes an editable text box placed and turned as on the page (font family, size, bold, italic, colour), each extractable image a picture, and the rest of the page (vector art, shadings, inline images, form fields, comments) one background picture rendered at dpi without the text and those images (left out when it is blank). Vector shapes are not rebuilt as PowerPoint shapes. mode image: each slide is one picture of its page. Returns counts (slides, text_boxes, pictures, backgrounds, omitted) and warnings. Includes unsaved edits. Editable mode is refused when the document does not allow copying (open it with the permissions password); image mode only renders. Run OCR (ocr, default auto, as in Acrobat): scanned pages (an image and no text) are recognized first on a temporary copy, so the export carries their text; the document itself is not changed. auto needs the OCR models (ocr_status) and goes ahead without recognition, saying why in the result's ocr, when they are missing or the document's permissions don't allow recognition; on recognizes every exported page without text and fails instead; off never recognizes. ocr_language picks the recognition language (default en). Returns ocr: mode, language, ran, pages_without_text, scanned_pages, recognized_pages, skipped_pages, words and not_run. Image mode never recognizes.")
+        t("doc_export_pptx", "Export to PowerPoint", "Export a PDF ▸ Microsoft PowerPoint (.pptx): one slide per page, the slide size from the first exported page as displayed (crop box after rotation, within PowerPoint's 1–56 in; other page sizes are scaled to fit and centred). mode editable (default): each paragraph becomes an editable text box placed and turned as on the page (font family, size, bold, italic, colour), each extractable image a picture, and the rest of the page (vector art, shadings, inline images, form fields, comments) one background picture rendered at dpi without the text and those images (left out when it is blank). Vector shapes are not rebuilt as PowerPoint shapes. mode image: each slide is one picture of its page. Returns counts (slides, text_boxes, pictures, backgrounds, omitted) and warnings. Includes unsaved edits. Editable mode is refused when the document does not allow copying (open it with the permissions password); image mode only renders. Run OCR (ocr, default auto, as in Acrobat): scanned pages (an image and no text) are recognized first on a temporary copy, so the export carries their text; the document itself is not changed. auto reads with the selected OCR engine (ocr_engines_list) and goes ahead without recognition, saying why in the result's ocr, when it can't run or doesn't read the language, or when the document's permissions don't allow recognition; on recognizes every exported page without text and fails instead; off never recognizes. ocr_language picks the recognition language (default en; one the engine reads). Returns ocr: mode, language, ran, pages_without_text, scanned_pages, recognized_pages, skipped_pages, words and not_run. Image mode never recognizes.")
             .with(schema(
                 json!({
                     "doc": doc(),
@@ -1906,14 +1917,15 @@ pub fn tools() -> Vec<ToolDef> {
             .with(schema(json!({ "enabled": { "type": "boolean" } }), &[])),
         t("js_enabled", "JavaScript on or off", "Preferences ▸ JavaScript ▸ Enable Acrobat JavaScript: set it with `enabled`, or read it. With JavaScript off, field scripts other than Acrobat's AF calls don't run.")
             .with(schema(json!({ "enabled": { "type": "boolean" } }), &[])),
-        t("ocr_recognize", "Recognize text (OCR)", "Scan & OCR ▸ Recognize text: render pages, read the words in them and add them as invisible text over the page image, so scanned pages become searchable and selectable (Searchable Image (Exact) by default; output straighten also turns skewed or turned pages straight; output editable replaces the recognized text with real, visible, editable text and cleans it out of the image). Pages that already have text are skipped unless skip_text_pages is false. Returns each page's recognised text, word count and the orientation corrected for reading (auto_rotate/deskew), or why it was skipped. Needs the OCR models (ocr_status) and permission both to copy text and to change the document (checked before any page is read). Undoable as one step.")
+        t("ocr_recognize", "Recognize text (OCR)", "Scan & OCR ▸ Recognize text: render pages, read the words in them and add them as invisible text over the page image, so scanned pages become searchable and selectable (Searchable Image (Exact) by default; output straighten also turns skewed or turned pages straight; output editable replaces the recognized text with real, visible, editable text and cleans it out of the image). Pages that already have text are skipped unless skip_text_pages is false. Returns each page's recognised text, word count and the orientation corrected for reading (auto_rotate/deskew), or why it was skipped. Reads with the selected engine or engine (ocr_engines_list; the built-in one needs its models, ocr_status) and permission both to copy text and to change the document (checked before any page is read). Undoable as one step.")
             .cmd("ocr.recognize")
             .with(schema(
                 json!({
                     "doc": doc(),
                     "pages": pages("to recognise (default: all)"),
                     "dpi": { "type": "number", "minimum": 72, "maximum": 600, "description": "Resolution pages are read at (default 300; a scanned page is read at most at its own resolution)." },
-                    "language": { "type": "string", "enum": ["en"], "description": "Document language (default en)." },
+                    "language": ocr_language(),
+                    "engine": ocr_engine(),
                     "skip_text_pages": { "type": "boolean", "description": "Leave pages that already contain text alone (default true)." },
                     "auto_rotate": { "type": "boolean", "description": "Detect pages turned by 90, 180 or 270 degrees and read them upright (default false). Detection compares recognition of reduced copies; the page image is not changed and the text is placed over the original words." },
                     "deskew": { "type": "boolean", "description": "Detect skew of up to 15 degrees and read the page straightened (default false). The page image is not changed unless output is straighten." },
@@ -1935,7 +1947,8 @@ pub fn tools() -> Vec<ToolDef> {
                     "paths": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
                     "folder": { "type": "string" },
                     "dpi": { "type": "number", "minimum": 72, "maximum": 600 },
-                    "language": { "type": "string", "enum": ["en"] },
+                    "language": ocr_language(),
+                    "engine": ocr_engine(),
                     "auto_rotate": { "type": "boolean", "description": "Detect pages turned by 90, 180 or 270 degrees and read them upright (default false). Detection compares recognition of reduced copies; the page image is not changed and the text is placed over the original words." },
                     "deskew": { "type": "boolean", "description": "Detect skew of up to 15 degrees and read the page straightened (default false). The page image is not changed unless output is straighten." },
                     "output": { "type": "string", "enum": ["exact", "straighten", "editable"], "description": "exact (default): Searchable Image (Exact), the page is not changed. straighten: Searchable Image, pages found turned or skewed by auto_rotate/deskew are also turned straight (content and /Rotate), and the recognized pages' images finer than dpi are downsampled to it. editable: Editable Text and Images, recognized lines become visible text in a matching standard font (serif, sans or mono, regular or bold), size and colour, fitted to the line's width with horizontal scaling; the text areas are filled with the local paper colour in the page image, which stays as the background with everything else (pictures, rules) intact; words below min_confidence stay as image with invisible text over them. Each page reports its lines, fonts and low-confidence words (editable)." },
@@ -1984,11 +1997,19 @@ pub fn tools() -> Vec<ToolDef> {
             .ro()
             .cmd("ocr.recognize")
             .with(schema(json!({}), &[])),
+        t("ocr_engines_list", "List OCR engines", "The text recognition engines this session can use: id, name, available (can run now), version, languages (code, name), external (a separate program on this machine, never shipped with PdfCraft), detail (where it was found, or why it can't run), selected and default. ocrs is built in and the default (it needs its models, see ocr_status); tesseract runs an installed Tesseract program found on PATH or through PDFCRAFT_TESSERACT, and is unavailable when it isn't installed (always on the web). Asks external engines afresh.")
+            .ro()
+            .cmd("ocr.recognize")
+            .with(schema(json!({}), &[])),
+        t("ocr_engine_set", "Choose the OCR engine", "Choose the engine every recognition in this session uses (ocr_recognize, ocr_prepare, ocr_recognize_files, camera and accessibility OCR) unless a call names another with engine. The engine must be listed by ocr_engines_list and available. Returns the selected engine, its version and languages. The program Tesseract runs is not set here: it is found on PATH or set with PDFCRAFT_TESSERACT before the session starts.")
+            .cmd("ocr.recognize")
+            .with(schema(json!({ "engine": { "type": "string", "minLength": 1, "maxLength": 32 } }), &["engine"])),
         t("ocr_prepare", "Recognize text for review", "Recognize pages into a draft without editing the PDF. Use ocr_review/ocr_correct, then ocr_apply or ocr_cancel. Needs permission both to copy text and to change the document (a restricted encrypted file must be opened with its permissions password); this is checked before any page is read. Drafts are bound to the document version; intervening edits require recognition again. At most eight drafts, two million words and 128 MiB of text are held at once. English recognition only; the original image is preserved.")
             .ro().cmd("ocr.recognize").with(schema(json!({
                 "doc": doc(), "pages": pages("to recognize (default all)"),
                 "dpi": {"type":"number", "minimum":72, "maximum":600},
-                "language": {"type":"string", "enum":["en"]},
+                "language": ocr_language(),
+                "engine": ocr_engine(),
                 "skip_text_pages": {"type":"boolean"},
                 "auto_rotate": {"type":"boolean", "description":"Detect 90/180/270-degree page turns and read pages upright (default false); the image is not changed."},
                 "deskew": {"type":"boolean", "description":"Detect skew up to 15 degrees and read pages straightened (default false); the image is not changed unless output is straighten."},
@@ -2019,7 +2040,7 @@ pub fn tools() -> Vec<ToolDef> {
                 }),
                 &["doc", "folder"],
             )),
-        t("doc_export_text", "Export text", "Write the reading-order text of pages to a .txt file (pages separated by form feeds). Refused when the document does not allow copying text (open it with the permissions password). Run OCR (ocr, default auto, as in Acrobat): scanned pages (an image and no text) are recognized first on a temporary copy, so the export carries their text; the document itself is not changed. auto needs the OCR models (ocr_status) and goes ahead without recognition, saying why in the result's ocr, when they are missing or the document's permissions don't allow recognition; on recognizes every exported page without text and fails instead; off never recognizes. ocr_language picks the recognition language (default en). Returns ocr: mode, language, ran, pages_without_text, scanned_pages, recognized_pages, skipped_pages, words and not_run.")
+        t("doc_export_text", "Export text", "Write the reading-order text of pages to a .txt file (pages separated by form feeds). Refused when the document does not allow copying text (open it with the permissions password). Run OCR (ocr, default auto, as in Acrobat): scanned pages (an image and no text) are recognized first on a temporary copy, so the export carries their text; the document itself is not changed. auto reads with the selected OCR engine (ocr_engines_list) and goes ahead without recognition, saying why in the result's ocr, when it can't run or doesn't read the language, or when the document's permissions don't allow recognition; on recognizes every exported page without text and fails instead; off never recognizes. ocr_language picks the recognition language (default en; one the engine reads). Returns ocr: mode, language, ran, pages_without_text, scanned_pages, recognized_pages, skipped_pages, words and not_run.")
             .cmd("export.text")
             .with(schema(json!({ "doc": doc(), "path": { "type": "string" }, "pages": pages("to export (default: all)"), "ocr": export_ocr_arg(), "ocr_language": export_ocr_language_arg() }), &["doc", "path"])),
         t("doc_export_accessible_text", "Export accessible text", "Save As ▸ Accessible Text: write a tagged PDF's text in logical structure order, as a screen reader reads it, to a .txt file (atomically replacing path). Each structure element gives its /ActualText, else its /Alt (a figure's alternate text), else the text of the marked content it covers; paragraphs, headings, figures and captions are separated by a blank line, consecutive list items and table rows by a line break, table cells by tabs. Artifacts (running headers, footers, page numbers marked /Artifact) are left out, and so is untagged content. Without path, returns the text instead (up to 1 MiB, then text_truncated). Returns counts of blocks, headings, list items, table rows and figures, and truncated when the structure tree or the text was too large to read in full. Untagged documents, empty structure trees and documents that do not allow copying text are refused.")

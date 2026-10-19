@@ -412,10 +412,19 @@ impl Automation {
             settings.dpi = d as f32;
         }
         if let Some(l) = a.opt_str("language")? {
-            if !pdfcraft_engine::ocr::LANGUAGES.iter().any(|x| x.0 == l) {
+            if !pdfcraft_engine::ocr::KNOWN_LANGUAGES.iter().any(|x| x.0 == l) {
                 return Err(ToolError::InvalidArgs(format!("unsupported language {l:?}")));
             }
             settings.language = l.into();
+        }
+        if let Some(e) = a.opt_str("engine")? {
+            if self.session.ocr_engine_registry().get(e).is_none() {
+                return Err(ToolError::InvalidArgs(format!(
+                    "unknown OCR engine {e:?}; use one of {} (ocr_engines_list)",
+                    self.session.ocr_engine_registry().ids().join(", ")
+                )));
+            }
+            settings.engine = Some(e.into());
         }
         if let Some(s) = a.opt_bool("skip_text_pages")? {
             settings.skip_text_pages = s;
@@ -444,7 +453,55 @@ impl Automation {
             e.min_confidence = c as f32;
         }
         settings.validate().map_err(ToolError::InvalidArgs)?;
+        // The engine reads the language: a language it doesn't read is a bad argument, an
+        // engine that can't run a failure.
+        if let Err(why) = self.session.ocr_engine_for(&settings) {
+            return Err(if why.starts_with("unsupported recognition language") { ToolError::InvalidArgs(why) } else { failed(why) });
+        }
         Ok(settings)
+    }
+
+    /// The engine `settings` read with, readied (models loaded, program and language found).
+    pub(crate) fn ocr_ready(&self, settings: &pdfcraft_engine::ocr::OcrSettings) -> Result<std::sync::Arc<dyn pdfcraft_engine::ocr::OcrEngine>> {
+        let engine = self.session.ocr_engine_for(settings).map_err(failed)?;
+        engine.prepare(&settings.language).map_err(|e| failed(e.to_string()))?;
+        Ok(engine)
+    }
+
+    /// `ocr_engines_list`: every registered engine.
+    pub(crate) fn ocr_engines_list(&self) -> Result<Value> {
+        let selected = self.session.ocr_engine_id().to_owned();
+        let engines: Vec<Value> = self
+            .session
+            .ocr_engines()
+            .into_iter()
+            .map(|e| {
+                let languages: Vec<Value> = e
+                    .languages
+                    .iter()
+                    .map(|c| json!({ "code": c, "name": pdfcraft_engine::ocr::KNOWN_LANGUAGES.iter().find(|l| l.0 == c).map(|l| l.2) }))
+                    .collect();
+                json!({
+                    "id": e.id, "name": e.name, "available": e.available, "version": e.version, "languages": languages,
+                    "external": e.external, "detail": e.detail, "selected": e.id == selected,
+                    "default": e.id == pdfcraft_engine::ocr::DEFAULT_ENGINE,
+                })
+            })
+            .collect();
+        Ok(json!({ "selected": selected, "default": pdfcraft_engine::ocr::DEFAULT_ENGINE, "engines": engines }))
+    }
+
+    /// `ocr_engine_set`: choose the engine recognition uses from now on in this session.
+    pub(crate) fn ocr_engine_set(&mut self, a: &Args) -> Result<Value> {
+        let id = a.str("engine")?;
+        if self.session.ocr_engine_registry().get(id).is_none() {
+            return Err(ToolError::InvalidArgs(format!(
+                "unknown OCR engine {id:?}; use one of {} (ocr_engines_list)",
+                self.session.ocr_engine_registry().ids().join(", ")
+            )));
+        }
+        let info = self.session.set_ocr_engine(id).map_err(failed)?;
+        Ok(json!({ "selected": info.id, "name": info.name, "version": info.version, "languages": info.languages }))
     }
 
     pub(crate) fn ocr_recognize_files(&mut self, a: &Args) -> Result<Value> {
@@ -454,7 +511,7 @@ impl Automation {
         // Every source must be inside the root before any file is read or written; a missing
         // file inside it is reported for that file alone.
         let sources = a.strs("paths")?.into_iter().map(|p| Ok((p, self.resolve(p, true)?))).collect::<Result<Vec<_>>>()?;
-        let ocr = pdfcraft_engine::ocr::engine().map_err(failed)?;
+        let ocr = self.ocr_ready(&settings)?;
         let mut out = Vec::new();
         for (p, src) in sources {
             let name = std::path::Path::new(p).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "document.pdf".into());
@@ -548,7 +605,7 @@ impl Automation {
         use pdfcraft_engine::ocr;
         let dirs: Vec<String> = ocr::Models::search_dirs().iter().map(|d| d.to_string_lossy().into_owned()).collect();
         let langs: Vec<Value> = ocr::LANGUAGES.iter().map(|(c, n)| json!({ "code": c, "name": n })).collect();
-        Ok(json!({ "available": ocr::available(), "search_dirs": dirs, "languages": langs }))
+        Ok(json!({ "available": ocr::available(), "search_dirs": dirs, "languages": langs, "engine": self.session.ocr_engine_id() }))
     }
 }
 

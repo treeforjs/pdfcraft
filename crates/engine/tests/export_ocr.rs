@@ -14,7 +14,7 @@ use pdfcraft_engine::{
     DocId, Session,
     export::{Exporter, encode_png},
     export_ocr::{ExportOcr, ExportOcrMode},
-    ocr::Recognizer,
+    ocr::{EngineInfo, OcrEngine, Recognizer},
 };
 use pdfcraft_ocr::{Line, OcrError, Word};
 
@@ -158,4 +158,114 @@ fn a_document_that_forbids_changes_is_not_recognized_in_auto_and_refused_when_on
     let err = restricted.with_export_ocr_using(rid, &[], &options(ExportOcrMode::On), || Ok(Some(reader.clone())), text).unwrap_err();
     assert!(err.contains("does not allow changes"), "{err}");
     assert_eq!(reader.calls.load(Ordering::Relaxed), 0, "nothing was read");
+}
+
+/// A registered engine that reads German, for the selected-engine path.
+struct German {
+    calls: AtomicUsize,
+}
+
+impl OcrEngine for German {
+    fn id(&self) -> &str {
+        "german"
+    }
+    fn name(&self) -> &str {
+        "German test engine"
+    }
+    fn info(&self) -> EngineInfo {
+        EngineInfo {
+            id: "german".into(),
+            name: self.name().into(),
+            available: true,
+            version: None,
+            languages: vec!["de".into()],
+            external: false,
+            detail: String::new(),
+        }
+    }
+    fn prepare(&self, _: &str) -> Result<(), OcrError> {
+        Ok(())
+    }
+    fn recognize(&self, pixels: &[u8], width: u32, height: u32, language: &str) -> Result<Vec<Line>, OcrError> {
+        pdfcraft_ocr::validate_image(pixels, width, height)?;
+        assert_eq!(language, "de");
+        self.calls.fetch_add(1, Ordering::Relaxed);
+        Ok(vec![Line { words: vec![Word { text: "Leuchtturm".into(), rect: [10.0, 10.0, 70.0, 25.0], confidence: Some(0.9) }] }])
+    }
+}
+
+#[test]
+fn exports_read_with_the_selected_engine_and_its_languages() {
+    let (mut session, id) = document();
+    let engine = Arc::new(German { calls: AtomicUsize::new(0) });
+    session.register_ocr_engine(engine.clone()).unwrap();
+    session.set_ocr_engine("german").unwrap();
+    let german = ExportOcr { language: "de".into(), ..Default::default() };
+    let (out, report) = session.with_export_ocr(id, &[], &german, text).unwrap();
+    assert_eq!(report.recognized, vec![0], "{report:?}");
+    assert!(out.contains("Leuchtturm") && out.contains("Lighthouse"), "{out}");
+    assert_eq!(engine.calls.load(Ordering::Relaxed), 1);
+    assert!(!session.get(id).unwrap().dirty, "the document itself is unchanged");
+
+    // A language the selected engine doesn't read: Auto exports as is and says why, On fails.
+    let french = ExportOcr { language: "fr".into(), ..Default::default() };
+    let (out, report) = session.with_export_ocr(id, &[], &french, text).unwrap();
+    assert!(!report.ran() && report.not_run.as_deref().unwrap().contains("the german engine reads German"), "{report:?}");
+    assert!(!out.contains("Leuchtturm"));
+    let on = ExportOcr { mode: ExportOcrMode::On, ..french };
+    assert!(session.with_export_ocr(id, &[], &on, text).unwrap_err().contains("text recognition is on, but unsupported"));
+    assert_eq!(engine.calls.load(Ordering::Relaxed), 1, "nothing more was read");
+}
+
+/// An engine that reads words with doubled letters, squeezed into narrow boxes as OCR finds them.
+struct Doubled;
+
+impl OcrEngine for Doubled {
+    fn id(&self) -> &str {
+        "doubled"
+    }
+    fn name(&self) -> &str {
+        "Doubled-letter test engine"
+    }
+    fn info(&self) -> EngineInfo {
+        EngineInfo {
+            id: "doubled".into(),
+            name: self.name().into(),
+            available: true,
+            version: None,
+            languages: vec!["en".into()],
+            external: false,
+            detail: String::new(),
+        }
+    }
+    fn prepare(&self, _: &str) -> Result<(), OcrError> {
+        Ok(())
+    }
+    fn recognize(&self, pixels: &[u8], width: u32, height: u32, _: &str) -> Result<Vec<Line>, OcrError> {
+        pdfcraft_ocr::validate_image(pixels, width, height)?;
+        let word = |text: &str, rect: [f32; 4]| Word { text: text.into(), rect, confidence: Some(0.9) };
+        Ok(vec![
+            Line { words: vec![word("letter", [10.0, 10.0, 32.0, 25.0]), word("settle", [40.0, 10.0, 62.0, 25.0])] },
+            Line { words: vec![word("Leuchtturm", [10.0, 40.0, 70.0, 55.0])] },
+        ])
+    }
+}
+
+#[test]
+fn doubled_letters_survive_recognize_text_and_export_ocr() {
+    // A narrow letter of a word stretched to its box advanced less than the fake-bold
+    // tolerance, so the second "t" of "tt" was dropped and read back as a space.
+    let (mut session, id) = document();
+    session.register_ocr_engine(Arc::new(Doubled)).unwrap();
+    session.set_ocr_engine("doubled").unwrap();
+    let (out, report) = session.with_export_ocr(id, &[], &ExportOcr::default(), text).unwrap();
+    assert_eq!(report.recognized, vec![0], "{report:?}");
+    let page = out.split('\u{c}').next().unwrap();
+    assert!(page.contains("letter settle") && page.contains("Leuchtturm"), "{page:?}");
+
+    let settings = pdfcraft_engine::ocr::OcrSettings { dpi: 72.0, ..Default::default() };
+    session.recognize_text(id, &[0], settings).unwrap();
+    let out = text(session.get(id).unwrap()).unwrap();
+    let page = out.split('\u{c}').next().unwrap();
+    assert!(page.contains("letter settle") && page.contains("Leuchtturm"), "{page:?}");
 }

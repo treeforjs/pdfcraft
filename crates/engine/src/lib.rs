@@ -3021,6 +3021,8 @@ pub struct Session {
     overprint_preview: preflight::OverprintPreview,
     /// Preferences ▸ Color Management (see [`color_settings`]).
     color: color_settings::ColorManagement,
+    /// Scan & OCR: the recognition engines and the one chosen (see [`ocr`]).
+    ocr_engines: ocr::Engines,
 }
 
 /// Lay a dynamic XFA form out (pages and fields) and give its widgets appearances.

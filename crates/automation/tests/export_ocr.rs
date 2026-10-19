@@ -203,7 +203,7 @@ fn export_ocr_arguments_are_in_the_schemas_and_validated() {
         let tool = tools.iter().find(|t| t.name == name).unwrap();
         let props = &tool.input_schema["properties"];
         assert_eq!(props["ocr"]["enum"], json!(["auto", "on", "off"]), "{name}");
-        assert_eq!(props["ocr_language"]["enum"], json!(["en"]), "{name}");
+        assert!(props["ocr_language"]["enum"].as_array().unwrap().contains(&json!("en")), "{name}");
     }
     for file in ["a.docx", "a.pptx", "a.txt"] {
         for extra in [json!({ "ocr": "always" }), json!({ "ocr": true }), json!({ "ocr_language": "xx" }), json!({ "ocr_language": 1 })] {

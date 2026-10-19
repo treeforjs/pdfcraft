@@ -437,7 +437,10 @@ pub fn find_in_chars(chars: &[char], needle: &str, case_sensitive: bool, whole_w
 /// 4. Within a segment glyphs run left to right; runs of right-to-left script are reversed so the
 ///    text comes out in logical order.
 pub fn layout(glyphs: Vec<TextGlyph>) -> PageText {
-    // Drop "fake bold" duplicates: the same character redrawn at (almost) the same place.
+    // Drop "fake bold" duplicates: the same character redrawn at (almost) the same place. The
+    // copy must also overlap most of the original: in horizontally compressed text (an OCR text
+    // layer stretched to its word box) a narrow letter advances less than a fifth of its height,
+    // and a doubled letter ("tt" in "letter") is the next glyph, not a copy.
     let mut glyphs = glyphs;
     let mut keep = vec![true; glyphs.len()];
     for i in 1..glyphs.len() {
@@ -445,7 +448,9 @@ pub fn layout(glyphs: Vec<TextGlyph>) -> PageText {
         let h = (g.rect[3] - g.rect[1]).max(0.1);
         for j in (i.saturating_sub(4)..i).rev() {
             let p = &glyphs[j];
-            if keep[j] && p.text == g.text && (p.rect[0] - g.rect[0]).abs() < h * 0.2 && (p.rect[1] - g.rect[1]).abs() < h * 0.2 {
+            let dx = (p.rect[0] - g.rect[0]).abs();
+            let w = (p.rect[2] - p.rect[0]).min(g.rect[2] - g.rect[0]).max(0.0);
+            if keep[j] && p.text == g.text && dx < h * 0.2 && dx <= w * 0.5 && (p.rect[1] - g.rect[1]).abs() < h * 0.2 {
                 keep[i] = false;
                 break;
             }
@@ -843,6 +848,28 @@ mod tests {
             v.push(g(&c.to_string(), x + 0.3, 10.0, x + 6.3));
         }
         assert_eq!(layout(v).plain_text(), "Bold");
+    }
+
+    #[test]
+    fn compressed_doubled_letters_are_not_fake_bold() {
+        // An OCR text layer squeezes "letter" into its word box: each "t" advances 3 of its
+        // 16 points of height, less than the fake-bold tolerance of a fifth of the height.
+        let mut v = Vec::new();
+        let mut x = 10.0;
+        for (c, w) in [("l", 2.4), ("e", 6.0), ("t", 3.0), ("t", 3.0), ("e", 6.0), ("r", 3.6)] {
+            v.push(TextGlyph { text: c.into(), rect: [x, 10.0, x + w, 26.0], mcid: None });
+            x += w;
+        }
+        assert_eq!(layout(v.clone()).plain_text(), "letter");
+        // The same squeezed word drawn twice, slightly offset, is still fake bold.
+        let copy: Vec<TextGlyph> =
+            v.iter().map(|g| TextGlyph { rect: [g.rect[0] + 0.3, g.rect[1], g.rect[2] + 0.3, g.rect[3]], ..g.clone() }).collect();
+        let mut both = Vec::new();
+        for (a, b) in v.into_iter().zip(copy) {
+            both.push(a);
+            both.push(b);
+        }
+        assert_eq!(layout(both).plain_text(), "letter");
     }
 
     #[test]

@@ -5,14 +5,21 @@
 //! captures what it needs, [`OcrJob::run`] works anywhere (the UI runs it on a worker thread) and
 //! [`Session::apply_ocr_review`] applies the reviewed result as one undoable step, provided the
 //! original document revision is still current.
+//!
+//! Recognition engines are pluggable ([`OcrEngine`]): the session holds a [`Registry`] (the
+//! built-in ocrs engine, the default, and an installed Tesseract program when there is one) and
+//! the selected engine ([`Session::set_ocr_engine`]); [`OcrSettings::engine`] overrides it for one
+//! job. Every recognition entry point resolves its engine through [`Session::ocr_engine_for`].
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use pdfcraft_render::{PageInfo, PageRenderer, RenderConfig, RenderRequest, RequestKind};
 
 pub use pdfcraft_ocr::editable::{Family as FontFamily, Font as StandardFont, Suspect, SuspectReason, horizontal_scale};
+pub use pdfcraft_ocr::engines::{DEFAULT_ENGINE, EngineInfo, KNOWN_LANGUAGES, OcrEngine, OcrsEngine, Registry};
 pub use pdfcraft_ocr::orient::Orientation;
-pub use pdfcraft_ocr::{LANGUAGES, Models, Ocr, OcrError, PlacedWord};
+pub use pdfcraft_ocr::tesseract;
+pub use pdfcraft_ocr::{LANGUAGES, Line, Models, Ocr, OcrError, PlacedWord, Word};
 pub use pdfcraft_optimize::background::{Options as BackgroundOptions, Stats as BackgroundStats, Strength as BackgroundStrength};
 pub use pdfcraft_optimize::despeckle::{Level as DespeckleLevel, Options as DespeckleOptions, Stats as DespeckleStats};
 pub use pdfcraft_optimize::{BackgroundReport, DespeckleReport};
@@ -28,6 +35,25 @@ impl Recognizer for Ocr {
     fn recognize(&self, pixels: &[u8], width: u32, height: u32) -> Result<Vec<pdfcraft_ocr::Line>, OcrError> {
         Ocr::recognize(self, pixels, width, height)
     }
+}
+
+/// A registered engine reading one language.
+pub(crate) struct EngineRecognizer<'a> {
+    pub(crate) engine: &'a dyn OcrEngine,
+    pub(crate) language: &'a str,
+}
+
+impl Recognizer for EngineRecognizer<'_> {
+    fn recognize(&self, pixels: &[u8], width: u32, height: u32) -> Result<Vec<pdfcraft_ocr::Line>, OcrError> {
+        self.engine.recognize(pixels, width, height, self.language)
+    }
+}
+
+/// The engines a session can use and the one chosen.
+#[derive(Default)]
+pub(crate) struct Engines {
+    registry: Registry,
+    selected: Option<String>,
 }
 
 /// Recognize Text settings.
@@ -66,6 +92,9 @@ pub struct OcrSettings {
     /// Not with `straighten`. With `background`/`despeckle` the page images are cleaned too.
     /// Off by default.
     pub editable: Option<EditableOptions>,
+    /// The engine to read with, by id ([`Session::ocr_engines`]); `None` uses the session's
+    /// selected engine ([`Session::set_ocr_engine`], ocrs unless changed).
+    pub engine: Option<String>,
 }
 
 /// Editable Text and Images options.
@@ -258,6 +287,7 @@ impl Default for OcrSettings {
             despeckle: DespeckleOptions::default(),
             background: BackgroundOptions::default(),
             editable: None,
+            engine: None,
         }
     }
 }
@@ -278,8 +308,15 @@ impl OcrSettings {
                 return Err("the minimum confidence must be between 0 and 1".into());
             }
         }
-        if !LANGUAGES.iter().any(|(code, _)| *code == self.language) {
+        // Which of these the chosen engine reads is checked when it is resolved
+        // ([`Session::ocr_engine_for`]).
+        if pdfcraft_ocr::engines::language_name(&self.language).is_none() {
             return Err(format!("unsupported recognition language {:?}; the installed recognizer currently supports English", self.language));
+        }
+        if let Some(id) = &self.engine
+            && !pdfcraft_ocr::engines::valid_id(id)
+        {
+            return Err(format!("invalid OCR engine id {id:?}"));
         }
         Ok(())
     }
@@ -419,19 +456,13 @@ fn straighten(info: &PageInfo, page: usize, o: Orientation) -> Result<Edit, Edit
     Ok(Edit::StraightenPage { page, matrix, quarter_turns: i64::from(o.rotation / 90) })
 }
 
-/// The recogniser, loaded once (it takes a moment) and shared.
+/// The built-in recogniser, loaded once (it takes a moment) and shared. Recognition entry
+/// points use the session's selected engine instead ([`Session::ocr_engine_for`]).
 pub fn engine() -> Result<Arc<Ocr>, String> {
-    static OCR: Mutex<Option<Arc<Ocr>>> = Mutex::new(None);
-    let mut slot = OCR.lock().unwrap_or_else(|e| e.into_inner());
-    if let Some(o) = slot.as_ref() {
-        return Ok(o.clone());
-    }
-    let o = Arc::new(Ocr::find().map_err(|e| e.to_string())?);
-    *slot = Some(o.clone());
-    Ok(o)
+    OcrsEngine::shared().map_err(|e| e.to_string())
 }
 
-/// Whether the recognition models are installed.
+/// Whether the built-in engine's recognition models are installed.
 pub fn available() -> bool {
     Models::find().is_some()
 }
@@ -447,9 +478,27 @@ pub struct OcrJob {
     native: Vec<Option<f32>>,
     pub pages: Vec<usize>,
     pub settings: OcrSettings,
+    /// The engine resolved for the job when it was created.
+    engine: Arc<dyn OcrEngine>,
 }
 
 impl OcrJob {
+    /// The engine the job reads with ([`Self::run_selected`]).
+    pub fn ocr_engine(&self) -> &Arc<dyn OcrEngine> {
+        &self.engine
+    }
+
+    /// [`Self::run`] with the job's own engine: it is readied first (models loaded, program and
+    /// language data found), so a missing engine fails the job before any page is rendered.
+    pub fn run_selected(self, progress: impl FnMut(usize, usize) -> bool) -> Result<OcrReview, String> {
+        let engine = self.engine.clone();
+        let language = self.settings.language.clone();
+        let ready = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| engine.prepare(&language)))
+            .unwrap_or_else(|_| Err(OcrError::Recognize("the recognition engine failed unexpectedly".into())));
+        ready.map_err(|e| e.to_string())?;
+        self.run(&EngineRecognizer { engine: engine.as_ref(), language: &language }, progress)
+    }
+
     /// Read the pages. `progress(done, total)` is called before each page; returning `false`
     /// cancels the entire draft. Checks also run after rendering and inference. Inference
     /// itself currently finishes before cancellation is observed; no partial result commits.
@@ -670,6 +719,7 @@ impl Session {
     /// Checked job creation for user-facing callers, before model loading or page rendering.
     pub fn ocr_job_checked(&self, id: DocId, pages: &[usize], settings: OcrSettings) -> Result<OcrJob, String> {
         settings.validate()?;
+        let engine = self.ocr_engine_for(&settings)?;
         self.ocr_authority(id)?;
         let doc = self.get(id).ok_or("no such document")?;
         let all = doc.info.pages.len();
@@ -698,7 +748,16 @@ impl Session {
             })
             .collect();
         let source = Source { doc: id, generation: doc.edit_generation(), bytes: doc.bytes.clone() };
-        Ok(OcrJob { source, bytes: doc.bytes.clone(), password: doc.password.clone(), infos: doc.info.pages.clone(), native, pages, settings })
+        Ok(OcrJob {
+            source,
+            bytes: doc.bytes.clone(),
+            password: doc.password.clone(),
+            infos: doc.info.pages.clone(),
+            native,
+            pages,
+            settings,
+            engine,
+        })
     }
 
     /// Refuse closed, restricted or stale targets before an OCR draft is shown, corrected or
@@ -793,10 +852,75 @@ impl Session {
     /// Recognise text on `pages` and add it, in one call (the CLI and agents use this).
     pub fn recognize_text(&mut self, id: DocId, pages: &[usize], settings: OcrSettings) -> Result<Vec<OcrPage>, String> {
         let job = self.ocr_job_checked(id, pages, settings)?;
-        let ocr = engine()?;
-        let review = job.run(ocr.as_ref(), |_, _| true)?;
+        let review = job.run_selected(|_, _| true)?;
         self.apply_ocr_review(&review)?;
         Ok(review.pages)
+    }
+
+    /// The registered engines.
+    pub fn ocr_engine_registry(&self) -> &Registry {
+        &self.ocr_engines.registry
+    }
+
+    /// Every registered engine: whether it can run, its version and languages. Asks external
+    /// engines afresh (it may run them briefly).
+    pub fn ocr_engines(&self) -> Vec<EngineInfo> {
+        self.ocr_engines.registry.engines().iter().map(|e| e.info()).collect()
+    }
+
+    /// The selected engine's id ([`DEFAULT_ENGINE`] unless changed).
+    pub fn ocr_engine_id(&self) -> &str {
+        self.ocr_engines.selected.as_deref().unwrap_or(DEFAULT_ENGINE)
+    }
+
+    /// Add an engine (or replace the one with its id). If the replaced engine was selected,
+    /// the new one is.
+    pub fn register_ocr_engine(&mut self, engine: Arc<dyn OcrEngine>) -> Result<(), String> {
+        self.ocr_engines.registry.register(engine).map(|_| ()).map_err(|e| e.to_string())
+    }
+
+    /// Run Tesseract from `path` (`None`: find `tesseract` on `PATH`) instead of where it was
+    /// looked for so far.
+    pub fn set_tesseract_path(&mut self, path: Option<std::path::PathBuf>) -> Result<(), String> {
+        let config = tesseract::Config { path, ..tesseract::Config::default() };
+        self.register_ocr_engine(Arc::new(tesseract::Tesseract::new(config)))
+    }
+
+    /// Choose the engine every recognition uses unless its settings name another. The engine
+    /// must be registered and able to run now.
+    pub fn set_ocr_engine(&mut self, id: &str) -> Result<EngineInfo, String> {
+        let engine = self.ocr_engines.registry.get(id).ok_or_else(|| self.unknown_engine(id))?;
+        let info = engine.info();
+        if !info.available {
+            return Err(format!("the {id} OCR engine can't run: {}", info.detail));
+        }
+        self.ocr_engines.selected = (id != DEFAULT_ENGINE).then(|| id.to_owned());
+        Ok(info)
+    }
+
+    fn unknown_engine(&self, id: &str) -> String {
+        format!("unknown OCR engine {id:?}; the registered engines are {}", self.ocr_engines.registry.ids().join(", "))
+    }
+
+    /// The engine `settings` read with ([`OcrSettings::engine`], else the selected one),
+    /// checked to be registered and to read `settings.language`. Whether it can run now is
+    /// checked when a job starts ([`OcrJob::run_selected`]).
+    pub fn ocr_engine_for(&self, settings: &OcrSettings) -> Result<Arc<dyn OcrEngine>, String> {
+        let id = settings.engine.as_deref().unwrap_or(self.ocr_engine_id());
+        let engine = self.ocr_engines.registry.get(id).ok_or_else(|| self.unknown_engine(id))?;
+        let info = engine.info();
+        if info.languages.contains(&settings.language) {
+            return Ok(engine);
+        }
+        if !info.available && info.languages.is_empty() {
+            return Err(format!("the {id} OCR engine can't run: {}", info.detail));
+        }
+        let names: Vec<&str> = info.languages.iter().filter_map(|l| pdfcraft_ocr::engines::language_name(l)).collect();
+        Err(format!(
+            "unsupported recognition language {:?}; the {id} engine reads {}",
+            settings.language,
+            if names.is_empty() { "no language".to_owned() } else { names.join(", ") }
+        ))
     }
 }
 
@@ -890,23 +1014,26 @@ impl FileResult {
     }
 }
 
-/// Recognize text in multiple files: one PDF's bytes in, the searchable PDF out. `progress`
-/// works as for [`OcrJob::run`].
+/// Recognize text in multiple files: one PDF's bytes in, the searchable PDF out, read with
+/// `engine` (resolve it with [`Session::ocr_engine_for`]). `progress` works as for
+/// [`OcrJob::run`].
 pub fn recognize_file(
     name: &str,
     bytes: Arc<Vec<u8>>,
     password: Option<&str>,
-    settings: OcrSettings,
-    ocr: &Ocr,
+    mut settings: OcrSettings,
+    engine: &Arc<dyn OcrEngine>,
     progress: impl FnMut(usize, usize) -> bool,
 ) -> Result<FileResult, String> {
     let mut s = Session::new();
+    s.register_ocr_engine(engine.clone())?;
+    settings.engine = Some(engine.id().to_owned());
     let id = s.open(name, None, bytes.clone(), password).map_err(|e| e.to_string())?;
     if let Some(why) = s.get(id).and_then(|d| d.read_only_reason.clone()) {
         return Err(why);
     }
     let job = s.ocr_job_checked(id, &[], settings)?;
-    let review = job.run(ocr, progress)?;
+    let review = job.run_selected(progress)?;
     let pages = review.pages.clone();
     if s.apply_ocr_review(&review)? == 0 {
         return Ok(FileResult { bytes, pages });
