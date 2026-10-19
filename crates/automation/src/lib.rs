@@ -156,6 +156,12 @@ impl Automation {
         self
     }
 
+    /// The engine session, to change it directly (embedders and tests, e.g. to register an
+    /// OCR engine).
+    pub fn session_mut(&mut self) -> &mut Session {
+        &mut self.session
+    }
+
     pub fn session(&self) -> &Session {
         &self.session
     }
@@ -790,9 +796,9 @@ impl Automation {
             "sign_embed_evidence" => self.sign_embed_evidence(&a)?,
             "accessibility_check" => self.a11y_check(&a)?,
             "ocr_recognize" if a.opt_bool("camera")? == Some(true) => {
-                // Every argument is checked, and the models found, before the page changes.
-                self.ocr_settings(&a)?;
-                pdfcraft_engine::ocr::engine().map_err(failed)?;
+                // Every argument is checked, and the engine readied, before the page changes.
+                let settings = self.ocr_settings(&a)?;
+                self.ocr_ready(&settings)?;
                 self.camera_then_recognize(&a, |s| s.ocr_recognize(&a))?
             }
             "ocr_recognize" => self.ocr_recognize(&a)?,
@@ -846,6 +852,8 @@ impl Automation {
             "form_set_actions" => self.form_set_actions(&a)?,
             "form_run_trigger" => self.form_run_trigger(&a)?,
             "ocr_status" => self.ocr_status()?,
+            "ocr_engines_list" => self.ocr_engines_list()?,
+            "ocr_engine_set" => self.ocr_engine_set(&a)?,
             "scan_despeckle" => self.scan_despeckle(&a)?,
             "scan_camera_image" => self.scan_camera_image(&a)?,
             "scan_remove_background" => self.scan_remove_background(&a)?,

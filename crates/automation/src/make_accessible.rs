@@ -258,7 +258,7 @@ impl Automation {
         };
         let mut v = if mode == Ocr::Auto && pages.is_empty() {
             skipped(S, "no page is image-only (every page with an image has text)")
-        } else if !pdfcraft_engine::ocr::available() {
+        } else if !self.session.ocr_engine_for(&pdfcraft_engine::ocr::OcrSettings::default()).is_ok_and(|e| e.info().available) {
             let why = if pages.is_empty() {
                 "no OCR models are installed (cargo xtask models, or set PDFCRAFT_MODELS)".to_owned()
             } else {

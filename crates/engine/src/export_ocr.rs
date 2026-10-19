@@ -8,8 +8,8 @@
 //! its history and its dirty state never change.
 //!
 //! [`ExportOcrMode::Auto`] (the default, as in Acrobat) recognizes only scanned pages, those that
-//! draw an image and have no text, and only when the recognition models are installed; without
-//! them, or when the document's permissions don't allow recognition, the export goes ahead
+//! draw an image and have no text, and only when the session's selected OCR engine
+//! ([`Session::ocr_engine_for`]) can run and reads the language; without it, or when the document's permissions don't allow recognition, the export goes ahead
 //! without text recognition and the report says why. [`ExportOcrMode::On`] recognizes every
 //! exported page without text and fails the export when it can't. [`ExportOcrMode::Off`] never
 //! recognizes.
@@ -18,7 +18,7 @@ use std::sync::Arc;
 
 use pdfcraft_render::{PageRenderer, RenderRequest, RequestKind};
 
-use crate::ocr::{LANGUAGES, OcrSettings, Recognizer};
+use crate::ocr::{DEFAULT_ENGINE, EngineRecognizer, KNOWN_LANGUAGES, LANGUAGES, OcrEngine, OcrError, OcrJob, OcrReview, OcrSettings, Recognizer};
 use crate::{DocId, Document, Session};
 
 /// When an export runs text recognition first.
@@ -53,7 +53,7 @@ impl ExportOcrMode {
 #[derive(Clone, Debug, PartialEq)]
 pub struct ExportOcr {
     pub mode: ExportOcrMode,
-    /// Recognition language, a code from [`LANGUAGES`].
+    /// Recognition language, a code from [`KNOWN_LANGUAGES`] the selected engine reads.
     pub language: String,
 }
 
@@ -64,7 +64,18 @@ impl Default for ExportOcr {
 }
 
 impl ExportOcr {
+    /// The language is one any engine could read ([`KNOWN_LANGUAGES`]); whether the selected
+    /// engine reads it is checked when recognition is needed.
     pub fn validate(&self) -> Result<(), String> {
+        if !KNOWN_LANGUAGES.iter().any(|(code, _, _)| *code == self.language) {
+            let codes: Vec<&str> = KNOWN_LANGUAGES.iter().map(|(c, _, _)| *c).collect();
+            return Err(format!("unsupported recognition language {:?} (one of {})", self.language, codes.join(", ")));
+        }
+        Ok(())
+    }
+
+    /// The language is one the built-in engine reads ([`LANGUAGES`]).
+    fn validate_bundled(&self) -> Result<(), String> {
         if !LANGUAGES.iter().any(|(code, _)| *code == self.language) {
             let codes: Vec<&str> = LANGUAGES.iter().map(|(c, _)| *c).collect();
             return Err(format!("unsupported recognition language {:?} (one of {})", self.language, codes.join(", ")));
@@ -100,10 +111,18 @@ impl ExportOcrReport {
 
 const NO_MODELS: &str = "no OCR models are installed (cargo xtask models, or set PDFCRAFT_MODELS)";
 
+/// The recognizer an export runs its job with, or why there is none.
+struct Ready<'a> {
+    /// The engine the temporary copy reads with (`None`: the copy's default).
+    engine: Option<Arc<dyn OcrEngine>>,
+    run: Box<dyn FnOnce(OcrJob) -> Result<OcrReview, String> + 'a>,
+}
+
 impl Session {
     /// Run `export` on document `id`, or on a temporary copy with the text of `pages` (0-based;
-    /// empty = all) recognized first, as `options` say (see the module notes). Uses the shared
-    /// recognizer ([`crate::ocr::engine`]) when the models are installed.
+    /// empty = all) recognized first, as `options` say (see the module notes). Reads with the
+    /// session's selected OCR engine ([`Session::ocr_engine_for`]); an engine that can't run, or
+    /// doesn't read the language, counts as no recognizer (Auto exports as is and says why).
     pub fn with_export_ocr<T>(
         &self,
         id: DocId,
@@ -111,18 +130,59 @@ impl Session {
         options: &ExportOcr,
         export: impl FnOnce(&Document) -> Result<T, String>,
     ) -> Result<(T, ExportOcrReport), String> {
-        let load = || if crate::ocr::available() { crate::ocr::engine().map(Some) } else { Ok(None) };
-        self.with_export_ocr_using(id, pages, options, load, export)
+        let settings = OcrSettings { language: options.language.clone(), ..Default::default() };
+        let load = || -> Result<Result<Ready<'static>, String>, String> {
+            let engine = match self.ocr_engine_for(&settings) {
+                Ok(e) => e,
+                Err(why) => return Ok(Err(why)),
+            };
+            let info = engine.info();
+            if !info.available {
+                return Ok(Err(if info.id == DEFAULT_ENGINE {
+                    NO_MODELS.to_owned()
+                } else {
+                    format!("the {} OCR engine can't run: {}", info.id, info.detail)
+                }));
+            }
+            let language = settings.language.clone();
+            let ready = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| engine.prepare(&language)))
+                .unwrap_or_else(|_| Err(OcrError::Recognize("the recognition engine failed unexpectedly".into())));
+            if let Err(e) = ready {
+                return Ok(Err(e.to_string()));
+            }
+            let reader = engine.clone();
+            let run = move |job: OcrJob| job.run(&EngineRecognizer { engine: reader.as_ref(), language: &language }, |_, _| true);
+            Ok(Ok(Ready { engine: Some(engine), run: Box::new(run) }))
+        };
+        self.export_ocr_with(id, pages, options, load, export)
     }
 
     /// [`Session::with_export_ocr`] with the recognizer `load` gives (`None`: no models
-    /// installed). `load` is called only when a page needs recognizing.
+    /// installed) instead of the selected engine. `load` is called only when a page needs
+    /// recognizing.
     pub fn with_export_ocr_using<T, R: Recognizer>(
         &self,
         id: DocId,
         pages: &[usize],
         options: &ExportOcr,
         load: impl FnOnce() -> Result<Option<Arc<R>>, String>,
+        export: impl FnOnce(&Document) -> Result<T, String>,
+    ) -> Result<(T, ExportOcrReport), String> {
+        options.validate_bundled()?;
+        let load = || {
+            let Some(ocr) = load()? else { return Ok(Err(NO_MODELS.to_owned())) };
+            let run = move |job: OcrJob| job.run(ocr.as_ref(), |_, _| true);
+            Ok(Ok(Ready { engine: None, run: Box::new(run) }))
+        };
+        self.export_ocr_with(id, pages, options, load, export)
+    }
+
+    fn export_ocr_with<'a, T>(
+        &self,
+        id: DocId,
+        pages: &[usize],
+        options: &ExportOcr,
+        load: impl FnOnce() -> Result<Result<Ready<'a>, String>, String>,
         export: impl FnOnce(&Document) -> Result<T, String>,
     ) -> Result<(T, ExportOcrReport), String> {
         options.validate()?;
@@ -154,21 +214,26 @@ impl Session {
             }
             return Err(why);
         }
-        let ocr = match load()? {
-            Some(o) => o,
-            None if auto => {
-                report.not_run = Some(format!("{} scanned page(s) need text recognition, but {NO_MODELS}", targets.len()));
+        let ready = match load()? {
+            Ok(r) => r,
+            Err(why) if auto => {
+                report.not_run = Some(format!("{} scanned page(s) need text recognition, but {why}", targets.len()));
                 return Ok((export(doc)?, report));
             }
-            None => return Err(format!("text recognition is on, but {NO_MODELS}")),
+            Err(why) => return Err(format!("text recognition is on, but {why}")),
         };
         // The temporary copy: the working file (unsaved edits included), opened as the
-        // document was.
+        // document was, reading with the same engine.
         let mut copy = Session::new();
+        if let Some(engine) = ready.engine {
+            let engine_id = engine.id().to_owned();
+            copy.register_ocr_engine(engine)?;
+            copy.set_ocr_engine(&engine_id)?;
+        }
         let cid = copy.open(doc.name.clone(), None, doc.bytes.clone(), doc.password.as_deref()).map_err(|e| e.to_string())?;
         let settings = OcrSettings { language: options.language.clone(), ..Default::default() };
         let job = copy.ocr_job_checked(cid, &targets, settings)?;
-        let review = job.run(ocr.as_ref(), |_, _| true)?;
+        let review = (ready.run)(job)?;
         for p in review.pages() {
             match &p.skipped {
                 Some(why) => report.skipped_pages.push((p.page, why.clone())),
@@ -188,7 +253,6 @@ impl Session {
     }
 }
 
-/// Of `pages`, those with no text, and those of them that draw an image (scans).
 fn pages_needing_text(doc: &Document, pages: &[usize]) -> (Vec<usize>, Vec<usize>) {
     let mut renderer = PageRenderer::new(doc.bytes.clone(), doc.config.clone());
     let (mut without, mut scanned) = (Vec::new(), Vec::new());

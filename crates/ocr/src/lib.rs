@@ -6,6 +6,9 @@
 //! into page content: invisible text (rendering mode 3) over each word, so the page becomes a
 //! searchable image (Acrobat's "Searchable Image (Exact)": the image is left untouched).
 //!
+//! Engines are pluggable ([`engines`]): ocrs is the default, and an installed Tesseract program
+//! can be used instead ([`tesseract`], run as a separate process, never linked or shipped).
+//!
 //! The bundled recognition model has an ASCII alphabet. English is the validated language;
 //! corrected searchable text supports WinAnsi accents, not arbitrary Unicode.
 
@@ -14,7 +17,9 @@
 use std::path::{Path, PathBuf};
 
 pub mod editable;
+pub mod engines;
 pub mod orient;
+pub mod tesseract;
 
 pub use pdfcraft_fonts::helvetica_width;
 
@@ -45,6 +50,12 @@ pub enum OcrError {
     InvalidImage(String),
     #[error("invalid recognized text: {0}")]
     InvalidText(String),
+    /// The chosen engine can't run (not installed, or not in this build).
+    #[error("{0}")]
+    Unavailable(String),
+    /// The chosen engine can't read the language.
+    #[error("{0}")]
+    Language(String),
 }
 
 /// Validate dimensions and packed channel layout without allocating from untrusted sizes.
@@ -428,7 +439,7 @@ mod tests {
         assert!(word.rect[0] >= 10.0 && word.rect[0] < 60.0, "{word:?}");
     }
 
-    mod test_image {
+    pub(crate) mod test_image {
         /// "HELLO WORLD" drawn with blocky 5×7 letters, 4 pixels per dot, black on white.
         pub fn hello() -> (u32, u32, Vec<u8>) {
             const GLYPHS: &[(char, [&str; 7])] = &[
