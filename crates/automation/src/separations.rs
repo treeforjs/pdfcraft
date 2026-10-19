@@ -31,7 +31,7 @@ pub(crate) fn view_point(page: Option<&PageInfo>, p: [f64; 2]) -> Value {
     }
 }
 
-fn hex(c: [f64; 3]) -> String {
+pub(crate) fn hex(c: [f64; 3]) -> String {
     let b = |v: f64| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
     format!("#{:02X}{:02X}{:02X}", b(c[0]), b(c[1]), b(c[2]))
 }
@@ -43,7 +43,7 @@ fn file_part(name: &str) -> String {
 }
 
 /// Turn a top-down image by the page's `/Rotate` (clockwise), as the page is displayed.
-fn rotate(data: &[u8], w: usize, h: usize, channels: usize, degrees: u16) -> (Vec<u8>, usize, usize) {
+pub(crate) fn rotate(data: &[u8], w: usize, h: usize, channels: usize, degrees: u16) -> (Vec<u8>, usize, usize) {
     if !matches!(degrees, 90 | 180 | 270) {
         return (data.to_vec(), w, h);
     }
@@ -65,7 +65,7 @@ fn rotate(data: &[u8], w: usize, h: usize, channels: usize, degrees: u16) -> (Ve
     (out, nw, nh)
 }
 
-fn encode(data: &[u8], w: usize, h: usize, color: png::ColorType) -> Result<Vec<u8>> {
+pub(crate) fn encode(data: &[u8], w: usize, h: usize, color: png::ColorType) -> Result<Vec<u8>> {
     let (Ok(w32), Ok(h32)) = (u32::try_from(w), u32::try_from(h)) else { return Err(failed("the plate is too large to encode")) };
     let mut out = Vec::new();
     let mut enc = png::Encoder::new(&mut out, w32, h32);

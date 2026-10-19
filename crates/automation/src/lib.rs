@@ -34,10 +34,12 @@ mod measure;
 mod object_inspector;
 mod objects;
 mod ocr_review;
+mod output_preview;
 mod overprint;
 mod preflight;
 mod printing;
 mod reader_selection;
+mod reading_order;
 mod redact;
 mod search_folder;
 mod separations;
@@ -739,6 +741,9 @@ impl Automation {
             "print_separations_render" => return self.separations_render(&a),
             "print_separations_sample" => self.separations_sample(&a)?,
             "print_object_inspector" => self.object_inspector(&a)?,
+            "print_output_preview_get" => self.output_preview_get(&a)?,
+            "print_output_preview_set" => self.output_preview_set(&a)?,
+            "print_output_preview_render" => return self.output_preview_render(&a),
             "print_ink_manager_list" => self.ink_manager_list(&a)?,
             "print_ink_manager_set" => self.ink_manager_set(&a)?,
             "print_ink_manager_apply" => self.ink_manager_apply(&a)?,
@@ -866,6 +871,10 @@ impl Automation {
             "tags_set" => self.tags_set(&a)?,
             "tags_add_namespace" => self.tags_add_namespace(&a)?,
             "tags_mark_artifact" => self.tags_mark_artifact(&a)?,
+            "reading_order_list" => self.a11y_reading_order_list(&a)?,
+            "reading_order_tag" => self.a11y_reading_order_tag(&a)?,
+            "reading_order_move" => self.a11y_reading_order_move(&a)?,
+            "reading_order_clear" => self.a11y_reading_order_clear(&a)?,
             "tags_autotag" => self.tags_autotag(&a)?,
             "accessibility_make_accessible" => self.a11y_make_accessible(&a)?,
             "alt_text_list" => self.alt_text_list(&a)?,

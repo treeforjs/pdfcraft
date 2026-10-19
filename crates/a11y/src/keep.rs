@@ -39,10 +39,10 @@ const MAX_WALK: usize = 2_000_000;
 /// Number-tree walks stop after this many nodes.
 const MAX_TREE_NODES: usize = 100_000;
 /// Ancestors followed when looking for a grouping element.
-const MAX_CLIMB: usize = 512;
+pub(crate) const MAX_CLIMB: usize = 512;
 
 /// Element types that group block-level elements: new paragraphs and figures go inside them.
-const GROUPING: &[&str] = &["Document", "DocumentFragment", "Part", "Art", "Sect", "Div", "BlockQuote", "Aside", "NonStruct"];
+pub(crate) const GROUPING: &[&str] = &["Document", "DocumentFragment", "Part", "Art", "Sect", "Div", "BlockQuote", "Aside", "NonStruct"];
 
 /// The kind of a drawing unit.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -373,7 +373,7 @@ enum Fate {
 }
 
 /// The standard role of an element in the tree read, or of one this pass made.
-struct Elements<'a> {
+pub(crate) struct Elements<'a> {
     tree: &'a Tags,
     index: HashMap<ObjRef, usize>,
     /// Elements made in this pass: (parent, role); `None` parent is the root.
@@ -381,12 +381,12 @@ struct Elements<'a> {
 }
 
 impl<'a> Elements<'a> {
-    fn new(tree: &'a Tags) -> Self {
+    pub(crate) fn new(tree: &'a Tags) -> Self {
         let index = tree.nodes.iter().enumerate().filter_map(|(i, n)| n.obj.map(|o| (o, i))).collect();
         Elements { tree, index, made: HashMap::new() }
     }
 
-    fn parent(&self, e: ObjRef) -> Option<Option<ObjRef>> {
+    pub(crate) fn parent(&self, e: ObjRef) -> Option<Option<ObjRef>> {
         if let Some((p, _)) = self.made.get(&e) {
             return Some(*p);
         }
@@ -410,7 +410,7 @@ impl<'a> Elements<'a> {
 }
 
 /// An element's kids as a list (K normalized: a single kid becomes a one-item list).
-fn kid_list(doc: &Document, d: &Dict) -> Vec<Object> {
+pub(crate) fn kid_list(doc: &Document, d: &Dict) -> Vec<Object> {
     match d.get(b"K") {
         None => Vec::new(),
         Some(Object::Array(a)) => a.clone(),
@@ -423,7 +423,7 @@ fn kid_list(doc: &Document, d: &Dict) -> Vec<Object> {
 }
 
 /// Where the tree's root and parent tree are (the root must be an indirect dictionary).
-fn root_ref(doc: &Document) -> Result<ObjRef, TagError> {
+pub(crate) fn root_ref(doc: &Document) -> Result<ObjRef, TagError> {
     let (_, cat) = catalog(doc).ok_or(TagError::Untagged)?;
     match cat.get(b"StructTreeRoot") {
         Some(Object::Ref(r)) if doc.get(*r).as_dict().is_some() => Ok(*r),
@@ -434,7 +434,14 @@ fn root_ref(doc: &Document) -> Result<ObjRef, TagError> {
 
 /// Insert `new` into `parent`'s kids (`None`: the root's) after (or before) `anchor`, or at the
 /// end (start) when the anchor isn't one of them.
-fn insert_kid(doc: &mut Document, root: ObjRef, parent: Option<ObjRef>, anchor: Option<ObjRef>, after: bool, new: ObjRef) -> Result<(), TagError> {
+pub(crate) fn insert_kid(
+    doc: &mut Document,
+    root: ObjRef,
+    parent: Option<ObjRef>,
+    anchor: Option<ObjRef>,
+    after: bool,
+    new: ObjRef,
+) -> Result<(), TagError> {
     let holder = parent.unwrap_or(root);
     let d = doc.get(holder).as_dict().cloned().ok_or_else(|| TagError::Invalid("a structure element is not a dictionary".into()))?;
     let mut list = kid_list(doc, &d);
@@ -452,7 +459,7 @@ fn insert_kid(doc: &mut Document, root: ObjRef, parent: Option<ObjRef>, anchor: 
 
 /// A marked-content reference on `page_obj` (inheriting `here` when it names no page), unless
 /// it is in another stream.
-fn mcr_mcid(doc: &Document, o: &Object, here: bool, page_obj: ObjRef) -> Option<i64> {
+pub(crate) fn mcr_mcid(doc: &Document, o: &Object, here: bool, page_obj: ObjRef) -> Option<i64> {
     let resolved;
     let d = match o {
         Object::Int(n) => return here.then_some(*n),
@@ -471,7 +478,7 @@ fn mcr_mcid(doc: &Document, o: &Object, here: bool, page_obj: ObjRef) -> Option<
 }
 
 /// Remove the MCIDs in `gone` from element `e`'s kids. Returns (removed, now empty).
-fn strip_mcids(doc: &mut Document, e: ObjRef, here: bool, page_obj: ObjRef, gone: &HashSet<i64>) -> Result<(usize, bool), TagError> {
+pub(crate) fn strip_mcids(doc: &mut Document, e: ObjRef, here: bool, page_obj: ObjRef, gone: &HashSet<i64>) -> Result<(usize, bool), TagError> {
     let Some(d) = doc.get(e).as_dict().cloned() else { return Ok((0, false)) };
     let here = d.get(b"Pg").and_then(Object::as_ref).map_or(here, |p| p == page_obj);
     let kids = kid_list(doc, &d);
@@ -495,7 +502,12 @@ fn strip_mcids(doc: &mut Document, e: ObjRef, here: bool, page_obj: ObjRef, gone
 /// Unlink elements left empty from their parents, and parents that become empty in turn (but
 /// never a top-level element that wasn't emptied itself). `parent_of` gives an element's parent
 /// (`None`: the root). Returns how many were removed.
-fn prune(doc: &mut Document, root: ObjRef, emptied: Vec<ObjRef>, parent_of: &dyn Fn(ObjRef) -> Option<Option<ObjRef>>) -> Result<usize, TagError> {
+pub(crate) fn prune(
+    doc: &mut Document,
+    root: ObjRef,
+    emptied: Vec<ObjRef>,
+    parent_of: &dyn Fn(ObjRef) -> Option<Option<ObjRef>>,
+) -> Result<usize, TagError> {
     let mut n = 0usize;
     let mut todo = emptied;
     let mut done: HashSet<ObjRef> = HashSet::new();
@@ -526,7 +538,7 @@ fn prune(doc: &mut Document, root: ObjRef, emptied: Vec<ObjRef>, parent_of: &dyn
 }
 
 /// The parent tree (created when missing).
-fn parent_tree(doc: &mut Document, root: ObjRef) -> Result<ObjRef, TagError> {
+pub(crate) fn parent_tree(doc: &mut Document, root: ObjRef) -> Result<ObjRef, TagError> {
     let r = doc.get(root).as_dict().and_then(|d| d.get(b"ParentTree").cloned());
     match r {
         Some(Object::Ref(r)) if doc.get(r).as_dict().is_some() => Ok(r),
@@ -550,7 +562,7 @@ fn parent_tree(doc: &mut Document, root: ObjRef) -> Result<ObjRef, TagError> {
 }
 
 /// Every node of a number tree (bounded, cycle-safe).
-fn number_tree_nodes(doc: &Document, root: ObjRef) -> Vec<ObjRef> {
+pub(crate) fn number_tree_nodes(doc: &Document, root: ObjRef) -> Vec<ObjRef> {
     let mut out = Vec::new();
     let mut stack = vec![root];
     let mut seen = HashSet::new();
@@ -567,13 +579,13 @@ fn number_tree_nodes(doc: &Document, root: ObjRef) -> Vec<ObjRef> {
     out
 }
 
-fn nums(doc: &Document, node: ObjRef) -> Option<Vec<Object>> {
+pub(crate) fn nums(doc: &Document, node: ObjRef) -> Option<Vec<Object>> {
     doc.get(node).as_dict().and_then(|d| d.get(b"Nums").cloned()).map(|o| doc.resolve(&o)).and_then(|o| o.as_array().cloned())
 }
 
 /// Set the parent-tree value for `key` (replacing it where it is, else adding it). Returns false
 /// when the key isn't in the tree and can't be added in order (the caller then takes a new key).
-fn put_number(doc: &mut Document, pt: ObjRef, key: i64, value: Object) -> Result<bool, TagError> {
+pub(crate) fn put_number(doc: &mut Document, pt: ObjRef, key: i64, value: Object) -> Result<bool, TagError> {
     let nodes = number_tree_nodes(doc, pt);
     let mut max: Option<i64> = None;
     for &node in &nodes {
@@ -631,7 +643,7 @@ fn put_number(doc: &mut Document, pt: ObjRef, key: i64, value: Object) -> Result
 }
 
 /// The largest key in the parent tree.
-fn number_max(doc: &Document, pt: ObjRef) -> Option<i64> {
+pub(crate) fn number_max(doc: &Document, pt: ObjRef) -> Option<i64> {
     number_tree_nodes(doc, pt)
         .into_iter()
         .filter_map(|n| nums(doc, n))
@@ -640,7 +652,7 @@ fn number_max(doc: &Document, pt: ObjRef) -> Option<i64> {
 }
 
 /// Rebuild page `page`'s parent-tree array (MCID → element) from the tree.
-fn rebuild_parent_tree(doc: &mut Document, root: ObjRef, page: usize, page_obj: ObjRef) -> Result<(), TagError> {
+pub(crate) fn rebuild_parent_tree(doc: &mut Document, root: ObjRef, page: usize, page_obj: ObjRef) -> Result<(), TagError> {
     let tree = tags(doc);
     let mut slots: Vec<Object> = Vec::new();
     for n in &tree.nodes {
@@ -896,7 +908,7 @@ fn keep_tags_inner(doc: &mut Document, before: &Snapshot) -> Result<TagUpdate, T
                 let mcid = next_mcid;
                 next_mcid = next_mcid.saturating_add(1);
                 let role: &'static str = if *class == Class::Image { "Figure" } else { "P" };
-                let element = place_element(doc, root, &tree, &mut elements, &placed, before.page, pg.obj, run.start, role, mcid)?;
+                let element = place_element(doc, root, &tree, &mut elements, &placed, before.page, pg.obj, run.start, role, Object::Int(mcid))?;
                 placed.push((run.start, element));
                 report.added.push(AddedTag { page: before.page, element, role: role.into(), mcid });
                 let mut props = Dict::new();
@@ -994,11 +1006,11 @@ fn keep_tags_inner(doc: &mut Document, before: &Snapshot) -> Result<TagUpdate, T
     Ok(report)
 }
 
-/// Make a `role` element for new content at operator `at` with `mcid`, next to the element of
+/// Make a `role` element for new content at operator `at` with `kids` (its /K), next to the element of
 /// the nearest tagged content (before it on the page, else after it, else on the nearest other
 /// page), or at the end of the top-level grouping element.
 #[allow(clippy::too_many_arguments)]
-fn place_element(
+pub(crate) fn place_element(
     doc: &mut Document,
     root: ObjRef,
     tree: &Tags,
@@ -1008,7 +1020,7 @@ fn place_element(
     page_obj: ObjRef,
     at: usize,
     role: &'static str,
-    mcid: i64,
+    kids: Object,
 ) -> Result<ObjRef, TagError> {
     let before = placed.iter().filter(|(i, _)| *i < at).max_by_key(|(i, _)| *i).map(|(_, e)| *e);
     let after = placed.iter().filter(|(i, _)| *i > at).min_by_key(|(i, _)| *i).map(|(_, e)| *e);
@@ -1060,7 +1072,7 @@ fn place_element(
         d.set(b"S".to_vec(), Object::name(role));
         d.set(b"P".to_vec(), Object::Ref(parent.unwrap_or(root)));
         d.set(b"Pg".to_vec(), Object::Ref(page_obj));
-        d.set(b"K".to_vec(), Object::Int(mcid));
+        d.set(b"K".to_vec(), kids);
         d
     }));
     insert_kid(doc, root, parent, sibling, anchor.is_none() || after_anchor, element)?;

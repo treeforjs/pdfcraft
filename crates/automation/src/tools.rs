@@ -734,6 +734,53 @@ pub fn tools() -> Vec<ToolDef> {
             &["doc", "page", "x", "y"],
         )),
         t(
+            "print_output_preview_get",
+            "Output Preview settings",
+            "Output Preview's session settings for an open document (not saved with it): simulation_profile (id output_intent, the default: the document's output intent profile when the colour settings let output intents override the working spaces, else the working CMYK space; working: the working CMYK space; or the id of a CMYK profile from color_profiles_list), simulate_overprint (default true), simulate_paper and simulate_black (paper implies black ink), show (the Show filter: all, device_cmyk, not_device_cmyk, spot, rgb, gray, icc_based, images, solid_color, text, line_art; show_options lists them), hidden_inks (separations switched off), coverage_warning with coverage_limit (total area coverage, default 300%) and warning_color. simulation says what the profile resolved to: used (output_intent, working, profile, or none when untagged colour is unmanaged in the colour settings), name, profile_used (whether a profile displays the inks, so paper and black ink can be simulated), display, conversion (how RGB and Lab separate: the colour settings' press conversion, or a chosen profile's BToA table with the settings' intent) and problem (e.g. no output intent, so the working space is simulated). inks is the separations list (print_separations_list's inks after the Ink Manager, with shown; null for documents over 500 pages). Read-only.",
+        )
+        .ro()
+        .with(schema(json!({ "doc": doc() }), &["doc"])),
+        t(
+            "print_output_preview_set",
+            "Set Output Preview",
+            "Change Output Preview's session settings for an open document (not saved, not an undo step); unspecified settings stay. simulation_profile: output_intent (the default: the output intent's profile when the colour settings let it override the working spaces, else the working CMYK space), working (the colour settings' working CMYK space) or the id of a CMYK profile the colour settings hold (color_profiles_list; load a file with color_profile_load first): process inks display through its AToB table and, for a chosen id, RGB/Lab colours separate through its BToA table with the colour settings' intent (else the colour settings' press conversion). simulate_paper (Simulate Paper Color: absolute colorimetric, the paper shows the profile's media white; turns simulate_black on unless given), simulate_black (Simulate Black Ink: no black point compensation, black ink shows as the gray it prints; can't be off while simulate_paper is on), simulate_overprint, show (all, device_cmyk, not_device_cmyk, spot, rgb, gray, icc_based, images, solid_color, text, line_art; labels such as \"Spot Color\" work too), hide_inks / show_inks switch separations off and on (names from print_output_preview_get; checked for documents of at most 500 pages), show_all_inks, coverage_warning, coverage_limit (1-2000%), warning_color (#RRGGBB), reset (start from the defaults). Returns the same as print_output_preview_get.",
+        )
+        .with(schema(
+            json!({
+                "doc": doc(),
+                "simulation_profile": { "type": "string", "description": "output_intent (default), working, or a CMYK profile id from color_profiles_list (such as cgats001 or user:<name>)." },
+                "simulate_overprint": { "type": "boolean" },
+                "simulate_paper": { "type": "boolean", "description": "Simulate Paper Color (implies black ink)." },
+                "simulate_black": { "type": "boolean", "description": "Simulate Black Ink." },
+                "show": { "type": "string", "description": "The Show filter: all, device_cmyk, not_device_cmyk, spot, rgb, gray, icc_based, images, solid_color, text, line_art." },
+                "hide_inks": { "type": "array", "items": { "type": "string" }, "description": "Separations to switch off." },
+                "show_inks": { "type": "array", "items": { "type": "string" }, "description": "Separations to switch on again." },
+                "show_all_inks": { "type": "boolean", "description": "Switch every separation on (before hide_inks)." },
+                "coverage_warning": { "type": "boolean", "description": "Show areas over coverage_limit in warning_color." },
+                "coverage_limit": { "type": "number", "minimum": 1, "maximum": 2000, "description": "Total area coverage limit in percent (default 300)." },
+                "warning_color": { "type": "string", "description": "#RRGGBB for areas over the limit (default #00FF00)." },
+                "reset": { "type": "boolean", "description": "Start from the default settings before applying the rest." },
+            }),
+            &["doc"],
+        )),
+        t(
+            "print_output_preview_render",
+            "Render Output Preview",
+            "Render a page as Output Preview shows it, as an RGB PNG in the displayed orientation (after /Rotate): inline, or written to path. The page is separated into ink plates by PdfCraft's ink rasterizer (as print_separations_render, at dpi, default 72, lowered on large pages or with many inks; overprint simulated when simulate_overprint), keeping only the objects the Show filter selects (hidden_objects counts the others); the separations switched on are composited: process inks through the simulation profile (relative colorimetric with black point compensation; simulate_black without it; simulate_paper absolute colorimetric with the paper's media white) or, without a profile, the renderer's CMYK conversion (simulated says what was simulated); spot inks multiply by their CMYK alternate at 100% (else their preview colour). The Ink Manager's session settings apply. inks gives each ink's shown flag, max, inked_percent (share of the page with any of it) and mean_percent (mean coverage). coverage is the total area coverage of every ink of the shown objects: max and max_at (top-left of the displayed page; pdf_max_at in user space), limit, over_limit, over_cells, over_percent, over_area (points²) and warned_pixels (painted warning_color when coverage_warning is on). With x and y (points from the top-left of the displayed page) sample gives every ink's percentage and the total there. Patterns, shadings, DCT/JPX/JBIG2/CCITT images and annotations are not shown (unmeasured); transparency is painted opaque. Read-only.",
+        )
+        .ro()
+        .with(schema(
+            json!({
+                "doc": doc(),
+                "page": { "type": "integer", "minimum": 1 },
+                "dpi": { "type": "number", "minimum": 9, "maximum": 300, "description": "Resolution in pixels per inch (default 72)." },
+                "x": { "type": "number", "minimum": 0, "description": "Read the inks at this point (with y)." },
+                "y": { "type": "number", "minimum": 0 },
+                "path": { "type": "string", "description": "Write the PNG here instead of returning it." },
+            }),
+            &["doc", "page"],
+        )),
+        t(
             "print_ink_manager_list",
             "Ink Manager",
             "Ink Manager's list: every ink the document (or pages) uses - the four process inks and each spot colorant of Separation and DeviceN colour spaces (forms, images, patterns and shadings included), as print_separations_list describes them, ignoring the Ink Manager settings - with its usage (pages where it is painted, pages that declare it, objects: the kinds of object that put it down: text, vector, image; shadings and patterns are not measured) and where it prints under the session's Ink Manager settings: route own (its own plate), alias (prints_on another ink's plate, aliased_to the ink it was aliased to) or process (converted to CMYK). settings holds the current settings. Read-only.",
@@ -1580,6 +1627,37 @@ pub fn tools() -> Vec<ToolDef> {
                 }),
                 &["doc"],
             )),
+        t("reading_order_list", "Reading order of a page", "Reading Order tool / Order panel: the regions of page (1-based) in reading order, as the structure tree reads them. A region is the outermost element below a grouping element (Document, Part, Sect, Div, Art …) that holds content on the page; each has its order (1-based), element number and obj, type and standard type, rect (where its content is drawn, points from the top-left of the displayed page: text by its glyphs, paths by their points, images and forms by their boxes, annotations by their rectangles) and the elements inside it that hold content (obj, type, mcids on the page, annotation obj numbers, rect, alt, actual_text). Also untagged (painting operations neither tagged nor artifacts), artifacts and orphaned (in marked content no element reaches) counts. Read-only.")
+            .ro()
+            .with(schema(json!({ "doc": doc(), "page": { "type": "integer", "minimum": 1, "description": "1-based page." } }), &["doc", "page"])),
+        t("reading_order_tag", "Tag a region (Reading Order tool)", "Reading Order tool: tag what lies inside rect on page as role: text (P), h1–h6, figure, figure-caption (a Figure holding the pictures and drawings with a Caption for the text), table (Table > TR > TH/TD from where the content lies, first row TH with column scope, rules and other drawings become layout artifacts), cell (TD, put in the row of the nearest cell before it), formula, form-field (each widget inside becomes a Form element with an OBJR, StructParent and parent-tree entry; already tagged widgets move) or background (the content becomes an artifact; artifact_type Pagination|Layout|Page|Background and artifact_subtype Header|Footer|Watermark optional). A painting operation is inside when the centre of its box is. Untagged content is wrapped in new marked content with new MCIDs; tagged or artifact marked content wholly inside changes as a whole (keeping its MCID); marked content partly inside is split at the rectangle's edge (the part outside keeps its tag and element, the part inside goes to the new element). q/Q, BT/ET and marked-content nesting are kept; elements left empty leave the tree; the new element goes next to the nearest tagged content before it on the page; the page's parent-tree entry is rebuilt; an untagged document gets a structure tree. alt (figure, figure-caption, formula, form-field) sets alternate text. All or nothing, one undo step. Returns the new elements (obj numbers, outer first), mcids, units inside, moved/split sequences, wrapped operations, artifacts, removed elements, widgets, created_tree and the page's reading order after (as reading_order_list).")
+            .with(schema(
+                json!({
+                    "doc": doc(),
+                    "page": { "type": "integer", "minimum": 1, "description": "1-based page." },
+                    "rect": { "type": "array", "items": { "type": "number" }, "minItems": 4, "maxItems": 4, "description": "[x0, y0, x1, y1] in points from the top-left of the displayed page." },
+                    "role": { "type": "string", "enum": ["text", "h1", "h2", "h3", "h4", "h5", "h6", "figure", "figure-caption", "table", "cell", "formula", "form-field", "background"] },
+                    "alt": { "type": "string", "maxLength": 16384, "description": "Alternate text (figure, figure-caption, formula, form-field)." },
+                    "artifact_type": { "type": "string", "enum": ["Pagination", "Layout", "Page", "Background"] },
+                    "artifact_subtype": { "type": "string", "enum": ["Header", "Footer", "Watermark"] }
+                }),
+                &["doc", "page", "rect", "role"],
+            )),
+        t("reading_order_move", "Change the reading order", "Order panel: move a structure element (element: its obj, from reading_order_list or tags_tree), with everything inside it, to just before another (before: obj) or just after one (after: obj) among that one's siblings, or to region number `to` of page (moving down puts it after that region, up before it). Refused when the target is inside the element or an element can't be edited. MCIDs and the parent tree don't change. One undo step. Returns the page's reading order after when page is given.")
+            .with(schema(
+                json!({
+                    "doc": doc(),
+                    "element": { "type": "integer", "minimum": 1 },
+                    "before": { "type": "integer", "minimum": 1 },
+                    "after": { "type": "integer", "minimum": 1 },
+                    "to": { "type": "integer", "minimum": 1, "description": "A 1-based region number on page." },
+                    "page": { "type": "integer", "minimum": 1, "description": "1-based page (needed with to)." }
+                }),
+                &["doc", "element"],
+            )),
+        t("reading_order_clear", "Clear page structure", "Reading Order tool ▸ Clear Page Structure: take page's tagged marked content (and its artifacts unless keep_artifacts) out of the content stream, its MCIDs and annotation references out of the structure elements (elements left empty leave the tree), and its parent-tree entries, /StructParents and annotations' /StructParent away, so the page can be tagged again region by region. Refused when the page has nothing to clear. One undo step. Returns the counts and the page's reading order after.")
+            .destructive()
+            .with(schema(json!({ "doc": doc(), "page": { "type": "integer", "minimum": 1 }, "keep_artifacts": { "type": "boolean", "description": "Keep the page's artifacts (default false)." } }), &["doc", "page"])),
         t("tags_autotag", "Autotag document", "Accessibility ▸ Autotag Document: give an untagged document a logical structure tree from its layout, as one undo step. Text is grouped into lines and blocks by spacing, alignment, size and weight; text larger than the body size becomes headings (H1 the largest, levels never skip) and short lines wholly in a bold font headings below those; blocks starting with a bullet or number become lists (L > LI > Lbl + LBody) when detect_lists (default true); ruled tables (a grid of at least two rows and two columns of lines) become Table > TR > TH (first row, Scope Column) / TD when detect_tables (default true); images become Figure elements, which all need alternate text (listed in figures_needing_alt: set it with accessibility_set_alt); link annotations become Link elements holding the text under them and an OBJR (and get a description from that text or their address when they have none); other annotations except widgets and popups become Annot elements. Form fields (detect_fields, default true): every widget, radio and checkbox kids included, becomes a Form element with an OBJR to it, a StructParent and a parent-tree entry, placed in reading order next to its label (inside the paragraph, list body or cell holding a label on its left or above it, before a checkbox's or radio button's label on its right, after a heading that labels it; a widget with no label nearby is ordered by its own position); its Alt is the field's tooltip (TU), else its name (T), else the label (a radio button adds its option, as in Payment: Card). Fields without a tooltip are listed in fields_needing_tooltip with one suggested from their label (else their name); field_tooltips fill writes the suggestions as TU (and uses them as Alt), report (default) only lists them. Running headers and footers (the same text at the top or bottom of two or more pages, digits ignored) and page numbers become pagination artifacts, paths and shadings layout and background artifacts. Blocks are ordered by rows and columns (two-column pages read down the left column, then the right). Every page's content is rewritten with marked content (MCIDs) and the parent tree, StructParents, StructParent on annotations, Tabs /S on every tagged page and MarkInfo Marked true are written; lang sets the document language when it has none. A tagged document is refused unless replace_existing is true (then the old tags are discarded and the whole document is tagged; pages must be left out). pages (1-based) limits which pages are tagged. Pages whose content can't be read safely are left untagged and listed in skipped. Returns pages tagged, skipped, counts per structure type, elements, artifacts (marked-content sequences), pagination_artifacts (header, footer and page-number blocks), figures_needing_alt (page, figure obj, rect in points from the top-left), links, link_descriptions, annotations, fields (page, name, kind, widget, field and element obj, rect, alt, alt_source: tooltip/suggested/name/label, label), fields_needing_tooltip (page, name, field obj, suggested, filled), tooltips_filled, lang, replaced, warnings, and before/after summaries (pdfua: conforms and failed checkpoints; checker: failed rules and the status of the tagging rules).")
             .with(schema(
                 json!({

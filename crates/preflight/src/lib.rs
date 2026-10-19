@@ -29,6 +29,7 @@ pub mod flatten;
 pub mod icc;
 pub mod ink_manager;
 pub mod inspector;
+pub mod output_preview;
 pub mod overprint;
 pub mod pdfx;
 pub mod pdfx_convert;

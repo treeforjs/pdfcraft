@@ -110,6 +110,21 @@ space and effective ppi, shading type, form transparency group; plus the separat
 the point (tool `print_object_inspector`). Clips are bounding boxes and optional content is not
 hidden.
 
+`output_preview` is Output Preview itself: `output_preview::render` separates a page with the
+same rasterizer, keeping only the objects its `Show` filter selects (all, DeviceCMYK, not
+DeviceCMYK, spot, RGB, gray, ICC-based, images, solid colour, text, line art; the walker tags
+each paint with `output_preview::space_family` bits and counts what it leaves out in
+`Raster::hidden_paints`, via `coverage::rasterize_shown`), and composites the separations that
+are switched on to RGB: process inks through a `Display` (a CMYK simulation profile's `AToB`
+table, read by moxcms into linear ProPhoto RGB and on to D50 XYZ; relative colorimetric with
+black point compensation, without it for Simulate Black Ink, absolute with the media white for
+Simulate Paper Color; or `Conversion::display_cmyk` without a profile), spot inks
+multiplied by their CMYK alternate. It reports each ink's max, inked area and mean coverage,
+and total area coverage (max and where, cells over the limit, optionally painted in a warning
+colour). `output_preview::synthetic_cmyk_profile` writes a small CMYK press profile in code
+for tests. The engine keeps the settings per document and takes the profile from its colour settings (`pdfcraft_engine::output_preview`;
+tools `print_output_preview_get`, `print_output_preview_set`, `print_output_preview_render`).
+
 ## PDF/X verification
 
 `pdfx::verify_pdfx` (tool `pdfx_verify`) checks the machine-checkable requirements of
