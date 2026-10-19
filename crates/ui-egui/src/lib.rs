@@ -408,8 +408,6 @@ pub struct PdfCraftApp {
     /// Preferences: bake Fill & Sign marks into the page when saving. Off, so a normal save stays editable.
     pub flatten_fill_sign_on_save: bool,
     pub dialog: Option<Dialog>,
-    /// How to ask for the latest release (the desktop app sets it; see `updates`).
-    pub update_source: Option<updates::UpdateSource>,
     pub(crate) updates: updates::Updates,
     pub palette_open: bool,
     pub palette_query: String,
@@ -701,7 +699,6 @@ impl PdfCraftApp {
             language: i18n::AUTO.to_string(),
             flatten_fill_sign_on_save: false,
             dialog: None,
-            update_source: None,
             updates: updates::Updates::default(),
             palette_open: false,
             palette_query: String::new(),
@@ -1406,6 +1403,7 @@ impl PdfCraftApp {
             "actions": actions_ui::encode(&self.custom_actions),
             "combine_columns": self.combine_columns.to_json(),
             "comments_panel_closed": self.comments_panel_closed,
+            "updates": self.persist_updates(),
         })
         .to_string()
     }
@@ -1414,6 +1412,7 @@ impl PdfCraftApp {
     pub fn restore(&mut self, json: &str) {
         let Ok(v) = serde_json::from_str::<serde_json::Value>(json) else { return };
         self.combine_columns = combine_ui::Columns::from_json(&v["combine_columns"]);
+        self.restore_updates(&v["updates"]);
         if let Ok(r) = serde_json::from_value::<Vec<RecentFile>>(v["recent"].clone()) {
             // Only keep entries whose files still exist.
             #[cfg(not(target_arch = "wasm32"))]
@@ -1965,7 +1964,7 @@ impl eframe::App for PdfCraftApp {
         self.guard_quit(ctx);
         let now = ctx.input(|i| i.time);
         self.autosave_tick(now);
-        self.poll_updates();
+        self.poll_updates(now);
         // Shortcuts deferred last frame: the text field has taken that frame's typing since.
         let deferred = std::mem::take(&mut self.deferred_commands);
         self.shortcuts(ctx);

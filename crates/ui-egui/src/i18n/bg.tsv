@@ -429,11 +429,22 @@
 	No check has run yet.	Още не е извършвана проверка.
 	Checking for a newer version…	Проверка за по-нова версия…
 	PdfCraft {v} is available.	Налична е PdfCraft {v}.
-	You have version {c}. Download the new version from its release page.	Имате версия {c}. Изтеглете новата версия от страницата на изданието.
 	PdfCraft {c} is up to date.	PdfCraft {c} е актуална.
-	Couldn't check for updates: {e}	Неуспешна проверка за актуализации: {e}
+	Check for updates automatically	Автоматична проверка за актуализации
+	PdfCraft {v} is available. Choose Help ▸ Check for updates to install it.	PdfCraft {v} е наличен. Изберете Помощ → Провери за актуализации, за да го инсталирате.
+	You have version {c}.	Имате версия {c}.
+	Download and install	Изтегли и инсталирай
+	Open release page	Отвори страницата на версията
+	Skip this version	Пропусни тази версия
+	Downloading PdfCraft {v}…	Изтегляне на PdfCraft {v}…
+	PdfCraft {v} is ready to install.	PdfCraft {v} е готов за инсталиране.
+	It installs when you quit PdfCraft. Restart now asks about unsaved documents first.	Инсталира се, когато затворите PdfCraft. „Рестартирай сега“ първо пита за незапазените документи.
+	Restart now	Рестартирай сега
+	Install when I quit	Инсталирай при изход
+	The update was cancelled.	Актуализацията е отменена.
+	Couldn't update: {e}	Неуспешна актуализация: {e}
+	Downloads come from PdfCraft's GitHub releases and are checked against the release's signed checksums before anything is installed.	Изтеглянията идват от изданията на PdfCraft в GitHub и се проверяват по подписаните контролни суми на изданието, преди да се инсталира каквото и да е.
 	You have version {c}. All releases are listed at {page}.	Имате версия {c}. Всички издания са изброени на {page}.
-	Asks GitHub for the latest release. Nothing is downloaded or installed automatically.	Запитва GitHub за най-новото издание. Нищо не се изтегля и не се инсталира автоматично.
 	Download	Изтегли
 	Later	По-късно
 	none	няма

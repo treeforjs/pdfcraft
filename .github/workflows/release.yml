@@ -32,6 +32,8 @@ env:
   CARGO_INCREMENTAL: 0
   RUST_BACKTRACE: 1
   PDFCRAFT_BUILD_SHA: ${{ github.sha }}
+  # The in-app updater's public key (a repository variable, not a secret), built into the app.
+  CRAFT_UPDATE_PUBLIC_KEY: ${{ vars.CRAFT_UPDATE_PUBLIC_KEY }}
   INPUT_VERSION: ${{ inputs.version }}
 
 jobs:
@@ -399,6 +401,23 @@ jobs:
         working-directory: artifacts
         run: |
           sha256sum -- * | tee SHA256SUMS.txt
+      # The in-app updater installs only what this signature covers (craft-update; key setup in
+      # https://github.com/treeforjs/craftworks/blob/main/docs/updates.md). Without the key the
+      # release still builds, and apps offer its page instead of installing it.
+      - name: Sign the checksums for in-app updates
+        working-directory: artifacts
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: |
+          if [ -z "$UPDATE_SIGNING_KEY" ]; then
+            echo "::warning::UPDATE_SIGNING_KEY is not set: PdfCraft can't install this release from inside the app"
+            exit 0
+          fi
+          key="$RUNNER_TEMP/update-key.pem"
+          trap 'rm -f "$key"' EXIT
+          printf '%s\n' "$UPDATE_SIGNING_KEY" >"$key"
+          openssl pkeyutl -sign -inkey "$key" -rawin -in SHA256SUMS.txt | base64 -w0 >SHA256SUMS.txt.sig
+          test -s SHA256SUMS.txt.sig
       - name: Create or update the draft release
         working-directory: artifacts
         run: |

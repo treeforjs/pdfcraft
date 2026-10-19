@@ -1,48 +1,32 @@
-//! Asks GitHub for the latest PdfCraft release (Help ▸ Check for updates, issue #28).
+//! In-app updates (issue #28): the shared craft updater, asking GitHub for PdfCraft releases.
 
-use std::time::Duration;
+use std::sync::Arc;
 
-use pdfcraft_ui_egui::updates::{RELEASES_PAGE, Release};
+use craft_update::{AppInfo, GitHub, Updater};
 
-const LATEST: &str = "https://api.github.com/repos/treeforjs/pdfcraft/releases/latest";
+/// The Ed25519 public key that signs releases' checksum lists, set at build time by the
+/// release workflow (repository variable `CRAFT_UPDATE_PUBLIC_KEY`). Builds without it still
+/// find new versions but never install anything themselves.
+const PUBLIC_KEY: Option<&str> = option_env!("CRAFT_UPDATE_PUBLIC_KEY");
 
-/// The latest release. The answer is untrusted: its size is capped, and only a page under
-/// [`RELEASES_PAGE`] is ever offered for download (anything else falls back to that list).
-pub fn latest_release() -> Result<Release, String> {
-    let agent = ureq::Agent::config_builder()
-        .timeout_global(Some(Duration::from_secs(10)))
-        .tls_config(ureq::tls::TlsConfig::builder().root_certs(os_roots()?).build())
-        .build()
-        .new_agent();
-    let mut response = agent
-        .get(LATEST)
-        .header("Accept", "application/vnd.github+json")
-        .header("User-Agent", concat!("PdfCraft/", env!("CARGO_PKG_VERSION")))
-        .call()
-        .map_err(|e| format!("couldn't reach GitHub ({e})"))?;
-    let body = response.body_mut().with_config().limit(1 << 20).read_to_string().map_err(|e| format!("unreadable answer ({e})"))?;
-    parse(&body)
-}
-
-/// The certificate authorities the operating system trusts.
-fn os_roots() -> Result<ureq::tls::RootCerts, String> {
-    let found = rustls_native_certs::load_native_certs();
-    let certs: Vec<ureq::tls::Certificate<'static>> = found.certs.iter().map(|c| ureq::tls::Certificate::from_der(c.as_ref()).to_owned()).collect();
-    if certs.is_empty() {
-        return Err("no trusted certificates found on this system".into());
+/// What the updater needs to know about this build.
+pub fn app_info() -> AppInfo {
+    AppInfo {
+        id: "pdfcraft".into(),
+        display_name: "PdfCraft".into(),
+        repo: "treeforjs/pdfcraft".into(),
+        current: env!("CARGO_PKG_VERSION").into(),
+        public_key: PUBLIC_KEY.map(str::trim).filter(|k| !k.is_empty()).map(Into::into),
+        prereleases: false,
     }
-    Ok(ureq::tls::RootCerts::new_with_certs(&certs))
 }
 
-fn parse(body: &str) -> Result<Release, String> {
-    let v: serde_json::Value = serde_json::from_str(body).map_err(|e| format!("unreadable answer ({e})"))?;
-    let version = v["tag_name"].as_str().filter(|t| !t.is_empty() && t.len() <= 64).ok_or("no release found")?.to_string();
-    let url = v["html_url"]
-        .as_str()
-        .filter(|u| u.strip_prefix(RELEASES_PAGE).is_some_and(|rest| rest.starts_with('/') && !rest.contains(['?', '#', '\\'])))
-        .unwrap_or(RELEASES_PAGE)
-        .to_string();
-    Ok(Release { version, url })
+/// The updater for this window; `wake` repaints when there is news. Builds nothing that
+/// touches the network or disk: the first check starts later, from the frame loop.
+pub fn updater(wake: impl Fn() + Send + Sync + 'static) -> Updater {
+    let mut u = Updater::new(app_info(), Arc::new(GitHub::new(concat!("PdfCraft/", env!("CARGO_PKG_VERSION")))));
+    u.on_change(wake);
+    u
 }
 
 #[cfg(test)]
@@ -50,23 +34,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn answers_are_read_and_only_our_release_pages_are_offered() {
-        let r = parse(r#"{"tag_name":"v0.2.0","html_url":"https://github.com/treeforjs/pdfcraft/releases/tag/v0.2.0"}"#).unwrap();
-        assert_eq!(r, Release { version: "v0.2.0".into(), url: "https://github.com/treeforjs/pdfcraft/releases/tag/v0.2.0".into() });
-        for elsewhere in ["https://example.com/pdfcraft.exe", "https://github.com/treeforjs/pdfcraft/releases.evil/x", "javascript:alert(1)"] {
-            let r = parse(&format!(r#"{{"tag_name":"v9.9.9","html_url":"{elsewhere}"}}"#)).unwrap();
-            assert_eq!(r.url, RELEASES_PAGE, "{elsewhere}");
+    fn this_build_is_described_for_the_updater() {
+        let info = app_info();
+        assert_eq!(info.releases_page(), pdfcraft_ui_egui::updates::RELEASES_PAGE);
+        assert!(craft_update::Version::parse(&info.current).is_some());
+        // A key set at build time must be usable, or installs would silently never happen.
+        if info.public_key.is_some() {
+            assert!(info.key().is_some(), "CRAFT_UPDATE_PUBLIC_KEY isn't an Ed25519 public key");
         }
-        assert!(parse(r#"{"message":"Not Found"}"#).is_err());
-        assert!(parse("<html>").is_err());
-    }
-
-    /// Live: asks GitHub over TLS with the OS's roots (`cargo test -p pdfcraft -- --ignored`).
-    #[test]
-    #[ignore = "needs network access"]
-    fn github_answers_with_the_latest_release() {
-        let r = latest_release().unwrap();
-        assert!(pdfcraft_ui_egui::updates::is_newer(&r.version, "0.0.0"), "{r:?}");
-        assert!(r.url.starts_with(RELEASES_PAGE), "{r:?}");
     }
 }

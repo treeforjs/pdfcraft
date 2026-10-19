@@ -16,6 +16,8 @@ pdfcraft-model = { workspace = true }
 pdfcraft-platform = { workspace = true }
 egui = { workspace = true, features = ["bytemuck"] }
 craft-ui = { workspace = true }
+# No network code here: the desktop app hands it the GitHub source.
+craft-update = { workspace = true }
 egui_extras = { workspace = true }
 eframe = { workspace = true, features = ["default_fonts", "wgpu", "accesskit", "persistence", "links"] }
 serde = { workspace = true }
@@ -66,6 +68,10 @@ egui_kittest = { workspace = true, features = ["eframe", "wgpu"] }
 image = { version = "0.25", default-features = false, features = ["png"] }
 # Glyph-coverage test of the interface fonts; the same skrifa pdfcraft-fonts already uses.
 skrifa = "0.44"
+# Updates tests sign a stand-in release (all already in the tree).
+ed25519-dalek = "3"
+sha2 = "0.11"
+tempfile = "3"
 
 [build-dependencies]
 serde_json = { workspace = true }
