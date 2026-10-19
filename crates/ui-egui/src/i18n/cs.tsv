@@ -772,11 +772,22 @@
 	No check has run yet.	Kontrola ještě neproběhla.
 	Checking for a newer version…	Hledá se novější verze…
 	PdfCraft {v} is available.	Je k dispozici PdfCraft {v}.
-	You have version {c}. Download the new version from its release page.	Máte verzi {c}. Novou verzi stáhněte ze stránky vydání.
 	PdfCraft {c} is up to date.	PdfCraft {c} je aktuální.
-	Couldn't check for updates: {e}	Aktualizace nelze zkontrolovat: {e}
+	Check for updates automatically	Automaticky kontrolovat aktualizace
+	PdfCraft {v} is available. Choose Help ▸ Check for updates to install it.	PdfCraft {v} je k dispozici. Nainstalujete ho volbou Nápověda ▸ Zkontrolovat aktualizace.
+	You have version {c}.	Máte verzi {c}.
+	Download and install	Stáhnout a nainstalovat
+	Open release page	Otevřít stránku vydání
+	Skip this version	Tuto verzi přeskočit
+	Downloading PdfCraft {v}…	Stahuje se PdfCraft {v}…
+	PdfCraft {v} is ready to install.	PdfCraft {v} je připraven k instalaci.
+	It installs when you quit PdfCraft. Restart now asks about unsaved documents first.	Nainstaluje se, až PdfCraft ukončíte. Restartovat nyní se nejdřív zeptá na neuložené dokumenty.
+	Restart now	Restartovat nyní
+	Install when I quit	Nainstalovat při ukončení
+	The update was cancelled.	Aktualizace byla zrušena.
+	Couldn't update: {e}	Aktualizace se nezdařila: {e}
+	Downloads come from PdfCraft's GitHub releases and are checked against the release's signed checksums before anything is installed.	Stahuje se z vydání PdfCraft na GitHubu a před instalací se vše ověří podle podepsaných kontrolních součtů vydání.
 	You have version {c}. All releases are listed at {page}.	Máte verzi {c}. Všechna vydání najdete na {page}.
-	Asks GitHub for the latest release. Nothing is downloaded or installed automatically.	Zjistí na GitHubu nejnovější vydání. Nic se automaticky nestahuje ani neinstaluje.
 	Download	Stáhnout
 	Later	Později
 	none	žádná

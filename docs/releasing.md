@@ -201,6 +201,12 @@ unsigned and the run shows a warning.
 | `WINDOWS_CERTIFICATE`, `WINDOWS_CERTIFICATE_PASSWORD` | base64 `.pfx` code-signing certificate and its password |
 | `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET` | service principal for Azure Trusted Signing (instead of a `.pfx`) |
 | `AZURE_SIGNING_ENDPOINT`, `AZURE_SIGNING_ACCOUNT`, `AZURE_CERT_PROFILE` | Trusted Signing endpoint, account and certificate profile |
+| `UPDATE_SIGNING_KEY` | Ed25519 private key (PEM) that signs `SHA256SUMS.txt` as `SHA256SUMS.txt.sig`, so the app can install the release itself |
+
+The in-app updater also needs the matching public key as the repository **variable**
+`CRAFT_UPDATE_PUBLIC_KEY` (base64; not secret), which every desktop build embeds. Making the key
+pair and where to put it: [craftworks `docs/updates.md`](https://github.com/treeforjs/craftworks/blob/main/docs/updates.md).
+Without both, PdfCraft still finds new releases and offers their page, but installs nothing.
 
 `GITHUB_TOKEN` creates the release; only the final job gets `contents: write`.
 

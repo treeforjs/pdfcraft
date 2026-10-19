@@ -1100,6 +1100,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "craft-update"
+version = "0.1.0"
+source = "git+https://github.com/treeforjs/craftworks?rev=8c52baa4c73e7fb8def81d19426a96005c814c12#8c52baa4c73e7fb8def81d19426a96005c814c12"
+dependencies = [
+ "base64 0.22.1",
+ "ed25519-dalek",
+ "rustls-native-certs",
+ "serde",
+ "serde_json",
+ "sha2",
+ "ureq",
+]
+
+[[package]]
 name = "crc32fast"
 version = "1.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3554,6 +3568,7 @@ dependencies = [
 name = "pdfcraft"
 version = "0.5.0"
 dependencies = [
+ "craft-update",
  "eframe",
  "egui",
  "fmv-macos-events",
@@ -3561,9 +3576,7 @@ dependencies = [
  "pdfcraft-render",
  "pdfcraft-ui-egui",
  "pollster 1.0.1",
- "rustls-native-certs",
  "serde_json",
- "ureq",
  "winresource",
  "winsafe",
 ]
@@ -3950,6 +3963,8 @@ dependencies = [
  "base64 0.22.1",
  "bytemuck",
  "craft-ui",
+ "craft-update",
+ "ed25519-dalek",
  "eframe",
  "egui",
  "egui_extras",
@@ -3974,8 +3989,10 @@ dependencies = [
  "rfd",
  "serde",
  "serde_json",
+ "sha2",
  "skrifa 0.44.0",
  "sys-locale",
+ "tempfile",
  "toml",
  "unicode-bidi",
  "wasm-bindgen",

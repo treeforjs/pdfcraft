@@ -717,11 +717,22 @@
 	No check has run yet.	Es wurde noch nicht gesucht.
 	Checking for a newer version…	Suche nach einer neueren Version…
 	PdfCraft {v} is available.	PdfCraft {v} ist verfügbar.
-	You have version {c}. Download the new version from its release page.	Du hast Version {c}. Lade die neue Version von ihrer Release-Seite herunter.
 	PdfCraft {c} is up to date.	PdfCraft {c} ist auf dem neuesten Stand.
-	Couldn't check for updates: {e}	Updates konnten nicht gesucht werden: {e}
+	Check for updates automatically	Automatisch nach Updates suchen
+	PdfCraft {v} is available. Choose Help ▸ Check for updates to install it.	PdfCraft {v} ist verfügbar. Wählen Sie Hilfe ▸ Nach Updates suchen, um es zu installieren.
+	You have version {c}.	Sie haben Version {c}.
+	Download and install	Herunterladen und installieren
+	Open release page	Release-Seite öffnen
+	Skip this version	Diese Version überspringen
+	Downloading PdfCraft {v}…	PdfCraft {v} wird heruntergeladen…
+	PdfCraft {v} is ready to install.	PdfCraft {v} ist bereit zur Installation.
+	It installs when you quit PdfCraft. Restart now asks about unsaved documents first.	Es wird installiert, wenn Sie PdfCraft beenden. „Jetzt neu starten“ fragt zuerst nach ungespeicherten Dokumenten.
+	Restart now	Jetzt neu starten
+	Install when I quit	Beim Beenden installieren
+	The update was cancelled.	Das Update wurde abgebrochen.
+	Couldn't update: {e}	Aktualisierung fehlgeschlagen: {e}
+	Downloads come from PdfCraft's GitHub releases and are checked against the release's signed checksums before anything is installed.	Downloads stammen aus den GitHub-Releases von PdfCraft und werden vor jeder Installation mit den signierten Prüfsummen des Releases verglichen.
 	You have version {c}. All releases are listed at {page}.	Du hast Version {c}. Alle Releases findest du unter {page}.
-	Asks GitHub for the latest release. Nothing is downloaded or installed automatically.	Fragt GitHub nach dem neuesten Release. Es wird nichts automatisch heruntergeladen oder installiert.
 	Download	Herunterladen
 	Later	Später
 	none	keine

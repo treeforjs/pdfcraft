@@ -744,11 +744,22 @@
 	No check has run yet.	まだ確認していません。
 	Checking for a newer version…	新しいバージョンを確認中…
 	PdfCraft {v} is available.	PdfCraft {v} が利用できます。
-	You have version {c}. Download the new version from its release page.	現在のバージョンは {c} です。リリースページから新しいバージョンをダウンロードしてください。
 	PdfCraft {c} is up to date.	PdfCraft {c} は最新です。
-	Couldn't check for updates: {e}	アップデートを確認できませんでした: {e}
+	Check for updates automatically	アップデートを自動的に確認
+	PdfCraft {v} is available. Choose Help ▸ Check for updates to install it.	PdfCraft {v} を利用できます。インストールするには ヘルプ ▸ アップデートを確認 を選んでください。
+	You have version {c}.	現在のバージョンは {c} です。
+	Download and install	ダウンロードしてインストール
+	Open release page	リリースページを開く
+	Skip this version	このバージョンをスキップ
+	Downloading PdfCraft {v}…	PdfCraft {v} をダウンロードしています…
+	PdfCraft {v} is ready to install.	PdfCraft {v} をインストールする準備ができました。
+	It installs when you quit PdfCraft. Restart now asks about unsaved documents first.	PdfCraft の終了時にインストールされます。今すぐ再起動 では、先に未保存の書類について確認します。
+	Restart now	今すぐ再起動
+	Install when I quit	終了時にインストール
+	The update was cancelled.	アップデートはキャンセルされました。
+	Couldn't update: {e}	アップデートできませんでした: {e}
+	Downloads come from PdfCraft's GitHub releases and are checked against the release's signed checksums before anything is installed.	ダウンロードは PdfCraft の GitHub リリースから取得し、インストール前にリリースの署名付きチェックサムで検証します。
 	You have version {c}. All releases are listed at {page}.	現在のバージョンは {c} です。すべてのリリースは {page} に掲載されています。
-	Asks GitHub for the latest release. Nothing is downloaded or installed automatically.	GitHub で最新リリースを確認します。自動でダウンロードやインストールは行いません。
 	Download	ダウンロード
 	Later	後で
 	none	なし

@@ -721,11 +721,22 @@ comment menu	Edit	సవరించు
 	No check has run yet.	ఇంకా తనిఖీ జరగలేదు.
 	Checking for a newer version…	కొత్త వెర్షన్ కోసం తనిఖీ చేస్తోంది…
 	PdfCraft {v} is available.	PdfCraft {v} అందుబాటులో ఉంది.
-	You have version {c}. Download the new version from its release page.	మీ వద్ద వెర్షన్ {c} ఉంది. కొత్త వెర్షన్‌ను దాని విడుదల పేజీ నుండి డౌన్‌లోడ్ చేసుకోండి.
 	PdfCraft {c} is up to date.	PdfCraft {c} తాజా వెర్షన్.
-	Couldn't check for updates: {e}	అప్‌డేట్‌ల కోసం తనిఖీ చేయడం సాధ్యం కాలేదు: {e}
+	Check for updates automatically	నవీకరణల కోసం స్వయంచాలకంగా తనిఖీ చేయి
+	PdfCraft {v} is available. Choose Help ▸ Check for updates to install it.	PdfCraft {v} అందుబాటులో ఉంది. దాన్ని ఇన్‌స్టాల్ చేయడానికి సహాయం ▸ నవీకరణల కోసం తనిఖీ చేయి ఎంచుకోండి.
+	You have version {c}.	మీ వద్ద వెర్షన్ {c} ఉంది.
+	Download and install	డౌన్‌లోడ్ చేసి ఇన్‌స్టాల్ చేయి
+	Open release page	విడుదల పేజీని తెరువు
+	Skip this version	ఈ వెర్షన్‌ను దాటవేయి
+	Downloading PdfCraft {v}…	PdfCraft {v} డౌన్‌లోడ్ అవుతోంది…
+	PdfCraft {v} is ready to install.	PdfCraft {v} ఇన్‌స్టాల్ చేయడానికి సిద్ధంగా ఉంది.
+	It installs when you quit PdfCraft. Restart now asks about unsaved documents first.	మీరు PdfCraft నుండి నిష్క్రమించినప్పుడు ఇది ఇన్‌స్టాల్ అవుతుంది. ఇప్పుడే పునఃప్రారంభించు ముందుగా సేవ్ చేయని పత్రాల గురించి అడుగుతుంది.
+	Restart now	ఇప్పుడే పునఃప్రారంభించు
+	Install when I quit	నిష్క్రమించినప్పుడు ఇన్‌స్టాల్ చేయి
+	The update was cancelled.	నవీకరణ రద్దు చేయబడింది.
+	Couldn't update: {e}	నవీకరించడం సాధ్యం కాలేదు: {e}
+	Downloads come from PdfCraft's GitHub releases and are checked against the release's signed checksums before anything is installed.	డౌన్‌లోడ్‌లు PdfCraft GitHub విడుదలల నుండి వస్తాయి మరియు ఏదైనా ఇన్‌స్టాల్ చేసే ముందు విడుదల యొక్క సంతకం చేసిన చెక్‌సమ్‌లతో తనిఖీ చేయబడతాయి.
 	You have version {c}. All releases are listed at {page}.	మీ వద్ద వెర్షన్ {c} ఉంది. అన్ని విడుదలల జాబితా: {page}.
-	Asks GitHub for the latest release. Nothing is downloaded or installed automatically.	తాజా విడుదల గురించి GitHubను అడుగుతుంది. ఏదీ ఆటోమేటిక్‌గా డౌన్‌లోడ్ లేదా ఇన్‌స్టాల్ చేయబడదు.
 	Download	డౌన్‌లోడ్ చేయి
 	Later	తర్వాత
 	none	ఏదీ లేదు

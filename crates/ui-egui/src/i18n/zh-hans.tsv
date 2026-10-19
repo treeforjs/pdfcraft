@@ -435,11 +435,22 @@
 	No check has run yet.	尚未运行检查。
 	Checking for a newer version…	正在检查新版本…
 	PdfCraft {v} is available.	PdfCraft {v} 可用。
-	You have version {c}. Download the new version from its release page.	当前版本为 {c}。请从其发布页面下载新版本。
 	PdfCraft {c} is up to date.	PdfCraft {c} 已是最新。
-	Couldn't check for updates: {e}	无法检查更新：{e}
+	Check for updates automatically	自动检查更新
+	PdfCraft {v} is available. Choose Help ▸ Check for updates to install it.	PdfCraft {v} 已发布。选择“帮助 ▸ 检查更新”即可安装。
+	You have version {c}.	你的版本是 {c}。
+	Download and install	下载并安装
+	Open release page	打开发布页面
+	Skip this version	跳过此版本
+	Downloading PdfCraft {v}…	正在下载 PdfCraft {v}…
+	PdfCraft {v} is ready to install.	PdfCraft {v} 已准备好安装。
+	It installs when you quit PdfCraft. Restart now asks about unsaved documents first.	退出 PdfCraft 时安装。“立即重启”会先询问未保存的文档。
+	Restart now	立即重启
+	Install when I quit	退出时安装
+	The update was cancelled.	更新已取消。
+	Couldn't update: {e}	无法更新：{e}
+	Downloads come from PdfCraft's GitHub releases and are checked against the release's signed checksums before anything is installed.	下载来自 PdfCraft 的 GitHub 发布，在安装任何内容之前都会用该发布的签名校验和进行核对。
 	You have version {c}. All releases are listed at {page}.	当前版本为 {c}。所有版本列在 {page}。
-	Asks GitHub for the latest release. Nothing is downloaded or installed automatically.	向 GitHub 查询最新版本。不会自动下载或安装任何内容。
 	Download	下载
 	Later	稍后
 	none	无

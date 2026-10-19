@@ -628,6 +628,7 @@ impl PdfCraftApp {
         } else {
             // A clean quit: nothing is left to recover.
             self.shutdown_recovery();
+            self.install_update_on_quit();
         }
     }
 }

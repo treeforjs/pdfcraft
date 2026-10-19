@@ -1714,8 +1714,8 @@ milestone = "M3"
 status = "partial"
 commands = ["help.check_updates"]
 tools = []
-evidence = ["crates/ui-egui/tests/updates.rs::a_newer_release_is_offered_for_download", "crates/ui-egui/tests/updates.rs::nothing_is_asked_until_the_user_checks", "apps/pdfcraft/src/updates.rs::answers_are_read_and_only_our_release_pages_are_offered"]
-notes = "asks GitHub Releases on request and offers the release page. By the owner's decision there is no check at start and no in-place install (Acrobat has both)"
+evidence = ["crates/ui-egui/tests/updates.rs::a_newer_release_downloads_verifies_and_waits_for_quit", "crates/ui-egui/tests/updates.rs::the_daily_check_waits_for_startup_and_only_notifies", "crates/ui-egui/tests/updates.rs::a_recent_or_disabled_check_doesnt_run_again", "crates/ui-egui/tests/updates.rs::without_an_installer_the_release_page_is_offered", "crates/ui-egui/tests/updates.rs::skipping_a_version_closes_and_remembers_it", "apps/pdfcraft/src/updates.rs::this_build_is_described_for_the_updater"]
+notes = "the craft apps' shared updater (craft-update): a daily background check (10 s after start, off in Preferences ▸ General) that only shows a notice; Help ▸ Check for updates downloads the installer that matches the install (MSI, AppImage, deb, rpm), verifies it against the release's Ed25519-signed SHA256SUMS.txt, and installs it on quit or Restart now. Missing: macOS installs in place (it offers the release page, as do the portable zip, Flatpak and tarball); installs need the release signing key set up (docs/releasing.md ▸ Secrets)"
 
 [[feature]]
 id = "view.single-key-accelerators"
