@@ -2248,3 +2248,18 @@ compare-page	Moved	తరలించబడింది
 	Page Open runs when the page becomes the current page; Page Close when another page does.	పేజీ ప్రస్తుత పేజీ అయినప్పుడు "పేజీ తెరవడం" అమలవుతుంది; మరొక పేజీ ప్రస్తుత పేజీ అయినప్పుడు "పేజీ మూసివేయడం" అమలవుతుంది.
 	JavaScript, e.g. app.alert("Hello")	JavaScript, ఉదా. app.alert("నమస్తే")
 	{s} actions aren't run by PdfCraft yet	{s} చర్యలను PdfCraft ఇంకా అమలు చేయదు
+	Insert clipboard before	క్లిప్‌బోర్డ్‌ను ముందు చొప్పించు
+	Insert clipboard after	క్లిప్‌బోర్డ్‌ను తర్వాత చొప్పించు
+	Couldn't insert pages: {e}	పేజీలను చొప్పించలేకపోయాము: {e}
+	Screen capture cancelled	స్క్రీన్ క్యాప్చర్ రద్దు చేయబడింది
+	Couldn't capture the screen: {e}	స్క్రీన్‌ను క్యాప్చర్ చేయలేకపోయాము: {e}
+	Create PDF from screen capture	స్క్రీన్ క్యాప్చర్ నుండి PDF సృష్టించు
+	Create PDF from window capture	విండో క్యాప్చర్ నుండి PDF సృష్టించు
+	Create PDF from region capture	ప్రాంతం క్యాప్చర్ నుండి PDF సృష్టించు
+	Insert pages from clipboard	క్లిప్‌బోర్డ్ నుండి పేజీలను చొప్పించు
+	Insert pages from clipboard before selection	ఎంపికకు ముందు క్లిప్‌బోర్డ్ నుండి పేజీలను చొప్పించు
+	Screen capture	స్క్రీన్ క్యాప్చర్
+	Window capture	విండో క్యాప్చర్
+	Region capture	ప్రాంతం క్యాప్చర్
+	Insert from clipboard	క్లిప్‌బోర్డ్ నుండి చొప్పించు
+	No screen capture tool was found. Capture with your system's tool, then use Create PDF from clipboard.	స్క్రీన్ క్యాప్చర్ సాధనం కనబడలేదు. మీ సిస్టమ్ సాధనంతో క్యాప్చర్ చేసి, తర్వాత క్లిప్‌బోర్డ్ నుండి PDF సృష్టించు ఉపయోగించండి.

@@ -2281,3 +2281,18 @@ compare-page	Moved	已移动
 	Page Open runs when the page becomes the current page; Page Close when another page does.	“页面打开”在该页成为当前页时运行；“页面关闭”在其他页成为当前页时运行。
 	JavaScript, e.g. app.alert("Hello")	JavaScript，例如 app.alert("你好")
 	{s} actions aren't run by PdfCraft yet	PdfCraft 尚不运行 {s} 操作
+	Insert clipboard before	在前面插入剪贴板
+	Insert clipboard after	在后面插入剪贴板
+	Couldn't insert pages: {e}	无法插入页面：{e}
+	Screen capture cancelled	已取消屏幕截图
+	Couldn't capture the screen: {e}	无法截取屏幕：{e}
+	Create PDF from screen capture	从屏幕截图创建 PDF
+	Create PDF from window capture	从窗口截图创建 PDF
+	Create PDF from region capture	从区域截图创建 PDF
+	Insert pages from clipboard	从剪贴板插入页面
+	Insert pages from clipboard before selection	在所选内容之前从剪贴板插入页面
+	Screen capture	屏幕截图
+	Window capture	窗口截图
+	Region capture	区域截图
+	Insert from clipboard	从剪贴板插入
+	No screen capture tool was found. Capture with your system's tool, then use Create PDF from clipboard.	未找到屏幕截图工具。请用系统自带的工具截图，然后使用“从剪贴板创建 PDF”。

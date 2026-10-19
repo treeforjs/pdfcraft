@@ -2315,3 +2315,18 @@ compare-page	Moved	Áthelyezve
 	Page Open runs when the page becomes the current page; Page Close when another page does.	Az „Oldal megnyitása” akkor fut, amikor az oldal lesz az aktuális; az „Oldal bezárása” akkor, amikor egy másik oldal lesz az.
 	JavaScript, e.g. app.alert("Hello")	JavaScript, pl. app.alert("Szia")
 	{s} actions aren't run by PdfCraft yet	A PdfCraft még nem futtatja a(z) {s} műveleteket
+	Insert clipboard before	Vágólap beszúrása elé
+	Insert clipboard after	Vágólap beszúrása utána
+	Couldn't insert pages: {e}	Nem sikerült beszúrni az oldalakat: {e}
+	Screen capture cancelled	Képernyőkép megszakítva
+	Couldn't capture the screen: {e}	Nem sikerült rögzíteni a képernyőt: {e}
+	Create PDF from screen capture	PDF létrehozása képernyőképből
+	Create PDF from window capture	PDF létrehozása ablakképből
+	Create PDF from region capture	PDF létrehozása területképből
+	Insert pages from clipboard	Oldalak beszúrása a vágólapról
+	Insert pages from clipboard before selection	Oldalak beszúrása a vágólapról a kijelölés elé
+	Screen capture	Képernyőkép
+	Window capture	Ablakkép
+	Region capture	Területkép
+	Insert from clipboard	Beszúrás a vágólapról
+	No screen capture tool was found. Capture with your system's tool, then use Create PDF from clipboard.	Nem található képernyőkép-készítő eszköz. Készítse el a képet a rendszer eszközével, majd használja a PDF létrehozása vágólapról parancsot.

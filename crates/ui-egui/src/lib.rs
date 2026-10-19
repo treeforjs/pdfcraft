@@ -91,6 +91,7 @@ mod signature_drag;
 pub mod timestamp_ui;
 pub use print_ui::{Handling as PrintHandling, PrintDraft, Which as PrintWhich};
 mod redact_ui;
+pub mod screen_capture;
 pub use redact_ui::{HiddenDraft, PagesDraft as RedactPagesDraft, RedactPrefs, SearchDraft as RedactSearchDraft};
 pub mod i18n;
 
@@ -416,6 +417,9 @@ pub struct PdfCraftApp {
     /// How to ask for the latest release (the desktop app sets it; see `updates`).
     pub update_source: Option<updates::UpdateSource>,
     pub(crate) updates: updates::Updates,
+    /// A running Create ▸ Screen capture (the web has no capture tool).
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+    pub(crate) capture: screen_capture::Capture,
     pub palette_open: bool,
     pub palette_query: String,
     pub all_tools_expanded: bool,
@@ -710,6 +714,7 @@ impl PdfCraftApp {
             dialog: None,
             update_source: None,
             updates: updates::Updates::default(),
+            capture: screen_capture::Capture::Idle,
             palette_open: false,
             palette_query: String::new(),
             all_tools_expanded: false,
@@ -1976,6 +1981,7 @@ impl eframe::App for PdfCraftApp {
         let now = ctx.input(|i| i.time);
         self.autosave_tick(now);
         self.poll_updates();
+        self.poll_capture();
         // Shortcuts deferred last frame: the text field has taken that frame's typing since.
         let deferred = std::mem::take(&mut self.deferred_commands);
         self.shortcuts(ctx);

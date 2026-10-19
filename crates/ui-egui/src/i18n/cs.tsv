@@ -2341,3 +2341,18 @@ compare-page	Moved	Přesunutá
 	Page Open runs when the page becomes the current page; Page Close when another page does.	„Otevření stránky“ se spustí, když se stránka stane aktuální; „Zavření stránky“, když se jí stane jiná stránka.
 	JavaScript, e.g. app.alert("Hello")	JavaScript, např. app.alert("Ahoj")
 	{s} actions aren't run by PdfCraft yet	Akce {s} zatím PdfCraft nespouští
+	Insert clipboard before	Vložit schránku před
+	Insert clipboard after	Vložit schránku za
+	Couldn't insert pages: {e}	Stránky nelze vložit: {e}
+	Screen capture cancelled	Snímek obrazovky zrušen
+	Couldn't capture the screen: {e}	Obrazovku nelze zachytit: {e}
+	Create PDF from screen capture	Vytvořit PDF ze snímku obrazovky
+	Create PDF from window capture	Vytvořit PDF ze snímku okna
+	Create PDF from region capture	Vytvořit PDF ze snímku oblasti
+	Insert pages from clipboard	Vložit stránky ze schránky
+	Insert pages from clipboard before selection	Vložit stránky ze schránky před výběr
+	Screen capture	Snímek obrazovky
+	Window capture	Snímek okna
+	Region capture	Snímek oblasti
+	Insert from clipboard	Vložit ze schránky
+	No screen capture tool was found. Capture with your system's tool, then use Create PDF from clipboard.	Nebyl nalezen žádný nástroj pro snímky obrazovky. Pořiďte snímek nástrojem systému a pak použijte Vytvořit PDF ze schránky.

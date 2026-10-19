@@ -115,6 +115,26 @@ fn clipboard_images_and_text_become_new_pdfs() {
 }
 
 #[test]
+fn screen_captures_become_new_pdfs() {
+    let mut png = Vec::new();
+    image::RgbaImage::from_pixel(80, 60, image::Rgba([30, 60, 90, 255]))
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .unwrap();
+    let mut app = PdfCraftApp::new();
+    app.set_option("language", "en").unwrap();
+    app.create_from_capture(&png, None).unwrap();
+    app.create_from_capture(&png, Some(pdfcraft_engine::CaptureRegion { x: 10, y: 10, width: 30, height: 20 })).unwrap();
+    let docs = app.session.docs();
+    assert_eq!(docs.len(), 2);
+    assert_eq!(docs[0].name, "Screen capture.pdf");
+    assert_eq!((docs[0].info.pages[0].width, docs[0].info.pages[0].height), (80.0, 60.0));
+    assert_eq!((docs[1].info.pages[0].width, docs[1].info.pages[0].height), (30.0, 20.0));
+    assert!(app.create_from_capture(b"not a picture", None).is_err());
+    assert!(app.create_from_capture(&png, Some(pdfcraft_engine::CaptureRegion { x: 70, y: 0, width: 20, height: 5 })).is_err());
+    assert_eq!(app.session.docs().len(), 2, "refused captures open nothing");
+}
+
+#[test]
 fn the_pdf_optimizer_dialog_saves_an_optimized_copy() {
     use egui_kittest::Harness;
     use egui_kittest::kittest::Queryable;

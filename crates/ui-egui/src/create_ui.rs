@@ -44,40 +44,16 @@ pub(crate) fn image_import_body(ui: &mut egui::Ui, app: &mut PdfCraftApp) -> (bo
 pub use pdfcraft_engine::CONVERTIBLE;
 
 /// What Create ▸ Clipboard found on the clipboard.
-#[derive(Clone, Debug, PartialEq)]
-pub enum Clip {
-    /// RGBA pixels, row by row.
-    Image {
-        width: usize,
-        height: usize,
-        rgba: Vec<u8>,
-    },
-    Text(String),
-}
+pub use pdfcraft_engine::Clip;
 
 /// An image on the system clipboard, or else its text.
 #[cfg(not(target_arch = "wasm32"))]
-fn read_clipboard() -> Option<Clip> {
+pub(crate) fn read_clipboard() -> Option<Clip> {
     let mut cb = arboard::Clipboard::new().ok()?;
     if let Ok(img) = cb.get_image() {
         return Some(Clip::Image { width: img.width, height: img.height, rgba: img.bytes.into_owned() });
     }
     cb.get_text().ok().filter(|t| !t.trim().is_empty()).map(Clip::Text)
-}
-
-fn png_from_rgba(width: usize, height: usize, rgba: &[u8]) -> Result<Vec<u8>, String> {
-    let (w, h) = (u32::try_from(width).map_err(|e| e.to_string())?, u32::try_from(height).map_err(|e| e.to_string())?);
-    if w == 0 || h == 0 || rgba.len() != width * height * 4 {
-        return Err("the clipboard image is empty or malformed".into());
-    }
-    let mut out = Vec::new();
-    let mut enc = png::Encoder::new(&mut out, w, h);
-    enc.set_color(png::ColorType::Rgba);
-    enc.set_depth(png::BitDepth::Eight);
-    let mut writer = enc.write_header().map_err(|e| e.to_string())?;
-    writer.write_image_data(rgba).map_err(|e| e.to_string())?;
-    writer.finish().map_err(|e| e.to_string())?;
-    Ok(out)
 }
 
 fn stem(name: &str) -> &str {
@@ -96,7 +72,7 @@ impl PdfCraftApp {
         Some(self.open_created_bytes(&format!("{}.pdf", stem(name)), created.map_err(|e| e.to_string())))
     }
 
-    fn open_created_bytes(&mut self, name: &str, created: Result<Arc<Vec<u8>>, String>) -> Result<(), String> {
+    pub(crate) fn open_created_bytes(&mut self, name: &str, created: Result<Arc<Vec<u8>>, String>) -> Result<(), String> {
         let bytes = created?;
         let id = self.session.open_new(name, bytes).map_err(|e| e.to_string())?;
         let info = &self.session.get(id).ok_or("the new document could not be opened")?.info;
@@ -124,13 +100,7 @@ impl PdfCraftApp {
 
     /// Create a new document from clipboard contents.
     pub fn create_from_clip(&mut self, clip: Clip) -> Result<(), String> {
-        let created = match clip {
-            Clip::Image { width, height, rgba } => {
-                let png = png_from_rgba(width, height, &rgba)?;
-                self.session.create_from_images(&[("Clipboard.png".into(), png)])
-            }
-            Clip::Text(t) => self.session.create_from_text("Clipboard", &t),
-        };
+        let created = self.session.pdf_from_clip(&clip).map(|(pdf, _)| pdf);
         self.open_created_bytes("Clipboard.pdf", created.map_err(|e| e.to_string()))
     }
 

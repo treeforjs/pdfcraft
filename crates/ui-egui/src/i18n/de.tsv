@@ -2317,3 +2317,18 @@ compare-page	Moved	Verschoben
 	Page Open runs when the page becomes the current page; Page Close when another page does.	„Seite öffnen“ läuft, wenn die Seite zur aktuellen Seite wird; „Seite schließen“, wenn eine andere Seite es wird.
 	JavaScript, e.g. app.alert("Hello")	JavaScript, z. B. app.alert("Hallo")
 	{s} actions aren't run by PdfCraft yet	{s}-Aktionen werden von PdfCraft noch nicht ausgeführt
+	Insert clipboard before	Zwischenablage davor einfügen
+	Insert clipboard after	Zwischenablage danach einfügen
+	Couldn't insert pages: {e}	Seiten konnten nicht eingefügt werden: {e}
+	Screen capture cancelled	Bildschirmaufnahme abgebrochen
+	Couldn't capture the screen: {e}	Bildschirm konnte nicht aufgenommen werden: {e}
+	Create PDF from screen capture	PDF aus Bildschirmaufnahme erstellen
+	Create PDF from window capture	PDF aus Fensteraufnahme erstellen
+	Create PDF from region capture	PDF aus Bereichsaufnahme erstellen
+	Insert pages from clipboard	Seiten aus Zwischenablage einfügen
+	Insert pages from clipboard before selection	Seiten aus Zwischenablage vor der Auswahl einfügen
+	Screen capture	Bildschirmaufnahme
+	Window capture	Fensteraufnahme
+	Region capture	Bereichsaufnahme
+	Insert from clipboard	Aus Zwischenablage einfügen
+	No screen capture tool was found. Capture with your system's tool, then use Create PDF from clipboard.	Kein Werkzeug für Bildschirmaufnahmen gefunden. Nehmen Sie mit dem Werkzeug Ihres Systems auf und verwenden Sie dann „PDF aus Zwischenablage erstellen“.

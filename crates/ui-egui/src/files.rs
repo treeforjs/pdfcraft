@@ -382,6 +382,45 @@ impl PdfCraftApp {
         }
     }
 
+    /// Organize ▸ Insert from clipboard: the image (one page at its size) or the text on the
+    /// system clipboard becomes new pages before the first selected page or after the last
+    /// (or the current page), in one undo step.
+    pub(crate) fn insert_from_clipboard(&mut self, before: bool) {
+        if self.active.is_none() {
+            self.notify_tr("Open a document first");
+            return;
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        let clip = crate::create_ui::read_clipboard();
+        #[cfg(target_arch = "wasm32")]
+        let clip: Option<crate::create_ui::Clip> = None;
+        match clip {
+            Some(c) => {
+                if let Err(e) = self.insert_clip(c, before) {
+                    self.notify_fmt("Couldn't insert pages: {e}", &[("e", &e)]);
+                }
+            }
+            None => self.notify_tr("The clipboard has no image or text"),
+        }
+    }
+
+    /// Insert clipboard contents before the first selected page or after the last (or the
+    /// current page) as one undoable edit, then select the new pages. Tests and the control
+    /// channel call this with contents they made.
+    pub fn insert_clip(&mut self, clip: crate::create_ui::Clip, before: bool) -> Result<(), String> {
+        let Some(view) = self.active.and_then(|i| self.views.get(i)) else { return Err("no document is open".into()) };
+        let (id, targets) = (view.id, view.target_pages());
+        let count = self.session.get(id).map_or(0, |d| d.info.pages.len());
+        let at = if before { targets.first().copied().unwrap_or(0) } else { targets.last().map_or(0, |p| p.saturating_add(1)) }.min(count);
+        let (edit, pages) = self.session.insert_clip_edit(&clip, at).map_err(|e| e.to_string())?;
+        if self.apply_edit(edit)
+            && let Some(view) = self.active.and_then(|i| self.views.get_mut(i))
+        {
+            view.select_pages(&(at..at.saturating_add(pages)).collect::<Vec<_>>());
+        }
+        Ok(())
+    }
+
     /// Copy the selected pages (or the current page) into a new unsaved document tab.
     pub fn extract_selection(&mut self) {
         // What's typed in a form field is part of the document (#166).

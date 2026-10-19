@@ -313,6 +313,21 @@ pub fn tools() -> Vec<ToolDef> {
                 json!({ "doc": doc(), "path": { "type": "string" }, "at": { "type": "integer", "minimum": 1 }, "pages": pages("of the source file (default: all)"), "merge_tags": { "type": "boolean", "description": "Merge the file's structure tree (default true); false inserts the pages untagged." } }),
                 &["doc", "path", "at"],
             )),
+        t("page_insert_clipboard", "Insert pages from the clipboard", "Organize ▸ Insert from clipboard: what the clipboard holds becomes new pages before or after `page` (default: after the last page), as one undo step. Headless there is no system clipboard, so pass its contents: `text` (flowed onto US Letter pages, 11 pt), `image_path` (a PNG, JPEG, TIFF, GIF or BMP file; one page at the image's size) or raw pixels as the clipboard holds them (`rgba_base64`, four bytes per pixel, rows top to bottom, with `width` and `height`; at most 8192 × 8192). Returns the document and `inserted` (first new page, count).")
+            .cmd("page.insert_clipboard")
+            .with(schema(
+                json!({
+                    "doc": doc(),
+                    "page": { "type": "integer", "minimum": 1, "description": "The page to insert next to (default: the last page)." },
+                    "position": { "type": "string", "enum": ["before", "after"], "description": "Default after." },
+                    "text": { "type": "string", "minLength": 1 },
+                    "image_path": { "type": "string" },
+                    "rgba_base64": { "type": "string" },
+                    "width": { "type": "integer", "minimum": 1, "maximum": 8192 },
+                    "height": { "type": "integer", "minimum": 1, "maximum": 8192 },
+                }),
+                &["doc"],
+            )),
         t("page_extract", "Extract pages", "Copy pages into a new PDF (links, bookmarks, fields, layers and the tags (structure elements) that belong to them come along). separate: true writes each page as its own file into out_dir; delete: true removes the pages from this document afterwards (undoable).")
             .cmd("page.extract")
             .with(schema(
@@ -2156,6 +2171,25 @@ pub fn tools() -> Vec<ToolDef> {
             }),
             &["from"],
         )),
+        t("doc_create_screenshot", "Create a PDF from a screen capture", "Create ▸ Screen capture: a new, unsaved one-page document from a screen capture (`path`: the PNG, JPEG or TIFF a capture tool wrote), optionally cut to `region` (pixels of the capture, origin top left). The page takes the image's size at its resolution (one point per pixel without one). Returned like doc_open. The capture itself is taken by the desktop app, which runs the system's capture tool (macOS screencapture; GNOME Screenshot, Spectacle, grim, scrot or ImageMagick import elsewhere).")
+            .cmd("create.screenshot")
+            .with(schema(
+                json!({
+                    "path": { "type": "string" },
+                    "region": {
+                        "type": "object",
+                        "properties": {
+                            "x": { "type": "integer", "minimum": 0 },
+                            "y": { "type": "integer", "minimum": 0 },
+                            "width": { "type": "integer", "minimum": 1 },
+                            "height": { "type": "integer", "minimum": 1 },
+                        },
+                        "required": ["x", "y", "width", "height"],
+                    },
+                    "name": { "type": "string", "description": "Name for the new document (default Screen capture.pdf)." },
+                }),
+                &["path"],
+            )),
         t("doc_reduce", "Reduce file size", "Write a smaller copy of the document to `path` with Acrobat's Reduce File Size choices: images above 225 ppi downsampled to 150 ppi and JPEG-compressed (medium quality), thumbnails dropped, identical fonts and images merged, unused objects dropped, compressed object streams. The open document is unchanged.")
             .cmd("optimize.reduce")
             .with(schema(json!({ "doc": doc(), "path": { "type": "string" } }), &["doc", "path"])),

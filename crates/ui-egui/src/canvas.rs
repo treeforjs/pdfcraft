@@ -401,6 +401,10 @@ pub enum ViewAction {
     PastePages,
     /// Page Properties ▸ Actions for this page (0-based).
     PageActions(usize),
+    /// Insert the system clipboard's image or text before or after the selection.
+    InsertClipboard {
+        before: bool,
+    },
 }
 
 impl DocView {
@@ -3715,6 +3719,15 @@ fn organize_grid(view: &mut DocView, info: &DocInfo, editable: bool, dirty: bool
                     }
                     if ui.add_enabled(editable, egui::Button::new(tl!("Paste after"))).clicked() {
                         view.pending_action = Some(ViewAction::PastePages);
+                        ui.close();
+                    }
+                    ui.separator();
+                    if ui.add_enabled(editable, egui::Button::new(tl!("Insert clipboard before"))).clicked() {
+                        view.pending_action = Some(ViewAction::InsertClipboard { before: true });
+                        ui.close();
+                    }
+                    if ui.add_enabled(editable, egui::Button::new(tl!("Insert clipboard after"))).clicked() {
+                        view.pending_action = Some(ViewAction::InsertClipboard { before: false });
                         ui.close();
                     }
                 });

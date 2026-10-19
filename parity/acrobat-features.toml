@@ -2667,11 +2667,11 @@ title = "Insert pages from the clipboard"
 area = "D"
 tier = "P1"
 milestone = "M10"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["page.insert_clipboard", "page.insert_clipboard_before"]
+tools = ["page_insert_clipboard"]
+evidence = ["crates/engine/src/clip.rs::hostile_clipboard_contents_are_refused", "crates/automation/tests/clipboard.rs::clipboard_contents_insert_before_or_after_a_page_in_one_undo_step", "crates/automation/tests/clipboard.rs::hostile_clipboard_arguments_are_refused_and_change_nothing", "crates/ui-egui/tests/editing.rs::clipboard_contents_insert_before_or_after_the_selection_in_one_undo_step"]
+notes = "An image on the clipboard becomes one page at its size, text flows onto US Letter pages; inserted before the first or after the last selected page (Pages menu, page-grid right-click Insert clipboard before / after) as one undo step, and the new pages are selected. Headless, the tool takes the clipboard's contents (text, an image file or raw RGBA). Missing: Acrobat's Insert Pages dialog with a page-number field (the selection, or the tool's page, chooses where)."
 
 [[feature]]
 id = "organize.insert-from-scanner"
@@ -6764,11 +6764,11 @@ title = "Create PDF from a screen capture"
 area = "J"
 tier = "P1"
 milestone = "M10"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["create.screenshot", "create.screenshot_window", "create.screenshot_region"]
+tools = ["doc_create_screenshot"]
+evidence = ["crates/engine/src/clip.rs::hostile_captures_are_refused", "crates/automation/tests/clipboard.rs::screen_captures_become_new_documents_whole_or_cut_to_a_region", "crates/ui-egui/tests/create.rs::screen_captures_become_new_pdfs", "crates/ui-egui/src/screen_capture.rs::each_system_gets_its_own_capture_tool"]
+notes = "Whole screen, a window or a dragged region becomes a new one-page PDF at the image's size. The app runs the operating system's own capture tool on a worker thread (macOS screencapture; GNOME Screenshot, Spectacle, grim (screen only), scrot or ImageMagick import on Linux/BSD) rather than linking a native capture library; the tool takes a captured image file and an optional pixel region. Missing: the OS capture hook on Windows (no command-line capture tool and no pure-Rust capture path without new native dependencies; use Win+Shift+S then Create from clipboard), hiding PdfCraft's own window during a whole-screen capture, and capture on the web."
 
 [[feature]]
 id = "create.blank"

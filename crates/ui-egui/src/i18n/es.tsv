@@ -2233,3 +2233,18 @@ compare-page	Moved	Movida
 	Page Open runs when the page becomes the current page; Page Close when another page does.	«Abrir página» se ejecuta cuando la página pasa a ser la actual; «Cerrar página», cuando lo pasa a ser otra.
 	JavaScript, e.g. app.alert("Hello")	JavaScript, p. ej. app.alert("Hola")
 	{s} actions aren't run by PdfCraft yet	PdfCraft aún no ejecuta las acciones {s}
+	Insert clipboard before	Insertar portapapeles antes
+	Insert clipboard after	Insertar portapapeles después
+	Couldn't insert pages: {e}	No se pudieron insertar las páginas: {e}
+	Screen capture cancelled	Captura de pantalla cancelada
+	Couldn't capture the screen: {e}	No se pudo capturar la pantalla: {e}
+	Create PDF from screen capture	Crear PDF a partir de una captura de pantalla
+	Create PDF from window capture	Crear PDF a partir de una captura de ventana
+	Create PDF from region capture	Crear PDF a partir de una captura de región
+	Insert pages from clipboard	Insertar páginas desde el portapapeles
+	Insert pages from clipboard before selection	Insertar páginas desde el portapapeles antes de la selección
+	Screen capture	Captura de pantalla
+	Window capture	Captura de ventana
+	Region capture	Captura de región
+	Insert from clipboard	Insertar desde el portapapeles
+	No screen capture tool was found. Capture with your system's tool, then use Create PDF from clipboard.	No se encontró ninguna herramienta de captura de pantalla. Capture con la herramienta de su sistema y luego use Crear PDF desde el portapapeles.

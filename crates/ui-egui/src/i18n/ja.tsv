@@ -2317,3 +2317,18 @@ compare-page	Moved	移動
 	Page Open runs when the page becomes the current page; Page Close when another page does.	「ページを開く」はそのページが現在のページになったときに、「ページを閉じる」は別のページが現在のページになったときに実行されます。
 	JavaScript, e.g. app.alert("Hello")	JavaScript（例: app.alert("こんにちは")）
 	{s} actions aren't run by PdfCraft yet	{s} アクションは PdfCraft ではまだ実行されません
+	Insert clipboard before	クリップボードを前に挿入
+	Insert clipboard after	クリップボードを後ろに挿入
+	Couldn't insert pages: {e}	ページを挿入できませんでした: {e}
+	Screen capture cancelled	画面キャプチャをキャンセルしました
+	Couldn't capture the screen: {e}	画面をキャプチャできませんでした: {e}
+	Create PDF from screen capture	画面キャプチャから PDF を作成
+	Create PDF from window capture	ウィンドウキャプチャから PDF を作成
+	Create PDF from region capture	範囲キャプチャから PDF を作成
+	Insert pages from clipboard	クリップボードからページを挿入
+	Insert pages from clipboard before selection	選択範囲の前にクリップボードからページを挿入
+	Screen capture	画面キャプチャ
+	Window capture	ウィンドウキャプチャ
+	Region capture	範囲キャプチャ
+	Insert from clipboard	クリップボードから挿入
+	No screen capture tool was found. Capture with your system's tool, then use Create PDF from clipboard.	画面キャプチャツールが見つかりません。システムのツールでキャプチャしてから、「クリップボードから PDF を作成」を使ってください。

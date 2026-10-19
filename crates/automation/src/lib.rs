@@ -17,6 +17,7 @@ mod attachment_trust;
 mod autotag;
 mod camera;
 mod certsec;
+mod clip;
 mod color_settings;
 mod comments;
 mod compare;
@@ -250,6 +251,7 @@ impl Automation {
             }
             "page_insert_blank" => self.insert_blank(&a)?,
             "page_insert_file" => self.insert_file(&a)?,
+            "page_insert_clipboard" => self.page_insert_clipboard(&a)?,
             "page_extract" => self.page_extract(&a)?,
             "doc_combine" => self.doc_combine(&a)?,
             "doc_bates_files" => self.doc_bates_files(&a)?,
@@ -399,6 +401,7 @@ impl Automation {
             }
             "page_set_transition" => self.page_set_transition(&a)?,
             "doc_create" => self.doc_create(&a)?,
+            "doc_create_screenshot" => self.doc_create_screenshot(&a)?,
             "doc_flatten" => {
                 let (comments, fields) = (a.opt_bool("comments")?.unwrap_or(true), a.opt_bool("fields")?.unwrap_or(true));
                 if !comments && !fields {

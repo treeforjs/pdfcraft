@@ -2326,3 +2326,18 @@ compare-page	Moved	Spostata
 	Page Open runs when the page becomes the current page; Page Close when another page does.	«Apertura pagina» viene eseguito quando la pagina diventa quella corrente; «Chiusura pagina» quando lo diventa un'altra pagina.
 	JavaScript, e.g. app.alert("Hello")	JavaScript, ad es. app.alert("Ciao")
 	{s} actions aren't run by PdfCraft yet	PdfCraft non esegue ancora le azioni {s}
+	Insert clipboard before	Inserisci appunti prima
+	Insert clipboard after	Inserisci appunti dopo
+	Couldn't insert pages: {e}	Impossibile inserire le pagine: {e}
+	Screen capture cancelled	Cattura dello schermo annullata
+	Couldn't capture the screen: {e}	Impossibile catturare lo schermo: {e}
+	Create PDF from screen capture	Crea PDF da cattura dello schermo
+	Create PDF from window capture	Crea PDF da cattura di finestra
+	Create PDF from region capture	Crea PDF da cattura di un'area
+	Insert pages from clipboard	Inserisci pagine dagli appunti
+	Insert pages from clipboard before selection	Inserisci pagine dagli appunti prima della selezione
+	Screen capture	Cattura dello schermo
+	Window capture	Cattura di finestra
+	Region capture	Cattura di un'area
+	Insert from clipboard	Inserisci dagli appunti
+	No screen capture tool was found. Capture with your system's tool, then use Create PDF from clipboard.	Nessuno strumento di cattura dello schermo trovato. Cattura con lo strumento del sistema, poi usa Crea PDF dagli appunti.

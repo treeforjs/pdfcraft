@@ -2279,3 +2279,18 @@ compare-page	Moved	Преместена
 	Page Open runs when the page becomes the current page; Page Close when another page does.	„Отваряне на страницата“ се изпълнява, когато страницата стане текуща; „Затваряне на страницата“ – когато текуща стане друга страница.
 	JavaScript, e.g. app.alert("Hello")	JavaScript, напр. app.alert("Здравей")
 	{s} actions aren't run by PdfCraft yet	PdfCraft все още не изпълнява действия {s}
+	Insert clipboard before	Вмъкни клипборда преди
+	Insert clipboard after	Вмъкни клипборда след
+	Couldn't insert pages: {e}	Страниците не можаха да бъдат вмъкнати: {e}
+	Screen capture cancelled	Заснемането на екрана е отменено
+	Couldn't capture the screen: {e}	Екранът не можа да бъде заснет: {e}
+	Create PDF from screen capture	Създай PDF от снимка на екрана
+	Create PDF from window capture	Създай PDF от снимка на прозорец
+	Create PDF from region capture	Създай PDF от снимка на област
+	Insert pages from clipboard	Вмъкни страници от клипборда
+	Insert pages from clipboard before selection	Вмъкни страници от клипборда преди избраното
+	Screen capture	Снимка на екрана
+	Window capture	Снимка на прозорец
+	Region capture	Снимка на област
+	Insert from clipboard	Вмъкни от клипборда
+	No screen capture tool was found. Capture with your system's tool, then use Create PDF from clipboard.	Не е намерен инструмент за снимки на екрана. Заснемете с инструмента на системата, след което използвайте Създай PDF от клипборда.

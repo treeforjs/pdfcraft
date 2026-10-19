@@ -2230,3 +2230,18 @@ compare-page	Moved	Перемещена
 	Page Open runs when the page becomes the current page; Page Close when another page does.	«Открытие страницы» выполняется, когда страница становится текущей; «Закрытие страницы» — когда текущей становится другая страница.
 	JavaScript, e.g. app.alert("Hello")	JavaScript, например app.alert("Привет")
 	{s} actions aren't run by PdfCraft yet	PdfCraft пока не выполняет действия {s}
+	Insert clipboard before	Вставить буфер обмена перед
+	Insert clipboard after	Вставить буфер обмена после
+	Couldn't insert pages: {e}	Не удалось вставить страницы: {e}
+	Screen capture cancelled	Снимок экрана отменён
+	Couldn't capture the screen: {e}	Не удалось сделать снимок экрана: {e}
+	Create PDF from screen capture	Создать PDF из снимка экрана
+	Create PDF from window capture	Создать PDF из снимка окна
+	Create PDF from region capture	Создать PDF из снимка области
+	Insert pages from clipboard	Вставить страницы из буфера обмена
+	Insert pages from clipboard before selection	Вставить страницы из буфера обмена перед выделением
+	Screen capture	Снимок экрана
+	Window capture	Снимок окна
+	Region capture	Снимок области
+	Insert from clipboard	Вставить из буфера обмена
+	No screen capture tool was found. Capture with your system's tool, then use Create PDF from clipboard.	Не найдено средство для снимков экрана. Сделайте снимок средством системы, затем используйте «Создать PDF из буфера обмена».

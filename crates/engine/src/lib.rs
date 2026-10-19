@@ -18,6 +18,7 @@ pub mod attachment_trust;
 pub mod autotag;
 pub mod camera;
 pub mod catalog;
+pub mod clip;
 pub mod color_settings;
 pub mod commands;
 pub mod compare;
@@ -44,6 +45,7 @@ mod upright_image;
 pub mod url_access;
 pub mod xfa;
 
+pub use clip::{CaptureRegion, Clip};
 pub use signature_image::{ImageSignaturePreview, SignatureImage};
 pub use summary::SummaryLayout;
 

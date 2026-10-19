@@ -148,6 +148,7 @@ impl PdfCraftApp {
             Some(crate::canvas::ViewAction::CopyPages { cut }) => self.copy_pages(cut),
             Some(crate::canvas::ViewAction::PastePages) => self.paste_pages(),
             Some(crate::canvas::ViewAction::PageActions(page)) => self.open_page_actions(page),
+            Some(crate::canvas::ViewAction::InsertClipboard { before }) => self.insert_from_clipboard(before),
             None => {}
         }
         applied

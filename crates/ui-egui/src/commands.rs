@@ -244,6 +244,8 @@ impl PdfCraftApp {
                 }
             }
             "page.insert" => self.insert_from_file_dialog(),
+            "page.insert_clipboard" => self.insert_from_clipboard(false),
+            "page.insert_clipboard_before" => self.insert_from_clipboard(true),
             "page.replace" => self.replace_pages_dialog(),
             "edit.header_footer"
             | "edit.watermark"
@@ -544,6 +546,9 @@ impl PdfCraftApp {
             "create.multiple" => self.create_multiple_dialog(),
             "create.images" => self.create_from_images_dialog(),
             "create.clipboard" => self.create_from_clipboard(),
+            "create.screenshot" => self.capture_screen(crate::screen_capture::CaptureMode::Screen),
+            "create.screenshot_window" => self.capture_screen(crate::screen_capture::CaptureMode::Window),
+            "create.screenshot_region" => self.capture_screen(crate::screen_capture::CaptureMode::Region),
             "optimize.reduce" => self.reduce_file_size(),
             "page.duplicate" => {
                 self.apply_edit(Edit::DuplicatePages { pages: targets });
