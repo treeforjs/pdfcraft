@@ -696,6 +696,8 @@ pub use text::{
 };
 mod background;
 pub use background::strip_text_and_images;
+pub mod lists;
+pub use lists::{Bullet, ListChange, ListItem, ListStyle, ListTarget, Numbering, edit_list, list_edit_changes};
 pub mod added;
 pub use added::{Added, AddedImage, AddedText, Align, Content, Family, add_content, delete_content, first_undrawable, list_added, update_content};
 

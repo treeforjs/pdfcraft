@@ -31,7 +31,7 @@ use pdfcraft_cos::{Dict, Document, ObjRef, Object, Stream};
 use crate::tags::{MAX_MCID, TagError, TagKid, Tags, catalog, sub_dict, tags};
 
 /// Pages with more operators than this are not compared (reported instead).
-const MAX_OPS: usize = 2_000_000;
+pub(crate) const MAX_OPS: usize = 2_000_000;
 /// Marked-content nesting deeper than this is not followed.
 const MAX_NEST: usize = 4096;
 /// Raw structure walks stop after this many objects.
@@ -232,7 +232,7 @@ fn scan(doc: &Document, page: &Dict, ops: &[Op]) -> Scan {
 }
 
 /// A page's content streams and their decoded bytes.
-fn content_streams(doc: &Document, page: &Dict) -> Vec<(Object, Vec<u8>)> {
+pub(crate) fn content_streams(doc: &Document, page: &Dict) -> Vec<(Object, Vec<u8>)> {
     let list: Vec<Object> = match page.get(b"Contents") {
         None => Vec::new(),
         Some(c) => match &*doc.resolve(c) {
@@ -315,6 +315,8 @@ pub struct TagUpdate {
     pub review_alt: Vec<ObjRef>,
     /// Parent-tree entries rewritten or removed.
     pub parent_tree: usize,
+    /// Lists given list structure (`L` > `LI` > `Lbl` + `LBody`; see [`crate::keep_list_tags`]).
+    pub lists: usize,
     /// What could not be kept in step.
     pub warnings: Vec<String>,
 }
@@ -343,7 +345,17 @@ impl TagUpdate {
             }
         }
         self.parent_tree = self.parent_tree.saturating_add(o.parent_tree);
+        self.lists = self.lists.saturating_add(o.lists);
         self.warnings.extend(o.warnings);
+    }
+
+    /// Fold in what [`crate::keep_list_tags`] did after this update: the elements this update
+    /// made for list labels and paragraphs were replaced by list elements, so they are reported
+    /// as those.
+    pub fn absorb_lists(&mut self, lists: TagUpdate) {
+        let moved: HashSet<(usize, i64)> = lists.added.iter().map(|a| (a.page, a.mcid)).collect();
+        self.added.retain(|a| !moved.contains(&(a.page, a.mcid)));
+        self.merge(lists);
     }
 
     fn touched(&self) -> bool {
@@ -355,6 +367,7 @@ impl TagUpdate {
             || self.pruned > 0
             || self.actual_text_cleared > 0
             || !self.review_alt.is_empty()
+            || self.lists > 0
     }
 }
 

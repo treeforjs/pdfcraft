@@ -13,6 +13,7 @@ use pdfcraft_cos::{Dict, Document, ObjRef, Object, PdfString, Stream};
 use pdfcraft_fonts::{GlyphError, GlyphOutline, ShapedCluster, arabic_glyph, helvetica_width, literal, shape_arabic, win_ansi};
 use unicode_bidi::{Level, ParagraphBidiInfo};
 
+use crate::lists::{self, ListItem};
 use crate::{EditError, check, contents, n, page_list, place_tagged};
 
 const TAG: &str = "Added";
@@ -98,6 +99,10 @@ pub struct AddedText {
     pub size: f64,
     pub color: [f64; 3],
     pub align: Align,
+    /// Bulleted and numbered list formatting, one entry per paragraph (`\n`-separated line of
+    /// `text`); empty (or shorter than the paragraphs) for ordinary paragraphs. See
+    /// [`crate::lists`].
+    pub list: Vec<Option<ListItem>>,
 }
 
 impl Default for AddedText {
@@ -111,6 +116,7 @@ impl Default for AddedText {
             size: 12.0,
             color: [0.0; 3],
             align: Align::Left,
+            list: Vec::new(),
         }
     }
 }
@@ -196,9 +202,93 @@ fn norm(r: [f64; 4]) -> [f64; 4] {
     [r[0].min(r[2]), r[1].min(r[3]), r[0].max(r[2]), r[1].max(r[3])]
 }
 
-/// The lines of a text item after wrapping to its box width.
+/// The lines of a text item after wrapping to its box width (list items to their body column,
+/// without their labels).
 pub fn lines(t: &AddedText) -> Vec<String> {
+    if has_list(t) {
+        return list_rows(t).into_iter().map(|r| r.text).collect();
+    }
     wrapped(t).into_iter().map(|(line, _)| line).collect()
+}
+
+fn has_list(t: &AddedText) -> bool {
+    t.list.iter().any(Option::is_some)
+}
+
+/// Indent per nesting level and least hanging indent, in ems.
+const LIST_INDENT_EM: f64 = 1.5;
+/// Least space between a label and its paragraph, in ems.
+const LABEL_GAP_EM: f64 = 0.5;
+
+/// One drawn row of a text box with a list. Offsets are from the box's left edge.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct Row {
+    pub(crate) text: String,
+    /// Where the row's paragraph column starts, and its width.
+    pub(crate) x: f64,
+    pub(crate) width: f64,
+    /// The item's label and where it starts, on an item's first row.
+    pub(crate) label: Option<(String, f64)>,
+    /// The paragraph (0-based), and whether this is its first and last row.
+    pub(crate) para: usize,
+    pub(crate) first: bool,
+    pub(crate) last: bool,
+}
+
+/// Greedy wrapping of one paragraph of Latin text to `width`, as [`wrapped`] does.
+fn wrap_latin(t: &AddedText, para: &str, width: f64) -> Vec<String> {
+    let measure = |s: &str| t.family.width(s, t.size, t.bold);
+    let mut out = Vec::new();
+    let mut line = String::new();
+    for word in para.split(' ') {
+        let candidate = if line.is_empty() { word.to_string() } else { format!("{line} {word}") };
+        if !line.is_empty() && measure(&candidate) > width {
+            out.push(std::mem::take(&mut line));
+            line = word.to_string();
+        } else {
+            line = candidate;
+        }
+    }
+    out.push(line);
+    out
+}
+
+/// The rows of a text box with a list: every paragraph wrapped to its column, list items with a
+/// hanging indent. A level's labels start where the level above's paragraphs do, and its
+/// paragraphs start [`LIST_INDENT_EM`] (or the widest of its labels plus [`LABEL_GAP_EM`]) past
+/// its labels.
+pub(crate) fn list_rows(t: &AddedText) -> Vec<Row> {
+    let items = lists::items(t);
+    let labels = lists::labels(&items);
+    let box_w = (t.rect[2] - t.rect[0]).max(t.size);
+    let levels = usize::from(lists::MAX_LIST_LEVEL) + 1;
+    let mut hang = vec![t.size * LIST_INDENT_EM; levels];
+    for (it, label) in items.iter().zip(&labels) {
+        if let (Some(it), Some(label)) = (it, label)
+            && let Some(h) = hang.get_mut(usize::from(it.level))
+        {
+            *h = h.max(t.family.width(label, t.size, t.bold) + t.size * LABEL_GAP_EM);
+        }
+    }
+    let indent = |level: u8| hang.iter().take(usize::from(level)).sum::<f64>();
+    let mut rows = Vec::new();
+    for (i, para) in lists::paragraphs(&t.text).enumerate() {
+        let item = items.get(i).copied().flatten();
+        let (label, x) = match (item, labels.get(i).cloned().flatten()) {
+            (Some(it), Some(label)) => {
+                let at = indent(it.level);
+                (Some((label, at)), at + hang.get(usize::from(it.level)).copied().unwrap_or(0.0))
+            }
+            _ => (None, 0.0),
+        };
+        let width = (box_w - x).max(t.size);
+        let wrapped = wrap_latin(t, para, width);
+        let n = wrapped.len();
+        for (k, text) in wrapped.into_iter().enumerate() {
+            rows.push(Row { text, x, width, label: if k == 0 { label.clone() } else { None }, para: i, first: k == 0, last: k + 1 == n });
+        }
+    }
+    rows
 }
 
 /// [`lines`], each with whether its paragraph runs right to left (its first strong character
@@ -235,7 +325,7 @@ fn wrapped(t: &AddedText) -> Vec<(String, bool)> {
 
 /// Arabic letters, marks, digits and punctuation: an item with any of them is shaped with the
 /// craft-fonts Arabic face.
-fn is_arabic(c: char) -> bool {
+pub(crate) fn is_arabic(c: char) -> bool {
     matches!(u32::from(c), 0x0600..=0x06FF | 0x0750..=0x077F | 0x0870..=0x08FF | 0xFB50..=0xFDFF | 0xFE70..=0xFEFC)
 }
 
@@ -362,7 +452,8 @@ fn arabic_error(e: GlyphError, text: &str) -> EditError {
 /// The box a text item occupies (height from its lines).
 pub fn text_rect(t: &AddedText) -> [f64; 4] {
     let r = norm(t.rect);
-    let h = lines(t).len().max(1) as f64 * t.size * 1.2;
+    let rows = if has_list(t) { list_rows(t).len() } else { lines(t).len() };
+    let h = rows.max(1) as f64 * t.size * 1.2;
     [r[0], r[3] - h, r[2], r[3]]
 }
 
@@ -570,7 +661,8 @@ fn draw(doc: &mut Document, c: &Content, view: [f64; 6], taken: &Dict, existing:
             font.set(b"Type".to_vec(), Object::name("Font"));
             font.set(b"Subtype".to_vec(), Object::name("Type1"));
             font.set(b"BaseFont".to_vec(), Object::name(base));
-            if t.family != Family::Courier || !t.text.is_ascii() {
+            let labels_ascii = !has_list(t) || lists::labels(&lists::items(t)).iter().flatten().all(|l| l.is_ascii());
+            if t.family != Family::Courier || !t.text.is_ascii() || !labels_ascii {
                 font.set(b"Encoding".to_vec(), Object::name("WinAnsiEncoding"));
             }
             let mut fonts = Dict::new();
@@ -585,6 +677,11 @@ fn draw(doc: &mut Document, c: &Content, view: [f64; 6], taken: &Dict, existing:
             let r = text_rect(t);
             let [cr, cg, cb] = t.color.map(|v| v.clamp(0.0, 1.0));
             out.extend(format!("BT /{name} {} Tf {} {} {} rg\n", n(t.size), n(cr), n(cg), n(cb)).bytes());
+            if has_list(t) {
+                draw_list(t, r, &mut out);
+                out.extend_from_slice(b"ET\nQ\n");
+                return Ok((out, res));
+            }
             for (i, line) in lines(t).iter().enumerate() {
                 let w = t.family.width(line, t.size, t.bold);
                 let x = match t.align {
@@ -638,6 +735,57 @@ fn draw(doc: &mut Document, c: &Content, view: [f64; 6], taken: &Dict, existing:
     Ok((out, res))
 }
 
+/// The rows of a box with a list, inside its text object. Each item's label and paragraph are
+/// marked content (`/PCList` with its role, list, item and level) so the structure tree can
+/// follow them (`pdfcraft_a11y::keep_list_tags`).
+fn draw_list(t: &AddedText, r: [f64; 4], out: &mut Vec<u8>) {
+    let items = lists::items(t);
+    let rows = list_rows(t);
+    let mut list = 0usize;
+    let mut previous_item = false;
+    let marker =
+        |role: &str, list: usize, item: usize, level: u8| format!("/PCList << /Role /{role} /List {list} /Item {item} /Level {level} >> BDC\n");
+    for (i, row) in rows.iter().enumerate() {
+        let item = items.get(row.para).copied().flatten();
+        // Baseline: 0.95 em below the row's top, as for ordinary text.
+        let y = r[3] - (i as f64 * 1.2 + 0.95) * t.size;
+        if row.first
+            && let Some(it) = item
+        {
+            if !previous_item && row.para > 0 {
+                list = list.saturating_add(1);
+            }
+            if let Some((label, at)) = &row.label {
+                out.extend(marker("Lbl", list, row.para, it.level).bytes());
+                out.extend(format!("1 0 0 1 {} {} Tm 0 Tw ", n(r[0] + at), n(y)).bytes());
+                out.extend(literal(&win_ansi(label)));
+                out.extend_from_slice(b" Tj\nEMC\n");
+            }
+            out.extend(marker("LBody", list, row.para, it.level).bytes());
+        }
+        let w = t.family.width(&row.text, t.size, t.bold);
+        let free = (row.width - w).max(0.0);
+        let x = r[0]
+            + row.x
+            + match t.align {
+                Align::Left | Align::Justify => 0.0,
+                Align::Center => free / 2.0,
+                Align::Right => free,
+            };
+        let spaces = row.text.matches(' ').count();
+        let tw = if t.align == Align::Justify && !row.last && spaces > 0 { free / spaces as f64 } else { 0.0 };
+        out.extend(format!("1 0 0 1 {} {} Tm {} Tw ", n(x), n(y), n(tw)).bytes());
+        out.extend(literal(&win_ansi(&row.text)));
+        out.extend_from_slice(b" Tj\n");
+        if row.last {
+            if item.is_some() {
+                out.extend_from_slice(b"EMC\n");
+            }
+            previous_item = item.is_some();
+        }
+    }
+}
+
 fn params(c: &Content) -> Dict {
     let mut d = Dict::new();
     let arr = |v: &[f64]| Object::Array(v.iter().map(|x| Object::Real(*x)).collect());
@@ -658,6 +806,9 @@ fn params(c: &Content) -> Dict {
                 }),
             );
             d.set(b"Rect".to_vec(), arr(&text_rect(t)));
+            if let Some(list) = lists::list_param(t) {
+                d.set(b"List".to_vec(), list);
+            }
         }
         Content::Image(i) => {
             d.set(b"Kind".to_vec(), Object::name("Image"));
@@ -701,6 +852,7 @@ fn parse(doc: &Document, d: &Dict) -> Option<Content> {
                     Some(3) => Align::Justify,
                     _ => Align::Left,
                 },
+                list: lists::parse_list(doc, d.get(b"List")),
             }))
         }
         b"Image" => {
@@ -733,6 +885,12 @@ fn validate(c: &Content) -> Result<(), EditError> {
             }
             if (r[2] - r[0]).abs() < 1.0 {
                 return Err(EditError::Invalid("the text box is too narrow".into()));
+            }
+            if has_list(t) && t.text.chars().any(is_arabic) {
+                return Err(EditError::Invalid("lists are not available for text boxes with Arabic text yet".into()));
+            }
+            if t.list.len() > lists::MAX_LIST_PARAGRAPHS {
+                return Err(EditError::Invalid(format!("lists take text boxes with at most {} paragraphs", lists::MAX_LIST_PARAGRAPHS)));
             }
             // Without the Arabic face, `draw` decides for the Arabic letters themselves (#403): a new
             // item is refused with what's missing, and one that already holds Arabic stays movable.
@@ -845,7 +1003,14 @@ pub fn update_content(doc: &mut Document, page: usize, index: usize, c: &Content
     if std::mem::discriminant(&a.content) != std::mem::discriminant(c) {
         return Err(EditError::Invalid("an item can't change between text and image".into()));
     }
-    write(doc, page, c, Some(a.obj))?;
+    // Retyped with its list formatting as it was: paragraphs typed into a list continue it.
+    let reconciled = match (&a.content, c) {
+        (Content::Text(old), Content::Text(new)) if new.text != old.text && new.list == old.list && has_list(old) => {
+            Some(Content::Text(AddedText { list: lists::reconcile(&old.text, &lists::items(old), &new.text), ..new.clone() }))
+        }
+        _ => None,
+    };
+    write(doc, page, reconciled.as_ref().unwrap_or(c), Some(a.obj))?;
     Ok(())
 }
 

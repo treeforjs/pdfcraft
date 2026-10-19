@@ -8,6 +8,20 @@ images and grouped artwork, flattening, and the Print Production fixes: Fix Hair
 Every entry point takes a `pdfcraft_cos::Document` and changes it in place; the engine runs them
 on a copy, so an error leaves the open document untouched, and each is one undo step there.
 
+## Bulleted and numbered lists
+
+`lists::edit_list(doc, page, &ListTarget::Added { index, paragraphs }, &ListChange::Set { style, start })`
+formats paragraphs (the `\n`-separated lines) of an added text box as list items; `Remove` and
+`Indent(levels)` take them out or change their level (0–8). `AddedText::list` holds one
+`Option<ListItem>` per paragraph and is stored with the box, so lists survive save and reopen and
+labels are generated at draw time: numbering continues per level, restarts after an ordinary
+paragraph or at `start`, and `update_content` reconciles retyped text so new paragraphs continue
+the list they were typed into. Items have a hanging indent (label at the level's indent, every
+row of the paragraph at the body indent past it). `ListTarget::Paragraphs { first, count }` moves
+page paragraphs into a new list box in the closest standard font. Labels and bodies are drawn in
+`/PCList` marked content for `pdfcraft_a11y::keep_list_tags`. Not yet: lists inside existing
+paragraphs in their own fonts, Arabic text, bullets outside WinAnsi (squares, checks).
+
 ## Convert Colors
 
 ```rust
