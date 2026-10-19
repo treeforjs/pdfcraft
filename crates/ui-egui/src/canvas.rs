@@ -4239,8 +4239,12 @@ trailer << /Root 1 0 R >>
             view.need_thumbnail(0, true);
         }
         app.finish_render_frame(&ctx);
+        // The active document's real renderer may replace its synthetic thumbnail with one of
+        // its own size within the frame, so bound the count and the shared allowance, not
+        // the synthetic size.
+        let held: usize = app.views.iter().map(|v| v.thumbs.len()).sum();
         let total: usize = app.views.iter().map(|v| v.thumbs.values().map(|p| texture_bytes(&p.tex)).sum::<usize>()).sum();
-        assert!(total <= 132 * 171 * 4);
+        assert!(held <= 1 && total <= THUMB_BYTES, "{held} thumbnails, {total} bytes");
         assert!(app.views.iter().take(5).all(|v| v.thumbs.is_empty() && v.last_queue.is_empty()));
         app.close_tab(5);
         assert!(app.views.iter().all(|v| v.thumbs.is_empty()));
