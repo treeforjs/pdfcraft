@@ -23,6 +23,7 @@ mod namespace;
 mod pdfa;
 mod pdfua;
 mod reading;
+mod reading_order;
 mod report;
 mod structure;
 mod tags;
@@ -43,6 +44,10 @@ pub use namespace::{
 pub use pdfa::{convert_pdfa, pdfa_blockers, pdfa_structure, verify_pdfa};
 pub use pdfua::{MAX_UA_FINDINGS, UA_CHECKPOINTS, UA_NOT_CHECKED, UaCheckpoint, UaFinding, UaOptions, UaPart, UaReport, UaSeverity, verify_pdfua};
 pub use reading::{Block, BlockKind, Piece, reading_blocks};
+pub use reading_order::{
+    ClearResult, MAX_REGION_UNITS, OrderElement, OrderPlace, OrderRegion, PageOrder, RegionResult, RegionRole, RegionTag, clear_page_structure,
+    move_element, page_order, tag_region,
+};
 pub use report::report_html;
 pub use tags::{
     AltTargets, FigureTarget, MAX_TEXT, TagChange, TagError, TagKid, TagNode, Tags, UntaggedImage, allowed_types, alt_targets, set_tag, tag_image,
@@ -522,5 +527,7 @@ pub fn check(doc: &Document, options: &Options) -> Report {
 
 #[cfg(test)]
 mod keep_tests;
+#[cfg(test)]
+mod reading_order_tests;
 #[cfg(test)]
 mod tests;

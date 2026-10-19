@@ -39,6 +39,7 @@ mod overprint;
 mod preflight;
 mod printing;
 mod reader_selection;
+mod reading_order;
 mod redact;
 mod search_folder;
 mod separations;
@@ -863,6 +864,10 @@ impl Automation {
             "tags_set" => self.tags_set(&a)?,
             "tags_add_namespace" => self.tags_add_namespace(&a)?,
             "tags_mark_artifact" => self.tags_mark_artifact(&a)?,
+            "reading_order_list" => self.a11y_reading_order_list(&a)?,
+            "reading_order_tag" => self.a11y_reading_order_tag(&a)?,
+            "reading_order_move" => self.a11y_reading_order_move(&a)?,
+            "reading_order_clear" => self.a11y_reading_order_clear(&a)?,
             "tags_autotag" => self.tags_autotag(&a)?,
             "accessibility_make_accessible" => self.a11y_make_accessible(&a)?,
             "alt_text_list" => self.alt_text_list(&a)?,

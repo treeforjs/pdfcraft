@@ -1905,7 +1905,7 @@ fn emit(l: &Layout, plan: &PagePlan, tree: &mut Tree, report: &mut AutotagReport
 
 /// User space → view space (points from the top-left of the displayed page, y down), and the
 /// displayed height.
-fn view_of(doc: &Document, page: &pdfcraft_model::Page) -> (Matrix, f64) {
+pub(crate) fn view_of(doc: &Document, page: &pdfcraft_model::Page) -> (Matrix, f64) {
     let to_user = Matrix(page.view_matrix(doc));
     let (_, h) = page.display_size(doc);
     let flip = Matrix([1.0, 0.0, 0.0, -1.0, 0.0, h]);

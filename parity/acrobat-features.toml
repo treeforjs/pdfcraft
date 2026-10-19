@@ -8768,11 +8768,11 @@ title = "Reading order tool"
 area = "M"
 tier = "P1"
 milestone = "M12"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["reading_order_list", "reading_order_tag", "reading_order_move", "reading_order_clear"]
+evidence = ["crates/automation/tests/reading_order.rs::regions_are_tagged_split_reordered_and_cleared_through_tools", "crates/automation/tests/reading_order.rs::artifacts_and_tagged_content_move_as_a_whole_or_split", "crates/automation/tests/reading_order.rs::bad_reading_order_requests_change_nothing", "crates/a11y/src/reading_order_tests.rs::a_figure_cut_by_the_rectangle_is_split_and_the_tree_follows", "crates/a11y/src/reading_order_tests.rs::untagged_pages_get_a_tree_and_background_needs_none", "crates/a11y/src/reading_order_tests.rs::hostile_requests_and_content_never_panic_and_change_nothing"]
+notes = "headless only (no tool overlay, no numbered-region drawing, no dialog): reading_order_tag tags a rectangle as text (P), h1-h6, figure (alt), figure-caption (Figure holding a Caption), table (Table > TR > TH/TD by layout, first row TH with column scope, rules as layout artifacts), cell (TD, in the row of the nearest cell), formula (alt), form-field (Form + OBJR + StructParent + parent-tree entry; tagged widgets move) or background (artifact, optional Type/Subtype), one undo step (Edit::TagRegion, pdfcraft_a11y::tag_region). A painting operation is inside when its box's centre is (text boxes from the renderer's glyphs on a provisional copy). Untagged content gets new MCIDs; tagged or artifact marked content wholly inside changes as a whole (MCID kept); marked content cut by the rectangle is split (outside part keeps its element and first MCID); new sequences never cross q/Q, BT/ET or other marked content; emptied elements leave the tree; the new element goes beside the nearest tagged content before it; parent tree rebuilt; untagged documents get a tree with MarkInfo. reading_order_list shows the page's regions in reading order with boxes; reading_order_clear is Clear Page Structure (keep_artifacts optional). Missing: the UI, splitting inside one text-showing operator (a Tj that crosses the rectangle goes by its centre), content inside form XObjects (tagged whole), nested tagged content (refused), table spans, header columns or THead/TBody, Acrobat's own table recognition, Show page content order vs structure order view, comparison with Acrobat on real documents"
 
 [[feature]]
 id = "a11y.tags-panel"
@@ -8828,11 +8828,11 @@ title = "Order panel"
 area = "M"
 tier = "P1"
 milestone = "M12"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["reading_order_list", "reading_order_move"]
+evidence = ["crates/automation/tests/reading_order.rs::regions_are_tagged_split_reordered_and_cleared_through_tools", "crates/automation/tests/reading_order.rs::bad_reading_order_requests_change_nothing", "crates/a11y/src/reading_order_tests.rs::a_figure_cut_by_the_rectangle_is_split_and_the_tree_follows"]
+notes = "headless only (no panel): reading_order_list lists a page's regions (outermost elements below a grouping element) in structure order with their boxes and the content-holding elements inside; reading_order_move moves an element before/after another (by obj) or to a region number, one undo step (Edit::MoveTag, pdfcraft_a11y::move_element), refusing moves into itself and direct (non-indirect) parents; accessible text follows the new order. Missing: the panel UI and drag and drop, multi-selection, moving into an empty container (only next to a sibling), moving across pages from a page view"
 
 [[feature]]
 id = "a11y.content-panel"
