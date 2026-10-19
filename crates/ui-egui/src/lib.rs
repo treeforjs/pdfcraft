@@ -41,6 +41,7 @@ mod crop;
 mod drag_pointer;
 mod export_ui;
 mod js_ui;
+pub use js_ui::{ActionScriptDraft, ScriptTarget};
 mod marks_ui;
 mod measure_ui;
 mod ocr_ui;
@@ -59,7 +60,7 @@ pub mod marks {
 mod content_ui;
 mod link_ui;
 pub use create_ui::Clip;
-pub use link_ui::LinkDraft;
+pub use link_ui::{LinkDraft, LinkKind};
 pub use optimize_ui::{OptimizeDraft, OptimizeTab};
 pub use sign_ui::{DigitalIdEntry, SigProps, SigPropsTab, SignDraft, SignStep, property_rows as signature_property_rows};
 pub use submit_ui::SubmitDraft;
@@ -80,6 +81,7 @@ pub mod last_session;
 mod pageboxes;
 mod palette;
 mod panels;
+pub use panels::BmAction;
 #[cfg(not(target_arch = "wasm32"))]
 mod pickers;
 pub mod prepare;
@@ -283,6 +285,8 @@ pub enum Dialog {
     JsConsole,
     /// Document JavaScripts.
     DocumentJs,
+    /// A bookmark's or page's Run-a-JavaScript action ([`Self::action_script`]).
+    ActionScript,
     /// Preferences.
     Preferences,
     /// Compare files: choose the older version.
@@ -500,6 +504,8 @@ pub struct PdfCraftApp {
     /// The JavaScript console and the Document JavaScripts draft.
     pub js_console: js_ui::JsConsole,
     pub doc_js: js_ui::DocJsDraft,
+    /// The Run-a-JavaScript action being edited (bookmark or page actions).
+    pub action_script: Option<js_ui::ActionScriptDraft>,
     /// The dialog a script is waiting on.
     pub js_question: Option<js_ui::JsQuestion>,
     pub a11y: a11y_ui::A11yState,
@@ -758,6 +764,7 @@ impl PdfCraftApp {
             compare_run: None,
             js_console: Default::default(),
             doc_js: Default::default(),
+            action_script: None,
             js_question: None,
             a11y: a11y_ui::A11yState::default(),
             a11y_skipped: Default::default(),
@@ -1954,6 +1961,8 @@ impl eframe::App for PdfCraftApp {
                 OsEvent::Quit => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
             }
         }
+        // Page Open / Page Close scripts, only when the current page changed.
+        self.run_page_actions();
         if let Some((_, id)) = self.active_ids() {
             let out = self.session.take_js_output(id);
             self.handle_js(id, out);

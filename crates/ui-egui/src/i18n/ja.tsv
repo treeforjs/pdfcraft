@@ -2294,3 +2294,15 @@ compare-page	Moved	移動
 	Archive documents…	文書をアーカイブ…
 	Archive Documents	文書をアーカイブ
 	Save as PDF/A-2b for long-term archiving.	長期保存用に PDF/A-2b として保存します。
+	Trigger:	トリガー:
+	Page Open	ページを開く
+	Page Close	ページを閉じる
+	Run a JavaScript…	JavaScript を実行…
+	Page actions…	ページアクション…
+	Type the JavaScript.	JavaScript を入力してください。
+	Bookmark Action	しおりのアクション
+	Runs when the bookmark is clicked.	しおりをクリックすると実行されます。
+	Page Actions: page {n}	ページアクション: {n} ページ
+	Page Open runs when the page becomes the current page; Page Close when another page does.	「ページを開く」はそのページが現在のページになったときに、「ページを閉じる」は別のページが現在のページになったときに実行されます。
+	JavaScript, e.g. app.alert("Hello")	JavaScript（例: app.alert("こんにちは")）
+	{s} actions aren't run by PdfCraft yet	{s} アクションは PdfCraft ではまだ実行されません

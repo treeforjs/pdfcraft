@@ -2317,3 +2317,15 @@ compare-page	Moved	Переміщена
 	Archive documents…	Архівувати документи…
 	Archive Documents	Архівувати документи
 	Save as PDF/A-2b for long-term archiving.	Зберегти як PDF/A-2b для довготривалого архівного зберігання.
+	Trigger:	Тригер:
+	Page Open	Відкриття сторінки
+	Page Close	Закриття сторінки
+	Run a JavaScript…	Виконати JavaScript…
+	Page actions…	Дії сторінки…
+	Type the JavaScript.	Введіть JavaScript.
+	Bookmark Action	Дія закладки
+	Runs when the bookmark is clicked.	Виконується після клацання закладки.
+	Page Actions: page {n}	Дії сторінки: сторінка {n}
+	Page Open runs when the page becomes the current page; Page Close when another page does.	«Відкриття сторінки» виконується, коли сторінка стає поточною; «Закриття сторінки» — коли поточною стає інша сторінка.
+	JavaScript, e.g. app.alert("Hello")	JavaScript, наприклад app.alert("Привіт")
+	{s} actions aren't run by PdfCraft yet	PdfCraft поки не виконує дії {s}

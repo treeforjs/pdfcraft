@@ -54,6 +54,10 @@ pub struct DocInfo {
     pub annotations: Vec<Annotation>,
     pub fields: Vec<Field>,
     pub links: Vec<Link>,
+    /// Pages (0-based, ascending) whose dictionary has additional actions (`/AA`: Page Open,
+    /// Page Close), noted on the pass that reads annotations so the viewer looks for page
+    /// scripts only where there are some.
+    pub page_actions: Vec<usize>,
     pub layers: Vec<Layer>,
     /// Radio-button layer groups (`/OCProperties /D /RBGroups`): turning one layer of a group on
     /// turns the others off.
@@ -161,6 +165,8 @@ impl PageInfo {
 #[derive(Clone, Debug)]
 pub struct Link {
     pub page: usize,
+    /// Its index in the page's `/Annots` (as the engine's link list counts them).
+    pub index: usize,
     pub rect: [f32; 4],
     pub target: LinkTarget,
 }
@@ -822,6 +828,9 @@ impl<'a> Inspector<'a> {
     fn annotations(&self, info: &mut DocInfo) {
         for (&id, &page) in &self.page_index {
             let Ok(page_dict) = self.doc.get_dictionary(id) else { continue };
+            if page_dict.has(b"AA") {
+                info.page_actions.push(page);
+            }
             let Ok(Object::Array(annots)) = page_dict.get(b"Annots").map(|o| self.resolve(o)) else { continue };
             for (index, a) in annots.iter().enumerate() {
                 let Some(d) = self.dict(a) else { continue };
@@ -833,7 +842,7 @@ impl<'a> Inspector<'a> {
                     info.attachments.push(self.attachment(name, fs, AttachmentSource::Annotation { page, index }));
                 }
                 if subtype == "Link" {
-                    if let Some(link) = self.link(page, d) {
+                    if let Some(link) = self.link(page, index, d) {
                         if matches!(&link.target, LinkTarget::Other(s) if s == "JavaScript") {
                             info.has_javascript = true;
                         }
@@ -895,9 +904,11 @@ impl<'a> Inspector<'a> {
             }
         }
         info.annotations.sort_by(|a, b| a.page.cmp(&b.page).then(b.rect[3].total_cmp(&a.rect[3])));
+        info.page_actions.sort_unstable();
+        info.page_actions.dedup();
     }
 
-    fn link(&self, page: usize, d: &Dictionary) -> Option<Link> {
+    fn link(&self, page: usize, index: usize, d: &Dictionary) -> Option<Link> {
         let rect = rect4(self.resolve(d.get(b"Rect").ok()?));
         let target = if let Ok(dest) = d.get(b"Dest") {
             let (page, view) = self.dest(dest, 0)?;
@@ -917,7 +928,7 @@ impl<'a> Inspector<'a> {
                 None => return None,
             }
         };
-        Some(Link { page, rect, target })
+        Some(Link { page, index, rect, target })
     }
 
     /// A set-OCG-state action: `/State` is `ON`, `OFF` or `Toggle`, each followed by the groups

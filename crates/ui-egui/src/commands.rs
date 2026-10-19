@@ -287,6 +287,12 @@ impl PdfCraftApp {
             "a11y.check" => self.start_accessibility_check(),
             "ocr.recognize" => self.dialog = Some(Dialog::RecognizeText),
             "tools.js_console" => self.dialog = Some(Dialog::JsConsole),
+            "tools.page_actions" => {
+                if let Some((i, _)) = self.active_ids() {
+                    let page = self.views[i].current;
+                    self.open_page_actions(page);
+                }
+            }
             "tools.document_js" => {
                 self.doc_js = Default::default();
                 self.dialog = Some(Dialog::DocumentJs);

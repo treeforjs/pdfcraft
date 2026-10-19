@@ -72,7 +72,7 @@ fn drawing_editing_and_deleting_links() {
     h.get_by_label("Link Properties");
     {
         let d = h.state_mut().link_draft.as_mut().unwrap();
-        d.web = false;
+        d.kind = pdfcraft_ui_egui::LinkKind::Page;
         d.target = 1;
     }
     h.get_by_label("OK").click();

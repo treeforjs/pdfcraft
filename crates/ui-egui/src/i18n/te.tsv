@@ -2225,3 +2225,15 @@ compare-page	Moved	తరలించబడింది
 	Archive documents…	పత్రాలను ఆర్కైవ్ చేయి…
 	Archive Documents	పత్రాలను ఆర్కైవ్ చేయి
 	Save as PDF/A-2b for long-term archiving.	దీర్ఘకాలిక ఆర్కైవ్ కోసం PDF/A-2b గా సేవ్ చేస్తుంది.
+	Trigger:	ట్రిగ్గర్:
+	Page Open	పేజీ తెరవడం
+	Page Close	పేజీ మూసివేయడం
+	Run a JavaScript…	JavaScriptను అమలు చేయి…
+	Page actions…	పేజీ చర్యలు…
+	Type the JavaScript.	JavaScriptను టైప్ చేయండి.
+	Bookmark Action	బుక్‌మార్క్ చర్య
+	Runs when the bookmark is clicked.	బుక్‌మార్క్‌ను క్లిక్ చేసినప్పుడు అమలవుతుంది.
+	Page Actions: page {n}	పేజీ చర్యలు: పేజీ {n}
+	Page Open runs when the page becomes the current page; Page Close when another page does.	పేజీ ప్రస్తుత పేజీ అయినప్పుడు "పేజీ తెరవడం" అమలవుతుంది; మరొక పేజీ ప్రస్తుత పేజీ అయినప్పుడు "పేజీ మూసివేయడం" అమలవుతుంది.
+	JavaScript, e.g. app.alert("Hello")	JavaScript, ఉదా. app.alert("నమస్తే")
+	{s} actions aren't run by PdfCraft yet	{s} చర్యలను PdfCraft ఇంకా అమలు చేయదు

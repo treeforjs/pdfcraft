@@ -3723,3 +3723,107 @@ fn convert_to_pdfx_survives_hostile_documents() {
         }
     }
 }
+
+#[test]
+fn link_bookmark_and_page_javascript_actions_run_in_the_sandbox() {
+    use crate::js::{ActionSource, Dialogs};
+    use pdfcraft_forms::PageTrigger;
+    let (mut s, id) = session_with(2);
+    s.apply(id, Edit::AddField { page: 0, rect: [20.0, 230.0, 120.0, 250.0], kind: NewField::Text { multiline: false }, name: Some("seen".into()) })
+        .unwrap();
+    let record = "getField('seen').value = event.type + ' ' + event.name + ' ' + this.pageNum;";
+    s.apply(id, Edit::AddLink { page: 1, rect: [10.0, 10.0, 90.0, 40.0], action: LinkAction::JavaScript(record.into()), style: Default::default() })
+        .unwrap();
+    s.apply(id, Edit::AddBookmark { parent: vec![], index: 0, title: "Script".into(), page: 0 }).unwrap();
+    s.apply(id, Edit::SetBookmarkAction { path: vec![0], action: crate::BookmarkAction::JavaScript(record.into()) }).unwrap();
+    s.apply(id, Edit::SetPageAction { page: 1, trigger: PageTrigger::Open, script: Some(record.into()) }).unwrap();
+    assert_eq!(s.get(id).unwrap().can_undo(), Some("Set page action"));
+    assert_eq!(s.get(id).unwrap().info.page_actions, [1], "the open pass notes pages with actions");
+    let seen = |s: &Session| s.get(id).unwrap().form.iter().find(|f| f.name == "seen").map(|f| f.value.clone()).unwrap_or_default();
+    let link = s.get(id).unwrap().links.iter().find(|l| l.page == 1).map(|l| l.index).unwrap();
+
+    let o = s.run_action_javascript(id, &ActionSource::Link { page: 1, index: link }, &Dialogs::default()).unwrap();
+    assert_eq!(o.error, None);
+    assert_eq!(seen(&s), ["Link Mouse Up 1"]);
+    assert_eq!(s.get(id).unwrap().can_undo(), Some("Run JavaScript"));
+    s.run_action_javascript(id, &ActionSource::Bookmark { path: vec![0] }, &Dialogs::default()).unwrap();
+    assert_eq!(seen(&s), ["Bookmark Mouse Up 0"]);
+    assert!(s.run_page_action(id, 1, PageTrigger::Open).unwrap());
+    assert_eq!(seen(&s), ["Page Open 1"]);
+    assert!(!s.run_page_action(id, 0, PageTrigger::Open).unwrap(), "page 1 has no script");
+    assert!(!s.run_page_action(id, 1, PageTrigger::Close).unwrap());
+    assert!(!s.run_page_action(id, 99, PageTrigger::Open).unwrap(), "no such page is no script");
+
+    // Sources that don't run a script are refused clearly.
+    assert!(s.run_action_javascript(id, &ActionSource::Link { page: 1, index: 999 }, &Dialogs::default()).is_err());
+    assert!(s.run_action_javascript(id, &ActionSource::Bookmark { path: vec![7, 3] }, &Dialogs::default()).is_err());
+    assert!(s.run_action_javascript(id, &ActionSource::Page { page: 0, trigger: PageTrigger::Close }, &Dialogs::default()).is_err());
+
+    // A page script can't print, save or move the view (no loops between pages).
+    s.take_js_output(id);
+    s.apply(
+        id,
+        Edit::SetPageAction { page: 1, trigger: PageTrigger::Close, script: Some("this.print(); this.pageNum = 0; app.alert('bye')".into()) },
+    )
+    .unwrap();
+    assert!(s.run_page_action(id, 1, PageTrigger::Close).unwrap());
+    let out = s.take_js_output(id);
+    assert_eq!(out.alerts, ["bye"]);
+    assert!(out.requests.is_empty(), "{:?}", out.requests);
+
+    // Hostile scripts: runaway loops and recursion stop at the engine's limits and change nothing.
+    for script in ["while (true) {}", "function f() { return f(); } f();"] {
+        s.apply(id, Edit::SetLink { page: 1, index: link, rect: None, action: Some(LinkAction::JavaScript(script.into())), style: None }).unwrap();
+        let before = seen(&s);
+        let o = s.run_action_javascript(id, &ActionSource::Link { page: 1, index: link }, &Dialogs::default()).unwrap();
+        assert!(o.error.is_some(), "{script}");
+        assert_eq!(seen(&s), before, "{script}");
+    }
+
+    // With JavaScript off nothing runs.
+    s.set_javascript(false);
+    assert!(s.run_action_javascript(id, &ActionSource::Bookmark { path: vec![0] }, &Dialogs::default()).is_err());
+    assert!(!s.run_page_action(id, 1, PageTrigger::Open).unwrap());
+    s.set_javascript(true);
+
+    // Saved and reopened, the actions are still there.
+    let bytes = s.save_bytes(id).unwrap();
+    let mut s2 = Session::new();
+    let id2 = s2.open("again.pdf", None, bytes, None).unwrap();
+    assert_eq!(s2.get(id2).unwrap().page_action(1, PageTrigger::Open).as_deref(), Some(record));
+    assert_eq!(s2.bookmark_action(id2, &[0]).unwrap(), crate::BookmarkAction::JavaScript(record.into()));
+}
+
+#[test]
+fn javascript_actions_respect_document_permissions() {
+    use crate::js::{ActionSource, Dialogs};
+    use pdfcraft_forms::PageTrigger;
+    // A page script that adds a comment, in a document that allows printing only.
+    let mut doc = pdfcraft_cos::Document::open(Arc::new(fixture(2))).unwrap();
+    pdfcraft_forms::set_page_action(&mut doc, 0, PageTrigger::Open, Some("this.addAnnot({ type: 'Square', rect: [10, 10, 50, 50] })")).unwrap();
+    doc.set_encryption(&pdfcraft_cos::NewEncryption {
+        algorithm: pdfcraft_cos::Algorithm::Aes256,
+        user_password: "",
+        owner_password: "owner",
+        permissions: 0b0100,
+        encrypt_metadata: true,
+        seed: [7; 32],
+    })
+    .unwrap();
+    let bytes = Arc::new(pdfcraft_cos::write_full(&doc, &Default::default()).unwrap());
+    let mut s = Session::new();
+    let id = s.open("r.pdf", None, bytes, None).unwrap();
+    let page = ActionSource::Page { page: 0, trigger: PageTrigger::Open };
+    assert_eq!(s.run_action_javascript(id, &page, &Dialogs::default()), Err(EditError::NotPermitted("comments")));
+    assert!(s.run_page_action(id, 0, PageTrigger::Open).is_err());
+    assert!(s.get(id).unwrap().info.annotations.is_empty() && !s.get(id).unwrap().dirty);
+    // Setting actions is refused too.
+    assert_eq!(
+        s.apply(id, Edit::SetPageAction { page: 1, trigger: PageTrigger::Open, script: Some("1".into()) }),
+        Err(EditError::NotPermitted("changes to the document"))
+    );
+    assert_eq!(
+        s.apply(id, Edit::AddLink { page: 0, rect: [10.0, 10.0, 90.0, 40.0], action: LinkAction::JavaScript("1".into()), style: Default::default() }),
+        Err(EditError::NotPermitted("changes to the document"))
+    );
+}

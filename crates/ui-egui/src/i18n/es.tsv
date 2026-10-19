@@ -2210,3 +2210,15 @@ compare-page	Moved	Movida
 	Archive documents…	Archivar documentos…
 	Archive Documents	Archivar documentos
 	Save as PDF/A-2b for long-term archiving.	Guarda como PDF/A-2b para el archivo a largo plazo.
+	Trigger:	Activador:
+	Page Open	Abrir página
+	Page Close	Cerrar página
+	Run a JavaScript…	Ejecutar un JavaScript…
+	Page actions…	Acciones de página…
+	Type the JavaScript.	Escriba el JavaScript.
+	Bookmark Action	Acción del marcador
+	Runs when the bookmark is clicked.	Se ejecuta al hacer clic en el marcador.
+	Page Actions: page {n}	Acciones de página: página {n}
+	Page Open runs when the page becomes the current page; Page Close when another page does.	«Abrir página» se ejecuta cuando la página pasa a ser la actual; «Cerrar página», cuando lo pasa a ser otra.
+	JavaScript, e.g. app.alert("Hello")	JavaScript, p. ej. app.alert("Hola")
+	{s} actions aren't run by PdfCraft yet	PdfCraft aún no ejecuta las acciones {s}

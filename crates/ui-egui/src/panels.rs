@@ -759,6 +759,10 @@ pub enum BmAction {
     Indent(Vec<usize>),
     /// Move it out to follow its parent.
     Outdent(Vec<usize>),
+    /// Edit the JavaScript it runs (Bookmark Properties ▸ Actions ▸ Run a JavaScript).
+    EditScript(Vec<usize>),
+    /// Clicked a bookmark without a page: run its action (a script, a web address).
+    Run(Vec<usize>),
 }
 
 /// Matching titles plus their ancestors, keeping document paths rather than filtered indexes.
@@ -899,10 +903,11 @@ fn outline_item(ui: &mut egui::Ui, t: &Tokens, info: &DocInfo, item: &OutlineIte
             let pos = pos2(rect.right() - 6.0 - g.size().x, rect.top() + 14.0 - g.size().y / 2.0);
             ui.painter().galley(pos, g, t.text_faint);
         }
-        if resp.clicked()
-            && let Some(p) = item.page
-        {
-            *cx.nav = Some(Nav::Dest(p, item.view));
+        if resp.clicked() {
+            match item.page {
+                Some(p) => *cx.nav = Some(Nav::Dest(p, item.view)),
+                None => *cx.action = Some(BmAction::Run(path.to_vec())),
+            }
         }
         if resp.double_clicked() && cx.editable {
             *cx.action = Some(BmAction::StartRename(path.to_vec()));
@@ -921,6 +926,7 @@ fn outline_item(ui: &mut egui::Ui, t: &Tokens, info: &DocInfo, item: &OutlineIte
                 pick(ui, tl!("Rename"), true, BmAction::StartRename(path.to_vec()));
                 let set_page = crate::i18n::fmt(tl!("Set to current page ({n})"), &[("n", &(current + 1).to_string())]);
                 pick(ui, &set_page, true, BmAction::SetToCurrentPage(path.to_vec()));
+                pick(ui, tl!("Run a JavaScript…"), true, BmAction::EditScript(path.to_vec()));
                 ui.separator();
                 pick(ui, tl!("Move up"), i > 0, BmAction::MoveUp(path.to_vec()));
                 pick(ui, tl!("Move down"), i + 1 < siblings, BmAction::MoveDown(path.to_vec()));
@@ -1027,6 +1033,10 @@ fn pages(ui: &mut egui::Ui, t: &Tokens, info: &DocInfo, view: &mut crate::DocVie
                 }
                 if ui.button(tl!("Extract pages")).clicked() {
                     view.pending_action = Some(crate::canvas::ViewAction::Extract);
+                    ui.close();
+                }
+                if ui.add_enabled(editable, egui::Button::new(tl!("Page actions…"))).clicked() {
+                    view.pending_action = Some(crate::canvas::ViewAction::PageActions(i));
                     ui.close();
                 }
                 ui.separator();

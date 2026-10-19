@@ -22,6 +22,12 @@ impl Automation {
     }
 
     fn link_action(&self, a: &Args) -> Result<Option<LinkAction>> {
+        if let Some(js) = a.opt_str("javascript")? {
+            if a.opt_str("url")?.is_some() || self.goto_target(a)?.is_some() {
+                return Err(bad("pass javascript, url or to_page/dest, only one"));
+            }
+            return Ok(Some(LinkAction::JavaScript(js.to_string())));
+        }
         match (a.opt_str("url")?, self.goto_target(a)?) {
             (Some(_), Some(_)) => Err(bad("pass url, or to_page/dest, not both")),
             (Some(u), None) => Ok(Some(LinkAction::Uri(u.to_string()))),
@@ -73,6 +79,7 @@ impl Automation {
                         v["url"] = json!(u);
                         v["url_access"] = crate::url_access::check_json(u, &self.session.check_url(u));
                     }
+                    LinkAction::JavaScript(js) => v["javascript"] = json!(js),
                     LinkAction::Other(o) => v["other"] = json!(o),
                 }
                 v
@@ -84,7 +91,7 @@ impl Automation {
     pub(crate) fn link_add(&mut self, a: &Args) -> Result<Value> {
         let page = self.page(a)?;
         let rect = self.view_rect(a, page)?.ok_or_else(|| bad("link_add needs rect"))?;
-        let action = self.link_action(a)?.ok_or_else(|| bad("pass url, to_page (optionally with view) or dest"))?;
+        let action = self.link_action(a)?.ok_or_else(|| bad("pass url, to_page (optionally with view), dest or javascript"))?;
         let style = self.link_style(a, LinkStyle::default())?;
         self.apply(a, Edit::AddLink { page, rect, action, style })
     }

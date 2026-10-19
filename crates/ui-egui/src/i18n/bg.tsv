@@ -2256,3 +2256,15 @@ compare-page	Moved	Преместена
 	Archive documents…	Архивирай документи…
 	Archive Documents	Архивиране на документи
 	Save as PDF/A-2b for long-term archiving.	Записва като PDF/A-2b за дългосрочно архивиране.
+	Trigger:	Задействане:
+	Page Open	Отваряне на страницата
+	Page Close	Затваряне на страницата
+	Run a JavaScript…	Изпълни JavaScript…
+	Page actions…	Действия на страницата…
+	Type the JavaScript.	Въведете JavaScript кода.
+	Bookmark Action	Действие на отметката
+	Runs when the bookmark is clicked.	Изпълнява се при щракване върху отметката.
+	Page Actions: page {n}	Действия на страницата: страница {n}
+	Page Open runs when the page becomes the current page; Page Close when another page does.	„Отваряне на страницата“ се изпълнява, когато страницата стане текуща; „Затваряне на страницата“ – когато текуща стане друга страница.
+	JavaScript, e.g. app.alert("Hello")	JavaScript, напр. app.alert("Здравей")
+	{s} actions aren't run by PdfCraft yet	PdfCraft все още не изпълнява действия {s}

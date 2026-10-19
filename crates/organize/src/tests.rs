@@ -1442,7 +1442,7 @@ fn bookmark_actions_go_to_views_named_destinations_and_web_pages() {
     crate::add_bookmark(&mut d, &[], 1, "Results", 2).unwrap();
     crate::add_bookmark(&mut d, &[1], 0, "Table", 1).unwrap();
     dests::set(&mut d, "results", &View { page: 2, fit: Fit::FitR { rect: [10.0, 20.0, 110.0, 220.0] } }).unwrap();
-    // A JavaScript action is reported by type and kept when other bookmarks change.
+    // A JavaScript action is reported with its script and kept when other bookmarks change.
     let js = d.add(Object::Dict(
         [(b"S".to_vec(), Object::name("JavaScript")), (b"JS".to_vec(), Object::String(pdfcraft_cos::PdfString::literal(b"app.alert(1)".to_vec())))]
             .into_iter()
@@ -1468,7 +1468,7 @@ fn bookmark_actions_go_to_views_named_destinations_and_web_pages() {
         [
             (vec![0], BookmarkAction::GoTo(Target::View(zoomed))),
             (vec![1], BookmarkAction::GoTo(Target::Named("results".into()))),
-            (vec![1, 0], BookmarkAction::Other("JavaScript".into())),
+            (vec![1, 0], BookmarkAction::JavaScript("app.alert(1)".into())),
         ]
     );
     // A web address replaces the go-to; /Dest and /A are never both present.
@@ -1484,7 +1484,17 @@ fn bookmark_actions_go_to_views_named_destinations_and_web_pages() {
     assert_eq!(crate::bookmark_action(&d, &[1]).unwrap(), BookmarkAction::GoTo(Target::Named("Results!".into())));
     crate::set_bookmark_page(&mut d, &[1], 0).unwrap();
     assert!(matches!(crate::bookmark_action(&d, &[1]).unwrap(), BookmarkAction::GoTo(Target::View(View { page: 0, .. }))));
-    assert_eq!(crate::bookmark_action(&d, &[1, 0]).unwrap(), BookmarkAction::Other("JavaScript".into()));
+    assert_eq!(crate::bookmark_action(&d, &[1, 0]).unwrap(), BookmarkAction::JavaScript("app.alert(1)".into()));
+    // A script replaces a go-to (no /Dest left); blank and over-long scripts are refused unchanged.
+    crate::set_bookmark_action(&mut d, &[0], &BookmarkAction::JavaScript("this.pageNum = 2;".into())).unwrap();
+    assert!(crate::set_bookmark_action(&mut d, &[1], &BookmarkAction::JavaScript(" \n ".into())).is_err());
+    let huge = "x".repeat(pdfcraft_model::actions::MAX_SCRIPT_BYTES + 1);
+    assert!(crate::set_bookmark_action(&mut d, &[1], &BookmarkAction::JavaScript(huge)).is_err());
+    let d = save_and_reopen(&d);
+    assert_eq!(crate::bookmark_action(&d, &[0]).unwrap(), BookmarkAction::JavaScript("this.pageNum = 2;".into()));
+    let (first, _) = crate::outline::resolve_path(&d, &[0]).unwrap();
+    assert!(!d.get(first).as_dict().unwrap().contains(b"Dest"));
+    assert!(matches!(crate::bookmark_action(&d, &[1]).unwrap(), BookmarkAction::GoTo(Target::View(View { page: 0, .. }))));
 }
 
 #[test]

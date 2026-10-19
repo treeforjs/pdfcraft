@@ -679,6 +679,11 @@ fn question_json(q: &pdfcraft_engine::js::Question) -> Value {
     }
 }
 
+/// A page trigger id (page_open, page_close).
+fn page_trigger(id: &str) -> Result<pdfcraft_engine::PageTrigger> {
+    pdfcraft_engine::PageTrigger::from_id(id).ok_or_else(|| ToolError::InvalidArgs(format!("unknown trigger {id:?} (one of page_open, page_close)")))
+}
+
 /// `js_run`'s `answers`: a button name (yes, no, ok, cancel) for an alert, text or null for
 /// app.response.
 fn answers(a: &Args) -> Result<Vec<pdfcraft_engine::js::Answer>> {
@@ -750,6 +755,72 @@ impl Automation {
         let id = self.doc(a)?.id;
         self.session.apply(id, edit).map_err(failed)?;
         self.js_document_actions(a)
+    }
+
+    /// Page Properties ▸ Actions for every page (or `page`): the Page Open and Page Close
+    /// scripts that are set.
+    pub(crate) fn js_page_actions(&self, a: &Args) -> Result<Value> {
+        let doc = self.doc(a)?;
+        let only = match a.opt_int("page")? {
+            None => None,
+            Some(_) => Some(self.page(a)?),
+        };
+        let list: Vec<Value> = match only {
+            // One page: only its own /AA is read.
+            Some(p) => pdfcraft_engine::PageTrigger::ALL
+                .iter()
+                .map(|t| json!({ "page": p + 1, "trigger": t.id(), "label": t.label(), "script": doc.page_action(p, *t) }))
+                .collect(),
+            None => doc
+                .page_actions()
+                .into_iter()
+                .map(|(p, t, js)| json!({ "page": p + 1, "trigger": t.id(), "label": t.label(), "script": js }))
+                .collect(),
+        };
+        Ok(json!({ "actions": list }))
+    }
+
+    pub(crate) fn js_set_page_action(&mut self, a: &Args) -> Result<Value> {
+        let page = self.page(a)?;
+        let trigger = page_trigger(a.str("trigger")?)?;
+        let edit = pdfcraft_engine::Edit::SetPageAction { page, trigger, script: a.opt_str("script")?.map(str::to_string) };
+        let id = self.doc(a)?.id;
+        self.session.apply(id, edit).map_err(failed)?;
+        let script = self.doc(a)?.page_action(page, trigger);
+        Ok(json!({ "page": page + 1, "trigger": trigger.id(), "script": script }))
+    }
+
+    /// Run the JavaScript action of a link, a bookmark or a page trigger, as a click or the
+    /// page opening or closing would.
+    pub(crate) fn js_run_action(&mut self, a: &Args) -> Result<Value> {
+        use pdfcraft_engine::js::ActionSource;
+        let id = self.doc(a)?.id;
+        let given = [a.get("link").is_some(), a.get("bookmark").is_some(), a.get("trigger").is_some()].iter().filter(|x| **x).count();
+        if given != 1 {
+            return Err(ToolError::InvalidArgs("pass exactly one of link (with page and index), bookmark (a path) or trigger (with page)".into()));
+        }
+        let source = if a.get("link").is_some() {
+            let link = a.get("link").and_then(Value::as_object).ok_or_else(|| Args::wrong("link", "an object { page, index }"))?;
+            let n = |k: &str| {
+                link.get(k)
+                    .and_then(Value::as_u64)
+                    .and_then(|v| usize::try_from(v).ok())
+                    .and_then(|v| v.checked_sub(1))
+                    .ok_or_else(|| Args::wrong("link", "{ page, index } with 1-based numbers (see link_list)"))
+            };
+            ActionSource::Link { page: n("page")?, index: n("index")? }
+        } else if a.get("bookmark").is_some() {
+            ActionSource::Bookmark { path: a.path("bookmark")? }
+        } else {
+            ActionSource::Page { page: self.page(a)?, trigger: page_trigger(a.str("trigger")?)? }
+        };
+        let dialogs = pdfcraft_engine::js::Dialogs { interactive: true, answers: answers(a)? };
+        let o = self.session.run_action_javascript(id, &source, &dialogs).map_err(failed)?;
+        if let Some(q) = &o.question {
+            return Ok(json!({ "question": question_json(q), "answered": dialogs.answers.len() }));
+        }
+        let reqs: Vec<Value> = o.requests.iter().map(|r| request_json(&self.session, r)).collect();
+        Ok(json!({ "alerts": o.alerts, "console": o.console, "requests": reqs, "error": o.error, "result": o.result }))
     }
 
     pub(crate) fn form_set_script(&mut self, a: &Args) -> Result<Value> {

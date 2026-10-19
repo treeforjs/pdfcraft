@@ -2279,11 +2279,11 @@ title = "Run-a-JavaScript action"
 area = "C"
 tier = "P1"
 milestone = "M6"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["edit.link", "tools.page_actions", "form.prepare"]
+tools = ["link_add", "link_edit", "link_list", "bookmark_set_action", "bookmark_list", "form_set_actions", "form_run_trigger", "js_page_actions", "js_set_page_action", "js_run_action"]
+evidence = ["crates/model/src/actions.rs::scripts_are_read_from_strings_and_streams_and_written_back", "crates/model/src/actions.rs::blank_and_over_long_scripts_are_refused", "crates/annot/src/tests.rs::links_run_javascript", "crates/organize/src/tests.rs::bookmark_actions_go_to_views_named_destinations_and_web_pages", "crates/forms/src/tests.rs::page_open_and_close_scripts_are_set_listed_and_removed", "crates/engine/src/tests.rs::link_bookmark_and_page_javascript_actions_run_in_the_sandbox", "crates/engine/src/tests.rs::javascript_actions_respect_document_permissions", "crates/automation/tests/action_javascript.rs::javascript_actions_on_links_bookmarks_fields_and_pages", "crates/automation/tests/action_javascript.rs::hostile_scripts_and_arguments_are_contained", "crates/ui-egui/tests/action_javascript.rs::links_bookmarks_and_pages_run_their_scripts", "crates/ui-egui/tests/action_javascript.rs::a_link_script_dialog_waits_for_the_user", "crates/ui-egui/tests/action_javascript.rs::link_properties_bookmarks_and_page_actions_set_scripts"]
+notes = "Set (undoable, saved) on links (Link Properties ▸ Run a JavaScript, link_add/link_edit javascript), bookmarks (bookmark menu ▸ Run a JavaScript…, bookmark_set_action javascript), field triggers (Field Properties ▸ Actions, form_set_actions) and Page Open / Page Close (thumbnail menu or Page actions…, js_set_page_action); scripts are capped at 256 KiB and blank ones refused. Clicking a link or a page-less bookmark, or the current page changing, runs the script in the forms sandbox (boa, loop and recursion limits, no host access) with event.type Link/Bookmark/Page and event.name Mouse Up/Open/Close; its changes are one undo step and refused when the document's permissions don't allow them; dialogs wait for the user; js_run_action runs any of them headlessly. Page scripts can't print, save or change page (no loops). Only pages the open pass saw with /AA are looked at, and only when the current page changes. Not yet: the document's /OpenAction script, /AA on other annotation types, a memory cap in the JavaScript engine (only loop and recursion limits), and a full Bookmark/Page Properties dialog with other action types."
 
 [[feature]]
 id = "edit.action-thread"

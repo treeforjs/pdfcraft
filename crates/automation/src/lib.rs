@@ -818,6 +818,9 @@ impl Automation {
             "js_set_document_script" => self.js_set_document_script(&a)?,
             "js_document_actions" => self.js_document_actions(&a)?,
             "js_set_document_action" => self.js_set_document_action(&a)?,
+            "js_page_actions" => self.js_page_actions(&a)?,
+            "js_set_page_action" => self.js_set_page_action(&a)?,
+            "js_run_action" => self.js_run_action(&a)?,
             "js_enabled" => self.js_enabled(&a)?,
             "edit_keep_tags" => {
                 if let Some(on) = a.opt_bool("enabled")? {

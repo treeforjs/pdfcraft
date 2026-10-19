@@ -949,6 +949,11 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
                 close = crate::js_ui::document_js_body(ui, app, &t);
                 return;
             }
+            Dialog::ActionScript => {
+                ui.set_width(600.0);
+                close = crate::js_ui::action_script_body(ui, app, &t);
+                return;
+            }
             Dialog::Preferences => {
                 close = crate::js_ui::preferences_body(ui, app, &t);
                 return;

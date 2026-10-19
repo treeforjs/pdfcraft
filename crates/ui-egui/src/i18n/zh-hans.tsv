@@ -2258,3 +2258,15 @@ compare-page	Moved	已移动
 	Archive documents…	存档文档…
 	Archive Documents	存档文档
 	Save as PDF/A-2b for long-term archiving.	另存为 PDF/A-2b 以便长期存档。
+	Trigger:	触发器：
+	Page Open	页面打开
+	Page Close	页面关闭
+	Run a JavaScript…	运行 JavaScript…
+	Page actions…	页面操作…
+	Type the JavaScript.	请输入 JavaScript。
+	Bookmark Action	书签操作
+	Runs when the bookmark is clicked.	单击书签时运行。
+	Page Actions: page {n}	页面操作：第 {n} 页
+	Page Open runs when the page becomes the current page; Page Close when another page does.	“页面打开”在该页成为当前页时运行；“页面关闭”在其他页成为当前页时运行。
+	JavaScript, e.g. app.alert("Hello")	JavaScript，例如 app.alert("你好")
+	{s} actions aren't run by PdfCraft yet	PdfCraft 尚不运行 {s} 操作
