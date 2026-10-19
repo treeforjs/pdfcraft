@@ -1078,7 +1078,7 @@ pub fn tools() -> Vec<ToolDef> {
             }),
             &["doc"],
         )),
-        t("content_list", "List added content", "Text and images added with page_add_text/page_add_image (or Edit a PDF ▸ Add content), per page with a 1-based index, rect (points from the top-left of the page), and text style. When the document does not allow copying text, text fields are null and text_withheld explains why.")
+        t("content_list", "List added content", "Text and images added with page_add_text/page_add_image (or Edit a PDF ▸ Add content), per page with a 1-based index, rect (points from the top-left of the page), and text style. Text boxes with a list (text_list_set) also have list: one entry per paragraph, null or {style, level, label, start}. When the document does not allow copying text, text fields are null and text_withheld explains why.")
             .ro()
             .with(schema(json!({ "doc": doc() }), &["doc"])),
         t(
@@ -1122,6 +1122,40 @@ pub fn tools() -> Vec<ToolDef> {
                     "image": { "type": "string", "description": "Replace the picture with this file." },
                 }),
                 &["doc", "page", "index"],
+            )),
+        t(
+            "text_list_set",
+            "Make a bulleted or numbered list",
+            "Edit a PDF ▸ bulleted and numbered lists. With block (an added text box, index from content_list): make its paragraphs (lines of its text; paragraphs [first, last], 1-based, default all) list items in style, or change the type of those already in a list (their indent levels stay). With paragraph (from text_paragraphs) and count (default 1): move those page paragraphs into a new list text box drawn where they were, in the closest standard font (helvetica, times or courier, keeping weight, slant, size and colour; a bullet or number they already start with is replaced by the label). Styles: bullets disc (•), dash (–), arrow (»), asterisk (*), dot (·); numbers decimal (1.), lower-alpha (a.), upper-alpha (A.), lower-roman (i.), upper-roman (I.). start (1-100000) restarts the numbering at the first paragraph; otherwise an item continues from the previous item at its level. Labels are generated, not typed: paragraphs typed into a list later with content_update continue it and are numbered in order. Items get a hanging indent: the label at the item's indent, every line of the paragraph at the body indent past it. Tagged documents (with edit_keep_tags on) get L > LI > Lbl + LBody structure in place of the paragraphs' elements. Returns the box's index. One undo step; no step when nothing changes.",
+        )
+        .with(schema(
+            json!({
+                "doc": doc(), "page": { "type": "integer", "minimum": 1 },
+                "block": { "type": "integer", "minimum": 1, "description": "Added text box index (content_list)." },
+                "paragraphs": { "type": "array", "items": { "type": "integer", "minimum": 1 }, "minItems": 2, "maxItems": 2, "description": "[first, last] paragraphs of the box, 1-based, inclusive (default all)." },
+                "paragraph": { "type": "integer", "minimum": 1, "description": "First page paragraph (text_paragraphs) to make into a list, instead of block." },
+                "count": { "type": "integer", "minimum": 1, "maximum": 10000, "description": "How many consecutive page paragraphs (with paragraph; default 1)." },
+                "style": { "type": "string", "enum": ["disc", "dash", "arrow", "asterisk", "dot", "decimal", "lower-alpha", "upper-alpha", "lower-roman", "upper-roman"] },
+                "start": { "type": "integer", "minimum": 1, "maximum": 100000 },
+            }),
+            &["doc", "page", "style"],
+        )),
+        t("text_list_remove", "Remove a list", "Make list items of an added text box (block, index from content_list; paragraphs [first, last], 1-based, default all) ordinary paragraphs again; the items after them are renumbered. Refused when none of them is in a list. One undo step.")
+            .with(schema(
+                json!({
+                    "doc": doc(), "page": { "type": "integer", "minimum": 1 }, "block": { "type": "integer", "minimum": 1 },
+                    "paragraphs": { "type": "array", "items": { "type": "integer", "minimum": 1 }, "minItems": 2, "maxItems": 2 },
+                }),
+                &["doc", "page", "block"],
+            )),
+        t("text_list_indent", "Indent or outdent list items", "Change the nesting level of list items of an added text box (block, index from content_list; paragraphs [first, last], 1-based, default all) by levels (default 1; negative outdents), within levels 0-8. A deeper item's label starts where its parent's paragraph does and it is numbered on its own (a nested list in a tagged document). Paragraphs that aren't list items are left alone; refused when none is. One undo step; no step when nothing changes (already at level 0 or 8).")
+            .with(schema(
+                json!({
+                    "doc": doc(), "page": { "type": "integer", "minimum": 1 }, "block": { "type": "integer", "minimum": 1 },
+                    "paragraphs": { "type": "array", "items": { "type": "integer", "minimum": 1 }, "minItems": 2, "maxItems": 2 },
+                    "levels": { "type": "integer", "minimum": -8, "maximum": 8 },
+                }),
+                &["doc", "page", "block"],
             )),
         t("content_delete", "Delete added content", "Delete an added item (page, index from content_list). Undoable.")
             .destructive()

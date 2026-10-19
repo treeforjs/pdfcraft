@@ -87,6 +87,19 @@ impl Automation {
                         v["size"] = json!(t.size);
                         v["bold"] = json!(t.bold);
                         v["italic"] = json!(t.italic);
+                        if t.list.iter().any(Option::is_some) {
+                            let items = pdfcraft_engine::list_items(t);
+                            let labels = pdfcraft_engine::list_labels(&items);
+                            v["list"] = json!(
+                                items
+                                    .iter()
+                                    .zip(labels)
+                                    .map(|(it, label)| it.map(
+                                        |it| json!({ "style": it.style.name(), "level": it.level, "start": it.start, "label": copy.then_some(label) })
+                                    ))
+                                    .collect::<Vec<_>>()
+                            );
+                        }
                     }
                     AddedContent::Image(_) => v["type"] = json!("image"),
                 }
@@ -203,5 +216,110 @@ impl Automation {
     pub(crate) fn content_delete(&mut self, a: &Args) -> Result<Value> {
         let (page, index, _, _) = self.item(a)?;
         self.apply(a, Edit::DeleteContent { page, index })
+    }
+}
+
+impl Automation {
+    /// `text_list_set`, `text_list_remove` and `text_list_indent`.
+    pub(crate) fn text_list(&mut self, tool: &str, a: &Args) -> Result<Value> {
+        use pdfcraft_engine::{ListChange, ListStyle, ListTarget};
+        let page = self.page(a)?;
+        let one_based = |v: i64, what: &str| {
+            usize::try_from(v).ok().and_then(|n| n.checked_sub(1)).ok_or_else(|| bad(format!("{what} must be a positive number")))
+        };
+        let paragraphs = match a.opt_ints("paragraphs")? {
+            None => None,
+            Some(p) => match p.as_slice() {
+                [first, last] if first <= last => Some([one_based(*first, "paragraphs")?, one_based(*last, "paragraphs")?]),
+                _ => return Err(bad("paragraphs takes [first, last] with 1 <= first <= last")),
+            },
+        };
+        let change = match tool {
+            "text_list_set" => {
+                let name = a.str("style")?;
+                let style = ListStyle::from_name(name)
+                    .ok_or_else(|| bad(format!("unknown style {name:?} ({})", ListStyle::ALL.map(ListStyle::name).join(", "))))?;
+                let start = a
+                    .opt_int("start")?
+                    .map(|s| {
+                        u32::try_from(s)
+                            .ok()
+                            .filter(|s| (1..=pdfcraft_engine::MAX_LIST_START).contains(s))
+                            .ok_or_else(|| bad("start must be 1 to 100000"))
+                    })
+                    .transpose()?;
+                ListChange::Set { style, start }
+            }
+            "text_list_remove" => ListChange::Remove,
+            _ => {
+                let levels = a.opt_int("levels")?.unwrap_or(1);
+                if !(-8..=8).contains(&levels) || levels == 0 {
+                    return Err(bad("levels must be -8 to 8 and not 0"));
+                }
+                ListChange::Indent(levels as i8)
+            }
+        };
+        let target = match (a.opt_int("block")?, a.opt_int("paragraph")?) {
+            (Some(_), Some(_)) => return Err(bad("pass block (an added text box) or paragraph (page paragraphs), not both")),
+            (Some(b), None) => {
+                if a.get("count").is_some() {
+                    return Err(bad("count goes with paragraph; use paragraphs [first, last] with block"));
+                }
+                let index = one_based(b, "block")?;
+                let doc = self.doc(a)?;
+                match doc.added.iter().filter(|x| x.page == page).nth(index).map(|x| &x.content) {
+                    Some(AddedContent::Text(_)) => {}
+                    Some(AddedContent::Image(_)) => {
+                        return Err(bad(format!("added item {b} on page {} is an image; lists need a text box", page + 1)));
+                    }
+                    None => return Err(failed(format!("page {} has no added item {b} (see content_list)", page + 1))),
+                }
+                ListTarget::Added { index, paragraphs }
+            }
+            (None, Some(p)) => {
+                if tool != "text_list_set" {
+                    return Err(bad("page paragraphs aren't in a list; pass block (the list's text box from content_list)"));
+                }
+                if paragraphs.is_some() {
+                    return Err(bad("paragraphs goes with block; use count with paragraph"));
+                }
+                let first = one_based(p, "paragraph")?;
+                let count = a.opt_int("count")?.unwrap_or(1);
+                let count = usize::try_from(count).ok().filter(|c| (1..=10_000).contains(c)).ok_or_else(|| bad("count must be 1 to 10000"))?;
+                let n = self.doc(a)?.text_blocks(page).len();
+                if first.saturating_add(count) > n {
+                    return Err(bad(format!(
+                        "paragraphs {p}–{} are out of range: page {} has {n} paragraphs",
+                        first.saturating_add(count),
+                        page + 1
+                    )));
+                }
+                ListTarget::Paragraphs { first, count }
+            }
+            (None, None) => return Err(bad("pass block (an added text box, from content_list) or paragraph (from text_paragraphs)")),
+        };
+        let mut out = self.apply(a, Edit::EditList { page, target: target.clone(), change })?;
+        let index = match target {
+            ListTarget::Added { index, .. } => index,
+            // A new box is the page's last added item.
+            ListTarget::Paragraphs { .. } => self.doc(a)?.added.iter().filter(|x| x.page == page).count().saturating_sub(1),
+        };
+        out["block"] = json!(index + 1);
+        let doc = self.doc(a)?;
+        let copy = doc.allows_copying();
+        if let Some(AddedContent::Text(t)) = doc.added.iter().filter(|x| x.page == page).nth(index).map(|x| &x.content) {
+            let items = pdfcraft_engine::list_items(t);
+            let labels = pdfcraft_engine::list_labels(&items);
+            out["list"] = json!(
+                items
+                    .iter()
+                    .zip(labels)
+                    .map(|(it, label)| it
+                        .map(|it| json!({ "style": it.style.name(), "level": it.level, "start": it.start, "label": copy.then_some(label) })))
+                    .collect::<Vec<_>>()
+            );
+            out["text"] = json!(copy.then_some(&t.text));
+        }
+        Ok(withheld(out, copy))
     }
 }

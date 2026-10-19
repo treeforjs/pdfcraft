@@ -1943,11 +1943,11 @@ title = "Bulleted and numbered lists"
 area = "C"
 tier = "P1"
 milestone = "M7"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["text_list_set", "text_list_remove", "text_list_indent", "content_update"]
+evidence = ["crates/automation/tests/lists.rs::bulleted_and_numbered_lists_in_a_text_box", "crates/automation/tests/lists.rs::page_paragraphs_become_a_tagged_list", "crates/automation/tests/lists.rs::list_arguments_are_checked", "crates/edit/src/lists.rs::labels_number_by_level_and_restart", "crates/edit/src/lists.rs::new_paragraphs_continue_the_list_they_are_typed_in"]
+notes = "Headless only (no Format panel controls). Bullets • – » * · and numbers 1. a. A. i. I. with start, change type, remove, indent/outdent (levels 0-8, nested numbering) and continued numbering for paragraphs typed into a list, with a hanging indent, on added text boxes; kept through undo/redo and save/reopen, and tagged as L > LI > Lbl + LBody in tagged documents. Page paragraphs become a list by moving into such a box, redrawn in the closest standard font (their own embedded fonts, kerning and mixed styles are not kept). Missing: lists inside existing paragraphs in their own fonts, Arabic/right-to-left lists, bullets outside WinAnsi (square, check, custom glyphs), custom indents or label alignment, and re-recognizing lists other tools wrote."
 
 [[feature]]
 id = "edit.add-text"

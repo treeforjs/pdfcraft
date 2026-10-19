@@ -31,7 +31,7 @@ use pdfcraft_cos::{Dict, Document, ObjRef, Object, Stream};
 use crate::tags::{MAX_MCID, TagError, TagKid, Tags, catalog, sub_dict, tags};
 
 /// Pages with more operators than this are not compared (reported instead).
-const MAX_OPS: usize = 2_000_000;
+pub(crate) const MAX_OPS: usize = 2_000_000;
 /// Marked-content nesting deeper than this is not followed.
 const MAX_NEST: usize = 4096;
 /// Raw structure walks stop after this many objects.
@@ -39,7 +39,7 @@ const MAX_WALK: usize = 2_000_000;
 /// Number-tree walks stop after this many nodes.
 const MAX_TREE_NODES: usize = 100_000;
 /// Ancestors followed when looking for a grouping element.
-const MAX_CLIMB: usize = 512;
+pub(crate) const MAX_CLIMB: usize = 512;
 
 /// Element types that group block-level elements: new paragraphs and figures go inside them.
 const GROUPING: &[&str] = &["Document", "DocumentFragment", "Part", "Art", "Sect", "Div", "BlockQuote", "Aside", "NonStruct"];
@@ -232,7 +232,7 @@ fn scan(doc: &Document, page: &Dict, ops: &[Op]) -> Scan {
 }
 
 /// A page's content streams and their decoded bytes.
-fn content_streams(doc: &Document, page: &Dict) -> Vec<(Object, Vec<u8>)> {
+pub(crate) fn content_streams(doc: &Document, page: &Dict) -> Vec<(Object, Vec<u8>)> {
     let list: Vec<Object> = match page.get(b"Contents") {
         None => Vec::new(),
         Some(c) => match &*doc.resolve(c) {
@@ -315,6 +315,8 @@ pub struct TagUpdate {
     pub review_alt: Vec<ObjRef>,
     /// Parent-tree entries rewritten or removed.
     pub parent_tree: usize,
+    /// Lists given list structure (`L` > `LI` > `Lbl` + `LBody`; see [`crate::keep_list_tags`]).
+    pub lists: usize,
     /// What could not be kept in step.
     pub warnings: Vec<String>,
 }
@@ -343,7 +345,17 @@ impl TagUpdate {
             }
         }
         self.parent_tree = self.parent_tree.saturating_add(o.parent_tree);
+        self.lists = self.lists.saturating_add(o.lists);
         self.warnings.extend(o.warnings);
+    }
+
+    /// Fold in what [`crate::keep_list_tags`] did after this update: the elements this update
+    /// made for list labels and paragraphs were replaced by list elements, so they are reported
+    /// as those.
+    pub fn absorb_lists(&mut self, lists: TagUpdate) {
+        let moved: HashSet<(usize, i64)> = lists.added.iter().map(|a| (a.page, a.mcid)).collect();
+        self.added.retain(|a| !moved.contains(&(a.page, a.mcid)));
+        self.merge(lists);
     }
 
     fn touched(&self) -> bool {
@@ -355,6 +367,7 @@ impl TagUpdate {
             || self.pruned > 0
             || self.actual_text_cleared > 0
             || !self.review_alt.is_empty()
+            || self.lists > 0
     }
 }
 
@@ -410,7 +423,7 @@ impl<'a> Elements<'a> {
 }
 
 /// An element's kids as a list (K normalized: a single kid becomes a one-item list).
-fn kid_list(doc: &Document, d: &Dict) -> Vec<Object> {
+pub(crate) fn kid_list(doc: &Document, d: &Dict) -> Vec<Object> {
     match d.get(b"K") {
         None => Vec::new(),
         Some(Object::Array(a)) => a.clone(),
@@ -423,7 +436,7 @@ fn kid_list(doc: &Document, d: &Dict) -> Vec<Object> {
 }
 
 /// Where the tree's root and parent tree are (the root must be an indirect dictionary).
-fn root_ref(doc: &Document) -> Result<ObjRef, TagError> {
+pub(crate) fn root_ref(doc: &Document) -> Result<ObjRef, TagError> {
     let (_, cat) = catalog(doc).ok_or(TagError::Untagged)?;
     match cat.get(b"StructTreeRoot") {
         Some(Object::Ref(r)) if doc.get(*r).as_dict().is_some() => Ok(*r),
@@ -434,7 +447,14 @@ fn root_ref(doc: &Document) -> Result<ObjRef, TagError> {
 
 /// Insert `new` into `parent`'s kids (`None`: the root's) after (or before) `anchor`, or at the
 /// end (start) when the anchor isn't one of them.
-fn insert_kid(doc: &mut Document, root: ObjRef, parent: Option<ObjRef>, anchor: Option<ObjRef>, after: bool, new: ObjRef) -> Result<(), TagError> {
+pub(crate) fn insert_kid(
+    doc: &mut Document,
+    root: ObjRef,
+    parent: Option<ObjRef>,
+    anchor: Option<ObjRef>,
+    after: bool,
+    new: ObjRef,
+) -> Result<(), TagError> {
     let holder = parent.unwrap_or(root);
     let d = doc.get(holder).as_dict().cloned().ok_or_else(|| TagError::Invalid("a structure element is not a dictionary".into()))?;
     let mut list = kid_list(doc, &d);
@@ -471,7 +491,7 @@ fn mcr_mcid(doc: &Document, o: &Object, here: bool, page_obj: ObjRef) -> Option<
 }
 
 /// Remove the MCIDs in `gone` from element `e`'s kids. Returns (removed, now empty).
-fn strip_mcids(doc: &mut Document, e: ObjRef, here: bool, page_obj: ObjRef, gone: &HashSet<i64>) -> Result<(usize, bool), TagError> {
+pub(crate) fn strip_mcids(doc: &mut Document, e: ObjRef, here: bool, page_obj: ObjRef, gone: &HashSet<i64>) -> Result<(usize, bool), TagError> {
     let Some(d) = doc.get(e).as_dict().cloned() else { return Ok((0, false)) };
     let here = d.get(b"Pg").and_then(Object::as_ref).map_or(here, |p| p == page_obj);
     let kids = kid_list(doc, &d);
@@ -640,7 +660,7 @@ fn number_max(doc: &Document, pt: ObjRef) -> Option<i64> {
 }
 
 /// Rebuild page `page`'s parent-tree array (MCID → element) from the tree.
-fn rebuild_parent_tree(doc: &mut Document, root: ObjRef, page: usize, page_obj: ObjRef) -> Result<(), TagError> {
+pub(crate) fn rebuild_parent_tree(doc: &mut Document, root: ObjRef, page: usize, page_obj: ObjRef) -> Result<(), TagError> {
     let tree = tags(doc);
     let mut slots: Vec<Object> = Vec::new();
     for n in &tree.nodes {

@@ -77,12 +77,14 @@ pub use pdfcraft_forms::{
 };
 
 pub use pdfcraft_a11y as a11y;
+pub use pdfcraft_edit::lists::{MAX_LIST_LEVEL, MAX_LIST_START, items as list_items, labels as list_labels};
 /// Edit a PDF ▸ arrange, align, distribute, rotate, flip and move page objects.
 pub use pdfcraft_edit::objects::{
     AlignTo, Anchor, Arrange, Axis, Dash, LineCap, LineJoin, ObjectKind, ObjectsEdit, PageObject, Paint, PathStyle, Size as ObjectSize,
 };
 pub use pdfcraft_edit::text::validate_paragraph_text;
 pub use pdfcraft_edit::{BlockStyle, PageFont, PageImage, TextBlock, TextLine, TextRun, first_undrawable};
+pub use pdfcraft_edit::{Bullet, ListChange, ListItem, ListStyle, ListTarget, Numbering};
 pub use pdfcraft_measure as measure;
 pub use pdfcraft_xfa::Report as XfaLayout;
 
@@ -1660,6 +1662,15 @@ pub enum Edit {
         /// Formatting changes (font, size, colour, alignment); default keeps the paragraph's.
         style: pdfcraft_edit::BlockStyle,
     },
+    /// Edit a PDF ▸ bulleted and numbered lists: make paragraphs list items, change their list
+    /// type, remove them from the list, or indent / outdent them ([`pdfcraft_edit::edit_list`]).
+    /// Page paragraphs move into a new list text box. A no-op (no undo step) when nothing would
+    /// change.
+    EditList {
+        page: usize,
+        target: pdfcraft_edit::ListTarget,
+        change: pdfcraft_edit::ListChange,
+    },
     /// Order tabs manually: move a field one place earlier or later on its page.
     MoveInTabOrder {
         name: String,
@@ -1920,6 +1931,12 @@ impl Edit {
                 ImageEdit::Delete => "Delete image".into(),
             },
             Edit::EditPageObjects { change, .. } => objects_label(change).into(),
+            Edit::EditList { change, .. } => match change {
+                pdfcraft_edit::ListChange::Set { .. } => "Format list".into(),
+                pdfcraft_edit::ListChange::Remove => "Remove list".into(),
+                pdfcraft_edit::ListChange::Indent(by) if *by < 0 => "Outdent list".into(),
+                pdfcraft_edit::ListChange::Indent(_) => "Indent list".into(),
+            },
             Edit::FixHairlines { .. } => "Fix hairlines".into(),
             Edit::FlattenTransparency { .. } => "Flatten transparency".into(),
             Edit::AddPrinterMarks { .. } => "Add printer marks".into(),
@@ -2145,6 +2162,7 @@ fn check_permission(edit: &Edit, p: &pdfcraft_cos::Permissions) -> Result<(), Ed
         | Edit::EditTextBlock { .. }
         | Edit::EditPageImage { .. }
         | Edit::EditPageObjects { .. }
+        | Edit::EditList { .. }
         | Edit::Flatten { .. }
         | Edit::FlattenFillSign => {
             if p.modify() {
@@ -2289,6 +2307,7 @@ fn tag_scope(edit: &Edit) -> TagScope {
         | Edit::EditTextBlock { page, .. }
         | Edit::EditPageImage { page, .. }
         | Edit::EditPageObjects { page, .. }
+        | Edit::EditList { page, .. }
         | Edit::AddText { page, .. }
         | Edit::AddImage { page, .. }
         | Edit::UpdateContent { page, .. }
@@ -2318,6 +2337,14 @@ fn run_edit(doc: &mut pdfcraft_cos::Document, edit: &Edit, cx: &mut EditCtx) -> 
             if let Some(before) = before {
                 let r = a11y::keep_tags(doc, &before);
                 note(cx, r);
+                // Lists drawn by the edit get list structure (L > LI > Lbl + LBody).
+                if matches!(edit, Edit::EditList { .. } | Edit::AddText { .. } | Edit::UpdateContent { .. }) {
+                    match a11y::keep_list_tags(doc, page) {
+                        Ok(u) if !u.is_empty() => cx.tags.get_or_insert_with(Default::default).absorb_lists(u),
+                        Ok(_) => {}
+                        Err(e) => note(cx, Err(e)),
+                    }
+                }
             }
             Ok(())
         }
@@ -2593,6 +2620,9 @@ fn run_edit_inner(doc: &mut pdfcraft_cos::Document, edit: &Edit, cx: &mut EditCt
         }
         Edit::EditTextBlock { page, block, text, style } => {
             pdfcraft_edit::rewrite_block(doc, *page, *block, Some(text), style)?;
+        }
+        Edit::EditList { page, target, change } => {
+            pdfcraft_edit::edit_list(doc, *page, target, change)?;
         }
         Edit::MarkDecorative { figure } => {
             let r = pdfcraft_cos::ObjRef::new(*figure, doc.generation(*figure));
@@ -3515,6 +3545,12 @@ impl Session {
         if let Edit::EditPageObjects { page, objects, change } = &edit {
             let changes =
                 guard(|| pdfcraft_edit::objects::objects_edit_changes(&editor.cos, *page, objects, change)).map_err(EditError::Invalid)??;
+            if !changes {
+                return Ok(());
+            }
+        }
+        if let Edit::EditList { page, target, change } = &edit {
+            let changes = guard(|| pdfcraft_edit::list_edit_changes(&editor.cos, *page, target, change)).map_err(EditError::Invalid)??;
             if !changes {
                 return Ok(());
             }

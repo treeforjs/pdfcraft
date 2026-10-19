@@ -768,6 +768,7 @@ impl Automation {
             "page_add_text" => self.page_add_text(&a)?,
             "page_add_image" => self.page_add_image(&a)?,
             "content_update" => self.content_update(&a)?,
+            "text_list_set" | "text_list_remove" | "text_list_indent" => self.text_list(name, &a)?,
             "content_delete" => self.content_delete(&a)?,
             "doc_print" => self.doc_print(&a)?,
             "doc_remove_hidden" => self.doc_remove_hidden(&a)?,
@@ -2540,6 +2541,7 @@ fn tag_update_json(u: &pdfcraft_engine::a11y::TagUpdate) -> Value {
         "actual_text_cleared": u.actual_text_cleared,
         "review_alt": u.review_alt.iter().map(|r| r.num).collect::<Vec<_>>(),
         "parent_tree": u.parent_tree,
+        "lists": u.lists,
         "warnings": u.warnings,
     })
 }

@@ -924,7 +924,7 @@ fn needs_type3(text: &str) -> bool {
     text.chars().any(|c| !is_win_ansi_char(c))
 }
 
-fn source_family(base_font: &str) -> crate::added::Family {
+pub(crate) fn source_family(base_font: &str) -> crate::added::Family {
     let name = base_font.to_ascii_lowercase();
     if ["courier", "mono", "consolas", "menlo", "monaco", "lucida console"].iter().any(|s| name.contains(s)) {
         crate::added::Family::Courier
@@ -1865,6 +1865,28 @@ fn rewrite_block_inner(doc: &mut Document, page: usize, block: usize, text: Opti
     block_ops.push(Op::new("Q", vec![]));
     install_block(doc, page, &lines, b, block_ops, new_font.then_some(fonts_res), false)?;
     Ok(LineEdit { substituted })
+}
+
+/// Whether paragraph `b` (of `lines`) reads upright in user space, and whether it is drawn as
+/// plain filled text (no stroking, invisible or clipping text, no extended graphics state).
+pub(crate) fn upright_and_plain(lines: &[TextLine], b: &TextBlock) -> (bool, bool) {
+    let upright = b.lines.iter().filter_map(|i| lines.get(*i)).all(|l| {
+        let [a, bb, c, d, _, _] = Matrix(l.origin.tm).then(&Matrix(l.origin.ctm)).0;
+        a > 0.0 && d > 0.0 && bb.abs() < 1e-6 * a && c.abs() < 1e-6 * d
+    }) && !b.lines.is_empty();
+    let plain = b.runs.iter().all(|r| r.state.render_mode == 0.0 && !r.state.complex_graphics);
+    (upright, plain)
+}
+
+/// The paragraphs of `lines`, as [`text_blocks`] groups them.
+pub(crate) fn group_blocks_pub(lines: &[TextLine]) -> Vec<TextBlock> {
+    group_blocks(lines, true)
+}
+
+/// Take paragraph `b` (of `lines`, the page's [`text_lines`]) off the page: its text operators
+/// (and its PdfCraft underlines) go, and the text after it gets the state it expects.
+pub(crate) fn remove_block(doc: &mut Document, page: usize, lines: &[TextLine], b: &TextBlock) -> Result<(), EditError> {
+    install_block(doc, page, lines, b, Vec::new(), None, true)
 }
 
 fn install_block(

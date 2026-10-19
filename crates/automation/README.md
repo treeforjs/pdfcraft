@@ -106,6 +106,17 @@ still use legacy normalization/reflow; their original character-code and spacing
 not yet equivalent to range/mixed edits. Broader shaping/encodings, transformed text, imported
 decoration recognition, structure tags and complex-layout paragraph detection remain open.
 
+## Lists
+
+`text_list_set {doc, page, block, paragraphs?, style, start?}` makes paragraphs of an added text
+box (index from `content_list`; `paragraphs` is `[first, last]`, 1-based) list items, or changes
+their type. `text_list_set {doc, page, paragraph, count?, style, start?}` moves page paragraphs
+(from `text_paragraphs`) into a new list box. `text_list_remove {doc, page, block, paragraphs?}`
+and `text_list_indent {doc, page, block, paragraphs?, levels?}` change existing items. Each is
+one undo step; a request already satisfied adds none. Results carry `block`, `text` and `list`
+(per paragraph: null or `{style, level, start, label}`), as `content_list` does, and a `tags`
+entry with `lists` in tagged documents (L > LI > Lbl + LBody).
+
 ## Reader text selection
 
 `text_selection` copies an inclusive glyph range across pages, a detected paragraph, or all
