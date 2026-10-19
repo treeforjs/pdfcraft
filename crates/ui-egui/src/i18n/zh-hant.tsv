@@ -2191,3 +2191,22 @@ compare-page	Moved	已移動
 	Close all pop-ups	關閉所有彈出視窗
 	No pop-ups to open	沒有可開啟的彈出視窗
 	No pop-ups are open	沒有開啟的彈出視窗
+
+# File ▸ Page Setup
+	Page setup…	版面設定…
+	Page Setup	版面設定
+	The paper and margins Print and Save as PDF use until you change them.	在您變更之前，列印和另存為 PDF 使用的紙張和邊界。
+	Paper	紙張
+	Custom size	自訂大小
+	Units:	單位：
+	Orientation	方向
+	Margins	邊界
+	Narrow	窄
+	Normal	一般
+	Wide	寬
+	Top:	上：
+	Right:	右：
+	Restore defaults	還原預設值
+	Each sheet turns to suit its page.	每張紙會依其頁面自動旋轉。
+	Custom ({w} × {h} in)	自訂 ({w} × {h} in)
+	Paper size, orientation and margins	紙張大小、方向和邊界

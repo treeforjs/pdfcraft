@@ -2236,3 +2236,22 @@ compare-page	Moved	తరలించబడింది
 	Close all pop-ups	అన్ని పాప్-అప్‌లను మూసివేయి
 	No pop-ups to open	తెరవడానికి పాప్-అప్‌లు లేవు
 	No pop-ups are open	తెరిచిన పాప్-అప్‌లు లేవు
+
+# File ▸ Page Setup
+	Page setup…	పేజీ సెటప్…
+	Page Setup	పేజీ సెటప్
+	The paper and margins Print and Save as PDF use until you change them.	మీరు మార్చే వరకు ముద్రించు, PDF గా భద్రపరచు ఉపయోగించే కాగితం, అంచులు.
+	Paper	కాగితం
+	Custom size	అనుకూల పరిమాణం
+	Units:	యూనిట్లు:
+	Orientation	దిశ
+	Margins	అంచులు
+	Narrow	సన్నని
+	Normal	సాధారణ
+	Wide	వెడల్పైన
+	Top:	పైన:
+	Right:	కుడి:
+	Restore defaults	డిఫాల్ట్‌లను పునరుద్ధరించు
+	Each sheet turns to suit its page.	ప్రతి షీట్ తన పేజీకి తగినట్లు తిరుగుతుంది.
+	Custom ({w} × {h} in)	అనుకూల ({w} × {h} in)
+	Paper size, orientation and margins	కాగితం పరిమాణం, దిశ, అంచులు

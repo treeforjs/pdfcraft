@@ -2305,3 +2305,22 @@ compare-page	Moved	Déplacée
 	Close all pop-ups	Fermer toutes les fenêtres contextuelles
 	No pop-ups to open	Aucune fenêtre contextuelle à ouvrir
 	No pop-ups are open	Aucune fenêtre contextuelle ouverte
+
+# File ▸ Page Setup
+	Page setup…	Mise en page…
+	Page Setup	Mise en page
+	The paper and margins Print and Save as PDF use until you change them.	Le papier et les marges utilisés par Imprimer et Enregistrer en PDF jusqu’à ce que vous les changiez.
+	Paper	Papier
+	Custom size	Format personnalisé
+	Units:	Unités :
+	Orientation	Orientation
+	Margins	Marges
+	Narrow	Étroites
+	Normal	Normales
+	Wide	Larges
+	Top:	Haut :
+	Right:	Droite :
+	Restore defaults	Rétablir les valeurs par défaut
+	Each sheet turns to suit its page.	Chaque feuille pivote selon sa page.
+	Custom ({w} × {h} in)	Personnalisé ({w} × {h} in)
+	Paper size, orientation and margins	Format du papier, orientation et marges

@@ -2305,3 +2305,22 @@ compare-page	Moved	Verschoben
 	Close all pop-ups	Alle Pop-ups schließen
 	No pop-ups to open	Keine Pop-ups zum Öffnen
 	No pop-ups are open	Keine Pop-ups geöffnet
+
+# File ▸ Page Setup
+	Page setup…	Seite einrichten…
+	Page Setup	Seite einrichten
+	The paper and margins Print and Save as PDF use until you change them.	Papier und Ränder, die Drucken und Als PDF sichern verwenden, bis Sie sie ändern.
+	Paper	Papier
+	Custom size	Eigene Größe
+	Units:	Einheiten:
+	Orientation	Ausrichtung
+	Margins	Ränder
+	Narrow	Schmal
+	Normal	Normal
+	Wide	Breit
+	Top:	Oben:
+	Right:	Rechts:
+	Restore defaults	Standard wiederherstellen
+	Each sheet turns to suit its page.	Jedes Blatt dreht sich passend zu seiner Seite.
+	Custom ({w} × {h} in)	Eigene ({w} × {h} in)
+	Paper size, orientation and margins	Papierformat, Ausrichtung und Ränder

@@ -469,3 +469,96 @@ fn printer_option_defaults_and_job_arguments() {
     assert!(args.ends_with("-o fit-to-page=false -o InputSlot=Tray2 -o EFMediaType=Heavy1"), "{args}");
     assert!(spool::printer_options("../../etc/passwd").is_empty(), "not a queue name");
 }
+
+#[test]
+fn page_setup_margins_move_the_printable_area() {
+    let sizes = [(200.0, 300.0)];
+    // Uneven margins: Fit fills the area between them and centres the page in it.
+    let margins = Margins { top: 72.0, right: 36.0, bottom: 0.0, left: 0.0 };
+    let setup = PageSetup::new((792.0, 612.0), Orientation::Portrait, margins).unwrap();
+    assert_eq!(setup.paper, (612.0, 792.0), "stored portrait");
+    assert_eq!(setup.paper_name(), Some("US Letter"));
+    let s = settings(vec![0], Layout::Size(SizeMode::Fit)).with_page_setup(&setup);
+    let sheets = layout(&sizes, &s).unwrap();
+    assert_eq!(sheets[0].area, [0.0, 0.0, 576.0, 720.0]);
+    let [a, _, _, _, e, f] = sheets[0].placed[0].matrix.0;
+    assert!(close(a, 2.4), "min(576 / 200, 720 / 300): {a}");
+    assert!(close(e, 48.0) && close(f, 0.0), "centred in the area: {e} {f}");
+    // Actual size centres in the area too; the default margins centre on the sheet as before.
+    let actual = layout(&sizes, &settings(vec![0], Layout::Size(SizeMode::Actual)).with_page_setup(&setup)).unwrap();
+    assert_eq!(actual[0].placed[0].matrix.0, [1.0, 0.0, 0.0, 1.0, 188.0, 210.0]);
+    // Landscape setup turns every sheet.
+    let land = PageSetup { orientation: Orientation::Landscape, ..PageSetup::default() };
+    let sheets = layout(&sizes, &settings(vec![0], Layout::Size(SizeMode::Fit)).with_page_setup(&land)).unwrap();
+    assert_eq!(sheets[0].size, (792.0, 612.0));
+    // Zero margins: Multiple uses the whole sheet; posters leave no cut marks in no margin.
+    let none = PageSetup { margins: Margins::uniform(0.0), ..PageSetup::default() };
+    let grid = layout(&[(200.0, 300.0); 4], &settings((0..4).collect(), Layout::multiple(4)).with_page_setup(&none)).unwrap();
+    let b = grid[0]
+        .placed
+        .iter()
+        .map(|p| p.matrix.bbox(p.clip))
+        .fold([f64::MAX, f64::MAX, f64::MIN, f64::MIN], |u, r| [u[0].min(r[0]), u[1].min(r[1]), u[2].max(r[2]), u[3].max(r[3])]);
+    assert!(b[1] < 1.0 && b[3] > 791.0, "the grid reaches the paper's edges: {b:?}");
+    let poster = layout(&sizes, &settings(vec![0], Layout::Poster { scale: 400.0, overlap: 36.0, cut_marks: true }).with_page_setup(&none)).unwrap();
+    assert!(poster.iter().all(|s| s.lines.is_empty()));
+    // A custom paper and its booklet.
+    let custom = PageSetup::new((400.0, 500.0), Orientation::Auto, Margins::uniform(10.0)).unwrap();
+    assert_eq!(custom.paper_name(), None);
+    let booklet = Layout::Booklet { subset: BookletSubset::BothSides, binding: Binding::Left };
+    let booklet = layout(&[(200.0, 300.0); 4], &settings((0..4).collect(), booklet).with_page_setup(&custom)).unwrap();
+    assert_eq!(booklet[0].size, (500.0, 400.0));
+    assert_eq!(booklet[0].area, [10.0, 10.0, 490.0, 390.0]);
+}
+
+#[test]
+fn page_setup_refuses_hostile_paper_and_margins() {
+    let ok = Margins::default();
+    for paper in [
+        (0.0, 792.0),
+        (-612.0, 792.0),
+        (612.0, f64::NAN),
+        (f64::INFINITY, 792.0),
+        (71.9, 792.0),
+        (612.0, 14_400.1),
+        (1e300, 1e300),
+        (f64::MIN_POSITIVE, 792.0),
+    ] {
+        assert!(matches!(PageSetup::new(paper, Orientation::Auto, ok), Err(PrintError::Invalid(_))), "{paper:?}");
+        let s = Settings { paper, ..settings(vec![0], Layout::Size(SizeMode::Fit)) };
+        assert!(matches!(layout(&[(200.0, 300.0)], &s), Err(PrintError::Invalid(_))), "{paper:?}");
+    }
+    for m in [
+        Margins { top: -1.0, ..ok },
+        Margins { left: f64::NAN, ..ok },
+        Margins { right: f64::INFINITY, ..ok },
+        Margins { bottom: f64::NEG_INFINITY, ..ok },
+        Margins::uniform(300.0),
+        // Fits across a landscape Letter sheet, but not a portrait one: refused either way.
+        Margins { left: 300.0, right: 300.0, ..ok },
+        Margins { top: f64::MAX, bottom: f64::MAX, ..ok },
+    ] {
+        assert!(matches!(PageSetup::new((612.0, 792.0), Orientation::Landscape, m), Err(PrintError::Invalid(_))), "{m:?}");
+        for mode in [
+            Layout::Size(SizeMode::Fit),
+            Layout::multiple(16),
+            Layout::Booklet { subset: BookletSubset::BothSides, binding: Binding::Left },
+            Layout::Poster { scale: 400.0, overlap: 0.0, cut_marks: true },
+        ] {
+            let s = Settings { margins: m, ..settings(vec![0], mode) };
+            assert!(matches!(layout(&[(200.0, 300.0)], &s), Err(PrintError::Invalid(_))), "{m:?} {mode:?}");
+        }
+    }
+    // The extremes that are allowed still lay out.
+    let edge = PageSetup::new((72.0, 14_400.0), Orientation::Auto, Margins::uniform(18.0)).unwrap();
+    for mode in
+        [Layout::Size(SizeMode::Fit), Layout::Size(SizeMode::Actual), Layout::Booklet { subset: BookletSubset::BothSides, binding: Binding::Left }]
+    {
+        let sheets = layout(&[(200.0, 300.0), (14_400.0, 14_400.0)], &settings(vec![0, 1], mode).with_page_setup(&edge)).unwrap();
+        assert!(sheets.iter().flat_map(|s| &s.placed).all(|p| p.matrix.0.iter().all(|v| v.is_finite())));
+    }
+    assert_eq!(paper_preset("letter"), Some((612.0, 792.0)));
+    assert_eq!(paper_preset(" a4 "), Some((595.28, 841.89)));
+    assert_eq!(paper_preset("Folio"), None);
+    assert_eq!(paper_name((841.89, 595.28)), Some("A4"), "either way round");
+}

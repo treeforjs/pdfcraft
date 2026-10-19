@@ -4,7 +4,7 @@
 //! sheets. Printing sends the print-ready PDF to the system spooler; "Save as PDF" writes it.
 
 use egui::{Color32, Pos2, Rect, Stroke, pos2, vec2};
-use pdfcraft_engine::print::{self, Binding, BookletSubset, Content, Layout, Orientation, PAPERS, PageOrder, SizeMode, Subset, spool};
+use pdfcraft_engine::print::{self, Binding, BookletSubset, Content, Layout, Margins, Orientation, PAPERS, PageOrder, SizeMode, Subset, spool};
 
 use crate::theme::{self, Tokens};
 use crate::{PdfCraftApp, widgets};
@@ -61,7 +61,11 @@ pub struct PrintDraft {
     pub cut_marks: bool,
     pub orientation: Orientation,
     pub content: Content,
-    pub paper: usize,
+    /// Portrait (width, height) in points; from Page Setup when the dialog opens.
+    pub paper: (f64, f64),
+    pub margins: Margins,
+    /// Page Setup… was clicked (the app opens it on this frame's end).
+    pub open_page_setup: bool,
     /// The sheet shown in the preview (0-based).
     pub sheet: usize,
     pub current_page: usize,
@@ -102,7 +106,9 @@ impl Default for PrintDraft {
             cut_marks: true,
             orientation: Orientation::Auto,
             content: Content::DocumentAndMarkups,
-            paper: 0,
+            paper: PAPERS[0].1,
+            margins: Margins::default(),
+            open_page_setup: false,
             sheet: 0,
             current_page: 0,
             driver_options: None,
@@ -145,7 +151,7 @@ impl PrintDraft {
             Handling::Booklet => Layout::Booklet { subset: self.booklet_subset, binding: self.binding },
             Handling::Poster => Layout::Poster { scale: self.poster_scale, overlap: self.overlap, cut_marks: self.cut_marks },
         };
-        Ok(print::Settings { pages, paper: PAPERS[self.paper.min(PAPERS.len() - 1)].1, orientation: self.orientation, layout, content: self.content })
+        Ok(print::Settings { pages, paper: self.paper, orientation: self.orientation, layout, content: self.content, margins: self.margins })
     }
 
     pub fn job(&self, title: &str) -> spool::Job {
@@ -180,7 +186,21 @@ impl PdfCraftApp {
             (true, Which::Selected) => Which::All,
             (true, other) => other,
         };
-        self.print_draft = PrintDraft { printers, printer: default, current_page: current, sheet: 0, selected, which, ..keep };
+        // Paper, orientation and margins come from Page Setup (the session's print settings).
+        let setup = *self.session.page_setup();
+        self.print_draft = PrintDraft {
+            printers,
+            printer: default,
+            current_page: current,
+            sheet: 0,
+            selected,
+            which,
+            paper: setup.paper,
+            orientation: setup.orientation,
+            margins: setup.margins,
+            open_page_setup: false,
+            ..keep
+        };
         self.dialog = Some(crate::Dialog::Print);
     }
 
@@ -205,6 +225,10 @@ impl PdfCraftApp {
             }
         };
         let name = doc.name.clone();
+        // What the Print dialog chose becomes the page setup for the next print. `settings`
+        // passed the same checks, so this can't fail; if it did, the old setup stays.
+        let setup = print::PageSetup { paper: settings.paper, orientation: settings.orientation, margins: settings.margins };
+        let _ = self.session.set_page_setup(setup);
         let bytes = match self.session.print_pdf(id, &settings) {
             Ok(b) => b,
             Err(e) => {
@@ -477,9 +501,21 @@ pub(crate) fn body(
                 );
                 ui.end_row();
                 ui.label(tl!("Paper:"));
-                egui::ComboBox::from_id_salt("paper").selected_text(PAPERS[d.paper].0).width(160.0).show_ui(ui, |ui| {
-                    for (i, (name, _)) in PAPERS.iter().enumerate() {
-                        ui.selectable_value(&mut d.paper, i, *name);
+                ui.horizontal(|ui| {
+                    let current = print::paper_name(d.paper);
+                    let shown = current.map_or_else(
+                        || crate::i18n::fmt(tl!("Custom ({w} × {h} in)"), &[("w", &format!("{:.2}", d.paper.0 / 72.0)), ("h", &format!("{:.2}", d.paper.1 / 72.0))]),
+                        str::to_string,
+                    );
+                    egui::ComboBox::from_id_salt("paper").selected_text(shown).width(160.0).show_ui(ui, |ui| {
+                        for (name, size) in PAPERS {
+                            if ui.selectable_label(current == Some(name), name).clicked() {
+                                d.paper = size;
+                            }
+                        }
+                    });
+                    if ui.button(tl!("Page setup…")).on_hover_text(tl!("Paper size, orientation and margins")).clicked() {
+                        d.open_page_setup = true;
                     }
                 });
                 ui.end_row();
@@ -686,6 +722,12 @@ pub(crate) fn body(
                                 );
                             }
                         }
+                    }
+                    // The printable area inside the margins.
+                    let [ax0, ay0, ax1, ay1] = sheet.area;
+                    let inner = Rect::from_two_pos(to_screen(ax0, ay0), to_screen(ax1, ay1));
+                    if inner.is_positive() && inner != paper {
+                        crate::page_setup_ui::dashed_rect(&painter, inner, Stroke::new(0.6, Color32::from_gray(185)));
                     }
                     for b in &sheet.borders {
                         painter.rect_stroke(

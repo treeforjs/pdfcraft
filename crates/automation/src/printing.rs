@@ -1,7 +1,9 @@
 //! Printing tools: list printers, and print (or save the print-ready PDF) with Acrobat's Print
 //! dialog options.
 
-use pdfcraft_engine::print::{self, Binding, BookletSubset, Content, Layout, Orientation, PAPERS, PageOrder, SizeMode, Subset, spool};
+use pdfcraft_engine::print::{
+    self, Binding, BookletSubset, Content, Layout, Margins, Orientation, PAPERS, PageOrder, PageSetup, SizeMode, Subset, spool,
+};
 use serde_json::{Value, json};
 
 use crate::{Args, Automation, Result, ToolError, failed, write_atomic};
@@ -88,12 +90,8 @@ impl Automation {
         if a.opt_str("order")? == Some("cut-stack") && !matches!(layout, Layout::Multiple { .. }) {
             return Err(bad("cut-stack order needs layout multiple"));
         }
-        let orientation = match a.opt_str("orientation")?.unwrap_or("auto") {
-            "auto" => Orientation::Auto,
-            "portrait" => Orientation::Portrait,
-            "landscape" => Orientation::Landscape,
-            o => return Err(bad(format!("unknown orientation {o:?}"))),
-        };
+        // Page Setup gives the paper, orientation and margins unless this job chooses its own.
+        let setup = page_setup_args(a, *self.session.page_setup())?;
         let content = match a.opt_str("comments_forms")?.unwrap_or("document-and-markups") {
             "document" => Content::Document,
             "document-and-markups" => Content::DocumentAndMarkups,
@@ -101,15 +99,7 @@ impl Automation {
             "form-fields-only" => Content::FormFieldsOnly,
             c => return Err(bad(format!("unknown comments_forms {c:?}"))),
         };
-        let paper = match a.opt_str("paper")? {
-            None => PAPERS[0].1,
-            Some(p) => PAPERS
-                .iter()
-                .find(|(n, _)| n.eq_ignore_ascii_case(p) || n.replace("US ", "").eq_ignore_ascii_case(p))
-                .map(|x| x.1)
-                .ok_or_else(|| bad(format!("unknown paper {p:?} (Letter, Legal, Tabloid, A3, A4, A5)")))?,
-        };
-        let settings = print::Settings { pages, paper, orientation, layout, content };
+        let settings = print::Settings { pages, layout, content, ..Default::default() }.with_page_setup(&setup);
         // Advanced ▸ Print As Image: each sheet goes to the printer as one picture.
         let as_image = match (a.opt_bool("as_image")?.unwrap_or(false), a.opt_num("dpi")?) {
             (true, dpi) => {
@@ -133,7 +123,7 @@ impl Automation {
             }
             None => (self.session.print_pdf(id, &settings).map_err(failed)?, None),
         };
-        let mut out = json!({ "sheets": sheets, "pages": settings.pages.len(), "bytes": bytes.len() });
+        let mut out = json!({ "sheets": sheets, "pages": settings.pages.len(), "bytes": bytes.len(), "page_setup": page_setup_json(&setup) });
         if let Some((dpi, r)) = rasters {
             out["as_image"] = json!({
                 "dpi": dpi,
@@ -489,5 +479,90 @@ impl Automation {
         out["output_intent"] = json!(report.output_intent);
         out["skipped"] = json!(report.skipped);
         Ok(out)
+    }
+}
+
+/// The page setup with the `paper`, `paper_size`, `orientation` and `margins` arguments applied to
+/// `base`, checked.
+fn page_setup_args(a: &Args, base: PageSetup) -> Result<PageSetup> {
+    let paper = match (a.opt_str("paper")?, a.nums::<2>("paper_size")?) {
+        (Some(_), Some(_)) => return Err(bad("pass paper (a preset name) or paper_size ([width, height] in points), not both")),
+        (Some(p), None) => print::paper_preset(p)
+            .ok_or_else(|| bad(format!("unknown paper {p:?} ({}); or pass paper_size [width, height] in points", paper_names())))?,
+        (None, Some([w, h])) => (w, h),
+        (None, None) => base.paper,
+    };
+    let orientation = match a.opt_str("orientation")? {
+        None => base.orientation,
+        Some("auto") => Orientation::Auto,
+        Some("portrait") => Orientation::Portrait,
+        Some("landscape") => Orientation::Landscape,
+        Some(o) => return Err(bad(format!("unknown orientation {o:?} (auto, portrait, landscape)"))),
+    };
+    let margins = match a.get("margins") {
+        None => base.margins,
+        Some(Value::Number(n)) => Margins::uniform(n.as_f64().ok_or_else(|| bad("margins must be a number of points"))?),
+        Some(Value::Object(m)) => {
+            let mut out = base.margins;
+            for (k, v) in m {
+                let v = v.as_f64().filter(|v| v.is_finite()).ok_or_else(|| bad(format!("margins.{k} must be a number of points")))?;
+                match k.as_str() {
+                    "top" => out.top = v,
+                    "right" => out.right = v,
+                    "bottom" => out.bottom = v,
+                    "left" => out.left = v,
+                    _ => return Err(bad(format!("unknown margin {k:?} (top, right, bottom, left)"))),
+                }
+            }
+            out
+        }
+        Some(_) => return Err(bad("margins must be a number (every side) or an object with top, right, bottom and left, in points")),
+    };
+    PageSetup::new(paper, orientation, margins).map_err(|e| bad(e.to_string()))
+}
+
+fn paper_names() -> String {
+    PAPERS.iter().map(|p| p.0).collect::<Vec<_>>().join(", ")
+}
+
+fn orientation_id(o: Orientation) -> &'static str {
+    match o {
+        Orientation::Auto => "auto",
+        Orientation::Portrait => "portrait",
+        Orientation::Landscape => "landscape",
+    }
+}
+
+fn page_setup_json(s: &PageSetup) -> Value {
+    let m = s.margins;
+    let (w, h) = s.paper;
+    json!({
+        "paper": { "name": s.paper_name(), "width": w, "height": h, "width_in": w / 72.0, "height_in": h / 72.0, "width_mm": w / 72.0 * 25.4, "height_mm": h / 72.0 * 25.4 },
+        "orientation": orientation_id(s.orientation),
+        "margins": { "top": m.top, "right": m.right, "bottom": m.bottom, "left": m.left },
+        // The room inside the margins, either way the sheet is turned.
+        "printable": {
+            "portrait": [w - m.left - m.right, h - m.top - m.bottom],
+            "landscape": [h - m.left - m.right, w - m.top - m.bottom],
+        },
+        "default": *s == PageSetup::default(),
+    })
+}
+
+impl Automation {
+    /// File ▸ Page Setup: read the session's paper, orientation and margins.
+    pub(crate) fn page_setup_get(&self) -> Result<Value> {
+        let mut out = page_setup_json(self.session.page_setup());
+        out["papers"] = json!(PAPERS.iter().map(|(n, (w, h))| json!({ "name": n, "width": w, "height": h })).collect::<Vec<_>>());
+        out["limits"] = json!({ "min_paper": print::MIN_PAPER, "max_paper": print::MAX_PAPER, "min_printable": print::MIN_PRINTABLE });
+        Ok(out)
+    }
+
+    /// File ▸ Page Setup: change them for this session.
+    pub(crate) fn page_setup_set(&mut self, a: &Args) -> Result<Value> {
+        let base = if a.opt_bool("reset")?.unwrap_or(false) { PageSetup::default() } else { *self.session.page_setup() };
+        let setup = page_setup_args(a, base)?;
+        self.session.set_page_setup(setup).map_err(|e| bad(e.to_string()))?;
+        self.page_setup_get()
     }
 }

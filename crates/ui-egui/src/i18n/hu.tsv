@@ -2303,3 +2303,22 @@ compare-page	Moved	Áthelyezve
 	Close all pop-ups	Összes felugró ablak bezárása
 	No pop-ups to open	Nincs megnyitható felugró ablak
 	No pop-ups are open	Nincs nyitott felugró ablak
+
+# File ▸ Page Setup
+	Page setup…	Oldalbeállítás…
+	Page Setup	Oldalbeállítás
+	The paper and margins Print and Save as PDF use until you change them.	A papír és a margók, amelyeket a Nyomtatás és a Mentés PDF-ként használ, amíg meg nem változtatja őket.
+	Paper	Papír
+	Custom size	Egyéni méret
+	Units:	Mértékegység:
+	Orientation	Tájolás
+	Margins	Margók
+	Narrow	Keskeny
+	Normal	Normál
+	Wide	Széles
+	Top:	Felső:
+	Right:	Jobb:
+	Restore defaults	Alapértékek visszaállítása
+	Each sheet turns to suit its page.	Minden lap az oldalához igazodva fordul.
+	Custom ({w} × {h} in)	Egyéni ({w} × {h} in)
+	Paper size, orientation and margins	Papírméret, tájolás és margók

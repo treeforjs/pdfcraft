@@ -2267,3 +2267,22 @@ compare-page	Moved	Преместена
 	Close all pop-ups	Затвори всички изскачащи бележки
 	No pop-ups to open	Няма изскачащи бележки за отваряне
 	No pop-ups are open	Няма отворени изскачащи бележки
+
+# File ▸ Page Setup
+	Page setup…	Настройка на страницата…
+	Page Setup	Настройка на страницата
+	The paper and margins Print and Save as PDF use until you change them.	Хартията и полетата, които Печат и Запиши като PDF използват, докато не ги промените.
+	Paper	Хартия
+	Custom size	Размер по избор
+	Units:	Мерни единици:
+	Orientation	Ориентация
+	Margins	Полета
+	Narrow	Тесни
+	Normal	Нормални
+	Wide	Широки
+	Top:	Горе:
+	Right:	Дясно:
+	Restore defaults	Възстанови стандартните
+	Each sheet turns to suit its page.	Всеки лист се завърта според страницата си.
+	Custom ({w} × {h} in)	По избор ({w} × {h} in)
+	Paper size, orientation and margins	Размер на хартията, ориентация и полета

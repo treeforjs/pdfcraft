@@ -2835,6 +2835,69 @@ fn printing_through_tools() {
 }
 
 #[test]
+fn page_setup_through_tools() {
+    let dir = workdir("page-setup");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    let d = ok(&mut a, "print_page_setup_get", json!({}));
+    assert_eq!((d["paper"]["name"].as_str(), d["orientation"].as_str(), d["default"].as_bool()), (Some("US Letter"), Some("auto"), Some(true)));
+    assert_eq!(d["margins"]["top"].as_f64(), Some(18.0));
+    assert!(d["papers"].as_array().is_some_and(|p| p.iter().any(|p| p["name"] == "A4")));
+    let s = ok(&mut a, "print_page_setup_set", json!({ "paper": "a4", "orientation": "landscape", "margins": 36 }));
+    assert_eq!((s["paper"]["name"].as_str(), s["orientation"].as_str(), s["default"].as_bool()), (Some("A4"), Some("landscape"), Some(false)));
+    assert_eq!(s["printable"]["landscape"][0].as_f64().map(f64::round), Some(770.0), "841.89 - 72");
+    // Only the given margin changes.
+    let s = ok(&mut a, "print_page_setup_set", json!({ "margins": { "left": 72 } }));
+    assert_eq!((s["margins"]["left"].as_f64(), s["margins"]["right"].as_f64()), (Some(72.0), Some(36.0)));
+    // Print to file follows the setup: landscape A4 sheets.
+    let sheet = |a: &mut Automation, path: &str| {
+        let printed = ok(a, "doc_open", json!({ "path": path }))["doc"].as_u64().unwrap();
+        let info = ok(a, "doc_info", json!({ "doc": printed }));
+        let p = &info["pages"][0];
+        (p["width"].as_f64().unwrap().round(), p["height"].as_f64().unwrap().round())
+    };
+    let r = ok(&mut a, "doc_print", json!({ "doc": doc, "path": "setup.pdf" }));
+    assert_eq!(r["page_setup"]["paper"]["name"].as_str(), Some("A4"));
+    assert_eq!(sheet(&mut a, "setup.pdf"), (842.0, 595.0));
+    // A job may choose its own paper without changing the setup.
+    let r = ok(&mut a, "doc_print", json!({ "doc": doc, "paper_size": [400, 600], "orientation": "portrait", "margins": 0, "path": "custom.pdf" }));
+    assert_eq!((r["page_setup"]["paper"]["name"].as_str(), r["page_setup"]["margins"]["top"].as_f64()), (None, Some(0.0)));
+    assert_eq!(sheet(&mut a, "custom.pdf"), (400.0, 600.0));
+    assert_eq!(ok(&mut a, "print_page_setup_get", json!({}))["paper"]["name"].as_str(), Some("A4"));
+    // Hostile values are refused with a reason and change nothing.
+    let before = ok(&mut a, "print_page_setup_get", json!({}));
+    for bad in [
+        json!({ "paper_size": [0, 792] }),
+        json!({ "paper_size": [-612, -792] }),
+        json!({ "paper_size": [1e308, 1e308] }),
+        json!({ "paper_size": [612] }),
+        json!({ "paper_size": ["612", 792] }),
+        json!({ "paper": "Folio" }),
+        json!({ "paper": "A4", "paper_size": [612, 792] }),
+        json!({ "orientation": "sideways" }),
+        json!({ "margins": -1 }),
+        json!({ "margins": 1e308 }),
+        json!({ "margins": 400 }),
+        json!({ "margins": { "middle": 1 } }),
+        json!({ "margins": { "top": "1" } }),
+        json!({ "margins": [1, 2, 3, 4] }),
+    ] {
+        match a.call("print_page_setup_set", &bad) {
+            Err(ToolError::InvalidArgs(m)) => assert!(!m.is_empty(), "{bad}"),
+            other => panic!("{bad}: {other:?}"),
+        }
+        let mut job = bad.clone();
+        job["doc"] = json!(doc);
+        job["path"] = json!("bad.pdf");
+        assert!(matches!(a.call("doc_print", &job), Err(ToolError::InvalidArgs(_))), "{job}");
+    }
+    assert_eq!(ok(&mut a, "print_page_setup_get", json!({})), before);
+    assert!(!dir.join("bad.pdf").exists());
+    let r = ok(&mut a, "print_page_setup_set", json!({ "reset": true }));
+    assert_eq!(r["default"].as_bool(), Some(true));
+}
+
+#[test]
 fn printing_as_an_image_through_tools() {
     let dir = workdir("print-as-image");
     let mut a = auto(&dir);

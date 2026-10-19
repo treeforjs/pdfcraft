@@ -1049,6 +1049,30 @@ pub fn tools() -> Vec<ToolDef> {
             }),
             &[],
         )),
+        t(
+            "print_page_setup_get",
+            "Page setup",
+            "File ▸ Page Setup: the session's paper (name of the preset, or null for a custom size; width and height in points, portrait, also in inches and millimetres), orientation (auto turns each sheet to suit its page; portrait; landscape) and margins (top, right, bottom, left in points, kept blank on each sheet as it comes out; default 18). printable is the room inside the margins on a portrait and on a landscape sheet. doc_print and the Print dialog use these unless a job passes its own paper, paper_size, orientation or margins. Also lists the paper presets and the limits. Read-only; the operating system's own page setup and print dialogs are not involved.",
+        )
+        .ro()
+        .cmd("print.page_setup")
+        .with(schema(json!({}), &[])),
+        t(
+            "print_page_setup_set",
+            "Set page setup",
+            "Change File ▸ Page Setup for this session (not saved with documents, not an undo step). paper: a preset name (Letter, Legal, Tabloid, Executive, A3, A4, A5, A6, B4, B5, Envelope #10; case-insensitive) or paper_size [width, height] in points (either way round; each side 72 to 14400 pt, stored portrait). orientation auto/portrait/landscape. margins: one number for every side, or an object with any of top, right, bottom, left (points, 0 or more; together they must leave at least 36 pt across and down the paper's short side, since Auto orientation and booklets turn the sheet). Options left out keep their current value; reset starts from the defaults (US Letter, auto, 18 pt). A refused change leaves the setup as it was. Returns the setup.",
+        )
+        .cmd("print.page_setup")
+        .with(schema(
+            json!({
+                "paper": { "type": "string", "description": "Paper preset name." },
+                "paper_size": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2, "description": "Custom paper [width, height] in points." },
+                "orientation": { "type": "string", "enum": ["auto", "portrait", "landscape"] },
+                "margins": { "type": ["number", "object"], "description": "Points: one number for every side, or {top, right, bottom, left}." },
+                "reset": { "type": "boolean", "description": "Start from the default page setup before applying the rest." },
+            }),
+            &[],
+        )),
         t("printers", "List printers", "The printers the system's print spooler knows (CUPS on macOS and Linux), with the default marked.").ro().with(schema(json!({}), &[])),
         t("printer_options", "List printer options", "A printer driver's own job options (CUPS: from its PPD), such as the paper tray, paper type or finishing: key, label, group, default and choices. Pass chosen values to doc_print as options. Empty on Windows, where the driver's preferences window holds them.")
             .ro()
@@ -1056,7 +1080,7 @@ pub fn tools() -> Vec<ToolDef> {
         t(
             "doc_print",
             "Print",
-            "Print with Acrobat's Print dialog options, or save the print-ready PDF. pages: a range such as \"1-3, 6, 9-\" (page labels allowed; default all); subset odd/even; reverse. layout: fit (default), actual, shrink, custom (scale %), multiple (per_sheet 2/4/6/9/16, order, border, auto_rotate; cut-stack order arranges single-sided sheets for cutting into piles and stacking left to right, top to bottom, keeping sheet order within each pile; duplex must be off), booklet (booklet_subset both/front/back, binding left/right), poster (scale %, overlap pt, cut_marks). orientation auto/portrait/landscape; comments_forms document / document-and-markups (default) / document-and-stamps / form-fields-only; paper Letter/Legal/Tabloid/A3/A4/A5. as_image (Advanced ▸ Print As Image) sends each sheet as one picture at dpi (36-1200, default 300; lowered for a sheet above 64 million pixels, refused above 1 billion for the job) so the printer gets no fonts, vectors or transparency; the result's as_image lists each sheet's pixel size and dpi. Then path (save) or printer (a name or \"default\") with copies, collate, duplex off/long-edge/short-edge, grayscale, and options (driver options from printer_options, CUPS).",
+            "Print with Acrobat's Print dialog options, or save the print-ready PDF. pages: a range such as \"1-3, 6, 9-\" (page labels allowed; default all); subset odd/even; reverse. layout: fit (default), actual, shrink, custom (scale %), multiple (per_sheet 2/4/6/9/16, order, border, auto_rotate; cut-stack order arranges single-sided sheets for cutting into piles and stacking left to right, top to bottom, keeping sheet order within each pile; duplex must be off), booklet (booklet_subset both/front/back, binding left/right), poster (scale %, overlap pt, cut_marks). orientation auto/portrait/landscape, paper (a preset: Letter, Legal, Tabloid, Executive, A3, A4, A5, A6, B4, B5, Envelope #10) or paper_size [w, h] in points, and margins (points: one number or {top, right, bottom, left}) default to the session's page setup (print_page_setup_get); the result's page_setup says what was used; comments_forms document / document-and-markups (default) / document-and-stamps / form-fields-only. as_image (Advanced ▸ Print As Image) sends each sheet as one picture at dpi (36-1200, default 300; lowered for a sheet above 64 million pixels, refused above 1 billion for the job) so the printer gets no fonts, vectors or transparency; the result's as_image lists each sheet's pixel size and dpi. Then path (save) or printer (a name or \"default\") with copies, collate, duplex off/long-edge/short-edge, grayscale, and options (driver options from printer_options, CUPS).",
         )
         .with(schema(
             json!({
@@ -1076,7 +1100,9 @@ pub fn tools() -> Vec<ToolDef> {
                 "cut_marks": { "type": "boolean" },
                 "orientation": { "type": "string", "enum": ["auto", "portrait", "landscape"] },
                 "comments_forms": { "type": "string", "enum": ["document", "document-and-markups", "document-and-stamps", "form-fields-only"] },
-                "paper": { "type": "string" },
+                "paper": { "type": "string", "description": "Paper preset (default: the page setup's paper)." },
+                "paper_size": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2, "description": "Custom paper [width, height] in points, for this job." },
+                "margins": { "type": ["number", "object"], "description": "Sheet margins in points for this job: one number, or {top, right, bottom, left} (default: the page setup's)." },
                 "as_image": { "type": "boolean", "description": "Print as image: rasterize each sheet (works around font and transparency problems)." },
                 "dpi": { "type": "number", "minimum": 36, "maximum": 1200, "description": "Print-as-image resolution, pixels per inch (default 300)." },
                 "path": { "type": "string" },

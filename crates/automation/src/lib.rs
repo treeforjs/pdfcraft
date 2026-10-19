@@ -735,6 +735,8 @@ impl Automation {
             "redact_patterns" => self.redact_patterns(&a)?,
             "doc_hidden_info" => self.doc_hidden_info(&a)?,
             "printers" => self.printers()?,
+            "print_page_setup_get" => self.page_setup_get()?,
+            "print_page_setup_set" => self.page_setup_set(&a)?,
             "print_total_area_coverage" => self.total_area_coverage(&a)?,
             "print_color_warnings" => self.colour_warnings(&a)?,
             "print_separations_list" => self.separations_list(&a)?,

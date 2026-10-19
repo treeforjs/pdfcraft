@@ -3085,6 +3085,9 @@ pub struct Session {
     color: color_settings::ColorManagement,
     /// Scan & OCR: the recognition engines and the one chosen (see [`ocr`]).
     ocr_engines: ocr::Engines,
+    /// File ▸ Page Setup: the paper, orientation and margins prints use (see
+    /// [`Session::page_setup`]).
+    page_setup: print::PageSetup,
 }
 
 /// Lay a dynamic XFA form out (pages and fields) and give its widgets appearances.
@@ -4095,6 +4098,20 @@ impl Session {
             other => pdfcraft_xfdf::export_data(&cos, other).into_bytes(),
         })
         .map_err(EditError::Write)
+    }
+
+    /// File ▸ Page Setup for this session: the paper, orientation and margins the Print dialog
+    /// starts from and `doc_print` uses unless a job chooses its own. Not saved with documents.
+    pub fn page_setup(&self) -> &print::PageSetup {
+        &self.page_setup
+    }
+
+    /// Change the session's page setup. Refused, leaving it as it was, when the paper or margins
+    /// are out of range (see [`print::check_paper`]); the paper is stored portrait.
+    pub fn set_page_setup(&mut self, setup: print::PageSetup) -> Result<(), EditError> {
+        let setup = print::PageSetup::new(setup.paper, setup.orientation, setup.margins).map_err(|e| EditError::Invalid(e.to_string()))?;
+        self.page_setup = setup;
+        Ok(())
     }
 
     /// The print-ready PDF for `settings` (sheets laid out for the paper; see `pdfcraft-print`).

@@ -190,3 +190,62 @@ fn print_dialog_shows_the_printer_driver_options() {
     h.state_mut().print_draft.printer = Some("Other_Queue".into());
     assert!(h.state().print_draft.job("form.pdf").options.is_empty());
 }
+
+/// File ▸ Page Setup sets the paper, orientation and margins the Print dialog, its preview and
+/// Save as PDF use; Page setup… in the Print dialog comes back to it.
+#[test]
+fn page_setup_dialog_sets_what_print_uses() {
+    use pdfcraft_engine::print::{Margins, Orientation, PageSetup};
+    let mut h = harness();
+    assert!(h.state_mut().execute("print.page_setup"));
+    h.run_steps(3);
+    assert_eq!(h.state().dialog, Some(Dialog::PageSetup));
+    h.get_by_label("Landscape").click();
+    h.get_by_label("Wide").click();
+    h.run_steps(2);
+    h.state_mut().page_setup_draft.paper = (595.28, 841.89);
+    h.run_steps(1);
+    // Values the engine refuses are not applied and change nothing; drawn, the fields bring them
+    // back into range without panicking.
+    let good = h.state().page_setup_draft.clone();
+    for bad in [Margins::uniform(1e9), Margins { left: f64::NAN, ..Margins::default() }, Margins::uniform(-3.0)] {
+        h.state_mut().page_setup_draft.margins = bad;
+        h.state_mut().page_setup_draft.paper = (f64::INFINITY, -1.0);
+        assert!(!h.state_mut().apply_page_setup());
+        assert_eq!(*h.state().session.page_setup(), PageSetup::default());
+        h.run_steps(1);
+        let d = &h.state().page_setup_draft;
+        let m = d.margins;
+        assert!([m.top, m.right, m.bottom, m.left, d.paper.0, d.paper.1].iter().all(|v| v.is_finite() && *v >= 0.0), "{d:?}");
+    }
+    h.state_mut().page_setup_draft = good;
+    h.run_steps(1);
+    h.get_by_label("OK").click();
+    h.run_steps(3);
+    assert_eq!(h.state().dialog, None);
+    let setup = *h.state().session.page_setup();
+    assert_eq!((setup.paper_name(), setup.orientation, setup.margins), (Some("A4"), Orientation::Landscape, Margins::uniform(72.0)));
+    // The Print dialog starts from it, and its Page setup… returns to it.
+    assert!(h.state_mut().execute("print.dialog"));
+    h.run_steps(3);
+    assert_eq!((h.state().print_draft.paper, h.state().print_draft.margins), (setup.paper, setup.margins));
+    h.get_by_label("Page setup…").click();
+    h.run_steps(3);
+    assert_eq!(h.state().dialog, Some(Dialog::PageSetup));
+    assert!(h.state().page_setup_draft.back_to_print);
+    h.get_by_label("Cancel").click();
+    h.run_steps(3);
+    assert_eq!(h.state().dialog, Some(Dialog::Print));
+    let out = std::env::temp_dir().join(format!("pdfcraft-page-setup-test-{}.pdf", std::process::id()));
+    h.state_mut().save_override = Some(out.to_string_lossy().into_owned());
+    h.state_mut().print_draft.printer = None;
+    h.run_steps(1);
+    h.get_by_label("Save as PDF").click();
+    h.run_steps(3);
+    let bytes = std::fs::read(&out).expect("saved");
+    let mut s = pdfcraft_engine::Session::new();
+    let id = s.open("p.pdf", None, std::sync::Arc::new(bytes), None).unwrap();
+    let p = &s.get(id).unwrap().info.pages[0];
+    assert_eq!((p.width.round(), p.height.round()), (842.0, 595.0), "a landscape A4 sheet");
+    let _ = std::fs::remove_file(out);
+}

@@ -2328,3 +2328,22 @@ compare-page	Moved	Переміщена
 	Close all pop-ups	Закрити всі спливні нотатки
 	No pop-ups to open	Немає спливних нотаток для відкриття
 	No pop-ups are open	Немає відкритих спливних нотаток
+
+# File ▸ Page Setup
+	Page setup…	Параметри сторінки…
+	Page Setup	Параметри сторінки
+	The paper and margins Print and Save as PDF use until you change them.	Папір і поля, які використовують Друк і Зберегти як PDF, доки ви їх не зміните.
+	Paper	Папір
+	Custom size	Власний розмір
+	Units:	Одиниці:
+	Orientation	Орієнтація
+	Margins	Поля
+	Narrow	Вузькі
+	Normal	Звичайні
+	Wide	Широкі
+	Top:	Згори:
+	Right:	Справа:
+	Restore defaults	Відновити типові
+	Each sheet turns to suit its page.	Кожен аркуш повертається відповідно до своєї сторінки.
+	Custom ({w} × {h} in)	Власний ({w} × {h} in)
+	Paper size, orientation and margins	Розмір паперу, орієнтація і поля

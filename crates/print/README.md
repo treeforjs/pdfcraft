@@ -25,6 +25,11 @@ spool::submit(&pdf, &spool::Job { printer: None, copies: 2, ..Default::default()
 - **Booklet**: saddle-stitch imposition padded to a multiple of 4; both sides, front or back
   only; left or right binding.
 - **Poster**: tile scale, overlap shared by neighbouring tiles, cut marks.
+- **Page setup**: `PageSetup` (paper, orientation, `Margins` per side) is what File ▸ Page
+  Setup stores in the session; `Settings::with_page_setup` applies it. Every layout places its
+  pages inside the margins (default 18 pt each side; `Sheet::area` is the printable rectangle).
+  `check_paper` refuses sides outside 72–14400 pt and margins that are negative, not finite or
+  leave less than 36 pt across or down the short side. `PAPERS` has 11 presets.
 - **Comments & forms**: document, + markups, + stamps, or form fields only; annotations print
   only with their Print flag, drawn from their appearance streams (Algorithm 8.1).
 

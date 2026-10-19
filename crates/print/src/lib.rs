@@ -152,26 +152,149 @@ pub struct Settings {
     pub orientation: Orientation,
     pub layout: Layout,
     pub content: Content,
+    /// The blank border kept around each sheet (Page Setup), as the sheet comes out.
+    pub margins: Margins,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Settings { pages: Vec::new(), paper: PAPERS[0].1, orientation: Orientation::Auto, layout: Layout::default(), content: Content::default() }
+        Settings {
+            pages: Vec::new(),
+            paper: PAPERS[0].1,
+            orientation: Orientation::Auto,
+            layout: Layout::default(),
+            content: Content::default(),
+            margins: Margins::default(),
+        }
+    }
+}
+
+impl Settings {
+    /// These settings with the paper, orientation and margins of `setup`.
+    pub fn with_page_setup(self, setup: &PageSetup) -> Settings {
+        Settings { paper: setup.paper, orientation: setup.orientation, margins: setup.margins, ..self }
     }
 }
 
 /// Common paper sizes (points, portrait).
-pub const PAPERS: [(&str, (f64, f64)); 6] = [
+pub const PAPERS: [(&str, (f64, f64)); 11] = [
     ("US Letter", (612.0, 792.0)),
     ("US Legal", (612.0, 1008.0)),
     ("Tabloid", (792.0, 1224.0)),
+    ("Executive", (522.0, 756.0)),
     ("A3", (841.89, 1190.55)),
     ("A4", (595.28, 841.89)),
     ("A5", (419.53, 595.28)),
+    ("A6", (297.64, 419.53)),
+    ("B4", (708.66, 1000.63)),
+    ("B5", (498.9, 708.66)),
+    ("Envelope #10", (297.0, 684.0)),
 ];
 
-/// The unprintable margin assumed around the sheet for Fit, Multiple and Booklet.
+/// The margin kept around the sheet unless Page Setup says otherwise (each side).
 pub const MARGIN: f64 = 18.0;
+
+/// The smallest and largest paper side, in points (1 in and 200 in, the largest page a PDF
+/// viewer must support without UserUnit).
+pub const MIN_PAPER: f64 = 72.0;
+pub const MAX_PAPER: f64 = 14_400.0;
+
+/// The least width and height (points) the margins must leave to print on, whichever way the
+/// sheet is turned.
+pub const MIN_PRINTABLE: f64 = 36.0;
+
+/// The blank border on each side of a sheet, in points, as the sheet comes out of the printer
+/// (top is the top edge of the turned sheet).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Margins {
+    pub top: f64,
+    pub right: f64,
+    pub bottom: f64,
+    pub left: f64,
+}
+
+impl Default for Margins {
+    fn default() -> Self {
+        Margins::uniform(MARGIN)
+    }
+}
+
+impl Margins {
+    pub const fn uniform(v: f64) -> Margins {
+        Margins { top: v, right: v, bottom: v, left: v }
+    }
+
+    /// The printable rectangle `[x0, y0, x1, y1]` of a sheet of `size`.
+    pub fn area(&self, size: (f64, f64)) -> [f64; 4] {
+        [self.left, self.bottom, size.0 - self.right, size.1 - self.top]
+    }
+}
+
+/// The paper preset named `name` (case-insensitive; "Letter", "Legal" without "US" too).
+pub fn paper_preset(name: &str) -> Option<(f64, f64)> {
+    let name = name.trim();
+    PAPERS.iter().find(|(n, _)| n.eq_ignore_ascii_case(name) || n.trim_start_matches("US ").eq_ignore_ascii_case(name)).map(|p| p.1)
+}
+
+/// The preset a paper size is (either way round, within half a point).
+pub fn paper_name(size: (f64, f64)) -> Option<&'static str> {
+    let (w, h) = (size.0.min(size.1), size.0.max(size.1));
+    PAPERS.iter().find(|(_, (pw, ph))| (pw - w).abs() < 0.5 && (ph - h).abs() < 0.5).map(|p| p.0)
+}
+
+/// Check a paper size and margins: each side finite and from [`MIN_PAPER`] to [`MAX_PAPER`];
+/// margins finite, not negative, and leaving at least [`MIN_PRINTABLE`] each way however the
+/// sheet is turned (Auto orientation and booklets turn it).
+pub fn check_paper(paper: (f64, f64), margins: &Margins) -> Result<(), PrintError> {
+    let ok = |v: f64| v.is_finite() && (MIN_PAPER..=MAX_PAPER).contains(&v);
+    if !(ok(paper.0) && ok(paper.1)) {
+        return Err(PrintError::Invalid(format!("invalid paper size: each side must be from {MIN_PAPER} to {MAX_PAPER} pt (1 to 200 in)")));
+    }
+    let Margins { top, right, bottom, left } = *margins;
+    if ![top, right, bottom, left].iter().all(|m| m.is_finite() && *m >= 0.0) {
+        return Err(PrintError::Invalid("margins must be numbers of 0 pt or more".into()));
+    }
+    let short = paper.0.min(paper.1);
+    if left + right > short - MIN_PRINTABLE || top + bottom > short - MIN_PRINTABLE {
+        return Err(PrintError::Invalid(format!(
+            "the margins leave no room to print: at least {MIN_PRINTABLE} pt must remain across and down the {short:.0} pt side"
+        )));
+    }
+    Ok(())
+}
+
+/// Page Setup: the paper, its orientation and the margins every print uses unless the Print
+/// dialog (or `doc_print`) chooses otherwise for one job.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PageSetup {
+    /// (width, height) in points, portrait.
+    pub paper: (f64, f64),
+    pub orientation: Orientation,
+    pub margins: Margins,
+}
+
+impl Default for PageSetup {
+    fn default() -> Self {
+        PageSetup { paper: PAPERS[0].1, orientation: Orientation::Auto, margins: Margins::default() }
+    }
+}
+
+impl PageSetup {
+    /// A setup for `paper` given either way round (stored portrait), after [`check_paper`].
+    pub fn new(paper: (f64, f64), orientation: Orientation, margins: Margins) -> Result<PageSetup, PrintError> {
+        check_paper(paper, &margins)?;
+        Ok(PageSetup { paper: (paper.0.min(paper.1), paper.0.max(paper.1)), orientation, margins })
+    }
+
+    pub fn validate(&self) -> Result<(), PrintError> {
+        check_paper(self.paper, &self.margins)
+    }
+
+    /// The preset this paper is, or `None` for a custom size.
+    pub fn paper_name(&self) -> Option<&'static str> {
+        paper_name(self.paper)
+    }
+}
 
 /// One page as placed on a sheet: the source page, the matrix from its *display space* to the
 /// sheet, and the visible part of it in display space (clipping).
@@ -186,6 +309,8 @@ pub struct Placement {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Sheet {
     pub size: (f64, f64),
+    /// The printable area inside the margins, in sheet space.
+    pub area: [f64; 4],
     pub placed: Vec<Placement>,
     /// Page borders (Multiple) and cut marks (Poster), in sheet space: rectangles and lines.
     pub borders: Vec<[f64; 4]>,
@@ -228,16 +353,16 @@ pub fn layout(sizes: &[(f64, f64)], settings: &Settings) -> Result<Vec<Sheet>, P
         return Err(PrintError::NoPages);
     }
     let paper = settings.paper;
-    if !(paper.0 >= 72.0 && paper.1 >= 72.0 && paper.0.is_finite() && paper.1.is_finite()) {
-        return Err(PrintError::Invalid("invalid paper size".into()));
-    }
+    let m = settings.margins;
+    check_paper(paper, &m)?;
     let mut sheets = Vec::new();
     match settings.layout {
         Layout::Size(mode) => {
             for &p in &pages {
                 let d = sizes[p];
                 let size = oriented(paper, settings.orientation, d.0 > d.1);
-                let fit = fit_scale(d, (size.0 - 2.0 * MARGIN, size.1 - 2.0 * MARGIN));
+                let area = m.area(size);
+                let fit = fit_scale(d, (area[2] - area[0], area[3] - area[1]));
                 let s = match mode {
                     SizeMode::Fit => fit,
                     SizeMode::Actual => 1.0,
@@ -245,7 +370,7 @@ pub fn layout(sizes: &[(f64, f64)], settings: &Settings) -> Result<Vec<Sheet>, P
                     SizeMode::Custom(pct) if pct.is_finite() && pct > 0.0 => pct / 100.0,
                     SizeMode::Custom(_) => return Err(PrintError::Invalid("the scale must be more than 0%".into())),
                 };
-                sheets.push(Sheet { size, placed: vec![place_in(p, d, [0.0, 0.0, size.0, size.1], s, false)], ..Sheet::default() });
+                sheets.push(Sheet { size, area, placed: vec![place_in(p, d, area, s, false)], ..Sheet::default() });
             }
         }
         Layout::Multiple { cols, rows, order, border, auto_rotate } => {
@@ -266,24 +391,25 @@ pub fn layout(sizes: &[(f64, f64)], settings: &Settings) -> Result<Vec<Sheet>, P
             };
             let size = oriented(paper, settings.orientation, sheet_landscape);
             let gap = 6.0;
-            let (aw, ah) = (size.0 - 2.0 * MARGIN, size.1 - 2.0 * MARGIN);
+            let area = m.area(size);
+            let (aw, ah) = (area[2] - area[0], area[3] - area[1]);
             let (cw, ch) = ((aw - gap * (gc - 1) as f64) / gc as f64, (ah - gap * (gr - 1) as f64) / gr as f64);
             if cw <= 0.0 || ch <= 0.0 {
                 return Err(PrintError::Invalid("the page grid does not fit on the paper".into()));
             }
             let sheet_count = pages.len().div_ceil(cells);
             for sheet_index in 0..sheet_count {
-                let mut sheet = Sheet { size, ..Sheet::default() };
+                let mut sheet = Sheet { size, area, ..Sheet::default() };
                 if order == PageOrder::CutStack {
                     // Marks align across every sheet, including unoccupied cells. Cut in the
                     // middle of each gutter; marks stay in the printable area, clear of cells.
                     for col in 1..gc {
-                        let x = MARGIN + col as f64 * (cw + gap) - gap / 2.0;
-                        sheet.lines.extend([[x, MARGIN, x, MARGIN + 8.0], [x, size.1 - MARGIN - 8.0, x, size.1 - MARGIN]]);
+                        let x = area[0] + col as f64 * (cw + gap) - gap / 2.0;
+                        sheet.lines.extend([[x, area[1], x, area[1] + 8.0], [x, area[3] - 8.0, x, area[3]]]);
                     }
                     for row in 1..gr {
-                        let y = size.1 - MARGIN - row as f64 * (ch + gap) + gap / 2.0;
-                        sheet.lines.extend([[MARGIN, y, MARGIN + 8.0, y], [size.0 - MARGIN - 8.0, y, size.0 - MARGIN, y]]);
+                        let y = area[3] - row as f64 * (ch + gap) + gap / 2.0;
+                        sheet.lines.extend([[area[0], y, area[0] + 8.0, y], [area[2] - 8.0, y, area[2], y]]);
                     }
                 }
                 for k in 0..cells {
@@ -302,8 +428,8 @@ pub fn layout(sizes: &[(f64, f64)], settings: &Settings) -> Result<Vec<Sheet>, P
                         PageOrder::Vertical => (k / gr, k % gr),
                         PageOrder::VerticalReversed => (gc - 1 - k / gr, k % gr),
                     };
-                    let x0 = MARGIN + col as f64 * (cw + gap);
-                    let y1 = size.1 - MARGIN - row as f64 * (ch + gap);
+                    let x0 = area[0] + col as f64 * (cw + gap);
+                    let y1 = area[3] - row as f64 * (ch + gap);
                     let cell = [x0, y1 - ch, x0 + cw, y1];
                     let d = sizes.get(p).copied().ok_or_else(|| PrintError::Invalid("page size is missing".into()))?;
                     if !(d.0.is_finite() && d.1.is_finite() && d.0 > 0.0 && d.1 > 0.0) {
@@ -329,8 +455,9 @@ pub fn layout(sizes: &[(f64, f64)], settings: &Settings) -> Result<Vec<Sheet>, P
             let n4 = pages.len().div_ceil(4) * 4;
             let at = |i: usize| pages.get(i).copied();
             let size = oriented(paper, Orientation::Landscape, true);
-            let half = (size.0 - 2.0 * MARGIN) / 2.0;
-            let cells = [[MARGIN, MARGIN, MARGIN + half, size.1 - MARGIN], [MARGIN + half, MARGIN, size.0 - MARGIN, size.1 - MARGIN]];
+            let area = m.area(size);
+            let half = (area[2] - area[0]) / 2.0;
+            let cells = [[area[0], area[1], area[0] + half, area[3]], [area[0] + half, area[1], area[2], area[3]]];
             for k in 0..n4 / 4 {
                 let front = (at(n4 - 1 - 2 * k), at(2 * k));
                 let back = (at(2 * k + 1), at(n4 - 2 - 2 * k));
@@ -343,7 +470,7 @@ pub fn layout(sizes: &[(f64, f64)], settings: &Settings) -> Result<Vec<Sheet>, P
                 }
                 for (l, r) in sides {
                     let (l, r) = if binding == Binding::Right { (r, l) } else { (l, r) };
-                    let mut sheet = Sheet { size, ..Sheet::default() };
+                    let mut sheet = Sheet { size, area, ..Sheet::default() };
                     for (p, cell) in [(l, cells[0]), (r, cells[1])] {
                         if let Some(p) = p {
                             let d = sizes[p];
@@ -364,7 +491,8 @@ pub fn layout(sizes: &[(f64, f64)], settings: &Settings) -> Result<Vec<Sheet>, P
                 let d = sizes[p];
                 let size = oriented(paper, settings.orientation, d.0 > d.1);
                 // Each tile shows `step` of the scaled page plus `overlap` shared with the next.
-                let (tw, th) = (size.0 - 2.0 * MARGIN, size.1 - 2.0 * MARGIN);
+                let area = m.area(size);
+                let (tw, th) = (area[2] - area[0], area[3] - area[1]);
                 if overlap * 2.0 >= tw.min(th) {
                     return Err(PrintError::Invalid("the overlap is larger than the tile".into()));
                 }
@@ -381,16 +509,24 @@ pub fn layout(sizes: &[(f64, f64)], settings: &Settings) -> Result<Vec<Sheet>, P
                         // The window into the scaled page (scaled display space, y up).
                         let wx0 = tx as f64 * stepx;
                         let wy1 = sh - ty as f64 * stepy;
-                        let matrix = Matrix([s, 0.0, 0.0, s, MARGIN - wx0, size.1 - MARGIN - wy1]);
+                        let matrix = Matrix([s, 0.0, 0.0, s, area[0] - wx0, area[3] - wy1]);
                         let clip = [wx0 / s, (wy1 - th) / s, (wx0 + tw) / s, wy1 / s];
-                        let mut sheet = Sheet { size, placed: vec![Placement { page: p, matrix, clip }], ..Sheet::default() };
+                        let mut sheet = Sheet { size, area, placed: vec![Placement { page: p, matrix, clip }], ..Sheet::default() };
                         if cut_marks {
-                            let (x0, y0, x1, y1) = (MARGIN, MARGIN, size.0 - MARGIN, size.1 - MARGIN);
-                            for (x, y) in [(x0, y0), (x1, y0), (x0, y1), (x1, y1)] {
+                            // Marks run out from each corner into the margins (none in a
+                            // margin too narrow to hold one).
+                            let [x0, y0, x1, y1] = area;
+                            for (x, y, mx, my) in
+                                [(x0, y0, m.left, m.bottom), (x1, y0, m.right, m.bottom), (x0, y1, m.left, m.top), (x1, y1, m.right, m.top)]
+                            {
                                 let dx = if x == x0 { -1.0 } else { 1.0 };
                                 let dy = if y == y0 { -1.0 } else { 1.0 };
-                                sheet.lines.push([x + dx * 2.0, y, x + dx * (MARGIN - 2.0), y]);
-                                sheet.lines.push([x, y + dy * 2.0, x, y + dy * (MARGIN - 2.0)]);
+                                if mx >= 6.0 {
+                                    sheet.lines.push([x + dx * 2.0, y, x + dx * (mx - 2.0), y]);
+                                }
+                                if my >= 6.0 {
+                                    sheet.lines.push([x, y + dy * 2.0, x, y + dy * (my - 2.0)]);
+                                }
                             }
                         }
                         sheets.push(sheet);

@@ -77,6 +77,7 @@ mod home;
 mod icon_data;
 pub mod icons;
 pub mod last_session;
+mod page_setup_ui;
 mod pageboxes;
 mod palette;
 mod panels;
@@ -87,6 +88,7 @@ pub mod prepare;
 mod print_ui;
 mod signature_drag;
 pub mod timestamp_ui;
+pub use page_setup_ui::{PageSetupDraft, Unit as PageSetupUnit};
 pub use print_ui::{Handling as PrintHandling, PrintDraft, Which as PrintWhich};
 mod redact_ui;
 pub use redact_ui::{HiddenDraft, PagesDraft as RedactPagesDraft, RedactPrefs, SearchDraft as RedactSearchDraft};
@@ -254,6 +256,8 @@ pub enum Dialog {
     RedactApply,
     /// File ▸ Print.
     Print,
+    /// File ▸ Page Setup.
+    PageSetup,
     /// File ▸ Revert confirmation.
     Revert,
     /// Link Properties.
@@ -605,6 +609,7 @@ pub struct PdfCraftApp {
     pub redact_search: RedactSearchDraft,
     pub hidden_draft: HiddenDraft,
     pub print_draft: PrintDraft,
+    pub page_setup_draft: PageSetupDraft,
     pub link_draft: Option<LinkDraft>,
     /// The style new text gets (Edit a PDF ▸ Format text).
     pub text_style: pdfcraft_engine::AddedText,
@@ -824,6 +829,7 @@ impl PdfCraftApp {
             redact_search: RedactSearchDraft::default(),
             hidden_draft: HiddenDraft::default(),
             print_draft: PrintDraft::default(),
+            page_setup_draft: PageSetupDraft::default(),
             link_draft: None,
             text_style: content_ui::default_style(),
             replace_draft: None,
@@ -1619,6 +1625,10 @@ impl PdfCraftApp {
                     "action-wizard" => Some(Dialog::ActionWizard),
                     "pdfa" => Some(Dialog::PdfA),
                     "preflight" => Some(Dialog::Preflight),
+                    "page-setup" => {
+                        self.open_page_setup(false);
+                        Some(Dialog::PageSetup)
+                    }
                     "signature" => Some(Dialog::Signature),
                     "optimize" => {
                         self.open_optimizer();

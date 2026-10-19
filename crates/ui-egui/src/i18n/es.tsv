@@ -2221,3 +2221,22 @@ compare-page	Moved	Movida
 	Close all pop-ups	Cerrar todas las ventanas emergentes
 	No pop-ups to open	No hay ventanas emergentes para abrir
 	No pop-ups are open	No hay ventanas emergentes abiertas
+
+# File ▸ Page Setup
+	Page setup…	Configurar página…
+	Page Setup	Configurar página
+	The paper and margins Print and Save as PDF use until you change them.	El papel y los márgenes que usan Imprimir y Guardar como PDF hasta que los cambie.
+	Paper	Papel
+	Custom size	Tamaño personalizado
+	Units:	Unidades:
+	Orientation	Orientación
+	Margins	Márgenes
+	Narrow	Estrechos
+	Normal	Normales
+	Wide	Anchos
+	Top:	Superior:
+	Right:	Derecha:
+	Restore defaults	Restablecer valores predeterminados
+	Each sheet turns to suit its page.	Cada hoja gira para ajustarse a su página.
+	Custom ({w} × {h} in)	Personalizado ({w} × {h} in)
+	Paper size, orientation and margins	Tamaño del papel, orientación y márgenes

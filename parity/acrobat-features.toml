@@ -8032,11 +8032,11 @@ title = "Page setup"
 area = "L"
 tier = "P1"
 milestone = "M10"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["print.page_setup", "print.dialog"]
+tools = ["print_page_setup_get", "print_page_setup_set", "doc_print"]
+evidence = ["crates/print/src/tests.rs::page_setup_margins_move_the_printable_area", "crates/print/src/tests.rs::page_setup_refuses_hostile_paper_and_margins", "crates/engine/src/tests.rs::page_setup_is_a_session_setting_prints_follow", "crates/automation/tests/automation.rs::page_setup_through_tools", "crates/ui-egui/tests/print.rs::page_setup_dialog_sets_what_print_uses"]
+notes = "File ▸ Page setup… (⇧⌘P): our own dialog with paper (11 presets: Letter, Legal, Tabloid, Executive, A3–A6, B4, B5, Envelope #10, or a custom size 72–14400 pt in in/mm/pt), orientation (auto, portrait, landscape) and margins (per side, None/Narrow/Normal/Wide presets; at least 36 pt must stay printable across and down the short side). Session settings (Session::page_setup, not saved with documents) that the Print dialog starts from (its Page setup… button returns to it, and a print stores its choices back), its sheet preview (dashed printable area) and Save as PDF / print-to-file and doc_print use; margins now drive Fit, Actual size centring, Multiple, Booklet and Poster tiles and cut marks instead of the fixed 18 pt. Headless: print_page_setup_get/set; doc_print takes paper, paper_size, orientation and margins per job. Missing: the operating system's own page setup sheet and the printer's hardware imageable area are not used (we cannot drive the OS print dialog, so margins are ours, not the driver's), and paper source/tray stays under Print ▸ Properties…"
 
 [[feature]]
 id = "print.print-ready-pdf"

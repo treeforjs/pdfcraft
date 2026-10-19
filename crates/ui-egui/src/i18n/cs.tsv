@@ -2329,3 +2329,22 @@ compare-page	Moved	Přesunutá
 	Close all pop-ups	Zavřít všechna okna poznámek
 	No pop-ups to open	Žádná okna poznámek k otevření
 	No pop-ups are open	Žádná okna poznámek nejsou otevřena
+
+# File ▸ Page Setup
+	Page setup…	Vzhled stránky…
+	Page Setup	Vzhled stránky
+	The paper and margins Print and Save as PDF use until you change them.	Papír a okraje, které Tisk a Uložit jako PDF používají, dokud je nezměníte.
+	Paper	Papír
+	Custom size	Vlastní velikost
+	Units:	Jednotky:
+	Orientation	Orientace
+	Margins	Okraje
+	Narrow	Úzké
+	Normal	Normální
+	Wide	Široké
+	Top:	Nahoře:
+	Right:	Vpravo:
+	Restore defaults	Obnovit výchozí
+	Each sheet turns to suit its page.	Každý list se otočí podle své stránky.
+	Custom ({w} × {h} in)	Vlastní ({w} × {h} in)
+	Paper size, orientation and margins	Velikost papíru, orientace a okraje

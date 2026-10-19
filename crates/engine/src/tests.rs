@@ -980,6 +980,35 @@ fn redaction_marks_apply_for_good_and_undo() {
 }
 
 #[test]
+fn page_setup_is_a_session_setting_prints_follow() {
+    let (mut s, id) = session_with(1);
+    assert_eq!(*s.page_setup(), print::PageSetup::default());
+    let setup = print::PageSetup { paper: (842.0, 595.0), orientation: print::Orientation::Landscape, margins: print::Margins::uniform(36.0) };
+    s.set_page_setup(setup).unwrap();
+    assert_eq!(s.page_setup().paper, (595.0, 842.0), "stored portrait");
+    let settings = print::Settings { pages: vec![0], ..Default::default() }.with_page_setup(s.page_setup());
+    let bytes = s.print_pdf(id, &settings).unwrap();
+    let mut s2 = Session::new();
+    let id2 = s2.open("print.pdf", None, Arc::new(bytes), None).unwrap();
+    let sheet = &s2.get(id2).unwrap().info.pages[0];
+    assert_eq!((sheet.width.round(), sheet.height.round()), (842.0, 595.0), "a landscape sheet of the setup's paper");
+    // Hostile values are refused and leave the setup as it was.
+    let before = *s.page_setup();
+    for bad in [
+        print::PageSetup { paper: (0.0, 792.0), ..before },
+        print::PageSetup { paper: (f64::NAN, 792.0), ..before },
+        print::PageSetup { paper: (-612.0, -792.0), ..before },
+        print::PageSetup { paper: (1e12, 1e12), ..before },
+        print::PageSetup { margins: print::Margins { left: -5.0, ..before.margins }, ..before },
+        print::PageSetup { margins: print::Margins::uniform(f64::INFINITY), ..before },
+        print::PageSetup { margins: print::Margins::uniform(400.0), ..before },
+    ] {
+        assert!(matches!(s.set_page_setup(bad), Err(EditError::Invalid(_))), "{bad:?}");
+        assert_eq!(*s.page_setup(), before);
+    }
+}
+
+#[test]
 fn printing_lays_out_sheets_that_render() {
     let (s, id) = session_with(5);
     let settings = print::Settings {

@@ -2305,3 +2305,22 @@ compare-page	Moved	移動
 	Close all pop-ups	すべてのポップアップを閉じる
 	No pop-ups to open	開くポップアップがありません
 	No pop-ups are open	開いているポップアップはありません
+
+# File ▸ Page Setup
+	Page setup…	ページ設定…
+	Page Setup	ページ設定
+	The paper and margins Print and Save as PDF use until you change them.	変更するまで、印刷と PDF として保存で使われる用紙と余白です。
+	Paper	用紙
+	Custom size	カスタムサイズ
+	Units:	単位:
+	Orientation	向き
+	Margins	余白
+	Narrow	狭い
+	Normal	標準
+	Wide	広い
+	Top:	上:
+	Right:	右:
+	Restore defaults	既定値に戻す
+	Each sheet turns to suit its page.	各用紙はページに合わせて回転します。
+	Custom ({w} × {h} in)	カスタム ({w} × {h} in)
+	Paper size, orientation and margins	用紙サイズ、向き、余白

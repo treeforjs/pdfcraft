@@ -46,6 +46,7 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
     let mut bulk_field_props_now = false;
     let mut redact_now: Option<Dialog> = None;
     let mut print_go = false;
+    let mut page_setup_ok = false;
     let mut revert_now = false;
     let mut summarize_now = false;
     let mut optimize_now = false;
@@ -839,6 +840,24 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
                 });
                 print_go = go;
                 close = go || cancel;
+                if std::mem::take(&mut app.print_draft.open_page_setup) && !close {
+                    // Page Setup starts from what the Print dialog shows, and comes back to it.
+                    let d = &app.print_draft;
+                    let setup = pdfcraft_engine::print::PageSetup { paper: d.paper, orientation: d.orientation, margins: d.margins };
+                    let unit = app.page_setup_draft.unit;
+                    app.page_setup_draft = crate::PageSetupDraft { unit, ..crate::PageSetupDraft::from_setup(&setup, true) };
+                    next = Dialog::PageSetup;
+                }
+                return;
+            }
+            Dialog::PageSetup => {
+                let (ok, cancel) = crate::page_setup_ui::body(ui, &mut app.page_setup_draft, &t);
+                page_setup_ok = ok;
+                if (ok || cancel) && app.page_setup_draft.back_to_print {
+                    next = Dialog::Print;
+                } else {
+                    close = ok || cancel;
+                }
                 return;
             }
             Dialog::RemoveHidden => {
@@ -1217,6 +1236,11 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
             bytes: d.bytes.clone(),
             src_pages: (d.src_from - 1..d.src_from - 1 + n).collect(),
         });
+    }
+    // Values that can't be used keep Page Setup open, with the reason in a notice.
+    if page_setup_ok && !app.apply_page_setup() {
+        close = false;
+        next = Dialog::PageSetup;
     }
     // A print or save that fails keeps the dialog open, with the reason in a notice.
     if print_go && !app.print_now() {

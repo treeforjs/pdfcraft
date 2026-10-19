@@ -2314,3 +2314,22 @@ compare-page	Moved	Spostata
 	Close all pop-ups	Chiudi tutti i popup
 	No pop-ups to open	Nessun popup da aprire
 	No pop-ups are open	Nessun popup aperto
+
+# File ▸ Page Setup
+	Page setup…	Imposta pagina…
+	Page Setup	Imposta pagina
+	The paper and margins Print and Save as PDF use until you change them.	La carta e i margini che Stampa e Salva come PDF usano finché non li cambi.
+	Paper	Carta
+	Custom size	Formato personalizzato
+	Units:	Unità:
+	Orientation	Orientamento
+	Margins	Margini
+	Narrow	Stretti
+	Normal	Normali
+	Wide	Larghi
+	Top:	Alto:
+	Right:	Destra:
+	Restore defaults	Ripristina predefiniti
+	Each sheet turns to suit its page.	Ogni foglio ruota in base alla sua pagina.
+	Custom ({w} × {h} in)	Personalizzato ({w} × {h} in)
+	Paper size, orientation and margins	Formato carta, orientamento e margini
