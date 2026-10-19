@@ -82,9 +82,11 @@ jobs:
       - uses: mozilla-actions/sccache-action@v0.0.11
       - name: Use sccache
         run: |
-          echo "SCCACHE_GHA_ENABLED=true" >> "$GITHUB_ENV"
-          echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
-          echo "SCCACHE_GHA_RW_MODE=READ_WRITE" >> "$GITHUB_ENV"
+          {
+            echo "SCCACHE_GHA_ENABLED=true"
+            echo "RUSTC_WRAPPER=sccache"
+            echo "SCCACHE_GHA_RW_MODE=READ_WRITE"
+          } >> "$GITHUB_ENV"
 
       - name: Format
         if: runner.os == 'Linux'
