@@ -22,6 +22,10 @@ jobs:
   test:
     name: test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      # Main deletes the saved build its own save replaces.
+      actions: write
     strategy:
       fail-fast: false
       matrix:
@@ -65,28 +69,46 @@ jobs:
             libgl1-mesa-dev libgtk-3-dev
 
       - uses: dtolnay/rust-toolchain@stable
+        id: rust
         with:
           components: clippy, rustfmt
 
-      # Only main saves caches; PRs restore main's. A save per PR branch (about 1 GB each, usable
-      # by that branch only) fills the repo's 10 GB cache budget and evicts main's.
+      # Registry downloads only: the build itself is cached whole below. Only main saves caches;
+      # PRs restore main's. A save per PR branch (usable by that branch only) fills the repo's
+      # 10 GB cache budget and evicts main's.
       - uses: Swatinem/rust-cache@v2
         with:
+          cache-targets: false
           save-if: ${{ github.ref == 'refs/heads/main' }}
-          cache-on-failure: true
 
-      # sccache caches compiled workspace and vendored crates by content hash. rust-cache above
-      # keeps only registry dependencies, so those crates were rebuilt on every run and were most
-      # of the build. Only main writes; PRs read main's entries, so every crate a PR leaves
-      # unchanged comes from the cache. Set through GITHUB_ENV after rust-cache so its key stays put.
-      - uses: mozilla-actions/sccache-action@v0.0.11
-      - name: Use sccache
+      # The whole target directory from main's latest run, workspace crates and test binaries
+      # included, so a PR rebuilds only what its changes reach. Cargo decides freshness of
+      # workspace files by mtime, and a fresh checkout makes every file new: the next step dates
+      # the checkout back, then re-touches every file that differs from the commit the cached
+      # build was made from (recorded in target/.ci-build-sha), so exactly those rebuild.
+      - name: Restore the build from main
+        uses: actions/cache/restore@v4
+        with:
+          path: target
+          key: target-${{ runner.os }}-${{ steps.rust.outputs.cachekey }}-${{ github.sha }}
+          restore-keys: target-${{ runner.os }}-${{ steps.rust.outputs.cachekey }}-
+
+      # craft-fonts is pinned in this workflow, so it is dated back with the checkout unless this
+      # file changed (its fonts are build inputs of pdfcraft-fonts, which most crates depend on).
+      - name: Mark files changed since the cached build
         run: |
-          {
-            echo "SCCACHE_GHA_ENABLED=true"
-            echo "RUSTC_WRAPPER=sccache"
-            echo "SCCACHE_GHA_RW_MODE=${{ github.ref == 'refs/heads/main' && 'READ_WRITE' || 'READ_ONLY' }}"
-          } >> "$GITHUB_ENV"
+          base=$(cat target/.ci-build-sha 2>/dev/null) || exit 0
+          # Without the base commit the checkout keeps its new mtimes and everything rebuilds.
+          git fetch -q --depth=1 origin "$base" || exit 0
+          changed=$(git diff --name-only "$base" HEAD) || exit 0
+          git ls-files -z | xargs -0 touch -d '2000-01-01 00:00:00'
+          if [ -d craft-fonts ] && ! printf '%s\n' "$changed" | grep -qx .github/workflows/ci.yml; then
+            find craft-fonts -type f -exec touch -d '2000-01-01 00:00:00' {} +
+          fi
+          printf '%s\n' "$changed" | while IFS= read -r f; do
+            if [ -e "$f" ]; then touch "$f"; fi
+          done
+          echo "Cached build from $base; $(printf '%s\n' "$changed" | grep -c .) files changed since"
 
       - name: Format
         if: runner.os == 'Linux'
@@ -124,6 +146,30 @@ jobs:
       - name: CLI without the MCP server still builds
         if: runner.os == 'Linux'
         run: cargo check -p pdfcraft-cli --no-default-features
+
+      # Main saves its build for the next runs and deletes the one it replaced, so a single copy
+      # (several GB) counts against the cache budget.
+      - name: Record the build's commit
+        if: github.ref == 'refs/heads/main' && !cancelled()
+        run: |
+          echo "$GITHUB_SHA" > target/.ci-build-sha
+          du -sh target
+
+      - name: Save the build
+        if: github.ref == 'refs/heads/main' && !cancelled()
+        uses: actions/cache/save@v4
+        with:
+          path: target
+          key: target-${{ runner.os }}-${{ steps.rust.outputs.cachekey }}-${{ github.sha }}
+
+      - name: Delete older saved builds
+        if: github.ref == 'refs/heads/main' && !cancelled()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh cache list --repo "$GITHUB_REPOSITORY" --key "target-$RUNNER_OS-" --sort created_at --order desc \
+            --limit 100 --json id,key --jq '.[1:][].id' |
+            while read -r id; do gh cache delete --repo "$GITHUB_REPOSITORY" "$id"; done
 
   wasm:
     name: wasm32 check
