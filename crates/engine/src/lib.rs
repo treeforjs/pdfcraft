@@ -34,6 +34,7 @@ pub mod pdfx;
 pub mod pptx_export;
 pub mod preflight;
 pub mod reader_selection;
+pub mod reading_order;
 pub mod signature_image;
 pub mod signature_workflow;
 pub mod submit;
@@ -1511,6 +1512,26 @@ pub enum Edit {
     MarkArtifact {
         selection: a11y::ArtifactSelection,
     },
+    /// Reading Order tool: tag what lies inside a rectangle on a page as text, a heading, a
+    /// figure, a figure with its caption, a table, a cell, a formula, form fields or background
+    /// (an artifact), splitting marked content at the rectangle's edge (see
+    /// [`a11y::tag_region`]).
+    TagRegion {
+        request: a11y::RegionTag,
+    },
+    /// Order panel: move structure element `element` (object number) to just before (or with
+    /// `after`, just after) element `target`, changing the reading order.
+    MoveTag {
+        element: u32,
+        target: u32,
+        after: bool,
+    },
+    /// Reading Order tool ▸ Clear Page Structure: take page `page`'s (0-based) tags (and,
+    /// unless `keep_artifacts`, its artifacts) out of its content and the structure tree.
+    ClearPageStructure {
+        page: usize,
+        keep_artifacts: bool,
+    },
     /// Tags panel ▸ Properties: change a structure element's type, alternate text, actual text,
     /// language or title. `element` is the element's object number (from `Document::tags`).
     SetTag {
@@ -1893,6 +1914,10 @@ impl Edit {
             Edit::SetTag { .. } => "Change tag properties".into(),
             Edit::AddNamespace { .. } => "Add structure namespace".into(),
             Edit::MarkArtifact { .. } => "Change to artifact".into(),
+            Edit::TagRegion { request } if request.role == a11y::RegionRole::Background => "Change to artifact".into(),
+            Edit::TagRegion { .. } => "Tag region".into(),
+            Edit::MoveTag { .. } => "Change reading order".into(),
+            Edit::ClearPageStructure { .. } => "Clear page structure".into(),
             Edit::TagImage { .. } => "Set alternate text".into(),
             Edit::Autotag { .. } => "Autotag document".into(),
             Edit::AddOcrText { .. } | Edit::AddEditableOcrText { .. } => "Recognize text".into(),
@@ -2126,6 +2151,9 @@ fn check_permission(edit: &Edit, p: &pdfcraft_cos::Permissions) -> Result<(), Ed
         | Edit::SetTag { .. }
         | Edit::AddNamespace { .. }
         | Edit::MarkArtifact { .. }
+        | Edit::TagRegion { .. }
+        | Edit::MoveTag { .. }
+        | Edit::ClearPageStructure { .. }
         | Edit::TagImage { .. }
         | Edit::Autotag { .. }
         | Edit::AddOcrText { .. }
@@ -2501,6 +2529,18 @@ fn run_edit_inner(doc: &mut pdfcraft_cos::Document, edit: &Edit, cx: &mut EditCt
         }
         Edit::MarkArtifact { selection } => {
             a11y::mark_artifact(doc, selection).map_err(|e| EditError::Accessibility(e.to_string()))?;
+        }
+        Edit::TagRegion { request } => {
+            reading_order::run_tag(doc, request).map_err(EditError::Accessibility)?;
+        }
+        Edit::MoveTag { element, target, after } => {
+            let e = pdfcraft_cos::ObjRef::new(*element, doc.generation(*element));
+            let t = pdfcraft_cos::ObjRef::new(*target, doc.generation(*target));
+            let place = if *after { a11y::OrderPlace::After(t) } else { a11y::OrderPlace::Before(t) };
+            a11y::move_element(doc, e, place).map_err(|e| EditError::Accessibility(e.to_string()))?;
+        }
+        Edit::ClearPageStructure { page, keep_artifacts } => {
+            a11y::clear_page_structure(doc, *page, *keep_artifacts).map_err(|e| EditError::Accessibility(e.to_string()))?;
         }
         Edit::TagImage { page, index, alt } => {
             a11y::tag_image(doc, *page, *index, alt).map_err(|e| EditError::Accessibility(e.to_string()))?;

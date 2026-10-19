@@ -60,4 +60,23 @@ let html = report_html(&report, "file.pdf", "2026-10-02");
   Returns a `TagUpdate` report. Not followed: form XObject content, edits other than text,
   images, added items and page deletion.
 
-Not yet: the Tags/Order/Content panels, the Reading Order tool (M12.1–M12.2).
+- **Reading Order tool and Order panel** (`tag_region`, `page_order`, `move_element`,
+  `clear_page_structure`, `reading_order.rs`): a rectangle on a page (points from the top-left
+  of the displayed page) is tagged as Text (`P`), H1–H6, Figure (with `/Alt`), Figure/Caption
+  (`Figure` holding a `Caption`), Table (`Table` > `TR` > `TH`/`TD` from where the content lies,
+  rules as layout artifacts), Cell (`TD`, in the row of the nearest cell), Formula, Form field
+  (`Form` + OBJR + `/StructParent`) or Background (an artifact). Painting operations are inside
+  when their box's centre is (text boxes from the caller's glyphs on a provisional copy, as
+  Autotag). Untagged content gets new MCIDs; tagged or artifact marked content wholly inside
+  changes as a whole; marked content cut by the rectangle is split (the outside part keeps its
+  tag, element and first MCID). New sequences never cross `q`/`Q`, `BT`/`ET` or other marked
+  content; emptied elements leave the tree; the new element goes beside the nearest tagged
+  content before it; the parent tree is rebuilt; untagged documents get a tree. `page_order`
+  lists a page's regions (outermost elements below a grouping element) in reading order with
+  boxes and the elements inside them; `move_element` puts an element before or after another;
+  `clear_page_structure` takes a page's tags (optionally keeping artifacts) out of the content,
+  the tree and the parent tree. All or nothing, bounded. Not yet: content inside form XObjects
+  (a form is tagged whole), splitting inside one text-showing operator, nested tagged content,
+  table spans or header detection beyond the first row, the Order panel's drag UI.
+
+Not yet: the Tags/Content panels' UI.
