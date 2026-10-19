@@ -914,6 +914,8 @@ impl Automation {
             "trust_url_check" => self.trust_url_check(&a)?,
             "comment_mark" => self.comment_mark(&a)?,
             "comment_lock" => self.comment_lock(&a)?,
+            "comment_popup" => self.comment_popup(&a)?,
+            "comment_popups_all" => self.comment_popups_all(&a)?,
             "comments_hide" => self.comments_hide(&a)?,
             "comments_summarize" => self.comments_summarize(&a)?,
             "comment_edit" => self.comment_edit(&a)?,

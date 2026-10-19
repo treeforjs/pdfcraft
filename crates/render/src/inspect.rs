@@ -264,6 +264,28 @@ pub struct Annotation {
     pub locked: bool,
     /// `/IT`, the intent: `FreeTextCallout`, `PolygonCloud`, `FreeTextTypeWriter`…
     pub intent: Option<String>,
+    /// The comment's pop-up note window (`/Popup`), when it has one.
+    pub popup: Option<PopupNote>,
+}
+
+/// A comment's pop-up (ISO 32000-2 §12.5.6.14).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PopupNote {
+    /// `/Rect` in PDF user space, normalised; a missing or unusable one is replaced by the
+    /// default place, to the right of the comment (as `pdfcraft_annot::default_popup_rect`).
+    pub rect: [f32; 4],
+    /// `/Open`: the pop-up is shown.
+    pub open: bool,
+}
+
+impl PopupNote {
+    /// Where a pop-up without a usable `/Rect` is shown: 200 × 120 pt to the right of `parent`.
+    /// Keep in step with `pdfcraft_annot::default_popup_rect`.
+    pub fn default_rect(parent: [f32; 4]) -> [f32; 4] {
+        let ok = parent.iter().all(|v| v.is_finite() && v.abs() < 1e7);
+        let (x, top) = if ok { (parent[0].max(parent[2]) + 10.0, parent[1].max(parent[3])) } else { (0.0, 120.0) };
+        [x, top - 120.0, x + 200.0, top]
+    }
 }
 
 impl Annotation {
@@ -891,10 +913,34 @@ impl<'a> Inspector<'a> {
                     quads,
                     locked: d.get(b"F").ok().and_then(|f| self.resolve(f).as_i64().ok()).unwrap_or(0) & 128 != 0,
                     intent: self.name(d, b"IT"),
+                    popup: self.popup(d, rect),
                 });
             }
         }
         info.annotations.sort_by(|a, b| a.page.cmp(&b.page).then(b.rect[3].total_cmp(&a.rect[3])));
+    }
+
+    /// The pop-up `d` points at, when `/Popup` really is one.
+    fn popup(&self, d: &Dictionary, parent: [f32; 4]) -> Option<PopupNote> {
+        let p = self.dict(d.get(b"Popup").ok()?)?;
+        if self.name(p, b"Subtype").as_deref() != Some("Popup") {
+            return None;
+        }
+        let rect = match p.get(b"Rect").map(|o| self.resolve(o)) {
+            Ok(Object::Array(a)) if a.len() == 4 => {
+                let v: Vec<f32> = a.iter().filter_map(|x| self.resolve(x).as_float().ok()).collect();
+                match v.as_slice() {
+                    [a, b, c, e] if [*a, *b, *c, *e].iter().all(|x| x.is_finite() && x.abs() < 1e7) => {
+                        let r = [a.min(*c), b.min(*e), a.max(*c), b.max(*e)];
+                        (r[2] - r[0] >= 1.0 && r[3] - r[1] >= 1.0).then_some(r)
+                    }
+                    _ => None,
+                }
+            }
+            _ => None,
+        };
+        let open = matches!(p.get(b"Open").map(|o| self.resolve(o)), Ok(Object::Boolean(true)));
+        Some(PopupNote { rect: rect.unwrap_or_else(|| PopupNote::default_rect(parent)), open })
     }
 
     fn link(&self, page: usize, d: &Dictionary) -> Option<Link> {

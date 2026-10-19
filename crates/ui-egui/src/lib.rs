@@ -82,6 +82,7 @@ mod palette;
 mod panels;
 #[cfg(not(target_arch = "wasm32"))]
 mod pickers;
+mod popup_notes;
 pub mod prepare;
 mod print_ui;
 mod signature_drag;

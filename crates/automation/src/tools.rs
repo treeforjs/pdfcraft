@@ -1392,6 +1392,17 @@ pub fn tools() -> Vec<ToolDef> {
             comment_ref(json!({ "locked": { "type": "boolean", "description": "Default true." } })),
             &["doc"],
         )),
+        t("comment_popup", "Open or move a comment's pop-up", "Open or close a comment's pop-up note (open) and/or move or resize it: rect [x0, y0, x1, y1] in points from the top-left of the displayed page (pop-ups stay upright and keep their size at every zoom, so this is the top-left corner where it shows plus its width and height; each side 24 to 2000 points), or move [dx, dy] in points. A comment without a pop-up gets one, to the right of it unless rect says where. Text boxes have none, and replies show in their comment's pop-up. comment_list reports each comment's popup (open, rect). The comment itself (text, date) is unchanged. One undo step.").with(schema(
+            comment_ref(json!({
+                "open": { "type": "boolean", "description": "true opens the pop-up, false closes it." },
+                "rect": { "type": "array", "items": { "type": "number" }, "minItems": 4, "maxItems": 4 },
+                "move": point(),
+            })),
+            &["doc"],
+        )),
+        t("comment_popups_all", "Open or close all pop-ups", "Open All Pop-ups (open true, the default) or Close All Pop-ups (open false): every comment pop-up on `page` (1-based; the whole document when left out) not already in that state, plus, when opening, sticky notes without one (they get one). One undo step. Returns how many changed.")
+            .cmd("comment.open_popups")
+            .with(schema(json!({ "doc": doc(), "open": { "type": "boolean", "description": "Default true." }, "page": { "type": "integer", "minimum": 1 } }), &["doc"])),
         t("comments_hide", "Hide all comments", "Hide or show every comment on the page (fields and links still draw). A view setting: the file doesn't change.")
             .cmd("comment.hide_all")
             .with(schema(json!({ "doc": doc(), "hidden": { "type": "boolean", "description": "Default true." } }), &["doc"])),

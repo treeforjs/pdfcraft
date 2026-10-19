@@ -670,6 +670,11 @@ impl DocView {
     }
 
     /// Where `page` is drawn this frame, with its coordinate mapping.
+    /// The pages drawn on screen this frame, with their transforms.
+    pub(crate) fn screen_pages(&self) -> Vec<(usize, PageXform)> {
+        self.screen_xforms.clone()
+    }
+
     pub(crate) fn page_xform(&self, page: usize) -> Option<PageXform> {
         self.screen_xforms.iter().find(|(p, _)| *p == page).map(|(_, xf)| *xf)
     }
@@ -2802,6 +2807,9 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
     }
     find_bar(view, info.pages.len(), avail, ui, &t);
     comments::load_rich(view, doc);
+    if let Some(e) = crate::popup_notes::show(ui.ctx(), view, info, allowed, comments_hidden) {
+        view.pending_edit = Some(e);
+    }
     if let Some(e) = comments::composer(ui.ctx(), view, info, prefs) {
         view.pending_edit = Some(e);
     }

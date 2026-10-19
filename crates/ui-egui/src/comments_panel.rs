@@ -848,6 +848,8 @@ fn header_menus(ui: &mut egui::Ui, index: &CommentIndex, view: &mut DocView, hid
         ui.separator();
         for (id, label) in [
             ("comment.hide_all", if hidden { tl!("Show all comments") } else { tl!("Hide all comments") }),
+            ("comment.open_popups", tl!("Open all pop-ups")),
+            ("comment.close_popups", tl!("Close all pop-ups")),
             ("comment.summarize", tl!("Create PDF comment summary…")),
             ("comment.export", tl!("Export all to data file…")),
             ("comment.import", tl!("Import comments…")),

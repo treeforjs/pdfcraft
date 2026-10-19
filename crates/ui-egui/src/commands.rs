@@ -383,6 +383,17 @@ impl PdfCraftApp {
             }
             "comment.export" => self.export_data_dialog(true, false),
             "comment.summarize" => self.dialog = Some(Dialog::SummarizeComments),
+            "comment.open_popups" | "comment.close_popups" => {
+                let open = id == "comment.open_popups";
+                let edit = active.and_then(|i| self.session.get(self.views[i].id)).and_then(|d| d.all_popups_edit(None, open));
+                match edit {
+                    Some(edit) => {
+                        self.apply_edit(edit);
+                    }
+                    None if open => self.notify_tr("No pop-ups to open"),
+                    None => self.notify_tr("No pop-ups are open"),
+                }
+            }
             "sign.digital" | "sign.certify" => {
                 let certify = id == "sign.certify";
                 self.quick_tool = crate::QuickTool::SignArea { certify };

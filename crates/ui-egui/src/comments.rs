@@ -427,6 +427,8 @@ pub struct CommentView {
     pub context_at: Option<(usize, [f64; 2])>,
     /// A one-shot tool just finished; the app returns to the Select tool unless pinned.
     pub tool_done: bool,
+    /// A pop-up note card being moved or resized.
+    pub popup_drag: Option<crate::popup_notes::PopupDrag>,
     /// The Comments panel's index, card list and card heights for this document.
     pub(crate) panel: crate::comments_panel::PanelCache,
 }
@@ -1433,6 +1435,13 @@ pub(crate) fn context_menu(ui: &mut egui::Ui, view: &mut DocView, info: &DocInfo
             if ui.add_enabled(allowed, egui::Button::new(tl!(if marked { "Remove checkmark" } else { "Mark with checkmark" }))).clicked() {
                 action = Some(CanvasAction::Edit(Box::new(Edit::MarkAnnotation { page, index, marked: !marked, author: prefs.author.clone() })));
                 ui.close();
+            }
+            if crate::popup_notes::can_have_popup(&a.subtype) {
+                let open = a.popup.is_some_and(|p| p.open);
+                if ui.add_enabled(allowed, egui::Button::new(tl!(if open { "Close pop-up note" } else { "Open pop-up note" }))).clicked() {
+                    action = Some(CanvasAction::Edit(Box::new(Edit::SetCommentPopup { page, index, open: Some(!open), rect: None })));
+                    ui.close();
+                }
             }
             if ui.button(tl!("Copy text")).clicked() {
                 ui.ctx().copy_text(a.contents.clone().unwrap_or_default());

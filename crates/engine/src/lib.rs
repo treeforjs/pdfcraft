@@ -289,7 +289,8 @@ fn scope_of(edit: &Edit) -> Scope {
         | Edit::MoveAnnotation { .. }
         | Edit::ResizeAnnotation { .. }
         | Edit::StyleAnnotation { .. }
-        | Edit::SetAnnotationInfo { .. } => Scope::Comments,
+        | Edit::SetAnnotationInfo { .. }
+        | Edit::SetCommentPopup { .. } => Scope::Comments,
         Edit::SetFieldValue { .. } | Edit::ResetForm { .. } | Edit::SetFieldImage { .. } | Edit::ApplyScriptChanges { .. } => Scope::Form,
         Edit::Batch { edits, .. } => {
             let mut scopes = edits.iter().map(scope_of);
@@ -777,6 +778,23 @@ impl Document {
     /// Comment properties of the comment at `(page, index)` (Comment Properties dialog).
     pub fn comment_props(&self, page: usize, index: usize) -> Option<pdfcraft_annot::Props> {
         self.editor.as_ref().and_then(|e| pdfcraft_annot::props(&e.cos, page, index))
+    }
+
+    /// The pop-up of the comment at `(page, index)`, as stored (`None`: it has none).
+    pub fn comment_popup(&self, page: usize, index: usize) -> Option<pdfcraft_annot::PopupState> {
+        self.editor.as_ref().and_then(|e| pdfcraft_annot::popup(&e.cos, page, index))
+    }
+
+    /// Open All Pop-ups / Close All Pop-ups on `page` (every page when `None`): one undo step
+    /// that opens (or closes) every comment pop-up not already in that state. `None` when there
+    /// is nothing to change.
+    pub fn all_popups_edit(&self, page: Option<usize>, open: bool) -> Option<Edit> {
+        let targets = pdfcraft_annot::popups_to_toggle(&self.editor.as_ref()?.cos, page, open);
+        if targets.is_empty() {
+            return None;
+        }
+        let edits = targets.into_iter().map(|(page, index)| Edit::SetCommentPopup { page, index, open: Some(open), rect: None }).collect();
+        Some(Edit::Batch { label: if open { "Open all pop-ups" } else { "Close all pop-ups" }.into(), edits })
     }
 
     /// The formatted text of the text box at `(page, index)` (`None` for other comments).
@@ -1451,6 +1469,14 @@ pub enum Edit {
         subject: Option<String>,
         icon: Option<NoteIcon>,
     },
+    /// Open or close a comment's pop-up note and/or move or resize it (`rect`, user space). A
+    /// comment without a pop-up gets one. The comment itself is unchanged.
+    SetCommentPopup {
+        page: usize,
+        index: usize,
+        open: Option<bool>,
+        rect: Option<[f64; 4]>,
+    },
     /// Fill in a form field.
     SetFieldValue {
         name: String,
@@ -1910,6 +1936,9 @@ impl Edit {
             Edit::MoveAnnotation { .. } => "Move comment".into(),
             Edit::ResizeAnnotation { .. } => "Resize comment".into(),
             Edit::StyleAnnotation { .. } | Edit::SetAnnotationInfo { .. } => "Change comment properties".into(),
+            Edit::SetCommentPopup { rect: Some(_), .. } => "Move pop-up".into(),
+            Edit::SetCommentPopup { open: Some(false), .. } => "Close pop-up".into(),
+            Edit::SetCommentPopup { .. } => "Open pop-up".into(),
             Edit::SetFieldValue { name, .. } => format!("Fill in {name}"),
             Edit::SetFieldImage { name, .. } => format!("Set the image of {name}"),
             Edit::ResetForm { .. } => "Clear form".into(),
@@ -2102,6 +2131,7 @@ fn check_permission(edit: &Edit, p: &pdfcraft_cos::Permissions) -> Result<(), Ed
         | Edit::ResizeAnnotation { .. }
         | Edit::StyleAnnotation { .. }
         | Edit::SetAnnotationInfo { .. }
+        | Edit::SetCommentPopup { .. }
         | Edit::SetMeasurementScale { .. } => {
             if p.annotate() {
                 Ok(())
@@ -2498,6 +2528,7 @@ fn run_edit_inner(doc: &mut pdfcraft_cos::Document, edit: &Edit, cx: &mut EditCt
         Edit::SetAnnotationInfo { page, index, author, subject, icon } => {
             pdfcraft_annot::set_info(doc, *page, *index, author.as_deref(), subject.as_deref(), *icon, &cx.meta())?;
         }
+        Edit::SetCommentPopup { page, index, open, rect } => pdfcraft_annot::set_popup(doc, *page, *index, *open, *rect)?,
         Edit::SetFieldValue { name, value } => match cx.js.as_mut() {
             Some(js) => pdfcraft_forms::set_value_with(doc, name, value, js)?,
             None => pdfcraft_forms::set_value(doc, name, value)?,
@@ -2849,6 +2880,7 @@ fn comment_list(doc: &pdfcraft_cos::Document) -> Vec<pdfcraft_render::Annotation
             quads: s.quads,
             locked: s.locked,
             intent: s.intent,
+            popup: s.popup.map(|p| pdfcraft_render::PopupNote { rect: p.rect.map(|v| v as f32), open: p.open }),
         })
         .collect()
 }

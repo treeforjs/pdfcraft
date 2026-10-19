@@ -104,7 +104,7 @@ fn every_registered_command_is_implemented() {
                 file: None,
             });
         }
-        if matches!(spec.id, "comment.flatten" | "comment.export" | "comment.summarize") {
+        if matches!(spec.id, "comment.flatten" | "comment.export" | "comment.summarize" | "comment.open_popups" | "comment.close_popups") {
             use pdfcraft_engine::{Edit, NewAnnotation, Shape, Style};
             let shape = Shape::Rectangle { rect: [10.0, 10.0, 50.0, 50.0] };
             app.apply_edit(Edit::AddAnnotation(NewAnnotation {

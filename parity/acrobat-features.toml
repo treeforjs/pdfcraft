@@ -3967,11 +3967,11 @@ title = "Open and reposition comment pop-ups"
 area = "E"
 tier = "P1"
 milestone = "M5"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["comment.open_popups", "comment.close_popups"]
+tools = ["comment_popup", "comment_popups_all", "comment_list"]
+evidence = ["crates/annot/src/tests.rs::pop_ups_open_close_move_and_survive_a_save", "crates/annot/src/tests.rs::comments_without_a_pop_up_get_one_and_some_have_none", "crates/annot/src/tests.rs::hostile_pop_up_values_are_refused_or_repaired", "crates/automation/tests/comment_popups.rs::pop_ups_open_move_undo_and_survive_a_save", "crates/automation/tests/comment_popups.rs::rotated_pages_broken_pop_ups_and_hostile_values", "crates/ui-egui/src/popup_notes.rs::cards_round_trip_through_pop_up_rectangles", "crates/ui-egui/src/popup_notes.rs::hostile_rectangles_are_clamped_or_refused"]
+notes = "Pop-up annotations (/Subtype /Popup, ISO 32000-2 12.5.6.14): open/close (/Open on the pop-up, and on a sticky note itself), move and resize (/Rect of the pop-up, 24-2000 pt a side), one undo step each (Edit::SetCommentPopup, pdfcraft_annot::set_popup); comments without a pop-up get one next to them (added to /Annots with /Parent and /P), text boxes and replies have none. Open All / Close All Pop-ups is one undo step (comment.open_popups / comment.close_popups, comment_popups_all). Pop-ups move with and are deleted with their comment and are kept through save/reload. comment_list reports each comment's popup (open, rect as displayed: NoZoom | NoRotate top-left plus size). Hostile files: a /Popup that isn't a pop-up is ignored (and replaced when opened), a broken /Rect or /Open falls back to the default place, closed, and opening writes a usable rectangle. UI: open pop-ups are floating cards over the page (colour strip, author, date, text and replies, close button, drag the header to move, grip to resize), the comment context menu opens/closes them, the Comments panel menu opens/closes all. Missing: typing into the card (text is edited with the composer), Acrobat's pop-up preferences (opacity, open on hover, auto-open on reply), connector lines between a card and its comment, printing open pop-ups (Comments and pop-ups print option), comparison with Acrobat on real documents"
 
 [[feature]]
 id = "comment.connector-lines"

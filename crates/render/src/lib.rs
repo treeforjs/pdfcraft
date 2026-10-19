@@ -21,7 +21,7 @@ mod vector_raster;
 pub use colour::{ColourProfiles, ColourSpec, default_cmyk_profile};
 pub use inspect::{
     Annotation, Attachment, AttachmentSource, DestView, DocInfo, Field, FieldKind, FontInfo, Layer, LayerOp, Link, LinkTarget, OutlineItem, PageInfo,
-    Xfa, attachment_data, inspect, pretty_date,
+    PopupNote, Xfa, attachment_data, inspect, pretty_date,
 };
 pub use pixels::Pixels;
 pub use raster::{
