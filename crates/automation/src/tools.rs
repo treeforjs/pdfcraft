@@ -395,7 +395,7 @@ pub fn tools() -> Vec<ToolDef> {
                 json!({ "doc": doc(), "every": { "type": "integer", "minimum": 1 }, "before": pages("that start a new part"), "bookmarks": { "type": "boolean" }, "max_mb": { "type": "number", "exclusiveMinimum": 0 }, "out_dir": { "type": "string" } }),
                 &["doc", "out_dir"],
             )),
-        t("bookmark_list", "List bookmarks", "The bookmark tree with each bookmark's path, title, target page, open state and action: { type: goto, to_page, view, dest? } | { type: uri, url } | { type: other, action } (JavaScript, Launch… kept as is) | { type: none }.")
+        t("bookmark_list", "List bookmarks", "The bookmark tree with each bookmark's path, title, target page, open state and action: { type: goto, to_page, view, dest? } | { type: uri, url } | { type: javascript, script } | { type: other, action } (Launch… kept as is) | { type: none }.")
             .ro()
             .with(schema(json!({ "doc": doc() }), &["doc"])),
         t("bookmark_add", "Add a bookmark", "Add a bookmark that goes to a page, under a parent bookmark (or at the top level), at a position. Undoable.").with(schema(
@@ -413,8 +413,8 @@ pub fn tools() -> Vec<ToolDef> {
         )),
         t("bookmark_set_page", "Set a bookmark's page", "Point a bookmark at another page. Undoable.")
             .with(schema(json!({ "doc": doc(), "path": path("The bookmark"), "page": { "type": "integer", "minimum": 1 } }), &["doc", "path", "page"])),
-        t("bookmark_set_action", "Set a bookmark's action", "Bookmark Properties ▸ Actions: make a bookmark go to to_page (optionally shown as view), go to the named destination dest, or open url. Replaces its go-to or action; other actions (JavaScript…) can't be written here but are kept on other bookmarks. Undoable.").with(schema(
-            json!({ "doc": doc(), "path": path("The bookmark"), "to_page": { "type": "integer", "minimum": 1 }, "view": { "type": "object", "description": "With to_page: how to show the page. { fit: XYZ|Fit|FitH|FitV|FitR|FitB|FitBH|FitBV, left, top, zoom (percent), rect [left, bottom, right, top] }; coordinates are PDF user space as stored in the destination (origin bottom-left of the unrotated page). Default fit: XYZ when left/top/zoom are given, FitR with rect, else Fit." }, "dest": { "type": "string", "description": "A named destination (see dest_list)." }, "url": { "type": "string" } }),
+        t("bookmark_set_action", "Set a bookmark's action", "Bookmark Properties ▸ Actions: make a bookmark go to to_page (optionally shown as view), go to the named destination dest, open url, or run javascript (Acrobat JavaScript, run in the sandbox when the bookmark is clicked; see js_run_action). Replaces its go-to or action; other actions (Launch…) can't be written here but are kept on other bookmarks. Undoable.").with(schema(
+            json!({ "doc": doc(), "path": path("The bookmark"), "javascript": { "type": "string", "minLength": 1 }, "to_page": { "type": "integer", "minimum": 1 }, "view": { "type": "object", "description": "With to_page: how to show the page. { fit: XYZ|Fit|FitH|FitV|FitR|FitB|FitBH|FitBV, left, top, zoom (percent), rect [left, bottom, right, top] }; coordinates are PDF user space as stored in the destination (origin bottom-left of the unrotated page). Default fit: XYZ when left/top/zoom are given, FitR with rect, else Fit." }, "dest": { "type": "string", "description": "A named destination (see dest_list)." }, "url": { "type": "string" } }),
             &["doc", "path"],
         )),
         t("bookmark_from_structure", "New bookmarks from structure", "Make bookmarks from the headings of a tagged PDF's structure tree (H1–H6, Hn, and H, whose level is the number of Sect/Part/Art elements around it): one per heading in document order, nested by level (a deeper heading goes under the nearest earlier shallower one), titled with the heading's actual text, else its alternate text, else the text of the marked content it covers, and going to where the heading starts on its page (/XYZ with the heading's top; the page alone on a rotated page). replace: true removes every existing bookmark first; otherwise the new ones follow them at the top level. max_level leaves out deeper headings. Headings without any text or page are skipped and counted (untitled, unplaced). Untagged documents and documents without headings are refused. Undoable.").with(schema(
@@ -1171,25 +1171,27 @@ pub fn tools() -> Vec<ToolDef> {
         t("content_delete", "Delete added content", "Delete an added item (page, index from content_list). Undoable.")
             .destructive()
             .with(schema(json!({ "doc": doc(), "page": { "type": "integer", "minimum": 1 }, "index": { "type": "integer", "minimum": 1 } }), &["doc", "page", "index"])),
-        t("link_list", "List links", "Every link: page, 1-based index (for link_edit/link_delete), rect (points from the top-left of the page), and where it goes: url, to_page (with view when it is not plain Fit), or dest (a named destination, with its resolved to_page and view, or unresolved: true).")
+        t("link_list", "List links", "Every link: page, 1-based index (for link_edit/link_delete), rect (points from the top-left of the page), and where it goes: url, to_page (with view when it is not plain Fit), or dest (a named destination, with its resolved to_page and view, or unresolved: true), or javascript (the script it runs).")
             .ro()
             .with(schema(json!({ "doc": doc() }), &["doc"])),
-        t("link_add", "Add a link", "Add a link over rect on page that opens url, goes to to_page (optionally shown as view: position and zoom, fit width, a rectangle…) or goes to the named destination dest. Appearance: visible (rectangle), color, width 1-3, highlight none/invert/outline/inset. Undoable.")
+        t("link_add", "Add a link", "Add a link over rect on page that opens url, goes to to_page (optionally shown as view: position and zoom, fit width, a rectangle…), goes to the named destination dest, or runs javascript (Acrobat JavaScript, run in the sandbox when clicked; see js_run_action). Appearance: visible (rectangle), color, width 1-3, highlight none/invert/outline/inset. Undoable.")
             .cmd("edit.link")
             .with(schema(
                 json!({
                     "doc": doc(), "page": { "type": "integer", "minimum": 1 }, "rect": { "type": "array", "items": { "type": "number" }, "minItems": 4, "maxItems": 4 },
                     "url": { "type": "string" }, "to_page": { "type": "integer", "minimum": 1 }, "view": { "type": "object", "description": "With to_page: how to show the page. { fit: XYZ|Fit|FitH|FitV|FitR|FitB|FitBH|FitBV, left, top, zoom (percent), rect [left, bottom, right, top] }; coordinates are PDF user space as stored in the destination (origin bottom-left of the unrotated page). Default fit: XYZ when left/top/zoom are given, FitR with rect, else Fit." }, "dest": { "type": "string", "description": "A named destination (see dest_list)." },
+                    "javascript": { "type": "string", "minLength": 1, "description": "Run this Acrobat JavaScript when the link is clicked (event.type Link, event.name Mouse Up)." },
                     "visible": { "type": "boolean" }, "color": { "type": "string" }, "width": { "type": "number" }, "highlight": { "type": "string", "enum": ["none", "invert", "outline", "inset"] },
                 }),
                 &["doc", "page", "rect"],
             )),
-        t("link_edit", "Edit a link", "Change a link's rect, destination (url, to_page with optional view, or dest) or appearance. Undoable.")
+        t("link_edit", "Edit a link", "Change a link's rect, action (url, to_page with optional view, dest, or javascript) or appearance. Undoable.")
             .with(schema(
                 json!({
                     "doc": doc(), "page": { "type": "integer", "minimum": 1 }, "index": { "type": "integer", "minimum": 1 },
                     "rect": { "type": "array", "items": { "type": "number" }, "minItems": 4, "maxItems": 4 },
                     "url": { "type": "string" }, "to_page": { "type": "integer", "minimum": 1 }, "view": { "type": "object", "description": "With to_page: how to show the page. { fit: XYZ|Fit|FitH|FitV|FitR|FitB|FitBH|FitBV, left, top, zoom (percent), rect [left, bottom, right, top] }; coordinates are PDF user space as stored in the destination (origin bottom-left of the unrotated page). Default fit: XYZ when left/top/zoom are given, FitR with rect, else Fit." }, "dest": { "type": "string", "description": "A named destination (see dest_list)." },
+                    "javascript": { "type": "string", "minLength": 1, "description": "Run this Acrobat JavaScript when the link is clicked (event.type Link, event.name Mouse Up)." },
                     "visible": { "type": "boolean" }, "color": { "type": "string" }, "width": { "type": "number" }, "highlight": { "type": "string", "enum": ["none", "invert", "outline", "inset"] },
                 }),
                 &["doc", "page", "index"],
@@ -1809,6 +1811,28 @@ pub fn tools() -> Vec<ToolDef> {
             .with(schema(json!({ "doc": doc() }), &["doc"])),
         t("js_set_document_action", "Set a document action", "Set the JavaScript a document trigger runs (will_close, will_save, did_save, will_print, did_print), or remove it (script omitted). Undoable.")
             .with(schema(json!({ "doc": doc(), "trigger": { "type": "string", "enum": ["will_close", "will_save", "did_save", "will_print", "did_print"] }, "script": { "type": "string" } }), &["doc", "trigger"])),
+        t("js_page_actions", "Page actions", "Page Properties ▸ Actions: the JavaScript each page runs on page_open (when it becomes the current page) and page_close (when it stops being it). With page, both triggers of that page (script null when none); without, every trigger that has a script.")
+            .ro()
+            .cmd("tools.page_actions")
+            .with(schema(json!({ "doc": doc(), "page": { "type": "integer", "minimum": 1 } }), &["doc"])),
+        t("js_set_page_action", "Set a page action", "Page Properties ▸ Actions: set the JavaScript page runs on trigger (page_open, page_close), replacing what that trigger ran, or remove it (script omitted or blank). Scripts are limited to 256 KiB. Undoable.")
+            .cmd("tools.page_actions")
+            .with(schema(
+                json!({ "doc": doc(), "page": { "type": "integer", "minimum": 1 }, "trigger": { "type": "string", "enum": ["page_open", "page_close"] }, "script": { "type": "string" } }),
+                &["doc", "page", "trigger"],
+            )),
+        t("js_run_action", "Run a JavaScript action", "Run the Run-a-JavaScript action of a link (link: { page, index } from link_list), a bookmark (bookmark: its path from bookmark_list) or a page trigger (page and trigger page_open / page_close), as clicking it or the page opening or closing does: event.type is Link, Bookmark or Page, event.name Mouse Up, Open or Close, and this.pageNum starts on the link's or page's page. It runs in the same sandbox as js_run (loop and recursion limits, no file or network access) and needs JavaScript on (js_enabled). Field, comment and form-reset changes are one undoable step, refused when the document's permissions don't allow them; requests (page, url, print, submit) are returned, never performed. A dialog that needs an answer returns question: run it again with answers, as with js_run.")
+            .with(schema(
+                json!({
+                    "doc": doc(),
+                    "link": { "type": "object", "properties": { "page": { "type": "integer", "minimum": 1 }, "index": { "type": "integer", "minimum": 1 } }, "required": ["page", "index"] },
+                    "bookmark": path("The bookmark"),
+                    "page": { "type": "integer", "minimum": 1 },
+                    "trigger": { "type": "string", "enum": ["page_open", "page_close"] },
+                    "answers": { "type": "array", "description": "Answers to the script's dialogs so far, in order: yes, no, ok or cancel for an alert, {\"text\": …} or null for app.response.", "items": { "type": ["string", "object", "null"] } }
+                }),
+                &["doc"],
+            )),
         t("form_set_script", "Set a field's JavaScript", "Field Properties ▸ Run custom script: set field's JavaScript for event keystroke, format, validate or calculate (the field's actions; calculated fields join the calculation order) or mouse_up (a button's action). Omit script to remove it. The scripts use Acrobat's object model (event.value, event.rc, getField, util.printf, …) and run when the field changes. Undoable.")
             .cmd("form.prepare")
             .with(schema(

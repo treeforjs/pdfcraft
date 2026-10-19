@@ -2314,3 +2314,15 @@ compare-page	Moved	Spostata
 	Close all pop-ups	Chiudi tutti i popup
 	No pop-ups to open	Nessun popup da aprire
 	No pop-ups are open	Nessun popup aperto
+	Trigger:	Attivazione:
+	Page Open	Apertura pagina
+	Page Close	Chiusura pagina
+	Run a JavaScript…	Esegui un JavaScript…
+	Page actions…	Azioni pagina…
+	Type the JavaScript.	Digita il JavaScript.
+	Bookmark Action	Azione del segnalibro
+	Runs when the bookmark is clicked.	Viene eseguito quando si fa clic sul segnalibro.
+	Page Actions: page {n}	Azioni pagina: pagina {n}
+	Page Open runs when the page becomes the current page; Page Close when another page does.	«Apertura pagina» viene eseguito quando la pagina diventa quella corrente; «Chiusura pagina» quando lo diventa un'altra pagina.
+	JavaScript, e.g. app.alert("Hello")	JavaScript, ad es. app.alert("Ciao")
+	{s} actions aren't run by PdfCraft yet	PdfCraft non esegue ancora le azioni {s}

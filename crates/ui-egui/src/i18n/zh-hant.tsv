@@ -2191,3 +2191,15 @@ compare-page	Moved	已移動
 	Close all pop-ups	關閉所有彈出視窗
 	No pop-ups to open	沒有可開啟的彈出視窗
 	No pop-ups are open	沒有開啟的彈出視窗
+	Trigger:	觸發條件：
+	Page Open	頁面開啟
+	Page Close	頁面關閉
+	Run a JavaScript…	執行 JavaScript…
+	Page actions…	頁面動作…
+	Type the JavaScript.	請輸入 JavaScript。
+	Bookmark Action	書籤動作
+	Runs when the bookmark is clicked.	按一下書籤時執行。
+	Page Actions: page {n}	頁面動作：第 {n} 頁
+	Page Open runs when the page becomes the current page; Page Close when another page does.	「頁面開啟」會在該頁成為目前頁面時執行；「頁面關閉」會在其他頁面成為目前頁面時執行。
+	JavaScript, e.g. app.alert("Hello")	JavaScript，例如 app.alert("你好")
+	{s} actions aren't run by PdfCraft yet	PdfCraft 尚未執行 {s} 動作

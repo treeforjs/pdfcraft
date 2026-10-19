@@ -188,11 +188,12 @@ impl Automation {
 
     pub(crate) fn bookmark_set_action(&mut self, a: &Args) -> Result<Value> {
         let path = a.path("path")?;
-        let action = match (self.goto_target(a)?, a.opt_str("url")?) {
-            (Some(_), Some(_)) => return Err(bad("pass url, or to_page/dest, not both")),
-            (Some(t), None) => BookmarkAction::GoTo(t),
-            (None, Some(u)) => BookmarkAction::Uri(u.to_string()),
-            (None, None) => return Err(bad("pass to_page (optionally with view), dest or url")),
+        let action = match (self.goto_target(a)?, a.opt_str("url")?, a.opt_str("javascript")?) {
+            (Some(t), None, None) => BookmarkAction::GoTo(t),
+            (None, Some(u), None) => BookmarkAction::Uri(u.to_string()),
+            (None, None, Some(js)) => BookmarkAction::JavaScript(js.to_string()),
+            (None, None, None) => return Err(bad("pass to_page (optionally with view), dest, url or javascript")),
+            _ => return Err(bad("pass one of to_page/dest, url or javascript")),
         };
         self.apply(a, Edit::SetBookmarkAction { path, action })
     }
@@ -211,6 +212,7 @@ impl Automation {
                         v
                     }
                     BookmarkAction::Uri(u) => json!({ "type": "uri", "url": u }),
+                    BookmarkAction::JavaScript(js) => json!({ "type": "javascript", "script": js }),
                     BookmarkAction::Other(s) => json!({ "type": "other", "action": s }),
                     BookmarkAction::None => json!({ "type": "none" }),
                 };

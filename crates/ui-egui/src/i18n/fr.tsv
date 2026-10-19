@@ -2305,3 +2305,15 @@ compare-page	Moved	Déplacée
 	Close all pop-ups	Fermer toutes les fenêtres contextuelles
 	No pop-ups to open	Aucune fenêtre contextuelle à ouvrir
 	No pop-ups are open	Aucune fenêtre contextuelle ouverte
+	Trigger:	Déclencheur :
+	Page Open	Ouverture de la page
+	Page Close	Fermeture de la page
+	Run a JavaScript…	Exécuter un JavaScript…
+	Page actions…	Actions de page…
+	Type the JavaScript.	Saisissez le JavaScript.
+	Bookmark Action	Action du signet
+	Runs when the bookmark is clicked.	S’exécute quand on clique sur le signet.
+	Page Actions: page {n}	Actions de page : page {n}
+	Page Open runs when the page becomes the current page; Page Close when another page does.	« Ouverture de la page » s’exécute quand la page devient la page courante ; « Fermeture de la page » quand une autre page le devient.
+	JavaScript, e.g. app.alert("Hello")	JavaScript, par ex. app.alert("Bonjour")
+	{s} actions aren't run by PdfCraft yet	Les actions {s} ne sont pas encore exécutées par PdfCraft

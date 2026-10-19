@@ -235,6 +235,22 @@ impl crate::Document {
         self.editor.as_ref().map(|e| pdfcraft_forms::document_actions(&e.cos)).unwrap_or_default()
     }
 
+    /// Page Properties ▸ Actions: each page trigger's JavaScript, as (0-based page, trigger,
+    /// script). Reads every page; for one page use [`crate::Document::page_action`].
+    pub fn page_actions(&self) -> Vec<(usize, pdfcraft_forms::PageTrigger, String)> {
+        self.editor.as_ref().map(|e| pdfcraft_forms::page_actions(&e.cos)).unwrap_or_default()
+    }
+
+    /// The JavaScript page `page` runs on `trigger`, if any. Pages the open pass found without
+    /// additional actions (`info.page_actions`) are answered without reading the document.
+    pub fn page_action(&self, page: usize, trigger: pdfcraft_forms::PageTrigger) -> Option<String> {
+        if self.info.page_actions.binary_search(&page).is_err() {
+            return None;
+        }
+        let cos = &self.editor.as_ref()?.cos;
+        pdfcraft_forms::page_action(cos, page, trigger)
+    }
+
     /// What the unsigned signature field `field` locks when signed (its `/Lock`).
     pub fn signature_field_lock(&self, field: &str) -> Option<pdfcraft_sign::FieldLock> {
         self.editor.as_ref().and_then(|e| pdfcraft_sign::lock::field_lock(&e.cos, field))
@@ -300,6 +316,20 @@ impl Session {
     /// [`Session::run_javascript`] for a field event named `event` (`event.name`); without a
     /// target, a document event of that name.
     fn run_script_event(&mut self, id: DocId, script: &str, target: Option<&str>, event: &str, dialogs: &Dialogs) -> Result<Outcome, EditError> {
+        self.run_script_in(id, script, target, event, None, dialogs)
+    }
+
+    /// [`Session::run_script_event`] with, for a script without a target, `scope` = (`event.type`,
+    /// the page `this.pageNum` starts on) instead of a document event on the current page.
+    fn run_script_in(
+        &mut self,
+        id: DocId,
+        script: &str,
+        target: Option<&str>,
+        event: &str,
+        scope: Option<(&str, usize)>,
+        dialogs: &Dialogs,
+    ) -> Result<Outcome, EditError> {
         if self.js_off {
             return Err(EditError::Invalid("JavaScript is turned off (Preferences ▸ JavaScript)".into()));
         }
@@ -327,9 +357,13 @@ impl Session {
         runner.doc.layers = doc.info.layers.iter().map(|l| pdfcraft_js::LayerState { name: l.name.clone(), on: l.visible }).collect();
         let fields = pdfcraft_forms::fields(&cos);
         let states: Vec<_> = fields.iter().map(|f| field_state(&cos, f)).collect();
-        let event = match target {
-            Some(t) => pdfcraft_js::Event { will_commit: false, ..pdfcraft_js::Event::field(event, t, "") },
-            None => pdfcraft_js::Event::doc(event),
+        let event = match (target, scope) {
+            (Some(t), _) => pdfcraft_js::Event { will_commit: false, ..pdfcraft_js::Event::field(event, t, "") },
+            (None, Some((kind, page))) => {
+                runner.doc.page = page.min(runner.doc.num_pages.saturating_sub(1));
+                pdfcraft_js::Event { kind: kind.to_string(), ..pdfcraft_js::Event::doc(event) }
+            }
+            (None, None) => pdfcraft_js::Event::doc(event),
         };
         let mut o = pdfcraft_js::run_with(script, &event, &runner.doc, &states, &runner.doc_scripts, Limits::default(), dialogs);
         if o.question.is_some() {
@@ -367,6 +401,70 @@ impl Session {
             }
         }
         Ok(o)
+    }
+
+    /// The JavaScript an action runs (a link's, a bookmark's or a page trigger's), or an error
+    /// an agent can act on when it runs something else or nothing.
+    pub fn action_script(&self, id: DocId, source: &ActionSource) -> Result<String, EditError> {
+        let doc = self.get(id).ok_or(EditError::NoDocument)?;
+        match source {
+            ActionSource::Link { page, index } => {
+                let l = doc
+                    .links
+                    .iter()
+                    .find(|l| l.page == *page && l.index == *index)
+                    .ok_or_else(|| EditError::Invalid(format!("page {} has no link {}", page.saturating_add(1), index.saturating_add(1))))?;
+                match &l.action {
+                    pdfcraft_annot::links::LinkAction::JavaScript(js) => Ok(js.clone()),
+                    _ => Err(EditError::Invalid("that link doesn't run a JavaScript".into())),
+                }
+            }
+            ActionSource::Bookmark { path } => match self.bookmark_action(id, path)? {
+                crate::BookmarkAction::JavaScript(js) => Ok(js),
+                _ => Err(EditError::Invalid("that bookmark doesn't run a JavaScript".into())),
+            },
+            ActionSource::Page { page, trigger } => {
+                if *page >= doc.info.pages.len() {
+                    return Err(EditError::Invalid(format!("the document has no page {}", page.saturating_add(1))));
+                }
+                doc.page_action(*page, *trigger)
+                    .ok_or_else(|| EditError::Invalid(format!("page {} has no {} script", page.saturating_add(1), trigger.label())))
+            }
+        }
+    }
+
+    /// Run a link's, bookmark's or page trigger's JavaScript action, as the viewer does when it
+    /// is clicked or the page opens or closes: `event.type` is Link, Bookmark or Page and
+    /// `event.name` Mouse Up, Open or Close; `this.pageNum` starts on the link's or trigger's
+    /// page. Same sandbox, limits and permission checks as [`Session::run_javascript_with`]:
+    /// field and comment changes are one undoable step (refused when the document's
+    /// permissions don't allow them), and a dialog that needs an answer stops it with nothing
+    /// applied.
+    pub fn run_action_javascript(&mut self, id: DocId, source: &ActionSource, dialogs: &Dialogs) -> Result<Outcome, EditError> {
+        if self.js_off {
+            return Err(EditError::Invalid("JavaScript is turned off (Preferences ▸ JavaScript)".into()));
+        }
+        let script = self.action_script(id, source)?;
+        let (kind, name, page) = source.event();
+        self.run_script_in(id, &script, None, name, Some((kind, page)), dialogs)
+    }
+
+    /// Run page `page`'s `trigger` script, if it has one and JavaScript is on, as the viewer
+    /// does when the page becomes (or stops being) the current one. Like a document action,
+    /// what it printed or asked for joins the document's script output
+    /// ([`Session::take_js_output`]) and dialogs get Cancel or No; requests to print, save or
+    /// go to another page are dropped, so page scripts can't bounce the view between pages or
+    /// start a print. Returns whether a script ran.
+    pub fn run_page_action(&mut self, id: DocId, page: usize, trigger: pdfcraft_forms::PageTrigger) -> Result<bool, EditError> {
+        if self.js_off || self.get(id).and_then(|d| d.page_action(page, trigger)).is_none() {
+            return Ok(false);
+        }
+        let mut o = self.run_action_javascript(id, &ActionSource::Page { page, trigger }, &Dialogs::default())?;
+        o.requests.retain(|r| !matches!(r, Request::Print | Request::SaveAs | Request::GoToPage(_)));
+        if let Some(d) = self.docs.iter_mut().find(|d| d.id == id) {
+            d.js_output.absorb(&o);
+        }
+        Ok(true)
     }
 
     /// Fire `trigger` on field `field`: run its actions (Field Properties ▸ Actions) in order, as
@@ -435,6 +533,28 @@ impl Session {
             out.ran.push(a.describe());
         }
         Ok(out)
+    }
+}
+
+/// Where a JavaScript action lives ([`Session::run_action_javascript`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ActionSource {
+    /// A link: its 0-based page and index in the page's `/Annots`.
+    Link { page: usize, index: usize },
+    /// A bookmark, by its 0-based path.
+    Bookmark { path: Vec<usize> },
+    /// A page's Page Open or Page Close trigger.
+    Page { page: usize, trigger: pdfcraft_forms::PageTrigger },
+}
+
+impl ActionSource {
+    /// (`event.type`, `event.name`, the page the script starts on).
+    fn event(&self) -> (&'static str, &'static str, usize) {
+        match self {
+            ActionSource::Link { page, .. } => ("Link", "Mouse Up", *page),
+            ActionSource::Bookmark { .. } => ("Bookmark", "Mouse Up", 0),
+            ActionSource::Page { page, trigger } => ("Page", trigger.event_name(), *page),
+        }
     }
 }
 

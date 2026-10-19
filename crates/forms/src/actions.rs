@@ -519,3 +519,124 @@ pub fn set_document_action(doc: &mut Document, trigger: DocTrigger, script: Opti
     })?;
     Ok(())
 }
+
+/// Page Properties ▸ Actions: a page's own triggers (§12.6.3, Table 196: the page's `/AA` O
+/// and C). Like Document Actions, they run JavaScript here.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum PageTrigger {
+    Open,
+    Close,
+}
+
+impl PageTrigger {
+    pub const ALL: [PageTrigger; 2] = [PageTrigger::Open, PageTrigger::Close];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            PageTrigger::Open => "Page Open",
+            PageTrigger::Close => "Page Close",
+        }
+    }
+
+    /// Snake-case id (agents).
+    pub fn id(self) -> &'static str {
+        match self {
+            PageTrigger::Open => "page_open",
+            PageTrigger::Close => "page_close",
+        }
+    }
+
+    pub fn from_id(id: &str) -> Option<PageTrigger> {
+        PageTrigger::ALL.into_iter().find(|t| t.id() == id)
+    }
+
+    /// `event.name` for its script (`event.type` is "Page").
+    pub fn event_name(self) -> &'static str {
+        match self {
+            PageTrigger::Open => "Open",
+            PageTrigger::Close => "Close",
+        }
+    }
+
+    fn key(self) -> &'static [u8] {
+        match self {
+            PageTrigger::Open => b"O",
+            PageTrigger::Close => b"C",
+        }
+    }
+}
+
+/// Page `page`'s `/AA`, resolved (empty when it has none).
+fn page_aa(doc: &Document, page: ObjRef) -> Dict {
+    doc.get(page).as_dict().and_then(|d| d.get(b"AA").map(|a| doc.resolve(a))).and_then(|a| a.as_dict().cloned()).unwrap_or_default()
+}
+
+/// The JavaScript of each page trigger that has any, as (0-based page, trigger, script): the
+/// trigger's scripts joined in the order they run (other action types on these triggers are
+/// left out: they don't run here).
+pub fn page_actions(doc: &Document) -> Vec<(usize, PageTrigger, String)> {
+    let pages = crate::page_refs(doc);
+    let mut out = Vec::new();
+    for (i, p) in pages.iter().enumerate() {
+        let aa = page_aa(doc, *p);
+        if aa.is_empty() {
+            continue;
+        }
+        for t in PageTrigger::ALL {
+            let Some(entry) = aa.get(t.key()) else { continue };
+            let scripts: Vec<String> = chain(doc, entry, &pages)
+                .into_iter()
+                .filter_map(|r| match r.action {
+                    FieldAction::JavaScript(js) => Some(js),
+                    _ => None,
+                })
+                .collect();
+            if !scripts.is_empty() {
+                out.push((i, t, scripts.join("\n")));
+            }
+        }
+    }
+    out
+}
+
+/// The JavaScript page `page` (0-based) runs on `trigger`, if any (only that page's `/AA` is
+/// read).
+pub fn page_action(doc: &Document, page: usize, trigger: PageTrigger) -> Option<String> {
+    let pages = crate::page_refs(doc);
+    let aa = page_aa(doc, *pages.get(page)?);
+    let entry = aa.get(trigger.key())?;
+    let scripts: Vec<String> = chain(doc, entry, &pages)
+        .into_iter()
+        .filter_map(|r| match r.action {
+            FieldAction::JavaScript(js) => Some(js),
+            _ => None,
+        })
+        .collect();
+    (!scripts.is_empty()).then(|| scripts.join("\n"))
+}
+
+/// Set (or with `None` or blank, remove) the JavaScript page `page` (0-based) runs on
+/// `trigger`, replacing what that trigger ran. Over-long scripts are refused.
+pub fn set_page_action(doc: &mut Document, page: usize, trigger: PageTrigger, script: Option<&str>) -> Result<(), FormError> {
+    let pages = crate::page_refs(doc);
+    let p = *pages.get(page).ok_or_else(|| FormError::Invalid(format!("the document has no page {}", page.saturating_add(1))))?;
+    let mut aa = page_aa(doc, p);
+    match script.filter(|s| !s.trim().is_empty()) {
+        Some(js) => {
+            let action = pdfcraft_model::actions::new_javascript(js).map_err(|e| FormError::Invalid(e.to_string()))?;
+            let r = doc.add(action);
+            aa.set(trigger.key().to_vec(), Object::Ref(r));
+        }
+        None => {
+            aa.remove(trigger.key());
+        }
+    }
+    doc.update_dict(p, |d| {
+        if aa.is_empty() {
+            d.remove(b"AA");
+        } else {
+            d.set(b"AA".to_vec(), Object::Dict(aa.clone()));
+        }
+    })?;
+    Ok(())
+}

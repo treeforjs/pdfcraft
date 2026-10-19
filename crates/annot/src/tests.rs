@@ -517,6 +517,29 @@ fn links_are_added_edited_listed_and_removed() {
 }
 
 #[test]
+fn links_run_javascript() {
+    use crate::links::{self, LinkAction, LinkStyle};
+    let mut doc = fixture();
+    let script = "app.alert(\"Ünïcode \" + this.numPages);";
+    let i = links::add(&mut doc, 0, [10.0, 10.0, 110.0, 30.0], &LinkAction::JavaScript(script.into()), &LinkStyle::default()).unwrap();
+    let j = links::add(&mut doc, 0, [10.0, 40.0, 110.0, 60.0], &LinkAction::Page(1), &LinkStyle::default()).unwrap();
+    // A go-to becomes a script: its /Dest goes, as /Dest and /A can't both be present.
+    links::set(&mut doc, 0, j, None, Some(&LinkAction::JavaScript("this.pageNum = 0;".into())), None).unwrap();
+    // Blank and over-long scripts are refused and change nothing.
+    assert!(links::add(&mut doc, 0, [10.0, 70.0, 110.0, 90.0], &LinkAction::JavaScript("   ".into()), &LinkStyle::default()).is_err());
+    let huge = "x".repeat(pdfcraft_model::actions::MAX_SCRIPT_BYTES + 1);
+    assert!(links::set(&mut doc, 0, j, None, Some(&LinkAction::JavaScript(huge)), None).is_err());
+    let doc = reopen(&doc);
+    let all = links::list(&doc);
+    let get = |k: usize| all.iter().find(|l| l.page == 0 && l.index == k).unwrap();
+    assert_eq!(get(i).action, LinkAction::JavaScript(script.into()));
+    assert_eq!(get(j).action, LinkAction::JavaScript("this.pageNum = 0;".into()));
+    assert_eq!(get(j).action.page(&doc), None);
+    let d = doc.resolve(&list(&doc, 0)[j].get(b"A").unwrap().clone());
+    assert!(!list(&doc, 0)[j].contains(b"Dest") && d.as_dict().unwrap().name(b"S") == Some(b"JavaScript"));
+}
+
+#[test]
 fn urls_are_found_in_text() {
     let t: Vec<char> = "See https://example.org/a?b=1, or www.rust-lang.org. Not a.b or http:/x.".chars().collect();
     let found: Vec<String> = crate::links::find_urls(&t).into_iter().map(|(_, u)| u).collect();

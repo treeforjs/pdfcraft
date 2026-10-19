@@ -2218,3 +2218,15 @@ compare-page	Moved	Перемещена
 	Close all pop-ups	Закрыть все всплывающие заметки
 	No pop-ups to open	Нет всплывающих заметок для открытия
 	No pop-ups are open	Нет открытых всплывающих заметок
+	Trigger:	Триггер:
+	Page Open	Открытие страницы
+	Page Close	Закрытие страницы
+	Run a JavaScript…	Запустить JavaScript…
+	Page actions…	Действия страницы…
+	Type the JavaScript.	Введите JavaScript.
+	Bookmark Action	Действие закладки
+	Runs when the bookmark is clicked.	Выполняется при щелчке по закладке.
+	Page Actions: page {n}	Действия страницы: страница {n}
+	Page Open runs when the page becomes the current page; Page Close when another page does.	«Открытие страницы» выполняется, когда страница становится текущей; «Закрытие страницы» — когда текущей становится другая страница.
+	JavaScript, e.g. app.alert("Hello")	JavaScript, например app.alert("Привет")
+	{s} actions aren't run by PdfCraft yet	PdfCraft пока не выполняет действия {s}

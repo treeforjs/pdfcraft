@@ -2305,3 +2305,15 @@ compare-page	Moved	Verschoben
 	Close all pop-ups	Alle Pop-ups schließen
 	No pop-ups to open	Keine Pop-ups zum Öffnen
 	No pop-ups are open	Keine Pop-ups geöffnet
+	Trigger:	Auslöser:
+	Page Open	Seite öffnen
+	Page Close	Seite schließen
+	Run a JavaScript…	JavaScript ausführen…
+	Page actions…	Seitenaktionen…
+	Type the JavaScript.	Geben Sie das JavaScript ein.
+	Bookmark Action	Lesezeichenaktion
+	Runs when the bookmark is clicked.	Wird beim Klicken auf das Lesezeichen ausgeführt.
+	Page Actions: page {n}	Seitenaktionen: Seite {n}
+	Page Open runs when the page becomes the current page; Page Close when another page does.	„Seite öffnen“ läuft, wenn die Seite zur aktuellen Seite wird; „Seite schließen“, wenn eine andere Seite es wird.
+	JavaScript, e.g. app.alert("Hello")	JavaScript, z. B. app.alert("Hallo")
+	{s} actions aren't run by PdfCraft yet	{s}-Aktionen werden von PdfCraft noch nicht ausgeführt

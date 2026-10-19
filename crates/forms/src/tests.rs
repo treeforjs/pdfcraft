@@ -1852,3 +1852,46 @@ fn submit_flags_follow_the_format_precedence_and_round_trip() {
         assert!(matches!(&field(&all, "b").button, Some(crate::af::ButtonAction::Submit(_))), "{flags}");
     }
 }
+
+#[test]
+fn page_open_and_close_scripts_are_set_listed_and_removed() {
+    use crate::{PageTrigger, page_actions, set_page_action};
+    // Page 2 has a cyclic /Next chain mixing a script and a URI action, and an /AA that is a
+    // reference: read without looping, scripts only.
+    let objs: Vec<String> = vec![
+        "<< /Type /Catalog /Pages 2 0 R >>".into(),
+        "<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 /MediaBox [0 0 600 800] >>".into(),
+        "<< /Type /Page /Parent 2 0 R >>".into(),
+        "<< /Type /Page /Parent 2 0 R /AA 5 0 R >>".into(),
+        "<< /C 6 0 R /Foo (kept) >>".into(),
+        "<< /S /JavaScript /JS (console.println\\(1\\)) /Next 7 0 R >>".into(),
+        "<< /S /URI /URI (https://example.org) /Next 6 0 R >>".into(),
+    ];
+    let mut doc = document(&objs);
+    assert_eq!(page_actions(&doc), vec![(1, PageTrigger::Close, "console.println(1)".to_string())]);
+    set_page_action(&mut doc, 0, PageTrigger::Open, Some("app.alert(\"opened\")")).unwrap();
+    set_page_action(&mut doc, 1, PageTrigger::Open, Some("this.pageNum")).unwrap();
+    // No such page, blank removes, over-long refused.
+    assert!(set_page_action(&mut doc, 9, PageTrigger::Open, Some("1")).is_err());
+    let huge = "x".repeat(pdfcraft_model::actions::MAX_SCRIPT_BYTES + 1);
+    assert!(set_page_action(&mut doc, 0, PageTrigger::Close, Some(&huge)).is_err());
+    let doc = reopen(&doc);
+    assert_eq!(
+        page_actions(&doc),
+        vec![
+            (0, PageTrigger::Open, "app.alert(\"opened\")".to_string()),
+            (1, PageTrigger::Open, "this.pageNum".to_string()),
+            (1, PageTrigger::Close, "console.println(1)".to_string()),
+        ]
+    );
+    let mut doc = doc;
+    set_page_action(&mut doc, 1, PageTrigger::Close, Some("  ")).unwrap();
+    set_page_action(&mut doc, 0, PageTrigger::Open, None).unwrap();
+    let doc = reopen(&doc);
+    assert_eq!(page_actions(&doc), vec![(1, PageTrigger::Open, "this.pageNum".to_string())]);
+    let pages = crate::page_refs(&doc);
+    assert!(!doc.get(pages[0]).as_dict().unwrap().contains(b"AA"), "an empty /AA goes");
+    let aa = doc.get(pages[1]).as_dict().unwrap().get(b"AA").map(|a| doc.resolve(a)).unwrap();
+    assert!(aa.as_dict().unwrap().contains(b"Foo"), "other /AA entries are kept");
+    assert_eq!(PageTrigger::from_id("page_close"), Some(PageTrigger::Close));
+}

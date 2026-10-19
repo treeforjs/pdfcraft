@@ -2303,3 +2303,15 @@ compare-page	Moved	Áthelyezve
 	Close all pop-ups	Összes felugró ablak bezárása
 	No pop-ups to open	Nincs megnyitható felugró ablak
 	No pop-ups are open	Nincs nyitott felugró ablak
+	Trigger:	Kiváltó esemény:
+	Page Open	Oldal megnyitása
+	Page Close	Oldal bezárása
+	Run a JavaScript…	JavaScript futtatása…
+	Page actions…	Oldalműveletek…
+	Type the JavaScript.	Írja be a JavaScriptet.
+	Bookmark Action	Könyvjelző művelete
+	Runs when the bookmark is clicked.	A könyvjelzőre kattintáskor fut le.
+	Page Actions: page {n}	Oldalműveletek: {n}. oldal
+	Page Open runs when the page becomes the current page; Page Close when another page does.	Az „Oldal megnyitása” akkor fut, amikor az oldal lesz az aktuális; az „Oldal bezárása” akkor, amikor egy másik oldal lesz az.
+	JavaScript, e.g. app.alert("Hello")	JavaScript, pl. app.alert("Szia")
+	{s} actions aren't run by PdfCraft yet	A PdfCraft még nem futtatja a(z) {s} műveleteket

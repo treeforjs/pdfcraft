@@ -2221,3 +2221,15 @@ compare-page	Moved	Movida
 	Close all pop-ups	Cerrar todas las ventanas emergentes
 	No pop-ups to open	No hay ventanas emergentes para abrir
 	No pop-ups are open	No hay ventanas emergentes abiertas
+	Trigger:	Activador:
+	Page Open	Abrir página
+	Page Close	Cerrar página
+	Run a JavaScript…	Ejecutar un JavaScript…
+	Page actions…	Acciones de página…
+	Type the JavaScript.	Escriba el JavaScript.
+	Bookmark Action	Acción del marcador
+	Runs when the bookmark is clicked.	Se ejecuta al hacer clic en el marcador.
+	Page Actions: page {n}	Acciones de página: página {n}
+	Page Open runs when the page becomes the current page; Page Close when another page does.	«Abrir página» se ejecuta cuando la página pasa a ser la actual; «Cerrar página», cuando lo pasa a ser otra.
+	JavaScript, e.g. app.alert("Hello")	JavaScript, p. ej. app.alert("Hola")
+	{s} actions aren't run by PdfCraft yet	PdfCraft aún no ejecuta las acciones {s}

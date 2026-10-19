@@ -2267,3 +2267,15 @@ compare-page	Moved	Преместена
 	Close all pop-ups	Затвори всички изскачащи бележки
 	No pop-ups to open	Няма изскачащи бележки за отваряне
 	No pop-ups are open	Няма отворени изскачащи бележки
+	Trigger:	Задействане:
+	Page Open	Отваряне на страницата
+	Page Close	Затваряне на страницата
+	Run a JavaScript…	Изпълни JavaScript…
+	Page actions…	Действия на страницата…
+	Type the JavaScript.	Въведете JavaScript кода.
+	Bookmark Action	Действие на отметката
+	Runs when the bookmark is clicked.	Изпълнява се при щракване върху отметката.
+	Page Actions: page {n}	Действия на страницата: страница {n}
+	Page Open runs when the page becomes the current page; Page Close when another page does.	„Отваряне на страницата“ се изпълнява, когато страницата стане текуща; „Затваряне на страницата“ – когато текуща стане друга страница.
+	JavaScript, e.g. app.alert("Hello")	JavaScript, напр. app.alert("Здравей")
+	{s} actions aren't run by PdfCraft yet	PdfCraft все още не изпълнява действия {s}

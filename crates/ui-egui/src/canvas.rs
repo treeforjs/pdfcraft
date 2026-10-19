@@ -349,6 +349,9 @@ pub struct DocView {
     pub(crate) signature_drag: crate::signature_drag::SignatureDrag,
     /// A non-edit action requested by the organize toolbar, handled by the app.
     pub pending_action: Option<ViewAction>,
+    /// The page whose Page Open script last had its turn (Page Open / Page Close run when the
+    /// current page moves off it).
+    pub script_page: Option<usize>,
     /// The grid gap the next inserted files go to (set by a "+" between pages); otherwise they
     /// go after the selection.
     pub insert_at: Option<usize>,
@@ -396,6 +399,8 @@ pub enum ViewAction {
     },
     /// Paste copied pages after the selection.
     PastePages,
+    /// Page Properties ▸ Actions for this page (0-based).
+    PageActions(usize),
 }
 
 impl DocView {
@@ -506,6 +511,7 @@ impl DocView {
             image_selection: None,
             block_drag: None,
             pending_action: None,
+            script_page: None,
             insert_at: None,
             grid_gap: None,
             grid_zoom: 1.0,
@@ -2051,7 +2057,8 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
     };
     let mut open_signature = false;
     let mut hover_text: Option<(Pos2, String)> = None;
-    let mut clicked_link: Option<LinkTarget> = None;
+    // The link clicked: what it does, and its page and index (scripts run by index).
+    let mut clicked_link: Option<(LinkTarget, usize, usize)> = None;
     let mut canvas_action: Option<comments::CanvasAction> = None;
     let mut field_menu: Option<FieldMenu> = None;
     let mut open_props: Option<(usize, usize)> = None;
@@ -2582,11 +2589,12 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
                             }
                             LinkTarget::Uri(u) => u.clone(),
                             LinkTarget::SetLayers { .. } => tl!("Set layer visibility").to_string(),
+                            LinkTarget::Other(s) if s == "JavaScript" => tl!("Run a JavaScript").to_string(),
                             LinkTarget::Other(s) => crate::i18n::fmt(tl!("{s} action"), &[("s", s)]),
                         };
                         hover_text = Some((p, label));
                         if resp.clicked() && tool == QuickTool::Select && !consumed {
-                            clicked_link = Some(l.target.clone());
+                            clicked_link = Some((l.target.clone(), l.page, l.index));
                         }
                     }
                 }
@@ -2868,10 +2876,14 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
         None => {}
     }
     match clicked_link {
-        Some(LinkTarget::Page(p, dest)) => view.go_to_dest(p, dest, info),
-        Some(LinkTarget::Uri(u)) => app.request_document_url(&u, crate::LinkOrigin::Link),
-        Some(LinkTarget::SetLayers { changes, preserve_rb }) => set_layers(app, index, &changes, preserve_rb),
-        Some(LinkTarget::Other(s)) => app.notify_fmt("{s} actions run in the JavaScript engine (M6)", &[("s", &s)]),
+        Some((LinkTarget::Page(p, dest), ..)) => view.go_to_dest(p, dest, info),
+        Some((LinkTarget::Uri(u), ..)) => app.request_document_url(&u, crate::LinkOrigin::Link),
+        Some((LinkTarget::SetLayers { changes, preserve_rb }, ..)) => set_layers(app, index, &changes, preserve_rb),
+        Some((LinkTarget::Other(s), page, link)) if s == "JavaScript" => {
+            let id = app.views[index].id;
+            app.run_action_script(id, pdfcraft_engine::js::ActionSource::Link { page, index: link });
+        }
+        Some((LinkTarget::Other(s), ..)) => app.notify_fmt("{s} actions aren't run by PdfCraft yet", &[("s", &s)]),
         None => {}
     }
     if tool == QuickTool::Crop && cropped {

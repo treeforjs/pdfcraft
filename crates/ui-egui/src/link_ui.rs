@@ -1,5 +1,5 @@
 //! Edit a PDF ▸ Link: drag a rectangle to create a link, then choose its appearance and action
-//! (go to a page, open a web page) in Link Properties; with the Link tool, existing links show
+//! (go to a page, open a web page, run a JavaScript) in Link Properties; with the Link tool, existing links show
 //! their outlines, a click selects one, a double-click edits it and Delete removes it.
 
 use egui::{Color32, CornerRadius, Pos2, Rect, Stroke};
@@ -25,6 +25,15 @@ pub struct LinkView {
     last_click: Option<(f64, usize, usize)>,
 }
 
+/// Link Properties ▸ Link Action.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum LinkKind {
+    #[default]
+    Web,
+    Page,
+    JavaScript,
+}
+
 /// Link Properties' working copy.
 #[derive(Clone, Debug, PartialEq)]
 pub struct LinkDraft {
@@ -32,8 +41,11 @@ pub struct LinkDraft {
     pub rect: [f64; 4],
     /// `None` for a new link.
     pub index: Option<usize>,
-    pub web: bool,
+    /// Which Link Action is chosen.
+    pub kind: LinkKind,
     pub url: String,
+    /// The JavaScript a Run-a-JavaScript link runs.
+    pub script: String,
     /// 1-based target page.
     pub target: usize,
     pub style: LinkStyle,
@@ -147,22 +159,31 @@ impl PdfCraftApp {
                     page,
                     rect: l.rect,
                     index,
-                    web: matches!(l.action, LinkAction::Uri(_)),
+                    kind: match l.action {
+                        LinkAction::Uri(_) => LinkKind::Web,
+                        LinkAction::JavaScript(_) => LinkKind::JavaScript,
+                        _ => LinkKind::Page,
+                    },
                     url: match &l.action {
                         LinkAction::Uri(u) => u.clone(),
                         _ => "https://".into(),
                     },
+                    script: match &l.action {
+                        LinkAction::JavaScript(js) => js.clone(),
+                        _ => String::new(),
+                    },
                     target,
                     style: l.style,
-                    keep: (!matches!(l.action, LinkAction::Uri(_))).then(|| (l.action.clone(), target)),
+                    keep: (!matches!(l.action, LinkAction::Uri(_) | LinkAction::JavaScript(_))).then(|| (l.action.clone(), target)),
                 }
             }
             None => LinkDraft {
                 page,
                 rect: rect.unwrap_or_default(),
                 index: None,
-                web: true,
+                kind: LinkKind::Web,
                 url: "https://".into(),
+                script: String::new(),
                 target: 1,
                 style: LinkStyle::default(),
                 keep: None,
@@ -254,15 +275,15 @@ pub(crate) fn body(ui: &mut egui::Ui, d: &mut LinkDraft, pages: usize, t: &Token
     });
     ui.add_space(8.0);
     widgets::section_title(ui, tl!("Link Action"));
-    ui.radio_value(&mut d.web, true, tl!("Open a web page"));
-    ui.add_enabled_ui(d.web, |ui| {
+    ui.radio_value(&mut d.kind, LinkKind::Web, tl!("Open a web page"));
+    ui.add_enabled_ui(d.kind == LinkKind::Web, |ui| {
         ui.horizontal(|ui| {
             ui.add_space(24.0);
             ui.add(egui::TextEdit::singleline(&mut d.url).desired_width(360.0).hint_text("https://example.org"));
         });
     });
-    ui.radio_value(&mut d.web, false, tl!("Go to a page view"));
-    ui.add_enabled_ui(!d.web, |ui| {
+    ui.radio_value(&mut d.kind, LinkKind::Page, tl!("Go to a page view"));
+    ui.add_enabled_ui(d.kind == LinkKind::Page, |ui| {
         ui.horizontal(|ui| {
             ui.add_space(24.0);
             ui.label(tl!("Page"));
@@ -270,9 +291,29 @@ pub(crate) fn body(ui: &mut egui::Ui, d: &mut LinkDraft, pages: usize, t: &Token
             ui.label(crate::i18n::fmt(tl!("of {name}"), &[("name", &pages.to_string())]));
         });
     });
-    let ok = !d.web || (d.url.trim().len() > 3 && d.url.trim() != "https://");
+    ui.radio_value(&mut d.kind, LinkKind::JavaScript, tl!("Run a JavaScript"));
+    if d.kind == LinkKind::JavaScript {
+        ui.horizontal(|ui| {
+            ui.add_space(24.0);
+            ui.add(
+                egui::TextEdit::multiline(&mut d.script)
+                    .code_editor()
+                    .desired_rows(6)
+                    .desired_width(ui.available_width())
+                    .char_limit(pdfcraft_engine::MAX_ACTION_SCRIPT_BYTES)
+                    .hint_text(tl!("JavaScript, e.g. app.alert(\"Hello\")"))
+                    .id_salt("link-js"),
+            );
+        });
+    }
+    let ok = match d.kind {
+        LinkKind::Web => d.url.trim().len() > 3 && d.url.trim() != "https://",
+        LinkKind::Page => true,
+        LinkKind::JavaScript => !d.script.trim().is_empty(),
+    };
     if !ok {
-        ui.label(egui::RichText::new(tl!("Type the web address.")).small().color(t.text_faint));
+        let hint = if d.kind == LinkKind::Web { tl!("Type the web address.") } else { tl!("Type the JavaScript.") };
+        ui.label(egui::RichText::new(hint).small().color(t.text_faint));
     }
     ui.add_space(12.0);
     let (mut a, mut c) = (false, false);
@@ -290,7 +331,8 @@ pub(crate) fn body(ui: &mut egui::Ui, d: &mut LinkDraft, pages: usize, t: &Token
 /// The edit for a confirmed draft.
 pub(crate) fn edit_for(d: &LinkDraft) -> Edit {
     let action = match &d.keep {
-        _ if d.web => LinkAction::Uri(d.url.trim().to_string()),
+        _ if d.kind == LinkKind::Web => LinkAction::Uri(d.url.trim().to_string()),
+        _ if d.kind == LinkKind::JavaScript => LinkAction::JavaScript(d.script.clone()),
         Some((kept, target)) if *target == d.target => kept.clone(),
         _ => LinkAction::Page(d.target.saturating_sub(1)),
     };

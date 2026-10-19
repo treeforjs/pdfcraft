@@ -73,8 +73,8 @@ pub use pdfcraft_edit::{
 };
 pub use pdfcraft_forms::{
     BorderStyle, CheckStyle, DocTrigger, Field as FormField, FieldAction, FieldChange, FieldFont, FieldKind as FormFieldKind, FieldProps, FieldValue,
-    Look as FieldLook, LookPatch as FieldLookPatch, MENU_ITEMS as FORM_MENU_ITEMS, NewField, TabOrder, Trigger as FieldTrigger, Widget as FormWidget,
-    af as form_scripts, flags as field_flags,
+    Look as FieldLook, LookPatch as FieldLookPatch, MENU_ITEMS as FORM_MENU_ITEMS, NewField, PageTrigger, TabOrder, Trigger as FieldTrigger,
+    Widget as FormWidget, af as form_scripts, flags as field_flags,
 };
 
 pub use pdfcraft_a11y as a11y;
@@ -143,6 +143,7 @@ pub use pdfcraft_annot::{
     Shape, StampGroup, StampKind, Style, rect_quad,
 };
 pub use pdfcraft_forms::detect;
+pub use pdfcraft_model::actions::MAX_SCRIPT_BYTES as MAX_ACTION_SCRIPT_BYTES;
 /// Named destinations and explicit views (go-to targets of links and bookmarks).
 pub use pdfcraft_model::dests::{DestError, DestSource, Fit as DestFit, NamedDest, Target as DestTarget, View as DestView};
 pub use pdfcraft_optimize as optimize;
@@ -1499,6 +1500,13 @@ pub enum Edit {
         trigger: pdfcraft_forms::DocTrigger,
         script: Option<String>,
     },
+    /// Page Properties ▸ Actions: the JavaScript page `page` (0-based) runs on Page Open or
+    /// Page Close (`None` removes it).
+    SetPageAction {
+        page: usize,
+        trigger: pdfcraft_forms::PageTrigger,
+        script: Option<String>,
+    },
     /// Field Properties ▸ General / Options.
     SetFieldProps {
         name: String,
@@ -1945,6 +1953,7 @@ impl Edit {
             Edit::AddField { .. } => "Add field".into(),
             Edit::SetFieldProps { .. } => "Change field properties".into(),
             Edit::SetDocumentAction { .. } => "Set document actions".into(),
+            Edit::SetPageAction { .. } => "Set page action".into(),
             Edit::DeleteField { .. } => "Delete field".into(),
             Edit::DuplicateField { .. } => "Duplicate field".into(),
             Edit::SetTabOrder { .. } | Edit::MoveInTabOrder { .. } => "Set tab order".into(),
@@ -2186,6 +2195,7 @@ fn check_permission(edit: &Edit, p: &pdfcraft_cos::Permissions) -> Result<(), Ed
         | Edit::Sanitize
         | Edit::SetFieldProps { .. }
         | Edit::SetDocumentAction { .. }
+        | Edit::SetPageAction { .. }
         | Edit::DeleteField { .. }
         | Edit::DuplicateField { .. }
         | Edit::SetTabOrder { .. }
@@ -2564,6 +2574,9 @@ fn run_edit_inner(doc: &mut pdfcraft_cos::Document, edit: &Edit, cx: &mut EditCt
         }
         Edit::SetDocumentAction { trigger, script } => {
             pdfcraft_forms::set_document_action(doc, *trigger, script.as_deref())?;
+        }
+        Edit::SetPageAction { page, trigger, script } => {
+            pdfcraft_forms::set_page_action(doc, *page, *trigger, script.as_deref())?;
         }
         Edit::DuplicateField { name, pages } => {
             if pdfcraft_forms::duplicate_field(doc, name, pages)? == 0 {
@@ -4329,6 +4342,11 @@ impl Session {
     /// Every bookmark's path and action (Bookmark Properties ▸ Actions).
     pub fn bookmark_actions(&self, id: DocId) -> Result<Vec<(Vec<usize>, BookmarkAction)>, EditError> {
         Ok(pdfcraft_organize::bookmark_actions(self.cos(id)?))
+    }
+
+    /// The action of the bookmark at `path`.
+    pub fn bookmark_action(&self, id: DocId, path: &[usize]) -> Result<BookmarkAction, EditError> {
+        Ok(pdfcraft_organize::bookmark_action(self.cos(id)?, path)?)
     }
 
     /// The page a link goes to (named destinations resolved), if any.

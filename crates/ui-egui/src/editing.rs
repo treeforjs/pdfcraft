@@ -147,6 +147,7 @@ impl PdfCraftApp {
             Some(crate::canvas::ViewAction::Split) => self.dialog = Some(crate::Dialog::Split),
             Some(crate::canvas::ViewAction::CopyPages { cut }) => self.copy_pages(cut),
             Some(crate::canvas::ViewAction::PastePages) => self.paste_pages(),
+            Some(crate::canvas::ViewAction::PageActions(page)) => self.open_page_actions(page),
             None => {}
         }
         applied
@@ -726,6 +727,19 @@ impl PdfCraftApp {
                 return;
             }
             A::Rename(path, title) => Edit::RenameBookmark { path, title },
+            A::EditScript(path) => return self.open_bookmark_script(path),
+            A::Run(path) => {
+                // A bookmark without a page: run its script, or open its web address.
+                match self.session.bookmark_action(id, &path) {
+                    Ok(pdfcraft_engine::BookmarkAction::JavaScript(_)) => {
+                        self.run_action_script(id, pdfcraft_engine::js::ActionSource::Bookmark { path });
+                    }
+                    Ok(pdfcraft_engine::BookmarkAction::Uri(u)) => self.request_document_url(&u, crate::LinkOrigin::Link),
+                    Ok(_) => {}
+                    Err(e) => self.notify_error(e),
+                }
+                return;
+            }
             A::SetToCurrentPage(path) => Edit::SetBookmarkPage { path, page: current },
             A::Delete(path) => Edit::DeleteBookmark { path },
             A::MoveUp(path) => {
