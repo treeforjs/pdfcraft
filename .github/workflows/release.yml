@@ -217,6 +217,27 @@ jobs:
           CRAFT_FONTS_DIR: ${{ github.workspace }}/craft-fonts
           CRAFT_FONTS_REQUIRED: "1"
         run: packaging/linux/package.sh
+      - name: Verify the production Wayland frame feature
+        if: matrix.arch == 'x86_64'
+        run: |
+          mkdir -p target/window-frame
+          cargo tree --locked --edges normal,features --target x86_64-unknown-linux-gnu -p pdfcraft -i winit >target/window-frame/features.txt
+          grep -F 'winit feature "wayland-csd-adwaita"' target/window-frame/features.txt
+      - name: Install Wayland frame-check tools
+        if: matrix.arch == 'x86_64'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends weston xvfb scrot libegl1-mesa libgl1-mesa-dri fonts-cantarell
+      - name: Check the native Wayland window frame
+        if: matrix.arch == 'x86_64'
+        run: bash packaging/linux/check-window-frame.sh target/release/pdfcraft target/window-frame
+      - name: Upload window-frame diagnostics
+        if: always() && matrix.arch == 'x86_64'
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagnostic-wayland-frame-x86_64
+          path: target/window-frame/
+          if-no-files-found: warn
       - name: Check the packages
         run: |
           dpkg-deb --info dist/release/*.deb
@@ -325,6 +346,8 @@ jobs:
           notes="$RUNNER_TEMP/release-notes.md"
           cat >"$notes" <<'EOF'
           Windows and Linux packages for PdfCraft.
+
+          Standard minimize, maximize/restore and close controls are available on Linux Wayland, with the system window frame on Windows and X11.
 
           Craftworks installs the Windows portable ZIP or Linux AppImage after verifying the signed SHA-256 checksums. Other packages are available for manual installation.
 

@@ -58,3 +58,9 @@ dependencies change (plan/adr/0002, 0006).
 Vendored (vendor/, patched; see vendor/README.md):
 - hayro 0.7.1 — Apache-2.0 OR MIT, Copyright the hayro authors (licence files kept in vendor/hayro).
 - hayro-interpret 0.7.0 — Apache-2.0 OR MIT, Copyright the hayro authors (LICENSE-APACHE, LICENSE-MIT kept in vendor/hayro-interpret).
+
+- Cantarell Regular 0.05, bundled by sctk-adwaita 0.10.1 for Linux Wayland title text:
+  Copyright (c) 2009-2011, Understanding Limited (dave@understandinglimited.com),
+  Copyright (c) 2010-2011, Jakub Steiner (jimmac@gmail.com).
+  SIL Open Font License 1.1; see assets/fonts/OFL-Cantarell.txt in the source tree,
+  and OFL-Cantarell.txt in the Linux package's documentation or AppImage root.

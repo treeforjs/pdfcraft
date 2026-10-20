@@ -65,6 +65,7 @@ mkdir -p "$STAGE/usr/share/icons"
 cp -R "$ROOT/assets/app-icon/hicolor" "$STAGE/usr/share/icons/"
 mkdir -p "$STAGE/usr/share/doc/pdfcraft"
 copy_docs "$STAGE/usr/share/doc/pdfcraft"
+install -m644 "$ROOT/assets/fonts/OFL-Cantarell.txt" "$STAGE/usr/share/doc/pdfcraft/OFL-Cantarell.txt"
 # OCR models: the app finds them at <bin>/../share/pdfcraft/models, so in every format below.
 stage_models "$STAGE/usr/share/pdfcraft/models"
 # Checkouts and downloaded models can themselves have owner-only permissions. Every staged
@@ -124,6 +125,7 @@ if has appimage; then
   APPDIR="$WORK/PdfCraft.AppDir"
   cp -R "$STAGE" "$APPDIR"
   mv "$APPDIR/usr/share/doc" "$WORK/doc-unused"
+  install -m644 "$ROOT/assets/fonts/OFL-Cantarell.txt" "$APPDIR/OFL-Cantarell.txt"
   ln -s usr/bin/pdfcraft "$APPDIR/AppRun"
   install -m644 "$HERE/$APP_ID.desktop" "$APPDIR/$APP_ID.desktop"
   install -m644 "$ROOT/assets/app-icon/hicolor/256x256/apps/$APP_ID.png" "$APPDIR/$APP_ID.png"
