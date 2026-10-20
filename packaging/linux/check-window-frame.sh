@@ -99,8 +99,10 @@ for _ in {1..300}; do
 done
 [[ "$READY" == true ]] || { echo 'PdfCraft did not render a configured Wayland window within 30 seconds.' >&2; exit 1; }
 sleep 3
-alive "$APP_PID" && alive "$WESTON_PID" && alive "$XVFB_PID" \
-  || { echo 'The private desktop or PdfCraft stopped before capture.' >&2; exit 1; }
+if ! alive "$APP_PID" || ! alive "$WESTON_PID" || ! alive "$XVFB_PID"; then
+  echo 'The private desktop or PdfCraft stopped before capture.' >&2
+  exit 1
+fi
 timeout 10s env DISPLAY="$PRIVATE_DISPLAY" scrot -z -o "$OUTPUT/window-frame.png" >"$OUTPUT/capture.log" 2>&1
 [[ -s "$OUTPUT/window-frame.png" ]] || { echo 'The native frame screenshot is missing.' >&2; exit 1; }
 printf 'Rendered PdfCraft over Wayland, including its native frame: %s/window-frame.png\n' "$OUTPUT"
