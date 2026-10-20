@@ -309,7 +309,7 @@ pub fn duplicate_pages(doc: &mut Document, indices: &[usize]) -> Result<(), Orga
 }
 
 /// Replace Pages: the content of `targets` (in order) is replaced by that of `src_pages` of
-/// `src`. As in Acrobat, only what the page shows changes (contents, resources and page boxes);
+/// `src`. As in other viewers, only what the page shows changes (contents, resources and page boxes);
 /// the original pages' links, comments, form widgets and the bookmarks pointing at them stay.
 pub fn replace_pages(doc: &mut Document, targets: &[usize], src: &Document, src_pages: &[usize]) -> Result<(), OrganizeError> {
     let n = page_count(doc)?;

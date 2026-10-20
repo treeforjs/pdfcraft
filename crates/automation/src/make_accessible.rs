@@ -1,4 +1,4 @@
-//! `accessibility_make_accessible`: Accessibility ▸ Make Accessible, Acrobat's guided action, headless.
+//! `accessibility_make_accessible`: Accessibility ▸ Make Accessible, the viewer's guided action, headless.
 //! It drives the pieces the other accessibility tools use: the document language and title
 //! (with DisplayDocTitle), OCR of image-only pages, tooltips for form fields, Autotag Document
 //! (form fields included), alternate text for figures, tab order by structure, and the Full Check with PDF/UA

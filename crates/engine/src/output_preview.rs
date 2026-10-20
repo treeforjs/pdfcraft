@@ -32,7 +32,7 @@ use crate::{DocId, EditError, Session};
 #[derive(Clone, Debug, Default, PartialEq)]
 pub enum SimulationProfile {
     /// The document's output intent profile when the colour settings let it override the working
-    /// spaces, else the working CMYK space (Acrobat's default).
+    /// spaces, else the working CMYK space (the viewer's default).
     #[default]
     OutputIntent,
     /// The colour settings' working CMYK space.

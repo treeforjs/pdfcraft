@@ -3,13 +3,12 @@
 # Plural forms (see `plural_one_other` in i18n/mod.rs): one (1) | other.
 # Clean-room: every entry was written from the plain meaning of the English label using ordinary
 # Bulgarian computing vocabulary. No proprietary localisation resource, string table or product UI
-# (Acrobat's included) was consulted or copied; add entries the same way.
-# Product and technology names (PdfCraft, PDF, Acrobat JavaScript ...) stay in Latin letters;
+# (PDF's included) was consulted or copied; add entries the same way.
+# Product and technology names (PdfCraft, PDF, PDF JavaScript ...) stay in Latin letters;
 # the trailing "…" of dialog commands is kept.
 
 	About	За програмата
 	Contributors	Сътрудници
-	Models	Модели
 	Show	Покажи
 	Username	Потребителско име
 	Display name	Показвано име
@@ -39,11 +38,8 @@
 	{n} contributors · {c} commits	{n} сътрудници · {c} къмита
 	No contributor data was built into this copy.	В това копие няма вградени данни за сътрудниците.
 	@{login}: {prs} PRs, {commits} commits, +{added} / −{deleted} lines (Δ {delta}), +{bin_added} / −{bin_deleted} binary assets, {first} – {last}	@{login}: {prs} PR, {commits} къмита, +{added} / −{deleted} реда (Δ {delta}), +{bin_added} / −{bin_deleted} двоични ресурса, {first} – {last}
-	No model credits were built into this copy.	В това копие няма вградени данни за моделите.
 	Company	Компания
 	Model	Модел
-	% of all commits	% от всички къмитове
-	Lines +/−	Редове +/−
 	Only continue if you trust this document. An address can carry information from the document, such as what you typed into its form.	Продължете само ако имате доверие на този документ. Адресът може да пренася информация от документа, например въведеното във формуляра му.
 	Print single-sided. Keep the sheets in order, cut at the marks, then stack the piles left to right, top to bottom.	Отпечатайте едностранно. Запазете реда на листовете, изрежете по маркировките, след което подредете купчините отляво надясно и отгоре надолу.
 	Menu	Меню
@@ -124,7 +120,7 @@
 	Fit to width	Побери по ширина
 	Display theme	Тема на показване
 	Side panels	Странични панели
-	Enable Acrobat JavaScript	Включи Acrobat JavaScript
+	Enable PDF JavaScript	Включи PDF JavaScript
 	Flatten Fill & Sign when saving	Сплескай „Попълни и подпиши“ при запазване
 	Text, marks and signatures become part of the page. Other comments stay editable.	Текстът, маркировките и подписите стават част от страницата. Другите коментари остават редактируеми.
 	OK	OK
@@ -163,7 +159,6 @@
 	Apply PDF standards	Приложи PDF стандарти
 	Add search index	Добави индекс за търсене
 	Use JavaScript	Използвай JavaScript
-	AI assistant	AI асистент
 	Export to	Експортирай в
 	Fill	Попълни
 	Modify page	Промени страница
@@ -906,7 +901,7 @@
 	Document JavaScripts	JavaScript скриптове на документа
 	Script Name:	Име на скрипта:
 	This document has no document-level scripts.	Този документ няма скриптове на ниво документ.
-	Scripts run in a sandbox without file or network access. With JavaScript off, Acrobat's standard format, validate and calculate functions still work.	Скриптовете се изпълняват в изолирана среда без достъп до файлове и мрежа. При изключен JavaScript стандартните функции на Acrobat за форматиране, проверка и изчисление продължават да работят.
+	Scripts run in a sandbox without file or network access. With JavaScript off, the viewer's standard format, validate and calculate functions still work.	Скриптовете се изпълняват в изолирана среда без достъп до файлове и мрежа. При изключен JavaScript стандартните функции на PDF за форматиране, проверка и изчисление продължават да работят.
 	No form fields were detected	Не са открити полета на формуляр
 	Detected 1 form field	Открито е 1 поле на формуляр
 	Detected {n} form fields	Открити са {n} полета на формуляр
@@ -948,7 +943,6 @@
 	Accessibility	Достъпност
 	Standards	Стандарти
 	Index	Индекс
-	Bring your own model (off by default)	Използвайте собствен модел (изключено по подразбиране)
 	Single file	Един файл
 	Multiple files	Няколко файла
 	Images	Изображения
@@ -1048,7 +1042,6 @@
 	Available	Налично
 	Planned · {m}	Планирано · {m}
 	Planned for milestone {m} — open to see what it will include	Планирано за етап {m} — отворете, за да видите какво ще включва
-	Optional: needs an AI provider you configure	По избор: изисква доставчик на ИИ, който сами конфигурирате
 	Coming in milestone {m}. Items marked Ready work today.	Очаква се в етап {m}. Елементите, отбелязани като готови, работят още днес.
 	1 mark	1 маркировка
 	{n} marks	{n} маркировки
@@ -1294,10 +1287,10 @@
 	Weak	Слаба
 	Advanced Options {chevron}	Разширени опции {chevron}
 	Compatibility	Съвместимост
-	Acrobat X and later (256-bit AES)	Acrobat X и по-нови (256-битов AES)
-	Acrobat 7.0 and later (128-bit AES)	Acrobat 7.0 и по-нови (128-битов AES)
-	Acrobat 5.0 and later (128-bit RC4)	Acrobat 5.0 и по-нови (128-битов RC4)
-	Acrobat 3.0 and later (40-bit RC4)	Acrobat 3.0 и по-нови (40-битов RC4)
+	AES-256	AES-256
+	AES-128	AES-128
+	RC4-128	RC4-128
+	RC4-40	RC4-40
 	Encrypt	Шифровай
 	All document contents	Цялото съдържание на документа
 	All document contents except metadata	Цялото съдържание на документа без метаданните
@@ -1645,7 +1638,6 @@
 	Downloading attachments on the web arrives with M3.10 ({n} bytes ready)	Изтеглянето на прикачени файлове в уеб версията ще стане достъпно с M3.10 ({n} байта готови)
 	`{command}` {when}	`{command}` {when}
 	ships in milestone {m}	ще бъде включено в етап {m}
-	needs an AI provider (off by default)	изисква доставчик на ИИ (изключено по подразбиране)
 	is available	е налично
 	is not available yet	все още не е налично
 	{label} failed: {e}	{label} — неуспешно: {e}
@@ -1709,7 +1701,7 @@
 	At least one signature has problems.	Поне един подпис има проблеми.
 	This document is secured. Some changes are restricted by its security settings.	Този документ е защитен. Някои промени са ограничени от настройките му за защита.
 	This is a dynamic XFA form, which PdfCraft can't display yet. What you see is the file's placeholder page.	Това е динамичен XFA формуляр, който PdfCraft все още не може да показва. Виждате заместващата страница на файла.
-	This form also contains XFA data, which PdfCraft doesn't read yet. You can fill its fields, but Acrobat may show the XFA values instead.	Този формуляр съдържа и XFA данни, които PdfCraft все още не чете. Можете да попълвате полетата му, но Acrobat може да покаже вместо това XFA стойностите.
+	This form also contains XFA data, which PdfCraft doesn't read yet. You can fill its fields, but PDF may show the XFA values instead.	Този формуляр съдържа и XFA данни, които PdfCraft все още не чете. Можете да попълвате полетата му, но PDF може да покаже вместо това XFA стойностите.
 	This document contains {n} interactive form fields.	Този документ съдържа {n} интерактивни полета на формуляр.
 	This file was damaged and has been repaired. Saving keeps the repaired version.	Този файл беше повреден и е поправен. При записване се запазва поправената версия.
 	Dismiss	Скрий
@@ -2026,7 +2018,7 @@
 	Open link	Отвори връзката
 	Open this web page?	Да се отвори ли тази уебстраница?
 	Page display: {layout}	Показване на страниците: {layout}
-	Scripts run in a sandbox without file or network access. A script that asks to open a web page needs your permission first. With JavaScript off, Acrobat's standard format, validate and calculate functions still work.	Скриптовете се изпълняват в изолирана среда без достъп до файлове или мрежа. Скрипт, който иска да отвори уебстраница, първо се нуждае от вашето разрешение. При изключен JavaScript стандартните функции на Acrobat за форматиране, валидиране и изчисляване продължават да работят.
+	Scripts run in a sandbox without file or network access. A script that asks to open a web page needs your permission first. With JavaScript off, the viewer's standard format, validate and calculate functions still work.	Скриптовете се изпълняват в изолирана среда без достъп до файлове или мрежа. Скрипт, който иска да отвори уебстраница, първо се нуждае от вашето разрешение. При изключен JavaScript стандартните функции на PDF за форматиране, валидиране и изчисляване продължават да работят.
 	Sign yourself	Подпишете сами
 	Switch to two-page view first to show the cover page	Първо превключете към изглед с две страници, за да се покаже корицата
 	Used when opening PDFs. An explicit launch or control mode takes precedence for the session.	Използва се при отваряне на PDF файлове. Изрично зададен режим при стартиране или управление има предимство за сесията.

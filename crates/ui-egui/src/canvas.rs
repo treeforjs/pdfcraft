@@ -144,7 +144,7 @@ pub struct ViewDefaults {
     pub fit: Fit,
     /// The zoom with [`Fit::None`] (1.0 = 100%).
     pub zoom: f32,
-    /// Highlight existing fields: a preference in Acrobat, so it carries over to the next
+    /// Highlight existing fields: a preference that carries over to the next
     /// document and the next session.
     pub highlight_fields: bool,
 }
@@ -190,7 +190,7 @@ pub struct Find {
     pub current: Option<usize>,
     pub focus: bool,
     pub case_query: String,
-    /// Find options (Acrobat's: case-sensitive, whole words only).
+    /// Find options (the viewer's: case-sensitive, whole words only).
     pub case_sensitive: bool,
     pub whole_words: bool,
     /// Shown in the Search panel (Advanced Search) instead of the find bar.
@@ -962,7 +962,7 @@ impl DocView {
     }
 
     /// Go to a destination, a bookmark's or a link's (ISO 32000-2 §12.3.2.2): its page, scrolled
-    /// and zoomed as `dest` asks, as Acrobat does. `/XYZ` puts (left, top) at the window's
+    /// and zoomed as `dest` asks, as other viewers do. `/XYZ` puts (left, top) at the window's
     /// top-left at its zoom (null or 0 keeps the zoom); `/Fit`, `/FitH` and `/FitV` switch to fit
     /// page, width and height with `top` or `left` at the window's edge; `/FitR` zooms so the
     /// rectangle fits, centred. The `B` (content box) forms are read as the page. A null
@@ -1043,7 +1043,7 @@ impl DocView {
         self.go_to_page(target);
     }
 
-    /// Go to the page typed in the page box: a page label (logical page numbers, as Acrobat
+    /// Go to the page typed in the page box: a page label (logical page numbers, as the viewer
     /// does), else a page number. `false` when it names no page.
     pub fn go_to_typed(&mut self, typed: &str, labels: &[String]) -> bool {
         let t = typed.trim();
@@ -1204,7 +1204,7 @@ impl DocView {
         }
     }
 
-    /// Standard zoom steps (as in Acrobat's zoom menu).
+    /// Standard zoom steps (as in the viewer's zoom menu).
     pub fn zoom_step(&mut self, up: bool) {
         const STEPS: [f32; 17] = [0.1, 0.25, 0.33, 0.5, 0.66, 0.75, 1.0, 1.25, 1.5, 2.0, 3.0, 4.0, 6.0, 8.0, 12.0, 16.0, 32.0];
         let z = self.zoom;
@@ -1801,7 +1801,7 @@ pub fn shortcuts(view: &mut DocView, ctx: &egui::Context, copy_allowed: bool) {
     if key(Key::End) {
         view.go_to_page(usize::MAX);
     }
-    // As in Acrobat: → / ← go to the next / previous page in every layout (#185), and so do
+    // As in PDF: → / ← go to the next / previous page in every layout (#185), and so do
     // ⌘Page Down / ⌘Page Up, or plain Page Down / Page Up in single-page view.
     let command = ctx.input(|i| i.modifiers.command);
     let scrolls = view.layout != PageLayout::Single;
@@ -2270,7 +2270,7 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
                 crate::measure_ui::page_input(ui, &resp, doc, view, &pcx, measure_tool);
             }
 
-            // Form fields take clicks first with the Select tool (as Acrobat fills fields in
+            // Form fields take clicks first with the Select tool (the viewer fills fields in
             // every viewing mode); then comments; then text selection.
             if let QuickTool::Stamp(kind) = tool
                 && allowed
@@ -2366,7 +2366,7 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
             } else {
                 tool == QuickTool::Select && crate::forms_ui::page_input(ui, &resp, &xf, i, info, &form, can_fill, view)
             };
-            // Redact draws boxes off text; so does Highlight (an area highlight, as in Acrobat).
+            // Redact draws boxes off text; so does Highlight (an area highlight, as in PDF).
             let area_tool = tool == QuickTool::Redact && can_modify || tool == QuickTool::Comment(comments::CommentTool::Highlight) && allowed;
             let boxing = area_tool && {
                 let text = view.page_text(i);
@@ -2540,8 +2540,8 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
                 crate::forms_ui::paint_page(ui, painter, &xf, i, info, &form, view);
             }
 
-            // Form-field highlight (Acrobat's "Highlight existing fields"); required fields get a
-            // red border. Radio buttons are round, and so is theirs (as in Acrobat).
+            // Form-field highlight (the viewer's "Highlight existing fields"); required fields get a
+            // red border. Radio buttons are round, and so is theirs (as in PDF).
             if view.highlight_fields {
                 for f in form.iter() {
                     let required = f.has(pdfcraft_engine::field_flags::REQUIRED);
@@ -2585,7 +2585,7 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
                         }
                     }
                 }
-                // Annotation hover shows the comment, as Acrobat's popups do; not while drawing
+                // Annotation hover shows the comment, as the viewer's popups do; not while drawing
                 // freehand, where it would cover the next stroke (#429).
                 let freehand = matches!(tool, QuickTool::Comment(comments::CommentTool::Ink | comments::CommentTool::Eraser));
                 let gesturing = view.comments.gesture.is_some() || freehand;
@@ -2819,7 +2819,7 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
         view.pending_edit = typed;
     }
     let form_notice = view.forms.notice.take();
-    // One crop, then back to selecting (as Acrobat does).
+    // One crop, then back to selecting (as other viewers do).
     let cropped = view.pending_edit.as_ref().is_some_and(|e| matches!(e, pdfcraft_engine::Edit::SetPageBox { .. }));
     let mut tool = app.quick_tool;
     comments::keys(ui.ctx(), view, &mut tool, allowed);
@@ -2841,7 +2841,7 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
     if text_done && tool == QuickTool::AddText {
         tool = QuickTool::Select;
     }
-    // One field, then back to selecting (Acrobat's default without "Keep tools pinned").
+    // One field, then back to selecting (the viewer's default without "Keep tools pinned").
     if field_placed {
         tool = QuickTool::Select;
     }
@@ -3056,7 +3056,7 @@ fn set_layers(app: &mut PdfCraftApp, index: usize, changes: &[(LayerOp, (u32, u1
     }
 }
 
-/// Acrobat-style floating find bar at the top-right of the document area.
+/// PDF-style floating find bar at the top-right of the document area.
 fn find_bar(view: &mut DocView, pages: usize, area: Rect, ui: &mut egui::Ui, t: &Tokens) {
     let Some(find) = view.find.as_mut() else { return };
     // The Search panel shows this search.
@@ -3165,7 +3165,7 @@ enum Notice {
     FieldHighlights(bool),
 }
 
-/// The notice bar above the pages: the signature status first (Acrobat's signature bar), then
+/// The notice bar above the pages: the signature status first (the viewer's signature bar), then
 /// security, forms and warnings.
 fn notices(
     view: &mut DocView,
@@ -3290,7 +3290,7 @@ fn quick_bar(app: &mut PdfCraftApp, area: Rect, ui: &mut egui::Ui) {
                     if icons::button(ui, "hand", 32.0, app.quick_tool == QuickTool::Hand, tl!("Hand (H)")).clicked() {
                         app.quick_tool = QuickTool::Hand;
                     }
-                    // Comment ▸, Highlight ▸, Draw ▸ (Acrobat's comment toolbar groups). Clicking a
+                    // Comment ▸, Highlight ▸, Draw ▸ (the viewer's comment toolbar groups). Clicking a
                     // group selects its last-used tool; clicking it again opens the flyout.
                     for g in 0..comments::GROUPS.len() {
                         let current = app.comment_prefs.group_tool[g];
@@ -3420,7 +3420,7 @@ fn quick_bar(app: &mut PdfCraftApp, area: Rect, ui: &mut egui::Ui) {
     });
 }
 
-/// The organize toolbar: page operations on the selection (Acrobat's Organize Pages bar).
+/// The organize toolbar: page operations on the selection (the viewer's Organize Pages bar).
 fn organize_toolbar(view: &mut DocView, info: &DocInfo, editable: bool, dirty: bool, ui: &mut egui::Ui, t: &Tokens) {
     let targets = view.target_pages();
     let n = info.pages.len();
@@ -3460,7 +3460,7 @@ fn organize_toolbar(view: &mut DocView, info: &DocInfo, editable: bool, dirty: b
                 if icons::button(ui, "scissors", 30.0, false, tl!("Split into files…")).clicked() {
                     view.pending_action = Some(ViewAction::Split);
                 }
-                // Select ▸ all, odd, even, landscape, portrait pages (Acrobat's page range
+                // Select ▸ all, odd, even, landscape, portrait pages (the viewer's page range
                 // selection in Organize Pages).
                 let sel = icons::button(ui, "list", 30.0, false, tl!("Select pages"));
                 egui::Popup::menu(&sel).show(|ui| {
@@ -3556,7 +3556,7 @@ fn organize_toolbar(view: &mut DocView, info: &DocInfo, editable: bool, dirty: b
     }
 }
 
-/// Organize pages: a thumbnail grid (Acrobat's Organize Pages view). Click selects, ⌘-click
+/// Organize pages: a thumbnail grid (the viewer's Organize Pages view). Click selects, ⌘-click
 /// toggles, ⇧-click extends; double-click opens the page.
 /// The gap (0 = before the first page, n = after the last) the pointer points at in the grid.
 fn drop_gap(cells: &[(usize, Rect)], p: Pos2) -> Option<usize> {

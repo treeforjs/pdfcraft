@@ -651,7 +651,7 @@ trailer << /Root 1 0 R >>
 %%EOF";
 
 /// #260 (page 8): with fields highlighted, a required radio button gets a round red border, as
-/// Acrobat draws it, not a square one around its corners.
+/// PDF draws it, not a square one around its corners.
 #[test]
 fn required_radio_buttons_get_a_round_red_border() {
     let _gpu = gpu();
@@ -685,7 +685,7 @@ fn required_radio_buttons_get_a_round_red_border() {
     assert!(!red(at(50.3, 339.7)), "the widget's corner, outside the circle, is not: {:?}", at(50.3, 339.7));
 }
 
-/// Acrobat's Highlight existing fields is a preference, not a per-document choice: turned on
+/// The viewer's Highlight existing fields is a preference, not a per-document choice: turned on
 /// once, the next document (and the next session) opens with fields highlighted.
 #[test]
 fn field_highlighting_is_remembered() {

@@ -669,7 +669,7 @@ fn arrow_and_page_keys_move_through_a_scrolling_document() {
         h.run_steps(2);
         h.state().views[0].current
     };
-    // → / ← turn pages, as in Acrobat
+    // → / ← turn pages, as in PDF
     assert_eq!(press(&mut h, Key::ArrowRight, 2), 2);
     assert_eq!(press(&mut h, Key::ArrowLeft, 1), 1);
     assert_eq!(press(&mut h, Key::ArrowLeft, 1), 0);

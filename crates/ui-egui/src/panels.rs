@@ -104,7 +104,6 @@ fn tool_row(ui: &mut egui::Ui, t: &Tokens, g: &ToolGroup) -> egui::Response {
     let tip = match g.availability {
         Availability::Ready => tl!("Available").to_string(),
         Availability::Planned(m) => format!("{} {m} — {}", tl!("Planned for milestone"), tl!("open to see what it will include")),
-        Availability::Provider => tl!("Optional: needs an AI provider you configure").into(),
     };
     resp.on_hover_text(tip)
 }
@@ -156,7 +155,7 @@ fn tool_detail(app: &mut PdfCraftApp, ui: &mut egui::Ui, t: &Tokens, g: &'static
         format_section(app, ui, t);
     }
     let mut run = None;
-    // Redact a PDF has Acrobat's footer: Clear all / Redact all.
+    // Redact a PDF has the viewer's footer: Clear all / Redact all.
     let footer = g.id == "redact";
     let marks = if footer { app.active_ids().and_then(|(_, id)| app.session.get(id)).map_or(0, |d| d.redaction_marks()) } else { 0 };
     let list_h = if footer { (ui.available_height() - 52.0).max(80.0) } else { ui.available_height() };
@@ -185,7 +184,6 @@ fn tool_detail(app: &mut PdfCraftApp, ui: &mut egui::Ui, t: &Tokens, g: &'static
                 let (chip, fill, cfg) = match item.availability {
                     Availability::Ready => (tl!("Ready"), Color32::from_rgb(0xDD, 0xF3, 0xE4), Color32::from_rgb(0x1E, 0x7B, 0x43)),
                     Availability::Planned(m) => (m, t.pressed, t.text_muted),
-                    Availability::Provider => ("AI", t.pressed, t.text_muted),
                 };
                 let font = theme::semibold(9.5);
                 let w = ui.fonts_mut(|f| f.layout_no_wrap(tl!(chip).to_string(), font.clone(), cfg).size().x);
@@ -487,7 +485,7 @@ pub fn right_panel(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
                         if icons::button(ui, "x", 26.0, false, tl!("Close")).clicked() {
                             close = true;
                         }
-                        // Right to left: close, "…", filter, search (Acrobat's order left to right).
+                        // Right to left: close, "…", filter, search (the viewer's order left to right).
                         if panel == RightPanel::Comments {
                             panel_command = crate::comments_panel::header_controls(ui, info, generation, view, doc.comments_hidden());
                         }
@@ -621,7 +619,7 @@ pub fn right_panel(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
                         if info.attachments.is_empty() {
                             empty(ui, &t, "paperclip", "This document has no attachments.");
                         }
-                        for (ai, a) in info.attachments.iter().enumerate() {
+                        for (attachment_index, a) in info.attachments.iter().enumerate() {
                             egui::Frame::NONE.inner_margin(egui::Margin::symmetric(4, 6)).show(ui, |ui| {
                                 ui.horizontal(|ui| {
                                     ui.add(icons::image("paperclip", 16.0, t.icon));
@@ -643,12 +641,12 @@ pub fn right_panel(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
                                     });
                                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                                         if icons::button(ui, "file-down", 28.0, false, tl!("Save attachment…")).clicked() {
-                                            attachment_action = Some((ai, false));
+                                            attachment_action = Some((attachment_index, false));
                                         }
                                         if a.name.to_lowercase().ends_with(".pdf")
                                             && icons::button(ui, "file-input", 28.0, false, tl!("Open in a new tab")).clicked()
                                         {
-                                            attachment_action = Some((ai, true));
+                                            attachment_action = Some((attachment_index, true));
                                         }
                                     });
                                 });
@@ -711,8 +709,8 @@ pub fn right_panel(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
     if let Some(a) = bm_action {
         app.bookmark_action(a);
     }
-    if let Some((ai, open)) = attachment_action {
-        app.attachment_action(id, ai, open);
+    if let Some((attachment_index, open)) = attachment_action {
+        app.attachment_action(id, attachment_index, open);
     }
     if let Some((layer, visible)) = toggle_layer
         && app.session.set_layer_visible(id, layer, visible)
@@ -1140,7 +1138,7 @@ fn page_drag(ui: &mut egui::Ui, t: &Tokens, view: &mut crate::DocView, rows: &[R
 }
 
 /// The Fields panel: fields by page, in tab order. While preparing a form, each field can move
-/// earlier or later in its page's tab order (Acrobat: Order Tabs Manually).
+/// earlier or later in its page's tab order (PDF: Order Tabs Manually).
 #[allow(clippy::too_many_arguments)]
 fn fields(
     ui: &mut egui::Ui,

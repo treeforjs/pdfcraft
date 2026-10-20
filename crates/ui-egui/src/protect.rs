@@ -1,4 +1,4 @@
-//! Protect Using Password (Acrobat's simplified dialog, screenshot 13b), with the classic
+//! Protect Using Password (the viewer's simplified dialog, screenshot 13b), with the classic
 //! Password Security settings behind "Advanced Options" (compatibility, what to encrypt,
 //! printing, changes, copying, screen readers). Execution plan M8.1.
 
@@ -53,7 +53,7 @@ impl ProtectDraft {
     }
 }
 
-/// A rough password strength, as Acrobat's meter shows (Weak / Medium / Strong).
+/// A rough password strength, as the viewer's meter shows (Weak / Medium / Strong).
 pub fn strength(pw: &str) -> (&'static str, Color32) {
     let classes = [
         pw.chars().any(|c| c.is_lowercase()),
@@ -74,7 +74,7 @@ pub fn strength(pw: &str) -> (&'static str, Color32) {
     }
 }
 
-/// A radio button drawn like Acrobat's: an outlined circle, filled blue with a white dot when on.
+/// A radio button drawn like the viewer's: an outlined circle, filled blue with a white dot when on.
 fn radio(ui: &mut egui::Ui, t: &Tokens, on: bool, label: &str) -> egui::Response {
     let (rect, resp) = ui.allocate_exact_size(egui::vec2(220.0, 26.0), egui::Sense::click());
     let c = egui::pos2(rect.left() + 9.0, rect.center().y);
@@ -107,7 +107,7 @@ pub(crate) fn body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> (boo
         d.viewing = false;
     }
     ui.add_space(10.0);
-    // Bordered fields (Acrobat: 1 pt #B1B1B1, radius 4).
+    // Bordered fields (1 pt #B1B1B1, radius 4).
     let field = |ui: &mut egui::Ui, label: &str, text: &mut String, id: &str| {
         let l = ui.label(tl!(label));
         egui::Frame::new()
@@ -145,12 +145,7 @@ pub(crate) fn body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> (boo
         let p = &mut d.protection;
         egui::Grid::new("protect-advanced").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
             ui.label(tl!("Compatibility"));
-            let algos = [
-                (A::Aes256, tl!("Acrobat X and later (256-bit AES)")),
-                (A::Aes128, tl!("Acrobat 7.0 and later (128-bit AES)")),
-                (A::Rc4_128, tl!("Acrobat 5.0 and later (128-bit RC4)")),
-                (A::Rc4_40, tl!("Acrobat 3.0 and later (40-bit RC4)")),
-            ];
+            let algos = [(A::Aes256, tl!("AES-256")), (A::Aes128, tl!("AES-128")), (A::Rc4_128, tl!("RC4-128")), (A::Rc4_40, tl!("RC4-40"))];
             let cur = algos.iter().find(|(a, _)| *a == p.algorithm).map_or(algos[0].1, |(_, l)| *l);
             egui::ComboBox::from_id_salt("protect-algo").width(300.0).selected_text(cur).show_ui(ui, |ui| {
                 for (a, l) in algos {
@@ -161,7 +156,7 @@ pub(crate) fn body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> (boo
             ui.label(tl!("Encrypt"));
             ui.vertical(|ui| {
                 ui.radio_value(&mut p.encrypt_metadata, true, tl!("All document contents"));
-                // Unencrypted metadata needs crypt filters (Acrobat 6.0 and later).
+                // Unencrypted metadata needs crypt filters.
                 ui.add_enabled_ui(p.algorithm != A::Rc4_40 && p.algorithm != A::Rc4_128, |ui| {
                     ui.radio_value(&mut p.encrypt_metadata, false, tl!("All document contents except metadata"));
                 });

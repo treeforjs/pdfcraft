@@ -42,7 +42,14 @@ pub fn create_staging(
             StagingName::SuffixThenTag => format!(".{stem}.{suffix:016x}.pdfcraft-tmp"),
             StagingName::TagThenSuffix => format!(".{stem}.pdfcraft-{suffix:016x}.tmp"),
         });
-        match std::fs::OpenOptions::new().write(true).create_new(true).open(&tmp) {
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        match options.open(&tmp) {
             Ok(file) => return Ok((tmp, file)),
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
             // Windows reports a folder at the name as "access denied"; it is taken all the same.
@@ -51,6 +58,24 @@ pub fn create_staging(
         }
     }
     Err(std::io::Error::new(std::io::ErrorKind::AlreadyExists, "every temporary file name tried is taken"))
+}
+
+/// Preserve an existing regular document's Unix access mode before replacing it. New files
+/// retain the staging file's private mode. Links are replaced without copying target metadata.
+pub fn preserve_permissions(file: &std::fs::File, target: &Path) -> std::io::Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        match target.symlink_metadata() {
+            Ok(metadata) if metadata.is_file() => file.set_permissions(std::fs::Permissions::from_mode(metadata.permissions().mode() & 0o777))?,
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error),
+        }
+    }
+    #[cfg(not(unix))]
+    let _ = (file, target);
+    Ok(())
 }
 
 /// Unpredictable staging-name suffixes, so a name can't be planted in advance. Each is the
@@ -93,6 +118,25 @@ pub fn unused_output_path(path: &Path) -> std::io::Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn staging_is_private_and_preserves_existing_document_access() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = test_dir("permissions");
+        let target = dir.join("private.pdf");
+        std::fs::write(&target, b"old").unwrap();
+        for mode in [0o600, 0o640] {
+            std::fs::set_permissions(&target, std::fs::Permissions::from_mode(mode)).unwrap();
+            let (staged, file) = create_staging(&dir, "private.pdf", StagingName::TagThenSuffix, [mode as u64]).unwrap();
+            assert_eq!(file.metadata().unwrap().permissions().mode() & 0o777, 0o600);
+            preserve_permissions(&file, &target).unwrap();
+            assert_eq!(file.metadata().unwrap().permissions().mode() & 0o777, mode);
+            drop(file);
+            std::fs::remove_file(staged).unwrap();
+        }
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 
     /// A fresh, empty folder for one test.
     fn test_dir(test: &str) -> PathBuf {

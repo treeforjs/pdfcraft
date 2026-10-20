@@ -656,7 +656,7 @@ fn declaring_a_form_xfa_does_not_excuse_replacing_the_pages() {
     }
 }
 
-/// Re-encode a DER CMS the way Windows CryptoAPI / Adobe PPKMS / `openssl cms -stream` write it:
+/// Re-encode a DER CMS the way Windows CryptoAPI / other CMS writers / `openssl cms -stream` write it:
 /// indefinite lengths on ContentInfo, [0] and SignedData (the signed attributes stay DER).
 fn to_ber(der_cms: &[u8]) -> Vec<u8> {
     use pdfcraft_sign::der::Tlv;
@@ -709,7 +709,7 @@ fn validates_signatures_written_with_ber_indefinite_lengths() {
 fn validation_data_and_xmp_added_after_signing_are_not_tampering() {
     let id = pkcs12::open(&data("rsa-aes.p12"), "test").unwrap();
     let signed = pdfcraft_sign::sign(&open(&fixture()), &id, &opts()).unwrap();
-    // As DocuSign / Acrobat LTV do: a DSS whose /Certs and /VRI are indirect objects, and XMP.
+    // As DocuSign / PDF LTV do: a DSS whose /Certs and /VRI are indirect objects, and XMP.
     let edited = edit_after(&signed, |doc| {
         let mut cert = pdfcraft_cos::Dict::new();
         cert.set(b"Length".to_vec(), Object::Int(3));
@@ -1008,7 +1008,7 @@ fn a_signed_store_may_grow_but_not_lose_or_swap_entries() {
     for certify in LEVELS {
         let signed = pdfcraft_sign::sign(&open(&base), &id, &SignOptions { certify, ..opts() }).unwrap();
         assert_eq!(check(&signed).status, Status::Valid, "{certify:?}");
-        // Validation data appended to the arrays, and a VRI entry: what Acrobat's LTV does.
+        // Validation data appended to the arrays, and a VRI entry: what the viewer's LTV does.
         let grown = edit_after(&signed, |doc| {
             let more = doc.add(stream_of(&[4, 5, 6]));
             let entry = doc.add(Object::Dict(dict_of(vec![("Cert", Object::Array(vec![Object::Ref(more)]))])));
@@ -1314,7 +1314,7 @@ fn a_legacy_x509_signature_with_a_malformed_rsa_key_is_invalid() {
 #[test]
 fn validates_the_legacy_adbe_x509_rsa_sha1_format() {
     let id = pkcs12::open(&data("rsa-aes.p12"), "test").unwrap();
-    // tests/data/x509-rsa-sha1.pdf: made with OpenSSL (README.md) as Acrobat 4-era signers wrote it.
+    // tests/data/x509-rsa-sha1.pdf: made with OpenSSL (README.md) as legacy signers wrote it.
     let pdf = data("x509-rsa-sha1.pdf");
     let s = signatures(&open(&pdf), &pdf, &TrustStore::default()).into_iter().find(|s| s.signed).unwrap();
     assert_eq!(s.sub_filter.as_deref(), Some("adbe.x509.rsa_sha1"));

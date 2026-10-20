@@ -1033,7 +1033,7 @@ impl Interp<'_> {
             Val::Host => Ok(match name.to_ascii_lowercase().as_str() {
                 "numpages" => Val::Num(self.h.doc.page_count as f64),
                 "currentpage" => Val::Num(self.h.doc.page as f64),
-                "name" => Val::Str("Acrobat".into()),
+                "name" => Val::Str("PDF".into()),
                 "apptype" => Val::Str("Exchange-Pro".into()),
                 "version" => Val::Str("11".into()),
                 "variation" => Val::Str("Full".into()),

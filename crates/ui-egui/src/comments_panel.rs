@@ -1,4 +1,4 @@
-//! The Comments panel (Acrobat's right-hand comment list; 11-visual-spec §3, audit `a15-*`).
+//! The Comments panel (the viewer's right-hand comment list; 11-visual-spec §3, audit `a15-*`).
 //!
 //! Header "Comments N" with search; an "Add a comment" box that posts a sticky note on the
 //! current page; cards grouped by page. Selecting a card selects the comment on the page and
@@ -609,7 +609,7 @@ fn card(
                         open_menu = more.clicked();
                         more_rect = Some(more.rect);
                     }
-                    // Acrobat's per-comment checkmark: a toggle on the selected card, a mark otherwise.
+                    // The viewer's per-comment checkmark: a toggle on the selected card, a mark otherwise.
                     let tip = if marked { tl!("Remove checkmark") } else { tl!("Mark with checkmark") };
                     if selected && allowed {
                         if icons::button(ui, "circle-check", 22.0, marked, tip).clicked() {
@@ -808,7 +808,7 @@ fn legible(c: Color32, t: &Tokens) -> Color32 {
     }
 }
 
-/// The Comments panel header's filter and sort controls (Acrobat: filter funnel and "…").
+/// The Comments panel header's filter and sort controls (PDF: filter funnel and "…").
 /// The header's "…" (sort, hide all, summary, data exchange) and filter menus; returns a
 /// command to run.
 pub(crate) fn header_controls(ui: &mut egui::Ui, info: &DocInfo, generation: u64, view: &mut DocView, hidden: bool) -> Option<&'static str> {

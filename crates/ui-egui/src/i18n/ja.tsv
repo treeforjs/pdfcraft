@@ -11,8 +11,8 @@
 #
 # Clean-room: every entry was written from the plain meaning of the English label using ordinary
 # Japanese computing vocabulary. No proprietary localisation resource, string table or product UI
-# (Acrobat's included) was consulted or copied; add entries the same way.
-# Product and technology names (PdfCraft, PDF, Acrobat JavaScript ...) stay in Latin letters;
+# (PDF's included) was consulted or copied; add entries the same way.
+# Product and technology names (PdfCraft, PDF, PDF JavaScript ...) stay in Latin letters;
 # the trailing "…" of dialog commands is kept.
 
 	Menu	メニュー
@@ -86,7 +86,7 @@
 	Fit to width	幅に合わせる
 	Display theme	表示テーマ
 	Side panels	サイドパネル
-	Enable Acrobat JavaScript	Acrobat JavaScript を有効にする
+	Enable PDF JavaScript	PDF JavaScript を有効にする
 	OK	OK
 	Close	閉じる
 	Next / previous match	次／前の検索結果
@@ -158,7 +158,7 @@
 	Files you open in PdfCraft appear here. Drop a PDF anywhere to open it.	PdfCraft で開いたファイルがここに表示されます。PDF をウィンドウにドロップして開くこともできます。
 	Privacy	プライバシー
 	PdfCraft works offline. No telemetry, no account, and no cloud processing unless you add a provider.	PdfCraft はオフラインで動作します。使用状況の送信やアカウント登録はありません。サービス提供元を追加しない限り、クラウド処理も行いません。
-	Scripts run in a sandbox without file or network access. With JavaScript off, Acrobat's standard format, validate and calculate functions still work.	スクリプトはファイルやネットワークにアクセスできないサンドボックスで実行されます。JavaScript を無効にしても、Acrobat の標準の書式設定・検証・計算関数は使用できます。
+	Scripts run in a sandbox without file or network access. With JavaScript off, the viewer's standard format, validate and calculate functions still work.	スクリプトはファイルやネットワークにアクセスできないサンドボックスで実行されます。JavaScript を無効にしても、PDF の標準の書式設定・検証・計算関数は使用できます。
 	Back to all tools	すべてのツールに戻る
 	Close panel	パネルを閉じる
 	View less	表示を減らす
@@ -455,8 +455,6 @@
 	Console	コンソール
 	Document JavaScripts	文書の JavaScript
 	Document actions	文書のアクション
-	AI assistant	AI アシスタント
-	Bring your own model (off by default)	自分のモデルを使用（初期設定では無効）
 	Summarize	要約
 	Ask about this document	この文書について質問
 	Translate	翻訳
@@ -464,7 +462,6 @@
 	Planned	開発予定
 	Planned for milestone	開発予定のマイルストーン
 	open to see what it will include	開くと予定されている機能を確認できます
-	Optional: needs an AI provider you configure	任意の機能：AI サービス提供元の設定が必要です
 	Coming in milestone	実装予定のマイルストーン
 	Items marked Ready work today.	「使用可能」と表示された項目は現在使用できます。
 	Preview	プレビュー
@@ -1347,10 +1344,10 @@
 	Weak	弱い
 	Advanced Options {chevron}	詳細オプション {chevron}
 	Compatibility	互換性
-	Acrobat X and later (256-bit AES)	Acrobat X 以降（256 ビット AES）
-	Acrobat 7.0 and later (128-bit AES)	Acrobat 7.0 以降（128 ビット AES）
-	Acrobat 5.0 and later (128-bit RC4)	Acrobat 5.0 以降（128 ビット RC4）
-	Acrobat 3.0 and later (40-bit RC4)	Acrobat 3.0 以降（40 ビット RC4）
+	AES-256	AES-256
+	AES-128	AES-128
+	RC4-128	RC4-128
+	RC4-40	RC4-40
 	Encrypt	暗号化
 	All document contents	文書のすべての内容
 	All document contents except metadata	メタデータ以外のすべての内容
@@ -1688,7 +1685,6 @@
 	Downloading attachments on the web arrives with M3.10 ({n} bytes ready)	Web 版の添付ファイルのダウンロードは M3.10 で対応予定です（{n} バイト準備済み）
 	`{command}` {when}	`{command}`: {when}
 	ships in milestone {m}	マイルストーン {m} で対応予定
-	needs an AI provider (off by default)	AI プロバイダーが必要（既定では無効）
 	is available	利用可能
 	is not available yet	まだ利用できません
 	{label} failed: {e}	操作「{label}」に失敗しました: {e}
@@ -1752,7 +1748,7 @@
 	At least one signature has problems.	問題のある署名があります。
 	This document is secured. Some changes are restricted by its security settings.	この文書は保護されています。セキュリティ設定により一部の変更が制限されています。
 	This is a dynamic XFA form, which PdfCraft can't display yet. What you see is the file's placeholder page.	この文書は動的 XFA フォームで、PdfCraft はまだ表示できません。現在はファイルの代替ページを表示しています。
-	This form also contains XFA data, which PdfCraft doesn't read yet. You can fill its fields, but Acrobat may show the XFA values instead.	このフォームには PdfCraft がまだ読み取れない XFA データも含まれます。フィールドには入力できますが、Acrobat は代わりに XFA の値を表示する場合があります。
+	This form also contains XFA data, which PdfCraft doesn't read yet. You can fill its fields, but PDF may show the XFA values instead.	このフォームには PdfCraft がまだ読み取れない XFA データも含まれます。フィールドには入力できますが、PDF は代わりに XFA の値を表示する場合があります。
 	This document contains {n} interactive form fields.	この文書には対話型フォームフィールドが {n} 個あります。
 	This file was damaged and has been repaired. Saving keeps the repaired version.	このファイルは破損していたため修復しました。保存すると修復済みの状態が保持されます。
 	Dismiss	閉じる
@@ -2029,7 +2025,6 @@
 	Printer properties	プリンターのプロパティ
 	Reset to printer defaults	プリンターの初期設定に戻す
 	This printer offers no settings of its own.	このプリンターには独自の設定がありません。
-	% of all commits	全コミットに占める割合（%）
 	+Bin	+Bin
 	+LOC	+LOC
 	@{login}: {prs} PRs, {commits} commits, +{added} / −{deleted} lines (Δ {delta}), +{bin_added} / −{bin_deleted} binary assets, {first} – {last}	@{login}：PR {prs} 件、コミット {commits} 件、行数 +{added} / −{deleted}（Δ {delta}）、バイナリファイル +{bin_added} / −{bin_deleted}、{first} – {last}
@@ -2070,7 +2065,6 @@
 	Last commit	最後のコミット
 	Line delta	行数の増減
 	Line ending	線端の形状
-	Lines +/−	行数 +/−
 	Lines added	追加した行数
 	Lines deleted	削除した行数
 	Mark differences	相違点をマーク
@@ -2079,10 +2073,8 @@
 	Match field sizes	フィールドのサイズを揃える
 	Merged PRs	マージ済みの PR
 	Model	モデル
-	Models	モデル
 	Name (A–Z)	名前（A–Z）
 	No contributor data was built into this copy.	このビルドには貢献者のデータが組み込まれていません。
-	No model credits were built into this copy.	このビルドにはモデルのクレジット情報が組み込まれていません。
 	Only continue if you trust this document. An address can carry information from the document, such as what you typed into its form.	この文書を信頼できる場合にのみ続行してください。アドレスには、フォームに入力した内容など、文書内の情報が含まれていることがあります。
 	Open email app	メールアプリを開く
 	Open link	リンクを開く
@@ -2097,7 +2089,7 @@
 	SHA-1 digest	SHA-1 ダイジェスト
 	SHA-256 digest	SHA-256 ダイジェスト
 	Scripted content must be usable with a keyboard and assistive technology. Check the document's scripts.	スクリプトで動作するコンテンツは、キーボードや支援技術でも操作できる必要があります。文書のスクリプトを確認してください。
-	Scripts run in a sandbox without file or network access. A script that asks to open a web page needs your permission first. With JavaScript off, Acrobat's standard format, validate and calculate functions still work.	スクリプトは、ファイルやネットワークにアクセスできないサンドボックス内で実行されます。スクリプトがウェブページを開くには、事前にユーザーの許可が必要です。JavaScript がオフでも、Acrobat 標準の書式・検証・計算関数は引き続き動作します。
+	Scripts run in a sandbox without file or network access. A script that asks to open a web page needs your permission first. With JavaScript off, the viewer's standard format, validate and calculate functions still work.	スクリプトは、ファイルやネットワークにアクセスできないサンドボックス内で実行されます。スクリプトがウェブページを開くには、事前にユーザーの許可が必要です。JavaScript がオフでも、PDF 標準の書式・検証・計算関数は引き続き動作します。
 	Selected image files: {count}	選択した画像ファイル数：{count}
 	Show	表示
 	Sign yourself	自分で署名

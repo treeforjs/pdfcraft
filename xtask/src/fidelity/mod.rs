@@ -11,7 +11,7 @@
 //!
 //! `xtask/baselines/fidelity.json` holds the last accepted numbers (metrics only; no PDFs or
 //! images). A page that differs noticeably more than its baseline, or text F1 that drops, fails
-//! the command. `--update-baseline` rewrites it. Poppler is the reference here, not Acrobat:
+//! the command. `--update-baseline` rewrites it. Poppler is the reference here, not PDF:
 //! where Poppler itself deviates from the spec the ground-truth columns say so for text, and the
 //! comparison images let a human judge pixels. Missing Poppler skips the command with a message.
 //! See `docs/fidelity.md`.

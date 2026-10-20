@@ -1,8 +1,8 @@
-//! pdfcraft-js — Acrobat JavaScript for forms (L3).
+//! pdfcraft-js — PDF JavaScript for forms (L3).
 //!
 //! Field scripts (format, keystroke, validate, calculate), button actions and document-level
 //! scripts run in [boa](https://boajs.dev), a JavaScript engine written in Rust, with the subset
-//! of Acrobat's object model that forms use, as the public *JavaScript for Acrobat API Reference*
+//! of the viewer's object model that forms use, as the public *JavaScript for PDF API Reference*
 //! describes it:
 //!
 //! - `event`: `value`, `change`, `willCommit`, `rc`, `name`, `type`, `target`, `targetName`.
@@ -89,7 +89,7 @@ pub struct FieldState {
     /// values, one per widget.
     pub options: Vec<(String, String)>,
     pub char_limit: Option<usize>,
-    /// `textColor` / `fillColor` as Acrobat colour arrays (`["RGB", r, g, b]` etc.), when set.
+    /// `textColor` / `fillColor` as PDF colour arrays (`["RGB", r, g, b]` etc.), when set.
     pub text_color: Option<Vec<String>>,
     pub fill_color: Option<Vec<String>>,
 }
@@ -371,7 +371,7 @@ fn error(msg: impl Into<String>) -> JsError {
     JsNativeError::typ().with_message(msg.into()).into()
 }
 
-/// A JavaScript number for a text value that reads as one, as Acrobat's `field.value` gives.
+/// A JavaScript number for a text value that reads as one, as the viewer's `field.value` gives.
 fn as_number(t: &str) -> Option<f64> {
     let t = t.trim();
     if t.is_empty() || t.starts_with('+') || t.len() > 1 && t.starts_with('0') && !t.starts_with("0.") {

@@ -1,4 +1,4 @@
-//! Action Wizard: named sequences of steps run over files (Acrobat's guided actions), the
+//! Action Wizard: named sequences of steps run over files (the viewer's guided actions), the
 //! built-in actions, and running an action over many files (batch processing).
 
 use std::sync::Arc;

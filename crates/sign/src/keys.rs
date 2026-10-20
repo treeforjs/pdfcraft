@@ -586,7 +586,7 @@ impl PrivateKey {
         }
     }
 
-    /// A new RSA key (Acrobat's default for a self-signed digital ID is 2048-bit RSA).
+    /// A new RSA key (the viewer's default for a self-signed digital ID is 2048-bit RSA).
     #[cfg(not(target_arch = "wasm32"))]
     pub fn generate_rsa(bits: usize) -> Result<PrivateKey, SignError> {
         use aws_lc_rs::encoding::AsDer;

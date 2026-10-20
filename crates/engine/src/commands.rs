@@ -187,7 +187,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     c("view.layout.single", "Single page", None, None, Document, "file-text"),
     c("view.layout.two_up", "Two-page view", None, None, Document, "columns-2"),
     c("view.layout.cover", "Show cover page in two-page view", None, None, TwoPageView, "bookmark"),
-    // Acrobat's view modes, a page display and a zoom at once (the rail's Page display menu).
+    // The viewer's view modes, a page display and a zoom at once (the rail's Page display menu).
     c("view.fit_width_scrolling", "Fit to width scrolling", None, None, Document, "arrow-left-right"),
     c("view.fit_one_page", "Fit one full page", None, None, Document, "maximize-2"),
     c("view.fit_visible", "Fit visible", VIEW, Some(Shortcut::cmd("3")), Document, "scan"),

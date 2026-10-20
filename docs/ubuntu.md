@@ -20,7 +20,7 @@ Choose **PdfCraft** in the application menu, use **Open With** on a PDF, or run
 To choose it yourself:
 
 ```sh
-xdg-mime default ai.storyteller.pdfcraft.desktop application/pdf
+xdg-mime default io.github.treeforjs.pdfcraft.desktop application/pdf
 ```
 
 The package includes the CLI and OCR models. CUPS printing and the desktop file-dialog portal

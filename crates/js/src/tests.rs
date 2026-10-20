@@ -600,7 +600,7 @@ s"#
         assert_eq!(in_row("Sum(row[*].amount)"), "15");
         assert_eq!(in_row("row[1].amount"), "5");
         assert_eq!(in_row("row[-1].amount"), "10");
-        // Past the ends there is no object, so a property of it is an error (as in Acrobat).
+        // Past the ends there is no object, so a property of it is an error (as in PDF).
         let past = go("row[+1].amount", "form1[0].page1[0].table[0].row[1].amount[0]", "calculate");
         assert!(past.error.unwrap().contains("no object"));
         assert_eq!(in_row("Exists(row[-5])"), "0");

@@ -4,9 +4,9 @@
 //! - [`open`] finds the `KeyTransRecipientInfo` addressed to a certificate (by issuer and
 //!   serial number, or subject key identifier), decrypts the content-encryption key with the
 //!   recipient's RSA private key (PKCS #1 v1.5, or OAEP with SHA-1) and the content with
-//!   AES-128/192/256-CBC, 3DES-CBC or RC2-CBC (Acrobat's older 40- and 128-bit envelopes).
+//!   AES-128/192/256-CBC, 3DES-CBC or RC2-CBC (the viewer's older 40- and 128-bit envelopes).
 //! - [`seal`] writes an envelope for RSA recipients with AES-256-CBC content encryption and
-//!   PKCS #1 v1.5 key transport, as Acrobat does.
+//!   PKCS #1 v1.5 key transport, as other viewers do.
 //!
 //! Envelopes are untrusted input: they are read as BER with size bounds and never panic.
 //! RSA private-key operations use aws-lc-rs (ADR-0009), so they are unavailable on wasm.

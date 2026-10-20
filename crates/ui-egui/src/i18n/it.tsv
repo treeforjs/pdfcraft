@@ -11,8 +11,8 @@
 #
 # Clean-room: every entry was written from the plain meaning of the English label using ordinary
 # Italian computing vocabulary. No proprietary localisation resource, string table or product UI
-# (Acrobat's included) was consulted or copied; add entries the same way.
-# Product and technology names (PdfCraft, PDF, Acrobat JavaScript ...) stay in Latin letters;
+# (PDF's included) was consulted or copied; add entries the same way.
+# Product and technology names (PdfCraft, PDF, PDF JavaScript ...) stay in Latin letters;
 # the trailing "…" of dialog commands is kept.
 
 	Menu	Menu
@@ -83,7 +83,7 @@
 	Fit to width	Adatta alla larghezza
 	Display theme	Tema di visualizzazione
 	Side panels	Pannelli laterali
-	Enable Acrobat JavaScript	Abilita JavaScript di Acrobat
+	Enable PDF JavaScript	Abilita JavaScript di PDF
 	OK	OK
 	Close	Chiudi
 	Next / previous match	Risultato successivo/precedente
@@ -155,7 +155,7 @@
 	Files you open in PdfCraft appear here. Drop a PDF anywhere to open it.	I file aperti in PdfCraft compaiono qui. Trascina un PDF in un punto qualsiasi per aprirlo.
 	Privacy	Privacy
 	PdfCraft works offline. No telemetry, no account, and no cloud processing unless you add a provider.	PdfCraft funziona offline. Nessuna telemetria, nessun account e nessuna elaborazione nel cloud, a meno che tu non aggiunga un fornitore.
-	Scripts run in a sandbox without file or network access. With JavaScript off, Acrobat's standard format, validate and calculate functions still work.	Gli script vengono eseguiti in una sandbox senza accesso a file o rete. Con JavaScript disattivato, le funzioni standard di formato, convalida e calcolo di Acrobat continuano a funzionare.
+	Scripts run in a sandbox without file or network access. With JavaScript off, the viewer's standard format, validate and calculate functions still work.	Gli script vengono eseguiti in una sandbox senza accesso a file o rete. Con JavaScript disattivato, le funzioni standard di formato, convalida e calcolo di PDF continuano a funzionare.
 	Back to all tools	Torna a tutti gli strumenti
 	Close panel	Chiudi pannello
 	View less	Mostra meno
@@ -452,8 +452,6 @@
 	Console	Console
 	Document JavaScripts	JavaScript del documento
 	Document actions	Azioni documento
-	AI assistant	Assistente IA
-	Bring your own model (off by default)	Usa il tuo modello (disattivato per impostazione predefinita)
 	Summarize	Riepiloga
 	Ask about this document	Fai domande su questo documento
 	Translate	Traduci
@@ -461,7 +459,6 @@
 	Planned	Pianificato
 	Planned for milestone	Pianificato per il traguardo
 	open to see what it will include	apri per vedere cosa includerà
-	Optional: needs an AI provider you configure	Facoltativo: richiede un fornitore IA configurato da te
 	Coming in milestone	In arrivo nel traguardo
 	Items marked Ready work today.	Le voci contrassegnate come Pronto funzionano già oggi.
 	Preview	Anteprima
@@ -1342,10 +1339,10 @@
 	Weak	Debole
 	Advanced Options {chevron}	Opzioni avanzate {chevron}
 	Compatibility	Compatibilità
-	Acrobat X and later (256-bit AES)	Acrobat X e successivi (AES a 256 bit)
-	Acrobat 7.0 and later (128-bit AES)	Acrobat 7.0 e successivi (AES a 128 bit)
-	Acrobat 5.0 and later (128-bit RC4)	Acrobat 5.0 e successivi (RC4 a 128 bit)
-	Acrobat 3.0 and later (40-bit RC4)	Acrobat 3.0 e successivi (RC4 a 40 bit)
+	AES-256	AES-256
+	AES-128	AES-128
+	RC4-128	RC4-128
+	RC4-40	RC4-40
 	Encrypt	Cifra
 	All document contents	Tutto il contenuto del documento
 	All document contents except metadata	Tutto il contenuto del documento tranne i metadati
@@ -1682,7 +1679,6 @@
 	Downloading attachments on the web arrives with M3.10 ({n} bytes ready)	Sul web, il download degli allegati arriverà con M3.10 ({n} byte pronti)
 	`{command}` {when}	`{command}` {when}
 	ships in milestone {m}	arriva nel traguardo {m}
-	needs an AI provider (off by default)	richiede un fornitore IA (disattivato per impostazione predefinita)
 	is available	è disponibile
 	is not available yet	non è ancora disponibile
 	{label} failed: {e}	Errore in {label}: {e}
@@ -1746,7 +1742,7 @@
 	At least one signature has problems.	Almeno una firma presenta problemi.
 	This document is secured. Some changes are restricted by its security settings.	Questo documento è protetto. Alcune modifiche sono limitate dalle sue impostazioni di sicurezza.
 	This is a dynamic XFA form, which PdfCraft can't display yet. What you see is the file's placeholder page.	Questo è un modulo XFA dinamico, che PdfCraft non è ancora in grado di visualizzare. Quella che vedi è la pagina segnaposto del file.
-	This form also contains XFA data, which PdfCraft doesn't read yet. You can fill its fields, but Acrobat may show the XFA values instead.	Questo modulo contiene anche dati XFA, che PdfCraft non legge ancora. Puoi compilarne i campi, ma Acrobat potrebbe mostrare invece i valori XFA.
+	This form also contains XFA data, which PdfCraft doesn't read yet. You can fill its fields, but PDF may show the XFA values instead.	Questo modulo contiene anche dati XFA, che PdfCraft non legge ancora. Puoi compilarne i campi, ma PDF potrebbe mostrare invece i valori XFA.
 	This document contains {n} interactive form fields.	Questo documento contiene {n} campi modulo interattivi.
 	This file was damaged and has been repaired. Saving keeps the repaired version.	Questo file era danneggiato ed è stato riparato. Il salvataggio mantiene la versione riparata.
 	Dismiss	Ignora
@@ -2005,7 +2001,7 @@
 	Open email app	Apri l'app di posta
 	Open link	Apri collegamento
 	Open this web page?	Aprire questa pagina web?
-	Scripts run in a sandbox without file or network access. A script that asks to open a web page needs your permission first. With JavaScript off, Acrobat's standard format, validate and calculate functions still work.	Gli script vengono eseguiti in una sandbox senza accesso a file o rete. Uno script che chiede di aprire una pagina web ha prima bisogno della tua autorizzazione. Con JavaScript disattivato, le funzioni standard di formato, convalida e calcolo di Acrobat continuano a funzionare.
+	Scripts run in a sandbox without file or network access. A script that asks to open a web page needs your permission first. With JavaScript off, the viewer's standard format, validate and calculate functions still work.	Gli script vengono eseguiti in una sandbox senza accesso a file o rete. Uno script che chiede di aprire una pagina web ha prima bisogno della tua autorizzazione. Con JavaScript disattivato, le funzioni standard di formato, convalida e calcolo di PDF continuano a funzionare.
 	Sign yourself	Firma tu stesso
 	Used when opening PDFs. An explicit launch or control mode takes precedence for the session.	Usata all'apertura dei PDF. Una modalità di avvio o di controllo esplicita ha la precedenza per la sessione.
 	Write this email?	Scrivere questa email?
@@ -2053,12 +2049,9 @@
 	Last commit	Ultimo commit
 	Last	Ultimo
 	No contributor data was built into this copy.	Questa copia non include dati sui contributori.
-	No model credits were built into this copy.	Questa copia non include riconoscimenti per i modelli.
 	{n} contributors · {c} commits	{n} contributori · {c} commit
 	Company	Azienda
 	Model	Modello
-	% of all commits	% di tutti i commit
-	Lines +/−	Righe +/−
 	@{login}: {prs} PRs, {commits} commits, +{added} / −{deleted} lines (Δ {delta}), +{bin_added} / −{bin_deleted} binary assets, {first} – {last}	@{login}: {prs} PR, {commits} commit, +{added} / −{deleted} righe (Δ {delta}), +{bin_added} / −{bin_deleted} risorse binarie, {first} – {last}
 @plural	{n} page|{n} pages	{n} pagina|{n} pagine
 @plural	{n} field|{n} fields	{n} campo|{n} campi
@@ -2093,7 +2086,6 @@
 	Mark for redaction	Contrassegna per l'oscuramento
 	Mark pages for redaction	Contrassegna pagine per l'oscuramento
 	Match field sizes	Uniforma dimensioni dei campi
-	Models	Modelli
 	Only continue if you trust this document. An address can carry information from the document, such as what you typed into its form.	Continua solo se ti fidi di questo documento. Un indirizzo può trasmettere informazioni del documento, come ciò che hai digitato nel modulo.
 	Open arrow	Freccia aperta
 	Opens the printer driver's preferences. They are saved for every print from this computer; the copies, two-sided, grayscale and paper chosen here still apply.	Apre le preferenze del driver della stampante. Vengono salvate per ogni stampa da questo computer; copie, fronte-retro, scala di grigi e carta scelti qui restano validi.

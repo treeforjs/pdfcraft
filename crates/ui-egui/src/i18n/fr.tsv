@@ -4,9 +4,9 @@
 #
 # Clean-room: every entry was written from the plain meaning of the English label using ordinary
 # French computing vocabulary (formal "vous", infinitive for commands). No proprietary localisation
-# resource, string table or product UI (Acrobat's included) was consulted or copied; add entries
+# resource, string table or product UI was consulted or copied; add entries
 # the same way.
-# Product and technology names (PdfCraft, PDF, Acrobat JavaScript ...) are not translated;
+# Product and technology names (PdfCraft, PDF, PDF JavaScript ...) are not translated;
 # the trailing "…" of dialog commands is kept.
 
 	Menu	Menu
@@ -57,7 +57,7 @@
 	Fit to width	Ajuster à la largeur
 	Display theme	Thème d'affichage
 	Side panels	Panneaux latéraux
-	Enable Acrobat JavaScript	Activer Acrobat JavaScript
+	Enable PDF JavaScript	Activer PDF JavaScript
 	Flatten Fill & Sign when saving	Aplatir Remplir et signer à l'enregistrement
 	Text, marks and signatures become part of the page. Other comments stay editable.	Le texte, les marques et les signatures deviennent partie de la page. Les autres commentaires restent modifiables.
 	OK	OK
@@ -131,7 +131,7 @@
 	Files you open in PdfCraft appear here. Drop a PDF anywhere to open it.	Les fichiers que vous ouvrez dans PdfCraft apparaissent ici. Déposez un PDF n'importe où pour l'ouvrir.
 	Privacy	Confidentialité
 	PdfCraft works offline. No telemetry, no account, and no cloud processing unless you add a provider.	PdfCraft fonctionne hors ligne. Pas de télémétrie, pas de compte, et aucun traitement dans le cloud sauf si vous ajoutez un fournisseur.
-	Scripts run in a sandbox without file or network access. With JavaScript off, Acrobat's standard format, validate and calculate functions still work.	Les scripts s'exécutent dans un bac à sable, sans accès aux fichiers ni au réseau. Si JavaScript est désactivé, les fonctions standard de format, de validation et de calcul d'Acrobat continuent de fonctionner.
+	Scripts run in a sandbox without file or network access. With JavaScript off, the viewer's standard format, validate and calculate functions still work.	Les scripts s'exécutent dans un bac à sable, sans accès aux fichiers ni au réseau. Si JavaScript est désactivé, les fonctions standard de format, de validation et de calcul d'PDF continuent de fonctionner.
 	Back to all tools	Retour à tous les outils
 	Close panel	Fermer le panneau
 	View less	Voir moins
@@ -428,8 +428,6 @@
 	Console	Console
 	Document JavaScripts	JavaScripts du document
 	Document actions	Actions du document
-	AI assistant	Assistant IA
-	Bring your own model (off by default)	Apportez votre propre modèle (désactivé par défaut)
 	Summarize	Résumer
 	Ask about this document	Interroger ce document
 	Translate	Traduire
@@ -437,7 +435,6 @@
 	Planned	Prévu
 	Planned for milestone	Prévu pour le jalon
 	open to see what it will include	ouvrez pour voir ce qu'il comprendra
-	Optional: needs an AI provider you configure	Facultatif : nécessite un fournisseur d'IA que vous configurez
 	Coming in milestone	Arrivera dans le jalon
 	Items marked Ready work today.	Les éléments marqués Prêt fonctionnent déjà.
 	Preview	Aperçu
@@ -1326,10 +1323,10 @@
 	Weak	Faible
 	Advanced Options {chevron}	Options avancées {chevron}
 	Compatibility	Compatibilité
-	Acrobat X and later (256-bit AES)	Acrobat X et versions ultérieures (AES 256 bits)
-	Acrobat 7.0 and later (128-bit AES)	Acrobat 7.0 et versions ultérieures (AES 128 bits)
-	Acrobat 5.0 and later (128-bit RC4)	Acrobat 5.0 et versions ultérieures (RC4 128 bits)
-	Acrobat 3.0 and later (40-bit RC4)	Acrobat 3.0 et versions ultérieures (RC4 40 bits)
+	AES-256	AES-256
+	AES-128	AES-128
+	RC4-128	RC4-128
+	RC4-40	RC4-40
 	Encrypt	Chiffrer
 	All document contents	Tout le contenu du document
 	All document contents except metadata	Tout le contenu du document sauf les métadonnées
@@ -1611,7 +1608,6 @@
 	Downloading attachments on the web arrives with M3.10 ({n} bytes ready)	Le téléchargement des pièces jointes sur le web arrivera avec M3.10 ({n} octets prêts)
 	`{command}` {when}	`{command}` {when}
 	ships in milestone {m}	arrivera dans le jalon {m}
-	needs an AI provider (off by default)	nécessite un fournisseur d'IA (désactivé par défaut)
 	is available	est disponible
 	is not available yet	n'est pas encore disponible
 	{label} failed: {e}	{label} a échoué : {e}
@@ -1675,7 +1671,7 @@
 	At least one signature has problems.	Au moins une signature pose problème.
 	This document is secured. Some changes are restricted by its security settings.	Ce document est protégé. Sa protection restreint certaines modifications.
 	This is a dynamic XFA form, which PdfCraft can't display yet. What you see is the file's placeholder page.	Ceci est un formulaire XFA dynamique, que PdfCraft ne peut pas encore afficher. Ce que vous voyez est la page de substitution du fichier.
-	This form also contains XFA data, which PdfCraft doesn't read yet. You can fill its fields, but Acrobat may show the XFA values instead.	Ce formulaire contient aussi des données XFA, que PdfCraft ne lit pas encore. Vous pouvez remplir ses champs, mais Acrobat peut afficher les valeurs XFA à la place.
+	This form also contains XFA data, which PdfCraft doesn't read yet. You can fill its fields, but PDF may show the XFA values instead.	Ce formulaire contient aussi des données XFA, que PdfCraft ne lit pas encore. Vous pouvez remplir ses champs, mais PDF peut afficher les valeurs XFA à la place.
 	This document contains {n} interactive form fields.	Ce document contient {n} champs de formulaire interactifs.
 	This file was damaged and has been repaired. Saving keeps the repaired version.	Ce fichier était endommagé et a été réparé. L'enregistrement conserve la version réparée.
 	Dismiss	Fermer
@@ -1917,7 +1913,7 @@
 	Open email app	Ouvrir l'application de courrier
 	Open link	Ouvrir le lien
 	Open this web page?	Ouvrir cette page web ?
-	Scripts run in a sandbox without file or network access. A script that asks to open a web page needs your permission first. With JavaScript off, Acrobat's standard format, validate and calculate functions still work.	Les scripts s'exécutent dans un bac à sable, sans accès aux fichiers ni au réseau. Un script qui demande d'ouvrir une page web a d'abord besoin de votre autorisation. Si JavaScript est désactivé, les fonctions standard de format, de validation et de calcul d'Acrobat continuent de fonctionner.
+	Scripts run in a sandbox without file or network access. A script that asks to open a web page needs your permission first. With JavaScript off, the viewer's standard format, validate and calculate functions still work.	Les scripts s'exécutent dans un bac à sable, sans accès aux fichiers ni au réseau. Un script qui demande d'ouvrir une page web a d'abord besoin de votre autorisation. Si JavaScript est désactivé, les fonctions standard de format, de validation et de calcul d'PDF continuent de fonctionner.
 	Sign yourself	Signer soi-même
 	Used when opening PDFs. An explicit launch or control mode takes precedence for the session.	Utilisé à l'ouverture des PDF. Un mode de lancement ou de contrôle explicite a priorité pour la session.
 	Write this email?	Écrire ce courriel ?
@@ -1972,12 +1968,9 @@
 	Last commit	Dernier commit
 	Last	Dernier
 	No contributor data was built into this copy.	Cette copie ne contient aucune donnée sur les contributeurs.
-	No model credits were built into this copy.	Cette copie ne contient aucun crédit de modèle.
 	{n} contributors · {c} commits	{n} contributeurs · {c} commits
 	Company	Société
 	Model	Modèle
-	% of all commits	% de tous les commits
-	Lines +/−	Lignes +/−
 	@{login}: {prs} PRs, {commits} commits, +{added} / −{deleted} lines (Δ {delta}), +{bin_added} / −{bin_deleted} binary assets, {first} – {last}	@{login} : {prs} PR, {commits} commits, +{added} / −{deleted} lignes (Δ {delta}), +{bin_added} / −{bin_deleted} fichiers binaires, {first} – {last}
 	Set layer visibility	Définir la visibilité des calques
 	Created a PDF from {n} files	PDF créé à partir de {n} fichiers
@@ -2109,7 +2102,6 @@
 	Mark for redaction	Marquer pour biffure
 	Mark pages for redaction	Marquer des pages pour biffure
 	Match field sizes	Uniformiser la taille des champs
-	Models	Modèles
 	No PDFs found in {folder}	Aucun PDF trouvé dans {folder}
 	Only continue if you trust this document. An address can carry information from the document, such as what you typed into its form.	Ne continuez que si vous faites confiance à ce document. Une adresse peut transmettre des informations du document, par exemple ce que vous avez saisi dans son formulaire.
 	Place saved {what}	Placer {what} (version enregistrée)

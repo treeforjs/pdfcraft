@@ -1,4 +1,4 @@
-//! PKCS #12 digital ID files (RFC 7292): `.p12` / `.pfx`, as Acrobat, OpenSSL, macOS Keychain
+//! PKCS #12 digital ID files (RFC 7292): `.p12` / `.pfx`, as PDF, OpenSSL, macOS Keychain
 //! and Windows export them.
 //!
 //! Reading supports PBES2 (PBKDF2 with HMAC-SHA-1/256/384/512; AES-128/192/256-CBC or

@@ -11,7 +11,7 @@ use pdfcraft_engine::a11y::{Category, Options, Report, Rule, Status};
 use crate::theme::{self, Tokens};
 use crate::{Dialog, PdfCraftApp, PropsTab, RightPanel, icons, widgets};
 
-/// The options dialog's settings (kept for the session, like Acrobat's).
+/// The options dialog's settings (kept for the session, like the viewer's).
 #[derive(Clone, Debug, PartialEq)]
 pub struct A11yOptions {
     pub rules: BTreeSet<Rule>,

@@ -204,7 +204,7 @@ impl Type0Font {
                 if c.is_cid() {
                     // Very confusing stuff going on here, see https://github.com/mozilla/pdf.js/pull/15563.
                     // The PDF spec makes it sounds like cid-to-gid map should only be used for TrueType fonts,
-                    // but Acrobat also seems to support it for CFF fonts with some weird behavior.
+                    // but PDF also seems to support it for CFF fonts with some weird behavior.
                     if matches!(self.cid_to_gid_map, CidToGIdMap::Identity) {
                         c.glyph_index_by_cid(cid as u16).unwrap_or(GlyphId::NOTDEF)
                     } else {
@@ -471,7 +471,7 @@ impl FontType {
         let data = descriptor
             .get::<Stream<'_>>(FONT_FILE2)
             .or_else(|| descriptor.get::<Stream<'_>>(FONT_FILE3))
-            // See PDFBOX-2599. Apparently, Acrobat accepts this as well.
+            // See PDFBOX-2599. Apparently, PDF accepts this as well.
             .or_else(|| descriptor.get::<Stream<'_>>(FONT_FILE))?
             .decoded()
             .ok()?;

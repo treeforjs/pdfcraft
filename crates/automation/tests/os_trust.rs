@@ -92,7 +92,7 @@ fn os_roots_anchor_signatures_and_certified_documents_only_when_switched_on() {
     assert_eq!(c["status"], "valid", "{}", details(&c));
     assert_eq!(c["trust_source"], "operating_system");
 
-    // Certified documents alone is not enough (Acrobat greys it out without signatures).
+    // Certified documents alone is not enough (PDF greys it out without signatures).
     let only = call(&mut a, "sign_os_trust_set", json!({ "signatures": false }));
     assert_eq!((only["certified_documents"].clone(), only["certified_documents_effective"].clone()), (json!(true), json!(false)));
     assert_eq!(signature(&mut a, certified)["status"], "unknown");

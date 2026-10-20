@@ -55,7 +55,7 @@ impl Trigger {
         Trigger::ALL.into_iter().find(|t| t.id() == id)
     }
 
-    /// `event.name` for a script this trigger runs (Acrobat JavaScript's field events).
+    /// `event.name` for a script this trigger runs (PDF JavaScript's field events).
     pub fn event_name(self) -> &'static str {
         match self {
             Trigger::MouseUp => "Mouse Up",
@@ -291,7 +291,7 @@ fn fresh(a: &FieldAction, pages: &[ObjRef]) -> Result<Object, FormError> {
             fs.set(b"FS".to_vec(), Object::name("URL"));
             fs.set(b"F".to_vec(), PdfString::literal(u.as_bytes().to_vec()));
             d.set(b"F".to_vec(), Object::Dict(fs));
-            // HTML form format, as Acrobat's default for web servers (ExportFormat, bit 3).
+            // HTML form format, as the viewer's default for web servers (ExportFormat, bit 3).
             d.set(b"Flags".to_vec(), Object::Int(4));
         }
         FieldAction::Other(kind) => {
@@ -408,7 +408,7 @@ pub fn set_field_actions(doc: &mut Document, name: &str, actions: &[(Trigger, Fi
 }
 
 /// Set Document Actions: the document's own triggers (§12.6.3, Table 199: the catalog's `/AA`
-/// WC, WS, DS, WP and DP). Like Acrobat's dialog, they run JavaScript.
+/// WC, WS, DS, WP and DP). Like the viewer's dialog, they run JavaScript.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum DocTrigger {
     WillClose,

@@ -78,10 +78,10 @@ jobs:
         run: |
           for resource in \
             /usr/share/doc/pdfcraft/README.md \
-            /usr/share/applications/ai.storyteller.pdfcraft.desktop \
-            /usr/share/metainfo/ai.storyteller.pdfcraft.metainfo.xml \
-            /usr/share/mime/packages/ai.storyteller.pdfcraft.xml \
-            /usr/share/icons/hicolor/*/apps/ai.storyteller.pdfcraft.png \
+            /usr/share/applications/io.github.treeforjs.pdfcraft.desktop \
+            /usr/share/metainfo/io.github.treeforjs.pdfcraft.metainfo.xml \
+            /usr/share/mime/packages/io.github.treeforjs.pdfcraft.xml \
+            /usr/share/icons/hicolor/*/apps/io.github.treeforjs.pdfcraft.png \
             /usr/share/pdfcraft/models/*; do
             runuser -u craft -- test -r "$resource"
           done

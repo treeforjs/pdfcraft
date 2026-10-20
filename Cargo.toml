@@ -5,7 +5,7 @@ exclude = ["vendor"]
 default-members = ["crates/*", "apps/pdfcraft", "apps/pdfcraft-cli", "xtask"]
 
 [workspace.package]
-version = "0.5.1"
+version = "0.5.2"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 rust-version = "1.90"
@@ -66,7 +66,7 @@ proptest = "1"
 # The design system shared by every craft app (tokens, theme, palette, toasts).
 craft-ui = { git = "https://github.com/treeforjs/craftworks", rev = "389c91ce90340b1e448bf7f8162bd58778253b6a", version = "0.1.0" }
 # In-app updates shared by the craft apps (check, download, verify, install on quit).
-craft-update = { git = "https://github.com/treeforjs/craftworks", rev = "8c52baa4c73e7fb8def81d19426a96005c814c12", version = "0.1.0", default-features = false }
+craft-update = { git = "https://github.com/treeforjs/craftworks", rev = "6f9541c5d2228881048998f2f42ffed6528f791a", version = "0.1.3", default-features = false }
 egui = "0.36"
 egui_extras = { version = "0.36", default-features = false, features = ["svg"] }
 eframe = { version = "0.36", default-features = false }

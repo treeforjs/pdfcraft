@@ -112,7 +112,7 @@ fn line_end(c: &mut String, kind: &[u8], tip: (f64, f64), from: (f64, f64), w: f
 /// The cubic Bézier segments (first control point, second control point, end) of a smooth curve
 /// through every point of `pts`, from the first: a Catmull-Rom spline, so the curve leaves each
 /// point parallel to the chord between its neighbours (an end uses itself as the missing
-/// neighbour). Ink is drawn so, as Acrobat draws it, rather than as straight segments. The curve
+/// neighbour). Ink is drawn so, as other viewers draw it, rather than as straight segments. The curve
 /// stays within its points and these control points.
 pub(crate) fn smooth_segments(pts: &[(f64, f64)]) -> Vec<[(f64, f64); 3]> {
     let Some(&last) = pts.last() else { return Vec::new() };

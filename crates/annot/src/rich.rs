@@ -484,7 +484,7 @@ fn hex(c: Rgb) -> String {
     format!("#{:02X}{:02X}{:02X}", b(c[0]), b(c[1]), b(c[2]))
 }
 
-/// A CSS length as points (`pt`, `px` as points, as Acrobat writes them, `em` and `%` of
+/// A CSS length as points (`pt`, `px` as points, as other viewers write them, `em` and `%` of
 /// `current`).
 fn css_size(v: &str, current: f64) -> Option<f64> {
     let v = v.trim().to_ascii_lowercase();

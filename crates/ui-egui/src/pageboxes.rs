@@ -1,4 +1,4 @@
-//! Set Page Boxes (Acrobat: Organize pages ▸ Set page boxes / Crop pages ▸ double-click), M4.4.
+//! Set Page Boxes (PDF: Organize pages ▸ Set page boxes / Crop pages ▸ double-click), M4.4.
 //!
 //! Choose a box (crop, trim, bleed, art, media), margins from the media box in points, inches or
 //! millimetres, and the pages. A preview shows the current page's media box and the new box.

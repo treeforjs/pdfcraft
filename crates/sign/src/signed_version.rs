@@ -1,4 +1,4 @@
-//! Compare a signature's signed version with the current document (Acrobat: View Signed
+//! Compare a signature's signed version with the current document (PDF: View Signed
 //! Version, Compare Signed Version to Current Version).
 //!
 //! The signed version is the file's first [`SignatureInfo::signed_len`] bytes: the revision the

@@ -2,13 +2,13 @@
 <!-- AppStream metadata (software centres, Flathub). Template: package.sh and the Flatpak
      manifest substitute @VERSION@ and @DATE@ from Cargo.toml and the build date. -->
 <component type="desktop-application">
-  <id>ai.storyteller.pdfcraft</id>
+  <id>io.github.treeforjs.pdfcraft</id>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>MIT OR Apache-2.0</project_license>
   <name>PdfCraft</name>
   <summary>Read, organize, combine, split and secure PDFs</summary>
-  <developer id="ai.storyteller">
-    <name>Learning Machines LLC</name>
+  <developer id="io.github.treeforjs">
+    <name>Craft contributors</name>
   </developer>
   <description>
     <p>
@@ -16,8 +16,8 @@
       organize, combine and split pages; edit, redact, protect and export documents.
     </p>
   </description>
-  <launchable type="desktop-id">ai.storyteller.pdfcraft.desktop</launchable>
-  <icon type="stock">ai.storyteller.pdfcraft</icon>
+  <launchable type="desktop-id">io.github.treeforjs.pdfcraft.desktop</launchable>
+  <icon type="stock">io.github.treeforjs.pdfcraft</icon>
   <!-- Only url types known to appstream 0.15 (Ubuntu 22.04, where CI validates): no vcs-browser. -->
   <url type="homepage">https://github.com/treeforjs/pdfcraft</url>
   <url type="bugtracker">https://github.com/treeforjs/pdfcraft/issues</url>

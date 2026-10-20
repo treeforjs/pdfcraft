@@ -1,5 +1,5 @@
 //! Keep tags on edit: after an edit changes a tagged page's content, bring the structure tree
-//! back in step with it, as Acrobat does when text and images are edited in a tagged PDF.
+//! back in step with it, as other viewers do when text and images are edited in a tagged PDF.
 //!
 //! The caller takes a [`Snapshot`] of the page before the edit and calls [`keep_tags`] after it.
 //! The page's marked content is compared before and after:

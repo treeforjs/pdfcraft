@@ -1,4 +1,4 @@
-//! Overprint Preview (Acrobat: Preferences ▸ Page Display ▸ Use Overprint Preview, and Output
+//! Overprint Preview (PDF: Preferences ▸ Page Display ▸ Use Overprint Preview, and Output
 //! Preview's Simulate Overprinting): how objects painted with overprint on (`OP` for strokes,
 //! `op` for fills, text and images, with overprint mode `OPM`) combine with what is below them
 //! on press, instead of knocking it out as the normal render does.
@@ -33,14 +33,14 @@ pub const DEFAULT_OBJECTS_DPI: f64 = 72.0;
 pub const DEFAULT_MAX_OBJECTS: usize = 100;
 pub const MAX_OBJECTS: usize = 10_000;
 
-/// When the normal page render simulates overprint (Acrobat's "Use Overprint Preview").
+/// When the normal page render simulates overprint (the viewer's "Use Overprint Preview").
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum Mode {
     /// Never: overprinting objects knock out, as on screen in most viewers.
     Never,
     /// Always.
     Always,
-    /// Only for PDF/X files (Acrobat's default): documents that declare a PDF/X version or
+    /// Only for PDF/X files (the viewer's default): documents that declare a PDF/X version or
     /// carry a `GTS_PDFX` output intent.
     #[default]
     PdfX,

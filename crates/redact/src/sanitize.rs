@@ -10,7 +10,7 @@ use pdfcraft_cos::{Dict, Document, ObjRef, Object};
 use crate::interp::{Mode, Scope, process};
 use crate::{RedactError, Report, annots_of, page_streams};
 
-/// The categories of Acrobat's Remove Hidden Information panel that PdfCraft handles.
+/// The categories of the viewer's Remove Hidden Information panel that PdfCraft handles.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Hidden {
     /// Document information (`/Info`) and XMP metadata streams.

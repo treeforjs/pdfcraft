@@ -54,7 +54,8 @@ fn options(a: &Args, visual_default: bool) -> Result<CompareOptions> {
 impl Automation {
     pub(crate) fn compare_files(&mut self, a: &Args) -> Result<Value> {
         let opts = options(a, true)?;
-        let limit = a.opt_int("limit")?.unwrap_or(DEFAULT_LIMIT).max(1) as usize;
+        let limit = usize::try_from(a.opt_int("limit")?.unwrap_or(DEFAULT_LIMIT).max(1))
+            .map_err(|_| ToolError::InvalidArgs("limit is too large for this platform".into()))?;
         // Output paths are checked before any work is done.
         let out = |key: &str| a.opt_str(key)?.map(|p| self.resolve(p, true)).transpose();
         let (json_path, report_path, overlay_path) = (out("json_path")?, out("report_path")?, out("overlay_path")?);
@@ -106,7 +107,8 @@ impl Automation {
     pub(crate) fn doc_compare(&self, a: &Args) -> Result<Value> {
         let (old, new) = self.compare_ids(a)?;
         let opts = options(a, false)?;
-        let limit = a.opt_int("limit")?.unwrap_or(DEFAULT_LIMIT).max(1) as usize;
+        let limit = usize::try_from(a.opt_int("limit")?.unwrap_or(DEFAULT_LIMIT).max(1))
+            .map_err(|_| ToolError::InvalidArgs("limit is too large for this platform".into()))?;
         let c = self.session.compare_files(old, new, &opts).map_err(failed)?;
         let mut v = report_json(&c, &opts, limit);
         // The original flat fields, kept for existing callers.

@@ -56,7 +56,7 @@ pub enum WidgetKind {
     },
     /// A signature field, to be signed in the app.
     Signature,
-    /// A date field with its Acrobat format pattern (`yyyy-mm-dd`).
+    /// A date field with its PDF format pattern (`yyyy-mm-dd`).
     Date(String),
     CheckBox {
         on: String,
@@ -316,7 +316,7 @@ fn is_row(node: &Node) -> bool {
     matches!(node, Node::Subform(s) if s.layout == Layout::Row)
 }
 
-/// The Acrobat date pattern for an XFA picture clause such as `date{YYYY-MM-DD}`.
+/// The PDF date pattern for an XFA picture clause such as `date{YYYY-MM-DD}`.
 fn date_pattern(picture: Option<&str>) -> String {
     let p = picture.unwrap_or("");
     let inner = p.find('{').and_then(|a| p[a + 1..].find('}').map(|b| &p[a + 1..a + 1 + b])).unwrap_or(p);

@@ -149,7 +149,7 @@ impl<'a> UntypedIter<'a> {
                 // the number is followed by a regular character, in which case it
                 // should behave more like an operator (even though there exists
                 // no operator that starts with a number). In order to preserve
-                // similar behavior to Acrobat and Chromium, we try to consume
+                // similar behavior to PDF and Chromium, we try to consume
                 // such an operator and then simply skip it.
                 if let Some(object) = self.reader.read_without_context::<Object<'_>>() {
                     self.stack.push(object)?;

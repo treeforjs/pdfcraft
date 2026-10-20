@@ -169,11 +169,11 @@ pub enum EncryptionVersion<'a> {
         permissions: Permissions,
     },
     /// (PDF 2.0; deprecated in PDF 2.0) Shall not be used. This value was used by a deprecated
-    /// proprietary Adobe extension.
+    /// proprietary legacy extension.
     ///
     /// This exists for testing purposes to guarantee improved compatibility.
     #[deprecated(
-        note = "R5 is a proprietary Adobe extension and should not be used in newly produced documents other than for testing purposes."
+        note = "R5 is a proprietary legacy extension and should not be used in newly produced documents other than for testing purposes."
     )]
     R5 {
         encrypt_metadata: bool,

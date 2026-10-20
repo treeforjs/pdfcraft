@@ -4,9 +4,9 @@
 #
 # Clean-room: every entry was written from the plain meaning of the English label using ordinary
 # Spanish computing vocabulary (European Spanish, informal "tú"). No proprietary localisation
-# resource, string table or product UI (Acrobat's included) was consulted or copied; add entries
+# resource, string table or product UI was consulted or copied; add entries
 # the same way.
-# Product and technology names (PdfCraft, PDF, Acrobat JavaScript ...) are not translated;
+# Product and technology names (PdfCraft, PDF, PDF JavaScript ...) are not translated;
 # the trailing "…" of dialog commands is kept.
 
 	Menu	Menú
@@ -80,7 +80,7 @@
 	Fit to width	Ajustar al ancho
 	Display theme	Tema de visualización
 	Side panels	Paneles laterales
-	Enable Acrobat JavaScript	Activar Acrobat JavaScript
+	Enable PDF JavaScript	Activar PDF JavaScript
 	OK	Aceptar
 	Close	Cerrar
 	Next / previous match	Coincidencia siguiente / anterior
@@ -152,7 +152,7 @@
 	Files you open in PdfCraft appear here. Drop a PDF anywhere to open it.	Los archivos que abras en PdfCraft aparecerán aquí. Suelta un PDF en cualquier parte para abrirlo.
 	Privacy	Privacidad
 	PdfCraft works offline. No telemetry, no account, and no cloud processing unless you add a provider.	PdfCraft funciona sin conexión. Sin telemetría, sin cuenta y sin procesamiento en la nube, salvo que añadas un proveedor.
-	Scripts run in a sandbox without file or network access. With JavaScript off, Acrobat's standard format, validate and calculate functions still work.	Los scripts se ejecutan en un entorno aislado, sin acceso a archivos ni a la red. Con JavaScript desactivado, las funciones estándar de formato, validación y cálculo de Acrobat siguen funcionando.
+	Scripts run in a sandbox without file or network access. With JavaScript off, the viewer's standard format, validate and calculate functions still work.	Los scripts se ejecutan en un entorno aislado, sin acceso a archivos ni a la red. Con JavaScript desactivado, las funciones estándar de formato, validación y cálculo de PDF siguen funcionando.
 	Back to all tools	Volver a todas las herramientas
 	Close panel	Cerrar panel
 	View less	Ver menos
@@ -449,8 +449,6 @@
 	Console	Consola
 	Document JavaScripts	JavaScripts del documento
 	Document actions	Acciones del documento
-	AI assistant	Asistente de IA
-	Bring your own model (off by default)	Usa tu propio modelo (desactivado por defecto)
 	Summarize	Resumir
 	Ask about this document	Preguntar sobre este documento
 	Translate	Traducir
@@ -458,7 +456,6 @@
 	Planned	Previsto
 	Planned for milestone	Previsto para el hito
 	open to see what it will include	abre para ver qué incluirá
-	Optional: needs an AI provider you configure	Opcional: necesita un proveedor de IA que configures
 	Coming in milestone	Llegará en el hito
 	Items marked Ready work today.	Los elementos marcados como Listo ya funcionan.
 	Preview	Vista previa
@@ -1341,10 +1338,10 @@
 	Weak	Débil
 	Advanced Options {chevron}	Opciones avanzadas {chevron}
 	Compatibility	Compatibilidad
-	Acrobat X and later (256-bit AES)	Acrobat X y posteriores (AES de 256 bits)
-	Acrobat 7.0 and later (128-bit AES)	Acrobat 7.0 y posteriores (AES de 128 bits)
-	Acrobat 5.0 and later (128-bit RC4)	Acrobat 5.0 y posteriores (RC4 de 128 bits)
-	Acrobat 3.0 and later (40-bit RC4)	Acrobat 3.0 y posteriores (RC4 de 40 bits)
+	AES-256	AES-256
+	AES-128	AES-128
+	RC4-128	RC4-128
+	RC4-40	RC4-40
 	Encrypt	Cifrar
 	All document contents	Todo el contenido del documento
 	All document contents except metadata	Todo el contenido del documento excepto los metadatos
@@ -1682,7 +1679,6 @@
 	Downloading attachments on the web arrives with M3.10 ({n} bytes ready)	La descarga de archivos adjuntos en la versión web llegará con M3.10 ({n} bytes listos)
 	`{command}` {when}	`{command}` {when}
 	ships in milestone {m}	llegará en el hito {m}
-	needs an AI provider (off by default)	necesita un proveedor de IA (desactivado por defecto)
 	is available	está disponible
 	is not available yet	aún no está disponible
 	{label} failed: {e}	{label} ha fallado: {e}
@@ -1746,7 +1742,7 @@
 	At least one signature has problems.	Al menos una firma tiene problemas.
 	This document is secured. Some changes are restricted by its security settings.	Este documento está protegido. Su configuración de seguridad restringe algunos cambios.
 	This is a dynamic XFA form, which PdfCraft can't display yet. What you see is the file's placeholder page.	Este es un formulario XFA dinámico, que PdfCraft aún no puede mostrar. Lo que ves es la página de marcador de posición del archivo.
-	This form also contains XFA data, which PdfCraft doesn't read yet. You can fill its fields, but Acrobat may show the XFA values instead.	Este formulario también contiene datos XFA, que PdfCraft aún no lee. Puedes rellenar sus campos, pero Acrobat puede mostrar los valores XFA en su lugar.
+	This form also contains XFA data, which PdfCraft doesn't read yet. You can fill its fields, but PDF may show the XFA values instead.	Este formulario también contiene datos XFA, que PdfCraft aún no lee. Puedes rellenar sus campos, pero PDF puede mostrar los valores XFA en su lugar.
 	This document contains {n} interactive form fields.	Este documento contiene {n} campos de formulario interactivos.
 	This file was damaged and has been repaired. Saving keeps the repaired version.	Este archivo estaba dañado y se ha reparado. Al guardar se conserva la versión reparada.
 	Dismiss	Cerrar
@@ -1988,7 +1984,7 @@
 	Open email app	Abrir la aplicación de correo
 	Open link	Abrir enlace
 	Open this web page?	¿Abrir esta página web?
-	Scripts run in a sandbox without file or network access. A script that asks to open a web page needs your permission first. With JavaScript off, Acrobat's standard format, validate and calculate functions still work.	Los scripts se ejecutan en un entorno aislado, sin acceso a archivos ni a la red. Un script que pida abrir una página web necesita antes tu permiso. Con JavaScript desactivado, las funciones estándar de formato, validación y cálculo de Acrobat siguen funcionando.
+	Scripts run in a sandbox without file or network access. A script that asks to open a web page needs your permission first. With JavaScript off, the viewer's standard format, validate and calculate functions still work.	Los scripts se ejecutan en un entorno aislado, sin acceso a archivos ni a la red. Un script que pida abrir una página web necesita antes tu permiso. Con JavaScript desactivado, las funciones estándar de formato, validación y cálculo de PDF siguen funcionando.
 	Sign yourself	Firmar tú mismo
 	Used when opening PDFs. An explicit launch or control mode takes precedence for the session.	Se usa al abrir archivos PDF. Un modo de inicio o de control explícito tiene prioridad durante la sesión.
 	Write this email?	¿Escribir este correo?

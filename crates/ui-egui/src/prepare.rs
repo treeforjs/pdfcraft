@@ -1,9 +1,9 @@
-//! Prepare a form (Acrobat's Prepare Form, execution plan M6.6): add fields with the field
+//! Prepare a form (the viewer's Prepare Form, execution plan M6.6): add fields with the field
 //! tools (click for the default size, or drag a rectangle), select, move and resize them, see
 //! their name tags, delete them, and edit them in Field Properties.
 //!
 //! While the Prepare a form panel is open the page shows every field with a light-blue fill and
-//! its name; clicks select fields instead of filling them in, as in Acrobat.
+//! its name; clicks select fields instead of filling them in, as in other viewers.
 
 use egui::{Color32, CornerRadius, Pos2, Rect, Stroke, vec2};
 use pdfcraft_engine::form_scripts::{CalcOp, Calculate, DATE_PRESETS, Format, TIME_PRESETS, Validate, format_value};
@@ -14,7 +14,7 @@ use crate::canvas::{DocView, PageXform};
 use crate::theme;
 
 const SELECT_BLUE: Color32 = Color32::from_rgb(0x14, 0x73, 0xE6);
-/// Acrobat's field fill in Prepare Form (light blue).
+/// The viewer's field fill in Prepare Form (light blue).
 const FIELD_FILL: Color32 = Color32::from_rgba_premultiplied(0x1B, 0x34, 0x54, 0x59);
 
 /// The Add form components tools.
@@ -967,7 +967,7 @@ pub(crate) fn body(ui: &mut egui::Ui, d: &mut FieldDraft, t: &crate::theme::Toke
     ui.separator();
     ui.add_space(6.0);
     let mut enter = false;
-    // A locked field keeps its properties until it is unlocked (Acrobat greys them out).
+    // A locked field keeps its properties until it is unlocked (PDF greys them out).
     let was_locked = d.original.as_ref().as_ref().is_some_and(|o| o.locked) && d.locked;
     if was_locked {
         ui.label(egui::RichText::new(tl!("This field is locked. Unlock it to change its properties.")).small().color(t.text_muted));

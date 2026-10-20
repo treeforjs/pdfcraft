@@ -1,7 +1,7 @@
 //! Ink separations and total area coverage (TAC): what each printing plate (process C, M, Y,
 //! K and every spot or DeviceN colorant) receives at each spot of a page, and the sum of
 //! those inks (0–400 %, more with spot inks), with the regions where it exceeds a press limit
-//! (Acrobat's Output Preview: the separations list, the ink percentages under the cursor and
+//! (the viewer's Output Preview: the separations list, the ink percentages under the cursor and
 //! the "Total Area Coverage" warning; 300 % by default).
 //!
 //! The page renderer only produces RGB, so this module has its own small, bounded ink

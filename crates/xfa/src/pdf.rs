@@ -18,7 +18,7 @@ pub const SOM_KEY: &[u8] = b"PCSom";
 /// laid out again.
 pub const LAYOUT_KEY: &[u8] = b"PCXfaLayout";
 /// Private key on generated push buttons whose template has a click script: the button has no
-/// PDF action (the script is XFA's, not Acrobat JavaScript); PdfCraft runs the script by the
+/// PDF action (the script is XFA's, not PDF JavaScript); PdfCraft runs the script by the
 /// field's SOM path.
 pub const CLICK_KEY: &[u8] = b"PCXfaClick";
 
@@ -53,7 +53,7 @@ fn parse_hex32(s: &[u8]) -> Option<[u8; 32]> {
     Some(out)
 }
 
-/// Width, height, components and whether an Adobe APP14 segment is present (such CMYK JPEGs
+/// Width, height, components and whether an APP14 segment is present (such CMYK JPEGs
 /// store inverted values).
 fn jpeg_info(data: &[u8]) -> Option<(u32, u32, u8, bool)> {
     if data.get(0..2)? != [0xFF, 0xD8] {
@@ -61,7 +61,7 @@ fn jpeg_info(data: &[u8]) -> Option<(u32, u32, u8, bool)> {
     }
     let mut i = 2usize;
     let mut guard = 0;
-    let mut adobe = false;
+    let mut app14 = false;
     while i + 4 <= data.len() && guard < 10_000 {
         guard += 1;
         if *data.get(i)? != 0xFF {
@@ -79,14 +79,14 @@ fn jpeg_info(data: &[u8]) -> Option<(u32, u32, u8, bool)> {
         }
         let len = u16::from_be_bytes([*data.get(i + 2)?, *data.get(i + 3)?]) as usize;
         if marker == 0xEE && data.get(i + 4..i + 9) == Some(b"Adobe") {
-            adobe = true;
+            app14 = true;
         }
         let sof = matches!(marker, 0xC0..=0xCF) && !matches!(marker, 0xC4 | 0xC8 | 0xCC);
         if sof {
             let h = u16::from_be_bytes([*data.get(i + 5)?, *data.get(i + 6)?]) as u32;
             let w = u16::from_be_bytes([*data.get(i + 7)?, *data.get(i + 8)?]) as u32;
             let comps = *data.get(i + 9)?;
-            return (w > 0 && h > 0).then_some((w, h, comps, adobe));
+            return (w > 0 && h > 0).then_some((w, h, comps, app14));
         }
         i = i.checked_add(2)?.checked_add(len.max(2))?;
     }
@@ -364,7 +364,7 @@ impl Emitter<'_> {
                 ff |= 1 << 16;
                 mk.set(b"CA".to_vec(), Object::String(PdfString::text(caption)));
                 if let Some(Action::Script(_)) = &w.action {
-                    // An XFA click script is no Acrobat JavaScript: no PDF action, which other
+                    // An XFA click script is no PDF JavaScript: no PDF action, which other
                     // viewers would run; PdfCraft finds the script by the field's SOM path.
                     d.set(CLICK_KEY.to_vec(), Object::Bool(true));
                 } else if let Some(a) = &w.action {
@@ -439,7 +439,7 @@ impl Emitter<'_> {
         d.set(b"BitsPerComponent".to_vec(), Object::Int(8));
         match crate::image::kind(data) {
             Some(crate::image::Kind::Jpeg) => {
-                let Some((iw, ih, comps, adobe)) = jpeg_info(data) else {
+                let Some((iw, ih, comps, app14)) = jpeg_info(data) else {
                     self.warnings.push(format!("a {what} image is not a readable JPEG and is left out"));
                     return None;
                 };
@@ -453,8 +453,8 @@ impl Emitter<'_> {
                         _ => "DeviceRGB",
                     }),
                 );
-                if comps == 4 && adobe {
-                    // Adobe APP14 JPEGs store inverted CMYK.
+                if comps == 4 && app14 {
+                    // APP14 JPEGs store inverted CMYK.
                     d.set(b"Decode".to_vec(), Object::Array([1, 0, 1, 0, 1, 0, 1, 0].iter().map(|v| Object::Int(*v)).collect()));
                 }
                 d.set(b"Filter".to_vec(), Object::name("DCTDecode"));

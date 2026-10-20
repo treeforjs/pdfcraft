@@ -1,4 +1,4 @@
-//! Fill & Sign (Acrobat's Fill & Sign tool, execution plan M5.7): type text onto the page, place
+//! Fill & Sign (the viewer's Fill & Sign tool, execution plan M5.7): type text onto the page, place
 //! ✓ ✕ ● ─ marks and today's date (in Preferences ▸ Date format), and sign with a drawn
 //! signature. Everything is an annotation (typewriter text, PdfCraft-drawn stamps, ink), so it
 //! can be moved, deleted and undone like any comment.
@@ -169,7 +169,7 @@ pub struct TypeBox {
     pub focus: bool,
 }
 
-/// The size Fill & Sign uses for typed text (Acrobat's default is 10 pt).
+/// The size Fill & Sign uses for typed text (the viewer's default is 10 pt).
 pub const TEXT_SIZE: f64 = 10.0;
 
 fn to_user(xf: &PageXform, info: &DocInfo, page: usize, p: Pos2) -> [f64; 2] {

@@ -71,7 +71,7 @@ impl PageText {
         self.find_opts(needle, false, false)
     }
 
-    /// Search with Acrobat's find options: case-sensitive, whole words only.
+    /// Search with the viewer's find options: case-sensitive, whole words only.
     pub fn find_opts(&self, needle: &str, case_sensitive: bool, whole_words: bool) -> Vec<std::ops::Range<usize>> {
         let (chars, owner) = self.search_chars(!case_sensitive);
         find_in_chars(&chars, needle, case_sensitive, whole_words).into_iter().map(|r| owner[r.start]..owner[r.end - 1] + 1).collect()
@@ -307,7 +307,7 @@ pub(crate) fn extract_page(pdf: &Pdf, page: usize, settings: &InterpreterSetting
     let (w, h) = p.render_dimensions();
     let cache = InterpreterCache::new();
     // Annotation appearances are included: form-field values and comment text are searchable,
-    // as in Acrobat, and match what other extractors report.
+    // as in other viewers, and match what other extractors report.
     let settings = settings.clone();
     let initial = p.initial_transform(true).to_kurbo();
     let mut ctx = Context::new(initial, Rect::new(0.0, 0.0, w as f64, h as f64), &cache, p.xref(), settings);
@@ -399,7 +399,7 @@ fn union(a: &mut [f32; 4], b: &[f32; 4]) {
     a[3] = a[3].max(b[3]);
 }
 
-/// Char ranges of `needle` in `chars` (see [`PageText::search_text`]), with Acrobat's find
+/// Char ranges of `needle` in `chars` (see [`PageText::search_text`]), with the viewer's find
 /// options; `chars` must be case-folded already when `case_sensitive` is false. Matches do not
 /// overlap; whitespace runs in the needle match one space.
 pub fn find_in_chars(chars: &[char], needle: &str, case_sensitive: bool, whole_words: bool) -> Vec<std::ops::Range<usize>> {

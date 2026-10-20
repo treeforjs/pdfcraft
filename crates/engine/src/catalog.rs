@@ -1,11 +1,11 @@
-//! The tool catalogue: Acrobat's "All tools" information architecture, as data.
+//! The tool catalogue: the viewer's "All tools" information architecture, as data.
 //!
 //! Every UI (the egui shell today, anything tomorrow) builds its tool panel, palette and menus
 //! from this table; nothing is hard-coded in the toolkit. Each item names the command it will
 //! dispatch and the milestone (plan/execution-plan.md) in which it ships, so the UI can be honest
 //! about what works today.
 //!
-//! Source of the inventory: plan/acrobat/02-ui-ux.md §2 (observed in Acrobat Pro 26.002).
+//! Source of the inventory: plan/reference/02-ui-ux.md §2 (observed in PDF 26.002).
 
 /// Where a tool or item stands.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -14,8 +14,6 @@ pub enum Availability {
     Ready,
     /// Planned; ships in the named milestone.
     Planned(&'static str),
-    /// Cloud-only in Acrobat; PdfCraft offers an optional pluggable provider instead.
-    Provider,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -37,7 +35,7 @@ pub struct ToolGroup {
     pub id: &'static str,
     pub label: &'static str,
     pub icon: &'static str,
-    /// Icon tint, as Acrobat colour-codes its tool families.
+    /// Icon tint for the tool family.
     pub hue: [u8; 3],
     pub badge: Option<&'static str>,
     pub availability: Availability,
@@ -48,7 +46,7 @@ const fn item(label: &'static str, icon: &'static str, command: &'static str, av
     ToolItem { label, icon, command, availability }
 }
 
-use Availability::{Planned, Provider, Ready};
+use Availability::{Planned, Ready};
 
 const RED: [u8; 3] = [0xE0, 0x3E, 0x3E];
 const PURPLE: [u8; 3] = [0x8E, 0x4E, 0xE6];
@@ -506,22 +504,6 @@ pub static TOOL_GROUPS: &[ToolGroup] = &[
                 item("Console", "braces", "js.console", Planned("M6")),
                 item("Document JavaScripts", "file-text", "js.document", Planned("M6")),
                 item("Document actions", "list-checks", "js.actions", Planned("M6")),
-            ],
-        }],
-    },
-    ToolGroup {
-        id: "ai",
-        label: "AI assistant",
-        icon: "sparkles",
-        hue: PINK,
-        badge: Some("Optional"),
-        availability: Provider,
-        sections: &[ToolSection {
-            title: "Bring your own model (off by default)",
-            items: &[
-                item("Summarize", "sparkles", "ai.summary", Provider),
-                item("Ask about this document", "message-circle-reply", "ai.ask", Provider),
-                item("Translate", "languages", "ai.translate", Provider),
             ],
         }],
     },

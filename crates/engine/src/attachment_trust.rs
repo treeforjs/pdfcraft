@@ -1,6 +1,6 @@
 //! Trust Manager ▸ file attachments: which attachment types may be opened or launched.
 //!
-//! Acrobat keeps a list of file extensions it will and won't open from a PDF's attachments:
+//! The viewer keeps a list of file extensions it will and won't open from a the viewer's attachments:
 //! programs and scripts (`.exe`, `.bat`, `.js`, `.vbs`, …) are blocked, and a type it doesn't
 //! know asks first. This is the same policy, kept on the [`Session`] so the app and the
 //! automation tools agree.

@@ -23,7 +23,7 @@ pub const PUBLIC_KEY_FILTER: &[u8] = b"Adobe.PubSec";
 /// The SubFilter PdfCraft writes: envelopes in the crypt filter, crypt filters for streams and
 /// strings (PDF 1.6 and later; the only one PDF 2.0 keeps besides s4).
 pub const SUBFILTER_S5: &[u8] = b"adbe.pkcs7.s5";
-/// The most `/Recipients` entries read. Acrobat writes one per distinct permission set.
+/// The most `/Recipients` entries read. PDF writes one per distinct permission set.
 pub const MAX_RECIPIENTS: usize = 1024;
 /// The largest single `/Recipients` entry read (an envelope for thousands of recipients is still
 /// far smaller).

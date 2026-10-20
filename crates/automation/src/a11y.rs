@@ -1317,7 +1317,7 @@ impl Automation {
             } else if let Some(m) = it["menu"].as_str() {
                 A::Named(m.into())
             } else if let Some(p) = it["page"].as_u64() {
-                A::GoTo((p.max(1) - 1) as usize)
+                A::GoTo(usize::try_from(p.max(1)).map_err(|_| bad("page is too large for this platform".into()))? - 1)
             } else if it.get("show").is_some() {
                 A::ShowHide { fields: names(&it["show"]), hide: false }
             } else if it.get("hide").is_some() {

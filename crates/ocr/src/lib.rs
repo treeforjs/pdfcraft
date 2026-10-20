@@ -4,7 +4,7 @@
 //! fetched by `cargo xtask models`; see ATTRIBUTION.toml). The caller renders a page to pixels;
 //! [`Ocr::recognize`] finds the words in them, and [`text_layer`] turns words placed in user space
 //! into page content: invisible text (rendering mode 3) over each word, so the page becomes a
-//! searchable image (Acrobat's "Searchable Image (Exact)": the image is left untouched).
+//! searchable image (the viewer's "Searchable Image (Exact)": the image is left untouched).
 //!
 //! Engines are pluggable ([`engines`]): ocrs is the default, and an installed Tesseract program
 //! can be used instead ([`tesseract`], run as a separate process, never linked or shipped).

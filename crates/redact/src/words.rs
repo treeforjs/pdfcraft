@@ -1,4 +1,4 @@
-//! Search & Redact word lists (Acrobat's Find Text ▸ Multiple words or phrases): every match of
+//! Search & Redact word lists (the viewer's Find Text ▸ Multiple words or phrases): every match of
 //! any word or phrase in a list, typed one per line or imported from a text file. Like the
 //! patterns, the matcher works on a page's text as characters and returns character ranges.
 

@@ -934,7 +934,7 @@ fn node_set(_: &JsValue, args: &[JsValue], ctx: &mut Context) -> JsResult<JsValu
     let som = n.som.clone();
     match key.as_str() {
         "rawValue" | "value" | "formattedValue" => {
-            // Not a field: the property doesn't exist, as in Acrobat, and nothing is recorded.
+            // Not a field: the property doesn't exist, as in other viewers, and nothing is recorded.
             h.set_value(idx, value);
         }
         "presence" => {
@@ -1118,7 +1118,7 @@ fn install(ctx: &mut Context, event: &XfaEvent, doc: &XfaDoc, current: usize) ->
         .function(NativeFunction::from_fn_ptr(noop), js_string!("getFocus"), 0)
         .property(js_string!("currentPage"), JsValue::from(doc.page as f64), rw)
         .property(js_string!("numPages"), JsValue::from(doc.page_count as f64), rw)
-        .property(js_string!("name"), s("Acrobat"), Attribute::READONLY)
+        .property(js_string!("name"), s("PDF"), Attribute::READONLY)
         .property(js_string!("appType"), s("Exchange-Pro"), Attribute::READONLY)
         .property(js_string!("version"), s("11"), Attribute::READONLY)
         .property(js_string!("variation"), s("Full"), Attribute::READONLY)

@@ -154,7 +154,7 @@ impl Default for SaveOptions {
     }
 }
 
-/// Objects per object stream (Acrobat and qpdf use 100–200).
+/// Objects per object stream (PDF and qpdf use 100–200).
 const OBJSTM_SIZE: usize = 100;
 /// Keep a batch's serialized body small as well as limiting its object count. One object
 /// may exceed this target; it is emitted in its own object stream without retaining a batch.

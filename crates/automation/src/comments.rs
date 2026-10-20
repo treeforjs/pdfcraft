@@ -161,7 +161,7 @@ impl Automation {
         let (Some(page), Some(index)) = (a.opt_int("page")?, a.opt_int("index")?) else {
             return Err(ToolError::InvalidArgs("pass the comment's id, or page and index".into()));
         };
-        let (page, index) = ((page.max(1) - 1) as usize, (index.max(1) - 1) as usize);
+        let (page, index) = (crate::one_based_index(page.max(1), "page")?, crate::one_based_index(index.max(1), "index")?);
         if !all.iter().any(|c| c.page == page && c.index == index) {
             return Err(failed(format!("there is no comment {} on page {} (see comment_list)", index + 1, page + 1)));
         }
@@ -170,7 +170,7 @@ impl Automation {
 
     pub(crate) fn comment_list(&self, a: &Args) -> Result<Value> {
         let doc = self.doc(a)?;
-        let only = a.opt_int("page")?.map(|p| (p.max(1) - 1) as usize);
+        let only = a.opt_int("page")?.map(|p| crate::one_based_index(p.max(1), "page")).transpose()?;
         let all = self.comments(a)?;
         let view = |c: &Annotation| -> Value {
             let p = &doc.info.pages[c.page.min(doc.info.pages.len().saturating_sub(1))];
@@ -674,7 +674,7 @@ impl Automation {
             file: pdfcraft_engine::MarkFile {
                 name: file,
                 bytes: std::sync::Arc::new(bytes),
-                page: a.opt_int("file_page")?.unwrap_or(1).max(1) as usize - 1,
+                page: crate::one_based_index(a.opt_int("file_page")?.unwrap_or(1).max(1), "file_page")?,
             },
             author: a.opt_str("author")?.unwrap_or(DEFAULT_AUTHOR).to_string(),
         };

@@ -67,7 +67,7 @@ pub struct DocInfo {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Xfa {
     /// The pages and fields are ordinary PDF; the XFA packets describe the same form (and hold
-    /// its data, which Acrobat shows in preference to the fields).
+    /// its data, which the viewer shows in preference to the fields).
     Static,
     /// The form is laid out from the XFA packets at open (`/NeedsRendering`, or no fields): the
     /// PDF pages are only a placeholder.
@@ -256,7 +256,7 @@ pub struct Annotation {
     pub color: Option<[f32; 3]>,
     /// Position in the page's `/Annots` (how edits address the comment).
     pub index: usize,
-    /// For a status reply (`/State`, Acrobat's "Set status"): the state it sets.
+    /// For a status reply (`/State`, the viewer's "Set status"): the state it sets.
     pub state: Option<String>,
     /// Text markup quadrilaterals (`/QuadPoints`), 8 numbers each.
     pub quads: Vec<[f32; 8]>,
@@ -489,7 +489,7 @@ impl<'a> Inspector<'a> {
                 self.field(f, None, &mut info.fields, &mut field_seen, 0);
             }
         }
-        // Widgets no `/Fields` entry reaches are fields too (Acrobat and the browsers fill them);
+        // Widgets no `/Fields` entry reaches are fields too (PDF and the browsers fill them);
         // each is adopted through its topmost unlisted `/Parent`, so a split field stays one.
         let mut pages: Vec<_> = self.page_index.iter().collect();
         pages.sort_by_key(|(_, i)| **i);

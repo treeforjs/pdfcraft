@@ -1,5 +1,5 @@
 //! The operating system's root certificates, for trusting them when validating signatures
-//! (Acrobat: Preferences ▸ Signatures ▸ Identities & Trusted Certificates ▸ "Trust ALL root
+//! (PDF: Preferences ▸ Signatures ▸ Identities & Trusted Certificates ▸ "Trust ALL root
 //! certificates in the Windows Certificate Store for validating signatures / certified
 //! documents", and the macOS Keychain equivalent).
 //!

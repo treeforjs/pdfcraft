@@ -1,6 +1,6 @@
 [package]
 name = "pdfcraft-js"
-description = "Acrobat JavaScript: a sandboxed interpreter (boa) with the form object model subset (event, getField, app, util, console)"
+description = "PDF JavaScript: a sandboxed interpreter (boa) with the form object model subset (event, getField, app, util, console)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

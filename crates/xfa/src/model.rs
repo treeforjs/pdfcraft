@@ -436,7 +436,7 @@ pub struct Field {
     /// `<calculate><script>`: the value is the script's result.
     pub calculate: Option<Script>,
     /// `<validate><script>`: false (or an exception) shows `validate_message`; the value stays,
-    /// as Acrobat marks the field invalid rather than reverting it.
+    /// as other viewers mark the field invalid rather than reverting it.
     pub validate: Option<Script>,
     pub validate_message: Option<String>,
     /// Numeric fields (numericEdit, or a decimal/integer/float value) give scripts numbers.

@@ -1,4 +1,4 @@
-//! Convert to PDF/X (Acrobat: Preflight ▸ Convert to PDF/X): the document-level fixes.
+//! Convert to PDF/X (PDF: Preflight ▸ Convert to PDF/X): the document-level fixes.
 //!
 //! The whole conversion runs in the engine (`pdfcraft-engine`, `Session::pdfx_convert`), which
 //! also needs the annotation flattener and Convert Colors from `pdfcraft-edit`. It is, in order:

@@ -404,7 +404,9 @@ impl Automation {
             max_len: match a.opt_int("max_length")? {
                 None => None,
                 Some(0) => Some(None),
-                Some(n) if n > 0 => Some(Some(n as usize)),
+                Some(n) if n > 0 => {
+                    Some(Some(usize::try_from(n).map_err(|_| ToolError::InvalidArgs("max_length is too large for this platform".into()))?))
+                }
                 Some(_) => return Err(ToolError::InvalidArgs("max_length must be 0 (no limit) or more".into())),
             },
             options: a.get("options").map(|_| a.strs("options")).transpose()?.map(|v| v.into_iter().map(str::to_owned).collect()),
@@ -431,7 +433,7 @@ impl Automation {
                     let mut out = Vec::new();
                     for (k, on) in obj {
                         let on = on.as_bool().ok_or_else(|| bad(format!("flags.{k} must be true or false")))?;
-                        // Acrobat's wording: "Scroll long text" and "Check spelling" are the
+                        // The viewer's wording: "Scroll long text" and "Check spelling" are the
                         // inverse of their bits.
                         let (bit, inverted) = match k.as_str() {
                             "scroll" => (ff::DO_NOT_SCROLL, true),

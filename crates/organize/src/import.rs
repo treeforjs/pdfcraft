@@ -602,7 +602,7 @@ pub fn split(src: &Document, by: &SplitBy) -> Result<Vec<Document>, OrganizeErro
 }
 
 /// Combine whole documents, in order, into a new document. Each source gets a top-level
-/// bookmark (its `title`) pointing to its first page, like Acrobat's Combine Files.
+/// bookmark (its `title`) pointing to its first page, like the viewer's Combine Files.
 /// The source's own bookmarks are nested (collapsed) under its entry, and its document-level
 /// attachments are carried over. When every source declares the same print standard (PDF/X
 /// with the same output intent), so does the result.

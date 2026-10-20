@@ -11,8 +11,8 @@
 #
 # Clean-room: every entry was written from the plain meaning of the English label using ordinary
 # Ukrainian computing vocabulary. No proprietary localisation resource, string table or product UI
-# (Acrobat's included) was consulted or copied; add entries the same way.
-# Product and technology names (PdfCraft, PDF, Acrobat JavaScript ...) stay in Latin letters;
+# (PDF's included) was consulted or copied; add entries the same way.
+# Product and technology names (PdfCraft, PDF, PDF JavaScript ...) stay in Latin letters;
 # the trailing "…" of dialog commands is kept.
 
 # Integer plurals (CLDR uk): one (1, 21) | few (2–4, 22–24) | many (0, 5–19); 11–14 take many.
@@ -85,7 +85,7 @@
 	Fit to width	За шириною
 	Display theme	Тема оформлення
 	Side panels	Бічні панелі
-	Enable Acrobat JavaScript	Увімкнути Acrobat JavaScript
+	Enable PDF JavaScript	Увімкнути PDF JavaScript
 	OK	OK
 	Close	Закрити
 	Next / previous match	Наступний / попередній збіг
@@ -157,7 +157,7 @@
 	Files you open in PdfCraft appear here. Drop a PDF anywhere to open it.	Тут з’являються файли, які ви відкриваєте в PdfCraft. Перетягніть PDF будь-куди, щоб відкрити його.
 	Privacy	Приватність
 	PdfCraft works offline. No telemetry, no account, and no cloud processing unless you add a provider.	PdfCraft працює офлайн. Без телеметрії, облікового запису та хмарної обробки, якщо ви не додасте постачальника.
-	Scripts run in a sandbox without file or network access. With JavaScript off, Acrobat's standard format, validate and calculate functions still work.	Сценарії виконуються в ізольованому середовищі без доступу до файлів і мережі. Коли JavaScript вимкнено, стандартні функції форматування, перевірки й обчислення Acrobat усе одно працюють.
+	Scripts run in a sandbox without file or network access. With JavaScript off, the viewer's standard format, validate and calculate functions still work.	Сценарії виконуються в ізольованому середовищі без доступу до файлів і мережі. Коли JavaScript вимкнено, стандартні функції форматування, перевірки й обчислення PDF усе одно працюють.
 	Back to all tools	Назад до всіх інструментів
 	Close panel	Закрити панель
 	View less	Показати менше
@@ -454,8 +454,6 @@
 	Console	Консоль
 	Document JavaScripts	Сценарії JavaScript документа
 	Document actions	Дії документа
-	AI assistant	ШІ-асистент
-	Bring your own model (off by default)	Додайте власну модель (типово вимкнено)
 	Summarize	Створити зведення
 	Ask about this document	Запитати про цей документ
 	Translate	Перекласти
@@ -463,7 +461,6 @@
 	Planned	Заплановано
 	Planned for milestone	Заплановано на етап
 	open to see what it will include	відкрийте, щоб побачити, що він міститиме
-	Optional: needs an AI provider you configure	Необов’язково: потрібен налаштований вами постачальник ШІ
 	Coming in milestone	З’явиться на етапі
 	Items marked Ready work today.	Елементи з позначкою «Готово» вже працюють.
 	Preview	Попередній перегляд
@@ -1345,10 +1342,10 @@
 	Weak	Слабкий
 	Advanced Options {chevron}	Додаткові параметри {chevron}
 	Compatibility	Сумісність
-	Acrobat X and later (256-bit AES)	Acrobat X і новіші (256-бітний AES)
-	Acrobat 7.0 and later (128-bit AES)	Acrobat 7.0 і новіші (128-бітний AES)
-	Acrobat 5.0 and later (128-bit RC4)	Acrobat 5.0 і новіші (128-бітний RC4)
-	Acrobat 3.0 and later (40-bit RC4)	Acrobat 3.0 і новіші (40-бітний RC4)
+	AES-256	AES-256
+	AES-128	AES-128
+	RC4-128	RC4-128
+	RC4-40	RC4-40
 	Encrypt	Зашифрувати
 	All document contents	Увесь вміст документа
 	All document contents except metadata	Увесь вміст документа, крім метаданих
@@ -1675,7 +1672,6 @@
 	Downloading attachments on the web arrives with M3.10 ({n} bytes ready)	Завантаження вкладень у вебверсії з’явиться на етапі M3.10 (готово байтів: {n})
 	`{command}` {when}	`{command}` {when}
 	ships in milestone {m}	з’явиться на етапі {m}
-	needs an AI provider (off by default)	потребує постачальника ШІ (типово вимкнено)
 	is available	доступна
 	is not available yet	ще недоступна
 	{label} failed: {e}	Помилка «{label}»: {e}
@@ -1739,7 +1735,7 @@
 	At least one signature has problems.	Щонайменше один підпис має проблеми.
 	This document is secured. Some changes are restricted by its security settings.	Цей документ захищено. Деякі зміни обмежено налаштуваннями захисту.
 	This is a dynamic XFA form, which PdfCraft can't display yet. What you see is the file's placeholder page.	Це динамічна форма XFA, яку PdfCraft ще не може відобразити. Ви бачите сторінку-заглушку файлу.
-	This form also contains XFA data, which PdfCraft doesn't read yet. You can fill its fields, but Acrobat may show the XFA values instead.	Ця форма також містить дані XFA, які PdfCraft ще не читає. Ви можете заповнювати поля, але Acrobat може показувати натомість значення XFA.
+	This form also contains XFA data, which PdfCraft doesn't read yet. You can fill its fields, but PDF may show the XFA values instead.	Ця форма також містить дані XFA, які PdfCraft ще не читає. Ви можете заповнювати поля, але PDF може показувати натомість значення XFA.
 	This document contains {n} interactive form fields.	Цей документ містить інтерактивні поля форми: {n}.
 	This file was damaged and has been repaired. Saving keeps the repaired version.	Цей файл було пошкоджено й виправлено. Збереження збереже виправлену версію.
 	Dismiss	Приховати
@@ -1981,7 +1977,7 @@
 	Open email app	Відкрити поштовий застосунок
 	Open link	Відкрити посилання
 	Open this web page?	Відкрити цю вебсторінку?
-	Scripts run in a sandbox without file or network access. A script that asks to open a web page needs your permission first. With JavaScript off, Acrobat's standard format, validate and calculate functions still work.	Сценарії виконуються в ізольованому середовищі без доступу до файлів і мережі. Сценарій, що просить відкрити вебсторінку, спочатку потребує вашого дозволу. Коли JavaScript вимкнено, стандартні функції форматування, перевірки й обчислення Acrobat усе одно працюють.
+	Scripts run in a sandbox without file or network access. A script that asks to open a web page needs your permission first. With JavaScript off, the viewer's standard format, validate and calculate functions still work.	Сценарії виконуються в ізольованому середовищі без доступу до файлів і мережі. Сценарій, що просить відкрити вебсторінку, спочатку потребує вашого дозволу. Коли JavaScript вимкнено, стандартні функції форматування, перевірки й обчислення PDF усе одно працюють.
 	Sign yourself	Підписати самостійно
 	Used when opening PDFs. An explicit launch or control mode takes precedence for the session.	Використовується під час відкриття PDF. Явно заданий режим запуску або керування має пріоритет для сеансу.
 	Write this email?	Написати цього листа?
@@ -2060,17 +2056,13 @@
 	Last commit	Останній коміт
 	Last	Останній
 	No contributor data was built into this copy.	У цю копію не вбудовано даних про учасників.
-	No model credits were built into this copy.	У цю копію не вбудовано відомостей про моделі.
 	{n} contributors · {c} commits	Учасників: {n} · Комітів: {c}
 	Company	Компанія
 	Model	Модель
-	% of all commits	% усіх комітів
-	Lines +/−	Рядків +/−
 	@{login}: {prs} PRs, {commits} commits, +{added} / −{deleted} lines (Δ {delta}), +{bin_added} / −{bin_deleted} binary assets, {first} – {last}	@{login}: PR: {prs}, комітів: {commits}, +{added} / −{deleted} рядків (Δ {delta}), +{bin_added} / −{bin_deleted} бінарних ресурсів, {first} – {last}
 	None of those files can be made into a PDF; use PDFs, images or .txt files	Жоден із цих файлів неможливо перетворити на PDF; використовуйте PDF, зображення або файли .txt
 	About	Про застосунок
 	Contributors	Учасники
-	Models	Моделі
 	Only continue if you trust this document. An address can carry information from the document, such as what you typed into its form.	Продовжуйте лише якщо довіряєте цьому документу. Адреса може містити інформацію з документа, наприклад дані, введені у форму.
 	Print single-sided. Keep the sheets in order, cut at the marks, then stack the piles left to right, top to bottom.	Друкуйте з одного боку. Зберігайте порядок аркушів, розріжте за мітками, а потім складіть стоси зліва направо, згори донизу.
 comment menu	Edit	Редагувати

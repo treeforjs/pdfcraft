@@ -10,7 +10,7 @@
 //!
 //! **Document-level files are also attachments.** A file associated with the document is
 //! registered in the `/Names /EmbeddedFiles` name tree too (the same file specification), as
-//! PDF/A-3 expects and as Acrobat's Attachments panel shows them, and removing it takes it out
+//! PDF/A-3 expects and as the viewer's Attachments panel shows them, and removing it takes it out
 //! of that tree again. Files associated with pages, annotations, structure elements or XObjects
 //! are only in their owner's `/AF` (they are not document attachments). Removing never frees
 //! the file specification or its stream, since other objects may still use them; a full save

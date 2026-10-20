@@ -275,7 +275,7 @@ impl Document {
 
     fn open_with_credential_limit(data: Arc<Vec<u8>>, password: pdfcraft_crypt::Credential, stream_limit: usize) -> Result<Self, CosError> {
         // Viewers accept files whose header is missing or damaged as long as the body looks
-        // like PDF; so do we (a note goes to the repair log).
+        // like other viewers; we do too (a note goes to the repair log).
         let header = find(&data, b"%PDF-", 0, 1024);
         let headerless = header.is_none();
         if headerless && find(&data, b" obj", 0, 4096).is_none() {

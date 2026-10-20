@@ -7,7 +7,7 @@ let report = check(&doc, &Options::default());          // 31 of 32 rules (colou
 let html = report_html(&report, "file.pdf", "2026-10-02");
 ```
 
-- **32 rules in 7 categories**, as in Acrobat's full check: Document (permission flag,
+- **32 rules in 7 categories**, as in the viewer's full check: Document (permission flag,
   image-only, tagged, reading order, language, title, bookmarks, colour contrast), Page Content
   (tagged content, tagged annotations, tab order, character encoding, tagged multimedia, and
   four manual checks), Forms (tagged fields, descriptions), Alternate Text (figures, nested,

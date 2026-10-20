@@ -1,4 +1,4 @@
-//! Modal dialogs: Document Properties, Keyboard Shortcuts, About (with the Contributors and Models credits).
+//! Modal dialogs: Document Properties, Keyboard Shortcuts, About (with contributor credits).
 
 use egui::{Align, Layout};
 
@@ -1120,11 +1120,11 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
                 });
             }
             Dialog::About => {
-                // Tabs About · Contributors · Models (craftrules standards/contributors.md).
+                // About and contributor credits.
                 let tab_id = egui::Id::new("about_tab");
                 let mut tab = ui.data_mut(|d| d.get_temp::<u8>(tab_id)).unwrap_or(0);
                 ui.horizontal(|ui| {
-                    for (i, label) in ["About", "Contributors", "Models"].into_iter().enumerate() {
+                    for (i, label) in ["About", "Contributors"].into_iter().enumerate() {
                         let i = i as u8;
                         if widgets::mode_tab(ui, tl!(label), tab == i).clicked() {
                             tab = i;
@@ -1135,7 +1135,6 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
                 ui.separator();
                 match tab {
                     1 => crate::credits::contributors_ui(ui),
-                    2 => crate::credits::models_ui(ui),
                     _ => {
                         ui.label(egui::RichText::new("PdfCraft").font(theme::semibold(20.0)));
                         ui.label(crate::i18n::fmt(tl!("Version {v}"), &[("v", env!("CARGO_PKG_VERSION"))]));
@@ -1551,7 +1550,7 @@ fn yes(b: bool) -> String {
     tl!(if b { "Yes" } else { "No" }).to_string()
 }
 
-/// Password prompt for encrypted documents (Acrobat: "Password" dialog on open).
+/// Password prompt for encrypted documents (PDF: "Password" dialog on open).
 fn password(app: &mut PdfCraftApp, ctx: &egui::Context) {
     let Some(prompt) = app.password_prompt.as_mut() else { return };
     let t = Tokens::get(ctx);

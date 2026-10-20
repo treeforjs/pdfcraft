@@ -4,9 +4,9 @@
 #
 # Clean-room: every entry was written from the plain meaning of the English label using ordinary
 # German computing vocabulary (informal lowercase "du", infinitive for commands). No proprietary
-# localisation resource, string table or product UI (Acrobat's included) was consulted or copied;
+# localisation resource, string table or product UI was consulted or copied;
 # add entries the same way.
-# Product and technology names (PdfCraft, PDF, Acrobat JavaScript ...) are not translated;
+# Product and technology names (PdfCraft, PDF, PDF JavaScript ...) are not translated;
 # the trailing "…" of dialog commands is kept.
 
 	Menu	Menü
@@ -57,7 +57,7 @@
 	Fit to width	Seitenbreite
 	Display theme	Design
 	Side panels	Seitenleisten
-	Enable Acrobat JavaScript	Acrobat-JavaScript aktivieren
+	Enable PDF JavaScript	PDF-JavaScript aktivieren
 	Flatten Fill & Sign when saving	Ausfüllen und unterschreiben beim Speichern reduzieren
 	Text, marks and signatures become part of the page. Other comments stay editable.	Text, Markierungen und Unterschriften werden Teil der Seite. Andere Kommentare bleiben bearbeitbar.
 	OK	OK
@@ -131,7 +131,7 @@
 	Files you open in PdfCraft appear here. Drop a PDF anywhere to open it.	Dateien, die du in PdfCraft öffnest, erscheinen hier. Zieh ein PDF an eine beliebige Stelle, um es zu öffnen.
 	Privacy	Datenschutz
 	PdfCraft works offline. No telemetry, no account, and no cloud processing unless you add a provider.	PdfCraft funktioniert offline. Keine Telemetrie, kein Konto und keine Cloud-Verarbeitung, solange du keinen Anbieter hinzufügst.
-	Scripts run in a sandbox without file or network access. With JavaScript off, Acrobat's standard format, validate and calculate functions still work.	Skripte laufen in einer Sandbox ohne Datei- oder Netzwerkzugriff. Auch bei deaktiviertem JavaScript funktionieren die Acrobat-Standardfunktionen zum Formatieren, Prüfen und Berechnen weiterhin.
+	Scripts run in a sandbox without file or network access. With JavaScript off, the viewer's standard format, validate and calculate functions still work.	Skripte laufen in einer Sandbox ohne Datei- oder Netzwerkzugriff. Auch bei deaktiviertem JavaScript funktionieren die PDF-Standardfunktionen zum Formatieren, Prüfen und Berechnen weiterhin.
 	Back to all tools	Zurück zu allen Werkzeugen
 	Close panel	Bereich schließen
 	View less	Weniger anzeigen
@@ -428,8 +428,6 @@
 	Console	Konsole
 	Document JavaScripts	Dokument-JavaScripts
 	Document actions	Dokumentaktionen
-	AI assistant	KI-Assistent
-	Bring your own model (off by default)	Eigenes Modell nutzen (standardmäßig aus)
 	Summarize	Zusammenfassen
 	Ask about this document	Fragen zu diesem Dokument stellen
 	Translate	Übersetzen
@@ -437,7 +435,6 @@
 	Planned	Geplant
 	Planned for milestone	Geplant für Meilenstein
 	open to see what it will include	öffne es, um zu sehen, was enthalten sein wird
-	Optional: needs an AI provider you configure	Optional: erfordert einen von dir eingerichteten KI-Anbieter
 	Coming in milestone	Kommt mit Meilenstein
 	Items marked Ready work today.	Als „Bereit“ markierte Einträge funktionieren schon heute.
 	Preview	Vorschau
@@ -1327,10 +1324,10 @@
 	Weak	Schwach
 	Advanced Options {chevron}	Erweiterte Optionen {chevron}
 	Compatibility	Kompatibilität
-	Acrobat X and later (256-bit AES)	Acrobat X und neuer (256-Bit-AES)
-	Acrobat 7.0 and later (128-bit AES)	Acrobat 7.0 und neuer (128-Bit-AES)
-	Acrobat 5.0 and later (128-bit RC4)	Acrobat 5.0 und neuer (128-Bit-RC4)
-	Acrobat 3.0 and later (40-bit RC4)	Acrobat 3.0 und neuer (40-Bit-RC4)
+	AES-256	AES-256
+	AES-128	AES-128
+	RC4-128	RC4-128
+	RC4-40	RC4-40
 	Encrypt	Verschlüsseln
 	All document contents	Alle Dokumentinhalte
 	All document contents except metadata	Alle Dokumentinhalte außer Metadaten
@@ -1612,7 +1609,6 @@
 	Downloading attachments on the web arrives with M3.10 ({n} bytes ready)	Anhänge herunterladen kommt im Web mit M3.10 ({n} Bytes bereit)
 	`{command}` {when}	`{command}` {when}
 	ships in milestone {m}	erscheint mit Meilenstein {m}
-	needs an AI provider (off by default)	benötigt einen KI-Anbieter (standardmäßig aus)
 	is available	ist verfügbar
 	is not available yet	ist noch nicht verfügbar
 	{label} failed: {e}	{label} fehlgeschlagen: {e}
@@ -1676,7 +1672,7 @@
 	At least one signature has problems.	Mindestens eine Signatur weist Probleme auf.
 	This document is secured. Some changes are restricted by its security settings.	Dieses Dokument ist geschützt. Einige Änderungen sind durch seine Sicherheitseinstellungen eingeschränkt.
 	This is a dynamic XFA form, which PdfCraft can't display yet. What you see is the file's placeholder page.	Dies ist ein dynamisches XFA-Formular, das PdfCraft noch nicht anzeigen kann. Du siehst die Platzhalterseite der Datei.
-	This form also contains XFA data, which PdfCraft doesn't read yet. You can fill its fields, but Acrobat may show the XFA values instead.	Dieses Formular enthält auch XFA-Daten, die PdfCraft noch nicht liest. Du kannst die Felder ausfüllen, aber Acrobat zeigt eventuell stattdessen die XFA-Werte an.
+	This form also contains XFA data, which PdfCraft doesn't read yet. You can fill its fields, but PDF may show the XFA values instead.	Dieses Formular enthält auch XFA-Daten, die PdfCraft noch nicht liest. Du kannst die Felder ausfüllen, aber PDF zeigt eventuell stattdessen die XFA-Werte an.
 	This document contains {n} interactive form fields.	Dieses Dokument enthält {n} interaktive Formularfelder.
 	This file was damaged and has been repaired. Saving keeps the repaired version.	Diese Datei war beschädigt und wurde repariert. Beim Speichern bleibt die reparierte Version erhalten.
 	Dismiss	Ausblenden
@@ -1918,7 +1914,7 @@
 	Open email app	E-Mail-App öffnen
 	Open link	Link öffnen
 	Open this web page?	Diese Webseite öffnen?
-	Scripts run in a sandbox without file or network access. A script that asks to open a web page needs your permission first. With JavaScript off, Acrobat's standard format, validate and calculate functions still work.	Skripte laufen in einer Sandbox ohne Datei- oder Netzwerkzugriff. Ein Skript, das eine Webseite öffnen will, braucht zuerst deine Erlaubnis. Bei deaktiviertem JavaScript funktionieren die Standardfunktionen von Acrobat zum Formatieren, Prüfen und Berechnen weiterhin.
+	Scripts run in a sandbox without file or network access. A script that asks to open a web page needs your permission first. With JavaScript off, the viewer's standard format, validate and calculate functions still work.	Skripte laufen in einer Sandbox ohne Datei- oder Netzwerkzugriff. Ein Skript, das eine Webseite öffnen will, braucht zuerst deine Erlaubnis. Bei deaktiviertem JavaScript funktionieren die Standardfunktionen von PDF zum Formatieren, Prüfen und Berechnen weiterhin.
 	Sign yourself	Selbst unterschreiben
 	Used when opening PDFs. An explicit launch or control mode takes precedence for the session.	Wird beim Öffnen von PDFs verwendet. Ein ausdrücklich gewählter Start- oder Steuermodus hat für die Sitzung Vorrang.
 	Write this email?	Diese E-Mail schreiben?
@@ -1972,12 +1968,9 @@
 	Last commit	Letzter Commit
 	Last	Letzter
 	No contributor data was built into this copy.	In diese Version wurden keine Mitwirkendendaten eingebaut.
-	No model credits were built into this copy.	In diese Version wurden keine Modellnachweise eingebaut.
 	{n} contributors · {c} commits	{n} Mitwirkende · {c} Commits
 	Company	Unternehmen
 	Model	Modell
-	% of all commits	% aller Commits
-	Lines +/−	Zeilen +/−
 	@{login}: {prs} PRs, {commits} commits, +{added} / −{deleted} lines (Δ {delta}), +{bin_added} / −{bin_deleted} binary assets, {first} – {last}	@{login}: {prs} PRs, {commits} Commits, +{added} / −{deleted} Zeilen (Δ {delta}), +{bin_added} / −{bin_deleted} Binärdateien, {first} – {last}
 	Set layer visibility	Sichtbarkeit der Ebene festlegen
 	Created a PDF from {n} files	PDF aus {n} Dateien erstellt
@@ -2069,7 +2062,6 @@
 	Go to page…	Gehe zu Seite…
 	About	Über
 	Contributors	Mitwirkende
-	Models	Modelle
 	Only continue if you trust this document. An address can carry information from the document, such as what you typed into its form.	Fahre nur fort, wenn du diesem Dokument vertraust. Eine Adresse kann Informationen aus dem Dokument übermitteln, etwa was du in sein Formular eingegeben hast.
 	Print single-sided. Keep the sheets in order, cut at the marks, then stack the piles left to right, top to bottom.	Einseitig drucken. Halte die Blätter in Reihenfolge, schneide an den Marken und lege die Stapel dann von links nach rechts, von oben nach unten aufeinander.
 	Unlocked {n} of {m} files	{n} von {m} Dateien entsperrt

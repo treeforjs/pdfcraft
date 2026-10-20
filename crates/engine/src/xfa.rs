@@ -670,7 +670,7 @@ pub(crate) fn on_open(doc: &mut pdfcraft_cos::Document, tpl: &Template, run: &mu
 
 /// After fields `names` took new values: each one's change, exit and validate scripts, then
 /// the calculations once (or only those, after a reset). A validate script that answers false,
-/// or fails, shows its message; the value stays, as Acrobat marks the field invalid rather
+/// or fails, shows its message; the value stays, as other viewers mark the field invalid rather
 /// than reverting it.
 pub(crate) fn on_changes(doc: &mut pdfcraft_cos::Document, tpl: &Template, names: &[String], run: &mut XfaRun) -> Result<(), String> {
     let mut r = Runner::new(doc, tpl, run, OPEN_BUDGET_MS);
@@ -723,7 +723,7 @@ pub(crate) fn template(doc: &pdfcraft_cos::Document) -> Option<Arc<Template>> {
 }
 
 /// Push buttons PdfCraft generated for XFA click scripts carry no PDF action (the script is
-/// XFA's, not Acrobat JavaScript): give them one that runs the script by the field's SOM path.
+/// XFA's, not PDF JavaScript): give them one that runs the script by the field's SOM path.
 pub(crate) fn mark_script_buttons(doc: &pdfcraft_cos::Document, fields: &mut [pdfcraft_forms::Field]) {
     for f in fields.iter_mut() {
         if f.kind == pdfcraft_forms::FieldKind::PushButton

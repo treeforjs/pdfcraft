@@ -1,7 +1,7 @@
-# PdfCraft parity checklist vs Acrobat Pro (offline feature set). Generated from plan docs; maintained by hand.
+# PdfCraft offline PDF workflow inventory. Maintained with implementation and test evidence.
 # Validated and reported by `cargo xtask parity`. Schema: see the [schema] table.
 # Status rules: `shipped` = usable today with at least one cited test; `partial` = part exists (notes say what is
-# missing); `planned` = not started; `na` = Adobe-cloud-only (notes name the local or pluggable alternative).
+# missing); `planned` = not started; `na` = outside the local application scope.
 # `commands` lists registry ids from crates/engine/src/commands.rs only; `tools` lists crates/automation/src/tools.rs names.
 [schema]
 version = 1
@@ -263,7 +263,7 @@ status = "partial"
 commands = []
 tools = ["doc_open"]
 evidence = ["crates/crypt/src/tests.rs::public_key_file_keys_follow_the_spec_and_recipients_get_their_permissions", "crates/cos/tests/encryption.rs::certificate_security_round_trips_for_each_recipient", "crates/sign/tests/envelope.rs::openssl_cms_agrees", "crates/engine/src/tests.rs::openssl_recovers_the_seed_and_the_file_key_matches", "crates/automation/tests/automation.rs::certificate_security_through_tools"]
-notes = "Adobe.PubSec opened (adbe.pkcs7.s5 with AES-128/AES-256 tested; s4 and RC4 are read but untested) with a .p12/.pfx digital ID (doc_open certificate): CMS KeyTransRecipientInfo by issuer+serial or SKI, RSA PKCS#1 v1.5 or OAEP-SHA-1 (aws-lc-rs), AES and 3DES content tested (RC2 untested). Viewed through an in-memory decrypted copy (the bootstrap renderer reads only password security); saves re-encrypt. Cross-checked with openssl cms only (no Acrobat-made fixtures). Missing: OS key stores/smart cards, ECDH (KeyAgree) recipients, XFA layout on open, desktop UI."
+notes = "Adobe.PubSec opened (adbe.pkcs7.s5 with AES-128/AES-256 tested; s4 and RC4 are read but untested) with a .p12/.pfx digital ID (doc_open certificate): CMS KeyTransRecipientInfo by issuer+serial or SKI, RSA PKCS#1 v1.5 or OAEP-SHA-1 (aws-lc-rs), AES and 3DES content tested (RC2 untested). Viewed through an in-memory decrypted copy (the bootstrap renderer reads only password security); saves re-encrypt. Cross-checked with openssl cms only (no fixtures produced by proprietary viewers). Missing: OS key stores/smart cards, ECDH (KeyAgree) recipients, XFA layout on open, desktop UI."
 
 [[feature]]
 id = "core.incremental-save"
@@ -359,7 +359,7 @@ status = "partial"
 commands = ["file.save_as"]
 tools = ["doc_save", "doc_linearization_check", "doc_info"]
 evidence = ["crates/cos/tests/linearize.rs::multi_page_document_with_shared_resources_is_linearized", "crates/cos/tests/linearize.rs::encrypted_documents_are_linearized_with_their_security", "crates/cos/tests/linearize.rs::the_checker_survives_truncation_and_damage", "crates/engine/src/tests.rs::linearized_save_is_fast_web_view_until_saved_incrementally", "crates/automation/tests/automation.rs::linearized_save_and_fast_web_view_check"]
-notes = "Annex F writer (pdfcraft_cos::write_linearized): parameter dictionary, first-page xref/trailer, part 4 open-document objects, primary hint stream with page offset, shared object and (UseOutlines) outline hint tables, page 1 section, per-page groups, shared objects, main xref; classic tables, no object streams; inherited page attributes pushed to pages; encryption kept. Checker (check_linearization) verifies /L /O /E /N /T /H and the hint tables; qpdf --check-linearization accepts our output (6 synthetic layouts incl. encrypted, when installed) and qpdf's output passes our checker. doc_save linearize:true, doc_linearization_check, doc_info fast_web_view. Missing: no Save As ▸ Fast Web View option or preference in the UI (UI redesign) and no Document Properties row; thumbnail and thread/named-destination/interactive-form/embedded-file hint tables not written (optional in Annex F); overflow hint streams not checked; object streams can't be combined with linearization; no Acrobat comparison."
+notes = "Annex F writer (pdfcraft_cos::write_linearized): parameter dictionary, first-page xref/trailer, part 4 open-document objects, primary hint stream with page offset, shared object and (UseOutlines) outline hint tables, page 1 section, per-page groups, shared objects, main xref; classic tables, no object streams; inherited page attributes pushed to pages; encryption kept. Checker (check_linearization) verifies /L /O /E /N /T /H and the hint tables; qpdf --check-linearization accepts our output (6 synthetic layouts incl. encrypted, when installed) and qpdf's output passes our checker. doc_save linearize:true, doc_linearization_check, doc_info fast_web_view. Missing: no Save As ▸ Fast Web View option or preference in the UI (UI redesign) and no Document Properties row; thumbnail and thread/named-destination/interactive-form/embedded-file hint tables not written (optional in Annex F); overflow hint streams not checked; object streams can't be combined with linearization; no comparison against other viewers."
 
 [[feature]]
 id = "core.revision-list"
@@ -631,7 +631,7 @@ status = "shipped"
 commands = ["file.revert"]
 tools = []
 evidence = ["crates/ui-egui/tests/viewer.rs::revert_after_confirming", "crates/engine/src/tests.rs::revert_goes_back_to_the_saved_version"]
-notes = "with confirmation; clears undo, as Acrobat"
+notes = "with confirmation; clears undo"
 
 [[feature]]
 id = "core.signed-save-policy"
@@ -1127,7 +1127,7 @@ status = "shipped"
 commands = []
 tools = []
 evidence = ["crates/ui-egui/tests/control.rs::state_and_view_options", "crates/ui-egui/tests/ui.rs::theme_and_view_options_apply", "crates/ui-egui/tests/viewer.rs::two_page_view_steps_a_spread_at_a_time", "crates/ui-egui/tests/viewer.rs::arrow_and_page_keys_move_through_a_scrolling_document"]
-notes = "in two-page view, next and previous page move a whole spread (with or without a cover page); → / ← turn pages in every layout, ↓ / ↑ scroll a line and Page Down / Page Up a screen (the page in single-page view), as in Acrobat; in single-page view ↓ / ↑ turn the page once there is nothing left to scroll that way, like the wheel"
+notes = "in two-page view, next and previous page move a whole spread (with or without a cover page); → / ← turn pages in every layout, ↓ / ↑ scroll a line and Page Down / Page Up a screen (the page in single-page view), as in the viewer; in single-page view ↓ / ↑ turn the page once there is nothing left to scroll that way, like the wheel"
 
 [[feature]]
 id = "view.goto-page-label"
@@ -1175,7 +1175,7 @@ status = "shipped"
 commands = []
 tools = []
 evidence = ["crates/ui-egui/tests/comments.rs::hovering_a_comment_shows_its_author_and_text"]
-notes = "a popup with the author and the comment text, as Acrobat shows"
+notes = "a popup with the author and the comment text, as the viewer shows"
 
 [[feature]]
 id = "view.document-tabs"
@@ -1439,7 +1439,7 @@ status = "partial"
 commands = []
 tools = ["search_folder"]
 evidence = ["crates/automation/tests/search_folder.rs::matches_across_files_and_pages_like_text_find", "crates/automation/tests/search_folder.rs::whole_words_and_case_options", "crates/automation/tests/search_folder.rs::subfolders_only_when_recursive", "crates/automation/tests/search_folder.rs::bookmarks_comments_and_attachments_on_request", "crates/automation/tests/search_folder.rs::corrupt_and_encrypted_files_are_skipped_with_reasons", "crates/automation/tests/search_folder.rs::symlink_loops_and_links_out_of_the_root_are_not_followed", "crates/automation/tests/search_folder.rs::caps_truncate_and_say_so", "crates/automation/tests/search_folder.rs::the_folder_must_be_inside_the_root"]
-notes = "Headless only: search_folder searches every .pdf in a folder (optionally its subfolders) with text_find's extraction and matcher, whole words / case-sensitive, and optionally bookmark titles, comment text, attachment names/descriptions and the page text of attached PDFs; results grouped by file with page, match, context and found_in; damaged, encrypted (without the right password) or oversized files are skipped with reasons; bounded walk (32 levels, 200000 entries, max_files, max_results, folder links never followed, file links only inside the root), 512 MB and 60 s per file (checked between pages, so one very slow page is not interrupted). Missing: the Advanced Search window in the UI (folder picker, results tree, open a result at its match), searching in a PDF Portfolio, Acrobat's further options (stemming, proximity, Boolean: view.search-boolean) and document properties/metadata search."
+notes = "Headless only: search_folder searches every .pdf in a folder (optionally its subfolders) with text_find's extraction and matcher, whole words / case-sensitive, and optionally bookmark titles, comment text, attachment names/descriptions and the page text of attached PDFs; results grouped by file with page, match, context and found_in; damaged, encrypted (without the right password) or oversized files are skipped with reasons; bounded walk (32 levels, 200000 entries, max_files, max_results, folder links never followed, file links only inside the root), 512 MB and 60 s per file (checked between pages, so one very slow page is not interrupted). Missing: the Advanced Search window in the UI (folder picker, results tree, open a result at its match), searching in a PDF Portfolio, the viewer's further options (stemming, proximity, Boolean: view.search-boolean) and document properties/metadata search."
 
 [[feature]]
 id = "view.search-boolean"
@@ -1607,7 +1607,7 @@ status = "shipped"
 commands = ["view.theme", "view.theme.light", "view.theme.warm", "view.theme.dim", "view.theme.dark"]
 tools = []
 evidence = ["crates/ui-egui/tests/theme.rs::toolbar_and_view_menu_share_three_state_preferences", "crates/ui-egui/tests/theme.rs::warm_and_dim_are_offered_in_the_toolbar_and_view_menu", "crates/ui-egui/src/theme.rs::text_is_readable_on_every_surface"]
-notes = "Toolbar and Display theme share five choices (System, Light gray, Warm, Dim, Dark gray; Warm is a warm off-white with a red accent and Dim a mid grey, both beyond Acrobat) and a preference setter; manual choices exit system mode. Every text colour meets WCAG AA (4.5:1) on every surface in every theme; glyphs are pixel-aligned for sharper text at 100–150 % scaling."
+notes = "Toolbar and Display theme share five choices (System, Light gray, Warm, Dim, Dark gray; Warm is a warm off-white with a red accent and Dim a mid grey, both beyond the viewer) and a preference setter; manual choices exit system mode. Every text colour meets WCAG AA (4.5:1) on every surface in every theme; glyphs are pixel-aligned for sharper text at 100–150 % scaling."
 
 [[feature]]
 id = "view.theme-system"
@@ -2007,7 +2007,7 @@ status = "partial"
 commands = []
 tools = ["edit_keep_tags", "text_edit", "image_edit", "page_add_text", "page_add_image", "content_update", "content_delete", "page_delete"]
 evidence = ["crates/a11y/src/keep_tests.rs::a_rewritten_paragraph_takes_over_the_tag_of_the_lines_it_replaced", "crates/a11y/src/keep_tests.rs::added_text_and_images_get_new_elements_after_the_nearest_tagged_content", "crates/a11y/src/keep_tests.rs::a_deleted_image_leaves_the_tree_and_its_empty_figure_goes", "crates/a11y/src/keep_tests.rs::deleted_pages_leave_the_tree_and_the_parent_tree", "crates/a11y/src/keep_tests.rs::hostile_trees_and_ids_do_not_crash", "crates/engine/src/keep_tags_tests.rs::editing_a_line_keeps_its_tag_in_one_undo_step", "crates/engine/src/keep_tags_tests.rs::rewriting_a_paragraph_keeps_it_in_its_element", "crates/engine/src/keep_tags_tests.rs::added_text_and_images_are_tagged_and_follow_later_edits", "crates/engine/src/keep_tags_tests.rs::page_images_deleted_or_replaced_update_their_figure", "crates/engine/src/keep_tags_tests.rs::deleting_a_page_removes_its_tags", "crates/engine/src/keep_tags_tests.rs::with_keep_tags_off_edits_leave_the_tree_alone", "crates/automation/tests/tags.rs::keep_tags_on_edit_through_tools"]
-notes = "Headless: on by default (Session::set_keep_tags_on_edit, tool edit_keep_tags; a session switch, not persisted). Edit text line/paragraph, Edit image (move/rotate/flip/crop/replace/delete), Add text/image, update/delete added items and Delete pages compare the page's marked content before and after (a11y::keep_tags / drop_page_tags) inside the same undo step: content changed in place keeps its MCID and element (stale element and BDC ActualText removed; figures whose image changed keep Alt and are listed in review_alt); new untagged content takes over the MCID of emptied content of the same kind (rewritten paragraph, moved/retyped added item) or gets a new P/Figure element beside the nearest tagged content's block (inside the grouping element); new vector-only content becomes /Artifact; emptied MCRs/OBJRs leave the tree, empty elements are unlinked, the page's parent-tree array is rebuilt (deleted pages' entries removed). Tool results carry a tags report. Missing: other content edits are not followed (header/footer/watermark/background/Bates marks, OCR text layers, flatten, Convert Colors, printer marks, straighten, insert/replace/duplicate pages; links and comments added as annotations get no OBJR); content inside form XObjects (MCR /Stm) is not followed; new content is only ever P or Figure (no heading/list/table inference) and new figures get no alternate text; ActualText is dropped, not rewritten; unlinked elements stay in the file and in the IDTree; content split across content streams is left untagged with a warning; no Preferences UI; not compared against Acrobat output on real tagged files."
+notes = "Headless: on by default (Session::set_keep_tags_on_edit, tool edit_keep_tags; a session switch, not persisted). Edit text line/paragraph, Edit image (move/rotate/flip/crop/replace/delete), Add text/image, update/delete added items and Delete pages compare the page's marked content before and after (a11y::keep_tags / drop_page_tags) inside the same undo step: content changed in place keeps its MCID and element (stale element and BDC ActualText removed; figures whose image changed keep Alt and are listed in review_alt); new untagged content takes over the MCID of emptied content of the same kind (rewritten paragraph, moved/retyped added item) or gets a new P/Figure element beside the nearest tagged content's block (inside the grouping element); new vector-only content becomes /Artifact; emptied MCRs/OBJRs leave the tree, empty elements are unlinked, the page's parent-tree array is rebuilt (deleted pages' entries removed). Tool results carry a tags report. Missing: other content edits are not followed (header/footer/watermark/background/Bates marks, OCR text layers, flatten, Convert Colors, printer marks, straighten, insert/replace/duplicate pages; links and comments added as annotations get no OBJR); content inside form XObjects (MCR /Stm) is not followed; new content is only ever P or Figure (no heading/list/table inference) and new figures get no alternate text; ActualText is dropped, not rewritten; unlinked elements stay in the file and in the IDTree; content split across content streams is left untagged with a warning; no Preferences UI; not compared against the viewer output on real tagged files."
 
 [[feature]]
 id = "edit.image-add"
@@ -2211,7 +2211,7 @@ status = "partial"
 commands = ["edit.link"]
 tools = ["link_add", "link_edit", "link_list"]
 evidence = ["crates/annot/src/tests.rs::links_are_added_edited_listed_and_removed", "crates/annot/src/tests.rs::links_go_to_views_and_named_destinations", "crates/automation/tests/automation.rs::named_destinations_views_and_bookmark_actions_through_tools", "crates/ui-egui/tests/pdf_links.rs::drawing_editing_and_deleting_links"]
-notes = "Engine and tools: go to a page view with any fit (XYZ position and zoom, Fit, FitH, FitV, FitR, FitB, FitBH, FitBV) or to a named destination (written as a string for the name tree, a name for legacy /Dests); link_list reports the view and resolves named destinations; checked after save/reopen and against pdfinfo -dests. The Link Properties dialog still only offers a page (Fit) or a web address; it keeps an existing view, named destination or other action unless the page is changed. Not yet: choosing a view or named destination in the dialog, Acrobat's 'Set link' from the current view"
+notes = "Engine and tools: go to a page view with any fit (XYZ position and zoom, Fit, FitH, FitV, FitR, FitB, FitBH, FitBV) or to a named destination (written as a string for the name tree, a name for legacy /Dests); link_list reports the view and resolves named destinations; checked after save/reopen and against pdfinfo -dests. The Link Properties dialog still only offers a page (Fit) or a web address; it keeps an existing view, named destination or other action unless the page is changed. Not yet: choosing a view or named destination in the dialog, the viewer's 'Set link' from the current view"
 
 [[feature]]
 id = "edit.action-uri"
@@ -2343,7 +2343,7 @@ status = "shipped"
 commands = ["edit.header_footer.update", "edit.header_footer.remove"]
 tools = ["doc_header_footer", "doc_remove_marks"]
 evidence = ["crates/edit/src/tests.rs::replace_and_remove_restore_the_original_content", "crates/ui-egui/tests/marks.rs::header_and_footer_dialog_inserts_tokens_and_applies_to_a_subset"]
-notes = "recognises PdfCraft marks; Acrobat-made headers are not detected yet"
+notes = "recognises PdfCraft marks; the viewer-made headers are not detected yet"
 
 [[feature]]
 id = "edit.header-footer-tokens"
@@ -2536,22 +2536,6 @@ commands = ["edit.edit_text"]
 tools = ["text_edit"]
 evidence = ["crates/edit/src/tests.rs::paragraphs_take_new_formatting", "crates/ui-egui/tests/editing.rs::the_format_panel_restyles_the_paragraph_being_edited", "crates/automation/tests/automation.rs::editing_existing_text_through_tools"]
 notes = "Edit a PDF ▸ Format text shows the paragraph being edited (family, bold/italic guessed from its font, size) and applies changes at once as one undo step each, keeping the paragraph open"
-
-[[feature]]
-id = "edit.adobe-express-edits"
-title = "Adobe Express image edits (remove background, generative fill)"
-area = "C"
-tier = "N/A"
-milestone = "none"
-status = "na"
-commands = []
-tools = []
-evidence = []
-notes = "cloud-only; images open in an external editor instead"
-
-# ==================================================================================================
-# D. Organize pages and documents
-# ==================================================================================================
 
 [[feature]]
 id = "organize.organize-grid"
@@ -2827,7 +2811,7 @@ status = "shipped"
 commands = ["page.organize"]
 tools = []
 evidence = ["crates/ui-egui/tests/editing.rs::page_grid_zooms_with_its_buttons_keys_and_pinch", "crates/ui-egui/tests/editing.rs::a_zoomed_page_grid_still_inserts_and_moves_at_the_right_gap", "crates/ui-egui/tests/editing.rs::zoomed_pages_in_view_are_rendered_at_the_size_drawn"]
-notes = "Organize page grid: 50–300% with toolbar buttons (and a percentage that resets to 100%), trackpad pinch or Ctrl/⌘ + wheel about the page under the pointer, and ⌘+ / ⌘− / ⌘0; pages drawn larger than their thumbnails are rendered at the size drawn while they are in view (the thumbnail stands in until then, and after an edit), so text stays sharp however long the document is. Missing: a slider as in Acrobat; the size is per document view and not remembered between sessions; the Pages side panel has no size control."
+notes = "Organize page grid: 50–300% with toolbar buttons (and a percentage that resets to 100%), trackpad pinch or Ctrl/⌘ + wheel about the page under the pointer, and ⌘+ / ⌘− / ⌘0; pages drawn larger than their thumbnails are rendered at the size drawn while they are in view (the thumbnail stands in until then, and after an edit), so text stays sharp however long the document is. Missing: a slider as in the viewer; the size is per document view and not remembered between sessions; the Pages side panel has no size control."
 
 [[feature]]
 id = "organize.split-every-n"
@@ -2911,7 +2895,7 @@ status = "shipped"
 commands = ["page.combine"]
 tools = ["doc_combine"]
 evidence = ["crates/organize/src/tests.rs::combine_concatenates_with_a_bookmark_per_file", "crates/ui-egui/tests/editing.rs::combining_files_opens_a_new_unsaved_tab", "crates/ui-egui/tests/editing.rs::combine_files_opens_in_its_own_tab", "crates/ui-egui/tests/editing.rs::combine_lists_size_and_warns_before_combining", "crates/ui-egui/tests/editing.rs::a_password_protected_file_is_unlocked_with_its_password_and_combined", "crates/ui-egui/tests/editing.rs::a_folder_adds_its_pdfs_in_order_and_optionally_its_subfolders", "crates/ui-egui/tests/ui.rs::pdfs_dropped_on_the_combine_tab_join_its_list", "crates/automation/tests/automation.rs::combine_extract_and_split", "crates/automation/tests/automation.rs::combine_opens_protected_files_with_their_passwords", "crates/organize/src/tests.rs::combine_keeps_pdfx_when_every_source_agrees", "crates/organize/src/tests.rs::combine_claims_no_pdfx_when_the_sources_disagree"]
-notes = "Combine files is its own tab: a table of the files (name, pages, size, modified, warnings) with column sorting, resizing and moving; files, folders (with subfolders) and open documents can be added, or dropped on the tab. Problems show before Combine (password, security settings that withhold page assembly, bad page ranges, duplicates); protected files are unlocked with their open or permissions password (also doc_combine passwords). The result is never encrypted, and is not yet offered for protection in the same step. A PDF/X result (output intent, GTS_PDFXVersion, Trapped, XMP pdfxid) only when every source declares the same version and output intent (#263). When they differ the result claims none, and nothing reports that yet; Acrobat behaviour not observed."
+notes = "Combine files is its own tab: a table of the files (name, pages, size, modified, warnings) with column sorting, resizing and moving; files, folders (with subfolders) and open documents can be added, or dropped on the tab. Problems show before Combine (password, security settings that withhold page assembly, bad page ranges, duplicates); protected files are unlocked with their open or permissions password (also doc_combine passwords). The result is never encrypted, and is not yet offered for protection in the same step. A PDF/X result (output intent, GTS_PDFXVersion, Trapped, XMP pdfxid) only when every source declares the same version and output intent (#263). When they differ the result claims none, and nothing reports that yet; the viewer behaviour not observed."
 
 [[feature]]
 id = "organize.combine-bookmarks"
@@ -3055,7 +3039,7 @@ status = "partial"
 commands = ["page.combine", "page.insert", "page.extract"]
 tools = ["doc_combine", "page_insert_file", "page_extract", "doc_split"]
 evidence = ["crates/organize/src/structure_tests.rs::combining_two_tagged_documents_merges_their_trees", "crates/organize/src/structure_tests.rs::identical_class_maps_and_namespaces_are_shared", "crates/organize/src/structure_tests.rs::tagged_with_untagged_is_partially_tagged", "crates/organize/src/structure_tests.rs::merging_can_be_turned_off", "crates/organize/src/structure_tests.rs::extracting_keeps_only_the_elements_on_the_kept_pages", "crates/organize/src/structure_tests.rs::inserting_places_the_elements_by_page_and_keeps_the_tree_valid", "crates/organize/src/structure_tests.rs::duplicate_and_replace_keep_a_valid_tree", "crates/organize/src/structure_tests.rs::hostile_trees_merge_without_panicking", "crates/automation/tests/struct_merge.rs::combined_tagged_files_keep_a_valid_tree_and_pass_the_same_checks", "crates/automation/tests/struct_merge.rs::tagged_with_untagged_and_inserted_pages_report_partial_tagging", "crates/automation/tests/struct_merge.rs::extracting_pages_keeps_only_their_elements"]
-notes = "Headless: Combine Files, Insert Pages from File, Duplicate, Extract and Split copy the structure tree with the pages (merge_tags, default on, for doc_combine and page_insert_file). Each source's top-level elements go under one Document element in page order (a plain source Document is dissolved, its Lang moving onto its kids; an existing multi-root tree is wrapped); MCIDs stay per content stream, StructParents/StructParent keys, the ParentTree (flat number tree) and ParentTreeNextKey are rebuilt for the copied pages, form XObjects and annotations (OBJR); RoleMap merged with the first mapping kept and conflicts reported; ClassMap merged (a different class under a used name is renamed and /C follows); IDTree merged with IDs made unique; PDF 2.0 Namespaces merged (same URI and role mapping shared). MarkInfo /Marked only when every part was tagged, otherwise the report says partially tagged. A subset keeps only elements with content on the kept pages. Bounded and cycle-safe. Not yet: a dialog option (UI redesign); a conflicting role mapping is kept-first rather than resolved by renaming the incoming type; root /AF, /PronunciationLexicon and attribute-owner revisions are not carried over; Delete Pages does not prune the tree; a page inserted twice tags only its first copy; not compared against Acrobat's output."
+notes = "Headless: Combine Files, Insert Pages from File, Duplicate, Extract and Split copy the structure tree with the pages (merge_tags, default on, for doc_combine and page_insert_file). Each source's top-level elements go under one Document element in page order (a plain source Document is dissolved, its Lang moving onto its kids; an existing multi-root tree is wrapped); MCIDs stay per content stream, StructParents/StructParent keys, the ParentTree (flat number tree) and ParentTreeNextKey are rebuilt for the copied pages, form XObjects and annotations (OBJR); RoleMap merged with the first mapping kept and conflicts reported; ClassMap merged (a different class under a used name is renamed and /C follows); IDTree merged with IDs made unique; PDF 2.0 Namespaces merged (same URI and role mapping shared). MarkInfo /Marked only when every part was tagged, otherwise the report says partially tagged. A subset keeps only elements with content on the kept pages. Bounded and cycle-safe. Not yet: a dialog option (UI redesign); a conflicting role mapping is kept-first rather than resolved by renaming the incoming type; root /AF, /PronunciationLexicon and attribute-owner revisions are not carried over; Delete Pages does not prune the tree; a page inserted twice tags only its first copy; not compared against the viewer's output."
 
 [[feature]]
 id = "organize.page-labels-edit"
@@ -3271,7 +3255,7 @@ status = "partial"
 commands = []
 tools = ["bookmark_from_structure"]
 evidence = ["crates/automation/tests/tags.rs::bookmarks_from_structure_headings_through_tools", "crates/automation/tests/tags.rs::bookmarks_from_structure_refuse_untagged_documents_and_documents_without_headings", "crates/engine/src/tests.rs::heading_bookmarks_come_from_tagged_headings_only", "crates/organize/src/tests.rs::bookmark_trees_nest_by_level_and_append_or_replace", "crates/organize/src/tests.rs::bookmark_trees_refuse_missing_pages_and_blank_titles_without_changing_anything", "crates/a11y/src/tests.rs::headings_in_document_order_with_levels_text_and_content", "crates/render/src/text.rs::glyphs_carry_the_mcid_of_their_marked_content"]
-notes = "Engine + agent tool (undoable Edit::AddBookmarkTree): one bookmark per structure heading (H1–H6, Hn, and H leveled by Sect/Part/Art nesting; role-mapped types count), nested by level, titled from /ActualText, else /Alt, else the text of the marked content it covers (glyphs now carry their MCID), going to /XYZ at the heading's top (page only on rotated pages); append or replace, max_level filter; untagged files and files without headings get a clear error. Missing: a menu command and dialog (UI is being redesigned), Acrobat's choice of other structure types than headings (e.g. Figure, Table, P), nesting the new bookmarks under one parent, text inside form XObjects referenced by MCRs with /Stm."
+notes = "Engine + agent tool (undoable Edit::AddBookmarkTree): one bookmark per structure heading (H1–H6, Hn, and H leveled by Sect/Part/Art nesting; role-mapped types count), nested by level, titled from /ActualText, else /Alt, else the text of the marked content it covers (glyphs now carry their MCID), going to /XYZ at the heading's top (page only on rotated pages); append or replace, max_level filter; untagged files and files without headings get a clear error. Missing: a menu command and dialog (UI is being redesigned), the viewer's choice of other structure types than headings (e.g. Figure, Table, P), nesting the new bookmarks under one parent, text inside form XObjects referenced by MCRs with /Stm."
 
 [[feature]]
 id = "organize.attachments-add"
@@ -3599,7 +3583,7 @@ status = "shipped"
 commands = ["comment.freetext"]
 tools = ["comment_add", "comment_format_text"]
 evidence = ["crates/ui-egui/tests/comments.rs::sticky_note_composer_posts_and_returns_to_select", "crates/annot/src/tests.rs::text_box_text_and_colour_changes_are_drawn", "crates/ui-egui/tests/comments.rs::text_box_composer_formats_selected_text", "crates/annot/src/tests.rs::rich_text_is_read_drawn_and_written_back", "crates/annot/src/tests.rs::formatted_text_survives_edits_and_ranges_reformat", "crates/automation/tests/automation.rs::formatting_a_text_box_through_tools"]
-notes = "Runs of formatted text (Helvetica, Times or Courier; size, colour, bold, italic, underline, strikethrough) and the box's alignment, from the composer's format bar on the selected characters or comment_format_text; /RC (XHTML) and /DS are read (Acrobat's included) and written, and edits keep each character's format. Standard fonts only (WinAnsi text)."
+notes = "Runs of formatted text (Helvetica, Times or Courier; size, colour, bold, italic, underline, strikethrough) and the box's alignment, from the composer's format bar on the selected characters or comment_format_text; /RC (XHTML) and /DS are read (the viewer's included) and written, and edits keep each character's format. Standard fonts only (WinAnsi text)."
 
 [[feature]]
 id = "comment.callout"
@@ -3623,7 +3607,7 @@ status = "shipped"
 commands = ["comment.ink"]
 tools = ["comment_add"]
 evidence = ["crates/ui-egui/tests/comments.rs::shapes_and_ink_are_drawn_by_dragging", "crates/annot/src/tests.rs::ink_strokes_are_smooth_curves_through_their_points"]
-notes = "one ink annotation per stroke; strokes are drawn as smooth curves through their points, as in Acrobat"
+notes = "one ink annotation per stroke; strokes are drawn as smooth curves through their points, as in the viewer"
 
 [[feature]]
 id = "comment.eraser"
@@ -3839,7 +3823,7 @@ status = "shipped"
 commands = []
 tools = ["comment_add"]
 evidence = ["crates/ui-egui/tests/comments.rs::dragging_over_text_with_the_highlighter_highlights_it", "crates/ui-egui/tests/identity.rs::the_identity_name_signs_new_comments_and_is_remembered"]
-notes = "Preferences ▸ Identity: the name on new comments (default the login name, as Acrobat), remembered across restarts"
+notes = "Preferences ▸ Identity: the name on new comments (default the login name), remembered across restarts"
 
 [[feature]]
 id = "comment.reply"
@@ -4163,7 +4147,7 @@ status = "partial"
 commands = ["measure.distance"]
 tools = ["measure_distance"]
 evidence = ["crates/automation/tests/automation.rs::measurements_calibrate_draw_save_reopen_and_export", "crates/measure/src/tests.rs::calibrated_lengths_concave_areas_and_axis_scales", "crates/ui-egui/tests/control.rs::measurement_tools_draw_live_calibrate_save_and_export"]
-notes = "Two-point distance annotations with saved numeric captions and rectilinear scales. Partial: only single-unit decimal formats; compound (ft-in) and fractional formats are not supported (listed as unsupported, data kept), no leader lines or caption placement options, geospatial scales unsupported, and interop with Acrobat-authored measurements (reading theirs, Acrobat reading ours) is untested."
+notes = "Two-point distance annotations with saved numeric captions and rectilinear scales. Partial: only single-unit decimal formats; compound (ft-in) and fractional formats are not supported (listed as unsupported, data kept), no leader lines or caption placement options, geospatial scales unsupported, and interop with the viewer-authored measurements (reading theirs, the viewer reading ours) is untested."
 
 [[feature]]
 id = "comment.measure-perimeter"
@@ -4199,7 +4183,7 @@ status = "partial"
 commands = ["measure.scale"]
 tools = ["measure_scale"]
 evidence = ["crates/measure/src/tests.rs::viewport_precedence_first_point_user_unit_and_roundtrip", "crates/measure/src/tests.rs::coordinates_roundtrip_for_crop_rotation_and_user_unit", "crates/automation/tests/automation.rs::measurements_calibrate_draw_save_reopen_and_export", "crates/ui-egui/tests/control.rs::measurement_tools_draw_live_calibrate_save_and_export"]
-notes = "Persistent rectangular viewports with last-containing-viewport precedence, numeric scale and two-point calibration. First vertex selects the scale; prior annotations retain theirs. Partial: single-unit decimal rectilinear scales only; compound (ft-in), fractional and differing distance units can't be authored or imported, no viewport editing/removal UI, and interop with Acrobat's scale ratio dialog and its saved viewports is untested."
+notes = "Persistent rectangular viewports with last-containing-viewport precedence, numeric scale and two-point calibration. First vertex selects the scale; prior annotations retain theirs. Partial: single-unit decimal rectilinear scales only; compound (ft-in), fractional and differing distance units can't be authored or imported, no viewport editing/removal UI, and interop with the viewer's scale ratio dialog and its saved viewports is untested."
 
 [[feature]]
 id = "comment.measure-snap"
@@ -4250,58 +4234,6 @@ evidence = []
 notes = ""
 
 [[feature]]
-id = "comment.shared-review"
-title = "Send for comments / shared review"
-area = "E"
-tier = "N/A"
-milestone = "none"
-status = "na"
-commands = []
-tools = []
-evidence = []
-notes = "Adobe cloud; exchange XFDF files or a pluggable review server instead"
-
-[[feature]]
-id = "comment.mentions-live-review"
-title = "@mentions, presence and live co-review"
-area = "E"
-tier = "N/A"
-milestone = "none"
-status = "na"
-commands = []
-tools = []
-evidence = []
-notes = "Adobe cloud; no local equivalent"
-
-[[feature]]
-id = "comment.review-tracker"
-title = "Review tracker"
-area = "E"
-tier = "N/A"
-milestone = "none"
-status = "na"
-commands = []
-tools = []
-evidence = []
-notes = "Adobe cloud / legacy"
-
-[[feature]]
-id = "comment.enable-reader-commenting"
-title = "Enable commenting and measuring in Reader (usage rights)"
-area = "E"
-tier = "N/A"
-milestone = "none"
-status = "na"
-commands = []
-tools = []
-evidence = []
-notes = "needs Adobe's private key; modern readers allow commenting anyway"
-
-# ==================================================================================================
-# F. Forms and JavaScript
-# ==================================================================================================
-
-[[feature]]
 id = "form.field-list"
 title = "Form fields panel listing every field and value"
 area = "F"
@@ -4323,7 +4255,7 @@ status = "shipped"
 commands = []
 tools = []
 evidence = ["crates/ui-egui/tests/view.rs::highlight_fields_tints_the_field_area", "crates/ui-egui/tests/view.rs::required_radio_buttons_get_a_round_red_border", "crates/ui-egui/tests/view.rs::field_highlighting_is_remembered"]
-notes = "remembered for the next document and session; required fields get a red border (round for radio buttons); the tint is drawn over the field, where Acrobat paints the highlight colour behind it"
+notes = "remembered for the next document and session; required fields get a red border (round for radio buttons); the tint is drawn over the field, where the viewer paints the highlight colour behind it"
 
 [[feature]]
 id = "form.field-appearance-display"
@@ -4479,7 +4411,7 @@ status = "shipped"
 commands = ["form.field.properties"]
 tools = ["form_set_props", "form_fill"]
 evidence = ["crates/forms/src/af.rs::validation_and_calculation", "crates/forms/src/tests.rs::formats_validation_and_calculations_run_like_acrobat", "crates/automation/tests/automation.rs::form_formats_and_calculations_through_tools"]
-notes = "AFRange_Validate with Acrobat's messages"
+notes = "AFRange_Validate with the viewer's messages"
 
 [[feature]]
 id = "form.af-simple-calculate"
@@ -4515,7 +4447,7 @@ status = "shipped"
 commands = ["form.prepare"]
 tools = ["form_set_script"]
 evidence = ["crates/engine/src/tests.rs::form_javascript_validates_calculates_and_formats", "crates/automation/tests/automation.rs::javascript_through_tools"]
-notes = "Custom keystroke (commit), validate, calculate and format scripts run in Acrobat's event order; AF calls still run natively."
+notes = "Custom keystroke (commit), validate, calculate and format scripts run in the viewer's event order; AF calls still run natively."
 
 [[feature]]
 id = "form.calculation-order"
@@ -4635,7 +4567,7 @@ status = "shipped"
 commands = ["form.export_data", "form.import_data"]
 tools = ["doc_export_data", "doc_import_data"]
 evidence = ["crates/xfdf/src/tests.rs::form_data_as_xml_csv_and_text", "crates/automation/tests/automation.rs::comments_and_form_data_travel_as_xfdf_fdf_and_text"]
-notes = "Acrobat's XML (xfdf:original), CSV, tab-delimited"
+notes = "the viewer's XML (xfdf:original), CSV, tab-delimited"
 
 [[feature]]
 id = "form.merge-to-spreadsheet"
@@ -4719,7 +4651,7 @@ status = "shipped"
 commands = ["form.field.properties"]
 tools = ["form_set_props", "form_fields"]
 evidence = ["crates/forms/src/tests.rs::check_box_styles_change_the_mark", "crates/ui-egui/tests/prepare.rs::options_tab_sets_the_check_box_style", "crates/automation/tests/automation.rs::preparing_a_form_through_tools"]
-notes = "Field Properties ▸ Options: check, circle, cross, diamond, square, star (/MK /CA, Acrobat's codes), drawn as paths; defaults check (check boxes) and circle (radio buttons)"
+notes = "Field Properties ▸ Options: check, circle, cross, diamond, square, star (/MK /CA, the viewer's codes), drawn as paths; defaults check (check boxes) and circle (radio buttons)"
 
 [[feature]]
 id = "form.add-dropdown"
@@ -4875,7 +4807,7 @@ status = "shipped"
 commands = ["form.field.properties"]
 tools = ["form_set_props", "form_fill"]
 evidence = ["crates/ui-egui/tests/prepare.rs::format_validate_and_calculate_tabs", "crates/automation/tests/automation.rs::form_formats_and_calculations_through_tools"]
-notes = "None/Number/Percentage/Date/Time/Special with a live example; writes Acrobat's AF scripts"
+notes = "None/Number/Percentage/Date/Time/Special with a live example; writes the viewer's AF scripts"
 
 [[feature]]
 id = "form.props-validate"
@@ -5031,7 +4963,7 @@ status = "shipped"
 commands = ["form.detect"]
 tools = ["form_detect_fields"]
 evidence = ["crates/forms/src/tests.rs::detection_finds_blanks_rules_boxes_and_names_them", "crates/engine/src/tests.rs::detecting_fields_on_a_printed_form", "crates/automation/tests/automation.rs::detecting_form_fields_through_tools", "crates/engine/src/tests.rs::detected_field_names_withhold_label_text_when_copying_is_denied", "crates/automation/tests/permission_guards.rs::detected_field_names_withhold_label_text_when_copying_is_denied"]
-notes = "Names come from the label to the left (or above; right of check boxes), unique like Acrobat's (Name2, Text1). A document that does not allow copying text gets the same fields named Text1, Check Box1, … (label words are page text; docs/reader-selection.md)."
+notes = "Names come from the label to the left (or above; right of check boxes), unique like the viewer's (Name2, Text1). A document that does not allow copying text gets the same fields named Text1, Check Box1, … (label words are page text; docs/reader-selection.md)."
 
 [[feature]]
 id = "form.document-javascripts"
@@ -5059,7 +4991,7 @@ notes = "The catalog /AA scripts (WC, WS, DS, WP, DP) run on close, save and pri
 
 [[feature]]
 id = "form.js-host"
-title = "JavaScript engine with the Acrobat object model subset"
+title = "JavaScript engine with the PDF JavaScript object model subset"
 area = "F"
 tier = "P0"
 milestone = "M6"
@@ -5115,7 +5047,7 @@ status = "shipped"
 commands = ["app.preferences"]
 tools = ["js_enabled"]
 evidence = ["crates/js/src/tests.rs::the_sandbox_has_no_host_access", "crates/js/src/tests.rs::errors_and_runaway_scripts_are_contained", "crates/ui-egui/tests/javascript.rs::document_scripts_and_preferences", "crates/ui-egui/tests/document_links.rs::a_script_asks_first_and_only_once", "crates/ui-egui/tests/document_links.rs::a_script_cannot_open_other_kinds_of_address"]
-notes = "Preferences \u25b8 JavaScript \u25b8 Enable Acrobat JavaScript (remembered); no host access; loop and recursion limits; app.launchURL asks before opening and only offers http, https and mailto addresses (#90, #91)."
+notes = "Preferences \u25b8 JavaScript \u25b8 Enable PDF JavaScript (remembered); no host access; loop and recursion limits; app.launchURL asks before opening and only offers http, https and mailto addresses (#90, #91)."
 
 [[feature]]
 id = "form.folder-level-js"
@@ -5139,7 +5071,7 @@ status = "partial"
 commands = ["file.open"]
 tools = ["doc_open", "form_fill"]
 evidence = ["crates/engine/src/tests.rs::static_xfa_forms_take_their_values_from_the_datasets_and_write_them_back", "crates/ui-egui/tests/xfa.rs::a_static_xfa_form_is_filled_from_its_data_and_says_so", "crates/xfa/src/tests.rs::static_forms_read_their_values_from_the_datasets", "crates/xfa/src/tests.rs::writing_values_keeps_the_data_no_field_binds_to", "crates/xfa/src/tests.rs::utf16_packets_are_read_and_written_back_as_utf16", "crates/engine/src/tests.rs::xfa_data_no_field_binds_to_survives_an_edit_and_save"]
-notes = "the AcroForm fields are shown and filled as in any form; on open their values come from the XFA datasets (what another viewer saved) by the fields' Designer names (recorded as a document warning), and every edit merges the values back into the datasets, keeping data no field binds to, so Acrobat shows the same values; values that can't be written are warnings. Missing: no template semantics (no scripts, calculations or hidden subforms), explicit bind refs are not followed (#60)"
+notes = "the AcroForm fields are shown and filled as in any form; on open their values come from the XFA datasets (what another viewer saved) by the fields' Designer names (recorded as a document warning), and every edit merges the values back into the datasets, keeping data no field binds to, so the viewer shows the same values; values that can't be written are warnings. Missing: no template semantics (no scripts, calculations or hidden subforms), explicit bind refs are not followed (#60)"
 
 [[feature]]
 id = "form.xfa-dynamic"
@@ -5151,7 +5083,7 @@ status = "partial"
 commands = ["file.open"]
 tools = ["doc_open", "doc_info", "form_fields", "form_fill", "js_run"]
 evidence = ["crates/xfa/src/tests.rs::layout_places_captions_fields_and_sizes_containers_to_their_content", "crates/xfa/src/tests.rs::tables_break_across_pages_and_repeat_their_header_row", "crates/xfa/src/tests.rs::rendering_into_the_pdf_replaces_the_placeholder_page_and_adds_fields", "crates/engine/src/tests.rs::dynamic_xfa_forms_are_laid_out_on_open_filled_and_saved_incrementally", "crates/automation/tests/automation.rs::dynamic_xfa_forms_open_render_fill_and_save_through_tools", "crates/ui-egui/tests/xfa.rs::a_dynamic_xfa_form_is_laid_out_and_filled", "crates/xfa/src/tests.rs::nested_width_less_subforms_lay_out_in_polynomial_time", "crates/js/src/tests.rs::instance_managers_add_remove_and_count", "crates/xfa/src/tests.rs::the_form_tree_carries_values_presence_instances_and_the_events", "crates/engine/src/tests.rs::xfa_scripts_initialize_calculate_validate_toggle_and_add_rows", "crates/automation/tests/automation.rs::xfa_scripts_run_for_buttons_and_field_changes_through_tools", "crates/ui-egui/tests/xfa.rs::xfa_buttons_run_their_scripts_in_the_app", "crates/engine/src/tests.rs::hostile_xfa_open_scripts_are_merged_capped_kept_from_printing_and_noted", "crates/engine/src/tests.rs::runaway_xfa_calculations_at_open_end_quickly_with_a_report", "crates/xfa/src/tests.rs::the_live_form_of_nested_repeating_subforms_stops_at_its_node_budget", "crates/xfa/src/tests.rs::data_ops_of_one_event_are_one_datasets_rewrite", "crates/xfa/src/tests.rs::choice_lists_signatures_passwords_and_pictures_become_fields_and_images", "crates/xfa/src/tests.rs::choice_values_come_from_the_data_as_saved_values_and_several_for_lists", "crates/xfa/src/tests.rs::pictures_are_sized_from_their_headers_and_hostile_ones_are_refused_unallocated", "crates/engine/src/tests.rs::xfa_choice_lists_signature_and_picture_fields_open_fill_script_and_save"]
-notes = "laid out from the template on open by the xfa crate (positioned, tb, lr-tb, table/row, page masters, breaks, repeated header rows, captions, rich text, JPEG/PNG/GIF images) into real pages and AcroForm fields (text, password, date with AFDate formats, check boxes, radio groups, drop-downs and list boxes with shown/saved item pairs and multi-select, signature fields, image fields showing their picture (pictures decoded once per document, at most 20 million pixels, and reused across re-layouts), buttons with reset/print/save/URL), filled from the datasets packet (including rows another viewer added), saved as an incremental revision with the values merged into the datasets so Adobe's viewers show them; doc_info reports xfa_layout. XFA JavaScript and FormCalc (form.xfa-formcalc) run in the js crate's XFA object model (xfa.form, SOM resolution, rawValue, presence, access, instance managers, xfa.host, xfa.layout, xfa.event): initialize and calculate on open, exit, validate and calculate after a field changes, click for buttons (through js_run and the app), with rows added and removed, subforms shown and hidden, and the form laid out again, all as one undo step and kept in the file. Hostile scripts are bounded per event (merged and capped effects, messages and console lines, lower loop limits and a time budget on open and calculate, one datasets rewrite per event, print/save/links/focus from clicks only, a runaway script abandoned and the form's scripts turned off) and what open-time scripts changed is noted. Missing: loops inside nested calls are only stopped by abandoning their thread, and script memory is not capped; the change event per keystroke; xfa.template, connections and data descriptions; a hidden instance of a repeating subform hides them all; choosing a new picture for an image field; barcodes are drawn as their text, not bars; keep rules; metrics are approximate and Acrobat fidelity is eyeballed on real forms, not measured (#60)"
+notes = "laid out from the template on open by the xfa crate (positioned, tb, lr-tb, table/row, page masters, breaks, repeated header rows, captions, rich text, JPEG/PNG/GIF images) into real pages and AcroForm fields (text, password, date with AFDate formats, check boxes, radio groups, drop-downs and list boxes with shown/saved item pairs and multi-select, signature fields, image fields showing their picture (pictures decoded once per document, at most 20 million pixels, and reused across re-layouts), buttons with reset/print/save/URL), filled from the datasets packet (including rows another viewer added), saved as an incremental revision with the values merged into the datasets so other XFA viewers show them; doc_info reports xfa_layout. XFA JavaScript and FormCalc (form.xfa-formcalc) run in the js crate's XFA object model (xfa.form, SOM resolution, rawValue, presence, access, instance managers, xfa.host, xfa.layout, xfa.event): initialize and calculate on open, exit, validate and calculate after a field changes, click for buttons (through js_run and the app), with rows added and removed, subforms shown and hidden, and the form laid out again, all as one undo step and kept in the file. Hostile scripts are bounded per event (merged and capped effects, messages and console lines, lower loop limits and a time budget on open and calculate, one datasets rewrite per event, print/save/links/focus from clicks only, a runaway script abandoned and the form's scripts turned off) and what open-time scripts changed is noted. Missing: loops inside nested calls are only stopped by abandoning their thread, and script memory is not capped; the change event per keystroke; xfa.template, connections and data descriptions; a hidden instance of a repeating subform hides them all; choosing a new picture for an image field; barcodes are drawn as their text, not bars; keep rules; metrics are approximate and the viewer fidelity is eyeballed on real forms, not measured (#60)"
 
 [[feature]]
 id = "form.xfa-formcalc"
@@ -5163,7 +5095,7 @@ status = "partial"
 commands = ["file.open"]
 tools = ["doc_open", "form_fill", "js_run"]
 evidence = ["crates/js/src/tests.rs::arithmetic_strings_and_comparisons_follow_formcalc_rules", "crates/js/src/tests.rs::built_in_functions_cover_the_common_set", "crates/js/src/tests.rs::control_flow_variables_and_functions_work", "crates/js/src/tests.rs::form_objects_resolve_assign_and_record_effects", "crates/js/src/tests.rs::hostile_formcalc_scripts_end_with_an_error_and_bounded_output", "crates/js/src/tests.rs::formcalc_values_results_and_errors_stay_bounded", "crates/engine/src/tests.rs::dynamic_xfa_forms_run_formcalc_scripts", "crates/engine/src/tests.rs::hostile_formcalc_scripts_cannot_hang_or_bloat_the_document", "crates/engine/src/tests.rs::a_formcalc_calculate_result_is_cut_before_it_is_saved"]
-notes = "a native FormCalc interpreter (crates/js/src/formcalc.rs) over the same form table, effects and budgets as the XFA JavaScript model: expressions and FormCalc coercions, var, if/while/for/foreach/func, accessors ($, $host, $form, $record, $layout, $event, xfa., .., [n], [*], _name instance managers) and the arithmetic, logical, string, date/time, financial and unit built-ins. Bounded: steps and loop iterations, statement and expression nesting, operator/accessor chain length, strings (1 MiB; messages and thrown errors clipped to 4 KiB, field values and calculate results to 64 KiB, noted; copying and comparing long strings is charged to the step budget, so it ends on wasm, which has no clock), lists (each object once), clamped dates, the instance cap, and a deadline the script itself honours after the engine stops waiting. Missing: locale-aware pictures beyond simple number and date ones, Format/Parse time and text pictures, Get/Post/Put (refused), $template/$connectionSet, user-defined functions across scripts, a cap on a script's total memory (each string and list is capped, but many variables can each hold one), real Uuid() values (deterministic, from the step count) and the wall clock on wasm (Date() reads 1970-01-01 and Time() midnight there), and checking against Acrobat on real Designer forms beyond the fixtures"
+notes = "a native FormCalc interpreter (crates/js/src/formcalc.rs) over the same form table, effects and budgets as the XFA JavaScript model: expressions and FormCalc coercions, var, if/while/for/foreach/func, accessors ($, $host, $form, $record, $layout, $event, xfa., .., [n], [*], _name instance managers) and the arithmetic, logical, string, date/time, financial and unit built-ins. Bounded: steps and loop iterations, statement and expression nesting, operator/accessor chain length, strings (1 MiB; messages and thrown errors clipped to 4 KiB, field values and calculate results to 64 KiB, noted; copying and comparing long strings is charged to the step budget, so it ends on wasm, which has no clock), lists (each object once), clamped dates, the instance cap, and a deadline the script itself honours after the engine stops waiting. Missing: locale-aware pictures beyond simple number and date ones, Format/Parse time and text pictures, Get/Post/Put (refused), $template/$connectionSet, user-defined functions across scripts, a cap on a script's total memory (each string and list is capped, but many variables can each hold one), real Uuid() values (deterministic, from the step count) and the wall clock on wasm (Date() reads 1970-01-01 and Time() midnight there), and checking against the viewer on real Designer forms beyond the fixtures"
 
 [[feature]]
 id = "form.xfa-data"
@@ -5223,7 +5155,7 @@ status = "shipped"
 commands = ["sign.fill.date"]
 tools = ["fill_sign_add", "fill_sign_date_format"]
 evidence = ["crates/ui-egui/tests/fill_sign.rs::text_marks_and_date", "crates/automation/tests/automation.rs::fill_and_sign_through_tools", "crates/ui-egui/tests/date_format.rs::fill_and_sign_dates_follow_the_date_format_preference_and_it_is_remembered", "crates/engine/src/dates.rs::presets_write_the_day_in_their_own_order", "crates/engine/src/dates.rs::names_follow_the_date_language", "crates/ui-egui/tests/date_format.rs::month_names_follow_the_date_language_or_else_the_interface_language", "crates/ui-egui/tests/date_format.rs::a_date_the_pdf_cannot_hold_is_refused_with_a_warning_first"]
-notes = "local date in Preferences ▸ Date format (default m/d/yyyy; 12 presets or any pattern in Acrobat date letters with \\ escapes, checked and previewed as typed, remembered; only whole date codes accepted; month and weekday names in the interface languages, Czech months in the genitive after a day, following the interface language unless one is picked; fill_sign_add takes a one-off format and language). Beyond Acrobat: its Fill & Sign has no format setting (only Acrobat Sign accounts do). Missing: Fill & Sign text is Helvetica/WinAnsi, so a date with letters outside Western European (Czech ř, Japanese, Chinese names) is refused with a warning instead of being saved as ?; the OS locale's format isn't offered as a preset; names in languages without an interface translation"
+notes = "local date in Preferences ▸ Date format (default m/d/yyyy; 12 presets or any pattern in PDF JavaScript date letters with \\ escapes, checked and previewed as typed, remembered; only whole date codes accepted; month and weekday names in the interface languages, Czech months in the genitive after a day, following the interface language unless one is picked; fill_sign_add takes a one-off format and language). Beyond the viewer: its Fill & Sign has no format setting (only the viewer Sign accounts do). Missing: Fill & Sign text is Helvetica/WinAnsi, so a date with letters outside Western European (Czech ř, Japanese, Chinese names) is refused with a warning instead of being saved as ?; the OS locale's format isn't offered as a preset; names in languages without an interface translation"
 
 [[feature]]
 id = "form.fill-sign-signature"
@@ -5248,46 +5180,6 @@ commands = ["comment.flatten"]
 tools = ["doc_save", "doc_flatten"]
 evidence = ["crates/edit/src/tests.rs::fill_sign_flatten_bakes_marks_keeps_other_comments_and_does_not_reuse_pcfl0", "crates/engine/src/tests.rs::flattening_fill_and_sign_keeps_other_comments_fields_and_undoes", "crates/engine/src/tests.rs::flattening_fill_and_sign_is_refused_without_permission_to_change", "crates/automation/tests/automation.rs::saving_with_flatten_fill_sign_bakes_marks_and_leaves_other_comments", "crates/ui-egui/tests/fill_sign.rs::saving_flattens_fill_and_sign_only_when_the_preference_is_on"]
 notes = "Preferences ▸ Fill & Sign, and doc_save flatten_fill_sign, bake text, marks and signatures into the page. The option defaults off, so a normal save leaves them editable. Other comments and form fields stay. Flatten comments still flattens every comment."
-
-[[feature]]
-id = "form.autofill-profile"
-title = "Autofill collection synced to an Adobe account"
-area = "F"
-tier = "N/A"
-milestone = "none"
-status = "na"
-commands = []
-tools = []
-evidence = []
-notes = "Adobe cloud; a local profile may come later"
-
-[[feature]]
-id = "form.distribute-track"
-title = "Distribute and track forms, collect responses"
-area = "F"
-tier = "N/A"
-milestone = "none"
-status = "na"
-commands = []
-tools = []
-evidence = []
-notes = "Adobe cloud; only submit-to-URL/email actions are supported"
-
-[[feature]]
-id = "form.web-forms"
-title = "Acrobat Sign web forms"
-area = "F"
-tier = "N/A"
-milestone = "none"
-status = "na"
-commands = []
-tools = []
-evidence = []
-notes = "Adobe cloud"
-
-# ==================================================================================================
-# G. Protect, redact, sanitize
-# ==================================================================================================
 
 [[feature]]
 id = "protect.security-properties"
@@ -5359,7 +5251,7 @@ status = "shipped"
 commands = ["protect.password"]
 tools = ["doc_protect"]
 evidence = ["crates/engine/src/tests.rs::protection_is_validated_undoable_and_never_logged"]
-notes = "Advanced Options; disabled for RC4 levels as in Acrobat"
+notes = "Advanced Options; disabled for RC4 levels as in the viewer"
 
 [[feature]]
 id = "protect.encrypt-attachments-only"
@@ -5444,18 +5336,6 @@ commands = []
 tools = []
 evidence = []
 notes = ""
-
-[[feature]]
-id = "protect.rights-management"
-title = "Server-based rights management (AEM/LiveCycle)"
-area = "G"
-tier = "N/A"
-milestone = "none"
-status = "na"
-commands = []
-tools = []
-evidence = []
-notes = "server product; local policy presets only"
 
 [[feature]]
 id = "protect.mip-labels"
@@ -5698,18 +5578,6 @@ evidence = []
 notes = ""
 
 [[feature]]
-id = "protect.redact-ai-suggestions"
-title = "Suggest sensitive content to redact via an AI provider"
-area = "G"
-tier = "P2"
-milestone = "M13"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = "local or user-provided model; off by default"
-
-[[feature]]
 id = "protect.remove-hidden-information"
 title = "Remove hidden information (selectable categories)"
 area = "G"
@@ -5755,7 +5623,7 @@ status = "partial"
 commands = []
 tools = ["trust_attachments_get", "trust_attachments_set", "attachment_list", "attachment_open", "attachment_extract", "associated_file_extract"]
 evidence = ["crates/engine/src/attachment_trust.rs::executables_and_scripts_are_blocked", "crates/engine/src/attachment_trust.rs::documents_are_allowed_and_unknown_types_prompt", "crates/engine/src/attachment_trust.rs::case_trailing_dots_and_spaces_are_normalized", "crates/engine/src/attachment_trust.rs::only_the_last_path_component_counts", "crates/engine/src/attachment_trust.rs::double_extensions_use_the_last_and_flag_disguises", "crates/engine/src/attachment_trust.rs::hidden_characters_are_seen_through", "crates/engine/src/attachment_trust.rs::stream_suffixes_take_the_stricter_reading", "crates/engine/src/attachment_trust.rs::user_lists_override_the_built_in_ones", "crates/engine/src/attachment_trust.rs::bad_user_lists_are_refused", "crates/engine/src/attachment_trust.rs::settings_round_trip_and_hostile_settings_are_tamed", "crates/engine/src/attachment_trust.rs::hostile_names_do_not_panic", "crates/automation/tests/automation.rs::attachment_trust_through_tools", "crates/ui-egui/tests/protect.rs::attachment_trust_is_saved_and_refuses_denied_types"]
-notes = "Trust Manager's attachment allow/deny list as a policy on the engine Session (pdfcraft_engine::attachment_trust). Built-in deny list of types that run code when opened (Windows programs, installers, scripts and script hosts such as exe, bat, cmd, js, vbs, ps1, hta, scr, lnk, msi; macOS apps, packages and scripts; Unix shell scripts and packages; jar/py/pl/rb/php; disk images; macro-enabled Office files and Access databases), a built-in allow list of plain documents and images (pdf, fdf, txt, csv, json, xml, png, jpg, …), and the user's allow/deny lists on top (user deny wins, then user allow, then built-in deny, then built-in allow); anything else, or a name with no extension, prompts. Names are checked as a launcher sees them: last path component, case folded, trailing dots/spaces/control characters dropped, invisible and bidi-override characters removed (and flagged), an NTFS stream suffix (x.exe:stream) read both ways with the stricter winning; only the last extension decides, so report.pdf.exe is an .exe flagged disguised while notes.exe.pdf is a PDF. attachment_open refuses blocked types even with confirm, returns status prompt with a question for unknown types until confirm: true, opens an allowed PDF as a new document and writes other types to a path for launching (launched: false; nothing headless launches programs). attachment_extract and associated_file_extract always save to the chosen path and report risk/trust/warning. The desktop app's Attachments panel refuses to open a denied type, warns after saving a risky one, and persists the lists in its settings (restored leniently: bad entries skipped, 256 per list). Missing: a Preferences ▸ Trust Manager panel to edit the lists in the UI (tool only), an Open-in-default-application action in the panel (it opens only PDFs in a tab and saves others), JavaScript exportDataObject/launch and /Launch or /GoToE actions to embedded files (not executed today, so not checked), Acrobat's exact default list (ours is our own), and persistence for headless sessions (CLI/MCP keep the lists until the session ends)."
+notes = "Trust Manager's attachment allow/deny list as a policy on the engine Session (pdfcraft_engine::attachment_trust). Built-in deny list of types that run code when opened (Windows programs, installers, scripts and script hosts such as exe, bat, cmd, js, vbs, ps1, hta, scr, lnk, msi; macOS apps, packages and scripts; Unix shell scripts and packages; jar/py/pl/rb/php; disk images; macro-enabled Office files and Access databases), a built-in allow list of plain documents and images (pdf, fdf, txt, csv, json, xml, png, jpg, …), and the user's allow/deny lists on top (user deny wins, then user allow, then built-in deny, then built-in allow); anything else, or a name with no extension, prompts. Names are checked as a launcher sees them: last path component, case folded, trailing dots/spaces/control characters dropped, invisible and bidi-override characters removed (and flagged), an NTFS stream suffix (x.exe:stream) read both ways with the stricter winning; only the last extension decides, so report.pdf.exe is an .exe flagged disguised while notes.exe.pdf is a PDF. attachment_open refuses blocked types even with confirm, returns status prompt with a question for unknown types until confirm: true, opens an allowed PDF as a new document and writes other types to a path for launching (launched: false; nothing headless launches programs). attachment_extract and associated_file_extract always save to the chosen path and report risk/trust/warning. The desktop app's Attachments panel refuses to open a denied type, warns after saving a risky one, and persists the lists in its settings (restored leniently: bad entries skipped, 256 per list). Missing: a Preferences ▸ Trust Manager panel to edit the lists in the UI (tool only), an Open-in-default-application action in the panel (it opens only PDFs in a tab and saves others), JavaScript exportDataObject/launch and /Launch or /GoToE actions to embedded files (not executed today, so not checked), the viewer's exact default list (ours is our own), and persistence for headless sessions (CLI/MCP keep the lists until the session ends)."
 
 [[feature]]
 id = "protect.url-access-control"
@@ -5879,7 +5747,7 @@ status = "shipped"
 commands = ["sign.digital"]
 tools = ["sign_document"]
 evidence = ["crates/ui-egui/tests/signing.rs::drawing_a_signature_creating_an_id_signing_and_trusting", "crates/automation/tests/automation.rs::digital_ids_signing_and_validation_through_tools"]
-notes = "drag a rectangle; Acrobat's name-and-details appearance"
+notes = "drag a rectangle; the viewer's name-and-details appearance"
 
 [[feature]]
 id = "sign.sign-existing-field"
@@ -5951,7 +5819,7 @@ status = "shipped"
 commands = ["sign.validate"]
 tools = ["sign_list"]
 evidence = ["crates/sign/tests/pdf.rs::validates_a_signature_made_by_openssl", "crates/sign/tests/pdf.rs::validates_signatures_written_with_ber_indefinite_lengths", "crates/sign/tests/ber.rs::deeply_nested_segmented_content_is_an_error_not_a_stack_overflow", "crates/sign/tests/ber.rs::indefinite_length_nesting_bombs_are_refused"]
-notes = "validated, including BER-encoded CMS (indefinite lengths and segmented strings, as DocuSign, Documenso, Adobe PPKMS and Windows write it; the BER is reported in the details); new signatures use CAdES. Not read: BER high tag numbers. Still missing: multiple SignerInfos, counter-signatures, CMS with the signer's cert referenced but absent"
+notes = "validated, including BER-encoded CMS (indefinite lengths and segmented strings, as DocuSign, Documenso, other CMS writers and Windows write it; the BER is reported in the details); new signatures use CAdES. Not read: BER high tag numbers. Still missing: multiple SignerInfos, counter-signatures, CMS with the signer's cert referenced but absent"
 
 [[feature]]
 id = "sign.cades-pades-bb"
@@ -6208,7 +6076,7 @@ status = "partial"
 commands = []
 tools = ["sign_os_trust_get", "sign_os_trust_set", "sign_os_roots", "sign_list"]
 evidence = ["crates/automation/tests/os_trust.rs::os_roots_anchor_signatures_and_certified_documents_only_when_switched_on", "crates/sign/src/os_trust.rs::bundle_skips_malformed_blocks_and_dedupes", "crates/sign/src/os_trust.rs::directory_reads_pem_and_der_skips_bad_and_huge_files", "crates/sign/src/os_trust.rs::an_unterminated_huge_block_is_dropped_not_grown"]
-notes = "Headless. Two settings, off by default as in Acrobat: trust the OS roots for validating signatures (approval signatures, embedded and document timestamps) and for certified documents (certification signatures; effective only with the first on). Roots come from the platform store via rustls-native-certs (macOS keychains, Windows Current User/Local Machine stores, Linux/BSD system CA bundle and directory, SSL_CERT_FILE/SSL_CERT_DIR) or an explicit PEM/DER bundle or directory; malformed entries are skipped and counted, at most 4096 roots, 32 MB bundle, 1 MB per file. Validation builds chains through the enabled roots and reports trust_source (trusted_certificates or operating_system), and says when a chain ends at an OS root whose setting is off. Missing: no Preferences UI and the settings are not persisted (session only); the OS store's per-certificate trust settings and distrust (macOS trust settings purposes, Windows disallowed store, EKU constraints on roots) are not read separately: every root rustls-native-certs returns (those trusted for TLS) is treated alike; not available in the browser (wasm); the RFC 3161 client's require_trusted_authority still uses only the trusted certificates; real Windows/macOS stores untested in CI (tests inject a bundle)."
+notes = "Headless. Two settings, off by default as in the viewer: trust the OS roots for validating signatures (approval signatures, embedded and document timestamps) and for certified documents (certification signatures; effective only with the first on). Roots come from the platform store via rustls-native-certs (macOS keychains, Windows Current User/Local Machine stores, Linux/BSD system CA bundle and directory, SSL_CERT_FILE/SSL_CERT_DIR) or an explicit PEM/DER bundle or directory; malformed entries are skipped and counted, at most 4096 roots, 32 MB bundle, 1 MB per file. Validation builds chains through the enabled roots and reports trust_source (trusted_certificates or operating_system), and says when a chain ends at an OS root whose setting is off. Missing: no Preferences UI and the settings are not persisted (session only); the OS store's per-certificate trust settings and distrust (macOS trust settings purposes, Windows disallowed store, EKU constraints on roots) are not read separately: every root rustls-native-certs returns (those trusted for TLS) is treated alike; not available in the browser (wasm); the RFC 3161 client's require_trusted_authority still uses only the trusted certificates; real Windows/macOS stores untested in CI (tests inject a bundle)."
 
 [[feature]]
 id = "sign.verification-time"
@@ -6329,46 +6197,6 @@ commands = []
 tools = []
 evidence = []
 notes = ""
-
-[[feature]]
-id = "sign.aatl"
-title = "Adobe Approved Trust List"
-area = "H"
-tier = "N/A"
-milestone = "none"
-status = "na"
-commands = []
-tools = []
-evidence = []
-notes = "Adobe-hosted list; use OS trust stores and EU Trusted Lists"
-
-[[feature]]
-id = "sign.request-esignatures"
-title = "Request e-signatures (Acrobat Sign)"
-area = "H"
-tier = "N/A"
-milestone = "none"
-status = "na"
-commands = []
-tools = []
-evidence = []
-notes = "Adobe cloud; pluggable provider hook only"
-
-[[feature]]
-id = "sign.cloud-signatures"
-title = "Cloud signature (CSC) digital IDs via Adobe"
-area = "H"
-tier = "N/A"
-milestone = "none"
-status = "na"
-commands = []
-tools = []
-evidence = []
-notes = "Adobe cloud; a pluggable remote-signing KeyProvider may follow"
-
-# ==================================================================================================
-# I. Scan and OCR
-# ==================================================================================================
 
 [[feature]]
 id = "ocr.recognize-text"
@@ -6500,7 +6328,7 @@ status = "partial"
 commands = ["ocr.recognize"]
 tools = ["ocr_recognize", "ocr_prepare", "ocr_recognize_files"]
 evidence = ["crates/automation/tests/ocr_orient.rs::ocr_auto_rotate_and_deskew_read_turned_and_skewed_scans_onto_the_visible_words", "crates/ocr/src/orient.rs::skew_is_found_on_synthetic_lines", "crates/ocr/src/orient.rs::deskew_only_straightens_without_recognition", "crates/ocr/src/orient.rs::transform_maps_corrected_points_onto_the_source"]
-notes = "Opt-in deskew (dialog 'Deskew pages', default off) estimates skew within ±15° with original projection-profile code on a downscaled Otsu-binarized copy (0.5° then 0.1° steps) and recognizes a straightened copy; words map back through the documented affine transform, the page image is never altered. Executed with the pinned models on one original synthetic page skewed ±3/±7° (and 93/173/263°): detected skew within 0.1°, 30/30 words at ±3° and 29/30 at ±7° (one word misread after two resamplings), reading order 0.97–1.00, every recognized word on its visible word; at -7° without deskew 21/30 words, order 0.70. Not yet: visible-page straightening (Acrobat-style deskewed image output), real scans, mixed-skew or curved pages, skew beyond ±15°."
+notes = "Opt-in deskew (dialog 'Deskew pages', default off) estimates skew within ±15° with original projection-profile code on a downscaled Otsu-binarized copy (0.5° then 0.1° steps) and recognizes a straightened copy; words map back through the documented affine transform, the page image is never altered. Executed with the pinned models on one original synthetic page skewed ±3/±7° (and 93/173/263°): detected skew within 0.1°, 30/30 words at ±3° and 29/30 at ±7° (one word misread after two resamplings), reading order 0.97–1.00, every recognized word on its visible word; at -7° without deskew 21/30 words, order 0.70. Not yet: visible-page straightening (the viewer-style deskewed image output), real scans, mixed-skew or curved pages, skew beyond ±15°."
 
 [[feature]]
 id = "ocr.despeckle"
@@ -6681,22 +6509,6 @@ commands = []
 tools = []
 evidence = []
 notes = ""
-
-[[feature]]
-id = "ocr.adobe-scan-sync"
-title = "Adobe Scan mobile capture sync"
-area = "I"
-tier = "N/A"
-milestone = "none"
-status = "na"
-commands = []
-tools = []
-evidence = []
-notes = "Adobe cloud; import images from any source instead"
-
-# ==================================================================================================
-# J. Create and export
-# ==================================================================================================
 
 [[feature]]
 id = "create.from-images"
@@ -7032,7 +6844,7 @@ status = "partial"
 commands = []
 tools = ["doc_export_svg"]
 evidence = ["crates/render/src/svg/tests.rs::paths_keep_colour_fill_rule_and_stroke_style", "crates/render/src/svg/tests.rs::colours_are_converted_to_srgb", "crates/render/src/svg/tests.rs::rotated_and_cropped_pages_use_the_displayed_box", "crates/render/src/svg/tests.rs::images_are_embedded_as_png", "crates/render/src/svg/tests.rs::text_is_drawn_as_glyph_outlines_with_a_transparent_text_layer", "crates/render/src/svg/tests.rs::nested_forms_are_flattened_and_looping_forms_end", "crates/render/src/svg/tests.rs::tiling_patterns_become_svg_patterns", "crates/render/src/svg/tests.rs::shadings_are_rasterised_under_the_painted_shape", "crates/render/src/svg/tests.rs::soft_masks_become_svg_masks", "crates/render/src/svg/tests.rs::hostile_pages_and_arguments_are_errors", "crates/engine/src/tests.rs::svg_export_follows_the_working_file", "crates/automation/tests/svg_export.rs::exporting_pages_to_svg_through_tools", "crates/automation/tests/svg_export.rs::svg_export_rejects_bad_arguments", "crates/automation/tests/reader_selection.rs::copy_denied_text_paths_withhold_or_refuse_and_owner_lifts"]
-notes = "One standalone SVG per page (`<name>_page_<n>.svg`), viewBox = crop box as displayed (after /Rotate), in points. Written by an original hayro-interpret Device (pdfcraft_render::svg), so fonts, colour spaces, forms, annotations and layers come out as on screen. Vector: paths with fill rule, width, caps, joins, miter limit, dashes (strokes keep the CTM as transform), hairlines as non-scaling 1 px, nested clipPath groups, colours converted to sRGB with constant alpha, glyphs as outlines defined once and placed with <use> (fonts not embedded) plus a transparent per-line <text> layer (optional) for search/selection, nested and looping forms flattened within the interpreter's nesting limit, tiling patterns as SVG <pattern>, soft masks as <mask> (luminosity/alpha; transfer functions ignored and counted), blend modes as CSS mix-blend-mode, groups with opacity. Images and stencil masks re-encoded as base64 PNG with their soft mask as alpha, box-downsampled above 4 MP. Shadings (sh and shading patterns, fills and strokes) are rasterised over the painted region at up to 2 px/pt (1 MP each, 16 MP per page) and masked by the painted shape. 128 MiB per page, then truncated (still well-formed). Each file reports counts, omitted (stencils painted with a pattern, undecodable images, budget overflow) and truncated. Output checked by parsing with roxmltree; not yet compared visually against Acrobat's SVG export or a browser render. Not yet: a menu command (UI redesign), embedded fonts / real <text> with font-family, knockout groups and non-isolated group semantics, shading as native SVG gradients, overprint, one-file multi-page output."
+notes = "One standalone SVG per page (`<name>_page_<n>.svg`), viewBox = crop box as displayed (after /Rotate), in points. Written by an original hayro-interpret Device (pdfcraft_render::svg), so fonts, colour spaces, forms, annotations and layers come out as on screen. Vector: paths with fill rule, width, caps, joins, miter limit, dashes (strokes keep the CTM as transform), hairlines as non-scaling 1 px, nested clipPath groups, colours converted to sRGB with constant alpha, glyphs as outlines defined once and placed with <use> (fonts not embedded) plus a transparent per-line <text> layer (optional) for search/selection, nested and looping forms flattened within the interpreter's nesting limit, tiling patterns as SVG <pattern>, soft masks as <mask> (luminosity/alpha; transfer functions ignored and counted), blend modes as CSS mix-blend-mode, groups with opacity. Images and stencil masks re-encoded as base64 PNG with their soft mask as alpha, box-downsampled above 4 MP. Shadings (sh and shading patterns, fills and strokes) are rasterised over the painted region at up to 2 px/pt (1 MP each, 16 MP per page) and masked by the painted shape. 128 MiB per page, then truncated (still well-formed). Each file reports counts, omitted (stencils painted with a pattern, undecodable images, budget overflow) and truncated. Output checked by parsing with roxmltree; not yet compared visually against the viewer's SVG export or a browser render. Not yet: a menu command (UI redesign), embedded fonts / real <text> with font-family, knockout groups and non-isolated group semantics, shading as native SVG gradients, overprint, one-file multi-page output."
 
 [[feature]]
 id = "create.export-ps"
@@ -7068,7 +6880,7 @@ status = "partial"
 commands = []
 tools = ["doc_export_office", "doc_export_pptx", "doc_export_text"]
 evidence = ["crates/automation/tests/export_ocr.rs::export_ocr_puts_recognized_text_in_every_text_format_and_off_leaves_it_out", "crates/automation/tests/export_ocr.rs::export_ocr_auto_recognizes_only_the_scanned_pages", "crates/automation/tests/export_ocr.rs::export_ocr_arguments_are_in_the_schemas_and_validated", "crates/automation/tests/export_ocr.rs::export_ocr_auto_without_models_exports_and_says_why_and_on_fails", "crates/engine/tests/export_ocr.rs::auto_recognizes_only_scans_into_a_copy", "crates/engine/tests/export_ocr.rs::on_recognizes_every_page_without_text_and_off_none", "crates/engine/tests/export_ocr.rs::without_models_auto_exports_as_is_and_on_fails", "crates/engine/tests/export_ocr.rs::a_document_that_forbids_changes_is_not_recognized_in_auto_and_refused_when_on", "crates/engine/tests/export_ocr.rs::exports_read_with_the_selected_engine_and_its_languages"]
-notes = "Export to Word, HTML, RTF, Excel, PowerPoint (editable mode) and text takes ocr auto (default, as Acrobat's export setting)/on/off and ocr_language (any code the selected OCR engine reads; en with the built-in one). Session::with_export_ocr reads with the session's selected engine (ocr.ocr-engines) and recognizes the exported pages that need it (auto: scans, pages with an image and no text; on: every page without text) on a temporary copy of the working file and exports that copy; the document, its history and dirty state never change. auto exports without recognition, saying why (no models, the engine can't run or doesn't read the language, or the document's permissions forbid recognition); on fails instead. Each export reports pages without text, scanned pages, recognized pages, skipped pages and words. Recognized text is the invisible Searchable Image (Exact) layer, so the exports hold the recognized paragraphs and also the scan image itself (Acrobat drops the text from the picture); fonts, sizes and styles are not recovered from the scan. Real-model test on one original 200 dpi synthetic page per format (recall >= 80%, none of the words with ocr off); English only with the built-in engine; no export dialog setting yet (the UI is being redesigned)."
+notes = "Export to Word, HTML, RTF, Excel, PowerPoint (editable mode) and text takes ocr auto (default, as the viewer's export setting)/on/off and ocr_language (any code the selected OCR engine reads; en with the built-in one). Session::with_export_ocr reads with the session's selected engine (ocr.ocr-engines) and recognizes the exported pages that need it (auto: scans, pages with an image and no text; on: every page without text) on a temporary copy of the working file and exports that copy; the document, its history and dirty state never change. auto exports without recognition, saying why (no models, the engine can't run or doesn't read the language, or the document's permissions forbid recognition); on fails instead. Each export reports pages without text, scanned pages, recognized pages, skipped pages and words. Recognized text is the invisible Searchable Image (Exact) layer, so the exports hold the recognized paragraphs and also the scan image itself (the viewer drops the text from the picture); fonts, sizes and styles are not recovered from the scan. Real-model test on one original 200 dpi synthetic page per format (recall >= 80%, none of the words with ocr off); English only with the built-in engine; no export dialog setting yet (the UI is being redesigned)."
 
 [[feature]]
 id = "create.export-settings"
@@ -7093,34 +6905,6 @@ commands = []
 tools = ["text_extract"]
 evidence = ["crates/render/src/text.rs::rtl_runs_come_out_in_logical_order_and_cjk_has_no_spaces", "crates/render/src/text.rs::lines_words_and_search", "crates/automation/tests/automation.rs::parallel_text_extraction_keeps_page_order_and_follows_edits"]
 notes = ""
-
-[[feature]]
-id = "create.translate"
-title = "Translate documents"
-area = "J"
-tier = "P3"
-milestone = "M13"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = "through an optional AiProvider; never Adobe's cloud"
-
-[[feature]]
-id = "create.cloud-office-conversion"
-title = "Cloud conversion from the macOS Office add-in"
-area = "J"
-tier = "N/A"
-milestone = "none"
-status = "na"
-commands = []
-tools = []
-evidence = []
-notes = "Adobe cloud; LibreOffice sidecar instead"
-
-# ==================================================================================================
-# K. Optimize and standards
-# ==================================================================================================
 
 [[feature]]
 id = "optimize.reduce-file-size"
@@ -7168,7 +6952,7 @@ status = "partial"
 commands = ["optimize.advanced"]
 tools = ["doc_optimize"]
 evidence = ["crates/optimize/tests/optimize.rs::images_are_measured_where_drawn_and_downsampled", "crates/optimize/tests/optimize.rs::settings_choose_what_happens", "crates/optimize/tests/codecs.rs::mono_settings_choose_flate_retain_and_downsampling", "crates/automation/tests/automation.rs::optimizing_through_tools"]
-notes = "colour and grayscale, bicubic, effective resolution measured where drawn; monochrome (one-bit images and image masks) by area average with majority and ties to ink, not bicubic and not compared with Acrobat output; monochrome images with /SMask or /Mask are not downsampled"
+notes = "colour and grayscale, bicubic, effective resolution measured where drawn; monochrome (one-bit images and image masks) by area average with majority and ties to ink, not bicubic and not compared with the viewer output; monochrome images with /SMask or /Mask are not downsampled"
 
 [[feature]]
 id = "optimize.recompress-images"
@@ -7216,7 +7000,7 @@ status = "partial"
 commands = ["optimize.advanced"]
 tools = ["doc_embedded_fonts", "doc_optimize"]
 evidence = ["crates/optimize/tests/optimize.rs::only_simple_complete_standard_encoded_fonts_can_be_unembedded", "crates/optimize/tests/optimize.rs::a_shared_descriptor_is_copied_and_conformance_blocks_unembedding", "crates/automation/tests/automation.rs::auditing_fonts_and_unembedding_through_tools", "crates/ui-egui/tests/viewer.rs::optimizer_fonts_panel_unembeds_the_chosen_font"]
-notes = "Headless only: lists embedded fonts and removes the program of complete, non-symbolic simple fonts with an explicit standard-based encoding and full widths (codes, widths and encoding kept; pdffonts reports emb=no and pdftotext is unchanged on the synthetic fixture). Composite, subset and symbolic fonts and PDF/A or PDF/X documents are refused with a reason; a refusal changes nothing. PDF Optimizer ▸ Fonts panel lists the embedded fonts (type, program, stored size) with a check box for each font that can be unembedded and the refusal reason for the others (a name shared with a refused font is refused too, since unembedding goes by name); choices are kept per dialog opening and pruned to the active document's eligible fonts; the saved notice counts unembedded fonts. Missing: Acrobat's two-list Embedded/Unembed layout and its Retain/Unembed buttons, inline (direct) font dictionaries are not listed, and no real-world (non-synthetic) unembedding was checked in the UI"
+notes = "Headless only: lists embedded fonts and removes the program of complete, non-symbolic simple fonts with an explicit standard-based encoding and full widths (codes, widths and encoding kept; pdffonts reports emb=no and pdftotext is unchanged on the synthetic fixture). Composite, subset and symbolic fonts and PDF/A or PDF/X documents are refused with a reason; a refusal changes nothing. PDF Optimizer ▸ Fonts panel lists the embedded fonts (type, program, stored size) with a check box for each font that can be unembedded and the refusal reason for the others (a name shared with a refused font is refused too, since unembedding goes by name); choices are kept per dialog opening and pruned to the active document's eligible fonts; the saved notice counts unembedded fonts. Missing: the viewer's two-list Embedded/Unembed layout and its Retain/Unembed buttons, inline (direct) font dictionaries are not listed, and no real-world (non-synthetic) unembedding was checked in the UI"
 
 [[feature]]
 id = "optimize.flatten-transparency"
@@ -7228,7 +7012,7 @@ status = "partial"
 commands = []
 tools = ["optimize_flatten_transparency"]
 evidence = ["crates/preflight/src/flatten_tests.rs::alpha_over_text_is_patched_and_keeps_its_look", "crates/preflight/src/flatten_tests.rs::soft_masked_images_and_blend_modes_are_flattened", "crates/preflight/src/flatten_tests.rs::a_shared_form_is_copied_and_page_subsets_are_honoured", "crates/preflight/src/flatten_tests.rs::balance_zero_rasterizes_the_whole_page", "crates/preflight/src/flatten_tests.rs::a_large_transparent_area_rasterizes_the_page_unless_balance_keeps_vectors", "crates/preflight/src/flatten_tests.rs::group_only_and_invisible_transparency_need_no_image", "crates/preflight/src/flatten_tests.rs::pages_without_transparency_are_left_alone", "crates/preflight/src/flatten_tests.rs::unbalanced_content_is_closed_before_the_images", "crates/preflight/src/flatten_tests.rs::settings_and_pages_are_checked", "crates/preflight/src/flatten_tests.rs::hostile_documents_do_not_panic", "crates/engine/src/tests.rs::flattening_transparency_is_one_undo_step_and_survives_saving", "crates/automation/tests/automation.rs::flattening_transparency_through_tools"]
-notes = "Headless (optimize_flatten_transparency; engine Edit::FlattenTransparency, one undo step, none when nothing uses transparency). Transparency is found with the PDF/X verifier's criteria (soft masks, CA/ca < 1, non-Normal blend modes, transparency groups, image soft masks) in the resources the content uses, through forms, patterns and Type 3 fonts. Resources are replaced by opaque copies (shared objects copied, so other pages keep theirs), the page /Group is removed, and only the rectangles where the rendered look changed are rasterized from the original at the preset's resolution (low 150, medium 300, high 600 ppi, or 36–1200) and drawn as opaque RGB images over the kept vector content; everything outside them stays vector and text stays searchable. raster_vector_balance 0 or regions above balance % of the page rasterize the whole page (64 MP budget). Saved files pass the PDF/X-1a transparency rule; renders before/after match within resampling at patch edges. Missing: annotation appearances are not flattened, regions are rectangles (no clipping to object outlines, no Clip Complex Regions, no text/strokes to outlines), images are DeviceRGB (no CMYK for PDF/X-1a), optional content is rasterized as shown by default, no comparison with Acrobat's flattener output, no Flattener Preview or Optimizer Transparency panel (UI redesign)"
+notes = "Headless (optimize_flatten_transparency; engine Edit::FlattenTransparency, one undo step, none when nothing uses transparency). Transparency is found with the PDF/X verifier's criteria (soft masks, CA/ca < 1, non-Normal blend modes, transparency groups, image soft masks) in the resources the content uses, through forms, patterns and Type 3 fonts. Resources are replaced by opaque copies (shared objects copied, so other pages keep theirs), the page /Group is removed, and only the rectangles where the rendered look changed are rasterized from the original at the preset's resolution (low 150, medium 300, high 600 ppi, or 36–1200) and drawn as opaque RGB images over the kept vector content; everything outside them stays vector and text stays searchable. raster_vector_balance 0 or regions above balance % of the page rasterize the whole page (64 MP budget). Saved files pass the PDF/X-1a transparency rule; renders before/after match within resampling at patch edges. Missing: annotation appearances are not flattened, regions are rectangles (no clipping to object outlines, no Clip Complex Regions, no text/strokes to outlines), images are DeviceRGB (no CMYK for PDF/X-1a), optional content is rasterized as shown by default, no comparison with the viewer's flattener output, no Flattener Preview or Optimizer Transparency panel (UI redesign)"
 
 [[feature]]
 id = "optimize.discard-javascript"
@@ -7708,7 +7492,7 @@ status = "partial"
 commands = []
 tools = ["pdfx_verify"]
 evidence = ["crates/preflight/src/pdfx_tests.rs::a_valid_x1a_file_conforms_and_is_detected", "crates/preflight/src/pdfx_tests.rs::a_valid_x4_file_with_transparency_conforms", "crates/preflight/src/pdfx_tests.rs::an_undeclared_file_is_checked_as_x4", "crates/preflight/src/pdfx_tests.rs::each_broken_x1a_variant_fails_with_its_rule", "crates/preflight/src/pdfx_tests.rs::output_profiles_are_checked", "crates/preflight/src/pdfx_tests.rs::warnings_do_not_break_conformance", "crates/preflight/src/pdfx_tests.rs::pdf_versions_are_limited_per_part", "crates/preflight/src/pdfx_tests.rs::x3_allows_device_independent_colour_but_not_rgb_with_a_cmyk_intent", "crates/preflight/src/pdfx_tests.rs::x4_rules", "crates/preflight/src/pdfx_tests.rs::looped_and_deep_forms_are_bounded", "crates/preflight/src/pdfx_tests.rs::findings_are_capped_but_counted", "crates/preflight/src/pdfx_tests.rs::hostile_documents_do_not_panic", "crates/automation/tests/automation.rs::pdfx_verify_through_tools"]
-notes = "PDF/X-1a:2001, X-1a:2003, X-3:2002, X-3:2003 and X-4 (ISO 15930-1/-4/-3/-6/-7) by rule id; the standard defaults to the declared one, else X-4. Errors: GTS_PDFXVersion (information; XMP pdfxid for X-4), GTS_PDFXConformance for X-1a:2001, PDF version limit (1.3/1.4/1.6, header and catalog), information Title/CreationDate/ModDate (X-1a/X-3), XMP and its dates (X-4), Trapped True/False (XMP pdf:Trapped agreeing with the information for X-4), file ID (2003 and X-4), encryption, exactly one GTS_PDFX output intent with OutputConditionIdentifier and a DestOutputProfile or RegistryName, ICC output (prtr) class and N (CMYK/gray for X-1a), TrimBox or ArtBox per page, boxes inside the MediaBox and TrimBox inside the BleedBox, printing non-PrinterMark/TrapNet annotations in the bleed area, fonts embedded, X-1a colour (no RGB, ICCBased, Cal or Lab, through Default spaces, inline images, shadings, patterns, Type 3 glyphs and annotation appearances), DeviceRGB only with an RGB intent (X-3/X-4), no transparency for X-1a/X-3 (SMask, CA/ca, blend modes, groups, image soft masks), X-4 optional content Name/AS, TR/TR2, halftone types outside 1/5/6/10/16, PostScript XObjects and PS, OPI, reference XObjects and external streams. Warnings, where we are not certain of the standard's wording: TrimBox and ArtBox together, spot alternates other than CMYK/gray in X-1a, DeviceCMYK with a non-CMYK intent, halftone types 6/10/16, ICC profile version, embedded files, JavaScript and additional actions, the file ID for 2001/2002, the X-4 information/XMP version agreement and dc:title. Not checked: the ICC characterization registry, an intent's colour space without a profile, font programs, LZW, 16-bit/JPX image details, TrapNet consistency, page-level output intents, X-4p/X-5, optional content Order, OPM. No UI yet (UI redesign) and no comparison with Acrobat Preflight or another validator."
+notes = "PDF/X-1a:2001, X-1a:2003, X-3:2002, X-3:2003 and X-4 (ISO 15930-1/-4/-3/-6/-7) by rule id; the standard defaults to the declared one, else X-4. Errors: GTS_PDFXVersion (information; XMP pdfxid for X-4), GTS_PDFXConformance for X-1a:2001, PDF version limit (1.3/1.4/1.6, header and catalog), information Title/CreationDate/ModDate (X-1a/X-3), XMP and its dates (X-4), Trapped True/False (XMP pdf:Trapped agreeing with the information for X-4), file ID (2003 and X-4), encryption, exactly one GTS_PDFX output intent with OutputConditionIdentifier and a DestOutputProfile or RegistryName, ICC output (prtr) class and N (CMYK/gray for X-1a), TrimBox or ArtBox per page, boxes inside the MediaBox and TrimBox inside the BleedBox, printing non-PrinterMark/TrapNet annotations in the bleed area, fonts embedded, X-1a colour (no RGB, ICCBased, Cal or Lab, through Default spaces, inline images, shadings, patterns, Type 3 glyphs and annotation appearances), DeviceRGB only with an RGB intent (X-3/X-4), no transparency for X-1a/X-3 (SMask, CA/ca, blend modes, groups, image soft masks), X-4 optional content Name/AS, TR/TR2, halftone types outside 1/5/6/10/16, PostScript XObjects and PS, OPI, reference XObjects and external streams. Warnings, where we are not certain of the standard's wording: TrimBox and ArtBox together, spot alternates other than CMYK/gray in X-1a, DeviceCMYK with a non-CMYK intent, halftone types 6/10/16, ICC profile version, embedded files, JavaScript and additional actions, the file ID for 2001/2002, the X-4 information/XMP version agreement and dc:title. Not checked: the ICC characterization registry, an intent's colour space without a profile, font programs, LZW, 16-bit/JPX image details, TrapNet consistency, page-level output intents, X-4p/X-5, optional content Order, OPM. No UI yet (UI redesign) and no comparison with the viewer Preflight or another validator."
 
 [[feature]]
 id = "optimize.pdfx-convert"
@@ -7720,7 +7504,7 @@ status = "partial"
 commands = []
 tools = ["pdfx_convert"]
 evidence = ["crates/engine/src/tests.rs::convert_to_pdfx_reaches_each_level_as_one_undo_step_and_is_idempotent", "crates/engine/src/tests.rs::convert_to_pdfx_refuses_what_it_cannot_fix_unless_partial", "crates/engine/src/tests.rs::convert_to_pdfx_survives_hostile_documents", "crates/preflight/src/pdfx_convert_tests.rs::structural_fixes_leave_only_colour_and_transparency_for_the_engine", "crates/preflight/src/pdfx_convert_tests.rs::a_second_run_changes_nothing", "crates/preflight/src/pdfx_convert_tests.rs::bad_options_are_refused", "crates/preflight/src/pdfx_convert_tests.rs::hostile_documents_do_not_panic", "crates/edit/src/convert_colors/tests.rs::device_output_converts_through_the_profile_but_writes_device_cmyk", "crates/automation/tests/automation.rs::pdfx_convert_through_tools"]
-notes = "PDF/X-1a:2003, X-3:2003 and X-4 (also X-1a:2001, X-3:2002) as one undoable edit, then pdfx_verify again (before/after, fixed, notes, unfixable); refuses (changing nothing) when the result wouldn't conform unless allow_partial; idempotent. Fixes: encryption, JavaScript and additional actions, non-printing annotations (links kept, not printing), printing annotations and form fields flattened and the AcroForm removed, transfer functions, bad halftones, OPI, X-4 optional content names, unembedded standard-14 Type 1 fonts embedded with the renderer's Foxit substitutes (BSD-3-Clause, standard widths, approximate descriptor metrics), transparency flattened for X-1a/X-3, colour converted to the output intent (X-1a: RGB/ICC/Cal/Lab to CMYK; X-3/X-4: DeviceRGB) through the profile's tables written as device colour, else a built-in approximation, the GTS_PDFX output intent (registered condition and/or ICC prtr profile; X-4 requires the profile), TrimBox/BleedBox, PDF version, GTS_PDFXVersion/Conformance, Title, dates, Trapped False, X-4 XMP, file ID. Not fixed: non-standard unembedded fonts, PostScript, reference XObjects, external streams, images Convert Colors can't decode, inline fonts; embedded files stay (warning). No bundled CMYK profile, no UI, not compared with Acrobat's output or another validator."
+notes = "PDF/X-1a:2003, X-3:2003 and X-4 (also X-1a:2001, X-3:2002) as one undoable edit, then pdfx_verify again (before/after, fixed, notes, unfixable); refuses (changing nothing) when the result wouldn't conform unless allow_partial; idempotent. Fixes: encryption, JavaScript and additional actions, non-printing annotations (links kept, not printing), printing annotations and form fields flattened and the AcroForm removed, transfer functions, bad halftones, OPI, X-4 optional content names, unembedded standard-14 Type 1 fonts embedded with the renderer's Foxit substitutes (BSD-3-Clause, standard widths, approximate descriptor metrics), transparency flattened for X-1a/X-3, colour converted to the output intent (X-1a: RGB/ICC/Cal/Lab to CMYK; X-3/X-4: DeviceRGB) through the profile's tables written as device colour, else a built-in approximation, the GTS_PDFX output intent (registered condition and/or ICC prtr profile; X-4 requires the profile), TrimBox/BleedBox, PDF version, GTS_PDFXVersion/Conformance, Title, dates, Trapped False, X-4 XMP, file ID. Not fixed: non-standard unembedded fonts, PostScript, reference XObjects, external streams, images Convert Colors can't decode, inline fonts; embedded files stay (warning). No bundled CMYK profile, no UI, not compared with the viewer's output or another validator."
 
 [[feature]]
 id = "optimize.output-intents"
@@ -7928,7 +7712,7 @@ status = "shipped"
 commands = ["print.dialog"]
 tools = ["doc_print"]
 evidence = ["crates/print/src/tests.rs::multiple_pages_per_sheet", "crates/automation/tests/automation.rs::printing_through_tools", "crates/print/src/tests.rs::cut_stack_keeps_piles_in_order_and_blanks_in_place", "crates/print/src/tests.rs::cutting_and_stacking_recovers_every_selected_page", "crates/automation/tests/automation.rs::cut_stack_printing_through_tools", "crates/ui-egui/tests/print.rs::cut_stack_dialog_previews_saves_and_refuses_duplex"]
-notes = "2/4/6/9/16, four sequential orders, borders, auto-rotate; also single-sided cut-and-stack order with aligned gutter cut marks, blank padding and range/reverse support (an extension, not an Acrobat parity claim). Duplex cut-and-stack is refused."
+notes = "2/4/6/9/16, four sequential orders, borders, auto-rotate; also single-sided cut-and-stack order with aligned gutter cut marks, blank padding and range/reverse support (an extension, not an the viewer parity claim). Duplex cut-and-stack is refused."
 
 [[feature]]
 id = "print.booklet"
@@ -8024,7 +7808,7 @@ status = "partial"
 commands = []
 tools = ["doc_print"]
 evidence = ["crates/preflight/src/flatten_tests.rs::rasterize_pages_makes_one_picture_per_page_at_the_resolution", "crates/preflight/src/flatten_tests.rs::rasterize_pages_honours_pages_and_refuses_bad_resolutions", "crates/preflight/src/flatten_tests.rs::rasterize_pages_caps_pixels", "crates/engine/src/tests.rs::printing_as_an_image_leaves_one_picture_per_sheet", "crates/automation/tests/automation.rs::printing_as_an_image_through_tools"]
-notes = "Headless: doc_print as_image true with dpi (36-1200, default 300; dpi alone is refused) works with every layout and with path or printer, and reports each sheet's pixel size and dpi. Engine Session::print_pdf_as_image imposes the sheets, then pdfcraft_preflight::rasterize_pages (the flatten-transparency renderer and tiling) replaces each sheet's content by one opaque DeviceRGB picture (2048 px tiles): no fonts, text operators, vectors or transparency group reach the printer; sheet count and size are kept. A sheet above 64 MP gets a lower dpi (reported); a job above 1 billion pixels is refused before rendering. Missing: no Print dialog Advanced checkbox in the UI, RGB only (no grayscale or CMYK raster for the printer), no comparison with Acrobat's rasterized output"
+notes = "Headless: doc_print as_image true with dpi (36-1200, default 300; dpi alone is refused) works with every layout and with path or printer, and reports each sheet's pixel size and dpi. Engine Session::print_pdf_as_image imposes the sheets, then pdfcraft_preflight::rasterize_pages (the flatten-transparency renderer and tiling) replaces each sheet's content by one opaque DeviceRGB picture (2048 px tiles): no fonts, text operators, vectors or transparency group reach the printer; sheet count and size are kept. A sheet above 64 MP gets a lower dpi (reported); a job above 1 billion pixels is refused before rendering. Missing: no Print dialog Advanced checkbox in the UI, RGB only (no grayscale or CMYK raster for the printer), no comparison with the viewer's rasterized output"
 
 [[feature]]
 id = "print.page-setup"
@@ -8084,7 +7868,7 @@ status = "partial"
 commands = []
 tools = ["print_output_preview_get", "print_output_preview_set", "print_output_preview_render", "print_separations_list", "print_separations_sample", "print_object_inspector", "print_ink_manager_set"]
 evidence = ["crates/preflight/src/output_preview/tests.rs::show_filters_keep_only_the_matching_objects", "crates/preflight/src/output_preview/tests.rs::hidden_separations_leave_their_ink_out_but_count_for_coverage", "crates/preflight/src/output_preview/tests.rs::coverage_warnings_paint_what_is_over_the_limit", "crates/preflight/src/output_preview/tests.rs::a_simulation_profile_shows_paper_and_black_ink", "crates/preflight/src/output_preview/tests.rs::spot_inks_multiply_their_alternate", "crates/preflight/src/output_preview/tests.rs::bad_settings_and_profiles_are_refused", "crates/preflight/src/output_preview/tests.rs::hostile_spaces_classify_without_panicking", "crates/engine/src/output_preview.rs::settings_validate_and_paper_implies_black", "crates/automation/tests/output_preview.rs::settings_round_trip_and_are_checked", "crates/automation/tests/output_preview.rs::show_filters_and_separations_change_the_pixels", "crates/automation/tests/output_preview.rs::total_area_coverage_is_measured_flagged_and_read_at_a_point", "crates/automation/tests/output_preview.rs::the_output_intent_simulates_paper_colour_and_black_ink", "crates/automation/tests/output_preview.rs::simulation_profiles_come_from_the_colour_settings", "crates/automation/tests/output_preview.rs::rotated_pages_render_and_sample_as_displayed_and_files_are_written", "crates/automation/tests/output_preview.rs::bad_arguments_and_hostile_pages_are_refused_without_panicking"]
-notes = "Headless only (the Output Preview panel waits for the UI redesign). Per-document session settings (not saved, not undo steps): simulation profile from the colour settings (output_intent, the default: the output intent's DestOutputProfile when the untagged-colour policy lets it override the working spaces, else the working CMYK space; working; or any CMYK profile id the colour settings hold, built-in or loaded with color_profile_load), Simulate Overprinting, Simulate Paper Color (implies black ink), Simulate Black Ink, the Show filter (all, DeviceCMYK, not DeviceCMYK, spot colour, RGB, gray, ICC-based, images, solid colour, text, line art), separations switched off, and the Total Area Coverage warning (limit 1-2000%, default 300%, warning colour). print_output_preview_render separates the page with PdfCraft's ink rasterizer keeping only the objects the filter shows, composites the separations switched on (process inks through the simulation profile's AToB table read by moxcms, relative colorimetric or else the profile's own table: with black point compensation, without it for black ink, absolute with the media white for paper; with untagged colour unmanaged no profile, the colour-settings display conversion and no paper/black simulation; spot inks multiply by their CMYK alternate), RGB/Lab separating through the colour settings' press conversion (a chosen profile id through its own BToA table with the settings' intent) and the Ink Manager applied; returns a PNG in display orientation, each ink's max, inked area and mean coverage, total area coverage (max and where, cells/area/% over the limit, painted in the warning colour when on) and the inks at a point. The Object Inspector is print_object_inspector. Missing: the panel, its cursor readout and on-page highlight, the Smooth Shades filter and everything the ink rasterizer can't see (patterns, shadings, DCT/JPX/JBIG2/CCITT images and annotations are not shown; transparency painted opaque), geometry at grid resolution (cell centres, clip bounding boxes, text string boxes) instead of the renderer's, black point compensation estimated from 100% of all four inks and applied on Y only, the Object Inspector and separations list ignoring the simulation profile and Show filter, the colour settings' intent and black point compensation for the display side (Output Preview always uses its own relative/BPC, black-ink and paper modes), settings not saved with the document, and comparison against Acrobat's numbers and pixels."
+notes = "Headless only (the Output Preview panel waits for the UI redesign). Per-document session settings (not saved, not undo steps): simulation profile from the colour settings (output_intent, the default: the output intent's DestOutputProfile when the untagged-colour policy lets it override the working spaces, else the working CMYK space; working; or any CMYK profile id the colour settings hold, built-in or loaded with color_profile_load), Simulate Overprinting, Simulate Paper Color (implies black ink), Simulate Black Ink, the Show filter (all, DeviceCMYK, not DeviceCMYK, spot colour, RGB, gray, ICC-based, images, solid colour, text, line art), separations switched off, and the Total Area Coverage warning (limit 1-2000%, default 300%, warning colour). print_output_preview_render separates the page with PdfCraft's ink rasterizer keeping only the objects the filter shows, composites the separations switched on (process inks through the simulation profile's AToB table read by moxcms, relative colorimetric or else the profile's own table: with black point compensation, without it for black ink, absolute with the media white for paper; with untagged colour unmanaged no profile, the colour-settings display conversion and no paper/black simulation; spot inks multiply by their CMYK alternate), RGB/Lab separating through the colour settings' press conversion (a chosen profile id through its own BToA table with the settings' intent) and the Ink Manager applied; returns a PNG in display orientation, each ink's max, inked area and mean coverage, total area coverage (max and where, cells/area/% over the limit, painted in the warning colour when on) and the inks at a point. The Object Inspector is print_object_inspector. Missing: the panel, its cursor readout and on-page highlight, the Smooth Shades filter and everything the ink rasterizer can't see (patterns, shadings, DCT/JPX/JBIG2/CCITT images and annotations are not shown; transparency painted opaque), geometry at grid resolution (cell centres, clip bounding boxes, text string boxes) instead of the renderer's, black point compensation estimated from 100% of all four inks and applied on Y only, the Object Inspector and separations list ignoring the simulation profile and Show filter, the colour settings' intent and black point compensation for the display side (Output Preview always uses its own relative/BPC, black-ink and paper modes), settings not saved with the document, and comparison against the viewer's numbers and pixels."
 
 [[feature]]
 id = "print.separations"
@@ -8096,7 +7880,7 @@ status = "partial"
 commands = []
 tools = ["print_separations_list", "print_separations_render", "print_separations_sample", "print_total_area_coverage"]
 evidence = ["crates/preflight/src/separations/tests.rs::the_ink_list_has_process_and_spot_inks_with_their_alternates_and_pages", "crates/preflight/src/separations/tests.rs::plates_hold_the_exact_ink_at_known_points", "crates/preflight/src/separations/tests.rs::overprint_keeps_the_plates_below_and_can_be_turned_off", "crates/preflight/src/separations/tests.rs::total_area_coverage_reports_its_maximum_and_where_it_is", "crates/preflight/src/separations/tests.rs::rgb_and_lab_are_converted_by_the_conversion_given_and_say_so", "crates/preflight/src/separations/tests.rs::plates_render_as_film_with_the_top_of_the_page_first", "crates/preflight/src/separations/tests.rs::bad_arguments_are_refused", "crates/preflight/src/separations/tests.rs::hostile_inks_and_resources_do_not_panic", "crates/preflight/src/separations/tests.rs::the_output_intent_is_found", "crates/edit/src/convert_colors/tests.rs::a_cmyk_profile_separates_srgb_and_lab_colours", "crates/engine/src/preflight/tests.rs::separations_convert_rgb_through_the_output_intent_and_say_so", "crates/automation/tests/separations.rs::the_list_names_every_ink_with_its_alternate_and_pages", "crates/automation/tests/separations.rs::samples_give_each_plate_at_a_point", "crates/automation/tests/separations.rs::plates_render_inline_or_to_files_in_display_orientation", "crates/automation/tests/separations.rs::rotated_pages_render_and_sample_as_displayed", "crates/automation/tests/separations.rs::total_area_coverage_reports_where_the_maximum_is", "crates/automation/tests/separations.rs::bad_arguments_are_refused", "crates/automation/tests/separations.rs::hostile_pages_do_not_panic"]
-notes = "Headless only: print_separations_list lists the four process inks and every Separation/DeviceN spot colorant (page resources, forms, images, patterns and shadings) with its alternate space, tint transform type, the alternate's value at 100% tint (Type 2 and one-input Type 0 into gray/RGB/CMYK), a preview colour and the pages where it is painted and declared; print_separations_render gives one grayscale plate per ink (film polarity) or an RGB composite of only the shown inks (Output Preview's show/hide), in display orientation; print_separations_sample reads every ink's percentage at a point; print_total_area_coverage reports the max TAC and where it is, checked against a limit. Plates come from PdfCraft's own bounded ink rasterizer (the renderer is RGB-only) on a grid (default 72 cells/inch, lowered so all plates fit 32M cells, at most 64 inks), simulating overprint (OP/op/OPM 1 nonzero rule; off with overprint false). CMYK, Gray, Separation (process names map to process plates, All to every plate, None to nothing), DeviceN and Indexed are exact; RGB/Lab convert through the output intent's CMYK ICC profile (relative colorimetric, lut BToA) when usable, else the Convert Colors built-in approximation, and every result says which. Missing: the Output Preview panel and cursor readout in the UI, anti-aliased/exact geometry (cell centres, clip bounding boxes, text as string boxes), transparency (painted opaque, counted), patterns, shadings, DCT/JPX/JBIG2/CCITT images and annotations (unmeasured), previews for DeviceN-only colorants and Type 3/4 tint transforms, ink manager aliasing, and comparison against Acrobat's numbers."
+notes = "Headless only: print_separations_list lists the four process inks and every Separation/DeviceN spot colorant (page resources, forms, images, patterns and shadings) with its alternate space, tint transform type, the alternate's value at 100% tint (Type 2 and one-input Type 0 into gray/RGB/CMYK), a preview colour and the pages where it is painted and declared; print_separations_render gives one grayscale plate per ink (film polarity) or an RGB composite of only the shown inks (Output Preview's show/hide), in display orientation; print_separations_sample reads every ink's percentage at a point; print_total_area_coverage reports the max TAC and where it is, checked against a limit. Plates come from PdfCraft's own bounded ink rasterizer (the renderer is RGB-only) on a grid (default 72 cells/inch, lowered so all plates fit 32M cells, at most 64 inks), simulating overprint (OP/op/OPM 1 nonzero rule; off with overprint false). CMYK, Gray, Separation (process names map to process plates, All to every plate, None to nothing), DeviceN and Indexed are exact; RGB/Lab convert through the output intent's CMYK ICC profile (relative colorimetric, lut BToA) when usable, else the Convert Colors built-in approximation, and every result says which. Missing: the Output Preview panel and cursor readout in the UI, anti-aliased/exact geometry (cell centres, clip bounding boxes, text as string boxes), transparency (painted opaque, counted), patterns, shadings, DCT/JPX/JBIG2/CCITT images and annotations (unmeasured), previews for DeviceN-only colorants and Type 3/4 tint transforms, ink manager aliasing, and comparison against the viewer's numbers."
 
 [[feature]]
 id = "print.total-area-coverage"
@@ -8132,7 +7916,7 @@ status = "partial"
 commands = []
 tools = ["print_object_inspector"]
 evidence = ["crates/preflight/src/inspector/tests.rs::stacked_objects_are_listed_topmost_first_with_their_colours", "crates/preflight/src/inspector/tests.rs::transparency_intent_and_fill_rules_are_reported", "crates/preflight/src/inspector/tests.rs::images_report_size_bits_space_and_effective_resolution", "crates/preflight/src/inspector/tests.rs::text_reports_its_font_size_and_embedding", "crates/preflight/src/inspector/tests.rs::forms_shadings_and_annotations_are_listed_in_order", "crates/preflight/src/inspector/tests.rs::ink_manager_routes_are_reflected", "crates/preflight/src/inspector/tests.rs::hostile_input_does_not_panic", "crates/preflight/src/inspector/tests.rs::many_objects_keep_the_topmost", "crates/automation/tests/object_inspector.rs::stacked_objects_list_topmost_first_with_colours_overprint_and_inks", "crates/automation/tests/object_inspector.rs::transparency_images_and_text_are_described", "crates/automation/tests/object_inspector.rs::rotated_pages_and_the_ink_manager_are_honoured", "crates/automation/tests/object_inspector.rs::bad_arguments_are_refused"]
-notes = "Headless only (no Output Preview panel or click-to-inspect in the UI yet). print_object_inspector lists every object at a point topmost first (text, path, image, shading, form XObject, annotation by its rectangle) with fill/stroke colour space, components and the inks they put down after Ink Manager routing, overprint OP/op/OPM, blend mode, constant alpha, soft mask, rendering intent, line width, fill rule, font name/type/size/effective size/embedded/subset and render mode, image size/bits/colour space/filters/effective ppi/mask/intent, shading type and colour space, form transparency group, enclosing forms, plus every plate's ink at the point (print_separations_sample's values, respecting the Ink Manager). Built on the ink rasterizer's interpreter with a point probe. Missing: exact clipping (clips are bounding boxes) and per-glyph text hits (string boxes), optional content visibility (hidden layers are listed), annotation appearance contents, Type 3 glyph and pattern cell contents, image pixel values at the point, ICC profile names/descriptions, output intent per object, and comparison against Acrobat's panel."
+notes = "Headless only (no Output Preview panel or click-to-inspect in the UI yet). print_object_inspector lists every object at a point topmost first (text, path, image, shading, form XObject, annotation by its rectangle) with fill/stroke colour space, components and the inks they put down after Ink Manager routing, overprint OP/op/OPM, blend mode, constant alpha, soft mask, rendering intent, line width, fill rule, font name/type/size/effective size/embedded/subset and render mode, image size/bits/colour space/filters/effective ppi/mask/intent, shading type and colour space, form transparency group, enclosing forms, plus every plate's ink at the point (print_separations_sample's values, respecting the Ink Manager). Built on the ink rasterizer's interpreter with a point probe. Missing: exact clipping (clips are bounding boxes) and per-glyph text hits (string boxes), optional content visibility (hidden layers are listed), annotation appearance contents, Type 3 glyph and pattern cell contents, image pixel values at the point, ICC profile names/descriptions, output intent per object, and comparison against the viewer's panel."
 
 [[feature]]
 id = "print.simulate-paper-ink"
@@ -8144,7 +7928,7 @@ status = "partial"
 commands = []
 tools = ["print_output_preview_set", "print_output_preview_render"]
 evidence = ["crates/preflight/src/output_preview/tests.rs::a_simulation_profile_shows_paper_and_black_ink", "crates/engine/src/output_preview.rs::settings_validate_and_paper_implies_black", "crates/automation/tests/output_preview.rs::the_output_intent_simulates_paper_colour_and_black_ink", "crates/automation/tests/output_preview.rs::simulation_profiles_come_from_the_colour_settings"]
-notes = "Headless only, in Output Preview (see print.output-preview): with a CMYK simulation profile from the colour settings (the output intent's, the working CMYK space or a held profile id), simulate_black shows black ink as the profile prints it (relative colorimetric without black point compensation) and simulate_paper the paper's media white point (absolute colorimetric; implies black ink); off, the profile's paper is screen white and its black screen black. Missing: the check boxes in the UI, simulation in page_render and the page view (only print_output_preview_render simulates), a simulation when untagged colour is unmanaged (no profile: nothing is simulated and simulated says so), the factory working CMYK profile has a D50 media white so paper colour shows white with it, Acrobat's exact black point estimate (PdfCraft uses 100% of all four inks, on Y only), and comparison against Acrobat."
+notes = "Headless only, in Output Preview (see print.output-preview): with a CMYK simulation profile from the colour settings (the output intent's, the working CMYK space or a held profile id), simulate_black shows black ink as the profile prints it (relative colorimetric without black point compensation) and simulate_paper the paper's media white point (absolute colorimetric; implies black ink); off, the profile's paper is screen white and its black screen black. Missing: the check boxes in the UI, simulation in page_render and the page view (only print_output_preview_render simulates), a simulation when untagged colour is unmanaged (no profile: nothing is simulated and simulated says so), the factory working CMYK profile has a D50 media white so paper colour shows white with it, the viewer's exact black point estimate (PdfCraft uses 100% of all four inks, on Y only), and comparison against the viewer."
 
 [[feature]]
 id = "print.overprint-preview"
@@ -8156,7 +7940,7 @@ status = "partial"
 commands = []
 tools = ["page_render", "render_preview", "print_overprint_preview", "print_overprint_objects"]
 evidence = ["crates/preflight/src/overprint/tests.rs::modes_parse_and_pdfx_files_are_recognised", "crates/preflight/src/overprint/tests.rs::yellow_overprinting_cyan_prints_green_where_knockout_shows_yellow", "crates/preflight/src/overprint/tests.rs::without_overprint_the_render_is_left_alone_after_one_pass", "crates/preflight/src/overprint/tests.rs::overprint_mode_decides_whether_zero_components_keep_the_plates_below", "crates/preflight/src/overprint/tests.rs::a_spot_ink_overprinting_process_ink_multiplies", "crates/preflight/src/overprint/tests.rs::overprinting_text_keeps_its_glyph_shapes", "crates/preflight/src/overprint/tests.rs::rotated_pages_map_pixels_to_the_right_cells", "crates/preflight/src/overprint/tests.rs::listed_objects_say_whether_overprinting_changes_anything", "crates/preflight/src/overprint/tests.rs::bad_buffers_and_pages_are_refused", "crates/render/src/lib.rs::device_cmyk_converts_as_pages_render_it", "crates/automation/tests/overprint.rs::page_render_simulates_overprint_as_the_mode_says", "crates/automation/tests/overprint.rs::pdfx_files_show_overprint_by_default", "crates/automation/tests/overprint.rs::white_with_opm_1_disappears_and_spot_inks_multiply", "crates/automation/tests/overprint.rs::print_overprint_objects_lists_what_overprints_and_whether_it_shows", "crates/automation/tests/overprint.rs::bad_arguments_are_refused"]
-notes = "Headless only (the Page Display preference and Output Preview's Simulate Overprinting check box wait for the UI redesign). print_overprint_preview reads or sets the session preference Use Overprint Preview: never, always, pdfx (Only For PDF/X Files, the default as in Acrobat: GTS_PDFXVersion in the information dictionary or XMP, or a GTS_PDFX output intent) or automatic (pages with objects painted with overprint on; since pages without them are left as rendered it shows the same as always). page_render and render_preview take overprint_preview to override it per call. Simulation: the bootstrap renderer is RGB-only and knocks out, so its pixels are corrected from PdfCraft's ink rasterizer (shared with print.separations): the page is separated with overprint simulated (OP/op, OPM 1 nonzero rule for DeviceCMYK; Separation/DeviceN paint only their own plates), knocked out and without the overprinting objects, at the render's resolution (9-300 cells/inch, bounded plate memory; a page without overprinting objects is separated once); where some plate differs, each plate set is composited (process inks through the renderer's own CMYK profile, so colours match the rest of the page; spot inks multiply by their CMYK alternate at 100% or preview colour) and each pixel moves from the knocked-out to the overprinted colour by the object's coverage estimated from the rendered pixel, so glyph and anti-aliased edges keep the renderer's geometry. The Ink Manager session settings apply, and RGB/Lab separate through the output intent's CMYK profile when usable. print_overprint_objects lists a page's objects painted with overprint on (from the colour-warning walk: paint kind, colour, OPM, rect, white/zero-tint warnings, merged occurrences), the ExtGStates that set overprint, and per object whether overprinting changes the page inside its rect (grid cells where a plate differs from knockout). Missing: the UI, compositing through the output intent's AToB tables (process inks display through the renderer's built-in CMYK profile, not the press profile), simulation of what the ink rasterizer can't see (patterns, shadings, DCT/JPX/JBIG2/CCITT images, annotations, transparency painted opaque, clip bounding boxes, text string boxes from font Widths, so standard-14 fonts without Widths are measured with a fallback width), edges up to half a grid cell off where cell centres decide coverage, per-object rather than per-box appearance changes, and a comparison against Acrobat's rendering."
+notes = "Headless only (the Page Display preference and Output Preview's Simulate Overprinting check box wait for the UI redesign). print_overprint_preview reads or sets the session preference Use Overprint Preview: never, always, pdfx (Only For PDF/X Files, the default as in the viewer: GTS_PDFXVersion in the information dictionary or XMP, or a GTS_PDFX output intent) or automatic (pages with objects painted with overprint on; since pages without them are left as rendered it shows the same as always). page_render and render_preview take overprint_preview to override it per call. Simulation: the bootstrap renderer is RGB-only and knocks out, so its pixels are corrected from PdfCraft's ink rasterizer (shared with print.separations): the page is separated with overprint simulated (OP/op, OPM 1 nonzero rule for DeviceCMYK; Separation/DeviceN paint only their own plates), knocked out and without the overprinting objects, at the render's resolution (9-300 cells/inch, bounded plate memory; a page without overprinting objects is separated once); where some plate differs, each plate set is composited (process inks through the renderer's own CMYK profile, so colours match the rest of the page; spot inks multiply by their CMYK alternate at 100% or preview colour) and each pixel moves from the knocked-out to the overprinted colour by the object's coverage estimated from the rendered pixel, so glyph and anti-aliased edges keep the renderer's geometry. The Ink Manager session settings apply, and RGB/Lab separate through the output intent's CMYK profile when usable. print_overprint_objects lists a page's objects painted with overprint on (from the colour-warning walk: paint kind, colour, OPM, rect, white/zero-tint warnings, merged occurrences), the ExtGStates that set overprint, and per object whether overprinting changes the page inside its rect (grid cells where a plate differs from knockout). Missing: the UI, compositing through the output intent's AToB tables (process inks display through the renderer's built-in CMYK profile, not the press profile), simulation of what the ink rasterizer can't see (patterns, shadings, DCT/JPX/JBIG2/CCITT images, annotations, transparency painted opaque, clip bounding boxes, text string boxes from font Widths, so standard-14 fonts without Widths are measured with a fallback width), edges up to half a grid cell off where cell centres decide coverage, per-object rather than per-box appearance changes, and a comparison against the viewer's rendering."
 
 [[feature]]
 id = "print.convert-colors"
@@ -8168,7 +7952,7 @@ status = "partial"
 commands = []
 tools = ["print_convert_colors"]
 evidence = ["crates/edit/src/convert_colors/tests.rs::rgb_fill_and_stroke_become_cmyk_with_black_preserved", "crates/edit/src/convert_colors/tests.rs::gray_goes_to_the_black_plate_including_the_default_colour", "crates/edit/src/convert_colors/tests.rs::only_the_chosen_object_types_and_spaces_change", "crates/edit/src/convert_colors/tests.rs::rgb_images_become_gray", "crates/edit/src/convert_colors/tests.rs::indexed_images_get_a_converted_palette_and_low_bit_images_convert", "crates/edit/src/convert_colors/tests.rs::spot_colours_are_kept_or_converted_to_process", "crates/edit/src/convert_colors/tests.rs::devicen_with_a_postscript_tint_transform_converts", "crates/edit/src/convert_colors/tests.rs::a_form_shared_by_pages_is_converted_once_and_takes_the_callers_colour", "crates/edit/src/convert_colors/tests.rs::looping_forms_stop", "crates/edit/src/convert_colors/tests.rs::only_the_chosen_pages_change", "crates/edit/src/convert_colors/tests.rs::shadings_patterns_inline_images_and_appearances_convert", "crates/edit/src/convert_colors/tests.rs::an_icc_destination_converts_through_its_tables_and_becomes_the_output_intent", "crates/edit/src/convert_colors/tests.rs::an_rgb_matrix_profile_destination_keeps_srgb_colours", "crates/edit/src/convert_colors/tests.rs::calibrated_lab_and_icc_sources_convert_and_a_second_pass_finds_nothing", "crates/edit/src/convert_colors/tests.rs::jpeg_images_are_decoded_and_re_encoded", "crates/edit/src/convert_colors/tests.rs::conversion_survives_save_and_reopen", "crates/edit/src/convert_colors/tests.rs::bad_settings_are_refused", "crates/edit/src/convert_colors/tests.rs::hostile_content_does_not_panic", "crates/edit/src/convert_colors/icc.rs::hostile_profiles_are_refused_without_panicking", "crates/engine/src/tests.rs::convert_colors_is_one_undo_step_and_a_noop_records_none", "crates/automation/tests/automation.rs::print_convert_colors_through_tools"]
-notes = "Headless only (the dialog waits for the UI redesign). Pages, source spaces (DeviceGray, DeviceRGB, DeviceCMYK, ICCBased, CalGray, CalRGB, Lab; Indexed and uncoloured patterns follow their base), object types (text, vector, images), rendering intent, preserve black (pure black to 100% K), spot colours kept or converted to process through their tint transforms (function Types 0, 2, 3, 4; /All and /None never), destination DeviceCMYK, DeviceGray, DeviceRGB or a user-supplied ICC profile, optionally embedded as the GTS_PDFX output intent. Rewrites page content, forms (once each, shared across pages, loops stopped), coloured tiling patterns, shadings (functions resampled), image XObjects and inline images (pixels re-encoded, capped at 40 Mpx; Indexed palettes converted), annotation appearances and transparency group spaces, as one undo step (Edit::ConvertColors; no step when nothing changes). Colour numbers: with a profile its lut8/lut16 BToA table for the intent or gray/RGB matrix-TRC from CIE XYZ; otherwise a documented built-in approximation (RGB to CMYK with full black generation and 70% UCR, flagged approximate). Missing: evaluating embedded source ICC profiles (DeviceRGB and ICC RGB are read as sRGB), v4 mAB/mBA tables, absolute-colorimetric white scaling, Acrobat's per-object-type/per-space command lists and Preserve CMYK primaries, black-point compensation, mesh shadings with per-vertex colours, JPX/JBIG2/CCITT/CMYK-JPEG images, Type 3 glyphs and soft-mask groups, and the dialog."
+notes = "Headless only (the dialog waits for the UI redesign). Pages, source spaces (DeviceGray, DeviceRGB, DeviceCMYK, ICCBased, CalGray, CalRGB, Lab; Indexed and uncoloured patterns follow their base), object types (text, vector, images), rendering intent, preserve black (pure black to 100% K), spot colours kept or converted to process through their tint transforms (function Types 0, 2, 3, 4; /All and /None never), destination DeviceCMYK, DeviceGray, DeviceRGB or a user-supplied ICC profile, optionally embedded as the GTS_PDFX output intent. Rewrites page content, forms (once each, shared across pages, loops stopped), coloured tiling patterns, shadings (functions resampled), image XObjects and inline images (pixels re-encoded, capped at 40 Mpx; Indexed palettes converted), annotation appearances and transparency group spaces, as one undo step (Edit::ConvertColors; no step when nothing changes). Colour numbers: with a profile its lut8/lut16 BToA table for the intent or gray/RGB matrix-TRC from CIE XYZ; otherwise a documented built-in approximation (RGB to CMYK with full black generation and 70% UCR, flagged approximate). Missing: evaluating embedded source ICC profiles (DeviceRGB and ICC RGB are read as sRGB), v4 mAB/mBA tables, absolute-colorimetric white scaling, the viewer's per-object-type/per-space command lists and Preserve CMYK primaries, black-point compensation, mesh shadings with per-vertex colours, JPX/JBIG2/CCITT/CMYK-JPEG images, Type 3 glyphs and soft-mask groups, and the dialog."
 
 [[feature]]
 id = "print.ink-manager"
@@ -8204,7 +7988,7 @@ status = "partial"
 commands = []
 tools = ["print_add_printer_marks"]
 evidence = ["crates/edit/src/printer_marks/tests.rs::marks_are_drawn_outside_the_trim_and_the_media_box_grows", "crates/edit/src/printer_marks/tests.rs::the_bleed_pushes_the_marks_out_and_the_trim_box_is_used", "crates/edit/src/printer_marks/tests.rs::rotated_pages_get_their_bars_on_top_as_displayed", "crates/edit/src/printer_marks/tests.rs::user_units_scale_the_marks_to_points", "crates/edit/src/printer_marks/tests.rs::adding_marks_again_replaces_them", "crates/edit/src/printer_marks/tests.rs::eastern_style_draws_double_corner_lines_and_centre_crosses", "crates/edit/src/printer_marks/tests.rs::marks_survive_save_and_reopen", "crates/edit/src/printer_marks/tests.rs::bad_settings_and_pages_change_nothing", "crates/edit/src/printer_marks/tests.rs::a_page_at_the_size_limit_is_refused_whole", "crates/edit/src/printer_marks/tests.rs::hostile_boxes_fall_back_without_panicking", "crates/engine/src/tests.rs::printer_marks_are_one_undo_step_and_keep_the_text", "crates/automation/tests/printer_marks.rs::printer_marks_grow_the_media_box_and_survive_save", "crates/automation/tests/printer_marks.rs::undo_restores_the_page", "crates/automation/tests/printer_marks.rs::bad_arguments_are_rejected_without_change"]
-notes = "Headless only (the dialog waits for the UI redesign). On the chosen pages the media box grows round the trim box (the crop box when there is none) by offset (default 6 pt, pushed past a wider bleed) + 18 pt marks + the line weight (default 0.25 pt); the crop box becomes the new media box and the trim, bleed and art boxes are pinned to their old rectangles. Trim marks, bleed marks, registration targets (/Separation /All), CMYK solids and overprints plus a 10-100% black tint bar, and a page information line (file name, page number, date) are drawn in display orientation (rotated pages, UserUnit) as one appended stream: /Artifact /Type /Page marked content (ISO 32000-2 page artifacts) inside an optional content group named Printer marks. The information line is Inter outlines, so text extraction, search and accessible text skip it. Styles Western and Eastern (tombo: double corner lines, centre crosses). Adding marks again replaces them. Missing: Acrobat's time of day in the page information, per-ink colour bars for spot colours, Acrobat's exact mark geometry, a Remove printer marks command, and the dialog."
+notes = "Headless only (the dialog waits for the UI redesign). On the chosen pages the media box grows round the trim box (the crop box when there is none) by offset (default 6 pt, pushed past a wider bleed) + 18 pt marks + the line weight (default 0.25 pt); the crop box becomes the new media box and the trim, bleed and art boxes are pinned to their old rectangles. Trim marks, bleed marks, registration targets (/Separation /All), CMYK solids and overprints plus a 10-100% black tint bar, and a page information line (file name, page number, date) are drawn in display orientation (rotated pages, UserUnit) as one appended stream: /Artifact /Type /Page marked content (ISO 32000-2 page artifacts) inside an optional content group named Printer marks. The information line is Inter outlines, so text extraction, search and accessible text skip it. Styles Western and Eastern (tombo: double corner lines, centre crosses). Adding marks again replaces them. Missing: the viewer's time of day in the page information, per-ink colour bars for spot colours, the viewer's exact mark geometry, a Remove printer marks command, and the dialog."
 
 [[feature]]
 id = "print.fix-hairlines"
@@ -8240,7 +8024,7 @@ status = "partial"
 commands = []
 tools = ["color_settings_get", "color_settings_set", "color_profiles_list", "color_profile_load", "page_render", "print_separations_sample", "print_convert_colors", "pdfx_convert"]
 evidence = ["crates/automation/tests/color_settings.rs::the_defaults_and_built_in_profiles_are_listed", "crates/automation/tests/color_settings.rs::working_spaces_and_the_untagged_policy_change_how_device_colour_renders", "crates/automation/tests/color_settings.rs::a_loaded_cmyk_profile_drives_rendering_separations_and_black_point_compensation", "crates/automation/tests/color_settings.rs::an_output_intent_overrides_the_working_space_unless_the_policy_says_otherwise", "crates/automation/tests/color_settings.rs::convert_colors_and_pdfx_take_their_defaults_from_the_settings", "crates/automation/tests/color_settings.rs::bad_settings_and_profiles_are_refused", "crates/engine/src/color_settings.rs::built_in_profiles_display_and_the_defaults_are_valid", "crates/engine/src/color_settings.rs::default_settings_render_as_the_built_in_conversions", "crates/engine/src/color_settings.rs::profile_names_are_checked", "crates/render/src/colour.rs::default_spec_matches_the_renderers_own_conversion", "crates/render/src/colour.rs::naive_cmyk_and_black_point_compensation_change_the_colours", "crates/render/src/colour.rs::unusable_profiles_are_refused_without_panicking", "crates/preflight/src/icc.rs::built_profiles_are_well_formed_and_srgb_colorants_match"]
-notes = "Headless only (the Preferences ▸ Color Management panel waits for the UI redesign). color_settings_get/color_settings_set read and change the session settings: RGB, CMYK and gray working spaces, rendering intent, black point compensation and the policy for untagged colour (output_intent, the default: a document's output intent profile replaces the working space of its family, Acrobat's Output Intent Overrides Working Spaces; working_space; unmanaged: gray/RGB as sRGB numbers, CMYK naively, separations through the built-in conversion); with doc they say per family what the document's untagged colour is read in and how RGB/Lab separate. color_profiles_list lists built-in profiles written in code from published colorimetry (srgb, display-p3, a98-rgb, romm-rgb; sgray, gray-gamma-2.2/1.8, dot-gain-15/20 on PdfCraft's own parabolic model; cgats001, the renderer's CC0 CMYK profile) and color_profile_load loads gray/RGB/CMYK ICC profiles from files under --root (refused when no table converts their colours). Effects: page_render/render_preview convert DeviceGray, DeviceRGB and DeviceCMYK through the resolved profiles with the intent and BPC and ICC-based colour with the intent and BPC (vendored hayro-interpret patch 25); separations, total area coverage, overprint preview, the object inspector and Ink Manager conversions separate RGB/Lab through the output intent's or the working CMYK profile (when it has BToA tables) with the intent, and overprint preview composites through the same display conversion; print_convert_colors takes the settings' intent and converts Device destinations through a non-factory working space (use_working_space); pdfx_convert uses a non-factory working CMYK output (prtr) profile as the output intent when the document has none. The factory settings render untagged colour exactly as before (ICC-based colour now uses their relative colorimetric intent, the PDF default, where the profile has that table; it used perceptual). Missing: the UI, persistence across sessions and Acrobat's named presets, a colour engine choice, black point compensation done in PCS (it scales the converted sRGB in linear light, and has no effect on profiles whose darkest colour is already black, such as cgats001), a built-in CMYK profile with BToA tables (separating with the factory settings still uses the built-in approximation), DeviceRGB/DeviceGray read in their working spaces when separating or converting colours (they are read as sRGB there), the intent in Convert to PDF/X (relative colorimetric), per-object rendering intents (ri, /Intent) in rendering, and a comparison against Acrobat's colours."
+notes = "Headless only (the Preferences ▸ Color Management panel waits for the UI redesign). color_settings_get/color_settings_set read and change the session settings: RGB, CMYK and gray working spaces, rendering intent, black point compensation and the policy for untagged colour (output_intent, the default: a document's output intent profile replaces the working space of its family, the viewer's Output Intent Overrides Working Spaces; working_space; unmanaged: gray/RGB as sRGB numbers, CMYK naively, separations through the built-in conversion); with doc they say per family what the document's untagged colour is read in and how RGB/Lab separate. color_profiles_list lists built-in profiles written in code from published colorimetry (srgb, display-p3, a98-rgb, romm-rgb; sgray, gray-gamma-2.2/1.8, dot-gain-15/20 on PdfCraft's own parabolic model; cgats001, the renderer's CC0 CMYK profile) and color_profile_load loads gray/RGB/CMYK ICC profiles from files under --root (refused when no table converts their colours). Effects: page_render/render_preview convert DeviceGray, DeviceRGB and DeviceCMYK through the resolved profiles with the intent and BPC and ICC-based colour with the intent and BPC (vendored hayro-interpret patch 25); separations, total area coverage, overprint preview, the object inspector and Ink Manager conversions separate RGB/Lab through the output intent's or the working CMYK profile (when it has BToA tables) with the intent, and overprint preview composites through the same display conversion; print_convert_colors takes the settings' intent and converts Device destinations through a non-factory working space (use_working_space); pdfx_convert uses a non-factory working CMYK output (prtr) profile as the output intent when the document has none. The factory settings render untagged colour exactly as before (ICC-based colour now uses their relative colorimetric intent, the PDF default, where the profile has that table; it used perceptual). Missing: the UI, persistence across sessions and the viewer's named presets, a colour engine choice, black point compensation done in PCS (it scales the converted sRGB in linear light, and has no effect on profiles whose darkest colour is already black, such as cgats001), a built-in CMYK profile with BToA tables (separating with the factory settings still uses the built-in approximation), DeviceRGB/DeviceGray read in their working spaces when separating or converting colours (they are read as sRGB there), the intent in Convert to PDF/X (relative colorimetric), per-object rendering intents (ri, /Intent) in rendering, and a comparison against the viewer's colours."
 
 [[feature]]
 id = "print.advanced-print-separations"
@@ -8448,7 +8232,7 @@ status = "shipped"
 commands = ["a11y.check"]
 tools = ["accessibility_check"]
 evidence = ["crates/automation/tests/automation.rs::accessibility_check_report_and_fixes_through_tools"]
-notes = "rule color-contrast: needs manual check; off by default as in Acrobat"
+notes = "rule color-contrast: needs manual check; off by default as in the viewer"
 
 [[feature]]
 id = "a11y.rule-tagged-content"
@@ -8748,7 +8532,7 @@ status = "partial"
 commands = []
 tools = ["tags_autotag"]
 evidence = ["crates/engine/tests/autotag.rs::a_single_column_gets_headings_and_paragraphs_in_order", "crates/engine/tests/autotag.rs::two_columns_read_down_the_left_then_the_right", "crates/engine/tests/autotag.rs::bulleted_and_numbered_lists", "crates/engine/tests/autotag.rs::a_ruled_table_becomes_rows_of_header_and_data_cells", "crates/engine/tests/autotag.rs::images_become_figures_flagged_for_alternate_text", "crates/engine/tests/autotag.rs::running_headers_footers_and_page_numbers_become_artifacts", "crates/engine/tests/autotag.rs::links_become_link_elements_with_object_references", "crates/engine/tests/autotag.rs::an_already_tagged_document_is_refused_unless_replaced", "crates/engine/tests/autotag.rs::the_pdfua_checker_improves_and_the_result_survives_save_and_undo", "crates/engine/tests/autotag.rs::hostile_content_never_panics", "crates/a11y/src/autotag_tests.rs::reading_order_follows_columns_and_rows", "crates/automation/tests/automation.rs::tags_autotag_through_tools_with_bad_arguments"]
-notes = "headless only (no menu or dialog yet): layout-based tags from the renderer's glyphs per painting operation: headings by size and bold weight (levels never skip), paragraphs, bullet/number lists with Lbl when the marker is drawn alone, ruled grid tables (TH first row with Scope), figures (all flagged for alt text), Link + OBJR and Annot elements, Form elements for widgets (a11y.autotag-fields), running headers/footers/page numbers and decoration as artifacts, row/column reading order; MCIDs, ParentTree, StructParents, Tabs /S, MarkInfo and Lang written; refuses tagged documents unless replace_existing. Not yet: unruled or spanned tables, captions, TOC, vector-graphic figures, splitting text runs (a marker inside the same run as its text gets no Lbl; a form XObject is tagged whole), comparison with Acrobat's output on real documents"
+notes = "headless only (no menu or dialog yet): layout-based tags from the renderer's glyphs per painting operation: headings by size and bold weight (levels never skip), paragraphs, bullet/number lists with Lbl when the marker is drawn alone, ruled grid tables (TH first row with Scope), figures (all flagged for alt text), Link + OBJR and Annot elements, Form elements for widgets (a11y.autotag-fields), running headers/footers/page numbers and decoration as artifacts, row/column reading order; MCIDs, ParentTree, StructParents, Tabs /S, MarkInfo and Lang written; refuses tagged documents unless replace_existing. Not yet: unruled or spanned tables, captions, TOC, vector-graphic figures, splitting text runs (a marker inside the same run as its text gets no Lbl; a form XObject is tagged whole), comparison with the viewer's output on real documents"
 
 [[feature]]
 id = "a11y.autotag-fields"
@@ -8760,7 +8544,7 @@ status = "partial"
 commands = []
 tools = ["tags_autotag"]
 evidence = ["crates/engine/tests/autotag.rs::form_fields_become_form_elements_next_to_their_labels", "crates/engine/tests/autotag.rs::fill_writes_suggested_tooltips", "crates/engine/tests/autotag.rs::form_tags_survive_undo_redo_save_and_reload", "crates/engine/tests/autotag.rs::fields_in_two_columns_read_down_each_column", "crates/engine/tests/autotag.rs::a_field_labelled_by_a_heading_goes_after_it", "crates/engine/tests/autotag.rs::hostile_field_trees_never_panic", "crates/engine/tests/autotag.rs::thousands_of_widgets_are_tagged_within_bounds", "crates/a11y/src/autotag_tests.rs::field_labels_and_names_become_tooltips", "crates/automation/tests/automation.rs::tags_autotag_tags_form_fields_and_fills_tooltips"]
-notes = "headless only (tags_autotag detect_fields, default true; field_tooltips report|fill): every widget (radio and checkbox kids included) becomes a Form element with an OBJR, a StructParent and a ParentTree entry, placed in reading order next to its label (inside the P/LBody/TD holding a label on its left or above, before a checkbox/radio label on its right, after a heading label; unlabelled widgets ordered by position with the blocks); Alt from TU, else T, else the label (radio buttons add their option); fields without TU reported with a suggestion from the label (else the humanized name), written as TU with fill. Field tree walked up through /Parent with a seen-set and depth limit, never down /Kids; 50 000 widgets at most. Not yet: no UI; labels inside the same text run as a drawn blank (\"Name: ____\" in one Tj) are not split; a widget inside a table goes with its label's cell rather than its own; no PrintField attributes for non-interactive fields; no comparison with Acrobat's output on real forms"
+notes = "headless only (tags_autotag detect_fields, default true; field_tooltips report|fill): every widget (radio and checkbox kids included) becomes a Form element with an OBJR, a StructParent and a ParentTree entry, placed in reading order next to its label (inside the P/LBody/TD holding a label on its left or above, before a checkbox/radio label on its right, after a heading label; unlabelled widgets ordered by position with the blocks); Alt from TU, else T, else the label (radio buttons add their option); fields without TU reported with a suggestion from the label (else the humanized name), written as TU with fill. Field tree walked up through /Parent with a seen-set and depth limit, never down /Kids; 50 000 widgets at most. Not yet: no UI; labels inside the same text run as a drawn blank (\"Name: ____\" in one Tj) are not split; a widget inside a table goes with its label's cell rather than its own; no PrintField attributes for non-interactive fields; no comparison with the viewer's output on real forms"
 
 [[feature]]
 id = "a11y.reading-order-tool"
@@ -8772,7 +8556,7 @@ status = "partial"
 commands = []
 tools = ["reading_order_list", "reading_order_tag", "reading_order_move", "reading_order_clear"]
 evidence = ["crates/automation/tests/reading_order.rs::regions_are_tagged_split_reordered_and_cleared_through_tools", "crates/automation/tests/reading_order.rs::artifacts_and_tagged_content_move_as_a_whole_or_split", "crates/automation/tests/reading_order.rs::bad_reading_order_requests_change_nothing", "crates/a11y/src/reading_order_tests.rs::a_figure_cut_by_the_rectangle_is_split_and_the_tree_follows", "crates/a11y/src/reading_order_tests.rs::untagged_pages_get_a_tree_and_background_needs_none", "crates/a11y/src/reading_order_tests.rs::hostile_requests_and_content_never_panic_and_change_nothing"]
-notes = "headless only (no tool overlay, no numbered-region drawing, no dialog): reading_order_tag tags a rectangle as text (P), h1-h6, figure (alt), figure-caption (Figure holding a Caption), table (Table > TR > TH/TD by layout, first row TH with column scope, rules as layout artifacts), cell (TD, in the row of the nearest cell), formula (alt), form-field (Form + OBJR + StructParent + parent-tree entry; tagged widgets move) or background (artifact, optional Type/Subtype), one undo step (Edit::TagRegion, pdfcraft_a11y::tag_region). A painting operation is inside when its box's centre is (text boxes from the renderer's glyphs on a provisional copy). Untagged content gets new MCIDs; tagged or artifact marked content wholly inside changes as a whole (MCID kept); marked content cut by the rectangle is split (outside part keeps its element and first MCID); new sequences never cross q/Q, BT/ET or other marked content; emptied elements leave the tree; the new element goes beside the nearest tagged content before it; parent tree rebuilt; untagged documents get a tree with MarkInfo. reading_order_list shows the page's regions in reading order with boxes; reading_order_clear is Clear Page Structure (keep_artifacts optional). Missing: the UI, splitting inside one text-showing operator (a Tj that crosses the rectangle goes by its centre), content inside form XObjects (tagged whole), nested tagged content (refused), table spans, header columns or THead/TBody, Acrobat's own table recognition, Show page content order vs structure order view, comparison with Acrobat on real documents"
+notes = "headless only (no tool overlay, no numbered-region drawing, no dialog): reading_order_tag tags a rectangle as text (P), h1-h6, figure (alt), figure-caption (Figure holding a Caption), table (Table > TR > TH/TD by layout, first row TH with column scope, rules as layout artifacts), cell (TD, in the row of the nearest cell), formula (alt), form-field (Form + OBJR + StructParent + parent-tree entry; tagged widgets move) or background (artifact, optional Type/Subtype), one undo step (Edit::TagRegion, pdfcraft_a11y::tag_region). A painting operation is inside when its box's centre is (text boxes from the renderer's glyphs on a provisional copy). Untagged content gets new MCIDs; tagged or artifact marked content wholly inside changes as a whole (MCID kept); marked content cut by the rectangle is split (outside part keeps its element and first MCID); new sequences never cross q/Q, BT/ET or other marked content; emptied elements leave the tree; the new element goes beside the nearest tagged content before it; parent tree rebuilt; untagged documents get a tree with MarkInfo. reading_order_list shows the page's regions in reading order with boxes; reading_order_clear is Clear Page Structure (keep_artifacts optional). Missing: the UI, splitting inside one text-showing operator (a Tj that crosses the rectangle goes by its centre), content inside form XObjects (tagged whole), nested tagged content (refused), table spans, header columns or THead/TBody, the viewer's own table recognition, Show page content order vs structure order view, comparison with the viewer on real documents"
 
 [[feature]]
 id = "a11y.tags-panel"
@@ -8907,18 +8691,6 @@ evidence = ["crates/a11y/src/tests.rs::figures_are_listed_with_their_alt_text_an
 notes = "Set Alternate Text dialog: each tagged figure (role map honoured) with a preview of where it is drawn, its alternate text, Decorative figure (content becomes /Artifact, element leaves the tags and parent tree), Previous/Next, Save & Close as one undo step. Headless (alt_text_list/alt_text_set): figures lacking alternate text (own or ancestor's, as the checker's figures-alt-text rule) plus images painted on the page outside tagged/artifact content, which are tagged as Figure with alt (minimal tree created for untagged files); images inside form XObjects are not found and the dialog does not list untagged images yet"
 
 [[feature]]
-id = "a11y.alt-text-suggestions"
-title = "Suggest alternate text via an AI provider"
-area = "M"
-tier = "P2"
-milestone = "M13"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = "optional provider; off by default"
-
-[[feature]]
 id = "a11y.set-language"
 title = "Set document language"
 area = "M"
@@ -8952,7 +8724,7 @@ status = "partial"
 commands = []
 tools = ["accessibility_make_accessible"]
 evidence = ["crates/automation/tests/make_accessible.rs::an_untagged_text_pdf_becomes_tagged_titled_and_in_structure_order", "crates/automation/tests/make_accessible.rs::a_tagged_pdf_keeps_its_tags_with_autotag_auto_and_takes_alt_text", "crates/automation/tests/make_accessible.rs::ocr_auto_skips_scans_when_no_models_are_installed", "crates/automation/tests/make_accessible.rs::bad_arguments_change_nothing"]
-notes = "headless only (no menu, dialog or interactive prompts: alt text and tooltips are given as maps, and what still needs a person is returned in needs_review): language (refused when missing, never guessed), OCR of image-only pages when models are installed (skipped with the reason otherwise; English only), field tooltips written before Autotag Document so Form elements take them, Autotag Document (auto leaves tagged documents alone; ruled tables, lists and form fields, fields still without tooltips listed with suggestions), title (given, existing, first H1 or file name) with DisplayDocTitle then figure alt text, tables reported for review, tab order by structure, Full Check and PDF/UA before/after; per-step done/skipped/failed with later steps continuing; one undo step (Session::group_undo). Not yet: no table editor or reading-order review, no comparison with Acrobat output on real documents"
+notes = "headless only (no menu, dialog or interactive prompts: alt text and tooltips are given as maps, and what still needs a person is returned in needs_review): language (refused when missing, never guessed), OCR of image-only pages when models are installed (skipped with the reason otherwise; English only), field tooltips written before Autotag Document so Form elements take them, Autotag Document (auto leaves tagged documents alone; ruled tables, lists and form fields, fields still without tooltips listed with suggestions), title (given, existing, first H1 or file name) with DisplayDocTitle then figure alt text, tables reported for review, tab order by structure, Full Check and PDF/UA before/after; per-step done/skipped/failed with later steps continuing; one undo step (Session::group_undo). Not yet: no table editor or reading-order review, no comparison with the viewer output on real documents"
 
 [[feature]]
 id = "a11y.setup-assistant"
@@ -9027,7 +8799,7 @@ evidence = []
 notes = ""
 
 # ==================================================================================================
-# N. Compare, automation, AI, preferences, misc
+# N. Compare, automation, preferences, misc
 # ==================================================================================================
 
 [[feature]]
@@ -9415,90 +9187,6 @@ evidence = ["crates/ui-egui/tests/control.rs::screenshots_of_window_and_region"]
 notes = ""
 
 [[feature]]
-id = "misc.ai-provider"
-title = "AI provider interface (local model or own endpoint), off by default"
-area = "N"
-tier = "P2"
-milestone = "M13"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
-
-[[feature]]
-id = "misc.ai-summary"
-title = "Summarize a document"
-area = "N"
-tier = "P2"
-milestone = "M13"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
-
-[[feature]]
-id = "misc.ai-ask"
-title = "Ask questions with citations to pages"
-area = "N"
-tier = "P2"
-milestone = "M13"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
-
-[[feature]]
-id = "misc.ai-conversational-edit"
-title = "Natural-language editing through registry commands"
-area = "N"
-tier = "P3"
-milestone = "M13"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
-
-[[feature]]
-id = "misc.ai-presentation"
-title = "Generate a presentation from documents"
-area = "N"
-tier = "P3"
-milestone = "M13"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
-
-[[feature]]
-id = "misc.ai-podcast"
-title = "Generate an audio overview"
-area = "N"
-tier = "P3"
-milestone = "M13"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
-
-[[feature]]
-id = "misc.ai-charts"
-title = "Charts from document data"
-area = "N"
-tier = "P3"
-milestone = "M13"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
-
-[[feature]]
 id = "misc.contract-analysis"
 title = "Contract key terms and multi-contract compare"
 area = "N"
@@ -9509,102 +9197,6 @@ commands = []
 tools = []
 evidence = []
 notes = ""
-
-[[feature]]
-id = "misc.adobe-ai-assistant"
-title = "Adobe AI Assistant"
-area = "N"
-tier = "N/A"
-milestone = "none"
-status = "na"
-commands = []
-tools = []
-evidence = []
-notes = "Adobe cloud; replaced by the optional local/BYO AiProvider"
-
-[[feature]]
-id = "misc.pdf-spaces"
-title = "PDF Spaces"
-area = "N"
-tier = "N/A"
-milestone = "none"
-status = "na"
-commands = []
-tools = []
-evidence = []
-notes = "Adobe cloud; no local equivalent planned"
-
-[[feature]]
-id = "misc.adobe-express"
-title = "Adobe Express integration and generated images"
-area = "N"
-tier = "N/A"
-milestone = "none"
-status = "na"
-commands = []
-tools = []
-evidence = []
-notes = "Adobe cloud"
-
-[[feature]]
-id = "misc.document-cloud-storage"
-title = "Adobe Document Cloud storage"
-area = "N"
-tier = "N/A"
-milestone = "none"
-status = "na"
-commands = []
-tools = []
-evidence = []
-notes = "Adobe cloud; local files and native dialogs (pluggable storage later)"
-
-[[feature]]
-id = "misc.share-links"
-title = "Share links and invitations"
-area = "N"
-tier = "N/A"
-milestone = "none"
-status = "na"
-commands = []
-tools = []
-evidence = []
-notes = "Adobe cloud; pluggable share provider"
-
-[[feature]]
-id = "misc.connected-storage"
-title = "Connected third-party storage accounts in-app"
-area = "N"
-tier = "N/A"
-milestone = "none"
-status = "na"
-commands = []
-tools = []
-evidence = []
-notes = "Adobe cloud; use OS file dialogs and synced folders, which can be pinned to Home (view.home-view)"
-
-[[feature]]
-id = "misc.cross-device-sync"
-title = "Sync signatures, stamps and preferences across devices"
-area = "N"
-tier = "N/A"
-milestone = "none"
-status = "na"
-commands = []
-tools = []
-evidence = []
-notes = "Adobe account service"
-
-[[feature]]
-id = "misc.adobe-account"
-title = "Adobe account sign-in"
-area = "N"
-tier = "N/A"
-milestone = "none"
-status = "na"
-commands = []
-tools = []
-evidence = []
-notes = "not applicable; no account needed"
 
 [[feature]]
 id = "misc.rich-media-preserve"
@@ -9667,18 +9259,6 @@ evidence = []
 notes = ""
 
 [[feature]]
-id = "misc.flash-swf"
-title = "Flash/SWF content"
-area = "N"
-tier = "N/A"
-milestone = "none"
-status = "na"
-commands = []
-tools = []
-evidence = []
-notes = "Flash is end-of-life; content is preserved but not played"
-
-[[feature]]
 id = "misc.preferences-dialog"
 title = "Preferences dialog generated from a schema"
 area = "N"
@@ -9712,7 +9292,7 @@ status = "partial"
 commands = []
 tools = []
 evidence = ["crates/ui-egui/tests/view.rs::default_page_display_is_used_for_new_documents", "crates/ui-egui/tests/view.rs::default_zoom_is_used_for_new_documents", "crates/ui-egui/tests/view.rs::preferences_set_the_default_zoom"]
-notes = "Preferences ▸ Documents and view: Default page display and Default zoom (Fit to width, Zoom to page level or a percentage) for every new tab; a PDF that asks for a layout or zoom gets it. Missing: Acrobat's resolution, rendering and page-content options"
+notes = "Preferences ▸ Documents and view: Default page display and Default zoom (Fit to width, Zoom to page level or a percentage) for every new tab; a PDF that asks for a layout or zoom gets it. Missing: the viewer's resolution, rendering and page-content options"
 
 [[feature]]
 id = "misc.prefs-documents"
@@ -9880,7 +9460,7 @@ status = "shipped"
 commands = ["app.preferences"]
 tools = ["js_enabled"]
 evidence = ["crates/ui-egui/tests/javascript.rs::document_scripts_and_preferences"]
-notes = "Enable Acrobat JavaScript, remembered between runs."
+notes = "Enable PDF JavaScript, remembered between runs."
 
 [[feature]]
 id = "misc.prefs-measuring"

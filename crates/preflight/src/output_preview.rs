@@ -1,4 +1,4 @@
-//! Output Preview (Acrobat: Print Production ▸ Output Preview): how a page will look printed,
+//! Output Preview (PDF: Print Production ▸ Output Preview): how a page will look printed,
 //! simulated on screen from its ink plates.
 //!
 //! The page is separated by the ink rasterizer of [`crate::coverage`] (overprint simulated or
@@ -9,7 +9,7 @@
 //! caller chose) read through its `AToB` table by moxcms, or the conversion pages display CMYK
 //! with ([`Conversion::display_cmyk`]) when there is none — and each spot ink multiplies the result by its preview colour.
 //!
-//! With a simulation profile the display follows Acrobat's three modes:
+//! With a simulation profile the display follows the viewer's three modes:
 //! - neither box: relative colorimetric with black point compensation (the profile's paper is
 //!   screen white, its darkest ink screen black);
 //! - **Simulate Black Ink**: relative colorimetric without black point compensation (black ink

@@ -14,9 +14,9 @@ let report = import(&mut doc, &bytes)?;                 // XFDF, FDF, XML, CSV o
   name, author, subject, dates, flags, colours, opacity, width, icon, quads, line ends, ink,
   default appearance, pop-ups and reply threads (`inreplyto`); field values nested by name.
 - **FDF**: fields (with `/Kids` hierarchies) and comments as direct objects.
-- **Form data**: Acrobat's XML (`xfdf:original` keeps names that aren't XML names), CSV and
+- **Form data**: the viewer's XML (`xfdf:original` keeps names that aren't XML names), CSV and
   tab-delimited text (a row of names, a row of values).
 
 Import replaces comments with the same `/NM`, draws appearances PdfCraft can draw, and sets
 values through the form's own checks (formats, validation, recalculation); read-only fields take
-imported values, as in Acrobat. XML is read with `roxmltree`.
+imported values, as in other viewers. XML is read with `roxmltree`.

@@ -1,4 +1,4 @@
-//! Optimize PDF ▸ Advanced optimization (Acrobat's PDF Optimizer): Images, Fonts, Discard
+//! Optimize PDF ▸ Advanced optimization (the viewer's PDF Optimizer): Images, Fonts, Discard
 //! Objects, Discard User Data and Clean Up panels, and Audit space usage. The result is saved as a copy, like Reduce File Size.
 //!
 //! The optimization (this dialog's, or Reduce File Size's fixed choices) runs on a worker thread
@@ -57,7 +57,7 @@ pub struct OptimizeProgress {
 /// Optimizer's notice lists what it did.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OptimizeKind {
-    /// Reduce File Size (Acrobat's defaults).
+    /// Reduce File Size (the viewer's defaults).
     Reduce,
     /// Optimize PDF ▸ Advanced optimization (the dialog's choices).
     Advanced,

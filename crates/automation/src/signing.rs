@@ -145,7 +145,7 @@ impl Automation {
         let cert = Certificate::self_signed(&dn, &key, time(now), years, &serial).map_err(failed)?;
         let id = DigitalId { key, certificate: cert, chain: Vec::new(), friendly_name: Some(name) };
         let p12 = sign::pkcs12::write(&id, password).map_err(failed)?;
-        write_atomic(&path, &p12)?;
+        crate::write_private_atomic(&path, &p12)?;
         Ok(json!({ "path": path.to_string_lossy(), "certificate": cert_json(&id.certificate) }))
     }
 
@@ -177,13 +177,18 @@ impl Automation {
         let doc_id = doc.id;
         let field = a.opt_str("field")?.map(str::to_string);
         let page = match a.opt_int("page")? {
-            Some(p) if p >= 1 && (p as usize) <= doc.info.pages.len() => p as usize - 1,
-            Some(p) => return Err(bad(format!("page {p} does not exist"))),
+            Some(p) => {
+                let index = crate::one_based_index(p, "page")?;
+                if index >= doc.info.pages.len() {
+                    return Err(bad(format!("page {p} does not exist")));
+                }
+                index
+            }
             None => 0,
         };
         let rect = match a.nums::<4>("rect")? {
             Some(r) => {
-                let p = &doc.info.pages[page];
+                let p = doc.info.pages.get(page).ok_or_else(|| bad("the document has no page for the signature rectangle"))?;
                 let (u0, u1) = (p.view_to_user(r[0] as f32, r[1] as f32), p.view_to_user(r[2] as f32, r[3] as f32));
                 let u = [u0[0].min(u1[0]) as f64, u0[1].min(u1[1]) as f64, u0[0].max(u1[0]) as f64, u0[1].max(u1[1]) as f64];
                 if u[2] - u[0] < 4.0 || u[3] - u[1] < 4.0 {
@@ -270,7 +275,7 @@ impl Automation {
         json!({
             "signatures": s.signatures,
             "certified_documents": s.certified_documents,
-            // As in Acrobat, trusting them for certified documents needs the signatures box too.
+            // As in other viewers, trusting them for certified documents needs the signatures box too.
             "certified_documents_effective": s.signatures && s.certified_documents,
             "source": self.session.os_trust_source().describe(),
         })

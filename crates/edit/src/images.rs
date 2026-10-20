@@ -249,7 +249,7 @@ pub enum ImageChange {
     Transform([f64; 6]),
     /// Draw this image XObject instead, in the same place.
     Replace(ObjRef),
-    /// Keep only the part inside this user-space box (Acrobat: Crop Image). The rest is
+    /// Keep only the part inside this user-space box (PDF: Crop Image). The rest is
     /// clipped, not discarded, and the clip moves, turns and flips with later edits.
     Crop([f64; 4]),
     Delete,

@@ -1,6 +1,6 @@
 //! Prepare a form: create, change and delete fields (execution plan M6.6).
 //!
-//! New fields follow Acrobat's conventions: names "Text1", "Check Box1", "Group1" (radio groups),
+//! New fields follow the viewer's conventions: names "Text1", "Check Box1", "Group1" (radio groups),
 //! "Dropdown1", "List Box1", "Button1", "Signature1", "Date1"; 12 pt Helvetica (auto-size for
 //! check boxes), a thin grey border and a white background, and appearance streams generated
 //! immediately so every viewer shows the empty field.
@@ -16,7 +16,7 @@ pub enum NewField {
     Text {
         multiline: bool,
     },
-    /// A date field: a text field with Acrobat's date format action (`AFDate_FormatEx`).
+    /// A date field: a text field with the viewer's date format action (`AFDate_FormatEx`).
     Date,
     CheckBox,
     /// One radio button in `group` (a new group is created when none of that name exists),
@@ -78,7 +78,7 @@ pub struct FieldProps {
     /// Change only these appearance properties. Unlike `look`, this preserves each widget's
     /// other colours, border settings and default appearance, including custom font resources.
     pub appearance: Option<LookPatch>,
-    /// Format, Validate and Calculate tabs (written as Acrobat's AF scripts).
+    /// Format, Validate and Calculate tabs (written as the viewer's AF scripts).
     pub format: Option<crate::af::Format>,
     pub validate: Option<crate::af::Validate>,
     pub calculate: Option<crate::af::Calculate>,
@@ -130,7 +130,7 @@ pub(crate) fn ensure_form(doc: &mut Document) -> Result<ObjRef, FormError> {
     }
     let mut dr = af.get(b"DR").map(|o| doc.resolve(o)).and_then(|o| o.as_dict().cloned()).unwrap_or_default();
     let mut fonts = dr.get(b"Font").map(|o| doc.resolve(o)).and_then(|o| o.as_dict().cloned()).unwrap_or_default();
-    // Acrobat's resource names for the standard fonts its Appearance tab offers.
+    // The viewer's resource names for the standard fonts its Appearance tab offers.
     let mut added = false;
     for (name, base) in [("Helv", "Helvetica"), ("TiRo", "Times-Roman"), ("Cour", "Courier")] {
         if fonts.contains(name.as_bytes()) {
@@ -157,7 +157,7 @@ pub(crate) fn ensure_form(doc: &mut Document) -> Result<ObjRef, FormError> {
 pub struct Look {
     pub border: Option<[f64; 3]>,
     pub fill: Option<[f64; 3]>,
-    /// Line thickness in points (Acrobat: thin 1, medium 2, thick 3).
+    /// Line thickness in points (PDF: thin 1, medium 2, thick 3).
     pub width: f64,
     pub style: BorderStyle,
     pub text: [f64; 3],
@@ -348,7 +348,7 @@ impl FieldFont {
 }
 
 /// The mark a check box or radio button shows when on (Field Properties ▸ Options ▸ style).
-/// Stored as `/MK /CA`, the ZapfDingbats character Acrobat uses for it; PdfCraft draws the
+/// Stored as `/MK /CA`, the ZapfDingbats character PDF uses for it; PdfCraft draws the
 /// mark as paths, so no symbol font is needed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CheckStyle {
@@ -553,7 +553,7 @@ pub fn add_field(doc: &mut Document, page: usize, rect: [f64; 4], kind: &NewFiel
         NewField::Date => {
             w.set(b"FT".to_vec(), Object::name("Tx"));
             w.set(b"DA".to_vec(), PdfString::literal(b"/Helv 12 Tf 0 g".to_vec()));
-            // Acrobat's format and keystroke actions for mm/dd/yyyy (run by its JavaScript engine).
+            // The viewer's format and keystroke actions for mm/dd/yyyy (run by its JavaScript engine).
             let js = |s: &str| {
                 let mut a = Dict::new();
                 a.set(b"S".to_vec(), Object::name("JavaScript"));
@@ -842,7 +842,7 @@ fn button_appearance(doc: &Document, w: &Widget) -> Stream {
             && x1 > x0
             && y1 > y0
         {
-            // Proportional, as large as fits (Acrobat's default icon placement), centred.
+            // Proportional, as large as fits (the viewer's default icon placement), centred.
             let k = ((width - 2.0) / (x1 - x0)).min((height - 2.0) / (y1 - y0)).max(0.0);
             let (dx, dy) = ((width - (x1 - x0) * k) / 2.0 - x0 * k, (height - (y1 - y0) * k) / 2.0 - y0 * k);
             content.extend(format!("q {k:.6} 0 0 {k:.6} {dx:.3} {dy:.3} cm /Icon Do Q\n").bytes());
@@ -945,7 +945,7 @@ pub fn set_props(doc: &mut Document, name: &str, props: &FieldProps) -> Result<S
             rotated_rect = Some(Some(rect));
         }
     }
-    // A locked field only takes unlocking (Acrobat greys its properties out).
+    // A locked field only takes unlocking (PDF greys its properties out).
     if f.locked() && props.locked != Some(false) && *props != (FieldProps { locked: props.locked, ..FieldProps::default() }) {
         return invalid(format!("{name} is locked: unlock it first"));
     }
@@ -1300,7 +1300,7 @@ pub fn delete_field(doc: &mut Document, name: &str) -> Result<(), FormError> {
 /// Widget-only keys: they stay with each widget when a merged field is split.
 const WIDGET_KEYS: [&[u8]; 12] = [b"Type", b"Subtype", b"Rect", b"P", b"AP", b"AS", b"MK", b"F", b"BS", b"Border", b"H", b"StructParent"];
 
-/// Duplicate a field onto other pages (Acrobat: right-click a field ▸ Duplicate): each page
+/// Duplicate a field onto other pages (PDF: right-click a field ▸ Duplicate): each page
 /// gets a widget at the same place, belonging to the same field, so they share one value.
 /// A field that is its own widget is first split into a field and a widget kid. Returns how
 /// many widgets were added (pages that already have one are skipped).

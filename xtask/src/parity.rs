@@ -1,4 +1,4 @@
-//! `cargo xtask parity`: validate `parity/acrobat-features.toml` and report progress (M0.8).
+//! `cargo xtask parity`: validate `parity/features.toml` and report progress (M0.8).
 //!
 //! Checks:
 //! - schema: unique ids (`area.kebab-name`), known area letters, tiers, milestones and statuses;
@@ -33,7 +33,7 @@ const AREAS: &[(&str, &str)] = &[
     ("K", "Optimize and standards"),
     ("L", "Print and print production"),
     ("M", "Accessibility"),
-    ("N", "Compare, automation, AI, misc"),
+    ("N", "Compare, automation, misc"),
 ];
 const TIERS: &[&str] = &["P0", "P1", "P2", "P3", "N/A"];
 const STATUSES: &[&str] = &["planned", "partial", "shipped", "na"];
@@ -159,7 +159,7 @@ pub fn validate(features: &[Feature], commands: &HashSet<String>, tools: &HashSe
 
 pub fn run(args: &[String]) -> Result<()> {
     let repo = root();
-    let path = repo.join("parity/acrobat-features.toml");
+    let path = repo.join("parity/features.toml");
     let text = std::fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
     let file: File = toml::from_str(&text).with_context(|| format!("parsing {}", path.display()))?;
     if file.schema.version != 1 {

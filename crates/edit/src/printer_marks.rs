@@ -1,4 +1,4 @@
-//! Add Printer Marks (Acrobat: Print Production ▸ Add Printer Marks): trim (crop) marks, bleed
+//! Add Printer Marks (PDF: Print Production ▸ Add Printer Marks): trim (crop) marks, bleed
 //! marks, registration targets, colour bars and a page information line drawn outside the trim
 //! box, with the media box enlarged to hold them.
 //!
@@ -45,7 +45,7 @@ const INFO_SIZE: f64 = 6.0;
 /// Most pages one call marks.
 pub const MAX_PAGES: usize = 10_000;
 
-/// Acrobat's mark styles.
+/// The viewer's mark styles.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum MarkStyle {
     /// Single crop lines at the corners, bleed lines beside them, round registration targets.

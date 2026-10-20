@@ -1,4 +1,4 @@
-//! Acrobat JavaScript in documents: field scripts run during form edits ([`JsRunner`], wired
+//! PDF JavaScript in documents: field scripts run during form edits ([`JsRunner`], wired
 //! into `forms` through its [`pdfcraft_forms::Scripts`] hook), and button actions and console
 //! input run on request ([`Session::run_javascript`]). What scripts ask of the viewer (alerts,
 //! printing, navigation, links) is kept for the front end in [`JsOutput`].
@@ -7,7 +7,7 @@
 //! hide layers (`getOCGs`), and can stop on a dialog that needs an answer
 //! ([`Session::run_javascript_with`]).
 //!
-//! Preferences ▸ JavaScript ▸ Enable Acrobat JavaScript is [`Session::set_javascript`]; with it
+//! Preferences ▸ JavaScript ▸ Enable PDF JavaScript is [`Session::set_javascript`]; with it
 //! off, scripts don't run and AF calls keep working natively.
 
 use pdfcraft_forms::{Field, FieldChange, FieldEvent, FieldKind, ScriptResult, Scripts};
@@ -21,7 +21,7 @@ pub struct JsOutput {
     pub alerts: Vec<String>,
     pub console: Vec<String>,
     pub requests: Vec<Request>,
-    /// Script errors (as Acrobat's console shows them).
+    /// Script errors (as the viewer's console shows them).
     pub errors: Vec<String>,
 }
 
@@ -145,7 +145,7 @@ impl Scripts for JsRunner {
         let o = pdfcraft_js::run(script, &ev, &self.doc, &states, &self.doc_scripts, Limits::default());
         self.output.absorb(&o);
         if o.error.is_some() {
-            // As in Acrobat, a failing script leaves the value alone (the error goes to the console).
+            // As in other viewers, a failing script leaves the value alone (the error goes to the console).
             return ScriptResult { rc: true, value: value.to_string(), changes: Vec::new(), message: None };
         }
         let after: Vec<_> = states.iter().map(|s| o.changed.iter().find(|c| c.name == s.name).unwrap_or(s).clone()).collect();
@@ -247,7 +247,7 @@ impl crate::Document {
 }
 
 impl Session {
-    /// Preferences ▸ JavaScript ▸ Enable Acrobat JavaScript (on by default).
+    /// Preferences ▸ JavaScript ▸ Enable PDF JavaScript (on by default).
     pub fn set_javascript(&mut self, on: bool) {
         self.js_off = !on;
     }

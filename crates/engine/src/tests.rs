@@ -542,6 +542,19 @@ fn autosave_snapshots_only_changed_documents() {
 }
 
 #[test]
+fn failed_autosave_can_retry_without_another_edit() {
+    let (mut session, id) = session_with(2);
+    session.apply(id, Edit::RotatePages { pages: vec![0], degrees: 90 }).unwrap();
+    let first = session.autosave_snapshots();
+    assert!(session.autosave_snapshots().is_empty());
+    session.retry_autosave(id);
+    let retry = session.autosave_snapshots();
+    assert_eq!(retry.len(), 1);
+    assert_eq!(retry[0].bytes, first[0].bytes);
+    assert!(session.autosave_snapshots().is_empty());
+}
+
+#[test]
 fn recovered_documents_reopen_unsaved_at_their_original_path() {
     let (mut s, id) = session_with(2);
     s.apply(id, Edit::DeletePages { pages: vec![1] }).unwrap();
@@ -2203,7 +2216,7 @@ fn dynamic_xfa_forms_are_laid_out_on_open_filled_and_saved_incrementally() {
     assert_eq!((x.pages, x.fields), (2, 14), "{x:?}");
     assert!(x.warnings.is_empty(), "{:?}", x.warnings);
     assert_eq!(doc.info.pages.len(), 2, "the placeholder page is gone");
-    assert_eq!(doc.info.xfa, Some(pdfcraft_render::Xfa::Dynamic), "still an XFA form for Adobe's viewers");
+    assert_eq!(doc.info.xfa, Some(pdfcraft_render::Xfa::Dynamic), "still an XFA form for other XFA viewers");
     assert!(!doc.dirty, "laying out is not an edit");
     assert!(doc.bytes.starts_with(&original[..]), "the layout is an appended revision; the original bytes stay");
     let names: Vec<&str> = doc.form.iter().map(|f| f.name.as_str()).collect();
@@ -2219,7 +2232,7 @@ fn dynamic_xfa_forms_are_laid_out_on_open_filled_and_saved_incrementally() {
     assert!(s.get(id).unwrap().dirty);
     let saved = s.save_bytes(id).unwrap();
     assert!(saved.starts_with(&original[..]));
-    // The datasets packet carries the values too, for Adobe's viewers.
+    // The datasets packet carries the values too, for other XFA viewers.
     let cos = pdfcraft_cos::Document::open(saved.clone()).unwrap();
     let data = pdfcraft_xfa::parse_datasets(&pdfcraft_xfa::read_packets(&cos).unwrap().unwrap().xdp).expect("a datasets packet");
     assert_eq!(data.text_at(&pdfcraft_xfa::som_to_path("form[0].head[0].familyName[0]")), Some("Singh"));
@@ -2400,7 +2413,7 @@ fn xfa_scripts_initialize_calculate_validate_toggle_and_add_rows() {
     // A change recalculates.
     s.apply(id, Edit::SetFieldValue { name: "qty".into(), value: FieldValue::Text("3".into()) }).unwrap();
     assert_eq!(value(&s, "total"), vec!["15".to_string()], "{:?}", s.take_js_output(id));
-    // A failing validate script shows its message; the value stays, as in Acrobat.
+    // A failing validate script shows its message; the value stays, as in other viewers.
     s.apply(id, Edit::SetFieldValue { name: "qty".into(), value: FieldValue::Text("500".into()) }).unwrap();
     let out = s.take_js_output(id);
     assert!(out.alerts.iter().any(|a| a == "Quantity must be 100 or less"), "{out:?}");

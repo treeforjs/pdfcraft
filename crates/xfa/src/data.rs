@@ -1,5 +1,5 @@
 //! The data model (`datasets` packet, XFA 3.3 part 1, "Data Binding"): reading the values a
-//! form was saved with, and writing the values of its fields back, so Adobe's viewers (which
+//! form was saved with, and writing the values of its fields back, so other XFA viewers (which
 //! lay the form out from the XFA packets) show what was filled in here.
 //!
 //! Binding is the default "normal" one: a field's data node is named after the field and nested
@@ -140,7 +140,7 @@ fn items_of(doc: &Document, f: &FieldDatum) -> (String, String) {
     (on, off)
 }
 
-/// The Acrobat date pattern a field's format action names (`AFDate_FormatEx("yyyy-mm-dd")`).
+/// The PDF date pattern a field's format action names (`AFDate_FormatEx("yyyy-mm-dd")`).
 fn date_pattern_of(doc: &Document, f: &FieldDatum) -> Option<String> {
     let d = doc.get(f.obj);
     let aa = doc.resolve(d.as_dict()?.get(b"AA")?);

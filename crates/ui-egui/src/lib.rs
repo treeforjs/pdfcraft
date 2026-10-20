@@ -1,6 +1,6 @@
 //! pdfcraft-ui-egui — the first PdfCraft shell (L7).
 //!
-//! Layout grammar follows plan/acrobat/02-ui-ux.md §1: tab strip, mode bar, left tool panel,
+//! Layout grammar follows plan/reference/02-ui-ux.md §1: tab strip, mode bar, left tool panel,
 //! floating quick-action bar, document area, right panel + right rail with page navigation.
 //! Everything here is presentation: documents, rendering and the tool catalogue live in
 //! `pdfcraft-engine`.
@@ -125,7 +125,7 @@ pub use files::{ExtractDraft, FilePurpose, FileRequest, RotateDraft, SplitDraft,
 pub use recovery::{AUTOSAVE_SECS, RecoveryMeta, RecoveryStore};
 use theme::{ThemeKind, ThemePreference};
 
-/// Top-level workspace modes (Acrobat's mode bar).
+/// Top-level workspace modes (the viewer's mode bar).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Mode {
@@ -913,7 +913,7 @@ impl PdfCraftApp {
         self.password_prompt = None;
         let doc = self.session.get(id).ok_or("the document could not be opened")?;
         let pages = doc.info.pages.len();
-        // Acrobat opens straight to the Comments panel when a document has comments.
+        // PDF opens straight to the Comments panel when a document has comments.
         if activate && self.right.is_none() {
             self.right = if !doc.info.annotations.is_empty() {
                 Some(RightPanel::Comments)
@@ -1097,7 +1097,7 @@ impl PdfCraftApp {
         }
     }
 
-    /// Enter or leave full-screen reading (Acrobat: View ▸ Full Screen Mode, ⌘L).
+    /// Enter or leave full-screen reading (PDF: View ▸ Full Screen Mode, ⌘L).
     pub fn set_full_screen(&mut self, ctx: &egui::Context, on: bool) {
         self.full_screen = on;
         ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(on));
@@ -1317,7 +1317,6 @@ impl PdfCraftApp {
             .find(|i| i.command == command)
             .map(|i| match i.availability {
                 pdfcraft_engine::catalog::Availability::Planned(m) => crate::i18n::fmt(tl!("ships in milestone {m}"), &[("m", m)]),
-                pdfcraft_engine::catalog::Availability::Provider => tl!("needs an AI provider (off by default)").to_string(),
                 pdfcraft_engine::catalog::Availability::Ready => tl!("is available").to_string(),
             })
             .unwrap_or_else(|| tl!("is not available yet").to_string());
@@ -1820,7 +1819,7 @@ impl PdfCraftApp {
 }
 
 impl PdfCraftApp {
-    /// The quick tools' keys, as in Acrobat: V selects, H pans, and holding Space pans until it
+    /// The quick tools' keys, as in PDF: V selects, H pans, and holding Space pans until it
     /// is released. Plain letters, so not while a text field, a form field, a dialog or the
     /// palette has the keyboard.
     fn tool_keys(&mut self, i: usize, ctx: &egui::Context) {

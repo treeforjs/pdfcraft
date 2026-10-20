@@ -8,7 +8,7 @@ pub use pdfcraft_compare::{Change, Comparison, Kind, PageMatch, PageStatus, Side
 
 use crate::{DocId, Edit, EditError, Markup, NewAnnotation, NoteIcon, Session, Shape};
 
-/// Acrobat's compare colours: replaced blue, inserted green, deleted red.
+/// The viewer's compare colours: replaced blue, inserted green, deleted red.
 pub fn colour(kind: Kind) -> crate::Rgb {
     match kind {
         Kind::Replaced => [0.2, 0.45, 0.95],

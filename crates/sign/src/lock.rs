@@ -1,7 +1,7 @@
 //! Field locks (ISO 32000-2 §12.7.5.5 and §12.8.2.4, FieldMDP): a signature field's `/Lock`
 //! names the form fields that become locked once it is signed, and signing records the lock in
 //! the signature as a FieldMDP transform. A lock may also restrict later changes to the whole
-//! document (`/P`, as DocMDP does: Acrobat's "Lock document after signing").
+//! document (`/P`, as DocMDP does: the viewer's "Lock document after signing").
 
 use std::collections::HashSet;
 

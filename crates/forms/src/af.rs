@@ -1,9 +1,9 @@
-//! Acrobat form formatting, validation and calculation without a JavaScript engine.
+//! PDF form formatting, validation and calculation without a JavaScript engine.
 //!
-//! Real forms carry these as JavaScript calls to the AF functions that Acrobat's JavaScript API
+//! Real forms carry these as JavaScript calls to the AF functions that the viewer's JavaScript API
 //! reference documents (`AFNumber_Format`, `AFPercent_Format`, `AFDate_FormatEx`,
 //! `AFTime_Format`, `AFSpecial_Format`, `AFSpecial_KeystrokeEx`, `AFRange_Validate`,
-//! `AFSimple_Calculate`, and simplified field notation). Acrobat itself writes exactly these
+//! `AFSimple_Calculate`, and simplified field notation). PDF itself writes exactly these
 //! calls from the Format, Validate and Calculate tabs. This module recognises them, runs them
 //! natively (format for display, keystroke check on commit, validation, calculation), and
 //! writes them back when a form is authored. Other scripts are kept untouched and reported as
@@ -303,7 +303,7 @@ fn call(js: &str, name: &str) -> Option<Vec<Arg>> {
     p.list(b')')
 }
 
-/// Acrobat's AFDate_Format(n) / AFTime_Format(n) presets.
+/// The viewer's AFDate_Format(n) / AFTime_Format(n) presets.
 pub const DATE_PRESETS: [&str; 14] = [
     "m/d",
     "m/d/yy",
@@ -365,7 +365,7 @@ pub fn parse_validate(js: &str) -> Option<Validate> {
 }
 
 pub fn parse_calculate(js: &str) -> Option<Calculate> {
-    // Simplified field notation: Acrobat keeps the expression in a comment.
+    // Simplified field notation: the viewer keeps the expression in a comment.
     if let (Some(a), Some(b)) = (js.find("BVCALC"), js.find("EVCALC")) {
         let expr = js.get(a + 6..b)?.trim().to_string();
         return Some(Calculate::Notation(expr));
@@ -387,7 +387,7 @@ pub fn parse_calculate(js: &str) -> Option<Calculate> {
     Some(Calculate::Simple { op, fields })
 }
 
-// ── writing scripts (what Acrobat's tabs generate) ─────────────────────────────────────────
+// ── writing scripts (what the viewer's tabs generate) ─────────────────────────────────────────
 
 fn js_str(s: &str) -> String {
     let mut o = String::from("\"");
@@ -651,7 +651,7 @@ pub fn parse_date(text: &str, fmt: &str) -> Option<DateTime> {
     Some(dt)
 }
 
-/// Format a date/time with Acrobat's date format letters.
+/// Format a date/time with the viewer's date format letters.
 pub fn format_date(dt: DateTime, fmt: &str) -> String {
     let chars: Vec<char> = fmt.chars().collect();
     let mut out = String::new();
@@ -802,7 +802,7 @@ pub fn format_value(f: &Format, value: &str) -> String {
 }
 
 /// The Keystroke event on commit: does the value fit the format? Returns the value to store
-/// (numbers are normalised), or Acrobat's message.
+/// (numbers are normalised), or the viewer's message.
 pub fn keystroke(f: &Format, field: &str, value: &str) -> Result<String, String> {
     let bad = || format!("The value entered does not match the format of the field [ {field} ]");
     if value.trim().is_empty() {
@@ -812,7 +812,7 @@ pub fn keystroke(f: &Format, field: &str, value: &str) -> Result<String, String>
         Format::None => Ok(value.to_string()),
         Format::Number { .. } => make_number(value).map(js_number).ok_or_else(bad),
         Format::Percent { .. } => {
-            // Typed "12.5%" or "12.5" both mean 0.125 once stored? Acrobat stores the number
+            // Typed "12.5%" or "12.5" both mean 0.125 once stored? the viewer stores the number
             // as typed and shows it ×100: keep the typed number.
             make_number(value).map(js_number).ok_or_else(bad)
         }
@@ -827,7 +827,7 @@ pub fn keystroke(f: &Format, field: &str, value: &str) -> Result<String, String>
     }
 }
 
-/// The Validate event: `Err` with Acrobat's message when the value is out of range.
+/// The Validate event: `Err` with the viewer's message when the value is out of range.
 pub fn validate(v: &Validate, value: &str) -> Result<(), String> {
     let Validate::Range { min, max } = v else { return Ok(()) };
     if value.trim().is_empty() {
@@ -848,7 +848,7 @@ pub fn validate(v: &Validate, value: &str) -> Result<(), String> {
 }
 
 /// Evaluate simplified field notation: + - * / and parentheses over numbers and field names
-/// (`\` escapes spaces and operators in names, as Acrobat writes them).
+/// (`\` escapes spaces and operators in names, as other viewers write them).
 fn eval_notation(src: &str, value_of: &dyn Fn(&str) -> f64) -> Option<f64> {
     #[derive(Debug, Clone, PartialEq)]
     enum T {

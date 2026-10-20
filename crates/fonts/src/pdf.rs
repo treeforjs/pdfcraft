@@ -74,7 +74,7 @@ fn dict(doc: &Document, o: Option<&Object>) -> Option<Dict> {
 /// Most entries a CMap may add, so a small stream of overlapping `bfrange`s can't take minutes
 /// or gigabytes; a full 2-byte code space is 65 536. Entries past it are ignored.
 const MAX_CMAP_ENTRIES: usize = 1 << 20;
-/// Most codespace or CID ranges kept from a CMap; Adobe's largest published CMaps have a few
+/// Most codespace or CID ranges kept from a CMap; the largest published CMaps have a few
 /// thousand.
 const MAX_CMAP_RANGES: usize = 1 << 16;
 

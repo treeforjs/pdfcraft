@@ -1229,7 +1229,7 @@ mod tests {
     #[test]
     fn simplified_chinese_covers_about_credit_labels() {
         let zh = Lang::from_code("zh-hans").expect("zh-hans registered");
-        for label in ["About", "Contributors", "Models"].into_iter().chain(crate::credits::MODEL_COLUMNS) {
+        for label in ["About", "Contributors"] {
             assert!(has(zh, label), "missing About label: {label}");
         }
         for mode in crate::credits::NameMode::ALL {

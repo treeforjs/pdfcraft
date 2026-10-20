@@ -195,7 +195,7 @@ fn recount(doc: &mut Document) -> Result<()> {
 fn destination(doc: &Document, page: usize) -> Result<Object> {
     let pages = walk(doc)?;
     let (p, _) = pages.get(page).ok_or(OrganizeError::NoSuchPage(page))?;
-    // `/XYZ null null null`: go to the page, keeping the reader's zoom (what Acrobat writes for
+    // `/XYZ null null null`: go to the page, keeping the reader's zoom (what PDF writes for
     // a new bookmark when the view has no specific position).
     Ok(Object::Array(vec![Object::Ref(*p), Object::name("XYZ"), Object::Null, Object::Null, Object::Null]))
 }

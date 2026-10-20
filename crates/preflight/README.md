@@ -50,7 +50,7 @@ for every level, reports ISO 19005-1 clause numbers for PDF/A-1 (plus its own ru
 embedded files, transparency or optional content) and, for levels a and u, checks that every
 glyph shown by page content, form XObjects and annotation appearances maps to Unicode
 (`unicode.rs`; ISO 19005-1 §6.3.8, ISO 19005-2 §6.2.11.7): a ToUnicode entry, else a
-predefined encoding or a known `/Differences` glyph name, else an Adobe CJK character
+predefined encoding or a known `/Differences` glyph name, else an standard CJK character
 collection. Missing mappings, U+0000/U+FEFF/U+FFFE and U+FFFD are errors; Private Use Area
 values and, for level a, word breaks made only by `TJ` positioning are warnings. Each
 `Issue` has a `severity` (error or warning).
@@ -93,7 +93,7 @@ through `Conversion::display_cmyk`: the renderer's CMYK conversion, `pdfcraft_re
 by default, the engine's colour settings when it passes them; spot inks multiplied by their
 preview) and each pixel moves from the knocked-out to the overprinted
 colour by the object's coverage, read from the rendered pixel between the backdrop and the
-knocked-out colour. `overprint::Mode` is Acrobat's preference (Never, Always, Only For PDF/X
+knocked-out colour. `overprint::Mode` is the viewer's preference (Never, Always, Only For PDF/X
 Files, Automatic) and `overprint::objects` lists the objects painted with overprint on (from
 `colour_warnings`) with whether overprinting changes the page in their box (tools
 `print_overprint_preview`, `print_overprint_objects`, and `overprint_preview` on

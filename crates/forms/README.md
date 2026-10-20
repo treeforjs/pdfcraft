@@ -41,7 +41,7 @@ delete_field(&mut doc, "email")?;
   dictionary keys are preserved. It is mutually exclusive with the complete `look` replacement.
   Use the engine's `Edit::Batch` to change several fields atomically in one undo step.
 - `/RV` (rich text) is removed when a value is set so it can't contradict `/V`.
-- New fields follow Acrobat: names Text1, Check Box1, Group1 (radio groups), Dropdown1, List Box1,
+- New fields follow PDF: names Text1, Check Box1, Group1 (radio groups), Dropdown1, List Box1,
   Button1, Date1, Signature1; `/Helv` is added to `/DR`; appearances are drawn at once. Radio
   buttons joining a group become kid widgets with their own export state. Renaming changes only
   the last part of a dotted name.

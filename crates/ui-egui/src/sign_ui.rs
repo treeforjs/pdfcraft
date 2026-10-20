@@ -12,7 +12,7 @@ use crate::canvas::{DocView, PageXform};
 use crate::theme::{self, Tokens};
 use crate::{PdfCraftApp, icons, widgets};
 
-/// A digital ID the app knows about (Acrobat: Digital ID files). The file stays where it is;
+/// A digital ID the app knows about (PDF: Digital ID files). The file stays where it is;
 /// its password is asked for at each signing.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct DigitalIdEntry {
@@ -33,7 +33,7 @@ pub enum SignStep {
     SignAs,
 }
 
-/// The key algorithms of a new digital ID (Acrobat offers RSA; P-256 also works in browsers).
+/// The key algorithms of a new digital ID (the viewer offers RSA; P-256 also works in browsers).
 pub const KEY_ALGORITHMS: [(&str, &str); 4] =
     [("2048-bit RSA", "rsa2048"), ("3072-bit RSA", "rsa3072"), ("4096-bit RSA", "rsa4096"), ("256-bit ECDSA (P-256)", "p256")];
 
@@ -354,7 +354,7 @@ impl PdfCraftApp {
         };
         let cancellation = pdfcraft_engine::signature_workflow::SignatureCancellation::default();
         let authority = self.signature_authority(d.timestamp_server, d.timestamp_network, cancellation.clone())?;
-        // Signing saves, as in Acrobat: choose where (a cancelled save cancels signing). The
+        // Signing saves, as in PDF: choose where (a cancelled save cancels signing). The
         // document is signed once the user has chosen.
         let name = self.session.get(doc_id).map(|d| d.name.clone()).unwrap_or_default();
         let stem = name.trim_end_matches(".pdf").trim_end_matches(".PDF").to_string();
@@ -670,7 +670,7 @@ fn configure(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> bool {
     close
 }
 
-/// The appearance preview: Acrobat's standard layout (name left, details right).
+/// The appearance preview: the viewer's standard layout (name left, details right).
 fn preview(ui: &mut egui::Ui, t: &Tokens, name: &str, d: &SignDraft) {
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 96.0), egui::Sense::hover());
     let bg = if t.dark() { Color32::from_gray(0xF4) } else { Color32::WHITE };
@@ -974,7 +974,7 @@ pub(crate) fn panel(
     let mut ordered: Vec<&SignatureInfo> = sigs.iter().collect();
     ordered.sort_by_key(|s| (!s.signed, s.revision));
     // Revisions saved after the first signature that no signature saved, in revision order
-    // among the signatures (Acrobat lists them as changes made after signing).
+    // among the signatures (the viewer lists them as changes made after signing).
     let first_signed = sigs.iter().filter(|s| s.signed).map(|s| s.revision).min();
     let mut changes: Vec<&sign::RevisionChanges> = revisions
         .iter()
@@ -1160,7 +1160,7 @@ pub(crate) fn cert_viewer(ui: &mut egui::Ui, v: &mut CertViewer, trusted: &[Cert
     let mut action = None;
     v.selected = v.selected.min(v.chain.len().saturating_sub(1));
     ui.horizontal_top(|ui| {
-        // The chain, root at the top (as Acrobat shows it).
+        // The chain, root at the top (as the viewer shows it).
         ui.vertical(|ui| {
             ui.set_width(200.0);
             for (depth, i) in (0..v.chain.len()).rev().enumerate() {
@@ -1399,7 +1399,7 @@ pub fn property_rows(s: &SignatureInfo, tab: SigPropsTab) -> Vec<(String, String
     rows
 }
 
-/// The Signature Properties dialog (Acrobat: right-click a signature ▸ Show Signature
+/// The Signature Properties dialog (PDF: right-click a signature ▸ Show Signature
 /// Properties). Returns whether to close, and what to do.
 pub(crate) fn properties_dialog(ui: &mut egui::Ui, p: &mut SigProps, s: &SignatureInfo, t: &Tokens) -> (bool, Option<SigPropsAction>) {
     title(ui, "Signature Properties");

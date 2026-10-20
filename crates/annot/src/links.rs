@@ -1,4 +1,4 @@
-//! Links (ISO 32000-2 §12.5.6.5): create, edit and remove link annotations with Acrobat's Link
+//! Links (ISO 32000-2 §12.5.6.5): create, edit and remove link annotations with the viewer's Link
 //! Properties (appearance and a go-to-page-view, go-to-named-destination or open-a-web-page action).
 
 use pdfcraft_cos::{Dict, Document, ObjRef, Object, PdfString};
@@ -41,7 +41,7 @@ impl LinkAction {
     }
 }
 
-/// Acrobat's Link Properties ▸ Appearance.
+/// The viewer's Link Properties ▸ Appearance.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LinkStyle {
     /// A visible rectangle (`/Border` width > 0) or invisible.
@@ -87,7 +87,7 @@ impl Highlight {
 
 impl Default for LinkStyle {
     fn default() -> Self {
-        // Acrobat's defaults for a new link: invisible rectangle, invert highlight.
+        // The viewer's defaults for a new link: invisible rectangle, invert highlight.
         LinkStyle { visible: false, color: [0.0, 0.0, 1.0], width: 1.0, dashed: false, underline: false, highlight: Highlight::Invert }
     }
 }

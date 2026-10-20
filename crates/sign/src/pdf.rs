@@ -188,8 +188,8 @@ impl DigestCache {
     }
 }
 
-/// Certificates the user trusts for signing (Acrobat: Trusted Certificates), plus the
-/// operating system's root certificates when the user chose to trust them (Acrobat:
+/// Certificates the user trusts for signing (PDF: Trusted Certificates), plus the
+/// operating system's root certificates when the user chose to trust them (PDF:
 /// Preferences ▸ Signatures ▸ Windows Integration / macOS Keychain integration).
 #[derive(Clone, Debug, Default)]
 pub struct TrustStore {
@@ -200,7 +200,7 @@ pub struct TrustStore {
     pub os_roots: Arc<Vec<Certificate>>,
     /// Trust `os_roots` for validating signatures (approval signatures and timestamps).
     pub os_for_signatures: bool,
-    /// Trust `os_roots` for validating certification signatures. As in Acrobat, this applies
+    /// Trust `os_roots` for validating certification signatures. As in other viewers, this applies
     /// only while `os_for_signatures` is on too.
     pub os_for_certified: bool,
 }
@@ -303,7 +303,7 @@ impl TrustStore {
     }
 }
 
-/// Acrobat's three verdicts.
+/// The viewer's three verdicts.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Status {
     /// Intact, signed by a trusted identity, and any later changes are permitted.
@@ -377,7 +377,7 @@ pub struct SignatureInfo {
     pub timestamp_chain: Vec<Certificate>,
     pub status: Status,
     pub modification: Modification,
-    /// Acrobat-style sentences explaining the verdict.
+    /// PDF-style sentences explaining the verdict.
     pub details: Vec<String>,
 }
 
@@ -1241,7 +1241,7 @@ fn validate_x509_rsa_sha1(
     finish_validation(doc, bytes, trust, info, cache, covered, cert, &certs, None, None, when);
 }
 
-/// What later revisions changed, classified as Acrobat reports it, under DocMDP `p` (or none:
+/// What later revisions changed, classified as other viewers report it, under DocMDP `p` (or none:
 /// an approval signature permits form fill, comments and further signatures) and a field
 /// `lock` (changes to locked fields are never permitted; its permissions tighten `p`).
 fn classify_changes(doc: &Document, old: Option<Document>, p: Option<u8>, lock: Option<&crate::FieldLock>) -> Modification {
@@ -1604,7 +1604,7 @@ fn change_kind(doc: &Document, old: &Document, d: &Dict, before: Option<&Dict>) 
 
 // ── signing ─────────────────────────────────────────────────────────────────────────────────
 
-/// What the visible signature shows (Acrobat: Configure Signature Appearance).
+/// What the visible signature shows (PDF: Configure Signature Appearance).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Appearance {
     pub name: bool,
@@ -1970,7 +1970,7 @@ pub fn display_date(pdf: &str) -> String {
 }
 
 /// The visible signature: the signer's name large on the left, the details on the right
-/// (Acrobat's standard layout), in Helvetica.
+/// (the viewer's standard layout), in Helvetica.
 fn appearance(rect: [f64; 4], name: &str, cert: &Certificate, opts: &SignOptions) -> Stream {
     use pdfcraft_fonts::{helvetica_width, literal, win_ansi, wrap};
     let (w, h) = ((rect[2] - rect[0]).max(0.0), (rect[3] - rect[1]).max(0.0));

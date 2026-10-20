@@ -1,6 +1,6 @@
 //! Prepare a form ▸ automatic field detection: find where a printed form expects answers —
 //! underscore runs, rules (horizontal lines), empty boxes and small squares — and name each new
-//! field from the label next to it (Acrobat's auto-naming).
+//! field from the label next to it (the viewer's auto-naming).
 //!
 //! [`detect`] is a pure function over the page's words and drawn shapes; [`page_shapes`] reads
 //! the shapes from a page's content.
@@ -246,7 +246,7 @@ pub fn detect(words: &[Word], shapes: &Shapes, existing: &[[f64; 4]], taken: &[S
     let mut keyed: Vec<(usize, Candidate)> = rows.into_iter().zip(out).collect();
     keyed.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.rect[0].total_cmp(&b.1.rect[0])));
     let mut out: Vec<Candidate> = keyed.into_iter().map(|(_, c)| c).collect();
-    // Unique names (Acrobat numbers repeats); unlabelled fields get Text1, Check Box1, …
+    // Unique names (PDF numbers repeats); unlabelled fields get Text1, Check Box1, …
     let mut used: Vec<String> = taken.to_vec();
     for c in &mut out {
         let base = if c.name.is_empty() {

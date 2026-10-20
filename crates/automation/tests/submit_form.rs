@@ -329,7 +329,7 @@ fn send_needs_confirmation_and_reports_the_answer() {
     assert!(started.elapsed() < Duration::from_secs(10), "the time limit holds");
     wait(&requests);
 
-    // An FDF answer is loaded into the form when asked (Acrobat imports it), as one undo step.
+    // An FDF answer is loaded into the form when asked (PDF imports it), as one undo step.
     let r = ok(&mut a, "form_submit_send", json!({ "doc": doc, "url": format!("{server}/reply"), "confirm": true }));
     assert_eq!(r["imported"], false, "only with import_reply");
     wait(&requests);

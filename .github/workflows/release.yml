@@ -349,6 +349,8 @@ jobs:
 
           Standard minimize, maximize/restore and close controls are available on Linux Wayland, with the system window frame on Windows and X11.
 
+          Includes bounded redaction overlays, checked automation page indices, private recovery and digital-ID writes, retryable autosaves, and the current shared updater. Desktop integration uses the current application ID with compatibility entries for previous native installs.
+
           Craftworks installs the Windows portable ZIP or Linux AppImage after verifying the signed SHA-256 checksums. Other packages are available for manual installation.
 
           Download the package for your operating system and architecture. Keep SHA256SUMS.txt and SHA256SUMS.txt.sig with the release assets.

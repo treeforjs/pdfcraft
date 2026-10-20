@@ -180,7 +180,7 @@ impl<'a> Type3<'a> {
             glyph.parent_resources.clone(),
         );
 
-        // Technically not valid, but also support by Adobe Acrobat. See PDFBOX-5294.
+        // Technically not valid, but also supported by other viewers. See PDFBOX-5294.
         if let Some(procs_resources) = program.dict().get::<Dict<'_>>(RESOURCES) {
             resources = Resources::from_parent(procs_resources, resources);
         }

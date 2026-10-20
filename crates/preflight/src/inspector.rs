@@ -1,4 +1,4 @@
-//! Object Inspector (Acrobat: Output Preview ▸ Object Inspector): every object painted at one
+//! Object Inspector (PDF: Output Preview ▸ Object Inspector): every object painted at one
 //! point of a page, topmost first, with what a print technician checks: its kind (text, path,
 //! image, shading, form XObject, annotation), its fill and stroke colour (space, components and
 //! the inks it puts down, as the Ink Manager routes them), overprint (`OP`, `op`, `OPM`),

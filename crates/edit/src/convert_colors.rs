@@ -1,4 +1,4 @@
-//! Convert Colors (Acrobat: Print Production ▸ Convert Colors): rewrite the colours of chosen
+//! Convert Colors (PDF: Print Production ▸ Convert Colors): rewrite the colours of chosen
 //! pages from chosen source spaces into one destination space — DeviceCMYK, DeviceGray,
 //! DeviceRGB, or an ICC profile the caller supplies.
 //!

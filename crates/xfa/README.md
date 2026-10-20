@@ -4,7 +4,7 @@ XFA forms (XFA 3.3, the template and layout parts). Layer L3; depends on `pdfcra
 `pdfcraft-fonts` only.
 
 A dynamic XFA form is a PDF shell around an XML template (`/AcroForm /XFA`): one placeholder page
-("requires Adobe Reader") and `/NeedsRendering true`. Viewers without an XFA engine show the
+("requires an XFA viewer") and `/NeedsRendering true`. Viewers without an XFA engine show the
 placeholder. This crate reads the template, lays it out, and writes ordinary pages and AcroForm
 fields into the document, so everything else in PdfCraft (rendering, filling, saving, printing,
 the automation tools) works on it unchanged. The engine does this when it opens such a form.
@@ -26,12 +26,12 @@ the automation tools) works on it unchanged. The engine does this when it opens 
   instances; fields that compute the page number or count on layout show the numbers.
 - **PDF** (`pdf::write_form`): pages with content streams in the standard 14 fonts (Arial and
   friends → Helvetica, Courier New → Courier, serif faces → Times; nothing is embedded), JPEG
-  XObjects, and widgets: text (multi-line, max length, alignment), date (Acrobat's `AFDate`
+  XObjects, and widgets: text (multi-line, max length, alignment), date (the viewer's `AFDate`
   format and keystroke actions from the picture clause), check boxes and radio groups (from
   `exclGroup`), push buttons with Reset / Print / Save As / URI actions recognised from their
   scripts. Appearance streams are left empty for the forms layer to generate. Each field keeps
   its SOM path in `/PCSom`; the AcroForm gets `/PCXfaLayout` so a saved form is not laid out
-  twice. The XFA packets stay, so Adobe's viewers keep rendering the form from them.
+  twice. The XFA packets stay, so other XFA viewers keep rendering the form from them.
 
 - **Data** (`data`): the `datasets` packet. On layout, a field takes its value from the data
   node at its SOM path (dates in ISO form, check and radio states by their on values), and a
@@ -41,7 +41,7 @@ the automation tools) works on it unchanged. The engine does this when it opens 
   unbound data, other namespaces, attributes and comments stay byte for byte. Values it can't
   write (a node holding structured content, absurd SOM indices, a packet that is neither UTF-8
   nor UTF-16) come back as warnings; UTF-16 packets are written back as UTF-16. `read_values`
-  goes the other way, so a form filled here shows its values in Adobe's viewers and a form
+  goes the other way, so a form filled here shows its values in other XFA viewers and a form
   filled there shows them here. The engine does both: values on open (recorded in the
   document's warnings), the packet after every form edit.
 
@@ -65,8 +65,8 @@ be measured exponentially often in their nesting. A measurement budget backs thi
   | --- | --- | --- |
   | `/PCSom` | generated fields | the field's SOM path, so values go back to the data |
   | `/PCXfaLayout` | AcroForm | what laying out produced, so a saved form is not laid out again |
-  | `/PCXfaOverrides` | AcroForm | `<< /Presence << /som (hidden) … >> /Access << /som (readOnly) … >> >>`: presence and access scripts set, by SOM path (instance 0 of a repeating subform stands for all); applied to the template before every layout, so undo, save and reopen keep them. Adobe's viewers draw from the XFA packets and don't read it; at most 10 000 entries are read or written |
-  | `/PCXfaClick` | generated push buttons | `true`: the template has a click script for this button. Such buttons carry no `/A`: XFA JavaScript is not Acrobat JavaScript, so it is never written as a `/S /JavaScript` action other viewers would run. PdfCraft finds the script by the field's `/PCSom` |
+  | `/PCXfaOverrides` | AcroForm | `<< /Presence << /som (hidden) … >> /Access << /som (readOnly) … >> >>`: presence and access scripts set, by SOM path (instance 0 of a repeating subform stands for all); applied to the template before every layout, so undo, save and reopen keep them. other XFA viewers draw from the XFA packets and don't read it; at most 10 000 entries are read or written |
+  | `/PCXfaClick` | generated push buttons | `true`: the template has a click script for this button. Such buttons carry no `/A`: XFA JavaScript is not PDF JavaScript, so it is never written as a `/S /JavaScript` action other viewers would run. PdfCraft finds the script by the field's `/PCSom` |
 
 ## API sketch
 
@@ -92,7 +92,7 @@ let form = pdfcraft_xfa::layout_xml(template_xml)?;       // pages of items, for
   `xfa.host` messages, reset, print, focus and URLs, `xfa.layout` page numbers, `xfa.event`);
   not `xfa.template`, data descriptions, `xfa.connectionSet`, `border`/`font`/`ui` properties
   (reads give a sink that accepts writes), `execEvent`, or the change event per keystroke.
-  Validate failures show their message and keep the value, as Acrobat does for scripts.
+  Validate failures show their message and keep the value, as other viewers do for scripts.
   A hidden instance of a repeating subform hides every instance (overrides apply to the template).
   A repeating subform shows what its data holds once the data holds any instance, else its
   `initial` count, and never fewer than one (`occur min="0"` still shows one row).
@@ -120,5 +120,5 @@ let form = pdfcraft_xfa::layout_xml(template_xml)?;       // pages of items, for
   but a new picture can't be chosen; barcode fields show their value as text, not as bars.
 - Missing: `keep` constraints, `subformSet` relations, `rl-tb` is mirrored `lr-tb`, font
   metrics are the approximate Helvetica ones, and line heights are 1.15 × size.
-- Acrobat cannot be an oracle here (clean-room rules): layout follows the specification, and
+- PDF cannot be an oracle here (clean-room rules): layout follows the specification, and
   fidelity has been checked by eye on real government forms, not pixel-compared.
