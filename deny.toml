@@ -43,6 +43,12 @@ ignore = [
     # private-key operations use aws-lc-rs on native targets and are refused in the browser
     # (ADR-0009). Revisit when a fixed `rsa` ships.
     { id = "RUSTSEC-2023-0071", reason = "rsa is used for verification only (ADR-0009)" },
+    # Informational/unmaintained: ttf-parser comes through ab_glyph in sctk-adwaita's
+    # Linux Wayland title text. It reads locally selected system fonts or the bundled
+    # Cantarell fallback; this path does not parse fonts from PDF documents. No patched
+    # ttf-parser version is available. Revisit when sctk-adwaita/ab_glyph migrates to a
+    # maintained parser: https://github.com/harfbuzz/ttf-parser/issues/217.
+    { id = "RUSTSEC-2026-0192", reason = "Unmaintained ttf-parser in Adwaita title text; local/system or bundled fallback fonts, no PDF document font path; revisit upstream parser migration" },
     # zvariant, zbus_names and zvariant_derive were folded into zbus 6 and are no longer
     # published on their own. They come in through eframe's Linux accessibility support
     # (accesskit_unix, atspi), which has no zbus 6 release yet. Unmaintained, not vulnerable;

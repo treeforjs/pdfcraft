@@ -65,3 +65,24 @@ OpenGL can't start either, PdfCraft exits with both errors in the log. The fallb
 | `PDFCRAFT_RENDERER` | `gl` starts with OpenGL (glow) and never loads wgpu; `wgpu` reports a wgpu failure instead of retrying with OpenGL; unset, wgpu is retried with OpenGL when it can't start (see [Renderer fallback](#renderer-fallback)) |
 | `CRAFT_FONTS_DIR` | Build time: a [craft-fonts](https://github.com/storytold/craft-fonts) checkout to embed (Japanese fonts) |
 | `PDFCRAFT_SYSTEM_FONTS` | `0` stops the desktop app from using an installed font for characters its embedded fonts lack (`cargo xtask screenshots` sets it) |
+
+## Standard desktop window controls
+
+Windows and X11 keep their system window frame. On Wayland, PdfCraft requests a decorated window
+and enables winit's Adwaita frame when the compositor leaves decorations to the application. This
+provides the standard minimize, maximize/restore and close controls. The document toolbar remains
+inside the frame. Linux builds use the existing patched winit 0.30.13 and its `wayland-csd-adwaita`
+feature; the dependency's Cantarell fallback font is attributed in `ATTRIBUTION.toml`.
+
+The Linux x86_64 release job checks the production dependency features and captures the actual
+window under a private nested Weston/Xvfb desktop. The diagnostic artifact is
+`diagnostic-wayland-frame-x86_64`; it is separate from release packages. Locally on Linux:
+
+```sh
+sudo apt-get install weston xvfb scrot libegl1-mesa libgl1-mesa-dri fonts-cantarell
+bash packaging/linux/check-window-frame.sh target/release/pdfcraft target/window-frame
+```
+
+The check uses an isolated home and settings directory, opens no user documents, and forces
+Wayland so it cannot silently fall back to X11. Screenshots are private diagnostics and are not
+committed to the repository.

@@ -1,12 +1,5 @@
-# Release pipeline: every push to `release` builds signed installers for every platform and
-# creates or updates the draft GitHub Release "PdfCraft v<version>". See docs/releasing.md.
-#
-# The jobs that sign (macOS, Windows) and the one that drafts the release run in the `release`
-# environment (restricted to the `release` branch), which holds the signing secrets. Every secret
-# is optional: missing ones produce unsigned artifacts and a warning, never a failed build. The
-# other jobs use no secrets and so no environment: a dispatch on another branch builds and checks
-# them (a dry run), while the signing jobs are refused there and the draft-release job, which
-# needs them, is skipped.
+# Windows and Linux release packages with signed update checksums.
+# Push to release, or dispatch that branch, to create a draft for review.
 name: Release
 
 on:
@@ -24,7 +17,7 @@ permissions:
 
 concurrency:
   group: release-${{ github.ref }}
-  # Never cancel a run mid-notarization or mid-upload; a newer push waits its turn.
+  # A newer push waits for the current upload to finish.
   cancel-in-progress: false
 
 env:
@@ -38,14 +31,68 @@ env:
 
 jobs:
   version:
-    name: version
+    name: Version and update signing checks
     runs-on: ubuntu-latest
+    environment: release
     outputs:
       version: ${{ steps.v.outputs.version }}
       date: ${{ steps.v.outputs.date }}
       prerelease: ${{ steps.v.outputs.prerelease }}
     steps:
       - uses: actions/checkout@v4
+      - name: Validate update public key
+        run: |
+          set -euo pipefail
+          if [ -z "$CRAFT_UPDATE_PUBLIC_KEY" ]; then
+            echo "::error::Set repository variable CRAFT_UPDATE_PUBLIC_KEY to the base64 DER Ed25519 public key."
+            exit 1
+          fi
+          public="$(mktemp -d)"
+          trap 'rm -rf "$public"' EXIT
+          printf '%s' "$CRAFT_UPDATE_PUBLIC_KEY" | base64 --decode >"$public/input"
+          if [ "$(base64 -w0 "$public/input")" != "$CRAFT_UPDATE_PUBLIC_KEY" ]; then
+            echo "::error::CRAFT_UPDATE_PUBLIC_KEY must be single-line base64."
+            exit 1
+          fi
+          case "$(wc -c <"$public/input")" in
+            32)
+              printf '\x30\x2a\x30\x05\x06\x03\x2b\x65\x70\x03\x21\x00' >"$public/key.der"
+              cat "$public/input" >>"$public/key.der"
+              ;;
+            44) cp "$public/input" "$public/key.der" ;;
+            *) echo "::error::CRAFT_UPDATE_PUBLIC_KEY must contain a raw 32-byte or DER Ed25519 public key."; exit 1 ;;
+          esac
+          if [ "$(head -c 12 "$public/key.der" | od -An -tx1 | tr -d ' \n')" != 302a300506032b6570032100 ]; then
+            echo "::error::CRAFT_UPDATE_PUBLIC_KEY must be an Ed25519 public key."
+            exit 1
+          fi
+          openssl pkey -pubin -inform DER -in "$public/key.der" -noout
+      - name: Validate update private key before building
+        if: github.ref == 'refs/heads/release'
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$UPDATE_SIGNING_KEY" ]; then
+            echo "::error::Set UPDATE_SIGNING_KEY in the release environment to the full Ed25519 private-key PEM."
+            exit 1
+          fi
+          umask 077
+          key_dir="$(mktemp -d)"
+          trap 'rm -rf "$key_dir"' EXIT
+          printf '%s\n' "$UPDATE_SIGNING_KEY" >"$key_dir/private.pem"
+          openssl pkey -passin pass: -in "$key_dir/private.pem" -check -noout
+          openssl pkey -passin pass: -in "$key_dir/private.pem" -pubout -outform DER >"$key_dir/public.der"
+          if [ "$(wc -c <"$key_dir/public.der")" -ne 44 ] ||
+             [ "$(head -c 12 "$key_dir/public.der" | od -An -tx1 | tr -d ' \n')" != 302a300506032b6570032100 ]; then
+            echo "::error::UPDATE_SIGNING_KEY must be an Ed25519 private key."
+            exit 1
+          fi
+          if [ "$(base64 -w0 "$key_dir/public.der")" != "$CRAFT_UPDATE_PUBLIC_KEY" ] &&
+             [ "$(tail -c 32 "$key_dir/public.der" | base64 -w0)" != "$CRAFT_UPDATE_PUBLIC_KEY" ]; then
+            echo "::error::UPDATE_SIGNING_KEY does not match CRAFT_UPDATE_PUBLIC_KEY."
+            exit 1
+          fi
       - id: v
         name: Resolve version
         run: |
@@ -63,56 +110,6 @@ jobs:
             echo "prerelease=$pre"
           } >>"$GITHUB_OUTPUT"
           echo "### PdfCraft v$v (\`${GITHUB_SHA::9}\`)" >>"$GITHUB_STEP_SUMMARY"
-
-  macos:
-    name: macOS universal
-    needs: version
-    runs-on: macos-15-xlarge  # M2 Pro larger runner; use only in release.yml (actions_macos_xl budget caps spend)
-    environment: release
-    env:
-      PDFCRAFT_VERSION: ${{ needs.version.outputs.version }}
-      PDFCRAFT_BUILD_DATE: ${{ needs.version.outputs.date }}
-    steps:
-      - uses: actions/checkout@v4
-      # The craft-fonts build input (Japanese fonts): every release embeds it. Bump deliberately.
-      - name: Check out craft-fonts
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          repository: storytold/craft-fonts
-          ref: abb83316d96aa59c1cf64784289e378fe9fa5695
-          path: craft-fonts
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-apple-darwin, x86_64-apple-darwin
-      - uses: Swatinem/rust-cache@v2
-        with:
-          key: release-macos-universal
-      - name: Apply version override
-        if: inputs.version != ''
-        run: cargo xtask version set "$PDFCRAFT_VERSION"
-      - name: Import signing certificate
-        env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
-        run: packaging/macos/import-cert.sh
-      - name: Build, sign, notarize
-        env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          CRAFT_FONTS_DIR: ${{ github.workspace }}/craft-fonts
-          CRAFT_FONTS_REQUIRED: "1"
-        run: packaging/macos/package.sh --arch universal
-      - uses: actions/upload-artifact@v4
-        with:
-          name: release-macos
-          path: dist/release/*
-          if-no-files-found: error
-      - name: Remove temporary keychain
-        if: always()
-        run: |
-          if [ -n "${MACOS_KEYCHAIN:-}" ]; then security delete-keychain "$MACOS_KEYCHAIN" || true; fi
 
   windows:
     name: Windows ${{ matrix.arch }}
@@ -204,7 +201,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             libxkbcommon-dev libwayland-dev libx11-dev libxrandr-dev libxi-dev libgl1-mesa-dev \
-            desktop-file-utils appstream python3-yaml zsync
+            desktop-file-utils appstream zsync
           curl -fsSL -o "$RUNNER_TEMP/nfpm.deb" \
             "https://github.com/goreleaser/nfpm/releases/download/v${NFPM_VERSION}/nfpm_${NFPM_VERSION}_${{ matrix.deb }}.deb"
           sudo dpkg -i "$RUNNER_TEMP/nfpm.deb"
@@ -220,6 +217,27 @@ jobs:
           CRAFT_FONTS_DIR: ${{ github.workspace }}/craft-fonts
           CRAFT_FONTS_REQUIRED: "1"
         run: packaging/linux/package.sh
+      - name: Verify the production Wayland frame feature
+        if: matrix.arch == 'x86_64'
+        run: |
+          mkdir -p target/window-frame
+          cargo tree --locked --edges normal,features --target x86_64-unknown-linux-gnu -p pdfcraft -i winit >target/window-frame/features.txt
+          grep -F 'winit feature "wayland-csd-adwaita"' target/window-frame/features.txt
+      - name: Install Wayland frame-check tools
+        if: matrix.arch == 'x86_64'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends weston xvfb scrot libegl1-mesa libgl1-mesa-dri fonts-cantarell
+      - name: Check the native Wayland window frame
+        if: matrix.arch == 'x86_64'
+        run: bash packaging/linux/check-window-frame.sh target/release/pdfcraft target/window-frame
+      - name: Upload window-frame diagnostics
+        if: always() && matrix.arch == 'x86_64'
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagnostic-wayland-frame-x86_64
+          path: target/window-frame/
+          if-no-files-found: warn
       - name: Check the packages
         run: |
           dpkg-deb --info dist/release/*.deb
@@ -235,7 +253,6 @@ jobs:
           tar -tzf "$cli" | grep -E '/LICENSE-APACHE$'
           mkdir -p "$RUNNER_TEMP/cli" && tar -xzf "$cli" -C "$RUNNER_TEMP/cli"
           "$RUNNER_TEMP/cli/pdfcraft-cli-$PDFCRAFT_VERSION-linux-${{ matrix.arch }}/pdfcraft-cli" --version
-          python3 -c "import yaml; m = yaml.safe_load(open('packaging/linux/flatpak/ai.storyteller.pdfcraft.yml')); assert m['id'] == 'ai.storyteller.pdfcraft'"
           for appimage in dist/release/*.AppImage; do
             chmod +x "$appimage"
             APPIMAGE_EXTRACT_AND_RUN=1 "$appimage" --version
@@ -249,139 +266,10 @@ jobs:
           path: dist/release/*
           if-no-files-found: error
 
-  flatpak:
-    name: Flatpak ${{ matrix.arch }}
-    needs: [version, linux]
-    # Repackages the Linux job's tarball (the same binaries as the AppImage/deb/rpm); no Rust
-    # build here. 24.04 for a newer flatpak-builder (1.4) than 22.04 ships.
-    runs-on: ${{ matrix.runner }}
-    # No `environment: release`: this job signs nothing, so it gets no release secrets.
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { arch: x86_64, runner: ubuntu-24.04 }
-          - { arch: aarch64, runner: ubuntu-24.04-arm }
-    env:
-      PDFCRAFT_VERSION: ${{ needs.version.outputs.version }}
-      PDFCRAFT_BUILD_DATE: ${{ needs.version.outputs.date }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          name: release-linux-${{ matrix.arch }}
-          path: dist/linux
-      - name: Install flatpak-builder
-        run: |
-          sudo apt-get update
-          # librsvg2-common: the SVG pixbuf loader. flatpak-builder runs the host's
-          # `appstreamcli compose`, which renders the scalable icon and fails without it.
-          sudo apt-get install -y --no-install-recommends flatpak flatpak-builder librsvg2-common
-          # Ubuntu 24.04's AppArmor blocks the unprivileged user namespaces bubblewrap needs.
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-      - name: Build the Flatpak bundle
-        run: packaging/linux/flatpak-bundle.sh "dist/linux/pdfcraft-$PDFCRAFT_VERSION-linux-${{ matrix.arch }}.tar.gz"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: release-flatpak-${{ matrix.arch }}
-          path: dist/release/*.flatpak
-          if-no-files-found: error
-
-  freebsd:
-    name: FreeBSD x86_64
-    needs: version
-    # GitHub has no FreeBSD runners: build in a FreeBSD VM (see .github/workflows/freebsd.yml).
-    runs-on: ubuntu-latest
-    timeout-minutes: 180
-    # No `environment: release`: this job signs nothing, so it gets no release secrets.
-    env:
-      PDFCRAFT_VERSION: ${{ needs.version.outputs.version }}
-      PDFCRAFT_BUILD_DATE: ${{ needs.version.outputs.date }}
-      VERSION_OVERRIDE: ${{ inputs.version }}
-    steps:
-      - uses: actions/checkout@v4
-      # The craft-fonts build input (Japanese fonts): every release embeds it. Bump deliberately.
-      - name: Check out craft-fonts
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          repository: storytold/craft-fonts
-          ref: abb83316d96aa59c1cf64784289e378fe9fa5695
-          path: craft-fonts
-      - name: Build and package in a FreeBSD VM (tar.gz)
-        # vmactions/freebsd-vm v1.5.9, pinned by commit (it runs our build).
-        uses: vmactions/freebsd-vm@c46abacb49f09938ca4e1702d15d836285d694cc
-        with:
-          release: "14.3"
-          usesh: true
-          cpu: 4
-          mem: 12288
-          envs: "PDFCRAFT_VERSION PDFCRAFT_BUILD_DATE VERSION_OVERRIDE"
-          # The same packages as the FreeBSD CI workflow, plus bash for the packaging script.
-          prepare: |
-            pkg install -y bash git curl pkgconf cmake python3 libxkbcommon wayland libX11 libXcursor libXrandr libXi libxcb mesa-libs vulkan-loader gtk3 fontconfig freetype2 alsa-lib
-            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
-          run: |
-            set -e
-            . "$HOME/.cargo/env"
-            git config --global --add safe.directory "$PWD"
-            export CRAFT_FONTS_DIR="$PWD/craft-fonts" CRAFT_FONTS_REQUIRED=1
-            if [ -n "$VERSION_OVERRIDE" ]; then cargo xtask version set "$PDFCRAFT_VERSION"; fi
-            packaging/freebsd/package.sh
-            # Only dist/ comes back out of the VM: copying the target dir back fails on large builds.
-            rm -rf target
-      - uses: actions/upload-artifact@v4
-        with:
-          name: release-freebsd-x86_64
-          path: dist/release/*
-          if-no-files-found: error
-
-  web:
-    name: Web (wasm)
-    needs: version
-    runs-on: ubuntu-latest
-    # No `environment: release`: this job signs nothing, so it gets no release secrets.
-    env:
-      PDFCRAFT_VERSION: ${{ needs.version.outputs.version }}
-      PDFCRAFT_BUILD_DATE: ${{ needs.version.outputs.date }}
-      TRUNK_VERSION: 0.21.14
-    steps:
-      - uses: actions/checkout@v4
-      # The craft-fonts build input (Japanese fonts): every release embeds it. Bump deliberately.
-      - name: Check out craft-fonts
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          repository: storytold/craft-fonts
-          ref: abb83316d96aa59c1cf64784289e378fe9fa5695
-          path: craft-fonts
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
-        with:
-          key: release-web
-      - name: Install trunk
-        run: |
-          curl -fsSL "https://github.com/trunk-rs/trunk/releases/download/v${TRUNK_VERSION}/trunk-x86_64-unknown-linux-gnu.tar.gz" \
-            | tar -xz -C "$HOME/.cargo/bin" trunk
-          trunk --version
-      - name: Apply version override
-        if: inputs.version != ''
-        run: cargo xtask version set "$PDFCRAFT_VERSION"
-      - name: Build and zip
-        env:
-          CRAFT_FONTS_DIR: ${{ github.workspace }}/craft-fonts
-          CRAFT_FONTS_REQUIRED: "1"
-        run: packaging/web/package.sh
-      - uses: actions/upload-artifact@v4
-        with:
-          name: release-web
-          path: dist/release/*
-          if-no-files-found: error
-
   release:
     name: Draft GitHub Release
-    # Needs the signing jobs, which only run on `release`: a branch dry run never drafts a release.
-    needs: [version, macos, windows, linux, flatpak, freebsd, web]
+    if: github.ref == 'refs/heads/release'
+    needs: [version, windows, linux]
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -397,34 +285,74 @@ jobs:
           pattern: release-*
           path: artifacts
           merge-multiple: true
-      - name: Checksums
+      - name: Check required packages and write checksums
         working-directory: artifacts
         run: |
-          sha256sum -- * | tee SHA256SUMS.txt
-      # The in-app updater installs only what this signature covers (craft-update; key setup in
-      # https://github.com/treeforjs/craftworks/blob/main/docs/updates.md). Without the key the
-      # release still builds, and apps offer its page instead of installing it.
-      - name: Sign the checksums for in-app updates
+          set -euo pipefail
+          for arch in x64 x86 arm64; do
+            test -s "pdfcraft-$VERSION-windows-$arch.msi"
+            test -s "pdfcraft-$VERSION-windows-$arch-portable.zip"
+          done
+          for arch in x86_64 aarch64; do
+            for format in AppImage AppImage.zsync deb rpm tar.gz; do
+              test -s "pdfcraft-$VERSION-linux-$arch.$format"
+            done
+            test -s "pdfcraft-cli-$VERSION-linux-$arch.tar.gz"
+          done
+          sha256sum -- * >SHA256SUMS.txt
+          sha256sum --check --strict SHA256SUMS.txt
+      - name: Sign and verify the update checksums
         working-directory: artifacts
         env:
           UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
         run: |
-          if [ -z "$UPDATE_SIGNING_KEY" ]; then
-            echo "::warning::UPDATE_SIGNING_KEY is not set: PdfCraft can't install this release from inside the app"
-            exit 0
+          set -euo pipefail
+          if [ -z "$UPDATE_SIGNING_KEY" ] || [ -z "$CRAFT_UPDATE_PUBLIC_KEY" ]; then
+            echo "::error::UPDATE_SIGNING_KEY and CRAFT_UPDATE_PUBLIC_KEY are required."
+            exit 1
           fi
-          key="$RUNNER_TEMP/update-key.pem"
-          trap 'rm -f "$key"' EXIT
-          printf '%s\n' "$UPDATE_SIGNING_KEY" >"$key"
-          openssl pkeyutl -sign -inkey "$key" -rawin -in SHA256SUMS.txt | base64 -w0 >SHA256SUMS.txt.sig
+          umask 077
+          key_dir="$(mktemp -d)"
+          trap 'rm -rf "$key_dir"' EXIT
+          printf '%s\n' "$UPDATE_SIGNING_KEY" >"$key_dir/private.pem"
+          printf '%s' "$CRAFT_UPDATE_PUBLIC_KEY" | base64 --decode >"$key_dir/public.input"
+          case "$(wc -c <"$key_dir/public.input")" in
+            32)
+              printf '\x30\x2a\x30\x05\x06\x03\x2b\x65\x70\x03\x21\x00' >"$key_dir/public.der"
+              cat "$key_dir/public.input" >>"$key_dir/public.der"
+              ;;
+            44) cp "$key_dir/public.input" "$key_dir/public.der" ;;
+            *) echo "::error::Invalid Ed25519 public key length."; exit 1 ;;
+          esac
+          if [ "$(head -c 12 "$key_dir/public.der" | od -An -tx1 | tr -d ' \n')" != 302a300506032b6570032100 ]; then
+            echo "::error::Expected an Ed25519 public key."
+            exit 1
+          fi
+          openssl pkey -passin pass: -in "$key_dir/private.pem" -pubout -outform DER >"$key_dir/derived.der"
+          cmp "$key_dir/public.der" "$key_dir/derived.der"
+          openssl pkeyutl -sign -passin pass: -inkey "$key_dir/private.pem" -rawin -in SHA256SUMS.txt -out "$key_dir/signature"
+          test "$(wc -c <"$key_dir/signature")" -eq 64
+          openssl pkeyutl -verify -pubin -keyform DER -inkey "$key_dir/public.der" -rawin -in SHA256SUMS.txt -sigfile "$key_dir/signature"
+          base64 -w0 "$key_dir/signature" >SHA256SUMS.txt.sig
           test -s SHA256SUMS.txt.sig
       - name: Create or update the draft release
         working-directory: artifacts
         run: |
           tag="v$VERSION"
           title="PdfCraft v$VERSION"
+          set -euo pipefail
           pre=()
           if [ "$PRERELEASE" = true ]; then pre=(--prerelease); fi
+          notes="$RUNNER_TEMP/release-notes.md"
+          cat >"$notes" <<'EOF'
+          Windows and Linux packages for PdfCraft.
+
+          Standard minimize, maximize/restore and close controls are available on Linux Wayland, with the system window frame on Windows and X11.
+
+          Craftworks installs the Windows portable ZIP or Linux AppImage after verifying the signed SHA-256 checksums. Other packages are available for manual installation.
+
+          Download the package for your operating system and architecture. Keep SHA256SUMS.txt and SHA256SUMS.txt.sig with the release assets.
+          EOF
           if draft="$(gh release view "$tag" --json isDraft --jq .isDraft 2>/dev/null)"; then
             if [ "$draft" != "true" ]; then
               echo "::error::Release $tag is already published. Bump the version (cargo xtask version set) before pushing to release."
@@ -434,11 +362,11 @@ jobs:
             gh release view "$tag" --json assets --jq '.assets[].name' | while read -r asset; do
               gh release delete-asset "$tag" "$asset" --yes
             done
-            gh release edit "$tag" --draft --title "$title" --target "$GITHUB_SHA" --prerelease="$PRERELEASE"
+            gh release edit "$tag" --draft --title "$title" --target "$GITHUB_SHA" --prerelease="$PRERELEASE" --notes-file "$notes"
             gh release upload "$tag" --clobber -- *
           else
             echo "Creating draft $tag"
-            gh release create "$tag" --draft --title "$title" --target "$GITHUB_SHA" --generate-notes "${pre[@]}" -- *
+            gh release create "$tag" --draft --title "$title" --target "$GITHUB_SHA" --notes-file "$notes" "${pre[@]}" -- *
           fi
           {
             echo "Draft release **$title** at \`${GITHUB_SHA::9}\`:"
