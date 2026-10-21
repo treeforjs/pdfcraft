@@ -4,7 +4,21 @@
 name: Windows ARM64
 
 on:
-  # Not on pull requests for now (Linux-only PR CI); main pushes and manual runs still build it.
+  # Exercise platform-sensitive changes before merging, including native signing/control UI.
+  pull_request:
+    paths:
+      - .github/workflows/windows-arm64.yml
+      - Cargo.toml
+      - Cargo.lock
+      - apps/pdfcraft-js-worker/**
+      - apps/pdfcraft-cli/**
+      - crates/js/**
+      - crates/sign/**
+      - crates/platform/**
+      - crates/engine/**
+      - crates/ui-egui/**
+      - crates/automation/**
+      - packaging/windows/**
   push:
     branches: [main]
   schedule:
