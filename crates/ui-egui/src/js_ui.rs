@@ -8,12 +8,8 @@ use pdfcraft_engine::{DocId, Edit};
 use crate::theme::{self, Tokens};
 use crate::{PdfCraftApp, widgets};
 
-/// The JavaScript console: the input and the output so far.
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct JsConsole {
-    pub input: String,
-    pub log: Vec<String>,
-}
+mod console;
+pub use console::JsConsole;
 
 /// A script stopped on a dialog: what to run again once the user answers.
 #[derive(Clone, Debug, PartialEq)]
@@ -53,9 +49,11 @@ impl PdfCraftApp {
         if out.is_empty() {
             return;
         }
-        self.js_console.log.extend(out.console.iter().cloned());
+        for line in &out.console {
+            self.js_console.record("", line);
+        }
         for e in &out.errors {
-            self.js_console.log.push(format!("Error: {e}"));
+            self.js_console.record("Error: ", e);
         }
         let view = self.views.iter().position(|v| v.id == id);
         for r in out.requests {
@@ -124,17 +122,21 @@ impl PdfCraftApp {
                 let console = target.is_none();
                 let (error, result) = (o.error.clone(), o.result.clone());
                 let errors = if console { Vec::new() } else { o.error.into_iter().collect() };
-                self.handle_js(id, JsOutput { alerts: o.alerts, console: o.console, requests: o.requests, errors });
+                self.handle_js(id, JsOutput { alerts: o.alerts, console: o.console, requests: o.requests, errors, limited: o.limited });
                 if console {
                     match error {
-                        Some(e) => self.js_console.log.push(format!("Error: {e}")),
-                        None => self.js_console.log.extend(result),
+                        Some(e) => self.js_console.record("Error: ", &e),
+                        None => {
+                            if let Some(result) = result {
+                                self.js_console.record("", &result);
+                            }
+                        }
                     }
                 }
             }
             Err(e) => match target {
                 Some(field) => self.notify_fmt("{field}: {e}", &[("field", field), ("e", &e.to_string())]),
-                None => self.js_console.log.push(format!("Error: {e}")),
+                None => self.js_console.record("Error: ", &e.to_string()),
             },
         }
     }
@@ -176,7 +178,7 @@ impl PdfCraftApp {
         if script.trim().is_empty() {
             return;
         }
-        self.js_console.log.push(format!("> {}", script.trim()));
+        self.js_console.record("> ", script.trim());
         self.run_script(id, &script, None, Vec::new());
     }
 }

@@ -30,6 +30,8 @@ fn dir() -> std::path::PathBuf {
 fn harness(dir: std::path::PathBuf) -> Harness<'static, PdfCraftApp> {
     let mut h = Harness::builder().with_size(egui::vec2(1400.0, 900.0)).build_eframe(move |_cc| {
         let mut app = PdfCraftApp::new();
+        // Work still resolves on a later poll, without depending on worker scheduling.
+        app.run_inline = true;
         app.set_option("language", "en").unwrap();
         app.open_bytes("contract.pdf", None, FIXTURE.to_vec()).expect("opens");
         app.set_option("left", "closed").unwrap();
@@ -101,6 +103,7 @@ fn drawing_a_signature_creating_an_id_signing_and_trusting() {
     field(&h, "Digital ID password").type_text("nope");
     h.get_by_label("Sign").click();
     h.run_steps(3);
+    assert_eq!(h.get_all_by_label("The password is incorrect.").count(), 1, "the retry form shows one inline error without a duplicate toast");
     h.get_by_label("The password is incorrect.");
     h.state_mut().sign_draft.as_mut().unwrap().password = "secret1".into();
     field(&h, "Reason").click();

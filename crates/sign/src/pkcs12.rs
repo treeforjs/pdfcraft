@@ -15,6 +15,10 @@
 
 use std::borrow::Cow;
 
+mod resource;
+use resource::{Budget, MAX_PASSWORD, MAX_SALT};
+pub use resource::{ImportControl, MAX_FILE_BYTES};
+
 use base64::Engine as _;
 use cbc::cipher::block_padding::Pkcs7;
 use cbc::cipher::{BlockModeDecrypt, BlockModeEncrypt, InnerIvInit, KeyIvInit};
@@ -70,7 +74,15 @@ fn bmp(password: &str) -> Vec<u8> {
 }
 
 /// The PKCS #12 key derivation function (RFC 7292 Appendix B.2).
-fn pkcs12_kdf(alg: DigestAlg, password: &[u8], salt: &[u8], id: u8, iterations: u32, n: usize) -> Vec<u8> {
+fn pkcs12_kdf(
+    alg: DigestAlg,
+    password: &[u8],
+    salt: &[u8],
+    id: u8,
+    iterations: u64,
+    n: usize,
+    budget: &mut Budget<'_>,
+) -> Result<Vec<u8>, SignError> {
     // Callers only pass the SHA-1/SHA-2 digests PKCS #12 files use (`open` restricts the MAC digest).
     let (u, v) = match alg {
         DigestAlg::Sha1 => (20, 64),
@@ -78,9 +90,12 @@ fn pkcs12_kdf(alg: DigestAlg, password: &[u8], salt: &[u8], id: u8, iterations: 
         DigestAlg::Sha256 => (32, 64),
         DigestAlg::Sha384 => (48, 128),
         DigestAlg::Sha512 => (64, 128),
-        _ => return Vec::new(),
+        _ => return Err(bad("unsupported derivation digest")),
     };
-    let _ = u;
+    if salt.len() > MAX_SALT || password.len() > MAX_PASSWORD * 2 + 2 {
+        return Err(bad("derivation input exceeds its size limit"));
+    }
+    let iterations = budget.charge(iterations, n.div_ceil(u), salt.len().saturating_add(password.len())).map_err(bad)?;
     let fill = |s: &[u8]| -> Vec<u8> {
         if s.is_empty() {
             return Vec::new();
@@ -93,7 +108,10 @@ fn pkcs12_kdf(alg: DigestAlg, password: &[u8], salt: &[u8], id: u8, iterations: 
     let mut out = Vec::with_capacity(n);
     while out.len() < n {
         let mut a = alg.digest(&[&d, &i]);
-        for _ in 1..iterations.max(1) {
+        for round in 1..iterations {
+            if round % 256 == 0 {
+                budget.control.check().map_err(bad)?;
+            }
             a = alg.digest(&[&a]);
         }
         let b: Vec<u8> = a.iter().cycle().take(v).copied().collect();
@@ -109,7 +127,7 @@ fn pkcs12_kdf(alg: DigestAlg, password: &[u8], salt: &[u8], id: u8, iterations: 
         out.extend_from_slice(&a);
     }
     out.truncate(n);
-    out
+    Ok(out)
 }
 
 #[derive(Clone, Copy)]
@@ -168,21 +186,58 @@ fn hmac(alg: DigestAlg, key: &[u8], data: &[u8]) -> Result<Vec<u8>, SignError> {
     }
 }
 
-fn pbkdf2(prf: DigestAlg, password: &[u8], salt: &[u8], rounds: u32, len: usize) -> Result<Vec<u8>, SignError> {
-    let mut out = vec![0u8; len];
-    match prf {
-        DigestAlg::Sha1 => pbkdf2::pbkdf2_hmac::<sha1::Sha1>(password, salt, rounds, &mut out),
-        DigestAlg::Sha224 => pbkdf2::pbkdf2_hmac::<sha2::Sha224>(password, salt, rounds, &mut out),
-        DigestAlg::Sha256 => pbkdf2::pbkdf2_hmac::<sha2::Sha256>(password, salt, rounds, &mut out),
-        DigestAlg::Sha384 => pbkdf2::pbkdf2_hmac::<sha2::Sha384>(password, salt, rounds, &mut out),
-        DigestAlg::Sha512 => pbkdf2::pbkdf2_hmac::<sha2::Sha512>(password, salt, rounds, &mut out),
-        other => return Err(SignError::Unsupported(format!("PBKDF2 with {}", other.name()))),
+fn pbkdf2(prf: DigestAlg, password: &[u8], salt: &[u8], rounds: u64, len: usize, budget: &mut Budget<'_>) -> Result<Vec<u8>, SignError> {
+    if salt.len() > MAX_SALT || password.len() > MAX_PASSWORD {
+        return Err(bad("derivation input exceeds its size limit"));
     }
-    Ok(out)
+    let digest_len = prf.digest(&[]).len();
+    if digest_len == 0 {
+        return Err(bad("invalid PBKDF2 digest size"));
+    }
+    let rounds = budget.charge(rounds, len.div_ceil(digest_len), salt.len().saturating_add(password.len())).map_err(bad)?;
+    fn run<D: hmac::EagerHash>(password: &[u8], salt: &[u8], rounds: u32, len: usize, budget: &Budget<'_>) -> Result<Vec<u8>, SignError>
+    where
+        hmac::Hmac<D>: hmac::KeyInit + Mac + Clone,
+    {
+        let mac = <hmac::Hmac<D> as hmac::KeyInit>::new_from_slice(password).map_err(|_| bad("PBKDF2 key"))?;
+        let mut out = Vec::with_capacity(len);
+        let mut block = 1u32;
+        while out.len() < len {
+            budget.control.check().map_err(bad)?;
+            let mut first = mac.clone();
+            first.update(salt);
+            first.update(&block.to_be_bytes());
+            let mut u = first.finalize().into_bytes();
+            let mut t = u.clone();
+            for round in 1..rounds {
+                if round % 256 == 0 {
+                    budget.control.check().map_err(bad)?;
+                }
+                let mut next = mac.clone();
+                next.update(&u);
+                u = next.finalize().into_bytes();
+                for (target, byte) in t.iter_mut().zip(u.iter()) {
+                    *target ^= byte;
+                }
+            }
+            let n = (len - out.len()).min(t.len());
+            out.extend_from_slice(&t[..n]);
+            block = block.checked_add(1).ok_or_else(|| bad("PBKDF2 output size"))?;
+        }
+        Ok(out)
+    }
+    match prf {
+        DigestAlg::Sha1 => run::<sha1::Sha1>(password, salt, rounds, len, budget),
+        DigestAlg::Sha224 => run::<sha2::Sha224>(password, salt, rounds, len, budget),
+        DigestAlg::Sha256 => run::<sha2::Sha256>(password, salt, rounds, len, budget),
+        DigestAlg::Sha384 => run::<sha2::Sha384>(password, salt, rounds, len, budget),
+        DigestAlg::Sha512 => run::<sha2::Sha512>(password, salt, rounds, len, budget),
+        other => Err(SignError::Unsupported(format!("PBKDF2 with {}", other.name()))),
+    }
 }
 
 /// Decrypt `ct` with the password-based scheme `alg` (an AlgorithmIdentifier).
-fn pbe_decrypt(alg: &Tlv<'_>, password: &str, ct: &[u8]) -> Result<Vec<u8>, SignError> {
+fn pbe_decrypt(alg: &Tlv<'_>, password: &str, ct: &[u8], budget: &mut Budget<'_>) -> Result<Vec<u8>, SignError> {
     let parts = alg.children()?;
     let o = parts.first().ok_or_else(|| bad("algorithm"))?.oid()?;
     let params = parts.get(1).ok_or_else(|| bad("algorithm parameters"))?;
@@ -196,7 +251,7 @@ fn pbe_decrypt(alg: &Tlv<'_>, password: &str, ct: &[u8]) -> Result<Vec<u8>, Sign
             }
             let kp = kdf.get(1).ok_or_else(|| bad("PBKDF2 parameters"))?.children()?;
             let salt = kp.first().ok_or_else(|| bad("salt"))?.octets("salt")?;
-            let rounds = kp.get(1).ok_or_else(|| bad("iterations"))?.u64()? as u32;
+            let rounds = kp.get(1).ok_or_else(|| bad("iterations"))?.u64()?;
             let prf = match kp
                 .iter()
                 .skip(2)
@@ -222,13 +277,13 @@ fn pbe_decrypt(alg: &Tlv<'_>, password: &str, ct: &[u8]) -> Result<Vec<u8>, Sign
                 other => return Err(SignError::Unsupported(format!("PBES2 cipher {}", other.unwrap_or("?")))),
             };
             let iv = sc.get(1).ok_or_else(|| bad("IV"))?.octets("IV")?;
-            let key = pbkdf2(prf, password.as_bytes(), &salt, rounds, cipher.key_len())?;
+            let key = pbkdf2(prf, password.as_bytes(), &salt, rounds, cipher.key_len(), budget)?;
             cipher.decrypt(&key, &iv, ct)
         }
         PBE_SHA_3DES | PBE_SHA_2DES | PBE_SHA_RC2_128 | PBE_SHA_RC2_40 => {
             let p = params.children()?;
             let salt = p.first().ok_or_else(|| bad("salt"))?.octets("salt")?;
-            let rounds = p.get(1).ok_or_else(|| bad("iterations"))?.u64()? as u32;
+            let rounds = p.get(1).ok_or_else(|| bad("iterations"))?.u64()?;
             let (cipher, key_len, iv_len) = match o.as_str() {
                 PBE_SHA_3DES => (Cipher::TripleDes, 24, 8),
                 PBE_SHA_2DES => (Cipher::TripleDes, 16, 8),
@@ -236,13 +291,13 @@ fn pbe_decrypt(alg: &Tlv<'_>, password: &str, ct: &[u8]) -> Result<Vec<u8>, Sign
                 _ => (Cipher::Rc2(40), 5, 8),
             };
             let pw = bmp(password);
-            let mut key = pkcs12_kdf(DigestAlg::Sha1, &pw, &salt, 1, rounds, key_len);
+            let mut key = pkcs12_kdf(DigestAlg::Sha1, &pw, &salt, 1, rounds, key_len, budget)?;
             if key.len() == 16 && matches!(cipher, Cipher::TripleDes) {
                 // Two-key 3DES: K1 K2 K1.
                 let k1 = key[..8].to_vec();
                 key.extend(k1);
             }
-            let iv = pkcs12_kdf(DigestAlg::Sha1, &pw, &salt, 2, rounds, iv_len);
+            let iv = pkcs12_kdf(DigestAlg::Sha1, &pw, &salt, 2, rounds, iv_len, budget)?;
             cipher.decrypt(&key, &iv, ct)
         }
         other => Err(SignError::Unsupported(format!("PKCS #12 encryption {other}"))),
@@ -260,8 +315,9 @@ enum BagKind {
     Cert(Vec<u8>),
 }
 
-fn bags(safe_contents: &[u8], password: &str, out: &mut Vec<Bag>) -> Result<(), SignError> {
+fn bags(safe_contents: &[u8], password: &str, out: &mut Vec<Bag>, budget: &mut Budget<'_>) -> Result<(), SignError> {
     for bag in Tlv::parse_all_ber(safe_contents)?.children()? {
+        budget.bag().map_err(bad)?;
         let f = bag.children()?;
         let Some(id) = f.first().and_then(|o| o.oid().ok()) else { continue };
         let Some(value) = f.get(1).filter(|v| v.tag == tag::ctx(0)).and_then(|v| v.inner().ok()) else { continue };
@@ -282,7 +338,7 @@ fn bags(safe_contents: &[u8], password: &str, out: &mut Vec<Bag>) -> Result<(), 
             SHROUDED_KEY_BAG => {
                 let p = value.children()?;
                 let [alg, data] = p.as_slice() else { return Err(bad("EncryptedPrivateKeyInfo")) };
-                BagKind::Key(pbe_decrypt(alg, password, &data.octets("encrypted private key")?)?)
+                BagKind::Key(pbe_decrypt(alg, password, &data.octets("encrypted private key")?, budget)?)
             }
             CERT_BAG => {
                 let p = value.children()?;
@@ -342,6 +398,19 @@ fn pem_body(pem: &[u8]) -> Result<&[u8], SignError> {
 
 /// Open a `.p12` / `.pfx` file. A wrong password is [`SignError::WrongPassword`].
 pub fn open(bytes: &[u8], password: &str) -> Result<DigitalId, SignError> {
+    open_with_control(bytes, password, &ImportControl::default())
+}
+
+/// Open with a shared cancellation handle. All bags and the MAC share one work budget.
+pub fn open_with_control(bytes: &[u8], password: &str, control: &ImportControl) -> Result<DigitalId, SignError> {
+    control.check().map_err(bad)?;
+    if bytes.len() > MAX_FILE_BYTES {
+        return Err(bad("identity file exceeds 16 MiB"));
+    }
+    if password.len() > MAX_PASSWORD {
+        return Err(bad("password exceeds 4096 bytes"));
+    }
+    let mut budget = Budget::new(control);
     let der = normalize(bytes)?;
     let pfx = Tlv::parse_all_ber(&der)
         .map_err(|e| match e {
@@ -367,9 +436,9 @@ pub fn open(bytes: &[u8], password: &str) -> Result<DigitalId, SignError> {
             .ok_or_else(|| SignError::Unsupported(format!("MAC digest {alg_oid}")))?;
         let expected = digest_info.get(1).ok_or_else(|| bad("MAC"))?.octets("MAC")?;
         let salt = m.get(1).ok_or_else(|| bad("MAC salt"))?.octets("MAC salt")?;
-        let iterations = m.get(2).map(|i| i.u64()).transpose()?.unwrap_or(1) as u32;
+        let iterations = m.get(2).map(|i| i.u64()).transpose()?.unwrap_or(1);
         let key_len = alg.digest(&[]).len();
-        let key = pkcs12_kdf(alg, &bmp(password), &salt, 3, iterations, key_len);
+        let key = pkcs12_kdf(alg, &bmp(password), &salt, 3, iterations, key_len, &mut budget)?;
         if hmac(alg, &key, &content)? != *expected {
             return Err(SignError::WrongPassword);
         }
@@ -380,7 +449,7 @@ pub fn open(bytes: &[u8], password: &str) -> Result<DigitalId, SignError> {
         let kind = p.first().ok_or_else(|| bad("ContentInfo"))?.oid()?;
         let body = p.get(1).ok_or_else(|| bad("ContentInfo content"))?.inner()?;
         match kind.as_str() {
-            DATA => bags(&body.octets("SafeContents")?, password, &mut all)?,
+            DATA => bags(&body.octets("SafeContents")?, password, &mut all, &mut budget)?,
             ENCRYPTED_DATA => {
                 let ed = body.children()?;
                 let eci = ed.get(1).ok_or_else(|| bad("EncryptedContentInfo"))?.children()?;
@@ -397,12 +466,13 @@ pub fn open(bytes: &[u8], password: &str) -> Result<DigitalId, SignError> {
                     }
                     _ => return Err(bad("encryptedContent")),
                 };
-                let plain = pbe_decrypt(alg, password, &ct)?;
-                bags(&plain, password, &mut all)?;
+                let plain = pbe_decrypt(alg, password, &ct, &mut budget)?;
+                bags(&plain, password, &mut all, &mut budget)?;
             }
             _ => {}
         }
     }
+    control.check().map_err(bad)?;
     let (key_bag, pkcs8) = all
         .iter()
         .find_map(|b| match &b.kind {
@@ -430,6 +500,7 @@ pub fn open(bytes: &[u8], password: &str) -> Result<DigitalId, SignError> {
     if &certificate.public_key != key.public_key() {
         return Err(bad("the certificate does not match the private key"));
     }
+    control.check().map_err(bad)?;
     Ok(DigitalId { key, certificate, chain: certs, friendly_name })
 }
 
@@ -441,17 +512,20 @@ fn random(n: usize) -> Result<Vec<u8>, SignError> {
 
 /// Write a digital ID as a `.p12` protected by `password`.
 pub fn write(id: &DigitalId, password: &str) -> Result<Vec<u8>, SignError> {
-    const ITER: u32 = 2048;
-    let encrypt = |plain: &[u8]| -> Result<Vec<u8>, SignError> {
+    const ITER: u64 = 2048;
+    if password.len() > MAX_PASSWORD {
+        return Err(bad("password exceeds 4096 bytes"));
+    }
+    let control = ImportControl::default();
+    let mut budget = Budget::new(&control);
+    let mut encrypt = |plain: &[u8]| -> Result<Vec<u8>, SignError> {
         let (salt, iv) = (random(16)?, random(16)?);
-        let key = pbkdf2(DigestAlg::Sha256, password.as_bytes(), &salt, ITER, 32)?;
+        let key = pbkdf2(DigestAlg::Sha256, password.as_bytes(), &salt, ITER, 32, &mut budget)?;
         let ct = cbc::Encryptor::<aes::Aes256>::new_from_slices(&key, &iv)
             .map_err(|_| SignError::Crypto("AES".into()))?
             .encrypt_padded_vec::<Pkcs7>(plain);
-        let kdf = der::seq(&[
-            &der::oid(PBKDF2),
-            &der::seq(&[&der::octets(&salt), &der::int(ITER as u64), &der::seq(&[&der::oid(HMAC_SHA256), &der::null()])]),
-        ]);
+        let kdf =
+            der::seq(&[&der::oid(PBKDF2), &der::seq(&[&der::octets(&salt), &der::int(ITER), &der::seq(&[&der::oid(HMAC_SHA256), &der::null()])])]);
         let alg = der::seq(&[&der::oid(PBES2), &der::seq(&[&kdf, &der::seq(&[&der::oid(AES256_CBC), &der::octets(&iv)])])]);
         Ok(der::seq(&[&alg, &der::octets(&ct)]))
     };
@@ -480,8 +554,104 @@ pub fn write(id: &DigitalId, password: &str) -> Result<Vec<u8>, SignError> {
     let ci_key = der::seq(&[&der::oid(DATA), &der::explicit(0, &der::octets(&der::seq(&[&key_bag])))]);
     let auth_safe = der::seq(&[&ci_certs, &ci_key]);
     let salt = random(16)?;
-    let mac_key = pkcs12_kdf(DigestAlg::Sha256, &bmp(password), &salt, 3, ITER, 32);
+    let mac_key = pkcs12_kdf(DigestAlg::Sha256, &bmp(password), &salt, 3, ITER, 32, &mut budget)?;
     let mac = hmac(DigestAlg::Sha256, &mac_key, &auth_safe)?;
-    let mac_data = der::seq(&[&der::seq(&[&DigestAlg::Sha256.algorithm(), &der::octets(&mac)]), &der::octets(&salt), &der::int(ITER as u64)]);
+    let mac_data = der::seq(&[&der::seq(&[&DigestAlg::Sha256.algorithm(), &der::octets(&mac)]), &der::octets(&salt), &der::int(ITER)]);
     Ok(der::seq(&[&der::int(3), &der::seq(&[&der::oid(DATA), &der::explicit(0, &der::octets(&auth_safe))]), &mac_data]))
+}
+
+#[cfg(test)]
+mod resource_tests {
+    use super::*;
+
+    #[test]
+    fn cancellable_pbkdf2_matches_the_reference_for_all_supported_digests() {
+        macro_rules! compare {
+            ($alg:expr, $digest:ty) => {
+                for rounds in [1, 2, 513] {
+                    let mut expected = [0u8; 77];
+                    pbkdf2::pbkdf2_hmac::<$digest>(b"password", b"salt", rounds, &mut expected);
+                    let control = ImportControl::default();
+                    let actual = pbkdf2($alg, b"password", b"salt", u64::from(rounds), expected.len(), &mut Budget::new(&control)).unwrap();
+                    assert_eq!(actual, expected, "rounds={rounds}");
+                }
+            };
+        }
+        compare!(DigestAlg::Sha1, sha1::Sha1);
+        compare!(DigestAlg::Sha224, sha2::Sha224);
+        compare!(DigestAlg::Sha256, sha2::Sha256);
+        compare!(DigestAlg::Sha384, sha2::Sha384);
+        compare!(DigestAlg::Sha512, sha2::Sha512);
+    }
+
+    #[test]
+    fn mac_iteration_integer_does_not_wrap_to_a_short_derivation() {
+        for count in [0, 2_000_001, u64::from(u32::MAX) + 1, u64::MAX] {
+            let content = der::seq(&[]);
+            let auth = der::seq(&[&der::oid(DATA), &der::explicit(0, &der::octets(&content))]);
+            let mac = der::seq(&[&der::seq(&[&DigestAlg::Sha256.algorithm(), &der::octets(&[0; 32])]), &der::octets(b"salt"), &der::int(count)]);
+            let pfx = der::seq(&[&der::int(3), &auth, &mac]);
+            let error = open(&pfx, "test").unwrap_err().to_string();
+            assert!(error.contains("derivation count"), "{count}: {error}");
+        }
+    }
+
+    #[test]
+    fn pbes2_and_legacy_iteration_integers_share_the_checked_budget() {
+        for count in [0, 2_000_001, u64::from(u32::MAX) + 1] {
+            let params = der::seq(&[&der::octets(b"salt"), &der::int(count)]);
+            let kdf = der::seq(&[&der::oid(PBKDF2), &params]);
+            let scheme = der::seq(&[&der::oid(AES256_CBC), &der::octets(&[0; 16])]);
+            for alg in [der::seq(&[&der::oid(PBES2), &der::seq(&[&kdf, &scheme])]), der::seq(&[&der::oid(PBE_SHA_3DES), &params])] {
+                let control = ImportControl::default();
+                let error = pbe_decrypt(&Tlv::parse_all(&alg).unwrap(), "test", &[0; 16], &mut Budget::new(&control)).unwrap_err().to_string();
+                assert!(error.contains("derivation count"), "{count}: {error}");
+            }
+        }
+    }
+
+    #[test]
+    fn iteration_counts_larger_than_u64_are_rejected_before_derivation() {
+        let count = der::tlv(tag::INTEGER, &[1, 0, 0, 0, 0, 0, 0, 0, 1]);
+        let params = der::seq(&[&der::octets(b"salt"), &count]);
+        let kdf = der::seq(&[&der::oid(PBKDF2), &params]);
+        let scheme = der::seq(&[&der::oid(AES256_CBC), &der::octets(&[0; 16])]);
+        for alg in [der::seq(&[&der::oid(PBES2), &der::seq(&[&kdf, &scheme])]), der::seq(&[&der::oid(PBE_SHA_3DES), &params])] {
+            let control = ImportControl::default();
+            assert!(
+                pbe_decrypt(&Tlv::parse_all(&alg).unwrap(), "test", &[0; 16], &mut Budget::new(&control))
+                    .unwrap_err()
+                    .to_string()
+                    .contains("exceeds u64")
+            );
+        }
+        let auth = der::seq(&[&der::oid(DATA), &der::explicit(0, &der::octets(&der::seq(&[])))]);
+        let mac = der::seq(&[&der::seq(&[&DigestAlg::Sha256.algorithm(), &der::octets(&[0; 32])]), &der::octets(b"salt"), &count]);
+        let pfx = der::seq(&[&der::int(3), &auth, &mac]);
+        assert!(open(&pfx, "test").unwrap_err().to_string().contains("exceeds u64"));
+    }
+
+    #[test]
+    fn cancelled_derivation_stops_and_a_new_import_remains_usable() {
+        let control = ImportControl::default();
+        let worker = control.clone();
+        let thread = std::thread::spawn(move || pbkdf2(DigestAlg::Sha256, b"password", b"salt", 2_000_000, 32, &mut Budget::new(&worker)));
+        // Wait until the worker has passed the preflight and entered the first output block.
+        // Cancelling before the worker starts would not test interruption inside the KDF loop.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while control.successful_checks() < 2 && std::time::Instant::now() < deadline {
+            std::thread::yield_now();
+        }
+        assert!(control.successful_checks() >= 2, "worker did not start derivation");
+        control.cancel();
+        assert!(thread.join().unwrap().unwrap_err().to_string().contains("cancelled"));
+        let fresh = ImportControl::default();
+        assert!(pbkdf2(DigestAlg::Sha256, b"password", b"salt", 1, 32, &mut Budget::new(&fresh)).is_ok());
+    }
+
+    #[test]
+    fn oversized_identity_or_password_is_refused_before_parsing() {
+        assert!(open(&vec![0; MAX_FILE_BYTES + 1], "").unwrap_err().to_string().contains("16 MiB"));
+        assert!(open(&[], &"x".repeat(MAX_PASSWORD + 1)).unwrap_err().to_string().contains("4096"));
+    }
 }

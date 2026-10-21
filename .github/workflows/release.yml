@@ -139,7 +139,7 @@ jobs:
           path: craft-fonts
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target }}
+          targets: ${{ matrix.target }}, wasm32-wasip1
       - uses: Swatinem/rust-cache@v2
         with:
           key: release-windows-${{ matrix.arch }}
@@ -150,6 +150,8 @@ jobs:
       - name: Install WiX
         shell: pwsh
         run: dotnet tool install --global wix --version 5.0.2
+      - name: Build the isolated scripting kernel
+        run: cargo xtask js-sandbox
       - name: Build, sign, package
         shell: pwsh
         env:
@@ -206,12 +208,16 @@ jobs:
             "https://github.com/goreleaser/nfpm/releases/download/v${NFPM_VERSION}/nfpm_${NFPM_VERSION}_${{ matrix.deb }}.deb"
           sudo dpkg -i "$RUNNER_TEMP/nfpm.deb"
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip1
       - uses: Swatinem/rust-cache@v2
         with:
           key: release-linux-${{ matrix.arch }}
       - name: Apply version override
         if: inputs.version != ''
         run: cargo xtask version set "$PDFCRAFT_VERSION"
+      - name: Build the isolated scripting kernel
+        run: cargo xtask js-sandbox
       - name: Build and package (AppImage, deb, rpm, tar.gz, CLI tar.gz)
         env:
           CRAFT_FONTS_DIR: ${{ github.workspace }}/craft-fonts

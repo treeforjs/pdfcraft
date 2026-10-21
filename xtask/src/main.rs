@@ -8,6 +8,7 @@ mod demo_pdf;
 mod fidelity;
 mod fuzz;
 mod gates;
+mod js_sandbox;
 mod layers;
 mod macos_integration;
 mod parity;
@@ -19,6 +20,7 @@ type Command = fn(&[String]) -> anyhow::Result<()>;
 
 /// Every subcommand: name, one-line summary, entry point.
 const COMMANDS: &[(&str, &str, Command)] = &[
+    ("js-sandbox", "Build the memory- and fuel-contained WASIp1 scripting kernel before native/browser builds", js_sandbox::run),
     ("version", "Print the workspace version, or `version set X.Y.Z[-pre]` to change it and refresh Cargo.lock", version_cmd),
     ("layers", "Enforce the crate dependency layering (plan/architecture.md §3)", gates::layers),
     ("wasm", "cargo check --target wasm32-unknown-unknown for every crate below L8", gates::wasm),

@@ -161,3 +161,10 @@ secrets also live in the `release` environment:
 package metadata on pull requests. Windows packaging checks PE architecture and subsystem values,
 MSI tables and the CLI version. Linux packaging checks the installed files, OCR models, CLI archive,
 AppImage startup and its update metadata before uploading the artifacts.
+
+## Local scripting-kernel bootstrap
+
+Native and browser builds embed an isolated generated scripting kernel. Before local packaging,
+run `rustup target add wasm32-wasip1` and `cargo xtask js-sandbox`. Release workflows perform
+this explicit step after any version override. Do not commit the generated Wasm module.
+See [development.md](development.md#contained-document-scripting) for the runtime limits.

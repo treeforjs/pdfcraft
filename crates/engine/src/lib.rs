@@ -3096,7 +3096,7 @@ fn xfa_sync_datasets(doc: &mut pdfcraft_cos::Document, datasets: &mut Option<pdf
 
 /// What a document whose form script ran away is told.
 const XFA_SCRIPTS_OFF: &str =
-    "A script of this form ran too long and was abandoned; the form's scripts are off for this document (reopen it to run them again)";
+    "A legacy script runtime could not stop safely; the form's scripts are off for this document (reopen it to run them again)";
 
 /// Most XFA warnings kept per document.
 const MAX_XFA_WARNINGS: usize = 50;
@@ -3402,13 +3402,13 @@ impl Session {
                                 (b, i, Ok(Ok(c)))
                             }
                             Err(e) => {
-                                script_output.errors.push(format!("The form's scripts could not be applied: {e}"));
+                                script_output.error(&format!("The form's scripts could not be applied: {e}"));
                                 (bytes, info, Ok(Ok(cos)))
                             }
                         },
                         Ok(_) => (bytes, info, Ok(Ok(cos))),
                         Err(e) => {
-                            script_output.errors.push(format!("The form's scripts could not run: {e}"));
+                            script_output.error(&format!("The form's scripts could not run: {e}"));
                             (bytes, info, Ok(Ok(cos)))
                         }
                     }
@@ -3425,7 +3425,7 @@ impl Session {
             d.xfa_template = if ran_away { None } else { xfa_template };
             d.js_output.append(script_output);
             if ran_away {
-                d.js_output.errors.push(XFA_SCRIPTS_OFF.into());
+                d.js_output.error(XFA_SCRIPTS_OFF);
             }
             note_warnings(&mut d.xfa_warnings, &xfa_warnings);
         }
@@ -3619,7 +3619,9 @@ impl Session {
                 let notes = guard(|| xfa_sync_datasets(&mut next, datasets))
                     .unwrap_or_else(|m| Err(format!("writing the XFA data failed unexpectedly ({m})")))
                     .map_err(EditError::Write)?;
-                cx.xfa_out.errors.extend(notes);
+                for note in notes {
+                    cx.xfa_out.error(&note);
+                }
             }
             fn collect(e: &Edit, changed: &mut Vec<String>, reset: &mut bool) {
                 match e {
@@ -3641,7 +3643,7 @@ impl Session {
                 cx.xfa_datasets = run.datasets;
                 cx.xfa_ran_away |= run.ran_away;
                 if let Err(e) = ran {
-                    cx.xfa_out.errors.push(e);
+                    cx.xfa_out.error(&e);
                 }
             }
         }
@@ -3697,7 +3699,7 @@ impl Session {
         doc.tag_update = cx.tags;
         if cx.xfa_ran_away {
             doc.xfa_template = None;
-            doc.js_output.errors.push(XFA_SCRIPTS_OFF.into());
+            doc.js_output.error(XFA_SCRIPTS_OFF);
         }
         Ok(())
     }

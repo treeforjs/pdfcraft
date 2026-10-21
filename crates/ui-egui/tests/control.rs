@@ -70,6 +70,17 @@ fn ok(h: &mut Harness<'static, PdfCraftApp>, c: &ControlClient, method: &str, pa
 }
 
 #[test]
+fn a_timed_out_queued_edit_is_not_applied_on_a_later_frame() {
+    let (mut h, c) = harness();
+    let before = h.state().theme_preference;
+    let (rx, ticket) = c.send_cancellable("ui.set", json!({ "key": "theme", "value": "dark" }));
+    assert!(ticket.cancel_before_start());
+    h.run_steps(3);
+    assert_eq!(h.state().theme_preference, before);
+    assert!(rx.try_recv().is_err());
+}
+
+#[test]
 fn bookmark_titles_can_be_searched_over_control() {
     let (mut h, c) = harness();
     for (index, title, page) in [(0, "Background", 0), (1, "Target chapter", 3)] {

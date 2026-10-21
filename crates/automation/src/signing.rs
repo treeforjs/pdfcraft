@@ -164,7 +164,7 @@ impl Automation {
             return Err(failed(format!("windows:{r}: Windows certificate store identities are only available on Windows")));
         }
         let path = self.resolve(a.str("id")?, false)?;
-        let bytes = std::fs::read(&path).map_err(|e| failed(format!("{}: {e}", path.display())))?;
+        let bytes = read_identity_file(&path)?;
         sign::pkcs12::open(&bytes, a.opt_str("password")?.unwrap_or("")).map_err(|e| match e {
             sign::SignError::WrongPassword => bad("the digital ID password is incorrect"),
             e => failed(e),
@@ -247,12 +247,13 @@ impl Automation {
         };
         for p in paths {
             let path = self.resolve(&p, false)?;
-            let bytes = std::fs::read(&path).map_err(|e| failed(format!("{}: {e}", path.display())))?;
             let lower = p.to_ascii_lowercase();
             let found = if lower.ends_with(".p12") || lower.ends_with(".pfx") {
+                let bytes = read_identity_file(&path)?;
                 let id = sign::pkcs12::open(&bytes, a.opt_str("password")?.unwrap_or("")).map_err(failed)?;
                 std::iter::once(id.certificate).chain(id.chain).collect()
             } else {
+                let bytes = std::fs::read(&path).map_err(|e| failed(format!("{}: {e}", path.display())))?;
                 sign::x509::load_certificates(&bytes).map_err(failed)?
             };
             for c in found {
@@ -393,4 +394,8 @@ fn field_lock(a: &Args) -> Result<Option<sign::FieldLock>> {
         (None, false) => None,
         (action, document) => Some(sign::FieldLock { action: action.unwrap_or(sign::LockAction::All), permissions: document.then_some(1) }),
     })
+}
+
+fn read_identity_file(path: &std::path::Path) -> Result<Vec<u8>> {
+    pdfcraft_platform::read::regular_file(path, sign::pkcs12::MAX_FILE_BYTES, || Ok(())).map_err(|e| failed(format!("{}: {e}", path.display())))
 }

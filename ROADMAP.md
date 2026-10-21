@@ -15,7 +15,7 @@ The current inventory has **797 entries: 435 shipped, 147 partial and 215 planne
 
 ## Where we're lacking and where we're going
 
-1. **Hardening and recovery:** bound untrusted allocations and work; protect private files; retry failed autosaves; keep fuzz findings as synthetic regressions. Basic document JavaScript still needs complete memory/time isolation, the opt-in control transport needs connection and message budgets, and imported identity files need KDF work limits.
+1. **Hardening and recovery:** bound untrusted allocations and work; protect private files; retry failed autosaves; keep fuzz findings as synthetic regressions. Document JavaScript/XFA/FormCalc now run inside a memory- and instruction-contained portable kernel; release-profile performance and browser execution still need independent acceptance. The opt-in control transport and imported identity files are bounded by their documented limits.
 2. **Large-document foundations:** implement lazy byte sources and measurable memory budgets instead of reading every input file whole. Continue the model/display-list renderer and broad font/image/transparency fidelity checks.
 3. **Editing existing content:** improve source-preserving paragraph identity, transforms, text state, complex shaping and RTL/CJK coverage; expose existing headless object/list tools in the GUI without overstating supported cases.
 4. **Recognition and conversion:** multilingual models and Unicode text layers, correction of saved recognition, richer editable output and layout-faithful Office import/export. Use original synthetic fixtures and independent format readers.
@@ -32,4 +32,6 @@ Before committing, run format, clippy, workspace tests, the browser check, asset
 
 ## Current maintenance checkpoint
 
-The October audit identified an outdated embedded updater, unbounded repeated redaction overlays, unchecked 32-bit automation indices, private-file permission changes and recovery validation/retry defects. The maintenance patch addresses those bounded paths and removes unavailable catalog placeholders. Larger runtime isolation and missing feature work remain explicitly open.
+The October audit identified an outdated embedded updater, unbounded repeated redaction overlays, unchecked 32-bit automation indices, private-file permission changes and recovery validation/retry defects. The maintenance patch addresses those bounded paths and removes unavailable catalog placeholders. The follow-up contains document scripting in a portable metered kernel and bounds opt-in control messages and identity-file work. Missing feature work and independent platform/performance acceptance remain open.
+
+The 2026-10-20 follow-up replaces abandoned script workers with a fresh bounded interpreter store, preserving the shared form/dialog protocol. The scripting crate tests cover ordinary form behavior and hostile built-in allocation, regex/loop work and message budgets; final platform evidence is recorded with the corresponding CI run.

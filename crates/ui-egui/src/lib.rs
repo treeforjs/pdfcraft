@@ -464,6 +464,7 @@ pub struct PdfCraftApp {
     pub summary_layout: pdfcraft_engine::SummaryLayout,
     /// The signing dialogs' state.
     pub sign_draft: Option<SignDraft>,
+    pub(crate) id_import: Option<sign_ui::IdImport>,
     /// Digital ID files the user has created or added.
     pub digital_ids: Vec<DigitalIdEntry>,
     pub timestamp_servers: Vec<pdfcraft_engine::signature_workflow::TimestampServer>,
@@ -733,6 +734,7 @@ impl PdfCraftApp {
             summary_sort: Default::default(),
             summary_layout: Default::default(),
             sign_draft: None,
+            id_import: None,
             digital_ids: Vec::new(),
             timestamp_servers: Vec::new(),
             signature_workflow: timestamp_ui::SignatureWorkflowState::default(),
@@ -1989,6 +1991,7 @@ impl eframe::App for PdfCraftApp {
         self.poll_export();
         self.poll_ocr();
         self.poll_signature_workflow();
+        self.poll_identity_import();
         self.poll_submit();
         self.poll_compare();
         self.poll_optimize();

@@ -406,22 +406,43 @@ mod xfa_model {
     #[test]
     fn values_set_again_merge_and_hostile_loops_are_capped() {
         // A calculate that sets its own value in a loop leaves one effect: the last value.
-        let o = go("for (var i = 0; i < 50000; i++) this.rawValue = i;", "form1[0].page1[0].total[0]", "calculate");
-        assert_eq!(o.effects, vec![XfaEffect::SetValue { som: "form1[0].page1[0].total[0]".into(), value: "49999".into() }], "{:?}", o.error);
+        let o = go("for (var i = 0; i < 500; i++) this.rawValue = i;", "form1[0].page1[0].total[0]", "calculate");
+        assert_eq!(o.effects, vec![XfaEffect::SetValue { som: "form1[0].page1[0].total[0]".into(), value: "499".into() }], "{:?}", o.error);
+        // The original stress workload may exceed a slow machine's deadline. It must
+        // either produce the exact final value or refuse atomically, without a worker left.
+        let stress = go("for (var i = 0; i < 50000; i++) this.rawValue = i;", "form1[0].page1[0].total[0]", "calculate");
+        if stress.limited {
+            assert!(stress.error.is_some() && stress.effects.is_empty() && !stress.abandoned, "{stress:?}");
+        } else {
+            assert_eq!(stress.error, None, "{stress:?}");
+            assert_eq!(stress.effects, vec![XfaEffect::SetValue { som: "form1[0].page1[0].total[0]".into(), value: "49999".into() }]);
+        }
         // Order-dependent effects in between keep the values on either side.
         let o = go("qty.rawValue = 1; xfa.host.resetData(); qty.rawValue = 2; qty.rawValue = 3;", "form1[0].page1[0]", "click");
         assert_eq!(o.effects.len(), 3, "{:?}", o.effects);
         assert_eq!(o.effects.last(), Some(&XfaEffect::SetValue { som: "form1[0].page1[0].qty[0]".into(), value: "3".into() }));
         // Message boxes and console lines in a loop stop at their caps, and say so.
-        let o = go("for (var i = 0; i < 100000; i++) { xfa.host.messageBox('m' + i); console.println('c' + i); }", "form1[0].page1[0]", "initialize");
+        let o = go("for (var i = 0; i < 1500; i++) { xfa.host.messageBox('m' + i); console.println('c' + i); }", "form1[0].page1[0]", "initialize");
         let alerts = o.effects.iter().filter(|e| matches!(e, XfaEffect::MessageBox(_))).count();
         assert_eq!(alerts, MAX_ALERTS);
         assert_eq!(o.console.len(), MAX_CONSOLE);
         assert!(o.notes.iter().any(|n| n.contains("messages")) && o.notes.iter().any(|n| n.contains("console")), "{:?}", o.notes);
+        let stress =
+            go("for (var i = 0; i < 100000; i++) { xfa.host.messageBox('m' + i); console.println('c' + i); }", "form1[0].page1[0]", "initialize");
+        if stress.limited {
+            assert!(stress.error.is_some() && stress.effects.is_empty() && stress.console.is_empty(), "{stress:?}");
+        } else {
+            assert_eq!(stress.console.len(), MAX_CONSOLE);
+            assert!(stress.effects.len() <= MAX_EFFECTS);
+        }
         // Distinct effects stop at the effect cap.
         let o = go("for (var i = 0; i < 30000; i++) xfa.host.beep();", "form1[0].page1[0]", "click");
-        assert_eq!(o.effects.len(), MAX_EFFECTS);
-        assert!(o.notes.iter().any(|n| n.contains("changes")), "{:?}", o.notes);
+        if o.limited {
+            assert!(o.error.is_some() && o.effects.is_empty(), "{o:?}");
+        } else {
+            assert_eq!(o.effects.len(), MAX_EFFECTS);
+            assert!(o.notes.iter().any(|n| n.contains("changes")), "{:?}", o.notes);
+        }
         // Long messages are cut.
         let o = go("xfa.host.messageBox(new Array(100000).join('x'));", "form1[0].page1[0]", "click");
         assert!(matches!(&o.effects[0], XfaEffect::MessageBox(m) if m.chars().count() <= 4_097));
@@ -445,6 +466,19 @@ mod formcalc {
         let o = go(script, "form1[0].page1[0].total[0]", "calculate");
         assert_eq!(o.error, None, "{script}");
         o.result.unwrap_or_default()
+    }
+
+    #[test]
+    fn dates_and_numeric_text_round_trip_through_the_contained_kernel() {
+        assert_eq!(calc(r#"Date2Num("1970-01-01")"#), "25568");
+        assert_eq!(calc(r#"Date2Num("2001-02-03","YYYY-MM-DD")"#), "36924");
+        assert_eq!(calc(r#"Num2Date(Date2Num("Feb 3, 2001","MMM D, YYYY"),"MMMM D, YYYY")"#), "February 3, 2001");
+        assert_eq!(calc(r#"Num2Date(Date2Num("2/3/01","M/D/YY"),"YYYY-MM-DD")"#), "2001-02-03");
+        assert_eq!(calc("WordNum(1234.5,2)"), "One Thousand Two Hundred Thirty-Four Dollars And 50 Cents");
+        assert_eq!(calc("3.0"), "3");
+        assert_eq!(calc("2.5"), "2.5");
+        assert_eq!(calc("0.1+0.2"), "0.3");
+        assert_eq!(calc(r#"1 + "12abc""#), "13");
     }
 
     #[test]

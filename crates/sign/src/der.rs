@@ -209,7 +209,9 @@ impl<'a> Tlv<'a> {
         if self.tag != tag::INTEGER || self.value.is_empty() || self.value.len() > 9 || self.value[0] & 0x80 != 0 {
             return Err(bad("expected a small non-negative INTEGER"));
         }
-        Ok(self.value.iter().fold(0u64, |acc, b| (acc << 8) | *b as u64))
+        self.value
+            .iter()
+            .try_fold(0u64, |acc, b| acc.checked_mul(256).and_then(|n| n.checked_add(u64::from(*b))).ok_or_else(|| bad("INTEGER exceeds u64")))
     }
 
     /// The magnitude of an INTEGER (leading zero dropped).
@@ -536,6 +538,18 @@ pub fn algorithm(oid_s: &str, params: Option<&[u8]>) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn integer_reader_rejects_nine_byte_values_that_do_not_fit() {
+        assert_eq!(Tlv::parse_all(&int(u64::MAX)).unwrap().u64().unwrap(), u64::MAX);
+        for low in [0, 1, 255] {
+            let mut magnitude = [0u8; 9];
+            magnitude[0] = 1;
+            magnitude[8] = low;
+            let encoded = tlv(tag::INTEGER, &magnitude);
+            assert!(Tlv::parse_all(&encoded).unwrap().u64().is_err());
+        }
+    }
 
     #[test]
     fn round_trips() {

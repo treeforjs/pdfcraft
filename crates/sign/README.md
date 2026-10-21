@@ -14,6 +14,15 @@ for s in signatures(&doc, &bytes, &trust) {                                // li
   certificates (`x509`), CMS SignedData (`cms`), and PKCS #12 digital ID files (`pkcs12`):
   PBES2 (PBKDF2 + AES/3DES), the legacy SHA-1 3DES/RC2 schemes, and MAC checks. Writing uses
   OpenSSL 3's defaults (AES-256-CBC, HMAC-SHA-256).
+- **Identity import budgets:** `pkcs12::open` accepts files up to 16 MiB, passwords up to
+  4 KiB, salts up to 64 KiB and at most 256 bags across the envelope. Iteration counts are
+  checked as encoded, from 1 through 2,000,000, without integer truncation. The MAC and all
+  encrypted bags share an 8,000,000-unit work budget (rounds per output digest block,
+  plus input-size charges). `open_with_control` accepts an
+  `ImportControl` cancellation handle; derivation loops check it at least every 256 rounds.
+  Native derivation also checks a 30-second deadline. A refused import produces no identity.
+  The native signing dialog imports and opens file identities in a background worker; Cancel
+  interrupts derivation and discards the result before saving.
 - **Keys:** RSA, ECDSA P-256 and P-384. Verification uses RustCrypto everywhere. RSA
   private-key operations (signing, key generation) use `aws-lc-rs` on native targets and are
   refused in the browser (ADR-0009: the `rsa` crate's Marvin advisory, RUSTSEC-2023-0071, has

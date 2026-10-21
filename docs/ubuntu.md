@@ -35,6 +35,8 @@ from the repository root. Build as your regular user; only system dependencies n
 ```sh
 sudo packaging/linux/install-ubuntu-deps.sh build
 sudo packaging/linux/install-ubuntu-deps.sh runtime
+rustup target add wasm32-wasip1
+cargo xtask js-sandbox
 cargo build --locked --release -p pdfcraft -p pdfcraft-cli
 ./target/release/pdfcraft "some document.pdf"
 ./target/release/pdfcraft-cli info "some document.pdf"

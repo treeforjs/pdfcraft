@@ -72,6 +72,7 @@ pub fn layers(_: &[String]) -> anyhow::Result<()> {
 }
 
 pub fn wasm(_: &[String]) -> anyhow::Result<()> {
+    crate::js_sandbox::run(&[])?;
     let crates = layers::from_metadata(&metadata()?).map_err(|e| anyhow!(e))?;
     let set: Vec<String> = crates
         .into_iter()
@@ -97,6 +98,7 @@ pub fn wasm(_: &[String]) -> anyhow::Result<()> {
 pub fn ci(_: &[String]) -> anyhow::Result<()> {
     type Step = (&'static str, Box<dyn Fn() -> anyhow::Result<()>>);
     let steps: Vec<Step> = vec![
+        ("js-sandbox", Box::new(|| crate::js_sandbox::run(&[]))),
         ("fmt", Box::new(|| run_args(&["fmt", "--all", "--", "--check"]))),
         ("clippy", Box::new(|| run_args(&["clippy", "--workspace", "--all-targets", "--", "-D", "warnings"]))),
         ("test", Box::new(|| run_args(&["test", "--workspace"]))),

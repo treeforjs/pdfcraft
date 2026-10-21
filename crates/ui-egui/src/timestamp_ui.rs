@@ -43,6 +43,7 @@ pub struct SignatureRun {
     path: PathBuf,
     pub cancellation: SignatureCancellation,
     result: Arc<Mutex<Option<Outcome>>>,
+    pub(crate) sign_retry: Option<crate::sign_ui::SignRetry>,
 }
 
 fn profile() -> TimestampServer {
@@ -416,7 +417,7 @@ impl PdfCraftApp {
         }
         #[cfg(target_arch = "wasm32")]
         task();
-        self.signature_run = Some(SignatureRun { doc, path, cancellation, result });
+        self.signature_run = Some(SignatureRun { doc, path, cancellation, result, sign_retry: None });
         self.signature_workflow.error = None;
         Ok(())
     }
@@ -444,6 +445,7 @@ impl PdfCraftApp {
             self.notify("Signature operation cancelled. No result was saved.");
             return;
         }
+        let retry = run.sign_retry;
         let apply = || -> Result<Vec<String>, String> {
             let (result, notes) = done?;
             self.session.check_signature_result(&result).map_err(|e| e.to_string())?;
@@ -461,7 +463,9 @@ impl PdfCraftApp {
             }
             Err(error) => {
                 self.signature_workflow.error = Some(error.clone());
-                self.notify_error(error);
+                if !self.restore_sign_retry(retry, &error) {
+                    self.notify_error(error);
+                }
             }
         }
     }

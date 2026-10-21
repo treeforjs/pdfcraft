@@ -15,34 +15,34 @@ pub use pdfcraft_js::{Answer, Dialogs, Limits, Outcome, Question, Request};
 
 use crate::{DocId, Edit, EditError, Session};
 
-/// What scripts produced for the viewer since it last looked.
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct JsOutput {
-    pub alerts: Vec<String>,
-    pub console: Vec<String>,
-    pub requests: Vec<Request>,
-    /// Script errors (as the viewer's console shows them).
-    pub errors: Vec<String>,
-}
+pub(crate) mod budget;
+mod output;
+pub use output::{JsOutput, MAX_OUTPUT_BYTES, MAX_OUTPUT_ITEMS};
+#[cfg(test)]
+mod tests;
 
-impl JsOutput {
-    pub fn is_empty(&self) -> bool {
-        self.alerts.is_empty() && self.console.is_empty() && self.requests.is_empty() && self.errors.is_empty()
+fn fields_fit(fields: &[Field], event: &[&str]) -> bool {
+    if fields.len() > budget::SNAPSHOT_ITEMS {
+        return false;
     }
-
-    fn absorb(&mut self, o: &Outcome) {
-        self.alerts.extend(o.alerts.iter().cloned());
-        self.console.extend(o.console.iter().cloned());
-        self.requests.extend(o.requests.iter().cloned());
-        self.errors.extend(o.error.iter().cloned());
-    }
-
-    pub(crate) fn append(&mut self, other: JsOutput) {
-        self.alerts.extend(other.alerts);
-        self.console.extend(other.console);
-        self.requests.extend(other.requests);
-        self.errors.extend(other.errors);
-    }
+    let Some(items) = fields.iter().try_fold(fields.len(), |n, f| {
+        let next = n.saturating_add(f.widgets.len());
+        (next <= budget::SNAPSHOT_ITEMS).then_some(next)
+    }) else {
+        return false;
+    };
+    budget::snapshot_fits(
+        items,
+        fields
+            .iter()
+            .flat_map(|f| {
+                std::iter::once(f.name.as_str())
+                    .chain(f.value.iter().chain(&f.default).map(String::as_str))
+                    .chain(f.options.iter().flat_map(|(value, label)| [value.as_str(), label.as_str()]))
+                    .chain(f.widgets.iter().filter_map(|w| w.on_state.as_deref()).flat_map(|s| [s, s]))
+            })
+            .chain(event.iter().copied()),
+    )
 }
 
 fn kind(k: FieldKind) -> pdfcraft_js::FieldType {
@@ -89,10 +89,11 @@ pub fn field_state(doc: &pdfcraft_cos::Document, f: &Field) -> pdfcraft_js::Fiel
 
 /// The changes a script made, against the fields as they were.
 fn changes(before: &[pdfcraft_js::FieldState], after: &[pdfcraft_js::FieldState]) -> Vec<FieldChange> {
+    let before: std::collections::HashMap<_, _> = before.iter().map(|s| (s.name.as_str(), s)).collect();
     after
         .iter()
         .filter_map(|a| {
-            let b = before.iter().find(|b| b.name == a.name)?;
+            let b = before.get(a.name.as_str())?;
             let c = FieldChange {
                 name: a.name.clone(),
                 value: (a.value != b.value).then(|| a.value.clone()),
@@ -112,6 +113,7 @@ pub struct JsRunner {
     pub output: JsOutput,
     /// The fields in the document as the forms code last read them (for `display`).
     cos: pdfcraft_cos::Document,
+    batch: budget::Budget,
 }
 
 impl JsRunner {
@@ -123,7 +125,13 @@ impl JsRunner {
             info: info(cos),
             ..Default::default()
         };
-        JsRunner { doc, doc_scripts: pdfcraft_forms::document_scripts(cos), output: JsOutput::default(), cos: cos.clone() }
+        JsRunner {
+            doc,
+            doc_scripts: pdfcraft_forms::document_scripts(cos),
+            output: JsOutput::default(),
+            cos: cos.clone(),
+            batch: budget::Budget::new(budget::AUTOMATIC_TIMEOUT),
+        }
     }
 }
 
@@ -140,19 +148,33 @@ fn info(cos: &pdfcraft_cos::Document) -> Vec<(String, String)> {
 
 impl Scripts for JsRunner {
     fn run(&mut self, event: FieldEvent, script: &str, target: &Field, value: &str, fields: &[Field]) -> ScriptResult {
+        let unchanged = || ScriptResult { rc: true, value: value.to_string(), changes: Vec::new(), message: None };
+        let Some(remaining) = self.batch.begin() else {
+            self.output.batch_refused();
+            return unchanged();
+        };
+        if script.len() > 256 * 1024 || !fields_fit(fields, &[value, &target.name, script]) {
+            self.batch.stop();
+            self.output.error(budget::SNAPSHOT_NOTICE);
+            self.output.batch_refused();
+            return unchanged();
+        }
         let states: Vec<_> = fields.iter().map(|f| field_state(&self.cos, f)).collect();
         let ev = pdfcraft_js::Event::field(event.name(), &target.name, value);
-        let o = pdfcraft_js::run(script, &ev, &self.doc, &states, &self.doc_scripts, Limits::default());
-        self.output.absorb(&o);
-        if o.error.is_some() {
-            // As in other viewers, a failing script leaves the value alone (the error goes to the console).
-            return ScriptResult { rc: true, value: value.to_string(), changes: Vec::new(), message: None };
+        let o = pdfcraft_js::run_within(script, &ev, &self.doc, &states, &self.doc_scripts, Limits::default(), &Dialogs::default(), remaining);
+        let retained = self.output.absorb(&o);
+        if o.limited || !retained {
+            self.batch.stop();
+            self.output.batch_refused();
         }
-        let after: Vec<_> = states.iter().map(|s| o.changed.iter().find(|c| c.name == s.name).unwrap_or(s).clone()).collect();
+        if o.error.is_some() || o.limited || !retained {
+            // As in other viewers, a failing script leaves the value alone (the error goes to the console).
+            return unchanged();
+        }
         ScriptResult {
             rc: o.rc,
             value: o.value.clone(),
-            changes: changes(&states, &after),
+            changes: changes(&states, &o.changed),
             message: (!o.rc).then(|| o.alerts.last().cloned()).flatten(),
         }
     }
@@ -300,6 +322,19 @@ impl Session {
     /// [`Session::run_javascript`] for a field event named `event` (`event.name`); without a
     /// target, a document event of that name.
     fn run_script_event(&mut self, id: DocId, script: &str, target: Option<&str>, event: &str, dialogs: &Dialogs) -> Result<Outcome, EditError> {
+        self.run_script_event_within(id, script, target, event, dialogs, None)
+    }
+
+    #[allow(clippy::too_many_arguments)] // Existing event API plus the enclosing action chain's deadline.
+    fn run_script_event_within(
+        &mut self,
+        id: DocId,
+        script: &str,
+        target: Option<&str>,
+        event: &str,
+        dialogs: &Dialogs,
+        timeout: Option<std::time::Duration>,
+    ) -> Result<Outcome, EditError> {
         if self.js_off {
             return Err(EditError::Invalid("JavaScript is turned off (Preferences ▸ JavaScript)".into()));
         }
@@ -314,6 +349,7 @@ impl Session {
             self.apply(id, Edit::XfaEvent { som, activity: "click".into() })?;
             let out = self.take_js_output(id);
             return Ok(Outcome {
+                limited: out.limited,
                 rc: true,
                 alerts: out.alerts,
                 console: out.console,
@@ -322,21 +358,29 @@ impl Session {
                 ..Default::default()
             });
         }
+        let fields = pdfcraft_forms::fields(&cos);
+        if script.len() > 256 * 1024 || !fields_fit(&fields, &[script, target.unwrap_or(""), event, &doc.name]) {
+            return Ok(Outcome { limited: true, rc: true, error: Some(budget::SNAPSHOT_NOTICE.into()), ..Default::default() });
+        }
         let mut runner = JsRunner::new(&cos, &doc.name);
         runner.doc.annots = annot_states(&cos);
         runner.doc.layers = doc.info.layers.iter().map(|l| pdfcraft_js::LayerState { name: l.name.clone(), on: l.visible }).collect();
-        let fields = pdfcraft_forms::fields(&cos);
         let states: Vec<_> = fields.iter().map(|f| field_state(&cos, f)).collect();
         let event = match target {
             Some(t) => pdfcraft_js::Event { will_commit: false, ..pdfcraft_js::Event::field(event, t, "") },
             None => pdfcraft_js::Event::doc(event),
         };
-        let mut o = pdfcraft_js::run_with(script, &event, &runner.doc, &states, &runner.doc_scripts, Limits::default(), dialogs);
+        let mut o = match timeout {
+            Some(timeout) => pdfcraft_js::run_within(script, &event, &runner.doc, &states, &runner.doc_scripts, Limits::default(), dialogs, timeout),
+            None => pdfcraft_js::run_with(script, &event, &runner.doc, &states, &runner.doc_scripts, Limits::default(), dialogs),
+        };
         if o.question.is_some() {
             return Ok(o);
         }
-        let after: Vec<_> = states.iter().map(|s| o.changed.iter().find(|c| c.name == s.name).unwrap_or(s).clone()).collect();
-        let changes = changes(&states, &after);
+        if o.limited {
+            return Ok(o);
+        }
+        let changes = changes(&states, &o.changed);
         let resets: Vec<Vec<String>> = o
             .requests
             .iter()
@@ -385,7 +429,25 @@ impl Session {
             .map(|(_, a)| a)
             .collect();
         let mut out = TriggerOutcome::default();
+        let mut messages = JsOutput::default();
+        let mut batch = budget::Budget::new(budget::ACTION_TIMEOUT);
         for a in actions {
+            let Some(remaining) = batch.begin() else {
+                messages.batch_refused();
+                break;
+            };
+            // Describe only admitted action arguments; joining a hostile Reset list must
+            // not allocate another unbounded string for the report.
+            let described_bytes = match &a {
+                A::Uri(s) | A::Submit(s) | A::Named(s) | A::Other(s) => s.len(),
+                A::Reset(names) | A::ShowHide { fields: names, .. } => names.iter().fold(0usize, |n, s| n.saturating_add(s.len()).saturating_add(2)),
+                _ => 0,
+            };
+            if described_bytes > 4_096 {
+                messages.batch_refused();
+                break;
+            }
+            let description = a.describe();
             let names = |list: &[String], this: &Session| -> Vec<String> {
                 let all: Vec<String> = this.get(id).map(|d| d.form.iter().map(|f| f.name.clone()).collect()).unwrap_or_default();
                 all.into_iter().filter(|n| list.iter().any(|x| n == x || n.starts_with(&format!("{x}.")))).collect()
@@ -393,14 +455,16 @@ impl Session {
             match &a {
                 A::JavaScript(script) => {
                     if self.js_off {
-                        out.skipped.push(format!("{} (JavaScript is turned off)", a.describe()));
+                        out.skipped.push(format!("{description} (JavaScript is turned off)"));
                         continue;
                     }
-                    let o = self.run_script_event(id, script, Some(field), trigger.event_name(), &Dialogs::default())?;
-                    out.alerts.extend(o.alerts);
-                    out.console.extend(o.console);
-                    out.errors.extend(o.error);
-                    out.requests.extend(o.requests);
+                    let o = self.run_script_event_within(id, script, Some(field), trigger.event_name(), &Dialogs::default(), Some(remaining))?;
+                    out.ran.push(description);
+                    if !messages.absorb(&o) || o.limited {
+                        messages.batch_refused();
+                        break;
+                    }
+                    continue;
                 }
                 A::Reset(list) => {
                     let targets = (!list.is_empty()).then(|| names(list, self));
@@ -422,18 +486,34 @@ impl Session {
                         self.apply(id, Edit::Batch { label: label.into(), edits: vec![Edit::ApplyScriptChanges { changes }] })?;
                     }
                 }
-                A::GoTo(p) => out.requests.push(Request::GoToPage(*p)),
-                A::Uri(u) => out.requests.push(Request::LaunchUrl(u.clone())),
-                A::Submit(u) => out.requests.push(Request::Submit(u.clone())),
-                A::Named(n) if n == "Print" => out.requests.push(Request::Print),
+                A::GoTo(p) => {
+                    messages.request(&Request::GoToPage(*p));
+                }
+                A::Uri(u) => {
+                    messages.request(&Request::LaunchUrl(u.clone()));
+                }
+                A::Submit(u) => {
+                    messages.request(&Request::Submit(u.clone()));
+                }
+                A::Named(n) if n == "Print" => {
+                    messages.request(&Request::Print);
+                }
                 A::Named(n) if pdfcraft_forms::MENU_ITEMS.contains(&n.as_str()) => out.menu.push(n.clone()),
                 A::Named(_) | A::Other(_) => {
-                    out.skipped.push(a.describe());
+                    out.skipped.push(description);
                     continue;
                 }
             }
-            out.ran.push(a.describe());
+            out.ran.push(description);
+            if messages.limited {
+                break;
+            }
         }
+        out.alerts = messages.alerts;
+        out.console = messages.console;
+        out.errors = messages.errors;
+        out.requests = messages.requests;
+        out.limited = messages.limited;
         Ok(out)
     }
 }
@@ -441,6 +521,8 @@ impl Session {
 /// What firing a field trigger did ([`Session::run_field_trigger`]).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct TriggerOutcome {
+    /// The current action chain stopped after a resource refusal.
+    pub limited: bool,
     /// The actions that ran, in order (as the Actions tab describes them).
     pub ran: Vec<String>,
     /// Actions not run: types PdfCraft doesn't run, menu items off the safe list, and scripts

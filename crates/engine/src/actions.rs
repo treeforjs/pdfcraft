@@ -205,6 +205,9 @@ fn apply_step(s: &mut Session, id: DocId, step: &Step, log: &mut Vec<String>) ->
         }
         Step::RunJavaScript(js) => {
             let o = s.run_javascript(id, js, None)?;
+            if o.limited {
+                return Err(EditError::Invalid(o.error.unwrap_or_else(|| crate::js::budget::BATCH_NOTICE.into())));
+            }
             log.push(match o.error {
                 Some(e) => format!("Run a JavaScript: {e}"),
                 None => "Run a JavaScript".into(),

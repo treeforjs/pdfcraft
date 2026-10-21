@@ -328,6 +328,8 @@ For Windows 11 graphics setup, see the [NVIDIA and Intel driver guide](docs/wind
 ```sh
 git clone https://github.com/treeforjs/pdfcraft
 cd pdfcraft
+rustup target add wasm32-wasip1
+cargo xtask js-sandbox
 cargo run --release -p pdfcraft -- some.pdf     # desktop app
 cargo xtask demo-pdf                              # build the showcase PDF used in these screenshots
 cargo xtask screenshots                           # regenerate every screenshot in this README

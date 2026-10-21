@@ -12,6 +12,38 @@ use crate::canvas::{DocView, PageXform};
 use crate::theme::{self, Tokens};
 use crate::{PdfCraftApp, icons, widgets};
 
+type IdentityResult = Result<(String, Certificate), String>;
+pub(crate) struct IdImport {
+    epoch: u64,
+    control: sign::pkcs12::ImportControl,
+    result: std::sync::Arc<std::sync::Mutex<Option<IdentityResult>>>,
+}
+
+impl Drop for IdImport {
+    fn drop(&mut self) {
+        self.control.cancel();
+    }
+}
+
+pub(crate) struct SignRetry {
+    draft: SignDraft,
+    doc: pdfcraft_engine::DocId,
+    generation: u64,
+    source: std::sync::Arc<Vec<u8>>,
+    epoch: u64,
+}
+
+fn open_id_file(path: &str, password: &str, control: &sign::pkcs12::ImportControl) -> Result<DigitalId, String> {
+    let bytes = pdfcraft_platform::read::regular_file(std::path::Path::new(path), sign::pkcs12::MAX_FILE_BYTES, || {
+        control.check().map_err(std::io::Error::other)
+    })
+    .map_err(|e| format!("{path}: {e}"))?;
+    sign::pkcs12::open_with_control(&bytes, password, control).map_err(|e| match e {
+        sign::SignError::WrongPassword => "The password is incorrect.".to_string(),
+        e => e.to_string(),
+    })
+}
+
 /// A digital ID the app knows about (PDF: Digital ID files). The file stays where it is;
 /// its password is asked for at each signing.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -230,6 +262,13 @@ pub fn entry_for(path: &str, c: &Certificate) -> DigitalIdEntry {
 impl PdfCraftApp {
     /// Start signing: the rectangle (or field) is known; show Sign with a Digital ID.
     pub fn start_signing(&mut self, page: usize, rect: Option<[f64; 4]>, field: Option<String>, certify: Option<u8>) {
+        // A replacement Sign dialog is a new owner even when its dialog kind is unchanged.
+        if let Some(run) = &mut self.signature_run {
+            run.sign_retry = None;
+        }
+        if let Some(run) = &self.id_import {
+            run.control.cancel();
+        }
         self.refresh_os_key_store_ids();
         self.sign_draft = Some(SignDraft::new(page, rect, field, certify, self.digital_ids.len()));
         self.dialog = Some(crate::Dialog::Sign);
@@ -309,15 +348,95 @@ impl PdfCraftApp {
         Ok(self.add_digital_id(&path.to_string_lossy(), &cert))
     }
 
-    /// Configure New Digital ID ▸ Use a Digital ID from a file.
-    fn import_digital_id(&mut self) -> Result<usize, String> {
-        let Some(d) = self.sign_draft.as_ref().map(|d| d.new_id.clone()) else { return Err("nothing to import".into()) };
-        let bytes = std::fs::read(&d.file).map_err(|e| format!("{}: {e}", d.file))?;
-        let id = sign::pkcs12::open(&bytes, &d.file_password).map_err(|e| match e {
-            sign::SignError::WrongPassword => "The password is incorrect.".to_string(),
-            e => e.to_string(),
-        })?;
-        Ok(self.add_digital_id(&d.file, &id.certificate))
+    /// Import in a cancellable worker; the result belongs only to this dialog instance.
+    fn import_digital_id(&mut self) -> Result<(), String> {
+        if self.id_import.is_some() {
+            return Err("An identity import is already running.".into());
+        }
+        let d = self.sign_draft.as_ref().map(|d| d.new_id.clone()).ok_or("nothing to import")?;
+        let control = sign::pkcs12::ImportControl::default();
+        let worker_control = control.clone();
+        let result = std::sync::Arc::new(std::sync::Mutex::new(None));
+        let slot = result.clone();
+        let ctx = self.ctx.clone();
+        let task = move || {
+            let done = pdfcraft_engine::guard(|| open_id_file(&d.file, &d.file_password, &worker_control).map(|id| (d.file, id.certificate)))
+                .and_then(|done| done);
+            if let Ok(mut slot) = slot.lock() {
+                *slot = Some(done);
+            }
+            if let Some(ctx) = ctx {
+                ctx.request_repaint();
+            }
+        };
+        #[cfg(not(target_arch = "wasm32"))]
+        if self.run_inline {
+            task();
+        } else {
+            std::thread::Builder::new().name("pdfcraft-identity".into()).spawn(task).map_err(|e| e.to_string())?;
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            let _ = (task, result, control);
+            return Err("File-based identity import is available in native PdfCraft.".into());
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.id_import = Some(IdImport { epoch: self.dialog_epoch(), control, result });
+            Ok(())
+        }
+    }
+
+    pub(crate) fn poll_identity_import(&mut self) {
+        let epoch = self.dialog_epoch();
+        let Some(run) = &self.id_import else { return };
+        if run.epoch != epoch || self.sign_draft.is_none() || self.dialog != Some(crate::Dialog::Sign) {
+            run.control.cancel();
+        }
+        let done = match run.result.lock() {
+            Ok(mut slot) => slot.take(),
+            Err(_) => Some(Err("Identity worker state is unavailable.".into())),
+        };
+        let Some(done) = done else {
+            if let Some(ctx) = &self.ctx {
+                ctx.request_repaint_after(std::time::Duration::from_millis(50));
+            }
+            return;
+        };
+        let Some(run) = self.id_import.take() else { return };
+        if run.control.is_cancelled() || run.epoch != epoch {
+            return;
+        }
+        let selected = done.map(|(path, cert)| self.add_digital_id(&path, &cert));
+        if let Some(d) = &mut self.sign_draft {
+            match selected {
+                Ok(i) => {
+                    d.selected = Some(i);
+                    d.step = SignStep::Choose;
+                    d.error = None;
+                    d.new_id = NewIdDraft::default();
+                }
+                Err(error) => d.error = Some(error),
+            }
+        }
+    }
+
+    pub(crate) fn restore_sign_retry(&mut self, retry: Option<SignRetry>, error: &str) -> bool {
+        let Some(mut retry) = retry else { return false };
+        if self.dialog.is_some()
+            || self.dialog_epoch() != retry.epoch
+            || self.active_ids().map(|(_, doc)| doc) != Some(retry.doc)
+            || !self
+                .session
+                .get(retry.doc)
+                .is_some_and(|doc| doc.edit_generation() == retry.generation && std::sync::Arc::ptr_eq(&doc.bytes, &retry.source))
+        {
+            return false;
+        }
+        retry.draft.error = Some(error.to_string());
+        self.sign_draft = Some(retry.draft);
+        self.dialog = Some(crate::Dialog::Sign);
+        true
     }
 
     /// Sign as …: open the ID, sign, save the signed file (Save As), and show it.
@@ -330,17 +449,6 @@ impl PdfCraftApp {
         let Some((_, doc_id)) = self.active_ids() else { return Err("no document".into()) };
         let d = self.sign_draft.clone().ok_or("nothing to sign")?;
         let entry = d.selected.and_then(|i| self.digital_ids.get(i)).cloned().ok_or("Choose a digital ID.")?;
-        let id = if entry.path.starts_with("keychain:") {
-            keychain_id(&entry.path)?
-        } else if entry.path.starts_with("windows:") {
-            windows_id(&entry.path)?
-        } else {
-            let bytes = std::fs::read(&entry.path).map_err(|e| format!("{}: {e}", entry.path))?;
-            sign::pkcs12::open(&bytes, &d.password).map_err(|e| match e {
-                sign::SignError::WrongPassword => "The password is incorrect.".to_string(),
-                e => e.to_string(),
-            })?
-        };
         let some = |s: &str| (!s.trim().is_empty()).then(|| s.trim().to_string());
         let opts = SignOptions {
             field: d.field.clone(),
@@ -354,7 +462,7 @@ impl PdfCraftApp {
         };
         let cancellation = pdfcraft_engine::signature_workflow::SignatureCancellation::default();
         let authority = self.signature_authority(d.timestamp_server, d.timestamp_network, cancellation.clone())?;
-        // Signing saves, as in PDF: choose where (a cancelled save cancels signing). The
+        // Signing saves: choose where (a cancelled save cancels signing). The
         // document is signed once the user has chosen.
         let name = self.session.get(doc_id).map(|d| d.name.clone()).unwrap_or_default();
         let stem = name.trim_end_matches(".pdf").trim_end_matches(".PDF").to_string();
@@ -364,20 +472,38 @@ impl PdfCraftApp {
             if !app.commit_typing_in(doc_id) {
                 return Err(String::new());
             }
-            if let Some(authority) = authority {
-                let job = app.session.signature_job(doc_id).map_err(|e| e.to_string())?;
-                return app.spawn_signature_job(doc_id, path, cancellation, move || {
-                    job.sign(&id, opts, Some(&authority)).map(|r| (r, Vec::new())).map_err(|e| e.to_string())
-                });
+            let epoch = app.dialog_epoch();
+            let retry = if app.dialog.is_none() || app.dialog == Some(crate::Dialog::Sign) {
+                app.session.get(doc_id).map(|doc| SignRetry {
+                    draft: d.clone(),
+                    doc: doc_id,
+                    generation: doc.edit_generation(),
+                    source: doc.bytes.clone(),
+                    epoch: if app.dialog.is_some() { epoch.wrapping_add(1) } else { epoch },
+                })
+            } else {
+                None
+            };
+            let job = app.session.signature_job(doc_id).map_err(|e| e.to_string())?;
+            let worker_cancellation = cancellation.clone();
+            app.spawn_signature_job(doc_id, path, cancellation, move || {
+                let id = if entry.path.starts_with("keychain:") {
+                    keychain_id(&entry.path)?
+                } else if entry.path.starts_with("windows:") {
+                    windows_id(&entry.path)?
+                } else {
+                    open_id_file(&entry.path, &d.password, &worker_cancellation.identity_import_control())?
+                };
+                if worker_cancellation.is_cancelled() {
+                    return Err("Signature operation cancelled.".into());
+                }
+                job.sign(&id, opts, authority.as_ref().map(|a| a as &dyn sign::TimestampAuthority))
+                    .map(|r| (r, Vec::new()))
+                    .map_err(|e| e.to_string())
+            })?;
+            if let Some(run) = &mut app.signature_run {
+                run.sign_retry = retry;
             }
-            let signed = app.session.sign(doc_id, &id, opts).map_err(|e| e.to_string())?;
-            crate::editing::write_atomically(&path.to_string_lossy(), signed.as_slice()).map_err(|e| format!("Could not save: {e}"))?;
-            app.session.mark_signed(doc_id, signed, Some(path.to_string_lossy().into_owned())).map_err(|e| e.to_string())?;
-            if let Some(view) = app.views.iter_mut().find(|v| v.id == doc_id) {
-                view.invalidate_content();
-            }
-            app.right = Some(crate::RightPanel::Signatures);
-            app.notify_fmt("Signed and saved to {path}", &[("path", &path.display().to_string())]);
             Ok(())
         };
         match self.save_override.clone() {
@@ -469,6 +595,13 @@ impl PdfCraftApp {
 
 /// Draw the signing dialogs; returns `true` when the dialog should close.
 pub(crate) fn dialog(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> bool {
+    if let Some(run) = &app.id_import {
+        ui.label("Opening digital ID...");
+        if ui.button("Cancel operation").clicked() {
+            run.control.cancel();
+        }
+        return false;
+    }
     let Some(step) = app.sign_draft.as_ref().map(|d| d.step) else { return true };
     match step {
         SignStep::Choose => choose(ui, app, t),
@@ -639,15 +772,16 @@ fn configure(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> bool {
     });
     if go {
         let create = app.sign_draft.as_ref().is_some_and(|d| d.new_id.create);
-        let result = if create { app.create_digital_id() } else { app.import_digital_id() };
+        let result = if create { app.create_digital_id().map(Some) } else { app.import_digital_id().map(|()| None) };
         let Some(d) = app.sign_draft.as_mut() else { return true };
         match result {
-            Ok(i) => {
+            Ok(Some(i)) => {
                 d.selected = Some(i);
                 d.step = SignStep::Choose;
                 d.error = None;
                 d.new_id = NewIdDraft::default();
             }
+            Ok(None) => d.error = None,
             Err(e) => d.error = Some(e),
         }
     }
@@ -1479,6 +1613,99 @@ pub fn certificate_pem(c: &Certificate) -> String {
 mod tests {
     use super::*;
 
+    #[test]
+    fn signing_retry_does_not_replace_another_dialog_or_an_edited_document() {
+        const PDF: &[u8] = b"%PDF-1.7\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] >> endobj\ntrailer << /Root 1 0 R >>\n%%EOF";
+        for change in ["edit", "dialog", "document"] {
+            let mut app = PdfCraftApp::new();
+            app.open_bytes("source.pdf", None, PDF.to_vec()).unwrap();
+            app.start_signing(0, None, None, None);
+            app.dialog = None;
+            let epoch = app.dialog_epoch();
+            let (_, id) = app.active_ids().unwrap();
+            let doc = app.session.get(id).unwrap();
+            let retry =
+                SignRetry { draft: app.sign_draft.take().unwrap(), doc: id, generation: doc.edit_generation(), source: doc.bytes.clone(), epoch };
+            match change {
+                "edit" => assert!(app.apply_edit(pdfcraft_engine::Edit::RotatePages { pages: vec![0], degrees: 90 })),
+                "dialog" => app.dialog = Some(crate::Dialog::About),
+                _ => {
+                    app.open_bytes("other.pdf", None, PDF.to_vec()).unwrap();
+                }
+            }
+            let showing = app.dialog;
+            assert!(!app.restore_sign_retry(Some(retry), "The password is incorrect."));
+            assert!(app.sign_draft.is_none(), "stale retry after {change}");
+            assert_eq!(app.dialog, showing);
+        }
+    }
+
+    #[test]
+    fn cancelled_identity_import_does_not_register_the_result() {
+        let mut app = PdfCraftApp::new();
+        app.dialog = Some(crate::Dialog::Sign);
+        app.sign_draft = Some(SignDraft::new(0, None, None, None, 0));
+        let epoch = app.dialog_epoch();
+        let control = sign::pkcs12::ImportControl::default();
+        control.cancel();
+        app.id_import = Some(IdImport { epoch, control, result: std::sync::Arc::new(std::sync::Mutex::new(Some(Err("cancelled".into())))) });
+        app.poll_identity_import();
+        assert!(app.id_import.is_none());
+        assert!(app.digital_ids.is_empty());
+        assert_eq!(app.sign_draft.as_ref().unwrap().step, SignStep::Configure);
+    }
+
+    #[test]
+    fn closing_or_replacing_the_dialog_cancels_its_identity_worker() {
+        let mut app = PdfCraftApp::new();
+        app.dialog = Some(crate::Dialog::Sign);
+        app.sign_draft = Some(SignDraft::new(0, None, None, None, 0));
+        let epoch = app.dialog_epoch();
+        let control = sign::pkcs12::ImportControl::default();
+        app.id_import = Some(IdImport { epoch, control: control.clone(), result: std::sync::Arc::new(std::sync::Mutex::new(None)) });
+        app.dialog = None;
+        app.poll_identity_import();
+        assert!(control.is_cancelled());
+        assert!(app.digital_ids.is_empty());
+    }
+
+    #[test]
+    fn replacing_a_sign_dialog_cancels_the_old_identity_import() {
+        let mut app = PdfCraftApp::new();
+        app.start_signing(0, None, None, None);
+        let epoch = app.dialog_epoch();
+        let control = sign::pkcs12::ImportControl::default();
+        app.id_import =
+            Some(IdImport { epoch, control: control.clone(), result: std::sync::Arc::new(std::sync::Mutex::new(Some(Err("old import".into())))) });
+        app.start_signing(2, None, None, None);
+        assert!(control.is_cancelled());
+        app.poll_identity_import();
+        assert!(app.digital_ids.is_empty());
+        let draft = app.sign_draft.as_ref().unwrap();
+        assert_eq!(draft.page, 2);
+        assert!(draft.error.is_none());
+    }
+
+    #[test]
+    fn a_bounded_file_import_completes_on_a_later_poll() {
+        let dir = scratch();
+        let saved = create_in(&dir).unwrap();
+        let mut app = PdfCraftApp::new();
+        app.run_inline = true;
+        app.dialog = Some(crate::Dialog::Sign);
+        let mut draft = SignDraft::new(0, None, None, None, 0);
+        draft.new_id.create = false;
+        draft.new_id.file = saved.to_string_lossy().into_owned();
+        draft.new_id.file_password = "secret1".into();
+        app.sign_draft = Some(draft);
+        app.import_digital_id().unwrap();
+        assert!(app.digital_ids.is_empty());
+        app.poll_identity_import();
+        assert_eq!(app.digital_ids.len(), 1);
+        assert_eq!(app.sign_draft.as_ref().unwrap().step, SignStep::Choose);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
     /// A fresh folder per call: tests run in parallel.
     fn scratch() -> PathBuf {
         static N: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
@@ -1557,3 +1784,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
+
+#[cfg(test)]
+#[cfg(not(target_arch = "wasm32"))]
+mod visual_tests;

@@ -1,0 +1,13 @@
+[package]
+name = "pdfcraft-js-worker"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[target.'cfg(target_os = "wasi")'.dependencies]
+pdfcraft-js.workspace = true

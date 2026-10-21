@@ -74,6 +74,15 @@ family (`sign`, `sign_with_timestamp`, `timestamp_document`, `embed_ltv`).
 | `color_settings` | Preferences ▸ Color Management for the session: RGB, CMYK and gray working spaces (built-in profiles written in code, plus ICC profiles loaded with `Session::load_color_profile`), rendering intent, black point compensation and the untagged-colour policy (`output_intent`, `working_space`, `unmanaged`). `Session::set_color_settings` re-resolves every open document (its output intent can replace a working space) and restarts its renderer with a `pdfcraft_render::ColourProfiles`; Output Preview's press conversion (`Document::press_conversion`) and overprint compositing follow the same resolution |
 | `output_preview` | Output Preview's per-document session settings (simulation profile, simulate overprint / paper / black ink, Show filter, separations switched off, total area coverage warning) and `Document::render_output_preview`, over `pdfcraft_preflight::output_preview` |
 
+Script refusals stop the current field/action batch; ordinary syntax exceptions remain reported
+without disabling later scripts. Automatic AcroForm edits share a monotonic 3-second, 2,000-script
+budget, field action chains share 5 seconds, and XFA calculations share their event's deadline.
+An isolated resource refusal discards that script's effects and leaves later explicit calls usable.
+Action Wizard stops its remaining steps on a resource refusal. Retained document messages share
+4 MiB and 10,000 items until `Session::take_js_output`; admission checks borrowed strings and
+request payloads before copying and reports omitted output. These limits do not bound the entire
+document model, form parser or rendering memory.
+
 ## Not done here
 
 - **Rendering is still borrowed.** `pdfcraft-render` wraps `hayro` and inspects through `lopdf`
