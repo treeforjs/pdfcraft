@@ -153,7 +153,17 @@ secrets also live in the `release` environment:
 | `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET` | service principal for Azure Trusted Signing (instead of a `.pfx`) |
 | `AZURE_SIGNING_ENDPOINT`, `AZURE_SIGNING_ACCOUNT`, `AZURE_CERT_PROFILE` | Trusted Signing endpoint, account and certificate profile |
 
-`GITHUB_TOKEN` creates the draft; only the final job gets `contents: write`.
+Only the final job gets `contents: write` for its `GITHUB_TOKEN`. GitHub also requires workflow
+write authorization when the target commit changes `.github/workflows/` relative to the default
+branch; `GITHUB_TOKEN` cannot receive that authorization. In that case draft creation or updates
+can fail with HTTP 403 or 404 even after all packages and signatures pass. See
+[GitHub's release API permissions](https://docs.github.com/en/rest/releases/releases?apiVersion=latest#create-a-release).
+
+The final job saves `SHA256SUMS.txt` and its verified Ed25519 signature as a separate
+`signed-checksums-pdfcraft-<version>-<source SHA>` workflow artifact before attempting the draft.
+The per-platform package artifacts remain available for review too. After an approved merge puts
+the reviewed workflow changes on the default branch, rerun the failed draft job or the release
+workflow for the reviewed source. Keep the release target equal to the package source commit.
 
 ## Checks
 

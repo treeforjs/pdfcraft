@@ -308,6 +308,7 @@ jobs:
           sha256sum -- * >SHA256SUMS.txt
           sha256sum --check --strict SHA256SUMS.txt
       - name: Sign and verify the update checksums
+        id: sign_checksums
         working-directory: artifacts
         env:
           UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
@@ -341,6 +342,16 @@ jobs:
           openssl pkeyutl -verify -pubin -keyform DER -inkey "$key_dir/public.der" -rawin -in SHA256SUMS.txt -sigfile "$key_dir/signature"
           base64 -w0 "$key_dir/signature" >SHA256SUMS.txt.sig
           test -s SHA256SUMS.txt.sig
+      - name: Preserve verified update checksums
+        if: always() && steps.sign_checksums.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: signed-checksums-pdfcraft-${{ needs.version.outputs.version }}-${{ github.sha }}
+          path: |
+            artifacts/SHA256SUMS.txt
+            artifacts/SHA256SUMS.txt.sig
+          if-no-files-found: error
+          retention-days: 14
       - name: Create or update the draft release
         working-directory: artifacts
         run: |

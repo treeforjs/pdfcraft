@@ -73,6 +73,7 @@ const XLINK: &str = "http://www.w3.org/1999/xlink";
 #[test]
 fn exporting_pages_to_svg_through_tools() {
     let (mut app, doc, dir) = setup("pages");
+    let root = dir.canonicalize().unwrap();
     let out = call(&mut app, "doc_export_svg", json!({"doc":doc,"folder":"svg"}));
     assert_eq!(out["count"], 3, "{out}");
     let files = out["files"].as_array().unwrap();
@@ -82,9 +83,11 @@ fn exporting_pages_to_svg_through_tools() {
         .map(|(i, f)| {
             let path = f["path"].as_str().unwrap();
             assert!(path.ends_with(&format!("art_page_{}.svg", i + 1)), "{path}");
-            assert!(std::path::Path::new(path).starts_with(&dir), "inside the root: {path}");
+            let actual = std::path::Path::new(path).canonicalize().expect("the exported SVG exists");
+            assert!(actual.starts_with(&root), "inside the root: {path}");
+            assert_eq!(actual, root.join("svg").join(format!("art_page_{}.svg", i + 1)));
             assert_eq!(f["truncated"], false);
-            std::fs::read_to_string(path).unwrap()
+            std::fs::read_to_string(actual).unwrap()
         })
         .collect();
 
