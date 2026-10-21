@@ -2,9 +2,9 @@
 
 `cargo xtask fidelity` measures how PdfCraft renders pages and extracts text on a set of synthetic
 PDFs, compared with Poppler. It is the first measured answer to ROADMAP gap 3, "measure fidelity".
-The reference is Poppler, not Acrobat. Acrobat comparisons still need the clean-room observation
-process (`plan/acrobat/`). Treat the numbers as "how far from a mature independent renderer", not
-as "how far from Acrobat".
+The reference is Poppler, not PDF. PDF comparisons still need the clean-room observation
+process (`plan/reference/`). Treat the numbers as "how far from a mature independent renderer", not
+as "how far from PDF".
 
 ## What it does
 
@@ -131,7 +131,7 @@ after that fix.
    the rest of the gap is Poppler splitting rotated, mirrored and vertical runs.
 6. **No stroke adjustment for thin lines** (`vector-art`, minor). Hairlines and lines up to 1 px
    come out as two grey rows instead of one solid pixel row, so they look lighter than in Poppler
-   or Acrobat.
+   or PDF.
 
 PdfCraft does better than Poppler on Type 3 text. Poppler loses word boundaries and order (F1
 against truth: Poppler 0.615, PdfCraft 1.000). PdfCraft also extracts rotated runs and
@@ -142,7 +142,7 @@ the anti-aliasing and colour effects listed above.
 
 ## Gaps in the harness
 
-- Poppler is not Acrobat, so where both share a gap (knockout, for instance) only the spec reveals
+- Poppler is not PDF, so where both share a gap (knockout, for instance) only the spec reveals
   it.
 - There are no JPEG, JBIG2, CCITT or JPX images and no CJK or vertical (Identity-V) text yet.
   Optional content, overprint and form behaviour (calculation, formatting) are not covered either.

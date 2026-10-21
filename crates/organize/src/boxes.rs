@@ -1,8 +1,8 @@
-//! Page boxes (ISO 32000-2 §14.11.2): Acrobat's Set Page Boxes and Crop, execution plan M4.4.
+//! Page boxes (ISO 32000-2 §14.11.2): the viewer's Set Page Boxes and Crop, execution plan M4.4.
 //!
 //! The crop, bleed, trim and art boxes default to their "parent" box (crop → media; the others
 //! → crop) and are clipped to the media box. Margins are measured inward from the media box in
-//! default user space (unrotated), as Acrobat's dialog does.
+//! default user space (unrotated), as the viewer's dialog does.
 
 use pdfcraft_cos::{Document, Object};
 

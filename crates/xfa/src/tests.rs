@@ -178,7 +178,7 @@ fn rendering_into_the_pdf_replaces_the_placeholder_page_and_adds_fields() {
     let acro = doc.resolve(catalog.get(b"AcroForm").unwrap());
     let acro = acro.as_dict().unwrap();
     assert!(acro.contains(b"XFA"), "the XFA packets stay");
-    assert_eq!(catalog.get(b"NeedsRendering"), Some(&Object::Bool(true)), "still a dynamic form for Adobe's viewers");
+    assert_eq!(catalog.get(b"NeedsRendering"), Some(&Object::Bool(true)), "still a dynamic form for other XFA viewers");
     let fields = doc.resolve(acro.get(b"Fields").unwrap()).as_array().unwrap().len();
     assert_eq!(fields, 11, "top-level fields (the radio group counts once)");
     let dr = doc.resolve(acro.get(b"DR").unwrap());

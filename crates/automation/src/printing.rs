@@ -1,4 +1,4 @@
-//! Printing tools: list printers, and print (or save the print-ready PDF) with Acrobat's Print
+//! Printing tools: list printers, and print (or save the print-ready PDF) with the viewer's Print
 //! dialog options.
 
 use pdfcraft_engine::print::{self, Binding, BookletSubset, Content, Layout, Orientation, PAPERS, PageOrder, SizeMode, Subset, spool};

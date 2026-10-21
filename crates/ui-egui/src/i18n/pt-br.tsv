@@ -4,8 +4,8 @@
 #
 # Clean-room: every entry was written from the plain meaning of the English label using ordinary
 # Brazilian Portuguese computing vocabulary. No proprietary localisation resource, string table or
-# product UI (Acrobat's included) was consulted or copied; add entries the same way.
-# Product and technology names (PdfCraft, PDF, Acrobat JavaScript ...) are not translated;
+# product UI was consulted or copied; add entries the same way.
+# Product and technology names (PdfCraft, PDF, PDF JavaScript ...) are not translated;
 # the trailing "…" of dialog commands is kept.
 
 	Menu	Menu
@@ -64,7 +64,7 @@
 	Fit to width	Ajustar à largura
 	Display theme	Tema de exibição
 	Side panels	Painéis laterais
-	Enable Acrobat JavaScript	Ativar o Acrobat JavaScript
+	Enable PDF JavaScript	Ativar o PDF JavaScript
 	OK	OK
 	Auto	Automático
 	Choose a PNG or JPEG image (up to 4 MiB). Transparency is preserved.	Escolha uma imagem PNG ou JPEG (até 4 MiB). A transparência é preservada.
@@ -117,7 +117,6 @@
 	Apply PDF standards	Aplicar normas PDF
 	Add search index	Adicionar índice de pesquisa
 	Use JavaScript	Usar JavaScript
-	AI assistant	Assistente de IA
 	Export to	Exportar para
 	Fill	Preencher
 	Modify page	Modificar página
@@ -850,7 +849,7 @@
 	Document JavaScripts	JavaScripts do documento
 	Script Name:	Nome do script:
 	This document has no document-level scripts.	Este documento não possui scripts em nível de documento.
-	Scripts run in a sandbox without file or network access. With JavaScript off, Acrobat's standard format, validate and calculate functions still work.	Os scripts são executados em um sandbox sem acesso a arquivos ou rede. Com o JavaScript desativado, as funções padrão de formatação, validação e cálculo do Acrobat ainda funcionam.
+	Scripts run in a sandbox without file or network access. With JavaScript off, the viewer's standard format, validate and calculate functions still work.	Os scripts são executados em um sandbox sem acesso a arquivos ou rede. Com o JavaScript desativado, as funções padrão de formatação, validação e cálculo do PDF ainda funcionam.
 	No form fields were detected	Nenhum campo de formulário foi detectado
 	Detected 1 form field	1 campo de formulário detectado
 	Detected {n} form fields	{n} campos de formulário detectados
@@ -890,7 +889,6 @@
 	Accessibility	Acessibilidade
 	Standards	Padrões
 	Index	Índice
-	Bring your own model (off by default)	Traga seu próprio modelo (desativado por padrão)
 	Single file	Arquivo único
 	Multiple files	Vários arquivos
 	Images	Imagens
@@ -991,7 +989,6 @@
 	Available	Disponível
 	Planned · {m}	Planejado · {m}
 	Planned for milestone {m} — open to see what it will include	Planejado para o marco {m} — abra para ver o que incluirá
-	Optional: needs an AI provider you configure	Opcional: necessita de um provedor de IA configurado por você
 	Coming in milestone {m}. Items marked Ready work today.	Previsto para o marco {m}. Itens marcados como Pronto já funcionam hoje.
 	1 mark	1 marca
 	{n} marks	{n} marcas
@@ -1236,10 +1233,10 @@
 	Weak	Fraca
 	Advanced Options {chevron}	Opções avançadas {chevron}
 	Compatibility	Compatibilidade
-	Acrobat X and later (256-bit AES)	Acrobat X e posterior (AES de 256 bits)
-	Acrobat 7.0 and later (128-bit AES)	Acrobat 7.0 e posterior (AES de 128 bits)
-	Acrobat 5.0 and later (128-bit RC4)	Acrobat 5.0 e posterior (RC4 de 128 bits)
-	Acrobat 3.0 and later (40-bit RC4)	Acrobat 3.0 e posterior (RC4 de 40 bits)
+	AES-256	AES-256
+	AES-128	AES-128
+	RC4-128	RC4-128
+	RC4-40	RC4-40
 	Encrypt	Criptografar
 	All document contents	Todo o conteúdo do documento
 	All document contents except metadata	Todo o conteúdo do documento, exceto metadados
@@ -1520,7 +1517,6 @@
 	Downloading attachments on the web arrives with M3.10 ({n} bytes ready)	O download de anexos na Web chegará no M3.10 ({n} bytes prontos)
 	`{command}` {when}	`{command}` {when}
 	ships in milestone {m}	será lançado no marco {m}
-	needs an AI provider (off by default)	requer um provedor de IA (desativado por padrão)
 	is available	está disponível
 	is not available yet	ainda não está disponível
 	{label} failed: {e}	{label} falhou: {e}
@@ -1584,7 +1580,7 @@
 	At least one signature has problems.	Pelo menos uma assinatura apresenta problemas.
 	This document is secured. Some changes are restricted by its security settings.	Este documento está protegido. Algumas alterações são restritas por suas configurações de segurança.
 	This is a dynamic XFA form, which PdfCraft can't display yet. What you see is the file's placeholder page.	Este é um formulário XFA dinâmico, que o PdfCraft ainda não pode exibir. O que você vê é a página de espaço reservado do arquivo.
-	This form also contains XFA data, which PdfCraft doesn't read yet. You can fill its fields, but Acrobat may show the XFA values instead.	Este formulário também contém dados XFA, que o PdfCraft ainda não lê. Você pode preencher seus campos, mas o Acrobat pode exibir os valores XFA em vez disso.
+	This form also contains XFA data, which PdfCraft doesn't read yet. You can fill its fields, but PDF may show the XFA values instead.	Este formulário também contém dados XFA, que o PdfCraft ainda não lê. Você pode preencher seus campos, mas o PDF pode exibir os valores XFA em vez disso.
 	This document contains {n} interactive form fields.	Este documento contém {n} campos de formulário interativos.
 	This file was damaged and has been repaired. Saving keeps the repaired version.	Este arquivo estava danificado e foi reparado. Salvar manterá a versão reparada.
 	Dismiss	Dispensar
@@ -1670,7 +1666,7 @@
 	Prepare a form	Preparar um formulário
 	Digitally sign	Assinar digitalmente
 	Files you open in PdfCraft appear here. Drop a PDF anywhere to open it.	Os arquivos abertos no PdfCraft aparecem aqui. Solte um PDF em qualquer lugar para abri-lo.
-	PdfCraft works offline. No telemetry, no account, and no cloud processing unless you add a provider.	O PdfCraft funciona offline. Sem telemetria, sem conta e sem processamento em nuvem, a menos que você adicione um provedor.
+	PdfCraft works offline.	O PdfCraft funciona offline.
 	Measure distance	Medir distância
 	Measure perimeter	Medir perímetro
 	Measure area	Medir área
@@ -1894,7 +1890,7 @@
 	Open email app	Abrir aplicativo de e-mail
 	Open link	Abrir link
 	Open this web page?	Abrir esta página da Web?
-	Scripts run in a sandbox without file or network access. A script that asks to open a web page needs your permission first. With JavaScript off, Acrobat's standard format, validate and calculate functions still work.	Os scripts são executados em uma sandbox sem acesso a arquivos ou à rede. Um script que solicitar a abertura de uma página da Web precisará da sua permissão primeiro. Com o JavaScript desativado, as funções padrão do Acrobat de formatação, validação e cálculo ainda funcionam.
+	Scripts run in a sandbox without file or network access. A script that asks to open a web page needs your permission first. With JavaScript off, the viewer's standard format, validate and calculate functions still work.	Os scripts são executados em uma sandbox sem acesso a arquivos ou à rede. Um script que solicitar a abertura de uma página da Web precisará da sua permissão primeiro. Com o JavaScript desativado, as funções padrão do PDF de formatação, validação e cálculo ainda funcionam.
 	Sign yourself	Assinar você mesmo
 	Used when opening PDFs. An explicit launch or control mode takes precedence for the session.	Usado ao abrir PDFs. Um modo explícito de inicialização ou controle terá precedência para a sessão.
 	Write this email?	Redigir este e-mail?
@@ -2026,7 +2022,6 @@
 	Table	Tabela
 	{n} contributors · {c} commits	{n} contribuidores · {c} commits
 	No contributor data was built into this copy.	Nenhum dado de contribuidores foi embutido nesta cópia.
-	No model credits were built into this copy.	Nenhum crédito de modelos foi embutido nesta cópia.
 	@{login}: {prs} PRs, {commits} commits, +{added} / −{deleted} lines (Δ {delta}), +{bin_added} / −{bin_deleted} binary assets, {first} – {last}	@{login}: {prs} PRs, {commits} commits, +{added} / −{deleted} linhas (Δ {delta}), +{bin_added} / −{bin_deleted} recursos binários, {first} – {last}
 signature pad	Type	Digitar
 certificate	Subject	Titular
@@ -2041,7 +2036,6 @@ action wizard	Start	Iniciar
 	Scroll tabs right	Rolar as abas para a direita
 
 # Labels added on main while this catalog was being completed (merged 2026-10-09)
-	% of all commits	% de todos os commits
 	+Bin	+Bin
 	+LOC	+LOC
 	A button	Um botão
@@ -2079,7 +2073,6 @@ action wizard	Start	Iniciar
 	Last	Último
 	Last commit	Último commit
 	Line delta	Saldo de linhas
-	Lines +/−	Linhas +/−
 	Lines added	Linhas adicionadas
 	Lines deleted	Linhas removidas
 	Mark differences	Marcar as diferenças
@@ -2088,7 +2081,6 @@ action wizard	Start	Iniciar
 	Match field sizes	Igualar o tamanho dos campos
 	Merged PRs	PRs mesclados
 	Model	Modelo
-	Models	Modelos
 	Name (A–Z)	Nome (A–Z)
 	No PDFs found in {folder}	Nenhum PDF encontrado em {folder}
 	None of those files can be made into a PDF; use PDFs, images or .txt files	Nenhum desses arquivos pode virar PDF; use PDFs, imagens ou arquivos .txt

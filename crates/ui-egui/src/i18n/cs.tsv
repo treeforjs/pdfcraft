@@ -3,8 +3,8 @@
 # Plural forms (see `plural_cs` in i18n/mod.rs): one (1) | few (2–4) | other (0, 5+).
 #
 # Clean-room: written from the meaning of the English labels, following common Czech desktop
-# conventions (menus are nouns, commands are infinitives); not taken from Adobe Acrobat's Czech
-# localisation or any other product's translation. Terminology: annotations are "komentáře",
+# conventions (menus are nouns, commands are infinitives).
+# Terminology: annotations are "komentáře",
 # pages are "stránky", form fields are "formulářová pole". Product and format names (PdfCraft,
 # PDF, Word, HTML…) stay in Latin letters; the trailing "…" of dialog commands is kept.
 # Further terms: redact "začernit", flatten "zploštit", combine "sloučit", text box (comment)
@@ -28,7 +28,7 @@
 	Interface language	Jazyk rozhraní
 	Identity	Identita
 	Name on new comments	Jméno autora nových komentářů
-	Enable Acrobat JavaScript	Povolit Acrobat JavaScript
+	Enable PDF JavaScript	Povolit PDF JavaScript
 	OK	OK
 	Open…	Otevřít…
 	Open Recent	Otevřít nedávné soubory
@@ -222,8 +222,8 @@
 	Recent	Nedávné
 	Files you open in PdfCraft appear here. Drop a PDF anywhere to open it.	Zde se zobrazí soubory, které otevřete v aplikaci PdfCraft. PDF otevřete přetažením kamkoli do okna.
 	Privacy	Soukromí
-	PdfCraft works offline. No telemetry, no account, and no cloud processing unless you add a provider.	PdfCraft funguje offline. Žádná telemetrie, žádný účet a žádné zpracování v cloudu, dokud nepřidáte poskytovatele.
-	Scripts run in a sandbox without file or network access. With JavaScript off, Acrobat's standard format, validate and calculate functions still work.	Skripty běží v izolovaném prostředí bez přístupu k souborům a síti. I s vypnutým JavaScriptem fungují standardní funkce Acrobatu pro formátování, ověřování a výpočty.
+	PdfCraft works offline.	PdfCraft funguje offline.
+	Scripts run in a sandbox without file or network access. With JavaScript off, the viewer's standard format, validate and calculate functions still work.	Skripty běží v izolovaném prostředí bez přístupu k souborům a síti. I s vypnutým JavaScriptem fungují standardní funkce prohlížeče pro formátování, ověřování a výpočty.
 	Back to all tools	Zpět na všechny nástroje
 	Close panel	Zavřít panel
 	View less	Zobrazit méně
@@ -487,8 +487,6 @@
 	Console	Konzola
 	Document JavaScripts	JavaScripty dokumentu
 	Document actions	Akce dokumentu
-	AI assistant	AI asistent
-	Bring your own model (off by default)	Vlastní model (ve výchozím stavu vypnuto)
 	Summarize	Shrnout
 	Ask about this document	Zeptat se na tento dokument
 	Translate	Přeložit
@@ -496,7 +494,6 @@
 	Planned	Plánováno
 	Planned for milestone	Plánováno pro milník
 	open to see what it will include	otevřete a podívejte se, co bude obsahovat
-	Optional: needs an AI provider you configure	Volitelné: vyžaduje poskytovatele AI, kterého nastavíte
 	Coming in milestone	Přijde v milníku
 	Items marked Ready work today.	Položky označené „Připraveno“ fungují už dnes.
 	Preview	Náhled
@@ -1365,10 +1362,10 @@
 	Weak	Slabé
 	Advanced Options {chevron}	Rozšířené možnosti {chevron}
 	Compatibility	Kompatibilita
-	Acrobat X and later (256-bit AES)	Acrobat X a novější (256bitové AES)
-	Acrobat 7.0 and later (128-bit AES)	Acrobat 7.0 a novější (128bitové AES)
-	Acrobat 5.0 and later (128-bit RC4)	Acrobat 5.0 a novější (128bitové RC4)
-	Acrobat 3.0 and later (40-bit RC4)	Acrobat 3.0 a novější (40bitové RC4)
+	AES-256	AES-256
+	AES-128	AES-128
+	RC4-128	RC4-128
+	RC4-40	RC4-40
 	Encrypt	Šifrovat
 	All document contents	Veškerý obsah dokumentu
 	All document contents except metadata	Veškerý obsah dokumentu kromě metadat
@@ -1648,7 +1645,6 @@
 	Downloading attachments on the web arrives with M3.10 ({n} bytes ready)	Stahování příloh přijde na web s M3.10 (připraveno bajtů: {n})
 	`{command}` {when}	`{command}` {when}
 	ships in milestone {m}	přijde v milníku {m}
-	needs an AI provider (off by default)	vyžaduje poskytovatele AI (ve výchozím stavu vypnuto)
 	is available	je k dispozici
 	is not available yet	zatím není k dispozici
 	{label} failed: {e}	{label} selhalo: {e}
@@ -1712,7 +1708,7 @@
 	At least one signature has problems.	Nejméně jeden podpis má problémy.
 	This document is secured. Some changes are restricted by its security settings.	Tento dokument je zabezpečený. Některé změny jsou omezeny jeho nastavením zabezpečení.
 	This is a dynamic XFA form, which PdfCraft can't display yet. What you see is the file's placeholder page.	Toto je dynamický formulář XFA, který PdfCraft zatím neumí zobrazit. Vidíte zástupnou stránku souboru.
-	This form also contains XFA data, which PdfCraft doesn't read yet. You can fill its fields, but Acrobat may show the XFA values instead.	Tento formulář obsahuje i data XFA, která PdfCraft zatím nečte. Pole můžete vyplnit, ale Acrobat může místo nich zobrazit hodnoty XFA.
+	This form also contains XFA data, which PdfCraft doesn't read yet. You can fill its fields, but PDF may show the XFA values instead.	Tento formulář obsahuje i data XFA, která PdfCraft zatím nečte. Pole můžete vyplnit, ale PDF může místo nich zobrazit hodnoty XFA.
 	This document contains {n} interactive form fields.	Tento dokument obsahuje interaktivní formulářová pole (počet: {n}).
 	This file was damaged and has been repaired. Saving keeps the repaired version.	Tento soubor byl poškozený a byl opraven. Uložením se zachová opravená verze.
 	Dismiss	Zavřít
@@ -1954,7 +1950,7 @@
 	Open email app	Otevřít e-mailovou aplikaci
 	Open link	Otevřít odkaz
 	Open this web page?	Otevřít tuto webovou stránku?
-	Scripts run in a sandbox without file or network access. A script that asks to open a web page needs your permission first. With JavaScript off, Acrobat's standard format, validate and calculate functions still work.	Skripty běží v izolovaném prostředí bez přístupu k souborům a síti. Skript, který chce otevřít webovou stránku, k tomu nejprve potřebuje vaše svolení. I s vypnutým JavaScriptem fungují standardní funkce Acrobatu pro formátování, ověřování a výpočty.
+	Scripts run in a sandbox without file or network access. A script that asks to open a web page needs your permission first. With JavaScript off, the viewer's standard format, validate and calculate functions still work.	Skripty běží v izolovaném prostředí bez přístupu k souborům a síti. Skript, který chce otevřít webovou stránku, k tomu nejprve potřebuje vaše svolení. I s vypnutým JavaScriptem fungují standardní funkce prohlížeče pro formátování, ověřování a výpočty.
 	Sign yourself	Podepsat sám
 	Used when opening PDFs. An explicit launch or control mode takes precedence for the session.	Používá se při otevírání PDF. Výslovně zvolený režim spuštění nebo řízení má pro danou relaci přednost.
 	Write this email?	Napsat tento e-mail?
@@ -2002,12 +1998,9 @@
 	Last commit	Poslední commit
 	Last	Poslední
 	No contributor data was built into this copy.	Do této kopie nebyla zabudována žádná data o přispěvatelích.
-	No model credits were built into this copy.	Do této kopie nebyly zabudovány žádné údaje o autorech modelů.
 	{n} contributors · {c} commits	Přispěvatelé: {n} · commity: {c}
 	Company	Společnost
 	Model	Model
-	% of all commits	% všech commitů
-	Lines +/−	Řádky +/−
 	@{login}: {prs} PRs, {commits} commits, +{added} / −{deleted} lines (Δ {delta}), +{bin_added} / −{bin_deleted} binary assets, {first} – {last}	@{login}: PR: {prs}, commity: {commits}, řádky +{added} / −{deleted} (Δ {delta}), binární soubory +{bin_added} / −{bin_deleted}, {first} – {last}
 	Set layer visibility	Nastavit viditelnost vrstvy
 	Created a PDF from {n} files	PDF vytvořeno ze souborů (počet: {n})
@@ -2093,7 +2086,6 @@
 	Pinned {folder} to Home	{folder} připnuta na úvodní stránku
 	About	O aplikaci
 	Contributors	Přispěvatelé
-	Models	Modely
 	Only continue if you trust this document. An address can carry information from the document, such as what you typed into its form.	Pokračujte, jen pokud tomuto dokumentu důvěřujete. Adresa může přenášet informace z dokumentu, například to, co jste zadali do jeho formuláře.
 	Print single-sided. Keep the sheets in order, cut at the marks, then stack the piles left to right, top to bottom.	Tiskněte jednostranně. Udržujte listy v pořadí, rozřežte je u značek a pak stohy skládejte zleva doprava a shora dolů.
 	Unlocked {n} of {m} files	Odemčeno souborů: {n} z {m}

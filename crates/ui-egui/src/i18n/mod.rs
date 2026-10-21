@@ -1112,6 +1112,11 @@ mod tests {
         }
         // Product, format and technical names, templates without words, and words spelt the same in Czech.
         const KEEP_AS_IS: &[&str] = &[
+            // Algorithm identifiers are invariant across interface languages.
+            "AES-256",
+            "AES-128",
+            "RC4-128",
+            "RC4-40",
             "OK",
             "PDF/A…",
             "Microsoft Word (.docx)",
@@ -1229,7 +1234,7 @@ mod tests {
     #[test]
     fn simplified_chinese_covers_about_credit_labels() {
         let zh = Lang::from_code("zh-hans").expect("zh-hans registered");
-        for label in ["About", "Contributors", "Models"].into_iter().chain(crate::credits::MODEL_COLUMNS) {
+        for label in ["About", "Contributors"] {
             assert!(has(zh, label), "missing About label: {label}");
         }
         for mode in crate::credits::NameMode::ALL {
@@ -1984,6 +1989,11 @@ mod tests {
         let (entries, errors) = parse_entries(uk.0.source, uk.0.plural_forms());
         assert!(errors.is_empty(), "{errors:?}");
         let keep = [
+            // Algorithm identifiers are invariant across interface languages.
+            "AES-256",
+            "AES-128",
+            "RC4-128",
+            "RC4-40",
             "OK",
             "PDF/A…",
             "Microsoft Word (.docx)",

@@ -1,4 +1,4 @@
-//! The PDF Optimizer (execution plan M11.1; Acrobat: Reduce File Size and Optimize PDF ▸
+//! The PDF Optimizer (execution plan M11.1; PDF: Reduce File Size and Optimize PDF ▸
 //! Advanced optimization).
 //!
 //! - **Images:** each image's effective resolution is measured where pages draw it (the
@@ -79,7 +79,7 @@ pub enum Compression {
     Retain,
 }
 
-/// Acrobat's JPEG quality steps.
+/// The viewer's JPEG quality steps.
 pub const QUALITIES: [(&str, u8); 5] = [("Minimum", 25), ("Low", 45), ("Medium", 60), ("High", 80), ("Maximum", 95)];
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -159,7 +159,7 @@ impl Settings {
 }
 
 impl Default for Settings {
-    /// Acrobat's Reduce File Size choices.
+    /// The viewer's Reduce File Size choices.
     fn default() -> Self {
         Self {
             color: ImageSettings::REDUCE,
@@ -230,7 +230,7 @@ fn uses_lzw(doc: &Document, d: &pdfcraft_cos::Dict) -> bool {
 /// Clean Up: every LZW stream that decodes completely ([`Stream::decoded_complete`]: strict,
 /// end-of-data code present, direct filter description, no external data) is replaced by a
 /// Flate stream of the same decoded bytes; any other filters of the chain and their
-/// parameters go with it. Acrobat documents this option as converting LZW streams regardless
+/// parameters go with it. PDF documents this option as converting LZW streams regardless
 /// of size. A stream that can't be decoded that way, or a chain with an image codec or
 /// `/Crypt`, is left exactly as it was and counted as skipped.
 fn lzw_to_flate(doc: &mut Document, report: &mut Report) {

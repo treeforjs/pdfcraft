@@ -1,6 +1,6 @@
 # PdfCraft parity inventory — 2026-10-12
 
-Scope: the offline Acrobat Pro workflows in the committed parity manifest. Adobe cloud services are excluded. This inventory records implementation labels, not proven equivalence.
+Scope: the offline PDF workflows in the committed parity manifest. External hosted services are excluded. This inventory records implementation labels, not proven equivalence.
 
 The starting point has **830 entries: 420 shipped, 73 partial, 314 planned, and 23 not applicable**. Of the 807 in-scope entries, 387 remain partial or planned. 141 shipped entries cite exactly one test; 96 have no automation-tool link. Missing links require investigation rather than proving the feature is inaccessible.
 
@@ -32,12 +32,12 @@ The starting point has **830 entries: 420 shipped, 73 partial, 314 planned, and 
 5. **Forms and advanced documents:** wider JavaScript object model, XFA fidelity, comparison, layers/actions and structure preservation.
 6. **Desktop completeness:** keyboard-only operation, screen-reader and locale audits, reliable web persistence, native printing and installers across supported platforms, measured latency/memory budgets.
 
-Each checkpoint needs engine and headless automation, real controls where applicable, error/no-op/history tests, actual persisted output, and an external oracle where one exists. One passing synthetic fixture is not proof of general PDF or Acrobat conformance.
+Each checkpoint needs engine and headless automation, real controls where applicable, error/no-op/history tests, actual persisted output, and an external oracle where one exists. One passing synthetic fixture is not proof of general PDF or PDF conformance.
 
 ## Current evidence boundaries
 
 - Rendering still uses hayro; parser/rendering/fidelity labels must not imply an independent completed renderer.
-- No systematic Acrobat visual/behavioral comparison has been performed in this environment. Development uses public specifications and contributor-original synthetic PDFs; no Adobe execution, code, fonts or assets are used.
+- No systematic PDF visual/behavioral comparison has been performed in this environment. Development uses public specifications and contributor-original synthetic PDFs; no proprietary software execution, code, fonts or assets are used.
 - The 2026-10-11 installed-app matrix covered Ubuntu 24.04 and 26.04, X11 and Wayland. It did not validate physical GPU drivers or Windows execution. New source needs fresh installed-app acceptance.
 - Optional craft-fonts inputs are absent from the default local build. Tests that conditionally skip without those inputs do not establish multilingual font coverage.
 - Existing text remains partial until arbitrary source encodings, transforms, layouts, decoration/structure preservation, and comprehensive Unicode editing are supported and independently checked.

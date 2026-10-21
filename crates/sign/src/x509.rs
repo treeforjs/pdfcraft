@@ -361,7 +361,7 @@ impl Certificate {
         self.not_before <= t && t <= self.not_after
     }
 
-    /// The display name Acrobat uses: the common name, else the organization, else the DN.
+    /// The display name PDF uses: the common name, else the organization, else the DN.
     pub fn display_name(&self) -> String {
         self.subject.common_name().or(self.subject.organization()).map(str::to_string).unwrap_or_else(|| self.subject.display())
     }
@@ -375,7 +375,7 @@ impl Certificate {
         self.serial.iter().map(|b| format!("{b:02X}")).collect()
     }
 
-    /// A self-signed certificate for `key`: what Acrobat's "Create a new digital ID ▸ save to
+    /// A self-signed certificate for `key`: what the viewer's "Create a new digital ID ▸ save to
     /// file" makes. Valid from `from` for `years`; usable for signing (digital signature and
     /// non-repudiation).
     pub fn self_signed(name: &Name, key: &PrivateKey, from: Time, years: u32, serial: &[u8]) -> Result<Certificate, SignError> {
@@ -396,7 +396,7 @@ impl Certificate {
         let extensions = der::seq(&[
             &ext("2.5.29.15", true, &key_usage),
             &ext("2.5.29.14", false, &der::octets(&ski)),
-            // extKeyUsage: emailProtection and Adobe's document signing (1.2.840.113583.1.1.5).
+            // extKeyUsage: emailProtection and the document-signing extension (1.2.840.113583.1.1.5).
             &ext("2.5.29.37", false, &der::seq(&[&der::oid("1.3.6.1.5.5.7.3.4"), &der::oid("1.2.840.113583.1.1.5")])),
         ]);
         let tbs = der::seq(&[
@@ -465,7 +465,7 @@ pub fn build_chain_noted<'a>(leaf: &'a Certificate, pool: &'a [Certificate], at:
 }
 
 /// Certificates from a file: DER, or PEM with one or more `CERTIFICATE` blocks (`.cer`, `.crt`,
-/// `.pem`, Acrobat's `.fdf`-free exports).
+/// `.pem`, the viewer's `.fdf`-free exports).
 pub fn load_certificates(bytes: &[u8]) -> Result<Vec<Certificate>, SignError> {
     if bytes.first() == Some(&0x30) {
         return Ok(vec![Certificate::parse(bytes)?]);

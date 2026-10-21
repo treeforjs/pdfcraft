@@ -1,10 +1,10 @@
 //! Comment and form data exchange (execution plan M5.6, M6.7). Layer L4.
 //!
-//! - **XFDF** (ISO 19444-1, Acrobat's "Export all to data file" / "Import comments", and form
+//! - **XFDF** (ISO 19444-1, the viewer's "Export all to data file" / "Import comments", and form
 //!   data): comments with their geometry, colours, flags, authors, dates, replies, pop-ups,
 //!   ink, quadrilaterals and line ends; field values, nested by name.
 //! - **FDF** (ISO 32000-2 §12.7.8): fields and comments in PDF syntax.
-//! - Form data as **XML**, **CSV** and **tab-delimited text** (Acrobat's Export data formats).
+//! - Form data as **XML**, **CSV** and **tab-delimited text** (the viewer's Export data formats).
 //!
 //! Import merges: a comment whose name (`/NM`) already exists on its page replaces it; field
 //! values go through the form's own checks (formats, validation) and recalculate.
@@ -618,7 +618,7 @@ fn xml_name(name: &str) -> String {
     s
 }
 
-/// Form data as XML, CSV or tab-delimited text (Acrobat's Export data formats).
+/// Form data as XML, CSV or tab-delimited text (the viewer's Export data formats).
 pub fn export_data(doc: &Document, format: Format) -> String {
     let fields: Vec<(String, String)> = pdfcraft_forms::fields(doc)
         .into_iter()
@@ -681,7 +681,7 @@ fn apply_values(doc: &mut Document, values: &[(String, Vec<String>)], report: &m
             FieldKind::Combo | FieldKind::List => FieldValue::Choice(vals.iter().filter(|v| !v.is_empty()).cloned().collect()),
             FieldKind::PushButton | FieldKind::Signature => continue,
         };
-        // Read-only fields still take imported data, as in Acrobat.
+        // Read-only fields still take imported data, as in other viewers.
         let ro = f.read_only();
         if ro {
             let _ = doc.update_dict(f.obj, |d| d.set(b"Ff".to_vec(), Object::Int((f.flags & !pdfcraft_forms::flags::READ_ONLY) as i64)));

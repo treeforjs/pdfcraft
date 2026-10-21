@@ -1,6 +1,6 @@
 //! pdfcraft-a11y — accessibility (L4): the Accessibility Checker's full check.
 //!
-//! [`check`] runs the 32 rules in Acrobat's seven categories (Document, Page Content, Forms,
+//! [`check`] runs the 32 rules in the viewer's seven categories (Document, Page Content, Forms,
 //! Alternate Text, Tables, Lists, Headings) and returns, per rule, Passed, Failed, Needs manual
 //! check or Skipped, with the elements or pages at fault. [`report_html`] writes the
 //! accessibility report. Rules read the document only; the fixes that need edits (language,
@@ -182,7 +182,7 @@ impl Rule {
         )
     }
 
-    /// Checked unless deselected (Acrobat leaves colour contrast off).
+    /// Checked unless deselected (PDF leaves colour contrast off).
     pub fn on_by_default(self) -> bool {
         self != Rule::ColorContrast
     }

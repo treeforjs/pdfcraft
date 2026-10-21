@@ -6,7 +6,7 @@
 //! - [`set_value`]: fill a field. Text and choice fields get new appearance streams
 //!   ([`appearance`]); check boxes and radio buttons switch `/V` and each widget's `/AS` between
 //!   the states their appearances already define.
-//! - [`reset`]: Acrobat's Clear form (back to `/DV`).
+//! - [`reset`]: the viewer's Clear form (back to `/DV`).
 //!
 //! Not yet: JavaScript actions (format, keystroke, validate, calculate — M6.4/M6.5) and rich text
 //! values (`/RV`, which is removed when a value is set so it can't contradict `/V`).
@@ -129,7 +129,7 @@ pub struct Field {
     pub quadding: i64,
     pub tooltip: Option<String>,
     pub widgets: Vec<Widget>,
-    /// Format, validate and calculate scripts (Acrobat's AF functions), see [`af`].
+    /// Format, validate and calculate scripts (the viewer's AF functions), see [`af`].
     pub actions: af::Actions,
     /// Push buttons: what a click does.
     pub button: Option<af::ButtonAction>,
@@ -533,7 +533,7 @@ fn enumerate(doc: &Document) -> (Vec<Field>, usize) {
     (out, adopted)
 }
 
-/// Widget annotations no `/Fields` entry reaches are adopted as fields, as Acrobat and the
+/// Widget annotations no `/Fields` entry reaches are adopted as fields, as other viewers and the
 /// browsers do: some writers list only some of the fields, or none at all. Each widget is adopted
 /// through its topmost unlisted `/Parent`, so a field split across several widgets stays one
 /// field. Tree-listed fields keep their order first; the rest follow in page-annotation order.
@@ -838,7 +838,7 @@ pub fn set_value_with(doc: &mut Document, name: &str, value: &FieldValue, script
 }
 
 /// Run every field's Calculate script in the form's calculation order (`/CO`, then the other
-/// calculated fields), as Acrobat does after any value changes. Returns how many changed.
+/// calculated fields), as other viewers do after any value changes. Returns how many changed.
 pub fn recalculate(doc: &mut Document) -> Result<usize, FormError> {
     recalculate_with(doc, &mut NoScripts)
 }
@@ -907,7 +907,7 @@ fn write_value(doc: &mut Document, f: &Field, value: &FieldValue, scripts: &mut 
             {
                 return invalid(format!("{:?} takes at most {max} characters", f.name));
             }
-            // Keystroke (on commit) and Validate, as Acrobat runs them before accepting a value.
+            // Keystroke (on commit) and Validate, as other viewers run them before accepting a value.
             let t = &af::keystroke(&f.actions.format, &f.name, t).map_err(FormError::Invalid)?;
             af::validate(&f.actions.validate, t).map_err(FormError::Invalid)?;
             let t = &scripting::accept(doc, f, t, scripts)?;
@@ -1096,7 +1096,7 @@ fn redraw(doc: &mut Document, f: &Field, values: &[String], scripts: &mut dyn Sc
     Ok(())
 }
 
-/// Acrobat's Clear form: every field (or the named ones) back to its default value.
+/// The viewer's Clear form: every field (or the named ones) back to its default value.
 pub fn reset(doc: &mut Document, names: Option<&[String]>) -> Result<usize, FormError> {
     let all = fields(doc);
     if all.is_empty() {
@@ -1129,7 +1129,7 @@ pub fn reset(doc: &mut Document, names: Option<&[String]>) -> Result<usize, Form
     Ok(changed)
 }
 
-/// Order tabs manually (Acrobat: Fields ▸ Tab Order ▸ Order Tabs Manually, then drag a field):
+/// Order tabs manually (PDF: Fields ▸ Tab Order ▸ Order Tabs Manually, then drag a field):
 /// move field `name` one place earlier or later in its page's tab order. The page switches to
 /// annotation order (`/Tabs` removed) and its widgets are reordered in `/Annots`; other
 /// annotations keep their places.

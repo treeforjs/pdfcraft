@@ -152,7 +152,7 @@ The legacy PDF/A tools retain the boolean `compliant` field, now conservatively 
 
 ## Custom commands
 
-Acrobat's Custom Commands: one document tool with preset options, run in one step.
+the viewer's Custom Commands: one document tool with preset options, run in one step.
 `custom_command_create {id, label, tool, params?, prompt_user?, description?, library?}` stores
 `<id>.json` (`{"format": "pdfcraft-custom-command", "version": 1, id, label, description, tool,
 params, prompt_user}`) in the library folder (`library`, default `custom-commands`, resolved like any

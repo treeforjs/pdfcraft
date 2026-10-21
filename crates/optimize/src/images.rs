@@ -183,7 +183,7 @@ pub(crate) fn pixels(s: &Stream, n: usize) -> Option<Vec<u8>> {
     let (w, h) = (s.dict.int(b"Width")? as usize, s.dict.int(b"Height")? as usize);
     if is_dct(s)? {
         let img = image::load_from_memory_with_format(&s.raw, image::ImageFormat::Jpeg).ok()?;
-        // Adobe CMYK/YCCK JPEGs aren't handled (the colour space check excludes them).
+        // APP14 CMYK/YCCK JPEGs aren't handled (the colour space check excludes them).
         let v = if n == 1 { img.into_luma8().into_raw() } else { img.into_rgb8().into_raw() };
         (v.len() == w * h * n).then_some(v)
     } else {

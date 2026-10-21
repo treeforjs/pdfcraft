@@ -1,5 +1,5 @@
 //! Create a PDF (blank, from images, from text) and Reduce File Size (execution plan M10.2,
-//! M11.1). Opening an image or a text file converts it to a new, unsaved PDF, as Acrobat does.
+//! M11.1). Opening an image or a text file converts it to a new, unsaved PDF, as other viewers do.
 
 use std::sync::Arc;
 
@@ -106,7 +106,7 @@ impl PdfCraftApp {
     }
 
     /// Create ▸ Clipboard: a new document from the image (one page, its size) or the text on
-    /// the clipboard, as Acrobat does.
+    /// the clipboard, as other viewers do.
     pub(crate) fn create_from_clipboard(&mut self) {
         #[cfg(not(target_arch = "wasm32"))]
         let clip = read_clipboard();

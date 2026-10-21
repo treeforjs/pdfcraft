@@ -9,3 +9,7 @@ license.workspace = true
 workspace = true
 
 [dependencies]
+
+[target.'cfg(unix)'.dependencies]
+# Constants for the safe standard-library nonblocking file-open API.
+libc = "0.2"

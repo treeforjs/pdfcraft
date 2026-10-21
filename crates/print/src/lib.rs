@@ -1,7 +1,7 @@
 //! Printing (execution plan M10.5). Layer L4.
 //!
 //! [`impose`] turns the pages to print into a print-ready PDF of *sheets*, laid out the way
-//! Acrobat's Print dialog describes them:
+//! The viewer's Print dialog describes them:
 //! - **Size**: one page per sheet, Fit, Actual size, Shrink oversized pages or a custom scale,
 //!   centred;
 //! - **Multiple**: pages per sheet in a grid (2, 4, 6, 9, 16 or custom), four page orders,
@@ -112,7 +112,7 @@ impl Default for Layout {
 }
 
 impl Layout {
-    /// Acrobat's pages-per-sheet choices as a grid (columns × rows on a portrait sheet).
+    /// The viewer's pages-per-sheet choices as a grid (columns × rows on a portrait sheet).
     pub fn multiple(per_sheet: usize) -> Layout {
         let (cols, rows) = match per_sheet {
             2 => (1, 2),
@@ -129,7 +129,7 @@ impl Layout {
     }
 }
 
-/// Acrobat's Comments & Forms choices.
+/// The viewer's Comments & Forms choices.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum Content {
     /// Page content and form fields.

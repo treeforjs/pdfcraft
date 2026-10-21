@@ -3156,6 +3156,25 @@ fn content_edits_reject_hostile_indexes_without_changing_the_document() {
 }
 
 #[test]
+fn oversized_page_and_position_arguments_never_wrap_on_32_bit_targets() {
+    let dir = workdir("hostile-page-conversions");
+    let mut automation = auto(&dir);
+    let doc = ok(&mut automation, "doc_open", json!({"path": "a.pdf"}))["doc"].as_u64().unwrap();
+    let before = ok(&mut automation, "doc_info", json!({"doc": doc}));
+    for index in [i64::MIN, -1, 0, 1_i64 << 32, (1_i64 << 32) + 1, i64::MAX] {
+        for (tool, arguments) in [
+            ("page_rotate", json!({"doc": doc, "pages": [index], "degrees": 90})),
+            ("page_add_text", json!({"doc": doc, "page": index, "at": [20, 20], "text": "Wrong page"})),
+            ("page_insert_blank", json!({"doc": doc, "at": index})),
+        ] {
+            assert!(automation.call(tool, &arguments).is_err(), "{tool} accepted {index}");
+            assert_eq!(ok(&mut automation, "doc_info", json!({"doc": doc})), before);
+        }
+    }
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
 fn links_through_tools() {
     let dir = workdir("links");
     std::fs::write(dir.join("notes.txt"), "Docs at https://example.org/docs and www.rust-lang.org").unwrap();

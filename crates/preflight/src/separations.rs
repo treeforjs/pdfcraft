@@ -1,4 +1,4 @@
-//! Separations preview (Acrobat's Output Preview ▸ Separations): which inks a document uses —
+//! Separations preview (the viewer's Output Preview ▸ Separations): which inks a document uses —
 //! the four process plates and every spot or DeviceN colorant, with its alternate space — on
 //! which pages, and each plate's ink at any point of a page.
 //!

@@ -721,7 +721,7 @@ decryption. Use was_encrypted() to check original encryption state.
 ### Make
 
 * Make add_xobject follow references ([#187](https://github.com/J-F-Liu/lopdf/issues/187))
-* Make xref public ,fix line endings and Fix Xref output so Adobe will open them again. ([#181](https://github.com/J-F-Liu/lopdf/issues/181))
+* Make xref public ,fix line endings and Fix Xref output so PDF readers will open them again. ([#181](https://github.com/J-F-Liu/lopdf/issues/181))
 
 ### Merge
 

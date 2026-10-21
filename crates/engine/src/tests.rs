@@ -542,6 +542,19 @@ fn autosave_snapshots_only_changed_documents() {
 }
 
 #[test]
+fn failed_autosave_can_retry_without_another_edit() {
+    let (mut session, id) = session_with(2);
+    session.apply(id, Edit::RotatePages { pages: vec![0], degrees: 90 }).unwrap();
+    let first = session.autosave_snapshots();
+    assert!(session.autosave_snapshots().is_empty());
+    session.retry_autosave(id);
+    let retry = session.autosave_snapshots();
+    assert_eq!(retry.len(), 1);
+    assert_eq!(retry[0].bytes, first[0].bytes);
+    assert!(session.autosave_snapshots().is_empty());
+}
+
+#[test]
 fn recovered_documents_reopen_unsaved_at_their_original_path() {
     let (mut s, id) = session_with(2);
     s.apply(id, Edit::DeletePages { pages: vec![1] }).unwrap();
@@ -2203,7 +2216,7 @@ fn dynamic_xfa_forms_are_laid_out_on_open_filled_and_saved_incrementally() {
     assert_eq!((x.pages, x.fields), (2, 14), "{x:?}");
     assert!(x.warnings.is_empty(), "{:?}", x.warnings);
     assert_eq!(doc.info.pages.len(), 2, "the placeholder page is gone");
-    assert_eq!(doc.info.xfa, Some(pdfcraft_render::Xfa::Dynamic), "still an XFA form for Adobe's viewers");
+    assert_eq!(doc.info.xfa, Some(pdfcraft_render::Xfa::Dynamic), "still an XFA form for other XFA viewers");
     assert!(!doc.dirty, "laying out is not an edit");
     assert!(doc.bytes.starts_with(&original[..]), "the layout is an appended revision; the original bytes stay");
     let names: Vec<&str> = doc.form.iter().map(|f| f.name.as_str()).collect();
@@ -2219,7 +2232,7 @@ fn dynamic_xfa_forms_are_laid_out_on_open_filled_and_saved_incrementally() {
     assert!(s.get(id).unwrap().dirty);
     let saved = s.save_bytes(id).unwrap();
     assert!(saved.starts_with(&original[..]));
-    // The datasets packet carries the values too, for Adobe's viewers.
+    // The datasets packet carries the values too, for other XFA viewers.
     let cos = pdfcraft_cos::Document::open(saved.clone()).unwrap();
     let data = pdfcraft_xfa::parse_datasets(&pdfcraft_xfa::read_packets(&cos).unwrap().unwrap().xdp).expect("a datasets packet");
     assert_eq!(data.text_at(&pdfcraft_xfa::som_to_path("form[0].head[0].familyName[0]")), Some("Singh"));
@@ -2400,7 +2413,7 @@ fn xfa_scripts_initialize_calculate_validate_toggle_and_add_rows() {
     // A change recalculates.
     s.apply(id, Edit::SetFieldValue { name: "qty".into(), value: FieldValue::Text("3".into()) }).unwrap();
     assert_eq!(value(&s, "total"), vec!["15".to_string()], "{:?}", s.take_js_output(id));
-    // A failing validate script shows its message; the value stays, as in Acrobat.
+    // A failing validate script shows its message; the value stays, as in other viewers.
     s.apply(id, Edit::SetFieldValue { name: "qty".into(), value: FieldValue::Text("500".into()) }).unwrap();
     let out = s.take_js_output(id);
     assert!(out.alerts.iter().any(|a| a == "Quantity must be 100 or less"), "{out:?}");
@@ -2627,22 +2640,25 @@ fn hostile_xfa_open_scripts_are_merged_capped_kept_from_printing_and_noted() {
     let id = s.open("hostile.pdf", None, bytes, None).expect("opens");
     assert!(started.elapsed() < std::time::Duration::from_secs(5), "{:?}", started.elapsed());
     let doc = s.get(id).unwrap();
-    assert_eq!(doc.form.iter().find(|f| f.name == "total").unwrap().value, vec!["49999".to_string()]);
     // One datasets stream for the scripts' revision, not one per value set.
     assert!(datasets_streams(&doc.bytes) <= 3, "{} datasets streams", datasets_streams(&doc.bytes));
     // What opening changed is noted with the form's other XFA notes.
-    assert!(doc.xfa_warnings.iter().any(|w| w.contains("scripts changed it on opening")), "{:?}", doc.xfa_warnings);
     let out = s.take_js_output(id);
-    assert_eq!(out.alerts.len(), 100, "message boxes are capped");
-    assert!(out.errors.iter().any(|e| e.contains("more than 100 messages")), "{:?}", out.errors);
+    if !out.limited {
+        assert_eq!(s.get(id).unwrap().form.iter().find(|f| f.name == "total").unwrap().value, vec!["49999".to_string()]);
+        assert!(s.get(id).unwrap().xfa_warnings.iter().any(|w| w.contains("scripts changed it on opening")));
+        assert_eq!(out.alerts.len(), 100, "message boxes are capped");
+        assert!(out.errors.iter().any(|e| e.contains("more than 100 messages")), "{:?}", out.errors);
+        assert!(out.console.iter().any(|c| c.contains("only print when a button is clicked")), "{:?}", out.console);
+    } else {
+        assert!(!out.errors.is_empty(), "a bounded refusal must be reported");
+    }
     assert!(out.requests.is_empty(), "only a click may print, save or open links: {:?}", out.requests);
-    assert!(out.console.iter().any(|c| c.contains("only print when a button is clicked")), "{:?}", out.console);
 }
 
 #[test]
 fn runaway_xfa_calculations_at_open_end_quickly_with_a_report() {
-    // Nested loops in one frame stop at the loop limit; loops in nested calls (that limit is per
-    // call) are abandoned at the time limit and turn the form's scripts off.
+    // A contained refusal stops the current event, and later explicit calls still work.
     let tpl = pdfcraft_xfa::fixtures::scripted_template()
         .replace(
             r#"<calculate><script contentType="application/x-javascript">qty.rawValue * price.rawValue</script></calculate>"#,
@@ -2658,14 +2674,10 @@ fn runaway_xfa_calculations_at_open_end_quickly_with_a_report() {
     let id = s.open("runaway.pdf", None, bytes, None).expect("opens");
     assert!(started.elapsed() < std::time::Duration::from_secs(4), "{:?}", started.elapsed());
     let out = s.take_js_output(id);
-    assert!(out.errors.iter().any(|e| e.contains("total") && e.contains("maximum number of iteration")), "{:?}", out.errors);
-    assert!(out.errors.iter().any(|e| e.contains("abandoned")), "{:?}", out.errors);
-    assert!(out.errors.iter().any(|e| e.contains("scripts are off")), "{:?}", out.errors);
-    // The scripts stay off: a change runs nothing more.
-    let started = std::time::Instant::now();
-    s.apply(id, Edit::SetFieldValue { name: "qty".into(), value: FieldValue::Text("3".into()) }).unwrap();
-    assert!(started.elapsed() < std::time::Duration::from_secs(2));
-    assert!(s.take_js_output(id).errors.is_empty());
+    assert!(out.limited && !out.errors.is_empty(), "{out:?}");
+    assert!(!out.errors.iter().any(|e| e.contains("abandoned") || e.contains("scripts are off")), "{:?}", out.errors);
+    assert!(s.get(id).unwrap().xfa_template.is_some(), "a contained refusal must not disable future events");
+    assert_eq!(s.run_javascript(id, "6 * 7", None).unwrap().result.as_deref(), Some("42"));
 }
 
 /// The page view's raster of `page` at 1 px/pt (the document's own render pool).

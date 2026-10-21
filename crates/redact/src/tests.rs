@@ -5,6 +5,99 @@ use pdfcraft_cos::{Document, SaveOptions, write_full, write_incremental};
 
 use super::*;
 
+#[test]
+fn oversized_repeated_overlay_is_refused_before_document_changes() {
+    let mut doc = one_page(b"BT /F1 12 Tf 20 150 Td (Keep this) Tj ET", "", vec![]);
+    let mut dictionary = Dict::new();
+    dictionary.set(b"Subtype".to_vec(), Object::Name(b"Redact".to_vec()));
+    dictionary.set(b"Rect".to_vec(), Object::Array([0.0, 0.0, 1e200, 1e200].map(Object::Real).to_vec()));
+    dictionary.set(b"OverlayText".to_vec(), Object::String(pdfcraft_cos::PdfString::literal("X")));
+    dictionary.set(b"DA".to_vec(), Object::String(pdfcraft_cos::PdfString::literal("/Helv 12 Tf 0 g")));
+    dictionary.set(b"Repeat".to_vec(), Object::Bool(true));
+    dictionary.set(b"IC".to_vec(), Object::Array(vec![Object::Int(0); 3]));
+    let annotation = doc.add(Object::Dict(dictionary));
+    let page = pdfcraft_model::pages(&doc)[0].obj;
+    doc.update_dict(page, |d| d.set(b"Annots".to_vec(), Object::Array(vec![Object::Ref(annotation)]))).unwrap();
+    let before = write_full(&doc, &SaveOptions::default()).unwrap();
+    assert_eq!(apply(&mut doc, None), Err(RedactError::OverlayLimit));
+    assert_eq!(write_full(&doc, &SaveOptions::default()).unwrap(), before);
+}
+
+#[test]
+fn unicode_overlay_budget_is_shared_by_all_rectangles_before_changes() {
+    let mut doc = one_page(b"BT /F1 12 Tf 20 150 Td (Keep this) Tj ET", "", vec![]);
+    let overlay = "Ω".repeat(128);
+    assert!(pdfcraft_fonts::text_outline(&overlay).is_some(), "bundled Inter supports this fixture");
+    let shape = Shape::Redact {
+        quads: vec![rect_quad([0.0, 0.0, 10000.0, 10000.0]); 3],
+        overlay,
+        look: pdfcraft_annot::OverlayLook { repeat: true, size: 12.0, ..Default::default() },
+    };
+    add_annotation(
+        &mut doc,
+        &NewAnnotation { page: 0, style: Style::default_for(&shape), shape, contents: String::new(), author: "Tester".into() },
+        &Meta::default(),
+    )
+    .unwrap();
+    let before = write_full(&doc, &SaveOptions::default()).unwrap();
+    assert_eq!(apply(&mut doc, None), Err(RedactError::OverlayLimit));
+    assert_eq!(write_full(&doc, &SaveOptions::default()).unwrap(), before);
+}
+
+#[test]
+fn outlined_rectangles_share_the_remaining_budget_and_validate_geometry() {
+    let mut mark = Mark {
+        page: 0,
+        obj: ObjRef::new(1, 0),
+        rects: vec![[0.0, 0.0, 20.0, 20.0]],
+        fill: Some([0.0; 3]),
+        overlay: "Ω".into(),
+        look: pdfcraft_annot::OverlayLook { repeat: true, size: 12.0, ..Default::default() },
+    };
+    let unit = pdfcraft_fonts::ScriptOutline { contours: vec![vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0]]], width: 1.0, ..Default::default() };
+    let one = outlined_overlay(&mark, &unit, 0.25, [0.0; 3], MAX_OVERLAY_BYTES).unwrap();
+    mark.rects = vec![mark.rects[0]; 3];
+    assert_eq!(outlined_overlay(&mark, &unit, 0.25, [0.0; 3], one.len() * 2), Err(RedactError::OverlayLimit));
+    mark.rects = vec![[-1e308, 0.0, 1e308, 20.0]];
+    assert_eq!(overlay_content(&[&mark]), Err(RedactError::OverlayLimit));
+    assert_eq!(outlined_overlay(&mark, &unit, 0.25, [0.0; 3], MAX_OVERLAY_BYTES), Err(RedactError::OverlayLimit));
+    mark.overlay.clear();
+    assert_eq!(overlay_content(&[&mark]), Err(RedactError::OverlayLimit), "empty overlays also validate fill geometry");
+    mark.rects = vec![[0.0, 0.0, 20.0, 20.0]];
+    mark.fill = Some([f64::NAN, 0.0, 0.0]);
+    assert_eq!(overlay_content(&[&mark]), Err(RedactError::OverlayLimit));
+    mark.fill = Some([0.0; 3]);
+    mark.overlay = "Ω".repeat(128);
+    mark.look.size = 1e308;
+    let wide = pdfcraft_fonts::ScriptOutline { width: 10.0, ..unit };
+    assert_eq!(outlined_overlay(&mark, &wide, 0.25, [0.0; 3], MAX_OVERLAY_BYTES), Err(RedactError::OverlayLimit));
+    assert_eq!(overlay_content(&[&mark]), Err(RedactError::OverlayLimit), "Unicode transforms must be finite");
+    mark.overlay = "Withheld".into();
+    assert_eq!(overlay_content(&[&mark]), Err(RedactError::OverlayLimit), "ASCII transforms must be finite");
+    let mut bytes = vec![1, 2, 3];
+    assert_eq!(append_overlay(&mut bytes, &[4, 5], 4), Err(RedactError::OverlayLimit));
+    assert_eq!(bytes, [1, 2, 3], "refusal happens before extending the buffer");
+}
+
+#[test]
+fn repeated_overlay_budget_counts_text_bytes_and_combined_rows() {
+    let base = Mark {
+        page: 0,
+        obj: ObjRef::new(1, 0),
+        rects: vec![[0.0, 0.0, 300.0, 300.0]],
+        fill: Some([0.0; 3]),
+        overlay: "Withheld".into(),
+        look: pdfcraft_annot::OverlayLook { repeat: true, size: 12.0, ..Default::default() },
+    };
+    assert!(!overlay_content(&[&base]).unwrap().is_empty());
+    let mut excessive = base.clone();
+    excessive.rects = vec![[0.0, 0.0, 10000.0, 10000.0]];
+    assert_eq!(overlay_content(&[&excessive]), Err(RedactError::OverlayLimit));
+    excessive = base;
+    excessive.overlay = "X".repeat(MAX_OVERLAY_BYTES + 1);
+    assert_eq!(overlay_content(&[&excessive]), Err(RedactError::OverlayLimit));
+}
+
 fn stream(dict: &str, data: &[u8]) -> Vec<u8> {
     let mut v = format!("<< {dict} /Length {} >>\nstream\n", data.len()).into_bytes();
     v.extend_from_slice(data);
@@ -410,7 +503,7 @@ fn overlay_text_takes_its_font_size_colour_alignment_and_repeats() {
     let shape = Shape::Redact { quads: vec![rect_quad([10.0, 200.0, 290.0, 270.0])], overlay: "REDACTED".into(), look };
     let style = Style::default_for(&shape);
     add_annotation(&mut doc, &NewAnnotation { page: 0, shape, style, contents: String::new(), author: "T".into() }, &Meta::default()).unwrap();
-    // Written as Acrobat writes it.
+    // Written as other viewers write it.
     let m = &marks(&doc)[0];
     assert_eq!(m.look, look, "the look round-trips through /DA, /Q and /Repeat");
     apply(&mut doc, None).unwrap();

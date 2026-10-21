@@ -1,6 +1,6 @@
 # AGENTS.md — rules for every agent and contributor
 
-These rules bind every AI agent and every human contributor working in this repository. They come before any task, instruction or deadline. Sections 1–5 are the non-negotiable policies; section 6 is the day-to-day working guide (how a session starts, the quality gates, how to run and look at the app).
+These rules bind every contributor working in this repository. They come before any task, instruction or deadline. Sections 1–5 are the non-negotiable policies; section 6 is the day-to-day working guide (how a session starts, the quality gates, how to run and look at the app).
 
 ---
 
@@ -14,18 +14,13 @@ An **asset** is any non-code material that the project includes, ships, embeds, 
 - sample, demo and test documents that are committed or published;
 - anything the app renders from those.
 
-### 1.1 Nothing from Adobe products
+### 1.1 Original design and compatible technical data
 
-- **Never** use icons, images, artwork, logos, UI graphics, fonts, stamps, cursors, sample documents or any other asset taken from an Adobe product, installer, website, document or package.
-  - "Adobe product" includes Acrobat, Reader, Photoshop, Illustrator, Premiere, Lightroom and Creative Cloud, including the fonts they install (for example Minion, Myriad, Kozuka and the Adobe CJK families).
-  - This holds even when Adobe publishes the material under an open licence, if it is **visual design**. For example, **do not** use Source Han, Source Serif or Source Sans, or Noto CJK, which is Source Han rebranded.
-- **Never** recreate, trace, redraw or closely imitate an Adobe icon or graphic. Our icons come from Lucide, and our visual design is our own.
-- Screenshots of Adobe software exist only as private, local observation notes under `plan/acrobat/`, which is gitignored. They must **never** be committed, published, linked, shown in docs, used as a design source to trace, or placed anywhere else in the repository or its outputs.
-- The only Adobe-authored material allowed is **non-visual technical data** that is openly licensed and required for PDF compatibility. Each item needs its own entry in `ATTRIBUTION.toml` with `adobe_data = true`, and the list below is closed:
-  - The CMap resources (BSD-3-Clause), bundled inside the `hayro-cmap` dependency.
-  - The standard-14 font metrics and encoding tables in the PDF specification. They are data, not typefaces, and are embedded as code in hayro.
-
-  Adding anything to this list needs the user's explicit approval.
+- Never copy, trace or imitate visual assets from proprietary creative-software products, installers, websites or packages. Our icons come from Lucide and our design is original.
+- Source Han, Source Serif, Source Sans, Noto CJK and the proprietary fonts installed by creative-software products are not permitted visual inputs.
+- Private reference screenshots stay under the ignored `plan/reference/` directory. Never commit, publish, link or redistribute them.
+- The closed compatibility-data allowlist contains only the openly licensed CMap resources bundled by `hayro-cmap`, and standard-14 font metrics/encoding tables embedded as code in hayro. These are technical data, not visual assets. Their manifest entries and legal notices retain accurate authorship and provenance.
+- Adding a new exception requires the user's explicit approval.
 
 ### 1.2 Only open, provable licences
 
@@ -60,7 +55,7 @@ Anything else is forbidden, including assets whose licence you cannot prove from
   - an entry's hash does not match;
   - a licence is not on the allowlist;
   - a licence file is missing;
-  - an image, icon or font names Adobe as author or source.
+  - an image, icon or font violates the permitted provenance policy.
 - **`cargo xtask demo-pdf`** downloads its fonts only from `ATTRIBUTION.toml` entries, pinned by SHA-256. Afterwards it **fails if the PDF embeds any font not in its allowlist**, which catches the browser silently falling back to a system font.
 
 ### 1.4 Fonts live in craft-fonts
@@ -74,7 +69,7 @@ Anything else is forbidden, including assets whose licence you cannot prove from
 Fonts go to craft-fonts instead (§1.4).
 
 1. Find an asset under an allowed licence from its **original source**: the author's repository or a release, not a random mirror. Record the exact version or commit.
-2. Confirm the authorship. It must not be Adobe (§1.1). Keep the licence text.
+2. Confirm the authorship. It must follow the provenance restrictions (§1.1). Keep the licence text.
 3. Add the file together with its licence file, plus an `ATTRIBUTION.toml` entry. Run `cargo xtask assets --write`, then `cargo xtask assets`.
 4. If an asset's origin or licence is unclear, **do not add it.** Ask the user.
 
@@ -84,10 +79,10 @@ If you find an asset that breaks these rules, stop and remove it from the reposi
 
 ## 2. Clean-room rules
 
-- Never read, disassemble or copy anything inside the Acrobat bundle. Only names and listings are allowed, and **never** open `Contents/Resources/JavaScripts/`.
+- Never read, disassemble or copy proprietary software bundles. Only public specifications and black-box observations may inform compatibility work.
 - Behaviour comes only from public specifications (ISO 32000-2, the Arlington model), public documentation and black-box observation.
 - Never copy GPL/AGPL code. Copyleft tools (MuPDF, Ghostscript, Poppler, veraPDF, DSS) run only as external oracle processes.
-- Observe Acrobat only with synthetic fixtures. Never capture the Home view, recent files, account information or any personal data. Capture by window id. Never commit Acrobat outputs, corpus files or personal data.
+- Observe document behavior only with synthetic fixtures. Never capture the Home view, recent files, account information or any personal data. Capture by window id. Never commit PDF outputs, corpus files or personal data.
 - Never commit large binary fixtures to this repo. Real-file test corpora are fetched by `cargo xtask corpus`, pinned by commit and verified by SHA-256, into a git-ignored directory.
 
 ## 3. Agent control (automation and MCP)
@@ -96,7 +91,7 @@ If you find an asset that breaks these rules, stop and remove it from the reposi
 - **The UI control channel is opt-in too.** It runs only when the app is launched with `--control <file>`. It binds to loopback, uses a fresh random token per launch, and writes it to an owner-only file. Never enable it by default, widen the bind address, or log the token.
 - **The MCP server is opt-in.** Never make the app, the CLI or an installer start it, register it with an agent, or listen on a port by default. It runs only when a user (or an agent the user configured) launches `pdfcraft-cli mcp`. Any future network transport must be off by default, bound to loopback and authenticated with a token.
 - **Safe by default.** Tools must never discard unsaved work silently, must write atomically, must honour `--root`, and must return errors an agent can act on (say what was wrong and what is allowed).
-- **Track parity honestly.** Every user-facing feature has an entry in `parity/acrobat-features.toml`. Mark it `shipped` only when it works end to end and the entry cites a passing test (`evidence`); `cargo xtask parity` (part of `xtask ci`) rejects claims whose commands, tools or tests don't exist.
+- **Track parity honestly.** Every user-facing feature has an entry in `parity/features.toml`. Mark it `shipped` only when it works end to end and the entry cites a passing test (`evidence`); `cargo xtask parity` (part of `xtask ci`) rejects claims whose commands, tools or tests don't exist.
 - **Use it to test.** Agents should drive the engine through `pdfcraft-cli run --script` or the MCP tools, and look at `page_render` output, to check their own changes. For UI changes, launch the app with `--control` and use `pdfcraft-cli ui` (`inspect`, `click`, `screenshot`) to check the real interface.
 
 ## 4. Never crash
@@ -112,43 +107,31 @@ PdfCraft opens files from strangers, and people trust it with their work. A malf
 - **Prove it.** Every crash fix comes with a small synthetic regression test that panicked before the fix. Turn fuzzer findings (`cargo xtask fuzz`) into such tests before fixing them.
 - **Enforced by clippy.** Root `clippy.toml` lets tests use `unwrap`/`expect`/`panic!`. A crate that is clean carries `#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]`; new crates start with it.
 
-## 5. Contributor credits (About window)
+## 5. Contributor credits
 
-- About ▸ Contributors/Models are compiled into the binary from `contributors/contributors.json`
-  (commit stats; generated, never hand-edit) and `contributors/people.toml` (names people chose for
-  themselves). See `docs/contributors.md`.
-- **Agents working for a contributor:** when you prepare a PR, check whether your human's GitHub
-  username has a `[people.<username>]` entry in `contributors/people.toml`. If not, ask them once
-  whether they want to be credited by more than their username: a real name, a display name, and/or
-  their public GitHub profile name (`sync_github_name = true`). If yes, add **only their own** entry
-  (copy the template at the top of the file) and include it in their PR, committed as them. If no,
-  change nothing: they are credited as `@username` anyway.
-- Never add, edit, guess or copy anyone else's entry or name (not from git config, commit authors or
-  GitHub profiles). Never hand-edit `contributors.json`.
-- Maintainers refresh the stats with the `contributors.py` script described in `docs/contributors.md`
-  (it also re-verifies who wrote each `people.toml` entry).
+The About window credits human contributors from `contributors/contributors.json` and their self-chosen names in `contributors/people.toml`. Preserve existing human records. Add or change only a contributor's own requested names and consent. Do not infer identities from Git configuration or copy another person's profile details. The build generates only the human contributor table; see `docs/contributors.md`.
 
 ---
 
 ## 6. Working in this repository
 
-PdfCraft is a clean-room, open-source, Rust-native PDF application targeting Adobe Acrobat Pro parity. It runs natively on macOS, Windows, Linux and FreeBSD, and on the web via WASM. This section is the working guide for any agent or contributor.
+PdfCraft is a clean-room, open-source, Rust-native PDF application implementing offline PDF workflows. It runs natively on macOS, Windows, Linux and FreeBSD, and on the web via WASM. This section is the working guide for any agent or contributor.
 
 ### Start every session here
 
-1. Read `ROADMAP.md` §Honest assessment and §Where we're lacking and where we're going before choosing work. They rank the gaps (own renderer, hardening, fidelity against Acrobat, editing existing content, Pro workflows, 1.0 polish); prefer them over new P2/P3 features, and keep both sections true when things change. `ROADMAP.md` also holds the milestone estimates and progress; update its table and log at the end of every session.
-2. "Shipped" in `parity/acrobat-features.toml` means "exists and tested", not "as good as Acrobat". Don't mark a feature shipped on a generic test, and say in its notes what is still missing.
+1. Read `ROADMAP.md` §Honest assessment and §Where we're lacking and where we're going before choosing work. They rank the gaps (own renderer, hardening, fidelity against PDF, editing existing content, Pro workflows, 1.0 polish); prefer them over new P2/P3 features, and keep both sections true when things change. `ROADMAP.md` also holds the milestone estimates and progress; update its table and log at the end of every session.
+2. "Shipped" in `parity/features.toml` means "exists and tested", not "complete in every PDF workflow". Don't mark a feature shipped on a generic test, and say in its notes what is still missing.
 3. Read the README of the crate you're touching (`crates/<name>/README.md`); `crates/automation/README.md` explains how tools are added, and `docs/development.md` lists logs, environment variables and other development notes.
 4. Work autonomously: orient → plan → implement + test → verify → record → commit. Don't stop to ask unless the decision is genuinely the user's (a new asset of unclear origin, an exception to the rules above, a change of scope).
 
-`plan/` (planning notes, architecture decision records, Acrobat observation notes) is a local, gitignored directory that is not part of the repository. Where this file mentions it, treat it as optional background; the committed sources of truth are `ROADMAP.md`, `parity/`, the crate READMEs and `docs/`.
+`plan/` (planning notes, architecture decision records, PDF observation notes) is a local, gitignored directory that is not part of the repository. Where this file mentions it, treat it as optional background; the committed sources of truth are `ROADMAP.md`, `parity/`, the crate READMEs and `docs/`.
 
 ### Non-negotiables
 
-- **Assets:** read §1 before adding or showing any icon, image, font or document. No assets from Adobe products, ever. Only openly licensed or contributor-original assets are allowed, each with an entry in `ATTRIBUTION.toml`. `cargo xtask assets` enforces this.
+- **Assets:** read §1 before adding or showing any icon, image, font or document. No copied proprietary-product assets. Only openly licensed or contributor-original assets are allowed, each with an entry in `ATTRIBUTION.toml`. `cargo xtask assets` enforces this.
 - **Fonts live in craft-fonts** (§1.4). Never commit font files here. It is the optional build input `CRAFT_FONTS_DIR`: `git clone https://github.com/storytold/craft-fonts ../craft-fonts && CRAFT_FONTS_DIR=../craft-fonts cargo test --workspace` embeds the Japanese fonts (UI fallback, Japanese text in edited PDFs) and runs their tests, which otherwise skip. Code using `pdfcraft_fonts::CRAFT_FONTS` must work when it is empty.
-- **Clean-room** (§2). Never read, disassemble or copy anything inside the Acrobat bundle (names and listings only). Behaviour comes from public docs, specs (ISO 32000-2, the Arlington model) and black-box observation. Never copy GPL/AGPL code; copyleft tools run only as external oracle processes.
-- **Privacy.** When observing Acrobat, use synthetic fixtures only. Never capture the Home view, recent files or account info. Never commit Acrobat outputs, corpus files or personal data.
+- **Clean-room** (§2). Never read, disassemble or copy anything inside a proprietary software bundle (names and listings only). Behaviour comes from public docs, specs (ISO 32000-2, the Arlington model) and black-box observation. Never copy GPL/AGPL code; copyleft tools run only as external oracle processes.
+- **Privacy.** When observing document behavior, use synthetic fixtures only. Never capture the Home view, recent files or account info. Never commit PDF outputs, corpus files or personal data.
 - **Layering.** Nothing below the UI layer depends on egui/winit/eframe/rfd. `cos`/`filters`/`crypt`/`arlington` stay standalone. `cargo xtask ci` checks the crate-layering rules.
 - **Fidelity.** The PDF object graph is the model. Preserve unknown data. Saves are incremental unless a full rewrite is required. Never silently drop or repair data without recording it.
 - **Never panic** (§4). Every PDF, script, MCP call, settings file and keystroke is untrusted input, and none of it may crash the app or lose the user's work. This outranks feature work. Return `Result` and propagate with `?`, or fall back leniently and record it. Every crash fix gets a synthetic regression test.
@@ -161,7 +144,7 @@ PdfCraft is a clean-room, open-source, Rust-native PDF application targeting Ado
 - `cargo run -p pdfcraft -- <file.pdf>` opens the desktop app.
 - `cargo run -p pdfcraft-cli -- run --script steps.json --root DIR` drives the engine headlessly through the automation tools (`pdfcraft-cli tools` lists them). Use it, together with `page_render`, to check engine changes. `pdfcraft-cli mcp` is the opt-in MCP server (§3).
 - `cargo xtask fuzz --time 300` mutation-fuzzes open/render/edit/save in child processes. Findings land in `fuzz-out/findings/` (git-ignored; never commit corpus-derived files). Turn every real finding into a small synthetic regression test before fixing it.
-- `cargo xtask parity [--partial]` reports Acrobat-parity progress from `parity/acrobat-features.toml`. Update the entry when a feature ships.
+- `cargo xtask parity [--partial]` reports PDF-parity progress from `parity/features.toml`. Update the entry when a feature ships.
 - `cargo xtask demo-pdf` builds `dist/demo/pdfcraft-showcase.pdf` (needs Chrome) for visual checks; `cargo xtask screenshots` regenerates the README screenshots from it.
 - For UI work, **look at the result**. Either launch `pdfcraft --control FILE doc.pdf` and use `pdfcraft-cli ui --control FILE screenshot --out x.png` (plus `inspect`, `click`, `key`, `type`, `command`, `set`), or take a headless shot with `cargo run -p pdfcraft-ui-egui --example shot`. Control-channel tests use kittest (`crates/ui-egui/tests/control.rs`).
 - Parallel agents: use a separate `CARGO_TARGET_DIR` per agent and separate git worktrees.

@@ -5,9 +5,9 @@
 #
 # Clean-room: every entry was written from the plain meaning of the English label using ordinary
 # Hungarian computing vocabulary (informal "te", nouns for commands such as Mentés and Megnyitás).
-# No proprietary localisation resource, string table or product UI (Acrobat's included) was
+# No proprietary localisation resource, string table or product UI was
 # consulted or copied; add entries the same way.
-# Product and technology names (PdfCraft, PDF, Acrobat JavaScript ...) are not translated;
+# Product and technology names (PdfCraft, PDF, PDF JavaScript ...) are not translated;
 # the trailing "…" of dialog commands is kept.
 	Menu	Menü
 	File	Fájl
@@ -57,7 +57,7 @@
 	Fit to width	Szélességhez igazítás
 	Display theme	Megjelenítési téma
 	Side panels	Oldalsó panelek
-	Enable Acrobat JavaScript	Acrobat JavaScript engedélyezése
+	Enable PDF JavaScript	PDF JavaScript engedélyezése
 	OK	OK
 	Close	Bezárás
 	Next / previous match	Következő / előző találat
@@ -128,8 +128,8 @@
 	Recent	Legutóbbiak
 	Files you open in PdfCraft appear here. Drop a PDF anywhere to open it.	A PdfCraftban megnyitott fájlok itt jelennek meg. Húzz ide egy PDF-et a megnyitáshoz.
 	Privacy	Adatvédelem
-	PdfCraft works offline. No telemetry, no account, and no cloud processing unless you add a provider.	A PdfCraft offline működik. Nincs telemetria, nincs fiók, és nincs felhőfeldolgozás, amíg nem adsz hozzá szolgáltatót.
-	Scripts run in a sandbox without file or network access. With JavaScript off, Acrobat's standard format, validate and calculate functions still work.	A szkriptek homokozóban futnak, fájl- és hálózat-hozzáférés nélkül. Kikapcsolt JavaScript mellett az Acrobat szabványos formázó, ellenőrző és számoló függvényei továbbra is működnek.
+	PdfCraft works offline.	A PdfCraft offline működik.
+	Scripts run in a sandbox without file or network access. With JavaScript off, the viewer's standard format, validate and calculate functions still work.	A szkriptek homokozóban futnak, fájl- és hálózat-hozzáférés nélkül. Kikapcsolt JavaScript mellett az PDF szabványos formázó, ellenőrző és számoló függvényei továbbra is működnek.
 	Back to all tools	Vissza az összes eszközhöz
 	Close panel	Panel bezárása
 	View less	Kevesebb megjelenítése
@@ -426,8 +426,6 @@
 	Console	Konzol
 	Document JavaScripts	Dokumentum JavaScriptjei
 	Document actions	Dokumentumműveletek
-	AI assistant	MI-asszisztens
-	Bring your own model (off by default)	Saját modell használata (alapból ki van kapcsolva)
 	Summarize	Összefoglalás
 	Ask about this document	Kérdezz erről a dokumentumról
 	Translate	Fordítás
@@ -435,7 +433,6 @@
 	Planned	Tervezett
 	Planned for milestone	Erre a mérföldkőre tervezve
 	open to see what it will include	nyisd meg, és meglátod, mi lesz benne
-	Optional: needs an AI provider you configure	Nem kötelező: egy általad beállított MI-szolgáltató kell hozzá
 	Coming in milestone	Ebben a mérföldkőben érkezik
 	Items marked Ready work today.	A Kész jelölésű elemek már működnek.
 	Preview	Előnézet
@@ -1316,10 +1313,10 @@
 	Weak	Gyenge
 	Advanced Options {chevron}	Speciális beállítások {chevron}
 	Compatibility	Kompatibilitás
-	Acrobat X and later (256-bit AES)	Acrobat X és újabb (256 bites AES)
-	Acrobat 7.0 and later (128-bit AES)	Acrobat 7.0 és újabb (128 bites AES)
-	Acrobat 5.0 and later (128-bit RC4)	Acrobat 5.0 és újabb (128 bites RC4)
-	Acrobat 3.0 and later (40-bit RC4)	Acrobat 3.0 és újabb (40 bites RC4)
+	AES-256	AES-256
+	AES-128	AES-128
+	RC4-128	RC4-128
+	RC4-40	RC4-40
 	Encrypt	Titkosítás
 	All document contents	A dokumentum teljes tartalma
 	All document contents except metadata	A dokumentum teljes tartalma, a metaadatok kivételével
@@ -1601,7 +1598,6 @@
 	Downloading attachments on the web arrives with M3.10 ({n} bytes ready)	A mellékletek letöltése a weben az M3.10-zel érkezik ({n} bájt kész)
 	`{command}` {when}	`{command}` {when}
 	ships in milestone {m}	{m} mérföldkőben érkezik
-	needs an AI provider (off by default)	MI-szolgáltató kell hozzá (alapból ki van kapcsolva)
 	is available	elérhető
 	is not available yet	még nem elérhető
 	{label} failed: {e}	{label} nem sikerült: {e}
@@ -1665,7 +1661,7 @@
 	At least one signature has problems.	Legalább egy aláírásnak problémája van.
 	This document is secured. Some changes are restricted by its security settings.	Ez a dokumentum védett. Egyes módosításokat a biztonsági beállításai korlátoznak.
 	This is a dynamic XFA form, which PdfCraft can't display yet. What you see is the file's placeholder page.	Ez egy dinamikus XFA-űrlap, amelyet a PdfCraft még nem tud megjeleníteni. Amit látsz, a fájl helyőrző oldala.
-	This form also contains XFA data, which PdfCraft doesn't read yet. You can fill its fields, but Acrobat may show the XFA values instead.	Ez az űrlap XFA-adatokat is tartalmaz, amelyeket a PdfCraft még nem olvas. Kitöltheted a mezőit, de az Acrobat helyettük az XFA-értékeket mutathatja.
+	This form also contains XFA data, which PdfCraft doesn't read yet. You can fill its fields, but PDF may show the XFA values instead.	Ez az űrlap XFA-adatokat is tartalmaz, amelyeket a PdfCraft még nem olvas. Kitöltheted a mezőit, de az PDF helyettük az XFA-értékeket mutathatja.
 	This document contains {n} interactive form fields.	Ez a dokumentum {n} interaktív űrlapmezőt tartalmaz.
 	This file was damaged and has been repaired. Saving keeps the repaired version.	Ez a fájl sérült volt, és javítottuk. A mentés megtartja a javított változatot.
 	Dismiss	Elvetés
@@ -1907,7 +1903,7 @@
 	Open email app	E-mail alkalmazás megnyitása
 	Open link	Hivatkozás megnyitása
 	Open this web page?	Megnyitod ezt a weboldalt?
-	Scripts run in a sandbox without file or network access. A script that asks to open a web page needs your permission first. With JavaScript off, Acrobat's standard format, validate and calculate functions still work.	A szkriptek homokozóban futnak, fájl- és hálózat-hozzáférés nélkül. Ha egy szkript weboldalt akar nyitni, előbb az engedélyed kell. Kikapcsolt JavaScript mellett az Acrobat szabványos formázó, ellenőrző és számoló függvényei továbbra is működnek.
+	Scripts run in a sandbox without file or network access. A script that asks to open a web page needs your permission first. With JavaScript off, the viewer's standard format, validate and calculate functions still work.	A szkriptek homokozóban futnak, fájl- és hálózat-hozzáférés nélkül. Ha egy szkript weboldalt akar nyitni, előbb az engedélyed kell. Kikapcsolt JavaScript mellett az PDF szabványos formázó, ellenőrző és számoló függvényei továbbra is működnek.
 	Sign yourself	Saját kezű aláírás
 	Used when opening PDFs. An explicit launch or control mode takes precedence for the session.	PDF-ek megnyitásakor érvényes. A kifejezetten választott indítási vagy vezérlőmód a munkamenetre felülírja.
 	Write this email?	Megírod ezt az e-mailt?
@@ -1961,12 +1957,9 @@
 	Last commit	Utolsó commit
 	Last	Utolsó
 	No contributor data was built into this copy.	Ebben a példányban nincsenek beépített közreműködői adatok.
-	No model credits were built into this copy.	Ebben a példányban nincsenek beépített modelladatok.
 	{n} contributors · {c} commits	{n} közreműködő · {c} commit
 	Company	Cég
 	Model	Modell
-	% of all commits	Az összes commit %-a
-	Lines +/−	Sorok +/−
 	@{login}: {prs} PRs, {commits} commits, +{added} / −{deleted} lines (Δ {delta}), +{bin_added} / −{bin_deleted} binary assets, {first} – {last}	@{login}: {prs} PR, {commits} commit, +{added} / −{deleted} sor (Δ {delta}), +{bin_added} / −{bin_deleted} bináris fájl, {first} – {last}
 	Set layer visibility	Réteg láthatóságának beállítása
 	Created a PDF from {n} files	PDF létrehozva {n} fájlból
@@ -2058,7 +2051,6 @@
 	Go to page…	Ugrás oldalra…
 	About	Névjegy
 	Contributors	Közreműködők
-	Models	Modellek
 	Only continue if you trust this document. An address can carry information from the document, such as what you typed into its form.	Csak akkor folytasd, ha megbízol ebben a dokumentumban. Egy cím adatokat vihet a dokumentumból, például azt, amit az űrlapjába írtál.
 	Print single-sided. Keep the sheets in order, cut at the marks, then stack the piles left to right, top to bottom.	Nyomtass egyoldalasan. Tartsd a lapokat sorrendben, vágd el a jeleknél, majd rakd a kötegeket balról jobbra, fentről lefelé egymásra.
 	Unlocked {n} of {m} files	{n} / {m} fájl feloldva

@@ -1,4 +1,4 @@
-//! Summarize Comments layouts that show the page (Acrobat's Summarize Comments ▸ Layout):
+//! Summarize Comments layouts that show the page (the viewer's Summarize Comments ▸ Layout):
 //!
 //! - [`SummaryLayout::ConnectorLines`], "Document and comments with connector lines on single
 //!   pages": a landscape page with the commented page on the left and the comments in a column on

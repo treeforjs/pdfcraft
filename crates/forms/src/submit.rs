@@ -40,7 +40,7 @@ impl SubmitFormat {
         }
     }
 
-    /// How Acrobat names it.
+    /// How PDF names it.
     pub fn label(self) -> &'static str {
         match self {
             Self::Fdf => "FDF",

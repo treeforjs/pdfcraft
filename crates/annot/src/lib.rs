@@ -1,6 +1,6 @@
 //! pdfcraft-annot — comments (annotations), ISO 32000-2 §12.5, execution plan M5.1–M5.3.
 //!
-//! Builders for the comment types Acrobat's commenting tools create (sticky note, highlight,
+//! Builders for the comment types the viewer's commenting tools create (sticky note, highlight,
 //! underline, strikethrough, squiggly, rectangle, oval, line/arrow, freehand ink, text box),
 //! appearance streams for them ([`appearance`]), and the edits a comment goes through: reply,
 //! change its text, recolour, move, resize and delete.
@@ -92,7 +92,7 @@ impl NoteIcon {
     }
 }
 
-/// Fill & Sign marks (Acrobat's ✓, ✕, ●, ─).
+/// Fill & Sign marks (the viewer's ✓, ✕, ●, ─).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FillMark {
     Check,
@@ -122,7 +122,7 @@ impl FillMark {
     }
 }
 
-/// The stamps of Acrobat's stamp palette (drawn in PdfCraft's own style).
+/// The stamps of the viewer's stamp palette (drawn in PdfCraft's own style).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum StampKind {
     // Standard business.
@@ -333,7 +333,7 @@ pub enum Shape {
         icon: NoteIcon,
     },
     /// Text markup over quadrilaterals: `[x1 y1 x2 y2 x3 y3 x4 y4]` = top-left, top-right,
-    /// bottom-left, bottom-right (the order Acrobat writes, §12.5.6.10).
+    /// bottom-left, bottom-right (the order PDF writes, §12.5.6.10).
     TextMarkup {
         kind: Markup,
         quads: Vec<[f64; 8]>,
@@ -402,7 +402,7 @@ pub enum Shape {
         overlay: String,
         look: OverlayLook,
     },
-    /// A closed polygon (Polygon tool); with `cloud`, Acrobat's Cloud tool: the same polygon
+    /// A closed polygon (Polygon tool); with `cloud`, the viewer's Cloud tool: the same polygon
     /// with a cloudy border (`/BE /S /C`, `/IT /PolygonCloud`).
     Polygon {
         vertices: Vec<[f64; 2]>,
@@ -462,7 +462,7 @@ impl AttachIcon {
     }
 }
 
-/// A rectangle `[x0 y0 x1 y1]` as a quad in Acrobat's order (top-left, top-right, bottom-left,
+/// A rectangle `[x0 y0 x1 y1]` as a quad in the viewer's order (top-left, top-right, bottom-left,
 /// bottom-right).
 pub fn rect_quad(r: [f64; 4]) -> [f64; 8] {
     let [x0, y0, x1, y1] = normalize(r);
@@ -509,7 +509,7 @@ impl OverlayFont {
         }
     }
 
-    /// The `/DA` font resource name (Acrobat's form font names).
+    /// The `/DA` font resource name (the viewer's form font names).
     pub fn resource(self) -> &'static str {
         match self {
             OverlayFont::Helvetica => "Helv",
@@ -614,7 +614,7 @@ pub struct Meta {
     pub id: String,
 }
 
-/// Review states a reply can set (§12.5.6.3, Table 172; Acrobat's "Set status").
+/// Review states a reply can set (§12.5.6.3, Table 172; the viewer's "Set status").
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ReviewState {
     None,
@@ -953,7 +953,7 @@ fn base_dict(subtype: &str, rect: [f64; 4], page: ObjRef, contents: &str, author
     d
 }
 
-/// Acrobat's `/Subj` for each tool (shown as the comment type in other viewers).
+/// The viewer's `/Subj` for each tool (shown as the comment type in other viewers).
 fn subject(shape: &Shape) -> &'static str {
     match shape {
         Shape::Note { .. } => "Sticky Note",
@@ -1349,7 +1349,7 @@ fn touch(d: &mut Dict, meta: &Meta) {
     }
 }
 
-/// Delete a comment together with its pop-up and its replies (and theirs), as Acrobat does.
+/// Delete a comment together with its pop-up and its replies (and theirs), as other viewers do.
 pub fn delete_annotation(doc: &mut Document, page: usize, index: usize) -> Result<(), AnnotError> {
     let p = page_ref(doc, page)?;
     let list = annots(doc, p);
@@ -1471,7 +1471,7 @@ fn write_rich(doc: &mut Document, r: ObjRef, text: &rich::RichText, natural_widt
         touch(d, meta);
     })?;
     // The box grows and shrinks with the text instead of clipping it. A locked box keeps its
-    // text editable (as in Acrobat), so the re-fit ignores the lock.
+    // text editable (as in PDF), so the re-fit ignores the lock.
     match fitted_box(doc, r, text, natural_width) {
         Some(rect) => apply_text_box(doc, r, rect, meta),
         None => set_appearance(doc, r),
@@ -1517,7 +1517,7 @@ pub fn add_reply(doc: &mut Document, page: usize, index: usize, text: &str, auth
     reply(doc, page, index, text, author, meta, None)
 }
 
-/// Set a comment's review status (Acrobat: "Set status ▸ Accepted"…). Like Acrobat this adds a
+/// Set a comment's review status (PDF: "Set status ▸ Accepted"…). This adds a
 /// state reply (`/State`, `/StateModel /Review`) by `author`; the latest one wins.
 pub fn set_review_state(doc: &mut Document, page: usize, index: usize, state: ReviewState, author: &str, meta: &Meta) -> Result<usize, AnnotError> {
     let text = format!("{} set by {}", state.name(), if author.is_empty() { "unknown" } else { author });
@@ -1573,13 +1573,13 @@ fn flags(doc: &Document, r: ObjRef) -> i64 {
     doc.get(r).as_dict().and_then(|d| d.get(b"F").and_then(|f| doc.resolve(f).as_f64())).unwrap_or(0.0) as i64
 }
 
-/// Refuse to change a locked comment (Acrobat: Properties ▸ Locked).
+/// Refuse to change a locked comment (PDF: Properties ▸ Locked).
 fn unlocked(doc: &Document, r: ObjRef) -> Result<(), AnnotError> {
     if flags(doc, r) & FLAG_LOCKED != 0 { Err(AnnotError::Invalid("the comment is locked".into())) } else { Ok(()) }
 }
 
 /// Lock or unlock a comment (the Locked flag). A locked comment can't be moved, resized,
-/// restyled or deleted; its text and replies stay editable, as in Acrobat.
+/// restyled or deleted; its text and replies stay editable, as in other viewers.
 pub fn set_locked(doc: &mut Document, page: usize, index: usize, locked: bool) -> Result<(), AnnotError> {
     let (_, r) = annot_ref(doc, page, index)?;
     let f = if locked { flags(doc, r) | FLAG_LOCKED } else { flags(doc, r) & !FLAG_LOCKED };
@@ -1587,7 +1587,7 @@ pub fn set_locked(doc: &mut Document, page: usize, index: usize, locked: bool) -
     Ok(())
 }
 
-/// Mark or unmark a comment with a checkmark. Like Acrobat this adds a hidden state reply with
+/// Mark or unmark a comment with a checkmark. This adds a hidden state reply with
 /// `/StateModel /Marked` by `author`; the latest one wins. It's private bookkeeping, not a status.
 pub fn set_marked(doc: &mut Document, page: usize, index: usize, marked: bool, author: &str, meta: &Meta) -> Result<usize, AnnotError> {
     let (p, parent) = annot_ref(doc, page, index)?;
@@ -2018,7 +2018,7 @@ fn line_endings_of(d: &Dict) -> Option<Vec<LineEnding>> {
     }
 }
 
-/// Replace Text (Acrobat's proposal): strike out `quads` and add a caret at the end of the
+/// Replace Text (the viewer's proposal): strike out `quads` and add a caret at the end of the
 /// struck text holding `replacement`, grouped with the strikeout (`/IRT` + `/RT /Group`) so they
 /// move, list and delete as one. Returns the strikeout's index.
 #[allow(clippy::too_many_arguments)]

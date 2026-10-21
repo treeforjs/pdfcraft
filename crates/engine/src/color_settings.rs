@@ -19,7 +19,7 @@
 //!   preview composites its plates through the resolved display conversion.
 //! - Convert Colors and Convert to PDF/X take their defaults from them (see the automation tools).
 //!
-//! **Untagged colour policy.** `output_intent` (Acrobat's "Output Intent Overrides Working
+//! **Untagged colour policy.** `output_intent` (the viewer's "Output Intent Overrides Working
 //! Spaces", the default): a document's output intent profile replaces the working space of its
 //! family; `working_space`: always the working spaces; `unmanaged`: no colour management of
 //! untagged colour (gray and RGB as sRGB numbers, CMYK naively as R = (1 − C)(1 − K), RGB and Lab

@@ -70,6 +70,17 @@ fn ok(h: &mut Harness<'static, PdfCraftApp>, c: &ControlClient, method: &str, pa
 }
 
 #[test]
+fn a_timed_out_queued_edit_is_not_applied_on_a_later_frame() {
+    let (mut h, c) = harness();
+    let before = h.state().theme_preference;
+    let (rx, ticket) = c.send_cancellable("ui.set", json!({ "key": "theme", "value": "dark" }));
+    assert!(ticket.cancel_before_start());
+    h.run_steps(3);
+    assert_eq!(h.state().theme_preference, before);
+    assert!(rx.try_recv().is_err());
+}
+
+#[test]
 fn bookmark_titles_can_be_searched_over_control() {
     let (mut h, c) = harness();
     for (index, title, page) in [(0, "Background", 0), (1, "Target chapter", 3)] {
@@ -712,10 +723,12 @@ fn simplified_chinese_about_tabs_and_credit_controls() {
     let documents = ok(&mut h, &c, "ui.state", json!({}))["documents"].clone();
     ok(&mut h, &c, "ui.set", json!({"key": "language", "value": "zh-hans"}));
     ok(&mut h, &c, "ui.set", json!({"key": "dialog", "value": "about"}));
-    for label in ["关于", "贡献者", "模型"] {
+    for label in ["关于", "贡献者"] {
         let found = ok(&mut h, &c, "ui.inspect", json!({"query": label}));
         assert!(found["widgets"].as_array().unwrap().iter().any(|w| w["label"] == label), "{found}");
     }
+    let removed = ok(&mut h, &c, "ui.inspect", json!({"query": "模型"}));
+    assert_eq!(removed["count"].as_u64(), Some(0), "{removed}");
     ok(&mut h, &c, "ui.click", json!({"label": "贡献者"}));
     for label in ["用户名", "显示名称", "真实姓名", "排序", "名称列表", "表格", "首次提交"] {
         let found = ok(&mut h, &c, "ui.inspect", json!({"query": label}));
@@ -726,10 +739,6 @@ fn simplified_chinese_about_tabs_and_credit_controls() {
         let found = ok(&mut h, &c, "ui.inspect", json!({"query": label}));
         assert!(found["count"].as_u64().unwrap() > 0, "{label}: {found}");
     }
-    ok(&mut h, &c, "ui.click", json!({"label": "模型"}));
-    let columns = ok(&mut h, &c, "ui.inspect", json!({"query": "占全部提交的比例"}));
-    let empty = ok(&mut h, &c, "ui.inspect", json!({"query": "此版本未包含模型贡献记录。"}));
-    assert!(columns["count"].as_u64().unwrap() > 0 || empty["count"].as_u64().unwrap() > 0, "{columns}, {empty}");
     assert_eq!(ok(&mut h, &c, "ui.state", json!({}))["documents"], documents);
 }
 

@@ -8,6 +8,7 @@ mod demo_pdf;
 mod fidelity;
 mod fuzz;
 mod gates;
+mod js_sandbox;
 mod layers;
 mod macos_integration;
 mod parity;
@@ -19,6 +20,7 @@ type Command = fn(&[String]) -> anyhow::Result<()>;
 
 /// Every subcommand: name, one-line summary, entry point.
 const COMMANDS: &[(&str, &str, Command)] = &[
+    ("js-sandbox", "Build the memory- and fuel-contained WASIp1 scripting kernel before native/browser builds", js_sandbox::run),
     ("version", "Print the workspace version, or `version set X.Y.Z[-pre]` to change it and refresh Cargo.lock", version_cmd),
     ("layers", "Enforce the crate dependency layering (plan/architecture.md §3)", gates::layers),
     ("wasm", "cargo check --target wasm32-unknown-unknown for every crate below L8", gates::wasm),
@@ -28,7 +30,7 @@ const COMMANDS: &[(&str, &str, Command)] = &[
     ("corpus", "Fetch the pinned pdf.js test corpus into corpus/ (git-ignored) and verify it; --update-pin re-records the pin", gates::corpus),
     ("check", "Robustness sweep over corpus/ with pdfcraft-cli; fails on crashes or regressions vs xtask/baselines", gates::check),
     ("fuzz", "Mutation fuzzing of open/render/edit/save in child processes; findings in fuzz-out/ (--time 300)", fuzz::run),
-    ("parity", "Validate parity/acrobat-features.toml against the registry, tools and tests; report progress (--json, --partial)", parity::run),
+    ("parity", "Validate parity/features.toml against the registry, tools and tests; report progress (--json, --partial)", parity::run),
     (
         "macos-integration",
         "Report macOS bundle, Quick Look, Spotlight and PDF integration diagnostics without mutating system state",

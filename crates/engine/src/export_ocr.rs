@@ -1,4 +1,4 @@
-//! Export a PDF with text recognition: Acrobat's "Run OCR" export setting (parity
+//! Export a PDF with text recognition: the viewer's "Run OCR" export setting (parity
 //! `create.export-ocr`).
 //!
 //! Exporting a scan to a text-bearing format (Word, RTF, HTML, Excel, PowerPoint, plain text)
@@ -7,7 +7,7 @@
 //! so unsaved edits count), hands that copy to the exporter, and drops it: the document itself,
 //! its history and its dirty state never change.
 //!
-//! [`ExportOcrMode::Auto`] (the default, as in Acrobat) recognizes only scanned pages, those that
+//! [`ExportOcrMode::Auto`] (the default, as in PDF) recognizes only scanned pages, those that
 //! draw an image and have no text, and only when the session's selected OCR engine
 //! ([`Session::ocr_engine_for`]) can run and reads the language; without it, or when the document's permissions don't allow recognition, the export goes ahead
 //! without text recognition and the report says why. [`ExportOcrMode::On`] recognizes every

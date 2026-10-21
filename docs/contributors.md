@@ -1,7 +1,6 @@
 # Contributors in the About window
 
-**About ▸ Contributors** credits everyone who contributed to PdfCraft, and **About ▸ Models** credits
-the AI models named in `Co-Authored-By` trailers. This page records the decision.
+**About ▸ Contributors** credits the people who contributed to PdfCraft. Human records and self-chosen names are preserved independently of build tooling.
 
 ## Decision
 
@@ -51,4 +50,4 @@ python3 contributors.py .           # regenerate + verify; needs git, Python 3.1
 python3 contributors.py --check .   # verify people.toml only
 ```
 
-Commit the updated `contributors/contributors.json`. Git author names and emails are never recorded.
+The build consumes only human records; other generation fields are ignored. Commit the updated `contributors/contributors.json`. Git author names and emails are never recorded.

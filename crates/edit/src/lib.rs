@@ -1,4 +1,4 @@
-//! pdfcraft-edit — page content editing (L4). Today: page marks, Acrobat's Header & footer,
+//! pdfcraft-edit — page content editing (L4). Today: page marks, the viewer's Header & footer,
 //! Watermark, Background and Bates numbering (execution plan M7.6).
 //!
 //! **How marks are stored.** Each mark is one content stream appended to (or, for content behind
@@ -34,7 +34,7 @@ pub enum MarkKind {
     Watermark,
     Background,
     /// A header or footer with a Bates number: added, kept and removed apart from other headers
-    /// and footers (Acrobat's Bates Numbering ▸ Remove).
+    /// and footers (the viewer's Bates Numbering ▸ Remove).
     Bates,
 }
 
@@ -51,7 +51,7 @@ impl MarkKind {
 
 pub type Rgb = [f64; 3];
 
-/// Header and footer settings (Acrobat's Add Header and Footer dialog).
+/// Header and footer settings (the viewer's Add Header and Footer dialog).
 #[derive(Clone, Debug, PartialEq)]
 pub struct HeaderFooter {
     /// Left, centre and right header text, then left, centre and right footer text. Tokens:
@@ -70,13 +70,13 @@ pub struct HeaderFooter {
 }
 
 impl Default for HeaderFooter {
-    /// Acrobat's defaults: 8 pt black, margins 0.5 in top and bottom, 1 in left and right.
+    /// The viewer's defaults: 8 pt black, margins 0.5 in top and bottom, 1 in left and right.
     fn default() -> Self {
         Self { text: Default::default(), font_size: 8.0, color: [0.0; 3], underline: false, margins: [36.0, 36.0, 72.0, 72.0], start_number: 1 }
     }
 }
 
-/// A picture for a background or watermark (Acrobat: Source ▸ File): an XObject already in
+/// A picture for a background or watermark (PDF: Source ▸ File): an XObject already in
 /// the document, an image (drawn into a unit square) or a form (a page of a PDF).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct MarkSource {
@@ -99,7 +99,7 @@ pub struct Watermark {
     pub color: Rgb,
     /// 0–1.
     pub opacity: f64,
-    /// Degrees counter-clockwise (Acrobat's 45° runs from bottom-left to top-right).
+    /// Degrees counter-clockwise (the viewer's 45° runs from bottom-left to top-right).
     pub rotation: f64,
     /// Draw behind the page content instead of on top.
     pub behind: bool,
@@ -243,7 +243,7 @@ pub fn bates_start(template: &str) -> Option<u64> {
 }
 
 /// `template` with every Bates number starting at `start`: numbering that continues from an
-/// earlier file (Acrobat's Bates Numbering across a list of files).
+/// earlier file (the viewer's Bates Numbering across a list of files).
 pub fn with_bates_start(template: &str, start: u64) -> String {
     let mut out = String::with_capacity(template.len());
     let mut rest = template;
@@ -463,7 +463,7 @@ fn text_op(x: f64, y: f64, text: &str) -> Vec<u8> {
 }
 
 /// Add a header and footer to `pages` (0-based). With `replace`, existing headers and footers on
-/// those pages are removed first (Acrobat's Replace Existing). One with a Bates number is a
+/// those pages are removed first (the viewer's Replace Existing). One with a Bates number is a
 /// [`MarkKind::Bates`] mark: it replaces, and is replaced by, only other Bates numbers.
 pub fn add_header_footer(doc: &mut Document, pages: &[usize], hf: &HeaderFooter, replace: bool, cx: &Context) -> Result<(), EditError> {
     let all = page_list(doc);

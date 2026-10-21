@@ -678,7 +678,7 @@ pub fn interpret<'a>(
             }
             TypedInstruction::ShowText(s) => {
                 if context.get().text_state.font.is_none() {
-                    // Even if no explicit font was set, we try to assume Helvetica. Acrobat
+                    // Even if no explicit font was set, we try to assume Helvetica. PDF
                     // seems to do the same.
                     context.get_mut().text_state.font = Font::new_standard(
                         StandardFont::Helvetica,
@@ -691,7 +691,7 @@ pub fn interpret<'a>(
             }
             TypedInstruction::ShowTexts(s) => {
                 if context.get().text_state.font.is_none() {
-                    // Even if no explicit font was set, we try to assume Helvetica. Acrobat
+                    // Even if no explicit font was set, we try to assume Helvetica. PDF
                     // seems to do the same.
                     context.get_mut().text_state.font = Font::new_standard(
                         StandardFont::Helvetica,

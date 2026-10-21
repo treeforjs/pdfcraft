@@ -1,7 +1,7 @@
 <h1 align="center">PdfCraft</h1>
 
 <p align="center">
-  <b>The PDF workbench; an open-source, clean-room reimplementation of Adobe Acrobat, rebuilt in pure Rust.</b><br>
+  <b>The PDF workbench; open-source document tools built in Rust.</b><br>
   Read, organize, combine, split and secure PDFs in a fast, native app, written in Rust from the ground up.<br>
   macOS · Windows · Linux · FreeBSD · the web
 </p>
@@ -254,7 +254,7 @@ Every engine feature is reachable without the GUI, through one table of JSON-Sch
 
   With `--root`, every file the script's steps read or write stays in that directory, including the PNG a step saves with `"out"` (the script itself is read from wherever you name it).
 
-- **An MCP server**, for any MCP client: an AI agent, an editor integration or your own automation. **It is opt-in:** PdfCraft never starts it on its own, and it opens no network port. It runs only while a client launches `pdfcraft-cli mcp`, talks over stdin/stdout, and stops when the client disconnects. To enable it, add it to your agent's MCP configuration (most clients accept this shape):
+- **An MCP server**, for any MCP client: an editor integration or your own automation. **It is opt-in:** PdfCraft never starts it on its own, and it opens no network port. It runs only while a client launches `pdfcraft-cli mcp`, talks over stdin/stdout, and stops when the client disconnects. To enable it, add it to your agent's MCP configuration (most clients accept this shape):
 
   ```json
   { "mcpServers": { "pdfcraft": { "command": "pdfcraft-cli", "args": ["mcp", "--root", "/path/to/your/pdfs"] } } }
@@ -328,6 +328,8 @@ For Windows 11 graphics setup, see the [NVIDIA and Intel driver guide](docs/wind
 ```sh
 git clone https://github.com/treeforjs/pdfcraft
 cd pdfcraft
+rustup target add wasm32-wasip1
+cargo xtask js-sandbox
 cargo run --release -p pdfcraft -- some.pdf     # desktop app
 cargo xtask demo-pdf                              # build the showcase PDF used in these screenshots
 cargo xtask screenshots                           # regenerate every screenshot in this README
@@ -354,26 +356,21 @@ Packaging and the release process are described in [docs/releasing.md](docs/rele
 
 ## What's next
 
-PdfCraft is young and moving fast. The aim is a workbench where you can view, organize, annotate, fill, sign and edit PDFs, at parity with Acrobat Pro.
+PdfCraft is a pre-1.0 workbench for viewing, organizing, annotating, filling, signing and editing PDFs.
 
-**Where it stands (October 2026), honestly:** about half of Acrobat Pro's offline features are in (88% of the must-haves), but that is roughly a third of the work, because the hardest parts are still ahead.
+The current inventory has **797 entries: 435 shipped, 147 partial and 215 planned**. These labels identify implemented paths and referenced tests; they do not establish conformance, test execution on every platform, or a completion percentage.
 
-- **Good today:** viewing and search; organizing, combining and splitting; most kinds of comment; filling and authoring forms (with sandboxed JavaScript); passwords, redaction and sanitizing; basic digital signatures; printing; the Accessibility Checker; agent control through the CLI and MCP.
-- **Still borrowed:** pages are drawn by the `hayro` crate while our own renderer is built.
-- **Thin or missing:** reliable editing of existing text (especially CJK), OCR beyond Latin script, Office import/export, signature timestamps and long-term validation, PDF/A/X/UA preflight, XFA forms and localization.
-- **Hardening:** fuzzing still turns up crashes and hangs on hostile files; each one is fixed with a regression test. Quality has not yet been compared with Acrobat side by side.
+The main gaps are runtime and allocation hardening, large-document memory use, the model/display-list renderer, broader existing-text and multilingual recognition support, layout-faithful Office conversion, complete standards and archival-signature validation, and native accessibility and platform acceptance.
 
-**Next, in order:** our own renderer, hardening and a fidelity harness against Acrobat, editing existing content, then the Pro workflows (signatures, OCR, Office, preflight, XFA) and 1.0 polish.
-
-The honest assessment by area, what's lacking and where we're going are in **[ROADMAP.md](ROADMAP.md#honest-assessment-2026-10-05)**, with the full plan, progress and estimates.
+The current assessment and priorities are in **[ROADMAP.md](ROADMAP.md#honest-assessment--2026-10-20)**.
 
 ---
 
 ## Downloads
 
 Releases are published on GitHub: the [latest release](https://github.com/treeforjs/pdfcraft/releases/latest)
-and [all releases](https://github.com/treeforjs/pdfcraft/releases). **No release has been published from
-this repository yet**; until one is, build from source (see [Get started](#get-started)). The release
+and [all releases](https://github.com/treeforjs/pdfcraft/releases). You can also build from source
+(see [Get started](#get-started)). The release
 workflow (`.github/workflows/release.yml`, described in [docs/releasing.md](docs/releasing.md)) produces
 the builds below, where `<ver>` is the version number and `SHA256SUMS.txt` lists a checksum for every file.
 
@@ -435,8 +432,8 @@ Every Linux build needs glibc 2.35 or newer (Ubuntu 22.04+, Debian 12+, Fedora 3
 ## Contributing
 
 Issues and pull requests are welcome at [github.com/treeforjs/pdfcraft](https://github.com/treeforjs/pdfcraft).
-[AGENTS.md](AGENTS.md) holds the rules every contributor and every AI agent follows here: the asset
-policy (nothing from Adobe products, only openly licensed material, everything attributed), the
+[AGENTS.md](AGENTS.md) holds the rules every contributor follows here: the asset
+policy (no copied proprietary-product assets, only openly licensed material, everything attributed), the
 clean-room rules, the never-crash rules, how agent control is kept opt-in, and the working guide
 (session start, quality gates, how to run and look at the app). Contributor credits in the About
 window are explained in [docs/contributors.md](docs/contributors.md).
@@ -452,5 +449,3 @@ Bundled fonts, icons, images and other assets keep their own open licenses; each
 with its author, source and license in [ATTRIBUTION.md](ATTRIBUTION.md). Release builds also embed
 the Japanese fonts of [craft-fonts](https://github.com/storytold/craft-fonts/blob/main/ATTRIBUTION.md)
 (SIL Open Font License 1.1).
-
-<sub>Adobe, Photoshop, Illustrator, Premiere Pro, Lightroom, Acrobat, After Effects and InDesign are trademarks or registered trademarks of Adobe Inc. in the United States and/or other countries. PdfCraft is an independent, open-source project and is not affiliated with, sponsored by or endorsed by Adobe Inc.; these names are used only to describe the workflows it is compatible with.</sub>

@@ -1,4 +1,4 @@
-//! Flatten (Acrobat: Fill & Sign ▸ flatten, Print production ▸ Flattener, Prepare form ▸
+//! Flatten (PDF: Fill & Sign ▸ flatten, Print production ▸ Flattener, Prepare form ▸
 //! Flatten): annotation appearances become ordinary page content and the annotations go away.
 //!
 //! Each visible annotation's normal appearance (for check boxes and radio buttons, the one its

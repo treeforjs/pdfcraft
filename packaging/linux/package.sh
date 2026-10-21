@@ -20,7 +20,7 @@ umask 022
 # shellcheck source=../env.sh
 . "$(dirname "${BASH_SOURCE[0]}")/../env.sh"
 HERE="$ROOT/packaging/linux"
-APP_ID=ai.storyteller.pdfcraft
+APP_ID=io.github.treeforjs.pdfcraft
 
 SKIP_BUILD=0
 FORMATS="appimage deb rpm tar cli"
@@ -39,7 +39,7 @@ case "$ARCH" in
   aarch64 | arm64) ARCH=aarch64; DEB_ARCH=arm64 ;;
   *) echo "unsupported architecture $ARCH" >&2; exit 2 ;;
 esac
-export PDFCRAFT_MAINTAINER="${PDFCRAFT_MAINTAINER:-PdfCraft maintainers <pdfcraft@storyteller.ai>}"
+export PDFCRAFT_MAINTAINER="${PDFCRAFT_MAINTAINER:-Craft contributors <noreply@users.noreply.github.com>}"
 BASENAME="pdfcraft-$VERSION-linux-$ARCH"
 
 echo "==> PdfCraft $VERSION for Linux $ARCH ($FORMATS)"
@@ -63,8 +63,10 @@ sed -e "s/@VERSION@/$VERSION/g" -e "s/@DATE@/$PDFCRAFT_BUILD_DATE/g" \
   "$HERE/$APP_ID.metainfo.xml.in" >"$STAGE/usr/share/metainfo/$APP_ID.metainfo.xml"
 mkdir -p "$STAGE/usr/share/icons"
 cp -R "$ROOT/assets/app-icon/hicolor" "$STAGE/usr/share/icons/"
+bash "$HERE/desktop-compat.sh" "$STAGE/usr"
 mkdir -p "$STAGE/usr/share/doc/pdfcraft"
 copy_docs "$STAGE/usr/share/doc/pdfcraft"
+install -m644 "$ROOT/assets/fonts/OFL-Cantarell.txt" "$STAGE/usr/share/doc/pdfcraft/OFL-Cantarell.txt"
 # OCR models: the app finds them at <bin>/../share/pdfcraft/models, so in every format below.
 stage_models "$STAGE/usr/share/pdfcraft/models"
 # Checkouts and downloaded models can themselves have owner-only permissions. Every staged
@@ -124,6 +126,8 @@ if has appimage; then
   APPDIR="$WORK/PdfCraft.AppDir"
   cp -R "$STAGE" "$APPDIR"
   mv "$APPDIR/usr/share/doc" "$WORK/doc-unused"
+  install -m644 "$ROOT/assets/fonts/OFL-Cantarell.txt" "$APPDIR/OFL-Cantarell.txt"
+  install -m644 "$ROOT/NOTICE" "$APPDIR/NOTICE"
   ln -s usr/bin/pdfcraft "$APPDIR/AppRun"
   install -m644 "$HERE/$APP_ID.desktop" "$APPDIR/$APP_ID.desktop"
   install -m644 "$ROOT/assets/app-icon/hicolor/256x256/apps/$APP_ID.png" "$APPDIR/$APP_ID.png"

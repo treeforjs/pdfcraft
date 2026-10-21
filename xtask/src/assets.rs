@@ -5,7 +5,7 @@
 //! time (`[[fetched]]`). This gate fails when:
 //! - an asset-like file in the repository has no entry, or its SHA-256 differs;
 //! - a licence is not on the allowlist, or a declared licence file is missing;
-//! - an icon, image or font names Adobe as author or source, or an `adobe_data` entry is not on
+//! - an icon, image or font has restricted authorship or provenance, or an `compatibility_data` entry is not on
 //!   the closed list approved in AGENTS.md §1.1;
 //! - a `[[bundled]]` crate version is not the one in Cargo.lock;
 //! - `ATTRIBUTION.md` is out of date (`--write` regenerates it).
@@ -35,8 +35,9 @@ pub const ALLOWED_LICENCES: &[&str] = &[
     "LicenseRef-Public-Domain",
 ];
 
-/// The closed list of Adobe-authored, non-visual technical data (AGENTS.md §1.1): (crate, path).
-pub const ADOBE_DATA_ALLOWED: &[(&str, &str)] = &[("hayro-cmap", "assets/cmaps.brotli"), ("hayro-interpret", "src/font/generated/metrics.rs")];
+/// The closed list of permitted, non-visual compatibility data (AGENTS.md §1.1): (crate, path).
+pub const COMPATIBILITY_DATA_ALLOWED: &[(&str, &str)] =
+    &[("hayro-cmap", "assets/cmaps.brotli"), ("hayro-interpret", "src/font/generated/metrics.rs")];
 
 /// File extensions that count as assets wherever they appear in the repository.
 const ASSET_EXTENSIONS: &[&str] = &[
@@ -88,7 +89,7 @@ pub struct Asset {
     pub usage: String,
     pub sha256: String,
     #[serde(default)]
-    pub adobe_data: bool,
+    pub compatibility_data: bool,
 }
 
 #[derive(Deserialize)]
@@ -106,7 +107,7 @@ pub struct Bundled {
     pub usage: String,
     pub sha256: String,
     #[serde(default)]
-    pub adobe_data: bool,
+    pub compatibility_data: bool,
 }
 
 #[derive(Deserialize)]
@@ -208,7 +209,7 @@ fn licence_ids(expr: &str) -> impl Iterator<Item = &str> {
     expr.split(|c: char| c.is_whitespace() || c == '(' || c == ')').filter(|t| !t.is_empty() && *t != "OR" && *t != "AND" && *t != "WITH")
 }
 
-fn mentions_adobe(s: &str) -> bool {
+fn restricted_source(s: &str) -> bool {
     s.to_ascii_lowercase().contains("adobe")
 }
 
@@ -216,7 +217,7 @@ fn mentions_adobe(s: &str) -> bool {
 pub fn check(root: &Path, m: &Manifest, repo_files: &[String], lock: &BTreeSet<(String, String)>) -> Vec<String> {
     let mut problems = Vec::new();
     let mut seen = BTreeSet::new();
-    // Kinds that may never come from Adobe (AGENTS.md §1.1): visual design, and UI translations
+    // Kinds that may not use restricted sources (AGENTS.md §1.1): visual design, and UI translations
     // (which must be clean-room, never taken from a product's string tables).
     let visual = |kind: &str| matches!(kind, "icon" | "image" | "font" | "logo" | "cursor" | "video" | "translation");
     let licence_ok = |what: &str, licence: &str, problems: &mut Vec<String>| {
@@ -234,11 +235,11 @@ pub fn check(root: &Path, m: &Manifest, repo_files: &[String], lock: &BTreeSet<(
         if !root.join(&a.licence_file).is_file() {
             problems.push(format!("{}: licence file {} is missing", a.path, a.licence_file));
         }
-        if visual(&a.kind) && (mentions_adobe(&a.author) || mentions_adobe(&a.source) || mentions_adobe(&a.title)) {
-            problems.push(format!("{}: {} from Adobe is forbidden (AGENTS.md §1.1)", a.path, a.kind));
+        if visual(&a.kind) && (restricted_source(&a.author) || restricted_source(&a.source) || restricted_source(&a.title)) {
+            problems.push(format!("{}: {} from a restricted source is forbidden (AGENTS.md §1.1)", a.path, a.kind));
         }
-        if a.adobe_data {
-            problems.push(format!("{}: adobe_data is only allowed for the closed list in AGENTS.md §1.1", a.path));
+        if a.compatibility_data {
+            problems.push(format!("{}: compatibility_data is only allowed for the closed list in AGENTS.md §1.1", a.path));
         }
         match std::fs::read(root.join(&a.path)) {
             Ok(bytes) if sha256_hex(&bytes) == a.sha256 => {}
@@ -257,13 +258,13 @@ pub fn check(root: &Path, m: &Manifest, repo_files: &[String], lock: &BTreeSet<(
         if !lock.contains(&(b.krate.clone(), b.version.clone())) {
             problems.push(format!("{what}: crate version not in Cargo.lock (dependency changed: re-audit its bundled assets)"));
         }
-        if visual(&b.kind) && (mentions_adobe(&b.author) || mentions_adobe(&b.source)) {
-            problems.push(format!("{what}: {} from Adobe is forbidden (AGENTS.md §1.1)", b.kind));
+        if visual(&b.kind) && (restricted_source(&b.author) || restricted_source(&b.source)) {
+            problems.push(format!("{what}: {} from a restricted source is forbidden (AGENTS.md §1.1)", b.kind));
         }
-        let adobe = mentions_adobe(&b.author);
-        let approved = ADOBE_DATA_ALLOWED.contains(&(b.krate.as_str(), b.path.as_str())) && b.kind == "data";
-        if (adobe || b.adobe_data) && !(approved && b.adobe_data) {
-            problems.push(format!("{what}: Adobe-authored material outside the closed list in AGENTS.md §1.1"));
+        let restricted = restricted_source(&b.author);
+        let approved = COMPATIBILITY_DATA_ALLOWED.contains(&(b.krate.as_str(), b.path.as_str())) && b.kind == "data";
+        if (restricted || b.compatibility_data) && !(approved && b.compatibility_data) {
+            problems.push(format!("{what}: restricted-source material outside the closed list in AGENTS.md §1.1"));
         }
         if b.sha256.len() != 64 {
             problems.push(format!("{what}: sha256 must be 64 hex digits"));
@@ -271,8 +272,8 @@ pub fn check(root: &Path, m: &Manifest, repo_files: &[String], lock: &BTreeSet<(
     }
     for f in &m.fetched {
         licence_ok(&f.file, &f.licence, &mut problems);
-        if visual(&f.kind) && (mentions_adobe(&f.author) || mentions_adobe(&f.source) || mentions_adobe(&f.title)) {
-            problems.push(format!("{}: {} from Adobe is forbidden (AGENTS.md §1.1)", f.file, f.kind));
+        if visual(&f.kind) && (restricted_source(&f.author) || restricted_source(&f.source) || restricted_source(&f.title)) {
+            problems.push(format!("{}: {} from a restricted source is forbidden (AGENTS.md §1.1)", f.file, f.kind));
         }
         if f.sha256.len() != 64 || f.licence_sha256.len() != 64 {
             problems.push(format!("{}: sha256 and licence_sha256 must be 64 hex digits", f.file));
@@ -283,8 +284,8 @@ pub fn check(root: &Path, m: &Manifest, repo_files: &[String], lock: &BTreeSet<(
     }
     for b in &m.build_input {
         licence_ok(&b.name, &b.licence, &mut problems);
-        if visual(&b.kind) && (mentions_adobe(&b.author) || mentions_adobe(&b.source) || mentions_adobe(&b.title)) {
-            problems.push(format!("{}: {} from Adobe is forbidden (AGENTS.md §1.1)", b.name, b.kind));
+        if visual(&b.kind) && (restricted_source(&b.author) || restricted_source(&b.source) || restricted_source(&b.title)) {
+            problems.push(format!("{}: {} from a restricted source is forbidden (AGENTS.md §1.1)", b.name, b.kind));
         }
         if !b.source.starts_with("https://") || !b.attribution.starts_with("https://") {
             problems.push(format!("{}: URLs must be https", b.name));
@@ -377,7 +378,7 @@ pub fn render_markdown(m: &Manifest) -> String {
         m.bundled.len()
     ));
     for b in &m.bundled {
-        let note = if b.adobe_data { " (non-visual data, AGENTS.md §1.1)" } else { "" };
+        let note = if b.compatibility_data { " (non-visual data, AGENTS.md §1.1)" } else { "" };
         let _ = writeln!(
             s,
             "| `{}` {} | `{}` | {}{} | {} | {} | {} | {} |",
@@ -447,11 +448,11 @@ mod tests {
             kind: kind.into(),
             usage: "u".into(),
             sha256: sha256_hex(&std::fs::read(root().join(path)).unwrap_or_default()),
-            adobe_data: false,
+            compatibility_data: false,
         }
     }
 
-    fn bundled(krate: &str, path: &str, author: &str, kind: &str, adobe_data: bool) -> Bundled {
+    fn bundled(krate: &str, path: &str, author: &str, kind: &str, compatibility_data: bool) -> Bundled {
         Bundled {
             krate: krate.into(),
             version: "1.0.0".into(),
@@ -463,7 +464,7 @@ mod tests {
             kind: kind.into(),
             usage: "u".into(),
             sha256: "0".repeat(64),
-            adobe_data,
+            compatibility_data,
         }
     }
 
@@ -510,14 +511,14 @@ mod tests {
         let p = check(&root(), &Manifest::default(), &["crates/ui-egui/src/i18n/ja.tsv".into()], &lock(&[]));
         assert!(p.iter().any(|p| p.contains("no ATTRIBUTION.toml entry")), "{p:?}");
         let m = Manifest { asset: vec![asset("crates/ui-egui/src/i18n/ja.tsv", "Adobe", "translation", "MIT")], ..Default::default() };
-        assert!(check(&root(), &m, &[], &lock(&[])).iter().any(|p| p.contains("from Adobe is forbidden")));
+        assert!(check(&root(), &m, &[], &lock(&[])).iter().any(|p| p.contains("from a restricted source is forbidden")));
     }
 
     #[test]
     fn adobe_icons_are_rejected() {
         let m = Manifest { asset: vec![asset("assets/icons/x.svg", "Adobe Inc.", "icon", "MIT")], ..Default::default() };
         let p = check(&root(), &m, &[], &lock(&[]));
-        assert!(p.iter().any(|p| p.contains("from Adobe is forbidden")), "{p:?}");
+        assert!(p.iter().any(|p| p.contains("from a restricted source is forbidden")), "{p:?}");
     }
 
     #[test]
@@ -543,7 +544,7 @@ mod tests {
     }
 
     #[test]
-    fn adobe_data_only_on_the_closed_list() {
+    fn compatibility_data_only_on_the_closed_list() {
         let l = lock(&[("hayro-cmap", "1.0.0"), ("other", "1.0.0")]);
         let ok = Manifest { bundled: vec![bundled("hayro-cmap", "assets/cmaps.brotli", "Adobe", "data", true)], ..Default::default() };
         assert!(check(&root(), &ok, &[], &l).is_empty());

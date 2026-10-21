@@ -96,7 +96,7 @@ fn the_field_tree_is_read_with_inheritance() {
 }
 
 /// Some writers leave every field out of `/Fields` and put the widgets only in the page
-/// annotations: the tree walk alone finds nothing, and Acrobat and the browsers fill them anyway.
+/// annotations: the tree walk alone finds nothing, and PDF and the browsers fill them anyway.
 /// The pages' widgets are adopted as fields, after the listed tree fields.
 #[test]
 fn fields_listed_only_on_the_pages_are_adopted() {
@@ -142,7 +142,7 @@ fn fields_listed_only_on_the_pages_are_adopted() {
 }
 
 /// pdf-lib and other writers give radio groups and check boxes an `/Opt` array and name the on
-/// states by position (`/0`, `/1`): the export values select them, as in Acrobat.
+/// states by position (`/0`, `/1`): the export values select them, as in other viewers.
 #[test]
 fn opt_export_values_select_button_states() {
     let objs: Vec<String> = vec![
@@ -554,7 +554,7 @@ fn formats_validation_and_calculations_run_like_acrobat() {
     )
     .unwrap();
     set_props(&mut doc, "Due", &FieldProps { format: Some(Format::Date("mmm d, yyyy".into())), ..FieldProps::default() }).unwrap();
-    // The scripts are Acrobat's, so Acrobat (and we, after a save) read them back.
+    // The scripts are the viewer's, so other viewers (and we, after a save) read them back.
     let doc2 = reopen(&doc);
     let total = field(&fields(&doc2), "Total").clone();
     assert_eq!(total.actions.calculate, Calculate::Notation("Price * Qty".into()));
@@ -573,7 +573,7 @@ fn formats_validation_and_calculations_run_like_acrobat() {
     assert_eq!(field(&all, "Total").value, ["2469"]);
     assert!(ap(&doc, &field(&all, "Total").widgets[0]).contains("($2,469.00) Tj"));
     assert_eq!(field(&all, "Count").value, ["2"]);
-    // Keystroke and validation errors use Acrobat's messages and change nothing.
+    // Keystroke and validation errors use the viewer's messages and change nothing.
     assert_eq!(
         set_value(&mut doc, "Qty", &FieldValue::Text("lots".into())),
         Err(FormError::Invalid("The value entered does not match the format of the field [ Qty ]".into()))

@@ -1025,7 +1025,7 @@ fn type3_path(face: &CraftFont, ch: char) -> Result<(Vec<u8>, f64), EditError> {
     let (dx, width) = proportional(ch, &glyph);
     let scale = 1000.0;
     // d1 is `wx wy llx lly urx ury` (ISO 32000-2 §9.6.4) with a box enclosing the glyph;
-    // Acrobat draws a bullet in place of a glyph whose d1 is malformed.
+    // PDF draws a bullet in place of a glyph whose d1 is malformed.
     let b = if glyph.contours.is_empty() { [0.0; 4] } else { glyph.bbox };
     let mut out = format!(
         "{} 0 {} {} {} {} d1\n",

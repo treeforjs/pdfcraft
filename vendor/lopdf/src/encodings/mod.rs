@@ -197,7 +197,7 @@ pub fn encode_utf16_be(text: &str, out: &mut Vec<u8>) {
 
 /// Encodes the given `str` to UTF-8. This method of encoding text strings
 /// is first specified in PDF2.0 and reader support is still lacking
-/// (notably, Adobe Acrobat Reader doesn't support it at the time of writing).
+/// (notably, some PDF readers do not support it at the time of writing).
 /// Thus, using it is **NOT RECOMMENDED**.
 pub fn encode_utf8(text: &str) -> Vec<u8> {
     // Prepend BOM to the mark string as UTF-8 encoded.

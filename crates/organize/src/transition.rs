@@ -1,5 +1,5 @@
 //! Page transitions (ISO 32000-2 §12.4.4.1, Table 164) and automatic advance (`/Dur`, Table 31):
-//! Acrobat's Organize Pages ▸ More ▸ Page Transitions, execution plan M4.
+//! The viewer's Organize Pages ▸ More ▸ Page Transitions, execution plan M4.
 //!
 //! Reading is lenient: an unknown style reads as `R` (the spec's default), out-of-range numbers
 //! fall back to their defaults, and entries that do not apply to the style are ignored. Writing is
@@ -260,7 +260,7 @@ pub fn page_transitions(doc: &Document) -> Result<Vec<PageTransition>, OrganizeE
 }
 
 /// Set (or with `None`, remove) the transition and the auto-advance time of `pages` (0-based).
-/// The two are set together, as Acrobat's Page Transitions dialog does. Atomic: everything is
+/// The two are set together, as the viewer's Page Transitions dialog does. Atomic: everything is
 /// validated before any page changes.
 pub fn set_page_transition(doc: &mut Document, pages: &[usize], settings: &PageTransition) -> Result<(), OrganizeError> {
     let all = walk(doc)?;

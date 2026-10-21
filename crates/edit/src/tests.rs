@@ -585,7 +585,7 @@ fn japanese_paragraph_uses_unicode_type3_fallback() {
 }
 
 /// Every Type 3 fallback glyph starts with a well-formed `d1`: six operands, the second 0, and a
-/// box that encloses every point of the glyph. Acrobat shows a bullet for a glyph whose `d1`
+/// box that encloses every point of the glyph. the viewer shows a bullet for a glyph whose `d1`
 /// has the wrong operand count.
 #[test]
 fn type3_fallback_glyphs_declare_a_well_formed_d1() {

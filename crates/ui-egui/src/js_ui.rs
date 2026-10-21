@@ -1,4 +1,4 @@
-//! Acrobat JavaScript in the shell: what scripts ask for (alerts, printing, navigation, links),
+//! PDF JavaScript in the shell: what scripts ask for (alerts, printing, navigation, links),
 //! the JavaScript console (⌘J), Document JavaScripts, and Preferences ▸ JavaScript.
 
 use egui::{Align, Layout};
@@ -8,12 +8,8 @@ use pdfcraft_engine::{DocId, Edit};
 use crate::theme::{self, Tokens};
 use crate::{PdfCraftApp, widgets};
 
-/// The JavaScript console: the input and the output so far.
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct JsConsole {
-    pub input: String,
-    pub log: Vec<String>,
-}
+mod console;
+pub use console::JsConsole;
 
 /// A script stopped on a dialog: what to run again once the user answers.
 #[derive(Clone, Debug, PartialEq)]
@@ -53,9 +49,11 @@ impl PdfCraftApp {
         if out.is_empty() {
             return;
         }
-        self.js_console.log.extend(out.console.iter().cloned());
+        for line in &out.console {
+            self.js_console.record("", line);
+        }
         for e in &out.errors {
-            self.js_console.log.push(format!("Error: {e}"));
+            self.js_console.record("Error: ", e);
         }
         let view = self.views.iter().position(|v| v.id == id);
         for r in out.requests {
@@ -124,17 +122,21 @@ impl PdfCraftApp {
                 let console = target.is_none();
                 let (error, result) = (o.error.clone(), o.result.clone());
                 let errors = if console { Vec::new() } else { o.error.into_iter().collect() };
-                self.handle_js(id, JsOutput { alerts: o.alerts, console: o.console, requests: o.requests, errors });
+                self.handle_js(id, JsOutput { alerts: o.alerts, console: o.console, requests: o.requests, errors, limited: o.limited });
                 if console {
                     match error {
-                        Some(e) => self.js_console.log.push(format!("Error: {e}")),
-                        None => self.js_console.log.extend(result),
+                        Some(e) => self.js_console.record("Error: ", &e),
+                        None => {
+                            if let Some(result) = result {
+                                self.js_console.record("", &result);
+                            }
+                        }
                     }
                 }
             }
             Err(e) => match target {
                 Some(field) => self.notify_fmt("{field}: {e}", &[("field", field), ("e", &e.to_string())]),
-                None => self.js_console.log.push(format!("Error: {e}")),
+                None => self.js_console.record("Error: ", &e.to_string()),
             },
         }
     }
@@ -176,7 +178,7 @@ impl PdfCraftApp {
         if script.trim().is_empty() {
             return;
         }
-        self.js_console.log.push(format!("> {}", script.trim()));
+        self.js_console.record("> ", script.trim());
         self.run_script(id, &script, None, Vec::new());
     }
 }
@@ -426,7 +428,7 @@ pub(crate) fn preferences_body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tok
     ui.checkbox(&mut app.reopen_last_session, tl!("Reopen the files that were open when PdfCraft last closed"));
     app.auto_update_checkbox(ui);
     ui.add_space(8.0);
-    // Identity: the author of new comments (Acrobat: Preferences ▸ Identity).
+    // Identity: the author of new comments (PDF: Preferences ▸ Identity).
     ui.label(egui::RichText::new(tl!("Identity")).font(theme::semibold(13.0)));
     ui.horizontal(|ui| {
         let label = ui.label(tl!("Name on new comments"));
@@ -446,11 +448,11 @@ pub(crate) fn preferences_body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tok
     egui::Frame::new().fill(t.hover).corner_radius(egui::CornerRadius::same(6)).inner_margin(egui::Margin::same(10)).show(ui, |ui| {
         ui.set_width(ui.available_width());
         let mut on = app.session.javascript();
-        if ui.checkbox(&mut on, tl!("Enable Acrobat JavaScript")).changed() {
+        if ui.checkbox(&mut on, tl!("Enable PDF JavaScript")).changed() {
             app.session.set_javascript(on);
         }
         ui.label(
-            egui::RichText::new(tl!("Scripts run in a sandbox without file or network access. A script that asks to open a web page needs your permission first. With JavaScript off, Acrobat's standard format, validate and calculate functions still work."))
+            egui::RichText::new(tl!("Scripts run in a sandbox without file or network access. A script that asks to open a web page needs your permission first. With JavaScript off, the viewer's standard format, validate and calculate functions still work."))
                 .small()
                 .color(t.text_muted),
         );

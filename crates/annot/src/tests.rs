@@ -141,7 +141,7 @@ fn every_tool_creates_a_drawable_comment() {
     assert_eq!(all[1].reference(b"Popup"), entries[2].as_ref());
 }
 
-/// #260 (page 7): Acrobat draws an Ink annotation as a smooth curve through its `/InkList`
+/// #260 (page 7): PDF draws an Ink annotation as a smooth curve through its `/InkList`
 /// points, where PdfCraft drew straight segments between them. Three or more points now make a
 /// Catmull-Rom spline through every point (as cubic Béziers); two points stay a line, one a dot.
 #[test]
@@ -379,7 +379,7 @@ fn a_locked_text_box_still_refits_its_text() {
     let mut doc = fixture();
     let t = add_annotation(&mut doc, &new(0, Shape::TextBox { rect: [100.0, 680.0, 304.0, 692.0], font_size: 12.0 }), &meta("t")).unwrap();
     set_locked(&mut doc, 0, t, true).unwrap();
-    // Resizing is refused, but the text (and its re-fit) stays editable, as in Acrobat.
+    // Resizing is refused, but the text (and its re-fit) stays editable, as in other viewers.
     assert!(matches!(set_rect(&mut doc, 0, t, [0.0, 0.0, 50.0, 50.0], &meta("")), Err(AnnotError::Invalid(_))));
     let long = "the quick brown fox jumps over the lazy dog";
     set_contents(&mut doc, 0, t, long, &meta("")).unwrap();
@@ -969,7 +969,7 @@ fn ap_of(doc: &Document, d: &Dict) -> String {
     String::from_utf8_lossy(&s.decoded().unwrap()).into_owned()
 }
 
-/// Acrobat-style `/RC` (a body style, paragraphs, styled spans, `<b>`/`<i>` and entities) is
+/// PDF-style `/RC` (a body style, paragraphs, styled spans, `<b>`/`<i>` and entities) is
 /// read into runs, drawn with the matching standard fonts, and written back.
 #[test]
 fn rich_text_is_read_drawn_and_written_back() {

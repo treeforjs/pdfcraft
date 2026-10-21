@@ -1,9 +1,9 @@
-//! Custom commands (Acrobat's Custom Commands): one tool bundled with preset options, kept as a
+//! Custom commands (the viewer's Custom Commands): one tool bundled with preset options, kept as a
 //! JSON file per command in a library folder and run in one step on an open document or on files.
 //!
 //! A command names a document tool from the tool table (anything taking `doc`, except the session
 //! and meta tools in [`DENIED`]) and a preset `params` object, validated against that tool's input
-//! schema when it is stored and again when it runs. `prompt_user` is Acrobat's "Prompt user"
+//! schema when it is stored and again when it runs. `prompt_user` is the viewer's "Prompt user"
 //! option: the caller may then supply (and must supply any missing required) options at run time;
 //! without it the presets are fixed. Running goes through [`Automation::call`], so the tool keeps
 //! its own validation, atomic writes and `--root` confinement; the library folder, imports,

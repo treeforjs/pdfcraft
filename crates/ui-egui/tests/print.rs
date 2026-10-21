@@ -41,7 +41,7 @@ fn print_dialog_lays_out_sheets_and_saves_a_pdf() {
     let _ = std::fs::remove_file(out);
 }
 
-/// Pages picked beforehand are what the dialog offers to print (Acrobat's "Selected pages").
+/// Pages picked beforehand are what the dialog offers to print (the viewer's "Selected pages").
 #[test]
 fn print_dialog_prints_the_selected_pages() {
     use pdfcraft_ui_egui::PrintWhich;

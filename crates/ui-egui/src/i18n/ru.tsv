@@ -4,8 +4,8 @@
 #
 # Clean-room: every entry was written from the plain meaning of the English label using ordinary
 # Russian computing vocabulary. No proprietary localisation resource, string table or product UI
-# (Acrobat's included) was consulted or copied; add entries the same way.
-# Product and technology names (PdfCraft, PDF, Acrobat JavaScript ...) are not translated;
+# (PDF's included) was consulted or copied; add entries the same way.
+# Product and technology names (PdfCraft, PDF, PDF JavaScript ...) are not translated;
 # the trailing "…" of dialog commands is kept.
 
 	Menu	Меню
@@ -78,7 +78,7 @@
 	Fit to width	По ширине
 	Display theme	Тема оформления
 	Side panels	Боковые панели
-	Enable Acrobat JavaScript	Включить Acrobat JavaScript
+	Enable PDF JavaScript	Включить PDF JavaScript
 	Flatten Fill & Sign when saving	Расплющить «Заполнить и подписать» при сохранении
 	Text, marks and signatures become part of the page. Other comments stay editable.	Текст, пометки и подписи становятся частью страницы. Остальные комментарии можно по-прежнему править.
 	OK	OK
@@ -151,8 +151,8 @@
 	Recent	Недавние
 	Files you open in PdfCraft appear here. Drop a PDF anywhere to open it.	Файлы, которые вы открываете в PdfCraft, появляются здесь. Перетащите PDF в любое место, чтобы открыть.
 	Privacy	Конфиденциальность
-	PdfCraft works offline. No telemetry, no account, and no cloud processing unless you add a provider.	PdfCraft работает офлайн. Без телеметрии, аккаунтов и облачной обработки, если вы не добавите провайдера.
-	Scripts run in a sandbox without file or network access. With JavaScript off, Acrobat's standard format, validate and calculate functions still work.	Скрипты выполняются в песочнице без доступа к файлам и сети. При отключённом JavaScript стандартные функции Acrobat форматирования, проверки и вычислений всё равно работают.
+	PdfCraft works offline.	PdfCraft работает офлайн.
+	Scripts run in a sandbox without file or network access. With JavaScript off, the viewer's standard format, validate and calculate functions still work.	Скрипты выполняются в песочнице без доступа к файлам и сети. При отключённом JavaScript стандартные функции PDF форматирования, проверки и вычислений всё равно работают.
 	Back to all tools	Назад ко всем инструментам
 	Close panel	Закрыть панель
 	View less	Показать меньше
@@ -449,8 +449,6 @@
 	Console	Консоль
 	Document JavaScripts	Скрипты документа
 	Document actions	Действия документа
-	AI assistant	AI-ассистент
-	Bring your own model (off by default)	Использовать свою модель (по умолчанию выключено)
 	Summarize	Суммировать
 	Ask about this document	Спросить об этом документе
 	Translate	Перевести
@@ -458,7 +456,6 @@
 	Planned	Запланировано
 	Planned for milestone	Запланировано на этап
 	open to see what it will include	откройте, чтобы увидеть содержимое
-	Optional: needs an AI provider you configure	Опционально: нужен настраиваемый AI-провайдер
 	Coming in milestone	Появится на этапе
 	Items marked Ready work today.	Пункты с пометкой «Готово» работают сегодня.
 	Preview	Предварительный просмотр
@@ -1348,10 +1345,10 @@
 	Weak	Низкая
 	Advanced Options {chevron}	Дополнительные параметры {chevron}
 	Compatibility	Совместимость
-	Acrobat X and later (256-bit AES)	Acrobat X и новее (256-битный AES)
-	Acrobat 7.0 and later (128-bit AES)	Acrobat 7.0 и новее (128-битный AES)
-	Acrobat 5.0 and later (128-bit RC4)	Acrobat 5.0 и новее (128-битный RC4)
-	Acrobat 3.0 and later (40-bit RC4)	Acrobat 3.0 и новее (40-битный RC4)
+	AES-256	AES-256
+	AES-128	AES-128
+	RC4-128	RC4-128
+	RC4-40	RC4-40
 	Encrypt	Шифровать
 	All document contents	Всё содержимое документа
 	All document contents except metadata	Всё содержимое документа, кроме метаданных
@@ -1678,7 +1675,6 @@
 	Downloading attachments on the web arrives with M3.10 ({n} bytes ready)	Скачивание вложений в веб-версии появится с M3.10 ({n} байт .ready)
 	`{command}` {when}	`{command}` {when}
 	ships in milestone {m}	появится на этапе {m}
-	needs an AI provider (off by default)	нужен AI-провайдер (по умолчанию выключено)
 	is available	доступно
 	is not available yet	пока недоступно
 	{label} failed: {e}	{label} не удалось: {e}
@@ -1742,7 +1738,7 @@
 	At least one signature has problems.	Хотя бы одна подпись имеет проблемы.
 	This document is secured. Some changes are restricted by its security settings.	Этот документ защищён. Некоторые изменения ограничены его настройками безопасности.
 	This is a dynamic XFA form, which PdfCraft can't display yet. What you see is the file's placeholder page.	Это динамическая форма XFA, которую PdfCraft пока не может отобразить. То, что вы видите, — заглушка страницы файла.
-	This form also contains XFA data, which PdfCraft doesn't read yet. You can fill its fields, but Acrobat may show the XFA values instead.	Эта форма также содержит данные XFA, которые PdfCraft пока не читает. Вы можете заполнить её поля, но Acrobat может показать значения XFA вместо них.
+	This form also contains XFA data, which PdfCraft doesn't read yet. You can fill its fields, but PDF may show the XFA values instead.	Эта форма также содержит данные XFA, которые PdfCraft пока не читает. Вы можете заполнить её поля, но PDF может показать значения XFA вместо них.
 	This document contains {n} interactive form fields.	Этот документ содержит {n} интерактивных полей формы.
 	This file was damaged and has been repaired. Saving keeps the repaired version.	Этот файл был повреждён и восстановлен. Сохранение сохраняет восстановленную версию.
 	Dismiss	Закрыть
@@ -1984,7 +1980,7 @@
 	Open email app	Открыть почтовое приложение
 	Open link	Открыть ссылку
 	Open this web page?	Открыть эту веб-страницу?
-	Scripts run in a sandbox without file or network access. A script that asks to open a web page needs your permission first. With JavaScript off, Acrobat's standard format, validate and calculate functions still work.	Скрипты выполняются в песочнице без доступа к файлам и сети. Скрипт, который просит открыть веб-страницу, сначала нуждается в вашем разрешении. При отключённом JavaScript стандартные функции Acrobat форматирования, проверки и вычислений всё равно работают.
+	Scripts run in a sandbox without file or network access. A script that asks to open a web page needs your permission first. With JavaScript off, the viewer's standard format, validate and calculate functions still work.	Скрипты выполняются в песочнице без доступа к файлам и сети. Скрипт, который просит открыть веб-страницу, сначала нуждается в вашем разрешении. При отключённом JavaScript стандартные функции PDF форматирования, проверки и вычислений всё равно работают.
 	Sign yourself	Подписать самим собой
 	Used when opening PDFs. An explicit launch or control mode takes precedence for the session.	Используется при открытии PDF. Явный запуск или режим управления имеет приоритет для сессии.
 	Write this email?	Написать это письмо?

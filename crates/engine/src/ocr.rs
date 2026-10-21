@@ -59,11 +59,11 @@ pub(crate) struct Engines {
 /// Recognize Text settings.
 #[derive(Clone, Debug, PartialEq)]
 pub struct OcrSettings {
-    /// Resolution pages are rendered at for recognition (Acrobat's "Downsample to" choices).
+    /// Resolution pages are rendered at for recognition (the viewer's "Downsample to" choices).
     pub dpi: f32,
     /// Language code from [`LANGUAGES`]; unsupported alphabets are rejected.
     pub language: String,
-    /// Leave pages that already have text alone (Acrobat reports "page contains renderable
+    /// Leave pages that already have text alone (PDF reports "page contains renderable
     /// text" and skips them).
     pub skip_text_pages: bool,
     /// Detect pages turned by a quarter or half turn and read them upright

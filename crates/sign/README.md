@@ -14,12 +14,21 @@ for s in signatures(&doc, &bytes, &trust) {                                // li
   certificates (`x509`), CMS SignedData (`cms`), and PKCS #12 digital ID files (`pkcs12`):
   PBES2 (PBKDF2 + AES/3DES), the legacy SHA-1 3DES/RC2 schemes, and MAC checks. Writing uses
   OpenSSL 3's defaults (AES-256-CBC, HMAC-SHA-256).
+- **Identity import budgets:** `pkcs12::open` accepts files up to 16 MiB, passwords up to
+  4 KiB, salts up to 64 KiB and at most 256 bags across the envelope. Iteration counts are
+  checked as encoded, from 1 through 2,000,000, without integer truncation. The MAC and all
+  encrypted bags share an 8,000,000-unit work budget (rounds per output digest block,
+  plus input-size charges). `open_with_control` accepts an
+  `ImportControl` cancellation handle; derivation loops check it at least every 256 rounds.
+  Native derivation also checks a 30-second deadline. A refused import produces no identity.
+  The native signing dialog imports and opens file identities in a background worker; Cancel
+  interrupts derivation and discards the result before saving.
 - **Keys:** RSA, ECDSA P-256 and P-384. Verification uses RustCrypto everywhere. RSA
   private-key operations (signing, key generation) use `aws-lc-rs` on native targets and are
   refused in the browser (ADR-0009: the `rsa` crate's Marvin advisory, RUSTSEC-2023-0071, has
   no fix, so `rsa` is only used to verify). ECDSA signs with deterministic nonces (RFC 6979).
 - **Signing:** PAdES B-B (`ETSI.CAdES.detached`, signing-certificate-v2, SHA-256/384, no SHA-1).
-  An existing unsigned field or a new one (visible with Acrobat's name-and-details appearance,
+  An existing unsigned field or a new one (visible with the viewer's name-and-details appearance,
   or invisible); certification with DocMDP P=1/2/3. The document is written incrementally
   with a zero-filled `/Contents` and fixed-width `/ByteRange`, which are then patched in
   place. Encrypted documents are refused for now.
@@ -65,12 +74,12 @@ ECDSA P-256/P-384; the store integration is tested with software-backed keys.
   the signature value and the signer's chain (against a `TrustStore`) are checked. Later
   revisions are diffed against the signed one, and the changes are classified (signing, form
   fill, comments, metadata, page content, document structure) under the DocMDP permissions.
-  The verdict follows Acrobat: valid, unknown (intact but the identity isn't trusted) or invalid.
+  The verdict follows PDF: valid, unknown (intact but the identity isn't trusted) or invalid.
 - **Operating system roots** (`os_trust`): `os_trust::load` reads the platform's root
   certificates (`rustls-native-certs`: macOS keychains, Windows stores, the Linux/BSD CA bundle
   and directory) or an explicit PEM/DER bundle or directory, skipping malformed entries and
   capping what it reads. In a `TrustStore` they anchor chains only for the enabled purposes
-  (`os_for_signatures`, `os_for_certified`; `TrustPurpose`), off by default as in Acrobat;
+  (`os_for_signatures`, `os_for_certified`; `TrustPurpose`), off by default as in other viewers;
   `SignatureInfo::trust_source` says whether the user's trusted certificates or the OS anchored
   the chain.
 - **Signed version and its comparison** (`signed_version`): `signed_version` returns the bytes a

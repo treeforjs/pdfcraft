@@ -166,7 +166,7 @@ fn jpeg(name: &str, bytes: &[u8]) -> Result<Embedded, CreateError> {
     if bytes.len() < 4 || bytes[0] != 0xFF || bytes[1] != 0xD8 {
         return Err(bad("not a JPEG file"));
     }
-    let (mut i, mut size, mut comps, mut dpi, mut adobe) = (2usize, None, 0u8, (72.0, 72.0), false);
+    let (mut i, mut size, mut comps, mut dpi, mut app14) = (2usize, None, 0u8, (72.0, 72.0), false);
     while i + 4 <= bytes.len() {
         if bytes[i] != 0xFF {
             i += 1;
@@ -191,7 +191,7 @@ fn jpeg(name: &str, bytes: &[u8]) -> Result<Embedded, CreateError> {
                     };
                 }
             }
-            0xEE if seg.starts_with(b"Adobe") => adobe = true,
+            0xEE if seg.starts_with(b"Adobe") => app14 = true,
             0xC0..=0xCF if marker != 0xC4 && marker != 0xC8 && marker != 0xCC => {
                 if seg.len() < 6 {
                     return Err(bad("bad frame header"));
@@ -211,8 +211,8 @@ fn jpeg(name: &str, bytes: &[u8]) -> Result<Embedded, CreateError> {
         1 => "DeviceGray",
         3 => "DeviceRGB",
         4 => {
-            if adobe {
-                // Adobe writes CMYK JPEGs inverted.
+            if app14 {
+                // APP14-marked CMYK JPEGs store inverted samples.
                 d.set(b"Decode".to_vec(), Object::Array([1, 0, 1, 0, 1, 0, 1, 0].iter().map(|v| Object::Int(*v)).collect()));
             }
             "DeviceCMYK"

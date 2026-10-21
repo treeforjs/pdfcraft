@@ -363,7 +363,7 @@ impl Session {
     }
 
     /// Preferences ▸ Page Display ▸ Use Overprint Preview: when page renders simulate overprint
-    /// (Only For PDF/X Files by default, as in Acrobat).
+    /// (Only For PDF/X Files by default, as in PDF).
     pub fn overprint_preview(&self) -> OverprintPreview {
         self.overprint_preview
     }

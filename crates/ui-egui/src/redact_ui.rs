@@ -1,7 +1,7 @@
 //! Redact a PDF (execution plan M8.5–M8.6): mark text and areas with the Redact tool (drag across
 //! text to mark it, drag elsewhere to mark a box), mark whole pages, find text or patterns and
 //! mark every match (patterns include locale-specific formats), set the default box colour and
-//! overlay text (custom or a redaction code), and apply all marks (with a confirmation, as Acrobat
+//! overlay text (custom or a redaction code), and apply all marks (with a confirmation, as PDF
 //! asks) or clear them.
 
 use egui::{Color32, CornerRadius, Pos2, Rect, Stroke};

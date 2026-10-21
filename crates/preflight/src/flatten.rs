@@ -1,4 +1,4 @@
-//! Flatten transparency (Acrobat: Print Production ▸ Flattener Preview, PDF Optimizer ▸
+//! Flatten transparency (PDF: Print Production ▸ Flattener Preview, PDF Optimizer ▸
 //! Transparency): give pages that use transparency an opaque equivalent.
 //!
 //! What counts as transparency is exactly what the PDF/X transparency rule
@@ -68,7 +68,7 @@ const MAX_CONTENT: usize = 64 << 20;
 /// Graphics-state nesting tolerated in content that is extended.
 const MAX_NESTING: i64 = 4_096;
 
-/// Acrobat's flattener presets, loosely: they choose the raster resolution.
+/// The viewer's flattener presets, loosely: they choose the raster resolution.
 ///
 /// One image holds whatever a region contains (text, line art, gradients), so there is one
 /// resolution rather than separate line-art and gradient resolutions: 150 ppi for screen and

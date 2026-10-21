@@ -1,4 +1,4 @@
-//! Make compatible with (Acrobat: PDF Optimizer ▸ Make compatible with): the copy is written as
+//! Make compatible with (PDF: PDF Optimizer ▸ Make compatible with): the copy is written as
 //! a chosen PDF version. Object streams need PDF 1.5, so an older target writes a classic
 //! cross-reference table ([`Settings::object_streams`](crate::Settings::object_streams)).
 //! Features the target version doesn't define are found and reported (not converted):
@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 
 use pdfcraft_cos::{Dict, Document, ObjRef, Object};
 
-/// The versions a copy can be made compatible with, oldest first (Acrobat 4 to PDF 2.0).
+/// The versions a copy can be made compatible with, oldest first (PDF 4 to PDF 2.0).
 pub const VERSIONS: [(u8, u8); 6] = [(1, 3), (1, 4), (1, 5), (1, 6), (1, 7), (2, 0)];
 
 /// A feature the target version doesn't define: what it is, the version it needs, and how many

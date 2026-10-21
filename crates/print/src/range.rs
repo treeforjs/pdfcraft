@@ -13,7 +13,7 @@ pub enum Subset {
 /// Resolve one range token: a page label, or a number (1-based).
 fn page_of(tok: &str, count: usize, labels: &[String]) -> Result<usize, PrintError> {
     let t = tok.trim();
-    // Page labels win over numbers (Acrobat's "use logical page numbers").
+    // Page labels win over numbers (the viewer's "use logical page numbers").
     if let Some(i) = labels.iter().position(|l| l == t) {
         return Ok(i);
     }
@@ -26,7 +26,7 @@ fn page_of(tok: &str, count: usize, labels: &[String]) -> Result<usize, PrintErr
 
 /// The pages to print (0-based, in print order). `range` is `None` for all pages; it may list
 /// numbers and labels with `-` ranges (open-ended allowed: `5-`, `-3`). The subset counts the
-/// selected pages (the first selected is "odd"), as Acrobat does.
+/// selected pages (the first selected is "odd"), as other viewers do.
 pub fn select_pages(count: usize, range: Option<&str>, labels: &[String], subset: Subset, reverse: bool) -> Result<Vec<usize>, PrintError> {
     let mut pages = Vec::new();
     match range.map(str::trim).filter(|r| !r.is_empty()) {

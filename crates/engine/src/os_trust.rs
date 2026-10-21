@@ -1,5 +1,5 @@
 //! Preferences ▸ Signatures ▸ trust the operating system's root certificates (sign.os-trust):
-//! Acrobat's "Trust ALL root certificates in the Windows Certificate Store for validating
+//! The viewer's "Trust ALL root certificates in the Windows Certificate Store for validating
 //! signatures / validating certified documents" (and the macOS Keychain equivalent). Both are
 //! off by default. When one is on, the roots are read from [`OsRootSource`] (the platform's
 //! store unless a bundle or directory was chosen) and added to the session's trust store for
@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 pub use pdfcraft_sign::os_trust::{OsRoots, RootSource as OsRootSource};
 
 /// The two settings. `certified_documents` applies only while `signatures` is on, as in
-/// Acrobat, where its box is unavailable otherwise.
+/// PDF, where its box is unavailable otherwise.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OsTrustSettings {
     /// Trust the operating system's roots for validating signatures (and timestamps).

@@ -69,7 +69,6 @@ pub const TABLE: &[(&str, Class)] = &[
     ("search", Class::Layer(4)),
     ("print", Class::Layer(4)),
     ("media", Class::Layer(4)),
-    ("ai", Class::Layer(4)),
     // L5 interaction
     ("viewport", Class::Layer(5)),
     ("tools", Class::Layer(5)),
@@ -86,6 +85,7 @@ pub const TABLE: &[(&str, Class)] = &[
     // L8 apps + tooling
     ("pdfcraft", Class::Exempt),
     ("cli", Class::Exempt),
+    ("js-worker", Class::Exempt),
     ("web", Class::Exempt),
     ("xtask", Class::Exempt),
 ];

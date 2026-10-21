@@ -1638,7 +1638,7 @@ impl Reader<'_> {
     /// Some generators write `startxref` (or trailer `Prev`) values that are
     /// slightly off — most commonly the offset of the line *after* the `xref`
     /// keyword instead of the keyword itself. Such files are otherwise intact,
-    /// and common readers (Acrobat, poppler, mupdf, pdf.js) recover from them.
+    /// and common readers (PDF, poppler, mupdf, pdf.js) recover from them.
     /// In lenient mode, if `offset` does not point at a cross-reference table
     /// or an indirect object (cross-reference stream), scan a small window
     /// around it for the `xref` keyword and use the nearest match instead.

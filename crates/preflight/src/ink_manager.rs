@@ -1,4 +1,4 @@
-//! Ink Manager (Acrobat: Output Preview / Print ▸ Output ▸ Ink Manager): session settings that
+//! Ink Manager (PDF: Output Preview / Print ▸ Output ▸ Ink Manager): session settings that
 //! decide which plate each ink prints on: alias a spot ink to another ink (spot or process),
 //! convert spot inks to process (CMYK), and preview spot colours from their Lab values.
 //!
@@ -33,9 +33,9 @@ pub struct InkManager {
     pub aliases: BTreeMap<String, String>,
     /// Spot inks converted to process.
     pub to_process: BTreeSet<String>,
-    /// Every spot ink is converted to process (Acrobat's "All Spots to Process").
+    /// Every spot ink is converted to process (the viewer's "All Spots to Process").
     pub all_to_process: bool,
-    /// Preview spot colours whose alternate space is Lab from their Lab values (Acrobat's
+    /// Preview spot colours whose alternate space is Lab from their Lab values (the viewer's
     /// "Use Lab values for spot colors"); otherwise they preview mid gray.
     pub use_lab: bool,
 }

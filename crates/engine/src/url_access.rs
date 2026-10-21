@@ -1,4 +1,4 @@
-//! Control internet access from PDFs (Acrobat: Preferences ▸ Trust Manager ▸ Internet Access
+//! Control internet access from PDFs (PDF: Preferences ▸ Trust Manager ▸ Internet Access
 //! from PDF Files). A [`UrlPolicy`] says whether an address a document asks for (a link's URI
 //! action, a Submit Form action, a script's `app.launchURL` or `this.submitForm`) may be
 //! reached: every web site, none, or a custom list of hosts each allowed, blocked or asked

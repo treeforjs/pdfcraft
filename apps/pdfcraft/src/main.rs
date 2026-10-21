@@ -31,14 +31,14 @@ mod logging;
 mod updates;
 
 /// Freedesktop app id: the `.desktop` file name and the hicolor icon name.
-const APP_ID: &str = "ai.storyteller.pdfcraft";
+const APP_ID: &str = "io.github.treeforjs.pdfcraft";
 
 /// The app icon (assets/app-icon/README.md). macOS gets the version on Apple's icon grid, with a
 /// transparent margin; Windows and Linux get the full-bleed tile.
 #[cfg(target_os = "macos")]
 const APP_ICON_PNG: &[u8] = include_bytes!("../../../assets/app-icon/pdfcraft-1024.png");
 #[cfg(not(target_os = "macos"))]
-const APP_ICON_PNG: &[u8] = include_bytes!("../../../assets/app-icon/hicolor/256x256/apps/ai.storyteller.pdfcraft.png");
+const APP_ICON_PNG: &[u8] = include_bytes!("../../../assets/app-icon/hicolor/256x256/apps/io.github.treeforjs.pdfcraft.png");
 
 /// The app was called PrintCraft before; settings saved then are under this key.
 const LEGACY_STORAGE_KEY: &str = "printcraft";
@@ -84,7 +84,7 @@ fn migrate_legacy_folders() {
 
 /// Desktop launchers (GNOME Files, KDE Dolphin…) only recognise an app as the default handler for a
 /// mime type if its `Exec` takes URIs (`%u`/`%U`), not just paths (`%F`); the packaged `.desktop`
-/// file uses `%U` accordingly (packaging/linux/ai.storyteller.pdfcraft.desktop). Decode a local
+/// file uses `%U` accordingly (packaging/linux/io.github.treeforjs.pdfcraft.desktop). Decode a local
 /// `file://` argument (`file:///path` or `file://localhost/path`) to a plain path here so the rest
 /// of the app, which only ever opens paths, is unaffected. Other schemes (`http://`, `mailto:`…),
 /// URIs naming another host, and plain paths pass through untouched.
@@ -241,10 +241,11 @@ fn retry_with_gl(choice: RendererChoice, app_started: bool) -> bool {
 fn native_options(integrated: bool, renderer: eframe::Renderer) -> eframe::NativeOptions {
     let mut viewport = egui::ViewportBuilder::default()
         .with_title("PdfCraft")
+        .with_decorations(true)
         .with_inner_size([1440.0, 920.0])
         .with_min_inner_size([820.0, 520.0])
         .with_drag_and_drop(true)
-        // Wayland app id: matches packaging/linux/ai.storyteller.pdfcraft.desktop.
+        // Wayland app id: matches packaging/linux/io.github.treeforjs.pdfcraft.desktop.
         .with_app_id(APP_ID);
     // Dock, taskbar, Alt-Tab and launcher icon when running unbundled.
     match eframe::icon_data::from_png_bytes(APP_ICON_PNG) {

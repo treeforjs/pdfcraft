@@ -1,6 +1,6 @@
-//! Comment Properties (Acrobat: right-click a comment ▸ Properties…; audit "Comment
+//! Comment Properties (PDF: right-click a comment ▸ Properties…; audit "Comment
 //! properties"): Appearance (colour, opacity, line thickness, note icon), General (author,
-//! subject, modified) and Review History (status changes), with Acrobat's Locked box.
+//! subject, modified) and Review History (status changes), with the viewer's Locked box.
 
 use egui::{Align, Layout};
 use pdfcraft_engine::{CommentProps, Edit, LineEnding, NoteIcon};

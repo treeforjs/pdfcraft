@@ -43,6 +43,75 @@ fn files_in(s: &RecoveryStore) -> usize {
     std::fs::read_dir(s.dir()).map(|d| d.count()).unwrap_or(0)
 }
 
+#[test]
+fn invalid_recovery_keys_and_mismatched_metadata_cannot_escape_the_store() {
+    use pdfcraft_ui_egui::RecoveryMeta;
+    let s = store("hostile-keys");
+    std::fs::create_dir_all(s.dir()).unwrap();
+    let outside = s.dir().parent().unwrap().join(format!("pdfcraft-outside-{}", std::process::id()));
+    let outside_pdf = outside.with_extension("pdf");
+    let outside_json = outside.with_extension("json");
+    std::fs::write(&outside_pdf, b"KEEP PDF").unwrap();
+    std::fs::write(&outside_json, b"KEEP JSON").unwrap();
+    let key = format!("../{}", outside.file_name().unwrap().to_str().unwrap());
+    let meta = RecoveryMeta { key: key.clone(), name: "untrusted.pdf".into(), path: None, saved_at: 1, encrypted: false };
+    std::fs::write(s.dir().join("hostile.json"), serde_json::to_vec(&meta).unwrap()).unwrap();
+    assert!(s.list().is_empty());
+    assert!(s.read(&key).is_err());
+    assert!(s.write(&meta, b"replace").is_err());
+    s.remove(&key);
+    s.clear();
+    assert_eq!(std::fs::read(&outside_pdf).unwrap(), b"KEEP PDF");
+    assert_eq!(std::fs::read(&outside_json).unwrap(), b"KEEP JSON");
+    for key in ["", ".", "..", "/absolute", "a/b", "a\\b", "a:b"] {
+        assert!(s.read(key).is_err(), "accepted {key:?}");
+    }
+    let mismatched = RecoveryMeta { key: "other".into(), ..meta };
+    std::fs::write(s.dir().join("different.json"), serde_json::to_vec(&mismatched).unwrap()).unwrap();
+    std::fs::write(s.dir().join("other.pdf"), b"unrelated").unwrap();
+    assert!(s.list().is_empty(), "metadata must match its own file name");
+    let _ = std::fs::remove_file(outside_pdf);
+    let _ = std::fs::remove_file(outside_json);
+    let _ = std::fs::remove_dir_all(s.dir());
+}
+
+#[test]
+fn transient_autosave_failure_retries_the_same_dirty_revision() {
+    let s = store("retry-write");
+    std::fs::write(s.dir(), b"a file prevents directory creation").unwrap();
+    let mut app = PdfCraftApp::new();
+    app.enable_recovery(s.clone());
+    app.open_bytes("unsaved.pdf", None, fixture(2)).unwrap();
+    app.apply_edit(Edit::RotatePages { pages: vec![0], degrees: 90 });
+    app.autosave_now();
+    std::fs::remove_file(s.dir()).unwrap();
+    app.autosave_now();
+    let entries = s.list();
+    assert_eq!(entries.len(), 1);
+    assert_eq!(s.read(&entries[0].key).unwrap().as_slice(), app.session.get(app.views[0].id).unwrap().bytes.as_slice());
+    let _ = std::fs::remove_dir_all(s.dir());
+}
+
+#[cfg(unix)]
+#[test]
+fn recovery_files_are_private_and_links_are_not_read() {
+    use pdfcraft_ui_egui::RecoveryMeta;
+    use std::os::unix::fs::{PermissionsExt, symlink};
+    let s = store("private-links");
+    let meta = RecoveryMeta { key: "entry".into(), name: "work.pdf".into(), path: None, saved_at: 1, encrypted: false };
+    s.write(&meta, b"private bytes").unwrap();
+    assert_eq!(std::fs::metadata(s.dir()).unwrap().permissions().mode() & 0o777, 0o700);
+    for name in ["entry.pdf", "entry.json"] {
+        assert_eq!(std::fs::metadata(s.dir().join(name)).unwrap().permissions().mode() & 0o777, 0o600);
+    }
+    std::fs::rename(s.dir().join("entry.pdf"), s.dir().join("elsewhere")).unwrap();
+    symlink(s.dir().join("elsewhere"), s.dir().join("entry.pdf")).unwrap();
+    assert!(s.list().is_empty());
+    assert!(s.read("entry").is_err());
+    assert_eq!(std::fs::read(s.dir().join("elsewhere")).unwrap(), b"private bytes");
+    let _ = std::fs::remove_dir_all(s.dir());
+}
+
 /// A session that edits a document, autosaves, and then "crashes" (is dropped).
 fn crashed_session(s: &RecoveryStore, bytes: Vec<u8>, password: Option<&str>, path: Option<&str>) {
     let mut app = PdfCraftApp::new();

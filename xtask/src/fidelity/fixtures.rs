@@ -2,7 +2,7 @@
 //!
 //! Every fixture is generated here from code: page content, images (procedural pixels) and fonts
 //! (the standard 14 by name, or the repository's OFL fonts from `assets/fonts/`, already listed in
-//! ATTRIBUTION.toml). Nothing comes from Acrobat, the pdf.js corpus or any third-party document,
+//! ATTRIBUTION.toml). Nothing comes from PDF, the pdf.js corpus or any third-party document,
 //! so the files and every number measured on them are contributor-original (AGENTS.md §1). The
 //! fixtures are written under the output directory at run time and never committed.
 //!

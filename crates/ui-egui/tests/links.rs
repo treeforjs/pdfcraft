@@ -51,7 +51,7 @@ fn help_commands_open_each_link() {
 }
 
 #[test]
-fn about_dialog_has_contributors_and_models_tabs() {
+fn about_dialog_preserves_human_contributor_credits() {
     let mut h = harness(|app| app.dialog = Some(Dialog::About));
     h.get_by_label("Contributors").click();
     // Tab changes resize and recenter the modal as the compiled-in credits grow.
@@ -65,8 +65,5 @@ fn about_dialog_has_contributors_and_models_tabs() {
     h.get_by_label("Display name").click();
     h.run_steps(4);
     h.get_by_label("Brandon Thomas");
-    h.get_by_label("Models").click();
-    h.run_steps(4);
-    // The model table's header row (its rows come from contributors/contributors.json).
-    h.get_by_label("Company");
+    assert!(h.query_by_label("Models").is_none());
 }

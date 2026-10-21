@@ -1,4 +1,4 @@
-//! The Crop tool (Acrobat: Edit ▸ Crop pages): drag a rectangle on a page to crop it to that
+//! The Crop tool (PDF: Edit ▸ Crop pages): drag a rectangle on a page to crop it to that
 //! rectangle; double-click a page to open Set Page Boxes for it.
 
 use egui::{Color32, CornerRadius, Pos2, Rect, Stroke};

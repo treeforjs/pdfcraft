@@ -4,14 +4,14 @@ Comments (annotations), ISO 32000-2 §12.5. Layer L3, depends on `pdfcraft-cos`,
 
 ## What it does
 
-- **Builders** for the comment types Acrobat's commenting tools create: sticky note (`Text` +
+- **Builders** for the comment types the viewer's commenting tools create: sticky note (`Text` +
   `Popup`), highlight, underline, strikethrough, squiggly, rectangle (`Square`), oval (`Circle`),
   line and arrow (`Line` with `/LE`), freehand drawing (`Ink`) and text box (`FreeText`).
 - **Appearance streams** (`appearance::build`) generated from the annotation dictionary, so new
   and restyled comments look the same in every viewer. Highlights multiply (`/BM /Multiply`).
   Note icons are PdfCraft's own drawings. Text boxes use standard Helvetica (WinAnsi), with
   line breaking by approximate Helvetica proportions (no font program is bundled).
-- **Edits:** reply (`/IRT`), set review status (a `/State` reply, as Acrobat's "Set status"
+- **Edits:** reply (`/IRT`), set review status (a `/State` reply, as the viewer's "Set status"
   does), change text, move, resize, restyle, delete (with pop-up and replies).
 
 ## API sketch
@@ -48,4 +48,4 @@ deterministic; the engine supplies them.
 ## Not yet
 
 Callouts, polygons and polylines, clouds, carets (insert/replace text), stamps, file
-attachments, rich text (`/RC`, `/DS`), and the shared named-appearance cache Acrobat writes.
+attachments, rich text (`/RC`, `/DS`), and the shared named-appearance cache PDF writes.

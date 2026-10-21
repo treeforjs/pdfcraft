@@ -65,7 +65,7 @@ impl PdfCraftApp {
                         let newest = info.annotations.iter().filter(|x| x.page == a.page && x.in_reply_to.is_none()).map(|x| x.index).max();
                         view.comments.selected = newest.map(|n| (a.page, n));
                         view.comments.reveal = true;
-                        // A new highlight opens its note for typing straight away, as in Acrobat,
+                        // A new highlight opens its note for typing straight away, as in other viewers,
                         // unless a note typed into another card is still unsaved.
                         if let (pdfcraft_engine::Shape::TextMarkup { kind: pdfcraft_engine::Markup::Highlight, .. }, Some(n)) = (&a.shape, newest)
                             && a.contents.is_empty()
@@ -657,8 +657,16 @@ pub fn write_atomically(path: &str, bytes: &[u8]) -> std::io::Result<()> {
     write_atomically_with(path, bytes, staging_suffixes())
 }
 
+pub(crate) fn write_private_atomically(path: &str, bytes: &[u8]) -> std::io::Result<()> {
+    write_atomically_mode(path, bytes, staging_suffixes(), false)
+}
+
 /// [`write_atomically`], trying the staging names that `suffixes` give.
 fn write_atomically_with(path: &str, bytes: &[u8], suffixes: impl IntoIterator<Item = u64>) -> std::io::Result<()> {
+    write_atomically_mode(path, bytes, suffixes, true)
+}
+
+fn write_atomically_mode(path: &str, bytes: &[u8], suffixes: impl IntoIterator<Item = u64>, preserve: bool) -> std::io::Result<()> {
     use std::io::Write;
     let target = std::path::Path::new(path);
     let dir = target.parent().filter(|d| !d.as_os_str().is_empty()).unwrap_or(std::path::Path::new("."));
@@ -669,6 +677,9 @@ fn write_atomically_with(path: &str, bytes: &[u8], suffixes: impl IntoIterator<I
         {
             let mut f = f;
             f.write_all(bytes)?;
+            if preserve {
+                pdfcraft_platform::staging::preserve_permissions(&f, target)?;
+            }
             f.sync_all()?;
         }
         std::fs::rename(&tmp, target)
@@ -715,7 +726,7 @@ impl PdfCraftApp {
             A::New => {
                 let n = self.session.get(id).map_or(0, |d| d.info.outline.len());
                 self.apply_edit(Edit::AddBookmark { parent: vec![], index: n, title: "Untitled".into(), page: current });
-                // Like Acrobat: the new bookmark starts in rename mode.
+                // Start the new bookmark in rename mode.
                 self.bookmark_rename = Some((vec![n], "Untitled".into()));
                 self.right = Some(crate::RightPanel::Bookmarks);
                 return;

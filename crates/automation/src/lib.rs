@@ -276,7 +276,7 @@ impl Automation {
                 use pdfcraft_organize::LabelStyle as L;
                 let n = self.doc(&a)?.info.pages.len();
                 let (from, to) = (a.int("from")?, a.int("to")?);
-                if from < 1 || to < from || to as usize > n {
+                if from < 1 || to < from || usize::try_from(to).ok().is_none_or(|to| to > n) {
                     return Err(ToolError::InvalidArgs(format!("from and to must satisfy 1 ≤ from ≤ to ≤ {n}")));
                 }
                 let style = match a.opt_str("style")?.unwrap_or("decimal") {
@@ -306,7 +306,7 @@ impl Automation {
             "bookmark_add" => {
                 let page = self.page(&a)?;
                 let parent = a.opt_path("parent")?.unwrap_or_default();
-                let index = a.opt_int("position")?.map_or(usize::MAX, |p| (p.max(1) - 1) as usize);
+                let index = a.opt_int("position")?.map(|p| one_based_index(p.max(1), "position")).transpose()?.unwrap_or(usize::MAX);
                 let title = a.str("title")?.to_string();
                 self.apply(&a, Edit::AddBookmark { parent, index, title, page })?
             }
@@ -321,14 +321,14 @@ impl Automation {
             "bookmark_move" => {
                 let from = a.path("path")?;
                 let to_parent = a.opt_path("parent")?.unwrap_or_default();
-                let index = a.opt_int("position")?.map_or(usize::MAX, |p| (p.max(1) - 1) as usize);
+                let index = a.opt_int("position")?.map(|p| one_based_index(p.max(1), "position")).transpose()?.unwrap_or(usize::MAX);
                 self.apply(&a, Edit::MoveBookmark { from, to_parent, index })?
             }
             "bookmark_from_structure" => {
                 let replace = a.opt_bool("replace")?.unwrap_or(false);
                 let max_level = match a.opt_int("max_level")? {
                     Some(m) if !(1..=64).contains(&m) => return Err(ToolError::InvalidArgs("max_level must be between 1 and 64".into())),
-                    m => m.map(|m| m as usize),
+                    m => m.map(|m| usize::try_from(m).map_err(|_| failed("max_level is out of range"))).transpose()?,
                 };
                 let found = self.doc(&a)?.heading_bookmarks(max_level).map_err(failed)?;
                 let added = found.entries.len();
@@ -461,7 +461,7 @@ impl Automation {
                 let page = self.page(&a)?;
                 let n = self.doc(&a)?.page_images(page).len();
                 let k = a.int("image")?;
-                if k < 1 || k as usize > n {
+                if k < 1 || usize::try_from(k).ok().is_none_or(|index| index > n) {
                     return Err(ToolError::InvalidArgs(format!("image {k} is out of range: page {} has {n} images", page + 1)));
                 }
                 let index = k as usize - 1;
@@ -557,7 +557,7 @@ impl Automation {
                 let page = self.page(&a)?;
                 let n = self.doc(&a)?.text_blocks(page).len();
                 let k = a.int("paragraph")?;
-                if k < 1 || k as usize > n {
+                if k < 1 || usize::try_from(k).ok().is_none_or(|index| index > n) {
                     return Err(ToolError::InvalidArgs(format!("paragraph {k} is out of range: page {} has {n} paragraphs", page + 1)));
                 }
                 let block = self.doc(&a)?.text_blocks(page)[k as usize - 1].clone();
@@ -644,7 +644,7 @@ impl Automation {
                 let page = self.page(&a)?;
                 let n = self.doc(&a)?.text_lines(page).len();
                 let line = a.int("line")?;
-                if line < 1 || line as usize > n {
+                if line < 1 || usize::try_from(line).ok().is_none_or(|index| index > n) {
                     return Err(ToolError::InvalidArgs(format!("line {line} is out of range: page {} has {n} lines", page + 1)));
                 }
                 let text = a.str("text")?.to_owned();
@@ -1112,7 +1112,7 @@ impl Automation {
             Some(_) => return Err(bad("magnification is a name or a percentage".into())),
         }
         if let Some(p) = a.opt_int("page")? {
-            v.page = (p.max(1) - 1) as usize;
+            v.page = one_based_index(p.max(1), "page")?;
         }
         for (k, f) in [
             ("fit_window", &mut v.fit_window),
@@ -1309,7 +1309,7 @@ impl Automation {
         let Some(p) = a.opt_str("file")? else { return Ok(None) };
         let path = self.resolve(p, false)?;
         let bytes = std::fs::read(&path).map_err(|e| failed(format!("{}: {e}", path.display())))?;
-        let page = a.opt_int("file_page")?.unwrap_or(1).max(1) as usize - 1;
+        let page = one_based_index(a.opt_int("file_page")?.unwrap_or(1).max(1), "file_page")?;
         Ok(Some(pdfcraft_engine::MarkFile {
             name: path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
             bytes: Arc::new(bytes),
@@ -1663,7 +1663,7 @@ impl Automation {
     fn insert_blank(&mut self, a: &Args) -> Result<Value> {
         let doc = self.doc(a)?;
         let at = self.position(a, "at")?;
-        // Default to the size of the neighbouring page, as Acrobat does; Letter for empty files.
+        // Default to the size of the neighbouring page, as other viewers do; Letter for empty files.
         let near = doc.info.pages.get(at.saturating_sub(1)).or(doc.info.pages.first());
         let (w, h) = near.map(|p| (f64::from(p.width), f64::from(p.height))).unwrap_or((612.0, 792.0));
         let width = a.opt_num("width")?.unwrap_or(w);
@@ -1811,7 +1811,7 @@ impl Automation {
         Ok(out)
     }
 
-    /// Bates numbers across a list of files, continuing from one file to the next (Acrobat's
+    /// Bates numbers across a list of files, continuing from one file to the next (the viewer's
     /// Bates Numbering ▸ Add with several files). Each numbered copy is written into `out_dir`
     /// as `<name><suffix>.pdf`, never over an existing file; the originals are left alone. A file
     /// that can't be opened or numbered is reported and stops the run, so the numbers stay
@@ -1996,7 +1996,9 @@ impl Automation {
             self.session.split_by_size(id, (mb * 1_048_576.0) as usize).map_err(failed)?
         } else {
             let by = match (a.opt_int("every")?, a.opt_ints("before")?) {
-                (Some(n), None) if n > 0 => pdfcraft_organize::SplitBy::PageCount(n as usize),
+                (Some(n), None) if n > 0 => {
+                    pdfcraft_organize::SplitBy::PageCount(usize::try_from(n).map_err(|_| failed("pages_per_file is out of range"))?)
+                }
                 (None, Some(b)) => pdfcraft_organize::SplitBy::Before(one_based(&b)?),
                 _ if bookmarks => {
                     titles = self.session.bookmark_splits(id);
@@ -2046,10 +2048,11 @@ impl Automation {
     fn position(&self, a: &Args, key: &str) -> Result<usize> {
         let n = self.doc(a)?.info.pages.len();
         let at = a.int(key)?;
-        if at < 1 || at as usize > n + 1 {
+        let index = one_based_index(at, key)?;
+        if index > n {
             return Err(ToolError::InvalidArgs(format!("{key} must be between 1 and {} (the document has {n} pages)", n + 1)));
         }
-        Ok(at as usize - 1)
+        Ok(index)
     }
 
     fn renderer(&mut self, id: DocId) -> Result<&mut PageRenderer> {
@@ -2080,10 +2083,11 @@ impl Automation {
     fn page(&self, a: &Args) -> Result<usize> {
         let n = self.doc(a)?.info.pages.len();
         let p = a.int("page")?;
-        if p < 1 || p as usize > n {
+        let index = one_based_index(p, "page")?;
+        if index >= n {
             return Err(ToolError::InvalidArgs(format!("page {p} is out of range: the document has {n} pages")));
         }
-        Ok(p as usize - 1)
+        Ok(index)
     }
 
     /// Hand the text of each of `pages` (0-based; repeats allowed) to `f` with its position in
@@ -2200,13 +2204,13 @@ impl Automation {
 
     fn text_find(&mut self, a: &Args) -> Result<Value> {
         let doc = self.doc(a)?;
-        // Finding is viewing (Acrobat searches documents that forbid copying), but the matched
+        // Finding is viewing (other viewers search documents that forbid copying), but the matched
         // text can differ from the query (case, whitespace, ligatures), so it is only returned
         // when the document allows copying; otherwise matches are locations only.
         let copy = doc.allows_copying();
         let (id, n) = (doc.id, doc.info.pages.len());
         let query = a.str("query")?;
-        let limit = a.opt_int("limit")?.unwrap_or(500).max(1) as usize;
+        let limit = usize::try_from(a.opt_int("limit")?.unwrap_or(500).max(1)).map_err(|_| failed("limit is out of range"))?;
         // Pages arrive out of order: keep the first `limit` matches in page order seen so far
         // (later pages' extra matches can never make the cut once `limit` precede them).
         let mut found: std::collections::BTreeMap<usize, Vec<Value>> = std::collections::BTreeMap::new();
@@ -2413,7 +2417,7 @@ impl Args<'_> {
     }
     fn opt_path(&self, key: &str) -> Result<Option<Vec<usize>>> {
         let Some(v) = self.opt_ints(key)? else { return Ok(None) };
-        v.iter().map(|i| if *i >= 1 { Ok(*i as usize - 1) } else { Err(Self::wrong(key, "1-based positions")) }).collect::<Result<Vec<_>>>().map(Some)
+        v.iter().map(|i| one_based_index(*i, key)).collect::<Result<Vec<_>>>().map(Some)
     }
     fn strs(&self, key: &str) -> Result<Vec<&str>> {
         let v = self.get(key).ok_or_else(|| Self::missing(key))?;
@@ -2501,11 +2505,16 @@ fn field_report(r: &pdfcraft_organize::FieldReport) -> Value {
     })
 }
 
+fn one_based_index(value: i64, label: &str) -> Result<usize> {
+    if value < 1 {
+        return Err(ToolError::InvalidArgs(format!("{label} starts at 1 (got {value})")));
+    }
+    // Convert the one-based value first so later diagnostics can safely add 1.
+    usize::try_from(value).map(|n| n - 1).map_err(|_| ToolError::InvalidArgs(format!("{label} is too large for this platform (got {value})")))
+}
+
 fn one_based(pages: &[i64]) -> Result<Vec<usize>> {
-    pages
-        .iter()
-        .map(|p| if *p >= 1 { Ok(*p as usize - 1) } else { Err(ToolError::InvalidArgs(format!("page numbers start at 1 (got {p})"))) })
-        .collect()
+    pages.iter().map(|p| one_based_index(*p, "page")).collect()
 }
 
 /// The document's security as the next save writes it (never includes passwords).
@@ -2789,8 +2798,16 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> Result<()> {
     write_atomic_with(path, bytes, staging_suffixes())
 }
 
+fn write_private_atomic(path: &Path, bytes: &[u8]) -> Result<()> {
+    write_atomic_mode(path, bytes, staging_suffixes(), false)
+}
+
 /// [`write_atomic`], trying the staging names that `suffixes` give.
 fn write_atomic_with(path: &Path, bytes: &[u8], suffixes: impl IntoIterator<Item = u64>) -> Result<()> {
+    write_atomic_mode(path, bytes, suffixes, true)
+}
+
+fn write_atomic_mode(path: &Path, bytes: &[u8], suffixes: impl IntoIterator<Item = u64>, preserve: bool) -> Result<()> {
     use std::io::Write;
     // A folder can't be replaced, and staging beside it could land outside the root: "." names
     // the root itself, whose parent isn't ours to write in.
@@ -2803,10 +2820,14 @@ fn write_atomic_with(path: &Path, bytes: &[u8], suffixes: impl IntoIterator<Item
     let (tmp, file) =
         create_staging(dir, &name.to_string_lossy(), StagingName::SuffixThenTag, suffixes).map_err(|e| failed(format!("{}: {e}", dir.display())))?;
     // Closed at the end of the block, before the rename.
-    let written = {
+    let written = (|| {
         let mut file = file;
-        file.write_all(bytes)
-    };
+        file.write_all(bytes)?;
+        if preserve {
+            pdfcraft_platform::staging::preserve_permissions(&file, path)?;
+        }
+        file.sync_all()
+    })();
     if let Err(e) = written {
         let _ = std::fs::remove_file(&tmp);
         return Err(failed(format!("{}: {e}", tmp.display())));
@@ -2820,7 +2841,40 @@ fn write_atomic_with(path: &Path, bytes: &[u8], suffixes: impl IntoIterator<Item
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn one_based_indices_reject_negative_and_platform_overflow() {
+        assert_eq!(one_based_index(1, "page").unwrap(), 0);
+        assert_eq!(one_based_index(2, "page").unwrap(), 1);
+        for value in [i64::MIN, -1, 0] {
+            assert!(one_based_index(value, "page").is_err());
+        }
+        #[cfg(target_pointer_width = "32")]
+        for value in [1_i64 << 32, (1_i64 << 32) + 1, i64::MAX] {
+            assert!(one_based_index(value, "page").is_err());
+        }
+        #[cfg(target_pointer_width = "64")]
+        assert_eq!(one_based_index(i64::MAX, "page").unwrap(), i64::MAX as usize - 1);
+    }
     use pdfcraft_platform::staging::STAGING_ATTEMPTS;
+
+    #[cfg(unix)]
+    #[test]
+    fn atomic_saves_preserve_document_permissions_and_keep_id_files_private() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join(format!("pdfcraft-save-modes-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("private.pdf");
+        std::fs::write(&path, b"old").unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+        write_atomic(&path, b"new").unwrap();
+        assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o600);
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+        write_private_atomic(&path, b"private ID").unwrap();
+        assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o600);
+        assert_eq!(std::fs::read(&path).unwrap(), b"private ID");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 
     #[test]
     fn dot_dot_resolves_by_name_and_never_climbs_above_the_start() {

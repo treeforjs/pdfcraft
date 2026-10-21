@@ -19,7 +19,7 @@ pub enum OcrPages {
     Range,
 }
 
-/// The dialog's choices (kept between runs, as in Acrobat).
+/// The dialog's choices (kept between runs, as in PDF).
 #[derive(Clone, Debug, PartialEq)]
 pub struct OcrDraft {
     pub pages: OcrPages,

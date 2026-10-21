@@ -1,6 +1,6 @@
 //! Keep list tags on edit: after an edit draws a bulleted or numbered list, give its marked
 //! content list structure (`L` > `LI` > `Lbl` + `LBody`, a nested list inside the `LBody` of the
-//! item it belongs to), as Acrobat tags lists made in Edit PDF.
+//! item it belongs to), as other viewers tag lists made in Edit PDF.
 //!
 //! Run after [`crate::keep_tags`], which gives every new label and paragraph its own MCID (in
 //! a new `P`, or in the element of the content it replaced). The list's drawing wraps each label

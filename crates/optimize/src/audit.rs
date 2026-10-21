@@ -14,7 +14,7 @@ use std::collections::{HashMap, HashSet};
 
 use pdfcraft_cos::{Dict, Document, ObjRef, Object, XrefEntry};
 
-/// The categories, in Acrobat's order.
+/// The categories, in the viewer's order.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum SpaceCategory {
     Images,

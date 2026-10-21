@@ -434,7 +434,7 @@ pub fn right_rail(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
                 rail_button(ui, RightPanel::Accessibility, "accessibility", "Accessibility Checker", false);
             }
 
-            // Page navigation cluster at the bottom (as in Acrobat's rail).
+            // Page navigation cluster at the bottom (as in the viewer's rail).
             let view = &mut app.views[index];
             let mut page_display = None;
             ui.with_layout(Layout::bottom_up(Align::Center), |ui| {
@@ -445,7 +445,7 @@ pub fn right_rail(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
                 if icons::button(ui, "zoom-in", 32.0, false, tl!("Zoom in (⌘+)")).clicked() {
                     view.zoom_step(true);
                 }
-                // Between rotate and zoom, as in Acrobat. Its command runs once `view` is free.
+                // Between rotate and zoom, as in other viewers. Its command runs once `view` is free.
                 let tip = crate::i18n::fmt(tl!("Page display: {layout}"), &[("layout", tl!(view.layout.label()))]);
                 let resp = icons::button(ui, view.layout.icon(), 32.0, false, &tip);
                 page_display = egui::Popup::menu(&resp)
@@ -486,7 +486,7 @@ pub fn right_rail(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
                     .inner
                     .on_hover_text(tl!("Current page — type a page number or label (such as iv) and press Enter"));
                 if r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-                    // A page label first (logical page numbers, as Acrobat), then a number.
+                    // A page label first (logical page numbers), then a number.
                     let typed = view.page_input.clone();
                     if !view.go_to_typed(&typed, &labels) {
                         view.page_input = (view.current + 1).to_string();
@@ -520,7 +520,7 @@ fn page_display_menu(ui: &mut egui::Ui, view: &DocView) -> Option<&'static str> 
     picked
 }
 
-/// The rail's Page display menu: Acrobat's view choices around the page display. Zoom changes
+/// The rail's Page display menu: the viewer's view choices around the page display. Zoom changes
 /// apply at once; the command a click asks for is returned for the caller to run.
 fn rail_view_menu(ui: &mut egui::Ui, view: &mut DocView) -> Option<&'static str> {
     let mut picked = None;

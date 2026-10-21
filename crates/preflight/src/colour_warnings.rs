@@ -1,5 +1,5 @@
 //! Print colour warnings: overprint use, white objects set to overprint, rich black, small
-//! rich-black text and the registration colour outside printer marks (Acrobat's Output
+//! rich-black text and the registration colour outside printer marks (the viewer's Output
 //! Preview "Show" warnings and the matching Preflight checks).
 //!
 //! [`check`] reads the document only. It interprets each page's content stream (and the forms

@@ -1,4 +1,4 @@
-//! Fix Hairlines (Acrobat: Print Production ▸ Fix Hairlines): strokes thinner than a threshold
+//! Fix Hairlines (PDF: Print Production ▸ Fix Hairlines): strokes thinner than a threshold
 //! print as near-invisible lines (a `0 w` line is one device pixel wide), so they are thickened.
 //!
 //! Widths are measured as printed, in points: the line width (`w`, or `/LW` from an ExtGState)

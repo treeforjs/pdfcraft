@@ -757,7 +757,7 @@ fn a_closed_comments_panel_stays_closed_when_picking_comment_tools() {
     assert_eq!(h.state().right, None);
     assert!(h.state_mut().execute("comment.highlight"));
     h.run_steps(2);
-    assert_eq!(h.state().right, Some(RightPanel::Comments), "Acrobat opens Comments with the tools");
+    assert_eq!(h.state().right, Some(RightPanel::Comments), "PDF opens Comments with the tools");
     h.get_by_label("Close").click();
     h.run_steps(2);
     assert_eq!(h.state().right, None);

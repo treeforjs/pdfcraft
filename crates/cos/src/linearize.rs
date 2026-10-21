@@ -1,4 +1,4 @@
-//! Linearized files, Acrobat's "Fast Web View" (ISO 32000-1 and ISO 32000-2, Annex F).
+//! Linearized files, the viewer's "Fast Web View" (ISO 32000-1 and ISO 32000-2, Annex F).
 //!
 //! [`write_linearized`] writes the document so a viewer can show page 1 before the rest of the
 //! file has arrived:
@@ -15,7 +15,7 @@
 //! Cross-reference sections are classic tables and nothing goes into object streams: hint
 //! tables describe objects by byte position, which objects inside streams don't have, so
 //! linearized output trades the compression of object streams for incremental loading (as
-//! Acrobat's own Fast Web View output on files without object streams). Encrypted documents
+//! The viewer's own Fast Web View output on files without object streams). Encrypted documents
 //! are linearized with their security kept: every object (the hint stream included) is
 //! encrypted with its output number, and the `/Encrypt` dictionary is in part 4.
 //!
@@ -42,7 +42,7 @@ use crate::writer::{SaveOptions, collect_refs, ensure_id, output_number, prepare
 
 /// Page tree depth beyond which a tree is treated as malformed.
 const MAX_TREE_DEPTH: usize = 256;
-/// The most pages either direction handles (Acrobat's practical limit is far lower).
+/// The most pages either direction handles (the viewer's practical limit is far lower).
 const MAX_PAGES: usize = 1 << 21;
 /// Catalog entries a viewer needs to open the document (part 4, F.3.5).
 const OPEN_KEYS: [&[u8]; 4] = [b"ViewerPreferences", b"Threads", b"OpenAction", b"AcroForm"];
@@ -150,7 +150,7 @@ type Inherited = Arc<Attributes>;
 
 /// Copy the attributes pages inherit from page tree nodes into the pages and drop them from the
 /// nodes, so a page's objects in the hint tables are all a viewer needs to show it (qpdf and
-/// Acrobat's linearizers do the same). An inherited dictionary or array becomes one indirect
+/// The viewer's linearizers do the same). An inherited dictionary or array becomes one indirect
 /// object the pages share; references and numbers are copied as they are. The document shows
 /// the same pages afterwards.
 fn push_inherited(doc: &mut Document, catalog: &Dict) -> Result<(), CosError> {
@@ -815,7 +815,7 @@ const MAX_PROBLEMS: usize = 40;
 /// Shared object references a page offset hint table may list in total.
 const MAX_SHARED_REFS: u64 = 1 << 22;
 
-/// Whether the file is linearized with a length that matches (what Acrobat's Document
+/// Whether the file is linearized with a length that matches (what the viewer's Document
 /// Properties shows as "Fast Web View: Yes"). Cheap: reads only the first object.
 pub fn fast_web_view(bytes: &[u8]) -> bool {
     matches!(first_object(bytes), Some((_, d, _)) if d.get(b"Linearized").is_some() && d.int(b"L").is_some_and(|l| usize::try_from(l).ok() == Some(bytes.len())))

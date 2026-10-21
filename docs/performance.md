@@ -122,7 +122,7 @@ What the numbers support:
 ## Defects found
 
 1. **Comments panel cost grows linearly with the comment count, every frame.** Documents with
-   comments open with the Comments panel (as Acrobat does). With 5 000 comments the median frame
+   comments open with the Comments panel (as other viewers do). With 5 000 comments the median frame
    is ~200 ms (≈5 fps) while scrolling; with the panel closed the same document scrolls at
    a 0.6 ms median frame (one run each, 2026-10-12: 142 ms with the panel, 0.64 ms without; 13 ms vs 434 ms to settle a far page). Cause (`crates/ui-egui/src/comments_panel.rs`, `show`): every frame it filters
    and lays out every card (no row virtualization), counts each page group's comments with a scan of

@@ -11,7 +11,7 @@ set -euo pipefail
 # shellcheck source=../env.sh
 . "$(dirname "${BASH_SOURCE[0]}")/../env.sh"
 LINUX="$ROOT/packaging/linux"
-APP_ID=ai.storyteller.pdfcraft
+APP_ID=io.github.treeforjs.pdfcraft
 
 SKIP_BUILD=0
 while [ $# -gt 0 ]; do
@@ -50,6 +50,7 @@ install -m 644 "$LINUX/$APP_ID.mime.xml" "$STAGE/share/mime/packages/$APP_ID.xml
 sed -e "s/@VERSION@/$VERSION/g" -e "s/@DATE@/$PDFCRAFT_BUILD_DATE/g" \
   "$LINUX/$APP_ID.metainfo.xml.in" >"$STAGE/share/metainfo/$APP_ID.metainfo.xml"
 cp -R "$ROOT/assets/app-icon/hicolor" "$STAGE/share/icons/"
+bash "$LINUX/desktop-compat.sh" "$STAGE"
 copy_docs "$STAGE/share/doc/pdfcraft"
 # OCR models: the app finds them at <bin>/../share/pdfcraft/models.
 stage_models "$STAGE/share/pdfcraft/models"

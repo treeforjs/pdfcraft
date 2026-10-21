@@ -16,6 +16,8 @@ use pdfcraft_xfa::{FormNode, LiveForm, NodeKind, ScriptEvent};
 use crate::js::JsOutput;
 use crate::js::Request;
 
+mod admission;
+
 /// Most scripts run for one event (calculates of a whole form, say).
 const MAX_SCRIPTS_PER_EVENT: usize = 2_000;
 /// Most times the form is laid out again for one event (a script adding rows in a loop).
@@ -38,8 +40,7 @@ fn limits_for(activity: &str) -> pdfcraft_js::Limits {
     }
 }
 
-/// Longest one script may run before it is abandoned (it can't be interrupted, only left
-/// behind): scripts that run unasked are held tighter than a click's.
+/// Longest one isolated script may run: scripts that run unasked are held tighter than a click's.
 fn timeout_for(activity: &str) -> std::time::Duration {
     std::time::Duration::from_millis(match activity {
         "click" | "change" | "exit" | "enter" => 3_000,
@@ -58,34 +59,24 @@ fn click_only(e: &XfaEffect) -> Option<&'static str> {
     }
 }
 
-/// A wall clock where there is one (not in the browser build, where the script and relayout
-/// caps alone bound an event).
+/// Monotonic time bounds the whole event on desktop and browser builds.
 #[derive(Clone, Copy)]
 struct Clock {
-    #[cfg(not(target_arch = "wasm32"))]
-    started: std::time::Instant,
+    started: web_time::Instant,
     budget_ms: u64,
 }
 
 impl Clock {
     fn start(budget_ms: u64) -> Self {
-        Clock {
-            #[cfg(not(target_arch = "wasm32"))]
-            started: std::time::Instant::now(),
-            budget_ms,
-        }
+        Clock { started: web_time::Instant::now(), budget_ms }
     }
 
     fn spent(&self) -> bool {
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            self.started.elapsed() >= std::time::Duration::from_millis(self.budget_ms)
-        }
-        #[cfg(target_arch = "wasm32")]
-        {
-            let _ = self.budget_ms;
-            false
-        }
+        self.remaining().is_zero()
+    }
+
+    fn remaining(&self) -> std::time::Duration {
+        std::time::Duration::from_millis(self.budget_ms).saturating_sub(self.started.elapsed())
     }
 }
 
@@ -125,7 +116,8 @@ pub(crate) struct XfaRun<'a> {
     pub out: &'a mut JsOutput,
     /// The datasets stream this edit already wrote, replaced in place by later writes.
     pub datasets: Option<pdfcraft_cos::ObjRef>,
-    /// A script ran past its time limit and was abandoned: the form's scripts should stay off.
+    /// Compatibility with a legacy runtime unable to stop a worker. New isolated refusals
+    /// stop only this event and leave a later explicit event available.
     pub ran_away: bool,
 }
 
@@ -251,6 +243,7 @@ struct Runner<'a, 'b> {
     relayouts_skipped: bool,
     dropped_output: usize,
     truncated_warned: bool,
+    limited: bool,
     data: Option<pdfcraft_xfa::DataNode>,
     ov: pdfcraft_xfa::Overrides,
     ov_dirty: bool,
@@ -279,6 +272,7 @@ impl<'a, 'b> Runner<'a, 'b> {
             relayouts_skipped: false,
             dropped_output: 0,
             truncated_warned: false,
+            limited: false,
             data,
             ov,
             ov_dirty: false,
@@ -322,27 +316,40 @@ impl<'a, 'b> Runner<'a, 'b> {
 
     fn error(&mut self, e: String) {
         if self.run.out.errors.len() < MAX_ERRORS_PER_EVENT {
-            self.run.out.errors.push(e);
+            if !self.run.out.error(&e) {
+                self.limited = true;
+            }
         } else {
             self.dropped_output += 1;
         }
     }
 
-    fn console(&mut self, lines: impl IntoIterator<Item = String>) {
+    fn console<S: AsRef<str>>(&mut self, lines: impl IntoIterator<Item = S>) {
         for l in lines {
             if self.run.out.console.len() < MAX_CONSOLE_PER_EVENT {
-                self.run.out.console.push(l);
+                if !self.run.out.console(l.as_ref()) {
+                    self.limited = true;
+                    break;
+                }
             } else {
                 self.dropped_output += 1;
             }
         }
     }
 
-    fn alert(&mut self, m: String) {
+    fn alert(&mut self, m: &str) {
         if self.run.out.alerts.len() < MAX_ALERTS_PER_EVENT {
-            self.run.out.alerts.push(m);
+            if !self.run.out.alert(m) {
+                self.limited = true;
+            }
         } else {
             self.dropped_output += 1;
+        }
+    }
+
+    fn request(&mut self, request: Request) {
+        if !self.run.out.request(&request) {
+            self.limited = true;
         }
     }
 
@@ -512,6 +519,9 @@ impl<'a, 'b> Runner<'a, 'b> {
             }
         }
         for e in effects {
+            if self.limited {
+                break;
+            }
             // Only a click script may print, save, open links or move the focus (not the
             // calculations a click sets off, nor anything run on open or on a change).
             if let Some(what) = click_only(e)
@@ -559,17 +569,17 @@ impl<'a, 'b> Runner<'a, 'b> {
                     self.changes.rows += 1;
                     relayout = true;
                 }
-                XfaEffect::MessageBox(m) => self.alert(m.clone()),
+                XfaEffect::MessageBox(m) => self.alert(m),
                 XfaEffect::ResetData(names) => self.reset(names)?,
-                XfaEffect::Print => self.run.out.requests.push(Request::Print),
-                XfaEffect::SaveAs => self.run.out.requests.push(Request::SaveAs),
-                XfaEffect::LaunchUrl(u) => self.run.out.requests.push(Request::LaunchUrl(u.clone())),
+                XfaEffect::Print => self.request(Request::Print),
+                XfaEffect::SaveAs => self.request(Request::SaveAs),
+                XfaEffect::LaunchUrl(u) => self.request(Request::LaunchUrl(u.clone())),
                 XfaEffect::SetFocus(som) => {
                     if let Some(name) = self.by_som().get(som).cloned() {
-                        self.run.out.requests.push(Request::Focus(name));
+                        self.request(Request::Focus(name));
                     }
                 }
-                XfaEffect::Beep => self.run.out.requests.push(Request::Beep),
+                XfaEffect::Beep => self.request(Request::Beep),
                 XfaEffect::Recalculate => {}
                 XfaEffect::Relayout => relayout = true,
             }
@@ -580,15 +590,21 @@ impl<'a, 'b> Runner<'a, 'b> {
     /// Run one event script against the form as it is now. `None`: it was skipped (the
     /// event's budget is spent).
     fn run(&mut self, ev: &ScriptEvent, new_text: &str) -> Result<Option<pdfcraft_js::xfa::XfaOutcome>, String> {
-        if self.runs >= MAX_SCRIPTS_PER_EVENT || self.clock.spent() || self.run.ran_away {
+        if self.runs >= MAX_SCRIPTS_PER_EVENT || self.clock.spent() || self.run.ran_away || self.limited {
             self.skipped += 1;
             return Ok(None);
         }
         self.runs += 1;
+        if ev.script.len() > 256 * 1024 || !admission::fits(&self.live().root, &[&ev.som, &ev.activity, new_text, &ev.script]) {
+            self.limited = true;
+            self.run.out.limited = true;
+            self.error(crate::js::budget::SNAPSHOT_NOTICE.into());
+            return Ok(None);
+        }
         let event = XfaEvent { activity: ev.activity.clone(), target: ev.som.clone(), new_text: new_text.to_string(), prev_text: String::new() };
         let doc_info = XfaDoc { file_name: String::new(), page: 0, page_count: self.run.page_count };
         let root_js = to_js(&self.live().root);
-        let (limits, timeout) = (limits_for(&ev.activity), timeout_for(&ev.activity));
+        let (limits, timeout) = (limits_for(&ev.activity), timeout_for(&ev.activity).min(self.clock.remaining()));
         let o = if ev.formcalc {
             run_formcalc_within(&ev.script, &event, &doc_info, root_js, limits, timeout)
         } else {
@@ -597,11 +613,16 @@ impl<'a, 'b> Runner<'a, 'b> {
         if o.abandoned {
             self.run.ran_away = true;
         }
-        self.console(o.console.iter().cloned());
+        if o.limited {
+            self.limited = true;
+            self.run.out.limited = true;
+        }
+        self.console(&o.console);
         for n in &o.notes {
             self.error(format!("{} ({}): {n}", ev.som, ev.activity));
         }
-        if let Some(e) = &o.error {
+        if o.error.is_some() || o.limited {
+            let e = o.error.as_deref().unwrap_or("the isolated script reached its resource budget");
             self.error(format!("{} ({}): {e}", ev.som, ev.activity));
             return Ok(Some(o));
         }
@@ -617,7 +638,7 @@ impl<'a, 'b> Runner<'a, 'b> {
         let events: Vec<ScriptEvent> = self.live().events.iter().filter(|e| e.activity == "calculate").cloned().collect();
         for ev in &events {
             let Some(o) = self.run(ev, "")? else { continue };
-            if o.error.is_some() || o.effects.iter().any(|e| matches!(e, XfaEffect::SetValue { som, .. } if *som == ev.som)) {
+            if o.limited || o.error.is_some() || o.effects.iter().any(|e| matches!(e, XfaEffect::SetValue { som, .. } if *som == ev.som)) {
                 continue;
             }
             if let Some(result) = o.result {
@@ -641,17 +662,18 @@ impl<'a, 'b> Runner<'a, 'b> {
         }
         self.flush()?;
         if self.skipped > 0 {
-            let why = if self.run.ran_away {
-                "one ran too long".to_string()
+            let why = if self.run.ran_away || self.limited {
+                "one reached its resource budget".to_string()
             } else if self.runs >= MAX_SCRIPTS_PER_EVENT {
                 format!("more than {MAX_SCRIPTS_PER_EVENT} scripts ran")
             } else {
                 format!("the scripts took more than {} seconds", self.clock.budget_ms / 1000)
             };
-            self.run.out.errors.push(format!("The form's scripts were stopped: {why}; {} more were skipped", self.skipped));
+            self.run.out.limited = true;
+            self.run.out.error(&format!("The form's scripts were stopped: {why}; {} more were skipped", self.skipped));
         }
         if self.dropped_output > 0 {
-            self.run.out.errors.push(format!("The form's scripts produced too much output; {} more messages were left out", self.dropped_output));
+            self.run.out.error(&format!("The form's scripts produced too much output; {} more messages were left out", self.dropped_output));
         }
         Ok(self.changes)
     }
@@ -670,7 +692,7 @@ pub(crate) fn on_open(doc: &mut pdfcraft_cos::Document, tpl: &Template, run: &mu
 
 /// After fields `names` took new values: each one's change, exit and validate scripts, then
 /// the calculations once (or only those, after a reset). A validate script that answers false,
-/// or fails, shows its message; the value stays, as Acrobat marks the field invalid rather
+/// or fails, shows its message; the value stays, as other viewers mark the field invalid rather
 /// than reverting it.
 pub(crate) fn on_changes(doc: &mut pdfcraft_cos::Document, tpl: &Template, names: &[String], run: &mut XfaRun) -> Result<(), String> {
     let mut r = Runner::new(doc, tpl, run, OPEN_BUDGET_MS);
@@ -684,7 +706,10 @@ pub(crate) fn on_changes(doc: &mut pdfcraft_cos::Document, tpl: &Template, names
         for ev in r.events_of(&som, "validate") {
             let Some(o) = r.run(&ev, &value)? else { continue };
             if (o.result_bool == Some(false) || o.error.is_some()) && !value.trim().is_empty() {
-                r.alert(ev.message.clone().unwrap_or_else(|| format!("{name}: the value is not valid")));
+                match ev.message.as_deref() {
+                    Some(message) => r.alert(message),
+                    None => r.alert(&format!("{name}: the value is not valid")),
+                }
             }
         }
     }
@@ -702,8 +727,7 @@ pub(crate) fn on_event(doc: &mut pdfcraft_cos::Document, tpl: &Template, som: &s
     for ev in events {
         r.run(&ev, "")?;
     }
-    // The calculations that follow get a budget of their own.
-    r.clock = Clock::start(OPEN_BUDGET_MS);
+    // Calculations share the click's deadline and cannot restart a refused batch.
     r.calculates()?;
     r.finish().map(|_| ())
 }
@@ -723,7 +747,7 @@ pub(crate) fn template(doc: &pdfcraft_cos::Document) -> Option<Arc<Template>> {
 }
 
 /// Push buttons PdfCraft generated for XFA click scripts carry no PDF action (the script is
-/// XFA's, not Acrobat JavaScript): give them one that runs the script by the field's SOM path.
+/// XFA's, not PDF JavaScript): give them one that runs the script by the field's SOM path.
 pub(crate) fn mark_script_buttons(doc: &pdfcraft_cos::Document, fields: &mut [pdfcraft_forms::Field]) {
     for f in fields.iter_mut() {
         if f.kind == pdfcraft_forms::FieldKind::PushButton

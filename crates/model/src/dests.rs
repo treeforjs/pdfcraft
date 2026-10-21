@@ -707,7 +707,7 @@ pub fn rename(doc: &mut Document, from: &str, to: &str) -> Result<usize> {
 }
 
 /// Delete a named destination. Links and bookmarks that used it keep the (now dangling) name, as
-/// in Acrobat. Returns how many still refer to it.
+/// in PDF. Returns how many still refer to it.
 pub fn delete(doc: &mut Document, name: &str) -> Result<usize> {
     let (source, raw, either) = locate(doc, name).ok_or_else(|| DestError::NoSuchName(name.to_string()))?;
     let still = holders(doc).iter().filter_map(|h| slot_of(doc, *h)).filter(|(_, v)| refers(doc, v, &raw, source, either)).count();

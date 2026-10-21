@@ -13,6 +13,14 @@ use std::path::{Path, PathBuf};
 
 use crate::PdfCraftApp;
 
+fn valid_key(key: &str) -> bool {
+    !key.is_empty() && key.len() <= 128 && key.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_'))
+}
+
+fn regular_file(path: &Path) -> bool {
+    path.symlink_metadata().is_ok_and(|metadata| metadata.file_type().is_file())
+}
+
 /// How often unsaved changes are written to the recovery folder.
 pub const AUTOSAVE_SECS: f64 = 60.0;
 
@@ -65,28 +73,63 @@ impl RecoveryStore {
     /// Write (or replace) an entry. The PDF is written before its metadata, both atomically, so
     /// a listed entry always has complete bytes.
     pub fn write(&self, meta: &RecoveryMeta, bytes: &[u8]) -> std::io::Result<()> {
-        std::fs::create_dir_all(&self.dir)?;
-        crate::editing::write_atomically(&self.dir.join(format!("{}.pdf", meta.key)).to_string_lossy(), bytes)?;
+        if !valid_key(&meta.key) {
+            return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid recovery key"));
+        }
+        let mut builder = std::fs::DirBuilder::new();
+        builder.recursive(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::DirBuilderExt;
+            builder.mode(0o700);
+        }
+        builder.create(&self.dir)?;
+        if !self.dir.symlink_metadata()?.file_type().is_dir() {
+            return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "recovery folder must not be a link"));
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&self.dir, std::fs::Permissions::from_mode(0o700))?;
+        }
+        crate::editing::write_private_atomically(&self.dir.join(format!("{}.pdf", meta.key)).to_string_lossy(), bytes)?;
         let json = serde_json::to_vec_pretty(meta).map_err(std::io::Error::other)?;
-        crate::editing::write_atomically(&self.dir.join(format!("{}.json", meta.key)).to_string_lossy(), &json)
+        crate::editing::write_private_atomically(&self.dir.join(format!("{}.json", meta.key)).to_string_lossy(), &json)
     }
 
     pub fn remove(&self, key: &str) {
+        if !valid_key(key) || !self.dir.symlink_metadata().is_ok_and(|metadata| metadata.file_type().is_dir()) {
+            return;
+        }
         let _ = std::fs::remove_file(self.dir.join(format!("{key}.json")));
         let _ = std::fs::remove_file(self.dir.join(format!("{key}.pdf")));
     }
 
     /// Complete entries, newest first. Incomplete leftovers (bytes without metadata) are removed.
     pub fn list(&self) -> Vec<RecoveryMeta> {
+        if !self.dir.symlink_metadata().is_ok_and(|metadata| metadata.file_type().is_dir()) {
+            return Vec::new();
+        }
         let Ok(dir) = std::fs::read_dir(&self.dir) else { return Vec::new() };
         let mut out = Vec::new();
         for entry in dir.flatten() {
             let path = entry.path();
             match path.extension().and_then(|e| e.to_str()) {
                 Some("json") => {
-                    let meta = std::fs::read(&path).ok().and_then(|b| serde_json::from_slice::<RecoveryMeta>(&b).ok());
+                    use std::io::Read;
+                    let meta = regular_file(&path).then(|| std::fs::File::open(&path).ok()).flatten().and_then(|file| {
+                        let mut bytes = Vec::new();
+                        file.take(65537).read_to_end(&mut bytes).ok()?;
+                        (bytes.len() <= 65536).then(|| serde_json::from_slice::<RecoveryMeta>(&bytes).ok()).flatten()
+                    });
                     match meta {
-                        Some(m) if self.dir.join(format!("{}.pdf", m.key)).is_file() => out.push(m),
+                        Some(m)
+                            if valid_key(&m.key)
+                                && path.file_stem().and_then(|s| s.to_str()) == Some(m.key.as_str())
+                                && regular_file(&self.dir.join(format!("{}.pdf", m.key))) =>
+                        {
+                            out.push(m)
+                        }
                         _ => {
                             let _ = std::fs::remove_file(&path);
                         }
@@ -103,7 +146,14 @@ impl RecoveryStore {
     }
 
     pub fn read(&self, key: &str) -> std::io::Result<Vec<u8>> {
-        std::fs::read(self.dir.join(format!("{key}.pdf")))
+        if !valid_key(key) || !self.dir.symlink_metadata().is_ok_and(|metadata| metadata.file_type().is_dir()) {
+            return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid recovery key"));
+        }
+        let path = self.dir.join(format!("{key}.pdf"));
+        if !regular_file(&path) {
+            return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "recovery entry must be a regular file"));
+        }
+        std::fs::read(path)
     }
 
     /// Remove every entry (clean quit, or "Discard all").
@@ -135,6 +185,7 @@ impl PdfCraftApp {
             let key = self.recovery_keys.entry(snap.doc).or_insert_with(|| format!("{}-{}-{}", now_secs(), std::process::id(), snap.doc.0)).clone();
             let meta = RecoveryMeta { key, name: snap.name, path: snap.path, saved_at: now_secs(), encrypted: snap.encrypted };
             if let Err(e) = store.write(&meta, &snap.bytes) {
+                self.session.retry_autosave(snap.doc);
                 log::warn!("autosave failed: {e}");
             }
         }

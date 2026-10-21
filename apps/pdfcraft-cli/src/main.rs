@@ -17,6 +17,8 @@
 
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
+mod control_rpc;
+
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
@@ -816,7 +818,7 @@ fn mcp(args: &[String]) -> Result<(), CliError> {
 /// One request to a running app's control channel (`pdfcraft --control FILE`).
 fn ui(args: &[String]) -> Result<(), CliError> {
     validate_options("ui", args, UI_OPTIONS)?;
-    use std::io::{BufRead, BufReader, Write as _};
+    use std::io::BufReader;
     let file = flag(args, "--control").ok_or("ui: missing --control FILE (start the app with `pdfcraft --control FILE`)")?;
     let info = read_control_file(file)?;
     let port = info["port"].as_u64().ok_or(format!("{file}: no port"))?;
@@ -835,15 +837,10 @@ fn ui(args: &[String]) -> Result<(), CliError> {
         std::net::TcpStream::connect(("127.0.0.1", port)).map_err(|e| format!("can't reach the app on port {port}: {e} (is it still running?)"))?;
     stream.set_read_timeout(Some(Duration::from_secs(40))).map_err(|e| e.to_string())?;
     let mut write = stream.try_clone().map_err(|e| e.to_string())?;
-    let mut lines = BufReader::new(stream).lines();
+    write.set_write_timeout(Some(Duration::from_secs(5))).map_err(|e| e.to_string())?;
+    let mut read = BufReader::new(stream);
     let mut rpc = |id: u64, method: &str, params: serde_json::Value| -> Result<serde_json::Value, String> {
-        writeln!(write, "{}", serde_json::json!({ "jsonrpc": "2.0", "id": id, "method": method, "params": params })).map_err(|e| e.to_string())?;
-        let line = lines.next().ok_or("the app closed the connection")?.map_err(|e| e.to_string())?;
-        let reply: serde_json::Value = serde_json::from_str(&line).map_err(|e| e.to_string())?;
-        match reply.get("error") {
-            Some(e) => Err(e["message"].as_str().unwrap_or("error").to_string()),
-            None => Ok(reply["result"].clone()),
-        }
+        control_rpc::request(&mut read, &mut write, id, method, params)
     };
     rpc(1, "auth", serde_json::json!({ "token": token }))?;
     let mut result = rpc(2, &method, serde_json::Value::Object(params))?;

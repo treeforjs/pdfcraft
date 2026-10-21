@@ -67,6 +67,10 @@ impl SignatureCancellation {
     pub fn is_cancelled(&self) -> bool {
         self.0.load(Ordering::Relaxed)
     }
+    /// The same Cancel action interrupts identity derivation before the signing operation.
+    pub fn identity_import_control(&self) -> pdfcraft_sign::pkcs12::ImportControl {
+        pdfcraft_sign::pkcs12::ImportControl::with_cancellation(self.0.clone())
+    }
     fn check(&self) -> Result<(), SignError> {
         if self.is_cancelled() { Err(SignError::Pdf("timestamp operation cancelled".into())) } else { Ok(()) }
     }

@@ -72,6 +72,7 @@ jobs:
         id: rust
         with:
           components: clippy, rustfmt
+          targets: wasm32-wasip1
 
       # Registry downloads only: the build itself is cached whole below. Only main saves caches;
       # PRs restore main's. A save per PR branch (usable by that branch only) fills the repo's
@@ -114,6 +115,8 @@ jobs:
         if: runner.os == 'Linux'
         run: cargo fmt --all -- --check
 
+      - name: Build the isolated scripting kernel
+        run: cargo xtask js-sandbox
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
 
@@ -135,6 +138,25 @@ jobs:
           CRAFT_FONTS_REQUIRED: "1"
           PDFCRAFT_MODELS_REQUIRED: "1"
         run: cargo test --workspace
+
+      - name: Capture identity import and signing controls
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
+        env:
+          CRAFT_FONTS_DIR: ${{ github.workspace }}/craft-fonts
+          CRAFT_FONTS_REQUIRED: "1"
+          PDFCRAFT_MODELS_REQUIRED: "1"
+          PDFCRAFT_SYSTEM_FONTS: "0"
+          PDFCRAFT_IDENTITY_UI_SHOTS: ${{ github.workspace }}/target/identity-ui/${{ github.run_id }}-${{ github.run_attempt }}
+        run: cargo test --locked -p pdfcraft-ui-egui --lib sign_ui::visual_tests::capture_identity_workflow -- --ignored --exact --nocapture
+
+      - name: Upload identity UI diagnostics
+        if: always() && runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagnostic-identity-ui-${{ runner.os }}-${{ runner.arch }}
+          path: target/identity-ui/${{ github.run_id }}-${{ github.run_attempt }}/**/*.png
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Layering
         run: cargo xtask layers
@@ -178,7 +200,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: wasm32-unknown-unknown
+          targets: wasm32-unknown-unknown, wasm32-wasip1
       - uses: Swatinem/rust-cache@v2
         with:
           key: wasm32
@@ -202,11 +224,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip1
       - uses: Swatinem/rust-cache@v2
         with:
           key: fuzz
       - name: Fetch the pdf.js corpus (seeds)
         run: cargo xtask corpus
+      - name: Build the isolated scripting kernel
+        run: cargo xtask js-sandbox
       - name: Fuzz
         run: cargo xtask fuzz --time 900 --seed ${{ github.run_number }}
       - name: Upload findings
@@ -224,12 +250,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip1
       - uses: Swatinem/rust-cache@v2
         with:
           key: perf
       # Budgets in xtask/baselines/perf.json were measured on a different machine; shared CI
       # runners only record the numbers (docs/performance.md). Run without --report-only on a
       # quiet, known machine to gate.
+      - name: Build the isolated scripting kernel
+        run: cargo xtask js-sandbox
       - name: Measure
         run: cargo xtask perf --runs 3 --report-only
       - name: Upload report

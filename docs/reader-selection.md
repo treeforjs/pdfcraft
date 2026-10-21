@@ -42,7 +42,7 @@ edited without its `/Perms` check value), even with the owner password.
 | Path | Copy denied |
 | --- | --- |
 | `text_selection`, `text_extract`, MCP `pdfcraft://doc/{n}/text` and `/page/{p}/text`, reader copy, `pdfcraft-cli text` | refused |
-| `text_find` | allowed as a search (Acrobat searches such files), but matches are locations only: `text` is null, `text_withheld` says why; only the caller's query is echoed |
+| `text_find` | allowed as a search (other viewers search such files), but matches are locations only: `text` is null, `text_withheld` says why; only the caller's query is echoed |
 | `text_lines`, `text_paragraphs`, `content_list`, the `text_edit` result echo | locations, fonts and styles only; `text` is null and `text_withheld` is set |
 | `doc_export_text`, `doc_export_office` (Word/HTML/RTF), `doc_export_pptx` in editable mode and Export dialogs, `doc_export_all_images` (graphics) | refused before anything is written (`doc_export_pptx` mode `image` only renders pages, as Export ▸ Image does) |
 | `doc_compare`, `doc_compare_report`, `doc_compare_mark` and the Compare panel | refused unless both documents allow copying |

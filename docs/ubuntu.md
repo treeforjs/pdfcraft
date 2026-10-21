@@ -20,7 +20,7 @@ Choose **PdfCraft** in the application menu, use **Open With** on a PDF, or run
 To choose it yourself:
 
 ```sh
-xdg-mime default ai.storyteller.pdfcraft.desktop application/pdf
+xdg-mime default io.github.treeforjs.pdfcraft.desktop application/pdf
 ```
 
 The package includes the CLI and OCR models. CUPS printing and the desktop file-dialog portal
@@ -35,6 +35,8 @@ from the repository root. Build as your regular user; only system dependencies n
 ```sh
 sudo packaging/linux/install-ubuntu-deps.sh build
 sudo packaging/linux/install-ubuntu-deps.sh runtime
+rustup target add wasm32-wasip1
+cargo xtask js-sandbox
 cargo build --locked --release -p pdfcraft -p pdfcraft-cli
 ./target/release/pdfcraft "some document.pdf"
 ./target/release/pdfcraft-cli info "some document.pdf"

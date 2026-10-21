@@ -1,4 +1,4 @@
-//! Filling in forms on the page (execution plan M6; Acrobat fills fields in every viewing mode).
+//! Filling in forms on the page (execution plan M6; PDF fills fields in every viewing mode).
 //!
 //! Text fields open an in-place editor over the widget (Enter or clicking away commits, Escape
 //! cancels, Tab moves to the next field). Check boxes and radio buttons toggle on click. Combo
@@ -336,7 +336,7 @@ pub(crate) fn overlay(ctx: &egui::Context, view: &mut DocView, info: &DocInfo, f
                     commit(view, form);
                 }
             });
-            // Date fields: a calendar under the field (Acrobat's date picker).
+            // Date fields: a calendar under the field (the viewer's date picker).
             if let pdfcraft_engine::form_scripts::Format::Date(fmt) = &f.actions.format
                 && let Some(picked) = calendar(ctx, view, rect, fmt, today)
             {

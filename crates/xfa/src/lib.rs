@@ -1,7 +1,7 @@
 //! pdfcraft-xfa — XFA forms (L3). See the README.
 //!
 //! A dynamic XFA form is a PDF shell around an XML template; viewers without an XFA engine
-//! show its one placeholder page ("requires Adobe Reader"). This crate reads the template,
+//! show its one placeholder page ("requires an XFA viewer"). This crate reads the template,
 //! lays it out and writes ordinary pages and AcroForm fields into the document, so the rest
 //! of PdfCraft (rendering, filling, saving, printing, tools) works on it unchanged.
 
@@ -73,7 +73,7 @@ pub fn layout_xml(xml: &str) -> Result<Form, XfaError> {
 
 /// Lay a dynamic XFA form out into its own document: its placeholder pages are replaced by the
 /// laid-out pages and its fields join the AcroForm, holding the values of the datasets packet.
-/// The XFA packets stay, so Adobe's viewers keep rendering it their way. Widget appearances are
+/// The XFA packets stay, so other XFA viewers keep rendering it their way. Widget appearances are
 /// left for the forms layer to generate.
 pub fn render_into(doc: &mut Document) -> Result<Report, XfaError> {
     if !is_dynamic(doc) {

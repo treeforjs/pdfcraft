@@ -1,4 +1,4 @@
-//! Search & Redact patterns (Acrobat's Find Text ▸ Patterns): phone numbers, email addresses,
+//! Search & Redact patterns (the viewer's Find Text ▸ Patterns): phone numbers, email addresses,
 //! credit card numbers, US Social Security numbers and dates, plus locale-specific sets (see
 //! [`LOCALES`]): US ZIP codes, UK postcodes and National Insurance numbers, Canadian postal codes
 //! and Social Insurance numbers, French social security numbers (NIR), Japanese postal codes and

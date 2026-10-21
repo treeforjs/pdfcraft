@@ -68,7 +68,7 @@ foreach ($sequence in @('InstallUISequence', 'InstallExecuteSequence')) {
   }
 }
 $manufacturer = Read-Row 'SELECT `Value` FROM `Property` WHERE `Property` = ''Manufacturer''' 1
-Assert-Equal $manufacturer[0] 'Learning Machines LLC' 'MSI manufacturer'
+Assert-Equal $manufacturer[0] 'Craft contributors' 'MSI manufacturer'
 $status = Read-Row 'SELECT `Text` FROM `Control` WHERE `Dialog_` = ''InstallProgress'' AND `Control` = ''Status''' 1
 Assert-Equal $status[0] 'Please wait while setup completes.' 'Persistent progress message'
 Assert-NoRow 'SELECT `Event` FROM `EventMapping` WHERE `Dialog_` = ''InstallProgress'' AND `Control_` = ''Status''' 'progress text subscription'

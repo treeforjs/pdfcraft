@@ -248,7 +248,7 @@ fn numbers(v: &JsValue, what: &str, ctx: &mut Context) -> JsResult<Vec<f64>> {
     Ok(out)
 }
 
-/// An Acrobat colour array as RGB (`None` for transparent).
+/// An PDF colour array as RGB (`None` for transparent).
 fn rgb(v: &JsValue, ctx: &mut Context) -> JsResult<Option<[f64; 3]>> {
     let parts = strings(v, ctx)?;
     let n = |i: usize| parts.get(i).and_then(|p| p.parse::<f64>().ok()).filter(|x| x.is_finite()).unwrap_or(0.0).clamp(0.0, 1.0);

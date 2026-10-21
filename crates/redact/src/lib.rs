@@ -32,6 +32,8 @@ pub type Rgb = [f64; 3];
 
 #[derive(Debug, thiserror::Error, PartialEq)]
 pub enum RedactError {
+    #[error("redaction overlay is too large or has invalid geometry; reduce its text, repetition or marked area")]
+    OverlayLimit,
     #[error("there are no redaction marks to apply")]
     NothingToApply,
     #[error("page {0} has content that can't be read, so it can't be redacted safely")]
@@ -196,19 +198,46 @@ pub(crate) fn page_streams(doc: &Document, page: &Dict, index: usize) -> Result<
 }
 
 /// The boxes and overlay text drawn for the applied marks.
-fn overlay_content(marks: &[&Mark]) -> Vec<u8> {
+const MAX_OVERLAY_COPIES: usize = 4096;
+const MAX_OVERLAY_BYTES: usize = 4 << 20;
+const MAX_TOTAL_OVERLAY_BYTES: usize = 16 << 20;
+
+fn check_overlay_append(current: usize, additional: usize, limit: usize) -> Result<(), RedactError> {
+    if current.checked_add(additional).is_none_or(|size| size > limit) {
+        return Err(RedactError::OverlayLimit);
+    }
+    Ok(())
+}
+
+fn append_overlay(content: &mut Vec<u8>, bytes: &[u8], limit: usize) -> Result<(), RedactError> {
+    check_overlay_append(content.len(), bytes.len(), limit)?;
+    content.extend_from_slice(bytes);
+    Ok(())
+}
+
+fn overlay_content(marks: &[&Mark]) -> Result<Vec<u8>, RedactError> {
     let n = |v: f64| {
         let s = format!("{:.3}", v);
         s.trim_end_matches('0').trim_end_matches('.').to_string()
     };
     let mut c: Vec<u8> = Vec::new();
     for m in marks {
-        let Some(fill) = m.fill else { continue };
-        c.extend(format!("q {} {} {} rg\n", n(fill[0]), n(fill[1]), n(fill[2])).bytes());
-        for r in &m.rects {
-            c.extend(format!("{} {} {} {} re f\n", n(r[0]), n(r[1]), n(r[2] - r[0]), n(r[3] - r[1])).bytes());
+        if m.overlay.len() > MAX_OVERLAY_BYTES || !m.look.size.is_finite() || !m.look.color.iter().all(|v| v.is_finite()) {
+            return Err(RedactError::OverlayLimit);
         }
-        c.extend_from_slice(b"Q\n");
+        if m.rects
+            .iter()
+            .any(|r| !r.iter().all(|v| v.is_finite()) || !((r[2] - r[0]).is_finite() && (r[3] - r[1]).is_finite()) || r[2] < r[0] || r[3] < r[1])
+            || m.fill.is_some_and(|fill| !fill.iter().all(|v| v.is_finite()))
+        {
+            return Err(RedactError::OverlayLimit);
+        }
+        let Some(fill) = m.fill else { continue };
+        append_overlay(&mut c, format!("q {} {} {} rg\n", n(fill[0]), n(fill[1]), n(fill[2])).as_bytes(), MAX_OVERLAY_BYTES)?;
+        for r in &m.rects {
+            append_overlay(&mut c, format!("{} {} {} {} re f\n", n(r[0]), n(r[1]), n(r[2] - r[0]), n(r[3] - r[1])).as_bytes(), MAX_OVERLAY_BYTES)?;
+        }
+        append_overlay(&mut c, b"Q\n", MAX_OVERLAY_BYTES)?;
         if m.overlay.is_empty() {
             continue;
         }
@@ -229,13 +258,20 @@ fn overlay_content(marks: &[&Mark]) -> Vec<u8> {
             Some((unit, space))
         });
         if let Some((unit, space)) = &outlined {
-            c.extend(outlined_overlay(m, unit, *space, [cr, cg, cb]));
+            let outlined = outlined_overlay(m, unit, *space, [cr, cg, cb], MAX_OVERLAY_BYTES.saturating_sub(c.len()))?;
+            append_overlay(&mut c, &outlined, MAX_OVERLAY_BYTES)?;
             continue;
         }
         for r in &m.rects {
             let (w, h) = (r[2] - r[0], r[3] - r[1]);
+            if !w.is_finite() || !h.is_finite() || w < 0.0 || h < 0.0 {
+                return Err(RedactError::OverlayLimit);
+            }
             let mut size = if look.size > 0.0 { look.size } else { (h * 0.7).min(12.0) };
             let tw = width(&m.overlay, size);
+            if !tw.is_finite() {
+                return Err(RedactError::OverlayLimit);
+            }
             if look.size <= 0.0 && tw > w - 2.0 && tw > 0.0 {
                 size *= (w - 2.0).max(0.0) / tw;
             }
@@ -245,17 +281,37 @@ fn overlay_content(marks: &[&Mark]) -> Vec<u8> {
             // One line, or as many repeated lines as fit (each line the text repeated across).
             let lines: Vec<String> = if look.repeat {
                 let unit = width(&format!("{} ", m.overlay), size).max(0.01);
-                let per_line = ((w - 2.0) / unit).floor().max(1.0) as usize;
-                let count = ((h / (size * 1.2)).floor() as usize).max(1);
+                let columns = ((w - 2.0) / unit).floor().max(1.0);
+                let rows = (h / (size * 1.2)).floor().max(1.0);
+                if !columns.is_finite() || !rows.is_finite() || columns > MAX_OVERLAY_COPIES as f64 || rows > MAX_OVERLAY_COPIES as f64 {
+                    return Err(RedactError::OverlayLimit);
+                }
+                let (per_line, count) = (columns as usize, rows as usize);
+                let copies = per_line.checked_mul(count).ok_or(RedactError::OverlayLimit)?;
+                // PDF literal escaping can expand every byte fourfold; leave room for each
+                // line's positioning and graphics operators before allocating repeated text.
+                let bytes = copies
+                    .checked_mul(m.overlay.len().saturating_mul(4).saturating_add(1))
+                    .and_then(|n| count.checked_mul(256).and_then(|overhead| n.checked_add(overhead)))
+                    .and_then(|n| n.checked_add(c.len()))
+                    .ok_or(RedactError::OverlayLimit)?;
+                if copies > MAX_OVERLAY_COPIES || bytes > MAX_OVERLAY_BYTES {
+                    return Err(RedactError::OverlayLimit);
+                }
                 vec![vec![m.overlay.as_str(); per_line].join(" "); count]
             } else {
                 vec![m.overlay.clone()]
             };
             let block = lines.len() as f64 * size * 1.2;
             let mut y = r[1] + (h + block) / 2.0 - size * 0.95;
-            c.extend(
-                format!("q {} {} {} {} re W n BT {} {} {} rg /{res} {} Tf ", n(r[0]), n(r[1]), n(w), n(h), n(cr), n(cg), n(cb), n(size)).bytes(),
-            );
+            if !block.is_finite() || !y.is_finite() {
+                return Err(RedactError::OverlayLimit);
+            }
+            append_overlay(
+                &mut c,
+                format!("q {} {} {} {} re W n BT {} {} {} rg /{res} {} Tf ", n(r[0]), n(r[1]), n(w), n(h), n(cr), n(cg), n(cb), n(size)).as_bytes(),
+                MAX_OVERLAY_BYTES,
+            )?;
             for line in &lines {
                 let lw = width(line, size);
                 let x = match look.align {
@@ -263,15 +319,19 @@ fn overlay_content(marks: &[&Mark]) -> Vec<u8> {
                     2 => r[2] - 1.0 - lw,
                     _ => r[0] + (w - lw) / 2.0,
                 };
-                c.extend(format!("1 0 0 1 {} {} Tm ", n(x), n(y)).bytes());
-                c.extend_from_slice(&pdfcraft_fonts::literal(&pdfcraft_fonts::win_ansi(line)));
-                c.extend_from_slice(b" Tj ");
+                if !lw.is_finite() || !x.is_finite() || !y.is_finite() {
+                    return Err(RedactError::OverlayLimit);
+                }
+                append_overlay(&mut c, format!("1 0 0 1 {} {} Tm ", n(x), n(y)).as_bytes(), MAX_OVERLAY_BYTES)?;
+                check_overlay_append(c.len(), line.len().saturating_mul(4).saturating_add(2), MAX_OVERLAY_BYTES)?;
+                append_overlay(&mut c, &pdfcraft_fonts::literal(&pdfcraft_fonts::win_ansi(line)), MAX_OVERLAY_BYTES)?;
+                append_overlay(&mut c, b" Tj ", MAX_OVERLAY_BYTES)?;
                 y -= size * 1.2;
             }
-            c.extend_from_slice(b"ET Q\n");
+            append_overlay(&mut c, b"ET Q\n", MAX_OVERLAY_BYTES)?;
         }
     }
-    c
+    Ok(c)
 }
 
 /// Most copies of the overlay text one repeated area draws as outlines, and most bytes of
@@ -281,7 +341,7 @@ const MAX_OUTLINED_BYTES: usize = 4 << 20;
 
 /// The overlay text of mark `m` drawn as outlines (`unit`, at a font size of 1, and the width of
 /// a space between repeats), laid out as [`overlay_content`] lays out text.
-fn outlined_overlay(m: &Mark, unit: &pdfcraft_fonts::ScriptOutline, space: f64, colour: [f64; 3]) -> Vec<u8> {
+fn outlined_overlay(m: &Mark, unit: &pdfcraft_fonts::ScriptOutline, space: f64, colour: [f64; 3], remaining: usize) -> Result<Vec<u8>, RedactError> {
     let n = |v: f64| {
         let s = format!("{:.3}", v);
         s.trim_end_matches('0').trim_end_matches('.').to_string()
@@ -291,19 +351,32 @@ fn outlined_overlay(m: &Mark, unit: &pdfcraft_fonts::ScriptOutline, space: f64, 
     let mut path = String::new();
     for contour in &unit.contours {
         for (i, p) in contour.iter().enumerate() {
-            path.push_str(&format!("{} {} {} ", n(p[0]), n(p[1]), if i == 0 { "m" } else { "l" }));
+            if !p.iter().all(|v| v.is_finite()) {
+                return Err(RedactError::OverlayLimit);
+            }
+            let point = format!("{} {} {} ", n(p[0]), n(p[1]), if i == 0 { "m" } else { "l" });
+            check_overlay_append(path.len(), point.len(), remaining)?;
+            path.push_str(&point);
         }
+        check_overlay_append(path.len(), 2, remaining)?;
         path.push_str("h ");
     }
     if path.is_empty() {
-        return Vec::new();
+        return Ok(Vec::new());
     }
+    check_overlay_append(path.len(), 2, remaining)?;
     path.push_str("f\n");
     let mut c: Vec<u8> = Vec::new();
     for r in &m.rects {
         let (w, h) = (r[2] - r[0], r[3] - r[1]);
+        if !r.iter().all(|v| v.is_finite()) || !w.is_finite() || !h.is_finite() || w < 0.0 || h < 0.0 {
+            return Err(RedactError::OverlayLimit);
+        }
         let mut size = if look.size > 0.0 { look.size } else { (h * 0.7).min(12.0) };
         let tw = unit.width * size;
+        if !tw.is_finite() {
+            return Err(RedactError::OverlayLimit);
+        }
         if look.size <= 0.0 && tw > w - 2.0 && tw > 0.0 {
             size *= (w - 2.0).max(0.0) / tw;
         }
@@ -311,6 +384,9 @@ fn outlined_overlay(m: &Mark, unit: &pdfcraft_fonts::ScriptOutline, space: f64, 
             continue;
         }
         let step = (unit.width + space) * size;
+        if !step.is_finite() {
+            return Err(RedactError::OverlayLimit);
+        }
         let (per_line, count) = if look.repeat {
             let per_line = ((w - 2.0 + space * size) / step.max(0.01)).floor().max(1.0) as usize;
             (per_line, ((h / (size * 1.2)).floor() as usize).max(1))
@@ -320,7 +396,14 @@ fn outlined_overlay(m: &Mark, unit: &pdfcraft_fonts::ScriptOutline, space: f64, 
         let lw = per_line as f64 * step - space * size;
         let block = count as f64 * size * 1.2;
         let mut y = r[1] + (h + block) / 2.0 - size * 0.95;
-        c.extend(format!("q {} {} {} {} re W n {} {} {} rg\n", n(r[0]), n(r[1]), n(w), n(h), n(colour[0]), n(colour[1]), n(colour[2])).bytes());
+        if !lw.is_finite() || !block.is_finite() || !y.is_finite() {
+            return Err(RedactError::OverlayLimit);
+        }
+        append_overlay(
+            &mut c,
+            format!("q {} {} {} {} re W n {} {} {} rg\n", n(r[0]), n(r[1]), n(w), n(h), n(colour[0]), n(colour[1]), n(colour[2])).as_bytes(),
+            remaining,
+        )?;
         let mut copies = 0;
         let most = MAX_OUTLINED_COPIES.min((MAX_OUTLINED_BYTES / path.len().max(1)).max(1));
         'lines: for _ in 0..count {
@@ -335,13 +418,20 @@ fn outlined_overlay(m: &Mark, unit: &pdfcraft_fonts::ScriptOutline, space: f64, 
                 }
                 copies += 1;
                 let x = x0 + k as f64 * step;
-                c.extend(format!("q {} 0 0 {} {} {} cm {path}Q\n", n(size), n(size), n(x), n(y)).bytes());
+                if !x.is_finite() || !y.is_finite() {
+                    return Err(RedactError::OverlayLimit);
+                }
+                let transform = format!("q {} 0 0 {} {} {} cm ", n(size), n(size), n(x), n(y));
+                check_overlay_append(c.len(), transform.len().saturating_add(path.len()).saturating_add(2), remaining)?;
+                append_overlay(&mut c, transform.as_bytes(), remaining)?;
+                append_overlay(&mut c, path.as_bytes(), remaining)?;
+                append_overlay(&mut c, b"Q\n", remaining)?;
             }
             y -= size * 1.2;
         }
-        c.extend_from_slice(b"Q\n");
+        append_overlay(&mut c, b"Q\n", remaining)?;
     }
-    c
+    Ok(c)
 }
 
 /// Apply every redaction mark (or only those on `pages`, 0-based). Irreversible for the saved
@@ -357,6 +447,18 @@ pub fn apply(doc: &mut Document, pages: Option<&[usize]>) -> Result<Report, Reda
     by_page.sort_unstable();
     by_page.dedup();
     report.pages = by_page.len();
+    // Validate and bound all overlays before removing any original content or annotations.
+    let mut overlay_bytes = 0usize;
+    let mut overlays = Vec::new();
+    for &pi in &by_page {
+        let page_marks: Vec<&Mark> = chosen.iter().copied().filter(|m| m.page == pi).collect();
+        let content = overlay_content(&page_marks)?;
+        overlay_bytes = overlay_bytes.checked_add(content.len()).ok_or(RedactError::OverlayLimit)?;
+        if overlay_bytes > MAX_TOTAL_OVERLAY_BYTES {
+            return Err(RedactError::OverlayLimit);
+        }
+        overlays.push((pi, content));
+    }
     let mut doomed_fields: Vec<String> = Vec::new();
     let widget_owner: Vec<(ObjRef, String)> =
         pdfcraft_forms::fields(doc).into_iter().flat_map(|f| f.widgets.iter().map(|w| (w.obj, f.name.clone())).collect::<Vec<_>>()).collect();
@@ -470,9 +572,7 @@ pub fn apply(doc: &mut Document, pages: Option<&[usize]>) -> Result<Report, Reda
     }
 
     // 4. The boxes.
-    for &pi in &by_page {
-        let page_marks: Vec<&Mark> = chosen.iter().copied().filter(|m| m.page == pi).collect();
-        let content = overlay_content(&page_marks);
+    for (pi, content) in overlays {
         if !content.is_empty() {
             pdfcraft_edit::stamp(doc, pi, "Redaction", content)?;
         }

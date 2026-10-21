@@ -13,7 +13,7 @@ release: 1
 section: graphics
 priority: optional
 maintainer: ${PDFCRAFT_MAINTAINER}
-vendor: Learning Machines LLC
+vendor: Craft contributors
 homepage: https://github.com/treeforjs/pdfcraft
 license: MIT OR Apache-2.0
 description: |-

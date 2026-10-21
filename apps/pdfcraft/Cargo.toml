@@ -23,6 +23,11 @@ serde_json = { workspace = true }
 # Records from every crate go to standard error and the log file (src/logging.rs).
 log = { workspace = true }
 
+[target.'cfg(target_os = "linux")'.dependencies]
+# Enable the standard Wayland title bar when the compositor does not provide one.
+# The existing workspace patch keeps winit's PdfCraft platform fixes.
+winit = { version = "0.30.13", default-features = false, features = ["wayland-csd-adwaita"] }
+
 [target.'cfg(target_os = "macos")'.dependencies]
 # Finder double-click / Open With / Dock drops arrive as Apple events (#73); this small audited
 # crate registers the handler (Objective-C interop needs unsafe, which our workspace forbids)

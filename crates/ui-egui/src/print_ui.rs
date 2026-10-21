@@ -1,4 +1,4 @@
-//! The Print dialog (Acrobat's File ▸ Print, execution plan M10.5): printer, copies, grayscale;
+//! The Print dialog (the viewer's File ▸ Print, execution plan M10.5): printer, copies, grayscale;
 //! pages to print (all, current, range with labels, the selected pages; odd/even, reverse); page sizing & handling
 //! (Size, Poster, Multiple, Booklet); orientation; comments & forms; and a live preview of the
 //! sheets. Printing sends the print-ready PDF to the system spooler; "Save as PDF" writes it.
@@ -173,7 +173,7 @@ impl PdfCraftApp {
         let current = self.views[i].current;
         let selected: Vec<usize> = self.views[i].selected.iter().copied().collect();
         let keep = std::mem::take(&mut self.print_draft);
-        // Picked pages are what Print is for (Acrobat's "Selected pages"); without any, a choice
+        // Picked pages are what Print is for (the viewer's "Selected pages"); without any, a choice
         // left over from another document falls back to the whole document.
         let which = match (selected.is_empty(), keep.which) {
             (false, _) => Which::Selected,

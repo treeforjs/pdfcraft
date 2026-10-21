@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "repo": "storytold/pdfcraft",
+  "repo": "treeforjs/pdfcraft",
   "branch": "main",
   "head": "49c6e2ec5437a355da4e9dadd9cc2db3476b5cf8",
   "head_date": "2026-10-10T00:56:13Z",
@@ -1020,116 +1020,6 @@
       "binary_deleted": 0,
       "first_commit": "2026-10-10T00:56:13Z",
       "last_commit": "2026-10-10T00:56:13Z"
-    }
-  ],
-  "models": [
-    {
-      "id": "anthropic/claude-opus/5.5",
-      "company": "Anthropic",
-      "model": "Claude Opus",
-      "version": "5.5",
-      "commits": 392,
-      "lines_added": 299122,
-      "lines_deleted": 16822
-    },
-    {
-      "id": "openai/codex",
-      "company": "OpenAI",
-      "model": "Codex",
-      "version": "",
-      "commits": 43,
-      "lines_added": 20596,
-      "lines_deleted": 2467
-    },
-    {
-      "id": "anthropic/claude-fable/5.1",
-      "company": "Anthropic",
-      "model": "Claude Fable",
-      "version": "5.1",
-      "commits": 9,
-      "lines_added": 1028,
-      "lines_deleted": 112
-    },
-    {
-      "id": "anthropic/claude-opus/5",
-      "company": "Anthropic",
-      "model": "Claude Opus",
-      "version": "5",
-      "commits": 9,
-      "lines_added": 3783,
-      "lines_deleted": 197
-    },
-    {
-      "id": "anthropic/claude-sonnet/5.5",
-      "company": "Anthropic",
-      "model": "Claude Sonnet",
-      "version": "5.5",
-      "commits": 4,
-      "lines_added": 2839,
-      "lines_deleted": 135
-    },
-    {
-      "id": "anthropic/claude",
-      "company": "Anthropic",
-      "model": "Claude",
-      "version": "",
-      "commits": 2,
-      "lines_added": 489,
-      "lines_deleted": 23
-    },
-    {
-      "id": "anthropic/claude-opus/4.8",
-      "company": "Anthropic",
-      "model": "Claude Opus",
-      "version": "4.8",
-      "commits": 1,
-      "lines_added": 1632,
-      "lines_deleted": 3
-    },
-    {
-      "id": "anthropic/claude-sonnet/5",
-      "company": "Anthropic",
-      "model": "Claude Sonnet",
-      "version": "5",
-      "commits": 1,
-      "lines_added": 55,
-      "lines_deleted": 3
-    },
-    {
-      "id": "anysphere/cursor",
-      "company": "Anysphere",
-      "model": "Cursor",
-      "version": "",
-      "commits": 1,
-      "lines_added": 2121,
-      "lines_deleted": 45
-    },
-    {
-      "id": "github/copilot",
-      "company": "GitHub",
-      "model": "Copilot",
-      "version": "",
-      "commits": 1,
-      "lines_added": 1478,
-      "lines_deleted": 105
-    },
-    {
-      "id": "openai/chatgpt",
-      "company": "OpenAI",
-      "model": "ChatGPT",
-      "version": "",
-      "commits": 1,
-      "lines_added": 272,
-      "lines_deleted": 16
-    },
-    {
-      "id": "zhipu/glm",
-      "company": "Zhipu AI",
-      "model": "GLM",
-      "version": "",
-      "commits": 1,
-      "lines_added": 1059,
-      "lines_deleted": 92
     }
   ]
 }

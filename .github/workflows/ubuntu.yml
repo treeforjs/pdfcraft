@@ -31,10 +31,14 @@ jobs:
             "https://github.com/goreleaser/nfpm/releases/download/v${NFPM_VERSION}/nfpm_${NFPM_VERSION}_amd64.deb"
           sudo dpkg -i "$RUNNER_TEMP/nfpm.deb"
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip1
       - uses: Swatinem/rust-cache@v2
         with:
           key: ubuntu-package
           save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Build the isolated scripting kernel
+        run: cargo xtask js-sandbox
       - name: Build and package
         run: |
           umask 077
@@ -78,10 +82,10 @@ jobs:
         run: |
           for resource in \
             /usr/share/doc/pdfcraft/README.md \
-            /usr/share/applications/ai.storyteller.pdfcraft.desktop \
-            /usr/share/metainfo/ai.storyteller.pdfcraft.metainfo.xml \
-            /usr/share/mime/packages/ai.storyteller.pdfcraft.xml \
-            /usr/share/icons/hicolor/*/apps/ai.storyteller.pdfcraft.png \
+            /usr/share/applications/io.github.treeforjs.pdfcraft.desktop \
+            /usr/share/metainfo/io.github.treeforjs.pdfcraft.metainfo.xml \
+            /usr/share/mime/packages/io.github.treeforjs.pdfcraft.xml \
+            /usr/share/icons/hicolor/*/apps/io.github.treeforjs.pdfcraft.png \
             /usr/share/pdfcraft/models/*; do
             runuser -u craft -- test -r "$resource"
           done

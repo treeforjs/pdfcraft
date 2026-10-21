@@ -1,4 +1,4 @@
-//! Internet access from PDFs (Acrobat: Trust Manager ▸ Internet Access from PDF Files): read
+//! Internet access from PDFs (PDF: Trust Manager ▸ Internet Access from PDF Files): read
 //! and change the policy (`trust_urls_get`, `trust_urls_set`) and evaluate addresses against it
 //! (`trust_url_check`). The policy lives in the session; the desktop app keeps it with its other
 //! settings. `form_submit`, `js_run`, `form_run_trigger` and `link_list` report its decision.

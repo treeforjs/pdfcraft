@@ -1,4 +1,4 @@
-//! Export a PDF ▸ Image (PNG, JPEG, TIFF) and Text (Acrobat's Export a PDF tool, first formats).
+//! Export a PDF ▸ Image (PNG, JPEG, TIFF) and Text (the viewer's Export a PDF tool, first formats).
 //!
 //! On the desktop the export runs on a worker thread and reports progress in the notice bar;
 //! on the web it runs in place and downloads the files.

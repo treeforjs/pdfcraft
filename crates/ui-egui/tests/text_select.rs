@@ -1,4 +1,4 @@
-//! Issue #295: quick clicks on text widen the selection, as in Acrobat: two clicks select a
+//! Issue #295: quick clicks on text widen the selection, as in PDF: two clicks select a
 //! word, three the line, four all the text on the page.
 
 use egui::{Event, Modifiers, PointerButton, Pos2};

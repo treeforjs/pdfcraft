@@ -1,7 +1,7 @@
 //! The date format Fill & Sign stamps (Preferences ▸ Date format), kept on the [`Session`] so
-//! the app and the automation tools write the same text. Acrobat's Fill & Sign has no such
-//! setting (only Acrobat Sign's account settings do); this one is per user and takes any
-//! pattern in Acrobat's date letters, not just a fixed list, with month and weekday names in
+//! the app and the automation tools write the same text. the viewer's Fill & Sign has no such
+//! setting (only PDF Sign's account settings do); this one is per user and takes any
+//! pattern in the viewer's date letters, not just a fixed list, with month and weekday names in
 //! any of [`DATE_LANGUAGES`].
 //!
 //! Patterns use `util.printd`'s date letters: `yyyy` `yy`, `mmmm` `mmm` `mm` `m`, `dddd` `ddd`
@@ -9,7 +9,7 @@
 
 use crate::Session;
 
-/// The format until the user picks one (Acrobat's: US month/day/year).
+/// The format until the user picks one (the viewer's: US month/day/year).
 pub const DEFAULT_DATE_FORMAT: &str = "m/d/yyyy";
 
 /// Ready-made formats for Preferences ▸ Date format. Any other valid pattern works too.

@@ -353,7 +353,7 @@ pub struct Document {
     /// What field scripts printed or asked for (see [`Session::take_js_output`]).
     js_output: js::JsOutput,
     /// Dynamic XFA forms: what laying the template out produced (pages and fields are
-    /// PdfCraft's; Adobe's viewers draw the form from the XFA packets themselves).
+    /// PdfCraft's; other XFA viewers draw the form from the XFA packets themselves).
     pub xfa: Option<XfaLayout>,
     /// The parsed template of a laid-out XFA form, for its scripts.
     xfa_template: Option<Arc<pdfcraft_xfa::model::Template>>,
@@ -987,7 +987,7 @@ pub struct SecuritySummary {
     pub pending: bool,
 }
 
-/// What printing a protected document allows (Acrobat: Printing allowed).
+/// What printing a protected document allows (PDF: Printing allowed).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Printing {
     None,
@@ -996,7 +996,7 @@ pub enum Printing {
     High,
 }
 
-/// What changes a protected document allows (Acrobat: Changes allowed).
+/// What changes a protected document allows (PDF: Changes allowed).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Changes {
     None,
@@ -1023,7 +1023,7 @@ pub struct Protection {
     pub copy: bool,
     /// "Enable text access for screen reader devices".
     pub accessibility: bool,
-    /// Compatibility level; AES-256 (Acrobat X and later) by default.
+    /// Compatibility level; AES-256 by default.
     pub algorithm: pdfcraft_cos::Algorithm,
     /// `false`: "Encrypt all document contents except metadata".
     pub encrypt_metadata: bool,
@@ -1046,7 +1046,7 @@ impl std::fmt::Debug for Protection {
 }
 
 impl Default for Protection {
-    /// Acrobat's defaults: AES-256, printing and accessibility allowed, no changes, no copying.
+    /// The viewer's defaults: AES-256, printing and accessibility allowed, no changes, no copying.
     fn default() -> Self {
         Self {
             open_password: None,
@@ -1062,7 +1062,7 @@ impl Default for Protection {
 }
 
 impl Protection {
-    /// The `/P` permission bits (ISO 32000-2 Table 22), as Acrobat maps its choices.
+    /// The `/P` permission bits (ISO 32000-2 Table 22), as the permissions UI maps its choices.
     pub fn permission_bits(&self) -> i32 {
         if self.permissions_password.is_none() {
             return -1; // nothing restricted without a permissions password
@@ -1083,13 +1083,13 @@ impl Protection {
         if self.algorithm != pdfcraft_cos::Algorithm::Aes256
             && [&self.open_password, &self.permissions_password].into_iter().flatten().any(|p| p.chars().any(|c| !(' '..='~').contains(&c)))
         {
-            return bad("this compatibility level supports only plain ASCII passwords; use AES-256 (Acrobat X and later)");
+            return bad("this compatibility level supports only plain ASCII passwords; use AES-256");
         }
         Ok(())
     }
 }
 
-/// What one recipient of certificate security may do (ISO 32000-2 Table 24; Acrobat's
+/// What one recipient of certificate security may do (ISO 32000-2 Table 24; the viewer's
 /// per-recipient Permissions dialog).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RecipientAccess {
@@ -1169,7 +1169,7 @@ impl CertificateProtection {
     }
 }
 
-/// The Table 22/24 bits for Acrobat's printing / changes / copy / accessibility choices.
+/// The Table 22/24 bits for the viewer's printing / changes / copy / accessibility choices.
 fn restriction_bits(printing: Printing, changes: Changes, copy: bool, accessibility: bool) -> i32 {
     let bit = |n: u32| 1i32 << (n - 1);
     let mut p = 0;
@@ -1320,7 +1320,7 @@ pub enum Edit {
     DeleteDestination {
         name: String,
     },
-    /// Label pages `from..=to` (0-based) as Acrobat's "Number pages" does; later pages keep their labels.
+    /// Label pages `from..=to` (0-based) as the viewer's "Number pages" does; later pages keep their labels.
     NumberPages {
         from: usize,
         to: usize,
@@ -1386,7 +1386,7 @@ pub enum Edit {
         text: String,
         author: String,
     },
-    /// Acrobat's "Set status" (a state reply by `author`).
+    /// The viewer's "Set status" (a state reply by `author`).
     SetAnnotationStatus {
         page: usize,
         index: usize,
@@ -1409,7 +1409,7 @@ pub enum Edit {
         strike: Style,
         caret: Style,
     },
-    /// Acrobat's "Mark with checkmark" (a hidden `/StateModel /Marked` reply by `author`).
+    /// The viewer's "Mark with checkmark" (a hidden `/StateModel /Marked` reply by `author`).
     MarkAnnotation {
         page: usize,
         index: usize,
@@ -1461,7 +1461,7 @@ pub enum Edit {
         names: Option<Vec<String>>,
     },
     /// Prepare a form: add a field on a page (`rect` in PDF user space); `name` defaults to
-    /// Acrobat's next free name ("Text1", "Check Box2", …).
+    /// The viewer's next free name ("Text1", "Check Box2", …).
     AddField {
         page: usize,
         rect: [f64; 4],
@@ -2038,7 +2038,7 @@ fn annotation_noun(s: &Shape) -> &'static str {
 }
 
 /// Opened as owner, or nothing is restricted (no permissions password was set): security may
-/// be changed, as in Acrobat.
+/// be changed, as in other viewers.
 fn unrestricted(p: &pdfcraft_cos::Permissions) -> bool {
     const ALL: i32 = 0b1111_0011_1100; // bits 3–6 and 9–12
     p.owner || p.bits & ALL == ALL
@@ -2798,7 +2798,7 @@ fn run_edit_inner(doc: &mut pdfcraft_cos::Document, edit: &Edit, cx: &mut EditCt
             p.validate()?;
             let failed = |e: pdfcraft_sign::SignError| EditError::Protection(e.to_string());
             let seed: [u8; 20] = pdfcraft_sign::envelope::random_bytes().map_err(failed)?;
-            // One envelope per distinct set of permissions, as Acrobat writes them.
+            // One envelope per distinct set of permissions, as other viewers write them.
             let mut groups: Vec<(i32, Vec<&pdfcraft_sign::Certificate>)> = Vec::new();
             for r in &p.recipients {
                 let bits = r.access.permission_bits();
@@ -3031,9 +3031,9 @@ pub struct Session {
     next_id: u64,
     /// Seconds since the Unix epoch, injected so saves are deterministic in tests.
     clock: Option<fn() -> i64>,
-    /// Certificates trusted for signing (Acrobat: Trusted Certificates).
+    /// Certificates trusted for signing (PDF: Trusted Certificates).
     trust: Arc<TrustStore>,
-    /// Preferences ▸ JavaScript ▸ Enable Acrobat JavaScript, inverted (on by default).
+    /// Preferences ▸ JavaScript ▸ Enable PDF JavaScript, inverted (on by default).
     js_off: bool,
     /// Preferences ▸ Date format, when not the default (see [`dates`]).
     date_format: Option<String>,
@@ -3096,7 +3096,7 @@ fn xfa_sync_datasets(doc: &mut pdfcraft_cos::Document, datasets: &mut Option<pdf
 
 /// What a document whose form script ran away is told.
 const XFA_SCRIPTS_OFF: &str =
-    "A script of this form ran too long and was abandoned; the form's scripts are off for this document (reopen it to run them again)";
+    "A legacy script runtime could not stop safely; the form's scripts are off for this document (reopen it to run them again)";
 
 /// Most XFA warnings kept per document.
 const MAX_XFA_WARNINGS: usize = 50;
@@ -3368,7 +3368,7 @@ impl Session {
             (_, cos) => (bytes, info, cos, None),
         };
         // A laid-out XFA form: its initialize and calculate scripts run now, as on opening in
-        // Acrobat; what they change is one more revision, still nothing to save.
+        // PDF; what they change is one more revision, still nothing to save.
         let mut script_output = js::JsOutput::default();
         let mut ran_away = false;
         let xfa_template = match (&xfa, &cos) {
@@ -3402,13 +3402,13 @@ impl Session {
                                 (b, i, Ok(Ok(c)))
                             }
                             Err(e) => {
-                                script_output.errors.push(format!("The form's scripts could not be applied: {e}"));
+                                script_output.error(&format!("The form's scripts could not be applied: {e}"));
                                 (bytes, info, Ok(Ok(cos)))
                             }
                         },
                         Ok(_) => (bytes, info, Ok(Ok(cos))),
                         Err(e) => {
-                            script_output.errors.push(format!("The form's scripts could not run: {e}"));
+                            script_output.error(&format!("The form's scripts could not run: {e}"));
                             (bytes, info, Ok(Ok(cos)))
                         }
                     }
@@ -3425,7 +3425,7 @@ impl Session {
             d.xfa_template = if ran_away { None } else { xfa_template };
             d.js_output.append(script_output);
             if ran_away {
-                d.js_output.errors.push(XFA_SCRIPTS_OFF.into());
+                d.js_output.error(XFA_SCRIPTS_OFF);
             }
             note_warnings(&mut d.xfa_warnings, &xfa_warnings);
         }
@@ -3619,7 +3619,9 @@ impl Session {
                 let notes = guard(|| xfa_sync_datasets(&mut next, datasets))
                     .unwrap_or_else(|m| Err(format!("writing the XFA data failed unexpectedly ({m})")))
                     .map_err(EditError::Write)?;
-                cx.xfa_out.errors.extend(notes);
+                for note in notes {
+                    cx.xfa_out.error(&note);
+                }
             }
             fn collect(e: &Edit, changed: &mut Vec<String>, reset: &mut bool) {
                 match e {
@@ -3641,11 +3643,11 @@ impl Session {
                 cx.xfa_datasets = run.datasets;
                 cx.xfa_ran_away |= run.ran_away;
                 if let Err(e) = ran {
-                    cx.xfa_out.errors.push(e);
+                    cx.xfa_out.error(&e);
                 }
             }
         }
-        // XFA forms keep their values in the datasets packet too, for Adobe's viewers.
+        // XFA forms keep their values in the datasets packet too, for other XFA viewers.
         let mut xfa_notes = Vec::new();
         if is_xfa && matches!(scope_of(&edit), Scope::Form | Scope::Full) {
             let datasets = &mut cx.xfa_datasets;
@@ -3697,7 +3699,7 @@ impl Session {
         doc.tag_update = cx.tags;
         if cx.xfa_ran_away {
             doc.xfa_template = None;
-            doc.js_output.errors.push(XFA_SCRIPTS_OFF.into());
+            doc.js_output.error(XFA_SCRIPTS_OFF);
         }
         Ok(())
     }
@@ -3964,7 +3966,7 @@ impl Session {
     }
 
     /// File ▸ Revert: back to the last saved version (or the file as opened). Undo history is
-    /// cleared, as in Acrobat.
+    /// cleared, as in other viewers.
     pub fn revert(&mut self, id: DocId) -> Result<(), EditError> {
         let doc = self.doc_mut(id)?;
         let editor = doc.editor.as_mut().ok_or_else(|| EditError::ReadOnly(doc.read_only_reason.clone().unwrap_or_default()))?;
@@ -4030,10 +4032,10 @@ impl Session {
         Ok((kind, created?))
     }
 
-    /// Reduce File Size: Acrobat's defaults (images above 225 ppi to 150 ppi, JPEG medium
+    /// Reduce File Size: the viewer's defaults (images above 225 ppi to 150 ppi, JPEG medium
     /// quality; thumbnails dropped), identical resources merged, unused objects dropped, objects
     /// packed into compressed object streams. Returns the bytes and how many objects were
-    /// merged. The open document is not changed (Acrobat saves the reduced copy as a new file).
+    /// merged. The open document is not changed (the reduced copy is saved as a new file).
     pub fn reduced_bytes(&self, id: DocId) -> Result<(Arc<Vec<u8>>, usize), EditError> {
         let (bytes, report) = self.optimized_bytes(id, &optimize::Settings::default(), &[])?;
         Ok((bytes, report.merged))
@@ -4084,7 +4086,7 @@ impl Session {
         pdfcraft_print::impose(&cos, settings).map_err(|e| EditError::Print(e.to_string()))
     }
 
-    /// Print as image (Acrobat: Print ▸ Advanced ▸ Print As Image): the print-ready PDF of
+    /// Print as image (PDF: Print ▸ Advanced ▸ Print As Image): the print-ready PDF of
     /// [`Session::print_pdf`] with every sheet replaced by one opaque picture of itself at `dpi`
     /// pixels per inch (36 to 1200), so the printer gets no fonts, vectors or transparency. Each
     /// sheet's resolution is lowered when its pixels would exceed
@@ -4204,7 +4206,7 @@ impl Session {
             .collect()
     }
 
-    /// Split into parts of at most `max_bytes` each (Acrobat's "File size"): pages are taken in
+    /// Split into parts of at most `max_bytes` each (the viewer's "File size"): pages are taken in
     /// order while their size (as single-page files, an over-estimate because shared fonts and
     /// images count once per part) fits; a page larger than the limit is a part of its own.
     pub fn split_by_size(&self, id: DocId, max_bytes: usize) -> Result<Vec<SplitPart>, EditError> {
@@ -4360,6 +4362,13 @@ impl Session {
         out
     }
 
+    /// Retry a snapshot after its storage write failed, even if no new edit has occurred.
+    pub fn retry_autosave(&mut self, id: DocId) {
+        if let Some(doc) = self.docs.iter_mut().find(|doc| doc.id == id) {
+            doc.snapshot_generation = doc.generation.wrapping_sub(1);
+        }
+    }
+
     /// Mark a document opened from a recovery file: it has unsaved changes and belongs at
     /// `path` (where Save writes), as when the session ended.
     pub fn mark_recovered(&mut self, id: DocId, path: Option<String>) {
@@ -4398,7 +4407,7 @@ impl Session {
         true
     }
 
-    /// Hide or show every comment on the page (Acrobat's Comments ▸ Hide all comments). Form
+    /// Hide or show every comment on the page (the viewer's Comments ▸ Hide all comments). Form
     /// fields and links still draw. Returns whether anything changed.
     pub fn set_hide_comments(&mut self, id: DocId, hide: bool) -> bool {
         let Some(doc) = self.docs.iter_mut().find(|d| d.id == id) else { return false };
@@ -4411,7 +4420,7 @@ impl Session {
         true
     }
 
-    /// Acrobat's Summarize Comments ("Comments only" layout): a new PDF listing every comment
+    /// The viewer's Summarize Comments ("Comments only" layout): a new PDF listing every comment
     /// with its number, author, type, date, text and replies, grouped by page.
     pub fn summarize_comments(&self, id: DocId, sort: SummarySort) -> Result<Arc<Vec<u8>>, EditError> {
         let doc = self.get(id).ok_or(EditError::NoDocument)?;
@@ -4600,7 +4609,7 @@ impl Session {
     }
 }
 
-/// A picture for a watermark or background (Acrobat: Source ▸ File): an image, or `page`
+/// A picture for a watermark or background (PDF: Source ▸ File): an image, or `page`
 /// (0-based) of a PDF.
 #[derive(Clone, Debug, PartialEq)]
 pub struct MarkFile {
@@ -4666,7 +4675,7 @@ impl SummarySort {
     }
 }
 
-/// Acrobat's name for a comment type, as comment lists show it.
+/// The viewer's name for a comment type, as comment lists show it.
 pub fn comment_type_name(subtype: &str) -> &str {
     match subtype {
         "Text" => "Sticky Note",
@@ -4754,7 +4763,7 @@ mod keep_tags_tests;
 #[cfg(test)]
 mod tests;
 
-/// Page filters of Acrobat's Rotate Pages and page selection: even/odd page numbers and
+/// Page filters of the viewer's Rotate Pages and page selection: even/odd page numbers and
 /// orientation (as displayed).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum PageParity {

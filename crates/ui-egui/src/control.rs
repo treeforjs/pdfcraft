@@ -38,6 +38,9 @@ use std::sync::{Arc, Mutex};
 use egui::accesskit::{self, Action, NodeId};
 use serde_json::{Value, json};
 
+mod ticket;
+pub use ticket::Ticket as ControlTicket;
+
 pub type Reply = Result<Value, String>;
 
 /// Seconds to wait for frames (input to be handled, a screenshot to be taken) before reporting
@@ -60,7 +63,7 @@ fn now_secs() -> f64 {
 
 fn not_drawn(what: &str) -> String {
     format!(
-        "{what} did not happen within {NOT_DRAWN_TIMEOUT:.0} s: the window is not being drawn (it may be hidden, minimized or covered); bring it to the front and retry"
+        "{what} did not happen within {NOT_DRAWN_TIMEOUT:.0} s: the window is not being drawn (it may be hidden, minimized or covered); bring it to the front"
     )
 }
 
@@ -69,6 +72,14 @@ pub struct ControlRequest {
     pub method: String,
     pub params: Value,
     pub reply: Sender<Reply>,
+    ticket: ControlTicket,
+}
+
+impl ControlRequest {
+    pub fn new(method: impl Into<String>, params: Value) -> (Self, Receiver<Reply>) {
+        let (reply, rx) = channel();
+        (Self { method: method.into(), params, reply, ticket: ControlTicket::default() }, rx)
+    }
 }
 
 /// Sends requests to the app (from the transport thread or a test).
@@ -81,13 +92,18 @@ pub struct ControlClient {
 impl ControlClient {
     /// Queue a request; the reply arrives on the returned receiver once the app has handled it.
     pub fn send(&self, method: &str, params: Value) -> Receiver<Reply> {
-        let (reply, rx) = channel();
-        let req = ControlRequest { method: method.into(), params, reply };
+        self.send_cancellable(method, params).0
+    }
+
+    /// Queue a request with a ticket that can prevent dispatch after a caller times out.
+    pub fn send_cancellable(&self, method: &str, params: Value) -> (Receiver<Reply>, ControlTicket) {
+        let (req, rx) = ControlRequest::new(method, params);
+        let ticket = req.ticket.clone();
         if let Err(e) = self.tx.send(req) {
             let _ = e.0.reply.send(Err("the app has closed".into()));
         }
         self.ctx.request_repaint();
-        rx
+        (rx, ticket)
     }
 }
 
@@ -182,6 +198,11 @@ impl Control {
     pub(crate) fn tick(&mut self, ctx: &egui::Context, host: &mut impl Host) {
         self.finish_pending(ctx);
         while let Ok(req) = self.rx.try_recv() {
+            // The transport may have cancelled while the UI was busy. Claim immediately before
+            // the first access to application state; a cancelled queued edit is never applied.
+            if !req.ticket.start() {
+                continue;
+            }
             match self.handle(ctx, host, &req.method, &req.params) {
                 Handled::Now(r) => {
                     let _ = req.reply.send(r);
@@ -226,11 +247,12 @@ impl Control {
                     let _ = reply.send(Ok(value));
                 }
                 Pending::Frames { since, reply, .. } if now - since > NOT_DRAWN_TIMEOUT => {
-                    // The agent is told it failed, so it must not happen later either.
+                    // Drop input not delivered yet. Earlier batches may already have changed the
+                    // document, so a missing completion must not be described as a safe retry.
                     if let Ok(mut sh) = self.shared.lock() {
                         sh.inject.clear();
                     }
-                    let _ = reply.send(Err(not_drawn("handling the input")));
+                    let _ = reply.send(Err(format!("{}. Input dispatch already started; its outcome is unknown. Remaining input was cancelled and nothing was retried; inspect the document before retrying an edit.", not_drawn("handling the input"))));
                 }
                 p @ Pending::Frames { .. } => keep.push(p),
                 Pending::Screenshot { tag, region, reply, since } => match shots.iter().find(|(t, _)| *t == tag) {
@@ -601,6 +623,7 @@ impl Host for crate::PdfCraftApp {
             "password_prompt": self.password_prompt.is_some(),
             "close_prompt": self.close_request.is_some(),
             "timestamp_servers": self.timestamp_servers,
+            "identity_import_running": self.id_import.is_some(),
             "signature_workflow": {"mode":format!("{:?}",self.signature_workflow.mode),"selected":self.signature_workflow.selected,
                 "allow_network":self.signature_workflow.allow_network,"verification_time":self.signature_workflow.verification_time,
                 "certificates":self.signature_workflow.certificates,"crls":self.signature_workflow.crls,"ocsps":self.signature_workflow.ocsps,
@@ -648,6 +671,9 @@ impl Host for crate::PdfCraftApp {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+mod transport;
+
 // ---- transport (native only) -----------------------------------------------------------------
 
 /// Where a running app's control channel can be reached (written to the `--control` file).
@@ -663,54 +689,69 @@ pub struct Endpoint {
 /// `{"method": "auth", "params": {"token": …}}`; anything else closes the connection.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn serve(client: ControlClient) -> std::io::Result<Endpoint> {
-    use std::io::{BufRead, BufReader, Write};
+    use std::io::BufReader;
+    use std::time::Instant;
     let listener = std::net::TcpListener::bind(("127.0.0.1", 0))?;
     let port = listener.local_addr()?.port();
     let token = random_token()?;
     let expected = token.clone();
-    std::thread::Builder::new().name("pdfcraft-control".into()).spawn(move || {
-        for stream in listener.incoming().flatten() {
-            let client = client.clone();
-            let expected = expected.clone();
-            let _ = std::thread::Builder::new().name("pdfcraft-control-conn".into()).spawn(move || {
-                let Ok(read) = stream.try_clone() else { return };
-                let mut write = stream;
-                let mut authed = false;
-                for line in BufReader::new(read).lines() {
-                    let Ok(line) = line else { break };
-                    if line.trim().is_empty() {
-                        continue;
-                    }
-                    let (reply, close) = match serde_json::from_str::<Value>(&line) {
-                        Err(e) => (rpc_error(Value::Null, -32700, &format!("parse error: {e}")), false),
-                        Ok(msg) => {
-                            let id = msg.get("id").cloned().unwrap_or(Value::Null);
-                            let method = msg.get("method").and_then(Value::as_str).unwrap_or("");
-                            let params = msg.get("params").cloned().unwrap_or(Value::Null);
-                            if !authed {
-                                let ok =
-                                    method == "auth" && params.get("token").and_then(Value::as_str).is_some_and(|t| constant_time_eq(t, &expected));
-                                authed = ok;
-                                if ok {
-                                    (json!({ "jsonrpc": "2.0", "id": id, "result": { "ok": true } }), false)
-                                } else {
-                                    (rpc_error(id, -32001, "authenticate first: auth {token}"), true)
-                                }
-                            } else {
-                                let rx = client.send(method, params);
-                                match rx.recv_timeout(std::time::Duration::from_secs(30)) {
-                                    Ok(Ok(v)) => (json!({ "jsonrpc": "2.0", "id": id, "result": v }), false),
-                                    Ok(Err(e)) => (rpc_error(id, -32000, &e), false),
-                                    Err(_) => (rpc_error(id, -32002, "the app did not answer within 30 s"), false),
-                                }
-                            }
+    let pool = transport::Pool::new(move |stream, accepted| {
+        let Ok(read) = stream.try_clone() else { return };
+        let mut read = BufReader::new(read);
+        let mut write = stream;
+        let mut authed = false;
+        let auth_deadline = accepted + transport::AUTH_TIMEOUT;
+        loop {
+            let deadline = if authed { Instant::now() + transport::MESSAGE_TIMEOUT } else { auth_deadline };
+            let Ok(Some(line)) = transport::line(&mut read, deadline) else { break };
+            // Empty lines must not renew an unauthenticated peer's absolute deadline.
+            if line.iter().all(u8::is_ascii_whitespace) {
+                continue;
+            }
+            let (reply, close) = match serde_json::from_slice::<Value>(&line) {
+                Err(e) => (rpc_error(Value::Null, -32700, &format!("parse error: {e}")), !authed),
+                Ok(msg) => {
+                    let id = msg.get("id").cloned().unwrap_or(Value::Null);
+                    let method = msg.get("method").and_then(Value::as_str).unwrap_or("");
+                    let params = msg.get("params").cloned().unwrap_or(Value::Null);
+                    if !authed {
+                        let ok = method == "auth" && params.get("token").and_then(Value::as_str).is_some_and(|t| constant_time_eq(t, &expected));
+                        authed = ok;
+                        if ok {
+                            (json!({ "jsonrpc": "2.0", "id": id, "result": { "ok": true } }), false)
+                        } else {
+                            (rpc_error(id, -32001, "authenticate first: auth {token}"), true)
                         }
-                    };
-                    if writeln!(write, "{reply}").and_then(|_| write.flush()).is_err() || close {
-                        break;
+                    } else {
+                        let (rx, ticket) = client.send_cancellable(method, params);
+                        match rx.recv_timeout(transport::MESSAGE_TIMEOUT) {
+                            Ok(Ok(v)) => (json!({ "jsonrpc": "2.0", "id": id, "result": v }), false),
+                            Ok(Err(e)) => (rpc_error(id, -32000, &e), false),
+                            Err(_) if ticket.cancel_before_start() => {
+                                (rpc_error(id, -32002, "The request timed out before dispatch and was cancelled; no operation was started."), true)
+                            }
+                            Err(_) => (
+                                rpc_error(
+                                    id,
+                                    -32002,
+                                    "The request started, but its outcome is unknown. It was not retried; inspect the document before retrying an edit.",
+                                ),
+                                true,
+                            ),
+                        }
                     }
                 }
-            });
+            };
+            let mut encoded = transport::ReplyBuffer(Vec::new());
+            if serde_json::to_writer(&mut encoded, &reply).is_err() || transport::reply(&mut write, &encoded.0).is_err() || close {
+                break;
+            }
+        }
+    })?;
+    std::thread::Builder::new().name("pdfcraft-control".into()).spawn(move || {
+        for stream in listener.incoming().flatten() {
+            // A saturated pool closes the newly accepted socket instead of spawning a thread.
+            pool.admit(stream);
         }
     })?;
     Ok(Endpoint { port, token })

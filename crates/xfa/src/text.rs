@@ -47,7 +47,7 @@ impl Family {
         }
     }
 
-    /// The resource name used in content streams and `/DA` strings (Acrobat's conventions).
+    /// The resource name used in content streams and `/DA` strings (the viewer's conventions).
     pub fn resource_name(self, bold: bool, italic: bool) -> &'static str {
         match (self, bold, italic) {
             (Family::Helvetica, false, false) => "Helv",

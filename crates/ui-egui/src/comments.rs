@@ -1,8 +1,8 @@
-//! Commenting in the document view (execution plan M5.3–M5.4; Acrobat's "Add comments").
+//! Commenting in the document view (execution plan M5.3–M5.4; the viewer's "Add comments").
 //!
 //! - **Tools** ([`CommentTool`]): sticky note, text box, highlight / underline / strikethrough
 //!   (driven by text selection), freehand, line, arrow, rectangle, oval. They live in the quick
-//!   bar in three flyout groups, as in Acrobat's comment toolbar (audit `a14-*`).
+//!   bar in three flyout groups, as in the viewer's comment toolbar (audit `a14-*`).
 //! - **On the page:** drawing gestures with live previews; with the Select tool, comments can be
 //!   hovered, selected (blue frame with 8 round handles), moved, resized (rectangles, ovals and
 //!   text boxes), edited (double-click) and deleted (⌫ / Delete); a context menu offers Edit,
@@ -22,7 +22,7 @@ use crate::canvas::{DocView, PageXform};
 use crate::theme::{self, Tokens};
 use crate::{QuickTool, icons};
 
-/// Acrobat's selection blue for annotation frames and handles (11-visual-spec §5).
+/// The viewer's selection blue for annotation frames and handles (11-visual-spec §5).
 const SELECT_BLUE: Color32 = Color32::from_rgb(0x14, 0x73, 0xE6);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -48,7 +48,7 @@ pub enum CommentTool {
     Eraser,
 }
 
-/// The quick-bar flyout groups, in Acrobat's order: Comment ▸, Highlight ▸, Draw ▸.
+/// The quick-bar flyout groups, in the viewer's order: Comment ▸, Highlight ▸, Draw ▸.
 pub const GROUPS: [&[CommentTool]; 3] = [
     &[CommentTool::Note, CommentTool::TextBox, CommentTool::Callout, CommentTool::Attach],
     &[CommentTool::Highlight, CommentTool::Underline, CommentTool::StrikeOut, CommentTool::Squiggly, CommentTool::Caret, CommentTool::ReplaceText],
@@ -218,7 +218,7 @@ impl CommentTool {
     }
 }
 
-/// The comment swatches (our palette, close to Acrobat's quick colours).
+/// The comment swatches (our palette, close to the viewer's quick colours).
 pub const SWATCHES: [(&str, Rgb); 10] = [
     ("Yellow", [1.0, 0.94, 0.0]),
     ("Orange", [1.0, 0.54, 0.0]),
@@ -240,7 +240,7 @@ pub fn color32(c: Rgb) -> Color32 {
 /// Commenting preferences shared by every document (author, per-tool styles, pin).
 #[derive(Clone, Debug)]
 pub struct CommentPrefs {
-    /// `/T` of new comments (Acrobat: Preferences ▸ Identity, default the login name).
+    /// `/T` of new comments (PDF: Preferences ▸ Identity, default the login name).
     pub author: String,
     styles: Vec<(CommentTool, Style)>,
     /// Keep the tool selected after use (the pin).
@@ -320,7 +320,7 @@ pub fn tool_for(a: &Annotation) -> Option<CommentTool> {
     })
 }
 
-/// The user's login name, which Acrobat uses as the default comment author.
+/// The user's login name, which PDF uses as the default comment author.
 fn login_name() -> String {
     #[cfg(not(target_arch = "wasm32"))]
     for var in ["USER", "USERNAME", "LOGNAME"] {
@@ -454,7 +454,7 @@ pub struct PanelStats {
     pub drawn: usize,
 }
 
-/// Comments panel order (Acrobat: Sort by page, author, date, type, colour).
+/// Comments panel order (PDF: Sort by page, author, date, type, colour).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum SortBy {
     #[default]

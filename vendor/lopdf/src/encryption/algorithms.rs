@@ -1501,7 +1501,7 @@ mod tests {
         assert_eq!(&file_encryption_key[..], key);
     }
 
-    /// Some PDF writers (e.g. Adobe) pad /O and /U to 127 bytes with trailing
+    /// Some PDF writers pad /O and /U to 127 bytes with trailing
     /// zeros instead of the spec-required 48. Verify that `try_from` accepts
     /// these and truncates to the correct 48-byte length.
     #[test]
@@ -1514,7 +1514,7 @@ mod tests {
         let o_48 = vec![0xAAu8; 48];
         let u_48 = vec![0xBBu8; 48];
 
-        // Pad to 127 bytes with trailing zeros — mimics real-world Adobe PDFs.
+        // Pad to 127 bytes with trailing zeros — mimics real-world PDF output.
         let mut o_127 = o_48.clone();
         o_127.resize(127, 0u8);
         let mut u_127 = u_48.clone();

@@ -106,7 +106,7 @@ fn every_catalog_tool_is_listed_after_view_more() {
 #[test]
 fn opening_a_pdf_shows_comments_and_bookmarks() {
     let mut h = harness(|app| app.open_bytes("fixture.pdf", None, FIXTURE.to_vec()).expect("fixture opens"));
-    // Documents with comments open on the Comments panel, like Acrobat.
+    // Documents with comments open on the Comments panel, as other viewers do.
     h.get_by_label_contains("Check the numbers");
     h.get_by_label("Bookmarks").click();
     h.run_steps(3);

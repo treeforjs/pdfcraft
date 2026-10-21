@@ -1,4 +1,4 @@
-//! Add Header and Footer, Add Watermark and Add Background dialogs (Acrobat: Edit a PDF ▸ …;
+//! Add Header and Footer, Add Watermark and Add Background dialogs (PDF: Edit a PDF ▸ …;
 //! dialog snapshots d13, d14, d12d). Each has the shared Page Range Options and a schematic
 //! preview of the current page. "Update" opens the same dialog in replace mode.
 

@@ -1,106 +1,65 @@
 # Releasing PdfCraft
 
-Every push to the `release` branch runs `.github/workflows/release.yml`. It builds installers for
-macOS, Windows, Linux, FreeBSD and the web, signs the ones it has certificates for, and creates or
-updates a **draft** GitHub Release named `PdfCraft v<version>`. Nobody sees a draft until a
-maintainer publishes it.
-
-The pipeline was ported from PhotoCraft's. User-facing names say **PdfCraft**; files, binaries and
-ids stay lowercase (`pdfcraft-<version>-<platform>-<arch>.<ext>`, `ai.storyteller.pdfcraft`).
+Every push to the `release` branch runs `.github/workflows/release.yml`. It builds Windows and
+Linux packages, verifies the update-signing configuration, and creates or updates a **draft**
+GitHub Release named `PdfCraft v<version>`. A maintainer tests and publishes the draft.
 
 ## Cutting a release
 
-1. **Bump the version** on `main`. It lives only in `[workspace.package] version` in the root
-   `Cargo.toml`:
+1. Set the signing configuration below. The workflow checks it before starting the package builds.
+2. **Bump the version on `main`** when that version has already been published:
 
    ```sh
-   cargo xtask version                 # prints the current version
-   cargo xtask version set 0.3.0       # or 0.3.0-rc.1; updates Cargo.toml and Cargo.lock
+   cargo xtask version
+   cargo xtask version set 0.5.1
    ```
 
-   Commit the change through the normal review flow (see the `Release: PdfCraft v0.2.1` PR).
-2. **Merge `main` into `release`** (or fast-forward it) and push. The workflow starts by itself.
-3. **Wait for the draft.** When every job has finished (notarization is the slow part), the
-   Releases page has a draft `PdfCraft v0.3.0` targeting the pushed commit, with every artifact
-   and `SHA256SUMS.txt`. The notes are generated from the merged PRs.
-4. **Check it.** Download an installer or two and read the job summaries. A `::warning::` there
-   means a signing secret was missing and that artifact is unsigned.
-5. **Publish** the draft in the GitHub UI. Publishing creates the `v0.3.0` tag. Versions with a
-   pre-release suffix (`-rc.1`) are marked as pre-releases.
+   Commit `Cargo.toml` and `Cargo.lock` through the normal review flow.
+3. **Merge or fast-forward `main` into `release` and push.** Alternatively, select the `release`
+   branch under **Actions > Release > Run workflow**. The optional `version` input applies to every
+   build in that run; leave it empty to use `Cargo.toml`.
+4. **Wait for the draft.** It contains Windows x64, x86 and ARM64 packages, Linux x86_64 and ARM64
+   packages, `SHA256SUMS.txt`, and its Ed25519 signature `SHA256SUMS.txt.sig`.
+5. **Test the packages** on Windows and Linux. Craftworks uses the Windows portable ZIP and Linux
+   AppImage. A warning about a missing Windows certificate means Authenticode signing is absent;
+   the separate update-checksum signature is always required.
+6. **Publish the draft** in the GitHub UI. Use a stable version for Craftworks' normal update
+   channel; versions with a suffix such as `-rc.1` are marked as pre-releases.
 
-Pushing to `release` again before you publish rebuilds the same draft and replaces its assets.
-Once the draft is published, the workflow refuses to touch that version again, so bump it first.
+The workflow only creates a draft when running on `release`. Dispatches from other branches are
+build checks and depend on the `release` environment's branch rules. Configure those rules to
+permit `release` for production signing.
 
-**Test runs:** *Actions ▸ Release ▸ Run workflow* runs the whole pipeline by hand. The optional
-`version` input (such as `0.3.0-rc.1`) overrides `Cargo.toml` for that run only; each job applies it
-with `cargo xtask version set` before building, so the binaries report it too. The signing jobs
-(macOS, Windows) and the draft-release job use the `release` environment, so pick the `release`
-branch in the dialog for a full run. On any other branch the same dispatch is a **dry run**: the
-Linux, Flatpak, FreeBSD and web jobs build and check everything, the signing jobs are refused by the
-environment's branch rule, and the draft-release job (which needs them) is skipped, so nothing is
-published (`gh workflow run release.yml --ref <branch>`).
+Rebuilding an unpublished version replaces its draft assets. A published version is never replaced:
+bump it first. The workflow does not publish automatically, and it cannot draft a release without
+all required packages and a valid signature from the configured key.
 
 ## What gets built
 
 | Platform | Artifacts | Built on |
 |---|---|---|
-| macOS 11+ (universal: Apple silicon + Intel) | `pdfcraft-<v>-macos-universal.dmg`, `pdfcraft-cli-<v>-macos-universal.zip` | `macos-15` |
 | Windows 10+ x64 | `pdfcraft-<v>-windows-x64.msi`, `pdfcraft-<v>-windows-x64-portable.zip` | `windows-latest` |
 | Windows 10+ x86 (32-bit) | `pdfcraft-<v>-windows-x86.msi`, `pdfcraft-<v>-windows-x86-portable.zip` | `windows-latest` |
 | Windows 11 on ARM64 | `pdfcraft-<v>-windows-arm64.msi`, `pdfcraft-<v>-windows-arm64-portable.zip` | `windows-latest` (cross-compiled) |
 | Linux x86_64 | `pdfcraft-<v>-linux-x86_64.{AppImage,AppImage.zsync,deb,rpm,tar.gz}`, `pdfcraft-cli-<v>-linux-x86_64.tar.gz` | `ubuntu-22.04` |
 | Linux aarch64 | `pdfcraft-<v>-linux-aarch64.{AppImage,AppImage.zsync,deb,rpm,tar.gz}`, `pdfcraft-cli-<v>-linux-aarch64.tar.gz` | `ubuntu-22.04-arm` |
-| Flatpak x86_64 | `pdfcraft-<v>-linux-x86_64.flatpak` | `ubuntu-24.04` (repackages the Linux tarball) |
-| Flatpak aarch64 | `pdfcraft-<v>-linux-aarch64.flatpak` | `ubuntu-24.04-arm` (repackages the Linux tarball) |
-| FreeBSD 14 x86_64 | `pdfcraft-<v>-freebsd-x86_64.tar.gz` | FreeBSD VM on `ubuntu-latest` |
-| Web | `pdfcraft-web-<v>.zip` (a static site; see [`packaging/web/README.md`](../packaging/web/README.md)) | `ubuntu-latest` |
 
 The ARM64 Windows build is cross-compiled on the x64 runner, so signing and WiX work as for the
 other Windows builds; `.github/workflows/windows-arm64.yml` installs and runs it on ARM64 hardware.
 
-Every binary reports its version (`pdfcraft --version`, `pdfcraft-cli --version`, *Help ▸ About*).
-The workflow sets `PDFCRAFT_BUILD_SHA` and `PDFCRAFT_BUILD_DATE` (`packaging/env.sh` fills them in
-for local builds): the commit is recorded in the macOS `Info.plist` (`PdfCraftBuildCommit`) and the
-date in the AppStream metadata. The binaries don't embed the commit yet.
+Every binary reports its version (`pdfcraft --version`, `pdfcraft-cli --version`, Help > About).
+The workflow sets `PDFCRAFT_BUILD_SHA` and `PDFCRAFT_BUILD_DATE`; the date is included in the
+AppStream metadata. Local packaging fills in these values when they are absent.
 
 **Fonts:** every job checks out [craft-fonts](https://github.com/storytold/craft-fonts) at the commit
 pinned in `release.yml` and builds with `CRAFT_FONTS_DIR` and `CRAFT_FONTS_REQUIRED=1`, so releases
 embed its Japanese fonts and fail rather than ship without them (`AGENTS.md` §1.4). Bump the pin
 deliberately.
 
-**OCR models:** every desktop package ships the Scan & OCR models (#103). The packaging scripts call
-`stage_models` (`packaging/env.sh`; `package.ps1` on Windows), which runs `cargo xtask models` to
-fetch every `kind = "model"` file in `ATTRIBUTION.toml` (verified by SHA-256) with its licence text
-and an `ATTRIBUTION.txt`, straight into the package, so packaging needs the network. They go where
-`pdfcraft_ocr::Models::dirs_beside_exe` looks: `models\` beside `pdfcraft.exe` (MSI, portable zip),
-`PdfCraft.app/Contents/Resources/models` (macOS), and `share/pdfcraft/models` beside `bin/`
-(deb, rpm, tar.gz, AppImage, Flatpak, FreeBSD). The web build doesn't include them yet.
-
-### macOS
-
-`packaging/macos/package.sh` builds both architectures, joins them with `lipo`, and assembles
-`PdfCraft.app` from `Info.plist.in` (bundle id `ai.storyteller.pdfcraft`, macOS 11+, PDF declared
-as a document type with rank Alternate, so PdfCraft is offered under Open With without taking over
-from Preview). Files opened from Finder arrive as Apple events, which
-`apps/pdfcraft/src/apple_events.rs` receives.
-
-- **Signing** uses the hardened runtime and a secure timestamp, executable first, then the bundle.
-  `packaging/macos/import-cert.sh` puts the certificate in a temporary keychain, deleted at the end
-  of the job.
-- **Notarization:** the app is zipped and sent with `xcrun notarytool submit --wait`, the ticket is
-  stapled, and the result is checked with `codesign --verify`, `stapler validate` and `spctl`. The
-  app ships on a drag-to-Applications DMG, which is signed and notarized too.
-  Its Finder window (background, icon size and positions) comes from
-  [`packaging/macos/dmg/`](../packaging/macos/dmg/README.md), and its volume is named `PdfCraft`
-  without the version, which the window's background needs; the DMG file name keeps the version.
-- **CLI:** `pdfcraft-cli` is signed and notarized as a zip. A bare executable can't hold a stapled
-  ticket, so Gatekeeper looks it up online the first time a downloaded copy runs.
-
-Without certificates (locally) the script signs ad-hoc and skips notarization:
-
-```sh
-packaging/macos/package.sh --arch aarch64     # quicker, host-only; --arch universal needs both targets
-```
+**OCR models:** every desktop package ships the Scan & OCR models. The packaging scripts run
+`cargo xtask models` to fetch each `kind = "model"` file in `ATTRIBUTION.toml`, verified by SHA-256,
+with its licence and attribution text. Models live in `models\` beside the Windows executable
+and in `share/pdfcraft/models` beside `bin/` on Linux. Packaging needs network access.
 
 ### Windows
 
@@ -161,58 +120,61 @@ downloading only the changed blocks. `latest` is the newest published, non-pre-r
 `package.sh` writes the `.zsync` when `zsyncmake` (the `zsync` package) is installed and warns
 otherwise; the release job checks both.
 
-**Flatpak:** the `flatpak` job turns each arch's tarball into a single-file bundle with
-`packaging/linux/flatpak-bundle.sh` and `flatpak/ai.storyteller.pdfcraft.bundle.yml` (no Rust build;
-the same binaries), then installs it and runs `pdfcraft-cli --version` in the sandbox.
-`flatpak/ai.storyteller.pdfcraft.yml` is the from-source manifest for a later Flathub submission;
-packaging-lint keeps the runtime and sandbox permissions (`finish-args`) of the two identical.
-Printing is not available in the Flatpak yet: it runs `lp`, which the freedesktop runtime lacks
-(the job logs a note); it needs the print portal. Users install the bundle with `flatpak install --user pdfcraft-<v>-linux-<arch>.flatpak`; the
-freedesktop runtime comes from Flathub.
+Locally (on Linux, with nfpm): `packaging/linux/package.sh` or `--formats "deb tar"`.
 
-Locally (on Linux, with nfpm): `packaging/linux/package.sh` or `--formats "deb tar"`; then
-`packaging/linux/flatpak-bundle.sh` for the Flatpak.
+## Signing configuration
 
-### FreeBSD
+Under **Settings > Environments > release**, add secret **`UPDATE_SIGNING_KEY`** containing the
+complete Ed25519 private-key PEM, including its BEGIN and END lines. Keep the private key out of
+source control and downloaded packages.
 
-GitHub has no FreeBSD runners, so the `freebsd` job runs `packaging/freebsd/package.sh` in a FreeBSD
-VM with the packages from `.github/workflows/freebsd.yml`. The tarball is a `/usr/local`-style tree
-with the same desktop entry, metainfo and icons as Linux. FreeBSD has no code signing for loose
-binaries; check the tarball against `SHA256SUMS.txt`.
+Under **Settings > Secrets and variables > Actions > Variables**, add repository variable
+**`CRAFT_UPDATE_PUBLIC_KEY`** containing the matching public key as a single line of base64 DER.
+Every desktop build embeds this public key. Generate it from your private key on Linux with:
 
-### Web
+```sh
+openssl pkey -in ~/.craft-signing/key.pem -pubout -outform DER | base64 -w0
+echo
+```
 
-`packaging/web/package.sh` runs `trunk build --release` in `apps/pdfcraft-web` and zips the site
-with sample `_headers` and `.htaccess` files. Hosting (MIME types, compression, caching, iframes) is
-covered in [`packaging/web/README.md`](../packaging/web/README.md).
+Base64 of the raw 32-byte Ed25519 public key is also accepted. Both values are required for
+production releases. Before building, the workflow checks the public key and verifies that the
+private key matches it. Before drafting, it signs the checksums, checks the signature length,
+and verifies the signature with the public key. A missing, malformed or mismatched key fails the
+run. See [Craftworks key setup](https://github.com/treeforjs/craftworks/blob/main/docs/updates.md)
+for key generation and backup instructions.
 
-## Secrets
-
-The signing secrets live in the repository's **`release` environment** (*Settings ▸ Environments ▸
-release*), restricted to the `release` branch; every job in `release.yml` declares
-`environment: release`. Each secret is optional: if one is missing, that platform's artifacts are
-unsigned and the run shows a warning.
+Windows Authenticode signing is optional and separate from update verification. These additional
+secrets also live in the `release` environment:
 
 | Secret | Used for |
 |---|---|
-| `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD` | base64 Developer ID Application `.p12` and its password |
-| `KEYCHAIN_PASSWORD` | the temporary CI keychain (random if unset) |
-| `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID` | `notarytool` (an app-specific password) |
 | `WINDOWS_CERTIFICATE`, `WINDOWS_CERTIFICATE_PASSWORD` | base64 `.pfx` code-signing certificate and its password |
 | `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET` | service principal for Azure Trusted Signing (instead of a `.pfx`) |
 | `AZURE_SIGNING_ENDPOINT`, `AZURE_SIGNING_ACCOUNT`, `AZURE_CERT_PROFILE` | Trusted Signing endpoint, account and certificate profile |
-| `UPDATE_SIGNING_KEY` | Ed25519 private key (PEM) that signs `SHA256SUMS.txt` as `SHA256SUMS.txt.sig`, so the app can install the release itself |
 
-The in-app updater also needs the matching public key as the repository **variable**
-`CRAFT_UPDATE_PUBLIC_KEY` (base64; not secret), which every desktop build embeds. Making the key
-pair and where to put it: [craftworks `docs/updates.md`](https://github.com/treeforjs/craftworks/blob/main/docs/updates.md).
-Without both, PdfCraft still finds new releases and offers their page, but installs nothing.
+Only the final job gets `contents: write` for its `GITHUB_TOKEN`. GitHub also requires workflow
+write authorization when the target commit changes `.github/workflows/` relative to the default
+branch; `GITHUB_TOKEN` cannot receive that authorization. In that case draft creation or updates
+can fail with HTTP 403 or 404 even after all packages and signatures pass. See
+[GitHub's release API permissions](https://docs.github.com/en/rest/releases/releases?apiVersion=latest#create-a-release).
 
-`GITHUB_TOKEN` creates the release; only the final job gets `contents: write`.
+The final job saves `SHA256SUMS.txt` and its verified Ed25519 signature as a separate
+`signed-checksums-pdfcraft-<version>-<source SHA>` workflow artifact before attempting the draft.
+The per-platform package artifacts remain available for review too. After an approved merge puts
+the reviewed workflow changes on the default branch, rerun the failed draft job or the release
+workflow for the reviewed source. Keep the release target equal to the package source commit.
 
 ## Checks
 
-`.github/workflows/packaging-lint.yml` runs on changes to `packaging/` and the workflows: actionlint, shellcheck,
-a PowerShell parse, xmllint (WiX, plist, MIME), `desktop-file-validate`, `appstreamcli validate`, and
-the MSI icon-id check. The FreeBSD and Windows ARM64 workflows also exercise their packaging before a
-release does.
+`.github/workflows/packaging-lint.yml` checks workflow syntax, shell and PowerShell scripts, and
+package metadata on pull requests. Windows packaging checks PE architecture and subsystem values,
+MSI tables and the CLI version. Linux packaging checks the installed files, OCR models, CLI archive,
+AppImage startup and its update metadata before uploading the artifacts.
+
+## Local scripting-kernel bootstrap
+
+Native and browser builds embed an isolated generated scripting kernel. Before local packaging,
+run `rustup target add wasm32-wasip1` and `cargo xtask js-sandbox`. Release workflows perform
+this explicit step after any version override. Do not commit the generated Wasm module.
+See [development.md](development.md#contained-document-scripting) for the runtime limits.

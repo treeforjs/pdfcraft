@@ -3,6 +3,22 @@
 version = 4
 
 [[package]]
+name = "ab_glyph"
+version = "0.2.32"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "01c0457472c38ea5bd1c3b5ada5e368271cb550be7a4ca4a0b4634e9913f6cc2"
+dependencies = [
+ "ab_glyph_rasterizer",
+ "owned_ttf_parser",
+]
+
+[[package]]
+name = "ab_glyph_rasterizer"
+version = "0.1.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "366ffbaa4442f4684d91e2cd7c5ea7c4ed8add41959a31447066e279e432b618"
+
+[[package]]
 name = "accesskit"
 version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -626,7 +642,6 @@ dependencies = [
  "fast-float2",
  "futures-concurrency",
  "futures-lite",
- "getrandom 0.4.3",
  "hashbrown 0.17.1",
  "icu_normalizer",
  "indexmap",
@@ -652,7 +667,6 @@ dependencies = [
  "thin-vec",
  "thiserror 2.0.21",
  "time",
- "web-time",
 ]
 
 [[package]]
@@ -1101,8 +1115,8 @@ dependencies = [
 
 [[package]]
 name = "craft-update"
-version = "0.1.0"
-source = "git+https://github.com/treeforjs/craftworks?rev=8c52baa4c73e7fb8def81d19426a96005c814c12#8c52baa4c73e7fb8def81d19426a96005c814c12"
+version = "0.2.0"
+source = "git+https://github.com/treeforjs/craftworks?rev=5be884ea9973989501d9e25c25ea75268f136c9b#5be884ea9973989501d9e25c25ea75268f136c9b"
 dependencies = [
  "base64 0.22.1",
  "ed25519-dalek",
@@ -1110,6 +1124,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "tempfile",
  "ureq",
 ]
 
@@ -1900,6 +1915,12 @@ checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 
 [[package]]
 name = "foldhash"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d9c4f5dac5e15c24eb999c26181a6ca40b39fe946cbe4c263c7209467bc83af2"
+
+[[package]]
+name = "foldhash"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
@@ -2108,7 +2129,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d99fc21d493812643aae86d53b7bbd02f376434a90317e8a790bc209fdd6605e"
 dependencies = [
  "bytemuck",
- "foldhash",
+ "foldhash 0.2.0",
  "hashbrown 0.17.1",
  "log",
  "peniko",
@@ -2125,7 +2146,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed4a1bb24121291d27230c1b1b44e07d6a9b28cefdb32fe1581dfb84e14f940a"
 dependencies = [
  "bytemuck",
- "foldhash",
+ "foldhash 0.2.0",
  "hashbrown 0.17.1",
  "log",
  "peniko",
@@ -2278,13 +2299,22 @@ checksum = "e5274423e17b7c9fc20b6e7e208532f9b19825d82dfd615708b70edd83df41f1"
 
 [[package]]
 name = "hashbrown"
+version = "0.15.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9229cfe53dfd69f0609a49f65461bd93001ea1ef889cd5529dd176593f5338a1"
+dependencies = [
+ "foldhash 0.1.5",
+]
+
+[[package]]
+name = "hashbrown"
 version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "841d1cc9bed7f9236f321df977030373f4a4163ae1a7dbfe1a51a2c1a51d9100"
 dependencies = [
  "allocator-api2",
  "equivalent",
- "foldhash",
+ "foldhash 0.2.0",
 ]
 
 [[package]]
@@ -2295,7 +2325,7 @@ checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
 dependencies = [
  "allocator-api2",
  "equivalent",
- "foldhash",
+ "foldhash 0.2.0",
 ]
 
 [[package]]
@@ -3479,6 +3509,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "owned_ttf_parser"
+version = "0.25.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "36820e9051aca1014ddc75770aab4d68bc1e9e632f0f5627c4086bc216fb583b"
+dependencies = [
+ "ttf-parser",
+]
+
+[[package]]
 name = "p256"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3566,7 +3605,7 @@ dependencies = [
 
 [[package]]
 name = "pdfcraft"
-version = "0.5.0"
+version = "0.5.2"
 dependencies = [
  "craft-update",
  "eframe",
@@ -3577,13 +3616,14 @@ dependencies = [
  "pdfcraft-ui-egui",
  "pollster 1.0.1",
  "serde_json",
+ "winit",
  "winresource",
  "winsafe",
 ]
 
 [[package]]
 name = "pdfcraft-a11y"
-version = "0.5.0"
+version = "0.5.2"
 dependencies = [
  "pdfcraft-content",
  "pdfcraft-cos",
@@ -3594,7 +3634,7 @@ dependencies = [
 
 [[package]]
 name = "pdfcraft-annot"
-version = "0.5.0"
+version = "0.5.2"
 dependencies = [
  "hayro-syntax",
  "pdfcraft-cos",
@@ -3606,11 +3646,11 @@ dependencies = [
 
 [[package]]
 name = "pdfcraft-arlington"
-version = "0.5.0"
+version = "0.5.2"
 
 [[package]]
 name = "pdfcraft-automation"
-version = "0.5.0"
+version = "0.5.2"
 dependencies = [
  "base64 0.22.1",
  "flate2",
@@ -3631,7 +3671,7 @@ dependencies = [
 
 [[package]]
 name = "pdfcraft-cli"
-version = "0.5.0"
+version = "0.5.2"
 dependencies = [
  "base64 0.22.1",
  "pdfcraft-automation",
@@ -3645,18 +3685,18 @@ dependencies = [
 
 [[package]]
 name = "pdfcraft-compare"
-version = "0.5.0"
+version = "0.5.2"
 
 [[package]]
 name = "pdfcraft-content"
-version = "0.5.0"
+version = "0.5.2"
 dependencies = [
  "pdfcraft-cos",
 ]
 
 [[package]]
 name = "pdfcraft-cos"
-version = "0.5.0"
+version = "0.5.2"
 dependencies = [
  "hayro-syntax",
  "pdfcraft-crypt",
@@ -3668,7 +3708,7 @@ dependencies = [
 
 [[package]]
 name = "pdfcraft-create"
-version = "0.5.0"
+version = "0.5.2"
 dependencies = [
  "hayro-syntax",
  "image",
@@ -3682,7 +3722,7 @@ dependencies = [
 
 [[package]]
 name = "pdfcraft-crypt"
-version = "0.5.0"
+version = "0.5.2"
 dependencies = [
  "aes",
  "md-5",
@@ -3695,7 +3735,7 @@ dependencies = [
 
 [[package]]
 name = "pdfcraft-edit"
-version = "0.5.0"
+version = "0.5.2"
 dependencies = [
  "hayro-syntax",
  "image",
@@ -3711,7 +3751,7 @@ dependencies = [
 
 [[package]]
 name = "pdfcraft-engine"
-version = "0.5.0"
+version = "0.5.2"
 dependencies = [
  "chrono",
  "icu_properties",
@@ -3746,11 +3786,12 @@ dependencies = [
  "thiserror 2.0.21",
  "ureq",
  "url",
+ "web-time",
 ]
 
 [[package]]
 name = "pdfcraft-export"
-version = "0.5.0"
+version = "0.5.2"
 dependencies = [
  "flate2",
  "roxmltree",
@@ -3758,7 +3799,7 @@ dependencies = [
 
 [[package]]
 name = "pdfcraft-filters"
-version = "0.5.0"
+version = "0.5.2"
 dependencies = [
  "flate2",
  "hayro-ccitt",
@@ -3769,7 +3810,7 @@ dependencies = [
 
 [[package]]
 name = "pdfcraft-fonts"
-version = "0.5.0"
+version = "0.5.2"
 dependencies = [
  "harfrust",
  "pdfcraft-cos",
@@ -3778,7 +3819,7 @@ dependencies = [
 
 [[package]]
 name = "pdfcraft-forms"
-version = "0.5.0"
+version = "0.5.2"
 dependencies = [
  "hayro-syntax",
  "pdfcraft-content",
@@ -3790,18 +3831,29 @@ dependencies = [
 
 [[package]]
 name = "pdfcraft-geom"
-version = "0.5.0"
+version = "0.5.2"
 
 [[package]]
 name = "pdfcraft-js"
-version = "0.5.0"
+version = "0.5.2"
 dependencies = [
  "boa_engine",
+ "serde",
+ "serde_json",
+ "wasmi",
+ "web-time",
+]
+
+[[package]]
+name = "pdfcraft-js-worker"
+version = "0.5.2"
+dependencies = [
+ "pdfcraft-js",
 ]
 
 [[package]]
 name = "pdfcraft-measure"
-version = "0.5.0"
+version = "0.5.2"
 dependencies = [
  "pdfcraft-annot",
  "pdfcraft-content",
@@ -3813,14 +3865,14 @@ dependencies = [
 
 [[package]]
 name = "pdfcraft-model"
-version = "0.5.0"
+version = "0.5.2"
 dependencies = [
  "pdfcraft-cos",
 ]
 
 [[package]]
 name = "pdfcraft-ocr"
-version = "0.5.0"
+version = "0.5.2"
 dependencies = [
  "ocrs",
  "pdfcraft-fonts",
@@ -3830,7 +3882,7 @@ dependencies = [
 
 [[package]]
 name = "pdfcraft-optimize"
-version = "0.5.0"
+version = "0.5.2"
 dependencies = [
  "hayro-ccitt",
  "image",
@@ -3845,7 +3897,7 @@ dependencies = [
 
 [[package]]
 name = "pdfcraft-organize"
-version = "0.5.0"
+version = "0.5.2"
 dependencies = [
  "hayro-syntax",
  "md-5",
@@ -3857,11 +3909,14 @@ dependencies = [
 
 [[package]]
 name = "pdfcraft-platform"
-version = "0.5.0"
+version = "0.5.2"
+dependencies = [
+ "libc",
+]
 
 [[package]]
 name = "pdfcraft-preflight"
-version = "0.5.0"
+version = "0.5.2"
 dependencies = [
  "moxcms",
  "pdfcraft-arlington",
@@ -3875,7 +3930,7 @@ dependencies = [
 
 [[package]]
 name = "pdfcraft-print"
-version = "0.5.0"
+version = "0.5.2"
 dependencies = [
  "pdfcraft-content",
  "pdfcraft-cos",
@@ -3885,7 +3940,7 @@ dependencies = [
 
 [[package]]
 name = "pdfcraft-redact"
-version = "0.5.0"
+version = "0.5.2"
 dependencies = [
  "pdfcraft-annot",
  "pdfcraft-content",
@@ -3899,7 +3954,7 @@ dependencies = [
 
 [[package]]
 name = "pdfcraft-render"
-version = "0.5.0"
+version = "0.5.2"
 dependencies = [
  "base64 0.22.1",
  "bytemuck",
@@ -3922,7 +3977,7 @@ dependencies = [
 
 [[package]]
 name = "pdfcraft-sign"
-version = "0.5.0"
+version = "0.5.2"
 dependencies = [
  "aes",
  "aws-lc-rs",
@@ -3957,7 +4012,7 @@ dependencies = [
 
 [[package]]
 name = "pdfcraft-ui-egui"
-version = "0.5.0"
+version = "0.5.2"
 dependencies = [
  "arboard",
  "base64 0.22.1",
@@ -4002,7 +4057,7 @@ dependencies = [
 
 [[package]]
 name = "pdfcraft-web"
-version = "0.5.0"
+version = "0.5.2"
 dependencies = [
  "eframe",
  "egui",
@@ -4014,7 +4069,7 @@ dependencies = [
 
 [[package]]
 name = "pdfcraft-xfa"
-version = "0.5.0"
+version = "0.5.2"
 dependencies = [
  "base64 0.22.1",
  "image",
@@ -4028,7 +4083,7 @@ dependencies = [
 
 [[package]]
 name = "pdfcraft-xfdf"
-version = "0.5.0"
+version = "0.5.2"
 dependencies = [
  "pdfcraft-annot",
  "pdfcraft-cos",
@@ -4980,9 +5035,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-webpki"
-version = "0.103.15"
+version = "0.103.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f3c3cf1d8b1e7d4927e2d154c3fcb02979afb9939629c62cd9048d4f07b60ac2"
+checksum = "4443b1b6d39d7c663139942cc4558262562d2c84123bb6282ef177009ca8b281"
 dependencies = [
  "ring",
  "rustls-pki-types",
@@ -5042,6 +5097,19 @@ name = "scopeguard"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
+
+[[package]]
+name = "sctk-adwaita"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b6277f0217056f77f1d8f49f2950ac6c278c0d607c45f5ee99328d792ede24ec"
+dependencies = [
+ "ab_glyph",
+ "log",
+ "memmap2",
+ "smithay-client-toolkit 0.19.2",
+ "tiny-skia",
+]
 
 [[package]]
 name = "sec1"
@@ -5397,6 +5465,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "spin"
+version = "0.9.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3763264f6b73151db08c50ff20d7d8a0b8796e021cdea7ceedad07b80155fa0e"
+
+[[package]]
 name = "spirv"
 version = "0.4.0+sdk-1.4.341.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5440,6 +5514,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6637bab7722d379c8b41ba849228d680cc12d0a45ba1fa2b48f2a30577a06731"
 dependencies = [
  "float-cmp",
+]
+
+[[package]]
+name = "string-interner"
+version = "0.19.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "23de088478b31c349c9ba67816fa55d9355232d63c3afea8bf513e31f0f1d2c0"
+dependencies = [
+ "hashbrown 0.15.5",
+ "serde",
 ]
 
 [[package]]
@@ -5633,7 +5717,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cdb87b95ec50ddfa440816d227a17b2ccbdda963a316a727fda0fc4334f7d134"
 dependencies = [
  "deranged",
- "js-sys",
  "libc",
  "num-conv",
  "num_threads",
@@ -5792,6 +5875,12 @@ checksum = "db97caf9d906fbde555dd62fa95ddba9eecfd14cb388e4f491a66d74cd5fb79a"
 dependencies = [
  "once_cell",
 ]
+
+[[package]]
+name = "ttf-parser"
+version = "0.25.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2df906b07856748fa3f6e0ad0cbaa047052d4a7dd609e231c4f72cee8c36f31"
 
 [[package]]
 name = "type-map"
@@ -6140,6 +6229,56 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23f0c9c52aa7cd7d77769a4cfe2a9adb1b331f489a41d912ce14513d5ab995c6"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "wasmi"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2300d0f78cba12f14e29e8dd157ea64050c0a688179aefdb2050105805594a0c"
+dependencies = [
+ "spin",
+ "wasmi_collections",
+ "wasmi_core",
+ "wasmi_ir",
+ "wasmparser",
+]
+
+[[package]]
+name = "wasmi_collections"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f8a8c42a2a76148d43097b1d7cc2a5bf33d5c23bd4dd69015fc887e311767884"
+dependencies = [
+ "string-interner",
+]
+
+[[package]]
+name = "wasmi_core"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9013136083d988725953390bf668b64b7a218fabf26f8b913bbc59546b97ee27"
+dependencies = [
+ "libm",
+]
+
+[[package]]
+name = "wasmi_ir"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba1fa003f79156f406d62ef0e1464dc03e11ace37170e9fa7524299a75ad8f68"
+dependencies = [
+ "wasmi_core",
+]
+
+[[package]]
+name = "wasmparser"
+version = "0.239.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8c9d90bb93e764f6beabf1d02028c70a2156a6583e63ac4218dd07ef733368b0"
+dependencies = [
+ "bitflags 2.13.2",
+ "indexmap",
 ]
 
 [[package]]
@@ -6823,6 +6962,7 @@ dependencies = [
  "raw-window-handle",
  "redox_syscall 0.4.1",
  "rustix 0.38.44",
+ "sctk-adwaita",
  "smithay-client-toolkit 0.19.2",
  "smol_str",
  "tracing",

@@ -1,7 +1,7 @@
 //! Field scripts beyond the AF calls: the hook through which the engine runs JavaScript.
 //!
 //! `forms` does not depend on a JavaScript engine (architecture §3: `forms → js` is not an
-//! allowed edge). It calls a [`Scripts`] implementation at the points Acrobat runs field
+//! allowed edge). It calls a [`Scripts`] implementation at the points PDF runs field
 //! events — Keystroke (on commit) and Validate before a value is accepted, Calculate in the
 //! calculation order, Format when the appearance is drawn — and applies what the script asks
 //! for: the event's value, `rc`, and changes to other fields.

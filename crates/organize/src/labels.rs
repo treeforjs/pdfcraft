@@ -1,7 +1,7 @@
 //! Page labels (ISO 32000-2 §12.4.2): "i, ii, iii, 1, 2, A-1…", execution plan M4.4.
 //!
 //! Labels are a number tree of ranges: from page `start` on, use a numbering `style`, a
-//! `prefix` and a first number. [`number_pages`] is Acrobat's "Number pages": relabel pages
+//! `prefix` and a first number. [`number_pages`] is the viewer's "Number pages": relabel pages
 //! `from..=to`, and keep every later page showing the label it had before. The tree is written
 //! back as one flat `/Nums` array, with ranges that merely continue the previous one merged.
 
@@ -316,7 +316,7 @@ pub fn set_page_label_ranges(doc: &mut Document, ranges: &[LabelRange]) -> Resul
     Ok(())
 }
 
-/// Acrobat's "Number pages": label pages `from..=to` (0-based) with `style`, `prefix` and
+/// The viewer's "Number pages": label pages `from..=to` (0-based) with `style`, `prefix` and
 /// starting number `first`; pages after `to` keep the labels they had.
 pub fn number_pages(doc: &mut Document, from: usize, to: usize, style: LabelStyle, prefix: &str, first: u32) -> Result<(), OrganizeError> {
     if prefix.len() > MAX_LABEL_BYTES {

@@ -187,7 +187,7 @@ impl PdfCraftApp {
                 let Some(tool) = crate::comments::CommentTool::from_command(tool) else { return false };
                 self.comment_prefs.group_tool[tool.group()] = tool;
                 self.quick_tool = crate::QuickTool::Comment(tool);
-                // Acrobat opens the Comments panel with the commenting tools, unless the user closed it.
+                // PDF opens the Comments panel with the commenting tools, unless the user closed it.
                 if self.right.is_none() && !self.comments_panel_closed {
                     self.right = Some(RightPanel::Comments);
                 }
@@ -441,7 +441,7 @@ impl PdfCraftApp {
                 self.left = crate::LeftPanel::Tool("form");
                 self.left_open = true;
                 self.right = Some(RightPanel::Fields);
-                // Like Acrobat, a document without fields gets them detected on the way in.
+                // Detect fields when a document has none.
                 if let Some((_, id)) = self.active_ids()
                     && self.session.get(id).is_some_and(|d| d.form.is_empty() && d.editable())
                 {
