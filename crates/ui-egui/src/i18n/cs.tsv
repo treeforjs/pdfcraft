@@ -3,8 +3,8 @@
 # Plural forms (see `plural_cs` in i18n/mod.rs): one (1) | few (2–4) | other (0, 5+).
 #
 # Clean-room: written from the meaning of the English labels, following common Czech desktop
-# conventions (menus are nouns, commands are infinitives); not taken from Adobe PDF's Czech
-# localisation or any other product's translation. Terminology: annotations are "komentáře",
+# conventions (menus are nouns, commands are infinitives).
+# Terminology: annotations are "komentáře",
 # pages are "stránky", form fields are "formulářová pole". Product and format names (PdfCraft,
 # PDF, Word, HTML…) stay in Latin letters; the trailing "…" of dialog commands is kept.
 # Further terms: redact "začernit", flatten "zploštit", combine "sloučit", text box (comment)
@@ -222,8 +222,8 @@
 	Recent	Nedávné
 	Files you open in PdfCraft appear here. Drop a PDF anywhere to open it.	Zde se zobrazí soubory, které otevřete v aplikaci PdfCraft. PDF otevřete přetažením kamkoli do okna.
 	Privacy	Soukromí
-	PdfCraft works offline. No telemetry, no account, and no cloud processing unless you add a provider.	PdfCraft funguje offline. Žádná telemetrie, žádný účet a žádné zpracování v cloudu, dokud nepřidáte poskytovatele.
-	Scripts run in a sandbox without file or network access. With JavaScript off, the viewer's standard format, validate and calculate functions still work.	Skripty běží v izolovaném prostředí bez přístupu k souborům a síti. I s vypnutým JavaScriptem fungují standardní funkce Acrobatu pro formátování, ověřování a výpočty.
+	PdfCraft works offline.	PdfCraft funguje offline.
+	Scripts run in a sandbox without file or network access. With JavaScript off, the viewer's standard format, validate and calculate functions still work.	Skripty běží v izolovaném prostředí bez přístupu k souborům a síti. I s vypnutým JavaScriptem fungují standardní funkce prohlížeče pro formátování, ověřování a výpočty.
 	Back to all tools	Zpět na všechny nástroje
 	Close panel	Zavřít panel
 	View less	Zobrazit méně
@@ -1950,7 +1950,7 @@
 	Open email app	Otevřít e-mailovou aplikaci
 	Open link	Otevřít odkaz
 	Open this web page?	Otevřít tuto webovou stránku?
-	Scripts run in a sandbox without file or network access. A script that asks to open a web page needs your permission first. With JavaScript off, the viewer's standard format, validate and calculate functions still work.	Skripty běží v izolovaném prostředí bez přístupu k souborům a síti. Skript, který chce otevřít webovou stránku, k tomu nejprve potřebuje vaše svolení. I s vypnutým JavaScriptem fungují standardní funkce Acrobatu pro formátování, ověřování a výpočty.
+	Scripts run in a sandbox without file or network access. A script that asks to open a web page needs your permission first. With JavaScript off, the viewer's standard format, validate and calculate functions still work.	Skripty běží v izolovaném prostředí bez přístupu k souborům a síti. Skript, který chce otevřít webovou stránku, k tomu nejprve potřebuje vaše svolení. I s vypnutým JavaScriptem fungují standardní funkce prohlížeče pro formátování, ověřování a výpočty.
 	Sign yourself	Podepsat sám
 	Used when opening PDFs. An explicit launch or control mode takes precedence for the session.	Používá se při otevírání PDF. Výslovně zvolený režim spuštění nebo řízení má pro danou relaci přednost.
 	Write this email?	Napsat tento e-mail?
