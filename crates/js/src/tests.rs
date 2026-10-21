@@ -184,6 +184,23 @@ fn ordinary_nesting_still_runs() {
     assert_eq!(go(&s, &Event::field("Calculate", "a", "")).value, "1000");
 }
 
+fn assert_xfa_resource_refusal(out: &xfa::XfaOutcome) {
+    assert!(out.limited && out.error.is_some(), "{out:?}");
+    assert!(out.effects.is_empty() && out.console.is_empty() && out.notes.is_empty(), "{out:?}");
+    assert!(out.result.is_none() && out.result_bool.is_none() && !out.abandoned, "{out:?}");
+}
+
+fn assert_added_instances(out: &xfa::XfaOutcome, added: usize) {
+    assert_eq!(out.error, None, "{out:?}");
+    assert!(!out.limited && !out.abandoned, "{out:?}");
+    let count = (added + 2).to_string();
+    assert_eq!(out.result.as_deref(), Some(count.as_str()), "{out:?}");
+    let effects: Vec<_> =
+        (2..added + 2).map(|index| xfa::XfaEffect::AddInstance { som: format!("form1[0].page1[0].table[0].row[{index}]") }).collect();
+    assert_eq!(out.effects, effects);
+    assert!(out.console.is_empty(), "{out:?}");
+}
+
 mod xfa_model {
     use crate::Limits;
     use crate::xfa::*;
@@ -269,14 +286,55 @@ mod xfa_model {
     #[test]
     fn long_values_and_results_are_cut_where_they_are_stored() {
         // The value kept for later reads is the one the effect saves.
-        let o = go("details.note.rawValue = new Array(100001).join('x'); details.note.rawValue.length", "form1[0].page1[0].total[0]", "calculate");
+        let o = go("details.note.rawValue = 'x'.repeat(100000); details.note.rawValue.length", "form1[0].page1[0].total[0]", "calculate");
         assert_eq!(o.error, None, "{o:?}");
+        assert!(!o.limited, "{o:?}");
         assert_eq!(o.result.as_deref(), Some("65536"));
+        assert_eq!(o.effects, vec![XfaEffect::SetValue { som: "form1[0].page1[0].details[0].note[0]".into(), value: "x".repeat(65_536) }]);
         assert!(o.notes.iter().any(|n| n.contains("cut")), "{:?}", o.notes);
         // A calculate's result is cut like a value set, and noted.
-        let o = go("new Array(100001).join('x')", "form1[0].page1[0].details[0].note[0]", "calculate");
-        assert_eq!(o.result.map(|r| r.chars().count()), Some(65_536));
+        let o = go("'x'.repeat(100000)", "form1[0].page1[0].details[0].note[0]", "calculate");
+        assert_eq!(o.error, None, "{o:?}");
+        assert!(!o.limited, "{o:?}");
+        assert_eq!(o.result, Some("x".repeat(65_536)));
+        assert!(o.effects.is_empty());
         assert!(o.notes.iter().any(|n| n.contains("result")), "{:?}", o.notes);
+    }
+
+    #[test]
+    fn long_array_join_workloads_complete_exactly_or_refuse_atomically() {
+        let clipped = "x".repeat(65_536);
+        let cases = [
+            (
+                "details.note.rawValue = new Array(100001).join('x'); details.note.rawValue.length",
+                "form1[0].page1[0].total[0]",
+                "65536".to_string(),
+                vec![XfaEffect::SetValue { som: "form1[0].page1[0].details[0].note[0]".into(), value: clipped.clone() }],
+            ),
+            ("new Array(100001).join('x')", "form1[0].page1[0].details[0].note[0]", clipped, Vec::new()),
+            (
+                "xfa.host.messageBox(new Array(100000).join('x'));",
+                "form1[0].page1[0]",
+                "1".to_string(),
+                vec![XfaEffect::MessageBox(format!("{}…", "x".repeat(4_096)))],
+            ),
+        ];
+        for (script, target, result, effects) in cases {
+            let out = go(script, target, "calculate");
+            if out.limited {
+                super::assert_xfa_resource_refusal(&out);
+            } else {
+                assert_eq!(out.error, None, "{out:?}");
+                assert!(!out.abandoned, "{out:?}");
+                assert_eq!(out.result.as_deref(), Some(result.as_str()), "{script}");
+                assert_eq!(out.effects, effects, "{script}");
+                assert!(out.console.is_empty(), "{out:?}");
+            }
+            let next = go("1+1", target, "calculate");
+            assert_eq!(next.error, None, "{next:?}");
+            assert!(!next.limited);
+            assert_eq!(next.result.as_deref(), Some("2"));
+        }
     }
 
     #[test]
@@ -398,9 +456,21 @@ mod xfa_model {
         assert!(o.error.is_some(), "the loop limit stops it");
         let o = go(&"(".repeat(200), "form1[0].page1[0].qty[0]", "click");
         assert!(o.error.is_some());
-        // Adding instances is capped; a runaway loop can't blow the tree up.
+        // Ordinary instance creation must complete and return every exact effect.
+        let o = go("for (var i = 0; i < 500; i++) table._row.addInstance(1); table._row.count", "form1[0].page1[0].go[0]", "click");
+        super::assert_added_instances(&o, 500);
+        // The original stress workload either reaches the instance cap exactly or
+        // exhausts the isolated resource budget without any partial effects.
         let o = go("for (var i = 0; i < 5000; i++) table._row.addInstance(1); table._row.count", "form1[0].page1[0].go[0]", "click");
-        assert_eq!(o.result.as_deref(), Some("1002"));
+        if o.limited {
+            super::assert_xfa_resource_refusal(&o);
+        } else {
+            super::assert_added_instances(&o, 1000);
+        }
+        let next = go("1+1", "form1[0].page1[0].go[0]", "click");
+        assert_eq!(next.error, None, "{next:?}");
+        assert!(!next.limited);
+        assert_eq!(next.result.as_deref(), Some("2"));
     }
 
     #[test]
@@ -444,8 +514,10 @@ mod xfa_model {
             assert!(o.notes.iter().any(|n| n.contains("changes")), "{:?}", o.notes);
         }
         // Long messages are cut.
-        let o = go("xfa.host.messageBox(new Array(100000).join('x'));", "form1[0].page1[0]", "click");
-        assert!(matches!(&o.effects[0], XfaEffect::MessageBox(m) if m.chars().count() <= 4_097));
+        let o = go("xfa.host.messageBox('x'.repeat(99999));", "form1[0].page1[0]", "click");
+        assert_eq!(o.error, None, "{o:?}");
+        assert!(!o.limited, "{o:?}");
+        assert_eq!(o.effects, vec![XfaEffect::MessageBox(format!("{}…", "x".repeat(4_096)))]);
     }
 }
 
@@ -817,13 +889,36 @@ $host.gotoURL("https://example.org")"#,
         assert!(run("\"unterminated").error.unwrap().contains("unterminated"));
         assert!(run("1 ) 2").error.is_some());
         assert!(run("Eval(\"Eval(\"\"Eval(\"\"\"\"1\"\"\"\")\"\")\")").error.is_none());
-        // Adding rows forever stops at the instance cap with the effects it managed.
+        // A small instance workload must complete with its exact result and effects.
+        let o = run("for i = 1 upto 500 do table._row.addInstance(1) endfor\ntable._row.count");
+        super::assert_added_instances(&o, 500);
+        // A tiny inner loop budget must still report its own diagnostic, and the
+        // host boundary discards the partial instance effects before returning it.
+        let inner = run_formcalc(
+            "for i = 1 upto 100000 do table._row.addInstance(1) endfor\ntable._row.count",
+            &ev,
+            &doc,
+            &form(),
+            Limits { loop_iterations: 10, recursion: 32 },
+        );
+        super::assert_xfa_resource_refusal(&inner);
+        assert!(inner.error.as_deref().is_some_and(|error| error.contains("looped")), "{inner:?}");
+        assert_eq!(run("1+1").result.as_deref(), Some("2"));
+        // Either the inner iteration counter or the outer fuel/deadline may win
+        // on the stress workload. Every resource refusal must remain atomic.
         let o = run("for i = 1 upto 100000 do table._row.addInstance(1) endfor\ntable._row.count");
-        assert!(o.error.unwrap().contains("looped"));
-        assert!(o.effects.iter().filter(|e| matches!(e, XfaEffect::AddInstance { .. })).count() <= 1000, "{}", o.effects.len());
+        super::assert_xfa_resource_refusal(&o);
+        assert_eq!(run("1+1").result.as_deref(), Some("2"));
         let o = run("for i = 1 upto 5000 do table._row.addInstance(1) endfor\ntable._row.count");
-        assert_eq!(o.error, None);
-        assert_eq!(o.result.as_deref(), Some("1002"));
+        if o.limited {
+            super::assert_xfa_resource_refusal(&o);
+        } else {
+            super::assert_added_instances(&o, 1000);
+        }
+        let next = run("1+1");
+        assert_eq!(next.error, None, "{next:?}");
+        assert!(!next.limited);
+        assert_eq!(next.result.as_deref(), Some("2"));
         // Message boxes past the cap are dropped and noted.
         let o = run("for i = 1 upto 500 do $host.messageBox(i) endfor");
         assert_eq!(o.effects.iter().filter(|e| matches!(e, XfaEffect::MessageBox(_))).count(), 100);

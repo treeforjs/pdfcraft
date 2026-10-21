@@ -140,7 +140,7 @@ jobs:
         run: cargo test --workspace
 
       - name: Capture identity import and signing controls
-        if: runner.os == 'Linux'
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
         env:
           CRAFT_FONTS_DIR: ${{ github.workspace }}/craft-fonts
           CRAFT_FONTS_REQUIRED: "1"

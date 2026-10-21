@@ -170,6 +170,7 @@ jobs:
       - name: Test
         run: cargo test --workspace --locked
       - name: Capture identity import and signing controls
+        if: ${{ !cancelled() }}
         env:
           PDFCRAFT_SYSTEM_FONTS: "0"
           PDFCRAFT_IDENTITY_UI_SHOTS: ${{ github.workspace }}/target/identity-ui/${{ github.run_id }}-${{ github.run_attempt }}
