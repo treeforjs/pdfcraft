@@ -2261,7 +2261,7 @@ compare-page	Moved	已移動
 	Saturation	飽和度
 	Save recovery copies of unsaved changes every	每隔以下時間儲存未儲存變更的復原副本
 	Search preferences	搜尋偏好設定
-	Shown on Home and in File ▸ Open Recent. 0 keeps no list.	顯示在首頁和「檔案 ▸ 開啟最近使用的檔案」中。0 表示不保留清單。
+	Shown on Home and in File ▸ Open Recent. 0 keeps no list.	顯示在首頁和「檔案 → 開啟最近使用的檔案」中。0 表示不保留清單。
 	Signs new comments. Empty uses your login name.	用於新註解的作者。留空則使用登入名稱。
 	Sites without a rule	沒有規則的網站
 	Stronger text, borders and outlines in every theme.	在所有佈景主題中加深文字、框線和外框。

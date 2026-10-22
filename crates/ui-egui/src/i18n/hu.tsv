@@ -2373,7 +2373,7 @@ compare-page	Moved	Áthelyezve
 	Saturation	Telítettség
 	Save recovery copies of unsaved changes every	Nem mentett módosítások helyreállítási másolatának mentése ennyi időnként:
 	Search preferences	Keresés a beállításokban
-	Shown on Home and in File ▸ Open Recent. 0 keeps no list.	A Kezdőlapon és a Fájl ▸ Legutóbbi megnyitása menüben látható. 0: nincs lista.
+	Shown on Home and in File ▸ Open Recent. 0 keeps no list.	A Kezdőlapon és a Fájl → Legutóbbi megnyitása menüben látható. 0: nincs lista.
 	Signs new comments. Empty uses your login name.	Az új megjegyzések szerzője. Üresen a bejelentkezési nevet használja.
 	Sites without a rule	Szabály nélküli webhelyek
 	Stronger text, borders and outlines in every theme.	Erősebb szöveg, szegélyek és körvonalak minden témában.
