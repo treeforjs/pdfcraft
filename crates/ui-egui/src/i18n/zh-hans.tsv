@@ -2354,3 +2354,26 @@ compare-page	Moved	已移动
 	Used by Output Preview and page images made for print checks.	用于输出预览和打印检查的页面图像。
 	Whether links and scripts in PDFs may reach web sites.	PDF 中的链接和脚本是否可以访问网站。
 	Your identity is suggested when you create a digital ID.	创建数字身份证时会建议使用您的身份信息。
+	Compare side by side	并排比较
+	Next change	下一处更改
+	Previous change	上一处更改
+	Synchronise scrolling	同步滚动
+	Both compared files must be open	两个比较的文件都必须处于打开状态
+	Change list	更改列表
+	Change {i} of {n}	第 {i} 处，共 {n} 处更改
+	Changes	更改
+	Close side-by-side view	关闭并排视图
+	Compare two files first (Compare files…)	请先比较两个文件（比较文件…）
+	Fit width	适合宽度
+	Looks different	外观不同
+	Old: {name}	旧：{name}
+	New: {name}	新：{name}
+	No changes	没有更改
+	Not in the new file	新文件中没有
+	Not in the old file	旧文件中没有
+	Old page {o} · new page {n}	旧页 {o} · 新页 {n}
+	Page deleted	页面已删除
+	Page inserted	页面已插入
+	Page moved	页面已移动
+	Rendering…	正在渲染…
+	Changes: {n}	更改：{n}

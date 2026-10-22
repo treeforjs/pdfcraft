@@ -1996,6 +1996,19 @@ pub fn tools() -> Vec<ToolDef> {
                 })),
                 &["old", "new"],
             )),
+        t("doc_compare_view", "Compare side by side", "The side-by-side compare view of other (older) and doc (newer), headless: the rows both panes share (1-based old_page and new_page side by side, following the page map, so a moved page sits beside its counterpart and an inserted or deleted page beside a gap: null), and every change in the order Next change / Previous change visit them (kind: replaced, inserted, deleted, visual, page_inserted, page_deleted, page_moved; old and new sides with page, row and rects in points, origin bottom-left). change (1-based) picks the current change; step next or previous moves from it (or from the start) and wraps around. current is where both panes scroll to (scroll_to_row), with the change's old and new text. limit caps the rows and changes listed (default 500).")
+            .ro()
+            .cmd("compare.side_by_side")
+            .with(schema(
+                compare_props(json!({
+                    "doc": doc(),
+                    "other": { "type": "integer", "description": "The older document (from doc_open)." },
+                    "visual": { "type": "boolean", "description": "Also compare how the paired pages look (default false)." },
+                    "change": { "type": "integer", "minimum": 1, "description": "The current change (1-based)." },
+                    "step": { "type": "string", "enum": ["next", "previous"], "description": "Move to the next or previous change from change (or from the start)." },
+                })),
+                &["doc", "other"],
+            )),
         t("doc_compare_report", "Compare report", "Write the compare summary report (a PDF listing every change) to path. Refused unless both documents allow copying text.")
             .cmd("doc.compare")
             .with(schema(json!({ "doc": doc(), "other": { "type": "integer" }, "path": { "type": "string" } }), &["doc", "other", "path"])),

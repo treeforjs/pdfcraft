@@ -124,6 +124,7 @@ pub enum PanelAction {
     SaveOverlay,
     Clear,
     Stop,
+    SideBySide,
 }
 
 pub fn colour(kind: Kind) -> Color32 {
@@ -132,7 +133,7 @@ pub fn colour(kind: Kind) -> Color32 {
 }
 
 /// A page's status in the page map (its own context: "Modified" is also a date column).
-fn status_label(s: PageStatus) -> &'static str {
+pub(crate) fn status_label(s: PageStatus) -> &'static str {
     match s {
         PageStatus::Same => tl_ctx!("compare-page", "Same"),
         PageStatus::Modified => tl_ctx!("compare-page", "Modified"),
@@ -142,7 +143,7 @@ fn status_label(s: PageStatus) -> &'static str {
     }
 }
 
-fn status_colour(s: PageStatus, t: &Tokens) -> Color32 {
+pub(crate) fn status_colour(s: PageStatus, t: &Tokens) -> Color32 {
     match s {
         PageStatus::Same => t.text_faint,
         PageStatus::Modified => colour(Kind::Replaced),
@@ -289,6 +290,9 @@ pub(crate) fn panel(
     }
     ui.add_space(6.0);
     ui.horizontal_wrapped(|ui| {
+        if ui.button(tl!("Compare side by side")).clicked() {
+            action = Some(PanelAction::SideBySide);
+        }
         if ui.button(tl!("Mark as comments")).clicked() {
             action = Some(PanelAction::Mark);
         }
@@ -395,7 +399,8 @@ impl PdfCraftApp {
                 return;
             }
         };
-        // The earlier comparison's marks go now.
+        // The earlier comparison's marks and side-by-side view go now.
+        self.side_by_side = None;
         if let Some(prev) = self.compare.take()
             && let Some(v) = self.views.iter_mut().find(|v| v.id == prev.new)
         {
@@ -504,6 +509,7 @@ impl PdfCraftApp {
                     v.flash = Some((page, rect.map(|x| x as f32), 0.0));
                 }
                 self.compare = Some(CompareState { selected: Some(i), ..s });
+                self.side_by_side_follow_text(i);
                 return;
             }
             PanelAction::GoToPage(p) => {
@@ -551,8 +557,14 @@ impl PdfCraftApp {
                 }
                 Err(e) => self.notify_error(e),
             },
+            PanelAction::SideBySide => {
+                self.compare = Some(s);
+                self.toggle_side_by_side();
+                return;
+            }
             PanelAction::Clear => {
                 keep = false;
+                self.side_by_side = None;
                 if let Some(v) = self.views.get_mut(index) {
                     v.compare_marks.clear();
                 }

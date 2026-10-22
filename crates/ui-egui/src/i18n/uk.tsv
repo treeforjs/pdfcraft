@@ -2413,3 +2413,26 @@ compare-page	Moved	Переміщена
 	Used by Output Preview and page images made for print checks.	Використовується переглядом виводу та зображеннями сторінок для перевірки друку.
 	Whether links and scripts in PDFs may reach web sites.	Чи можуть посилання та скрипти в PDF звертатися до вебсайтів.
 	Your identity is suggested when you create a digital ID.	Ваші дані пропонуються під час створення цифрового ідентифікатора.
+	Compare side by side	Порівняти поруч
+	Next change	Наступна зміна
+	Previous change	Попередня зміна
+	Synchronise scrolling	Синхронне прокручування
+	Both compared files must be open	Обидва порівнювані файли мають бути відкриті
+	Change list	Список змін
+	Change {i} of {n}	Зміна {i} з {n}
+	Changes	Зміни
+	Close side-by-side view	Закрити перегляд поруч
+	Compare two files first (Compare files…)	Спочатку порівняйте два файли (Порівняти файли…)
+	Fit width	За шириною
+	Looks different	Виглядає інакше
+	Old: {name}	Старий: {name}
+	New: {name}	Новий: {name}
+	No changes	Змін немає
+	Not in the new file	Немає в новому файлі
+	Not in the old file	Немає в старому файлі
+	Old page {o} · new page {n}	Стара сторінка {o} · нова сторінка {n}
+	Page deleted	Сторінку видалено
+	Page inserted	Сторінку вставлено
+	Page moved	Сторінку переміщено
+	Rendering…	Відображення…
+	Changes: {n}	Зміни: {n}

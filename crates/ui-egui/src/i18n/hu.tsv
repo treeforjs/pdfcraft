@@ -2388,3 +2388,26 @@ compare-page	Moved	Áthelyezve
 	Used by Output Preview and page images made for print checks.	A Kimenet előnézete és a nyomtatási ellenőrzéshez készült oldalképek használják.
 	Whether links and scripts in PDFs may reach web sites.	Elérhetik-e a PDF-ek hivatkozásai és szkriptjei a webhelyeket.
 	Your identity is suggested when you create a digital ID.	Digitális azonosító létrehozásakor a rendszer felajánlja az identitását.
+	Compare side by side	Összehasonlítás egymás mellett
+	Next change	Következő változás
+	Previous change	Előző változás
+	Synchronise scrolling	Görgetés összehangolása
+	Both compared files must be open	Mindkét összehasonlított fájlnak nyitva kell lennie
+	Change list	Változáslista
+	Change {i} of {n}	{n}/{i}. változás
+	Changes	Változások
+	Close side-by-side view	Egymás melletti nézet bezárása
+	Compare two files first (Compare files…)	Előbb hasonlítson össze két fájlt (Fájlok összehasonlítása…)
+	Fit width	Szélességhez igazítás
+	Looks different	Másképp néz ki
+	Old: {name}	Régi: {name}
+	New: {name}	Új: {name}
+	No changes	Nincs változás
+	Not in the new file	Nincs benne az új fájlban
+	Not in the old file	Nincs benne a régi fájlban
+	Old page {o} · new page {n}	Régi {o}. oldal · új {n}. oldal
+	Page deleted	Oldal törölve
+	Page inserted	Oldal beszúrva
+	Page moved	Oldal áthelyezve
+	Rendering…	Megjelenítés…
+	Changes: {n}	Változások: {n}

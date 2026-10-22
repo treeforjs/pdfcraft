@@ -469,6 +469,10 @@ impl PdfCraftApp {
             }
             "form.detect" => self.detect_fields(),
             "doc.compare" => self.dialog = Some(Dialog::CompareFiles),
+            "compare.side_by_side" => self.toggle_side_by_side(),
+            "compare.next_change" => self.side_by_side_step(true),
+            "compare.previous_change" => self.side_by_side_step(false),
+            "compare.sync_scroll" => self.side_by_side_sync(None),
             "standards.pdfa" => {
                 self.pdfa.issues = None;
                 self.dialog = Some(Dialog::PdfA);

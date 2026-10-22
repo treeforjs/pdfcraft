@@ -22,6 +22,7 @@ pub mod clip;
 pub mod color_settings;
 pub mod commands;
 pub mod compare;
+pub mod compare_view;
 pub mod dates;
 pub mod export;
 pub mod export_ocr;

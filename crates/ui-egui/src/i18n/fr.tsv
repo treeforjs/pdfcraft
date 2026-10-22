@@ -2390,3 +2390,26 @@ compare-page	Moved	Déplacée
 	Used by Output Preview and page images made for print checks.	Utilisé par l’aperçu de sortie et les images de page destinées aux contrôles d’impression.
 	Whether links and scripts in PDFs may reach web sites.	Si les liens et scripts des PDF peuvent accéder à des sites web.
 	Your identity is suggested when you create a digital ID.	Votre identité est proposée lorsque vous créez une identité numérique.
+	Compare side by side	Comparer côte à côte
+	Next change	Modification suivante
+	Previous change	Modification précédente
+	Synchronise scrolling	Synchroniser le défilement
+	Both compared files must be open	Les deux fichiers comparés doivent être ouverts
+	Change list	Liste des modifications
+	Change {i} of {n}	Modification {i} sur {n}
+	Changes	Modifications
+	Close side-by-side view	Fermer la vue côte à côte
+	Compare two files first (Compare files…)	Comparez d’abord deux fichiers (Comparer des fichiers…)
+	Fit width	Ajuster à la largeur
+	Looks different	Aspect différent
+	Old: {name}	Ancien : {name}
+	New: {name}	Nouveau : {name}
+	No changes	Aucune modification
+	Not in the new file	Absent du nouveau fichier
+	Not in the old file	Absent de l’ancien fichier
+	Old page {o} · new page {n}	Ancienne page {o} · nouvelle page {n}
+	Page deleted	Page supprimée
+	Page inserted	Page insérée
+	Page moved	Page déplacée
+	Rendering…	Rendu…
+	Changes: {n}	Modifications : {n}

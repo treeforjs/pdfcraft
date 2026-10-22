@@ -369,6 +369,9 @@ pub struct DocView {
     /// Sharp renders of the pages the grid shows larger than a thumbnail: only those in view,
     /// at the size drawn (device pixels wide).
     grid_pages: HashMap<usize, (u32, TextureHandle)>,
+    /// How many documents share the application's page and tile allowance this frame: 1, or 2
+    /// while the side-by-side compare view shows this document beside another.
+    pub(crate) raster_share: usize,
 }
 
 /// The page grid's zoom range and the step of its buttons and keys.
@@ -522,6 +525,7 @@ impl DocView {
             grid_zoom_request: None,
             grid_anchor: None,
             grid_pages: HashMap::new(),
+            raster_share: 1,
             comments: Default::default(),
             measure: Default::default(),
             forms: Default::default(),
@@ -1230,6 +1234,41 @@ impl DocView {
     }
 
     /// Start collecting demand from every consumer before scheduling or uploading results.
+    /// This view's part of the application's page bytes, tile bytes and cached-page count: all
+    /// of it, or an equal share when [`Self::raster_share`] documents are on screen together.
+    fn allowance(&self) -> (usize, usize, usize) {
+        let n = self.raster_share.clamp(1, 4);
+        (PAGE_BYTES / n, TILE_BYTES / n, (MAX_CACHED_PAGES / n).max(1))
+    }
+
+    /// Side-by-side compare: ask for a whole-page raster of `page` at device `scale` this frame
+    /// (`visible`: on screen, always admitted; otherwise prefetch within the allowance) and get
+    /// what is there now — the texture, its size, and whether it is at that scale (otherwise
+    /// it is an older one to draw stretched). `Err` carries why the page couldn't be drawn.
+    pub(crate) fn side_page(&mut self, page: usize, scale: f32, visible: bool) -> Result<Option<(egui::TextureId, [usize; 2], bool)>, String> {
+        if let Some(e) = self.errors.get(&page) {
+            return Err(e.clone());
+        }
+        if page >= self.page_count || !scale.is_finite() || scale <= 0.0 {
+            return Ok(None);
+        }
+        let tag = scale_tag(scale);
+        if !self.frame_queue.iter().any(|r| r.page == page && r.kind == RequestKind::Pixels && r.tile.is_none()) {
+            self.frame_queue.push(RenderRequest { page, kind: RequestKind::Pixels, tile: None, scale, tag });
+        }
+        if visible {
+            self.frame_visible.insert(page);
+        }
+        Ok(self.pages.get(&page).map(|p| (p.tex.id(), p.tex.size(), p.tag == tag)))
+    }
+
+    /// Side-by-side compare starts: drop the tiles of the single-document view (the panes draw
+    /// whole-page rasters), so the shared allowance is not spent on them.
+    pub(crate) fn enter_side_by_side(&mut self) {
+        self.tiles.clear();
+        self.grid_pages.clear();
+    }
+
     pub(crate) fn begin_render_frame(&mut self) {
         self.thumb_demand.clear();
         self.frame_queue.clear();
@@ -1297,6 +1336,7 @@ impl DocView {
     /// Admit current demand within explicit byte limits. Cached and pending surfaces share
     /// the allowance, so an evicted page can be requested again without a permanent done set.
     fn prepare_render_queue(&mut self, info: &DocInfo, ppp: f32) -> Vec<RenderRequest> {
+        let (page_limit, tile_limit, cached_limit) = self.allowance();
         let requests = std::mem::take(&mut self.frame_queue);
         let mut queue = Vec::new();
         let mut pages = HashSet::new();
@@ -1324,7 +1364,7 @@ impl DocView {
             if let Some(tile) = req.tile {
                 let key = (req.page, req.tag, tile.x / TILE, tile.y / TILE);
                 let bytes = rgba_bytes(tile.w as usize, tile.h as usize);
-                if (!visible && tile_bytes.saturating_add(bytes) > TILE_BYTES) || !tiles.insert(key) {
+                if (!visible && tile_bytes.saturating_add(bytes) > tile_limit) || !tiles.insert(key) {
                     continue;
                 }
                 tile_bytes = tile_bytes.saturating_add(bytes);
@@ -1334,7 +1374,7 @@ impl DocView {
                 }
             } else {
                 let bytes = rgba_bytes(device_pixels(p.width, req.scale) as usize, device_pixels(p.height, req.scale) as usize);
-                if (!visible && (page_bytes.saturating_add(bytes) > PAGE_BYTES || pages.len() >= MAX_CACHED_PAGES)) || !pages.insert(req.page) {
+                if (!visible && (page_bytes.saturating_add(bytes) > page_limit || pages.len() >= cached_limit)) || !pages.insert(req.page) {
                     continue;
                 }
                 page_bytes = page_bytes.saturating_add(bytes);
@@ -1350,7 +1390,7 @@ impl DocView {
         let mut kept = pages.len();
         for page in undemanded {
             let bytes = self.pages.get(&page).map_or(0, |p| texture_bytes(&p.tex));
-            if kept < MAX_CACHED_PAGES && page_bytes.saturating_add(bytes) <= PAGE_BYTES {
+            if kept < cached_limit && page_bytes.saturating_add(bytes) <= page_limit {
                 page_bytes = page_bytes.saturating_add(bytes);
                 kept += 1;
                 pages.insert(page);
@@ -1484,6 +1524,7 @@ impl DocView {
     /// Check real dimensions before conversion, including stale textures kept during edits.
     /// Dropping an old handle releases its backend allocation after the current frame.
     fn admit_texture(&mut self, req: RenderRequest, bytes: usize) -> bool {
+        let (page_limit, tile_limit, _) = self.allowance();
         // An on-screen page or tile is always taken (the viewport bounds it): it may evict
         // off-screen rasters but never another on-screen one, and is never refused.
         let visible = req.tag & THUMB_TAG == 0 && self.frame_visible.contains(&req.page);
@@ -1496,10 +1537,10 @@ impl DocView {
             let key = (req.page, req.tag, t.x / TILE, t.y / TILE);
             self.tiles.remove(&key);
             let retained = self.tiles.values().fold(0usize, |n, tex| n.saturating_add(texture_bytes(tex)));
-            visible || bytes <= TILE_BYTES.saturating_sub(retained)
+            visible || bytes <= tile_limit.saturating_sub(retained)
         } else {
             let thumb = req.tag & THUMB_TAG != 0;
-            let (cache, limit) = if thumb { (&mut self.thumbs, THUMB_BYTES) } else { (&mut self.pages, PAGE_BYTES) };
+            let (cache, limit) = if thumb { (&mut self.thumbs, THUMB_BYTES) } else { (&mut self.pages, page_limit) };
             cache.remove(&req.page);
             let mut retained = cache.values().fold(0usize, |n, p| n.saturating_add(texture_bytes(&p.tex)));
             // A zoom/DPI change can temporarily retain larger stale images than the new

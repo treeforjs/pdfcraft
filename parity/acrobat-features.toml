@@ -9060,11 +9060,11 @@ title = "Side-by-side compare view with synchronised scrolling"
 area = "N"
 tier = "P1"
 milestone = "M12"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["compare.side_by_side", "compare.next_change", "compare.previous_change", "compare.sync_scroll"]
+tools = ["doc_compare_view"]
+evidence = ["crates/engine/src/compare_view.rs::rows_follow_the_page_map_and_changes_go_in_row_order", "crates/engine/src/compare_view.rs::stepping_wraps_and_starts_from_either_end", "crates/engine/src/compare_view.rs::hostile_results_do_not_point_outside_the_rows", "crates/automation/tests/automation.rs::compare_side_by_side_through_tools", "crates/ui-egui/tests/compare.rs::side_by_side_compare_view"]
+notes = "Old and new documents in two panes, rows following the page map (moved pages beside their counterpart, gaps beside inserted and deleted pages); scrolling and zoom synchronised or independent; text, visual and page changes shaded on both sides; Next / Previous change scroll both panes; a change list linked to the panes and the Compare panel. Only rows on screen (plus one screenful of prefetch) are rendered, through each document's view cache and render pool, the two documents sharing the application's raster allowance. Missing: tiles in the panes (very deep zoom shows a 4096 px raster enlarged), no text selection or commenting inside the panes, no change-type filters (misc.compare-filters)."
 
 [[feature]]
 id = "misc.compare-report"

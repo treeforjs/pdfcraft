@@ -2276,3 +2276,26 @@ compare-page	Moved	已移動
 	Used by Output Preview and page images made for print checks.	用於輸出預覽和列印檢查的頁面影像。
 	Whether links and scripts in PDFs may reach web sites.	PDF 中的連結和指令碼是否可以存取網站。
 	Your identity is suggested when you create a digital ID.	建立數位識別碼時會建議使用您的身分資訊。
+	Compare side by side	並排比較
+	Next change	下一處變更
+	Previous change	上一處變更
+	Synchronise scrolling	同步捲動
+	Both compared files must be open	兩個比較的檔案都必須保持開啟
+	Change list	變更清單
+	Change {i} of {n}	第 {i} 處，共 {n} 處變更
+	Changes	變更
+	Close side-by-side view	關閉並排檢視
+	Compare two files first (Compare files…)	請先比較兩個檔案（比較檔案…）
+	Fit width	符合寬度
+	Looks different	外觀不同
+	Old: {name}	舊：{name}
+	New: {name}	新：{name}
+	No changes	沒有變更
+	Not in the new file	新檔案中沒有
+	Not in the old file	舊檔案中沒有
+	Old page {o} · new page {n}	舊頁 {o} · 新頁 {n}
+	Page deleted	頁面已刪除
+	Page inserted	頁面已插入
+	Page moved	頁面已移動
+	Rendering…	正在轉譯…
+	Changes: {n}	變更：{n}

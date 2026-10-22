@@ -2306,3 +2306,26 @@ compare-page	Moved	Movida
 	Used by Output Preview and page images made for print checks.	Lo usan la Previsualización de salida y las imágenes de página para comprobar la impresión.
 	Whether links and scripts in PDFs may reach web sites.	Si los enlaces y scripts de los PDF pueden acceder a sitios web.
 	Your identity is suggested when you create a digital ID.	Su identidad se sugiere al crear un ID digital.
+	Compare side by side	Comparar en paralelo
+	Next change	Cambio siguiente
+	Previous change	Cambio anterior
+	Synchronise scrolling	Sincronizar desplazamiento
+	Both compared files must be open	Los dos archivos comparados deben estar abiertos
+	Change list	Lista de cambios
+	Change {i} of {n}	Cambio {i} de {n}
+	Changes	Cambios
+	Close side-by-side view	Cerrar vista en paralelo
+	Compare two files first (Compare files…)	Compare primero dos archivos (Comparar archivos…)
+	Fit width	Ajustar al ancho
+	Looks different	Se ve diferente
+	Old: {name}	Anterior: {name}
+	New: {name}	Nuevo: {name}
+	No changes	Sin cambios
+	Not in the new file	No está en el archivo nuevo
+	Not in the old file	No está en el archivo anterior
+	Old page {o} · new page {n}	Página anterior {o} · página nueva {n}
+	Page deleted	Página eliminada
+	Page inserted	Página insertada
+	Page moved	Página movida
+	Rendering…	Representando…
+	Changes: {n}	Cambios: {n}

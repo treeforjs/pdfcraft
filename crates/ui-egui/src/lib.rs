@@ -33,6 +33,7 @@ mod comment_props;
 pub mod comments;
 mod comments_panel;
 mod compare_ui;
+pub mod compare_view;
 pub mod control;
 mod create_multiple_ui;
 mod create_ui;
@@ -507,6 +508,8 @@ pub struct PdfCraftApp {
     pub compare_draft: compare_ui::CompareDraft,
     /// A comparison running in the background.
     pub compare_run: Option<compare_ui::CompareRun>,
+    /// Compare side by side: the last comparison's old and new documents in two panes.
+    pub side_by_side: Option<compare_view::SideBySide>,
     /// The JavaScript console and the Document JavaScripts draft.
     pub js_console: js_ui::JsConsole,
     pub doc_js: js_ui::DocJsDraft,
@@ -773,6 +776,7 @@ impl PdfCraftApp {
             compare: None,
             compare_draft: Default::default(),
             compare_run: None,
+            side_by_side: None,
             js_console: Default::default(),
             doc_js: Default::default(),
             action_script: None,
@@ -1736,6 +1740,48 @@ impl PdfCraftApp {
                 self.view_defaults =
                     self.view_defaults.with_zoom(value).ok_or("default-zoom must be fit-width, fit-page or a percentage from 8 to 6400")?;
             }
+            ("compare-view", _) => match value {
+                "on" if !self.side_by_side_showing() => {
+                    if !self.open_side_by_side() {
+                        return Err("compare two open documents first (doc.compare), with both still open".into());
+                    }
+                }
+                "on" => {}
+                "off" => self.side_by_side = None,
+                _ => return Err("compare-view must be on or off".into()),
+            },
+            ("compare-sync", _) => {
+                let on = match value {
+                    "on" => true,
+                    "off" => false,
+                    _ => return Err("compare-sync must be on or off".into()),
+                };
+                if !self.side_by_side_showing() {
+                    return Err("open the side-by-side view first (compare-view on)".into());
+                }
+                self.side_by_side_sync(Some(on));
+            }
+            ("compare-change", _) => {
+                if !self.side_by_side_showing() {
+                    return Err("open the side-by-side view first (compare-view on)".into());
+                }
+                let v = self.side_by_side.as_mut().ok_or("open the side-by-side view first (compare-view on)")?;
+                let n = v.model.changes.len();
+                let i = value.parse::<usize>().ok().filter(|i| (1..=n).contains(i)).ok_or_else(|| {
+                    if n == 0 {
+                        "this comparison found no changes".to_string()
+                    } else {
+                        format!("compare-change must be a change number from 1 to {n}")
+                    }
+                })?;
+                v.go_to(i - 1);
+            }
+            ("compare-zoom", _) => {
+                let z = value.trim_end_matches('%').parse::<f32>().ok().filter(|z| z.is_finite() && (8.0..=1600.0).contains(z));
+                let z = z.ok_or("compare-zoom must be a percentage from 8 to 1600")?;
+                let v = self.side_by_side.as_mut().ok_or("open the side-by-side view first (compare-view on)")?;
+                v.set_zoom(z / 100.0);
+            }
             ("organize", Some(v)) => v.organize = value != "off",
             // `--grid-zoom 150`: the size of the pages in the organize grid, in percent.
             ("grid-zoom", Some(v)) => {
@@ -2131,6 +2177,7 @@ impl eframe::App for PdfCraftApp {
         egui::CentralPanel::default().frame(egui::Frame::NONE.fill(t.pasteboard)).show(ui, |ui| match self.active {
             None if self.combine_showing() => combine_ui::page(self, ui),
             None => home::show(self, ui),
+            Some(_) if self.side_by_side_showing() => compare_view::show(self, ui),
             Some(i) => canvas::document_area(self, i, ui),
         });
         self.process_pending_edits();
@@ -2152,11 +2199,16 @@ impl PdfCraftApp {
             || ctx.egui_wants_keyboard_input();
         // Retire hidden documents before admitting the visible document's textures, so the
         // three cache limits apply to the application, regardless of how many tabs are open.
+        // Side by side, the two documents on screen split the page and tile allowance.
+        let partner = self.side_by_side_partner();
+        let share = if partner.is_some() { 2 } else { 1 };
         for (i, view) in self.views.iter_mut().enumerate() {
-            if reader_blocked || Some(i) != self.active || view.organize {
+            if reader_blocked || Some(i) != self.active || view.organize || partner.is_some() {
                 view.cancel_reader_input();
             }
+            view.raster_share = share;
             if Some(i) != self.active
+                && Some(view.id) != partner
                 && let Some(doc) = self.session.get(view.id)
             {
                 view.suspend_rendering(&doc.renderer);
@@ -2166,9 +2218,14 @@ impl PdfCraftApp {
             && let Some(doc) = self.session.get(view.id)
         {
             view.finish_render_frame(ctx, &doc.info, &doc.renderer);
-            if !reader_blocked && !view.organize {
+            if !reader_blocked && !view.organize && partner.is_none() {
                 view.finish_reader_copy(ctx, doc.allows_copying());
             }
+        }
+        if let Some(view) = partner.and_then(|id| self.views.iter_mut().find(|v| v.id == id))
+            && let Some(doc) = self.session.get(view.id)
+        {
+            view.finish_render_frame(ctx, &doc.info, &doc.renderer);
         }
     }
 }

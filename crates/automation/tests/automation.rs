@@ -4333,6 +4333,85 @@ fn comparing_documents_through_tools() {
     assert!(!r["visual_regions"].as_array().unwrap().is_empty(), "{r}");
 }
 
+/// The side-by-side view headless: rows follow the page map (moved page beside its
+/// counterpart, gaps beside inserted and deleted pages), changes go in row order, and change /
+/// step move between them, wrapping around; hostile arguments are refused with the range.
+#[test]
+fn compare_side_by_side_through_tools() {
+    let dir = workdir("compare-view");
+    let mut a = auto(&dir);
+    let pa = "Alpha page about the lease terms, the monthly rent, the deposit and the dates it is due.";
+    let pb = "Bravo page about parking spaces, bicycle storage, the shared laundry room and its hours.";
+    let pc = "Charlie page about pets, noise after ten at night, smoking and guests staying over weekends.";
+    let pd = "Delta page with the signatures of both parties and the date the agreement was signed.";
+    let pe = "Echo page about the new garden behind the building and who may use it in summer.";
+    let pc2 = pc.replace("pets", "cats");
+    let v1 = ok(&mut a, "doc_create", json!({ "from": "text", "text": ([pa, pb, pc, pd].join("\u{c}")) }))["doc"].as_u64().unwrap();
+    let v2 = ok(&mut a, "doc_create", json!({ "from": "text", "text": ([pc2.as_str(), pa, pe, pd].join("\u{c}")) }))["doc"].as_u64().unwrap();
+    let r = ok(&mut a, "doc_compare_view", json!({ "doc": v2, "other": v1 }));
+    let rows: Vec<(Value, Value, String)> = r["rows"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|x| (x["old_page"].clone(), x["new_page"].clone(), x["status"].as_str().unwrap().to_string()))
+        .collect();
+    assert_eq!(
+        rows,
+        [
+            (json!(3), json!(1), "moved".to_string()),
+            (json!(1), json!(2), "same".to_string()),
+            (json!(2), Value::Null, "deleted".to_string()),
+            (Value::Null, json!(3), "inserted".to_string()),
+            (json!(4), json!(4), "same".to_string()),
+        ],
+        "{r}"
+    );
+    let n = r["change_count"].as_u64().unwrap();
+    assert!(n >= 4, "{r}");
+    assert!(r["current"].is_null());
+    // In row order: the moved page, its one changed word, then the deleted and inserted pages.
+    let kinds: Vec<&str> = r["changes"].as_array().unwrap().iter().map(|c| c["kind"].as_str().unwrap()).collect();
+    assert_eq!(&kinds[..3], ["page_moved", "replaced", "page_deleted"], "{r}");
+    let rows_of: Vec<u64> = r["changes"].as_array().unwrap().iter().map(|c| c["new"]["row"].as_u64().or(c["old"]["row"].as_u64()).unwrap()).collect();
+    assert!(rows_of.windows(2).all(|w| w[0] <= w[1]), "{rows_of:?}");
+    // Next from the start is the first change; from it, the replaced word on both sides.
+    let first = ok(&mut a, "doc_compare_view", json!({ "doc": v2, "other": v1, "step": "next", "limit": 1 }));
+    assert_eq!(first["current"]["index"], 1);
+    assert_eq!(first["truncated"], true);
+    let word = ok(&mut a, "doc_compare_view", json!({ "doc": v2, "other": v1, "change": 1, "step": "next" }));
+    let c = &word["current"];
+    assert_eq!((c["index"].as_u64(), c["kind"].as_str(), c["scroll_to_row"].as_u64()), (Some(2), Some("replaced"), Some(1)), "{word}");
+    assert_eq!((c["old_text"].as_str(), c["new_text"].as_str()), (Some("pets,"), Some("cats,")));
+    assert_eq!((c["old"]["page"].as_u64(), c["new"]["page"].as_u64()), (Some(3), Some(1)));
+    assert_eq!(c["new"]["rects"].as_array().unwrap().len(), 1);
+    // Previous from the first wraps to the last; a change picked directly stays.
+    let last = ok(&mut a, "doc_compare_view", json!({ "doc": v2, "other": v1, "change": 1, "step": "previous" }));
+    assert_eq!(last["current"]["index"].as_u64(), Some(n));
+    let picked = ok(&mut a, "doc_compare_view", json!({ "doc": v2, "other": v1, "change": 3 }));
+    assert_eq!(picked["current"]["kind"], "page_deleted");
+    assert_eq!(picked["current"]["new"], Value::Null);
+    // Hostile arguments: out-of-range changes, unknown steps, wrong types, missing documents.
+    for bad in [
+        json!({ "doc": v2, "other": v1, "change": 0 }),
+        json!({ "doc": v2, "other": v1, "change": n + 1 }),
+        json!({ "doc": v2, "other": v1, "change": -5 }),
+        json!({ "doc": v2, "other": v1, "change": i64::MAX }),
+        json!({ "doc": v2, "other": v1, "step": "sideways" }),
+        json!({ "doc": v2, "other": v1, "step": 3 }),
+        json!({ "doc": v2, "other": 999 }),
+        json!({ "doc": v2, "other": v1, "dpi": 1e9, "visual": true }),
+    ] {
+        assert!(a.call("doc_compare_view", &bad).is_err(), "{bad}");
+    }
+    let e = a.call("doc_compare_view", &json!({ "doc": v2, "other": v1, "change": n + 1 })).unwrap_err().to_string();
+    assert!(e.contains(&format!("1 to {n}")), "{e}");
+    // Identical files: one row per page, nothing to visit.
+    let same = ok(&mut a, "doc_compare_view", json!({ "doc": v1, "other": v1, "step": "next" }));
+    assert_eq!((same["change_count"].as_u64(), same["row_count"].as_u64()), (Some(0), Some(4)));
+    assert!(same["current"].is_null());
+    assert!(a.call("doc_compare_view", &json!({ "doc": v1, "other": v1, "change": 1 })).is_err());
+}
+
 /// Two versions of a four-page file saved to disk: in the newer one the third page moved to
 /// the front with one word changed, the second page was deleted, a new page was inserted and
 /// the last page's text was pushed down (same words, different look).

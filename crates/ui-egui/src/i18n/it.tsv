@@ -2399,3 +2399,26 @@ compare-page	Moved	Spostata
 	Used by Output Preview and page images made for print checks.	Usato dall’Anteprima output e dalle immagini delle pagine per i controlli di stampa.
 	Whether links and scripts in PDFs may reach web sites.	Se i collegamenti e gli script nei PDF possono raggiungere i siti web.
 	Your identity is suggested when you create a digital ID.	La tua identità viene suggerita quando crei un ID digitale.
+	Compare side by side	Confronta affiancati
+	Next change	Modifica successiva
+	Previous change	Modifica precedente
+	Synchronise scrolling	Sincronizza scorrimento
+	Both compared files must be open	Entrambi i file confrontati devono essere aperti
+	Change list	Elenco modifiche
+	Change {i} of {n}	Modifica {i} di {n}
+	Changes	Modifiche
+	Close side-by-side view	Chiudi vista affiancata
+	Compare two files first (Compare files…)	Confronta prima due file (Confronta file…)
+	Fit width	Adatta larghezza
+	Looks different	Aspetto diverso
+	Old: {name}	Vecchio: {name}
+	New: {name}	Nuovo: {name}
+	No changes	Nessuna modifica
+	Not in the new file	Non presente nel nuovo file
+	Not in the old file	Non presente nel vecchio file
+	Old page {o} · new page {n}	Pagina vecchia {o} · pagina nuova {n}
+	Page deleted	Pagina eliminata
+	Page inserted	Pagina inserita
+	Page moved	Pagina spostata
+	Rendering…	Rendering…
+	Changes: {n}	Modifiche: {n}

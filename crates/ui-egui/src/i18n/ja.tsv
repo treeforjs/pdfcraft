@@ -2390,3 +2390,26 @@ compare-page	Moved	移動
 	Used by Output Preview and page images made for print checks.	出力プレビューと印刷チェック用のページ画像で使用されます。
 	Whether links and scripts in PDFs may reach web sites.	PDF 内のリンクやスクリプトが Web サイトにアクセスできるかどうか。
 	Your identity is suggested when you create a digital ID.	デジタル ID を作成するときに ID 情報が提案されます。
+	Compare side by side	並べて比較
+	Next change	次の変更
+	Previous change	前の変更
+	Synchronise scrolling	スクロールを同期
+	Both compared files must be open	比較した両方のファイルを開いておく必要があります
+	Change list	変更リスト
+	Change {i} of {n}	変更 {i} / {n}
+	Changes	変更
+	Close side-by-side view	並べて表示を閉じる
+	Compare two files first (Compare files…)	先に 2 つのファイルを比較してください（ファイルを比較…）
+	Fit width	幅に合わせる
+	Looks different	見た目が異なる
+	Old: {name}	旧: {name}
+	New: {name}	新: {name}
+	No changes	変更はありません
+	Not in the new file	新しいファイルにはありません
+	Not in the old file	古いファイルにはありません
+	Old page {o} · new page {n}	旧ページ {o} · 新ページ {n}
+	Page deleted	ページ削除
+	Page inserted	ページ挿入
+	Page moved	ページ移動
+	Rendering…	描画中…
+	Changes: {n}	変更: {n}

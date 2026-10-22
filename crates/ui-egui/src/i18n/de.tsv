@@ -2390,3 +2390,26 @@ compare-page	Moved	Verschoben
 	Used by Output Preview and page images made for print checks.	Wird von der Ausgabevorschau und von Seitenbildern für Druckprüfungen verwendet.
 	Whether links and scripts in PDFs may reach web sites.	Ob Links und Skripte in PDFs Websites erreichen dürfen.
 	Your identity is suggested when you create a digital ID.	Ihre Identität wird beim Erstellen einer digitalen ID vorgeschlagen.
+	Compare side by side	Nebeneinander vergleichen
+	Next change	Nächste Änderung
+	Previous change	Vorherige Änderung
+	Synchronise scrolling	Bildlauf synchronisieren
+	Both compared files must be open	Beide verglichenen Dateien müssen geöffnet sein
+	Change list	Änderungsliste
+	Change {i} of {n}	Änderung {i} von {n}
+	Changes	Änderungen
+	Close side-by-side view	Nebeneinander-Ansicht schließen
+	Compare two files first (Compare files…)	Vergleichen Sie zuerst zwei Dateien (Dateien vergleichen…)
+	Fit width	Breite anpassen
+	Looks different	Sieht anders aus
+	Old: {name}	Alt: {name}
+	New: {name}	Neu: {name}
+	No changes	Keine Änderungen
+	Not in the new file	Nicht in der neuen Datei
+	Not in the old file	Nicht in der alten Datei
+	Old page {o} · new page {n}	Alte Seite {o} · neue Seite {n}
+	Page deleted	Seite gelöscht
+	Page inserted	Seite eingefügt
+	Page moved	Seite verschoben
+	Rendering…	Wird gerendert…
+	Changes: {n}	Änderungen: {n}

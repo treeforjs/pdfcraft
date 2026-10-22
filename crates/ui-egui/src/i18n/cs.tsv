@@ -2414,3 +2414,26 @@ compare-page	Moved	Přesunutá
 	Used by Output Preview and page images made for print checks.	Používá ho Náhled výstupu a obrázky stránek pro kontrolu tisku.
 	Whether links and scripts in PDFs may reach web sites.	Zda odkazy a skripty v PDF smějí přistupovat na weby.
 	Your identity is suggested when you create a digital ID.	Vaše identita se nabídne při vytváření digitálního ID.
+	Compare side by side	Porovnat vedle sebe
+	Next change	Další změna
+	Previous change	Předchozí změna
+	Synchronise scrolling	Synchronizovat posouvání
+	Both compared files must be open	Oba porovnávané soubory musí být otevřené
+	Change list	Seznam změn
+	Change {i} of {n}	Změna {i} z {n}
+	Changes	Změny
+	Close side-by-side view	Zavřít zobrazení vedle sebe
+	Compare two files first (Compare files…)	Nejprve porovnejte dva soubory (Porovnat soubory…)
+	Fit width	Přizpůsobit šířce
+	Looks different	Vypadá jinak
+	Old: {name}	Starý: {name}
+	New: {name}	Nový: {name}
+	No changes	Žádné změny
+	Not in the new file	Není v novém souboru
+	Not in the old file	Není ve starém souboru
+	Old page {o} · new page {n}	Stará strana {o} · nová strana {n}
+	Page deleted	Strana odstraněna
+	Page inserted	Strana vložena
+	Page moved	Strana přesunuta
+	Rendering…	Vykreslování…
+	Changes: {n}	Změny: {n}

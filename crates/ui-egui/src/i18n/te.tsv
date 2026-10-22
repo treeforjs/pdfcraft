@@ -2321,3 +2321,26 @@ compare-page	Moved	తరలించబడింది
 	Used by Output Preview and page images made for print checks.	అవుట్‌పుట్ ప్రివ్యూ మరియు ప్రింట్ తనిఖీల కోసం చేసిన పేజీ చిత్రాలు దీన్ని వాడతాయి.
 	Whether links and scripts in PDFs may reach web sites.	PDFలలోని లింక్‌లు మరియు స్క్రిప్ట్‌లు వెబ్‌సైట్‌లను చేరవచ్చో లేదో.
 	Your identity is suggested when you create a digital ID.	డిజిటల్ IDని సృష్టించినప్పుడు మీ గుర్తింపు సూచించబడుతుంది.
+	Compare side by side	పక్కపక్కన పోల్చు
+	Next change	తదుపరి మార్పు
+	Previous change	మునుపటి మార్పు
+	Synchronise scrolling	స్క్రోలింగ్‌ను సమకాలీకరించు
+	Both compared files must be open	పోల్చిన రెండు ఫైల్‌లూ తెరిచి ఉండాలి
+	Change list	మార్పుల జాబితా
+	Change {i} of {n}	మార్పు {i} / {n}
+	Changes	మార్పులు
+	Close side-by-side view	పక్కపక్క వీక్షణను మూసివేయి
+	Compare two files first (Compare files…)	ముందుగా రెండు ఫైల్‌లను పోల్చండి (ఫైల్‌లను పోల్చు…)
+	Fit width	వెడల్పుకు సరిపెట్టు
+	Looks different	వేరుగా కనిపిస్తుంది
+	Old: {name}	పాతది: {name}
+	New: {name}	కొత్తది: {name}
+	No changes	మార్పులు లేవు
+	Not in the new file	కొత్త ఫైల్‌లో లేదు
+	Not in the old file	పాత ఫైల్‌లో లేదు
+	Old page {o} · new page {n}	పాత పేజీ {o} · కొత్త పేజీ {n}
+	Page deleted	పేజీ తొలగించబడింది
+	Page inserted	పేజీ చొప్పించబడింది
+	Page moved	పేజీ తరలించబడింది
+	Rendering…	రెండరింగ్…
+	Changes: {n}	మార్పులు: {n}

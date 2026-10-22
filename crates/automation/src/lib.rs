@@ -839,6 +839,7 @@ impl Automation {
             "form_actions" => self.form_actions(&a)?,
             "form_detect_fields" => self.form_detect_fields(&a)?,
             "doc_compare" => self.doc_compare(&a)?,
+            "doc_compare_view" => self.doc_compare_view(&a)?,
             "compare_files" => self.compare_files(&a)?,
             "action_list" => self.action_list()?,
             "pdfa_verify" => self.pdfa_verify(&a)?,
