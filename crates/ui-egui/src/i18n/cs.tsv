@@ -2523,3 +2523,7 @@ compare-page	Moved	Přesunutá
 	This tab is in the main window	Tato karta je v hlavním okně
 	Move tab to {window}	Přesunout kartu do: {window}
 	Release to open in a new window	Pusťte, aby se otevřela v novém okně
+	This page only  ·  	Jen tato stránka  ·  
+	The file stays on this device: PdfCraft reads it in this page and forgets it when the page closes. The password is never stored.	Soubor zůstává v tomto zařízení: PdfCraft jej načte na této stránce a po jejím zavření jej zapomene. Heslo se nikdy neukládá.
+	Downloaded the new digital ID as {name}. Keep it: this page forgets it when it closes.	Nové digitální ID bylo staženo jako {name}. Uschovejte si je: tato stránka je po zavření zapomene.
+	Signed. Downloaded {name}	Podepsáno. Staženo: {name}

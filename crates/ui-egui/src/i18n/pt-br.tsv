@@ -2500,3 +2500,7 @@ compare-page	Moved	Movida
 	This tab is in the main window	Esta aba está na janela principal
 	Move tab to {window}	Mover aba para {window}
 	Release to open in a new window	Solte para abrir em uma nova janela
+	This page only  ·  	Somente esta página  ·  
+	The file stays on this device: PdfCraft reads it in this page and forgets it when the page closes. The password is never stored.	O arquivo permanece neste dispositivo: o PdfCraft o lê nesta página e o esquece quando a página é fechada. A senha nunca é armazenada.
+	Downloaded the new digital ID as {name}. Keep it: this page forgets it when it closes.	A nova identificação digital foi baixada como {name}. Guarde-a: esta página a esquece ao ser fechada.
+	Signed. Downloaded {name}	Assinado. {name} baixado

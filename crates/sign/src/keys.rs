@@ -491,8 +491,9 @@ fn ecdsa_rs(sig: &[u8], field_len: usize, notes: &mut Vec<&'static str>) -> Opti
 enum Inner {
     #[cfg(not(target_arch = "wasm32"))]
     Rsa(aws_lc_rs::signature::RsaKeyPair),
+    /// Pure Rust in the browser (no aws-lc-rs there).
     #[cfg(target_arch = "wasm32")]
-    Rsa,
+    Rsa(Box<crate::rsa_soft::SoftRsa>),
     P256(p256::ecdsa::SigningKey),
     P384(p384::ecdsa::SigningKey),
     /// A key held elsewhere (the macOS Keychain, a token) that signs on request.
@@ -552,7 +553,7 @@ impl PrivateKey {
                         .map_err(|e| SignError::Malformed(format!("RSA private key: {e}")))?,
                 );
                 #[cfg(target_arch = "wasm32")]
-                let inner = Inner::Rsa;
+                let inner = Inner::Rsa(Box::new(crate::rsa_soft::SoftRsa::from_der(key.value)?));
                 Ok(PrivateKey { inner, public: PublicKey::Rsa { n, e }, pkcs8: info.to_vec() })
             }
             oid::EC => {
@@ -670,7 +671,7 @@ impl PrivateKey {
                 Ok(sig)
             }
             #[cfg(target_arch = "wasm32")]
-            Inner::Rsa => Err(SignError::Unsupported("RSA signing in the browser".into())),
+            Inner::Rsa(k) => k.sign(alg, msg),
             Inner::P256(k) => {
                 use p256::ecdsa::signature::hazmat::PrehashSigner;
                 let s: p256::ecdsa::Signature = k.sign_prehash(&alg.digest(&[msg])).map_err(|e| SignError::Crypto(e.to_string()))?;

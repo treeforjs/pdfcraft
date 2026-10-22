@@ -2522,3 +2522,7 @@ compare-page	Moved	Переміщена
 	This tab is in the main window	Ця вкладка в головному вікні
 	Move tab to {window}	Перемістити вкладку: {window}
 	Release to open in a new window	Відпустіть, щоб відкрити в новому вікні
+	This page only  ·  	Лише ця сторінка  ·  
+	The file stays on this device: PdfCraft reads it in this page and forgets it when the page closes. The password is never stored.	Файл залишається на цьому пристрої: PdfCraft читає його на цій сторінці й забуває, коли сторінку закрито. Пароль ніколи не зберігається.
+	Downloaded the new digital ID as {name}. Keep it: this page forgets it when it closes.	Нове цифрове посвідчення завантажено як {name}. Збережіть його: ця сторінка забуде його після закриття.
+	Signed. Downloaded {name}	Підписано. Завантажено: {name}

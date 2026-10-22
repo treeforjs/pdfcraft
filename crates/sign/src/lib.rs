@@ -1,7 +1,8 @@
 //! Digital signatures (execution plan M9; ISO 32000-2 §12.8; ETSI EN 319 142 PAdES).
 //!
 //! - [`der`], [`x509`], [`cms`], [`pkcs12`], [`keys`]: the cryptographic formats, on RustCrypto
-//!   primitives (RSA private-key operations use aws-lc-rs on native targets, ADR-0009).
+//!   primitives (RSA private-key operations use aws-lc-rs on native targets, ADR-0009, and the
+//!   pure-Rust `rsa` crate in the browser). [`id_file`] opens digital ID files given as bytes.
 //! - [`pdf`]: signature fields in a document — listing and validating them, and signing
 //!   (PAdES B-B, `ETSI.CAdES.detached`) with an incremental save.
 //! - [`signed_version`]: a signature's signed version, and what changed since it was signed.
@@ -15,6 +16,7 @@ pub mod dss;
 mod ec512;
 pub mod envelope;
 pub mod evidence;
+pub mod id_file;
 #[cfg(target_os = "macos")]
 pub mod keychain;
 pub mod keys;
@@ -24,6 +26,7 @@ pub mod pdf;
 pub mod pkcs12;
 pub mod revocation;
 mod rsa_pad;
+mod rsa_soft;
 pub mod signed_version;
 pub mod timestamp;
 #[cfg(target_os = "windows")]

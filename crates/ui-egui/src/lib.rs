@@ -49,6 +49,7 @@ mod measure_ui;
 mod object_ui;
 mod ocr_ui;
 mod optimize_ui;
+pub mod picked_ids;
 mod preflight_ui;
 mod search_ui;
 mod sign_ui;
@@ -629,6 +630,8 @@ pub struct PdfCraftApp {
     pub(crate) saved_signature_previews: [Option<(fill_sign::SavedSig, egui::TextureHandle)>; 2],
     #[cfg(target_arch = "wasm32")]
     pub(crate) signature_images: fill_sign::ImageInbox,
+    /// Digital ID files held in memory (picked in the browser or created in the web app).
+    pub(crate) picked_ids: picked_ids::PickedIds,
     /// The Comment Properties dialog's state.
     pub comment_props: Option<comment_props::PropsDraft>,
     pub field_props: Option<prepare::FieldDraft>,
@@ -860,6 +863,7 @@ impl PdfCraftApp {
             saved_signature_previews: [None, None],
             #[cfg(target_arch = "wasm32")]
             signature_images: Default::default(),
+            picked_ids: Default::default(),
             comment_props: None,
             field_props: None,
             bulk_field_props: None,
@@ -1478,7 +1482,12 @@ impl PdfCraftApp {
             "signature_image": match &self.signature { Some(s @ fill_sign::SavedSig::Image(_)) => Some(s), _ => None },
             "initials": self.initials,
             // macOS Keychain and Windows store identities are read from their OS key stores each time.
-            "digital_ids": self.digital_ids.iter().filter(|e| !e.path.starts_with("keychain:") && !e.path.starts_with("windows:")).collect::<Vec<_>>(),
+            // Files picked in the browser are held in memory only (picked_ids), so not listed.
+            "digital_ids": self
+                .digital_ids
+                .iter()
+                .filter(|e| !e.path.starts_with("keychain:") && !e.path.starts_with("windows:") && !picked_ids::is_picked(&e.path))
+                .collect::<Vec<_>>(),
             "trusted": trusted,
             "url_access": self.session.url_policy(),
             "timestamp_servers": self.timestamp_servers,
@@ -1604,7 +1613,9 @@ impl PdfCraftApp {
         if let Ok(i) = serde_json::from_value::<fill_sign::SavedSig>(v["initials"].clone()) {
             self.initials = Some(i);
         }
-        if let Ok(ids) = serde_json::from_value::<Vec<DigitalIdEntry>>(v["digital_ids"].clone()) {
+        if let Ok(mut ids) = serde_json::from_value::<Vec<DigitalIdEntry>>(v["digital_ids"].clone()) {
+            // A held file's bytes don't outlive its page; an entry naming one lists nothing.
+            ids.retain(|e| !picked_ids::is_picked(&e.path));
             self.digital_ids = ids;
         }
         if let Ok(servers) = serde_json::from_value::<Vec<pdfcraft_engine::signature_workflow::TimestampServer>>(v["timestamp_servers"].clone()) {
@@ -2130,6 +2141,8 @@ impl eframe::App for PdfCraftApp {
         }
         #[cfg(target_arch = "wasm32")]
         self.process_signature_images();
+        #[cfg(target_arch = "wasm32")]
+        self.process_picked_ids();
         let dropped = ctx.input(|i| i.raw.dropped_files.clone());
         #[cfg(not(target_arch = "wasm32"))]
         let dropped = self.drop_on_grid(dropped, ctx);

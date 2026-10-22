@@ -2461,3 +2461,7 @@ compare-page	Moved	Преместена
 	This tab is in the main window	Този раздел е в главния прозорец
 	Move tab to {window}	Преместване на раздела в: {window}
 	Release to open in a new window	Пуснете, за да се отвори в нов прозорец
+	This page only  ·  	Само тази страница  ·  
+	The file stays on this device: PdfCraft reads it in this page and forgets it when the page closes. The password is never stored.	Файлът остава на това устройство: PdfCraft го чете в тази страница и го забравя, когато страницата се затвори. Паролата никога не се съхранява.
+	Downloaded the new digital ID as {name}. Keep it: this page forgets it when it closes.	Новият цифров идентификатор е изтеглен като {name}. Запазете го: тази страница го забравя, когато се затвори.
+	Signed. Downloaded {name}	Подписано. Изтеглено: {name}

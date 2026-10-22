@@ -2499,3 +2499,7 @@ compare-page	Moved	Verschoben
 	This tab is in the main window	Dieser Tab ist im Hauptfenster
 	Move tab to {window}	Tab nach {window} verschieben
 	Release to open in a new window	Loslassen, um in einem neuen Fenster zu öffnen
+	This page only  ·  	Nur diese Seite  ·  
+	The file stays on this device: PdfCraft reads it in this page and forgets it when the page closes. The password is never stored.	Die Datei bleibt auf diesem Gerät: PdfCraft liest sie in dieser Seite und vergisst sie, wenn die Seite geschlossen wird. Das Kennwort wird nie gespeichert.
+	Downloaded the new digital ID as {name}. Keep it: this page forgets it when it closes.	Die neue digitale ID wurde als {name} heruntergeladen. Bewahren Sie sie auf: Diese Seite vergisst sie beim Schließen.
+	Signed. Downloaded {name}	Signiert. {name} heruntergeladen

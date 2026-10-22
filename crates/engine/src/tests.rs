@@ -3830,3 +3830,14 @@ fn javascript_actions_respect_document_permissions() {
         Err(EditError::NotPermitted("changes to the document"))
     );
 }
+
+/// The web app's clock: a browser reading in milliseconds becomes whole seconds, and readings
+/// no date can have are unknown rather than wrapped or saturated.
+#[test]
+fn browser_clock_readings() {
+    assert_eq!(browser_now_secs(1_761_100_000_999.0), Some(1_761_100_000));
+    assert_eq!(browser_now_secs(0.0), Some(0));
+    for bad in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY, -1.0, 1e300, 253_402_300_800_000.0] {
+        assert_eq!(browser_now_secs(bad), None, "{bad}");
+    }
+}

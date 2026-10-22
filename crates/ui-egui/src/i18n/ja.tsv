@@ -2499,3 +2499,7 @@ compare-page	Moved	移動
 	This tab is in the main window	このタブはメインウィンドウにあります
 	Move tab to {window}	タブを {window} に移動
 	Release to open in a new window	離すと新しいウィンドウで開きます
+	This page only  ·  	このページのみ · 
+	The file stays on this device: PdfCraft reads it in this page and forgets it when the page closes. The password is never stored.	ファイルはこのデバイスから出ません。PdfCraft はこのページ内で読み込み、ページを閉じると破棄します。パスワードは保存されません。
+	Downloaded the new digital ID as {name}. Keep it: this page forgets it when it closes.	新しいデジタル ID を {name} としてダウンロードしました。保管してください。このページを閉じると破棄されます。
+	Signed. Downloaded {name}	署名しました。{name} をダウンロードしました

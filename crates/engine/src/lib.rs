@@ -2914,8 +2914,22 @@ fn comment_list(doc: &pdfcraft_cos::Document) -> Vec<pdfcraft_render::Annotation
 fn local_utc_offset() -> i64 {
     #[cfg(not(target_arch = "wasm32"))]
     return i64::from(chrono::Local::now().offset().local_minus_utc());
+    // The browser's offset for now, in minutes behind UTC (so negated). A NaN or absurd value
+    // (more than a day) is taken as UTC.
     #[cfg(target_arch = "wasm32")]
-    return 0;
+    {
+        let behind = js_sys::Date::new_0().get_timezone_offset();
+        if behind.is_finite() && behind.abs() <= 24.0 * 60.0 { -(behind as i64) * 60 } else { 0 }
+    }
+}
+
+/// Whole seconds since the Unix epoch from a browser clock reading in milliseconds; `None` for
+/// NaN, before 1970 or after the year 9999.
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+fn browser_now_secs(ms: f64) -> Option<i64> {
+    const MAX_SECS: f64 = 253_402_300_799.0; // 9999-12-31T23:59:59Z
+    let secs = (ms / 1000.0).floor();
+    (secs.is_finite() && (0.0..=MAX_SECS).contains(&secs)).then_some(secs as i64)
 }
 
 /// (year, month, day) from a PDF date `D:YYYYMMDD…`.
@@ -3239,8 +3253,10 @@ impl Session {
         }
         #[cfg(not(target_arch = "wasm32"))]
         return std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).ok().map(|d| d.as_secs() as i64);
+        // The browser's clock (std's SystemTime is unavailable there): signing times, dates and
+        // certificate validity need it. A clock before 1970 or beyond year 9999 is unknown.
         #[cfg(target_arch = "wasm32")]
-        return None;
+        return browser_now_secs(js_sys::Date::now());
     }
 
     /// Today's date in local time: (year, month, day). With an injected clock (tests) the clock

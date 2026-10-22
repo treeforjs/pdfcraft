@@ -2430,3 +2430,7 @@ compare-page	Moved	తరలించబడింది
 	This tab is in the main window	ఈ ట్యాబ్ ప్రధాన విండోలో ఉంది
 	Move tab to {window}	ట్యాబ్‌ను {window}కు తరలించు
 	Release to open in a new window	కొత్త విండోలో తెరవడానికి వదిలేయండి
+	This page only  ·  	ఈ పేజీ మాత్రమే  ·  
+	The file stays on this device: PdfCraft reads it in this page and forgets it when the page closes. The password is never stored.	ఫైల్ ఈ పరికరంలోనే ఉంటుంది: PdfCraft దీన్ని ఈ పేజీలో చదువుతుంది, పేజీ మూసినప్పుడు మరచిపోతుంది. పాస్‌వర్డ్ ఎప్పుడూ నిల్వ చేయబడదు.
+	Downloaded the new digital ID as {name}. Keep it: this page forgets it when it closes.	కొత్త డిజిటల్ IDని {name}గా డౌన్‌లోడ్ చేశాం. దాన్ని భద్రపరచండి: ఈ పేజీ మూసినప్పుడు దాన్ని మరచిపోతుంది.
+	Signed. Downloaded {name}	సంతకం చేయబడింది. {name} డౌన్‌లోడ్ అయింది

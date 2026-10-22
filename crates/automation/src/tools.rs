@@ -1387,6 +1387,18 @@ pub fn tools() -> Vec<ToolDef> {
             }),
             &["name", "password", "path"],
         )),
+        t("sign_id_inspect", "Inspect a digital ID file", "Open a digital ID file (.p12/.pfx) with its password and report what it signs as, keeping neither: give data_base64 (the file's bytes, as the web app gets a file picked in the browser) or path, at most 1 MiB. Returns the certificate (name, subject, issuer, validity, key, SHA-256), the chain, the key and digest a signature uses, valid_now (the certificate is within its validity period by the session clock) and signs_in_browser (the web app can sign with it: RSA, P-256 and P-384 keys). name labels the result (cleaned of paths and control characters). A wrong password is an invalid-arguments error.")
+            .ro()
+            .cmd("sign.digital")
+            .with(schema(
+                json!({
+                    "data_base64": { "type": "string", "description": "The digital ID file, base64." },
+                    "path": path_arg(),
+                    "password": { "type": "string" },
+                    "name": { "type": "string", "description": "The file's name, to label the result." },
+                }),
+                &[],
+            )),
         t("sign_windows_ids", "List Windows store digital IDs", "Windows: signing identities in the Current User Personal certificate store (certificate details and the windows: reference sign_document takes). Private keys remain in CNG; Windows may ask permission to use them.")
             .ro()
             .cmd("sign.digital")

@@ -25,7 +25,8 @@ p521 = { version = "0.14", default-features = false, features = ["ecdsa", "std"]
 bp256 = { version = "0.14", default-features = false, features = ["arithmetic", "ecdsa", "std"] }
 bp384 = { version = "0.14", default-features = false, features = ["arithmetic", "ecdsa", "std"] }
 ecdsa = { version = "0.17", default-features = false, features = ["algorithm", "der"] }
-# Verification only on native targets (RSA private-key operations use aws-lc-rs, ADR-0009).
+# RSA verification everywhere; RSA signing in the browser (native targets sign with aws-lc-rs,
+# ADR-0009).
 crypto-bigint = { version = "0.7", default-features = false, features = ["alloc"] }
 rsa = { version = "=0.10.0-rc.18", default-features = false, features = ["std", "hazmat"] }
 pbkdf2 = { version = "0.13", default-features = false, features = ["hmac"] }
@@ -40,7 +41,8 @@ ed25519-dalek = "3.0.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 aws-lc-rs = { version = "1.18", default-features = false, features = ["aws-lc-sys", "prebuilt-nasm"] }
-getrandom = "0.4"
+# sys_rng: blinding for the pure-Rust RSA signer (rsa_soft; tested natively).
+getrandom = { version = "0.4", features = ["sys_rng"] }
 # The operating system's root certificates (sign.os-trust); already in the graph through the
 # engine's HTTPS clients. Pure Rust on Linux/BSD; safe security-framework/schannel wrappers
 # on macOS/Windows (MIT OR Apache-2.0 OR ISC).
@@ -55,5 +57,6 @@ rustls-cng = { version = "0.7.1", default-features = false }
 security-framework = "3.7"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-# crypto-bigint asks for randomness; in the browser it comes from Web Crypto.
-getrandom = { version = "0.4", features = ["wasm_js"] }
+# crypto-bigint asks for randomness, and RSA signing blinds with it; in the browser it comes
+# from Web Crypto.
+getrandom = { version = "0.4", features = ["wasm_js", "sys_rng"] }

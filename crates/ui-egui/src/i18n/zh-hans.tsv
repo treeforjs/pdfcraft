@@ -2463,3 +2463,7 @@ compare-page	Moved	已移动
 	This tab is in the main window	此选项卡位于主窗口中
 	Move tab to {window}	将选项卡移到 {window}
 	Release to open in a new window	松开即可在新窗口中打开
+	This page only  ·  	仅此页面 · 
+	The file stays on this device: PdfCraft reads it in this page and forgets it when the page closes. The password is never stored.	文件保留在此设备上：PdfCraft 在此页面中读取它，并在页面关闭时将其丢弃。密码从不保存。
+	Downloaded the new digital ID as {name}. Keep it: this page forgets it when it closes.	新的数字身份证已下载为 {name}。请妥善保存：此页面关闭后将不再保留。
+	Signed. Downloaded {name}	已签名。已下载 {name}

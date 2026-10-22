@@ -2499,3 +2499,7 @@ compare-page	Moved	Déplacée
 	This tab is in the main window	Cet onglet est dans la fenêtre principale
 	Move tab to {window}	Déplacer l'onglet vers {window}
 	Release to open in a new window	Relâchez pour ouvrir dans une nouvelle fenêtre
+	This page only  ·  	Cette page uniquement  ·  
+	The file stays on this device: PdfCraft reads it in this page and forgets it when the page closes. The password is never stored.	Le fichier reste sur cet appareil : PdfCraft le lit dans cette page et l’oublie à sa fermeture. Le mot de passe n’est jamais enregistré.
+	Downloaded the new digital ID as {name}. Keep it: this page forgets it when it closes.	La nouvelle identité numérique a été téléchargée sous le nom {name}. Conservez-la : cette page l’oublie à sa fermeture.
+	Signed. Downloaded {name}	Signé. {name} téléchargé

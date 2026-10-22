@@ -50,3 +50,7 @@ chrono = { version = "0.4", default-features = false, features = ["clock"] }
 # the desktop update client. No bundled root list or automatic network access.
 ureq = { version = "3.4", default-features = false, features = ["rustls-no-provider", "_ring"] }
 rustls-native-certs = "0.8"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+# The browser's clock and time zone (Date), for signing times and today's date in the web app.
+js-sys = "0.3"

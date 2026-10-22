@@ -2412,3 +2412,7 @@ compare-page	Moved	Перемещена
 	This tab is in the main window	Эта вкладка в главном окне
 	Move tab to {window}	Переместить вкладку: {window}
 	Release to open in a new window	Отпустите, чтобы открыть в новом окне
+	This page only  ·  	Только эта страница  ·  
+	The file stays on this device: PdfCraft reads it in this page and forgets it when the page closes. The password is never stored.	Файл остаётся на этом устройстве: PdfCraft читает его на этой странице и забывает, когда страница закрывается. Пароль никогда не сохраняется.
+	Downloaded the new digital ID as {name}. Keep it: this page forgets it when it closes.	Новое цифровое удостоверение загружено как {name}. Сохраните его: эта страница забудет его при закрытии.
+	Signed. Downloaded {name}	Подписано. Загружено: {name}

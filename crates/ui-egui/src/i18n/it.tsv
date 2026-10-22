@@ -2508,3 +2508,7 @@ compare-page	Moved	Spostata
 	This tab is in the main window	Questa scheda è nella finestra principale
 	Move tab to {window}	Sposta scheda in {window}
 	Release to open in a new window	Rilascia per aprire in una nuova finestra
+	This page only  ·  	Solo questa pagina  ·  
+	The file stays on this device: PdfCraft reads it in this page and forgets it when the page closes. The password is never stored.	Il file resta su questo dispositivo: PdfCraft lo legge in questa pagina e lo dimentica quando la pagina viene chiusa. La password non viene mai memorizzata.
+	Downloaded the new digital ID as {name}. Keep it: this page forgets it when it closes.	Il nuovo ID digitale è stato scaricato come {name}. Conservalo: questa pagina lo dimentica alla chiusura.
+	Signed. Downloaded {name}	Firmato. Scaricato {name}

@@ -49,9 +49,12 @@ pub struct NewIdDraft {
     pub key: usize,
     pub password: String,
     pub confirm: String,
-    /// Use a Digital ID from a file: its path and password.
+    /// Use a Digital ID from a file: its path (in the browser, the picked file's name) and
+    /// password.
     pub file: String,
     pub file_password: String,
+    /// The picked file's bytes, in the browser (which gives no paths).
+    pub file_bytes: Option<crate::picked_ids::IdFileBytes>,
 }
 
 impl Default for NewIdDraft {
@@ -68,6 +71,7 @@ impl Default for NewIdDraft {
             confirm: String::new(),
             file: String::new(),
             file_password: String::new(),
+            file_bytes: None,
         }
     }
 }
@@ -163,6 +167,7 @@ pub(crate) fn page_input(ui: &egui::Ui, resp: &egui::Response, xf: &PageXform, p
 
 /// Where new digital IDs are saved: next to the recovery folder (`…/PdfCraft/Digital IDs`, or
 /// `PdfCraftData/Digital IDs` in portable mode).
+#[cfg(not(target_arch = "wasm32"))]
 fn id_dir() -> Option<PathBuf> {
     crate::recovery::RecoveryStore::default_dir().and_then(|d| d.parent().map(|p| p.join("Digital IDs")))
 }
@@ -171,6 +176,7 @@ fn id_dir() -> Option<PathBuf> {
 /// is always created fresh, never opened through a file or link already at the name (checking
 /// first and then writing would let one be planted in between), and on Unix only its owner can
 /// read it: it holds the private key.
+#[cfg(not(target_arch = "wasm32"))]
 fn save_new_id_file(dir: &std::path::Path, stem: &str, p12: &[u8]) -> std::io::Result<PathBuf> {
     use std::io::{ErrorKind, Write};
     for i in 1..=10_000u32 {
@@ -236,6 +242,8 @@ impl PdfCraftApp {
             organization: id.organization.clone(),
             unit: id.unit.clone(),
             email: id.email.clone(),
+            // The browser makes P-256 keys only (RSA key generation needs aws-lc-rs, ADR-0009).
+            key: if cfg!(target_arch = "wasm32") { 3 } else { 0 },
             ..NewIdDraft::default()
         }
     }
@@ -321,20 +329,44 @@ impl PdfCraftApp {
         let cert = Certificate::self_signed(&dn, &key, sign::Time::from_unix(now), 5, &serial).map_err(|e| e.to_string())?;
         let id = DigitalId { key, certificate: cert.clone(), chain: Vec::new(), friendly_name: Some(d.name.trim().to_string()) };
         let p12 = sign::pkcs12::write(&id, &d.password).map_err(|e| e.to_string())?;
+        let stem: String = d.name.trim().chars().map(|c| if c.is_alphanumeric() || c == ' ' || c == '-' { c } else { '_' }).collect();
+        self.store_new_id(&stem, p12, &cert)
+    }
+
+    /// Save a new digital ID's file next to the app data (or in `export_dir_override`).
+    #[cfg(not(target_arch = "wasm32"))]
+    fn store_new_id(&mut self, stem: &str, p12: Vec<u8>, cert: &Certificate) -> Result<usize, String> {
         let dir = match &self.export_dir_override {
             Some(p) => Some(PathBuf::from(p)),
             None => id_dir(),
         }
         .ok_or("There is no folder to save the digital ID in.")?;
         std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-        let stem: String = d.name.trim().chars().map(|c| if c.is_alphanumeric() || c == ' ' || c == '-' { c } else { '_' }).collect();
-        let path = save_new_id_file(&dir, &stem, &p12).map_err(|e| e.to_string())?;
-        Ok(self.add_digital_id(&path.to_string_lossy(), &cert))
+        let path = save_new_id_file(&dir, stem, &p12).map_err(|e| e.to_string())?;
+        Ok(self.add_digital_id(&path.to_string_lossy(), cert))
+    }
+
+    /// In the browser a new digital ID is held for the page and offered as a download, which is
+    /// how the user keeps it (a page can't save files of its own).
+    #[cfg(target_arch = "wasm32")]
+    fn store_new_id(&mut self, stem: &str, p12: Vec<u8>, cert: &Certificate) -> Result<usize, String> {
+        let name = format!("{stem}.p12");
+        let p12 = std::sync::Arc::new(p12);
+        let i = self.hold_digital_id(&name, p12.clone(), cert);
+        match crate::editing::download_typed(&name, &p12, "application/x-pkcs12") {
+            Ok(()) => self.notify_fmt("Downloaded the new digital ID as {name}. Keep it: this page forgets it when it closes.", &[("name", &name)]),
+            Err(e) => self.notify_fmt("Couldn't download {name}: {e}", &[("name", &name), ("e", &e)]),
+        }
+        Ok(i)
     }
 
     /// Configure New Digital ID ▸ Use a Digital ID from a file.
     fn import_digital_id(&mut self) -> Result<usize, String> {
         let Some(d) = self.sign_draft.as_ref().map(|d| d.new_id.clone()) else { return Err("nothing to import".into()) };
+        // A file picked in the browser: its bytes, held for the page.
+        if let Some(picked) = d.file_bytes {
+            return self.add_digital_id_bytes(&d.file, picked.0, &d.file_password);
+        }
         let bytes = std::fs::read(&d.file).map_err(|e| format!("{}: {e}", d.file))?;
         let id = sign::pkcs12::open(&bytes, &d.file_password).map_err(|e| match e {
             sign::SignError::WrongPassword => "The password is incorrect.".to_string(),
@@ -357,6 +389,8 @@ impl PdfCraftApp {
             keychain_id(&entry.path)?
         } else if entry.path.starts_with("windows:") {
             windows_id(&entry.path)?
+        } else if crate::picked_ids::is_picked(&entry.path) {
+            self.open_picked_id(&entry.path, &d.password)?
         } else {
             let bytes = std::fs::read(&entry.path).map_err(|e| format!("{}: {e}", entry.path))?;
             sign::pkcs12::open(&bytes, &d.password).map_err(|e| match e {
@@ -377,10 +411,31 @@ impl PdfCraftApp {
         };
         let cancellation = pdfcraft_engine::signature_workflow::SignatureCancellation::default();
         let authority = self.signature_authority(d.timestamp_server, d.timestamp_network, cancellation.clone())?;
-        // Signing saves, as in Acrobat: choose where (a cancelled save cancels signing). The
-        // document is signed once the user has chosen.
+        // The password has opened the ID; it isn't kept (a retry asks for it again).
+        if let Some(d) = self.sign_draft.as_mut() {
+            d.password.clear();
+        }
         let name = self.session.get(doc_id).map(|d| d.name.clone()).unwrap_or_default();
         let stem = name.trim_end_matches(".pdf").trim_end_matches(".PDF").to_string();
+        // In the browser the signed file is a download.
+        #[cfg(target_arch = "wasm32")]
+        if self.save_override.is_none() {
+            if authority.is_some() {
+                return Err(
+                    "Timestamping a signature with a server isn't available in the browser yet. Sign without a timestamp, or use the desktop app."
+                        .into(),
+                );
+            }
+            let signed = self.sign_in_memory(doc_id, &id, opts)?;
+            let file = format!("{stem}_signed.pdf");
+            match crate::editing::download(&file, &signed) {
+                Ok(()) => self.notify_fmt("Signed. Downloaded {name}", &[("name", &file)]),
+                Err(e) => self.notify_fmt("Couldn't download {name}: {e}", &[("name", &file), ("e", &e)]),
+            }
+            return Ok(());
+        }
+        // Signing saves, as in Acrobat: choose where (a cancelled save cancels signing). The
+        // document is signed once the user has chosen.
         let sign_and_save = move |app: &mut Self, path: PathBuf| -> Result<(), String> {
             // Sign what was typed while the save panel was open, too (#166); a refused value
             // has said why already.
@@ -427,6 +482,24 @@ impl PdfCraftApp {
                 Err(String::new())
             }
         }
+    }
+
+    /// Sign the document's current state with `id` and make the signed file the document (as a
+    /// save does), without writing it anywhere: the web app then offers it as a download.
+    #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+    pub(crate) fn sign_in_memory(
+        &mut self,
+        doc_id: pdfcraft_engine::DocId,
+        id: &DigitalId,
+        opts: SignOptions,
+    ) -> Result<std::sync::Arc<Vec<u8>>, String> {
+        let signed = self.session.sign(doc_id, id, opts).map_err(|e| e.to_string())?;
+        self.session.mark_signed(doc_id, signed.clone(), None).map_err(|e| e.to_string())?;
+        if let Some(view) = self.views.iter_mut().find(|v| v.id == doc_id) {
+            view.invalidate_content();
+        }
+        self.right = Some(crate::RightPanel::Signatures);
+        Ok(signed)
     }
 
     /// Trust a certificate (Signatures panel ▸ Add to trusted certificates), revalidating.
@@ -542,6 +615,8 @@ fn choose(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> bool {
                     tl!("Keychain  ·  ").to_string()
                 } else if e.path.starts_with("windows:") {
                     tl!("Windows store  ·  ").to_string()
+                } else if crate::picked_ids::is_picked(&e.path) {
+                    tl!("This page only  ·  ").to_string()
                 } else {
                     String::new()
                 },
@@ -587,8 +662,6 @@ fn configure(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> bool {
     let Some(d) = app.sign_draft.as_mut() else { return true };
     let mut close = false;
     let mut go = false;
-    // Browse… is desktop-only.
-    #[cfg_attr(target_arch = "wasm32", allow(unused_mut))]
     let mut browse = false;
     ui.radio_value(&mut d.new_id.create, false, tl!("Use a Digital ID from a file"));
     ui.radio_value(&mut d.new_id.create, true, tl!("Create a new Digital ID (self-signed, saved to a password-protected file)"));
@@ -632,8 +705,9 @@ fn configure(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> bool {
         egui::Grid::new("id-file").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
             let l = ui.label(tl!("File (.p12, .pfx)"));
             ui.horizontal(|ui| {
-                ui.add(egui::TextEdit::singleline(&mut n.file).desired_width(220.0)).labelled_by(l.id);
-                #[cfg(not(target_arch = "wasm32"))]
+                // The browser gives no paths: the picked file's name shows, read-only.
+                let typed = !cfg!(target_arch = "wasm32");
+                ui.add(egui::TextEdit::singleline(&mut n.file).interactive(typed).desired_width(220.0)).labelled_by(l.id);
                 if ui.button(tl!("Browse…")).clicked() {
                     browse = true;
                 }
@@ -643,6 +717,15 @@ fn configure(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> bool {
             ui.add(egui::TextEdit::singleline(&mut n.file_password).password(true).desired_width(200.0)).labelled_by(l.id);
             ui.end_row();
         });
+        if cfg!(target_arch = "wasm32") {
+            ui.label(
+                egui::RichText::new(tl!(
+                    "The file stays on this device: PdfCraft reads it in this page and forgets it when the page closes. The password is never stored."
+                ))
+                .small()
+                .color(t.text_muted),
+            );
+        }
     }
     ui.add_space(6.0);
     error(ui, &d.error);
@@ -690,7 +773,9 @@ fn configure(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> bool {
         });
     }
     #[cfg(target_arch = "wasm32")]
-    let _ = browse;
+    if browse {
+        app.pick_digital_id_file();
+    }
     close
 }
 

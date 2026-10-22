@@ -55,6 +55,7 @@ mod submit_form;
 mod text_cache;
 mod tools;
 mod url_access;
+mod web_signing;
 mod windows;
 
 use std::collections::HashMap;
@@ -917,6 +918,7 @@ impl Automation {
             "alt_text_set" => self.alt_text_set(&a)?,
             "sign_id_create" => self.sign_id_create(&a)?,
             "sign_document" => self.sign_document(&a)?,
+            "sign_id_inspect" => self.sign_id_inspect(&a)?,
             "sign_field_lock" => self.sign_field_lock(&a)?,
             "sign_keychain_ids" => {
                 #[cfg(target_os = "macos")]

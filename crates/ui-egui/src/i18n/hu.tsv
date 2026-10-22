@@ -2497,3 +2497,7 @@ compare-page	Moved	Áthelyezve
 	This tab is in the main window	Ez a lap a főablakban van
 	Move tab to {window}	Lap áthelyezése ide: {window}
 	Release to open in a new window	Engedd el, hogy új ablakban nyíljon meg
+	This page only  ·  	Csak ez az oldal  ·  
+	The file stays on this device: PdfCraft reads it in this page and forgets it when the page closes. The password is never stored.	A fájl ezen az eszközön marad: a PdfCraft ezen az oldalon olvassa be, és az oldal bezárásakor elfelejti. A jelszót soha nem tárolja.
+	Downloaded the new digital ID as {name}. Keep it: this page forgets it when it closes.	Az új digitális azonosító letöltve: {name}. Őrizze meg: ez az oldal bezáráskor elfelejti.
+	Signed. Downloaded {name}	Aláírva. Letöltve: {name}

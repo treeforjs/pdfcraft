@@ -6333,11 +6333,11 @@ title = "Sign in the browser with a PKCS#12 file"
 area = "H"
 tier = "P1"
 milestone = "M9"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["sign.digital", "sign.certify", "sign.validate"]
+tools = ["sign_id_inspect"]
+evidence = ["crates/sign/src/rsa_soft.rs::signs_the_same_bytes_as_aws_lc_and_verifies", "crates/sign/src/id_file.rs::hostile_files_are_errors", "crates/ui-egui/src/picked_ids.rs::a_picked_rsa_id_signs_in_memory", "crates/ui-egui/src/picked_ids.rs::picked_ids_are_held_opened_and_never_saved", "crates/automation/tests/web_signing.rs::inspects_ids_given_as_bytes_or_paths", "crates/engine/src/tests.rs::browser_clock_readings"]
+notes = "The web app signs and certifies with a .p12/.pfx picked in the browser (held in memory for the page, never in settings; the password is never kept), RSA through a pure-Rust signer (byte-identical to aws-lc-rs) and P-256/P-384, downloads the signed file, creates P-256 digital IDs as a download, validates signatures, and reads the browser clock and time zone. Fill & Sign marks already ran in the browser. Missing: the picker and download glue is compiled for wasm32 but not run in a real browser here; RSA key creation and timestamp-server requests are not available in the browser; OS key stores and tokens are desktop-only."
 
 [[feature]]
 id = "sign.aatl"

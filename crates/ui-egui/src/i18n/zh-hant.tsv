@@ -2385,3 +2385,7 @@ compare-page	Moved	已移動
 	This tab is in the main window	此索引標籤位於主視窗中
 	Move tab to {window}	將索引標籤移到 {window}
 	Release to open in a new window	放開即可在新視窗中開啟
+	This page only  ·  	僅此頁面 · 
+	The file stays on this device: PdfCraft reads it in this page and forgets it when the page closes. The password is never stored.	檔案保留在此裝置上：PdfCraft 在此頁面中讀取它，並在頁面關閉時將其捨棄。密碼從不儲存。
+	Downloaded the new digital ID as {name}. Keep it: this page forgets it when it closes.	新的數位識別證已下載為 {name}。請妥善保存：此頁面關閉後將不再保留。
+	Signed. Downloaded {name}	已簽署。已下載 {name}
