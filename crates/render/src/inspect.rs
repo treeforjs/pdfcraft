@@ -406,11 +406,10 @@ pub fn inspect(bytes: Arc<Vec<u8>>, password: Option<&str>) -> Result<DocInfo, O
     // structural inspection, including the compatibility fallback for damaged files.
     drop(pdf);
     // When neither structure reader accepts the file (e.g. an AES-256 file whose /Perms no
-    // longer matches /P), the renderer may still have decrypted it. Report it as encrypted then,
-    // so permission checks fail closed instead of treating it as unrestricted. A successful
-    // structure read below replaces this with the parsed answer.
-    info.encrypted = bytes.windows(8).any(|w| w == b"/Encrypt");
-    inspect_structure(&mut info, |tmp| {
+    // longer matches /P), the renderer may still have decrypted it. Report it as encrypted then
+    // (below), so permission checks fail closed instead of treating it as unrestricted. A
+    // successful structure read gives the parsed answer.
+    let read = inspect_structure(&mut info, |tmp| {
         // The lazy reader first; lopdf's repair/tolerance path when it can't expose the same
         // page tree or an object a panel needs. No partial result is published.
         let lazy = catch_unwind(AssertUnwindSafe(|| {
@@ -433,6 +432,10 @@ pub fn inspect(bytes: Arc<Vec<u8>>, password: Option<&str>) -> Result<DocInfo, O
         Inspector::new(&doc).fill(tmp);
         Ok(())
     });
+    if !read {
+        // Only searched when needed: it reads the whole file, a long wait on a very large one.
+        info.encrypted = memchr::memmem::find(&bytes, b"/Encrypt").is_some();
+    }
     if info.pages.is_empty() {
         return Err(OpenError::Invalid("the document has no pages".into()));
     }
@@ -440,7 +443,8 @@ pub fn inspect(bytes: Arc<Vec<u8>>, password: Option<&str>) -> Result<DocInfo, O
 }
 
 // Commit auxiliary metadata only after inspection succeeds; renderer geometry is the fallback.
-fn inspect_structure(info: &mut DocInfo, fill: impl FnOnce(&mut DocInfo) -> Result<(), String>) {
+/// Returns whether it succeeded.
+fn inspect_structure(info: &mut DocInfo, fill: impl FnOnce(&mut DocInfo) -> Result<(), String>) -> bool {
     let structure = catch_unwind(AssertUnwindSafe(|| {
         let mut tmp = DocInfo { pages: info.pages.clone(), ..Default::default() };
         fill(&mut tmp)?;
@@ -451,10 +455,15 @@ fn inspect_structure(info: &mut DocInfo, fill: impl FnOnce(&mut DocInfo) -> Resu
             filled.file_size = info.file_size;
             filled.pdf_version = std::mem::take(&mut info.pdf_version);
             *info = filled;
+            true
         }
-        Ok(Err(e)) => info.warnings.push(format!("Some document structure (bookmarks, comments, fields) could not be read: {e}")),
+        Ok(Err(e)) => {
+            info.warnings.push(format!("Some document structure (bookmarks, comments, fields) could not be read: {e}"));
+            false
+        }
         Err(p) => {
             info.warnings.push(format!("Document structure inspection crashed and was skipped: {}", crate::raster::panic_message(&p)));
+            false
         }
     }
 }
@@ -1873,7 +1882,7 @@ trailer << /Root 1 0 R >>
                 pages: vec![PageInfo { width: 300.0, height: 200.0, label: "1".into(), crop: [10.0, 20.0, 210.0, 320.0], rotation: 90 }],
                 ..Default::default()
             };
-            inspect_structure(&mut info, |tmp| {
+            let read = inspect_structure(&mut info, |tmp| {
                 tmp.pages.clear();
                 tmp.title = Some("partially inspected".into());
                 if crash {
@@ -1881,6 +1890,7 @@ trailer << /Root 1 0 R >>
                 }
                 Err("synthetic structure inspection failure".into())
             });
+            assert!(!read);
 
             assert_eq!(info.pages.len(), 1);
             let page = &info.pages[0];

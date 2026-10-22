@@ -54,8 +54,18 @@ another. Edits never touch the original bytes.
 - **Tolerant, never fatal.** The lexer works on a byte slice and a position; it allocates nothing
   for skipped data, bounds-checks every index, and caps nesting depth. Malformed input yields
   `CosError`, never a panic — this crate is the first thing a hostile file meets.
-- **Lazy.** Objects are parsed on first use and cached. (Whole-file buffering is still the case;
-  `ByteSource` streaming is `core.lazy-loading`, not yet done.)
+- **Lazy, within a memory budget** (`core.lazy-loading`). Opening reads the `startxref`
+  tail, the cross-reference sections and the catalog, nothing else (5 ms for a 250 MB,
+  4 000-page file). Objects are parsed on first use into a **bounded** cache: two generations of
+  at most 16 384 objects / 32 MiB each, so the objects in use stay while a walk over every page
+  streams through; decoded object streams have their own two-generation cache (64 streams /
+  64 MiB each). `doc.cache_footprint()` reports it, `Document::CACHE_LIMIT` is the most it can
+  be. Streams read from the file are views into the file's bytes, never copies. Repair scans
+  (reconstruction, the last-resort object search, the trailer) search with `memchr` instead of
+  trying every byte. The file itself is still one shared in-memory buffer: memory-mapping needs
+  `unsafe`, which the workspace forbids, and a positioned-read `ByteSource` would change every
+  reader of `doc.bytes()` (the bootstrap renderer among them); it is the remaining part of
+  `core.lazy-loading`, as is showing page 1 of a linearized file before the rest is read.
 - **Encryption** is handled on load and save through `pdfcraft-crypt`: every standard-security
   revision R2–R6 (RC4, AES-128/256), crypt filters, `/EFF` embedded-file encryption, and
   `/EncryptMetadata`. `security.rs` knows what the spec exempts — the `/Encrypt` dictionary, xref

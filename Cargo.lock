@@ -3666,6 +3666,7 @@ name = "pdfcraft-cos"
 version = "0.5.0"
 dependencies = [
  "hayro-syntax",
+ "memchr",
  "pdfcraft-crypt",
  "pdfcraft-filters",
  "proptest",
@@ -3925,6 +3926,7 @@ dependencies = [
  "kurbo 0.13.1",
  "log",
  "lopdf",
+ "memchr",
  "pdfcraft-content",
  "pdfcraft-cos",
  "pdfcraft-filters",

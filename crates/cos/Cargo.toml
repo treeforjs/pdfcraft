@@ -12,6 +12,8 @@ workspace = true
 pdfcraft-crypt = { workspace = true }
 pdfcraft-filters = { workspace = true }
 thiserror = { workspace = true }
+# Substring search for repair scans and the trailer; already in the tree (hayro, regex).
+memchr = "2.7"
 
 [dev-dependencies]
 serde_json = { workspace = true }

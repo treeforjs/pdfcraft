@@ -577,10 +577,12 @@ pub fn list_with_time(doc: &Document, bytes: &[u8], trust: &TrustStore, when: Ve
 }
 
 pub fn list_cached_with_time(doc: &Document, bytes: &[u8], trust: &TrustStore, cache: &DigestCache, when: VerificationTime) -> Vec<SignatureInfo> {
-    let pages = annot_pages(doc);
+    let fields = sig_fields(doc);
+    // Which page each widget is on takes a walk over every page: only when there are fields.
+    let pages = if fields.is_empty() { HashMap::new() } else { annot_pages(doc) };
     let mut out = Vec::new();
     let mut field_values: HashSet<ObjRef> = HashSet::new();
-    for f in sig_fields(doc) {
+    for f in fields {
         if let Some(v_ref) = f.dict.get(b"V").and_then(Object::as_ref) {
             field_values.insert(v_ref);
         }

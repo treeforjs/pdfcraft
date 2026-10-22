@@ -9,12 +9,14 @@
 //! by scanning, encryption on load and save (R2–R6, crypt filters, `/EFF`), incremental writing,
 //! full saves that pack objects into compressed object streams with a cross-reference stream, and
 //! linearized output with its checker (`core.linearization`, Annex F).
-//! Not yet: streaming very large files within a memory budget (`ByteSource`,
-//! `core.lazy-loading`). See the README.
+//! Parse caches are bounded whatever the size of the file (`core.lazy-loading`,
+//! [`Document::cache_footprint`]). Not yet: reading the file through a `ByteSource` instead of
+//! one in-memory buffer, and linearized first-page-first loading. See the README.
 
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
 mod bytes;
+mod cache;
 mod document;
 mod linearize;
 mod object;
@@ -24,7 +26,7 @@ mod security;
 mod writer;
 
 pub use bytes::Bytes;
-pub use document::{Document, Revision, SourceIdentity, XrefEntry};
+pub use document::{CacheFootprint, Document, Revision, SourceIdentity, XrefEntry};
 pub use linearize::{LinearizationParams, LinearizationReport, check_linearization, fast_web_view, write_linearized};
 pub use object::{Dict, MAX_DECODED, Name, ObjRef, Object, PdfString, Stream};
 pub use parser::{Lexer, parse_indirect};

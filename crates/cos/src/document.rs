@@ -9,6 +9,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{Arc, Mutex, Weak};
 
 use crate::CosError;
+use crate::cache::BoundedCache;
 use crate::object::{Dict, ObjRef, Object};
 use crate::parser::{Lexer, is_whitespace, parse_indirect, parse_indirect_shared};
 
@@ -61,6 +62,18 @@ pub enum XrefEntry {
     InStream { stream: u32, index: u32 },
 }
 
+/// What a document's parse caches hold ([`Document::cache_footprint`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct CacheFootprint {
+    /// Parsed objects.
+    pub objects: usize,
+    /// Decoded object streams.
+    pub object_streams: usize,
+    /// Memory both hold of their own (roughly), not counting views into the file's bytes. One
+    /// object larger than a cache generation's budget is held alone and can exceed it.
+    pub bytes: usize,
+}
+
 /// One cross-reference section of the file (one per save; the first is the original).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Revision {
@@ -106,8 +119,11 @@ pub struct Document {
     trailer: Dict,
     revisions: Arc<Vec<Revision>>,
     repair_log: Arc<Vec<String>>,
-    cache: Arc<Mutex<HashMap<u32, Arc<Object>>>>,
-    objstms: Arc<Mutex<HashMap<u32, Arc<ObjStm>>>>,
+    /// Parsed objects, bounded (`core.lazy-loading`): a walk over a very large file streams
+    /// through it instead of keeping every object it touched.
+    cache: Arc<Mutex<BoundedCache<Arc<Object>>>>,
+    /// Decoded object streams, bounded the same way.
+    objstms: Arc<Mutex<BoundedCache<Arc<ObjStm>>>>,
     stream_limit: usize,
     overlay: BTreeMap<u32, Slot>,
     next_num: u32,
@@ -161,7 +177,7 @@ impl ObjectReader {
                         Some(XrefEntry::InStream { stream, .. }) => Some(stream),
                         _ => None,
                     };
-                    streams.retain(|num, _| Some(*num) == current);
+                    streams.retain(|num| Some(*num) == current);
                 }
                 self.decoded_count = streams.len();
             }
@@ -201,6 +217,48 @@ fn owned_bytes(object: &Object, data: &Arc<Vec<u8>>, depth: usize) -> usize {
     }
 }
 
+/// Parsed objects kept per cache generation (two generations are kept; see [`BoundedCache`]).
+const CACHE_OBJECTS: usize = 16_384;
+/// Memory parsed objects may hold per generation, beyond views into the file.
+const CACHE_BYTES: usize = 32 << 20;
+/// Decoded object streams kept per generation, and their memory.
+const CACHE_OBJSTMS: usize = 64;
+const CACHE_OBJSTM_BYTES: usize = 64 << 20;
+
+fn object_cache() -> Arc<Mutex<BoundedCache<Arc<Object>>>> {
+    Arc::new(Mutex::new(BoundedCache::new(CACHE_OBJECTS, CACHE_BYTES)))
+}
+
+fn objstm_cache() -> Arc<Mutex<BoundedCache<Arc<ObjStm>>>> {
+    Arc::new(Mutex::new(BoundedCache::new(CACHE_OBJSTMS, CACHE_OBJSTM_BYTES)))
+}
+
+/// Roughly the memory a parsed `object` holds: its containers and names, and string and stream
+/// data that is not a view into `data` (the input file). Nesting deeper than a few levels is
+/// rare and counted flat, which keeps this bounded.
+fn held_bytes(object: &Object, data: &Arc<Vec<u8>>, depth: usize) -> usize {
+    const NODE: usize = 32;
+    if depth > 4 {
+        return NODE;
+    }
+    match object {
+        Object::String(s) => NODE.saturating_add(s.bytes.len()),
+        Object::Name(n) => NODE.saturating_add(n.len()),
+        Object::Stream(s) => {
+            let own = if s.raw.shares(data) { 0 } else { s.raw.len() };
+            let dict = held_bytes_dict(&s.dict, data, depth);
+            NODE.saturating_add(own).saturating_add(dict)
+        }
+        Object::Array(a) => a.iter().fold(NODE, |n, v| n.saturating_add(held_bytes(v, data, depth + 1))),
+        Object::Dict(d) => held_bytes_dict(d, data, depth),
+        _ => NODE,
+    }
+}
+
+fn held_bytes_dict(d: &Dict, data: &Arc<Vec<u8>>, depth: usize) -> usize {
+    d.iter().fold(32usize, |n, (k, v)| n.saturating_add(k.len()).saturating_add(32).saturating_add(held_bytes(v, data, depth + 1)))
+}
+
 impl std::fmt::Debug for Document {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Document").field("bytes", &self.data.len()).field("objects", &self.entries.len()).field("edits", &self.overlay.len()).finish()
@@ -218,8 +276,8 @@ impl Document {
             trailer: Dict::new(),
             revisions: Arc::new(Vec::new()),
             repair_log: Arc::new(Vec::new()),
-            cache: Arc::default(),
-            objstms: Arc::default(),
+            cache: object_cache(),
+            objstms: objstm_cache(),
             stream_limit: crate::object::MAX_DECODED,
             overlay: BTreeMap::new(),
             next_num: 1,
@@ -293,8 +351,8 @@ impl Document {
             trailer: Dict::new(),
             revisions: Arc::new(Vec::new()),
             repair_log: Arc::new(Vec::new()),
-            cache: Arc::default(),
-            objstms: Arc::default(),
+            cache: object_cache(),
+            objstms: objstm_cache(),
             stream_limit: stream_limit.min(crate::object::MAX_DECODED),
             overlay: BTreeMap::new(),
             next_num: 1,
@@ -382,8 +440,8 @@ impl Document {
         self.security = Some(Arc::new(handler));
         self.encrypt_num = num;
         // Objects read while locating the catalog were read before decryption was possible.
-        self.cache = Arc::default();
-        self.objstms = Arc::default();
+        self.cache = object_cache();
+        self.objstms = objstm_cache();
         Ok(())
     }
 
@@ -581,7 +639,7 @@ impl Document {
         let mut ends: Vec<usize> = Vec::with_capacity(self.revisions.len());
         for r in self.revisions.iter() {
             let from = (r.xref_offset as usize).saturating_add(self.header_offset).min(d.len());
-            let Some(at) = d[from..].windows(5).position(|w| w == b"%%EOF") else { continue };
+            let Some(at) = memchr::memmem::find(&d[from..], b"%%EOF") else { continue };
             let mut end = from + at + 5;
             while end < d.len() && matches!(d[end], b'\r' | b'\n') && end - (from + at + 5) < 2 {
                 end += 1;
@@ -657,17 +715,31 @@ impl Document {
             None => {}
         }
         if let Some(o) = self.cache.lock().map_err(|_| CosError::Poisoned)?.get(&num) {
-            return Ok(o.clone());
+            return Ok(o);
         }
         // Loading can re-enter (indirect stream `/Length`, object streams); damaged files make
         // cycles such as `6 0 obj << /Length 6 0 R >>`. Bound the nesting on every path.
         let _guard =
             LoadGuard::enter(num).ok_or_else(|| CosError::Syntax { offset: 0, detail: format!("reference cycle while loading object {num}") })?;
         let obj = self.load(num, 0)?;
+        let held = held_bytes(&obj, &self.data, 0);
         let obj = Arc::new(obj);
-        self.cache.lock().map_err(|_| CosError::Poisoned)?.insert(num, obj.clone());
+        self.cache.lock().map_err(|_| CosError::Poisoned)?.insert_weighed(num, obj.clone(), held);
         Ok(obj)
     }
+
+    /// What the shared parse caches hold now. They are bounded whatever the size of the file
+    /// (`core.lazy-loading`): opening reads only the cross-reference data and the objects asked
+    /// for, and a walk over every page streams through the caches instead of filling memory.
+    pub fn cache_footprint(&self) -> CacheFootprint {
+        let (objects, object_bytes) = self.cache.lock().map(|c| (c.len(), c.bytes())).unwrap_or_default();
+        let (object_streams, stream_bytes) = self.objstms.lock().map(|c| (c.len(), c.bytes())).unwrap_or_default();
+        CacheFootprint { objects, object_streams, bytes: object_bytes.saturating_add(stream_bytes) }
+    }
+
+    /// The most [`Self::cache_footprint`] can report, for any file.
+    pub const CACHE_LIMIT: CacheFootprint =
+        CacheFootprint { objects: 2 * CACHE_OBJECTS, object_streams: 2 * CACHE_OBJSTMS, bytes: 2 * (CACHE_BYTES + CACHE_OBJSTM_BYTES) };
 
     /// Visit every current object without filling this document's editing cache.
     ///
@@ -717,8 +789,8 @@ impl Document {
 
     pub(crate) fn object_reader(&self) -> ObjectReader {
         let mut document = self.clone();
-        document.cache = Arc::default();
-        document.objstms = Arc::default();
+        document.cache = object_cache();
+        document.objstms = objstm_cache();
         ObjectReader { document, decoded_count: 0 }
     }
 
@@ -765,7 +837,7 @@ impl Document {
 
     fn objstm(&self, num: u32) -> Result<Arc<ObjStm>, CosError> {
         if let Some(s) = self.objstms.lock().map_err(|_| CosError::Poisoned)?.get(&num) {
-            return Ok(s.clone());
+            return Ok(s);
         }
         let Object::Stream(s) = &*self.try_get(num)? else { return Err(CosError::MissingObject(num)) };
         let n = s.dict.int(b"N").unwrap_or(0).clamp(0, 1_000_000) as usize;
@@ -777,8 +849,9 @@ impl Document {
             let (Some(Object::Int(onum)), Some(Object::Int(off))) = (lx.object().ok(), lx.object().ok()) else { break };
             index.push((onum.max(0) as u32, first + off.max(0) as usize));
         }
+        let held = data.capacity().saturating_add(index.capacity().saturating_mul(std::mem::size_of::<(u32, usize)>()));
         let stm = Arc::new(ObjStm { index, data: Arc::new(data) });
-        self.objstms.lock().map_err(|_| CosError::Poisoned)?.insert(num, stm.clone());
+        self.objstms.lock().map_err(|_| CosError::Poisoned)?.insert_weighed(num, stm.clone(), held);
         Ok(stm)
     }
 
@@ -996,28 +1069,30 @@ impl Document {
     fn reconstruct(&mut self, log: &mut Vec<String>) -> Result<(), CosError> {
         let data = self.data.clone();
         let mut entries: BTreeMap<u32, XrefEntry> = BTreeMap::new();
-        let mut i = 0;
         let mut objstms = Vec::new();
-        while i < data.len() {
-            // Object headers start at a line start (or after whitespace).
-            let at_start = i == 0 || is_whitespace(data[i - 1]) || data[i - 1] == b'>';
-            if at_start && data[i].is_ascii_digit() {
-                let mut lx = Lexer::new(&data, i);
-                let n = lx.token();
-                lx.skip_ws();
-                let g = lx.token();
-                if !n.is_empty() && !g.is_empty() && n.iter().all(u8::is_ascii_digit) && g.iter().all(u8::is_ascii_digit) && lx.eat_keyword(b"obj") {
-                    let num = std::str::from_utf8(n).ok().and_then(|s| s.parse::<u32>().ok());
-                    let generation = std::str::from_utf8(g).ok().and_then(|s| s.parse::<u16>().ok()).unwrap_or(0);
-                    if let Some(num) = num {
-                        entries.insert(num, XrefEntry::InFile { offset: i as u64, generation });
-                        objstms.push(num);
-                    }
-                    i = lx.pos;
-                    continue;
-                }
+        // Every `obj` keyword is a candidate: step back over `N G ` to where its header would
+        // start, then read the header there as before. Searching for the keyword instead of
+        // trying every byte is what makes rebuilding a file of hundreds of megabytes take
+        // a fraction of a second.
+        let mut resume = 0;
+        for at in memchr::memmem::find_iter(&data[..], b"obj") {
+            if at < resume {
+                continue;
             }
-            i += 1;
+            let Some(i) = header_start(&data, at) else { continue };
+            let mut lx = Lexer::new(&data, i);
+            let n = lx.token();
+            lx.skip_ws();
+            let g = lx.token();
+            if !n.is_empty() && !g.is_empty() && n.iter().all(u8::is_ascii_digit) && g.iter().all(u8::is_ascii_digit) && lx.eat_keyword(b"obj") {
+                let num = std::str::from_utf8(n).ok().and_then(|s| s.parse::<u32>().ok());
+                let generation = std::str::from_utf8(g).ok().and_then(|s| s.parse::<u16>().ok()).unwrap_or(0);
+                if let Some(num) = num {
+                    entries.insert(num, XrefEntry::InFile { offset: i as u64, generation });
+                    objstms.push(num);
+                }
+                resume = lx.pos;
+            }
         }
         if entries.is_empty() {
             return Err(CosError::Syntax { offset: 0, detail: "no objects found".into() });
@@ -1075,19 +1150,43 @@ impl Document {
     }
 }
 
+/// Where the object header `N G obj` whose keyword is at `at` starts: the digits of `N`, which
+/// begin the file or follow whitespace or `>`, then whitespace, the digits of `G`, whitespace.
+fn header_start(data: &[u8], at: usize) -> Option<usize> {
+    let mut i = at;
+    let back_over = |i: &mut usize, keep: fn(u8) -> bool| {
+        let end = *i;
+        while *i > 0 && data.get(*i - 1).is_some_and(|b| keep(*b)) {
+            *i -= 1;
+        }
+        end - *i
+    };
+    if back_over(&mut i, is_whitespace) == 0 || back_over(&mut i, |b| b.is_ascii_digit()) == 0 {
+        return None;
+    }
+    if back_over(&mut i, is_whitespace) == 0 || back_over(&mut i, |b| b.is_ascii_digit()) == 0 {
+        return None;
+    }
+    let before = i.checked_sub(1).and_then(|p| data.get(p).copied());
+    before.is_none_or(|b| is_whitespace(b) || b == b'>').then_some(i)
+}
+
+/// The first `needle` in `hay[from..to]` (vectorised: repair scans of a very large file
+/// search hundreds of megabytes).
 pub(crate) fn find(hay: &[u8], needle: &[u8], from: usize, to: usize) -> Option<usize> {
     let to = to.min(hay.len());
     if from >= to || needle.is_empty() || to - from < needle.len() {
         return None;
     }
-    hay[from..to].windows(needle.len()).position(|w| w == needle).map(|p| p + from)
+    memchr::memmem::find(hay.get(from..to)?, needle).map(|p| p + from)
 }
 
+/// The last `needle` starting at or after `from`.
 fn rfind(hay: &[u8], needle: &[u8], from: usize) -> Option<usize> {
-    if hay.len() < needle.len() {
+    if hay.len() < needle.len() || needle.is_empty() {
         return None;
     }
-    (from..=hay.len() - needle.len()).rev().find(|&i| &hay[i..i + needle.len()] == needle)
+    memchr::memmem::rfind(hay.get(from..)?, needle).map(|p| p + from)
 }
 
 /// A file identifier derived from entropy supplied by the caller.
@@ -1389,7 +1488,7 @@ mod tests {
         // Data of its own (decrypted streams, strings) counts: past the budget the cache is
         // cleared after the next read, including a failed one.
         let owned = Object::Stream(crate::Stream::from_raw(Dict::new(), vec![b'y'; ObjectReader::STREAM_BYTES + 1]));
-        reader.document.cache.lock().unwrap().insert(3, Arc::new(owned));
+        reader.document.cache.lock().unwrap().insert_weighed(3, Arc::new(owned), 0);
         assert_eq!(*reader.get(ObjRef::new(99, 0)), Object::Null);
         assert!(reader.document.cache.lock().unwrap().is_empty(), "owned data over budget is evicted");
     }
@@ -1526,6 +1625,73 @@ mod tests {
         // The first revision opens on its own, without the update.
         let old = Document::open(Arc::new(bytes[..ends[0]].to_vec())).unwrap();
         assert!(old.get(ObjRef::new(1, 0)).as_dict().unwrap().get(b"Lang").is_none());
+    }
+
+    /// The byte-by-byte header scan reconstruction used before it searched for the keyword.
+    fn byte_scan(data: &[u8]) -> Vec<(u32, u64, u16)> {
+        let mut out = Vec::new();
+        let mut i = 0;
+        while i < data.len() {
+            let at_start = i == 0 || is_whitespace(data[i - 1]) || data[i - 1] == b'>';
+            if at_start && data[i].is_ascii_digit() {
+                let mut lx = Lexer::new(data, i);
+                let n = lx.token();
+                lx.skip_ws();
+                let g = lx.token();
+                if !n.is_empty() && !g.is_empty() && n.iter().all(u8::is_ascii_digit) && g.iter().all(u8::is_ascii_digit) && lx.eat_keyword(b"obj") {
+                    if let Some(num) = std::str::from_utf8(n).ok().and_then(|s| s.parse::<u32>().ok()) {
+                        let generation = std::str::from_utf8(g).ok().and_then(|s| s.parse::<u16>().ok()).unwrap_or(0);
+                        out.push((num, i as u64, generation));
+                    }
+                    i = lx.pos;
+                    continue;
+                }
+            }
+            i += 1;
+        }
+        out
+    }
+
+    #[test]
+    fn reconstruction_finds_the_headers_the_byte_scan_found() {
+        let mut noise = Vec::new();
+        let mut state = 7u64;
+        for _ in 0..200_000 {
+            state = state.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1_442_695_040_888_963_407);
+            // Mostly digits, spaces and the letters of the keyword, so near-headers abound.
+            noise.push(b"0123456789 \n\robj>x"[(state >> 59) as usize % 18]);
+        }
+        let cases: Vec<Vec<u8>> = vec![
+            b"5 0 obj<<>>endobj\n6 1 obj (x) endobj 7   2 \r\n obj 1 endobj".to_vec(),
+            b">>3 0 obj x12 0 obj 12 0 objx 99999999999 0 obj 4 70000 obj 8 0 obj".to_vec(),
+            b"1 0 obj\nstream\n2 0 obj inside a stream\nendstream endobj\n10 0 obj".to_vec(),
+            b"obj 0 obj 1 obj 1 1obj 11 obj".to_vec(),
+            build(&["<< /Type /Catalog /Pages 2 0 R >>", "<< /Type /Pages /Kids [] /Count 0 >>"], "/Root 1 0 R"),
+            noise,
+        ];
+        for data in cases {
+            let mut doc = Document::new_empty();
+            doc.data = Arc::new(data.clone());
+            let mut log = Vec::new();
+            let _ = doc.reconstruct(&mut log);
+            let mut expected: BTreeMap<u32, (u64, u16)> = BTreeMap::new();
+            for (num, offset, generation) in byte_scan(&data) {
+                expected.insert(num, (offset, generation));
+            }
+            let found: BTreeMap<u32, (u64, u16)> = doc
+                .entries
+                .iter()
+                .filter_map(|(n, e)| match e {
+                    XrefEntry::InFile { offset, generation } => Some((*n, (*offset, *generation))),
+                    _ => None,
+                })
+                .collect();
+            if expected.is_empty() {
+                assert!(found.is_empty() || doc.entries.is_empty());
+            } else {
+                assert_eq!(found, expected, "{:?}", String::from_utf8_lossy(&data[..data.len().min(120)]));
+            }
+        }
     }
 
     #[test]

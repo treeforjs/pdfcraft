@@ -391,11 +391,11 @@ title = "Lazy loading of very large (GB) files within a memory budget"
 area = "A"
 tier = "P0"
 milestone = "M1"
-status = "planned"
+status = "partial"
 commands = []
-tools = []
-evidence = []
-notes = "ByteSource (M1.5); files are buffered whole today"
+tools = ["doc_open"]
+evidence = ["crates/cos/tests/lazy_loading.rs::walking_every_object_of_a_large_file_keeps_the_caches_bounded", "crates/cos/tests/lazy_loading.rs::a_broken_xref_on_a_large_file_is_reconstructed_within_the_cache_bounds", "crates/cos/tests/lazy_loading.rs::object_streams_that_contain_themselves_read_as_missing", "crates/cos/tests/lazy_loading.rs::truncated_files_open_or_fail_cleanly", "crates/cos/src/document.rs::reconstruction_finds_the_headers_the_byte_scan_found", "crates/engine/tests/large_documents.rs::a_document_of_thousands_of_pages_opens_renders_and_saves", "crates/engine/tests/large_documents.rs::cyclic_and_very_deep_page_trees_open_or_fail_cleanly", "crates/engine/tests/large_documents.rs::truncated_large_files_open_recovered_or_fail_cleanly"]
+notes = "Opening reads only the xref/trailer and the catalog (cos open: 5 ms on a 250 MB, 4 000-page file); objects (pages, content, resources) are parsed on first use into bounded two-generation caches (16 384 objects / 32 MiB and 64 object streams / 64 MiB per generation; Document::cache_footprint, Document::CACHE_LIMIT). Open-path work that was O(file) or per-open was removed: the renderer inspection's whole-file /Encrypt scan (now only when structure inspection fails), colour-profile preparation on every open (cached by spec; the built-in profile list no longer builds the CMYK tables ten times), the signature panel's page walk when there are no signature fields, and byte-by-byte repair scans (reconstruction now searches for the obj keyword with memchr). Measured with `cargo run -p pdfcraft-automation --example large_open` (dev profile, 4 000 pages, 250 MB, median of 3): time to first page 845 -> 438 ms, peak RSS at first page unchanged (300 MiB, the file itself is ~238 MiB); same file linearized 812 -> 436 ms; same file with a broken startxref (full reconstruction) 5 379 -> 1 597 ms; a 20-page file 202 -> 77 ms. Saves and extraction unchanged (perf_probe). Missing: the file is still read whole into one buffer (mmap needs unsafe, which is forbidden; a positioned-read ByteSource has to replace doc.bytes() in every reader, the hayro bootstrap renderer included), so linearized files can't show page 1 before the rest is read and multi-GB files need that much RAM; opening runs on the UI thread; opening still walks the whole page tree once (page sizes, comments, fields, links); the bootstrap renderer and the lopdf structure fallback (used for damaged files) still parse on their own."
 
 [[feature]]
 id = "core.pdf20-utf8-strings"

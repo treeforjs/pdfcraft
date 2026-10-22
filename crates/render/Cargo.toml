@@ -21,6 +21,8 @@ thiserror = { workspace = true }
 log = { workspace = true }
 # Reads rendered pixel words as bytes; already in the tree through hayro.
 bytemuck = { version = "1" }
+# Substring search over the whole file when structure inspection fails; already in the tree.
+memchr = "2.7"
 # SVG export: images are embedded as base64 PNG (the versions the workspace already uses).
 png = "0.18"
 base64 = "0.22"
