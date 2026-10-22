@@ -2482,3 +2482,18 @@ compare-page	Moved	Áthelyezve
 	line {n}	{n}. sor
 	{error} (document script {name}, line {n})	{error} ({name} dokumentumszkript, {n}. sor)
 	{error} (line {n})	{error} ({n}. sor)
+	New window	Új ablak
+	Move tab to new window	Lap áthelyezése új ablakba
+	Move tab to main window	Lap áthelyezése a főablakba
+	Close window	Ablak bezárása
+	Separate windows are only available in the desktop app	Külön ablakok csak az asztali alkalmazásban érhetők el
+	Window {n}	{n}. ablak
+	{window} has closed	{window} bezárult
+	That tab has closed	Ez a lap bezárult
+	At most {n} windows can be open besides the main window: close one first	A főablakon kívül legfeljebb {n} ablak lehet nyitva: előbb zárj be egyet
+	{window} has no room for more tabs	{window} nem fogad több lapot
+	This tab is already in a window of its own	Ez a lap már egyedül van az ablakában
+	This is the main window: quit to close it	Ez a főablak: a bezárásához lépj ki az alkalmazásból
+	This tab is in the main window	Ez a lap a főablakban van
+	Move tab to {window}	Lap áthelyezése ide: {window}
+	Release to open in a new window	Engedd el, hogy új ablakban nyíljon meg

@@ -541,7 +541,7 @@ impl Host for crate::PdfCraftApp {
             .enumerate()
             .filter_map(|(i, v)| {
                 let d = self.session.get(v.id)?;
-                Some(json!({ "tab": i, "doc": v.id.0, "name": d.name, "path": d.path, "pages": d.info.pages.len(), "dirty": d.dirty, "active": self.active == Some(i) }))
+                Some(json!({ "tab": i, "view": v.key, "window": self.windows.window_of(v.key).0, "doc": v.id.0, "name": d.name, "path": d.path, "pages": d.info.pages.len(), "dirty": d.dirty, "active": self.active == Some(i) }))
             })
             .collect();
         json!({
@@ -595,6 +595,9 @@ impl Host for crate::PdfCraftApp {
             "default_mode": self.default_mode,
             "left_panel": if self.left_open { json!(format!("{:?}", self.left)) } else { Value::Null },
             "right_panel": self.right.map(|r| format!("{r:?}")),
+            // Every window, its tabs (view keys) and the one it shows (ui.set window-new,
+            // window-move-tab, window-close, window-focus).
+            "windows": self.windows_state(),
             "compare_view": self.side_by_side.as_ref().filter(|_| self.side_by_side_showing()).map(|v| v.state()),
             "dialog": self.dialog.map(|d| format!("{d:?}")),
             "js_debugger": (self.dialog == Some(crate::Dialog::JsDebugger)).then(|| self.js_debugger.state()),

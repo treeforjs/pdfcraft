@@ -47,6 +47,7 @@ pub mod summary;
 pub mod text_preview;
 mod upright_image;
 pub mod url_access;
+pub mod windows;
 pub mod xfa;
 
 pub use clip::{CaptureRegion, Clip};

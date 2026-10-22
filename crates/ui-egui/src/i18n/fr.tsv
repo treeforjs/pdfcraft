@@ -2484,3 +2484,18 @@ compare-page	Moved	Déplacée
 	line {n}	ligne {n}
 	{error} (document script {name}, line {n})	{error} (script de document {name}, ligne {n})
 	{error} (line {n})	{error} (ligne {n})
+	New window	Nouvelle fenêtre
+	Move tab to new window	Déplacer l'onglet dans une nouvelle fenêtre
+	Move tab to main window	Déplacer l'onglet dans la fenêtre principale
+	Close window	Fermer la fenêtre
+	Separate windows are only available in the desktop app	Les fenêtres séparées ne sont disponibles que dans l'application de bureau
+	Window {n}	Fenêtre {n}
+	{window} has closed	{window} a été fermée
+	That tab has closed	Cet onglet a été fermé
+	At most {n} windows can be open besides the main window: close one first	Au plus {n} fenêtres peuvent être ouvertes en plus de la fenêtre principale : fermez-en une d'abord
+	{window} has no room for more tabs	{window} ne peut pas contenir plus d'onglets
+	This tab is already in a window of its own	Cet onglet est déjà seul dans sa fenêtre
+	This is the main window: quit to close it	C'est la fenêtre principale : quittez l'application pour la fermer
+	This tab is in the main window	Cet onglet est dans la fenêtre principale
+	Move tab to {window}	Déplacer l'onglet vers {window}
+	Release to open in a new window	Relâchez pour ouvrir dans une nouvelle fenêtre

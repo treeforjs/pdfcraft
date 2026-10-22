@@ -2397,3 +2397,18 @@ compare-page	Moved	Перемещена
 	line {n}	строка {n}
 	{error} (document script {name}, line {n})	{error} (скрипт документа {name}, строка {n})
 	{error} (line {n})	{error} (строка {n})
+	New window	Новое окно
+	Move tab to new window	Переместить вкладку в новое окно
+	Move tab to main window	Переместить вкладку в главное окно
+	Close window	Закрыть окно
+	Separate windows are only available in the desktop app	Отдельные окна доступны только в настольном приложении
+	Window {n}	Окно {n}
+	{window} has closed	{window} закрыто
+	That tab has closed	Эта вкладка закрыта
+	At most {n} windows can be open besides the main window: close one first	Кроме главного окна можно открыть не больше {n} окон: сначала закройте одно
+	{window} has no room for more tabs	В {window} нет места для новых вкладок
+	This tab is already in a window of its own	Эта вкладка уже одна в своём окне
+	This is the main window: quit to close it	Это главное окно: чтобы закрыть его, выйдите из приложения
+	This tab is in the main window	Эта вкладка в главном окне
+	Move tab to {window}	Переместить вкладку: {window}
+	Release to open in a new window	Отпустите, чтобы открыть в новом окне

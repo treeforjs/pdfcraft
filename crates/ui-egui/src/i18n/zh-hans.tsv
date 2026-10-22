@@ -2448,3 +2448,18 @@ compare-page	Moved	已移动
 	line {n}	第 {n} 行
 	{error} (document script {name}, line {n})	{error}（文档脚本 {name}，第 {n} 行）
 	{error} (line {n})	{error}（第 {n} 行）
+	New window	新建窗口
+	Move tab to new window	将选项卡移到新窗口
+	Move tab to main window	将选项卡移到主窗口
+	Close window	关闭窗口
+	Separate windows are only available in the desktop app	单独的窗口仅在桌面应用中可用
+	Window {n}	窗口 {n}
+	{window} has closed	{window} 已关闭
+	That tab has closed	该选项卡已关闭
+	At most {n} windows can be open besides the main window: close one first	除主窗口外最多可打开 {n} 个窗口：请先关闭一个
+	{window} has no room for more tabs	{window} 无法再容纳更多选项卡
+	This tab is already in a window of its own	此选项卡已单独位于一个窗口中
+	This is the main window: quit to close it	这是主窗口：退出应用即可关闭它
+	This tab is in the main window	此选项卡位于主窗口中
+	Move tab to {window}	将选项卡移到 {window}
+	Release to open in a new window	松开即可在新窗口中打开

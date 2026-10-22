@@ -2370,3 +2370,18 @@ compare-page	Moved	已移動
 	line {n}	第 {n} 行
 	{error} (document script {name}, line {n})	{error}（文件指令碼 {name}，第 {n} 行）
 	{error} (line {n})	{error}（第 {n} 行）
+	New window	新增視窗
+	Move tab to new window	將索引標籤移到新視窗
+	Move tab to main window	將索引標籤移到主視窗
+	Close window	關閉視窗
+	Separate windows are only available in the desktop app	獨立視窗僅在桌面應用程式中提供
+	Window {n}	視窗 {n}
+	{window} has closed	{window} 已關閉
+	That tab has closed	該索引標籤已關閉
+	At most {n} windows can be open besides the main window: close one first	除主視窗外最多可開啟 {n} 個視窗：請先關閉一個
+	{window} has no room for more tabs	{window} 無法再容納更多索引標籤
+	This tab is already in a window of its own	此索引標籤已單獨位於一個視窗中
+	This is the main window: quit to close it	這是主視窗：結束應用程式即可關閉它
+	This tab is in the main window	此索引標籤位於主視窗中
+	Move tab to {window}	將索引標籤移到 {window}
+	Release to open in a new window	放開即可在新視窗中開啟

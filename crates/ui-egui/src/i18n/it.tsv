@@ -2493,3 +2493,18 @@ compare-page	Moved	Spostata
 	line {n}	riga {n}
 	{error} (document script {name}, line {n})	{error} (script del documento {name}, riga {n})
 	{error} (line {n})	{error} (riga {n})
+	New window	Nuova finestra
+	Move tab to new window	Sposta scheda in una nuova finestra
+	Move tab to main window	Sposta scheda nella finestra principale
+	Close window	Chiudi finestra
+	Separate windows are only available in the desktop app	Le finestre separate sono disponibili solo nell'app desktop
+	Window {n}	Finestra {n}
+	{window} has closed	{window} è stata chiusa
+	That tab has closed	Quella scheda è stata chiusa
+	At most {n} windows can be open besides the main window: close one first	Oltre alla finestra principale possono essere aperte al massimo {n} finestre: chiudine prima una
+	{window} has no room for more tabs	{window} non ha spazio per altre schede
+	This tab is already in a window of its own	Questa scheda è già da sola nella sua finestra
+	This is the main window: quit to close it	Questa è la finestra principale: esci dall'app per chiuderla
+	This tab is in the main window	Questa scheda è nella finestra principale
+	Move tab to {window}	Sposta scheda in {window}
+	Release to open in a new window	Rilascia per aprire in una nuova finestra

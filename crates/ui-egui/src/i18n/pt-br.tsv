@@ -2485,3 +2485,18 @@ compare-page	Moved	Movida
 	line {n}	linha {n}
 	{error} (document script {name}, line {n})	{error} (script do documento {name}, linha {n})
 	{error} (line {n})	{error} (linha {n})
+	New window	Nova janela
+	Move tab to new window	Mover aba para nova janela
+	Move tab to main window	Mover aba para a janela principal
+	Close window	Fechar janela
+	Separate windows are only available in the desktop app	Janelas separadas só estão disponíveis no aplicativo para desktop
+	Window {n}	Janela {n}
+	{window} has closed	{window} foi fechada
+	That tab has closed	Essa aba foi fechada
+	At most {n} windows can be open besides the main window: close one first	No máximo {n} janelas podem ficar abertas além da janela principal: feche uma primeiro
+	{window} has no room for more tabs	{window} não tem espaço para mais abas
+	This tab is already in a window of its own	Esta aba já está sozinha na própria janela
+	This is the main window: quit to close it	Esta é a janela principal: saia do aplicativo para fechá-la
+	This tab is in the main window	Esta aba está na janela principal
+	Move tab to {window}	Mover aba para {window}
+	Release to open in a new window	Solte para abrir em uma nova janela

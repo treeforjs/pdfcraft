@@ -126,6 +126,7 @@ pub mod theme;
 pub mod updates;
 mod wheel_pager;
 mod widgets;
+pub mod windows_ui;
 
 use pdfcraft_engine::{DocId, Session};
 
@@ -646,6 +647,9 @@ pub struct PdfCraftApp {
     pub last_opened_url: Option<String>,
     /// A document asked to open this address; the user hasn't answered yet (#90, #91).
     pub pending_link: Option<PendingLink>,
+    /// The windows besides the main one and the tabs moved into them (see [`windows_ui`]).
+    pub windows: pdfcraft_engine::windows::WindowSet,
+    pub(crate) win: windows_ui::WindowsState,
 }
 
 /// Where in a document a request to open an address came from.
@@ -867,6 +871,8 @@ impl PdfCraftApp {
             link_draft: None,
             text_style: content_ui::default_style(),
             replace_draft: None,
+            windows: Default::default(),
+            win: Default::default(),
             number_draft: NumberDraft { from: 1, to: 1, style: pdfcraft_engine::LabelStyle::Decimal, prefix: String::new(), start: 1 },
         }
     }
@@ -1225,14 +1231,29 @@ impl PdfCraftApp {
         if index >= self.views.len() {
             return;
         }
-        let Some(id) = self.views.get(index).map(|v| v.id) else { return };
-        // Document Will Close runs first; what it changes is closed with the document.
-        self.run_document_action(id, pdfcraft_engine::DocTrigger::WillClose);
-        let id = self.views.remove(index).id;
-        self.forget_recovery(id);
-        self.session.close(id);
+        let Some((id, key)) = self.views.get(index).map(|v| (v.id, v.key)) else { return };
+        // Another window may show the document too: then only this view closes.
+        let last_view = !self.views.iter().any(|v| v.id == id && v.key != key);
+        if last_view {
+            // Document Will Close runs first; what it changes is closed with the document.
+            self.run_document_action(id, pdfcraft_engine::DocTrigger::WillClose);
+        }
+        let Some(index) = self.view_index(key) else { return };
+        let window = self.windows.window_of(key);
+        self.views.remove(index);
+        self.windows.remove_tab(key);
+        if last_view {
+            self.forget_recovery(id);
+            self.session.close(id);
+        }
         self.active = match self.active {
             _ if self.views.is_empty() => None,
+            // The tab beside it in the same window takes its place.
+            Some(a) if a == index && window.is_main() => {
+                let main: Vec<usize> = (0..self.views.len()).filter(|&i| self.in_main(i)).collect();
+                main.iter().copied().find(|&i| i >= index).or_else(|| main.last().copied())
+            }
+            Some(a) if a == index => self.windows.active(window).and_then(|t| self.view_index(t.key)),
             Some(a) if a > index => Some(a - 1),
             Some(a) if a >= self.views.len() => Some(self.views.len() - 1),
             other => other,
@@ -1621,6 +1642,9 @@ impl PdfCraftApp {
     /// This is the seed of the UI control channel (M3.9): the same verbs become `ui.set` calls.
     pub fn set_option(&mut self, key: &str, value: &str) -> Result<(), String> {
         if let Some(result) = self.set_signature_option(key, value) {
+            return result;
+        }
+        if let Some(result) = self.set_window_option(key, value) {
             return result;
         }
         // `pref.<key>`: any preference by key (see `prefs_ui`); a value starting with `[` is read
@@ -2073,6 +2097,7 @@ impl eframe::App for PdfCraftApp {
 
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.ctx = Some(ctx.clone());
+        self.settle_windows();
         self.dialog_epoch();
         // Notices raised outside `ui` (opened files, OS events, the control channel) translate too.
         let lang = i18n::Lang::from_pref(&self.language);
@@ -2170,12 +2195,24 @@ impl eframe::App for PdfCraftApp {
         self.poll_capture();
         // Shortcuts deferred last frame: the text field has taken that frame's typing since.
         let deferred = std::mem::take(&mut self.deferred_commands);
-        self.shortcuts(ctx);
+        // A dialog or prompt opened in another window takes that window's keys, not these.
+        if self.win.overlay.is_main() {
+            self.shortcuts(ctx);
+        }
         // Scrolling is transient: never resume after changing tabs, opening a modal/palette,
         // or returning to a window that lost focus.
         let blocked = self.dialog.is_some() || self.close_request.is_some() || self.palette_open || !ctx.input(|i| i.focused);
+        // Tabs shown in other windows follow their own window's focus.
+        let elsewhere = if self.windows.is_empty() { Vec::new() } else { self.window_views() };
+        let overlay = self.overlay_open();
+        let focused: Vec<bool> = elsewhere.iter().map(|(w, _)| self.window_focused(*w)).collect();
         for (index, view) in self.views.iter_mut().enumerate() {
-            if blocked || self.active != Some(index) {
+            let other = elsewhere.iter().position(|(_, i)| *i == index);
+            let stop = match other {
+                Some(k) => overlay || !focused.get(k).copied().unwrap_or(false),
+                None => blocked || self.active != Some(index),
+            };
+            if stop {
                 view.auto_scroll.cancel();
                 view.cancel_reader_input();
             }
@@ -2210,9 +2247,12 @@ impl eframe::App for PdfCraftApp {
             ctx.request_repaint();
             return;
         }
+        self.settle_windows();
+        self.note_main_window(&ctx);
         for view in &mut self.views {
             view.begin_render_frame();
         }
+        self.share_rasters();
         // The window shows the active document's name (or title, if it asks for that).
         let title = self
             .active
@@ -2235,11 +2275,15 @@ impl eframe::App for PdfCraftApp {
                     }
                 },
             );
-            dialogs::show(self, &ctx);
-            edit_text_ui::preview_dialog(self, &ctx);
+            if self.win.overlay.is_main() {
+                dialogs::show(self, &ctx);
+                edit_text_ui::preview_dialog(self, &ctx);
+            }
             // Notices too: a refused field value or a failed save must be seen in full screen.
             self.show_progress(&ctx);
             widgets::toast(self, &ctx);
+            self.show_windows(&ctx);
+            self.sync_sibling_views();
             self.finish_render_frame(&ctx);
             return;
         }
@@ -2262,51 +2306,130 @@ impl eframe::App for PdfCraftApp {
             Some(i) => canvas::document_area(self, i, ui),
         });
         self.process_pending_edits();
-        palette::show(self, &ctx);
-        dialogs::show(self, &ctx);
-        edit_text_ui::preview_dialog(self, &ctx);
-        self.show_progress(&ctx);
-        widgets::toast(self, &ctx);
+        if self.win.overlay.is_main() {
+            palette::show(self, &ctx);
+            dialogs::show(self, &ctx);
+            edit_text_ui::preview_dialog(self, &ctx);
+        }
+        // Notices show in the window the user is in.
+        let elsewhere = !self.windows.is_empty() && self.windows.windows().iter().any(|w| self.window_focused(w.id));
+        if !elsewhere {
+            self.show_progress(&ctx);
+            widgets::toast(self, &ctx);
+        }
+        self.show_windows(&ctx);
+        self.sync_sibling_views();
         self.finish_render_frame(&ctx);
     }
 }
 
 impl PdfCraftApp {
+    /// What the main window is like this frame (its focus and where it is on the screen), for
+    /// the other windows' focus rules and tab drops.
+    fn note_main_window(&mut self, ctx: &egui::Context) {
+        if self.windows.is_empty() && self.win.drag.is_none() {
+            return;
+        }
+        let (focused, inner, minimized) = ctx.input(|i| (i.focused, i.viewport().inner_rect, i.viewport().minimized.unwrap_or(false)));
+        let info = self.win.info.entry(pdfcraft_engine::windows::WindowId::MAIN).or_default();
+        info.focused = focused;
+        info.minimized = minimized;
+        info.origin = inner.map_or(egui::Pos2::ZERO, |r| r.min);
+    }
+
+    /// The views on screen split the application's page and tile allowance: the main window's
+    /// document, the side-by-side partner and each other window's tab (as last drawn).
+    fn share_rasters(&mut self) {
+        let mut shown = usize::from(self.active.is_some()) + usize::from(self.side_by_side_partner().is_some());
+        if !self.windows.is_empty() {
+            shown = shown.saturating_add(self.window_views().len());
+        }
+        let share = shown.max(1);
+        for view in &mut self.views {
+            view.raster_share = share;
+        }
+    }
+
     fn finish_render_frame(&mut self, ctx: &egui::Context) {
         let reader_blocked = self.dialog.is_some()
             || self.close_request.is_some()
             || self.palette_open
             || !ctx.input(|input| input.focused)
             || ctx.egui_wants_keyboard_input();
-        // Retire hidden documents before admitting the visible document's textures, so the
+        // Retire hidden documents before admitting the visible documents' textures, so the
         // three cache limits apply to the application, regardless of how many tabs are open.
-        // Side by side, the two documents on screen split the page and tile allowance.
+        // Side by side, the two documents on screen split the page and tile allowance; so do
+        // the documents in other windows.
         let partner = self.side_by_side_partner();
-        let share = if partner.is_some() { 2 } else { 1 };
+        let mut shown: Vec<usize> = Vec::new();
+        shown.extend(self.active.filter(|&i| i < self.views.len()));
+        if let Some(p) = partner.and_then(|id| self.views.iter().position(|v| v.id == id))
+            && !shown.contains(&p)
+        {
+            shown.push(p);
+        }
+        for &i in &self.win.drawn {
+            if i < self.views.len() && !shown.contains(&i) {
+                shown.push(i);
+            }
+        }
+        let shown_docs: Vec<DocId> = shown.iter().filter_map(|&i| self.views.get(i).map(|v| v.id)).collect();
         for (i, view) in self.views.iter_mut().enumerate() {
-            if reader_blocked || Some(i) != self.active || view.organize || partner.is_some() {
+            let elsewhere = self.win.drawn.contains(&i);
+            if !elsewhere && (reader_blocked || Some(i) != self.active || view.organize || partner.is_some()) {
                 view.cancel_reader_input();
             }
-            view.raster_share = share;
-            if Some(i) != self.active
-                && Some(view.id) != partner
+            if !shown.contains(&i)
                 && let Some(doc) = self.session.get(view.id)
             {
-                view.suspend_rendering(&doc.renderer);
+                if shown_docs.contains(&view.id) {
+                    // Another view (another window) shows this document: keep its queue.
+                    view.suspend_textures();
+                } else {
+                    view.suspend_rendering(&doc.renderer);
+                }
             }
         }
-        if let Some(view) = self.active.and_then(|i| self.views.get_mut(i))
-            && let Some(doc) = self.session.get(view.id)
-        {
-            view.finish_render_frame(ctx, &doc.info, &doc.renderer);
-            if !reader_blocked && !view.organize && partner.is_none() {
-                view.finish_reader_copy(ctx, doc.allows_copying());
+        let main = self.active;
+        let mut done: Vec<DocId> = Vec::new();
+        for &id in &shown_docs {
+            if done.contains(&id) {
+                continue;
+            }
+            done.push(id);
+            let Some(doc) = self.session.get(id) else { continue };
+            let group: Vec<usize> = shown.iter().copied().filter(|&i| self.views.get(i).is_some_and(|v| v.id == id)).collect();
+            if let [only] = group.as_slice() {
+                let only = *only;
+                // No longer shown twice: the pool may still hold the shared queue.
+                if self.win.shared_queues.remove(&id).is_some_and(|q| !q.is_empty()) {
+                    doc.renderer.set_queue(Vec::new());
+                    if let Some(v) = self.views.get_mut(only) {
+                        v.forget_queue();
+                    }
+                }
+                let Some(view) = self.views.get_mut(only) else { continue };
+                view.finish_render_frame(ctx, &doc.info, &doc.renderer);
+                if Some(only) == main && !reader_blocked && !view.organize && partner.is_none() {
+                    view.finish_reader_copy(ctx, doc.allows_copying());
+                }
+            } else {
+                let last = self.win.shared_queues.entry(id).or_default();
+                let mut views: Vec<&mut DocView> = self.views.iter_mut().enumerate().filter(|(i, _)| group.contains(i)).map(|(_, v)| v).collect();
+                DocView::finish_shared_render_frame(&mut views, ctx, &doc.info, &doc.renderer, last);
+                if let Some(view) = main.filter(|i| group.contains(i)).and_then(|i| self.views.get_mut(i))
+                    && !reader_blocked
+                    && !view.organize
+                    && partner.is_none()
+                {
+                    view.finish_reader_copy(ctx, doc.allows_copying());
+                }
             }
         }
-        if let Some(view) = partner.and_then(|id| self.views.iter_mut().find(|v| v.id == id))
-            && let Some(doc) = self.session.get(view.id)
-        {
-            view.finish_render_frame(ctx, &doc.info, &doc.renderer);
+        if !self.win.shared_queues.is_empty() {
+            let multi: Vec<DocId> =
+                done.into_iter().filter(|id| shown.iter().filter(|&&i| self.views.get(i).is_some_and(|v| v.id == *id)).count() > 1).collect();
+            self.win.shared_queues.retain(|id, _| multi.contains(id));
         }
     }
 }

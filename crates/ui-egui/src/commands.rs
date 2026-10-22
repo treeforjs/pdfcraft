@@ -17,6 +17,9 @@ impl PdfCraftApp {
         if self.combine_showing() && matches!(spec.needs, commands::Needs::Undo | commands::Needs::Redo) {
             return self.combine_can_undo(spec.needs == commands::Needs::Undo);
         }
+        if let Some(enabled) = self.window_command_enabled(spec.id) {
+            return enabled && commands::is_enabled(spec, &self.session, self.active_ids().map(|(_, id)| id));
+        }
         commands::is_enabled(spec, &self.session, self.active_ids().map(|(_, id)| id))
             && (spec.needs != commands::Needs::TwoPageView || self.active.and_then(|i| self.views.get(i)).is_some_and(crate::DocView::cover_applies))
     }
@@ -39,6 +42,10 @@ impl PdfCraftApp {
     fn execute_unguarded(&mut self, id: &str) -> bool {
         let Some(spec) = commands::command(id) else { return false };
         if !self.command_enabled(spec) {
+            if let Some(why) = self.window_refusal(spec.id) {
+                self.notify(why);
+                return false;
+            }
             let why = match spec.needs {
                 commands::Needs::Undo => tl!("Nothing to undo").to_string(),
                 commands::Needs::Redo => tl!("Nothing to redo").to_string(),
@@ -98,6 +105,9 @@ impl PdfCraftApp {
                 }
             }
             "file.close_all" => self.close_all(),
+            "window.new" | "window.move_tab" | "window.move_to_main" | "window.close" => {
+                self.run_window_command(id);
+            }
             "file.revert" => self.dialog = Some(Dialog::Revert),
             "file.recover" => self.recover_command(),
             "file.autosave_now" => self.autosave_command(),
@@ -137,7 +147,7 @@ impl PdfCraftApp {
             "view.focus_page_input" => {
                 if let (Some(ctx), Some(view)) = (self.ctx.clone(), active.and_then(|i| self.views.get(i))) {
                     // The page box in the toolbar (chrome.rs); select its number so typing replaces it.
-                    let id = egui::Id::new("page-input");
+                    let id = self.page_input_id();
                     ctx.memory_mut(|m| m.request_focus(id));
                     let mut state = egui::TextEdit::load_state(&ctx, id).unwrap_or_default();
                     let len = view.page_input.chars().count();

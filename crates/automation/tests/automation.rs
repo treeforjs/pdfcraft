@@ -7080,3 +7080,74 @@ fn doc_validate_arlington_through_tools() {
         assert!(matches!(a.call("doc_validate_arlington", &args), Err(ToolError::InvalidArgs(_))), "{args}");
     }
 }
+
+/// Windows headless: a second view of a document in a new window, tabs moving between windows
+/// and into new ones, edits and undo shared by both views, closing a window (refused while it
+/// would drop unsaved changes), and stale or hostile ids refused with a way out.
+#[test]
+fn windows_through_tools() {
+    let dir = workdir("windows");
+    let mut a = auto(&dir);
+    let da = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    let db = ok(&mut a, "doc_open", json!({ "path": "b.pdf" }))["doc"].as_u64().unwrap();
+    let list = ok(&mut a, "window_list", json!({}));
+    let main = &list["windows"][0];
+    assert_eq!(main["main"], true);
+    assert_eq!(main["tabs"].as_array().unwrap().len(), 2, "{list}");
+    let tab_b = main["tabs"][1]["tab"].as_u64().unwrap();
+    // A second view of a.pdf in a window of its own.
+    let r = ok(&mut a, "window_new", json!({ "doc": da }));
+    let w1 = r["window"].as_u64().unwrap();
+    assert_eq!(r["windows"].as_array().unwrap().len(), 2, "{r}");
+    assert_eq!(r["windows"][1]["tabs"][0]["doc"], da);
+    assert_eq!(r["windows"][0]["tabs"].as_array().unwrap().len(), 2, "the first view stays in the main window");
+    // b.pdf moves there, then into a new window, then back to the main window.
+    let r = ok(&mut a, "window_move_tab", json!({ "tab": tab_b, "window": w1 }));
+    assert_eq!(r["windows"][1]["tabs"].as_array().unwrap().len(), 2, "{r}");
+    assert_eq!(r["windows"][1]["active_tab"], tab_b);
+    let r = ok(&mut a, "window_move_tab", json!({ "tab": tab_b, "new_window": true }));
+    let w2 = r["window"].as_u64().unwrap();
+    assert_ne!(w1, w2);
+    assert!(a.call("window_move_tab", &json!({ "tab": tab_b, "new_window": true })).is_err(), "already alone in its window");
+    let r = ok(&mut a, "window_move_tab", json!({ "tab": tab_b, "window": 0 }));
+    assert_eq!(r["windows"].as_array().unwrap().len(), 2, "window {w2} was left empty and closed: {r}");
+    // Both views show one document: an edit and its undo are seen through either.
+    assert_eq!(ok(&mut a, "page_rotate", json!({ "doc": da, "pages": [1], "degrees": 90 }))["dirty"], true);
+    // Closing the window drops only its view: a.pdf is still open in the main window.
+    let r = ok(&mut a, "window_close", json!({ "window": w1 }));
+    assert_eq!(r["closed_documents"], json!([]), "{r}");
+    assert!(a.call("doc_info", &json!({ "doc": da })).is_ok());
+    // Moved out alone, an unsaved document's window refuses to close without discard_changes.
+    let tab_a = ok(&mut a, "window_list", json!({}))["windows"][0]["tabs"][0]["tab"].as_u64().unwrap();
+    let w3 = ok(&mut a, "window_move_tab", json!({ "tab": tab_a, "new_window": true }))["window"].as_u64().unwrap();
+    let e = a.call("window_close", &json!({ "window": w3 })).unwrap_err().to_string();
+    assert!(e.contains("unsaved changes") && e.contains("discard_changes"), "{e}");
+    let r = ok(&mut a, "window_close", json!({ "window": w3, "discard_changes": true }));
+    assert_eq!(r["closed_documents"], json!([da]));
+    assert!(a.call("doc_info", &json!({ "doc": da })).is_err(), "a.pdf closed with its last tab");
+    // Stale and hostile ids.
+    for (tool, args) in [
+        ("window_move_tab", json!({ "tab": 999, "window": 0 })),
+        ("window_move_tab", json!({ "tab": tab_b, "window": 77 })),
+        ("window_move_tab", json!({ "tab": tab_b, "window": -1 })),
+        ("window_move_tab", json!({ "tab": -5, "window": 0 })),
+        ("window_move_tab", json!({ "tab": tab_b, "window": 4_294_967_296_i64 })),
+        ("window_move_tab", json!({ "tab": tab_b })),
+        ("window_move_tab", json!({ "tab": tab_b, "window": 0, "new_window": true })),
+        ("window_close", json!({ "window": 0 })),
+        ("window_close", json!({ "window": w3 })),
+        ("window_new", json!({ "doc": 12345 })),
+        ("window_new", json!({ "doc": db, "extra": 1 })),
+    ] {
+        assert!(a.call(tool, &args).is_err(), "{tool} {args} should be refused");
+    }
+    // The window count is capped.
+    for _ in 0..pdfcraft_engine::windows::MAX_WINDOWS {
+        ok(&mut a, "window_new", json!({ "doc": db }));
+    }
+    let e = a.call("window_new", &json!({ "doc": db })).unwrap_err().to_string();
+    assert!(e.contains("at most"), "{e}");
+    // Closing the document drops its tabs everywhere.
+    ok(&mut a, "doc_close", json!({ "doc": db }));
+    assert_eq!(ok(&mut a, "window_list", json!({}))["windows"].as_array().unwrap().len(), 1);
+}

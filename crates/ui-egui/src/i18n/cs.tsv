@@ -2508,3 +2508,18 @@ compare-page	Moved	Přesunutá
 	line {n}	řádek {n}
 	{error} (document script {name}, line {n})	{error} (skript dokumentu {name}, řádek {n})
 	{error} (line {n})	{error} (řádek {n})
+	New window	Nové okno
+	Move tab to new window	Přesunout kartu do nového okna
+	Move tab to main window	Přesunout kartu do hlavního okna
+	Close window	Zavřít okno
+	Separate windows are only available in the desktop app	Samostatná okna jsou k dispozici jen v aplikaci pro počítač
+	Window {n}	Okno {n}
+	{window} has closed	{window} bylo zavřeno
+	That tab has closed	Tato karta byla zavřena
+	At most {n} windows can be open besides the main window: close one first	Kromě hlavního okna může být otevřeno nejvýše {n} oken: nejprve jedno zavřete
+	{window} has no room for more tabs	{window} už nemá místo pro další karty
+	This tab is already in a window of its own	Tato karta už je ve svém okně sama
+	This is the main window: quit to close it	Toto je hlavní okno: zavřete ho ukončením aplikace
+	This tab is in the main window	Tato karta je v hlavním okně
+	Move tab to {window}	Přesunout kartu do: {window}
+	Release to open in a new window	Pusťte, aby se otevřela v novém okně

@@ -2066,6 +2066,32 @@ pub fn tools() -> Vec<ToolDef> {
                 })),
                 &["old", "new"],
             )),
+        t("window_list", "Windows", "The windows and their tabs: window 0 is the main window; each tab (a view of a document, by tab number) is in one window. Every open document has a tab; window_new adds a second view of one in a new window. Headless model of the desktop app's windows (drive the running app with the control channel's window-* options).")
+            .ro()
+            .with(schema(json!({}), &[])),
+        t("window_new", "New window", "Open doc again in a new window: a second view (tab) of the same document, so edits and undo in either show in both. Returns the windows, the new window and its tab. At most 7 windows besides the main one.")
+            .cmd("window.new")
+            .with(schema(json!({ "doc": doc() }), &["doc"])),
+        t("window_move_tab", "Move tab to window", "Move a tab (from window_list) into another window (window: its number, 0 for the main window) or into a new window of its own (new_window: true). A window left without tabs closes.")
+            .cmd("window.move_tab")
+            .with(schema(
+                json!({
+                    "tab": { "type": "integer", "minimum": 1, "description": "A tab number from window_list." },
+                    "window": { "type": "integer", "minimum": 0, "description": "The window to move it to (0 is the main window)." },
+                    "new_window": { "type": "boolean", "description": "Move it into a new window instead." },
+                }),
+                &["tab"],
+            )),
+        t("window_close", "Close window", "Close a window (not the main window, 0) and its tabs. A document that no other tab shows closes with them; one with unsaved changes is refused unless discard_changes: true.")
+            .destructive()
+            .cmd("window.close")
+            .with(schema(
+                json!({
+                    "window": { "type": "integer", "minimum": 1, "description": "The window to close (from window_list)." },
+                    "discard_changes": { "type": "boolean", "description": "Close documents with unsaved changes anyway." },
+                }),
+                &["window"],
+            )),
         t("doc_compare_view", "Compare side by side", "The side-by-side compare view of other (older) and doc (newer), headless: the rows both panes share (1-based old_page and new_page side by side, following the page map, so a moved page sits beside its counterpart and an inserted or deleted page beside a gap: null), and every change in the order Next change / Previous change visit them (kind: replaced, inserted, deleted, visual, page_inserted, page_deleted, page_moved; old and new sides with page, row and rects in points, origin bottom-left). change (1-based) picks the current change; step next or previous moves from it (or from the start) and wraps around. current is where both panes scroll to (scroll_to_row), with the change's old and new text. limit caps the rows and changes listed (default 500).")
             .ro()
             .cmd("compare.side_by_side")

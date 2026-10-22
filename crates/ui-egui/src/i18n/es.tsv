@@ -2400,3 +2400,18 @@ compare-page	Moved	Movida
 	line {n}	línea {n}
 	{error} (document script {name}, line {n})	{error} (script del documento {name}, línea {n})
 	{error} (line {n})	{error} (línea {n})
+	New window	Ventana nueva
+	Move tab to new window	Mover pestaña a una ventana nueva
+	Move tab to main window	Mover pestaña a la ventana principal
+	Close window	Cerrar ventana
+	Separate windows are only available in the desktop app	Las ventanas separadas solo están disponibles en la aplicación de escritorio
+	Window {n}	Ventana {n}
+	{window} has closed	{window} se ha cerrado
+	That tab has closed	Esa pestaña se ha cerrado
+	At most {n} windows can be open besides the main window: close one first	Puede haber como máximo {n} ventanas abiertas además de la principal: cierra una primero
+	{window} has no room for more tabs	{window} no admite más pestañas
+	This tab is already in a window of its own	Esta pestaña ya está sola en su ventana
+	This is the main window: quit to close it	Esta es la ventana principal: sal de la aplicación para cerrarla
+	This tab is in the main window	Esta pestaña está en la ventana principal
+	Move tab to {window}	Mover pestaña a {window}
+	Release to open in a new window	Suelta para abrir en una ventana nueva

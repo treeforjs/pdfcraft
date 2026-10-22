@@ -219,6 +219,9 @@ pub struct RasterMemory {
 
 pub struct DocView {
     pub id: DocId,
+    /// This view's tab, unique in the application (two windows can show one document, each in
+    /// its own view: see [`pdfcraft_engine::windows`]).
+    pub key: u64,
     pub zoom: f32,
     pub fit: Fit,
     pub layout: PageLayout,
@@ -374,7 +377,31 @@ pub struct DocView {
     /// How many documents share the application's page and tile allowance this frame: 1, or 2
     /// while the side-by-side compare view shows this document beside another.
     pub(crate) raster_share: usize,
+    /// How the document's appearance was refreshed since the app last looked: other views of
+    /// the same document (another window) are refreshed the same way.
+    pub(crate) refreshed: Refresh,
+    /// The pixel density of the window this view was drawn in this frame, when it is not the
+    /// main window (another screen may have another density).
+    pub(crate) draw_ppp: Option<f32>,
 }
+
+/// What [`DocView::document_changed`], [`DocView::invalidate_content`] and
+/// [`DocView::page_changed`] refreshed (see [`DocView::refreshed`]).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) enum Refresh {
+    #[default]
+    None,
+    /// These pages only (a comment edit).
+    Pages(BTreeSet<usize>),
+    /// Everything.
+    All,
+}
+
+/// Hands out view keys ([`DocView::key`]); they are never reused while the app runs.
+static NEXT_VIEW_KEY: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
+/// The most changed pages [`Refresh::Pages`] lists before it becomes [`Refresh::All`].
+const SHARED_PAGE_LIMIT: usize = 64;
 
 /// The page grid's zoom range and the step of its buttons and keys.
 pub const GRID_ZOOM_RANGE: std::ops::RangeInclusive<f32> = 0.5..=3.0;
@@ -458,6 +485,7 @@ impl DocView {
     pub fn new(id: DocId, info: &DocInfo, defaults: ViewDefaults) -> Self {
         Self {
             id,
+            key: NEXT_VIEW_KEY.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             zoom: defaults.zoom,
             fit: defaults.fit,
             layout: defaults.layout,
@@ -529,6 +557,8 @@ impl DocView {
             grid_anchor: None,
             grid_pages: HashMap::new(),
             raster_share: 1,
+            refreshed: Refresh::None,
+            draw_ppp: None,
             comments: Default::default(),
             measure: Default::default(),
             forms: Default::default(),
@@ -626,6 +656,7 @@ impl DocView {
     /// was toggled). Out-of-date rasters stay on screen until their replacements arrive, so the
     /// view never flashes blank.
     pub fn invalidate_content(&mut self) {
+        self.refreshed = Refresh::All;
         for p in self.pages.values_mut() {
             p.tag = STALE_TAG;
         }
@@ -657,6 +688,14 @@ impl DocView {
     /// Only `page` changed (a comment was added, edited or removed): re-render that page and
     /// re-read its text, keep everything else.
     pub fn page_changed(&mut self, page: usize) {
+        match &mut self.refreshed {
+            Refresh::None => self.refreshed = Refresh::Pages(BTreeSet::from([page])),
+            Refresh::Pages(pages) if pages.len() < SHARED_PAGE_LIMIT => {
+                pages.insert(page);
+            }
+            Refresh::Pages(_) => self.refreshed = Refresh::All,
+            Refresh::All => {}
+        }
         if let Some(p) = self.pages.get_mut(&page) {
             p.tag = STALE_TAG;
         }
@@ -1240,7 +1279,7 @@ impl DocView {
     /// This view's part of the application's page bytes, tile bytes and cached-page count: all
     /// of it, or an equal share when [`Self::raster_share`] documents are on screen together.
     fn allowance(&self) -> (usize, usize, usize) {
-        let n = self.raster_share.clamp(1, 4);
+        let n = self.raster_share.clamp(1, pdfcraft_engine::windows::MAX_WINDOWS + 2);
         (PAGE_BYTES / n, TILE_BYTES / n, (MAX_CACHED_PAGES / n).max(1))
     }
 
@@ -1295,6 +1334,26 @@ impl DocView {
     /// Only the displayed document owns raster textures. Tabs keep their document and view
     /// state, but do not each retain a separate full application texture allowance.
     pub(crate) fn suspend_rendering(&mut self, pool: &RenderPool) {
+        self.suspend_textures();
+        if !self.last_queue.is_empty() {
+            pool.set_queue(Vec::new());
+            self.last_queue.clear();
+        }
+        // Results already finished for this tab would otherwise sit in its pool, rasters and
+        // all, until the tab is shown again. (An inline pool renders inside try_recv: skip it.)
+        if !pool.is_inline() {
+            while pool.try_recv().is_some() {}
+        }
+    }
+
+    /// Forget the queue sent to the pool, so the next frame sends this view's own again.
+    pub(crate) fn forget_queue(&mut self) {
+        self.last_queue.clear();
+    }
+
+    /// [`Self::suspend_rendering`] for a view whose document another view (another window)
+    /// still shows: its textures go, the document's render queue is that view's.
+    pub(crate) fn suspend_textures(&mut self) {
         self.cancel_reader_input();
         self.begin_render_frame();
         self.pages.clear();
@@ -1306,15 +1365,8 @@ impl DocView {
         self.waiting_since.clear();
         // Signature previews own a separate renderer and image/background textures.
         self.signature_drag = Default::default();
-        if !self.last_queue.is_empty() {
-            pool.set_queue(Vec::new());
-            self.last_queue.clear();
-        }
-        // Results already finished for this tab would otherwise sit in its pool, rasters and
-        // all, until the tab is shown again. (An inline pool renders inside try_recv: skip it.)
-        if !pool.is_inline() {
-            while pool.try_recv().is_some() {}
-        }
+        self.last_queue.clear();
+        self.draw_ppp = None;
     }
 
     fn thumbnail_requests(&self, info: &DocInfo, ppp: f32) -> Vec<RenderRequest> {
@@ -1427,7 +1479,8 @@ impl DocView {
     }
 
     pub(crate) fn finish_render_frame(&mut self, ctx: &egui::Context, info: &DocInfo, pool: &RenderPool) {
-        let queue = self.prepare_render_queue(info, ctx.pixels_per_point());
+        let ppp = self.draw_ppp.take().unwrap_or_else(|| ctx.pixels_per_point());
+        let queue = self.prepare_render_queue(info, ppp);
         if queue != self.last_queue {
             pool.set_queue(queue.clone());
             self.last_queue = queue;
@@ -1456,6 +1509,92 @@ impl DocView {
             if started.elapsed() >= std::time::Duration::from_millis(4) {
                 break;
             }
+        }
+    }
+
+    /// Several views of one document on screen at once (windows): one render queue for the
+    /// document, every view's demand interleaved so none starves, and each result rendered and
+    /// uploaded once, its texture shared by every view that asked for it. `last` is the queue
+    /// the pool has (kept by the caller per document).
+    pub(crate) fn finish_shared_render_frame(
+        views: &mut [&mut DocView],
+        ctx: &egui::Context,
+        info: &DocInfo,
+        pool: &RenderPool,
+        last: &mut Vec<RenderRequest>,
+    ) {
+        let mut queues = Vec::with_capacity(views.len());
+        let mut refill = false;
+        for v in views.iter_mut() {
+            let ppp = v.draw_ppp.take().unwrap_or_else(|| ctx.pixels_per_point());
+            let q = v.prepare_render_queue(info, ppp);
+            // A view that dropped its queue (an edit, a new pool) needs its work queued again.
+            refill |= v.last_queue.is_empty() && !q.is_empty();
+            queues.push(q);
+        }
+        let longest = queues.iter().map(Vec::len).max().unwrap_or(0);
+        let mut merged: Vec<RenderRequest> = Vec::with_capacity(queues.iter().map(Vec::len).sum());
+        for i in 0..longest {
+            for q in &queues {
+                // The queues are bounded by the allowance, so a linear check stays cheap.
+                if let Some(r) = q.get(i)
+                    && !merged.contains(r)
+                {
+                    merged.push(*r);
+                }
+            }
+        }
+        if refill || merged != *last {
+            pool.set_queue(merged.clone());
+            *last = merged;
+        }
+        for (v, q) in views.iter_mut().zip(queues) {
+            v.last_queue = q;
+        }
+        let budget = if pool.is_inline() { 1 } else { RESULTS_PER_FRAME };
+        let mut uploaded = 0usize;
+        #[cfg(not(target_arch = "wasm32"))]
+        let started = std::time::Instant::now();
+        for _ in 0..budget {
+            let Some(r) = pool.try_recv() else { break };
+            let wanted: Vec<usize> = views.iter().enumerate().filter(|(_, v)| v.last_queue.contains(&r.request)).map(|(i, _)| i).collect();
+            let Some((&first, others)) = wanted.split_first() else { continue };
+            let (req, width) = (r.request, r.width);
+            // Text and errors are cheap to hand to each view; pixels become one texture.
+            let light = (req.kind == RequestKind::Text || r.error.is_some()).then(|| (r.error.clone(), r.text.clone()));
+            let Some(view) = views.get_mut(first) else { continue };
+            uploaded = uploaded.saturating_add(view.receive_result(ctx, r));
+            let tex = if light.is_none() { view.texture_for(&req) } else { None };
+            for &i in others {
+                let Some(view) = views.get_mut(i) else { continue };
+                match (&light, &tex) {
+                    (Some((error, text)), _) => {
+                        let copy = pdfcraft_render::RenderedPage {
+                            request: req,
+                            width: 0,
+                            height: 0,
+                            rgba: Default::default(),
+                            error: error.clone(),
+                            text: text.clone(),
+                            warnings: Vec::new(),
+                            millis: 0,
+                        };
+                        view.receive_result(ctx, copy);
+                    }
+                    (None, Some(tex)) => view.adopt_texture(req, tex.clone(), width),
+                    (None, None) => {}
+                }
+            }
+            if uploaded >= UPLOAD_BYTES_PER_FRAME {
+                break;
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            if started.elapsed() >= std::time::Duration::from_millis(4) {
+                break;
+            }
+        }
+        if views.iter().any(|v| !v.last_queue.is_empty()) {
+            ctx.request_repaint_after(std::time::Duration::from_millis(30));
         }
     }
 
@@ -1522,6 +1661,59 @@ impl DocView {
             self.waiting_since.remove(&page);
         }
         bytes
+    }
+
+    /// A second view of this view's document (Window ▸ New window): the same page, zoom, page
+    /// display and view rotation, with its own scroll position, selection and caches.
+    pub fn second_view(&self, info: &DocInfo) -> Self {
+        let defaults = ViewDefaults { zoom: self.zoom, fit: self.fit, layout: self.layout, highlight_fields: self.highlight_fields };
+        let mut v = Self::new(self.id, info, defaults);
+        v.rotation = self.rotation;
+        v.cover = self.cover;
+        v.current = self.current.min(v.page_count.saturating_sub(1));
+        v.page_input = (v.current + 1).to_string();
+        v.goto = Some((v.current, 0.0));
+        v
+    }
+
+    /// The texture a result for `req` became in this view, if it is still cached.
+    fn texture_for(&self, req: &RenderRequest) -> Option<TextureHandle> {
+        let page = req.page;
+        if let Some(t) = req.tile {
+            return self.tiles.get(&(page, req.tag, t.x / TILE, t.y / TILE)).cloned();
+        }
+        if req.tag & PRINT_TAG != 0 {
+            return self.print_pages.get(&page).filter(|(tag, _)| *tag == req.tag).map(|(_, tex)| tex.clone());
+        }
+        if req.tag & GRID_TAG != 0 {
+            return self.grid_pages.get(&page).map(|(_, tex)| tex.clone());
+        }
+        let cache = if req.tag & THUMB_TAG != 0 { &self.thumbs } else { &self.pages };
+        cache.get(&page).filter(|p| p.tag == req.tag).map(|p| p.tex.clone())
+    }
+
+    /// Take a texture another view of the same document made from a shared result: the same
+    /// GPU texture (a handle, not a copy), admitted against this view's share of the allowance.
+    fn adopt_texture(&mut self, req: RenderRequest, tex: TextureHandle, width: u32) {
+        let bytes = texture_bytes(&tex);
+        if !self.admit_texture(req, bytes) {
+            return;
+        }
+        let page = req.page;
+        if let Some(t) = req.tile {
+            self.tiles.insert((page, req.tag, t.x / TILE, t.y / TILE), tex);
+        } else if req.tag & PRINT_TAG != 0 {
+            self.print_pages.insert(page, (req.tag, tex));
+        } else if req.tag & GRID_TAG != 0 {
+            self.grid_pages.insert(page, (width, tex));
+        } else if req.tag & THUMB_TAG != 0 {
+            self.thumbs.insert(page, PageTex { tag: req.tag, tex });
+            self.stale_thumbs.remove(&page);
+        } else {
+            self.pages.insert(page, PageTex { tag: req.tag, tex });
+            self.signature_drag.page_received(page);
+            self.waiting_since.remove(&page);
+        }
     }
 
     /// Check real dimensions before conversion, including stale textures kept during edits.
@@ -1911,6 +2103,7 @@ const KEY_SCROLL_LINE: f32 = 40.0;
 
 pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
     let t = Tokens::get(ui.ctx());
+    let page_input = app.page_input_id();
     // Keyboard scrolling applies to this frame's page view only, never later.
     let key_scroll = std::mem::take(&mut app.views[index].key_scroll);
     // The Search panel closed: its search moves to the find bar.
@@ -2049,7 +2242,8 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
         ..Default::default()
     });
     // Each document keeps its own scroll position when switching tabs (#189).
-    scroll = scroll.id_salt(("page-view", view.id));
+    // Two windows can show one document: each view scrolls on its own.
+    scroll = scroll.id_salt(("page-view", view.id, view.key));
     // A newly opened document starts at the top. eframe saves egui's memory with the settings
     // and document ids start again at 1 every launch, so the offset stored under this id can be
     // where an earlier session left another document.
@@ -2739,7 +2933,7 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
         }
         if view.layout != PageLayout::Single {
             view.current = current;
-            if !ui.memory(|m| m.has_focus(egui::Id::new("page-input"))) {
+            if !ui.memory(|m| m.has_focus(page_input)) {
                 view.page_input = (current + 1).to_string();
             }
         }

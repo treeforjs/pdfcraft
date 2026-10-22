@@ -70,6 +70,9 @@ const PICKERS: &[&str] = &[
     "export.rtf",
     "export.xlsx",
     "measure.export",
+    // Act on a window other than the main one: tests/windows.rs runs them from inside one.
+    "window.move_to_main",
+    "window.close",
 ];
 
 #[test]

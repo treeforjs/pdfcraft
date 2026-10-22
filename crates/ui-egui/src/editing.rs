@@ -16,6 +16,8 @@ pub enum CloseRequest {
     Quit,
     /// File ▸ Close all: like Quit, but the application stays open.
     All,
+    /// Close this window (not the main one) once its unsaved documents are resolved.
+    Window(pdfcraft_engine::windows::WindowId),
 }
 
 /// Where Save writes.
@@ -507,8 +509,11 @@ impl PdfCraftApp {
 
     /// Close a tab, asking first if it has unsaved changes.
     pub fn request_close_tab(&mut self, index: usize) {
+        // Another window still shows the document: only this view closes, nothing is lost.
+        let shared = self.views.get(index).is_some_and(|v| self.views.iter().any(|o| o.id == v.id && o.key != v.key));
         // Text typed into a field counts as an unsaved change.
-        if self.has_unsaved_work(index)
+        if !shared
+            && self.has_unsaved_work(index)
             && let Some(id) = self.views.get(index).map(|v| v.id)
         {
             self.close_request = Some(CloseRequest::Tab(id));
@@ -573,6 +578,13 @@ impl PdfCraftApp {
                     return;
                 }
             },
+            CloseRequest::Window(w) => match self.first_dirty_in(w) {
+                Some(i) => i,
+                None => {
+                    self.close_clean_tabs_of(w);
+                    return;
+                }
+            },
         };
         // Quitting closes the unsaved tabs one by one (and brings each forward to save it):
         // remember what was open, and which tab was active, before the first one goes (#442).
@@ -605,14 +617,32 @@ impl PdfCraftApp {
 
     /// Close tab `index` for a close request, then ask about the next dirty document, or quit.
     fn close_and_continue(&mut self, ctx: &egui::Context, index: usize, req: CloseRequest) {
-        self.close_tab(index);
+        match req {
+            // The document goes, with every view of it (another window may show it too).
+            CloseRequest::Quit | CloseRequest::All | CloseRequest::Window(_) => {
+                if let Some(id) = self.views.get(index).map(|v| v.id) {
+                    while let Some(i) = self.views.iter().rposition(|v| v.id == id) {
+                        self.close_tab(i);
+                    }
+                }
+            }
+            CloseRequest::Tab(_) => self.close_tab(index),
+        }
         // A newer prompt wins: the user may have started another close while a save was pending.
-        if (req == CloseRequest::Quit || req == CloseRequest::All) && self.close_request.is_none() {
-            match self.first_dirty() {
+        if self.close_request.is_some() {
+            return;
+        }
+        match req {
+            CloseRequest::Quit | CloseRequest::All => match self.first_dirty() {
                 Some(_) => self.close_request = Some(req),
                 None if req == CloseRequest::Quit => self.quit(ctx),
                 None => {}
-            }
+            },
+            CloseRequest::Window(w) => match self.first_dirty_in(w) {
+                Some(_) => self.close_request = Some(req),
+                None => self.close_clean_tabs_of(w),
+            },
+            CloseRequest::Tab(_) => {}
         }
     }
 

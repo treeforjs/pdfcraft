@@ -2415,3 +2415,18 @@ compare-page	Moved	తరలించబడింది
 	line {n}	{n}వ పంక్తి
 	{error} (document script {name}, line {n})	{error} (డాక్యుమెంట్ స్క్రిప్ట్ {name}, {n}వ పంక్తి)
 	{error} (line {n})	{error} ({n}వ పంక్తి)
+	New window	కొత్త విండో
+	Move tab to new window	ట్యాబ్‌ను కొత్త విండోకు తరలించు
+	Move tab to main window	ట్యాబ్‌ను ప్రధాన విండోకు తరలించు
+	Close window	విండోను మూసివేయి
+	Separate windows are only available in the desktop app	ప్రత్యేక విండోలు డెస్క్‌టాప్ యాప్‌లో మాత్రమే అందుబాటులో ఉన్నాయి
+	Window {n}	విండో {n}
+	{window} has closed	{window} మూసివేయబడింది
+	That tab has closed	ఆ ట్యాబ్ మూసివేయబడింది
+	At most {n} windows can be open besides the main window: close one first	ప్రధాన విండో కాకుండా గరిష్ఠంగా {n} విండోలు తెరిచి ఉండవచ్చు: ముందుగా ఒకదాన్ని మూసివేయండి
+	{window} has no room for more tabs	{window}లో మరిన్ని ట్యాబ్‌లకు చోటు లేదు
+	This tab is already in a window of its own	ఈ ట్యాబ్ ఇప్పటికే దాని విండోలో ఒంటరిగా ఉంది
+	This is the main window: quit to close it	ఇది ప్రధాన విండో: దీన్ని మూసివేయడానికి యాప్ నుండి నిష్క్రమించండి
+	This tab is in the main window	ఈ ట్యాబ్ ప్రధాన విండోలో ఉంది
+	Move tab to {window}	ట్యాబ్‌ను {window}కు తరలించు
+	Release to open in a new window	కొత్త విండోలో తెరవడానికి వదిలేయండి

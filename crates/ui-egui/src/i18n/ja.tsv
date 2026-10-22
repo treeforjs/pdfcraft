@@ -2484,3 +2484,18 @@ compare-page	Moved	移動
 	line {n}	{n} 行目
 	{error} (document script {name}, line {n})	{error}（文書スクリプト {name}、{n} 行目）
 	{error} (line {n})	{error}（{n} 行目）
+	New window	新しいウィンドウ
+	Move tab to new window	タブを新しいウィンドウに移動
+	Move tab to main window	タブをメインウィンドウに移動
+	Close window	ウィンドウを閉じる
+	Separate windows are only available in the desktop app	別ウィンドウはデスクトップアプリでのみ使えます
+	Window {n}	ウィンドウ {n}
+	{window} has closed	{window} は閉じられました
+	That tab has closed	そのタブは閉じられました
+	At most {n} windows can be open besides the main window: close one first	メインウィンドウのほかに開けるウィンドウは {n} 個までです。先にどれかを閉じてください
+	{window} has no room for more tabs	{window} にはこれ以上タブを追加できません
+	This tab is already in a window of its own	このタブはすでに単独でウィンドウに表示されています
+	This is the main window: quit to close it	これはメインウィンドウです。閉じるにはアプリを終了してください
+	This tab is in the main window	このタブはメインウィンドウにあります
+	Move tab to {window}	タブを {window} に移動
+	Release to open in a new window	離すと新しいウィンドウで開きます

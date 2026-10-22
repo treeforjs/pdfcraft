@@ -55,6 +55,7 @@ mod submit_form;
 mod text_cache;
 mod tools;
 mod url_access;
+mod windows;
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -129,6 +130,8 @@ pub struct Automation {
     ocr_reviews: HashMap<DocId, pdfcraft_engine::ocr::OcrReview>,
     /// Recovery entry keys of documents snapshotted or restored (`recovery_*`).
     recovery_keys: HashMap<DocId, String>,
+    /// Windows and their tabs (`window_*`), the model the desktop app uses.
+    windows: windows::Windows,
 }
 
 impl Default for Automation {
@@ -147,6 +150,7 @@ impl Automation {
             search: text_cache::SearchCache::new(text_cache::SEARCH_BUDGET),
             ocr_reviews: HashMap::new(),
             recovery_keys: HashMap::new(),
+            windows: Default::default(),
         }
     }
 
@@ -857,6 +861,10 @@ impl Automation {
             "form_detect_fields" => self.form_detect_fields(&a)?,
             "doc_compare" => self.doc_compare(&a)?,
             "doc_compare_view" => self.doc_compare_view(&a)?,
+            "window_list" => self.window_list()?,
+            "window_new" => self.window_new(&a)?,
+            "window_move_tab" => self.window_move_tab(&a)?,
+            "window_close" => self.window_close(&a)?,
             "compare_files" => self.compare_files(&a)?,
             "action_list" => self.action_list()?,
             "pdfa_verify" => self.pdfa_verify(&a)?,
@@ -985,12 +993,17 @@ impl Automation {
         }
         // Document Will Close runs first; what it changes is closed with the document.
         let _ = self.session.run_document_action(id, pdfcraft_engine::DocTrigger::WillClose);
+        self.forget_doc(id);
+        Ok(json!({ "closed": id.0 }))
+    }
+
+    /// Close document `id` and drop everything cached for it.
+    fn forget_doc(&mut self, id: DocId) {
         self.session.close(id);
         self.renderers.remove(&id);
         self.texts.remove_doc(id);
         self.search.remove_doc(id);
         self.ocr_reviews.remove(&id);
-        Ok(json!({ "closed": id.0 }))
     }
 
     fn doc_save(&mut self, a: &Args) -> Result<Value> {

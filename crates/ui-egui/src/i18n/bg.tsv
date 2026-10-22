@@ -2446,3 +2446,18 @@ compare-page	Moved	Преместена
 	line {n}	ред {n}
 	{error} (document script {name}, line {n})	{error} (скрипт на документа {name}, ред {n})
 	{error} (line {n})	{error} (ред {n})
+	New window	Нов прозорец
+	Move tab to new window	Преместване на раздела в нов прозорец
+	Move tab to main window	Преместване на раздела в главния прозорец
+	Close window	Затваряне на прозореца
+	Separate windows are only available in the desktop app	Отделни прозорци има само в настолното приложение
+	Window {n}	Прозорец {n}
+	{window} has closed	{window} е затворен
+	That tab has closed	Този раздел е затворен
+	At most {n} windows can be open besides the main window: close one first	Освен главния прозорец могат да бъдат отворени най-много {n} прозореца: първо затворете един
+	{window} has no room for more tabs	{window} няма място за още раздели
+	This tab is already in a window of its own	Този раздел вече е сам в прозореца си
+	This is the main window: quit to close it	Това е главният прозорец: излезте от приложението, за да го затворите
+	This tab is in the main window	Този раздел е в главния прозорец
+	Move tab to {window}	Преместване на раздела в: {window}
+	Release to open in a new window	Пуснете, за да се отвори в нов прозорец

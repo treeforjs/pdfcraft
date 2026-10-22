@@ -2484,3 +2484,18 @@ compare-page	Moved	Verschoben
 	line {n}	Zeile {n}
 	{error} (document script {name}, line {n})	{error} (Dokumentskript {name}, Zeile {n})
 	{error} (line {n})	{error} (Zeile {n})
+	New window	Neues Fenster
+	Move tab to new window	Tab in neues Fenster verschieben
+	Move tab to main window	Tab ins Hauptfenster verschieben
+	Close window	Fenster schließen
+	Separate windows are only available in the desktop app	Separate Fenster gibt es nur in der Desktop-App
+	Window {n}	Fenster {n}
+	{window} has closed	{window} wurde geschlossen
+	That tab has closed	Dieser Tab wurde geschlossen
+	At most {n} windows can be open besides the main window: close one first	Neben dem Hauptfenster können höchstens {n} Fenster offen sein: Schließe zuerst eines
+	{window} has no room for more tabs	In {window} ist kein Platz für weitere Tabs
+	This tab is already in a window of its own	Dieser Tab ist bereits allein in seinem Fenster
+	This is the main window: quit to close it	Das ist das Hauptfenster: Beende die App, um es zu schließen
+	This tab is in the main window	Dieser Tab ist im Hauptfenster
+	Move tab to {window}	Tab nach {window} verschieben
+	Release to open in a new window	Loslassen, um in einem neuen Fenster zu öffnen

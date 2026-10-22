@@ -2507,3 +2507,18 @@ compare-page	Moved	Переміщена
 	line {n}	рядок {n}
 	{error} (document script {name}, line {n})	{error} (скрипт документа {name}, рядок {n})
 	{error} (line {n})	{error} (рядок {n})
+	New window	Нове вікно
+	Move tab to new window	Перемістити вкладку в нове вікно
+	Move tab to main window	Перемістити вкладку в головне вікно
+	Close window	Закрити вікно
+	Separate windows are only available in the desktop app	Окремі вікна доступні лише в настільному застосунку
+	Window {n}	Вікно {n}
+	{window} has closed	{window} закрито
+	That tab has closed	Цю вкладку закрито
+	At most {n} windows can be open besides the main window: close one first	Окрім головного вікна можна відкрити щонайбільше {n} вікон: спершу закрийте одне
+	{window} has no room for more tabs	У {window} немає місця для нових вкладок
+	This tab is already in a window of its own	Ця вкладка вже сама у своєму вікні
+	This is the main window: quit to close it	Це головне вікно: щоб закрити його, вийдіть із застосунку
+	This tab is in the main window	Ця вкладка в головному вікні
+	Move tab to {window}	Перемістити вкладку: {window}
+	Release to open in a new window	Відпустіть, щоб відкрити в новому вікні

@@ -1195,11 +1195,20 @@ title = "Multiple windows; drag a tab out into a window"
 area = "B"
 tier = "P1"
 milestone = "M14"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["window.new", "window.move_tab", "window.move_to_main", "window.close"]
+tools = ["window_list", "window_new", "window_move_tab", "window_close"]
+evidence = [
+  "crates/engine/src/windows.rs::a_tab_moves_out_and_back",
+  "crates/engine/src/windows.rs::stale_and_hostile_ids_are_refused",
+  "crates/automation/tests/automation.rs::windows_through_tools",
+  "crates/ui-egui/tests/windows.rs::a_second_window_shows_the_document_and_follows_edits_and_undo",
+  "crates/ui-egui/tests/windows.rs::tabs_move_to_a_new_window_and_back",
+  "crates/ui-egui/tests/windows.rs::dragging_a_tab_out_of_the_strip_opens_a_window",
+  "crates/ui-egui/tests/windows.rs::closing_a_window_with_unsaved_changes_asks_first",
+  "crates/ui-egui/tests/windows.rs::stale_and_hostile_window_requests_are_refused",
+]
+notes = "Windows are egui immediate viewports (native OS windows on desktop); kittest exercises them as embedded viewports, so real OS windows (focus, minimise, cross-window drops by screen position) are untested in CI. Mode, panels and tools are shared by all windows; files opened with Open go to the main window. Web keeps tabs (commands disabled). Up to 7 extra windows."
 
 [[feature]]
 id = "view.split-window"
