@@ -1410,6 +1410,7 @@ fn run_here(script: &str, event: &XfaEvent, doc: &XfaDoc, root: XfaNode, limits:
     ctx.insert_data(RefCell::new(host_state));
     let mut out = XfaOutcome::default();
     let result = (|| -> JsResult<()> {
+        crate::harden::harden(&mut ctx)?;
         install(&mut ctx, event, doc, current)?;
         ctx.register_global_property(js_string!("__xfa_src"), s(script), Attribute::CONFIGURABLE)?;
         // Direct eval inside a function called on the node: `this` is the node and the

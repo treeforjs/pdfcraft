@@ -640,3 +640,73 @@ pub fn set_page_action(doc: &mut Document, page: usize, trigger: PageTrigger, sc
     })?;
     Ok(())
 }
+
+/// The JavaScripts an action entry (an action dictionary, a reference to one or an array) runs,
+/// it first and then its `/Next` actions, cut like [`field_actions`]. Other action types are
+/// left out.
+pub fn action_scripts(doc: &Document, entry: &Object) -> Vec<String> {
+    chain(doc, entry, &[])
+        .into_iter()
+        .filter_map(|r| match r.action {
+            FieldAction::JavaScript(js) => Some(js),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Where a form script runs: one of a field's own events, or a trigger of its first widget.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum FormScriptEvent {
+    /// The field's `/AA` K, F, V or C: `keystroke`, `format`, `validate` or `calculate`.
+    Field(&'static str),
+    /// Field Properties ▸ Actions (the first widget's `/A` or `/AA`).
+    Trigger(Trigger),
+}
+
+/// A form field's JavaScript: the field, the event and the script (AF calls included).
+#[derive(Clone, Debug, PartialEq)]
+pub struct FormScript {
+    pub field: String,
+    pub event: FormScriptEvent,
+    pub script: String,
+}
+
+/// The field events [`FormScriptEvent::Field`] names, with their `/AA` keys.
+pub const FIELD_SCRIPT_EVENTS: [(&str, &[u8]); 4] = [("keystroke", b"K"), ("format", b"F"), ("validate", b"V"), ("calculate", b"C")];
+
+/// Every form field's JavaScripts, field by field in the form's order: its keystroke, format,
+/// validate and calculate scripts (the field's `/AA`, or its only widget's) and the scripts
+/// its first widget runs on each Actions trigger. At most `max` are returned.
+pub fn form_scripts(doc: &Document, max: usize) -> Vec<FormScript> {
+    let mut out = Vec::new();
+    for f in fields(doc) {
+        if out.len() >= max {
+            break;
+        }
+        let fd = doc.get(f.obj).as_dict().cloned().unwrap_or_default();
+        let aa = fd.get(b"AA").map(|a| doc.resolve(a)).and_then(|a| a.as_dict().cloned()).or_else(|| match f.widgets.as_slice() {
+            [only] => doc.get(only.obj).as_dict().and_then(|wd| wd.get(b"AA").map(|a| doc.resolve(a))).and_then(|a| a.as_dict().cloned()),
+            _ => None,
+        });
+        if let Some(aa) = aa {
+            for (event, key) in FIELD_SCRIPT_EVENTS {
+                if let Some(js) = aa.get(key).and_then(|a| crate::script(doc, a)).filter(|s| !s.trim().is_empty()) {
+                    out.push(FormScript { field: f.name.clone(), event: FormScriptEvent::Field(event), script: js });
+                }
+            }
+        }
+        if let Some(w) = f.widgets.first() {
+            for (t, list) in widget_actions(doc, w.obj, &[]) {
+                for r in list {
+                    if let FieldAction::JavaScript(js) = r.action
+                        && !js.trim().is_empty()
+                    {
+                        out.push(FormScript { field: f.name.clone(), event: FormScriptEvent::Trigger(t), script: js });
+                    }
+                }
+            }
+        }
+    }
+    out.truncate(max);
+    out
+}

@@ -1919,6 +1919,33 @@ pub fn tools() -> Vec<ToolDef> {
                 }),
                 &["doc"],
             )),
+        t("js_scripts", "List the document's JavaScripts", "JavaScript debugger: every script in the document and where it lives, in this order: document-level scripts (document), the open action (open), document actions (document_action), page actions (page), field keystroke/format/validate/calculate scripts (field), field action triggers (field_trigger), links (link), bookmarks (bookmark) and other annotations' actions (annotation). Each has an id to pass to js_script and js_debug, its kind, a description of where it is, its line and byte counts and its first line. kind filters the list. At most 5000 scripts (32 MiB) are listed; truncated says when there are more.")
+            .ro()
+            .cmd("tools.js_debugger")
+            .with(schema(
+                json!({ "doc": doc(), "kind": { "type": "string", "enum": ["document", "open", "document_action", "page", "field", "field_trigger", "link", "bookmark", "annotation"] } }),
+                &["doc"],
+            )),
+        t("js_script", "Read a JavaScript", "JavaScript debugger: the source of the script id (from js_scripts) and breakable, the 1-based lines a breakpoint can be set on (lines where a statement starts).")
+            .ro()
+            .cmd("tools.js_debugger")
+            .with(schema(json!({ "doc": doc(), "id": { "type": "string", "minLength": 1 } }), &["doc", "id"])),
+        t("js_debug", "Debug JavaScript", "JavaScript debugger: run script (typed JavaScript) or the document's script id (from js_scripts; script, when also given, replaces its source for this run) against the document, in the js_run sandbox, after the document-level scripts. A script from the document runs with its own event (a field's calculate script gets event.name Calculate, its field as event.target and its value; a link's script event.type Link, …); typed scripts run as the console does. Dialogs get Cancel or No. breakpoints are 1-based lines to stop at (see breakable); step is run (to a breakpoint or the end), into, over or out; watches are expressions evaluated where the run stops, local variables included. A stopped run returns status paused with the line, the call stack (innermost first), the watches and resume: pass resume back with a step to go on (each step runs the script again from the start to the next stop, which is exact because nothing is applied until a run finishes). A finished run returns console, alerts, requests, result and error with error_at (script, 1-based line and column) and applies its field, comment and form-reset changes as one undoable step, like js_run. Runs are bounded: max_steps (instruction steps, default 20 million, at most 500 million) and timeout_ms (default 10000, at most 60000); a run past either is stopped (status stopped, nothing applied) with where it was. Needs JavaScript on (js_enabled). Breakpoints and stepping cover lines where a statement starts; inside one line, or in the document-level scripts, the run doesn't stop.")
+            .cmd("tools.js_debugger")
+            .with(schema(
+                json!({
+                    "doc": doc(),
+                    "script": { "type": "string" },
+                    "id": { "type": "string", "minLength": 1 },
+                    "breakpoints": { "type": "array", "items": { "type": "integer", "minimum": 1 }, "maxItems": 10000 },
+                    "watches": { "type": "array", "items": { "type": "string" }, "maxItems": 32 },
+                    "step": { "type": "string", "enum": ["run", "into", "over", "out"] },
+                    "resume": { "type": "object", "properties": { "hit": { "type": "integer", "minimum": 0 }, "depth": { "type": "integer", "minimum": 0 } }, "required": ["hit", "depth"] },
+                    "max_steps": { "type": "integer", "minimum": 1 },
+                    "timeout_ms": { "type": "integer", "minimum": 100 }
+                }),
+                &["doc"],
+            )),
         t("form_set_script", "Set a field's JavaScript", "Field Properties ▸ Run custom script: set field's JavaScript for event keystroke, format, validate or calculate (the field's actions; calculated fields join the calculation order) or mouse_up (a button's action). Omit script to remove it. The scripts use Acrobat's object model (event.value, event.rc, getField, util.printf, …) and run when the field changes. Undoable.")
             .cmd("form.prepare")
             .with(schema(

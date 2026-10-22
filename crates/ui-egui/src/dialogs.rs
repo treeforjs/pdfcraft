@@ -945,6 +945,10 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
                 close = crate::js_ui::console_body(ui, app, &t);
                 return;
             }
+            Dialog::JsDebugger => {
+                close = crate::js_debug_ui::body(ui, app, &t);
+                return;
+            }
             Dialog::DocumentJs => {
                 ui.set_width(640.0);
                 close = crate::js_ui::document_js_body(ui, app, &t);

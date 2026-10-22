@@ -2437,3 +2437,50 @@ compare-page	Moved	移動
 	Nothing to recover	復元するものはありません
 	Saved recovery copies of unsaved changes	未保存の変更の復元用コピーを保存しました
 	Recovery copies are up to date	復元用コピーは最新です
+
+# JavaScript debugger
+	(top level)	（トップレベル）
+	Add a watch expression	ウォッチ式を追加
+	Annotations	注釈
+	Bookmark	しおり
+	Breakpoint on line {n}	{n} 行目のブレークポイント
+	Call stack	コールスタック
+	Click a line number to set a breakpoint.	行番号をクリックするとブレークポイントを設定できます。
+	Document script	文書スクリプト
+	Edited here only: runs use this text; the document keeps its script.	ここでのみ編集：実行にはこのテキストが使われ、文書のスクリプトは変わりません。
+	Error	エラー
+	Error on line {n}	{n} 行目でエラー
+	Evaluate	評価
+	Evaluate in the paused scope	一時停止中のスコープで評価
+	Filter scripts	スクリプトを絞り込む
+	Finished	完了
+	JavaScript Debugger	JavaScript デバッガー
+	JavaScript debugger…	JavaScript デバッガー…
+	JavaScript is turned off (Preferences → JavaScript).	JavaScript はオフです（環境設定 → JavaScript）。
+	Keystroke	キーストローク
+	Lines: {n}	行数：{n}
+	Link {n}	リンク {n}
+	Links	リンク
+	More scripts than can be listed; the list is cut.	表示できる数を超えるスクリプトがあるため、一覧は途中までです。
+	No scripts match.	一致するスクリプトはありません。
+	Not paused	一時停止していません
+	Open action	開くときのアクション
+	Page {n}	ページ {n}
+	Paused on line {n}	{n} 行目で一時停止中
+	Refresh	再読み込み
+	Run JavaScript against the document	文書に対して JavaScript を実行
+	Scratch script	スクラッチスクリプト
+	Scripts: {n}	スクリプト：{n}
+	Step into	ステップイン
+	Step out	ステップアウト
+	Step over	ステップオーバー
+	Stopped. Nothing the script did was applied.	停止しました。スクリプトが行ったことは何も適用されていません。
+	Stopped: the script ran too long	停止：スクリプトの実行時間が長すぎます
+	The paused point could not be reached again.	一時停止した位置に再び到達できませんでした。
+	This document has no scripts.	この文書にはスクリプトがありません。
+	Watch values show here when the script pauses.	スクリプトが一時停止すると、ここにウォッチの値が表示されます。
+	Watches	ウォッチ
+	document script, line {n}	文書スクリプト、{n} 行目
+	line {n}	{n} 行目
+	{error} (document script {name}, line {n})	{error}（文書スクリプト {name}、{n} 行目）
+	{error} (line {n})	{error}（{n} 行目）

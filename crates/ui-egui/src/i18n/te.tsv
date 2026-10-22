@@ -2368,3 +2368,50 @@ compare-page	Moved	తరలించబడింది
 	Nothing to recover	పునరుద్ధరించడానికి ఏమీ లేదు
 	Saved recovery copies of unsaved changes	సేవ్ చేయని మార్పుల పునరుద్ధరణ కాపీలు సేవ్ చేయబడ్డాయి
 	Recovery copies are up to date	పునరుద్ధరణ కాపీలు తాజాగా ఉన్నాయి
+
+# JavaScript debugger
+	(top level)	(అగ్ర స్థాయి)
+	Add a watch expression	గమనించే వ్యక్తీకరణను జోడించండి
+	Annotations	వ్యాఖ్యానాలు
+	Bookmark	బుక్‌మార్క్
+	Breakpoint on line {n}	{n}వ పంక్తిలో బ్రేక్‌పాయింట్
+	Call stack	కాల్ స్టాక్
+	Click a line number to set a breakpoint.	బ్రేక్‌పాయింట్ పెట్టడానికి పంక్తి సంఖ్యను క్లిక్ చేయండి.
+	Document script	డాక్యుమెంట్ స్క్రిప్ట్
+	Edited here only: runs use this text; the document keeps its script.	ఇక్కడ మాత్రమే మార్చబడింది: రన్‌లు ఈ పాఠ్యాన్ని వాడతాయి; డాక్యుమెంట్ తన స్క్రిప్ట్‌ను ఉంచుకుంటుంది.
+	Error	లోపం
+	Error on line {n}	{n}వ పంక్తిలో లోపం
+	Evaluate	మూల్యాంకనం
+	Evaluate in the paused scope	ఆపిన పరిధిలో మూల్యాంకనం చేయండి
+	Filter scripts	స్క్రిప్ట్‌లను వడపోయండి
+	Finished	పూర్తయింది
+	JavaScript Debugger	JavaScript డీబగ్గర్
+	JavaScript debugger…	JavaScript డీబగ్గర్…
+	JavaScript is turned off (Preferences → JavaScript).	JavaScript ఆఫ్‌లో ఉంది (అభిరుచులు → JavaScript).
+	Keystroke	కీస్ట్రోక్
+	Lines: {n}	పంక్తులు: {n}
+	Link {n}	లింక్ {n}
+	Links	లింక్‌లు
+	More scripts than can be listed; the list is cut.	జాబితా చేయగలిగిన దానికంటే ఎక్కువ స్క్రిప్ట్‌లు ఉన్నాయి; జాబితా కత్తిరించబడింది.
+	No scripts match.	సరిపోలే స్క్రిప్ట్‌లు లేవు.
+	Not paused	ఆపబడలేదు
+	Open action	తెరిచే చర్య
+	Page {n}	పేజీ {n}
+	Paused on line {n}	{n}వ పంక్తి వద్ద ఆపబడింది
+	Refresh	రిఫ్రెష్
+	Run JavaScript against the document	డాక్యుమెంట్‌పై JavaScript రన్ చేయండి
+	Scratch script	చిత్తు స్క్రిప్ట్
+	Scripts: {n}	స్క్రిప్ట్‌లు: {n}
+	Step into	లోపలికి అడుగు
+	Step out	బయటికి అడుగు
+	Step over	దాటి అడుగు
+	Stopped. Nothing the script did was applied.	ఆపబడింది. స్క్రిప్ట్ చేసినవేవీ వర్తింపజేయబడలేదు.
+	Stopped: the script ran too long	ఆపబడింది: స్క్రిప్ట్ చాలా సేపు నడిచింది
+	The paused point could not be reached again.	ఆపిన స్థానాన్ని మళ్లీ చేరుకోలేకపోయాం.
+	This document has no scripts.	ఈ డాక్యుమెంట్‌లో స్క్రిప్ట్‌లు లేవు.
+	Watch values show here when the script pauses.	స్క్రిప్ట్ ఆగినప్పుడు గమనించే విలువలు ఇక్కడ కనిపిస్తాయి.
+	Watches	గమనింపులు
+	document script, line {n}	డాక్యుమెంట్ స్క్రిప్ట్, {n}వ పంక్తి
+	line {n}	{n}వ పంక్తి
+	{error} (document script {name}, line {n})	{error} (డాక్యుమెంట్ స్క్రిప్ట్ {name}, {n}వ పంక్తి)
+	{error} (line {n})	{error} ({n}వ పంక్తి)

@@ -597,6 +597,7 @@ impl Host for crate::PdfCraftApp {
             "right_panel": self.right.map(|r| format!("{r:?}")),
             "compare_view": self.side_by_side.as_ref().filter(|_| self.side_by_side_showing()).map(|v| v.state()),
             "dialog": self.dialog.map(|d| format!("{d:?}")),
+            "js_debugger": (self.dialog == Some(crate::Dialog::JsDebugger)).then(|| self.js_debugger.state()),
             "palette_open": self.palette_open,
             "theme": format!("{:?}", self.theme),
             "theme_preference": self.theme_preference,

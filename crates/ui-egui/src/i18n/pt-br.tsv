@@ -2438,3 +2438,50 @@ compare-page	Moved	Movida
 	Nothing to recover	Nada para recuperar
 	Saved recovery copies of unsaved changes	Cópias de recuperação das alterações não salvas foram salvas
 	Recovery copies are up to date	As cópias de recuperação estão atualizadas
+
+# JavaScript debugger
+	(top level)	(nível superior)
+	Add a watch expression	Adicionar uma expressão de inspeção
+	Annotations	Anotações
+	Bookmark	Marcador
+	Breakpoint on line {n}	Ponto de interrupção na linha {n}
+	Call stack	Pilha de chamadas
+	Click a line number to set a breakpoint.	Clique em um número de linha para definir um ponto de interrupção.
+	Document script	Script do documento
+	Edited here only: runs use this text; the document keeps its script.	Editado só aqui: as execuções usam este texto; o documento mantém seu script.
+	Error	Erro
+	Error on line {n}	Erro na linha {n}
+	Evaluate	Avaliar
+	Evaluate in the paused scope	Avaliar no escopo pausado
+	Filter scripts	Filtrar scripts
+	Finished	Concluído
+	JavaScript Debugger	Depurador de JavaScript
+	JavaScript debugger…	Depurador de JavaScript…
+	JavaScript is turned off (Preferences → JavaScript).	O JavaScript está desativado (Preferências → JavaScript).
+	Keystroke	Pressionamento de tecla
+	Lines: {n}	Linhas: {n}
+	Link {n}	Link {n}
+	Links	Links
+	More scripts than can be listed; the list is cut.	Há mais scripts do que é possível listar; a lista foi cortada.
+	No scripts match.	Nenhum script corresponde.
+	Not paused	Sem pausa
+	Open action	Ação de abertura
+	Page {n}	Página {n}
+	Paused on line {n}	Pausado na linha {n}
+	Refresh	Atualizar
+	Run JavaScript against the document	Executar JavaScript no documento
+	Scratch script	Script livre
+	Scripts: {n}	Scripts: {n}
+	Step into	Entrar
+	Step out	Sair
+	Step over	Pular
+	Stopped. Nothing the script did was applied.	Parado. Nada do que o script fez foi aplicado.
+	Stopped: the script ran too long	Parado: o script demorou demais
+	The paused point could not be reached again.	Não foi possível chegar de novo ao ponto de pausa.
+	This document has no scripts.	Este documento não tem scripts.
+	Watch values show here when the script pauses.	Os valores inspecionados aparecem aqui quando o script pausa.
+	Watches	Inspeção
+	document script, line {n}	script do documento, linha {n}
+	line {n}	linha {n}
+	{error} (document script {name}, line {n})	{error} (script do documento {name}, linha {n})
+	{error} (line {n})	{error} (linha {n})

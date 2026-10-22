@@ -2350,3 +2350,50 @@ compare-page	Moved	Перемещена
 	Nothing to recover	Нечего восстанавливать
 	Saved recovery copies of unsaved changes	Копии несохранённых изменений для восстановления сохранены
 	Recovery copies are up to date	Копии для восстановления актуальны
+
+# JavaScript debugger
+	(top level)	(верхний уровень)
+	Add a watch expression	Добавить выражение для наблюдения
+	Annotations	Аннотации
+	Bookmark	Закладка
+	Breakpoint on line {n}	Точка останова в строке {n}
+	Call stack	Стек вызовов
+	Click a line number to set a breakpoint.	Щёлкните номер строки, чтобы поставить точку останова.
+	Document script	Скрипт документа
+	Edited here only: runs use this text; the document keeps its script.	Изменено только здесь: запуски используют этот текст, а документ сохраняет свой скрипт.
+	Error	Ошибка
+	Error on line {n}	Ошибка в строке {n}
+	Evaluate	Вычислить
+	Evaluate in the paused scope	Вычислить в приостановленном контексте
+	Filter scripts	Фильтр скриптов
+	Finished	Завершено
+	JavaScript Debugger	Отладчик JavaScript
+	JavaScript debugger…	Отладчик JavaScript…
+	JavaScript is turned off (Preferences → JavaScript).	JavaScript отключён (Настройки → JavaScript).
+	Keystroke	Нажатие клавиши
+	Lines: {n}	Строк: {n}
+	Link {n}	Ссылка {n}
+	Links	Ссылки
+	More scripts than can be listed; the list is cut.	Скриптов больше, чем можно показать; список обрезан.
+	No scripts match.	Нет подходящих скриптов.
+	Not paused	Не приостановлено
+	Open action	Действие при открытии
+	Page {n}	Страница {n}
+	Paused on line {n}	Остановлено на строке {n}
+	Refresh	Обновить
+	Run JavaScript against the document	Выполнить JavaScript в документе
+	Scratch script	Черновой скрипт
+	Scripts: {n}	Скриптов: {n}
+	Step into	Шаг с заходом
+	Step out	Шаг с выходом
+	Step over	Шаг с обходом
+	Stopped. Nothing the script did was applied.	Остановлено. Ничего из сделанного скриптом не применено.
+	Stopped: the script ran too long	Остановлено: скрипт работал слишком долго
+	The paused point could not be reached again.	Не удалось снова дойти до точки остановки.
+	This document has no scripts.	В этом документе нет скриптов.
+	Watch values show here when the script pauses.	Значения наблюдаемых выражений появятся здесь, когда скрипт остановится.
+	Watches	Наблюдение
+	document script, line {n}	скрипт документа, строка {n}
+	line {n}	строка {n}
+	{error} (document script {name}, line {n})	{error} (скрипт документа {name}, строка {n})
+	{error} (line {n})	{error} (строка {n})

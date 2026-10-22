@@ -2435,3 +2435,50 @@ compare-page	Moved	Áthelyezve
 	Nothing to recover	Nincs mit helyreállítani
 	Saved recovery copies of unsaved changes	A nem mentett módosítások helyreállítási másolatai elmentve
 	Recovery copies are up to date	A helyreállítási másolatok naprakészek
+
+# JavaScript debugger
+	(top level)	(legfelső szint)
+	Add a watch expression	Figyelt kifejezés hozzáadása
+	Annotations	Megjegyzések
+	Bookmark	Könyvjelző
+	Breakpoint on line {n}	Töréspont a(z) {n}. sorban
+	Call stack	Hívási verem
+	Click a line number to set a breakpoint.	Kattintson egy sorszámra töréspont beállításához.
+	Document script	Dokumentumszkript
+	Edited here only: runs use this text; the document keeps its script.	Csak itt szerkesztve: a futtatások ezt a szöveget használják, a dokumentum megtartja a szkriptjét.
+	Error	Hiba
+	Error on line {n}	Hiba a(z) {n}. sorban
+	Evaluate	Kiértékelés
+	Evaluate in the paused scope	Kiértékelés a szüneteltetett környezetben
+	Filter scripts	Szkriptek szűrése
+	Finished	Befejeződött
+	JavaScript Debugger	JavaScript-hibakereső
+	JavaScript debugger…	JavaScript-hibakereső…
+	JavaScript is turned off (Preferences → JavaScript).	A JavaScript ki van kapcsolva (Beállítások → JavaScript).
+	Keystroke	Billentyűleütés
+	Lines: {n}	Sorok: {n}
+	Link {n}	{n}. hivatkozás
+	Links	Hivatkozások
+	More scripts than can be listed; the list is cut.	Több szkript van, mint amennyi listázható; a lista csonka.
+	No scripts match.	Nincs egyező szkript.
+	Not paused	Nincs szüneteltetve
+	Open action	Megnyitási művelet
+	Page {n}	{n}. oldal
+	Paused on line {n}	Szüneteltetve a(z) {n}. sorban
+	Refresh	Frissítés
+	Run JavaScript against the document	JavaScript futtatása a dokumentumon
+	Scratch script	Vázlatszkript
+	Scripts: {n}	Szkriptek: {n}
+	Step into	Belépés
+	Step out	Kilépés
+	Step over	Átlépés
+	Stopped. Nothing the script did was applied.	Leállítva. A szkript semmilyen művelete nem lett alkalmazva.
+	Stopped: the script ran too long	Leállítva: a szkript túl sokáig futott
+	The paused point could not be reached again.	A szüneteltetési pontot nem sikerült újra elérni.
+	This document has no scripts.	Ez a dokumentum nem tartalmaz szkriptet.
+	Watch values show here when the script pauses.	A figyelt értékek itt jelennek meg, amikor a szkript megáll.
+	Watches	Figyelés
+	document script, line {n}	dokumentumszkript, {n}. sor
+	line {n}	{n}. sor
+	{error} (document script {name}, line {n})	{error} ({name} dokumentumszkript, {n}. sor)
+	{error} (line {n})	{error} ({n}. sor)

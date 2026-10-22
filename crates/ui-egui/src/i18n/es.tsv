@@ -2353,3 +2353,50 @@ compare-page	Moved	Movida
 	Nothing to recover	No hay nada que recuperar
 	Saved recovery copies of unsaved changes	Se guardaron copias de recuperación de los cambios sin guardar
 	Recovery copies are up to date	Las copias de recuperación están al día
+
+# JavaScript debugger
+	(top level)	(nivel superior)
+	Add a watch expression	Añadir una expresión de inspección
+	Annotations	Anotaciones
+	Bookmark	Marcador
+	Breakpoint on line {n}	Punto de interrupción en la línea {n}
+	Call stack	Pila de llamadas
+	Click a line number to set a breakpoint.	Haga clic en un número de línea para poner un punto de interrupción.
+	Document script	Script del documento
+	Edited here only: runs use this text; the document keeps its script.	Editado solo aquí: las ejecuciones usan este texto; el documento conserva su script.
+	Error	Error
+	Error on line {n}	Error en la línea {n}
+	Evaluate	Evaluar
+	Evaluate in the paused scope	Evaluar en el ámbito en pausa
+	Filter scripts	Filtrar scripts
+	Finished	Terminado
+	JavaScript Debugger	Depurador de JavaScript
+	JavaScript debugger…	Depurador de JavaScript…
+	JavaScript is turned off (Preferences → JavaScript).	JavaScript está desactivado (Preferencias → JavaScript).
+	Keystroke	Pulsación de tecla
+	Lines: {n}	Líneas: {n}
+	Link {n}	Vínculo {n}
+	Links	Vínculos
+	More scripts than can be listed; the list is cut.	Hay más scripts de los que se pueden mostrar; la lista está recortada.
+	No scripts match.	Ningún script coincide.
+	Not paused	Sin pausa
+	Open action	Acción de apertura
+	Page {n}	Página {n}
+	Paused on line {n}	En pausa en la línea {n}
+	Refresh	Actualizar
+	Run JavaScript against the document	Ejecutar JavaScript en el documento
+	Scratch script	Script libre
+	Scripts: {n}	Scripts: {n}
+	Step into	Paso a paso por instrucciones
+	Step out	Paso a paso para salir
+	Step over	Paso a paso por procedimientos
+	Stopped. Nothing the script did was applied.	Detenido. No se aplicó nada de lo que hizo el script.
+	Stopped: the script ran too long	Detenido: el script tardó demasiado
+	The paused point could not be reached again.	No se pudo volver a llegar al punto de pausa.
+	This document has no scripts.	Este documento no tiene scripts.
+	Watch values show here when the script pauses.	Los valores inspeccionados aparecen aquí cuando el script se detiene.
+	Watches	Inspección
+	document script, line {n}	script del documento, línea {n}
+	line {n}	línea {n}
+	{error} (document script {name}, line {n})	{error} (script del documento {name}, línea {n})
+	{error} (line {n})	{error} (línea {n})

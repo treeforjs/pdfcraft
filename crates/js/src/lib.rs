@@ -35,6 +35,7 @@
 
 use std::cell::RefCell;
 use std::collections::BTreeSet;
+use std::path::Path;
 
 use boa_engine::object::builtins::{JsArray, JsFunction};
 use boa_engine::object::{FunctionObjectBuilder, ObjectInitializer};
@@ -311,6 +312,17 @@ pub struct Outcome {
     /// The dialog the script is waiting on ([`Dialogs::interactive`]); when set, the run did
     /// nothing else and the rest of the outcome is empty.
     pub question: Option<Question>,
+    /// Where [`Outcome::error`] happened, when the engine knows.
+    pub error_at: Option<ErrorAt>,
+}
+
+/// Where a script error happened: in the script run (`script` `None`) or in document-level
+/// script `script` (an index into the document scripts), at a 1-based line and column.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ErrorAt {
+    pub script: Option<usize>,
+    pub line: u32,
+    pub column: u32,
 }
 
 /// Bounds that keep a script from hanging the viewer.
@@ -1005,6 +1017,7 @@ fn color_object(ctx: &mut Context) -> JsObject {
 }
 
 fn install(ctx: &mut Context) -> JsResult<()> {
+    harden::harden(ctx)?;
     let globals: [(&str, usize, NativeFunction); 13] = [
         ("getOCGs", 1, NativeFunction::from_fn_ptr(objects::get_ocgs)),
         ("getAnnots", 1, NativeFunction::from_fn_ptr(objects::get_annots)),
@@ -1245,6 +1258,30 @@ pub fn run_with(
 }
 
 fn run_here(script: &str, event: &Event, doc: &DocInfo, fields: &[FieldState], doc_scripts: &[String], limits: Limits, dialogs: &Dialogs) -> Outcome {
+    let mut ctx = context(doc, fields, limits, dialogs);
+    let mut out = Outcome { rc: true, value: event.value.clone(), change: event.change.clone(), ..Default::default() };
+    // Which script is running: a document-level one (its index), or `script` (None).
+    let mut running: Option<usize> = None;
+    let result = (|| -> JsResult<()> {
+        let ev = globals(&mut ctx, event)?;
+        for (i, d) in doc_scripts.iter().enumerate() {
+            running = Some(i);
+            ctx.eval(Source::from_bytes(d).with_path(Path::new(&doc_script_path(i))))?;
+        }
+        running = None;
+        let r = ctx.eval(Source::from_bytes(script).with_path(Path::new(SCRIPT_PATH)))?;
+        read_event(&mut ctx, &ev, &r, &mut out)
+    })();
+    if let Err(e) = result {
+        let full = e.to_string();
+        out.error = Some(error_message(&full));
+        out.error_at = error_location(&full, running);
+    }
+    finish(&mut ctx, event, doc, out)
+}
+
+/// A fresh engine with the host state for a run.
+fn context(doc: &DocInfo, fields: &[FieldState], limits: Limits, dialogs: &Dialogs) -> Context {
     let mut ctx = Context::default();
     ctx.runtime_limits_mut().set_loop_iteration_limit(limits.loop_iterations);
     ctx.runtime_limits_mut().set_recursion_limit(limits.recursion);
@@ -1262,29 +1299,33 @@ fn run_here(script: &str, event: &Event, doc: &DocInfo, fields: &[FieldState], d
         answered: 0,
         pending: None,
     }));
-    let mut out = Outcome { rc: true, value: event.value.clone(), change: event.change.clone(), ..Default::default() };
-    let result = (|| -> JsResult<()> {
-        install(&mut ctx)?;
-        let ev = event_object(&mut ctx, event);
-        ctx.register_global_property(js_string!("event"), ev.clone(), Attribute::all())?;
-        for d in doc_scripts {
-            ctx.eval(Source::from_bytes(d))?;
-        }
-        let r = ctx.eval(Source::from_bytes(script))?;
-        if !r.is_undefined() {
-            out.result = Some(text(&r, &mut ctx)?);
-        }
-        let rc = ev.get(js_string!("rc"), &mut ctx)?;
-        out.rc = rc.to_boolean();
-        let v = ev.get(js_string!("value"), &mut ctx)?;
-        out.value = text(&v, &mut ctx)?;
-        let c = ev.get(js_string!("change"), &mut ctx)?;
-        out.change = text(&c, &mut ctx)?;
-        Ok(())
-    })();
-    if let Err(e) = result {
-        out.error = Some(e.to_string());
+    ctx
+}
+
+/// Install the object model and `event`; returns the event object.
+fn globals(ctx: &mut Context, event: &Event) -> JsResult<JsObject> {
+    install(ctx)?;
+    let ev = event_object(ctx, event);
+    ctx.register_global_property(js_string!("event"), ev.clone(), Attribute::all())?;
+    Ok(ev)
+}
+
+/// The script's completion value `r` and what it left in `event`.
+fn read_event(ctx: &mut Context, ev: &JsObject, r: &JsValue, out: &mut Outcome) -> JsResult<()> {
+    if !r.is_undefined() {
+        out.result = Some(text(r, ctx)?);
     }
+    let rc = ev.get(js_string!("rc"), ctx)?;
+    out.rc = rc.to_boolean();
+    let v = ev.get(js_string!("value"), ctx)?;
+    out.value = text(&v, ctx)?;
+    let c = ev.get(js_string!("change"), ctx)?;
+    out.change = text(&c, ctx)?;
+    Ok(())
+}
+
+/// What the run did to the host state, into `out`.
+fn finish(ctx: &mut Context, event: &Event, doc: &DocInfo, mut out: Outcome) -> Outcome {
     if let Some(h) = ctx.remove_data::<Shared>() {
         let h = h.into_inner();
         if let Some(q) = h.pending {
@@ -1292,7 +1333,7 @@ fn run_here(script: &str, event: &Event, doc: &DocInfo, fields: &[FieldState], d
             return Outcome { rc: true, value: event.value.clone(), change: event.change.clone(), question: Some(q), ..Default::default() };
         }
         out.annots = objects::annot_changes(&doc.annots, &h.annots, &h.destroyed, &h.added);
-        out.changed = h.changed.iter().map(|i| h.fields[*i].clone()).collect();
+        out.changed = h.changed.iter().filter_map(|i| h.fields.get(*i).cloned()).collect();
         out.alerts = h.alerts;
         out.console = h.console;
         out.requests = h.requests;
@@ -1300,7 +1341,70 @@ fn run_here(script: &str, event: &Event, doc: &DocInfo, fields: &[FieldState], d
     out
 }
 
+/// The source name the script being run has in error positions.
+pub(crate) const SCRIPT_PATH: &str = "script";
+
+/// The source name document-level script `i` has in error positions.
+pub(crate) fn doc_script_path(i: usize) -> String {
+    format!("document script {}", i.saturating_add(1))
+}
+
+/// Which script a source name is: `Some(None)` the script run, `Some(Some(i))` document-level
+/// script `i`.
+pub(crate) fn script_of_path(path: &str) -> Option<Option<usize>> {
+    if path == SCRIPT_PATH {
+        return Some(None);
+    }
+    let n: usize = path.strip_prefix("document script ")?.parse().ok()?;
+    Some(Some(n.checked_sub(1)?))
+}
+
+/// An engine error's message without boa's position suffix and backtrace.
+pub(crate) fn error_message(full: &str) -> String {
+    let first = full.lines().next().unwrap_or("").trim_end();
+    let first = match first.rfind(" (") {
+        Some(i) if first.ends_with(')') && (first[i..].contains(':') || first[i..].starts_with(" (native")) => &first[..i],
+        _ => first,
+    };
+    first.to_string()
+}
+
+/// "(path:line:column)" → (path, line, column); `?` positions are unknown.
+fn position_of(part: &str) -> Option<(&str, u32, u32)> {
+    let inner = part.strip_suffix(')')?;
+    let inner = &inner[inner.rfind('(')?.saturating_add(1)..];
+    let mut it = inner.rsplitn(3, ':');
+    let column = it.next()?.parse().ok()?;
+    let line = it.next()?.parse().ok()?;
+    Some((it.next()?, line, column))
+}
+
+/// Where an engine error happened: the innermost frame of its backtrace in one of the run's
+/// scripts, or for a syntax error, the position the parser gives in `running` (the script
+/// that was being compiled).
+pub(crate) fn error_location(full: &str, running: Option<usize>) -> Option<ErrorAt> {
+    let mut lines = full.lines();
+    let first = lines.next().unwrap_or("");
+    for l in lines {
+        if let Some(rest) = l.trim_start().strip_prefix("at ")
+            && let Some((path, line, column)) = position_of(rest.trim_end())
+            && let Some(script) = script_of_path(path)
+        {
+            return Some(ErrorAt { script, line, column });
+        }
+    }
+    if let Some(rest) = first.rfind(" at line ").map(|i| &first[i + " at line ".len()..]) {
+        let (line, rest) = rest.split_once(", col ")?;
+        let column: String = rest.chars().take_while(char::is_ascii_digit).collect();
+        return Some(ErrorAt { script: running, line: line.trim().parse().ok()?, column: column.parse().ok()? });
+    }
+    let (path, line, column) = position_of(first.trim_end())?;
+    Some(ErrorAt { script: script_of_path(path)?, line, column })
+}
+
+pub mod debug;
 pub mod formcalc;
+pub mod harden;
 mod objects;
 pub mod xfa;
 

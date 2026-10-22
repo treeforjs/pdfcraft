@@ -2446,3 +2446,50 @@ compare-page	Moved	Spostata
 	Nothing to recover	Niente da recuperare
 	Saved recovery copies of unsaved changes	Copie di ripristino delle modifiche non salvate salvate
 	Recovery copies are up to date	Le copie di ripristino sono aggiornate
+
+# JavaScript debugger
+	(top level)	(livello superiore)
+	Add a watch expression	Aggiungi un’espressione da osservare
+	Annotations	Annotazioni
+	Bookmark	Segnalibro
+	Breakpoint on line {n}	Punto di interruzione alla riga {n}
+	Call stack	Stack delle chiamate
+	Click a line number to set a breakpoint.	Fai clic su un numero di riga per impostare un punto di interruzione.
+	Document script	Script del documento
+	Edited here only: runs use this text; the document keeps its script.	Modificato solo qui: le esecuzioni usano questo testo; il documento mantiene il suo script.
+	Error	Errore
+	Error on line {n}	Errore alla riga {n}
+	Evaluate	Valuta
+	Evaluate in the paused scope	Valuta nel contesto in pausa
+	Filter scripts	Filtra gli script
+	Finished	Terminato
+	JavaScript Debugger	Debugger JavaScript
+	JavaScript debugger…	Debugger JavaScript…
+	JavaScript is turned off (Preferences → JavaScript).	JavaScript è disattivato (Preferenze → JavaScript).
+	Keystroke	Battitura
+	Lines: {n}	Righe: {n}
+	Link {n}	Collegamento {n}
+	Links	Collegamenti
+	More scripts than can be listed; the list is cut.	Ci sono più script di quanti se ne possano elencare; l’elenco è troncato.
+	No scripts match.	Nessuno script corrisponde.
+	Not paused	Non in pausa
+	Open action	Azione di apertura
+	Page {n}	Pagina {n}
+	Paused on line {n}	In pausa alla riga {n}
+	Refresh	Aggiorna
+	Run JavaScript against the document	Esegui JavaScript sul documento
+	Scratch script	Script libero
+	Scripts: {n}	Script: {n}
+	Step into	Passo dentro
+	Step out	Passo fuori
+	Step over	Passo oltre
+	Stopped. Nothing the script did was applied.	Interrotto. Nulla di ciò che lo script ha fatto è stato applicato.
+	Stopped: the script ran too long	Interrotto: lo script è durato troppo
+	The paused point could not be reached again.	Non è stato possibile raggiungere di nuovo il punto di pausa.
+	This document has no scripts.	Questo documento non contiene script.
+	Watch values show here when the script pauses.	I valori osservati compaiono qui quando lo script è in pausa.
+	Watches	Osservazione
+	document script, line {n}	script del documento, riga {n}
+	line {n}	riga {n}
+	{error} (document script {name}, line {n})	{error} (script del documento {name}, riga {n})
+	{error} (line {n})	{error} (riga {n})

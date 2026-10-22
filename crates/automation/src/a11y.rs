@@ -642,7 +642,7 @@ pub(crate) fn export_ocr_json(r: &pdfcraft_engine::export_ocr::ExportOcrReport) 
 }
 
 /// A script's request; an address carries the internet access decision for it (`url_access`).
-fn request_json(session: &pdfcraft_engine::Session, r: &pdfcraft_engine::js::Request) -> Value {
+pub(crate) fn request_json(session: &pdfcraft_engine::Session, r: &pdfcraft_engine::js::Request) -> Value {
     use pdfcraft_engine::js::Request as R;
     let access = |u: &str| crate::url_access::check_json(u, &session.check_url(u));
     match r {

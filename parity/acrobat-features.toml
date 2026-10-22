@@ -5087,11 +5087,11 @@ title = "JavaScript debugger"
 area = "F"
 tier = "P1"
 milestone = "M12"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["tools.js_debugger"]
+tools = ["js_scripts", "js_script", "js_debug"]
+evidence = ["crates/js/src/debug.rs::statement_lines_take_breakpoints", "crates/js/src/debug.rs::breakpoints_pause_and_steps_replay", "crates/js/src/debug.rs::errors_have_lines", "crates/js/src/debug.rs::hostile_scripts_are_bounded", "crates/js/src/debug.rs::paused_runs_change_nothing", "crates/js/src/tests.rs::string_bombs_end_with_an_error", "crates/automation/tests/js_debugger.rs::scripts_are_listed_read_and_debugged", "crates/automation/tests/js_debugger.rs::hostile_scripts_and_arguments_are_refused_or_bounded", "crates/ui-egui/tests/js_debugger.rs::breakpoints_steps_watches_and_the_console", "crates/ui-egui/tests/js_debugger.rs::hostile_scripts_never_take_the_app_down"]
+notes = "Tools → JavaScript debugger… (Cmd+Shift+J) and js_scripts / js_script / js_debug. Lists every script with where it lives (document-level scripts, the open action, document actions, page open/close, field keystroke/format/validate/calculate scripts and field triggers, links, bookmarks, other annotations' /AA; capped at 5000 scripts / 32 MiB), shows its source with line numbers, and runs it, or a typed script, against the open document with console.println output, the result, and errors with their line (and the document-level script they came from). Breakpoints, Continue, Step into/over/out, watches evaluated in the paused scope (locals included), the call stack, and a console that evaluates in the paused scope. Runs are bounded by a step budget (default 20M, at most 500M) and a clock (default 10 s, at most 60 s); string, array, apply and repeat bombs end in a RangeError instead of aborting (vendored boa_string with a 64 Mi-unit cap, guarded built-ins). A finished run applies its changes like the console; a paused or stopped one changes nothing. Respects the JavaScript preference (refuses to run when off; listing still works). Limits: breakpoints only on lines where a statement starts, and none inside document-level scripts (stepping into their functions goes over them); every step re-runs the script from its start (the sandbox is deterministic, except Date and Math.random); a native call stuck in a loop is bounded only by the clock; edits made in the debugger are for the run only and aren't saved to the document; many large arrays can still exhaust memory."
 
 [[feature]]
 id = "form.edit-all-javascripts"

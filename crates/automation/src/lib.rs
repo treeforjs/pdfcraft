@@ -28,6 +28,7 @@ mod dests;
 mod direction;
 mod forms;
 mod ink_manager;
+mod js_debug;
 mod links;
 mod make_accessible;
 #[cfg(feature = "mcp")]
@@ -840,6 +841,9 @@ impl Automation {
             "js_page_actions" => self.js_page_actions(&a)?,
             "js_set_page_action" => self.js_set_page_action(&a)?,
             "js_run_action" => self.js_run_action(&a)?,
+            "js_scripts" => self.js_scripts(&a)?,
+            "js_script" => self.js_script(&a)?,
+            "js_debug" => self.js_debug(&a)?,
             "js_enabled" => self.js_enabled(&a)?,
             "edit_keep_tags" => {
                 if let Some(on) = a.opt_bool("enabled")? {

@@ -2399,3 +2399,50 @@ compare-page	Moved	Преместена
 	Nothing to recover	Няма какво да се възстанови
 	Saved recovery copies of unsaved changes	Копията за възстановяване на незаписаните промени са записани
 	Recovery copies are up to date	Копията за възстановяване са актуални
+
+# JavaScript debugger
+	(top level)	(най-горно ниво)
+	Add a watch expression	Добавяне на израз за наблюдение
+	Annotations	Анотации
+	Bookmark	Отметка
+	Breakpoint on line {n}	Точка на прекъсване на ред {n}
+	Call stack	Стек на извикванията
+	Click a line number to set a breakpoint.	Щракнете върху номер на ред, за да поставите точка на прекъсване.
+	Document script	Скрипт на документа
+	Edited here only: runs use this text; the document keeps its script.	Редактирано само тук: изпълненията използват този текст, а документът запазва своя скрипт.
+	Error	Грешка
+	Error on line {n}	Грешка на ред {n}
+	Evaluate	Изчисляване
+	Evaluate in the paused scope	Изчисляване в спрения контекст
+	Filter scripts	Филтриране на скриптове
+	Finished	Завършено
+	JavaScript Debugger	Дебъгер за JavaScript
+	JavaScript debugger…	Дебъгер за JavaScript…
+	JavaScript is turned off (Preferences → JavaScript).	JavaScript е изключен (Предпочитания → JavaScript).
+	Keystroke	Натискане на клавиш
+	Lines: {n}	Редове: {n}
+	Link {n}	Връзка {n}
+	Links	Връзки
+	More scripts than can be listed; the list is cut.	Скриптовете са повече, отколкото може да се покажат; списъкът е съкратен.
+	No scripts match.	Няма съвпадащи скриптове.
+	Not paused	Не е спряно
+	Open action	Действие при отваряне
+	Page {n}	Страница {n}
+	Paused on line {n}	Спряно на ред {n}
+	Refresh	Опресняване
+	Run JavaScript against the document	Изпълнение на JavaScript върху документа
+	Scratch script	Чернови скрипт
+	Scripts: {n}	Скриптове: {n}
+	Step into	Стъпка навътре
+	Step out	Стъпка навън
+	Step over	Стъпка през
+	Stopped. Nothing the script did was applied.	Спряно. Нищо от направеното от скрипта не е приложено.
+	Stopped: the script ran too long	Спряно: скриптът работи твърде дълго
+	The paused point could not be reached again.	Мястото на спиране не можа да бъде достигнато отново.
+	This document has no scripts.	Този документ няма скриптове.
+	Watch values show here when the script pauses.	Стойностите за наблюдение се показват тук, когато скриптът спре.
+	Watches	Наблюдение
+	document script, line {n}	скрипт на документа, ред {n}
+	line {n}	ред {n}
+	{error} (document script {name}, line {n})	{error} (скрипт на документа {name}, ред {n})
+	{error} (line {n})	{error} (ред {n})

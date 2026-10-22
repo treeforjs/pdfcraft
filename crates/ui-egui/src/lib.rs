@@ -41,6 +41,7 @@ mod credits;
 mod crop;
 mod drag_pointer;
 mod export_ui;
+pub mod js_debug_ui;
 mod js_ui;
 pub use js_ui::{ActionScriptDraft, ScriptTarget};
 mod marks_ui;
@@ -292,6 +293,8 @@ pub enum Dialog {
     RecognizeText,
     /// The JavaScript console (⌘J).
     JsConsole,
+    /// The JavaScript debugger (⌘⇧J).
+    JsDebugger,
     /// Document JavaScripts.
     DocumentJs,
     /// A bookmark's or page's Run-a-JavaScript action ([`Self::action_script`]).
@@ -517,6 +520,8 @@ pub struct PdfCraftApp {
     pub side_by_side: Option<compare_view::SideBySide>,
     /// The JavaScript console and the Document JavaScripts draft.
     pub js_console: js_ui::JsConsole,
+    /// The JavaScript debugger (Tools → JavaScript debugger).
+    pub js_debugger: js_debug_ui::JsDebugger,
     pub doc_js: js_ui::DocJsDraft,
     /// The Run-a-JavaScript action being edited (bookmark or page actions).
     pub action_script: Option<js_ui::ActionScriptDraft>,
@@ -787,6 +792,7 @@ impl PdfCraftApp {
             compare_run: None,
             side_by_side: None,
             js_console: Default::default(),
+            js_debugger: Default::default(),
             doc_js: Default::default(),
             action_script: None,
             js_question: None,
@@ -1679,6 +1685,28 @@ impl PdfCraftApp {
                 self.left_open = true;
             }
             ("left", _) => self.left_open = value != "closed",
+            ("js-debugger-script", _) => self.debugger_select_id(value)?,
+            ("js-debugger-breakpoints", _) => {
+                let lines: Vec<u32> = value
+                    .split(',')
+                    .map(str::trim)
+                    .filter(|v| !v.is_empty())
+                    .map(|v| v.parse().map_err(|_| "js-debugger-breakpoints must be line numbers, e.g. 2,5"))
+                    .collect::<Result<_, _>>()?;
+                self.js_debugger.breakpoints.clear();
+                for l in lines {
+                    self.js_debugger.toggle_breakpoint(l);
+                }
+            }
+            ("js-debugger-watches", _) => {
+                self.js_debugger.watches = value
+                    .split('\n')
+                    .map(str::trim)
+                    .filter(|v| !v.is_empty())
+                    .take(pdfcraft_engine::js_debug::MAX_WATCHES)
+                    .map(str::to_string)
+                    .collect();
+            }
             ("home", _) => self.active = None,
             ("dialog", _) => {
                 self.dialog = match value {
@@ -1699,6 +1727,10 @@ impl PdfCraftApp {
                     "accessibility-options" => Some(Dialog::AccessibilityOptions),
                     "recognize-text" => Some(Dialog::RecognizeText),
                     "js-console" => Some(Dialog::JsConsole),
+                    "js-debugger" => {
+                        self.open_js_debugger();
+                        Some(Dialog::JsDebugger)
+                    }
                     "document-js" => Some(Dialog::DocumentJs),
                     "preferences" => Some(Dialog::Preferences),
                     "compare-files" => Some(Dialog::CompareFiles),

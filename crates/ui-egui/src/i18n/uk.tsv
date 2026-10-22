@@ -2460,3 +2460,50 @@ compare-page	Moved	Переміщена
 	Nothing to recover	Нічого відновлювати
 	Saved recovery copies of unsaved changes	Копії незбережених змін для відновлення збережено
 	Recovery copies are up to date	Копії для відновлення актуальні
+
+# JavaScript debugger
+	(top level)	(верхній рівень)
+	Add a watch expression	Додати вираз для спостереження
+	Annotations	Анотації
+	Bookmark	Закладка
+	Breakpoint on line {n}	Точка зупинки в рядку {n}
+	Call stack	Стек викликів
+	Click a line number to set a breakpoint.	Клацніть номер рядка, щоб поставити точку зупинки.
+	Document script	Скрипт документа
+	Edited here only: runs use this text; the document keeps its script.	Змінено лише тут: запуски використовують цей текст, а документ зберігає свій скрипт.
+	Error	Помилка
+	Error on line {n}	Помилка в рядку {n}
+	Evaluate	Обчислити
+	Evaluate in the paused scope	Обчислити в призупиненому контексті
+	Filter scripts	Фільтр скриптів
+	Finished	Завершено
+	JavaScript Debugger	Налагоджувач JavaScript
+	JavaScript debugger…	Налагоджувач JavaScript…
+	JavaScript is turned off (Preferences → JavaScript).	JavaScript вимкнено (Параметри → JavaScript).
+	Keystroke	Натискання клавіші
+	Lines: {n}	Рядків: {n}
+	Link {n}	Посилання {n}
+	Links	Посилання
+	More scripts than can be listed; the list is cut.	Скриптів більше, ніж можна показати; список обрізано.
+	No scripts match.	Немає відповідних скриптів.
+	Not paused	Не призупинено
+	Open action	Дія під час відкриття
+	Page {n}	Сторінка {n}
+	Paused on line {n}	Призупинено на рядку {n}
+	Refresh	Оновити
+	Run JavaScript against the document	Виконати JavaScript у документі
+	Scratch script	Чернетковий скрипт
+	Scripts: {n}	Скриптів: {n}
+	Step into	Крок із заходом
+	Step out	Крок із виходом
+	Step over	Крок з обходом
+	Stopped. Nothing the script did was applied.	Зупинено. Нічого зі зробленого скриптом не застосовано.
+	Stopped: the script ran too long	Зупинено: скрипт працював задовго
+	The paused point could not be reached again.	Не вдалося знову дійти до точки зупинки.
+	This document has no scripts.	У цьому документі немає скриптів.
+	Watch values show here when the script pauses.	Значення виразів для спостереження з’являться тут, коли скрипт зупиниться.
+	Watches	Спостереження
+	document script, line {n}	скрипт документа, рядок {n}
+	line {n}	рядок {n}
+	{error} (document script {name}, line {n})	{error} (скрипт документа {name}, рядок {n})
+	{error} (line {n})	{error} (рядок {n})

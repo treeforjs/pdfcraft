@@ -27,6 +27,7 @@ pub mod dates;
 pub mod export;
 pub mod export_ocr;
 pub mod js;
+pub mod js_debug;
 pub mod links;
 pub mod ocr;
 pub mod optimizer;

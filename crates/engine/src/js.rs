@@ -352,25 +352,27 @@ impl Session {
                 ..Default::default()
             });
         }
-        let mut runner = JsRunner::new(&cos, &doc.name);
-        runner.doc.annots = annot_states(&cos);
-        runner.doc.layers = doc.info.layers.iter().map(|l| pdfcraft_js::LayerState { name: l.name.clone(), on: l.visible }).collect();
-        let fields = pdfcraft_forms::fields(&cos);
-        let states: Vec<_> = fields.iter().map(|f| field_state(&cos, f)).collect();
-        let event = match (target, scope) {
-            (Some(t), _) => pdfcraft_js::Event { will_commit: false, ..pdfcraft_js::Event::field(event, t, "") },
-            (None, Some((kind, page))) => {
-                runner.doc.page = page.min(runner.doc.num_pages.saturating_sub(1));
-                pdfcraft_js::Event { kind: kind.to_string(), ..pdfcraft_js::Event::doc(event) }
-            }
-            (None, None) => pdfcraft_js::Event::doc(event),
-        };
-        let mut o = pdfcraft_js::run_with(script, &event, &runner.doc, &states, &runner.doc_scripts, Limits::default(), dialogs);
+        let mut env = ScriptEnv::new(doc, &cos);
+        let event = env.event(target, event, scope);
+        let mut o = pdfcraft_js::run_with(script, &event, &env.runner.doc, &env.states, &env.runner.doc_scripts, Limits::default(), dialogs);
         if o.question.is_some() {
             return Ok(o);
         }
+        self.apply_script_outcome(id, &mut o, &env.fields, &env.states)?;
+        Ok(o)
+    }
+
+    /// Apply what a finished script did: field changes, form resets and comment changes as one
+    /// undoable step (Reset requests are taken out of `o`), and layers shown or hidden.
+    pub(crate) fn apply_script_outcome(
+        &mut self,
+        id: DocId,
+        o: &mut Outcome,
+        fields: &[pdfcraft_forms::Field],
+        states: &[pdfcraft_js::FieldState],
+    ) -> Result<(), EditError> {
         let after: Vec<_> = states.iter().map(|s| o.changed.iter().find(|c| c.name == s.name).unwrap_or(s).clone()).collect();
-        let changes = changes(&states, &after);
+        let changes = changes(states, &after);
         let resets: Vec<Vec<String>> = o
             .requests
             .iter()
@@ -400,7 +402,7 @@ impl Session {
                 self.set_layer_visible(id, *index, *on);
             }
         }
-        Ok(o)
+        Ok(())
     }
 
     /// The JavaScript an action runs (a link's, a bookmark's or a page trigger's), or an error
@@ -536,6 +538,37 @@ impl Session {
     }
 }
 
+/// What a script run needs from the document: the object model state and the form.
+pub(crate) struct ScriptEnv {
+    pub(crate) runner: JsRunner,
+    pub(crate) fields: Vec<pdfcraft_forms::Field>,
+    pub(crate) states: Vec<pdfcraft_js::FieldState>,
+}
+
+impl ScriptEnv {
+    pub(crate) fn new(doc: &crate::Document, cos: &pdfcraft_cos::Document) -> ScriptEnv {
+        let mut runner = JsRunner::new(cos, &doc.name);
+        runner.doc.annots = annot_states(cos);
+        runner.doc.layers = doc.info.layers.iter().map(|l| pdfcraft_js::LayerState { name: l.name.clone(), on: l.visible }).collect();
+        let fields = pdfcraft_forms::fields(cos);
+        let states: Vec<_> = fields.iter().map(|f| field_state(cos, f)).collect();
+        ScriptEnv { runner, fields, states }
+    }
+
+    /// The event for a button's script (`target`), or without one a document event named
+    /// `event`, or with `scope` = (`event.type`, page) an action's event on that page.
+    pub(crate) fn event(&mut self, target: Option<&str>, event: &str, scope: Option<(&str, usize)>) -> pdfcraft_js::Event {
+        match (target, scope) {
+            (Some(t), _) => pdfcraft_js::Event { will_commit: false, ..pdfcraft_js::Event::field(event, t, "") },
+            (None, Some((kind, page))) => {
+                self.runner.doc.page = page.min(self.runner.doc.num_pages.saturating_sub(1));
+                pdfcraft_js::Event { kind: kind.to_string(), ..pdfcraft_js::Event::doc(event) }
+            }
+            (None, None) => pdfcraft_js::Event::doc(event),
+        }
+    }
+}
+
 /// Where a JavaScript action lives ([`Session::run_action_javascript`]).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ActionSource {
@@ -549,7 +582,7 @@ pub enum ActionSource {
 
 impl ActionSource {
     /// (`event.type`, `event.name`, the page the script starts on).
-    fn event(&self) -> (&'static str, &'static str, usize) {
+    pub(crate) fn event(&self) -> (&'static str, &'static str, usize) {
         match self {
             ActionSource::Link { page, .. } => ("Link", "Mouse Up", *page),
             ActionSource::Bookmark { .. } => ("Bookmark", "Mouse Up", 0),

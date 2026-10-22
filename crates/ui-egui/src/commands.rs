@@ -291,6 +291,7 @@ impl PdfCraftApp {
             "a11y.check" => self.start_accessibility_check(),
             "ocr.recognize" => self.dialog = Some(Dialog::RecognizeText),
             "tools.js_console" => self.dialog = Some(Dialog::JsConsole),
+            "tools.js_debugger" => self.open_js_debugger(),
             "tools.page_actions" => {
                 if let Some((i, _)) = self.active_ids() {
                     let page = self.views[i].current;

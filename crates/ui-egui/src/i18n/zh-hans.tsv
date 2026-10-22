@@ -2401,3 +2401,50 @@ compare-page	Moved	已移动
 	Nothing to recover	没有可恢复的内容
 	Saved recovery copies of unsaved changes	已保存未保存更改的恢复副本
 	Recovery copies are up to date	恢复副本已是最新
+
+# JavaScript debugger
+	(top level)	（顶层）
+	Add a watch expression	添加监视表达式
+	Annotations	注释
+	Bookmark	书签
+	Breakpoint on line {n}	第 {n} 行的断点
+	Call stack	调用堆栈
+	Click a line number to set a breakpoint.	单击行号即可设置断点。
+	Document script	文档脚本
+	Edited here only: runs use this text; the document keeps its script.	仅在此处编辑：运行使用此文本，文档保留原脚本。
+	Error	错误
+	Error on line {n}	第 {n} 行出错
+	Evaluate	求值
+	Evaluate in the paused scope	在暂停的作用域中求值
+	Filter scripts	筛选脚本
+	Finished	已完成
+	JavaScript Debugger	JavaScript 调试器
+	JavaScript debugger…	JavaScript 调试器…
+	JavaScript is turned off (Preferences → JavaScript).	JavaScript 已关闭（首选项 → JavaScript）。
+	Keystroke	按键
+	Lines: {n}	行数：{n}
+	Link {n}	链接 {n}
+	Links	链接
+	More scripts than can be listed; the list is cut.	脚本数量超出可列出的范围，列表已截断。
+	No scripts match.	没有匹配的脚本。
+	Not paused	未暂停
+	Open action	打开时的动作
+	Page {n}	第 {n} 页
+	Paused on line {n}	在第 {n} 行暂停
+	Refresh	刷新
+	Run JavaScript against the document	对文档运行 JavaScript
+	Scratch script	草稿脚本
+	Scripts: {n}	脚本：{n}
+	Step into	单步进入
+	Step out	单步跳出
+	Step over	单步跳过
+	Stopped. Nothing the script did was applied.	已停止。脚本所做的任何操作均未应用。
+	Stopped: the script ran too long	已停止：脚本运行时间过长
+	The paused point could not be reached again.	无法再次到达暂停的位置。
+	This document has no scripts.	此文档没有脚本。
+	Watch values show here when the script pauses.	脚本暂停时，监视值会显示在这里。
+	Watches	监视
+	document script, line {n}	文档脚本，第 {n} 行
+	line {n}	第 {n} 行
+	{error} (document script {name}, line {n})	{error}（文档脚本 {name}，第 {n} 行）
+	{error} (line {n})	{error}（第 {n} 行）

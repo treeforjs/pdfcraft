@@ -2437,3 +2437,50 @@ compare-page	Moved	Verschoben
 	Nothing to recover	Nichts wiederherzustellen
 	Saved recovery copies of unsaved changes	Wiederherstellungskopien der nicht gespeicherten Änderungen gespeichert
 	Recovery copies are up to date	Wiederherstellungskopien sind aktuell
+
+# JavaScript debugger
+	(top level)	(oberste Ebene)
+	Add a watch expression	Überwachungsausdruck hinzufügen
+	Annotations	Anmerkungen
+	Bookmark	Lesezeichen
+	Breakpoint on line {n}	Haltepunkt in Zeile {n}
+	Call stack	Aufrufliste
+	Click a line number to set a breakpoint.	Klicken Sie auf eine Zeilennummer, um einen Haltepunkt zu setzen.
+	Document script	Dokumentskript
+	Edited here only: runs use this text; the document keeps its script.	Nur hier bearbeitet: Ausführungen verwenden diesen Text, das Dokument behält sein Skript.
+	Error	Fehler
+	Error on line {n}	Fehler in Zeile {n}
+	Evaluate	Auswerten
+	Evaluate in the paused scope	Im angehaltenen Kontext auswerten
+	Filter scripts	Skripte filtern
+	Finished	Beendet
+	JavaScript Debugger	JavaScript-Debugger
+	JavaScript debugger…	JavaScript-Debugger…
+	JavaScript is turned off (Preferences → JavaScript).	JavaScript ist ausgeschaltet (Einstellungen → JavaScript).
+	Keystroke	Tastenanschlag
+	Lines: {n}	Zeilen: {n}
+	Link {n}	Verknüpfung {n}
+	Links	Verknüpfungen
+	More scripts than can be listed; the list is cut.	Mehr Skripte, als aufgelistet werden können; die Liste ist gekürzt.
+	No scripts match.	Keine passenden Skripte.
+	Not paused	Nicht angehalten
+	Open action	Öffnen-Aktion
+	Page {n}	Seite {n}
+	Paused on line {n}	Angehalten in Zeile {n}
+	Refresh	Aktualisieren
+	Run JavaScript against the document	JavaScript auf das Dokument anwenden
+	Scratch script	Notizskript
+	Scripts: {n}	Skripte: {n}
+	Step into	Hineinspringen
+	Step out	Herausspringen
+	Step over	Überspringen
+	Stopped. Nothing the script did was applied.	Angehalten. Nichts, was das Skript getan hat, wurde übernommen.
+	Stopped: the script ran too long	Angehalten: Das Skript lief zu lange
+	The paused point could not be reached again.	Die angehaltene Stelle konnte nicht erneut erreicht werden.
+	This document has no scripts.	Dieses Dokument enthält keine Skripte.
+	Watch values show here when the script pauses.	Überwachte Werte erscheinen hier, wenn das Skript anhält.
+	Watches	Überwachung
+	document script, line {n}	Dokumentskript, Zeile {n}
+	line {n}	Zeile {n}
+	{error} (document script {name}, line {n})	{error} (Dokumentskript {name}, Zeile {n})
+	{error} (line {n})	{error} (Zeile {n})

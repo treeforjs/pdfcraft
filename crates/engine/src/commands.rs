@@ -317,6 +317,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     c("export.xlsx", "Export to Excel…", FILE, None, Document, "grid-3x3"),
     c("app.preferences", "Preferences…", EDIT, Some(Shortcut::cmd(",")), Nothing, "settings"),
     c("tools.js_console", "JavaScript console…", None, Some(Shortcut::cmd("J")), Document, "square-terminal"),
+    c("tools.js_debugger", "JavaScript debugger…", None, Some(Shortcut::cmd_shift("J")), Document, "square-terminal"),
     c("tools.document_js", "Document JavaScripts…", None, None, Modification, "file-code"),
     c("tools.page_actions", "Page actions…", None, None, Modification, "file-code"),
     c("ocr.recognize", "Recognize text…", None, None, Modification, "scan-text"),

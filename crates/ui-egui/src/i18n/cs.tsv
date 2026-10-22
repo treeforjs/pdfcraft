@@ -2461,3 +2461,50 @@ compare-page	Moved	Přesunutá
 	Nothing to recover	Není co obnovit
 	Saved recovery copies of unsaved changes	Záložní kopie neuložených změn byly uloženy
 	Recovery copies are up to date	Záložní kopie jsou aktuální
+
+# JavaScript debugger
+	(top level)	(nejvyšší úroveň)
+	Add a watch expression	Přidat sledovaný výraz
+	Annotations	Poznámky
+	Bookmark	Záložka
+	Breakpoint on line {n}	Zarážka na řádku {n}
+	Call stack	Zásobník volání
+	Click a line number to set a breakpoint.	Kliknutím na číslo řádku nastavíte zarážku.
+	Document script	Skript dokumentu
+	Edited here only: runs use this text; the document keeps its script.	Upraveno jen zde: spuštění používají tento text, dokument si ponechá svůj skript.
+	Error	Chyba
+	Error on line {n}	Chyba na řádku {n}
+	Evaluate	Vyhodnotit
+	Evaluate in the paused scope	Vyhodnotit v pozastaveném kontextu
+	Filter scripts	Filtrovat skripty
+	Finished	Dokončeno
+	JavaScript Debugger	Ladicí program JavaScriptu
+	JavaScript debugger…	Ladicí program JavaScriptu…
+	JavaScript is turned off (Preferences → JavaScript).	JavaScript je vypnutý (Předvolby → JavaScript).
+	Keystroke	Stisk klávesy
+	Lines: {n}	Řádky: {n}
+	Link {n}	Odkaz {n}
+	Links	Odkazy
+	More scripts than can be listed; the list is cut.	Skriptů je víc, než lze vypsat; seznam je zkrácen.
+	No scripts match.	Žádný skript neodpovídá.
+	Not paused	Nepozastaveno
+	Open action	Akce při otevření
+	Page {n}	Stránka {n}
+	Paused on line {n}	Pozastaveno na řádku {n}
+	Refresh	Obnovit
+	Run JavaScript against the document	Spustit JavaScript nad dokumentem
+	Scratch script	Pracovní skript
+	Scripts: {n}	Skripty: {n}
+	Step into	Krok dovnitř
+	Step out	Krok ven
+	Step over	Krok přes
+	Stopped. Nothing the script did was applied.	Zastaveno. Nic z toho, co skript udělal, nebylo použito.
+	Stopped: the script ran too long	Zastaveno: skript běžel příliš dlouho
+	The paused point could not be reached again.	Místo pozastavení se nepodařilo znovu dosáhnout.
+	This document has no scripts.	Tento dokument neobsahuje žádné skripty.
+	Watch values show here when the script pauses.	Sledované hodnoty se zobrazí zde, když se skript pozastaví.
+	Watches	Sledování
+	document script, line {n}	skript dokumentu, řádek {n}
+	line {n}	řádek {n}
+	{error} (document script {name}, line {n})	{error} (skript dokumentu {name}, řádek {n})
+	{error} (line {n})	{error} (řádek {n})

@@ -2323,3 +2323,50 @@ compare-page	Moved	已移動
 	Nothing to recover	沒有可復原的內容
 	Saved recovery copies of unsaved changes	已儲存未儲存變更的復原副本
 	Recovery copies are up to date	復原副本已是最新
+
+# JavaScript debugger
+	(top level)	（最上層）
+	Add a watch expression	新增監看運算式
+	Annotations	註解
+	Bookmark	書籤
+	Breakpoint on line {n}	第 {n} 行的中斷點
+	Call stack	呼叫堆疊
+	Click a line number to set a breakpoint.	按一下行號即可設定中斷點。
+	Document script	文件指令碼
+	Edited here only: runs use this text; the document keeps its script.	僅在此處編輯：執行會使用此文字，文件保留原本的指令碼。
+	Error	錯誤
+	Error on line {n}	第 {n} 行發生錯誤
+	Evaluate	求值
+	Evaluate in the paused scope	在暫停的範圍中求值
+	Filter scripts	篩選指令碼
+	Finished	已完成
+	JavaScript Debugger	JavaScript 偵錯工具
+	JavaScript debugger…	JavaScript 偵錯工具…
+	JavaScript is turned off (Preferences → JavaScript).	JavaScript 已關閉（偏好設定 → JavaScript）。
+	Keystroke	按鍵
+	Lines: {n}	行數：{n}
+	Link {n}	連結 {n}
+	Links	連結
+	More scripts than can be listed; the list is cut.	指令碼數量超出可列出的範圍，清單已截斷。
+	No scripts match.	沒有符合的指令碼。
+	Not paused	未暫停
+	Open action	開啟時的動作
+	Page {n}	第 {n} 頁
+	Paused on line {n}	在第 {n} 行暫停
+	Refresh	重新整理
+	Run JavaScript against the document	對文件執行 JavaScript
+	Scratch script	草稿指令碼
+	Scripts: {n}	指令碼：{n}
+	Step into	逐步執行
+	Step out	跳離函式
+	Step over	不進入函式
+	Stopped. Nothing the script did was applied.	已停止。指令碼所做的任何操作都未套用。
+	Stopped: the script ran too long	已停止：指令碼執行時間過長
+	The paused point could not be reached again.	無法再次到達暫停的位置。
+	This document has no scripts.	此文件沒有指令碼。
+	Watch values show here when the script pauses.	指令碼暫停時，監看值會顯示在這裡。
+	Watches	監看
+	document script, line {n}	文件指令碼，第 {n} 行
+	line {n}	第 {n} 行
+	{error} (document script {name}, line {n})	{error}（文件指令碼 {name}，第 {n} 行）
+	{error} (line {n})	{error}（第 {n} 行）
