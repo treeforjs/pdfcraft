@@ -17,6 +17,9 @@ pdfcraft-model = { workspace = true }
 thiserror = { workspace = true }
 # Display order of right-to-left lines in added text; already in the tree via the interface.
 unicode-bidi = "0.3"
+# Arabic presentation forms ↔ letters for editing existing right-to-left text; already in the
+# tree via stringprep.
+unicode-normalization = "0.1"
 # JPEG decoding and encoding for Convert Colors (zune-jpeg); already in the tree via pdfcraft-optimize.
 image = { version = "0.25", default-features = false, features = ["jpeg"] }
 pdfcraft-filters = { workspace = true }

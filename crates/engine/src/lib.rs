@@ -82,6 +82,8 @@ pub use pdfcraft_forms::{
 };
 
 pub use pdfcraft_a11y as a11y;
+/// Right-to-left text: display order (UAX #9), visual caret movement, Arabic presentation forms.
+pub use pdfcraft_edit::bidi;
 pub use pdfcraft_edit::lists::{MAX_LIST_LEVEL, MAX_LIST_START, items as list_items, labels as list_labels};
 /// Edit a PDF ▸ arrange, align, distribute, rotate, flip and move page objects.
 pub use pdfcraft_edit::objects::{

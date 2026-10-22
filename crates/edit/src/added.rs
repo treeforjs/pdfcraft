@@ -439,7 +439,7 @@ fn arabic_width(t: &AddedText, s: &str, rtl: bool) -> f64 {
     arabic_layout(t, s, rtl).map(|(_, w)| w).unwrap_or_else(|_| t.family.width(s, t.size, t.bold))
 }
 
-fn arabic_error(e: GlyphError, text: &str) -> EditError {
+pub(crate) fn arabic_error(e: GlyphError, text: &str) -> EditError {
     EditError::Invalid(match e {
         GlyphError::NoFont => "Arabic text needs PdfCraft's Arabic font, which this build doesn't include \
                                (to build it in, set CRAFT_FONTS_DIR to a craft-fonts checkout that has an Arab face)"
@@ -462,7 +462,7 @@ fn font_name(base: &str) -> String {
 }
 
 /// Most glyphs in one Type 3 font: its codes are single bytes, 1–240.
-const GLYPHS_PER_FONT: usize = 240;
+pub(crate) const GLYPHS_PER_FONT: usize = 240;
 /// Most Type 3 fonts one item may use, which bounds the objects it adds (ordinary text needs one
 /// or two).
 const MAX_ARABIC_FONTS: usize = 16;
@@ -563,14 +563,14 @@ fn draw_arabic(doc: &mut Document, t: &AddedText, latin: &str, taken: &Dict, fon
 
 /// What makes two clusters the same Type 3 glyph: text, glyphs, offsets and advance (bit for bit;
 /// equal clusters come from the same font units).
-type ClusterKey<'a> = (&'a str, Vec<(u32, u64, u64)>, u64);
+pub(crate) type ClusterKey<'a> = (&'a str, Vec<(u32, u64, u64)>, u64);
 
-fn cluster_key(c: &ShapedCluster) -> ClusterKey<'_> {
+pub(crate) fn cluster_key(c: &ShapedCluster) -> ClusterKey<'_> {
     (c.text.as_str(), c.glyphs.iter().map(|(id, [x, y])| (*id, x.to_bits(), y.to_bits())).collect(), c.advance.to_bits())
 }
 
 /// A Type 3 font with `clusters` as codes 1…, each drawn from the Arabic face's glyph `outlines`.
-fn type3_arabic(doc: &mut Document, clusters: &[&ShapedCluster], outlines: &HashMap<u32, GlyphOutline>) -> ObjRef {
+pub(crate) fn type3_arabic(doc: &mut Document, clusters: &[&ShapedCluster], outlines: &HashMap<u32, GlyphOutline>) -> ObjRef {
     let mut charprocs = Dict::new();
     let mut differences = vec![Object::Int(1)];
     let mut widths = Vec::with_capacity(clusters.len());

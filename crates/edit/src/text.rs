@@ -50,6 +50,12 @@ pub struct TextLine {
     /// Where the line starts: text matrix (text space), the state there, and its `BT`.
     origin: Origin,
     glyphs: Vec<SourceGlyph>,
+    /// Right-to-left text: the page shows it in display order, and `text` and the glyphs were
+    /// put in logical (typing) order ([`crate::bidi::unit_order`]).
+    pub rtl: bool,
+    /// Vertical writing (an `Identity-V` or other `-V` font): the line is a column running down
+    /// the page. Its `baseline` is the column's x and its extent runs down from `x`.
+    pub vertical: bool,
 }
 
 /// Source character codes and positioning, kept separately from Unicode. Re-encoding Unicode
@@ -184,6 +190,11 @@ pub struct TextBlock {
     pub runs: Vec<TextRun>,
     /// Visual rows, distinct from `lines` (which indexes same-style source fragments).
     pub line_count: usize,
+    /// The paragraph's base direction is right to left (its first strong character, UAX #9);
+    /// its text is in logical order and rows are written back in display order.
+    pub rtl: bool,
+    /// A column of vertical writing (see [`TextLine::vertical`]).
+    pub vertical: bool,
 }
 
 impl TextLine {
@@ -411,6 +422,7 @@ struct Shown {
     italic: bool,
     decodable: bool,
     glyphs: Vec<SourceGlyph>,
+    vertical: bool,
 }
 
 /// The graphics state carried from one of a page's content streams to the next: the streams
@@ -558,8 +570,11 @@ fn interpret(
                     _ => op.operands.last().cloned().into_iter().collect(),
                 };
                 let trm0 = tm.then(&ts.ctm);
+                let tm0 = tm;
                 let frame = Frame::of(&trm0);
-                let start = frame.local(trm0.apply(0.0, ts.rise));
+                // Vertical writing advances down the page by the vertical displacements (§9.7.4.3).
+                let vertical = m.vertical;
+                let start = frame.local(trm0.apply(0.0, if vertical { 0.0 } else { ts.rise }));
                 let mut text = String::new();
                 let mut decodable = true;
                 let mut x_text = 0.0;
@@ -581,13 +596,19 @@ fn interpret(
                                     Some(t) => text.push_str(t),
                                     None => decodable = false,
                                 }
-                                let w = m.width(code) * ts.size + ts.char_spacing + if m.is_space(code, len) { ts.word_spacing } else { 0.0 };
-                                x_text += w * ts.scale;
+                                let spacing = ts.char_spacing + if m.is_space(code, len) { ts.word_spacing } else { 0.0 };
+                                if vertical {
+                                    // Progress down the column: -ty.
+                                    x_text -= m.vertical_advance(code) * ts.size + spacing;
+                                } else {
+                                    x_text += (m.width(code) * ts.size + spacing) * ts.scale;
+                                }
                             }
                         }
                         other => {
                             if let Some(n) = other.as_f64() {
-                                let dx = -n / 1000.0 * ts.size * ts.scale;
+                                // Positive numbers move back along a line, further down a column.
+                                let dx = if vertical { n / 1000.0 * ts.size } else { -n / 1000.0 * ts.size * ts.scale };
                                 // A large gap inside TJ reads as a space.
                                 if dx > ts.size * 0.2 && !text.ends_with(' ') {
                                     text.push(' ');
@@ -602,18 +623,27 @@ fn interpret(
                         }
                     }
                 }
-                tm = Matrix([1.0, 0.0, 0.0, 1.0, x_text, 0.0]).then(&tm);
+                tm = if vertical { Matrix([1.0, 0.0, 0.0, 1.0, 0.0, -x_text]) } else { Matrix([1.0, 0.0, 0.0, 1.0, x_text, 0.0]) }.then(&tm);
                 // The actual end point (its source TJ adjustments included), projected into the frame.
-                let end = frame.local(tm.then(&ts.ctm).apply(0.0, ts.rise));
-                // The box: from descent to ascent along the run.
-                let corners = [
-                    trm0.apply(0.0, ts.rise + m.descent * ts.size),
-                    trm0.apply(x_text, ts.rise + m.descent * ts.size),
-                    trm0.apply(0.0, ts.rise + m.ascent * ts.size),
-                    trm0.apply(x_text, ts.rise + m.ascent * ts.size),
-                ];
+                let end = frame.local(tm.then(&ts.ctm).apply(0.0, if vertical { 0.0 } else { ts.rise }));
+                // The box: from descent to ascent along the run; a column is an em wide, centred
+                // on its glyphs' vertical origins, from the first origin down to where it ends.
+                let corners = if vertical {
+                    let half = ts.size * 0.5;
+                    [trm0.apply(-half, 0.0), trm0.apply(half, 0.0), trm0.apply(-half, -x_text), trm0.apply(half, -x_text)]
+                } else {
+                    [
+                        trm0.apply(0.0, ts.rise + m.descent * ts.size),
+                        trm0.apply(x_text, ts.rise + m.descent * ts.size),
+                        trm0.apply(0.0, ts.rise + m.ascent * ts.size),
+                        trm0.apply(x_text, ts.rise + m.ascent * ts.size),
+                    ]
+                };
                 let rect = bounds(corners);
-                let frame_rect = bounds(corners.map(|p| frame.local(p)));
+                let local = bounds(corners.map(|p| frame.local(p)));
+                // A column's frame box runs along it (down the page) and across it (its x).
+                let frame_rect = if vertical { [-local[3], local[0], -local[1], local[2]] } else { local };
+                let (baseline, start_x, end_x) = if vertical { (start.0, -start.1, -end.1) } else { (start.1, start.0, end.0) };
                 let size_user = (trm0.0[2].powi(2) + trm0.0[3].powi(2)).sqrt() * ts.size;
                 let mut shown_state = ts.clone();
                 shown_state.complex_graphics |= pending_path;
@@ -623,7 +653,7 @@ fn interpret(
                 }
                 out.push(Shown {
                     op: i,
-                    tm: Matrix([tm.0[0], tm.0[1], tm.0[2], tm.0[3], tm.0[4] - x_text * tm.0[0], tm.0[5] - x_text * tm.0[1]]),
+                    tm: tm0,
                     state: shown_state,
                     tlm,
                     bt_op: at_bt.0,
@@ -631,9 +661,9 @@ fn interpret(
                     text,
                     rect,
                     frame_rect,
-                    baseline: start.1,
-                    start_x: start.0,
-                    end_x: end.0,
+                    baseline,
+                    start_x,
+                    end_x,
                     bt,
                     font: name,
                     base_font: m.base_font.clone(),
@@ -642,6 +672,7 @@ fn interpret(
                     italic: m.italic,
                     decodable,
                     glyphs,
+                    vertical,
                 });
             }
             _ => {}
@@ -713,6 +744,8 @@ pub fn text_lines(doc: &Document, page: usize) -> Result<Vec<TextLine>, EditErro
                 color: fill_color(&s.state.fill),
                 decodable: s.decodable,
                 glyphs: s.glyphs,
+                rtl: false,
+                vertical: s.vertical,
                 stream: si,
                 ops: vec![s.op],
                 origin: Origin {
@@ -732,7 +765,84 @@ pub fn text_lines(doc: &Document, page: usize) -> Result<Vec<TextLine>, EditErro
     }
     // Lines of only spaces aren't editable text.
     lines.retain(|l| !l.text.is_empty());
+    logical_order(&mut lines);
+    logical_rows(&mut lines);
     Ok(lines)
+}
+
+/// Lines of one row in different fonts or styles are separate [`TextLine`]s in display order.
+/// When the row has right-to-left text, put them in logical order too (each is ordered
+/// already), so a paragraph reads, and is edited, in typing order.
+fn logical_rows(lines: &mut [TextLine]) {
+    let mut start = 0;
+    while start < lines.len() {
+        let mut end = start + 1;
+        while let (Some(p), Some(l)) = (lines.get(end - 1), lines.get(end)) {
+            let size = p.size.max(l.size).max(1.0);
+            let horizontal = horizontal_text_size(p).max(horizontal_text_size(l));
+            let same = !p.vertical
+                && !l.vertical
+                && p.stream == l.stream
+                && p.origin.ctm == l.origin.ctm
+                && p.origin.tm.get(..4) == l.origin.tm.get(..4)
+                && (p.origin.baseline - l.origin.baseline).abs() < size * 0.15
+                && {
+                    let gap = l.origin.x - p.frame_rect[2];
+                    gap >= -horizontal * 0.2 && gap < horizontal * 2.0
+                };
+            if !same {
+                break;
+            }
+            end += 1;
+        }
+        if let Some(row) = lines.get_mut(start..end)
+            && row.len() > 1
+            && row.iter().any(|l| crate::bidi::has_rtl(&l.text))
+        {
+            let shown: String = row.iter().map(|l| l.text.as_str()).collect();
+            let rtl = crate::bidi::display_order_rtl(&shown);
+            let order = crate::bidi::unit_order(&row.iter().map(|l| l.text.as_str()).collect::<Vec<_>>(), rtl);
+            let mut taken: Vec<Option<TextLine>> = row.iter().cloned().map(Some).collect();
+            let ordered: Vec<TextLine> = order.into_iter().filter_map(|i| taken.get_mut(i).and_then(Option::take)).collect();
+            if ordered.len() == row.len() {
+                for (slot, mut line) in row.iter_mut().zip(ordered) {
+                    line.rtl = true;
+                    *slot = line;
+                }
+            }
+        }
+        start = end;
+    }
+}
+
+/// Put right-to-left lines (shown in display order) into logical order, glyphs and text alike,
+/// and read Arabic presentation forms as the letters they show. Only lines whose text is
+/// exactly their glyphs' text are reordered; columns of vertical writing are left alone.
+fn logical_order(lines: &mut [TextLine]) {
+    for l in lines.iter_mut() {
+        if l.vertical || !crate::bidi::has_rtl(&l.text) {
+            continue;
+        }
+        let joined: String = l.glyphs.iter().map(|g| g.text.as_str()).collect();
+        if joined != l.text {
+            continue;
+        }
+        for g in &mut l.glyphs {
+            if let std::borrow::Cow::Owned(t) = crate::bidi::normalize(&g.text) {
+                g.text = t;
+            }
+        }
+        let shown: String = l.glyphs.iter().map(|g| g.text.as_str()).collect();
+        let rtl = crate::bidi::display_order_rtl(&shown);
+        let order = {
+            let units: Vec<&str> = l.glyphs.iter().map(|g| g.text.as_str()).collect();
+            crate::bidi::unit_order(&units, rtl)
+        };
+        let mut glyphs: Vec<Option<SourceGlyph>> = std::mem::take(&mut l.glyphs).into_iter().map(Some).collect();
+        l.glyphs = order.into_iter().filter_map(|i| glyphs.get_mut(i).and_then(Option::take)).collect();
+        l.text = l.glyphs.iter().map(|g| g.text.as_str()).collect();
+        l.rtl = true;
+    }
 }
 
 /// The line `s` continues, or a new one: `last` is the previous run of the same stream
@@ -780,6 +890,8 @@ fn add_shown(lines: &mut Vec<TextLine>, last: &mut Option<(usize, f64, f64, f64)
             color: fill_color(&s.state.fill),
             decodable: s.decodable,
             glyphs: s.glyphs,
+            rtl: false,
+            vertical: s.vertical,
             stream,
             ops: vec![s.op],
             origin: Origin {
@@ -910,6 +1022,7 @@ fn reading_lines(doc: &Document, page: usize) -> Result<Vec<TextLine>, EditError
     }
     let mut lines = w.lines;
     lines.retain(|l| !l.text.trim().is_empty());
+    logical_order(&mut lines);
     Ok(lines)
 }
 
@@ -1085,7 +1198,9 @@ fn fallback_face<'a>(faces: &[&'a CraftFont], chars: &[char], has_glyph: impl Fn
 }
 
 fn type3_font(doc: &mut Document, fonts_res: &mut Dict, text: &str, family: crate::added::Family, bold: bool) -> Result<Type3Fallback, EditError> {
-    let faces = pdfcraft_fonts::document_japanese_fonts_for_style(family == crate::added::Family::Times, bold);
+    // Japanese faces first (the style's best match), then Chinese and Korean ones, so Simplified
+    // Chinese or Hangul a Japanese face lacks still finds a face that has every character.
+    let faces = pdfcraft_fonts::document_cjk_fonts_for_style(family == crate::added::Family::Times, bold);
     let mut chars = Vec::new();
     for ch in text.chars() {
         if !chars.contains(&ch) {
@@ -1163,6 +1278,70 @@ fn type3_font(doc: &mut Document, fonts_res: &mut Dict, text: &str, family: crat
     Ok(Type3Fallback { name, family, codes })
 }
 
+/// Arabic text (logical order) the paragraph's fonts can't show, shaped with the craft-fonts
+/// Arabic face into a new Type 3 font (joining forms, ligatures and marks; each cluster one code
+/// with its text in ToUnicode). Returns the font's resource name and the clusters as glyphs in
+/// logical order; rows put them back in display order, which is the order they were shaped in.
+fn arabic_fallback(doc: &mut Document, fonts: &mut Dict, text: &str) -> Result<(String, Vec<SourceGlyph>), EditError> {
+    use crate::added::{GLYPHS_PER_FONT, arabic_error, cluster_key, type3_arabic};
+    let mut clusters = pdfcraft_fonts::shape_arabic(text, true).map_err(|e| arabic_error(e, text))?;
+    clusters.reverse();
+    let mut keys: Vec<&pdfcraft_fonts::ShapedCluster> = Vec::new();
+    let mut index = HashMap::new();
+    let mut codes = Vec::with_capacity(clusters.len());
+    for c in &clusters {
+        let k = *index.entry(cluster_key(c)).or_insert_with(|| {
+            keys.push(c);
+            keys.len() - 1
+        });
+        if k >= GLYPHS_PER_FONT {
+            return Err(EditError::Invalid(format!(
+                "the Arabic text uses more than {GLYPHS_PER_FONT} different glyphs; edit it a few words at a time"
+            )));
+        }
+        // Codes start at 1; k < 240.
+        codes.push(u8::try_from(k + 1).unwrap_or(1));
+    }
+    // Every outline is read before anything is written.
+    let mut outlines = HashMap::new();
+    for c in &keys {
+        for (id, _) in &c.glyphs {
+            if !outlines.contains_key(id) {
+                outlines.insert(*id, pdfcraft_fonts::arabic_glyph(*id).map_err(|e| arabic_error(e, &c.text))?);
+            }
+        }
+    }
+    let font = type3_arabic(doc, &keys, &outlines);
+    let mut name = format!("PCAr{}", font.num);
+    let mut suffix = 0usize;
+    while fonts.contains(name.as_bytes()) {
+        suffix = suffix.saturating_add(1);
+        name = format!("PCAr{}_{suffix}", font.num);
+    }
+    fonts.set(name.clone().into_bytes(), Object::Ref(font));
+    let glyphs = clusters.iter().zip(codes).map(|(c, code)| SourceGlyph { text: c.text.clone(), bytes: vec![code], adjustment: 0.0 }).collect();
+    Ok((name, glyphs))
+}
+
+/// `text` (logical order) as a line's font shows it, left to right: Unicode bidi display order
+/// with the text's own base direction, direction controls dropped.
+fn display_text(text: &str) -> std::borrow::Cow<'_, str> {
+    if crate::bidi::has_rtl(text) { std::borrow::Cow::Owned(crate::bidi::visual_text(text, None)) } else { std::borrow::Cow::Borrowed(text) }
+}
+
+/// The bytes that show `text` (logical order) in display order in font `m`: as typed, or for
+/// Arabic, in the presentation forms the font maps its glyphs to.
+fn encode_display(m: &Metrics, text: &str) -> Option<Vec<u8>> {
+    let shown = display_text(text);
+    if text.chars().any(crate::bidi::joining_letter) {
+        let presented = crate::bidi::present(text);
+        if let Some(bytes) = m.encode(&display_text(&presented)) {
+            return Some(bytes);
+        }
+    }
+    m.encode(&shown)
+}
+
 fn type3_encode(fallback: &Type3Fallback, text: &str) -> Option<Vec<u8>> {
     text.chars().map(|ch| fallback.codes.iter().find(|(c, _, _)| *c == ch).map(|(_, code, _)| *code)).collect()
 }
@@ -1184,7 +1363,20 @@ pub fn replace_line(doc: &mut Document, page: usize, line: usize, text: &str) ->
     let first = target.ops.first().copied().filter(|i| *i < ops.len()).ok_or_else(|| EditError::Invalid("the page's content changed".into()))?;
     // The line's own font, when it can show every character.
     let font = fonts_res.get(target.font.as_bytes()).and_then(|f| doc.resolve(f).as_dict().cloned()).map(|d| Metrics::from_dict(doc, &d));
-    let reused = font.as_ref().and_then(|m| m.encode(&text));
+    // Right-to-left text is written in display order, Arabic in the font's presentation forms.
+    let reused = font.as_ref().and_then(|m| encode_display(m, &text));
+    if reused.is_none() && target.vertical {
+        return Err(EditError::Invalid(format!(
+            "\"{text}\" has characters the vertical text's own font ({}) doesn't have; vertical text can only be rewritten in its own font",
+            target.base_font
+        )));
+    }
+    if reused.is_none() && text.chars().any(crate::bidi::joining_letter) {
+        return Err(EditError::Invalid(format!(
+            "{} can't show this Arabic text; edit the paragraph instead (text_edit with paragraph), which shapes it with PdfCraft's Arabic font",
+            target.base_font
+        )));
+    }
     let mut substituted = None;
     let mut replacement: Vec<Op> = Vec::new();
     // ' and " also move to the next line; keep that.
@@ -1202,8 +1394,8 @@ pub fn replace_line(doc: &mut Document, page: usize, line: usize, text: &str) ->
         None => {
             if needs_type3(&text) {
                 let fallback = type3_font(doc, &mut fonts_res, &text, source_family(&target.base_font), target.bold)?;
-                let bytes = type3_encode(&fallback, &text)
-                    .ok_or_else(|| EditError::Invalid(format!("\"{text}\" can't be shown by the Japanese fallback")))?;
+                let bytes = type3_encode(&fallback, &display_text(&text))
+                    .ok_or_else(|| EditError::Invalid(format!("\"{text}\" can't be shown by the CJK fallback")))?;
                 let size = font_size_before(&ops, first).unwrap_or(target.size);
                 replacement.push(Op::new("Tf", vec![Object::name(&fallback.name), pdfcraft_content::num(size)]));
                 replacement.push(Op::new("Tj", vec![Object::String(PdfString::literal(bytes))]));
@@ -1383,17 +1575,21 @@ fn group_blocks(lines: &[TextLine], mixed: bool) -> Vec<TextBlock> {
                 && p.color == l.color
                 && (p.size - l.size).abs() < 0.01
         };
-        let compatible = previous.is_some_and(|p| {
-            p.stream == l.stream && p.origin.ctm == l.origin.ctm && p.origin.tm.get(..4) == l.origin.tm.get(..4) && (mixed || same_style(p))
-        });
+        // A column of vertical writing is a paragraph of its own.
+        let compatible = !l.vertical
+            && previous.is_some_and(|p| {
+                !p.vertical
+                    && p.stream == l.stream
+                    && p.origin.ctm == l.origin.ctm
+                    && p.origin.tm.get(..4) == l.origin.tm.get(..4)
+                    && (mixed || same_style(p))
+            });
         let same_row = mixed
             && compatible
             && previous.is_some_and(|p| {
                 let size = p.size.max(l.size).max(1.0);
                 let horizontal = horizontal_text_size(p).max(horizontal_text_size(l));
-                (p.origin.baseline - l.origin.baseline).abs() < size * 0.15
-                    && l.origin.x >= p.frame_rect[2] - horizontal * 0.2
-                    && l.origin.x - p.frame_rect[2] < horizontal * 2.0
+                (p.origin.baseline - l.origin.baseline).abs() < size * 0.15 && row_gap(p, l, horizontal).is_some()
             });
         let next_row = compatible
             && row.is_some_and(|p| {
@@ -1424,7 +1620,8 @@ fn group_blocks(lines: &[TextLine], mixed: bool) -> Vec<TextBlock> {
                     }
                 }
             } else if let Some(previous) = previous {
-                let gap = l.origin.x - previous.frame_rect[2];
+                let horizontal = horizontal_text_size(previous).max(horizontal_text_size(l));
+                let gap = row_gap(previous, l, horizontal).unwrap_or(l.origin.x - previous.frame_rect[2]);
                 let adjustment = gap / horizontal_scale(&previous.origin);
                 if gap > horizontal_text_size(l) * 0.2 && !b.text.ends_with(' ') && !l.text.starts_with(' ') {
                     b.text.push(' ');
@@ -1458,11 +1655,30 @@ fn group_blocks(lines: &[TextLine], mixed: bool) -> Vec<TextBlock> {
                 lines: vec![i],
                 runs: vec![run],
                 line_count: 1,
+                rtl: false,
+                vertical: l.vertical,
             });
         }
     }
     blocks.retain(|b| !b.text.trim().is_empty());
+    for b in &mut blocks {
+        b.rtl = crate::bidi::has_rtl(&b.text) && crate::bidi::base_rtl(&b.text);
+    }
     blocks
+}
+
+/// The gap from line `p` to line `l` when `l` continues `p`'s row: to its right, or for
+/// right-to-left lines (put in logical order by [`logical_rows`]) to its left.
+fn row_gap(p: &TextLine, l: &TextLine, horizontal: f64) -> Option<f64> {
+    let forward = l.origin.x - p.frame_rect[2];
+    let backward = p.frame_rect[0] - l.frame_rect[2];
+    if forward >= -horizontal * 0.2 && forward < horizontal * 2.0 {
+        Some(forward)
+    } else if p.rtl && l.rtl && backward >= -horizontal * 0.2 && backward < horizontal * 2.0 {
+        Some(backward)
+    } else {
+        None
+    }
 }
 
 fn run_of(l: &TextLine, start: usize, end: usize) -> TextRun {
@@ -1639,6 +1855,21 @@ fn rewrite_block_inner(doc: &mut Document, page: usize, block: usize, text: Opti
     let blocks = group_blocks(&lines, true);
     let b = blocks.get(block).ok_or_else(|| EditError::Invalid(format!("page {} has no paragraph {}", page + 1, block + 1)))?;
     mixed::validate_text(&b.text)?;
+    if b.vertical {
+        // A column of vertical writing is rewritten in place in its own font: its positioning
+        // stays and the viewer lays the new text down the column (Identity-V and friends).
+        if *style != BlockStyle::default() {
+            return Err(EditError::Invalid("vertical text can't be reformatted, moved or rewrapped yet; change only its text".into()));
+        }
+        let new = text.unwrap_or(&b.text);
+        if new == b.text {
+            return Ok(LineEdit { substituted: None });
+        }
+        let [line] = b.lines.as_slice() else {
+            return Err(EditError::Invalid("this vertical paragraph spans several columns; edit one column at a time".into()));
+        };
+        return replace_line(doc, page, *line, new);
+    }
     if b.runs.len() > mixed::MAX_SEGMENTS {
         return Err(EditError::Invalid("edit paragraphs with at most 8,192 style segments".into()));
     }
@@ -1751,12 +1982,12 @@ fn rewrite_block_inner(doc: &mut Document, page: usize, block: usize, text: Opti
     let mut substituted = None;
     let new_font = !reuse;
     let (show_font, encode): (String, Encoder) = if let Some(m) = metrics.clone().filter(|_| reuse) {
-        (chosen_font.to_owned(), Box::new(move |s: &str| m.encode(s)))
+        (chosen_font.to_owned(), Box::new(move |s: &str| encode_display(&m, s)))
     } else if let Some(fallback) = type3.clone() {
         let name = fallback.name.clone();
         let encoder = fallback.clone();
         substituted = Some(format!("{} Type3", fallback.family));
-        (name, Box::new(move |s: &str| type3_encode(&encoder, s)))
+        (name, Box::new(move |s: &str| type3_encode(&encoder, &display_text(s))))
     } else {
         let win = pdfcraft_fonts::win_ansi(&text);
         let back: String = win.iter().map(|c| char::from_u32(u32::from(*c)).unwrap_or('?')).collect();

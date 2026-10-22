@@ -689,6 +689,7 @@ pub use printer_marks::{MarkStyle, MarkedPage, PrinterMarks, add_printer_marks};
 pub mod images;
 pub mod objects;
 pub use images::{ImageChange, PageImage, change_image, page_images, reading_images, rect_to_rect, turn_about_centre};
+pub mod bidi;
 pub mod text;
 pub use text::{
     BlockFrame, BlockStyle, LineEdit, PageFont, TextBlock, TextLine, TextRun, page_fonts, reading_blocks, reading_blocks_framed, replace_block,
@@ -701,5 +702,7 @@ pub use lists::{Bullet, ListChange, ListItem, ListStyle, ListTarget, Numbering, 
 pub mod added;
 pub use added::{Added, AddedImage, AddedText, Align, Content, Family, add_content, delete_content, first_undrawable, list_added, update_content};
 
+#[cfg(test)]
+mod rtl_cjk_tests;
 #[cfg(test)]
 mod tests;

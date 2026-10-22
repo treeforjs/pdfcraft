@@ -109,6 +109,8 @@ struct Prepared {
 
 struct Glyph {
     bytes: Vec<u8>,
+    /// The text it shows (for display order and line breaking).
+    text: String,
     face: usize,
     /// Its full advance in user space, including its source adjustment.
     advance: f64,
@@ -136,8 +138,24 @@ fn segments(block: &TextBlock, text: &str, range: Option<[usize; 2]>) -> Result<
     {
         return Err(EditError::Invalid(format!("selection must satisfy 0 <= start < end <= {} Unicode characters", new.len())));
     }
-    let prefix = old.iter().zip(&new).take_while(|(a, b)| a == b).count();
-    let suffix = old.iter().rev().zip(new.iter().rev()).take(old.len().min(new.len()).saturating_sub(prefix)).take_while(|(a, b)| a == b).count();
+    let mut prefix = old.iter().zip(&new).take_while(|(a, b)| a == b).count();
+    let mut suffix = old.iter().rev().zip(new.iter().rev()).take(old.len().min(new.len()).saturating_sub(prefix)).take_while(|(a, b)| a == b).count();
+    // Arabic letters join: typing next to one can change its form, so the edit takes in the
+    // whole word on either side, which is then encoded (or shaped) again.
+    let joins_at = |i: usize, j: usize| {
+        old.get(i).copied().is_some_and(crate::bidi::in_joined_word) || new.get(j).copied().is_some_and(crate::bidi::in_joined_word)
+    };
+    if old != new && joins_at(prefix, prefix) {
+        while prefix > 0 && old.get(prefix - 1).copied().is_some_and(crate::bidi::in_joined_word) {
+            prefix -= 1;
+        }
+    }
+    let (old_before, new_before) = (old.len().wrapping_sub(suffix + 1), new.len().wrapping_sub(suffix + 1));
+    if old != new && joins_at(old_before, new_before) {
+        while suffix > 0 && old.len().checked_sub(suffix).and_then(|i| old.get(i)).copied().is_some_and(crate::bidi::in_joined_word) {
+            suffix -= 1;
+        }
+    }
     let new_len = new.len();
     let insertion = prefix.min(old.len().saturating_sub(1));
     let mut out: Vec<Segment> = Vec::new();
@@ -174,6 +192,48 @@ fn segments(block: &TextBlock, text: &str, range: Option<[usize; 2]>) -> Result<
                 return Err(EditError::Invalid("edit paragraphs with at most 8,192 style segments".into()));
             }
             out.push(Segment { text: ch.to_string(), source, selected, source_range: preserved.then_some(local..local + 1) });
+        }
+    }
+    split_scripts(out)
+}
+
+/// Splits re-encoded segments where Arabic meets other text, so each piece can take a font
+/// that shows it (Arabic may need the shaped Arabic fallback, the rest a standard or CJK face).
+/// Spaces and punctuation stay with the piece before them.
+fn split_scripts(segments: Vec<Segment>) -> Result<Vec<Segment>, EditError> {
+    if !segments.iter().any(|s| s.source_range.is_none() && s.text.chars().any(crate::added::is_arabic)) {
+        return Ok(segments);
+    }
+    let face = pdfcraft_fonts::document_arabic_font().is_some();
+    let mut out: Vec<Segment> = Vec::with_capacity(segments.len());
+    for segment in segments {
+        if segment.source_range.is_some() {
+            out.push(segment);
+            continue;
+        }
+        let mut arabic: Option<bool> = None;
+        let start = out.len();
+        for c in segment.text.chars() {
+            let kind = if crate::added::is_arabic(c) {
+                true
+            } else if !c.is_alphanumeric() && arabic == Some(true) {
+                !face || pdfcraft_fonts::arabic_has(c)
+            } else if !c.is_alphanumeric() {
+                arabic.unwrap_or(false)
+            } else {
+                false
+            };
+            let extend = out.len() > start && arabic == Some(kind);
+            match out.last_mut() {
+                Some(last) if extend => last.text.push(c),
+                _ => {
+                    if out.len() >= MAX_SEGMENTS {
+                        return Err(EditError::Invalid("edit paragraphs with at most 8,192 style segments".into()));
+                    }
+                    out.push(Segment { text: c.to_string(), source: segment.source, selected: segment.selected, source_range: None });
+                }
+            }
+            arabic = Some(kind);
         }
     }
     Ok(out)
@@ -252,10 +312,32 @@ fn prepare(
         let mut m = metrics(doc, fonts, &name, &mut metric_cache);
         let font_changed = change && (style.family.is_some() || style.family_only.is_some() || style.bold.is_some() || style.italic.is_some());
         let keep_codes = !font_changed && exact.is_none_or(|name| name == source.font) && segment.source_range.is_some();
-        if exact.is_some() && m.as_ref().is_none_or(|m| m.encode(&segment.text).is_none()) {
+        // New Arabic text: in the font's own presentation forms when its glyphs are mapped to
+        // them; else shaped with the Arabic fallback face when there is one (a font that maps
+        // several joining forms to one letter can't be told which to draw); else as letters.
+        let arabic = !keep_codes && segment.text.chars().any(crate::bidi::joining_letter);
+        let shape = arabic && pdfcraft_fonts::document_arabic_font().is_some() && segment.text.chars().all(pdfcraft_fonts::arabic_has);
+        let presented = arabic.then(|| crate::bidi::present(&segment.text));
+        let usable = |m: &Metrics| -> Option<String> {
+            if let Some(p) = &presented
+                && m.encode(p).is_some()
+            {
+                return Some(p.clone());
+            }
+            (!shape && m.encode(&segment.text).is_some()).then(|| segment.text.clone())
+        };
+        if exact.is_some() && m.as_deref().is_none_or(|m| usable(m).is_none() && m.encode(&segment.text).is_none()) {
             return Err(EditError::Invalid(format!("font resource /{name} is missing or cannot encode the selected characters")));
         }
-        if font_changed || m.as_ref().is_none_or(|m| !keep_codes && m.encode(&segment.text).is_none()) {
+        let mut chosen = if font_changed || keep_codes {
+            None
+        } else if exact.is_some() {
+            m.as_deref().and_then(|m| usable(m).or_else(|| m.encode(&segment.text).is_some().then(|| segment.text.clone())))
+        } else {
+            m.as_deref().and_then(usable)
+        };
+        let mut shaped = None;
+        if font_changed || m.is_none() || (!keep_codes && chosen.is_none()) {
             let (family, bold, italic) = if change {
                 let (f, b, i) =
                     style.family.unwrap_or((style.family_only.unwrap_or_else(|| source_family(&source.base_font)), source.bold, source.italic));
@@ -263,7 +345,15 @@ fn prepare(
             } else {
                 (source_family(&source.base_font), source.bold, source.italic)
             };
-            if needs_type3(&segment.text) {
+            if shape {
+                let (font, glyphs) = arabic_fallback(doc, fonts, &segment.text)?;
+                name = font;
+                shaped = Some(glyphs);
+                state.word_spacing = 0.0;
+                substituted = Some(format!("{} Type3", pdfcraft_fonts::document_arabic_font().map_or("Arabic", |f| f.family)));
+            } else if arabic && pdfcraft_fonts::document_arabic_font().is_none() {
+                return Err(crate::added::arabic_error(GlyphError::NoFont, &segment.text));
+            } else if needs_type3(&segment.text) {
                 let fallback = type3_font(doc, fonts, &segment.text, family, bold)?;
                 name = fallback.name;
                 state.word_spacing = 0.0;
@@ -273,6 +363,7 @@ fn prepare(
                 substituted = Some(family.base_font(bold, italic).into());
             }
             m = metrics(doc, fonts, &name, &mut metric_cache);
+            chosen = None;
         }
         let m = m.ok_or_else(|| EditError::Invalid(format!("font /{name} has no usable metrics")))?;
         let size = if change { style.size.unwrap_or(source.size) / k } else { source.size / k };
@@ -297,8 +388,11 @@ fn prepare(
             && keep_codes
         {
             original_glyphs(source, range, &m)?
+        } else if let Some(glyphs) = shaped {
+            glyphs
         } else {
-            let bytes = m.encode(&segment.text).ok_or_else(|| EditError::Invalid(format!("{} cannot encode the replacement text", m.base_font)))?;
+            let text = chosen.as_deref().unwrap_or(&segment.text);
+            let bytes = m.encode(text).ok_or_else(|| EditError::Invalid(format!("{} cannot encode the replacement text", m.base_font)))?;
             let mut offset = 0usize;
             let mut mapped = Vec::new();
             for (code, len) in m.codes(&bytes) {
@@ -354,7 +448,7 @@ fn prepare(
             if underline && !glyph.bytes.is_empty() {
                 minimum = minimum.checked_add(UNDERLINED_GLYPH_OPS).filter(|n| *n <= MAX_EMITTED_OPS).ok_or_else(over_budget)?;
             }
-            glyphs.push(Glyph { bytes: glyph.bytes, face, advance, shown, space, row_start: starts_row && position == 0 });
+            glyphs.push(Glyph { bytes: glyph.bytes, text: glyph.text, face, advance, shown, space, row_start: starts_row && position == 0 });
         }
     }
     Ok(Prepared { faces, glyphs, substituted })
@@ -378,6 +472,9 @@ fn rows(glyphs: &[Glyph], width: f64, keep_breaks: bool) -> Vec<std::ops::Range<
         }
         if glyph.space {
             word_break = Some(index + 1);
+        } else if index > start && cjk_break_before(glyphs.get(index - 1), glyph) {
+            // Chinese, Japanese and Korean break between characters.
+            word_break = Some(index);
         }
         if advance + glyph.advance > width
             && index > start
@@ -397,6 +494,31 @@ fn rows(glyphs: &[Glyph], width: f64, keep_breaks: bool) -> Vec<std::ops::Range<
         rows.push(start..glyphs.len());
     }
     rows
+}
+
+/// Ideographs, kana, Hangul and full-width forms: a line may break between them.
+fn cjk(c: char) -> bool {
+    matches!(u32::from(c), 0x2E80..=0x9FFF | 0xAC00..=0xD7AF | 0xF900..=0xFAFF | 0xFE30..=0xFE4F | 0xFF00..=0xFFEF | 0x2_0000..=0x3_FFFF)
+}
+
+/// Whether a row may end between `before` and `glyph`: before a CJK character, except before
+/// closing punctuation, small kana and the prolonged sound mark, and except after an opening
+/// bracket (kinsoku, simplified).
+fn cjk_break_before(before: Option<&Glyph>, glyph: &Glyph) -> bool {
+    const NOT_AT_START: &str = "、。，．・：；？！ー）」』】〕〉》〙〗｝］…‥々〻ぁぃぅぇぉっゃゅょゎゕゖァィゥェォッャュョヮヵヶ゛゜ヽヾゝゞ";
+    const NOT_AT_END: &str = "（「『【〔〈《〘〖｛［";
+    let Some(first) = glyph.text.chars().next() else { return false };
+    cjk(first)
+        && !NOT_AT_START.contains(first)
+        && before.and_then(|b| b.text.chars().last()).is_some_and(|last| !NOT_AT_END.contains(last) && !last.is_whitespace())
+}
+
+/// Right-to-left text in a paragraph: rows are shown in display order and, unless an alignment
+/// is chosen, end at the paragraph's right edge (`right`, user space from its origin).
+#[derive(Clone, Copy, Debug)]
+struct RowBidi {
+    rtl: bool,
+    right: f64,
 }
 
 /// One placement in the planned paragraph.
@@ -421,7 +543,15 @@ impl Item {
 /// character's style, so text and styles read back unchanged. Repeated spaces at a wrap are
 /// all kept (the reader adds no space after them). Alignment and justification measure each
 /// row without its trailing spaces.
-fn plan(glyphs: &[Glyph], faces: &[Face], rows: &[std::ops::Range<usize>], width: f64, horizontal: f64, style: &BlockStyle) -> Vec<Item> {
+fn plan(
+    glyphs: &[Glyph],
+    faces: &[Face],
+    rows: &[std::ops::Range<usize>],
+    width: f64,
+    horizontal: f64,
+    style: &BlockStyle,
+    bidi: Option<RowBidi>,
+) -> Vec<Item> {
     let same_face = |a: &Glyph, b: &Glyph| match (faces.get(a.face), faces.get(b.face)) {
         (Some(a), Some(b)) => a.underline == b.underline && a.state == b.state,
         _ => false,
@@ -439,16 +569,35 @@ fn plan(glyphs: &[Glyph], faces: &[Face], rows: &[std::ops::Range<usize>], width
         let measured = line.get(..line.len().saturating_sub(trailing)).unwrap_or_default();
         let advance: f64 = measured.iter().map(|g| g.advance).sum();
         let free = (width - advance).max(0.0);
-        let mut x = match style.align {
-            Some(crate::added::Align::Center) => free / 2.0,
-            Some(crate::added::Align::Right) => free,
-            _ => 0.0,
-        } / horizontal;
         let spaces = measured.iter().filter(|g| g.space).count();
         let justify = style.align == Some(crate::added::Align::Justify) && !last_row && spaces > 0;
+        let mut x = match bidi {
+            // A right-to-left row's trailing spaces are shown at its left, before the text.
+            Some(b) if b.rtl => {
+                let left = b.right - width;
+                let trailing: f64 = line.get(measured.len()..).unwrap_or_default().iter().map(|g| g.advance).sum();
+                match style.align {
+                    Some(crate::added::Align::Center) => left + free / 2.0 - trailing,
+                    Some(crate::added::Align::Left) => left - trailing,
+                    Some(crate::added::Align::Justify) if justify => left - trailing,
+                    _ => b.right - advance - trailing,
+                }
+            }
+            _ => match style.align {
+                Some(crate::added::Align::Center) => free / 2.0,
+                Some(crate::added::Align::Right) => free,
+                _ => 0.0,
+            },
+        } / horizontal;
+        // Display order: the glyphs of the row from the left.
+        let order: Vec<usize> = match bidi {
+            Some(b) => crate::bidi::unit_order(&line.iter().map(|g| g.text.as_str()).collect::<Vec<_>>(), b.rtl),
+            None => (0..line.len()).collect(),
+        };
         let extra = if justify { free / horizontal / spaces as f64 } else { 0.0 };
         let mut chunk: Option<Item> = None;
-        for (offset, glyph) in line.iter().enumerate() {
+        for offset in order {
+            let Some(glyph) = line.get(offset) else { continue };
             let index = range.start + offset;
             let width = glyph.advance / horizontal + if glyph.space && offset < measured.len() { extra } else { 0.0 };
             let underlined = faces.get(glyph.face).is_some_and(|f| f.underline) && !glyph.bytes.is_empty();
@@ -562,9 +711,16 @@ pub(super) fn rewrite(
     let [dx, dy] = style.offset.unwrap_or([0.0, 0.0]);
     // Widths are measured along the writing direction; a single line grows to the page margin
     // it runs towards (the right margin for upright text).
+    // Right-to-left paragraphs keep their right edge and grow to the left.
+    let rtl = crate::bidi::base_rtl(text);
+    let bidi = (rtl || glyphs.iter().any(|g| crate::bidi::has_rtl(&g.text))).then_some(RowBidi { rtl, right: frame_rect[2] - o.x });
     let width = style.width.map(|w| w.clamp(block.size, 14_400.0)).unwrap_or_else(|| {
         let current = (frame_rect[2] - frame_rect[0]).max(block.size);
-        if block.line_count == 1 {
+        if block.line_count == 1 && rtl {
+            let (x, y) = frame.user((frame_rect[2], o.baseline));
+            let back = Frame { x: [-frame.x[0], -frame.x[1]], y: frame.y };
+            current.max(room_to_margin(p.crop(doc), &back, (x + dx, y + dy)))
+        } else if block.line_count == 1 {
             let (x, y) = frame.user((frame_rect[0], o.baseline));
             current.max(room_to_margin(p.crop(doc), &frame, (x + dx, y + dy)))
         } else {
@@ -598,7 +754,7 @@ pub(super) fn rewrite(
     if !lead.is_finite() {
         return Err(EditError::Invalid("the paragraph has an invalid line spacing".into()));
     }
-    let items = plan(&glyphs, &faces, &rows, width, horizontal, style);
+    let items = plan(&glyphs, &faces, &rows, width, horizontal, style, bidi);
     let emitted = count(&items, &faces);
     if emitted > MAX_EMITTED_OPS {
         return Err(over_budget());

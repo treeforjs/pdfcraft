@@ -1979,11 +1979,11 @@ title = "Edit right-to-left and CJK text"
 area = "C"
 tier = "P1"
 milestone = "M7"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["edit.edit_text"]
+tools = ["text_direction", "text_edit", "text_paragraphs"]
+evidence = ["crates/automation/tests/rtl_cjk.rs::hebrew_paragraphs_are_edited_in_logical_order", "crates/automation/tests/rtl_cjk.rs::vertical_columns_take_new_text_in_their_own_font_only", "crates/automation/tests/rtl_cjk.rs::text_direction_checks_its_arguments", "crates/edit/src/rtl_cjk_tests.rs::hebrew_reads_in_logical_order_and_is_written_in_display_order", "crates/edit/src/rtl_cjk_tests.rs::arabic_in_presentation_forms_reads_as_letters_and_rejoins_when_edited", "crates/edit/src/rtl_cjk_tests.rs::arabic_a_font_cannot_show_is_shaped_with_the_fallback_face_or_refused", "crates/edit/src/rtl_cjk_tests.rs::hostile_bidi_controls_and_huge_runs_are_edited_or_refused_without_panicking", "crates/edit/src/rtl_cjk_tests.rs::cjk_paragraphs_wrap_between_characters_and_keep_punctuation_off_line_starts", "crates/edit/src/rtl_cjk_tests.rs::chinese_and_korean_fall_back_to_a_cjk_face_that_has_every_character", "crates/edit/src/bidi.rs::caret_moves_visually"]
+notes = "Existing Hebrew and Arabic text reads in logical order (display-order lines and same-row font fragments reordered, Arabic presentation forms read as letters) and paragraph edits write rows back in display order by the Unicode bidi algorithm (unicode-bidi), keeping a right-to-left paragraph's right edge. New Arabic takes its joining forms: the run's own font when it maps presentation forms, else shaped with the craft-fonts Arabic face (harfrust) into a Type 3 font, and edits re-join the whole word. CJK rows break between characters with simple kinsoku, and the fallback tries Japanese, Chinese and Korean faces. Identity-V/WMode 1 vertical text is read as columns and rewritten in its own font. The Edit text box moves the caret with the arrow keys by display order and right-aligns right-to-left paragraphs (not checked on screen here: GPU tests don't run in this container). Partial: direction of display-order lines is a heuristic (outermost strong characters, then majority); no bracket mirroring; no Hebrew fallback face in craft-fonts (Hebrew needs a page font that has it); vertical text can't be reformatted, moved, reflowed or given a fallback font; the PDF's own embedded Arabic font program isn't used for shaping; without craft-fonts, Arabic a page font can't show and CJK fallback are refused with a clear error."
 
 [[feature]]
 id = "edit.rotated-text-editing"

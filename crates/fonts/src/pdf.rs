@@ -59,6 +59,14 @@ pub struct Metrics {
     pub italic: bool,
     /// Bytes per code for writing new text (1 for simple fonts, else the codespace length).
     code_len: usize,
+    /// Vertical writing (ISO 32000-2 §9.7.4.3): a Type 0 font whose CMap has `/WMode 1`
+    /// (`Identity-V` and the other predefined `-V` CMaps). Glyphs then advance down the page.
+    pub vertical: bool,
+    /// Vertical displacements `w1y` (glyph units, negative downwards): `/DW2`'s second number,
+    /// and per CID from `/W2`.
+    vertical_default: f64,
+    vertical_widths: HashMap<u32, f64>,
+    vertical_ranges: Vec<(u32, u32, f64)>,
 }
 
 fn nums(doc: &Document, o: Option<&Object>) -> Vec<f64> {
@@ -225,6 +233,52 @@ fn number(t: &Tok) -> Option<u32> {
     }
 }
 
+/// Whether an embedded CMap program sets `/WMode 1`.
+fn wmode_one(data: &[u8]) -> bool {
+    let mut toks = Lexer::new(data);
+    while let Some(t) = toks.next() {
+        if t == Tok::Word(b"/WMode") {
+            return toks.next() == Some(Tok::Word(b"1"));
+        }
+    }
+    false
+}
+
+/// Most `/W2` entries kept; a full two-byte CID space is 65 536.
+const MAX_W2_ENTRIES: usize = 1 << 17;
+
+/// `/W2` (§9.7.4.3): `c [w1y v1x v1y …]` or `c_first c_last w1y v1x v1y`.
+fn read_w2(doc: &Document, w2: &[Object], m: &mut Metrics) {
+    let num = |o: &Object| doc.resolve(o).as_f64().filter(|v| v.is_finite());
+    let mut i = 0usize;
+    while let Some(first) = w2.get(i).and_then(num) {
+        if m.vertical_widths.len().saturating_add(m.vertical_ranges.len()) >= MAX_W2_ENTRIES || first < 0.0 {
+            break;
+        }
+        let c0 = first as u32;
+        match w2.get(i + 1).map(|o| doc.resolve(o)) {
+            Some(list) if list.as_array().is_some() => {
+                for (k, triple) in list.as_array().map_or(&[][..], Vec::as_slice).chunks(3).enumerate() {
+                    if m.vertical_widths.len() >= MAX_W2_ENTRIES {
+                        break;
+                    }
+                    if let Some(w1) = triple.first().and_then(num) {
+                        m.vertical_widths.insert(c0.saturating_add(u32::try_from(k).unwrap_or(u32::MAX)), w1);
+                    }
+                }
+                i = i.saturating_add(2);
+            }
+            Some(last) => {
+                if let (Some(last), Some(w1)) = (last.as_f64().filter(|v| v.is_finite() && *v >= 0.0), w2.get(i + 2).and_then(num)) {
+                    m.vertical_ranges.push((c0, last as u32, w1));
+                }
+                i = i.saturating_add(5);
+            }
+            None => break,
+        }
+    }
+}
+
 /// Codespace ranges and CID mappings from an embedded CMap stream, at most
 /// [`MAX_CMAP_RANGES`] of each (every glyph searches them).
 #[allow(clippy::type_complexity)]
@@ -291,6 +345,10 @@ impl Metrics {
             bold: false,
             italic: false,
             code_len: 1,
+            vertical: false,
+            vertical_default: -1000.0,
+            vertical_widths: HashMap::new(),
+            vertical_ranges: Vec::new(),
         }
     }
 
@@ -344,6 +402,11 @@ impl Metrics {
                     m.codes = Codes::Ranges(spaces);
                 }
                 m.cid_map = cids;
+                m.vertical = s.dict.get(b"WMode").and_then(|w| doc.resolve(w).as_f64()) == Some(1.0) || wmode_one(&data);
+            }
+            // The predefined CMaps name their writing mode: `Identity-V`, `UniJIS-UCS2-V`, ….
+            if let Some(name) = font.get(b"Encoding").map(|e| doc.resolve(e)).and_then(|e| e.as_name().map(<[u8]>::to_vec)) {
+                m.vertical = name.ends_with(b"-V");
             }
             let desc = font
                 .get(b"DescendantFonts")
@@ -362,7 +425,7 @@ impl Metrics {
                         Some(a) if a.as_array().is_some() => {
                             for (k, x) in a.as_array().into_iter().flatten().enumerate() {
                                 if let Some(v) = doc.resolve(x).as_f64() {
-                                    m.cid_widths.insert(c0 + k as u32, v);
+                                    m.cid_widths.insert(c0.saturating_add(u32::try_from(k).unwrap_or(u32::MAX)), v);
                                 }
                             }
                             i += 2;
@@ -376,6 +439,14 @@ impl Metrics {
                         None => break,
                     }
                 }
+            }
+            if let Some(dw2) = desc.get(b"DW2").map(|d| doc.resolve(d)).and_then(|d| d.as_array().cloned())
+                && let Some(w1) = dw2.get(1).and_then(|v| doc.resolve(v).as_f64()).filter(|v| v.is_finite())
+            {
+                m.vertical_default = w1;
+            }
+            if let Some(w2) = desc.get(b"W2").map(|w| doc.resolve(w)).and_then(|w| w.as_array().cloned()) {
+                read_w2(doc, &w2, &mut m);
             }
             descriptor = dict(doc, desc.get(b"FontDescriptor"));
         } else {
@@ -480,6 +551,19 @@ impl Metrics {
             }
             None => self.default * self.scale,
         }
+    }
+
+    /// The vertical displacement of `code` in text space per unit of font size (negative: down
+    /// the page), for [`Self::vertical`] fonts.
+    pub fn vertical_advance(&self, code: u32) -> f64 {
+        let cid = self.cid(code);
+        let w = self
+            .vertical_widths
+            .get(&cid)
+            .copied()
+            .or_else(|| self.vertical_ranges.iter().find(|(a, b, _)| cid >= *a && cid <= *b).map(|r| r.2))
+            .unwrap_or(self.vertical_default);
+        w * self.scale
     }
 
     /// Word spacing applies to the single-byte code 32 (§9.3.3).
@@ -807,6 +891,62 @@ mod tests {
         }
         let _ = doc;
         d
+    }
+
+    fn type0(encoding: Object, descendant: Dict) -> Dict {
+        let mut d = Dict::new();
+        d.set(b"Type".to_vec(), Object::name("Font"));
+        d.set(b"Subtype".to_vec(), Object::name("Type0"));
+        d.set(b"BaseFont".to_vec(), Object::name("FakeMincho"));
+        d.set(b"Encoding".to_vec(), encoding);
+        d.set(b"DescendantFonts".to_vec(), Object::Array(vec![Object::Dict(descendant)]));
+        d
+    }
+
+    #[test]
+    fn identity_v_fonts_write_vertically_with_w2_displacements() {
+        let doc = Document::new_empty();
+        let mut cid = Dict::new();
+        cid.set(b"Subtype".to_vec(), Object::name("CIDFontType2"));
+        cid.set(b"DW2".to_vec(), Object::Array(vec![Object::Int(880), Object::Int(-900)]));
+        // 5 [-500 250 880]; 10 20 -700 500 880.
+        cid.set(
+            b"W2".to_vec(),
+            Object::Array(vec![
+                Object::Int(5),
+                Object::Array(vec![Object::Int(-500), Object::Int(250), Object::Int(880)]),
+                Object::Int(10),
+                Object::Int(20),
+                Object::Int(-700),
+                Object::Int(500),
+                Object::Int(880),
+            ]),
+        );
+        let m = Metrics::from_dict(&doc, &type0(Object::name("Identity-V"), cid.clone()));
+        assert!(m.vertical);
+        assert_eq!(m.vertical_advance(5), -0.5);
+        assert!((m.vertical_advance(15) + 0.7).abs() < 1e-9);
+        assert!((m.vertical_advance(3) + 0.9).abs() < 1e-9);
+        assert!(!Metrics::from_dict(&doc, &type0(Object::name("Identity-H"), cid.clone())).vertical);
+        // An embedded CMap program says so with /WMode 1.
+        let cmap = Stream::from_raw(
+            Dict::new(),
+            b"/CIDInit /ProcSet findresource begin /WMode 1 def 1 begincodespacerange <0000> <FFFF> endcodespacerange".to_vec(),
+        );
+        assert!(Metrics::from_dict(&doc, &type0(Object::Stream(cmap), cid)).vertical);
+    }
+
+    #[test]
+    fn hostile_w_and_w2_arrays_do_not_overflow() {
+        let doc = Document::new_empty();
+        let mut cid = Dict::new();
+        let huge = Object::Real(1e30);
+        let many = Object::Array((0..10).map(Object::Int).collect());
+        cid.set(b"W".to_vec(), Object::Array(vec![huge.clone(), many.clone()]));
+        cid.set(b"W2".to_vec(), Object::Array(vec![huge.clone(), many, huge.clone(), Object::Real(f64::NAN), Object::Int(-1), Object::Int(-5)]));
+        let m = Metrics::from_dict(&doc, &type0(Object::name("Identity-V"), cid));
+        assert!(m.vertical_advance(u32::MAX).is_finite());
+        assert!(m.width(u32::MAX).is_finite());
     }
 
     #[test]

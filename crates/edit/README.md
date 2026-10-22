@@ -8,6 +8,32 @@ images and grouped artwork, flattening, and the Print Production fixes: Fix Hair
 Every entry point takes a `pdfcraft_cos::Document` and changes it in place; the engine runs them
 on a copy, so an error leaves the open document untouched, and each is one undo step there.
 
+## Right-to-left and CJK text
+
+Pages store text in display order. `text_lines` puts right-to-left lines (Hebrew, Arabic) into
+logical order, glyphs and text alike (`bidi::unit_order` with `bidi::display_order_rtl`: the
+outermost strong characters, else the majority, decide the line's direction), reads Arabic
+presentation forms as letters (`bidi::normalize`), and orders the different-font fragments of
+one row the same way; `TextLine::rtl` / `TextBlock::rtl` say so. Paragraph edits (the run path)
+write each row back in display order by UAX #9 (`unicode-bidi`) with the paragraph's
+first-strong base direction; a right-to-left paragraph keeps its right edge and a single line
+grows to the left margin. New Arabic text takes the joining forms its neighbours call for: in
+the run's own font when its ToUnicode maps presentation forms (`bidi::present`), otherwise shaped
+with the craft-fonts `Arab` face (harfrust) into a Type 3 font (one code per cluster, ToUnicode
+kept), otherwise as letters; an edit next to an Arabic letter re-encodes the whole word so its
+neighbours re-join. Re-encoded segments split where Arabic meets other text, so each piece gets
+a face that shows it. CJK rows break between characters (not before closing punctuation, small
+kana or ー, not after opening brackets), and the Type 3 fallback tries Japanese, then Chinese
+and Korean faces (`pdfcraft_fonts::document_cjk_fonts_for_style`) for one with every character.
+Vertical writing (Type 0 fonts with `/WMode 1`: `Identity-V`, `-V` CMaps; `/W2`, `/DW2`) is read
+as columns (`TextLine::vertical`) and rewritten in place in its own font (`replace_line`);
+formatting, moving or a font that lacks a character is refused. `bidi::caret_move` is the visual
+caret movement the editor uses. Bidi work is capped at `bidi::MAX_BIDI_CHARS` and guarded.
+
+Not yet: mirrored brackets in right-to-left runs, Hebrew without a font that has it (craft-fonts
+has no Hebrew face), vertical fallback fonts and reflow of vertical paragraphs, and shaping with
+the PDF's own embedded Arabic font program.
+
 ## Bulleted and numbered lists
 
 `lists::edit_list(doc, page, &ListTarget::Added { index, paragraphs }, &ListChange::Set { style, start })`

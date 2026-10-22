@@ -25,6 +25,7 @@ mod content;
 mod conventions;
 mod custom_commands;
 mod dests;
+mod direction;
 mod forms;
 mod ink_manager;
 mod links;
@@ -544,6 +545,8 @@ impl Automation {
                             "font": b.base_font,
                             "size": (b.size * 100.0).round() / 100.0,
                             "line_count": b.line_count,
+                            "direction": if b.rtl { "rtl" } else { "ltr" },
+                            "vertical": b.vertical,
                             "runs": b.runs.iter().map(|run| json!({
                                 "start": run.start, "end": run.end, "font_resource": run.font,
                                 "font": run.base_font, "size": run.size, "bold": run.bold,
@@ -554,6 +557,7 @@ impl Automation {
                     .collect();
                 withheld(json!({ "page": page + 1, "count": blocks.len(), "paragraphs": blocks }), copy)
             }
+            "text_direction" => self.text_direction(&a)?,
             "text_edit" if a.get("paragraph").is_some() => {
                 if let Some(text) = a.opt_str("text")? {
                     pdfcraft_engine::validate_paragraph_text(text).map_err(|error| ToolError::InvalidArgs(error.to_string()))?;
