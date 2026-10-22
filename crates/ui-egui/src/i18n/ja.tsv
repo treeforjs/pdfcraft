@@ -2375,7 +2375,7 @@ compare-page	Moved	移動
 	Saturation	彩度
 	Save recovery copies of unsaved changes every	未保存の変更の復元用コピーを保存する間隔
 	Search preferences	環境設定を検索
-	Shown on Home and in File ▸ Open Recent. 0 keeps no list.	ホームと「ファイル ▸ 最近使用したファイルを開く」に表示されます。0 にすると一覧を残しません。
+	Shown on Home and in File ▸ Open Recent. 0 keeps no list.	ホームと「ファイル → 最近使用したファイルを開く」に表示されます。0 にすると一覧を残しません。
 	Signs new comments. Empty uses your login name.	新しい注釈の作成者名です。空欄の場合はログイン名を使用します。
 	Sites without a rule	ルールのないサイト
 	Stronger text, borders and outlines in every theme.	どのテーマでも文字・境界線・輪郭を濃くします。
