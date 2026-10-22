@@ -48,6 +48,8 @@ mod marks_ui;
 mod measure_ui;
 mod object_ui;
 mod ocr_ui;
+#[cfg(target_arch = "wasm32")]
+mod ocr_web;
 mod optimize_ui;
 pub mod picked_ids;
 mod preflight_ui;

@@ -2248,10 +2248,21 @@ pub fn tools() -> Vec<ToolDef> {
                 }),
                 &["doc"],
             )),
-        t("ocr_status", "OCR status", "Whether text recognition is available (its models are installed: release packages include them; a source build fetches them with `cargo xtask models`; PDFCRAFT_MODELS overrides), where it looks for them, and the languages it reads.")
+        t("ocr_status", "OCR status", "Whether text recognition is available (its models are installed: release packages include them; a source build fetches them with `cargo xtask models`; PDFCRAFT_MODELS overrides; the web app downloads them from its site's models/ folder the first time text is recognized and keeps them in browser storage), where it looks for them, the languages it reads, whether the built-in engine is loaded in this process (loaded), and the pinned models (models: file, bytes, sha256, web_path).")
             .ro()
             .cmd("ocr.recognize")
             .with(schema(json!({}), &[])),
+        t("ocr_model_verify", "Verify an OCR model file", "Check a text recognition model file the way PdfCraft checks the models before loading them (the web app's download and its browser-storage copy): file names which pinned model (text-detection.rten or text-recognition.rten); give the bytes as data_base64 or a path. The length must be exactly the pinned one (a larger file isn't read), then the SHA-256 sum must match the pin in ATTRIBUTION.toml. Returns ok, bytes, expected_bytes, sha256, expected_sha256 and error. Nothing is loaded or kept.")
+            .ro()
+            .cmd("ocr.recognize")
+            .with(schema(
+                json!({
+                    "file": { "type": "string", "enum": ["text-detection.rten", "text-recognition.rten"] },
+                    "data_base64": { "type": "string", "description": "The model file, base64." },
+                    "path": path_arg(),
+                }),
+                &["file"],
+            )),
         t("ocr_engines_list", "List OCR engines", "The text recognition engines this session can use: id, name, available (can run now), version, languages (code, name), external (a separate program on this machine, never shipped with PdfCraft), detail (where it was found, or why it can't run), selected and default. ocrs is built in and the default (it needs its models, see ocr_status); tesseract runs an installed Tesseract program found on PATH or through PDFCRAFT_TESSERACT, and is unavailable when it isn't installed (always on the web). Asks external engines afresh.")
             .ro()
             .cmd("ocr.recognize")

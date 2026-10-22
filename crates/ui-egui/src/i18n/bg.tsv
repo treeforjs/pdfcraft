@@ -2487,3 +2487,6 @@ compare-page	Moved	Преместена
 	The key is on the smart card or token, and the signature is made there.	Ключът е на смарт картата или токена и подписът се създава там.
 	Choose a slot with a card or token.	Изберете слот с карта или токен.
 	Unlock the token again.	Отключете токена отново.
+	Downloading text recognition models… {r} of {t} MB	Изтегляне на моделите за разпознаване на текст… {r} от {t} MB
+	The text recognition models (12 MB) are downloaded from this site the first time you recognize text, then kept in this browser.	Моделите за разпознаване на текст (12 MB) се изтеглят от този сайт при първото разпознаване на текст и след това се пазят в този браузър.
+	the text recognition models haven't been downloaded into this browser yet; run Recognize Text to download them	моделите за разпознаване на текст още не са изтеглени в този браузър; изпълнете „Разпознаване на текст“, за да ги изтеглите

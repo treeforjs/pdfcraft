@@ -3835,6 +3835,8 @@ dependencies = [
  "ocrs",
  "pdfcraft-fonts",
  "rten",
+ "rten-imageproc",
+ "sha2",
  "thiserror 2.0.21",
 ]
 

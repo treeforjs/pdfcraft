@@ -605,7 +605,14 @@ impl Automation {
         use pdfcraft_engine::ocr;
         let dirs: Vec<String> = ocr::Models::search_dirs().iter().map(|d| d.to_string_lossy().into_owned()).collect();
         let langs: Vec<Value> = ocr::LANGUAGES.iter().map(|(c, n)| json!({ "code": c, "name": n })).collect();
-        Ok(json!({ "available": ocr::available(), "search_dirs": dirs, "languages": langs, "engine": self.session.ocr_engine_id() }))
+        Ok(json!({
+            "available": ocr::available(),
+            "search_dirs": dirs,
+            "languages": langs,
+            "engine": self.session.ocr_engine_id(),
+            "loaded": ocr::OcrsEngine::loaded(),
+            "models": crate::web_ocr::pinned_json(),
+        }))
     }
 }
 

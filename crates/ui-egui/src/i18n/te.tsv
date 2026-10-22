@@ -2456,3 +2456,6 @@ compare-page	Moved	తరలించబడింది
 	The key is on the smart card or token, and the signature is made there.	కీ స్మార్ట్ కార్డ్ లేదా టోకెన్‌పై ఉంది, సంతకం అక్కడే తయారవుతుంది.
 	Choose a slot with a card or token.	కార్డ్ లేదా టోకెన్ ఉన్న స్లాట్‌ను ఎంచుకోండి.
 	Unlock the token again.	టోకెన్‌ను మళ్లీ అన్‌లాక్ చేయండి.
+	Downloading text recognition models… {r} of {t} MB	టెక్స్ట్ గుర్తింపు మోడళ్లను డౌన్‌లోడ్ చేస్తోంది… {t} MBలో {r} MB
+	The text recognition models (12 MB) are downloaded from this site the first time you recognize text, then kept in this browser.	టెక్స్ట్ గుర్తింపు మోడళ్లు (12 MB) మీరు మొదటిసారి టెక్స్ట్‌ను గుర్తించినప్పుడు ఈ సైట్ నుండి డౌన్‌లోడ్ అవుతాయి, ఆ తర్వాత ఈ బ్రౌజర్‌లోనే ఉంటాయి.
+	the text recognition models haven't been downloaded into this browser yet; run Recognize Text to download them	టెక్స్ట్ గుర్తింపు మోడళ్లు ఇంకా ఈ బ్రౌజర్‌లోకి డౌన్‌లోడ్ కాలేదు; వాటిని డౌన్‌లోడ్ చేయడానికి టెక్స్ట్‌ను గుర్తించు అమలు చేయండి

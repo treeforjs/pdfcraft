@@ -2411,3 +2411,6 @@ compare-page	Moved	已移動
 	The key is on the smart card or token, and the signature is made there.	金鑰位於智慧卡或權杖上，簽章也在那裡產生。
 	Choose a slot with a card or token.	請選擇插有卡片或權杖的插槽。
 	Unlock the token again.	請再次解除權杖鎖定。
+	Downloading text recognition models… {r} of {t} MB	正在下載文字辨識模型… {r} / {t} MB
+	The text recognition models (12 MB) are downloaded from this site the first time you recognize text, then kept in this browser.	文字辨識模型（12 MB）會在你第一次辨識文字時從本站下載，之後保存在此瀏覽器中。
+	the text recognition models haven't been downloaded into this browser yet; run Recognize Text to download them	文字辨識模型尚未下載到此瀏覽器；請執行「辨識文字」來下載

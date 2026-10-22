@@ -2489,3 +2489,6 @@ compare-page	Moved	已移动
 	The key is on the smart card or token, and the signature is made there.	密钥位于智能卡或令牌上，签名也在那里生成。
 	Choose a slot with a card or token.	请选择插有卡或令牌的插槽。
 	Unlock the token again.	请重新解锁令牌。
+	Downloading text recognition models… {r} of {t} MB	正在下载文本识别模型… {r} / {t} MB
+	The text recognition models (12 MB) are downloaded from this site the first time you recognize text, then kept in this browser.	文本识别模型（12 MB）会在你第一次识别文本时从本站下载，之后保存在此浏览器中。
+	the text recognition models haven't been downloaded into this browser yet; run Recognize Text to download them	文本识别模型尚未下载到此浏览器；请运行“识别文本”来下载

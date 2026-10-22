@@ -6649,11 +6649,11 @@ title = "OCR in the browser"
 area = "I"
 tier = "P1"
 milestone = "M10"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["ocr.recognize", "ocr.recognize_batch"]
+tools = ["ocr_model_verify", "ocr_status"]
+evidence = ["crates/ocr/src/models.rs::pins_match_the_attribution_manifest", "crates/ocr/src/models.rs::wrong_length_name_or_checksum_is_refused_before_loading", "crates/ocr/src/models.rs::hostile_model_bytes_are_an_error", "crates/ocr/src/lib.rs::reads_in_steps_from_verified_bytes", "crates/engine/tests/ocr_paced.rs::paced_reading_steps_through_each_page_and_matches_the_unpaced_run", "crates/engine/tests/ocr_paced.rs::canceling_between_steps_stops_within_a_page_and_applies_nothing", "crates/engine/tests/ocr_paced.rs::a_panicking_step_ends_the_job_with_an_error", "crates/automation/tests/web_ocr.rs::wrong_bytes_fail_the_check_and_hostile_arguments_are_errors"]
+notes = "Recognize Text (and Recognize text in multiple files) run in the web app with the built-in pure-Rust ocrs engine. The models are fetched once, on the first recognition, from the site's models/ folder (shipped in the web release zip, not in the wasm), with progress and Cancel, capped at and checked against the pinned length and SHA-256 that cargo xtask models uses, kept in the browser's origin-private file system and re-verified on each load. Pages are read in short steps (lines found, then four lines a step) with the thread given back to the browser every 30 ms, so the page keeps drawing and Cancel works within a page; desktop recognition is unchanged. Tesseract is desktop-only (clear message). Missing: the fetch, storage and timer glue is compiled for wasm32 but not run in a real browser here, so speed in the browser is unmeasured; finding a page's text lines is one step that runs to its end (no web worker); camera, Make Accessible and export OCR run unpaced in the browser once the models are loaded."
 
 [[feature]]
 id = "ocr.scanner-acquire"

@@ -8,6 +8,7 @@ static site in `pdfcraft-web-<version>/`:
 | `index.html` | The page. It loads everything through relative URLs. |
 | `pdfcraft-web-<hash>.js` | wasm-bindgen glue (generated, ES module) |
 | `pdfcraft-web-<hash>_bg.wasm` | The app, about 13 MB, or 5 MB with compression |
+| `models/` | The text recognition (OCR) models, about 12 MB, with their licences and `ATTRIBUTION.txt` |
 | `_headers`, `.htaccess` | Sample header rules for Netlify/Cloudflare Pages and Apache |
 
 There is no server-side code. Upload the folder's contents anywhere that serves static files.
@@ -23,6 +24,17 @@ Add `?file=<URL-encoded document URL>` to open a PDF on startup. The document mu
 from the same origin or allow the app's origin through CORS. If the user starts working before
 the download finishes, the downloaded file opens in a background tab; the current document,
 workspace and Save target stay selected. Click the downloaded file's tab to switch to it.
+
+## Text recognition models
+
+Scan & OCR → Recognize Text needs the two `.rten` model files in `models/`. They are not part of
+the app's initial download: the first time someone recognizes text, the app fetches them from
+`models/` next to `index.html` (same origin, with `?v=<checksum>` added) and keeps them in the
+browser's origin-private storage, so later visits don't download them again. Every copy must
+match the SHA-256 sum pinned in the app, or it is not used (a damaged stored copy is fetched
+again). Leave `models/` out to save space; Recognize Text then reports that the download failed.
+Serve them as `application/octet-stream`; they can be cached forever (a new model has a new
+checksum, so a new URL).
 
 ## Required server settings
 

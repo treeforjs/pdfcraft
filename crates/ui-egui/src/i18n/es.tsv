@@ -2441,3 +2441,6 @@ compare-page	Moved	Movida
 	The key is on the smart card or token, and the signature is made there.	La clave está en la tarjeta inteligente o el token, y la firma se crea allí.
 	Choose a slot with a card or token.	Elija una ranura con una tarjeta o un token.
 	Unlock the token again.	Vuelva a desbloquear el token.
+	Downloading text recognition models… {r} of {t} MB	Descargando los modelos de reconocimiento de texto… {r} de {t} MB
+	The text recognition models (12 MB) are downloaded from this site the first time you recognize text, then kept in this browser.	Los modelos de reconocimiento de texto (12 MB) se descargan de este sitio la primera vez que reconoces texto y luego se guardan en este navegador.
+	the text recognition models haven't been downloaded into this browser yet; run Recognize Text to download them	los modelos de reconocimiento de texto aún no se han descargado en este navegador; ejecuta Reconocer texto para descargarlos

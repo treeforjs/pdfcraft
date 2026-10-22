@@ -2549,3 +2549,6 @@ compare-page	Moved	Přesunutá
 	The key is on the smart card or token, and the signature is made there.	Klíč je na čipové kartě nebo tokenu a podpis se vytvoří tam.
 	Choose a slot with a card or token.	Vyberte slot s kartou nebo tokenem.
 	Unlock the token again.	Odemkněte token znovu.
+	Downloading text recognition models… {r} of {t} MB	Stahování modelů pro rozpoznávání textu… {r} z {t} MB
+	The text recognition models (12 MB) are downloaded from this site the first time you recognize text, then kept in this browser.	Modely pro rozpoznávání textu (12 MB) se z tohoto webu stáhnou při prvním rozpoznávání textu a pak zůstanou v tomto prohlížeči.
+	the text recognition models haven't been downloaded into this browser yet; run Recognize Text to download them	modely pro rozpoznávání textu ještě nebyly do tohoto prohlížeče staženy; spusťte Rozpoznat text, aby se stáhly

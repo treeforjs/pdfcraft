@@ -15,9 +15,13 @@
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
+use rten_imageproc::RotatedRect;
 
 pub mod editable;
 pub mod engines;
+pub mod models;
 pub mod orient;
 pub mod tesseract;
 
@@ -40,6 +44,9 @@ pub enum OcrError {
     /// `cargo xtask models`). The UI catalogs key this exact text.
     #[error("the text recognition models are not installed (reinstall PdfCraft, or set PDFCRAFT_MODELS to the folder that holds them)")]
     NoModels,
+    /// The web app's equivalent of [`OcrError::NoModels`]: the models are fetched on demand.
+    #[error("the text recognition models haven't been downloaded into this browser yet; run Recognize Text to download them")]
+    NotDownloaded,
     #[error("loading {0}: {1}")]
     Load(String, String),
     #[error("text recognition failed: {0}")]
@@ -181,46 +188,121 @@ pub struct Ocr {
 impl Ocr {
     pub fn load(models: &Models) -> Result<Ocr, OcrError> {
         let load = |p: &Path| rten::Model::load_file(p).map_err(|e| OcrError::Load(p.display().to_string(), e.to_string()));
-        let params = ocrs::OcrEngineParams {
-            detection_model: Some(load(&models.detection)?),
-            recognition_model: Some(load(&models.recognition)?),
-            ..Default::default()
-        };
+        Self::from_models(load(&models.detection)?, load(&models.recognition)?)
+    }
+
+    /// Load the models from their bytes (the web app's download or browser copy). Each must be
+    /// exactly the pinned file ([`models::verify`]: length, then SHA-256), so other bytes end in
+    /// an error before the model loader sees them.
+    pub fn from_bytes(detection: Vec<u8>, recognition: Vec<u8>) -> Result<Ocr, OcrError> {
+        models::verify(DETECTION_MODEL, &detection)?;
+        models::verify(RECOGNITION_MODEL, &recognition)?;
+        Self::from_models(models::load(DETECTION_MODEL, detection)?, models::load(RECOGNITION_MODEL, recognition)?)
+    }
+
+    fn from_models(detection: rten::Model, recognition: rten::Model) -> Result<Ocr, OcrError> {
+        let params = ocrs::OcrEngineParams { detection_model: Some(detection), recognition_model: Some(recognition), ..Default::default() };
         let engine = ocrs::OcrEngine::new(params).map_err(|e| OcrError::Load("ocr engine".into(), e.to_string()))?;
         Ok(Ocr { engine })
     }
 
-    /// Load the models found by [`Models::find`].
+    /// Load the models found by [`Models::find`]. The web app has no model files: there the
+    /// models are downloaded and installed with [`engines::OcrsEngine::install`].
     pub fn find() -> Result<Ocr, OcrError> {
+        if cfg!(target_arch = "wasm32") {
+            return Err(OcrError::NotDownloaded);
+        }
         Self::load(&Models::find().ok_or(OcrError::NoModels)?)
     }
 
     /// Recognise the text in an RGBA (or RGB, or grey) image, `width` × `height` pixels.
     pub fn recognize(&self, pixels: &[u8], width: u32, height: u32) -> Result<Vec<Line>, OcrError> {
+        let (input, lines) = self.detect(pixels, width, height)?;
+        let read = self.engine.recognize_text(&input, &lines).map_err(|e| OcrError::Recognize(e.to_string()))?;
+        Ok(convert_lines(read))
+    }
+
+    /// Find the text lines: the input prepared for recognition and each line's word boxes.
+    fn detect(&self, pixels: &[u8], width: u32, height: u32) -> Result<(ocrs::OcrInput, Vec<Vec<RotatedRect>>), OcrError> {
         let rgb = recognition_pixels(pixels, width, height)?;
         let err = |e: &dyn std::fmt::Display| OcrError::Recognize(e.to_string());
         let source = ocrs::ImageSource::from_bytes(&rgb, (width, height)).map_err(|e| err(&e))?;
         let input = self.engine.prepare_input(source).map_err(|e| err(&e))?;
         let found = self.engine.detect_words(&input).map_err(|e| err(&e))?;
-        let lines = self.engine.find_text_lines(&input, &found);
-        let read = self.engine.recognize_text(&input, &lines).map_err(|e| err(&e))?;
-        use ocrs::TextItem;
-        Ok(read
-            .into_iter()
-            .flatten()
-            .map(|line| Line {
-                words: line
-                    .words()
-                    .map(|w| {
-                        let r = w.bounding_rect();
-                        Word { text: w.to_string(), rect: [r.left() as f32, r.top() as f32, r.right() as f32, r.bottom() as f32], confidence: None }
-                    })
-                    .filter(|w| !w.text.trim().is_empty())
-                    .collect(),
-            })
-            .filter(|l| !l.words.is_empty())
-            .collect())
+        let lines = self.engine.find_text_lines(&input, &found).into_iter().filter(|l| !l.is_empty()).collect();
+        Ok((input, lines))
     }
+
+    /// [`Self::recognize`] split into short steps, for a page that must not stop responding
+    /// while it reads (the web app runs everything on one thread): the first step finds the text
+    /// lines, each later one reads up to [`LINES_PER_STEP`] of them. The result is the same.
+    pub fn begin(self: Arc<Self>, pixels: &[u8], width: u32, height: u32) -> Reading<'_> {
+        Reading { ocr: self, pixels, width, height, state: ReadState::Start }
+    }
+}
+
+/// Lines read per [`Reading::step`] after the first.
+pub const LINES_PER_STEP: usize = 4;
+
+/// A recognition in progress ([`Ocr::begin`]).
+pub struct Reading<'a> {
+    ocr: Arc<Ocr>,
+    pixels: &'a [u8],
+    width: u32,
+    height: u32,
+    state: ReadState,
+}
+
+enum ReadState {
+    Start,
+    Lines { input: ocrs::OcrInput, lines: Vec<Vec<RotatedRect>>, next: usize, out: Vec<Line> },
+    Done,
+}
+
+impl Reading<'_> {
+    /// Do the next step: `Some(lines)` once the image has been read. An error ends the reading.
+    pub fn step(&mut self) -> Result<Option<Vec<Line>>, OcrError> {
+        match std::mem::replace(&mut self.state, ReadState::Done) {
+            ReadState::Start => {
+                let (input, lines) = self.ocr.detect(self.pixels, self.width, self.height)?;
+                if lines.is_empty() {
+                    return Ok(Some(Vec::new()));
+                }
+                self.state = ReadState::Lines { input, lines, next: 0, out: Vec::new() };
+                Ok(None)
+            }
+            ReadState::Lines { input, lines, next, mut out } => {
+                let end = next.saturating_add(LINES_PER_STEP).min(lines.len());
+                let chunk = lines.get(next..end).unwrap_or_default();
+                let read = self.ocr.engine.recognize_text(&input, chunk).map_err(|e| OcrError::Recognize(e.to_string()))?;
+                out.extend(convert_lines(read));
+                if end >= lines.len() {
+                    return Ok(Some(out));
+                }
+                self.state = ReadState::Lines { input, lines, next: end, out };
+                Ok(None)
+            }
+            ReadState::Done => Err(OcrError::Recognize("the reading has already finished".into())),
+        }
+    }
+}
+
+fn convert_lines(read: Vec<Option<ocrs::TextLine>>) -> Vec<Line> {
+    use ocrs::TextItem;
+    read.into_iter()
+        .flatten()
+        .map(|line| Line {
+            words: line
+                .words()
+                .map(|w| {
+                    let r = w.bounding_rect();
+                    Word { text: w.to_string(), rect: [r.left() as f32, r.top() as f32, r.right() as f32, r.bottom() as f32], confidence: None }
+                })
+                .filter(|w| !w.text.trim().is_empty())
+                .collect(),
+        })
+        .filter(|l| !l.words.is_empty())
+        .collect()
 }
 
 /// A word placed on a page, in PDF user space: the bottom-left corner of its box, and the
@@ -437,6 +519,37 @@ mod tests {
         assert!(text.iter().any(|t| t.contains("HELL") && t.contains("WOR")), "{text:?}");
         let word = lines.iter().flat_map(|l| &l.words).find(|w| w.text.contains("HELL")).unwrap();
         assert!(word.rect[0] >= 10.0 && word.rect[0] < 60.0, "{word:?}");
+    }
+
+    /// The stepwise reading the web app uses finds the same words as one call, from models
+    /// loaded from their verified bytes; hostile images end in an error.
+    #[test]
+    fn reads_in_steps_from_verified_bytes() {
+        if !Models::required_for_tests().unwrap() {
+            eprintln!("skipped: OCR models not installed");
+            return;
+        }
+        let models = Models::find().unwrap();
+        let ocr = Arc::new(Ocr::from_bytes(std::fs::read(&models.detection).unwrap(), std::fs::read(&models.recognition).unwrap()).unwrap());
+        let (w, h, px) = test_image::hello();
+        let whole = ocr.recognize(&px, w, h).unwrap();
+        let mut reading = ocr.clone().begin(&px, w, h);
+        let mut steps = 0;
+        let stepped = loop {
+            steps += 1;
+            if let Some(lines) = reading.step().unwrap() {
+                break lines;
+            }
+            assert!(steps < 1000);
+        };
+        assert!(steps >= 2, "lines are found first, then read");
+        assert_eq!(stepped, whole);
+        for (pixels, width, height) in [(&[][..], 0, 0), (&[0, 1][..], 1, 1), (&[0][..], u32::MAX, 1)] {
+            assert!(ocr.clone().begin(pixels, width, height).step().is_err());
+        }
+        // Not the pinned bytes: refused before loading.
+        assert!(Ocr::from_bytes(b"x".to_vec(), std::fs::read(&models.recognition).unwrap()).is_err());
+        assert!(Ocr::from_bytes(std::fs::read(&models.recognition).unwrap(), std::fs::read(&models.detection).unwrap()).is_err(), "swapped");
     }
 
     pub(crate) mod test_image {

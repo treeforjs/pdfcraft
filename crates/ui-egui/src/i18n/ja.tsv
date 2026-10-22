@@ -2525,3 +2525,6 @@ compare-page	Moved	移動
 	The key is on the smart card or token, and the signature is made there.	鍵はスマートカードまたはトークン上にあり、署名はそこで作成されます。
 	Choose a slot with a card or token.	カードまたはトークンが入ったスロットを選択してください。
 	Unlock the token again.	トークンのロックをもう一度解除してください。
+	Downloading text recognition models… {r} of {t} MB	テキスト認識モデルをダウンロード中… {r} / {t} MB
+	The text recognition models (12 MB) are downloaded from this site the first time you recognize text, then kept in this browser.	テキスト認識モデル（12 MB）は、初めてテキストを認識するときにこのサイトからダウンロードされ、その後はこのブラウザーに保存されます。
+	the text recognition models haven't been downloaded into this browser yet; run Recognize Text to download them	テキスト認識モデルがまだこのブラウザーにダウンロードされていません。「テキスト認識」を実行してダウンロードしてください
