@@ -2413,3 +2413,17 @@ compare-page	Moved	Déplacée
 	Page moved	Page déplacée
 	Rendering…	Rendu…
 	Changes: {n}	Modifications : {n}
+	Edit objects	Modifier les objets
+	Click an object to select it, or drag around several	Cliquez sur un objet pour le sélectionner, ou faites glisser autour de plusieurs
+	Bring to Front	Mettre au premier plan
+	Bring Forward	Avancer
+	Send Backward	Reculer
+	Send to Back	Mettre à l’arrière-plan
+	Object properties	Propriétés de l’objet
+	Form XObject	XObject de formulaire
+	Shading	Dégradé
+	{n} objects selected	{n} objets sélectionnés
+	Arrange	Disposition
+	Fill color	Couleur de remplissage
+	Stroke color	Couleur du contour
+	Line width	Épaisseur de trait

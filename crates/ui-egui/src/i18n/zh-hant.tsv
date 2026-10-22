@@ -2299,3 +2299,17 @@ compare-page	Moved	已移動
 	Page moved	頁面已移動
 	Rendering…	正在轉譯…
 	Changes: {n}	變更：{n}
+	Edit objects	編輯物件
+	Click an object to select it, or drag around several	按一下物件以選取，或拖曳框選多個物件
+	Bring to Front	移至最上層
+	Bring Forward	上移一層
+	Send Backward	下移一層
+	Send to Back	移至最下層
+	Object properties	物件屬性
+	Form XObject	表單 XObject
+	Shading	著色
+	{n} objects selected	已選取 {n} 個物件
+	Arrange	排列
+	Fill color	填滿顏色
+	Stroke color	筆畫顏色
+	Line width	線寬

@@ -446,3 +446,220 @@ fn hostile_styles_and_resizes_never_panic() {
         }
     }
 }
+
+/// A one-page PDF whose page uses `resources` and whose objects 5… are `extra`.
+fn page_with_objects(content: &str, resources: &str, extra: &[String]) -> Document {
+    let mut objs: Vec<String> = vec![
+        "<< /Type /Catalog /Pages 2 0 R >>".into(),
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 /MediaBox [0 0 600 800] >>".into(),
+        format!("<< /Type /Page /Parent 2 0 R /Contents 4 0 R /Resources {resources} >>"),
+        format!("<< /Length {} >>\nstream\n{content}\nendstream", content.len()),
+    ];
+    objs.extend(extra.iter().cloned());
+    let mut out = b"%PDF-1.7\n".to_vec();
+    let mut offs = Vec::new();
+    for (i, o) in objs.iter().enumerate() {
+        offs.push(out.len());
+        out.extend_from_slice(format!("{} 0 obj\n{o}\nendobj\n", i + 1).as_bytes());
+    }
+    let x = out.len();
+    out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objs.len() + 1).as_bytes());
+    for o in offs {
+        out.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+    }
+    out.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{x}\n%%EOF\n", objs.len() + 1).as_bytes());
+    Document::open(Arc::new(out)).unwrap()
+}
+
+#[test]
+fn rotating_by_degrees_turns_about_the_centre_and_leaves_the_rest() {
+    let mut doc = page_with(THREE, "");
+    let before = joined(&doc);
+    assert!(edit_objects(&mut doc, 0, &[0], &ObjectsEdit::RotateBy(45.0)).unwrap());
+    let r = page_objects(&doc, 0).unwrap()[0].rect.unwrap();
+    let half = 50.0 * 2f64.sqrt();
+    for (v, want) in r.iter().zip([60.0 - half, 60.0 - half, 60.0 + half, 60.0 + half]) {
+        assert!((v - want).abs() < 0.01, "{r:?}");
+    }
+    let after = joined(&doc);
+    assert!(after.contains("0.707107 -0.707107 0.707107 0.707107"), "{after}");
+    // The other objects keep their bytes.
+    let tail = &before[before.find("0 0 1 rg").unwrap()..];
+    assert!(after.ends_with(tail), "{after}");
+    // A whole turn changes nothing; a quarter turn is the same as Rotate.
+    assert_eq!(edit_objects(&mut doc, 0, &[1], &ObjectsEdit::RotateBy(-720.0)), Ok(false));
+    let (mut a, mut b) = (page_with(THREE, ""), page_with(THREE, ""));
+    edit_objects(&mut a, 0, &[1], &ObjectsEdit::RotateBy(90.0)).unwrap();
+    edit_objects(&mut b, 0, &[1], &ObjectsEdit::Rotate(1)).unwrap();
+    assert_eq!(joined(&a), joined(&b));
+    assert_eq!(kinds(&reopen(&a)), kinds(&b));
+}
+
+#[test]
+fn hostile_angles_are_refused_and_change_nothing() {
+    let mut doc = page_with(THREE, "");
+    let before = joined(&doc);
+    for d in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY, 1e7, -1e300] {
+        assert!(edit_objects(&mut doc, 0, &[0, 1, 2], &ObjectsEdit::RotateBy(d)).is_err(), "{d}");
+        assert!(objects_edit_changes(&doc, 0, &[0], &ObjectsEdit::RotateBy(d)).is_err());
+    }
+    assert_eq!(joined(&doc), before);
+}
+
+#[test]
+fn objects_report_how_they_are_painted() {
+    let doc = page_with(&format!("{THREE}\n0.5 G 3 w 2 0 0 2 0 0 cm 0 0 10 10 re S\n/Pattern cs /P1 scn 0 0 5 5 re B"), "");
+    let o = page_objects(&doc, 0).unwrap();
+    let a = o[0].appearance.clone().unwrap();
+    assert_eq!((a.fill, a.stroke, a.fill_opacity), (Paint::Rgb([1.0, 0.0, 0.0]), Paint::None, 1.0));
+    assert_eq!(o[1].appearance.as_ref().unwrap().fill, Paint::Rgb([0.0, 0.0, 1.0]));
+    assert_eq!((o[2].kind, o[2].appearance.clone(), o[2].opacity), (ObjectKind::Text, None, 1.0));
+    let s = o[3].appearance.clone().unwrap();
+    assert_eq!((&s.fill, &s.stroke), (&Paint::None, &Paint::Gray(0.5)));
+    assert!((s.line_width - 6.0).abs() < 1e-9, "{s:?}");
+    let p = o[4].appearance.clone().unwrap();
+    assert_eq!((p.fill, p.stroke), (Paint::Current(Vec::new()), Paint::Gray(0.5)));
+}
+
+#[test]
+fn opacity_applies_to_any_object_other_styles_only_to_paths() {
+    let mut doc = page_with(THREE, "");
+    let lines = texts(&doc);
+    assert!(edit_objects(&mut doc, 0, &[2], &style(|s| s.opacity = Some(0.25))).unwrap());
+    let doc = reopen(&doc);
+    let o = page_objects(&doc, 0).unwrap();
+    assert_eq!((o.len(), o[2].kind, o[2].opacity), (3, ObjectKind::Text, 0.25));
+    assert_eq!(texts(&doc), lines, "the text stays text");
+    assert_eq!((o[0].opacity, o[1].opacity), (1.0, 1.0));
+    let mut doc = doc;
+    assert!(edit_objects(&mut doc, 0, &[2], &style(|s| s.fill = Some(Paint::Gray(0.0)))).is_err());
+    // A path's opacity shows on it too.
+    assert!(edit_objects(&mut doc, 0, &[0], &style(|s| s.opacity = Some(0.5))).unwrap());
+    let a = page_objects(&doc, 0).unwrap()[0].appearance.clone().unwrap();
+    assert_eq!((a.fill_opacity, a.stroke_opacity), (0.5, 0.5));
+}
+
+#[test]
+fn the_index_finds_the_topmost_object_and_marquee_hits() {
+    let doc = page_with(THREE, "");
+    let objects = page_objects(&doc, 0).unwrap();
+    let index = ObjectIndex::new(&objects);
+    assert_eq!(index.len(), 3);
+    assert_eq!(index.hit(60.0, 60.0, 0.0), Some(1), "the blue square is on top");
+    assert_eq!(index.hits(60.0, 60.0, 0.0), vec![1, 0]);
+    assert_eq!(index.hit(20.0, 20.0, 0.0), Some(0));
+    assert_eq!(index.hit(9.0, 20.0, 2.0), Some(0), "within the slop");
+    assert_eq!(index.hit(500.0, 20.0, 2.0), None);
+    assert_eq!(index.touching([0.0, 0.0, 55.0, 55.0]), vec![0, 1]);
+    assert_eq!(index.touching([305.0, 0.0, 290.0, 800.0]), vec![2], "corners in either order");
+    assert!(index.touching([f64::NAN, 0.0, 1.0, 1.0]).is_empty());
+    assert_eq!(index.hit(f64::NAN, 1.0, 1.0), None);
+}
+
+#[test]
+fn hostile_boxes_never_break_the_index() {
+    let o = |rect| PageObject { kind: ObjectKind::Path, rect, text: String::new(), mcid: None, appearance: None, opacity: 1.0 };
+    let objects = vec![
+        o(Some([f64::NAN, 0.0, 1.0, 1.0])),
+        o(Some([-f64::MAX, -f64::MAX, f64::MAX, f64::MAX])),
+        o(Some([5.0, 5.0, 5.0, 5.0])),
+        o(None),
+        o(Some([10.0, 10.0, 0.0, 0.0])),
+    ];
+    let index = ObjectIndex::new(&objects);
+    assert_eq!(index.hit(5.0, 5.0, f64::INFINITY), Some(2));
+    assert_eq!(index.touching([0.0, 0.0, 6.0, 6.0]), vec![1, 2]);
+    // Many objects: each is entered in a bounded number of cells.
+    let many: Vec<PageObject> = (0..20_000).map(|k| o(Some([k as f64, 0.0, k as f64 + 1.0, 1.0]))).chain([o(Some([0.0, 0.0, 1e6, 1e6]))]).collect();
+    let index = ObjectIndex::new(&many);
+    assert!(index.cells.iter().map(Vec::len).sum::<usize>() <= many.len() * MAX_CELLS);
+    assert_eq!(index.hit(100.5, 0.5, 0.0), Some(20_000), "the large one is on top");
+    assert_eq!(index.hits(100.5, 0.5, 0.0), vec![20_000, 100]);
+    assert!(ObjectIndex::new(&[]).hit(0.0, 0.0, 1.0).is_none());
+}
+
+#[test]
+fn deeply_nested_forms_are_one_object_and_move_whole() {
+    // Form k draws form k+1, two thousand deep; the last is a square.
+    let depth = 2000;
+    let extra: Vec<String> = (0..depth)
+        .map(|k| {
+            let (body, res) = if k + 1 == depth {
+                ("0 0 10 10 re f".to_string(), "<< >>".to_string())
+            } else {
+                ("/X Do".to_string(), format!("<< /XObject << /X {} 0 R >> >>", k + 6))
+            };
+            format!("<< /Type /XObject /Subtype /Form /BBox [0 0 10 10] /Resources {res} /Length {} >>\nstream\n{body}\nendstream", body.len())
+        })
+        .collect();
+    let mut doc = page_with_objects("q 1 0 0 1 100 100 cm /X Do Q", "<< /XObject << /X 5 0 R >> >>", &extra);
+    let o = page_objects(&doc, 0).unwrap();
+    assert_eq!((o.len(), o[0].kind), (1, ObjectKind::Form));
+    assert_eq!(o[0].rect.map(|r| r.map(|v| v.round() as i64)), Some([100, 100, 110, 110]));
+    assert!(edit_objects(&mut doc, 0, &[0], &ObjectsEdit::Move { dx: 5.0, dy: 0.0 }).unwrap());
+    assert!(edit_objects(&mut doc, 0, &[0], &ObjectsEdit::RotateBy(30.0)).unwrap());
+    assert!(edit_objects(&mut doc, 0, &[0], &style(|s| s.opacity = Some(0.5))).unwrap());
+    assert_eq!(page_objects(&reopen(&doc), 0).unwrap().len(), 1);
+}
+
+#[test]
+fn hostile_matrices_and_degenerate_paths_never_panic() {
+    for content in [
+        "1e308 0 0 1e308 0 0 cm 0 0 10 10 re f",
+        "1e308 1e308 -1e308 -1e308 1e308 1e308 cm 0 0 m 1 1 l S",
+        "0 0 0 0 0 0 cm 0 0 10 10 re f",
+        "1e-300 0 0 1e-300 0 0 cm 0 0 10 10 re f",
+        "0 0 m f 0 0 0 0 re S 5 5 m h B",
+        "1e400 w 1e400 0 0 1e400 0 0 cm 0 0 1 1 re S",
+        "/GS1 gs 2 w 0 0 m 1e308 1e308 l S",
+    ] {
+        let mut doc = page_with(content, "");
+        let objects = page_objects(&doc, 0).unwrap_or_default();
+        let index = ObjectIndex::new(&objects);
+        let _ = (index.hit(0.0, 0.0, 4.0), index.touching([-1e308, -1e308, 1e308, 1e308]));
+        let all: Vec<usize> = (0..objects.len()).collect();
+        for edit in [
+            ObjectsEdit::RotateBy(33.0),
+            ObjectsEdit::RotateBy(-1e6),
+            ObjectsEdit::Resize { size: Size::Scale { sx: 2.0, sy: 0.5 }, anchor: Anchor::TopLeft },
+            style(|s| s.opacity = Some(0.3)),
+            ObjectsEdit::Move { dx: 1e6, dy: -1e6 },
+            ObjectsEdit::Arrange(Arrange::Back),
+            ObjectsEdit::Delete,
+        ] {
+            let _ = edit_objects(&mut doc, 0, &all, &edit);
+            let _ = page_objects(&doc, 0);
+        }
+    }
+}
+
+#[test]
+fn a_matrix_transforms_several_objects_together() {
+    let mut doc = page_with(THREE, "");
+    // Scale both squares by 2 about (10, 10): their combined box doubles.
+    assert!(edit_objects(&mut doc, 0, &[0, 1], &ObjectsEdit::Matrix([2.0, 0.0, 0.0, 2.0, -10.0, -10.0])).unwrap());
+    assert_eq!(kinds(&doc)[..2], [(ObjectKind::Path, [10, 10, 210, 210]), (ObjectKind::Path, [90, 90, 290, 290])]);
+    assert_eq!(texts(&doc), vec!["Hello".to_string()]);
+    let before = joined(&doc);
+    for m in [
+        [f64::NAN, 0.0, 0.0, 1.0, 0.0, 0.0],
+        [1e9, 0.0, 0.0, 1.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0, 1.0, 1e300, 0.0],
+        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+        [1.0, 1.0, 1.0, 1.0, 0.0, 0.0],
+    ] {
+        assert!(edit_objects(&mut doc, 0, &[0], &ObjectsEdit::Matrix(m)).is_err(), "{m:?}");
+    }
+    assert_eq!(joined(&doc), before);
+    assert_eq!(edit_objects(&mut doc, 0, &[0], &ObjectsEdit::Matrix([1.0, 0.0, 0.0, 1.0, 0.0, 0.0])), Ok(false));
+}
+
+#[test]
+fn a_shading_is_as_large_as_the_clip_it_fills() {
+    let doc = page_with("q 10 10 100 50 re W n /Sh0 sh Q /Sh0 sh q 2 0 0 2 0 0 cm 0 0 5 5 re W n 1 1 2 2 re W n /Sh0 sh Q", "");
+    let o = page_objects(&doc, 0).unwrap();
+    assert_eq!(o.iter().map(|o| o.kind).collect::<Vec<_>>(), vec![ObjectKind::Shading; 3]);
+    let boxes: Vec<[i64; 4]> = o.iter().map(|o| o.rect.unwrap().map(|v| v.round() as i64)).collect();
+    assert_eq!(boxes, vec![[10, 10, 110, 60], [0, 0, 600, 800], [2, 2, 6, 6]]);
+    assert_eq!(ObjectIndex::new(&o).hit(50.0, 30.0, 0.0), Some(1), "the unclipped one is on top");
+}

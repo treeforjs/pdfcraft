@@ -2375,3 +2375,17 @@ compare-page	Moved	Преместена
 	Page moved	Страницата е преместена
 	Rendering…	Изобразяване…
 	Changes: {n}	Промени: {n}
+	Edit objects	Редактирай обекти
+	Click an object to select it, or drag around several	Щракнете върху обект, за да го изберете, или оградете няколко с плъзгане
+	Bring to Front	Най-отпред
+	Bring Forward	Една позиция напред
+	Send Backward	Една позиция назад
+	Send to Back	Най-отзад
+	Object properties	Свойства на обекта
+	Form XObject	XObject форма
+	Shading	Преливка
+	{n} objects selected	Избрани обекти: {n}
+	Arrange	Подреждане
+	Fill color	Цвят на запълване
+	Stroke color	Цвят на контура
+	Line width	Дебелина на линията

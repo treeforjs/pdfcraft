@@ -2436,3 +2436,17 @@ compare-page	Moved	Переміщена
 	Page moved	Сторінку переміщено
 	Rendering…	Відображення…
 	Changes: {n}	Зміни: {n}
+	Edit objects	Редагувати об’єкти
+	Click an object to select it, or drag around several	Клацніть об’єкт, щоб виділити його, або обведіть кілька, перетягнувши рамку
+	Bring to Front	На передній план
+	Bring Forward	Перемістити вперед
+	Send Backward	Перемістити назад
+	Send to Back	На задній план
+	Object properties	Властивості об’єкта
+	Form XObject	XObject форми
+	Shading	Градієнтна заливка
+	{n} objects selected	Вибрано об’єктів: {n}
+	Arrange	Упорядкувати
+	Fill color	Колір заливки
+	Stroke color	Колір обведення
+	Line width	Товщина лінії

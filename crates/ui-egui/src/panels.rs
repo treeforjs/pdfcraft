@@ -154,6 +154,7 @@ fn tool_detail(app: &mut PdfCraftApp, ui: &mut egui::Ui, t: &Tokens, g: &'static
     // Edit a PDF shows Format text at the top while text is selected or being added.
     if g.id == "edit" {
         format_section(app, ui, t);
+        crate::object_ui::panel(app, ui, t);
     }
     let mut run = None;
     // Redact a PDF has Acrobat's footer: Clear all / Redact all.

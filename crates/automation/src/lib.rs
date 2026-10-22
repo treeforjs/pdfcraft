@@ -517,6 +517,7 @@ impl Automation {
                 }
             }
             "page_objects" => self.page_objects(&a)?,
+            "objects_select" => self.objects_select(&a)?,
             "objects_arrange" | "objects_align" | "objects_distribute" | "objects_transform" | "objects_resize" | "objects_style"
             | "objects_delete" => self.objects_edit(name, &a)?,
             "text_fonts" => {

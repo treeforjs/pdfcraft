@@ -45,6 +45,7 @@ mod js_ui;
 pub use js_ui::{ActionScriptDraft, ScriptTarget};
 mod marks_ui;
 mod measure_ui;
+mod object_ui;
 mod ocr_ui;
 mod optimize_ui;
 mod preflight_ui;
@@ -201,6 +202,8 @@ pub enum QuickTool {
     AddText,
     /// Edit a PDF ▸ Edit text: click a line of existing text to edit it.
     EditText,
+    /// Edit a PDF ▸ Edit objects: select, move, resize, turn and restyle any page object.
+    EditObject,
     /// Add a stamp: click to place this stamp.
     Stamp(pdfcraft_engine::StampKind),
     /// A custom stamp from the library (its index).
@@ -1819,6 +1822,29 @@ impl PdfCraftApp {
                 v.rerun_find();
             }
             ("fields", Some(v)) => v.highlight_fields = value != "off",
+            ("objects", Some(v)) => {
+                // `--objects 2:1,3` (1-based page and objects) selects page objects for the
+                // Edit object tool; `none` clears the selection.
+                if value == "none" {
+                    v.objects.clear();
+                } else {
+                    let (page, list) = value.split_once(':').ok_or("objects: PAGE:N,N… (1-based) or none")?;
+                    let page = page.trim().parse::<usize>().ok().filter(|p| *p >= 1).ok_or("objects: the page is a number from 1")?;
+                    let doc = self.session.get(v.id).ok_or("objects: no document")?;
+                    let n = doc.page_objects(page - 1).len();
+                    let mut picked = Vec::new();
+                    for k in list.split(',') {
+                        let k = k
+                            .trim()
+                            .parse::<usize>()
+                            .ok()
+                            .filter(|k| (1..=n).contains(k))
+                            .ok_or_else(|| format!("objects: object numbers are 1 to {n}"))?;
+                        picked.push(k - 1);
+                    }
+                    v.objects.select(page - 1, picked, doc.edit_generation());
+                }
+            }
             ("select", Some(v)) => {
                 // `--select 2,3,5` (1-based) selects pages in the organize grid.
                 let pages: Result<Vec<usize>, _> = value.split(',').map(|p| p.trim().parse::<usize>().map(|n| n.saturating_sub(1))).collect();
@@ -1837,6 +1863,7 @@ impl PdfCraftApp {
                     "redact" => QuickTool::Redact,
                     "add-text" => QuickTool::AddText,
                     "edit-text" => QuickTool::EditText,
+                    "edit-object" => QuickTool::EditObject,
                     "link" => QuickTool::Link,
                     "sign" => QuickTool::SignArea { certify: false },
                     "marquee-zoom" => QuickTool::MarqueeZoom,
@@ -1926,6 +1953,14 @@ impl PdfCraftApp {
                 if self.is_preparing() {
                     if let Some(doc) = self.session.get(self.views[i].id) {
                         prepare::select_all(&mut self.views[i], &doc.form);
+                    }
+                } else if self.quick_tool == QuickTool::EditObject {
+                    // Edit objects: every object on the current page.
+                    if let Some(doc) = self.session.get(self.views[i].id) {
+                        let view = &mut self.views[i];
+                        let page = view.current;
+                        let n = view.objects.objects(doc, page).objects.len();
+                        view.objects.select(page, (0..n).collect(), doc.edit_generation());
                     }
                 } else {
                     self.views[i].select_all();

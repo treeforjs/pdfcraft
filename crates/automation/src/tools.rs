@@ -2287,10 +2287,23 @@ pub fn tools() -> Vec<ToolDef> {
             .destructive()
             .cmd("edit.edit_text")
             .with(schema(json!({ "doc": doc(), "page": { "type": "integer", "minimum": 1 }, "image": { "type": "integer", "minimum": 1 }, "path": { "type": "string" } }), &["doc", "page", "image", "path"])),
-        t("page_objects", "List page objects", "The objects a page's own content draws, in paint order from back to front (Edit a PDF ▸ select objects): number, kind (text, path, image, form, inline_image, shading, or group for tagged content of several kinds), box (top-left-origin points; null when it can't be measured, e.g. a shading), the MCID that makes tagged content one object, and the text a text object shows. Everything inside one marked-content sequence with an MCID is one object. Added text and images and page marks (headers, watermarks) are not listed: edit them with content_update / doc_header_footer and friends. Numbers change when the order changes: take them from a fresh call. When the document does not allow copying text, text fields are null and text_withheld explains why.")
+        t("page_objects", "List page objects", "The objects a page's own content draws, in paint order from back to front (Edit a PDF ▸ select objects): number, kind (text, path, image, form, inline_image, shading, or group for tagged content of several kinds), box (top-left-origin points; null when it can't be measured, e.g. a shading), the MCID that makes tagged content one object, the text a text object shows, its opacity, and for a vector path its appearance (fill and stroke: \"none\" or { space: gray | rgb | cmyk | current, components }, where current with no components is a pattern; line_width in displayed points; fill_opacity, stroke_opacity). Everything inside one marked-content sequence with an MCID is one object. Added text and images and page marks (headers, watermarks) are not listed: edit them with content_update / doc_header_footer and friends. Numbers change when the order changes: take them from a fresh call. When the document does not allow copying text, text fields are null and text_withheld explains why.")
             .ro()
             .cmd("edit.edit_text")
             .with(schema(json!({ "doc": doc(), "page": { "type": "integer", "minimum": 1 } }), &["doc", "page"])),
+        t("objects_select", "Select objects", "Pick page objects as the Edit object tool does (Edit a PDF ▸ Edit objects): point [x, y] returns the objects whose boxes are under it (within tolerance points, default 2, at most 100), topmost first (top is the one a click selects); rect [x0, y0, x1, y1] (a marquee) returns the objects whose boxes touch it, in paint order. Coordinates are points from the top-left of the displayed page. Returns object numbers for page_objects and the objects_* tools; objects without a box can't be picked. Read-only.")
+            .ro()
+            .cmd("edit.edit_object")
+            .with(schema(
+                json!({
+                    "doc": doc(),
+                    "page": { "type": "integer", "minimum": 1 },
+                    "point": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 },
+                    "rect": { "type": "array", "items": { "type": "number" }, "minItems": 4, "maxItems": 4 },
+                    "tolerance": { "type": "number", "minimum": 0, "maximum": 100 },
+                }),
+                &["doc", "page"],
+            )),
         t("objects_arrange", "Arrange objects", "Change the paint order of page objects (numbers from page_objects): order front (Bring to Front), forward (Bring Forward: above the next object up that overlaps them, or the next one up when none does), backward (Send Backward, the same downwards) or back (Send to Back). Several objects keep their relative order. Each object keeps its look (graphics state, clip, colours, tags and optional content). One undo step; a no-op when nothing would change. Pages that use text as a clipping path, or whose text objects hold stray graphics-state operators, are refused.")
             .cmd("edit.edit_text")
             .with(schema(
@@ -2324,15 +2337,17 @@ pub fn tools() -> Vec<ToolDef> {
                 }),
                 &["doc", "page", "objects", "axis"],
             )),
-        t("objects_transform", "Rotate, flip or move objects", "Change page objects (numbers from page_objects) in place: action rotate (quarters clockwise, default 1, each about its own centre), flip_horizontal / flip_vertical (as displayed, each about its own centre) or move (dx right, dy down, in points). Text stays editable text; everything else on the page is untouched. One undo step.")
+        t("objects_transform", "Rotate, flip or move objects", "Change page objects (numbers from page_objects) in place: action rotate (quarters clockwise, default 1, or degrees clockwise for any angle, each about its own centre), flip_horizontal / flip_vertical (as displayed, each about its own centre) move (dx right, dy down, in points) or matrix (matrix [a, b, c, d, e, f] in the displayed page's space, points from the top-left with y down, applied to every selected object together: scale or turn several about their combined box, as dragging the Edit object tool's handles does; scale parts at most 1000, offsets at most 10,000,000 points, no flattening). Text stays editable text; everything else on the page is untouched. One undo step.")
             .cmd("edit.edit_text")
             .with(schema(
                 json!({
                     "doc": doc(),
                     "page": { "type": "integer", "minimum": 1 },
                     "objects": { "type": "array", "items": { "type": "integer", "minimum": 1 }, "minItems": 1, "description": "Object numbers from page_objects." },
-                    "action": { "type": "string", "enum": ["rotate", "flip_horizontal", "flip_vertical", "move"] },
+                    "action": { "type": "string", "enum": ["rotate", "flip_horizontal", "flip_vertical", "move", "matrix"] },
                     "quarters": { "type": "integer" },
+                    "degrees": { "type": "number", "description": "Rotate by any angle, clockwise as displayed (instead of quarters)." },
+                    "matrix": { "type": "array", "items": { "type": "number" }, "minItems": 6, "maxItems": 6 },
                     "dx": { "type": "number" },
                     "dy": { "type": "number" },
                 }),
@@ -2354,7 +2369,7 @@ pub fn tools() -> Vec<ToolDef> {
                 }),
                 &["doc", "page", "objects"],
             )),
-        t("objects_style", "Change path appearance", "Change how vector paths (numbers from page_objects; kind path, or the paths inside a tagged group) are painted, as Edit PDF's object properties do: fill and stroke colour (\"none\" turns the fill or stroke off, a colour turns it on; \"#RRGGBB\", [gray], [r, g, b] or [c, m, y, k] with components 0-1 write DeviceGray/RGB/CMYK, { space: current, components } keeps the colour space the path already paints with, e.g. a spot colour or ICC space, components checked against it), line_width (displayed points, 0 = thinnest), dash (lengths in displayed points, [] = solid; dash_phase), cap (butt, round, square), join (miter, round, bevel) and opacity (0-1, fill and stroke: a new ExtGState). Fields left out stay as they are. Each path is wrapped in q … Q with the new state, so nothing else on the page changes; a path left with neither fill nor stroke is refused (use objects_delete). Text, images and other objects are refused. One undo step; tagged content keeps its MCIDs.")
+        t("objects_style", "Change path appearance", "Change how vector paths (numbers from page_objects; kind path, or the paths inside a tagged group) are painted, as Edit PDF's object properties do: fill and stroke colour (\"none\" turns the fill or stroke off, a colour turns it on; \"#RRGGBB\", [gray], [r, g, b] or [c, m, y, k] with components 0-1 write DeviceGray/RGB/CMYK, { space: current, components } keeps the colour space the path already paints with, e.g. a spot colour or ICC space, components checked against it), line_width (displayed points, 0 = thinnest), dash (lengths in displayed points, [] = solid; dash_phase), cap (butt, round, square), join (miter, round, bevel) and opacity (0-1, fill and stroke: a new ExtGState). Fields left out stay as they are. Each path is wrapped in q … Q with the new state, so nothing else on the page changes; a path left with neither fill nor stroke is refused (use objects_delete). Text, images and other objects take opacity alone (the object is wrapped whole in q /gs … Q); their other fields are refused. One undo step; tagged content keeps its MCIDs.")
             .cmd("edit.edit_text")
             .with(schema(
                 json!({

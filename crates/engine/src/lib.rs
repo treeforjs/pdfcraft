@@ -87,7 +87,8 @@ pub use pdfcraft_edit::bidi;
 pub use pdfcraft_edit::lists::{MAX_LIST_LEVEL, MAX_LIST_START, items as list_items, labels as list_labels};
 /// Edit a PDF ▸ arrange, align, distribute, rotate, flip and move page objects.
 pub use pdfcraft_edit::objects::{
-    AlignTo, Anchor, Arrange, Axis, Dash, LineCap, LineJoin, ObjectKind, ObjectsEdit, PageObject, Paint, PathStyle, Size as ObjectSize,
+    AlignTo, Anchor, Appearance, Arrange, Axis, Dash, LineCap, LineJoin, ObjectIndex, ObjectKind, ObjectsEdit, PageObject, Paint, PathStyle,
+    Size as ObjectSize,
 };
 pub use pdfcraft_edit::text::validate_paragraph_text;
 pub use pdfcraft_edit::{BlockStyle, PageFont, PageImage, TextBlock, TextLine, TextRun, first_undrawable};
@@ -2265,7 +2266,9 @@ fn objects_label(change: &pdfcraft_edit::objects::ObjectsEdit) -> &'static str {
         ObjectsEdit::Align(AlignTo::Bottom) => "Align bottom",
         ObjectsEdit::Distribute(Axis::Horizontal) => "Distribute horizontally",
         ObjectsEdit::Distribute(Axis::Vertical) => "Distribute vertically",
-        ObjectsEdit::Rotate(_) => "Rotate objects",
+        ObjectsEdit::Rotate(_) | ObjectsEdit::RotateBy(_) => "Rotate objects",
+        ObjectsEdit::Matrix(m) if m[1] == 0.0 && m[2] == 0.0 => "Resize objects",
+        ObjectsEdit::Matrix(_) => "Transform objects",
         ObjectsEdit::Flip { .. } => "Flip objects",
         ObjectsEdit::Move { .. } => "Move objects",
         ObjectsEdit::Resize { .. } => "Resize objects",

@@ -307,6 +307,12 @@ impl PdfCraftApp {
                 self.left_open = true;
                 self.notify_tr("Click text or an image to edit it");
             }
+            "edit.edit_object" => {
+                self.quick_tool = crate::QuickTool::EditObject;
+                self.left = crate::LeftPanel::Tool("edit");
+                self.left_open = true;
+                self.notify_tr("Click an object to select it, or drag around several");
+            }
             "edit.advanced_search" => {
                 if let Some(i) = self.active {
                     let f = self.views[i].find.get_or_insert_with(Default::default);

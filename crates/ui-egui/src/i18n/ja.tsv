@@ -2413,3 +2413,17 @@ compare-page	Moved	移動
 	Page moved	ページ移動
 	Rendering…	描画中…
 	Changes: {n}	変更: {n}
+	Edit objects	オブジェクトを編集
+	Click an object to select it, or drag around several	オブジェクトをクリックして選択、またはドラッグして複数を囲みます
+	Bring to Front	最前面へ
+	Bring Forward	前面へ
+	Send Backward	背面へ
+	Send to Back	最背面へ
+	Object properties	オブジェクトのプロパティ
+	Form XObject	フォーム XObject
+	Shading	シェーディング
+	{n} objects selected	{n} 個のオブジェクトを選択中
+	Arrange	重ね順
+	Fill color	塗りの色
+	Stroke color	線の色
+	Line width	線幅

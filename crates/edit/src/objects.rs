@@ -34,6 +34,12 @@
 //! tagged object of several kinds only its paths change. **Delete** removes the selected
 //! objects' painting operators and keeps the state they leave for later content (a clip, text
 //! state), so nothing else changes; keep-tags-on-edit then drops emptied structure elements.
+//! Opacity alone also applies to text, images, Form XObjects and shadings: the object is wrapped
+//! whole in `q /PCOpacity… gs … Q`.
+//!
+//! **Edit object tool.** Each [`PageObject`] reports how it is painted ([`Appearance`]: fill and
+//! stroke colour, displayed line width, opacity), [`ObjectsEdit::RotateBy`] turns objects by any
+//! angle, [`ObjectsEdit::Matrix`] scales or turns several about their combined box, and [`ObjectIndex`] answers clicks and marquees from a grid built once per page edit.
 
 use std::collections::HashMap;
 use std::ops::Range;
@@ -85,13 +91,31 @@ impl ObjectKind {
 #[derive(Clone, Debug, PartialEq)]
 pub struct PageObject {
     pub kind: ObjectKind,
-    /// Its box in user space; `None` when it has none that can be worked out (a shading, text
-    /// whose font can't be measured): such objects can be arranged but not aligned or turned.
+    /// Its box in user space; `None` when it has none that can be worked out (text whose font
+    /// can't be measured): such objects can be arranged but not aligned or turned. A shading's
+    /// box is the clip it fills, within the crop box.
     pub rect: Option<[f64; 4]>,
     /// For text: what it shows.
     pub text: String,
     /// The marked-content id that makes it one tagged object.
     pub mcid: Option<i64>,
+    /// For a vector path (or the first path of a tagged group): how it is painted.
+    pub appearance: Option<Appearance>,
+    /// The constant opacity it is painted with (`/ca`, or `/CA` for a path that only strokes).
+    pub opacity: f64,
+}
+
+/// How a vector path is painted, as Edit PDF's object properties show it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Appearance {
+    /// The fill colour ([`Paint::None`]: not filled; [`Paint::Current`] with no components: a
+    /// pattern).
+    pub fill: Paint,
+    pub stroke: Paint,
+    /// The line width in displayed points.
+    pub line_width: f64,
+    pub fill_opacity: f64,
+    pub stroke_opacity: f64,
 }
 
 /// A change of paint order.
@@ -222,6 +246,8 @@ const MAX_SCALE: f64 = 1e3;
 /// The longest dash pattern accepted, and the largest width or dash length (points).
 const MAX_DASH: usize = 16;
 const MAX_LENGTH: f64 = 10_000.0;
+/// The largest rotation accepted (degrees, either way).
+const MAX_DEGREES: f64 = 1e6;
 
 /// What to do with the selected objects.
 #[derive(Clone, Debug, PartialEq)]
@@ -233,6 +259,12 @@ pub enum ObjectsEdit {
     Distribute(Axis),
     /// Quarter turns clockwise, each object about its own centre.
     Rotate(i32),
+    /// Turn each object about its own centre by this many degrees, clockwise as displayed (the
+    /// Edit object tool's rotation handle).
+    RotateBy(f64),
+    /// Apply this user-space transform to every selected object (the Edit object tool scaling or
+    /// turning several objects about their combined box).
+    Matrix([f64; 6]),
     /// Mirror each object about its own centre: left to right (`horizontal`) or top to bottom.
     Flip {
         horizontal: bool,
@@ -292,6 +324,10 @@ struct Unit {
     problem: Option<String>,
     /// For a path: the fill and stroke colour spaces it paints with.
     spaces: Option<(Object, Object)>,
+    /// For a path: how it is painted.
+    appearance: Option<Appearance>,
+    /// The constant opacity it is painted with.
+    opacity: f64,
 }
 
 #[derive(Clone, Debug)]
@@ -326,35 +362,119 @@ struct Gs {
     render_mode: f64,
     fill_cs: Object,
     stroke_cs: Object,
+    /// The current fill and stroke colour components (empty: a pattern, or unknown).
+    fill_color: Vec<f64>,
+    stroke_color: Vec<f64>,
+    /// Constant opacity (`/ca`, `/CA` of the `gs` in effect).
+    fill_alpha: f64,
+    stroke_alpha: f64,
+    /// The box of the clipping paths in effect (device space), if any.
+    clip: Option<[f64; 4]>,
 }
 
 impl Default for Gs {
     fn default() -> Self {
-        Gs { ctm: Matrix::IDENTITY, line_width: 1.0, render_mode: 0.0, fill_cs: Object::name("DeviceGray"), stroke_cs: Object::name("DeviceGray") }
+        Gs {
+            ctm: Matrix::IDENTITY,
+            line_width: 1.0,
+            render_mode: 0.0,
+            fill_cs: Object::name("DeviceGray"),
+            stroke_cs: Object::name("DeviceGray"),
+            fill_color: vec![0.0],
+            stroke_color: vec![0.0],
+            fill_alpha: 1.0,
+            stroke_alpha: 1.0,
+            clip: None,
+        }
+    }
+}
+
+/// The most colour components followed (a DeviceN space has at most 32).
+const MAX_COMPONENTS: usize = 32;
+
+/// The initial colour of a colour space selected with `cs` / `CS` (black, or unknown).
+fn initial_color(space: &Object) -> Vec<f64> {
+    match space.as_name() {
+        Some(b"DeviceGray" | b"G") => vec![0.0],
+        Some(b"DeviceRGB" | b"RGB") => vec![0.0; 3],
+        Some(b"DeviceCMYK" | b"CMYK") => vec![0.0, 0.0, 0.0, 1.0],
+        _ => Vec::new(),
     }
 }
 
 impl Gs {
-    /// Follow the colour spaces colour operators select.
+    /// Follow the colour spaces and colours colour operators select.
     fn track_color(&mut self, op: &Op) {
-        let (fill, space) = match op.op.as_slice() {
-            b"g" => (true, Object::name("DeviceGray")),
-            b"rg" => (true, Object::name("DeviceRGB")),
-            b"k" => (true, Object::name("DeviceCMYK")),
-            b"G" => (false, Object::name("DeviceGray")),
-            b"RG" => (false, Object::name("DeviceRGB")),
-            b"K" => (false, Object::name("DeviceCMYK")),
+        let nums = || op.operands.iter().take(MAX_COMPONENTS).filter_map(Object::as_f64).filter(|v| v.is_finite()).collect::<Vec<_>>();
+        let (fill, space, color) = match op.op.as_slice() {
+            b"g" => (true, Object::name("DeviceGray"), nums()),
+            b"rg" => (true, Object::name("DeviceRGB"), nums()),
+            b"k" => (true, Object::name("DeviceCMYK"), nums()),
+            b"G" => (false, Object::name("DeviceGray"), nums()),
+            b"RG" => (false, Object::name("DeviceRGB"), nums()),
+            b"K" => (false, Object::name("DeviceCMYK"), nums()),
             b"cs" | b"CS" => match op.operands.first() {
-                Some(o) => (op.is("cs"), o.clone()),
+                Some(o) => (op.is("cs"), o.clone(), initial_color(o)),
                 None => return,
             },
+            b"sc" | b"scn" => {
+                self.fill_color = nums();
+                return;
+            }
+            b"SC" | b"SCN" => {
+                self.stroke_color = nums();
+                return;
+            }
             _ => return,
         };
         if fill {
             self.fill_cs = space;
+            self.fill_color = color;
         } else {
             self.stroke_cs = space;
+            self.stroke_color = color;
         }
+    }
+
+    /// Follow the constant opacity a `gs` operator sets (from the page's `/ExtGState`s).
+    fn track_alpha(&mut self, doc: &Document, states: &Dict, op: &Op) {
+        if !op.is("gs") {
+            return;
+        }
+        let Some(state) = op.name(0).and_then(|n| states.get(n)).map(|s| doc.resolve(s)) else { return };
+        let Some(state) = state.as_dict() else { return };
+        let alpha = |key: &[u8]| state.get(key).and_then(Object::as_f64).filter(|v| v.is_finite()).map(|v| v.clamp(0.0, 1.0));
+        if let Some(a) = alpha(b"ca") {
+            self.fill_alpha = a;
+        }
+        if let Some(a) = alpha(b"CA") {
+            self.stroke_alpha = a;
+        }
+    }
+
+    /// How a path painted with operator `op` now looks.
+    fn appearance(&self, op: &[u8]) -> Appearance {
+        let fills = matches!(op, b"f" | b"F" | b"f*" | b"B" | b"B*" | b"b" | b"b*");
+        let [a, b, c, d, _, _] = self.ctm.0;
+        let scale = (a * d - b * c).abs().sqrt();
+        let width = self.line_width.abs() * scale;
+        Appearance {
+            fill: if fills { paint_of(&self.fill_cs, &self.fill_color) } else { Paint::None },
+            stroke: if strokes(op) { paint_of(&self.stroke_cs, &self.stroke_color) } else { Paint::None },
+            line_width: if width.is_finite() { width } else { 0.0 },
+            fill_opacity: self.fill_alpha,
+            stroke_opacity: self.stroke_alpha,
+        }
+    }
+}
+
+/// A colour as [`Paint`]: device colours by their space, anything else in its own space.
+fn paint_of(space: &Object, color: &[f64]) -> Paint {
+    match (space.as_name(), color) {
+        (Some(b"DeviceGray" | b"G"), [g]) => Paint::Gray(*g),
+        (Some(b"DeviceRGB" | b"RGB"), [r, g, b]) => Paint::Rgb([*r, *g, *b]),
+        (Some(b"DeviceCMYK" | b"CMYK"), [c, m, y, k]) => Paint::Cmyk([*c, *m, *y, *k]),
+        _ => Paint::Current(color.to_vec()),
     }
 }
 
@@ -488,6 +608,8 @@ fn scan(doc: &Document, page: usize, with_prefix: bool) -> Result<Scan, EditErro
     let region = r0..r1;
     let res = resources(doc, &p.dict);
     let (xobjects, properties) = (sub_dict(doc, &res, b"XObject"), sub_dict(doc, &res, b"Properties"));
+    let states = sub_dict(doc, &res, b"ExtGState");
+    let crop = p.crop(doc);
 
     let mut problem = None;
     // The CTM where the region starts (marks before it may wrap it in `q … cm`).
@@ -571,6 +693,8 @@ fn scan(doc: &Document, page: usize, with_prefix: bool) -> Result<Scan, EditErro
         text: String::new(),
         problem: None,
         spaces: None,
+        appearance: None,
+        opacity: 1.0,
     };
 
     for (i, op) in ops.iter().enumerate().take(last).skip(first) {
@@ -583,6 +707,7 @@ fn scan(doc: &Document, page: usize, with_prefix: bool) -> Result<Scan, EditErro
                 b"ET" => {
                     let Some(t) = text.take() else { continue };
                     let mut u = unit(UnitKind::Text, t.start..i.saturating_add(1), t.ctm, None);
+                    u.opacity = gs.fill_alpha;
                     u.problem = t.problem.or_else(|| (t.depth != 0).then(|| "marked content crosses the edge of a text object".to_string()));
                     if t.render_mode >= 4.0 {
                         u.problem = Some("text used as a clipping path can't be rearranged or moved".to_string());
@@ -617,6 +742,7 @@ fn scan(doc: &Document, page: usize, with_prefix: bool) -> Result<Scan, EditErro
                         t.render_mode = t.render_mode.max(v);
                     }
                     gs.track_color(op);
+                    gs.track_alpha(doc, &states, op);
                     if kw == b"w"
                         && let Some(v) = op.num(0)
                     {
@@ -648,6 +774,14 @@ fn scan(doc: &Document, page: usize, with_prefix: bool) -> Result<Scan, EditErro
             if is_path_painting(kw) {
                 let Some((start, rect, clip, inner)) = path.take() else { continue };
                 let mut residue = inner;
+                if clip.is_some()
+                    && let Some(r) = rect
+                {
+                    gs.clip = Some(match gs.clip {
+                        Some(c) => [c[0].max(r[0]), c[1].max(r[1]), c[2].min(r[2]), c[3].min(r[3])],
+                        None => r,
+                    });
+                }
                 if let Some(w) = &clip {
                     residue.extend(ops.get(start..i).unwrap_or_default().iter().filter(|o| is_path_construction(&o.op)).cloned());
                     residue.push(w.clone());
@@ -664,6 +798,8 @@ fn scan(doc: &Document, page: usize, with_prefix: bool) -> Result<Scan, EditErro
                     let mut u = unit(UnitKind::Path, start..i.saturating_add(1), gs.ctm, rect);
                     u.residue = residue.clone();
                     u.spaces = Some((gs.fill_cs.clone(), gs.stroke_cs.clone()));
+                    u.opacity = if strokes(kw) && gs.appearance(kw).fill == Paint::None { gs.stroke_alpha } else { gs.fill_alpha };
+                    u.appearance = Some(gs.appearance(kw));
                     // The unit's own state ops apply before it at this level for later units.
                     if let Some(level) = levels.last_mut() {
                         for r in residue {
@@ -686,6 +822,7 @@ fn scan(doc: &Document, page: usize, with_prefix: bool) -> Result<Scan, EditErro
                 // Not allowed inside a path, but kept: it applies after the path's object.
                 inner.push(op.clone());
                 gs.track_color(op);
+                gs.track_alpha(doc, &states, op);
                 if kw == b"w"
                     && let Some(v) = op.num(0)
                 {
@@ -727,15 +864,23 @@ fn scan(doc: &Document, page: usize, with_prefix: bool) -> Result<Scan, EditErro
             b"Do" => {
                 let (kind, bbox) = xobject_box(doc, &xobjects, op);
                 let rect = bbox.map(|(b, m)| m.then(&gs.ctm).bbox(b));
-                let u = unit(kind, i..i.saturating_add(1), gs.ctm, rect);
+                let mut u = unit(kind, i..i.saturating_add(1), gs.ctm, rect);
+                u.opacity = gs.fill_alpha;
                 push_unit(&mut units, &mut marked, &levels, &mut replayed, &mut problem, u);
             }
             b"BI" => {
-                let u = unit(UnitKind::InlineImage, i..i.saturating_add(1), gs.ctm, Some(gs.ctm.bbox([0.0, 0.0, 1.0, 1.0])));
+                let mut u = unit(UnitKind::InlineImage, i..i.saturating_add(1), gs.ctm, Some(gs.ctm.bbox([0.0, 0.0, 1.0, 1.0])));
+                u.opacity = gs.fill_alpha;
                 push_unit(&mut units, &mut marked, &levels, &mut replayed, &mut problem, u);
             }
             b"sh" => {
-                let u = unit(UnitKind::Shading, i..i.saturating_add(1), gs.ctm, None);
+                // A shading fills the clip (and the page at most).
+                let area = match gs.clip {
+                    Some(c) => [c[0].max(crop[0]), c[1].max(crop[1]), c[2].min(crop[2]), c[3].min(crop[3])],
+                    None => crop,
+                };
+                let mut u = unit(UnitKind::Shading, i..i.saturating_add(1), gs.ctm, Some(area));
+                u.opacity = gs.fill_alpha;
                 push_unit(&mut units, &mut marked, &levels, &mut replayed, &mut problem, u);
             }
             b"MP" | b"DP" => {
@@ -775,6 +920,7 @@ fn scan(doc: &Document, page: usize, with_prefix: bool) -> Result<Scan, EditErro
                     gs.render_mode = v;
                 }
                 gs.track_color(op);
+                gs.track_alpha(doc, &states, op);
                 if let Some(level) = levels.last_mut() {
                     if level.len() >= MAX_LEVEL {
                         problem.get_or_insert_with(|| "the page is too complex to rearrange".to_string());
@@ -844,7 +990,9 @@ impl Scan {
         };
         let rect = units.iter().filter(|u| u.kind.paints()).fold(None, |r, u| union(r, u.rect));
         let text = units.iter().filter(|u| !u.text.is_empty()).map(|u| u.text.as_str()).collect::<Vec<_>>().join(" ");
-        PageObject { kind, rect, text, mcid: g.mcid }
+        let appearance = units.iter().find_map(|u| u.appearance.clone());
+        let opacity = units.iter().find(|u| u.kind.paints()).map_or(1.0, |u| u.opacity);
+        PageObject { kind, rect, text, mcid: g.mcid, appearance, opacity }
     }
 
     /// The groups of the selected objects (indexes into the listed objects), deduplicated.
@@ -888,6 +1036,132 @@ pub fn page_objects(doc: &Document, page: usize) -> Result<Vec<PageObject>, Edit
     Ok(s.listed.iter().filter_map(|g| s.groups.get(*g)).map(|g| s.object(g)).collect())
 }
 
+/// Cells per side of an [`ObjectIndex`]'s grid.
+const GRID: usize = 32;
+/// The most grid cells one object is entered in; larger objects are kept on a short list that
+/// every query checks.
+const MAX_CELLS: usize = 16;
+
+/// A hit-testing index of a page's objects (the Edit object tool's clicks and marquees): built
+/// once from [`page_objects`] when the page changes, then each query looks only at the objects
+/// in the grid cells it touches. Objects without a box can't be hit.
+#[derive(Clone, Debug, Default)]
+pub struct ObjectIndex {
+    rects: Vec<Option<[f64; 4]>>,
+    /// The grid's extent in user space, and the size of a cell.
+    origin: [f64; 2],
+    cell: [f64; 2],
+    cells: Vec<Vec<u32>>,
+    /// Objects too large for the grid (or every object, when the extent can't be gridded).
+    large: Vec<u32>,
+}
+
+impl ObjectIndex {
+    pub fn new(objects: &[PageObject]) -> ObjectIndex {
+        let rects: Vec<Option<[f64; 4]>> = objects.iter().map(|o| o.rect.and_then(finite_rect)).collect();
+        let bounds = rects.iter().fold(None, |b, r| union(b, *r));
+        let mut index = ObjectIndex { rects, ..ObjectIndex::default() };
+        let Some(b) = bounds else { return index };
+        let (w, h) = (b[2] - b[0], b[3] - b[1]);
+        let griddable = w.is_finite() && h.is_finite() && w > 1e-9 && h > 1e-9 && index.rects.len() <= u32::MAX as usize;
+        if !griddable {
+            index.large = (0..index.rects.len()).filter(|k| index.rects.get(*k).is_some_and(Option::is_some)).map(|k| k as u32).collect();
+            return index;
+        }
+        index.origin = [b[0], b[1]];
+        index.cell = [w / GRID as f64, h / GRID as f64];
+        index.cells = vec![Vec::new(); GRID * GRID];
+        for (k, r) in index.rects.iter().enumerate() {
+            let Some(r) = r else { continue };
+            let (cols, rows) = index.span(*r);
+            if cols.len().saturating_mul(rows.len()) > MAX_CELLS {
+                index.large.push(k as u32);
+                continue;
+            }
+            for row in rows {
+                for col in cols.clone() {
+                    if let Some(c) = index.cells.get_mut(row * GRID + col) {
+                        c.push(k as u32);
+                    }
+                }
+            }
+        }
+        index
+    }
+
+    /// How many objects it holds.
+    pub fn len(&self) -> usize {
+        self.rects.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.rects.is_empty()
+    }
+
+    /// The columns and rows of cells `r` touches.
+    fn span(&self, r: [f64; 4]) -> (Range<usize>, Range<usize>) {
+        let at = |v: f64, o: f64, size: f64| -> usize {
+            let k = ((v - o) / size).floor();
+            if k.is_nan() || k < 0.0 { 0 } else { (k as usize).min(GRID - 1) }
+        };
+        let (c0, c1) = (at(r[0], self.origin[0], self.cell[0]), at(r[2], self.origin[0], self.cell[0]));
+        let (r0, r1) = (at(r[1], self.origin[1], self.cell[1]), at(r[3], self.origin[1], self.cell[1]));
+        (c0..c1.saturating_add(1), r0..r1.saturating_add(1))
+    }
+
+    /// The objects whose boxes may touch `r`, each once, in paint order.
+    fn candidates(&self, r: [f64; 4]) -> Vec<usize> {
+        let mut out: Vec<usize> = self.large.iter().map(|k| *k as usize).collect();
+        if !self.cells.is_empty() {
+            let (cols, rows) = self.span(r);
+            for row in rows {
+                for col in cols.clone() {
+                    out.extend(self.cells.get(row * GRID + col).into_iter().flatten().map(|k| *k as usize));
+                }
+            }
+        }
+        out.sort_unstable();
+        out.dedup();
+        out
+    }
+
+    /// The objects under user-space point (`x`, `y`), within `slop` points of their boxes,
+    /// topmost first.
+    pub fn hits(&self, x: f64, y: f64, slop: f64) -> Vec<usize> {
+        if !(x.is_finite() && y.is_finite()) {
+            return Vec::new();
+        }
+        let slop = if slop.is_finite() { slop.clamp(0.0, 1e4) } else { 0.0 };
+        let probe = [x - slop, y - slop, x + slop, y + slop];
+        let mut out: Vec<usize> = self
+            .candidates(probe)
+            .into_iter()
+            .filter(|k| {
+                self.rects.get(*k).copied().flatten().is_some_and(|r| r[0] <= probe[2] && probe[0] <= r[2] && r[1] <= probe[3] && probe[1] <= r[3])
+            })
+            .collect();
+        out.reverse();
+        out
+    }
+
+    /// The topmost object under user-space point (`x`, `y`) (within `slop` points).
+    pub fn hit(&self, x: f64, y: f64, slop: f64) -> Option<usize> {
+        self.hits(x, y, slop).into_iter().next()
+    }
+
+    /// The objects whose boxes touch user-space rectangle `r` (a marquee), in paint order.
+    pub fn touching(&self, r: [f64; 4]) -> Vec<usize> {
+        if !r.iter().all(|v| v.is_finite()) {
+            return Vec::new();
+        }
+        let r = [r[0].min(r[2]), r[1].min(r[3]), r[0].max(r[2]), r[1].max(r[3])];
+        self.candidates(r)
+            .into_iter()
+            .filter(|k| self.rects.get(*k).copied().flatten().is_some_and(|b| b[0] <= r[2] && r[0] <= b[2] && b[1] <= r[3] && r[1] <= b[3]))
+            .collect()
+    }
+}
+
 /// User space → display space (after `/Rotate`), linear part only.
 fn display(page: &pdfcraft_model::Page) -> Matrix {
     match page.dict.int(b"Rotate").unwrap_or(0).rem_euclid(360) / 90 {
@@ -910,7 +1184,8 @@ enum Plan {
 /// Restyled path units: (unit index, state operators to set first, the new painting operator),
 /// and the opacity ExtGState to add to the page's resources (its name and value).
 struct Styled {
-    units: Vec<(usize, Vec<u8>, &'static str)>,
+    /// `None` for the painting operator: the unit is kept whole (opacity only).
+    units: Vec<(usize, Vec<u8>, Option<&'static str>)>,
     opacity: Option<(Vec<u8>, f64)>,
 }
 
@@ -1060,6 +1335,37 @@ fn plan(doc: &Document, s: &Scan, objects: &[usize], edit: &ObjectsEdit) -> Resu
         }
         ObjectsEdit::Rotate(quarters) => {
             selected.iter().map(|g| Ok((*g, crate::turn_about_centre(rect_of(*g)?, *quarters, false, false)))).collect::<Result<_, EditError>>()?
+        }
+        ObjectsEdit::RotateBy(degrees) => {
+            if !(degrees.is_finite() && degrees.abs() <= MAX_DEGREES) {
+                return Err(EditError::Invalid(format!("the angle must be a finite number of degrees, at most {MAX_DEGREES} either way")));
+            }
+            let (sin, cos) = degrees.rem_euclid(360.0).to_radians().sin_cos();
+            // Exact quarter turns stay exact.
+            let snap = |v: f64| if (v - v.round()).abs() < 1e-12 { v.round() } else { v };
+            let (sin, cos) = (snap(sin), snap(cos));
+            selected
+                .iter()
+                .map(|g| {
+                    let r = rect_of(*g)?;
+                    let (cx, cy) = ((r[0] + r[2]) / 2.0, (r[1] + r[3]) / 2.0);
+                    // Clockwise with y up; about the centre.
+                    let (a, b, c, d) = (cos, -sin, sin, cos);
+                    Ok((*g, [a, b, c, d, cx - a * cx - c * cy, cy - b * cx - d * cy]))
+                })
+                .collect::<Result<_, EditError>>()?
+        }
+        ObjectsEdit::Matrix(m) => {
+            let [a, b, c, d, e, f] = *m;
+            if !m.iter().all(|v| v.is_finite()) || [a, b, c, d].iter().any(|v| v.abs() > MAX_SCALE) || e.abs() > 1e7 || f.abs() > 1e7 {
+                return Err(EditError::Invalid(format!(
+                    "the matrix must be finite, its scale parts at most {MAX_SCALE} and its offsets at most 10,000,000 points"
+                )));
+            }
+            if (a * d - b * c).abs() < MIN_SCALE * MIN_SCALE {
+                return Err(EditError::Invalid("the matrix would flatten the objects to nothing".into()));
+            }
+            selected.iter().map(|g| (*g, *m)).collect()
         }
         ObjectsEdit::Flip { horizontal } => {
             // Left–right as displayed is top–bottom in user space on a page turned a quarter.
@@ -1250,12 +1556,26 @@ fn style_plan(doc: &Document, s: &Scan, selected: &[usize], style: &PathStyle, n
     let res = resources(doc, &s.page.dict);
     let opacity = style.opacity.map(|o| (opacity_name(doc, &res, o), o));
     let mut units = Vec::new();
+    // Opacity alone applies to any object (text, images, forms, shadings) as a whole.
+    let opacity_only = *style == PathStyle { opacity: style.opacity, ..PathStyle::default() };
     for g in selected {
         let Some(group) = s.groups.get(*g) else { continue };
         let n = number_of(*g);
         let paths: Vec<usize> = group.units.clone().filter(|u| s.units.get(*u).is_some_and(|u| u.kind == UnitKind::Path)).collect();
-        if paths.is_empty() {
-            return Err(EditError::Invalid(format!("object {n} is not a vector path")));
+        if opacity_only {
+            for k in group.units.clone().filter(|u| s.units.get(*u).is_some_and(|u| u.kind.paints() && u.kind != UnitKind::Path)) {
+                if let Some(p) = s.units.get(k).and_then(|u| u.problem.as_ref()) {
+                    return Err(EditError::Invalid(format!("object {n} can't be changed: {p}")));
+                }
+                if let Some((name, _)) = &opacity {
+                    let mut state = b"/".to_vec();
+                    state.extend_from_slice(name);
+                    state.extend_from_slice(b" gs ");
+                    units.push((k, state, None));
+                }
+            }
+        } else if paths.is_empty() {
+            return Err(EditError::Invalid(format!("object {n} is not a vector path: only its opacity can change")));
         }
         for k in paths {
             let Some(u) = s.units.get(k) else { continue };
@@ -1307,7 +1627,7 @@ fn style_plan(doc: &Document, s: &Scan, selected: &[usize], style: &PathStyle, n
             if let Some(p) = &style.stroke {
                 paint_ops(doc, &res, p, spaces.map(|s| &s.1), false, n, &mut out)?;
             }
-            units.push((k, out.into_bytes(), op));
+            units.push((k, out.into_bytes(), Some(op)));
         }
     }
     Ok(Styled { units, opacity })
@@ -1413,11 +1733,21 @@ fn write_styles(doc: &mut Document, s: &Scan, styled: &Styled) -> Result<(), Edi
         let mut out = b"\nq ".to_vec();
         out.extend_from_slice(state);
         out.push(b'\n');
-        for op in body {
-            s.op_bytes(op, &mut out);
+        match paint {
+            Some(paint) => {
+                for op in body {
+                    s.op_bytes(op, &mut out);
+                }
+                out.extend_from_slice(paint.as_bytes());
+                out.extend_from_slice(b"\nQ\n");
+            }
+            None => {
+                for op in ops {
+                    s.op_bytes(op, &mut out);
+                }
+                out.extend_from_slice(b"Q\n");
+            }
         }
-        out.extend_from_slice(paint.as_bytes());
-        out.extend_from_slice(b"\nQ\n");
         for op in &u.residue {
             s.op_bytes(op, &mut out);
         }

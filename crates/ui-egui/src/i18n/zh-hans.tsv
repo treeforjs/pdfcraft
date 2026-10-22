@@ -2377,3 +2377,17 @@ compare-page	Moved	已移动
 	Page moved	页面已移动
 	Rendering…	正在渲染…
 	Changes: {n}	更改：{n}
+	Edit objects	编辑对象
+	Click an object to select it, or drag around several	单击对象以选择它，或拖动框选多个对象
+	Bring to Front	置于顶层
+	Bring Forward	上移一层
+	Send Backward	下移一层
+	Send to Back	置于底层
+	Object properties	对象属性
+	Form XObject	表单 XObject
+	Shading	着色
+	{n} objects selected	已选择 {n} 个对象
+	Arrange	排列
+	Fill color	填充颜色
+	Stroke color	描边颜色
+	Line width	线宽

@@ -317,6 +317,8 @@ pub struct DocView {
     pub image_selection: Option<crate::edit_text_ui::ImageSelection>,
     /// A paragraph box being dragged (moved, or resized from its right edge) in Edit text.
     pub block_drag: Option<crate::edit_text_ui::BlockDrag>,
+    /// Edit objects: the selected page objects, the gesture, and each page's object index.
+    pub objects: crate::object_ui::ObjectView,
     /// Commenting state: selected comment, gestures, composer.
     pub comments: crate::comments::CommentView,
     pub measure: crate::measure_ui::MeasureView,
@@ -517,6 +519,7 @@ impl DocView {
             edit_images: HashMap::new(),
             image_selection: None,
             block_drag: None,
+            objects: Default::default(),
             pending_action: None,
             script_page: None,
             insert_at: None,
@@ -1782,6 +1785,10 @@ pub fn shortcuts(view: &mut DocView, ctx: &egui::Context, copy_allowed: bool) {
     if ctx.egui_wants_keyboard_input() {
         return;
     }
+    // Edit objects: a selection takes Delete, the arrows, ⌘[ / ⌘] and Esc.
+    if crate::object_ui::keys(view, ctx) {
+        return;
+    }
     let cmd = |k| KeyboardShortcut::new(Modifiers::COMMAND, k);
     let pressed = |s: KeyboardShortcut| ctx.input_mut(|i| i.consume_shortcut(&s));
     // Rotation first: egui matches ⌘+ loosely with respect to Shift.
@@ -1930,8 +1937,12 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
     // Edit a PDF: added text and images can be selected, moved and edited.
     let editing_content = (app.left_open && app.left == crate::LeftPanel::Tool("edit")) || app.quick_tool == QuickTool::AddText;
     let text_style = app.text_style.clone();
+    let object_tool = app.quick_tool == QuickTool::EditObject;
     let view = &mut app.views[index];
     view.copy_allowed = doc.allows_copying();
+    if !object_tool {
+        view.objects.release();
+    }
     if ui.input(|input| !input.pointer.primary_down() || input.pointer.primary_pressed()) {
         view.text_dragging = false;
     }
@@ -2076,6 +2087,7 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
         | QuickTool::Field(_)
         | QuickTool::AddText
         | QuickTool::EditText
+        | QuickTool::EditObject
         | QuickTool::Stamp(_)
         | QuickTool::CustomStamp(_)
         | QuickTool::Link
@@ -2465,7 +2477,10 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
                     || crate::edit_text_ui::page_input(ui, &resp, &xf, i, info, &lines, view, can_read_text, &mut edit_text_refused)
             };
             let on_link = tool == QuickTool::Link && can_modify && crate::link_ui::page_input(ui, &resp, &xf, i, info, &doc_links, view);
-            let consumed = on_edit_text || on_link || on_content || boxing || on_field || comments::page_input(ui, &resp, &pcx, view);
+            // Edit objects: the page's own objects (added items keep their own handles above).
+            let on_object =
+                tool == QuickTool::EditObject && can_modify && !on_content && crate::object_ui::page_input(ui, &resp, &xf, i, info, doc, view);
+            let consumed = on_object || on_edit_text || on_link || on_content || boxing || on_field || comments::page_input(ui, &resp, &pcx, view);
 
             let preview_target = (tool == QuickTool::Select && !comments_hidden).then_some(view.comments.selected).flatten();
             view.signature_drag.prepare(ui.ctx(), doc, preview_target, scale);

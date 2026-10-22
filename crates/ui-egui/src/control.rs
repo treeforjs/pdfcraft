@@ -565,6 +565,9 @@ impl Host for crate::PdfCraftApp {
                 "pages_on_screen": v.visible_page_rects().iter().map(|(p, r)| json!({ "page": p + 1, "rect": [r.min.x, r.min.y, r.max.x, r.max.y] })).collect::<Vec<_>>(),
                 "text_selection": v.text_selection_state(),
                 "selected_comment": v.comments.selected.map(|(p, i)| json!({ "page": p + 1, "index": i + 1 })),
+                // The Edit object tool's selection (1-based page and object numbers, as page_objects).
+                "selected_objects": (!v.objects.selected.is_empty())
+                    .then(|| json!({ "page": v.objects.page + 1, "objects": v.objects.selected.iter().map(|k| k + 1).collect::<Vec<_>>() })),
                 "comment_composer_open": v.comments.composer.is_some(),
             })),
             "quick_tool": match self.quick_tool {
@@ -575,6 +578,7 @@ impl Host for crate::PdfCraftApp {
                 crate::QuickTool::Redact => "redact".to_string(),
                 crate::QuickTool::AddText => "add-text".to_string(),
                 crate::QuickTool::EditText => "edit-text".to_string(),
+                crate::QuickTool::EditObject => "edit-object".to_string(),
                 crate::QuickTool::Link => "link".to_string(),
                 crate::QuickTool::SignArea { certify: false } => "sign".to_string(),
                 crate::QuickTool::SignArea { certify: true } => "certify".to_string(),

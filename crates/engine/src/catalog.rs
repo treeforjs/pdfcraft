@@ -126,6 +126,7 @@ pub static TOOL_GROUPS: &[ToolGroup] = &[
                 title: "Add content",
                 items: &[
                     item("Edit text & images", "text-cursor-input", "edit.edit_text", Ready),
+                    item("Edit objects", "square-dashed-mouse-pointer", "edit.edit_object", Ready),
                     item("Text", "type", "edit.text", Ready),
                     item("Image", "image-plus", "edit.image", Ready),
                     item("Header and footer", "heading", "edit.header_footer", Ready),
