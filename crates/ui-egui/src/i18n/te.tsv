@@ -2358,3 +2358,13 @@ compare-page	Moved	తరలించబడింది
 	Fill color	నింపు రంగు
 	Stroke color	గీత రంగు
 	Line width	గీత మందం
+	Recover unsaved documents…	సేవ్ చేయని పత్రాలను పునరుద్ధరించు…
+	Save recovery copies now	పునరుద్ధరణ కాపీలను ఇప్పుడే సేవ్ చేయి
+	PdfCraft was closed with unsaved changes. These documents have recovery copies in this browser:	సేవ్ చేయని మార్పులతో PdfCraft మూసివేయబడింది. ఈ పత్రాలకు ఈ బ్రౌజర్‌లో పునరుద్ధరణ కాపీలు ఉన్నాయి:
+	This browser can't keep recovery copies of unsaved changes: {e}	ఈ బ్రౌజర్ సేవ్ చేయని మార్పుల పునరుద్ధరణ కాపీలను ఉంచలేదు: {e}
+	{name} is too large to keep a recovery copy in the browser	{name} బ్రౌజర్‌లో పునరుద్ధరణ కాపీని ఉంచడానికి చాలా పెద్దది
+	Autosave is off, so there is nothing to recover	ఆటోసేవ్ ఆఫ్‌లో ఉంది, కాబట్టి పునరుద్ధరించడానికి ఏమీ లేదు
+	Still looking for recovery copies…	పునరుద్ధరణ కాపీల కోసం వెతుకుతోంది…
+	Nothing to recover	పునరుద్ధరించడానికి ఏమీ లేదు
+	Saved recovery copies of unsaved changes	సేవ్ చేయని మార్పుల పునరుద్ధరణ కాపీలు సేవ్ చేయబడ్డాయి
+	Recovery copies are up to date	పునరుద్ధరణ కాపీలు తాజాగా ఉన్నాయి

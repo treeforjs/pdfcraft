@@ -99,6 +99,8 @@ impl PdfCraftApp {
             }
             "file.close_all" => self.close_all(),
             "file.revert" => self.dialog = Some(Dialog::Revert),
+            "file.recover" => self.recover_command(),
+            "file.autosave_now" => self.autosave_command(),
             "file.properties" => self.dialog = Some(Dialog::Properties(PropsTab::Description)),
             "protect.properties" => self.dialog = Some(Dialog::Properties(PropsTab::Security)),
             "protect.password" => {

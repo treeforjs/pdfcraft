@@ -2451,3 +2451,13 @@ compare-page	Moved	Přesunutá
 	Fill color	Barva výplně
 	Stroke color	Barva tahu
 	Line width	Šířka čáry
+	Recover unsaved documents…	Obnovit neuložené dokumenty…
+	Save recovery copies now	Uložit záložní kopie nyní
+	PdfCraft was closed with unsaved changes. These documents have recovery copies in this browser:	PdfCraft byl zavřen s neuloženými změnami. Tyto dokumenty mají v tomto prohlížeči záložní kopie:
+	This browser can't keep recovery copies of unsaved changes: {e}	Tento prohlížeč nemůže uchovávat záložní kopie neuložených změn: {e}
+	{name} is too large to keep a recovery copy in the browser	{name} je příliš velký na uložení záložní kopie v prohlížeči
+	Autosave is off, so there is nothing to recover	Automatické ukládání je vypnuté, takže není co obnovit
+	Still looking for recovery copies…	Hledají se záložní kopie…
+	Nothing to recover	Není co obnovit
+	Saved recovery copies of unsaved changes	Záložní kopie neuložených změn byly uloženy
+	Recovery copies are up to date	Záložní kopie jsou aktuální

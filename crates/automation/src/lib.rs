@@ -43,6 +43,7 @@ mod prefs;
 mod printing;
 mod reader_selection;
 mod reading_order;
+mod recovery;
 mod redact;
 mod search_folder;
 mod separations;
@@ -125,6 +126,8 @@ pub struct Automation {
     search: text_cache::SearchCache,
     /// Recognition drafts awaiting explicit correction, apply or cancellation.
     ocr_reviews: HashMap<DocId, pdfcraft_engine::ocr::OcrReview>,
+    /// Recovery entry keys of documents snapshotted or restored (`recovery_*`).
+    recovery_keys: HashMap<DocId, String>,
 }
 
 impl Default for Automation {
@@ -142,6 +145,7 @@ impl Automation {
             texts: text_cache::TextCache::new(text_cache::DEFAULT_BUDGET),
             search: text_cache::SearchCache::new(text_cache::SEARCH_BUDGET),
             ocr_reviews: HashMap::new(),
+            recovery_keys: HashMap::new(),
         }
     }
 
@@ -758,6 +762,10 @@ impl Automation {
             "print_ink_manager_apply" => self.ink_manager_apply(&a)?,
             "print_overprint_preview" => self.overprint_preview(&a)?,
             "prefs_get" => self.prefs_get(&a)?,
+            "recovery_snapshot" => self.recovery_snapshot(&a)?,
+            "recovery_list" => self.recovery_list(&a)?,
+            "recovery_restore" => self.recovery_restore(&a)?,
+            "recovery_discard" => self.recovery_discard(&a)?,
             "prefs_set" => self.prefs_set(&a)?,
             "color_settings_get" => self.color_settings_get(&a)?,
             "color_settings_set" => self.color_settings_set(&a)?,

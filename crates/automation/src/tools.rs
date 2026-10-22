@@ -850,6 +850,49 @@ pub fn tools() -> Vec<ToolDef> {
             &[],
         )),
         t(
+            "recovery_snapshot",
+            "Save recovery copies",
+            "Crash recovery, as the app's autosave: write a recovery entry into the folder dir for every document with unsaved changes made since its last snapshot (<key>.pdf, the working file, written before <key>.json, its name, original path, time, length and checksum). Encrypted documents stay encrypted. A document keeps its key, so later snapshots replace its entry. The same layout as the desktop recovery folder and the web app's browser store. Returns the entries written (none when nothing changed).",
+        )
+        .cmd("file.autosave_now")
+        .with(schema(json!({ "dir": { "type": "string", "description": "The recovery folder (created if missing)." } }), &["dir"])),
+        t(
+            "recovery_list",
+            "List recovery copies",
+            "Recovery entries in the folder dir, newest first: key, name, original path, saved_at (Unix seconds), encrypted and bytes. Stored entries are treated as hostile: only complete entries with well-formed metadata whose bytes have the recorded length are listed; the files of damaged or incomplete ones (truncated bytes, bytes without metadata, malformed or oversized metadata) are named in damaged. Files that aren't recovery entries are ignored. Read-only.",
+        )
+        .ro()
+        .cmd("file.recover")
+        .with(schema(json!({ "dir": { "type": "string", "description": "The recovery folder." } }), &["dir"])),
+        t(
+            "recovery_restore",
+            "Restore a recovery copy",
+            "Open recovery entry key from the folder dir as a document with unsaved changes; doc_save without a path then writes to its original path. The bytes must match the recorded length and checksum: a damaged entry opens nothing and returns an error. Encrypted entries need password. The entry stays until recovery_discard (or a later snapshot replaces it). Returns the document summary and its key.",
+        )
+        .cmd("file.recover")
+        .with(schema(
+            json!({
+                "dir": { "type": "string", "description": "The recovery folder." },
+                "key": { "type": "string", "minLength": 1, "maxLength": 64, "description": "The entry, from recovery_list." },
+                "password": { "type": "string", "description": "The document password, for an encrypted entry." },
+            }),
+            &["dir", "key"],
+        )),
+        t(
+            "recovery_discard",
+            "Discard recovery copies",
+            "Delete recovery entry key from the folder dir, or with all every entry plus the files of damaged ones. Returns the keys discarded.",
+        )
+        .destructive()
+        .with(schema(
+            json!({
+                "dir": { "type": "string", "description": "The recovery folder." },
+                "key": { "type": "string", "minLength": 1, "maxLength": 64, "description": "One entry, from recovery_list." },
+                "all": { "type": "boolean", "description": "Every entry, and damaged leftovers." },
+            }),
+            &["dir"],
+        )),
+        t(
             "prefs_get",
             "Read preferences",
             "Preferences by key, the same ones the desktop app's Preferences window shows: documents.autosave_minutes, documents.recent_files, forms.highlight_color, forms.required_color, forms.date_format, identity.name/organization/unit/email, signatures.reason/location, security.javascript, security.internet_access, security.unlisted_sites, accessibility.text_scale/reduce_motion/high_contrast and color.rgb/cmyk/gray/intent/black_point_compensation/untagged/overprint_preview. Without key returns values (all, or one category: general, documents, commenting, forms, identity, signatures, security, accessibility, color); with key its value. schema adds, per key, its category, type (boolean, integer, number, string, color), range or enum, default, description and applies: session keys change what other tools do (identity.name is the default author of new comments, signatures.reason/location the defaults of sign, the security and color keys the session's JavaScript, internet access and colour settings); app keys are kept for the desktop app (autosave, recent files, field highlight colours, accessibility, identity details for new digital IDs). The app's own window settings (theme, language, workspace, page display) are set through its control channel (ui.set pref.<key>). Read-only.",

@@ -2427,3 +2427,13 @@ compare-page	Moved	Déplacée
 	Fill color	Couleur de remplissage
 	Stroke color	Couleur du contour
 	Line width	Épaisseur de trait
+	Recover unsaved documents…	Récupérer les documents non enregistrés…
+	Save recovery copies now	Enregistrer les copies de récupération maintenant
+	PdfCraft was closed with unsaved changes. These documents have recovery copies in this browser:	PdfCraft a été fermé avec des modifications non enregistrées. Ces documents ont des copies de récupération dans ce navigateur :
+	This browser can't keep recovery copies of unsaved changes: {e}	Ce navigateur ne peut pas conserver de copies de récupération des modifications non enregistrées : {e}
+	{name} is too large to keep a recovery copy in the browser	{name} est trop volumineux pour conserver une copie de récupération dans le navigateur
+	Autosave is off, so there is nothing to recover	L’enregistrement automatique est désactivé, il n’y a donc rien à récupérer
+	Still looking for recovery copies…	Recherche des copies de récupération…
+	Nothing to recover	Rien à récupérer
+	Saved recovery copies of unsaved changes	Copies de récupération des modifications non enregistrées enregistrées
+	Recovery copies are up to date	Les copies de récupération sont à jour

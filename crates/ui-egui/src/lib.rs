@@ -117,6 +117,8 @@ pub(crate) const MAX_AUTHOR_CHARS: usize = 200;
 pub mod portable;
 mod protect;
 mod recovery;
+#[cfg(target_arch = "wasm32")]
+mod recovery_web;
 #[cfg(not(target_arch = "wasm32"))]
 mod system_fonts;
 pub mod theme;
@@ -569,6 +571,10 @@ pub struct PdfCraftApp {
     /// Entries left by a previous session, offered in the Recovery dialog.
     pub recoverable: Vec<RecoveryMeta>,
     recovery_keys: std::collections::HashMap<DocId, String>,
+    /// The store's earlier entries have been looked at (browser storage loads asynchronously).
+    recovery_loaded: bool,
+    /// Documents told they are too large for a recovery copy in the browser (said once).
+    recovery_too_large: std::collections::HashSet<DocId>,
     last_autosave: f64,
     /// The Preferences window: its page, search text and text boxes being typed in.
     pub prefs_ui: prefs_ui::PrefsUi,
@@ -813,6 +819,8 @@ impl PdfCraftApp {
             recovery: None,
             recoverable: Vec::new(),
             recovery_keys: Default::default(),
+            recovery_loaded: false,
+            recovery_too_large: Default::default(),
             last_autosave: 0.0,
             prefs_ui: Default::default(),
             styled_a11y: None,
@@ -2023,6 +2031,12 @@ impl eframe::App for PdfCraftApp {
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         storage.set_string("pdfcraft", self.persist());
+        // The browser tab is being hidden or closed: keep a recovery copy of the latest changes
+        // (only documents changed since their last snapshot are written).
+        #[cfg(target_arch = "wasm32")]
+        if self.autosave_interval().is_some() && web_sys::window().and_then(|w| w.document()).is_some_and(|d| d.hidden()) {
+            self.autosave_now();
+        }
     }
 
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
@@ -2119,7 +2133,7 @@ impl eframe::App for PdfCraftApp {
         }
         self.guard_quit(ctx);
         let now = ctx.input(|i| i.time);
-        self.autosave_tick(now);
+        self.autosave_tick(now, Some(ctx));
         self.poll_updates();
         self.poll_capture();
         // Shortcuts deferred last frame: the text field has taken that frame's typing since.

@@ -2389,3 +2389,13 @@ compare-page	Moved	Преместена
 	Fill color	Цвят на запълване
 	Stroke color	Цвят на контура
 	Line width	Дебелина на линията
+	Recover unsaved documents…	Възстановяване на незаписани документи…
+	Save recovery copies now	Запис на копия за възстановяване сега
+	PdfCraft was closed with unsaved changes. These documents have recovery copies in this browser:	PdfCraft беше затворен с незаписани промени. Тези документи имат копия за възстановяване в този браузър:
+	This browser can't keep recovery copies of unsaved changes: {e}	Този браузър не може да пази копия за възстановяване на незаписаните промени: {e}
+	{name} is too large to keep a recovery copy in the browser	{name} е твърде голям, за да се пази копие за възстановяване в браузъра
+	Autosave is off, so there is nothing to recover	Автоматичният запис е изключен, затова няма какво да се възстанови
+	Still looking for recovery copies…	Търсят се копия за възстановяване…
+	Nothing to recover	Няма какво да се възстанови
+	Saved recovery copies of unsaved changes	Копията за възстановяване на незаписаните промени са записани
+	Recovery copies are up to date	Копията за възстановяване са актуални

@@ -532,9 +532,9 @@ area = "A"
 tier = "P0"
 milestone = "M4"
 status = "shipped"
-commands = []
-tools = []
-evidence = ["crates/engine/src/tests.rs::autosave_snapshots_only_changed_documents", "crates/ui-egui/tests/recovery.rs::saving_or_closing_clears_the_entry_and_nothing_is_written_for_clean_documents"]
+commands = ["file.autosave_now"]
+tools = ["recovery_snapshot"]
+evidence = ["crates/engine/src/tests.rs::autosave_snapshots_only_changed_documents", "crates/ui-egui/tests/recovery.rs::saving_or_closing_clears_the_entry_and_nothing_is_written_for_clean_documents", "crates/automation/tests/recovery.rs::snapshot_list_restore_and_discard_through_tools"]
 notes = ""
 
 [[feature]]
@@ -544,9 +544,9 @@ area = "A"
 tier = "P0"
 milestone = "M4"
 status = "shipped"
-commands = []
-tools = []
-evidence = ["crates/ui-egui/tests/recovery.rs::a_crashed_session_is_offered_and_recovered_unsaved", "crates/ui-egui/tests/recovery.rs::discarding_removes_the_autosaves", "crates/engine/src/tests.rs::recovered_documents_reopen_unsaved_at_their_original_path"]
+commands = ["file.recover"]
+tools = ["recovery_list", "recovery_restore", "recovery_discard"]
+evidence = ["crates/ui-egui/tests/recovery.rs::a_crashed_session_is_offered_and_recovered_unsaved", "crates/ui-egui/tests/recovery.rs::discarding_removes_the_autosaves", "crates/engine/src/tests.rs::recovered_documents_reopen_unsaved_at_their_original_path", "crates/automation/tests/recovery.rs::snapshot_list_restore_and_discard_through_tools"]
 notes = ""
 
 [[feature]]
@@ -567,11 +567,11 @@ title = "Crash recovery in the web app"
 area = "A"
 tier = "P1"
 milestone = "M4"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "partial"
+commands = ["file.recover", "file.autosave_now"]
+tools = ["recovery_snapshot", "recovery_list", "recovery_restore", "recovery_discard"]
+evidence = ["crates/ui-egui/tests/recovery.rs::a_closed_browser_tab_is_offered_and_recovered_like_a_crash", "crates/ui-egui/tests/recovery.rs::damaged_browser_entries_load_nothing_and_are_cleaned_up", "crates/ui-egui/tests/recovery.rs::bytes_that_fail_their_checksum_open_nothing", "crates/ui-egui/tests/recovery.rs::recovery_commands_reopen_the_prompt_and_save_copies_now", "crates/engine/src/recovery.rs::hostile_metadata_is_rejected_or_cleaned", "crates/engine/src/recovery.rs::truncated_or_corrupt_bytes_load_nothing", "crates/engine/src/recovery.rs::the_cap_refuses_entries_that_do_not_fit_and_counts_replacements_once", "crates/automation/tests/recovery.rs::damaged_entries_open_nothing_and_hostile_arguments_are_refused"]
+notes = "The web app autosaves unsaved documents (Preferences autosave interval) into the browser's origin-private file system (web-sys, no JS) with the desktop's entry format and checks (pdfcraft_engine::recovery: validated keys and metadata, length + checksum, damaged entries load nothing and are removed), capped at 256 MiB; writes are queued off the frame, and a hidden or closing tab flushes changes. The Recovery prompt opens once stored entries have loaded; saving (download) or closing a document discards its copy. The browser glue (recovery_web.rs) compiles for wasm32 but is not exercised in a real browser here (no browser in CI): the shared logic is tested through a native stand-in for browser storage. Not yet: coordination between two PdfCraft tabs of the same origin (one tab can offer the other's live copies), and changes made after the last flush are lost when the tab closes before the async write completes."
 
 [[feature]]
 id = "core.unsaved-changes-prompt"

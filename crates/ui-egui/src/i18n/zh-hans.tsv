@@ -2391,3 +2391,13 @@ compare-page	Moved	已移动
 	Fill color	填充颜色
 	Stroke color	描边颜色
 	Line width	线宽
+	Recover unsaved documents…	恢复未保存的文档…
+	Save recovery copies now	立即保存恢复副本
+	PdfCraft was closed with unsaved changes. These documents have recovery copies in this browser:	PdfCraft 在有未保存更改时被关闭。以下文档在此浏览器中有恢复副本：
+	This browser can't keep recovery copies of unsaved changes: {e}	此浏览器无法保留未保存更改的恢复副本：{e}
+	{name} is too large to keep a recovery copy in the browser	{name} 太大，无法在浏览器中保留恢复副本
+	Autosave is off, so there is nothing to recover	自动保存已关闭，因此没有可恢复的内容
+	Still looking for recovery copies…	正在查找恢复副本…
+	Nothing to recover	没有可恢复的内容
+	Saved recovery copies of unsaved changes	已保存未保存更改的恢复副本
+	Recovery copies are up to date	恢复副本已是最新

@@ -177,6 +177,8 @@ pub const COMMANDS: &[CommandSpec] = &[
     c("file.close", "Close file", FILE, Some(Shortcut::cmd("W")), Document, "x"),
     c("file.close_all", "Close all", FILE, Some(Shortcut::cmd_shift("W")), Document, "x"),
     c("file.revert", "Revert", FILE, None, Undo, "rotate-ccw"),
+    c("file.recover", "Recover unsaved documents…", FILE, None, Nothing, "clock-3"),
+    c("file.autosave_now", "Save recovery copies now", None, None, Nothing, "save"),
     c("print.dialog", "Print…", FILE, Some(Shortcut::cmd("P")), Document, "printer"),
     c("file.properties", "Document properties…", FILE, Some(Shortcut::cmd("D")), Document, "info"),
     ct("edit.undo", "Undo", EDIT, Some(Shortcut::cmd("Z")), Undo, "undo-2"),

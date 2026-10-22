@@ -38,6 +38,7 @@ pub mod preflight;
 pub mod prefs;
 pub mod reader_selection;
 pub mod reading_order;
+pub mod recovery;
 pub mod signature_image;
 pub mod signature_workflow;
 pub mod submit;
@@ -4391,6 +4392,12 @@ impl Session {
     fn write_new(&self, doc: &pdfcraft_cos::Document) -> Result<Arc<Vec<u8>>, EditError> {
         let opts = SaveOptions { mod_date: self.now().map(pdfcraft_cos::pdf_date), ..SaveOptions::default() };
         write_full(doc, &opts).map(Arc::new).map_err(|e| EditError::Write(e.to_string()))
+    }
+
+    /// Whether a document has unsaved changes that no autosave snapshot holds yet (cheap
+    /// enough for every frame).
+    pub fn has_unsnapshotted_changes(&self) -> bool {
+        self.docs.iter().any(|d| d.dirty && d.generation != d.snapshot_generation)
     }
 
     /// Documents with unsaved changes made since the last call: their current working file,

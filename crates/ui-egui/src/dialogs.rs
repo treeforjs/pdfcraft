@@ -1067,9 +1067,14 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
                     ui.label(egui::RichText::new(tl!("Recover unsaved documents?")).font(theme::semibold(18.0)));
                 });
                 ui.add_space(6.0);
-                ui.label(tl!("PdfCraft didn't shut down normally. These documents had changes that were autosaved:"));
+                // In the browser a closed tab ends a session too, not only a crash.
+                if app.recovery.as_ref().is_some_and(crate::RecoveryStore::is_browser) {
+                    ui.label(tl!("PdfCraft was closed with unsaved changes. These documents have recovery copies in this browser:"));
+                } else {
+                    ui.label(tl!("PdfCraft didn't shut down normally. These documents had changes that were autosaved:"));
+                }
                 ui.add_space(8.0);
-                let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+                let now = crate::recovery::wall_secs();
                 egui::Grid::new("recoverable").num_columns(2).spacing([18.0, 6.0]).show(ui, |ui| {
                     for m in &app.recoverable {
                         ui.label(egui::RichText::new(&m.name).font(theme::medium(13.0)));

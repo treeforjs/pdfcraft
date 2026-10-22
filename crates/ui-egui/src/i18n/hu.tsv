@@ -2425,3 +2425,13 @@ compare-page	Moved	Áthelyezve
 	Fill color	Kitöltőszín
 	Stroke color	Körvonalszín
 	Line width	Vonalvastagság
+	Recover unsaved documents…	Nem mentett dokumentumok helyreállítása…
+	Save recovery copies now	Helyreállítási másolatok mentése most
+	PdfCraft was closed with unsaved changes. These documents have recovery copies in this browser:	A PdfCraft nem mentett módosításokkal zárult be. Ezeknek a dokumentumoknak van helyreállítási másolata ebben a böngészőben:
+	This browser can't keep recovery copies of unsaved changes: {e}	Ez a böngésző nem tud helyreállítási másolatot tárolni a nem mentett módosításokról: {e}
+	{name} is too large to keep a recovery copy in the browser	{name} túl nagy ahhoz, hogy helyreállítási másolat készüljön róla a böngészőben
+	Autosave is off, so there is nothing to recover	Az automatikus mentés ki van kapcsolva, így nincs mit helyreállítani
+	Still looking for recovery copies…	Helyreállítási másolatok keresése…
+	Nothing to recover	Nincs mit helyreállítani
+	Saved recovery copies of unsaved changes	A nem mentett módosítások helyreállítási másolatai elmentve
+	Recovery copies are up to date	A helyreállítási másolatok naprakészek

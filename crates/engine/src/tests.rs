@@ -529,8 +529,11 @@ fn owner_password_of_older_revisions_opens_the_viewer_too() {
 fn autosave_snapshots_only_changed_documents() {
     let (mut s, id) = session_with(2);
     assert!(s.autosave_snapshots().is_empty(), "clean documents are not snapshotted");
+    assert!(!s.has_unsnapshotted_changes());
     s.apply(id, Edit::RotatePages { pages: vec![0], degrees: 90 }).unwrap();
+    assert!(s.has_unsnapshotted_changes());
     let snaps = s.autosave_snapshots();
+    assert!(!s.has_unsnapshotted_changes());
     assert_eq!(snaps.len(), 1);
     assert_eq!(snaps[0].bytes, s.get(id).unwrap().bytes, "the working file");
     assert!(s.autosave_snapshots().is_empty(), "nothing new since the last snapshot");

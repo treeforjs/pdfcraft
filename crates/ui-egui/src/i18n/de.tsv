@@ -2427,3 +2427,13 @@ compare-page	Moved	Verschoben
 	Fill color	Füllfarbe
 	Stroke color	Konturfarbe
 	Line width	Linienstärke
+	Recover unsaved documents…	Nicht gespeicherte Dokumente wiederherstellen…
+	Save recovery copies now	Wiederherstellungskopien jetzt speichern
+	PdfCraft was closed with unsaved changes. These documents have recovery copies in this browser:	PdfCraft wurde mit nicht gespeicherten Änderungen geschlossen. Für diese Dokumente gibt es Wiederherstellungskopien in diesem Browser:
+	This browser can't keep recovery copies of unsaved changes: {e}	Dieser Browser kann keine Wiederherstellungskopien nicht gespeicherter Änderungen aufbewahren: {e}
+	{name} is too large to keep a recovery copy in the browser	{name} ist zu groß für eine Wiederherstellungskopie im Browser
+	Autosave is off, so there is nothing to recover	Automatisches Speichern ist aus, daher gibt es nichts wiederherzustellen
+	Still looking for recovery copies…	Wiederherstellungskopien werden gesucht…
+	Nothing to recover	Nichts wiederherzustellen
+	Saved recovery copies of unsaved changes	Wiederherstellungskopien der nicht gespeicherten Änderungen gespeichert
+	Recovery copies are up to date	Wiederherstellungskopien sind aktuell

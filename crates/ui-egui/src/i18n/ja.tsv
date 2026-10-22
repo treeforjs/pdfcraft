@@ -2427,3 +2427,13 @@ compare-page	Moved	移動
 	Fill color	塗りの色
 	Stroke color	線の色
 	Line width	線幅
+	Recover unsaved documents…	未保存の文書を復元…
+	Save recovery copies now	復元用コピーを今すぐ保存
+	PdfCraft was closed with unsaved changes. These documents have recovery copies in this browser:	未保存の変更があるまま PdfCraft が閉じられました。次の文書には、このブラウザーに復元用コピーがあります:
+	This browser can't keep recovery copies of unsaved changes: {e}	このブラウザーでは未保存の変更の復元用コピーを保持できません: {e}
+	{name} is too large to keep a recovery copy in the browser	{name} は大きすぎるため、ブラウザーに復元用コピーを保持できません
+	Autosave is off, so there is nothing to recover	自動保存がオフのため、復元するものはありません
+	Still looking for recovery copies…	復元用コピーを検索しています…
+	Nothing to recover	復元するものはありません
+	Saved recovery copies of unsaved changes	未保存の変更の復元用コピーを保存しました
+	Recovery copies are up to date	復元用コピーは最新です

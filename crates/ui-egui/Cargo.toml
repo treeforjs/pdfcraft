@@ -56,7 +56,8 @@ rfd = { workspace = true, features = ["file-handle-inner"] }
 wasm-bindgen-futures = "0.4"
 wasm-bindgen = "0.2"
 js-sys = "0.3"
-web-sys = { version = "0.3", features = ["Window", "Document", "Element", "HtmlElement", "HtmlAnchorElement", "Blob", "BlobPropertyBag", "Url"] }
+# Crash recovery in the origin-private file system: Navigator through WritableStream.
+web-sys = { version = "0.3", features = ["Window", "Document", "Element", "HtmlElement", "HtmlAnchorElement", "Blob", "BlobPropertyBag", "Url", "Navigator", "StorageManager", "FileSystemHandle", "FileSystemDirectoryHandle", "FileSystemFileHandle", "FileSystemGetDirectoryOptions", "FileSystemGetFileOptions", "FileSystemWritableFileStream", "WritableStream", "File"] }
 
 [dev-dependencies]
 pdfcraft-sign = { workspace = true }

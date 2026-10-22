@@ -425,7 +425,10 @@ impl PdfCraftApp {
             };
             match download(&name, &bytes) {
                 Ok(()) => {
-                    let _ = self.session.mark_saved(id, bytes, None);
+                    if self.session.mark_saved(id, bytes, None).is_ok() {
+                        // Downloaded: nothing left to recover.
+                        self.forget_recovery(id);
+                    }
                     if let Some(doc) = self.session.get(id) {
                         self.views[index].document_changed(&doc.info);
                     }

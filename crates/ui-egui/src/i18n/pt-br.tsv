@@ -2428,3 +2428,13 @@ compare-page	Moved	Movida
 	Fill color	Cor de preenchimento
 	Stroke color	Cor do traço
 	Line width	Espessura da linha
+	Recover unsaved documents…	Recuperar documentos não salvos…
+	Save recovery copies now	Salvar cópias de recuperação agora
+	PdfCraft was closed with unsaved changes. These documents have recovery copies in this browser:	O PdfCraft foi fechado com alterações não salvas. Estes documentos têm cópias de recuperação neste navegador:
+	This browser can't keep recovery copies of unsaved changes: {e}	Este navegador não consegue guardar cópias de recuperação das alterações não salvas: {e}
+	{name} is too large to keep a recovery copy in the browser	{name} é grande demais para guardar uma cópia de recuperação no navegador
+	Autosave is off, so there is nothing to recover	O salvamento automático está desativado, então não há nada para recuperar
+	Still looking for recovery copies…	Procurando cópias de recuperação…
+	Nothing to recover	Nada para recuperar
+	Saved recovery copies of unsaved changes	Cópias de recuperação das alterações não salvas foram salvas
+	Recovery copies are up to date	As cópias de recuperação estão atualizadas
