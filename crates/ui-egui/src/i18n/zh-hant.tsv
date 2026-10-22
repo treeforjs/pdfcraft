@@ -391,11 +391,22 @@
 	No check has run yet.	尚未執行檢驗。
 	Checking for a newer version…	正在檢驗新版本…
 	PdfCraft {v} is available.	PdfCraft {v} 可用。
-	You have version {c}. Download the new version from its release page.	當前版本為 {c}。請從其釋出頁面下載新版本。
 	PdfCraft {c} is up to date.	PdfCraft {c} 已是最新。
-	Couldn't check for updates: {e}	無法檢驗更新：{e}
+	Check for updates automatically	自動檢查更新
+	PdfCraft {v} is available. Choose Help ▸ Check for updates to install it.	PdfCraft {v} 已推出。選擇「說明 → 檢查更新」即可安裝。
+	You have version {c}.	你的版本是 {c}。
+	Download and install	下載並安裝
+	Open release page	開啟發行頁面
+	Skip this version	略過此版本
+	Downloading PdfCraft {v}…	正在下載 PdfCraft {v}…
+	PdfCraft {v} is ready to install.	PdfCraft {v} 已準備好安裝。
+	It installs when you quit PdfCraft. Restart now asks about unsaved documents first.	結束 PdfCraft 時安裝。「立即重新啟動」會先詢問未儲存的文件。
+	Restart now	立即重新啟動
+	Install when I quit	結束時安裝
+	The update was cancelled.	已取消更新。
+	Couldn't update: {e}	無法更新：{e}
+	Downloads come from PdfCraft's GitHub releases and are checked against the release's signed checksums before anything is installed.	下載內容來自 PdfCraft 的 GitHub 發行版本，安裝前都會以該版本的簽署總和檢查碼核對。
 	You have version {c}. All releases are listed at {page}.	當前版本為 {c}。所有版本列在 {page}。
-	Asks GitHub for the latest release. Nothing is downloaded or installed automatically.	向 GitHub 搜尋最新版本。不會自動下載或安裝任何內容。
 	Download	下載
 	Later	稍後
 	none	無

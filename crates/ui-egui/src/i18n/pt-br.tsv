@@ -381,11 +381,22 @@
 	No check has run yet.	Nenhuma verificação foi executada ainda.
 	Checking for a newer version…	Verificando se há uma versão mais recente…
 	PdfCraft {v} is available.	O PdfCraft {v} está disponível.
-	You have version {c}. Download the new version from its release page.	Você tem a versão {c}. Baixe a nova versão na página de lançamentos.
 	PdfCraft {c} is up to date.	O PdfCraft {c} está atualizado.
-	Couldn't check for updates: {e}	Não foi possível verificar atualizações: {e}
+	Check for updates automatically	Procurar atualizações automaticamente
+	PdfCraft {v} is available. Choose Help ▸ Check for updates to install it.	O PdfCraft {v} está disponível. Escolha Ajuda → Procurar atualizações para instalá-lo.
+	You have version {c}.	Você tem a versão {c}.
+	Download and install	Baixar e instalar
+	Open release page	Abrir a página da versão
+	Skip this version	Pular esta versão
+	Downloading PdfCraft {v}…	Baixando o PdfCraft {v}…
+	PdfCraft {v} is ready to install.	O PdfCraft {v} está pronto para ser instalado.
+	It installs when you quit PdfCraft. Restart now asks about unsaved documents first.	Ele é instalado quando você sai do PdfCraft. Reiniciar agora pergunta antes sobre os documentos não salvos.
+	Restart now	Reiniciar agora
+	Install when I quit	Instalar ao sair
+	The update was cancelled.	A atualização foi cancelada.
+	Couldn't update: {e}	Não foi possível atualizar: {e}
+	Downloads come from PdfCraft's GitHub releases and are checked against the release's signed checksums before anything is installed.	Os downloads vêm das versões do PdfCraft no GitHub e são conferidos com as somas de verificação assinadas da versão antes de qualquer instalação.
 	You have version {c}. All releases are listed at {page}.	Você tem a versão {c}. Todos os lançamentos estão listados em {page}.
-	Asks GitHub for the latest release. Nothing is downloaded or installed automatically.	Consulta o GitHub para obter o lançamento mais recente. Nada é baixado ou instalado automaticamente.
 	Download	Baixar
 	Later	Mais tarde
 	none	nenhum

@@ -428,8 +428,6 @@ pub struct PdfCraftApp {
     /// Preferences: bake Fill & Sign marks into the page when saving. Off, so a normal save stays editable.
     pub flatten_fill_sign_on_save: bool,
     pub dialog: Option<Dialog>,
-    /// How to ask for the latest release (the desktop app sets it; see `updates`).
-    pub update_source: Option<updates::UpdateSource>,
     pub(crate) updates: updates::Updates,
     /// A running Create ▸ Screen capture (the web has no capture tool).
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
@@ -750,7 +748,6 @@ impl PdfCraftApp {
             language: i18n::AUTO.to_string(),
             flatten_fill_sign_on_save: false,
             dialog: None,
-            update_source: None,
             updates: updates::Updates::default(),
             capture: screen_capture::Capture::Idle,
             palette_open: false,
@@ -1515,6 +1512,7 @@ impl PdfCraftApp {
             // Preferences by key (autosave, recent files, identity, field highlights, signing
             // defaults, accessibility, colour management; see `pdfcraft_engine::prefs`).
             "prefs": self.session.saved_prefs(),
+            "updates": self.persist_updates(),
         })
         .to_string()
     }
@@ -1531,6 +1529,7 @@ impl PdfCraftApp {
             self.comment_prefs.pinned = on;
         }
         self.combine_columns = combine_ui::Columns::from_json(&v["combine_columns"]);
+        self.restore_updates(&v["updates"]);
         if let Ok(r) = serde_json::from_value::<Vec<RecentFile>>(v["recent"].clone()) {
             // Only keep entries whose files still exist.
             #[cfg(not(target_arch = "wasm32"))]
@@ -2217,7 +2216,7 @@ impl eframe::App for PdfCraftApp {
         self.guard_quit(ctx);
         let now = ctx.input(|i| i.time);
         self.autosave_tick(now, Some(ctx));
-        self.poll_updates();
+        self.poll_updates(now);
         self.poll_capture();
         // Shortcuts deferred last frame: the text field has taken that frame's typing since.
         let deferred = std::mem::take(&mut self.deferred_commands);

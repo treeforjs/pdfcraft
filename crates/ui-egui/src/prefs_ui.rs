@@ -97,7 +97,7 @@ impl Page {
     /// The keys shown on this page, in order.
     pub fn rows(self) -> &'static [&'static str] {
         match self {
-            Page::General => &["general.language", "general.theme", "general.default_mode", "general.reopen_last_session"],
+            Page::General => &["general.language", "general.theme", "general.default_mode", "general.reopen_last_session", "general.check_updates"],
             Page::Documents => &["documents.autosave_minutes", "documents.recent_files", "documents.default_layout", "documents.default_zoom"],
             Page::Commenting => &["commenting.keep_tool_selected", "commenting.open_panel"],
             Page::Forms => {
@@ -130,11 +130,12 @@ pub struct PrefsUi {
 }
 
 /// The keys the app holds itself (the rest are the session's, [`engine_prefs::SCHEMA`]).
-pub const APP_KEYS: [&str; 11] = [
+pub const APP_KEYS: [&str; 12] = [
     "general.language",
     "general.theme",
     "general.default_mode",
     "general.reopen_last_session",
+    "general.check_updates",
     "documents.default_layout",
     "documents.default_zoom",
     "commenting.keep_tool_selected",
@@ -152,6 +153,7 @@ fn label(key: &str) -> &'static str {
         "general.theme" => tl!("Theme"),
         "general.default_mode" => tl!("Default workspace mode"),
         "general.reopen_last_session" => tl!("Reopen the files that were open when PdfCraft last closed"),
+        "general.check_updates" => tl!("Check for updates automatically"),
         "documents.autosave_minutes" => tl!("Save recovery copies of unsaved changes every"),
         "documents.recent_files" => tl!("Recent files to remember"),
         "documents.default_layout" => tl!("Default page display"),
@@ -194,6 +196,7 @@ fn keywords(key: &str) -> &'static str {
         "general.theme" => "theme appearance dark light mode colors",
         "general.default_mode" => "workspace mode start",
         "general.reopen_last_session" => "reopen restore session startup",
+        "general.check_updates" => "updates update version release automatic check",
         "documents.autosave_minutes" => "autosave auto-save recovery backup interval minutes crash",
         "documents.recent_files" => "recent files history list count",
         "documents.default_layout" => "page display layout continuous single two-up",
@@ -275,6 +278,7 @@ impl PdfCraftApp {
             "general.theme" => json!(self.theme_preference.id()),
             "general.default_mode" => serde_json::to_value(self.default_mode).ok()?,
             "general.reopen_last_session" => json!(self.reopen_last_session),
+            "general.check_updates" => json!(self.updates.auto.enabled),
             "documents.default_layout" => json!(self.view_defaults.layout.as_str()),
             "documents.default_zoom" => json!(self.view_defaults.zoom_name()),
             "commenting.keep_tool_selected" => json!(self.comment_prefs.pinned),
@@ -313,6 +317,7 @@ impl PdfCraftApp {
                 self.default_mode = Mode::parse(as_text(key, value)?).ok_or_else(|| format!("{key} must be all, read, edit, convert or sign"))?;
             }
             "general.reopen_last_session" => self.reopen_last_session = as_bool(key, value)?,
+            "general.check_updates" => self.updates.auto.enabled = as_bool(key, value)?,
             "documents.default_layout" => {
                 self.view_defaults.layout = crate::canvas::PageLayout::try_parse(as_text(key, value)?)
                     .ok_or_else(|| format!("{key} must be continuous, single or two-up"))?;
@@ -597,6 +602,12 @@ fn row(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens, key: &'static str) 
         }
         "general.reopen_last_session" => {
             // The web build has no file paths to reopen.
+            if cfg!(not(target_arch = "wasm32")) {
+                check(ui, app, t, key, None);
+            }
+        }
+        "general.check_updates" => {
+            // The web app is always the deployed version.
             if cfg!(not(target_arch = "wasm32")) {
                 check(ui, app, t, key, None);
             }

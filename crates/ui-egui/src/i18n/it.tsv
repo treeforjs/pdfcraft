@@ -740,11 +740,22 @@
 	No check has run yet.	Nessuna verifica eseguita finora.
 	Checking for a newer version…	Ricerca di una versione più recente…
 	PdfCraft {v} is available.	PdfCraft {v} è disponibile.
-	You have version {c}. Download the new version from its release page.	Hai la versione {c}. Scarica la nuova versione dalla sua pagina di rilascio.
 	PdfCraft {c} is up to date.	PdfCraft {c} è aggiornato.
-	Couldn't check for updates: {e}	Impossibile verificare gli aggiornamenti: {e}
+	Check for updates automatically	Cerca aggiornamenti automaticamente
+	PdfCraft {v} is available. Choose Help ▸ Check for updates to install it.	PdfCraft {v} è disponibile. Scegli Aiuto → Cerca aggiornamenti per installarlo.
+	You have version {c}.	Hai la versione {c}.
+	Download and install	Scarica e installa
+	Open release page	Apri la pagina della versione
+	Skip this version	Salta questa versione
+	Downloading PdfCraft {v}…	Download di PdfCraft {v}…
+	PdfCraft {v} is ready to install.	PdfCraft {v} è pronto per l’installazione.
+	It installs when you quit PdfCraft. Restart now asks about unsaved documents first.	Si installa quando esci da PdfCraft. Riavvia ora chiede prima dei documenti non salvati.
+	Restart now	Riavvia ora
+	Install when I quit	Installa all’uscita
+	The update was cancelled.	L’aggiornamento è stato annullato.
+	Couldn't update: {e}	Impossibile aggiornare: {e}
+	Downloads come from PdfCraft's GitHub releases and are checked against the release's signed checksums before anything is installed.	I download provengono dalle release GitHub di PdfCraft e vengono verificati con i checksum firmati della release prima di installare qualsiasi cosa.
 	You have version {c}. All releases are listed at {page}.	Hai la versione {c}. Tutte le versioni sono elencate su {page}.
-	Asks GitHub for the latest release. Nothing is downloaded or installed automatically.	Chiede a GitHub qual è l'ultima versione. Nulla viene scaricato o installato automaticamente.
 	Download	Scarica
 	Later	Più tardi
 	none	nessuno

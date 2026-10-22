@@ -738,11 +738,22 @@
 	No check has run yet.	Aún no se ha hecho ninguna comprobación.
 	Checking for a newer version…	Buscando una versión más reciente…
 	PdfCraft {v} is available.	PdfCraft {v} está disponible.
-	You have version {c}. Download the new version from its release page.	Tienes la versión {c}. Descarga la nueva versión desde su página de publicación.
 	PdfCraft {c} is up to date.	PdfCraft {c} está actualizado.
-	Couldn't check for updates: {e}	No se pudieron buscar actualizaciones: {e}
+	Check for updates automatically	Buscar actualizaciones automáticamente
+	PdfCraft {v} is available. Choose Help ▸ Check for updates to install it.	PdfCraft {v} está disponible. Elija Ayuda → Buscar actualizaciones para instalarlo.
+	You have version {c}.	Tiene la versión {c}.
+	Download and install	Descargar e instalar
+	Open release page	Abrir la página de la versión
+	Skip this version	Omitir esta versión
+	Downloading PdfCraft {v}…	Descargando PdfCraft {v}…
+	PdfCraft {v} is ready to install.	PdfCraft {v} está listo para instalarse.
+	It installs when you quit PdfCraft. Restart now asks about unsaved documents first.	Se instala al salir de PdfCraft. Reiniciar ahora pregunta antes por los documentos sin guardar.
+	Restart now	Reiniciar ahora
+	Install when I quit	Instalar al salir
+	The update was cancelled.	Se canceló la actualización.
+	Couldn't update: {e}	No se pudo actualizar: {e}
+	Downloads come from PdfCraft's GitHub releases and are checked against the release's signed checksums before anything is installed.	Las descargas provienen de las versiones de PdfCraft en GitHub y se comprueban con las sumas de verificación firmadas de la versión antes de instalar nada.
 	You have version {c}. All releases are listed at {page}.	Tienes la versión {c}. Todas las versiones aparecen en {page}.
-	Asks GitHub for the latest release. Nothing is downloaded or installed automatically.	Consulta a GitHub cuál es la última versión. No se descarga ni se instala nada automáticamente.
 	Download	Descargar
 	Later	Más tarde
 	none	ninguno

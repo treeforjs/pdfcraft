@@ -714,11 +714,22 @@
 	No check has run yet.	Még nem futott ellenőrzés.
 	Checking for a newer version…	Újabb verzió keresése…
 	PdfCraft {v} is available.	Elérhető a PdfCraft {v}.
-	You have version {c}. Download the new version from its release page.	A jelenlegi verzió: {c}. Töltsd le az újat a kiadási oldaláról.
 	PdfCraft {c} is up to date.	A PdfCraft {c} naprakész.
-	Couldn't check for updates: {e}	A frissítések keresése nem sikerült: {e}
+	Check for updates automatically	Frissítések automatikus keresése
+	PdfCraft {v} is available. Choose Help ▸ Check for updates to install it.	Elérhető a PdfCraft {v}. A telepítéshez válassza a Súgó → Frissítések keresése parancsot.
+	You have version {c}.	Az Ön verziója: {c}.
+	Download and install	Letöltés és telepítés
+	Open release page	Kiadási oldal megnyitása
+	Skip this version	Verzió kihagyása
+	Downloading PdfCraft {v}…	A PdfCraft {v} letöltése…
+	PdfCraft {v} is ready to install.	A PdfCraft {v} telepítésre kész.
+	It installs when you quit PdfCraft. Restart now asks about unsaved documents first.	A PdfCraft bezárásakor települ. Az Újraindítás most előbb rákérdez a mentetlen dokumentumokra.
+	Restart now	Újraindítás most
+	Install when I quit	Telepítés kilépéskor
+	The update was cancelled.	A frissítés megszakadt.
+	Couldn't update: {e}	Nem sikerült frissíteni: {e}
+	Downloads come from PdfCraft's GitHub releases and are checked against the release's signed checksums before anything is installed.	A letöltések a PdfCraft GitHub-kiadásaiból származnak, és telepítés előtt a kiadás aláírt ellenőrzőösszegeivel ellenőrizzük őket.
 	You have version {c}. All releases are listed at {page}.	A jelenlegi verzió: {c}. Minden kiadás itt található: {page}.
-	Asks GitHub for the latest release. Nothing is downloaded or installed automatically.	A GitHubtól kéri le a legújabb kiadást. Semmi sem töltődik le vagy települ automatikusan.
 	Download	Letöltés
 	Later	Később
 	none	nincs
