@@ -2389,3 +2389,25 @@ compare-page	Moved	已移動
 	The file stays on this device: PdfCraft reads it in this page and forgets it when the page closes. The password is never stored.	檔案保留在此裝置上：PdfCraft 在此頁面中讀取它，並在頁面關閉時將其捨棄。密碼從不儲存。
 	Downloaded the new digital ID as {name}. Keep it: this page forgets it when it closes.	新的數位識別證已下載為 {name}。請妥善保存：此頁面關閉後將不再保留。
 	Signed. Downloaded {name}	已簽署。已下載 {name}
+	Sign with a smart card or token	使用智慧卡或權杖簽署
+	Sign with a Smart Card or Token	使用智慧卡或權杖簽署
+	Use a Smart Card or Token	使用智慧卡或權杖
+	The signature is made on the card or token. Its private key never leaves it.	簽章在卡片或權杖上產生，其私密金鑰絕不會離開它。
+	PKCS #11 module	PKCS #11 模組
+	Find tokens	尋找權杖
+	No PKCS #11 module was found here. Choose the module file that came with your card or token (for example opensc-pkcs11).	這裡找不到 PKCS #11 模組。請選擇卡片或權杖隨附的模組檔案（例如 opensc-pkcs11）。
+	Serial	序號
+	PIN locked	PIN 已鎖定
+	One try left	只剩一次機會
+	PIN pad	PIN 鍵盤
+	No card	無卡片
+	PIN	PIN
+	Enter the PIN on the reader's keypad, then choose Unlock.	請在讀卡機鍵盤上輸入 PIN，然後選擇「解除鎖定」。
+	Waiting for the token…	正在等待權杖…
+	Choose the certificate to sign with:	選擇用來簽署的憑證：
+	No certificate on this token can sign.	此權杖上沒有可用於簽署的憑證。
+	Certificates left out: {n}	已排除的憑證：{n}
+	Token  ·  	權杖  ·  
+	The key is on the smart card or token, and the signature is made there.	金鑰位於智慧卡或權杖上，簽章也在那裡產生。
+	Choose a slot with a card or token.	請選擇插有卡片或權杖的插槽。
+	Unlock the token again.	請再次解除權杖鎖定。

@@ -2527,3 +2527,25 @@ compare-page	Moved	Přesunutá
 	The file stays on this device: PdfCraft reads it in this page and forgets it when the page closes. The password is never stored.	Soubor zůstává v tomto zařízení: PdfCraft jej načte na této stránce a po jejím zavření jej zapomene. Heslo se nikdy neukládá.
 	Downloaded the new digital ID as {name}. Keep it: this page forgets it when it closes.	Nové digitální ID bylo staženo jako {name}. Uschovejte si je: tato stránka je po zavření zapomene.
 	Signed. Downloaded {name}	Podepsáno. Staženo: {name}
+	Sign with a smart card or token	Podepsat čipovou kartou nebo tokenem
+	Sign with a Smart Card or Token	Podepsat čipovou kartou nebo tokenem
+	Use a Smart Card or Token	Použít čipovou kartu nebo token
+	The signature is made on the card or token. Its private key never leaves it.	Podpis se vytvoří na kartě nebo tokenu. Jeho soukromý klíč je nikdy neopustí.
+	PKCS #11 module	Modul PKCS #11
+	Find tokens	Najít tokeny
+	No PKCS #11 module was found here. Choose the module file that came with your card or token (for example opensc-pkcs11).	Nebyl nalezen žádný modul PKCS #11. Vyberte soubor modulu dodaný s vaší kartou nebo tokenem (například opensc-pkcs11).
+	Serial	Sériové číslo
+	PIN locked	PIN zablokován
+	One try left	Zbývá jeden pokus
+	PIN pad	Klávesnice PIN
+	No card	Žádná karta
+	PIN	Kód PIN
+	Enter the PIN on the reader's keypad, then choose Unlock.	Zadejte PIN na klávesnici čtečky a pak zvolte Odemknout.
+	Waiting for the token…	Čeká se na token…
+	Choose the certificate to sign with:	Vyberte certifikát pro podpis:
+	No certificate on this token can sign.	Žádný certifikát na tomto tokenu nemůže podepisovat.
+	Certificates left out: {n}	Vynechané certifikáty: {n}
+	Token  ·  	Hardwarový token  ·  
+	The key is on the smart card or token, and the signature is made there.	Klíč je na čipové kartě nebo tokenu a podpis se vytvoří tam.
+	Choose a slot with a card or token.	Vyberte slot s kartou nebo tokenem.
+	Unlock the token again.	Odemkněte token znovu.

@@ -2416,3 +2416,25 @@ compare-page	Moved	Перемещена
 	The file stays on this device: PdfCraft reads it in this page and forgets it when the page closes. The password is never stored.	Файл остаётся на этом устройстве: PdfCraft читает его на этой странице и забывает, когда страница закрывается. Пароль никогда не сохраняется.
 	Downloaded the new digital ID as {name}. Keep it: this page forgets it when it closes.	Новое цифровое удостоверение загружено как {name}. Сохраните его: эта страница забудет его при закрытии.
 	Signed. Downloaded {name}	Подписано. Загружено: {name}
+	Sign with a smart card or token	Подписать смарт-картой или токеном
+	Sign with a Smart Card or Token	Подписать смарт-картой или токеном
+	Use a Smart Card or Token	Использовать смарт-карту или токен
+	The signature is made on the card or token. Its private key never leaves it.	Подпись создаётся на карте или токене. Закрытый ключ никогда их не покидает.
+	PKCS #11 module	Модуль PKCS #11
+	Find tokens	Найти токены
+	No PKCS #11 module was found here. Choose the module file that came with your card or token (for example opensc-pkcs11).	Модуль PKCS #11 не найден. Выберите файл модуля, поставляемый с картой или токеном (например, opensc-pkcs11).
+	Serial	Серийный номер
+	PIN locked	PIN заблокирован
+	One try left	Осталась одна попытка
+	PIN pad	PIN-клавиатура
+	No card	Нет карты
+	PIN	PIN-код
+	Enter the PIN on the reader's keypad, then choose Unlock.	Введите PIN на клавиатуре считывателя и выберите «Разблокировать».
+	Waiting for the token…	Ожидание токена…
+	Choose the certificate to sign with:	Выберите сертификат для подписи:
+	No certificate on this token can sign.	Ни один сертификат на этом токене не может подписывать.
+	Certificates left out: {n}	Пропущено сертификатов: {n}
+	Token  ·  	Токен  ·  
+	The key is on the smart card or token, and the signature is made there.	Ключ находится на смарт-карте или токене, и подпись создаётся там.
+	Choose a slot with a card or token.	Выберите слот с картой или токеном.
+	Unlock the token again.	Разблокируйте токен снова.

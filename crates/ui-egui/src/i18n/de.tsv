@@ -2503,3 +2503,25 @@ compare-page	Moved	Verschoben
 	The file stays on this device: PdfCraft reads it in this page and forgets it when the page closes. The password is never stored.	Die Datei bleibt auf diesem Gerät: PdfCraft liest sie in dieser Seite und vergisst sie, wenn die Seite geschlossen wird. Das Kennwort wird nie gespeichert.
 	Downloaded the new digital ID as {name}. Keep it: this page forgets it when it closes.	Die neue digitale ID wurde als {name} heruntergeladen. Bewahren Sie sie auf: Diese Seite vergisst sie beim Schließen.
 	Signed. Downloaded {name}	Signiert. {name} heruntergeladen
+	Sign with a smart card or token	Mit Smartcard oder Token signieren
+	Sign with a Smart Card or Token	Mit Smartcard oder Token signieren
+	Use a Smart Card or Token	Smartcard oder Token verwenden
+	The signature is made on the card or token. Its private key never leaves it.	Die Signatur wird auf der Karte oder dem Token erstellt. Der private Schlüssel verlässt sie nie.
+	PKCS #11 module	PKCS #11-Modul
+	Find tokens	Token suchen
+	No PKCS #11 module was found here. Choose the module file that came with your card or token (for example opensc-pkcs11).	Hier wurde kein PKCS #11-Modul gefunden. Wählen Sie die Moduldatei, die mit Ihrer Karte oder Ihrem Token geliefert wurde (zum Beispiel opensc-pkcs11).
+	Serial	Seriennummer
+	PIN locked	PIN gesperrt
+	One try left	Ein Versuch übrig
+	PIN pad	PIN-Pad
+	No card	Keine Karte
+	PIN	PIN
+	Enter the PIN on the reader's keypad, then choose Unlock.	Geben Sie die PIN am Tastenfeld des Lesegeräts ein und wählen Sie dann Entsperren.
+	Waiting for the token…	Warten auf das Token…
+	Choose the certificate to sign with:	Wählen Sie das Zertifikat zum Signieren:
+	No certificate on this token can sign.	Kein Zertifikat auf diesem Token kann signieren.
+	Certificates left out: {n}	Ausgelassene Zertifikate: {n}
+	Token  ·  	Token  ·  
+	The key is on the smart card or token, and the signature is made there.	Der Schlüssel liegt auf der Smartcard oder dem Token, und die Signatur wird dort erstellt.
+	Choose a slot with a card or token.	Wählen Sie einen Steckplatz mit einer Karte oder einem Token.
+	Unlock the token again.	Entsperren Sie das Token erneut.

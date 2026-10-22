@@ -5840,7 +5840,7 @@ status = "shipped"
 commands = ["sign.digital", "sign.certify"]
 tools = ["sign_windows_ids", "sign_document"]
 evidence = ["crates/sign/tests/pdf.rs::signing_with_windows_store_identities", "crates/sign/tests/pdf.rs::windows_store_enumeration_and_missing_identity", "crates/automation/tests/automation.rs::digital_ids_signing_and_validation_through_tools", "crates/ui-egui/tests/signing.rs::windows_store_identity_does_not_ask_for_a_file_password"]
-notes = "Current User Personal (My) CNG identities: RSA PKCS #1 v1.5 and DER-encoded ECDSA P-256/P-384. Keys never leave Windows; windows:<fingerprint|common name> for agents and Windows store labels in the desktop ID picker. Tested with throwaway software-backed RSA-2048, P-256 and P-384 certificates (run with --ignored); smart cards and PKCS #11 still planned."
+notes = "Current User Personal (My) CNG identities: RSA PKCS #1 v1.5 and DER-encoded ECDSA P-256/P-384. Keys never leave Windows; windows:<fingerprint|common name> for agents and Windows store labels in the desktop ID picker. Tested with throwaway software-backed RSA-2048, P-256 and P-384 certificates (run with --ignored); smart cards and tokens sign through PKCS #11 (sign.pkcs11)."
 
 [[feature]]
 id = "sign.pkcs11"
@@ -5848,11 +5848,11 @@ title = "Sign with PKCS#11 tokens and smart cards"
 area = "H"
 tier = "P1"
 milestone = "M9"
-status = "planned"
-commands = []
-tools = []
-evidence = []
-notes = ""
+status = "shipped"
+commands = ["sign.token", "sign.digital", "sign.certify"]
+tools = ["sign_token_modules", "sign_token_slots", "sign_token_ids", "sign_document"]
+evidence = ["crates/sign/tests/token.rs::lists_slots_unlocks_and_signs_on_the_token", "crates/sign/tests/token.rs::wrong_pins_count_down_and_a_locked_token_is_not_tried_again", "crates/sign/tests/token.rs::hostile_module_responses_are_contained", "crates/platform/tests/softhsm.rs::signing_on_softhsm", "crates/automation/tests/token_signing.rs::tokens_are_listed_unlocked_and_sign_through_the_tools", "crates/ui-egui/tests/signing.rs::signing_on_a_smart_card_through_the_token_step"]
+notes = "PKCS #11 modules (OpenSC smart cards, USB tokens, HSMs, SoftHSM) through the Apache-2.0 cryptoki safe wrapper, loaded only in pdfcraft-platform behind pdfcraft_sign::token traits (optional pkcs11 feature; unavailable in the browser, where file IDs still work). Module found in common locations or chosen; slot, PIN or PIN pad, certificate; the key never leaves the token. RSA PKCS #1 v1.5 (CKM_RSA_PKCS or on-token hashing) and ECDSA (P-256/384/521, Brainpool); token CA certificates join the chain. PINs zeroed after use and never kept; locked PINs not retried; module output capped and every returned signature verified before use. Tested with a software mock token and a real SoftHSM module (skips when not installed); no physical smart card was exercised here. A native module runs in-process, so a module that corrupts memory can still crash the app."
 
 [[feature]]
 id = "sign.self-signed-id"

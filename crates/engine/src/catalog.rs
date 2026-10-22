@@ -376,6 +376,7 @@ pub static TOOL_GROUPS: &[ToolGroup] = &[
             title: "Certificates",
             items: &[
                 item("Digitally sign", "signature", "sign.digital", Ready),
+                item("Sign with a smart card or token", "shield-check", "sign.token", Ready),
                 item("Timestamp", "clock-3", "sign.timestamp", Ready),
                 item("Timestamp servers", "clock-3", "sign.timestamp_servers", Ready),
                 item("Embed validation evidence", "badge-check", "sign.embed_evidence", Ready),

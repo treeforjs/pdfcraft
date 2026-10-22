@@ -133,6 +133,8 @@ pub struct Automation {
     recovery_keys: HashMap<DocId, String>,
     /// Windows and their tabs (`window_*`), the model the desktop app uses.
     windows: windows::Windows,
+    /// Where PKCS #11 modules come from (`sign_token_*`, `sign_document` with a `pkcs11:` id).
+    token_provider: Arc<dyn pdfcraft_engine::sign::token::TokenProvider>,
 }
 
 impl Default for Automation {
@@ -152,7 +154,14 @@ impl Automation {
             ocr_reviews: HashMap::new(),
             recovery_keys: HashMap::new(),
             windows: Default::default(),
+            token_provider: pdfcraft_platform::pkcs11::provider(),
         }
+    }
+
+    /// Use these PKCS #11 modules instead of the native ones (tests use a software token).
+    pub fn with_token_provider(mut self, provider: Arc<dyn pdfcraft_engine::sign::token::TokenProvider>) -> Self {
+        self.token_provider = provider;
+        self
     }
 
     /// Confine every path the tools read or write to `root` (relative paths resolve inside it).
@@ -942,6 +951,9 @@ impl Automation {
                 let ids: Vec<Value> = Vec::new();
                 json!({ "count": ids.len(), "ids": ids })
             }
+            "sign_token_modules" => self.sign_token_modules()?,
+            "sign_token_slots" => self.sign_token_slots(&a)?,
+            "sign_token_ids" => self.sign_token_ids(&a)?,
             "sign_trust" => self.sign_trust(&a)?,
             "sign_os_trust_get" => self.sign_os_trust_get()?,
             "sign_os_trust_set" => self.sign_os_trust_set(&a)?,

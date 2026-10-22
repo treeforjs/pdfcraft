@@ -2503,3 +2503,25 @@ compare-page	Moved	移動
 	The file stays on this device: PdfCraft reads it in this page and forgets it when the page closes. The password is never stored.	ファイルはこのデバイスから出ません。PdfCraft はこのページ内で読み込み、ページを閉じると破棄します。パスワードは保存されません。
 	Downloaded the new digital ID as {name}. Keep it: this page forgets it when it closes.	新しいデジタル ID を {name} としてダウンロードしました。保管してください。このページを閉じると破棄されます。
 	Signed. Downloaded {name}	署名しました。{name} をダウンロードしました
+	Sign with a smart card or token	スマートカードまたはトークンで署名
+	Sign with a Smart Card or Token	スマートカードまたはトークンで署名
+	Use a Smart Card or Token	スマートカードまたはトークンを使用
+	The signature is made on the card or token. Its private key never leaves it.	署名はカードまたはトークン上で作成されます。秘密鍵が外に出ることはありません。
+	PKCS #11 module	PKCS #11 モジュール
+	Find tokens	トークンを検索
+	No PKCS #11 module was found here. Choose the module file that came with your card or token (for example opensc-pkcs11).	PKCS #11 モジュールが見つかりませんでした。カードまたはトークンに付属のモジュールファイル（例: opensc-pkcs11）を選択してください。
+	Serial	シリアル
+	PIN locked	PIN ロック中
+	One try left	残り 1 回
+	PIN pad	PIN パッド
+	No card	カードなし
+	PIN	PIN
+	Enter the PIN on the reader's keypad, then choose Unlock.	リーダーのキーパッドで PIN を入力してから、［ロック解除］を選択してください。
+	Waiting for the token…	トークンを待っています…
+	Choose the certificate to sign with:	署名に使う証明書を選択してください:
+	No certificate on this token can sign.	このトークンには署名できる証明書がありません。
+	Certificates left out: {n}	除外された証明書: {n}
+	Token  ·  	トークン  ·  
+	The key is on the smart card or token, and the signature is made there.	鍵はスマートカードまたはトークン上にあり、署名はそこで作成されます。
+	Choose a slot with a card or token.	カードまたはトークンが入ったスロットを選択してください。
+	Unlock the token again.	トークンのロックをもう一度解除してください。

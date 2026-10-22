@@ -757,6 +757,7 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
             Dialog::Sign => {
                 if crate::sign_ui::dialog(ui, app, &t) {
                     app.sign_draft = None;
+                    app.close_token();
                     close = true;
                 }
                 return;

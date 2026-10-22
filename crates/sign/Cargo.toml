@@ -38,6 +38,8 @@ rc2 = "0.9"
 sha3 = "0.12.0"
 ripemd = "0.2.0"
 ed25519-dalek = "3.0.0"
+# Clears token PINs from memory once they have been used (sign.pkcs11).
+zeroize = "1.8"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 aws-lc-rs = { version = "1.18", default-features = false, features = ["aws-lc-sys", "prebuilt-nasm"] }

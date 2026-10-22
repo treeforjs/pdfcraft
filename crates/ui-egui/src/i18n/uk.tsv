@@ -2526,3 +2526,25 @@ compare-page	Moved	Переміщена
 	The file stays on this device: PdfCraft reads it in this page and forgets it when the page closes. The password is never stored.	Файл залишається на цьому пристрої: PdfCraft читає його на цій сторінці й забуває, коли сторінку закрито. Пароль ніколи не зберігається.
 	Downloaded the new digital ID as {name}. Keep it: this page forgets it when it closes.	Нове цифрове посвідчення завантажено як {name}. Збережіть його: ця сторінка забуде його після закриття.
 	Signed. Downloaded {name}	Підписано. Завантажено: {name}
+	Sign with a smart card or token	Підписати смарт-карткою або токеном
+	Sign with a Smart Card or Token	Підписати смарт-карткою або токеном
+	Use a Smart Card or Token	Використати смарт-картку або токен
+	The signature is made on the card or token. Its private key never leaves it.	Підпис створюється на картці або токені. Закритий ключ ніколи їх не залишає.
+	PKCS #11 module	Модуль PKCS #11
+	Find tokens	Знайти токени
+	No PKCS #11 module was found here. Choose the module file that came with your card or token (for example opensc-pkcs11).	Модуль PKCS #11 не знайдено. Виберіть файл модуля, що постачається з карткою або токеном (наприклад, opensc-pkcs11).
+	Serial	Серійний номер
+	PIN locked	PIN заблоковано
+	One try left	Залишилася одна спроба
+	PIN pad	PIN-клавіатура
+	No card	Немає картки
+	PIN	PIN-код
+	Enter the PIN on the reader's keypad, then choose Unlock.	Введіть PIN на клавіатурі зчитувача й виберіть «Розблокувати».
+	Waiting for the token…	Очікування токена…
+	Choose the certificate to sign with:	Виберіть сертифікат для підпису:
+	No certificate on this token can sign.	Жоден сертифікат на цьому токені не може підписувати.
+	Certificates left out: {n}	Пропущено сертифікатів: {n}
+	Token  ·  	Токен  ·  
+	The key is on the smart card or token, and the signature is made there.	Ключ зберігається на смарт-картці або токені, і підпис створюється там.
+	Choose a slot with a card or token.	Виберіть слот із карткою або токеном.
+	Unlock the token again.	Розблокуйте токен знову.

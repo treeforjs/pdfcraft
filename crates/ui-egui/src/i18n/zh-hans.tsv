@@ -2467,3 +2467,25 @@ compare-page	Moved	已移动
 	The file stays on this device: PdfCraft reads it in this page and forgets it when the page closes. The password is never stored.	文件保留在此设备上：PdfCraft 在此页面中读取它，并在页面关闭时将其丢弃。密码从不保存。
 	Downloaded the new digital ID as {name}. Keep it: this page forgets it when it closes.	新的数字身份证已下载为 {name}。请妥善保存：此页面关闭后将不再保留。
 	Signed. Downloaded {name}	已签名。已下载 {name}
+	Sign with a smart card or token	使用智能卡或令牌签名
+	Sign with a Smart Card or Token	使用智能卡或令牌签名
+	Use a Smart Card or Token	使用智能卡或令牌
+	The signature is made on the card or token. Its private key never leaves it.	签名在卡或令牌上生成，其私钥永远不会离开它。
+	PKCS #11 module	PKCS #11 模块
+	Find tokens	查找令牌
+	No PKCS #11 module was found here. Choose the module file that came with your card or token (for example opensc-pkcs11).	此处未找到 PKCS #11 模块。请选择卡或令牌随附的模块文件（例如 opensc-pkcs11）。
+	Serial	序列号
+	PIN locked	PIN 已锁定
+	One try left	仅剩一次机会
+	PIN pad	PIN 键盘
+	No card	无卡
+	PIN	PIN
+	Enter the PIN on the reader's keypad, then choose Unlock.	请在读卡器键盘上输入 PIN，然后选择“解锁”。
+	Waiting for the token…	正在等待令牌…
+	Choose the certificate to sign with:	选择用于签名的证书：
+	No certificate on this token can sign.	此令牌上没有可以签名的证书。
+	Certificates left out: {n}	已排除的证书：{n}
+	Token  ·  	令牌  ·  
+	The key is on the smart card or token, and the signature is made there.	密钥位于智能卡或令牌上，签名也在那里生成。
+	Choose a slot with a card or token.	请选择插有卡或令牌的插槽。
+	Unlock the token again.	请重新解锁令牌。

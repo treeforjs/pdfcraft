@@ -421,8 +421,10 @@ impl PdfCraftApp {
                     None => self.notify_tr("No pop-ups are open"),
                 }
             }
-            "sign.digital" | "sign.certify" => {
+            "sign.digital" | "sign.certify" | "sign.token" => {
                 let certify = id == "sign.certify";
+                // Sign with a smart card or token: the same area, then the token step.
+                self.sign_with_token = id == "sign.token";
                 self.quick_tool = crate::QuickTool::SignArea { certify };
                 self.notify_tr("Drag to draw the area where the signature should appear.");
             }

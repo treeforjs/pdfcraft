@@ -292,6 +292,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     c("sign.digital", "Digitally sign", None, None, Document, "signature"),
     c("sign.certify", "Certify (visible signature)", None, None, Document, "badge-check"),
     c("sign.certify_invisible", "Certify (invisible signature)", None, None, Document, "badge-check"),
+    c("sign.token", "Sign with a smart card or token", None, None, Document, "shield-check"),
     c("sign.validate", "Validate all signatures", None, None, Document, "badge-check"),
     c("sign.timestamp", "Timestamp document", None, None, Document, "clock-3"),
     c("sign.timestamp_servers", "Timestamp servers", None, None, Nothing, "clock-3"),

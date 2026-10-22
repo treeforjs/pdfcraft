@@ -5,6 +5,7 @@
 use std::path::PathBuf;
 
 use egui::{Align, Color32, CornerRadius, Layout, Pos2, Rect, Stroke, vec2};
+use pdfcraft_engine::sign::token::{self as tok, Identities, Login, Pin, SlotInfo, TokenError};
 use pdfcraft_engine::sign::{self, Appearance, Certificate, DigitalId, Modification, Name, PrivateKey};
 use pdfcraft_engine::{SignOptions, SignatureInfo, SignatureStatus};
 
@@ -31,6 +32,53 @@ pub enum SignStep {
     Configure,
     /// Sign as "Name": appearance, password, Sign.
     SignAs,
+    /// Sign with a smart card or token: module, slot, PIN, certificate.
+    Token,
+}
+
+/// Identities kept in the OS key stores or on a token, listed afresh each time (never saved).
+pub(crate) fn is_key_store_entry(path: &str) -> bool {
+    path.starts_with("keychain:") || path.starts_with("windows:") || path.starts_with("pkcs11:")
+}
+
+/// A PIN as typed: never printed, zeroed when dropped or used.
+#[derive(Clone, Default, PartialEq)]
+pub struct PinField(pub String);
+
+impl std::fmt::Debug for PinField {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("PinField(…)")
+    }
+}
+
+impl Drop for PinField {
+    fn drop(&mut self) {
+        // Moves the bytes out and zeroes them (Pin's own drop).
+        drop(Pin::take(&mut self.0));
+    }
+}
+
+/// Sign with a smart card or token: what the step shows.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct TokenDraft {
+    /// Module files found in the usual places.
+    pub modules: Vec<String>,
+    /// The module to use (a found one, or a path the user chose).
+    pub module: String,
+    /// Its slots, once listed.
+    pub slots: Vec<SlotInfo>,
+    pub slot: Option<u64>,
+    pub pin: PinField,
+    /// The unlocked token's identities.
+    pub found: Option<Identities>,
+    pub selected: Option<usize>,
+}
+
+/// A token being unlocked in the background (a PIN-pad reader waits for its keypad).
+#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+pub(crate) struct TokenUnlock {
+    rx: std::sync::mpsc::Receiver<Result<(Login, Identities), TokenError>>,
+    epoch: u64,
 }
 
 /// The key algorithms of a new digital ID (Acrobat offers RSA; P-256 also works in browsers).
@@ -96,6 +144,7 @@ pub struct SignDraft {
     pub error: Option<String>,
     pub timestamp_server: Option<usize>,
     pub timestamp_network: bool,
+    pub token: TokenDraft,
 }
 
 impl SignDraft {
@@ -115,6 +164,7 @@ impl SignDraft {
             error: None,
             timestamp_server: None,
             timestamp_network: false,
+            token: TokenDraft::default(),
         }
     }
 }
@@ -223,6 +273,12 @@ fn windows_id(reference: &str) -> Result<DigitalId, String> {
     Err(format!("{reference}: Windows certificate store identities are only available on Windows"))
 }
 
+/// A token identity by its `pkcs11:` reference, on the token unlocked in this dialog.
+fn token_id(login: Option<&Login>, reference: &str) -> Result<DigitalId, String> {
+    let login = login.ok_or_else(|| tl!("Unlock the token again.").to_string())?;
+    login.find(reference).map_err(|e| e.to_string())
+}
+
 pub fn entry_for(path: &str, c: &Certificate) -> DigitalIdEntry {
     DigitalIdEntry {
         path: path.to_string(),
@@ -262,13 +318,165 @@ impl PdfCraftApp {
         self.refresh_os_key_store_ids();
         let mut draft = SignDraft::new(page, rect, field, certify, self.digital_ids.len());
         self.prefill_sign_draft(&mut draft);
+        let token = std::mem::take(&mut self.sign_with_token);
         self.sign_draft = Some(draft);
         self.dialog = Some(crate::Dialog::Sign);
+        if token {
+            self.open_token_step();
+        }
+    }
+
+    /// Sign with a Smart Card or Token: find modules and, with one, its slots.
+    pub fn open_token_step(&mut self) {
+        let modules = self.token_provider.discover();
+        let Some(d) = self.sign_draft.as_mut() else { return };
+        d.step = SignStep::Token;
+        d.error = None;
+        if d.token.module.trim().is_empty() {
+            d.token.module = modules.first().cloned().unwrap_or_default();
+        }
+        d.token.modules = modules;
+        if !d.token.module.trim().is_empty() && d.token.slots.is_empty() {
+            self.find_tokens();
+        }
+    }
+
+    /// List the chosen module's slots (loading the module on first use).
+    pub fn find_tokens(&mut self) {
+        let module = self.sign_draft.as_ref().map(|d| d.token.module.clone()).unwrap_or_default();
+        let result = tok::load_module(self.token_provider.as_ref(), Some(&module)).and_then(|(_, m)| tok::slots(m.as_ref()));
+        // A token from another module or slot is no longer the one in use.
+        self.token_login = None;
+        self.token_unlock = None;
+        let Some(d) = self.sign_draft.as_mut() else { return };
+        d.token.found = None;
+        d.token.selected = None;
+        match result {
+            Ok(slots) => {
+                // The first slot with a card in it.
+                d.token.slot = slots.iter().find(|s| s.token.is_some()).map(|s| s.id);
+                d.token.slots = slots;
+                d.error = None;
+            }
+            Err(e) => {
+                d.token.slots.clear();
+                d.token.slot = None;
+                d.error = Some(e.to_string());
+            }
+        }
+    }
+
+    /// Unlock the chosen token with the typed PIN (cleared from the field at once), then list
+    /// its certificates. Runs in the background so a PIN-pad reader can wait for its keypad.
+    pub fn unlock_token(&mut self) {
+        let epoch = self.dialog_epoch();
+        let Some(d) = self.sign_draft.as_mut() else { return };
+        let Some(slot) = d.token.slot else {
+            d.error = Some(tl!("Choose a slot with a card or token.").to_string());
+            return;
+        };
+        let pin = Pin::take(&mut d.token.pin.0);
+        let module = d.token.module.clone();
+        d.token.found = None;
+        d.token.selected = None;
+        d.error = None;
+        self.token_login = None;
+        let provider = self.token_provider.clone();
+        let work = move || -> Result<(Login, Identities), TokenError> {
+            let (_, module) = tok::load_module(provider.as_ref(), Some(&module))?;
+            let login = tok::login(module.as_ref(), slot, Some(pin))?;
+            let found = login.identities()?;
+            Ok((login, found))
+        };
+        #[cfg(not(target_arch = "wasm32"))]
+        if !self.run_inline {
+            let (tx, rx) = std::sync::mpsc::channel();
+            let spawned = std::thread::Builder::new().name("token-unlock".into()).spawn(move || {
+                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(work))
+                    .unwrap_or_else(|_| Err(TokenError::Device("the token module failed".into())));
+                let _ = tx.send(result);
+            });
+            match spawned {
+                Ok(_) => self.token_unlock = Some(TokenUnlock { rx, epoch }),
+                Err(e) => {
+                    if let Some(d) = self.sign_draft.as_mut() {
+                        d.error = Some(e.to_string());
+                    }
+                }
+            }
+            return;
+        }
+        #[cfg(target_arch = "wasm32")]
+        let _ = epoch;
+        self.token_unlocked(work());
+    }
+
+    /// An unlock finished: keep the token open and show its certificates, or say what failed.
+    fn token_unlocked(&mut self, result: Result<(Login, Identities), TokenError>) {
+        self.token_unlock = None;
+        let Some(d) = self.sign_draft.as_mut() else { return };
+        match result {
+            Ok((login, found)) => {
+                d.token.selected = (!found.ids.is_empty()).then_some(0);
+                d.token.found = Some(found);
+                self.token_login = Some(login);
+            }
+            Err(e) => d.error = Some(e.to_string()),
+        }
+    }
+
+    /// Poll a background unlock (each frame while the token step shows).
+    fn poll_token_unlock(&mut self, ctx: &egui::Context) {
+        let epoch = self.dialog_epoch();
+        let Some(u) = self.token_unlock.as_ref() else { return };
+        if u.epoch != epoch {
+            // The dialog was closed or reopened meanwhile: the result is dropped (logging out).
+            self.token_unlock = None;
+            return;
+        }
+        match u.rx.try_recv() {
+            Ok(result) => self.token_unlocked(result),
+            Err(std::sync::mpsc::TryRecvError::Empty) => ctx.request_repaint_after(std::time::Duration::from_millis(100)),
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => self.token_unlocked(Err(TokenError::Device("the token module failed".into()))),
+        }
+    }
+
+    /// Use the token identity chosen in the token step: list it with the digital IDs and go on
+    /// to Sign as.
+    pub fn use_token_identity(&mut self) -> Result<(), String> {
+        let ident = self
+            .sign_draft
+            .as_ref()
+            .and_then(|d| d.token.found.as_ref().zip(d.token.selected))
+            .and_then(|(f, i)| f.ids.get(i).cloned())
+            .ok_or_else(|| tl!("Choose the certificate to sign with:").trim_end_matches(':').to_string())?;
+        if self.token_login.is_none() {
+            return Err(tl!("Unlock the token again.").to_string());
+        }
+        self.digital_ids.retain(|e| !e.path.starts_with("pkcs11:"));
+        let mut entry = entry_for(&ident.reference, &ident.certificate);
+        entry.name = ident.label.clone();
+        self.digital_ids.push(entry);
+        let i = self.digital_ids.len() - 1;
+        if let Some(d) = self.sign_draft.as_mut() {
+            d.selected = Some(i);
+            d.step = SignStep::SignAs;
+            d.error = None;
+        }
+        Ok(())
+    }
+
+    /// The signing dialog closed: log out of the token (a signature still being made keeps its
+    /// own hold until it is done) and forget its identities.
+    pub(crate) fn close_token(&mut self) {
+        self.token_login = None;
+        self.token_unlock = None;
+        self.digital_ids.retain(|e| !e.path.starts_with("pkcs11:"));
     }
 
     /// List OS key store signing identities (after the file-based IDs).
     fn refresh_os_key_store_ids(&mut self) {
-        self.digital_ids.retain(|e| !e.path.starts_with("keychain:") && !e.path.starts_with("windows:"));
+        self.digital_ids.retain(|e| !is_key_store_entry(&e.path));
         #[cfg(target_os = "macos")]
         if self.os_key_store_ids {
             match sign::keychain::identities(None) {
@@ -391,6 +599,8 @@ impl PdfCraftApp {
             windows_id(&entry.path)?
         } else if crate::picked_ids::is_picked(&entry.path) {
             self.open_picked_id(&entry.path, &d.password)?
+        } else if entry.path.starts_with("pkcs11:") {
+            token_id(self.token_login.as_ref(), &entry.path)?
         } else {
             let bytes = std::fs::read(&entry.path).map_err(|e| format!("{}: {e}", entry.path))?;
             sign::pkcs12::open(&bytes, &d.password).map_err(|e| match e {
@@ -570,6 +780,7 @@ pub(crate) fn dialog(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> bo
         SignStep::Choose => choose(ui, app, t),
         SignStep::Configure => configure(ui, app, t),
         SignStep::SignAs => sign_as(ui, app, t),
+        SignStep::Token => token_step(ui, app, t),
     }
 }
 
@@ -617,6 +828,8 @@ fn choose(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> bool {
                     tl!("Windows store  ·  ").to_string()
                 } else if crate::picked_ids::is_picked(&e.path) {
                     tl!("This page only  ·  ").to_string()
+                } else if e.path.starts_with("pkcs11:") {
+                    tl!("Token  ·  ").to_string()
                 } else {
                     String::new()
                 },
@@ -639,10 +852,14 @@ fn choose(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> bool {
         }
     });
     ui.add_space(10.0);
+    let mut token = false;
     ui.horizontal(|ui| {
         if widgets::pill_button(ui, tl!("Configure New Digital ID"), false).clicked() {
             d.step = SignStep::Configure;
             d.error = None;
+        }
+        if widgets::icon_pill(ui, "shield-check", tl!("Use a Smart Card or Token"), false).clicked() {
+            token = true;
         }
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             if ui.add_enabled_ui(d.selected.is_some(), |ui| widgets::pill_button(ui, tl!("Continue"), true)).inner.clicked() {
@@ -654,6 +871,9 @@ fn choose(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> bool {
             }
         });
     });
+    if token {
+        app.open_token_step();
+    }
     close
 }
 
@@ -779,6 +999,235 @@ fn configure(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> bool {
     close
 }
 
+/// One selectable row in the token step: an icon, a title and a muted line, with optional
+/// status chips (text, colour) on the right.
+fn token_row(
+    ui: &mut egui::Ui,
+    t: &Tokens,
+    (selected, enabled): (bool, bool),
+    icon: &str,
+    (title_text, sub): (&str, &str),
+    chips: &[(&str, Color32)],
+) -> egui::Response {
+    let sense = if enabled { egui::Sense::click() } else { egui::Sense::hover() };
+    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 46.0), sense);
+    resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::RadioButton, enabled, selected, title_text));
+    let fill = if selected {
+        t.accent_soft
+    } else if resp.hovered() && enabled {
+        t.hover
+    } else {
+        Color32::TRANSPARENT
+    };
+    ui.painter().rect_filled(rect, CornerRadius::same(6), fill);
+    let tint = if enabled { t.accent } else { t.text_faint };
+    icons::paint(ui, Rect::from_min_size(rect.min + vec2(10.0, 13.0), vec2(20.0, 20.0)), icon, 18.0, tint);
+    let mut right = rect.right() - 8.0;
+    for (label, colour) in chips.iter().rev() {
+        let galley = ui.painter().layout_no_wrap(label.to_string(), theme::semibold(10.5), *colour);
+        let chip = Rect::from_min_size(egui::pos2(right - galley.size().x - 14.0, rect.center().y - 10.0), vec2(galley.size().x + 14.0, 20.0));
+        ui.painter().rect_filled(chip, CornerRadius::same(10), colour.gamma_multiply(0.14));
+        ui.painter().galley(chip.min + vec2(7.0, (20.0 - galley.size().y) / 2.0), galley, *colour);
+        right = chip.left() - 6.0;
+    }
+    let width = (right - rect.left() - 46.0).max(20.0);
+    widgets::row_text(ui, rect.min + vec2(40.0, 16.0), title_text, theme::semibold(13.0), if enabled { t.text } else { t.text_muted }, width);
+    widgets::row_text(ui, rect.min + vec2(40.0, 32.0), sub, theme::regular(11.5), t.text_muted, width);
+    resp
+}
+
+/// Sign with a Smart Card or Token: the module, a slot, the PIN, then a certificate.
+fn token_step(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> bool {
+    app.poll_token_unlock(ui.ctx());
+    title(ui, "Sign with a Smart Card or Token");
+    ui.label(egui::RichText::new(tl!("The signature is made on the card or token. Its private key never leaves it.")).color(t.text_muted));
+    ui.add_space(8.0);
+    let busy = app.token_unlock.is_some();
+    let unlocked = app.token_login.is_some();
+    let Some(d) = app.sign_draft.as_mut() else { return true };
+    let (mut close, mut find, mut unlock, mut go) = (false, false, false, false);
+    #[cfg_attr(target_arch = "wasm32", allow(unused_mut))]
+    let mut browse = false;
+    let tk = &mut d.token;
+
+    // The module.
+    let l = ui.label(egui::RichText::new(tl!("PKCS #11 module")).font(theme::semibold(12.5)));
+    ui.horizontal(|ui| {
+        let r = ui.add_enabled(!busy, egui::TextEdit::singleline(&mut tk.module).desired_width(300.0).hint_text("opensc-pkcs11")).labelled_by(l.id);
+        if r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+            find = true;
+        }
+        if !tk.modules.is_empty() {
+            egui::ComboBox::from_id_salt("token-modules").selected_text("").width(24.0).show_ui(ui, |ui| {
+                for m in &tk.modules {
+                    if ui.selectable_label(tk.module == *m, m.as_str()).clicked() {
+                        tk.module = m.clone();
+                        find = true;
+                    }
+                }
+            });
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        if ui.add_enabled(!busy, egui::Button::new(tl!("Browse…"))).clicked() {
+            browse = true;
+        }
+        if ui.add_enabled(!busy && !tk.module.trim().is_empty(), egui::Button::new(tl!("Find tokens"))).clicked() {
+            find = true;
+        }
+    });
+    if tk.modules.is_empty() && tk.module.trim().is_empty() {
+        ui.label(
+            egui::RichText::new(tl!(
+                "No PKCS #11 module was found here. Choose the module file that came with your card or token (for example opensc-pkcs11)."
+            ))
+            .small()
+            .color(t.text_muted),
+        );
+    }
+    ui.add_space(6.0);
+
+    // Slots, while no token is unlocked.
+    if tk.found.is_none() && !tk.slots.is_empty() {
+        egui::ScrollArea::vertical().id_salt("token-slots").max_height(150.0).show(ui, |ui| {
+            for s in &tk.slots {
+                let red = Color32::from_rgb(0xD7, 0x37, 0x3F);
+                let amber = Color32::from_rgb(0xE6, 0x86, 0x19);
+                let (title_text, sub, chips): (String, String, Vec<(&str, Color32)>) = match &s.token {
+                    Some(info) => {
+                        let mut parts: Vec<String> =
+                            [info.model.as_str(), info.manufacturer.as_str()].iter().filter(|p| !p.is_empty()).map(|p| p.to_string()).collect();
+                        if !info.serial.is_empty() {
+                            parts.push(format!("{} {}", tl!("Serial"), info.serial));
+                        }
+                        let mut chips = Vec::new();
+                        if info.pin_locked {
+                            chips.push((tl!("PIN locked"), red));
+                        } else if info.pin_final_try {
+                            chips.push((tl!("One try left"), amber));
+                        }
+                        if info.protected_path {
+                            chips.push((tl!("PIN pad"), t.accent));
+                        }
+                        let name = if info.label.is_empty() { s.description.clone() } else { info.label.clone() };
+                        (name, parts.join("  ·  "), chips)
+                    }
+                    None => (s.description.clone(), tl!("No card").to_string(), Vec::new()),
+                };
+                let enabled = s.token.is_some() && !busy;
+                if token_row(ui, t, (tk.slot == Some(s.id), enabled), "shield-check", (&title_text, &sub), &chips).clicked() {
+                    tk.slot = Some(s.id);
+                }
+            }
+        });
+        ui.add_space(6.0);
+        let slot = tk.slot.and_then(|id| tk.slots.iter().find(|s| s.id == id)).and_then(|s| s.token.as_ref());
+        let locked = slot.is_some_and(|s| s.pin_locked);
+        let pad = slot.is_some_and(|s| s.protected_path);
+        let needs_pin = slot.is_some_and(|s| s.login_required && !s.protected_path);
+        ui.horizontal(|ui| {
+            if needs_pin {
+                let l = ui.label(tl!("PIN"));
+                let r =
+                    ui.add_enabled(!busy && !locked, egui::TextEdit::singleline(&mut tk.pin.0).password(true).desired_width(160.0)).labelled_by(l.id);
+                if r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                    unlock = true;
+                }
+            } else if pad {
+                ui.label(egui::RichText::new(tl!("Enter the PIN on the reader's keypad, then choose Unlock.")).color(t.text_muted));
+            }
+            if ui.add_enabled(!busy && !locked && slot.is_some(), egui::Button::new(tl!("Unlock"))).clicked() {
+                unlock = true;
+            }
+            if busy {
+                ui.spinner();
+                ui.label(egui::RichText::new(tl!("Waiting for the token…")).color(t.text_muted));
+            }
+        });
+    }
+
+    // The unlocked token's certificates.
+    if let Some(found) = tk.found.as_ref().filter(|_| unlocked) {
+        ui.label(tl!("Choose the certificate to sign with:"));
+        ui.add_space(4.0);
+        egui::ScrollArea::vertical().id_salt("token-ids").max_height(180.0).show(ui, |ui| {
+            for (i, ident) in found.ids.iter().enumerate() {
+                let c = &ident.certificate;
+                let issuer = c.issuer.common_name().map(str::to_string).unwrap_or_else(|| c.issuer.display());
+                let sub = format!(
+                    "{}{issuer}{}{:04}.{:02}.{:02}",
+                    tl!("Issued by: "),
+                    tl!(", Expires: "),
+                    c.not_after.year,
+                    c.not_after.month,
+                    c.not_after.day
+                );
+                let r = token_row(ui, t, (tk.selected == Some(i), true), "badge-check", (&ident.label, &sub), &[]);
+                if r.clicked() {
+                    tk.selected = Some(i);
+                }
+                if r.double_clicked() {
+                    go = true;
+                }
+            }
+            if found.ids.is_empty() {
+                ui.label(egui::RichText::new(tl!("No certificate on this token can sign.")).color(t.text_muted));
+            }
+        });
+        if !found.skipped.is_empty() {
+            let why: Vec<String> = found.skipped.iter().map(|s| format!("{}: {}", s.label, s.reason)).collect();
+            ui.label(
+                egui::RichText::new(crate::i18n::fmt(tl!("Certificates left out: {n}"), &[("n", &found.skipped.len().to_string())]))
+                    .small()
+                    .color(t.text_muted),
+            )
+            .on_hover_text(why.join("\n"));
+        }
+    }
+    ui.add_space(6.0);
+    error(ui, &d.error);
+    let can_go = d.token.found.as_ref().is_some_and(|f| !f.ids.is_empty()) && d.token.selected.is_some() && unlocked;
+    ui.horizontal(|ui| {
+        if widgets::pill_button(ui, tl!("Back"), false).clicked() {
+            d.step = if app.digital_ids.is_empty() { SignStep::Configure } else { SignStep::Choose };
+            d.error = None;
+        }
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            if ui.add_enabled_ui(can_go, |ui| widgets::pill_button(ui, tl!("Continue"), true)).inner.clicked() {
+                go = true;
+            }
+            if widgets::pill_button(ui, tl!("Cancel"), false).clicked() {
+                close = true;
+            }
+        });
+    });
+    if find {
+        app.find_tokens();
+    } else if unlock {
+        app.unlock_token();
+    } else if go
+        && let Err(e) = app.use_token_identity()
+        && let Some(d) = app.sign_draft.as_mut()
+    {
+        d.error = Some(e);
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    if browse {
+        let dialog = rfd::AsyncFileDialog::new().add_filter(tl!("PKCS #11 module"), &["so", "dylib", "dll"]);
+        let epoch = app.dialog_epoch();
+        app.ask_one(crate::pickers::Ask::File(dialog), None, move |app, p| {
+            if app.dialog_epoch() == epoch
+                && let Some(d) = app.sign_draft.as_mut()
+            {
+                d.token.module = p.to_string_lossy().into_owned();
+                app.find_tokens();
+            }
+        });
+    }
+    #[cfg(target_arch = "wasm32")]
+    let _ = browse;
+    close
+}
+
 /// The appearance preview: Acrobat's standard layout (name left, details right).
 fn preview(ui: &mut egui::Ui, t: &Tokens, name: &str, d: &SignDraft) {
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 96.0), egui::Sense::hover());
@@ -823,7 +1272,7 @@ fn sign_as(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> bool {
             &[("verb", if d.certify.is_some() { tl!("Certify") } else { tl!("Sign") }), ("name", &entry.name)],
         ),
     );
-    let in_os_key_store = entry.path.starts_with("keychain:") || entry.path.starts_with("windows:");
+    let in_os_key_store = is_key_store_entry(&entry.path);
     let mut close = false;
     let mut go = false;
     if d.rect.is_some() || d.field.is_some() {
@@ -868,7 +1317,9 @@ fn sign_as(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> bool {
         if in_os_key_store {
             ui.label("");
             ui.label(
-                egui::RichText::new(if entry.path.starts_with("windows:") {
+                egui::RichText::new(if entry.path.starts_with("pkcs11:") {
+                    tl!("The key is on the smart card or token, and the signature is made there.")
+                } else if entry.path.starts_with("windows:") {
                     tl!("The key is in the Windows certificate store, which may ask to allow PdfCraft to use it.")
                 } else {
                     tl!("The key is in the macOS Keychain, which may ask to allow PdfCraft to use it.")

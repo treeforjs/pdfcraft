@@ -7,6 +7,7 @@
 //!   (PAdES B-B, `ETSI.CAdES.detached`) with an incremental save.
 //! - [`signed_version`]: a signature's signed version, and what changed since it was signed.
 //! - [`os_trust`]: the operating system's root certificates, trusted only when the user opts in.
+//! - [`token`]: smart cards, USB tokens and HSMs (PKCS #11) behind a trait, with a software mock.
 
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
@@ -29,6 +30,7 @@ mod rsa_pad;
 mod rsa_soft;
 pub mod signed_version;
 pub mod timestamp;
+pub mod token;
 #[cfg(target_os = "windows")]
 pub mod windows;
 pub mod x509;

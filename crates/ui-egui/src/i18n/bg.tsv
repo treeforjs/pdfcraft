@@ -2465,3 +2465,25 @@ compare-page	Moved	Преместена
 	The file stays on this device: PdfCraft reads it in this page and forgets it when the page closes. The password is never stored.	Файлът остава на това устройство: PdfCraft го чете в тази страница и го забравя, когато страницата се затвори. Паролата никога не се съхранява.
 	Downloaded the new digital ID as {name}. Keep it: this page forgets it when it closes.	Новият цифров идентификатор е изтеглен като {name}. Запазете го: тази страница го забравя, когато се затвори.
 	Signed. Downloaded {name}	Подписано. Изтеглено: {name}
+	Sign with a smart card or token	Подписване със смарт карта или токен
+	Sign with a Smart Card or Token	Подписване със смарт карта или токен
+	Use a Smart Card or Token	Използване на смарт карта или токен
+	The signature is made on the card or token. Its private key never leaves it.	Подписът се създава на картата или токена. Частният ключ никога не го напуска.
+	PKCS #11 module	Модул PKCS #11
+	Find tokens	Търсене на токени
+	No PKCS #11 module was found here. Choose the module file that came with your card or token (for example opensc-pkcs11).	Не е намерен модул PKCS #11. Изберете файла на модула, доставен с картата или токена (например opensc-pkcs11).
+	Serial	Сериен номер
+	PIN locked	PIN кодът е блокиран
+	One try left	Остава един опит
+	PIN pad	PIN клавиатура
+	No card	Няма карта
+	PIN	PIN
+	Enter the PIN on the reader's keypad, then choose Unlock.	Въведете PIN кода от клавиатурата на четеца и изберете Отключване.
+	Waiting for the token…	Изчакване на токена…
+	Choose the certificate to sign with:	Изберете сертификат за подписване:
+	No certificate on this token can sign.	Нито един сертификат на този токен не може да подписва.
+	Certificates left out: {n}	Пропуснати сертификати: {n}
+	Token  ·  	Токен  ·  
+	The key is on the smart card or token, and the signature is made there.	Ключът е на смарт картата или токена и подписът се създава там.
+	Choose a slot with a card or token.	Изберете слот с карта или токен.
+	Unlock the token again.	Отключете токена отново.

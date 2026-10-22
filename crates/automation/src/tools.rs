@@ -1403,17 +1403,39 @@ pub fn tools() -> Vec<ToolDef> {
             .ro()
             .cmd("sign.digital")
             .with(schema(json!({}), &[])),
+        t("sign_token_modules", "Find PKCS #11 modules", "The PKCS #11 modules (smart card, USB token and HSM middleware: OpenSC, p11-kit, SoftHSM, vendor modules) found in the usual install locations, for sign_token_slots, sign_token_ids and sign_document's module. available is false when this build can't load modules (the browser). Nothing is loaded.")
+            .ro()
+            .cmd("sign.token")
+            .with(schema(json!({}), &[])),
+        t("sign_token_slots", "List smart card and token slots", "Load a PKCS #11 module (module: its path, default the first found by sign_token_modules) and list its slots: each reader or port, and the token in it (label, model, serial, whether it needs a PIN, has a PIN pad, or its PIN is locked or on its final try). No PIN is needed. With a root, module must be one sign_token_modules found or a file inside the root (loading a module runs its code).")
+            .ro()
+            .cmd("sign.token")
+            .with(schema(json!({ "module": { "type": "string", "description": "The PKCS #11 module file (.so, .dylib, .dll)." } }), &[])),
+        t("sign_token_ids", "List digital IDs on a smart card or token", "Unlock the token in slot (default: the only slot with a token) with pin and list its signing identities: certificates with a private key on the token (id: the pkcs11: reference sign_document takes, label, certificate, chain: CA certificates on the token), and skipped certificates with why (no private key, unreadable, key type not supported, not for signing). The PIN is used once and not kept; a wrong PIN counts against the token's tries, and a locked token is not tried. The private keys never leave the token.")
+            .ro()
+            .cmd("sign.token")
+            .with(schema(
+                json!({
+                    "module": { "type": "string", "description": "The PKCS #11 module file; default the first found." },
+                    "slot": { "type": "integer", "minimum": 0 },
+                    "pin": { "type": "string", "description": "The token's user PIN (omit for a PIN-pad reader or a token without one)." },
+                }),
+                &[],
+            )),
         t("sign_keychain_ids", "List Keychain digital IDs", "macOS: the signing identities in the user's keychains (certificate details and the keychain: reference sign_document takes). The private keys stay in the Keychain, which may ask the user to allow their use.")
             .ro()
             .cmd("sign.digital")
             .with(schema(json!({}), &[])),
-        t("sign_document", "Sign a document", "Sign with a digital ID (a .p12/.pfx path, or on macOS a Keychain identity: \"keychain:<common name or fingerprint>\" from sign_keychain_ids, or on Windows a store identity: \"windows:<common name or fingerprint>\" from sign_windows_ids) and save the signed file to `out` (signing always saves, as in Acrobat; the document then shows the signed file). Sign an existing empty signature field (`field`), or a new one on `page` at `rect` (omit rect for an invisible signature). certify: no_changes, form_fill or comments makes a certification signature. lock (all, include or exclude, with lock_fields) makes the fields read-only once signed and records a FieldMDP lock, so later changes to them invalidate the signature; without it, a field's own lock (sign_field_lock) applies. lock_document: true permits no changes after signing. PAdES B-B, SHA-256 (SHA-384 for P-384 keys).")
+        t("sign_document", "Sign a document", "Sign with a digital ID (a .p12/.pfx path, or on macOS a Keychain identity: \"keychain:<common name or fingerprint>\" from sign_keychain_ids, or on Windows a store identity: \"windows:<common name or fingerprint>\" from sign_windows_ids, or a smart card or token identity: \"pkcs11:<fingerprint or common name>\" from sign_token_ids, with module, slot and pin as there; the signature is made on the token) and save the signed file to `out` (signing always saves, as in Acrobat; the document then shows the signed file). Sign an existing empty signature field (`field`), or a new one on `page` at `rect` (omit rect for an invisible signature). certify: no_changes, form_fill or comments makes a certification signature. lock (all, include or exclude, with lock_fields) makes the fields read-only once signed and records a FieldMDP lock, so later changes to them invalidate the signature; without it, a field's own lock (sign_field_lock) applies. lock_document: true permits no changes after signing. PAdES B-B, SHA-256 (SHA-384 for P-384 keys).")
             .cmd("sign.digital")
             .with(schema(
                 json!({
                     "doc": doc(),
-                    "id": { "type": "string", "description": "Digital ID file (.p12 / .pfx), keychain: reference on macOS, or windows: reference on Windows." },
+                    "id": { "type": "string", "description": "Digital ID file (.p12 / .pfx), keychain: reference on macOS, windows: reference on Windows, or pkcs11: reference of a smart card or token." },
                     "password": { "type": "string" },
+                    "module": { "type": "string", "description": "pkcs11: ids: the PKCS #11 module file (default the first found)." },
+                    "slot": { "type": "integer", "minimum": 0, "description": "pkcs11: ids: the token's slot (default the only one with a token)." },
+                    "pin": { "type": "string", "description": "pkcs11: ids: the token's PIN, used once and not kept." },
                     "field": { "type": "string" },
                     "page": { "type": "integer", "minimum": 1 },
                     "rect": { "type": "array", "items": { "type": "number" }, "minItems": 4, "maxItems": 4 },

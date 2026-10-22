@@ -652,6 +652,23 @@ impl PrivateKey {
         }
     }
 
+    /// ECDSA over a ready digest as plain `r ‖ s` (what a PKCS #11 token's CKM_ECDSA returns),
+    /// for the software token in [`crate::token::mock`]. Other keys can't sign a bare digest.
+    pub(crate) fn sign_digest_ec(&self, digest: &[u8]) -> Result<Vec<u8>, SignError> {
+        use ecdsa::signature::hazmat::PrehashSigner;
+        match &self.inner {
+            Inner::P256(k) => {
+                let s: p256::ecdsa::Signature = k.sign_prehash(digest).map_err(|e| SignError::Crypto(e.to_string()))?;
+                Ok(s.to_bytes().to_vec())
+            }
+            Inner::P384(k) => {
+                let s: p384::ecdsa::Signature = k.sign_prehash(digest).map_err(|e| SignError::Crypto(e.to_string()))?;
+                Ok(s.to_bytes().to_vec())
+            }
+            _ => Err(SignError::Unsupported("ECDSA over a digest with this key".into())),
+        }
+    }
+
     /// Sign `msg` (hashed with `alg`). New signatures never use SHA-1.
     pub fn sign(&self, alg: DigestAlg, msg: &[u8]) -> Result<Vec<u8>, SignError> {
         if !matches!(alg, DigestAlg::Sha256 | DigestAlg::Sha384 | DigestAlg::Sha512) {

@@ -2512,3 +2512,25 @@ compare-page	Moved	Spostata
 	The file stays on this device: PdfCraft reads it in this page and forgets it when the page closes. The password is never stored.	Il file resta su questo dispositivo: PdfCraft lo legge in questa pagina e lo dimentica quando la pagina viene chiusa. La password non viene mai memorizzata.
 	Downloaded the new digital ID as {name}. Keep it: this page forgets it when it closes.	Il nuovo ID digitale è stato scaricato come {name}. Conservalo: questa pagina lo dimentica alla chiusura.
 	Signed. Downloaded {name}	Firmato. Scaricato {name}
+	Sign with a smart card or token	Firma con smart card o token
+	Sign with a Smart Card or Token	Firma con smart card o token
+	Use a Smart Card or Token	Usa una smart card o un token
+	The signature is made on the card or token. Its private key never leaves it.	La firma viene creata sulla carta o sul token. La sua chiave privata non lo lascia mai.
+	PKCS #11 module	Modulo PKCS #11
+	Find tokens	Cerca token
+	No PKCS #11 module was found here. Choose the module file that came with your card or token (for example opensc-pkcs11).	Nessun modulo PKCS #11 trovato. Scegli il file del modulo fornito con la carta o il token (ad esempio opensc-pkcs11).
+	Serial	Numero di serie
+	PIN locked	PIN bloccato
+	One try left	Ultimo tentativo
+	PIN pad	Tastierino PIN
+	No card	Nessuna carta
+	PIN	PIN
+	Enter the PIN on the reader's keypad, then choose Unlock.	Inserisci il PIN sul tastierino del lettore, poi scegli Sblocca.
+	Waiting for the token…	In attesa del token…
+	Choose the certificate to sign with:	Scegli il certificato con cui firmare:
+	No certificate on this token can sign.	Nessun certificato di questo token può firmare.
+	Certificates left out: {n}	Certificati esclusi: {n}
+	Token  ·  	Token  ·  
+	The key is on the smart card or token, and the signature is made there.	La chiave è sulla smart card o sul token, e la firma viene creata lì.
+	Choose a slot with a card or token.	Scegli uno slot con una carta o un token.
+	Unlock the token again.	Sblocca di nuovo il token.

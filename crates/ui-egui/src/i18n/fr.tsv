@@ -2503,3 +2503,25 @@ compare-page	Moved	Déplacée
 	The file stays on this device: PdfCraft reads it in this page and forgets it when the page closes. The password is never stored.	Le fichier reste sur cet appareil : PdfCraft le lit dans cette page et l’oublie à sa fermeture. Le mot de passe n’est jamais enregistré.
 	Downloaded the new digital ID as {name}. Keep it: this page forgets it when it closes.	La nouvelle identité numérique a été téléchargée sous le nom {name}. Conservez-la : cette page l’oublie à sa fermeture.
 	Signed. Downloaded {name}	Signé. {name} téléchargé
+	Sign with a smart card or token	Signer avec une carte à puce ou un jeton
+	Sign with a Smart Card or Token	Signer avec une carte à puce ou un jeton
+	Use a Smart Card or Token	Utiliser une carte à puce ou un jeton
+	The signature is made on the card or token. Its private key never leaves it.	La signature est créée sur la carte ou le jeton. Sa clé privée ne le quitte jamais.
+	PKCS #11 module	Module PKCS #11
+	Find tokens	Rechercher les jetons
+	No PKCS #11 module was found here. Choose the module file that came with your card or token (for example opensc-pkcs11).	Aucun module PKCS #11 n’a été trouvé ici. Choisissez le fichier de module fourni avec votre carte ou votre jeton (par exemple opensc-pkcs11).
+	Serial	Numéro de série
+	PIN locked	PIN verrouillé
+	One try left	Dernier essai
+	PIN pad	Clavier PIN
+	No card	Aucune carte
+	PIN	PIN
+	Enter the PIN on the reader's keypad, then choose Unlock.	Saisissez le PIN sur le clavier du lecteur, puis choisissez Déverrouiller.
+	Waiting for the token…	En attente du jeton…
+	Choose the certificate to sign with:	Choisissez le certificat de signature :
+	No certificate on this token can sign.	Aucun certificat de ce jeton ne peut signer.
+	Certificates left out: {n}	Certificats écartés : {n}
+	Token  ·  	Jeton  ·  
+	The key is on the smart card or token, and the signature is made there.	La clé se trouve sur la carte à puce ou le jeton, et la signature y est créée.
+	Choose a slot with a card or token.	Choisissez un emplacement contenant une carte ou un jeton.
+	Unlock the token again.	Déverrouillez à nouveau le jeton.

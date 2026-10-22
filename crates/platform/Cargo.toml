@@ -9,3 +9,18 @@ license.workspace = true
 workspace = true
 
 [dependencies]
+pdfcraft-sign = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# PKCS #11 smart cards, USB tokens and HSMs (sign.pkcs11): a maintained safe wrapper over the
+# C API that loads the module the user names at run time (Apache-2.0).
+cryptoki = { version = "0.12.1", optional = true }
+
+[features]
+default = ["pkcs11"]
+# Signing with PKCS #11 modules. Without it, token signing reports that it isn't available.
+pkcs11 = ["dep:cryptoki"]
+
+[dev-dependencies]
+pdfcraft-cos = { workspace = true }
+base64 = "0.22"

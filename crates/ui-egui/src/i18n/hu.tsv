@@ -2501,3 +2501,25 @@ compare-page	Moved	Áthelyezve
 	The file stays on this device: PdfCraft reads it in this page and forgets it when the page closes. The password is never stored.	A fájl ezen az eszközön marad: a PdfCraft ezen az oldalon olvassa be, és az oldal bezárásakor elfelejti. A jelszót soha nem tárolja.
 	Downloaded the new digital ID as {name}. Keep it: this page forgets it when it closes.	Az új digitális azonosító letöltve: {name}. Őrizze meg: ez az oldal bezáráskor elfelejti.
 	Signed. Downloaded {name}	Aláírva. Letöltve: {name}
+	Sign with a smart card or token	Aláírás intelligens kártyával vagy tokennel
+	Sign with a Smart Card or Token	Aláírás intelligens kártyával vagy tokennel
+	Use a Smart Card or Token	Intelligens kártya vagy token használata
+	The signature is made on the card or token. Its private key never leaves it.	Az aláírás a kártyán vagy a tokenen készül. A titkos kulcs soha nem hagyja el.
+	PKCS #11 module	PKCS #11 modul
+	Find tokens	Tokenek keresése
+	No PKCS #11 module was found here. Choose the module file that came with your card or token (for example opensc-pkcs11).	Nem található PKCS #11 modul. Válassza ki a kártyához vagy tokenhez kapott modulfájlt (például opensc-pkcs11).
+	Serial	Sorozatszám
+	PIN locked	PIN zárolva
+	One try left	Egy próbálkozás maradt
+	PIN pad	PIN-billentyűzet
+	No card	Nincs kártya
+	PIN	PIN
+	Enter the PIN on the reader's keypad, then choose Unlock.	Írja be a PIN-t az olvasó billentyűzetén, majd válassza a Feloldás lehetőséget.
+	Waiting for the token…	Várakozás a tokenre…
+	Choose the certificate to sign with:	Válassza ki az aláíráshoz használt tanúsítványt:
+	No certificate on this token can sign.	A token egyik tanúsítványa sem tud aláírni.
+	Certificates left out: {n}	Kihagyott tanúsítványok: {n}
+	Token  ·  	Token  ·  
+	The key is on the smart card or token, and the signature is made there.	A kulcs az intelligens kártyán vagy a tokenen van, és az aláírás ott készül.
+	Choose a slot with a card or token.	Válasszon egy kártyát vagy tokent tartalmazó foglalatot.
+	Unlock the token again.	Oldja fel újra a tokent.

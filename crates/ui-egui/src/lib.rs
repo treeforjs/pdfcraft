@@ -66,7 +66,7 @@ mod link_ui;
 pub use create_ui::Clip;
 pub use link_ui::{LinkDraft, LinkKind};
 pub use optimize_ui::{OptimizeDraft, OptimizeTab};
-pub use sign_ui::{DigitalIdEntry, SigProps, SigPropsTab, SignDraft, SignStep, property_rows as signature_property_rows};
+pub use sign_ui::{DigitalIdEntry, PinField, SigProps, SigPropsTab, SignDraft, SignStep, TokenDraft, property_rows as signature_property_rows};
 pub use submit_ui::SubmitDraft;
 mod autoscroll;
 mod bidi;
@@ -489,6 +489,13 @@ pub struct PdfCraftApp {
     pub sign_draft: Option<SignDraft>,
     /// Digital ID files the user has created or added.
     pub digital_ids: Vec<DigitalIdEntry>,
+    /// Smart cards and tokens (sign.pkcs11): where PKCS #11 modules come from (the native
+    /// provider; tests put a software token here), the unlocked token while signing, an unlock
+    /// running in the background, and whether the next signature area goes to the token step.
+    pub token_provider: std::sync::Arc<dyn pdfcraft_engine::sign::token::TokenProvider>,
+    pub(crate) token_login: Option<pdfcraft_engine::sign::token::Login>,
+    pub(crate) token_unlock: Option<sign_ui::TokenUnlock>,
+    pub(crate) sign_with_token: bool,
     pub timestamp_servers: Vec<pdfcraft_engine::signature_workflow::TimestampServer>,
     pub signature_workflow: timestamp_ui::SignatureWorkflowState,
     pub signature_run: Option<timestamp_ui::SignatureRun>,
@@ -778,6 +785,10 @@ impl PdfCraftApp {
             summary_layout: Default::default(),
             sign_draft: None,
             digital_ids: Vec::new(),
+            token_provider: pdfcraft_platform::pkcs11::provider(),
+            token_login: None,
+            token_unlock: None,
+            sign_with_token: false,
             timestamp_servers: Vec::new(),
             signature_workflow: timestamp_ui::SignatureWorkflowState::default(),
             signature_run: None,
@@ -1481,12 +1492,12 @@ impl PdfCraftApp {
             "signature_text": match &self.signature { Some(fill_sign::SavedSig::Typed(t)) => Some(t), _ => None },
             "signature_image": match &self.signature { Some(s @ fill_sign::SavedSig::Image(_)) => Some(s), _ => None },
             "initials": self.initials,
-            // macOS Keychain and Windows store identities are read from their OS key stores each time.
+            // Keychain, Windows store and token identities are read from where they live each time.
             // Files picked in the browser are held in memory only (picked_ids), so not listed.
             "digital_ids": self
                 .digital_ids
                 .iter()
-                .filter(|e| !e.path.starts_with("keychain:") && !e.path.starts_with("windows:") && !picked_ids::is_picked(&e.path))
+                .filter(|e| !sign_ui::is_key_store_entry(&e.path) && !picked_ids::is_picked(&e.path))
                 .collect::<Vec<_>>(),
             "trusted": trusted,
             "url_access": self.session.url_policy(),

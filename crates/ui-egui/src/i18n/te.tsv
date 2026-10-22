@@ -2434,3 +2434,25 @@ compare-page	Moved	తరలించబడింది
 	The file stays on this device: PdfCraft reads it in this page and forgets it when the page closes. The password is never stored.	ఫైల్ ఈ పరికరంలోనే ఉంటుంది: PdfCraft దీన్ని ఈ పేజీలో చదువుతుంది, పేజీ మూసినప్పుడు మరచిపోతుంది. పాస్‌వర్డ్ ఎప్పుడూ నిల్వ చేయబడదు.
 	Downloaded the new digital ID as {name}. Keep it: this page forgets it when it closes.	కొత్త డిజిటల్ IDని {name}గా డౌన్‌లోడ్ చేశాం. దాన్ని భద్రపరచండి: ఈ పేజీ మూసినప్పుడు దాన్ని మరచిపోతుంది.
 	Signed. Downloaded {name}	సంతకం చేయబడింది. {name} డౌన్‌లోడ్ అయింది
+	Sign with a smart card or token	స్మార్ట్ కార్డ్ లేదా టోకెన్‌తో సంతకం చేయండి
+	Sign with a Smart Card or Token	స్మార్ట్ కార్డ్ లేదా టోకెన్‌తో సంతకం చేయండి
+	Use a Smart Card or Token	స్మార్ట్ కార్డ్ లేదా టోకెన్ ఉపయోగించండి
+	The signature is made on the card or token. Its private key never leaves it.	సంతకం కార్డ్ లేదా టోకెన్‌పైనే తయారవుతుంది. దాని ప్రైవేట్ కీ ఎప్పుడూ బయటకు రాదు.
+	PKCS #11 module	PKCS #11 మాడ్యూల్
+	Find tokens	టోకెన్‌లను కనుగొనండి
+	No PKCS #11 module was found here. Choose the module file that came with your card or token (for example opensc-pkcs11).	ఇక్కడ PKCS #11 మాడ్యూల్ కనబడలేదు. మీ కార్డ్ లేదా టోకెన్‌తో వచ్చిన మాడ్యూల్ ఫైల్‌ను ఎంచుకోండి (ఉదాహరణకు opensc-pkcs11).
+	Serial	సీరియల్
+	PIN locked	PIN లాక్ అయింది
+	One try left	ఒక ప్రయత్నం మిగిలింది
+	PIN pad	PIN ప్యాడ్
+	No card	కార్డ్ లేదు
+	PIN	PIN
+	Enter the PIN on the reader's keypad, then choose Unlock.	రీడర్ కీప్యాడ్‌పై PIN నమోదు చేసి, తర్వాత అన్‌లాక్ ఎంచుకోండి.
+	Waiting for the token…	టోకెన్ కోసం వేచి ఉంది…
+	Choose the certificate to sign with:	సంతకం చేయడానికి సర్టిఫికెట్‌ను ఎంచుకోండి:
+	No certificate on this token can sign.	ఈ టోకెన్‌లోని ఏ సర్టిఫికెట్ కూడా సంతకం చేయలేదు.
+	Certificates left out: {n}	వదిలివేసిన సర్టిఫికెట్‌లు: {n}
+	Token  ·  	టోకెన్  ·  
+	The key is on the smart card or token, and the signature is made there.	కీ స్మార్ట్ కార్డ్ లేదా టోకెన్‌పై ఉంది, సంతకం అక్కడే తయారవుతుంది.
+	Choose a slot with a card or token.	కార్డ్ లేదా టోకెన్ ఉన్న స్లాట్‌ను ఎంచుకోండి.
+	Unlock the token again.	టోకెన్‌ను మళ్లీ అన్‌లాక్ చేయండి.

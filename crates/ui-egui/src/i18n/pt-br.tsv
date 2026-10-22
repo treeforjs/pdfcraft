@@ -2504,3 +2504,25 @@ compare-page	Moved	Movida
 	The file stays on this device: PdfCraft reads it in this page and forgets it when the page closes. The password is never stored.	O arquivo permanece neste dispositivo: o PdfCraft o lê nesta página e o esquece quando a página é fechada. A senha nunca é armazenada.
 	Downloaded the new digital ID as {name}. Keep it: this page forgets it when it closes.	A nova identificação digital foi baixada como {name}. Guarde-a: esta página a esquece ao ser fechada.
 	Signed. Downloaded {name}	Assinado. {name} baixado
+	Sign with a smart card or token	Assinar com cartão inteligente ou token
+	Sign with a Smart Card or Token	Assinar com cartão inteligente ou token
+	Use a Smart Card or Token	Usar um cartão inteligente ou token
+	The signature is made on the card or token. Its private key never leaves it.	A assinatura é feita no cartão ou token. A chave privada nunca sai dele.
+	PKCS #11 module	Módulo PKCS #11
+	Find tokens	Procurar tokens
+	No PKCS #11 module was found here. Choose the module file that came with your card or token (for example opensc-pkcs11).	Nenhum módulo PKCS #11 foi encontrado aqui. Escolha o arquivo de módulo que acompanha seu cartão ou token (por exemplo, opensc-pkcs11).
+	Serial	Número de série
+	PIN locked	PIN bloqueado
+	One try left	Resta uma tentativa
+	PIN pad	Teclado de PIN
+	No card	Sem cartão
+	PIN	PIN
+	Enter the PIN on the reader's keypad, then choose Unlock.	Digite o PIN no teclado da leitora e escolha Desbloquear.
+	Waiting for the token…	Aguardando o token…
+	Choose the certificate to sign with:	Escolha o certificado para assinar:
+	No certificate on this token can sign.	Nenhum certificado deste token pode assinar.
+	Certificates left out: {n}	Certificados deixados de fora: {n}
+	Token  ·  	Token  ·  
+	The key is on the smart card or token, and the signature is made there.	A chave está no cartão inteligente ou token, e a assinatura é feita nele.
+	Choose a slot with a card or token.	Escolha um slot com um cartão ou token.
+	Unlock the token again.	Desbloqueie o token novamente.
