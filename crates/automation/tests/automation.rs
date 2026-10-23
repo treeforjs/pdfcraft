@@ -4953,6 +4953,26 @@ fn exporting_to_word_html_and_rtf() {
     assert!(a.call("doc_export_office", &json!({ "doc": doc, "path": "a.xyz" })).is_err());
 }
 
+#[test]
+fn exporting_chosen_pages_reports_what_was_read() {
+    let dir = workdir("office-pages");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    let r = ok(&mut a, "doc_export_office", json!({ "doc": doc, "path": "two.html", "pages": [3, 1] }));
+    assert_eq!((r["pages"].as_u64(), r["warnings"].as_array().map(Vec::len)), (Some(2), Some(0)), "{r}");
+    assert!(r["paragraphs"].as_u64().unwrap() >= 2, "{r}");
+    let html = std::fs::read_to_string(dir.join("two.html")).unwrap();
+    assert!(html.contains("Page 1") && html.contains("Page 3") && !html.contains("Page 2"), "{html}");
+    assert_eq!(ok(&mut a, "doc_export_office", json!({ "doc": doc, "path": "once.rtf", "pages": [2, 2] }))["pages"], 1, "each page once");
+    for bad in [json!([0]), json!([4]), json!("all"), json!([])] {
+        assert!(
+            matches!(a.call("doc_export_office", &json!({ "doc": doc, "path": "x.docx", "pages": bad })), Err(ToolError::InvalidArgs(_))),
+            "{bad}"
+        );
+    }
+    assert!(!dir.join("x.docx").exists());
+}
+
 /// The inflated parts of a zip archive written with local headers that carry sizes (no data
 /// descriptors), by name.
 fn unzip(zip: &[u8]) -> Vec<(String, String)> {

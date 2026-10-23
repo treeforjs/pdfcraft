@@ -25,6 +25,7 @@ pub mod compare;
 pub mod compare_view;
 pub mod dates;
 pub mod export;
+pub mod export_job;
 pub mod export_ocr;
 pub mod folder_search;
 pub mod help;

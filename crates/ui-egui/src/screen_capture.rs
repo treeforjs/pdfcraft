@@ -5,8 +5,11 @@
 //! PdfCraft links no capture library: it runs the tool the system already has, on a worker
 //! thread so an interactive capture never blocks a frame. macOS ships `screencapture`; on Linux
 //! and the BSDs the first of GNOME Screenshot, Spectacle, grim (whole screen only), scrot or
-//! ImageMagick's `import` that is installed is used. Windows has no command-line capture tool,
-//! so there Create ▸ Clipboard (after ⊞ Win+Shift+S) is the way in.
+//! ImageMagick's `import` that is installed is used. Windows has no command-line capture tool:
+//! there Windows PowerShell (part of Windows) copies the whole screen itself, and for a window
+//! or region it opens the system's Snipping bar (`ms-screenclip:`) and takes the snip from the
+//! clipboard once the clipboard changes. For a whole-screen capture PdfCraft minimizes its own
+//! window first so it isn't in the picture, and restores it afterwards.
 
 use crate::PdfCraftApp;
 
@@ -26,13 +29,32 @@ pub enum CaptureMode {
 pub struct CaptureTool {
     pub program: &'static str,
     pub args: &'static [&'static str],
+    /// The output path goes in the `PDFCRAFT_CAPTURE_OUT` environment variable instead of last
+    /// among the arguments (the PowerShell scripts).
+    pub out_env: bool,
 }
+
+/// Windows PowerShell: copy the whole (virtual) screen to a PNG.
+const WINDOWS_SCREEN: &str = "$ErrorActionPreference='Stop';Add-Type -AssemblyName System.Windows.Forms,System.Drawing;\
+$b=[System.Windows.Forms.SystemInformation]::VirtualScreen;$i=New-Object System.Drawing.Bitmap $b.Width,$b.Height;\
+$g=[System.Drawing.Graphics]::FromImage($i);$g.CopyFromScreen($b.Left,$b.Top,0,0,$i.Size);\
+$i.Save($env:PDFCRAFT_CAPTURE_OUT,[System.Drawing.Imaging.ImageFormat]::Png)";
+
+/// Windows PowerShell: open the Snipping bar and save the snip it puts on the clipboard (the
+/// clipboard's sequence number tells a new snip from what was there before). Exit status 1
+/// when nothing arrives within two minutes (the user cancelled).
+const WINDOWS_SNIP: &str = "$ErrorActionPreference='Stop';Add-Type -AssemblyName System.Windows.Forms,System.Drawing;\
+Add-Type -Namespace PdfCraft -Name Clip -MemberDefinition '[DllImport(\"user32.dll\")] public static extern uint GetClipboardSequenceNumber();';\
+$n=[PdfCraft.Clip]::GetClipboardSequenceNumber();Start-Process 'ms-screenclip:';$t=[DateTime]::Now.AddMinutes(2);\
+while([DateTime]::Now -lt $t){Start-Sleep -Milliseconds 250;\
+if([PdfCraft.Clip]::GetClipboardSequenceNumber() -ne $n -and [System.Windows.Forms.Clipboard]::ContainsImage()){\
+[System.Windows.Forms.Clipboard]::GetImage().Save($env:PDFCRAFT_CAPTURE_OUT,[System.Drawing.Imaging.ImageFormat]::Png);exit 0}};exit 1";
 
 /// The capture tool for `os` (`std::env::consts::OS`) and `mode`, the first that `installed`
 /// says exists; `None` when there is none.
 pub fn capture_tool(os: &str, mode: CaptureMode, installed: &dyn Fn(&str) -> bool) -> Option<CaptureTool> {
     use CaptureMode::{Region, Screen, Window};
-    let tool = |program, args| CaptureTool { program, args };
+    let tool = |program, args| CaptureTool { program, args, out_env: false };
     let candidates: Vec<CaptureTool> = match os {
         // -x: no sound; -i: interactive; -w: windows only; -s: a dragged rectangle only.
         "macos" => vec![tool(
@@ -72,6 +94,15 @@ pub fn capture_tool(os: &str, mode: CaptureMode, installed: &dyn Fn(&str) -> boo
             v.push(tool("import", if mode == Screen { &["-window", "root"] } else { &[] }));
             v
         }
+        // -STA: the clipboard needs a single-threaded apartment.
+        "windows" => vec![CaptureTool {
+            program: "powershell.exe",
+            args: match mode {
+                Screen => &["-NoProfile", "-NonInteractive", "-STA", "-ExecutionPolicy", "Bypass", "-Command", WINDOWS_SCREEN],
+                Window | Region => &["-NoProfile", "-NonInteractive", "-STA", "-ExecutionPolicy", "Bypass", "-Command", WINDOWS_SNIP],
+            },
+            out_env: true,
+        }],
         _ => Vec::new(),
     };
     candidates.into_iter().find(|t| installed(t.program))
@@ -93,9 +124,14 @@ fn installed(program: &str) -> bool {
 fn run_capture(tool: &CaptureTool) -> Result<Option<Vec<u8>>, String> {
     let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos());
     let out = std::env::temp_dir().join(format!("pdfcraft-capture-{}-{nanos}.png", std::process::id()));
-    let status = std::process::Command::new(tool.program)
-        .args(tool.args)
-        .arg(&out)
+    let mut command = std::process::Command::new(tool.program);
+    command.args(tool.args);
+    if tool.out_env {
+        command.env("PDFCRAFT_CAPTURE_OUT", &out);
+    } else {
+        command.arg(&out);
+    }
+    let status = command
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
@@ -140,13 +176,29 @@ impl PdfCraftApp {
             };
             let (tx, rx) = std::sync::mpsc::channel();
             let ctx = self.ctx.clone();
-            std::thread::spawn(move || {
+            // The whole screen without PdfCraft's own window over it: minimize it first and give
+            // the system a moment to animate it away.
+            let hide = mode == CaptureMode::Screen && !self.run_inline;
+            if hide && let Some(ctx) = &ctx {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
+            }
+            self.capture_hid_window = hide && ctx.is_some();
+            let spawned = std::thread::Builder::new().name("pdfcraft-capture".into()).spawn(move || {
+                if hide {
+                    std::thread::sleep(std::time::Duration::from_millis(600));
+                }
+                let result = std::panic::catch_unwind(|| run_capture(&tool)).unwrap_or_else(|_| Err("the capture tool failed unexpectedly".into()));
                 // The receiver may be gone (the app quit): nothing to report to then.
-                let _ = tx.send(run_capture(&tool));
+                let _ = tx.send(result);
                 if let Some(ctx) = ctx {
                     ctx.request_repaint();
                 }
             });
+            if let Err(e) = spawned {
+                self.restore_after_capture();
+                self.notify_fmt("Couldn't capture the screen: {e}", &[("e", &e.to_string())]);
+                return;
+            }
             self.capture = Capture::Running(rx);
         }
         #[cfg(target_arch = "wasm32")]
@@ -166,6 +218,7 @@ impl PdfCraftApp {
                 Err(std::sync::mpsc::TryRecvError::Disconnected) => Err("the capture stopped unexpectedly".into()),
             };
             self.capture = Capture::Idle;
+            self.restore_after_capture();
             match result {
                 Ok(Some(image)) => {
                     if let Err(e) = self.create_from_capture(&image, None) {
@@ -175,6 +228,17 @@ impl PdfCraftApp {
                 Ok(None) => self.notify_tr("Screen capture cancelled"),
                 Err(e) => self.notify_fmt("Couldn't capture the screen: {e}", &[("e", &e)]),
             }
+        }
+    }
+
+    /// Bring the window back after a whole-screen capture minimized it.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn restore_after_capture(&mut self) {
+        if std::mem::take(&mut self.capture_hid_window)
+            && let Some(ctx) = &self.ctx
+        {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
+            ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
         }
     }
 
@@ -199,7 +263,15 @@ mod tests {
         assert_eq!(capture_tool("linux", CaptureMode::Screen, &only("grim")).unwrap().program, "grim");
         assert_eq!(capture_tool("linux", CaptureMode::Region, &only("grim")), None, "grim can't pick a region by itself");
         assert_eq!(capture_tool("freebsd", CaptureMode::Region, &only("import")).unwrap().args, &[] as &[&str]);
-        assert_eq!(capture_tool("windows", CaptureMode::Screen, &all), None);
+        let win = capture_tool("windows", CaptureMode::Screen, &all).unwrap();
+        assert!(win.out_env && win.program == "powershell.exe" && win.args.contains(&"-STA"), "{win:?}");
+        assert!(win.args.last().unwrap().contains("CopyFromScreen"));
+        let snip = capture_tool("windows", CaptureMode::Region, &all).unwrap();
+        assert!(snip.args.last().unwrap().contains("ms-screenclip:") && snip.args.last().unwrap().contains("GetClipboardSequenceNumber"));
+        assert_eq!(capture_tool("windows", CaptureMode::Window, &all), Some(snip));
+        assert_eq!(capture_tool("windows", CaptureMode::Screen, &|_| false), None);
+        assert!(!mac.out_env);
+        assert_eq!(capture_tool("haiku", CaptureMode::Screen, &all), None);
         assert_eq!(capture_tool("linux", CaptureMode::Screen, &|_| false), None);
     }
 }

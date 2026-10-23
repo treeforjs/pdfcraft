@@ -3125,3 +3125,53 @@ compare-page	Moved	Переміщена
 	{n} more	ще {n}
 	{n} more not shown	ще {n} не показано
 	{n} skipped	пропущено: {n}
+	; text recognized on {n} scanned pages	; текст розпізнано на {n} відсканованих сторінках
+	A flowing document: paragraphs in reading order with their fonts and styles, headings, lists, tables and images.	Зв'язний документ: абзаци в порядку читання з їхніми шрифтами та стилями, заголовки, списки, таблиці та зображення.
+	Add a selectable text layer	Додати виділюваний текстовий шар
+	An export is already running	Експорт уже виконується
+	Cleans up the images on scanned or photographed pages. Each correction can be undone.	Очищає зображення відсканованих або сфотографованих сторінок. Кожне виправлення можна скасувати.
+	Correct camera photos	Виправити фото з камери
+	Couldn't enhance the scans: {e}	Не вдалося покращити скани: {e}
+	Despeckle	Видалення плям
+	Editable Text and Images	Редагований текст і зображення
+	Editable text boxes and pictures	Редаговані текстові поля та зображення
+	Enhance	Покращити
+	Enhance Scans	Покращити скани
+	Enhanced: {list}	Покращено: {list}
+	Export Accessible Text	Експортувати доступний текст
+	Export cancelled	Експорт скасовано
+	Export cancelled after {n} pages	Експорт скасовано після {n} стор.
+	Export stopped unexpectedly	Експорт несподівано зупинився
+	Export to Excel	Експортувати в Excel
+	Export to HTML	Експортувати в HTML
+	Export to PowerPoint	Експортувати в PowerPoint
+	Export to RTF	Експортувати в RTF
+	Export to SVG	Експортувати в SVG
+	Export to Word	Експортувати в Word
+	Finds the page in a photo, corrects its perspective and evens out the lighting	Знаходить сторінку на фото, виправляє перспективу й вирівнює освітлення
+	Nothing needed enhancing on these pages	На цих сторінках нічого покращувати
+	On every page without text	На кожній сторінці без тексту
+	On scanned pages	На відсканованих сторінках
+	One SVG file per page, named after the document: vector paths, text as outlines, images.	Один файл SVG на сторінку, з назвою документа: векторні контури, текст кривими, зображення.
+	One picture per page	Одне зображення на сторінку
+	One slide per page.	Один слайд на сторінку.
+	One web page: headings, paragraphs with their fonts and styles, lists, tables and images inline.	Одна вебсторінка: заголовки, абзаци з їхніми шрифтами та стилями, списки, таблиці й вбудовані зображення.
+	One worksheet per page: tables as cell grids, numbers as numbers, images as pictures.	Один аркуш на сторінку: таблиці як сітки клітинок, числа як числа, зображення як малюнки.
+	Picture resolution	Роздільність зображень
+	Removes isolated specks before reading; with an output that changes the page, from the page images too	Видаляє окремі плями перед читанням; для виводу, що змінює сторінку, — і із зображень сторінки
+	Rich text: paragraphs with their fonts and styles, and tables.	Форматований текст: абзаци з їхніми шрифтами та стилями, а також таблиці.
+	Straighten skewed pages	Вирівняти перекошені сторінки
+	The tagged text in logical reading order, as a screen reader reads it.	Текст із тегами в логічному порядку читання, як його читає програма зчитування з екрана.
+	Turns pages scanned at a slant (up to 15°) straight	Вирівнює сторінки, відскановані з нахилом (до 15°)
+	Turns recognized lines into editable text in a matching font, size and colour; the rest of the page stays as an image	Перетворює розпізнані рядки на редагований текст відповідного шрифту, розміру й кольору; решта сторінки лишається зображенням
+	Whitens the paper background before reading; with an output that changes the page, the page images too	Вибілює тло паперу перед читанням; для виводу, що змінює сторінку, — і зображення сторінки
+	background whitened in {n} images	тло вибілено на зображеннях: {n}
+	specks removed from {n} images	плями видалено із зображень: {n}
+	{n} camera photos corrected	виправлено фото з камери: {n}
+	{n} pages straightened	вирівняно сторінок: {n}
+	Export to PowerPoint…	Експортувати в PowerPoint…
+	Export to SVG…	Експортувати в SVG…
+	Export accessible text…	Експортувати доступний текст…
+	Enhance scans…	Покращити скани…
+	SVG (one file per page)	SVG (один файл на сторінку)
+	Accessible text	Доступний текст

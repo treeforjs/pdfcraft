@@ -626,6 +626,24 @@ impl Automation {
         }))
     }
 
+    /// Scan & OCR ▸ Enhance scans ▸ Straighten pages (`scan_straighten`).
+    pub(crate) fn scan_straighten(&mut self, a: &Args) -> Result<Value> {
+        let min_skew = a.opt_num("min_skew")?.unwrap_or(0.3);
+        if !(0.0..=15.0).contains(&min_skew) {
+            return Err(ToolError::InvalidArgs(format!("min_skew must be between 0 and 15 degrees, not {min_skew}")));
+        }
+        let dry_run = a.opt_bool("dry_run")?.unwrap_or(false);
+        let pages = if a.opt_ints("pages")?.is_some() { self.pages(a, "pages")? } else { Vec::new() };
+        let id = self.doc(a)?.id;
+        let found = self.session.straighten_scans(id, &pages, min_skew as f32, dry_run).map_err(|e| failed(e.to_string()))?;
+        let straightened = found.iter().filter(|p| p.straightened).count();
+        let pages: Vec<Value> = found
+            .iter()
+            .map(|p| json!({ "page": p.page + 1, "skew": (f64::from(p.skew) * 100.0).round() / 100.0, "straightened": p.straightened, "skipped": p.skipped }))
+            .collect();
+        Ok(json!({ "pages": pages, "straightened": straightened, "undoable": !dry_run && straightened > 0 }))
+    }
+
     /// Scan & OCR ▸ Enhance scan ▸ Remove background (`scan_remove_background`).
     pub(crate) fn scan_remove_background(&mut self, a: &Args) -> Result<Value> {
         let mut options = background_options(a, "strength", "white_point")?;
@@ -907,10 +925,26 @@ impl Automation {
         let format = pdfcraft_engine::compare::OfficeFormat::from_extension(&ext)
             .ok_or_else(|| ToolError::InvalidArgs(format!("unsupported extension {ext:?} (docx, html, rtf or xlsx)")))?;
         let options = export_ocr_options(a)?;
+        let pages = match a.opt_ints("pages")? {
+            Some(_) => self.pages(a, "pages")?,
+            None => Vec::new(),
+        };
         let id = self.doc(a)?.id;
-        let (bytes, report) = self.session.with_export_ocr(id, &[], &options, |d| d.export_office(format)).map_err(failed)?;
+        let ((bytes, read), report) =
+            self.session.with_export_ocr(id, &pages, &options, |d| d.export_office_pages(format, &pages, &mut |_, _| true)).map_err(failed)?;
         write_atomic(&path, &bytes)?;
-        Ok(json!({ "path": path.to_string_lossy(), "bytes": bytes.len(), "format": format.extension(), "ocr": export_ocr_json(&report) }))
+        let styled = read.pages.iter().map(|p| p.blocks.iter().filter(|b| !b.runs.is_empty()).count()).sum::<usize>();
+        Ok(json!({
+            "path": path.to_string_lossy(),
+            "bytes": bytes.len(),
+            "format": format.extension(),
+            "pages": read.pages.len(),
+            "paragraphs": read.pages.iter().map(|p| p.blocks.len()).sum::<usize>(),
+            "styled_paragraphs": styled,
+            "images": read.pages.iter().map(|p| p.images.len()).sum::<usize>(),
+            "warnings": read.warnings(),
+            "ocr": export_ocr_json(&report),
+        }))
     }
 
     /// `doc_export_text` (with `ocr`/`ocr_language`).

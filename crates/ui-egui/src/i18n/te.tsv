@@ -3064,3 +3064,53 @@ compare-page	Moved	తరలించబడింది
 	{n} more	మరో {n}
 	{n} more not shown	మరో {n} చూపబడలేదు
 	{n} skipped	{n} దాటవేయబడ్డాయి
+	; text recognized on {n} scanned pages	; స్కాన్ చేసిన {n} పేజీలలో టెక్స్ట్ గుర్తించబడింది
+	A flowing document: paragraphs in reading order with their fonts and styles, headings, lists, tables and images.	ప్రవహించే పత్రం: చదివే క్రమంలో పేరాలు వాటి ఫాంట్‌లు, శైలులతో, శీర్షికలు, జాబితాలు, పట్టికలు మరియు చిత్రాలు.
+	Add a selectable text layer	ఎంచుకోగల టెక్స్ట్ పొరను జోడించు
+	An export is already running	ఒక ఎగుమతి ఇప్పటికే జరుగుతోంది
+	Cleans up the images on scanned or photographed pages. Each correction can be undone.	స్కాన్ చేసిన లేదా ఫోటో తీసిన పేజీల చిత్రాలను శుభ్రం చేస్తుంది. ప్రతి సవరణను రద్దు చేయవచ్చు.
+	Correct camera photos	కెమెరా ఫోటోలను సరిచేయి
+	Couldn't enhance the scans: {e}	స్కాన్‌లను మెరుగుపరచలేకపోయాము: {e}
+	Despeckle	మచ్చలు తీసివేయి
+	Editable Text and Images	సవరించగల టెక్స్ట్ మరియు చిత్రాలు
+	Editable text boxes and pictures	సవరించగల టెక్స్ట్ బాక్స్‌లు మరియు చిత్రాలు
+	Enhance	మెరుగుపరచు
+	Enhance Scans	స్కాన్‌లను మెరుగుపరచు
+	Enhanced: {list}	మెరుగుపరచబడింది: {list}
+	Export Accessible Text	యాక్సెసిబుల్ టెక్స్ట్‌ను ఎగుమతి చేయి
+	Export cancelled	ఎగుమతి రద్దు చేయబడింది
+	Export cancelled after {n} pages	{n} పేజీల తర్వాత ఎగుమతి రద్దు చేయబడింది
+	Export stopped unexpectedly	ఎగుమతి అనుకోకుండా ఆగిపోయింది
+	Export to Excel	Excel కి ఎగుమతి చేయి
+	Export to HTML	HTML గా ఎగుమతి చేయి
+	Export to PowerPoint	PowerPoint కి ఎగుమతి చేయి
+	Export to RTF	RTF గా ఎగుమతి చేయి
+	Export to SVG	SVG గా ఎగుమతి చేయి
+	Export to Word	Word కి ఎగుమతి చేయి
+	Finds the page in a photo, corrects its perspective and evens out the lighting	ఫోటోలో పేజీని కనుగొని, దాని దృక్కోణాన్ని సరిచేసి, వెలుతురును సమం చేస్తుంది
+	Nothing needed enhancing on these pages	ఈ పేజీలలో మెరుగుపరచాల్సినది ఏమీ లేదు
+	On every page without text	టెక్స్ట్ లేని ప్రతి పేజీలో
+	On scanned pages	స్కాన్ చేసిన పేజీలలో
+	One SVG file per page, named after the document: vector paths, text as outlines, images.	ప్రతి పేజీకి ఒక SVG ఫైల్, పత్రం పేరుతో: వెక్టర్ మార్గాలు, అవుట్‌లైన్‌లుగా టెక్స్ట్, చిత్రాలు.
+	One picture per page	ప్రతి పేజీకి ఒక చిత్రం
+	One slide per page.	ప్రతి పేజీకి ఒక స్లయిడ్.
+	One web page: headings, paragraphs with their fonts and styles, lists, tables and images inline.	ఒక వెబ్ పేజీ: శీర్షికలు, ఫాంట్‌లు మరియు శైలులతో పేరాలు, జాబితాలు, పట్టికలు మరియు లోపల చిత్రాలు.
+	One worksheet per page: tables as cell grids, numbers as numbers, images as pictures.	ప్రతి పేజీకి ఒక వర్క్‌షీట్: పట్టికలు సెల్ గ్రిడ్‌లుగా, సంఖ్యలు సంఖ్యలుగా, చిత్రాలు చిత్రాలుగా.
+	Picture resolution	చిత్రం రిజల్యూషన్
+	Removes isolated specks before reading; with an output that changes the page, from the page images too	చదవడానికి ముందు విడి మచ్చలను తీసివేస్తుంది; పేజీని మార్చే అవుట్‌పుట్‌తో, పేజీ చిత్రాల నుండి కూడా
+	Rich text: paragraphs with their fonts and styles, and tables.	రిచ్ టెక్స్ట్: ఫాంట్‌లు మరియు శైలులతో పేరాలు, మరియు పట్టికలు.
+	Straighten skewed pages	వంగిన పేజీలను నిటారుగా చేయి
+	The tagged text in logical reading order, as a screen reader reads it.	స్క్రీన్ రీడర్ చదివే విధంగా, తార్కిక చదివే క్రమంలో ట్యాగ్ చేసిన టెక్స్ట్.
+	Turns pages scanned at a slant (up to 15°) straight	వాలుగా స్కాన్ చేసిన పేజీలను (15° వరకు) నిటారుగా చేస్తుంది
+	Turns recognized lines into editable text in a matching font, size and colour; the rest of the page stays as an image	గుర్తించిన పంక్తులను సరిపోలే ఫాంట్, పరిమాణం మరియు రంగులో సవరించగల టెక్స్ట్‌గా మారుస్తుంది; పేజీలో మిగిలినది చిత్రంగానే ఉంటుంది
+	Whitens the paper background before reading; with an output that changes the page, the page images too	చదవడానికి ముందు కాగితం నేపథ్యాన్ని తెల్లగా చేస్తుంది; పేజీని మార్చే అవుట్‌పుట్‌తో, పేజీ చిత్రాలను కూడా
+	background whitened in {n} images	{n} చిత్రాలలో నేపథ్యం తెల్లగా చేయబడింది
+	specks removed from {n} images	{n} చిత్రాల నుండి మచ్చలు తీసివేయబడ్డాయి
+	{n} camera photos corrected	{n} కెమెరా ఫోటోలు సరిచేయబడ్డాయి
+	{n} pages straightened	{n} పేజీలు నిటారుగా చేయబడ్డాయి
+	Export to PowerPoint…	PowerPoint కి ఎగుమతి చేయి…
+	Export to SVG…	SVG గా ఎగుమతి చేయి…
+	Export accessible text…	యాక్సెసిబుల్ టెక్స్ట్‌ను ఎగుమతి చేయి…
+	Enhance scans…	స్కాన్‌లను మెరుగుపరచు…
+	SVG (one file per page)	SVG (ప్రతి పేజీకి ఒక ఫైల్)
+	Accessible text	యాక్సెసిబుల్ టెక్స్ట్

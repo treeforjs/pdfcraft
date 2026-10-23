@@ -3067,3 +3067,53 @@ compare-page	Moved	已移动
 	{n} more	还有 {n} 个
 	{n} more not shown	另有 {n} 个未显示
 	{n} skipped	已跳过 {n} 个
+	; text recognized on {n} scanned pages	；已在 {n} 个扫描页上识别文本
+	A flowing document: paragraphs in reading order with their fonts and styles, headings, lists, tables and images.	流式文档：按阅读顺序排列的段落及其字体和样式、标题、列表、表格和图像。
+	Add a selectable text layer	添加可选择的文本层
+	An export is already running	已有导出正在运行
+	Cleans up the images on scanned or photographed pages. Each correction can be undone.	清理扫描或拍摄页面的图像。每项校正都可以撤销。
+	Correct camera photos	校正相机照片
+	Couldn't enhance the scans: {e}	无法增强扫描：{e}
+	Despeckle	去除斑点
+	Editable Text and Images	可编辑的文本和图像
+	Editable text boxes and pictures	可编辑的文本框和图片
+	Enhance	增强
+	Enhance Scans	增强扫描
+	Enhanced: {list}	已增强：{list}
+	Export Accessible Text	导出辅助功能文本
+	Export cancelled	导出已取消
+	Export cancelled after {n} pages	导出已在 {n} 页后取消
+	Export stopped unexpectedly	导出意外停止
+	Export to Excel	导出到 Excel
+	Export to HTML	导出为 HTML
+	Export to PowerPoint	导出到 PowerPoint
+	Export to RTF	导出为 RTF
+	Export to SVG	导出为 SVG
+	Export to Word	导出到 Word
+	Finds the page in a photo, corrects its perspective and evens out the lighting	在照片中找到页面，校正其透视并均衡光照
+	Nothing needed enhancing on these pages	这些页面无需增强
+	On every page without text	在每个没有文本的页面上
+	On scanned pages	在扫描页上
+	One SVG file per page, named after the document: vector paths, text as outlines, images.	每页一个 SVG 文件，以文档命名：矢量路径、转为轮廓的文本、图像。
+	One picture per page	每页一张图片
+	One slide per page.	每页一张幻灯片。
+	One web page: headings, paragraphs with their fonts and styles, lists, tables and images inline.	一个网页：标题、带字体和样式的段落、列表、表格和内嵌图像。
+	One worksheet per page: tables as cell grids, numbers as numbers, images as pictures.	每页一个工作表：表格为单元格网格，数字为数字，图像为图片。
+	Picture resolution	图片分辨率
+	Removes isolated specks before reading; with an output that changes the page, from the page images too	识别前去除孤立斑点；输出会更改页面时，也从页面图像中去除
+	Rich text: paragraphs with their fonts and styles, and tables.	富文本：带字体和样式的段落以及表格。
+	Straighten skewed pages	拉直倾斜的页面
+	The tagged text in logical reading order, as a screen reader reads it.	按逻辑阅读顺序排列的标记文本，与屏幕阅读器朗读的一致。
+	Turns pages scanned at a slant (up to 15°) straight	将倾斜扫描的页面（最多 15°）拉直
+	Turns recognized lines into editable text in a matching font, size and colour; the rest of the page stays as an image	将识别出的行转为字体、大小和颜色相匹配的可编辑文本；页面其余部分保留为图像
+	Whitens the paper background before reading; with an output that changes the page, the page images too	识别前将纸张背景变白；输出会更改页面时，页面图像也会变白
+	background whitened in {n} images	已将 {n} 个图像的背景变白
+	specks removed from {n} images	已从 {n} 个图像中去除斑点
+	{n} camera photos corrected	已校正 {n} 张相机照片
+	{n} pages straightened	已拉直 {n} 页
+	Export to PowerPoint…	导出到 PowerPoint…
+	Export to SVG…	导出为 SVG…
+	Export accessible text…	导出辅助功能文本…
+	Enhance scans…	增强扫描…
+	SVG (one file per page)	SVG（每页一个文件）
+	Accessible text	辅助功能文本

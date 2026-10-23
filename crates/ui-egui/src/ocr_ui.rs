@@ -8,7 +8,9 @@ use std::sync::{Arc, Mutex};
 
 use egui::{Align, Layout};
 use pdfcraft_engine::DocId;
-use pdfcraft_engine::ocr::{LANGUAGES, OcrReview, OcrSettings};
+use pdfcraft_engine::ocr::{
+    BackgroundOptions, BackgroundStrength, DespeckleLevel, DespeckleOptions, EditableOptions, LANGUAGES, OcrReview, OcrSettings,
+};
 
 use crate::theme::{self, Tokens};
 use crate::{PdfCraftApp, widgets};
@@ -37,6 +39,13 @@ pub struct OcrDraft {
     pub deskew: bool,
     /// Output Searchable Image: also straighten the pages themselves (`OcrSettings::straighten`).
     pub straighten: bool,
+    /// Output Editable Text and Images (`OcrSettings::editable`; not with `straighten`).
+    pub editable: bool,
+    /// Remove specks before reading (and from the page images with Searchable Image or
+    /// Editable Text and Images).
+    pub despeckle: DespeckleLevel,
+    /// Whiten the paper background before reading (likewise).
+    pub background: BackgroundStrength,
 }
 
 impl Default for OcrDraft {
@@ -51,6 +60,26 @@ impl Default for OcrDraft {
             auto_rotate: false,
             deskew: false,
             straighten: false,
+            editable: false,
+            despeckle: DespeckleLevel::Off,
+            background: BackgroundStrength::Off,
+        }
+    }
+}
+
+impl OcrDraft {
+    /// The recognition settings these choices stand for.
+    pub fn settings(&self) -> OcrSettings {
+        OcrSettings {
+            dpi: self.dpi as f32,
+            language: self.language.clone(),
+            auto_rotate: self.auto_rotate,
+            deskew: self.deskew,
+            straighten: self.straighten && !self.editable,
+            editable: self.editable.then(EditableOptions::default),
+            despeckle: DespeckleOptions { level: self.despeckle, ..Default::default() },
+            background: BackgroundOptions { strength: self.background, white_point: None },
+            ..Default::default()
         }
     }
 }
@@ -187,27 +216,74 @@ pub(crate) fn body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> (boo
             });
             ui.end_row();
             ui.label(tl!("Output"));
-            let output = if d.straighten { tl!("Searchable Image") } else { tl!("Searchable Image (Exact)") };
+            let output = if d.editable {
+                tl!("Editable Text and Images")
+            } else if d.straighten {
+                tl!("Searchable Image")
+            } else {
+                tl!("Searchable Image (Exact)")
+            };
             egui::ComboBox::from_id_salt("ocr-output").selected_text(output).width(220.0).show_ui(ui, |ui| {
                 if ui
-                    .selectable_label(d.straighten, tl!("Searchable Image"))
+                    .selectable_label(d.straighten && !d.editable, tl!("Searchable Image"))
                     .on_hover_text(tl!(
                         "Adds invisible text, straightens turned or skewed pages and downsamples finer images to the chosen resolution"
                     ))
                     .clicked()
-                    && !d.straighten
+                    && (!d.straighten || d.editable)
                 {
                     d.straighten = true;
+                    d.editable = false;
                     d.deskew = true;
                 }
                 if ui
-                    .selectable_label(!d.straighten, tl!("Searchable Image (Exact)"))
+                    .selectable_label(!d.straighten && !d.editable, tl!("Searchable Image (Exact)"))
                     .on_hover_text(tl!("Adds invisible text over each word; the page image is not changed"))
                     .clicked()
                 {
                     d.straighten = false;
+                    d.editable = false;
+                }
+                if ui
+                    .selectable_label(d.editable, tl!("Editable Text and Images"))
+                    .on_hover_text(tl!(
+                        "Turns recognized lines into editable text in a matching font, size and colour; the rest of the page stays as an image"
+                    ))
+                    .clicked()
+                {
+                    d.editable = true;
+                    d.straighten = false;
                 }
             });
+            ui.end_row();
+            let levels = [tl!("Off"), tl!("Low"), tl!("Medium"), tl!("High")];
+            ui.label(tl!("Remove background"));
+            let strengths = [BackgroundStrength::Off, BackgroundStrength::Low, BackgroundStrength::Medium, BackgroundStrength::High];
+            let at = strengths.iter().position(|v| *v == d.background).unwrap_or(0);
+            egui::ComboBox::from_id_salt("ocr-background")
+                .selected_text(levels.get(at).copied().unwrap_or_default())
+                .width(220.0)
+                .show_ui(ui, |ui| {
+                    for (v, name) in strengths.iter().zip(levels) {
+                        ui.selectable_value(&mut d.background, *v, name);
+                    }
+                })
+                .response
+                .on_hover_text(tl!("Whitens the paper background before reading; with an output that changes the page, the page images too"));
+            ui.end_row();
+            ui.label(tl!("Despeckle"));
+            let specks = [DespeckleLevel::Off, DespeckleLevel::Low, DespeckleLevel::Medium, DespeckleLevel::High];
+            let at = specks.iter().position(|v| *v == d.despeckle).unwrap_or(0);
+            egui::ComboBox::from_id_salt("ocr-despeckle")
+                .selected_text(levels.get(at).copied().unwrap_or_default())
+                .width(220.0)
+                .show_ui(ui, |ui| {
+                    for (v, name) in specks.iter().zip(levels) {
+                        ui.selectable_value(&mut d.despeckle, *v, name);
+                    }
+                })
+                .response
+                .on_hover_text(tl!("Removes isolated specks before reading; with an output that changes the page, from the page images too"));
             ui.end_row();
             ui.label(tl!("Downsample to"));
             egui::ComboBox::from_id_salt("ocr-dpi").selected_text(format!("{} dpi", d.dpi)).width(220.0).show_ui(ui, |ui| {
@@ -278,14 +354,7 @@ impl PdfCraftApp {
             OcrPages::Current => vec![self.views[vi].current],
             OcrPages::Range => (d.from.saturating_sub(1)..d.to).collect(),
         };
-        let settings = OcrSettings {
-            dpi: d.dpi as f32,
-            language: d.language.clone(),
-            auto_rotate: d.auto_rotate,
-            deskew: d.deskew,
-            straighten: d.straighten,
-            ..Default::default()
-        };
+        let settings = d.settings();
         let job = match self.session.ocr_job_checked(id, &pages, settings) {
             Ok(job) => job,
             Err(error) => {
@@ -335,14 +404,7 @@ impl PdfCraftApp {
         }
         // The settings showing now, not when the folder arrives.
         let d = &self.ocr_draft;
-        let settings = OcrSettings {
-            dpi: d.dpi as f32,
-            language: d.language.clone(),
-            auto_rotate: d.auto_rotate,
-            deskew: d.deskew,
-            straighten: d.straighten,
-            ..Default::default()
-        };
+        let settings = d.settings();
         #[cfg(not(target_arch = "wasm32"))]
         match self.export_dir_override.clone() {
             Some(d) => self.ocr_files_into(files, settings, d.into()),
@@ -613,5 +675,29 @@ impl PdfCraftApp {
         {
             self.finish_ocr_review(run.doc, &draft.result);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dialog_choices_become_recognition_settings() {
+        let exact = OcrDraft::default().settings();
+        assert!(!exact.straighten && exact.editable.is_none() && !exact.despeckle.any() && !exact.background.any());
+        let d = OcrDraft {
+            editable: true,
+            straighten: true,
+            despeckle: DespeckleLevel::Medium,
+            background: BackgroundStrength::High,
+            ..Default::default()
+        };
+        let s = d.settings();
+        assert_eq!(s.editable, Some(EditableOptions::default()));
+        assert!(!s.straighten, "editable output never straightens the page too");
+        assert_eq!((s.despeckle.level, s.background.strength), (DespeckleLevel::Medium, BackgroundStrength::High));
+        let searchable = OcrDraft { straighten: true, ..Default::default() }.settings();
+        assert!(searchable.straighten && searchable.editable.is_none());
     }
 }

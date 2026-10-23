@@ -67,6 +67,7 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
     let mut open_revision: Option<usize> = None;
     let mut a11y_now = false;
     let mut ocr_now = false;
+    let mut enhance_now = false;
     let mut compare_now = false;
     let mut images_now = false;
     let mut stamp_now = false;
@@ -1061,6 +1062,13 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
                 close = go || cancel;
                 return;
             }
+            Dialog::EnhanceScans => {
+                ui.set_width(440.0);
+                let (go, cancel) = crate::enhance_ui::body(ui, app, &t);
+                enhance_now = go;
+                close = go || cancel;
+                return;
+            }
             Dialog::AccessibilityOptions => {
                 let (start, cancel) = crate::a11y_ui::options_body(ui, app, &t);
                 a11y_now = start;
@@ -1460,6 +1468,9 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
     }
     if ocr_now {
         app.start_ocr();
+    }
+    if enhance_now {
+        app.enhance_scans();
     }
     if compare_now {
         app.run_compare();

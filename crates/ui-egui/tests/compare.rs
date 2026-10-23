@@ -283,11 +283,16 @@ fn export_to_word_html_and_rtf() {
     let mut app = PdfCraftApp::new();
     app.set_option("language", "en").unwrap();
     app.open_bytes("e.pdf", None, doc).unwrap();
+    app.run_inline = true;
     for ext in ["docx", "html", "rtf"] {
         let out = dir.join(format!("e.{ext}"));
         app.save_override = Some(out.to_string_lossy().into_owned());
+        // The command opens the export dialog; its Export button writes the file.
         assert!(app.execute(&format!("export.{ext}")));
+        assert!(matches!(app.dialog, Some(pdfcraft_ui_egui::Dialog::Export(_))), "{ext}");
+        assert!(app.run_export_dialog());
         assert!(std::fs::metadata(&out).unwrap().len() > 40, "{ext}");
+        assert!(!app.exporting());
     }
     assert!(std::fs::read_to_string(dir.join("e.html")).unwrap().contains("Exported words"));
 }
@@ -302,7 +307,9 @@ fn export_to_excel_writes_a_workbook() {
     app.open_bytes("e.pdf", None, doc).unwrap();
     let out = dir.join("e.xlsx");
     app.save_override = Some(out.to_string_lossy().into_owned());
+    app.run_inline = true;
     assert!(app.execute("export.xlsx"));
+    assert!(app.run_export_dialog());
     let bytes = std::fs::read(&out).unwrap();
     assert!(bytes.starts_with(b"PK\x03\x04"));
     assert!(bytes.windows(b"xl/worksheets/sheet1.xml".len()).any(|w| w == b"xl/worksheets/sheet1.xml"));

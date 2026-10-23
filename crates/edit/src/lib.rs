@@ -733,8 +733,8 @@ pub use images::{ImageChange, PageImage, change_image, page_images, reading_imag
 pub mod bidi;
 pub mod text;
 pub use text::{
-    BlockFrame, BlockStyle, LineEdit, PageFont, TextBlock, TextLine, TextRun, page_fonts, reading_blocks, reading_blocks_framed, replace_block,
-    replace_line, rewrite_block, text_blocks, text_lines,
+    BlockFrame, BlockStyle, LineEdit, PageFont, TextBlock, TextLine, TextRun, page_fonts, reading_blocks, reading_blocks_framed, reading_paragraphs,
+    replace_block, replace_line, rewrite_block, text_blocks, text_lines,
 };
 mod background;
 pub use background::strip_text_and_images;

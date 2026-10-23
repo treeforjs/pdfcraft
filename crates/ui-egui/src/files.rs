@@ -648,47 +648,6 @@ impl PdfCraftApp {
         self.notify_tr("Importing data arrives on the web with file pickers for data files");
     }
 
-    /// Export all comments / form data: the format follows the file name's extension.
-    /// Export a PDF ▸ Word, HTML or RTF: ask where (`save_override` in tests), then write.
-    pub fn export_office_dialog(&mut self, format: pdfcraft_engine::compare::OfficeFormat) {
-        // What's typed in a form field is part of the document (#166).
-        if !self.commit_form_typing() {
-            return;
-        }
-        let Some((_, id)) = self.active_ids() else { return };
-        let Some(doc) = self.session.get(id) else { return };
-        let stem = doc.name.trim_end_matches(".pdf").trim_end_matches(".PDF").to_string();
-        let ext = format.extension();
-        let bytes = match doc.export_office(format) {
-            Ok(bytes) => bytes,
-            Err(e) => {
-                self.notify_fmt("Export stopped: {e}", &[("e", &e)]);
-                return;
-            }
-        };
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            let write = move |app: &mut Self, path: std::path::PathBuf| match crate::editing::write_atomically(&path.to_string_lossy(), &bytes) {
-                Ok(()) => app.notify_fmt("Exported to {path}", &[("path", &path.display().to_string())]),
-                Err(e) => app.notify_fmt("Couldn't write {name}: {e}", &[("name", &path.display().to_string()), ("e", &e.to_string())]),
-            };
-            match self.save_override.clone() {
-                Some(p) => write(self, p.into()),
-                None => {
-                    let dialog = rfd::AsyncFileDialog::new()
-                        .set_title(tl!("Export").to_string())
-                        .add_filter(ext.to_uppercase(), &[ext])
-                        .set_file_name(format!("{stem}.{ext}"));
-                    self.ask_one(crate::pickers::Ask::Save(dialog), None, write);
-                }
-            }
-        }
-        #[cfg(target_arch = "wasm32")]
-        if let Err(e) = crate::editing::download(&format!("{stem}.{ext}"), &bytes) {
-            self.notify_error(e);
-        }
-    }
-
     /// Forms ▸ Merge data files into spreadsheet: choose data files (FDF, XFDF or filled-in PDF
     /// forms), then where to save the CSV.
     pub fn merge_data_dialog(&mut self) {

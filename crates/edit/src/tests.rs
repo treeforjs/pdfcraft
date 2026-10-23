@@ -3222,3 +3222,52 @@ fn text_boxes_take_line_and_paragraph_spacing() {
     assert_eq!(added::line_height(&unusable), 12.0);
     assert_eq!(added::text_rect(&unusable)[1], 700.0 - 36.0);
 }
+
+/// A page in Helvetica (/F1) and Helvetica-Bold (/F2).
+fn two_font_page(content: &str) -> Document {
+    let mut doc = text_page(content);
+    let mut font = doc.get(pdfcraft_cos::ObjRef::new(5, 0)).as_dict().unwrap().clone();
+    font.set(b"BaseFont".to_vec(), pdfcraft_cos::Object::name("Helvetica-Bold"));
+    doc.set(pdfcraft_cos::ObjRef::new(6, 0), pdfcraft_cos::Object::Dict(font));
+    doc
+}
+
+#[test]
+fn reading_paragraphs_keep_inline_bold_in_the_sentence_and_dehyphenate() {
+    let doc = two_font_page(
+        "BT /F2 12 Tf 72 714 Td (Bold Title) Tj ET\n\
+BT /F1 12 Tf 72 700 Td (Regular text with a ) Tj /F2 12 Tf (bold) Tj /F1 12 Tf ( word and a hyphen-) Tj ET\n\
+BT /F1 12 Tf 72 686 Td (ated ending.) Tj ET",
+    );
+    let paras = text::reading_paragraphs(&doc, 0).unwrap();
+    let texts: Vec<&str> = paras.iter().map(|b| b.text.as_str()).collect();
+    assert_eq!(
+        texts,
+        ["Bold Title", "Regular text with a bold word and a hyphenated ending."],
+        "{:?}",
+        paras.iter().map(|b| (&b.text, b.rect, b.runs.len())).collect::<Vec<_>>()
+    );
+    let body = &paras[1];
+    assert_eq!(body.runs.iter().filter(|r| r.bold).count(), 1, "one bold run inside the paragraph: {:#?}", body.runs);
+    let run = body.runs.iter().find(|r| r.bold).unwrap();
+    let word: String = body.text.chars().skip(run.start).take(run.end - run.start).collect();
+    assert_eq!(word.trim(), "bold");
+    assert!(paras[0].bold && !body.bold);
+    // Style grouping (the older reading order) splits the sentence at the bold word.
+    assert!(text::reading_blocks(&doc, 0).unwrap().len() > 2);
+}
+
+#[test]
+fn reading_paragraphs_survive_empty_and_hostile_pages() {
+    for content in [
+        "",
+        "BT ET",
+        "BT /F1 0 Tf (zero) Tj ET",
+        "BT /F1 1e30 Tf 1e30 1e30 Td (huge) Tj ET",
+        "BT /F9 12 Tf (no font) Tj ET",
+        "BT /F1 12 Tf (-) Tj ET",
+    ] {
+        let _ = text::reading_paragraphs(&text_page(content), 0);
+    }
+    assert!(text::reading_paragraphs(&text_page(""), 7).is_err());
+}

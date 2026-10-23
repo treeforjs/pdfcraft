@@ -3103,3 +3103,53 @@ compare-page	Moved	Movida
 	{n} more	mais {n}
 	{n} more not shown	mais {n} não mostrados
 	{n} skipped	{n} ignorados
+	; text recognized on {n} scanned pages	; texto reconhecido em {n} páginas digitalizadas
+	A flowing document: paragraphs in reading order with their fonts and styles, headings, lists, tables and images.	Um documento fluido: parágrafos na ordem de leitura com suas fontes e estilos, títulos, listas, tabelas e imagens.
+	Add a selectable text layer	Adicionar uma camada de texto selecionável
+	An export is already running	Já há uma exportação em andamento
+	Cleans up the images on scanned or photographed pages. Each correction can be undone.	Limpa as imagens das páginas digitalizadas ou fotografadas. Cada correção pode ser desfeita.
+	Correct camera photos	Corrigir fotos de câmera
+	Couldn't enhance the scans: {e}	Não foi possível melhorar as digitalizações: {e}
+	Despeckle	Remover manchas
+	Editable Text and Images	Texto e imagens editáveis
+	Editable text boxes and pictures	Caixas de texto e imagens editáveis
+	Enhance	Melhorar
+	Enhance Scans	Melhorar digitalizações
+	Enhanced: {list}	Melhorado: {list}
+	Export Accessible Text	Exportar texto acessível
+	Export cancelled	Exportação cancelada
+	Export cancelled after {n} pages	Exportação cancelada após {n} páginas
+	Export stopped unexpectedly	A exportação parou inesperadamente
+	Export to Excel	Exportar para Excel
+	Export to HTML	Exportar para HTML
+	Export to PowerPoint	Exportar para PowerPoint
+	Export to RTF	Exportar para RTF
+	Export to SVG	Exportar para SVG
+	Export to Word	Exportar para Word
+	Finds the page in a photo, corrects its perspective and evens out the lighting	Encontra a página em uma foto, corrige a perspectiva e uniformiza a iluminação
+	Nothing needed enhancing on these pages	Não havia nada a melhorar nestas páginas
+	On every page without text	Em cada página sem texto
+	On scanned pages	Em páginas digitalizadas
+	One SVG file per page, named after the document: vector paths, text as outlines, images.	Um arquivo SVG por página, com o nome do documento: caminhos vetoriais, texto como contornos, imagens.
+	One picture per page	Uma imagem por página
+	One slide per page.	Um slide por página.
+	One web page: headings, paragraphs with their fonts and styles, lists, tables and images inline.	Uma página web: títulos, parágrafos com suas fontes e estilos, listas, tabelas e imagens incorporadas.
+	One worksheet per page: tables as cell grids, numbers as numbers, images as pictures.	Uma planilha por página: tabelas como grades de células, números como números, imagens como imagens.
+	Picture resolution	Resolução das imagens
+	Removes isolated specks before reading; with an output that changes the page, from the page images too	Remove manchas isoladas antes da leitura; com uma saída que altera a página, também das imagens da página
+	Rich text: paragraphs with their fonts and styles, and tables.	Rich text: parágrafos com suas fontes e estilos, e tabelas.
+	Straighten skewed pages	Endireitar páginas tortas
+	The tagged text in logical reading order, as a screen reader reads it.	O texto marcado na ordem lógica de leitura, como um leitor de tela o lê.
+	Turns pages scanned at a slant (up to 15°) straight	Endireita páginas digitalizadas tortas (até 15°)
+	Turns recognized lines into editable text in a matching font, size and colour; the rest of the page stays as an image	Transforma as linhas reconhecidas em texto editável com fonte, tamanho e cor correspondentes; o resto da página continua como imagem
+	Whitens the paper background before reading; with an output that changes the page, the page images too	Clareia o fundo do papel antes da leitura; com uma saída que altera a página, também as imagens da página
+	background whitened in {n} images	fundo clareado em {n} imagens
+	specks removed from {n} images	manchas removidas de {n} imagens
+	{n} camera photos corrected	{n} fotos de câmera corrigidas
+	{n} pages straightened	{n} páginas endireitadas
+	Export to PowerPoint…	Exportar para PowerPoint…
+	Export to SVG…	Exportar para SVG…
+	Export accessible text…	Exportar texto acessível…
+	Enhance scans…	Melhorar digitalizações…
+	SVG (one file per page)	SVG (um arquivo por página)
+	Accessible text	Texto acessível

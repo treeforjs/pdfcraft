@@ -938,6 +938,7 @@ impl Automation {
             "ocr_engines_list" => self.ocr_engines_list()?,
             "ocr_engine_set" => self.ocr_engine_set(&a)?,
             "scan_despeckle" => self.scan_despeckle(&a)?,
+            "scan_straighten" => self.scan_straighten(&a)?,
             "scan_camera_image" => self.scan_camera_image(&a)?,
             "scan_remove_background" => self.scan_remove_background(&a)?,
             "ocr_recognize_files" => self.ocr_recognize_files(&a)?,

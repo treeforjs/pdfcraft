@@ -1916,6 +1916,7 @@ pub fn tools() -> Vec<ToolDef> {
                 &["doc", "folder"],
             )),
         t("doc_export_svg", "Export pages as SVG", "Save As ▸ SVG: write pages as standalone SVG files (`<name>_page_<n>.svg`) into a folder, one per page, sized to the page as displayed (crop box after rotation, in points). Vector where possible: paths with fill rule, line width, caps, joins and dashes; clipping; colours converted to sRGB with their opacity; text as glyph outlines (fonts are not embedded) plus a transparent text layer for searching and selecting (text_layer false leaves it out); images as embedded PNG (downsampled above 4 megapixels); nested forms flattened; tiling patterns, soft masks and blend modes kept as SVG patterns, masks and mix-blend-mode. Shadings are rasterised over the region they paint. Each file reports what it holds and `omitted` (content it could not express) and `truncated` (the 128 MiB page limit was reached). transparent leaves out the white paper. Includes unsaved edits. Refused when the document does not allow copying (extracting text and graphics).")
+            .cmd("export.svg")
             .with(schema(
                 json!({
                     "doc": doc(),
@@ -2186,10 +2187,14 @@ pub fn tools() -> Vec<ToolDef> {
                 json!({ "doc": doc(), "field": { "type": "string" }, "event": { "type": "string", "enum": ["keystroke", "format", "validate", "calculate", "mouse_up"] }, "script": { "type": "string" } }),
                 &["doc", "field", "event"],
             )),
-        t("doc_export_office", "Export to Word, HTML, RTF or Excel", "Export a PDF ▸ Word (.docx), HTML (.html, one file with images inline), RTF (.rtf) or Excel (.xlsx), chosen by path's extension: paragraphs in reading order, headings from larger text, bold and italic, images where they fall, a page break between pages. Excel gets one worksheet per page: paragraphs in column A, tables detected from the text layout as cell grids, unambiguous numbers (1,234.50, (12.00), 12.5%) stored as numbers. Refused when the document does not allow copying text (open it with the permissions password). Run OCR (ocr, default auto, as in Acrobat): scanned pages (an image and no text) are recognized first on a temporary copy, so the export carries their text; the document itself is not changed. auto reads with the selected OCR engine (ocr_engines_list) and goes ahead without recognition, saying why in the result's ocr, when it can't run or doesn't read the language, or when the document's permissions don't allow recognition; on recognizes every exported page without text and fails instead; off never recognizes. ocr_language picks the recognition language (default en; one the engine reads). Returns ocr: mode, language, ran, pages_without_text, scanned_pages, recognized_pages, skipped_pages, words and not_run.")
+        t("doc_export_office", "Export to Word, HTML, RTF or Excel", "Export a PDF ▸ Word (.docx), HTML (.html, one file with images inline), RTF (.rtf) or Excel (.xlsx), chosen by path's extension: paragraphs in reading order (multi-column pages column by column), headings from larger text, fonts, sizes, colours and bold/italic kept per run within a paragraph, bulleted and numbered lists as real lists (Word numbering, HTML ul/ol), detected tables, images where they fall (Excel: pictures anchored where they fall), a page break between pages. pages limits the export (default all); at most 5000 pages and 512 MiB of images are exported, the rest is reported in warnings. Returns pages, paragraphs, styled_paragraphs (with style runs) and images. Excel gets one worksheet per page: paragraphs in column A, tables detected from the text layout as cell grids, unambiguous numbers (1,234.50, (12.00), 12.5%) stored as numbers. Refused when the document does not allow copying text (open it with the permissions password). Run OCR (ocr, default auto, as in Acrobat): scanned pages (an image and no text) are recognized first on a temporary copy, so the export carries their text; the document itself is not changed. auto reads with the selected OCR engine (ocr_engines_list) and goes ahead without recognition, saying why in the result's ocr, when it can't run or doesn't read the language, or when the document's permissions don't allow recognition; on recognizes every exported page without text and fails instead; off never recognizes. ocr_language picks the recognition language (default en; one the engine reads). Returns ocr: mode, language, ran, pages_without_text, scanned_pages, recognized_pages, skipped_pages, words and not_run.")
             .cmd("export.docx")
-            .with(schema(json!({ "doc": doc(), "path": { "type": "string" }, "ocr": export_ocr_arg(), "ocr_language": export_ocr_language_arg() }), &["doc", "path"])),
+            .with(schema(
+                json!({ "doc": doc(), "path": { "type": "string" }, "pages": pages("to export, in order (default: all)"), "ocr": export_ocr_arg(), "ocr_language": export_ocr_language_arg() }),
+                &["doc", "path"],
+            )),
         t("doc_export_pptx", "Export to PowerPoint", "Export a PDF ▸ Microsoft PowerPoint (.pptx): one slide per page, the slide size from the first exported page as displayed (crop box after rotation, within PowerPoint's 1–56 in; other page sizes are scaled to fit and centred). mode editable (default): each paragraph becomes an editable text box placed and turned as on the page (font family, size, bold, italic, colour), each extractable image a picture, and the rest of the page (vector art, shadings, inline images, form fields, comments) one background picture rendered at dpi without the text and those images (left out when it is blank). Vector shapes are not rebuilt as PowerPoint shapes. mode image: each slide is one picture of its page. Returns counts (slides, text_boxes, pictures, backgrounds, omitted) and warnings. Includes unsaved edits. Editable mode is refused when the document does not allow copying (open it with the permissions password); image mode only renders. Run OCR (ocr, default auto, as in Acrobat): scanned pages (an image and no text) are recognized first on a temporary copy, so the export carries their text; the document itself is not changed. auto reads with the selected OCR engine (ocr_engines_list) and goes ahead without recognition, saying why in the result's ocr, when it can't run or doesn't read the language, or when the document's permissions don't allow recognition; on recognizes every exported page without text and fails instead; off never recognizes. ocr_language picks the recognition language (default en; one the engine reads). Returns ocr: mode, language, ran, pages_without_text, scanned_pages, recognized_pages, skipped_pages, words and not_run. Image mode never recognizes.")
+            .cmd("export.pptx")
             .with(schema(
                 json!({
                     "doc": doc(),
@@ -2428,6 +2433,7 @@ pub fn tools() -> Vec<ToolDef> {
                 &["folder"],
             )),
         t("scan_remove_background", "Remove scan background", "Scan & OCR ▸ Enhance scan ▸ Remove background: whiten the off-white, grey or yellowed paper of the images the pages draw, as one undoable step. Each image's paper level is the main light peak of its luma histogram (at least 30 % of the pixels within 16 levels of it; photographs, dark and inverted scans are left alone); pixels within a margin below it (low, medium (default) or high, widened by the paper's measured noise; never below 128) become white, and a levels curve keeps ink and mid-greys at their values. Colour scans are neutralised per channel from the paper's own colour. 8-bit gray and RGB images are rewritten (JPEG at quality 90 when they were JPEG); one-bit images already have white paper and are counted in images_unchanged; JPEG 2000, CMYK and other images it cannot decode faithfully are left alone and counted in images_skipped. Images shared with other pages change there too. Returns images, images_changed, images_skipped, images_unchanged, pixels_whitened and pixels_changed; when nothing changed no step is added.")
+            .cmd("ocr.enhance")
             .with(schema(
                 json!({
                     "doc": doc(),
@@ -2438,6 +2444,7 @@ pub fn tools() -> Vec<ToolDef> {
                 &["doc"],
             )),
         t("scan_camera_image", "Enhance camera images", "Scan & OCR ▸ Enhance ▸ Camera Image: for a page that is a photo of a document (a skewed page against a background), find the page's outline in the largest image the page draws (edge detection, line fitting and the best-supported convex quadrilateral, refined to sub-pixel at full resolution), correct the perspective to an upright rectangle at the page's estimated aspect ratio (single-view rectangle geometry, bilinear resampling), and even out the lighting (deshadow, white balance, contrast stretch, paper whitening). The page is replaced by the corrected image on a page of that aspect ratio whose longer side is the old page's (other page content, page boxes and rotation are dropped; annotations are kept), as one undoable step for all pages. Returns per page found, confidence (0-1), corners (points from the top-left of the displayed page, top-left/top-right/bottom-right/bottom-left), image_corners (photo pixels), image_size, aspect (width/height), output_size (pixels) and page_size (points), or skipped with the reason (no image, an image it cannot decode: only 8-bit gray/RGB JPEG or Flate). Where no outline is found (confidence below 0.45) the whole photo is only enhanced, or skipped with enhance false; give corners to set the outline yourself. dry_run reports without changing anything.")
+            .cmd("ocr.enhance")
             .with(schema(
                 json!({
                     "doc": doc(),
@@ -2449,6 +2456,7 @@ pub fn tools() -> Vec<ToolDef> {
                 &["doc"],
             )),
         t("scan_despeckle", "Despeckle scanned pages", "Scan & OCR ▸ Enhance scan ▸ Despeckle: remove isolated dark specks (scanner dust, noise) from the images the pages draw, as one undoable step. Each image is sized by its effective resolution where it is drawn: level low removes specks up to 0.13 mm across, medium (default) 0.21 mm, high 0.34 mm; a speck within about 1 mm of text-sized ink is kept, so periods, commas and i-dots survive. One-bit scans (CCITT fax, Flate, LZW) stay one-bit; 8-bit gray and RGB images are rewritten (JPEG at quality 90 when they were JPEG). JBIG2, JPEG 2000, CMYK and other images it cannot decode faithfully are left alone and counted in images_skipped. Images shared with other pages change there too. Returns images, images_changed, images_skipped, dark_specks, light_specks, impulses and pixels_changed; when nothing changed no step is added.")
+            .cmd("ocr.enhance")
             .with(schema(
                 json!({
                     "doc": doc(),
@@ -2456,6 +2464,17 @@ pub fn tools() -> Vec<ToolDef> {
                     "level": { "type": "string", "enum": ["off", "low", "medium", "high"], "description": "Largest speck removed (default medium); off with median true only median-filters." },
                     "light": { "type": "boolean", "description": "Also fill small light holes inside solid ink (default false)." },
                     "median": { "type": "boolean", "description": "Also replace single-pixel impulses in gray/colour images by their 3x3 median (default false; ignores the punctuation rule)." },
+                }),
+                &["doc"],
+            )),
+        t("scan_straighten", "Straighten scanned pages", "Scan & OCR ▸ Enhance scans ▸ Straighten pages: measure the skew of each scanned page (a page that draws an image) without recognizing text, within ±15°, from projection profiles of a reduced copy of the page, and turn skewed pages straight about their centre (in the page content; the image is not resampled), as one undoable step. Pages without an image are skipped. min_skew (degrees, default 0.3) leaves slightly skewed pages alone; dry_run measures only. Returns per page: page (1-based), skew (degrees counterclockwise), straightened and skipped (why); and undoable.")
+            .cmd("ocr.enhance")
+            .with(schema(
+                json!({
+                    "doc": doc(),
+                    "pages": pages("to straighten (default: all)"),
+                    "min_skew": { "type": "number", "minimum": 0, "maximum": 15, "description": "Smallest skew corrected, degrees (default 0.3)." },
+                    "dry_run": { "type": "boolean", "description": "Measure only; change nothing (default false)." },
                 }),
                 &["doc"],
             )),
@@ -2521,7 +2540,7 @@ pub fn tools() -> Vec<ToolDef> {
             .cmd("export.text")
             .with(schema(json!({ "doc": doc(), "path": { "type": "string" }, "pages": pages("to export (default: all)"), "ocr": export_ocr_arg(), "ocr_language": export_ocr_language_arg() }), &["doc", "path"])),
         t("doc_export_accessible_text", "Export accessible text", "Save As ▸ Accessible Text: write a tagged PDF's text in logical structure order, as a screen reader reads it, to a .txt file (atomically replacing path). Each structure element gives its /ActualText, else its /Alt (a figure's alternate text), else the text of the marked content it covers; paragraphs, headings, figures and captions are separated by a blank line, consecutive list items and table rows by a line break, table cells by tabs. Artifacts (running headers, footers, page numbers marked /Artifact) are left out, and so is untagged content. Without path, returns the text instead (up to 1 MiB, then text_truncated). Returns counts of blocks, headings, list items, table rows and figures, and truncated when the structure tree or the text was too large to read in full. Untagged documents, empty structure trees and documents that do not allow copying text are refused.")
-            .cmd("export.text")
+            .cmd("export.accessible_text")
             .with(schema(json!({ "doc": doc(), "path": { "type": "string", "description": "The .txt file to write (default: return the text)." } }), &["doc"])),
         t(
             "fill_sign_add",

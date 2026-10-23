@@ -49,6 +49,7 @@ mod create_ui;
 mod credits;
 mod crop;
 mod drag_pointer;
+mod enhance_ui;
 mod export_ui;
 pub mod js_debug_ui;
 mod js_ui;
@@ -329,6 +330,8 @@ pub enum Dialog {
     AccessibilityOptions,
     /// Scan & OCR ▸ Recognize text.
     RecognizeText,
+    /// Scan & OCR ▸ Enhance scans (camera, straighten, background, specks).
+    EnhanceScans,
     /// The JavaScript console (⌘J).
     JsConsole,
     /// The JavaScript debugger (⌘⇧J).
@@ -493,6 +496,9 @@ pub struct PdfCraftApp {
     /// A running Create ▸ Screen capture (the web has no capture tool).
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     pub(crate) capture: screen_capture::Capture,
+    /// A whole-screen capture minimized the window; restore it when the capture ends.
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+    capture_hid_window: bool,
     pub palette_open: bool,
     pub palette_query: String,
     pub all_tools_expanded: bool,
@@ -569,6 +575,7 @@ pub struct PdfCraftApp {
     pub a11y_options: a11y_ui::A11yOptions,
     /// Scan & OCR: the Recognize Text choices, the running job, and (tests) run it inline.
     pub ocr_draft: ocr_ui::OcrDraft,
+    pub enhance_draft: enhance_ui::EnhanceDraft,
     pub ocr_run: Option<ocr_ui::OcrRun>,
     pub ocr_batch: Option<std::sync::Arc<std::sync::Mutex<ocr_ui::BatchProgress>>>,
     /// Bates numbering continued into other files, running in the background.
@@ -723,6 +730,10 @@ pub struct PdfCraftApp {
     pub export_draft: export_ui::ExportDraft,
     /// A running export's progress.
     export_status: Option<export_ui::ExportStatus>,
+    /// A document export (Word, Excel, PowerPoint, HTML, RTF, SVG, text) running on a worker.
+    export_run: Option<export_ui::ExportRun>,
+    /// Cancel request for the running image export.
+    export_cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
     /// The saved Fill & Sign signature and initials (drawn or typed).
     pub signature: Option<fill_sign::SavedSig>,
     pub initials: Option<fill_sign::SavedSig>,
@@ -846,6 +857,7 @@ impl PdfCraftApp {
             dialog: None,
             updates: updates::Updates::default(),
             capture: screen_capture::Capture::Idle,
+            capture_hid_window: false,
             palette_open: false,
             palette_query: String::new(),
             all_tools_expanded: false,
@@ -891,6 +903,7 @@ impl PdfCraftApp {
             sig_expanded: Vec::new(),
             a11y_options: a11y_ui::A11yOptions::default(),
             ocr_draft: ocr_ui::OcrDraft::default(),
+            enhance_draft: enhance_ui::EnhanceDraft::default(),
             ocr_run: None,
             ocr_batch: None,
             bates_batch: None,
@@ -980,6 +993,8 @@ impl PdfCraftApp {
             marks_draft: Default::default(),
             export_draft: Default::default(),
             export_status: None,
+            export_run: None,
+            export_cancel: Default::default(),
             signature: None,
             initials: None,
             signature_draft: Default::default(),
@@ -1505,6 +1520,7 @@ impl PdfCraftApp {
         self.signature_progress(ctx);
         if widgets::progress_notice(self, ctx) {
             self.cancel_optimize();
+            self.cancel_export();
         }
     }
 
@@ -1945,6 +1961,14 @@ impl PdfCraftApp {
                     "export-all-images" => Some(Dialog::Export(export_ui::ExportKind::AllImages)),
                     "accessibility-options" => Some(Dialog::AccessibilityOptions),
                     "recognize-text" => Some(Dialog::RecognizeText),
+                    "enhance-scans" => Some(Dialog::EnhanceScans),
+                    "export-word" => Some(Dialog::Export(export_ui::ExportKind::Word)),
+                    "export-excel" => Some(Dialog::Export(export_ui::ExportKind::Excel)),
+                    "export-powerpoint" => Some(Dialog::Export(export_ui::ExportKind::PowerPoint)),
+                    "export-html" => Some(Dialog::Export(export_ui::ExportKind::Html)),
+                    "export-rtf" => Some(Dialog::Export(export_ui::ExportKind::Rtf)),
+                    "export-svg" => Some(Dialog::Export(export_ui::ExportKind::Svg)),
+                    "export-accessible-text" => Some(Dialog::Export(export_ui::ExportKind::AccessibleText)),
                     "js-console" => Some(Dialog::JsConsole),
                     "js-debugger" => {
                         self.open_js_debugger();

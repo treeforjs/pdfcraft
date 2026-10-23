@@ -3100,3 +3100,53 @@ compare-page	Moved	Áthelyezve
 	{n} more	még {n}
 	{n} more not shown	további {n} nem látható
 	{n} skipped	{n} kihagyva
+	; text recognized on {n} scanned pages	; szöveg felismerve {n} beolvasott oldalon
+	A flowing document: paragraphs in reading order with their fonts and styles, headings, lists, tables and images.	Folyamatos dokumentum: bekezdések olvasási sorrendben a betűtípusaikkal és stílusaikkal, címsorok, listák, táblázatok és képek.
+	Add a selectable text layer	Kijelölhető szövegréteg hozzáadása
+	An export is already running	Már fut egy exportálás
+	Cleans up the images on scanned or photographed pages. Each correction can be undone.	Megtisztítja a beolvasott vagy lefényképezett oldalak képeit. Minden javítás visszavonható.
+	Correct camera photos	Fényképezőgépes fotók javítása
+	Couldn't enhance the scans: {e}	Nem sikerült feljavítani a beolvasásokat: {e}
+	Despeckle	Foltok eltávolítása
+	Editable Text and Images	Szerkeszthető szöveg és képek
+	Editable text boxes and pictures	Szerkeszthető szövegdobozok és képek
+	Enhance	Feljavítás
+	Enhance Scans	Beolvasások feljavítása
+	Enhanced: {list}	Feljavítva: {list}
+	Export Accessible Text	Akadálymentes szöveg exportálása
+	Export cancelled	Exportálás megszakítva
+	Export cancelled after {n} pages	Exportálás megszakítva {n} oldal után
+	Export stopped unexpectedly	Az exportálás váratlanul leállt
+	Export to Excel	Exportálás Excelbe
+	Export to HTML	Exportálás HTML-be
+	Export to PowerPoint	Exportálás PowerPointba
+	Export to RTF	Exportálás RTF-be
+	Export to SVG	Exportálás SVG-be
+	Export to Word	Exportálás Wordbe
+	Finds the page in a photo, corrects its perspective and evens out the lighting	Megkeresi az oldalt a fotón, kijavítja a perspektíváját és kiegyenlíti a megvilágítást
+	Nothing needed enhancing on these pages	Ezeken az oldalakon nem volt mit feljavítani
+	On every page without text	Minden szöveg nélküli oldalon
+	On scanned pages	A beolvasott oldalakon
+	One SVG file per page, named after the document: vector paths, text as outlines, images.	Oldalanként egy SVG-fájl a dokumentumról elnevezve: vektoros útvonalak, körvonalazott szöveg, képek.
+	One picture per page	Oldalanként egy kép
+	One slide per page.	Oldalanként egy dia.
+	One web page: headings, paragraphs with their fonts and styles, lists, tables and images inline.	Egy weboldal: címsorok, bekezdések a betűtípusaikkal és stílusaikkal, listák, táblázatok és beágyazott képek.
+	One worksheet per page: tables as cell grids, numbers as numbers, images as pictures.	Oldalanként egy munkalap: táblázatok cellarácsként, számok számként, képek képként.
+	Picture resolution	Képfelbontás
+	Removes isolated specks before reading; with an output that changes the page, from the page images too	Olvasás előtt eltávolítja az elszigetelt foltokat; az oldalt módosító kimenetnél az oldal képeiről is
+	Rich text: paragraphs with their fonts and styles, and tables.	Formázott szöveg: bekezdések a betűtípusaikkal és stílusaikkal, valamint táblázatok.
+	Straighten skewed pages	Ferde oldalak kiegyenesítése
+	The tagged text in logical reading order, as a screen reader reads it.	A címkézett szöveg logikai olvasási sorrendben, ahogy egy képernyőolvasó felolvassa.
+	Turns pages scanned at a slant (up to 15°) straight	Kiegyenesíti a ferdén beolvasott oldalakat (legfeljebb 15°)
+	Turns recognized lines into editable text in a matching font, size and colour; the rest of the page stays as an image	A felismert sorokat szerkeszthető szöveggé alakítja egyező betűtípussal, mérettel és színnel; az oldal többi része kép marad
+	Whitens the paper background before reading; with an output that changes the page, the page images too	Olvasás előtt kifehéríti a papír hátterét; az oldalt módosító kimenetnél az oldal képeit is
+	background whitened in {n} images	háttér kifehérítve {n} képen
+	specks removed from {n} images	foltok eltávolítva {n} képről
+	{n} camera photos corrected	{n} fényképezőgépes fotó javítva
+	{n} pages straightened	{n} oldal kiegyenesítve
+	Export to PowerPoint…	Exportálás PowerPointba…
+	Export to SVG…	Exportálás SVG-be…
+	Export accessible text…	Akadálymentes szöveg exportálása…
+	Enhance scans…	Beolvasások feljavítása…
+	SVG (one file per page)	SVG (oldalanként egy fájl)
+	Accessible text	Akadálymentes szöveg

@@ -130,8 +130,21 @@ impl Session {
         options: &ExportOcr,
         export: impl FnOnce(&Document) -> Result<T, String>,
     ) -> Result<(T, ExportOcrReport), String> {
+        self.with_export_ocr_progress(id, pages, options, &mut |_, _| true, export)
+    }
+
+    /// [`Session::with_export_ocr`], reporting recognition as `progress(pages done, total)`;
+    /// returning false stops recognition and the export with an error.
+    pub fn with_export_ocr_progress<T>(
+        &self,
+        id: DocId,
+        pages: &[usize],
+        options: &ExportOcr,
+        progress: &mut dyn FnMut(usize, usize) -> bool,
+        export: impl FnOnce(&Document) -> Result<T, String>,
+    ) -> Result<(T, ExportOcrReport), String> {
         let settings = OcrSettings { language: options.language.clone(), ..Default::default() };
-        let load = || -> Result<Result<Ready<'static>, String>, String> {
+        let load = || -> Result<Result<Ready<'_>, String>, String> {
             let engine = match self.ocr_engine_for(&settings) {
                 Ok(e) => e,
                 Err(why) => return Ok(Err(why)),
@@ -151,7 +164,7 @@ impl Session {
                 return Ok(Err(e.to_string()));
             }
             let reader = engine.clone();
-            let run = move |job: OcrJob| job.run(&EngineRecognizer { engine: reader.as_ref(), language: &language }, |_, _| true);
+            let run = move |job: OcrJob| job.run(&EngineRecognizer { engine: reader.as_ref(), language: &language }, &mut *progress);
             Ok(Ok(Ready { engine: Some(engine), run: Box::new(run) }))
         };
         self.export_ocr_with(id, pages, options, load, export)

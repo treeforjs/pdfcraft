@@ -3065,3 +3065,53 @@ compare-page	Moved	Преместена
 	{n} more	още {n}
 	{n} more not shown	още {n} не са показани
 	{n} skipped	пропуснати: {n}
+	; text recognized on {n} scanned pages	; текстът е разпознат на {n} сканирани страници
+	A flowing document: paragraphs in reading order with their fonts and styles, headings, lists, tables and images.	Свързан документ: абзаци в реда на четене с техните шрифтове и стилове, заглавия, списъци, таблици и изображения.
+	Add a selectable text layer	Добавяне на слой с текст за избиране
+	An export is already running	Вече се изпълнява експортиране
+	Cleans up the images on scanned or photographed pages. Each correction can be undone.	Почиства изображенията на сканирани или снимани страници. Всяка корекция може да бъде отменена.
+	Correct camera photos	Коригиране на снимки от камера
+	Couldn't enhance the scans: {e}	Сканираните изображения не можаха да бъдат подобрени: {e}
+	Despeckle	Премахване на петна
+	Editable Text and Images	Редактируем текст и изображения
+	Editable text boxes and pictures	Редактируеми текстови полета и изображения
+	Enhance	Подобряване
+	Enhance Scans	Подобряване на сканирани изображения
+	Enhanced: {list}	Подобрено: {list}
+	Export Accessible Text	Експортиране на достъпен текст
+	Export cancelled	Експортирането е отменено
+	Export cancelled after {n} pages	Експортирането е отменено след {n} страници
+	Export stopped unexpectedly	Експортирането спря неочаквано
+	Export to Excel	Експортиране в Excel
+	Export to HTML	Експортиране в HTML
+	Export to PowerPoint	Експортиране в PowerPoint
+	Export to RTF	Експортиране в RTF
+	Export to SVG	Експортиране в SVG
+	Export to Word	Експортиране в Word
+	Finds the page in a photo, corrects its perspective and evens out the lighting	Намира страницата в снимка, коригира перспективата и изравнява осветлението
+	Nothing needed enhancing on these pages	Няма нищо за подобряване на тези страници
+	On every page without text	На всяка страница без текст
+	On scanned pages	На сканирани страници
+	One SVG file per page, named after the document: vector paths, text as outlines, images.	Един SVG файл на страница, именуван по документа: векторни пътища, текст като контури, изображения.
+	One picture per page	Едно изображение на страница
+	One slide per page.	Един слайд на страница.
+	One web page: headings, paragraphs with their fonts and styles, lists, tables and images inline.	Една уеб страница: заглавия, абзаци с техните шрифтове и стилове, списъци, таблици и вградени изображения.
+	One worksheet per page: tables as cell grids, numbers as numbers, images as pictures.	Един работен лист на страница: таблиците като мрежи от клетки, числата като числа, изображенията като картини.
+	Picture resolution	Разделителна способност на изображенията
+	Removes isolated specks before reading; with an output that changes the page, from the page images too	Премахва отделни петна преди четене; при изход, който променя страницата, и от изображенията на страницата
+	Rich text: paragraphs with their fonts and styles, and tables.	Форматиран текст: абзаци с техните шрифтове и стилове, и таблици.
+	Straighten skewed pages	Изправяне на наклонени страници
+	The tagged text in logical reading order, as a screen reader reads it.	Текстът с етикети в логически ред на четене, както го чете екранен четец.
+	Turns pages scanned at a slant (up to 15°) straight	Изправя страници, сканирани под наклон (до 15°)
+	Turns recognized lines into editable text in a matching font, size and colour; the rest of the page stays as an image	Превръща разпознатите редове в редактируем текст с подходящ шрифт, размер и цвят; останалата част от страницата остава изображение
+	Whitens the paper background before reading; with an output that changes the page, the page images too	Избелва фона на хартията преди четене; при изход, който променя страницата, и изображенията на страницата
+	background whitened in {n} images	фонът е избелен в {n} изображения
+	specks removed from {n} images	петната са премахнати от {n} изображения
+	{n} camera photos corrected	{n} снимки от камера са коригирани
+	{n} pages straightened	{n} страници са изправени
+	Export to PowerPoint…	Експортиране в PowerPoint…
+	Export to SVG…	Експортиране в SVG…
+	Export accessible text…	Експортиране на достъпен текст…
+	Enhance scans…	Подобряване на сканирани изображения…
+	SVG (one file per page)	SVG (един файл на страница)
+	Accessible text	Достъпен текст

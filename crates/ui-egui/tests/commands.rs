@@ -65,10 +65,6 @@ const PICKERS: &[&str] = &[
     "a11y.report",
     "ocr.recognize_batch",
     "form.merge_data",
-    "export.docx",
-    "export.html",
-    "export.rtf",
-    "export.xlsx",
     "measure.export",
     // Act on a window other than the main one: tests/windows.rs runs them from inside one.
     "window.move_to_main",

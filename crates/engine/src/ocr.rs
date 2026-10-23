@@ -1125,6 +1125,93 @@ impl Session {
     }
 }
 
+/// What Enhance scans ▸ Straighten found on one page.
+#[derive(Clone, Debug, PartialEq)]
+pub struct StraightenedPage {
+    /// 0-based.
+    pub page: usize,
+    /// The skew found, in degrees counterclockwise (0 when straight or not measured).
+    pub skew: f32,
+    /// Whether the page is turned straight.
+    pub straightened: bool,
+    /// Why the page was left alone without measuring.
+    pub skipped: Option<String>,
+}
+
+/// Straighten measures skew on a copy at most this many pixels a side.
+const STRAIGHTEN_SIDE: f32 = 2000.0;
+
+impl Session {
+    /// Scan & OCR ▸ Enhance scans ▸ Straighten pages: measure the skew of the scanned pages
+    /// among `pages` (0-based; empty = all) of document `id` without recognizing text (the
+    /// projection-profile estimate of [`pdfcraft_ocr::orient`], within ±15°) and turn skewed
+    /// pages straight, in their content about the page centre ([`Edit::StraightenPage`]), as
+    /// one undoable step. Pages that draw no image are left alone, as are pages whose skew is
+    /// under `min_skew` degrees. With `dry_run` nothing changes.
+    pub fn straighten_scans(&mut self, id: DocId, pages: &[usize], min_skew: f32, dry_run: bool) -> Result<Vec<StraightenedPage>, EditError> {
+        let doc = self.get(id).ok_or_else(|| EditError::Invalid("no such document".into()))?;
+        let all = doc.info.pages.len();
+        let mut unique = std::collections::BTreeSet::new();
+        if pages.iter().any(|p| *p >= all || !unique.insert(*p)) {
+            return Err(EditError::Invalid(format!("straighten pages must be unique page indexes below {all}")));
+        }
+        if !min_skew.is_finite() || !(0.0..=pdfcraft_ocr::orient::MAX_SKEW as f32).contains(&min_skew) {
+            return Err(EditError::Invalid(format!("the smallest skew to correct must be between 0 and {} degrees", pdfcraft_ocr::orient::MAX_SKEW)));
+        }
+        if !dry_run {
+            if let Some(why) = &doc.read_only_reason {
+                return Err(EditError::ReadOnly(why.clone()));
+            }
+            if !doc.allows_modification() {
+                return Err(EditError::NotPermitted("changes to the document"));
+            }
+        }
+        let pages: Vec<usize> = if pages.is_empty() { (0..all).collect() } else { pages.to_vec() };
+        let mut renderer = PageRenderer::new(doc.bytes.clone(), doc.config.clone());
+        let mut out = Vec::with_capacity(pages.len());
+        let mut edits = Vec::new();
+        for page in pages {
+            let Some(info) = doc.info.pages.get(page) else { continue };
+            let skipped = |why: &str| StraightenedPage { page, skew: 0.0, straightened: false, skipped: Some(why.to_string()) };
+            if doc.page_images(page).is_empty() {
+                out.push(skipped("the page has no scanned image"));
+                continue;
+            }
+            let side = info.width.max(info.height).max(1.0);
+            let scale = (150.0 / 72.0f32).min(STRAIGHTEN_SIDE / side);
+            let shot = renderer.render(RenderRequest { page, scale, ..Default::default() });
+            if let Some(e) = shot.error {
+                out.push(skipped(&e));
+                continue;
+            }
+            let options = pdfcraft_ocr::orient::Options { auto_rotate: false, deskew: true };
+            let found = crate::guard(|| pdfcraft_ocr::orient::correct(&shot.rgba, shot.width, shot.height, options, |_, _, _| Ok(Vec::new())));
+            let orientation = match found {
+                Ok(Ok(c)) => c.orientation,
+                Ok(Err(e)) => {
+                    out.push(skipped(&e.to_string()));
+                    continue;
+                }
+                Err(m) => {
+                    out.push(skipped(&format!("measuring the skew failed unexpectedly ({m})")));
+                    continue;
+                }
+            };
+            let skew = orientation.skew;
+            let turn = skew.is_finite() && skew.abs() >= min_skew.max(0.05);
+            if turn {
+                edits.push(straighten(info, page, Orientation { rotation: 0, skew })?);
+            }
+            out.push(StraightenedPage { page, skew, straightened: turn, skipped: None });
+        }
+        if !dry_run && !edits.is_empty() {
+            let edit = if edits.len() == 1 { edits.remove(0) } else { Edit::Batch { label: "Straighten pages".into(), edits } };
+            self.apply(id, edit)?;
+        }
+        Ok(out)
+    }
+}
+
 /// What [`recognize_file`] did to one file.
 #[derive(Clone, Debug, PartialEq)]
 pub struct FileResult {

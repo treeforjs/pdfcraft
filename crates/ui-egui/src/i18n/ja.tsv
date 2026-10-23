@@ -3102,3 +3102,53 @@ compare-page	Moved	移動
 	{n} more	ほか {n} 件
 	{n} more not shown	ほか {n} 件は非表示
 	{n} skipped	{n} 件をスキップ
+	; text recognized on {n} scanned pages	。スキャンされた {n} ページでテキストを認識しました
+	A flowing document: paragraphs in reading order with their fonts and styles, headings, lists, tables and images.	流れのある文書: 読み順の段落とそのフォントやスタイル、見出し、リスト、表、画像。
+	Add a selectable text layer	選択可能なテキストレイヤーを追加
+	An export is already running	書き出しはすでに実行中です
+	Cleans up the images on scanned or photographed pages. Each correction can be undone.	スキャンまたは撮影したページの画像をきれいにします。各補正は取り消せます。
+	Correct camera photos	カメラ写真を補正
+	Couldn't enhance the scans: {e}	スキャンを補正できませんでした: {e}
+	Despeckle	ノイズ除去
+	Editable Text and Images	編集可能なテキストと画像
+	Editable text boxes and pictures	編集可能なテキストボックスと画像
+	Enhance	補正
+	Enhance Scans	スキャンを補正
+	Enhanced: {list}	補正しました: {list}
+	Export Accessible Text	アクセシブルテキストを書き出し
+	Export cancelled	書き出しをキャンセルしました
+	Export cancelled after {n} pages	{n} ページで書き出しをキャンセルしました
+	Export stopped unexpectedly	書き出しが予期せず停止しました
+	Export to Excel	Excel に書き出し
+	Export to HTML	HTML に書き出し
+	Export to PowerPoint	PowerPoint に書き出し
+	Export to RTF	RTF に書き出し
+	Export to SVG	SVG に書き出し
+	Export to Word	Word に書き出し
+	Finds the page in a photo, corrects its perspective and evens out the lighting	写真からページを見つけ、遠近を補正し、明るさのむらを整えます
+	Nothing needed enhancing on these pages	これらのページには補正が必要な箇所はありませんでした
+	On every page without text	テキストのないすべてのページ
+	On scanned pages	スキャンされたページ
+	One SVG file per page, named after the document: vector paths, text as outlines, images.	ページごとに 1 つの SVG ファイル (文書名を付けます): ベクターパス、アウトライン化したテキスト、画像。
+	One picture per page	ページごとに 1 枚の画像
+	One slide per page.	ページごとに 1 枚のスライド。
+	One web page: headings, paragraphs with their fonts and styles, lists, tables and images inline.	1 つの Web ページ: 見出し、フォントやスタイル付きの段落、リスト、表、埋め込み画像。
+	One worksheet per page: tables as cell grids, numbers as numbers, images as pictures.	ページごとに 1 つのワークシート: 表はセルのグリッド、数値は数値、画像は画像として。
+	Picture resolution	画像の解像度
+	Removes isolated specks before reading; with an output that changes the page, from the page images too	認識の前に孤立した点を取り除きます。ページを変更する出力では、ページ画像からも取り除きます
+	Rich text: paragraphs with their fonts and styles, and tables.	リッチテキスト: フォントやスタイル付きの段落と表。
+	Straighten skewed pages	傾いたページをまっすぐにする
+	The tagged text in logical reading order, as a screen reader reads it.	スクリーンリーダーが読む順序の、タグ付きテキスト。
+	Turns pages scanned at a slant (up to 15°) straight	斜めにスキャンされたページ (15° まで) をまっすぐにします
+	Turns recognized lines into editable text in a matching font, size and colour; the rest of the page stays as an image	認識した行を、フォント・サイズ・色を合わせた編集可能なテキストにします。ページの残りは画像のまま残ります
+	Whitens the paper background before reading; with an output that changes the page, the page images too	認識の前に紙の背景を白くします。ページを変更する出力では、ページ画像も白くします
+	background whitened in {n} images	{n} 個の画像の背景を白くしました
+	specks removed from {n} images	{n} 個の画像から点を取り除きました
+	{n} camera photos corrected	{n} 枚のカメラ写真を補正しました
+	{n} pages straightened	{n} ページをまっすぐにしました
+	Export to PowerPoint…	PowerPoint に書き出し…
+	Export to SVG…	SVG に書き出し…
+	Export accessible text…	アクセシブルテキストを書き出し…
+	Enhance scans…	スキャンを補正…
+	SVG (one file per page)	SVG (ページごとに 1 ファイル)
+	Accessible text	アクセシブルテキスト

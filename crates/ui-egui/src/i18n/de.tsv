@@ -3102,3 +3102,53 @@ compare-page	Moved	Verschoben
 	{n} more	{n} weitere
 	{n} more not shown	{n} weitere nicht angezeigt
 	{n} skipped	{n} übersprungen
+	; text recognized on {n} scanned pages	; Text auf {n} gescannten Seiten erkannt
+	A flowing document: paragraphs in reading order with their fonts and styles, headings, lists, tables and images.	Ein fließendes Dokument: Absätze in Lesereihenfolge mit ihren Schriften und Stilen, Überschriften, Listen, Tabellen und Bilder.
+	Add a selectable text layer	Auswählbare Textebene hinzufügen
+	An export is already running	Ein Export läuft bereits
+	Cleans up the images on scanned or photographed pages. Each correction can be undone.	Bereinigt die Bilder gescannter oder fotografierter Seiten. Jede Korrektur kann rückgängig gemacht werden.
+	Correct camera photos	Kamerafotos korrigieren
+	Couldn't enhance the scans: {e}	Die Scans konnten nicht verbessert werden: {e}
+	Despeckle	Flecken entfernen
+	Editable Text and Images	Bearbeitbarer Text und Bilder
+	Editable text boxes and pictures	Bearbeitbare Textfelder und Bilder
+	Enhance	Verbessern
+	Enhance Scans	Scans verbessern
+	Enhanced: {list}	Verbessert: {list}
+	Export Accessible Text	Barrierefreien Text exportieren
+	Export cancelled	Export abgebrochen
+	Export cancelled after {n} pages	Export nach {n} Seiten abgebrochen
+	Export stopped unexpectedly	Der Export wurde unerwartet beendet
+	Export to Excel	Nach Excel exportieren
+	Export to HTML	Als HTML exportieren
+	Export to PowerPoint	Nach PowerPoint exportieren
+	Export to RTF	Als RTF exportieren
+	Export to SVG	Als SVG exportieren
+	Export to Word	Nach Word exportieren
+	Finds the page in a photo, corrects its perspective and evens out the lighting	Findet die Seite in einem Foto, korrigiert ihre Perspektive und gleicht die Beleuchtung aus
+	Nothing needed enhancing on these pages	Auf diesen Seiten war nichts zu verbessern
+	On every page without text	Auf jeder Seite ohne Text
+	On scanned pages	Auf gescannten Seiten
+	One SVG file per page, named after the document: vector paths, text as outlines, images.	Eine SVG-Datei pro Seite, nach dem Dokument benannt: Vektorpfade, Text als Konturen, Bilder.
+	One picture per page	Ein Bild pro Seite
+	One slide per page.	Eine Folie pro Seite.
+	One web page: headings, paragraphs with their fonts and styles, lists, tables and images inline.	Eine Webseite: Überschriften, Absätze mit ihren Schriften und Stilen, Listen, Tabellen und eingebettete Bilder.
+	One worksheet per page: tables as cell grids, numbers as numbers, images as pictures.	Ein Arbeitsblatt pro Seite: Tabellen als Zellraster, Zahlen als Zahlen, Bilder als Bilder.
+	Picture resolution	Bildauflösung
+	Removes isolated specks before reading; with an output that changes the page, from the page images too	Entfernt einzelne Flecken vor dem Lesen; bei einer Ausgabe, die die Seite ändert, auch aus den Seitenbildern
+	Rich text: paragraphs with their fonts and styles, and tables.	Rich Text: Absätze mit ihren Schriften und Stilen sowie Tabellen.
+	Straighten skewed pages	Schiefe Seiten gerade ausrichten
+	The tagged text in logical reading order, as a screen reader reads it.	Der getaggte Text in logischer Lesereihenfolge, wie ihn ein Bildschirmleser vorliest.
+	Turns pages scanned at a slant (up to 15°) straight	Richtet schräg gescannte Seiten (bis 15°) gerade aus
+	Turns recognized lines into editable text in a matching font, size and colour; the rest of the page stays as an image	Macht erkannte Zeilen zu bearbeitbarem Text in passender Schrift, Größe und Farbe; der Rest der Seite bleibt ein Bild
+	Whitens the paper background before reading; with an output that changes the page, the page images too	Macht den Papierhintergrund vor dem Lesen weiß; bei einer Ausgabe, die die Seite ändert, auch die Seitenbilder
+	background whitened in {n} images	Hintergrund in {n} Bildern geweißt
+	specks removed from {n} images	Flecken aus {n} Bildern entfernt
+	{n} camera photos corrected	{n} Kamerafotos korrigiert
+	{n} pages straightened	{n} Seiten gerade ausgerichtet
+	Export to PowerPoint…	Nach PowerPoint exportieren…
+	Export to SVG…	Als SVG exportieren…
+	Export accessible text…	Barrierefreien Text exportieren…
+	Enhance scans…	Scans verbessern…
+	SVG (one file per page)	SVG (eine Datei pro Seite)
+	Accessible text	Barrierefreier Text

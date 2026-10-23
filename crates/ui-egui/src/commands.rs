@@ -541,10 +541,14 @@ impl PdfCraftApp {
             }
             "form.export_data" => self.export_data_dialog(false, true),
             "form.merge_data" => self.merge_data_dialog(),
-            "export.docx" => self.export_office_dialog(pdfcraft_engine::compare::OfficeFormat::Docx),
-            "export.html" => self.export_office_dialog(pdfcraft_engine::compare::OfficeFormat::Html),
-            "export.rtf" => self.export_office_dialog(pdfcraft_engine::compare::OfficeFormat::Rtf),
-            "export.xlsx" => self.export_office_dialog(pdfcraft_engine::compare::OfficeFormat::Xlsx),
+            "export.docx" => self.dialog = Some(Dialog::Export(crate::export_ui::ExportKind::Word)),
+            "export.html" => self.dialog = Some(Dialog::Export(crate::export_ui::ExportKind::Html)),
+            "export.rtf" => self.dialog = Some(Dialog::Export(crate::export_ui::ExportKind::Rtf)),
+            "export.xlsx" => self.dialog = Some(Dialog::Export(crate::export_ui::ExportKind::Excel)),
+            "export.pptx" => self.dialog = Some(Dialog::Export(crate::export_ui::ExportKind::PowerPoint)),
+            "export.svg" => self.dialog = Some(Dialog::Export(crate::export_ui::ExportKind::Svg)),
+            "export.accessible_text" => self.dialog = Some(Dialog::Export(crate::export_ui::ExportKind::AccessibleText)),
+            "ocr.enhance" => self.dialog = Some(Dialog::EnhanceScans),
             "form.prepare" => {
                 self.left = crate::LeftPanel::Tool("form");
                 self.left_open = true;

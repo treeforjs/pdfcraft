@@ -1467,7 +1467,20 @@ fn coincident_ops(lines: &[TextLine], targets: &[&TextLine]) -> std::collections
 /// The paragraphs on a page (0-based).
 pub fn text_blocks(doc: &Document, page: usize) -> Result<Vec<TextBlock>, EditError> {
     let lines = text_lines(doc, page)?;
-    Ok(group_blocks(&lines, true))
+    Ok(group_blocks(&lines, Grouping::Mixed))
+}
+
+/// How [`group_blocks`] joins lines into paragraphs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Grouping {
+    /// Only lines of one style, row after row ([`reading_blocks`]).
+    Style,
+    /// Lines of any style, on a row and row after row, kept as typed (the editor's paragraphs).
+    Mixed,
+    /// Reflowed reading text ([`reading_paragraphs`]): styles mix within a row and across rows
+    /// of the same size, rows are joined with one space and hyphens at row ends are dropped.
+    /// A row set wholly in bold (or larger) doesn't run on into a regular row: that is a heading.
+    Reflow,
 }
 
 /// The paragraphs on a page as a reader sees them, including text drawn by form XObjects
@@ -1475,7 +1488,16 @@ pub fn text_blocks(doc: &Document, page: usize) -> Result<Vec<TextBlock>, EditEr
 /// [`text_blocks`] indexes, so they can't be passed to [`replace_block`] or [`rewrite_block`].
 pub fn reading_blocks(doc: &Document, page: usize) -> Result<Vec<TextBlock>, EditError> {
     let lines = reading_lines(doc, page)?;
-    Ok(group_blocks(&lines, false))
+    Ok(group_blocks(&lines, Grouping::Style))
+}
+
+/// The page's paragraphs as a reader sees them (like [`reading_blocks`]), with inline style
+/// changes kept inside the paragraph as [`TextBlock::runs`]: a bold word or a link in another
+/// colour stays in its sentence. Rows are joined with a space and hyphens at row ends dropped.
+/// For Export to Word, HTML and RTF. Read-only, like [`reading_blocks`].
+pub fn reading_paragraphs(doc: &Document, page: usize) -> Result<Vec<TextBlock>, EditError> {
+    let lines = reading_lines(doc, page)?;
+    Ok(group_blocks(&lines, Grouping::Reflow))
 }
 
 /// Where a paragraph sits in its own text frame, for placing it as a box that may be turned
@@ -1493,7 +1515,7 @@ pub struct BlockFrame {
 /// [`reading_blocks`], each with its [`BlockFrame`].
 pub fn reading_blocks_framed(doc: &Document, page: usize) -> Result<Vec<(TextBlock, BlockFrame)>, EditError> {
     let lines = reading_lines(doc, page)?;
-    let blocks = group_blocks(&lines, false);
+    let blocks = group_blocks(&lines, Grouping::Style);
     Ok(blocks
         .into_iter()
         .map(|b| {
@@ -1560,7 +1582,10 @@ fn horizontal_text_size(line: &TextLine) -> f64 {
     (size * horizontal_scale(&line.origin) * line.origin.state.scale.abs()).max(1.0)
 }
 
-fn group_blocks(lines: &[TextLine], mixed: bool) -> Vec<TextBlock> {
+fn group_blocks(lines: &[TextLine], grouping: Grouping) -> Vec<TextBlock> {
+    let mixed = grouping != Grouping::Style;
+    // Rows are joined as reading text (trimmed, hyphens dropped) rather than kept as typed.
+    let reflow = grouping != Grouping::Mixed;
     let mut blocks: Vec<TextBlock> = Vec::new();
     let mut gap: Option<f64> = None;
     let mut row_start = 0;
@@ -1598,7 +1623,8 @@ fn group_blocks(lines: &[TextLine], mixed: bool) -> Vec<TextBlock> {
                     && g > p.size.max(l.size) * 0.8
                     && g < p.size.max(l.size) * 2.5
                     && gap.is_none_or(|first| (g - first).abs() < first * 0.2)
-            });
+            })
+            && (grouping != Grouping::Reflow || continues_reflowed_row(lines, blocks.last(), row_start, l));
         if (same_row || next_row)
             && let Some(b) = blocks.last_mut()
         {
@@ -1608,7 +1634,10 @@ fn group_blocks(lines: &[TextLine], mixed: bool) -> Vec<TextBlock> {
                 }
                 b.line_count += 1;
                 row_start = i;
-                if !mixed && b.text.ends_with('-') {
+                if grouping == Grouping::Reflow {
+                    trim_block_end(b);
+                }
+                if reflow && b.text.ends_with('-') {
                     b.text.pop();
                     if let Some(run) = b.runs.last_mut() {
                         run.end = run.end.saturating_sub(1);
@@ -1633,7 +1662,13 @@ fn group_blocks(lines: &[TextLine], mixed: bool) -> Vec<TextBlock> {
                     glyph.adjustment += adjustment;
                 }
             }
-            let part = if next_row && !mixed { l.text.trim_matches(paragraph_separator) } else { &l.text };
+            // Reflowed rows keep their trailing space until the row ends: a style change on
+            // the same row may follow it.
+            let part = match (next_row, grouping) {
+                (true, Grouping::Reflow) => l.text.trim_start_matches(paragraph_separator),
+                (true, Grouping::Style) => l.text.trim_matches(paragraph_separator),
+                _ => &l.text,
+            };
             let start = b.runs.last().map_or(0, |r| r.end);
             b.text.push_str(part);
             b.runs.push(TextRun { row_start: next_row, ..run_of(l, start, start + part.chars().count()) });
@@ -1642,7 +1677,11 @@ fn group_blocks(lines: &[TextLine], mixed: bool) -> Vec<TextBlock> {
         } else {
             gap = None;
             row_start = i;
-            let text = if mixed { l.text.clone() } else { l.text.trim_matches(paragraph_separator).to_string() };
+            let text = match grouping {
+                Grouping::Mixed => l.text.clone(),
+                Grouping::Reflow => l.text.trim_start_matches(paragraph_separator).to_string(),
+                Grouping::Style => l.text.trim_matches(paragraph_separator).to_string(),
+            };
             let run = run_of(l, 0, text.chars().count());
             blocks.push(TextBlock {
                 text,
@@ -1660,11 +1699,37 @@ fn group_blocks(lines: &[TextLine], mixed: bool) -> Vec<TextBlock> {
             });
         }
     }
+    if grouping == Grouping::Reflow {
+        blocks.iter_mut().for_each(trim_block_end);
+    }
     blocks.retain(|b| !b.text.trim().is_empty());
     for b in &mut blocks {
         b.rtl = crate::bidi::has_rtl(&b.text) && crate::bidi::base_rtl(&b.text);
     }
     blocks
+}
+
+/// Drop the separators at the end of a reflowed block's text, and the run ends past it.
+fn trim_block_end(b: &mut TextBlock) {
+    let kept = b.text.trim_end_matches(paragraph_separator).len();
+    b.text.truncate(kept);
+    let chars = b.text.chars().count();
+    for r in &mut b.runs {
+        r.end = r.end.min(chars);
+        r.start = r.start.min(r.end);
+    }
+}
+
+/// [`Grouping::Reflow`]: whether line `l` may start a new row of `block`, whose current row
+/// starts at line `row_start`: the sizes match, and the row isn't a bold heading over regular
+/// text.
+fn continues_reflowed_row(lines: &[TextLine], block: Option<&TextBlock>, row_start: usize, l: &TextLine) -> bool {
+    let Some(b) = block else { return false };
+    let row: Vec<&TextLine> = b.lines.iter().filter(|i| **i >= row_start).filter_map(|i| lines.get(*i)).collect();
+    if row.iter().any(|p| (p.size - l.size).abs() > 0.5) {
+        return false;
+    }
+    !(row.iter().all(|p| p.bold) && !l.bold)
 }
 
 /// The gap from line `p` to line `l` when `l` continues `p`'s row: to its right, or for
@@ -1852,7 +1917,7 @@ fn rewrite_block_inner(doc: &mut Document, page: usize, block: usize, text: Opti
         return Err(EditError::Invalid("font_resource selects an exact face; omit font, bold and italic".into()));
     }
     let lines = text_lines(doc, page)?;
-    let blocks = group_blocks(&lines, true);
+    let blocks = group_blocks(&lines, Grouping::Mixed);
     let b = blocks.get(block).ok_or_else(|| EditError::Invalid(format!("page {} has no paragraph {}", page + 1, block + 1)))?;
     mixed::validate_text(&b.text)?;
     if b.vertical {
@@ -2111,7 +2176,7 @@ pub(crate) fn upright_and_plain(lines: &[TextLine], b: &TextBlock) -> (bool, boo
 
 /// The paragraphs of `lines`, as [`text_blocks`] groups them.
 pub(crate) fn group_blocks_pub(lines: &[TextLine]) -> Vec<TextBlock> {
-    group_blocks(lines, true)
+    group_blocks(lines, Grouping::Mixed)
 }
 
 /// Take paragraph `b` (of `lines`, the page's [`text_lines`]) off the page: its text operators
