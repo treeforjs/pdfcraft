@@ -1,0 +1,92 @@
+name: Web app
+
+# Builds the browser version from main and publishes it with GitHub Pages
+# (https://treeforjs.github.io/pdfcraft/). It is off until a maintainer turns it on:
+#
+#   1. Settings → Pages → Source: GitHub Actions.
+#   2. Settings → Secrets and variables → Actions → Variables: PDFCRAFT_WEB_DEPLOY = true.
+#
+# With both set, every push to main deploys. Run it by hand (Actions → Web app → Run workflow) to
+# build without deploying, or with "deploy" ticked to publish the current main. See
+# packaging/web/README.md, "GitHub Pages".
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: Publish to GitHub Pages after building
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: web-${{ github.ref }}
+  # A deploy that has started finishes; the next push queues behind it.
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build the web app
+    # A push only builds once deploys are turned on; a manual run always builds.
+    if: github.event_name == 'workflow_dispatch' || vars.PDFCRAFT_WEB_DEPLOY == 'true'
+    runs-on: ubuntu-latest
+    env:
+      CARGO_TERM_COLOR: always
+      TRUNK_VERSION: 0.21.14
+    steps:
+      - uses: actions/checkout@v4
+      # The craft-fonts build input (Japanese fonts), pinned as in release.yml. Bump deliberately.
+      - name: Check out craft-fonts
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: storytold/craft-fonts
+          ref: abb83316d96aa59c1cf64784289e378fe9fa5695
+          path: craft-fonts
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: web
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Install trunk
+        run: |
+          curl -fsSL "https://github.com/trunk-rs/trunk/releases/download/v${TRUNK_VERSION}/trunk-x86_64-unknown-linux-gnu.tar.gz" \
+            | tar -xz -C "$HOME/.cargo/bin" trunk
+          trunk --version
+      - name: Build
+        env:
+          CRAFT_FONTS_DIR: ${{ github.workspace }}/craft-fonts
+          CRAFT_FONTS_REQUIRED: "1"
+        run: packaging/web/package.sh
+      # The same static site as the release zip (app, OCR models, notices).
+      - name: Unpack the site
+        run: |
+          mkdir -p "$RUNNER_TEMP/site"
+          unzip -q dist/release/pdfcraft-web-*.zip -d "$RUNNER_TEMP/site"
+          mv "$RUNNER_TEMP"/site/pdfcraft-web-*/ _site
+          test -f _site/index.html
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    name: Publish to GitHub Pages
+    needs: build
+    if: >-
+      vars.PDFCRAFT_WEB_DEPLOY == 'true' && github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || inputs.deploy)
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
