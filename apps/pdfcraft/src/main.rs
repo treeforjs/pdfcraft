@@ -286,6 +286,7 @@ fn app_creator<'a>(
             app.restore(&json);
         }
         app.integrated_titlebar = integrated;
+        app.tool_host = Some(std::sync::Arc::new(pdfcraft_automation::SessionTools { root: None }));
         let ctx = cc.egui_ctx.clone();
         app.set_updater(updates::updater(move || ctx.request_repaint()));
         app.os_key_store_ids = cfg!(any(target_os = "macos", target_os = "windows"));

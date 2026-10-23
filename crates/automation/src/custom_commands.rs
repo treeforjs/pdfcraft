@@ -175,7 +175,12 @@ fn target_tool(name: &str) -> std::result::Result<&'static tools::ToolDef, Strin
 
 /// The tools a custom command may wrap.
 fn allowed_tools() -> Vec<&'static str> {
-    tools::all().iter().filter(|d| target_tool(d.name).is_ok()).map(|d| d.name).collect()
+    wrappable_tools().into_iter().map(|d| d.name).collect()
+}
+
+/// The definitions of the tools a custom command may wrap (the app's command builder lists them).
+pub(crate) fn wrappable_tools() -> Vec<&'static tools::ToolDef> {
+    tools::all().iter().filter(|d| target_tool(d.name).is_ok()).collect()
 }
 
 /// Check `params` against `def`'s schema: known keys (never `doc`), each value's type, range,

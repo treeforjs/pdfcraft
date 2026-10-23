@@ -366,8 +366,9 @@ fn an_earlier_revision_opens_from_document_properties() {
     h.run_steps(2);
     h.state_mut().dialog = Some(Dialog::Properties(pdfcraft_ui_egui::PropsTab::Advanced));
     h.run_steps(2);
-    h.run_steps(2);
-    h.get_by_label("View revision 1").click();
+    // The button sits at the bottom of the scrolled Advanced tab; click it the way assistive
+    // technology does, so its position doesn't matter.
+    h.get_by_label("View revision 1").click_accesskit();
     h.run_steps(3);
     let s = h.state();
     assert!(s.dialog.is_none(), "{:?} {:?}", s.dialog, s.session.get(s.views[s.active.unwrap()].id).unwrap().name);

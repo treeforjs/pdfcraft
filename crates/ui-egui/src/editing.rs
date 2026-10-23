@@ -16,6 +16,8 @@ pub enum CloseRequest {
     Quit,
     /// File ▸ Close all: like Quit, but the application stays open.
     All,
+    /// Close this window (not the main one) once its unsaved documents are resolved.
+    Window(pdfcraft_engine::windows::WindowId),
 }
 
 /// Where Save writes.
@@ -147,6 +149,8 @@ impl PdfCraftApp {
             Some(crate::canvas::ViewAction::Split) => self.dialog = Some(crate::Dialog::Split),
             Some(crate::canvas::ViewAction::CopyPages { cut }) => self.copy_pages(cut),
             Some(crate::canvas::ViewAction::PastePages) => self.paste_pages(),
+            Some(crate::canvas::ViewAction::PageActions(page)) => self.open_page_actions(page),
+            Some(crate::canvas::ViewAction::InsertClipboard { before }) => self.insert_from_clipboard(before),
             None => {}
         }
         applied
@@ -234,7 +238,7 @@ impl PdfCraftApp {
     /// Apply the edit queued on tab `i` (the active one). Returns false only when it was a
     /// field's typing and the field refused it (#166): the editor reopens with the text, and the
     /// user has been told why, so the typing isn't lost and the caller can stop.
-    fn apply_queued_edit(&mut self, i: usize) -> bool {
+    pub(crate) fn apply_queued_edit(&mut self, i: usize) -> bool {
         let Some(edit) = self.views.get_mut(i).and_then(|v| v.pending_edit.take()) else { return true };
         let signature_page = self.views.get_mut(i).and_then(|v| v.fill_signature_page.take());
         let committed = self.views.get_mut(i).and_then(|v| v.forms.committed.take());
@@ -384,6 +388,8 @@ impl PdfCraftApp {
         let Some(id) = self.views.get(index).map(|v| v.id) else { return false };
         let Some(doc) = self.session.get(id) else { return false };
         let (name, path) = (doc.name.clone(), doc.path.clone());
+        // Preferences ▸ Documents: Save As writes a linearized (Fast Web View) file.
+        let fast = matches!(target, SaveTarget::As) && self.session.prefs().fast_web_view;
         #[cfg(not(target_arch = "wasm32"))]
         {
             let destination = match (target, path, &self.save_override) {
@@ -394,14 +400,14 @@ impl PdfCraftApp {
                     let dialog = rfd::AsyncFileDialog::new().add_filter("PDF", &["pdf"]).set_file_name(name);
                     // The bytes are taken once the user has chosen, so edits made meanwhile are saved too.
                     self.ask_one(crate::pickers::Ask::Save(dialog), None, move |app, dest| {
-                        if app.save_doc_to(id, &dest.to_string_lossy()) {
+                        if app.save_doc_to(id, &dest.to_string_lossy(), fast) {
                             after(app);
                         }
                     });
                     return false;
                 }
             };
-            let saved = self.save_doc_to(id, &destination);
+            let saved = self.save_doc_to(id, &destination, fast);
             if saved {
                 after(self);
             }
@@ -414,7 +420,7 @@ impl PdfCraftApp {
                 return false;
             }
             self.run_document_action(id, pdfcraft_engine::DocTrigger::WillSave);
-            let bytes = match self.session.save_bytes(id) {
+            let bytes = match self.bytes_to_save(id, fast) {
                 Ok(b) => b,
                 Err(e) => {
                     self.notify_fmt("Couldn't save {name}: {e}", &[("name", &name), ("e", &e.to_string())]);
@@ -423,7 +429,10 @@ impl PdfCraftApp {
             };
             match download(&name, &bytes) {
                 Ok(()) => {
-                    let _ = self.session.mark_saved(id, bytes, None);
+                    if self.session.mark_saved(id, bytes, None).is_ok() {
+                        // Downloaded: nothing left to recover.
+                        self.forget_recovery(id);
+                    }
                     if let Some(doc) = self.session.get(id) {
                         self.views[index].document_changed(&doc.info);
                     }
@@ -458,7 +467,7 @@ impl PdfCraftApp {
 
     /// Write document `id` to `dest` and make it the document's file. Returns `true` if written.
     #[cfg(not(target_arch = "wasm32"))]
-    fn save_doc_to(&mut self, id: pdfcraft_engine::DocId, dest: &str) -> bool {
+    fn save_doc_to(&mut self, id: pdfcraft_engine::DocId, dest: &str, fast_web_view: bool) -> bool {
         // Save As answers on a later frame: commit what was typed meanwhile, too (#166), even
         // if another tab is active by then.
         if !self.commit_typing_in(id) || !self.flatten_fill_sign_for_save(id) {
@@ -470,7 +479,7 @@ impl PdfCraftApp {
             self.notify_tr("The document was closed before it could be saved.");
             return false;
         };
-        let bytes = match self.session.save_bytes(id) {
+        let bytes = match self.bytes_to_save(id, fast_web_view) {
             Ok(b) => b,
             Err(e) => {
                 self.notify_fmt("Couldn't save {name}: {e}", &[("name", &name), ("e", &e.to_string())]);
@@ -500,10 +509,22 @@ impl PdfCraftApp {
         }
     }
 
+    /// The bytes a save writes: an incremental update, or with `fast_web_view` a linearized
+    /// rewrite (signed documents, which a rewrite would break, are saved incrementally).
+    fn bytes_to_save(&self, id: pdfcraft_engine::DocId, fast_web_view: bool) -> Result<std::sync::Arc<Vec<u8>>, pdfcraft_engine::EditError> {
+        if fast_web_view && self.session.get(id).is_some_and(|d| d.editable() && !d.is_signed()) {
+            return self.session.save_linearized_bytes(id);
+        }
+        self.session.save_bytes(id)
+    }
+
     /// Close a tab, asking first if it has unsaved changes.
     pub fn request_close_tab(&mut self, index: usize) {
+        // Another window still shows the document: only this view closes, nothing is lost.
+        let shared = self.views.get(index).is_some_and(|v| self.views.iter().any(|o| o.id == v.id && o.key != v.key));
         // Text typed into a field counts as an unsaved change.
-        if self.has_unsaved_work(index)
+        if !shared
+            && self.has_unsaved_work(index)
             && let Some(id) = self.views.get(index).map(|v| v.id)
         {
             self.close_request = Some(CloseRequest::Tab(id));
@@ -568,6 +589,13 @@ impl PdfCraftApp {
                     return;
                 }
             },
+            CloseRequest::Window(w) => match self.first_dirty_in(w) {
+                Some(i) => i,
+                None => {
+                    self.close_clean_tabs_of(w);
+                    return;
+                }
+            },
         };
         // Quitting closes the unsaved tabs one by one (and brings each forward to save it):
         // remember what was open, and which tab was active, before the first one goes (#442).
@@ -600,14 +628,32 @@ impl PdfCraftApp {
 
     /// Close tab `index` for a close request, then ask about the next dirty document, or quit.
     fn close_and_continue(&mut self, ctx: &egui::Context, index: usize, req: CloseRequest) {
-        self.close_tab(index);
+        match req {
+            // The document goes, with every view of it (another window may show it too).
+            CloseRequest::Quit | CloseRequest::All | CloseRequest::Window(_) => {
+                if let Some(id) = self.views.get(index).map(|v| v.id) {
+                    while let Some(i) = self.views.iter().rposition(|v| v.id == id) {
+                        self.close_tab(i);
+                    }
+                }
+            }
+            CloseRequest::Tab(_) => self.close_tab(index),
+        }
         // A newer prompt wins: the user may have started another close while a save was pending.
-        if (req == CloseRequest::Quit || req == CloseRequest::All) && self.close_request.is_none() {
-            match self.first_dirty() {
+        if self.close_request.is_some() {
+            return;
+        }
+        match req {
+            CloseRequest::Quit | CloseRequest::All => match self.first_dirty() {
                 Some(_) => self.close_request = Some(req),
                 None if req == CloseRequest::Quit => self.quit(ctx),
                 None => {}
-            }
+            },
+            CloseRequest::Window(w) => match self.first_dirty_in(w) {
+                Some(_) => self.close_request = Some(req),
+                None => self.close_clean_tabs_of(w),
+            },
+            CloseRequest::Tab(_) => {}
         }
     }
 
@@ -646,7 +692,8 @@ fn comment_page(edit: &Edit) -> Option<usize> {
         | Edit::MoveAnnotation { page, .. }
         | Edit::ResizeAnnotation { page, .. }
         | Edit::StyleAnnotation { page, .. }
-        | Edit::SetAnnotationInfo { page, .. } => Some(*page),
+        | Edit::SetAnnotationInfo { page, .. }
+        | Edit::SetCommentPopup { page, .. } => Some(*page),
         _ => None,
     }
 }
@@ -687,12 +734,18 @@ fn short_name(path: &str) -> String {
 /// Offer bytes as a browser download.
 #[cfg(target_arch = "wasm32")]
 pub(crate) fn download(name: &str, bytes: &[u8]) -> Result<(), String> {
+    download_typed(name, bytes, "application/pdf")
+}
+
+/// Offer bytes of media type `mime` as a browser download.
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn download_typed(name: &str, bytes: &[u8], mime: &str) -> Result<(), String> {
     use wasm_bindgen::JsCast;
     let err = |e: wasm_bindgen::JsValue| format!("{e:?}");
     let array = js_sys::Uint8Array::from(bytes);
     let parts = js_sys::Array::of1(&array);
     let opts = web_sys::BlobPropertyBag::new();
-    opts.set_type("application/pdf");
+    opts.set_type(mime);
     let blob = web_sys::Blob::new_with_u8_array_sequence_and_options(&parts, &opts).map_err(err)?;
     let url = web_sys::Url::create_object_url_with_blob(&blob).map_err(err)?;
     let document = web_sys::window().and_then(|w| w.document()).ok_or("no document")?;
@@ -726,6 +779,20 @@ impl PdfCraftApp {
                 return;
             }
             A::Rename(path, title) => Edit::RenameBookmark { path, title },
+            A::EditScript(path) => return self.open_bookmark_script(path),
+            A::Properties(path) => return self.open_bookmark_props(path),
+            A::Run(path) => {
+                // A bookmark without a page: run its script, or open its web address.
+                match self.session.bookmark_action(id, &path) {
+                    Ok(pdfcraft_engine::BookmarkAction::JavaScript(_)) => {
+                        self.run_action_script(id, pdfcraft_engine::js::ActionSource::Bookmark { path });
+                    }
+                    Ok(pdfcraft_engine::BookmarkAction::Uri(u)) => self.request_document_url(&u, crate::LinkOrigin::Link),
+                    Ok(_) => {}
+                    Err(e) => self.notify_error(e),
+                }
+                return;
+            }
             A::SetToCurrentPage(path) => Edit::SetBookmarkPage { path, page: current },
             A::Delete(path) => Edit::DeleteBookmark { path },
             A::MoveUp(path) => {
@@ -935,6 +1002,7 @@ mod revert_draft_tests {
             select_all: false,
             calendar: None,
             calendar_rect: None,
+            keystrokes: false,
         }
     }
 

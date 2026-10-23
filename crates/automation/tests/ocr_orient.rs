@@ -286,3 +286,45 @@ fn ocr_auto_rotate_and_deskew_read_turned_and_skewed_scans_onto_the_visible_word
     }
     assert!(failures.is_empty(), "{failures:#?}");
 }
+
+/// Scan & OCR ▸ Enhance scans ▸ Straighten, without recognition (no models needed): a scan
+/// skewed 5° is measured, turned straight in one undoable step, and bad requests change nothing.
+#[test]
+fn scan_straighten_turns_a_skewed_scan_straight_without_recognition() {
+    let path = root("straighten");
+    let (w, h, rgba, _) = source();
+    let turned = Turned::new(w, h, &rgba, 5.0);
+    let mut png = Vec::new();
+    {
+        let mut enc = png::Encoder::new(&mut png, turned.width, turned.height);
+        enc.set_color(png::ColorType::Rgba);
+        enc.set_depth(png::BitDepth::Eight);
+        enc.write_header().unwrap().write_image_data(&turned.rgba).unwrap();
+    }
+    let pdf = Session::new().pdf_from_capture(&png, None).unwrap();
+    std::fs::write(path.join("skewed.pdf"), pdf.as_slice()).unwrap();
+    let mut auto = Automation::new().with_root(&path).unwrap();
+    let doc = result(&mut auto, "doc_open", json!({"path":"skewed.pdf"}))["doc"].as_u64().unwrap();
+    for bad in [
+        json!({"doc":doc,"min_skew":-1}),
+        json!({"doc":doc,"min_skew":16}),
+        json!({"doc":doc,"pages":[2]}),
+        json!({"doc":doc,"pages":[0]}),
+        json!({"doc":doc,"dry_run":"no"}),
+    ] {
+        assert!(auto.call("scan_straighten", &bad).is_err(), "{bad}");
+    }
+    assert!(auto.call("edit_undo", &json!({"doc":doc})).is_err(), "nothing changed");
+    let dry = result(&mut auto, "scan_straighten", json!({"doc":doc,"dry_run":true}));
+    let skew = dry["pages"][0]["skew"].as_f64().unwrap();
+    assert!((skew.abs() - 5.0).abs() < 1.0 && dry["undoable"] == false, "{dry}");
+    let done = result(&mut auto, "scan_straighten", json!({"doc":doc,"pages":[1]}));
+    assert_eq!((done["straightened"].as_u64(), done["undoable"].as_bool()), (Some(1), Some(true)), "{done}");
+    let again = result(&mut auto, "scan_straighten", json!({"doc":doc,"dry_run":true}));
+    assert!(again["pages"][0]["skew"].as_f64().unwrap().abs() < 0.6, "{again}");
+    assert!(auto.call("edit_undo", &json!({"doc":doc})).is_ok());
+    let back = result(&mut auto, "scan_straighten", json!({"doc":doc,"dry_run":true}));
+    assert!((back["pages"][0]["skew"].as_f64().unwrap() - skew).abs() < 0.2, "{back}");
+    let tool = pdfcraft_automation::tools().into_iter().find(|t| t.name == "scan_straighten").unwrap();
+    assert_eq!(tool.input_schema["properties"]["dry_run"]["type"], "boolean");
+}

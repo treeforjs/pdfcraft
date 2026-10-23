@@ -54,6 +54,10 @@ pub struct DocInfo {
     pub annotations: Vec<Annotation>,
     pub fields: Vec<Field>,
     pub links: Vec<Link>,
+    /// Pages (0-based, ascending) whose dictionary has additional actions (`/AA`: Page Open,
+    /// Page Close), noted on the pass that reads annotations so the viewer looks for page
+    /// scripts only where there are some.
+    pub page_actions: Vec<usize>,
     pub layers: Vec<Layer>,
     /// Radio-button layer groups (`/OCProperties /D /RBGroups`): turning one layer of a group on
     /// turns the others off.
@@ -161,6 +165,8 @@ impl PageInfo {
 #[derive(Clone, Debug)]
 pub struct Link {
     pub page: usize,
+    /// Its index in the page's `/Annots` (as the engine's link list counts them).
+    pub index: usize,
     pub rect: [f32; 4],
     pub target: LinkTarget,
 }
@@ -264,6 +270,28 @@ pub struct Annotation {
     pub locked: bool,
     /// `/IT`, the intent: `FreeTextCallout`, `PolygonCloud`, `FreeTextTypeWriter`…
     pub intent: Option<String>,
+    /// The comment's pop-up note window (`/Popup`), when it has one.
+    pub popup: Option<PopupNote>,
+}
+
+/// A comment's pop-up (ISO 32000-2 §12.5.6.14).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PopupNote {
+    /// `/Rect` in PDF user space, normalised; a missing or unusable one is replaced by the
+    /// default place, to the right of the comment (as `pdfcraft_annot::default_popup_rect`).
+    pub rect: [f32; 4],
+    /// `/Open`: the pop-up is shown.
+    pub open: bool,
+}
+
+impl PopupNote {
+    /// Where a pop-up without a usable `/Rect` is shown: 200 × 120 pt to the right of `parent`.
+    /// Keep in step with `pdfcraft_annot::default_popup_rect`.
+    pub fn default_rect(parent: [f32; 4]) -> [f32; 4] {
+        let ok = parent.iter().all(|v| v.is_finite() && v.abs() < 1e7);
+        let (x, top) = if ok { (parent[0].max(parent[2]) + 10.0, parent[1].max(parent[3])) } else { (0.0, 120.0) };
+        [x, top - 120.0, x + 200.0, top]
+    }
 }
 
 impl Annotation {
@@ -378,11 +406,10 @@ pub fn inspect(bytes: Arc<Vec<u8>>, password: Option<&str>) -> Result<DocInfo, O
     // structural inspection, including the compatibility fallback for damaged files.
     drop(pdf);
     // When neither structure reader accepts the file (e.g. an AES-256 file whose /Perms no
-    // longer matches /P), the renderer may still have decrypted it. Report it as encrypted then,
-    // so permission checks fail closed instead of treating it as unrestricted. A successful
-    // structure read below replaces this with the parsed answer.
-    info.encrypted = bytes.windows(8).any(|w| w == b"/Encrypt");
-    inspect_structure(&mut info, |tmp| {
+    // longer matches /P), the renderer may still have decrypted it. Report it as encrypted then
+    // (below), so permission checks fail closed instead of treating it as unrestricted. A
+    // successful structure read gives the parsed answer.
+    let read = inspect_structure(&mut info, |tmp| {
         // The lazy reader first; lopdf's repair/tolerance path when it can't expose the same
         // page tree or an object a panel needs. No partial result is published.
         let lazy = catch_unwind(AssertUnwindSafe(|| {
@@ -405,6 +432,10 @@ pub fn inspect(bytes: Arc<Vec<u8>>, password: Option<&str>) -> Result<DocInfo, O
         Inspector::new(&doc).fill(tmp);
         Ok(())
     });
+    if !read {
+        // Only searched when needed: it reads the whole file, a long wait on a very large one.
+        info.encrypted = memchr::memmem::find(&bytes, b"/Encrypt").is_some();
+    }
     if info.pages.is_empty() {
         return Err(OpenError::Invalid("the document has no pages".into()));
     }
@@ -412,7 +443,8 @@ pub fn inspect(bytes: Arc<Vec<u8>>, password: Option<&str>) -> Result<DocInfo, O
 }
 
 // Commit auxiliary metadata only after inspection succeeds; renderer geometry is the fallback.
-fn inspect_structure(info: &mut DocInfo, fill: impl FnOnce(&mut DocInfo) -> Result<(), String>) {
+/// Returns whether it succeeded.
+fn inspect_structure(info: &mut DocInfo, fill: impl FnOnce(&mut DocInfo) -> Result<(), String>) -> bool {
     let structure = catch_unwind(AssertUnwindSafe(|| {
         let mut tmp = DocInfo { pages: info.pages.clone(), ..Default::default() };
         fill(&mut tmp)?;
@@ -423,10 +455,15 @@ fn inspect_structure(info: &mut DocInfo, fill: impl FnOnce(&mut DocInfo) -> Resu
             filled.file_size = info.file_size;
             filled.pdf_version = std::mem::take(&mut info.pdf_version);
             *info = filled;
+            true
         }
-        Ok(Err(e)) => info.warnings.push(format!("Some document structure (bookmarks, comments, fields) could not be read: {e}")),
+        Ok(Err(e)) => {
+            info.warnings.push(format!("Some document structure (bookmarks, comments, fields) could not be read: {e}"));
+            false
+        }
         Err(p) => {
             info.warnings.push(format!("Document structure inspection crashed and was skipped: {}", crate::raster::panic_message(&p)));
+            false
         }
     }
 }
@@ -822,6 +859,9 @@ impl<'a> Inspector<'a> {
     fn annotations(&self, info: &mut DocInfo) {
         for (&id, &page) in &self.page_index {
             let Ok(page_dict) = self.doc.get_dictionary(id) else { continue };
+            if page_dict.has(b"AA") {
+                info.page_actions.push(page);
+            }
             let Ok(Object::Array(annots)) = page_dict.get(b"Annots").map(|o| self.resolve(o)) else { continue };
             for (index, a) in annots.iter().enumerate() {
                 let Some(d) = self.dict(a) else { continue };
@@ -833,7 +873,7 @@ impl<'a> Inspector<'a> {
                     info.attachments.push(self.attachment(name, fs, AttachmentSource::Annotation { page, index }));
                 }
                 if subtype == "Link" {
-                    if let Some(link) = self.link(page, d) {
+                    if let Some(link) = self.link(page, index, d) {
                         if matches!(&link.target, LinkTarget::Other(s) if s == "JavaScript") {
                             info.has_javascript = true;
                         }
@@ -891,13 +931,39 @@ impl<'a> Inspector<'a> {
                     quads,
                     locked: d.get(b"F").ok().and_then(|f| self.resolve(f).as_i64().ok()).unwrap_or(0) & 128 != 0,
                     intent: self.name(d, b"IT"),
+                    popup: self.popup(d, rect),
                 });
             }
         }
         info.annotations.sort_by(|a, b| a.page.cmp(&b.page).then(b.rect[3].total_cmp(&a.rect[3])));
+        info.page_actions.sort_unstable();
+        info.page_actions.dedup();
     }
 
-    fn link(&self, page: usize, d: &Dictionary) -> Option<Link> {
+    /// The pop-up `d` points at, when `/Popup` really is one.
+    fn popup(&self, d: &Dictionary, parent: [f32; 4]) -> Option<PopupNote> {
+        let p = self.dict(d.get(b"Popup").ok()?)?;
+        if self.name(p, b"Subtype").as_deref() != Some("Popup") {
+            return None;
+        }
+        let rect = match p.get(b"Rect").map(|o| self.resolve(o)) {
+            Ok(Object::Array(a)) if a.len() == 4 => {
+                let v: Vec<f32> = a.iter().filter_map(|x| self.resolve(x).as_float().ok()).collect();
+                match v.as_slice() {
+                    [a, b, c, e] if [*a, *b, *c, *e].iter().all(|x| x.is_finite() && x.abs() < 1e7) => {
+                        let r = [a.min(*c), b.min(*e), a.max(*c), b.max(*e)];
+                        (r[2] - r[0] >= 1.0 && r[3] - r[1] >= 1.0).then_some(r)
+                    }
+                    _ => None,
+                }
+            }
+            _ => None,
+        };
+        let open = matches!(p.get(b"Open").map(|o| self.resolve(o)), Ok(Object::Boolean(true)));
+        Some(PopupNote { rect: rect.unwrap_or_else(|| PopupNote::default_rect(parent)), open })
+    }
+
+    fn link(&self, page: usize, index: usize, d: &Dictionary) -> Option<Link> {
         let rect = rect4(self.resolve(d.get(b"Rect").ok()?));
         let target = if let Ok(dest) = d.get(b"Dest") {
             let (page, view) = self.dest(dest, 0)?;
@@ -917,7 +983,7 @@ impl<'a> Inspector<'a> {
                 None => return None,
             }
         };
-        Some(Link { page, rect, target })
+        Some(Link { page, index, rect, target })
     }
 
     /// A set-OCG-state action: `/State` is `ON`, `OFF` or `Toggle`, each followed by the groups
@@ -1816,7 +1882,7 @@ trailer << /Root 1 0 R >>
                 pages: vec![PageInfo { width: 300.0, height: 200.0, label: "1".into(), crop: [10.0, 20.0, 210.0, 320.0], rotation: 90 }],
                 ..Default::default()
             };
-            inspect_structure(&mut info, |tmp| {
+            let read = inspect_structure(&mut info, |tmp| {
                 tmp.pages.clear();
                 tmp.title = Some("partially inspected".into());
                 if crash {
@@ -1824,6 +1890,7 @@ trailer << /Root 1 0 R >>
                 }
                 Err("synthetic structure inspection failure".into())
             });
+            assert!(!read);
 
             assert_eq!(info.pages.len(), 1);
             let page = &info.pages[0];

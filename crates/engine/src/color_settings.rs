@@ -198,7 +198,9 @@ static BUILT_IN: LazyLock<Vec<Entry>> = LazyLock::new(|| {
 
 /// Whether `bytes` (a `family` profile) displays and whether PdfCraft converts into it.
 fn capabilities_of(bytes: &Arc<Vec<u8>>, family: Family) -> (bool, bool) {
-    let mut spec = ColourSpec::default();
+    // Only `family`'s profile is prepared: the default CMYK profile's tables would otherwise be
+    // built again for every gray and RGB profile listed (most of the first open's time).
+    let mut spec = ColourSpec { naive_cmyk: family != Family::Cmyk, ..ColourSpec::default() };
     match family {
         Family::Gray => spec.gray = Some(bytes.clone()),
         Family::Rgb => spec.rgb = Some(bytes.clone()),

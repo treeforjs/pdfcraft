@@ -552,56 +552,162 @@ impl OfficeFormat {
     }
 }
 
+/// Office exports read at most this many pages; later pages are left out and reported.
+pub const MAX_OFFICE_PAGES: usize = 5000;
+/// Images embedded in one office export stop at this many bytes; later images are left out and
+/// reported (the text is still exported).
+pub const MAX_OFFICE_IMAGE_BYTES: usize = 512 << 20;
+
+/// The pages read for an office export, and what the caps left out.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct OfficePages {
+    pub pages: Vec<pdfcraft_export::Page>,
+    /// Pages past [`MAX_OFFICE_PAGES`] that were left out.
+    pub pages_left_out: usize,
+    /// Images past [`MAX_OFFICE_IMAGE_BYTES`] that were left out.
+    pub images_left_out: usize,
+}
+
+impl OfficePages {
+    /// What the caps left out, as warnings.
+    pub fn warnings(&self) -> Vec<String> {
+        let mut w = Vec::new();
+        if self.pages_left_out > 0 {
+            w.push(format!("only the first {MAX_OFFICE_PAGES} pages were exported ({} left out)", self.pages_left_out));
+        }
+        if self.images_left_out > 0 {
+            w.push(format!("{} images were left out: the export holds {} MiB of images at most", self.images_left_out, MAX_OFFICE_IMAGE_BYTES >> 20));
+        }
+        w
+    }
+}
+
+/// A paragraph for export: its text, style and inline style runs (char offsets become bytes).
+fn export_block(b: pdfcraft_edit::TextBlock) -> pdfcraft_export::Block {
+    let style = |base_font: &str| {
+        let f = base_font.to_ascii_lowercase();
+        (f.contains("bold") || f.contains("black") || f.contains("heavy"), f.contains("italic") || f.contains("oblique"))
+    };
+    // Byte offset of each char boundary (and the end).
+    let bounds: Vec<usize> = b.text.char_indices().map(|(i, _)| i).chain(std::iter::once(b.text.len())).collect();
+    let byte = |c: usize| bounds.get(c).copied().unwrap_or(b.text.len());
+    let runs = if b.runs.len() > 1 {
+        b.runs
+            .iter()
+            .map(|r| {
+                let (bold, italic) = style(&r.base_font);
+                pdfcraft_export::Run {
+                    start: byte(r.start),
+                    end: byte(r.end),
+                    font: pdfcraft_export::font_family(&r.base_font),
+                    size: r.size,
+                    bold: bold || r.bold,
+                    italic: italic || r.italic,
+                    color: r.color,
+                }
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
+    let (bold, italic) = style(&b.base_font);
+    pdfcraft_export::Block {
+        font: pdfcraft_export::font_family(&b.base_font),
+        text: b.text,
+        rect: b.rect,
+        size: b.size,
+        bold: bold || b.bold,
+        italic: italic || b.italic,
+        color: b.color,
+        runs,
+    }
+}
+
 impl crate::Document {
     /// The pages as paragraphs and images (for Word, HTML and RTF export), including what
     /// form XObjects draw.
     pub fn export_pages(&self) -> Vec<pdfcraft_export::Page> {
-        let Some(cos) = self.editor.as_ref().map(|e| &e.cos) else { return Vec::new() };
-        self.info
-            .pages
-            .iter()
-            .enumerate()
-            .map(|(i, info)| {
-                let blocks = pdfcraft_edit::reading_blocks(cos, i)
-                    .unwrap_or_default()
-                    .into_iter()
-                    .filter(|b| !b.text.trim().is_empty())
-                    .map(|b| {
-                        let f = b.base_font.to_ascii_lowercase();
-                        pdfcraft_export::Block {
-                            text: b.text,
-                            rect: b.rect,
-                            size: b.size,
-                            bold: f.contains("bold") || f.contains("black") || f.contains("heavy"),
-                            italic: f.contains("italic") || f.contains("oblique"),
-                            color: b.color,
-                        }
-                    })
-                    .collect();
-                let images = pdfcraft_edit::reading_images(cos, i)
-                    .unwrap_or_default()
-                    .iter()
-                    .filter_map(|im| {
-                        let (ext, bytes) = pdfcraft_create::image_file(cos, im.object?).ok()?;
-                        Some(pdfcraft_export::Image { ext: if ext == "jpg" { "jpg" } else { "png" }, bytes, rect: im.rect })
-                    })
-                    .collect();
-                pdfcraft_export::Page { width: info.width as f64, height: info.height as f64, blocks, images }
-            })
-            .collect()
+        self.office_pages(&[], &mut |_, _| true).map(|p| p.pages).unwrap_or_default()
+    }
+
+    /// [`Document::export_pages`] for `pages` (0-based; empty = all), capped at
+    /// [`MAX_OFFICE_PAGES`] pages and [`MAX_OFFICE_IMAGE_BYTES`] of images. `progress(done,
+    /// total)` is called before each page; returning false stops with an error.
+    pub fn office_pages(&self, pages: &[usize], progress: &mut dyn FnMut(usize, usize) -> bool) -> Result<OfficePages, String> {
+        let n = self.info.pages.len();
+        if let Some(p) = pages.iter().find(|p| **p >= n) {
+            return Err(format!("page {} does not exist (the document has {n} pages)", p.saturating_add(1)));
+        }
+        // In document order, each page once.
+        let mut wanted: Vec<usize> = if pages.is_empty() { (0..n).collect() } else { pages.to_vec() };
+        wanted.sort_unstable();
+        wanted.dedup();
+        let mut out = OfficePages { pages_left_out: wanted.len().saturating_sub(MAX_OFFICE_PAGES), ..Default::default() };
+        wanted.truncate(MAX_OFFICE_PAGES);
+        let Some(cos) = self.editor.as_ref().map(|e| &e.cos) else { return Ok(out) };
+        let mut image_bytes = 0usize;
+        let total = wanted.len();
+        for (k, i) in wanted.into_iter().enumerate() {
+            if !progress(k, total) {
+                return Err(CANCELLED.into());
+            }
+            let Some(info) = self.info.pages.get(i) else { continue };
+            let blocks = pdfcraft_edit::reading_paragraphs(cos, i)
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|b| !b.text.trim().is_empty())
+                .map(export_block)
+                .collect();
+            let mut images = Vec::new();
+            for im in pdfcraft_edit::reading_images(cos, i).unwrap_or_default() {
+                let Some(object) = im.object else { continue };
+                if image_bytes >= MAX_OFFICE_IMAGE_BYTES {
+                    out.images_left_out += 1;
+                    continue;
+                }
+                let Ok((ext, bytes)) = pdfcraft_create::image_file(cos, object) else { continue };
+                if image_bytes.saturating_add(bytes.len()) > MAX_OFFICE_IMAGE_BYTES {
+                    out.images_left_out += 1;
+                    image_bytes = MAX_OFFICE_IMAGE_BYTES;
+                    continue;
+                }
+                image_bytes += bytes.len();
+                images.push(pdfcraft_export::Image { ext: if ext == "jpg" { "jpg" } else { "png" }, bytes, rect: im.rect });
+            }
+            out.pages.push(pdfcraft_export::Page { width: info.width as f64, height: info.height as f64, blocks, images });
+        }
+        progress(total, total);
+        Ok(out)
     }
 
     /// The document as a Word, HTML, RTF or Excel file. Refused when the document does not allow
     /// copying: the file carries its text and images.
     pub fn export_office(&self, format: OfficeFormat) -> Result<Vec<u8>, String> {
+        self.export_office_pages(format, &[], &mut |_, _| true).map(|(bytes, _)| bytes)
+    }
+
+    /// [`Document::export_office`] of `pages` (0-based; empty = all), with progress and cancel
+    /// as [`Document::office_pages`]; also returns what the caps left out.
+    pub fn export_office_pages(
+        &self,
+        format: OfficeFormat,
+        pages: &[usize],
+        progress: &mut dyn FnMut(usize, usize) -> bool,
+    ) -> Result<(Vec<u8>, OfficePages), String> {
         self.require_copying()?;
-        let pages = self.export_pages();
+        let mut read = self.office_pages(pages, progress)?;
         let title = self.info.title.clone().unwrap_or_else(|| self.name.trim_end_matches(".pdf").to_string());
-        Ok(match format {
-            OfficeFormat::Docx => pdfcraft_export::docx(&pages, &title),
-            OfficeFormat::Html => pdfcraft_export::html(&pages, &title).into_bytes(),
-            OfficeFormat::Rtf => pdfcraft_export::rtf(&pages).into_bytes(),
-            OfficeFormat::Xlsx => pdfcraft_export::xlsx(&pages, &title),
-        })
+        let doc_pages = std::mem::take(&mut read.pages);
+        let bytes = match format {
+            OfficeFormat::Docx => pdfcraft_export::docx(&doc_pages, &title),
+            OfficeFormat::Html => pdfcraft_export::html(&doc_pages, &title).into_bytes(),
+            OfficeFormat::Rtf => pdfcraft_export::rtf(&doc_pages).into_bytes(),
+            OfficeFormat::Xlsx => pdfcraft_export::xlsx(&doc_pages, &title),
+        };
+        read.pages = doc_pages;
+        Ok((bytes, read))
     }
 }
+
+/// The error an export stopped by its progress callback returns.
+pub const CANCELLED: &str = "the export was cancelled";

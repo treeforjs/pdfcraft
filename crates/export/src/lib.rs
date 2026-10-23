@@ -9,16 +9,19 @@
 
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
+mod flow;
 mod pptx;
 mod xlsx;
 mod zip;
+
+pub use flow::{Delimiter, Numbering};
 
 pub use pptx::{MAX_SHAPES, MAX_SLIDES, Placement, PptxStats, Slide, SlidePicture, SlideText, font_family, pptx};
 pub use xlsx::{MAX_SHEETS, xlsx};
 pub use zip::Zip;
 
 /// A paragraph of a page.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Block {
     pub text: String,
     /// [x0, y0, x1, y1] in user space (y up).
@@ -29,6 +32,89 @@ pub struct Block {
     pub italic: bool,
     /// Text fill colour as sRGB components in 0..=1 (black when unknown).
     pub color: [f64; 3],
+    /// The font family ([`font_family`] of the PDF font name; empty when unknown).
+    pub font: String,
+    /// Style changes within the paragraph, in text order (byte ranges of `text`). Text no run
+    /// covers has the paragraph's own style; empty means the whole paragraph is one style.
+    pub runs: Vec<Run>,
+}
+
+/// A stretch of a paragraph in one style.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Run {
+    /// Byte offsets into [`Block::text`], `end` exclusive.
+    pub start: usize,
+    pub end: usize,
+    pub font: String,
+    pub size: f64,
+    pub bold: bool,
+    pub italic: bool,
+    pub color: [f64; 3],
+}
+
+/// More style runs than this in one paragraph are written in the paragraph's style.
+const MAX_RUNS: usize = 4096;
+
+/// A piece of a paragraph to write in one style.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Span<'a> {
+    text: &'a str,
+    font: &'a str,
+    size: f64,
+    bold: bool,
+    italic: bool,
+    color: [f64; 3],
+}
+
+/// The paragraph's text from byte `from` on, as styled pieces: its runs, with any text they
+/// don't cover in the paragraph's style. Runs out of order, out of range or not on character
+/// boundaries are ignored.
+fn spans(b: &Block, from: usize) -> Vec<Span<'_>> {
+    let text = b.text.as_str();
+    // (start, end, style) with the style borrowed from the paragraph (None) or a run.
+    let mut pieces: Vec<(usize, usize, Option<&Run>)> = Vec::new();
+    let mut at = if text.is_char_boundary(from) { from.min(text.len()) } else { 0 };
+    if b.runs.len() <= MAX_RUNS {
+        for r in &b.runs {
+            let (s, e) = (r.start.max(at), r.end.min(text.len()));
+            if e <= s || !text.is_char_boundary(s) || !text.is_char_boundary(e) {
+                continue;
+            }
+            if s > at {
+                pieces.push((at, s, None));
+            }
+            pieces.push((s, e, Some(r)));
+            at = e;
+        }
+    }
+    if at < text.len() {
+        pieces.push((at, text.len(), None));
+    }
+    fn style<'b>(b: &'b Block, r: Option<&'b Run>) -> (&'b str, f64, bool, bool, [f64; 3]) {
+        match r {
+            Some(r) => (r.font.as_str(), r.size, r.bold, r.italic, r.color),
+            None => (b.font.as_str(), b.size, b.bold, b.italic, b.color),
+        }
+    }
+    let same = |a: Option<&'_ Run>, c: Option<&'_ Run>| {
+        let (x, y) = (style(b, a), style(b, c));
+        x.0 == y.0 && (x.1 - y.1).abs() < 0.01 && x.2 == y.2 && x.3 == y.3 && rgb8(x.4) == rgb8(y.4)
+    };
+    // Neighbours in the same style are one piece (fewer, longer runs in the output).
+    let mut merged: Vec<(usize, usize, Option<&Run>)> = Vec::with_capacity(pieces.len());
+    for p in pieces {
+        match merged.last_mut() {
+            Some(last) if last.1 == p.0 && same(last.2, p.2) => last.1 = p.1,
+            _ => merged.push(p),
+        }
+    }
+    merged
+        .into_iter()
+        .filter_map(|(s, e, r)| {
+            let (font, size, bold, italic, color) = style(b, r);
+            Some(Span { text: text.get(s..e)?, font, size, bold, italic, color })
+        })
+        .collect()
 }
 
 /// An image of a page.
@@ -59,6 +145,8 @@ pub struct Cell {
     /// Text fill colour as sRGB components in 0..=1.
     pub color: [f64; 3],
     pub span: usize,
+    /// Font family (empty when unknown).
+    pub font: String,
 }
 
 /// A table detected from the page's text layout: rows of cells, and the left edge of each
@@ -73,6 +161,8 @@ pub struct Table {
 /// What goes into the output, in order.
 enum Item<'a> {
     Para(&'a Block, u8),
+    /// A paragraph that is an item of a list.
+    List(flow::ListItem<'a>),
     /// Owned: tables are detected per page inside [`items`], so they cannot borrow.
     Table(Table),
     Img(&'a Image),
@@ -209,7 +299,15 @@ fn tables(blocks: &[Block]) -> (Vec<Table>, Vec<bool>) {
                 let b = &blocks[bi];
                 let Some(slot) = edges.iter().position(|e| (*e - b.rect[0]).abs() <= COL_TOL) else { continue };
                 let span = edges[slot + 1..].iter().filter(|e| **e > b.rect[0] + COL_TOL && **e < b.rect[2] - COL_TOL).count() + 1;
-                let cell = Cell { text: b.text.trim().to_string(), size: b.size, bold: b.bold, italic: b.italic, color: b.color, span };
+                let cell = Cell {
+                    text: b.text.trim().to_string(),
+                    size: b.size,
+                    bold: b.bold,
+                    italic: b.italic,
+                    color: b.color,
+                    span,
+                    font: b.font.clone(),
+                };
                 match &mut slots[slot] {
                     Some(c) => {
                         c.text.push(' ');
@@ -230,7 +328,15 @@ fn tables(blocks: &[Block]) -> (Vec<Table>, Vec<bool>) {
                     }
                     None => {
                         column += 1;
-                        materialized.push(Cell { text: String::new(), size: 11.0, bold: false, italic: false, color: [0.0; 3], span: 1 });
+                        materialized.push(Cell {
+                            text: String::new(),
+                            size: 11.0,
+                            bold: false,
+                            italic: false,
+                            color: [0.0; 3],
+                            span: 1,
+                            font: String::new(),
+                        });
                     }
                 }
             }
@@ -297,25 +403,63 @@ fn tables(blocks: &[Block]) -> (Vec<Table>, Vec<bool>) {
 fn items(pages: &[Page]) -> Vec<Item<'_>> {
     let body = body_size(pages);
     let mut out = Vec::new();
+    let mut next_list = 0;
     for (i, p) in pages.iter().enumerate() {
         if i > 0 {
             out.push(Item::PageBreak);
         }
         let (tables, consumed) = tables(&p.blocks);
-        // Blocks and images by their top edge, top to bottom.
-        let mut parts: Vec<(f64, f64, Item)> = p
+        let mut parts: Vec<([f64; 4], Item)> = p
             .blocks
             .iter()
             .enumerate()
             .filter(|(bi, _)| !consumed.get(*bi).copied().unwrap_or(false))
-            .map(|(_, b)| (b.rect[3], b.rect[0], Item::Para(b, level(b, body))))
+            .map(|(_, b)| (b.rect, Item::Para(b, level(b, body))))
             .collect();
-        parts.extend(tables.into_iter().map(|t| (t.rect[3], t.rect[0], Item::Table(t))));
-        parts.extend(p.images.iter().map(|im| (im.rect[3], im.rect[0], Item::Img(im))));
-        parts.sort_by(|a, b| b.0.total_cmp(&a.0).then(a.1.total_cmp(&b.1)));
-        out.extend(parts.into_iter().map(|x| x.2));
+        parts.extend(tables.into_iter().map(|t| (t.rect, Item::Table(t))));
+        parts.extend(p.images.iter().map(|im| (im.rect, Item::Img(im))));
+        // In reading order: column by column on multi-column pages (see `flow`).
+        let rects: Vec<[f64; 4]> = parts.iter().map(|x| x.0).collect();
+        let mut slots: Vec<Option<Item>> = parts.into_iter().map(|x| Some(x.1)).collect();
+        let ordered: Vec<Item> = flow::reading_order(&rects).into_iter().filter_map(|k| slots.get_mut(k).and_then(Option::take)).collect();
+        out.extend(flow::lists(ordered, &mut next_list));
     }
     out
+}
+
+/// The family most of the document's text is set in (empty when no paragraph names one).
+fn body_font(pages: &[Page]) -> String {
+    let mut by: Vec<(&str, usize)> = Vec::new();
+    for b in pages.iter().flat_map(|p| &p.blocks) {
+        let f = b.font.as_str();
+        match by.iter_mut().find(|e| e.0 == f) {
+            Some(e) => e.1 += b.text.len(),
+            None => by.push((f, b.text.len())),
+        }
+    }
+    by.into_iter().filter(|e| !e.0.is_empty()).max_by_key(|e| e.1).map(|e| e.0.to_string()).unwrap_or_default()
+}
+
+/// The CSS generic family a font name falls back to.
+fn generic_family(font: &str) -> &'static str {
+    let f = font.to_ascii_lowercase();
+    if ["courier", "mono", "consol", "code", "typewriter"].iter().any(|k| f.contains(k)) {
+        "monospace"
+    } else if ["times", "serif", "georgia", "garamond", "roman", "minion", "cambria", "book", "palatino", "baskerville", "mincho", "song", "ming"]
+        .iter()
+        .any(|k| f.contains(k))
+        && !f.contains("sans")
+    {
+        "serif"
+    } else {
+        "sans-serif"
+    }
+}
+
+/// A CSS `font-family` value for `font`: the family, then its generic fallback.
+fn css_family(font: &str) -> String {
+    let name: String = font.chars().filter(|c| !matches!(c, '\'' | '"' | ';' | '<' | '>' | '&' | '{' | '}' | '\\') && !c.is_control()).collect();
+    if name.trim().is_empty() { generic_family(font).to_string() } else { format!("'{}',{}", name.trim(), generic_family(font)) }
 }
 
 /// Whether a character may appear in the output. XML 1.0 forbids the C0 controls other than tab,
@@ -352,26 +496,116 @@ fn base64(data: &[u8]) -> String {
     s
 }
 
-/// One HTML file: headings and paragraphs, tables as real `<table>` elements, images inline, a
-/// rule between pages.
+/// A number for CSS or a format: at most one decimal, without a trailing `.0`.
+fn num1(v: f64) -> String {
+    let v = if v.is_finite() { v.clamp(-1e6, 1e6) } else { 0.0 };
+    let s = format!("{v:.1}");
+    s.strip_suffix(".0").map_or(s.clone(), str::to_string)
+}
+
+/// The inline style of a paragraph: its colour, and its font and size where they differ from
+/// the document's body text (headings keep their own sizes).
+fn para_css(b: &Block, lvl: u8, body: f64, body_font: &str) -> String {
+    let mut css = Vec::new();
+    if let Some(h) = hex(b.color) {
+        css.push(format!("color:#{h}"));
+    }
+    if !b.font.is_empty() && b.font != body_font {
+        css.push(format!("font-family:{}", css_family(&b.font)));
+    }
+    if lvl == 0 && b.size.is_finite() && b.size > 0.0 && (b.size - body).abs() > 0.5 {
+        css.push(format!("font-size:{}pt", num1(b.size)));
+    }
+    if css.is_empty() { String::new() } else { format!(" style=\"{}\"", css.join(";")) }
+}
+
+/// A paragraph's text from byte `skip` on, as HTML: each style run in `<strong>`, `<em>` and a
+/// `<span>` for its colour, font and size where they differ from the paragraph's.
+fn html_inner(b: &Block, skip: usize, lvl: u8) -> String {
+    let mut out = String::new();
+    for sp in spans(b, skip) {
+        let mut t = esc(sp.text);
+        if sp.italic {
+            t = format!("<em>{t}</em>");
+        }
+        if sp.bold && lvl == 0 {
+            t = format!("<strong>{t}</strong>");
+        }
+        let mut css = Vec::new();
+        if rgb8(sp.color) != rgb8(b.color) {
+            css.push(format!("color:#{}", hex(sp.color).unwrap_or_else(|| "000000".into())));
+        }
+        if !sp.font.is_empty() && sp.font != b.font {
+            css.push(format!("font-family:{}", css_family(sp.font)));
+        }
+        if sp.size.is_finite() && sp.size > 0.0 && (sp.size - b.size).abs() > 0.5 {
+            css.push(format!("font-size:{}pt", num1(sp.size)));
+        }
+        if !css.is_empty() {
+            t = format!("<span style=\"{}\">{t}</span>", css.join(";"));
+        }
+        out.push_str(&t);
+    }
+    out
+}
+
+/// One HTML file: headings and paragraphs (with their fonts, sizes and inline styles), lists as
+/// `<ul>`/`<ol>`, tables as real `<table>` elements, images inline, a rule between pages.
 pub fn html(pages: &[Page], title: &str) -> String {
+    let body = body_size(pages);
+    let body_font = body_font(pages);
+    let family = if body_font.is_empty() { "sans-serif".to_string() } else { css_family(&body_font) };
     let mut s = format!(
-        "<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"utf-8\">\n<title>{}</title>\n<style>body{{max-width:46em;margin:2em auto;font-family:sans-serif;line-height:1.45}}\
-img{{max-width:100%}}hr{{border:0;border-top:1px solid #ccc;margin:2em 0}}\
+        "<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>{}</title>\n\
+<style>body{{max-width:46em;margin:2em auto;padding:0 1em;font-family:{family};font-size:{}pt;line-height:1.45}}\
+img{{max-width:100%;height:auto}}hr{{border:0;border-top:1px solid #ccc;margin:2em 0}}li{{margin:.15em 0}}\
 table{{border-collapse:collapse;margin:1em 0}}td,th{{border:1px solid #999;padding:2px 6px;vertical-align:top}}</style>\n</head>\n<body>\n",
-        esc(title)
+        esc(title),
+        num1(if body.is_finite() && body > 0.0 { body } else { 11.0 })
     );
+    // Open lists, innermost last: (list, level, closing tag); each has an open <li>.
+    let mut open: Vec<(usize, u8, &str)> = Vec::new();
+    let close_to = |s: &mut String, open: &mut Vec<(usize, u8, &str)>, keep: &dyn Fn(&(usize, u8, &str)) -> bool| {
+        while let Some(top) = open.last() {
+            if keep(top) {
+                break;
+            }
+            s.push_str(&format!("</li></{}>\n", top.2));
+            open.pop();
+        }
+    };
     for it in items(pages) {
+        if let Item::List(l) = &it {
+            close_to(&mut s, &mut open, &|t| t.0 == l.list && t.1 <= l.level);
+            match open.last() {
+                Some(top) if top.1 == l.level => s.push_str("</li>\n"),
+                _ => {
+                    let (tag, attrs) = match l.numbering {
+                        Numbering::Bullet => ("ul", String::new()),
+                        n => {
+                            let kind = match n {
+                                Numbering::LowerLetter => " type=\"a\"",
+                                Numbering::UpperLetter => " type=\"A\"",
+                                Numbering::LowerRoman => " type=\"i\"",
+                                Numbering::UpperRoman => " type=\"I\"",
+                                _ => "",
+                            };
+                            let start = if open.is_empty() && l.start != 1 { format!(" start=\"{}\"", l.start) } else { String::new() };
+                            ("ol", format!("{kind}{start}"))
+                        }
+                    };
+                    s.push_str(&format!("<{tag}{attrs}>\n"));
+                    open.push((l.list, l.level, tag));
+                }
+            }
+            s.push_str(&format!("<li{}>{}", para_css(l.block, 0, body, &body_font), html_inner(l.block, l.skip, 0)));
+            continue;
+        }
+        close_to(&mut s, &mut open, &|_| false);
         match it {
             Item::Para(b, lvl) => {
-                let mut t = esc(&b.text);
-                if b.italic {
-                    t = format!("<em>{t}</em>");
-                }
-                if b.bold && lvl == 0 {
-                    t = format!("<strong>{t}</strong>");
-                }
-                let style = hex(b.color).map_or(String::new(), |h| format!(" style=\"color:#{h}\""));
+                let style = para_css(b, lvl, body, &body_font);
+                let t = html_inner(b, 0, lvl);
                 match lvl {
                     0 => s.push_str(&format!("<p{style}>{t}</p>\n")),
                     l => s.push_str(&format!("<h{l}{style}>{t}</h{l}>\n")),
@@ -390,7 +624,14 @@ table{{border-collapse:collapse;margin:1em 0}}td,th{{border:1px solid #999;paddi
                             body = format!("<strong>{body}</strong>");
                         }
                         let span = if c.span > 1 { format!(" colspan=\"{}\"", c.span) } else { String::new() };
-                        let style = hex(c.color).map_or(String::new(), |h| format!(" style=\"color:#{h}\""));
+                        let mut css = Vec::new();
+                        if let Some(h) = hex(c.color) {
+                            css.push(format!("color:#{h}"));
+                        }
+                        if !c.font.is_empty() && c.font != body_font {
+                            css.push(format!("font-family:{}", css_family(&c.font)));
+                        }
+                        let style = if css.is_empty() { String::new() } else { format!(" style=\"{}\"", css.join(";")) };
                         s.push_str(&format!("<td{span}{style}>{body}</td>"));
                     }
                     s.push_str("</tr>\n");
@@ -402,8 +643,10 @@ table{{border-collapse:collapse;margin:1em 0}}td,th{{border:1px solid #999;paddi
                 s.push_str(&format!("<p><img alt=\"\" src=\"data:{mime};base64,{}\"></p>\n", base64(&im.bytes)));
             }
             Item::PageBreak => s.push_str("<hr>\n"),
+            Item::List(_) => {}
         }
     }
+    close_to(&mut s, &mut open, &|_| false);
     s.push_str("</body>\n</html>\n");
     s
 }
@@ -420,9 +663,15 @@ fn hex(c: [f64; 3]) -> Option<String> {
     (r | g | b != 0).then(|| format!("{r:02X}{g:02X}{b:02X}"))
 }
 
-/// A formatted text run (shared by paragraphs and table cells).
-fn run_xml(text: &str, size: f64, bold: bool, italic: bool, color: [f64; 3]) -> String {
+/// A formatted text run (shared by paragraphs and table cells). The font is named when it is
+/// not the document's body font (the default in `styles.xml`).
+fn run_xml(sp: &Span, body_font: &str) -> String {
+    let Span { text, size, bold, italic, color, font } = *sp;
     let mut rpr = String::new();
+    if !font.is_empty() && font != body_font {
+        let f = esc(font);
+        rpr.push_str(&format!("<w:rFonts w:ascii=\"{f}\" w:hAnsi=\"{f}\" w:cs=\"{f}\" w:eastAsia=\"{f}\"/>"));
+    }
     if bold {
         rpr.push_str("<w:b/>");
     }
@@ -439,7 +688,7 @@ fn run_xml(text: &str, size: f64, bold: bool, italic: bool, color: [f64; 3]) -> 
 
 /// One Word table: explicit single borders (so it renders without a table style), a grid sized
 /// from the detected column edges, `gridSpan` for spanning cells, empty cells for holes.
-fn docx_table(t: &Table) -> String {
+fn docx_table(t: &Table, body_font: &str) -> String {
     let mut edges = t.cols.clone();
     edges.push(t.rect[2]);
     let widths: Vec<i64> = edges.windows(2).map(|w| ((w[1] - w[0]).max(20.0) * 20.0).round().clamp(60.0, 31680.0) as i64).collect();
@@ -467,7 +716,7 @@ fn docx_table(t: &Table) -> String {
             let w: i64 = widths.iter().take(c.span.min(widths.len())).sum();
             s.push_str(&format!(
                 "<w:tc><w:tcPr><w:tcW w:w=\"{w}\" w:type=\"dxa\"/>{span}</w:tcPr><w:p>{}</w:p></w:tc>",
-                run_xml(&c.text, c.size, c.bold, c.italic, c.color)
+                run_xml(&Span { text: &c.text, font: &c.font, size: c.size, bold: c.bold, italic: c.italic, color: c.color }, body_font)
             ));
         }
         // Pad the grid so every row covers all columns (Word rejects short rows).
@@ -495,7 +744,10 @@ pub fn docx(pages: &[Page], title: &str) -> Vec<u8> {
     let mut media: Vec<(String, &Image)> = Vec::new();
     // Word needs a paragraph between adjacent tables and after the last one in the body.
     let mut after_table = false;
-    let run = |b: &Block| run_xml(&b.text, b.size, b.bold, b.italic, b.color);
+    let body_font = body_font(pages);
+    let runs = |b: &Block, skip: usize| spans(b, skip).iter().map(|sp| run_xml(sp, &body_font)).collect::<String>();
+    // The lists, by list number: how they are numbered and where they start.
+    let mut lists: Vec<(Numbering, Delimiter, u32)> = Vec::new();
     for it in items(pages) {
         match &it {
             Item::Para(b, lvl) => {
@@ -504,13 +756,24 @@ pub fn docx(pages: &[Page], title: &str) -> Vec<u8> {
                     2 => "<w:pPr><w:pStyle w:val=\"Heading2\"/></w:pPr>",
                     _ => "",
                 };
-                body.push_str(&format!("<w:p>{style}{}</w:p>", run(b)));
+                body.push_str(&format!("<w:p>{style}{}</w:p>", runs(b, 0)));
+            }
+            Item::List(l) => {
+                if lists.len() <= l.list {
+                    lists.resize(l.list + 1, (l.numbering, l.delimiter, l.start));
+                }
+                body.push_str(&format!(
+                    "<w:p><w:pPr><w:pStyle w:val=\"ListParagraph\"/><w:numPr><w:ilvl w:val=\"{}\"/><w:numId w:val=\"{}\"/></w:numPr></w:pPr>{}</w:p>",
+                    l.level,
+                    l.list + 1,
+                    runs(l.block, l.skip)
+                ));
             }
             Item::Table(t) => {
                 if after_table {
                     body.push_str("<w:p/>");
                 }
-                body.push_str(&docx_table(t));
+                body.push_str(&docx_table(t, &body_font));
             }
             Item::Img(im) => {
                 let n = media.len() + 1;
@@ -552,6 +815,9 @@ xmlns:wp=\"http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawin
 <Override PartName=\"/word/styles.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml\"/>\
 <Override PartName=\"/docProps/core.xml\" ContentType=\"application/vnd.openxmlformats-package.core-properties+xml\"/>",
     );
+    if !lists.is_empty() {
+        types.push_str("<Override PartName=\"/word/numbering.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml\"/>");
+    }
     types.push_str("</Types>");
     let rels = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\
 <Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"word/document.xml\"/>\
@@ -560,6 +826,11 @@ xmlns:wp=\"http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawin
         "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\
 <Relationship Id=\"rIdStyles\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles\" Target=\"styles.xml\"/>",
     );
+    if !lists.is_empty() {
+        doc_rels.push_str(
+            "<Relationship Id=\"rIdNumbering\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering\" Target=\"numbering.xml\"/>",
+        );
+    }
     for (i, (name, _)) in media.iter().enumerate() {
         doc_rels.push_str(&format!(
             "<Relationship Id=\"rIdImg{}\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/image\" Target=\"media/{name}\"/>",
@@ -567,11 +838,23 @@ xmlns:wp=\"http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawin
         ));
     }
     doc_rels.push_str("</Relationships>");
-    let styles = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<w:styles xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\">\
+    // The body font is the document default; runs in other fonts name theirs.
+    let defaults = if body_font.is_empty() {
+        String::new()
+    } else {
+        let f = esc(&body_font);
+        format!(
+            "<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii=\"{f}\" w:hAnsi=\"{f}\" w:cs=\"{f}\" w:eastAsia=\"{f}\"/></w:rPr></w:rPrDefault></w:docDefaults>"
+        )
+    };
+    let styles = format!(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<w:styles xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\">{defaults}\
 <w:style w:type=\"paragraph\" w:default=\"1\" w:styleId=\"Normal\"><w:name w:val=\"Normal\"/><w:pPr><w:spacing w:after=\"120\"/></w:pPr></w:style>\
 <w:style w:type=\"paragraph\" w:styleId=\"Heading1\"><w:name w:val=\"heading 1\"/><w:basedOn w:val=\"Normal\"/><w:next w:val=\"Normal\"/><w:pPr><w:keepNext/><w:spacing w:before=\"240\"/><w:outlineLvl w:val=\"0\"/></w:pPr><w:rPr><w:b/></w:rPr></w:style>\
 <w:style w:type=\"paragraph\" w:styleId=\"Heading2\"><w:name w:val=\"heading 2\"/><w:basedOn w:val=\"Normal\"/><w:next w:val=\"Normal\"/><w:pPr><w:keepNext/><w:spacing w:before=\"200\"/><w:outlineLvl w:val=\"1\"/></w:pPr><w:rPr><w:b/></w:rPr></w:style>\
-</w:styles>";
+<w:style w:type=\"paragraph\" w:styleId=\"ListParagraph\"><w:name w:val=\"List Paragraph\"/><w:basedOn w:val=\"Normal\"/><w:pPr><w:spacing w:after=\"40\"/><w:contextualSpacing/></w:pPr></w:style>\
+</w:styles>"
+    );
     let core = format!(
         "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<cp:coreProperties xmlns:cp=\"http://schemas.openxmlformats.org/package/2006/metadata/core-properties\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\"><dc:title>{}</dc:title></cp:coreProperties>",
         esc(title)
@@ -582,11 +865,60 @@ xmlns:wp=\"http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawin
     z.add("docProps/core.xml", core.as_bytes(), true);
     z.add("word/document.xml", doc.as_bytes(), true);
     z.add("word/styles.xml", styles.as_bytes(), true);
+    if !lists.is_empty() {
+        z.add("word/numbering.xml", numbering_xml(&lists).as_bytes(), true);
+    }
     z.add("word/_rels/document.xml.rels", doc_rels.as_bytes(), true);
     for (name, im) in &media {
         z.add(&format!("word/media/{name}"), &im.bytes, false);
     }
     z.finish()
+}
+
+/// Word's numbering part: one abstract numbering (four levels) and one instance per list, so
+/// each numbered list counts from its own first number.
+fn numbering_xml(lists: &[(Numbering, Delimiter, u32)]) -> String {
+    let mut s = String::from(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<w:numbering xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\">",
+    );
+    for (k, (numbering, delimiter, start)) in lists.iter().enumerate() {
+        s.push_str(&format!("<w:abstractNum w:abstractNumId=\"{k}\"><w:multiLevelType w:val=\"hybridMultilevel\"/>"));
+        for level in 0..4u32 {
+            let (fmt, text) = match numbering {
+                Numbering::Bullet => {
+                    ("bullet", ["\u{2022}", "\u{25E6}", "\u{25AA}", "\u{2022}"].get(level as usize).copied().unwrap_or("\u{2022}").to_string())
+                }
+                n => {
+                    let fmt = match n {
+                        Numbering::LowerLetter => "lowerLetter",
+                        Numbering::UpperLetter => "upperLetter",
+                        Numbering::LowerRoman => "lowerRoman",
+                        Numbering::UpperRoman => "upperRoman",
+                        _ => "decimal",
+                    };
+                    let text = match delimiter {
+                        Delimiter::Period => format!("%{}.", level + 1),
+                        Delimiter::Paren => format!("%{})", level + 1),
+                        Delimiter::Parens => format!("(%{})", level + 1),
+                    };
+                    (fmt, text)
+                }
+            };
+            let first = if level == 0 { (*start).clamp(1, 32767) } else { 1 };
+            s.push_str(&format!(
+                "<w:lvl w:ilvl=\"{level}\"><w:start w:val=\"{first}\"/><w:numFmt w:val=\"{fmt}\"/><w:lvlText w:val=\"{}\"/><w:lvlJc w:val=\"left\"/>\
+<w:pPr><w:ind w:left=\"{}\" w:hanging=\"360\"/></w:pPr></w:lvl>",
+                esc(&text),
+                720 * (level + 1)
+            ));
+        }
+        s.push_str("</w:abstractNum>");
+    }
+    for k in 0..lists.len() {
+        s.push_str(&format!("<w:num w:numId=\"{}\"><w:abstractNumId w:val=\"{k}\"/></w:num>", k + 1));
+    }
+    s.push_str("</w:numbering>");
+    s
 }
 
 fn rtf_text(s: &str) -> String {
@@ -615,18 +947,27 @@ fn rtf_text(s: &str) -> String {
 pub fn rtf(pages: &[Page]) -> String {
     let items = items(pages);
     // The colour table: entry 0 is the default (auto) colour, then each non-black colour once.
+    // The font table: entry 0 is the body font (Helvetica when unknown), then each other family.
+    let body_font = body_font(pages);
+    let mut fonts: Vec<String> = vec![if body_font.is_empty() { "Helvetica".to_string() } else { body_font.clone() }];
     let mut colors: Vec<[u8; 3]> = Vec::new();
-    let mut note = |c: [f64; 3]| {
-        let c = rgb8(c);
-        if c != [0, 0, 0] && !colors.contains(&c) {
-            colors.push(c);
-        }
-    };
-    for it in &items {
-        match it {
-            Item::Para(b, _) => note(b.color),
-            Item::Table(t) => t.rows.iter().flatten().for_each(|c| note(c.color)),
-            Item::Img(_) | Item::PageBreak => {}
+    {
+        let mut note = |c: [f64; 3], f: &str| {
+            let c = rgb8(c);
+            if c != [0, 0, 0] && !colors.contains(&c) {
+                colors.push(c);
+            }
+            if !f.is_empty() && !fonts.iter().any(|e| e == f) && fonts.len() < 1000 {
+                fonts.push(f.to_string());
+            }
+        };
+        for it in &items {
+            match it {
+                Item::Para(b, _) => spans(b, 0).iter().for_each(|sp| note(sp.color, sp.font)),
+                Item::List(l) => spans(l.block, 0).iter().for_each(|sp| note(sp.color, sp.font)),
+                Item::Table(t) => t.rows.iter().flatten().for_each(|c| note(c.color, &c.font)),
+                Item::Img(_) | Item::PageBreak => {}
+            }
         }
     }
     // `\cfN` for a colour (nothing for black, which keeps the default).
@@ -634,7 +975,14 @@ pub fn rtf(pages: &[Page]) -> String {
         let c = rgb8(c);
         colors.iter().position(|e| *e == c).map_or(String::new(), |i| format!("\\cf{}", i + 1))
     };
-    let mut s = String::from("{\\rtf1\\ansi\\deff0{\\fonttbl{\\f0 Helvetica;}}\n");
+    // `\fN` for a font (nothing for the body font, which is the default).
+    let ff = |f: &str| fonts.iter().position(|e| e == f).filter(|i| *i > 0).map_or(String::new(), |i| format!("\\f{i}"));
+    let mut s = String::from("{\\rtf1\\ansi\\deff0{\\fonttbl");
+    for (i, f) in fonts.iter().enumerate() {
+        let name: String = f.chars().filter(|c| !matches!(c, '{' | '}' | ';' | '\\') && !c.is_control()).collect();
+        s.push_str(&format!("{{\\f{i} {};}}", rtf_text(&name)));
+    }
+    s.push_str("}\n");
     if !colors.is_empty() {
         s.push_str("{\\colortbl;");
         for [r, g, b] in &colors {
@@ -642,23 +990,44 @@ pub fn rtf(pages: &[Page]) -> String {
         }
         s.push_str("}\n");
     }
+    let style = |font: &str, size: f64, bold: bool, italic: bool, color: [f64; 3], explicit: bool| {
+        let mut fmt = ff(font);
+        let half = if size.is_finite() { (size * 2.0).round().clamp(2.0, 3276.0) as i64 } else { 24 };
+        fmt.push_str(&format!("\\fs{half}"));
+        if bold {
+            fmt.push_str("\\b");
+        } else if explicit {
+            fmt.push_str("\\b0");
+        }
+        if italic {
+            fmt.push_str("\\i");
+        } else if explicit {
+            fmt.push_str("\\i0");
+        }
+        fmt.push_str(&cf(color));
+        fmt
+    };
+    let para = |b: &Block| {
+        let pieces = spans(b, 0);
+        let head = style(&b.font, b.size, b.bold, b.italic, b.color, false);
+        if pieces.len() <= 1 {
+            return format!("{{\\pard{head} {}\\par}}\n", rtf_text(&b.text));
+        }
+        let mut body = String::new();
+        for sp in pieces {
+            body.push_str(&format!("{{{} {}}}", style(sp.font, sp.size, sp.bold, sp.italic, sp.color, true), rtf_text(sp.text)));
+        }
+        format!("{{\\pard{head} {body}\\par}}\n")
+    };
     for it in items {
         match it {
-            Item::Para(b, _) => {
-                let mut fmt = format!("\\fs{}", (b.size * 2.0).round() as i64);
-                if b.bold {
-                    fmt.push_str("\\b");
-                }
-                if b.italic {
-                    fmt.push_str("\\i");
-                }
-                fmt.push_str(&cf(b.color));
-                s.push_str(&format!("{{\\pard{fmt} {}\\par}}\n", rtf_text(&b.text)));
-            }
+            Item::Para(b, _) => s.push_str(&para(b)),
+            Item::List(l) => s.push_str(&para(l.block)),
             Item::Table(t) => {
                 let mut edges = t.cols.clone();
                 edges.push(t.rect[2]);
-                let cellx: Vec<i64> = edges.iter().skip(1).map(|e| (e * 20.0).round() as i64).collect();
+                let cellx: Vec<i64> =
+                    edges.iter().skip(1).map(|e| if e.is_finite() { (e * 20.0).round().clamp(-1e9, 1e9) as i64 } else { 0 }).collect();
                 for row in &t.rows {
                     s.push_str("\\trowd\\trgaph108");
                     // The row's cell boundaries come first: each cell ends at the right edge of
@@ -671,15 +1040,8 @@ pub fn rtf(pages: &[Page]) -> String {
                         }
                     }
                     for c in row {
-                        let mut fmt = format!("\\intbl\\fs{}", (c.size * 2.0).round() as i64);
-                        if c.bold {
-                            fmt.push_str("\\b");
-                        }
-                        if c.italic {
-                            fmt.push_str("\\i");
-                        }
-                        fmt.push_str(&cf(c.color));
-                        s.push_str(&format!("{{{fmt} {}}}\\cell", rtf_text(&c.text)));
+                        let fmt = style(&c.font, c.size, c.bold, c.italic, c.color, false);
+                        s.push_str(&format!("{{\\intbl{fmt} {}}}\\cell", rtf_text(&c.text)));
                     }
                     s.push_str("\\row\n");
                 }
@@ -704,6 +1066,7 @@ mod tests {
             bold,
             italic: false,
             color: [0.0; 3],
+            ..Default::default()
         };
         Page {
             width: 612.0,
@@ -777,6 +1140,7 @@ mod tests {
             bold: false,
             italic: false,
             color: [0.0; 3],
+            ..Default::default()
         });
         let xml = part(&docx(&[p.clone()], "Receipt\u{1}"), "word/document.xml");
         assert!(xml.contains(">Total 4.50\tGBP</w:t>"), "{xml}");
@@ -818,7 +1182,15 @@ mod tests {
     #[test]
     fn rtf_escapes_and_sizes() {
         let mut p = page();
-        p.blocks.push(Block { text: "Café {x}".into(), rect: [72.0, 100.0, 200.0, 110.0], size: 10.0, bold: false, italic: true, color: [0.0; 3] });
+        p.blocks.push(Block {
+            text: "Café {x}".into(),
+            rect: [72.0, 100.0, 200.0, 110.0],
+            size: 10.0,
+            bold: false,
+            italic: true,
+            color: [0.0; 3],
+            ..Default::default()
+        });
         let r = rtf(&[p]);
         assert!(r.starts_with("{\\rtf1") && r.ends_with('}'));
         assert!(r.contains("\\fs48\\b Annual Report"));
@@ -834,6 +1206,7 @@ mod tests {
             bold: false,
             italic: false,
             color: [0.0; 3],
+            ..Default::default()
         };
         Page {
             width: 612.0,
@@ -856,6 +1229,7 @@ mod tests {
                     bold: false,
                     italic: false,
                     color: [0.0; 3],
+                    ..Default::default()
                 },
             ],
             images: Vec::new(),
@@ -877,7 +1251,7 @@ mod tests {
         assert!(d.windows(b"word/document.xml".len()).any(|w| w == b"word/document.xml"));
         let (tables, _) = tables(&p.blocks);
         assert_eq!(tables.len(), 1);
-        let table_xml = docx_table(&tables[0]);
+        let table_xml = docx_table(&tables[0], "");
         assert!(table_xml.contains("<w:tblGrid>"));
         assert!(table_xml.contains("<w:gridSpan w:val=\"2\"/>"), "{table_xml}");
         assert_eq!(table_xml.matches("<w:tr>").count(), 4);
@@ -899,7 +1273,15 @@ mod tests {
             .map(|i| {
                 let (row, col) = (i / 2, i / 2 + i % 2);
                 let (x, y) = (10.0 + col as f64 * 20.0, 10_000.0 - row as f64 * 14.0);
-                Block { text: "x".into(), rect: [x, y, x + 8.0, y + 12.0], size: 11.0, bold: false, italic: false, color: [0.0; 3] }
+                Block {
+                    text: "x".into(),
+                    rect: [x, y, x + 8.0, y + 12.0],
+                    size: 11.0,
+                    bold: false,
+                    italic: false,
+                    color: [0.0; 3],
+                    ..Default::default()
+                }
             })
             .collect();
         let started = std::time::Instant::now();
@@ -918,7 +1300,15 @@ mod tests {
                 .flat_map(|row| {
                     (0..n).map(move |col| {
                         let (x, y) = (20.0 + col as f64 * 22.0, 700.0 - row as f64 * 14.0);
-                        Block { text: (col + 1).to_string(), rect: [x, y, x + 8.0, y + 8.0], size: 8.0, bold: false, italic: false, color: [0.0; 3] }
+                        Block {
+                            text: (col + 1).to_string(),
+                            rect: [x, y, x + 8.0, y + 8.0],
+                            size: 8.0,
+                            bold: false,
+                            italic: false,
+                            color: [0.0; 3],
+                            ..Default::default()
+                        }
                     })
                 })
                 .collect(),
@@ -939,6 +1329,7 @@ mod tests {
             bold: false,
             italic: false,
             color: [0.0; 3],
+            ..Default::default()
         };
         let p = Page {
             width: 612.0,

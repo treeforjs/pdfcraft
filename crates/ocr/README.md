@@ -6,6 +6,12 @@ The validated recognition language is **English**. The bundled recognition model
 
 Fetch the existing, manifest-pinned models with `cargo xtask models`, or set `PDFCRAFT_MODELS` to a directory containing both `.rten` files. Desktop packages ship both models, their license texts and attribution. Tests that print `skipped: OCR models not installed` are **not** evidence that recognition ran. Set `PDFCRAFT_MODELS_REQUIRED=1` (Linux CI does, after `cargo xtask models`) to turn that skip into a failure (`Models::required_for_tests`), so a passing run means the actual models ran.
 
+## Web app
+
+The web app has no model files to find. `models.rs` pins both models (`PINNED`: name, exact length, SHA-256, kept in step with ATTRIBUTION.toml by a test); `models::check_length` checks an announced or stored size and `models::verify` the bytes (length, then SHA-256) before `Ocr::from_bytes` hands them to the loader, so damaged, truncated, swapped or tampered bytes are an error, never loaded; `OcrsEngine::install` makes the loaded recognizer the shared one. The browser glue (`crates/ui-egui/src/ocr_web.rs`) fetches `models/<file>` from the site on the first recognition (streamed, capped at the pinned length, cancelable), keeps verified copies in the origin-private file system and verifies them again on every load. Before that, `Ocr::find` reports `OcrError::NotDownloaded` in the web build.
+
+The page has one thread, so `Ocr::begin` returns a `Reading` that does the work in steps (first the detection model and line finding, then `LINES_PER_STEP` lines at a time); the result equals `Ocr::recognize`. `OcrEngine::begin` exposes it per engine (engines that can't split their work read in one step), and `engine::ocr::OcrJob::run_selected_paced` reads a job's pages in steps, awaiting its `Pace` between them. Desktop runs unpaced: one `recognize` call per page, as before.
+
 ## Engines
 
 Recognition engines are pluggable (`src/engines.rs`). An `OcrEngine` has an id, a name, `info` (available, version, languages as ISO 639-1 codes, whether it is an external program, and where it was found or why it can't run), `prepare(language)` (called once before a job's pages are read, so a missing engine fails the job, not every page) and `recognize(pixels, width, height, language)`, returning the same `Line`s/`Word`s as the built-in engine. A `Registry` holds them; the default one has:

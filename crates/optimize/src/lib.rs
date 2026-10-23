@@ -31,6 +31,7 @@ pub mod camera;
 mod camera_page;
 pub mod compat;
 pub mod despeckle;
+mod downgrade;
 pub mod fonts;
 mod images;
 pub mod inpaint;
@@ -101,6 +102,9 @@ impl ImageSettings {
 pub enum MonoCompression {
     /// CCITT Group 4 (lossless).
     CcittG4,
+    /// JBIG2 generic region coding (lossless; PDF 1.4). Made compatible with PDF 1.3, CCITT
+    /// Group 4 is used instead.
+    Jbig2,
     /// Flate (lossless).
     Flate,
     /// Keep the image's own compression (downsampled images become Flate).
@@ -148,6 +152,25 @@ pub struct Settings {
     /// Make compatible with this PDF version (one of [`VERSIONS`]); `None` retains the
     /// document's own.
     pub compatibility: Option<(u8, u8)>,
+    /// Transparency: flatten it in the copy (the engine runs preflight's flattener before the
+    /// images are optimized). Made compatible with PDF 1.3, transparency is always flattened,
+    /// with these settings or [`Transparency::default`].
+    pub transparency: Option<Transparency>,
+}
+
+/// How the Transparency panel flattens: raster resolution (ppi) of what is rasterized and the
+/// raster/vector balance (0 to 100, see `pdfcraft_preflight::FlattenSettings`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Transparency {
+    pub resolution: f64,
+    pub balance: u8,
+}
+
+impl Default for Transparency {
+    /// The medium resolution preset (300 ppi) with a balance of 75.
+    fn default() -> Self {
+        Self { resolution: 300.0, balance: 75 }
+    }
 }
 
 impl Settings {
@@ -155,6 +178,16 @@ impl Settings {
     /// it is made compatible with (PDF 1.5 and later).
     pub fn object_streams(&self) -> bool {
         self.compress_structure && self.compatibility.is_none_or(|v| v >= (1, 5))
+    }
+
+    /// How transparency is flattened in the copy, if it is: as the Transparency panel says, and
+    /// always when the copy is made compatible with PDF 1.3 (which has no transparency).
+    pub fn flattening(&self) -> Option<Transparency> {
+        match (self.transparency, self.compatibility) {
+            (Some(t), _) => Some(t),
+            (None, Some(v)) if v < (1, 4) => Some(Transparency::default()),
+            _ => None,
+        }
     }
 }
 
@@ -176,6 +209,7 @@ impl Default for Settings {
             remove_unreferenced_dests: true,
             unembed_fonts: Vec::new(),
             compatibility: None,
+            transparency: None,
         }
     }
 }
@@ -208,6 +242,18 @@ pub struct Report {
     pub fonts_unembedded: usize,
     /// Features the copy keeps that the version it was made compatible with doesn't define.
     pub newer_features: Vec<NewerFeature>,
+    /// Make compatible with: JPEG 2000, JBIG2 and 16-bit images converted to what the older
+    /// version defines, and those that couldn't be (still listed in `newer_features`).
+    pub images_downgraded: usize,
+    pub images_not_downgraded: usize,
+    /// Monochrome images now stored as JBIG2 (also counted in `images_recompressed` or
+    /// `images_resampled`).
+    pub images_jbig2: usize,
+}
+
+/// Run `f`, turning a panic in a third-party decoder into `None`.
+pub(crate) fn guarded<T>(f: impl FnOnce() -> T) -> Option<T> {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)).ok()
 }
 
 /// Encoded size limit for one LZW stream, and decoded total for one run (the same limits as
@@ -460,6 +506,7 @@ pub fn optimize_with_progress(doc: &mut Document, settings: &Settings, progress:
         }
     }
     if let Some(v) = settings.compatibility {
+        downgrade::run(doc, v, settings, &mut report);
         compat::apply(doc, v)?;
         report.newer_features = newer_features(doc, v);
     }

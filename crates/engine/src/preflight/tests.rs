@@ -246,3 +246,37 @@ fn separations_convert_rgb_through_the_output_intent_and_say_so() {
     let seps = session.get(id).unwrap().separations(0, 72.0, true).unwrap();
     assert!(seps.conversion.contains("could not be read"), "{}", seps.conversion);
 }
+
+#[test]
+fn press_snapshots_analyse_as_the_document_does_on_another_thread() {
+    let (mut session, id) = press_doc(None);
+    let mut settings = session.get(id).unwrap().output_preview().clone();
+    settings.coverage_warning = true;
+    settings.coverage_limit = 150.0;
+    session.set_output_preview(id, settings).unwrap();
+    let doc = session.get(id).unwrap();
+    let snapshot = doc.press_snapshot().unwrap();
+    let (direct, _) = doc.render_output_preview(0, 72.0).unwrap();
+    let (copied, info) = std::thread::spawn(move || snapshot.render_output_preview(0, 72.0)).join().unwrap().unwrap();
+    assert_eq!(direct.rgb, copied.rgb);
+    assert_eq!(direct.coverage, copied.coverage);
+    assert!(copied.coverage.warning && copied.coverage.over_cells > 0, "{:?}", copied.coverage);
+    assert_eq!(info.used, "working");
+    let snapshot = doc.press_snapshot().unwrap();
+    assert_eq!(snapshot.settings().coverage_limit, 150.0);
+    let found = snapshot.inspect_objects(0, 30.0, 30.0, 72.0).unwrap();
+    assert_eq!(found.objects.len(), 1);
+    assert_eq!(found.objects[0].fill.as_ref().unwrap().space, "DeviceRGB");
+    assert!(snapshot.colour_warnings(0).unwrap().findings.is_empty());
+    // Pages past the end and hostile points are refused, never a panic.
+    assert!(snapshot.render_output_preview(1, 72.0).is_err());
+    assert!(snapshot.render_output_preview(usize::MAX, 72.0).is_err());
+    assert!(snapshot.render_output_preview(0, f64::NAN).is_err());
+    assert!(snapshot.inspect_objects(0, f64::INFINITY, 0.0, 72.0).is_err());
+    assert!(snapshot.colour_warnings(9).is_err());
+    let inks = snapshot.document_inks(&[]).unwrap();
+    assert_eq!(inks.inks.len(), 4);
+    assert!(snapshot.document_inks(&[3]).is_err());
+    assert_eq!(snapshot.page_count(), 1);
+    assert!(!doc.dirty && doc.can_undo().is_none());
+}

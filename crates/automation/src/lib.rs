@@ -17,6 +17,7 @@ mod attachment_trust;
 mod autotag;
 mod camera;
 mod certsec;
+mod clip;
 mod color_settings;
 mod comments;
 mod compare;
@@ -24,9 +25,14 @@ mod content;
 mod conventions;
 mod custom_commands;
 mod dests;
+mod direction;
 mod forms;
+mod help;
+mod host;
 mod ink_manager;
+mod js_debug;
 mod links;
+mod locale;
 mod make_accessible;
 #[cfg(feature = "mcp")]
 pub mod mcp;
@@ -37,12 +43,15 @@ mod ocr_review;
 mod output_preview;
 mod overprint;
 mod preflight;
+mod prefs;
 mod printing;
 mod reader_selection;
 mod reading_order;
+mod recovery;
 mod redact;
 mod search_folder;
 mod separations;
+mod signature_settings;
 mod signature_workflow;
 mod signed_version;
 mod signing;
@@ -50,6 +59,9 @@ mod submit_form;
 mod text_cache;
 mod tools;
 mod url_access;
+mod web_ocr;
+mod web_signing;
+mod windows;
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -57,9 +69,10 @@ use std::sync::Arc;
 
 use pdfcraft_engine::{DocId, Document, Edit, Session, commands};
 use pdfcraft_platform::staging::{StagingName, create_staging, staging_suffixes};
-use pdfcraft_render::{PageRenderer, PageText, RenderConfig, RenderRequest, RequestKind};
+use pdfcraft_render::{PageRenderer, PageText, RenderConfig};
 use serde_json::{Value, json};
 
+pub use host::SessionTools;
 pub use tools::{ToolDef, tools};
 
 /// One piece of a tool's result.
@@ -122,6 +135,12 @@ pub struct Automation {
     search: text_cache::SearchCache,
     /// Recognition drafts awaiting explicit correction, apply or cancellation.
     ocr_reviews: HashMap<DocId, pdfcraft_engine::ocr::OcrReview>,
+    /// Recovery entry keys of documents snapshotted or restored (`recovery_*`).
+    recovery_keys: HashMap<DocId, String>,
+    /// Windows and their tabs (`window_*`), the model the desktop app uses.
+    windows: windows::Windows,
+    /// Where PKCS #11 modules come from (`sign_token_*`, `sign_document` with a `pkcs11:` id).
+    token_provider: Arc<dyn pdfcraft_engine::sign::token::TokenProvider>,
 }
 
 impl Default for Automation {
@@ -139,7 +158,16 @@ impl Automation {
             texts: text_cache::TextCache::new(text_cache::DEFAULT_BUDGET),
             search: text_cache::SearchCache::new(text_cache::SEARCH_BUDGET),
             ocr_reviews: HashMap::new(),
+            recovery_keys: HashMap::new(),
+            windows: Default::default(),
+            token_provider: pdfcraft_platform::pkcs11::provider(),
         }
+    }
+
+    /// Use these PKCS #11 modules instead of the native ones (tests use a software token).
+    pub fn with_token_provider(mut self, provider: Arc<dyn pdfcraft_engine::sign::token::TokenProvider>) -> Self {
+        self.token_provider = provider;
+        self
     }
 
     /// Confine every path the tools read or write to `root` (relative paths resolve inside it).
@@ -208,6 +236,23 @@ impl Automation {
             "text_selection" => self.text_selection(&a)?,
             "text_find" => self.text_find(&a)?,
             "search_folder" => self.search_folder(&a)?,
+            "page_range_select" => {
+                let parity = match a.opt_str("subset")?.unwrap_or("all") {
+                    "all" => pdfcraft_engine::PageParity::Both,
+                    "even" => pdfcraft_engine::PageParity::Even,
+                    "odd" => pdfcraft_engine::PageParity::Odd,
+                    s => return Err(ToolError::InvalidArgs(format!("unknown subset {s:?} (all, even, odd)"))),
+                };
+                let orientation = match a.opt_str("orientation")?.unwrap_or("all") {
+                    "all" => pdfcraft_engine::PageOrientation::Both,
+                    "landscape" => pdfcraft_engine::PageOrientation::Landscape,
+                    "portrait" => pdfcraft_engine::PageOrientation::Portrait,
+                    o => return Err(ToolError::InvalidArgs(format!("unknown orientation {o:?} (all, landscape, portrait)"))),
+                };
+                let range = a.opt_str("range")?.unwrap_or("");
+                let pages = pdfcraft_engine::select_page_range(&self.doc(&a)?.info, range, parity, orientation).map_err(ToolError::InvalidArgs)?;
+                json!({ "count": pages.len(), "pages": pages.iter().map(|p| p + 1).collect::<Vec<_>>() })
+            }
             "page_rotate" => {
                 let degrees = a.int("degrees")?;
                 if degrees % 90 != 0 {
@@ -250,6 +295,7 @@ impl Automation {
             }
             "page_insert_blank" => self.insert_blank(&a)?,
             "page_insert_file" => self.insert_file(&a)?,
+            "page_insert_clipboard" => self.page_insert_clipboard(&a)?,
             "page_extract" => self.page_extract(&a)?,
             "doc_combine" => self.doc_combine(&a)?,
             "doc_bates_files" => self.doc_bates_files(&a)?,
@@ -268,6 +314,8 @@ impl Automation {
                 json!({ "redone": label, "document": summary(self.doc(&a)?) })
             }
             "command_list" => self.command_list(&a)?,
+            "help_shortcuts" => self.help_shortcuts(&a)?,
+            "help_guide" => self.help_guide(&a)?,
             "command_run" => return self.command_run(&a),
             "command_batch" => self.command_batch(&a)?,
             "doc_inspect" => self.doc_inspect(&a)?,
@@ -399,6 +447,7 @@ impl Automation {
             }
             "page_set_transition" => self.page_set_transition(&a)?,
             "doc_create" => self.doc_create(&a)?,
+            "doc_create_screenshot" => self.doc_create_screenshot(&a)?,
             "doc_flatten" => {
                 let (comments, fields) = (a.opt_bool("comments")?.unwrap_or(true), a.opt_bool("fields")?.unwrap_or(true));
                 if !comments && !fields {
@@ -512,6 +561,7 @@ impl Automation {
                 }
             }
             "page_objects" => self.page_objects(&a)?,
+            "objects_select" => self.objects_select(&a)?,
             "objects_arrange" | "objects_align" | "objects_distribute" | "objects_transform" | "objects_resize" | "objects_style"
             | "objects_delete" => self.objects_edit(name, &a)?,
             "text_fonts" => {
@@ -540,6 +590,8 @@ impl Automation {
                             "font": b.base_font,
                             "size": (b.size * 100.0).round() / 100.0,
                             "line_count": b.line_count,
+                            "direction": if b.rtl { "rtl" } else { "ltr" },
+                            "vertical": b.vertical,
                             "runs": b.runs.iter().map(|run| json!({
                                 "start": run.start, "end": run.end, "font_resource": run.font,
                                 "font": run.base_font, "size": run.size, "bold": run.bold,
@@ -550,6 +602,7 @@ impl Automation {
                     .collect();
                 withheld(json!({ "page": page + 1, "count": blocks.len(), "paragraphs": blocks }), copy)
             }
+            "text_direction" => self.text_direction(&a)?,
             "text_edit" if a.get("paragraph").is_some() => {
                 if let Some(text) = a.opt_str("text")? {
                     pdfcraft_engine::validate_paragraph_text(text).map_err(|error| ToolError::InvalidArgs(error.to_string()))?;
@@ -732,6 +785,9 @@ impl Automation {
             "redact_apply" => self.redact_apply(&a)?,
             "redact_clear" => self.redact_clear(&a)?,
             "redact_codes" => self.redact_codes(&a)?,
+            "redact_code_set_save" => self.redact_code_set_save(&a)?,
+            "redact_code_set_delete" => self.redact_code_set_delete(&a)?,
+            "redact_code_sets_file" => self.redact_code_sets_file(&a)?,
             "redact_patterns" => self.redact_patterns(&a)?,
             "doc_hidden_info" => self.doc_hidden_info(&a)?,
             "printers" => self.printers()?,
@@ -748,6 +804,15 @@ impl Automation {
             "print_ink_manager_set" => self.ink_manager_set(&a)?,
             "print_ink_manager_apply" => self.ink_manager_apply(&a)?,
             "print_overprint_preview" => self.overprint_preview(&a)?,
+            "prefs_get" => self.prefs_get(&a)?,
+            "recovery_snapshot" => self.recovery_snapshot(&a)?,
+            "recovery_list" => self.recovery_list(&a)?,
+            "recovery_restore" => self.recovery_restore(&a)?,
+            "recovery_discard" => self.recovery_discard(&a)?,
+            "prefs_set" => self.prefs_set(&a)?,
+            "ui_language_get" => self.ui_language_get()?,
+            "ui_language_set" => self.ui_language_set(&a)?,
+            "locale_format" => self.locale_format(&a)?,
             "color_settings_get" => self.color_settings_get(&a)?,
             "color_settings_set" => self.color_settings_set(&a)?,
             "color_profiles_list" => self.color_profiles_list(&a)?,
@@ -818,6 +883,12 @@ impl Automation {
             "js_set_document_script" => self.js_set_document_script(&a)?,
             "js_document_actions" => self.js_document_actions(&a)?,
             "js_set_document_action" => self.js_set_document_action(&a)?,
+            "js_page_actions" => self.js_page_actions(&a)?,
+            "js_set_page_action" => self.js_set_page_action(&a)?,
+            "js_run_action" => self.js_run_action(&a)?,
+            "js_scripts" => self.js_scripts(&a)?,
+            "js_script" => self.js_script(&a)?,
+            "js_debug" => self.js_debug(&a)?,
             "js_enabled" => self.js_enabled(&a)?,
             "edit_keep_tags" => {
                 if let Some(on) = a.opt_bool("enabled")? {
@@ -830,6 +901,11 @@ impl Automation {
             "form_actions" => self.form_actions(&a)?,
             "form_detect_fields" => self.form_detect_fields(&a)?,
             "doc_compare" => self.doc_compare(&a)?,
+            "doc_compare_view" => self.doc_compare_view(&a)?,
+            "window_list" => self.window_list()?,
+            "window_new" => self.window_new(&a)?,
+            "window_move_tab" => self.window_move_tab(&a)?,
+            "window_close" => self.window_close(&a)?,
             "compare_files" => self.compare_files(&a)?,
             "action_list" => self.action_list()?,
             "pdfa_verify" => self.pdfa_verify(&a)?,
@@ -857,10 +933,12 @@ impl Automation {
             "doc_compare_mark" => self.doc_compare_mark(&a)?,
             "form_set_actions" => self.form_set_actions(&a)?,
             "form_run_trigger" => self.form_run_trigger(&a)?,
+            "form_keystroke" => self.form_keystroke(&a)?,
             "ocr_status" => self.ocr_status()?,
             "ocr_engines_list" => self.ocr_engines_list()?,
             "ocr_engine_set" => self.ocr_engine_set(&a)?,
             "scan_despeckle" => self.scan_despeckle(&a)?,
+            "scan_straighten" => self.scan_straighten(&a)?,
             "scan_camera_image" => self.scan_camera_image(&a)?,
             "scan_remove_background" => self.scan_remove_background(&a)?,
             "ocr_recognize_files" => self.ocr_recognize_files(&a)?,
@@ -872,6 +950,8 @@ impl Automation {
             "tags_set" => self.tags_set(&a)?,
             "tags_add_namespace" => self.tags_add_namespace(&a)?,
             "tags_mark_artifact" => self.tags_mark_artifact(&a)?,
+            "tags_new" => self.tags_new(&a)?,
+            "tags_delete" => self.tags_delete(&a)?,
             "reading_order_list" => self.a11y_reading_order_list(&a)?,
             "reading_order_tag" => self.a11y_reading_order_tag(&a)?,
             "reading_order_move" => self.a11y_reading_order_move(&a)?,
@@ -882,6 +962,8 @@ impl Automation {
             "alt_text_set" => self.alt_text_set(&a)?,
             "sign_id_create" => self.sign_id_create(&a)?,
             "sign_document" => self.sign_document(&a)?,
+            "sign_id_inspect" => self.sign_id_inspect(&a)?,
+            "ocr_model_verify" => self.ocr_model_verify(&a)?,
             "sign_field_lock" => self.sign_field_lock(&a)?,
             "sign_keychain_ids" => {
                 #[cfg(target_os = "macos")]
@@ -905,15 +987,28 @@ impl Automation {
                 let ids: Vec<Value> = Vec::new();
                 json!({ "count": ids.len(), "ids": ids })
             }
+            "sign_token_modules" => self.sign_token_modules()?,
+            "sign_token_slots" => self.sign_token_slots(&a)?,
+            "sign_token_ids" => self.sign_token_ids(&a)?,
             "sign_trust" => self.sign_trust(&a)?,
             "sign_os_trust_get" => self.sign_os_trust_get()?,
             "sign_os_trust_set" => self.sign_os_trust_set(&a)?,
             "sign_os_roots" => self.sign_os_roots(&a)?,
+            "sign_trust_list" => self.sign_trust_list()?,
+            "sign_trust_set" => self.sign_trust_set(&a)?,
+            "sign_appearance_list" => self.sign_appearance_list()?,
+            "sign_appearance_save" => self.sign_appearance_save(&a)?,
+            "sign_appearance_delete" => self.sign_appearance_delete(&a)?,
+            "sign_timestamp_servers_get" => self.sign_timestamp_servers_get()?,
+            "sign_timestamp_servers_set" => self.sign_timestamp_servers_set(&a)?,
+            "sign_add_verification" => self.sign_add_verification(&a)?,
             "trust_urls_get" => self.trust_urls_get()?,
             "trust_urls_set" => self.trust_urls_set(&a)?,
             "trust_url_check" => self.trust_url_check(&a)?,
             "comment_mark" => self.comment_mark(&a)?,
             "comment_lock" => self.comment_lock(&a)?,
+            "comment_popup" => self.comment_popup(&a)?,
+            "comment_popups_all" => self.comment_popups_all(&a)?,
             "comments_hide" => self.comments_hide(&a)?,
             "comments_summarize" => self.comments_summarize(&a)?,
             "comment_edit" => self.comment_edit(&a)?,
@@ -956,12 +1051,17 @@ impl Automation {
         }
         // Document Will Close runs first; what it changes is closed with the document.
         let _ = self.session.run_document_action(id, pdfcraft_engine::DocTrigger::WillClose);
+        self.forget_doc(id);
+        Ok(json!({ "closed": id.0 }))
+    }
+
+    /// Close document `id` and drop everything cached for it.
+    fn forget_doc(&mut self, id: DocId) {
         self.session.close(id);
         self.renderers.remove(&id);
         self.texts.remove_doc(id);
         self.search.remove_doc(id);
         self.ocr_reviews.remove(&id);
-        Ok(json!({ "closed": id.0 }))
     }
 
     fn doc_save(&mut self, a: &Args) -> Result<Value> {
@@ -1212,9 +1312,10 @@ impl Automation {
             if let Some(c) = compression {
                 m.compression = match c {
                     "ccitt-g4" | "ccitt" | "g4" => MonoCompression::CcittG4,
+                    "jbig2" => MonoCompression::Jbig2,
                     "zip" | "flate" => MonoCompression::Flate,
                     "retain" => MonoCompression::Retain,
-                    other => return Err(ToolError::InvalidArgs(format!("unknown mono compression {other:?} (ccitt-g4, zip, retain)"))),
+                    other => return Err(ToolError::InvalidArgs(format!("unknown mono compression {other:?} (ccitt-g4, jbig2, zip, retain)"))),
                 };
             }
         }
@@ -1243,6 +1344,21 @@ impl Automation {
                     ))
                 })?);
             }
+        }
+        if let Some(on) = a.opt_bool("flatten_transparency")? {
+            let mut t = pdfcraft_engine::optimize::Transparency::default();
+            if let Some(p) = a.opt_str("flatten_preset")? {
+                let preset = pdfcraft_engine::pdfa::FlattenPreset::from_id(p)
+                    .ok_or_else(|| ToolError::InvalidArgs(format!("unknown flatten_preset {p:?} (low, medium, high)")))?;
+                t.resolution = pdfcraft_engine::pdfa::FlattenSettings::preset(preset).resolution;
+            }
+            if let Some(b) = a.opt_int("flatten_balance")? {
+                t.balance = u8::try_from(b)
+                    .ok()
+                    .filter(|b| *b <= 100)
+                    .ok_or_else(|| ToolError::InvalidArgs(format!("flatten_balance must be 0 to 100, not {b}")))?;
+            }
+            settings.transparency = on.then_some(t);
         }
         let discard: Vec<pdfcraft_engine::Hidden> = match a.get("discard") {
             None => Vec::new(),
@@ -1286,6 +1402,10 @@ impl Automation {
             "image_bytes_before": o.image_bytes_before,
             "image_bytes_after": o.image_bytes_after,
             "images_ccitt": o.images_ccitt,
+            "images_jbig2": o.images_jbig2,
+            "images_downgraded": o.images_downgraded,
+            "images_not_downgraded": o.images_not_downgraded,
+            "transparency_flattened_pages": r.flattened,
             "thumbnails": o.thumbnails,
             "alternate_images": o.alternate_images,
             "tags_removed": o.tags_removed,
@@ -1356,7 +1476,12 @@ impl Automation {
                     opacity: a.opt_num("opacity")?.unwrap_or(d.opacity),
                     rotation: a.opt_num("rotation")?.unwrap_or(d.rotation),
                     behind: a.opt_bool("behind")?.unwrap_or(false),
-                    offset: [0.0; 2],
+                    offset: [a.opt_num("offset_x")?.unwrap_or(0.0), a.opt_num("offset_y")?.unwrap_or(0.0)],
+                    visibility: pdfcraft_engine::MarkVisibility::from_flags(
+                        a.opt_bool("show_on_print")?.unwrap_or(true),
+                        a.opt_bool("show_on_screen")?.unwrap_or(true),
+                    )
+                    .map_err(|e| ToolError::InvalidArgs(e.to_string()))?,
                 };
                 Edit::AddWatermark { pages, settings: wm, replace, file }
             }
@@ -1828,7 +1953,7 @@ impl Automation {
             }
             Some(_) => return Err(ToolError::InvalidArgs("passwords must list a password (or null) for each path".into())),
         };
-        let mut hf = header_footer(a)?;
+        let hf = header_footer(a)?;
         let Some(first) = hf.text.iter().find_map(|t| pdfcraft_engine::bates_start(t)) else {
             return Err(ToolError::InvalidArgs("put a <<Bates Number#digits#start#prefix#suffix>> token in a header or footer".into()));
         };
@@ -1839,7 +1964,6 @@ impl Automation {
         };
         let replace = a.opt_bool("replace")?.unwrap_or(false);
         let suffix = a.opt_str("suffix")?.unwrap_or("_bates").to_string();
-        let templates = hf.text.clone();
         let dir = self.resolve(a.str("out_dir")?, true)?;
         std::fs::create_dir_all(&dir).map_err(|e| failed(format!("{}: {e}", dir.display())))?;
         let mut files = Vec::new();
@@ -1848,20 +1972,13 @@ impl Automation {
             let bytes = std::fs::read(&src).map_err(|e| failed(format!("{}: {e}", src.display())))?;
             let name = src.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
             let stem = src.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "document".into());
-            let id = self.session.open(name, None, Arc::new(bytes), password.as_deref()).map_err(|e| failed(format!("{p}: {e}")))?;
-            let numbered = (|| {
-                let count = self.session.get(id).map(|d| d.info.pages.len()).unwrap_or(0);
-                for (t, template) in hf.text.iter_mut().zip(&templates) {
-                    *t = pdfcraft_engine::with_bates_start(template, next);
-                }
-                self.session.apply(id, Edit::AddHeaderFooter { pages: (0..count).collect(), settings: hf.clone(), replace })?;
-                Ok::<_, pdfcraft_engine::EditError>((count, self.session.save_bytes(id)?))
-            })();
-            self.session.close(id);
-            let (count, pdf) = numbered.map_err(|e| failed(format!("{p}: {e}")))?;
+            let numbered = self
+                .session
+                .bates_number_file(&name, Arc::new(bytes), password.as_deref(), &hf, next, replace)
+                .map_err(|e| failed(format!("{p}: {e}")))?;
+            let (count, last) = (numbered.pages, numbered.last);
             let target = unused(&dir, &format!("{stem}{suffix}"))?;
-            write_atomic(&target, &pdf)?;
-            let last = next.saturating_add((count as u64).saturating_sub(1));
+            write_atomic(&target, &numbered.bytes)?;
             files.push(json!({ "path": p, "output": target.to_string_lossy(), "pages": count, "first": next, "last": last }));
             next = last.saturating_add(1);
         }
@@ -2672,78 +2789,10 @@ fn encode_png(width: u32, height: u32, premultiplied: &[u8]) -> Result<Vec<u8>> 
     Ok(out)
 }
 
-/// Extract the text of `pages` (0-based, distinct) with one renderer per worker thread, handing
-/// each page to `sink` on this thread as soon as it is ready (in no particular order), so
-/// pages are not all held at once. Stops at the first error from extraction or `sink`; a page a
-/// worker could not deliver (a worker panicked) is an error, never silently missing.
-fn extract_each(
-    bytes: &Arc<Vec<u8>>,
-    password: Option<Arc<str>>,
-    pages: &[usize],
-    mut sink: impl FnMut(usize, PageText) -> Result<()>,
-) -> Result<()> {
-    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-    let extract = |r: &mut PageRenderer, p: usize| {
-        let out = r.render(RenderRequest { page: p, kind: RequestKind::Text, tile: None, scale: 1.0, tag: 0 });
-        match out.error {
-            Some(e) => Err(e),
-            None => Ok(out.text.map(Arc::unwrap_or_clone).unwrap_or_default()),
-        }
-    };
-    let config = RenderConfig { password, ..Default::default() };
-    let workers = if cfg!(target_arch = "wasm32") { 1 } else { std::thread::available_parallelism().map_or(1, |n| n.get()).min(8) };
-    // Small jobs aren't worth a second parse of the document.
-    if workers == 1 || pages.len() < 8 {
-        if pages.is_empty() {
-            return Ok(());
-        }
-        let mut r = PageRenderer::new(bytes.clone(), config);
-        for &p in pages {
-            let text = extract(&mut r, p).map_err(|e| failed(format!("page {}: {e}", p + 1)))?;
-            sink(p, text)?;
-        }
-        return Ok(());
-    }
-    let next = AtomicUsize::new(0);
-    let stop = AtomicBool::new(false);
-    std::thread::scope(|s| {
-        // Bounded: workers wait while `sink` catches up instead of piling pages up.
-        let (tx, rx) = std::sync::mpsc::sync_channel::<(usize, std::result::Result<PageText, String>)>(workers * 2);
-        let handles: Vec<_> = (0..workers)
-            .map(|_| {
-                let (tx, next, stop, config) = (tx.clone(), &next, &stop, config.clone());
-                s.spawn(move || {
-                    let mut r = PageRenderer::new(bytes.clone(), config);
-                    while !stop.load(Ordering::Relaxed) {
-                        let Some(&p) = pages.get(next.fetch_add(1, Ordering::Relaxed)) else { break };
-                        if tx.send((p, extract(&mut r, p))).is_err() {
-                            break;
-                        }
-                    }
-                })
-            })
-            .collect();
-        drop(tx);
-        let mut result = Ok(());
-        let mut delivered = 0usize;
-        for (p, text) in rx.iter() {
-            delivered += 1;
-            if let Err(e) = text.map_err(|e| failed(format!("page {}: {e}", p + 1))).and_then(|t| sink(p, t)) {
-                result = Err(e);
-                break;
-            }
-        }
-        stop.store(true, Ordering::Relaxed);
-        // Unblock workers waiting to send, then wait for them (a panic is joined, not rethrown).
-        drop(rx);
-        for h in handles {
-            let _ = h.join();
-        }
-        match result {
-            Ok(()) if delivered < pages.len() => Err(failed("page text could not be extracted (an extraction worker failed)")),
-            other => other,
-        }
-    })
+/// Extract the text of `pages` (0-based, distinct) in parallel, handing each page to `sink` as it
+/// is ready ([`pdfcraft_engine::text_extract::extract_each`]).
+fn extract_each(bytes: &Arc<Vec<u8>>, password: Option<Arc<str>>, pages: &[usize], sink: impl FnMut(usize, PageText) -> Result<()>) -> Result<()> {
+    pdfcraft_engine::text_extract::extract_each(bytes, password, pages, sink, failed)
 }
 
 /// The file `name` inside `dir`, where `name` comes from a document or an argument: separators,
@@ -2777,6 +2826,75 @@ fn child(dir: &Path, name: &str) -> PathBuf {
         safe.insert(0, '_');
     }
     dir.join(safe)
+}
+
+/// The most files a batch tool (`action_run`, `ocr_recognize_files`) takes from a folder.
+const MAX_BATCH_FILES: usize = 10_000;
+
+/// One file of a batch run: how it was named in the request or found in the folder, where it
+/// is, and where its result goes inside the output folder (subfolders kept, every part a plain
+/// name, so it can't lead out).
+pub(crate) struct BatchFile {
+    pub shown: String,
+    pub source: PathBuf,
+    pub output: PathBuf,
+}
+
+impl Automation {
+    /// The files of a batch tool: `paths`, or every PDF in `source_folder` (with `recursive`,
+    /// its subfolders too: a bounded, link-safe walk inside the root). Returns the files and,
+    /// for a folder, what the walk skipped or which cap cut it short.
+    pub(crate) fn batch_files(&self, a: &Args, out: &Path) -> Result<(Vec<BatchFile>, Value)> {
+        match (a.get("paths"), a.opt_str("source_folder")?) {
+            (Some(_), Some(_)) => Err(ToolError::InvalidArgs("pass paths or source_folder, not both".into())),
+            (None, None) => Err(ToolError::InvalidArgs("pass paths (files) or source_folder (a folder of PDFs)".into())),
+            (Some(_), None) => {
+                if a.get("recursive").is_some() {
+                    return Err(ToolError::InvalidArgs("recursive goes with source_folder".into()));
+                }
+                let files = a
+                    .strs("paths")?
+                    .into_iter()
+                    .map(|p| {
+                        let name = Path::new(p).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "document.pdf".into());
+                        Ok(BatchFile { shown: p.to_string(), source: self.resolve(p, true)?, output: child(out, &name) })
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                Ok((files, Value::Null))
+            }
+            (None, Some(shown)) => {
+                let folder = self.resolve(shown, false)?;
+                if !folder.is_dir() {
+                    return Err(failed(format!("{shown} is not a folder")));
+                }
+                let recursive = a.opt_bool("recursive")?.unwrap_or(false);
+                let limits = pdfcraft_engine::folder_search::LIMITS;
+                // Links to files are followed only inside the source folder itself.
+                let inside = folder.canonicalize().map_err(|e| failed(format!("{shown}: {e}")))?;
+                let walk = pdfcraft_engine::folder_search::walk_pdfs(&folder, shown, recursive, Some(&inside), MAX_BATCH_FILES, &limits);
+                let files = walk
+                    .files
+                    .into_iter()
+                    .map(|f| {
+                        // The walk names files `<shown>/<sub>/<name>`; anything else keeps just its name.
+                        let rel = Path::new(&f.shown)
+                            .strip_prefix(shown)
+                            .map(Path::to_path_buf)
+                            .unwrap_or_else(|_| Path::new(&f.shown).file_name().map(PathBuf::from).unwrap_or_default());
+                        let mut output = out.to_path_buf();
+                        for part in rel.components().filter_map(|c| match c {
+                            std::path::Component::Normal(n) => Some(n.to_string_lossy().into_owned()),
+                            _ => None,
+                        }) {
+                            output = child(&output, &part);
+                        }
+                        BatchFile { shown: f.shown, source: f.real, output }
+                    })
+                    .collect();
+                Ok((files, json!({ "skipped": walk.skipped, "truncated_by": walk.truncated })))
+            }
+        }
+    }
 }
 
 /// `<stem>.pdf` in `dir`, or `<stem> (2).pdf` and so on when that name is taken.

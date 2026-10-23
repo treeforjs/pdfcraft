@@ -232,3 +232,139 @@ fn control_click_effects_are_visible_when_the_reply_arrives() {
     assert_eq!(files_in(&s), 0, "discarded by the time the click is answered");
     assert_eq!(call(&mut h, "ui.state", serde_json::json!({}))["dialog"], serde_json::Value::Null);
 }
+
+// ---- The web app's store (browser storage), through its native stand-in ----------------------
+
+use pdfcraft_engine::recovery::{MemoryFiles, RecoveryFiles};
+
+fn browser_app(storage: &MemoryFiles) -> PdfCraftApp {
+    let mut app = PdfCraftApp::new();
+    app.set_option("language", "en").unwrap();
+    app.enable_recovery(RecoveryStore::in_browser_storage(storage.clone()));
+    app
+}
+
+#[test]
+fn a_closed_browser_tab_is_offered_and_recovered_like_a_crash() {
+    let storage = MemoryFiles::new();
+    {
+        let mut app = browser_app(&storage);
+        app.open_bytes("web.pdf", None, fixture(3)).unwrap();
+        assert!(app.apply_edit(Edit::DeletePages { pages: vec![0] }));
+        app.autosave_now();
+        // The tab is closed: nothing runs, the entry stays in browser storage.
+    }
+    assert_eq!(storage.names().len(), 2, "{:?}", storage.names());
+    let mut h = Harness::builder().with_size(egui::vec2(1200.0, 800.0)).build_eframe({
+        let storage = storage.clone();
+        move |_cc| browser_app(&storage)
+    });
+    h.run_steps(4);
+    h.get_by_label("Recover unsaved documents?");
+    h.get_by_label_contains("recovery copies in this browser");
+    h.get_by_label("Recover").click();
+    h.run_steps(4);
+    let app = h.state();
+    assert_eq!(app.views.len(), 1);
+    let doc = app.session.get(app.views[0].id).unwrap();
+    assert!(doc.dirty && doc.path.is_none());
+    assert_eq!(doc.info.pages.len(), 2, "the edit survived the closed tab");
+    // Closing the recovered document discards its copy.
+    h.state_mut().close_tab(0);
+    assert!(storage.names().is_empty(), "{:?}", storage.names());
+}
+
+#[test]
+fn damaged_browser_entries_load_nothing_and_are_cleaned_up() {
+    let storage = MemoryFiles::new();
+    {
+        let mut app = browser_app(&storage);
+        app.open_bytes("a.pdf", None, fixture(2)).unwrap();
+        app.apply_edit(Edit::RotatePages { pages: vec![0], degrees: 90 });
+        app.autosave_now();
+    }
+    let names = storage.names();
+    let pdf = names.iter().find(|n| n.ends_with(".pdf")).unwrap().clone();
+    let good = storage.read(&pdf, u64::MAX).unwrap();
+    // Truncated bytes, bytes without metadata, garbage and oversized metadata, a key that
+    // climbs out of the store, and a file that isn't an entry.
+    storage.put(&pdf, good[..good.len() / 2].to_vec());
+    storage.put("orphan.pdf", good.to_vec());
+    storage.put("garbage.json", vec![0xff; 100]);
+    storage.put("garbage.pdf", b"%PDF-1.7".to_vec());
+    storage.put("big.json", vec![b' '; 70 * 1024]);
+    storage.put("big.pdf", b"%PDF".to_vec());
+    storage.put("climb.json", br#"{"key":"../x","name":"x","path":null,"saved_at":1,"encrypted":false}"#.to_vec());
+    storage.put("climb.pdf", b"%PDF".to_vec());
+    storage.put("notes.txt", b"not ours".to_vec());
+    let app = browser_app(&storage);
+    assert!(app.recoverable.is_empty());
+    assert!(app.dialog.is_none(), "nothing to offer");
+    assert_eq!(storage.names(), ["notes.txt"], "damaged entries are removed, other files kept");
+}
+
+#[test]
+fn bytes_that_fail_their_checksum_open_nothing() {
+    let storage = MemoryFiles::new();
+    {
+        let mut app = browser_app(&storage);
+        app.open_bytes("c.pdf", None, fixture(2)).unwrap();
+        app.apply_edit(Edit::RotatePages { pages: vec![0], degrees: 90 });
+        app.autosave_now();
+    }
+    let pdf = storage.names().into_iter().find(|n| n.ends_with(".pdf")).unwrap();
+    let mut bytes = storage.read(&pdf, u64::MAX).unwrap().to_vec();
+    let mid = bytes.len() / 2;
+    bytes[mid] ^= 0x20;
+    storage.put(&pdf, bytes);
+    let mut app = browser_app(&storage);
+    // Same length, so it is listed; reading it refuses.
+    let keys: Vec<String> = app.recoverable.iter().map(|m| m.key.clone()).collect();
+    assert_eq!(keys.len(), 1);
+    app.recover(&keys);
+    assert!(app.views.is_empty(), "a damaged copy opens nothing");
+    assert!(app.toast.as_ref().is_some_and(|(t, _)| t.contains("damaged")), "{:?}", app.toast);
+    assert!(storage.names().is_empty(), "and is removed");
+}
+
+#[test]
+fn recovery_commands_reopen_the_prompt_and_save_copies_now() {
+    let storage = MemoryFiles::new();
+    {
+        let mut app = browser_app(&storage);
+        app.open_bytes("r.pdf", None, fixture(2)).unwrap();
+        app.apply_edit(Edit::RotatePages { pages: vec![0], degrees: 90 });
+        assert!(app.execute("file.autosave_now"));
+        assert_eq!(app.toast.as_ref().map(|t| t.0.as_str()), Some("Saved recovery copies of unsaved changes"));
+        assert!(app.execute("file.autosave_now"));
+        assert_eq!(app.toast.as_ref().map(|t| t.0.as_str()), Some("Recovery copies are up to date"));
+        // This session's own copies are not offered back to it.
+        assert!(app.execute("file.recover"));
+        assert_eq!(app.toast.as_ref().map(|t| t.0.as_str()), Some("Nothing to recover"));
+    }
+    let mut app = browser_app(&storage);
+    assert_eq!(app.dialog, Some(pdfcraft_ui_egui::Dialog::Recovery));
+    // Closed without choosing: the copies stay, and the command shows them again.
+    app.dialog = None;
+    assert!(app.execute("file.recover"));
+    assert_eq!(app.dialog, Some(pdfcraft_ui_egui::Dialog::Recovery));
+    let keys: Vec<String> = app.recoverable.iter().map(|m| m.key.clone()).collect();
+    app.recover(&keys);
+    assert_eq!(app.views.len(), 1);
+    // Without a store there is nothing to recover.
+    let mut off = PdfCraftApp::new();
+    off.set_option("language", "en").unwrap();
+    assert!(off.execute("file.recover"));
+    assert_eq!(off.toast.as_ref().map(|t| t.0.as_str()), Some("Autosave is off, so there is nothing to recover"));
+}
+
+#[test]
+fn desktop_entries_with_a_wrong_length_are_not_offered() {
+    let s = store("length");
+    crashed_session(&s, fixture(2), None, None);
+    let pdf = std::fs::read_dir(s.dir()).unwrap().flatten().map(|e| e.path()).find(|p| p.extension().is_some_and(|e| e == "pdf")).unwrap();
+    let bytes = std::fs::read(&pdf).unwrap();
+    std::fs::write(&pdf, &bytes[..bytes.len() - 10]).unwrap();
+    assert!(s.list().is_empty(), "a truncated autosave is not offered");
+    assert_eq!(files_in(&s), 0);
+}

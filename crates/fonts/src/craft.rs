@@ -110,6 +110,24 @@ pub fn document_japanese_fonts_for_style(serif: bool, bold: bool) -> Vec<&'stati
     document_faces(CRAFT_FONTS, serif, bold)
 }
 
+/// Every face that can stand in for CJK document text, for a face that has every character of
+/// an edit: the Japanese faces in [`document_japanese_fonts_for_style`] order, then Chinese
+/// (`Hans`, `Hant`) and Korean (`Kore`, `Hang`) faces in manifest order. Empty without
+/// craft-fonts.
+pub fn document_cjk_fonts_for_style(serif: bool, bold: bool) -> Vec<&'static CraftFont> {
+    cjk_faces(CRAFT_FONTS, serif, bold)
+}
+
+fn cjk_faces(faces: &[CraftFont], serif: bool, bold: bool) -> Vec<&CraftFont> {
+    let mut out = document_faces(faces, serif, bold);
+    for face in faces.iter().filter(|f| ["Hans", "Hant", "Kore", "Hang"].iter().any(|s| f.covers(s))) {
+        if !out.iter().any(|f| std::ptr::eq(*f, face)) {
+            out.push(face);
+        }
+    }
+    out
+}
+
 fn document_face(faces: &[CraftFont], serif: bool, bold: bool) -> Option<&CraftFont> {
     document_faces(faces, serif, bold).into_iter().next()
 }
@@ -195,6 +213,19 @@ mod tests {
         assert_eq!(zh, ["FakeHans", "BIZ UDPGothic", "Shippori Mincho"]);
         let ja: Vec<&str> = order_cjk([&mincho, &faces[2], &faces[1]], false).iter().map(|f| f.family).collect();
         assert_eq!(ja, ["BIZ UDPGothic", "Shippori Mincho", "FakeHans"]);
+    }
+
+    #[test]
+    fn cjk_document_faces_put_japanese_first_then_chinese_and_korean() {
+        let faces = [
+            CraftFont { family: "FakeKorean", style: "Regular", scripts: &["Kore"], bytes: b"ko" },
+            CraftFont { family: "FakeHans", style: "Regular", scripts: &["Hans"], bytes: b"zh" },
+            CraftFont { family: "Shippori Mincho", style: "Regular", scripts: &["Jpan"], bytes: b"ja" },
+            CraftFont { family: "Inter", style: "Regular", scripts: &["Latn"], bytes: b"la" },
+        ];
+        let order: Vec<&str> = cjk_faces(&faces, true, false).iter().map(|f| f.family).collect();
+        assert_eq!(order, ["Shippori Mincho", "FakeKorean", "FakeHans"]);
+        assert!(cjk_faces(&[], true, false).is_empty());
     }
 
     #[test]

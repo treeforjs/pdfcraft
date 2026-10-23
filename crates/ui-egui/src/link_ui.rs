@@ -1,9 +1,9 @@
 //! Edit a PDF ▸ Link: drag a rectangle to create a link, then choose its appearance and action
-//! (go to a page, open a web page) in Link Properties; with the Link tool, existing links show
+//! (go to a page, open a web page, run a JavaScript) in Link Properties; with the Link tool, existing links show
 //! their outlines, a click selects one, a double-click edits it and Delete removes it.
 
 use egui::{Color32, CornerRadius, Pos2, Rect, Stroke};
-use pdfcraft_engine::{Edit, LinkAction, LinkHighlight, LinkItem, LinkStyle};
+use pdfcraft_engine::{DestFit, DestView, Edit, LinkAction, LinkHighlight, LinkItem, LinkStyle};
 use pdfcraft_render::DocInfo;
 
 use crate::canvas::{DocView, PageXform};
@@ -25,6 +25,77 @@ pub struct LinkView {
     last_click: Option<(f64, usize, usize)>,
 }
 
+/// Link Properties ▸ Link Action.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum LinkKind {
+    #[default]
+    Web,
+    Page,
+    /// Go to a named destination of the document.
+    Named,
+    JavaScript,
+}
+
+/// How a go-to-page link shows its page.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum ViewFit {
+    /// The whole page (`/Fit`).
+    #[default]
+    Page,
+    /// The page's width (`/FitH`).
+    Width,
+    /// The page's height (`/FitV`).
+    Height,
+    /// The page's content (`/FitB`).
+    Visible,
+    /// Keep the reader's zoom (`/XYZ` with nulls).
+    Inherit,
+    /// A view set from the screen (Use current view) or kept from the link as it was.
+    Exact(DestFit),
+}
+
+impl ViewFit {
+    /// The simple choice for `fit` when there is one, otherwise `Exact`.
+    fn of(fit: DestFit) -> ViewFit {
+        match fit {
+            DestFit::Fit => ViewFit::Page,
+            DestFit::FitH { top: None } => ViewFit::Width,
+            DestFit::FitV { left: None } => ViewFit::Height,
+            DestFit::FitB => ViewFit::Visible,
+            DestFit::Xyz { left: None, top: None, zoom: None } => ViewFit::Inherit,
+            other => ViewFit::Exact(other),
+        }
+    }
+
+    fn fit(self) -> DestFit {
+        match self {
+            ViewFit::Page => DestFit::Fit,
+            ViewFit::Width => DestFit::FitH { top: None },
+            ViewFit::Height => DestFit::FitV { left: None },
+            ViewFit::Visible => DestFit::FitB,
+            ViewFit::Inherit => DestFit::Xyz { left: None, top: None, zoom: None },
+            ViewFit::Exact(f) => f,
+        }
+    }
+
+    fn label(self) -> String {
+        match self {
+            ViewFit::Page => tl!("Fit page").to_string(),
+            ViewFit::Width => tl!("Fit width").to_string(),
+            ViewFit::Height => tl!("Fit height").to_string(),
+            ViewFit::Visible => tl!("Fit visible").to_string(),
+            ViewFit::Inherit => tl!("Inherit zoom").to_string(),
+            ViewFit::Exact(DestFit::Xyz { zoom: Some(z), .. }) => {
+                crate::i18n::fmt(tl!("Custom view ({zoom}%)"), &[("zoom", &format!("{:.0}", z * 100.0))])
+            }
+            ViewFit::Exact(f) => crate::i18n::fmt(tl!("Custom view ({kind})"), &[("kind", f.kind())]),
+        }
+    }
+}
+
+/// Most named destinations Link Properties lists.
+const MAX_LISTED_NAMES: usize = 5_000;
+
 /// Link Properties' working copy.
 #[derive(Clone, Debug, PartialEq)]
 pub struct LinkDraft {
@@ -32,14 +103,41 @@ pub struct LinkDraft {
     pub rect: [f64; 4],
     /// `None` for a new link.
     pub index: Option<usize>,
-    pub web: bool,
+    /// Which Link Action is chosen.
+    pub kind: LinkKind,
     pub url: String,
+    /// The JavaScript a Run-a-JavaScript link runs.
+    pub script: String,
     /// 1-based target page.
     pub target: usize,
+    /// How the target page is shown.
+    pub view: ViewFit,
+    /// The named destination a Named link goes to, and the document's names (read once when
+    /// the dialog opens).
+    pub dest_name: String,
+    pub names: Vec<String>,
+    /// The page and view on screen when the dialog opened (Use current view).
+    pub here: Option<(usize, DestFit)>,
     pub style: LinkStyle,
-    /// An existing link's go-to (or other) action and the target it showed: kept unless the
-    /// page is changed, so a view's zoom, a named destination or a script survive a restyle.
+    /// An existing link's action PdfCraft doesn't edit (a remote go-to, a launch…) and the
+    /// target it showed: kept unless the page or view is changed.
     pub keep: Option<(LinkAction, usize)>,
+}
+
+/// The view on screen in `view`: its current page, the point of it at the window's top-left
+/// (in user space) and the zoom, as an `/XYZ` destination.
+pub(crate) fn current_view(view: &DocView, info: &DocInfo) -> Option<(usize, DestFit)> {
+    let page = view.current;
+    let xf = view.page_xform(page)?;
+    let p = info.pages.get(page)?;
+    let vp = view.viewport_rect();
+    let corner = egui::pos2(xf.rect.left().max(vp.left()).min(xf.rect.right()), xf.rect.top().max(vp.top()).min(xf.rect.bottom()));
+    let (vx, vy) = xf.screen_to_view(corner);
+    let [x, y] = p.view_to_user(vx, vy);
+    let zoom = xf.rect.width().max(xf.rect.height()) / (xf.pw.max(xf.ph).max(1.0) * crate::canvas::PT);
+    let ok = |v: f32| v.is_finite().then_some(f64::from(v));
+    let zoom = ok(zoom).map(|z| (z * 100.0).round() / 100.0).filter(|z| (0.08..=64.0).contains(z));
+    Some((page, DestFit::Xyz { left: ok(x).map(|v| v.round()), top: ok(y).map(|v| v.round()), zoom }))
 }
 
 fn screen_rect(xf: &PageXform, info: &DocInfo, page: usize, r: [f64; 4]) -> Rect {
@@ -140,6 +238,14 @@ impl PdfCraftApp {
     pub(crate) fn open_link_props(&mut self, page: usize, rect: Option<[f64; 4]>, index: Option<usize>) {
         let Some((_, id)) = self.active_ids() else { return };
         let existing = index.and_then(|i| self.session.get(id).and_then(|d| d.links.iter().find(|l| l.page == page && l.index == i).cloned()));
+        let mut names: Vec<String> =
+            self.session.destinations(id).map(|all| all.into_iter().take(MAX_LISTED_NAMES).map(|(d, _)| d.name).collect()).unwrap_or_default();
+        names.sort();
+        names.dedup();
+        let here = self.active_ids().and_then(|(i, _)| {
+            let view = self.views.get(i)?;
+            current_view(view, &self.session.get(id)?.info)
+        });
         let draft = match existing {
             Some(l) => {
                 let target = self.session.link_target_page(id, &l.action).map_or(1, |p| p + 1);
@@ -147,23 +253,47 @@ impl PdfCraftApp {
                     page,
                     rect: l.rect,
                     index,
-                    web: matches!(l.action, LinkAction::Uri(_)),
+                    kind: match l.action {
+                        LinkAction::Uri(_) => LinkKind::Web,
+                        LinkAction::JavaScript(_) => LinkKind::JavaScript,
+                        LinkAction::Named(_) => LinkKind::Named,
+                        _ => LinkKind::Page,
+                    },
+                    view: match &l.action {
+                        LinkAction::View(v) => ViewFit::of(v.fit),
+                        _ => ViewFit::Page,
+                    },
+                    dest_name: match &l.action {
+                        LinkAction::Named(n) => n.clone(),
+                        _ => names.first().cloned().unwrap_or_default(),
+                    },
+                    names,
+                    here,
                     url: match &l.action {
                         LinkAction::Uri(u) => u.clone(),
                         _ => "https://".into(),
                     },
+                    script: match &l.action {
+                        LinkAction::JavaScript(js) => js.clone(),
+                        _ => String::new(),
+                    },
                     target,
                     style: l.style,
-                    keep: (!matches!(l.action, LinkAction::Uri(_))).then(|| (l.action.clone(), target)),
+                    keep: matches!(l.action, LinkAction::Other(_)).then(|| (l.action.clone(), target)),
                 }
             }
             None => LinkDraft {
                 page,
                 rect: rect.unwrap_or_default(),
                 index: None,
-                web: true,
+                kind: LinkKind::Web,
                 url: "https://".into(),
+                script: String::new(),
                 target: 1,
+                view: ViewFit::Page,
+                dest_name: names.first().cloned().unwrap_or_default(),
+                names,
+                here,
                 style: LinkStyle::default(),
                 keep: None,
             },
@@ -254,25 +384,95 @@ pub(crate) fn body(ui: &mut egui::Ui, d: &mut LinkDraft, pages: usize, t: &Token
     });
     ui.add_space(8.0);
     widgets::section_title(ui, tl!("Link Action"));
-    ui.radio_value(&mut d.web, true, tl!("Open a web page"));
-    ui.add_enabled_ui(d.web, |ui| {
+    ui.radio_value(&mut d.kind, LinkKind::Web, tl!("Open a web page"));
+    ui.add_enabled_ui(d.kind == LinkKind::Web, |ui| {
         ui.horizontal(|ui| {
             ui.add_space(24.0);
             ui.add(egui::TextEdit::singleline(&mut d.url).desired_width(360.0).hint_text("https://example.org"));
         });
     });
-    ui.radio_value(&mut d.web, false, tl!("Go to a page view"));
-    ui.add_enabled_ui(!d.web, |ui| {
+    ui.radio_value(&mut d.kind, LinkKind::Page, tl!("Go to a page view"));
+    ui.add_enabled_ui(d.kind == LinkKind::Page, |ui| {
         ui.horizontal(|ui| {
             ui.add_space(24.0);
             ui.label(tl!("Page"));
+            let before = d.target;
             ui.add(egui::DragValue::new(&mut d.target).range(1..=pages.max(1)));
             ui.label(crate::i18n::fmt(tl!("of {name}"), &[("name", &pages.to_string())]));
+            // A view set from the screen belongs to the page it was set on.
+            if d.target != before && matches!(d.view, ViewFit::Exact(DestFit::Xyz { .. } | DestFit::FitR { .. })) {
+                d.view = ViewFit::Inherit;
+            }
+        });
+        ui.horizontal(|ui| {
+            ui.add_space(24.0);
+            let l = ui.label(tl!("Zoom"));
+            egui::ComboBox::from_id_salt("link-view")
+                .selected_text(d.view.label())
+                .show_ui(ui, |ui| {
+                    for v in [ViewFit::Page, ViewFit::Width, ViewFit::Height, ViewFit::Visible, ViewFit::Inherit] {
+                        let label = v.label();
+                        ui.selectable_value(&mut d.view, v, label);
+                    }
+                    if let ViewFit::Exact(f) = d.view {
+                        let label = ViewFit::Exact(f).label();
+                        ui.selectable_value(&mut d.view, ViewFit::Exact(f), label);
+                    }
+                })
+                .response
+                .labelled_by(l.id);
+            if let Some((page, fit)) = d.here
+                && ui.button(tl!("Use current view")).on_hover_text(tl!("Go to the page as it is shown now: its position and zoom")).clicked()
+            {
+                d.target = page + 1;
+                d.view = ViewFit::Exact(fit);
+            }
         });
     });
-    let ok = !d.web || (d.url.trim().len() > 3 && d.url.trim() != "https://");
+    ui.radio_value(&mut d.kind, LinkKind::Named, tl!("Go to a named destination"));
+    if d.kind == LinkKind::Named {
+        ui.horizontal(|ui| {
+            ui.add_space(24.0);
+            if d.names.is_empty() {
+                ui.label(egui::RichText::new(tl!("This document has no named destinations.")).small().color(t.text_faint));
+            } else {
+                let shown = if d.dest_name.is_empty() { tl!("Choose a destination").to_string() } else { d.dest_name.clone() };
+                egui::ComboBox::from_id_salt("link-dest").selected_text(shown).width(300.0).show_ui(ui, |ui| {
+                    for n in &d.names {
+                        ui.selectable_value(&mut d.dest_name, n.clone(), n);
+                    }
+                });
+            }
+        });
+    }
+    ui.radio_value(&mut d.kind, LinkKind::JavaScript, tl!("Run a JavaScript"));
+    if d.kind == LinkKind::JavaScript {
+        ui.horizontal(|ui| {
+            ui.add_space(24.0);
+            ui.add(
+                egui::TextEdit::multiline(&mut d.script)
+                    .code_editor()
+                    .desired_rows(6)
+                    .desired_width(ui.available_width())
+                    .char_limit(pdfcraft_engine::MAX_ACTION_SCRIPT_BYTES)
+                    .hint_text(tl!("JavaScript, e.g. app.alert(\"Hello\")"))
+                    .id_salt("link-js"),
+            );
+        });
+    }
+    let ok = match d.kind {
+        LinkKind::Web => d.url.trim().len() > 3 && d.url.trim() != "https://",
+        LinkKind::Page => true,
+        LinkKind::Named => !d.dest_name.is_empty(),
+        LinkKind::JavaScript => !d.script.trim().is_empty(),
+    };
     if !ok {
-        ui.label(egui::RichText::new(tl!("Type the web address.")).small().color(t.text_faint));
+        let hint = match d.kind {
+            LinkKind::Web => tl!("Type the web address."),
+            LinkKind::Named => tl!("Choose a destination"),
+            _ => tl!("Type the JavaScript."),
+        };
+        ui.label(egui::RichText::new(hint).small().color(t.text_faint));
     }
     ui.add_space(12.0);
     let (mut a, mut c) = (false, false);
@@ -289,10 +489,14 @@ pub(crate) fn body(ui: &mut egui::Ui, d: &mut LinkDraft, pages: usize, t: &Token
 
 /// The edit for a confirmed draft.
 pub(crate) fn edit_for(d: &LinkDraft) -> Edit {
+    let page = d.target.saturating_sub(1);
     let action = match &d.keep {
-        _ if d.web => LinkAction::Uri(d.url.trim().to_string()),
-        Some((kept, target)) if *target == d.target => kept.clone(),
-        _ => LinkAction::Page(d.target.saturating_sub(1)),
+        _ if d.kind == LinkKind::Web => LinkAction::Uri(d.url.trim().to_string()),
+        _ if d.kind == LinkKind::JavaScript => LinkAction::JavaScript(d.script.clone()),
+        _ if d.kind == LinkKind::Named => LinkAction::Named(d.dest_name.clone()),
+        Some((kept, target)) if *target == d.target && d.view == ViewFit::Page => kept.clone(),
+        _ if d.view == ViewFit::Page => LinkAction::Page(page),
+        _ => LinkAction::View(DestView { page, fit: d.view.fit() }),
     };
     match d.index {
         None => Edit::AddLink { page: d.page, rect: d.rect, action, style: d.style },

@@ -811,16 +811,43 @@ fn legible(c: Color32, t: &Tokens) -> Color32 {
 /// The Comments panel header's filter and sort controls (Acrobat: filter funnel and "…").
 /// The header's "…" (sort, hide all, summary, data exchange) and filter menus; returns a
 /// command to run.
-pub(crate) fn header_controls(ui: &mut egui::Ui, info: &DocInfo, generation: u64, view: &mut DocView, hidden: bool) -> Option<&'static str> {
+pub(crate) fn header_controls(
+    ui: &mut egui::Ui,
+    info: &DocInfo,
+    generation: u64,
+    view: &mut DocView,
+    hidden: bool,
+    hidden_types: &[String],
+) -> Option<&'static str> {
     refresh(view, info, generation);
     // The filter's choices come from the index (set aside while the menus change the view).
     let cache = std::mem::take(&mut view.comments.panel);
-    let command = header_menus(ui, &cache.index, view, hidden);
+    let command = header_menus(ui, &cache.index, info, view, hidden, hidden_types);
     view.comments.panel = cache;
     command
 }
 
-fn header_menus(ui: &mut egui::Ui, index: &CommentIndex, view: &mut DocView, hidden: bool) -> Option<&'static str> {
+/// The comment subtypes in the document that can be hidden on the page (Show by type), in name
+/// order. Read only while the menu is open.
+pub fn page_types(info: &DocInfo) -> Vec<String> {
+    let mut types: Vec<String> = Vec::new();
+    for a in &info.annotations {
+        if !matches!(a.subtype.as_str(), "Popup" | "Link" | "Widget") && !types.contains(&a.subtype) && types.len() < 64 {
+            types.push(a.subtype.clone());
+        }
+    }
+    types.sort();
+    types
+}
+
+fn header_menus(
+    ui: &mut egui::Ui,
+    index: &CommentIndex,
+    info: &DocInfo,
+    view: &mut DocView,
+    hidden: bool,
+    hidden_types: &[String],
+) -> Option<&'static str> {
     let mut command = None;
     let cv = &mut view.comments;
     let (types, authors, colors) = (&index.types, &index.authors, &index.colors);
@@ -846,8 +873,36 @@ fn header_menus(ui: &mut egui::Ui, index: &CommentIndex, view: &mut DocView, hid
             }
         }
         ui.separator();
+        // Comments ▸ Show by type: which kinds of comment the pages draw.
+        ui.add_enabled_ui(!hidden, |ui| {
+            ui.menu_button(tl!("Show on pages by type"), |ui| {
+                let types = page_types(info);
+                if types.is_empty() {
+                    ui.label(egui::RichText::new(tl!("No comments")).small());
+                }
+                for ty in &types {
+                    let mut shown = !hidden_types.contains(ty);
+                    if ui.checkbox(&mut shown, tl!(subtype_label(ty))).changed() {
+                        let mut next: Vec<String> = hidden_types.iter().filter(|t| *t != ty).cloned().collect();
+                        if !shown {
+                            next.push(ty.clone());
+                        }
+                        cv.hide_types_request = Some(next);
+                    }
+                }
+                if !hidden_types.is_empty() {
+                    ui.separator();
+                    if ui.button(tl!("Show all types")).clicked() {
+                        cv.hide_types_request = Some(Vec::new());
+                        ui.close();
+                    }
+                }
+            });
+        });
         for (id, label) in [
             ("comment.hide_all", if hidden { tl!("Show all comments") } else { tl!("Hide all comments") }),
+            ("comment.open_popups", tl!("Open all pop-ups")),
+            ("comment.close_popups", tl!("Close all pop-ups")),
             ("comment.summarize", tl!("Create PDF comment summary…")),
             ("comment.export", tl!("Export all to data file…")),
             ("comment.import", tl!("Import comments…")),
@@ -919,6 +974,29 @@ fn header_menus(ui: &mut egui::Ui, index: &CommentIndex, view: &mut DocView, hid
         }
     });
     command
+}
+
+impl crate::PdfCraftApp {
+    /// Comments ▸ Show by type: hide these comment types on the active document's pages (an
+    /// empty list shows every type). A view setting, like Hide all comments.
+    pub fn set_hidden_comment_types(&mut self, types: &[String]) {
+        let Some((i, id)) = self.active_ids() else { return };
+        match self.session.set_hidden_comment_types(id, types) {
+            Ok(true) => {
+                if let Some(v) = self.views.get_mut(i) {
+                    v.invalidate_content();
+                    // A hidden comment can't stay selected.
+                    if let (Some((p, k)), Some(doc)) = (v.comments.selected, self.session.get(id))
+                        && doc.info.annotations.iter().any(|a| a.page == p && a.index == k && doc.comment_type_hidden(&a.subtype))
+                    {
+                        v.comments.selected = None;
+                    }
+                }
+            }
+            Ok(false) => {}
+            Err(e) => self.notify_error(e),
+        }
+    }
 }
 
 #[cfg(test)]

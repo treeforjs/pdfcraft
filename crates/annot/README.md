@@ -13,6 +13,10 @@ Comments (annotations), ISO 32000-2 §12.5. Layer L3, depends on `pdfcraft-cos`,
   line breaking by approximate Helvetica proportions (no font program is bundled).
 - **Edits:** reply (`/IRT`), set review status (a `/State` reply, as Acrobat's "Set status"
   does), change text, move, resize, restyle, delete (with pop-up and replies).
+- **Pop-ups** (`popup`): read a comment's pop-up (`PopupState`: rect, open), open/close, move
+  or resize it (`set_popup`, 24–2000 pt a side), creating one beside the comment when needed
+  (not for text boxes or replies); a sticky note's own `/Open` follows. A `/Popup` that isn't a
+  pop-up is ignored and a broken `/Rect` falls back to the default place.
 
 ## API sketch
 

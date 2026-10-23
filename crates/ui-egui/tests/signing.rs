@@ -474,3 +474,107 @@ fn the_signatures_panel_outlines_each_revision_after_signing() {
     assert_eq!(opened.name, "changed (revision 4).pdf");
     assert_eq!(opened.bytes.len(), bytes.len());
 }
+
+/// A smart card with the P-256 test ID and a certificate without a key, in reader 2 of a mock
+/// PKCS #11 module (reader 1 is empty).
+fn token_provider() -> std::sync::Arc<pdfcraft_sign::token::mock::MockProvider> {
+    use pdfcraft_sign::token::mock::{MockModule, MockProvider, MockToken};
+    let read = |f: &str| std::fs::read(format!("{}/../sign/tests/data/{f}", env!("CARGO_MANIFEST_DIR"))).unwrap();
+    let ec = pdfcraft_engine::sign::pkcs12::open(&read("ec-p256.p12"), "test").unwrap();
+    let other = pdfcraft_engine::sign::pkcs12::open(&read("rsa-aes.p12"), "test").unwrap();
+    let card = MockToken::new("My Card", "2468")
+        .with_certificate(b"1", "Card signature", &ec.certificate.raw)
+        .with_key(b"1", ec.key)
+        .with_certificate(b"2", "Card encryption", &other.certificate.raw);
+    std::sync::Arc::new(MockProvider::new().with_module("/opt/mock/token.so", MockModule::new().with_slot(1, None).with_slot(2, Some(card))))
+}
+
+#[test]
+fn signing_on_a_smart_card_through_the_token_step() {
+    let dir = dir();
+    let mut h = harness(dir.clone());
+    let provider = token_provider();
+    h.state_mut().token_provider = provider.clone();
+    h.state_mut().run_inline = true;
+    assert!(h.state_mut().execute("sign.token"));
+    assert_eq!(h.state().quick_tool, QuickTool::SignArea { certify: false });
+    let (a, b) = (at(&h, 40.0, 90.0), at(&h, 220.0, 40.0));
+    drag(&mut h, a, b);
+    assert_eq!(h.state().dialog, Some(Dialog::Sign));
+    assert_eq!(h.state().sign_draft.as_ref().map(|d| d.step), Some(SignStep::Token));
+    h.run_steps(2);
+    h.get_by_label("Sign with a Smart Card or Token");
+    // The module was found and its readers listed; the reader with the card is chosen.
+    assert_eq!(h.state().sign_draft.as_ref().unwrap().token.module, "/opt/mock/token.so");
+    h.get_by_label("My Card");
+    h.get_by_label("Reader 1");
+    assert_eq!(h.state().sign_draft.as_ref().unwrap().token.slot, Some(2));
+
+    // A wrong PIN says so; the field is cleared either way.
+    field(&h, "PIN").click();
+    h.run_steps(1);
+    field(&h, "PIN").type_text("1111");
+    h.run_steps(1);
+    button(&h, "Unlock").click();
+    h.run_steps(3);
+    assert!(h.state().sign_draft.as_ref().unwrap().token.pin.0.is_empty());
+    h.get_by_label("the PIN is incorrect");
+    field(&h, "PIN").click();
+    h.run_steps(1);
+    field(&h, "PIN").type_text("2468");
+    h.run_steps(1);
+    button(&h, "Unlock").click();
+    h.run_steps(3);
+    assert!(h.state().sign_draft.as_ref().unwrap().token.pin.0.is_empty());
+    h.get_by_label("Card signature");
+    h.get_by_label("Certificates left out: 1");
+    assert_eq!(h.query_all_by_label("Card encryption").count(), 0, "no key: not offered");
+
+    h.get_by_label("Continue").click();
+    h.run_steps(3);
+    h.get_by_label("Sign as \"Card signature\"");
+    assert_eq!(h.query_all_by_label("Digital ID password").count(), 0);
+    h.get_by_label("The key is on the smart card or token, and the signature is made there.");
+    h.get_by_label("Sign").click();
+    h.run_steps(6);
+    let s = h.state();
+    assert_eq!(s.dialog, None, "{:?}", s.sign_draft.as_ref().and_then(|d| d.error.clone()));
+    assert!(dir.join("contract_signed.pdf").exists());
+    let doc = s.session.get(s.views[0].id).unwrap();
+    assert!(doc.signatures.iter().any(|x| x.signed));
+    assert_eq!(provider.module("/opt/mock/token.so").unwrap().counts().1, 1, "signed on the token");
+    // Token identities aren't remembered with the digital ID files.
+    assert!(s.digital_ids.iter().all(|e| !e.path.starts_with("pkcs11:")));
+}
+
+#[test]
+fn the_token_step_reports_missing_modules_and_locked_cards() {
+    let mut h = harness(dir());
+    h.state_mut().token_provider = std::sync::Arc::new(pdfcraft_sign::token::mock::MockProvider::new());
+    h.state_mut().run_inline = true;
+    h.state_mut().start_signing(0, None, None, None);
+    h.state_mut().open_token_step();
+    h.run_steps(3);
+    h.get_by_label("No PKCS #11 module was found here. Choose the module file that came with your card or token (for example opensc-pkcs11).");
+    // A module path that isn't there.
+    h.state_mut().sign_draft.as_mut().unwrap().token.module = "/nope/module.so".into();
+    h.state_mut().find_tokens();
+    h.run_steps(2);
+    h.get_by_label("the PKCS #11 module /nope/module.so was not found");
+
+    // A card whose PIN is locked can't be unlocked from here.
+    let provider = token_provider();
+    let module = provider.module("/opt/mock/token.so").unwrap();
+    for _ in 0..3 {
+        let _ = pdfcraft_sign::token::login(module.as_ref(), 2, Some(pdfcraft_sign::token::Pin::from_bytes(b"0".to_vec())));
+    }
+    h.state_mut().token_provider = provider;
+    h.state_mut().sign_draft.as_mut().unwrap().token.module = "/opt/mock/token.so".into();
+    h.state_mut().find_tokens();
+    h.run_steps(3);
+    let slots = &h.state().sign_draft.as_ref().unwrap().token.slots;
+    assert!(slots.iter().any(|s| s.token.as_ref().is_some_and(|t| t.pin_locked)));
+    h.state_mut().unlock_token();
+    h.run_steps(2);
+    assert!(h.state().sign_draft.as_ref().unwrap().error.as_ref().unwrap().contains("locked"));
+}

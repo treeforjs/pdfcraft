@@ -89,6 +89,11 @@ pub fn convert_pdfa(doc: &mut Document, level: Level) -> Result<Report, ConvertE
     pdfcraft_preflight::convert_with(doc, level, |d| pdfa_structure(d, level))
 }
 
+/// [`convert_pdfa`] with a chosen output intent (replacing the document's PDF/A intents).
+pub fn convert_pdfa_with_intent(doc: &mut Document, level: Level, intent: Option<&pdfcraft_preflight::PdfaIntent>) -> Result<Report, ConvertError> {
+    pdfcraft_preflight::convert_with_intent(doc, level, intent, |d| pdfa_structure(d, level))
+}
+
 #[cfg(test)]
 #[path = "pdfa_tests.rs"]
 mod tests;

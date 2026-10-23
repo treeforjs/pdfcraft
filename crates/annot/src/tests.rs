@@ -517,6 +517,29 @@ fn links_are_added_edited_listed_and_removed() {
 }
 
 #[test]
+fn links_run_javascript() {
+    use crate::links::{self, LinkAction, LinkStyle};
+    let mut doc = fixture();
+    let script = "app.alert(\"Ünïcode \" + this.numPages);";
+    let i = links::add(&mut doc, 0, [10.0, 10.0, 110.0, 30.0], &LinkAction::JavaScript(script.into()), &LinkStyle::default()).unwrap();
+    let j = links::add(&mut doc, 0, [10.0, 40.0, 110.0, 60.0], &LinkAction::Page(1), &LinkStyle::default()).unwrap();
+    // A go-to becomes a script: its /Dest goes, as /Dest and /A can't both be present.
+    links::set(&mut doc, 0, j, None, Some(&LinkAction::JavaScript("this.pageNum = 0;".into())), None).unwrap();
+    // Blank and over-long scripts are refused and change nothing.
+    assert!(links::add(&mut doc, 0, [10.0, 70.0, 110.0, 90.0], &LinkAction::JavaScript("   ".into()), &LinkStyle::default()).is_err());
+    let huge = "x".repeat(pdfcraft_model::actions::MAX_SCRIPT_BYTES + 1);
+    assert!(links::set(&mut doc, 0, j, None, Some(&LinkAction::JavaScript(huge)), None).is_err());
+    let doc = reopen(&doc);
+    let all = links::list(&doc);
+    let get = |k: usize| all.iter().find(|l| l.page == 0 && l.index == k).unwrap();
+    assert_eq!(get(i).action, LinkAction::JavaScript(script.into()));
+    assert_eq!(get(j).action, LinkAction::JavaScript("this.pageNum = 0;".into()));
+    assert_eq!(get(j).action.page(&doc), None);
+    let d = doc.resolve(&list(&doc, 0)[j].get(b"A").unwrap().clone());
+    assert!(!list(&doc, 0)[j].contains(b"Dest") && d.as_dict().unwrap().name(b"S") == Some(b"JavaScript"));
+}
+
+#[test]
 fn urls_are_found_in_text() {
     let t: Vec<char> = "See https://example.org/a?b=1, or www.rust-lang.org. Not a.b or http:/x.".chars().collect();
     let found: Vec<String> = crate::links::find_urls(&t).into_iter().map(|(_, u)| u).collect();
@@ -1071,4 +1094,90 @@ fn contents_wins_over_stale_rich_text() {
     assert_eq!((r.text().as_str(), r.spans.len(), r.spans[0].format.bold, r.spans[0].format.size), ("new", 1, false, 9.0));
     d.set(b"Contents".to_vec(), PdfString::text("old"));
     assert!(rich::of_dict(&d).spans[0].format.bold);
+}
+
+fn open_flag(doc: &Document, d: &Dict) -> Option<bool> {
+    d.get(b"Open").map(|o| matches!(*doc.resolve(o), Object::Bool(true)))
+}
+
+#[test]
+fn pop_ups_open_close_move_and_survive_a_save() {
+    let mut doc = fixture();
+    let note = add_annotation(&mut doc, &new(0, Shape::Note { at: [100.0, 700.0], icon: NoteIcon::Comment }), &meta("n")).unwrap();
+    let before = popup(&doc, 0, note).expect("notes have a pop-up");
+    assert!(!before.open);
+    set_popup(&mut doc, 0, note, Some(true), None).unwrap();
+    let d = &list(&doc, 0)[note];
+    assert_eq!(open_flag(&doc, d), Some(true), "the note's own /Open follows its pop-up");
+    assert_eq!(popup(&doc, 0, note).unwrap(), PopupState { rect: before.rect, open: true });
+    set_popup(&mut doc, 0, note, None, Some([300.0, 400.0, 520.0, 560.0])).unwrap();
+    let doc = reopen(&doc);
+    assert_eq!(popup(&doc, 0, note).unwrap(), PopupState { rect: [300.0, 400.0, 520.0, 560.0], open: true });
+    let s = summaries(&doc).into_iter().find(|s| s.index == note).unwrap();
+    assert_eq!(s.popup.map(|p| p.open), Some(true), "the comment list reports it");
+    // Moving the comment takes its pop-up along; deleting it removes the pop-up.
+    let mut doc = doc;
+    move_annotation(&mut doc, 0, note, 10.0, -5.0, &meta("m")).unwrap();
+    assert_eq!(popup(&doc, 0, note).unwrap().rect, [310.0, 395.0, 530.0, 555.0]);
+    let n = list(&doc, 0).len();
+    delete_annotation(&mut doc, 0, note).unwrap();
+    assert_eq!(list(&doc, 0).len(), n - 2);
+    assert!(list(&doc, 0).iter().all(|d| d.name(b"Subtype") != Some(b"Popup")));
+}
+
+#[test]
+fn comments_without_a_pop_up_get_one_and_some_have_none() {
+    let mut doc = fixture();
+    // The inline square on page 1 has no pop-up: closing changes nothing, opening adds one.
+    set_popup(&mut doc, 0, 0, Some(false), None).unwrap();
+    assert_eq!(list(&doc, 0).len(), 1);
+    set_popup(&mut doc, 0, 0, Some(true), None).unwrap();
+    let all = list(&doc, 0);
+    assert_eq!(all.len(), 2, "the new pop-up is in /Annots");
+    let pop = &all[1];
+    assert_eq!(pop.name(b"Subtype"), Some(&b"Popup"[..]));
+    assert_eq!(all[0].reference(b"Popup").map(|r| doc.get(r).as_dict().cloned()), Some(Some(pop.clone())));
+    assert_eq!(popup(&doc, 0, 0).unwrap(), PopupState { rect: [60.0, -70.0, 260.0, 50.0], open: true });
+    assert_eq!(open_flag(&doc, &all[0]), None, "only notes carry their own /Open");
+    // Text boxes show their text on the page; replies use their comment's pop-up.
+    let tb = add_annotation(&mut doc, &new(0, Shape::TextBox { rect: [10.0, 100.0, 200.0, 150.0], font_size: 12.0 }), &meta("t")).unwrap();
+    assert!(set_popup(&mut doc, 0, tb, Some(true), None).is_err());
+    let reply = add_reply(&mut doc, 0, 0, "ok", "Bo", &meta("r")).unwrap();
+    assert!(set_popup(&mut doc, 0, reply, Some(true), None).is_err());
+    assert!(set_popup(&mut doc, 0, 1, Some(true), None).is_err(), "a pop-up has no pop-up");
+    assert!(set_popup(&mut doc, 0, 99, Some(true), None).is_err());
+    assert!(set_popup(&mut doc, 0, 0, None, None).is_err(), "nothing to change");
+}
+
+#[test]
+fn hostile_pop_up_values_are_refused_or_repaired() {
+    let mut doc = fixture();
+    for bad in [[f64::NAN, 0.0, 100.0, 100.0], [0.0, 0.0, 10.0, 10.0], [0.0, 0.0, 5000.0, 100.0], [1e300, 0.0, 1e300, 100.0]] {
+        assert!(set_popup(&mut doc, 0, 0, None, Some(bad)).is_err(), "{bad:?}");
+    }
+    assert_eq!(list(&doc, 0).len(), 1, "a refused edit changes nothing");
+    // /Popup pointing at a comment, a pop-up with a broken /Rect and /Open, and a /Popup cycle.
+    let mut doc = document_of(&[
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 /MediaBox [0 0 612 792] >>",
+        b"<< /Type /Page /Parent 2 0 R /Annots [4 0 R 5 0 R 6 0 R] >>",
+        b"<< /Type /Annot /Subtype /Square /Rect [10 10 50 50] /Popup 6 0 R >>",
+        b"<< /Type /Annot /Subtype /Text /Rect [100 100 120 120] /Popup 7 0 R /Open 3 >>",
+        b"<< /Type /Annot /Subtype /Circle /Rect [200 200 250 250] /Popup 6 0 R >>",
+        b"<< /Type /Annot /Subtype /Popup /Rect [0 0 (x) 1e400] /Open /Yes /Parent 5 0 R >>",
+    ]);
+    assert_eq!(popup(&doc, 0, 0), None, "a /Popup that isn't one is ignored");
+    assert_eq!(popup(&doc, 0, 2), None, "a comment pointing at itself has no pop-up");
+    let broken = popup(&doc, 0, 1).unwrap();
+    assert_eq!(broken, PopupState { rect: default_popup_rect([100.0, 100.0, 120.0, 120.0]), open: false });
+    assert!(summaries(&doc).iter().all(|s| s.popup.is_none_or(|p| p.rect.iter().all(|v| v.is_finite()))));
+    set_popup(&mut doc, 0, 1, Some(true), None).unwrap();
+    let doc2 = reopen(&doc);
+    assert_eq!(popup(&doc2, 0, 1).unwrap(), PopupState { rect: broken.rect, open: true }, "opening writes a usable rectangle");
+    // The square gets a real pop-up in place of the bogus reference.
+    set_popup(&mut doc, 0, 0, Some(true), None).unwrap();
+    assert!(popup(&doc, 0, 0).is_some_and(|p| p.open));
+    assert_eq!(list(&doc, 0)[2].name(b"Subtype"), Some(&b"Circle"[..]), "the comment it pointed at is untouched");
+    assert_eq!(popups_to_toggle(&doc, None, false), vec![(0, 0), (0, 1)]);
+    assert_eq!(popups_to_toggle(&doc, Some(5), false), vec![]);
 }

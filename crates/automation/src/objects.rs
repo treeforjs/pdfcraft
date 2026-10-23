@@ -2,10 +2,11 @@
 //! (`objects_arrange`), align (`objects_align`) and distribute (`objects_distribute`) them, and
 //! rotate, flip or move them (`objects_transform`), resize (`objects_resize`) and delete them
 //! (`objects_delete`), and change vector paths' fill, stroke, line style and opacity
-//! (`objects_style`). Boxes are in points from the top-left of the displayed page (y down), like
-//! every other tool; directions are as displayed.
+//! (`objects_style`; opacity alone for any object). `objects_select` picks objects as the Edit
+//! object tool does: the ones under a point, or touching a marquee. Boxes are in points from the
+//! top-left of the displayed page (y down), like every other tool; directions are as displayed.
 
-use pdfcraft_engine::{AlignTo, Anchor, Arrange, Axis, Dash, Edit, LineCap, LineJoin, ObjectSize, ObjectsEdit, Paint, PathStyle};
+use pdfcraft_engine::{AlignTo, Anchor, Arrange, Axis, Dash, Edit, LineCap, LineJoin, ObjectIndex, ObjectSize, ObjectsEdit, Paint, PathStyle};
 use serde_json::{Value, json};
 
 use crate::{Args, Automation, Result, ToolError, withheld};
@@ -30,7 +31,16 @@ impl Automation {
                     let (u, v) = (info.user_to_view(b[0] as f32, b[1] as f32), info.user_to_view(b[2] as f32, b[3] as f32));
                     json!([r(u[0].min(v[0])), r(u[1].min(v[1])), r(u[0].max(v[0])), r(u[1].max(v[1]))])
                 });
-                let mut v = json!({ "object": i + 1, "kind": o.kind.label(), "rect": rect, "mcid": o.mcid });
+                let mut v = json!({ "object": i + 1, "kind": o.kind.label(), "rect": rect, "mcid": o.mcid, "opacity": r3(o.opacity) });
+                if let Some(a) = &o.appearance {
+                    v["appearance"] = json!({
+                        "fill": paint_json(&a.fill),
+                        "stroke": paint_json(&a.stroke),
+                        "line_width": r3(a.line_width),
+                        "fill_opacity": r3(a.fill_opacity),
+                        "stroke_opacity": r3(a.stroke_opacity),
+                    });
+                }
                 if !o.text.is_empty() {
                     v["text"] = if copy { json!(o.text) } else { Value::Null };
                 }
@@ -38,6 +48,45 @@ impl Automation {
             })
             .collect();
         Ok(withheld(json!({ "page": page + 1, "count": list.len(), "objects": list }), copy))
+    }
+
+    /// `objects_select`: the objects under a point (topmost first) or touching a marquee (in
+    /// paint order), as the Edit object tool picks them.
+    pub(crate) fn objects_select(&self, a: &Args) -> Result<Value> {
+        let page = self.page(a)?;
+        let doc = self.doc(a)?;
+        let info = doc.info.pages.get(page).ok_or_else(|| bad(format!("no page {}", page + 1)))?;
+        let objects = doc.page_objects(page);
+        let index = ObjectIndex::new(&objects);
+        let user = |x: f64, y: f64| {
+            let [u, v] = info.view_to_user(x as f32, y as f32);
+            (f64::from(u), f64::from(v))
+        };
+        let limit = |v: f64| v.abs() <= 1e6;
+        let found = match (a.nums::<2>("point")?, a.nums::<4>("rect")?) {
+            (Some([x, y]), None) => {
+                if !(limit(x) && limit(y)) {
+                    return Err(bad("point must be within 1,000,000 points of the page"));
+                }
+                let slop = a.opt_num("tolerance")?.unwrap_or(2.0);
+                if !(0.0..=100.0).contains(&slop) {
+                    return Err(bad("tolerance must be between 0 and 100 points"));
+                }
+                let (u, v) = user(x, y);
+                index.hits(u, v, slop)
+            }
+            (None, Some(r)) => {
+                if !r.iter().all(|v| limit(*v)) {
+                    return Err(bad("rect must be within 1,000,000 points of the page"));
+                }
+                let (p, q) = (user(r[0], r[1]), user(r[2], r[3]));
+                index.touching([p.0, p.1, q.0, q.1])
+            }
+            (Some(_), Some(_)) => return Err(bad("give either point or rect, not both")),
+            (None, None) => return Err(bad("give point [x, y] (a click) or rect [x0, y0, x1, y1] (a marquee), in points from the top-left")),
+        };
+        let numbers: Vec<usize> = found.iter().map(|k| k + 1).collect();
+        Ok(json!({ "page": page + 1, "count": numbers.len(), "objects": numbers, "top": numbers.first() }))
     }
 
     /// `objects_arrange`, `objects_align`, `objects_distribute`, `objects_transform`,
@@ -56,6 +105,15 @@ impl Automation {
             }
             objects.push(k as usize - 1);
         }
+        // A view-space matrix (`objects_transform` action matrix) → user space.
+        let matrix = match (tool, a.opt_str("action")?) {
+            ("objects_transform", Some("matrix")) => {
+                let m = a.nums::<6>("matrix")?.ok_or_else(|| bad("action matrix needs matrix [a, b, c, d, e, f]"))?;
+                let info = self.doc(a)?.info.pages.get(page).ok_or_else(|| bad(format!("no page {}", page + 1)))?;
+                Some(user_matrix(info, m).ok_or_else(|| bad("the page's view can't be inverted"))?)
+            }
+            _ => None,
+        };
         let change = match tool {
             "objects_arrange" => ObjectsEdit::Arrange(match a.str("order")? {
                 "front" => Arrange::Front,
@@ -82,10 +140,17 @@ impl Automation {
             "objects_style" => ObjectsEdit::Style(style(a)?),
             "objects_delete" => ObjectsEdit::Delete,
             _ => match a.str("action")? {
-                "rotate" => {
-                    let q = a.opt_int("quarters")?.unwrap_or(1);
-                    ObjectsEdit::Rotate(q.rem_euclid(4) as i32)
-                }
+                "rotate" => match (a.opt_num("degrees")?, a.opt_int("quarters")?) {
+                    (Some(_), Some(_)) => return Err(bad("give either quarters or degrees, not both")),
+                    (Some(d), None) => {
+                        if d.abs() > 1e6 {
+                            return Err(bad("degrees must be at most 1,000,000 either way"));
+                        }
+                        ObjectsEdit::RotateBy(d)
+                    }
+                    (None, q) => ObjectsEdit::Rotate(q.unwrap_or(1).rem_euclid(4) as i32),
+                },
+                "matrix" => ObjectsEdit::Matrix(matrix.ok_or_else(|| bad("action matrix needs matrix [a, b, c, d, e, f]"))?),
                 "flip_horizontal" => ObjectsEdit::Flip { horizontal: true },
                 "flip_vertical" => ObjectsEdit::Flip { horizontal: false },
                 "move" => {
@@ -96,10 +161,53 @@ impl Automation {
                     // View offsets run down the page; display space runs up.
                     ObjectsEdit::Move { dx, dy: -dy }
                 }
-                other => return Err(bad(format!("unknown action {other:?}: use rotate, flip_horizontal, flip_vertical or move"))),
+                other => return Err(bad(format!("unknown action {other:?}: use rotate, flip_horizontal, flip_vertical, move or matrix"))),
             },
         };
         self.apply(a, Edit::EditPageObjects { page, objects, change })
+    }
+}
+
+/// `a` then `b` (row vectors, as PDF matrices compose).
+fn then(a: [f64; 6], b: [f64; 6]) -> [f64; 6] {
+    let [a0, a1, a2, a3, a4, a5] = a;
+    let [b0, b1, b2, b3, b4, b5] = b;
+    [a0 * b0 + a1 * b2, a0 * b1 + a1 * b3, a2 * b0 + a3 * b2, a2 * b1 + a3 * b3, a4 * b0 + a5 * b2 + b4, a4 * b1 + a5 * b3 + b5]
+}
+
+/// A matrix in the displayed page's space (points from the top-left, y down) as the same
+/// transform in the page's user space.
+fn user_matrix(info: &pdfcraft_render::PageInfo, m: [f64; 6]) -> Option<[f64; 6]> {
+    let view = |x: f32, y: f32| {
+        let [a, b] = info.user_to_view(x, y);
+        (f64::from(a), f64::from(b))
+    };
+    let (o, x, y) = (view(0.0, 0.0), view(1.0, 0.0), view(0.0, 1.0));
+    let v = [x.0 - o.0, x.1 - o.1, y.0 - o.0, y.1 - o.1, o.0, o.1];
+    let det = v[0] * v[3] - v[1] * v[2];
+    if !(det.is_finite() && det.abs() > 1e-9) {
+        return None;
+    }
+    let (ia, ib, ic, id) = (v[3] / det, -v[1] / det, -v[2] / det, v[0] / det);
+    let inv = [ia, ib, ic, id, -(v[4] * ia + v[5] * ic), -(v[4] * ib + v[5] * id)];
+    Some(then(then(v, m), inv))
+}
+
+/// A number rounded to 1/1000.
+fn r3(v: f64) -> f64 {
+    (v * 1000.0).round() / 1000.0
+}
+
+/// A path's fill or stroke as `page_objects` reports it: "none", or its space and components
+/// (`current`: the colour space the path paints with; no components: a pattern).
+fn paint_json(p: &Paint) -> Value {
+    let c = |v: &[f64]| v.iter().map(|x| r3(*x)).collect::<Vec<_>>();
+    match p {
+        Paint::None => json!("none"),
+        Paint::Gray(g) => json!({ "space": "gray", "components": c(&[*g]) }),
+        Paint::Rgb(v) => json!({ "space": "rgb", "components": c(v) }),
+        Paint::Cmyk(v) => json!({ "space": "cmyk", "components": c(v) }),
+        Paint::Current(v) => json!({ "space": "current", "components": c(v) }),
     }
 }
 

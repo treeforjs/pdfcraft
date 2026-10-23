@@ -663,9 +663,13 @@ impl crate::PdfCraftApp {
             self.session.get(id).map(|doc| doc.form.iter().filter(|x| x.name != name).map(|x| x.name.clone()).collect()).unwrap_or_default();
         d.others = others.clone();
         d.actions = self.session.get(id).map(|doc| doc.field_actions(name)).unwrap_or_default();
+        if f.kind == FormFieldKind::Signature {
+            d.lock = self.session.get(id).and_then(|doc| doc.signature_field_lock(name));
+        }
         if let Some(o) = d.original.as_mut() {
             o.others = others;
             o.actions = d.actions.clone();
+            o.lock = d.lock.clone();
         }
         self.field_props = Some(d);
         self.dialog = Some(crate::Dialog::FieldProps);
@@ -682,6 +686,8 @@ pub enum FieldTab {
     Validate,
     Calculate,
     Actions,
+    /// Signature fields: what signing locks.
+    Signed,
 }
 
 /// Actions tab: the "Select Action" choices.
@@ -798,6 +804,8 @@ pub struct FieldDraft {
     /// Actions tab: each trigger's action, and the one being added.
     pub actions: Vec<(pdfcraft_engine::FieldTrigger, pdfcraft_engine::FieldAction)>,
     pub new_action: ActionDraft,
+    /// Signature fields (Signed tab): the fields, and maybe the document, signing locks.
+    pub lock: Option<pdfcraft_engine::sign::FieldLock>,
     original: Box<Option<FieldDraft>>,
 }
 
@@ -858,6 +866,7 @@ impl FieldDraft {
             others: Vec::new(),
             actions: Vec::new(),
             new_action: ActionDraft::default(),
+            lock: None,
             original: Box::new(None),
         };
         d.original = Box::new(Some(d.clone()));
@@ -884,8 +893,28 @@ impl FieldDraft {
         if matches!(self.kind, FormFieldKind::Text | FormFieldKind::Combo) {
             t.extend([(FieldTab::Format, "Format"), (FieldTab::Validate, "Validate"), (FieldTab::Calculate, "Calculate")]);
         }
+        if self.kind == FormFieldKind::Signature {
+            t.push((FieldTab::Signed, "Signed"));
+        }
         t.push((FieldTab::Actions, "Actions"));
         t
+    }
+
+    /// The Signed tab's change, if it changed.
+    pub fn lock_edit(&self) -> Option<pdfcraft_engine::Edit> {
+        let o = self.original.as_ref().as_ref()?;
+        (self.kind == FormFieldKind::Signature && self.lock != o.lock)
+            .then(|| pdfcraft_engine::Edit::SetSignatureLock { field: self.field.clone(), lock: self.lock.clone() })
+    }
+
+    /// Every edit Apply makes: the properties, then the lock.
+    pub fn edits(&self) -> Vec<pdfcraft_engine::Edit> {
+        let mut out = Vec::new();
+        if let Some(props) = self.props() {
+            out.push(pdfcraft_engine::Edit::SetFieldProps { name: self.field.clone(), props: Box::new(props) });
+        }
+        out.extend(self.lock_edit());
+        out
     }
 
     /// The properties that changed (`None` when nothing did).
@@ -949,6 +978,76 @@ fn flag_box(ui: &mut egui::Ui, flags: &mut u32, bit: u32, inverted: bool, label:
             *flags &= !bit;
         }
     }
+}
+
+/// Signed tab: which fields become read-only when this signature field is signed, and whether
+/// the document allows no further changes (a DocMDP lock with no changes permitted).
+fn signed_tab(ui: &mut egui::Ui, d: &mut FieldDraft, t: &crate::theme::Tokens) {
+    use pdfcraft_engine::sign::{FieldLock, LockAction};
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    enum Choice {
+        Nothing,
+        All,
+        AllExcept,
+        Just,
+    }
+    let now = match d.lock.as_ref().map(|l| &l.action) {
+        None => Choice::Nothing,
+        Some(LockAction::All) => Choice::All,
+        Some(LockAction::Exclude(_)) => Choice::AllExcept,
+        Some(LockAction::Include(_)) => Choice::Just,
+    };
+    let mut choice = now;
+    ui.label(tl!("When signed:"));
+    ui.radio_value(&mut choice, Choice::Nothing, tl!("Nothing happens"));
+    ui.radio_value(&mut choice, Choice::All, tl!("Mark as read-only all fields"));
+    ui.radio_value(&mut choice, Choice::AllExcept, tl!("Mark as read-only all fields except these"));
+    ui.radio_value(&mut choice, Choice::Just, tl!("Mark as read-only just these fields"));
+    if choice != now {
+        let keep = d.lock.as_ref().and_then(|l| l.permissions);
+        let names = match d.lock.as_ref().map(|l| &l.action) {
+            Some(LockAction::Include(n) | LockAction::Exclude(n)) => n.clone(),
+            _ => Vec::new(),
+        };
+        d.lock = match choice {
+            Choice::Nothing => keep.map(|p| FieldLock { action: LockAction::All, permissions: Some(p) }),
+            Choice::All => Some(FieldLock { action: LockAction::All, permissions: keep }),
+            Choice::AllExcept => Some(FieldLock { action: LockAction::Exclude(names), permissions: keep }),
+            Choice::Just => Some(FieldLock { action: LockAction::Include(names), permissions: keep }),
+        };
+    }
+    if let Some(FieldLock { action: LockAction::Include(names) | LockAction::Exclude(names), .. }) = d.lock.as_mut() {
+        ui.add_space(4.0);
+        if d.others.is_empty() {
+            ui.label(egui::RichText::new(tl!("The form has no other fields.")).color(t.text_faint));
+        }
+        egui::ScrollArea::vertical().id_salt("signed-fields").max_height(160.0).auto_shrink([false, true]).show(ui, |ui| {
+            for other in &d.others {
+                let mut on = names.contains(other);
+                if ui.checkbox(&mut on, other.as_str()).changed() {
+                    if on {
+                        names.push(other.clone());
+                    } else {
+                        names.retain(|n| n != other);
+                    }
+                }
+            }
+        });
+    }
+    ui.add_space(8.0);
+    let mut lock_doc = d.lock.as_ref().is_some_and(|l| l.permissions == Some(1));
+    if ui.checkbox(&mut lock_doc, tl!("Lock the document after signing")).changed() {
+        match (d.lock.as_mut(), lock_doc) {
+            (Some(l), on) => l.permissions = on.then_some(1),
+            (None, true) => d.lock = Some(FieldLock::document()),
+            (None, false) => {}
+        }
+    }
+    ui.label(
+        egui::RichText::new(tl!("Locked fields become read-only once the field is signed; a locked document then allows no changes."))
+            .small()
+            .color(t.text_muted),
+    );
 }
 
 /// Draw Field Properties; returns (apply, cancel).
@@ -1096,6 +1195,7 @@ pub(crate) fn body(ui: &mut egui::Ui, d: &mut FieldDraft, t: &crate::theme::Toke
             FieldTab::Validate => validate_tab(ui, d),
             FieldTab::Calculate => calculate_tab(ui, d, t),
             FieldTab::Actions => actions_tab(ui, d, t),
+            FieldTab::Signed => signed_tab(ui, d, t),
             FieldTab::Options => match d.kind {
                 FormFieldKind::Text => {
                     use pdfcraft_engine::field_flags as ff;

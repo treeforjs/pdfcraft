@@ -1120,6 +1120,39 @@ fn inserting_a_file_goes_after_the_selection_and_undoes() {
 }
 
 #[test]
+fn clipboard_contents_insert_before_or_after_the_selection_in_one_undo_step() {
+    use pdfcraft_ui_egui::Clip;
+    let mut h = organize(3);
+    h.get_by_label("Page 2").click();
+    h.run_steps(2);
+    // Text after page 2: its pages land there and are selected.
+    h.state_mut().insert_clip(Clip::Text("from the clipboard".into()), false).unwrap();
+    h.run_steps(3);
+    assert_eq!(texts_of(h.state(), 0), ["Page 1", "Page 2", "from the clipboard", "Page 3"]);
+    assert_eq!(picked(&h), [2]);
+    // An image before the selection (the new page): one page at the image's size.
+    h.state_mut().insert_clip(Clip::Image { width: 50, height: 25, rgba: [0u8, 90, 200, 255].repeat(50 * 25) }, true).unwrap();
+    h.run_steps(3);
+    let pages = &h.state().session.docs()[0].info.pages;
+    assert_eq!((pages.len(), pages[2].width, pages[2].height), (5, 50.0, 25.0));
+    assert_eq!(picked(&h), [2]);
+    // Each insertion is one undo step.
+    h.key_press_modifiers(Modifiers::COMMAND, Key::Z);
+    h.run_steps(3);
+    assert_eq!(texts_of(h.state(), 0), ["Page 1", "Page 2", "from the clipboard", "Page 3"]);
+    h.key_press_modifiers(Modifiers::COMMAND, Key::Z);
+    h.run_steps(3);
+    assert_eq!(texts_of(h.state(), 0), ["Page 1", "Page 2", "Page 3"]);
+    // Hostile contents are refused without touching the document.
+    for clip in
+        [Clip::Image { width: 3, height: 3, rgba: vec![1; 5] }, Clip::Image { width: usize::MAX, height: 3, rgba: vec![] }, Clip::Text(" \n ".into())]
+    {
+        assert!(h.state_mut().insert_clip(clip, false).is_err());
+    }
+    assert_eq!(texts_of(h.state(), 0), ["Page 1", "Page 2", "Page 3"]);
+}
+
+#[test]
 fn plus_between_pages_inserts_picked_files_there_in_order() {
     let dir = temp_path("insert-gap");
     std::fs::create_dir_all(&dir).unwrap();

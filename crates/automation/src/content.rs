@@ -61,6 +61,19 @@ fn style(a: &Args, t: &mut AddedText) -> Result<()> {
             other => return Err(bad(format!("unknown align {other:?}"))),
         };
     }
+    if let Some(k) = a.opt_num("line_spacing")? {
+        let (lo, hi) = pdfcraft_engine::LINE_SPACING_RANGE;
+        if !(lo..=hi).contains(&k) {
+            return Err(bad(format!("line_spacing must be a multiple of the font size from {lo} to {hi}")));
+        }
+        t.line_spacing = k;
+    }
+    if let Some(p) = a.opt_num("paragraph_spacing")? {
+        if !(0.0..=pdfcraft_engine::MAX_PARA_SPACE).contains(&p) {
+            return Err(bad(format!("paragraph_spacing must be 0 to {} points", pdfcraft_engine::MAX_PARA_SPACE)));
+        }
+        t.para_space = p;
+    }
     Ok(())
 }
 
@@ -87,6 +100,8 @@ impl Automation {
                         v["size"] = json!(t.size);
                         v["bold"] = json!(t.bold);
                         v["italic"] = json!(t.italic);
+                        v["line_spacing"] = json!(t.line_spacing);
+                        v["paragraph_spacing"] = json!(t.para_space);
                         if t.list.iter().any(Option::is_some) {
                             let items = pdfcraft_engine::list_items(t);
                             let labels = pdfcraft_engine::list_labels(&items);

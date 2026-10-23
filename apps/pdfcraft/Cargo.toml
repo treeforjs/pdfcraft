@@ -13,6 +13,9 @@ workspace = true
 # root list (webpki-roots and webpki-root-certs are CDLA-licensed); see craft-update.
 craft-update = { workspace = true, features = ["github"] }
 pdfcraft-ui-egui = { workspace = true }
+# Custom commands run automation tools; the interface reaches them through the engine's
+# ToolHost trait (ui-egui can't depend on automation: both are L7).
+pdfcraft-automation = { workspace = true }
 # Only to apply PDFCRAFT_NATIVE_VECTOR (the opt-in native vector renderer) at start-up.
 pdfcraft-render = { workspace = true }
 # wgpu draws; OpenGL (glow) is the fallback when wgpu can't start on an old or unusual GPU or

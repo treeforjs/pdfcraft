@@ -44,21 +44,63 @@ fn custom_library() -> Value {
     json!({ "type": "string", "description": "A file path: the custom command library folder (default custom-commands, inside the root)." })
 }
 
+fn source_folder() -> Value {
+    json!({ "type": "string", "description": "Instead of paths: a folder whose PDFs are processed (at most 10000; links to folders are never followed, links to files only inside the root)." })
+}
+
+fn recursive() -> Value {
+    json!({ "type": "boolean", "description": "With source_folder: its subfolders too (32 levels deep at most)." })
+}
+
 fn doc() -> Value {
     json!({ "type": "integer", "minimum": 1, "description": "Document id from doc_open or doc_list." })
 }
 
 fn timestamp_server() -> Value {
+    json!({
+        "description": "The name of a configured server (sign_timestamp_servers_get), or a server given inline.",
+        "anyOf": [{ "type": "string", "minLength": 1, "maxLength": 200 }, timestamp_server_object()],
+    })
+}
+
+fn timestamp_server_object() -> Value {
     schema(
         json!({
             "name":{"type":"string","minLength":1,"maxLength":200},
             "url":{"type":"string","maxLength":4096,"description":"HTTPS endpoint; HTTP only for literal loopback IPs. No redirects or URL credentials."},
             "policy":{"type":["string","null"],"description":"Optional requested policy OID; reply must match."},
             "timeout_seconds":{"type":"integer","minimum":1,"maximum":30},
-            "require_trusted_authority":{"type":"boolean","description":"Require the TSA chain to reach an explicitly trusted certificate. False permits an untrusted token, never confers trust."}
+            "require_trusted_authority":{"type":"boolean","description":"Require the TSA chain to reach an explicitly trusted certificate. False permits an untrusted token, never confers trust."},
+            "username":{"type":["string","null"],"maxLength":200,"description":"Account name for a server that needs one (HTTP Basic over HTTPS); its password is held for the session (sign_timestamp_servers_set password_for), never saved."}
         }),
         &["name", "url", "timeout_seconds", "require_trusted_authority"],
     )
+}
+
+fn appearance_schema() -> Value {
+    json!({
+        "description": "What a visible signature shows: the name of a saved appearance (sign_appearance_list), or an object.",
+        "anyOf": [
+            { "type": "string", "minLength": 1, "maxLength": 100 },
+            {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                    "saved": { "type": "string", "description": "Start from this saved appearance." },
+                    "show_name": { "type": "boolean", "description": "The signer's name (in large type on the left when there is no graphic). Default true." },
+                    "date": { "type": "boolean", "description": "Default true." },
+                    "reason": { "type": "boolean" },
+                    "location": { "type": "boolean" },
+                    "distinguished_name": { "type": "boolean" },
+                    "labels": { "type": "boolean", "description": "Labels such as Date: and Reason:. Default true." },
+                    "image": { "type": ["string", "null"], "description": "A PNG or JPEG file (at most 4 MiB, 4 megapixels) shown on the left: a scanned signature. null removes it." },
+                    "remove_white": { "type": "boolean", "description": "Make the picture's near-white paper transparent." },
+                    "strokes": { "type": ["array", "null"], "maxItems": 256, "items": { "type": "array", "items": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 } }, "description": "A drawn signature: strokes of [x, y] points (any units, y down; fitted to the box keeping proportions). At most 256 strokes and 8192 points." },
+                    "logo": { "type": ["string", "null"], "description": "A PNG or JPEG file shown faintly behind the whole signature. null removes it." }
+                }
+            }
+        ]
+    })
 }
 
 fn verification_time() -> Value {
@@ -283,6 +325,17 @@ pub fn tools() -> Vec<ToolDef> {
                 }),
                 &["folder", "query"],
             )),
+        t("page_range_select", "Select pages by range", "Organize Pages ▸ Select: the pages (1-based, sorted, no repeats) a typed range names, such as \"1-3, 7, 9-\" (page labels work as in Print; empty: every page), narrowed by subset (all, even, odd page numbers) and orientation (all, landscape, portrait). Pass the result as another tool's pages.")
+            .ro()
+            .cmd("page.select_range")
+            .with(schema(
+                json!({
+                    "doc": doc(), "range": { "type": "string", "maxLength": 4000 },
+                    "subset": { "type": "string", "enum": ["all", "even", "odd"] },
+                    "orientation": { "type": "string", "enum": ["all", "landscape", "portrait"] },
+                }),
+                &["doc"],
+            )),
         t("page_rotate", "Rotate pages", "Rotate pages by a multiple of 90 degrees (positive is clockwise): the listed pages (default all), filtered like Acrobat's Rotate Pages by subset (all, even, odd page numbers) and orientation (all, landscape, portrait). Undoable.")
             .cmd("page.rotate")
             .with(schema(
@@ -312,6 +365,21 @@ pub fn tools() -> Vec<ToolDef> {
             .with(schema(
                 json!({ "doc": doc(), "path": { "type": "string" }, "at": { "type": "integer", "minimum": 1 }, "pages": pages("of the source file (default: all)"), "merge_tags": { "type": "boolean", "description": "Merge the file's structure tree (default true); false inserts the pages untagged." } }),
                 &["doc", "path", "at"],
+            )),
+        t("page_insert_clipboard", "Insert pages from the clipboard", "Organize ▸ Insert from clipboard: what the clipboard holds becomes new pages before or after `page` (default: after the last page), as one undo step. Headless there is no system clipboard, so pass its contents: `text` (flowed onto US Letter pages, 11 pt), `image_path` (a PNG, JPEG, TIFF, GIF or BMP file; one page at the image's size) or raw pixels as the clipboard holds them (`rgba_base64`, four bytes per pixel, rows top to bottom, with `width` and `height`; at most 8192 × 8192). Returns the document and `inserted` (first new page, count).")
+            .cmd("page.insert_clipboard")
+            .with(schema(
+                json!({
+                    "doc": doc(),
+                    "page": { "type": "integer", "minimum": 1, "description": "The page to insert next to (default: the last page)." },
+                    "position": { "type": "string", "enum": ["before", "after"], "description": "Default after." },
+                    "text": { "type": "string", "minLength": 1 },
+                    "image_path": { "type": "string" },
+                    "rgba_base64": { "type": "string" },
+                    "width": { "type": "integer", "minimum": 1, "maximum": 8192 },
+                    "height": { "type": "integer", "minimum": 1, "maximum": 8192 },
+                }),
+                &["doc"],
             )),
         t("page_extract", "Extract pages", "Copy pages into a new PDF (links, bookmarks, fields, layers and the tags (structure elements) that belong to them come along). separate: true writes each page as its own file into out_dir; delete: true removes the pages from this document afterwards (undoable).")
             .cmd("page.extract")
@@ -395,7 +463,7 @@ pub fn tools() -> Vec<ToolDef> {
                 json!({ "doc": doc(), "every": { "type": "integer", "minimum": 1 }, "before": pages("that start a new part"), "bookmarks": { "type": "boolean" }, "max_mb": { "type": "number", "exclusiveMinimum": 0 }, "out_dir": { "type": "string" } }),
                 &["doc", "out_dir"],
             )),
-        t("bookmark_list", "List bookmarks", "The bookmark tree with each bookmark's path, title, target page, open state and action: { type: goto, to_page, view, dest? } | { type: uri, url } | { type: other, action } (JavaScript, Launch… kept as is) | { type: none }.")
+        t("bookmark_list", "List bookmarks", "The bookmark tree with each bookmark's path, title, target page, open state and action: { type: goto, to_page, view, dest? } | { type: uri, url } | { type: javascript, script } | { type: other, action } (Launch… kept as is) | { type: none }.")
             .ro()
             .with(schema(json!({ "doc": doc() }), &["doc"])),
         t("bookmark_add", "Add a bookmark", "Add a bookmark that goes to a page, under a parent bookmark (or at the top level), at a position. Undoable.").with(schema(
@@ -413,8 +481,8 @@ pub fn tools() -> Vec<ToolDef> {
         )),
         t("bookmark_set_page", "Set a bookmark's page", "Point a bookmark at another page. Undoable.")
             .with(schema(json!({ "doc": doc(), "path": path("The bookmark"), "page": { "type": "integer", "minimum": 1 } }), &["doc", "path", "page"])),
-        t("bookmark_set_action", "Set a bookmark's action", "Bookmark Properties ▸ Actions: make a bookmark go to to_page (optionally shown as view), go to the named destination dest, or open url. Replaces its go-to or action; other actions (JavaScript…) can't be written here but are kept on other bookmarks. Undoable.").with(schema(
-            json!({ "doc": doc(), "path": path("The bookmark"), "to_page": { "type": "integer", "minimum": 1 }, "view": { "type": "object", "description": "With to_page: how to show the page. { fit: XYZ|Fit|FitH|FitV|FitR|FitB|FitBH|FitBV, left, top, zoom (percent), rect [left, bottom, right, top] }; coordinates are PDF user space as stored in the destination (origin bottom-left of the unrotated page). Default fit: XYZ when left/top/zoom are given, FitR with rect, else Fit." }, "dest": { "type": "string", "description": "A named destination (see dest_list)." }, "url": { "type": "string" } }),
+        t("bookmark_set_action", "Set a bookmark's action", "Bookmark Properties ▸ Actions: make a bookmark go to to_page (optionally shown as view), go to the named destination dest, open url, or run javascript (Acrobat JavaScript, run in the sandbox when the bookmark is clicked; see js_run_action). Replaces its go-to or action; other actions (Launch…) can't be written here but are kept on other bookmarks. Undoable.").with(schema(
+            json!({ "doc": doc(), "path": path("The bookmark"), "javascript": { "type": "string", "minLength": 1 }, "to_page": { "type": "integer", "minimum": 1 }, "view": { "type": "object", "description": "With to_page: how to show the page. { fit: XYZ|Fit|FitH|FitV|FitR|FitB|FitBH|FitBV, left, top, zoom (percent), rect [left, bottom, right, top] }; coordinates are PDF user space as stored in the destination (origin bottom-left of the unrotated page). Default fit: XYZ when left/top/zoom are given, FitR with rect, else Fit." }, "dest": { "type": "string", "description": "A named destination (see dest_list)." }, "url": { "type": "string" } }),
             &["doc", "path"],
         )),
         t("bookmark_from_structure", "New bookmarks from structure", "Make bookmarks from the headings of a tagged PDF's structure tree (H1–H6, Hn, and H, whose level is the number of Sect/Part/Art elements around it): one per heading in document order, nested by level (a deeper heading goes under the nearest earlier shallower one), titled with the heading's actual text, else its alternate text, else the text of the marked content it covers, and going to where the heading starts on its page (/XYZ with the heading's top; the page alone on a rotated page). replace: true removes every existing bookmark first; otherwise the new ones follow them at the top level. max_level leaves out deeper headings. Headings without any text or page are skipped and counted (untitled, unplaced). Untagged documents and documents without headings are refused. Undoable.").with(schema(
@@ -616,17 +684,39 @@ pub fn tools() -> Vec<ToolDef> {
         t(
             "redact_codes",
             "List redaction codes",
-            "The built-in redaction code sets (us-foia: U.S. FOIA exemptions, 5 U.S.C. 552(b); us-privacy-act: U.S. Privacy Act exemptions, 5 U.S.C. 552a) with each code and a short description. Pass code_set and codes to redact_mark to show codes on the boxes.",
+            "The redaction code sets with each code and a short description: the built-in ones (us-foia: U.S. FOIA exemptions, 5 U.S.C. 552(b); us-privacy-act: U.S. Privacy Act exemptions, 5 U.S.C. 552a), then the user's own (custom: true, id = name; see redact_code_set_save). Pass code_set (an id or a set's name) and codes to redact_mark to show codes on the boxes.",
         )
         .ro()
-        .with(schema(json!({ "code_set": { "type": "string", "enum": ["us-foia", "us-privacy-act"] } }), &[])),
+        .with(schema(json!({ "code_set": { "type": "string", "description": "a built-in id (us-foia, us-privacy-act) or the name of one of your sets" } }), &[])),
+        t(
+            "redact_code_set_save",
+            "Save a redaction code set",
+            "Redaction code sets: add one of your own code sets, or replace yours of the same name (ignoring case; built-in names are refused). codes: up to 500, each a string or { code, description } (code: one line of at most 64 characters; description: at most 300). The desktop app keeps your sets with its settings; here they last for the session (see redact_code_sets_file to keep them in a file). Returns name, codes and replaced.",
+        )
+        .cmd("redact.code_sets")
+        .with(schema(
+            json!({ "name": { "type": "string", "maxLength": 64 }, "codes": { "type": "array", "maxItems": 500, "items": { "anyOf": [
+                { "type": "string" },
+                { "type": "object", "properties": { "code": { "type": "string" }, "description": { "type": "string" } }, "required": ["code"] } ] } } }),
+            &["name", "codes"],
+        )),
+        t("redact_code_set_delete", "Delete a redaction code set", "Delete one of your redaction code sets by name (ignoring case). Built-in sets can't be deleted.")
+            .cmd("redact.code_sets")
+            .with(schema(json!({ "name": { "type": "string" } }), &["name"])),
+        t(
+            "redact_code_sets_file",
+            "Import or export code sets",
+            "mode import: read the code sets in a JSON file ({\"code_sets\": [{\"name\": …, \"codes\": [{\"code\": …, \"description\": …}]}]}, or one set; at most 1 MiB and 64 sets) and add them to yours (a set of the same name is replaced; a bad file changes nothing). mode export: write your sets to path in that format. Returns imported (names) or path.",
+        )
+        .cmd("redact.code_sets")
+        .with(schema(json!({ "mode": { "type": "string", "enum": ["import", "export"] }, "path": { "type": "string" } }), &["mode", "path"])),
         t(
             "redact_patterns",
             "List Search & Redact patterns",
-            "The Search & Redact patterns by locale set (intl, en-US, en-GB, en-CA, fr-FR, ja-JP) with their ids and labels. A locale set passed to redact_mark also includes the intl patterns.",
+            "The Search & Redact patterns by locale set (intl, en-US, en-GB, en-CA, fr-FR, de-DE, en-IN, en-AU, ja-JP) with their ids and labels. A locale set passed to redact_mark also includes the intl patterns. Dates are found in English, French, German, Spanish, Italian, Portuguese and Dutch; IBANs need their country's length and a valid checksum.",
         )
         .ro()
-        .with(schema(json!({ "locale": { "type": "string", "enum": ["intl", "en-US", "en-GB", "en-CA", "fr-FR", "ja-JP"] } }), &[])),
+        .with(schema(json!({ "locale": { "type": "string", "enum": ["intl", "en-US", "en-GB", "en-CA", "fr-FR", "de-DE", "en-IN", "en-AU", "ja-JP"] } }), &[])),
         t("redact_clear", "Remove redaction marks", "Remove every redaction mark without applying it. Undoable.")
             .destructive()
             .with(schema(json!({ "doc": doc() }), &["doc"])),
@@ -835,6 +925,109 @@ pub fn tools() -> Vec<ToolDef> {
             &[],
         )),
         t(
+            "recovery_snapshot",
+            "Save recovery copies",
+            "Crash recovery, as the app's autosave: write a recovery entry into the folder dir for every document with unsaved changes made since its last snapshot (<key>.pdf, the working file, written before <key>.json, its name, original path, time, length and checksum). Encrypted documents stay encrypted. A document keeps its key, so later snapshots replace its entry. The same layout as the desktop recovery folder and the web app's browser store. Returns the entries written (none when nothing changed).",
+        )
+        .cmd("file.autosave_now")
+        .with(schema(json!({ "dir": { "type": "string", "description": "The recovery folder (created if missing)." } }), &["dir"])),
+        t(
+            "recovery_list",
+            "List recovery copies",
+            "Recovery entries in the folder dir, newest first: key, name, original path, saved_at (Unix seconds), encrypted and bytes. Stored entries are treated as hostile: only complete entries with well-formed metadata whose bytes have the recorded length are listed; the files of damaged or incomplete ones (truncated bytes, bytes without metadata, malformed or oversized metadata) are named in damaged. Files that aren't recovery entries are ignored. Read-only.",
+        )
+        .ro()
+        .cmd("file.recover")
+        .with(schema(json!({ "dir": { "type": "string", "description": "The recovery folder." } }), &["dir"])),
+        t(
+            "recovery_restore",
+            "Restore a recovery copy",
+            "Open recovery entry key from the folder dir as a document with unsaved changes; doc_save without a path then writes to its original path. The bytes must match the recorded length and checksum: a damaged entry opens nothing and returns an error. Encrypted entries need password. The entry stays until recovery_discard (or a later snapshot replaces it). Returns the document summary and its key.",
+        )
+        .cmd("file.recover")
+        .with(schema(
+            json!({
+                "dir": { "type": "string", "description": "The recovery folder." },
+                "key": { "type": "string", "minLength": 1, "maxLength": 64, "description": "The entry, from recovery_list." },
+                "password": { "type": "string", "description": "The document password, for an encrypted entry." },
+            }),
+            &["dir", "key"],
+        )),
+        t(
+            "recovery_discard",
+            "Discard recovery copies",
+            "Delete recovery entry key from the folder dir, or with all every entry plus the files of damaged ones. Returns the keys discarded.",
+        )
+        .destructive()
+        .with(schema(
+            json!({
+                "dir": { "type": "string", "description": "The recovery folder." },
+                "key": { "type": "string", "minLength": 1, "maxLength": 64, "description": "One entry, from recovery_list." },
+                "all": { "type": "boolean", "description": "Every entry, and damaged leftovers." },
+            }),
+            &["dir"],
+        )),
+        t(
+            "prefs_get",
+            "Read preferences",
+            "Preferences by key, the same ones the desktop app's Preferences window shows: general.language, documents.autosave_minutes, documents.recent_files, forms.highlight_color, forms.required_color, forms.date_format, identity.name/organization/unit/email, signatures.reason/location, security.javascript, security.internet_access, security.unlisted_sites, accessibility.text_scale/reduce_motion/high_contrast and color.rgb/cmyk/gray/intent/black_point_compensation/untagged/overprint_preview. Without key returns values (all, or one category: general, documents, commenting, forms, identity, signatures, security, accessibility, color); with key its value. schema adds, per key, its category, type (boolean, integer, number, string, color), range or enum, default, description and applies: session keys change what other tools do (identity.name is the default author of new comments, signatures.reason/location the defaults of sign, the security and color keys the session's JavaScript, internet access and colour settings); app keys are kept for the desktop app (autosave, recent files, field highlight colours, accessibility, identity details for new digital IDs). The app's own window settings (theme, workspace, page display) are set through its control channel (ui.set pref.<key>). Read-only.",
+        )
+        .ro()
+        .with(schema(
+            json!({
+                "key": { "type": "string", "description": "One preference key." },
+                "category": { "type": "string", "enum": ["general", "documents", "commenting", "forms", "identity", "signatures", "security", "accessibility", "color"] },
+                "schema": { "type": "boolean", "description": "Also return the schema (types, ranges, defaults)." },
+            }),
+            &[],
+        )),
+        t(
+            "prefs_set",
+            "Set preferences",
+            "Change preferences for this session (not saved with documents, not an undo step): key and value for one, values (an object of key: value) for several, reset (true, or an array of keys) to put keys back to their defaults first. All or none: when one value is refused nothing changes. Values are validated against the schema (prefs_get with schema): booleans take true/false (or \"on\"/\"off\"), integers and numbers are clamped into their range (the clamped list names them), text is cut to its length without control characters, colours are \"#RRGGBB\" or [r, g, b], enums and colour profile ids must be one listed. Returns the values stored.",
+        )
+        .with(schema(
+            json!({
+                "key": { "type": "string", "description": "The preference to set." },
+                "value": { "description": "Its new value (with key)." },
+                "values": { "type": "object", "description": "Several preferences: key → value." },
+                "reset": { "type": ["boolean", "array"], "items": { "type": "string" }, "description": "true resets every preference; an array resets those keys." },
+            }),
+            &[],
+        )),
+        t(
+            "ui_language_get",
+            "Interface language",
+            "The interface language: preference (general.language: auto or a language code), language (the one in effect: for auto, the one the LC_ALL, LC_MESSAGES or LANG environment asks for, else English; the desktop app also asks macOS and Windows), system (what auto resolves to, or null), and languages: every interface language with code, name, direction (ltr; no right-to-left language is offered), plural_categories, decimal_separator, group_separator, sample_number and sample_date. Translated text appears only in the desktop and web app; tools, the CLI and the control channel keep English labels and ids.",
+        )
+        .ro()
+        .with(schema(json!({}), &[])),
+        t(
+            "ui_language_set",
+            "Set the interface language",
+            "Edit ▸ Preferences ▸ General ▸ Interface language for this session: language is auto (follow the system), a language code from ui_language_get (any case) or a system locale tag that resolves to one (de_AT.UTF-8 → de, zh-TW → zh-hant, pt-PT → pt-br). Anything else is refused with the codes allowed. The desktop app reads the same preference (the control channel's ui.set pref.general.language switches the running app at once). Returns what ui_language_get returns.",
+        )
+        .cmd("app.language")
+        .with(schema(json!({ "language": { "type": "string", "minLength": 1, "maxLength": 64 } }), &["language"])),
+        t(
+            "locale_format",
+            "Format for a language",
+            "Write values the way the interface shows them in a language (default: the one in effect, ui_language_get): number (with decimals fraction digits, 0 to 10, default 2) as decimal, integer as whole number with digit grouping, date (YYYY-MM-DD) as the short numeric date, pdf_date (D:YYYYMMDDHHmm…) as date and time, count as its plural category (one, few, many, other) and form index. Give at least one value. Returns language and one field per value given.",
+        )
+        .ro()
+        .with(schema(
+            json!({
+                "language": { "type": "string", "description": "A language code or locale tag (default: the interface language in effect)." },
+                "number": { "type": "number" },
+                "decimals": { "type": "integer", "minimum": 0, "maximum": 10 },
+                "integer": { "type": "integer" },
+                "date": { "type": "string", "description": "YYYY-MM-DD." },
+                "pdf_date": { "type": "string", "description": "A PDF date string such as D:20261008140500Z." },
+                "count": { "type": "integer", "minimum": 0 },
+            }),
+            &[],
+        )),
+        t(
             "color_settings_get",
             "Colour management settings",
             "Preferences ▸ Color Management: the session's colour settings — working spaces rgb, cmyk and gray (profile ids from color_profiles_list), the rendering intent, black_point_compensation and the policy for untagged (DeviceGray/RGB/CMYK) colour: output_intent (the default: a document's output intent profile replaces the working space of its family, Acrobat's Output Intent Overrides Working Spaces), working_space (always the working spaces) or unmanaged (no colour management: gray and RGB as sRGB numbers, CMYK naively, separations through the built-in conversion). With doc also says, per family, what that document's untagged colour is read in (source working_space, output_intent or unmanaged, with a note when the output intent can't be used) and how RGB and Lab separate into process inks (separation.conversion). page_render, render_preview, print_separations_*, print_total_area_coverage, print_overprint_*, print_object_inspector and the Ink Manager follow the settings; print_convert_colors and pdfx_convert take defaults from them. Read-only.",
@@ -1038,6 +1231,7 @@ pub fn tools() -> Vec<ToolDef> {
             "Change the attachment trust policy",
             "Change your attachment allow and deny lists (Trust Manager ▸ attachments). allow / deny replace a list; add_allow / add_deny add extensions (taking them off the other list); remove takes extensions off both; reset starts from empty lists first. Extensions may be written .EXE, exe or *.exe; letters, digits and - _ + ~ $ only, at most 32 characters and 256 per list; one extension can't be in both. Allowing a built-in blocked type such as exe makes it open. The desktop app keeps the lists in its settings; a headless session keeps them until it ends. Returns the policy as trust_attachments_get does.",
         )
+        .cmd("app.trust_manager")
         .with(schema(
             json!({
                 "allow": { "type": "array", "items": { "type": "string" }, "maxItems": 256 },
@@ -1095,7 +1289,7 @@ pub fn tools() -> Vec<ToolDef> {
         t(
             "page_add_text",
             "Add text to a page",
-            "Add text as page content (not a comment). Place it with at [x, y] (top-left, points from the top-left of the displayed page) and width (wrap width, default 200), or rect. Newlines start new lines; long lines wrap. Style: font helvetica/times/courier, size, bold, italic, color (#RRGGBB or a name), align left/center/right. It stays editable with content_update. Undoable.",
+            "Add text as page content (not a comment). Place it with at [x, y] (top-left, points from the top-left of the displayed page) and width (wrap width, default 200), or rect. Newlines start new lines; long lines wrap. Style: font helvetica/times/courier, size, bold, italic, color (#RRGGBB or a name), align left/center/right, line_spacing (× size), paragraph_spacing (points after each paragraph). It stays editable with content_update. Undoable.",
         )
         .cmd("edit.text")
         .with(schema(
@@ -1107,6 +1301,8 @@ pub fn tools() -> Vec<ToolDef> {
                 "font": { "type": "string", "enum": ["helvetica", "times", "courier"] }, "size": { "type": "number", "minimum": 1, "maximum": 500 },
                 "bold": { "type": "boolean" }, "italic": { "type": "boolean" }, "color": { "type": "string" },
                 "align": { "type": "string", "enum": ["left", "center", "right", "justify"] },
+                "line_spacing": { "type": "number", "minimum": 0.5, "maximum": 5, "description": "Line spacing as a multiple of the size (default 1.2)." },
+                "paragraph_spacing": { "type": "number", "minimum": 0, "maximum": 500, "description": "Space after each paragraph, in points (default 0)." },
             }),
             &["doc", "page", "text"],
         )),
@@ -1120,7 +1316,7 @@ pub fn tools() -> Vec<ToolDef> {
             json!({ "doc": doc(), "page": { "type": "integer", "minimum": 1 }, "path": { "type": "string" }, "rect": { "type": "array", "items": { "type": "number" }, "minItems": 4, "maxItems": 4 } }),
             &["doc", "page", "path"],
         )),
-        t("content_update", "Edit added content", "Move/resize (rect), retype (text) or restyle (font, size, bold, italic, color, align) an added item (page, index from content_list). Images: rotate (degrees, multiple of 90, counter-clockwise), flip_h / flip_v (toggle), crop [left, bottom, right, top] as fractions trimmed, image (a file that replaces the picture). Undoable.")
+        t("content_update", "Edit added content", "Move/resize (rect), retype (text) or restyle (font, size, bold, italic, color, align, line_spacing, paragraph_spacing) an added item (page, index from content_list). Images: rotate (degrees, multiple of 90, counter-clockwise), flip_h / flip_v (toggle), crop [left, bottom, right, top] as fractions trimmed, image (a file that replaces the picture). Undoable.")
             .with(schema(
                 json!({
                     "doc": doc(), "page": { "type": "integer", "minimum": 1 }, "index": { "type": "integer", "minimum": 1 },
@@ -1128,6 +1324,8 @@ pub fn tools() -> Vec<ToolDef> {
                     "font": { "type": "string", "enum": ["helvetica", "times", "courier"] }, "size": { "type": "number", "minimum": 1, "maximum": 500 },
                     "bold": { "type": "boolean" }, "italic": { "type": "boolean" }, "color": { "type": "string" },
                     "align": { "type": "string", "enum": ["left", "center", "right", "justify"] },
+                    "line_spacing": { "type": "number", "minimum": 0.5, "maximum": 5 },
+                    "paragraph_spacing": { "type": "number", "minimum": 0, "maximum": 500 },
                     "rotate": { "type": "integer" }, "flip_h": { "type": "boolean" }, "flip_v": { "type": "boolean" },
                     "crop": { "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 0.49 }, "minItems": 4, "maxItems": 4 },
                     "image": { "type": "string", "description": "Replace the picture with this file." },
@@ -1171,25 +1369,27 @@ pub fn tools() -> Vec<ToolDef> {
         t("content_delete", "Delete added content", "Delete an added item (page, index from content_list). Undoable.")
             .destructive()
             .with(schema(json!({ "doc": doc(), "page": { "type": "integer", "minimum": 1 }, "index": { "type": "integer", "minimum": 1 } }), &["doc", "page", "index"])),
-        t("link_list", "List links", "Every link: page, 1-based index (for link_edit/link_delete), rect (points from the top-left of the page), and where it goes: url, to_page (with view when it is not plain Fit), or dest (a named destination, with its resolved to_page and view, or unresolved: true).")
+        t("link_list", "List links", "Every link: page, 1-based index (for link_edit/link_delete), rect (points from the top-left of the page), and where it goes: url, to_page (with view when it is not plain Fit), or dest (a named destination, with its resolved to_page and view, or unresolved: true), or javascript (the script it runs).")
             .ro()
             .with(schema(json!({ "doc": doc() }), &["doc"])),
-        t("link_add", "Add a link", "Add a link over rect on page that opens url, goes to to_page (optionally shown as view: position and zoom, fit width, a rectangle…) or goes to the named destination dest. Appearance: visible (rectangle), color, width 1-3, highlight none/invert/outline/inset. Undoable.")
+        t("link_add", "Add a link", "Add a link over rect on page that opens url, goes to to_page (optionally shown as view: position and zoom, fit width, a rectangle…), goes to the named destination dest, or runs javascript (Acrobat JavaScript, run in the sandbox when clicked; see js_run_action). Appearance: visible (rectangle), color, width 1-3, highlight none/invert/outline/inset. Undoable.")
             .cmd("edit.link")
             .with(schema(
                 json!({
                     "doc": doc(), "page": { "type": "integer", "minimum": 1 }, "rect": { "type": "array", "items": { "type": "number" }, "minItems": 4, "maxItems": 4 },
                     "url": { "type": "string" }, "to_page": { "type": "integer", "minimum": 1 }, "view": { "type": "object", "description": "With to_page: how to show the page. { fit: XYZ|Fit|FitH|FitV|FitR|FitB|FitBH|FitBV, left, top, zoom (percent), rect [left, bottom, right, top] }; coordinates are PDF user space as stored in the destination (origin bottom-left of the unrotated page). Default fit: XYZ when left/top/zoom are given, FitR with rect, else Fit." }, "dest": { "type": "string", "description": "A named destination (see dest_list)." },
+                    "javascript": { "type": "string", "minLength": 1, "description": "Run this Acrobat JavaScript when the link is clicked (event.type Link, event.name Mouse Up)." },
                     "visible": { "type": "boolean" }, "color": { "type": "string" }, "width": { "type": "number" }, "highlight": { "type": "string", "enum": ["none", "invert", "outline", "inset"] },
                 }),
                 &["doc", "page", "rect"],
             )),
-        t("link_edit", "Edit a link", "Change a link's rect, destination (url, to_page with optional view, or dest) or appearance. Undoable.")
+        t("link_edit", "Edit a link", "Change a link's rect, action (url, to_page with optional view, dest, or javascript) or appearance. Undoable.")
             .with(schema(
                 json!({
                     "doc": doc(), "page": { "type": "integer", "minimum": 1 }, "index": { "type": "integer", "minimum": 1 },
                     "rect": { "type": "array", "items": { "type": "number" }, "minItems": 4, "maxItems": 4 },
                     "url": { "type": "string" }, "to_page": { "type": "integer", "minimum": 1 }, "view": { "type": "object", "description": "With to_page: how to show the page. { fit: XYZ|Fit|FitH|FitV|FitR|FitB|FitBH|FitBV, left, top, zoom (percent), rect [left, bottom, right, top] }; coordinates are PDF user space as stored in the destination (origin bottom-left of the unrotated page). Default fit: XYZ when left/top/zoom are given, FitR with rect, else Fit." }, "dest": { "type": "string", "description": "A named destination (see dest_list)." },
+                    "javascript": { "type": "string", "minLength": 1, "description": "Run this Acrobat JavaScript when the link is clicked (event.type Link, event.name Mouse Up)." },
                     "visible": { "type": "boolean" }, "color": { "type": "string" }, "width": { "type": "number" }, "highlight": { "type": "string", "enum": ["none", "invert", "outline", "inset"] },
                 }),
                 &["doc", "page", "index"],
@@ -1229,7 +1429,7 @@ pub fn tools() -> Vec<ToolDef> {
             "Add a comment as Acrobat's commenting tools do. Geometry is in points with the origin at the top-left of the displayed page, y down (as in page_render images at 72 dpi and text_find rects). \
              note: `at` [x, y] (icon top-left). stamp: `at` [x, y] (its centre) and `stamp`: approved, completed, confidential, draft, final, for comment, for public release, information only, not approved, not for public release, preliminary results, void, accepted, initial here, rejected, sign here, witness; dynamic: true for the dynamic approved/confidential/received/reviewed/revised stamps with a By … at … line. highlight/underline/strikeout/squiggly: `find` (text on the page to mark; every match with all: true) or `quads`. \
              rectangle/oval/textbox: `rect` [x0, y0, x1, y1]. line/arrow: `from`, `to`. Optional `endings` (two names: start, end) for a line, arrow or polyline, or one name for a callout: None, Square, Circle, Diamond, OpenArrow, ClosedArrow, Butt, ROpenArrow, RClosedArrow, Slash. An arrow without endings is None then OpenArrow. ink: `strokes` [[[x, y], …], …]. \
-             polygon/cloud/polyline (connected lines): `points` [[x, y], …]. callout: `rect` (its text box), `to` (the point the arrow touches), optional `knee`. caret (inserted text): `at`, the insertion point on the baseline. replace (Replace Text): `find` or `quads` like highlight, `contents` the replacement. attachment: `path` (the file), `at`, optional `icon` (PushPin, Paperclip, Graph, Tag). Undoable.",
+             polygon/cloud/polyline (connected lines): `points` [[x, y], …]. callout: `rect` (its text box), `to` (the point the arrow touches), optional `knee`. caret (inserted text): `at`, the insertion point on the baseline; snap: true moves it to the gap between the characters nearest `at` (within 24 pt), sized to the line. replace (Replace Text): `find` or `quads` like highlight, `contents` the replacement. attachment: `path` (the file), `at`, optional `icon` (PushPin, Paperclip, Graph, Tag). Undoable.",
         )
         .with(schema(
             json!({
@@ -1250,6 +1450,7 @@ pub fn tools() -> Vec<ToolDef> {
                 "quads": { "type": "array", "items": { "type": "array", "items": { "type": "number" }, "minItems": 8, "maxItems": 8 } },
                 "stamp": { "type": "string" },
                 "dynamic": { "type": "boolean" },
+                "snap": { "type": "boolean", "description": "caret: snap `at` to the nearest text insertion point." },
                 "strokes": { "type": "array", "items": { "type": "array", "items": point() } },
                 "icon": { "type": "string", "description": "note: Comment, Note, Help, Insert, Key, NewParagraph, Paragraph; attachment: PushPin, Paperclip, Graph, Tag." },
                 "color": color(),
@@ -1278,6 +1479,7 @@ pub fn tools() -> Vec<ToolDef> {
             .with(schema(json!({ "doc": doc(), "field": { "type": "string", "description": "The signature field's fully qualified name (from sign_list)." }, "out": path_arg(), "open": { "type": "boolean" } }), &["doc", "field"])),
         t("sign_compare_signed_version", "Compare signed version to current version", "Compare Signed Version to Current Version: every change made after the signature in `field` was applied, read from the objects the later revisions changed or added (the same diff signature validation uses). Each change has kind (page content, comments, form fill, changes to locked fields, signature, pages added or removed, document structure, links, metadata, document security store, other changes), action (added, modified, removed), page (1-based; for something removed, in the signed version), object, subject (page, page content, an annotation subtype, form field…), the form field's name and its value before and after, and whether the signature's DocMDP/FieldMDP permissions allow it. Also: permissions (certification level tightened by a field lock; null = approval signature) in words, page counts and pages added/removed, the categories with permitted flags, modified and permitted (the verdict signature validation reports). With text (default true) also a word-level Compare Files report between the signed and current versions (visual: also compare how pages look, default false). limit caps the listed changes (default 500).")
             .ro()
+            .cmd("sign.compare_signed_version")
             .with(schema(json!({ "doc": doc(), "field": { "type": "string", "description": "The signature field's fully qualified name (from sign_list)." }, "text": { "type": "boolean" }, "visual": { "type": "boolean" }, "limit": { "type": "integer", "minimum": 1 } }), &["doc", "field"])),
         t("sign_timestamp", "Timestamp and save document", "Request an RFC 3161 document timestamp from an explicitly configured server and save an incremental revision. Sends only the digest request. Requires allow_network: true; no redirects; response and time limits. No automatic certificate trust.")
             .cmd("sign.timestamp").with(schema(json!({"doc":doc(),"out":path_arg(),"timestamp_server":timestamp_server(),"allow_network":{"type":"boolean"}}), &["doc","out","timestamp_server","allow_network"])),
@@ -1299,21 +1501,55 @@ pub fn tools() -> Vec<ToolDef> {
             }),
             &["name", "password", "path"],
         )),
+        t("sign_id_inspect", "Inspect a digital ID file", "Open a digital ID file (.p12/.pfx) with its password and report what it signs as, keeping neither: give data_base64 (the file's bytes, as the web app gets a file picked in the browser) or path, at most 1 MiB. Returns the certificate (name, subject, issuer, validity, key, SHA-256), the chain, the key and digest a signature uses, valid_now (the certificate is within its validity period by the session clock) and signs_in_browser (the web app can sign with it: RSA, P-256 and P-384 keys). name labels the result (cleaned of paths and control characters). A wrong password is an invalid-arguments error.")
+            .ro()
+            .cmd("sign.digital")
+            .with(schema(
+                json!({
+                    "data_base64": { "type": "string", "description": "The digital ID file, base64." },
+                    "path": path_arg(),
+                    "password": { "type": "string" },
+                    "name": { "type": "string", "description": "The file's name, to label the result." },
+                }),
+                &[],
+            )),
         t("sign_windows_ids", "List Windows store digital IDs", "Windows: signing identities in the Current User Personal certificate store (certificate details and the windows: reference sign_document takes). Private keys remain in CNG; Windows may ask permission to use them.")
             .ro()
             .cmd("sign.digital")
             .with(schema(json!({}), &[])),
+        t("sign_token_modules", "Find PKCS #11 modules", "The PKCS #11 modules (smart card, USB token and HSM middleware: OpenSC, p11-kit, SoftHSM, vendor modules) found in the usual install locations, for sign_token_slots, sign_token_ids and sign_document's module. available is false when this build can't load modules (the browser). Nothing is loaded.")
+            .ro()
+            .cmd("sign.token")
+            .with(schema(json!({}), &[])),
+        t("sign_token_slots", "List smart card and token slots", "Load a PKCS #11 module (module: its path, default the first found by sign_token_modules) and list its slots: each reader or port, and the token in it (label, model, serial, whether it needs a PIN, has a PIN pad, or its PIN is locked or on its final try). No PIN is needed. With a root, module must be one sign_token_modules found or a file inside the root (loading a module runs its code).")
+            .ro()
+            .cmd("sign.token")
+            .with(schema(json!({ "module": { "type": "string", "description": "The PKCS #11 module file (.so, .dylib, .dll)." } }), &[])),
+        t("sign_token_ids", "List digital IDs on a smart card or token", "Unlock the token in slot (default: the only slot with a token) with pin and list its signing identities: certificates with a private key on the token (id: the pkcs11: reference sign_document takes, label, certificate, chain: CA certificates on the token), and skipped certificates with why (no private key, unreadable, key type not supported, not for signing). The PIN is used once and not kept; a wrong PIN counts against the token's tries, and a locked token is not tried. The private keys never leave the token.")
+            .ro()
+            .cmd("sign.token")
+            .with(schema(
+                json!({
+                    "module": { "type": "string", "description": "The PKCS #11 module file; default the first found." },
+                    "slot": { "type": "integer", "minimum": 0 },
+                    "pin": { "type": "string", "description": "The token's user PIN (omit for a PIN-pad reader or a token without one)." },
+                }),
+                &[],
+            )),
         t("sign_keychain_ids", "List Keychain digital IDs", "macOS: the signing identities in the user's keychains (certificate details and the keychain: reference sign_document takes). The private keys stay in the Keychain, which may ask the user to allow their use.")
             .ro()
             .cmd("sign.digital")
             .with(schema(json!({}), &[])),
-        t("sign_document", "Sign a document", "Sign with a digital ID (a .p12/.pfx path, or on macOS a Keychain identity: \"keychain:<common name or fingerprint>\" from sign_keychain_ids, or on Windows a store identity: \"windows:<common name or fingerprint>\" from sign_windows_ids) and save the signed file to `out` (signing always saves, as in Acrobat; the document then shows the signed file). Sign an existing empty signature field (`field`), or a new one on `page` at `rect` (omit rect for an invisible signature). certify: no_changes, form_fill or comments makes a certification signature. lock (all, include or exclude, with lock_fields) makes the fields read-only once signed and records a FieldMDP lock, so later changes to them invalidate the signature; without it, a field's own lock (sign_field_lock) applies. lock_document: true permits no changes after signing. PAdES B-B, SHA-256 (SHA-384 for P-384 keys).")
+        t("sign_document", "Sign a document", "Sign with a digital ID (a .p12/.pfx path, or on macOS a Keychain identity: \"keychain:<common name or fingerprint>\" from sign_keychain_ids, or on Windows a store identity: \"windows:<common name or fingerprint>\" from sign_windows_ids, or a smart card or token identity: \"pkcs11:<fingerprint or common name>\" from sign_token_ids, with module, slot and pin as there; the signature is made on the token) and save the signed file to `out` (signing always saves, as in Acrobat; the document then shows the signed file). Sign an existing empty signature field (`field`), or a new one on `page` at `rect` (omit rect for an invisible signature). certify: no_changes, form_fill or comments makes a certification signature. lock (all, include or exclude, with lock_fields) makes the fields read-only once signed and records a FieldMDP lock, so later changes to them invalidate the signature; without it, a field's own lock (sign_field_lock) applies. lock_document: true permits no changes after signing. PAdES B-B, SHA-256 (SHA-384 for P-384 keys).")
             .cmd("sign.digital")
             .with(schema(
                 json!({
                     "doc": doc(),
-                    "id": { "type": "string", "description": "Digital ID file (.p12 / .pfx), keychain: reference on macOS, or windows: reference on Windows." },
+                    "id": { "type": "string", "description": "Digital ID file (.p12 / .pfx), keychain: reference on macOS, windows: reference on Windows, or pkcs11: reference of a smart card or token." },
                     "password": { "type": "string" },
+                    "module": { "type": "string", "description": "pkcs11: ids: the PKCS #11 module file (default the first found)." },
+                    "slot": { "type": "integer", "minimum": 0, "description": "pkcs11: ids: the token's slot (default the only one with a token)." },
+                    "pin": { "type": "string", "description": "pkcs11: ids: the token's PIN, used once and not kept." },
                     "field": { "type": "string" },
                     "page": { "type": "integer", "minimum": 1 },
                     "rect": { "type": "array", "items": { "type": "number" }, "minItems": 4, "maxItems": 4 },
@@ -1327,6 +1563,7 @@ pub fn tools() -> Vec<ToolDef> {
                     "out": { "type": "string", "description": "Where to save the signed document." },
                     "timestamp_server": timestamp_server(),
                     "allow_network": {"type":"boolean","description":"Required true when timestamp_server is supplied."},
+                    "appearance": appearance_schema(),
                 }),
                 &["doc", "id", "out"],
             )),
@@ -1368,10 +1605,67 @@ pub fn tools() -> Vec<ToolDef> {
                 }),
                 &[],
             )),
+        t("sign_trust_list", "List trusted certificates and their trust settings", "The trusted certificates (certificate details with sha256) and what each is trusted for (Acrobat: the certificate's Trust tab): root (trusted as a root: certificates it issued are trusted too; off: only signatures made with this very certificate), signatures (signed documents or data, and timestamps) and certified_documents (certification signatures). New certificates are trusted for all three.")
+            .ro()
+            .cmd("sign.trusted_certificates")
+            .with(schema(json!({}), &[])),
+        t("sign_trust_set", "Change a trusted certificate's trust settings", "Set what the trusted certificate with SHA-256 fingerprint sha256 (sign_trust_list; spaces and colons are ignored) is trusted for: root, signatures, certified_documents (each optional, others unchanged), or remove: true to take it off the list. Every open document is revalidated. Returns the trusted list.")
+            .cmd("sign.trusted_certificates")
+            .with(schema(
+                json!({
+                    "sha256": { "type": "string", "description": "The certificate's SHA-256 fingerprint." },
+                    "root": { "type": "boolean" },
+                    "signatures": { "type": "boolean" },
+                    "certified_documents": { "type": "boolean" },
+                    "remove": { "type": "boolean" },
+                }),
+                &["sha256"],
+            )),
+        t("sign_appearance_list", "List saved signature appearances", "The saved signature appearances (Preferences → Signatures → Appearances): name, the text items shown (show_name, date, reason, location, distinguished_name, labels), the graphic (an imported picture's size, or a drawn signature's strokes and points) and the logo's size. sign_document's appearance takes a name.")
+            .ro()
+            .cmd("sign.appearances")
+            .with(schema(json!({}), &[])),
+        t("sign_appearance_save", "Save a signature appearance", "Save (or replace) the signature appearance `name`: appearance says which text items show and adds a picture (image: a PNG or JPEG file; remove_white makes its paper transparent) or a drawn signature (strokes), and a faint logo behind it all. At most 32 appearances; pictures at most 4 MiB. The desktop app saves them with its settings. Returns the list.")
+            .cmd("sign.appearances")
+            .with(schema(json!({ "name": { "type": "string", "minLength": 1, "maxLength": 100 }, "appearance": appearance_schema() }), &["name"])),
+        t("sign_appearance_delete", "Delete a saved signature appearance", "Delete the saved signature appearance `name`. Returns the list.")
+            .cmd("sign.appearances")
+            .destructive()
+            .with(schema(json!({ "name": { "type": "string" } }), &["name"])),
+        t("sign_timestamp_servers_get", "List timestamp servers", "The configured timestamp servers (Preferences → Signatures → Timestamp servers): name, url, policy, timeout_seconds, require_trusted_authority, username and, for a server with a user name, password_held. None is configured by default. sign_document, sign_timestamp, sign_embed_evidence and sign_add_verification take a server's name as timestamp_server.")
+            .ro()
+            .cmd("sign.timestamp_servers")
+            .with(schema(json!({}), &[])),
+        t("sign_timestamp_servers_set", "Configure timestamp servers", "Replace the timestamp servers (servers: the whole list; each checked: HTTPS, or HTTP to a literal loopback IP; no URL credentials or fragments; 1-30 s; distinct names; at most 32), and/or hold the password of the server named password_for for this session (password; null forgets it). Passwords are never saved or returned. Nothing changes unless every server is valid. Returns the list.")
+            .cmd("sign.timestamp_servers")
+            .with(schema(
+                json!({
+                    "servers": { "type": "array", "items": timestamp_server_object(), "maxItems": 32 },
+                    "password_for": { "type": "string" },
+                    "password": { "type": ["string", "null"] },
+                }),
+                &[],
+            )),
+        t("sign_add_verification", "Add verification information (LTV)", "Add verification information to the document's signatures and save an incremental revision to out (PAdES B-LT; with timestamp_server also a document timestamp over it, B-LTA). Embeds every signer's and timestamp authority's certificate chain in the Document Security Store, with OCSP responses or CRLs fetched from the addresses the certificates name when allow_network is true, Preferences → Signatures → fetch revocation information is on and Internet access allows the site (trust_urls_get; allow_prompted: true also allows sites it would ask about; blocked sites stay blocked). Requests run with a deadline (timeout_seconds, default 10; one minute in all), at most 32 requests and 2 MiB per response, no redirects. Every response must verify against the certificate's issuer; anything else is reported and not embedded. Local DER files (certificates, crls, ocsps) are added too. Returns each request's outcome (good, revoked, blocked, asks, skipped, unusable, failed), the coverage per certificate and whether it is complete. Signed bytes are never changed; certificates are never trusted by this.")
+            .cmd("sign.ltv_enable")
+            .with(schema(
+                json!({
+                    "doc": doc(),
+                    "out": path_arg(),
+                    "allow_network": { "type": "boolean" },
+                    "allow_prompted": { "type": "boolean" },
+                    "timeout_seconds": { "type": "integer", "minimum": 1, "maximum": 30 },
+                    "certificates": { "type": "array", "items": path_arg(), "maxItems": 32 },
+                    "crls": { "type": "array", "items": path_arg(), "maxItems": 32 },
+                    "ocsps": { "type": "array", "items": path_arg(), "maxItems": 32 },
+                    "timestamp_server": timestamp_server(),
+                }),
+                &["doc", "out"],
+            )),
         t("trust_urls_get", "Internet access settings", "Read the policy for internet access from PDFs (Acrobat: Trust Manager ▸ Internet Access from PDF Files): mode (allow-all, block-all or custom), default_action for hosts on no rule in custom mode (allow, block or ask), and rules [{host, action, subdomains}]. It governs links' URI actions, Submit Form and scripts' app.launchURL/submitForm. The desktop app keeps it with its settings; here it lasts for the session.")
             .ro()
             .with(schema(json!({}), &[])),
-        t("trust_urls_set", "Change internet access settings", "Change the internet access policy: mode (allow-all, block-all, custom), default_action (allow, block, ask), rules (replace the whole list), remove (hosts to drop), then add (rules to add or replace). A rule's host is a name (matches its subdomains unless subdomains: false), *.name, an IP literal (matches only itself) or a whole address; it is stored lowercase, without a trailing dot, port or user name, internationalised names in their xn-- form. Nothing changes unless every argument is valid. Returns the policy and the hosts removed.").with(schema(
+        t("trust_urls_set", "Change internet access settings", "Change the internet access policy: mode (allow-all, block-all, custom), default_action (allow, block, ask), rules (replace the whole list), remove (hosts to drop), then add (rules to add or replace). A rule's host is a name (matches its subdomains unless subdomains: false), *.name, an IP literal (matches only itself) or a whole address; it is stored lowercase, without a trailing dot, port or user name, internationalised names in their xn-- form. Nothing changes unless every argument is valid. Returns the policy and the hosts removed.").cmd("app.trust_manager").with(schema(
             json!({
                 "mode": { "type": "string", "enum": ["allow-all", "block-all", "custom"] },
                 "default_action": { "type": "string", "enum": ["allow", "block", "ask"] },
@@ -1392,9 +1686,27 @@ pub fn tools() -> Vec<ToolDef> {
             comment_ref(json!({ "locked": { "type": "boolean", "description": "Default true." } })),
             &["doc"],
         )),
-        t("comments_hide", "Hide all comments", "Hide or show every comment on the page (fields and links still draw). A view setting: the file doesn't change.")
+        t("comment_popup", "Open or move a comment's pop-up", "Open or close a comment's pop-up note (open) and/or move or resize it: rect [x0, y0, x1, y1] in points from the top-left of the displayed page (pop-ups stay upright and keep their size at every zoom, so this is the top-left corner where it shows plus its width and height; each side 24 to 2000 points), or move [dx, dy] in points. A comment without a pop-up gets one, to the right of it unless rect says where. Text boxes have none, and replies show in their comment's pop-up. comment_list reports each comment's popup (open, rect). The comment itself (text, date) is unchanged. One undo step.").with(schema(
+            comment_ref(json!({
+                "open": { "type": "boolean", "description": "true opens the pop-up, false closes it." },
+                "rect": { "type": "array", "items": { "type": "number" }, "minItems": 4, "maxItems": 4 },
+                "move": point(),
+            })),
+            &["doc"],
+        )),
+        t("comment_popups_all", "Open or close all pop-ups", "Open All Pop-ups (open true, the default) or Close All Pop-ups (open false): every comment pop-up on `page` (1-based; the whole document when left out) not already in that state, plus, when opening, sticky notes without one (they get one). One undo step. Returns how many changed.")
+            .cmd("comment.open_popups")
+            .with(schema(json!({ "doc": doc(), "open": { "type": "boolean", "description": "Default true." }, "page": { "type": "integer", "minimum": 1 } }), &["doc"])),
+        t("comments_hide", "Hide all comments", "Hide or show every comment on the page (fields and links still draw), or with types hide just the comments of those types (annotation subtypes such as Highlight, Ink, FreeText, Square; an empty list shows every type again). A view setting: the file doesn't change. Returns hidden and hidden_types.")
             .cmd("comment.hide_all")
-            .with(schema(json!({ "doc": doc(), "hidden": { "type": "boolean", "description": "Default true." } }), &["doc"])),
+            .with(schema(
+                json!({
+                    "doc": doc(),
+                    "hidden": { "type": "boolean", "description": "Default true." },
+                    "types": { "type": "array", "items": { "type": "string" }, "maxItems": 64, "description": "Hide only these comment types (replaces the list)." },
+                }),
+                &["doc"],
+            )),
         t("comments_summarize", "Summarize comments", "Make a PDF summarising every comment (number, author, type, date, text, replies), sorted by page, author, date or type. layout: comments-only (default); connector-lines (each commented page beside its comments, joined by lines from numbered markers); sequence-numbers (each commented page with numbered markers, then its comments).")
             .cmd("comment.summarize")
             .with(schema(
@@ -1461,6 +1773,7 @@ pub fn tools() -> Vec<ToolDef> {
             "Protect with certificates",
             "Encrypt the document for recipient certificates (public-key security, ISO 32000-2 §7.6.5, adbe.pkcs7.s5): it then opens only with a recipient's digital ID (doc_open with certificate). Each recipient is a certificate file (.cer/.crt/.pem/.der) or a digital ID (.p12/.pfx, with password; only its certificate is used) with its own permissions; change_security makes a recipient owner-equivalent (may change or remove security, everything allowed). Include yourself with change_security, or nobody can change the security later. RSA certificates only. Applied by the next doc_save (a full rewrite). Undoable.",
         )
+        .cmd("protect.certificate")
         .with(schema(
             json!({
                 "doc": doc(),
@@ -1557,7 +1870,7 @@ pub fn tools() -> Vec<ToolDef> {
             }),
             &["doc"],
         )),
-        t("doc_watermark", "Add watermark", "Add a watermark to pages: text, or a picture from `file` (an image, or page `file_page` of a PDF) at `scale` of the page (default 0.5); rotated (degrees counter-clockwise, default 45), semi-transparent (opacity 0–1, default 0.5), text fitted to the page unless font_size is given, on top unless behind: true. replace: true swaps out existing ones. Undoable.")
+        t("doc_watermark", "Add watermark", "Add a watermark to pages: text, or a picture from `file` (an image, or page `file_page` of a PDF) at `scale` of the page (default 0.5); rotated (degrees counter-clockwise, default 45), semi-transparent (opacity 0–1, default 0.5), text fitted to `scale` of the page diagonal unless font_size is given, on top unless behind: true; offset_x / offset_y move it from the page centre (points, right and up); show_on_print / show_on_screen false makes it a screen-only or print-only watermark (optional content with print and view usage). replace: true swaps out existing ones. Undoable.")
             .cmd("edit.watermark")
             .with(schema(
                 json!({
@@ -1572,6 +1885,10 @@ pub fn tools() -> Vec<ToolDef> {
                     "opacity": { "type": "number", "minimum": 0, "maximum": 1 },
                     "rotation": { "type": "number" },
                     "behind": { "type": "boolean" },
+                    "offset_x": { "type": "number", "minimum": -10000, "maximum": 10000, "description": "Move the centre right (points; negative: left)." },
+                    "offset_y": { "type": "number", "minimum": -10000, "maximum": 10000, "description": "Move the centre up (points; negative: down)." },
+                    "show_on_print": { "type": "boolean", "description": "Show when printing (default true)." },
+                    "show_on_screen": { "type": "boolean", "description": "Show on screen (default true)." },
                     "replace": { "type": "boolean" },
                 }),
                 &["doc"],
@@ -1599,6 +1916,7 @@ pub fn tools() -> Vec<ToolDef> {
                 &["doc", "folder"],
             )),
         t("doc_export_svg", "Export pages as SVG", "Save As ▸ SVG: write pages as standalone SVG files (`<name>_page_<n>.svg`) into a folder, one per page, sized to the page as displayed (crop box after rotation, in points). Vector where possible: paths with fill rule, line width, caps, joins and dashes; clipping; colours converted to sRGB with their opacity; text as glyph outlines (fonts are not embedded) plus a transparent text layer for searching and selecting (text_layer false leaves it out); images as embedded PNG (downsampled above 4 megapixels); nested forms flattened; tiling patterns, soft masks and blend modes kept as SVG patterns, masks and mix-blend-mode. Shadings are rasterised over the region they paint. Each file reports what it holds and `omitted` (content it could not express) and `truncated` (the 128 MiB page limit was reached). transparent leaves out the white paper. Includes unsaved edits. Refused when the document does not allow copying (extracting text and graphics).")
+            .cmd("export.svg")
             .with(schema(
                 json!({
                     "doc": doc(),
@@ -1677,13 +1995,14 @@ pub fn tools() -> Vec<ToolDef> {
                 }),
                 &["doc", "page", "rect", "role"],
             )),
-        t("reading_order_move", "Change the reading order", "Order panel: move a structure element (element: its obj, from reading_order_list or tags_tree), with everything inside it, to just before another (before: obj) or just after one (after: obj) among that one's siblings, or to region number `to` of page (moving down puts it after that region, up before it). Refused when the target is inside the element or an element can't be edited. MCIDs and the parent tree don't change. One undo step. Returns the page's reading order after when page is given.")
+        t("reading_order_move", "Change the reading order", "Order panel: move a structure element (element: its obj, from reading_order_list or tags_tree), with everything inside it, to just before another (before: obj) or just after one (after: obj) among that one's siblings, or to region number `to` of page (moving down puts it after that region, up before it), or inside another as its last kid (into: obj; an empty tag too, as dropping on a tag in the Tags panel). Refused when the target is inside the element or an element can't be edited. MCIDs and the parent tree don't change. One undo step. Returns the page's reading order after when page is given.")
             .with(schema(
                 json!({
                     "doc": doc(),
                     "element": { "type": "integer", "minimum": 1 },
                     "before": { "type": "integer", "minimum": 1 },
                     "after": { "type": "integer", "minimum": 1 },
+                    "into": { "type": "integer", "minimum": 1, "description": "Move inside this element (obj), as its last kid." },
                     "to": { "type": "integer", "minimum": 1, "description": "A 1-based region number on page." },
                     "page": { "type": "integer", "minimum": 1, "description": "1-based page (needed with to)." }
                 }),
@@ -1733,6 +2052,19 @@ pub fn tools() -> Vec<ToolDef> {
                 }),
                 &["doc", "obj"],
             )),
+        t("tags_new", "New tag", "Tags panel ▸ New Tag: add an empty structure element of type (a standard structure type, or a custom type the role map maps to one) as the last kid of parent (an element's obj from tags_tree), or as a new top-level element when parent is left out. Move content tags into it with reading_order_move into. The document must be tagged. One undo step. Returns the new element's obj and the element count.")
+            .cmd("a11y.new_tag")
+            .with(schema(
+                json!({
+                    "doc": doc(),
+                    "type": { "type": "string", "description": "The new element's structure type (P, H1, Sect, Figure …)." },
+                    "parent": { "type": "integer", "minimum": 1, "description": "The parent element's obj from tags_tree (default: top level)." }
+                }),
+                &["doc", "type"],
+            )),
+        t("tags_delete", "Delete tag", "Tags panel ▸ Delete Tag: take a structure element (obj from tags_tree) out of the tree. Its kids take its place in its parent, in order: child elements get the parent as /P, its marked content keeps its page (written as a marked-content reference) and the parent tree points that content and its annotations at the parent, so nothing it held becomes untagged and the reading order stays. A top-level element that holds content itself is refused (the tree root holds only elements), as is content inside form XObjects. One undo step. Returns how many kids moved up and the parent's obj.")
+            .cmd("a11y.delete_tag")
+            .with(schema(json!({ "doc": doc(), "obj": { "type": "integer", "minimum": 1, "description": "The element's obj from tags_tree." } }), &["doc", "obj"])),
         t("tags_add_namespace", "Add structure namespace", "PDF 2.0 structure namespaces (ISO 32000-2 §14.7.4): add a namespace (uri, or pdf-2.0, pdf-1.7, mathml) to the structure tree's /Namespaces, or change the one there: its schema (a file name or URL) and role mappings (role_map: [{type, maps_to, namespace}], /RoleMapNS; namespace is the target's URI or short name, omitted for the default namespace; an empty maps_to removes that mapping). Every mapped type must then reach a standard type: circular or dead-end chains are refused, and standard PDF 2.0 types can't be remapped in the PDF 2.0 namespace. Then put elements in it with tags_set namespace. All or nothing, one undo step. Returns the namespace.")
             .with(schema(
                 json!({
@@ -1795,19 +2127,74 @@ pub fn tools() -> Vec<ToolDef> {
             .with(schema(json!({ "doc": doc(), "name": { "type": "string", "minLength": 1 }, "script": { "type": "string" } }), &["doc", "name"])),
         t("js_document_actions", "Document actions", "Set Document Actions: the JavaScript each document trigger runs (will_close, will_save, did_save, will_print, did_print; script null when none). doc_save, doc_print and doc_close run them.")
             .ro()
+            .cmd("tools.document_actions")
             .with(schema(json!({ "doc": doc() }), &["doc"])),
         t("js_set_document_action", "Set a document action", "Set the JavaScript a document trigger runs (will_close, will_save, did_save, will_print, did_print), or remove it (script omitted). Undoable.")
+            .cmd("tools.document_actions")
             .with(schema(json!({ "doc": doc(), "trigger": { "type": "string", "enum": ["will_close", "will_save", "did_save", "will_print", "did_print"] }, "script": { "type": "string" } }), &["doc", "trigger"])),
+        t("js_page_actions", "Page actions", "Page Properties ▸ Actions: the JavaScript each page runs on page_open (when it becomes the current page) and page_close (when it stops being it). With page, both triggers of that page (script null when none); without, every trigger that has a script.")
+            .ro()
+            .cmd("tools.page_actions")
+            .with(schema(json!({ "doc": doc(), "page": { "type": "integer", "minimum": 1 } }), &["doc"])),
+        t("js_set_page_action", "Set a page action", "Page Properties ▸ Actions: set the JavaScript page runs on trigger (page_open, page_close), replacing what that trigger ran, or remove it (script omitted or blank). Scripts are limited to 256 KiB. Undoable.")
+            .cmd("tools.page_actions")
+            .with(schema(
+                json!({ "doc": doc(), "page": { "type": "integer", "minimum": 1 }, "trigger": { "type": "string", "enum": ["page_open", "page_close"] }, "script": { "type": "string" } }),
+                &["doc", "page", "trigger"],
+            )),
+        t("js_run_action", "Run a JavaScript action", "Run the Run-a-JavaScript action of a link (link: { page, index } from link_list), a bookmark (bookmark: its path from bookmark_list) or a page trigger (page and trigger page_open / page_close), as clicking it or the page opening or closing does: event.type is Link, Bookmark or Page, event.name Mouse Up, Open or Close, and this.pageNum starts on the link's or page's page. It runs in the same sandbox as js_run (loop and recursion limits, no file or network access) and needs JavaScript on (js_enabled). Field, comment and form-reset changes are one undoable step, refused when the document's permissions don't allow them; requests (page, url, print, submit) are returned, never performed. A dialog that needs an answer returns question: run it again with answers, as with js_run.")
+            .with(schema(
+                json!({
+                    "doc": doc(),
+                    "link": { "type": "object", "properties": { "page": { "type": "integer", "minimum": 1 }, "index": { "type": "integer", "minimum": 1 } }, "required": ["page", "index"] },
+                    "bookmark": path("The bookmark"),
+                    "page": { "type": "integer", "minimum": 1 },
+                    "trigger": { "type": "string", "enum": ["page_open", "page_close"] },
+                    "answers": { "type": "array", "description": "Answers to the script's dialogs so far, in order: yes, no, ok or cancel for an alert, {\"text\": …} or null for app.response.", "items": { "type": ["string", "object", "null"] } }
+                }),
+                &["doc"],
+            )),
+        t("js_scripts", "List the document's JavaScripts", "JavaScript debugger: every script in the document and where it lives, in this order: document-level scripts (document), the open action (open), document actions (document_action), page actions (page), field keystroke/format/validate/calculate scripts (field), field action triggers (field_trigger), links (link), bookmarks (bookmark) and other annotations' actions (annotation). Each has an id to pass to js_script and js_debug, its kind, a description of where it is, its line and byte counts and its first line. kind filters the list. At most 5000 scripts (32 MiB) are listed; truncated says when there are more.")
+            .ro()
+            .cmd("tools.js_debugger")
+            .with(schema(
+                json!({ "doc": doc(), "kind": { "type": "string", "enum": ["document", "open", "document_action", "page", "field", "field_trigger", "link", "bookmark", "annotation"] } }),
+                &["doc"],
+            )),
+        t("js_script", "Read a JavaScript", "JavaScript debugger: the source of the script id (from js_scripts) and breakable, the 1-based lines a breakpoint can be set on (lines where a statement starts).")
+            .ro()
+            .cmd("tools.js_debugger")
+            .with(schema(json!({ "doc": doc(), "id": { "type": "string", "minLength": 1 } }), &["doc", "id"])),
+        t("js_debug", "Debug JavaScript", "JavaScript debugger: run script (typed JavaScript) or the document's script id (from js_scripts; script, when also given, replaces its source for this run) against the document, in the js_run sandbox, after the document-level scripts. A script from the document runs with its own event (a field's calculate script gets event.name Calculate, its field as event.target and its value; a link's script event.type Link, …); typed scripts run as the console does. Dialogs get Cancel or No. breakpoints are 1-based lines to stop at (see breakable); step is run (to a breakpoint or the end), into, over or out; watches are expressions evaluated where the run stops, local variables included. A stopped run returns status paused with the line, the call stack (innermost first), the watches and resume: pass resume back with a step to go on (each step runs the script again from the start to the next stop, which is exact because nothing is applied until a run finishes). A finished run returns console, alerts, requests, result and error with error_at (script, 1-based line and column) and applies its field, comment and form-reset changes as one undoable step, like js_run. Runs are bounded: max_steps (instruction steps, default 20 million, at most 500 million) and timeout_ms (default 10000, at most 60000); a run past either is stopped (status stopped, nothing applied) with where it was. Needs JavaScript on (js_enabled). Breakpoints and stepping cover lines where a statement starts; inside one line, or in the document-level scripts, the run doesn't stop.")
+            .cmd("tools.js_debugger")
+            .with(schema(
+                json!({
+                    "doc": doc(),
+                    "script": { "type": "string" },
+                    "id": { "type": "string", "minLength": 1 },
+                    "breakpoints": { "type": "array", "items": { "type": "integer", "minimum": 1 }, "maxItems": 10000 },
+                    "watches": { "type": "array", "items": { "type": "string" }, "maxItems": 32 },
+                    "step": { "type": "string", "enum": ["run", "into", "over", "out"] },
+                    "resume": { "type": "object", "properties": { "hit": { "type": "integer", "minimum": 0 }, "depth": { "type": "integer", "minimum": 0 } }, "required": ["hit", "depth"] },
+                    "max_steps": { "type": "integer", "minimum": 1 },
+                    "timeout_ms": { "type": "integer", "minimum": 100 }
+                }),
+                &["doc"],
+            )),
         t("form_set_script", "Set a field's JavaScript", "Field Properties ▸ Run custom script: set field's JavaScript for event keystroke, format, validate or calculate (the field's actions; calculated fields join the calculation order) or mouse_up (a button's action). Omit script to remove it. The scripts use Acrobat's object model (event.value, event.rc, getField, util.printf, …) and run when the field changes. Undoable.")
             .cmd("form.prepare")
             .with(schema(
                 json!({ "doc": doc(), "field": { "type": "string" }, "event": { "type": "string", "enum": ["keystroke", "format", "validate", "calculate", "mouse_up"] }, "script": { "type": "string" } }),
                 &["doc", "field", "event"],
             )),
-        t("doc_export_office", "Export to Word, HTML, RTF or Excel", "Export a PDF ▸ Word (.docx), HTML (.html, one file with images inline), RTF (.rtf) or Excel (.xlsx), chosen by path's extension: paragraphs in reading order, headings from larger text, bold and italic, images where they fall, a page break between pages. Excel gets one worksheet per page: paragraphs in column A, tables detected from the text layout as cell grids, unambiguous numbers (1,234.50, (12.00), 12.5%) stored as numbers. Refused when the document does not allow copying text (open it with the permissions password). Run OCR (ocr, default auto, as in Acrobat): scanned pages (an image and no text) are recognized first on a temporary copy, so the export carries their text; the document itself is not changed. auto reads with the selected OCR engine (ocr_engines_list) and goes ahead without recognition, saying why in the result's ocr, when it can't run or doesn't read the language, or when the document's permissions don't allow recognition; on recognizes every exported page without text and fails instead; off never recognizes. ocr_language picks the recognition language (default en; one the engine reads). Returns ocr: mode, language, ran, pages_without_text, scanned_pages, recognized_pages, skipped_pages, words and not_run.")
+        t("doc_export_office", "Export to Word, HTML, RTF or Excel", "Export a PDF ▸ Word (.docx), HTML (.html, one file with images inline), RTF (.rtf) or Excel (.xlsx), chosen by path's extension: paragraphs in reading order (multi-column pages column by column), headings from larger text, fonts, sizes, colours and bold/italic kept per run within a paragraph, bulleted and numbered lists as real lists (Word numbering, HTML ul/ol), detected tables, images where they fall (Excel: pictures anchored where they fall), a page break between pages. pages limits the export (default all); at most 5000 pages and 512 MiB of images are exported, the rest is reported in warnings. Returns pages, paragraphs, styled_paragraphs (with style runs) and images. Excel gets one worksheet per page: paragraphs in column A, tables detected from the text layout as cell grids, unambiguous numbers (1,234.50, (12.00), 12.5%) stored as numbers. Refused when the document does not allow copying text (open it with the permissions password). Run OCR (ocr, default auto, as in Acrobat): scanned pages (an image and no text) are recognized first on a temporary copy, so the export carries their text; the document itself is not changed. auto reads with the selected OCR engine (ocr_engines_list) and goes ahead without recognition, saying why in the result's ocr, when it can't run or doesn't read the language, or when the document's permissions don't allow recognition; on recognizes every exported page without text and fails instead; off never recognizes. ocr_language picks the recognition language (default en; one the engine reads). Returns ocr: mode, language, ran, pages_without_text, scanned_pages, recognized_pages, skipped_pages, words and not_run.")
             .cmd("export.docx")
-            .with(schema(json!({ "doc": doc(), "path": { "type": "string" }, "ocr": export_ocr_arg(), "ocr_language": export_ocr_language_arg() }), &["doc", "path"])),
+            .with(schema(
+                json!({ "doc": doc(), "path": { "type": "string" }, "pages": pages("to export, in order (default: all)"), "ocr": export_ocr_arg(), "ocr_language": export_ocr_language_arg() }),
+                &["doc", "path"],
+            )),
         t("doc_export_pptx", "Export to PowerPoint", "Export a PDF ▸ Microsoft PowerPoint (.pptx): one slide per page, the slide size from the first exported page as displayed (crop box after rotation, within PowerPoint's 1–56 in; other page sizes are scaled to fit and centred). mode editable (default): each paragraph becomes an editable text box placed and turned as on the page (font family, size, bold, italic, colour), each extractable image a picture, and the rest of the page (vector art, shadings, inline images, form fields, comments) one background picture rendered at dpi without the text and those images (left out when it is blank). Vector shapes are not rebuilt as PowerPoint shapes. mode image: each slide is one picture of its page. Returns counts (slides, text_boxes, pictures, backgrounds, omitted) and warnings. Includes unsaved edits. Editable mode is refused when the document does not allow copying (open it with the permissions password); image mode only renders. Run OCR (ocr, default auto, as in Acrobat): scanned pages (an image and no text) are recognized first on a temporary copy, so the export carries their text; the document itself is not changed. auto reads with the selected OCR engine (ocr_engines_list) and goes ahead without recognition, saying why in the result's ocr, when it can't run or doesn't read the language, or when the document's permissions don't allow recognition; on recognizes every exported page without text and fails instead; off never recognizes. ocr_language picks the recognition language (default en; one the engine reads). Returns ocr: mode, language, ran, pages_without_text, scanned_pages, recognized_pages, skipped_pages, words and not_run. Image mode never recognizes.")
+            .cmd("export.pptx")
             .with(schema(
                 json!({
                     "doc": doc(),
@@ -1836,6 +2223,7 @@ pub fn tools() -> Vec<ToolDef> {
                 &["doc"],
             )),
         t("pdfua_verify", "Verify PDF/UA", "Verify the machine-checkable requirements of PDF/UA-1 (ISO 14289-1, part 1, the default) or PDF/UA-2 (ISO 14289-2, part 2), reported by Matterhorn Protocol checkpoint (06-002, 28-011, …) or a short code where none applies (struct-tree-root, fonts-embedded, ua2-namespace): identification and dc:title in XMP, DisplayDocTitle, MarkInfo, the structure tree (loops, role mapping, namespaces, tables, lists, headings, figure and formula alternate text, notes), content tagged or artifact with every MCID in the structure and parent tree, fonts embedded and mapped to Unicode, language, annotations and fields (tags, Contents, TU, Tabs), optional content, embedded files, XFA, encryption, reference and PostScript XObjects. conforms is true when no checked requirement fails; checkpoints that need a person are listed in not_checked and are not part of it. counts has every checked checkpoint; findings keep at most max_findings per checkpoint (default 100), with 1-based page and object number.")
+            .cmd("standards.pdfua")
             .ro()
             .with(schema(
                 json!({
@@ -1846,6 +2234,7 @@ pub fn tools() -> Vec<ToolDef> {
                 &["doc"],
             )),
         t("doc_validate_arlington", "Validate against the Arlington model", "Structural validation against the Arlington PDF Model (PDF Association; the vendored model's commit is in the result): walks the object graph from the trailer, works out each object's Arlington type from the links of the key that reaches it (choosing among alternatives such as page or page tree node, or the action kinds, by the object's /Type, /Subtype, /S and keys), and checks it. Codes: missing-required (error; inheritable keys are also looked up through /Parent), wrong-type (error), value-not-allowed (error: outside the possible values or failing their conditions such as /Rotate a multiple of 90), introduced-later (warning: key, type or value newer than the PDF version), deprecated (warning), must-be-indirect / must-be-direct (warning), unknown-key and extra-element (info), limit (info: the walk stopped at a bound). Each finding has the object number holding the value (null for the trailer), path (e.g. Trailer/Root/Pages/Kids[0]/Resources/Font/F1/BaseFont), key, object_type and message. version (1.0 to 1.7 or 2.0) checks against that PDF version instead of the document's (the header, or the catalog /Version when later). Findings kept: errors first, then warnings, then information, at most max_findings (default 1000); errors/warnings/infos count all. Predicates evaluated are listed in predicates_evaluated; rules that need any other predicate (and the SpecialCase column) are not reported as problems but counted in not_evaluated. valid is true when no error is found. Includes unsaved edits. Read-only.")
+            .cmd("standards.validate")
             .ro()
             .with(schema(
                 json!({
@@ -1856,6 +2245,7 @@ pub fn tools() -> Vec<ToolDef> {
                 &["doc"],
             )),
         t("pdfx_verify", "Verify PDF/X", "Verify the machine-checkable requirements of PDF/X-1a:2001, PDF/X-1a:2003, PDF/X-3:2002, PDF/X-3:2003 or PDF/X-4 (ISO 15930-1/-4/-3/-6/-7), like Acrobat Preflight's PDF/X profiles. standard defaults to the one the document declares (GTS_PDFXVersion), else X-4. Rules by id: GTS_PDFXVersion (document information; XMP pdfxid for X-4), PDF version limit, information and XMP keys, Trapped True/False, file ID, encryption, exactly one GTS_PDFX output intent with OutputConditionIdentifier and an ICC output (prtr) profile or RegistryName, TrimBox or ArtBox on every page and box nesting, printing annotations in the bleed area, fonts embedded, X-1a colour (CMYK, gray, spot only), DeviceRGB/DeviceCMYK against the output intent for X-3/X-4, no transparency for X-1a/X-3, X-4 optional content names, transfer functions, halftone types, PostScript, OPI, external content, embedded files, JavaScript. Severity error breaks conformance; warning marks a rule whose wording we are not certain of or a limit reached. conforms is true when no error is found; not_checked lists what isn't decided. counts has every checked rule; findings keep at most max_findings per rule (default 100), with 1-based page and object number.")
+            .cmd("standards.pdfx")
             .ro()
             .with(schema(
                 json!({
@@ -1866,6 +2256,7 @@ pub fn tools() -> Vec<ToolDef> {
                 &["doc"],
             )),
         t("pdfx_convert", "Convert to PDF/X", "Preflight ▸ Convert to PDF/X: fix the document for level x1a (PDF/X-1a:2003), x3 (PDF/X-3:2003) or x4 (PDF/X-4); X-1a:2001 and X-3:2002 are accepted too. As one undoable edit: encryption, JavaScript and additional actions removed; annotations that don't print removed (links kept, not printing) and printing annotations and form fields flattened into the page, then the form removed; transfer functions, bad halftones and OPI removed; unembedded standard-14 fonts embedded (the renderer's BSD-licensed substitute programs, with standard widths; other fonts can't be embedded); X-1a and X-3: transparency flattened (flatten_preset low/medium/high, default medium); colour converted to the output intent (X-1a: RGB, ICC, calibrated and Lab colour to CMYK, or gray with a gray profile; X-3/X-4: DeviceRGB unless the intent is RGB), through the profile's tables when it has them, else a built-in approximation (notes says which); the one GTS_PDFX output intent (output_condition: a registered condition such as FOGRA39, and/or profile: an ICC output (prtr) profile file; X-4 needs the profile; without either the document's own intent is kept, or, when it has none, the colour settings' working CMYK space when that is an output (prtr) profile other than the factory one: output_intent_from_settings names it); TrimBox (trim, default the page's TrimBox, ArtBox, CropBox or MediaBox) and BleedBox (bleed, default BleedBox or CropBox, always containing the trim) in points of default user space; the PDF version (1.3/1.4/1.6; a lower version is saved in full); GTS_PDFXVersion, Title (title, default existing or Untitled), CreationDate, ModDate, Trapped False; XMP for X-4; file ID. Then pdfx_verify runs again: before and after hold both results and unfixable the errors left. When the result wouldn't conform nothing changes (converted false, refused says why) unless allow_partial. Converting a conforming document again changes nothing (changed false). Bad arguments are errors. Save the document to keep it.")
+            .cmd("standards.pdfx")
             .with(schema(
                 json!({
                     "doc": doc(),
@@ -1881,23 +2272,34 @@ pub fn tools() -> Vec<ToolDef> {
                 }),
                 &["doc", "level"],
             )),
-        t("pdfa_convert", "Save as PDF/A", "Standards ▸ Save as PDF/A: fix what can be fixed for a PDF/A level (1a, 1b, 2a, 2b, 2u, 3a, 3b, 3u; default the declared level, else 2b): XMP identification (pdfaid:part and pdfaid:conformance) and metadata, an sRGB output intent, forbidden actions and JavaScript, annotation print flags, image interpolation, encryption; for levels u and a, ToUnicode maps written from fonts' encodings where a used glyph has no or a bad mapping. Levels u and a refuse when some glyph's meaning can't be derived, and level a refuses unless the document is already tagged well enough (it never tags automatically): then converted is false, nothing changes, and blocking lists the findings with a hint. Otherwise converted is true and the result is pdfa_verify's for the level (what remains, e.g. fonts that aren't embedded). Undoable; save the document to keep it.")
+        t("pdfa_convert", "Save as PDF/A", "Standards ▸ Save as PDF/A: fix what can be fixed for a PDF/A level (1a, 1b, 2a, 2b, 2u, 3a, 3b, 3u; default the declared level, else 2b): XMP identification (pdfaid:part and pdfaid:conformance) and metadata, an sRGB output intent, forbidden actions and JavaScript, annotation print flags, image interpolation, encryption; for levels u and a, ToUnicode maps written from fonts' encodings where a used glyph has no or a bad mapping. Levels u and a refuse when some glyph's meaning can't be derived, and level a refuses unless the document is already tagged well enough (it never tags automatically): then converted is false, nothing changes, and blocking lists the findings with a hint. Otherwise converted is true and the result is pdfa_verify's for the level (what remains, e.g. fonts that aren't embedded). output_profile (an ICC file: an output (prtr) or monitor (mntr) profile for gray, RGB or CMYK, ICC version 2 at most for PDF/A-1, 4 for PDF/A-2/3) becomes the one PDF/A output intent instead (replacing the document's), named output_condition (default the file name; a registered condition such as FOGRA39 also gets RegistryName) with output_info; an unsuitable profile is an error and changes nothing. Undoable; save the document to keep it.")
             .cmd("standards.pdfa")
-            .with(schema(json!({ "doc": doc(), "level": { "type": "string", "enum": ["1a", "1b", "2a", "2b", "2u", "3a", "3b", "3u"] } }), &["doc"])),
+            .with(schema(
+                json!({
+                    "doc": doc(),
+                    "level": { "type": "string", "enum": ["1a", "1b", "2a", "2b", "2u", "3a", "3b", "3u"] },
+                    "output_profile": { "type": "string", "description": "Path of an ICC output (prtr) or monitor (mntr) profile (gray, RGB or CMYK) for the PDF/A output intent." },
+                    "output_condition": { "type": "string", "maxLength": 256, "description": "OutputConditionIdentifier for output_profile (default: the file name)." },
+                    "output_info": { "type": "string", "maxLength": 256, "description": "The output intent's Info (default: output_condition)." },
+                }),
+                &["doc"],
+            )),
         t("action_list", "List actions", "Action Wizard: the built-in actions (name, description, steps) and every step an action can use (id, label, whether it takes a text argument).")
             .ro()
             .cmd("actions.wizard")
             .with(schema(json!({}), &[])),
-        t("action_run", "Run an action", "Action Wizard: run a built-in action (action: its name) or a list of steps ([{step, arg}], ids from action_list) on each PDF in paths, writing the results into folder under the same names. Returns each file's step log or error.")
+        t("action_run", "Run an action", "Action Wizard: run a built-in action (action: its name) or a list of steps ([{step, arg}], ids from action_list) on each PDF in paths, or in source_folder (with recursive, its subfolders too, kept as subfolders of folder), writing the results into folder under the same names. Returns each file's step log or error, and for a folder what the walk skipped (walk).")
             .cmd("actions.wizard")
             .with(schema(
                 json!({
                     "action": { "type": "string" },
                     "steps": { "type": "array", "items": { "type": "object", "properties": { "step": { "type": "string" }, "arg": { "type": "string" } }, "required": ["step"] } },
                     "paths": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+                    "source_folder": source_folder(),
+                    "recursive": recursive(),
                     "folder": { "type": "string" },
                 }),
-                &["paths", "folder"],
+                &["folder"],
             )),
         t("doc_compare", "Compare files", "Compare two open documents: other is the older version, doc the newer. Returns the page map (each page same, modified, moved, inserted or deleted, 1-based old and new numbers), summary counts and each text change (replaced, inserted, deleted) with the old and new text, pages (1-based) and rectangles (points, origin bottom-left); with visual, the paired pages that look different (changed_percent, regions) and visual_regions as flat {page, rect}. Moved pages are compared with their counterpart.")
             .ro()
@@ -1918,13 +2320,52 @@ pub fn tools() -> Vec<ToolDef> {
                 })),
                 &["old", "new"],
             )),
+        t("window_list", "Windows", "The windows and their tabs: window 0 is the main window; each tab (a view of a document, by tab number) is in one window. Every open document has a tab; window_new adds a second view of one in a new window. Headless model of the desktop app's windows (drive the running app with the control channel's window-* options).")
+            .ro()
+            .with(schema(json!({}), &[])),
+        t("window_new", "New window", "Open doc again in a new window: a second view (tab) of the same document, so edits and undo in either show in both. Returns the windows, the new window and its tab. At most 7 windows besides the main one.")
+            .cmd("window.new")
+            .with(schema(json!({ "doc": doc() }), &["doc"])),
+        t("window_move_tab", "Move tab to window", "Move a tab (from window_list) into another window (window: its number, 0 for the main window) or into a new window of its own (new_window: true). A window left without tabs closes.")
+            .cmd("window.move_tab")
+            .with(schema(
+                json!({
+                    "tab": { "type": "integer", "minimum": 1, "description": "A tab number from window_list." },
+                    "window": { "type": "integer", "minimum": 0, "description": "The window to move it to (0 is the main window)." },
+                    "new_window": { "type": "boolean", "description": "Move it into a new window instead." },
+                }),
+                &["tab"],
+            )),
+        t("window_close", "Close window", "Close a window (not the main window, 0) and its tabs. A document that no other tab shows closes with them; one with unsaved changes is refused unless discard_changes: true.")
+            .destructive()
+            .cmd("window.close")
+            .with(schema(
+                json!({
+                    "window": { "type": "integer", "minimum": 1, "description": "The window to close (from window_list)." },
+                    "discard_changes": { "type": "boolean", "description": "Close documents with unsaved changes anyway." },
+                }),
+                &["window"],
+            )),
+        t("doc_compare_view", "Compare side by side", "The side-by-side compare view of other (older) and doc (newer), headless: the rows both panes share (1-based old_page and new_page side by side, following the page map, so a moved page sits beside its counterpart and an inserted or deleted page beside a gap: null), and every change in the order Next change / Previous change visit them (kind: replaced, inserted, deleted, visual, page_inserted, page_deleted, page_moved; old and new sides with page, row and rects in points, origin bottom-left). change (1-based) picks the current change; step next or previous moves from it (or from the start) and wraps around. current is where both panes scroll to (scroll_to_row), with the change's old and new text. limit caps the rows and changes listed (default 500).")
+            .ro()
+            .cmd("compare.side_by_side")
+            .with(schema(
+                compare_props(json!({
+                    "doc": doc(),
+                    "other": { "type": "integer", "description": "The older document (from doc_open)." },
+                    "visual": { "type": "boolean", "description": "Also compare how the paired pages look (default false)." },
+                    "change": { "type": "integer", "minimum": 1, "description": "The current change (1-based)." },
+                    "step": { "type": "string", "enum": ["next", "previous"], "description": "Move to the next or previous change from change (or from the start)." },
+                })),
+                &["doc", "other"],
+            )),
         t("doc_compare_report", "Compare report", "Write the compare summary report (a PDF listing every change) to path. Refused unless both documents allow copying text.")
             .cmd("doc.compare")
             .with(schema(json!({ "doc": doc(), "other": { "type": "integer" }, "path": { "type": "string" } }), &["doc", "other", "path"])),
         t("doc_compare_mark", "Mark differences as comments", "Add the differences from other (older) to doc (newer) as comments in doc: highlights over replaced (blue) and inserted (green) text, notes where text was deleted (red), authored Compare. Undoable. Refused unless both documents allow copying text.")
             .cmd("doc.compare")
             .with(schema(json!({ "doc": doc(), "other": { "type": "integer" } }), &["doc", "other"])),
-        t("form_detect_fields", "Detect form fields", "Prepare a form ▸ automatic field detection: find the blanks a printed form asks to be filled (underscore runs, lines, empty boxes, small squares for check boxes) and name each field from its label. With add (default true) the fields are created as one undoable step; otherwise they are only proposed. Returns page (1-based), kind, name and rect (points, origin bottom-left).")
+        t("form_detect_fields", "Detect form fields", "Prepare a form ▸ automatic field detection: find the blanks a printed form asks to be filled (underscore runs, lines, empty boxes, small squares for check boxes, rows of touching cells as comb fields, small circles as radio groups named from their question with each choice's export value from its label, and the empty cells of ruled tables named from their column heading and row) and name each field from its label. Scanned forms need text recognition (OCR) first. With add (default true) the fields are created as one undoable step; otherwise they are only proposed. Returns page (1-based), kind (text, check, comb with cells, radio with export), name and rect (points, origin bottom-left).")
             .cmd("form.detect")
             .with(schema(json!({ "doc": doc(), "pages": pages("to look at (default: all)"), "add": { "type": "boolean" } }), &["doc"])),
         t("form_actions", "Field actions", "Field Properties ▸ Actions: the field's actions, each with its trigger (mouse_up, mouse_down, mouse_enter, mouse_exit, on_focus, on_blur), in the order they run (a trigger's later actions follow its /Next chain). Actions PdfCraft doesn't edit are listed as other (their /S type).")
@@ -1946,6 +2387,13 @@ pub fn tools() -> Vec<ToolDef> {
             .with(schema(
                 json!({ "doc": doc(), "field": { "type": "string" }, "trigger": { "type": "string", "enum": ["mouse_up", "mouse_down", "mouse_enter", "mouse_exit", "on_focus", "on_blur"] } }),
                 &["doc", "field", "trigger"],
+            )),
+        t("form_keystroke", "Check a keystroke", "What typing would do in a text field before the value is committed (the Keystroke event with willCommit false): change replaces the characters sel [start, end] (character positions; default: the end) of value (default: the field's value). The field's custom Keystroke JavaScript decides when it has one and JavaScript is on (event.change may be rewritten, event.rc refuses); otherwise its number, percent, special or arbitrary-mask format does. Nothing changes. Returns accepted, change, result (the text after the keystroke), checked_by (script, format or none), alerts, console and errors.")
+            .ro()
+            .with(schema(
+                json!({ "doc": doc(), "field": { "type": "string" }, "change": { "type": "string" }, "value": { "type": "string" },
+                    "sel": { "type": "array", "items": { "type": "integer", "minimum": 0 }, "minItems": 2, "maxItems": 2 } }),
+                &["doc", "field"],
             )),
         t("edit_keep_tags", "Keep tags on edit", "Keep a tagged document's structure tree in step with content edits (on by default), as Acrobat does: text edited in place keeps its marked content and element (an ActualText that spelled the old words is removed); a rewritten paragraph, or an added item that is moved, retyped or replaced, takes over the tag of the content it replaced; new text and images get new P and Figure elements next to the nearest tagged content (figures need alternate text: see accessibility_set_alt); new underlines become artifacts; deleted content, images and pages leave the tree, elements left empty go, and the parent tree is rebuilt, all in the edit's one undo step. The results of text_edit, image_edit, page_add_text, page_add_image, content_update, content_delete and page_delete then have a tags entry: pages, kept, adopted, added (page, element, role, mcid), artifacts, removed, pruned, actual_text_cleared, review_alt (figures whose image changed: check their alternate text), parent_tree and warnings. Set it with enabled, or read it; off, edits leave the tree as it was.")
             .with(schema(json!({ "enabled": { "type": "boolean" } }), &[])),
@@ -1974,11 +2422,13 @@ pub fn tools() -> Vec<ToolDef> {
                 }),
                 &["doc"],
             )),
-        t("ocr_recognize_files", "Recognize text in multiple files", "Scan & OCR ▸ Recognize text ▸ In multiple files: read every page of each PDF in paths and write the searchable result into folder under the same name (pages that already have text are left alone). Returns, per file, the output path, word count and skipped pages, or the error.")
+        t("ocr_recognize_files", "Recognize text in multiple files", "Scan & OCR ▸ Recognize text ▸ In multiple files: read every page of each PDF in paths, or in source_folder (with recursive, its subfolders too, kept as subfolders of folder), and write the searchable result into folder under the same name (pages that already have text are left alone). Returns, per file, the output path, word count and skipped pages, or the error.")
             .cmd("ocr.recognize_batch")
             .with(schema(
                 json!({
                     "paths": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+                    "source_folder": source_folder(),
+                    "recursive": recursive(),
                     "folder": { "type": "string" },
                     "dpi": { "type": "number", "minimum": 72, "maximum": 600 },
                     "language": ocr_language(),
@@ -1993,9 +2443,10 @@ pub fn tools() -> Vec<ToolDef> {
                     "background": { "type": "string", "enum": ["off", "low", "medium", "high"], "description": "Whiten the off-white, grey or yellowed paper before reading (default off): the paper level is estimated from the page's luma histogram and pixels within a margin of it (low, medium, high reach further) become white; ink and mid-greys keep their values. Runs before despeckle. The page image changes only with output straighten." },
                     "background_white_point": { "type": "integer", "minimum": 128, "maximum": 255, "description": "With background (or alone): an explicit white point instead of the estimate; pixels at least this light become white." },
                 }),
-                &["paths", "folder"],
+                &["folder"],
             )),
         t("scan_remove_background", "Remove scan background", "Scan & OCR ▸ Enhance scan ▸ Remove background: whiten the off-white, grey or yellowed paper of the images the pages draw, as one undoable step. Each image's paper level is the main light peak of its luma histogram (at least 30 % of the pixels within 16 levels of it; photographs, dark and inverted scans are left alone); pixels within a margin below it (low, medium (default) or high, widened by the paper's measured noise; never below 128) become white, and a levels curve keeps ink and mid-greys at their values. Colour scans are neutralised per channel from the paper's own colour. 8-bit gray and RGB images are rewritten (JPEG at quality 90 when they were JPEG); one-bit images already have white paper and are counted in images_unchanged; JPEG 2000, CMYK and other images it cannot decode faithfully are left alone and counted in images_skipped. Images shared with other pages change there too. Returns images, images_changed, images_skipped, images_unchanged, pixels_whitened and pixels_changed; when nothing changed no step is added.")
+            .cmd("ocr.enhance")
             .with(schema(
                 json!({
                     "doc": doc(),
@@ -2006,6 +2457,7 @@ pub fn tools() -> Vec<ToolDef> {
                 &["doc"],
             )),
         t("scan_camera_image", "Enhance camera images", "Scan & OCR ▸ Enhance ▸ Camera Image: for a page that is a photo of a document (a skewed page against a background), find the page's outline in the largest image the page draws (edge detection, line fitting and the best-supported convex quadrilateral, refined to sub-pixel at full resolution), correct the perspective to an upright rectangle at the page's estimated aspect ratio (single-view rectangle geometry, bilinear resampling), and even out the lighting (deshadow, white balance, contrast stretch, paper whitening). The page is replaced by the corrected image on a page of that aspect ratio whose longer side is the old page's (other page content, page boxes and rotation are dropped; annotations are kept), as one undoable step for all pages. Returns per page found, confidence (0-1), corners (points from the top-left of the displayed page, top-left/top-right/bottom-right/bottom-left), image_corners (photo pixels), image_size, aspect (width/height), output_size (pixels) and page_size (points), or skipped with the reason (no image, an image it cannot decode: only 8-bit gray/RGB JPEG or Flate). Where no outline is found (confidence below 0.45) the whole photo is only enhanced, or skipped with enhance false; give corners to set the outline yourself. dry_run reports without changing anything.")
+            .cmd("ocr.enhance")
             .with(schema(
                 json!({
                     "doc": doc(),
@@ -2017,6 +2469,7 @@ pub fn tools() -> Vec<ToolDef> {
                 &["doc"],
             )),
         t("scan_despeckle", "Despeckle scanned pages", "Scan & OCR ▸ Enhance scan ▸ Despeckle: remove isolated dark specks (scanner dust, noise) from the images the pages draw, as one undoable step. Each image is sized by its effective resolution where it is drawn: level low removes specks up to 0.13 mm across, medium (default) 0.21 mm, high 0.34 mm; a speck within about 1 mm of text-sized ink is kept, so periods, commas and i-dots survive. One-bit scans (CCITT fax, Flate, LZW) stay one-bit; 8-bit gray and RGB images are rewritten (JPEG at quality 90 when they were JPEG). JBIG2, JPEG 2000, CMYK and other images it cannot decode faithfully are left alone and counted in images_skipped. Images shared with other pages change there too. Returns images, images_changed, images_skipped, dark_specks, light_specks, impulses and pixels_changed; when nothing changed no step is added.")
+            .cmd("ocr.enhance")
             .with(schema(
                 json!({
                     "doc": doc(),
@@ -2027,10 +2480,32 @@ pub fn tools() -> Vec<ToolDef> {
                 }),
                 &["doc"],
             )),
-        t("ocr_status", "OCR status", "Whether text recognition is available (its models are installed: release packages include them; a source build fetches them with `cargo xtask models`; PDFCRAFT_MODELS overrides), where it looks for them, and the languages it reads.")
+        t("scan_straighten", "Straighten scanned pages", "Scan & OCR ▸ Enhance scans ▸ Straighten pages: measure the skew of each scanned page (a page that draws an image) without recognizing text, within ±15°, from projection profiles of a reduced copy of the page, and turn skewed pages straight about their centre (in the page content; the image is not resampled), as one undoable step. Pages without an image are skipped. min_skew (degrees, default 0.3) leaves slightly skewed pages alone; dry_run measures only. Returns per page: page (1-based), skew (degrees counterclockwise), straightened and skipped (why); and undoable.")
+            .cmd("ocr.enhance")
+            .with(schema(
+                json!({
+                    "doc": doc(),
+                    "pages": pages("to straighten (default: all)"),
+                    "min_skew": { "type": "number", "minimum": 0, "maximum": 15, "description": "Smallest skew corrected, degrees (default 0.3)." },
+                    "dry_run": { "type": "boolean", "description": "Measure only; change nothing (default false)." },
+                }),
+                &["doc"],
+            )),
+        t("ocr_status", "OCR status", "Whether text recognition is available (its models are installed: release packages include them; a source build fetches them with `cargo xtask models`; PDFCRAFT_MODELS overrides; the web app downloads them from its site's models/ folder the first time text is recognized and keeps them in browser storage), where it looks for them, the languages it reads, whether the built-in engine is loaded in this process (loaded), and the pinned models (models: file, bytes, sha256, web_path).")
             .ro()
             .cmd("ocr.recognize")
             .with(schema(json!({}), &[])),
+        t("ocr_model_verify", "Verify an OCR model file", "Check a text recognition model file the way PdfCraft checks the models before loading them (the web app's download and its browser-storage copy): file names which pinned model (text-detection.rten or text-recognition.rten); give the bytes as data_base64 or a path. The length must be exactly the pinned one (a larger file isn't read), then the SHA-256 sum must match the pin in ATTRIBUTION.toml. Returns ok, bytes, expected_bytes, sha256, expected_sha256 and error. Nothing is loaded or kept.")
+            .ro()
+            .cmd("ocr.recognize")
+            .with(schema(
+                json!({
+                    "file": { "type": "string", "enum": ["text-detection.rten", "text-recognition.rten"] },
+                    "data_base64": { "type": "string", "description": "The model file, base64." },
+                    "path": path_arg(),
+                }),
+                &["file"],
+            )),
         t("ocr_engines_list", "List OCR engines", "The text recognition engines this session can use: id, name, available (can run now), version, languages (code, name), external (a separate program on this machine, never shipped with PdfCraft), detail (where it was found, or why it can't run), selected and default. ocrs is built in and the default (it needs its models, see ocr_status); tesseract runs an installed Tesseract program found on PATH or through PDFCRAFT_TESSERACT, and is unavailable when it isn't installed (always on the web). Asks external engines afresh.")
             .ro()
             .cmd("ocr.recognize")
@@ -2078,7 +2553,7 @@ pub fn tools() -> Vec<ToolDef> {
             .cmd("export.text")
             .with(schema(json!({ "doc": doc(), "path": { "type": "string" }, "pages": pages("to export (default: all)"), "ocr": export_ocr_arg(), "ocr_language": export_ocr_language_arg() }), &["doc", "path"])),
         t("doc_export_accessible_text", "Export accessible text", "Save As ▸ Accessible Text: write a tagged PDF's text in logical structure order, as a screen reader reads it, to a .txt file (atomically replacing path). Each structure element gives its /ActualText, else its /Alt (a figure's alternate text), else the text of the marked content it covers; paragraphs, headings, figures and captions are separated by a blank line, consecutive list items and table rows by a line break, table cells by tabs. Artifacts (running headers, footers, page numbers marked /Artifact) are left out, and so is untagged content. Without path, returns the text instead (up to 1 MiB, then text_truncated). Returns counts of blocks, headings, list items, table rows and figures, and truncated when the structure tree or the text was too large to read in full. Untagged documents, empty structure trees and documents that do not allow copying text are refused.")
-            .cmd("export.text")
+            .cmd("export.accessible_text")
             .with(schema(json!({ "doc": doc(), "path": { "type": "string", "description": "The .txt file to write (default: return the text)." } }), &["doc"])),
         t(
             "fill_sign_add",
@@ -2121,6 +2596,25 @@ pub fn tools() -> Vec<ToolDef> {
             }),
             &["from"],
         )),
+        t("doc_create_screenshot", "Create a PDF from a screen capture", "Create ▸ Screen capture: a new, unsaved one-page document from a screen capture (`path`: the PNG, JPEG or TIFF a capture tool wrote), optionally cut to `region` (pixels of the capture, origin top left). The page takes the image's size at its resolution (one point per pixel without one). Returned like doc_open. The capture itself is taken by the desktop app, which runs the system's capture tool (macOS screencapture; GNOME Screenshot, Spectacle, grim, scrot or ImageMagick import elsewhere).")
+            .cmd("create.screenshot")
+            .with(schema(
+                json!({
+                    "path": { "type": "string" },
+                    "region": {
+                        "type": "object",
+                        "properties": {
+                            "x": { "type": "integer", "minimum": 0 },
+                            "y": { "type": "integer", "minimum": 0 },
+                            "width": { "type": "integer", "minimum": 1 },
+                            "height": { "type": "integer", "minimum": 1 },
+                        },
+                        "required": ["x", "y", "width", "height"],
+                    },
+                    "name": { "type": "string", "description": "Name for the new document (default Screen capture.pdf)." },
+                }),
+                &["path"],
+            )),
         t("doc_reduce", "Reduce file size", "Write a smaller copy of the document to `path` with Acrobat's Reduce File Size choices: images above 225 ppi downsampled to 150 ppi and JPEG-compressed (medium quality), thumbnails dropped, identical fonts and images merged, unused objects dropped, compressed object streams. The open document is unchanged.")
             .cmd("optimize.reduce")
             .with(schema(json!({ "doc": doc(), "path": { "type": "string" } }), &["doc", "path"])),
@@ -2177,10 +2671,23 @@ pub fn tools() -> Vec<ToolDef> {
             .destructive()
             .cmd("edit.edit_text")
             .with(schema(json!({ "doc": doc(), "page": { "type": "integer", "minimum": 1 }, "image": { "type": "integer", "minimum": 1 }, "path": { "type": "string" } }), &["doc", "page", "image", "path"])),
-        t("page_objects", "List page objects", "The objects a page's own content draws, in paint order from back to front (Edit a PDF ▸ select objects): number, kind (text, path, image, form, inline_image, shading, or group for tagged content of several kinds), box (top-left-origin points; null when it can't be measured, e.g. a shading), the MCID that makes tagged content one object, and the text a text object shows. Everything inside one marked-content sequence with an MCID is one object. Added text and images and page marks (headers, watermarks) are not listed: edit them with content_update / doc_header_footer and friends. Numbers change when the order changes: take them from a fresh call. When the document does not allow copying text, text fields are null and text_withheld explains why.")
+        t("page_objects", "List page objects", "The objects a page's own content draws, in paint order from back to front (Edit a PDF ▸ select objects): number, kind (text, path, image, form, inline_image, shading, or group for tagged content of several kinds), box (top-left-origin points; null when it can't be measured, e.g. a shading), the MCID that makes tagged content one object, the text a text object shows, its opacity, and for a vector path its appearance (fill and stroke: \"none\" or { space: gray | rgb | cmyk | current, components }, where current with no components is a pattern; line_width in displayed points; fill_opacity, stroke_opacity). Everything inside one marked-content sequence with an MCID is one object. Added text and images and page marks (headers, watermarks) are not listed: edit them with content_update / doc_header_footer and friends. Numbers change when the order changes: take them from a fresh call. When the document does not allow copying text, text fields are null and text_withheld explains why.")
             .ro()
             .cmd("edit.edit_text")
             .with(schema(json!({ "doc": doc(), "page": { "type": "integer", "minimum": 1 } }), &["doc", "page"])),
+        t("objects_select", "Select objects", "Pick page objects as the Edit object tool does (Edit a PDF ▸ Edit objects): point [x, y] returns the objects whose boxes are under it (within tolerance points, default 2, at most 100), topmost first (top is the one a click selects); rect [x0, y0, x1, y1] (a marquee) returns the objects whose boxes touch it, in paint order. Coordinates are points from the top-left of the displayed page. Returns object numbers for page_objects and the objects_* tools; objects without a box can't be picked. Read-only.")
+            .ro()
+            .cmd("edit.edit_object")
+            .with(schema(
+                json!({
+                    "doc": doc(),
+                    "page": { "type": "integer", "minimum": 1 },
+                    "point": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 },
+                    "rect": { "type": "array", "items": { "type": "number" }, "minItems": 4, "maxItems": 4 },
+                    "tolerance": { "type": "number", "minimum": 0, "maximum": 100 },
+                }),
+                &["doc", "page"],
+            )),
         t("objects_arrange", "Arrange objects", "Change the paint order of page objects (numbers from page_objects): order front (Bring to Front), forward (Bring Forward: above the next object up that overlaps them, or the next one up when none does), backward (Send Backward, the same downwards) or back (Send to Back). Several objects keep their relative order. Each object keeps its look (graphics state, clip, colours, tags and optional content). One undo step; a no-op when nothing would change. Pages that use text as a clipping path, or whose text objects hold stray graphics-state operators, are refused.")
             .cmd("edit.edit_text")
             .with(schema(
@@ -2214,15 +2721,17 @@ pub fn tools() -> Vec<ToolDef> {
                 }),
                 &["doc", "page", "objects", "axis"],
             )),
-        t("objects_transform", "Rotate, flip or move objects", "Change page objects (numbers from page_objects) in place: action rotate (quarters clockwise, default 1, each about its own centre), flip_horizontal / flip_vertical (as displayed, each about its own centre) or move (dx right, dy down, in points). Text stays editable text; everything else on the page is untouched. One undo step.")
+        t("objects_transform", "Rotate, flip or move objects", "Change page objects (numbers from page_objects) in place: action rotate (quarters clockwise, default 1, or degrees clockwise for any angle, each about its own centre), flip_horizontal / flip_vertical (as displayed, each about its own centre) move (dx right, dy down, in points) or matrix (matrix [a, b, c, d, e, f] in the displayed page's space, points from the top-left with y down, applied to every selected object together: scale or turn several about their combined box, as dragging the Edit object tool's handles does; scale parts at most 1000, offsets at most 10,000,000 points, no flattening). Text stays editable text; everything else on the page is untouched. One undo step.")
             .cmd("edit.edit_text")
             .with(schema(
                 json!({
                     "doc": doc(),
                     "page": { "type": "integer", "minimum": 1 },
                     "objects": { "type": "array", "items": { "type": "integer", "minimum": 1 }, "minItems": 1, "description": "Object numbers from page_objects." },
-                    "action": { "type": "string", "enum": ["rotate", "flip_horizontal", "flip_vertical", "move"] },
+                    "action": { "type": "string", "enum": ["rotate", "flip_horizontal", "flip_vertical", "move", "matrix"] },
                     "quarters": { "type": "integer" },
+                    "degrees": { "type": "number", "description": "Rotate by any angle, clockwise as displayed (instead of quarters)." },
+                    "matrix": { "type": "array", "items": { "type": "number" }, "minItems": 6, "maxItems": 6 },
                     "dx": { "type": "number" },
                     "dy": { "type": "number" },
                 }),
@@ -2244,7 +2753,7 @@ pub fn tools() -> Vec<ToolDef> {
                 }),
                 &["doc", "page", "objects"],
             )),
-        t("objects_style", "Change path appearance", "Change how vector paths (numbers from page_objects; kind path, or the paths inside a tagged group) are painted, as Edit PDF's object properties do: fill and stroke colour (\"none\" turns the fill or stroke off, a colour turns it on; \"#RRGGBB\", [gray], [r, g, b] or [c, m, y, k] with components 0-1 write DeviceGray/RGB/CMYK, { space: current, components } keeps the colour space the path already paints with, e.g. a spot colour or ICC space, components checked against it), line_width (displayed points, 0 = thinnest), dash (lengths in displayed points, [] = solid; dash_phase), cap (butt, round, square), join (miter, round, bevel) and opacity (0-1, fill and stroke: a new ExtGState). Fields left out stay as they are. Each path is wrapped in q … Q with the new state, so nothing else on the page changes; a path left with neither fill nor stroke is refused (use objects_delete). Text, images and other objects are refused. One undo step; tagged content keeps its MCIDs.")
+        t("objects_style", "Change path appearance", "Change how vector paths (numbers from page_objects; kind path, or the paths inside a tagged group) are painted, as Edit PDF's object properties do: fill and stroke colour (\"none\" turns the fill or stroke off, a colour turns it on; \"#RRGGBB\", [gray], [r, g, b] or [c, m, y, k] with components 0-1 write DeviceGray/RGB/CMYK, { space: current, components } keeps the colour space the path already paints with, e.g. a spot colour or ICC space, components checked against it), line_width (displayed points, 0 = thinnest), dash (lengths in displayed points, [] = solid; dash_phase), cap (butt, round, square), join (miter, round, bevel) and opacity (0-1, fill and stroke: a new ExtGState). Fields left out stay as they are. Each path is wrapped in q … Q with the new state, so nothing else on the page changes; a path left with neither fill nor stroke is refused (use objects_delete). Text, images and other objects take opacity alone (the object is wrapped whole in q /gs … Q); their other fields are refused. One undo step; tagged content keeps its MCIDs.")
             .cmd("edit.edit_text")
             .with(schema(
                 json!({
@@ -2277,11 +2786,26 @@ pub fn tools() -> Vec<ToolDef> {
             .ro()
             .cmd("edit.edit_text")
             .with(schema(json!({ "doc": doc(), "page": { "type": "integer", "minimum": 1 }, "text": { "type": "string" } }), &["doc", "page"])),
-        t("text_paragraphs", "List paragraphs", "The paragraphs on a page: number, text, source line numbers, visual line_count, box (top-left-origin points), first style and runs. Each run reports zero-based Unicode scalar start/end (end exclusive), font_resource, font, size, bold, italic and RGB color. Use paragraph and selected range offsets with text_edit. When the document does not allow copying text, text fields are null and text_withheld explains why.")
+        t("text_paragraphs", "List paragraphs", "The paragraphs on a page: number, text, source line numbers, visual line_count, box (top-left-origin points), first style, direction (ltr or rtl: right-to-left paragraphs are listed in logical order and text_edit writes their rows back in display order), vertical (a column of Identity-V vertical writing, which text_edit rewrites in its own font only) and runs. Each run reports zero-based Unicode scalar start/end (end exclusive), font_resource, font, size, bold, italic and RGB color. Use paragraph and selected range offsets with text_edit. When the document does not allow copying text, text fields are null and text_withheld explains why.")
             .ro()
             .cmd("edit.edit_text")
             .with(schema(json!({ "doc": doc(), "page": { "type": "integer", "minimum": 1 } }), &["doc", "page"])),
-        t("text_edit", "Edit text", "Replace the text of one paragraph (paragraph, from text_paragraphs: rewrapped to the paragraph's width with its line spacing) or one line (line, from text_lines) in place, keeping position, size and colour. For a paragraph, also change its formatting: font (helvetica, times, courier) with bold/italic, size (points), color (#rrggbb), align (left, center, right, justify), underline, line_spacing (× size), char_spacing (points) and scale (horizontal, percent), or move it (dx, dy in points; up is +dy) and rewrap it to a new width (points); text may then be omitted. Its own font is reused when it can show every character and no font/weight change is requested; otherwise it uses a standard font matching the source style or, for Japanese and other text no standard font can show (Cyrillic, Greek), real Mincho/Gothic fallback outlines matching the requested/source family and available weight, from a face that has every character (the result shows the font used). Missing Japanese weights use Regular, not synthetic bold; the small web build has only Gothic Regular. Paragraph bold and italic may be set independently without font to keep the source family and the other style. Changing font keeps the current weight/slant unless explicitly overridden. Alternatively font_resource (from text_fonts) selects an exact existing page font and refuses unsupported characters; it cannot be combined with font, bold or italic. Standard Latin faces use their exact glyph advances for reflow. Text that no available font can show is refused. range_start/range_end select Unicode scalar offsets (end exclusive): character formatting affects that range; alignment/width/position/line spacing remain paragraph-wide. Unchanged surrounding runs retain source glyph codes, supported spacing and styles. Underline on/off applies to selected characters and persists for PdfCraft-authored associations through reflow and reopen; unmarked imported paths remain artwork. Malformed underline associations refuse unchanged. Rotated/skewed/reflected mixed text and splitting indivisible PDF glyphs are refused unchanged. preview=true returns a bounded actual-PDF PNG (max_side, default1024) without changing bytes/history. Already-satisfied edits preserve history. Undoable.")
+        t("text_direction", "Text direction and caret movement", "Right-to-left and CJK text editing support. For a paragraph (doc, page, paragraph from text_paragraphs) or any text: its base direction (rtl when its first strong character is Hebrew, Arabic or another right-to-left script; direction auto|ltr|rtl overrides), whether it is a column of vertical writing (Identity-V fonts), the scripts in it (latin, hebrew, arabic, han, kana, hangul), display (the text in the order the page shows it, by the Unicode bidirectional algorithm, direction controls dropped) and display_order (for each position from the left, the zero-based logical character shown there; up to 10,000 characters). With caret (a zero-based Unicode scalar offset) and move (left|right), and optionally steps (1-10000): where the Edit text caret goes on screen, as the arrow keys move it in right-to-left text (caret, and caret_path for each step). Paragraph text comes in logical (typing) order, the order text_edit takes; text_edit writes right-to-left rows back in display order, Arabic shaped. Read-only. When the document does not allow copying text, text fields are null and text_withheld explains why.")
+            .ro()
+            .cmd("edit.edit_text")
+            .with(schema(
+                json!({
+                    "doc": doc(), "page": { "type": "integer", "minimum": 1 },
+                    "paragraph": { "type": "integer", "minimum": 1, "description": "Paragraph number from text_paragraphs (with doc and page)." },
+                    "text": { "type": "string", "description": "Text to examine instead of a paragraph." },
+                    "direction": { "type": "string", "enum": ["auto", "ltr", "rtl"] },
+                    "caret": { "type": "integer", "minimum": 0 },
+                    "move": { "type": "string", "enum": ["left", "right"] },
+                    "steps": { "type": "integer", "minimum": 1, "maximum": 10000 },
+                }),
+                &[],
+            )),
+        t("text_edit", "Edit text", "Replace the text of one paragraph (paragraph, from text_paragraphs: rewrapped to the paragraph's width with its line spacing) or one line (line, from text_lines) in place, keeping position, size and colour. For a paragraph, also change its formatting: font (helvetica, times, courier) with bold/italic, size (points), color (#rrggbb), align (left, center, right, justify), underline, line_spacing (× size), char_spacing (points) and scale (horizontal, percent), or move it (dx, dy in points; up is +dy) and rewrap it to a new width (points); text may then be omitted. Its own font is reused when it can show every character and no font/weight change is requested; otherwise it uses a standard font matching the source style or, for Japanese and other text no standard font can show (Cyrillic, Greek), real Mincho/Gothic fallback outlines matching the requested/source family and available weight, from a face that has every character (the result shows the font used). Missing Japanese weights use Regular, not synthetic bold; the small web build has only Gothic Regular. Paragraph bold and italic may be set independently without font to keep the source family and the other style. Changing font keeps the current weight/slant unless explicitly overridden. Alternatively font_resource (from text_fonts) selects an exact existing page font and refuses unsupported characters; it cannot be combined with font, bold or italic. Standard Latin faces use their exact glyph advances for reflow. Text that no available font can show is refused. Right-to-left text (Hebrew, Arabic) is given in logical order and written in display order by the Unicode bidirectional algorithm; a right-to-left paragraph keeps its right edge. Arabic letters take the joining forms their neighbours call for: in the paragraph's own font when it maps presentation forms, otherwise shaped with PdfCraft's Arabic font (official builds); an edit next to an Arabic letter re-forms its whole word. Chinese, Japanese and Korean wrap between characters (not before closing punctuation) and fall back to a CJK face that has every character. A column of vertical writing (Identity-V) is rewritten in its own font only; formatting it is refused. range_start/range_end select Unicode scalar offsets (end exclusive): character formatting affects that range; alignment/width/position/line spacing remain paragraph-wide. Unchanged surrounding runs retain source glyph codes, supported spacing and styles. Underline on/off applies to selected characters and persists for PdfCraft-authored associations through reflow and reopen; unmarked imported paths remain artwork. Malformed underline associations refuse unchanged. Rotated/skewed/reflected mixed text and splitting indivisible PDF glyphs are refused unchanged. preview=true returns a bounded actual-PDF PNG (max_side, default1024) without changing bytes/history. Already-satisfied edits preserve history. Undoable.")
             .cmd("edit.edit_text")
             .with(schema(
                 json!({ "doc": doc(), "page": { "type": "integer", "minimum": 1 }, "line": { "type": "integer", "minimum": 1 },
@@ -2325,7 +2849,7 @@ pub fn tools() -> Vec<ToolDef> {
             .with(schema(json!({ "doc": doc() }), &["doc"])),
         t("doc_open_revision", "Open a revision", "Open saved revision `revision` (1 = the oldest) of a document as a new, unsaved document, to see the file as it was then.")
             .with(schema(json!({ "doc": doc(), "revision": { "type": "integer", "minimum": 1 } }), &["doc", "revision"])),
-        t("doc_optimize", "Optimize PDF", "Write an optimized copy to `path` (Acrobat's PDF Optimizer). color / gray: { downsample, ppi, above_ppi, compression: jpeg|zip|retain, quality 1–100 } (defaults: downsample to 150 ppi above 225, JPEG 60). mono (one-bit images and image masks): { downsample, ppi, above_ppi, compression: ccitt-g4|zip|retain } or just the compression name (defaults: downsample to 300 ppi above 450, CCITT Group 4; without downsampling the samples are unchanged). Images are measured where pages draw them and replaced only when smaller. discard_*: thumbnails (default true), alternate_images (true), tags, print_settings; flate_unencoded (true); lzw_to_flate (true: LZW streams that decode completely are re-encoded as Flate, others are left and counted in lzw_skipped); compress_structure (true: pack objects into object streams); remove_invalid_links and remove_unreferenced_dests (true). compatibility: retain (default) or a PDF version (1.3, 1.4, 1.5, 1.6, 1.7, 2.0) to write; below 1.5 there are no object streams, and features the version doesn't define are kept and listed in newer_features (feature, needs, count). discard: Remove Hidden Information categories (metadata, attachments, comments, form-fields, hidden-text, hidden-layers, bookmarks, links-actions-scripts, private-data). unembed_fonts: embedded font names (from doc_embedded_fonts) whose program is removed; a name that matches no embedded font or a font that can't be unembedded refuses the whole call. Signed documents are refused. The open document is unchanged.")
+        t("doc_optimize", "Optimize PDF", "Write an optimized copy to `path` (Acrobat's PDF Optimizer). color / gray: { downsample, ppi, above_ppi, compression: jpeg|zip|retain, quality 1–100 } (defaults: downsample to 150 ppi above 225, JPEG 60). mono (one-bit images and image masks): { downsample, ppi, above_ppi, compression: ccitt-g4|jbig2|zip|retain } or just the compression name (defaults: downsample to 300 ppi above 450, CCITT Group 4; jbig2 is lossless JBIG2 generic region coding, CCITT Group 4 when made compatible with 1.3; without downsampling the samples are unchanged; images_ccitt and images_jbig2 count the results). Images are measured where pages draw them and replaced only when smaller. discard_*: thumbnails (default true), alternate_images (true), tags, print_settings; flate_unencoded (true); lzw_to_flate (true: LZW streams that decode completely are re-encoded as Flate, others are left and counted in lzw_skipped); compress_structure (true: pack objects into object streams); remove_invalid_links and remove_unreferenced_dests (true). compatibility: retain (default) or a PDF version (1.3, 1.4, 1.5, 1.6, 1.7, 2.0) to write; below 1.5 there are no object streams; below 1.5 JPEG 2000 images become JPEG (Flate for CMYK) and 16-bit images 8-bit, below 1.4 JBIG2 images become CCITT Group 4 (images_downgraded; images_not_downgraded could not be decoded), and below 1.4 transparency is flattened; features the version still doesn't define are listed in newer_features (feature, needs, count). flatten_transparency (default false; the Transparency panel): flatten transparency in the copy, flatten_preset low|medium|high (default medium, 300 ppi) and flatten_balance 0–100 (default 75) as for optimize_flatten_transparency; transparency_flattened_pages counts the pages. discard: Remove Hidden Information categories (metadata, attachments, comments, form-fields, hidden-text, hidden-layers, bookmarks, links-actions-scripts, private-data). unembed_fonts: embedded font names (from doc_embedded_fonts) whose program is removed; a name that matches no embedded font or a font that can't be unembedded refuses the whole call. Signed documents are refused. The open document is unchanged.")
             .cmd("optimize.advanced")
             .with(schema(
                 json!({
@@ -2344,6 +2868,9 @@ pub fn tools() -> Vec<ToolDef> {
                     "remove_invalid_links": { "type": "boolean" },
                     "remove_unreferenced_dests": { "type": "boolean" },
                     "compatibility": { "type": "string", "enum": ["retain", "1.3", "1.4", "1.5", "1.6", "1.7", "2.0"] },
+                    "flatten_transparency": { "type": "boolean" },
+                    "flatten_preset": { "type": "string", "enum": ["low", "medium", "high"] },
+                    "flatten_balance": { "type": "integer", "minimum": 0, "maximum": 100 },
                     "discard": { "type": "array", "items": { "type": "string" } },
                     "unembed_fonts": { "type": "array", "items": { "type": "string" } },
                 }),
@@ -2357,6 +2884,21 @@ pub fn tools() -> Vec<ToolDef> {
         t("command_list", "List commands", "Every registered PdfCraft command with its menu, shortcut, whether it is enabled now, and the tool that automates it.")
             .ro()
             .with(schema(json!({ "doc": doc(), "filter":{"type":"string"}, "enabled_only":{"type":"boolean"} }), &[])),
+        t("help_shortcuts", "Keyboard shortcuts", "The keyboard reference, the same list as the app's Help → Keyboard shortcuts and docs/user/keyboard.md: every registry command with a shortcut (section = its menu, or Tools) and the keys the document view and page grid handle themselves, each with section, action (English), command (registry id, or null for view keys) and the keys as written on macOS (mac, also the web app) and on Windows, Linux and FreeBSD (other). query keeps the rows whose action, section, keys or command id contain every word (case-insensitive; at most 200 characters are read). platform mac or other returns that platform's keys only. Read-only.")
+            .ro()
+            .cmd("help.shortcuts")
+            .with(schema(json!({
+                "query": { "type": "string", "maxLength": 10000, "description": "Words to search for, e.g. \"zoom\" or \"ctrl+shift\"." },
+                "platform": { "type": "string", "enum": ["mac", "other", "both"], "description": "Whose keys to return (default both)." },
+            }), &[])),
+        t("help_guide", "User guide", "PdfCraft's user guide for people (docs/user, bundled offline; the app shows it under Help → User guide). Without arguments lists the pages (page id and title); page returns one page's Markdown (ids such as getting-started, viewing, editing, comments, forms, signing, organizing, create-and-export, security, ocr, accessibility, preferences, web-app, automation, keyboard; a file name like viewing.md works too); query returns the lines containing every word (page, 1-based line, text), at most limit (default 50). Read-only.")
+            .ro()
+            .cmd("help.user_guide")
+            .with(schema(json!({
+                "page": { "type": "string", "maxLength": 200, "description": "A page id from the list." },
+                "query": { "type": "string", "maxLength": 10000, "description": "Words to search the guide for." },
+                "limit": { "type": "integer", "minimum": 1, "maximum": 500 },
+            }), &[])),
         t("command_run", "Run a command", "Run a registry command through its headless tool. Pass that tool's arguments in params (see command_list). Unknown params are ignored with warnings; path confinement still applies.")
             .destructive().with(schema(json!({"id":{"type":"string"},"params":{"type":"object"}}), &["id"])),
         t("command_batch", "Run several commands", "Run steps in order (at most 1000). Returns completed/failed counts and per-step ok/result/error; stop_on_error defaults to true.")

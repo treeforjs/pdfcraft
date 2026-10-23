@@ -14,6 +14,9 @@ pub fn tab_strip(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
         .frame(egui::Frame::NONE.fill(t.titlebar).inner_margin(egui::Margin { left, right: 10, top: 0, bottom: 0 }))
         .show(ui, |ui| {
             let full = ui.max_rect();
+            if let Some(info) = app.win.info.get_mut(&pdfcraft_engine::windows::WindowId::MAIN) {
+                info.strip = Some(full);
+            }
             let drag = ui.interact(full, ui.id().with("titledrag"), Sense::click_and_drag());
             if drag.drag_started() {
                 ui.ctx().send_viewport_cmd(egui::ViewportCommand::StartDrag);
@@ -36,7 +39,9 @@ pub fn tab_strip(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
                 // Tabs shrink to share the strip (names end in "…") and scroll only once they reach
                 // their narrowest; then arrows either side say so and step through them.
                 let mut natural: Vec<f32> = Vec::with_capacity(app.views.len() + 1);
-                for v in &app.views {
+                // Tabs moved to other windows show there, not here.
+                let main: Vec<usize> = (0..app.views.len()).filter(|&i| app.windows.is_empty() || app.in_main(i)).collect();
+                for v in main.iter().filter_map(|&i| app.views.get(i)) {
                     if let Some(doc) = app.session.get(v.id) {
                         natural.push(tab_natural_width(ui, &t, &doc.display_name()));
                     }
@@ -73,18 +78,22 @@ pub fn tab_strip(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
                     }
                     let out = area.show(ui, |ui| {
                         ui.horizontal_centered(|ui| {
-                            for i in 0..app.views.len() {
-                                let Some(doc) = app.session.get(app.views[i].id) else { continue };
+                            for &i in &main {
+                                let Some(view) = app.views.get(i) else { continue };
+                                let key = view.key;
+                                let Some(doc) = app.session.get(view.id) else { continue };
                                 let (name, dirty) = (doc.display_name(), doc.dirty);
                                 // A tab showing the document's title names its file on hover.
-                                let file = (name != doc.name).then_some(doc.name.as_str());
-                                let response = tab(ui, &t, "file-text", &name, file, dirty, app.active == Some(i), &mut close, i, cap);
+                                let file = (name != doc.name).then(|| doc.name.clone());
+                                let response = tab(ui, &t, "file-text", &name, file.as_deref(), dirty, app.active == Some(i), &mut close, i, cap);
                                 if changed && app.active == Some(i) && !app.combine_showing() {
                                     response.scroll_to_me(Some(Align::Center));
                                 }
                                 if response.clicked() {
                                     app.active = Some(i);
                                 }
+                                crate::windows_ui::tab_context_menu(app, &response, key);
+                                crate::windows_ui::tab_drag(app, ui, &response, key, pdfcraft_engine::windows::WindowId::MAIN, &name);
                             }
                             if let Some(i) = close {
                                 app.request_close_tab(i);
@@ -132,7 +141,7 @@ pub fn tab_strip(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
                     let response = icons::button(ui, icon, 28.0, false, &tip);
                     egui::Popup::menu(&response).show(|ui| theme_menu(app, ui));
                     if icons::button(ui, "circle-help", 28.0, false, tl!("Keyboard shortcuts")).clicked() {
-                        app.dialog = Some(Dialog::Shortcuts);
+                        app.open_shortcuts();
                     }
                 });
             });
@@ -158,7 +167,7 @@ fn theme_menu(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
 /// A tab's chrome around its name: the icon on the left, the close button on the right.
 const TAB_CHROME: f32 = 64.0;
 /// The narrowest a tab shrinks to before the strip scrolls: room for most of a name.
-const TAB_MIN_WIDTH: f32 = 180.0;
+pub(crate) const TAB_MIN_WIDTH: f32 = 180.0;
 /// The arrows either side of tabs that don't fit.
 const TAB_ARROW: f32 = 24.0;
 
@@ -174,12 +183,12 @@ fn arrow(ui: &mut egui::Ui, icon: &str, enabled: bool, tip: &str) -> bool {
 }
 
 /// A tab name, at most 28 characters (longer names end in "…").
-fn tab_name(name: &str) -> String {
+pub(crate) fn tab_name(name: &str) -> String {
     if name.chars().count() > 28 { format!("{}…", name.chars().take(27).collect::<String>()) } else { name.to_string() }
 }
 
 /// The width a tab takes when nothing has to shrink.
-fn tab_natural_width(ui: &egui::Ui, t: &Tokens, name: &str) -> f32 {
+pub(crate) fn tab_natural_width(ui: &egui::Ui, t: &Tokens, name: &str) -> f32 {
     let label = crate::bidi::visual(&tab_name(name)).into_owned();
     ui.fonts_mut(|f| f.layout_no_wrap(label, theme::regular(13.0), t.text).size().x) + TAB_CHROME
 }
@@ -187,7 +196,7 @@ fn tab_natural_width(ui: &egui::Ui, t: &Tokens, name: &str) -> f32 {
 /// The widest any tab may be so that tabs of `natural` widths, `gap` apart, fit in `budget`:
 /// narrow tabs keep their width and the rest share what is left equally (as browsers do).
 /// `None` when every tab fits as it is; never below `min` (then the strip scrolls).
-fn tab_cap(natural: &[f32], budget: f32, gap: f32, min: f32) -> Option<f32> {
+pub(crate) fn tab_cap(natural: &[f32], budget: f32, gap: f32, min: f32) -> Option<f32> {
     let n = natural.len();
     if n == 0 {
         return None;
@@ -209,7 +218,7 @@ fn tab_cap(natural: &[f32], budget: f32, gap: f32, min: f32) -> Option<f32> {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn tab(
+pub(crate) fn tab(
     ui: &mut egui::Ui,
     t: &Tokens,
     icon: &str,
@@ -234,7 +243,9 @@ fn tab(
     let label = crate::bidi::visual(&label).into_owned();
     let text_w = ui.fonts_mut(|f| f.layout_no_wrap(label.clone(), font.clone(), t.text).size().x);
     let width = cap.map_or(text_w + TAB_CHROME, |cap| (text_w + TAB_CHROME).min(cap));
-    let (rect, resp) = ui.allocate_exact_size(vec2(width, 30.0), Sense::click());
+    // Dragged out of the strip, a tab moves to a window of its own (see `windows_ui`).
+    let sense = if crate::windows_ui::SUPPORTED { Sense::click_and_drag() } else { Sense::click() };
+    let (rect, resp) = ui.allocate_exact_size(vec2(width, 30.0), sense);
     let a11y = if dirty { format!("{name} (edited)") } else { name.to_string() };
     resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, true, active, &a11y));
     let bg = if active {
@@ -378,8 +389,11 @@ fn main_menu(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
                     (RightPanel::Attachments, tl!("Attachments")),
                     (RightPanel::Signatures, tl!("Signatures")),
                     (RightPanel::Accessibility, tl!("Accessibility Checker")),
+                    (RightPanel::Tags, tl!("Tags")),
+                    (RightPanel::Order, tl!("Order")),
                     (RightPanel::Search, tl!("Search")),
                     (RightPanel::Compare, tl!("Compare")),
+                    (RightPanel::OutputPreview, tl!("Output preview")),
                 ] {
                     if ui.radio(app.right == Some(p), tl!(label)).clicked() {
                         app.choose_right_panel(Some(p));
@@ -397,6 +411,10 @@ pub fn right_rail(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
     let Some(doc) = app.session.get(id) else { return };
     let has_signatures = doc.is_signed();
     let has_check = app.a11y.report.as_ref().is_some_and(|(d, _)| *d == id);
+    let previewing = app.right == Some(RightPanel::OutputPreview);
+    let a11y_work = (app.left_open && app.left == crate::LeftPanel::Tool("accessibility"))
+        || matches!(app.right, Some(RightPanel::Tags | RightPanel::Order))
+        || app.quick_tool == crate::QuickTool::ReadingOrder;
     let (has_comments, has_outline, has_fields, has_layers, has_files) = (
         !doc.info.annotations.is_empty(),
         !doc.info.outline.is_empty(),
@@ -433,8 +451,17 @@ pub fn right_rail(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
             if has_check {
                 rail_button(ui, RightPanel::Accessibility, "accessibility", "Accessibility Checker", false);
             }
+            if previewing {
+                rail_button(ui, RightPanel::OutputPreview, "layers", "Output preview", false);
+            }
+            // The tag panels show while accessibility work is going on.
+            if a11y_work {
+                rail_button(ui, RightPanel::Tags, "tag", "Tags", false);
+                rail_button(ui, RightPanel::Order, "list-ordered", "Order", false);
+            }
 
             // Page navigation cluster at the bottom (as in Acrobat's rail).
+            let page_input = app.page_input_id();
             let view = &mut app.views[index];
             let mut page_display = None;
             ui.with_layout(Layout::bottom_up(Align::Center), |ui| {
@@ -473,7 +500,7 @@ pub fn right_rail(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
                 }
                 ui.label(egui::RichText::new(page_count.to_string()).font(theme::regular(11.0)).color(t.text_muted));
                 let edit = egui::TextEdit::singleline(&mut view.page_input)
-                    .id(egui::Id::new("page-input"))
+                    .id(page_input)
                     .desired_width(34.0)
                     .horizontal_align(Align::Center)
                     .font(theme::medium(12.0))

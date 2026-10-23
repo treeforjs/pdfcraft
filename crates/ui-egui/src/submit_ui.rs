@@ -1,18 +1,42 @@
 //! Submit Form: a button's submit-form action (or `this.submitForm`) asks first. The dialog
 //! names the address and what would be sent; Send posts it, Save Data As writes it to a file
-//! instead, and Cancel sends nothing.
+//! instead, and Cancel sends nothing. Sending runs on a background thread with a time limit and
+//! a capped reply; an FDF or XFDF reply (a server filling fields back) is imported. A `mailto:`
+//! submission is handed to the email app with the data saved to attach (PdfCraft sends no
+//! email itself). The internet access settings decide which sites may be sent to.
 
 use std::sync::{Arc, Mutex};
 
 use egui::{Align, Color32, Layout};
 use pdfcraft_engine::DocId;
-use pdfcraft_engine::submit::{Reply, Submission};
+use pdfcraft_engine::submit::{Email, Payload, Reply, SendOptions, Submission, Target};
 
 use crate::theme::{self, Tokens};
 use crate::{PdfCraftApp, widgets};
 
 /// Where a background send leaves its result.
 type SendSlot = Arc<Mutex<Option<Result<Reply, String>>>>;
+
+/// Sends a payload and returns the server's reply ([`pdfcraft_engine::submit::send_with`] unless
+/// a test sets [`PdfCraftApp::submit_sender`]).
+pub type Sender = Arc<dyn Fn(&Payload) -> Result<Reply, String> + Send + Sync>;
+
+/// The largest reply read, and the longest wait for it.
+pub const SEND_OPTIONS: SendOptions = SendOptions { timeout_seconds: pdfcraft_engine::submit::TIMEOUT_SECONDS, max_response: 1 << 20 };
+
+/// Whether a reply is form data to import: its type, or its first bytes.
+pub fn reply_data_name(reply: &Reply) -> Option<&'static str> {
+    let ct = reply.content_type.to_ascii_lowercase();
+    let head: Vec<u8> = reply.body.iter().copied().skip_while(u8::is_ascii_whitespace).take(256).collect();
+    let text = String::from_utf8_lossy(&head).to_ascii_lowercase();
+    if ct.contains("vnd.fdf") || head.starts_with(b"%FDF") {
+        Some("reply.fdf")
+    } else if ct.contains("vnd.adobe.xfdf") || ((text.starts_with("<?xml") || text.starts_with("<xfdf")) && text.contains("<xfdf")) {
+        Some("reply.xfdf")
+    } else {
+        None
+    }
+}
 
 /// A pending Submit Form request.
 pub struct SubmitDraft {
@@ -27,28 +51,35 @@ pub struct SubmitDraft {
     /// A send in progress: its result, once it arrives.
     pub sending: Option<SendSlot>,
     pub error: Option<String>,
+    /// A `mailto:` submission: the email to hand to the email app.
+    pub email: Option<Email>,
 }
 
 impl PdfCraftApp {
     /// Ask whether to submit document `doc`'s form as `submission` (from `button`, or a script).
     pub fn start_submit(&mut self, doc: DocId, button: &str, submission: Submission) {
-        let problem = pdfcraft_engine::submit::destination(&submission.url).err().or_else(|| {
-            // Internet access settings that block the host: Save Data As still works.
-            let access = self.session.check_url(&submission.url);
-            (access.decision == pdfcraft_engine::url_access::UrlDecision::Block).then(|| format!("Not sent: {}.", access.reason))
-        });
-        #[cfg(target_arch = "wasm32")]
-        let problem = problem.or_else(|| Some("Sending forms isn't available in the browser version. Save the data instead.".to_string()));
+        let (problem, email) = match pdfcraft_engine::submit::target(&submission.url) {
+            Ok(Target::Email(e)) => (None, Some(e)),
+            Ok(Target::Web(_)) => {
+                // Internet access settings that block the host: Save Data As still works.
+                let access = self.session.check_url(&submission.url);
+                let blocked = (access.decision == pdfcraft_engine::url_access::UrlDecision::Block).then(|| format!("Not sent: {}.", access.reason));
+                #[cfg(target_arch = "wasm32")]
+                let blocked = blocked.or_else(|| Some("Sending forms isn't available in the browser version. Save the data instead.".to_string()));
+                (blocked, None)
+            }
+            Err(e) => (Some(e), None),
+        };
         let fields =
             self.session.get(doc).map(|d| d.form.iter().filter(|f| submission.sends(f)).map(|f| f.name.clone()).collect()).unwrap_or_default();
-        self.submit_draft = Some(SubmitDraft { doc, button: button.to_string(), submission, problem, fields, sending: None, error: None });
+        self.submit_draft = Some(SubmitDraft { doc, button: button.to_string(), submission, problem, fields, sending: None, error: None, email });
         self.dialog = Some(crate::Dialog::SubmitForm);
     }
 
     /// Send the pending submission (Send in the dialog): in the background, unless `run_inline`.
     pub fn send_submission(&mut self) {
         let Some(d) = self.submit_draft.as_ref() else { return };
-        if d.sending.is_some() || d.problem.is_some() {
+        if d.sending.is_some() || d.problem.is_some() || d.email.is_some() {
             return;
         }
         let payload = match self.session.submission(d.doc, &d.submission) {
@@ -63,8 +94,13 @@ impl PdfCraftApp {
         let slot: SendSlot = Arc::new(Mutex::new(None));
         let result = slot.clone();
         let ctx = self.ctx.clone();
+        let sender = self.submit_sender.clone();
         let task = move || {
-            let done = pdfcraft_engine::guard(|| pdfcraft_engine::submit::send(&payload)).and_then(|r| r);
+            let done = pdfcraft_engine::guard(|| match &sender {
+                Some(send) => send(&payload),
+                None => pdfcraft_engine::submit::send_with(&payload, &SEND_OPTIONS),
+            })
+            .and_then(|r| r);
             if let Ok(mut slot) = result.lock() {
                 *slot = Some(done);
             }
@@ -111,11 +147,32 @@ impl PdfCraftApp {
             .unwrap_or_default();
         match done {
             Ok(reply) if (200..300).contains(&reply.status) => {
-                self.submit_draft = None;
+                let doc = self.submit_draft.take().map(|d| d.doc);
                 if self.dialog == Some(crate::Dialog::SubmitForm) {
                     self.dialog = None;
                 }
-                self.notify_fmt("The form was sent to {host}.", &[("host", &host)]);
+                match (doc, reply_data_name(&reply)) {
+                    (Some(doc), Some(name)) if !reply.truncated => {
+                        let edit = pdfcraft_engine::Edit::ImportData { name: name.to_string(), bytes: Arc::new(reply.body) };
+                        match self.session.apply(doc, edit) {
+                            Ok(()) => {
+                                if let (Some(i), Some(d)) = (self.views.iter().position(|v| v.id == doc), self.session.get(doc)) {
+                                    let info = d.info.clone();
+                                    if let Some(v) = self.views.get_mut(i) {
+                                        v.document_changed(&info);
+                                    }
+                                }
+                                self.notify_fmt("The form was sent to {host}, which filled in its answer.", &[("host", &host)]);
+                            }
+                            Err(e) => self.notify_fmt(
+                                "The form was sent to {host}; its answer couldn't be imported: {e}",
+                                &[("host", &host), ("e", &e.to_string())],
+                            ),
+                        }
+                    }
+                    (_, Some(_)) => self.notify_fmt("The form was sent to {host}; its answer was too large to import.", &[("host", &host)]),
+                    _ => self.notify_fmt("The form was sent to {host}.", &[("host", &host)]),
+                }
             }
             Ok(reply) => {
                 if let Some(d) = self.submit_draft.as_mut() {
@@ -130,6 +187,24 @@ impl PdfCraftApp {
                 if let Some(d) = self.submit_draft.as_mut() {
                     d.sending = None;
                     d.error = Some(e);
+                }
+            }
+        }
+    }
+
+    /// A `mailto:` submission: open the email app with the address and subject, and save the
+    /// data to attach (Acrobat attaches it itself; a `mailto:` link can't carry a file).
+    pub fn email_submission(&mut self) {
+        let Some(url) = self.submit_draft.as_ref().map(|d| d.submission.url.clone()) else { return };
+        match pdfcraft_engine::links::document_url(&url) {
+            Ok(url) => {
+                self.open_url(&url);
+                self.save_submission();
+                self.notify_tr("Attach the saved form data to the email");
+            }
+            Err(e) => {
+                if let Some(d) = self.submit_draft.as_mut() {
+                    d.error = Some(e.to_string());
                 }
             }
         }
@@ -162,12 +237,30 @@ pub(crate) fn dialog(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> bo
     ui.label(egui::RichText::new(tl!("Submit Form")).font(theme::semibold(18.0)));
     ui.add_space(8.0);
     let url = d.submission.url.trim();
-    let host = pdfcraft_engine::submit::destination(url).ok().and_then(|u| u.host_str().map(str::to_string));
-    match &host {
-        Some(h) => ui.label(crate::i18n::fmt(tl!("This form wants to send its data to {host}:"), &[("host", h)])),
-        None => ui.label(tl!("This form wants to send its data to:")),
-    };
-    ui.add(egui::Label::new(egui::RichText::new(url).font(theme::regular(12.0)).color(t.text_muted)).wrap());
+    if let Some(e) = &d.email {
+        ui.label(tl!("This form wants to email its data:"));
+        egui::Grid::new("submit-email").num_columns(2).spacing([10.0, 4.0]).show(ui, |ui| {
+            for (label, list) in [(tl!("To"), &e.to), (tl!("Cc"), &e.cc), (tl!("Bcc"), &e.bcc)] {
+                if !list.is_empty() {
+                    ui.label(egui::RichText::new(label).color(t.text_muted));
+                    ui.add(egui::Label::new(list.join(", ")).wrap());
+                    ui.end_row();
+                }
+            }
+            if let Some(subject) = &e.subject {
+                ui.label(egui::RichText::new(tl!("Subject")).color(t.text_muted));
+                ui.add(egui::Label::new(subject.as_str()).wrap());
+                ui.end_row();
+            }
+        });
+    } else {
+        let host = pdfcraft_engine::submit::destination(url).ok().and_then(|u| u.host_str().map(str::to_string));
+        match &host {
+            Some(h) => ui.label(crate::i18n::fmt(tl!("This form wants to send its data to {host}:"), &[("host", h)])),
+            None => ui.label(tl!("This form wants to send its data to:")),
+        };
+        ui.add(egui::Label::new(egui::RichText::new(url).font(theme::regular(12.0)).color(t.text_muted)).wrap());
+    }
     ui.add_space(6.0);
     let lang = crate::i18n::current();
     let count = crate::i18n::trn(lang, d.fields.len() as u64, "{n} field", "{n} fields");
@@ -195,11 +288,24 @@ pub(crate) fn dialog(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> bo
         ui.add_space(4.0);
         ui.add(egui::Label::new(egui::RichText::new(message.as_str()).color(danger)).wrap());
     }
-    let (can_send, sending) = (d.problem.is_none(), d.sending.is_some());
-    let (mut send, mut save, mut close) = (false, false, false);
+    if d.email.is_some() {
+        ui.add_space(4.0);
+        ui.add(
+            egui::Label::new(
+                egui::RichText::new(tl!("PdfCraft doesn't send email itself: it opens your email app and saves the data for you to attach."))
+                    .font(theme::regular(11.5))
+                    .color(t.text_muted),
+            )
+            .wrap(),
+        );
+    }
+    let (can_send, sending, email) = (d.problem.is_none(), d.sending.is_some(), d.email.is_some());
+    let (mut send, mut save, mut close, mut mail) = (false, false, false, false);
     ui.add_space(12.0);
     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-        if ui.add_enabled_ui(can_send && !sending, |ui| widgets::pill_button(ui, tl!("Send"), true)).inner.clicked() {
+        if email {
+            mail = widgets::pill_button(ui, tl!("Open email app"), true).clicked();
+        } else if ui.add_enabled_ui(can_send && !sending, |ui| widgets::pill_button(ui, tl!("Send"), true)).inner.clicked() {
             send = true;
         }
         if ui.add_enabled_ui(!sending, |ui| widgets::pill_button(ui, tl!("Save Data As…"), false)).inner.clicked() {
@@ -215,6 +321,10 @@ pub(crate) fn dialog(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> bo
     });
     if send {
         app.send_submission();
+    }
+    if mail {
+        app.email_submission();
+        return app.submit_draft.is_none();
     }
     if save {
         app.save_submission();

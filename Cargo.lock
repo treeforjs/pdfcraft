@@ -719,8 +719,6 @@ dependencies = [
 [[package]]
 name = "boa_string"
 version = "0.22.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "30bf86c2bcff5bf2547acbfc516c5d3108ca527cb131511d749bf6fbef762c0e"
 dependencies = [
  "fast-float2",
  "itoa",
@@ -1192,10 +1190,32 @@ dependencies = [
 ]
 
 [[package]]
-name = "ctutils"
-version = "0.4.2"
+name = "cryptoki"
+version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d5515a3834141de9eafb9717ad39eea8247b5674e6066c404e8c4b365d2a29e"
+checksum = "625cf4599c43d69a16996ce2573fc80745a0b0300c962f0bfa11d55b6cab2b2d"
+dependencies = [
+ "bitflags 2.13.2",
+ "cryptoki-sys",
+ "libloading",
+ "log",
+ "secrecy",
+]
+
+[[package]]
+name = "cryptoki-sys"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f1fd850498411e4057f1cba79e6e2bc7cbe960544c1046ab46d4685c403a1121"
+dependencies = [
+ "libloading",
+]
+
+[[package]]
+name = "ctutils"
+version = "0.4.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "38d28fb6aa7dd680b3ffd1a3e64e115c177bdba63c0ae7f9cd48129ff05c4fa0"
 dependencies = [
  "cmov",
  "subtle",
@@ -2350,6 +2370,7 @@ version = "0.3.0"
 dependencies = [
  "fearless_simd",
  "hayro-ccitt",
+ "image",
 ]
 
 [[package]]
@@ -2359,6 +2380,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c75ab947623ef4ccaa7acf0579edf7cbb5a73838e3839a7be73335e522f433a1"
 dependencies = [
  "fearless_simd",
+ "image",
+ "moxcms",
 ]
 
 [[package]]
@@ -3573,6 +3596,7 @@ dependencies = [
  "egui",
  "fmv-macos-events",
  "log",
+ "pdfcraft-automation",
  "pdfcraft-render",
  "pdfcraft-ui-egui",
  "pollster 1.0.1",
@@ -3659,6 +3683,7 @@ name = "pdfcraft-cos"
 version = "0.5.0"
 dependencies = [
  "hayro-syntax",
+ "memchr",
  "pdfcraft-crypt",
  "pdfcraft-filters",
  "proptest",
@@ -3707,16 +3732,19 @@ dependencies = [
  "pdfcraft-model",
  "thiserror 2.0.21",
  "unicode-bidi",
+ "unicode-normalization",
 ]
 
 [[package]]
 name = "pdfcraft-engine"
 version = "0.5.0"
 dependencies = [
+ "base64 0.22.1",
  "chrono",
  "icu_properties",
  "idna",
  "image",
+ "js-sys",
  "pdfcraft-a11y",
  "pdfcraft-annot",
  "pdfcraft-compare",
@@ -3762,6 +3790,7 @@ version = "0.5.0"
 dependencies = [
  "flate2",
  "hayro-ccitt",
+ "hayro-jbig2",
  "proptest",
  "thiserror 2.0.21",
  "weezl 0.2.1",
@@ -3825,6 +3854,8 @@ dependencies = [
  "ocrs",
  "pdfcraft-fonts",
  "rten",
+ "rten-imageproc",
+ "sha2",
  "thiserror 2.0.21",
 ]
 
@@ -3833,6 +3864,8 @@ name = "pdfcraft-optimize"
 version = "0.5.0"
 dependencies = [
  "hayro-ccitt",
+ "hayro-jbig2",
+ "hayro-jpeg2000",
  "image",
  "pdfcraft-annot",
  "pdfcraft-content",
@@ -3858,6 +3891,12 @@ dependencies = [
 [[package]]
 name = "pdfcraft-platform"
 version = "0.5.0"
+dependencies = [
+ "base64 0.22.1",
+ "cryptoki",
+ "pdfcraft-cos",
+ "pdfcraft-sign",
+]
 
 [[package]]
 name = "pdfcraft-preflight"
@@ -3910,6 +3949,7 @@ dependencies = [
  "kurbo 0.13.1",
  "log",
  "lopdf",
+ "memchr",
  "pdfcraft-content",
  "pdfcraft-cos",
  "pdfcraft-filters",
@@ -3953,6 +3993,7 @@ dependencies = [
  "sha2",
  "sha3",
  "thiserror 2.0.21",
+ "zeroize",
 ]
 
 [[package]]
@@ -5054,6 +5095,15 @@ dependencies = [
  "der",
  "hybrid-array",
  "subtle",
+ "zeroize",
+]
+
+[[package]]
+name = "secrecy"
+version = "0.10.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e891af845473308773346dc847b2c23ee78fe442e0472ac50e22a18a93d3ae5a"
+dependencies = [
  "zeroize",
 ]
 

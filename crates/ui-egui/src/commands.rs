@@ -17,6 +17,9 @@ impl PdfCraftApp {
         if self.combine_showing() && matches!(spec.needs, commands::Needs::Undo | commands::Needs::Redo) {
             return self.combine_can_undo(spec.needs == commands::Needs::Undo);
         }
+        if let Some(enabled) = self.window_command_enabled(spec.id) {
+            return enabled && commands::is_enabled(spec, &self.session, self.active_ids().map(|(_, id)| id));
+        }
         commands::is_enabled(spec, &self.session, self.active_ids().map(|(_, id)| id))
             && (spec.needs != commands::Needs::TwoPageView || self.active.and_then(|i| self.views.get(i)).is_some_and(crate::DocView::cover_applies))
     }
@@ -39,6 +42,10 @@ impl PdfCraftApp {
     fn execute_unguarded(&mut self, id: &str) -> bool {
         let Some(spec) = commands::command(id) else { return false };
         if !self.command_enabled(spec) {
+            if let Some(why) = self.window_refusal(spec.id) {
+                self.notify(why);
+                return false;
+            }
             let why = match spec.needs {
                 commands::Needs::Undo => tl!("Nothing to undo").to_string(),
                 commands::Needs::Redo => tl!("Nothing to redo").to_string(),
@@ -98,12 +105,21 @@ impl PdfCraftApp {
                 }
             }
             "file.close_all" => self.close_all(),
+            "window.new" | "window.move_tab" | "window.move_to_main" | "window.close" => {
+                self.run_window_command(id);
+            }
             "file.revert" => self.dialog = Some(Dialog::Revert),
+            "file.recover" => self.recover_command(),
+            "file.autosave_now" => self.autosave_command(),
             "file.properties" => self.dialog = Some(Dialog::Properties(PropsTab::Description)),
             "protect.properties" => self.dialog = Some(Dialog::Properties(PropsTab::Security)),
             "protect.password" => {
                 self.protect_draft = Default::default();
                 self.dialog = Some(Dialog::Protect);
+            }
+            "protect.certificate" => {
+                self.cert_draft = Default::default();
+                self.dialog = Some(Dialog::ProtectCertificates);
             }
             "protect.remove" => {
                 if self.apply_edit(Edit::RemoveProtection) {
@@ -135,7 +151,7 @@ impl PdfCraftApp {
             "view.focus_page_input" => {
                 if let (Some(ctx), Some(view)) = (self.ctx.clone(), active.and_then(|i| self.views.get(i))) {
                     // The page box in the toolbar (chrome.rs); select its number so typing replaces it.
-                    let id = egui::Id::new("page-input");
+                    let id = self.page_input_id();
                     ctx.memory_mut(|m| m.request_focus(id));
                     let mut state = egui::TextEdit::load_state(&ctx, id).unwrap_or_default();
                     let len = view.page_input.chars().count();
@@ -244,6 +260,8 @@ impl PdfCraftApp {
                 }
             }
             "page.insert" => self.insert_from_file_dialog(),
+            "page.insert_clipboard" => self.insert_from_clipboard(false),
+            "page.insert_clipboard_before" => self.insert_from_clipboard(true),
             "page.replace" => self.replace_pages_dialog(),
             "edit.header_footer"
             | "edit.watermark"
@@ -287,17 +305,48 @@ impl PdfCraftApp {
             "a11y.check" => self.start_accessibility_check(),
             "ocr.recognize" => self.dialog = Some(Dialog::RecognizeText),
             "tools.js_console" => self.dialog = Some(Dialog::JsConsole),
+            "tools.js_debugger" => self.open_js_debugger(),
+            "tools.page_actions" => {
+                if let Some((i, _)) = self.active_ids() {
+                    let page = self.views[i].current;
+                    self.open_page_actions(page);
+                }
+            }
             "tools.document_js" => {
                 self.doc_js = Default::default();
                 self.dialog = Some(Dialog::DocumentJs);
             }
             "app.preferences" => self.dialog = Some(Dialog::Preferences),
+            "app.trust_manager" => {
+                self.prefs_ui.page = crate::prefs_ui::Page::Security;
+                self.prefs_ui.query.clear();
+                self.dialog = Some(Dialog::Preferences);
+            }
+            "tools.document_actions" => self.open_document_actions(),
+            "redact.code_sets" => {
+                self.code_sets_draft = Default::default();
+                self.dialog = Some(Dialog::RedactCodeSets);
+            }
+            // Preferences ▸ General, where the interface language is chosen.
+            "app.language" => {
+                self.prefs_ui.page = crate::prefs_ui::Page::General;
+                self.prefs_ui.query.clear();
+                self.dialog = Some(Dialog::Preferences);
+            }
             "ocr.recognize_batch" => self.ocr_files_dialog(),
             "edit.edit_text" => {
                 self.quick_tool = crate::QuickTool::EditText;
                 self.left = crate::LeftPanel::Tool("edit");
                 self.left_open = true;
                 self.notify_tr("Click text or an image to edit it");
+            }
+            object if crate::object_ui::command_change(object).is_some() => self.object_command(object),
+            "edit.list.bulleted" | "edit.list.numbered" | "edit.list.remove" | "edit.list.indent" | "edit.list.outdent" => self.list_command(id),
+            "edit.edit_object" => {
+                self.quick_tool = crate::QuickTool::EditObject;
+                self.left = crate::LeftPanel::Tool("edit");
+                self.left_open = true;
+                self.notify_tr("Click an object to select it, or drag around several");
             }
             "edit.advanced_search" => {
                 if let Some(i) = self.active {
@@ -307,8 +356,36 @@ impl PdfCraftApp {
                     self.right = Some(crate::RightPanel::Search);
                 }
             }
+            "edit.search_folder" => {
+                if let Some(i) = self.active {
+                    let f = self.views[i].find.get_or_insert_with(Default::default);
+                    f.in_panel = true;
+                    f.focus = true;
+                }
+                self.adv_search.scope = crate::search_ui::Scope::Folder;
+                self.right = Some(crate::RightPanel::Search);
+            }
+            "bookmark.properties" => match self.bookmark_for_current_page() {
+                Some(path) => self.open_bookmark_props(path),
+                None => self.notify_tr("Select a bookmark first"),
+            },
+            "bookmark.from_structure" => {
+                self.from_structure.error = None;
+                self.dialog = Some(Dialog::BookmarksFromStructure);
+            }
+            "page.select_range" => {
+                self.select_pages.error = None;
+                self.dialog = Some(Dialog::SelectPages);
+            }
+            "file.associated_files" => self.right = Some(crate::RightPanel::Attachments),
+            "actions.custom_commands" => self.open_custom_commands(),
             "a11y.report" => self.show_accessibility_report(),
             "a11y.alt_text" => self.start_alt_text(),
+            "a11y.tags" | "a11y.order" | "a11y.tag_properties" | "a11y.new_tag" | "a11y.delete_tag" | "a11y.artifact" => self.tags_command(id),
+            "a11y.reading_order" => self.execute_reading_order_tool(),
+            "a11y.autotag" => self.open_autotag(false),
+            "a11y.autotag_fields" => self.open_autotag(true),
+            "actions.make_accessible" => self.start_make_accessible(),
             "a11y.reading_options" => self.dialog = Some(Dialog::Properties(crate::PropsTab::Advanced)),
             "export.all_images" => self.dialog = Some(Dialog::Export(crate::export_ui::ExportKind::AllImages)),
             "edit.text" => {
@@ -383,8 +460,21 @@ impl PdfCraftApp {
             }
             "comment.export" => self.export_data_dialog(true, false),
             "comment.summarize" => self.dialog = Some(Dialog::SummarizeComments),
-            "sign.digital" | "sign.certify" => {
+            "comment.open_popups" | "comment.close_popups" => {
+                let open = id == "comment.open_popups";
+                let edit = active.and_then(|i| self.session.get(self.views[i].id)).and_then(|d| d.all_popups_edit(None, open));
+                match edit {
+                    Some(edit) => {
+                        self.apply_edit(edit);
+                    }
+                    None if open => self.notify_tr("No pop-ups to open"),
+                    None => self.notify_tr("No pop-ups are open"),
+                }
+            }
+            "sign.digital" | "sign.certify" | "sign.token" => {
                 let certify = id == "sign.certify";
+                // Sign with a smart card or token: the same area, then the token step.
+                self.sign_with_token = id == "sign.token";
                 self.quick_tool = crate::QuickTool::SignArea { certify };
                 self.notify_tr("Drag to draw the area where the signature should appear.");
             }
@@ -398,7 +488,24 @@ impl PdfCraftApp {
                 self.right = Some(RightPanel::Signatures);
             }
             "sign.panel" => self.right = Some(RightPanel::Signatures),
-            "sign.timestamp_servers" => self.open_signature_workflow(crate::timestamp_ui::SignatureWorkflowMode::Servers),
+            "sign.timestamp_servers" | "sign.trusted_certificates" | "sign.appearances" => {
+                self.prefs_ui.page = crate::prefs_ui::Page::Signatures;
+                self.dialog = Some(Dialog::Preferences);
+            }
+            "sign.ltv_enable" => self.open_signature_workflow(crate::timestamp_ui::SignatureWorkflowMode::Ltv),
+            "sign.compare_signed_version" => {
+                let field = active.and_then(|i| self.session.get(self.views[i].id)).and_then(|d| {
+                    let mut sigs: Vec<_> = d.signatures.iter().filter(|s| s.signed).collect();
+                    sigs.sort_by_key(|s| s.revision);
+                    let signed: Vec<&str> = sigs.iter().map(|s| s.field.as_str()).collect();
+                    // The signature to compare: the one expanded in the Signatures panel, else the latest.
+                    signed.iter().rev().find(|f| self.sig_expanded.iter().any(|e| e == **f)).or(signed.last()).map(|f| f.to_string())
+                });
+                match field {
+                    Some(f) => self.compare_signed_with_current(&f),
+                    None => self.notify_tr("This document has no signatures."),
+                }
+            }
             "sign.timestamp" => self.open_signature_workflow(crate::timestamp_ui::SignatureWorkflowMode::Timestamp),
             "sign.embed_evidence" => self.open_signature_workflow(crate::timestamp_ui::SignatureWorkflowMode::Evidence),
             "sign.verification_options" => self.open_signature_workflow(crate::timestamp_ui::SignatureWorkflowMode::Verify),
@@ -422,6 +529,7 @@ impl PdfCraftApp {
             "page.copy" => self.copy_pages(false),
             "page.cut" => self.copy_pages(true),
             "page.paste" => self.paste_pages(),
+            "comment.show_all_types" => self.set_hidden_comment_types(&[]),
             "comment.hide_all" => {
                 if let Some(i) = active {
                     let id = self.views[i].id;
@@ -433,10 +541,14 @@ impl PdfCraftApp {
             }
             "form.export_data" => self.export_data_dialog(false, true),
             "form.merge_data" => self.merge_data_dialog(),
-            "export.docx" => self.export_office_dialog(pdfcraft_engine::compare::OfficeFormat::Docx),
-            "export.html" => self.export_office_dialog(pdfcraft_engine::compare::OfficeFormat::Html),
-            "export.rtf" => self.export_office_dialog(pdfcraft_engine::compare::OfficeFormat::Rtf),
-            "export.xlsx" => self.export_office_dialog(pdfcraft_engine::compare::OfficeFormat::Xlsx),
+            "export.docx" => self.dialog = Some(Dialog::Export(crate::export_ui::ExportKind::Word)),
+            "export.html" => self.dialog = Some(Dialog::Export(crate::export_ui::ExportKind::Html)),
+            "export.rtf" => self.dialog = Some(Dialog::Export(crate::export_ui::ExportKind::Rtf)),
+            "export.xlsx" => self.dialog = Some(Dialog::Export(crate::export_ui::ExportKind::Excel)),
+            "export.pptx" => self.dialog = Some(Dialog::Export(crate::export_ui::ExportKind::PowerPoint)),
+            "export.svg" => self.dialog = Some(Dialog::Export(crate::export_ui::ExportKind::Svg)),
+            "export.accessible_text" => self.dialog = Some(Dialog::Export(crate::export_ui::ExportKind::AccessibleText)),
+            "ocr.enhance" => self.dialog = Some(Dialog::EnhanceScans),
             "form.prepare" => {
                 self.left = crate::LeftPanel::Tool("form");
                 self.left_open = true;
@@ -450,10 +562,14 @@ impl PdfCraftApp {
             }
             "form.detect" => self.detect_fields(),
             "doc.compare" => self.dialog = Some(Dialog::CompareFiles),
-            "standards.pdfa" => {
-                self.pdfa.issues = None;
-                self.dialog = Some(Dialog::PdfA);
-            }
+            "compare.side_by_side" => self.toggle_side_by_side(),
+            "compare.next_change" => self.side_by_side_step(true),
+            "compare.previous_change" => self.side_by_side_step(false),
+            "compare.sync_scroll" => self.side_by_side_sync(None),
+            "standards.pdfa" => self.open_standards(crate::standards_ui::StandardsTab::Pdfa),
+            "standards.pdfx" => self.open_standards(crate::standards_ui::StandardsTab::Pdfx),
+            "standards.pdfua" => self.open_standards(crate::standards_ui::StandardsTab::Pdfua),
+            "standards.validate" => self.open_standards(crate::standards_ui::StandardsTab::Syntax),
             "prepress.hairlines" => {
                 if let Some((_, id)) = self.active_ids() {
                     let pages: Vec<usize> = (0..self.session.get(id).map_or(0, |d| d.info.pages.len())).collect();
@@ -468,6 +584,17 @@ impl PdfCraftApp {
                         Err(e) => self.notify_error(e),
                     }
                 }
+            }
+            "prepress.output_preview" => self.open_output_preview(crate::output_preview_ui::PreviewMode::Separations),
+            "prepress.object_inspector" => self.open_output_preview(crate::output_preview_ui::PreviewMode::Inspector),
+            "prepress.color_warnings" => self.open_output_preview(crate::output_preview_ui::PreviewMode::Warnings),
+            "prepress.ink_manager" => self.open_ink_manager(),
+            "prepress.convert_colors" => self.dialog = Some(Dialog::ConvertColors),
+            "prepress.marks" => self.dialog = Some(Dialog::PrinterMarks),
+            "app.color_management" => {
+                self.prefs_ui.page = crate::prefs_ui::Page::Color;
+                self.prefs_ui.query.clear();
+                self.dialog = Some(Dialog::Preferences);
             }
             "preflight.run" => {
                 self.preflight.result = None;
@@ -527,6 +654,9 @@ impl PdfCraftApp {
             "create.multiple" => self.create_multiple_dialog(),
             "create.images" => self.create_from_images_dialog(),
             "create.clipboard" => self.create_from_clipboard(),
+            "create.screenshot" => self.capture_screen(crate::screen_capture::CaptureMode::Screen),
+            "create.screenshot_window" => self.capture_screen(crate::screen_capture::CaptureMode::Window),
+            "create.screenshot_region" => self.capture_screen(crate::screen_capture::CaptureMode::Region),
             "optimize.reduce" => self.reduce_file_size(),
             "page.duplicate" => {
                 self.apply_edit(Edit::DuplicatePages { pages: targets });
@@ -549,7 +679,8 @@ impl PdfCraftApp {
                 self.dialog = Some(Dialog::RotatePages);
             }
             "page.split" => self.dialog = Some(Dialog::Split),
-            "help.shortcuts" => self.dialog = Some(Dialog::Shortcuts),
+            "help.shortcuts" => self.open_shortcuts(),
+            "help.user_guide" => self.open_user_guide(),
             "help.about" => self.dialog = Some(Dialog::About),
             "help.check_updates" => self.check_for_updates(),
             _ => return false,

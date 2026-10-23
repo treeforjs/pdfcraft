@@ -378,12 +378,30 @@ pub struct Composer {
     pub formatted: bool,
     /// The last selected characters of `text` (sorted), which the format bar changes.
     pub selection: Option<(usize, usize)>,
+    /// Insert Text snapped to the page's text: the caret's size from the line (points).
+    pub caret_height: Option<f64>,
 }
 
 impl Composer {
     pub fn new(page: usize, at: [f64; 2], kind: ComposerKind, text: String) -> Composer {
-        Composer { page, at, kind, text, focus: true, rich: None, rich_loaded: false, formatted: false, selection: None }
+        Composer { page, at, kind, text, focus: true, rich: None, rich_loaded: false, formatted: false, selection: None, caret_height: None }
     }
+}
+
+/// How far (points) from text Insert Text snaps its caret.
+const CARET_SNAP: f32 = 24.0;
+
+/// Insert Text's insertion point near screen point `p`: the caret tip in user space (on the
+/// line's bottom, between two characters) and the line's height, or `None` away from text (or
+/// before the page's text has been extracted), where the caret goes where clicked.
+fn caret_snap(cx: &PageCx, p: Pos2) -> Option<([f64; 2], f64)> {
+    let text = cx.text.as_ref()?;
+    let (vx, vy) = cx.xf.screen_to_view(p);
+    let ip = text.insertion_point(vx, vy, CARET_SNAP)?;
+    let page = cx.info.pages.get(cx.page)?;
+    let u = page.view_to_user(ip.x, ip.bottom);
+    let h = f64::from(ip.bottom - ip.top);
+    (u.iter().all(|v| v.is_finite()) && h.is_finite() && h > 0.0).then(|| ([f64::from(u[0]), f64::from(u[1])], h.min(200.0)))
 }
 
 /// Per-document commenting state.
@@ -416,6 +434,8 @@ pub struct CommentView {
     pub sort: SortBy,
     /// Comment Properties was asked for from the panel: (page, index).
     pub props_request: Option<(usize, usize)>,
+    /// Show by type changed: the comment types to hide on the pages from now on.
+    pub hide_types_request: Option<Vec<String>>,
     /// Make Current Properties Default was asked for: (page, index).
     pub default_request: Option<(usize, usize)>,
     /// Replace Text: the struck-out text's quads while the replacement is typed.
@@ -427,6 +447,8 @@ pub struct CommentView {
     pub context_at: Option<(usize, [f64; 2])>,
     /// A one-shot tool just finished; the app returns to the Select tool unless pinned.
     pub tool_done: bool,
+    /// A pop-up note card being moved or resized.
+    pub popup_drag: Option<crate::popup_notes::PopupDrag>,
     /// The Comments panel's index, card list and card heights for this document.
     pub(crate) panel: crate::comments_panel::PanelCache,
 }
@@ -476,6 +498,10 @@ pub(crate) struct PageCx<'a> {
     pub allowed: bool,
     /// Comments are hidden (Hide all comments): nothing to select.
     pub hidden: bool,
+    /// Comment types hidden by Show by type: not selectable either.
+    pub hidden_types: &'a [String],
+    /// The page's text, for Insert Text's caret (only while that tool is chosen).
+    pub text: Option<std::sync::Arc<pdfcraft_render::PageText>>,
 }
 
 impl PageCx<'_> {
@@ -496,7 +522,9 @@ impl PageCx<'_> {
 
     /// Top-level comments on this page, in paint order.
     fn comments(&self) -> impl Iterator<Item = &Annotation> {
-        self.info.annotations.iter().filter(move |a| !self.hidden && a.page == self.page && a.in_reply_to.is_none() && a.subtype != "Popup")
+        self.info.annotations.iter().filter(move |a| {
+            !self.hidden && a.page == self.page && a.in_reply_to.is_none() && a.subtype != "Popup" && !self.hidden_types.contains(&a.subtype)
+        })
     }
 
     /// Where a comment is on screen: one rectangle, or one per marked line for text markup.
@@ -782,11 +810,31 @@ pub(crate) fn page_input(ui: &egui::Ui, resp: &egui::Response, cx: &PageCx<'_>, 
             if over_page {
                 ui.ctx().set_cursor_icon(egui::CursorIcon::Text);
             }
+            // The caret snaps to the gap between characters nearest the pointer (Acrobat's
+            // insertion point), and the preview shows where it will go.
+            let snapped = pointer.filter(|_| over_page).and_then(|p| caret_snap(cx, p));
+            if let Some((tip, h)) = snapped {
+                let s = cx.to_screen(tip);
+                let px = (h * cx.xf.rect.height() as f64 / f64::from(cx.xf.ph.max(1.0))) as f32;
+                let w = (px * 0.5).clamp(4.0, 24.0);
+                let color = egui::Color32::from_rgb(0x2b, 0x6c, 0xd6);
+                ui.painter().line_segment([s + egui::vec2(0.0, -px * 1.4), s], egui::Stroke::new(1.0, color.gamma_multiply(0.6)));
+                ui.painter().add(egui::Shape::convex_polygon(
+                    vec![s, s + egui::vec2(w / 2.0, w), s + egui::vec2(-w / 2.0, w)],
+                    color,
+                    egui::Stroke::NONE,
+                ));
+            }
             if resp.clicked()
                 && over_page
                 && let Some(p) = pointer
             {
-                cv.composer = Some(Composer::new(cx.page, cx.to_user(p), ComposerKind::Caret, String::new()));
+                let mut composer = Composer::new(cx.page, cx.to_user(p), ComposerKind::Caret, String::new());
+                if let Some((tip, h)) = snapped {
+                    composer.at = tip;
+                    composer.caret_height = Some(h);
+                }
+                cv.composer = Some(composer);
                 cv.selected = None;
             }
             true
@@ -1102,7 +1150,7 @@ pub(crate) fn composer(ctx: &egui::Context, view: &mut DocView, info: &DocInfo, 
         // Scrolled away: keep the draft until the page is back.
         return None;
     };
-    let cx = PageCx { page, xf: &xf, info, tool: QuickTool::Select, prefs, allowed: true, hidden: false };
+    let cx = PageCx { page, xf: &xf, info, tool: QuickTool::Select, prefs, allowed: true, hidden: false, hidden_types: &[], text: None };
     let anchor = cx.to_screen(c.at);
     let t = Tokens::get(ctx);
     let mut post = false;
@@ -1262,7 +1310,9 @@ pub(crate) fn composer(ctx: &egui::Context, view: &mut DocView, info: &DocInfo, 
         ComposerKind::Caret => {
             view.comments.tool_done = true;
             let [x, y] = c.at;
-            Some(new_comment(&cx, CommentTool::Caret, Shape::Caret { rect: [x - 4.0, y - 8.0, x + 4.0, y] }, text))
+            // Snapped: sized to the line, its tip at the insertion point.
+            let size = c.caret_height.map_or(8.0, |h| (h * 0.6).clamp(4.0, 24.0));
+            Some(new_comment(&cx, CommentTool::Caret, Shape::Caret { rect: [x - size / 2.0, y - size, x + size / 2.0, y] }, text))
         }
     }
 }
@@ -1433,6 +1483,13 @@ pub(crate) fn context_menu(ui: &mut egui::Ui, view: &mut DocView, info: &DocInfo
             if ui.add_enabled(allowed, egui::Button::new(tl!(if marked { "Remove checkmark" } else { "Mark with checkmark" }))).clicked() {
                 action = Some(CanvasAction::Edit(Box::new(Edit::MarkAnnotation { page, index, marked: !marked, author: prefs.author.clone() })));
                 ui.close();
+            }
+            if crate::popup_notes::can_have_popup(&a.subtype) {
+                let open = a.popup.is_some_and(|p| p.open);
+                if ui.add_enabled(allowed, egui::Button::new(tl!(if open { "Close pop-up note" } else { "Open pop-up note" }))).clicked() {
+                    action = Some(CanvasAction::Edit(Box::new(Edit::SetCommentPopup { page, index, open: Some(!open), rect: None })));
+                    ui.close();
+                }
             }
             if ui.button(tl!("Copy text")).clicked() {
                 ui.ctx().copy_text(a.contents.clone().unwrap_or_default());

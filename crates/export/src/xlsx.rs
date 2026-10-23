@@ -4,7 +4,9 @@
 //! order as the Word export: a paragraph is one cell in column A, and every table that
 //! [`super::tables`] detects from the positioned text becomes a block of rows on the grid it
 //! found, one spreadsheet column per detected table column (spanning cells merged), followed by
-//! an empty row. Images are left out. Columns are sized from the widest detected table column.
+//! an empty row. Images are placed as pictures where they fall in that order, at their size on
+//! the page (at most [`MAX_PICTURE_WIDTH`] wide), anchored at column A with the rows under them
+//! left free. Columns are sized from the widest detected table column.
 //!
 //! A cell whose whole text is an unambiguous number is stored as a number, with a number format
 //! that shows it as it was printed (decimals, thousands separators, a trailing `%`, negatives in
@@ -17,7 +19,7 @@
 //! sheet (later rows are left out) and 32,767 characters per cell (Excel's limit; the rest is
 //! cut). Strings are written inline, so no text can become a formula.
 
-use super::{Item, Page, Zip, esc, items};
+use super::{Image, Item, Page, Zip, esc, items};
 
 /// More worksheets than this make a workbook slow to open; later pages share the last sheet.
 pub const MAX_SHEETS: usize = 1024;
@@ -27,6 +29,12 @@ const MAX_ROWS: u32 = 1_048_576;
 const MAX_CELL_CHARS: usize = 32_767;
 /// Excel's column limit (detected tables have at most 63 columns, so this is a guard).
 const MAX_COLUMNS: usize = 16_384;
+/// Pictures are at most this wide (points), keeping their aspect ratio.
+pub const MAX_PICTURE_WIDTH: f64 = 480.0;
+/// The default row height (points): a picture leaves this many points per row free under it.
+const ROW_HEIGHT: f64 = 15.0;
+/// More pictures than this in one workbook are left out.
+const MAX_PICTURES: usize = 10_000;
 
 /// How a number was printed, so the cell shows it the same way.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -194,7 +202,9 @@ impl Styles {
 
 /// One worksheet being written.
 #[derive(Default)]
-struct Sheet {
+struct Sheet<'a> {
+    /// Pictures: the 0-based row their top-left corner is anchored at, and the image.
+    pictures: Vec<(u32, &'a Image)>,
     rows: String,
     merges: Vec<String>,
     /// Widths in points of the detected table columns, by spreadsheet column.
@@ -204,8 +214,8 @@ struct Sheet {
     row: String,
 }
 
-impl Sheet {
-    fn new() -> Sheet {
+impl<'a> Sheet<'a> {
+    fn new() -> Sheet<'a> {
         Sheet { next: 1, ..Sheet::default() }
     }
 
@@ -246,12 +256,29 @@ impl Sheet {
         self.next += 1;
     }
 
-    fn page(&mut self, styles: &mut Styles, items: Vec<Item<'_>>) {
+    fn page(&mut self, styles: &mut Styles, items: Vec<Item<'a>>, pictures: &mut usize) {
         for it in items {
             match it {
                 Item::Para(b, _) => {
                     self.cell(styles, 0, &b.text, b.bold, b.italic);
                     self.end_row();
+                }
+                Item::List(l) => {
+                    self.cell(styles, 0, &l.block.text, l.block.bold, l.block.italic);
+                    self.end_row();
+                }
+                Item::Img(im) => {
+                    if *pictures >= MAX_PICTURES || !self.room() {
+                        continue;
+                    }
+                    *pictures += 1;
+                    self.end_row();
+                    let row = self.next.saturating_sub(1);
+                    self.pictures.push((row, im));
+                    // Leave the rows the picture covers free, then one more.
+                    let (_, h) = picture_size(im);
+                    let rows = (h / ROW_HEIGHT).ceil().clamp(1.0, 2000.0) as u32;
+                    self.next = self.next.saturating_add(rows).min(MAX_ROWS.saturating_add(1));
                 }
                 Item::Table(t) => {
                     let mut edges = t.cols.clone();
@@ -278,7 +305,7 @@ impl Sheet {
                     // An empty row keeps the table apart from what follows.
                     self.end_row();
                 }
-                Item::Img(_) | Item::PageBreak => {}
+                Item::PageBreak => {}
             }
         }
     }
@@ -309,9 +336,43 @@ xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">
             }
             s.push_str("</mergeCells>");
         }
+        if !self.pictures.is_empty() {
+            s.push_str("<drawing r:id=\"rIdDrawing\"/>");
+        }
         s.push_str("</worksheet>");
         s
     }
+}
+
+/// A picture's size in points: as on the page, at most [`MAX_PICTURE_WIDTH`] wide.
+fn picture_size(im: &Image) -> (f64, f64) {
+    let w = (im.rect[2] - im.rect[0]).abs();
+    let h = (im.rect[3] - im.rect[1]).abs();
+    let (w, h) = (if w.is_finite() { w.max(1.0) } else { 1.0 }, if h.is_finite() { h.max(1.0) } else { 1.0 });
+    let k = (MAX_PICTURE_WIDTH / w).min(1.0);
+    ((w * k).min(10_000.0), (h * k).min(10_000.0))
+}
+
+/// The drawing part of a worksheet: each picture anchored at its row in column A, sized in EMU.
+fn drawing_xml(pictures: &[(u32, &Image)]) -> String {
+    let mut s = String::from(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<xdr:wsDr xmlns:xdr=\"http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing\" \
+xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">",
+    );
+    for (k, (row, im)) in pictures.iter().enumerate() {
+        let (w, h) = picture_size(im);
+        let (cx, cy) = ((w * 12700.0).round() as i64, (h * 12700.0).round() as i64);
+        let n = k + 1;
+        s.push_str(&format!(
+            "<xdr:oneCellAnchor><xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>{row}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>\
+<xdr:ext cx=\"{cx}\" cy=\"{cy}\"/><xdr:pic><xdr:nvPicPr><xdr:cNvPr id=\"{}\" name=\"Picture {n}\"/><xdr:cNvPicPr><a:picLocks noChangeAspect=\"1\"/></xdr:cNvPicPr></xdr:nvPicPr>\
+<xdr:blipFill><a:blip r:embed=\"rIdImg{n}\"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill>\
+<xdr:spPr><a:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"{cx}\" cy=\"{cy}\"/></a:xfrm><a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:oneCellAnchor>",
+            n + 1
+        ));
+    }
+    s.push_str("</xdr:wsDr>");
+    s
 }
 
 /// An Excel workbook (.xlsx, Office Open XML SpreadsheetML): one worksheet per page with the
@@ -319,11 +380,12 @@ xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">
 pub fn xlsx(pages: &[Page], title: &str) -> Vec<u8> {
     let mut styles = Styles::default();
     let mut sheets: Vec<(String, Sheet)> = Vec::new();
+    let mut pictures = 0;
     for (i, p) in pages.iter().enumerate() {
         let page_items = items(std::slice::from_ref(p));
         if i < MAX_SHEETS {
             let mut sheet = Sheet::new();
-            sheet.page(&mut styles, page_items);
+            sheet.page(&mut styles, page_items, &mut pictures);
             sheets.push((format!("Page {}", i + 1), sheet));
         } else if let Some((name, sheet)) = sheets.last_mut() {
             if i == MAX_SHEETS {
@@ -332,7 +394,7 @@ pub fn xlsx(pages: &[Page], title: &str) -> Vec<u8> {
             sheet.end_row();
             sheet.cell(&mut styles, 0, &format!("Page {}", i + 1), true, false);
             sheet.end_row();
-            sheet.page(&mut styles, page_items);
+            sheet.page(&mut styles, page_items, &mut pictures);
         }
     }
     if sheets.is_empty() {
@@ -342,6 +404,7 @@ pub fn xlsx(pages: &[Page], title: &str) -> Vec<u8> {
     let mut types = String::from(
         "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">\
 <Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/><Default Extension=\"xml\" ContentType=\"application/xml\"/>\
+<Default Extension=\"png\" ContentType=\"image/png\"/><Default Extension=\"jpg\" ContentType=\"image/jpeg\"/>\
 <Override PartName=\"/xl/workbook.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/>\
 <Override PartName=\"/xl/styles.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml\"/>\
 <Override PartName=\"/docProps/core.xml\" ContentType=\"application/vnd.openxmlformats-package.core-properties+xml\"/>",
@@ -359,6 +422,11 @@ xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">
         types.push_str(&format!(
             "<Override PartName=\"/xl/worksheets/sheet{n}.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>"
         ));
+        if sheets.get(i).is_some_and(|s| !s.1.pictures.is_empty()) {
+            types.push_str(&format!(
+                "<Override PartName=\"/xl/drawings/drawing{n}.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.drawing+xml\"/>"
+            ));
+        }
         workbook.push_str(&format!("<sheet name=\"{}\" sheetId=\"{n}\" r:id=\"rId{n}\"/>", esc(name)));
         wb_rels.push_str(&format!(
             "<Relationship Id=\"rId{n}\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" Target=\"worksheets/sheet{n}.xml\"/>"
@@ -381,8 +449,30 @@ xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">
     z.add("xl/workbook.xml", workbook.as_bytes(), true);
     z.add("xl/_rels/workbook.xml.rels", wb_rels.as_bytes(), true);
     z.add("xl/styles.xml", styles.xml().as_bytes(), true);
+    let rel = |id: &str, kind: &str, target: &str| {
+        format!("<Relationship Id=\"{id}\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/{kind}\" Target=\"{target}\"/>")
+    };
+    let rels_head = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">";
+    let mut media = 0;
     for (i, (_, sheet)) in sheets.iter().enumerate() {
-        z.add(&format!("xl/worksheets/sheet{}.xml", i + 1), sheet.xml().as_bytes(), true);
+        let n = i + 1;
+        z.add(&format!("xl/worksheets/sheet{n}.xml"), sheet.xml().as_bytes(), true);
+        if sheet.pictures.is_empty() {
+            continue;
+        }
+        let sheet_rels = format!("{rels_head}{}</Relationships>", rel("rIdDrawing", "drawing", &format!("../drawings/drawing{n}.xml")));
+        z.add(&format!("xl/worksheets/_rels/sheet{n}.xml.rels"), sheet_rels.as_bytes(), true);
+        z.add(&format!("xl/drawings/drawing{n}.xml"), drawing_xml(&sheet.pictures).as_bytes(), true);
+        let mut drawing_rels = String::from(rels_head);
+        for (k, (_, im)) in sheet.pictures.iter().enumerate() {
+            media += 1;
+            let ext = if im.ext == "jpg" { "jpg" } else { "png" };
+            let name = format!("image{media}.{ext}");
+            drawing_rels.push_str(&rel(&format!("rIdImg{}", k + 1), "image", &format!("../media/{name}")));
+            z.add(&format!("xl/media/{name}"), &im.bytes, false);
+        }
+        drawing_rels.push_str("</Relationships>");
+        z.add(&format!("xl/drawings/_rels/drawing{n}.xml.rels"), drawing_rels.as_bytes(), true);
     }
     z.finish()
 }
@@ -460,7 +550,7 @@ mod tests {
     }
 
     fn block(t: &str, x: f64, y: f64, w: f64, bold: bool) -> Block {
-        Block { text: t.into(), rect: [x, y, x + w, y + 12.0], size: 11.0, bold, italic: false, color: [0.0; 3] }
+        Block { text: t.into(), rect: [x, y, x + w, y + 12.0], size: 11.0, bold, italic: false, color: [0.0; 3], ..Default::default() }
     }
 
     fn statement() -> Page {

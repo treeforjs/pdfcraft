@@ -2,8 +2,8 @@
 //! the JavaScript console (⌘J), Document JavaScripts, and Preferences ▸ JavaScript.
 
 use egui::{Align, Layout};
-use pdfcraft_engine::js::{Answer, Dialogs, JsOutput, Question, Request};
-use pdfcraft_engine::{DocId, Edit};
+use pdfcraft_engine::js::{ActionSource, Answer, Dialogs, JsOutput, Question, Request};
+use pdfcraft_engine::{DocId, DocTrigger, Edit, PageTrigger};
 
 use crate::theme::{self, Tokens};
 use crate::{PdfCraftApp, widgets};
@@ -20,8 +20,10 @@ pub struct JsConsole {
 pub struct JsQuestion {
     pub doc: DocId,
     pub script: String,
-    /// The button the script belongs to (`None`: the console).
+    /// The button the script belongs to (`None`: the console, or `source`).
     pub target: Option<String>,
+    /// The link, bookmark or page action the script is (run again from the document).
+    pub source: Option<ActionSource>,
     pub answers: Vec<Answer>,
     pub question: Question,
     /// What is typed for `app.response`.
@@ -95,8 +97,31 @@ impl PdfCraftApp {
     /// Run `script` (a button's, or the console's when `target` is `None`) with the answers its
     /// dialogs have had so far; a new question opens its dialog and waits.
     fn run_script(&mut self, id: DocId, script: &str, target: Option<&str>, answers: Vec<Answer>) {
+        self.run_script_from(id, script, target, None, answers);
+    }
+
+    /// Run a link's, bookmark's or page trigger's Run-a-JavaScript action (a click on it); its
+    /// dialogs wait for the user like a button's.
+    pub fn run_action_script(&mut self, id: DocId, source: ActionSource) {
+        if !self.session.javascript() {
+            self.notify_tr("JavaScript is turned off (Preferences ▸ JavaScript).");
+            return;
+        }
+        // A script reads the fields: include what's still being typed in one (#166).
+        if !self.commit_form_typing() {
+            return;
+        }
+        self.run_script_from(id, "", None, Some(source), Vec::new());
+    }
+
+    /// [`Self::run_script`], or with `source` that action's script as the document holds it.
+    fn run_script_from(&mut self, id: DocId, script: &str, target: Option<&str>, source: Option<ActionSource>, answers: Vec<Answer>) {
         let dialogs = Dialogs { interactive: true, answers };
-        match self.session.run_javascript_with(id, script, target, &dialogs) {
+        let result = match &source {
+            Some(src) => self.session.run_action_javascript(id, src, &dialogs),
+            None => self.session.run_javascript_with(id, script, target, &dialogs),
+        };
+        match result {
             Ok(o) => {
                 if let Some(question) = o.question {
                     let text = match &question {
@@ -108,6 +133,7 @@ impl PdfCraftApp {
                         doc: id,
                         script: script.to_string(),
                         target: target.map(str::to_string),
+                        source: source.clone(),
                         answers: dialogs.answers,
                         question,
                         text,
@@ -121,7 +147,7 @@ impl PdfCraftApp {
                 {
                     self.views[i].document_changed(&info);
                 }
-                let console = target.is_none();
+                let console = target.is_none() && source.is_none();
                 let (error, result) = (o.error.clone(), o.result.clone());
                 let errors = if console { Vec::new() } else { o.error.into_iter().collect() };
                 self.handle_js(id, JsOutput { alerts: o.alerts, console: o.console, requests: o.requests, errors });
@@ -134,6 +160,7 @@ impl PdfCraftApp {
             }
             Err(e) => match target {
                 Some(field) => self.notify_fmt("{field}: {e}", &[("field", field), ("e", &e.to_string())]),
+                None if source.is_some() => self.notify_error(e),
                 None => self.js_console.log.push(format!("Error: {e}")),
             },
         }
@@ -146,7 +173,7 @@ impl PdfCraftApp {
         self.dialog = q.back;
         q.answers.push(answer);
         if self.session.get(q.doc).is_some() {
-            self.run_script(q.doc, &q.script, q.target.as_deref(), q.answers);
+            self.run_script_from(q.doc, &q.script, q.target.as_deref(), q.source, q.answers);
         }
     }
 
@@ -356,113 +383,10 @@ pub(crate) fn document_js_body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tok
     close
 }
 
-/// Preferences: interface language, identity and JavaScript. Returns `true` to close.
-pub(crate) fn preferences_body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> bool {
-    ui.label(egui::RichText::new(tl!("Preferences")).font(theme::semibold(18.0)));
-    ui.horizontal(|ui| {
-        ui.label(tl!("Interface language"));
-        let selected = crate::i18n::Lang::from_code(&app.language).map_or(tl!("Auto"), crate::i18n::Lang::name);
-        let before = app.language.clone();
-        egui::ComboBox::from_id_salt("interface-language").selected_text(selected).show_ui(ui, |ui| {
-            if ui.selectable_value(&mut app.language, crate::i18n::AUTO.to_string(), tl!("Auto")).clicked() {
-                ui.close();
-            }
-            for language in crate::i18n::Lang::all() {
-                if ui.selectable_value(&mut app.language, language.code().to_string(), language.name()).clicked() {
-                    ui.close();
-                }
-            }
-        });
-        // Relabel the rest of this dialog in the new language right away, not next frame.
-        if app.language != before {
-            crate::i18n::set_current(crate::i18n::Lang::from_pref(&app.language));
-        }
-    });
-    ui.add_space(8.0);
-    ui.label(egui::RichText::new(tl!("Documents and view")).font(theme::semibold(13.0)));
-    ui.horizontal(|ui| {
-        ui.label(tl!("Default workspace mode"));
-        for (mode, label) in [
-            (crate::Mode::AllTools, "All tools"),
-            (crate::Mode::Read, "Read"),
-            (crate::Mode::Edit, "Edit"),
-            (crate::Mode::Convert, "Convert"),
-            (crate::Mode::Sign, "E-Sign"),
-        ] {
-            ui.radio_value(&mut app.default_mode, mode, tl!(label));
-        }
-    });
-    ui.label(
-        egui::RichText::new(tl!("Used when opening PDFs. An explicit launch or control mode takes precedence for the session."))
-            .small()
-            .color(t.text_muted),
-    );
-    let defaults = &mut app.view_defaults;
-    ui.horizontal(|ui| {
-        ui.label(tl!("Default page display"));
-        for l in crate::canvas::PageLayout::ORDER {
-            ui.radio_value(&mut defaults.layout, l, tl!(l.label()));
-        }
-    });
-    ui.horizontal(|ui| {
-        use crate::canvas::Fit;
-        ui.label(tl!("Default zoom"));
-        ui.radio_value(&mut defaults.fit, Fit::Width, tl!("Fit to width"));
-        ui.radio_value(&mut defaults.fit, Fit::Page, tl!("Zoom to page level"));
-        ui.radio_value(&mut defaults.fit, Fit::None, tl!("Custom"));
-        // Editing the percentage selects Custom.
-        let mut percent = defaults.zoom * 100.0;
-        if ui.add(egui::DragValue::new(&mut percent).range(8.0..=6400.0).max_decimals(0).suffix("%")).changed() {
-            (defaults.fit, defaults.zoom) = (Fit::None, percent / 100.0);
-        }
-    });
-    ui.label(
-        egui::RichText::new(tl!("Used when a PDF doesn't ask for a layout or zoom. Continuous scrolling never snaps between pages."))
-            .small()
-            .color(t.text_muted),
-    );
-    // The web build has no file paths to reopen.
-    #[cfg(not(target_arch = "wasm32"))]
-    ui.checkbox(&mut app.reopen_last_session, tl!("Reopen the files that were open when PdfCraft last closed"));
-    app.auto_update_checkbox(ui);
-    ui.add_space(8.0);
-    // Identity: the author of new comments (Acrobat: Preferences ▸ Identity).
-    ui.label(egui::RichText::new(tl!("Identity")).font(theme::semibold(13.0)));
-    ui.horizontal(|ui| {
-        let label = ui.label(tl!("Name on new comments"));
-        ui.add(egui::TextEdit::singleline(&mut app.comment_prefs.author).desired_width(220.0).char_limit(crate::MAX_AUTHOR_CHARS))
-            .labelled_by(label.id);
-    });
-    ui.add_space(8.0);
-    ui.label(egui::RichText::new(tl!("Fill & Sign")).font(theme::semibold(13.0)));
-    ui.checkbox(&mut app.flatten_fill_sign_on_save, tl!("Flatten Fill & Sign when saving"));
-    ui.label(
-        egui::RichText::new(tl!("Text, marks and signatures become part of the page. Other comments stay editable.")).small().color(t.text_muted),
-    );
-    ui.add_space(8.0);
-    date_format(ui, app, t);
-    ui.add_space(8.0);
-    ui.label(egui::RichText::new("JavaScript").font(theme::semibold(13.0)));
-    egui::Frame::new().fill(t.hover).corner_radius(egui::CornerRadius::same(6)).inner_margin(egui::Margin::same(10)).show(ui, |ui| {
-        ui.set_width(ui.available_width());
-        let mut on = app.session.javascript();
-        if ui.checkbox(&mut on, tl!("Enable Acrobat JavaScript")).changed() {
-            app.session.set_javascript(on);
-        }
-        ui.label(
-            egui::RichText::new(tl!("Scripts run in a sandbox without file or network access. A script that asks to open a web page needs your permission first. With JavaScript off, Acrobat's standard format, validate and calculate functions still work."))
-                .small()
-                .color(t.text_muted),
-        );
-    });
-    ui.add_space(10.0);
-    buttons(ui, tl!("OK"), &[]).is_some()
-}
-
 /// Preferences ▸ Date format: a preset, or any pattern typed in, for Fill & Sign dates, and the
 /// language of its month and weekday names. A valid pattern applies as it's typed; an invalid
 /// one stays in the box with the reason, and the last valid one stays in use.
-fn date_format(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) {
+pub(crate) fn date_format(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) {
     use pdfcraft_engine::dates::{DATE_FORMATS, DATE_LANGUAGES, MAX_DATE_FORMAT_CHARS};
     ui.label(egui::RichText::new(tl!("Date format")).font(theme::semibold(13.0)));
     let sample = |app: &PdfCraftApp, f: &str| format!("{}   {f}", app.date_text(Some(f)).unwrap_or_default());
@@ -548,4 +472,247 @@ fn date_format(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) {
         .small()
         .color(t.text_muted),
     );
+}
+
+/// What a Run-a-JavaScript action editor (a bookmark's action, or Page Properties ▸ Actions)
+/// is editing.
+#[derive(Clone, Debug, PartialEq)]
+pub enum ScriptTarget {
+    Bookmark(Vec<usize>),
+    /// A page (0-based): its Page Open and Page Close scripts.
+    Page(usize),
+    /// The document: its Set Document Actions scripts (will close, will save, did save, will
+    /// print, did print).
+    Document,
+}
+
+/// The action editor's working copy. A bookmark has one script; a page has one per trigger
+/// ([`PageTrigger::ALL`] order), and `trigger` is the one shown.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ActionScriptDraft {
+    pub target: ScriptTarget,
+    pub trigger: PageTrigger,
+    /// The document trigger shown ([`ScriptTarget::Document`]; [`DocTrigger::ALL`] order).
+    pub doc_trigger: DocTrigger,
+    pub scripts: Vec<String>,
+    /// The scripts as the document has them, to save only what changed.
+    pub original: Vec<String>,
+}
+
+impl ActionScriptDraft {
+    fn slot(&self) -> usize {
+        match self.target {
+            ScriptTarget::Bookmark(_) => 0,
+            ScriptTarget::Page(_) => PageTrigger::ALL.iter().position(|t| *t == self.trigger).unwrap_or(0),
+            ScriptTarget::Document => DocTrigger::ALL.iter().position(|t| *t == self.doc_trigger).unwrap_or(0),
+        }
+    }
+
+    /// The edit that saves the draft (`None`: nothing changed, or nothing to save).
+    pub fn edit(&self) -> Option<Edit> {
+        match &self.target {
+            ScriptTarget::Bookmark(path) => {
+                let js = self.scripts.first()?;
+                (js.trim() != self.original.first().map_or("", |s| s.trim()) && !js.trim().is_empty())
+                    .then(|| Edit::SetBookmarkAction { path: path.clone(), action: pdfcraft_engine::BookmarkAction::JavaScript(js.clone()) })
+            }
+            ScriptTarget::Page(page) => {
+                let edits: Vec<Edit> = PageTrigger::ALL
+                    .iter()
+                    .zip(self.scripts.iter().zip(&self.original))
+                    .filter(|(_, (now, was))| now.trim() != was.trim())
+                    .map(|(t, (now, _))| Edit::SetPageAction { page: *page, trigger: *t, script: (!now.trim().is_empty()).then(|| now.clone()) })
+                    .collect();
+                match edits.len() {
+                    0 => None,
+                    1 => edits.into_iter().next(),
+                    _ => Some(Edit::Batch { label: "Set page actions".into(), edits }),
+                }
+            }
+            ScriptTarget::Document => {
+                let edits: Vec<Edit> = DocTrigger::ALL
+                    .iter()
+                    .zip(self.scripts.iter().zip(&self.original))
+                    .filter(|(_, (now, was))| now.trim() != was.trim())
+                    .map(|(t, (now, _))| Edit::SetDocumentAction { trigger: *t, script: (!now.trim().is_empty()).then(|| now.clone()) })
+                    .collect();
+                match edits.len() {
+                    0 => None,
+                    1 => edits.into_iter().next(),
+                    _ => Some(Edit::Batch { label: "Set document actions".into(), edits }),
+                }
+            }
+        }
+    }
+}
+
+impl PdfCraftApp {
+    /// Bookmark ▸ Run a JavaScript: edit the script the bookmark runs when clicked.
+    pub fn open_bookmark_script(&mut self, path: Vec<usize>) {
+        let Some((_, id)) = self.active_ids() else { return };
+        let current = match self.session.bookmark_action(id, &path) {
+            Ok(pdfcraft_engine::BookmarkAction::JavaScript(js)) => js,
+            Ok(_) => String::new(),
+            Err(e) => return self.notify_error(e),
+        };
+        self.action_script = Some(ActionScriptDraft {
+            target: ScriptTarget::Bookmark(path),
+            trigger: PageTrigger::Open,
+            doc_trigger: DocTrigger::WillClose,
+            scripts: vec![current.clone()],
+            original: vec![current],
+        });
+        self.dialog = Some(crate::Dialog::ActionScript);
+    }
+
+    /// Page Properties ▸ Actions for page `page` (0-based): its Page Open and Page Close scripts.
+    pub fn open_page_actions(&mut self, page: usize) {
+        let Some((_, id)) = self.active_ids() else { return };
+        let Some(doc) = self.session.get(id) else { return };
+        let scripts: Vec<String> = PageTrigger::ALL.iter().map(|t| doc.page_action(page, *t).unwrap_or_default()).collect();
+        self.action_script = Some(ActionScriptDraft {
+            target: ScriptTarget::Page(page),
+            trigger: PageTrigger::Open,
+            doc_trigger: DocTrigger::WillClose,
+            original: scripts.clone(),
+            scripts,
+        });
+        self.dialog = Some(crate::Dialog::ActionScript);
+    }
+
+    /// Set Document Actions: the active document's will close, will save, did save, will print
+    /// and did print scripts.
+    pub fn open_document_actions(&mut self) {
+        let Some((_, id)) = self.active_ids() else { return };
+        let Some(doc) = self.session.get(id) else { return };
+        let actions = doc.document_actions();
+        let scripts: Vec<String> =
+            DocTrigger::ALL.iter().map(|t| actions.iter().find(|(x, _)| x == t).map(|(_, s)| s.clone()).unwrap_or_default()).collect();
+        self.action_script = Some(ActionScriptDraft {
+            target: ScriptTarget::Document,
+            trigger: PageTrigger::Open,
+            doc_trigger: DocTrigger::WillClose,
+            original: scripts.clone(),
+            scripts,
+        });
+        self.dialog = Some(crate::Dialog::ActionScript);
+    }
+
+    /// Run the Page Close script of the page the active view leaves and the Page Open script
+    /// of the one it arrives at. Cheap per frame: nothing happens until the current page
+    /// changes, and only pages the open pass found with additional actions are looked at.
+    pub(crate) fn run_page_actions(&mut self) {
+        let Some((i, id)) = self.active_ids() else { return };
+        let Some(view) = self.views.get_mut(i) else { return };
+        let now = view.current;
+        let before = view.script_page.replace(now);
+        if before == Some(now) || !self.session.javascript() || self.dialog == Some(crate::Dialog::JsQuestion) {
+            return;
+        }
+        let has = |p: usize, s: &Self| s.session.get(id).is_some_and(|d| d.info.page_actions.binary_search(&p).is_ok());
+        let mut ran = false;
+        for (page, trigger) in [(before, PageTrigger::Close), (Some(now), PageTrigger::Open)] {
+            let Some(page) = page.filter(|p| has(*p, self)) else { continue };
+            match self.session.run_page_action(id, page, trigger) {
+                Ok(r) => ran |= r,
+                Err(e) => self.notify_error(e),
+            }
+        }
+        if ran
+            && let Some(doc) = self.session.get(id)
+            && let Some(view) = self.views.iter_mut().find(|v| v.id == id)
+        {
+            view.document_changed(&doc.info);
+        }
+    }
+}
+
+/// The Run-a-JavaScript action editor. Returns `true` to close.
+pub(crate) fn action_script_body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> bool {
+    let Some(d) = app.action_script.as_mut() else { return true };
+    let (title, hint) = match &d.target {
+        ScriptTarget::Bookmark(_) => (tl!("Bookmark Action").to_string(), tl!("Runs when the bookmark is clicked.").to_string()),
+        ScriptTarget::Page(p) => (
+            crate::i18n::fmt(tl!("Page Actions: page {n}"), &[("n", &p.saturating_add(1).to_string())]),
+            tl!("Page Open runs when the page becomes the current page; Page Close when another page does.").to_string(),
+        ),
+        ScriptTarget::Document => (
+            tl!("Document Actions").to_string(),
+            tl!("Each script runs when the document is about to close, is saved or is printed. Scripts can't start another save or print.")
+                .to_string(),
+        ),
+    };
+    ui.label(egui::RichText::new(title).font(theme::semibold(18.0)));
+    ui.label(egui::RichText::new(hint).small().color(t.text_muted));
+    if !app.session.javascript() {
+        ui.label(egui::RichText::new(tl!("JavaScript is turned off (Preferences ▸ JavaScript).")).small().color(t.text_muted));
+    }
+    ui.add_space(8.0);
+    if matches!(d.target, ScriptTarget::Page(_)) {
+        ui.horizontal(|ui| {
+            ui.label(tl!("Trigger:"));
+            for tr in PageTrigger::ALL {
+                let set = !d.scripts.get(PageTrigger::ALL.iter().position(|x| *x == tr).unwrap_or(0)).is_none_or(|s| s.trim().is_empty());
+                let label = if set { format!("{} ●", tl!(tr.label())) } else { tl!(tr.label()).to_string() };
+                ui.selectable_value(&mut d.trigger, tr, label);
+            }
+        });
+        ui.add_space(4.0);
+    }
+    if d.target == ScriptTarget::Document {
+        ui.horizontal_wrapped(|ui| {
+            ui.label(tl!("Trigger:"));
+            for (i, tr) in DocTrigger::ALL.into_iter().enumerate() {
+                let set = !d.scripts.get(i).is_none_or(|s| s.trim().is_empty());
+                let label = if set { format!("{} ●", tl!(tr.label())) } else { tl!(tr.label()).to_string() };
+                ui.selectable_value(&mut d.doc_trigger, tr, label);
+            }
+        });
+        ui.add_space(4.0);
+    }
+    widgets::section_title(ui, tl!("Run a JavaScript"));
+    let slot = d.slot();
+    if let Some(script) = d.scripts.get_mut(slot) {
+        ui.add(
+            egui::TextEdit::multiline(script)
+                .code_editor()
+                .desired_rows(10)
+                .desired_width(f32::INFINITY)
+                .char_limit(pdfcraft_engine::MAX_ACTION_SCRIPT_BYTES)
+                .hint_text(tl!("JavaScript, e.g. app.alert(\"Hello\")"))
+                .id_salt(("action-js", slot)),
+        );
+    }
+    ui.add_space(8.0);
+    let changed = d.edit().is_some();
+    let bookmark = matches!(d.target, ScriptTarget::Bookmark(_));
+    let mut close = false;
+    let mut save = false;
+    ui.horizontal(|ui| {
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            if ui.push_id("Save", |ui| ui.add_enabled_ui(changed, |ui| widgets::pill_button(ui, tl!("Save"), true)).inner).inner.clicked() {
+                save = true;
+            }
+            if ui.push_id("Close", |ui| widgets::pill_button(ui, tl!("Close"), false)).inner.clicked() {
+                close = true;
+            }
+            if !bookmark
+                && ui.push_id("Remove", |ui| widgets::pill_button(ui, tl!("Remove"), false)).inner.clicked()
+                && let Some(s) = d.scripts.get_mut(slot)
+            {
+                s.clear();
+            }
+        });
+    });
+    if save
+        && let Some(e) = app.action_script.as_ref().and_then(ActionScriptDraft::edit)
+        && app.apply_edit(e)
+    {
+        app.action_script = None;
+        return true;
+    }
+    if close {
+        app.action_script = None;
+    }
+    close
 }

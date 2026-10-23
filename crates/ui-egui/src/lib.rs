@@ -24,29 +24,49 @@ macro_rules! tl_ctx {
 
 mod a11y_ui;
 mod actions_ui;
+pub mod assoc_ui;
+#[cfg(not(target_arch = "wasm32"))]
+pub use actions_ui::safe_relative as actions_safe_relative;
+pub mod bookmark_ui;
 pub mod canvas;
 mod chrome;
 mod combine_ui;
+pub mod custom_commands_ui;
+pub mod make_accessible_ui;
+pub mod reading_order_ui;
+pub mod select_pages_ui;
+pub mod tags_ui;
 pub use combine_ui::{Columns as CombineColumns, Lock as CombineLock, SortKey};
 mod commands;
 mod comment_props;
 pub mod comments;
 mod comments_panel;
 mod compare_ui;
+pub mod compare_view;
 pub mod control;
 mod create_multiple_ui;
 mod create_ui;
 mod credits;
 mod crop;
 mod drag_pointer;
+mod enhance_ui;
 mod export_ui;
+pub mod js_debug_ui;
 mod js_ui;
+pub use js_ui::{ActionScriptDraft, ScriptTarget};
 mod marks_ui;
 mod measure_ui;
+mod object_ui;
 mod ocr_ui;
+#[cfg(target_arch = "wasm32")]
+mod ocr_web;
 mod optimize_ui;
+pub mod output_preview_ui;
+pub mod picked_ids;
 mod preflight_ui;
-mod search_ui;
+pub mod prepress_ui;
+pub mod search_ui;
+mod sign_settings_ui;
 mod sign_ui;
 mod stamps_ui;
 mod standards_ui;
@@ -58,11 +78,17 @@ pub mod marks {
 }
 mod content_ui;
 mod link_ui;
+pub use cert_ui::CertDraft;
 pub use create_ui::Clip;
-pub use link_ui::LinkDraft;
+pub use link_ui::{LinkDraft, LinkKind, ViewFit};
 pub use optimize_ui::{OptimizeDraft, OptimizeTab};
-pub use sign_ui::{DigitalIdEntry, SigProps, SigPropsTab, SignDraft, SignStep, property_rows as signature_property_rows};
-pub use submit_ui::SubmitDraft;
+pub use redact_sets_ui::CodeSetsDraft;
+pub use sign_ui::{
+    DigitalIdEntry, GraphicChoice, PinField, SigProps, SigPropsTab, SignDraft, SignStep, SignedComparison, TokenDraft,
+    property_rows as signature_property_rows,
+};
+pub use submit_ui::{Sender as SubmitSender, SubmitDraft};
+pub use trust_ui::TrustDraft;
 mod autoscroll;
 mod bidi;
 pub mod bulk_fields;
@@ -73,6 +99,7 @@ mod files;
 pub mod fill_sign;
 pub mod folders_ui;
 pub mod forms_ui;
+pub mod help_ui;
 mod home;
 mod icon_data;
 pub mod icons;
@@ -80,15 +107,21 @@ pub mod last_session;
 mod pageboxes;
 mod palette;
 mod panels;
+pub use panels::BmAction;
 #[cfg(not(target_arch = "wasm32"))]
 mod pickers;
+mod popup_notes;
+pub mod prefs_ui;
 pub mod prepare;
 mod print_ui;
 mod signature_drag;
 pub mod timestamp_ui;
 pub use print_ui::{Handling as PrintHandling, PrintDraft, Which as PrintWhich};
 mod redact_ui;
-pub use redact_ui::{HiddenDraft, PagesDraft as RedactPagesDraft, RedactPrefs, SearchDraft as RedactSearchDraft};
+pub mod screen_capture;
+pub use redact_ui::{
+    HiddenDraft, PagesDraft as RedactPagesDraft, RedactPrefs, SearchDraft as RedactSearchDraft, toggle_code as toggle_redaction_code,
+};
 pub mod i18n;
 
 /// [`PdfCraftApp::date_text`] for callers that already borrow other parts of the app.
@@ -107,15 +140,21 @@ pub(crate) fn date_text_for_pdf(session: &Session) -> Result<String, String> {
 /// The longest author name kept (Preferences ▸ Identity, restored settings).
 pub(crate) const MAX_AUTHOR_CHARS: usize = 200;
 
+mod cert_ui;
 pub mod portable;
 mod protect;
 mod recovery;
+#[cfg(target_arch = "wasm32")]
+mod recovery_web;
+mod redact_sets_ui;
 #[cfg(not(target_arch = "wasm32"))]
 mod system_fonts;
 pub mod theme;
+mod trust_ui;
 pub mod updates;
 mod wheel_pager;
 mod widgets;
+pub mod windows_ui;
 
 use pdfcraft_engine::{DocId, Session};
 
@@ -169,10 +208,16 @@ pub enum RightPanel {
     Signatures,
     /// Accessibility Checker results.
     Accessibility,
+    /// The structure tree (Accessibility ▸ Tags).
+    Tags,
+    /// A page's reading order (Accessibility ▸ Order).
+    Order,
     /// Advanced Search results.
     Search,
     /// Compare files: the differences.
     Compare,
+    /// Print production ▸ Output preview.
+    OutputPreview,
 }
 
 /// Quick-action bar tools (the vertical floating strip).
@@ -195,6 +240,8 @@ pub enum QuickTool {
     AddText,
     /// Edit a PDF ▸ Edit text: click a line of existing text to edit it.
     EditText,
+    /// Edit a PDF ▸ Edit objects: select, move, resize, turn and restyle any page object.
+    EditObject,
     /// Add a stamp: click to place this stamp.
     Stamp(pdfcraft_engine::StampKind),
     /// A custom stamp from the library (its index).
@@ -209,6 +256,8 @@ pub enum QuickTool {
     MarqueeZoom,
     /// Edit ▸ Take a Snapshot.
     Snapshot,
+    /// Accessibility ▸ Reading order tool: draw a box around content and tag it.
+    ReadingOrder,
 }
 
 /// Files dropped on a document's page grid.
@@ -225,6 +274,8 @@ pub enum Dialog {
     Properties(PropsTab),
     About,
     Shortcuts,
+    /// Help → User guide (the bundled docs/user pages).
+    UserGuide,
     Split,
     /// Pages ▸ Number pages… (page labels).
     NumberPages,
@@ -279,10 +330,16 @@ pub enum Dialog {
     AccessibilityOptions,
     /// Scan & OCR ▸ Recognize text.
     RecognizeText,
+    /// Scan & OCR ▸ Enhance scans (camera, straighten, background, specks).
+    EnhanceScans,
     /// The JavaScript console (⌘J).
     JsConsole,
+    /// The JavaScript debugger (⌘⇧J).
+    JsDebugger,
     /// Document JavaScripts.
     DocumentJs,
+    /// A bookmark's or page's Run-a-JavaScript action ([`Self::action_script`]).
+    ActionScript,
     /// Preferences.
     Preferences,
     /// Compare files: choose the older version.
@@ -306,6 +363,33 @@ pub enum Dialog {
     SignatureProperties,
     /// A Submit Form button asks before sending.
     SubmitForm,
+    /// Print production ▸ Ink manager.
+    InkManager,
+    /// Print production ▸ Convert colors.
+    ConvertColors,
+    /// Print production ▸ Add printer marks.
+    PrinterMarks,
+    /// Tags panel ▸ Tag properties.
+    TagProperties,
+    /// Tags panel ▸ New tag.
+    NewTag,
+    /// Accessibility ▸ Autotag document / form fields: the options, then what was made.
+    Autotag,
+    AutotagSummary,
+    /// Use guided actions ▸ Make accessible.
+    MakeAccessible,
+    /// Protect → Encrypt with certificate (recipients and their permissions).
+    ProtectCertificates,
+    /// Redact → Redaction code sets (create, edit, import and export saved sets).
+    RedactCodeSets,
+    /// Bookmarks panel ▸ Properties (title, style, action).
+    BookmarkProperties,
+    /// Bookmarks panel ▸ New bookmarks from structure.
+    BookmarksFromStructure,
+    /// Pages ▸ Select pages (a typed range).
+    SelectPages,
+    /// Action Wizard ▸ Custom commands.
+    CustomCommands,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -409,6 +493,12 @@ pub struct PdfCraftApp {
     pub flatten_fill_sign_on_save: bool,
     pub dialog: Option<Dialog>,
     pub(crate) updates: updates::Updates,
+    /// A running Create ▸ Screen capture (the web has no capture tool).
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+    pub(crate) capture: screen_capture::Capture,
+    /// A whole-screen capture minimized the window; restore it when the capture ends.
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+    capture_hid_window: bool,
     pub palette_open: bool,
     pub palette_query: String,
     pub all_tools_expanded: bool,
@@ -466,7 +556,17 @@ pub struct PdfCraftApp {
     pub sign_draft: Option<SignDraft>,
     /// Digital ID files the user has created or added.
     pub digital_ids: Vec<DigitalIdEntry>,
-    pub timestamp_servers: Vec<pdfcraft_engine::signature_workflow::TimestampServer>,
+    /// Smart cards and tokens (sign.pkcs11): where PKCS #11 modules come from (the native
+    /// provider; tests put a software token here), the unlocked token while signing, an unlock
+    /// running in the background, and whether the next signature area goes to the token step.
+    pub token_provider: std::sync::Arc<dyn pdfcraft_engine::sign::token::TokenProvider>,
+    pub(crate) token_login: Option<pdfcraft_engine::sign::token::Login>,
+    pub(crate) token_unlock: Option<sign_ui::TokenUnlock>,
+    pub(crate) sign_with_token: bool,
+    /// Compare signed version with current: the object-level changes since that signature,
+    /// shown in the Signatures panel, and whether the next comparison opens side by side.
+    pub signed_comparison: Option<sign_ui::SignedComparison>,
+    pub(crate) side_by_side_after_compare: bool,
     pub signature_workflow: timestamp_ui::SignatureWorkflowState,
     pub signature_run: Option<timestamp_ui::SignatureRun>,
     /// Signatures panel: expanded entries (field names).
@@ -475,8 +575,11 @@ pub struct PdfCraftApp {
     pub a11y_options: a11y_ui::A11yOptions,
     /// Scan & OCR: the Recognize Text choices, the running job, and (tests) run it inline.
     pub ocr_draft: ocr_ui::OcrDraft,
+    pub enhance_draft: enhance_ui::EnhanceDraft,
     pub ocr_run: Option<ocr_ui::OcrRun>,
     pub ocr_batch: Option<std::sync::Arc<std::sync::Mutex<ocr_ui::BatchProgress>>>,
+    /// Bates numbering continued into other files, running in the background.
+    pub bates_batch: Option<std::sync::Arc<std::sync::Mutex<ocr_ui::BatchProgress>>>,
     /// Background jobs (OCR, actions, listing pinned folders) run inline instead (tests).
     pub run_inline: bool,
     /// Action Wizard: the user's actions, the dialog state, the running action and (tests) the
@@ -485,6 +588,17 @@ pub struct PdfCraftApp {
     pub wizard: actions_ui::Wizard,
     pub action_run: Option<std::sync::Arc<std::sync::Mutex<actions_ui::RunProgress>>>,
     pub action_files_override: Option<Vec<String>>,
+    /// Bookmark Properties, New bookmarks from structure and Select pages dialogs.
+    pub bookmark_props: Option<bookmark_ui::BookmarkProps>,
+    pub from_structure: bookmark_ui::FromStructure,
+    pub select_pages: select_pages_ui::SelectPages,
+    /// Search panel beyond the current document (open documents, a folder).
+    pub adv_search: search_ui::AdvancedSearch,
+    /// Attachments panel ▸ Associated files.
+    pub assoc: assoc_ui::AssocFiles,
+    /// Custom commands: the dialog, and the automation tools they run (installed by the app).
+    pub custom_commands: custom_commands_ui::CustomCommands,
+    pub tool_host: Option<std::sync::Arc<dyn pdfcraft_engine::tool_host::ToolHost>>,
     /// Standards ▸ PDF/A: level and last result.
     pub pdfa: standards_ui::PdfaState,
     pub preflight: preflight_ui::PreflightState,
@@ -495,14 +609,29 @@ pub struct PdfCraftApp {
     pub compare_draft: compare_ui::CompareDraft,
     /// A comparison running in the background.
     pub compare_run: Option<compare_ui::CompareRun>,
+    /// Compare side by side: the last comparison's old and new documents in two panes.
+    pub side_by_side: Option<compare_view::SideBySide>,
     /// The JavaScript console and the Document JavaScripts draft.
     pub js_console: js_ui::JsConsole,
+    /// The JavaScript debugger (Tools → JavaScript debugger).
+    pub js_debugger: js_debug_ui::JsDebugger,
+    /// Print production: Output Preview's panel state and the Ink Manager, Convert Colors and
+    /// Add Printer Marks dialogs.
+    pub output_preview: output_preview_ui::OutputPreviewUi,
+    pub ink_manager: prepress_ui::InkManagerDraft,
+    pub convert_draft: prepress_ui::ConvertDraft,
+    pub printer_marks_draft: prepress_ui::PrinterMarksDraft,
     pub doc_js: js_ui::DocJsDraft,
+    /// The Run-a-JavaScript action being edited (bookmark or page actions).
+    pub action_script: Option<js_ui::ActionScriptDraft>,
     /// The dialog a script is waiting on.
     pub js_question: Option<js_ui::JsQuestion>,
     pub a11y: a11y_ui::A11yState,
     pub a11y_skipped: std::collections::BTreeSet<pdfcraft_engine::a11y::Rule>,
     pub alt_draft: a11y_ui::AltDraft,
+    /// The Tags and Order panels, the Reading Order tool and the autotag / Make Accessible
+    /// dialogs.
+    pub a11y_tools: tags_ui::A11yTools,
     /// List the OS key store's signing identities among the digital IDs (the desktop app).
     pub os_key_store_ids: bool,
     pub cert_viewer: Option<sign_ui::CertViewer>,
@@ -549,7 +678,17 @@ pub struct PdfCraftApp {
     /// Entries left by a previous session, offered in the Recovery dialog.
     pub recoverable: Vec<RecoveryMeta>,
     recovery_keys: std::collections::HashMap<DocId, String>,
+    /// The store's earlier entries have been looked at (browser storage loads asynchronously).
+    recovery_loaded: bool,
+    /// Documents told they are too large for a recovery copy in the browser (said once).
+    recovery_too_large: std::collections::HashSet<DocId>,
     last_autosave: f64,
+    /// The Preferences window: its page, search text and text boxes being typed in.
+    pub prefs_ui: prefs_ui::PrefsUi,
+    /// Help → Keyboard shortcuts (its search) and Help → User guide (the page shown).
+    pub help_ui: help_ui::HelpUi,
+    /// The accessibility preferences last laid over the theme (see [`PdfCraftApp::restyle`]).
+    styled_a11y: Option<theme::Accessibility>,
     pending_recovered: Option<RecoveryMeta>,
     allow_quit: bool,
     /// Shortcuts pressed while a text field had the keyboard, run on the next frame (see
@@ -575,6 +714,14 @@ pub struct PdfCraftApp {
     pub number_draft: NumberDraft,
     /// Protect Using Password dialog state.
     pub protect_draft: protect::ProtectDraft,
+    /// Preferences → Security → Trust Manager: what is being typed.
+    pub trust_draft: trust_ui::TrustDraft,
+    /// Encrypt with certificate: the recipients and their permissions while the dialog is open.
+    pub cert_draft: cert_ui::CertDraft,
+    /// Redaction code sets: the set being edited.
+    pub code_sets_draft: redact_sets_ui::CodeSetsDraft,
+    /// Sends a form submission (tests swap in a mock; `None` uses the network).
+    pub submit_sender: Option<submit_ui::Sender>,
     /// Set Page Boxes dialog state.
     pub boxes_draft: pageboxes::BoxesDraft,
     /// Header & footer / watermark / background dialog state.
@@ -583,6 +730,10 @@ pub struct PdfCraftApp {
     pub export_draft: export_ui::ExportDraft,
     /// A running export's progress.
     export_status: Option<export_ui::ExportStatus>,
+    /// A document export (Word, Excel, PowerPoint, HTML, RTF, SVG, text) running on a worker.
+    export_run: Option<export_ui::ExportRun>,
+    /// Cancel request for the running image export.
+    export_cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
     /// The saved Fill & Sign signature and initials (drawn or typed).
     pub signature: Option<fill_sign::SavedSig>,
     pub initials: Option<fill_sign::SavedSig>,
@@ -593,6 +744,8 @@ pub struct PdfCraftApp {
     pub(crate) saved_signature_previews: [Option<(fill_sign::SavedSig, egui::TextureHandle)>; 2],
     #[cfg(target_arch = "wasm32")]
     pub(crate) signature_images: fill_sign::ImageInbox,
+    /// Digital ID files held in memory (picked in the browser or created in the web app).
+    pub(crate) picked_ids: picked_ids::PickedIds,
     /// The Comment Properties dialog's state.
     pub comment_props: Option<comment_props::PropsDraft>,
     pub field_props: Option<prepare::FieldDraft>,
@@ -611,6 +764,9 @@ pub struct PdfCraftApp {
     pub last_opened_url: Option<String>,
     /// A document asked to open this address; the user hasn't answered yet (#90, #91).
     pub pending_link: Option<PendingLink>,
+    /// The windows besides the main one and the tabs moved into them (see [`windows_ui`]).
+    pub windows: pdfcraft_engine::windows::WindowSet,
+    pub(crate) win: windows_ui::WindowsState,
 }
 
 /// Where in a document a request to open an address came from.
@@ -700,6 +856,8 @@ impl PdfCraftApp {
             flatten_fill_sign_on_save: false,
             dialog: None,
             updates: updates::Updates::default(),
+            capture: screen_capture::Capture::Idle,
+            capture_hid_window: false,
             palette_open: false,
             palette_query: String::new(),
             all_tools_expanded: false,
@@ -734,31 +892,53 @@ impl PdfCraftApp {
             summary_layout: Default::default(),
             sign_draft: None,
             digital_ids: Vec::new(),
-            timestamp_servers: Vec::new(),
+            token_provider: pdfcraft_platform::pkcs11::provider(),
+            token_login: None,
+            token_unlock: None,
+            sign_with_token: false,
+            signed_comparison: None,
+            side_by_side_after_compare: false,
             signature_workflow: timestamp_ui::SignatureWorkflowState::default(),
             signature_run: None,
             sig_expanded: Vec::new(),
             a11y_options: a11y_ui::A11yOptions::default(),
             ocr_draft: ocr_ui::OcrDraft::default(),
+            enhance_draft: enhance_ui::EnhanceDraft::default(),
             ocr_run: None,
             ocr_batch: None,
+            bates_batch: None,
             run_inline: false,
             custom_actions: Vec::new(),
             wizard: Default::default(),
             action_run: None,
             action_files_override: None,
+            bookmark_props: None,
+            from_structure: Default::default(),
+            select_pages: Default::default(),
+            adv_search: Default::default(),
+            assoc: Default::default(),
+            custom_commands: Default::default(),
+            tool_host: None,
             pdfa: Default::default(),
             preflight: Default::default(),
             compare_old: None,
             compare: None,
             compare_draft: Default::default(),
             compare_run: None,
+            side_by_side: None,
             js_console: Default::default(),
+            js_debugger: Default::default(),
+            output_preview: Default::default(),
+            ink_manager: Default::default(),
+            convert_draft: Default::default(),
+            printer_marks_draft: Default::default(),
             doc_js: Default::default(),
+            action_script: None,
             js_question: None,
             a11y: a11y_ui::A11yState::default(),
             a11y_skipped: Default::default(),
             alt_draft: Default::default(),
+            a11y_tools: Default::default(),
             os_key_store_ids: false,
             cert_viewer: None,
             sig_props: None,
@@ -785,7 +965,12 @@ impl PdfCraftApp {
             recovery: None,
             recoverable: Vec::new(),
             recovery_keys: Default::default(),
+            recovery_loaded: false,
+            recovery_too_large: Default::default(),
             last_autosave: 0.0,
+            prefs_ui: Default::default(),
+            help_ui: Default::default(),
+            styled_a11y: None,
             pending_recovered: None,
             allow_quit: false,
             deferred_commands: Vec::new(),
@@ -800,10 +985,16 @@ impl PdfCraftApp {
             last_opened_url: None,
             pending_link: None,
             protect_draft: Default::default(),
+            trust_draft: Default::default(),
+            cert_draft: Default::default(),
+            code_sets_draft: Default::default(),
+            submit_sender: None,
             boxes_draft: Default::default(),
             marks_draft: Default::default(),
             export_draft: Default::default(),
             export_status: None,
+            export_run: None,
+            export_cancel: Default::default(),
             signature: None,
             initials: None,
             signature_draft: Default::default(),
@@ -812,6 +1003,7 @@ impl PdfCraftApp {
             saved_signature_previews: [None, None],
             #[cfg(target_arch = "wasm32")]
             signature_images: Default::default(),
+            picked_ids: Default::default(),
             comment_props: None,
             field_props: None,
             bulk_field_props: None,
@@ -823,6 +1015,8 @@ impl PdfCraftApp {
             link_draft: None,
             text_style: content_ui::default_style(),
             replace_draft: None,
+            windows: Default::default(),
+            win: Default::default(),
             number_draft: NumberDraft { from: 1, to: 1, style: pdfcraft_engine::LabelStyle::Decimal, prefix: String::new(), start: 1 },
         }
     }
@@ -942,7 +1136,7 @@ impl PdfCraftApp {
         if let Some(p) = path {
             self.recent.retain(|r| r.path != p);
             self.recent.insert(0, RecentFile { name: name.to_string(), path: p, pages, size });
-            self.recent.truncate(12);
+            self.recent.truncate(self.session.prefs().recent_files as usize);
         }
         // What the form's scripts said while it opened (messages, errors) shows now, not with
         // the next edit.
@@ -1181,14 +1375,29 @@ impl PdfCraftApp {
         if index >= self.views.len() {
             return;
         }
-        let Some(id) = self.views.get(index).map(|v| v.id) else { return };
-        // Document Will Close runs first; what it changes is closed with the document.
-        self.run_document_action(id, pdfcraft_engine::DocTrigger::WillClose);
-        let id = self.views.remove(index).id;
-        self.forget_recovery(id);
-        self.session.close(id);
+        let Some((id, key)) = self.views.get(index).map(|v| (v.id, v.key)) else { return };
+        // Another window may show the document too: then only this view closes.
+        let last_view = !self.views.iter().any(|v| v.id == id && v.key != key);
+        if last_view {
+            // Document Will Close runs first; what it changes is closed with the document.
+            self.run_document_action(id, pdfcraft_engine::DocTrigger::WillClose);
+        }
+        let Some(index) = self.view_index(key) else { return };
+        let window = self.windows.window_of(key);
+        self.views.remove(index);
+        self.windows.remove_tab(key);
+        if last_view {
+            self.forget_recovery(id);
+            self.session.close(id);
+        }
         self.active = match self.active {
             _ if self.views.is_empty() => None,
+            // The tab beside it in the same window takes its place.
+            Some(a) if a == index && window.is_main() => {
+                let main: Vec<usize> = (0..self.views.len()).filter(|&i| self.in_main(i)).collect();
+                main.iter().copied().find(|&i| i >= index).or_else(|| main.last().copied())
+            }
+            Some(a) if a == index => self.windows.active(window).and_then(|t| self.view_index(t.key)),
             Some(a) if a > index => Some(a - 1),
             Some(a) if a >= self.views.len() => Some(self.views.len() - 1),
             other => other,
@@ -1283,9 +1492,27 @@ impl PdfCraftApp {
     pub fn set_theme_preference(&mut self, preference: ThemePreference) {
         self.theme_preference = preference;
         self.theme = preference.resolve(self.ctx.as_ref().and_then(egui::Context::system_theme), self.theme);
-        if let Some(ctx) = &self.ctx {
-            theme::apply(ctx, self.theme);
+        if let Some(ctx) = self.ctx.clone() {
+            self.restyle(&ctx);
         }
+    }
+
+    /// The accessibility preferences (Preferences ▸ Accessibility).
+    pub fn accessibility(&self) -> theme::Accessibility {
+        let p = self.session.prefs();
+        theme::Accessibility { text_scale: p.text_scale, reduce_motion: p.reduce_motion, high_contrast: p.high_contrast }
+    }
+
+    /// Apply the theme with the accessibility preferences over it. The text size changes only
+    /// when its preference does, so a zoom the user made with the keyboard stays otherwise.
+    fn restyle(&mut self, ctx: &egui::Context) {
+        let a = self.accessibility();
+        theme::apply(ctx, self.theme);
+        theme::apply_accessibility(ctx, a);
+        if self.styled_a11y.is_none_or(|old| old.text_scale != a.text_scale) {
+            ctx.set_zoom_factor(a.text_scale);
+        }
+        self.styled_a11y = Some(a);
     }
 
     /// Draw the running job's progress card and pass a Cancel click on to the job.
@@ -1293,6 +1520,7 @@ impl PdfCraftApp {
         self.signature_progress(ctx);
         if widgets::progress_notice(self, ctx) {
             self.cancel_optimize();
+            self.cancel_export();
         }
     }
 
@@ -1300,7 +1528,10 @@ impl PdfCraftApp {
         let kind = self.theme_preference.resolve(ctx.system_theme(), self.theme);
         if kind != self.theme {
             self.theme = kind;
-            theme::apply(ctx, kind);
+            self.restyle(ctx);
+        } else if self.styled_a11y != Some(self.accessibility()) {
+            // Preferences ▸ Accessibility changed (a cheap comparison each frame).
+            self.restyle(ctx);
         }
     }
 
@@ -1391,18 +1622,30 @@ impl PdfCraftApp {
             "signature_text": match &self.signature { Some(fill_sign::SavedSig::Typed(t)) => Some(t), _ => None },
             "signature_image": match &self.signature { Some(s @ fill_sign::SavedSig::Image(_)) => Some(s), _ => None },
             "initials": self.initials,
-            // macOS Keychain and Windows store identities are read from their OS key stores each time.
-            "digital_ids": self.digital_ids.iter().filter(|e| !e.path.starts_with("keychain:") && !e.path.starts_with("windows:")).collect::<Vec<_>>(),
+            // Keychain, Windows store and token identities are read from where they live each time.
+            // Files picked in the browser are held in memory only (picked_ids), so not listed.
+            "digital_ids": self
+                .digital_ids
+                .iter()
+                .filter(|e| !sign_ui::is_key_store_entry(&e.path) && !picked_ids::is_picked(&e.path))
+                .collect::<Vec<_>>(),
             "trusted": trusted,
             "url_access": self.session.url_policy(),
-            "timestamp_servers": self.timestamp_servers,
+            "timestamp_servers": self.session.timestamp_servers(),
+            "signature_appearances": self.session.signature_appearances().iter().map(|a| a.to_json()).collect::<Vec<_>>(),
+            "trusted_settings": self.session.saved_certificate_trust_settings(),
             "custom_stamps": stamps_ui::encode(&self.custom_stamps),
             "javascript": self.session.javascript(),
             // Trust Manager ▸ attachments: the user's allow/deny lists.
             "attachment_trust": self.session.attachment_trust().to_settings(),
+            "redaction_code_sets": pdfcraft_engine::redaction_sets::code_sets_json(self.session.redaction_code_sets()),
             "actions": actions_ui::encode(&self.custom_actions),
             "combine_columns": self.combine_columns.to_json(),
             "comments_panel_closed": self.comments_panel_closed,
+            "comment_tool_pinned": self.comment_prefs.pinned,
+            // Preferences by key (autosave, recent files, identity, field highlights, signing
+            // defaults, accessibility, colour management; see `pdfcraft_engine::prefs`).
+            "prefs": self.session.saved_prefs(),
             "updates": self.persist_updates(),
         })
         .to_string()
@@ -1411,6 +1654,14 @@ impl PdfCraftApp {
     /// Restore state written by `persist`. Unknown or malformed data is ignored.
     pub fn restore(&mut self, json: &str) {
         let Ok(v) = serde_json::from_str::<serde_json::Value>(json) else { return };
+        // Untrusted: unknown keys and unusable values keep the defaults.
+        let skipped = self.session.load_prefs(&v["prefs"]);
+        if !skipped.is_empty() {
+            log::warn!("preferences that couldn't be read kept their defaults: {}", skipped.join(", "));
+        }
+        if let Some(on) = v["comment_tool_pinned"].as_bool() {
+            self.comment_prefs.pinned = on;
+        }
         self.combine_columns = combine_ui::Columns::from_json(&v["combine_columns"]);
         self.restore_updates(&v["updates"]);
         if let Ok(r) = serde_json::from_value::<Vec<RecentFile>>(v["recent"].clone()) {
@@ -1418,6 +1669,7 @@ impl PdfCraftApp {
             #[cfg(not(target_arch = "wasm32"))]
             let r: Vec<RecentFile> = r.into_iter().filter(|f| std::path::Path::new(&f.path).exists()).collect();
             self.recent = r;
+            self.recent.truncate(self.session.prefs().recent_files as usize);
         }
         if let Some(on) = v["reopen_last_session"].as_bool() {
             self.reopen_last_session = on;
@@ -1463,6 +1715,8 @@ impl PdfCraftApp {
         if let Some(author) = v["author"].as_str().map(str::trim).filter(|a| !a.is_empty()) {
             self.comment_prefs.author = author.chars().take(MAX_AUTHOR_CHARS).collect();
         }
+        // The session's identity follows the saved author, so automation agrees with the app.
+        self.sync_identity_name();
         // Per-tool comment styles (#340): each field goes through its clamping setter, so a
         // malformed or hostile entry is clamped or ignored rather than trusted.
         if let Some(styles) = v["comment_styles"].as_array() {
@@ -1505,11 +1759,33 @@ impl PdfCraftApp {
         if let Ok(i) = serde_json::from_value::<fill_sign::SavedSig>(v["initials"].clone()) {
             self.initials = Some(i);
         }
-        if let Ok(ids) = serde_json::from_value::<Vec<DigitalIdEntry>>(v["digital_ids"].clone()) {
+        if let Ok(mut ids) = serde_json::from_value::<Vec<DigitalIdEntry>>(v["digital_ids"].clone()) {
+            // A held file's bytes don't outlive its page; an entry naming one lists nothing.
+            ids.retain(|e| !picked_ids::is_picked(&e.path));
             self.digital_ids = ids;
         }
-        if let Ok(servers) = serde_json::from_value::<Vec<pdfcraft_engine::signature_workflow::TimestampServer>>(v["timestamp_servers"].clone()) {
-            self.timestamp_servers = servers.into_iter().take(32).filter(|s| s.validate().is_ok()).collect();
+        // Untrusted settings: unusable servers and appearances are skipped, the lists capped.
+        if let Some(list) = v["timestamp_servers"].as_array() {
+            let mut servers: Vec<pdfcraft_engine::signature_workflow::TimestampServer> = Vec::new();
+            for s in list.iter().filter_map(|x| serde_json::from_value::<pdfcraft_engine::signature_workflow::TimestampServer>(x.clone()).ok()) {
+                if s.validate().is_ok()
+                    && !servers.iter().any(|o| o.name == s.name)
+                    && servers.len() < pdfcraft_engine::signature_settings::MAX_TIMESTAMP_SERVERS
+                {
+                    servers.push(s);
+                }
+            }
+            let _ = self.session.set_timestamp_servers(servers);
+        }
+        if let Some(list) = v["signature_appearances"].as_array() {
+            for a in list.iter().take(pdfcraft_engine::signature_settings::MAX_APPEARANCES) {
+                match pdfcraft_engine::signature_settings::SavedAppearance::from_json(a) {
+                    Ok(a) => {
+                        let _ = self.session.save_signature_appearance(a);
+                    }
+                    Err(e) => log::warn!("a saved signature appearance couldn't be read: {e}"),
+                }
+            }
         }
         self.custom_stamps = stamps_ui::decode(&v["custom_stamps"]);
         self.custom_actions = actions_ui::decode(&v["actions"]);
@@ -1524,6 +1800,12 @@ impl PdfCraftApp {
             }
         }
         // Untrusted settings: bad entries are skipped and the lists capped.
+        if let Some(sets) = v.get("redaction_code_sets") {
+            let skipped = self.session.restore_redaction_code_sets(sets);
+            if skipped > 0 {
+                log::warn!("redaction code sets: {skipped} couldn't be read and were dropped");
+            }
+        }
         if v.get("attachment_trust").is_some() {
             self.session.set_attachment_trust(pdfcraft_engine::attachment_trust::AttachmentTrust::from_settings(&v["attachment_trust"]));
         }
@@ -1531,6 +1813,8 @@ impl PdfCraftApp {
             let certs = pems.iter().filter_map(|p| pdfcraft_engine::sign::x509::load_certificates(p.as_bytes()).ok()).flatten().collect();
             self.session.set_trusted_certificates(certs);
         }
+        // After the certificates they belong to.
+        self.session.load_certificate_trust_settings(&v["trusted_settings"]);
     }
 
     /// `true` while any open document still waits for page renders (used by headless capture).
@@ -1545,8 +1829,32 @@ impl PdfCraftApp {
         if let Some(result) = self.set_signature_option(key, value) {
             return result;
         }
+        if let Some(result) = self.set_window_option(key, value) {
+            return result;
+        }
+        if let Some(result) = self.set_output_preview_option(key, value) {
+            return result;
+        }
+        // `pref.<key>`: any preference by key (see `prefs_ui`); a value starting with `[` is read
+        // as JSON (a colour as [r, g, b]), anything else as text, which numbers and booleans
+        // accept too.
+        if let Some(pref) = key.strip_prefix("pref.") {
+            let v = if value.trim_start().starts_with('[') {
+                serde_json::from_str(value).unwrap_or_else(|_| serde_json::Value::String(value.to_string()))
+            } else {
+                serde_json::Value::String(value.to_string())
+            };
+            return self.set_pref(pref, &v).map(|_| ());
+        }
         let view = self.active.and_then(|i| self.views.get_mut(i));
         match (key, view) {
+            ("shortcuts-query", _) => self.help_ui.query = value.chars().take(pdfcraft_engine::help::MAX_QUERY_CHARS).collect(),
+            ("user-guide-page", _) => self.set_guide_page(value)?,
+            ("preferences-page", _) => {
+                let ids: Vec<&str> = prefs_ui::Page::ALL.iter().map(|p| p.id()).collect();
+                self.prefs_ui.page = prefs_ui::Page::from_id(value).ok_or_else(|| format!("preferences-page must be one of {}", ids.join(", ")))?;
+                self.prefs_ui.query.clear();
+            }
             ("language", _) => {
                 let language = i18n::normalize_pref(value).ok_or_else(|| {
                     let codes: Vec<&str> = std::iter::once(i18n::AUTO).chain(i18n::Lang::all().map(i18n::Lang::code)).collect();
@@ -1569,8 +1877,11 @@ impl PdfCraftApp {
                     "attachments" => Some(RightPanel::Attachments),
                     "signatures" => Some(RightPanel::Signatures),
                     "accessibility" => Some(RightPanel::Accessibility),
+                    "tags" => Some(RightPanel::Tags),
+                    "order" => Some(RightPanel::Order),
                     "search" => Some(RightPanel::Search),
                     "compare" => Some(RightPanel::Compare),
+                    "output-preview" => Some(RightPanel::OutputPreview),
                     "none" => None,
                     other => return Err(format!("unknown panel {other}")),
                 }
@@ -1591,6 +1902,28 @@ impl PdfCraftApp {
                 self.left_open = true;
             }
             ("left", _) => self.left_open = value != "closed",
+            ("js-debugger-script", _) => self.debugger_select_id(value)?,
+            ("js-debugger-breakpoints", _) => {
+                let lines: Vec<u32> = value
+                    .split(',')
+                    .map(str::trim)
+                    .filter(|v| !v.is_empty())
+                    .map(|v| v.parse().map_err(|_| "js-debugger-breakpoints must be line numbers, e.g. 2,5"))
+                    .collect::<Result<_, _>>()?;
+                self.js_debugger.breakpoints.clear();
+                for l in lines {
+                    self.js_debugger.toggle_breakpoint(l);
+                }
+            }
+            ("js-debugger-watches", _) => {
+                self.js_debugger.watches = value
+                    .split('\n')
+                    .map(str::trim)
+                    .filter(|v| !v.is_empty())
+                    .take(pdfcraft_engine::js_debug::MAX_WATCHES)
+                    .map(str::to_string)
+                    .collect();
+            }
             ("home", _) => self.active = None,
             ("dialog", _) => {
                 self.dialog = match value {
@@ -1599,8 +1932,26 @@ impl PdfCraftApp {
                     "fonts" => Some(Dialog::Properties(PropsTab::Fonts)),
                     "advanced" => Some(Dialog::Properties(PropsTab::Advanced)),
                     "shortcuts" => Some(Dialog::Shortcuts),
+                    "user-guide" => Some(Dialog::UserGuide),
                     "split" => Some(Dialog::Split),
                     "protect" => Some(Dialog::Protect),
+                    "protect-certificates" => {
+                        self.cert_draft = Default::default();
+                        Some(Dialog::ProtectCertificates)
+                    }
+                    "redaction-code-sets" => {
+                        self.code_sets_draft = Default::default();
+                        Some(Dialog::RedactCodeSets)
+                    }
+                    "trust-manager" => {
+                        self.prefs_ui.page = crate::prefs_ui::Page::Security;
+                        self.prefs_ui.query.clear();
+                        Some(Dialog::Preferences)
+                    }
+                    "document-actions" => {
+                        self.open_document_actions();
+                        self.dialog
+                    }
                     "page-boxes" => Some(Dialog::PageBoxes),
                     "header-footer" => Some(Dialog::Marks(pdfcraft_engine::MarkKind::HeaderFooter)),
                     "watermark" => Some(Dialog::Marks(pdfcraft_engine::MarkKind::Watermark)),
@@ -1610,13 +1961,31 @@ impl PdfCraftApp {
                     "export-all-images" => Some(Dialog::Export(export_ui::ExportKind::AllImages)),
                     "accessibility-options" => Some(Dialog::AccessibilityOptions),
                     "recognize-text" => Some(Dialog::RecognizeText),
+                    "enhance-scans" => Some(Dialog::EnhanceScans),
+                    "export-word" => Some(Dialog::Export(export_ui::ExportKind::Word)),
+                    "export-excel" => Some(Dialog::Export(export_ui::ExportKind::Excel)),
+                    "export-powerpoint" => Some(Dialog::Export(export_ui::ExportKind::PowerPoint)),
+                    "export-html" => Some(Dialog::Export(export_ui::ExportKind::Html)),
+                    "export-rtf" => Some(Dialog::Export(export_ui::ExportKind::Rtf)),
+                    "export-svg" => Some(Dialog::Export(export_ui::ExportKind::Svg)),
+                    "export-accessible-text" => Some(Dialog::Export(export_ui::ExportKind::AccessibleText)),
                     "js-console" => Some(Dialog::JsConsole),
+                    "js-debugger" => {
+                        self.open_js_debugger();
+                        Some(Dialog::JsDebugger)
+                    }
                     "document-js" => Some(Dialog::DocumentJs),
                     "preferences" => Some(Dialog::Preferences),
                     "compare-files" => Some(Dialog::CompareFiles),
                     "action-wizard" => Some(Dialog::ActionWizard),
                     "pdfa" => Some(Dialog::PdfA),
                     "preflight" => Some(Dialog::Preflight),
+                    "ink-manager" => {
+                        self.open_ink_manager();
+                        self.dialog
+                    }
+                    "convert-colors" => Some(Dialog::ConvertColors),
+                    "printer-marks" => Some(Dialog::PrinterMarks),
                     "signature" => Some(Dialog::Signature),
                     "optimize" => {
                         self.open_optimizer();
@@ -1663,6 +2032,48 @@ impl PdfCraftApp {
                 self.view_defaults =
                     self.view_defaults.with_zoom(value).ok_or("default-zoom must be fit-width, fit-page or a percentage from 8 to 6400")?;
             }
+            ("compare-view", _) => match value {
+                "on" if !self.side_by_side_showing() => {
+                    if !self.open_side_by_side() {
+                        return Err("compare two open documents first (doc.compare), with both still open".into());
+                    }
+                }
+                "on" => {}
+                "off" => self.side_by_side = None,
+                _ => return Err("compare-view must be on or off".into()),
+            },
+            ("compare-sync", _) => {
+                let on = match value {
+                    "on" => true,
+                    "off" => false,
+                    _ => return Err("compare-sync must be on or off".into()),
+                };
+                if !self.side_by_side_showing() {
+                    return Err("open the side-by-side view first (compare-view on)".into());
+                }
+                self.side_by_side_sync(Some(on));
+            }
+            ("compare-change", _) => {
+                if !self.side_by_side_showing() {
+                    return Err("open the side-by-side view first (compare-view on)".into());
+                }
+                let v = self.side_by_side.as_mut().ok_or("open the side-by-side view first (compare-view on)")?;
+                let n = v.model.changes.len();
+                let i = value.parse::<usize>().ok().filter(|i| (1..=n).contains(i)).ok_or_else(|| {
+                    if n == 0 {
+                        "this comparison found no changes".to_string()
+                    } else {
+                        format!("compare-change must be a change number from 1 to {n}")
+                    }
+                })?;
+                v.go_to(i - 1);
+            }
+            ("compare-zoom", _) => {
+                let z = value.trim_end_matches('%').parse::<f32>().ok().filter(|z| z.is_finite() && (8.0..=1600.0).contains(z));
+                let z = z.ok_or("compare-zoom must be a percentage from 8 to 1600")?;
+                let v = self.side_by_side.as_mut().ok_or("open the side-by-side view first (compare-view on)")?;
+                v.set_zoom(z / 100.0);
+            }
             ("organize", Some(v)) => v.organize = value != "off",
             // `--grid-zoom 150`: the size of the pages in the organize grid, in percent.
             ("grid-zoom", Some(v)) => {
@@ -1700,6 +2111,29 @@ impl PdfCraftApp {
                 v.rerun_find();
             }
             ("fields", Some(v)) => v.highlight_fields = value != "off",
+            ("objects", Some(v)) => {
+                // `--objects 2:1,3` (1-based page and objects) selects page objects for the
+                // Edit object tool; `none` clears the selection.
+                if value == "none" {
+                    v.objects.clear();
+                } else {
+                    let (page, list) = value.split_once(':').ok_or("objects: PAGE:N,N… (1-based) or none")?;
+                    let page = page.trim().parse::<usize>().ok().filter(|p| *p >= 1).ok_or("objects: the page is a number from 1")?;
+                    let doc = self.session.get(v.id).ok_or("objects: no document")?;
+                    let n = doc.page_objects(page - 1).len();
+                    let mut picked = Vec::new();
+                    for k in list.split(',') {
+                        let k = k
+                            .trim()
+                            .parse::<usize>()
+                            .ok()
+                            .filter(|k| (1..=n).contains(k))
+                            .ok_or_else(|| format!("objects: object numbers are 1 to {n}"))?;
+                        picked.push(k - 1);
+                    }
+                    v.objects.select(page - 1, picked, doc.edit_generation());
+                }
+            }
             ("select", Some(v)) => {
                 // `--select 2,3,5` (1-based) selects pages in the organize grid.
                 let pages: Result<Vec<usize>, _> = value.split(',').map(|p| p.trim().parse::<usize>().map(|n| n.saturating_sub(1))).collect();
@@ -1718,10 +2152,12 @@ impl PdfCraftApp {
                     "redact" => QuickTool::Redact,
                     "add-text" => QuickTool::AddText,
                     "edit-text" => QuickTool::EditText,
+                    "edit-object" => QuickTool::EditObject,
                     "link" => QuickTool::Link,
                     "sign" => QuickTool::SignArea { certify: false },
                     "marquee-zoom" => QuickTool::MarqueeZoom,
                     "snapshot" => QuickTool::Snapshot,
+                    "reading-order" => QuickTool::ReadingOrder,
                     "certify" => QuickTool::SignArea { certify: true },
                     custom if custom.starts_with("custom-stamp-") => {
                         let i: usize = custom[13..].parse().map_err(|_| format!("bad stamp {custom}"))?;
@@ -1808,6 +2244,14 @@ impl PdfCraftApp {
                     if let Some(doc) = self.session.get(self.views[i].id) {
                         prepare::select_all(&mut self.views[i], &doc.form);
                     }
+                } else if self.quick_tool == QuickTool::EditObject {
+                    // Edit objects: every object on the current page.
+                    if let Some(doc) = self.session.get(self.views[i].id) {
+                        let view = &mut self.views[i];
+                        let page = view.current;
+                        let n = view.objects.objects(doc, page).objects.len();
+                        view.objects.select(page, (0..n).collect(), doc.edit_generation());
+                    }
                 } else {
                     self.views[i].select_all();
                 }
@@ -1869,10 +2313,17 @@ impl eframe::App for PdfCraftApp {
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         storage.set_string("pdfcraft", self.persist());
+        // The browser tab is being hidden or closed: keep a recovery copy of the latest changes
+        // (only documents changed since their last snapshot are written).
+        #[cfg(target_arch = "wasm32")]
+        if self.autosave_interval().is_some() && web_sys::window().and_then(|w| w.document()).is_some_and(|d| d.hidden()) {
+            self.autosave_now();
+        }
     }
 
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.ctx = Some(ctx.clone());
+        self.settle_windows();
         self.dialog_epoch();
         // Notices raised outside `ui` (opened files, OS events, the control channel) translate too.
         let lang = i18n::Lang::from_pref(&self.language);
@@ -1883,7 +2334,7 @@ impl eframe::App for PdfCraftApp {
             egui_extras::install_image_loaders(ctx);
             theme::install_fonts_for(ctx, hans);
             self.fonts_hans = hans;
-            theme::apply(ctx, self.theme);
+            self.restyle(ctx);
             self.styled = true;
         } else {
             self.fonts_ready = true;
@@ -1905,6 +2356,8 @@ impl eframe::App for PdfCraftApp {
         }
         #[cfg(target_arch = "wasm32")]
         self.process_signature_images();
+        #[cfg(target_arch = "wasm32")]
+        self.process_picked_ids();
         let dropped = ctx.input(|i| i.raw.dropped_files.clone());
         #[cfg(not(target_arch = "wasm32"))]
         let dropped = self.drop_on_grid(dropped, ctx);
@@ -1953,6 +2406,8 @@ impl eframe::App for PdfCraftApp {
                 OsEvent::Quit => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
             }
         }
+        // Page Open / Page Close scripts, only when the current page changed.
+        self.run_page_actions();
         if let Some((_, id)) = self.active_ids() {
             let out = self.session.take_js_output(id);
             self.handle_js(id, out);
@@ -1963,16 +2418,29 @@ impl eframe::App for PdfCraftApp {
         }
         self.guard_quit(ctx);
         let now = ctx.input(|i| i.time);
-        self.autosave_tick(now);
+        self.autosave_tick(now, Some(ctx));
         self.poll_updates(now);
+        self.poll_capture();
         // Shortcuts deferred last frame: the text field has taken that frame's typing since.
         let deferred = std::mem::take(&mut self.deferred_commands);
-        self.shortcuts(ctx);
+        // A dialog or prompt opened in another window takes that window's keys, not these.
+        if self.win.overlay.is_main() {
+            self.shortcuts(ctx);
+        }
         // Scrolling is transient: never resume after changing tabs, opening a modal/palette,
         // or returning to a window that lost focus.
         let blocked = self.dialog.is_some() || self.close_request.is_some() || self.palette_open || !ctx.input(|i| i.focused);
+        // Tabs shown in other windows follow their own window's focus.
+        let elsewhere = if self.windows.is_empty() { Vec::new() } else { self.window_views() };
+        let overlay = self.overlay_open();
+        let focused: Vec<bool> = elsewhere.iter().map(|(w, _)| self.window_focused(*w)).collect();
         for (index, view) in self.views.iter_mut().enumerate() {
-            if blocked || self.active != Some(index) {
+            let other = elsewhere.iter().position(|(_, i)| *i == index);
+            let stop = match other {
+                Some(k) => overlay || !focused.get(k).copied().unwrap_or(false),
+                None => blocked || self.active != Some(index),
+            };
+            if stop {
                 view.auto_scroll.cancel();
                 view.cancel_reader_input();
             }
@@ -1989,6 +2457,7 @@ impl eframe::App for PdfCraftApp {
         }
         self.poll_export();
         self.poll_ocr();
+        self.poll_bates();
         self.poll_signature_workflow();
         self.poll_submit();
         self.poll_compare();
@@ -2007,9 +2476,12 @@ impl eframe::App for PdfCraftApp {
             ctx.request_repaint();
             return;
         }
+        self.settle_windows();
+        self.note_main_window(&ctx);
         for view in &mut self.views {
             view.begin_render_frame();
         }
+        self.share_rasters();
         // The window shows the active document's name (or title, if it asks for that).
         let title = self
             .active
@@ -2032,11 +2504,15 @@ impl eframe::App for PdfCraftApp {
                     }
                 },
             );
-            dialogs::show(self, &ctx);
-            edit_text_ui::preview_dialog(self, &ctx);
+            if self.win.overlay.is_main() {
+                dialogs::show(self, &ctx);
+                edit_text_ui::preview_dialog(self, &ctx);
+            }
             // Notices too: a refused field value or a failed save must be seen in full screen.
             self.show_progress(&ctx);
             widgets::toast(self, &ctx);
+            self.show_windows(&ctx);
+            self.sync_sibling_views();
             self.finish_render_frame(&ctx);
             return;
         }
@@ -2055,44 +2531,137 @@ impl eframe::App for PdfCraftApp {
         egui::CentralPanel::default().frame(egui::Frame::NONE.fill(t.pasteboard)).show(ui, |ui| match self.active {
             None if self.combine_showing() => combine_ui::page(self, ui),
             None => home::show(self, ui),
-            Some(i) => canvas::document_area(self, i, ui),
+            Some(_) if self.side_by_side_showing() => compare_view::show(self, ui),
+            Some(i) => {
+                canvas::document_area(self, i, ui);
+                reading_order_ui::overlay(self, i, ui);
+            }
         });
         self.process_pending_edits();
-        palette::show(self, &ctx);
-        dialogs::show(self, &ctx);
-        edit_text_ui::preview_dialog(self, &ctx);
-        self.show_progress(&ctx);
-        widgets::toast(self, &ctx);
+        if self.win.overlay.is_main() {
+            palette::show(self, &ctx);
+            dialogs::show(self, &ctx);
+            edit_text_ui::preview_dialog(self, &ctx);
+        }
+        // Notices show in the window the user is in.
+        let elsewhere = !self.windows.is_empty() && self.windows.windows().iter().any(|w| self.window_focused(w.id));
+        if !elsewhere {
+            self.show_progress(&ctx);
+            widgets::toast(self, &ctx);
+        }
+        self.show_windows(&ctx);
+        self.sync_sibling_views();
         self.finish_render_frame(&ctx);
     }
 }
 
 impl PdfCraftApp {
+    /// What the main window is like this frame (its focus and where it is on the screen), for
+    /// the other windows' focus rules and tab drops.
+    fn note_main_window(&mut self, ctx: &egui::Context) {
+        if self.windows.is_empty() && self.win.drag.is_none() {
+            return;
+        }
+        let (focused, inner, minimized) = ctx.input(|i| (i.focused, i.viewport().inner_rect, i.viewport().minimized.unwrap_or(false)));
+        let info = self.win.info.entry(pdfcraft_engine::windows::WindowId::MAIN).or_default();
+        info.focused = focused;
+        info.minimized = minimized;
+        info.origin = inner.map_or(egui::Pos2::ZERO, |r| r.min);
+    }
+
+    /// The views on screen split the application's page and tile allowance: the main window's
+    /// document, the side-by-side partner and each other window's tab (as last drawn).
+    fn share_rasters(&mut self) {
+        let mut shown = usize::from(self.active.is_some()) + usize::from(self.side_by_side_partner().is_some());
+        if !self.windows.is_empty() {
+            shown = shown.saturating_add(self.window_views().len());
+        }
+        let share = shown.max(1);
+        for view in &mut self.views {
+            view.raster_share = share;
+        }
+    }
+
     fn finish_render_frame(&mut self, ctx: &egui::Context) {
         let reader_blocked = self.dialog.is_some()
             || self.close_request.is_some()
             || self.palette_open
             || !ctx.input(|input| input.focused)
             || ctx.egui_wants_keyboard_input();
-        // Retire hidden documents before admitting the visible document's textures, so the
+        // Retire hidden documents before admitting the visible documents' textures, so the
         // three cache limits apply to the application, regardless of how many tabs are open.
-        for (i, view) in self.views.iter_mut().enumerate() {
-            if reader_blocked || Some(i) != self.active || view.organize {
-                view.cancel_reader_input();
-            }
-            if Some(i) != self.active
-                && let Some(doc) = self.session.get(view.id)
-            {
-                view.suspend_rendering(&doc.renderer);
+        // Side by side, the two documents on screen split the page and tile allowance; so do
+        // the documents in other windows.
+        let partner = self.side_by_side_partner();
+        let mut shown: Vec<usize> = Vec::new();
+        shown.extend(self.active.filter(|&i| i < self.views.len()));
+        if let Some(p) = partner.and_then(|id| self.views.iter().position(|v| v.id == id))
+            && !shown.contains(&p)
+        {
+            shown.push(p);
+        }
+        for &i in &self.win.drawn {
+            if i < self.views.len() && !shown.contains(&i) {
+                shown.push(i);
             }
         }
-        if let Some(view) = self.active.and_then(|i| self.views.get_mut(i))
-            && let Some(doc) = self.session.get(view.id)
-        {
-            view.finish_render_frame(ctx, &doc.info, &doc.renderer);
-            if !reader_blocked && !view.organize {
-                view.finish_reader_copy(ctx, doc.allows_copying());
+        let shown_docs: Vec<DocId> = shown.iter().filter_map(|&i| self.views.get(i).map(|v| v.id)).collect();
+        for (i, view) in self.views.iter_mut().enumerate() {
+            let elsewhere = self.win.drawn.contains(&i);
+            if !elsewhere && (reader_blocked || Some(i) != self.active || view.organize || partner.is_some()) {
+                view.cancel_reader_input();
             }
+            if !shown.contains(&i)
+                && let Some(doc) = self.session.get(view.id)
+            {
+                if shown_docs.contains(&view.id) {
+                    // Another view (another window) shows this document: keep its queue.
+                    view.suspend_textures();
+                } else {
+                    view.suspend_rendering(&doc.renderer);
+                }
+            }
+        }
+        let main = self.active;
+        let mut done: Vec<DocId> = Vec::new();
+        for &id in &shown_docs {
+            if done.contains(&id) {
+                continue;
+            }
+            done.push(id);
+            let Some(doc) = self.session.get(id) else { continue };
+            let group: Vec<usize> = shown.iter().copied().filter(|&i| self.views.get(i).is_some_and(|v| v.id == id)).collect();
+            if let [only] = group.as_slice() {
+                let only = *only;
+                // No longer shown twice: the pool may still hold the shared queue.
+                if self.win.shared_queues.remove(&id).is_some_and(|q| !q.is_empty()) {
+                    doc.renderer.set_queue(Vec::new());
+                    if let Some(v) = self.views.get_mut(only) {
+                        v.forget_queue();
+                    }
+                }
+                let Some(view) = self.views.get_mut(only) else { continue };
+                view.finish_render_frame(ctx, &doc.info, &doc.renderer);
+                if Some(only) == main && !reader_blocked && !view.organize && partner.is_none() {
+                    view.finish_reader_copy(ctx, doc.allows_copying());
+                }
+            } else {
+                let last = self.win.shared_queues.entry(id).or_default();
+                let mut views: Vec<&mut DocView> = self.views.iter_mut().enumerate().filter(|(i, _)| group.contains(i)).map(|(_, v)| v).collect();
+                DocView::finish_shared_render_frame(&mut views, ctx, &doc.info, &doc.renderer, last);
+                if let Some(view) = main.filter(|i| group.contains(i)).and_then(|i| self.views.get_mut(i))
+                    && !reader_blocked
+                    && !view.organize
+                    && partner.is_none()
+                {
+                    view.finish_reader_copy(ctx, doc.allows_copying());
+                }
+            }
+        }
+        if !self.win.shared_queues.is_empty() {
+            let multi: Vec<DocId> =
+                done.into_iter().filter(|id| shown.iter().filter(|&&i| self.views.get(i).is_some_and(|v| v.id == *id)).count() > 1).collect();
+            self.win.shared_queues.retain(|id, _| multi.contains(id));
         }
     }
 }

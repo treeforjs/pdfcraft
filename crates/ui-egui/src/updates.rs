@@ -137,14 +137,6 @@ impl PdfCraftApp {
             self.updates.auto = auto;
         }
     }
-
-    /// Settings ▸ General: the automatic check on or off.
-    pub(crate) fn auto_update_checkbox(&mut self, ui: &mut egui::Ui) {
-        #[cfg(not(target_arch = "wasm32"))]
-        ui.checkbox(&mut self.updates.auto.enabled, tl!("Check for updates automatically"));
-        #[cfg(target_arch = "wasm32")]
-        let _ = ui;
-    }
 }
 
 /// What the dialog's buttons asked for.

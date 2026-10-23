@@ -2031,7 +2031,6 @@ action wizard	Start	ప్రారంభించు
 	? of {n}	{n}లో ?
 	Added more than once	ఒకటి కంటే ఎక్కువసార్లు జోడించబడింది
 	yesterday	నిన్న
-	{n} days ago	{n} రోజుల క్రితం
 	No pages selected	పేజీలు ఏవీ ఎంచుకోబడలేదు
 	Password-protected	పాస్‌వర్డ్‌తో రక్షించబడింది
 	Its security settings don't allow copying pages	దీని భద్రతా సెట్టింగ్‌లు పేజీలను కాపీ చేయడాన్ని అనుమతించవు
@@ -2236,3 +2235,925 @@ compare-page	Moved	తరలించబడింది
 	Archive documents…	పత్రాలను ఆర్కైవ్ చేయి…
 	Archive Documents	పత్రాలను ఆర్కైవ్ చేయి
 	Save as PDF/A-2b for long-term archiving.	దీర్ఘకాలిక ఆర్కైవ్ కోసం PDF/A-2b గా సేవ్ చేస్తుంది.
+	Open pop-up	పాప్-అప్ తెరువు
+	Close pop-up	పాప్-అప్ మూసివేయి
+	Move pop-up	పాప్-అప్ తరలించు
+	Resize pop-up	పాప్-అప్ పరిమాణం మార్చు
+	No text	వచనం లేదు
+	Open pop-up note	పాప్-అప్ గమనిక తెరువు
+	Close pop-up note	పాప్-అప్ గమనిక మూసివేయి
+	Open all pop-ups	అన్ని పాప్-అప్‌లను తెరువు
+	Close all pop-ups	అన్ని పాప్-అప్‌లను మూసివేయి
+	No pop-ups to open	తెరవడానికి పాప్-అప్‌లు లేవు
+	No pop-ups are open	తెరిచిన పాప్-అప్‌లు లేవు
+	Trigger:	ట్రిగ్గర్:
+	Page Open	పేజీ తెరవడం
+	Page Close	పేజీ మూసివేయడం
+	Run a JavaScript…	JavaScriptను అమలు చేయి…
+	Page actions…	పేజీ చర్యలు…
+	Type the JavaScript.	JavaScriptను టైప్ చేయండి.
+	Bookmark Action	బుక్‌మార్క్ చర్య
+	Runs when the bookmark is clicked.	బుక్‌మార్క్‌ను క్లిక్ చేసినప్పుడు అమలవుతుంది.
+	Page Actions: page {n}	పేజీ చర్యలు: పేజీ {n}
+	Page Open runs when the page becomes the current page; Page Close when another page does.	పేజీ ప్రస్తుత పేజీ అయినప్పుడు "పేజీ తెరవడం" అమలవుతుంది; మరొక పేజీ ప్రస్తుత పేజీ అయినప్పుడు "పేజీ మూసివేయడం" అమలవుతుంది.
+	JavaScript, e.g. app.alert("Hello")	JavaScript, ఉదా. app.alert("నమస్తే")
+	{s} actions aren't run by PdfCraft yet	{s} చర్యలను PdfCraft ఇంకా అమలు చేయదు
+	Insert clipboard before	క్లిప్‌బోర్డ్‌ను ముందు చొప్పించు
+	Insert clipboard after	క్లిప్‌బోర్డ్‌ను తర్వాత చొప్పించు
+	Couldn't insert pages: {e}	పేజీలను చొప్పించలేకపోయాము: {e}
+	Screen capture cancelled	స్క్రీన్ క్యాప్చర్ రద్దు చేయబడింది
+	Couldn't capture the screen: {e}	స్క్రీన్‌ను క్యాప్చర్ చేయలేకపోయాము: {e}
+	Create PDF from screen capture	స్క్రీన్ క్యాప్చర్ నుండి PDF సృష్టించు
+	Create PDF from window capture	విండో క్యాప్చర్ నుండి PDF సృష్టించు
+	Create PDF from region capture	ప్రాంతం క్యాప్చర్ నుండి PDF సృష్టించు
+	Insert pages from clipboard	క్లిప్‌బోర్డ్ నుండి పేజీలను చొప్పించు
+	Insert pages from clipboard before selection	ఎంపికకు ముందు క్లిప్‌బోర్డ్ నుండి పేజీలను చొప్పించు
+	Screen capture	స్క్రీన్ క్యాప్చర్
+	Window capture	విండో క్యాప్చర్
+	Region capture	ప్రాంతం క్యాప్చర్
+	Insert from clipboard	క్లిప్‌బోర్డ్ నుండి చొప్పించు
+	No screen capture tool was found. Capture with your system's tool, then use Create PDF from clipboard.	స్క్రీన్ క్యాప్చర్ సాధనం కనబడలేదు. మీ సిస్టమ్ సాధనంతో క్యాప్చర్ చేసి, తర్వాత క్లిప్‌బోర్డ్ నుండి PDF సృష్టించు ఉపయోగించండి.
+# Preferences window (M14)
+	min	నిమి
+	Absolute colorimetric	సంపూర్ణ కలరిమెట్రిక్
+	Allow	అనుమతించు
+	Allow all sites	అన్ని సైట్‌లను అనుమతించు
+	Always	ఎల్లప్పుడూ
+	Always use the working spaces	ఎల్లప్పుడూ వర్కింగ్ స్పేస్‌లను వాడు
+	Ask each time	ప్రతిసారీ అడుగు
+	Automatic	స్వయంచాలకం
+	Black point compensation	బ్లాక్ పాయింట్ పరిహారం
+	Block	నిరోధించు
+	Block all sites	అన్ని సైట్‌లను నిరోధించు
+	CMYK working space	CMYK వర్కింగ్ స్పేస్
+	Color management	రంగు నిర్వహణ
+	Default location	డిఫాల్ట్ స్థానం
+	Default reason	డిఫాల్ట్ కారణం
+	Documents	పత్రాలు
+	Don't color-manage untagged color	ట్యాగ్ లేని రంగును నిర్వహించవద్దు
+	Each document's own Highlight fields button still turns them on and off.	ప్రతి పత్రంలోని ఫీల్డ్‌లను హైలైట్ చేయి బటన్ వాటిని ఆన్ మరియు ఆఫ్ చేస్తూనే ఉంటుంది.
+	Field highlight color	ఫీల్డ్ హైలైట్ రంగు
+	Gray working space	గ్రే వర్కింగ్ స్పేస్
+	High contrast	అధిక కాంట్రాస్ట్
+	Highlight form fields in documents that open	తెరిచే పత్రాల్లో ఫారమ్ ఫీల్డ్‌లను హైలైట్ చేయి
+	Internet access from PDFs	PDFల నుండి ఇంటర్నెట్ యాక్సెస్
+	Keep the comment tool selected after adding a comment	వ్యాఖ్యను జోడించిన తర్వాత వ్యాఖ్య సాధనాన్ని ఎంచుకున్నట్లే ఉంచు
+	Makes all interface text and controls larger or smaller.	ఇంటర్‌ఫేస్‌లోని మొత్తం వచనం మరియు నియంత్రణలను పెద్దవి లేదా చిన్నవి చేస్తుంది.
+	Never	ఎప్పుడూ వద్దు
+	New signatures start with these; you can change them when signing.	కొత్త సంతకాలు వీటితో ప్రారంభమవుతాయి; సంతకం చేసేటప్పుడు మీరు వాటిని మార్చవచ్చు.
+	No preferences match “{query}”.	“{query}”కి సరిపోయే ప్రాధాన్యతలు లేవు.
+	Off: after one comment, the Select tool comes back.	ఆఫ్: ఒక వ్యాఖ్య తర్వాత ఎంపిక సాధనం తిరిగి వస్తుంది.
+	Only for PDF/X files	PDF/X ఫైళ్లకు మాత్రమే
+	Open the Comments panel when a comment tool is chosen	వ్యాఖ్య సాధనాన్ని ఎంచుకున్నప్పుడు వ్యాఖ్యల ప్యానెల్‌ను తెరువు
+	Output intent overrides working spaces	అవుట్‌పుట్ ఇంటెంట్ వర్కింగ్ స్పేస్‌లను భర్తీ చేస్తుంది
+	Perceptual	గ్రహణాత్మక
+	RGB working space	RGB వర్కింగ్ స్పేస్
+	Recent files to remember	గుర్తుంచుకోవలసిన ఇటీవలి ఫైళ్లు
+	Reduce motion	కదలికను తగ్గించు
+	Relative colorimetric	సాపేక్ష కలరిమెట్రిక్
+	Rendering intent	రెండరింగ్ ఇంటెంట్
+	Required field border color	తప్పనిసరి ఫీల్డ్ అంచు రంగు
+	Saturation	సంతృప్తత
+	Save recovery copies of unsaved changes every	సేవ్ చేయని మార్పుల పునరుద్ధరణ కాపీలను ప్రతి ఇంత సమయానికి సేవ్ చేయి
+	Search preferences	ప్రాధాన్యతలను శోధించు
+	Shown on Home and in File ▸ Open Recent. 0 keeps no list.	హోమ్‌లో మరియు ఫైల్ → ఇటీవలివి తెరువులో చూపబడతాయి. 0 అయితే జాబితా ఉంచదు.
+	Signs new comments. Empty uses your login name.	కొత్త వ్యాఖ్యలపై సంతకం చేస్తుంది. ఖాళీగా ఉంటే మీ లాగిన్ పేరు వాడబడుతుంది.
+	Sites without a rule	నియమం లేని సైట్‌లు
+	Stronger text, borders and outlines in every theme.	ప్రతి థీమ్‌లో గాఢమైన వచనం, అంచులు మరియు రూపురేఖలు.
+	Text size	వచన పరిమాణం
+	Theme	థీమ్
+	Turns off animations and smooth scrolling.	యానిమేషన్‌లు మరియు సున్నితమైన స్క్రోలింగ్‌ను ఆఫ్ చేస్తుంది.
+	Unsaved changes are kept in a recovery folder so they survive a crash. 0 turns autosave off.	సేవ్ చేయని మార్పులు క్రాష్ తర్వాత కూడా ఉండేలా పునరుద్ధరణ ఫోల్డర్‌లో ఉంచబడతాయి. 0 ఆటోసేవ్‌ను ఆఫ్ చేస్తుంది.
+	Untagged color	ట్యాగ్ లేని రంగు
+	Untagged gray, RGB and CMYK color is shown through these profiles.	ట్యాగ్ లేని గ్రే, RGB మరియు CMYK రంగులు ఈ ప్రొఫైల్‌ల ద్వారా చూపబడతాయి.
+	Use overprint preview	ఓవర్‌ప్రింట్ ప్రివ్యూ వాడు
+	Use the site rules	సైట్ నియమాలను వాడు
+	Used by Output Preview and page images made for print checks.	అవుట్‌పుట్ ప్రివ్యూ మరియు ప్రింట్ తనిఖీల కోసం చేసిన పేజీ చిత్రాలు దీన్ని వాడతాయి.
+	Whether links and scripts in PDFs may reach web sites.	PDFలలోని లింక్‌లు మరియు స్క్రిప్ట్‌లు వెబ్‌సైట్‌లను చేరవచ్చో లేదో.
+	Your identity is suggested when you create a digital ID.	డిజిటల్ IDని సృష్టించినప్పుడు మీ గుర్తింపు సూచించబడుతుంది.
+	Compare side by side	పక్కపక్కన పోల్చు
+	Next change	తదుపరి మార్పు
+	Previous change	మునుపటి మార్పు
+	Synchronise scrolling	స్క్రోలింగ్‌ను సమకాలీకరించు
+	Both compared files must be open	పోల్చిన రెండు ఫైల్‌లూ తెరిచి ఉండాలి
+	Change list	మార్పుల జాబితా
+	Change {i} of {n}	మార్పు {i} / {n}
+	Changes	మార్పులు
+	Close side-by-side view	పక్కపక్క వీక్షణను మూసివేయి
+	Compare two files first (Compare files…)	ముందుగా రెండు ఫైల్‌లను పోల్చండి (ఫైల్‌లను పోల్చు…)
+	Fit width	వెడల్పుకు సరిపెట్టు
+	Looks different	వేరుగా కనిపిస్తుంది
+	Old: {name}	పాతది: {name}
+	New: {name}	కొత్తది: {name}
+	No changes	మార్పులు లేవు
+	Not in the new file	కొత్త ఫైల్‌లో లేదు
+	Not in the old file	పాత ఫైల్‌లో లేదు
+	Old page {o} · new page {n}	పాత పేజీ {o} · కొత్త పేజీ {n}
+	Page deleted	పేజీ తొలగించబడింది
+	Page inserted	పేజీ చొప్పించబడింది
+	Page moved	పేజీ తరలించబడింది
+	Rendering…	రెండరింగ్…
+	Changes: {n}	మార్పులు: {n}
+	Edit objects	ఆబ్జెక్ట్‌లను సవరించు
+	Click an object to select it, or drag around several	ఆబ్జెక్ట్‌ను ఎంచుకోవడానికి దానిపై క్లిక్ చేయండి, లేదా అనేకవాటి చుట్టూ లాగండి
+	Bring to Front	అన్నిటికంటే ముందుకు
+	Bring Forward	ఒక స్థాయి ముందుకు
+	Send Backward	ఒక స్థాయి వెనక్కి
+	Send to Back	అన్నిటికంటే వెనక్కి
+	Object properties	ఆబ్జెక్ట్ లక్షణాలు
+	Form XObject	ఫారమ్ XObject
+	Shading	షేడింగ్
+	{n} objects selected	{n} ఆబ్జెక్ట్‌లు ఎంచుకోబడ్డాయి
+	Arrange	అమర్చు
+	Fill color	నింపు రంగు
+	Stroke color	గీత రంగు
+	Line width	గీత మందం
+	Recover unsaved documents…	సేవ్ చేయని పత్రాలను పునరుద్ధరించు…
+	Save recovery copies now	పునరుద్ధరణ కాపీలను ఇప్పుడే సేవ్ చేయి
+	PdfCraft was closed with unsaved changes. These documents have recovery copies in this browser:	సేవ్ చేయని మార్పులతో PdfCraft మూసివేయబడింది. ఈ పత్రాలకు ఈ బ్రౌజర్‌లో పునరుద్ధరణ కాపీలు ఉన్నాయి:
+	This browser can't keep recovery copies of unsaved changes: {e}	ఈ బ్రౌజర్ సేవ్ చేయని మార్పుల పునరుద్ధరణ కాపీలను ఉంచలేదు: {e}
+	{name} is too large to keep a recovery copy in the browser	{name} బ్రౌజర్‌లో పునరుద్ధరణ కాపీని ఉంచడానికి చాలా పెద్దది
+	Autosave is off, so there is nothing to recover	ఆటోసేవ్ ఆఫ్‌లో ఉంది, కాబట్టి పునరుద్ధరించడానికి ఏమీ లేదు
+	Still looking for recovery copies…	పునరుద్ధరణ కాపీల కోసం వెతుకుతోంది…
+	Nothing to recover	పునరుద్ధరించడానికి ఏమీ లేదు
+	Saved recovery copies of unsaved changes	సేవ్ చేయని మార్పుల పునరుద్ధరణ కాపీలు సేవ్ చేయబడ్డాయి
+	Recovery copies are up to date	పునరుద్ధరణ కాపీలు తాజాగా ఉన్నాయి
+
+# JavaScript debugger
+	(top level)	(అగ్ర స్థాయి)
+	Add a watch expression	గమనించే వ్యక్తీకరణను జోడించండి
+	Annotations	వ్యాఖ్యానాలు
+	Bookmark	బుక్‌మార్క్
+	Breakpoint on line {n}	{n}వ పంక్తిలో బ్రేక్‌పాయింట్
+	Call stack	కాల్ స్టాక్
+	Click a line number to set a breakpoint.	బ్రేక్‌పాయింట్ పెట్టడానికి పంక్తి సంఖ్యను క్లిక్ చేయండి.
+	Document script	డాక్యుమెంట్ స్క్రిప్ట్
+	Edited here only: runs use this text; the document keeps its script.	ఇక్కడ మాత్రమే మార్చబడింది: రన్‌లు ఈ పాఠ్యాన్ని వాడతాయి; డాక్యుమెంట్ తన స్క్రిప్ట్‌ను ఉంచుకుంటుంది.
+	Error	లోపం
+	Error on line {n}	{n}వ పంక్తిలో లోపం
+	Evaluate	మూల్యాంకనం
+	Evaluate in the paused scope	ఆపిన పరిధిలో మూల్యాంకనం చేయండి
+	Filter scripts	స్క్రిప్ట్‌లను వడపోయండి
+	Finished	పూర్తయింది
+	JavaScript Debugger	JavaScript డీబగ్గర్
+	JavaScript debugger…	JavaScript డీబగ్గర్…
+	JavaScript is turned off (Preferences → JavaScript).	JavaScript ఆఫ్‌లో ఉంది (అభిరుచులు → JavaScript).
+	Keystroke	కీస్ట్రోక్
+	Lines: {n}	పంక్తులు: {n}
+	Link {n}	లింక్ {n}
+	Links	లింక్‌లు
+	More scripts than can be listed; the list is cut.	జాబితా చేయగలిగిన దానికంటే ఎక్కువ స్క్రిప్ట్‌లు ఉన్నాయి; జాబితా కత్తిరించబడింది.
+	No scripts match.	సరిపోలే స్క్రిప్ట్‌లు లేవు.
+	Not paused	ఆపబడలేదు
+	Open action	తెరిచే చర్య
+	Page {n}	పేజీ {n}
+	Paused on line {n}	{n}వ పంక్తి వద్ద ఆపబడింది
+	Refresh	రిఫ్రెష్
+	Run JavaScript against the document	డాక్యుమెంట్‌పై JavaScript రన్ చేయండి
+	Scratch script	చిత్తు స్క్రిప్ట్
+	Scripts: {n}	స్క్రిప్ట్‌లు: {n}
+	Step into	లోపలికి అడుగు
+	Step out	బయటికి అడుగు
+	Step over	దాటి అడుగు
+	Stopped. Nothing the script did was applied.	ఆపబడింది. స్క్రిప్ట్ చేసినవేవీ వర్తింపజేయబడలేదు.
+	Stopped: the script ran too long	ఆపబడింది: స్క్రిప్ట్ చాలా సేపు నడిచింది
+	The paused point could not be reached again.	ఆపిన స్థానాన్ని మళ్లీ చేరుకోలేకపోయాం.
+	This document has no scripts.	ఈ డాక్యుమెంట్‌లో స్క్రిప్ట్‌లు లేవు.
+	Watch values show here when the script pauses.	స్క్రిప్ట్ ఆగినప్పుడు గమనించే విలువలు ఇక్కడ కనిపిస్తాయి.
+	Watches	గమనింపులు
+	document script, line {n}	డాక్యుమెంట్ స్క్రిప్ట్, {n}వ పంక్తి
+	line {n}	{n}వ పంక్తి
+	{error} (document script {name}, line {n})	{error} (డాక్యుమెంట్ స్క్రిప్ట్ {name}, {n}వ పంక్తి)
+	{error} (line {n})	{error} ({n}వ పంక్తి)
+	New window	కొత్త విండో
+	Move tab to new window	ట్యాబ్‌ను కొత్త విండోకు తరలించు
+	Move tab to main window	ట్యాబ్‌ను ప్రధాన విండోకు తరలించు
+	Close window	విండోను మూసివేయి
+	Separate windows are only available in the desktop app	ప్రత్యేక విండోలు డెస్క్‌టాప్ యాప్‌లో మాత్రమే అందుబాటులో ఉన్నాయి
+	Window {n}	విండో {n}
+	{window} has closed	{window} మూసివేయబడింది
+	That tab has closed	ఆ ట్యాబ్ మూసివేయబడింది
+	At most {n} windows can be open besides the main window: close one first	ప్రధాన విండో కాకుండా గరిష్ఠంగా {n} విండోలు తెరిచి ఉండవచ్చు: ముందుగా ఒకదాన్ని మూసివేయండి
+	{window} has no room for more tabs	{window}లో మరిన్ని ట్యాబ్‌లకు చోటు లేదు
+	This tab is already in a window of its own	ఈ ట్యాబ్ ఇప్పటికే దాని విండోలో ఒంటరిగా ఉంది
+	This is the main window: quit to close it	ఇది ప్రధాన విండో: దీన్ని మూసివేయడానికి యాప్ నుండి నిష్క్రమించండి
+	This tab is in the main window	ఈ ట్యాబ్ ప్రధాన విండోలో ఉంది
+	Move tab to {window}	ట్యాబ్‌ను {window}కు తరలించు
+	Release to open in a new window	కొత్త విండోలో తెరవడానికి వదిలేయండి
+	This page only  ·  	ఈ పేజీ మాత్రమే  ·  
+	The file stays on this device: PdfCraft reads it in this page and forgets it when the page closes. The password is never stored.	ఫైల్ ఈ పరికరంలోనే ఉంటుంది: PdfCraft దీన్ని ఈ పేజీలో చదువుతుంది, పేజీ మూసినప్పుడు మరచిపోతుంది. పాస్‌వర్డ్ ఎప్పుడూ నిల్వ చేయబడదు.
+	Downloaded the new digital ID as {name}. Keep it: this page forgets it when it closes.	కొత్త డిజిటల్ IDని {name}గా డౌన్‌లోడ్ చేశాం. దాన్ని భద్రపరచండి: ఈ పేజీ మూసినప్పుడు దాన్ని మరచిపోతుంది.
+	Signed. Downloaded {name}	సంతకం చేయబడింది. {name} డౌన్‌లోడ్ అయింది
+	Sign with a smart card or token	స్మార్ట్ కార్డ్ లేదా టోకెన్‌తో సంతకం చేయండి
+	Sign with a Smart Card or Token	స్మార్ట్ కార్డ్ లేదా టోకెన్‌తో సంతకం చేయండి
+	Use a Smart Card or Token	స్మార్ట్ కార్డ్ లేదా టోకెన్ ఉపయోగించండి
+	The signature is made on the card or token. Its private key never leaves it.	సంతకం కార్డ్ లేదా టోకెన్‌పైనే తయారవుతుంది. దాని ప్రైవేట్ కీ ఎప్పుడూ బయటకు రాదు.
+	PKCS #11 module	PKCS #11 మాడ్యూల్
+	Find tokens	టోకెన్‌లను కనుగొనండి
+	No PKCS #11 module was found here. Choose the module file that came with your card or token (for example opensc-pkcs11).	ఇక్కడ PKCS #11 మాడ్యూల్ కనబడలేదు. మీ కార్డ్ లేదా టోకెన్‌తో వచ్చిన మాడ్యూల్ ఫైల్‌ను ఎంచుకోండి (ఉదాహరణకు opensc-pkcs11).
+	Serial	సీరియల్
+	PIN locked	PIN లాక్ అయింది
+	One try left	ఒక ప్రయత్నం మిగిలింది
+	PIN pad	PIN ప్యాడ్
+	No card	కార్డ్ లేదు
+	PIN	PIN
+	Enter the PIN on the reader's keypad, then choose Unlock.	రీడర్ కీప్యాడ్‌పై PIN నమోదు చేసి, తర్వాత అన్‌లాక్ ఎంచుకోండి.
+	Waiting for the token…	టోకెన్ కోసం వేచి ఉంది…
+	Choose the certificate to sign with:	సంతకం చేయడానికి సర్టిఫికెట్‌ను ఎంచుకోండి:
+	No certificate on this token can sign.	ఈ టోకెన్‌లోని ఏ సర్టిఫికెట్ కూడా సంతకం చేయలేదు.
+	Certificates left out: {n}	వదిలివేసిన సర్టిఫికెట్‌లు: {n}
+	Token  ·  	టోకెన్  ·  
+	The key is on the smart card or token, and the signature is made there.	కీ స్మార్ట్ కార్డ్ లేదా టోకెన్‌పై ఉంది, సంతకం అక్కడే తయారవుతుంది.
+	Choose a slot with a card or token.	కార్డ్ లేదా టోకెన్ ఉన్న స్లాట్‌ను ఎంచుకోండి.
+	Unlock the token again.	టోకెన్‌ను మళ్లీ అన్‌లాక్ చేయండి.
+
+# Localization: the language command, file sizes, relative dates.
+	Interface language…	ఇంటర్‌ఫేస్ భాష…
+	Auto ({language})	ఆటో ({language})
+	{n} KB	{n} KB
+	{n} MB	{n} MB
+@plural	{n} byte|{n} bytes	{n} బైట్|{n} బైట్‌లు
+@plural	{n} day ago|{n} days ago	{n} రోజు క్రితం|{n} రోజుల క్రితం
+
+# Home folders, Combine and page tools added since the last review.
+	Created a PDF from the first {n} files	మొదటి {n} ఫైల్‌ల నుండి PDF సృష్టించబడింది
+	Created a PDF from {n} files	{n} ఫైల్‌ల నుండి PDF సృష్టించబడింది
+	Created a PDF from {n} files; left out: {names}	{n} ఫైల్‌ల నుండి PDF సృష్టించబడింది; వదిలివేసినవి: {names}
+	Flatten Fill & Sign when saving	సేవ్ చేసేటప్పుడు నింపడం & సంతకాన్ని ఫ్లాటెన్ చేయి
+	Folders	ఫోల్డర్‌లు
+	Insert a file at the end	చివరలో ఒక ఫైల్‌ను చొప్పించు
+	Insert a file before page {label}	పేజీ {label} ముందు ఒక ఫైల్‌ను చొప్పించు
+	Larger pages	పెద్ద పేజీలు
+	Line ending	గీత చివర
+	Looking for PDFs…	PDFల కోసం వెతుకుతోంది…
+	No PDFs in this folder yet	ఈ ఫోల్డర్‌లో ఇంకా PDFలు లేవు
+	No changes to save	సేవ్ చేయడానికి మార్పులు లేవు
+	PDF, images and text	PDF, చిత్రాలు మరియు వచనం
+	Pin a folder to Home	ఒక ఫోల్డర్‌ను హోమ్‌కు పిన్ చేయి
+	Pin a folder to list its newest PDFs here, such as where your scanner or a synced cloud drive saves them.	ఒక ఫోల్డర్‌ను పిన్ చేస్తే దానిలోని కొత్త PDFలు ఇక్కడ కనిపిస్తాయి, ఉదాహరణకు మీ స్కానర్ లేదా సింక్ అయ్యే క్లౌడ్ డ్రైవ్ వాటిని సేవ్ చేసే చోటు.
+	Pin a folder…	ఒక ఫోల్డర్‌ను పిన్ చేయి…
+	Reset page size	పేజీ పరిమాణాన్ని రీసెట్ చేయి
+	Save pages	పేజీలను సేవ్ చేయి
+	Save these pages as one PDF	ఈ పేజీలను ఒకే PDFగా సేవ్ చేయి
+	Show less	తక్కువ చూపించు
+	Show {n} more	మరో {n} చూపించు
+	Smaller pages	చిన్న పేజీలు
+	Text, marks and signatures become part of the page. Other comments stay editable.	వచనం, గుర్తులు మరియు సంతకాలు పేజీలో భాగమవుతాయి. ఇతర వ్యాఖ్యలు సవరించదగినవిగానే ఉంటాయి.
+	The newest {n} of {total} PDFs	{total} PDFలలో కొత్తవి {n}
+	The standard fonts can't draw “{c}” ({code}). Only Western European characters can be added as text for now.	ప్రామాణిక ఫాంట్‌లు “{c}” ({code})ను గీయలేవు. ప్రస్తుతానికి పశ్చిమ యూరోపియన్ అక్షరాలను మాత్రమే వచనంగా జోడించవచ్చు.
+	This folder isn't available right now. It may have moved, or its drive or cloud sync is offline.	ఈ ఫోల్డర్ ప్రస్తుతం అందుబాటులో లేదు. అది తరలించబడి ఉండవచ్చు, లేదా దాని డ్రైవ్ లేదా క్లౌడ్ సింక్ ఆఫ్‌లైన్‌లో ఉండవచ్చు.
+	Unpin	పిన్ తీసివేయి
+	Unpin {folder}	{folder} పిన్ తీసివేయి
+	Downloading text recognition models… {r} of {t} MB	టెక్స్ట్ గుర్తింపు మోడళ్లను డౌన్‌లోడ్ చేస్తోంది… {t} MBలో {r} MB
+	The text recognition models (12 MB) are downloaded from this site the first time you recognize text, then kept in this browser.	టెక్స్ట్ గుర్తింపు మోడళ్లు (12 MB) మీరు మొదటిసారి టెక్స్ట్‌ను గుర్తించినప్పుడు ఈ సైట్ నుండి డౌన్‌లోడ్ అవుతాయి, ఆ తర్వాత ఈ బ్రౌజర్‌లోనే ఉంటాయి.
+	the text recognition models haven't been downloaded into this browser yet; run Recognize Text to download them	టెక్స్ట్ గుర్తింపు మోడళ్లు ఇంకా ఈ బ్రౌజర్‌లోకి డౌన్‌లోడ్ కాలేదు; వాటిని డౌన్‌లోడ్ చేయడానికి టెక్స్ట్‌ను గుర్తించు అమలు చేయండి
+	User guide	వినియోగదారు గైడ్
+	Search shortcuts	షార్ట్‌కట్‌లను వెతకండి
+	No shortcuts match “{query}”.	“{query}”కి సరిపోలే షార్ట్‌కట్‌లు లేవు.
+	Document view	డాక్యుమెంట్ వీక్షణ
+	Tools	సాధనాలు
+# Print production
+	Add marks	గుర్తులను జోడించు
+	Add printer marks…	ప్రింటర్ గుర్తులను జోడించు…
+	Advanced:	అధునాతనం:
+	All spots to process	అన్ని స్పాట్ రంగులను ప్రాసెస్‌కు
+	Analyzing…	విశ్లేషిస్తోంది…
+	Annotation	వ్యాఖ్య
+	Apply to document	పత్రానికి వర్తింపజేయి
+	Bleed marks	బ్లీడ్ గుర్తులు
+	Choose at least one mark.	కనీసం ఒక గుర్తును ఎంచుకోండి.
+	Click on the page to list the objects under the pointer.	పాయింటర్ కింద ఉన్న వస్తువుల జాబితా కోసం పేజీపై క్లిక్ చేయండి.
+	Color bars	రంగు పట్టీలు
+	Color management…	రంగు నిర్వహణ…
+	Color warnings	రంగు హెచ్చరికలు
+	Colors converted: {n}	మార్చిన రంగులు: {n}
+	Colors to convert	మార్చాల్సిన రంగులు
+	Convert colors…	రంగులను మార్చు…
+	Convert spot colors to process	స్పాట్ రంగులను ప్రాసెస్‌కు మార్చు
+	Convert to:	దీనికి మార్చు:
+	Cyan	సియాన్
+	Each sheet is sent as one picture.	ప్రతి షీట్ ఒకే చిత్రంగా పంపబడుతుంది.
+	Eastern	తూర్పు
+	Font	ఫాంట్
+	Highest on this page: {n}	ఈ పేజీలో అత్యధికం: {n}
+	Highlight coverage over	ఈ విలువకు మించిన కవరేజీని హైలైట్ చేయి
+	ICC profile	ICC ప్రొఫైల్
+	ICC-based	ICC ఆధారిత
+	Ink manager	ఇంక్ నిర్వాహకం
+	Ink manager…	ఇంక్ నిర్వాహకం…
+	Inks changed in the document	పత్రంలో ఇంక్‌లు మార్చబడ్డాయి
+	Inks here: {inks} (total {total})	ఇక్కడి ఇంక్‌లు: {inks} (మొత్తం {total})
+	Inks of the first {n} pages.	మొదటి {n} పేజీల ఇంక్‌లు.
+	Line art	లైన్ ఆర్ట్
+	Line weight:	గీత మందం:
+	Load ICC profile…	ICC ప్రొఫైల్‌ను లోడ్ చేయి…
+	Loaded the profile {name}	{name} ప్రొఫైల్ లోడ్ అయింది
+	Magenta	మెజెంటా
+	No alias	మారుపేరు లేదు
+	No ink needed changing	ఏ ఇంక్‌ను మార్చాల్సిన అవసరం లేదు
+	No overprint, rich black or registration color on this page.	ఈ పేజీలో ఓవర్‌ప్రింట్, రిచ్ బ్లాక్ లేదా రిజిస్ట్రేషన్ రంగు లేదు.
+	Not DeviceCMYK	DeviceCMYK కాదు
+	Nothing is painted here.	ఇక్కడ ఏమీ చిత్రించలేదు.
+	Nothing to convert	మార్చడానికి ఏమీ లేదు
+	OK keeps these settings for this session; Apply to document changes the file.	OK ఈ సెషన్ కోసం ఈ సెట్టింగ్‌లను ఉంచుతుంది; పత్రానికి వర్తింపజేయి ఫైల్‌ను మారుస్తుంది.
+	Object inspector	ఆబ్జెక్ట్ ఇన్‌స్పెక్టర్
+	Offset from trim:	ట్రిమ్ నుండి ఆఫ్‌సెట్:
+	Output intent	అవుట్‌పుట్ ఇంటెంట్
+	Overprint	ఓవర్‌ప్రింట్
+	Page information	పేజీ సమాచారం
+	Preserve black	నలుపును కాపాడు
+	Print as image	చిత్రంగా ముద్రించు
+	Process	ప్రాసెస్
+	Registration color	రిజిస్ట్రేషన్ రంగు
+	Registration marks	రిజిస్ట్రేషన్ గుర్తులు
+	Rendering intent:	రెండరింగ్ ఇంటెంట్:
+	Reset	రీసెట్
+	Rich black	రిచ్ బ్లాక్
+	Separations	సెపరేషన్లు
+	Set an alias or convert a spot ink to process first.	ముందుగా మారుపేరు సెట్ చేయండి లేదా స్పాట్ ఇంక్‌ను ప్రాసెస్‌కు మార్చండి.
+	Show all inks	అన్ని ఇంక్‌లను చూపు
+	Simulate black ink	నలుపు ఇంక్‌ను అనుకరించు
+	Simulate overprinting	ఓవర్‌ప్రింటింగ్‌ను అనుకరించు
+	Simulate paper color	కాగితం రంగును అనుకరించు
+	Simulation profile	అనుకరణ ప్రొఫైల్
+	Small rich black text	చిన్న రిచ్ బ్లాక్ టెక్స్ట్
+	Solid color	ఘన రంగు
+	Some objects can't be measured and are left out.	కొన్ని వస్తువులను కొలవలేము, అవి వదిలివేయబడ్డాయి.
+	Spot colors	స్పాట్ రంగులు
+	Stroke	స్ట్రోక్
+	Style:	శైలి:
+	The page grows to make room for the marks.	గుర్తులకు చోటు కోసం పేజీ పెద్దదవుతుంది.
+	The profile is larger than {n} MB.	ప్రొఫైల్ {n} MB కంటే పెద్దది.
+	This document uses only the process inks.	ఈ పత్రం ప్రాసెస్ ఇంక్‌లను మాత్రమే ఉపయోగిస్తుంది.
+	To process	ప్రాసెస్‌కు
+	Total area coverage	మొత్తం ఇంక్ కవరేజీ
+	Transparency	పారదర్శకత
+	Trim marks	ట్రిమ్ గుర్తులు
+	Use Lab values for spot colors	స్పాట్ రంగులకు Lab విలువలు వాడు
+	Vector objects	వెక్టర్ వస్తువులు
+	Western	పాశ్చాత్య
+	White overprint	తెలుపు ఓవర్‌ప్రింట్
+	Working CMYK space	CMYK పని స్థలం
+	embedded	పొందుపరచబడింది
+	not embedded	పొందుపరచలేదు
+	{n} of the page is over the limit	పేజీలో {n} పరిమితిని మించింది.
+
+# Accessibility: Tags and Order panels, Reading order tool, Autotag, Make accessible
+	Marked content {mcid} on page {page}	పేజీ {page}లో గుర్తించిన కంటెంట్ {mcid}
+	Marked content {mcid}	గుర్తించిన కంటెంట్ {mcid}
+	Object	ఆబ్జెక్ట్
+	Annotation: {kind}	వ్యాఖ్య: {kind}
+	This document has no tags.	ఈ పత్రానికి ట్యాగ్‌లు లేవు.
+	Tags tell screen readers what each part of the page is and in which order to read it.	పేజీలోని ప్రతి భాగం ఏమిటో, ఏ క్రమంలో చదవాలో ట్యాగ్‌లు స్క్రీన్ రీడర్‌లకు చెబుతాయి.
+	Autotag document	పత్రానికి స్వయంచాలకంగా ట్యాగ్ చేయి
+	Reading order tool	చదివే క్రమం సాధనం
+	New tag…	కొత్త ట్యాగ్…
+	Tag properties…	ట్యాగ్ లక్షణాలు…
+	Change to artifact	ఆర్టిఫ్యాక్ట్‌గా మార్చు
+	Delete tag	ట్యాగ్ తొలగించు
+	Collapse all tags	అన్ని ట్యాగ్‌లను ముడుచు
+	Expand all tags	అన్ని ట్యాగ్‌లను విస్తరించు
+	This structure tree is very large: only part of it is shown, and it can't be edited.	ఈ నిర్మాణ వృక్షం చాలా పెద్దది: దానిలో కొంత భాగమే చూపబడుతుంది, దాన్ని సవరించలేరు.
+	Collapse some tags to see the rest.	మిగతావి చూడటానికి కొన్ని ట్యాగ్‌లను ముడుచండి.
+	Clear page structure	పేజీ నిర్మాణాన్ని తొలగించు
+	Nothing on this page is tagged yet.	ఈ పేజీలో ఇంకా ఏదీ ట్యాగ్ చేయలేదు.
+	Use the Reading order tool: draw a box around content and choose what it is.	చదివే క్రమం సాధనాన్ని ఉపయోగించండి: కంటెంట్ చుట్టూ పెట్టె గీసి అది ఏమిటో ఎంచుకోండి.
+	{n} drawing operations on this page are not tagged.	ఈ పేజీలో {n} డ్రాయింగ్ చర్యలు ట్యాగ్ చేయబడలేదు.
+	Tag properties	ట్యాగ్ లక్షణాలు
+	What a figure or formula shows	చిత్రం లేదా సూత్రం ఏమి చూపిస్తుంది
+	Actual text	అసలు వచనం
+	The exact text the content spells	కంటెంట్ ఖచ్చితంగా సూచించే వచనం
+	Alternate and actual text replace everything inside the tag for screen readers.	ప్రత్యామ్నాయ వచనం, అసలు వచనం స్క్రీన్ రీడర్‌ల కోసం ట్యాగ్‌లోని ప్రతిదాన్నీ భర్తీ చేస్తాయి.
+	New tag	కొత్త ట్యాగ్
+	Drag tags onto the new tag to move them inside it.	కొత్త ట్యాగ్‌లోకి తరలించడానికి ట్యాగ్‌లను దానిపైకి లాగండి.
+	Add tag	ట్యాగ్ జోడించు
+	Inside {tag}	{tag} లోపల
+	At the top level	అగ్ర స్థాయిలో
+	Draw a box around content, then choose what it is.	కంటెంట్ చుట్టూ పెట్టె గీసి, అది ఏమిటో ఎంచుకోండి.
+	Tag this area as	ఈ ప్రాంతాన్ని ఇలా ట్యాగ్ చేయి
+	Alternate text (figures and formulas)	ప్రత్యామ్నాయ వచనం (చిత్రాలు, సూత్రాలు)
+	Autotag form fields	ఫారమ్ ఫీల్డ్‌లకు స్వయంచాలకంగా ట్యాగ్ చేయి
+	PdfCraft reads the layout of every page and tags headings, paragraphs, lists, tables, figures, links and form fields in reading order.	PdfCraft ప్రతి పేజీ లేఅవుట్‌ను చదివి, శీర్షికలు, పేరాలు, జాబితాలు, పట్టికలు, చిత్రాలు, లింక్‌లు, ఫారమ్ ఫీల్డ్‌లను చదివే క్రమంలో ట్యాగ్ చేస్తుంది.
+	Find tables	పట్టికలను కనుగొను
+	Find lists	జాబితాలను కనుగొను
+	Tag form fields	ఫారమ్ ఫీల్డ్‌లను ట్యాగ్ చేయి
+	Give fields without a tooltip one from their label	టూల్‌టిప్ లేని ఫీల్డ్‌లకు వాటి లేబుల్ నుండి ఒకటి ఇవ్వు
+	This document is already tagged. Autotagging replaces all of its tags.	ఈ పత్రం ఇప్పటికే ట్యాగ్ చేయబడింది. స్వయంచాలక ట్యాగింగ్ దాని అన్ని ట్యాగ్‌లను భర్తీ చేస్తుంది.
+	Replace the existing tags	ఉన్న ట్యాగ్‌లను భర్తీ చేయి
+	Autotag	స్వయంచాలక ట్యాగ్
+	Autotag finished	స్వయంచాలక ట్యాగింగ్ పూర్తయింది
+	{n} tags on {p} pages.	{p} పేజీలలో {n} ట్యాగ్‌లు.
+	{n} figures need alternate text.	{n} చిత్రాలకు ప్రత్యామ్నాయ వచనం అవసరం.
+	{n} form fields have no tooltip.	{n} ఫారమ్ ఫీల్డ్‌లకు టూల్‌టిప్ లేదు.
+	Check the reading order of each page with the Order panel.	క్రమం ప్యానెల్‌తో ప్రతి పేజీ చదివే క్రమాన్ని తనిఖీ చేయండి.
+	Show tags	ట్యాగ్‌లు చూపించు
+	Results	ఫలితాలు
+	Screen readers announce the title and read the text in the document's language.	స్క్రీన్ రీడర్‌లు శీర్షికను ప్రకటించి, పత్రం భాషలో వచనాన్ని చదువుతాయి.
+	Tag the document again (replaces its tags)	పత్రాన్ని మళ్లీ ట్యాగ్ చేయి (దాని ట్యాగ్‌లను భర్తీ చేస్తుంది)
+	Tag the document	పత్రాన్ని ట్యాగ్ చేయి
+	Next	తదుపరి
+	Give the document's language as a language tag, such as en-US.	పత్రం భాషను en-US వంటి భాషా ట్యాగ్‌గా ఇవ్వండి.
+	Screen readers read a field's tooltip to say what to fill in. Check each one.	ఏమి నింపాలో చెప్పడానికి స్క్రీన్ రీడర్‌లు ఫీల్డ్ టూల్‌టిప్‌ను చదువుతాయి. ప్రతిదాన్నీ తనిఖీ చేయండి.
+	Figure {i} of {n}	{n}లో చిత్రం {i}
+	Finish	ముగించు
+	Undo takes back the whole action in one step.	రద్దు చేయి మొత్తం చర్యను ఒకే దశలో వెనక్కి తీసుకుంటుంది.
+	Show checker results	తనిఖీ ఫలితాలు చూపించు
+	skipped	దాటవేయబడింది
+	{n} set	{n} సెట్ చేయబడ్డాయి
+	structure order	నిర్మాణ క్రమం
+	no figures	చిత్రాలు లేవు
+	Tags	ట్యాగ్‌లు
+	Order	క్రమం
+	Heading 1	శీర్షిక 1
+	Heading 2	శీర్షిక 2
+	Heading 3	శీర్షిక 3
+	Heading 4	శీర్షిక 4
+	Heading 5	శీర్షిక 5
+	Heading 6	శీర్షిక 6
+	Figure	చిత్రం
+	Figure with caption	శీర్షికతో చిత్రం
+	Table cell	పట్టిక గడి
+	Formula	సూత్రం
+	Form field	ఫారమ్ ఫీల్డ్
+	Artifact: header	ఆర్టిఫ్యాక్ట్: హెడర్
+	Artifact: footer	ఆర్టిఫ్యాక్ట్: ఫుటర్
+	Artifact: background	ఆర్టిఫ్యాక్ట్: నేపథ్యం
+	Form field tooltips	ఫారమ్ ఫీల్డ్ టూల్‌టిప్‌లు
+	Paragraphs	పేరాలు
+	Figures	చిత్రాలు
+	Tags panel	ట్యాగ్‌ల ప్యానెల్
+	Order panel	క్రమం ప్యానెల్
+	Autotag document…	పత్రానికి స్వయంచాలకంగా ట్యాగ్ చేయి…
+	Autotag form fields…	ఫారమ్ ఫీల్డ్‌లకు స్వయంచాలకంగా ట్యాగ్ చేయి…
+	Make accessible…	అందుబాటులోకి తెచ్చు…
+	Change reading order	చదివే క్రమం మార్చు
+	Change tag properties	ట్యాగ్ లక్షణాలు మార్చు
+	Tag region	ప్రాంతాన్ని ట్యాగ్ చేయి
+	Add files to number	సంఖ్యలు వేయడానికి ఫైళ్లను జోడించు
+	Align and distribute	సమలేఖనం మరియు పంపిణీ
+	Align bottom	దిగువకు సమలేఖనం
+	Align horizontal centers	అడ్డంగా మధ్యలో సమలేఖనం
+	Align to the page	పేజీకి సమలేఖనం
+	Align top	పైకి సమలేఖనం
+	Align vertical centers	నిలువుగా మధ్యలో సమలేఖనం
+	Bates Number Options	బేట్స్ సంఖ్య ఎంపికలు
+	Bates numbering… file {d} of {t}	బేట్స్ సంఖ్యలు వేస్తోంది… {t}లో ఫైల్ {d}
+	Bulleted list	బుల్లెట్ జాబితా
+	Choose a destination	గమ్యాన్ని ఎంచుకోండి
+	Choose a folder for the numbered files	సంఖ్యలు వేసిన ఫైళ్ల కోసం ఫోల్డర్‌ను ఎంచుకోండి
+	Custom view ({kind})	అనుకూల వీక్షణ ({kind})
+	Custom view ({zoom}%)	అనుకూల వీక్షణ ({zoom}%)
+	Distribute horizontally	అడ్డంగా పంపిణీ
+	Distribute vertically	నిలువుగా పంపిణీ
+	Edited, added and deleted text and images update a tagged document's structure in the same undo step.	సవరించిన, జోడించిన మరియు తొలగించిన పాఠ్యం, చిత్రాలు ట్యాగ్ చేసిన పత్రం నిర్మాణాన్ని అదే అన్‌డూ దశలో నవీకరిస్తాయి.
+	File name suffix	ఫైల్ పేరు ప్రత్యయం
+	Fit height	ఎత్తుకు సరిపెట్టు
+	Fit page	పూర్తి పేజీ
+	Go to a named destination	పేరున్న గమ్యానికి వెళ్లు
+	Go to the page as it is shown now: its position and zoom	పేజీ ఇప్పుడు కనిపిస్తున్నట్లుగా దానికి వెళ్లు: దాని స్థానం మరియు జూమ్
+	Horizontal offset	అడ్డ ఆఫ్‌సెట్
+	Indent list	జాబితా ఇండెంట్ పెంచు
+	Inherit zoom	జూమ్‌ను వారసత్వంగా తీసుకో
+	Keep structure tags when editing content	కంటెంట్‌ను సవరించేటప్పుడు నిర్మాణ ట్యాగ్‌లను ఉంచు
+	Number of digits	అంకెల సంఖ్య
+	Numbered list	సంఖ్యల జాబితా
+	Numbered {done} of {total} files; {name} couldn't be numbered: {e}	{total} ఫైళ్లలో {done}కి సంఖ్యలు వేశాం; {name}కి సంఖ్యలు వేయలేకపోయాం: {e}
+	Numbered {n} more files, up to {last}	మరో {n} ఫైళ్లకు {last} వరకు సంఖ్యలు వేశాం
+	Outdent list	జాబితా ఇండెంట్ తగ్గించు
+	Remove list	జాబితాను తీసివేయి
+	Select three or more objects to distribute them	పంపిణీ చేయడానికి మూడు లేదా అంతకంటే ఎక్కువ వస్తువులను ఎంచుకోండి
+	Show when displaying on screen	తెరపై చూపేటప్పుడు చూపించు
+	Show when printing	ముద్రించేటప్పుడు చూపించు
+	Space after paragraphs	పేరాల తర్వాత అంతరం
+	Start number	ప్రారంభ సంఖ్య
+	Suffix	ప్రత్యయం
+	The numbers continue into these files, in order. Each gets a numbered copy in a folder you choose; the files themselves are left as they are.	సంఖ్యలు ఈ ఫైళ్లలో వరుసగా కొనసాగుతాయి. ప్రతిదానికీ మీరు ఎంచుకున్న ఫోల్డర్‌లో సంఖ్యలు వేసిన ప్రతి వస్తుంది; ఫైళ్లు అలాగే ఉంటాయి.
+	This document has no named destinations.	ఈ పత్రంలో పేరున్న గమ్యాలు లేవు.
+	Use current view	ప్రస్తుత వీక్షణను ఉపయోగించు
+	Vertical offset	నిలువు ఆఫ్‌సెట్
+	Bates numbering of other files couldn't start; try again	ఇతర ఫైళ్లకు బేట్స్ సంఖ్యలు వేయడం మొదలవలేదు; మళ్లీ ప్రయత్నించండి
+	Bates numbering of other files is already running	ఇతర ఫైళ్లకు బేట్స్ సంఖ్యలు వేయడం ఇప్పటికే జరుగుతోంది
+	That's as many files as one Bates numbering run takes	ఒక బేట్స్ సంఖ్యల పరుగు ఇన్ని ఫైళ్లనే తీసుకుంటుంది
+	Numbering other files arrives on the web with folder pickers	ఇతర ఫైళ్లకు సంఖ్యలు వేయడం ఫోల్డర్ ఎంపికతో పాటు వెబ్‌కు వస్తుంది
+	Select objects with Edit objects first	ముందుగా వస్తువులను సవరించు సాధనంతో వస్తువులను ఎంచుకోండి
+	Select a text box, or click into a paragraph, first	ముందుగా ఒక టెక్స్ట్ బాక్స్‌ను ఎంచుకోండి, లేదా ఒక పేరాలో క్లిక్ చేయండి
+	That didn't work: an internal error stopped it ({m}).	అది పని చేయలేదు: అంతర్గత లోపం దాన్ని ఆపింది ({m}).
+# Signing: appearances, trusted certificates, verification information, compare signed version
+	0 accepts it however old it is.	0 అయితే ఎంత పాతదైనా అంగీకరిస్తుంది.
+	A cancelled response is discarded. A blocked request stops at the configured deadline (at most 30 seconds).	రద్దు చేసిన ప్రతిస్పందన విస్మరించబడుతుంది. నిలిచిపోయిన అభ్యర్థన సెట్ చేసిన గడువులో (గరిష్టంగా 30 సెకన్లు) ఆగుతుంది.
+	A certificate file is limited to 4 MiB.	సర్టిఫికేట్ ఫైల్ 4 MiB కి పరిమితం.
+	A chosen or claimed date is not cryptographic proof of time.	ఎంచుకున్న లేదా ప్రకటించిన తేదీ సమయానికి క్రిప్టోగ్రాఫిక్ రుజువు కాదు.
+	Account name (optional)	ఖాతా పేరు (ఐచ్ఛికం)
+	Add a TSA certificate to Trusted Certificates only after independently verifying its identity and fingerprint. Disabling this check saves an untrusted token; it does not establish trusted time.	TSA సర్టిఫికేట్ గుర్తింపు మరియు ఫింగర్‌ప్రింట్‌ను స్వతంత్రంగా ధృవీకరించిన తర్వాతే దానిని విశ్వసనీయ సర్టిఫికేట్‌లకు జోడించండి. ఈ తనిఖీని నిలిపివేస్తే విశ్వసనీయం కాని టోకెన్ సేవ్ అవుతుంది; అది విశ్వసనీయ సమయాన్ని నిర్ధారించదు.
+	Add logo…	లోగోను జోడించు…
+	Add verification information	ధృవీకరణ సమాచారాన్ని జోడించు
+	Add verification information…	ధృవీకరణ సమాచారాన్ని జోడించు…
+	Allow a timestamp request to the selected server	ఎంచుకున్న సర్వర్‌కు టైమ్‌స్టాంప్ అభ్యర్థనను అనుమతించు
+	Allow a timestamp request to this server	ఈ సర్వర్‌కు టైమ్‌స్టాంప్ అభ్యర్థనను అనుమతించు
+	Also from sites that Internet access asks about	ఇంటర్నెట్ యాక్సెస్ అడిగే సైట్‌ల నుండి కూడా
+	Also trust them for certified documents	ధృవీకరించిన పత్రాల కోసం కూడా వాటిని విశ్వసించు
+	Appearance name	రూపం పేరు
+	Blocked sites stay blocked. Only the certificates' OCSP responders and CRL addresses are contacted.	నిరోధించిన సైట్‌లు నిరోధించబడే ఉంటాయి. సర్టిఫికేట్‌ల OCSP రెస్పాండర్‌లు మరియు CRL చిరునామాలను మాత్రమే సంప్రదిస్తుంది.
+	CRLs	CRLలు
+	Cancel operation	ఆపరేషన్‌ను రద్దు చేయి
+	Certificate and revocation checks at:	సర్టిఫికేట్ మరియు రద్దు తనిఖీల సమయం:
+	Certified documents	ధృవీకరించిన పత్రాలు
+	Change logo…	లోగోను మార్చు…
+	Choose a configured timestamp server.	కాన్ఫిగర్ చేసిన టైమ్‌స్టాంప్ సర్వర్‌ను ఎంచుకోండి.
+	Choose a server	సర్వర్‌ను ఎంచుకోండి
+	Choose another picture…	మరో చిత్రాన్ని ఎంచుకో…
+	Choose picture…	చిత్రాన్ని ఎంచుకో…
+	Clear drawing	డ్రాయింగ్‌ను తుడిచివేయి
+	Compare signed version	సంతకం చేసిన వెర్షన్‌ను పోల్చు
+	Compare signed version with current	సంతకం చేసిన వెర్షన్‌ను ప్రస్తుతదానితో పోల్చు
+	Compare with current	ప్రస్తుతదానితో పోల్చు
+	Couldn't compare the signed version: {e}	సంతకం చేసిన వెర్షన్‌ను పోల్చలేకపోయాము: {e}
+	Couldn't use the picture: {e}	చిత్రాన్ని ఉపయోగించలేకపోయాము: {e}
+	Current time	ప్రస్తుత సమయం
+	Drawn signature	గీసిన సంతకం
+	Embedding evidence does not itself establish PAdES B-LT/B-LTA compliance. Incomplete coverage is reported after validation.	సాక్ష్యాన్ని పొందుపరచడం మాత్రమే PAdES B-LT/B-LTA అనుగుణ్యతను నిర్ధారించదు. అసంపూర్ణ కవరేజ్ ధృవీకరణ తర్వాత నివేదించబడుతుంది.
+	Every certificate's revocation status is now in the document.	ప్రతి సర్టిఫికేట్ రద్దు స్థితి ఇప్పుడు పత్రంలో ఉంది.
+	Every change since signing is permitted by the signature.	సంతకం తర్వాతి ప్రతి మార్పును సంతకం అనుమతిస్తుంది.
+	Every form field is locked and no later change keeps the signature valid.	ప్రతి ఫారమ్ ఫీల్డ్ లాక్ అవుతుంది; తర్వాతి ఏ మార్పు అయినా సంతకాన్ని చెల్లకుండా చేస్తుంది.
+	Fetch revocation information online	రద్దు సమాచారాన్ని ఆన్‌లైన్‌లో పొందు
+	Fetch revocation information online when adding verification information	ధృవీకరణ సమాచారాన్ని జోడించేటప్పుడు రద్దు సమాచారాన్ని ఆన్‌లైన్‌లో పొందు
+	Filling in forms, signing and commenting are permitted (approval signature).	ఫారమ్‌లు నింపడం, సంతకం చేయడం మరియు వ్యాఖ్యానించడం అనుమతించబడతాయి (ఆమోద సంతకం).
+	HTTPS URL	HTTPS URL
+	Import certificates…	సర్టిఫికేట్‌లను దిగుమతి చేయి…
+	Issued by {issuer}, valid to {date}	{issuer} జారీ చేసింది, {date} వరకు చెల్లుతుంది
+	Local DER files to add too (optional), one path per line. Certificates are not automatically trusted.	అదనంగా జోడించాల్సిన స్థానిక DER ఫైల్‌లు (ఐచ్ఛికం), పంక్తికి ఒక మార్గం. సర్టిఫికేట్‌లు స్వయంచాలకంగా విశ్వసనీయం కావు.
+	Local DER files, one path per line. Certificates are not automatically trusted.	స్థానిక DER ఫైల్‌లు, పంక్తికి ఒక మార్గం. సర్టిఫికేట్‌లు స్వయంచాలకంగా విశ్వసనీయం కావు.
+	Lock document after signing	సంతకం తర్వాత పత్రాన్ని లాక్ చేయి
+	Logo	లోగో
+	Manage timestamp servers in Preferences → Signatures.	టైమ్‌స్టాంప్ సర్వర్‌లను ప్రాధాన్యతలు → సంతకాలు లో నిర్వహించండి.
+	Maximum age of revocation information without an update time	నవీకరణ సమయం లేని రద్దు సమాచారపు గరిష్ఠ వయస్సు
+	More changes were found than are listed.	జాబితాలో ఉన్నవాటి కంటే ఎక్కువ మార్పులు కనుగొనబడ్డాయి.
+	New server	కొత్త సర్వర్
+	No changes are permitted.	ఏ మార్పులూ అనుమతించబడవు.
+	No saved appearances yet.	ఇంకా సేవ్ చేసిన రూపాలు లేవు.
+	No server is configured. PdfCraft never contacts one unless you add it here.	ఏ సర్వర్ కాన్ఫిగర్ కాలేదు. మీరు ఇక్కడ జోడిస్తే తప్ప PdfCraft ఏ సర్వర్‌నూ సంప్రదించదు.
+	No timestamp	టైమ్‌స్టాంప్ లేదు
+	No trusted certificates yet.	ఇంకా విశ్వసనీయ సర్టిఫికేట్‌లు లేవు.
+	Nothing has changed since it was signed.	సంతకం చేసినప్పటి నుండి ఏమీ మారలేదు.
+	OCSP responses	OCSP ప్రతిస్పందనలు
+	Only filling in forms and signing are permitted.	ఫారమ్‌లు నింపడం మరియు సంతకం చేయడం మాత్రమే అనుమతించబడతాయి.
+	Only filling in forms, signing and commenting are permitted.	ఫారమ్‌లు నింపడం, సంతకం చేయడం మరియు వ్యాఖ్యానించడం మాత్రమే అనుమతించబడతాయి.
+	Only from sites that Internet access allows. Opening or validating a document never goes online.	ఇంటర్నెట్ యాక్సెస్ అనుమతించే సైట్‌ల నుండి మాత్రమే. పత్రాన్ని తెరవడం లేదా ధృవీకరించడం ఎప్పుడూ ఆన్‌లైన్‌కు వెళ్లదు.
+	Open a signed document first	ముందుగా సంతకం చేసిన పత్రాన్ని తెరవండి
+	Optional policy OID	ఐచ్ఛిక పాలసీ OID
+	Or UTC date (YYYYMMDDHHmmSSZ)	లేదా UTC తేదీ (YYYYMMDDHHmmSSZ)
+	Pages: {a} when signed, {b} now	పేజీలు: సంతకం సమయంలో {a}, ఇప్పుడు {b}
+	Picture	చిత్రం
+	Pictures can be chosen in the desktop app; draw your signature here instead.	చిత్రాలను డెస్క్‌టాప్ యాప్‌లో ఎంచుకోవచ్చు; ఇక్కడ మీ సంతకాన్ని గీయండి.
+	Remove logo	లోగోను తీసివేయి
+	Remove picture	చిత్రాన్ని తీసివేయి
+	Require an explicitly trusted timestamp authority	స్పష్టంగా విశ్వసించిన టైమ్‌స్టాంప్ అథారిటీ అవసరం
+	Revocation information for {covered} of {needed} certificates was fetched.	{needed} సర్టిఫికేట్‌లలో {covered} కోసం రద్దు సమాచారం పొందబడింది.
+	Save an appearance from the signing dialog: its text, a picture or drawn signature, and a logo.	సంతకం డైలాగ్ నుండి రూపాన్ని సేవ్ చేయండి: దాని వచనం, చిత్రం లేదా గీసిన సంతకం, మరియు లోగో.
+	Save appearance	రూపాన్ని సేవ్ చేయి
+	Save result…	ఫలితాన్ని సేవ్ చేయి…
+	Save server	సర్వర్‌ను సేవ్ చేయి
+	Saved appearances	సేవ్ చేసిన రూపాలు
+	Saved the appearance {name}	{name} రూపం సేవ్ చేయబడింది
+	Secure time (timestamp), else the signing time	సురక్షిత సమయం (టైమ్‌స్టాంప్), లేకపోతే సంతకం సమయం
+	Show on the left	ఎడమవైపు చూపు
+	Sign here with your mouse, pen or finger	మౌస్, పెన్ లేదా వేలితో ఇక్కడ సంతకం చేయండి
+	Signature appearances	సంతకం రూపాలు
+	Signature operation	సంతకం ఆపరేషన్
+	Signatures whose certificates chain to one of these are trusted. Choose what each one is trusted for.	వీటిలో ఒకదానికి గొలుసుగా కలిసే సర్టిఫికేట్‌లున్న సంతకాలు విశ్వసనీయం. ప్రతిదాన్ని దేనికి విశ్వసించాలో ఎంచుకోండి.
+	Signed documents	సంతకం చేసిన పత్రాలు
+	Signed version of {field} (revision {n})	{field} యొక్క సంతకం చేసిన వెర్షన్ (పునర్విమర్శ {n})
+	Some changes since signing are not permitted by the signature.	సంతకం తర్వాతి కొన్ని మార్పులను సంతకం అనుమతించదు.
+	Text only	వచనం మాత్రమే
+	The Signatures panel checks certificates and revocation at this time. A signing time without a trusted timestamp is the signer's own claim.	సంతకాల ప్యానెల్ ఈ సమయానికి సర్టిఫికేట్‌లను మరియు రద్దును తనిఖీ చేస్తుంది. విశ్వసనీయ టైమ్‌స్టాంప్ లేని సంతకం సమయం సంతకందారు స్వయంగా చెప్పుకున్నదే.
+	The current time	ప్రస్తుత సమయం
+	The password is kept only until PdfCraft quits, never saved.	పాస్‌వర్డ్ PdfCraft మూసే వరకు మాత్రమే ఉంచబడుతుంది, ఎప్పుడూ సేవ్ కాదు.
+	The request contains a digest, not the PDF. No request is made when this dialog opens.	అభ్యర్థనలో డైజెస్ట్ ఉంటుంది, PDF కాదు. ఈ డైలాగ్ తెరిచినప్పుడు ఏ అభ్యర్థనా చేయబడదు.
+	The signed version could not be read.	సంతకం చేసిన వెర్షన్‌ను చదవలేకపోయాము.
+	The time the signature was created	సంతకం సృష్టించిన సమయం
+	Then add a document timestamp (optional):	తర్వాత పత్రం టైమ్‌స్టాంప్‌ను జోడించండి (ఐచ్ఛికం):
+	Timeout (seconds)	సమయ పరిమితి (సెకన్లు)
+	Timestamp (optional)	టైమ్‌స్టాంప్ (ఐచ్ఛికం)
+	Trust the operating system's root certificates for signatures	సంతకాల కోసం ఆపరేటింగ్ సిస్టమ్ రూట్ సర్టిఫికేట్‌లను విశ్వసించు
+	Trusted certificates	విశ్వసనీయ సర్టిఫికేట్‌లు
+	Trusted root	విశ్వసనీయ రూట్
+	Trusted timestamp, else claimed signing time	విశ్వసనీయ టైమ్‌స్టాంప్, లేకపోతే ప్రకటించిన సంతకం సమయం
+	Validating and saving…	ధృవీకరిస్తూ సేవ్ చేస్తోంది…
+	Verify signatures using	సంతకాలను దీనితో ధృవీకరించు
+	macOS Keychain, Windows certificate store, or the system's CA bundle. Off by default.	macOS కీచైన్, Windows సర్టిఫికేట్ స్టోర్ లేదా సిస్టమ్ CA బండిల్. డిఫాల్ట్‌గా ఆఫ్.
+	{n} addresses were not contacted because of Internet access settings.	ఇంటర్నెట్ యాక్సెస్ సెట్టింగ్‌ల కారణంగా {n} చిరునామాలను సంప్రదించలేదు.
+	{n} certificates added to your trusted certificates.	మీ విశ్వసనీయ సర్టిఫికేట్‌లకు {n} సర్టిఫికేట్‌లు జోడించబడ్డాయి.
+	Adds the signers' certificate chains and their revocation status to the document, so the signatures can still be checked after the certificates expire.	సంతకందారుల సర్టిఫికేట్ గొలుసులను మరియు వాటి రద్దు స్థితిని పత్రానికి జోడిస్తుంది, తద్వారా సర్టిఫికేట్‌ల గడువు ముగిసిన తర్వాత కూడా సంతకాలను తనిఖీ చేయవచ్చు.
+# Field triggers, document actions, certificate security, Trust Manager, redaction code sets and locales.
+	Add at least one recipient certificate.	కనీసం ఒక గ్రహీత సర్టిఫికెట్‌ను జోడించండి.
+	Add code	కోడ్ జోడించు
+	Add recipient	గ్రహీతను జోడించు
+	Add recipient…	గ్రహీతను జోడించు…
+	Add site	సైట్ జోడించు
+	Add type	రకం జోడించు
+	All locales	అన్ని ప్రాంతాలు
+	Allow changing the security settings (and everything else)	భద్రతా సెట్టింగ్‌లను మార్చడానికి అనుమతించు (మిగతా అన్నింటినీ కూడా)
+	Always allow	ఎల్లప్పుడూ అనుమతించు
+	At most {n} recipients.	గరిష్టంగా {n} గ్రహీతలు.
+	Attach the saved form data to the email	సేవ్ చేసిన ఫారమ్ డేటాను ఇమెయిల్‌కు జోడించండి
+	Australia	ఆస్ట్రేలియా
+	Bcc	Bcc
+	Canada	కెనడా
+	Cc	Cc
+	Certificate or digital ID	సర్టిఫికెట్ లేదా డిజిటల్ ఐడీ
+	Certificate security will be applied when you save	సేవ్ చేసినప్పుడు సర్టిఫికెట్ భద్రత వర్తిస్తుంది
+	Choose a saved set or make a new one.	సేవ్ చేసిన సెట్‌ను ఎంచుకోండి లేదా కొత్తది చేయండి.
+	Choose codes	కోడ్‌లను ఎంచుకో
+	Code	కోడ్
+	Code set file	కోడ్ సెట్ ఫైల్
+	Delete set	సెట్‌ను తొలగించు
+	Deleted {name}.	{name} తొలగించబడింది.
+	Document Actions	డాక్యుమెంట్ చర్యలు
+	Document Did Print	డాక్యుమెంట్ ముద్రించబడింది
+	Document Did Save	డాక్యుమెంట్ సేవ్ అయింది
+	Document Will Close	డాక్యుమెంట్ మూసివేయబడబోతోంది
+	Document Will Print	డాక్యుమెంట్ ముద్రించబడబోతోంది
+	Document Will Save	డాక్యుమెంట్ సేవ్ కాబోతోంది
+	Document actions…	డాక్యుమెంట్ చర్యలు…
+	Each script runs when the document is about to close, is saved or is printed. Scripts can't start another save or print.	డాక్యుమెంట్ మూసివేయబోతున్నప్పుడు, సేవ్ అయినప్పుడు లేదా ముద్రించబడినప్పుడు ప్రతి స్క్రిప్ట్ నడుస్తుంది. స్క్రిప్ట్‌లు మరో సేవ్ లేదా ముద్రణను ప్రారంభించలేవు.
+	Encrypt with certificate…	సర్టిఫికెట్‌తో ఎన్‌క్రిప్ట్ చేయి…
+	Export code sets	కోడ్ సెట్‌లను ఎగుమతి చేయి
+	Extension, such as zip	పొడిగింపు, ఉదా. zip
+	France	ఫ్రాన్స్
+	Germany	జర్మనీ
+	Import code sets	కోడ్ సెట్‌లను దిగుమతి చేయి
+	Imported {names}.	{names} దిగుమతి అయ్యాయి.
+	Import…	దిగుమతి…
+	Include subdomains	సబ్‌డొమైన్‌లతో సహా
+	India	భారతదేశం
+	International	అంతర్జాతీయ
+	Japan	జపాన్
+	Lock the document after signing	సంతకం చేసిన తర్వాత డాక్యుమెంట్‌ను లాక్ చేయి
+	Locked fields become read-only once the field is signed; a locked document then allows no changes.	ఫీల్డ్‌పై సంతకం చేసిన తర్వాత లాక్ చేసిన ఫీల్డ్‌లు చదవడానికి మాత్రమే అవుతాయి; లాక్ చేసిన డాక్యుమెంట్ ఆ తర్వాత ఎలాంటి మార్పులనూ అనుమతించదు.
+	Mark as read-only all fields	అన్ని ఫీల్డ్‌లను చదవడానికి మాత్రమేగా చేయి
+	Mark as read-only all fields except these	ఇవి తప్ప అన్ని ఫీల్డ్‌లను చదవడానికి మాత్రమేగా చేయి
+	Mark as read-only just these fields	ఈ ఫీల్డ్‌లను మాత్రమే చదవడానికి మాత్రమేగా చేయి
+	Mark every pattern of this locale	ఈ ప్రాంతంలోని ప్రతి నమూనాను గుర్తించు
+	Never open	ఎప్పుడూ తెరవవద్దు
+	New set	కొత్త సెట్
+	No recipients yet. Add a certificate for each person who may open the document.	ఇంకా గ్రహీతలు లేరు. డాక్యుమెంట్‌ను తెరవగల ప్రతి వ్యక్తికి ఒక సర్టిఫికెట్ జోడించండి.
+	No site rules yet.	ఇంకా సైట్ నియమాలు లేవు.
+	Nobody can change or remove this security later unless a recipient may change the security.	భద్రతను మార్చగల గ్రహీత ఎవరూ లేకపోతే, తర్వాత ఎవరూ ఈ భద్రతను మార్చలేరు లేదా తీసివేయలేరు.
+	None yet	ఇంకా ఏవీ లేవు
+	Nothing happens	ఏమీ జరగదు
+	Only the recipients can open the document, each with the permissions you give them. It's applied when you save.	గ్రహీతలు మాత్రమే డాక్యుమెంట్‌ను తెరవగలరు, ప్రతి ఒక్కరికీ మీరు ఇచ్చిన అనుమతులతో. సేవ్ చేసినప్పుడు వర్తిస్తుంది.
+	PdfCraft doesn't send email itself: it opens your email app and saves the data for you to attach.	PdfCraft స్వయంగా ఇమెయిల్ పంపదు: ఇది మీ ఇమెయిల్ యాప్‌ను తెరిచి, మీరు జోడించడానికి డేటాను సేవ్ చేస్తుంది.
+	Permissions for {name}	{name} కోసం అనుమతులు
+	Programs and scripts are refused and plain documents open; other types ask. Your lists override the built-in ones.	ప్రోగ్రామ్‌లు, స్క్రిప్ట్‌లు నిరాకరించబడతాయి, సాధారణ డాక్యుమెంట్‌లు తెరుచుకుంటాయి; ఇతర రకాలకు అడుగుతుంది. మీ జాబితాలు అంతర్నిర్మిత జాబితాల కంటే ముందుంటాయి.
+	Recipients	గ్రహీతలు
+	Redaction code sets	రెడాక్షన్ కోడ్ సెట్‌లు
+	Redaction code sets…	రెడాక్షన్ కోడ్ సెట్‌లు…
+	Remove the rule for {host}	{host} నియమాన్ని తీసివేయి
+	Remove this code	ఈ కోడ్‌ను తీసివేయి
+	Rules for web sites that links, scripts and form submissions reach. Used when internet access follows the site rules.	లింక్‌లు, స్క్రిప్ట్‌లు, ఫారమ్ సమర్పణలు చేరే వెబ్‌సైట్‌ల నియమాలు. ఇంటర్నెట్ యాక్సెస్ సైట్ నియమాలను అనుసరించినప్పుడు వాడతారు.
+	Save set	సెట్‌ను సేవ్ చేయి
+	Saved sets	సేవ్ చేసిన సెట్‌లు
+	Saved {name}.	{name} సేవ్ అయింది.
+	Set name	సెట్ పేరు
+	Signed	సంతకం చేయబడింది
+	Sites	సైట్‌లు
+	Take .{ext} off the list	.{ext}ను జాబితా నుండి తీసివేయి
+	That recipient is already on the list.	ఆ గ్రహీత ఇప్పటికే జాబితాలో ఉన్నారు.
+	The file holds {n} certificates; add each recipient from its own file.	ఫైల్‌లో {n} సర్టిఫికెట్‌లు ఉన్నాయి; ప్రతి గ్రహీతను వారి సొంత ఫైల్ నుండి జోడించండి.
+	The file is larger than {n} MB.	ఫైల్ {n} MB కంటే పెద్దది.
+	The file is too large for a code set file.	కోడ్ సెట్ ఫైల్‌కు ఈ ఫైల్ చాలా పెద్దది.
+	The form has no other fields.	ఫారమ్‌లో ఇతర ఫీల్డ్‌లు లేవు.
+	The form was sent to {host}, which filled in its answer.	ఫారమ్ {host}కు పంపబడింది, అది తన సమాధానాన్ని నింపింది.
+	The form was sent to {host}; its answer couldn't be imported: {e}	ఫారమ్ {host}కు పంపబడింది; దాని సమాధానాన్ని దిగుమతి చేయలేకపోయాం: {e}
+	The form was sent to {host}; its answer was too large to import.	ఫారమ్ {host}కు పంపబడింది; దాని సమాధానం దిగుమతి చేయడానికి చాలా పెద్దది.
+	This form wants to email its data:	ఈ ఫారమ్ తన డేటాను ఇమెయిల్ ద్వారా పంపాలనుకుంటోంది:
+	This isn't a certificate (.cer, .crt, .pem, .der) or digital ID (.p12, .pfx).	ఇది సర్టిఫికెట్ (.cer, .crt, .pem, .der) లేదా డిజిటల్ ఐడీ (.p12, .pfx) కాదు.
+	To	కు
+	Trust Manager	విశ్వాస నిర్వాహకం
+	Trust Manager…	విశ్వాస నిర్వాహకం…
+	Type the digital ID's password first (or choose a certificate file).	ముందుగా డిజిటల్ ఐడీ పాస్‌వర్డ్ టైప్ చేయండి (లేదా సర్టిఫికెట్ ఫైల్ ఎంచుకోండి).
+	United Kingdom	యునైటెడ్ కింగ్‌డమ్
+	United States	యునైటెడ్ స్టేట్స్
+	When signed:	సంతకం చేసినప్పుడు:
+	Your own codes to cite on redactions, offered in Redaction Properties beside the built-in sets.	రెడాక్షన్‌లపై ఉదహరించడానికి మీ సొంత కోడ్‌లు, రెడాక్షన్ లక్షణాలలో అంతర్నిర్మిత సెట్‌ల పక్కన అందించబడతాయి.
+	and subdomains	మరియు సబ్‌డొమైన్‌లు
+	this host only	ఈ హోస్ట్ మాత్రమే
+	{n} chosen	{n} ఎంచుకోబడ్డాయి
+	German Tax Identification Numbers	జర్మన్ పన్ను గుర్తింపు సంఖ్యలు
+	Indian Aadhaar Numbers	భారతీయ ఆధార్ సంఖ్యలు
+	Indian PAN Numbers	భారతీయ PAN సంఖ్యలు
+	Australian Tax File Numbers	ఆస్ట్రేలియన్ పన్ను ఫైల్ సంఖ్యలు (TFN)
+	Australian Medicare Numbers	ఆస్ట్రేలియన్ మెడికేర్ సంఖ్యలు
+	Australian Business Numbers	ఆస్ట్రేలియన్ వ్యాపార సంఖ్యలు (ABN)
+
+# Comment, organize and search gaps (find comments, hide by type, page ranges, bookmark
+# properties, bookmarks from structure, advanced search, associated files, custom commands).
+	 in {f} of {s} documents	 {s} పత్రాలలో {f} పత్రాలలో
+	(no name)	(పేరు లేదు)
+	(this document doesn't allow copying its text)	(ఈ పత్రం దాని వచనాన్ని కాపీ చేయడానికి అనుమతించదు)
+	* the tool needs this option	* టూల్‌కు ఈ ఎంపిక అవసరం
+	A bookmark needs a title.	బుక్‌మార్క్‌కు శీర్షిక ఉండాలి.
+	A folder	ఒక ఫోల్డర్
+	A folder…	ఒక ఫోల్డర్…
+	Add an associated file	అనుబంధ ఫైల్‌ను జోడించు
+	Add file…	ఫైల్ జోడించు…
+	Added 1 bookmark	1 బుక్‌మార్క్ జోడించబడింది
+	Added {n} bookmarks	{n} బుక్‌మార్క్‌లు జోడించబడ్డాయి
+	All levels	అన్ని స్థాయిలు
+	Another action (kept as it is)	మరో చర్య (అలాగే ఉంచబడుతుంది)
+	Ask for the options each time it runs	ప్రతిసారి నడిపేటప్పుడు ఎంపికలను అడుగు
+	Asks for its options when it runs.	నడిపేటప్పుడు దాని ఎంపికలను అడుగుతుంది.
+	Associated files	అనుబంధ ఫైల్‌లు
+	Bookmark properties	బుక్‌మార్క్ లక్షణాలు
+	Bookmark properties…	బుక్‌మార్క్ లక్షణాలు…
+	Cancelled: not every document was searched.	రద్దు చేయబడింది: అన్ని పత్రాలు వెతకబడలేదు.
+	Check the options, then run the command.	ఎంపికలను సరిచూసి, ఆపై ఆదేశాన్ని నడపండి.
+	Choose a folder of PDFs	PDFల ఫోల్డర్‌ను ఎంచుకోండి
+	Choose a folder to search	వెతకడానికి ఫోల్డర్‌ను ఎంచుకోండి
+	Choose a folder to search.	వెతకడానికి ఒక ఫోల్డర్‌ను ఎంచుకోండి.
+	Choose folder…	ఫోల్డర్ ఎంచుకో…
+	Choose one of the document's named destinations.	పత్రంలోని పేరున్న గమ్యాలలో ఒకదాన్ని ఎంచుకోండి.
+	Choose the tool the command runs.	ఆదేశం నడిపే టూల్‌ను ఎంచుకోండి.
+	Choose…	ఎంచుకో…
+	Comment	వ్యాఖ్య
+	Comment on page {label}	పేజీ {label}లో వ్యాఖ్య
+	Custom commands	అనుకూల ఆదేశాలు
+	Custom commands aren't available in this version of PdfCraft.	PdfCraft యొక్క ఈ వెర్షన్‌లో అనుకూల ఆదేశాలు అందుబాటులో లేవు.
+	Custom commands…	అనుకూల ఆదేశాలు…
+	Description (optional)	వివరణ (ఐచ్ఛికం)
+	Destination:	గమ్యం:
+	Edit Command	ఆదేశాన్ని సవరించు
+	Enter a page number from 1 to {n}.	1 నుండి {n} వరకు పేజీ సంఖ్యను నమోదు చేయండి.
+	Enter a web address starting with https://, http:// or mailto:.	https://, http:// లేదా mailto:తో మొదలయ్యే వెబ్ చిరునామాను నమోదు చేయండి.
+	Enter a zoom from 1% to 6400%.	1% నుండి 6400% వరకు జూమ్‌ను నమోదు చేయండి.
+	Existing bookmarks:	ఉన్న బుక్‌మార్క్‌లు:
+	Export custom commands	అనుకూల ఆదేశాలను ఎగుమతి చేయి
+	Files linked to the document, a page or a comment, each with its relationship (source, data, alternative…).	పత్రానికి, పేజీకి లేదా వ్యాఖ్యకు లింక్ చేసిన ఫైల్‌లు, ఒక్కొక్కటి దాని సంబంధంతో (మూలం, డేటా, ప్రత్యామ్నాయం…).
+	Files…	ఫైల్‌లు…
+	Fixed zoom	స్థిర జూమ్
+	Headings:	శీర్షికలు:
+	Import custom commands	అనుకూల ఆదేశాలను దిగుమతి చేయి
+	Imported {n} custom commands	{n} అనుకూల ఆదేశాలు దిగుమతి చేయబడ్డాయి
+	Include bookmarks and comments	బుక్‌మార్క్‌లు మరియు వ్యాఖ్యలను చేర్చు
+	Include comments	వ్యాఖ్యలను చేర్చు
+	Include subfolders	ఉప ఫోల్డర్‌లను చేర్చు
+	Keep them, add the new ones after	వాటిని ఉంచి, కొత్తవాటిని తర్వాత జోడించు
+	Levels 1 to {n}	స్థాయిలు 1 నుండి {n}
+	Look in	ఇందులో వెతుకు
+	Make bookmarks	బుక్‌మార్క్‌లు సృష్టించు
+	Make one bookmark for each heading of the document's tags, nested by heading level.	పత్రం ట్యాగ్‌లలోని ప్రతి శీర్షికకు ఒక బుక్‌మార్క్ సృష్టించు, శీర్షిక స్థాయి ప్రకారం అమర్చబడుతుంది.
+	New Command	కొత్త ఆదేశం
+	New Command…	కొత్త ఆదేశం…
+	New bookmarks from structure	నిర్మాణం నుండి కొత్త బుక్‌మార్క్‌లు
+	New bookmarks from structure…	నిర్మాణం నుండి కొత్త బుక్‌మార్క్‌లు…
+	No associated files.	అనుబంధ ఫైల్‌లు లేవు.
+	No comments	వ్యాఖ్యలు లేవు
+	No custom commands yet.	ఇంకా అనుకూల ఆదేశాలు లేవు.
+	No folder chosen	ఫోల్డర్ ఎంచుకోలేదు
+	No pages match.	ఏ పేజీలూ సరిపోలలేదు.
+	Object {n}	వస్తువు {n}
+	One tool with the options you choose, run in one step.	మీరు ఎంచుకున్న ఎంపికలతో ఒక టూల్, ఒకే దశలో నడుస్తుంది.
+	Open a document to run the command on.	ఆదేశాన్ని నడపడానికి ఒక పత్రాన్ని తెరవండి.
+	Page labels work too, as in Print.	ముద్రణలో లాగే పేజీ లేబుళ్లు కూడా పనిచేస్తాయి.
+	Page range	పేజీ పరిధి
+	Page:	పేజీ:
+	Ran {name}	{name} నడిపింది
+	Relationship:	సంబంధం:
+	Remove associated file	అనుబంధ ఫైల్‌ను తీసివేయి
+	Replace them	వాటిని భర్తీ చేయి
+	Run on this document	ఈ పత్రంపై నడుపు
+	Run on:	దీనిపై నడుపు:
+	Runs: {tool}	నడుపుతుంది: {tool}
+	Save associated file…	అనుబంధ ఫైల్‌ను సేవ్ చేయి…
+	Search a folder…	ఫోల్డర్‌లో వెతుకు…
+	Searching {d} of {t}…	{t}లో {d} వెతుకుతోంది…
+	Select	ఎంచుకో
+	Select a bookmark first	ముందుగా ఒక బుక్‌మార్క్‌ను ఎంచుకోండి
+	Select pages…	పేజీలను ఎంచుకో…
+	Show all comment types	అన్ని వ్యాఖ్య రకాలను చూపు
+	Show all types	అన్ని రకాలను చూపు
+	Show on pages by type	పేజీలపై రకం ప్రకారం చూపు
+	Stopped at the result limit: narrow the search to see the rest.	ఫలితాల పరిమితి వద్ద ఆగింది: మిగతావి చూడటానికి వెతుకులాటను కుదించండి.
+	Subset:	ఉపసమితి:
+	That bookmark no longer exists	ఆ బుక్‌మార్క్ ఇక లేదు
+	The current document	ప్రస్తుత పత్రం
+	The document changed; add the file again	పత్రం మారింది; ఫైల్‌ను మళ్ళీ జోడించండి
+	The folder to search	వెతకవలసిన ఫోల్డర్
+	The script is too long.	స్క్రిప్ట్ చాలా పొడవుగా ఉంది.
+	There is no folder to keep custom commands in.	అనుకూల ఆదేశాలను ఉంచడానికి ఫోల్డర్ లేదు.
+	This bookmark runs a {kind} action, kept as it is unless you choose another.	ఈ బుక్‌మార్క్ {kind} చర్యను నడుపుతుంది, మీరు మరొకటి ఎంచుకోకపోతే అది అలాగే ఉంటుంది.
+	Title:	శీర్షిక:
+	To the document	పత్రానికి
+	To this page	ఈ పేజీకి
+	Tool:	టూల్:
+	Type a word or phrase to search for.	వెతకడానికి పదం లేదా పదబంధాన్ని టైప్ చేయండి.
+	Web address:	వెబ్ చిరునామా:
+	When clicked:	క్లిక్ చేసినప్పుడు:
+	Zoom:	జూమ్:
+	cancelled	రద్దు చేయబడింది
+	comment	వ్యాఖ్య
+	e.g. 1-3, 7	ఉదా. 1-3, 7
+	e.g. 1-3, 7 (empty: all pages)	ఉదా. 1-3, 7 (ఖాళీ: అన్ని పేజీలు)
+	larger than {n} MB	{n} MB కంటే పెద్దది
+	not a file name	ఫైల్ పేరు కాదు
+	stopped at {n} files	{n} ఫైల్‌ల వద్ద ఆగింది
+	the action stopped unexpectedly	చర్య అనుకోకుండా ఆగిపోయింది
+	{name} is larger than {n} MB	{name} {n} MB కంటే పెద్దది
+	{name} isn't valid	{name} చెల్లదు
+	{n} files skipped	{n} ఫైల్‌లు దాటవేయబడ్డాయి
+	{n} more	మరో {n}
+	{n} more not shown	మరో {n} చూపబడలేదు
+	{n} skipped	{n} దాటవేయబడ్డాయి
+	; text recognized on {n} scanned pages	; స్కాన్ చేసిన {n} పేజీలలో టెక్స్ట్ గుర్తించబడింది
+	A flowing document: paragraphs in reading order with their fonts and styles, headings, lists, tables and images.	ప్రవహించే పత్రం: చదివే క్రమంలో పేరాలు వాటి ఫాంట్‌లు, శైలులతో, శీర్షికలు, జాబితాలు, పట్టికలు మరియు చిత్రాలు.
+	Add a selectable text layer	ఎంచుకోగల టెక్స్ట్ పొరను జోడించు
+	An export is already running	ఒక ఎగుమతి ఇప్పటికే జరుగుతోంది
+	Cleans up the images on scanned or photographed pages. Each correction can be undone.	స్కాన్ చేసిన లేదా ఫోటో తీసిన పేజీల చిత్రాలను శుభ్రం చేస్తుంది. ప్రతి సవరణను రద్దు చేయవచ్చు.
+	Correct camera photos	కెమెరా ఫోటోలను సరిచేయి
+	Couldn't enhance the scans: {e}	స్కాన్‌లను మెరుగుపరచలేకపోయాము: {e}
+	Despeckle	మచ్చలు తీసివేయి
+	Editable Text and Images	సవరించగల టెక్స్ట్ మరియు చిత్రాలు
+	Editable text boxes and pictures	సవరించగల టెక్స్ట్ బాక్స్‌లు మరియు చిత్రాలు
+	Enhance	మెరుగుపరచు
+	Enhance Scans	స్కాన్‌లను మెరుగుపరచు
+	Enhanced: {list}	మెరుగుపరచబడింది: {list}
+	Export Accessible Text	యాక్సెసిబుల్ టెక్స్ట్‌ను ఎగుమతి చేయి
+	Export cancelled	ఎగుమతి రద్దు చేయబడింది
+	Export cancelled after {n} pages	{n} పేజీల తర్వాత ఎగుమతి రద్దు చేయబడింది
+	Export stopped unexpectedly	ఎగుమతి అనుకోకుండా ఆగిపోయింది
+	Export to Excel	Excel కి ఎగుమతి చేయి
+	Export to HTML	HTML గా ఎగుమతి చేయి
+	Export to PowerPoint	PowerPoint కి ఎగుమతి చేయి
+	Export to RTF	RTF గా ఎగుమతి చేయి
+	Export to SVG	SVG గా ఎగుమతి చేయి
+	Export to Word	Word కి ఎగుమతి చేయి
+	Finds the page in a photo, corrects its perspective and evens out the lighting	ఫోటోలో పేజీని కనుగొని, దాని దృక్కోణాన్ని సరిచేసి, వెలుతురును సమం చేస్తుంది
+	Nothing needed enhancing on these pages	ఈ పేజీలలో మెరుగుపరచాల్సినది ఏమీ లేదు
+	On every page without text	టెక్స్ట్ లేని ప్రతి పేజీలో
+	On scanned pages	స్కాన్ చేసిన పేజీలలో
+	One SVG file per page, named after the document: vector paths, text as outlines, images.	ప్రతి పేజీకి ఒక SVG ఫైల్, పత్రం పేరుతో: వెక్టర్ మార్గాలు, అవుట్‌లైన్‌లుగా టెక్స్ట్, చిత్రాలు.
+	One picture per page	ప్రతి పేజీకి ఒక చిత్రం
+	One slide per page.	ప్రతి పేజీకి ఒక స్లయిడ్.
+	One web page: headings, paragraphs with their fonts and styles, lists, tables and images inline.	ఒక వెబ్ పేజీ: శీర్షికలు, ఫాంట్‌లు మరియు శైలులతో పేరాలు, జాబితాలు, పట్టికలు మరియు లోపల చిత్రాలు.
+	One worksheet per page: tables as cell grids, numbers as numbers, images as pictures.	ప్రతి పేజీకి ఒక వర్క్‌షీట్: పట్టికలు సెల్ గ్రిడ్‌లుగా, సంఖ్యలు సంఖ్యలుగా, చిత్రాలు చిత్రాలుగా.
+	Picture resolution	చిత్రం రిజల్యూషన్
+	Removes isolated specks before reading; with an output that changes the page, from the page images too	చదవడానికి ముందు విడి మచ్చలను తీసివేస్తుంది; పేజీని మార్చే అవుట్‌పుట్‌తో, పేజీ చిత్రాల నుండి కూడా
+	Rich text: paragraphs with their fonts and styles, and tables.	రిచ్ టెక్స్ట్: ఫాంట్‌లు మరియు శైలులతో పేరాలు, మరియు పట్టికలు.
+	Straighten skewed pages	వంగిన పేజీలను నిటారుగా చేయి
+	The tagged text in logical reading order, as a screen reader reads it.	స్క్రీన్ రీడర్ చదివే విధంగా, తార్కిక చదివే క్రమంలో ట్యాగ్ చేసిన టెక్స్ట్.
+	Turns pages scanned at a slant (up to 15°) straight	వాలుగా స్కాన్ చేసిన పేజీలను (15° వరకు) నిటారుగా చేస్తుంది
+	Turns recognized lines into editable text in a matching font, size and colour; the rest of the page stays as an image	గుర్తించిన పంక్తులను సరిపోలే ఫాంట్, పరిమాణం మరియు రంగులో సవరించగల టెక్స్ట్‌గా మారుస్తుంది; పేజీలో మిగిలినది చిత్రంగానే ఉంటుంది
+	Whitens the paper background before reading; with an output that changes the page, the page images too	చదవడానికి ముందు కాగితం నేపథ్యాన్ని తెల్లగా చేస్తుంది; పేజీని మార్చే అవుట్‌పుట్‌తో, పేజీ చిత్రాలను కూడా
+	background whitened in {n} images	{n} చిత్రాలలో నేపథ్యం తెల్లగా చేయబడింది
+	specks removed from {n} images	{n} చిత్రాల నుండి మచ్చలు తీసివేయబడ్డాయి
+	{n} camera photos corrected	{n} కెమెరా ఫోటోలు సరిచేయబడ్డాయి
+	{n} pages straightened	{n} పేజీలు నిటారుగా చేయబడ్డాయి
+	Export to PowerPoint…	PowerPoint కి ఎగుమతి చేయి…
+	Export to SVG…	SVG గా ఎగుమతి చేయి…
+	Export accessible text…	యాక్సెసిబుల్ టెక్స్ట్‌ను ఎగుమతి చేయి…
+	Enhance scans…	స్కాన్‌లను మెరుగుపరచు…
+	SVG (one file per page)	SVG (ప్రతి పేజీకి ఒక ఫైల్)
+	Accessible text	యాక్సెసిబుల్ టెక్స్ట్
+	Can't reach {standard} automatically; nothing was changed.	{standard}‌ను స్వయంచాలకంగా చేరుకోలేము; ఏదీ మార్చలేదు.
+	Checking…	తనిఖీ చేస్తోంది…
+	Compress document structure	పత్ర నిర్మాణాన్ని కుదించు
+	Compress entire file	మొత్తం ఫైల్‌ను కుదించు
+	Convert to PDF/X	PDF/X‌కి మార్చు
+	Converted to {standard}: {n} changes. Save to keep them.	{standard}‌కి మార్చాం: {n} మార్పులు. వాటిని ఉంచడానికి సేవ్ చేయండి.
+	Converting…	మారుస్తోంది…
+	Errors: {e} · Warnings: {w}	లోపాలు: {e} · హెచ్చరికలు: {w}
+	Flatten transparency	పారదర్శకతను చదును చేయి
+	High (600 ppi)	అధికం (600 ppi)
+	Keep the document's (sRGB if it has none)	పత్రానిదే (లేకపోతే sRGB)
+	Keep the document's output intent	పత్రం అవుట్‌పుట్ ఇంటెంట్‌ను ఉంచు
+	Low (150 ppi)	తక్కువ (150 ppi)
+	Make compatible with	దీనితో అనుకూలంగా చేయి
+	Medium (300 ppi)	మధ్యస్థం (300 ppi)
+	No output intents	అవుట్‌పుట్ ఇంటెంట్‌లు లేవు
+	No problems found in the implemented checks.	అమలైన తనిఖీల్లో సమస్యలు కనిపించలేదు.
+	Nothing needed changing.	ఏదీ మార్చాల్సిన అవసరం రాలేదు.
+	Object compression	ఆబ్జెక్ట్ కుదింపు
+	Only the areas whose look depends on transparency become images; text and vectors elsewhere stay as they are.	పారదర్శకతపై ఆధారపడి కనిపించే ప్రాంతాలు మాత్రమే చిత్రాలుగా మారతాయి; మిగతా చోట్ల పాఠ్యం, వెక్టర్‌లు అలాగే ఉంటాయి.
+	Only the first {n} findings are shown.	మొదటి {n} ఫలితాలు మాత్రమే చూపబడ్డాయి.
+	Optimizing… flattening transparency	ఆప్టిమైజ్ చేస్తోంది… పారదర్శకతను చదును చేస్తోంది
+	PDF 1.3 has no transparency: it is always flattened.	PDF 1.3‌లో పారదర్శకత లేదు: అది ఎప్పుడూ చదును అవుతుంది.
+	PDF {v} · objects checked: {n}	PDF {v} · తనిఖీ చేసిన ఆబ్జెక్ట్‌లు: {n}
+	PDF/X-4 embeds the output profile: choose a profile.	PDF/X-4 అవుట్‌పుట్ ప్రొఫైల్‌ను పొందుపరుస్తుంది: ఒక ప్రొఫైల్‌ను ఎంచుకోండి.
+	Raster/vector balance	రాస్టర్/వెక్టర్ సమతుల్యం
+	Remove compression	కుదింపును తీసివేయి
+	Save As optimizes for Fast Web View	ఇలా సేవ్ చేయి వేగవంతమైన వెబ్ వీక్షణ కోసం ఆప్టిమైజ్ చేస్తుంది
+	Save As writes the file so a browser can show the first page before the download finishes.	డౌన్‌లోడ్ పూర్తయ్యేలోపే బ్రౌజర్ మొదటి పేజీని చూపగలిగేలా ఇలా సేవ్ చేయి ఫైల్‌ను రాస్తుంది.
+	Standard	ప్రమాణం
+	Syntax	సింటాక్స్
+	The chosen profile is no longer loaded.	ఎంచుకున్న ప్రొఫైల్ ఇక లోడ్ అయి లేదు.
+	no profile (registered condition)	ప్రొఫైల్ లేదు (నమోదైన షరతు)
+	object	ఆబ్జెక్ట్
+	the profile can't be read: {e}	ప్రొఫైల్‌ను చదవలేము: {e}
+	{space} {class} profile, ICC version {v}, {n} bytes	{space} {class} ప్రొఫైల్, ICC వెర్షన్ {v}, {n} బైట్‌లు
+	Checks what a machine can decide. Reading order, the quality of alternate text and the use of colour need a person.	యంత్రం నిర్ణయించగలిగే వాటిని తనిఖీ చేస్తుంది. చదివే క్రమం, ప్రత్యామ్నాయ పాఠ్యం నాణ్యత, రంగుల వినియోగం కోసం మనిషి అవసరం.
+	Checks every object reachable from the trailer against the Arlington PDF model for the file's PDF version.	ఫైల్ PDF వెర్షన్‌కు Arlington PDF మోడల్‌తో ట్రైలర్ నుండి చేరుకోగల ప్రతి ఆబ్జెక్ట్‌ను పోల్చి తనిఖీ చేస్తుంది.
+	Older versions: JPEG 2000 and 16-bit images are converted, JBIG2 becomes CCITT for PDF 1.3, transparency is flattened for PDF 1.3, and there are no object streams.	పాత వెర్షన్‌లు: JPEG 2000, 16-బిట్ చిత్రాలు మార్చబడతాయి, PDF 1.3‌కి JBIG2 CCITT‌గా మారుతుంది, పారదర్శకత చదును అవుతుంది, ఆబ్జెక్ట్ స్ట్రీమ్‌లు ఉండవు.
+	PDF/X…	PDF/X…
+	PDF/UA…	PDF/UA…
+	Validate PDF syntax…	PDF సింటాక్స్‌ను ధృవీకరించు…
+	Validate PDF syntax	PDF సింటాక్స్‌ను ధృవీకరించు

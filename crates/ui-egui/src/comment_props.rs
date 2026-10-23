@@ -233,7 +233,7 @@ pub(crate) fn body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> (boo
                 ui.add(egui::TextEdit::singleline(&mut e.subject).desired_width(280.0)).labelled_by(l.id);
                 ui.end_row();
                 ui.label(tl!("Modified"));
-                ui.label(e.modified.as_deref().map(pdfcraft_render::pretty_date).unwrap_or_else(|| "—".into()));
+                ui.label(e.modified.as_deref().map(crate::i18n::pdf_date).unwrap_or_else(|| "—".into()));
                 ui.end_row();
             });
         }

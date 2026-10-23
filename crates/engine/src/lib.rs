@@ -18,14 +18,21 @@ pub mod attachment_trust;
 pub mod autotag;
 pub mod camera;
 pub mod catalog;
+pub mod clip;
 pub mod color_settings;
 pub mod commands;
 pub mod compare;
+pub mod compare_view;
 pub mod dates;
 pub mod export;
+pub mod export_job;
 pub mod export_ocr;
+pub mod folder_search;
+pub mod help;
 pub mod js;
+pub mod js_debug;
 pub mod links;
+pub mod locale;
 pub mod ocr;
 pub mod optimizer;
 pub mod os_trust;
@@ -33,17 +40,27 @@ pub mod output_preview;
 pub mod pdfx;
 pub mod pptx_export;
 pub mod preflight;
+pub mod prefs;
 pub mod reader_selection;
 pub mod reading_order;
+pub mod recovery;
+pub mod redaction_sets;
+pub mod revocation_fetch;
 pub mod signature_image;
+pub mod signature_settings;
 pub mod signature_workflow;
+pub mod standards;
 pub mod submit;
 pub mod summary;
+pub mod text_extract;
 pub mod text_preview;
+pub mod tool_host;
 mod upright_image;
 pub mod url_access;
+pub mod windows;
 pub mod xfa;
 
+pub use clip::{CaptureRegion, Clip};
 pub use signature_image::{ImageSignaturePreview, SignatureImage};
 pub use summary::SummaryLayout;
 
@@ -68,26 +85,40 @@ pub fn color_profile_limit() -> usize {
     pdfcraft_edit::convert_colors::icc::MAX_PROFILE
 }
 pub use pdfcraft_edit::{
-    Added, AddedImage, AddedText, Align as TextAlign, Background, Content as AddedContent, Family as FontFamily, Hairlines, HeaderFooter, MarkKind,
-    MarkStyle, MarkedPage, PrinterMarks, Watermark, bates_start, with_bates_start,
+    Added, AddedImage, AddedText, Align as TextAlign, Background, Content as AddedContent, Family as FontFamily, Hairlines, HeaderFooter,
+    MAX_MARK_OFFSET, MarkKind, MarkStyle, MarkVisibility, MarkedPage, PrinterMarks, Watermark, bates_start, with_bates_start,
 };
+pub use pdfcraft_edit::{DEFAULT_LINE_SPACING, LINE_SPACING_RANGE, MAX_PARA_SPACE, line_height as text_line_height};
 pub use pdfcraft_forms::{
     BorderStyle, CheckStyle, DocTrigger, Field as FormField, FieldAction, FieldChange, FieldFont, FieldKind as FormFieldKind, FieldProps, FieldValue,
-    Look as FieldLook, LookPatch as FieldLookPatch, MENU_ITEMS as FORM_MENU_ITEMS, NewField, TabOrder, Trigger as FieldTrigger, Widget as FormWidget,
-    af as form_scripts, flags as field_flags,
+    Look as FieldLook, LookPatch as FieldLookPatch, MENU_ITEMS as FORM_MENU_ITEMS, NewField, PageTrigger, TabOrder, Trigger as FieldTrigger,
+    Widget as FormWidget, af as form_scripts, flags as field_flags,
 };
 
 pub use pdfcraft_a11y as a11y;
+/// Right-to-left text: display order (UAX #9), visual caret movement, Arabic presentation forms.
+pub use pdfcraft_edit::bidi;
 pub use pdfcraft_edit::lists::{MAX_LIST_LEVEL, MAX_LIST_START, items as list_items, labels as list_labels};
 /// Edit a PDF ▸ arrange, align, distribute, rotate, flip and move page objects.
 pub use pdfcraft_edit::objects::{
-    AlignTo, Anchor, Arrange, Axis, Dash, LineCap, LineJoin, ObjectKind, ObjectsEdit, PageObject, Paint, PathStyle, Size as ObjectSize,
+    AlignTo, Anchor, Appearance, Arrange, Axis, Dash, LineCap, LineJoin, ObjectIndex, ObjectKind, ObjectsEdit, PageObject, Paint, PathStyle,
+    Size as ObjectSize,
 };
 pub use pdfcraft_edit::text::validate_paragraph_text;
 pub use pdfcraft_edit::{BlockStyle, PageFont, PageImage, TextBlock, TextLine, TextRun, first_undrawable};
 pub use pdfcraft_edit::{Bullet, ListChange, ListItem, ListStyle, ListTarget, Numbering};
 pub use pdfcraft_measure as measure;
 pub use pdfcraft_xfa::Report as XfaLayout;
+
+/// A file numbered by [`Session::bates_number_file`]: its page count, first and last Bates
+/// numbers, and the saved PDF.
+#[derive(Clone, Debug)]
+pub struct BatesFile {
+    pub pages: usize,
+    pub first: u64,
+    pub last: u64,
+    pub bytes: Arc<Vec<u8>>,
+}
 
 /// A change to an existing page image.
 #[derive(Clone, Debug, PartialEq)]
@@ -143,6 +174,7 @@ pub use pdfcraft_annot::{
     Shape, StampGroup, StampKind, Style, rect_quad,
 };
 pub use pdfcraft_forms::detect;
+pub use pdfcraft_model::actions::MAX_SCRIPT_BYTES as MAX_ACTION_SCRIPT_BYTES;
 /// Named destinations and explicit views (go-to targets of links and bookmarks).
 pub use pdfcraft_model::dests::{DestError, DestSource, Fit as DestFit, NamedDest, Target as DestTarget, View as DestView};
 pub use pdfcraft_optimize as optimize;
@@ -289,7 +321,8 @@ fn scope_of(edit: &Edit) -> Scope {
         | Edit::MoveAnnotation { .. }
         | Edit::ResizeAnnotation { .. }
         | Edit::StyleAnnotation { .. }
-        | Edit::SetAnnotationInfo { .. } => Scope::Comments,
+        | Edit::SetAnnotationInfo { .. }
+        | Edit::SetCommentPopup { .. } => Scope::Comments,
         Edit::SetFieldValue { .. } | Edit::ResetForm { .. } | Edit::SetFieldImage { .. } | Edit::ApplyScriptChanges { .. } => Scope::Form,
         Edit::Batch { edits, .. } => {
             let mut scopes = edits.iter().map(scope_of);
@@ -681,6 +714,16 @@ impl Document {
         self.config.hide_comments
     }
 
+    /// Comment types hidden by Comments ▸ Show by type (annotation subtypes, e.g. `Ink`).
+    pub fn hidden_comment_types(&self) -> Vec<String> {
+        self.config.hidden_comment_subtypes.iter().map(|s| String::from_utf8_lossy(s).into_owned()).collect()
+    }
+
+    /// Whether comments of `subtype` are hidden (by type or all of them).
+    pub fn comment_type_hidden(&self, subtype: &str) -> bool {
+        self.config.hide_comments || self.config.hidden_comment_subtypes.iter().any(|s| s.as_slice() == subtype.as_bytes())
+    }
+
     pub fn can_undo(&self) -> Option<&str> {
         self.editor.as_ref().and_then(|e| e.undo.last()).map(|(l, ..)| l.as_str())
     }
@@ -777,6 +820,23 @@ impl Document {
     /// Comment properties of the comment at `(page, index)` (Comment Properties dialog).
     pub fn comment_props(&self, page: usize, index: usize) -> Option<pdfcraft_annot::Props> {
         self.editor.as_ref().and_then(|e| pdfcraft_annot::props(&e.cos, page, index))
+    }
+
+    /// The pop-up of the comment at `(page, index)`, as stored (`None`: it has none).
+    pub fn comment_popup(&self, page: usize, index: usize) -> Option<pdfcraft_annot::PopupState> {
+        self.editor.as_ref().and_then(|e| pdfcraft_annot::popup(&e.cos, page, index))
+    }
+
+    /// Open All Pop-ups / Close All Pop-ups on `page` (every page when `None`): one undo step
+    /// that opens (or closes) every comment pop-up not already in that state. `None` when there
+    /// is nothing to change.
+    pub fn all_popups_edit(&self, page: Option<usize>, open: bool) -> Option<Edit> {
+        let targets = pdfcraft_annot::popups_to_toggle(&self.editor.as_ref()?.cos, page, open);
+        if targets.is_empty() {
+            return None;
+        }
+        let edits = targets.into_iter().map(|(page, index)| Edit::SetCommentPopup { page, index, open: Some(open), rect: None }).collect();
+        Some(Edit::Batch { label: if open { "Open all pop-ups" } else { "Close all pop-ups" }.into(), edits })
     }
 
     /// The formatted text of the text box at `(page, index)` (`None` for other comments).
@@ -1451,6 +1511,14 @@ pub enum Edit {
         subject: Option<String>,
         icon: Option<NoteIcon>,
     },
+    /// Open or close a comment's pop-up note and/or move or resize it (`rect`, user space). A
+    /// comment without a pop-up gets one. The comment itself is unchanged.
+    SetCommentPopup {
+        page: usize,
+        index: usize,
+        open: Option<bool>,
+        rect: Option<[f64; 4]>,
+    },
     /// Fill in a form field.
     SetFieldValue {
         name: String,
@@ -1471,6 +1539,13 @@ pub enum Edit {
     /// Set Document Actions: the JavaScript a document trigger runs (`None` removes it).
     SetDocumentAction {
         trigger: pdfcraft_forms::DocTrigger,
+        script: Option<String>,
+    },
+    /// Page Properties ▸ Actions: the JavaScript page `page` (0-based) runs on Page Open or
+    /// Page Close (`None` removes it).
+    SetPageAction {
+        page: usize,
+        trigger: pdfcraft_forms::PageTrigger,
         script: Option<String>,
     },
     /// Field Properties ▸ General / Options.
@@ -1528,6 +1603,23 @@ pub enum Edit {
         target: u32,
         after: bool,
     },
+    /// Tags / Order panel ▸ drag onto a tag: move structure element `element` inside element
+    /// `target`, as its last kid (an empty tag too).
+    MoveTagInto {
+        element: u32,
+        target: u32,
+    },
+    /// Tags panel ▸ New Tag: an empty structure element of type `ty` as the last kid of element
+    /// `parent` (object number; `None`: a new top-level element), see [`a11y::new_element`].
+    NewTag {
+        parent: Option<u32>,
+        ty: String,
+    },
+    /// Tags panel ▸ Delete Tag: take element `element` out of the structure tree; its kids take
+    /// its place in its parent, so its content stays tagged (see [`a11y::delete_element`]).
+    DeleteTag {
+        element: u32,
+    },
     /// Reading Order tool ▸ Clear Page Structure: take page `page`'s (0-based) tags (and,
     /// unless `keep_artifacts`, its artifacts) out of its content and the structure tree.
     ClearPageStructure {
@@ -1582,6 +1674,16 @@ pub enum Edit {
     /// forbidden actions, annotation flags, …).
     ConvertPdfA {
         level: pdfcraft_preflight::Level,
+        /// The output intent to give the document (default: sRGB, when it has no PDF/A intent).
+        intent: Option<Box<pdfcraft_preflight::PdfaIntent>>,
+    },
+    /// The result of a conversion (Save as PDF/A, Convert to PDF/X) worked out on a copy in
+    /// the background ([`standards`]): the document becomes `result` as one undo step named
+    /// `label`. Only [`Session::finish_standards`] makes it, after checking the document hasn't
+    /// changed since the copy was taken.
+    Converted {
+        label: String,
+        result: standards::ConvertedDocument,
     },
     /// Preflight ▸ Convert to PDF/X: the fixes for `options.part` (see [`pdfx`]); run it through
     /// [`Session::pdfx_convert`], which checks the result first.
@@ -1910,12 +2012,16 @@ impl Edit {
             Edit::MoveAnnotation { .. } => "Move comment".into(),
             Edit::ResizeAnnotation { .. } => "Resize comment".into(),
             Edit::StyleAnnotation { .. } | Edit::SetAnnotationInfo { .. } => "Change comment properties".into(),
+            Edit::SetCommentPopup { rect: Some(_), .. } => "Move pop-up".into(),
+            Edit::SetCommentPopup { open: Some(false), .. } => "Close pop-up".into(),
+            Edit::SetCommentPopup { .. } => "Open pop-up".into(),
             Edit::SetFieldValue { name, .. } => format!("Fill in {name}"),
             Edit::SetFieldImage { name, .. } => format!("Set the image of {name}"),
             Edit::ResetForm { .. } => "Clear form".into(),
             Edit::AddField { .. } => "Add field".into(),
             Edit::SetFieldProps { .. } => "Change field properties".into(),
             Edit::SetDocumentAction { .. } => "Set document actions".into(),
+            Edit::SetPageAction { .. } => "Set page action".into(),
             Edit::DeleteField { .. } => "Delete field".into(),
             Edit::DuplicateField { .. } => "Duplicate field".into(),
             Edit::SetTabOrder { .. } | Edit::MoveInTabOrder { .. } => "Set tab order".into(),
@@ -1927,7 +2033,9 @@ impl Edit {
             Edit::MarkArtifact { .. } => "Change to artifact".into(),
             Edit::TagRegion { request } if request.role == a11y::RegionRole::Background => "Change to artifact".into(),
             Edit::TagRegion { .. } => "Tag region".into(),
-            Edit::MoveTag { .. } => "Change reading order".into(),
+            Edit::MoveTag { .. } | Edit::MoveTagInto { .. } => "Change reading order".into(),
+            Edit::NewTag { .. } => "New tag".into(),
+            Edit::DeleteTag { .. } => "Delete tag".into(),
             Edit::ClearPageStructure { .. } => "Clear page structure".into(),
             Edit::TagImage { .. } => "Set alternate text".into(),
             Edit::Autotag { .. } => "Autotag document".into(),
@@ -1939,7 +2047,8 @@ impl Edit {
             Edit::CorrectCameraImages { .. } => "Correct camera image".into(),
             Edit::ApplyScriptChanges { .. } => "Run JavaScript".into(),
             Edit::XfaEvent { .. } => "Run form script".into(),
-            Edit::ConvertPdfA { level } => format!("Save as {}", level.label()),
+            Edit::ConvertPdfA { level, .. } => format!("Save as {}", level.label()),
+            Edit::Converted { label, .. } => label.clone(),
             Edit::ConvertPdfX { options } => format!("Convert to {}", options.part.label()),
             Edit::PreflightFix { .. } => "Apply preflight fixes".into(),
             Edit::SetFieldScript { name, .. } => format!("Edit script of {name}"),
@@ -2102,6 +2211,7 @@ fn check_permission(edit: &Edit, p: &pdfcraft_cos::Permissions) -> Result<(), Ed
         | Edit::ResizeAnnotation { .. }
         | Edit::StyleAnnotation { .. }
         | Edit::SetAnnotationInfo { .. }
+        | Edit::SetCommentPopup { .. }
         | Edit::SetMeasurementScale { .. } => {
             if p.annotate() {
                 Ok(())
@@ -2156,6 +2266,7 @@ fn check_permission(edit: &Edit, p: &pdfcraft_cos::Permissions) -> Result<(), Ed
         | Edit::Sanitize
         | Edit::SetFieldProps { .. }
         | Edit::SetDocumentAction { .. }
+        | Edit::SetPageAction { .. }
         | Edit::DeleteField { .. }
         | Edit::DuplicateField { .. }
         | Edit::SetTabOrder { .. }
@@ -2170,6 +2281,9 @@ fn check_permission(edit: &Edit, p: &pdfcraft_cos::Permissions) -> Result<(), Ed
         | Edit::MarkArtifact { .. }
         | Edit::TagRegion { .. }
         | Edit::MoveTag { .. }
+        | Edit::MoveTagInto { .. }
+        | Edit::NewTag { .. }
+        | Edit::DeleteTag { .. }
         | Edit::ClearPageStructure { .. }
         | Edit::TagImage { .. }
         | Edit::Autotag { .. }
@@ -2185,6 +2299,7 @@ fn check_permission(edit: &Edit, p: &pdfcraft_cos::Permissions) -> Result<(), Ed
         | Edit::SetSignatureLock { .. }
         | Edit::ConvertPdfA { .. }
         | Edit::ConvertPdfX { .. }
+        | Edit::Converted { .. }
         | Edit::PreflightFix { .. }
         | Edit::EditTextLine { .. }
         | Edit::EditTextBlock { .. }
@@ -2219,7 +2334,9 @@ fn objects_label(change: &pdfcraft_edit::objects::ObjectsEdit) -> &'static str {
         ObjectsEdit::Align(AlignTo::Bottom) => "Align bottom",
         ObjectsEdit::Distribute(Axis::Horizontal) => "Distribute horizontally",
         ObjectsEdit::Distribute(Axis::Vertical) => "Distribute vertically",
-        ObjectsEdit::Rotate(_) => "Rotate objects",
+        ObjectsEdit::Rotate(_) | ObjectsEdit::RotateBy(_) => "Rotate objects",
+        ObjectsEdit::Matrix(m) if m[1] == 0.0 && m[2] == 0.0 => "Resize objects",
+        ObjectsEdit::Matrix(_) => "Transform objects",
         ObjectsEdit::Flip { .. } => "Flip objects",
         ObjectsEdit::Move { .. } => "Move objects",
         ObjectsEdit::Resize { .. } => "Resize objects",
@@ -2498,6 +2615,7 @@ fn run_edit_inner(doc: &mut pdfcraft_cos::Document, edit: &Edit, cx: &mut EditCt
         Edit::SetAnnotationInfo { page, index, author, subject, icon } => {
             pdfcraft_annot::set_info(doc, *page, *index, author.as_deref(), subject.as_deref(), *icon, &cx.meta())?;
         }
+        Edit::SetCommentPopup { page, index, open, rect } => pdfcraft_annot::set_popup(doc, *page, *index, *open, *rect)?,
         Edit::SetFieldValue { name, value } => match cx.js.as_mut() {
             Some(js) => pdfcraft_forms::set_value_with(doc, name, value, js)?,
             None => pdfcraft_forms::set_value(doc, name, value)?,
@@ -2534,6 +2652,9 @@ fn run_edit_inner(doc: &mut pdfcraft_cos::Document, edit: &Edit, cx: &mut EditCt
         Edit::SetDocumentAction { trigger, script } => {
             pdfcraft_forms::set_document_action(doc, *trigger, script.as_deref())?;
         }
+        Edit::SetPageAction { page, trigger, script } => {
+            pdfcraft_forms::set_page_action(doc, *page, *trigger, script.as_deref())?;
+        }
         Edit::DuplicateField { name, pages } => {
             if pdfcraft_forms::duplicate_field(doc, name, pages)? == 0 {
                 return Err(EditError::Form(pdfcraft_forms::FormError::Invalid(format!("{name} is already on those pages"))));
@@ -2566,6 +2687,19 @@ fn run_edit_inner(doc: &mut pdfcraft_cos::Document, edit: &Edit, cx: &mut EditCt
             let place = if *after { a11y::OrderPlace::After(t) } else { a11y::OrderPlace::Before(t) };
             a11y::move_element(doc, e, place).map_err(|e| EditError::Accessibility(e.to_string()))?;
         }
+        Edit::MoveTagInto { element, target } => {
+            let e = pdfcraft_cos::ObjRef::new(*element, doc.generation(*element));
+            let t = pdfcraft_cos::ObjRef::new(*target, doc.generation(*target));
+            a11y::move_element(doc, e, a11y::OrderPlace::Into(t)).map_err(|e| EditError::Accessibility(e.to_string()))?;
+        }
+        Edit::NewTag { parent, ty } => {
+            let p = parent.map(|n| pdfcraft_cos::ObjRef::new(n, doc.generation(n)));
+            a11y::new_element(doc, p, ty).map_err(|e| EditError::Accessibility(e.to_string()))?;
+        }
+        Edit::DeleteTag { element } => {
+            let e = pdfcraft_cos::ObjRef::new(*element, doc.generation(*element));
+            a11y::delete_element(doc, e).map_err(|e| EditError::Accessibility(e.to_string()))?;
+        }
         Edit::ClearPageStructure { page, keep_artifacts } => {
             a11y::clear_page_structure(doc, *page, *keep_artifacts).map_err(|e| EditError::Accessibility(e.to_string()))?;
         }
@@ -2588,9 +2722,10 @@ fn run_edit_inner(doc: &mut pdfcraft_cos::Document, edit: &Edit, cx: &mut EditCt
                 None => pdfcraft_forms::recalculate(doc)?,
             };
         }
-        Edit::ConvertPdfA { level } => {
-            pdfcraft_a11y::convert_pdfa(doc, *level).map_err(|e| EditError::Invalid(e.to_string()))?;
+        Edit::ConvertPdfA { level, intent } => {
+            pdfcraft_a11y::convert_pdfa_with_intent(doc, *level, intent.as_deref()).map_err(|e| EditError::Invalid(e.to_string()))?;
         }
+        Edit::Converted { result, .. } => *doc = result.document().clone(),
         Edit::ConvertPdfX { options } => {
             let date = cx.date.clone().unwrap_or_else(|| "D:19700101000000Z".into());
             pdfx::run(doc, options, &date)?;
@@ -2849,6 +2984,7 @@ fn comment_list(doc: &pdfcraft_cos::Document) -> Vec<pdfcraft_render::Annotation
             quads: s.quads,
             locked: s.locked,
             intent: s.intent,
+            popup: s.popup.map(|p| pdfcraft_render::PopupNote { rect: p.rect.map(|v| v as f32), open: p.open }),
         })
         .collect()
 }
@@ -2857,8 +2993,22 @@ fn comment_list(doc: &pdfcraft_cos::Document) -> Vec<pdfcraft_render::Annotation
 fn local_utc_offset() -> i64 {
     #[cfg(not(target_arch = "wasm32"))]
     return i64::from(chrono::Local::now().offset().local_minus_utc());
+    // The browser's offset for now, in minutes behind UTC (so negated). A NaN or absurd value
+    // (more than a day) is taken as UTC.
     #[cfg(target_arch = "wasm32")]
-    return 0;
+    {
+        let behind = js_sys::Date::new_0().get_timezone_offset();
+        if behind.is_finite() && behind.abs() <= 24.0 * 60.0 { -(behind as i64) * 60 } else { 0 }
+    }
+}
+
+/// Whole seconds since the Unix epoch from a browser clock reading in milliseconds; `None` for
+/// NaN, before 1970 or after the year 9999.
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+fn browser_now_secs(ms: f64) -> Option<i64> {
+    const MAX_SECS: f64 = 253_402_300_799.0; // 9999-12-31T23:59:59Z
+    let secs = (ms / 1000.0).floor();
+    (secs.is_finite() && (0.0..=MAX_SECS).contains(&secs)).then_some(secs as i64)
 }
 
 /// (year, month, day) from a PDF date `D:YYYYMMDD…`.
@@ -3043,6 +3193,8 @@ pub struct Session {
     url_policy: url_access::UrlPolicy,
     /// Trust Manager ▸ attachments: the user's allow/deny overrides (see [`attachment_trust`]).
     attachment_trust: attachment_trust::AttachmentTrust,
+    /// Redaction code sets the user made (see [`redaction_sets`]).
+    redaction_code_sets: Vec<pdfcraft_redact::codes::CustomCodeSet>,
     /// Trust the operating system's root certificates for signatures (see [`os_trust`]).
     os_trust: os_trust::OsTrust,
     /// Keep tags on edit, inverted (on by default; see [`Session::set_keep_tags_on_edit`]).
@@ -3053,6 +3205,10 @@ pub struct Session {
     color: color_settings::ColorManagement,
     /// Scan & OCR: the recognition engines and the one chosen (see [`ocr`]).
     ocr_engines: ocr::Engines,
+    /// Preferences held by the session (autosave, identity, accessibility…; see [`prefs`]).
+    prefs: prefs::Preferences,
+    /// Preferences → Signatures: servers, appearances, verification time (see [`signature_settings`]).
+    signature_settings: signature_settings::SignatureSettings,
 }
 
 /// Lay a dynamic XFA form out (pages and fields) and give its widgets appearances.
@@ -3155,7 +3311,7 @@ fn revisions_of(cos: &pdfcraft_cos::Document, bytes: &[u8], signatures: &[Signat
 
 /// Validate the signature fields of `cos` (written as `bytes`).
 fn signatures_of(cos: &pdfcraft_cos::Document, bytes: &[u8], trust: &TrustStore, cache: &pdfcraft_sign::DigestCache) -> Arc<Vec<SignatureInfo>> {
-    Arc::new(pdfcraft_sign::pdf::list_cached(cos, bytes, trust, cache))
+    Arc::new(pdfcraft_sign::pdf::list_cached_with_time(cos, bytes, trust, cache, trust.verification))
 }
 
 impl Session {
@@ -3180,8 +3336,10 @@ impl Session {
         }
         #[cfg(not(target_arch = "wasm32"))]
         return std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).ok().map(|d| d.as_secs() as i64);
+        // The browser's clock (std's SystemTime is unavailable there): signing times, dates and
+        // certificate validity need it. A clock before 1970 or beyond year 9999 is unknown.
         #[cfg(target_arch = "wasm32")]
-        return None;
+        return browser_now_secs(js_sys::Date::now());
     }
 
     /// Today's date in local time: (year, month, day). With an injected clock (tests) the clock
@@ -3482,6 +3640,10 @@ impl Session {
         let added = editor.as_ref().map(|e| pdfcraft_edit::list_added(&e.cos)).unwrap_or_default();
         let links = editor.as_ref().map(|e| pdfcraft_annot::links::list(&e.cos)).unwrap_or_default();
         let sig_cache = Arc::new(pdfcraft_sign::DigestCache::default());
+        // "Current time" validation reads the clock when a document opens.
+        if self.signature_settings.verify_at == signature_settings::VerifyAt::Current {
+            Arc::make_mut(&mut self.trust).verification = self.verification_time();
+        }
         let (signatures, revisions) = editor
             .as_ref()
             .map(|e| {
@@ -3917,6 +4079,39 @@ impl Session {
         guard(|| write_incremental(&editor.cos, &opts)).map_err(EditError::Write)?.map(Arc::new).map_err(|e| EditError::Write(e.to_string()))
     }
 
+    /// Bates-number another file, continuing a numbering (Acrobat's Bates Numbering across a
+    /// list of files): open `bytes` (with `password` when encrypted) in this session, add header
+    /// and footer `hf` to every page with its Bates numbers starting at `start`, and return the
+    /// saved PDF. The file is closed again either way; the document open in the app is not
+    /// touched. `hf` must hold a `<<Bates Number…>>` token.
+    pub fn bates_number_file(
+        &mut self,
+        name: &str,
+        bytes: Arc<Vec<u8>>,
+        password: Option<&str>,
+        hf: &HeaderFooter,
+        start: u64,
+        replace: bool,
+    ) -> Result<BatesFile, String> {
+        if !hf.text.iter().any(|t| bates_start(t).is_some()) {
+            return Err("put a <<Bates Number#digits#start#prefix#suffix>> token in a header or footer".into());
+        }
+        let id = self.open(name.to_string(), None, bytes, password).map_err(|e| e.to_string())?;
+        let numbered = (|| {
+            let pages = self.get(id).map_or(0, |d| d.info.pages.len());
+            let mut settings = hf.clone();
+            for t in &mut settings.text {
+                *t = with_bates_start(t, start);
+            }
+            self.apply(id, Edit::AddHeaderFooter { pages: (0..pages).collect(), settings, replace })?;
+            Ok::<_, EditError>((pages, self.save_bytes(id)?))
+        })();
+        self.close(id);
+        let (pages, bytes) = numbered.map_err(|e| e.to_string())?;
+        let last = start.saturating_add((pages as u64).saturating_sub(1));
+        Ok(BatesFile { pages, first: start, last, bytes })
+    }
+
     /// A compact, garbage-collected rewrite (Save As ▸ "Optimized" / Reduce File Size groundwork).
     pub fn save_full_bytes(&self, id: DocId) -> Result<Arc<Vec<u8>>, EditError> {
         let doc = self.get(id).ok_or(EditError::NoDocument)?;
@@ -4080,7 +4275,9 @@ impl Session {
         // Printed as displayed: comments and widgets without an appearance get the one drawn for
         // the page view (in the print copy only).
         let cos = pdfcraft_annot::with_missing_appearances(&cos).unwrap_or(cos);
-        let cos = pdfcraft_forms::with_missing_appearances(&cos).unwrap_or(cos);
+        let mut cos = pdfcraft_forms::with_missing_appearances(&cos).unwrap_or(cos);
+        // Watermarks shown only on screen stay off paper (print-only ones need nothing).
+        pdfcraft_edit::without_screen_only_marks(&mut cos)?;
         pdfcraft_print::impose(&cos, settings).map_err(|e| EditError::Print(e.to_string()))
     }
 
@@ -4299,6 +4496,11 @@ impl Session {
         Ok(pdfcraft_organize::bookmark_actions(self.cos(id)?))
     }
 
+    /// The action of the bookmark at `path`.
+    pub fn bookmark_action(&self, id: DocId, path: &[usize]) -> Result<BookmarkAction, EditError> {
+        Ok(pdfcraft_organize::bookmark_action(self.cos(id)?, path)?)
+    }
+
     /// The page a link goes to (named destinations resolved), if any.
     pub fn link_target_page(&self, id: DocId, action: &LinkAction) -> Option<usize> {
         action.page(self.cos(id).ok()?)
@@ -4330,6 +4532,12 @@ impl Session {
     fn write_new(&self, doc: &pdfcraft_cos::Document) -> Result<Arc<Vec<u8>>, EditError> {
         let opts = SaveOptions { mod_date: self.now().map(pdfcraft_cos::pdf_date), ..SaveOptions::default() };
         write_full(doc, &opts).map(Arc::new).map_err(|e| EditError::Write(e.to_string()))
+    }
+
+    /// Whether a document has unsaved changes that no autosave snapshot holds yet (cheap
+    /// enough for every frame).
+    pub fn has_unsnapshotted_changes(&self) -> bool {
+        self.docs.iter().any(|d| d.dirty && d.generation != d.snapshot_generation)
     }
 
     /// Documents with unsaved changes made since the last call: their current working file,
@@ -4409,6 +4617,37 @@ impl Session {
         doc.renderer = RenderPool::new(doc.display.clone(), render_threads(), doc.config.clone());
         doc.generation += 1;
         true
+    }
+
+    /// Hide comments of these types (Comments ▸ Show by type): annotation subtypes such as
+    /// `Highlight` or `Ink`. Form fields, links and pop-ups can't be hidden this way and other
+    /// names are refused; at most 64 types. Returns whether anything changed.
+    pub fn set_hidden_comment_types(&mut self, id: DocId, types: &[String]) -> Result<bool, EditError> {
+        let mut list: Vec<Vec<u8>> = Vec::new();
+        if types.len() > 64 {
+            return Err(EditError::Invalid("at most 64 comment types can be hidden".into()));
+        }
+        for t in types {
+            let t = t.trim();
+            if t.is_empty() || t.len() > 64 || !t.chars().all(|c| c.is_ascii_alphanumeric()) {
+                return Err(EditError::Invalid(format!("{t:?} is not a comment type (use names such as Highlight, Ink or FreeText)")));
+            }
+            if matches!(t, "Widget" | "Link" | "Popup") {
+                return Err(EditError::Invalid(format!("{t} annotations are not comments and can't be hidden by type")));
+            }
+            if !list.iter().any(|l| l.as_slice() == t.as_bytes()) {
+                list.push(t.as_bytes().to_vec());
+            }
+        }
+        list.sort();
+        let doc = self.docs.iter_mut().find(|d| d.id == id).ok_or(EditError::NoDocument)?;
+        if *doc.config.hidden_comment_subtypes == list {
+            return Ok(false);
+        }
+        doc.config.hidden_comment_subtypes = Arc::new(list);
+        doc.renderer = RenderPool::new(doc.display.clone(), render_threads(), doc.config.clone());
+        doc.generation += 1;
+        Ok(true)
     }
 
     /// Acrobat's Summarize Comments ("Comments only" layout): a new PDF listing every comment
@@ -4504,7 +4743,13 @@ impl Session {
         self.replace_trust(trust);
     }
 
-    fn replace_trust(&mut self, trust: TrustStore) {
+    fn replace_trust(&mut self, mut trust: TrustStore) {
+        // Preferences → Signatures: the verification time and the revocation freshness policy.
+        trust.verification = self.verification_time();
+        trust.revocation_max_age = match self.signature_settings.revocation_max_age_hours {
+            0 => None,
+            h => Some(u64::from(h).saturating_mul(3600)),
+        };
         self.trust = Arc::new(trust);
         for doc in &mut self.docs {
             doc.trust = self.trust.clone();
@@ -4639,6 +4884,8 @@ pub struct OptimizeReport {
     pub merged: usize,
     /// Remove Hidden Information categories discarded, with counts.
     pub discarded: Vec<(Hidden, usize)>,
+    /// Pages whose transparency was flattened (Transparency panel, or compatible with PDF 1.3).
+    pub flattened: usize,
 }
 
 /// Order of Summarize Comments.
@@ -4792,4 +5039,39 @@ pub fn filter_pages(info: &pdfcraft_render::DocInfo, pages: &[usize], parity: Pa
             }
         })
         .collect()
+}
+
+/// The most comma-separated parts a typed page range may have.
+pub const MAX_RANGE_PARTS: usize = 256;
+
+/// Organize ▸ Select ▸ Page range: the pages a typed range names (`1-3, 7, 9-`; page labels
+/// work as in Print, so `iv-vi` or `A-1`), narrowed to odd or even page numbers and to
+/// landscape or portrait pages; sorted, without repeats. An empty range means every page.
+/// Errors say which part is wrong.
+pub fn select_page_range(
+    info: &pdfcraft_render::DocInfo,
+    range: &str,
+    parity: PageParity,
+    orientation: PageOrientation,
+) -> Result<Vec<usize>, String> {
+    let n = info.pages.len();
+    if range.chars().count() > 4000 {
+        return Err("the page range is too long".into());
+    }
+    let parts: Vec<&str> = range.split([',', ';']).map(str::trim).filter(|p| !p.is_empty()).collect();
+    if parts.len() > MAX_RANGE_PARTS {
+        return Err(format!("a page range can have at most {MAX_RANGE_PARTS} parts"));
+    }
+    let mut chosen = std::collections::BTreeSet::new();
+    if parts.is_empty() {
+        chosen.extend(0..n);
+    } else {
+        let labels: Vec<String> = info.pages.iter().map(|p| p.label.clone()).collect();
+        for part in parts {
+            let pages = print::select_pages(n, Some(part), &labels, print::Subset::All, false).map_err(|e| e.to_string())?;
+            chosen.extend(pages);
+        }
+    }
+    let all: Vec<usize> = chosen.into_iter().collect();
+    Ok(filter_pages(info, &all, parity, orientation))
 }

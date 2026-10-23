@@ -21,7 +21,7 @@ mod vector_raster;
 pub use colour::{ColourProfiles, ColourSpec, default_cmyk_profile};
 pub use inspect::{
     Annotation, Attachment, AttachmentSource, DestView, DocInfo, Field, FieldKind, FontInfo, Layer, LayerOp, Link, LinkTarget, OutlineItem, PageInfo,
-    Xfa, attachment_data, inspect, pretty_date,
+    PopupNote, Xfa, attachment_data, inspect, pretty_date,
 };
 pub use pixels::Pixels;
 pub use raster::{
@@ -29,7 +29,7 @@ pub use raster::{
     device_pixels, effective_scale, native_vector_default, native_vector_requested, set_native_vector_default,
 };
 pub use svg::{SvgOptions, SvgPage, SvgStats};
-pub use text::{PageText, TextGlyph, find_in_chars};
+pub use text::{InsertionPoint, PageText, TextGlyph, find_in_chars};
 
 /// The program of the substitute the renderer draws a standard-14 font with when a PDF doesn't
 /// embed it (the BSD-3-Clause Foxit/PDFium faces vendored in hayro-interpret, `ATTRIBUTION.toml`),

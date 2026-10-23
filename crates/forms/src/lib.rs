@@ -23,7 +23,9 @@ pub mod detect;
 mod scripting;
 pub mod submit;
 pub use actions::{
-    DocTrigger, FieldAction, MAX_ACTIONS_PER_TRIGGER, MENU_ITEMS, Trigger, document_actions, field_actions, set_document_action, set_field_actions,
+    DocTrigger, FIELD_SCRIPT_EVENTS, FieldAction, FormScript, FormScriptEvent, MAX_ACTIONS_PER_TRIGGER, MENU_ITEMS, PageTrigger, Trigger,
+    action_scripts, document_actions, field_actions, form_scripts, page_action, page_actions, set_document_action, set_field_actions,
+    set_page_action,
 };
 pub use author::{
     BorderStyle, CheckStyle, FieldFont, FieldProps, Look, LookPatch, MAX_DISPLAY_APPEARANCES, NewField, add_field, check_style, delete_field,
@@ -106,6 +108,10 @@ pub struct Widget {
     pub hidden: bool,
     /// `/MK /R` as 0, 90, 180 or 270 degrees counterclockwise. Anything else is stored as 0.
     pub rotation: i64,
+    /// The triggers this widget has an action for (`/A`, `/AA` U D E X Fo Bl), as bits of
+    /// [`Trigger::bit`]: lets a viewer skip firing triggers that do nothing without reading
+    /// the actions.
+    pub triggers: u8,
 }
 
 /// A terminal form field.
@@ -783,6 +789,7 @@ fn walk(
                 locked: annot_flags & 128 != 0,
                 hidden: annot_flags & (2 | 32) != 0,
                 rotation: appearance::mk_rotation(doc, wd),
+                triggers: actions::trigger_bits(doc, wd),
             })
         })
         .collect();

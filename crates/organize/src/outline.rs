@@ -250,7 +250,9 @@ pub enum BookmarkAction {
     GoTo(Target),
     /// Open a web page (a URI action).
     Uri(String),
-    /// Another action (JavaScript, Launch, Named, a remote go-to…) or a go-to whose destination
+    /// Run a JavaScript (§12.6.4.17): the script.
+    JavaScript(String),
+    /// Another action (Launch, Named, a remote go-to…) or a go-to whose destination
     /// isn't in this document: shown by its action type and kept as is.
     Other(String),
     /// Does nothing.
@@ -270,6 +272,9 @@ fn action_of(doc: &Document, d: &Dict, pages: &[ObjRef]) -> BookmarkAction {
             .get(b"D")
             .and_then(|dest| dests::read_target(doc, dest, pages))
             .map_or_else(|| BookmarkAction::Other("GoTo".into()), BookmarkAction::GoTo),
+        // A script that can't be read (a broken `/JS`) is kept, not offered for editing.
+        Some(b"JavaScript") => pdfcraft_model::actions::script(doc, &Object::Dict(a.clone()))
+            .map_or_else(|| BookmarkAction::Other("JavaScript".into()), BookmarkAction::JavaScript),
         Some(s) => BookmarkAction::Other(String::from_utf8_lossy(s).into_owned()),
         None => BookmarkAction::Other("unknown".into()),
     }
@@ -305,9 +310,9 @@ pub fn bookmark_action(doc: &Document, path: &[usize]) -> Result<BookmarkAction>
     Ok(action_of(doc, item.as_dict().unwrap_or(&Dict::new()), &dests::page_refs(doc)))
 }
 
-/// Bookmark Properties ▸ Actions: make the bookmark go to a view or named destination, or open
-/// a web page. Replaces its `/Dest` or `/A` (never both, §12.3.3); everything else on the item
-/// is kept. Other action types can't be set here.
+/// Bookmark Properties ▸ Actions: make the bookmark go to a view or named destination, open a
+/// web page or run a JavaScript. Replaces its `/Dest` or `/A` (never both, §12.3.3); everything
+/// else on the item is kept. Other action types can't be set here.
 pub fn set_bookmark_action(doc: &mut Document, path: &[usize], action: &BookmarkAction) -> Result<()> {
     let (dest, act) = match action {
         BookmarkAction::GoTo(t) => (Some(dests::target_object(doc, t).map_err(|e| OutlineError::Action(e.to_string()))?), None),
@@ -321,8 +326,9 @@ pub fn set_bookmark_action(doc: &mut Document, path: &[usize], action: &Bookmark
             a.set(b"URI".to_vec(), PdfString::literal(u.as_bytes().to_vec()));
             (None, Some(Object::Dict(a)))
         }
+        BookmarkAction::JavaScript(js) => (None, Some(pdfcraft_model::actions::new_javascript(js).map_err(|e| OutlineError::Action(e.to_string()))?)),
         BookmarkAction::Other(_) | BookmarkAction::None => {
-            return Err(OutlineError::Action("a bookmark action can be a page view, a named destination or a web address".into()));
+            return Err(OutlineError::Action("a bookmark action can be a page view, a named destination, a web address or a JavaScript".into()));
         }
     };
     let (r, _) = resolve_path(doc, path)?;

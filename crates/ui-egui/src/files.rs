@@ -382,6 +382,45 @@ impl PdfCraftApp {
         }
     }
 
+    /// Organize ▸ Insert from clipboard: the image (one page at its size) or the text on the
+    /// system clipboard becomes new pages before the first selected page or after the last
+    /// (or the current page), in one undo step.
+    pub(crate) fn insert_from_clipboard(&mut self, before: bool) {
+        if self.active.is_none() {
+            self.notify_tr("Open a document first");
+            return;
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        let clip = crate::create_ui::read_clipboard();
+        #[cfg(target_arch = "wasm32")]
+        let clip: Option<crate::create_ui::Clip> = None;
+        match clip {
+            Some(c) => {
+                if let Err(e) = self.insert_clip(c, before) {
+                    self.notify_fmt("Couldn't insert pages: {e}", &[("e", &e)]);
+                }
+            }
+            None => self.notify_tr("The clipboard has no image or text"),
+        }
+    }
+
+    /// Insert clipboard contents before the first selected page or after the last (or the
+    /// current page) as one undoable edit, then select the new pages. Tests and the control
+    /// channel call this with contents they made.
+    pub fn insert_clip(&mut self, clip: crate::create_ui::Clip, before: bool) -> Result<(), String> {
+        let Some(view) = self.active.and_then(|i| self.views.get(i)) else { return Err("no document is open".into()) };
+        let (id, targets) = (view.id, view.target_pages());
+        let count = self.session.get(id).map_or(0, |d| d.info.pages.len());
+        let at = if before { targets.first().copied().unwrap_or(0) } else { targets.last().map_or(0, |p| p.saturating_add(1)) }.min(count);
+        let (edit, pages) = self.session.insert_clip_edit(&clip, at).map_err(|e| e.to_string())?;
+        if self.apply_edit(edit)
+            && let Some(view) = self.active.and_then(|i| self.views.get_mut(i))
+        {
+            view.select_pages(&(at..at.saturating_add(pages)).collect::<Vec<_>>());
+        }
+        Ok(())
+    }
+
     /// Copy the selected pages (or the current page) into a new unsaved document tab.
     pub fn extract_selection(&mut self) {
         // What's typed in a form field is part of the document (#166).
@@ -607,47 +646,6 @@ impl PdfCraftApp {
         }
         #[cfg(target_arch = "wasm32")]
         self.notify_tr("Importing data arrives on the web with file pickers for data files");
-    }
-
-    /// Export all comments / form data: the format follows the file name's extension.
-    /// Export a PDF ▸ Word, HTML or RTF: ask where (`save_override` in tests), then write.
-    pub fn export_office_dialog(&mut self, format: pdfcraft_engine::compare::OfficeFormat) {
-        // What's typed in a form field is part of the document (#166).
-        if !self.commit_form_typing() {
-            return;
-        }
-        let Some((_, id)) = self.active_ids() else { return };
-        let Some(doc) = self.session.get(id) else { return };
-        let stem = doc.name.trim_end_matches(".pdf").trim_end_matches(".PDF").to_string();
-        let ext = format.extension();
-        let bytes = match doc.export_office(format) {
-            Ok(bytes) => bytes,
-            Err(e) => {
-                self.notify_fmt("Export stopped: {e}", &[("e", &e)]);
-                return;
-            }
-        };
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            let write = move |app: &mut Self, path: std::path::PathBuf| match crate::editing::write_atomically(&path.to_string_lossy(), &bytes) {
-                Ok(()) => app.notify_fmt("Exported to {path}", &[("path", &path.display().to_string())]),
-                Err(e) => app.notify_fmt("Couldn't write {name}: {e}", &[("name", &path.display().to_string()), ("e", &e.to_string())]),
-            };
-            match self.save_override.clone() {
-                Some(p) => write(self, p.into()),
-                None => {
-                    let dialog = rfd::AsyncFileDialog::new()
-                        .set_title(tl!("Export").to_string())
-                        .add_filter(ext.to_uppercase(), &[ext])
-                        .set_file_name(format!("{stem}.{ext}"));
-                    self.ask_one(crate::pickers::Ask::Save(dialog), None, write);
-                }
-            }
-        }
-        #[cfg(target_arch = "wasm32")]
-        if let Err(e) = crate::editing::download(&format!("{stem}.{ext}"), &bytes) {
-            self.notify_error(e);
-        }
     }
 
     /// Forms ▸ Merge data files into spreadsheet: choose data files (FDF, XFDF or filled-in PDF

@@ -17,18 +17,29 @@ use crate::{Dialog, PdfCraftApp, RightPanel};
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum SignatureWorkflowMode {
     #[default]
-    Servers,
     Timestamp,
     Evidence,
     Verify,
+    /// Add verification information (LTV): chains and revocation evidence, fetched online
+    /// where allowed.
+    Ltv,
 }
 
 #[derive(Default)]
 pub struct SignatureWorkflowState {
     pub mode: SignatureWorkflowMode,
     pub selected: Option<usize>,
+    /// Preferences → Signatures → Timestamp servers: the server being edited (its index in
+    /// the list, or `None` for a new one) and the draft.
+    pub editing: Option<usize>,
     pub server_draft: Option<TimestampServer>,
+    /// A password typed for the selected server (held for the session once used).
+    pub password: String,
     pub allow_network: bool,
+    /// Add verification information: fetch revocation evidence online, and also from sites
+    /// Internet access would ask about.
+    pub fetch_online: bool,
+    pub allow_asked_sites: bool,
     pub certificates: String,
     pub crls: String,
     pub ocsps: String,
@@ -46,14 +57,21 @@ pub struct SignatureRun {
 }
 
 fn profile() -> TimestampServer {
-    TimestampServer { name: "Timestamp authority".into(), url: String::new(), policy: None, timeout_seconds: 15, require_trusted_authority: true }
+    TimestampServer {
+        name: tl!("Timestamp authority").into(),
+        url: String::new(),
+        policy: None,
+        timeout_seconds: 15,
+        require_trusted_authority: true,
+        username: None,
+    }
 }
 
 pub(crate) fn server_choice(ui: &mut egui::Ui, servers: &[TimestampServer], selected: &mut Option<usize>, optional: bool) {
-    let name = selected.and_then(|i| servers.get(i)).map_or(if optional { "No timestamp" } else { "Choose a server" }, |s| s.name.as_str());
+    let name = selected.and_then(|i| servers.get(i)).map_or(if optional { tl!("No timestamp") } else { tl!("Choose a server") }, |s| s.name.as_str());
     egui::ComboBox::from_id_salt("timestamp-server-choice").selected_text(name).show_ui(ui, |ui| {
         if optional {
-            ui.selectable_value(selected, None, "No timestamp");
+            ui.selectable_value(selected, None, tl!("No timestamp"));
         }
         for (index, server) in servers.iter().enumerate() {
             ui.selectable_value(selected, Some(index), &server.name);
@@ -64,62 +82,92 @@ pub(crate) fn server_choice(ui: &mut egui::Ui, servers: &[TimestampServer], sele
 pub(crate) fn body(ui: &mut egui::Ui, app: &mut PdfCraftApp) -> bool {
     let mode = app.signature_workflow.mode;
     let title = match mode {
-        SignatureWorkflowMode::Servers => "Timestamp servers",
-        SignatureWorkflowMode::Timestamp => "Timestamp document",
-        SignatureWorkflowMode::Evidence => "Embed validation evidence",
-        SignatureWorkflowMode::Verify => "Verification time",
+        SignatureWorkflowMode::Timestamp => tl!("Timestamp document"),
+        SignatureWorkflowMode::Evidence => tl!("Embed validation evidence"),
+        SignatureWorkflowMode::Verify => tl!("Verification time"),
+        SignatureWorkflowMode::Ltv => tl!("Add verification information"),
     };
     ui.heading(title);
-    let mut execute = false;
-    if mode == SignatureWorkflowMode::Servers {
-        servers(ui, app);
-    } else {
-        let d = &mut app.signature_workflow;
-        if mode != SignatureWorkflowMode::Verify {
-            server_choice(ui, &app.timestamp_servers, &mut d.selected, mode == SignatureWorkflowMode::Evidence);
-            ui.checkbox(&mut d.allow_network, "Allow a timestamp request to the selected server");
-            ui.label("The request contains a digest, not the PDF. No request is made when this dialog opens.");
+    let servers = app.session.timestamp_servers().to_vec();
+    let d = &mut app.signature_workflow;
+    if mode == SignatureWorkflowMode::Ltv {
+        ui.label(tl!(
+            "Adds the signers' certificate chains and their revocation status to the document, so the signatures can still be checked after the certificates expire."
+        ));
+        ui.checkbox(&mut d.fetch_online, tl!("Fetch revocation information online"));
+        if d.fetch_online {
+            ui.checkbox(&mut d.allow_asked_sites, tl!("Also from sites that Internet access asks about"));
+            ui.label(
+                egui::RichText::new(tl!("Blocked sites stay blocked. Only the certificates' OCSP responders and CRL addresses are contacted."))
+                    .small(),
+            );
         }
-        if mode == SignatureWorkflowMode::Evidence {
-            ui.label("Local DER files, one path per line. Certificates are not automatically trusted.");
-            for (label, value) in [("Certificates", &mut d.certificates), ("CRLs", &mut d.crls), ("OCSP responses", &mut d.ocsps)] {
-                let label = ui.label(label);
-                ui.add(egui::TextEdit::multiline(value).desired_rows(2).desired_width(f32::INFINITY)).labelled_by(label.id);
-            }
-            ui.label("Embedding evidence does not itself establish PAdES B-LT/B-LTA compliance. Incomplete coverage is reported after validation.");
-        }
-        if mode != SignatureWorkflowMode::Timestamp {
-            if d.verification_time.is_empty() {
-                d.verification_time = "best".into();
-            }
-            ui.label("Certificate and revocation checks at:");
-            for (value, label) in
-                [("best", "Trusted timestamp, else claimed signing time"), ("claimed", "Claimed signing time"), ("now", "Current time")]
-            {
-                ui.radio_value(&mut d.verification_time, value.to_string(), label);
-            }
-            let label = ui.label("Or UTC date (YYYYMMDDHHmmSSZ)");
-            ui.text_edit_singleline(&mut d.verification_time).labelled_by(label.id);
-            ui.label("A chosen or claimed date is not cryptographic proof of time.");
-        }
-        if mode == SignatureWorkflowMode::Verify {
-            egui::ScrollArea::vertical().max_height(260.0).show(ui, |ui| {
-                for result in &d.results {
-                    ui.collapsing(format!("{}: {}", result.field, result.summary()), |ui| {
-                        for detail in &result.details {
-                            ui.label(detail);
-                        }
-                    });
-                }
-            });
-        }
-        execute = ui
-            .add_enabled(
-                app.signature_run.is_none(),
-                egui::Button::new(if mode == SignatureWorkflowMode::Verify { "Verify" } else { "Save result…" }),
-            )
-            .clicked();
     }
+    if mode != SignatureWorkflowMode::Verify {
+        let optional = mode != SignatureWorkflowMode::Timestamp;
+        if mode == SignatureWorkflowMode::Ltv {
+            ui.label(tl!("Then add a document timestamp (optional):"));
+        }
+        server_choice(ui, &servers, &mut d.selected, optional);
+        if d.selected.is_some() {
+            ui.checkbox(&mut d.allow_network, tl!("Allow a timestamp request to the selected server"));
+            ui.label(egui::RichText::new(tl!("The request contains a digest, not the PDF. No request is made when this dialog opens.")).small());
+        }
+        if let Some(server) = d.selected.and_then(|i| servers.get(i)).filter(|s| s.username.is_some())
+            && app.session.timestamp_password(&server.name).is_none()
+        {
+            let l = ui.label(tl!("Password"));
+            ui.add(egui::TextEdit::singleline(&mut d.password).password(true)).labelled_by(l.id);
+        }
+    }
+    if matches!(mode, SignatureWorkflowMode::Evidence | SignatureWorkflowMode::Ltv) {
+        ui.label(if mode == SignatureWorkflowMode::Ltv {
+            tl!("Local DER files to add too (optional), one path per line. Certificates are not automatically trusted.")
+        } else {
+            tl!("Local DER files, one path per line. Certificates are not automatically trusted.")
+        });
+        for (label, value) in [(tl!("Certificates"), &mut d.certificates), (tl!("CRLs"), &mut d.crls), (tl!("OCSP responses"), &mut d.ocsps)] {
+            let label = ui.label(label);
+            ui.add(egui::TextEdit::multiline(value).desired_rows(2).desired_width(f32::INFINITY)).labelled_by(label.id);
+        }
+        ui.label(
+            egui::RichText::new(tl!(
+                "Embedding evidence does not itself establish PAdES B-LT/B-LTA compliance. Incomplete coverage is reported after validation."
+            ))
+            .small(),
+        );
+    }
+    if matches!(mode, SignatureWorkflowMode::Evidence | SignatureWorkflowMode::Verify) {
+        if d.verification_time.is_empty() {
+            d.verification_time = "best".into();
+        }
+        ui.label(tl!("Certificate and revocation checks at:"));
+        for (value, label) in
+            [("best", tl!("Trusted timestamp, else claimed signing time")), ("claimed", tl!("Claimed signing time")), ("now", tl!("Current time"))]
+        {
+            ui.radio_value(&mut d.verification_time, value.to_string(), label);
+        }
+        let label = ui.label(tl!("Or UTC date (YYYYMMDDHHmmSSZ)"));
+        ui.text_edit_singleline(&mut d.verification_time).labelled_by(label.id);
+        ui.label(egui::RichText::new(tl!("A chosen or claimed date is not cryptographic proof of time.")).small());
+    }
+    if mode == SignatureWorkflowMode::Verify {
+        egui::ScrollArea::vertical().max_height(260.0).show(ui, |ui| {
+            for result in &d.results {
+                ui.collapsing(format!("{}: {}", result.field, tl!(result.summary())), |ui| {
+                    for detail in &result.details {
+                        ui.label(detail);
+                    }
+                });
+            }
+        });
+    }
+    let execute = ui
+        .add_enabled(
+            app.signature_run.is_none(),
+            egui::Button::new(if mode == SignatureWorkflowMode::Verify { tl!("Verify") } else { tl!("Save result…") }),
+        )
+        .clicked();
     if execute {
         let result = match mode {
             SignatureWorkflowMode::Verify => app.verify_signature_workflow(),
@@ -130,65 +178,134 @@ pub(crate) fn body(ui: &mut egui::Ui, app: &mut PdfCraftApp) -> bool {
         }
     }
     if let Some(error) = &app.signature_workflow.error {
-        ui.colored_label(egui::Color32::DARK_RED, error);
+        ui.colored_label(egui::Color32::from_rgb(0xD7, 0x37, 0x3F), error);
     }
-    ui.button("Close").clicked()
+    ui.button(tl!("Close")).clicked()
 }
 
-fn servers(ui: &mut egui::Ui, app: &mut PdfCraftApp) {
+/// Preferences → Signatures → Timestamp servers: the list, and the server being edited.
+pub(crate) fn servers(ui: &mut egui::Ui, app: &mut PdfCraftApp) {
+    let list = app.session.timestamp_servers().to_vec();
+    if list.is_empty() {
+        ui.label(egui::RichText::new(tl!("No server is configured. PdfCraft never contacts one unless you add it here.")).small());
+    }
+    let mut edit = None;
+    let mut remove = None;
+    for (i, server) in list.iter().enumerate() {
+        ui.push_id(("timestamp-server", i), |ui| {
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new(&server.name).strong());
+                ui.label(egui::RichText::new(&server.url).small());
+                if ui.button(tl!("Edit")).clicked() {
+                    edit = Some(i);
+                }
+                if ui.button(tl!("Remove")).clicked() {
+                    remove = Some(i);
+                }
+            });
+        });
+    }
     let d = &mut app.signature_workflow;
-    let before = d.selected;
-    server_choice(ui, &app.timestamp_servers, &mut d.selected, true);
-    if before != d.selected {
-        d.server_draft = d.selected.and_then(|i| app.timestamp_servers.get(i)).cloned();
+    if let Some(i) = edit {
+        d.editing = Some(i);
+        d.server_draft = list.get(i).cloned();
+        d.password.clear();
     }
-    if ui.button("New server").clicked() {
-        d.selected = None;
-        d.server_draft = Some(profile());
-    }
-    let Some(server) = &mut d.server_draft else {
-        ui.label("Choose a server or add one. No server is enabled by default.");
+    if let Some(i) = remove {
+        let mut next = list.clone();
+        if i < next.len() {
+            next.remove(i);
+        }
+        if let Err(e) = app.session.set_timestamp_servers(next) {
+            app.signature_workflow.error = Some(e);
+        }
+        app.signature_workflow.server_draft = None;
+        app.signature_workflow.editing = None;
+        app.signature_workflow.selected = None;
         return;
-    };
-    for (label, value) in [("Name", &mut server.name), ("HTTPS URL", &mut server.url)] {
+    }
+    if d.server_draft.is_none() && ui.button(tl!("New server")).clicked() {
+        d.editing = None;
+        d.server_draft = Some(profile());
+        d.password.clear();
+    }
+    let Some(server) = &mut d.server_draft else { return };
+    for (label, value) in [(tl!("Name"), &mut server.name), (tl!("HTTPS URL"), &mut server.url)] {
         let l = ui.label(label);
         ui.text_edit_singleline(value).labelled_by(l.id);
     }
     let mut policy = server.policy.clone().unwrap_or_default();
-    let l = ui.label("Optional policy OID");
+    let l = ui.label(tl!("Optional policy OID"));
     if ui.text_edit_singleline(&mut policy).labelled_by(l.id).changed() {
         server.policy = (!policy.trim().is_empty()).then(|| policy.trim().to_string());
     }
+    let mut user = server.username.clone().unwrap_or_default();
+    let l = ui.label(tl!("Account name (optional)"));
+    if ui.text_edit_singleline(&mut user).labelled_by(l.id).changed() {
+        server.username = (!user.trim().is_empty()).then(|| user.trim().to_string());
+    }
+    if server.username.is_some() {
+        let l = ui.label(tl!("Password"));
+        ui.add(egui::TextEdit::singleline(&mut d.password).password(true)).labelled_by(l.id);
+        ui.label(egui::RichText::new(tl!("The password is kept only until PdfCraft quits, never saved.")).small());
+    }
     ui.horizontal(|ui| {
-        ui.label("Timeout (seconds)");
+        ui.label(tl!("Timeout (seconds)"));
         ui.add(egui::DragValue::new(&mut server.timeout_seconds).range(1..=30));
     });
-    ui.checkbox(&mut server.require_trusted_authority, "Require an explicitly trusted timestamp authority");
-    ui.label("Add a TSA certificate to Trusted Certificates only after independently verifying its identity and fingerprint. Disabling this check saves an untrusted token; it does not establish trusted time.");
-    if ui.button("Save server").clicked() {
-        match server.validate() {
-            Ok(()) => {
-                if let Some(entry) = d.selected.and_then(|i| app.timestamp_servers.get_mut(i)) {
-                    *entry = server.clone();
-                } else if app.timestamp_servers.len() < 32 {
-                    app.timestamp_servers.push(server.clone());
-                    d.selected = Some(app.timestamp_servers.len() - 1);
-                } else {
-                    d.error = Some("At most 32 timestamp servers may be configured.".into());
-                    return;
-                }
-                d.error = None;
-            }
-            Err(error) => d.error = Some(error),
-        }
-    }
-    if d.selected.is_some() && ui.button("Remove server").clicked() {
-        if let Some(index) = d.selected.filter(|i| *i < app.timestamp_servers.len()) {
-            app.timestamp_servers.remove(index);
-        }
-        d.selected = None;
+    ui.checkbox(&mut server.require_trusted_authority, tl!("Require an explicitly trusted timestamp authority"));
+    ui.label(egui::RichText::new(tl!("Add a TSA certificate to Trusted Certificates only after independently verifying its identity and fingerprint. Disabling this check saves an untrusted token; it does not establish trusted time.")).small());
+    let mut save = false;
+    let mut cancel = false;
+    ui.horizontal(|ui| {
+        save = ui.button(tl!("Save server")).clicked();
+        cancel = ui.button(tl!("Cancel")).clicked();
+    });
+    if cancel {
         d.server_draft = None;
+        d.editing = None;
+        d.password.clear();
+        return;
     }
+    if save {
+        let server = server.clone();
+        let mut next = list;
+        match d.editing.filter(|i| *i < next.len()) {
+            Some(i) => next[i] = server.clone(),
+            None => next.push(server.clone()),
+        }
+        let password = std::mem::take(&mut d.password);
+        match app.session.set_timestamp_servers(next) {
+            Ok(()) => {
+                if server.username.is_some() && !password.is_empty() {
+                    let _ = app.session.set_timestamp_password(&server.name, Some(password));
+                }
+                app.signature_workflow.server_draft = None;
+                app.signature_workflow.editing = None;
+                app.signature_workflow.error = None;
+            }
+            Err(e) => app.signature_workflow.error = Some(e),
+        }
+    }
+}
+
+/// The notice after adding verification information: how much was covered, and why not all.
+fn ltv_notes(report: &pdfcraft_engine::signature_workflow::LtvReport) -> Vec<String> {
+    let f = &report.fetched;
+    let mut notes = vec![crate::i18n::fmt(
+        tl!("Revocation information for {covered} of {needed} certificates was fetched."),
+        &[("covered", &f.covered.to_string()), ("needed", &f.needed.to_string())],
+    )];
+    let refused = f.attempts.iter().filter(|a| matches!(a.outcome, "blocked" | "asks")).count();
+    if refused > 0 {
+        notes.push(crate::i18n::fmt(tl!("{n} addresses were not contacted because of Internet access settings."), &[("n", &refused.to_string())]));
+    }
+    if report.evidence.has_complete_coverage() {
+        notes.push(tl!("Every certificate's revocation status is now in the document.").to_string());
+    } else {
+        notes.extend(report.evidence.notes.iter().cloned());
+    }
+    notes
 }
 
 impl PdfCraftApp {
@@ -204,23 +321,16 @@ impl PdfCraftApp {
                 (None, _) => Err("signature-properties-tab must be summary, document, signer, date-time or legal".into()),
                 (_, None) => Err("Signature Properties is not open.".into()),
             },
-            "timestamp-servers" => serde_json::from_str::<Vec<TimestampServer>>(value).map_err(|e| e.to_string()).and_then(|servers| {
-                if servers.len() > 32 {
-                    return Err("At most 32 timestamp servers may be configured.".into());
-                }
-                for server in &servers {
-                    server.validate()?;
-                }
-                self.timestamp_servers = servers;
-                Ok(())
-            }),
+            "timestamp-servers" => serde_json::from_str::<Vec<TimestampServer>>(value)
+                .map_err(|e| e.to_string())
+                .and_then(|servers| self.session.set_timestamp_servers(servers)),
             "timestamp-server" => {
                 if value == "none" {
                     self.signature_workflow.selected = None;
                     Ok(())
                 } else {
                     value.parse::<usize>().map_err(|_| "timestamp-server must be a zero-based index or none".to_string()).and_then(|index| {
-                        if index >= self.timestamp_servers.len() {
+                        if index >= self.session.timestamp_servers().len() {
                             return Err("Timestamp server does not exist.".into());
                         }
                         self.signature_workflow.selected = Some(index);
@@ -228,6 +338,18 @@ impl PdfCraftApp {
                     })
                 }
             }
+            "signature-fetch-online" | "signature-asked-sites" => match value {
+                "true" | "false" => {
+                    let on = value == "true";
+                    if key == "signature-fetch-online" {
+                        self.signature_workflow.fetch_online = on;
+                    } else {
+                        self.signature_workflow.allow_asked_sites = on;
+                    }
+                    Ok(())
+                }
+                _ => Err(format!("{key} must be true or false")),
+            },
             "timestamp-network" => match value {
                 "true" => {
                     self.signature_workflow.allow_network = true;
@@ -260,6 +382,36 @@ impl PdfCraftApp {
                 self.signature_workflow.verification_time = value.to_string();
                 Ok(())
             }
+            // The Sign As dialog: lock after signing, the graphic, a saved appearance.
+            "sign-lock-document" | "sign-graphic" | "sign-appearance" => {
+                let Some(d) = self.sign_draft.as_mut() else { return Some(Err("No signing dialog is open.".into())) };
+                match key {
+                    "sign-lock-document" => match value {
+                        "true" | "false" => {
+                            d.lock_document = value == "true";
+                            Ok(())
+                        }
+                        _ => Err("sign-lock-document must be true or false".into()),
+                    },
+                    "sign-graphic" => {
+                        use crate::sign_ui::GraphicChoice;
+                        match value {
+                            "name" => d.graphic = GraphicChoice::Name,
+                            "drawn" => d.graphic = GraphicChoice::Drawn,
+                            "picture" => d.graphic = GraphicChoice::Picture,
+                            _ => return Some(Err("sign-graphic must be name, drawn or picture".into())),
+                        }
+                        Ok(())
+                    }
+                    _ => match self.session.signature_appearance(value).cloned() {
+                        Some(a) => {
+                            d.apply(&a);
+                            Ok(())
+                        }
+                        None => Err(format!("No saved appearance is named {value:?}.")),
+                    },
+                }
+            }
             _ => return None,
         };
         Some(result)
@@ -267,7 +419,11 @@ impl PdfCraftApp {
 
     pub fn open_signature_workflow(&mut self, mode: SignatureWorkflowMode) {
         self.signature_workflow.mode = mode;
+        // Every request needs consent again, each time the dialog opens.
         self.signature_workflow.allow_network = false;
+        self.signature_workflow.fetch_online = false;
+        self.signature_workflow.allow_asked_sites = false;
+        self.signature_workflow.password.clear();
         self.signature_workflow.error = None;
         self.signature_workflow.results.clear();
         self.dialog = Some(Dialog::SignatureWorkflow);
@@ -299,8 +455,9 @@ impl PdfCraftApp {
         if !consent {
             return Err("Allow the timestamp request before saving.".into());
         }
-        let server = self.timestamp_servers.get(index).cloned().ok_or("Choose a configured timestamp server.")?;
-        HttpTimestampAuthority::new(server, self.session.trusted_certificates().to_vec(), cancel).map(Some)
+        let server = self.session.timestamp_servers().get(index).cloned().ok_or("Choose a configured timestamp server.")?;
+        let password = self.session.timestamp_password(&server.name).map(str::to_string);
+        HttpTimestampAuthority::with_trust(server, self.session.trust_store().clone(), password, cancel).map(Some)
     }
 
     pub fn save_signature_workflow(&mut self) -> Result<(), String> {
@@ -312,12 +469,29 @@ impl PdfCraftApp {
         }
         let (_, doc) = self.active_ids().ok_or("No document is open.")?;
         let cancel = SignatureCancellation::default();
+        // A password typed in the dialog is held for the session from now on.
+        if let Some(server) = self.signature_workflow.selected.and_then(|i| self.session.timestamp_servers().get(i)).cloned()
+            && server.username.is_some()
+            && !self.signature_workflow.password.is_empty()
+        {
+            let password = std::mem::take(&mut self.signature_workflow.password);
+            self.session.set_timestamp_password(&server.name, Some(password))?;
+        }
         let authority = self.signature_authority(self.signature_workflow.selected, self.signature_workflow.allow_network, cancel.clone())?;
         let mode = self.signature_workflow.mode;
         if mode == SignatureWorkflowMode::Timestamp && authority.is_none() {
-            return Err("Choose a configured timestamp server.".into());
+            return Err(tl!("Choose a configured timestamp server.").into());
         }
-        let evidence = if mode == SignatureWorkflowMode::Evidence { Some(self.read_signature_evidence()?) } else { None };
+        let evidence = match mode {
+            SignatureWorkflowMode::Evidence => Some(self.read_signature_evidence()?),
+            SignatureWorkflowMode::Ltv => Some(self.read_signature_evidence_optional()?),
+            _ => None,
+        };
+        let ltv = (mode == SignatureWorkflowMode::Ltv).then(|| {
+            let d = &self.signature_workflow;
+            self.session.revocation_fetch_policy(d.fetch_online, d.allow_asked_sites)
+        });
+        let transport = pdfcraft_engine::revocation_fetch::HttpTransport { cancellation: cancel.clone() };
         let when = self.signature_verification_time()?;
         let go = move |app: &mut Self, path: PathBuf| -> Result<(), String> {
             if !app.commit_typing_in(doc) {
@@ -326,9 +500,15 @@ impl PdfCraftApp {
             let job = app.session.signature_job(doc).map_err(|e| e.to_string())?;
             app.spawn_signature_job(doc, path, cancel, move || {
                 let authority = authority.as_ref().map(|a| a as &dyn sign::TimestampAuthority);
-                match evidence {
-                    Some(evidence) => job.embed_evidence(&evidence, when, authority).map(|(r, report)| (r, report.notes)).map_err(|e| e.to_string()),
-                    None => job.timestamp(authority.ok_or("Choose a timestamp server.")?).map(|r| (r, Vec::new())).map_err(|e| e.to_string()),
+                match (evidence, ltv) {
+                    (Some(local), Some(policy)) => job
+                        .add_verification_information(&local, &policy, &transport, authority)
+                        .map(|(r, report)| (r, ltv_notes(&report)))
+                        .map_err(|e| e.to_string()),
+                    (Some(evidence), None) => {
+                        job.embed_evidence(&evidence, when, authority).map(|(r, report)| (r, report.notes)).map_err(|e| e.to_string())
+                    }
+                    _ => job.timestamp(authority.ok_or("Choose a timestamp server.")?).map(|r| (r, Vec::new())).map_err(|e| e.to_string()),
                 }
             })
         };
@@ -353,6 +533,15 @@ impl PdfCraftApp {
             let _ = go;
             Err("Saving this workflow is available in native PdfCraft.".into())
         }
+    }
+
+    /// Add verification information's local files: none is fine.
+    fn read_signature_evidence_optional(&self) -> Result<sign::dss::Evidence, String> {
+        let d = &self.signature_workflow;
+        if [&d.certificates, &d.crls, &d.ocsps].iter().all(|s| s.trim().is_empty()) {
+            return Ok(sign::dss::Evidence::default());
+        }
+        self.read_signature_evidence()
     }
 
     fn read_signature_evidence(&self) -> Result<sign::dss::Evidence, String> {
@@ -470,12 +659,12 @@ impl PdfCraftApp {
         if self.signature_run.is_none() {
             return;
         }
-        egui::Window::new("Signature operation").collapsible(false).resizable(false).show(ctx, |ui| {
-            ui.label("Validating and saving…");
-            if ui.button("Cancel operation").clicked() {
+        egui::Window::new(tl!("Signature operation")).collapsible(false).resizable(false).show(ctx, |ui| {
+            ui.label(tl!("Validating and saving…"));
+            if ui.button(tl!("Cancel operation")).clicked() {
                 self.cancel_signature_workflow();
             }
-            ui.label("A cancelled response is discarded. A blocked request stops at the configured deadline (at most 30 seconds).");
+            ui.label(tl!("A cancelled response is discarded. A blocked request stops at the configured deadline (at most 30 seconds)."));
         });
     }
 }

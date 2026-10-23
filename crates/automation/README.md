@@ -106,6 +106,16 @@ still use legacy normalization/reflow; their original character-code and spacing
 not yet equivalent to range/mixed edits. Broader shaping/encodings, transformed text, imported
 decoration recognition, structure tags and complex-layout paragraph detection remain open.
 
+## Right-to-left and CJK text
+
+`text_paragraphs` lists right-to-left paragraphs in logical order with `direction` (`ltr` or
+`rtl`) and `vertical` (a column of Identity-V writing). `text_edit` takes logical text and writes
+right-to-left rows in display order (Arabic in joining forms); vertical columns take new text in
+their own font only. `text_direction {doc, page, paragraph | text, direction?, caret?, move?,
+steps?}` returns the direction, scripts, `display` (the text as the page shows it),
+`display_order` and, with a caret, where the arrow keys move it on screen (`caret`,
+`caret_path`).
+
 ## Lists
 
 `text_list_set {doc, page, block, paragraphs?, style, start?}` makes paragraphs of an added text

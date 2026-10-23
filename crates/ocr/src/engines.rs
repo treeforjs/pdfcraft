@@ -73,6 +73,33 @@ pub trait OcrEngine: Send + Sync {
     fn prepare(&self, language: &str) -> Result<(), OcrError>;
     /// Recognise the text in a gray, RGB or RGBA image of `width` × `height` pixels.
     fn recognize(&self, pixels: &[u8], width: u32, height: u32, language: &str) -> Result<Vec<Line>, OcrError>;
+    /// [`Self::recognize`] in steps, so a single-threaded host (the web app) can let the page
+    /// respond between them. Engines that can't split their work read in one step.
+    fn begin<'a>(&'a self, pixels: &'a [u8], width: u32, height: u32, language: &'a str) -> Result<Box<dyn Steps + 'a>, OcrError> {
+        Ok(Box::new(OneStep(Some(move || self.recognize(pixels, width, height, language)))))
+    }
+}
+
+/// A recognition in progress ([`OcrEngine::begin`]).
+pub trait Steps {
+    /// Do the next step: `Some(lines)` once the image has been read.
+    fn step(&mut self) -> Result<Option<Vec<Line>>, OcrError>;
+}
+
+/// A recognition done in one step.
+pub struct OneStep<F>(pub Option<F>);
+
+impl<F: FnOnce() -> Result<Vec<Line>, OcrError>> Steps for OneStep<F> {
+    fn step(&mut self) -> Result<Option<Vec<Line>>, OcrError> {
+        let read = self.0.take().ok_or_else(|| OcrError::Recognize("the reading has already finished".into()))?;
+        read().map(Some)
+    }
+}
+
+impl Steps for crate::Reading<'_> {
+    fn step(&mut self) -> Result<Option<Vec<Line>>, OcrError> {
+        crate::Reading::step(self)
+    }
 }
 
 /// Whether `id` is a valid engine identifier.
@@ -143,17 +170,31 @@ impl Registry {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct OcrsEngine;
 
+static SHARED: Mutex<Option<Arc<Ocr>>> = Mutex::new(None);
+
 impl OcrsEngine {
     /// The loaded recogniser, shared by every session in the process.
     pub fn shared() -> Result<Arc<Ocr>, OcrError> {
-        static OCR: Mutex<Option<Arc<Ocr>>> = Mutex::new(None);
-        let mut slot = OCR.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut slot = SHARED.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(o) = slot.as_ref() {
             return Ok(o.clone());
         }
         let o = Arc::new(Ocr::find()?);
         *slot = Some(o.clone());
         Ok(o)
+    }
+
+    /// Use `ocr` as the shared recogniser from now on: the web app installs the models it
+    /// downloaded ([`Ocr::from_bytes`]), since it has no model files to find.
+    pub fn install(ocr: Ocr) -> Arc<Ocr> {
+        let ocr = Arc::new(ocr);
+        *SHARED.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(ocr.clone());
+        ocr
+    }
+
+    /// Whether the recogniser is loaded (or installed) in this process.
+    pub fn loaded() -> bool {
+        SHARED.lock().unwrap_or_else(std::sync::PoisonError::into_inner).is_some()
     }
 }
 
@@ -174,18 +215,22 @@ impl OcrEngine for OcrsEngine {
     }
 
     fn info(&self) -> EngineInfo {
-        let models = Models::find();
+        let (available, detail) = if cfg!(target_arch = "wasm32") {
+            if Self::loaded() { (true, "models downloaded into this browser".into()) } else { (false, OcrError::NotDownloaded.to_string()) }
+        } else {
+            match Models::find() {
+                Some(m) => (true, format!("models in {}", m.recognition.parent().map_or_else(String::new, |p| p.display().to_string()))),
+                None => (false, OcrError::NoModels.to_string()),
+            }
+        };
         EngineInfo {
             id: DEFAULT_ENGINE.into(),
             name: self.name().into(),
-            available: models.is_some(),
+            available,
             version: Some(OCRS_VERSION.into()),
             languages: LANGUAGES.iter().map(|(c, _)| (*c).to_owned()).collect(),
             external: false,
-            detail: match models {
-                Some(m) => format!("models in {}", m.recognition.parent().map_or_else(String::new, |p| p.display().to_string())),
-                None => OcrError::NoModels.to_string(),
-            },
+            detail,
         }
     }
 
@@ -197,6 +242,11 @@ impl OcrEngine for OcrsEngine {
     fn recognize(&self, pixels: &[u8], width: u32, height: u32, language: &str) -> Result<Vec<Line>, OcrError> {
         ocrs_language(language)?;
         Self::shared()?.recognize(pixels, width, height)
+    }
+
+    fn begin<'a>(&'a self, pixels: &'a [u8], width: u32, height: u32, language: &'a str) -> Result<Box<dyn Steps + 'a>, OcrError> {
+        ocrs_language(language)?;
+        Ok(Box::new(Self::shared()?.begin(pixels, width, height)))
     }
 }
 
@@ -254,6 +304,14 @@ mod tests {
             r.register(Arc::new(Named(format!("e{i}").leak()))).unwrap();
         }
         assert!(r.register(Arc::new(Named("one-too-many"))).is_err());
+    }
+
+    #[test]
+    fn engines_that_cannot_split_their_work_read_in_one_step() {
+        let named = Named("one");
+        let mut steps = named.begin(&[0], 1, 1, "en").unwrap();
+        assert_eq!(steps.step().unwrap(), Some(Vec::new()));
+        assert!(steps.step().is_err(), "a finished reading reports an error, not a crash");
     }
 
     #[test]

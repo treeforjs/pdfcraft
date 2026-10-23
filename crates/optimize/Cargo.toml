@@ -21,6 +21,9 @@ thiserror.workspace = true
 image = { version = "0.25", default-features = false, features = ["jpeg"] }
 # CCITT fax decoding for despeckling bilevel scans (MIT/Apache-2.0, already in the tree through hayro).
 hayro-ccitt = "0.3.0"
+# JPEG 2000 and JBIG2 decoding for "Make compatible with" (MIT/Apache-2.0, already in the tree through hayro).
+hayro-jpeg2000 = "0.3.5"
+hayro-jbig2 = "0.3.0"
 
 [dev-dependencies]
 pdfcraft-render = { workspace = true }

@@ -233,8 +233,106 @@ pub(super) fn jp_my_number(s: &[char], i: usize) -> Option<usize> {
     (d.get(11) == Some(&check)).then_some(end - i)
 }
 
+/// IBAN lengths by country (the ISO 13616 registry's published lengths).
+const IBAN_LENGTHS: [(&str, usize); 88] = [
+    ("AD", 24),
+    ("AE", 23),
+    ("AL", 28),
+    ("AT", 20),
+    ("AZ", 28),
+    ("BA", 20),
+    ("BE", 16),
+    ("BG", 22),
+    ("BH", 22),
+    ("BI", 27),
+    ("BR", 29),
+    ("BY", 28),
+    ("CH", 21),
+    ("CR", 22),
+    ("CY", 28),
+    ("CZ", 24),
+    ("DE", 22),
+    ("DJ", 27),
+    ("DK", 18),
+    ("DO", 28),
+    ("EE", 20),
+    ("EG", 29),
+    ("ES", 24),
+    ("FI", 18),
+    ("FK", 18),
+    ("FO", 18),
+    ("FR", 27),
+    ("GB", 22),
+    ("GE", 22),
+    ("GI", 23),
+    ("GL", 18),
+    ("GR", 27),
+    ("GT", 28),
+    ("HR", 21),
+    ("HU", 28),
+    ("IE", 22),
+    ("IL", 23),
+    ("IQ", 23),
+    ("IS", 26),
+    ("IT", 27),
+    ("JO", 30),
+    ("KW", 30),
+    ("KZ", 20),
+    ("LB", 28),
+    ("LC", 32),
+    ("LI", 21),
+    ("LT", 20),
+    ("LU", 20),
+    ("LV", 21),
+    ("LY", 25),
+    ("MC", 27),
+    ("MD", 24),
+    ("ME", 22),
+    ("MK", 19),
+    ("MN", 20),
+    ("MR", 27),
+    ("MT", 31),
+    ("MU", 30),
+    ("NI", 28),
+    ("NL", 18),
+    ("NO", 15),
+    ("OM", 23),
+    ("PK", 24),
+    ("PL", 28),
+    ("PS", 29),
+    ("PT", 25),
+    ("QA", 29),
+    ("RO", 24),
+    ("RS", 22),
+    ("RU", 33),
+    ("SA", 24),
+    ("SC", 31),
+    ("SD", 18),
+    ("SE", 24),
+    ("SI", 19),
+    ("SK", 24),
+    ("SM", 27),
+    ("SO", 23),
+    ("ST", 25),
+    ("SV", 28),
+    ("TL", 23),
+    ("TN", 24),
+    ("TR", 26),
+    ("UA", 29),
+    ("VA", 22),
+    ("VG", 24),
+    ("XK", 20),
+    ("YE", 30),
+];
+
+/// The IBAN length of country `cc`, if it has one in the registry.
+fn iban_length(cc: &str) -> Option<usize> {
+    IBAN_LENGTHS.iter().find(|(c, _)| *c == cc).map(|(_, n)| *n)
+}
+
 /// IBANs: country code, check digits and up to 30 letters and digits, bare or in groups of four
-/// separated by single spaces; the ISO 13616 mod-97 check must hold.
+/// separated by single spaces; the ISO 13616 mod-97 check must hold, and a country in the IBAN
+/// registry must have its own length (a German IBAN is 22 characters).
 pub(super) fn iban(s: &[char], i: usize) -> Option<usize> {
     if is_alnum(before(s, i)) || !upper(at(s, i), "") || !upper(at(s, i + 1), "") || !digits(s, i + 2, 2) {
         return None;
@@ -254,8 +352,13 @@ pub(super) fn iban(s: &[char], i: usize) -> Option<usize> {
             _ => break,
         }
     }
+    let cc: String = chars.iter().take(2).collect();
+    let fixed = iban_length(&cc);
     // The longest valid prefix that ends a word (a following word in capitals may follow).
     for n in (15..=chars.len()).rev() {
+        if fixed.is_some_and(|len| len != n) {
+            continue;
+        }
         let end = *ends.get(n - 1)?;
         if is_alnum(at(s, end)) {
             continue;
@@ -271,4 +374,116 @@ pub(super) fn iban(s: &[char], i: usize) -> Option<usize> {
         }
     }
     None
+}
+
+/// German tax identification numbers (steuerliche Identifikationsnummer): 11 digits, not
+/// starting with 0, bare or grouped "12 345 678 903", whose last digit is the ISO 7064 MOD 11,10
+/// check digit of the first ten.
+pub(super) fn de_tax_id(s: &[char], i: usize) -> Option<usize> {
+    if is_alnum(before(s, i)) || at(s, i) == Some('0') {
+        return None;
+    }
+    let (end, d) = grouped(s, i, &[2, 3, 3, 3], &[' '], true)?;
+    let mut product = 10u32;
+    for v in d.iter().take(10) {
+        let mut sum = (v + product) % 10;
+        if sum == 0 {
+            sum = 10;
+        }
+        product = (sum * 2) % 11;
+    }
+    let check = (11 - product) % 10;
+    (d.get(10) == Some(&check)).then_some(end - i)
+}
+
+/// The Verhoeff check (used by Aadhaar): true when the digits, check digit last, are valid.
+fn verhoeff(digits: &[u32]) -> bool {
+    const D: [[u8; 10]; 10] = [
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+        [1, 2, 3, 4, 0, 6, 7, 8, 9, 5],
+        [2, 3, 4, 0, 1, 7, 8, 9, 5, 6],
+        [3, 4, 0, 1, 2, 8, 9, 5, 6, 7],
+        [4, 0, 1, 2, 3, 9, 5, 6, 7, 8],
+        [5, 9, 8, 7, 6, 0, 4, 3, 2, 1],
+        [6, 5, 9, 8, 7, 1, 0, 4, 3, 2],
+        [7, 6, 5, 9, 8, 2, 1, 0, 4, 3],
+        [8, 7, 6, 5, 9, 3, 2, 1, 0, 4],
+        [9, 8, 7, 6, 5, 4, 3, 2, 1, 0],
+    ];
+    const P: [[u8; 10]; 8] = [
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+        [1, 5, 7, 6, 2, 8, 3, 0, 9, 4],
+        [5, 8, 0, 3, 7, 9, 6, 1, 4, 2],
+        [8, 9, 1, 6, 0, 4, 3, 5, 2, 7],
+        [9, 4, 5, 3, 1, 2, 6, 8, 7, 0],
+        [4, 2, 8, 6, 5, 7, 3, 9, 0, 1],
+        [2, 7, 9, 3, 8, 0, 6, 4, 1, 5],
+        [7, 0, 4, 6, 9, 1, 3, 2, 5, 8],
+    ];
+    let mut c = 0usize;
+    for (k, v) in digits.iter().rev().enumerate() {
+        let p = P.get(k % 8).and_then(|row| row.get(*v as usize)).copied().unwrap_or(0) as usize;
+        c = D.get(c).and_then(|row| row.get(p)).copied().unwrap_or(0) as usize;
+    }
+    c == 0
+}
+
+/// Indian Aadhaar numbers: 12 digits as "2345 6789 0123" or one run, not starting with 0 or 1,
+/// with a valid Verhoeff check digit.
+pub(super) fn in_aadhaar(s: &[char], i: usize) -> Option<usize> {
+    if is_alnum(before(s, i)) || matches!(at(s, i), Some('0' | '1')) {
+        return None;
+    }
+    let (end, d) = grouped(s, i, &[4, 4, 4], &[' ', '-'], true)?;
+    verhoeff(&d).then_some(end - i)
+}
+
+/// Indian Permanent Account Numbers: five letters, four digits and a letter ("ABCPE1234F"),
+/// whose fourth letter names the holder's type (P person, C company, H, F, A, T, B, L, J, G).
+pub(super) fn in_pan(s: &[char], i: usize) -> Option<usize> {
+    if is_alnum(before(s, i)) {
+        return None;
+    }
+    let letters = (0..5).all(|k| upper(at(s, i + k), "")) && at(s, i + 3).is_some_and(|c| "PCHFATBLJG".contains(c));
+    let ok = letters && digits(s, i + 5, 4) && upper(at(s, i + 9), "") && !is_alnum(at(s, i + 10));
+    ok.then_some(10)
+}
+
+/// Australian tax file numbers: nine digits as "123 456 782" or one run, weighted 1, 4, 3, 7, 5,
+/// 8, 6, 9, 10 with a sum divisible by 11.
+pub(super) fn au_tfn(s: &[char], i: usize) -> Option<usize> {
+    if is_alnum(before(s, i)) {
+        return None;
+    }
+    let (end, d) = grouped(s, i, &[3, 3, 3], &[' ', '-'], true)?;
+    let sum: u32 = d.iter().zip([1u32, 4, 3, 7, 5, 8, 6, 9, 10]).map(|(v, w)| v * w).sum();
+    sum.is_multiple_of(11).then_some(end - i)
+}
+
+/// Australian Medicare card numbers: ten digits as "2123 45670 1" or one run, starting 2–6, the
+/// ninth the check digit of the first eight (weights 1, 3, 7, 9, 1, 3, 7, 9, mod 10).
+pub(super) fn au_medicare(s: &[char], i: usize) -> Option<usize> {
+    if is_alnum(before(s, i)) || !matches!(at(s, i), Some('2'..='6')) {
+        return None;
+    }
+    let (end, d) = grouped(s, i, &[4, 5, 1], &[' '], true)?;
+    let sum: u32 = d.iter().take(8).zip([1u32, 3, 7, 9, 1, 3, 7, 9]).map(|(v, w)| v * w).sum();
+    (d.get(8) == Some(&(sum % 10))).then_some(end - i)
+}
+
+/// Australian Business Numbers: eleven digits as "51 824 753 556" or one run; with 1 taken from
+/// the first digit, the digits weighted 10, 1, 3, 5, …, 19 sum to a multiple of 89.
+pub(super) fn au_abn(s: &[char], i: usize) -> Option<usize> {
+    if is_alnum(before(s, i)) || at(s, i) == Some('0') {
+        return None;
+    }
+    let (end, d) = grouped(s, i, &[2, 3, 3, 3], &[' '], true)?;
+    let sum: u32 = d
+        .iter()
+        .enumerate()
+        .map(|(k, v)| if k == 0 { v.saturating_sub(1) } else { *v })
+        .zip([10u32, 1, 3, 5, 7, 9, 11, 13, 15, 17, 19])
+        .map(|(v, w)| v * w)
+        .sum();
+    sum.is_multiple_of(89).then_some(end - i)
 }

@@ -23,7 +23,7 @@ pub struct RedactPrefs {
     pub overlay: String,
     /// Overlay text font, size (0 = auto), colour, alignment and repetition.
     pub look: pdfcraft_engine::OverlayLook,
-    /// The redaction code set offered (index into `REDACTION_CODE_SETS`).
+    /// The redaction code set offered: an index into `REDACTION_CODE_SETS`, then the user's sets.
     pub code_set: usize,
 }
 
@@ -67,6 +67,10 @@ pub struct SearchDraft {
     pub case_sensitive: bool,
     pub whole_words: bool,
     pub pattern: RedactPattern,
+    /// The locale whose patterns are offered (`"all"`: every locale).
+    pub locale: &'static str,
+    /// Mark every pattern of [`Self::locale`] (and the international ones) at once.
+    pub every_pattern: bool,
     /// The result of the last search (matches marked), shown in the dialog.
     pub found: Option<usize>,
     /// Why the list couldn't be searched, shown in the dialog.
@@ -92,6 +96,8 @@ impl Default for SearchDraft {
             case_sensitive: false,
             whole_words: false,
             pattern: RedactPattern::Phone,
+            locale: "all",
+            every_pattern: false,
             found: None,
             error: None,
             import: false,
@@ -203,7 +209,15 @@ impl PdfCraftApp {
             let out = r.render(pdfcraft_render::RenderRequest { page, kind: pdfcraft_render::RequestKind::Text, scale: 1.0, ..Default::default() });
             let Some(text) = out.text else { continue };
             let hits = match (d.mode, &words) {
-                (SearchMode::Patterns, _) => text.find_with(|c| pdfcraft_engine::find_pattern(d.pattern, c)),
+                (SearchMode::Patterns, _) => match pdfcraft_engine::redact_patterns_for(d.locale).filter(|_| d.every_pattern) {
+                    Some(patterns) => text.find_with(|c| {
+                        let mut all: Vec<std::ops::Range<usize>> = patterns.iter().flat_map(|p| pdfcraft_engine::find_pattern(*p, c)).collect();
+                        all.sort_by_key(|r| (r.start, r.end));
+                        all.dedup();
+                        all
+                    }),
+                    None => text.find_with(|c| pdfcraft_engine::find_pattern(d.pattern, c)),
+                },
                 (SearchMode::Words, Some(w)) => text.find_with(|c| w.find(c)),
                 _ => text.find(&d.text),
             };
@@ -322,10 +336,33 @@ pub(crate) fn search_body(ui: &mut egui::Ui, d: &mut SearchDraft, t: &Tokens) ->
     ui.add_space(6.0);
     ui.radio_value(&mut d.mode, SearchMode::Patterns, tl!("Patterns"));
     ui.add_enabled_ui(d.mode == SearchMode::Patterns, |ui| {
-        egui::ComboBox::from_id_salt("redact-pattern").selected_text(tl!(d.pattern.label())).width(240.0).show_ui(ui, |ui| {
-            for p in REDACT_PATTERNS {
-                ui.selectable_value(&mut d.pattern, p, tl!(p.label()));
+        ui.horizontal_wrapped(|ui| {
+            let locale_name = |id: &str| -> &'static str {
+                pdfcraft_engine::REDACT_PATTERN_LOCALES.iter().find(|(l, _)| *l == id).map_or(tl!("All locales"), |(_, n)| tl!(n))
+            };
+            egui::ComboBox::from_id_salt("redact-locale").selected_text(locale_name(d.locale)).width(160.0).show_ui(ui, |ui| {
+                ui.selectable_value(&mut d.locale, "all", tl!("All locales"));
+                for (id, name) in pdfcraft_engine::REDACT_PATTERN_LOCALES {
+                    ui.selectable_value(&mut d.locale, id, tl!(name));
+                }
+            });
+            let offered: Vec<RedactPattern> =
+                REDACT_PATTERNS.into_iter().filter(|p| d.locale == "all" || p.locale() == "intl" || p.locale() == d.locale).collect();
+            if !offered.contains(&d.pattern)
+                && let Some(p) = offered.first()
+            {
+                d.pattern = *p;
             }
+            ui.add_enabled_ui(!d.every_pattern || d.locale == "all", |ui| {
+                egui::ComboBox::from_id_salt("redact-pattern").selected_text(tl!(d.pattern.label())).width(240.0).show_ui(ui, |ui| {
+                    for p in offered {
+                        ui.selectable_value(&mut d.pattern, p, tl!(p.label()));
+                    }
+                });
+            });
+        });
+        ui.add_enabled_ui(d.locale != "all", |ui| {
+            ui.checkbox(&mut d.every_pattern, tl!("Mark every pattern of this locale"));
         });
     });
     ui.add_space(6.0);
@@ -348,7 +385,31 @@ pub(crate) fn search_body(ui: &mut egui::Ui, d: &mut SearchDraft, t: &Tokens) ->
 }
 
 /// Redaction Tool Properties. Returns (apply, cancel).
-pub(crate) fn props_body(ui: &mut egui::Ui, d: &mut RedactPrefs, _t: &Tokens) -> (bool, bool) {
+/// The codes in an overlay text ("A, B" → ["A", "B"]).
+pub fn picked_codes(overlay: &str) -> Vec<String> {
+    overlay.split(',').map(str::trim).filter(|c| !c.is_empty()).map(str::to_string).collect()
+}
+
+/// `overlay` with `code` added at the end, or taken out when it is there already; codes are
+/// separated by ", " and the text is kept within the overlay limit.
+pub fn toggle_code(overlay: &str, code: &str) -> String {
+    let mut codes = picked_codes(overlay);
+    if let Some(i) = codes.iter().position(|c| c == code) {
+        codes.remove(i);
+    } else {
+        codes.push(code.trim().to_string());
+    }
+    let text = codes.join(", ");
+    if text.chars().count() > pdfcraft_engine::redaction_codes::MAX_OVERLAY_CHARS { overlay.to_string() } else { text }
+}
+
+/// Redaction Tool Properties; `custom` are the user's code sets.
+pub(crate) fn props_body(
+    ui: &mut egui::Ui,
+    d: &mut RedactPrefs,
+    custom: &[pdfcraft_engine::redaction_codes::CustomCodeSet],
+    _t: &Tokens,
+) -> (bool, bool) {
     ui.set_width(380.0);
     ui.label(egui::RichText::new(tl!("Redaction Tool Properties")).font(crate::theme::semibold(18.0)));
     ui.add_space(8.0);
@@ -372,22 +433,47 @@ pub(crate) fn props_body(ui: &mut egui::Ui, d: &mut RedactPrefs, _t: &Tokens) ->
         let l = ui.label(tl!("Custom text:"));
         ui.add_enabled(d.use_overlay, egui::TextEdit::singleline(&mut d.overlay).desired_width(220.0)).labelled_by(l.id);
         ui.end_row();
-        // Redaction codes: picking one makes it the overlay text (set names and descriptions
-        // are the statutes' English names).
+        // Redaction codes: each code picked joins the overlay text ("(b)(6), (b)(7)(C)"), and
+        // picking it again takes it out. The user's own sets follow the built-in ones.
         ui.label(tl!("Redaction code:"));
         ui.add_enabled_ui(d.use_overlay, |ui| {
             ui.horizontal(|ui| {
-                let sets = pdfcraft_engine::REDACTION_CODE_SETS;
-                let Some(set) = sets.get(d.code_set).or(sets.first()) else { return };
-                egui::ComboBox::from_id_salt("redact-code-set").selected_text(set.name).show_ui(ui, |ui| {
-                    for (i, s) in sets.iter().enumerate() {
-                        ui.selectable_value(&mut d.code_set, i, s.name);
+                let builtin = pdfcraft_engine::REDACTION_CODE_SETS;
+                let count = builtin.len().saturating_add(custom.len());
+                if d.code_set >= count {
+                    d.code_set = 0;
+                }
+                let name = |i: usize| -> String {
+                    match builtin.get(i) {
+                        Some(s) => s.name.to_string(),
+                        None => custom.get(i.saturating_sub(builtin.len())).map(|s| s.name.clone()).unwrap_or_default(),
+                    }
+                };
+                egui::ComboBox::from_id_salt("redact-code-set").selected_text(name(d.code_set)).show_ui(ui, |ui| {
+                    for i in 0..count {
+                        ui.selectable_value(&mut d.code_set, i, name(i));
                     }
                 });
-                egui::ComboBox::from_id_salt("redact-code").selected_text(tl!("Choose a code")).show_ui(ui, |ui| {
-                    for c in set.codes {
-                        if ui.selectable_label(d.overlay == c.code, c.code).on_hover_text(c.description).clicked() {
-                            d.overlay = c.code.to_string();
+                let codes: Vec<(String, String)> = match builtin.get(d.code_set) {
+                    Some(s) => s.codes.iter().map(|c| (c.code.to_string(), c.description.to_string())).collect(),
+                    None => custom
+                        .get(d.code_set.saturating_sub(builtin.len()))
+                        .map(|s| s.codes.iter().map(|c| (c.code.clone(), c.description.clone())).collect())
+                        .unwrap_or_default(),
+                };
+                let picked = picked_codes(&d.overlay);
+                let shown = if picked.is_empty() {
+                    tl!("Choose codes").to_string()
+                } else {
+                    crate::i18n::fmt(tl!("{n} chosen"), &[("n", &picked.len().to_string())])
+                };
+                egui::ComboBox::from_id_salt("redact-code").selected_text(shown).show_ui(ui, |ui| {
+                    for (code, description) in &codes {
+                        let on = picked.iter().any(|p| p == code);
+                        let r = ui.selectable_label(on, code.as_str());
+                        let r = if description.is_empty() { r } else { r.on_hover_text(description.as_str()) };
+                        if r.clicked() {
+                            d.overlay = toggle_code(&d.overlay, code);
                         }
                     }
                 });

@@ -26,6 +26,7 @@ mod reading;
 mod reading_order;
 mod report;
 mod structure;
+mod tag_edit;
 mod tags;
 
 pub use alt::{AltError, Figure, figures, mark_decorative, set_alt};
@@ -41,7 +42,7 @@ pub use namespace::{
     MAX_NAMESPACES, MAX_NS_MAPPINGS, NS_MATHML, NS_PDF17, NS_PDF20, Namespace, NamespaceKind, NamespaceSpec, NsMapping, add_namespace, namespace_uri,
     namespaces,
 };
-pub use pdfa::{convert_pdfa, pdfa_blockers, pdfa_structure, verify_pdfa};
+pub use pdfa::{convert_pdfa, convert_pdfa_with_intent, pdfa_blockers, pdfa_structure, verify_pdfa};
 pub use pdfua::{MAX_UA_FINDINGS, UA_CHECKPOINTS, UA_NOT_CHECKED, UaCheckpoint, UaFinding, UaOptions, UaPart, UaReport, UaSeverity, verify_pdfua};
 pub use reading::{Block, BlockKind, Piece, reading_blocks};
 pub use reading_order::{
@@ -49,6 +50,7 @@ pub use reading_order::{
     move_element, page_order, tag_region,
 };
 pub use report::report_html;
+pub use tag_edit::{DeleteResult, delete_element, new_element};
 pub use tags::{
     AltTargets, FigureTarget, MAX_TEXT, TagChange, TagError, TagKid, TagNode, Tags, UntaggedImage, allowed_types, alt_targets, set_tag, tag_image,
     tags, untagged_images,
@@ -529,5 +531,7 @@ pub fn check(doc: &Document, options: &Options) -> Report {
 mod keep_tests;
 #[cfg(test)]
 mod reading_order_tests;
+#[cfg(test)]
+mod tag_edit_tests;
 #[cfg(test)]
 mod tests;

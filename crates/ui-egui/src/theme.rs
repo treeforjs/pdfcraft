@@ -82,6 +82,9 @@ impl ThemePreference {
     }
 }
 
+/// Error text in panels and dialogs (readable on every theme).
+pub const DANGER: egui::Color32 = egui::Color32::from_rgb(0xD7, 0x37, 0x3F);
+
 #[derive(Clone, Copy, Debug)]
 pub struct Tokens {
     pub kind: ThemeKind,
@@ -334,6 +337,55 @@ pub fn apply(ctx: &egui::Context, kind: ThemeKind) {
         s.text_styles.insert(egui::TextStyle::Small, regular(11.0));
         s.text_styles.insert(egui::TextStyle::Heading, semibold(17.0));
         s.interaction.tooltip_delay = 0.35;
+    });
+}
+
+/// Preferences ▸ Accessibility, laid over the theme by [`apply_accessibility`].
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Accessibility {
+    /// Interface size factor (the app sets egui's zoom factor to it).
+    pub text_scale: f32,
+    /// No animations, no smooth scrolling.
+    pub reduce_motion: bool,
+    /// Stronger text, borders and outlines.
+    pub high_contrast: bool,
+}
+
+impl Default for Accessibility {
+    fn default() -> Self {
+        Self { text_scale: 1.0, reduce_motion: false, high_contrast: false }
+    }
+}
+
+impl Tokens {
+    /// The tokens with secondary text as strong as body text and borders as strong as
+    /// secondary text was (Preferences ▸ Accessibility ▸ High contrast).
+    pub fn high_contrast(self) -> Self {
+        Self { text_muted: self.text, text_faint: self.text_muted, border: self.text_muted, divider: self.border, ..self }
+    }
+}
+
+/// Lay the accessibility preferences over the style [`apply`] set (call it after `apply`).
+pub fn apply_accessibility(ctx: &egui::Context, a: Accessibility) {
+    if a.high_contrast {
+        let t = Tokens::get(ctx).high_contrast();
+        ctx.data_mut(|d| d.insert_temp(egui::Id::new("pdfcraft-theme"), t));
+        let mut v = ctx.global_style().visuals.clone();
+        v.window_stroke = Stroke::new(1.5, t.border);
+        v.widgets.noninteractive.bg_stroke = Stroke::new(1.0, t.border);
+        v.widgets.inactive.bg_stroke = Stroke::new(1.0, t.border);
+        v.widgets.hovered.bg_stroke = Stroke::new(1.5, t.text);
+        v.widgets.active.bg_stroke = Stroke::new(2.0, t.accent);
+        v.selection.stroke = Stroke::new(2.0, t.accent);
+        ctx.set_visuals(v);
+    }
+    ctx.global_style_mut(|s| {
+        if a.reduce_motion {
+            s.animation_time = 0.0;
+            s.scroll_animation = egui::style::ScrollAnimation::none();
+        } else {
+            s.scroll_animation = egui::style::ScrollAnimation::default();
+        }
     });
 }
 

@@ -350,7 +350,7 @@ fn downsample_bits(bits: &[u8], w: usize, h: usize, nw: usize, nh: usize, ink: b
 /// are already CCITT or JBIG2, indirect filter descriptions and truncated LZW data are left
 /// alone), and the new stream is returned only if it is smaller. Without downsampling the
 /// samples are unchanged.
-fn process_mono(s: &Stream, ppi: f64, st: &MonoSettings) -> Option<Stream> {
+fn process_mono(s: &Stream, ppi: f64, st: &MonoSettings, jbig2_ok: bool) -> Option<Stream> {
     let d = &s.dict;
     let (w, h) = (usize::try_from(d.int(b"Width")?).ok()?, usize::try_from(d.int(b"Height")?).ok()?);
     // Group 4 takes at most 2^20 columns; the bound also keeps the per-column tables small.
@@ -390,7 +390,14 @@ fn process_mono(s: &Stream, ppi: f64, st: &MonoSettings) -> Option<Stream> {
     }
     nd.set(b"Width".to_vec(), Object::Int(nw as i64));
     nd.set(b"Height".to_vec(), Object::Int(nh as i64));
-    let new = match st.compression {
+    let compression = if st.compression == MonoCompression::Jbig2 && !jbig2_ok { MonoCompression::CcittG4 } else { st.compression };
+    let new = match compression {
+        MonoCompression::Jbig2 => {
+            // JBIG2 codes the samples losslessly; only a smaller stream is useful.
+            let data = pdfcraft_filters::encode_jbig2_generic(bits, nw, nh, s.raw.len()).ok()?;
+            nd.set(b"Filter".to_vec(), Object::name("JBIG2Decode"));
+            Stream::from_raw(nd, data)
+        }
         MonoCompression::CcittG4 => {
             // Only a smaller stream is useful, so encoding stops past the current size. Either
             // polarity round-trips the samples; keep the smaller.
@@ -445,7 +452,8 @@ pub(crate) fn run(
         let Object::Stream(s) = &*obj else { continue };
         report.images += 1;
         if is_mono(doc, &s.dict) {
-            let Some(new) = process_mono(s, ppi, &settings.mono) else { continue };
+            let jbig2_ok = settings.compatibility.is_none_or(|v| v >= (1, 4));
+            let Some(new) = process_mono(s, ppi, &settings.mono, jbig2_ok) else { continue };
             let resized = new.dict.int(b"Width") != s.dict.int(b"Width") || new.dict.int(b"Height") != s.dict.int(b"Height");
             report.image_bytes_before += s.raw.len();
             report.image_bytes_after += new.raw.len();
@@ -454,8 +462,10 @@ pub(crate) fn run(
             } else {
                 report.images_recompressed += 1;
             }
-            if new.dict.name(b"Filter") == Some(b"CCITTFaxDecode") {
-                report.images_ccitt += 1;
+            match new.dict.name(b"Filter") {
+                Some(b"CCITTFaxDecode") => report.images_ccitt += 1,
+                Some(b"JBIG2Decode") => report.images_jbig2 += 1,
+                _ => {}
             }
             doc.set(r, Object::Stream(new));
             continue;

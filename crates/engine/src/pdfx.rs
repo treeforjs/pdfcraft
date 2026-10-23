@@ -121,8 +121,30 @@ fn device(space: [u8; 4]) -> ColorDestination {
     }
 }
 
-fn verify(doc: &pdfcraft_cos::Document, part: XPart) -> XReport {
+pub(crate) fn verify(doc: &pdfcraft_cos::Document, part: XPart) -> XReport {
     verify_pdfx(doc, &XOptions { part: Some(part), max_findings: 100 })
+}
+
+/// Convert a copy of `cos` for `options` and check it: the conversion as
+/// [`Session::pdfx_convert`] reports it, and the converted copy (`None` when nothing needed
+/// changing or the result wouldn't conform and `allow_partial` is off).
+pub(crate) fn trial(
+    cos: &pdfcraft_cos::Document,
+    options: &XConvertOptions,
+    date: &str,
+) -> Result<(PdfxConversion, Option<pdfcraft_cos::Document>), EditError> {
+    options.validate(cos).map_err(EditError::Invalid)?;
+    let part = options.part;
+    let before = guard(|| verify(cos, part)).map_err(EditError::Invalid)?;
+    let mut probe = cos.clone();
+    let (fixed, notes) = guard(|| run(&mut probe, options, date))
+        .unwrap_or_else(|m| Err(EditError::Invalid(format!("Convert to PDF/X failed unexpectedly ({m}); the document was not changed"))))?;
+    let after = guard(|| verify(&probe, part)).map_err(EditError::Invalid)?;
+    if !after.conforms() && !options.allow_partial {
+        return Ok((PdfxConversion { part, before, after, fixed, notes, converted: false }, None));
+    }
+    let changed = !fixed.is_empty();
+    Ok((PdfxConversion { part, before, after, fixed, notes, converted: true }, changed.then_some(probe)))
 }
 
 impl Session {
@@ -134,23 +156,13 @@ impl Session {
         let date = self.now().map(pdfcraft_cos::pdf_date).unwrap_or_else(|| "D:19700101000000Z".into());
         let doc = self.get(id).ok_or(EditError::NoDocument)?;
         let editor = doc.editor.as_ref().ok_or_else(|| EditError::ReadOnly(doc.read_only_reason.clone().unwrap_or_default()))?;
-        options.validate(&editor.cos).map_err(EditError::Invalid)?;
+        let (conversion, converted) = trial(&editor.cos, &options, &date)?;
+        let Some(converted) = converted else { return Ok(conversion) };
+        drop(converted);
         let part = options.part;
-        let before = guard(|| verify(&editor.cos, part)).map_err(EditError::Invalid)?;
-        let mut probe = editor.cos.clone();
-        let (fixed, notes) = guard(|| run(&mut probe, &options, &date))
-            .unwrap_or_else(|m| Err(EditError::Invalid(format!("Convert to PDF/X failed unexpectedly ({m}); the document was not changed"))))?;
-        let after = guard(|| verify(&probe, part)).map_err(EditError::Invalid)?;
-        drop(probe);
-        if !after.conforms() && !options.allow_partial {
-            return Ok(PdfxConversion { part, before, after, fixed, notes, converted: false });
-        }
-        if fixed.is_empty() {
-            return Ok(PdfxConversion { part, before, after, fixed, notes, converted: true });
-        }
         self.apply(id, Edit::ConvertPdfX { options: Box::new(options) })?;
         let doc = self.get(id).ok_or(EditError::NoDocument)?;
-        let after = doc.editor.as_ref().map(|e| verify(&e.cos, part)).unwrap_or(after);
-        Ok(PdfxConversion { part, before, after, fixed, notes, converted: true })
+        let after = doc.editor.as_ref().map(|e| verify(&e.cos, part)).unwrap_or(conversion.after.clone());
+        Ok(PdfxConversion { after, ..conversion })
     }
 }

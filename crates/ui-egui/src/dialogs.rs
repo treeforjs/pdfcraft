@@ -7,6 +7,19 @@ use pdfcraft_engine::Edit;
 
 use crate::{CloseRequest, Dialog, PdfCraftApp, PropsTab, panels::human_size, widgets};
 
+/// A dialog body that may have moved on to another dialog (or closed it while running a
+/// command): whether to close, and the dialog to show next.
+fn follow(app: &PdfCraftApp, dialog: Dialog, done: bool, next: &mut Dialog) -> bool {
+    match app.dialog {
+        Some(d) if d != dialog => {
+            *next = d;
+            false
+        }
+        None => true,
+        _ => done,
+    }
+}
+
 const INFO_KEYS: [&str; 4] = ["Title", "Author", "Subject", "Keywords"];
 
 pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
@@ -54,6 +67,7 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
     let mut open_revision: Option<usize> = None;
     let mut a11y_now = false;
     let mut ocr_now = false;
+    let mut enhance_now = false;
     let mut compare_now = false;
     let mut images_now = false;
     let mut stamp_now = false;
@@ -68,6 +82,10 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
             Dialog::Print => 820.0,
             Dialog::FieldProps | Dialog::BulkFieldProps => 600.0,
             Dialog::About => 780.0,
+            Dialog::Preferences => 800.0,
+            Dialog::UserGuide => 900.0,
+            Dialog::Shortcuts => 640.0,
+            Dialog::InkManager => 600.0,
             _ => 520.0,
         });
         // Dialog controls are outlined (radio buttons, check boxes, combo boxes and number fields
@@ -323,8 +341,17 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
                         }
                         PropsTab::Advanced => {
                             row(ui, "PDF version", i.pdf_version.clone());
+                            row(ui, "Fast Web View", yes(doc.fast_web_view()));
                             row(ui, "Location", crate::bidi::visual(doc.path.as_deref().unwrap_or_default()).into_owned());
-                            row(ui, "File size", format!("{} ({} bytes)", human_size(i.file_size), i.file_size));
+                            row(
+                                ui,
+                                "File size",
+                                format!(
+                                    "{} ({})",
+                                    human_size(i.file_size),
+                                    crate::i18n::trn(crate::i18n::current(), u64::try_from(i.file_size).unwrap_or(u64::MAX), "{n} byte", "{n} bytes")
+                                ),
+                            );
                             let p = &i.pages[0];
                             row(ui, "Page size", format!("{:.2} × {:.2} in", p.width / 72.0, p.height / 72.0));
                             row(ui, "Number of pages", i.pages.len().to_string());
@@ -528,7 +555,8 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
             }
             Dialog::RedactProps => {
                 let mut prefs = app.redact_prefs.clone();
-                let (ok, cancel) = crate::redact_ui::props_body(ui, &mut prefs, &t);
+                let custom = app.session.redaction_code_sets().to_vec();
+                let (ok, cancel) = crate::redact_ui::props_body(ui, &mut prefs, &custom, &t);
                 app.redact_prefs = prefs;
                 close = ok || cancel;
                 return;
@@ -716,6 +744,16 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
                 close = crate::submit_ui::dialog(ui, app, &t);
                 return;
             }
+            Dialog::ProtectCertificates => {
+                ui.set_width(620.0);
+                close = crate::cert_ui::body(ui, app, &t);
+                return;
+            }
+            Dialog::RedactCodeSets => {
+                ui.set_width(620.0);
+                close = crate::redact_sets_ui::body(ui, app, &t);
+                return;
+            }
             Dialog::SignatureProperties => {
                 ui.set_width(620.0);
                 let sig = app.active_ids().and_then(|(_, id)| app.session.get(id)).and_then(|d| {
@@ -756,6 +794,7 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
             Dialog::Sign => {
                 if crate::sign_ui::dialog(ui, app, &t) {
                     app.sign_draft = None;
+                    app.close_token();
                     close = true;
                 }
                 return;
@@ -903,6 +942,31 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
                 close = apply || cancel;
                 return;
             }
+            Dialog::TagProperties => {
+                let done = crate::tags_ui::props_body(ui, app, &t);
+                close = follow(app, dialog, done, &mut next);
+                return;
+            }
+            Dialog::NewTag => {
+                let done = crate::tags_ui::new_tag_body(ui, app, &t);
+                close = follow(app, dialog, done, &mut next);
+                return;
+            }
+            Dialog::Autotag => {
+                let done = crate::make_accessible_ui::autotag_body(ui, app, &t);
+                close = follow(app, dialog, done, &mut next);
+                return;
+            }
+            Dialog::AutotagSummary => {
+                let done = crate::make_accessible_ui::summary_body(ui, app, &t);
+                close = follow(app, dialog, done, &mut next);
+                return;
+            }
+            Dialog::MakeAccessible => {
+                let done = crate::make_accessible_ui::make_body(ui, app, &t);
+                close = follow(app, dialog, done, &mut next);
+                return;
+            }
             Dialog::AltText => {
                 let (save, cancel) = crate::a11y_ui::alt_body(ui, app, &t);
                 alt_now = save;
@@ -921,6 +985,37 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
             }
             Dialog::Preflight => {
                 close = crate::preflight_ui::body(ui, app, &t);
+                return;
+            }
+            Dialog::InkManager => {
+                close = crate::prepress_ui::ink_manager_body(ui, app, &t);
+                return;
+            }
+            Dialog::ConvertColors => {
+                close = crate::prepress_ui::convert_colors_body(ui, app);
+                return;
+            }
+            Dialog::PrinterMarks => {
+                close = crate::prepress_ui::printer_marks_body(ui, app, &t);
+                return;
+            }
+            Dialog::BookmarkProperties => {
+                ui.set_width(440.0);
+                close = crate::bookmark_ui::props_body(ui, app, &t);
+                return;
+            }
+            Dialog::BookmarksFromStructure => {
+                ui.set_width(440.0);
+                close = crate::bookmark_ui::from_structure_body(ui, app, &t);
+                return;
+            }
+            Dialog::SelectPages => {
+                close = crate::select_pages_ui::body(ui, app, &t);
+                return;
+            }
+            Dialog::CustomCommands => {
+                ui.set_width(660.0);
+                close = crate::custom_commands_ui::body(ui, app, &t);
                 return;
             }
             Dialog::ActionWizard => {
@@ -944,18 +1039,34 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
                 close = crate::js_ui::console_body(ui, app, &t);
                 return;
             }
+            Dialog::JsDebugger => {
+                close = crate::js_debug_ui::body(ui, app, &t);
+                return;
+            }
             Dialog::DocumentJs => {
                 ui.set_width(640.0);
                 close = crate::js_ui::document_js_body(ui, app, &t);
                 return;
             }
+            Dialog::ActionScript => {
+                ui.set_width(600.0);
+                close = crate::js_ui::action_script_body(ui, app, &t);
+                return;
+            }
             Dialog::Preferences => {
-                close = crate::js_ui::preferences_body(ui, app, &t);
+                close = crate::prefs_ui::body(ui, app, &t);
                 return;
             }
             Dialog::RecognizeText => {
                 let (go, cancel) = crate::ocr_ui::body(ui, app, &t);
                 ocr_now = go;
+                close = go || cancel;
+                return;
+            }
+            Dialog::EnhanceScans => {
+                ui.set_width(440.0);
+                let (go, cancel) = crate::enhance_ui::body(ui, app, &t);
+                enhance_now = go;
                 close = go || cancel;
                 return;
             }
@@ -1061,9 +1172,14 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
                     ui.label(egui::RichText::new(tl!("Recover unsaved documents?")).font(theme::semibold(18.0)));
                 });
                 ui.add_space(6.0);
-                ui.label(tl!("PdfCraft didn't shut down normally. These documents had changes that were autosaved:"));
+                // In the browser a closed tab ends a session too, not only a crash.
+                if app.recovery.as_ref().is_some_and(crate::RecoveryStore::is_browser) {
+                    ui.label(tl!("PdfCraft was closed with unsaved changes. These documents have recovery copies in this browser:"));
+                } else {
+                    ui.label(tl!("PdfCraft didn't shut down normally. These documents had changes that were autosaved:"));
+                }
                 ui.add_space(8.0);
-                let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+                let now = crate::recovery::wall_secs();
                 egui::Grid::new("recoverable").num_columns(2).spacing([18.0, 6.0]).show(ui, |ui| {
                     for m in &app.recoverable {
                         ui.label(egui::RichText::new(&m.name).font(theme::medium(13.0)));
@@ -1079,45 +1195,14 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
                     }
                 });
             }
-            Dialog::Shortcuts => {
-                ui.label(egui::RichText::new(tl!("Keyboard shortcuts")).font(theme::semibold(18.0)));
-                ui.add_space(8.0);
-                let mac = cfg!(target_os = "macos") || cfg!(target_arch = "wasm32");
-                // Registered commands first (always in sync with the real bindings), then the
-                // keys the document view handles itself.
-                let mut rows: Vec<(String, String)> = pdfcraft_engine::commands::COMMANDS
-                    .iter()
-                    .filter_map(|c| c.shortcut.map(|k| (k.label(mac), tl!(c.label).trim_end_matches('…').to_string())))
-                    .collect();
-                for (k, v) in [
-                    ("⌘G / ⇧⌘G", tl!("Next / previous match")),
-                    ("⌘C", tl!("Copy selected text")),
-                    ("Double-click", tl!("Select a word")),
-                    ("Esc", tl!("Clear selection / close find")),
-                    ("⌘1", tl!("Actual size")),
-                    ("⌘0", tl!("Zoom to page level")),
-                    ("⌘2", tl!("Fit to width")),
-                    ("⌘3", tl!("Fit visible")),
-                    ("⌘+ / ⌘−", tl!("Zoom in / out (also pinch or ⌘-scroll)")),
-                    ("⇧⌘+ / ⇧⌘−", tl!("Rotate view")),
-                    ("Home / End", tl!("First / last page")),
-                    ("← / →, ⌘← / ⌘→", tl!("Previous / next page")),
-                    ("V", tl!("Select (V)")),
-                    ("H / Space (hold)", tl!("Hand (H)")),
-                    ("Delete", tl!("Delete selected pages (Organize)")),
-                    ("⌘A", tl!("Select all pages (Organize)")),
-                ] {
-                    rows.push((tl!(k).to_string(), tl!(v).to_string()));
+            Dialog::Shortcuts => crate::help_ui::shortcuts_body(ui, app, &t),
+            Dialog::UserGuide => {
+                close = crate::help_ui::guide_body(ui, app, &t);
+                // Its Keyboard shortcuts button switches to that window.
+                if let Some(d) = app.dialog {
+                    next = d;
                 }
-                egui::ScrollArea::vertical().max_height(460.0).show(ui, |ui| {
-                    egui::Grid::new("keys").num_columns(2).spacing([24.0, 6.0]).show(ui, |ui| {
-                        for (k, v) in &rows {
-                            ui.label(egui::RichText::new(k).font(egui::FontId::monospace(12.5)));
-                            ui.label(v);
-                            ui.end_row();
-                        }
-                    });
-                });
+                return;
             }
             Dialog::About => {
                 // Tabs About · Contributors · Models (craftrules standards/contributors.md).
@@ -1280,10 +1365,10 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
     if bulk_field_props_now {
         close = app.apply_bulk_field_props();
     }
-    if field_props_now
-        && let Some(d) = app.field_props.take()
-        && let Some(props) = d.props()
-        && app.apply_edit(Edit::SetFieldProps { name: d.field.clone(), props: Box::new(props) })
+    let field_edit = if field_props_now { app.field_props.take().map(|d| (d.edits(), d)) } else { None };
+    if let Some((mut edits, d)) = field_edit
+        && !edits.is_empty()
+        && app.apply_edit(if edits.len() == 1 { edits.remove(0) } else { Edit::Batch { label: "Change field properties".into(), edits } })
         && let Some(i) = app.active
     {
         // Keep the (possibly renamed) field selected.
@@ -1308,7 +1393,25 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
     if marks_now && let (Dialog::Marks(kind), Some((_, id))) = (dialog, app.active_ids()) {
         let count = app.session.get(id).map(|d| d.info.pages.len()).unwrap_or(0);
         let edit = crate::marks_ui::edit(&app.marks_draft, kind, count);
-        app.apply_edit(edit);
+        let d = &app.marks_draft;
+        // Bates numbering continued into other files: from the number after this document's last.
+        let bates =
+            d.hf.text
+                .iter()
+                .find_map(|t| pdfcraft_engine::bates_start(t))
+                .filter(|_| matches!(kind, pdfcraft_engine::MarkKind::HeaderFooter | pdfcraft_engine::MarkKind::Bates));
+        let run = bates.filter(|_| !d.bates_files.is_empty()).map(|start| crate::marks_ui::BatesRun {
+            files: d.bates_files.clone(),
+            hf: d.hf.clone(),
+            start: start.saturating_add(d.range.pages(count).len() as u64),
+            replace: d.replace,
+            suffix: d.bates_suffix.trim().to_string(),
+        });
+        if app.apply_edit(edit)
+            && let Some(run) = run
+        {
+            app.start_bates_files(run);
+        }
     }
     if boxes_now && let Some((i, id)) = app.active_ids() {
         let count = app.session.get(id).map(|d| d.info.pages.len()).unwrap_or(0);
@@ -1367,6 +1470,9 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
     if ocr_now {
         app.start_ocr();
     }
+    if enhance_now {
+        app.enhance_scans();
+    }
     if compare_now {
         app.run_compare();
     }
@@ -1419,6 +1525,7 @@ fn save_prompt(app: &mut PdfCraftApp, ctx: &egui::Context) {
     let index = match req {
         CloseRequest::Tab(id) => app.views.iter().position(|v| v.id == id),
         CloseRequest::Quit | CloseRequest::All => app.first_dirty(),
+        CloseRequest::Window(w) => app.first_dirty_in(w),
     };
     let Some(name) = index.and_then(|i| app.views.get(i)).and_then(|v| app.session.get(v.id)).map(|d| d.name.clone()) else {
         // Nothing left to ask about (tab already gone or no dirty documents).

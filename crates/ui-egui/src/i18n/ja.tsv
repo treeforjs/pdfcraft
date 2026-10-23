@@ -1638,7 +1638,6 @@
 	? of {n}	?/{n}
 	Added more than once	複数回追加されています
 	yesterday	昨日
-	{n} days ago	{n} 日前
 	No pages selected	ページが選択されていません
 	Password-protected	パスワードで保護されています
 	Its security settings don't allow copying pages	セキュリティ設定によりページのコピーが許可されていません
@@ -2305,3 +2304,894 @@ compare-page	Moved	移動
 	Archive documents…	文書をアーカイブ…
 	Archive Documents	文書をアーカイブ
 	Save as PDF/A-2b for long-term archiving.	長期保存用に PDF/A-2b として保存します。
+	Open pop-up	ポップアップを開く
+	Close pop-up	ポップアップを閉じる
+	Move pop-up	ポップアップを移動
+	Resize pop-up	ポップアップのサイズを変更
+	No text	テキストなし
+	Open pop-up note	ポップアップノートを開く
+	Close pop-up note	ポップアップノートを閉じる
+	Open all pop-ups	すべてのポップアップを開く
+	Close all pop-ups	すべてのポップアップを閉じる
+	No pop-ups to open	開くポップアップがありません
+	No pop-ups are open	開いているポップアップはありません
+	Trigger:	トリガー:
+	Page Open	ページを開く
+	Page Close	ページを閉じる
+	Run a JavaScript…	JavaScript を実行…
+	Page actions…	ページアクション…
+	Type the JavaScript.	JavaScript を入力してください。
+	Bookmark Action	しおりのアクション
+	Runs when the bookmark is clicked.	しおりをクリックすると実行されます。
+	Page Actions: page {n}	ページアクション: {n} ページ
+	Page Open runs when the page becomes the current page; Page Close when another page does.	「ページを開く」はそのページが現在のページになったときに、「ページを閉じる」は別のページが現在のページになったときに実行されます。
+	JavaScript, e.g. app.alert("Hello")	JavaScript（例: app.alert("こんにちは")）
+	{s} actions aren't run by PdfCraft yet	{s} アクションは PdfCraft ではまだ実行されません
+	Insert clipboard before	クリップボードを前に挿入
+	Insert clipboard after	クリップボードを後ろに挿入
+	Couldn't insert pages: {e}	ページを挿入できませんでした: {e}
+	Screen capture cancelled	画面キャプチャをキャンセルしました
+	Couldn't capture the screen: {e}	画面をキャプチャできませんでした: {e}
+	Create PDF from screen capture	画面キャプチャから PDF を作成
+	Create PDF from window capture	ウィンドウキャプチャから PDF を作成
+	Create PDF from region capture	範囲キャプチャから PDF を作成
+	Insert pages from clipboard	クリップボードからページを挿入
+	Insert pages from clipboard before selection	選択範囲の前にクリップボードからページを挿入
+	Screen capture	画面キャプチャ
+	Window capture	ウィンドウキャプチャ
+	Region capture	範囲キャプチャ
+	Insert from clipboard	クリップボードから挿入
+	No screen capture tool was found. Capture with your system's tool, then use Create PDF from clipboard.	画面キャプチャツールが見つかりません。システムのツールでキャプチャしてから、「クリップボードから PDF を作成」を使ってください。
+# Preferences window (M14)
+	min	分
+	Absolute colorimetric	絶対的な色域を維持
+	Allow	許可
+	Allow all sites	すべてのサイトを許可
+	Always	常に
+	Always use the working spaces	常に作業用スペースを使用
+	Ask each time	毎回確認
+	Automatic	自動
+	Black point compensation	黒点の補正
+	Block	ブロック
+	Block all sites	すべてのサイトをブロック
+	CMYK working space	CMYK 作業用スペース
+	Color management	カラーマネジメント
+	Default location	既定の場所
+	Default reason	既定の理由
+	Documents	文書
+	Don't color-manage untagged color	タグなしのカラーを管理しない
+	Each document's own Highlight fields button still turns them on and off.	各文書の「フィールドをハイライト」ボタンで個別にオン／オフできます。
+	Field highlight color	フィールドのハイライト色
+	Gray working space	グレー作業用スペース
+	High contrast	ハイコントラスト
+	Highlight form fields in documents that open	開いた文書のフォームフィールドをハイライト
+	Internet access from PDFs	PDF からのインターネットアクセス
+	Keep the comment tool selected after adding a comment	注釈の追加後も注釈ツールを選択したままにする
+	Makes all interface text and controls larger or smaller.	インターフェイスのすべての文字とコントロールを拡大・縮小します。
+	Never	しない
+	New signatures start with these; you can change them when signing.	新しい署名はこれらの値で始まります。署名時に変更できます。
+	No preferences match “{query}”.	「{query}」に一致する環境設定はありません。
+	Off: after one comment, the Select tool comes back.	オフ：注釈を 1 つ追加すると選択ツールに戻ります。
+	Only for PDF/X files	PDF/X ファイルのみ
+	Open the Comments panel when a comment tool is chosen	注釈ツールを選んだら注釈パネルを開く
+	Output intent overrides working spaces	出力インテントで作業用スペースを上書き
+	Perceptual	知覚的
+	RGB working space	RGB 作業用スペース
+	Recent files to remember	記憶する最近使用したファイルの数
+	Reduce motion	視差効果を減らす
+	Relative colorimetric	相対的な色域を維持
+	Rendering intent	レンダリングインテント
+	Required field border color	必須フィールドの境界線の色
+	Saturation	彩度
+	Save recovery copies of unsaved changes every	未保存の変更の復元用コピーを保存する間隔
+	Search preferences	環境設定を検索
+	Shown on Home and in File ▸ Open Recent. 0 keeps no list.	ホームと「ファイル → 最近使用したファイルを開く」に表示されます。0 にすると一覧を残しません。
+	Signs new comments. Empty uses your login name.	新しい注釈の作成者名です。空欄の場合はログイン名を使用します。
+	Sites without a rule	ルールのないサイト
+	Stronger text, borders and outlines in every theme.	どのテーマでも文字・境界線・輪郭を濃くします。
+	Text size	文字サイズ
+	Theme	テーマ
+	Turns off animations and smooth scrolling.	アニメーションとスムーズスクロールをオフにします。
+	Unsaved changes are kept in a recovery folder so they survive a crash. 0 turns autosave off.	未保存の変更はクラッシュに備えて復元用フォルダーに保存されます。0 にすると自動保存はオフになります。
+	Untagged color	タグなしのカラー
+	Untagged gray, RGB and CMYK color is shown through these profiles.	タグなしのグレー、RGB、CMYK はこれらのプロファイルで表示されます。
+	Use overprint preview	オーバープリントプレビューを使用
+	Use the site rules	サイトのルールを使用
+	Used by Output Preview and page images made for print checks.	出力プレビューと印刷チェック用のページ画像で使用されます。
+	Whether links and scripts in PDFs may reach web sites.	PDF 内のリンクやスクリプトが Web サイトにアクセスできるかどうか。
+	Your identity is suggested when you create a digital ID.	デジタル ID を作成するときに ID 情報が提案されます。
+	Compare side by side	並べて比較
+	Next change	次の変更
+	Previous change	前の変更
+	Synchronise scrolling	スクロールを同期
+	Both compared files must be open	比較した両方のファイルを開いておく必要があります
+	Change list	変更リスト
+	Change {i} of {n}	変更 {i} / {n}
+	Changes	変更
+	Close side-by-side view	並べて表示を閉じる
+	Compare two files first (Compare files…)	先に 2 つのファイルを比較してください（ファイルを比較…）
+	Fit width	幅に合わせる
+	Looks different	見た目が異なる
+	Old: {name}	旧: {name}
+	New: {name}	新: {name}
+	No changes	変更はありません
+	Not in the new file	新しいファイルにはありません
+	Not in the old file	古いファイルにはありません
+	Old page {o} · new page {n}	旧ページ {o} · 新ページ {n}
+	Page deleted	ページ削除
+	Page inserted	ページ挿入
+	Page moved	ページ移動
+	Rendering…	描画中…
+	Changes: {n}	変更: {n}
+	Edit objects	オブジェクトを編集
+	Click an object to select it, or drag around several	オブジェクトをクリックして選択、またはドラッグして複数を囲みます
+	Bring to Front	最前面へ
+	Bring Forward	前面へ
+	Send Backward	背面へ
+	Send to Back	最背面へ
+	Object properties	オブジェクトのプロパティ
+	Form XObject	フォーム XObject
+	Shading	シェーディング
+	{n} objects selected	{n} 個のオブジェクトを選択中
+	Arrange	重ね順
+	Fill color	塗りの色
+	Stroke color	線の色
+	Line width	線幅
+	Recover unsaved documents…	未保存の文書を復元…
+	Save recovery copies now	復元用コピーを今すぐ保存
+	PdfCraft was closed with unsaved changes. These documents have recovery copies in this browser:	未保存の変更があるまま PdfCraft が閉じられました。次の文書には、このブラウザーに復元用コピーがあります:
+	This browser can't keep recovery copies of unsaved changes: {e}	このブラウザーでは未保存の変更の復元用コピーを保持できません: {e}
+	{name} is too large to keep a recovery copy in the browser	{name} は大きすぎるため、ブラウザーに復元用コピーを保持できません
+	Autosave is off, so there is nothing to recover	自動保存がオフのため、復元するものはありません
+	Still looking for recovery copies…	復元用コピーを検索しています…
+	Nothing to recover	復元するものはありません
+	Saved recovery copies of unsaved changes	未保存の変更の復元用コピーを保存しました
+	Recovery copies are up to date	復元用コピーは最新です
+
+# JavaScript debugger
+	(top level)	（トップレベル）
+	Add a watch expression	ウォッチ式を追加
+	Annotations	注釈
+	Bookmark	しおり
+	Breakpoint on line {n}	{n} 行目のブレークポイント
+	Call stack	コールスタック
+	Click a line number to set a breakpoint.	行番号をクリックするとブレークポイントを設定できます。
+	Document script	文書スクリプト
+	Edited here only: runs use this text; the document keeps its script.	ここでのみ編集：実行にはこのテキストが使われ、文書のスクリプトは変わりません。
+	Error	エラー
+	Error on line {n}	{n} 行目でエラー
+	Evaluate	評価
+	Evaluate in the paused scope	一時停止中のスコープで評価
+	Filter scripts	スクリプトを絞り込む
+	Finished	完了
+	JavaScript Debugger	JavaScript デバッガー
+	JavaScript debugger…	JavaScript デバッガー…
+	JavaScript is turned off (Preferences → JavaScript).	JavaScript はオフです（環境設定 → JavaScript）。
+	Keystroke	キーストローク
+	Lines: {n}	行数：{n}
+	Link {n}	リンク {n}
+	Links	リンク
+	More scripts than can be listed; the list is cut.	表示できる数を超えるスクリプトがあるため、一覧は途中までです。
+	No scripts match.	一致するスクリプトはありません。
+	Not paused	一時停止していません
+	Open action	開くときのアクション
+	Page {n}	ページ {n}
+	Paused on line {n}	{n} 行目で一時停止中
+	Refresh	再読み込み
+	Run JavaScript against the document	文書に対して JavaScript を実行
+	Scratch script	スクラッチスクリプト
+	Scripts: {n}	スクリプト：{n}
+	Step into	ステップイン
+	Step out	ステップアウト
+	Step over	ステップオーバー
+	Stopped. Nothing the script did was applied.	停止しました。スクリプトが行ったことは何も適用されていません。
+	Stopped: the script ran too long	停止：スクリプトの実行時間が長すぎます
+	The paused point could not be reached again.	一時停止した位置に再び到達できませんでした。
+	This document has no scripts.	この文書にはスクリプトがありません。
+	Watch values show here when the script pauses.	スクリプトが一時停止すると、ここにウォッチの値が表示されます。
+	Watches	ウォッチ
+	document script, line {n}	文書スクリプト、{n} 行目
+	line {n}	{n} 行目
+	{error} (document script {name}, line {n})	{error}（文書スクリプト {name}、{n} 行目）
+	{error} (line {n})	{error}（{n} 行目）
+	New window	新しいウィンドウ
+	Move tab to new window	タブを新しいウィンドウに移動
+	Move tab to main window	タブをメインウィンドウに移動
+	Close window	ウィンドウを閉じる
+	Separate windows are only available in the desktop app	別ウィンドウはデスクトップアプリでのみ使えます
+	Window {n}	ウィンドウ {n}
+	{window} has closed	{window} は閉じられました
+	That tab has closed	そのタブは閉じられました
+	At most {n} windows can be open besides the main window: close one first	メインウィンドウのほかに開けるウィンドウは {n} 個までです。先にどれかを閉じてください
+	{window} has no room for more tabs	{window} にはこれ以上タブを追加できません
+	This tab is already in a window of its own	このタブはすでに単独でウィンドウに表示されています
+	This is the main window: quit to close it	これはメインウィンドウです。閉じるにはアプリを終了してください
+	This tab is in the main window	このタブはメインウィンドウにあります
+	Move tab to {window}	タブを {window} に移動
+	Release to open in a new window	離すと新しいウィンドウで開きます
+	This page only  ·  	このページのみ · 
+	The file stays on this device: PdfCraft reads it in this page and forgets it when the page closes. The password is never stored.	ファイルはこのデバイスから出ません。PdfCraft はこのページ内で読み込み、ページを閉じると破棄します。パスワードは保存されません。
+	Downloaded the new digital ID as {name}. Keep it: this page forgets it when it closes.	新しいデジタル ID を {name} としてダウンロードしました。保管してください。このページを閉じると破棄されます。
+	Signed. Downloaded {name}	署名しました。{name} をダウンロードしました
+	Sign with a smart card or token	スマートカードまたはトークンで署名
+	Sign with a Smart Card or Token	スマートカードまたはトークンで署名
+	Use a Smart Card or Token	スマートカードまたはトークンを使用
+	The signature is made on the card or token. Its private key never leaves it.	署名はカードまたはトークン上で作成されます。秘密鍵が外に出ることはありません。
+	PKCS #11 module	PKCS #11 モジュール
+	Find tokens	トークンを検索
+	No PKCS #11 module was found here. Choose the module file that came with your card or token (for example opensc-pkcs11).	PKCS #11 モジュールが見つかりませんでした。カードまたはトークンに付属のモジュールファイル（例: opensc-pkcs11）を選択してください。
+	Serial	シリアル
+	PIN locked	PIN ロック中
+	One try left	残り 1 回
+	PIN pad	PIN パッド
+	No card	カードなし
+	PIN	PIN
+	Enter the PIN on the reader's keypad, then choose Unlock.	リーダーのキーパッドで PIN を入力してから、［ロック解除］を選択してください。
+	Waiting for the token…	トークンを待っています…
+	Choose the certificate to sign with:	署名に使う証明書を選択してください:
+	No certificate on this token can sign.	このトークンには署名できる証明書がありません。
+	Certificates left out: {n}	除外された証明書: {n}
+	Token  ·  	トークン  ·  
+	The key is on the smart card or token, and the signature is made there.	鍵はスマートカードまたはトークン上にあり、署名はそこで作成されます。
+	Choose a slot with a card or token.	カードまたはトークンが入ったスロットを選択してください。
+	Unlock the token again.	トークンのロックをもう一度解除してください。
+
+# Localization: the language command, file sizes, relative dates.
+	Interface language…	表示言語…
+	Auto ({language})	自動 ({language})
+	{n} KB	{n} KB
+	{n} MB	{n} MB
+@plural	{n} byte|{n} bytes	{n} バイト
+@plural	{n} day ago|{n} days ago	{n} 日前
+	Downloading text recognition models… {r} of {t} MB	テキスト認識モデルをダウンロード中… {r} / {t} MB
+	The text recognition models (12 MB) are downloaded from this site the first time you recognize text, then kept in this browser.	テキスト認識モデル（12 MB）は、初めてテキストを認識するときにこのサイトからダウンロードされ、その後はこのブラウザーに保存されます。
+	the text recognition models haven't been downloaded into this browser yet; run Recognize Text to download them	テキスト認識モデルがまだこのブラウザーにダウンロードされていません。「テキスト認識」を実行してダウンロードしてください
+	User guide	ユーザーガイド
+	Search shortcuts	ショートカットを検索
+	No shortcuts match “{query}”.	「{query}」に一致するショートカットはありません。
+	Document view	ドキュメント表示
+	Tools	ツール
+# Print production
+	Add marks	マークを追加
+	Add printer marks…	トンボを追加…
+	Advanced:	詳細:
+	All spots to process	すべての特色をプロセスカラーに
+	Analyzing…	分析中…
+	Annotation	注釈
+	Apply to document	文書に適用
+	Bleed marks	裁ち落としマーク
+	Choose at least one mark.	マークを 1 つ以上選んでください。
+	Click on the page to list the objects under the pointer.	ページをクリックすると、ポインターの下のオブジェクトを一覧表示します。
+	Color bars	カラーバー
+	Color management…	カラーマネジメント…
+	Color warnings	カラー警告
+	Colors converted: {n}	変換したカラー: {n}
+	Colors to convert	変換するカラー
+	Convert colors…	カラーを変換…
+	Convert spot colors to process	特色をプロセスカラーに変換
+	Convert to:	変換先:
+	Cyan	シアン
+	Each sheet is sent as one picture.	各シートを 1 枚の画像として送信します。
+	Eastern	和文
+	Font	フォント
+	Highest on this page: {n}	このページの最大値: {n}
+	Highlight coverage over	強調表示する総インキ量の上限
+	ICC profile	ICC プロファイル
+	ICC-based	ICC ベース
+	Ink manager	インキマネージャー
+	Ink manager…	インキマネージャー…
+	Inks changed in the document	文書のインキを変更しました
+	Inks here: {inks} (total {total})	ここのインキ: {inks} (合計 {total})
+	Inks of the first {n} pages.	最初の {n} ページのインキです。
+	Line art	線画
+	Line weight:	線幅:
+	Load ICC profile…	ICC プロファイルを読み込み…
+	Loaded the profile {name}	プロファイル {name} を読み込みました
+	Magenta	マゼンタ
+	No alias	エイリアスなし
+	No ink needed changing	変更が必要なインキはありません
+	No overprint, rich black or registration color on this page.	このページにはオーバープリント、リッチブラック、レジストレーションカラーはありません。
+	Not DeviceCMYK	DeviceCMYK 以外
+	Nothing is painted here.	ここには何も描画されていません。
+	Nothing to convert	変換するものがありません
+	OK keeps these settings for this session; Apply to document changes the file.	OK はこのセッションの設定を保持します。文書に適用はファイルを変更します。
+	Object inspector	オブジェクトインスペクター
+	Offset from trim:	仕上がりからのオフセット:
+	Output intent	出力インテント
+	Overprint	オーバープリント
+	Page information	ページ情報
+	Preserve black	黒を保持
+	Print as image	画像として印刷
+	Process	プロセス
+	Registration color	レジストレーションカラー
+	Registration marks	レジストレーションマーク
+	Rendering intent:	レンダリングインテント:
+	Reset	リセット
+	Rich black	リッチブラック
+	Separations	分版
+	Set an alias or convert a spot ink to process first.	先にエイリアスを設定するか、特色をプロセスカラーに変換してください。
+	Show all inks	すべてのインキを表示
+	Simulate black ink	黒インキをシミュレート
+	Simulate overprinting	オーバープリントをシミュレート
+	Simulate paper color	紙色をシミュレート
+	Simulation profile	シミュレーションプロファイル
+	Small rich black text	小さなリッチブラックのテキスト
+	Solid color	単色
+	Some objects can't be measured and are left out.	一部のオブジェクトは測定できないため除外されます。
+	Spot colors	特色
+	Stroke	線
+	Style:	スタイル:
+	The page grows to make room for the marks.	マークを入れるためにページが大きくなります。
+	The profile is larger than {n} MB.	プロファイルが {n} MB を超えています。
+	This document uses only the process inks.	この文書はプロセスインキのみを使用しています。
+	To process	プロセスに
+	Total area coverage	総インキ量
+	Transparency	透明
+	Trim marks	トリムマーク
+	Use Lab values for spot colors	特色に Lab 値を使用
+	Vector objects	ベクトルオブジェクト
+	Western	欧文
+	White overprint	白のオーバープリント
+	Working CMYK space	CMYK 作業用スペース
+	embedded	埋め込み
+	not embedded	埋め込みなし
+	{n} of the page is over the limit	ページの {n} が上限を超えています。
+
+# Accessibility: Tags and Order panels, Reading order tool, Autotag, Make accessible
+	Marked content {mcid} on page {page}	マークされたコンテンツ {mcid}（{page} ページ）
+	Marked content {mcid}	マークされたコンテンツ {mcid}
+	Object	オブジェクト
+	Annotation: {kind}	注釈: {kind}
+	This document has no tags.	この文書にはタグがありません。
+	Tags tell screen readers what each part of the page is and in which order to read it.	タグは、ページの各部分が何であり、どの順序で読むかをスクリーンリーダーに伝えます。
+	Autotag document	文書に自動タグ付け
+	Reading order tool	読み上げ順序ツール
+	New tag…	新しいタグ…
+	Tag properties…	タグのプロパティ…
+	Change to artifact	アーティファクトに変更
+	Delete tag	タグを削除
+	Collapse all tags	すべてのタグを折りたたむ
+	Expand all tags	すべてのタグを展開
+	This structure tree is very large: only part of it is shown, and it can't be edited.	この構造ツリーは非常に大きいため、一部のみ表示され、編集できません。
+	Collapse some tags to see the rest.	残りを表示するには、いくつかのタグを折りたたんでください。
+	Clear page structure	ページ構造をクリア
+	Nothing on this page is tagged yet.	このページにはまだタグ付けされたものがありません。
+	Use the Reading order tool: draw a box around content and choose what it is.	読み上げ順序ツールを使います。コンテンツを枠で囲み、その種類を選んでください。
+	{n} drawing operations on this page are not tagged.	このページの {n} 個の描画操作はタグ付けされていません。
+	Tag properties	タグのプロパティ
+	What a figure or formula shows	図や数式が示している内容
+	Actual text	実際のテキスト
+	The exact text the content spells	コンテンツが表す正確なテキスト
+	Alternate and actual text replace everything inside the tag for screen readers.	代替テキストと実際のテキストは、スクリーンリーダーに対してタグ内のすべてを置き換えます。
+	New tag	新しいタグ
+	Drag tags onto the new tag to move them inside it.	タグを新しいタグにドラッグすると、その中に移動します。
+	Add tag	タグを追加
+	Inside {tag}	{tag} の中
+	At the top level	最上位
+	Draw a box around content, then choose what it is.	コンテンツを枠で囲み、その種類を選んでください。
+	Tag this area as	この領域のタグ
+	Alternate text (figures and formulas)	代替テキスト（図と数式）
+	Autotag form fields	フォームフィールドに自動タグ付け
+	PdfCraft reads the layout of every page and tags headings, paragraphs, lists, tables, figures, links and form fields in reading order.	PdfCraft は各ページのレイアウトを読み取り、見出し、段落、リスト、表、図、リンク、フォームフィールドに読み上げ順序でタグを付けます。
+	Find tables	表を検出
+	Find lists	リストを検出
+	Tag form fields	フォームフィールドにタグ付け
+	Give fields without a tooltip one from their label	ツールヒントのないフィールドにラベルからツールヒントを付ける
+	This document is already tagged. Autotagging replaces all of its tags.	この文書にはすでにタグがあります。自動タグ付けはすべてのタグを置き換えます。
+	Replace the existing tags	既存のタグを置き換える
+	Autotag	自動タグ付け
+	Autotag finished	自動タグ付けが完了しました
+	{n} tags on {p} pages.	{p} ページに {n} 個のタグ。
+	{n} figures need alternate text.	{n} 個の図に代替テキストが必要です。
+	{n} form fields have no tooltip.	{n} 個のフォームフィールドにツールヒントがありません。
+	Check the reading order of each page with the Order panel.	順序パネルで各ページの読み上げ順序を確認してください。
+	Show tags	タグを表示
+	Results	結果
+	Screen readers announce the title and read the text in the document's language.	スクリーンリーダーはタイトルを読み上げ、文書の言語でテキストを読みます。
+	Tag the document again (replaces its tags)	文書にもう一度タグ付け（既存のタグを置き換え）
+	Tag the document	文書にタグ付け
+	Next	次へ
+	Give the document's language as a language tag, such as en-US.	文書の言語を en-US などの言語タグで入力してください。
+	Screen readers read a field's tooltip to say what to fill in. Check each one.	スクリーンリーダーはフィールドのツールヒントを読み上げて入力内容を伝えます。それぞれ確認してください。
+	Figure {i} of {n}	図 {i}/{n}
+	Finish	完了
+	Undo takes back the whole action in one step.	元に戻すと、操作全体が 1 ステップで取り消されます。
+	Show checker results	チェック結果を表示
+	skipped	スキップ
+	{n} set	{n} 件設定
+	structure order	構造の順序
+	no figures	図なし
+	Tags	タグ
+	Order	順序
+	Heading 1	見出し 1
+	Heading 2	見出し 2
+	Heading 3	見出し 3
+	Heading 4	見出し 4
+	Heading 5	見出し 5
+	Heading 6	見出し 6
+	Figure	図
+	Figure with caption	キャプション付きの図
+	Table cell	表のセル
+	Formula	数式
+	Form field	フォームフィールド
+	Artifact: header	アーティファクト: ヘッダー
+	Artifact: footer	アーティファクト: フッター
+	Artifact: background	アーティファクト: 背景
+	Form field tooltips	フォームフィールドのツールヒント
+	Paragraphs	段落
+	Figures	図
+	Tags panel	タグパネル
+	Order panel	順序パネル
+	Autotag document…	文書に自動タグ付け…
+	Autotag form fields…	フォームフィールドに自動タグ付け…
+	Make accessible…	アクセシブルにする…
+	Change reading order	読み上げ順序を変更
+	Change tag properties	タグのプロパティを変更
+	Tag region	領域にタグ付け
+	Add files to number	番号を付けるファイルを追加
+	Align and distribute	整列と分布
+	Align bottom	下揃え
+	Align horizontal centers	左右中央揃え
+	Align to the page	ページに揃える
+	Align top	上揃え
+	Align vertical centers	上下中央揃え
+	Bates Number Options	ベイツ番号のオプション
+	Bates numbering… file {d} of {t}	ベイツ番号を付けています… ファイル {d}/{t}
+	Bulleted list	箇条書き
+	Choose a destination	移動先を選択
+	Choose a folder for the numbered files	番号付きファイルの保存先フォルダーを選択
+	Custom view ({kind})	カスタム表示（{kind}）
+	Custom view ({zoom}%)	カスタム表示（{zoom}%）
+	Distribute horizontally	左右に均等配置
+	Distribute vertically	上下に均等配置
+	Edited, added and deleted text and images update a tagged document's structure in the same undo step.	テキストや画像を編集・追加・削除すると、タグ付き文書の構造も同じ取り消し単位で更新されます。
+	File name suffix	ファイル名の接尾辞
+	Fit height	高さに合わせる
+	Fit page	ページ全体
+	Go to a named destination	名前付き移動先へ移動
+	Go to the page as it is shown now: its position and zoom	現在表示されている状態（位置と倍率）でページへ移動
+	Horizontal offset	横方向のオフセット
+	Indent list	リストのインデントを増やす
+	Inherit zoom	倍率を引き継ぐ
+	Keep structure tags when editing content	コンテンツの編集時に構造タグを保持
+	Number of digits	桁数
+	Numbered list	番号付きリスト
+	Numbered {done} of {total} files; {name} couldn't be numbered: {e}	{total} 件中 {done} 件に番号を付けました。{name} には番号を付けられませんでした: {e}
+	Numbered {n} more files, up to {last}	さらに {n} 件のファイルに {last} まで番号を付けました
+	Outdent list	リストのインデントを減らす
+	Remove list	リストを解除
+	Select three or more objects to distribute them	均等配置するには 3 つ以上のオブジェクトを選択してください
+	Show when displaying on screen	画面表示時に表示
+	Show when printing	印刷時に表示
+	Space after paragraphs	段落後の間隔
+	Start number	開始番号
+	Suffix	接尾辞
+	The numbers continue into these files, in order. Each gets a numbered copy in a folder you choose; the files themselves are left as they are.	番号はこれらのファイルに順に続きます。各ファイルの番号付きコピーを選択したフォルダーに保存し、元のファイルは変更しません。
+	This document has no named destinations.	この文書には名前付き移動先がありません。
+	Use current view	現在の表示を使用
+	Vertical offset	縦方向のオフセット
+	Bates numbering of other files couldn't start; try again	他のファイルへのベイツ番号付けを開始できませんでした。もう一度お試しください
+	Bates numbering of other files is already running	他のファイルへのベイツ番号付けはすでに実行中です
+	That's as many files as one Bates numbering run takes	1 回のベイツ番号付けで扱えるファイル数の上限です
+	Numbering other files arrives on the web with folder pickers	他のファイルへの番号付けは、フォルダー選択とともに Web 版に追加予定です
+	Select objects with Edit objects first	先に「オブジェクトを編集」でオブジェクトを選択してください
+	Select a text box, or click into a paragraph, first	先にテキストボックスを選択するか、段落内をクリックしてください
+# Signing: appearances, trusted certificates, verification information, compare signed version
+	0 accepts it however old it is.	0 にすると古さに関係なく受け入れます。
+	A cancelled response is discarded. A blocked request stops at the configured deadline (at most 30 seconds).	キャンセルした応答は破棄されます。応答のない要求は設定した期限（最大 30 秒）で停止します。
+	A certificate file is limited to 4 MiB.	証明書ファイルは 4 MiB までです。
+	A chosen or claimed date is not cryptographic proof of time.	選択した日時や自己申告の日時は、暗号による時刻の証明ではありません。
+	Account name (optional)	アカウント名（省略可）
+	Add a TSA certificate to Trusted Certificates only after independently verifying its identity and fingerprint. Disabling this check saves an untrusted token; it does not establish trusted time.	TSA の証明書は、身元とフィンガープリントを別途確認してから信頼済み証明書に追加してください。この確認を無効にすると信頼されないトークンが保存され、信頼できる時刻にはなりません。
+	Add logo…	ロゴを追加…
+	Add verification information	検証情報を追加
+	Add verification information…	検証情報を追加…
+	Allow a timestamp request to the selected server	選択したサーバーへのタイムスタンプ要求を許可
+	Allow a timestamp request to this server	このサーバーへのタイムスタンプ要求を許可
+	Also from sites that Internet access asks about	インターネットアクセスで確認が必要なサイトからも
+	Also trust them for certified documents	認証済み文書にも信頼する
+	Appearance name	表示方法の名前
+	Blocked sites stay blocked. Only the certificates' OCSP responders and CRL addresses are contacted.	ブロックしたサイトはブロックされたままです。接続するのは証明書の OCSP レスポンダーと CRL のアドレスだけです。
+	CRLs	CRL
+	Cancel operation	操作をキャンセル
+	Certificate and revocation checks at:	証明書と失効の確認時点:
+	Certified documents	認証済み文書
+	Change logo…	ロゴを変更…
+	Choose a configured timestamp server.	設定済みのタイムスタンプサーバーを選択してください。
+	Choose a server	サーバーを選択
+	Choose another picture…	別の画像を選択…
+	Choose picture…	画像を選択…
+	Clear drawing	描画を消去
+	Compare signed version	署名済みバージョンを比較
+	Compare signed version with current	署名済みバージョンを現在のものと比較
+	Compare with current	現在のものと比較
+	Couldn't compare the signed version: {e}	署名済みバージョンを比較できませんでした: {e}
+	Couldn't use the picture: {e}	画像を使用できませんでした: {e}
+	Current time	現在時刻
+	Drawn signature	手書きの署名
+	Embedding evidence does not itself establish PAdES B-LT/B-LTA compliance. Incomplete coverage is reported after validation.	証拠を埋め込むだけでは PAdES B-LT/B-LTA への準拠にはなりません。不完全な範囲は検証後に報告されます。
+	Every certificate's revocation status is now in the document.	すべての証明書の失効状態が文書に含まれました。
+	Every change since signing is permitted by the signature.	署名後の変更はすべて署名で許可されています。
+	Every form field is locked and no later change keeps the signature valid.	すべてのフォームフィールドがロックされ、以降に変更すると署名は有効でなくなります。
+	Fetch revocation information online	失効情報をオンラインで取得
+	Fetch revocation information online when adding verification information	検証情報を追加するときに失効情報をオンラインで取得
+	Filling in forms, signing and commenting are permitted (approval signature).	フォームへの入力、署名、注釈が許可されています（承認署名）。
+	HTTPS URL	HTTPS URL
+	Import certificates…	証明書を読み込む…
+	Issued by {issuer}, valid to {date}	発行者: {issuer}、有効期限: {date}
+	Local DER files to add too (optional), one path per line. Certificates are not automatically trusted.	追加するローカルの DER ファイル（省略可）。1 行に 1 つのパスを入力します。証明書は自動的には信頼されません。
+	Local DER files, one path per line. Certificates are not automatically trusted.	ローカルの DER ファイル。1 行に 1 つのパスを入力します。証明書は自動的には信頼されません。
+	Lock document after signing	署名後に文書をロック
+	Logo	ロゴ
+	Manage timestamp servers in Preferences → Signatures.	タイムスタンプサーバーは 環境設定 → 署名 で管理します。
+	Maximum age of revocation information without an update time	更新時刻のない失効情報の最大経過時間
+	More changes were found than are listed.	一覧にある以上の変更が見つかりました。
+	New server	新しいサーバー
+	No changes are permitted.	変更は許可されていません。
+	No saved appearances yet.	保存した表示方法はまだありません。
+	No server is configured. PdfCraft never contacts one unless you add it here.	サーバーは設定されていません。ここで追加しない限り、PdfCraft がサーバーに接続することはありません。
+	No timestamp	タイムスタンプなし
+	No trusted certificates yet.	信頼済み証明書はまだありません。
+	Nothing has changed since it was signed.	署名後に変更はありません。
+	OCSP responses	OCSP 応答
+	Only filling in forms and signing are permitted.	許可されているのはフォームへの入力と署名だけです。
+	Only filling in forms, signing and commenting are permitted.	許可されているのはフォームへの入力、署名、注釈だけです。
+	Only from sites that Internet access allows. Opening or validating a document never goes online.	インターネットアクセスで許可されたサイトからのみ取得します。文書を開いたり検証したりするだけでは接続しません。
+	Open a signed document first	先に署名済みの文書を開いてください
+	Optional policy OID	ポリシー OID（省略可）
+	Or UTC date (YYYYMMDDHHmmSSZ)	または UTC 日時（YYYYMMDDHHmmSSZ）
+	Pages: {a} when signed, {b} now	ページ数: 署名時 {a}、現在 {b}
+	Picture	画像
+	Pictures can be chosen in the desktop app; draw your signature here instead.	画像はデスクトップアプリで選択できます。ここでは署名を手書きしてください。
+	Remove logo	ロゴを削除
+	Remove picture	画像を削除
+	Require an explicitly trusted timestamp authority	明示的に信頼したタイムスタンプ局を必須にする
+	Revocation information for {covered} of {needed} certificates was fetched.	{needed} 件中 {covered} 件の証明書の失効情報を取得しました。
+	Save an appearance from the signing dialog: its text, a picture or drawn signature, and a logo.	署名ダイアログで表示方法（テキスト、画像または手書きの署名、ロゴ）を保存できます。
+	Save appearance	表示方法を保存
+	Save result…	結果を保存…
+	Save server	サーバーを保存
+	Saved appearances	保存した表示方法
+	Saved the appearance {name}	表示方法「{name}」を保存しました
+	Secure time (timestamp), else the signing time	安全な時刻（タイムスタンプ）、なければ署名時刻
+	Show on the left	左側に表示
+	Sign here with your mouse, pen or finger	マウス、ペン、または指でここに署名してください
+	Signature appearances	署名の表示方法
+	Signature operation	署名の操作
+	Signatures whose certificates chain to one of these are trusted. Choose what each one is trusted for.	証明書チェーンがこれらのいずれかにつながる署名は信頼されます。各証明書を何に信頼するかを選択してください。
+	Signed documents	署名済み文書
+	Signed version of {field} (revision {n})	{field} の署名済みバージョン（リビジョン {n}）
+	Some changes since signing are not permitted by the signature.	署名後の変更の一部は署名で許可されていません。
+	Text only	テキストのみ
+	The Signatures panel checks certificates and revocation at this time. A signing time without a trusted timestamp is the signer's own claim.	署名パネルはこの時点で証明書と失効を確認します。信頼できるタイムスタンプのない署名時刻は、署名者の自己申告にすぎません。
+	The current time	現在の時刻
+	The password is kept only until PdfCraft quits, never saved.	パスワードは PdfCraft を終了するまでだけ保持され、保存されることはありません。
+	The request contains a digest, not the PDF. No request is made when this dialog opens.	要求に含まれるのはダイジェストで、PDF ではありません。このダイアログを開いただけでは要求は送信されません。
+	The signed version could not be read.	署名済みバージョンを読み取れませんでした。
+	The time the signature was created	署名が作成された時刻
+	Then add a document timestamp (optional):	続けて文書タイムスタンプを追加（省略可）:
+	Timeout (seconds)	タイムアウト（秒）
+	Timestamp (optional)	タイムスタンプ（省略可）
+	Trust the operating system's root certificates for signatures	署名にオペレーティングシステムのルート証明書を信頼する
+	Trusted certificates	信頼済み証明書
+	Trusted root	信頼済みルート
+	Trusted timestamp, else claimed signing time	信頼できるタイムスタンプ、なければ申告された署名時刻
+	Validating and saving…	検証して保存しています…
+	Verify signatures using	署名の検証に使う時刻
+	macOS Keychain, Windows certificate store, or the system's CA bundle. Off by default.	macOS のキーチェーン、Windows の証明書ストア、またはシステムの CA バンドル。既定ではオフです。
+	{n} addresses were not contacted because of Internet access settings.	インターネットアクセスの設定により、{n} 件のアドレスには接続しませんでした。
+	{n} certificates added to your trusted certificates.	{n} 件の証明書を信頼済み証明書に追加しました。
+	Adds the signers' certificate chains and their revocation status to the document, so the signatures can still be checked after the certificates expire.	署名者の証明書チェーンと失効状態を文書に追加し、証明書の期限が切れた後も署名を確認できるようにします。
+# Field triggers, document actions, certificate security, Trust Manager, redaction code sets and locales.
+	Add at least one recipient certificate.	受信者の証明書を 1 つ以上追加してください。
+	Add code	コードを追加
+	Add recipient	受信者を追加
+	Add recipient…	受信者を追加…
+	Add site	サイトを追加
+	Add type	種類を追加
+	All locales	すべての地域
+	Allow changing the security settings (and everything else)	セキュリティ設定の変更を許可（ほかのすべても許可）
+	Always allow	常に許可
+	At most {n} recipients.	受信者は最大 {n} 人です。
+	Attach the saved form data to the email	保存したフォームデータをメールに添付してください
+	Australia	オーストラリア
+	Bcc	BCC
+	Canada	カナダ
+	Cc	CC
+	Certificate or digital ID	証明書またはデジタル ID
+	Certificate security will be applied when you save	証明書セキュリティは保存時に適用されます
+	Choose a saved set or make a new one.	保存済みのセットを選ぶか、新しく作成してください。
+	Choose codes	コードを選択
+	Code	コード
+	Code set file	コードセットファイル
+	Delete set	セットを削除
+	Deleted {name}.	{name} を削除しました。
+	Document Actions	文書のアクション
+	Document Did Print	文書の印刷後
+	Document Did Save	文書の保存後
+	Document Will Close	文書を閉じる前
+	Document Will Print	文書の印刷前
+	Document Will Save	文書の保存前
+	Document actions…	文書のアクション…
+	Each script runs when the document is about to close, is saved or is printed. Scripts can't start another save or print.	各スクリプトは、文書を閉じる前、保存時、印刷時に実行されます。スクリプトから別の保存や印刷を始めることはできません。
+	Encrypt with certificate…	証明書で暗号化…
+	Export code sets	コードセットを書き出す
+	Extension, such as zip	拡張子（例: zip）
+	France	フランス
+	Germany	ドイツ
+	Import code sets	コードセットを読み込む
+	Imported {names}.	{names} を読み込みました。
+	Import…	読み込み…
+	Include subdomains	サブドメインを含める
+	India	インド
+	International	国際
+	Japan	日本
+	Lock the document after signing	署名後に文書をロック
+	Locked fields become read-only once the field is signed; a locked document then allows no changes.	ロックしたフィールドは、このフィールドに署名すると読み取り専用になります。ロックした文書はその後変更できません。
+	Mark as read-only all fields	すべてのフィールドを読み取り専用にする
+	Mark as read-only all fields except these	これら以外のすべてのフィールドを読み取り専用にする
+	Mark as read-only just these fields	これらのフィールドだけを読み取り専用にする
+	Mark every pattern of this locale	この地域のすべてのパターンをマーク
+	Never open	開かない
+	New set	新しいセット
+	No recipients yet. Add a certificate for each person who may open the document.	受信者はまだいません。文書を開けるすべての人について証明書を追加してください。
+	No site rules yet.	サイトのルールはまだありません。
+	Nobody can change or remove this security later unless a recipient may change the security.	セキュリティを変更できる受信者がいないと、このセキュリティは後で誰も変更・解除できません。
+	None yet	まだありません
+	Nothing happens	何もしない
+	Only the recipients can open the document, each with the permissions you give them. It's applied when you save.	文書を開けるのは受信者だけで、それぞれに指定した権限が与えられます。保存時に適用されます。
+	PdfCraft doesn't send email itself: it opens your email app and saves the data for you to attach.	PdfCraft 自体はメールを送信しません。メールアプリを開き、添付用にデータを保存します。
+	Permissions for {name}	{name} の権限
+	Programs and scripts are refused and plain documents open; other types ask. Your lists override the built-in ones.	プログラムとスクリプトは拒否され、通常の文書は開きます。その他の種類は確認します。ユーザーのリストが組み込みのリストより優先されます。
+	Recipients	受信者
+	Redaction code sets	墨消しコードセット
+	Redaction code sets…	墨消しコードセット…
+	Remove the rule for {host}	{host} のルールを削除
+	Remove this code	このコードを削除
+	Rules for web sites that links, scripts and form submissions reach. Used when internet access follows the site rules.	リンク、スクリプト、フォーム送信がアクセスする Web サイトのルールです。インターネットアクセスがサイトのルールに従うときに使われます。
+	Save set	セットを保存
+	Saved sets	保存済みのセット
+	Saved {name}.	{name} を保存しました。
+	Set name	セット名
+	Signed	署名済み
+	Sites	サイト
+	Take .{ext} off the list	.{ext} をリストから外す
+	That recipient is already on the list.	この受信者はすでにリストにあります。
+	The file holds {n} certificates; add each recipient from its own file.	このファイルには証明書が {n} 個あります。受信者ごとに別のファイルから追加してください。
+	The file is larger than {n} MB.	ファイルが {n} MB を超えています。
+	The file is too large for a code set file.	コードセットファイルとしては大きすぎます。
+	The form has no other fields.	このフォームにはほかのフィールドがありません。
+	The form was sent to {host}, which filled in its answer.	フォームを {host} に送信し、回答が入力されました。
+	The form was sent to {host}; its answer couldn't be imported: {e}	フォームを {host} に送信しましたが、回答を読み込めませんでした: {e}
+	The form was sent to {host}; its answer was too large to import.	フォームを {host} に送信しましたが、回答が大きすぎて読み込めません。
+	This form wants to email its data:	このフォームはデータをメールで送信しようとしています:
+	This isn't a certificate (.cer, .crt, .pem, .der) or digital ID (.p12, .pfx).	証明書（.cer、.crt、.pem、.der）でもデジタル ID（.p12、.pfx）でもありません。
+	To	宛先
+	Trust Manager	信頼の管理
+	Trust Manager…	信頼の管理…
+	Type the digital ID's password first (or choose a certificate file).	先にデジタル ID のパスワードを入力してください（または証明書ファイルを選択してください）。
+	United Kingdom	イギリス
+	United States	アメリカ合衆国
+	When signed:	署名時:
+	Your own codes to cite on redactions, offered in Redaction Properties beside the built-in sets.	墨消しに記載する独自のコード。墨消しのプロパティで組み込みのセットと並んで表示されます。
+	and subdomains	とサブドメイン
+	this host only	このホストのみ
+	{n} chosen	{n} 個を選択
+	German Tax Identification Numbers	ドイツの納税者番号
+	Indian Aadhaar Numbers	インドの Aadhaar 番号
+	Indian PAN Numbers	インドの PAN 番号
+	Australian Tax File Numbers	オーストラリアの納税者番号（TFN）
+	Australian Medicare Numbers	オーストラリアの Medicare 番号
+	Australian Business Numbers	オーストラリアの事業者番号（ABN）
+
+# Comment, organize and search gaps (find comments, hide by type, page ranges, bookmark
+# properties, bookmarks from structure, advanced search, associated files, custom commands).
+	 in {f} of {s} documents	（{s} 件中 {f} 件の文書）
+	(no name)	（名前なし）
+	(this document doesn't allow copying its text)	（この文書はテキストのコピーを許可していません）
+	* the tool needs this option	* このオプションはツールに必須です
+	A bookmark needs a title.	しおりにはタイトルが必要です。
+	A folder	フォルダー
+	A folder…	フォルダー…
+	Add an associated file	関連ファイルを追加
+	Add file…	ファイルを追加…
+	Added 1 bookmark	しおりを 1 件追加しました
+	Added {n} bookmarks	しおりを {n} 件追加しました
+	All levels	すべてのレベル
+	Another action (kept as it is)	その他のアクション（そのまま保持）
+	Ask for the options each time it runs	実行するたびにオプションを確認する
+	Asks for its options when it runs.	実行時にオプションを確認します。
+	Associated files	関連ファイル
+	Bookmark properties	しおりのプロパティ
+	Bookmark properties…	しおりのプロパティ…
+	Cancelled: not every document was searched.	キャンセルしました：一部の文書は検索されていません。
+	Check the options, then run the command.	オプションを確認してからコマンドを実行してください。
+	Choose a folder of PDFs	PDF のフォルダーを選択
+	Choose a folder to search	検索するフォルダーを選択
+	Choose a folder to search.	検索するフォルダーを選択してください。
+	Choose folder…	フォルダーを選択…
+	Choose one of the document's named destinations.	文書の名前付きリンク先から選択してください。
+	Choose the tool the command runs.	コマンドが実行するツールを選択してください。
+	Choose…	選択…
+	Comment	注釈
+	Comment on page {label}	{label} ページの注釈
+	Custom commands	カスタムコマンド
+	Custom commands aren't available in this version of PdfCraft.	このバージョンの PdfCraft ではカスタムコマンドを使用できません。
+	Custom commands…	カスタムコマンド…
+	Description (optional)	説明（省略可）
+	Destination:	リンク先：
+	Edit Command	コマンドを編集
+	Enter a page number from 1 to {n}.	1 から {n} までのページ番号を入力してください。
+	Enter a web address starting with https://, http:// or mailto:.	https://、http:// または mailto: で始まる Web アドレスを入力してください。
+	Enter a zoom from 1% to 6400%.	1% から 6400% までのズーム倍率を入力してください。
+	Existing bookmarks:	既存のしおり：
+	Export custom commands	カスタムコマンドを書き出し
+	Files linked to the document, a page or a comment, each with its relationship (source, data, alternative…).	文書、ページ、注釈に関連付けられたファイルと、それぞれの関係（ソース、データ、代替…）。
+	Files…	ファイル…
+	Fixed zoom	固定ズーム
+	Headings:	見出し：
+	Import custom commands	カスタムコマンドを読み込み
+	Imported {n} custom commands	カスタムコマンドを {n} 件読み込みました
+	Include bookmarks and comments	しおりと注釈も含める
+	Include comments	注釈も含める
+	Include subfolders	サブフォルダーも含める
+	Keep them, add the new ones after	残して、新しいしおりを後ろに追加
+	Levels 1 to {n}	レベル 1〜{n}
+	Look in	検索対象
+	Make bookmarks	しおりを作成
+	Make one bookmark for each heading of the document's tags, nested by heading level.	文書のタグの見出しごとにしおりを作成し、見出しレベルで階層化します。
+	New Command	新規コマンド
+	New Command…	新規コマンド…
+	New bookmarks from structure	構造から新規しおり
+	New bookmarks from structure…	構造から新規しおり…
+	No associated files.	関連ファイルはありません。
+	No comments	注釈はありません
+	No custom commands yet.	カスタムコマンドはまだありません。
+	No folder chosen	フォルダーが選択されていません
+	No pages match.	一致するページがありません。
+	Object {n}	オブジェクト {n}
+	One tool with the options you choose, run in one step.	選んだオプションで 1 つのツールを 1 回で実行します。
+	Open a document to run the command on.	コマンドを実行する文書を開いてください。
+	Page labels work too, as in Print.	印刷と同様にページラベルも使えます。
+	Page range	ページ範囲
+	Page:	ページ：
+	Ran {name}	{name} を実行しました
+	Relationship:	関係：
+	Remove associated file	関連ファイルを削除
+	Replace them	置き換える
+	Run on this document	この文書で実行
+	Run on:	実行対象：
+	Runs: {tool}	実行するツール：{tool}
+	Save associated file…	関連ファイルを保存…
+	Search a folder…	フォルダーを検索…
+	Searching {d} of {t}…	検索中 {d} / {t}…
+	Select	選択
+	Select a bookmark first	先にしおりを選択してください
+	Select pages…	ページを選択…
+	Show all comment types	すべての注釈の種類を表示
+	Show all types	すべての種類を表示
+	Show on pages by type	ページ上で種類別に表示
+	Stopped at the result limit: narrow the search to see the rest.	結果の上限で停止しました：残りを見るには検索を絞り込んでください。
+	Subset:	サブセット：
+	That bookmark no longer exists	そのしおりはもう存在しません
+	The current document	現在の文書
+	The document changed; add the file again	文書が変更されました。ファイルをもう一度追加してください
+	The folder to search	検索するフォルダー
+	The script is too long.	スクリプトが長すぎます。
+	There is no folder to keep custom commands in.	カスタムコマンドを保存するフォルダーがありません。
+	This bookmark runs a {kind} action, kept as it is unless you choose another.	このしおりは {kind} アクションを実行します。別のアクションを選ばない限りそのまま保持されます。
+	Title:	タイトル：
+	To the document	文書に
+	To this page	このページに
+	Tool:	ツール：
+	Type a word or phrase to search for.	検索する語句を入力してください。
+	Web address:	Web アドレス：
+	When clicked:	クリック時：
+	Zoom:	ズーム：
+	cancelled	キャンセル済み
+	comment	注釈
+	e.g. 1-3, 7	例：1-3, 7
+	e.g. 1-3, 7 (empty: all pages)	例：1-3, 7（空欄：全ページ）
+	larger than {n} MB	{n} MB を超えています
+	not a file name	ファイル名ではありません
+	stopped at {n} files	{n} 件のファイルで停止しました
+	the action stopped unexpectedly	アクションが予期せず停止しました
+	{name} is larger than {n} MB	{name} は {n} MB を超えています
+	{name} isn't valid	{name} が正しくありません
+	{n} files skipped	{n} 件のファイルをスキップ
+	{n} more	ほか {n} 件
+	{n} more not shown	ほか {n} 件は非表示
+	{n} skipped	{n} 件をスキップ
+	; text recognized on {n} scanned pages	。スキャンされた {n} ページでテキストを認識しました
+	A flowing document: paragraphs in reading order with their fonts and styles, headings, lists, tables and images.	流れのある文書: 読み順の段落とそのフォントやスタイル、見出し、リスト、表、画像。
+	Add a selectable text layer	選択可能なテキストレイヤーを追加
+	An export is already running	書き出しはすでに実行中です
+	Cleans up the images on scanned or photographed pages. Each correction can be undone.	スキャンまたは撮影したページの画像をきれいにします。各補正は取り消せます。
+	Correct camera photos	カメラ写真を補正
+	Couldn't enhance the scans: {e}	スキャンを補正できませんでした: {e}
+	Despeckle	ノイズ除去
+	Editable Text and Images	編集可能なテキストと画像
+	Editable text boxes and pictures	編集可能なテキストボックスと画像
+	Enhance	補正
+	Enhance Scans	スキャンを補正
+	Enhanced: {list}	補正しました: {list}
+	Export Accessible Text	アクセシブルテキストを書き出し
+	Export cancelled	書き出しをキャンセルしました
+	Export cancelled after {n} pages	{n} ページで書き出しをキャンセルしました
+	Export stopped unexpectedly	書き出しが予期せず停止しました
+	Export to Excel	Excel に書き出し
+	Export to HTML	HTML に書き出し
+	Export to PowerPoint	PowerPoint に書き出し
+	Export to RTF	RTF に書き出し
+	Export to SVG	SVG に書き出し
+	Export to Word	Word に書き出し
+	Finds the page in a photo, corrects its perspective and evens out the lighting	写真からページを見つけ、遠近を補正し、明るさのむらを整えます
+	Nothing needed enhancing on these pages	これらのページには補正が必要な箇所はありませんでした
+	On every page without text	テキストのないすべてのページ
+	On scanned pages	スキャンされたページ
+	One SVG file per page, named after the document: vector paths, text as outlines, images.	ページごとに 1 つの SVG ファイル (文書名を付けます): ベクターパス、アウトライン化したテキスト、画像。
+	One picture per page	ページごとに 1 枚の画像
+	One slide per page.	ページごとに 1 枚のスライド。
+	One web page: headings, paragraphs with their fonts and styles, lists, tables and images inline.	1 つの Web ページ: 見出し、フォントやスタイル付きの段落、リスト、表、埋め込み画像。
+	One worksheet per page: tables as cell grids, numbers as numbers, images as pictures.	ページごとに 1 つのワークシート: 表はセルのグリッド、数値は数値、画像は画像として。
+	Picture resolution	画像の解像度
+	Removes isolated specks before reading; with an output that changes the page, from the page images too	認識の前に孤立した点を取り除きます。ページを変更する出力では、ページ画像からも取り除きます
+	Rich text: paragraphs with their fonts and styles, and tables.	リッチテキスト: フォントやスタイル付きの段落と表。
+	Straighten skewed pages	傾いたページをまっすぐにする
+	The tagged text in logical reading order, as a screen reader reads it.	スクリーンリーダーが読む順序の、タグ付きテキスト。
+	Turns pages scanned at a slant (up to 15°) straight	斜めにスキャンされたページ (15° まで) をまっすぐにします
+	Turns recognized lines into editable text in a matching font, size and colour; the rest of the page stays as an image	認識した行を、フォント・サイズ・色を合わせた編集可能なテキストにします。ページの残りは画像のまま残ります
+	Whitens the paper background before reading; with an output that changes the page, the page images too	認識の前に紙の背景を白くします。ページを変更する出力では、ページ画像も白くします
+	background whitened in {n} images	{n} 個の画像の背景を白くしました
+	specks removed from {n} images	{n} 個の画像から点を取り除きました
+	{n} camera photos corrected	{n} 枚のカメラ写真を補正しました
+	{n} pages straightened	{n} ページをまっすぐにしました
+	Export to PowerPoint…	PowerPoint に書き出し…
+	Export to SVG…	SVG に書き出し…
+	Export accessible text…	アクセシブルテキストを書き出し…
+	Enhance scans…	スキャンを補正…
+	SVG (one file per page)	SVG (ページごとに 1 ファイル)
+	Accessible text	アクセシブルテキスト
+	Can't reach {standard} automatically; nothing was changed.	{standard} に自動で準拠させることはできません。何も変更していません。
+	Checking…	チェック中…
+	Compress document structure	文書構造を圧縮
+	Compress entire file	ファイル全体を圧縮
+	Convert to PDF/X	PDF/X に変換
+	Converted to {standard}: {n} changes. Save to keep them.	{standard} に変換しました: {n} 件の変更。保存すると保持されます。
+	Converting…	変換中…
+	Errors: {e} · Warnings: {w}	エラー: {e} · 警告: {w}
+	Flatten transparency	透明部分を分割・統合
+	High (600 ppi)	高 (600 ppi)
+	Keep the document's (sRGB if it has none)	文書のものを使用 (なければ sRGB)
+	Keep the document's output intent	文書の出力インテントを保持
+	Low (150 ppi)	低 (150 ppi)
+	Make compatible with	互換性
+	Medium (300 ppi)	中 (300 ppi)
+	No output intents	出力インテントなし
+	No problems found in the implemented checks.	実装済みのチェックでは問題は見つかりませんでした。
+	Nothing needed changing.	変更が必要な箇所はありませんでした。
+	Object compression	オブジェクトの圧縮
+	Only the areas whose look depends on transparency become images; text and vectors elsewhere stay as they are.	外観が透明に依存する部分だけが画像になります。それ以外のテキストやベクターはそのままです。
+	Only the first {n} findings are shown.	最初の {n} 件だけを表示しています。
+	Optimizing… flattening transparency	最適化中… 透明部分を分割・統合
+	PDF 1.3 has no transparency: it is always flattened.	PDF 1.3 には透明がないため、常に分割・統合されます。
+	PDF {v} · objects checked: {n}	PDF {v} · チェックしたオブジェクト: {n}
+	PDF/X-4 embeds the output profile: choose a profile.	PDF/X-4 は出力プロファイルを埋め込みます。プロファイルを選択してください。
+	Raster/vector balance	ラスター/ベクターのバランス
+	Remove compression	圧縮を解除
+	Save As optimizes for Fast Web View	「名前を付けて保存」で Web 表示用に最適化
+	Save As writes the file so a browser can show the first page before the download finishes.	「名前を付けて保存」で、ダウンロードが終わる前にブラウザーが最初のページを表示できるようにファイルを書き出します。
+	Standard	規格
+	Syntax	構文
+	The chosen profile is no longer loaded.	選択したプロファイルはもう読み込まれていません。
+	no profile (registered condition)	プロファイルなし (登録済みの条件)
+	object	オブジェクト
+	the profile can't be read: {e}	プロファイルを読み取れません: {e}
+	{space} {class} profile, ICC version {v}, {n} bytes	{space} {class} プロファイル、ICC バージョン {v}、{n} バイト
+	Checks what a machine can decide. Reading order, the quality of alternate text and the use of colour need a person.	機械で判断できる項目をチェックします。読み上げ順序、代替テキストの質、色の使い方は人による確認が必要です。
+	Checks every object reachable from the trailer against the Arlington PDF model for the file's PDF version.	トレーラーからたどれるすべてのオブジェクトを、ファイルの PDF バージョンの Arlington PDF モデルと照合します。
+	Older versions: JPEG 2000 and 16-bit images are converted, JBIG2 becomes CCITT for PDF 1.3, transparency is flattened for PDF 1.3, and there are no object streams.	古いバージョン: JPEG 2000 と 16 ビットの画像は変換され、PDF 1.3 では JBIG2 が CCITT になり透明部分が分割・統合されます。オブジェクトストリームは使われません。
+	PDF/X…	PDF/X…
+	PDF/UA…	PDF/UA…
+	Validate PDF syntax…	PDF 構文を検証…
+	Validate PDF syntax	PDF 構文を検証

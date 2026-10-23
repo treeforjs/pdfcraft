@@ -1,12 +1,16 @@
 //! Scan & OCR ▸ Recognize text: the Recognize Text dialog (pages, language, output, resolution)
-//! and the background run with its progress. Recognition happens on a worker thread; the result
-//! is reviewed by default, then applied to the captured document version as one undoable edit.
+//! and the background run with its progress. Recognition happens on a worker thread (in the web
+//! app, as a task that reads in steps, after fetching the models the first time: `ocr_web`); the
+//! result is reviewed by default, then applied to the captured document version as one undoable
+//! edit.
 
 use std::sync::{Arc, Mutex};
 
 use egui::{Align, Layout};
 use pdfcraft_engine::DocId;
-use pdfcraft_engine::ocr::{LANGUAGES, OcrReview, OcrSettings};
+use pdfcraft_engine::ocr::{
+    BackgroundOptions, BackgroundStrength, DespeckleLevel, DespeckleOptions, EditableOptions, LANGUAGES, OcrReview, OcrSettings,
+};
 
 use crate::theme::{self, Tokens};
 use crate::{PdfCraftApp, widgets};
@@ -35,6 +39,13 @@ pub struct OcrDraft {
     pub deskew: bool,
     /// Output Searchable Image: also straighten the pages themselves (`OcrSettings::straighten`).
     pub straighten: bool,
+    /// Output Editable Text and Images (`OcrSettings::editable`; not with `straighten`).
+    pub editable: bool,
+    /// Remove specks before reading (and from the page images with Searchable Image or
+    /// Editable Text and Images).
+    pub despeckle: DespeckleLevel,
+    /// Whiten the paper background before reading (likewise).
+    pub background: BackgroundStrength,
 }
 
 impl Default for OcrDraft {
@@ -49,6 +60,26 @@ impl Default for OcrDraft {
             auto_rotate: false,
             deskew: false,
             straighten: false,
+            editable: false,
+            despeckle: DespeckleLevel::Off,
+            background: BackgroundStrength::Off,
+        }
+    }
+}
+
+impl OcrDraft {
+    /// The recognition settings these choices stand for.
+    pub fn settings(&self) -> OcrSettings {
+        OcrSettings {
+            dpi: self.dpi as f32,
+            language: self.language.clone(),
+            auto_rotate: self.auto_rotate,
+            deskew: self.deskew,
+            straighten: self.straighten && !self.editable,
+            editable: self.editable.then(EditableOptions::default),
+            despeckle: DespeckleOptions { level: self.despeckle, ..Default::default() },
+            background: BackgroundOptions { strength: self.background, white_point: None },
+            ..Default::default()
         }
     }
 }
@@ -58,8 +89,29 @@ impl Default for OcrDraft {
 pub struct OcrProgress {
     pub done: usize,
     pub total: usize,
+    /// The web app downloading the models first: bytes so far and in all.
+    pub downloading: Option<(u64, u64)>,
     pub result: Option<Result<OcrReview, String>>,
     pub cancel: bool,
+}
+
+/// What Recognize text in multiple files says when it is done.
+pub(crate) fn batch_summary(ok: usize, words: usize, failed: &[String]) -> String {
+    let mut msg = if ok == 1 {
+        crate::i18n::fmt(tl!("Recognized {w} words in 1 file"), &[("w", &words.to_string())])
+    } else {
+        crate::i18n::fmt(tl!("Recognized {w} words in {n} files"), &[("w", &words.to_string()), ("n", &ok.to_string())])
+    };
+    if !failed.is_empty() {
+        msg.push_str(&crate::i18n::fmt(tl!("; failed: {list}"), &[("list", &failed.join("; "))]));
+    }
+    msg
+}
+
+/// The web app's model download, for the progress message.
+fn downloading_message(received: u64, total: u64) -> String {
+    let mb = |b: u64| format!("{:.1}", b as f64 / 1_000_000.0);
+    crate::i18n::fmt(tl!("Downloading text recognition models… {r} of {t} MB"), &[("r", &mb(received.min(total))), ("t", &mb(total))])
 }
 
 /// Recognize text in multiple files: files done, total, and the summary once finished.
@@ -67,6 +119,8 @@ pub struct OcrProgress {
 pub struct BatchProgress {
     pub done: usize,
     pub total: usize,
+    /// The web app downloading the models first: bytes so far and in all.
+    pub downloading: Option<(u64, u64)>,
     pub message: Option<String>,
 }
 
@@ -119,6 +173,11 @@ impl ReviewDraft {
     }
 }
 
+/// The web app hasn't downloaded the built-in engine's models yet (it will when text is recognized).
+fn web_download_pending(app: &PdfCraftApp) -> bool {
+    cfg!(target_arch = "wasm32") && app.session.ocr_engine_id() == pdfcraft_engine::ocr::DEFAULT_ENGINE && !pdfcraft_engine::ocr::OcrsEngine::loaded()
+}
+
 pub(crate) fn body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> (bool, bool) {
     let pages = app.active_ids().and_then(|(_, id)| app.session.get(id)).map_or(1, |d| d.info.pages.len().max(1));
     let available = pdfcraft_engine::ocr::available();
@@ -157,27 +216,74 @@ pub(crate) fn body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> (boo
             });
             ui.end_row();
             ui.label(tl!("Output"));
-            let output = if d.straighten { tl!("Searchable Image") } else { tl!("Searchable Image (Exact)") };
+            let output = if d.editable {
+                tl!("Editable Text and Images")
+            } else if d.straighten {
+                tl!("Searchable Image")
+            } else {
+                tl!("Searchable Image (Exact)")
+            };
             egui::ComboBox::from_id_salt("ocr-output").selected_text(output).width(220.0).show_ui(ui, |ui| {
                 if ui
-                    .selectable_label(d.straighten, tl!("Searchable Image"))
+                    .selectable_label(d.straighten && !d.editable, tl!("Searchable Image"))
                     .on_hover_text(tl!(
                         "Adds invisible text, straightens turned or skewed pages and downsamples finer images to the chosen resolution"
                     ))
                     .clicked()
-                    && !d.straighten
+                    && (!d.straighten || d.editable)
                 {
                     d.straighten = true;
+                    d.editable = false;
                     d.deskew = true;
                 }
                 if ui
-                    .selectable_label(!d.straighten, tl!("Searchable Image (Exact)"))
+                    .selectable_label(!d.straighten && !d.editable, tl!("Searchable Image (Exact)"))
                     .on_hover_text(tl!("Adds invisible text over each word; the page image is not changed"))
                     .clicked()
                 {
                     d.straighten = false;
+                    d.editable = false;
+                }
+                if ui
+                    .selectable_label(d.editable, tl!("Editable Text and Images"))
+                    .on_hover_text(tl!(
+                        "Turns recognized lines into editable text in a matching font, size and colour; the rest of the page stays as an image"
+                    ))
+                    .clicked()
+                {
+                    d.editable = true;
+                    d.straighten = false;
                 }
             });
+            ui.end_row();
+            let levels = [tl!("Off"), tl!("Low"), tl!("Medium"), tl!("High")];
+            ui.label(tl!("Remove background"));
+            let strengths = [BackgroundStrength::Off, BackgroundStrength::Low, BackgroundStrength::Medium, BackgroundStrength::High];
+            let at = strengths.iter().position(|v| *v == d.background).unwrap_or(0);
+            egui::ComboBox::from_id_salt("ocr-background")
+                .selected_text(levels.get(at).copied().unwrap_or_default())
+                .width(220.0)
+                .show_ui(ui, |ui| {
+                    for (v, name) in strengths.iter().zip(levels) {
+                        ui.selectable_value(&mut d.background, *v, name);
+                    }
+                })
+                .response
+                .on_hover_text(tl!("Whitens the paper background before reading; with an output that changes the page, the page images too"));
+            ui.end_row();
+            ui.label(tl!("Despeckle"));
+            let specks = [DespeckleLevel::Off, DespeckleLevel::Low, DespeckleLevel::Medium, DespeckleLevel::High];
+            let at = specks.iter().position(|v| *v == d.despeckle).unwrap_or(0);
+            egui::ComboBox::from_id_salt("ocr-despeckle")
+                .selected_text(levels.get(at).copied().unwrap_or_default())
+                .width(220.0)
+                .show_ui(ui, |ui| {
+                    for (v, name) in specks.iter().zip(levels) {
+                        ui.selectable_value(&mut d.despeckle, *v, name);
+                    }
+                })
+                .response
+                .on_hover_text(tl!("Removes isolated specks before reading; with an output that changes the page, from the page images too"));
             ui.end_row();
             ui.label(tl!("Downsample to"));
             egui::ComboBox::from_id_salt("ocr-dpi").selected_text(format!("{} dpi", d.dpi)).width(220.0).show_ui(ui, |ui| {
@@ -196,6 +302,16 @@ pub(crate) fn body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> (boo
         ui.checkbox(&mut d.deskew, tl!("Deskew pages")).on_hover_text(hint);
         ui.checkbox(&mut d.review, tl!("Review recognized text before applying"));
     });
+    if web_download_pending(app) {
+        ui.label(
+            egui::RichText::new(tl!(
+                "The text recognition models (12 MB) are downloaded from this site the first time you recognize text, then kept in this browser."
+            ))
+            .small()
+            .color(t.text_muted),
+        );
+        ui.add_space(6.0);
+    }
     if !available {
         ui.label(
             egui::RichText::new(tl!("Text recognition isn't installed: its model files are missing. Reinstall PdfCraft, or set PDFCRAFT_MODELS to the folder that holds them."))
@@ -238,14 +354,7 @@ impl PdfCraftApp {
             OcrPages::Current => vec![self.views[vi].current],
             OcrPages::Range => (d.from.saturating_sub(1)..d.to).collect(),
         };
-        let settings = OcrSettings {
-            dpi: d.dpi as f32,
-            language: d.language.clone(),
-            auto_rotate: d.auto_rotate,
-            deskew: d.deskew,
-            straighten: d.straighten,
-            ..Default::default()
-        };
+        let settings = d.settings();
         let job = match self.session.ocr_job_checked(id, &pages, settings) {
             Ok(job) => job,
             Err(error) => {
@@ -255,32 +364,33 @@ impl PdfCraftApp {
         };
         let review_first = d.review;
         let progress = Arc::new(Mutex::new(OcrProgress { total: job.pages.len(), ..Default::default() }));
-        let p = progress.clone();
-        let work = move || {
-            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                job.run_selected(|done, total| {
-                    let Ok(mut s) = p.lock() else { return false };
-                    s.done = done;
-                    s.total = total;
-                    !s.cancel
-                })
-            }))
-            .unwrap_or_else(|_| Err("text recognition failed unexpectedly; no text was applied".into()));
-            if let Ok(mut s) = p.lock() {
-                s.result = Some(result);
-            }
-        };
         #[cfg(not(target_arch = "wasm32"))]
-        if self.run_inline {
-            work();
-        } else {
-            if let Err(error) = std::thread::Builder::new().name("pdfcraft-ocr".into()).spawn(work) {
+        {
+            let p = progress.clone();
+            let work = move || {
+                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    job.run_selected(|done, total| {
+                        let Ok(mut s) = p.lock() else { return false };
+                        s.done = done;
+                        s.total = total;
+                        !s.cancel
+                    })
+                }))
+                .unwrap_or_else(|_| Err("text recognition failed unexpectedly; no text was applied".into()));
+                if let Ok(mut s) = p.lock() {
+                    s.result = Some(result);
+                }
+            };
+            if self.run_inline {
+                work();
+            } else if let Err(error) = std::thread::Builder::new().name("pdfcraft-ocr".into()).spawn(work) {
                 self.notify_error(format!("could not start text recognition: {error}"));
                 return;
             }
         }
+        // One thread: the models are fetched if needed, then the pages are read in steps.
         #[cfg(target_arch = "wasm32")]
-        work();
+        crate::ocr_web::run(job, progress.clone(), self.ctx.clone());
         self.ocr_run = Some(OcrRun { doc: id, progress, review_first, review: None });
         self.poll_ocr();
     }
@@ -294,14 +404,7 @@ impl PdfCraftApp {
         }
         // The settings showing now, not when the folder arrives.
         let d = &self.ocr_draft;
-        let settings = OcrSettings {
-            dpi: d.dpi as f32,
-            language: d.language.clone(),
-            auto_rotate: d.auto_rotate,
-            deskew: d.deskew,
-            straighten: d.straighten,
-            ..Default::default()
-        };
+        let settings = d.settings();
         #[cfg(not(target_arch = "wasm32"))]
         match self.export_dir_override.clone() {
             Some(d) => self.ocr_files_into(files, settings, d.into()),
@@ -322,62 +425,53 @@ impl PdfCraftApp {
             return;
         }
         let progress = Arc::new(Mutex::new(BatchProgress { total: files.len(), ..Default::default() }));
-        let p = progress.clone();
         // The session's selected engine, readied on the worker thread.
         let engine = self.session.ocr_engine_for(&settings);
-        // The summary is written on the worker thread: draw it in the UI's language.
-        let lang = crate::i18n::current();
-        let work = move || {
-            crate::i18n::set_current(lang);
-            let (mut ok, mut words, mut failed) = (0, 0, Vec::new());
-            let language = settings.language.clone();
-            match engine.and_then(|e| e.prepare(&language).map(|_| e).map_err(|e| e.to_string())) {
-                Err(e) => failed.push(e),
-                Ok(ocr) => {
-                    for (i, (name, bytes)) in files.into_iter().enumerate() {
-                        if let Ok(mut s) = p.lock() {
-                            s.done = i;
-                        }
-                        let r = pdfcraft_engine::ocr::recognize_file(&name, Arc::new(bytes), None, settings.clone(), &ocr, |_, _| true);
-                        let saved = r.and_then(|r| {
-                            #[cfg(not(target_arch = "wasm32"))]
-                            crate::editing::write_atomically(&dir.join(&name).to_string_lossy(), &r.bytes).map_err(|e| e.to_string())?;
-                            #[cfg(target_arch = "wasm32")]
-                            crate::editing::download(&name, &r.bytes)?;
-                            Ok(r.words())
-                        });
-                        match saved {
-                            Ok(n) => {
-                                ok += 1;
-                                words += n;
+        #[cfg(target_arch = "wasm32")]
+        crate::ocr_web::run_files(files, settings, engine, progress.clone(), self.ctx.clone());
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let p = progress.clone();
+            // The summary is written on the worker thread: draw it in the UI's language.
+            let lang = crate::i18n::current();
+            let work = move || {
+                crate::i18n::set_current(lang);
+                let (mut ok, mut words, mut failed) = (0, 0, Vec::new());
+                let language = settings.language.clone();
+                match engine.and_then(|e| e.prepare(&language).map(|_| e).map_err(|e| e.to_string())) {
+                    Err(e) => failed.push(e),
+                    Ok(ocr) => {
+                        for (i, (name, bytes)) in files.into_iter().enumerate() {
+                            if let Ok(mut s) = p.lock() {
+                                s.done = i;
                             }
-                            Err(e) => failed.push(format!("{name}: {}", e)),
+                            let r = pdfcraft_engine::ocr::recognize_file(&name, Arc::new(bytes), None, settings.clone(), &ocr, |_, _| true);
+                            let saved = r.and_then(|r| {
+                                crate::editing::write_atomically(&dir.join(&name).to_string_lossy(), &r.bytes).map_err(|e| e.to_string())?;
+                                Ok(r.words())
+                            });
+                            match saved {
+                                Ok(n) => {
+                                    ok += 1;
+                                    words += n;
+                                }
+                                Err(e) => failed.push(format!("{name}: {}", e)),
+                            }
                         }
                     }
                 }
-            }
-            let done = if ok == 1 {
-                crate::i18n::fmt(tl!("Recognized {w} words in 1 file"), &[("w", &words.to_string())])
-            } else {
-                crate::i18n::fmt(tl!("Recognized {w} words in {n} files"), &[("w", &words.to_string()), ("n", &ok.to_string())])
+                let msg = batch_summary(ok, words, &failed);
+                if let Ok(mut s) = p.lock() {
+                    s.done = s.total;
+                    s.message = Some(msg);
+                }
             };
-            let mut msg = done;
-            if !failed.is_empty() {
-                msg.push_str(&crate::i18n::fmt(tl!("; failed: {list}"), &[("list", &failed.join("; "))]));
+            if self.run_inline {
+                work();
+            } else {
+                std::thread::Builder::new().name("pdfcraft-ocr-files".into()).spawn(work).ok();
             }
-            if let Ok(mut s) = p.lock() {
-                s.done = s.total;
-                s.message = Some(msg);
-            }
-        };
-        #[cfg(not(target_arch = "wasm32"))]
-        if self.run_inline {
-            work();
-        } else {
-            std::thread::Builder::new().name("pdfcraft-ocr-files".into()).spawn(work).ok();
         }
-        #[cfg(target_arch = "wasm32")]
-        work();
         self.ocr_batch = Some(progress);
         self.poll_ocr();
     }
@@ -399,17 +493,20 @@ impl PdfCraftApp {
     /// Show progress; apply the result once the worker is done.
     pub(crate) fn poll_ocr(&mut self) {
         if let Some(b) = self.ocr_batch.clone() {
-            let msg = b.lock().ok().map(|mut s| s.message.take().ok_or((s.done, s.total)));
+            let msg = b.lock().ok().map(|mut s| s.message.take().ok_or((s.done, s.total, s.downloading)));
             match msg {
                 Some(Ok(m)) => {
                     self.ocr_batch = None;
                     self.notify(m);
                 }
-                Some(Err((done, total))) => {
-                    let m = crate::i18n::fmt(
-                        tl!("Recognizing text… file {d} of {t}"),
-                        &[("d", &(done + 1).min(total.max(1)).to_string()), ("t", &total.max(1).to_string())],
-                    );
+                Some(Err((done, total, downloading))) => {
+                    let m = match downloading {
+                        Some((r, t)) => downloading_message(r, t),
+                        None => crate::i18n::fmt(
+                            tl!("Recognizing text… file {d} of {t}"),
+                            &[("d", &(done + 1).min(total.max(1)).to_string()), ("t", &total.max(1).to_string())],
+                        ),
+                    };
                     if self.toast.as_ref().is_none_or(|t| t.0 != m) {
                         self.notify(m);
                     }
@@ -428,10 +525,13 @@ impl PdfCraftApp {
         let (doc, progress) = (run.doc, run.progress.clone());
         let Ok(mut s) = progress.lock() else { return };
         let Some(result) = s.result.take() else {
-            let msg = crate::i18n::fmt(
-                tl!("Recognizing text… page {d} of {t}"),
-                &[("d", &(s.done + 1).min(s.total.max(1)).to_string()), ("t", &s.total.max(1).to_string())],
-            );
+            let msg = match s.downloading {
+                Some((r, t)) => downloading_message(r, t),
+                None => crate::i18n::fmt(
+                    tl!("Recognizing text… page {d} of {t}"),
+                    &[("d", &(s.done + 1).min(s.total.max(1)).to_string()), ("t", &s.total.max(1).to_string())],
+                ),
+            };
             drop(s);
             if self.toast.as_ref().is_none_or(|t| t.0 != msg) {
                 self.notify(msg);
@@ -575,5 +675,29 @@ impl PdfCraftApp {
         {
             self.finish_ocr_review(run.doc, &draft.result);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dialog_choices_become_recognition_settings() {
+        let exact = OcrDraft::default().settings();
+        assert!(!exact.straighten && exact.editable.is_none() && !exact.despeckle.any() && !exact.background.any());
+        let d = OcrDraft {
+            editable: true,
+            straighten: true,
+            despeckle: DespeckleLevel::Medium,
+            background: BackgroundStrength::High,
+            ..Default::default()
+        };
+        let s = d.settings();
+        assert_eq!(s.editable, Some(EditableOptions::default()));
+        assert!(!s.straighten, "editable output never straightens the page too");
+        assert_eq!((s.despeckle.level, s.background.strength), (DespeckleLevel::Medium, BackgroundStrength::High));
+        let searchable = OcrDraft { straighten: true, ..Default::default() }.settings();
+        assert!(searchable.straighten && searchable.editable.is_none());
     }
 }

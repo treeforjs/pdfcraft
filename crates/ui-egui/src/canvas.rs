@@ -195,6 +195,88 @@ pub struct Find {
     pub whole_words: bool,
     /// Shown in the Search panel (Advanced Search) instead of the find bar.
     pub in_panel: bool,
+    /// Find options ▸ Include comments: comment text and authors are searched too.
+    pub comments: bool,
+    /// Comments that match, as (page, index in `/Annots`), in page order.
+    pub comment_matches: Vec<(usize, usize)>,
+    /// The current match is this comment match (instead of `current`).
+    pub comment_current: Option<usize>,
+    /// What `comment_matches` was found for: query, options and the annotations' revision.
+    comment_key: Option<(String, bool, bool, u64)>,
+}
+
+/// The most comment matches the find bar keeps.
+const MAX_COMMENT_MATCHES: usize = 5000;
+
+/// Whether comment text `hay` contains `query` with the find bar's options. Whitespace runs
+/// count as one space, like page text.
+pub fn comment_text_matches(hay: &str, query: &str, case_sensitive: bool, whole_words: bool) -> bool {
+    let norm = |s: &str| s.split_whitespace().collect::<Vec<_>>().join(" ");
+    let (hay, query) = if case_sensitive { (norm(hay), norm(query)) } else { (norm(hay).to_lowercase(), norm(query).to_lowercase()) };
+    if query.is_empty() {
+        return false;
+    }
+    if !whole_words {
+        return hay.contains(&query);
+    }
+    let word = |c: Option<char>| c.is_some_and(char::is_alphanumeric);
+    hay.match_indices(&query).any(|(i, m)| !word(hay[..i].chars().next_back()) && !word(hay[i + m.len()..].chars().next()))
+}
+
+impl Find {
+    /// Find again in comments when the query, options or comments changed (cheap otherwise).
+    pub fn refresh_comments(&mut self, info: &DocInfo, revision: u64) {
+        if !self.comments || self.case_query.trim().is_empty() {
+            self.comment_matches.clear();
+            self.comment_current = None;
+            self.comment_key = None;
+            return;
+        }
+        let key = (self.case_query.clone(), self.case_sensitive, self.whole_words, revision);
+        if self.comment_key.as_ref() == Some(&key) {
+            return;
+        }
+        let q = self.case_query.as_str();
+        self.comment_matches = info
+            .annotations
+            .iter()
+            .filter(|a| !matches!(a.subtype.as_str(), "Popup" | "Link" | "Widget"))
+            .filter(|a| {
+                [a.contents.as_deref(), a.author.as_deref()]
+                    .into_iter()
+                    .flatten()
+                    .any(|t| comment_text_matches(t, q, self.case_sensitive, self.whole_words))
+            })
+            .map(|a| (a.page, a.index))
+            .take(MAX_COMMENT_MATCHES)
+            .collect();
+        self.comment_matches.sort_unstable();
+        self.comment_current = None;
+        self.comment_key = Some(key);
+    }
+
+    /// All matches: page text then comments within each page, as (page, is a comment, index).
+    fn ordered(&self) -> Vec<(usize, bool, usize)> {
+        let mut all: Vec<(usize, bool, usize)> = self.matches.iter().enumerate().map(|(i, (p, _))| (*p, false, i)).collect();
+        all.extend(self.comment_matches.iter().enumerate().map(|(i, (p, _))| (*p, true, i)));
+        all.sort_unstable();
+        all
+    }
+
+    /// The position of the current match among all matches (1-based for display), and the
+    /// number of matches.
+    pub fn position(&self) -> (Option<usize>, usize) {
+        let total = self.matches.len() + self.comment_matches.len();
+        if self.comment_matches.is_empty() {
+            return (self.current, total);
+        }
+        let all = self.ordered();
+        let at = match self.comment_current {
+            Some(c) => all.iter().position(|e| e.1 && e.2 == c),
+            None => self.current.and_then(|c| all.iter().position(|e| !e.1 && e.2 == c)),
+        };
+        (at, total)
+    }
 }
 
 struct PageTex {
@@ -219,6 +301,9 @@ pub struct RasterMemory {
 
 pub struct DocView {
     pub id: DocId,
+    /// This view's tab, unique in the application (two windows can show one document, each in
+    /// its own view: see [`pdfcraft_engine::windows`]).
+    pub key: u64,
     pub zoom: f32,
     pub fit: Fit,
     pub layout: PageLayout,
@@ -317,6 +402,8 @@ pub struct DocView {
     pub image_selection: Option<crate::edit_text_ui::ImageSelection>,
     /// A paragraph box being dragged (moved, or resized from its right edge) in Edit text.
     pub block_drag: Option<crate::edit_text_ui::BlockDrag>,
+    /// Edit objects: the selected page objects, the gesture, and each page's object index.
+    pub objects: crate::object_ui::ObjectView,
     /// Commenting state: selected comment, gestures, composer.
     pub comments: crate::comments::CommentView,
     pub measure: crate::measure_ui::MeasureView,
@@ -349,6 +436,9 @@ pub struct DocView {
     pub(crate) signature_drag: crate::signature_drag::SignatureDrag,
     /// A non-edit action requested by the organize toolbar, handled by the app.
     pub pending_action: Option<ViewAction>,
+    /// The page whose Page Open script last had its turn (Page Open / Page Close run when the
+    /// current page moves off it).
+    pub script_page: Option<usize>,
     /// The grid gap the next inserted files go to (set by a "+" between pages); otherwise they
     /// go after the selection.
     pub insert_at: Option<usize>,
@@ -360,13 +450,43 @@ pub struct DocView {
     /// A zoom asked for this frame (toolbar, pinch, keys); the grid applies it once it has laid
     /// out, so it can keep the same pages in view.
     grid_zoom_request: Option<f32>,
+    /// Organize ▸ Select ▸ Page range: the range typed, and why it couldn't be used.
+    pub range_input: String,
+    pub range_error: Option<String>,
     /// The page to keep in place after a grid zoom, and how far below the top of the grid its
     /// cell was.
     grid_anchor: Option<(usize, f32)>,
     /// Sharp renders of the pages the grid shows larger than a thumbnail: only those in view,
     /// at the size drawn (device pixels wide).
     grid_pages: HashMap<usize, (u32, TextureHandle)>,
+    /// How many documents share the application's page and tile allowance this frame: 1, or 2
+    /// while the side-by-side compare view shows this document beside another.
+    pub(crate) raster_share: usize,
+    /// How the document's appearance was refreshed since the app last looked: other views of
+    /// the same document (another window) are refreshed the same way.
+    pub(crate) refreshed: Refresh,
+    /// The pixel density of the window this view was drawn in this frame, when it is not the
+    /// main window (another screen may have another density).
+    pub(crate) draw_ppp: Option<f32>,
 }
+
+/// What [`DocView::document_changed`], [`DocView::invalidate_content`] and
+/// [`DocView::page_changed`] refreshed (see [`DocView::refreshed`]).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) enum Refresh {
+    #[default]
+    None,
+    /// These pages only (a comment edit).
+    Pages(BTreeSet<usize>),
+    /// Everything.
+    All,
+}
+
+/// Hands out view keys ([`DocView::key`]); they are never reused while the app runs.
+static NEXT_VIEW_KEY: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
+/// The most changed pages [`Refresh::Pages`] lists before it becomes [`Refresh::All`].
+const SHARED_PAGE_LIMIT: usize = 64;
 
 /// The page grid's zoom range and the step of its buttons and keys.
 pub const GRID_ZOOM_RANGE: std::ops::RangeInclusive<f32> = 0.5..=3.0;
@@ -396,6 +516,12 @@ pub enum ViewAction {
     },
     /// Paste copied pages after the selection.
     PastePages,
+    /// Page Properties ▸ Actions for this page (0-based).
+    PageActions(usize),
+    /// Insert the system clipboard's image or text before or after the selection.
+    InsertClipboard {
+        before: bool,
+    },
 }
 
 impl DocView {
@@ -444,6 +570,7 @@ impl DocView {
     pub fn new(id: DocId, info: &DocInfo, defaults: ViewDefaults) -> Self {
         Self {
             id,
+            key: NEXT_VIEW_KEY.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             zoom: defaults.zoom,
             fit: defaults.fit,
             layout: defaults.layout,
@@ -505,13 +632,20 @@ impl DocView {
             edit_images: HashMap::new(),
             image_selection: None,
             block_drag: None,
+            objects: Default::default(),
             pending_action: None,
+            script_page: None,
             insert_at: None,
             grid_gap: None,
             grid_zoom: 1.0,
             grid_zoom_request: None,
+            range_input: String::new(),
+            range_error: None,
             grid_anchor: None,
             grid_pages: HashMap::new(),
+            raster_share: 1,
+            refreshed: Refresh::None,
+            draw_ppp: None,
             comments: Default::default(),
             measure: Default::default(),
             forms: Default::default(),
@@ -609,6 +743,7 @@ impl DocView {
     /// was toggled). Out-of-date rasters stay on screen until their replacements arrive, so the
     /// view never flashes blank.
     pub fn invalidate_content(&mut self) {
+        self.refreshed = Refresh::All;
         for p in self.pages.values_mut() {
             p.tag = STALE_TAG;
         }
@@ -640,6 +775,14 @@ impl DocView {
     /// Only `page` changed (a comment was added, edited or removed): re-render that page and
     /// re-read its text, keep everything else.
     pub fn page_changed(&mut self, page: usize) {
+        match &mut self.refreshed {
+            Refresh::None => self.refreshed = Refresh::Pages(BTreeSet::from([page])),
+            Refresh::Pages(pages) if pages.len() < SHARED_PAGE_LIMIT => {
+                pages.insert(page);
+            }
+            Refresh::Pages(_) => self.refreshed = Refresh::All,
+            Refresh::All => {}
+        }
         if let Some(p) = self.pages.get_mut(&page) {
             p.tag = STALE_TAG;
         }
@@ -670,6 +813,11 @@ impl DocView {
     }
 
     /// Where `page` is drawn this frame, with its coordinate mapping.
+    /// The pages drawn on screen this frame, with their transforms.
+    pub(crate) fn screen_pages(&self) -> Vec<(usize, PageXform)> {
+        self.screen_xforms.clone()
+    }
+
     pub(crate) fn page_xform(&self, page: usize) -> Option<PageXform> {
         self.screen_xforms.iter().find(|(p, _)| *p == page).map(|(_, xf)| *xf)
     }
@@ -802,6 +950,34 @@ impl DocView {
     /// Move to the next/previous match.
     pub fn find_step(&mut self, forward: bool) {
         let Some(f) = self.find.as_mut() else { return };
+        if !f.comment_matches.is_empty() {
+            // Page text and comments, in page order.
+            let all = f.ordered();
+            let n = all.len();
+            let next = match f.position().0 {
+                Some(c) if forward => (c + 1) % n,
+                Some(c) => (c + n - 1) % n,
+                None => {
+                    let cur = self.current;
+                    all.iter().position(|e| e.0 >= cur).unwrap_or(0)
+                }
+            };
+            let Some(&(page, comment, i)) = all.get(next) else { return };
+            if comment {
+                f.comment_current = Some(i);
+                f.current = None;
+                if let Some(&(p, index)) = f.comment_matches.get(i) {
+                    self.comments.selected = Some((p, index));
+                    self.comments.reveal = true;
+                }
+                self.go_to_page(page);
+            } else {
+                f.comment_current = None;
+                f.current = Some(i);
+                self.flash_match(page);
+            }
+            return;
+        }
         if f.matches.is_empty() {
             return;
         }
@@ -1215,6 +1391,41 @@ impl DocView {
     }
 
     /// Start collecting demand from every consumer before scheduling or uploading results.
+    /// This view's part of the application's page bytes, tile bytes and cached-page count: all
+    /// of it, or an equal share when [`Self::raster_share`] documents are on screen together.
+    fn allowance(&self) -> (usize, usize, usize) {
+        let n = self.raster_share.clamp(1, pdfcraft_engine::windows::MAX_WINDOWS + 2);
+        (PAGE_BYTES / n, TILE_BYTES / n, (MAX_CACHED_PAGES / n).max(1))
+    }
+
+    /// Side-by-side compare: ask for a whole-page raster of `page` at device `scale` this frame
+    /// (`visible`: on screen, always admitted; otherwise prefetch within the allowance) and get
+    /// what is there now — the texture, its size, and whether it is at that scale (otherwise
+    /// it is an older one to draw stretched). `Err` carries why the page couldn't be drawn.
+    pub(crate) fn side_page(&mut self, page: usize, scale: f32, visible: bool) -> Result<Option<(egui::TextureId, [usize; 2], bool)>, String> {
+        if let Some(e) = self.errors.get(&page) {
+            return Err(e.clone());
+        }
+        if page >= self.page_count || !scale.is_finite() || scale <= 0.0 {
+            return Ok(None);
+        }
+        let tag = scale_tag(scale);
+        if !self.frame_queue.iter().any(|r| r.page == page && r.kind == RequestKind::Pixels && r.tile.is_none()) {
+            self.frame_queue.push(RenderRequest { page, kind: RequestKind::Pixels, tile: None, scale, tag });
+        }
+        if visible {
+            self.frame_visible.insert(page);
+        }
+        Ok(self.pages.get(&page).map(|p| (p.tex.id(), p.tex.size(), p.tag == tag)))
+    }
+
+    /// Side-by-side compare starts: drop the tiles of the single-document view (the panes draw
+    /// whole-page rasters), so the shared allowance is not spent on them.
+    pub(crate) fn enter_side_by_side(&mut self) {
+        self.tiles.clear();
+        self.grid_pages.clear();
+    }
+
     pub(crate) fn begin_render_frame(&mut self) {
         self.thumb_demand.clear();
         self.frame_queue.clear();
@@ -1238,6 +1449,26 @@ impl DocView {
     /// Only the displayed document owns raster textures. Tabs keep their document and view
     /// state, but do not each retain a separate full application texture allowance.
     pub(crate) fn suspend_rendering(&mut self, pool: &RenderPool) {
+        self.suspend_textures();
+        if !self.last_queue.is_empty() {
+            pool.set_queue(Vec::new());
+            self.last_queue.clear();
+        }
+        // Results already finished for this tab would otherwise sit in its pool, rasters and
+        // all, until the tab is shown again. (An inline pool renders inside try_recv: skip it.)
+        if !pool.is_inline() {
+            while pool.try_recv().is_some() {}
+        }
+    }
+
+    /// Forget the queue sent to the pool, so the next frame sends this view's own again.
+    pub(crate) fn forget_queue(&mut self) {
+        self.last_queue.clear();
+    }
+
+    /// [`Self::suspend_rendering`] for a view whose document another view (another window)
+    /// still shows: its textures go, the document's render queue is that view's.
+    pub(crate) fn suspend_textures(&mut self) {
         self.cancel_reader_input();
         self.begin_render_frame();
         self.pages.clear();
@@ -1249,15 +1480,8 @@ impl DocView {
         self.waiting_since.clear();
         // Signature previews own a separate renderer and image/background textures.
         self.signature_drag = Default::default();
-        if !self.last_queue.is_empty() {
-            pool.set_queue(Vec::new());
-            self.last_queue.clear();
-        }
-        // Results already finished for this tab would otherwise sit in its pool, rasters and
-        // all, until the tab is shown again. (An inline pool renders inside try_recv: skip it.)
-        if !pool.is_inline() {
-            while pool.try_recv().is_some() {}
-        }
+        self.last_queue.clear();
+        self.draw_ppp = None;
     }
 
     fn thumbnail_requests(&self, info: &DocInfo, ppp: f32) -> Vec<RenderRequest> {
@@ -1282,6 +1506,7 @@ impl DocView {
     /// Admit current demand within explicit byte limits. Cached and pending surfaces share
     /// the allowance, so an evicted page can be requested again without a permanent done set.
     fn prepare_render_queue(&mut self, info: &DocInfo, ppp: f32) -> Vec<RenderRequest> {
+        let (page_limit, tile_limit, cached_limit) = self.allowance();
         let requests = std::mem::take(&mut self.frame_queue);
         let mut queue = Vec::new();
         let mut pages = HashSet::new();
@@ -1309,7 +1534,7 @@ impl DocView {
             if let Some(tile) = req.tile {
                 let key = (req.page, req.tag, tile.x / TILE, tile.y / TILE);
                 let bytes = rgba_bytes(tile.w as usize, tile.h as usize);
-                if (!visible && tile_bytes.saturating_add(bytes) > TILE_BYTES) || !tiles.insert(key) {
+                if (!visible && tile_bytes.saturating_add(bytes) > tile_limit) || !tiles.insert(key) {
                     continue;
                 }
                 tile_bytes = tile_bytes.saturating_add(bytes);
@@ -1319,7 +1544,7 @@ impl DocView {
                 }
             } else {
                 let bytes = rgba_bytes(device_pixels(p.width, req.scale) as usize, device_pixels(p.height, req.scale) as usize);
-                if (!visible && (page_bytes.saturating_add(bytes) > PAGE_BYTES || pages.len() >= MAX_CACHED_PAGES)) || !pages.insert(req.page) {
+                if (!visible && (page_bytes.saturating_add(bytes) > page_limit || pages.len() >= cached_limit)) || !pages.insert(req.page) {
                     continue;
                 }
                 page_bytes = page_bytes.saturating_add(bytes);
@@ -1335,7 +1560,7 @@ impl DocView {
         let mut kept = pages.len();
         for page in undemanded {
             let bytes = self.pages.get(&page).map_or(0, |p| texture_bytes(&p.tex));
-            if kept < MAX_CACHED_PAGES && page_bytes.saturating_add(bytes) <= PAGE_BYTES {
+            if kept < cached_limit && page_bytes.saturating_add(bytes) <= page_limit {
                 page_bytes = page_bytes.saturating_add(bytes);
                 kept += 1;
                 pages.insert(page);
@@ -1369,7 +1594,8 @@ impl DocView {
     }
 
     pub(crate) fn finish_render_frame(&mut self, ctx: &egui::Context, info: &DocInfo, pool: &RenderPool) {
-        let queue = self.prepare_render_queue(info, ctx.pixels_per_point());
+        let ppp = self.draw_ppp.take().unwrap_or_else(|| ctx.pixels_per_point());
+        let queue = self.prepare_render_queue(info, ppp);
         if queue != self.last_queue {
             pool.set_queue(queue.clone());
             self.last_queue = queue;
@@ -1398,6 +1624,92 @@ impl DocView {
             if started.elapsed() >= std::time::Duration::from_millis(4) {
                 break;
             }
+        }
+    }
+
+    /// Several views of one document on screen at once (windows): one render queue for the
+    /// document, every view's demand interleaved so none starves, and each result rendered and
+    /// uploaded once, its texture shared by every view that asked for it. `last` is the queue
+    /// the pool has (kept by the caller per document).
+    pub(crate) fn finish_shared_render_frame(
+        views: &mut [&mut DocView],
+        ctx: &egui::Context,
+        info: &DocInfo,
+        pool: &RenderPool,
+        last: &mut Vec<RenderRequest>,
+    ) {
+        let mut queues = Vec::with_capacity(views.len());
+        let mut refill = false;
+        for v in views.iter_mut() {
+            let ppp = v.draw_ppp.take().unwrap_or_else(|| ctx.pixels_per_point());
+            let q = v.prepare_render_queue(info, ppp);
+            // A view that dropped its queue (an edit, a new pool) needs its work queued again.
+            refill |= v.last_queue.is_empty() && !q.is_empty();
+            queues.push(q);
+        }
+        let longest = queues.iter().map(Vec::len).max().unwrap_or(0);
+        let mut merged: Vec<RenderRequest> = Vec::with_capacity(queues.iter().map(Vec::len).sum());
+        for i in 0..longest {
+            for q in &queues {
+                // The queues are bounded by the allowance, so a linear check stays cheap.
+                if let Some(r) = q.get(i)
+                    && !merged.contains(r)
+                {
+                    merged.push(*r);
+                }
+            }
+        }
+        if refill || merged != *last {
+            pool.set_queue(merged.clone());
+            *last = merged;
+        }
+        for (v, q) in views.iter_mut().zip(queues) {
+            v.last_queue = q;
+        }
+        let budget = if pool.is_inline() { 1 } else { RESULTS_PER_FRAME };
+        let mut uploaded = 0usize;
+        #[cfg(not(target_arch = "wasm32"))]
+        let started = std::time::Instant::now();
+        for _ in 0..budget {
+            let Some(r) = pool.try_recv() else { break };
+            let wanted: Vec<usize> = views.iter().enumerate().filter(|(_, v)| v.last_queue.contains(&r.request)).map(|(i, _)| i).collect();
+            let Some((&first, others)) = wanted.split_first() else { continue };
+            let (req, width) = (r.request, r.width);
+            // Text and errors are cheap to hand to each view; pixels become one texture.
+            let light = (req.kind == RequestKind::Text || r.error.is_some()).then(|| (r.error.clone(), r.text.clone()));
+            let Some(view) = views.get_mut(first) else { continue };
+            uploaded = uploaded.saturating_add(view.receive_result(ctx, r));
+            let tex = if light.is_none() { view.texture_for(&req) } else { None };
+            for &i in others {
+                let Some(view) = views.get_mut(i) else { continue };
+                match (&light, &tex) {
+                    (Some((error, text)), _) => {
+                        let copy = pdfcraft_render::RenderedPage {
+                            request: req,
+                            width: 0,
+                            height: 0,
+                            rgba: Default::default(),
+                            error: error.clone(),
+                            text: text.clone(),
+                            warnings: Vec::new(),
+                            millis: 0,
+                        };
+                        view.receive_result(ctx, copy);
+                    }
+                    (None, Some(tex)) => view.adopt_texture(req, tex.clone(), width),
+                    (None, None) => {}
+                }
+            }
+            if uploaded >= UPLOAD_BYTES_PER_FRAME {
+                break;
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            if started.elapsed() >= std::time::Duration::from_millis(4) {
+                break;
+            }
+        }
+        if views.iter().any(|v| !v.last_queue.is_empty()) {
+            ctx.request_repaint_after(std::time::Duration::from_millis(30));
         }
     }
 
@@ -1466,9 +1778,63 @@ impl DocView {
         bytes
     }
 
+    /// A second view of this view's document (Window ▸ New window): the same page, zoom, page
+    /// display and view rotation, with its own scroll position, selection and caches.
+    pub fn second_view(&self, info: &DocInfo) -> Self {
+        let defaults = ViewDefaults { zoom: self.zoom, fit: self.fit, layout: self.layout, highlight_fields: self.highlight_fields };
+        let mut v = Self::new(self.id, info, defaults);
+        v.rotation = self.rotation;
+        v.cover = self.cover;
+        v.current = self.current.min(v.page_count.saturating_sub(1));
+        v.page_input = (v.current + 1).to_string();
+        v.goto = Some((v.current, 0.0));
+        v
+    }
+
+    /// The texture a result for `req` became in this view, if it is still cached.
+    fn texture_for(&self, req: &RenderRequest) -> Option<TextureHandle> {
+        let page = req.page;
+        if let Some(t) = req.tile {
+            return self.tiles.get(&(page, req.tag, t.x / TILE, t.y / TILE)).cloned();
+        }
+        if req.tag & PRINT_TAG != 0 {
+            return self.print_pages.get(&page).filter(|(tag, _)| *tag == req.tag).map(|(_, tex)| tex.clone());
+        }
+        if req.tag & GRID_TAG != 0 {
+            return self.grid_pages.get(&page).map(|(_, tex)| tex.clone());
+        }
+        let cache = if req.tag & THUMB_TAG != 0 { &self.thumbs } else { &self.pages };
+        cache.get(&page).filter(|p| p.tag == req.tag).map(|p| p.tex.clone())
+    }
+
+    /// Take a texture another view of the same document made from a shared result: the same
+    /// GPU texture (a handle, not a copy), admitted against this view's share of the allowance.
+    fn adopt_texture(&mut self, req: RenderRequest, tex: TextureHandle, width: u32) {
+        let bytes = texture_bytes(&tex);
+        if !self.admit_texture(req, bytes) {
+            return;
+        }
+        let page = req.page;
+        if let Some(t) = req.tile {
+            self.tiles.insert((page, req.tag, t.x / TILE, t.y / TILE), tex);
+        } else if req.tag & PRINT_TAG != 0 {
+            self.print_pages.insert(page, (req.tag, tex));
+        } else if req.tag & GRID_TAG != 0 {
+            self.grid_pages.insert(page, (width, tex));
+        } else if req.tag & THUMB_TAG != 0 {
+            self.thumbs.insert(page, PageTex { tag: req.tag, tex });
+            self.stale_thumbs.remove(&page);
+        } else {
+            self.pages.insert(page, PageTex { tag: req.tag, tex });
+            self.signature_drag.page_received(page);
+            self.waiting_since.remove(&page);
+        }
+    }
+
     /// Check real dimensions before conversion, including stale textures kept during edits.
     /// Dropping an old handle releases its backend allocation after the current frame.
     fn admit_texture(&mut self, req: RenderRequest, bytes: usize) -> bool {
+        let (page_limit, tile_limit, _) = self.allowance();
         // An on-screen page or tile is always taken (the viewport bounds it): it may evict
         // off-screen rasters but never another on-screen one, and is never refused.
         let visible = req.tag & THUMB_TAG == 0 && self.frame_visible.contains(&req.page);
@@ -1481,10 +1847,10 @@ impl DocView {
             let key = (req.page, req.tag, t.x / TILE, t.y / TILE);
             self.tiles.remove(&key);
             let retained = self.tiles.values().fold(0usize, |n, tex| n.saturating_add(texture_bytes(tex)));
-            visible || bytes <= TILE_BYTES.saturating_sub(retained)
+            visible || bytes <= tile_limit.saturating_sub(retained)
         } else {
             let thumb = req.tag & THUMB_TAG != 0;
-            let (cache, limit) = if thumb { (&mut self.thumbs, THUMB_BYTES) } else { (&mut self.pages, PAGE_BYTES) };
+            let (cache, limit) = if thumb { (&mut self.thumbs, THUMB_BYTES) } else { (&mut self.pages, page_limit) };
             cache.remove(&req.page);
             let mut retained = cache.values().fold(0usize, |n, p| n.saturating_add(texture_bytes(&p.tex)));
             // A zoom/DPI change can temporarily retain larger stale images than the new
@@ -1726,6 +2092,10 @@ pub fn shortcuts(view: &mut DocView, ctx: &egui::Context, copy_allowed: bool) {
     if ctx.egui_wants_keyboard_input() {
         return;
     }
+    // Edit objects: a selection takes Delete, the arrows, ⌘[ / ⌘] and Esc.
+    if crate::object_ui::keys(view, ctx) {
+        return;
+    }
     let cmd = |k| KeyboardShortcut::new(Modifiers::COMMAND, k);
     let pressed = |s: KeyboardShortcut| ctx.input_mut(|i| i.consume_shortcut(&s));
     // Rotation first: egui matches ⌘+ loosely with respect to Shift.
@@ -1848,6 +2218,7 @@ const KEY_SCROLL_LINE: f32 = 40.0;
 
 pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
     let t = Tokens::get(ui.ctx());
+    let page_input = app.page_input_id();
     // Keyboard scrolling applies to this frame's page view only, never later.
     let key_scroll = std::mem::take(&mut app.views[index].key_scroll);
     // The Search panel closed: its search moves to the find bar.
@@ -1857,6 +2228,11 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
         && !search_open
     {
         f.in_panel = false;
+    }
+    // Output Preview draws on the pages and reads the pointer only while its panel is open.
+    let print_preview = app.right == Some(crate::RightPanel::OutputPreview);
+    if print_preview {
+        app.output_preview.hover = None;
     }
     let Some(doc) = app.session.get(app.views[index].id) else { return };
     let info = &doc.info;
@@ -1874,8 +2250,12 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
     // Edit a PDF: added text and images can be selected, moved and edited.
     let editing_content = (app.left_open && app.left == crate::LeftPanel::Tool("edit")) || app.quick_tool == QuickTool::AddText;
     let text_style = app.text_style.clone();
+    let object_tool = app.quick_tool == QuickTool::EditObject;
     let view = &mut app.views[index];
     view.copy_allowed = doc.allows_copying();
+    if !object_tool {
+        view.objects.release();
+    }
     if ui.input(|input| !input.pointer.primary_down() || input.pointer.primary_pressed()) {
         view.text_dragging = false;
     }
@@ -1982,7 +2362,8 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
         ..Default::default()
     });
     // Each document keeps its own scroll position when switching tabs (#189).
-    scroll = scroll.id_salt(("page-view", view.id));
+    // Two windows can show one document: each view scrolls on its own.
+    scroll = scroll.id_salt(("page-view", view.id, view.key));
     // A newly opened document starts at the top. eframe saves egui's memory with the settings
     // and document ids start again at 1 every launch, so the offset stored under this id can be
     // where an earlier session left another document.
@@ -2003,6 +2384,11 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
     let tag = scale_tag(scale);
     let hand = app.quick_tool == QuickTool::Hand;
     let tool = app.quick_tool;
+    // Preferences ▸ Forms: the field highlight colours.
+    let (field_tint, required_tint) = {
+        let p = app.session.prefs();
+        (p.field_highlight, p.required_highlight)
+    };
     // Text selection runs for the Select tool and for the markup tools (highlight…).
     let selects_text = match tool {
         QuickTool::Comment(t) => t.markup().is_some() || t == comments::CommentTool::ReplaceText,
@@ -2015,16 +2401,20 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
         | QuickTool::Field(_)
         | QuickTool::AddText
         | QuickTool::EditText
+        | QuickTool::EditObject
         | QuickTool::Stamp(_)
         | QuickTool::CustomStamp(_)
         | QuickTool::Link
         | QuickTool::SignArea { .. }
         | QuickTool::MarqueeZoom
-        | QuickTool::Snapshot => false,
+        | QuickTool::Snapshot
+        | QuickTool::ReadingOrder => false,
     };
     let prefs = &app.comment_prefs;
     let allowed = doc.allows_annotation();
     let comments_hidden = doc.comments_hidden();
+    // Comments ▸ Show by type: hidden types aren't drawn, selected or opened (usually none).
+    let hidden_types = doc.hidden_comment_types();
     let form = doc.form.clone();
     let can_fill = doc.allows_form_filling();
     let can_crop = doc.allows_assembly();
@@ -2046,7 +2436,8 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
     };
     let mut open_signature = false;
     let mut hover_text: Option<(Pos2, String)> = None;
-    let mut clicked_link: Option<LinkTarget> = None;
+    // The link clicked: what it does, and its page and index (scripts run by index).
+    let mut clicked_link: Option<(LinkTarget, usize, usize)> = None;
     let mut canvas_action: Option<comments::CanvasAction> = None;
     let mut field_menu: Option<FieldMenu> = None;
     let mut open_props: Option<(usize, usize)> = None;
@@ -2263,9 +2654,24 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
                 }
             }
             painter.rect_stroke(r, CornerRadius::ZERO, Stroke::new(0.5, t.border.gamma_multiply(0.8)), egui::StrokeKind::Outside);
+            if print_preview && !view.errors.contains_key(&i) {
+                crate::output_preview_ui::page(ui, &resp, painter, &xf, i, info, view.id, &mut app.output_preview, &t);
+            }
 
             // Comments: tools, selection, moving and resizing come before text selection.
-            let pcx = comments::PageCx { page: i, xf: &xf, info, tool, prefs, allowed, hidden: comments_hidden };
+            // Insert Text snaps its caret to the page's text, once that has been extracted.
+            let caret_text = if tool == QuickTool::Comment(comments::CommentTool::Caret) { view.page_text(i) } else { None };
+            let pcx = comments::PageCx {
+                page: i,
+                xf: &xf,
+                info,
+                tool,
+                prefs,
+                allowed,
+                hidden: comments_hidden,
+                hidden_types: &hidden_types,
+                text: caret_text,
+            };
             if let QuickTool::Measure(measure_tool) = tool {
                 crate::measure_ui::page_input(ui, &resp, doc, view, &pcx, measure_tool);
             }
@@ -2403,7 +2809,10 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
                     || crate::edit_text_ui::page_input(ui, &resp, &xf, i, info, &lines, view, can_read_text, &mut edit_text_refused)
             };
             let on_link = tool == QuickTool::Link && can_modify && crate::link_ui::page_input(ui, &resp, &xf, i, info, &doc_links, view);
-            let consumed = on_edit_text || on_link || on_content || boxing || on_field || comments::page_input(ui, &resp, &pcx, view);
+            // Edit objects: the page's own objects (added items keep their own handles above).
+            let on_object =
+                tool == QuickTool::EditObject && can_modify && !on_content && crate::object_ui::page_input(ui, &resp, &xf, i, info, doc, view);
+            let consumed = on_object || on_edit_text || on_link || on_content || boxing || on_field || comments::page_input(ui, &resp, &pcx, view);
 
             let preview_target = (tool == QuickTool::Select && !comments_hidden).then_some(view.comments.selected).flatten();
             view.signature_drag.prepare(ui.ctx(), doc, preview_target, scale);
@@ -2549,9 +2958,10 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
                     for w in f.widgets.iter().filter(|w| w.page == Some(i) && !w.hidden) {
                         let r = w.rect;
                         let sr = xf.user_rect(info, i, [r[0] as f32, r[1] as f32, r[2] as f32, r[3] as f32]);
-                        let tint = Color32::from_rgba_unmultiplied(0x6E, 0x8E, 0xF5, 48);
-                        let (width, color) =
-                            if required { (2.0, Color32::from_rgb(0xE3, 0x22, 0x22)) } else { (1.0, Color32::from_rgb(0x6E, 0x8E, 0xF5)) };
+                        let [r, g, b] = field_tint;
+                        let tint = Color32::from_rgba_unmultiplied(r, g, b, 48);
+                        let [rr, rg, rb] = required_tint;
+                        let (width, color) = if required { (2.0, Color32::from_rgb(rr, rg, rb)) } else { (1.0, Color32::from_rgb(r, g, b)) };
                         if round {
                             let radius = sr.width().min(sr.height()) / 2.0;
                             painter.circle_filled(sr.center(), radius, tint);
@@ -2577,11 +2987,12 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
                             }
                             LinkTarget::Uri(u) => u.clone(),
                             LinkTarget::SetLayers { .. } => tl!("Set layer visibility").to_string(),
+                            LinkTarget::Other(s) if s == "JavaScript" => tl!("Run a JavaScript").to_string(),
                             LinkTarget::Other(s) => crate::i18n::fmt(tl!("{s} action"), &[("s", s)]),
                         };
                         hover_text = Some((p, label));
                         if resp.clicked() && tool == QuickTool::Select && !consumed {
-                            clicked_link = Some(l.target.clone());
+                            clicked_link = Some((l.target.clone(), l.page, l.index));
                         }
                     }
                 }
@@ -2660,7 +3071,7 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
         }
         if view.layout != PageLayout::Single {
             view.current = current;
-            if !ui.memory(|m| m.has_focus(egui::Id::new("page-input"))) {
+            if !ui.memory(|m| m.has_focus(page_input)) {
                 view.page_input = (current + 1).to_string();
             }
         }
@@ -2685,6 +3096,13 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
                     ui.close();
                 }
                 ui.separator();
+            }
+            // Edit objects: the selection's menu.
+            if tool == QuickTool::EditObject && can_modify && !view.objects.selected.is_empty() {
+                if let Some(change) = crate::object_ui::context_menu(ui, view.objects.selected.len()) {
+                    view.pending_edit = view.objects.edit(change);
+                }
+                return;
             }
             // Preparing a form: the selected field's menu.
             if preparing && let Some((name, wi)) = view.prepare.selected.clone() {
@@ -2800,8 +3218,11 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
             });
         });
     }
-    find_bar(view, info.pages.len(), avail, ui, &t);
+    find_bar(view, info, doc.edit_generation(), avail, ui, &t);
     comments::load_rich(view, doc);
+    if let Some(e) = crate::popup_notes::show(ui.ctx(), view, info, allowed, comments_hidden, &hidden_types) {
+        view.pending_edit = Some(e);
+    }
     if let Some(e) = comments::composer(ui.ctx(), view, info, prefs) {
         view.pending_edit = Some(e);
     }
@@ -2811,6 +3232,7 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
     if let Some(e) = crate::forms_ui::overlay(ui.ctx(), view, info, &form, today) {
         view.pending_edit = Some(e);
     }
+    crate::forms_ui::after_input(view, &form);
     if let Some(e) = crate::fill_sign::type_box(ui.ctx(), view, info, &author) {
         view.pending_edit = Some(e);
     }
@@ -2860,10 +3282,14 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
         None => {}
     }
     match clicked_link {
-        Some(LinkTarget::Page(p, dest)) => view.go_to_dest(p, dest, info),
-        Some(LinkTarget::Uri(u)) => app.request_document_url(&u, crate::LinkOrigin::Link),
-        Some(LinkTarget::SetLayers { changes, preserve_rb }) => set_layers(app, index, &changes, preserve_rb),
-        Some(LinkTarget::Other(s)) => app.notify_fmt("{s} actions run in the JavaScript engine (M6)", &[("s", &s)]),
+        Some((LinkTarget::Page(p, dest), ..)) => view.go_to_dest(p, dest, info),
+        Some((LinkTarget::Uri(u), ..)) => app.request_document_url(&u, crate::LinkOrigin::Link),
+        Some((LinkTarget::SetLayers { changes, preserve_rb }, ..)) => set_layers(app, index, &changes, preserve_rb),
+        Some((LinkTarget::Other(s), page, link)) if s == "JavaScript" => {
+            let id = app.views[index].id;
+            app.run_action_script(id, pdfcraft_engine::js::ActionSource::Link { page, index: link });
+        }
+        Some((LinkTarget::Other(s), ..)) => app.notify_fmt("{s} actions aren't run by PdfCraft yet", &[("s", &s)]),
         None => {}
     }
     if tool == QuickTool::Crop && cropped {
@@ -2961,9 +3387,16 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
             crate::forms_ui::FormNotice::NoAction(name) => app.notify_fmt("{name} has no action", &[("name", &name)]),
         }
     }
+    app.check_field_keystroke(index);
+    // Field triggers: Mouse Down, Focus, Blur, Enter and Exit, then a push button's own first
+    // action, then Mouse Up (the rest of a button's chain).
+    let (ups, others): (Vec<_>, Vec<_>) =
+        std::mem::take(&mut app.views[index].forms.fires).into_iter().partition(|f| f.trigger == pdfcraft_engine::FieldTrigger::MouseUp);
+    app.fire_field_triggers(index, others);
     if let Some((name, action)) = app.views[index].forms.button.take() {
         run_button(app, index, &name, action);
     }
+    app.fire_field_triggers(index, ups);
     quick_bar(app, avail, ui);
 }
 
@@ -3057,8 +3490,11 @@ fn set_layers(app: &mut PdfCraftApp, index: usize, changes: &[(LayerOp, (u32, u1
 }
 
 /// Acrobat-style floating find bar at the top-right of the document area.
-fn find_bar(view: &mut DocView, pages: usize, area: Rect, ui: &mut egui::Ui, t: &Tokens) {
+fn find_bar(view: &mut DocView, info: &DocInfo, revision: u64, area: Rect, ui: &mut egui::Ui, t: &Tokens) {
+    let pages = info.pages.len();
     let Some(find) = view.find.as_mut() else { return };
+    // Comments are searched for the find bar and the Search panel alike.
+    find.refresh_comments(info, revision);
     // The Search panel shows this search.
     if find.in_panel {
         return;
@@ -3097,9 +3533,10 @@ fn find_bar(view: &mut DocView, pages: usize, area: Rect, ui: &mut egui::Ui, t: 
                         if r.has_focus() && ui.input(|i| i.key_pressed(egui::Key::Escape)) {
                             close = true;
                         }
+                        let (position, total) = find.position();
                         let status = if find.query.trim().is_empty() {
                             String::new()
-                        } else if find.matches.is_empty() {
+                        } else if total == 0 {
                             if searched < pages {
                                 crate::i18n::fmt(tl!("Searching… {s}/{p}"), &[("s", &searched.to_string()), ("p", &pages.to_string())])
                             } else {
@@ -3109,12 +3546,12 @@ fn find_bar(view: &mut DocView, pages: usize, area: Rect, ui: &mut egui::Ui, t: 
                             let more = if searched < pages { "+" } else { "" };
                             crate::i18n::fmt(
                                 tl!("{c} of {n}{more}"),
-                                &[
-                                    ("c", &find.current.map(|c| c + 1).unwrap_or(0).to_string()),
-                                    ("n", &find.matches.len().to_string()),
-                                    ("more", more),
-                                ],
+                                &[("c", &position.map(|c| c + 1).unwrap_or(0).to_string()), ("n", &total.to_string()), ("more", more)],
                             )
+                        };
+                        let status = match find.comment_current.and_then(|c| find.comment_matches.get(c)) {
+                            Some(_) => format!("{status} · {}", tl!("comment")),
+                            None => status,
                         };
                         ui.label(egui::RichText::new(status).font(theme::regular(12.0)).color(t.text_muted));
                         if icons::button(ui, "chevron-up", 26.0, false, tl!("Previous (⇧⌘G)")).clicked() {
@@ -3123,11 +3560,13 @@ fn find_bar(view: &mut DocView, pages: usize, area: Rect, ui: &mut egui::Ui, t: 
                         if icons::button(ui, "chevron-down", 26.0, false, tl!("Next (⌘G)")).clicked() {
                             step = Some(true);
                         }
-                        let opts = icons::button(ui, "settings-2", 26.0, find.case_sensitive || find.whole_words, tl!("Find options"));
+                        let opts =
+                            icons::button(ui, "settings-2", 26.0, find.case_sensitive || find.whole_words || find.comments, tl!("Find options"));
                         egui::Popup::menu(&opts).show(|ui| {
                             let a = ui.checkbox(&mut find.whole_words, tl!("Whole words only")).changed();
                             let b = ui.checkbox(&mut find.case_sensitive, tl!("Case-sensitive")).changed();
-                            if a || b {
+                            let c = ui.checkbox(&mut find.comments, tl!("Include comments")).changed();
+                            if a || b || c {
                                 // Search again with the new options.
                                 find.case_query.clear();
                             }
@@ -3144,6 +3583,9 @@ fn find_bar(view: &mut DocView, pages: usize, area: Rect, ui: &mut egui::Ui, t: 
     }
     if find.query != find.case_query {
         view.rerun_find();
+    }
+    if let Some(f) = view.find.as_mut() {
+        f.refresh_comments(info, revision);
     }
     if let Some(forward) = step {
         view.find_step(forward);
@@ -3482,6 +3924,32 @@ fn organize_toolbar(view: &mut DocView, info: &DocInfo, editable: bool, dirty: b
                         view.select_pages(&[]);
                         ui.close();
                     }
+                    ui.separator();
+                    ui.label(egui::RichText::new(tl!("Page range")).small().color(t.text_muted));
+                    let mut go = false;
+                    ui.horizontal(|ui| {
+                        let r = ui.add(
+                            egui::TextEdit::singleline(&mut view.range_input)
+                                .hint_text(tl!("e.g. 1-3, 7"))
+                                .desired_width(130.0)
+                                .id_salt("page-range-input"),
+                        );
+                        go = r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+                        go |= ui.button(tl!("Select")).clicked();
+                    });
+                    if go {
+                        match pdfcraft_engine::select_page_range(info, &view.range_input, P::Both, O::Both) {
+                            Ok(pages) => {
+                                view.range_error = None;
+                                view.select_pages(&pages);
+                                ui.close();
+                            }
+                            Err(e) => view.range_error = Some(e),
+                        }
+                    }
+                    if let Some(e) = &view.range_error {
+                        ui.label(egui::RichText::new(e).small().color(theme::DANGER));
+                    }
                 });
                 ui.add_space(8.0);
                 if ui.add_enabled_ui(first > 0, |ui| icons::button(ui, "chevron-left", 30.0, false, tl!("Move earlier"))).inner.clicked() {
@@ -3695,6 +4163,15 @@ fn organize_grid(view: &mut DocView, info: &DocInfo, editable: bool, dirty: bool
                     }
                     if ui.add_enabled(editable, egui::Button::new(tl!("Paste after"))).clicked() {
                         view.pending_action = Some(ViewAction::PastePages);
+                        ui.close();
+                    }
+                    ui.separator();
+                    if ui.add_enabled(editable, egui::Button::new(tl!("Insert clipboard before"))).clicked() {
+                        view.pending_action = Some(ViewAction::InsertClipboard { before: true });
+                        ui.close();
+                    }
+                    if ui.add_enabled(editable, egui::Button::new(tl!("Insert clipboard after"))).clicked() {
+                        view.pending_action = Some(ViewAction::InsertClipboard { before: false });
                         ui.close();
                     }
                 });

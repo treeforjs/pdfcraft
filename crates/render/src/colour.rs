@@ -30,6 +30,10 @@ pub struct ColourSpec {
     pub black_point_compensation: bool,
 }
 
+/// Recently prepared settings (shared: preparing is a pure function of the spec).
+static PREPARED: std::sync::Mutex<Vec<ColourProfiles>> = std::sync::Mutex::new(Vec::new());
+const PREPARED_MAX: usize = 8;
+
 /// Prepared colour settings for [`crate::RenderConfig::colour`].
 #[derive(Clone, Debug)]
 pub struct ColourProfiles {
@@ -57,8 +61,20 @@ impl ColourProfiles {
             intent: spec.intent,
             black_point_compensation: spec.black_point_compensation,
         };
+        // Preparing a profile builds its conversion tables (milliseconds each, every document
+        // open): reuse the last few preparations of the same settings.
+        let cached = PREPARED.lock().unwrap_or_else(std::sync::PoisonError::into_inner).iter().find(|p| *p.spec == spec).cloned();
+        if let Some(prepared) = cached {
+            return Ok(prepared);
+        }
         let device = std::panic::catch_unwind(|| DeviceColor::new(&settings)).map_err(|_| "the colour engine failed on a profile".to_string())??;
-        Ok(Self { device, spec: Arc::new(spec) })
+        let prepared = Self { device, spec: Arc::new(spec) };
+        let mut list = PREPARED.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        if list.len() >= PREPARED_MAX {
+            list.remove(0);
+        }
+        list.push(prepared.clone());
+        Ok(prepared)
     }
 
     pub fn spec(&self) -> &ColourSpec {

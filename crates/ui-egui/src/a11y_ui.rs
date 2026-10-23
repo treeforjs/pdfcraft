@@ -424,7 +424,7 @@ impl std::fmt::Debug for AltDraft {
 }
 
 /// Render a figure's area for the dialog, at the preview pane's device resolution.
-fn figure_picture(ctx: &egui::Context, doc: &pdfcraft_engine::Document, f: &pdfcraft_engine::a11y::Figure) -> Option<egui::TextureHandle> {
+pub(crate) fn figure_picture(ctx: &egui::Context, doc: &pdfcraft_engine::Document, f: &pdfcraft_engine::a11y::Figure) -> Option<egui::TextureHandle> {
     let (page, b) = (f.page?, f.bbox?);
     let info = doc.info.pages.get(page)?;
     let (u, v) = (info.user_to_view(b[0] as f32, b[1] as f32), info.user_to_view(b[2] as f32, b[3] as f32));

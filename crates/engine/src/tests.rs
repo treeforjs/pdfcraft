@@ -529,8 +529,11 @@ fn owner_password_of_older_revisions_opens_the_viewer_too() {
 fn autosave_snapshots_only_changed_documents() {
     let (mut s, id) = session_with(2);
     assert!(s.autosave_snapshots().is_empty(), "clean documents are not snapshotted");
+    assert!(!s.has_unsnapshotted_changes());
     s.apply(id, Edit::RotatePages { pages: vec![0], degrees: 90 }).unwrap();
+    assert!(s.has_unsnapshotted_changes());
     let snaps = s.autosave_snapshots();
+    assert!(!s.has_unsnapshotted_changes());
     assert_eq!(snaps.len(), 1);
     assert_eq!(snaps[0].bytes, s.get(id).unwrap().bytes, "the working file");
     assert!(s.autosave_snapshots().is_empty(), "nothing new since the last snapshot");
@@ -1407,6 +1410,24 @@ fn revert_goes_back_to_the_saved_version() {
 }
 
 #[test]
+fn typed_page_ranges_select_pages() {
+    let (s, id) = session_with(6);
+    let info = &s.get(id).unwrap().info;
+    let sel = |r: &str, p: PageParity| select_page_range(info, r, p, PageOrientation::Both);
+    assert_eq!(sel("1-3, 5", PageParity::Both).unwrap(), vec![0, 1, 2, 4]);
+    assert_eq!(sel("5, 1-3, 2", PageParity::Both).unwrap(), vec![0, 1, 2, 4], "sorted, no repeats");
+    assert_eq!(sel("4-", PageParity::Both).unwrap(), vec![3, 4, 5]);
+    assert_eq!(sel("-2; 6", PageParity::Both).unwrap(), vec![0, 1, 5]);
+    assert_eq!(sel("", PageParity::Even).unwrap(), vec![1, 3, 5], "empty: every page, then even numbers");
+    assert_eq!(sel("3-1", PageParity::Odd).unwrap(), vec![0, 2]);
+    assert!(select_page_range(info, "1-6", PageParity::Both, PageOrientation::Landscape).unwrap().is_empty());
+    // Hostile ranges are errors, never panics or huge allocations.
+    for bad in ["0", "7", "1-99999999999999999999", "x", "1-x", "--", &"1,".repeat(300), &"9".repeat(5000)] {
+        assert!(sel(bad, PageParity::Both).is_err(), "{bad:?}");
+    }
+}
+
+#[test]
 fn split_by_size_and_bookmarks_and_page_filters() {
     let (mut s, id) = session_with(6);
     // Every page alone is a few hundred bytes: a limit of about two pages gives three parts.
@@ -1506,6 +1527,32 @@ fn comments_lock_take_checkmarks_hide_and_summarize() {
     let n = s.open_new("summary.pdf", pdf).unwrap();
     assert!(!s.get(n).unwrap().info.pages.is_empty());
     assert_eq!(comment_summary("x", &[], SummarySort::Page), "Summary of Comments on x\n\nThis document has no comments.\n");
+}
+
+#[test]
+fn comments_hide_by_type() {
+    let (mut s, id) = session_with(2);
+    s.apply(id, rect_comment(1, [80.0, 80.0, 120.0, 120.0])).unwrap();
+    let subtype = s.get(id).unwrap().info.annotations[0].subtype.clone();
+    assert!(pixel(&s, id, 1, 105, 100)[1] < 40, "drawn");
+    // Another type hidden: the rectangle stays.
+    assert!(s.set_hidden_comment_types(id, &["Ink".into()]).unwrap());
+    assert!(pixel(&s, id, 1, 105, 100)[1] < 40);
+    assert!(!s.get(id).unwrap().comment_type_hidden(&subtype));
+    assert!(s.set_hidden_comment_types(id, &["Ink".into(), subtype.clone(), "Ink".into()]).unwrap());
+    assert!(!s.set_hidden_comment_types(id, &[subtype.clone(), "Ink".into()]).unwrap(), "the same set in another order");
+    assert_eq!(pixel(&s, id, 1, 105, 100), [255, 255, 255, 255]);
+    assert!(s.get(id).unwrap().comment_type_hidden(&subtype));
+    assert_eq!(s.get(id).unwrap().hidden_comment_types(), vec!["Ink".to_string(), subtype.clone()]);
+    // Hostile names are refused without changing anything.
+    for bad in ["", "Widget", "Link", "Popup", "a/b", "x y", &"X".repeat(65)] {
+        assert!(s.set_hidden_comment_types(id, &[bad.to_string()]).is_err(), "{bad:?}");
+    }
+    assert!(s.set_hidden_comment_types(id, &vec!["Ink".to_string(); 65]).is_err());
+    assert!(s.set_hidden_comment_types(DocId(9999), &[]).is_err());
+    assert!(s.get(id).unwrap().comment_type_hidden(&subtype));
+    assert!(s.set_hidden_comment_types(id, &[]).unwrap());
+    assert!(pixel(&s, id, 1, 105, 100)[1] < 40);
 }
 
 #[test]
@@ -3722,4 +3769,279 @@ fn convert_to_pdfx_survives_hostile_documents() {
             let _ = s.pdfx_convert(id, pdfcraft_preflight::XConvertOptions { allow_partial: true, ..pdfx_options(level) });
         }
     }
+}
+
+#[test]
+fn link_bookmark_and_page_javascript_actions_run_in_the_sandbox() {
+    use crate::js::{ActionSource, Dialogs};
+    use pdfcraft_forms::PageTrigger;
+    let (mut s, id) = session_with(2);
+    s.apply(id, Edit::AddField { page: 0, rect: [20.0, 230.0, 120.0, 250.0], kind: NewField::Text { multiline: false }, name: Some("seen".into()) })
+        .unwrap();
+    let record = "getField('seen').value = event.type + ' ' + event.name + ' ' + this.pageNum;";
+    s.apply(id, Edit::AddLink { page: 1, rect: [10.0, 10.0, 90.0, 40.0], action: LinkAction::JavaScript(record.into()), style: Default::default() })
+        .unwrap();
+    s.apply(id, Edit::AddBookmark { parent: vec![], index: 0, title: "Script".into(), page: 0 }).unwrap();
+    s.apply(id, Edit::SetBookmarkAction { path: vec![0], action: crate::BookmarkAction::JavaScript(record.into()) }).unwrap();
+    s.apply(id, Edit::SetPageAction { page: 1, trigger: PageTrigger::Open, script: Some(record.into()) }).unwrap();
+    assert_eq!(s.get(id).unwrap().can_undo(), Some("Set page action"));
+    assert_eq!(s.get(id).unwrap().info.page_actions, [1], "the open pass notes pages with actions");
+    let seen = |s: &Session| s.get(id).unwrap().form.iter().find(|f| f.name == "seen").map(|f| f.value.clone()).unwrap_or_default();
+    let link = s.get(id).unwrap().links.iter().find(|l| l.page == 1).map(|l| l.index).unwrap();
+
+    let o = s.run_action_javascript(id, &ActionSource::Link { page: 1, index: link }, &Dialogs::default()).unwrap();
+    assert_eq!(o.error, None);
+    assert_eq!(seen(&s), ["Link Mouse Up 1"]);
+    assert_eq!(s.get(id).unwrap().can_undo(), Some("Run JavaScript"));
+    s.run_action_javascript(id, &ActionSource::Bookmark { path: vec![0] }, &Dialogs::default()).unwrap();
+    assert_eq!(seen(&s), ["Bookmark Mouse Up 0"]);
+    assert!(s.run_page_action(id, 1, PageTrigger::Open).unwrap());
+    assert_eq!(seen(&s), ["Page Open 1"]);
+    assert!(!s.run_page_action(id, 0, PageTrigger::Open).unwrap(), "page 1 has no script");
+    assert!(!s.run_page_action(id, 1, PageTrigger::Close).unwrap());
+    assert!(!s.run_page_action(id, 99, PageTrigger::Open).unwrap(), "no such page is no script");
+
+    // Sources that don't run a script are refused clearly.
+    assert!(s.run_action_javascript(id, &ActionSource::Link { page: 1, index: 999 }, &Dialogs::default()).is_err());
+    assert!(s.run_action_javascript(id, &ActionSource::Bookmark { path: vec![7, 3] }, &Dialogs::default()).is_err());
+    assert!(s.run_action_javascript(id, &ActionSource::Page { page: 0, trigger: PageTrigger::Close }, &Dialogs::default()).is_err());
+
+    // A page script can't print, save or move the view (no loops between pages).
+    s.take_js_output(id);
+    s.apply(
+        id,
+        Edit::SetPageAction { page: 1, trigger: PageTrigger::Close, script: Some("this.print(); this.pageNum = 0; app.alert('bye')".into()) },
+    )
+    .unwrap();
+    assert!(s.run_page_action(id, 1, PageTrigger::Close).unwrap());
+    let out = s.take_js_output(id);
+    assert_eq!(out.alerts, ["bye"]);
+    assert!(out.requests.is_empty(), "{:?}", out.requests);
+
+    // Hostile scripts: runaway loops and recursion stop at the engine's limits and change nothing.
+    for script in ["while (true) {}", "function f() { return f(); } f();"] {
+        s.apply(id, Edit::SetLink { page: 1, index: link, rect: None, action: Some(LinkAction::JavaScript(script.into())), style: None }).unwrap();
+        let before = seen(&s);
+        let o = s.run_action_javascript(id, &ActionSource::Link { page: 1, index: link }, &Dialogs::default()).unwrap();
+        assert!(o.error.is_some(), "{script}");
+        assert_eq!(seen(&s), before, "{script}");
+    }
+
+    // With JavaScript off nothing runs.
+    s.set_javascript(false);
+    assert!(s.run_action_javascript(id, &ActionSource::Bookmark { path: vec![0] }, &Dialogs::default()).is_err());
+    assert!(!s.run_page_action(id, 1, PageTrigger::Open).unwrap());
+    s.set_javascript(true);
+
+    // Saved and reopened, the actions are still there.
+    let bytes = s.save_bytes(id).unwrap();
+    let mut s2 = Session::new();
+    let id2 = s2.open("again.pdf", None, bytes, None).unwrap();
+    assert_eq!(s2.get(id2).unwrap().page_action(1, PageTrigger::Open).as_deref(), Some(record));
+    assert_eq!(s2.bookmark_action(id2, &[0]).unwrap(), crate::BookmarkAction::JavaScript(record.into()));
+}
+
+#[test]
+fn javascript_actions_respect_document_permissions() {
+    use crate::js::{ActionSource, Dialogs};
+    use pdfcraft_forms::PageTrigger;
+    // A page script that adds a comment, in a document that allows printing only.
+    let mut doc = pdfcraft_cos::Document::open(Arc::new(fixture(2))).unwrap();
+    pdfcraft_forms::set_page_action(&mut doc, 0, PageTrigger::Open, Some("this.addAnnot({ type: 'Square', rect: [10, 10, 50, 50] })")).unwrap();
+    doc.set_encryption(&pdfcraft_cos::NewEncryption {
+        algorithm: pdfcraft_cos::Algorithm::Aes256,
+        user_password: "",
+        owner_password: "owner",
+        permissions: 0b0100,
+        encrypt_metadata: true,
+        seed: [7; 32],
+    })
+    .unwrap();
+    let bytes = Arc::new(pdfcraft_cos::write_full(&doc, &Default::default()).unwrap());
+    let mut s = Session::new();
+    let id = s.open("r.pdf", None, bytes, None).unwrap();
+    let page = ActionSource::Page { page: 0, trigger: PageTrigger::Open };
+    assert_eq!(s.run_action_javascript(id, &page, &Dialogs::default()), Err(EditError::NotPermitted("comments")));
+    assert!(s.run_page_action(id, 0, PageTrigger::Open).is_err());
+    assert!(s.get(id).unwrap().info.annotations.is_empty() && !s.get(id).unwrap().dirty);
+    // Setting actions is refused too.
+    assert_eq!(
+        s.apply(id, Edit::SetPageAction { page: 1, trigger: PageTrigger::Open, script: Some("1".into()) }),
+        Err(EditError::NotPermitted("changes to the document"))
+    );
+    assert_eq!(
+        s.apply(id, Edit::AddLink { page: 0, rect: [10.0, 10.0, 90.0, 40.0], action: LinkAction::JavaScript("1".into()), style: Default::default() }),
+        Err(EditError::NotPermitted("changes to the document"))
+    );
+}
+
+/// The web app's clock: a browser reading in milliseconds becomes whole seconds, and readings
+/// no date can have are unknown rather than wrapped or saturated.
+#[test]
+fn browser_clock_readings() {
+    assert_eq!(browser_now_secs(1_761_100_000_999.0), Some(1_761_100_000));
+    assert_eq!(browser_now_secs(0.0), Some(0));
+    for bad in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY, -1.0, 1e300, 253_402_300_800_000.0] {
+        assert_eq!(browser_now_secs(bad), None, "{bad}");
+    }
+}
+
+#[test]
+fn standards_jobs_verify_and_convert_on_a_copy_as_one_undo_step() {
+    use crate::standards::{StandardsOutcome, StandardsTask};
+    let mut s = Session::new().with_clock(|| 1_700_000_000);
+    let original = Arc::new(transparency_fixture());
+    let id = s.open("t.pdf", None, original.clone(), None).unwrap();
+    // Checks change nothing.
+    for task in [
+        StandardsTask::VerifyPdfa(pdfcraft_preflight::Level::A2b),
+        StandardsTask::VerifyPdfx(pdfcraft_preflight::XOptions { part: Some(pdfcraft_preflight::XPart::X4), max_findings: 10 }),
+        StandardsTask::VerifyPdfua(pdfcraft_a11y::UaOptions::default()),
+        StandardsTask::ValidateSyntax(pdfcraft_preflight::ArlOptions::default()),
+    ] {
+        let r = s.standards_job(id, task.clone()).unwrap().run().unwrap();
+        assert!(!r.changes_document(), "{task:?}");
+        match s.finish_standards(id, r).unwrap() {
+            StandardsOutcome::Pdfa(_, issues) => assert!(issues.iter().any(|i| i.clause == "6.6.2.1"), "{issues:?}"),
+            StandardsOutcome::Pdfx(r) => assert!(!r.conforms()),
+            StandardsOutcome::Pdfua(r) => assert!(!r.conforms()),
+            StandardsOutcome::Syntax(r) => assert!(r.objects_checked > 0),
+            other => panic!("{other:?}"),
+        }
+    }
+    assert!(s.get(id).unwrap().can_undo().is_none());
+
+    // Convert to PDF/X-4 in the background: one undo step with the conversion's label.
+    let job = s.standards_job(id, StandardsTask::ConvertPdfx(pdfx_options("x4"))).unwrap();
+    let r = job.run().unwrap();
+    assert!(r.changes_document());
+    let StandardsOutcome::PdfxConverted(c) = s.finish_standards(id, r).unwrap() else { panic!() };
+    assert!(c.converted && c.after.conforms(), "{:?}", c.after.findings);
+    assert_eq!(s.get(id).unwrap().can_undo(), Some("Convert to PDF/X-4"));
+    let saved = s.save_bytes(id).unwrap();
+    assert!(pdfx_report(&saved, pdfcraft_preflight::XPart::X4).conforms());
+    s.undo(id).unwrap();
+    assert_eq!(page_pixels(&s.get(id).unwrap().bytes, 1), page_pixels(&original, 1));
+
+    // A job whose document changed meanwhile is refused and changes nothing.
+    let job = s.standards_job(id, StandardsTask::ConvertPdfx(pdfx_options("x4"))).unwrap();
+    s.apply(id, Edit::RotatePages { pages: vec![1], degrees: 90 }).unwrap();
+    let generation = s.get(id).unwrap().edit_generation();
+    let r = job.run().unwrap();
+    assert!(matches!(s.finish_standards(id, r), Err(EditError::Invalid(_))));
+    assert_eq!(s.get(id).unwrap().edit_generation(), generation);
+
+    // Bad options are refused before any work.
+    let mut bad = pdfx_options("x4");
+    bad.intent = Some(pdfcraft_preflight::XIntent { condition: "FOGRA39".into(), info: None, profile: Some(Arc::new(b"not a profile".to_vec())) });
+    assert!(matches!(s.standards_job(id, StandardsTask::ConvertPdfx(bad)), Err(EditError::Invalid(_))));
+}
+
+#[test]
+fn save_as_pdfa_with_a_chosen_output_intent() {
+    use crate::standards::{StandardsOutcome, StandardsTask};
+    use pdfcraft_preflight::{Level, PdfaIntent};
+    // A CMYK page: the default (sRGB) intent can't serve it.
+    let page = "0 0 0 1 k 10 10 50 50 re f";
+    let bodies = [
+        "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Contents 4 0 R >>".to_string(),
+        format!("<< /Length {} >>\nstream\n{page}\nendstream", page.len()),
+    ];
+    let mut out = b"%PDF-1.7\n".to_vec();
+    let mut offsets = Vec::new();
+    for (i, b) in bodies.iter().enumerate() {
+        offsets.push(out.len());
+        out.extend_from_slice(format!("{} 0 obj\n{b}\nendobj\n", i + 1).as_bytes());
+    }
+    let xref = out.len();
+    out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", bodies.len() + 1).as_bytes());
+    for o in offsets {
+        out.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+    }
+    out.extend_from_slice(format!("trailer << /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", bodies.len() + 1).as_bytes());
+    let mut s = Session::new().with_clock(|| 1_700_000_000);
+    let id = s.open("cmyk.pdf", None, Arc::new(out), None).unwrap();
+    s.apply(id, Edit::ConvertPdfA { level: Level::A2b, intent: None }).unwrap();
+    let left = s.get(id).unwrap().pdfa_verify(Level::A2b);
+    assert!(left.iter().any(|i| i.clause == "6.2.4.3" && i.message.contains("DeviceCMYK")), "{left:?}");
+    s.undo(id).unwrap();
+
+    // With a CMYK output profile the device colour is accounted for, as one undo step.
+    let intent = PdfaIntent { condition: "FOGRA39".into(), info: None, profile: output_profile(4, b"CMYK") };
+    let r = s.standards_job(id, StandardsTask::ConvertPdfa { level: Level::A2b, intent: Some(intent.clone()) }).unwrap().run().unwrap();
+    let StandardsOutcome::PdfaConverted(c) = s.finish_standards(id, r).unwrap() else { panic!() };
+    assert!(c.refused.is_none() && c.fixed.iter().any(|f| f.contains("FOGRA39")), "{:?}", c.fixed);
+    assert!(!c.remaining.iter().any(|i| i.clause.starts_with("6.2.")), "{:?}", c.remaining);
+    assert_eq!(s.get(id).unwrap().can_undo(), Some("Save as PDF/A-2b"));
+    let declared = s.get(id).unwrap().standards();
+    assert_eq!(declared.intents.len(), 1, "one PDF/A intent: {:?}", declared.intents);
+    assert_eq!(declared.intents[0].subtype, "GTS_PDFA1");
+    assert_eq!(declared.intents[0].registry.as_deref(), Some("http://www.color.org"));
+    assert!(matches!(&declared.intents[0].profile, Some(Ok((h, 256))) if &h.space == b"CMYK"));
+    // Converting again with the same intent keeps one intent.
+    s.apply(id, Edit::ConvertPdfA { level: Level::A2b, intent: Some(Box::new(intent)) }).unwrap();
+    assert_eq!(s.get(id).unwrap().standards().intents.len(), 1);
+
+    // Unsuitable intents are refused: a display class, a version too new for PDF/A-1, junk.
+    let mut scanner = output_profile(2, b"RGB ").to_vec();
+    scanner[12..16].copy_from_slice(b"scnr");
+    for (level, profile) in [(Level::A2b, Arc::new(scanner)), (Level::A1b, output_profile(4, b"CMYK")), (Level::A2b, Arc::new(vec![0xFF; 3]))] {
+        let bad = PdfaIntent { condition: "X".into(), info: None, profile };
+        assert!(bad.validate(level).is_err());
+        assert!(matches!(s.standards_job(id, StandardsTask::ConvertPdfa { level, intent: Some(bad.clone()) }), Err(EditError::Invalid(_))));
+        let generation = s.get(id).unwrap().edit_generation();
+        assert!(s.apply(id, Edit::ConvertPdfA { level, intent: Some(Box::new(bad)) }).is_err());
+        assert_eq!(s.get(id).unwrap().edit_generation(), generation);
+    }
+    let blank = PdfaIntent { condition: " \n".into(), info: None, profile: output_profile(2, b"CMYK") };
+    assert!(blank.validate(Level::A2b).is_err());
+}
+
+#[test]
+fn optimizing_flattens_transparency_and_makes_pdf_1_3_copies() {
+    let mut s = Session::new().with_clock(|| 1_700_000_000);
+    let original = Arc::new(transparency_fixture());
+    let id = s.open("t.pdf", None, original.clone(), None).unwrap();
+    // Off by default.
+    let (bytes, r) = s.optimized_bytes(id, &optimize::Settings::default(), &[]).unwrap();
+    assert_eq!(r.flattened, 0);
+    assert!(x1a_transparency(&bytes) > 0);
+    // The Transparency panel.
+    let settings = optimize::Settings { transparency: Some(optimize::Transparency::default()), ..optimize::Settings::default() };
+    let (bytes, r) = s.optimized_bytes(id, &settings, &[]).unwrap();
+    assert_eq!(r.flattened, 1);
+    assert_eq!(x1a_transparency(&bytes), 0);
+    // Made compatible with PDF 1.3: always flattened, nothing newer left.
+    let settings = optimize::Settings { compatibility: Some((1, 3)), ..optimize::Settings::default() };
+    let (bytes, r) = s.optimized_bytes(id, &settings, &[]).unwrap();
+    assert_eq!(r.flattened, 1);
+    assert!(bytes.starts_with(b"%PDF-1.3"));
+    assert!(r.optimize.newer_features.iter().all(|f| f.feature != "transparency"), "{:?}", r.optimize.newer_features);
+    // Bad settings are an error, and the job reports its flattening stage.
+    let bad =
+        optimize::Settings { transparency: Some(optimize::Transparency { resolution: f64::NAN, balance: 50 }), ..optimize::Settings::default() };
+    assert!(s.optimized_bytes(id, &bad, &[]).is_err());
+    let mut stages = Vec::new();
+    let settings = optimize::Settings { transparency: Some(optimize::Transparency::default()), ..optimize::Settings::default() };
+    s.optimize_job(id, &settings, &[])
+        .unwrap()
+        .run(|st| {
+            stages.push(st);
+            true
+        })
+        .unwrap();
+    assert_eq!(stages.get(1), Some(&crate::optimizer::OptimizeStage::Flattening));
+    assert_eq!(s.get(id).unwrap().bytes, original, "the open document is unchanged");
+}
+
+#[test]
+fn save_as_fast_web_view_preference_is_kept() {
+    let mut s = Session::new();
+    assert_eq!(s.pref("documents.fast_web_view"), Some(serde_json::json!(false)));
+    s.set_pref("documents.fast_web_view", &serde_json::json!(true)).unwrap();
+    assert!(s.prefs().fast_web_view);
+    assert!(s.set_pref("documents.fast_web_view", &serde_json::json!("sometimes")).is_err());
+    assert!(s.prefs().fast_web_view);
 }

@@ -2042,7 +2042,6 @@
 	yesterday	hier
 	{k} of {n}	{k} sur {n}
 	{name} can't be combined: {why}	Impossible de combiner {name} : {why}
-	{n} days ago	il y a {n} jours
 	{n} files	{n} fichiers
 	{n} files need attention	{n} fichiers demandent votre attention
 	{n} selected	{n} sélectionnés
@@ -2305,3 +2304,894 @@ compare-page	Moved	Déplacée
 	Archive documents…	Archiver des documents…
 	Archive Documents	Archiver des documents
 	Save as PDF/A-2b for long-term archiving.	Enregistre au format PDF/A-2b pour l'archivage à long terme.
+	Open pop-up	Ouvrir la fenêtre contextuelle
+	Close pop-up	Fermer la fenêtre contextuelle
+	Move pop-up	Déplacer la fenêtre contextuelle
+	Resize pop-up	Redimensionner la fenêtre contextuelle
+	No text	Aucun texte
+	Open pop-up note	Ouvrir la note contextuelle
+	Close pop-up note	Fermer la note contextuelle
+	Open all pop-ups	Ouvrir toutes les fenêtres contextuelles
+	Close all pop-ups	Fermer toutes les fenêtres contextuelles
+	No pop-ups to open	Aucune fenêtre contextuelle à ouvrir
+	No pop-ups are open	Aucune fenêtre contextuelle ouverte
+	Trigger:	Déclencheur :
+	Page Open	Ouverture de la page
+	Page Close	Fermeture de la page
+	Run a JavaScript…	Exécuter un JavaScript…
+	Page actions…	Actions de page…
+	Type the JavaScript.	Saisissez le JavaScript.
+	Bookmark Action	Action du signet
+	Runs when the bookmark is clicked.	S’exécute quand on clique sur le signet.
+	Page Actions: page {n}	Actions de page : page {n}
+	Page Open runs when the page becomes the current page; Page Close when another page does.	« Ouverture de la page » s’exécute quand la page devient la page courante ; « Fermeture de la page » quand une autre page le devient.
+	JavaScript, e.g. app.alert("Hello")	JavaScript, par ex. app.alert("Bonjour")
+	{s} actions aren't run by PdfCraft yet	Les actions {s} ne sont pas encore exécutées par PdfCraft
+	Insert clipboard before	Insérer le presse-papiers avant
+	Insert clipboard after	Insérer le presse-papiers après
+	Couldn't insert pages: {e}	Impossible d'insérer les pages : {e}
+	Screen capture cancelled	Capture d'écran annulée
+	Couldn't capture the screen: {e}	Impossible de capturer l'écran : {e}
+	Create PDF from screen capture	Créer un PDF à partir d'une capture d'écran
+	Create PDF from window capture	Créer un PDF à partir d'une capture de fenêtre
+	Create PDF from region capture	Créer un PDF à partir d'une capture de zone
+	Insert pages from clipboard	Insérer des pages depuis le presse-papiers
+	Insert pages from clipboard before selection	Insérer des pages depuis le presse-papiers avant la sélection
+	Screen capture	Capture d'écran
+	Window capture	Capture de fenêtre
+	Region capture	Capture de zone
+	Insert from clipboard	Insérer depuis le presse-papiers
+	No screen capture tool was found. Capture with your system's tool, then use Create PDF from clipboard.	Aucun outil de capture d'écran n'a été trouvé. Faites la capture avec l'outil de votre système, puis utilisez Créer un PDF à partir du presse-papiers.
+# Preferences window (M14)
+	min	min
+	Absolute colorimetric	Colorimétrie absolue
+	Allow	Autoriser
+	Allow all sites	Autoriser tous les sites
+	Always	Toujours
+	Always use the working spaces	Toujours utiliser les espaces de travail
+	Ask each time	Demander à chaque fois
+	Automatic	Automatique
+	Black point compensation	Compensation du point noir
+	Block	Bloquer
+	Block all sites	Bloquer tous les sites
+	CMYK working space	Espace de travail CMJN
+	Color management	Gestion des couleurs
+	Default location	Lieu par défaut
+	Default reason	Motif par défaut
+	Documents	Documents
+	Don't color-manage untagged color	Ne pas gérer les couleurs non balisées
+	Each document's own Highlight fields button still turns them on and off.	Le bouton Surligner les champs de chaque document les active et les désactive toujours.
+	Field highlight color	Couleur de surbrillance des champs
+	Gray working space	Espace de travail Niveaux de gris
+	High contrast	Contraste élevé
+	Highlight form fields in documents that open	Surligner les champs de formulaire des documents ouverts
+	Internet access from PDFs	Accès à Internet depuis les PDF
+	Keep the comment tool selected after adding a comment	Garder l’outil de commentaire sélectionné après l’ajout d’un commentaire
+	Makes all interface text and controls larger or smaller.	Agrandit ou réduit tout le texte et les commandes de l’interface.
+	Never	Jamais
+	New signatures start with these; you can change them when signing.	Les nouvelles signatures commencent avec ces valeurs ; vous pouvez les modifier lors de la signature.
+	No preferences match “{query}”.	Aucune préférence ne correspond à « {query} ».
+	Off: after one comment, the Select tool comes back.	Désactivé : après un commentaire, l’outil Sélection revient.
+	Only for PDF/X files	Uniquement pour les fichiers PDF/X
+	Open the Comments panel when a comment tool is chosen	Ouvrir le panneau Commentaires quand un outil de commentaire est choisi
+	Output intent overrides working spaces	La mode de sortie remplace les espaces de travail
+	Perceptual	Perception
+	RGB working space	Espace de travail RVB
+	Recent files to remember	Nombre de fichiers récents mémorisés
+	Reduce motion	Réduire les animations
+	Relative colorimetric	Colorimétrie relative
+	Rendering intent	Mode de rendu
+	Required field border color	Couleur de bordure des champs obligatoires
+	Saturation	Saturation
+	Save recovery copies of unsaved changes every	Enregistrer des copies de récupération des modifications non enregistrées toutes les
+	Search preferences	Rechercher dans les préférences
+	Shown on Home and in File ▸ Open Recent. 0 keeps no list.	Affichés dans Accueil et dans Fichier → Ouvrir un fichier récent. 0 ne garde aucune liste.
+	Signs new comments. Empty uses your login name.	Signe les nouveaux commentaires. Vide utilise votre nom de connexion.
+	Sites without a rule	Sites sans règle
+	Stronger text, borders and outlines in every theme.	Texte, bordures et contours plus marqués dans chaque thème.
+	Text size	Taille du texte
+	Theme	Thème
+	Turns off animations and smooth scrolling.	Désactive les animations et le défilement fluide.
+	Unsaved changes are kept in a recovery folder so they survive a crash. 0 turns autosave off.	Les modifications non enregistrées sont conservées dans un dossier de récupération pour survivre à un plantage. 0 désactive l’enregistrement automatique.
+	Untagged color	Couleur non balisée
+	Untagged gray, RGB and CMYK color is shown through these profiles.	Le gris, le RVB et le CMJN non balisés sont affichés via ces profils.
+	Use overprint preview	Utiliser l’aperçu de la surimpression
+	Use the site rules	Utiliser les règles des sites
+	Used by Output Preview and page images made for print checks.	Utilisé par l’aperçu de sortie et les images de page destinées aux contrôles d’impression.
+	Whether links and scripts in PDFs may reach web sites.	Si les liens et scripts des PDF peuvent accéder à des sites web.
+	Your identity is suggested when you create a digital ID.	Votre identité est proposée lorsque vous créez une identité numérique.
+	Compare side by side	Comparer côte à côte
+	Next change	Modification suivante
+	Previous change	Modification précédente
+	Synchronise scrolling	Synchroniser le défilement
+	Both compared files must be open	Les deux fichiers comparés doivent être ouverts
+	Change list	Liste des modifications
+	Change {i} of {n}	Modification {i} sur {n}
+	Changes	Modifications
+	Close side-by-side view	Fermer la vue côte à côte
+	Compare two files first (Compare files…)	Comparez d’abord deux fichiers (Comparer des fichiers…)
+	Fit width	Ajuster à la largeur
+	Looks different	Aspect différent
+	Old: {name}	Ancien : {name}
+	New: {name}	Nouveau : {name}
+	No changes	Aucune modification
+	Not in the new file	Absent du nouveau fichier
+	Not in the old file	Absent de l’ancien fichier
+	Old page {o} · new page {n}	Ancienne page {o} · nouvelle page {n}
+	Page deleted	Page supprimée
+	Page inserted	Page insérée
+	Page moved	Page déplacée
+	Rendering…	Rendu…
+	Changes: {n}	Modifications : {n}
+	Edit objects	Modifier les objets
+	Click an object to select it, or drag around several	Cliquez sur un objet pour le sélectionner, ou faites glisser autour de plusieurs
+	Bring to Front	Mettre au premier plan
+	Bring Forward	Avancer
+	Send Backward	Reculer
+	Send to Back	Mettre à l’arrière-plan
+	Object properties	Propriétés de l’objet
+	Form XObject	XObject de formulaire
+	Shading	Dégradé
+	{n} objects selected	{n} objets sélectionnés
+	Arrange	Disposition
+	Fill color	Couleur de remplissage
+	Stroke color	Couleur du contour
+	Line width	Épaisseur de trait
+	Recover unsaved documents…	Récupérer les documents non enregistrés…
+	Save recovery copies now	Enregistrer les copies de récupération maintenant
+	PdfCraft was closed with unsaved changes. These documents have recovery copies in this browser:	PdfCraft a été fermé avec des modifications non enregistrées. Ces documents ont des copies de récupération dans ce navigateur :
+	This browser can't keep recovery copies of unsaved changes: {e}	Ce navigateur ne peut pas conserver de copies de récupération des modifications non enregistrées : {e}
+	{name} is too large to keep a recovery copy in the browser	{name} est trop volumineux pour conserver une copie de récupération dans le navigateur
+	Autosave is off, so there is nothing to recover	L’enregistrement automatique est désactivé, il n’y a donc rien à récupérer
+	Still looking for recovery copies…	Recherche des copies de récupération…
+	Nothing to recover	Rien à récupérer
+	Saved recovery copies of unsaved changes	Copies de récupération des modifications non enregistrées enregistrées
+	Recovery copies are up to date	Les copies de récupération sont à jour
+
+# JavaScript debugger
+	(top level)	(niveau supérieur)
+	Add a watch expression	Ajouter une expression à surveiller
+	Annotations	Annotations
+	Bookmark	Signet
+	Breakpoint on line {n}	Point d’arrêt à la ligne {n}
+	Call stack	Pile d’appels
+	Click a line number to set a breakpoint.	Cliquez sur un numéro de ligne pour placer un point d’arrêt.
+	Document script	Script de document
+	Edited here only: runs use this text; the document keeps its script.	Modifié ici seulement : les exécutions utilisent ce texte, le document garde son script.
+	Error	Erreur
+	Error on line {n}	Erreur à la ligne {n}
+	Evaluate	Évaluer
+	Evaluate in the paused scope	Évaluer dans le contexte en pause
+	Filter scripts	Filtrer les scripts
+	Finished	Terminé
+	JavaScript Debugger	Débogueur JavaScript
+	JavaScript debugger…	Débogueur JavaScript…
+	JavaScript is turned off (Preferences → JavaScript).	JavaScript est désactivé (Préférences → JavaScript).
+	Keystroke	Frappe
+	Lines: {n}	Lignes : {n}
+	Link {n}	Lien {n}
+	Links	Liens
+	More scripts than can be listed; the list is cut.	Plus de scripts que la liste ne peut en contenir ; elle est tronquée.
+	No scripts match.	Aucun script ne correspond.
+	Not paused	Pas en pause
+	Open action	Action d’ouverture
+	Page {n}	Page {n}
+	Paused on line {n}	En pause à la ligne {n}
+	Refresh	Actualiser
+	Run JavaScript against the document	Exécuter du JavaScript sur le document
+	Scratch script	Script libre
+	Scripts: {n}	Scripts : {n}
+	Step into	Pas à pas détaillé
+	Step out	Pas à pas sortant
+	Step over	Pas à pas principal
+	Stopped. Nothing the script did was applied.	Arrêté. Rien de ce que le script a fait n’a été appliqué.
+	Stopped: the script ran too long	Arrêté : le script a duré trop longtemps
+	The paused point could not be reached again.	Le point de pause n’a pas pu être atteint à nouveau.
+	This document has no scripts.	Ce document ne contient aucun script.
+	Watch values show here when the script pauses.	Les valeurs surveillées s’affichent ici quand le script est en pause.
+	Watches	Surveillance
+	document script, line {n}	script de document, ligne {n}
+	line {n}	ligne {n}
+	{error} (document script {name}, line {n})	{error} (script de document {name}, ligne {n})
+	{error} (line {n})	{error} (ligne {n})
+	New window	Nouvelle fenêtre
+	Move tab to new window	Déplacer l'onglet dans une nouvelle fenêtre
+	Move tab to main window	Déplacer l'onglet dans la fenêtre principale
+	Close window	Fermer la fenêtre
+	Separate windows are only available in the desktop app	Les fenêtres séparées ne sont disponibles que dans l'application de bureau
+	Window {n}	Fenêtre {n}
+	{window} has closed	{window} a été fermée
+	That tab has closed	Cet onglet a été fermé
+	At most {n} windows can be open besides the main window: close one first	Au plus {n} fenêtres peuvent être ouvertes en plus de la fenêtre principale : fermez-en une d'abord
+	{window} has no room for more tabs	{window} ne peut pas contenir plus d'onglets
+	This tab is already in a window of its own	Cet onglet est déjà seul dans sa fenêtre
+	This is the main window: quit to close it	C'est la fenêtre principale : quittez l'application pour la fermer
+	This tab is in the main window	Cet onglet est dans la fenêtre principale
+	Move tab to {window}	Déplacer l'onglet vers {window}
+	Release to open in a new window	Relâchez pour ouvrir dans une nouvelle fenêtre
+	This page only  ·  	Cette page uniquement  ·  
+	The file stays on this device: PdfCraft reads it in this page and forgets it when the page closes. The password is never stored.	Le fichier reste sur cet appareil : PdfCraft le lit dans cette page et l’oublie à sa fermeture. Le mot de passe n’est jamais enregistré.
+	Downloaded the new digital ID as {name}. Keep it: this page forgets it when it closes.	La nouvelle identité numérique a été téléchargée sous le nom {name}. Conservez-la : cette page l’oublie à sa fermeture.
+	Signed. Downloaded {name}	Signé. {name} téléchargé
+	Sign with a smart card or token	Signer avec une carte à puce ou un jeton
+	Sign with a Smart Card or Token	Signer avec une carte à puce ou un jeton
+	Use a Smart Card or Token	Utiliser une carte à puce ou un jeton
+	The signature is made on the card or token. Its private key never leaves it.	La signature est créée sur la carte ou le jeton. Sa clé privée ne le quitte jamais.
+	PKCS #11 module	Module PKCS #11
+	Find tokens	Rechercher les jetons
+	No PKCS #11 module was found here. Choose the module file that came with your card or token (for example opensc-pkcs11).	Aucun module PKCS #11 n’a été trouvé ici. Choisissez le fichier de module fourni avec votre carte ou votre jeton (par exemple opensc-pkcs11).
+	Serial	Numéro de série
+	PIN locked	PIN verrouillé
+	One try left	Dernier essai
+	PIN pad	Clavier PIN
+	No card	Aucune carte
+	PIN	PIN
+	Enter the PIN on the reader's keypad, then choose Unlock.	Saisissez le PIN sur le clavier du lecteur, puis choisissez Déverrouiller.
+	Waiting for the token…	En attente du jeton…
+	Choose the certificate to sign with:	Choisissez le certificat de signature :
+	No certificate on this token can sign.	Aucun certificat de ce jeton ne peut signer.
+	Certificates left out: {n}	Certificats écartés : {n}
+	Token  ·  	Jeton  ·  
+	The key is on the smart card or token, and the signature is made there.	La clé se trouve sur la carte à puce ou le jeton, et la signature y est créée.
+	Choose a slot with a card or token.	Choisissez un emplacement contenant une carte ou un jeton.
+	Unlock the token again.	Déverrouillez à nouveau le jeton.
+
+# Localization: the language command, file sizes, relative dates.
+	Interface language…	Langue de l'interface…
+	Auto ({language})	Automatique ({language})
+	{n} KB	{n} Ko
+	{n} MB	{n} Mo
+@plural	{n} byte|{n} bytes	{n} octet|{n} octets
+@plural	{n} day ago|{n} days ago	il y a {n} jour|il y a {n} jours
+	Downloading text recognition models… {r} of {t} MB	Téléchargement des modèles de reconnaissance de texte… {r} sur {t} Mo
+	The text recognition models (12 MB) are downloaded from this site the first time you recognize text, then kept in this browser.	Les modèles de reconnaissance de texte (12 Mo) sont téléchargés depuis ce site la première fois que vous reconnaissez du texte, puis conservés dans ce navigateur.
+	the text recognition models haven't been downloaded into this browser yet; run Recognize Text to download them	les modèles de reconnaissance de texte n’ont pas encore été téléchargés dans ce navigateur ; lancez Reconnaître le texte pour les télécharger
+	User guide	Guide de l’utilisateur
+	Search shortcuts	Rechercher des raccourcis
+	No shortcuts match “{query}”.	Aucun raccourci ne correspond à « {query} ».
+	Document view	Vue du document
+	Tools	Outils
+# Print production
+	Add marks	Ajouter les repères
+	Add printer marks…	Ajouter des repères d’impression…
+	Advanced:	Avancé :
+	All spots to process	Toutes les tons directs en quadrichromie
+	Analyzing…	Analyse…
+	Annotation	Commentaire
+	Apply to document	Appliquer au document
+	Bleed marks	Repères de fond perdu
+	Choose at least one mark.	Choisissez au moins un repère.
+	Click on the page to list the objects under the pointer.	Cliquez sur la page pour lister les objets sous le pointeur.
+	Color bars	Barres de couleur
+	Color management…	Gestion des couleurs…
+	Color warnings	Avertissements de couleur
+	Colors converted: {n}	Couleurs converties : {n}
+	Colors to convert	Couleurs à convertir
+	Convert colors…	Convertir les couleurs…
+	Convert spot colors to process	Convertir les tons directs en quadrichromie
+	Convert to:	Convertir en :
+	Cyan	Cyan
+	Each sheet is sent as one picture.	Chaque feuille est envoyée comme une seule image.
+	Eastern	Oriental
+	Font	Police
+	Highest on this page: {n}	Maximum sur cette page : {n}
+	Highlight coverage over	Mettre en évidence la couverture au-delà de
+	ICC profile	Profil ICC
+	ICC-based	Basé sur ICC
+	Ink manager	Gestionnaire d’encres
+	Ink manager…	Gestionnaire d’encres…
+	Inks changed in the document	Encres modifiées dans le document
+	Inks here: {inks} (total {total})	Encres ici : {inks} (total {total})
+	Inks of the first {n} pages.	Encres des {n} premières pages.
+	Line art	Dessin au trait
+	Line weight:	Épaisseur du trait :
+	Load ICC profile…	Charger un profil ICC…
+	Loaded the profile {name}	Profil {name} chargé
+	Magenta	Magenta
+	No alias	Aucun alias
+	No ink needed changing	Aucune encre à modifier
+	No overprint, rich black or registration color on this page.	Aucune surimpression, aucun noir riche et aucune couleur de repérage sur cette page.
+	Not DeviceCMYK	Pas DeviceCMYK
+	Nothing is painted here.	Rien n’est peint ici.
+	Nothing to convert	Rien à convertir
+	OK keeps these settings for this session; Apply to document changes the file.	OK garde ces réglages pour cette session ; « Appliquer au document » modifie le fichier.
+	Object inspector	Inspecteur d’objets
+	Offset from trim:	Décalage par rapport au format fini :
+	Output intent	Mode de sortie
+	Overprint	Surimpression
+	Page information	Informations sur la page
+	Preserve black	Préserver le noir
+	Print as image	Imprimer comme image
+	Process	Quadrichromie
+	Registration color	Couleur de repérage
+	Registration marks	Repères de montage
+	Rendering intent:	Mode de rendu :
+	Reset	Réinitialiser
+	Rich black	Noir riche
+	Separations	Séparations
+	Set an alias or convert a spot ink to process first.	Définissez d’abord un alias ou convertissez un ton direct en quadrichromie.
+	Show all inks	Afficher toutes les encres
+	Simulate black ink	Simuler l’encre noire
+	Simulate overprinting	Simuler la surimpression
+	Simulate paper color	Simuler la couleur du papier
+	Simulation profile	Profil de simulation
+	Small rich black text	Petit texte en noir riche
+	Solid color	Aplat
+	Some objects can't be measured and are left out.	Certains objets ne peuvent pas être mesurés et sont ignorés.
+	Spot colors	Tons directs
+	Stroke	Contour
+	Style:	Style :
+	The page grows to make room for the marks.	La page s’agrandit pour faire place aux repères.
+	The profile is larger than {n} MB.	Le profil dépasse {n} Mo.
+	This document uses only the process inks.	Ce document n’utilise que les encres quadri.
+	To process	En quadrichromie
+	Total area coverage	Couverture totale d’encre
+	Transparency	Transparence
+	Trim marks	Traits de coupe
+	Use Lab values for spot colors	Utiliser les valeurs Lab pour les tons directs
+	Vector objects	Objets vectoriels
+	Western	Occidental
+	White overprint	Surimpression du blanc
+	Working CMYK space	Espace de travail CMJN
+	embedded	incorporée
+	not embedded	non incorporée
+	{n} of the page is over the limit	{n} de la page dépasse la limite
+
+# Accessibility: Tags and Order panels, Reading order tool, Autotag, Make accessible
+	Marked content {mcid} on page {page}	Contenu marqué {mcid} à la page {page}
+	Marked content {mcid}	Contenu marqué {mcid}
+	Object	Objet
+	Annotation: {kind}	Annotation : {kind}
+	This document has no tags.	Ce document n’a pas de balises.
+	Tags tell screen readers what each part of the page is and in which order to read it.	Les balises indiquent aux lecteurs d’écran ce qu’est chaque partie de la page et dans quel ordre la lire.
+	Autotag document	Baliser automatiquement le document
+	Reading order tool	Outil Ordre de lecture
+	New tag…	Nouvelle balise…
+	Tag properties…	Propriétés de la balise…
+	Change to artifact	Changer en artefact
+	Delete tag	Supprimer la balise
+	Collapse all tags	Réduire toutes les balises
+	Expand all tags	Développer toutes les balises
+	This structure tree is very large: only part of it is shown, and it can't be edited.	Cette arborescence de structure est très grande : seule une partie est affichée et elle ne peut pas être modifiée.
+	Collapse some tags to see the rest.	Réduisez certaines balises pour voir le reste.
+	Clear page structure	Effacer la structure de la page
+	Nothing on this page is tagged yet.	Rien n’est encore balisé sur cette page.
+	Use the Reading order tool: draw a box around content and choose what it is.	Utilisez l’outil Ordre de lecture : tracez un cadre autour du contenu et choisissez ce que c’est.
+	{n} drawing operations on this page are not tagged.	{n} opérations de dessin de cette page ne sont pas balisées.
+	Tag properties	Propriétés de la balise
+	What a figure or formula shows	Ce que montre une figure ou une formule
+	Actual text	Texte réel
+	The exact text the content spells	Le texte exact que forme le contenu
+	Alternate and actual text replace everything inside the tag for screen readers.	Le texte de remplacement et le texte réel remplacent tout le contenu de la balise pour les lecteurs d’écran.
+	New tag	Nouvelle balise
+	Drag tags onto the new tag to move them inside it.	Faites glisser des balises sur la nouvelle balise pour les y placer.
+	Add tag	Ajouter la balise
+	Inside {tag}	Dans {tag}
+	At the top level	Au niveau supérieur
+	Draw a box around content, then choose what it is.	Tracez un cadre autour du contenu, puis choisissez ce que c’est.
+	Tag this area as	Baliser cette zone comme
+	Alternate text (figures and formulas)	Texte de remplacement (figures et formules)
+	Autotag form fields	Baliser automatiquement les champs de formulaire
+	PdfCraft reads the layout of every page and tags headings, paragraphs, lists, tables, figures, links and form fields in reading order.	PdfCraft lit la mise en page de chaque page et balise les titres, paragraphes, listes, tableaux, figures, liens et champs de formulaire dans l’ordre de lecture.
+	Find tables	Détecter les tableaux
+	Find lists	Détecter les listes
+	Tag form fields	Baliser les champs de formulaire
+	Give fields without a tooltip one from their label	Donner aux champs sans info-bulle une info-bulle tirée de leur libellé
+	This document is already tagged. Autotagging replaces all of its tags.	Ce document est déjà balisé. Le balisage automatique remplace toutes ses balises.
+	Replace the existing tags	Remplacer les balises existantes
+	Autotag	Baliser
+	Autotag finished	Balisage automatique terminé
+	{n} tags on {p} pages.	{n} balises sur {p} pages.
+	{n} figures need alternate text.	{n} figures ont besoin d’un texte de remplacement.
+	{n} form fields have no tooltip.	{n} champs de formulaire n’ont pas d’info-bulle.
+	Check the reading order of each page with the Order panel.	Vérifiez l’ordre de lecture de chaque page dans le panneau Ordre.
+	Show tags	Afficher les balises
+	Results	Résultats
+	Screen readers announce the title and read the text in the document's language.	Les lecteurs d’écran annoncent le titre et lisent le texte dans la langue du document.
+	Tag the document again (replaces its tags)	Baliser à nouveau le document (remplace ses balises)
+	Tag the document	Baliser le document
+	Next	Suivant
+	Give the document's language as a language tag, such as en-US.	Indiquez la langue du document sous forme de code de langue, par exemple en-US.
+	Screen readers read a field's tooltip to say what to fill in. Check each one.	Les lecteurs d’écran lisent l’info-bulle d’un champ pour indiquer quoi saisir. Vérifiez chacune.
+	Figure {i} of {n}	Figure {i} sur {n}
+	Finish	Terminer
+	Undo takes back the whole action in one step.	Annuler revient sur toute l’action en une seule étape.
+	Show checker results	Afficher les résultats du vérificateur
+	skipped	ignoré
+	{n} set	{n} définis
+	structure order	ordre de la structure
+	no figures	aucune figure
+	Tags	Balises
+	Order	Ordre
+	Heading 1	Titre 1
+	Heading 2	Titre 2
+	Heading 3	Titre 3
+	Heading 4	Titre 4
+	Heading 5	Titre 5
+	Heading 6	Titre 6
+	Figure	Figure
+	Figure with caption	Figure avec légende
+	Table cell	Cellule de tableau
+	Formula	Formule
+	Form field	Champ de formulaire
+	Artifact: header	Artefact : en-tête
+	Artifact: footer	Artefact : pied de page
+	Artifact: background	Artefact : arrière-plan
+	Form field tooltips	Info-bulles des champs de formulaire
+	Paragraphs	Paragraphes
+	Figures	Figures
+	Tags panel	Panneau Balises
+	Order panel	Panneau Ordre
+	Autotag document…	Baliser automatiquement le document…
+	Autotag form fields…	Baliser automatiquement les champs de formulaire…
+	Make accessible…	Rendre accessible…
+	Change reading order	Modifier l’ordre de lecture
+	Change tag properties	Modifier les propriétés de la balise
+	Tag region	Baliser la zone
+	Add files to number	Ajouter des fichiers à numéroter
+	Align and distribute	Aligner et répartir
+	Align bottom	Aligner en bas
+	Align horizontal centers	Centrer horizontalement
+	Align to the page	Aligner sur la page
+	Align top	Aligner en haut
+	Align vertical centers	Centrer verticalement
+	Bates Number Options	Options de numérotation Bates
+	Bates numbering… file {d} of {t}	Numérotation Bates… fichier {d} sur {t}
+	Bulleted list	Liste à puces
+	Choose a destination	Choisir une destination
+	Choose a folder for the numbered files	Choisir un dossier pour les fichiers numérotés
+	Custom view ({kind})	Vue personnalisée ({kind})
+	Custom view ({zoom}%)	Vue personnalisée ({zoom} %)
+	Distribute horizontally	Répartir horizontalement
+	Distribute vertically	Répartir verticalement
+	Edited, added and deleted text and images update a tagged document's structure in the same undo step.	Le texte et les images modifiés, ajoutés ou supprimés mettent à jour la structure d’un document balisé dans la même étape d’annulation.
+	File name suffix	Suffixe du nom de fichier
+	Fit height	Ajuster la hauteur
+	Fit page	Page entière
+	Go to a named destination	Aller à une destination nommée
+	Go to the page as it is shown now: its position and zoom	Aller à la page telle qu’elle est affichée : sa position et son zoom
+	Horizontal offset	Décalage horizontal
+	Indent list	Augmenter le retrait de la liste
+	Inherit zoom	Zoom hérité
+	Keep structure tags when editing content	Conserver les balises de structure lors de la modification du contenu
+	Number of digits	Nombre de chiffres
+	Numbered list	Liste numérotée
+	Numbered {done} of {total} files; {name} couldn't be numbered: {e}	{done} fichiers sur {total} numérotés ; {name} n’a pas pu être numéroté : {e}
+	Numbered {n} more files, up to {last}	{n} fichiers de plus numérotés, jusqu’à {last}
+	Outdent list	Réduire le retrait de la liste
+	Remove list	Supprimer la liste
+	Select three or more objects to distribute them	Sélectionnez au moins trois objets pour les répartir
+	Show when displaying on screen	Afficher à l’écran
+	Show when printing	Afficher à l’impression
+	Space after paragraphs	Espace après les paragraphes
+	Start number	Numéro de départ
+	Suffix	Suffixe
+	The numbers continue into these files, in order. Each gets a numbered copy in a folder you choose; the files themselves are left as they are.	La numérotation se poursuit dans ces fichiers, dans l’ordre. Chacun reçoit une copie numérotée dans un dossier de votre choix ; les fichiers eux-mêmes restent inchangés.
+	This document has no named destinations.	Ce document n’a aucune destination nommée.
+	Use current view	Utiliser la vue actuelle
+	Vertical offset	Décalage vertical
+	Bates numbering of other files couldn't start; try again	La numérotation Bates des autres fichiers n’a pas pu démarrer ; réessayez
+	Bates numbering of other files is already running	La numérotation Bates d’autres fichiers est déjà en cours
+	That's as many files as one Bates numbering run takes	Une numérotation Bates ne peut pas prendre plus de fichiers
+	Numbering other files arrives on the web with folder pickers	La numérotation d’autres fichiers arrivera sur le web avec les sélecteurs de dossier
+	Select objects with Edit objects first	Sélectionnez d’abord des objets avec Modifier les objets
+	Select a text box, or click into a paragraph, first	Sélectionnez d’abord une zone de texte ou cliquez dans un paragraphe
+# Signing: appearances, trusted certificates, verification information, compare signed version
+	0 accepts it however old it is.	0 l’accepte quel que soit son âge.
+	A cancelled response is discarded. A blocked request stops at the configured deadline (at most 30 seconds).	Une réponse annulée est ignorée. Une requête bloquée s’arrête au délai configuré (30 secondes au plus).
+	A certificate file is limited to 4 MiB.	Un fichier de certificat est limité à 4 Mio.
+	A chosen or claimed date is not cryptographic proof of time.	Une date choisie ou déclarée n’est pas une preuve cryptographique de l’heure.
+	Account name (optional)	Nom du compte (facultatif)
+	Add a TSA certificate to Trusted Certificates only after independently verifying its identity and fingerprint. Disabling this check saves an untrusted token; it does not establish trusted time.	N’ajoutez un certificat de TSA aux certificats de confiance qu’après avoir vérifié indépendamment son identité et son empreinte. Désactiver ce contrôle enregistre un jeton non fiable ; cela n’établit pas une heure de confiance.
+	Add logo…	Ajouter un logo…
+	Add verification information	Ajouter les informations de vérification
+	Add verification information…	Ajouter les informations de vérification…
+	Allow a timestamp request to the selected server	Autoriser une demande d’horodatage auprès du serveur choisi
+	Allow a timestamp request to this server	Autoriser une demande d’horodatage auprès de ce serveur
+	Also from sites that Internet access asks about	Aussi depuis les sites pour lesquels l’accès à Internet demande
+	Also trust them for certified documents	Leur faire aussi confiance pour les documents certifiés
+	Appearance name	Nom de l’apparence
+	Blocked sites stay blocked. Only the certificates' OCSP responders and CRL addresses are contacted.	Les sites bloqués restent bloqués. Seuls les répondeurs OCSP et les adresses de CRL des certificats sont contactés.
+	CRLs	CRL
+	Cancel operation	Annuler l’opération
+	Certificate and revocation checks at:	Vérification des certificats et des révocations à :
+	Certified documents	Documents certifiés
+	Change logo…	Changer de logo…
+	Choose a configured timestamp server.	Choisissez un serveur d’horodatage configuré.
+	Choose a server	Choisir un serveur
+	Choose another picture…	Choisir une autre image…
+	Choose picture…	Choisir une image…
+	Clear drawing	Effacer le dessin
+	Compare signed version	Comparer la version signée
+	Compare signed version with current	Comparer la version signée à la version actuelle
+	Compare with current	Comparer à l’actuelle
+	Couldn't compare the signed version: {e}	Impossible de comparer la version signée : {e}
+	Couldn't use the picture: {e}	Impossible d’utiliser l’image : {e}
+	Current time	Heure actuelle
+	Drawn signature	Signature dessinée
+	Embedding evidence does not itself establish PAdES B-LT/B-LTA compliance. Incomplete coverage is reported after validation.	L’intégration de preuves n’établit pas à elle seule la conformité PAdES B-LT/B-LTA. Une couverture incomplète est signalée après la validation.
+	Every certificate's revocation status is now in the document.	L’état de révocation de chaque certificat figure maintenant dans le document.
+	Every change since signing is permitted by the signature.	Chaque modification depuis la signature est autorisée par celle-ci.
+	Every form field is locked and no later change keeps the signature valid.	Tous les champs du formulaire sont verrouillés et aucune modification ultérieure ne garde la signature valide.
+	Fetch revocation information online	Récupérer les informations de révocation en ligne
+	Fetch revocation information online when adding verification information	Récupérer les informations de révocation en ligne lors de l’ajout des informations de vérification
+	Filling in forms, signing and commenting are permitted (approval signature).	Le remplissage de formulaires, la signature et les commentaires sont autorisés (signature d’approbation).
+	HTTPS URL	URL HTTPS
+	Import certificates…	Importer des certificats…
+	Issued by {issuer}, valid to {date}	Émis par {issuer}, valide jusqu’au {date}
+	Local DER files to add too (optional), one path per line. Certificates are not automatically trusted.	Fichiers DER locaux à ajouter aussi (facultatif), un chemin par ligne. Les certificats ne deviennent pas automatiquement de confiance.
+	Local DER files, one path per line. Certificates are not automatically trusted.	Fichiers DER locaux, un chemin par ligne. Les certificats ne deviennent pas automatiquement de confiance.
+	Lock document after signing	Verrouiller le document après la signature
+	Logo	Logo
+	Manage timestamp servers in Preferences → Signatures.	Gérez les serveurs d’horodatage dans Préférences → Signatures.
+	Maximum age of revocation information without an update time	Âge maximal des informations de révocation sans date de mise à jour
+	More changes were found than are listed.	Plus de modifications ont été trouvées que celles listées.
+	New server	Nouveau serveur
+	No changes are permitted.	Aucune modification n’est autorisée.
+	No saved appearances yet.	Aucune apparence enregistrée pour l’instant.
+	No server is configured. PdfCraft never contacts one unless you add it here.	Aucun serveur n’est configuré. PdfCraft n’en contacte jamais un que vous n’avez pas ajouté ici.
+	No timestamp	Sans horodatage
+	No trusted certificates yet.	Aucun certificat de confiance pour l’instant.
+	Nothing has changed since it was signed.	Rien n’a changé depuis la signature.
+	OCSP responses	Réponses OCSP
+	Only filling in forms and signing are permitted.	Seuls le remplissage de formulaires et la signature sont autorisés.
+	Only filling in forms, signing and commenting are permitted.	Seuls le remplissage de formulaires, la signature et les commentaires sont autorisés.
+	Only from sites that Internet access allows. Opening or validating a document never goes online.	Uniquement depuis les sites autorisés par l’accès à Internet. Ouvrir ou valider un document ne se connecte jamais.
+	Open a signed document first	Ouvrez d’abord un document signé
+	Optional policy OID	OID de politique facultatif
+	Or UTC date (YYYYMMDDHHmmSSZ)	Ou date UTC (YYYYMMDDHHmmSSZ)
+	Pages: {a} when signed, {b} now	Pages : {a} à la signature, {b} maintenant
+	Picture	Image
+	Pictures can be chosen in the desktop app; draw your signature here instead.	Les images se choisissent dans l’application de bureau ; dessinez plutôt votre signature ici.
+	Remove logo	Retirer le logo
+	Remove picture	Retirer l’image
+	Require an explicitly trusted timestamp authority	Exiger une autorité d’horodatage explicitement approuvée
+	Revocation information for {covered} of {needed} certificates was fetched.	Les informations de révocation de {covered} certificats sur {needed} ont été récupérées.
+	Save an appearance from the signing dialog: its text, a picture or drawn signature, and a logo.	Enregistrez une apparence depuis la boîte de signature : son texte, une image ou une signature dessinée, et un logo.
+	Save appearance	Enregistrer l’apparence
+	Save result…	Enregistrer le résultat…
+	Save server	Enregistrer le serveur
+	Saved appearances	Apparences enregistrées
+	Saved the appearance {name}	Apparence {name} enregistrée
+	Secure time (timestamp), else the signing time	Heure sûre (horodatage), sinon l’heure de signature
+	Show on the left	Afficher à gauche
+	Sign here with your mouse, pen or finger	Signez ici avec la souris, un stylet ou le doigt
+	Signature appearances	Apparences de signature
+	Signature operation	Opération de signature
+	Signatures whose certificates chain to one of these are trusted. Choose what each one is trusted for.	Les signatures dont les certificats remontent à l’un de ceux-ci sont approuvées. Choisissez pour quoi chacun est approuvé.
+	Signed documents	Documents signés
+	Signed version of {field} (revision {n})	Version signée de {field} (révision {n})
+	Some changes since signing are not permitted by the signature.	Certaines modifications depuis la signature ne sont pas autorisées par celle-ci.
+	Text only	Texte seul
+	The Signatures panel checks certificates and revocation at this time. A signing time without a trusted timestamp is the signer's own claim.	Le panneau Signatures vérifie les certificats et les révocations à ce moment. Une heure de signature sans horodatage de confiance n’est qu’une déclaration du signataire.
+	The current time	L’heure actuelle
+	The password is kept only until PdfCraft quits, never saved.	Le mot de passe n’est conservé que jusqu’à la fermeture de PdfCraft, jamais enregistré.
+	The request contains a digest, not the PDF. No request is made when this dialog opens.	La requête contient une empreinte, pas le PDF. Aucune requête n’est faite à l’ouverture de cette boîte.
+	The signed version could not be read.	La version signée n’a pas pu être lue.
+	The time the signature was created	L’heure de création de la signature
+	Then add a document timestamp (optional):	Puis ajouter un horodatage du document (facultatif) :
+	Timeout (seconds)	Délai (secondes)
+	Timestamp (optional)	Horodatage (facultatif)
+	Trust the operating system's root certificates for signatures	Faire confiance aux certificats racines du système pour les signatures
+	Trusted certificates	Certificats de confiance
+	Trusted root	Racine de confiance
+	Trusted timestamp, else claimed signing time	Horodatage de confiance, sinon l’heure de signature déclarée
+	Validating and saving…	Validation et enregistrement…
+	Verify signatures using	Vérifier les signatures selon
+	macOS Keychain, Windows certificate store, or the system's CA bundle. Off by default.	Trousseau macOS, magasin de certificats Windows ou paquet d’AC du système. Désactivé par défaut.
+	{n} addresses were not contacted because of Internet access settings.	{n} adresses n’ont pas été contactées à cause des réglages d’accès à Internet.
+	{n} certificates added to your trusted certificates.	{n} certificats ajoutés à vos certificats de confiance.
+	Adds the signers' certificate chains and their revocation status to the document, so the signatures can still be checked after the certificates expire.	Ajoute au document les chaînes de certificats des signataires et leur état de révocation, pour que les signatures restent vérifiables après l’expiration des certificats.
+# Field triggers, document actions, certificate security, Trust Manager, redaction code sets and locales.
+	Add at least one recipient certificate.	Ajoutez au moins un certificat de destinataire.
+	Add code	Ajouter un code
+	Add recipient	Ajouter un destinataire
+	Add recipient…	Ajouter un destinataire…
+	Add site	Ajouter le site
+	Add type	Ajouter le type
+	All locales	Toutes les régions
+	Allow changing the security settings (and everything else)	Autoriser la modification des paramètres de sécurité (et tout le reste)
+	Always allow	Toujours autoriser
+	At most {n} recipients.	{n} destinataires au maximum.
+	Attach the saved form data to the email	Joignez les données de formulaire enregistrées au courriel
+	Australia	Australie
+	Bcc	Cci
+	Canada	Canada
+	Cc	Cc
+	Certificate or digital ID	Certificat ou identifiant numérique
+	Certificate security will be applied when you save	La sécurité par certificat sera appliquée à l'enregistrement
+	Choose a saved set or make a new one.	Choisissez un jeu enregistré ou créez-en un.
+	Choose codes	Choisir des codes
+	Code	Code
+	Code set file	Fichier de jeux de codes
+	Delete set	Supprimer le jeu
+	Deleted {name}.	{name} supprimé.
+	Document Actions	Actions du document
+	Document Did Print	Document imprimé
+	Document Did Save	Document enregistré
+	Document Will Close	Fermeture du document
+	Document Will Print	Impression du document
+	Document Will Save	Enregistrement du document
+	Document actions…	Actions du document…
+	Each script runs when the document is about to close, is saved or is printed. Scripts can't start another save or print.	Chaque script s'exécute quand le document va être fermé, est enregistré ou est imprimé. Les scripts ne peuvent pas lancer un autre enregistrement ou une autre impression.
+	Encrypt with certificate…	Chiffrer avec un certificat…
+	Export code sets	Exporter les jeux de codes
+	Extension, such as zip	Extension, par exemple zip
+	France	France
+	Germany	Allemagne
+	Import code sets	Importer des jeux de codes
+	Imported {names}.	{names} importé(s).
+	Import…	Importer…
+	Include subdomains	Inclure les sous-domaines
+	India	Inde
+	International	International
+	Japan	Japon
+	Lock the document after signing	Verrouiller le document après la signature
+	Locked fields become read-only once the field is signed; a locked document then allows no changes.	Les champs verrouillés passent en lecture seule une fois le champ signé ; un document verrouillé n'accepte ensuite aucune modification.
+	Mark as read-only all fields	Mettre en lecture seule tous les champs
+	Mark as read-only all fields except these	Mettre en lecture seule tous les champs sauf ceux-ci
+	Mark as read-only just these fields	Mettre en lecture seule uniquement ces champs
+	Mark every pattern of this locale	Marquer chaque motif de cette région
+	Never open	Ne jamais ouvrir
+	New set	Nouveau jeu
+	No recipients yet. Add a certificate for each person who may open the document.	Aucun destinataire pour l'instant. Ajoutez un certificat pour chaque personne autorisée à ouvrir le document.
+	No site rules yet.	Aucune règle de site pour l'instant.
+	Nobody can change or remove this security later unless a recipient may change the security.	Personne ne pourra modifier ni supprimer cette sécurité, sauf un destinataire autorisé à modifier la sécurité.
+	None yet	Aucun pour l'instant
+	Nothing happens	Rien ne se passe
+	Only the recipients can open the document, each with the permissions you give them. It's applied when you save.	Seuls les destinataires peuvent ouvrir le document, chacun avec les autorisations que vous lui donnez. Appliqué à l'enregistrement.
+	PdfCraft doesn't send email itself: it opens your email app and saves the data for you to attach.	PdfCraft n'envoie pas lui-même de courriel : il ouvre votre application de messagerie et enregistre les données pour que vous les joigniez.
+	Permissions for {name}	Autorisations pour {name}
+	Programs and scripts are refused and plain documents open; other types ask. Your lists override the built-in ones.	Les programmes et scripts sont refusés et les documents simples s'ouvrent ; pour les autres types, une question est posée. Vos listes priment sur les listes intégrées.
+	Recipients	Destinataires
+	Redaction code sets	Jeux de codes de biffure
+	Redaction code sets…	Jeux de codes de biffure…
+	Remove the rule for {host}	Supprimer la règle pour {host}
+	Remove this code	Supprimer ce code
+	Rules for web sites that links, scripts and form submissions reach. Used when internet access follows the site rules.	Règles pour les sites web atteints par les liens, les scripts et les envois de formulaires. Utilisées quand l'accès à Internet suit les règles des sites.
+	Save set	Enregistrer le jeu
+	Saved sets	Jeux enregistrés
+	Saved {name}.	{name} enregistré.
+	Set name	Nom du jeu
+	Signed	Signé
+	Sites	Sites
+	Take .{ext} off the list	Retirer .{ext} de la liste
+	That recipient is already on the list.	Ce destinataire est déjà dans la liste.
+	The file holds {n} certificates; add each recipient from its own file.	Le fichier contient {n} certificats ; ajoutez chaque destinataire depuis son propre fichier.
+	The file is larger than {n} MB.	Le fichier dépasse {n} Mo.
+	The file is too large for a code set file.	Le fichier est trop volumineux pour un fichier de jeux de codes.
+	The form has no other fields.	Le formulaire n'a pas d'autres champs.
+	The form was sent to {host}, which filled in its answer.	Le formulaire a été envoyé à {host}, qui y a inscrit sa réponse.
+	The form was sent to {host}; its answer couldn't be imported: {e}	Le formulaire a été envoyé à {host} ; sa réponse n'a pas pu être importée : {e}
+	The form was sent to {host}; its answer was too large to import.	Le formulaire a été envoyé à {host} ; sa réponse était trop volumineuse pour être importée.
+	This form wants to email its data:	Ce formulaire veut envoyer ses données par courriel :
+	This isn't a certificate (.cer, .crt, .pem, .der) or digital ID (.p12, .pfx).	Ce n'est ni un certificat (.cer, .crt, .pem, .der) ni un identifiant numérique (.p12, .pfx).
+	To	À
+	Trust Manager	Gestionnaire de confiance
+	Trust Manager…	Gestionnaire de confiance…
+	Type the digital ID's password first (or choose a certificate file).	Saisissez d'abord le mot de passe de l'identifiant numérique (ou choisissez un fichier de certificat).
+	United Kingdom	Royaume-Uni
+	United States	États-Unis
+	When signed:	À la signature :
+	Your own codes to cite on redactions, offered in Redaction Properties beside the built-in sets.	Vos propres codes à citer sur les biffures, proposés dans les propriétés de biffure à côté des jeux intégrés.
+	and subdomains	et sous-domaines
+	this host only	cet hôte uniquement
+	{n} chosen	{n} choisi(s)
+	German Tax Identification Numbers	Numéros d'identification fiscale allemands
+	Indian Aadhaar Numbers	Numéros Aadhaar indiens
+	Indian PAN Numbers	Numéros PAN indiens
+	Australian Tax File Numbers	Numéros de dossier fiscal australiens (TFN)
+	Australian Medicare Numbers	Numéros Medicare australiens
+	Australian Business Numbers	Numéros d'entreprise australiens (ABN)
+
+# Comment, organize and search gaps (find comments, hide by type, page ranges, bookmark
+# properties, bookmarks from structure, advanced search, associated files, custom commands).
+	 in {f} of {s} documents	 dans {f} documents sur {s}
+	(no name)	(sans nom)
+	(this document doesn't allow copying its text)	(ce document ne permet pas de copier son texte)
+	* the tool needs this option	* l'outil a besoin de cette option
+	A bookmark needs a title.	Un signet doit avoir un titre.
+	A folder	Un dossier
+	A folder…	Un dossier…
+	Add an associated file	Ajouter un fichier associé
+	Add file…	Ajouter un fichier…
+	Added 1 bookmark	1 signet ajouté
+	Added {n} bookmarks	{n} signets ajoutés
+	All levels	Tous les niveaux
+	Another action (kept as it is)	Autre action (conservée telle quelle)
+	Ask for the options each time it runs	Demander les options à chaque exécution
+	Asks for its options when it runs.	Demande ses options à l'exécution.
+	Associated files	Fichiers associés
+	Bookmark properties	Propriétés du signet
+	Bookmark properties…	Propriétés du signet…
+	Cancelled: not every document was searched.	Annulé : tous les documents n'ont pas été parcourus.
+	Check the options, then run the command.	Vérifiez les options, puis exécutez la commande.
+	Choose a folder of PDFs	Choisir un dossier de PDF
+	Choose a folder to search	Choisir un dossier où rechercher
+	Choose a folder to search.	Choisissez un dossier où rechercher.
+	Choose folder…	Choisir un dossier…
+	Choose one of the document's named destinations.	Choisissez l'une des destinations nommées du document.
+	Choose the tool the command runs.	Choisissez l'outil que la commande exécute.
+	Choose…	Choisir…
+	Comment	Commentaire
+	Comment on page {label}	Commentaire en page {label}
+	Custom commands	Commandes personnalisées
+	Custom commands aren't available in this version of PdfCraft.	Les commandes personnalisées ne sont pas disponibles dans cette version de PdfCraft.
+	Custom commands…	Commandes personnalisées…
+	Description (optional)	Description (facultative)
+	Destination:	Destination :
+	Edit Command	Modifier la commande
+	Enter a page number from 1 to {n}.	Saisissez un numéro de page de 1 à {n}.
+	Enter a web address starting with https://, http:// or mailto:.	Saisissez une adresse web commençant par https://, http:// ou mailto:.
+	Enter a zoom from 1% to 6400%.	Saisissez un zoom de 1 % à 6400 %.
+	Existing bookmarks:	Signets existants :
+	Export custom commands	Exporter les commandes personnalisées
+	Files linked to the document, a page or a comment, each with its relationship (source, data, alternative…).	Fichiers liés au document, à une page ou à un commentaire, chacun avec sa relation (source, données, alternative…).
+	Files…	Fichiers…
+	Fixed zoom	Zoom fixe
+	Headings:	Titres :
+	Import custom commands	Importer des commandes personnalisées
+	Imported {n} custom commands	{n} commandes personnalisées importées
+	Include bookmarks and comments	Inclure les signets et les commentaires
+	Include comments	Inclure les commentaires
+	Include subfolders	Inclure les sous-dossiers
+	Keep them, add the new ones after	Les garder, ajouter les nouveaux après
+	Levels 1 to {n}	Niveaux 1 à {n}
+	Look in	Rechercher dans
+	Make bookmarks	Créer les signets
+	Make one bookmark for each heading of the document's tags, nested by heading level.	Créer un signet pour chaque titre des balises du document, imbriqué selon le niveau de titre.
+	New Command	Nouvelle commande
+	New Command…	Nouvelle commande…
+	New bookmarks from structure	Nouveaux signets d'après la structure
+	New bookmarks from structure…	Nouveaux signets d'après la structure…
+	No associated files.	Aucun fichier associé.
+	No comments	Aucun commentaire
+	No custom commands yet.	Aucune commande personnalisée pour l'instant.
+	No folder chosen	Aucun dossier choisi
+	No pages match.	Aucune page ne correspond.
+	Object {n}	Objet {n}
+	One tool with the options you choose, run in one step.	Un outil avec les options choisies, exécuté en une étape.
+	Open a document to run the command on.	Ouvrez un document sur lequel exécuter la commande.
+	Page labels work too, as in Print.	Les libellés de page fonctionnent aussi, comme dans Imprimer.
+	Page range	Plage de pages
+	Page:	Page :
+	Ran {name}	{name} exécutée
+	Relationship:	Relation :
+	Remove associated file	Supprimer le fichier associé
+	Replace them	Les remplacer
+	Run on this document	Exécuter sur ce document
+	Run on:	Exécuter sur :
+	Runs: {tool}	Exécute : {tool}
+	Save associated file…	Enregistrer le fichier associé…
+	Search a folder…	Rechercher dans un dossier…
+	Searching {d} of {t}…	Recherche {d} sur {t}…
+	Select	Sélectionner
+	Select a bookmark first	Sélectionnez d'abord un signet
+	Select pages…	Sélectionner des pages…
+	Show all comment types	Afficher tous les types de commentaires
+	Show all types	Afficher tous les types
+	Show on pages by type	Afficher sur les pages par type
+	Stopped at the result limit: narrow the search to see the rest.	Arrêté à la limite de résultats : affinez la recherche pour voir la suite.
+	Subset:	Sous-ensemble :
+	That bookmark no longer exists	Ce signet n'existe plus
+	The current document	Le document actuel
+	The document changed; add the file again	Le document a changé ; ajoutez de nouveau le fichier
+	The folder to search	Le dossier où rechercher
+	The script is too long.	Le script est trop long.
+	There is no folder to keep custom commands in.	Il n'y a pas de dossier où conserver les commandes personnalisées.
+	This bookmark runs a {kind} action, kept as it is unless you choose another.	Ce signet exécute une action {kind}, conservée telle quelle sauf si vous en choisissez une autre.
+	Title:	Titre :
+	To the document	Au document
+	To this page	À cette page
+	Tool:	Outil :
+	Type a word or phrase to search for.	Saisissez un mot ou une expression à rechercher.
+	Web address:	Adresse web :
+	When clicked:	Au clic :
+	Zoom:	Zoom :
+	cancelled	annulé
+	comment	commentaire
+	e.g. 1-3, 7	p. ex. 1-3, 7
+	e.g. 1-3, 7 (empty: all pages)	p. ex. 1-3, 7 (vide : toutes les pages)
+	larger than {n} MB	plus de {n} Mo
+	not a file name	pas un nom de fichier
+	stopped at {n} files	arrêté à {n} fichiers
+	the action stopped unexpectedly	l'action s'est arrêtée de façon inattendue
+	{name} is larger than {n} MB	{name} dépasse {n} Mo
+	{name} isn't valid	{name} n'est pas valide
+	{n} files skipped	{n} fichiers ignorés
+	{n} more	{n} de plus
+	{n} more not shown	{n} autres non affichés
+	{n} skipped	{n} ignorés
+	; text recognized on {n} scanned pages	; texte reconnu sur {n} pages numérisées
+	A flowing document: paragraphs in reading order with their fonts and styles, headings, lists, tables and images.	Un document fluide : les paragraphes dans l'ordre de lecture avec leurs polices et styles, titres, listes, tableaux et images.
+	Add a selectable text layer	Ajouter une couche de texte sélectionnable
+	An export is already running	Une exportation est déjà en cours
+	Cleans up the images on scanned or photographed pages. Each correction can be undone.	Nettoie les images des pages numérisées ou photographiées. Chaque correction peut être annulée.
+	Correct camera photos	Corriger les photos d'appareil
+	Couldn't enhance the scans: {e}	Impossible d'améliorer les numérisations : {e}
+	Despeckle	Supprimer les taches
+	Editable Text and Images	Texte et images modifiables
+	Editable text boxes and pictures	Zones de texte et images modifiables
+	Enhance	Améliorer
+	Enhance Scans	Améliorer les numérisations
+	Enhanced: {list}	Amélioré : {list}
+	Export Accessible Text	Exporter le texte accessible
+	Export cancelled	Exportation annulée
+	Export cancelled after {n} pages	Exportation annulée après {n} pages
+	Export stopped unexpectedly	L'exportation s'est arrêtée de façon inattendue
+	Export to Excel	Exporter vers Excel
+	Export to HTML	Exporter en HTML
+	Export to PowerPoint	Exporter vers PowerPoint
+	Export to RTF	Exporter en RTF
+	Export to SVG	Exporter en SVG
+	Export to Word	Exporter vers Word
+	Finds the page in a photo, corrects its perspective and evens out the lighting	Trouve la page dans une photo, corrige sa perspective et uniformise l'éclairage
+	Nothing needed enhancing on these pages	Rien à améliorer sur ces pages
+	On every page without text	Sur chaque page sans texte
+	On scanned pages	Sur les pages numérisées
+	One SVG file per page, named after the document: vector paths, text as outlines, images.	Un fichier SVG par page, nommé d'après le document : tracés vectoriels, texte vectorisé, images.
+	One picture per page	Une image par page
+	One slide per page.	Une diapositive par page.
+	One web page: headings, paragraphs with their fonts and styles, lists, tables and images inline.	Une page web : titres, paragraphes avec leurs polices et styles, listes, tableaux et images intégrées.
+	One worksheet per page: tables as cell grids, numbers as numbers, images as pictures.	Une feuille de calcul par page : tableaux en grilles de cellules, nombres en nombres, images en images.
+	Picture resolution	Résolution des images
+	Removes isolated specks before reading; with an output that changes the page, from the page images too	Retire les taches isolées avant la lecture ; avec une sortie qui modifie la page, aussi des images de la page
+	Rich text: paragraphs with their fonts and styles, and tables.	Texte enrichi : paragraphes avec leurs polices et styles, et tableaux.
+	Straighten skewed pages	Redresser les pages inclinées
+	The tagged text in logical reading order, as a screen reader reads it.	Le texte balisé dans l'ordre de lecture logique, tel qu'un lecteur d'écran le lit.
+	Turns pages scanned at a slant (up to 15°) straight	Redresse les pages numérisées de travers (jusqu'à 15°)
+	Turns recognized lines into editable text in a matching font, size and colour; the rest of the page stays as an image	Transforme les lignes reconnues en texte modifiable dans une police, une taille et une couleur assorties ; le reste de la page reste une image
+	Whitens the paper background before reading; with an output that changes the page, the page images too	Blanchit le fond du papier avant la lecture ; avec une sortie qui modifie la page, aussi les images de la page
+	background whitened in {n} images	fond blanchi dans {n} images
+	specks removed from {n} images	taches retirées de {n} images
+	{n} camera photos corrected	{n} photos d'appareil corrigées
+	{n} pages straightened	{n} pages redressées
+	Export to PowerPoint…	Exporter vers PowerPoint…
+	Export to SVG…	Exporter en SVG…
+	Export accessible text…	Exporter le texte accessible…
+	Enhance scans…	Améliorer les numérisations…
+	SVG (one file per page)	SVG (un fichier par page)
+	Accessible text	Texte accessible
+	Can't reach {standard} automatically; nothing was changed.	Impossible d'atteindre {standard} automatiquement ; rien n'a été modifié.
+	Checking…	Vérification…
+	Compress document structure	Compresser la structure du document
+	Compress entire file	Compresser tout le fichier
+	Convert to PDF/X	Convertir en PDF/X
+	Converted to {standard}: {n} changes. Save to keep them.	Converti en {standard} : {n} modifications. Enregistrez pour les conserver.
+	Converting…	Conversion…
+	Errors: {e} · Warnings: {w}	Erreurs : {e} · Avertissements : {w}
+	Flatten transparency	Aplatir la transparence
+	High (600 ppi)	Élevée (600 ppp)
+	Keep the document's (sRGB if it has none)	Celui du document (sRGB s'il n'en a pas)
+	Keep the document's output intent	Conserver la condition de sortie du document
+	Low (150 ppi)	Basse (150 ppp)
+	Make compatible with	Rendre compatible avec
+	Medium (300 ppi)	Moyenne (300 ppp)
+	No output intents	Aucune condition de sortie
+	No problems found in the implemented checks.	Aucun problème trouvé par les contrôles disponibles.
+	Nothing needed changing.	Aucune modification nécessaire.
+	Object compression	Compression des objets
+	Only the areas whose look depends on transparency become images; text and vectors elsewhere stay as they are.	Seules les zones dont l'aspect dépend de la transparence deviennent des images ; ailleurs, le texte et les vecteurs restent intacts.
+	Only the first {n} findings are shown.	Seuls les {n} premiers résultats sont affichés.
+	Optimizing… flattening transparency	Optimisation… aplatissement de la transparence
+	PDF 1.3 has no transparency: it is always flattened.	Le PDF 1.3 ne connaît pas la transparence : elle est toujours aplatie.
+	PDF {v} · objects checked: {n}	PDF {v} · objets vérifiés : {n}
+	PDF/X-4 embeds the output profile: choose a profile.	PDF/X-4 incorpore le profil de sortie : choisissez un profil.
+	Raster/vector balance	Équilibre pixellisation/vectoriel
+	Remove compression	Supprimer la compression
+	Save As optimizes for Fast Web View	« Enregistrer sous » optimise pour l'affichage Web rapide
+	Save As writes the file so a browser can show the first page before the download finishes.	« Enregistrer sous » écrit le fichier de sorte qu'un navigateur puisse afficher la première page avant la fin du téléchargement.
+	Standard	Norme
+	Syntax	Syntaxe
+	The chosen profile is no longer loaded.	Le profil choisi n'est plus chargé.
+	no profile (registered condition)	aucun profil (condition enregistrée)
+	object	objet
+	the profile can't be read: {e}	impossible de lire le profil : {e}
+	{space} {class} profile, ICC version {v}, {n} bytes	profil {space} {class}, version ICC {v}, {n} octets
+	Checks what a machine can decide. Reading order, the quality of alternate text and the use of colour need a person.	Vérifie ce qu'une machine peut décider. L'ordre de lecture, la qualité des textes de remplacement et l'usage de la couleur demandent une personne.
+	Checks every object reachable from the trailer against the Arlington PDF model for the file's PDF version.	Vérifie chaque objet accessible depuis le trailer par rapport au modèle PDF Arlington pour la version PDF du fichier.
+	Older versions: JPEG 2000 and 16-bit images are converted, JBIG2 becomes CCITT for PDF 1.3, transparency is flattened for PDF 1.3, and there are no object streams.	Versions anciennes : les images JPEG 2000 et 16 bits sont converties, JBIG2 devient CCITT pour PDF 1.3, la transparence est aplatie pour PDF 1.3 et il n'y a pas de flux d'objets.
+	PDF/X…	PDF/X…
+	PDF/UA…	PDF/UA…
+	Validate PDF syntax…	Valider la syntaxe PDF…
+	Validate PDF syntax	Valider la syntaxe PDF

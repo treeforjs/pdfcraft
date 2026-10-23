@@ -3,9 +3,16 @@
 //! Text fields open an in-place editor over the widget (Enter or clicking away commits, Escape
 //! cancels, Tab moves to the next field). Check boxes and radio buttons toggle on click. Combo
 //! and list boxes open a list of their options. Every change is one undoable engine edit.
+//!
+//! Field triggers (Field Properties ▸ Actions) fire as in Acrobat: Mouse Enter and Exit as the
+//! pointer crosses a widget, Mouse Down and Focus on a press (Blur on the field that had the
+//! focus), Mouse Up on the click, and the Keystroke event (`willCommit` false) as text is typed
+//! into a field with a Keystroke script or an AF format. Nothing is read or run for a widget
+//! whose `/A` and `/AA` have no entry for the trigger ([`pdfcraft_engine::FormField`] widgets
+//! carry those bits), so a form without actions costs nothing extra per frame.
 
 use egui::{Color32, CornerRadius, Rect, Stroke, vec2};
-use pdfcraft_engine::{Edit, FieldValue, FormField, FormFieldKind, field_flags};
+use pdfcraft_engine::{Edit, FieldTrigger as Trigger, FieldValue, FormField, FormFieldKind, field_flags};
 use pdfcraft_render::DocInfo;
 
 use crate::canvas::{DocView, PageXform};
@@ -29,6 +36,41 @@ pub struct Focus {
     /// Date fields: the month the calendar shows (year, month 1–12), and where it was drawn.
     pub calendar: Option<(i32, u32)>,
     pub calendar_rect: Option<egui::Rect>,
+    /// Typing is checked keystroke by keystroke ([`checks_keystrokes`]).
+    pub keystrokes: bool,
+}
+
+/// At most this many field triggers fire per frame (more are dropped).
+pub const MAX_FIRES_PER_FRAME: usize = 16;
+
+/// A field trigger to fire: the field, the trigger, and how many of its chain's first actions
+/// the viewer already ran (a push button's first Mouse Up action).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Fire {
+    pub field: String,
+    pub trigger: Trigger,
+    pub skip: usize,
+}
+
+/// A keystroke to check against the field's Keystroke script or format: the text before it,
+/// what it inserted over which characters, and the text after it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct KeystrokeCheck {
+    pub field: String,
+    pub before: String,
+    pub change: String,
+    pub sel: std::ops::Range<usize>,
+    pub after: String,
+}
+
+/// What a keystroke replaced: the inserted text and the replaced char range of `before`.
+pub fn keystroke_diff(before: &str, after: &str) -> (String, std::ops::Range<usize>) {
+    let b: Vec<char> = before.chars().collect();
+    let a: Vec<char> = after.chars().collect();
+    let prefix = b.iter().zip(&a).take_while(|(x, y)| x == y).count();
+    let suffix = b.iter().rev().zip(a.iter().rev()).take_while(|(x, y)| x == y).count().min(b.len() - prefix).min(a.len() - prefix);
+    let change: String = a.get(prefix..a.len() - suffix).map(|c| c.iter().collect()).unwrap_or_default();
+    (change, prefix..b.len() - suffix)
 }
 
 #[derive(Clone, Debug, Default)]
@@ -41,6 +83,50 @@ pub struct FormView {
     pub notice: Option<FormNotice>,
     /// A push button was clicked: (its field name, what it does).
     pub button: Option<(String, pdfcraft_engine::form_scripts::ButtonAction)>,
+    /// The widget under the pointer (field, widget, its trigger bits), for Mouse Enter / Exit.
+    pub hover: Option<(String, usize, u8)>,
+    /// This frame: the pointer is still over `hover` (`hover_seen`) or over another widget
+    /// (`hover_new`); neither means it left.
+    pub(crate) hover_seen: bool,
+    pub(crate) hover_new: Option<(String, usize, u8)>,
+    /// The field that has the focus (for Focus and Blur) and its widget's trigger bits.
+    pub active: Option<(String, u8)>,
+    /// A press landed on the page off every field (the focused one loses the focus).
+    pub(crate) pressed_off: bool,
+    /// Triggers to fire, in order (at most [`MAX_FIRES_PER_FRAME`]).
+    pub fires: Vec<Fire>,
+    /// Text typed into a field with keystroke checks, waiting to be checked.
+    pub keystroke: Option<KeystrokeCheck>,
+    /// The field the editor was open on last frame (Tab moving it is a focus change).
+    pub(crate) editor_was: Option<String>,
+}
+
+impl FormView {
+    fn fire(&mut self, field: &str, trigger: Trigger, bits: u8, skip: usize) {
+        if bits & trigger.bit() != 0 && self.fires.len() < MAX_FIRES_PER_FRAME {
+            self.fires.push(Fire { field: field.to_string(), trigger, skip });
+        }
+    }
+
+    /// Give `field` (whose widget has trigger `bits`) the focus: Blur on the field that had it,
+    /// then Focus.
+    fn focus_field(&mut self, field: &str, bits: u8) {
+        if self.active.as_ref().is_some_and(|(n, _)| n == field) {
+            return;
+        }
+        if let Some((old, old_bits)) = self.active.take() {
+            self.fire(&old, Trigger::OnBlur, old_bits, 0);
+        }
+        self.fire(field, Trigger::OnFocus, bits, 0);
+        self.active = Some((field.to_string(), bits));
+    }
+}
+
+/// Whether typing in `f` is checked keystroke by keystroke (a Keystroke script, or an AF format
+/// that refuses characters).
+fn checks_keystrokes(f: &FormField) -> bool {
+    use pdfcraft_engine::form_scripts::Format;
+    f.actions.scripts.keystroke.is_some() || !matches!(f.actions.format, Format::None | Format::Date(_) | Format::Time(_))
 }
 
 /// A form message for the app to show, with document data kept separate so the visible
@@ -73,6 +159,7 @@ fn open_focus(f: &FormField, widget: usize) -> Focus {
         select_all: false,
         calendar: None,
         calendar_rect: None,
+        keystrokes: f.kind == FormFieldKind::Text && checks_keystrokes(f),
     }
 }
 
@@ -97,7 +184,17 @@ pub(crate) fn page_input(
             .find(|(_, w)| w.page == Some(page) && !w.hidden && widget_rect(xf, info, page, w.rect).contains(p))
             .map(|(i, w)| (f, i, w))
     });
-    let Some((f, wi, w)) = hit else { return false };
+    let pressed = ui.input(|i| i.pointer.primary_pressed());
+    let Some((f, wi, w)) = hit else {
+        view.forms.pressed_off |= pressed && resp.hovered();
+        return false;
+    };
+    // Mouse Enter / Exit: only a change of widget allocates.
+    if view.forms.hover.as_ref().is_some_and(|(n, i, _)| *n == f.name && *i == wi) {
+        view.forms.hover_seen = true;
+    } else if view.forms.hover_new.is_none() {
+        view.forms.hover_new = Some((f.name.clone(), wi, w.triggers));
+    }
     // Empty signature fields are signed by clicking them (Use a certificate); push buttons run
     // their action.
     let pressable = f.kind == FormFieldKind::PushButton && !f.read_only() && f.button.is_some();
@@ -107,6 +204,16 @@ pub(crate) fn page_input(
         (true, FormFieldKind::Text) => egui::CursorIcon::Text,
         _ => egui::CursorIcon::PointingHand,
     });
+    // Mouse Down, then the focus moves here (Blur on the field that had it, Focus on this one).
+    if pressed && usable && !f.read_only() {
+        view.forms.fire(&f.name, Trigger::MouseDown, w.triggers, 0);
+        view.forms.focus_field(&f.name, w.triggers);
+    }
+    if resp.clicked() && allowed && usable && !f.read_only() {
+        // A push button's first Mouse Up action runs below; the rest of its chain after it.
+        let skip = usize::from(f.kind == FormFieldKind::PushButton && f.button.is_some());
+        view.forms.fire(&f.name, Trigger::MouseUp, w.triggers, skip);
+    }
     if !resp.clicked() {
         return resp.is_pointer_button_down_on();
     }
@@ -142,6 +249,43 @@ pub(crate) fn page_input(
         }
     }
     true
+}
+
+/// After the pages' input: fire Mouse Exit / Enter when the pointer changed widget, Blur when a
+/// press landed off every field, and Blur / Focus when Tab moved the editor to another field.
+pub(crate) fn after_input(view: &mut DocView, form: &[FormField]) {
+    let fv = &mut view.forms;
+    let new = fv.hover_new.take();
+    if !fv.hover_seen || new.is_some() {
+        if !fv.hover_seen
+            && let Some((name, _, bits)) = fv.hover.take()
+        {
+            fv.fire(&name, Trigger::MouseExit, bits, 0);
+        }
+        if let Some((name, wi, bits)) = new.filter(|_| !fv.hover_seen) {
+            fv.fire(&name, Trigger::MouseEnter, bits, 0);
+            fv.hover = Some((name, wi, bits));
+        }
+    }
+    fv.hover_seen = false;
+    if std::mem::take(&mut fv.pressed_off)
+        && fv.focus.is_none()
+        && let Some((name, bits)) = fv.active.take()
+    {
+        fv.fire(&name, Trigger::OnBlur, bits, 0);
+    }
+    // Tab moved the editor to another field (a press already moved the focus itself).
+    let editor = fv.focus.as_ref().map(|fx| (fx.name.as_str(), fx.widget));
+    if editor.map(|(n, _)| n) != fv.editor_was.as_deref() {
+        let moved = editor.map(|(n, w)| (n.to_string(), w));
+        fv.editor_was = moved.as_ref().map(|(n, _)| n.clone());
+        if let Some((name, widget)) = moved
+            && fv.active.as_ref().is_none_or(|(n, _)| *n != name)
+        {
+            let bits = form.iter().find(|f| f.name == name).and_then(|f| f.widgets.get(widget)).map_or(0, |w| w.triggers);
+            fv.focus_field(&name, bits);
+        }
+    }
 }
 
 /// The edit the focused field's draft makes, if it differs from the field's value.
@@ -295,6 +439,8 @@ pub(crate) fn overlay(ctx: &egui::Context, view: &mut DocView, info: &DocInfo, f
             egui::Area::new(egui::Id::new(("form-editor", view.id.0))).order(egui::Order::Foreground).fixed_pos(rect.min).show(ctx, |ui| {
                 ui.set_min_size(rect.size());
                 let Some(fx) = view.forms.focus.as_mut() else { return };
+                // Only fields with keystroke checks keep the text from before this frame.
+                let before = fx.keystrokes.then(|| fx.text.clone());
                 let mut te = if multiline { egui::TextEdit::multiline(&mut fx.text) } else { egui::TextEdit::singleline(&mut fx.text) };
                 te = te
                     .desired_width(rect.width() - 6.0)
@@ -311,6 +457,13 @@ pub(crate) fn overlay(ctx: &egui::Context, view: &mut DocView, info: &DocInfo, f
                     te = te.desired_rows(((rect.height() / (font * 1.3)).floor() as usize).max(1));
                 }
                 let r = ui.add_sized(rect.size(), te);
+                if let Some(before) = before
+                    && r.changed()
+                    && view.forms.keystroke.is_none()
+                {
+                    let (change, sel) = keystroke_diff(&before, &fx.text);
+                    view.forms.keystroke = Some(KeystrokeCheck { field: f.name.clone(), before, change, sel, after: fx.text.clone() });
+                }
                 if fx.request_focus {
                     r.request_focus();
                     fx.request_focus = false;
@@ -433,4 +586,96 @@ pub fn field_screen_rect(view: &DocView, info: &DocInfo, f: &FormField, widget: 
     let page = w.page?;
     let xf = view.page_xform(page)?;
     Some(widget_rect(&xf, info, page, w.rect))
+}
+
+impl crate::PdfCraftApp {
+    /// Fire field triggers of tab `index` (queued in [`FormView::fires`]). What they ask for is
+    /// handled as a script's requests are (pages, print, links and submits through the internet
+    /// access settings); menu items from the safe list run here.
+    pub(crate) fn fire_field_triggers(&mut self, index: usize, fires: Vec<Fire>) {
+        if fires.is_empty() {
+            return;
+        }
+        let Some(id) = self.views.get(index).map(|v| v.id) else { return };
+        // A value just typed or toggled is in the document before its triggers run (a check
+        // box's Mouse Up script sees it checked; Blur comes after the commit).
+        if self.active == Some(index) && !self.apply_queued_edit(index) {
+            return;
+        }
+        for fire in fires.into_iter().take(MAX_FIRES_PER_FRAME) {
+            match self.session.run_field_trigger_from(id, &fire.field, fire.trigger, fire.skip) {
+                Ok(o) => self.handle_trigger(index, id, o),
+                Err(e) => log::warn!("{} {}: {e}", fire.field, fire.trigger.label()),
+            }
+        }
+    }
+
+    fn handle_trigger(&mut self, index: usize, id: pdfcraft_engine::DocId, o: pdfcraft_engine::js::TriggerOutcome) {
+        if o.ran.is_empty() {
+            return;
+        }
+        if let Some(info) = self.session.get(id).map(|d| d.info.clone())
+            && let Some(view) = self.views.get_mut(index)
+        {
+            view.document_changed(&info);
+        }
+        let pages = self.session.get(id).map_or(0, |d| d.info.pages.len());
+        for m in &o.menu {
+            let Some(view) = self.views.get_mut(index) else { break };
+            match m.as_str() {
+                "NextPage" => view.step_page(true),
+                "PrevPage" => view.step_page(false),
+                "FirstPage" => view.go_to_page(0),
+                "LastPage" => view.go_to_page(pages.saturating_sub(1)),
+                _ => {}
+            }
+        }
+        self.handle_js(id, pdfcraft_engine::js::JsOutput { alerts: o.alerts, console: o.console, requests: o.requests, errors: o.errors });
+    }
+
+    /// Check the keystroke tab `index` queued: a refused one puts the field's text back, a
+    /// script that changed `event.change` puts its text in.
+    pub(crate) fn check_field_keystroke(&mut self, index: usize) {
+        let Some(view) = self.views.get_mut(index) else { return };
+        let Some(k) = view.forms.keystroke.take() else { return };
+        let id = view.id;
+        let outcome = match self.session.field_keystroke(id, &k.field, &k.before, &k.change, k.sel.clone()) {
+            Ok(o) => o,
+            Err(e) => {
+                log::warn!("{}: keystroke check: {e}", k.field);
+                return;
+            }
+        };
+        let text = if !outcome.rc {
+            k.before.clone()
+        } else if outcome.change != k.change {
+            k.before.chars().take(k.sel.start).chain(outcome.change.chars()).chain(k.before.chars().skip(k.sel.end)).collect()
+        } else {
+            k.after.clone()
+        };
+        if let Some(fx) = self.views.get_mut(index).and_then(|v| v.forms.focus.as_mut()).filter(|fx| fx.name == k.field && fx.text == k.after) {
+            fx.text = text;
+        }
+        if !outcome.alerts.is_empty() || !outcome.console.is_empty() || !outcome.errors.is_empty() {
+            self.handle_js(
+                id,
+                pdfcraft_engine::js::JsOutput { alerts: outcome.alerts, console: outcome.console, requests: Vec::new(), errors: outcome.errors },
+            );
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn keystroke_diffs_name_the_replaced_characters() {
+        assert_eq!(keystroke_diff("12", "123"), ("3".to_string(), 2..2));
+        assert_eq!(keystroke_diff("1234", "14"), (String::new(), 1..3));
+        assert_eq!(keystroke_diff("abc", "aXc"), ("X".to_string(), 1..2));
+        assert_eq!(keystroke_diff("", "日本"), ("日本".to_string(), 0..0));
+        assert_eq!(keystroke_diff("aaa", "aaaa"), ("a".to_string(), 3..3));
+        assert_eq!(keystroke_diff("same", "same"), (String::new(), 4..4));
+    }
 }

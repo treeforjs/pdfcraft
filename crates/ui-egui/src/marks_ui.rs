@@ -87,6 +87,10 @@ pub struct MarksDraft {
     pub use_file: bool,
     pub file: Option<(String, std::sync::Arc<Vec<u8>>)>,
     pub file_page: usize,
+    /// Bates numbering: other files the numbers continue into, in order, and the suffix their
+    /// numbered copies get.
+    pub bates_files: Vec<(String, std::sync::Arc<Vec<u8>>)>,
+    pub bates_suffix: String,
 }
 
 impl Default for MarksDraft {
@@ -104,8 +108,57 @@ impl Default for MarksDraft {
             use_file: false,
             file: None,
             file_page: 1,
+            bates_files: Vec::new(),
+            bates_suffix: "_bates".into(),
         }
     }
+}
+
+/// A Bates number token's options: digits, start, prefix and suffix.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BatesOptions {
+    pub digits: usize,
+    pub start: u64,
+    pub prefix: String,
+    pub suffix: String,
+}
+
+/// The longest prefix or suffix a Bates number takes in the dialog.
+const MAX_BATES_AFFIX: usize = 40;
+
+/// The options of the first `<<Bates Number#digits#start#prefix#suffix>>` token in `text`.
+pub fn bates_options(text: &str) -> Option<BatesOptions> {
+    let at = text.find("<<Bates Number")?;
+    let rest = text.get(at + 2..)?;
+    let token = rest.get(..rest.find(">>")?)?;
+    let parts: Vec<&str> = token.split('#').collect();
+    Some(BatesOptions {
+        digits: parts.get(1).and_then(|d| d.parse::<usize>().ok()).unwrap_or(6).clamp(1, 15),
+        start: parts.get(2).and_then(|d| d.parse::<u64>().ok()).unwrap_or(1),
+        prefix: parts.get(3).map(|s| s.to_string()).unwrap_or_default(),
+        suffix: parts.get(4).map(|s| s.to_string()).unwrap_or_default(),
+    })
+}
+
+/// The Bates token for `o`. `#`, `<` and `>` would end the token early, so they are left out.
+pub fn bates_token(o: &BatesOptions) -> String {
+    let clean = |s: &str| s.chars().filter(|c| !matches!(c, '#' | '<' | '>') && !c.is_control()).take(MAX_BATES_AFFIX).collect::<String>();
+    format!("<<Bates Number#{}#{}#{}#{}>>", o.digits.clamp(1, 15), o.start, clean(&o.prefix), clean(&o.suffix))
+}
+
+/// `text` with every Bates token replaced by the token for `o`.
+fn with_bates_options(text: &str, o: &BatesOptions) -> String {
+    let token = bates_token(o);
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(i) = rest.find("<<Bates Number") {
+        let Some(end) = rest.get(i..).and_then(|r| r.find(">>")) else { break };
+        out.push_str(rest.get(..i).unwrap_or_default());
+        out.push_str(&token);
+        rest = rest.get(i + end + 2..).unwrap_or_default();
+    }
+    out.push_str(rest);
+    out
 }
 
 const PAGE_FORMATS: [&str; 5] = ["<<1>>", "<<1 of n>>", "<<1/n>>", "<<Page 1>>", "<<Page 1 of n>>"];
@@ -146,6 +199,7 @@ pub(crate) fn body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens, kind: M
     let page = doc.info.pages.get(current).map(|p| (p.width as f64, p.height as f64)).unwrap_or((612.0, 792.0));
     let d = &mut app.marks_draft;
     let mut browse = false;
+    let mut browse_bates = false;
     let verb = if d.replace { tl!("Update") } else { tl!("Add") };
     let title = match kind {
         MarkKind::HeaderFooter | MarkKind::Bates => crate::i18n::fmt(tl!("{verb} Header and Footer"), &[("verb", verb)]),
@@ -217,6 +271,9 @@ pub(crate) fn body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens, kind: M
                 ui.label(tl!("Start page number"));
                 ui.add(egui::DragValue::new(&mut d.hf.start_number).range(1..=999_999));
             });
+            if let Some(mut o) = d.hf.text.iter().find_map(|x| bates_options(x)) {
+                browse_bates |= bates_section(ui, t, d, &mut o);
+            }
         }
         MarkKind::Watermark => {
             ui.horizontal(|ui| {
@@ -269,6 +326,43 @@ pub(crate) fn body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens, kind: M
                         ui.radio_value(&mut d.wm.behind, true, tl!("Appear behind page"));
                         ui.radio_value(&mut d.wm.behind, false, tl!("Appear on top of page"));
                     });
+                    // Fitted text takes a share of the page diagonal (pictures their own slider).
+                    if !d.use_file && d.fit {
+                        ui.horizontal(|ui| {
+                            ui.label(tl!("Scale relative to target page"));
+                            let mut pct = d.wm.scale * 100.0;
+                            if ui.add(egui::Slider::new(&mut pct, 5.0..=100.0).suffix("%")).changed() {
+                                d.wm.scale = pct / 100.0;
+                            }
+                        });
+                    }
+                    ui.horizontal(|ui| {
+                        ui.label(tl!("Position"));
+                        let max = pdfcraft_engine::MAX_MARK_OFFSET;
+                        let l = ui.label(tl!("Horizontal offset"));
+                        ui.add(egui::DragValue::new(&mut d.wm.offset[0]).range(-max..=max).speed(1.0).suffix(" pt")).labelled_by(l.id);
+                        let l = ui.label(tl!("Vertical offset"));
+                        ui.add(egui::DragValue::new(&mut d.wm.offset[1]).range(-max..=max).speed(1.0).suffix(" pt")).labelled_by(l.id);
+                        if d.wm.offset != [0.0; 2] && ui.small_button(tl!("Center")).clicked() {
+                            d.wm.offset = [0.0; 2];
+                        }
+                    });
+                    ui.horizontal(|ui| {
+                        let (mut print, mut screen) = (d.wm.visibility.prints(), d.wm.visibility.on_screen());
+                        let a = ui.checkbox(&mut print, tl!("Show when printing")).changed();
+                        let b = ui.checkbox(&mut screen, tl!("Show when displaying on screen")).changed();
+                        // Neither can't be chosen: unticking the last one ticks the other.
+                        if a || b {
+                            if !print && !screen {
+                                if a {
+                                    screen = true;
+                                } else {
+                                    print = true;
+                                }
+                            }
+                            d.wm.visibility = pdfcraft_engine::MarkVisibility::from_flags(print, screen).unwrap_or_default();
+                        }
+                    });
                 });
             });
         }
@@ -318,24 +412,19 @@ pub(crate) fn body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens, kind: M
             }
             MarkKind::Watermark if file_name.is_some() => {
                 let side = r.width().min(r.height()) * wm.scale as f32;
+                let centre = r.center() + vec2(wm.offset[0] as f32 * s, -(wm.offset[1] as f32) * s);
                 p.rect_stroke(
-                    Rect::from_center_size(r.center(), vec2(side, side)),
+                    Rect::from_center_size(centre, vec2(side, side)),
                     CornerRadius::ZERO,
                     egui::Stroke::new(1.0, Color32::GRAY),
                     egui::StrokeKind::Inside,
                 );
-                p.text(
-                    r.center(),
-                    egui::Align2::CENTER_CENTER,
-                    file_name.clone().unwrap_or_default(),
-                    egui::FontId::proportional(10.0),
-                    Color32::GRAY,
-                );
+                p.text(centre, egui::Align2::CENTER_CENTER, file_name.clone().unwrap_or_default(), egui::FontId::proportional(10.0), Color32::GRAY);
             }
             MarkKind::Watermark => {
                 let text = if wm.text.trim().is_empty() { "CONFIDENTIAL" } else { wm.text.trim() };
                 let size = if fit {
-                    (r.width().hypot(r.height()) * 0.5 / (text.len().max(1) as f32 * 0.55)).clamp(6.0, 80.0)
+                    (r.width().hypot(r.height()) * wm.scale as f32 / (text.len().max(1) as f32 * 0.55)).clamp(6.0, 80.0)
                 } else {
                     (wm.font_size as f32 * s).max(5.0)
                 };
@@ -344,7 +433,8 @@ pub(crate) fn body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens, kind: M
                 let half = galley.size() / 2.0;
                 let (sn, cs) = angle.sin_cos();
                 let offset = vec2(half.x * cs - half.y * sn, half.x * sn + half.y * cs);
-                p.add(egui::epaint::TextShape::new(r.center() - offset, galley, Color32::BLACK).with_angle(angle));
+                let centre = r.center() + vec2(wm.offset[0] as f32 * s, -(wm.offset[1] as f32) * s);
+                p.add(egui::epaint::TextShape::new(centre - offset, galley, Color32::BLACK).with_angle(angle));
             }
             MarkKind::Background if file_name.is_some() => {
                 p.rect_stroke(r.shrink(6.0), CornerRadius::ZERO, egui::Stroke::new(1.0, Color32::GRAY), egui::StrokeKind::Inside);
@@ -416,7 +506,223 @@ pub(crate) fn body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens, kind: M
     }
     #[cfg(target_arch = "wasm32")]
     let _ = browse;
+    if browse_bates {
+        app.bates_files_dialog();
+    }
     (apply, cancel)
+}
+
+/// Bates Number Options (digits, start, prefix, suffix, rewriting every Bates token) and the
+/// other files the numbering continues into. Returns true when Add files… was clicked.
+fn bates_section(ui: &mut egui::Ui, t: &Tokens, d: &mut MarksDraft, o: &mut BatesOptions) -> bool {
+    let before = o.clone();
+    let mut browse = false;
+    ui.add_space(8.0);
+    ui.label(egui::RichText::new(tl!("Bates Number Options")).font(theme::semibold(12.5)));
+    ui.horizontal(|ui| {
+        let l = ui.label(tl!("Number of digits"));
+        ui.add(egui::DragValue::new(&mut o.digits).range(1..=15)).labelled_by(l.id);
+        let l = ui.label(tl!("Start number"));
+        ui.add(egui::DragValue::new(&mut o.start).range(0..=999_999_999_999u64)).labelled_by(l.id);
+        let l = ui.label(tl!("Prefix"));
+        ui.add(egui::TextEdit::singleline(&mut o.prefix).desired_width(80.0).char_limit(MAX_BATES_AFFIX).id_salt("bates-prefix")).labelled_by(l.id);
+        let l = ui.label(tl!("Suffix"));
+        ui.add(egui::TextEdit::singleline(&mut o.suffix).desired_width(80.0).char_limit(MAX_BATES_AFFIX).id_salt("bates-suffix")).labelled_by(l.id);
+    });
+    if *o != before {
+        for text in &mut d.hf.text {
+            *text = with_bates_options(text, o);
+        }
+    }
+    ui.add_space(6.0);
+    ui.label(
+        egui::RichText::new(tl!("The numbers continue into these files, in order. Each gets a numbered copy in a folder you choose; the files themselves are left as they are."))
+            .small()
+            .color(t.text_muted),
+    );
+    let mut remove = None;
+    for (k, (name, _)) in d.bates_files.iter().enumerate() {
+        ui.horizontal(|ui| {
+            ui.label(egui::RichText::new(format!("{}.", k + 2)).color(t.text_faint));
+            ui.label(name);
+            if crate::icons::button(ui, "x", 20.0, false, &crate::i18n::fmt(tl!("Remove {name}"), &[("name", name)])).clicked() {
+                remove = Some(k);
+            }
+        });
+    }
+    if let Some(k) = remove.filter(|k| *k < d.bates_files.len()) {
+        d.bates_files.remove(k);
+    }
+    ui.horizontal(|ui| {
+        #[cfg(not(target_arch = "wasm32"))]
+        if ui.button(tl!("Add files…")).clicked() {
+            browse = true;
+        }
+        if !d.bates_files.is_empty() {
+            let l = ui.label(tl!("File name suffix"));
+            ui.add(egui::TextEdit::singleline(&mut d.bates_suffix).desired_width(90.0).char_limit(40).id_salt("bates-file-suffix")).labelled_by(l.id);
+            if ui.small_button(tl!("Clear")).clicked() {
+                d.bates_files.clear();
+            }
+        }
+    });
+    browse
+}
+
+/// Files whose Bates numbering continues from the open document's.
+pub(crate) struct BatesRun {
+    pub files: Vec<(String, std::sync::Arc<Vec<u8>>)>,
+    pub hf: HeaderFooter,
+    pub start: u64,
+    pub replace: bool,
+    pub suffix: String,
+}
+
+impl PdfCraftApp {
+    /// Add files… under Bates Number Options: PDFs the numbering continues into.
+    pub(crate) fn bates_files_dialog(&mut self) {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let dialog = rfd::AsyncFileDialog::new().add_filter("PDF", &["pdf"]).set_title(tl!("Add files to number").to_string());
+            let epoch = self.dialog_epoch();
+            self.ask(crate::pickers::Ask::Files(dialog), None, move |app, paths| {
+                if app.dialog_epoch() != epoch {
+                    return;
+                }
+                for p in paths {
+                    match std::fs::read(&p) {
+                        Ok(b) => {
+                            let name = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "file.pdf".into());
+                            app.add_bates_file(name, b);
+                        }
+                        Err(e) => app.notify_fmt("Couldn't read {name}: {e}", &[("name", &p.display().to_string()), ("e", &e.to_string())]),
+                    }
+                }
+            });
+        }
+    }
+
+    /// A file for the Bates list (also the entry point for tests and automation).
+    pub fn add_bates_file(&mut self, name: String, bytes: Vec<u8>) {
+        if self.marks_draft.bates_files.len() >= pdfcraft_engine::MAX_CREATE_FILES {
+            self.notify_tr("That's as many files as one Bates numbering run takes");
+            return;
+        }
+        self.marks_draft.bates_files.push((name, std::sync::Arc::new(bytes)));
+    }
+
+    /// After the open document is numbered: number the listed files on from `start`, writing
+    /// each numbered copy into a folder (asked for, unless tests set one) in the background.
+    pub(crate) fn start_bates_files(&mut self, run: BatesRun) {
+        if self.bates_batch.is_some() {
+            self.notify_tr("Bates numbering of other files is already running");
+            return;
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        match self.export_dir_override.clone() {
+            Some(dir) => self.bates_files_into(run, dir.into()),
+            None => {
+                let dialog = rfd::AsyncFileDialog::new().set_title(tl!("Choose a folder for the numbered files").to_string());
+                self.ask_one(crate::pickers::Ask::Folder(dialog), None, move |app, dir| app.bates_files_into(run, dir));
+            }
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            let _ = run;
+            self.notify_tr("Numbering other files arrives on the web with folder pickers");
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn bates_files_into(&mut self, run: BatesRun, dir: std::path::PathBuf) {
+        use std::sync::{Arc, Mutex};
+        if self.bates_batch.is_some() {
+            self.notify_tr("Bates numbering of other files is already running");
+            return;
+        }
+        let progress = Arc::new(Mutex::new(crate::ocr_ui::BatchProgress { total: run.files.len(), ..Default::default() }));
+        let p = progress.clone();
+        let lang = crate::i18n::current();
+        let work = move || {
+            crate::i18n::set_current(lang);
+            // Last-resort guard (AGENTS.md §4): a panic numbering one file ends the run with an
+            // error instead of taking the app down.
+            let summary = pdfcraft_engine::guard(|| {
+                let mut session = pdfcraft_engine::Session::new();
+                let mut next = run.start;
+                let (mut done, mut last) = (0usize, None);
+                for (k, (name, bytes)) in run.files.iter().enumerate() {
+                    if let Ok(mut s) = p.lock() {
+                        s.done = k;
+                    }
+                    let stem = std::path::Path::new(name).file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "document".into());
+                    let numbered = session.bates_number_file(name, bytes.clone(), None, &run.hf, next, run.replace);
+                    let saved = numbered.and_then(|f| {
+                        let target = pdfcraft_platform::staging::unused_output_path(&dir.join(format!("{stem}{}.pdf", run.suffix)))
+                            .map_err(|e| e.to_string())?;
+                        crate::editing::write_atomically(&target.to_string_lossy(), &f.bytes).map_err(|e| e.to_string())?;
+                        Ok(f.last)
+                    });
+                    match saved {
+                        Ok(l) => {
+                            done += 1;
+                            last = Some(l);
+                            next = l.saturating_add(1);
+                        }
+                        // Numbers stay unbroken: a file that fails stops the run.
+                        Err(e) => {
+                            return crate::i18n::fmt(
+                                tl!("Numbered {done} of {total} files; {name} couldn't be numbered: {e}"),
+                                &[("done", &done.to_string()), ("total", &run.files.len().to_string()), ("name", name), ("e", &e)],
+                            );
+                        }
+                    }
+                }
+                crate::i18n::fmt(
+                    tl!("Numbered {n} more files, up to {last}"),
+                    &[("n", &done.to_string()), ("last", &last.unwrap_or(run.start).to_string())],
+                )
+            })
+            .unwrap_or_else(|m| crate::i18n::fmt(tl!("That didn't work: an internal error stopped it ({m})."), &[("m", m.as_str())]));
+            if let Ok(mut s) = p.lock() {
+                s.done = s.total;
+                s.message = Some(summary);
+            }
+        };
+        if self.run_inline {
+            work();
+        } else if std::thread::Builder::new().name("pdfcraft-bates-files".into()).spawn(work).is_err() {
+            self.notify_tr("Bates numbering of other files couldn't start; try again");
+            return;
+        }
+        self.bates_batch = Some(progress);
+        self.poll_bates();
+    }
+
+    /// Progress of numbering other files, and its summary once done.
+    pub(crate) fn poll_bates(&mut self) {
+        let Some(b) = self.bates_batch.clone() else { return };
+        let state = b.lock().ok().map(|mut s| s.message.take().ok_or((s.done, s.total)));
+        match state {
+            Some(Ok(m)) => {
+                self.bates_batch = None;
+                self.notify(m);
+            }
+            Some(Err((done, total))) => {
+                let m = crate::i18n::fmt(
+                    tl!("Bates numbering… file {d} of {t}"),
+                    &[("d", &(done + 1).min(total.max(1)).to_string()), ("t", &total.max(1).to_string())],
+                );
+                if self.toast.as_ref().is_none_or(|t| t.0 != m) {
+                    self.notify(m);
+                }
+                if let Some(ctx) = &self.ctx {
+                    ctx.request_repaint_after(std::time::Duration::from_millis(200));
+                }
+            }
+            None => self.bates_batch = None,
+        }
+    }
 }
 
 fn mark_file(d: &MarksDraft) -> Option<pdfcraft_engine::MarkFile> {
@@ -471,6 +777,20 @@ pub fn edit(d: &MarksDraft, kind: MarkKind, count: usize) -> Edit {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bates_tokens_are_read_and_rewritten() {
+        let o = bates_options("Case <<Bates Number#4#17#ABC#-X>> page").unwrap();
+        assert_eq!(o, BatesOptions { digits: 4, start: 17, prefix: "ABC".into(), suffix: "-X".into() });
+        let o2 = BatesOptions { digits: 8, start: 3, prefix: "P#<>".into(), suffix: String::new() };
+        assert_eq!(with_bates_options("a <<Bates Number#6#1##>> b <<Bates Number>>", &o2), "a <<Bates Number#8#3#P#>> b <<Bates Number#8#3#P#>>");
+        // Hostile tokens: unterminated, huge or non-numeric values, multi-byte text.
+        assert_eq!(bates_options("<<Bates Number#99#x"), None);
+        let o = bates_options("<<Bates Number#99#99999999999999999999999#é>>").unwrap();
+        assert_eq!((o.digits, o.start, o.prefix.as_str()), (15, 1, "é"));
+        assert_eq!(with_bates_options("é<<Bates Number#2#5", &o2), "é<<Bates Number#2#5");
+        assert!(bates_options("no token").is_none());
+    }
 
     #[test]
     fn page_ranges_with_subsets() {

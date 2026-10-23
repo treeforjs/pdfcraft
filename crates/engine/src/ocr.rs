@@ -16,7 +16,8 @@ use std::sync::Arc;
 use pdfcraft_render::{PageInfo, PageRenderer, RenderConfig, RenderRequest, RequestKind};
 
 pub use pdfcraft_ocr::editable::{Family as FontFamily, Font as StandardFont, Suspect, SuspectReason, horizontal_scale};
-pub use pdfcraft_ocr::engines::{DEFAULT_ENGINE, EngineInfo, KNOWN_LANGUAGES, OcrEngine, OcrsEngine, Registry};
+pub use pdfcraft_ocr::engines::{DEFAULT_ENGINE, EngineInfo, KNOWN_LANGUAGES, OcrEngine, OcrsEngine, OneStep, Registry, Steps};
+pub use pdfcraft_ocr::models;
 pub use pdfcraft_ocr::orient::Orientation;
 pub use pdfcraft_ocr::tesseract;
 pub use pdfcraft_ocr::{LANGUAGES, Line, Models, Ocr, OcrError, PlacedWord, Word};
@@ -29,6 +30,84 @@ use crate::{DocId, Edit, EditError, Session};
 /// Native recognition backends share the same bounded image and review workflow.
 pub trait Recognizer {
     fn recognize(&self, pixels: &[u8], width: u32, height: u32) -> Result<Vec<pdfcraft_ocr::Line>, OcrError>;
+    /// [`Self::recognize`] in steps ([`OcrEngine::begin`]); in one step unless overridden.
+    fn begin<'a>(&'a self, pixels: &'a [u8], width: u32, height: u32) -> Result<Box<dyn Steps + 'a>, OcrError> {
+        Ok(Box::new(OneStep(Some(move || self.recognize(pixels, width, height)))))
+    }
+}
+
+/// How a recognition job shares its thread ([`OcrJob::run_paced`]). The desktop app reads on a
+/// worker thread and never pauses ([`Unpaced`]); the web app has one thread, so it reads each
+/// page in short steps and lets the browser draw and handle input between them.
+pub trait Pace {
+    /// Read each page in short steps ([`OcrEngine::begin`]) rather than one call.
+    fn stepwise(&self) -> bool;
+    /// Called between steps (and between pages); a host yields to its event loop here once it
+    /// has worked long enough.
+    fn pause(&mut self) -> impl std::future::Future<Output = ()>;
+}
+
+/// Never pauses and reads each page in one call: [`OcrJob::run`].
+pub struct Unpaced;
+
+impl Pace for Unpaced {
+    fn stepwise(&self) -> bool {
+        false
+    }
+    fn pause(&mut self) -> impl std::future::Future<Output = ()> {
+        std::future::ready(())
+    }
+}
+
+/// Run a future that never waits (an [`Unpaced`] job) to the end now.
+fn finish_now<F: std::future::Future>(f: F) -> Option<F::Output> {
+    let mut f = std::pin::pin!(f);
+    let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
+    match f.as_mut().poll(&mut cx) {
+        std::task::Poll::Ready(v) => Some(v),
+        std::task::Poll::Pending => None,
+    }
+}
+
+const FAILED: &str = "text recognition failed unexpectedly; no text was applied";
+const CANCELED: &str = "text recognition canceled; no text was applied";
+
+/// A job's future with every poll guarded: a panic inside ends it with an error.
+struct Guarded<F>(std::pin::Pin<Box<F>>);
+
+impl<T, F: std::future::Future<Output = Result<T, String>>> std::future::Future for Guarded<F> {
+    type Output = Result<T, String>;
+    fn poll(mut self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Self::Output> {
+        let inner = &mut self.0;
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| inner.as_mut().poll(cx))).unwrap_or(std::task::Poll::Ready(Err(FAILED.into())))
+    }
+}
+
+/// Read one image, in steps when `pace` asks for them, pausing between steps. `Ok(None)`: the
+/// job was canceled (`go_on` said so) between steps.
+async fn read_paced(
+    ocr: &impl Recognizer,
+    pixels: &[u8],
+    width: u32,
+    height: u32,
+    pace: &mut impl Pace,
+    mut go_on: impl FnMut() -> bool,
+) -> Result<Option<Vec<pdfcraft_ocr::Line>>, OcrError> {
+    if !pace.stepwise() {
+        return ocr.recognize(pixels, width, height).map(Some);
+    }
+    let mut steps = ocr.begin(pixels, width, height)?;
+    // Far more steps than any page has lines: a misbehaving engine can't keep the job alive.
+    for _ in 0..1_000_000 {
+        if let Some(lines) = steps.step()? {
+            return Ok(Some(lines));
+        }
+        pace.pause().await;
+        if !go_on() {
+            return Ok(None);
+        }
+    }
+    Err(OcrError::Recognize("the recognition engine did not finish".into()))
 }
 
 impl Recognizer for Ocr {
@@ -46,6 +125,9 @@ pub(crate) struct EngineRecognizer<'a> {
 impl Recognizer for EngineRecognizer<'_> {
     fn recognize(&self, pixels: &[u8], width: u32, height: u32) -> Result<Vec<pdfcraft_ocr::Line>, OcrError> {
         self.engine.recognize(pixels, width, height, self.language)
+    }
+    fn begin<'a>(&'a self, pixels: &'a [u8], width: u32, height: u32) -> Result<Box<dyn Steps + 'a>, OcrError> {
+        self.engine.begin(pixels, width, height, self.language)
     }
 }
 
@@ -462,9 +544,10 @@ pub fn engine() -> Result<Arc<Ocr>, String> {
     OcrsEngine::shared().map_err(|e| e.to_string())
 }
 
-/// Whether the built-in engine's recognition models are installed.
+/// Whether the built-in engine can recognize text: its models are installed, or (in the web app,
+/// which downloads them when text is first recognized) can be fetched.
 pub fn available() -> bool {
-    Models::find().is_some()
+    cfg!(target_arch = "wasm32") || Models::find().is_some()
 }
 
 /// Everything recognition needs from a document, detached from the session.
@@ -491,23 +574,56 @@ impl OcrJob {
     /// [`Self::run`] with the job's own engine: it is readied first (models loaded, program and
     /// language data found), so a missing engine fails the job before any page is rendered.
     pub fn run_selected(self, progress: impl FnMut(usize, usize) -> bool) -> Result<OcrReview, String> {
-        let engine = self.engine.clone();
+        let engine = self.prepare()?;
         let language = self.settings.language.clone();
-        let ready = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| engine.prepare(&language)))
-            .unwrap_or_else(|_| Err(OcrError::Recognize("the recognition engine failed unexpectedly".into())));
-        ready.map_err(|e| e.to_string())?;
         self.run(&EngineRecognizer { engine: engine.as_ref(), language: &language }, progress)
+    }
+
+    /// [`Self::run_selected`], sharing the thread as `pace` says ([`Self::run_paced`]).
+    pub async fn run_selected_paced(self, progress: impl FnMut(usize, usize) -> bool, pace: &mut impl Pace) -> Result<OcrReview, String> {
+        let engine = self.prepare()?;
+        let language = self.settings.language.clone();
+        self.run_paced(&EngineRecognizer { engine: engine.as_ref(), language: &language }, progress, pace).await
+    }
+
+    fn prepare(&self) -> Result<Arc<dyn OcrEngine>, String> {
+        let engine = self.engine.clone();
+        let language = &self.settings.language;
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| engine.prepare(language)))
+            .unwrap_or_else(|_| Err(OcrError::Recognize("the recognition engine failed unexpectedly".into())))
+            .map_err(|e| e.to_string())?;
+        Ok(engine)
     }
 
     /// Read the pages. `progress(done, total)` is called before each page; returning `false`
     /// cancels the entire draft. Checks also run after rendering and inference. Inference
     /// itself currently finishes before cancellation is observed; no partial result commits.
     pub fn run(self, ocr: &impl Recognizer, mut progress: impl FnMut(usize, usize) -> bool) -> Result<OcrReview, String> {
-        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.run_inner(ocr, &mut progress)))
-            .unwrap_or_else(|_| Err("text recognition failed unexpectedly; no text was applied".into()))
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| finish_now(self.run_inner(ocr, &mut progress, &mut Unpaced))))
+            .unwrap_or_else(|_| Some(Err(FAILED.into())))
+            .unwrap_or_else(|| Err(FAILED.into()))
     }
 
-    fn run_inner(self, ocr: &impl Recognizer, progress: &mut impl FnMut(usize, usize) -> bool) -> Result<OcrReview, String> {
+    /// [`Self::run`] for a host with one thread: with a stepwise `pace` each page is read in
+    /// short steps ([`OcrEngine::begin`]), `pace.pause()` is awaited between them and between
+    /// pages, and `progress` is asked again after each step, so the job can be canceled within
+    /// a page. Same result as [`Self::run`]. Detecting page rotation reads reduced copies of the
+    /// page in one step each.
+    pub async fn run_paced(
+        self,
+        ocr: &impl Recognizer,
+        mut progress: impl FnMut(usize, usize) -> bool,
+        pace: &mut impl Pace,
+    ) -> Result<OcrReview, String> {
+        Guarded(Box::pin(self.run_inner(ocr, &mut progress, pace))).await
+    }
+
+    async fn run_inner(
+        self,
+        ocr: &impl Recognizer,
+        progress: &mut impl FnMut(usize, usize) -> bool,
+        pace: &mut impl Pace,
+    ) -> Result<OcrReview, String> {
         self.settings.validate()?;
         let unique: std::collections::BTreeSet<_> = self.pages.iter().copied().collect();
         if unique.len() != self.pages.len() || self.pages.iter().any(|p| *p >= self.infos.len()) {
@@ -520,8 +636,11 @@ impl OcrJob {
         let mut text_bytes = 0usize;
         let total = self.pages.len();
         for (done, &page) in self.pages.iter().enumerate() {
+            if done > 0 {
+                pace.pause().await;
+            }
             if !progress(done, total) {
-                return Err("text recognition canceled; no text was applied".into());
+                return Err(CANCELED.into());
             }
             let Some(info) = self.infos.get(page) else { continue };
             let skip = |why: &str| OcrPage {
@@ -558,8 +677,9 @@ impl OcrJob {
                 continue;
             }
             let shot = r.render(RenderRequest { page, scale, ..Default::default() });
+            pace.pause().await;
             if !progress(done, total) {
-                return Err("text recognition canceled; no text was applied".into());
+                return Err(CANCELED.into());
             }
             if let Some(e) = shot.error {
                 out.push(skip(&e));
@@ -614,15 +734,20 @@ impl OcrJob {
                     continue;
                 }
             };
-            if !progress(done, total) {
-                return Err("text recognition canceled; no text was applied".into());
+            if options.any() {
+                pace.pause().await;
             }
+            if !progress(done, total) {
+                return Err(CANCELED.into());
+            }
+            let go_on = || progress(done, total);
             let read = match &corrected.image {
-                Some(image) => ocr.recognize(&image.pixels, image.width, image.height),
-                None => ocr.recognize(input, input_w, input_h),
+                Some(image) => read_paced(ocr, &image.pixels, image.width, image.height, pace, go_on).await,
+                None => read_paced(ocr, input, input_w, input_h, pace, go_on).await,
             };
             let lines = match read {
-                Ok(l) => l,
+                Ok(Some(l)) => l,
+                Ok(None) => return Err(CANCELED.into()),
                 Err(e) => {
                     out.push(skip(&e.to_string()));
                     continue;
@@ -636,7 +761,7 @@ impl OcrJob {
                 return Err("recognition results exceed one million words or 64 MiB of text; recognize a smaller page range".into());
             }
             if !progress(done, total) {
-                return Err("text recognition canceled; no text was applied".into());
+                return Err(CANCELED.into());
             }
             let scale = shot.width as f32 / info.width.max(1e-3);
             let to_user = |x: f32, y: f32| {
@@ -680,7 +805,7 @@ impl OcrJob {
             }
         }
         if !progress(total, total) {
-            return Err("text recognition canceled; no text was applied".into());
+            return Err(CANCELED.into());
         }
         let downsample = self.settings.straighten.then_some(self.settings.dpi);
         let rewrite = self.settings.straighten || self.settings.editable.is_some();
@@ -1000,6 +1125,93 @@ impl Session {
     }
 }
 
+/// What Enhance scans ▸ Straighten found on one page.
+#[derive(Clone, Debug, PartialEq)]
+pub struct StraightenedPage {
+    /// 0-based.
+    pub page: usize,
+    /// The skew found, in degrees counterclockwise (0 when straight or not measured).
+    pub skew: f32,
+    /// Whether the page is turned straight.
+    pub straightened: bool,
+    /// Why the page was left alone without measuring.
+    pub skipped: Option<String>,
+}
+
+/// Straighten measures skew on a copy at most this many pixels a side.
+const STRAIGHTEN_SIDE: f32 = 2000.0;
+
+impl Session {
+    /// Scan & OCR ▸ Enhance scans ▸ Straighten pages: measure the skew of the scanned pages
+    /// among `pages` (0-based; empty = all) of document `id` without recognizing text (the
+    /// projection-profile estimate of [`pdfcraft_ocr::orient`], within ±15°) and turn skewed
+    /// pages straight, in their content about the page centre ([`Edit::StraightenPage`]), as
+    /// one undoable step. Pages that draw no image are left alone, as are pages whose skew is
+    /// under `min_skew` degrees. With `dry_run` nothing changes.
+    pub fn straighten_scans(&mut self, id: DocId, pages: &[usize], min_skew: f32, dry_run: bool) -> Result<Vec<StraightenedPage>, EditError> {
+        let doc = self.get(id).ok_or_else(|| EditError::Invalid("no such document".into()))?;
+        let all = doc.info.pages.len();
+        let mut unique = std::collections::BTreeSet::new();
+        if pages.iter().any(|p| *p >= all || !unique.insert(*p)) {
+            return Err(EditError::Invalid(format!("straighten pages must be unique page indexes below {all}")));
+        }
+        if !min_skew.is_finite() || !(0.0..=pdfcraft_ocr::orient::MAX_SKEW as f32).contains(&min_skew) {
+            return Err(EditError::Invalid(format!("the smallest skew to correct must be between 0 and {} degrees", pdfcraft_ocr::orient::MAX_SKEW)));
+        }
+        if !dry_run {
+            if let Some(why) = &doc.read_only_reason {
+                return Err(EditError::ReadOnly(why.clone()));
+            }
+            if !doc.allows_modification() {
+                return Err(EditError::NotPermitted("changes to the document"));
+            }
+        }
+        let pages: Vec<usize> = if pages.is_empty() { (0..all).collect() } else { pages.to_vec() };
+        let mut renderer = PageRenderer::new(doc.bytes.clone(), doc.config.clone());
+        let mut out = Vec::with_capacity(pages.len());
+        let mut edits = Vec::new();
+        for page in pages {
+            let Some(info) = doc.info.pages.get(page) else { continue };
+            let skipped = |why: &str| StraightenedPage { page, skew: 0.0, straightened: false, skipped: Some(why.to_string()) };
+            if doc.page_images(page).is_empty() {
+                out.push(skipped("the page has no scanned image"));
+                continue;
+            }
+            let side = info.width.max(info.height).max(1.0);
+            let scale = (150.0 / 72.0f32).min(STRAIGHTEN_SIDE / side);
+            let shot = renderer.render(RenderRequest { page, scale, ..Default::default() });
+            if let Some(e) = shot.error {
+                out.push(skipped(&e));
+                continue;
+            }
+            let options = pdfcraft_ocr::orient::Options { auto_rotate: false, deskew: true };
+            let found = crate::guard(|| pdfcraft_ocr::orient::correct(&shot.rgba, shot.width, shot.height, options, |_, _, _| Ok(Vec::new())));
+            let orientation = match found {
+                Ok(Ok(c)) => c.orientation,
+                Ok(Err(e)) => {
+                    out.push(skipped(&e.to_string()));
+                    continue;
+                }
+                Err(m) => {
+                    out.push(skipped(&format!("measuring the skew failed unexpectedly ({m})")));
+                    continue;
+                }
+            };
+            let skew = orientation.skew;
+            let turn = skew.is_finite() && skew.abs() >= min_skew.max(0.05);
+            if turn {
+                edits.push(straighten(info, page, Orientation { rotation: 0, skew })?);
+            }
+            out.push(StraightenedPage { page, skew, straightened: turn, skipped: None });
+        }
+        if !dry_run && !edits.is_empty() {
+            let edit = if edits.len() == 1 { edits.remove(0) } else { Edit::Batch { label: "Straighten pages".into(), edits } };
+            self.apply(id, edit)?;
+        }
+        Ok(out)
+    }
+}
+
 /// What [`recognize_file`] did to one file.
 #[derive(Clone, Debug, PartialEq)]
 pub struct FileResult {
@@ -1021,9 +1233,22 @@ pub fn recognize_file(
     name: &str,
     bytes: Arc<Vec<u8>>,
     password: Option<&str>,
+    settings: OcrSettings,
+    engine: &Arc<dyn OcrEngine>,
+    progress: impl FnMut(usize, usize) -> bool,
+) -> Result<FileResult, String> {
+    finish_now(recognize_file_paced(name, bytes, password, settings, engine, progress, &mut Unpaced)).unwrap_or_else(|| Err(FAILED.into()))
+}
+
+/// [`recognize_file`], sharing the thread as `pace` says ([`OcrJob::run_paced`]).
+pub async fn recognize_file_paced(
+    name: &str,
+    bytes: Arc<Vec<u8>>,
+    password: Option<&str>,
     mut settings: OcrSettings,
     engine: &Arc<dyn OcrEngine>,
     progress: impl FnMut(usize, usize) -> bool,
+    pace: &mut impl Pace,
 ) -> Result<FileResult, String> {
     let mut s = Session::new();
     s.register_ocr_engine(engine.clone())?;
@@ -1033,7 +1258,7 @@ pub fn recognize_file(
         return Err(why);
     }
     let job = s.ocr_job_checked(id, &[], settings)?;
-    let review = job.run_selected(progress)?;
+    let review = job.run_selected_paced(progress, pace).await?;
     let pages = review.pages.clone();
     if s.apply_ocr_review(&review)? == 0 {
         return Ok(FileResult { bytes, pages });

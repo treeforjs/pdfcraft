@@ -103,7 +103,18 @@ pub struct AddedText {
     /// `text`); empty (or shorter than the paragraphs) for ordinary paragraphs. See
     /// [`crate::lists`].
     pub list: Vec<Option<ListItem>>,
+    /// Line spacing as a multiple of the font size ([`DEFAULT_LINE_SPACING`] is ordinary).
+    pub line_spacing: f64,
+    /// Space after each paragraph but the last, in points.
+    pub para_space: f64,
 }
+
+/// The line spacing of text boxes that don't set their own, as a multiple of the font size.
+pub const DEFAULT_LINE_SPACING: f64 = 1.2;
+/// The range of [`AddedText::line_spacing`].
+pub const LINE_SPACING_RANGE: (f64, f64) = (0.5, 5.0);
+/// The largest [`AddedText::para_space`], in points.
+pub const MAX_PARA_SPACE: f64 = 500.0;
 
 impl Default for AddedText {
     fn default() -> Self {
@@ -117,6 +128,8 @@ impl Default for AddedText {
             color: [0.0; 3],
             align: Align::Left,
             list: Vec::new(),
+            line_spacing: DEFAULT_LINE_SPACING,
+            para_space: 0.0,
         }
     }
 }
@@ -208,7 +221,30 @@ pub fn lines(t: &AddedText) -> Vec<String> {
     if has_list(t) {
         return list_rows(t).into_iter().map(|r| r.text).collect();
     }
-    wrapped(t).into_iter().map(|(line, _)| line).collect()
+    wrapped(t).into_iter().map(|(line, _, _)| line).collect()
+}
+
+/// The distance from one line's top to the next one's, in points: the box's line spacing (a
+/// usable value; anything else is the ordinary 1.2) times its size.
+pub fn line_height(t: &AddedText) -> f64 {
+    t.size * spacing(t)
+}
+
+/// The box's line spacing, as a multiple of its size.
+fn spacing(t: &AddedText) -> f64 {
+    let (lo, hi) = LINE_SPACING_RANGE;
+    if t.line_spacing.is_finite() && (lo..=hi).contains(&t.line_spacing) { t.line_spacing } else { DEFAULT_LINE_SPACING }
+}
+
+/// The box's space after paragraphs, in points (0 when unusable).
+fn para_space(t: &AddedText) -> f64 {
+    if t.para_space.is_finite() && (0.0..=MAX_PARA_SPACE).contains(&t.para_space) { t.para_space } else { 0.0 }
+}
+
+/// The baseline of row `row` of paragraph `para` (both 0-based) in a box whose top is `top`:
+/// 0.95 em below the row's top, which is `row` line heights and `para` paragraph spaces down.
+fn baseline(t: &AddedText, top: f64, row: usize, para: usize) -> f64 {
+    top - (row as f64 * spacing(t) + 0.95) * t.size - para as f64 * para_space(t)
 }
 
 fn has_list(t: &AddedText) -> bool {
@@ -292,11 +328,11 @@ pub(crate) fn list_rows(t: &AddedText) -> Vec<Row> {
 }
 
 /// [`lines`], each with whether its paragraph runs right to left (its first strong character
-/// does).
-fn wrapped(t: &AddedText) -> Vec<(String, bool)> {
+/// does) and the paragraph it belongs to (0-based).
+fn wrapped(t: &AddedText) -> Vec<(String, bool, usize)> {
     let width = (t.rect[2] - t.rect[0]).max(t.size);
     let mut out = Vec::new();
-    for para in t.text.split('\n') {
+    for (k, para) in t.text.split('\n').enumerate() {
         let arabic = para.chars().any(is_arabic);
         let rtl = arabic && unicode_bidi::get_base_direction(para) == unicode_bidi::Direction::Rtl;
         // Arabic words are shaped one by one (joining stops at spaces), so a line's width is the
@@ -310,7 +346,7 @@ fn wrapped(t: &AddedText) -> Vec<(String, bool)> {
             let candidate = if line.is_empty() { word.to_string() } else { format!("{line} {word}") };
             let candidate_w = if arabic { if line.is_empty() { measure(word) } else { line_w + space + measure(word) } } else { measure(&candidate) };
             if !line.is_empty() && candidate_w > width {
-                out.push((std::mem::take(&mut line), rtl));
+                out.push((std::mem::take(&mut line), rtl, k));
                 line = word.to_string();
                 line_w = measure(word);
             } else {
@@ -318,7 +354,7 @@ fn wrapped(t: &AddedText) -> Vec<(String, bool)> {
                 line_w = candidate_w;
             }
         }
-        out.push((line, rtl));
+        out.push((line, rtl, k));
     }
     out
 }
@@ -343,7 +379,7 @@ pub fn first_undrawable(t: &AddedText) -> Option<char> {
         return t.text.split('\n').find_map(pdfcraft_fonts::first_non_win_ansi);
     }
     // What `arabic_layout` leaves to the standard font, exactly as `draw_arabic` splits it.
-    wrapped(t).into_iter().find_map(|(line, rtl)| {
+    wrapped(t).into_iter().find_map(|(line, rtl, _)| {
         let (pieces, _) = arabic_layout(t, &line, rtl).ok()?;
         pieces.iter().find_map(|p| match p {
             Piece::Latin(s) => pdfcraft_fonts::first_non_win_ansi(s),
@@ -439,7 +475,7 @@ fn arabic_width(t: &AddedText, s: &str, rtl: bool) -> f64 {
     arabic_layout(t, s, rtl).map(|(_, w)| w).unwrap_or_else(|_| t.family.width(s, t.size, t.bold))
 }
 
-fn arabic_error(e: GlyphError, text: &str) -> EditError {
+pub(crate) fn arabic_error(e: GlyphError, text: &str) -> EditError {
     EditError::Invalid(match e {
         GlyphError::NoFont => "Arabic text needs PdfCraft's Arabic font, which this build doesn't include \
                                (to build it in, set CRAFT_FONTS_DIR to a craft-fonts checkout that has an Arab face)"
@@ -452,8 +488,15 @@ fn arabic_error(e: GlyphError, text: &str) -> EditError {
 /// The box a text item occupies (height from its lines).
 pub fn text_rect(t: &AddedText) -> [f64; 4] {
     let r = norm(t.rect);
-    let rows = if has_list(t) { list_rows(t).len() } else { lines(t).len() };
-    let h = rows.max(1) as f64 * t.size * 1.2;
+    // The last row's paragraph number is how many paragraph gaps there are above it.
+    let (rows, paras) = if has_list(t) {
+        let rows = list_rows(t);
+        (rows.len(), rows.last().map_or(0, |r| r.para))
+    } else {
+        let lines = wrapped(t);
+        (lines.len(), lines.last().map_or(0, |l| l.2))
+    };
+    let h = rows.max(1) as f64 * t.size * spacing(t) + paras as f64 * para_space(t);
     [r[0], r[3] - h, r[2], r[3]]
 }
 
@@ -462,7 +505,7 @@ fn font_name(base: &str) -> String {
 }
 
 /// Most glyphs in one Type 3 font: its codes are single bytes, 1–240.
-const GLYPHS_PER_FONT: usize = 240;
+pub(crate) const GLYPHS_PER_FONT: usize = 240;
 /// Most Type 3 fonts one item may use, which bounds the objects it adds (ordinary text needs one
 /// or two).
 const MAX_ARABIC_FONTS: usize = 16;
@@ -473,7 +516,7 @@ const MAX_ARABIC_FONTS: usize = 16;
 fn draw_arabic(doc: &mut Document, t: &AddedText, latin: &str, taken: &Dict, fonts: &mut Dict, out: &mut Vec<u8>) -> Result<(), EditError> {
     let r = text_rect(t);
     let lines = wrapped(t);
-    let laid = lines.iter().map(|(line, rtl)| arabic_layout(t, line, *rtl)).collect::<Result<Vec<_>, _>>()?;
+    let laid = lines.iter().map(|(line, rtl, _)| arabic_layout(t, line, *rtl)).collect::<Result<Vec<_>, _>>()?;
     // Every distinct cluster (a letter with its dots and the text it stands for) is one glyph of
     // one of the fonts, so copy and search get each character exactly once.
     let mut keys: Vec<&ShapedCluster> = Vec::new();
@@ -515,7 +558,7 @@ fn draw_arabic(doc: &mut Document, t: &AddedText, latin: &str, taken: &Dict, fon
     }
     let [cr, cg, cb] = t.color.map(|v| v.clamp(0.0, 1.0));
     out.extend(format!("BT {} {} {} rg\n", n(cr), n(cg), n(cb)).bytes());
-    for (i, ((line, rtl), (pieces, w))) in lines.iter().zip(&laid).enumerate() {
+    for (i, ((line, rtl, para), (pieces, w))) in lines.iter().zip(&laid).enumerate() {
         let spaces = line.matches(' ').count();
         // Justified: the spaces of every line but the last stretch to fill the box.
         let tw = if t.align == Align::Justify && i + 1 < lines.len() && spaces > 0 { ((r[2] - r[0]) - w).max(0.0) / spaces as f64 } else { 0.0 };
@@ -526,7 +569,7 @@ fn draw_arabic(doc: &mut Document, t: &AddedText, latin: &str, taken: &Dict, fon
             Align::Center => r[0] + ((r[2] - r[0]) - w) / 2.0,
             Align::Right => r[2] - w,
         };
-        let y = r[3] - (i as f64 * 1.2 + 0.95) * t.size;
+        let y = baseline(t, r[3], i, *para);
         let mut pen = x;
         let mut current: Option<&str> = None;
         for piece in pieces {
@@ -563,14 +606,14 @@ fn draw_arabic(doc: &mut Document, t: &AddedText, latin: &str, taken: &Dict, fon
 
 /// What makes two clusters the same Type 3 glyph: text, glyphs, offsets and advance (bit for bit;
 /// equal clusters come from the same font units).
-type ClusterKey<'a> = (&'a str, Vec<(u32, u64, u64)>, u64);
+pub(crate) type ClusterKey<'a> = (&'a str, Vec<(u32, u64, u64)>, u64);
 
-fn cluster_key(c: &ShapedCluster) -> ClusterKey<'_> {
+pub(crate) fn cluster_key(c: &ShapedCluster) -> ClusterKey<'_> {
     (c.text.as_str(), c.glyphs.iter().map(|(id, [x, y])| (*id, x.to_bits(), y.to_bits())).collect(), c.advance.to_bits())
 }
 
 /// A Type 3 font with `clusters` as codes 1…, each drawn from the Arabic face's glyph `outlines`.
-fn type3_arabic(doc: &mut Document, clusters: &[&ShapedCluster], outlines: &HashMap<u32, GlyphOutline>) -> ObjRef {
+pub(crate) fn type3_arabic(doc: &mut Document, clusters: &[&ShapedCluster], outlines: &HashMap<u32, GlyphOutline>) -> ObjRef {
     let mut charprocs = Dict::new();
     let mut differences = vec![Object::Int(1)];
     let mut widths = Vec::with_capacity(clusters.len());
@@ -682,17 +725,16 @@ fn draw(doc: &mut Document, c: &Content, view: [f64; 6], taken: &Dict, existing:
                 out.extend_from_slice(b"ET\nQ\n");
                 return Ok((out, res));
             }
-            for (i, line) in lines(t).iter().enumerate() {
+            let all = wrapped(t);
+            for (i, (line, _, para)) in all.iter().enumerate() {
                 let w = t.family.width(line, t.size, t.bold);
                 let x = match t.align {
                     Align::Left | Align::Justify => r[0],
                     Align::Center => r[0] + ((r[2] - r[0]) - w) / 2.0,
                     Align::Right => r[2] - w,
                 };
-                // Baseline: 0.8 em below the line top.
-                let y = r[3] - (i as f64 * 1.2 + 0.95) * t.size;
+                let y = baseline(t, r[3], i, *para);
                 // Justified: word spacing makes every line but the last fill the box.
-                let all = lines(t);
                 let spaces = line.matches(' ').count();
                 let tw =
                     if t.align == Align::Justify && i + 1 < all.len() && spaces > 0 { ((r[2] - r[0]) - w).max(0.0) / spaces as f64 } else { 0.0 };
@@ -748,7 +790,7 @@ fn draw_list(t: &AddedText, r: [f64; 4], out: &mut Vec<u8>) {
     for (i, row) in rows.iter().enumerate() {
         let item = items.get(row.para).copied().flatten();
         // Baseline: 0.95 em below the row's top, as for ordinary text.
-        let y = r[3] - (i as f64 * 1.2 + 0.95) * t.size;
+        let y = baseline(t, r[3], i, row.para);
         if row.first
             && let Some(it) = item
         {
@@ -809,6 +851,13 @@ fn params(c: &Content) -> Dict {
             if let Some(list) = lists::list_param(t) {
                 d.set(b"List".to_vec(), list);
             }
+            // Written only when set, so items saved before them read back the same.
+            if t.line_spacing != DEFAULT_LINE_SPACING {
+                d.set(b"LineSpacing".to_vec(), Object::Real(t.line_spacing));
+            }
+            if t.para_space != 0.0 {
+                d.set(b"ParaSpace".to_vec(), Object::Real(t.para_space));
+            }
         }
         Content::Image(i) => {
             d.set(b"Kind".to_vec(), Object::name("Image"));
@@ -853,6 +902,17 @@ fn parse(doc: &Document, d: &Dict) -> Option<Content> {
                     _ => Align::Left,
                 },
                 list: lists::parse_list(doc, d.get(b"List")),
+                // A saved value out of range (a hand-edited file) falls back to the default.
+                line_spacing: d
+                    .get(b"LineSpacing")
+                    .and_then(Object::as_f64)
+                    .filter(|v| v.is_finite() && (LINE_SPACING_RANGE.0..=LINE_SPACING_RANGE.1).contains(v))
+                    .unwrap_or(DEFAULT_LINE_SPACING),
+                para_space: d
+                    .get(b"ParaSpace")
+                    .and_then(Object::as_f64)
+                    .filter(|v| v.is_finite() && (0.0..=MAX_PARA_SPACE).contains(v))
+                    .unwrap_or(0.0),
             }))
         }
         b"Image" => {
@@ -885,6 +945,13 @@ fn validate(c: &Content) -> Result<(), EditError> {
             }
             if (r[2] - r[0]).abs() < 1.0 {
                 return Err(EditError::Invalid("the text box is too narrow".into()));
+            }
+            let (lo, hi) = LINE_SPACING_RANGE;
+            if !(t.line_spacing.is_finite() && (lo..=hi).contains(&t.line_spacing)) {
+                return Err(EditError::Invalid(format!("line spacing must be a multiple of the font size from {lo} to {hi}")));
+            }
+            if !(t.para_space.is_finite() && (0.0..=MAX_PARA_SPACE).contains(&t.para_space)) {
+                return Err(EditError::Invalid(format!("the space after paragraphs must be 0 to {MAX_PARA_SPACE} points")));
             }
             if has_list(t) && t.text.chars().any(is_arabic) {
                 return Err(EditError::Invalid("lists are not available for text boxes with Arabic text yet".into()));

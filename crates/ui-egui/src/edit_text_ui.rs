@@ -825,6 +825,48 @@ pub(crate) fn page_input(
     true
 }
 
+/// The most arrow presses handled in one frame (key repeat delivers a few).
+const MAX_ARROW_STEPS: usize = 256;
+
+/// One arrow-key step through text with right-to-left characters: the caret moves by display
+/// order (UAX #9) rather than logical order, so → goes right on screen in Hebrew and Arabic as
+/// it does in Latin text. With shift the selection's moving end goes; without, a selection
+/// collapses to where its moving end was.
+pub(crate) fn visual_arrow(text: &str, range: egui::text::CCursorRange, right: bool, shift: bool, presses: usize) -> egui::text::CCursorRange {
+    use egui::text::{CCursor, CCursorRange};
+    if !shift && range.primary.index != range.secondary.index {
+        return CCursorRange::one(CCursor::new(range.primary.index));
+    }
+    let mut at = range.primary.index.0;
+    for _ in 0..presses.min(MAX_ARROW_STEPS) {
+        at = pdfcraft_engine::bidi::caret_move(text, at, right, None);
+    }
+    let primary = CCursor::new(at);
+    if shift { CCursorRange { primary, secondary: range.secondary, h_pos: None } } else { CCursorRange::one(primary) }
+}
+
+/// Takes ← and → (with or without shift) from the focused editor `id` when its text has
+/// right-to-left characters, and moves its caret by display order instead ([`visual_arrow`]).
+/// Text without them is left to the text editor, with no extra work per frame beyond a scan.
+fn visual_arrows(ctx: &egui::Context, id: egui::Id, text: &str) {
+    if !ctx.memory(|m| m.has_focus(id)) || !pdfcraft_engine::bidi::has_rtl(text) {
+        return;
+    }
+    for (key, right) in [(egui::Key::ArrowLeft, false), (egui::Key::ArrowRight, true)] {
+        for shift in [false, true] {
+            let modifiers = if shift { egui::Modifiers::SHIFT } else { egui::Modifiers::NONE };
+            let presses = ctx.input_mut(|i| i.count_and_consume_key(modifiers, key));
+            if presses == 0 {
+                continue;
+            }
+            let Some(mut state) = egui::TextEdit::load_state(ctx, id) else { continue };
+            let Some(range) = state.cursor.char_range() else { continue };
+            state.cursor.set_char_range(Some(visual_arrow(text, range, right, shift, presses)));
+            state.store(ctx, id);
+        }
+    }
+}
+
 /// The inline editor; returns the edit once the text is applied.
 pub(crate) fn overlay(ctx: &egui::Context, view: &mut DocView, info: &DocInfo) -> Option<Edit> {
     // Clicks outside the document (the Format text panel) keep the paragraph open.
@@ -864,13 +906,20 @@ pub(crate) fn overlay(ctx: &egui::Context, view: &mut DocView, info: &DocInfo) -
                 let original = &ed.original;
                 let runs = &ed.runs;
                 let look = &ed.look;
+                let input = egui::Id::new("edit-text-line-input");
+                // Right-to-left paragraphs: arrows move by display order, and rows sit at the right.
+                visual_arrows(ui.ctx(), input, &ed.text);
+                let rtl = pdfcraft_engine::bidi::has_rtl(&ed.text) && pdfcraft_engine::bidi::base_rtl(&ed.text);
+                let align = if rtl { egui::Align::RIGHT } else { egui::Align::LEFT };
                 let mut layouter = |ui: &egui::Ui, text: &dyn egui::TextBuffer, width: f32| {
                     let mut job = draft_layout(text.as_str(), original, runs, look, scale);
                     job.wrap.max_width = width;
+                    job.halign = align;
                     ui.fonts_mut(|fonts| fonts.layout_job(job))
                 };
                 let output = egui::TextEdit::multiline(&mut ed.text)
-                    .id(egui::Id::new("edit-text-line-input"))
+                    .id(input)
+                    .horizontal_align(align)
                     .font(font.clone())
                     .text_color(text_color)
                     .layouter(&mut layouter)
@@ -913,5 +962,30 @@ pub(crate) fn overlay(ctx: &egui::Context, view: &mut DocView, info: &DocInfo) -
             })
         }
         None => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use egui::text::{CCursor, CCursorRange};
+
+    use super::visual_arrow;
+
+    fn at(i: usize) -> CCursorRange {
+        CCursorRange::one(CCursor::new(i))
+    }
+
+    #[test]
+    fn arrows_move_by_display_order_in_right_to_left_text() {
+        // In Hebrew → moves towards the start of the word (it is on the right).
+        assert_eq!(visual_arrow("שלום", at(2), true, false, 1).primary.index.0, 1);
+        assert_eq!(visual_arrow("שלום", at(2), false, false, 1).primary.index.0, 3);
+        // Shift extends from the fixed end; a plain arrow collapses a selection.
+        let extended = visual_arrow("שלום", at(2), false, true, 2);
+        assert_eq!((extended.secondary.index.0, extended.primary.index.0), (2, 4));
+        assert_eq!(visual_arrow("שלום", extended, true, false, 1), at(4));
+        // Presses are capped, positions out of range are clamped, nothing panics.
+        assert_eq!(visual_arrow("שלום", at(99), true, false, usize::MAX).primary.index.0, 0);
+        assert_eq!(visual_arrow("", at(0), true, true, 3).primary.index.0, 0);
     }
 }

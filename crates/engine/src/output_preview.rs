@@ -182,6 +182,116 @@ pub fn held_profile(color: &ColorManagement, id: &str) -> Result<SimulationProfi
     Ok(SimulationProfile::Profile { id: id.to_string(), name, bytes })
 }
 
+/// The press conversion and display simulation `profile` gives under the colour settings
+/// `color` (`press`: the document's own press conversion), and what they are.
+fn simulation(
+    cos: &pdfcraft_cos::Document,
+    color: &ColorManagement,
+    press: Box<dyn Conversion>,
+    profile: &SimulationProfile,
+) -> Result<(Box<dyn Conversion>, Display, SimulationInfo), EditError> {
+    let source = match profile {
+        SimulationProfile::OutputIntent => "output_intent",
+        SimulationProfile::Working => "working",
+        SimulationProfile::Profile { .. } => "profile",
+    };
+    let mut problem: Option<String> = None;
+    // The profile to display through: (bytes, name, where it came from).
+    let mut chosen: Option<(Arc<Vec<u8>>, String, &'static str)> = None;
+    let unmanaged = color.settings().untagged == UntaggedPolicy::Unmanaged;
+    match profile {
+        SimulationProfile::Profile { name, bytes, .. } => chosen = Some((bytes.clone(), name.clone(), "profile")),
+        _ if unmanaged => problem = Some("colour management of untagged colour is off in the colour settings".into()),
+        SimulationProfile::OutputIntent if color.settings().untagged == UntaggedPolicy::OutputIntent => {
+            match crate::guard(|| pdfcraft_preflight::separations::output_intent(cos)).ok().flatten() {
+                None => problem = Some("the document has no output intent, so the working CMYK space is simulated".into()),
+                Some(i) => {
+                    let name = i.condition.clone().unwrap_or_else(|| format!("{} output intent", i.subtype));
+                    match i.profile {
+                        Some(bytes) if bytes.get(16..20) == Some(b"CMYK".as_slice()) => chosen = Some((Arc::new(bytes), name, "output_intent")),
+                        Some(_) => {
+                            problem = Some(format!("the output intent {name:?} is not a CMYK profile, so the working CMYK space is simulated"))
+                        }
+                        None => {
+                            let why = i.problem.unwrap_or_else(|| "it has no DestOutputProfile".into());
+                            problem = Some(format!("the output intent {name:?} is not used ({why}), so the working CMYK space is simulated"));
+                        }
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+    if chosen.is_none()
+        && !unmanaged
+        && let Some((info, bytes)) = color.working(Family::Cmyk)
+    {
+        chosen = Some((bytes, format!("{} ({})", info.id, info.description), "working"));
+    }
+    let mut display = Display::renderer();
+    let mut used = "none";
+    let mut name = None;
+    if let Some((bytes, label, from)) = &chosen {
+        let described = match *from {
+            "output_intent" => format!("the output intent's profile ({label})"),
+            "working" => format!("the working CMYK space {label}"),
+            _ => format!("the colour settings' profile {label}"),
+        };
+        match crate::guard(|| Display::from_profile(bytes, &described)) {
+            Ok(Ok(d)) => {
+                display = d;
+                used = from;
+                name = Some(label.clone());
+            }
+            Ok(Err(e)) | Err(e) => {
+                if *from == "profile" {
+                    return Err(EditError::Invalid(format!("{label} can't be the simulation profile: {e}")));
+                }
+                let why = format!("{described} can't display CMYK: {e}");
+                problem = Some(match problem {
+                    Some(p) => format!("{p}; {why}"),
+                    None => why,
+                });
+            }
+        }
+    }
+    // A chosen profile separates RGB and Lab itself when it has BToA tables; otherwise (and
+    // for the output intent and working space) the colour settings' press conversion does.
+    let (conversion, conversion_note): (Box<dyn Conversion>, Option<String>) = match (&chosen, used) {
+        (Some((bytes, label, "profile")), "profile") => {
+            let intent = intent_code(color.settings().intent);
+            let parsed = crate::guard(|| Profile::parse(bytes, intent)).ok().and_then(Result::ok).filter(|p| p.family == Family::Cmyk && p.exact());
+            match parsed {
+                Some(p) => {
+                    let label = format!("the simulation profile {label}, {}", color.settings().intent.name().replace('_', " "));
+                    (Box::new(Chosen { profile: p, label, inner: press }), None)
+                }
+                None => {
+                    let why = format!("{label} has no BToA table PdfCraft reads, so RGB and Lab separate through {}", press.describe());
+                    (press, Some(why))
+                }
+            }
+        }
+        _ => (press, None),
+    };
+    if let Some(n) = conversion_note {
+        problem = Some(match problem {
+            Some(p) => format!("{p}; {n}"),
+            None => n,
+        });
+    }
+    let info = SimulationInfo {
+        source,
+        used,
+        name,
+        profile_used: display.has_profile(),
+        display: display.description.clone(),
+        conversion: conversion.describe(),
+        problem,
+    };
+    Ok((conversion, display, info))
+}
+
 impl crate::Document {
     /// Output Preview's session settings for this document.
     pub fn output_preview(&self) -> &OutputPreview {
@@ -190,110 +300,7 @@ impl crate::Document {
 
     /// The press conversion and display the simulation profile gives, and what they are.
     fn simulation(&self, cos: &pdfcraft_cos::Document) -> Result<(Box<dyn Conversion>, Display, SimulationInfo), EditError> {
-        let press = self.press_conversion()?;
-        let color = self.color_management.as_ref();
-        let profile = &self.output_preview.profile;
-        let source = match profile {
-            SimulationProfile::OutputIntent => "output_intent",
-            SimulationProfile::Working => "working",
-            SimulationProfile::Profile { .. } => "profile",
-        };
-        let mut problem: Option<String> = None;
-        // The profile to display through: (bytes, name, where it came from).
-        let mut chosen: Option<(Arc<Vec<u8>>, String, &'static str)> = None;
-        let unmanaged = color.settings().untagged == UntaggedPolicy::Unmanaged;
-        match profile {
-            SimulationProfile::Profile { name, bytes, .. } => chosen = Some((bytes.clone(), name.clone(), "profile")),
-            _ if unmanaged => problem = Some("colour management of untagged colour is off in the colour settings".into()),
-            SimulationProfile::OutputIntent if color.settings().untagged == UntaggedPolicy::OutputIntent => {
-                match crate::guard(|| pdfcraft_preflight::separations::output_intent(cos)).ok().flatten() {
-                    None => problem = Some("the document has no output intent, so the working CMYK space is simulated".into()),
-                    Some(i) => {
-                        let name = i.condition.clone().unwrap_or_else(|| format!("{} output intent", i.subtype));
-                        match i.profile {
-                            Some(bytes) if bytes.get(16..20) == Some(b"CMYK".as_slice()) => chosen = Some((Arc::new(bytes), name, "output_intent")),
-                            Some(_) => {
-                                problem = Some(format!("the output intent {name:?} is not a CMYK profile, so the working CMYK space is simulated"))
-                            }
-                            None => {
-                                let why = i.problem.unwrap_or_else(|| "it has no DestOutputProfile".into());
-                                problem = Some(format!("the output intent {name:?} is not used ({why}), so the working CMYK space is simulated"));
-                            }
-                        }
-                    }
-                }
-            }
-            _ => {}
-        }
-        if chosen.is_none()
-            && !unmanaged
-            && let Some((info, bytes)) = color.working(Family::Cmyk)
-        {
-            chosen = Some((bytes, format!("{} ({})", info.id, info.description), "working"));
-        }
-        let mut display = Display::renderer();
-        let mut used = "none";
-        let mut name = None;
-        if let Some((bytes, label, from)) = &chosen {
-            let described = match *from {
-                "output_intent" => format!("the output intent's profile ({label})"),
-                "working" => format!("the working CMYK space {label}"),
-                _ => format!("the colour settings' profile {label}"),
-            };
-            match crate::guard(|| Display::from_profile(bytes, &described)) {
-                Ok(Ok(d)) => {
-                    display = d;
-                    used = from;
-                    name = Some(label.clone());
-                }
-                Ok(Err(e)) | Err(e) => {
-                    if *from == "profile" {
-                        return Err(EditError::Invalid(format!("{label} can't be the simulation profile: {e}")));
-                    }
-                    let why = format!("{described} can't display CMYK: {e}");
-                    problem = Some(match problem {
-                        Some(p) => format!("{p}; {why}"),
-                        None => why,
-                    });
-                }
-            }
-        }
-        // A chosen profile separates RGB and Lab itself when it has BToA tables; otherwise (and
-        // for the output intent and working space) the colour settings' press conversion does.
-        let (conversion, conversion_note): (Box<dyn Conversion>, Option<String>) = match (&chosen, used) {
-            (Some((bytes, label, "profile")), "profile") => {
-                let intent = intent_code(color.settings().intent);
-                let parsed =
-                    crate::guard(|| Profile::parse(bytes, intent)).ok().and_then(Result::ok).filter(|p| p.family == Family::Cmyk && p.exact());
-                match parsed {
-                    Some(p) => {
-                        let label = format!("the simulation profile {label}, {}", color.settings().intent.name().replace('_', " "));
-                        (Box::new(Chosen { profile: p, label, inner: press }), None)
-                    }
-                    None => {
-                        let why = format!("{label} has no BToA table PdfCraft reads, so RGB and Lab separate through {}", press.describe());
-                        (press, Some(why))
-                    }
-                }
-            }
-            _ => (press, None),
-        };
-        if let Some(n) = conversion_note {
-            problem = Some(match problem {
-                Some(p) => format!("{p}; {n}"),
-                None => n,
-            });
-        }
-        let info = SimulationInfo {
-            source,
-            used,
-            name,
-            profile_used: display.has_profile(),
-            display: display.description.clone(),
-            conversion: conversion.describe(),
-            problem,
-        };
-        Ok((conversion, display, info))
+        simulation(cos, self.color_management.as_ref(), self.press_conversion()?, &self.output_preview.profile)
     }
 
     /// What the simulation profile resolves to for this document.
@@ -313,6 +320,102 @@ impl crate::Document {
             .map_err(|e| EditError::Invalid(format!("Output preview failed on page {}: {e}", page.saturating_add(1))))?
             .map_err(EditError::Invalid)?;
         Ok((preview, info))
+    }
+}
+
+/// What Output Preview reads of a document, copied so that a worker thread can separate,
+/// inspect and check a page while the session goes on (the PDF's bytes and parsed objects are
+/// shared, not copied). Built by [`crate::Document::press_snapshot`]; it sees the document,
+/// colour settings, Ink Manager and Output Preview settings as they were then.
+#[derive(Clone)]
+pub struct PressSnapshot {
+    cos: pdfcraft_cos::Document,
+    color_management: Arc<ColorManagement>,
+    render: Option<pdfcraft_render::ColourProfiles>,
+    ink_manager: pdfcraft_preflight::ink_manager::InkManager,
+    preview: OutputPreview,
+    pages: usize,
+}
+
+impl crate::Document {
+    /// A copy of what Output Preview needs, for analysis away from the session.
+    pub fn press_snapshot(&self) -> Result<PressSnapshot, EditError> {
+        let editor = self.editor.as_ref().ok_or_else(|| EditError::ReadOnly(self.read_only_reason.clone().unwrap_or_default()))?;
+        Ok(PressSnapshot {
+            cos: editor.cos.clone(),
+            color_management: self.color_management.clone(),
+            render: self.color.render.clone(),
+            ink_manager: self.ink_manager.clone(),
+            preview: self.output_preview.clone(),
+            pages: self.info.pages.len(),
+        })
+    }
+}
+
+impl PressSnapshot {
+    fn press(&self) -> Box<dyn Conversion> {
+        crate::preflight::displayed_press(&self.cos, &self.color_management, self.render.clone())
+    }
+
+    fn page(&self, page: usize) -> Result<(), EditError> {
+        if page < self.pages { Ok(()) } else { Err(EditError::Invalid(format!("the document has no page {}", page.saturating_add(1)))) }
+    }
+
+    /// The Output Preview settings the snapshot was taken with.
+    pub fn settings(&self) -> &OutputPreview {
+        &self.preview
+    }
+
+    /// [`crate::Document::render_output_preview`] on the snapshot.
+    pub fn render_output_preview(&self, page: usize, dpi: f64) -> Result<(Preview, SimulationInfo), EditError> {
+        self.page(page)?;
+        let (base, display, info) = simulation(&self.cos, &self.color_management, self.press(), &self.preview.profile)?;
+        let conversion = Managed { conversion: base.as_ref(), inks: &self.ink_manager };
+        let settings = self.preview.settings();
+        let preview = crate::guard(|| pdfcraft_preflight::output_preview::render(&self.cos, page, dpi, &settings, &conversion, &display))
+            .map_err(|e| EditError::Invalid(format!("Output preview failed on page {}: {e}", page.saturating_add(1))))?
+            .map_err(EditError::Invalid)?;
+        Ok((preview, info))
+    }
+
+    /// [`crate::Document::inspect_objects`] on the snapshot, simulating overprint as Output
+    /// Preview's settings say.
+    pub fn inspect_objects(&self, page: usize, x: f64, y: f64, dpi: f64) -> Result<crate::preflight::Inspection, EditError> {
+        self.page(page)?;
+        let base = self.press();
+        let conversion = Managed { conversion: base.as_ref(), inks: &self.ink_manager };
+        let overprint = self.preview.simulate_overprint;
+        crate::guard(|| pdfcraft_preflight::inspector::inspect(&self.cos, page, x, y, dpi, overprint, &conversion))
+            .map_err(|e| EditError::Invalid(format!("Inspecting page {} failed: {e}", page.saturating_add(1))))?
+            .map_err(EditError::Invalid)
+    }
+
+    /// [`crate::Document::document_inks`] on the snapshot: the document's own inks on `pages`
+    /// (0-based; all when empty), ignoring the Ink Manager.
+    pub fn document_inks(&self, pages: &[usize]) -> Result<crate::preflight::InkList, EditError> {
+        if let Some(p) = pages.iter().find(|p| **p >= self.pages) {
+            return Err(EditError::Invalid(format!("the document has no page {}", p.saturating_add(1))));
+        }
+        let base = self.press();
+        let none = pdfcraft_preflight::ink_manager::InkManager::default();
+        let conversion = Managed { conversion: base.as_ref(), inks: &none };
+        crate::guard(|| pdfcraft_preflight::separations::list_inks(&self.cos, pages, &conversion))
+            .map_err(|e| EditError::Invalid(format!("Listing the separations failed: {e}")))?
+            .map_err(EditError::Invalid)
+    }
+
+    /// The number of pages.
+    pub fn page_count(&self) -> usize {
+        self.pages
+    }
+
+    /// [`crate::Document::colour_warnings`] for one page of the snapshot.
+    pub fn colour_warnings(&self, page: usize) -> Result<crate::preflight::ColourWarnings, EditError> {
+        self.page(page)?;
+        let options = crate::preflight::ColourWarningOptions { pages: vec![page], ..Default::default() };
+        crate::guard(|| pdfcraft_preflight::colour_warnings::check(&self.cos, &options))
+            .map_err(|e| EditError::Invalid(format!("The colour warning check failed: {e}")))?
+            .map_err(EditError::Invalid)
     }
 }
 
@@ -340,6 +443,15 @@ impl Session {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn snapshots_go_to_worker_threads() {
+        fn send<T: Send + Sync + 'static>() {}
+        send::<PressSnapshot>();
+        send::<Preview>();
+        send::<crate::preflight::Inspection>();
+        send::<crate::preflight::ColourWarnings>();
+    }
 
     #[test]
     fn settings_validate_and_paper_implies_black() {

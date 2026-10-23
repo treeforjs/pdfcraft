@@ -34,6 +34,7 @@ fn fill_and_sign_dates_follow_the_date_format_preference_and_it_is_remembered() 
         app.open_bytes("form.pdf", None, PDF.to_vec()).expect("opens");
         app.set_option("left", "closed").unwrap();
         app.set_option("dialog", "preferences").unwrap();
+        app.set_option("preferences-page", "forms").unwrap();
         app
     });
     h.run_steps(4);
@@ -104,6 +105,7 @@ fn month_names_follow_the_date_language_or_else_the_interface_language() {
         app.set_option("date-format", "d mmmm yyyy").unwrap();
         app.set_option("language", "cs").unwrap();
         app.set_option("dialog", "preferences").unwrap();
+        app.set_option("preferences-page", "forms").unwrap();
         app
     });
     h.run_steps(3);
@@ -139,6 +141,7 @@ fn a_date_the_pdf_cannot_hold_is_refused_with_a_warning_first() {
         app.set_option("date-format", "dddd").unwrap();
         app.set_option("date-language", "ja").unwrap();
         app.set_option("dialog", "preferences").unwrap();
+        app.set_option("preferences-page", "forms").unwrap();
         app
     });
     h.run_steps(3);

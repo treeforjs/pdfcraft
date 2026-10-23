@@ -68,7 +68,7 @@ impl crate::Document {
     /// RGB and Lab to process inks under the colour settings, displayed (overprint preview)
     /// through the renderer's resolved CMYK conversion.
     fn press(&self, cos: &pdfcraft_cos::Document) -> Box<dyn Conversion> {
-        Box::new(Displayed { inner: press_conversion(cos, &self.color_management), display: self.color.render.clone() })
+        displayed_press(cos, &self.color_management, self.color.render.clone())
     }
 
     /// Output Preview's separations list: the process and spot inks of `pages` (0-based; all
@@ -197,6 +197,16 @@ impl Conversion for ProfileConversion {
     fn tint_function(&self, doc: &pdfcraft_cos::Document, f: &pdfcraft_cos::Object, inputs: usize, outputs: usize) -> Option<Box<dyn TintFunction>> {
         edit_tint(doc, f, inputs, outputs)
     }
+}
+
+/// RGB and Lab to process inks under the colour settings `color`, displayed (overprint preview)
+/// through `display`, the renderer's resolved CMYK conversion.
+pub(crate) fn displayed_press(
+    cos: &pdfcraft_cos::Document,
+    color: &crate::color_settings::ColorManagement,
+    display: Option<pdfcraft_render::ColourProfiles>,
+) -> Box<dyn Conversion> {
+    Box::new(Displayed { inner: press_conversion(cos, color), display })
 }
 
 /// A press conversion whose CMYK displays through the document's resolved colour settings.

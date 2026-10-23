@@ -532,6 +532,12 @@ fn screenshot_png(image: &egui::ColorImage, region: Option<egui::Rect>, ppp: f32
     Ok(json!({ "png_base64": base64::engine::general_purpose::STANDARD.encode(out), "width": cw, "height": ch, "pixels_per_point": ppp }))
 }
 
+/// The language the interface is drawn in, for `ui.state`.
+fn interface_language(pref: &str) -> Value {
+    let l = crate::i18n::Lang::from_pref(pref);
+    json!({ "code": l.code(), "name": l.name(), "direction": if l.is_rtl() { "rtl" } else { "ltr" } })
+}
+
 impl Host for crate::PdfCraftApp {
     fn state(&self) -> Value {
         let active = self.active.and_then(|i| self.views.get(i));
@@ -541,10 +547,10 @@ impl Host for crate::PdfCraftApp {
             .enumerate()
             .filter_map(|(i, v)| {
                 let d = self.session.get(v.id)?;
-                Some(json!({ "tab": i, "doc": v.id.0, "name": d.name, "path": d.path, "pages": d.info.pages.len(), "dirty": d.dirty, "active": self.active == Some(i) }))
+                Some(json!({ "tab": i, "view": v.key, "window": self.windows.window_of(v.key).0, "doc": v.id.0, "name": d.name, "path": d.path, "pages": d.info.pages.len(), "dirty": d.dirty, "active": self.active == Some(i) }))
             })
             .collect();
-        json!({
+        let mut state = json!({
             "documents": docs,
             "active": active.map(|v| json!({
                 "doc": v.id.0,
@@ -565,6 +571,9 @@ impl Host for crate::PdfCraftApp {
                 "pages_on_screen": v.visible_page_rects().iter().map(|(p, r)| json!({ "page": p + 1, "rect": [r.min.x, r.min.y, r.max.x, r.max.y] })).collect::<Vec<_>>(),
                 "text_selection": v.text_selection_state(),
                 "selected_comment": v.comments.selected.map(|(p, i)| json!({ "page": p + 1, "index": i + 1 })),
+                // The Edit object tool's selection (1-based page and object numbers, as page_objects).
+                "selected_objects": (!v.objects.selected.is_empty())
+                    .then(|| json!({ "page": v.objects.page + 1, "objects": v.objects.selected.iter().map(|k| k + 1).collect::<Vec<_>>() })),
                 "comment_composer_open": v.comments.composer.is_some(),
             })),
             "quick_tool": match self.quick_tool {
@@ -575,11 +584,13 @@ impl Host for crate::PdfCraftApp {
                 crate::QuickTool::Redact => "redact".to_string(),
                 crate::QuickTool::AddText => "add-text".to_string(),
                 crate::QuickTool::EditText => "edit-text".to_string(),
+                crate::QuickTool::EditObject => "edit-object".to_string(),
                 crate::QuickTool::Link => "link".to_string(),
                 crate::QuickTool::SignArea { certify: false } => "sign".to_string(),
                 crate::QuickTool::SignArea { certify: true } => "certify".to_string(),
                 crate::QuickTool::MarqueeZoom => "marquee-zoom".to_string(),
                 crate::QuickTool::Snapshot => "snapshot".to_string(),
+                crate::QuickTool::ReadingOrder => "reading-order".to_string(),
                 crate::QuickTool::Stamp(k) => format!("stamp-{}", k.name().trim_start_matches("PC").to_ascii_lowercase()),
                 crate::QuickTool::CustomStamp(i) => format!("custom-stamp-{i}"),
                 crate::QuickTool::Fill(f) => format!("fill-{}", f.command().trim_start_matches("sign.fill.")),
@@ -591,23 +602,85 @@ impl Host for crate::PdfCraftApp {
             "default_mode": self.default_mode,
             "left_panel": if self.left_open { json!(format!("{:?}", self.left)) } else { Value::Null },
             "right_panel": self.right.map(|r| format!("{r:?}")),
+            // Every window, its tabs (view keys) and the one it shows (ui.set window-new,
+            // window-move-tab, window-close, window-focus).
+            "windows": self.windows_state(),
+            "compare_view": self.side_by_side.as_ref().filter(|_| self.side_by_side_showing()).map(|v| v.state()),
             "dialog": self.dialog.map(|d| format!("{d:?}")),
+            // Help → Keyboard shortcuts' search and Help → User guide's page
+            // (ui.set shortcuts-query, user-guide-page).
+            "help": { "shortcuts_query": self.help_ui.query, "user_guide_page": self.guide_page_slug() },
+            "js_debugger": (self.dialog == Some(crate::Dialog::JsDebugger)).then(|| self.js_debugger.state()),
             "palette_open": self.palette_open,
             "theme": format!("{:?}", self.theme),
             "theme_preference": self.theme_preference,
+            // Every preference by key (set with ui.set pref.<key>).
+            "prefs": self.prefs_values(),
             "language": self.language,
+            // The language the interface is drawn in (the preference resolved: auto follows the system).
+            "interface_language": interface_language(&self.language),
             "notice": self.toast.as_ref().map(|t| t.0.clone()),
             "progress": self.progress_notice.as_ref().map(|p| json!({ "label": p.label, "fraction": p.fraction })),
             "password_prompt": self.password_prompt.is_some(),
             "close_prompt": self.close_request.is_some(),
-            "timestamp_servers": self.timestamp_servers,
+            "timestamp_servers": self.session.timestamp_servers(),
             "signature_workflow": {"mode":format!("{:?}",self.signature_workflow.mode),"selected":self.signature_workflow.selected,
                 "allow_network":self.signature_workflow.allow_network,"verification_time":self.signature_workflow.verification_time,
                 "certificates":self.signature_workflow.certificates,"crls":self.signature_workflow.crls,"ocsps":self.signature_workflow.ocsps,
                 "error":self.signature_workflow.error,"running":self.signature_run.as_ref().map(|r|serde_json::json!({"doc":r.doc.0,"cancelled":r.cancellation.is_cancelled()})),
                 "results":self.signature_workflow.results.iter().map(|s|json!({"field":s.field,"status":format!("{:?}",s.status),
                     "verification_time":s.verification_time.map(|t|t.to_string()),"verification_time_source":format!("{:?}",s.verification_time_source),"details":s.details})).collect::<Vec<_>>()},
-        })
+        });
+        // Kept out of the json! above, which is at the macro recursion limit.
+        if let Some(m) = state.as_object_mut() {
+            m.insert(
+                "signing".into(),
+                json!({
+                    "lock_document": self.sign_draft.as_ref().map(|d| d.lock_document),
+                    "graphic": self.sign_draft.as_ref().map(|d| d.graphic),
+                    "saved_appearance": self.sign_draft.as_ref().and_then(|d| d.saved.clone()),
+                    "appearances": self.session.signature_appearances().iter().map(|a| a.name.clone()).collect::<Vec<_>>(),
+                    "signed_comparison": self.signed_comparison.as_ref().map(|c| json!({"doc": c.doc.0, "signed": c.signed.0, "field": c.field,
+                        "modified": c.result.modified(), "permitted": c.result.permitted()})),
+                }),
+            );
+            let active_doc = self.active_ids().and_then(|(_, id)| self.session.get(id));
+            m.insert("advanced_search".into(), self.adv_search.state());
+            m.insert("custom_commands".into(), self.custom_commands.state());
+            m.insert("action_run".into(), self.action_run_state());
+            m.insert("action_wizard".into(), json!({ "folder": self.wizard.folder, "recursive": self.wizard.recursive }));
+            m.insert("hidden_comment_types".into(), json!(active_doc.map(|d| d.hidden_comment_types()).unwrap_or_default()));
+            m.insert("select_pages".into(), json!({ "range": self.select_pages.range, "error": self.select_pages.error }));
+            m.insert("bookmark_properties".into(), json!(self.bookmark_props.as_ref().map(|p| json!({ "path": p.path, "title": p.title }))));
+            m.insert(
+                "from_structure".into(),
+                json!({ "max_level": self.from_structure.max_level, "replace": self.from_structure.replace, "error": self.from_structure.error }),
+            );
+            m.insert(
+                "find_comments".into(),
+                json!(self.active.and_then(|i| self.views.get(i)).and_then(|v| v.find.as_ref()).map(|f| json!({
+                    "include": f.comments,
+                    "matches": f.comment_matches.iter().map(|(p, k)| json!({ "page": p + 1, "index": k })).collect::<Vec<_>>(),
+                    "current": f.comment_current,
+                }))),
+            );
+            if self.right == Some(crate::RightPanel::Attachments) {
+                m.insert("associated_files".into(), crate::assoc_ui::AssocFiles::state(active_doc));
+            }
+            m.insert("output_preview".into(), json!((self.right == Some(crate::RightPanel::OutputPreview)).then(|| self.output_preview_state())));
+            m.insert("ink_manager".into(), json!((self.dialog == Some(crate::Dialog::InkManager)).then(|| self.ink_manager_state())));
+            // Tags / Order panels and the Reading Order tool: the selected tag (obj) and region.
+            m.insert(
+                "tags".into(),
+                json!({
+                    "selected": self.a11y_tools.tags.selected_obj(),
+                    "rows": self.a11y_tools.tags.rows.len(),
+                    "region": self.a11y_tools.region.map(|(p, r)| json!({ "page": p + 1, "region": r + 1 })),
+                    "pending_box": self.a11y_tools.reading.pending.as_ref().map(|b| json!({ "page": b.page + 1, "rect": b.rect })),
+                }),
+            );
+        }
+        state
     }
 
     fn command(&mut self, id: &str) -> Reply {
@@ -620,9 +693,22 @@ impl Host for crate::PdfCraftApp {
     }
 
     fn commands(&self) -> Value {
+        // Labels in the language the interface is drawn in, even before the next frame sets it.
+        crate::i18n::set_current(crate::i18n::Lang::from_pref(&self.language));
         let list: Vec<Value> = pdfcraft_engine::commands::COMMANDS
             .iter()
-            .map(|c| json!({ "id": c.id, "label": c.label, "menu": c.menu, "enabled": self.command_enabled(c), "shortcut": c.shortcut.map(|s| s.label(cfg!(target_os = "macos"))) }))
+            .map(|c| {
+                json!({
+                    "id": c.id,
+                    "label": c.label,
+                    // What the person at the app reads: the label and menu in the interface language.
+                    "label_localized": crate::i18n::menu_label(c.id, c.label),
+                    "menu": c.menu,
+                    "menu_localized": c.menu.map(crate::i18n::t),
+                    "enabled": self.command_enabled(c),
+                    "shortcut": c.shortcut.map(|s| s.label(cfg!(target_os = "macos"))),
+                })
+            })
             .collect();
         json!({ "commands": list })
     }

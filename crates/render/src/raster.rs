@@ -82,6 +82,9 @@ pub struct RenderConfig {
     pub layers: Arc<Vec<(i32, i32, bool)>>,
     /// View ▸ Hide all comments: markup annotations aren't drawn (fields and links still are).
     pub hide_comments: bool,
+    /// Comments ▸ Show by type: annotation subtypes (`Highlight`, `Ink`, …) not drawn. Fields
+    /// and links are never hidden this way.
+    pub hidden_comment_subtypes: Arc<Vec<Vec<u8>>>,
     /// Refuse a whole-page raster that would be reduced by the renderer's hard size caps.
     /// Tiled requests remain available for pages that exceed those caps.
     pub reject_oversize: bool,
@@ -104,6 +107,7 @@ impl Default for RenderConfig {
             password: None,
             layers: Arc::default(),
             hide_comments: false,
+            hidden_comment_subtypes: Arc::default(),
             reject_oversize: false,
             native_vector: native_vector_default(),
             colour: None,
@@ -122,6 +126,7 @@ impl RenderConfig {
         InterpreterSettings {
             ocg_overrides: self.layers.clone(),
             hide_comments: self.hide_comments,
+            hidden_annotation_subtypes: self.hidden_comment_subtypes.clone(),
             font_resolver: Arc::new(move |query| japanese_fallback(query).or_else(|| standard(query))),
             device_color: self.colour.as_ref().map(|c| c.device().clone()),
             ..InterpreterSettings::default()
@@ -2494,6 +2499,42 @@ trailer << /Root 1 0 R >>
         let hidden = render(true);
         assert_eq!(px(&hidden, 75, 25), vec![255, 255, 255, 255], "Hide all comments");
         assert_eq!(px(&hidden, 20, 80), vec![255, 0, 0, 255], "fields stay");
+    }
+
+    #[test]
+    fn hiding_comment_types_keeps_other_comments_and_fields() {
+        let pdf = b"%PDF-1.7
+1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
+2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj
+3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Annots [4 0 R 6 0 R 8 0 R] >> endobj
+4 0 obj << /Type /Annot /Subtype /Widget /FT /Tx /T (t) /Rect [10 10 30 30] /AP << /N 5 0 R >> >> endobj
+5 0 obj << /Type /XObject /Subtype /Form /BBox [0 0 20 20] /Length 24 >> stream
+1 0 0 rg 0 0 20 20 re f
+endstream endobj
+6 0 obj << /Type /Annot /Subtype /Square /F 4 /Rect [60 60 90 90] /AP << /N 7 0 R >> >> endobj
+7 0 obj << /Type /XObject /Subtype /Form /BBox [0 0 30 30] /Length 24 >> stream
+0 1 0 rg 0 0 30 30 re f
+endstream endobj
+8 0 obj << /Type /Annot /Subtype /Ink /F 4 /Rect [60 10 90 40] /AP << /N 9 0 R >> >> endobj
+9 0 obj << /Type /XObject /Subtype /Form /BBox [0 0 30 30] /Length 24 >> stream
+0 0 1 rg 0 0 30 30 re f
+endstream endobj
+trailer << /Root 1 0 R >>
+%%EOF";
+        let render = |hidden: &[&str]| {
+            let hidden = Arc::new(hidden.iter().map(|s| s.as_bytes().to_vec()).collect::<Vec<_>>());
+            let mut r = PageRenderer::new(Arc::new(pdf.to_vec()), RenderConfig { hidden_comment_subtypes: hidden, ..RenderConfig::default() });
+            r.render(RenderRequest { page: 0, kind: RequestKind::Pixels, tile: None, scale: 1.0, tag: 0 })
+        };
+        let px = |p: &RenderedPage, x: u32, y: u32| p.rgba[((y * p.width + x) * 4) as usize..][..4].to_vec();
+        let ink = render(&["Ink"]);
+        assert_eq!(px(&ink, 75, 25), vec![0, 255, 0, 255], "the square stays");
+        assert_eq!(px(&ink, 75, 75), vec![255, 255, 255, 255], "the ink is hidden");
+        // Fields and links can't be hidden by type; unknown or odd names change nothing.
+        let odd = render(&["Widget", "Link", "", "Nonsense", "ink"]);
+        assert_eq!(px(&odd, 20, 80), vec![255, 0, 0, 255]);
+        assert_eq!(px(&odd, 75, 75), vec![0, 0, 255, 255]);
+        assert_eq!(px(&odd, 75, 25), vec![0, 255, 0, 255]);
     }
 
     #[test]

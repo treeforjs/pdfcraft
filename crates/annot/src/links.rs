@@ -1,5 +1,6 @@
 //! Links (ISO 32000-2 §12.5.6.5): create, edit and remove link annotations with Acrobat's Link
-//! Properties (appearance and a go-to-page-view, go-to-named-destination or open-a-web-page action).
+//! Properties (appearance and a go-to-page-view, go-to-named-destination, open-a-web-page or
+//! run-a-JavaScript action).
 
 use pdfcraft_cos::{Dict, Document, ObjRef, Object, PdfString};
 use pdfcraft_model::dests::{self, Fit, Target, View};
@@ -16,7 +17,9 @@ pub enum LinkAction {
     /// A named destination (§12.3.2.3), possibly one that no longer exists.
     Named(String),
     Uri(String),
-    /// Something PdfCraft doesn't edit yet (JavaScript, remote go-to…): kept as is.
+    /// Run a JavaScript (§12.6.4.17): the script.
+    JavaScript(String),
+    /// Something PdfCraft doesn't edit yet (remote go-to, launch…): kept as is.
     Other(String),
 }
 
@@ -36,7 +39,7 @@ impl LinkAction {
             LinkAction::Page(p) => Some(*p),
             LinkAction::View(v) => Some(v.page),
             LinkAction::Named(n) => dests::lookup(doc, n).and_then(|d| d.view).map(|v| v.page),
-            LinkAction::Uri(_) | LinkAction::Other(_) => None,
+            LinkAction::Uri(_) | LinkAction::JavaScript(_) | LinkAction::Other(_) => None,
         }
     }
 }
@@ -118,6 +121,11 @@ fn action_of(doc: &Document, d: &Dict, pages: &[ObjRef]) -> LinkAction {
             a.get(b"URI").and_then(|u| doc.resolve(u).as_string().map(|s| String::from_utf8_lossy(&s.bytes).into_owned())).unwrap_or_default(),
         ),
         Some(b"GoTo") => LinkAction::from_target(a.get(b"D").and_then(|dest| dests::read_target(doc, dest, pages))),
+        // A script that can't be read (a broken `/JS`) runs nothing: it stays an action PdfCraft keeps.
+        Some(b"JavaScript") => match pdfcraft_model::actions::script(doc, &Object::Dict(a.clone())) {
+            Some(js) => LinkAction::JavaScript(js),
+            None => LinkAction::Other("JavaScript".into()),
+        },
         Some(s) => LinkAction::Other(String::from_utf8_lossy(s).into_owned()),
         None => LinkAction::Other("no action".into()),
     }
@@ -224,6 +232,11 @@ fn write_action(doc: &Document, d: &mut Dict, a: &LinkAction) -> Result<(), Anno
             act.set(b"URI".to_vec(), PdfString::literal(u.as_bytes().to_vec()));
             d.set(b"A".to_vec(), Object::Dict(act));
         }
+        LinkAction::JavaScript(js) => {
+            let act = pdfcraft_model::actions::new_javascript(js).map_err(|e| AnnotError::Invalid(e.to_string()))?;
+            d.remove(b"Dest");
+            d.set(b"A".to_vec(), act);
+        }
         LinkAction::Other(_) => {}
     }
     Ok(())
@@ -237,7 +250,7 @@ pub fn add(doc: &mut Document, page: usize, rect: [f64; 4], action: &LinkAction,
         return Err(AnnotError::Invalid("the link area is too small".into()));
     }
     if matches!(action, LinkAction::Other(_)) {
-        return Err(AnnotError::Invalid("choose a page, a named destination or a web address".into()));
+        return Err(AnnotError::Invalid("choose a page, a named destination, a web address or a JavaScript".into()));
     }
     let mut d = Dict::new();
     d.set(b"Type".to_vec(), Object::name("Annot"));

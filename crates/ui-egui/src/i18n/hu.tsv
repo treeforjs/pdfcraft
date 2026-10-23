@@ -2029,7 +2029,6 @@
 	yesterday	tegnap
 	{k} of {n}	{k} / {n}
 	{name} can't be combined: {why}	{name} nem egyesíthető: {why}
-	{n} days ago	{n} napja
 	{n} files	{n} fájl
 	{n} files need attention	{n} fájl figyelmet kér
 	{n} selected	{n} kijelölve
@@ -2303,3 +2302,894 @@ compare-page	Moved	Áthelyezve
 	Archive documents…	Dokumentumok archiválása…
 	Archive Documents	Dokumentumok archiválása
 	Save as PDF/A-2b for long-term archiving.	Mentsd PDF/A-2b formátumban a hosszú távú archiváláshoz.
+	Open pop-up	Felugró ablak megnyitása
+	Close pop-up	Felugró ablak bezárása
+	Move pop-up	Felugró ablak áthelyezése
+	Resize pop-up	Felugró ablak átméretezése
+	No text	Nincs szöveg
+	Open pop-up note	Felugró jegyzet megnyitása
+	Close pop-up note	Felugró jegyzet bezárása
+	Open all pop-ups	Összes felugró ablak megnyitása
+	Close all pop-ups	Összes felugró ablak bezárása
+	No pop-ups to open	Nincs megnyitható felugró ablak
+	No pop-ups are open	Nincs nyitott felugró ablak
+	Trigger:	Kiváltó esemény:
+	Page Open	Oldal megnyitása
+	Page Close	Oldal bezárása
+	Run a JavaScript…	JavaScript futtatása…
+	Page actions…	Oldalműveletek…
+	Type the JavaScript.	Írja be a JavaScriptet.
+	Bookmark Action	Könyvjelző művelete
+	Runs when the bookmark is clicked.	A könyvjelzőre kattintáskor fut le.
+	Page Actions: page {n}	Oldalműveletek: {n}. oldal
+	Page Open runs when the page becomes the current page; Page Close when another page does.	Az „Oldal megnyitása” akkor fut, amikor az oldal lesz az aktuális; az „Oldal bezárása” akkor, amikor egy másik oldal lesz az.
+	JavaScript, e.g. app.alert("Hello")	JavaScript, pl. app.alert("Szia")
+	{s} actions aren't run by PdfCraft yet	A PdfCraft még nem futtatja a(z) {s} műveleteket
+	Insert clipboard before	Vágólap beszúrása elé
+	Insert clipboard after	Vágólap beszúrása utána
+	Couldn't insert pages: {e}	Nem sikerült beszúrni az oldalakat: {e}
+	Screen capture cancelled	Képernyőkép megszakítva
+	Couldn't capture the screen: {e}	Nem sikerült rögzíteni a képernyőt: {e}
+	Create PDF from screen capture	PDF létrehozása képernyőképből
+	Create PDF from window capture	PDF létrehozása ablakképből
+	Create PDF from region capture	PDF létrehozása területképből
+	Insert pages from clipboard	Oldalak beszúrása a vágólapról
+	Insert pages from clipboard before selection	Oldalak beszúrása a vágólapról a kijelölés elé
+	Screen capture	Képernyőkép
+	Window capture	Ablakkép
+	Region capture	Területkép
+	Insert from clipboard	Beszúrás a vágólapról
+	No screen capture tool was found. Capture with your system's tool, then use Create PDF from clipboard.	Nem található képernyőkép-készítő eszköz. Készítse el a képet a rendszer eszközével, majd használja a PDF létrehozása vágólapról parancsot.
+# Preferences window (M14)
+	min	perc
+	Absolute colorimetric	Abszolút kolorimetrikus
+	Allow	Engedélyezés
+	Allow all sites	Minden webhely engedélyezése
+	Always	Mindig
+	Always use the working spaces	Mindig a munkaterek használata
+	Ask each time	Rákérdezés minden alkalommal
+	Automatic	Automatikus
+	Black point compensation	Feketepont-kompenzáció
+	Block	Tiltás
+	Block all sites	Minden webhely tiltása
+	CMYK working space	CMYK munkatér
+	Color management	Színkezelés
+	Default location	Alapértelmezett hely
+	Default reason	Alapértelmezett ok
+	Documents	Dokumentumok
+	Don't color-manage untagged color	Címkézetlen színek kezelése nélkül
+	Each document's own Highlight fields button still turns them on and off.	Az egyes dokumentumok Mezők kiemelése gombja továbbra is be- és kikapcsolja őket.
+	Field highlight color	Mezőkiemelés színe
+	Gray working space	Szürke munkatér
+	High contrast	Nagy kontraszt
+	Highlight form fields in documents that open	Űrlapmezők kiemelése a megnyitott dokumentumokban
+	Internet access from PDFs	Internet-hozzáférés PDF-ekből
+	Keep the comment tool selected after adding a comment	A megjegyzéseszköz kijelölve marad megjegyzés hozzáadása után
+	Makes all interface text and controls larger or smaller.	Nagyobbra vagy kisebbre állítja a felület összes szövegét és vezérlőjét.
+	Never	Soha
+	New signatures start with these; you can change them when signing.	Az új aláírások ezekkel indulnak; aláíráskor módosíthatja őket.
+	No preferences match “{query}”.	Egy beállítás sem felel meg ennek: „{query}”.
+	Off: after one comment, the Select tool comes back.	Kikapcsolva: egy megjegyzés után visszaáll a Kijelölés eszköz.
+	Only for PDF/X files	Csak PDF/X fájlokhoz
+	Open the Comments panel when a comment tool is chosen	A Megjegyzések panel megnyitása megjegyzéseszköz választásakor
+	Output intent overrides working spaces	A kimeneti szándék felülírja a munkatereket
+	Perceptual	Perceptuális
+	RGB working space	RGB munkatér
+	Recent files to remember	Megjegyzett legutóbbi fájlok száma
+	Reduce motion	Mozgás csökkentése
+	Relative colorimetric	Relatív kolorimetrikus
+	Rendering intent	Megjelenítési szándék
+	Required field border color	Kötelező mezők szegélyszíne
+	Saturation	Telítettség
+	Save recovery copies of unsaved changes every	Nem mentett módosítások helyreállítási másolatának mentése ennyi időnként:
+	Search preferences	Keresés a beállításokban
+	Shown on Home and in File ▸ Open Recent. 0 keeps no list.	A Kezdőlapon és a Fájl → Legutóbbi megnyitása menüben látható. 0: nincs lista.
+	Signs new comments. Empty uses your login name.	Az új megjegyzések szerzője. Üresen a bejelentkezési nevet használja.
+	Sites without a rule	Szabály nélküli webhelyek
+	Stronger text, borders and outlines in every theme.	Erősebb szöveg, szegélyek és körvonalak minden témában.
+	Text size	Szövegméret
+	Theme	Téma
+	Turns off animations and smooth scrolling.	Kikapcsolja az animációkat és a finom görgetést.
+	Unsaved changes are kept in a recovery folder so they survive a crash. 0 turns autosave off.	A nem mentett módosítások egy helyreállítási mappába kerülnek, így egy összeomlás után is megmaradnak. 0: az automatikus mentés kikapcsolva.
+	Untagged color	Címkézetlen szín
+	Untagged gray, RGB and CMYK color is shown through these profiles.	A címkézetlen szürke, RGB és CMYK színek ezeken a profilokon át jelennek meg.
+	Use overprint preview	Felülnyomás előnézetének használata
+	Use the site rules	A webhelyszabályok használata
+	Used by Output Preview and page images made for print checks.	A Kimenet előnézete és a nyomtatási ellenőrzéshez készült oldalképek használják.
+	Whether links and scripts in PDFs may reach web sites.	Elérhetik-e a PDF-ek hivatkozásai és szkriptjei a webhelyeket.
+	Your identity is suggested when you create a digital ID.	Digitális azonosító létrehozásakor a rendszer felajánlja az identitását.
+	Compare side by side	Összehasonlítás egymás mellett
+	Next change	Következő változás
+	Previous change	Előző változás
+	Synchronise scrolling	Görgetés összehangolása
+	Both compared files must be open	Mindkét összehasonlított fájlnak nyitva kell lennie
+	Change list	Változáslista
+	Change {i} of {n}	{n}/{i}. változás
+	Changes	Változások
+	Close side-by-side view	Egymás melletti nézet bezárása
+	Compare two files first (Compare files…)	Előbb hasonlítson össze két fájlt (Fájlok összehasonlítása…)
+	Fit width	Szélességhez igazítás
+	Looks different	Másképp néz ki
+	Old: {name}	Régi: {name}
+	New: {name}	Új: {name}
+	No changes	Nincs változás
+	Not in the new file	Nincs benne az új fájlban
+	Not in the old file	Nincs benne a régi fájlban
+	Old page {o} · new page {n}	Régi {o}. oldal · új {n}. oldal
+	Page deleted	Oldal törölve
+	Page inserted	Oldal beszúrva
+	Page moved	Oldal áthelyezve
+	Rendering…	Megjelenítés…
+	Changes: {n}	Változások: {n}
+	Edit objects	Objektumok szerkesztése
+	Click an object to select it, or drag around several	Kattintson egy objektumra a kijelöléshez, vagy húzzon keretet több köré
+	Bring to Front	Előtérbe hozás
+	Bring Forward	Előrébb hozás
+	Send Backward	Hátrébb küldés
+	Send to Back	Háttérbe küldés
+	Object properties	Objektum tulajdonságai
+	Form XObject	Űrlap-XObject
+	Shading	Színátmenet
+	{n} objects selected	{n} objektum kijelölve
+	Arrange	Elrendezés
+	Fill color	Kitöltőszín
+	Stroke color	Körvonalszín
+	Line width	Vonalvastagság
+	Recover unsaved documents…	Nem mentett dokumentumok helyreállítása…
+	Save recovery copies now	Helyreállítási másolatok mentése most
+	PdfCraft was closed with unsaved changes. These documents have recovery copies in this browser:	A PdfCraft nem mentett módosításokkal zárult be. Ezeknek a dokumentumoknak van helyreállítási másolata ebben a böngészőben:
+	This browser can't keep recovery copies of unsaved changes: {e}	Ez a böngésző nem tud helyreállítási másolatot tárolni a nem mentett módosításokról: {e}
+	{name} is too large to keep a recovery copy in the browser	{name} túl nagy ahhoz, hogy helyreállítási másolat készüljön róla a böngészőben
+	Autosave is off, so there is nothing to recover	Az automatikus mentés ki van kapcsolva, így nincs mit helyreállítani
+	Still looking for recovery copies…	Helyreállítási másolatok keresése…
+	Nothing to recover	Nincs mit helyreállítani
+	Saved recovery copies of unsaved changes	A nem mentett módosítások helyreállítási másolatai elmentve
+	Recovery copies are up to date	A helyreállítási másolatok naprakészek
+
+# JavaScript debugger
+	(top level)	(legfelső szint)
+	Add a watch expression	Figyelt kifejezés hozzáadása
+	Annotations	Megjegyzések
+	Bookmark	Könyvjelző
+	Breakpoint on line {n}	Töréspont a(z) {n}. sorban
+	Call stack	Hívási verem
+	Click a line number to set a breakpoint.	Kattintson egy sorszámra töréspont beállításához.
+	Document script	Dokumentumszkript
+	Edited here only: runs use this text; the document keeps its script.	Csak itt szerkesztve: a futtatások ezt a szöveget használják, a dokumentum megtartja a szkriptjét.
+	Error	Hiba
+	Error on line {n}	Hiba a(z) {n}. sorban
+	Evaluate	Kiértékelés
+	Evaluate in the paused scope	Kiértékelés a szüneteltetett környezetben
+	Filter scripts	Szkriptek szűrése
+	Finished	Befejeződött
+	JavaScript Debugger	JavaScript-hibakereső
+	JavaScript debugger…	JavaScript-hibakereső…
+	JavaScript is turned off (Preferences → JavaScript).	A JavaScript ki van kapcsolva (Beállítások → JavaScript).
+	Keystroke	Billentyűleütés
+	Lines: {n}	Sorok: {n}
+	Link {n}	{n}. hivatkozás
+	Links	Hivatkozások
+	More scripts than can be listed; the list is cut.	Több szkript van, mint amennyi listázható; a lista csonka.
+	No scripts match.	Nincs egyező szkript.
+	Not paused	Nincs szüneteltetve
+	Open action	Megnyitási művelet
+	Page {n}	{n}. oldal
+	Paused on line {n}	Szüneteltetve a(z) {n}. sorban
+	Refresh	Frissítés
+	Run JavaScript against the document	JavaScript futtatása a dokumentumon
+	Scratch script	Vázlatszkript
+	Scripts: {n}	Szkriptek: {n}
+	Step into	Belépés
+	Step out	Kilépés
+	Step over	Átlépés
+	Stopped. Nothing the script did was applied.	Leállítva. A szkript semmilyen művelete nem lett alkalmazva.
+	Stopped: the script ran too long	Leállítva: a szkript túl sokáig futott
+	The paused point could not be reached again.	A szüneteltetési pontot nem sikerült újra elérni.
+	This document has no scripts.	Ez a dokumentum nem tartalmaz szkriptet.
+	Watch values show here when the script pauses.	A figyelt értékek itt jelennek meg, amikor a szkript megáll.
+	Watches	Figyelés
+	document script, line {n}	dokumentumszkript, {n}. sor
+	line {n}	{n}. sor
+	{error} (document script {name}, line {n})	{error} ({name} dokumentumszkript, {n}. sor)
+	{error} (line {n})	{error} ({n}. sor)
+	New window	Új ablak
+	Move tab to new window	Lap áthelyezése új ablakba
+	Move tab to main window	Lap áthelyezése a főablakba
+	Close window	Ablak bezárása
+	Separate windows are only available in the desktop app	Külön ablakok csak az asztali alkalmazásban érhetők el
+	Window {n}	{n}. ablak
+	{window} has closed	{window} bezárult
+	That tab has closed	Ez a lap bezárult
+	At most {n} windows can be open besides the main window: close one first	A főablakon kívül legfeljebb {n} ablak lehet nyitva: előbb zárj be egyet
+	{window} has no room for more tabs	{window} nem fogad több lapot
+	This tab is already in a window of its own	Ez a lap már egyedül van az ablakában
+	This is the main window: quit to close it	Ez a főablak: a bezárásához lépj ki az alkalmazásból
+	This tab is in the main window	Ez a lap a főablakban van
+	Move tab to {window}	Lap áthelyezése ide: {window}
+	Release to open in a new window	Engedd el, hogy új ablakban nyíljon meg
+	This page only  ·  	Csak ez az oldal  ·  
+	The file stays on this device: PdfCraft reads it in this page and forgets it when the page closes. The password is never stored.	A fájl ezen az eszközön marad: a PdfCraft ezen az oldalon olvassa be, és az oldal bezárásakor elfelejti. A jelszót soha nem tárolja.
+	Downloaded the new digital ID as {name}. Keep it: this page forgets it when it closes.	Az új digitális azonosító letöltve: {name}. Őrizze meg: ez az oldal bezáráskor elfelejti.
+	Signed. Downloaded {name}	Aláírva. Letöltve: {name}
+	Sign with a smart card or token	Aláírás intelligens kártyával vagy tokennel
+	Sign with a Smart Card or Token	Aláírás intelligens kártyával vagy tokennel
+	Use a Smart Card or Token	Intelligens kártya vagy token használata
+	The signature is made on the card or token. Its private key never leaves it.	Az aláírás a kártyán vagy a tokenen készül. A titkos kulcs soha nem hagyja el.
+	PKCS #11 module	PKCS #11 modul
+	Find tokens	Tokenek keresése
+	No PKCS #11 module was found here. Choose the module file that came with your card or token (for example opensc-pkcs11).	Nem található PKCS #11 modul. Válassza ki a kártyához vagy tokenhez kapott modulfájlt (például opensc-pkcs11).
+	Serial	Sorozatszám
+	PIN locked	PIN zárolva
+	One try left	Egy próbálkozás maradt
+	PIN pad	PIN-billentyűzet
+	No card	Nincs kártya
+	PIN	PIN
+	Enter the PIN on the reader's keypad, then choose Unlock.	Írja be a PIN-t az olvasó billentyűzetén, majd válassza a Feloldás lehetőséget.
+	Waiting for the token…	Várakozás a tokenre…
+	Choose the certificate to sign with:	Válassza ki az aláíráshoz használt tanúsítványt:
+	No certificate on this token can sign.	A token egyik tanúsítványa sem tud aláírni.
+	Certificates left out: {n}	Kihagyott tanúsítványok: {n}
+	Token  ·  	Token  ·  
+	The key is on the smart card or token, and the signature is made there.	A kulcs az intelligens kártyán vagy a tokenen van, és az aláírás ott készül.
+	Choose a slot with a card or token.	Válasszon egy kártyát vagy tokent tartalmazó foglalatot.
+	Unlock the token again.	Oldja fel újra a tokent.
+
+# Localization: the language command, file sizes, relative dates.
+	Interface language…	Felület nyelve…
+	Auto ({language})	Automatikus ({language})
+	{n} KB	{n} KB
+	{n} MB	{n} MB
+@plural	{n} byte|{n} bytes	{n} bájt|{n} bájt
+@plural	{n} day ago|{n} days ago	{n} napja|{n} napja
+	Downloading text recognition models… {r} of {t} MB	Szövegfelismerő modellek letöltése… {r} / {t} MB
+	The text recognition models (12 MB) are downloaded from this site the first time you recognize text, then kept in this browser.	A szövegfelismerő modellek (12 MB) az első szövegfelismeréskor töltődnek le erről a webhelyről, és utána ebben a böngészőben maradnak.
+	the text recognition models haven't been downloaded into this browser yet; run Recognize Text to download them	a szövegfelismerő modellek még nincsenek letöltve ebbe a böngészőbe; futtassa a Szöveg felismerése parancsot a letöltésükhöz
+	User guide	Felhasználói kézikönyv
+	Search shortcuts	Billentyűparancsok keresése
+	No shortcuts match “{query}”.	Egy billentyűparancs sem felel meg ennek: „{query}”.
+	Document view	Dokumentumnézet
+	Tools	Eszközök
+# Print production
+	Add marks	Jelek hozzáadása
+	Add printer marks…	Nyomdai jelek hozzáadása…
+	Advanced:	Speciális:
+	All spots to process	Minden direkt szín négyszínnyomásra
+	Analyzing…	Elemzés…
+	Annotation	Megjegyzés
+	Apply to document	Alkalmazás a dokumentumra
+	Bleed marks	Kifutójelek
+	Choose at least one mark.	Válasszon legalább egy jelet.
+	Click on the page to list the objects under the pointer.	Kattintson az oldalra a mutató alatti objektumok listázásához.
+	Color bars	Színsávok
+	Color management…	Színkezelés…
+	Color warnings	Színfigyelmeztetések
+	Colors converted: {n}	Átalakított színek: {n}
+	Colors to convert	Átalakítandó színek
+	Convert colors…	Színek átalakítása…
+	Convert spot colors to process	Direkt színek átalakítása négyszínnyomásra
+	Convert to:	Átalakítás erre:
+	Cyan	Ciánkék
+	Each sheet is sent as one picture.	Minden ív egyetlen képként kerül elküldésre.
+	Eastern	Keleti
+	Font	Betűtípus
+	Highest on this page: {n}	Legmagasabb ezen az oldalon: {n}
+	Highlight coverage over	Fedettség kiemelése e fölött:
+	ICC profile	ICC-profil
+	ICC-based	ICC-alapú
+	Ink manager	Festékkezelő
+	Ink manager…	Festékkezelő…
+	Inks changed in the document	A dokumentum festékei módosultak
+	Inks here: {inks} (total {total})	Festékek itt: {inks} (összesen {total})
+	Inks of the first {n} pages.	Az első {n} oldal festékei.
+	Line art	Vonalas grafika
+	Line weight:	Vonalvastagság:
+	Load ICC profile…	ICC-profil betöltése…
+	Loaded the profile {name}	Betöltött profil: {name}
+	Magenta	Bíbor
+	No alias	Nincs álnév
+	No ink needed changing	Egyik festéket sem kellett módosítani
+	No overprint, rich black or registration color on this page.	Ezen az oldalon nincs felülnyomás, mély fekete vagy illesztőszín.
+	Not DeviceCMYK	Nem DeviceCMYK
+	Nothing is painted here.	Itt nincs semmi megrajzolva.
+	Nothing to convert	Nincs mit átalakítani
+	OK keeps these settings for this session; Apply to document changes the file.	Az OK erre a munkamenetre megtartja a beállításokat; az Alkalmazás a dokumentumra módosítja a fájlt.
+	Object inspector	Objektumvizsgáló
+	Offset from trim:	Eltolás a vágástól:
+	Output intent	Kimeneti szándék
+	Overprint	Felülnyomás
+	Page information	Oldalinformáció
+	Preserve black	Fekete megőrzése
+	Print as image	Nyomtatás képként
+	Process	Négyszín
+	Registration color	Illesztőszín
+	Registration marks	Illesztőjelek
+	Rendering intent:	Leképezési szándék:
+	Reset	Visszaállítás
+	Rich black	Mély fekete
+	Separations	Színkivonatok
+	Set an alias or convert a spot ink to process first.	Előbb adjon meg álnevet, vagy alakítsa a direkt festéket négyszínnyomásra.
+	Show all inks	Minden festék megjelenítése
+	Simulate black ink	Fekete festék szimulálása
+	Simulate overprinting	Felülnyomás szimulálása
+	Simulate paper color	Papírszín szimulálása
+	Simulation profile	Szimulációs profil
+	Small rich black text	Kis méretű mély fekete szöveg
+	Solid color	Egyszínű
+	Some objects can't be measured and are left out.	Néhány objektum nem mérhető, ezek kimaradnak.
+	Spot colors	Direkt színek
+	Stroke	Körvonal
+	Style:	Stílus:
+	The page grows to make room for the marks.	Az oldal megnő, hogy elférjenek a jelek.
+	The profile is larger than {n} MB.	A profil nagyobb, mint {n} MB.
+	This document uses only the process inks.	Ez a dokumentum csak négyszínnyomásos festékeket használ.
+	To process	Négyszínre
+	Total area coverage	Teljes festékfedettség
+	Transparency	Átlátszóság
+	Trim marks	Vágójelek
+	Use Lab values for spot colors	Lab-értékek a direkt színekhez
+	Vector objects	Vektoros objektumok
+	Western	Nyugati
+	White overprint	Fehér felülnyomás
+	Working CMYK space	CMYK munkaszíntér
+	embedded	beágyazva
+	not embedded	nincs beágyazva
+	{n} of the page is over the limit	Az oldal {n} része a határ fölött van.
+
+# Accessibility: Tags and Order panels, Reading order tool, Autotag, Make accessible
+	Marked content {mcid} on page {page}	Jelölt tartalom: {mcid}, {page}. oldal
+	Marked content {mcid}	Jelölt tartalom: {mcid}
+	Object	Objektum
+	Annotation: {kind}	Megjegyzés: {kind}
+	This document has no tags.	Ennek a dokumentumnak nincsenek címkéi.
+	Tags tell screen readers what each part of the page is and in which order to read it.	A címkék megmondják a képernyőolvasóknak, mi az oldal egyes részei, és milyen sorrendben kell felolvasni őket.
+	Autotag document	Dokumentum automatikus címkézése
+	Reading order tool	Olvasási sorrend eszköz
+	New tag…	Új címke…
+	Tag properties…	Címke tulajdonságai…
+	Change to artifact	Átalakítás műtermékké
+	Delete tag	Címke törlése
+	Collapse all tags	Összes címke összecsukása
+	Expand all tags	Összes címke kibontása
+	This structure tree is very large: only part of it is shown, and it can't be edited.	Ez a szerkezeti fa nagyon nagy: csak egy része látható, és nem szerkeszthető.
+	Collapse some tags to see the rest.	Csukjon össze néhány címkét a többi megtekintéséhez.
+	Clear page structure	Oldalszerkezet törlése
+	Nothing on this page is tagged yet.	Ezen az oldalon még semmi sincs címkézve.
+	Use the Reading order tool: draw a box around content and choose what it is.	Használja az Olvasási sorrend eszközt: rajzoljon keretet a tartalom köré, és válassza ki, mi az.
+	{n} drawing operations on this page are not tagged.	Ezen az oldalon {n} rajzolási művelet nincs címkézve.
+	Tag properties	Címke tulajdonságai
+	What a figure or formula shows	Mit mutat egy ábra vagy képlet
+	Actual text	Tényleges szöveg
+	The exact text the content spells	A tartalom által kiírt pontos szöveg
+	Alternate and actual text replace everything inside the tag for screen readers.	Az alternatív és a tényleges szöveg a képernyőolvasók számára a címkén belül mindent helyettesít.
+	New tag	Új címke
+	Drag tags onto the new tag to move them inside it.	Húzza a címkéket az új címkére, hogy áthelyezze őket bele.
+	Add tag	Címke hozzáadása
+	Inside {tag}	Ebben: {tag}
+	At the top level	A legfelső szinten
+	Draw a box around content, then choose what it is.	Rajzoljon keretet a tartalom köré, majd válassza ki, mi az.
+	Tag this area as	Terület címkézése mint
+	Alternate text (figures and formulas)	Alternatív szöveg (ábrák és képletek)
+	Autotag form fields	Űrlapmezők automatikus címkézése
+	PdfCraft reads the layout of every page and tags headings, paragraphs, lists, tables, figures, links and form fields in reading order.	A PdfCraft beolvassa minden oldal elrendezését, és olvasási sorrendben címkézi a címsorokat, bekezdéseket, listákat, táblázatokat, ábrákat, hivatkozásokat és űrlapmezőket.
+	Find tables	Táblázatok keresése
+	Find lists	Listák keresése
+	Tag form fields	Űrlapmezők címkézése
+	Give fields without a tooltip one from their label	Elemleírás nélküli mezők elemleírása a címkéjük alapján
+	This document is already tagged. Autotagging replaces all of its tags.	Ez a dokumentum már címkézett. Az automatikus címkézés az összes címkéjét lecseréli.
+	Replace the existing tags	Meglévő címkék cseréje
+	Autotag	Automatikus címkézés
+	Autotag finished	Az automatikus címkézés kész
+	{n} tags on {p} pages.	{n} címke {p} oldalon.
+	{n} figures need alternate text.	{n} ábrához alternatív szöveg kell.
+	{n} form fields have no tooltip.	{n} űrlapmezőnek nincs elemleírása.
+	Check the reading order of each page with the Order panel.	Ellenőrizze minden oldal olvasási sorrendjét a Sorrend panelen.
+	Show tags	Címkék megjelenítése
+	Results	Eredmények
+	Screen readers announce the title and read the text in the document's language.	A képernyőolvasók bemondják a címet, és a dokumentum nyelvén olvassák fel a szöveget.
+	Tag the document again (replaces its tags)	A dokumentum újracímkézése (lecseréli a címkéit)
+	Tag the document	A dokumentum címkézése
+	Next	Tovább
+	Give the document's language as a language tag, such as en-US.	Adja meg a dokumentum nyelvét nyelvkódként, például en-US.
+	Screen readers read a field's tooltip to say what to fill in. Check each one.	A képernyőolvasók a mező elemleírását olvassák fel, hogy elmondják, mit kell kitölteni. Ellenőrizze mindet.
+	Figure {i} of {n}	{i}. ábra / {n}
+	Finish	Befejezés
+	Undo takes back the whole action in one step.	A visszavonás egy lépésben vonja vissza a teljes műveletet.
+	Show checker results	Ellenőrzési eredmények megjelenítése
+	skipped	kihagyva
+	{n} set	{n} beállítva
+	structure order	szerkezeti sorrend
+	no figures	nincs ábra
+	Tags	Címkék
+	Order	Sorrend
+	Heading 1	1. címsor
+	Heading 2	2. címsor
+	Heading 3	3. címsor
+	Heading 4	4. címsor
+	Heading 5	5. címsor
+	Heading 6	6. címsor
+	Figure	Ábra
+	Figure with caption	Ábra képaláírással
+	Table cell	Táblázatcella
+	Formula	Képlet
+	Form field	Űrlapmező
+	Artifact: header	Műtermék: élőfej
+	Artifact: footer	Műtermék: élőláb
+	Artifact: background	Műtermék: háttér
+	Form field tooltips	Űrlapmezők elemleírásai
+	Paragraphs	Bekezdések
+	Figures	Ábrák
+	Tags panel	Címkék panel
+	Order panel	Sorrend panel
+	Autotag document…	Dokumentum automatikus címkézése…
+	Autotag form fields…	Űrlapmezők automatikus címkézése…
+	Make accessible…	Akadálymentessé tétel…
+	Change reading order	Olvasási sorrend módosítása
+	Change tag properties	Címke tulajdonságainak módosítása
+	Tag region	Terület címkézése
+	Add files to number	Számozandó fájlok hozzáadása
+	Align and distribute	Igazítás és elosztás
+	Align bottom	Igazítás alulra
+	Align horizontal centers	Vízszintes középre igazítás
+	Align to the page	Igazítás az oldalhoz
+	Align top	Igazítás felülre
+	Align vertical centers	Függőleges középre igazítás
+	Bates Number Options	Bates-számozás beállításai
+	Bates numbering… file {d} of {t}	Bates-számozás… {d}. fájl / {t}
+	Bulleted list	Felsorolásjeles lista
+	Choose a destination	Válasszon célt
+	Choose a folder for the numbered files	Válasszon mappát a számozott fájloknak
+	Custom view ({kind})	Egyéni nézet ({kind})
+	Custom view ({zoom}%)	Egyéni nézet ({zoom}%)
+	Distribute horizontally	Vízszintes elosztás
+	Distribute vertically	Függőleges elosztás
+	Edited, added and deleted text and images update a tagged document's structure in the same undo step.	A szerkesztett, hozzáadott és törölt szöveg és képek ugyanabban a visszavonási lépésben frissítik a címkézett dokumentum szerkezetét.
+	File name suffix	Fájlnév-utótag
+	Fit height	Igazítás magassághoz
+	Fit page	Teljes oldal
+	Go to a named destination	Ugrás elnevezett célhoz
+	Go to the page as it is shown now: its position and zoom	Ugrás az oldalra úgy, ahogy most látszik: pozíció és nagyítás
+	Horizontal offset	Vízszintes eltolás
+	Indent list	Lista behúzásának növelése
+	Inherit zoom	Nagyítás öröklése
+	Keep structure tags when editing content	Szerkezeti címkék megtartása a tartalom szerkesztésekor
+	Number of digits	Számjegyek száma
+	Numbered list	Számozott lista
+	Numbered {done} of {total} files; {name} couldn't be numbered: {e}	{total} fájlból {done} számozva; {name} nem számozható: {e}
+	Numbered {n} more files, up to {last}	További {n} fájl számozva, {last}-ig
+	Outdent list	Lista behúzásának csökkentése
+	Remove list	Lista eltávolítása
+	Select three or more objects to distribute them	Az elosztáshoz jelöljön ki legalább három objektumot
+	Show when displaying on screen	Megjelenítés a képernyőn
+	Show when printing	Megjelenítés nyomtatáskor
+	Space after paragraphs	Térköz a bekezdések után
+	Start number	Kezdőszám
+	Suffix	Utótag
+	The numbers continue into these files, in order. Each gets a numbered copy in a folder you choose; the files themselves are left as they are.	A számozás sorrendben folytatódik ezekben a fájlokban. Mindegyikről számozott másolat készül egy választott mappába; maguk a fájlok változatlanok maradnak.
+	This document has no named destinations.	Ebben a dokumentumban nincsenek elnevezett célok.
+	Use current view	Jelenlegi nézet használata
+	Vertical offset	Függőleges eltolás
+	Bates numbering of other files couldn't start; try again	Más fájlok Bates-számozása nem indult el; próbálja újra
+	Bates numbering of other files is already running	Más fájlok Bates-számozása már fut
+	That's as many files as one Bates numbering run takes	Egy Bates-számozás ennél több fájlt nem fogad
+	Numbering other files arrives on the web with folder pickers	Más fájlok számozása a mappaválasztóval együtt érkezik a webre
+	Select objects with Edit objects first	Előbb jelöljön ki objektumokat az Objektumok szerkesztése eszközzel
+	Select a text box, or click into a paragraph, first	Előbb jelöljön ki egy szövegdobozt, vagy kattintson egy bekezdésbe
+# Signing: appearances, trusted certificates, verification information, compare signed version
+	0 accepts it however old it is.	0 esetén bármilyen régit elfogad.
+	A cancelled response is discarded. A blocked request stops at the configured deadline (at most 30 seconds).	A megszakított válasz elvész. Az elakadt kérés a beállított határidőnél leáll (legfeljebb 30 másodperc).
+	A certificate file is limited to 4 MiB.	Egy tanúsítványfájl legfeljebb 4 MiB lehet.
+	A chosen or claimed date is not cryptographic proof of time.	A választott vagy állított dátum nem kriptográfiai időbizonyíték.
+	Account name (optional)	Fióknév (nem kötelező)
+	Add a TSA certificate to Trusted Certificates only after independently verifying its identity and fingerprint. Disabling this check saves an untrusted token; it does not establish trusted time.	TSA-tanúsítványt csak a személyazonosság és az ujjlenyomat független ellenőrzése után vegyen fel a megbízható tanúsítványok közé. Az ellenőrzés kikapcsolása nem megbízható tokent ment; megbízható időt nem igazol.
+	Add logo…	Logó hozzáadása…
+	Add verification information	Ellenőrzési adatok hozzáadása
+	Add verification information…	Ellenőrzési adatok hozzáadása…
+	Allow a timestamp request to the selected server	Időbélyeg-kérés engedélyezése a kiválasztott kiszolgálónak
+	Allow a timestamp request to this server	Időbélyeg-kérés engedélyezése ennek a kiszolgálónak
+	Also from sites that Internet access asks about	Azokról a webhelyekről is, amelyekről az internet-hozzáférés rákérdez
+	Also trust them for certified documents	Tanúsított dokumentumoknál is megbízhatók
+	Appearance name	Megjelenés neve
+	Blocked sites stay blocked. Only the certificates' OCSP responders and CRL addresses are contacted.	A tiltott webhelyek tiltva maradnak. Csak a tanúsítványok OCSP-válaszolóit és CRL-címeit keresi meg.
+	CRLs	CRL-ek
+	Cancel operation	Művelet megszakítása
+	Certificate and revocation checks at:	Tanúsítvány- és visszavonás-ellenőrzés időpontja:
+	Certified documents	Tanúsított dokumentumok
+	Change logo…	Logó cseréje…
+	Choose a configured timestamp server.	Válasszon egy beállított időbélyeg-kiszolgálót.
+	Choose a server	Válasszon kiszolgálót
+	Choose another picture…	Másik kép választása…
+	Choose picture…	Kép választása…
+	Clear drawing	Rajz törlése
+	Compare signed version	Aláírt verzió összehasonlítása
+	Compare signed version with current	Aláírt verzió összehasonlítása a jelenlegivel
+	Compare with current	Összehasonlítás a jelenlegivel
+	Couldn't compare the signed version: {e}	Az aláírt verzió nem hasonlítható össze: {e}
+	Couldn't use the picture: {e}	A kép nem használható: {e}
+	Current time	Jelenlegi idő
+	Drawn signature	Rajzolt aláírás
+	Embedding evidence does not itself establish PAdES B-LT/B-LTA compliance. Incomplete coverage is reported after validation.	A bizonyítékok beágyazása önmagában nem biztosít PAdES B-LT/B-LTA megfelelést. A hiányos lefedettséget az ellenőrzés után jelzi.
+	Every certificate's revocation status is now in the document.	Minden tanúsítvány visszavonási állapota most már a dokumentumban van.
+	Every change since signing is permitted by the signature.	Az aláírás óta tett minden változtatást engedélyez az aláírás.
+	Every form field is locked and no later change keeps the signature valid.	Minden űrlapmező zárolva lesz, és semmilyen későbbi változtatás után nem marad érvényes az aláírás.
+	Fetch revocation information online	Visszavonási adatok lekérése online
+	Fetch revocation information online when adding verification information	Visszavonási adatok lekérése online ellenőrzési adatok hozzáadásakor
+	Filling in forms, signing and commenting are permitted (approval signature).	Űrlapkitöltés, aláírás és megjegyzések engedélyezettek (jóváhagyó aláírás).
+	HTTPS URL	HTTPS-cím
+	Import certificates…	Tanúsítványok importálása…
+	Issued by {issuer}, valid to {date}	Kiállító: {issuer}, érvényes: {date}
+	Local DER files to add too (optional), one path per line. Certificates are not automatically trusted.	További helyi DER-fájlok (nem kötelező), soronként egy elérési út. A tanúsítványok nem válnak automatikusan megbízhatóvá.
+	Local DER files, one path per line. Certificates are not automatically trusted.	Helyi DER-fájlok, soronként egy elérési út. A tanúsítványok nem válnak automatikusan megbízhatóvá.
+	Lock document after signing	Dokumentum zárolása aláírás után
+	Logo	Logó
+	Manage timestamp servers in Preferences → Signatures.	Az időbélyeg-kiszolgálókat a Beállítások → Aláírások helyen kezelheti.
+	Maximum age of revocation information without an update time	Frissítési idő nélküli visszavonási adatok legnagyobb kora
+	More changes were found than are listed.	Több változás található, mint amennyi fel van sorolva.
+	New server	Új kiszolgáló
+	No changes are permitted.	Semmilyen változtatás nem engedélyezett.
+	No saved appearances yet.	Még nincs mentett megjelenés.
+	No server is configured. PdfCraft never contacts one unless you add it here.	Nincs beállított kiszolgáló. A PdfCraft csak az itt felvett kiszolgálókhoz kapcsolódik.
+	No timestamp	Nincs időbélyeg
+	No trusted certificates yet.	Még nincs megbízható tanúsítvány.
+	Nothing has changed since it was signed.	Az aláírás óta semmi sem változott.
+	OCSP responses	OCSP-válaszok
+	Only filling in forms and signing are permitted.	Csak űrlapkitöltés és aláírás engedélyezett.
+	Only filling in forms, signing and commenting are permitted.	Csak űrlapkitöltés, aláírás és megjegyzések engedélyezettek.
+	Only from sites that Internet access allows. Opening or validating a document never goes online.	Csak az internet-hozzáférés által engedélyezett webhelyekről. A dokumentum megnyitása vagy ellenőrzése sosem megy online.
+	Open a signed document first	Először nyisson meg egy aláírt dokumentumot
+	Optional policy OID	Szabályzat-OID (nem kötelező)
+	Or UTC date (YYYYMMDDHHmmSSZ)	Vagy UTC-dátum (YYYYMMDDHHmmSSZ)
+	Pages: {a} when signed, {b} now	Oldalak: aláíráskor {a}, most {b}
+	Picture	Kép
+	Pictures can be chosen in the desktop app; draw your signature here instead.	Képet az asztali alkalmazásban választhat; itt rajzolja meg az aláírását.
+	Remove logo	Logó eltávolítása
+	Remove picture	Kép eltávolítása
+	Require an explicitly trusted timestamp authority	Kifejezetten megbízható időbélyeg-szolgáltató megkövetelése
+	Revocation information for {covered} of {needed} certificates was fetched.	{needed} tanúsítványból {covered} visszavonási adatai lekérve.
+	Save an appearance from the signing dialog: its text, a picture or drawn signature, and a logo.	Mentsen megjelenést az aláírási párbeszédablakból: szöveg, kép vagy rajzolt aláírás és logó.
+	Save appearance	Megjelenés mentése
+	Save result…	Eredmény mentése…
+	Save server	Kiszolgáló mentése
+	Saved appearances	Mentett megjelenések
+	Saved the appearance {name}	A(z) {name} megjelenés mentve
+	Secure time (timestamp), else the signing time	Biztonságos idő (időbélyeg), egyébként az aláírás ideje
+	Show on the left	Bal oldalon
+	Sign here with your mouse, pen or finger	Írja alá itt egérrel, tollal vagy ujjal
+	Signature appearances	Aláírás-megjelenések
+	Signature operation	Aláírási művelet
+	Signatures whose certificates chain to one of these are trusted. Choose what each one is trusted for.	Megbízhatók azok az aláírások, amelyek tanúsítványlánca ezek egyikéhez vezet. Válassza ki, mire megbízható mindegyik.
+	Signed documents	Aláírt dokumentumok
+	Signed version of {field} (revision {n})	{field} aláírt verziója ({n}. változat)
+	Some changes since signing are not permitted by the signature.	Az aláírás óta tett egyes változtatásokat az aláírás nem engedélyezi.
+	Text only	Csak szöveg
+	The Signatures panel checks certificates and revocation at this time. A signing time without a trusted timestamp is the signer's own claim.	Az Aláírások panel ehhez az időponthoz viszonyítva ellenőrzi a tanúsítványokat és a visszavonást. Megbízható időbélyeg nélkül az aláírás ideje csak az aláíró állítása.
+	The current time	A jelenlegi idő
+	The password is kept only until PdfCraft quits, never saved.	A jelszót csak a PdfCraft bezárásáig őrzi, sosem menti.
+	The request contains a digest, not the PDF. No request is made when this dialog opens.	A kérés kivonatot tartalmaz, nem a PDF-et. A párbeszédablak megnyitásakor nem történik kérés.
+	The signed version could not be read.	Az aláírt verzió nem olvasható.
+	The time the signature was created	Az aláírás létrehozásának ideje
+	Then add a document timestamp (optional):	Ezután dokumentum-időbélyeg hozzáadása (nem kötelező):
+	Timeout (seconds)	Időkorlát (másodperc)
+	Timestamp (optional)	Időbélyeg (nem kötelező)
+	Trust the operating system's root certificates for signatures	Az operációs rendszer gyökértanúsítványainak elfogadása aláírásokhoz
+	Trusted certificates	Megbízható tanúsítványok
+	Trusted root	Megbízható gyökér
+	Trusted timestamp, else claimed signing time	Megbízható időbélyeg, egyébként az állított aláírási idő
+	Validating and saving…	Ellenőrzés és mentés…
+	Verify signatures using	Aláírások ellenőrzése ehhez képest:
+	macOS Keychain, Windows certificate store, or the system's CA bundle. Off by default.	macOS-kulcskarika, Windows tanúsítványtár vagy a rendszer CA-csomagja. Alapértelmezés szerint ki.
+	{n} addresses were not contacted because of Internet access settings.	{n} címet az internet-hozzáférési beállítások miatt nem keresett meg.
+	{n} certificates added to your trusted certificates.	{n} tanúsítvány hozzáadva a megbízható tanúsítványokhoz.
+	Adds the signers' certificate chains and their revocation status to the document, so the signatures can still be checked after the certificates expire.	A dokumentumba menti az aláírók tanúsítványláncát és visszavonási állapotát, így az aláírások a tanúsítványok lejárta után is ellenőrizhetők.
+# Field triggers, document actions, certificate security, Trust Manager, redaction code sets and locales.
+	Add at least one recipient certificate.	Adjon hozzá legalább egy címzetti tanúsítványt.
+	Add code	Kód hozzáadása
+	Add recipient	Címzett hozzáadása
+	Add recipient…	Címzett hozzáadása…
+	Add site	Webhely hozzáadása
+	Add type	Típus hozzáadása
+	All locales	Minden régió
+	Allow changing the security settings (and everything else)	A biztonsági beállítások módosításának engedélyezése (és minden másé)
+	Always allow	Mindig engedélyezve
+	At most {n} recipients.	Legfeljebb {n} címzett.
+	Attach the saved form data to the email	Csatolja az e-mailhez a mentett űrlapadatokat
+	Australia	Ausztrália
+	Bcc	Titkos másolat
+	Canada	Kanada
+	Cc	Másolat
+	Certificate or digital ID	Tanúsítvány vagy digitális azonosító
+	Certificate security will be applied when you save	A tanúsítványalapú biztonság mentéskor lép életbe
+	Choose a saved set or make a new one.	Válasszon mentett készletet, vagy hozzon létre újat.
+	Choose codes	Kódok kiválasztása
+	Code	Kód
+	Code set file	Kódkészletfájl
+	Delete set	Készlet törlése
+	Deleted {name}.	{name} törölve.
+	Document Actions	Dokumentumműveletek
+	Document Did Print	A dokumentum kinyomtatva
+	Document Did Save	A dokumentum mentve
+	Document Will Close	A dokumentum bezárul
+	Document Will Print	A dokumentum nyomtatásra kerül
+	Document Will Save	A dokumentum mentésre kerül
+	Document actions…	Dokumentumműveletek…
+	Each script runs when the document is about to close, is saved or is printed. Scripts can't start another save or print.	Minden szkript akkor fut, amikor a dokumentum bezárul, mentésre vagy nyomtatásra kerül. A szkriptek nem indíthatnak újabb mentést vagy nyomtatást.
+	Encrypt with certificate…	Titkosítás tanúsítvánnyal…
+	Export code sets	Kódkészletek exportálása
+	Extension, such as zip	Kiterjesztés, például zip
+	France	Franciaország
+	Germany	Németország
+	Import code sets	Kódkészletek importálása
+	Imported {names}.	Importálva: {names}.
+	Import…	Importálás…
+	Include subdomains	Altartományokkal együtt
+	India	India
+	International	Nemzetközi
+	Japan	Japán
+	Lock the document after signing	A dokumentum zárolása aláírás után
+	Locked fields become read-only once the field is signed; a locked document then allows no changes.	A zárolt mezők a mező aláírásakor csak olvashatóvá válnak; a zárolt dokumentum ezután nem enged módosítást.
+	Mark as read-only all fields	Minden mező csak olvasható
+	Mark as read-only all fields except these	Minden mező csak olvasható, kivéve ezeket
+	Mark as read-only just these fields	Csak ezek a mezők legyenek csak olvashatók
+	Mark every pattern of this locale	A régió összes mintájának megjelölése
+	Never open	Soha ne nyíljon meg
+	New set	Új készlet
+	No recipients yet. Add a certificate for each person who may open the document.	Még nincs címzett. Adjon hozzá tanúsítványt mindenkinek, aki megnyithatja a dokumentumot.
+	No site rules yet.	Még nincs webhelyszabály.
+	Nobody can change or remove this security later unless a recipient may change the security.	Ha egyik címzett sem módosíthatja a biztonságot, később senki sem módosíthatja vagy távolíthatja el.
+	None yet	Még nincs
+	Nothing happens	Nem történik semmi
+	Only the recipients can open the document, each with the permissions you give them. It's applied when you save.	Csak a címzettek nyithatják meg a dokumentumot, mindegyik a megadott engedélyekkel. Mentéskor lép életbe.
+	PdfCraft doesn't send email itself: it opens your email app and saves the data for you to attach.	A PdfCraft maga nem küld e-mailt: megnyitja a levelezőalkalmazást, és elmenti az adatokat, hogy csatolhassa őket.
+	Permissions for {name}	{name} engedélyei
+	Programs and scripts are refused and plain documents open; other types ask. Your lists override the built-in ones.	A programok és szkriptek tiltva vannak, az egyszerű dokumentumok megnyílnak; más típusoknál kérdés jelenik meg. Saját listái felülírják a beépítetteket.
+	Recipients	Címzettek
+	Redaction code sets	Kitakarási kódkészletek
+	Redaction code sets…	Kitakarási kódkészletek…
+	Remove the rule for {host}	A(z) {host} szabályának eltávolítása
+	Remove this code	Kód eltávolítása
+	Rules for web sites that links, scripts and form submissions reach. Used when internet access follows the site rules.	Szabályok a webhelyekre, amelyeket hivatkozások, szkriptek és űrlapküldések elérnek. Akkor érvényesek, ha az internet-hozzáférés a webhelyszabályokat követi.
+	Save set	Készlet mentése
+	Saved sets	Mentett készletek
+	Saved {name}.	{name} mentve.
+	Set name	Készlet neve
+	Signed	Aláírva
+	Sites	Webhelyek
+	Take .{ext} off the list	A(z) .{ext} levétele a listáról
+	That recipient is already on the list.	Ez a címzett már szerepel a listán.
+	The file holds {n} certificates; add each recipient from its own file.	A fájl {n} tanúsítványt tartalmaz; minden címzettet külön fájlból adjon hozzá.
+	The file is larger than {n} MB.	A fájl nagyobb, mint {n} MB.
+	The file is too large for a code set file.	A fájl túl nagy egy kódkészletfájlhoz.
+	The form has no other fields.	Az űrlapnak nincs más mezője.
+	The form was sent to {host}, which filled in its answer.	Az űrlap elküldve ide: {host}, amely kitöltötte a válaszát.
+	The form was sent to {host}; its answer couldn't be imported: {e}	Az űrlap elküldve ide: {host}; a választ nem sikerült importálni: {e}
+	The form was sent to {host}; its answer was too large to import.	Az űrlap elküldve ide: {host}; a válasz túl nagy volt az importáláshoz.
+	This form wants to email its data:	Ez az űrlap e-mailben szeretné elküldeni az adatait:
+	This isn't a certificate (.cer, .crt, .pem, .der) or digital ID (.p12, .pfx).	Ez nem tanúsítvány (.cer, .crt, .pem, .der) és nem digitális azonosító (.p12, .pfx).
+	To	Címzett
+	Trust Manager	Megbízhatóságkezelő
+	Trust Manager…	Megbízhatóságkezelő…
+	Type the digital ID's password first (or choose a certificate file).	Előbb írja be a digitális azonosító jelszavát (vagy válasszon tanúsítványfájlt).
+	United Kingdom	Egyesült Királyság
+	United States	Egyesült Államok
+	When signed:	Aláíráskor:
+	Your own codes to cite on redactions, offered in Redaction Properties beside the built-in sets.	Saját kódok a kitakarásokhoz, amelyeket a kitakarás tulajdonságai a beépített készletek mellett kínálnak.
+	and subdomains	és altartományai
+	this host only	csak ez a gazdagép
+	{n} chosen	{n} kiválasztva
+	German Tax Identification Numbers	Német adóazonosító számok
+	Indian Aadhaar Numbers	Indiai Aadhaar-számok
+	Indian PAN Numbers	Indiai PAN-számok
+	Australian Tax File Numbers	Ausztrál adószámok (TFN)
+	Australian Medicare Numbers	Ausztrál Medicare-számok
+	Australian Business Numbers	Ausztrál cégazonosító számok (ABN)
+
+# Comment, organize and search gaps (find comments, hide by type, page ranges, bookmark
+# properties, bookmarks from structure, advanced search, associated files, custom commands).
+	 in {f} of {s} documents	 {s} dokumentumból {f} dokumentumban
+	(no name)	(névtelen)
+	(this document doesn't allow copying its text)	(ez a dokumentum nem engedi a szöveg másolását)
+	* the tool needs this option	* az eszköznek szüksége van erre a beállításra
+	A bookmark needs a title.	A könyvjelzőnek cím kell.
+	A folder	Egy mappa
+	A folder…	Egy mappa…
+	Add an associated file	Kapcsolódó fájl hozzáadása
+	Add file…	Fájl hozzáadása…
+	Added 1 bookmark	1 könyvjelző hozzáadva
+	Added {n} bookmarks	{n} könyvjelző hozzáadva
+	All levels	Minden szint
+	Another action (kept as it is)	Másik művelet (változatlanul marad)
+	Ask for the options each time it runs	A beállítások kérése minden futtatáskor
+	Asks for its options when it runs.	Futtatáskor kéri a beállításait.
+	Associated files	Kapcsolódó fájlok
+	Bookmark properties	Könyvjelző tulajdonságai
+	Bookmark properties…	Könyvjelző tulajdonságai…
+	Cancelled: not every document was searched.	Megszakítva: nem minden dokumentumban történt keresés.
+	Check the options, then run the command.	Ellenőrizze a beállításokat, majd futtassa a parancsot.
+	Choose a folder of PDFs	Válasszon PDF-eket tartalmazó mappát
+	Choose a folder to search	Válasszon mappát a kereséshez
+	Choose a folder to search.	Válasszon mappát a kereséshez.
+	Choose folder…	Mappa kiválasztása…
+	Choose one of the document's named destinations.	Válasszon a dokumentum elnevezett céljai közül.
+	Choose the tool the command runs.	Válassza ki az eszközt, amelyet a parancs futtat.
+	Choose…	Kiválasztás…
+	Comment	Megjegyzés
+	Comment on page {label}	Megjegyzés a(z) {label}. oldalon
+	Custom commands	Egyéni parancsok
+	Custom commands aren't available in this version of PdfCraft.	Az egyéni parancsok nem érhetők el a PdfCraft ezen verziójában.
+	Custom commands…	Egyéni parancsok…
+	Description (optional)	Leírás (nem kötelező)
+	Destination:	Cél:
+	Edit Command	Parancs szerkesztése
+	Enter a page number from 1 to {n}.	Adjon meg egy oldalszámot 1 és {n} között.
+	Enter a web address starting with https://, http:// or mailto:.	Adjon meg egy https://, http:// vagy mailto: kezdetű webcímet.
+	Enter a zoom from 1% to 6400%.	Adjon meg 1% és 6400% közötti nagyítást.
+	Existing bookmarks:	Meglévő könyvjelzők:
+	Export custom commands	Egyéni parancsok exportálása
+	Files linked to the document, a page or a comment, each with its relationship (source, data, alternative…).	A dokumentumhoz, egy oldalhoz vagy egy megjegyzéshez kapcsolt fájlok, mindegyik a kapcsolatával (forrás, adat, alternatíva…).
+	Files…	Fájlok…
+	Fixed zoom	Rögzített nagyítás
+	Headings:	Címsorok:
+	Import custom commands	Egyéni parancsok importálása
+	Imported {n} custom commands	{n} egyéni parancs importálva
+	Include bookmarks and comments	Könyvjelzők és megjegyzések bevonása
+	Include comments	Megjegyzések bevonása
+	Include subfolders	Almappák bevonása
+	Keep them, add the new ones after	Megtartás, az újak utánuk
+	Levels 1 to {n}	1–{n}. szint
+	Look in	Keresés itt
+	Make bookmarks	Könyvjelzők létrehozása
+	Make one bookmark for each heading of the document's tags, nested by heading level.	Könyvjelző létrehozása a dokumentum címkéinek minden címsorához, címsorszint szerint egymásba ágyazva.
+	New Command	Új parancs
+	New Command…	Új parancs…
+	New bookmarks from structure	Új könyvjelzők a szerkezetből
+	New bookmarks from structure…	Új könyvjelzők a szerkezetből…
+	No associated files.	Nincsenek kapcsolódó fájlok.
+	No comments	Nincsenek megjegyzések
+	No custom commands yet.	Még nincsenek egyéni parancsok.
+	No folder chosen	Nincs kiválasztott mappa
+	No pages match.	Egy oldal sem egyezik.
+	Object {n}	{n}. objektum
+	One tool with the options you choose, run in one step.	Egy eszköz a választott beállításokkal, egy lépésben futtatva.
+	Open a document to run the command on.	Nyisson meg egy dokumentumot, amelyen a parancs fut.
+	Page labels work too, as in Print.	Az oldalcímkék is működnek, mint a Nyomtatásnál.
+	Page range	Oldaltartomány
+	Page:	Oldal:
+	Ran {name}	Lefutott: {name}
+	Relationship:	Kapcsolat:
+	Remove associated file	Kapcsolódó fájl eltávolítása
+	Replace them	Cseréjük
+	Run on this document	Futtatás ezen a dokumentumon
+	Run on:	Futtatás ezen:
+	Runs: {tool}	Futtatja: {tool}
+	Save associated file…	Kapcsolódó fájl mentése…
+	Search a folder…	Keresés mappában…
+	Searching {d} of {t}…	Keresés: {d} / {t}…
+	Select	Kijelölés
+	Select a bookmark first	Előbb jelöljön ki egy könyvjelzőt
+	Select pages…	Oldalak kijelölése…
+	Show all comment types	Minden megjegyzéstípus megjelenítése
+	Show all types	Minden típus megjelenítése
+	Show on pages by type	Megjelenítés az oldalakon típus szerint
+	Stopped at the result limit: narrow the search to see the rest.	Megállt a találati korlátnál: szűkítse a keresést a többi megtekintéséhez.
+	Subset:	Részhalmaz:
+	That bookmark no longer exists	Ez a könyvjelző már nem létezik
+	The current document	Az aktuális dokumentum
+	The document changed; add the file again	A dokumentum megváltozott; adja hozzá újra a fájlt
+	The folder to search	A keresendő mappa
+	The script is too long.	A szkript túl hosszú.
+	There is no folder to keep custom commands in.	Nincs mappa az egyéni parancsok tárolására.
+	This bookmark runs a {kind} action, kept as it is unless you choose another.	Ez a könyvjelző {kind} műveletet futtat, amely változatlan marad, hacsak nem választ mást.
+	Title:	Cím:
+	To the document	A dokumentumhoz
+	To this page	Ehhez az oldalhoz
+	Tool:	Eszköz:
+	Type a word or phrase to search for.	Írjon be egy keresendő szót vagy kifejezést.
+	Web address:	Webcím:
+	When clicked:	Kattintáskor:
+	Zoom:	Nagyítás:
+	cancelled	megszakítva
+	comment	megjegyzés
+	e.g. 1-3, 7	pl. 1-3, 7
+	e.g. 1-3, 7 (empty: all pages)	pl. 1-3, 7 (üres: minden oldal)
+	larger than {n} MB	nagyobb mint {n} MB
+	not a file name	nem fájlnév
+	stopped at {n} files	megállt {n} fájlnál
+	the action stopped unexpectedly	a művelet váratlanul leállt
+	{name} is larger than {n} MB	{name} nagyobb mint {n} MB
+	{name} isn't valid	{name} érvénytelen
+	{n} files skipped	{n} fájl kihagyva
+	{n} more	még {n}
+	{n} more not shown	további {n} nem látható
+	{n} skipped	{n} kihagyva
+	; text recognized on {n} scanned pages	; szöveg felismerve {n} beolvasott oldalon
+	A flowing document: paragraphs in reading order with their fonts and styles, headings, lists, tables and images.	Folyamatos dokumentum: bekezdések olvasási sorrendben a betűtípusaikkal és stílusaikkal, címsorok, listák, táblázatok és képek.
+	Add a selectable text layer	Kijelölhető szövegréteg hozzáadása
+	An export is already running	Már fut egy exportálás
+	Cleans up the images on scanned or photographed pages. Each correction can be undone.	Megtisztítja a beolvasott vagy lefényképezett oldalak képeit. Minden javítás visszavonható.
+	Correct camera photos	Fényképezőgépes fotók javítása
+	Couldn't enhance the scans: {e}	Nem sikerült feljavítani a beolvasásokat: {e}
+	Despeckle	Foltok eltávolítása
+	Editable Text and Images	Szerkeszthető szöveg és képek
+	Editable text boxes and pictures	Szerkeszthető szövegdobozok és képek
+	Enhance	Feljavítás
+	Enhance Scans	Beolvasások feljavítása
+	Enhanced: {list}	Feljavítva: {list}
+	Export Accessible Text	Akadálymentes szöveg exportálása
+	Export cancelled	Exportálás megszakítva
+	Export cancelled after {n} pages	Exportálás megszakítva {n} oldal után
+	Export stopped unexpectedly	Az exportálás váratlanul leállt
+	Export to Excel	Exportálás Excelbe
+	Export to HTML	Exportálás HTML-be
+	Export to PowerPoint	Exportálás PowerPointba
+	Export to RTF	Exportálás RTF-be
+	Export to SVG	Exportálás SVG-be
+	Export to Word	Exportálás Wordbe
+	Finds the page in a photo, corrects its perspective and evens out the lighting	Megkeresi az oldalt a fotón, kijavítja a perspektíváját és kiegyenlíti a megvilágítást
+	Nothing needed enhancing on these pages	Ezeken az oldalakon nem volt mit feljavítani
+	On every page without text	Minden szöveg nélküli oldalon
+	On scanned pages	A beolvasott oldalakon
+	One SVG file per page, named after the document: vector paths, text as outlines, images.	Oldalanként egy SVG-fájl a dokumentumról elnevezve: vektoros útvonalak, körvonalazott szöveg, képek.
+	One picture per page	Oldalanként egy kép
+	One slide per page.	Oldalanként egy dia.
+	One web page: headings, paragraphs with their fonts and styles, lists, tables and images inline.	Egy weboldal: címsorok, bekezdések a betűtípusaikkal és stílusaikkal, listák, táblázatok és beágyazott képek.
+	One worksheet per page: tables as cell grids, numbers as numbers, images as pictures.	Oldalanként egy munkalap: táblázatok cellarácsként, számok számként, képek képként.
+	Picture resolution	Képfelbontás
+	Removes isolated specks before reading; with an output that changes the page, from the page images too	Olvasás előtt eltávolítja az elszigetelt foltokat; az oldalt módosító kimenetnél az oldal képeiről is
+	Rich text: paragraphs with their fonts and styles, and tables.	Formázott szöveg: bekezdések a betűtípusaikkal és stílusaikkal, valamint táblázatok.
+	Straighten skewed pages	Ferde oldalak kiegyenesítése
+	The tagged text in logical reading order, as a screen reader reads it.	A címkézett szöveg logikai olvasási sorrendben, ahogy egy képernyőolvasó felolvassa.
+	Turns pages scanned at a slant (up to 15°) straight	Kiegyenesíti a ferdén beolvasott oldalakat (legfeljebb 15°)
+	Turns recognized lines into editable text in a matching font, size and colour; the rest of the page stays as an image	A felismert sorokat szerkeszthető szöveggé alakítja egyező betűtípussal, mérettel és színnel; az oldal többi része kép marad
+	Whitens the paper background before reading; with an output that changes the page, the page images too	Olvasás előtt kifehéríti a papír hátterét; az oldalt módosító kimenetnél az oldal képeit is
+	background whitened in {n} images	háttér kifehérítve {n} képen
+	specks removed from {n} images	foltok eltávolítva {n} képről
+	{n} camera photos corrected	{n} fényképezőgépes fotó javítva
+	{n} pages straightened	{n} oldal kiegyenesítve
+	Export to PowerPoint…	Exportálás PowerPointba…
+	Export to SVG…	Exportálás SVG-be…
+	Export accessible text…	Akadálymentes szöveg exportálása…
+	Enhance scans…	Beolvasások feljavítása…
+	SVG (one file per page)	SVG (oldalanként egy fájl)
+	Accessible text	Akadálymentes szöveg
+	Can't reach {standard} automatically; nothing was changed.	A(z) {standard} automatikusan nem érhető el; semmi sem változott.
+	Checking…	Ellenőrzés…
+	Compress document structure	Dokumentumszerkezet tömörítése
+	Compress entire file	Teljes fájl tömörítése
+	Convert to PDF/X	Konvertálás PDF/X formátumba
+	Converted to {standard}: {n} changes. Save to keep them.	Konvertálva erre: {standard}, {n} módosítás. Mentse a megtartásukhoz.
+	Converting…	Konvertálás…
+	Errors: {e} · Warnings: {w}	Hibák: {e} · Figyelmeztetések: {w}
+	Flatten transparency	Átlátszóság egyesítése
+	High (600 ppi)	Magas (600 ppi)
+	Keep the document's (sRGB if it has none)	A dokumentumé (sRGB, ha nincs)
+	Keep the document's output intent	A dokumentum kimeneti feltételének megtartása
+	Low (150 ppi)	Alacsony (150 ppi)
+	Make compatible with	Kompatibilissé tétel ezzel:
+	Medium (300 ppi)	Közepes (300 ppi)
+	No output intents	Nincs kimeneti feltétel
+	No problems found in the implemented checks.	Az elérhető ellenőrzések nem találtak hibát.
+	Nothing needed changing.	Semmit sem kellett módosítani.
+	Object compression	Objektumtömörítés
+	Only the areas whose look depends on transparency become images; text and vectors elsewhere stay as they are.	Csak azok a területek lesznek képek, amelyek megjelenése az átlátszóságtól függ; máshol a szöveg és a vektorok változatlanok maradnak.
+	Only the first {n} findings are shown.	Csak az első {n} találat látható.
+	Optimizing… flattening transparency	Optimalizálás… átlátszóság egyesítése
+	PDF 1.3 has no transparency: it is always flattened.	A PDF 1.3 nem ismeri az átlátszóságot: mindig egyesítve lesz.
+	PDF {v} · objects checked: {n}	PDF {v} · ellenőrzött objektumok: {n}
+	PDF/X-4 embeds the output profile: choose a profile.	A PDF/X-4 beágyazza a kimeneti profilt: válasszon profilt.
+	Raster/vector balance	Raszter/vektor arány
+	Remove compression	Tömörítés eltávolítása
+	Save As optimizes for Fast Web View	A Mentés másként gyors webes megjelenítésre optimalizál
+	Save As writes the file so a browser can show the first page before the download finishes.	A Mentés másként úgy írja a fájlt, hogy a böngésző már a letöltés vége előtt megjeleníthesse az első oldalt.
+	Standard	Szabvány
+	Syntax	Szintaxis
+	The chosen profile is no longer loaded.	A választott profil már nincs betöltve.
+	no profile (registered condition)	nincs profil (regisztrált feltétel)
+	object	objektum
+	the profile can't be read: {e}	a profil nem olvasható: {e}
+	{space} {class} profile, ICC version {v}, {n} bytes	{space} {class} profil, ICC-verzió: {v}, {n} bájt
+	Checks what a machine can decide. Reading order, the quality of alternate text and the use of colour need a person.	Azt ellenőrzi, amit egy gép el tud dönteni. Az olvasási sorrendhez, a helyettesítő szövegek minőségéhez és a színhasználathoz ember kell.
+	Checks every object reachable from the trailer against the Arlington PDF model for the file's PDF version.	A trailerből elérhető minden objektumot ellenőriz az Arlington PDF-modell alapján, a fájl PDF-verziójához.
+	Older versions: JPEG 2000 and 16-bit images are converted, JBIG2 becomes CCITT for PDF 1.3, transparency is flattened for PDF 1.3, and there are no object streams.	Régebbi verziók: a JPEG 2000 és a 16 bites képek átalakulnak, a JBIG2 PDF 1.3 esetén CCITT lesz, az átlátszóság PDF 1.3 esetén egyesül, és nincsenek objektumfolyamok.
+	PDF/X…	PDF/X…
+	PDF/UA…	PDF/UA…
+	Validate PDF syntax…	PDF-szintaxis ellenőrzése…
+	Validate PDF syntax	PDF-szintaxis ellenőrzése

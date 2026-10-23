@@ -53,6 +53,15 @@ fn keystroke_scripts_see_the_change() {
     e.will_commit = false;
     let o = go("event.rc = /^[0-9]*$/.test(event.change);", &e);
     assert!(!o.rc);
+    // The selection the keystroke replaces, clamped to the value; the script may change it.
+    let mut e = Event::field("Keystroke", "qty", "12345");
+    (e.change, e.will_commit, e.sel_start, e.sel_end) = ("9".into(), false, 1, 3);
+    let o = go("event.change = event.change + String(event.selStart) + String(event.selEnd);", &e);
+    assert_eq!(o.change, "913");
+    e.sel_start = usize::MAX;
+    e.sel_end = 2;
+    let o = go("event.change = String(event.selStart) + ',' + String(event.selEnd);", &e);
+    assert_eq!(o.change, "5,5");
 }
 
 #[test]
@@ -959,4 +968,19 @@ fn dialogs_wait_for_answers() {
     let o =
         go("[app.alert('a', 1, 1), app.alert('b', 2, 2), app.alert('c', 0, 3), app.alert('d'), app.response('?')].join()", &Event::doc("Console"));
     assert_eq!((o.result.as_deref(), o.alerts.len(), o.question), (Some("2,3,2,1,"), 4, None));
+}
+
+/// A script doubling a string used to ask boa for 16 GiB at once, which aborted the app
+/// (vendored boa_string caps string lengths; the panic is caught on the script thread).
+#[test]
+fn string_bombs_end_with_an_error() {
+    for s in [
+        "var s = 'x'; while (true) s = s + s;",
+        "var s = '\u{3042}'; for (;;) s += s;",
+        "'ab'.repeat(1 << 30)",
+        "var a = []; a[1 << 29] = 1; a.join('xx')",
+    ] {
+        let o = go(s, &Event::doc("Console"));
+        assert!(o.error.is_some(), "{s}: {o:?}");
+    }
 }

@@ -38,11 +38,12 @@ allow-git = ["https://github.com/treeforjs/craftworks"]
 [advisories]
 yanked = "warn"
 ignore = [
-    # Marvin (RSA private-key timing side channel, no fixed `rsa` release). pdfcraft-sign uses
-    # `rsa` only for public-key signature verification, which the advisory does not affect; RSA
-    # private-key operations use aws-lc-rs on native targets and are refused in the browser
-    # (ADR-0009). Revisit when a fixed `rsa` ships.
-    { id = "RUSTSEC-2023-0071", reason = "rsa is used for verification only (ADR-0009)" },
+    # Marvin (RSA private-key timing side channel, no fixed `rsa` release). Native targets use
+    # `rsa` only for public-key signature verification, which the advisory does not affect; their
+    # RSA private-key operations use aws-lc-rs (ADR-0009). In the browser, signing with a picked
+    # .p12 uses `rsa` (pdfcraft_sign::rsa_soft) with blinding, locally and only on the user's
+    # request, so there is no remote timing oracle. Revisit when a fixed `rsa` ships.
+    { id = "RUSTSEC-2023-0071", reason = "native: verification only; browser: blinded local signing (ADR-0009)" },
     # zvariant, zbus_names and zvariant_derive were folded into zbus 6 and are no longer
     # published on their own. They come in through eframe's Linux accessibility support
     # (accesskit_unix, atspi), which has no zbus 6 release yet. Unmaintained, not vulnerable;

@@ -18,7 +18,10 @@ use pdfcraft_cos::{Dict, Document, ObjRef, Object, PdfString};
 
 pub mod appearance;
 pub mod links;
+pub mod popup;
 pub mod rich;
+
+pub use popup::{PopupState, check_popup_rect, default_popup_rect, popup, popups_to_toggle, set_popup};
 
 #[cfg(test)]
 mod tests;
@@ -1845,6 +1848,8 @@ pub struct Summary {
     pub quads: Vec<[f32; 8]>,
     pub locked: bool,
     pub intent: Option<String>,
+    /// The comment's pop-up (`/Popup`), when it has one.
+    pub popup: Option<PopupState>,
 }
 
 fn text_value(doc: &Document, d: &Dict, key: &[u8]) -> Option<String> {
@@ -1915,6 +1920,7 @@ pub fn summaries(doc: &Document) -> Vec<Summary> {
                 quads,
                 locked: d.get(b"F").and_then(|f| doc.resolve(f).as_int()).unwrap_or(0) & FLAG_LOCKED != 0,
                 intent: d.get(b"IT").and_then(|o| doc.resolve(o).as_name().map(|n| String::from_utf8_lossy(n).into_owned())),
+                popup: popup::popup_of_dict(doc, d),
             });
         }
     }

@@ -27,6 +27,9 @@ fn main() {
                     if let Some(json) = cc.storage.and_then(|s| s.get_string("pdfcraft").or_else(|| s.get_string("printcraft"))) {
                         app.restore(&json);
                     }
+                    // Unsaved changes are kept in the browser's origin-private file system; what a
+                    // crashed or closed tab left there is offered once it has loaded.
+                    app.enable_recovery(pdfcraft_ui_egui::RecoveryStore::browser(&cc.egui_ctx));
                     // `?file=<url>` opens a PDF from a URL (same-origin or CORS-enabled).
                     if let Some(url) = query_param("file") {
                         let inbox = app.startup_inbox.clone();

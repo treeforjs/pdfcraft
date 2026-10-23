@@ -41,6 +41,24 @@ const MAX_OBJECTS: usize = 2_000_000;
 const MAX_ARRAY: usize = 10_000;
 const MAX_TEXT: usize = 256;
 
+/// Printing conditions of the ICC characterization registry (<http://www.color.org>) that
+/// output intents commonly name, with a description: identifiers a PDF/X output intent may give
+/// without embedding a profile (not for PDF/X-4).
+pub const REGISTERED_CONDITIONS: &[(&str, &str)] = &[
+    ("FOGRA39", "Offset, coated paper (ISO 12647-2:2004, FOGRA39)"),
+    ("FOGRA51", "Offset, premium coated paper (ISO 12647-2:2013, FOGRA51)"),
+    ("FOGRA52", "Offset, uncoated white paper (ISO 12647-2:2013, FOGRA52)"),
+    ("FOGRA29", "Offset, uncoated paper (ISO 12647-2:2004, FOGRA29)"),
+    ("CGATS TR 001", "Web offset, coated (SWOP, CGATS TR 001)"),
+    ("CGATS21_CRPC6", "Sheetfed offset, coated (GRACoL, CGATS 21-2 CRPC6)"),
+    ("JC200103", "Sheetfed offset, coated (Japan Color 2001)"),
+];
+
+/// Whether `condition` is one of [`REGISTERED_CONDITIONS`] (ignoring case).
+pub fn is_registered(condition: &str) -> bool {
+    REGISTERED_CONDITIONS.iter().any(|(id, _)| id.eq_ignore_ascii_case(condition.trim()))
+}
+
 /// The output intent the conversion gives the document.
 #[derive(Clone, Debug, PartialEq)]
 pub struct XIntent {

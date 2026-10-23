@@ -9,6 +9,9 @@ use pdfcraft_engine::{
 use pdfcraft_render::{Annotation, PageInfo};
 use serde_json::{Value, json};
 
+/// How far from text (points) a snapped caret may be placed.
+const SNAP_DISTANCE: f32 = 24.0;
+
 use crate::{Args, Automation, Content, DEFAULT_DPI, MAX_DPI, Result, ToolError, encode_png, failed};
 
 /// Author used when a tool call names none.
@@ -172,6 +175,7 @@ impl Automation {
         let doc = self.doc(a)?;
         let only = a.opt_int("page")?.map(|p| (p.max(1) - 1) as usize);
         let all = self.comments(a)?;
+        let p_of = |page: usize| doc.info.pages.get(page).or_else(|| doc.info.pages.last());
         let view = |c: &Annotation| -> Value {
             let p = &doc.info.pages[c.page.min(doc.info.pages.len().saturating_sub(1))];
             let v = json!({
@@ -205,6 +209,7 @@ impl Automation {
                 v["status"] = json!(status);
                 v["marked"] = json!(thread.iter().rev().find(|r| r.is_mark()).is_some_and(|r| r.state.as_deref() == Some("Marked")));
                 v["locked"] = json!(c.locked);
+                v["popup"] = c.popup.map_or(Value::Null, |pop| popup_view(p_of(c.page), pop));
                 v["replies"] = thread.iter().filter(|r| r.state.is_none()).map(|r| view(r)).collect();
                 v
             })
@@ -281,7 +286,7 @@ impl Automation {
                     let (w, h) = stamp.size();
                     let [x, y] = a.need::<2>("at", "a stamp (its centre)")?;
                     let rect = rect_to_user(&info, [x - w / 2.0, y - h / 2.0, x + w / 2.0, y + h / 2.0]);
-                    let author = a.opt_str("author")?.unwrap_or(DEFAULT_AUTHOR).to_string();
+                    let author = a.opt_str("author")?.unwrap_or(self.session.author_or(DEFAULT_AUTHOR)).to_string();
                     let by = dynamic.then(|| self.session.stamp_by_line(&author));
                     Shape::Stamp { rect, stamp, by }
                 }
@@ -378,8 +383,19 @@ impl Automation {
                     Shape::Attachment { at: icon_anchor(&info, x, y), icon, file, data }
                 }
                 "caret" => {
-                    let [x, y] = a.need::<2>("at", "a caret (the insertion point on the baseline)")?;
-                    Shape::Caret { rect: rect_to_user(&info, [x - 4.0, y, x + 4.0, y + 8.0]) }
+                    let [mut x, mut y] = a.need::<2>("at", "a caret (the insertion point on the baseline)")?;
+                    let mut size = 8.0;
+                    if a.opt_bool("snap")?.unwrap_or(false) {
+                        // Like the app's Insert Text tool: the gap between the characters nearest `at`.
+                        let id = self.doc(a)?.id;
+                        let text = self.page_texts(id, &[page])?.remove(0);
+                        let ip = text
+                            .insertion_point(x as f32, y as f32, SNAP_DISTANCE)
+                            .ok_or_else(|| failed(format!("no text within {SNAP_DISTANCE} pt of [{x}, {y}] on page {} to snap to", page + 1)))?;
+                        (x, y) = (f64::from(ip.x), f64::from(ip.bottom));
+                        size = (f64::from(ip.bottom - ip.top) * 0.6).clamp(4.0, 24.0);
+                    }
+                    Shape::Caret { rect: rect_to_user(&info, [x - size / 2.0, y, x + size / 2.0, y + size]) }
                 }
                 other => return Err(ToolError::InvalidArgs(format!("unknown comment type {other:?}"))),
             }
@@ -396,7 +412,7 @@ impl Automation {
             style.width = w.max(0.0);
         }
         let contents = a.opt_str("contents")?.unwrap_or_default().to_string();
-        let author = a.opt_str("author")?.unwrap_or(DEFAULT_AUTHOR).to_string();
+        let author = a.opt_str("author")?.unwrap_or(self.session.author_or(DEFAULT_AUTHOR)).to_string();
         // Replace Text: the struck-out text and a grouped caret holding `contents`.
         if kind == "replace" {
             let Shape::TextMarkup { quads, .. } = shape else {
@@ -460,7 +476,7 @@ impl Automation {
         let info = self.doc(a)?.info.pages[page].clone();
         let [x, y] = a.need::<2>("at", "Fill & Sign")?;
         let at = to_user(&info, x, y);
-        let author = a.opt_str("author")?.unwrap_or(DEFAULT_AUTHOR).to_string();
+        let author = a.opt_str("author")?.unwrap_or(self.session.author_or(DEFAULT_AUTHOR)).to_string();
         let kind = a.str("type")?;
         if let Some(path) = a.opt_str("path")? {
             if !matches!(kind, "signature" | "initials") || a.opt_str("text")?.is_some() {
@@ -517,7 +533,7 @@ impl Automation {
 
     pub(crate) fn comment_reply(&mut self, a: &Args) -> Result<Value> {
         let (page, index) = self.comment_target(a)?;
-        let author = a.opt_str("author")?.unwrap_or(DEFAULT_AUTHOR).to_string();
+        let author = a.opt_str("author")?.unwrap_or(self.session.author_or(DEFAULT_AUTHOR)).to_string();
         self.apply(a, Edit::ReplyToAnnotation { page, index, text: a.str("text")?.to_string(), author })
     }
 
@@ -525,14 +541,14 @@ impl Automation {
         let (page, index) = self.comment_target(a)?;
         let status = a.str("status")?;
         let state = ReviewState::from_name(status).ok_or_else(|| ToolError::InvalidArgs(format!("unknown status {status:?}")))?;
-        let author = a.opt_str("author")?.unwrap_or(DEFAULT_AUTHOR).to_string();
+        let author = a.opt_str("author")?.unwrap_or(self.session.author_or(DEFAULT_AUTHOR)).to_string();
         self.apply(a, Edit::SetAnnotationStatus { page, index, state, author })
     }
 
     pub(crate) fn comment_mark(&mut self, a: &Args) -> Result<Value> {
         let (page, index) = self.comment_target(a)?;
         let marked = a.opt_bool("marked")?.unwrap_or(true);
-        let author = a.opt_str("author")?.unwrap_or(DEFAULT_AUTHOR).to_string();
+        let author = a.opt_str("author")?.unwrap_or(self.session.author_or(DEFAULT_AUTHOR)).to_string();
         self.apply(a, Edit::MarkAnnotation { page, index, marked, author })
     }
 
@@ -544,9 +560,18 @@ impl Automation {
 
     pub(crate) fn comments_hide(&mut self, a: &Args) -> Result<Value> {
         let id = self.doc(a)?.id;
-        let hidden = a.opt_bool("hidden")?.unwrap_or(true);
-        self.session.set_hide_comments(id, hidden);
-        Ok(json!({ "hidden": hidden }))
+        if a.get("types").is_some() {
+            if a.get("hidden").is_some() {
+                return Err(ToolError::InvalidArgs("pass hidden (all comments) or types (comments of these types), not both".into()));
+            }
+            let types: Vec<String> = a.strs("types")?.into_iter().map(str::to_string).collect();
+            self.session.set_hidden_comment_types(id, &types).map_err(|e| ToolError::InvalidArgs(e.to_string()))?;
+        } else {
+            let hidden = a.opt_bool("hidden")?.unwrap_or(true);
+            self.session.set_hide_comments(id, hidden);
+        }
+        let doc = self.doc(a)?;
+        Ok(json!({ "hidden": doc.comments_hidden(), "hidden_types": doc.hidden_comment_types() }))
     }
 
     pub(crate) fn comments_summarize(&mut self, a: &Args) -> Result<Value> {
@@ -649,6 +674,61 @@ impl Automation {
         Ok(out)
     }
 
+    /// Open, close, move or resize a comment's pop-up note.
+    pub(crate) fn comment_popup(&mut self, a: &Args) -> Result<Value> {
+        let (page, index) = self.comment_target(a)?;
+        let info = self.doc(a)?.info.pages.get(page).cloned().ok_or_else(|| failed("no such page"))?;
+        let open = a.opt_bool("open")?;
+        let mut rect = a.nums::<4>("rect")?.map(|r| popup_from_view(&info, r));
+        if let Some([dx, dy]) = a.nums::<2>("move")? {
+            if rect.is_some() {
+                return Err(ToolError::InvalidArgs("pass rect or move, not both".into()));
+            }
+            let current =
+                self.doc(a)?.comment_popup(page, index).ok_or_else(|| failed("the comment has no pop-up yet: open it or give it a rect"))?;
+            let r = current.rect;
+            let [x, y] = info.user_to_view(r[0] as f32, r[3] as f32);
+            let (x0, y0) = (f64::from(x), f64::from(y));
+            let (x1, y1) = (x0 + (r[2] - r[0]).abs(), y0 + (r[3] - r[1]).abs());
+            rect = Some(popup_from_view(&info, [x0 + dx, y0 + dy, x1 + dx, y1 + dy]));
+        }
+        if open.is_none() && rect.is_none() {
+            return Err(ToolError::InvalidArgs("nothing to change: pass open, rect or move".into()));
+        }
+        let mut out = self.apply(a, Edit::SetCommentPopup { page, index, open, rect })?;
+        let state = self.doc(a)?.comment_popup(page, index);
+        out["popup"] =
+            state.map_or(Value::Null, |s| popup_view(Some(&info), pdfcraft_render::PopupNote { rect: s.rect.map(|v| v as f32), open: s.open }));
+        Ok(out)
+    }
+
+    /// Open All Pop-ups / Close All Pop-ups, on one page or the whole document.
+    pub(crate) fn comment_popups_all(&mut self, a: &Args) -> Result<Value> {
+        let open = a.opt_bool("open")?.unwrap_or(true);
+        let page = match a.opt_int("page")? {
+            Some(p) => {
+                let n = self.doc(a)?.info.pages.len();
+                let p = usize::try_from(p)
+                    .ok()
+                    .filter(|p| (1..=n).contains(p))
+                    .ok_or_else(|| ToolError::InvalidArgs(format!("page must be between 1 and {n}")))?;
+                Some(p - 1)
+            }
+            None => None,
+        };
+        let Some(edit) = self.doc(a)?.all_popups_edit(page, open) else {
+            return Ok(json!({ "changed": 0, "open": open }));
+        };
+        let changed = match &edit {
+            Edit::Batch { edits, .. } => edits.len(),
+            _ => 1,
+        };
+        let mut out = self.apply(a, edit)?;
+        out["changed"] = json!(changed);
+        out["open"] = json!(open);
+        Ok(out)
+    }
+
     pub(crate) fn comment_delete(&mut self, a: &Args) -> Result<Value> {
         let (page, index) = self.comment_target(a)?;
         self.apply(a, Edit::DeleteAnnotation { page, index })
@@ -676,13 +756,32 @@ impl Automation {
                 bytes: std::sync::Arc::new(bytes),
                 page: a.opt_int("file_page")?.unwrap_or(1).max(1) as usize - 1,
             },
-            author: a.opt_str("author")?.unwrap_or(DEFAULT_AUTHOR).to_string(),
+            author: a.opt_str("author")?.unwrap_or(self.session.author_or(DEFAULT_AUTHOR)).to_string(),
         };
         self.apply(a, edit)
     }
 }
 
 /// A text box's runs for agents: each with its text and format.
+/// A pop-up as tools report it. Pop-ups stay upright and keep their size (NoRotate | NoZoom),
+/// so `rect` is the displayed position of their top-left corner (`[x0, y1]` in user space) plus
+/// their width and height in points.
+fn popup_view(p: Option<&PageInfo>, pop: pdfcraft_render::PopupNote) -> Value {
+    let r = pop.rect;
+    let [x, y] = p.map_or([r[0], r[3]], |p| p.user_to_view(r[0], r[3]));
+    let (w, h) = ((r[2] - r[0]).abs(), (r[3] - r[1]).abs());
+    let round = |v: f32| f64::from((v * 100.0).round() / 100.0);
+    json!({ "open": pop.open, "rect": [round(x), round(y), round(x + w), round(y + h)] })
+}
+
+/// The user-space pop-up rectangle for a displayed `[x0, y0, x1, y1]` (see [`popup_view`]).
+fn popup_from_view(p: &PageInfo, r: [f64; 4]) -> [f64; 4] {
+    let (x0, y0) = (r[0].min(r[2]), r[1].min(r[3]));
+    let (w, h) = ((r[2] - r[0]).abs(), (r[3] - r[1]).abs());
+    let [ux, uy] = to_user(p, x0, y0);
+    [ux, uy - h, ux + w, uy]
+}
+
 fn runs(rich: &pdfcraft_engine::RichText) -> Value {
     rich.spans
         .iter()

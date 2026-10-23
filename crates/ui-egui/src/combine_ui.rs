@@ -1110,13 +1110,19 @@ pub(crate) fn ago(time: SystemTime) -> String {
         _ if hours == 0 => crate::i18n::fmt(tl!("{n} min ago"), &[("n", &mins.to_string())]),
         _ if days == 0 => crate::i18n::fmt(tl!("{n} h ago"), &[("n", &hours.to_string())]),
         _ if days == 1 => tl!("yesterday").to_string(),
-        _ if days < 7 => crate::i18n::fmt(tl!("{n} days ago"), &[("n", &days.to_string())]),
-        _ => utc_stamp(time).get(..10).unwrap_or_default().to_string(),
+        _ if days < 7 => crate::i18n::trn(crate::i18n::current(), days, "{n} day ago", "{n} days ago"),
+        _ => crate::i18n::date(utc_parts(time).0),
     }
 }
 
-/// `time` as "2026-10-08 14:05 UTC".
+/// `time` as "2026-10-08 14:05 UTC", the date written the interface language's way.
 fn utc_stamp(time: SystemTime) -> String {
+    let (day, hm) = utc_parts(time);
+    format!("{} UTC", crate::i18n::current().locale().date_time(day, hm))
+}
+
+/// `time` in UTC as ((year, month, day), (hour, minute)).
+fn utc_parts(time: SystemTime) -> ((i64, u32, u32), (u32, u32)) {
     let secs = time.duration_since(SystemTime::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
     let days = i64::try_from(secs / 86_400).unwrap_or(0);
     let rem = secs % 86_400;
@@ -1130,7 +1136,8 @@ fn utc_stamp(time: SystemTime) -> String {
     let d = doy - (153 * mp + 2) / 5 + 1;
     let m = if mp < 10 { mp + 3 } else { mp - 9 };
     let y = yoe + era * 400 + i64::from(m <= 2);
-    format!("{y:04}-{m:02}-{d:02} {:02}:{:02} UTC", rem / 3600, rem % 3600 / 60)
+    let small = |v: i64| u32::try_from(v).unwrap_or(0);
+    ((y, small(m), small(d)), (u32::try_from(rem / 3600).unwrap_or(0), u32::try_from(rem % 3600 / 60).unwrap_or(0)))
 }
 
 impl PdfCraftApp {

@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use pdfcraft_engine::DocId;
 use pdfcraft_engine::compare::{CompareOptions, Kind, report_json};
+use pdfcraft_engine::compare_view::{CompareView, Spot, ViewChange};
 use serde_json::{Value, json};
 
 use crate::{Args, Automation, Result, ToolError, failed, write_atomic};
@@ -116,5 +117,62 @@ impl Automation {
         v["visual_regions"] =
             json!(c.visual.iter().flat_map(|p| p.regions.iter().map(move |r| json!({ "page": p.new_page + 1, "rect": r2(r) }))).collect::<Vec<_>>());
         Ok(v)
+    }
+
+    /// `doc_compare_view`: the side-by-side view's rows and changes, and the current change.
+    pub(crate) fn doc_compare_view(&self, a: &Args) -> Result<Value> {
+        let (old, new) = self.compare_ids(a)?;
+        let opts = options(a, false)?;
+        let limit = a.opt_int("limit")?.unwrap_or(DEFAULT_LIMIT).max(1) as usize;
+        let forward = match a.opt_str("step")? {
+            None => None,
+            Some("next") => Some(true),
+            Some("previous") => Some(false),
+            Some(other) => return Err(ToolError::InvalidArgs(format!("step must be next or previous, not {other:?}"))),
+        };
+        let change = a.opt_int("change")?;
+        let c = self.session.compare_files(old, new, &opts).map_err(failed)?;
+        let v = CompareView::new(&c);
+        let n = v.changes.len();
+        let from = match change {
+            None => None,
+            Some(i) if i >= 1 && usize::try_from(i).is_ok_and(|i| i <= n) => usize::try_from(i - 1).ok(),
+            Some(i) if n == 0 => return Err(ToolError::InvalidArgs(format!("change {i}: this comparison found no changes"))),
+            Some(i) => return Err(ToolError::InvalidArgs(format!("change {i} is out of range: there are {n} changes (1 to {n})"))),
+        };
+        let current = match forward {
+            Some(f) => v.step(from, f),
+            None => from,
+        };
+        let page = |p: Option<usize>| p.map(|p| p + 1);
+        let rows: Vec<Value> = v
+            .rows
+            .iter()
+            .enumerate()
+            .take(limit)
+            .map(|(i, r)| json!({ "row": i + 1, "old_page": page(r.old), "new_page": page(r.new), "status": r.status.label() }))
+            .collect();
+        let spot = |s: &Option<Spot>| {
+            s.as_ref().map(|s| json!({ "page": s.page + 1, "row": s.row + 1, "rects": s.rects.iter().map(r2).collect::<Vec<_>>(), "focus": s.focus.as_ref().map(r2) }))
+        };
+        let entry = |i: usize, ch: &ViewChange| json!({ "index": i + 1, "kind": ch.kind.name(), "old": spot(&ch.old), "new": spot(&ch.new) });
+        let changes: Vec<Value> = v.changes.iter().enumerate().take(limit).map(|(i, ch)| entry(i, ch)).collect();
+        let current = current.and_then(|i| v.changes.get(i).map(|ch| (i, ch))).map(|(i, ch)| {
+            let mut e = entry(i, ch);
+            e["scroll_to_row"] = json!(ch.row().map(|r| r + 1));
+            if let Some(t) = ch.text.and_then(|t| c.text.changes.get(t)) {
+                e["old_text"] = json!(t.old.text);
+                e["new_text"] = json!(t.new.text);
+            }
+            e
+        });
+        Ok(json!({
+            "rows": rows,
+            "row_count": v.rows.len(),
+            "changes": changes,
+            "change_count": n,
+            "truncated": v.rows.len() > limit || n > limit,
+            "current": current,
+        }))
     }
 }

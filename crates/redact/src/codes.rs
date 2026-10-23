@@ -141,9 +141,141 @@ fn join(codes: &[&str]) -> Result<String, CodeError> {
     Ok(text)
 }
 
+/// The most custom code sets kept.
+pub const MAX_CUSTOM_SETS: usize = 64;
+/// The most codes in one custom set.
+pub const MAX_CUSTOM_CODES: usize = 500;
+/// The longest custom set name and code (characters).
+pub const MAX_CUSTOM_NAME_CHARS: usize = 64;
+/// The longest code description (characters).
+pub const MAX_CUSTOM_DESCRIPTION_CHARS: usize = 300;
+
+/// One code of a set the user made.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct CustomCode {
+    pub code: String,
+    pub description: String,
+}
+
+/// A code set the user made (Redaction Properties ▸ Edit codes), saved with the settings and
+/// imported or exported as a file.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct CustomCodeSet {
+    pub name: String,
+    pub codes: Vec<CustomCode>,
+}
+
+fn one_line(text: &str, what: &str, max: usize) -> Result<String, String> {
+    let t = text.trim();
+    if t.contains(['\n', '\r']) || t.chars().any(char::is_control) {
+        return Err(format!("{what} {:?} contains a line break or a control character", t.chars().take(40).collect::<String>()));
+    }
+    if t.chars().count() > max {
+        return Err(format!("{what} {:?}… is longer than {max} characters", t.chars().take(40).collect::<String>()));
+    }
+    Ok(t.to_string())
+}
+
+impl CustomCodeSet {
+    /// A set checked and cleaned: a name, at most [`MAX_CUSTOM_CODES`] one-line codes (each at
+    /// most [`MAX_CUSTOM_NAME_CHARS`]), no code twice (ignoring case), descriptions on one line.
+    /// Codes left empty are dropped.
+    pub fn new(name: &str, codes: &[(String, String)]) -> Result<Self, String> {
+        let name = one_line(name, "the set name", MAX_CUSTOM_NAME_CHARS)?;
+        if name.is_empty() {
+            return Err("give the code set a name".into());
+        }
+        if CODE_SETS.iter().any(|s| s.name.eq_ignore_ascii_case(&name) || s.id.eq_ignore_ascii_case(&name)) {
+            return Err(format!("{name:?} is the name of a built-in set; choose another"));
+        }
+        if codes.len() > MAX_CUSTOM_CODES {
+            return Err(format!("a code set holds at most {MAX_CUSTOM_CODES} codes"));
+        }
+        let mut out: Vec<CustomCode> = Vec::new();
+        for (code, description) in codes {
+            let code = one_line(code, "the code", MAX_CUSTOM_NAME_CHARS)?;
+            if code.is_empty() {
+                continue;
+            }
+            if out.iter().any(|c| c.code.eq_ignore_ascii_case(&code)) {
+                return Err(format!("{code:?} is in the set twice"));
+            }
+            let description = one_line(description, "the description", MAX_CUSTOM_DESCRIPTION_CHARS)?;
+            out.push(CustomCode { code, description });
+        }
+        if out.is_empty() {
+            return Err(format!("{name:?} has no codes"));
+        }
+        Ok(Self { name, codes: out })
+    }
+
+    pub fn find(&self, code: &str) -> Option<&CustomCode> {
+        let code = code.trim();
+        self.codes.iter().find(|c| c.code.eq_ignore_ascii_case(code))
+    }
+
+    /// The overlay text for `codes` of this set (as [`overlay_text`] for a built-in set).
+    pub fn overlay_text(&self, codes: &[&str]) -> Result<String, String> {
+        let mut out: Vec<&str> = Vec::new();
+        for code in codes {
+            let found = self.find(code).ok_or_else(|| {
+                let known: Vec<&str> = self.codes.iter().map(|c| c.code.as_str()).take(30).collect();
+                format!("{:?} is not a code of {} (codes: {})", code.chars().take(40).collect::<String>(), self.name, known.join(", "))
+            })?;
+            if !out.contains(&found.code.as_str()) {
+                out.push(found.code.as_str());
+            }
+        }
+        join(&out).map_err(|e| e.to_string())
+    }
+}
+
+/// Add `set` to `sets`, replacing a set of the same name (ignoring case). Refused once
+/// [`MAX_CUSTOM_SETS`] are kept.
+pub fn save_custom_set(sets: &mut Vec<CustomCodeSet>, set: CustomCodeSet) -> Result<(), String> {
+    if let Some(old) = sets.iter_mut().find(|s| s.name.eq_ignore_ascii_case(&set.name)) {
+        *old = set;
+        return Ok(());
+    }
+    if sets.len() >= MAX_CUSTOM_SETS {
+        return Err(format!("at most {MAX_CUSTOM_SETS} code sets are kept; delete one first"));
+    }
+    sets.push(set);
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn custom_sets_are_checked_saved_and_cited() {
+        let codes = |list: &[(&str, &str)]| list.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect::<Vec<_>>();
+        let set = CustomCodeSet::new(" Contract ", &codes(&[("C-1", "Pricing"), (" C-2 ", ""), ("", "dropped")])).unwrap();
+        assert_eq!(set.name, "Contract");
+        assert_eq!(set.codes.iter().map(|c| c.code.as_str()).collect::<Vec<_>>(), ["C-1", "C-2"]);
+        assert_eq!(set.overlay_text(&["c-2", "C-1", "C-2"]).unwrap(), "C-2, C-1");
+        assert!(set.overlay_text(&["C-3"]).is_err());
+        assert!(CustomCodeSet::new("", &codes(&[("a", "")])).is_err());
+        assert!(CustomCodeSet::new("U.S. FOIA", &codes(&[("a", "")])).is_err(), "built-in names are taken");
+        assert!(CustomCodeSet::new("x", &codes(&[("a", ""), ("A", "")])).is_err(), "duplicates");
+        assert!(CustomCodeSet::new("x", &codes(&[("a\nb", "")])).is_err());
+        assert!(CustomCodeSet::new("x", &codes(&[("a", "\u{7}")])).is_err());
+        assert!(CustomCodeSet::new("x", &codes(&[])).is_err());
+        assert!(CustomCodeSet::new(&"n".repeat(65), &codes(&[("a", "")])).is_err());
+        let many: Vec<(String, String)> = (0..=MAX_CUSTOM_CODES).map(|i| (format!("c{i}"), String::new())).collect();
+        assert!(CustomCodeSet::new("x", &many).is_err());
+        let mut sets = Vec::new();
+        save_custom_set(&mut sets, set.clone()).unwrap();
+        let mut renamed = set.clone();
+        renamed.name = "CONTRACT".into();
+        save_custom_set(&mut sets, renamed).unwrap();
+        assert_eq!(sets.len(), 1, "same name replaces");
+        for i in 1..MAX_CUSTOM_SETS {
+            save_custom_set(&mut sets, CustomCodeSet { name: format!("s{i}"), ..set.clone() }).unwrap();
+        }
+        assert!(save_custom_set(&mut sets, CustomCodeSet { name: "one more".into(), ..set }).is_err());
+    }
 
     #[test]
     fn code_sets_are_well_formed() {

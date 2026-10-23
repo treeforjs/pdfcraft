@@ -235,6 +235,22 @@ impl crate::Document {
         self.editor.as_ref().map(|e| pdfcraft_forms::document_actions(&e.cos)).unwrap_or_default()
     }
 
+    /// Page Properties ▸ Actions: each page trigger's JavaScript, as (0-based page, trigger,
+    /// script). Reads every page; for one page use [`crate::Document::page_action`].
+    pub fn page_actions(&self) -> Vec<(usize, pdfcraft_forms::PageTrigger, String)> {
+        self.editor.as_ref().map(|e| pdfcraft_forms::page_actions(&e.cos)).unwrap_or_default()
+    }
+
+    /// The JavaScript page `page` runs on `trigger`, if any. Pages the open pass found without
+    /// additional actions (`info.page_actions`) are answered without reading the document.
+    pub fn page_action(&self, page: usize, trigger: pdfcraft_forms::PageTrigger) -> Option<String> {
+        if self.info.page_actions.binary_search(&page).is_err() {
+            return None;
+        }
+        let cos = &self.editor.as_ref()?.cos;
+        pdfcraft_forms::page_action(cos, page, trigger)
+    }
+
     /// What the unsigned signature field `field` locks when signed (its `/Lock`).
     pub fn signature_field_lock(&self, field: &str) -> Option<pdfcraft_sign::FieldLock> {
         self.editor.as_ref().and_then(|e| pdfcraft_sign::lock::field_lock(&e.cos, field))
@@ -300,6 +316,20 @@ impl Session {
     /// [`Session::run_javascript`] for a field event named `event` (`event.name`); without a
     /// target, a document event of that name.
     fn run_script_event(&mut self, id: DocId, script: &str, target: Option<&str>, event: &str, dialogs: &Dialogs) -> Result<Outcome, EditError> {
+        self.run_script_in(id, script, target, event, None, dialogs)
+    }
+
+    /// [`Session::run_script_event`] with, for a script without a target, `scope` = (`event.type`,
+    /// the page `this.pageNum` starts on) instead of a document event on the current page.
+    fn run_script_in(
+        &mut self,
+        id: DocId,
+        script: &str,
+        target: Option<&str>,
+        event: &str,
+        scope: Option<(&str, usize)>,
+        dialogs: &Dialogs,
+    ) -> Result<Outcome, EditError> {
         if self.js_off {
             return Err(EditError::Invalid("JavaScript is turned off (Preferences ▸ JavaScript)".into()));
         }
@@ -322,21 +352,27 @@ impl Session {
                 ..Default::default()
             });
         }
-        let mut runner = JsRunner::new(&cos, &doc.name);
-        runner.doc.annots = annot_states(&cos);
-        runner.doc.layers = doc.info.layers.iter().map(|l| pdfcraft_js::LayerState { name: l.name.clone(), on: l.visible }).collect();
-        let fields = pdfcraft_forms::fields(&cos);
-        let states: Vec<_> = fields.iter().map(|f| field_state(&cos, f)).collect();
-        let event = match target {
-            Some(t) => pdfcraft_js::Event { will_commit: false, ..pdfcraft_js::Event::field(event, t, "") },
-            None => pdfcraft_js::Event::doc(event),
-        };
-        let mut o = pdfcraft_js::run_with(script, &event, &runner.doc, &states, &runner.doc_scripts, Limits::default(), dialogs);
+        let mut env = ScriptEnv::new(doc, &cos);
+        let event = env.event(target, event, scope);
+        let mut o = pdfcraft_js::run_with(script, &event, &env.runner.doc, &env.states, &env.runner.doc_scripts, Limits::default(), dialogs);
         if o.question.is_some() {
             return Ok(o);
         }
+        self.apply_script_outcome(id, &mut o, &env.fields, &env.states)?;
+        Ok(o)
+    }
+
+    /// Apply what a finished script did: field changes, form resets and comment changes as one
+    /// undoable step (Reset requests are taken out of `o`), and layers shown or hidden.
+    pub(crate) fn apply_script_outcome(
+        &mut self,
+        id: DocId,
+        o: &mut Outcome,
+        fields: &[pdfcraft_forms::Field],
+        states: &[pdfcraft_js::FieldState],
+    ) -> Result<(), EditError> {
         let after: Vec<_> = states.iter().map(|s| o.changed.iter().find(|c| c.name == s.name).unwrap_or(s).clone()).collect();
-        let changes = changes(&states, &after);
+        let changes = changes(states, &after);
         let resets: Vec<Vec<String>> = o
             .requests
             .iter()
@@ -366,7 +402,71 @@ impl Session {
                 self.set_layer_visible(id, *index, *on);
             }
         }
-        Ok(o)
+        Ok(())
+    }
+
+    /// The JavaScript an action runs (a link's, a bookmark's or a page trigger's), or an error
+    /// an agent can act on when it runs something else or nothing.
+    pub fn action_script(&self, id: DocId, source: &ActionSource) -> Result<String, EditError> {
+        let doc = self.get(id).ok_or(EditError::NoDocument)?;
+        match source {
+            ActionSource::Link { page, index } => {
+                let l = doc
+                    .links
+                    .iter()
+                    .find(|l| l.page == *page && l.index == *index)
+                    .ok_or_else(|| EditError::Invalid(format!("page {} has no link {}", page.saturating_add(1), index.saturating_add(1))))?;
+                match &l.action {
+                    pdfcraft_annot::links::LinkAction::JavaScript(js) => Ok(js.clone()),
+                    _ => Err(EditError::Invalid("that link doesn't run a JavaScript".into())),
+                }
+            }
+            ActionSource::Bookmark { path } => match self.bookmark_action(id, path)? {
+                crate::BookmarkAction::JavaScript(js) => Ok(js),
+                _ => Err(EditError::Invalid("that bookmark doesn't run a JavaScript".into())),
+            },
+            ActionSource::Page { page, trigger } => {
+                if *page >= doc.info.pages.len() {
+                    return Err(EditError::Invalid(format!("the document has no page {}", page.saturating_add(1))));
+                }
+                doc.page_action(*page, *trigger)
+                    .ok_or_else(|| EditError::Invalid(format!("page {} has no {} script", page.saturating_add(1), trigger.label())))
+            }
+        }
+    }
+
+    /// Run a link's, bookmark's or page trigger's JavaScript action, as the viewer does when it
+    /// is clicked or the page opens or closes: `event.type` is Link, Bookmark or Page and
+    /// `event.name` Mouse Up, Open or Close; `this.pageNum` starts on the link's or trigger's
+    /// page. Same sandbox, limits and permission checks as [`Session::run_javascript_with`]:
+    /// field and comment changes are one undoable step (refused when the document's
+    /// permissions don't allow them), and a dialog that needs an answer stops it with nothing
+    /// applied.
+    pub fn run_action_javascript(&mut self, id: DocId, source: &ActionSource, dialogs: &Dialogs) -> Result<Outcome, EditError> {
+        if self.js_off {
+            return Err(EditError::Invalid("JavaScript is turned off (Preferences ▸ JavaScript)".into()));
+        }
+        let script = self.action_script(id, source)?;
+        let (kind, name, page) = source.event();
+        self.run_script_in(id, &script, None, name, Some((kind, page)), dialogs)
+    }
+
+    /// Run page `page`'s `trigger` script, if it has one and JavaScript is on, as the viewer
+    /// does when the page becomes (or stops being) the current one. Like a document action,
+    /// what it printed or asked for joins the document's script output
+    /// ([`Session::take_js_output`]) and dialogs get Cancel or No; requests to print, save or
+    /// go to another page are dropped, so page scripts can't bounce the view between pages or
+    /// start a print. Returns whether a script ran.
+    pub fn run_page_action(&mut self, id: DocId, page: usize, trigger: pdfcraft_forms::PageTrigger) -> Result<bool, EditError> {
+        if self.js_off || self.get(id).and_then(|d| d.page_action(page, trigger)).is_none() {
+            return Ok(false);
+        }
+        let mut o = self.run_action_javascript(id, &ActionSource::Page { page, trigger }, &Dialogs::default())?;
+        o.requests.retain(|r| !matches!(r, Request::Print | Request::SaveAs | Request::GoToPage(_)));
+        if let Some(d) = self.docs.iter_mut().find(|d| d.id == id) {
+            d.js_output.absorb(&o);
+        }
+        Ok(true)
     }
 
     /// Fire `trigger` on field `field`: run its actions (Field Properties ▸ Actions) in order, as
@@ -375,6 +475,18 @@ impl Session {
     /// a script's changes); navigation, links, menu items and submits are returned for the front
     /// end, never acted on here. Actions PdfCraft can't run are listed in `skipped`.
     pub fn run_field_trigger(&mut self, id: DocId, field: &str, trigger: pdfcraft_forms::Trigger) -> Result<TriggerOutcome, EditError> {
+        self.run_field_trigger_from(id, field, trigger, 0)
+    }
+
+    /// [`Session::run_field_trigger`] without the chain's first `skip` actions (a viewer that
+    /// ran a push button's first Mouse Up action itself runs the rest here).
+    pub fn run_field_trigger_from(
+        &mut self,
+        id: DocId,
+        field: &str,
+        trigger: pdfcraft_forms::Trigger,
+        skip: usize,
+    ) -> Result<TriggerOutcome, EditError> {
         use pdfcraft_forms::FieldAction as A;
         let doc = self.get(id).ok_or(EditError::NoDocument)?;
         let cos = doc.editor.as_ref().map(|e| &e.cos).ok_or_else(|| EditError::ReadOnly(doc.read_only_reason.clone().unwrap_or_default()))?;
@@ -383,6 +495,7 @@ impl Session {
             .into_iter()
             .filter(|(t, _)| *t == trigger)
             .map(|(_, a)| a)
+            .skip(skip)
             .collect();
         let mut out = TriggerOutcome::default();
         for a in actions {
@@ -435,6 +548,133 @@ impl Session {
             out.ran.push(a.describe());
         }
         Ok(out)
+    }
+}
+
+/// What a keystroke in a text field did ([`Session::field_keystroke`]).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct KeystrokeOutcome {
+    /// `event.rc`: `false` refuses the keystroke (the field keeps its text).
+    pub rc: bool,
+    /// The text to insert instead of the one typed (`event.change` after the script).
+    pub change: String,
+    /// What ran: "script" (the field's Keystroke JavaScript), "format" (its AF format,
+    /// natively) or "none".
+    pub checked_by: &'static str,
+    pub alerts: Vec<String>,
+    pub console: Vec<String>,
+    pub errors: Vec<String>,
+}
+
+/// The longest text a keystroke check looks at (a paste longer than this is refused).
+pub const MAX_KEYSTROKE_TEXT: usize = 64 * 1024;
+
+impl Session {
+    /// The Keystroke event while typing in text field `field` (`event.willCommit` false): the
+    /// field holds `value`, and `change` replaces its characters `sel` (a char range, clamped).
+    /// The field's Keystroke JavaScript runs when it has one and JavaScript is on (bounded like
+    /// every script, and only its `rc` and `change` count: other fields are not changed while
+    /// typing); otherwise its AF format decides natively ([`pdfcraft_forms::af::keystroke_partial`]).
+    /// A field with neither accepts everything. Nothing in the document changes.
+    pub fn field_keystroke(
+        &self,
+        id: DocId,
+        field: &str,
+        value: &str,
+        change: &str,
+        sel: std::ops::Range<usize>,
+    ) -> Result<KeystrokeOutcome, EditError> {
+        let doc = self.get(id).ok_or(EditError::NoDocument)?;
+        let f = doc.form.iter().find(|f| f.name == field).ok_or_else(|| EditError::Invalid(format!("no field named {field:?}")))?;
+        if value.len().saturating_add(change.len()) > MAX_KEYSTROKE_TEXT {
+            return Ok(KeystrokeOutcome { rc: false, change: String::new(), checked_by: "none", ..Default::default() });
+        }
+        let len = value.chars().count();
+        let (start, end) = (sel.start.min(len), sel.end.clamp(sel.start.min(len), len));
+        let proposed: String = value.chars().take(start).chain(change.chars()).chain(value.chars().skip(end)).collect();
+        if let Some(script) = f.actions.scripts.keystroke.as_ref().filter(|_| !self.js_off)
+            && let Some(cos) = doc.editor.as_ref().map(|e| &e.cos)
+        {
+            let env = ScriptEnv::new(doc, cos);
+            let mut ev = pdfcraft_js::Event::field("Keystroke", field, value);
+            ev.change = change.to_string();
+            ev.will_commit = false;
+            // selStart/selEnd count UTF-16 units, as JavaScript does.
+            let units = |n: usize| value.chars().take(n).map(char::len_utf16).sum::<usize>();
+            (ev.sel_start, ev.sel_end) = (units(start), units(end));
+            let o = pdfcraft_js::run(script, &ev, &env.runner.doc, &env.states, &env.runner.doc_scripts, Limits::default());
+            let failed = o.error.is_some();
+            return Ok(KeystrokeOutcome {
+                // A failing script leaves the keystroke alone, as on commit.
+                rc: o.rc || failed,
+                change: if failed { change.to_string() } else { o.change.clone() },
+                checked_by: "script",
+                alerts: o.alerts,
+                console: o.console,
+                errors: o.error.into_iter().collect(),
+            });
+        }
+        let format = &f.actions.format;
+        let checked_by = if *format == pdfcraft_forms::af::Format::None { "none" } else { "format" };
+        Ok(KeystrokeOutcome {
+            rc: pdfcraft_forms::af::keystroke_partial(format, &proposed),
+            change: change.to_string(),
+            checked_by,
+            ..Default::default()
+        })
+    }
+}
+
+/// What a script run needs from the document: the object model state and the form.
+pub(crate) struct ScriptEnv {
+    pub(crate) runner: JsRunner,
+    pub(crate) fields: Vec<pdfcraft_forms::Field>,
+    pub(crate) states: Vec<pdfcraft_js::FieldState>,
+}
+
+impl ScriptEnv {
+    pub(crate) fn new(doc: &crate::Document, cos: &pdfcraft_cos::Document) -> ScriptEnv {
+        let mut runner = JsRunner::new(cos, &doc.name);
+        runner.doc.annots = annot_states(cos);
+        runner.doc.layers = doc.info.layers.iter().map(|l| pdfcraft_js::LayerState { name: l.name.clone(), on: l.visible }).collect();
+        let fields = pdfcraft_forms::fields(cos);
+        let states: Vec<_> = fields.iter().map(|f| field_state(cos, f)).collect();
+        ScriptEnv { runner, fields, states }
+    }
+
+    /// The event for a button's script (`target`), or without one a document event named
+    /// `event`, or with `scope` = (`event.type`, page) an action's event on that page.
+    pub(crate) fn event(&mut self, target: Option<&str>, event: &str, scope: Option<(&str, usize)>) -> pdfcraft_js::Event {
+        match (target, scope) {
+            (Some(t), _) => pdfcraft_js::Event { will_commit: false, ..pdfcraft_js::Event::field(event, t, "") },
+            (None, Some((kind, page))) => {
+                self.runner.doc.page = page.min(self.runner.doc.num_pages.saturating_sub(1));
+                pdfcraft_js::Event { kind: kind.to_string(), ..pdfcraft_js::Event::doc(event) }
+            }
+            (None, None) => pdfcraft_js::Event::doc(event),
+        }
+    }
+}
+
+/// Where a JavaScript action lives ([`Session::run_action_javascript`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ActionSource {
+    /// A link: its 0-based page and index in the page's `/Annots`.
+    Link { page: usize, index: usize },
+    /// A bookmark, by its 0-based path.
+    Bookmark { path: Vec<usize> },
+    /// A page's Page Open or Page Close trigger.
+    Page { page: usize, trigger: pdfcraft_forms::PageTrigger },
+}
+
+impl ActionSource {
+    /// (`event.type`, `event.name`, the page the script starts on).
+    pub(crate) fn event(&self) -> (&'static str, &'static str, usize) {
+        match self {
+            ActionSource::Link { page, .. } => ("Link", "Mouse Up", *page),
+            ActionSource::Bookmark { .. } => ("Bookmark", "Mouse Up", 0),
+            ActionSource::Page { page, trigger } => ("Page", trigger.event_name(), *page),
+        }
     }
 }
 
@@ -546,19 +786,45 @@ impl Session {
         if found.is_empty() {
             return Ok(Vec::new());
         }
-        let names = found.iter().map(|(_, c)| c.name.clone()).collect();
-        let edits = found
-            .into_iter()
-            .map(|(page, c)| Edit::AddField {
-                page,
-                rect: c.rect,
-                kind: match c.kind {
-                    pdfcraft_forms::detect::Kind::Text => pdfcraft_forms::NewField::Text { multiline: c.rect[3] - c.rect[1] > 30.0 },
-                    pdfcraft_forms::detect::Kind::CheckBox => pdfcraft_forms::NewField::CheckBox,
-                },
-                name: Some(c.name),
-            })
-            .collect();
+        let mut names: Vec<String> = Vec::new();
+        let mut edits = Vec::new();
+        for (page, c) in found {
+            use pdfcraft_forms::detect::Kind;
+            if !names.contains(&c.name) {
+                names.push(c.name.clone());
+            }
+            match c.kind {
+                Kind::Text => edits.push(Edit::AddField {
+                    page,
+                    rect: c.rect,
+                    kind: pdfcraft_forms::NewField::Text { multiline: c.rect[3] - c.rect[1] > 30.0 },
+                    name: Some(c.name),
+                }),
+                Kind::CheckBox => edits.push(Edit::AddField { page, rect: c.rect, kind: pdfcraft_forms::NewField::CheckBox, name: Some(c.name) }),
+                // One button of a group: the first creates the group, the others join it.
+                Kind::Radio { export, .. } => edits.push(Edit::AddField {
+                    page,
+                    rect: c.rect,
+                    kind: pdfcraft_forms::NewField::Radio { group: Some(c.name), export },
+                    name: None,
+                }),
+                // A comb: a text field with one character per cell.
+                Kind::Comb { cells } => {
+                    edits.push(Edit::AddField {
+                        page,
+                        rect: c.rect,
+                        kind: pdfcraft_forms::NewField::Text { multiline: false },
+                        name: Some(c.name.clone()),
+                    });
+                    let props = pdfcraft_forms::FieldProps {
+                        max_len: Some(Some(cells)),
+                        flags: vec![(pdfcraft_forms::flags::COMB, true)],
+                        ..Default::default()
+                    };
+                    edits.push(Edit::SetFieldProps { name: c.name, props: Box::new(props) });
+                }
+            }
+        }
         self.apply(id, Edit::Batch { label: "Detect form fields".into(), edits })?;
         Ok(names)
     }

@@ -3,7 +3,7 @@
 use pdfcraft_engine::a11y::{Category, MAX_NS_MAPPINGS, Namespace, NamespaceSpec, NsMapping, Options, Report, Rule, Status, TagChange, TagKid};
 use serde_json::{Value, json};
 
-use crate::{Args, Automation, Result, ToolError, child, failed, write_atomic};
+use crate::{Args, Automation, Result, ToolError, failed, write_atomic};
 
 pub(crate) fn status_id(s: Status) -> &'static str {
     match s {
@@ -223,6 +223,44 @@ impl Automation {
             "element": i + 1, "obj": element, "type": n.ty, "standard": n.standard, "namespace": n.namespace,
             "standard_namespace": n.standard_namespace, "title": n.title, "alt": n.alt, "actual_text": n.actual_text, "lang": n.lang,
         }))
+    }
+
+    pub(crate) fn tags_new(&mut self, a: &Args) -> Result<Value> {
+        let ty = a.str("type")?.trim().to_owned();
+        let parent = match a.opt_int("parent")? {
+            None => None,
+            Some(n) => Some(
+                u32::try_from(n)
+                    .ok()
+                    .filter(|n| *n >= 1)
+                    .ok_or_else(|| ToolError::InvalidArgs("parent must be an element's object number (obj) from tags_tree".into()))?,
+            ),
+        };
+        let doc = self.doc(a)?;
+        let before: std::collections::HashSet<u32> = doc.tags().nodes.iter().filter_map(|n| n.obj.map(|o| o.num)).collect();
+        let id = doc.id;
+        self.session.apply(id, pdfcraft_engine::Edit::NewTag { parent, ty: ty.clone() }).map_err(failed)?;
+        let t = self.doc(a)?.tags();
+        let new = t.nodes.iter().filter_map(|n| n.obj.map(|o| o.num)).find(|n| !before.contains(n));
+        Ok(json!({ "obj": new, "type": ty, "parent": parent, "count": t.nodes.len() }))
+    }
+
+    pub(crate) fn tags_delete(&mut self, a: &Args) -> Result<Value> {
+        let element = u32::try_from(a.int("obj")?)
+            .ok()
+            .filter(|n| *n >= 1)
+            .ok_or_else(|| ToolError::InvalidArgs("obj must be an element's object number (obj) from tags_tree".into()))?;
+        let doc = self.doc(a)?;
+        let t = doc.tags();
+        let node = t.nodes.iter().find(|n| n.obj.is_some_and(|o| o.num == element)).ok_or_else(|| {
+            ToolError::InvalidArgs(format!("object {element} is not an element of the structure tree (see tags_tree for the obj numbers)"))
+        })?;
+        let lifted = node.kids.len();
+        let parent = node.parent.and_then(|p| t.nodes.get(p)).and_then(|p| p.obj).map(|o| o.num);
+        let id = doc.id;
+        self.session.apply(id, pdfcraft_engine::Edit::DeleteTag { element }).map_err(failed)?;
+        let count = self.doc(a)?.tags().nodes.len();
+        Ok(json!({ "deleted": element, "lifted": lifted, "parent": parent, "count": count }))
     }
 
     pub(crate) fn tags_add_namespace(&mut self, a: &Args) -> Result<Value> {
@@ -507,20 +545,24 @@ impl Automation {
     pub(crate) fn ocr_recognize_files(&mut self, a: &Args) -> Result<Value> {
         let settings = self.ocr_settings(a)?;
         let folder = self.resolve(a.str("folder")?, true)?;
-        std::fs::create_dir_all(&folder).map_err(|e| failed(e.to_string()))?;
         // Every source must be inside the root before any file is read or written; a missing
         // file inside it is reported for that file alone.
-        let sources = a.strs("paths")?.into_iter().map(|p| Ok((p, self.resolve(p, true)?))).collect::<Result<Vec<_>>>()?;
+        let (sources, walk) = self.batch_files(a, &folder)?;
+        std::fs::create_dir_all(&folder).map_err(|e| failed(e.to_string()))?;
         let ocr = self.ocr_ready(&settings)?;
         let mut out = Vec::new();
-        for (p, src) in sources {
-            let name = std::path::Path::new(p).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "document.pdf".into());
-            let result = std::fs::read(&src)
+        for f in sources {
+            let p = f.shown.as_str();
+            let name = f.output.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "document.pdf".into());
+            let result = std::fs::read(&f.source)
                 .map_err(|e| e.to_string())
                 .and_then(|bytes| pdfcraft_engine::ocr::recognize_file(&name, std::sync::Arc::new(bytes), None, settings.clone(), &ocr, |_, _| true));
             out.push(match result {
                 Ok(r) => {
-                    let target = child(&folder, &name);
+                    let target = f.output.clone();
+                    if let Some(dir) = target.parent() {
+                        std::fs::create_dir_all(dir).map_err(|e| failed(format!("{}: {e}", dir.display())))?;
+                    }
                     write_atomic(&target, &r.bytes)?;
                     let skipped: Vec<usize> = r.pages.iter().filter(|p| p.skipped.is_some()).map(|p| p.page + 1).collect();
                     let orientation: Vec<Value> =
@@ -536,7 +578,11 @@ impl Automation {
                 Err(e) => json!({ "path": p, "error": e }),
             });
         }
-        Ok(json!({ "files": out }))
+        let mut v = json!({ "files": out });
+        if !walk.is_null() {
+            v["walk"] = walk;
+        }
+        Ok(v)
     }
 
     pub(crate) fn ocr_recognize(&mut self, a: &Args) -> Result<Value> {
@@ -580,6 +626,24 @@ impl Automation {
         }))
     }
 
+    /// Scan & OCR ▸ Enhance scans ▸ Straighten pages (`scan_straighten`).
+    pub(crate) fn scan_straighten(&mut self, a: &Args) -> Result<Value> {
+        let min_skew = a.opt_num("min_skew")?.unwrap_or(0.3);
+        if !(0.0..=15.0).contains(&min_skew) {
+            return Err(ToolError::InvalidArgs(format!("min_skew must be between 0 and 15 degrees, not {min_skew}")));
+        }
+        let dry_run = a.opt_bool("dry_run")?.unwrap_or(false);
+        let pages = if a.opt_ints("pages")?.is_some() { self.pages(a, "pages")? } else { Vec::new() };
+        let id = self.doc(a)?.id;
+        let found = self.session.straighten_scans(id, &pages, min_skew as f32, dry_run).map_err(|e| failed(e.to_string()))?;
+        let straightened = found.iter().filter(|p| p.straightened).count();
+        let pages: Vec<Value> = found
+            .iter()
+            .map(|p| json!({ "page": p.page + 1, "skew": (f64::from(p.skew) * 100.0).round() / 100.0, "straightened": p.straightened, "skipped": p.skipped }))
+            .collect();
+        Ok(json!({ "pages": pages, "straightened": straightened, "undoable": !dry_run && straightened > 0 }))
+    }
+
     /// Scan & OCR ▸ Enhance scan ▸ Remove background (`scan_remove_background`).
     pub(crate) fn scan_remove_background(&mut self, a: &Args) -> Result<Value> {
         let mut options = background_options(a, "strength", "white_point")?;
@@ -605,7 +669,14 @@ impl Automation {
         use pdfcraft_engine::ocr;
         let dirs: Vec<String> = ocr::Models::search_dirs().iter().map(|d| d.to_string_lossy().into_owned()).collect();
         let langs: Vec<Value> = ocr::LANGUAGES.iter().map(|(c, n)| json!({ "code": c, "name": n })).collect();
-        Ok(json!({ "available": ocr::available(), "search_dirs": dirs, "languages": langs, "engine": self.session.ocr_engine_id() }))
+        Ok(json!({
+            "available": ocr::available(),
+            "search_dirs": dirs,
+            "languages": langs,
+            "engine": self.session.ocr_engine_id(),
+            "loaded": ocr::OcrsEngine::loaded(),
+            "models": crate::web_ocr::pinned_json(),
+        }))
     }
 }
 
@@ -642,7 +713,7 @@ pub(crate) fn export_ocr_json(r: &pdfcraft_engine::export_ocr::ExportOcrReport) 
 }
 
 /// A script's request; an address carries the internet access decision for it (`url_access`).
-fn request_json(session: &pdfcraft_engine::Session, r: &pdfcraft_engine::js::Request) -> Value {
+pub(crate) fn request_json(session: &pdfcraft_engine::Session, r: &pdfcraft_engine::js::Request) -> Value {
     use pdfcraft_engine::js::Request as R;
     let access = |u: &str| crate::url_access::check_json(u, &session.check_url(u));
     match r {
@@ -677,6 +748,11 @@ fn question_json(q: &pdfcraft_engine::js::Question) -> Value {
             json!({ "kind": "response", "message": question, "title": title, "default": default, "label": label, "password": password })
         }
     }
+}
+
+/// A page trigger id (page_open, page_close).
+fn page_trigger(id: &str) -> Result<pdfcraft_engine::PageTrigger> {
+    pdfcraft_engine::PageTrigger::from_id(id).ok_or_else(|| ToolError::InvalidArgs(format!("unknown trigger {id:?} (one of page_open, page_close)")))
 }
 
 /// `js_run`'s `answers`: a button name (yes, no, ok, cancel) for an alert, text or null for
@@ -752,6 +828,72 @@ impl Automation {
         self.js_document_actions(a)
     }
 
+    /// Page Properties ▸ Actions for every page (or `page`): the Page Open and Page Close
+    /// scripts that are set.
+    pub(crate) fn js_page_actions(&self, a: &Args) -> Result<Value> {
+        let doc = self.doc(a)?;
+        let only = match a.opt_int("page")? {
+            None => None,
+            Some(_) => Some(self.page(a)?),
+        };
+        let list: Vec<Value> = match only {
+            // One page: only its own /AA is read.
+            Some(p) => pdfcraft_engine::PageTrigger::ALL
+                .iter()
+                .map(|t| json!({ "page": p + 1, "trigger": t.id(), "label": t.label(), "script": doc.page_action(p, *t) }))
+                .collect(),
+            None => doc
+                .page_actions()
+                .into_iter()
+                .map(|(p, t, js)| json!({ "page": p + 1, "trigger": t.id(), "label": t.label(), "script": js }))
+                .collect(),
+        };
+        Ok(json!({ "actions": list }))
+    }
+
+    pub(crate) fn js_set_page_action(&mut self, a: &Args) -> Result<Value> {
+        let page = self.page(a)?;
+        let trigger = page_trigger(a.str("trigger")?)?;
+        let edit = pdfcraft_engine::Edit::SetPageAction { page, trigger, script: a.opt_str("script")?.map(str::to_string) };
+        let id = self.doc(a)?.id;
+        self.session.apply(id, edit).map_err(failed)?;
+        let script = self.doc(a)?.page_action(page, trigger);
+        Ok(json!({ "page": page + 1, "trigger": trigger.id(), "script": script }))
+    }
+
+    /// Run the JavaScript action of a link, a bookmark or a page trigger, as a click or the
+    /// page opening or closing would.
+    pub(crate) fn js_run_action(&mut self, a: &Args) -> Result<Value> {
+        use pdfcraft_engine::js::ActionSource;
+        let id = self.doc(a)?.id;
+        let given = [a.get("link").is_some(), a.get("bookmark").is_some(), a.get("trigger").is_some()].iter().filter(|x| **x).count();
+        if given != 1 {
+            return Err(ToolError::InvalidArgs("pass exactly one of link (with page and index), bookmark (a path) or trigger (with page)".into()));
+        }
+        let source = if a.get("link").is_some() {
+            let link = a.get("link").and_then(Value::as_object).ok_or_else(|| Args::wrong("link", "an object { page, index }"))?;
+            let n = |k: &str| {
+                link.get(k)
+                    .and_then(Value::as_u64)
+                    .and_then(|v| usize::try_from(v).ok())
+                    .and_then(|v| v.checked_sub(1))
+                    .ok_or_else(|| Args::wrong("link", "{ page, index } with 1-based numbers (see link_list)"))
+            };
+            ActionSource::Link { page: n("page")?, index: n("index")? }
+        } else if a.get("bookmark").is_some() {
+            ActionSource::Bookmark { path: a.path("bookmark")? }
+        } else {
+            ActionSource::Page { page: self.page(a)?, trigger: page_trigger(a.str("trigger")?)? }
+        };
+        let dialogs = pdfcraft_engine::js::Dialogs { interactive: true, answers: answers(a)? };
+        let o = self.session.run_action_javascript(id, &source, &dialogs).map_err(failed)?;
+        if let Some(q) = &o.question {
+            return Ok(json!({ "question": question_json(q), "answered": dialogs.answers.len() }));
+        }
+        let reqs: Vec<Value> = o.requests.iter().map(|r| request_json(&self.session, r)).collect();
+        Ok(json!({ "alerts": o.alerts, "console": o.console, "requests": reqs, "error": o.error, "result": o.result }))
+    }
+
     pub(crate) fn form_set_script(&mut self, a: &Args) -> Result<Value> {
         let edit = pdfcraft_engine::Edit::SetFieldScript {
             name: a.str("field")?.into(),
@@ -783,10 +925,26 @@ impl Automation {
         let format = pdfcraft_engine::compare::OfficeFormat::from_extension(&ext)
             .ok_or_else(|| ToolError::InvalidArgs(format!("unsupported extension {ext:?} (docx, html, rtf or xlsx)")))?;
         let options = export_ocr_options(a)?;
+        let pages = match a.opt_ints("pages")? {
+            Some(_) => self.pages(a, "pages")?,
+            None => Vec::new(),
+        };
         let id = self.doc(a)?.id;
-        let (bytes, report) = self.session.with_export_ocr(id, &[], &options, |d| d.export_office(format)).map_err(failed)?;
+        let ((bytes, read), report) =
+            self.session.with_export_ocr(id, &pages, &options, |d| d.export_office_pages(format, &pages, &mut |_, _| true)).map_err(failed)?;
         write_atomic(&path, &bytes)?;
-        Ok(json!({ "path": path.to_string_lossy(), "bytes": bytes.len(), "format": format.extension(), "ocr": export_ocr_json(&report) }))
+        let styled = read.pages.iter().map(|p| p.blocks.iter().filter(|b| !b.runs.is_empty()).count()).sum::<usize>();
+        Ok(json!({
+            "path": path.to_string_lossy(),
+            "bytes": bytes.len(),
+            "format": format.extension(),
+            "pages": read.pages.len(),
+            "paragraphs": read.pages.iter().map(|p| p.blocks.len()).sum::<usize>(),
+            "styled_paragraphs": styled,
+            "images": read.pages.iter().map(|p| p.images.len()).sum::<usize>(),
+            "warnings": read.warnings(),
+            "ocr": export_ocr_json(&report),
+        }))
     }
 
     /// `doc_export_text` (with `ocr`/`ocr_language`).
@@ -1160,7 +1318,31 @@ impl Automation {
                 "hint": hint,
             }));
         }
-        self.session.apply(id, pdfcraft_engine::Edit::ConvertPdfA { level }).map_err(failed)?;
+        let intent = match a.opt_str("output_profile")? {
+            Some(p) => {
+                let path = self.resolve(p, false)?;
+                let max = pdfcraft_engine::pdfa::MAX_PROFILE_BYTES;
+                let size = std::fs::metadata(&path).map_err(|e| failed(format!("{}: {e}", path.display())))?.len();
+                if size > max as u64 {
+                    return Err(ToolError::InvalidArgs(format!("output_profile is larger than {} MB", max >> 20)));
+                }
+                let profile = std::sync::Arc::new(std::fs::read(&path).map_err(|e| failed(format!("{}: {e}", path.display())))?);
+                let condition = match a.opt_str("output_condition")? {
+                    Some(c) => c.to_owned(),
+                    None => path.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "Custom".into()),
+                };
+                let intent = pdfcraft_engine::pdfa::PdfaIntent { condition, info: a.opt_str("output_info")?.map(str::to_owned), profile };
+                intent.validate(level).map_err(ToolError::InvalidArgs)?;
+                Some(Box::new(intent))
+            }
+            None if a.opt_str("output_condition")?.is_some() => {
+                return Err(ToolError::InvalidArgs(
+                    "a PDF/A output intent embeds its profile: give output_profile (an ICC file) with output_condition".into(),
+                ));
+            }
+            None => None,
+        };
+        self.session.apply(id, pdfcraft_engine::Edit::ConvertPdfA { level, intent }).map_err(failed)?;
         let mut r = self.pdfa_verify_at(a, level, source)?;
         if let Some(o) = r.as_object_mut() {
             o.insert("converted".into(), json!(true));
@@ -1198,25 +1380,31 @@ impl Automation {
             Action { name: "Custom".into(), description: String::new(), steps, builtin: false }
         };
         let folder = self.resolve(a.str("folder")?, true)?;
+        let (sources, walk) = self.batch_files(a, &folder)?;
         std::fs::create_dir_all(&folder).map_err(|e| failed(e.to_string()))?;
         let mut out = Vec::new();
-        for p in a.strs("paths")? {
-            let name = std::path::Path::new(p).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "document.pdf".into());
-            let result = self
-                .resolve(p, false)
-                .map_err(|e| e.to_string())
-                .and_then(|src| std::fs::read(&src).map_err(|e| e.to_string()))
-                .and_then(|bytes| run_on(&action, &name, std::sync::Arc::new(bytes), |_, _| {}));
+        for f in sources {
+            let p = f.shown.as_str();
+            let name = f.output.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "document.pdf".into());
+            let result =
+                std::fs::read(&f.source).map_err(|e| e.to_string()).and_then(|bytes| run_on(&action, &name, std::sync::Arc::new(bytes), |_, _| {}));
             out.push(match result {
                 Ok(r) => {
-                    let target = child(&folder, &name);
+                    let target = f.output.clone();
+                    if let Some(dir) = target.parent() {
+                        std::fs::create_dir_all(dir).map_err(|e| failed(format!("{}: {e}", dir.display())))?;
+                    }
                     write_atomic(&target, &r.bytes)?;
                     json!({ "path": p, "output": target.to_string_lossy(), "log": r.log })
                 }
                 Err(e) => json!({ "path": p, "error": e }),
             });
         }
-        Ok(json!({ "action": action.name, "files": out }))
+        let mut v = json!({ "action": action.name, "files": out });
+        if !walk.is_null() {
+            v["walk"] = walk;
+        }
+        Ok(v)
     }
 
     pub(crate) fn compare_ids(&self, a: &Args) -> Result<(pdfcraft_engine::DocId, pdfcraft_engine::DocId)> {
@@ -1254,11 +1442,20 @@ impl Automation {
         let list: Vec<Value> = found
             .iter()
             .map(|(p, c)| {
+                use pdfcraft_engine::detect::Kind;
                 let kind = match c.kind {
-                    pdfcraft_engine::detect::Kind::Text => "text",
-                    pdfcraft_engine::detect::Kind::CheckBox => "checkbox",
+                    Kind::Text => "text",
+                    Kind::CheckBox => "checkbox",
+                    Kind::Comb { .. } => "comb",
+                    Kind::Radio { .. } => "radio",
                 };
-                json!({ "page": p + 1, "kind": kind, "name": c.name, "rect": c.rect.map(|v| (v * 100.0).round() / 100.0) })
+                let mut v = json!({ "page": p + 1, "kind": kind, "name": c.name, "rect": c.rect.map(|v| (v * 100.0).round() / 100.0) });
+                match &c.kind {
+                    Kind::Comb { cells } => v["cells"] = json!(cells),
+                    Kind::Radio { export, .. } => v["export"] = json!(export),
+                    _ => {}
+                }
+                v
             })
             .collect();
         if a.opt_bool("add")?.unwrap_or(true) && !found.is_empty() {
@@ -1348,6 +1545,35 @@ impl Automation {
         Ok(json!({
             "field": a.str("field")?, "trigger": tid, "ran": o.ran, "skipped": o.skipped, "alerts": o.alerts,
             "console": o.console, "errors": o.errors, "requests": reqs, "menu": o.menu,
+        }))
+    }
+
+    /// `form_keystroke`: what typing `change` over the characters `sel` of text field `field`
+    /// would do (the Keystroke event while typing, before the value is committed).
+    pub(crate) fn form_keystroke(&mut self, a: &Args) -> Result<Value> {
+        let field = a.str("field")?;
+        let doc = self.doc(a)?;
+        let id = doc.id;
+        let current = doc.form.iter().find(|f| f.name == field).map(|f| f.value.first().cloned().unwrap_or_default()).unwrap_or_default();
+        let value = a.opt_str("value")?.map_or(current, str::to_string);
+        let change = a.opt_str("change")?.unwrap_or_default();
+        let len = value.chars().count();
+        let sel = match a.get("sel") {
+            None => len..len,
+            Some(_) => {
+                let v = a.opt_ints("sel")?.unwrap_or_default();
+                let [start, end] = v.as_slice() else {
+                    return Err(ToolError::InvalidArgs("sel is [start, end] (character positions)".into()));
+                };
+                let clamp = |n: i64| usize::try_from(n.max(0)).unwrap_or(0).min(len);
+                clamp(*start)..clamp(*end).max(clamp(*start))
+            }
+        };
+        let o = self.session.field_keystroke(id, field, &value, change, sel.clone()).map_err(failed)?;
+        let proposed: String = value.chars().take(sel.start).chain(o.change.chars()).chain(value.chars().skip(sel.end)).collect();
+        Ok(json!({
+            "field": field, "accepted": o.rc, "change": o.change, "result": if o.rc { proposed } else { value },
+            "checked_by": o.checked_by, "alerts": o.alerts, "console": o.console, "errors": o.errors,
         }))
     }
 

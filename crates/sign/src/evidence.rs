@@ -162,7 +162,7 @@ impl Checks<'_> {
             let mut status = RevocationStatus::Unknown;
             if let (Some(issuer), Some(at)) = (chain.get(index.saturating_add(1)), signature.verification_time) {
                 for (index, crl) in self.crls.iter().enumerate() {
-                    let found = crl.check(certificate, issuer, at);
+                    let found = crl.check_with(certificate, issuer, at, self.trust.revocation_max_age);
                     if found != RevocationStatus::Unknown {
                         if let Some(used) = self.used_crls.get_mut(index) {
                             *used = true;
@@ -173,7 +173,7 @@ impl Checks<'_> {
                     }
                 }
                 for (index, ocsp) in self.ocsps.iter().enumerate() {
-                    let found = ocsp.check(certificate, issuer, at);
+                    let found = ocsp.check_with(certificate, issuer, at, self.trust.revocation_max_age);
                     if found != RevocationStatus::Unknown {
                         if let Some(used) = self.used_ocsps.get_mut(index) {
                             *used = true;

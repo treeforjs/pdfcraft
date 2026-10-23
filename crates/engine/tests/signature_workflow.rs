@@ -20,7 +20,14 @@ fn at() -> Time {
 }
 
 fn server(url: String) -> TimestampServer {
-    TimestampServer { name: "Synthetic local TSA".into(), url, policy: Some("1.2.3.4".into()), timeout_seconds: 2, require_trusted_authority: true }
+    TimestampServer {
+        name: "Synthetic local TSA".into(),
+        url,
+        policy: Some("1.2.3.4".into()),
+        timeout_seconds: 2,
+        require_trusted_authority: true,
+        username: None,
+    }
 }
 
 fn local_server(reply: impl FnOnce(Vec<u8>) -> Vec<u8> + Send + 'static) -> (String, thread::JoinHandle<Vec<u8>>) {
@@ -239,4 +246,76 @@ fn server_and_verification_dates_are_strictly_validated() {
         assert!(verification_time_utc(bad).is_err(), "{bad}");
     }
     assert_eq!(verification_time_utc("20261012120000Z").unwrap(), at());
+}
+
+#[test]
+fn a_server_account_sends_basic_credentials_and_needs_its_password() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let url = format!("http://{}/timestamp", listener.local_addr().unwrap());
+    let worker = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        stream.set_read_timeout(Some(std::time::Duration::from_secs(5))).unwrap();
+        let mut header = Vec::new();
+        while !header.ends_with(b"\r\n\r\n") {
+            let mut b = [0];
+            stream.read_exact(&mut b).unwrap();
+            header.push(b[0]);
+            assert!(header.len() < 16384);
+        }
+        let header = String::from_utf8(header).unwrap();
+        let length: usize = header
+            .lines()
+            .find_map(|line| line.split_once(':').filter(|(k, _)| k.eq_ignore_ascii_case("content-length")).map(|(_, v)| v.trim().parse().unwrap()))
+            .unwrap();
+        let mut body = vec![0; length];
+        stream.read_exact(&mut body).unwrap();
+        let _ = stream.write_all(b"HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+        header
+    });
+    let mut settings = server(url);
+    settings.username = Some("ada".into());
+    // An account without its password is refused before any request.
+    assert!(HttpTimestampAuthority::with_trust(settings.clone(), sign::TrustStore::default(), None, SignatureCancellation::default()).is_err());
+    let tsa = HttpTimestampAuthority::with_trust(settings, sign::TrustStore::default(), Some("pw".into()), SignatureCancellation::default()).unwrap();
+    let query = sign::TimestampQuery::online(DigestAlg::Sha256, DigestAlg::Sha256.digest(&[b"synthetic"])).unwrap().encode().unwrap();
+    let error = tsa.timestamp(&query).unwrap_err().to_string();
+    assert!(error.contains("account name or password"), "{error}");
+    let header = worker.join().unwrap();
+    // base64("ada:pw")
+    assert!(header.to_ascii_lowercase().contains("authorization: basic ywrhonb3"), "{header}");
+    // Hostile account names are refused.
+    for name in ["", "a:b", "line\nbreak", &"x".repeat(201)] {
+        let mut s = server("https://tsa.example.com/".into());
+        s.username = Some(name.into());
+        assert!(s.validate().is_err(), "{name:?}");
+    }
+}
+
+#[test]
+fn signature_preferences_drive_validation_and_trust() {
+    let (issuer, leaf) = support::chain();
+    let mut session = Session::new().with_clock(|| at().unix());
+    session.set_trusted_certificates(vec![issuer.certificate.clone()]);
+    let doc = session.open("synthetic.pdf", None, Arc::new(support::pdf()), None).unwrap();
+    let bytes = session.sign(doc, &leaf, SignOptions::default()).unwrap();
+    session.mark_signed(doc, bytes, None).unwrap();
+    let source = |s: &Session| s.get(doc).unwrap().signatures.iter().find(|x| x.signed).unwrap().verification_time_source;
+    assert_eq!(source(&session), sign::VerificationTimeSource::ClaimedSigningTime);
+    session.set_pref("signatures.verification_time", &serde_json::json!("current")).unwrap();
+    assert_eq!(source(&session), sign::VerificationTimeSource::ChosenTime);
+    assert!(session.set_pref("signatures.verification_time", &serde_json::json!("yesterday")).is_err());
+    // Hostile numbers are clamped into 0..=87600 hours (ten years).
+    assert!(session.set_pref("signatures.revocation_max_age_hours", &serde_json::json!(-5)).unwrap().clamped);
+    assert_eq!(session.trust_store().revocation_max_age, None, "0 is no limit");
+    assert!(session.set_pref("signatures.revocation_max_age_hours", &serde_json::json!(1e300)).unwrap().clamped);
+    assert_eq!(session.trust_store().revocation_max_age, Some(87_600 * 3600));
+    assert!(session.set_pref("signatures.revocation_max_age_hours", &serde_json::json!("lots")).is_err());
+    session.set_pref("signatures.revocation_max_age_hours", &serde_json::json!(24)).unwrap();
+    assert_eq!(session.trust_store().revocation_max_age, Some(86_400));
+    // The operating-system trust settings are preferences too; certified needs signatures on.
+    session.set_pref("signatures.os_trust_signatures", &serde_json::json!(true)).unwrap();
+    session.set_pref("signatures.os_trust_certified", &serde_json::json!(true)).unwrap();
+    assert!(session.os_trust_settings().signatures && session.os_trust_settings().certified_documents);
+    assert_eq!(session.pref("signatures.os_trust_signatures"), Some(serde_json::json!(true)));
+    assert!(session.set_pref("signatures.os_trust_signatures", &serde_json::json!({"on": 1})).is_err());
 }

@@ -3789,7 +3789,13 @@ fn optimizing_scans_with_ccitt_lzw_to_flate_and_object_streams_through_tools() {
     assert_eq!((r["images_ccitt"].as_u64(), r["lzw_reencoded"].as_u64(), r["object_streams"].as_bool()), (Some(0), Some(0), Some(true)), "{r}");
     let packed = std::fs::read(dir.join("packed.pdf")).unwrap();
     assert!(contains(&packed, b"/ObjStm") && !contains(&packed, b"/CCITTFaxDecode"));
-    for bad in [json!("jbig2"), json!(7), json!({ "compression": 3 }), json!({ "downsample": "yes" })] {
+    // JBIG2 (lossless generic region): the same page, smaller than the LZW scan.
+    let r = ok(&mut a, "doc_optimize", json!({ "doc": doc, "path": "jbig2.pdf", "mono": "jbig2" }));
+    assert_eq!((r["images_jbig2"].as_u64(), r["images_ccitt"].as_u64()), (Some(1), Some(0)), "{r}");
+    assert!(contains(&std::fs::read(dir.join("jbig2.pdf")).unwrap(), b"/JBIG2Decode"));
+    let copy = ok(&mut a, "doc_open", json!({ "path": "jbig2.pdf" }))["doc"].as_u64().unwrap();
+    assert!(preview(&mut a, copy) == original, "the JBIG2 copy renders differently");
+    for bad in [json!("jbig3"), json!(7), json!({ "compression": 3 }), json!({ "downsample": "yes" })] {
         assert!(matches!(a.call("doc_optimize", &json!({ "doc": doc, "path": "x.pdf", "mono": bad })), Err(ToolError::InvalidArgs(_))), "{bad}");
     }
 }
@@ -4333,6 +4339,85 @@ fn comparing_documents_through_tools() {
     assert!(!r["visual_regions"].as_array().unwrap().is_empty(), "{r}");
 }
 
+/// The side-by-side view headless: rows follow the page map (moved page beside its
+/// counterpart, gaps beside inserted and deleted pages), changes go in row order, and change /
+/// step move between them, wrapping around; hostile arguments are refused with the range.
+#[test]
+fn compare_side_by_side_through_tools() {
+    let dir = workdir("compare-view");
+    let mut a = auto(&dir);
+    let pa = "Alpha page about the lease terms, the monthly rent, the deposit and the dates it is due.";
+    let pb = "Bravo page about parking spaces, bicycle storage, the shared laundry room and its hours.";
+    let pc = "Charlie page about pets, noise after ten at night, smoking and guests staying over weekends.";
+    let pd = "Delta page with the signatures of both parties and the date the agreement was signed.";
+    let pe = "Echo page about the new garden behind the building and who may use it in summer.";
+    let pc2 = pc.replace("pets", "cats");
+    let v1 = ok(&mut a, "doc_create", json!({ "from": "text", "text": ([pa, pb, pc, pd].join("\u{c}")) }))["doc"].as_u64().unwrap();
+    let v2 = ok(&mut a, "doc_create", json!({ "from": "text", "text": ([pc2.as_str(), pa, pe, pd].join("\u{c}")) }))["doc"].as_u64().unwrap();
+    let r = ok(&mut a, "doc_compare_view", json!({ "doc": v2, "other": v1 }));
+    let rows: Vec<(Value, Value, String)> = r["rows"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|x| (x["old_page"].clone(), x["new_page"].clone(), x["status"].as_str().unwrap().to_string()))
+        .collect();
+    assert_eq!(
+        rows,
+        [
+            (json!(3), json!(1), "moved".to_string()),
+            (json!(1), json!(2), "same".to_string()),
+            (json!(2), Value::Null, "deleted".to_string()),
+            (Value::Null, json!(3), "inserted".to_string()),
+            (json!(4), json!(4), "same".to_string()),
+        ],
+        "{r}"
+    );
+    let n = r["change_count"].as_u64().unwrap();
+    assert!(n >= 4, "{r}");
+    assert!(r["current"].is_null());
+    // In row order: the moved page, its one changed word, then the deleted and inserted pages.
+    let kinds: Vec<&str> = r["changes"].as_array().unwrap().iter().map(|c| c["kind"].as_str().unwrap()).collect();
+    assert_eq!(&kinds[..3], ["page_moved", "replaced", "page_deleted"], "{r}");
+    let rows_of: Vec<u64> = r["changes"].as_array().unwrap().iter().map(|c| c["new"]["row"].as_u64().or(c["old"]["row"].as_u64()).unwrap()).collect();
+    assert!(rows_of.windows(2).all(|w| w[0] <= w[1]), "{rows_of:?}");
+    // Next from the start is the first change; from it, the replaced word on both sides.
+    let first = ok(&mut a, "doc_compare_view", json!({ "doc": v2, "other": v1, "step": "next", "limit": 1 }));
+    assert_eq!(first["current"]["index"], 1);
+    assert_eq!(first["truncated"], true);
+    let word = ok(&mut a, "doc_compare_view", json!({ "doc": v2, "other": v1, "change": 1, "step": "next" }));
+    let c = &word["current"];
+    assert_eq!((c["index"].as_u64(), c["kind"].as_str(), c["scroll_to_row"].as_u64()), (Some(2), Some("replaced"), Some(1)), "{word}");
+    assert_eq!((c["old_text"].as_str(), c["new_text"].as_str()), (Some("pets,"), Some("cats,")));
+    assert_eq!((c["old"]["page"].as_u64(), c["new"]["page"].as_u64()), (Some(3), Some(1)));
+    assert_eq!(c["new"]["rects"].as_array().unwrap().len(), 1);
+    // Previous from the first wraps to the last; a change picked directly stays.
+    let last = ok(&mut a, "doc_compare_view", json!({ "doc": v2, "other": v1, "change": 1, "step": "previous" }));
+    assert_eq!(last["current"]["index"].as_u64(), Some(n));
+    let picked = ok(&mut a, "doc_compare_view", json!({ "doc": v2, "other": v1, "change": 3 }));
+    assert_eq!(picked["current"]["kind"], "page_deleted");
+    assert_eq!(picked["current"]["new"], Value::Null);
+    // Hostile arguments: out-of-range changes, unknown steps, wrong types, missing documents.
+    for bad in [
+        json!({ "doc": v2, "other": v1, "change": 0 }),
+        json!({ "doc": v2, "other": v1, "change": n + 1 }),
+        json!({ "doc": v2, "other": v1, "change": -5 }),
+        json!({ "doc": v2, "other": v1, "change": i64::MAX }),
+        json!({ "doc": v2, "other": v1, "step": "sideways" }),
+        json!({ "doc": v2, "other": v1, "step": 3 }),
+        json!({ "doc": v2, "other": 999 }),
+        json!({ "doc": v2, "other": v1, "dpi": 1e9, "visual": true }),
+    ] {
+        assert!(a.call("doc_compare_view", &bad).is_err(), "{bad}");
+    }
+    let e = a.call("doc_compare_view", &json!({ "doc": v2, "other": v1, "change": n + 1 })).unwrap_err().to_string();
+    assert!(e.contains(&format!("1 to {n}")), "{e}");
+    // Identical files: one row per page, nothing to visit.
+    let same = ok(&mut a, "doc_compare_view", json!({ "doc": v1, "other": v1, "step": "next" }));
+    assert_eq!((same["change_count"].as_u64(), same["row_count"].as_u64()), (Some(0), Some(4)));
+    assert!(same["current"].is_null());
+    assert!(a.call("doc_compare_view", &json!({ "doc": v1, "other": v1, "change": 1 })).is_err());
+}
+
 /// Two versions of a four-page file saved to disk: in the newer one the third page moved to
 /// the front with one word changed, the second page was deleted, a new page was inserted and
 /// the last page's text was pushed down (same words, different look).
@@ -4872,6 +4957,26 @@ fn exporting_to_word_html_and_rtf() {
     assert!(std::fs::read(dir.join("a.docx")).unwrap().starts_with(b"PK"));
     assert!(std::fs::read_to_string(dir.join("a.rtf")).unwrap().contains("Page 2"));
     assert!(a.call("doc_export_office", &json!({ "doc": doc, "path": "a.xyz" })).is_err());
+}
+
+#[test]
+fn exporting_chosen_pages_reports_what_was_read() {
+    let dir = workdir("office-pages");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    let r = ok(&mut a, "doc_export_office", json!({ "doc": doc, "path": "two.html", "pages": [3, 1] }));
+    assert_eq!((r["pages"].as_u64(), r["warnings"].as_array().map(Vec::len)), (Some(2), Some(0)), "{r}");
+    assert!(r["paragraphs"].as_u64().unwrap() >= 2, "{r}");
+    let html = std::fs::read_to_string(dir.join("two.html")).unwrap();
+    assert!(html.contains("Page 1") && html.contains("Page 3") && !html.contains("Page 2"), "{html}");
+    assert_eq!(ok(&mut a, "doc_export_office", json!({ "doc": doc, "path": "once.rtf", "pages": [2, 2] }))["pages"], 1, "each page once");
+    for bad in [json!([0]), json!([4]), json!("all"), json!([])] {
+        assert!(
+            matches!(a.call("doc_export_office", &json!({ "doc": doc, "path": "x.docx", "pages": bad })), Err(ToolError::InvalidArgs(_))),
+            "{bad}"
+        );
+    }
+    assert!(!dir.join("x.docx").exists());
 }
 
 /// The inflated parts of a zip archive written with local headers that carry sizes (no data
@@ -7000,4 +7105,190 @@ fn doc_validate_arlington_through_tools() {
     for args in [json!({ "doc": doc, "version": "3.1" }), json!({ "doc": doc, "max_findings": 0 }), json!({ "doc": doc, "version": "x" })] {
         assert!(matches!(a.call("doc_validate_arlington", &args), Err(ToolError::InvalidArgs(_))), "{args}");
     }
+}
+
+/// Windows headless: a second view of a document in a new window, tabs moving between windows
+/// and into new ones, edits and undo shared by both views, closing a window (refused while it
+/// would drop unsaved changes), and stale or hostile ids refused with a way out.
+#[test]
+fn windows_through_tools() {
+    let dir = workdir("windows");
+    let mut a = auto(&dir);
+    let da = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    let db = ok(&mut a, "doc_open", json!({ "path": "b.pdf" }))["doc"].as_u64().unwrap();
+    let list = ok(&mut a, "window_list", json!({}));
+    let main = &list["windows"][0];
+    assert_eq!(main["main"], true);
+    assert_eq!(main["tabs"].as_array().unwrap().len(), 2, "{list}");
+    let tab_b = main["tabs"][1]["tab"].as_u64().unwrap();
+    // A second view of a.pdf in a window of its own.
+    let r = ok(&mut a, "window_new", json!({ "doc": da }));
+    let w1 = r["window"].as_u64().unwrap();
+    assert_eq!(r["windows"].as_array().unwrap().len(), 2, "{r}");
+    assert_eq!(r["windows"][1]["tabs"][0]["doc"], da);
+    assert_eq!(r["windows"][0]["tabs"].as_array().unwrap().len(), 2, "the first view stays in the main window");
+    // b.pdf moves there, then into a new window, then back to the main window.
+    let r = ok(&mut a, "window_move_tab", json!({ "tab": tab_b, "window": w1 }));
+    assert_eq!(r["windows"][1]["tabs"].as_array().unwrap().len(), 2, "{r}");
+    assert_eq!(r["windows"][1]["active_tab"], tab_b);
+    let r = ok(&mut a, "window_move_tab", json!({ "tab": tab_b, "new_window": true }));
+    let w2 = r["window"].as_u64().unwrap();
+    assert_ne!(w1, w2);
+    assert!(a.call("window_move_tab", &json!({ "tab": tab_b, "new_window": true })).is_err(), "already alone in its window");
+    let r = ok(&mut a, "window_move_tab", json!({ "tab": tab_b, "window": 0 }));
+    assert_eq!(r["windows"].as_array().unwrap().len(), 2, "window {w2} was left empty and closed: {r}");
+    // Both views show one document: an edit and its undo are seen through either.
+    assert_eq!(ok(&mut a, "page_rotate", json!({ "doc": da, "pages": [1], "degrees": 90 }))["dirty"], true);
+    // Closing the window drops only its view: a.pdf is still open in the main window.
+    let r = ok(&mut a, "window_close", json!({ "window": w1 }));
+    assert_eq!(r["closed_documents"], json!([]), "{r}");
+    assert!(a.call("doc_info", &json!({ "doc": da })).is_ok());
+    // Moved out alone, an unsaved document's window refuses to close without discard_changes.
+    let tab_a = ok(&mut a, "window_list", json!({}))["windows"][0]["tabs"][0]["tab"].as_u64().unwrap();
+    let w3 = ok(&mut a, "window_move_tab", json!({ "tab": tab_a, "new_window": true }))["window"].as_u64().unwrap();
+    let e = a.call("window_close", &json!({ "window": w3 })).unwrap_err().to_string();
+    assert!(e.contains("unsaved changes") && e.contains("discard_changes"), "{e}");
+    let r = ok(&mut a, "window_close", json!({ "window": w3, "discard_changes": true }));
+    assert_eq!(r["closed_documents"], json!([da]));
+    assert!(a.call("doc_info", &json!({ "doc": da })).is_err(), "a.pdf closed with its last tab");
+    // Stale and hostile ids.
+    for (tool, args) in [
+        ("window_move_tab", json!({ "tab": 999, "window": 0 })),
+        ("window_move_tab", json!({ "tab": tab_b, "window": 77 })),
+        ("window_move_tab", json!({ "tab": tab_b, "window": -1 })),
+        ("window_move_tab", json!({ "tab": -5, "window": 0 })),
+        ("window_move_tab", json!({ "tab": tab_b, "window": 4_294_967_296_i64 })),
+        ("window_move_tab", json!({ "tab": tab_b })),
+        ("window_move_tab", json!({ "tab": tab_b, "window": 0, "new_window": true })),
+        ("window_close", json!({ "window": 0 })),
+        ("window_close", json!({ "window": w3 })),
+        ("window_new", json!({ "doc": 12345 })),
+        ("window_new", json!({ "doc": db, "extra": 1 })),
+    ] {
+        assert!(a.call(tool, &args).is_err(), "{tool} {args} should be refused");
+    }
+    // The window count is capped.
+    for _ in 0..pdfcraft_engine::windows::MAX_WINDOWS {
+        ok(&mut a, "window_new", json!({ "doc": db }));
+    }
+    let e = a.call("window_new", &json!({ "doc": db })).unwrap_err().to_string();
+    assert!(e.contains("at most"), "{e}");
+    // Closing the document drops its tabs everywhere.
+    ok(&mut a, "doc_close", json!({ "doc": db }));
+    assert_eq!(ok(&mut a, "window_list", json!({}))["windows"].as_array().unwrap().len(), 1);
+}
+
+#[test]
+fn watermarks_move_and_show_only_when_printing_or_on_screen() {
+    let dir = workdir("wm-visibility");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    ok(&mut a, "doc_watermark", json!({ "doc": doc, "pages": [1], "text": "SCREENONLY", "show_on_print": false, "offset_x": 30, "offset_y": -40 }));
+    ok(&mut a, "doc_watermark", json!({ "doc": doc, "pages": [1], "text": "PRINTONLY", "show_on_screen": false }));
+    let texts = page_text(&mut a, doc);
+    assert!(texts[0].contains("SCREENONLY") && !texts[0].contains("PRINTONLY"), "the print-only one is hidden on screen: {texts:?}");
+    ok(&mut a, "doc_save", json!({ "doc": doc, "path": "wm.pdf" }));
+    let saved = ok(&mut a, "doc_open", json!({ "path": "wm.pdf" }))["doc"].as_u64().unwrap();
+    let t = page_text(&mut a, saved);
+    assert!(t[0].contains("SCREENONLY") && !t[0].contains("PRINTONLY"), "saved as optional content: {t:?}");
+    // Printing drops the screen-only watermark and keeps the print-only one.
+    ok(&mut a, "doc_print", json!({ "doc": doc, "pages": "1", "path": "printed.pdf" }));
+    let printed = ok(&mut a, "doc_open", json!({ "path": "printed.pdf" }))["doc"].as_u64().unwrap();
+    let t = page_text(&mut a, printed);
+    assert!(t[0].contains("PRINTONLY") && !t[0].contains("SCREENONLY"), "{t:?}");
+    // One undo step each.
+    ok(&mut a, "edit_undo", json!({ "doc": doc }));
+    ok(&mut a, "doc_print", json!({ "doc": doc, "pages": "1", "path": "printed2.pdf" }));
+    let printed = ok(&mut a, "doc_open", json!({ "path": "printed2.pdf" }))["doc"].as_u64().unwrap();
+    assert!(!page_text(&mut a, printed)[0].contains("PRINTONLY"), "undone");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn hostile_watermark_appearance_is_refused() {
+    let dir = workdir("wm-hostile");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    for extra in [
+        json!({ "show_on_print": false, "show_on_screen": false }),
+        json!({ "offset_x": 1e9 }),
+        json!({ "offset_y": -1e300 }),
+        json!({ "offset_x": "left" }),
+        json!({ "show_on_print": "no" }),
+    ] {
+        let mut args = json!({ "doc": doc, "text": "X" });
+        for (k, v) in extra.as_object().unwrap() {
+            args[k] = v.clone();
+        }
+        assert!(a.call("doc_watermark", &args).is_err(), "{args}");
+    }
+    assert!(!page_text(&mut a, doc)[0].contains('X'), "nothing was added");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn pdfa_with_a_chosen_output_intent_and_optimizing_down_through_tools() {
+    let dir = workdir("pdfa-intent");
+    let mut a = auto(&dir);
+    let header = |class: &[u8; 4], space: &[u8; 4], major: u8| {
+        let mut icc = vec![0u8; 256];
+        icc[0..4].copy_from_slice(&256u32.to_be_bytes());
+        icc[8] = major;
+        icc[12..16].copy_from_slice(class);
+        icc[16..20].copy_from_slice(space);
+        icc[20..24].copy_from_slice(b"Lab ");
+        icc[36..40].copy_from_slice(b"acsp");
+        icc
+    };
+    std::fs::write(dir.join("press.icc"), header(b"prtr", b"CMYK", 2)).unwrap();
+    std::fs::write(dir.join("abstract.icc"), header(b"abst", b"CMYK", 2)).unwrap();
+    std::fs::write(dir.join("new.icc"), header(b"prtr", b"CMYK", 4)).unwrap();
+    std::fs::write(dir.join("junk.icc"), b"not a profile").unwrap();
+    let doc = ok(&mut a, "doc_create", json!({ "from": "text", "text": "Archive me" }))["doc"].as_u64().unwrap();
+    for bad in [
+        json!({ "doc": doc, "level": "2b", "output_profile": "abstract.icc" }),
+        json!({ "doc": doc, "level": "1b", "output_profile": "new.icc" }),
+        json!({ "doc": doc, "level": "2b", "output_profile": "junk.icc" }),
+        json!({ "doc": doc, "level": "2b", "output_profile": "press.icc", "output_condition": "" }),
+        json!({ "doc": doc, "level": "2b", "output_profile": "press.icc", "output_condition": "a\nb" }),
+        json!({ "doc": doc, "level": "2b", "output_condition": "FOGRA39" }),
+    ] {
+        assert!(matches!(a.call("pdfa_convert", &bad), Err(ToolError::InvalidArgs(_))), "{bad}");
+    }
+    assert!(a.call("pdfa_convert", &json!({ "doc": doc, "output_profile": "missing.icc" })).is_err());
+    assert_eq!(ok(&mut a, "doc_inspect", json!({ "doc": doc }))["undo"], Value::Null, "refusals change nothing");
+    let r = ok(&mut a, "pdfa_convert", json!({ "doc": doc, "level": "2b", "output_profile": "press.icc", "output_condition": "FOGRA39" }));
+    assert_eq!(r["declared"]["output_intents"], json!(["FOGRA39"]), "{r}");
+    // Without output_condition the file name is the condition.
+    let other = ok(&mut a, "doc_create", json!({ "from": "text", "text": "Archive me too" }))["doc"].as_u64().unwrap();
+    let r = ok(&mut a, "pdfa_convert", json!({ "doc": other, "level": "2b", "output_profile": "press.icc" }));
+    assert_eq!(r["declared"]["output_intents"], json!(["press"]), "{r}");
+
+    // Optimizing: JBIG2 for monochrome, PDF 1.3 forces flattening; bad options are refused.
+    for bad in [
+        json!({ "doc": doc, "path": "x.pdf", "mono": { "compression": "jbig3" } }),
+        json!({ "doc": doc, "path": "x.pdf", "flatten_transparency": true, "flatten_preset": "ultra" }),
+        json!({ "doc": doc, "path": "x.pdf", "flatten_transparency": true, "flatten_balance": 101 }),
+        json!({ "doc": doc, "path": "x.pdf", "flatten_transparency": true, "flatten_balance": -1 }),
+    ] {
+        assert!(matches!(a.call("doc_optimize", &bad), Err(ToolError::InvalidArgs(_))), "{bad}");
+    }
+    std::fs::write(dir.join("t.pdf"), transparent_pdf()).unwrap();
+    let t = ok(&mut a, "doc_open", json!({ "path": "t.pdf" }))["doc"].as_u64().unwrap();
+    let r = ok(&mut a, "doc_optimize", json!({ "doc": t, "path": "old.pdf", "compatibility": "1.3", "mono": { "compression": "jbig2" } }));
+    assert_eq!(r["transparency_flattened_pages"], 1, "{r}");
+    assert!(r["newer_features"].as_array().unwrap().iter().all(|f| f["feature"] != "transparency"), "{r}");
+    let bytes = std::fs::read(dir.join("old.pdf")).unwrap();
+    assert!(bytes.starts_with(b"%PDF-1.3"));
+    let old = pdfcraft_cos::Document::open(std::sync::Arc::new(bytes)).unwrap();
+    let x1a = pdfcraft_engine::pdfa::XOptions { part: Some(pdfcraft_engine::pdfa::XPart::X1a2001), max_findings: 0 };
+    assert_eq!(pdfcraft_engine::pdfa::verify_pdfx(&old, &x1a).count("transparency"), 0);
+    // Flattening on request at PDF 1.7; the open document is not changed.
+    let r = ok(
+        &mut a,
+        "doc_optimize",
+        json!({ "doc": t, "path": "flat.pdf", "flatten_transparency": true, "flatten_preset": "low", "flatten_balance": 100 }),
+    );
+    assert_eq!(r["transparency_flattened_pages"], 1, "{r}");
+    assert_eq!(ok(&mut a, "doc_inspect", json!({ "doc": t }))["undo"], Value::Null);
 }

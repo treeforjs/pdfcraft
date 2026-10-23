@@ -447,3 +447,44 @@ fn searchable_image_downsamples_finer_page_images_and_exact_keeps_them() {
     exact.apply_ocr_review(&review).unwrap();
     assert_eq!(pixels_of(&exact, id), (400, 200), "Exact keeps the image");
 }
+
+/// A scan of `skewed_scan`: its rendering as the page's only content, an image.
+fn scanned(degrees: f64) -> Arc<Vec<u8>> {
+    let shot = PageRenderer::new(skewed_scan(degrees, 0), RenderConfig::default()).render(RenderRequest { scale: 2.0, ..Default::default() });
+    let img = image::RgbaImage::from_raw(shot.width, shot.height, shot.rgba.to_vec()).unwrap();
+    let mut png = Vec::new();
+    img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+    Session::new().pdf_from_capture(&png, None).unwrap()
+}
+
+#[test]
+fn straighten_scans_turns_skewed_scans_without_recognition() {
+    let mut session = Session::new().with_clock(|| 1_700_000_000);
+    let id = session.open("scan.pdf", None, scanned(5.0), None).unwrap();
+    // A dry run measures and changes nothing.
+    let seen = session.straighten_scans(id, &[], 0.3, true).unwrap();
+    assert_eq!(seen.len(), 1);
+    assert!((seen[0].skew - 5.0).abs() < 1.0 && seen[0].straightened && seen[0].skipped.is_none(), "{seen:?}");
+    assert_eq!(session.get(id).unwrap().can_undo(), None);
+    // For real: one undoable step, and the page reads straight afterwards.
+    session.straighten_scans(id, &[0], 0.3, false).unwrap();
+    assert!(session.get(id).unwrap().can_undo().is_some());
+    let after = skew_of(session.save_bytes(id).unwrap());
+    assert!(after.abs() < 0.6, "straightened: {after}");
+    // A second pass finds nothing left to do; above the threshold nothing is turned either.
+    let again = session.straighten_scans(id, &[], 0.3, true).unwrap();
+    assert!(!again[0].straightened, "{again:?}");
+    let mut other = Session::new();
+    let id2 = other.open("scan.pdf", None, scanned(2.0), None).unwrap();
+    assert!(!other.straighten_scans(id2, &[], 10.0, false).unwrap()[0].straightened);
+    assert_eq!(other.get(id2).unwrap().can_undo(), None);
+    // Pages with no image (vector text) are left alone and say why.
+    let id3 = other.open("vector.pdf", None, skewed_scan(5.0, 0), None).unwrap();
+    let r = other.straighten_scans(id3, &[], 0.3, false).unwrap();
+    assert!(r[0].skipped.is_some() && !r[0].straightened);
+    // Hostile requests are refused before anything happens.
+    for (pages, min) in [(vec![1usize], 0.3f32), (vec![0, 0], 0.3), (vec![usize::MAX], 0.3), (vec![], f32::NAN), (vec![], -1.0), (vec![], 99.0)] {
+        assert!(session.straighten_scans(id, &pages, min, false).is_err(), "{pages:?} {min}");
+    }
+    assert!(session.straighten_scans(DocId(424242), &[], 0.3, false).is_err());
+}

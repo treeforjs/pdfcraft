@@ -256,6 +256,7 @@ fn pdfa_dialog_verifies_and_converts() {
     let mut h = Harness::builder().with_size(egui::vec2(1400.0, 900.0)).build_eframe(move |_cc| {
         let mut app = PdfCraftApp::new();
         app.set_option("language", "en").unwrap();
+        app.run_inline = true;
         app.open_bytes("keep.pdf", None, doc.clone()).unwrap();
         app
     });
@@ -276,6 +277,58 @@ fn pdfa_dialog_verifies_and_converts() {
 }
 
 #[test]
+fn standards_window_checks_pdfx_pdfua_and_syntax_off_the_ui_thread() {
+    let doc = Session::new().create_from_text("t", "Check me").unwrap().to_vec();
+    let mut h = Harness::builder().with_size(egui::vec2(1400.0, 900.0)).build_eframe(move |_cc| {
+        let mut app = PdfCraftApp::new();
+        app.set_option("language", "en").unwrap();
+        app.open_bytes("check.pdf", None, doc.clone()).unwrap();
+        app
+    });
+    h.run_steps(4);
+    // Each command opens its tab; Verify runs on a worker thread and the result is taken when
+    // it arrives.
+    let wait = |h: &mut Harness<'_, PdfCraftApp>| {
+        for _ in 0..400 {
+            h.run_steps(1);
+            if h.state().pdfa.run.is_none() {
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        panic!("the check did not finish");
+    };
+    assert!(h.state_mut().execute("standards.pdfx"));
+    h.run_steps(2);
+    h.get_by_label("Convert to PDF/X");
+    h.get_by_label("Verify").click();
+    wait(&mut h);
+    let x = h.state().pdfa.pdfx.clone().expect("a PDF/X report");
+    assert!(!x.conforms(), "an undeclared document isn't PDF/X");
+    h.run_steps(2);
+    h.get_by_label("Declared conformance: none");
+    assert!(h.state_mut().execute("standards.pdfua"));
+    h.run_steps(2);
+    h.get_by_label("Verify").click();
+    wait(&mut h);
+    let ua = h.state().pdfa.pdfua.clone().expect("a PDF/UA report");
+    assert!(!ua.conforms(), "an untagged document isn't PDF/UA");
+    assert!(h.state_mut().execute("standards.validate"));
+    h.run_steps(2);
+    h.get_by_label("Validate").click();
+    wait(&mut h);
+    assert!(h.state().pdfa.syntax.is_some());
+    h.run_steps(2);
+    // Cancelling a run takes no result; closing the window with Escape is safe.
+    h.state_mut().pdfa_verify();
+    h.state_mut().cancel_standards();
+    h.run_steps(3);
+    assert!(h.state().pdfa.run.is_none());
+    let id = h.state().active_ids().unwrap().1;
+    assert_eq!(h.state().session.get(id).unwrap().can_undo(), None, "checks don't change the document");
+}
+
+#[test]
 fn export_to_word_html_and_rtf() {
     let doc = Session::new().create_from_text("t", "Exported words").unwrap().to_vec();
     let dir = std::env::temp_dir().join(format!("pdfcraft-office-ui-{}", std::process::id()));
@@ -283,11 +336,16 @@ fn export_to_word_html_and_rtf() {
     let mut app = PdfCraftApp::new();
     app.set_option("language", "en").unwrap();
     app.open_bytes("e.pdf", None, doc).unwrap();
+    app.run_inline = true;
     for ext in ["docx", "html", "rtf"] {
         let out = dir.join(format!("e.{ext}"));
         app.save_override = Some(out.to_string_lossy().into_owned());
+        // The command opens the export dialog; its Export button writes the file.
         assert!(app.execute(&format!("export.{ext}")));
+        assert!(matches!(app.dialog, Some(pdfcraft_ui_egui::Dialog::Export(_))), "{ext}");
+        assert!(app.run_export_dialog());
         assert!(std::fs::metadata(&out).unwrap().len() > 40, "{ext}");
+        assert!(!app.exporting());
     }
     assert!(std::fs::read_to_string(dir.join("e.html")).unwrap().contains("Exported words"));
 }
@@ -302,8 +360,168 @@ fn export_to_excel_writes_a_workbook() {
     app.open_bytes("e.pdf", None, doc).unwrap();
     let out = dir.join("e.xlsx");
     app.save_override = Some(out.to_string_lossy().into_owned());
+    app.run_inline = true;
     assert!(app.execute("export.xlsx"));
+    assert!(app.run_export_dialog());
     let bytes = std::fs::read(&out).unwrap();
     assert!(bytes.starts_with(b"PK\x03\x04"));
     assert!(bytes.windows(b"xl/worksheets/sheet1.xml".len()).any(|w| w == b"xl/worksheets/sheet1.xml"));
+}
+
+/// Draw frames until both compared documents have page rasters on screen (bounded).
+fn wait_for_panes(h: &mut Harness<'static, PdfCraftApp>) {
+    for _ in 0..300 {
+        let ready = h.state().views.iter().all(|v| v.raster_memory().page_count > 0);
+        if ready {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        h.run_steps(1);
+    }
+    h.run_steps(2);
+}
+
+fn view_state(h: &Harness<'static, PdfCraftApp>) -> serde_json::Value {
+    h.state().side_by_side.as_ref().expect("the side-by-side view is open").state()
+}
+
+fn on_screen(state: &serde_json::Value, side: &str) -> Vec<(u64, f64)> {
+    state[format!("{side}_pages_on_screen")]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|p| (p["page"].as_u64().unwrap(), p["rect"][1].as_f64().unwrap()))
+        .collect()
+}
+
+/// Compare side by side: the panes line up as the page map does (the moved page beside its
+/// counterpart), scroll and zoom together unless turned off, Next / Previous change and the
+/// change list move both panes, the two documents share one raster allowance, and the view
+/// closes cleanly (also when one of its documents is closed).
+#[test]
+fn side_by_side_compare_view() {
+    let (v1, v2) = page_versions();
+    let mut h = two_files(v1, v2);
+    // Nothing compared yet: the command explains itself.
+    assert!(h.state_mut().execute("compare.side_by_side"));
+    assert!(h.state().side_by_side.is_none());
+    assert_eq!(h.state().toast.clone().unwrap().0, "Compare two files first (Compare files…)");
+    assert!(h.state_mut().execute("doc.compare"));
+    h.run_steps(2);
+    h.get_by_role_and_label(Role::Button, "Compare").click();
+    h.run_steps(1);
+    wait_for_compare(&mut h);
+    // The Compare panel opens the view.
+    h.get_by_role_and_label(Role::Button, "Compare side by side").click();
+    h.run_steps(2);
+    assert!(h.state().side_by_side_showing());
+    wait_for_panes(&mut h);
+    let s = view_state(&h);
+    assert_eq!((s["rows"].as_u64(), s["sync"].as_bool()), (Some(5), Some(true)), "{s}");
+    // Row 1: old page 3 (moved) beside new page 1, at the same height.
+    let (old, new) = (on_screen(&s, "old"), on_screen(&s, "new"));
+    assert_eq!(old.first().map(|p| p.0), Some(3), "{s}");
+    assert_eq!(new.first().map(|p| p.0), Some(1), "{s}");
+    assert!((old[0].1 - new[0].1).abs() < 1.0, "{s}");
+    // Both documents render, within one shared allowance (half each).
+    for v in &h.state().views {
+        let m = v.raster_memory();
+        assert!(m.page_count > 0 && m.page_bytes <= 64 * 1024 * 1024, "{m:?}");
+    }
+    h.get_by_label("Page moved");
+    let n = s["changes"].as_u64().unwrap();
+    assert!(n >= 6, "{s}");
+
+    // Next change: the moved page, then its changed word, selected in the list.
+    assert!(h.state_mut().execute("compare.next_change"));
+    h.run_steps(2);
+    h.get_by_label(&format!("Change 1 of {n}"));
+    h.get_by_label("Next change").click();
+    h.run_steps(2);
+    assert_eq!(view_state(&h)["current_change"]["kind"], "replaced");
+    // The change list shows it too (beside the Compare panel's own row).
+    assert!(h.query_all_by_label("\"pets,\" → \"cats,\"").count() >= 2);
+    // Previous from the first wraps to the last change, on the shifted last page: both panes
+    // scroll there, together.
+    h.get_by_label("Previous change").click();
+    h.run_steps(2);
+    h.get_by_label("Previous change").click();
+    h.run_steps(3);
+    let s = view_state(&h);
+    assert_eq!(s["current"].as_u64(), Some(n), "{s}");
+    assert_eq!(s["current_change"]["kind"], "visual", "{s}");
+    assert_eq!(s["scroll"][0], s["scroll"][1], "{s}");
+    assert!(s["scroll"][1][1].as_f64().unwrap() > 100.0, "{s}");
+    assert!(on_screen(&s, "new").iter().any(|p| p.0 == 4), "{s}");
+    assert!(on_screen(&s, "old").iter().any(|p| p.0 == 4), "{s}");
+    // The change list goes to a change.
+    h.get_by_label("Page inserted").click();
+    h.run_steps(3);
+    let s = view_state(&h);
+    assert_eq!(s["current_change"]["kind"], "page_inserted", "{s}");
+    assert!(on_screen(&s, "new").iter().any(|p| p.0 == 3), "{s}");
+
+    // Scrolling the new pane scrolls the old one while synchronised…
+    let pane = h.state().side_by_side.as_ref().unwrap().pane_rects()[1];
+    let wheel = |h: &mut Harness<'static, PdfCraftApp>, dy: f32| {
+        h.event(egui::Event::PointerMoved(pane.center()));
+        h.event(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(0.0, dy),
+            phase: egui::TouchPhase::Move,
+            modifiers: egui::Modifiers::NONE,
+        });
+        h.run_steps(30);
+    };
+    let before = view_state(&h)["scroll"][1][1].as_f64().unwrap();
+    wheel(&mut h, 150.0);
+    let s = view_state(&h);
+    assert!(s["scroll"][1][1].as_f64().unwrap() < before - 1.0, "{s}");
+    assert_eq!(s["scroll"][0], s["scroll"][1], "{s}");
+    // …and not once it's turned off; zoom then changes one pane at a time.
+    h.get_by_label("Synchronise scrolling").click();
+    h.run_steps(2);
+    assert_eq!(view_state(&h)["sync"], false);
+    let old_y = view_state(&h)["scroll"][0][1].as_f64().unwrap();
+    wheel(&mut h, 120.0);
+    let s = view_state(&h);
+    assert_eq!(s["scroll"][0][1].as_f64().unwrap(), old_y, "{s}");
+    assert_ne!(s["scroll"][0], s["scroll"][1], "{s}");
+    h.event(egui::Event::PointerMoved(pane.center()));
+    h.event(egui::Event::Zoom(1.5));
+    h.run_steps(2);
+    let s = view_state(&h);
+    assert!(s["zoom_percent"][1].as_f64().unwrap() > s["zoom_percent"][0].as_f64().unwrap(), "{s}");
+    // Turned back on, the old pane takes the new one's zoom and position.
+    assert!(h.state_mut().execute("compare.sync_scroll"));
+    h.run_steps(3);
+    let s = view_state(&h);
+    assert_eq!(s["zoom_percent"][0], s["zoom_percent"][1], "{s}");
+    assert_eq!(s["scroll"][0], s["scroll"][1], "{s}");
+
+    // The control channel's options: hostile values are refused with what is allowed.
+    let app = h.state_mut();
+    assert_eq!(app.set_option("compare-change", "0").unwrap_err(), format!("compare-change must be a change number from 1 to {n}"));
+    assert!(app.set_option("compare-change", "99999999999999999999").is_err());
+    assert!(app.set_option("compare-zoom", "NaN").is_err());
+    assert!(app.set_option("compare-sync", "maybe").is_err());
+    app.set_option("compare-change", "2").unwrap();
+    app.set_option("compare-zoom", "50%").unwrap();
+    h.run_steps(3);
+    assert_eq!((view_state(&h)["current"].as_u64(), view_state(&h)["zoom_percent"][1].as_f64()), (Some(2), Some(50.0)));
+
+    // Close, reopen, then close the old document: the view goes, the new one shows alone.
+    h.get_by_label("Close side-by-side view").click();
+    h.run_steps(2);
+    assert!(h.state().side_by_side.is_none());
+    assert!(h.state_mut().execute("compare.previous_change"));
+    h.run_steps(2);
+    assert!(h.state().side_by_side_showing(), "previous change opens the view");
+    let old_tab = h.state().views.iter().position(|v| v.id == h.state().side_by_side.as_ref().unwrap().old).unwrap();
+    h.state_mut().close_tab(old_tab);
+    h.run_steps(3);
+    assert!(h.state().side_by_side.is_none() && h.state().active.is_some());
+    for v in &h.state().views {
+        assert!(v.raster_memory().page_bytes <= 128 * 1024 * 1024);
+    }
 }

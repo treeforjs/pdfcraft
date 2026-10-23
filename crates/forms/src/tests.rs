@@ -880,6 +880,13 @@ fn field_actions_round_trip_on_every_trigger() {
     got.sort_by_key(key);
     want.sort_by_key(key);
     assert_eq!(got, want);
+    // The widget says which triggers have something to run, without reading the actions.
+    let bits = fields(&doc).iter().find(|f| f.name == "go").unwrap().widgets[0].triggers;
+    assert_eq!(
+        bits,
+        [Trigger::MouseUp, Trigger::MouseEnter, Trigger::OnFocus, Trigger::OnBlur, Trigger::MouseDown].iter().fold(0, |b, t| b | t.bit())
+    );
+    assert_eq!(bits & Trigger::MouseExit.bit(), 0);
     set_field_actions(&mut doc, &name, &[(Trigger::MouseExit, FieldAction::Named("NextPage".into()))]).unwrap();
     assert_eq!(field_actions(&doc, &name).unwrap(), [(Trigger::MouseExit, FieldAction::Named("NextPage".into()))]);
     // The Mouse Up script is what the button runs.
@@ -1098,6 +1105,7 @@ fn detection_finds_blanks_rules_boxes_and_names_them() {
     let shapes = Shapes {
         boxes: vec![[56.0, 600.0, 68.0, 612.0], [50.0, 500.0, 300.0, 540.0], [40.0, 20.0, 560.0, 780.0]],
         rules: vec![[370.0, 699.0, 500.0, 699.0], [50.0, 748.0, 100.0, 748.0]],
+        ..Default::default()
     };
     let found = detect(&words, &shapes, &[], &["Comments".into()]);
     let names: Vec<(&str, &Kind)> = found.iter().map(|c| (c.name.as_str(), &c.kind)).collect();
@@ -1105,6 +1113,72 @@ fn detection_finds_blanks_rules_boxes_and_names_them() {
     // An existing field there: nothing new.
     let again = detect(&words, &shapes, &found.iter().map(|c| c.rect).collect::<Vec<_>>(), &[]);
     assert!(again.is_empty(), "{again:?}");
+}
+
+#[test]
+fn detection_finds_combs_radio_groups_and_table_cells() {
+    use crate::detect::*;
+    let w = |t: &str, x0: f64, y0: f64, x1: f64| Word { text: t.into(), rect: [x0, y0, x1, y0 + 10.0] };
+    let words = vec![
+        w("Account", 50.0, 700.0, 90.0),
+        w("Size", 50.0, 650.0, 75.0),
+        w("Small", 112.0, 650.0, 140.0),
+        w("Large", 172.0, 650.0, 200.0),
+        w("Item", 60.0, 585.0, 85.0),
+        w("Qty", 210.0, 585.0, 230.0),
+        w("Apples", 60.0, 565.0, 95.0),
+    ];
+    // Six touching 14 pt cells after "Account"; two circles in a row after "Size"; a ruled
+    // table (heading row + two rows, two columns).
+    let cells: Vec<[f64; 4]> = (0..6).map(|i| [100.0 + 14.0 * i as f64, 698.0, 114.0 + 14.0 * i as f64, 712.0]).collect();
+    let shapes = Shapes {
+        boxes: cells,
+        circles: vec![[98.0, 649.0, 108.0, 659.0], [158.0, 649.0, 168.0, 659.0]],
+        rules: vec![[50.0, 600.0, 350.0, 600.0], [50.0, 580.0, 350.0, 580.0], [50.0, 560.0, 350.0, 560.0], [50.0, 540.0, 350.0, 540.0]],
+        columns: vec![[200.0, 540.0, 200.0, 600.0]],
+    };
+    let found = detect(&words, &shapes, &[], &[]);
+    let got: Vec<(String, Kind)> = found.iter().map(|c| (c.name.clone(), c.kind.clone())).collect();
+    assert!(got.contains(&("Account".into(), Kind::Comb { cells: 6 })), "{got:?}");
+    // The cells are one comb, not six check boxes.
+    assert!(!got.iter().any(|(_, k)| *k == Kind::CheckBox), "{got:?}");
+    assert!(got.contains(&("Size".into(), Kind::Radio { group: 0, export: "Small".into() })), "{got:?}");
+    assert!(got.contains(&("Size".into(), Kind::Radio { group: 0, export: "Large".into() })), "{got:?}");
+    // Table: the Apples row has an empty Qty cell; the last row has two empty cells.
+    let table: Vec<&str> = got.iter().filter(|(_, k)| *k == Kind::Text).map(|(n, _)| n.as_str()).collect();
+    assert_eq!(table, ["Qty Row1", "Item Row2", "Qty Row2"], "{got:?}");
+    // The table's rules don't also become blanks of their own.
+    assert_eq!(found.len(), 1 + 2 + 3, "{got:?}");
+}
+
+#[test]
+fn detection_survives_hostile_shapes() {
+    use crate::detect::*;
+    let nan = f64::NAN;
+    let many: Vec<[f64; 4]> = (0..5000).map(|i| [i as f64 * 0.01, 10.0, i as f64 * 0.01 + 8.0, 18.0]).collect();
+    let shapes = Shapes {
+        boxes: [many.clone(), vec![[nan, nan, nan, nan], [f64::INFINITY, 0.0, -f64::INFINITY, 1.0]]].concat(),
+        rules: (0..3000).map(|i| [0.0, i as f64 * 0.5, 500.0, i as f64 * 0.5]).collect(),
+        columns: vec![[nan, 0.0, nan, 100.0]; 100],
+        circles: [many, vec![[nan; 4]]].concat(),
+    };
+    let found = detect(&[], &shapes, &[], &[]);
+    assert!(found.len() < 20_000);
+}
+
+#[test]
+fn page_shapes_reads_curves_and_columns() {
+    let mut doc = fixture();
+    let page = pdfcraft_model::pages(&doc)[0].obj;
+    // A circle of four Bézier arcs (radius 5 around 100,100) and a vertical rule.
+    let s = doc.add(pdfcraft_cos::Object::Stream(pdfcraft_cos::Stream::flate(
+        Default::default(),
+        b"105 100 m 105 102.76 102.76 105 100 105 c 97.24 105 95 102.76 95 100 c 95 97.24 97.24 95 100 95 c 102.76 95 105 97.24 105 100 c S 300 100 m 300 200 l S",
+    )));
+    doc.update_dict(page, |d| d.set(b"Contents".to_vec(), pdfcraft_cos::Object::Ref(s))).unwrap();
+    let sh = crate::detect::page_shapes(&doc, 0);
+    assert_eq!(sh.circles, [[95.0, 95.0, 105.0, 105.0]]);
+    assert_eq!(sh.columns, [[300.0, 100.0, 300.0, 200.0]]);
 }
 
 #[test]
@@ -1851,4 +1925,47 @@ fn submit_flags_follow_the_format_precedence_and_round_trip() {
         let all = fields(&doc);
         assert!(matches!(&field(&all, "b").button, Some(crate::af::ButtonAction::Submit(_))), "{flags}");
     }
+}
+
+#[test]
+fn page_open_and_close_scripts_are_set_listed_and_removed() {
+    use crate::{PageTrigger, page_actions, set_page_action};
+    // Page 2 has a cyclic /Next chain mixing a script and a URI action, and an /AA that is a
+    // reference: read without looping, scripts only.
+    let objs: Vec<String> = vec![
+        "<< /Type /Catalog /Pages 2 0 R >>".into(),
+        "<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 /MediaBox [0 0 600 800] >>".into(),
+        "<< /Type /Page /Parent 2 0 R >>".into(),
+        "<< /Type /Page /Parent 2 0 R /AA 5 0 R >>".into(),
+        "<< /C 6 0 R /Foo (kept) >>".into(),
+        "<< /S /JavaScript /JS (console.println\\(1\\)) /Next 7 0 R >>".into(),
+        "<< /S /URI /URI (https://example.org) /Next 6 0 R >>".into(),
+    ];
+    let mut doc = document(&objs);
+    assert_eq!(page_actions(&doc), vec![(1, PageTrigger::Close, "console.println(1)".to_string())]);
+    set_page_action(&mut doc, 0, PageTrigger::Open, Some("app.alert(\"opened\")")).unwrap();
+    set_page_action(&mut doc, 1, PageTrigger::Open, Some("this.pageNum")).unwrap();
+    // No such page, blank removes, over-long refused.
+    assert!(set_page_action(&mut doc, 9, PageTrigger::Open, Some("1")).is_err());
+    let huge = "x".repeat(pdfcraft_model::actions::MAX_SCRIPT_BYTES + 1);
+    assert!(set_page_action(&mut doc, 0, PageTrigger::Close, Some(&huge)).is_err());
+    let doc = reopen(&doc);
+    assert_eq!(
+        page_actions(&doc),
+        vec![
+            (0, PageTrigger::Open, "app.alert(\"opened\")".to_string()),
+            (1, PageTrigger::Open, "this.pageNum".to_string()),
+            (1, PageTrigger::Close, "console.println(1)".to_string()),
+        ]
+    );
+    let mut doc = doc;
+    set_page_action(&mut doc, 1, PageTrigger::Close, Some("  ")).unwrap();
+    set_page_action(&mut doc, 0, PageTrigger::Open, None).unwrap();
+    let doc = reopen(&doc);
+    assert_eq!(page_actions(&doc), vec![(1, PageTrigger::Open, "this.pageNum".to_string())]);
+    let pages = crate::page_refs(&doc);
+    assert!(!doc.get(pages[0]).as_dict().unwrap().contains(b"AA"), "an empty /AA goes");
+    let aa = doc.get(pages[1]).as_dict().unwrap().get(b"AA").map(|a| doc.resolve(a)).unwrap();
+    assert!(aa.as_dict().unwrap().contains(b"Foo"), "other /AA entries are kept");
+    assert_eq!(PageTrigger::from_id("page_close"), Some(PageTrigger::Close));
 }

@@ -13,8 +13,9 @@ mod script;
 mod standard;
 pub use arabic::{ShapedCluster, arabic_glyph, arabic_has, shape_arabic};
 pub use craft::{
-    CRAFT_FONTS, CraftFont, SHIPPORI_MINCHO, document_arabic_font, document_japanese_font, document_japanese_font_for_style,
-    document_japanese_fonts_for_style, ui_arabic_fonts, ui_chinese_fonts, ui_cjk_fonts, ui_japanese_fonts, ui_telugu_fonts,
+    CRAFT_FONTS, CraftFont, SHIPPORI_MINCHO, document_arabic_font, document_cjk_fonts_for_style, document_japanese_font,
+    document_japanese_font_for_style, document_japanese_fonts_for_style, ui_arabic_fonts, ui_chinese_fonts, ui_cjk_fonts, ui_japanese_fonts,
+    ui_telugu_fonts,
 };
 pub use script::{
     GlyphError, GlyphOutline, INTER_REGULAR, MAX_OUTLINE_CHARS, MAX_SIGNATURE_CHARS, ScriptOutline, japanese_glyph, japanese_glyph_from,

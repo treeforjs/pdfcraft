@@ -47,9 +47,9 @@ impl Automation {
             Some(_) => self.pages(a, "pages")?,
             None => (0..n).collect(),
         };
-        let overlay = overlay_text(a)?;
+        let overlay = overlay_text(a, &self.session)?;
         let look = overlay_look(a)?;
-        let author = a.opt_str("author")?.unwrap_or(DEFAULT_AUTHOR).to_string();
+        let author = a.opt_str("author")?.unwrap_or(self.session.author_or(DEFAULT_AUTHOR)).to_string();
         let mut style = Style::default_for(&Shape::Redact { quads: Vec::new(), overlay: String::new(), look: Default::default() });
         if let Some(c) = a.opt_str("fill")? {
             style.fill = Some(parse_color(c)?);
@@ -162,17 +162,73 @@ impl Automation {
         Ok(out)
     }
 
-    /// The redaction code sets (Redaction Properties ▸ Redaction Code).
+    /// The redaction code sets (Redaction Properties ▸ Redaction Code): the built-in ones, then
+    /// the user's (`custom: true`, named by `name`).
     pub(crate) fn redact_codes(&self, a: &Args) -> Result<Value> {
-        let sets: Vec<&RedactionCodeSet> = match a.opt_str("code_set")? {
-            Some(id) => vec![code_set(id)?],
-            None => REDACTION_CODE_SETS.iter().collect(),
+        let builtin = |s: &RedactionCodeSet| json!({ "id": s.id, "name": s.name, "custom": false, "codes": s.codes.iter().map(|c| json!({ "code": c.code, "description": c.description })).collect::<Vec<_>>() });
+        let custom = |s: &redaction_codes::CustomCodeSet| json!({ "id": s.name, "name": s.name, "custom": true, "codes": s.codes.iter().map(|c| json!({ "code": c.code, "description": c.description })).collect::<Vec<_>>() });
+        let sets: Vec<Value> = match a.opt_str("code_set")? {
+            Some(id) => match AnySet::find(id, &self.session)? {
+                AnySet::Builtin(s) => vec![builtin(s)],
+                AnySet::Custom(s) => vec![custom(s)],
+            },
+            None => REDACTION_CODE_SETS.iter().map(builtin).chain(self.session.redaction_code_sets().iter().map(custom)).collect(),
         };
-        let sets: Vec<Value> = sets
-            .into_iter()
-            .map(|s| json!({ "id": s.id, "name": s.name, "codes": s.codes.iter().map(|c| json!({ "code": c.code, "description": c.description })).collect::<Vec<_>>() }))
-            .collect();
         Ok(json!({ "code_sets": sets }))
+    }
+
+    /// `redact_code_set_save`: add a code set of the user's, or replace the one of that name.
+    pub(crate) fn redact_code_set_save(&mut self, a: &Args) -> Result<Value> {
+        let name = a.str("name")?;
+        if RedactionCodeSet::from_id(name).is_some() || REDACTION_CODE_SETS.iter().any(|s| s.name.eq_ignore_ascii_case(name.trim())) {
+            return Err(ToolError::InvalidArgs(format!("{name:?} is a built-in code set; choose another name")));
+        }
+        let list = a.get("codes").and_then(Value::as_array).ok_or_else(|| ToolError::InvalidArgs("codes must be an array".into()))?;
+        let file = json!({ "name": name, "codes": list });
+        let bytes = serde_json::to_vec(&file).map_err(|e| failed(e.to_string()))?;
+        let mut sets = pdfcraft_engine::redaction_sets::parse_code_sets(&bytes).map_err(ToolError::InvalidArgs)?;
+        let set = sets.pop().ok_or_else(|| ToolError::InvalidArgs("no code set".into()))?;
+        let replaced = self.session.redaction_code_set(&set.name).is_some();
+        let out = json!({ "name": set.name, "codes": set.codes.len(), "replaced": replaced });
+        self.session.save_redaction_code_set(set).map_err(ToolError::InvalidArgs)?;
+        Ok(out)
+    }
+
+    /// `redact_code_set_delete`.
+    pub(crate) fn redact_code_set_delete(&mut self, a: &Args) -> Result<Value> {
+        let name = a.str("name")?;
+        if !self.session.delete_redaction_code_set(name) {
+            return Err(ToolError::InvalidArgs(format!("there is no code set of yours named {name:?} (see redact_codes)")));
+        }
+        Ok(json!({ "deleted": name }))
+    }
+
+    /// `redact_code_sets_file`: import the sets in a JSON file, or export the user's sets to one.
+    pub(crate) fn redact_code_sets_file(&mut self, a: &Args) -> Result<Value> {
+        let path = a.str("path")?;
+        match a.str("mode")? {
+            "import" => {
+                let p = self.resolve(path, false)?;
+                let len = std::fs::metadata(&p).map_err(|e| failed(format!("{}: {e}", p.display())))?.len();
+                if len > pdfcraft_engine::redaction_sets::MAX_CODE_SET_FILE as u64 {
+                    return Err(ToolError::InvalidArgs(format!("{path} is too large for a code set file ({len} bytes)")));
+                }
+                let bytes = std::fs::read(&p).map_err(|e| failed(format!("{}: {e}", p.display())))?;
+                let names = self.session.import_redaction_code_sets(&bytes).map_err(ToolError::InvalidArgs)?;
+                Ok(json!({ "imported": names, "code_sets": self.session.redaction_code_sets().len() }))
+            }
+            "export" => {
+                let sets = self.session.redaction_code_sets();
+                if sets.is_empty() {
+                    return Err(failed("there are no code sets of yours to export (see redact_code_set_save)"));
+                }
+                let bytes = serde_json::to_vec_pretty(&pdfcraft_engine::redaction_sets::code_sets_json(sets)).map_err(|e| failed(e.to_string()))?;
+                let n = sets.len();
+                let written = self.write_output(path, &bytes)?;
+                Ok(json!({ "path": written.display().to_string(), "code_sets": n }))
+            }
+            other => Err(ToolError::InvalidArgs(format!("unknown mode {other:?} (import or export)"))),
+        }
     }
 
     /// The Search & Redact patterns, by locale set.
@@ -248,18 +304,32 @@ impl Automation {
     }
 }
 
-fn code_set(id: &str) -> Result<&'static RedactionCodeSet> {
-    RedactionCodeSet::from_id(id).ok_or_else(|| {
-        let ids: Vec<&str> = REDACTION_CODE_SETS.iter().map(|s| s.id).collect();
-        ToolError::InvalidArgs(format!("unknown code_set {id:?} (one of {}; see redact_codes)", ids.join(", ")))
-    })
+/// A built-in code set or one of the user's.
+enum AnySet<'a> {
+    Builtin(&'static RedactionCodeSet),
+    Custom(&'a redaction_codes::CustomCodeSet),
+}
+
+impl<'a> AnySet<'a> {
+    /// The set `id` names: a built-in id, or the name of one of the user's sets.
+    fn find(id: &str, session: &'a pdfcraft_engine::Session) -> Result<Self> {
+        if let Some(s) = RedactionCodeSet::from_id(id) {
+            return Ok(Self::Builtin(s));
+        }
+        if let Some(s) = session.redaction_code_set(id) {
+            return Ok(Self::Custom(s));
+        }
+        let ids: Vec<String> =
+            REDACTION_CODE_SETS.iter().map(|s| s.id.to_string()).chain(session.redaction_code_sets().iter().map(|s| s.name.clone())).collect();
+        Err(ToolError::InvalidArgs(format!("unknown code_set {id:?} (one of {}; see redact_codes)", ids.join(", "))))
+    }
 }
 
 /// The overlay text of new marks: `overlay` (custom text), or `codes` of `code_set` (a built-in
-/// set; without one the codes are a custom set).
-fn overlay_text(a: &Args) -> Result<String> {
+/// set or one of the user's; without one the codes are a custom set).
+fn overlay_text(a: &Args, session: &pdfcraft_engine::Session) -> Result<String> {
     let text = a.opt_str("overlay")?;
-    let set = a.opt_str("code_set")?.map(code_set).transpose()?;
+    let set = a.opt_str("code_set")?.map(|id| AnySet::find(id, session)).transpose()?;
     let codes = if a.get("codes").is_some() { Some(a.strs("codes")?) } else { None };
     match (text, set, codes) {
         (Some(_), _, Some(_)) | (Some(_), Some(_), _) => {
@@ -272,7 +342,10 @@ fn overlay_text(a: &Args) -> Result<String> {
             }
             Ok(t.to_string())
         }
-        (None, Some(set), Some(codes)) => redaction_codes::overlay_text(set, &codes).map_err(|e| ToolError::InvalidArgs(e.to_string())),
+        (None, Some(AnySet::Builtin(set)), Some(codes)) => {
+            redaction_codes::overlay_text(set, &codes).map_err(|e| ToolError::InvalidArgs(e.to_string()))
+        }
+        (None, Some(AnySet::Custom(set)), Some(codes)) => set.overlay_text(&codes).map_err(ToolError::InvalidArgs),
         (None, None, Some(codes)) => redaction_codes::custom_overlay_text(&codes).map_err(|e| ToolError::InvalidArgs(e.to_string())),
         (None, None, None) => Ok(String::new()),
     }
