@@ -2551,3 +2551,88 @@ compare-page	Moved	Déplacée
 	No shortcuts match “{query}”.	Aucun raccourci ne correspond à « {query} ».
 	Document view	Vue du document
 	Tools	Outils
+# Print production
+	Add marks	Ajouter les repères
+	Add printer marks…	Ajouter des repères d’impression…
+	Advanced:	Avancé :
+	All spots to process	Toutes les tons directs en quadrichromie
+	Analyzing…	Analyse…
+	Annotation	Commentaire
+	Apply to document	Appliquer au document
+	Bleed marks	Repères de fond perdu
+	Choose at least one mark.	Choisissez au moins un repère.
+	Click on the page to list the objects under the pointer.	Cliquez sur la page pour lister les objets sous le pointeur.
+	Color bars	Barres de couleur
+	Color management…	Gestion des couleurs…
+	Color warnings	Avertissements de couleur
+	Colors converted: {n}	Couleurs converties : {n}
+	Colors to convert	Couleurs à convertir
+	Convert colors…	Convertir les couleurs…
+	Convert spot colors to process	Convertir les tons directs en quadrichromie
+	Convert to:	Convertir en :
+	Cyan	Cyan
+	Each sheet is sent as one picture.	Chaque feuille est envoyée comme une seule image.
+	Eastern	Oriental
+	Font	Police
+	Highest on this page: {n}	Maximum sur cette page : {n}
+	Highlight coverage over	Mettre en évidence la couverture au-delà de
+	ICC profile	Profil ICC
+	ICC-based	Basé sur ICC
+	Ink manager	Gestionnaire d’encres
+	Ink manager…	Gestionnaire d’encres…
+	Inks changed in the document	Encres modifiées dans le document
+	Inks here: {inks} (total {total})	Encres ici : {inks} (total {total})
+	Inks of the first {n} pages.	Encres des {n} premières pages.
+	Line art	Dessin au trait
+	Line weight:	Épaisseur du trait :
+	Load ICC profile…	Charger un profil ICC…
+	Loaded the profile {name}	Profil {name} chargé
+	Magenta	Magenta
+	No alias	Aucun alias
+	No ink needed changing	Aucune encre à modifier
+	No overprint, rich black or registration color on this page.	Aucune surimpression, aucun noir riche et aucune couleur de repérage sur cette page.
+	Not DeviceCMYK	Pas DeviceCMYK
+	Nothing is painted here.	Rien n’est peint ici.
+	Nothing to convert	Rien à convertir
+	OK keeps these settings for this session; Apply to document changes the file.	OK garde ces réglages pour cette session ; « Appliquer au document » modifie le fichier.
+	Object inspector	Inspecteur d’objets
+	Offset from trim:	Décalage par rapport au format fini :
+	Output intent	Mode de sortie
+	Overprint	Surimpression
+	Page information	Informations sur la page
+	Preserve black	Préserver le noir
+	Print as image	Imprimer comme image
+	Process	Quadrichromie
+	Registration color	Couleur de repérage
+	Registration marks	Repères de montage
+	Rendering intent:	Mode de rendu :
+	Reset	Réinitialiser
+	Rich black	Noir riche
+	Separations	Séparations
+	Set an alias or convert a spot ink to process first.	Définissez d’abord un alias ou convertissez un ton direct en quadrichromie.
+	Show all inks	Afficher toutes les encres
+	Simulate black ink	Simuler l’encre noire
+	Simulate overprinting	Simuler la surimpression
+	Simulate paper color	Simuler la couleur du papier
+	Simulation profile	Profil de simulation
+	Small rich black text	Petit texte en noir riche
+	Solid color	Aplat
+	Some objects can't be measured and are left out.	Certains objets ne peuvent pas être mesurés et sont ignorés.
+	Spot colors	Tons directs
+	Stroke	Contour
+	Style:	Style :
+	The page grows to make room for the marks.	La page s’agrandit pour faire place aux repères.
+	The profile is larger than {n} MB.	Le profil dépasse {n} Mo.
+	This document uses only the process inks.	Ce document n’utilise que les encres quadri.
+	To process	En quadrichromie
+	Total area coverage	Couverture totale d’encre
+	Transparency	Transparence
+	Trim marks	Traits de coupe
+	Use Lab values for spot colors	Utiliser les valeurs Lab pour les tons directs
+	Vector objects	Objets vectoriels
+	Western	Occidental
+	White overprint	Surimpression du blanc
+	Working CMYK space	Espace de travail CMJN
+	embedded	incorporée
+	not embedded	non incorporée
+	{n} of the page is over the limit	{n} de la page dépasse la limite

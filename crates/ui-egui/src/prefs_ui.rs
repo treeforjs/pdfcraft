@@ -400,6 +400,9 @@ pub(crate) fn body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> bool
                     let page = app.prefs_ui.page;
                     ui.label(egui::RichText::new(page.label()).font(theme::semibold(15.0)));
                     ui.add_space(4.0);
+                    if page == Page::Color {
+                        color_footer(ui, app);
+                    }
                     for key in page.rows() {
                         row(ui, app, t, key);
                     }
@@ -430,6 +433,64 @@ pub(crate) fn body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> bool
         });
     });
     close
+}
+
+/// Color management: load an ICC profile (it joins the working-space and simulation choices)
+/// or go back to the factory settings.
+fn color_footer(ui: &mut egui::Ui, app: &mut PdfCraftApp) {
+    ui.horizontal_wrapped(|ui| {
+        #[cfg(not(target_arch = "wasm32"))]
+        if widgets::pill_button(ui, tl!("Load ICC profile…"), false).clicked() {
+            app.load_color_profile_dialog();
+        }
+        if widgets::pill_button(ui, tl!("Reset"), false).clicked() {
+            match app.session.set_color_settings(Default::default()) {
+                Ok(()) => app.colour_settings_changed(),
+                Err(e) => app.notify_error(e),
+            }
+        }
+    });
+    ui.add_space(8.0);
+}
+
+impl PdfCraftApp {
+    /// Open documents show the colour settings as they now are.
+    pub(crate) fn colour_settings_changed(&mut self) {
+        for v in &mut self.views {
+            v.invalidate_content();
+        }
+    }
+
+    /// Read an ICC profile file and hold it in the colour settings.
+    pub fn load_color_profile_file(&mut self, path: &std::path::Path) {
+        let max = pdfcraft_engine::color_profile_limit();
+        let size = std::fs::metadata(path).map(|m| m.len()).unwrap_or(u64::MAX);
+        if size > max as u64 {
+            self.notify(crate::i18n::fmt(tl!("The profile is larger than {n} MB."), &[("n", &(max >> 20).to_string())]));
+            return;
+        }
+        let source = path.display().to_string();
+        let name = match pdfcraft_engine::color_settings::profile_name(None, &source) {
+            Ok(n) => n,
+            Err(e) => {
+                self.notify_error(e);
+                return;
+            }
+        };
+        let loaded = std::fs::read(path)
+            .map_err(|e| e.to_string())
+            .and_then(|bytes| self.session.load_color_profile(&name, &source, bytes).map_err(|e| e.to_string()));
+        match loaded {
+            Ok(info) => self.notify(crate::i18n::fmt(tl!("Loaded the profile {name}"), &[("name", &info.id)])),
+            Err(e) => self.notify_error(e),
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn load_color_profile_dialog(&mut self) {
+        let dialog = rfd::AsyncFileDialog::new().add_filter(tl!("ICC profile"), &["icc", "icm"]).set_title(tl!("Load ICC profile…"));
+        self.ask_one(crate::pickers::Ask::File(dialog), None, |app, path| app.load_color_profile_file(&path));
+    }
 }
 
 /// One category in the list on the left.

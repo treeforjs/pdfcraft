@@ -2549,3 +2549,88 @@ compare-page	Moved	Áthelyezve
 	No shortcuts match “{query}”.	Egy billentyűparancs sem felel meg ennek: „{query}”.
 	Document view	Dokumentumnézet
 	Tools	Eszközök
+# Print production
+	Add marks	Jelek hozzáadása
+	Add printer marks…	Nyomdai jelek hozzáadása…
+	Advanced:	Speciális:
+	All spots to process	Minden direkt szín négyszínnyomásra
+	Analyzing…	Elemzés…
+	Annotation	Megjegyzés
+	Apply to document	Alkalmazás a dokumentumra
+	Bleed marks	Kifutójelek
+	Choose at least one mark.	Válasszon legalább egy jelet.
+	Click on the page to list the objects under the pointer.	Kattintson az oldalra a mutató alatti objektumok listázásához.
+	Color bars	Színsávok
+	Color management…	Színkezelés…
+	Color warnings	Színfigyelmeztetések
+	Colors converted: {n}	Átalakított színek: {n}
+	Colors to convert	Átalakítandó színek
+	Convert colors…	Színek átalakítása…
+	Convert spot colors to process	Direkt színek átalakítása négyszínnyomásra
+	Convert to:	Átalakítás erre:
+	Cyan	Ciánkék
+	Each sheet is sent as one picture.	Minden ív egyetlen képként kerül elküldésre.
+	Eastern	Keleti
+	Font	Betűtípus
+	Highest on this page: {n}	Legmagasabb ezen az oldalon: {n}
+	Highlight coverage over	Fedettség kiemelése e fölött:
+	ICC profile	ICC-profil
+	ICC-based	ICC-alapú
+	Ink manager	Festékkezelő
+	Ink manager…	Festékkezelő…
+	Inks changed in the document	A dokumentum festékei módosultak
+	Inks here: {inks} (total {total})	Festékek itt: {inks} (összesen {total})
+	Inks of the first {n} pages.	Az első {n} oldal festékei.
+	Line art	Vonalas grafika
+	Line weight:	Vonalvastagság:
+	Load ICC profile…	ICC-profil betöltése…
+	Loaded the profile {name}	Betöltött profil: {name}
+	Magenta	Bíbor
+	No alias	Nincs álnév
+	No ink needed changing	Egyik festéket sem kellett módosítani
+	No overprint, rich black or registration color on this page.	Ezen az oldalon nincs felülnyomás, mély fekete vagy illesztőszín.
+	Not DeviceCMYK	Nem DeviceCMYK
+	Nothing is painted here.	Itt nincs semmi megrajzolva.
+	Nothing to convert	Nincs mit átalakítani
+	OK keeps these settings for this session; Apply to document changes the file.	Az OK erre a munkamenetre megtartja a beállításokat; az Alkalmazás a dokumentumra módosítja a fájlt.
+	Object inspector	Objektumvizsgáló
+	Offset from trim:	Eltolás a vágástól:
+	Output intent	Kimeneti szándék
+	Overprint	Felülnyomás
+	Page information	Oldalinformáció
+	Preserve black	Fekete megőrzése
+	Print as image	Nyomtatás képként
+	Process	Négyszín
+	Registration color	Illesztőszín
+	Registration marks	Illesztőjelek
+	Rendering intent:	Leképezési szándék:
+	Reset	Visszaállítás
+	Rich black	Mély fekete
+	Separations	Színkivonatok
+	Set an alias or convert a spot ink to process first.	Előbb adjon meg álnevet, vagy alakítsa a direkt festéket négyszínnyomásra.
+	Show all inks	Minden festék megjelenítése
+	Simulate black ink	Fekete festék szimulálása
+	Simulate overprinting	Felülnyomás szimulálása
+	Simulate paper color	Papírszín szimulálása
+	Simulation profile	Szimulációs profil
+	Small rich black text	Kis méretű mély fekete szöveg
+	Solid color	Egyszínű
+	Some objects can't be measured and are left out.	Néhány objektum nem mérhető, ezek kimaradnak.
+	Spot colors	Direkt színek
+	Stroke	Körvonal
+	Style:	Stílus:
+	The page grows to make room for the marks.	Az oldal megnő, hogy elférjenek a jelek.
+	The profile is larger than {n} MB.	A profil nagyobb, mint {n} MB.
+	This document uses only the process inks.	Ez a dokumentum csak négyszínnyomásos festékeket használ.
+	To process	Négyszínre
+	Total area coverage	Teljes festékfedettség
+	Transparency	Átlátszóság
+	Trim marks	Vágójelek
+	Use Lab values for spot colors	Lab-értékek a direkt színekhez
+	Vector objects	Vektoros objektumok
+	Western	Nyugati
+	White overprint	Fehér felülnyomás
+	Working CMYK space	CMYK munkaszíntér
+	embedded	beágyazva
+	not embedded	nincs beágyazva
+	{n} of the page is over the limit	Az oldal {n} része a határ fölött van.

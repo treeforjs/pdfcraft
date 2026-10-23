@@ -2472,3 +2472,89 @@ compare-page	Moved	Movida
 	No shortcuts match “{query}”.	Ningún atajo coincide con «{query}».
 	Document view	Vista del documento
 	Tools	Herramientas
+# Print production
+	Add marks	Añadir marcas
+	Add printer marks…	Añadir marcas de impresora…
+	Advanced:	Avanzado:
+	All spots to process	Todas las tintas planas a cuatricromía
+	Analyzing…	Analizando…
+	Annotation	Comentario
+	Apply to document	Aplicar al documento
+	Bleed marks	Marcas de sangrado
+	Choose at least one mark.	Elija al menos una marca.
+	Click on the page to list the objects under the pointer.	Haga clic en la página para ver los objetos bajo el puntero.
+	Color bars	Barras de color
+	Color management…	Gestión del color…
+	Color warnings	Advertencias de color
+	Colors converted: {n}	Colores convertidos: {n}
+	Colors to convert	Colores que convertir
+	Convert colors…	Convertir colores…
+	Convert spot colors to process	Convertir tintas planas a cuatricromía
+	Convert to:	Convertir a:
+	Cyan	Cian
+	Each sheet is sent as one picture.	Cada hoja se envía como una sola imagen.
+	Eastern	Oriental
+	Font	Fuente
+	Highest on this page: {n}	Máximo en esta página: {n}
+	Highlight coverage over	Resaltar cobertura por encima de
+	ICC profile	Perfil ICC
+	ICC-based	Basado en ICC
+	Ink manager	Administrador de tintas
+	Ink manager…	Administrador de tintas…
+	Inks changed in the document	Tintas cambiadas en el documento
+	Inks here: {inks} (total {total})	Tintas aquí: {inks} (total {total})
+	Inks of the first {n} pages.	Tintas de las primeras {n} páginas.
+	Line art	Arte lineal
+	Line weight:	Grosor de línea:
+	Load ICC profile…	Cargar perfil ICC…
+	Loaded the profile {name}	Perfil {name} cargado
+	Magenta	Magenta
+	No alias	Sin alias
+	No ink needed changing	Ninguna tinta necesitaba cambios
+	No overprint, rich black or registration color on this page.	Sin sobreimpresión, negro enriquecido ni color de registro en esta página.
+	Not DeviceCMYK	No DeviceCMYK
+	Nothing is painted here.	Aquí no hay nada pintado.
+	Nothing to convert	Nada que convertir
+	OK keeps these settings for this session; Apply to document changes the file.	Aceptar guarda estos ajustes para esta sesión; «Aplicar al documento» cambia el archivo.
+	Object inspector	Inspector de objetos
+	Offset from trim:	Desplazamiento desde el corte:
+	Output intent	Intención de salida
+	Overprint	Sobreimpresión
+	Page information	Información de página
+	Preserve black	Conservar el negro
+	Print as image	Imprimir como imagen
+	Process	Cuatricromía
+	Registration color	Color de registro
+	Registration marks	Marcas de registro
+	Rendering intent:	Intención de interpretación:
+	Reset	Restablecer
+	Rich black	Negro enriquecido
+	Separations	Separaciones
+	Set an alias or convert a spot ink to process first.	Primero defina un alias o convierta una tinta plana a cuatricromía.
+	Show	Mostrar
+	Show all inks	Mostrar todas las tintas
+	Simulate black ink	Simular tinta negra
+	Simulate overprinting	Simular sobreimpresión
+	Simulate paper color	Simular color del papel
+	Simulation profile	Perfil de simulación
+	Small rich black text	Texto pequeño en negro enriquecido
+	Solid color	Color sólido
+	Some objects can't be measured and are left out.	Algunos objetos no se pueden medir y se omiten.
+	Spot colors	Tintas planas
+	Stroke	Trazo
+	Style:	Estilo:
+	The page grows to make room for the marks.	La página crece para dejar sitio a las marcas.
+	The profile is larger than {n} MB.	El perfil ocupa más de {n} MB.
+	This document uses only the process inks.	Este documento solo usa las tintas de cuatricromía.
+	To process	A cuatricromía
+	Total area coverage	Cobertura total de tinta
+	Transparency	Transparencia
+	Trim marks	Marcas de corte
+	Use Lab values for spot colors	Usar valores Lab para tintas planas
+	Vector objects	Objetos vectoriales
+	Western	Occidental
+	White overprint	Sobreimpresión de blanco
+	Working CMYK space	Espacio de trabajo CMYK
+	embedded	incrustada
+	not embedded	no incrustada
+	{n} of the page is over the limit	{n} de la página supera el límite

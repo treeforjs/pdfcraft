@@ -2551,3 +2551,88 @@ compare-page	Moved	移動
 	No shortcuts match “{query}”.	「{query}」に一致するショートカットはありません。
 	Document view	ドキュメント表示
 	Tools	ツール
+# Print production
+	Add marks	マークを追加
+	Add printer marks…	トンボを追加…
+	Advanced:	詳細:
+	All spots to process	すべての特色をプロセスカラーに
+	Analyzing…	分析中…
+	Annotation	注釈
+	Apply to document	文書に適用
+	Bleed marks	裁ち落としマーク
+	Choose at least one mark.	マークを 1 つ以上選んでください。
+	Click on the page to list the objects under the pointer.	ページをクリックすると、ポインターの下のオブジェクトを一覧表示します。
+	Color bars	カラーバー
+	Color management…	カラーマネジメント…
+	Color warnings	カラー警告
+	Colors converted: {n}	変換したカラー: {n}
+	Colors to convert	変換するカラー
+	Convert colors…	カラーを変換…
+	Convert spot colors to process	特色をプロセスカラーに変換
+	Convert to:	変換先:
+	Cyan	シアン
+	Each sheet is sent as one picture.	各シートを 1 枚の画像として送信します。
+	Eastern	和文
+	Font	フォント
+	Highest on this page: {n}	このページの最大値: {n}
+	Highlight coverage over	強調表示する総インキ量の上限
+	ICC profile	ICC プロファイル
+	ICC-based	ICC ベース
+	Ink manager	インキマネージャー
+	Ink manager…	インキマネージャー…
+	Inks changed in the document	文書のインキを変更しました
+	Inks here: {inks} (total {total})	ここのインキ: {inks} (合計 {total})
+	Inks of the first {n} pages.	最初の {n} ページのインキです。
+	Line art	線画
+	Line weight:	線幅:
+	Load ICC profile…	ICC プロファイルを読み込み…
+	Loaded the profile {name}	プロファイル {name} を読み込みました
+	Magenta	マゼンタ
+	No alias	エイリアスなし
+	No ink needed changing	変更が必要なインキはありません
+	No overprint, rich black or registration color on this page.	このページにはオーバープリント、リッチブラック、レジストレーションカラーはありません。
+	Not DeviceCMYK	DeviceCMYK 以外
+	Nothing is painted here.	ここには何も描画されていません。
+	Nothing to convert	変換するものがありません
+	OK keeps these settings for this session; Apply to document changes the file.	OK はこのセッションの設定を保持します。文書に適用はファイルを変更します。
+	Object inspector	オブジェクトインスペクター
+	Offset from trim:	仕上がりからのオフセット:
+	Output intent	出力インテント
+	Overprint	オーバープリント
+	Page information	ページ情報
+	Preserve black	黒を保持
+	Print as image	画像として印刷
+	Process	プロセス
+	Registration color	レジストレーションカラー
+	Registration marks	レジストレーションマーク
+	Rendering intent:	レンダリングインテント:
+	Reset	リセット
+	Rich black	リッチブラック
+	Separations	分版
+	Set an alias or convert a spot ink to process first.	先にエイリアスを設定するか、特色をプロセスカラーに変換してください。
+	Show all inks	すべてのインキを表示
+	Simulate black ink	黒インキをシミュレート
+	Simulate overprinting	オーバープリントをシミュレート
+	Simulate paper color	紙色をシミュレート
+	Simulation profile	シミュレーションプロファイル
+	Small rich black text	小さなリッチブラックのテキスト
+	Solid color	単色
+	Some objects can't be measured and are left out.	一部のオブジェクトは測定できないため除外されます。
+	Spot colors	特色
+	Stroke	線
+	Style:	スタイル:
+	The page grows to make room for the marks.	マークを入れるためにページが大きくなります。
+	The profile is larger than {n} MB.	プロファイルが {n} MB を超えています。
+	This document uses only the process inks.	この文書はプロセスインキのみを使用しています。
+	To process	プロセスに
+	Total area coverage	総インキ量
+	Transparency	透明
+	Trim marks	トリムマーク
+	Use Lab values for spot colors	特色に Lab 値を使用
+	Vector objects	ベクトルオブジェクト
+	Western	欧文
+	White overprint	白のオーバープリント
+	Working CMYK space	CMYK 作業用スペース
+	embedded	埋め込み
+	not embedded	埋め込みなし
+	{n} of the page is over the limit	ページの {n} が上限を超えています。

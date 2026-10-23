@@ -2513,3 +2513,88 @@ compare-page	Moved	Преместена
 	No shortcuts match “{query}”.	Няма клавишни комбинации, отговарящи на „{query}“.
 	Document view	Изглед на документа
 	Tools	Инструменти
+# Print production
+	Add marks	Добавяне на маркери
+	Add printer marks…	Добавяне на печатни маркери…
+	Advanced:	Разширени:
+	All spots to process	Всички специални в процесни
+	Analyzing…	Анализиране…
+	Annotation	Коментар
+	Apply to document	Прилагане към документа
+	Bleed marks	Маркери за обрез извън формата
+	Choose at least one mark.	Изберете поне един маркер.
+	Click on the page to list the objects under the pointer.	Щракнете върху страницата, за да видите обектите под показалеца.
+	Color bars	Цветни скали
+	Color management…	Управление на цветовете…
+	Color warnings	Предупреждения за цвят
+	Colors converted: {n}	Преобразувани цветове: {n}
+	Colors to convert	Цветове за преобразуване
+	Convert colors…	Преобразуване на цветове…
+	Convert spot colors to process	Преобразуване на специалните цветове в процесни
+	Convert to:	Преобразуване в:
+	Cyan	Циан
+	Each sheet is sent as one picture.	Всеки лист се изпраща като едно изображение.
+	Eastern	Източни
+	Font	Шрифт
+	Highest on this page: {n}	Най-високо на страницата: {n}
+	Highlight coverage over	Открояване на покритие над
+	ICC profile	ICC профил
+	ICC-based	На база ICC
+	Ink manager	Мениджър на мастила
+	Ink manager…	Мениджър на мастила…
+	Inks changed in the document	Мастилата в документа са променени
+	Inks here: {inks} (total {total})	Мастила тук: {inks} (общо {total})
+	Inks of the first {n} pages.	Мастила на първите {n} страници.
+	Line art	Щрихова графика
+	Line weight:	Дебелина на линията:
+	Load ICC profile…	Зареждане на ICC профил…
+	Loaded the profile {name}	Зареден е профилът {name}
+	Magenta	Магента
+	No alias	Без псевдоним
+	No ink needed changing	Нито едно мастило не трябваше да се променя
+	No overprint, rich black or registration color on this page.	На тази страница няма надпечатване, наситено черно или цвят за регистрация.
+	Not DeviceCMYK	Не е DeviceCMYK
+	Nothing is painted here.	Тук нищо не е нарисувано.
+	Nothing to convert	Няма какво да се преобразува
+	OK keeps these settings for this session; Apply to document changes the file.	OK запазва тези настройки за сесията; „Прилагане към документа“ променя файла.
+	Object inspector	Инспектор на обекти
+	Offset from trim:	Отместване от обреза:
+	Output intent	Изходно предназначение
+	Overprint	Надпечатване
+	Page information	Информация за страницата
+	Preserve black	Запазване на черното
+	Print as image	Печат като изображение
+	Process	Процесно
+	Registration color	Цвят за регистрация
+	Registration marks	Маркери за регистрация
+	Rendering intent:	Метод на рендиране:
+	Reset	Нулиране
+	Rich black	Наситено черно
+	Separations	Цветоотделяне
+	Set an alias or convert a spot ink to process first.	Първо задайте псевдоним или преобразувайте специалното мастило в процесно.
+	Show all inks	Показване на всички мастила
+	Simulate black ink	Симулиране на черно мастило
+	Simulate overprinting	Симулиране на надпечатване
+	Simulate paper color	Симулиране на цвета на хартията
+	Simulation profile	Профил за симулация
+	Small rich black text	Малък текст в наситено черно
+	Solid color	Плътен цвят
+	Some objects can't be measured and are left out.	Някои обекти не могат да се измерят и са изключени.
+	Spot colors	Специални цветове
+	Stroke	Контур
+	Style:	Стил:
+	The page grows to make room for the marks.	Страницата се уголемява, за да побере маркерите.
+	The profile is larger than {n} MB.	Профилът е по-голям от {n} MB.
+	This document uses only the process inks.	Документът използва само процесни мастила.
+	To process	В процесно
+	Total area coverage	Общо покритие
+	Transparency	Прозрачност
+	Trim marks	Маркери за обрез
+	Use Lab values for spot colors	Lab стойности за специалните цветове
+	Vector objects	Векторни обекти
+	Western	Западни
+	White overprint	Надпечатване в бяло
+	Working CMYK space	Работно пространство CMYK
+	embedded	вграден
+	not embedded	не е вграден
+	{n} of the page is over the limit	{n} от страницата е над границата.

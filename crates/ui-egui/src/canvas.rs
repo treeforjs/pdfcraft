@@ -2114,6 +2114,11 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
     {
         f.in_panel = false;
     }
+    // Output Preview draws on the pages and reads the pointer only while its panel is open.
+    let print_preview = app.right == Some(crate::RightPanel::OutputPreview);
+    if print_preview {
+        app.output_preview.hover = None;
+    }
     let Some(doc) = app.session.get(app.views[index].id) else { return };
     let info = &doc.info;
     if info.pages.is_empty() {
@@ -2531,6 +2536,9 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
                 }
             }
             painter.rect_stroke(r, CornerRadius::ZERO, Stroke::new(0.5, t.border.gamma_multiply(0.8)), egui::StrokeKind::Outside);
+            if print_preview && !view.errors.contains_key(&i) {
+                crate::output_preview_ui::page(ui, &resp, painter, &xf, i, info, view.id, &mut app.output_preview, &t);
+            }
 
             // Comments: tools, selection, moving and resizing come before text selection.
             let pcx = comments::PageCx { page: i, xf: &xf, info, tool, prefs, allowed, hidden: comments_hidden };

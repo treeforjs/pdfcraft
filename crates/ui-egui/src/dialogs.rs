@@ -71,6 +71,7 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
             Dialog::Preferences => 800.0,
             Dialog::UserGuide => 900.0,
             Dialog::Shortcuts => 640.0,
+            Dialog::InkManager => 600.0,
             _ => 520.0,
         });
         // Dialog controls are outlined (radio buttons, check boxes, combo boxes and number fields
@@ -933,6 +934,18 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
             }
             Dialog::Preflight => {
                 close = crate::preflight_ui::body(ui, app, &t);
+                return;
+            }
+            Dialog::InkManager => {
+                close = crate::prepress_ui::ink_manager_body(ui, app, &t);
+                return;
+            }
+            Dialog::ConvertColors => {
+                close = crate::prepress_ui::convert_colors_body(ui, app);
+                return;
+            }
+            Dialog::PrinterMarks => {
+                close = crate::prepress_ui::printer_marks_body(ui, app, &t);
                 return;
             }
             Dialog::ActionWizard => {

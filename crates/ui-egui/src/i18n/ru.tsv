@@ -2464,3 +2464,89 @@ compare-page	Moved	Перемещена
 	No shortcuts match “{query}”.	Нет сочетаний клавиш по запросу «{query}».
 	Document view	Просмотр документа
 	Tools	Инструменты
+# Print production
+	Add marks	Добавить метки
+	Add printer marks…	Добавить типографские метки…
+	Advanced:	Дополнительно:
+	All spots to process	Все плашечные в триадные
+	Analyzing…	Анализ…
+	Annotation	Комментарий
+	Apply to document	Применить к документу
+	Bleed marks	Метки выпуска за обрез
+	Choose at least one mark.	Выберите хотя бы одну метку.
+	Click on the page to list the objects under the pointer.	Щёлкните на странице, чтобы увидеть объекты под указателем.
+	Color bars	Цветовые шкалы
+	Color management…	Управление цветом…
+	Color warnings	Предупреждения о цвете
+	Colors converted: {n}	Преобразовано цветов: {n}
+	Colors to convert	Цвета для преобразования
+	Convert colors…	Преобразовать цвета…
+	Convert spot colors to process	Преобразовать плашечные цвета в триадные
+	Convert to:	Преобразовать в:
+	Cyan	Голубой
+	Each sheet is sent as one picture.	Каждый лист отправляется одним изображением.
+	Eastern	Восточные
+	Font	Шрифт
+	Highest on this page: {n}	Максимум на странице: {n}
+	Highlight coverage over	Выделять покрытие выше
+	ICC profile	ICC-профиль
+	ICC-based	На основе ICC
+	Ink manager	Менеджер красок
+	Ink manager…	Менеджер красок…
+	Inks changed in the document	Краски в документе изменены
+	Inks here: {inks} (total {total})	Краски здесь: {inks} (всего {total})
+	Inks of the first {n} pages.	Краски первых {n} страниц.
+	Line art	Штриховая графика
+	Line weight:	Толщина линии:
+	Load ICC profile…	Загрузить ICC-профиль…
+	Loaded the profile {name}	Загружен профиль {name}
+	Magenta	Пурпурный
+	No alias	Без псевдонима
+	No ink needed changing	Ни одну краску не нужно менять
+	No overprint, rich black or registration color on this page.	На этой странице нет наложения, составного чёрного или цвета приводки.
+	Not DeviceCMYK	Не DeviceCMYK
+	Nothing is painted here.	Здесь ничего не нарисовано.
+	Nothing to convert	Нечего преобразовывать
+	OK keeps these settings for this session; Apply to document changes the file.	OK сохраняет настройки на этот сеанс; «Применить к документу» изменяет файл.
+	Object inspector	Инспектор объектов
+	Offset from trim:	Отступ от обреза:
+	Output intent	Цель вывода
+	Overprint	Наложение
+	Page information	Сведения о странице
+	Preserve black	Сохранять чёрный
+	Print as image	Печатать как изображение
+	Process	Триадная
+	Registration color	Цвет приводки
+	Registration marks	Метки приводки
+	Rendering intent:	Метод рендеринга:
+	Reset	Сбросить
+	Rich black	Составной чёрный
+	Separations	Цветоделение
+	Set an alias or convert a spot ink to process first.	Сначала задайте псевдоним или преобразуйте плашечную краску в триадную.
+	Show	Показать
+	Show all inks	Показать все краски
+	Simulate black ink	Имитировать чёрную краску
+	Simulate overprinting	Имитировать наложение
+	Simulate paper color	Имитировать цвет бумаги
+	Simulation profile	Профиль имитации
+	Small rich black text	Мелкий текст составным чёрным
+	Solid color	Сплошной цвет
+	Some objects can't be measured and are left out.	Некоторые объекты нельзя измерить, они не учитываются.
+	Spot colors	Плашечные цвета
+	Stroke	Обводка
+	Style:	Стиль:
+	The page grows to make room for the marks.	Страница увеличится, чтобы вместить метки.
+	The profile is larger than {n} MB.	Профиль больше {n} МБ.
+	This document uses only the process inks.	В документе только триадные краски.
+	To process	В триадную
+	Total area coverage	Общее покрытие
+	Transparency	Прозрачность
+	Trim marks	Метки обреза
+	Use Lab values for spot colors	Lab-значения для плашечных цветов
+	Vector objects	Векторные объекты
+	Western	Западные
+	White overprint	Наложение белого
+	Working CMYK space	Рабочее пространство CMYK
+	embedded	встроен
+	not embedded	не встроен
+	{n} of the page is over the limit	{n} страницы выше предела.

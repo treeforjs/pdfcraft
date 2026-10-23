@@ -2552,3 +2552,88 @@ compare-page	Moved	Movida
 	No shortcuts match “{query}”.	Nenhum atalho corresponde a “{query}”.
 	Document view	Visualização do documento
 	Tools	Ferramentas
+# Print production
+	Add marks	Adicionar marcas
+	Add printer marks…	Adicionar marcas de impressora…
+	Advanced:	Avançado:
+	All spots to process	Todas as cores especiais em escala
+	Analyzing…	Analisando…
+	Annotation	Comentário
+	Apply to document	Aplicar ao documento
+	Bleed marks	Marcas de sangria
+	Choose at least one mark.	Escolha pelo menos uma marca.
+	Click on the page to list the objects under the pointer.	Clique na página para listar os objetos sob o ponteiro.
+	Color bars	Barras de cores
+	Color management…	Gerenciamento de cores…
+	Color warnings	Avisos de cor
+	Colors converted: {n}	Cores convertidas: {n}
+	Colors to convert	Cores a converter
+	Convert colors…	Converter cores…
+	Convert spot colors to process	Converter cores especiais em escala
+	Convert to:	Converter para:
+	Cyan	Ciano
+	Each sheet is sent as one picture.	Cada folha é enviada como uma única imagem.
+	Eastern	Oriental
+	Font	Fonte
+	Highest on this page: {n}	Máximo nesta página: {n}
+	Highlight coverage over	Realçar cobertura acima de
+	ICC profile	Perfil ICC
+	ICC-based	Baseado em ICC
+	Ink manager	Gerenciador de tintas
+	Ink manager…	Gerenciador de tintas…
+	Inks changed in the document	Tintas alteradas no documento
+	Inks here: {inks} (total {total})	Tintas aqui: {inks} (total {total})
+	Inks of the first {n} pages.	Tintas das primeiras {n} páginas.
+	Line art	Traço
+	Line weight:	Espessura da linha:
+	Load ICC profile…	Carregar perfil ICC…
+	Loaded the profile {name}	Perfil {name} carregado
+	Magenta	Magenta
+	No alias	Sem alias
+	No ink needed changing	Nenhuma tinta precisou de alteração
+	No overprint, rich black or registration color on this page.	Sem superimposição, preto rico ou cor de registro nesta página.
+	Not DeviceCMYK	Não DeviceCMYK
+	Nothing is painted here.	Nada é pintado aqui.
+	Nothing to convert	Nada para converter
+	OK keeps these settings for this session; Apply to document changes the file.	OK mantém estas configurações nesta sessão; “Aplicar ao documento” altera o arquivo.
+	Object inspector	Inspetor de objetos
+	Offset from trim:	Distância do refile:
+	Output intent	Intenção de saída
+	Overprint	Superimposição
+	Page information	Informações da página
+	Preserve black	Preservar preto
+	Print as image	Imprimir como imagem
+	Process	Escala
+	Registration color	Cor de registro
+	Registration marks	Marcas de registro
+	Rendering intent:	Intenção de renderização:
+	Reset	Redefinir
+	Rich black	Preto rico
+	Separations	Separações
+	Set an alias or convert a spot ink to process first.	Defina primeiro um alias ou converta uma cor especial em escala.
+	Show all inks	Mostrar todas as tintas
+	Simulate black ink	Simular tinta preta
+	Simulate overprinting	Simular superimposição
+	Simulate paper color	Simular cor do papel
+	Simulation profile	Perfil de simulação
+	Small rich black text	Texto pequeno em preto rico
+	Solid color	Cor sólida
+	Some objects can't be measured and are left out.	Alguns objetos não podem ser medidos e ficam de fora.
+	Spot colors	Cores especiais
+	Stroke	Traçado
+	Style:	Estilo:
+	The page grows to make room for the marks.	A página cresce para dar espaço às marcas.
+	The profile is larger than {n} MB.	O perfil tem mais de {n} MB.
+	This document uses only the process inks.	Este documento usa só as tintas de escala.
+	To process	Para escala
+	Total area coverage	Cobertura total de tinta
+	Transparency	Transparência
+	Trim marks	Marcas de corte
+	Use Lab values for spot colors	Usar valores Lab para cores especiais
+	Vector objects	Objetos vetoriais
+	Western	Ocidental
+	White overprint	Superimposição de branco
+	Working CMYK space	Espaço de trabalho CMYK
+	embedded	incorporada
+	not embedded	não incorporada
+	{n} of the page is over the limit	{n} da página está acima do limite

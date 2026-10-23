@@ -190,3 +190,30 @@ fn print_dialog_shows_the_printer_driver_options() {
     h.state_mut().print_draft.printer = Some("Other_Queue".into());
     assert!(h.state().print_draft.job("form.pdf").options.is_empty());
 }
+
+/// Advanced ▸ Print as image: the saved sheets carry one picture each and no text.
+#[test]
+fn print_dialog_prints_as_an_image() {
+    let mut h = harness();
+    assert!(h.state_mut().execute("print.dialog"));
+    h.run_steps(3);
+    h.get_by_label("Print as image").click();
+    h.run_steps(2);
+    assert!(h.state().print_draft.as_image);
+    h.state_mut().print_draft.image_dpi = 72.0;
+    let out = std::env::temp_dir().join(format!("pdfcraft-print-image-{}.pdf", std::process::id()));
+    h.state_mut().save_override = Some(out.to_string_lossy().into_owned());
+    h.state_mut().print_draft.printer = None;
+    h.run_steps(1);
+    h.get_by_label("Save as PDF").click();
+    h.run_steps(3);
+    assert_eq!(h.state().dialog, None);
+    let bytes = std::fs::read(&out).expect("saved");
+    let mut session = pdfcraft_engine::Session::new();
+    let id = session.open("printed.pdf", None, std::sync::Arc::new(bytes), None).unwrap();
+    let doc = session.get(id).unwrap();
+    assert_eq!(doc.info.pages.len(), 1);
+    assert_eq!(doc.page_images(0).len(), 1);
+    assert!(doc.text_blocks(0).is_empty());
+    let _ = std::fs::remove_file(out);
+}

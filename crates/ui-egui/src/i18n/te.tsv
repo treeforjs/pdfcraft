@@ -2512,3 +2512,88 @@ compare-page	Moved	తరలించబడింది
 	No shortcuts match “{query}”.	“{query}”కి సరిపోలే షార్ట్‌కట్‌లు లేవు.
 	Document view	డాక్యుమెంట్ వీక్షణ
 	Tools	సాధనాలు
+# Print production
+	Add marks	గుర్తులను జోడించు
+	Add printer marks…	ప్రింటర్ గుర్తులను జోడించు…
+	Advanced:	అధునాతనం:
+	All spots to process	అన్ని స్పాట్ రంగులను ప్రాసెస్‌కు
+	Analyzing…	విశ్లేషిస్తోంది…
+	Annotation	వ్యాఖ్య
+	Apply to document	పత్రానికి వర్తింపజేయి
+	Bleed marks	బ్లీడ్ గుర్తులు
+	Choose at least one mark.	కనీసం ఒక గుర్తును ఎంచుకోండి.
+	Click on the page to list the objects under the pointer.	పాయింటర్ కింద ఉన్న వస్తువుల జాబితా కోసం పేజీపై క్లిక్ చేయండి.
+	Color bars	రంగు పట్టీలు
+	Color management…	రంగు నిర్వహణ…
+	Color warnings	రంగు హెచ్చరికలు
+	Colors converted: {n}	మార్చిన రంగులు: {n}
+	Colors to convert	మార్చాల్సిన రంగులు
+	Convert colors…	రంగులను మార్చు…
+	Convert spot colors to process	స్పాట్ రంగులను ప్రాసెస్‌కు మార్చు
+	Convert to:	దీనికి మార్చు:
+	Cyan	సియాన్
+	Each sheet is sent as one picture.	ప్రతి షీట్ ఒకే చిత్రంగా పంపబడుతుంది.
+	Eastern	తూర్పు
+	Font	ఫాంట్
+	Highest on this page: {n}	ఈ పేజీలో అత్యధికం: {n}
+	Highlight coverage over	ఈ విలువకు మించిన కవరేజీని హైలైట్ చేయి
+	ICC profile	ICC ప్రొఫైల్
+	ICC-based	ICC ఆధారిత
+	Ink manager	ఇంక్ నిర్వాహకం
+	Ink manager…	ఇంక్ నిర్వాహకం…
+	Inks changed in the document	పత్రంలో ఇంక్‌లు మార్చబడ్డాయి
+	Inks here: {inks} (total {total})	ఇక్కడి ఇంక్‌లు: {inks} (మొత్తం {total})
+	Inks of the first {n} pages.	మొదటి {n} పేజీల ఇంక్‌లు.
+	Line art	లైన్ ఆర్ట్
+	Line weight:	గీత మందం:
+	Load ICC profile…	ICC ప్రొఫైల్‌ను లోడ్ చేయి…
+	Loaded the profile {name}	{name} ప్రొఫైల్ లోడ్ అయింది
+	Magenta	మెజెంటా
+	No alias	మారుపేరు లేదు
+	No ink needed changing	ఏ ఇంక్‌ను మార్చాల్సిన అవసరం లేదు
+	No overprint, rich black or registration color on this page.	ఈ పేజీలో ఓవర్‌ప్రింట్, రిచ్ బ్లాక్ లేదా రిజిస్ట్రేషన్ రంగు లేదు.
+	Not DeviceCMYK	DeviceCMYK కాదు
+	Nothing is painted here.	ఇక్కడ ఏమీ చిత్రించలేదు.
+	Nothing to convert	మార్చడానికి ఏమీ లేదు
+	OK keeps these settings for this session; Apply to document changes the file.	OK ఈ సెషన్ కోసం ఈ సెట్టింగ్‌లను ఉంచుతుంది; పత్రానికి వర్తింపజేయి ఫైల్‌ను మారుస్తుంది.
+	Object inspector	ఆబ్జెక్ట్ ఇన్‌స్పెక్టర్
+	Offset from trim:	ట్రిమ్ నుండి ఆఫ్‌సెట్:
+	Output intent	అవుట్‌పుట్ ఇంటెంట్
+	Overprint	ఓవర్‌ప్రింట్
+	Page information	పేజీ సమాచారం
+	Preserve black	నలుపును కాపాడు
+	Print as image	చిత్రంగా ముద్రించు
+	Process	ప్రాసెస్
+	Registration color	రిజిస్ట్రేషన్ రంగు
+	Registration marks	రిజిస్ట్రేషన్ గుర్తులు
+	Rendering intent:	రెండరింగ్ ఇంటెంట్:
+	Reset	రీసెట్
+	Rich black	రిచ్ బ్లాక్
+	Separations	సెపరేషన్లు
+	Set an alias or convert a spot ink to process first.	ముందుగా మారుపేరు సెట్ చేయండి లేదా స్పాట్ ఇంక్‌ను ప్రాసెస్‌కు మార్చండి.
+	Show all inks	అన్ని ఇంక్‌లను చూపు
+	Simulate black ink	నలుపు ఇంక్‌ను అనుకరించు
+	Simulate overprinting	ఓవర్‌ప్రింటింగ్‌ను అనుకరించు
+	Simulate paper color	కాగితం రంగును అనుకరించు
+	Simulation profile	అనుకరణ ప్రొఫైల్
+	Small rich black text	చిన్న రిచ్ బ్లాక్ టెక్స్ట్
+	Solid color	ఘన రంగు
+	Some objects can't be measured and are left out.	కొన్ని వస్తువులను కొలవలేము, అవి వదిలివేయబడ్డాయి.
+	Spot colors	స్పాట్ రంగులు
+	Stroke	స్ట్రోక్
+	Style:	శైలి:
+	The page grows to make room for the marks.	గుర్తులకు చోటు కోసం పేజీ పెద్దదవుతుంది.
+	The profile is larger than {n} MB.	ప్రొఫైల్ {n} MB కంటే పెద్దది.
+	This document uses only the process inks.	ఈ పత్రం ప్రాసెస్ ఇంక్‌లను మాత్రమే ఉపయోగిస్తుంది.
+	To process	ప్రాసెస్‌కు
+	Total area coverage	మొత్తం ఇంక్ కవరేజీ
+	Transparency	పారదర్శకత
+	Trim marks	ట్రిమ్ గుర్తులు
+	Use Lab values for spot colors	స్పాట్ రంగులకు Lab విలువలు వాడు
+	Vector objects	వెక్టర్ వస్తువులు
+	Western	పాశ్చాత్య
+	White overprint	తెలుపు ఓవర్‌ప్రింట్
+	Working CMYK space	CMYK పని స్థలం
+	embedded	పొందుపరచబడింది
+	not embedded	పొందుపరచలేదు
+	{n} of the page is over the limit	పేజీలో {n} పరిమితిని మించింది.

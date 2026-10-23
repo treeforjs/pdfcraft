@@ -519,6 +519,17 @@ impl PdfCraftApp {
                     }
                 }
             }
+            "prepress.output_preview" => self.open_output_preview(crate::output_preview_ui::PreviewMode::Separations),
+            "prepress.object_inspector" => self.open_output_preview(crate::output_preview_ui::PreviewMode::Inspector),
+            "prepress.color_warnings" => self.open_output_preview(crate::output_preview_ui::PreviewMode::Warnings),
+            "prepress.ink_manager" => self.open_ink_manager(),
+            "prepress.convert_colors" => self.dialog = Some(Dialog::ConvertColors),
+            "prepress.marks" => self.dialog = Some(Dialog::PrinterMarks),
+            "app.color_management" => {
+                self.prefs_ui.page = crate::prefs_ui::Page::Color;
+                self.prefs_ui.query.clear();
+                self.dialog = Some(Dialog::Preferences);
+            }
             "preflight.run" => {
                 self.preflight.result = None;
                 self.preflight.selected.clear();

@@ -40,6 +40,9 @@ pub struct PrintDraft {
     pub copies: u32,
     pub collate: bool,
     pub grayscale: bool,
+    /// Advanced ▸ Print as image: each sheet goes to the printer as one picture at `image_dpi`.
+    pub as_image: bool,
+    pub image_dpi: f64,
     pub duplex: spool::Duplex,
     pub which: Which,
     pub range: String,
@@ -82,6 +85,8 @@ impl Default for PrintDraft {
             copies: 1,
             collate: true,
             grayscale: false,
+            as_image: false,
+            image_dpi: 300.0,
             duplex: spool::Duplex::Off,
             which: Which::All,
             range: String::new(),
@@ -205,7 +210,12 @@ impl PdfCraftApp {
             }
         };
         let name = doc.name.clone();
-        let bytes = match self.session.print_pdf(id, &settings) {
+        let printed = if self.print_draft.as_image {
+            self.session.print_pdf_as_image(id, &settings, self.print_draft.image_dpi).map(|(bytes, _)| bytes)
+        } else {
+            self.session.print_pdf(id, &settings)
+        };
+        let bytes = match printed {
             Ok(b) => b,
             Err(e) => {
                 self.notify_error(e);
@@ -461,6 +471,13 @@ pub(crate) fn body(
                     ui.add(egui::DragValue::new(&mut d.copies).range(1..=999));
                     ui.checkbox(&mut d.collate, tl!("Collate"));
                     ui.checkbox(&mut d.grayscale, tl!("Print in grayscale"));
+                });
+                ui.end_row();
+                ui.label(tl!("Advanced:"));
+                ui.horizontal(|ui| {
+                    ui.checkbox(&mut d.as_image, tl!("Print as image"))
+                        .on_hover_text(tl!("Each sheet is sent as one picture."));
+                    ui.add_enabled(d.as_image, egui::DragValue::new(&mut d.image_dpi).range(36.0..=1200.0).speed(5.0).suffix(" dpi"));
                 });
                 ui.end_row();
                 ui.label(tl!("Two-sided:"));

@@ -2574,3 +2574,88 @@ compare-page	Moved	Переміщена
 	No shortcuts match “{query}”.	Немає скорочень за запитом «{query}».
 	Document view	Перегляд документа
 	Tools	Інструменти
+# Print production
+	Add marks	Додати мітки
+	Add printer marks…	Додати друкарські мітки…
+	Advanced:	Додатково:
+	All spots to process	Усі плашкові в тріадні
+	Analyzing…	Аналіз…
+	Annotation	Коментар
+	Apply to document	Застосувати до документа
+	Bleed marks	Мітки випуску за обріз
+	Choose at least one mark.	Виберіть принаймні одну мітку.
+	Click on the page to list the objects under the pointer.	Клацніть на сторінці, щоб побачити об’єкти під вказівником.
+	Color bars	Кольорові шкали
+	Color management…	Керування кольором…
+	Color warnings	Попередження про колір
+	Colors converted: {n}	Перетворено кольорів: {n}
+	Colors to convert	Кольори для перетворення
+	Convert colors…	Перетворити кольори…
+	Convert spot colors to process	Перетворити плашкові кольори на тріадні
+	Convert to:	Перетворити на:
+	Cyan	Блакитний
+	Each sheet is sent as one picture.	Кожен аркуш надсилається одним зображенням.
+	Eastern	Східні
+	Font	Шрифт
+	Highest on this page: {n}	Максимум на сторінці: {n}
+	Highlight coverage over	Виділяти покриття понад
+	ICC profile	ICC-профіль
+	ICC-based	На основі ICC
+	Ink manager	Менеджер фарб
+	Ink manager…	Менеджер фарб…
+	Inks changed in the document	Фарби в документі змінено
+	Inks here: {inks} (total {total})	Фарби тут: {inks} (усього {total})
+	Inks of the first {n} pages.	Фарби перших {n} сторінок.
+	Line art	Штрихова графіка
+	Line weight:	Товщина лінії:
+	Load ICC profile…	Завантажити ICC-профіль…
+	Loaded the profile {name}	Завантажено профіль {name}
+	Magenta	Пурпуровий
+	No alias	Без псевдоніма
+	No ink needed changing	Жодну фарбу не треба змінювати
+	No overprint, rich black or registration color on this page.	На цій сторінці немає накладання, складеного чорного чи кольору приводки.
+	Not DeviceCMYK	Не DeviceCMYK
+	Nothing is painted here.	Тут нічого не намальовано.
+	Nothing to convert	Нічого перетворювати
+	OK keeps these settings for this session; Apply to document changes the file.	OK зберігає налаштування на цей сеанс; «Застосувати до документа» змінює файл.
+	Object inspector	Інспектор об’єктів
+	Offset from trim:	Відступ від обрізу:
+	Output intent	Ціль виводу
+	Overprint	Накладання
+	Page information	Відомості про сторінку
+	Preserve black	Зберігати чорний
+	Print as image	Друкувати як зображення
+	Process	Тріадна
+	Registration color	Колір приводки
+	Registration marks	Мітки приводки
+	Rendering intent:	Метод рендерингу:
+	Reset	Скинути
+	Rich black	Складений чорний
+	Separations	Кольороподіл
+	Set an alias or convert a spot ink to process first.	Спершу задайте псевдонім або перетворіть плашкову фарбу на тріадну.
+	Show all inks	Показати всі фарби
+	Simulate black ink	Імітувати чорну фарбу
+	Simulate overprinting	Імітувати накладання
+	Simulate paper color	Імітувати колір паперу
+	Simulation profile	Профіль імітації
+	Small rich black text	Дрібний текст складеним чорним
+	Solid color	Суцільний колір
+	Some objects can't be measured and are left out.	Деякі об’єкти не можна виміряти, їх не враховано.
+	Spot colors	Плашкові кольори
+	Stroke	Обведення
+	Style:	Стиль:
+	The page grows to make room for the marks.	Сторінка збільшиться, щоб умістити мітки.
+	The profile is larger than {n} MB.	Профіль більший за {n} МБ.
+	This document uses only the process inks.	У документі лише тріадні фарби.
+	To process	У тріадну
+	Total area coverage	Загальне покриття
+	Transparency	Прозорість
+	Trim marks	Мітки обрізу
+	Use Lab values for spot colors	Lab-значення для плашкових кольорів
+	Vector objects	Векторні об’єкти
+	Western	Західні
+	White overprint	Накладання білого
+	Working CMYK space	Робочий простір CMYK
+	embedded	вбудований
+	not embedded	не вбудований
+	{n} of the page is over the limit	{n} сторінки понад межу.

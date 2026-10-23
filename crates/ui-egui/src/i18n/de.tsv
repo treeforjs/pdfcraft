@@ -2551,3 +2551,88 @@ compare-page	Moved	Verschoben
 	No shortcuts match “{query}”.	Keine Tastenkürzel passen zu „{query}“.
 	Document view	Dokumentansicht
 	Tools	Werkzeuge
+# Print production
+	Add marks	Marken hinzufügen
+	Add printer marks…	Druckermarken hinzufügen…
+	Advanced:	Erweitert:
+	All spots to process	Alle Volltonfarben in Prozessfarben
+	Analyzing…	Wird analysiert…
+	Annotation	Kommentar
+	Apply to document	Auf Dokument anwenden
+	Bleed marks	Anschnittmarken
+	Choose at least one mark.	Wählen Sie mindestens eine Marke.
+	Click on the page to list the objects under the pointer.	Klicken Sie auf die Seite, um die Objekte unter dem Zeiger aufzulisten.
+	Color bars	Farbbalken
+	Color management…	Farbmanagement…
+	Color warnings	Farbwarnungen
+	Colors converted: {n}	Konvertierte Farben: {n}
+	Colors to convert	Zu konvertierende Farben
+	Convert colors…	Farben konvertieren…
+	Convert spot colors to process	Volltonfarben in Prozessfarben konvertieren
+	Convert to:	Konvertieren in:
+	Cyan	Cyan
+	Each sheet is sent as one picture.	Jeder Bogen wird als ein Bild gesendet.
+	Eastern	Östlich
+	Font	Schrift
+	Highest on this page: {n}	Höchstwert auf dieser Seite: {n}
+	Highlight coverage over	Farbauftrag hervorheben über
+	ICC profile	ICC-Profil
+	ICC-based	ICC-basiert
+	Ink manager	Druckfarbenverwaltung
+	Ink manager…	Druckfarbenverwaltung…
+	Inks changed in the document	Druckfarben im Dokument geändert
+	Inks here: {inks} (total {total})	Druckfarben hier: {inks} (gesamt {total})
+	Inks of the first {n} pages.	Druckfarben der ersten {n} Seiten.
+	Line art	Strichgrafik
+	Line weight:	Linienstärke:
+	Load ICC profile…	ICC-Profil laden…
+	Loaded the profile {name}	Profil {name} geladen
+	Magenta	Magenta
+	No alias	Kein Alias
+	No ink needed changing	Keine Druckfarbe musste geändert werden
+	No overprint, rich black or registration color on this page.	Kein Überdrucken, kein tiefes Schwarz und keine Passermarkenfarbe auf dieser Seite.
+	Not DeviceCMYK	Nicht DeviceCMYK
+	Nothing is painted here.	Hier ist nichts gemalt.
+	Nothing to convert	Nichts zu konvertieren
+	OK keeps these settings for this session; Apply to document changes the file.	OK behält diese Einstellungen für diese Sitzung; „Auf Dokument anwenden“ ändert die Datei.
+	Object inspector	Objektinspektor
+	Offset from trim:	Abstand vom Endformat:
+	Output intent	Ausgabemethode
+	Overprint	Überdrucken
+	Page information	Seiteninformationen
+	Preserve black	Schwarz beibehalten
+	Print as image	Als Bild drucken
+	Process	Prozessfarbe
+	Registration color	Passermarkenfarbe
+	Registration marks	Passermarken
+	Rendering intent:	Rendering-Methode:
+	Reset	Zurücksetzen
+	Rich black	Tiefes Schwarz
+	Separations	Farbauszüge
+	Set an alias or convert a spot ink to process first.	Legen Sie zuerst einen Alias fest oder konvertieren Sie eine Volltonfarbe in Prozessfarben.
+	Show all inks	Alle Druckfarben anzeigen
+	Simulate black ink	Schwarze Druckfarbe simulieren
+	Simulate overprinting	Überdrucken simulieren
+	Simulate paper color	Papierfarbe simulieren
+	Simulation profile	Simulationsprofil
+	Small rich black text	Kleiner Text in tiefem Schwarz
+	Solid color	Volltonfläche
+	Some objects can't be measured and are left out.	Einige Objekte können nicht gemessen werden und werden ausgelassen.
+	Spot colors	Volltonfarben
+	Stroke	Kontur
+	Style:	Stil:
+	The page grows to make room for the marks.	Die Seite wächst, um Platz für die Marken zu schaffen.
+	The profile is larger than {n} MB.	Das Profil ist größer als {n} MB.
+	This document uses only the process inks.	Dieses Dokument verwendet nur die Prozessfarben.
+	To process	In Prozessfarben
+	Total area coverage	Gesamtfarbauftrag
+	Transparency	Transparenz
+	Trim marks	Schnittmarken
+	Use Lab values for spot colors	Lab-Werte für Volltonfarben verwenden
+	Vector objects	Vektorobjekte
+	Western	Westlich
+	White overprint	Weiß überdrucken
+	Working CMYK space	CMYK-Arbeitsfarbraum
+	embedded	eingebettet
+	not embedded	nicht eingebettet
+	{n} of the page is over the limit	{n} der Seite liegt über dem Grenzwert

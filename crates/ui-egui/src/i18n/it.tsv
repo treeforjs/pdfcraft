@@ -2560,3 +2560,88 @@ compare-page	Moved	Spostata
 	No shortcuts match “{query}”.	Nessuna scorciatoia corrisponde a «{query}».
 	Document view	Vista documento
 	Tools	Strumenti
+# Print production
+	Add marks	Aggiungi segni
+	Add printer marks…	Aggiungi segni di stampa…
+	Advanced:	Avanzate:
+	All spots to process	Tutte le tinte piatte in quadricromia
+	Analyzing…	Analisi…
+	Annotation	Commento
+	Apply to document	Applica al documento
+	Bleed marks	Segni di pagina al vivo
+	Choose at least one mark.	Scegli almeno un segno.
+	Click on the page to list the objects under the pointer.	Fai clic sulla pagina per elencare gli oggetti sotto il puntatore.
+	Color bars	Barre dei colori
+	Color management…	Gestione colore…
+	Color warnings	Avvisi colore
+	Colors converted: {n}	Colori convertiti: {n}
+	Colors to convert	Colori da convertire
+	Convert colors…	Converti colori…
+	Convert spot colors to process	Converti le tinte piatte in quadricromia
+	Convert to:	Converti in:
+	Cyan	Ciano
+	Each sheet is sent as one picture.	Ogni foglio viene inviato come un’unica immagine.
+	Eastern	Orientale
+	Font	Font
+	Highest on this page: {n}	Massimo su questa pagina: {n}
+	Highlight coverage over	Evidenzia la copertura oltre
+	ICC profile	Profilo ICC
+	ICC-based	Basato su ICC
+	Ink manager	Gestione inchiostri
+	Ink manager…	Gestione inchiostri…
+	Inks changed in the document	Inchiostri modificati nel documento
+	Inks here: {inks} (total {total})	Inchiostri qui: {inks} (totale {total})
+	Inks of the first {n} pages.	Inchiostri delle prime {n} pagine.
+	Line art	Grafica al tratto
+	Line weight:	Spessore linea:
+	Load ICC profile…	Carica profilo ICC…
+	Loaded the profile {name}	Profilo {name} caricato
+	Magenta	Magenta
+	No alias	Nessun alias
+	No ink needed changing	Nessun inchiostro da modificare
+	No overprint, rich black or registration color on this page.	Nessuna sovrastampa, nero ricco o colore di registro in questa pagina.
+	Not DeviceCMYK	Non DeviceCMYK
+	Nothing is painted here.	Qui non è dipinto nulla.
+	Nothing to convert	Niente da convertire
+	OK keeps these settings for this session; Apply to document changes the file.	OK mantiene queste impostazioni per questa sessione; «Applica al documento» modifica il file.
+	Object inspector	Ispettore oggetti
+	Offset from trim:	Distanza dal formato rifilato:
+	Output intent	Intento di output
+	Overprint	Sovrastampa
+	Page information	Informazioni pagina
+	Preserve black	Mantieni il nero
+	Print as image	Stampa come immagine
+	Process	Quadricromia
+	Registration color	Colore di registro
+	Registration marks	Crocini di registro
+	Rendering intent:	Intento di rendering:
+	Reset	Reimposta
+	Rich black	Nero ricco
+	Separations	Separazioni
+	Set an alias or convert a spot ink to process first.	Imposta prima un alias o converti una tinta piatta in quadricromia.
+	Show all inks	Mostra tutti gli inchiostri
+	Simulate black ink	Simula inchiostro nero
+	Simulate overprinting	Simula sovrastampa
+	Simulate paper color	Simula colore carta
+	Simulation profile	Profilo di simulazione
+	Small rich black text	Testo piccolo in nero ricco
+	Solid color	Colore pieno
+	Some objects can't be measured and are left out.	Alcuni oggetti non si possono misurare e vengono esclusi.
+	Spot colors	Tinte piatte
+	Stroke	Traccia
+	Style:	Stile:
+	The page grows to make room for the marks.	La pagina si allarga per fare spazio ai segni.
+	The profile is larger than {n} MB.	Il profilo supera {n} MB.
+	This document uses only the process inks.	Questo documento usa solo gli inchiostri di quadricromia.
+	To process	In quadricromia
+	Total area coverage	Copertura totale
+	Transparency	Trasparenza
+	Trim marks	Segni di taglio
+	Use Lab values for spot colors	Usa valori Lab per le tinte piatte
+	Vector objects	Oggetti vettoriali
+	Western	Occidentale
+	White overprint	Sovrastampa del bianco
+	Working CMYK space	Spazio di lavoro CMYK
+	embedded	incorporato
+	not embedded	non incorporato
+	{n} of the page is over the limit	{n} della pagina supera il limite

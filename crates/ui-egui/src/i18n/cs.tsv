@@ -2575,3 +2575,88 @@ compare-page	Moved	Přesunutá
 	No shortcuts match “{query}”.	Hledání „{query}“ neodpovídá žádná zkratka.
 	Document view	Zobrazení dokumentu
 	Tools	Nástroje
+# Print production
+	Add marks	Přidat značky
+	Add printer marks…	Přidat tiskové značky…
+	Advanced:	Pokročilé:
+	All spots to process	Všechny přímé barvy na procesní
+	Analyzing…	Analýza…
+	Annotation	Komentář
+	Apply to document	Použít na dokument
+	Bleed marks	Značky spadávky
+	Choose at least one mark.	Vyberte alespoň jednu značku.
+	Click on the page to list the objects under the pointer.	Klepnutím na stránku zobrazíte objekty pod ukazatelem.
+	Color bars	Barevné pruhy
+	Color management…	Správa barev…
+	Color warnings	Barevná upozornění
+	Colors converted: {n}	Převedené barvy: {n}
+	Colors to convert	Barvy k převodu
+	Convert colors…	Převést barvy…
+	Convert spot colors to process	Převést přímé barvy na procesní
+	Convert to:	Převést na:
+	Cyan	Azurová
+	Each sheet is sent as one picture.	Každý arch se odešle jako jeden obrázek.
+	Eastern	Východní
+	Font	Písmo
+	Highest on this page: {n}	Nejvyšší na této stránce: {n}
+	Highlight coverage over	Zvýraznit krytí nad
+	ICC profile	Profil ICC
+	ICC-based	Založený na ICC
+	Ink manager	Správce inkoustů
+	Ink manager…	Správce inkoustů…
+	Inks changed in the document	Inkousty v dokumentu změněny
+	Inks here: {inks} (total {total})	Inkousty zde: {inks} (celkem {total})
+	Inks of the first {n} pages.	Inkousty prvních {n} stránek.
+	Line art	Perokresba
+	Line weight:	Tloušťka čáry:
+	Load ICC profile…	Načíst profil ICC…
+	Loaded the profile {name}	Načten profil {name}
+	Magenta	Purpurová
+	No alias	Bez aliasu
+	No ink needed changing	Žádný inkoust nebylo třeba měnit
+	No overprint, rich black or registration color on this page.	Na této stránce není přetisk, sytá černá ani registrační barva.
+	Not DeviceCMYK	Není DeviceCMYK
+	Nothing is painted here.	Zde není nic nakresleno.
+	Nothing to convert	Není co převést
+	OK keeps these settings for this session; Apply to document changes the file.	OK zachová nastavení pro tuto relaci; Použít na dokument změní soubor.
+	Object inspector	Inspektor objektů
+	Offset from trim:	Posun od ořezu:
+	Output intent	Výstupní záměr
+	Overprint	Přetisk
+	Page information	Informace o stránce
+	Preserve black	Zachovat černou
+	Print as image	Tisknout jako obrázek
+	Process	Procesní
+	Registration color	Registrační barva
+	Registration marks	Registrační značky
+	Rendering intent:	Účel vykreslování:
+	Reset	Obnovit
+	Rich black	Sytá černá
+	Separations	Separace
+	Set an alias or convert a spot ink to process first.	Nejprve nastavte alias nebo převeďte přímý inkoust na procesní.
+	Show all inks	Zobrazit všechny inkousty
+	Simulate black ink	Simulovat černý inkoust
+	Simulate overprinting	Simulovat přetisk
+	Simulate paper color	Simulovat barvu papíru
+	Simulation profile	Profil simulace
+	Small rich black text	Malý text sytou černou
+	Solid color	Plná barva
+	Some objects can't be measured and are left out.	Některé objekty nelze změřit a jsou vynechány.
+	Spot colors	Přímé barvy
+	Stroke	Tah
+	Style:	Styl:
+	The page grows to make room for the marks.	Stránka se zvětší, aby se značky vešly.
+	The profile is larger than {n} MB.	Profil je větší než {n} MB.
+	This document uses only the process inks.	Tento dokument používá jen procesní inkousty.
+	To process	Na procesní
+	Total area coverage	Celkové krytí
+	Transparency	Průhlednost
+	Trim marks	Ořezové značky
+	Use Lab values for spot colors	Hodnoty Lab pro přímé barvy
+	Vector objects	Vektorové objekty
+	Western	Západní
+	White overprint	Přetisk bílé
+	Working CMYK space	Pracovní prostor CMYK
+	embedded	vložený
+	not embedded	nevložený
+	{n} of the page is over the limit	{n} stránky je nad limitem.

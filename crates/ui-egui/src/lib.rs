@@ -51,8 +51,10 @@ mod ocr_ui;
 #[cfg(target_arch = "wasm32")]
 mod ocr_web;
 mod optimize_ui;
+pub mod output_preview_ui;
 pub mod picked_ids;
 mod preflight_ui;
+pub mod prepress_ui;
 mod search_ui;
 mod sign_ui;
 mod stamps_ui;
@@ -188,6 +190,8 @@ pub enum RightPanel {
     Search,
     /// Compare files: the differences.
     Compare,
+    /// Print production ▸ Output preview.
+    OutputPreview,
 }
 
 /// Quick-action bar tools (the vertical floating strip).
@@ -329,6 +333,12 @@ pub enum Dialog {
     SignatureProperties,
     /// A Submit Form button asks before sending.
     SubmitForm,
+    /// Print production ▸ Ink manager.
+    InkManager,
+    /// Print production ▸ Convert colors.
+    ConvertColors,
+    /// Print production ▸ Add printer marks.
+    PrinterMarks,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -534,6 +544,12 @@ pub struct PdfCraftApp {
     pub js_console: js_ui::JsConsole,
     /// The JavaScript debugger (Tools → JavaScript debugger).
     pub js_debugger: js_debug_ui::JsDebugger,
+    /// Print production: Output Preview's panel state and the Ink Manager, Convert Colors and
+    /// Add Printer Marks dialogs.
+    pub output_preview: output_preview_ui::OutputPreviewUi,
+    pub ink_manager: prepress_ui::InkManagerDraft,
+    pub convert_draft: prepress_ui::ConvertDraft,
+    pub printer_marks_draft: prepress_ui::PrinterMarksDraft,
     pub doc_js: js_ui::DocJsDraft,
     /// The Run-a-JavaScript action being edited (bookmark or page actions).
     pub action_script: Option<js_ui::ActionScriptDraft>,
@@ -815,6 +831,10 @@ impl PdfCraftApp {
             side_by_side: None,
             js_console: Default::default(),
             js_debugger: Default::default(),
+            output_preview: Default::default(),
+            ink_manager: Default::default(),
+            convert_draft: Default::default(),
+            printer_marks_draft: Default::default(),
             doc_js: Default::default(),
             action_script: None,
             js_question: None,
@@ -1676,6 +1696,9 @@ impl PdfCraftApp {
         if let Some(result) = self.set_window_option(key, value) {
             return result;
         }
+        if let Some(result) = self.set_output_preview_option(key, value) {
+            return result;
+        }
         // `pref.<key>`: any preference by key (see `prefs_ui`); a value starting with `[` is read
         // as JSON (a colour as [r, g, b]), anything else as text, which numbers and booleans
         // accept too.
@@ -1720,6 +1743,7 @@ impl PdfCraftApp {
                     "accessibility" => Some(RightPanel::Accessibility),
                     "search" => Some(RightPanel::Search),
                     "compare" => Some(RightPanel::Compare),
+                    "output-preview" => Some(RightPanel::OutputPreview),
                     "none" => None,
                     other => return Err(format!("unknown panel {other}")),
                 }
@@ -1793,6 +1817,12 @@ impl PdfCraftApp {
                     "action-wizard" => Some(Dialog::ActionWizard),
                     "pdfa" => Some(Dialog::PdfA),
                     "preflight" => Some(Dialog::Preflight),
+                    "ink-manager" => {
+                        self.open_ink_manager();
+                        self.dialog
+                    }
+                    "convert-colors" => Some(Dialog::ConvertColors),
+                    "printer-marks" => Some(Dialog::PrinterMarks),
                     "signature" => Some(Dialog::Signature),
                     "optimize" => {
                         self.open_optimizer();

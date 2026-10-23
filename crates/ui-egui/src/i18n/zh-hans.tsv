@@ -2515,3 +2515,88 @@ compare-page	Moved	已移动
 	No shortcuts match “{query}”.	没有与“{query}”匹配的快捷键。
 	Document view	文档视图
 	Tools	工具
+# Print production
+	Add marks	添加标记
+	Add printer marks…	添加印刷标记…
+	Advanced:	高级：
+	All spots to process	所有专色转为印刷色
+	Analyzing…	正在分析…
+	Annotation	注释
+	Apply to document	应用到文档
+	Bleed marks	出血标记
+	Choose at least one mark.	请至少选择一个标记。
+	Click on the page to list the objects under the pointer.	点击页面以列出指针下的对象。
+	Color bars	颜色条
+	Color management…	颜色管理…
+	Color warnings	颜色警告
+	Colors converted: {n}	已转换颜色：{n}
+	Colors to convert	要转换的颜色
+	Convert colors…	转换颜色…
+	Convert spot colors to process	将专色转换为印刷色
+	Convert to:	转换为：
+	Cyan	青色
+	Each sheet is sent as one picture.	每张纸作为一张图片发送。
+	Eastern	东亚
+	Font	字体
+	Highest on this page: {n}	本页最高值：{n}
+	Highlight coverage over	高亮显示超过此值的覆盖率
+	ICC profile	ICC 配置文件
+	ICC-based	基于 ICC
+	Ink manager	油墨管理器
+	Ink manager…	油墨管理器…
+	Inks changed in the document	已更改文档中的油墨
+	Inks here: {inks} (total {total})	此处油墨：{inks}（总计 {total}）
+	Inks of the first {n} pages.	前 {n} 页的油墨。
+	Line art	线条图
+	Line weight:	线条粗细：
+	Load ICC profile…	载入 ICC 配置文件…
+	Loaded the profile {name}	已载入配置文件 {name}
+	Magenta	洋红色
+	No alias	无别名
+	No ink needed changing	没有需要更改的油墨
+	No overprint, rich black or registration color on this page.	本页没有叠印、复色黑或套版色。
+	Not DeviceCMYK	非 DeviceCMYK
+	Nothing is painted here.	此处没有绘制任何内容。
+	Nothing to convert	没有可转换的内容
+	OK keeps these settings for this session; Apply to document changes the file.	“确定”在本次会话中保留这些设置；“应用到文档”会更改文件。
+	Object inspector	对象检查器
+	Offset from trim:	距裁切位置偏移：
+	Output intent	输出意图
+	Overprint	叠印
+	Page information	页面信息
+	Preserve black	保留黑色
+	Print as image	作为图像打印
+	Process	印刷色
+	Registration color	套版色
+	Registration marks	套准标记
+	Rendering intent:	渲染方法：
+	Reset	重置
+	Rich black	复色黑
+	Separations	分色
+	Set an alias or convert a spot ink to process first.	请先设置别名或将专色转换为印刷色。
+	Show all inks	显示所有油墨
+	Simulate black ink	模拟黑色油墨
+	Simulate overprinting	模拟叠印
+	Simulate paper color	模拟纸张颜色
+	Simulation profile	模拟配置文件
+	Small rich black text	小号复色黑文本
+	Solid color	纯色
+	Some objects can't be measured and are left out.	有些对象无法测量，已排除。
+	Spot colors	专色
+	Stroke	描边
+	Style:	样式：
+	The page grows to make room for the marks.	页面会扩大以容纳标记。
+	The profile is larger than {n} MB.	配置文件大于 {n} MB。
+	This document uses only the process inks.	本文档只使用印刷油墨。
+	To process	转为印刷色
+	Total area coverage	总油墨覆盖率
+	Transparency	透明度
+	Trim marks	裁切标记
+	Use Lab values for spot colors	专色使用 Lab 值
+	Vector objects	矢量对象
+	Western	西文
+	White overprint	白色叠印
+	Working CMYK space	CMYK 工作空间
+	embedded	已嵌入
+	not embedded	未嵌入
+	{n} of the page is over the limit	页面的 {n} 超过限制。

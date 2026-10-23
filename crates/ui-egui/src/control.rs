@@ -550,7 +550,7 @@ impl Host for crate::PdfCraftApp {
                 Some(json!({ "tab": i, "view": v.key, "window": self.windows.window_of(v.key).0, "doc": v.id.0, "name": d.name, "path": d.path, "pages": d.info.pages.len(), "dirty": d.dirty, "active": self.active == Some(i) }))
             })
             .collect();
-        json!({
+        let mut state = json!({
             "documents": docs,
             "active": active.map(|v| json!({
                 "doc": v.id.0,
@@ -629,7 +629,13 @@ impl Host for crate::PdfCraftApp {
                 "error":self.signature_workflow.error,"running":self.signature_run.as_ref().map(|r|serde_json::json!({"doc":r.doc.0,"cancelled":r.cancellation.is_cancelled()})),
                 "results":self.signature_workflow.results.iter().map(|s|json!({"field":s.field,"status":format!("{:?}",s.status),
                     "verification_time":s.verification_time.map(|t|t.to_string()),"verification_time_source":format!("{:?}",s.verification_time_source),"details":s.details})).collect::<Vec<_>>()},
-        })
+        });
+        // Kept out of the json! above, which is at the macro recursion limit.
+        if let Some(m) = state.as_object_mut() {
+            m.insert("output_preview".into(), json!((self.right == Some(crate::RightPanel::OutputPreview)).then(|| self.output_preview_state())));
+            m.insert("ink_manager".into(), json!((self.dialog == Some(crate::Dialog::InkManager)).then(|| self.ink_manager_state())));
+        }
+        state
     }
 
     fn command(&mut self, id: &str) -> Reply {
