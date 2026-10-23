@@ -28,6 +28,7 @@ mod dests;
 mod direction;
 mod forms;
 mod help;
+mod host;
 mod ink_manager;
 mod js_debug;
 mod links;
@@ -68,9 +69,10 @@ use std::sync::Arc;
 
 use pdfcraft_engine::{DocId, Document, Edit, Session, commands};
 use pdfcraft_platform::staging::{StagingName, create_staging, staging_suffixes};
-use pdfcraft_render::{PageRenderer, PageText, RenderConfig, RenderRequest, RequestKind};
+use pdfcraft_render::{PageRenderer, PageText, RenderConfig};
 use serde_json::{Value, json};
 
+pub use host::SessionTools;
 pub use tools::{ToolDef, tools};
 
 /// One piece of a tool's result.
@@ -234,6 +236,23 @@ impl Automation {
             "text_selection" => self.text_selection(&a)?,
             "text_find" => self.text_find(&a)?,
             "search_folder" => self.search_folder(&a)?,
+            "page_range_select" => {
+                let parity = match a.opt_str("subset")?.unwrap_or("all") {
+                    "all" => pdfcraft_engine::PageParity::Both,
+                    "even" => pdfcraft_engine::PageParity::Even,
+                    "odd" => pdfcraft_engine::PageParity::Odd,
+                    s => return Err(ToolError::InvalidArgs(format!("unknown subset {s:?} (all, even, odd)"))),
+                };
+                let orientation = match a.opt_str("orientation")?.unwrap_or("all") {
+                    "all" => pdfcraft_engine::PageOrientation::Both,
+                    "landscape" => pdfcraft_engine::PageOrientation::Landscape,
+                    "portrait" => pdfcraft_engine::PageOrientation::Portrait,
+                    o => return Err(ToolError::InvalidArgs(format!("unknown orientation {o:?} (all, landscape, portrait)"))),
+                };
+                let range = a.opt_str("range")?.unwrap_or("");
+                let pages = pdfcraft_engine::select_page_range(&self.doc(&a)?.info, range, parity, orientation).map_err(ToolError::InvalidArgs)?;
+                json!({ "count": pages.len(), "pages": pages.iter().map(|p| p + 1).collect::<Vec<_>>() })
+            }
             "page_rotate" => {
                 let degrees = a.int("degrees")?;
                 if degrees % 90 != 0 {
@@ -2749,78 +2768,10 @@ fn encode_png(width: u32, height: u32, premultiplied: &[u8]) -> Result<Vec<u8>> 
     Ok(out)
 }
 
-/// Extract the text of `pages` (0-based, distinct) with one renderer per worker thread, handing
-/// each page to `sink` on this thread as soon as it is ready (in no particular order), so
-/// pages are not all held at once. Stops at the first error from extraction or `sink`; a page a
-/// worker could not deliver (a worker panicked) is an error, never silently missing.
-fn extract_each(
-    bytes: &Arc<Vec<u8>>,
-    password: Option<Arc<str>>,
-    pages: &[usize],
-    mut sink: impl FnMut(usize, PageText) -> Result<()>,
-) -> Result<()> {
-    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-    let extract = |r: &mut PageRenderer, p: usize| {
-        let out = r.render(RenderRequest { page: p, kind: RequestKind::Text, tile: None, scale: 1.0, tag: 0 });
-        match out.error {
-            Some(e) => Err(e),
-            None => Ok(out.text.map(Arc::unwrap_or_clone).unwrap_or_default()),
-        }
-    };
-    let config = RenderConfig { password, ..Default::default() };
-    let workers = if cfg!(target_arch = "wasm32") { 1 } else { std::thread::available_parallelism().map_or(1, |n| n.get()).min(8) };
-    // Small jobs aren't worth a second parse of the document.
-    if workers == 1 || pages.len() < 8 {
-        if pages.is_empty() {
-            return Ok(());
-        }
-        let mut r = PageRenderer::new(bytes.clone(), config);
-        for &p in pages {
-            let text = extract(&mut r, p).map_err(|e| failed(format!("page {}: {e}", p + 1)))?;
-            sink(p, text)?;
-        }
-        return Ok(());
-    }
-    let next = AtomicUsize::new(0);
-    let stop = AtomicBool::new(false);
-    std::thread::scope(|s| {
-        // Bounded: workers wait while `sink` catches up instead of piling pages up.
-        let (tx, rx) = std::sync::mpsc::sync_channel::<(usize, std::result::Result<PageText, String>)>(workers * 2);
-        let handles: Vec<_> = (0..workers)
-            .map(|_| {
-                let (tx, next, stop, config) = (tx.clone(), &next, &stop, config.clone());
-                s.spawn(move || {
-                    let mut r = PageRenderer::new(bytes.clone(), config);
-                    while !stop.load(Ordering::Relaxed) {
-                        let Some(&p) = pages.get(next.fetch_add(1, Ordering::Relaxed)) else { break };
-                        if tx.send((p, extract(&mut r, p))).is_err() {
-                            break;
-                        }
-                    }
-                })
-            })
-            .collect();
-        drop(tx);
-        let mut result = Ok(());
-        let mut delivered = 0usize;
-        for (p, text) in rx.iter() {
-            delivered += 1;
-            if let Err(e) = text.map_err(|e| failed(format!("page {}: {e}", p + 1))).and_then(|t| sink(p, t)) {
-                result = Err(e);
-                break;
-            }
-        }
-        stop.store(true, Ordering::Relaxed);
-        // Unblock workers waiting to send, then wait for them (a panic is joined, not rethrown).
-        drop(rx);
-        for h in handles {
-            let _ = h.join();
-        }
-        match result {
-            Ok(()) if delivered < pages.len() => Err(failed("page text could not be extracted (an extraction worker failed)")),
-            other => other,
-        }
-    })
+/// Extract the text of `pages` (0-based, distinct) in parallel, handing each page to `sink` as it
+/// is ready ([`pdfcraft_engine::text_extract::extract_each`]).
+fn extract_each(bytes: &Arc<Vec<u8>>, password: Option<Arc<str>>, pages: &[usize], sink: impl FnMut(usize, PageText) -> Result<()>) -> Result<()> {
+    pdfcraft_engine::text_extract::extract_each(bytes, password, pages, sink, failed)
 }
 
 /// The file `name` inside `dir`, where `name` comes from a document or an argument: separators,
@@ -2854,6 +2805,75 @@ fn child(dir: &Path, name: &str) -> PathBuf {
         safe.insert(0, '_');
     }
     dir.join(safe)
+}
+
+/// The most files a batch tool (`action_run`, `ocr_recognize_files`) takes from a folder.
+const MAX_BATCH_FILES: usize = 10_000;
+
+/// One file of a batch run: how it was named in the request or found in the folder, where it
+/// is, and where its result goes inside the output folder (subfolders kept, every part a plain
+/// name, so it can't lead out).
+pub(crate) struct BatchFile {
+    pub shown: String,
+    pub source: PathBuf,
+    pub output: PathBuf,
+}
+
+impl Automation {
+    /// The files of a batch tool: `paths`, or every PDF in `source_folder` (with `recursive`,
+    /// its subfolders too: a bounded, link-safe walk inside the root). Returns the files and,
+    /// for a folder, what the walk skipped or which cap cut it short.
+    pub(crate) fn batch_files(&self, a: &Args, out: &Path) -> Result<(Vec<BatchFile>, Value)> {
+        match (a.get("paths"), a.opt_str("source_folder")?) {
+            (Some(_), Some(_)) => Err(ToolError::InvalidArgs("pass paths or source_folder, not both".into())),
+            (None, None) => Err(ToolError::InvalidArgs("pass paths (files) or source_folder (a folder of PDFs)".into())),
+            (Some(_), None) => {
+                if a.get("recursive").is_some() {
+                    return Err(ToolError::InvalidArgs("recursive goes with source_folder".into()));
+                }
+                let files = a
+                    .strs("paths")?
+                    .into_iter()
+                    .map(|p| {
+                        let name = Path::new(p).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "document.pdf".into());
+                        Ok(BatchFile { shown: p.to_string(), source: self.resolve(p, true)?, output: child(out, &name) })
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                Ok((files, Value::Null))
+            }
+            (None, Some(shown)) => {
+                let folder = self.resolve(shown, false)?;
+                if !folder.is_dir() {
+                    return Err(failed(format!("{shown} is not a folder")));
+                }
+                let recursive = a.opt_bool("recursive")?.unwrap_or(false);
+                let limits = pdfcraft_engine::folder_search::LIMITS;
+                // Links to files are followed only inside the source folder itself.
+                let inside = folder.canonicalize().map_err(|e| failed(format!("{shown}: {e}")))?;
+                let walk = pdfcraft_engine::folder_search::walk_pdfs(&folder, shown, recursive, Some(&inside), MAX_BATCH_FILES, &limits);
+                let files = walk
+                    .files
+                    .into_iter()
+                    .map(|f| {
+                        // The walk names files `<shown>/<sub>/<name>`; anything else keeps just its name.
+                        let rel = Path::new(&f.shown)
+                            .strip_prefix(shown)
+                            .map(Path::to_path_buf)
+                            .unwrap_or_else(|_| Path::new(&f.shown).file_name().map(PathBuf::from).unwrap_or_default());
+                        let mut output = out.to_path_buf();
+                        for part in rel.components().filter_map(|c| match c {
+                            std::path::Component::Normal(n) => Some(n.to_string_lossy().into_owned()),
+                            _ => None,
+                        }) {
+                            output = child(&output, &part);
+                        }
+                        BatchFile { shown: f.shown, source: f.real, output }
+                    })
+                    .collect();
+                Ok((files, json!({ "skipped": walk.skipped, "truncated_by": walk.truncated })))
+            }
+        }
+    }
 }
 
 /// `<stem>.pdf` in `dir`, or `<stem> (2).pdf` and so on when that name is taken.

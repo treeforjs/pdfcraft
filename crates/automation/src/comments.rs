@@ -9,6 +9,9 @@ use pdfcraft_engine::{
 use pdfcraft_render::{Annotation, PageInfo};
 use serde_json::{Value, json};
 
+/// How far from text (points) a snapped caret may be placed.
+const SNAP_DISTANCE: f32 = 24.0;
+
 use crate::{Args, Automation, Content, DEFAULT_DPI, MAX_DPI, Result, ToolError, encode_png, failed};
 
 /// Author used when a tool call names none.
@@ -380,8 +383,19 @@ impl Automation {
                     Shape::Attachment { at: icon_anchor(&info, x, y), icon, file, data }
                 }
                 "caret" => {
-                    let [x, y] = a.need::<2>("at", "a caret (the insertion point on the baseline)")?;
-                    Shape::Caret { rect: rect_to_user(&info, [x - 4.0, y, x + 4.0, y + 8.0]) }
+                    let [mut x, mut y] = a.need::<2>("at", "a caret (the insertion point on the baseline)")?;
+                    let mut size = 8.0;
+                    if a.opt_bool("snap")?.unwrap_or(false) {
+                        // Like the app's Insert Text tool: the gap between the characters nearest `at`.
+                        let id = self.doc(a)?.id;
+                        let text = self.page_texts(id, &[page])?.remove(0);
+                        let ip = text
+                            .insertion_point(x as f32, y as f32, SNAP_DISTANCE)
+                            .ok_or_else(|| failed(format!("no text within {SNAP_DISTANCE} pt of [{x}, {y}] on page {} to snap to", page + 1)))?;
+                        (x, y) = (f64::from(ip.x), f64::from(ip.bottom));
+                        size = (f64::from(ip.bottom - ip.top) * 0.6).clamp(4.0, 24.0);
+                    }
+                    Shape::Caret { rect: rect_to_user(&info, [x - size / 2.0, y, x + size / 2.0, y + size]) }
                 }
                 other => return Err(ToolError::InvalidArgs(format!("unknown comment type {other:?}"))),
             }
@@ -546,9 +560,18 @@ impl Automation {
 
     pub(crate) fn comments_hide(&mut self, a: &Args) -> Result<Value> {
         let id = self.doc(a)?.id;
-        let hidden = a.opt_bool("hidden")?.unwrap_or(true);
-        self.session.set_hide_comments(id, hidden);
-        Ok(json!({ "hidden": hidden }))
+        if a.get("types").is_some() {
+            if a.get("hidden").is_some() {
+                return Err(ToolError::InvalidArgs("pass hidden (all comments) or types (comments of these types), not both".into()));
+            }
+            let types: Vec<String> = a.strs("types")?.into_iter().map(str::to_string).collect();
+            self.session.set_hidden_comment_types(id, &types).map_err(|e| ToolError::InvalidArgs(e.to_string()))?;
+        } else {
+            let hidden = a.opt_bool("hidden")?.unwrap_or(true);
+            self.session.set_hide_comments(id, hidden);
+        }
+        let doc = self.doc(a)?;
+        Ok(json!({ "hidden": doc.comments_hidden(), "hidden_types": doc.hidden_comment_types() }))
     }
 
     pub(crate) fn comments_summarize(&mut self, a: &Args) -> Result<Value> {

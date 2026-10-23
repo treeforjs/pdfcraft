@@ -2905,3 +2905,122 @@ compare-page	Moved	已移動
 	Australian Tax File Numbers	澳洲稅號（TFN）
 	Australian Medicare Numbers	澳洲 Medicare 號碼
 	Australian Business Numbers	澳洲企業號碼（ABN）
+
+# Comment, organize and search gaps (find comments, hide by type, page ranges, bookmark
+# properties, bookmarks from structure, advanced search, associated files, custom commands).
+	 in {f} of {s} documents	（在 {s} 份文件中的 {f} 份）
+	(no name)	（無名稱）
+	(this document doesn't allow copying its text)	（此文件不允許複製其文字）
+	* the tool needs this option	* 工具需要此選項
+	A bookmark needs a title.	書籤需要標題。
+	A folder	資料夾
+	A folder…	資料夾…
+	Add an associated file	新增關聯檔案
+	Add file…	新增檔案…
+	Added 1 bookmark	已新增 1 個書籤
+	Added {n} bookmarks	已新增 {n} 個書籤
+	All levels	所有層級
+	Another action (kept as it is)	其他動作（保持不變）
+	Ask for the options each time it runs	每次執行時詢問選項
+	Asks for its options when it runs.	執行時詢問其選項。
+	Associated files	關聯檔案
+	Bookmark properties	書籤屬性
+	Bookmark properties…	書籤屬性…
+	Cancelled: not every document was searched.	已取消：並非所有文件都已搜尋。
+	Check the options, then run the command.	請檢查選項，然後執行命令。
+	Choose a folder of PDFs	選擇 PDF 資料夾
+	Choose a folder to search	選擇要搜尋的資料夾
+	Choose a folder to search.	請選擇要搜尋的資料夾。
+	Choose folder…	選擇資料夾…
+	Choose one of the document's named destinations.	請選擇文件中的一個命名目標。
+	Choose the tool the command runs.	請選擇命令執行的工具。
+	Choose…	選擇…
+	Comment	註解
+	Comment on page {label}	第 {label} 頁上的註解
+	Custom commands	自訂命令
+	Custom commands aren't available in this version of PdfCraft.	此版本的 PdfCraft 不提供自訂命令。
+	Custom commands…	自訂命令…
+	Description (optional)	說明（選填）
+	Destination:	目標：
+	Edit Command	編輯命令
+	Enter a page number from 1 to {n}.	請輸入 1 到 {n} 之間的頁碼。
+	Enter a web address starting with https://, http:// or mailto:.	請輸入以 https://、http:// 或 mailto: 開頭的網址。
+	Enter a zoom from 1% to 6400%.	請輸入 1% 到 6400% 之間的縮放比例。
+	Existing bookmarks:	現有書籤：
+	Export custom commands	匯出自訂命令
+	Files linked to the document, a page or a comment, each with its relationship (source, data, alternative…).	與文件、頁面或註解關聯的檔案，各帶其關係（來源、資料、替代…）。
+	Files…	檔案…
+	Fixed zoom	固定縮放
+	Headings:	標題：
+	Import custom commands	匯入自訂命令
+	Imported {n} custom commands	已匯入 {n} 個自訂命令
+	Include bookmarks and comments	包含書籤和註解
+	Include comments	包含註解
+	Include subfolders	包含子資料夾
+	Keep them, add the new ones after	保留它們，在後面新增新書籤
+	Levels 1 to {n}	層級 1 到 {n}
+	Look in	搜尋範圍
+	Make bookmarks	建立書籤
+	Make one bookmark for each heading of the document's tags, nested by heading level.	為文件標籤中的每個標題建立一個書籤，依標題層級巢狀排列。
+	New Command	新增命令
+	New Command…	新增命令…
+	New bookmarks from structure	從結構新增書籤
+	New bookmarks from structure…	從結構新增書籤…
+	No associated files.	沒有關聯檔案。
+	No comments	沒有註解
+	No custom commands yet.	還沒有自訂命令。
+	No folder chosen	未選擇資料夾
+	No pages match.	沒有符合的頁面。
+	Object {n}	物件 {n}
+	One tool with the options you choose, run in one step.	使用所選選項的一個工具，一步執行。
+	Open a document to run the command on.	請開啟要執行命令的文件。
+	Page labels work too, as in Print.	也可以使用頁面標籤，與列印相同。
+	Page range	頁面範圍
+	Page:	頁面：
+	Ran {name}	已執行 {name}
+	Relationship:	關係：
+	Remove associated file	移除關聯檔案
+	Replace them	取代它們
+	Run on this document	在此文件上執行
+	Run on:	執行於：
+	Runs: {tool}	執行：{tool}
+	Save associated file…	儲存關聯檔案…
+	Search a folder…	搜尋資料夾…
+	Searching {d} of {t}…	正在搜尋 {d} / {t}…
+	Select	選擇
+	Select a bookmark first	請先選擇一個書籤
+	Select pages…	選擇頁面…
+	Show all comment types	顯示所有註解類型
+	Show all types	顯示所有類型
+	Show on pages by type	在頁面上依類型顯示
+	Stopped at the result limit: narrow the search to see the rest.	已在結果上限處停止：縮小搜尋範圍以檢視其餘結果。
+	Subset:	子集：
+	That bookmark no longer exists	該書籤已不存在
+	The current document	目前文件
+	The document changed; add the file again	文件已變更；請重新新增檔案
+	The folder to search	要搜尋的資料夾
+	The script is too long.	指令碼過長。
+	There is no folder to keep custom commands in.	沒有用於儲存自訂命令的資料夾。
+	This bookmark runs a {kind} action, kept as it is unless you choose another.	此書籤執行 {kind} 動作，除非您選擇其他動作，否則保持不變。
+	Title:	標題：
+	To the document	新增到文件
+	To this page	新增到此頁面
+	Tool:	工具：
+	Type a word or phrase to search for.	請輸入要搜尋的字詞或片語。
+	Web address:	網址：
+	When clicked:	按一下時：
+	Zoom:	縮放：
+	cancelled	已取消
+	comment	註解
+	e.g. 1-3, 7	例如 1-3, 7
+	e.g. 1-3, 7 (empty: all pages)	例如 1-3, 7（留空：所有頁面）
+	larger than {n} MB	大於 {n} MB
+	not a file name	不是檔案名稱
+	stopped at {n} files	在 {n} 個檔案處停止
+	the action stopped unexpectedly	動作意外停止
+	{name} is larger than {n} MB	{name} 大於 {n} MB
+	{name} isn't valid	{name} 無效
+	{n} files skipped	已略過 {n} 個檔案
+	{n} more	還有 {n} 個
+	{n} more not shown	另有 {n} 個未顯示
+	{n} skipped	已略過 {n} 個

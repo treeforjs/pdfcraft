@@ -466,6 +466,8 @@ pub fn right_panel(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
     let mut tags_action: Option<crate::tags_ui::TagsAction> = None;
     let mut order_action: Option<(usize, crate::tags_ui::OrderAction)> = None;
     let mut compare_action: Option<crate::compare_ui::PanelAction> = None;
+    let mut search_action: Option<crate::search_ui::SearchAction> = None;
+    let mut assoc_action: Option<crate::assoc_ui::AssocAction> = None;
     let mut bm_rename = app.bookmark_rename.clone();
     let bm_editable = app.session.get(id).is_some_and(|d| d.allows_assembly() && d.read_only_reason.is_none());
     // Prepare a form is open: the Fields panel orders tabs.
@@ -485,6 +487,8 @@ pub fn right_panel(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
         }
         let compare = &app.compare;
         let signed_comparison = app.signed_comparison.as_ref().filter(|c| c.doc == id);
+        let adv_search = &mut app.adv_search;
+        let assoc = &mut app.assoc;
         let compare_running = app.compare_run.as_ref().filter(|r| r.new == id).and_then(|r| r.snapshot());
         let comment_allowed = doc.allows_annotation();
         // A dialog or the palette owns the keyboard: the panel leaves Escape to it.
@@ -534,7 +538,8 @@ pub fn right_panel(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
                         }
                         // Right to left: close, "…", filter, search (Acrobat's order left to right).
                         if panel == RightPanel::Comments {
-                            panel_command = crate::comments_panel::header_controls(ui, info, generation, view, doc.comments_hidden());
+                            let hidden_types = doc.hidden_comment_types();
+                            panel_command = crate::comments_panel::header_controls(ui, info, generation, view, doc.comments_hidden(), &hidden_types);
                         }
                         if panel == RightPanel::Comments
                             && icons::button(ui, "search", 26.0, view.comments.search.is_some(), tl!("Search comments")).clicked()
@@ -545,17 +550,28 @@ pub fn right_panel(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
                             };
                             view.comments.search_focus = true;
                         }
-                        if panel == RightPanel::Bookmarks && !info.outline.is_empty() {
+                        if panel == RightPanel::Bookmarks && (!info.outline.is_empty() || bm_editable) {
                             let more = icons::button(ui, "ellipsis", 26.0, false, tl!("Bookmark options"));
                             egui::Popup::menu(&more).show(|ui| {
                                 ui.set_min_width(200.0);
-                                for (levels, label) in [
-                                    (usize::MAX, tl!("Expand all bookmarks")),
-                                    (1, tl!("Expand top-level bookmarks")),
-                                    (0, tl!("Collapse all bookmarks")),
-                                ] {
-                                    if ui.button(label).clicked() {
-                                        bm_expand = Some(levels);
+                                if !info.outline.is_empty() {
+                                    for (levels, label) in [
+                                        (usize::MAX, tl!("Expand all bookmarks")),
+                                        (1, tl!("Expand top-level bookmarks")),
+                                        (0, tl!("Collapse all bookmarks")),
+                                    ] {
+                                        if ui.button(label).clicked() {
+                                            bm_expand = Some(levels);
+                                            ui.close();
+                                        }
+                                    }
+                                }
+                                if bm_editable {
+                                    if !info.outline.is_empty() {
+                                        ui.separator();
+                                    }
+                                    if ui.button(tl!("New bookmarks from structure…")).clicked() {
+                                        panel_command = Some("bookmark.from_structure");
                                         ui.close();
                                     }
                                 }
@@ -610,6 +626,14 @@ pub fn right_panel(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
                     RightPanel::Bookmarks => {
                         if info.outline.is_empty() {
                             empty(ui, &t, "bookmark", "This document has no bookmarks.");
+                            if bm_editable {
+                                ui.add_space(8.0);
+                                ui.vertical_centered(|ui| {
+                                    if crate::widgets::pill_button(ui, tl!("New bookmarks from structure…"), false).clicked() {
+                                        panel_command = Some("bookmark.from_structure");
+                                    }
+                                });
+                            }
                         }
                         let mut ctx = OutlineCtx {
                             nav: &mut nav,
@@ -665,7 +689,7 @@ pub fn right_panel(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
                         let page = view.current.min(info.pages.len().saturating_sub(1));
                         order_action = crate::tags_ui::order_panel(ui, &t, tools, doc, page, editable).map(|a| (page, a));
                     }
-                    RightPanel::Search => crate::search_ui::panel(ui, &t, view, info.pages.len()),
+                    RightPanel::Search => crate::search_ui::panel(ui, &t, view, info, adv_search, &mut search_action),
                     RightPanel::Compare => {
                         if let Some(c) = signed_comparison {
                             crate::sign_ui::signed_comparison_card(ui, &t, c);
@@ -677,6 +701,7 @@ pub fn right_panel(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
                         if info.attachments.is_empty() {
                             empty(ui, &t, "paperclip", "This document has no attachments.");
                         }
+                        let assoc_editable = doc.allows_modification() && doc.editable() && doc.read_only_reason.is_none();
                         for (ai, a) in info.attachments.iter().enumerate() {
                             egui::Frame::NONE.inner_margin(egui::Margin::symmetric(4, 6)).show(ui, |ui| {
                                 ui.horizontal(|ui| {
@@ -710,6 +735,7 @@ pub fn right_panel(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
                                 });
                             });
                         }
+                        assoc_action = crate::assoc_ui::section(ui, &t, assoc, doc, assoc_editable);
                     }
                 });
             });
@@ -737,6 +763,12 @@ pub fn right_panel(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
     }
     if let Some(a) = compare_action {
         app.compare_action(index, a);
+    }
+    if let Some(a) = search_action {
+        app.advanced_search_action(a);
+    }
+    if let Some(a) = assoc_action {
+        app.assoc_action(a);
     }
     match sig_action {
         Some(crate::sign_ui::PanelAction::Validate) => app.run_command("sign.validate"),
@@ -767,6 +799,9 @@ pub fn right_panel(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
     }
     if let Some((p, i)) = app.views.get_mut(index).and_then(|v| v.comments.default_request.take()) {
         app.make_comment_default(p, i);
+    }
+    if let Some(types) = app.views.get_mut(index).and_then(|v| v.comments.hide_types_request.take()) {
+        app.set_hidden_comment_types(&types);
     }
     if let Some((p, i)) = app.views.get_mut(index).and_then(|v| v.comments.props_request.take()) {
         app.open_comment_props(p, i);
@@ -827,6 +862,8 @@ pub enum BmAction {
     EditScript(Vec<usize>),
     /// Clicked a bookmark without a page: run its action (a script, a web address).
     Run(Vec<usize>),
+    /// Bookmark Properties: its title and action.
+    Properties(Vec<usize>),
 }
 
 /// Matching titles plus their ancestors, keeping document paths rather than filtered indexes.
@@ -991,6 +1028,7 @@ fn outline_item(ui: &mut egui::Ui, t: &Tokens, info: &DocInfo, item: &OutlineIte
                 let set_page = crate::i18n::fmt(tl!("Set to current page ({n})"), &[("n", &(current + 1).to_string())]);
                 pick(ui, &set_page, true, BmAction::SetToCurrentPage(path.to_vec()));
                 pick(ui, tl!("Run a JavaScript…"), true, BmAction::EditScript(path.to_vec()));
+                pick(ui, tl!("Properties…"), true, BmAction::Properties(path.to_vec()));
                 ui.separator();
                 pick(ui, tl!("Move up"), i > 0, BmAction::MoveUp(path.to_vec()));
                 pick(ui, tl!("Move down"), i + 1 < siblings, BmAction::MoveDown(path.to_vec()));

@@ -82,6 +82,9 @@ impl ThemePreference {
     }
 }
 
+/// Error text in panels and dialogs (readable on every theme).
+pub const DANGER: egui::Color32 = egui::Color32::from_rgb(0xD7, 0x37, 0x3F);
+
 #[derive(Clone, Copy, Debug)]
 pub struct Tokens {
     pub kind: ThemeKind,

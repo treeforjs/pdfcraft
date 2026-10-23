@@ -18,14 +18,50 @@ pub struct Wizard {
     pub editing: Option<(Option<String>, Action)>,
     /// The step the "Add" menu adds.
     pub add: usize,
+    /// Start runs on a folder's PDFs (and its subfolders') instead of chosen files.
+    pub folder: bool,
+    pub recursive: bool,
 }
 
-/// Progress of a run: files done, total, and the summary once finished.
+/// Progress of a run: files done, total, the file being processed, whether Cancel was
+/// pressed, and the summary once finished.
 #[derive(Default)]
 pub struct RunProgress {
     pub done: usize,
     pub total: usize,
+    pub current: String,
+    pub cancel: bool,
     pub message: Option<String>,
+}
+
+/// What a run processes: files already read, or the PDFs of a folder (and its subfolders),
+/// found and read one at a time on the worker thread.
+pub enum BatchSource {
+    Files(Vec<(String, Vec<u8>)>),
+    #[cfg(not(target_arch = "wasm32"))]
+    Folder {
+        folder: std::path::PathBuf,
+        recursive: bool,
+    },
+}
+
+/// Files a folder run processes at most.
+#[cfg(not(target_arch = "wasm32"))]
+pub const MAX_BATCH_FILES: usize = 10_000;
+
+/// `rel` as a path below the results folder: its plain components only (never `..`, a root or
+/// a drive), so a result can't be written outside the folder.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn safe_relative(rel: &str) -> Option<std::path::PathBuf> {
+    let mut out = std::path::PathBuf::new();
+    for c in std::path::Path::new(rel).components() {
+        match c {
+            std::path::Component::Normal(n) => out.push(n),
+            std::path::Component::CurDir => {}
+            _ => return None,
+        }
+    }
+    (!out.as_os_str().is_empty()).then_some(out)
 }
 
 impl PdfCraftApp {
@@ -39,68 +75,149 @@ impl PdfCraftApp {
     /// Run `action` on files, writing the results into a folder the user picks (the export
     /// folder override in tests), in the background.
     pub fn run_action_on(&mut self, action: Action, files: Vec<(String, Vec<u8>)>) {
+        self.run_action_source(action, BatchSource::Files(files));
+    }
+
+    /// [`Self::run_action_on`] for files or a folder.
+    pub fn run_action_source(&mut self, action: Action, source: BatchSource) {
         if self.action_run.is_some() {
             self.notify_tr("An action is already running");
             return;
         }
         #[cfg(not(target_arch = "wasm32"))]
         match self.export_dir_override.clone() {
-            Some(d) => self.run_action_into(action, files, d.into()),
+            Some(d) => self.run_action_into(action, source, d.into()),
             None => {
                 let dialog = rfd::AsyncFileDialog::new().set_title(tl!("Choose a folder for the results").to_string());
-                self.ask_one(crate::pickers::Ask::Folder(dialog), None, move |app, dir| app.run_action_into(action, files, dir));
+                self.ask_one(crate::pickers::Ask::Folder(dialog), None, move |app, dir| app.run_action_into(action, source, dir));
             }
         }
         #[cfg(target_arch = "wasm32")]
-        self.run_action_into(action, files);
+        self.run_action_into(action, source);
     }
 
-    /// [`Self::run_action_on`] once the folder for the results is known.
-    fn run_action_into(&mut self, action: Action, files: Vec<(String, Vec<u8>)>, #[cfg(not(target_arch = "wasm32"))] dir: std::path::PathBuf) {
+    /// Cancel the running action: it stops before the next file.
+    pub fn cancel_action(&mut self) {
+        if let Some(p) = &self.action_run {
+            p.lock().unwrap_or_else(std::sync::PoisonError::into_inner).cancel = true;
+        }
+    }
+
+    /// [`Self::run_action_source`] once the folder for the results is known.
+    fn run_action_into(&mut self, action: Action, source: BatchSource, #[cfg(not(target_arch = "wasm32"))] dir: std::path::PathBuf) {
         // Another run may have started while the folder picker was open.
         if self.action_run.is_some() {
             self.notify_tr("An action is already running");
             return;
         }
-        let progress = Arc::new(Mutex::new(RunProgress { total: files.len(), ..Default::default() }));
+        let total = match &source {
+            BatchSource::Files(f) => f.len(),
+            #[cfg(not(target_arch = "wasm32"))]
+            BatchSource::Folder { .. } => 0,
+        };
+        let progress = Arc::new(Mutex::new(RunProgress { total, ..Default::default() }));
         let p = progress.clone();
         // The summary is written on the worker thread: draw it in the UI's language.
         let lang = crate::i18n::current();
         let work = move || {
             crate::i18n::set_current(lang);
-            let (mut ok, mut failed) = (0, Vec::new());
-            for (i, (name, bytes)) in files.into_iter().enumerate() {
-                if let Ok(mut s) = p.lock() {
-                    s.done = i;
+            let lock = || p.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+            // (shown name, bytes or where to read them).
+            let mut items: Vec<(String, Result<Vec<u8>, std::path::PathBuf>)> = Vec::new();
+            #[cfg_attr(target_arch = "wasm32", allow(unused_mut))]
+            let mut notes: Vec<String> = Vec::new();
+            match source {
+                BatchSource::Files(f) => items.extend(f.into_iter().map(|(n, b)| (n, Ok(b)))),
+                #[cfg(not(target_arch = "wasm32"))]
+                BatchSource::Folder { folder, recursive } => {
+                    lock().current = folder.to_string_lossy().into_owned();
+                    // Links may lead to files only inside the folder itself.
+                    let root = folder.canonicalize().unwrap_or_else(|_| folder.clone());
+                    let limits = pdfcraft_engine::folder_search::LIMITS;
+                    let walk = pdfcraft_engine::folder_search::walk_pdfs(&root, "", recursive, Some(&root), MAX_BATCH_FILES, &limits);
+                    if !walk.skipped.is_empty() {
+                        notes.push(crate::i18n::fmt(tl!("{n} skipped"), &[("n", &walk.skipped.len().to_string())]));
+                    }
+                    if !walk.truncated.is_empty() {
+                        notes.push(crate::i18n::fmt(tl!("stopped at {n} files"), &[("n", &walk.files.len().to_string())]));
+                    }
+                    items.extend(walk.files.into_iter().map(|f| (f.shown, Err(f.real))));
                 }
-                let r = pdfcraft_engine::actions::run_on(&action, &name, Arc::new(bytes), |_, _| {}).and_then(|r| {
+            }
+            lock().total = items.len();
+            let (mut ok, mut failed, mut cancelled) = (0usize, Vec::new(), false);
+            for (i, (name, src)) in items.into_iter().enumerate() {
+                {
+                    let mut s = lock();
+                    if s.cancel {
+                        cancelled = true;
+                        break;
+                    }
+                    s.done = i;
+                    s.current = name.clone();
+                }
+                let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| -> Result<(), String> {
+                    let bytes = match src {
+                        Ok(b) => b,
+                        Err(path) => {
+                            let max = pdfcraft_engine::folder_search::LIMITS.max_file_bytes;
+                            match std::fs::metadata(&path) {
+                                Ok(m) if m.len() > max => {
+                                    return Err(crate::i18n::fmt(tl!("larger than {n} MB"), &[("n", &(max >> 20).to_string())]));
+                                }
+                                Ok(_) => std::fs::read(&path).map_err(|e| e.to_string())?,
+                                Err(e) => return Err(e.to_string()),
+                            }
+                        }
+                    };
+                    let file_name = std::path::Path::new(&name).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| name.clone());
+                    let r = pdfcraft_engine::actions::run_on(&action, &file_name, Arc::new(bytes), |_, _| {})?;
                     #[cfg(not(target_arch = "wasm32"))]
-                    crate::editing::write_atomically(&dir.join(&name).to_string_lossy(), &r.bytes).map_err(|e| e.to_string())?;
+                    {
+                        // Subfolders are kept below the results folder.
+                        let rel = safe_relative(&name).ok_or_else(|| tl!("not a file name").to_string())?;
+                        let out = dir.join(rel);
+                        if let Some(parent) = out.parent() {
+                            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+                        }
+                        crate::editing::write_atomically(&out.to_string_lossy(), &r.bytes).map_err(|e| e.to_string())?;
+                    }
                     #[cfg(target_arch = "wasm32")]
-                    crate::editing::download(&name, &r.bytes)?;
+                    crate::editing::download(&file_name, &r.bytes)?;
                     Ok(())
-                });
+                }))
+                .unwrap_or_else(|_| Err(tl!("the action stopped unexpectedly").to_string()));
                 match r {
                     Ok(()) => ok += 1,
-                    Err(e) => failed.push(format!("{name}: {}", e)),
+                    Err(e) => failed.push(format!("{name}: {e}")),
                 }
             }
             let done =
                 if ok == 1 { crate::i18n::fmt(tl!("1 file done"), &[]) } else { crate::i18n::fmt(tl!("{n} files done"), &[("n", &ok.to_string())]) };
             let mut msg = format!("{}: {done}", action.name);
+            if cancelled {
+                msg.push_str(&format!(" ({})", tl!("cancelled")));
+            }
+            for n in notes {
+                msg.push_str(&format!("; {n}"));
+            }
             if !failed.is_empty() {
+                let more = failed.len().saturating_sub(20);
+                failed.truncate(20);
+                if more > 0 {
+                    failed.push(crate::i18n::fmt(tl!("{n} more"), &[("n", &more.to_string())]));
+                }
                 msg.push_str(&crate::i18n::fmt(tl!("; failed: {list}"), &[("list", &failed.join("; "))]));
             }
-            if let Ok(mut s) = p.lock() {
-                s.done = s.total;
-                s.message = Some(msg);
-            }
+            let mut s = lock();
+            s.done = s.total;
+            s.message = Some(msg);
         };
         #[cfg(not(target_arch = "wasm32"))]
         if self.run_inline {
             work();
-        } else {
-            std::thread::Builder::new().name("pdfcraft-action".into()).spawn(work).ok();
+        } else if let Err(e) = std::thread::Builder::new().name("pdfcraft-action".into()).spawn(work) {
+            return self.notify_error(e);
         }
         #[cfg(target_arch = "wasm32")]
         work();
@@ -133,11 +250,34 @@ impl PdfCraftApp {
         }
     }
 
-    /// Start: ask for the files, then run the selected action on them.
+    /// The running action, for the control channel.
+    pub fn action_run_state(&self) -> serde_json::Value {
+        match &self.action_run {
+            Some(p) => {
+                let s = p.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+                serde_json::json!({ "running": true, "done": s.done, "total": s.total, "current": s.current, "cancelling": s.cancel })
+            }
+            None => serde_json::json!({ "running": false }),
+        }
+    }
+
+    /// Start: ask for the files (or the folder), then run the selected action on them.
     fn start_selected_action(&mut self) {
         let Some(action) = self.wizard.selected.as_ref().and_then(|n| self.all_actions().into_iter().find(|a| &a.name == n)) else { return };
         #[cfg(not(target_arch = "wasm32"))]
         {
+            if self.wizard.folder {
+                let recursive = self.wizard.recursive;
+                let run = move |app: &mut Self, folder: std::path::PathBuf| app.run_action_source(action, BatchSource::Folder { folder, recursive });
+                match self.action_files_override.clone().and_then(|p| p.into_iter().next()) {
+                    Some(p) => run(self, p.into()),
+                    None => {
+                        let dialog = rfd::AsyncFileDialog::new().set_title(tl!("Choose a folder of PDFs").to_string());
+                        self.ask_one(crate::pickers::Ask::Folder(dialog), None, run);
+                    }
+                }
+                return;
+            }
             let title = crate::i18n::fmt(tl!("Files for {name}"), &[("name", &action.name)]);
             let run = move |app: &mut Self, paths: Vec<std::path::PathBuf>| {
                 let mut files = Vec::new();
@@ -241,6 +381,28 @@ pub(crate) fn body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> bool
             }
         });
     });
+    ui.add_space(8.0);
+    #[cfg(not(target_arch = "wasm32"))]
+    ui.horizontal(|ui| {
+        ui.label(tl!("Run on:"));
+        ui.radio_value(&mut app.wizard.folder, false, tl!("Files…"));
+        ui.radio_value(&mut app.wizard.folder, true, tl!("A folder…"));
+        ui.add_enabled(app.wizard.folder, egui::Checkbox::new(&mut app.wizard.recursive, tl!("Include subfolders")));
+    });
+    if let Some(p) = app.action_run.clone() {
+        let (done, total, current) = {
+            let s = p.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+            (s.done, s.total, s.current.clone())
+        };
+        ui.add_space(4.0);
+        ui.horizontal(|ui| {
+            let f = if total == 0 { 0.0 } else { done as f32 / total as f32 };
+            ui.add(egui::ProgressBar::new(f).desired_width(ui.available_width() - 90.0).text(egui::RichText::new(current).small()));
+            if ui.button(tl!("Cancel")).clicked() {
+                app.cancel_action();
+            }
+        });
+    }
     ui.add_space(10.0);
     let selected_custom = app.wizard.selected.as_ref().and_then(|n| app.custom_actions.iter().position(|a| &a.name == n));
     let mut close = false;
@@ -259,7 +421,7 @@ pub(crate) fn body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> bool
             }
         }
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            if widgets::pill_button(ui, tl_ctx!("action wizard", "Start"), true).clicked() {
+            if widgets::pill_button(ui, tl_ctx!("action wizard", "Start"), app.action_run.is_none()).clicked() && app.action_run.is_none() {
                 close = true;
                 app.start_selected_action();
             }

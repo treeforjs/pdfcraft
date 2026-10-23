@@ -3007,3 +3007,122 @@ compare-page	Moved	Přesunutá
 	Australian Tax File Numbers	Australská daňová čísla (TFN)
 	Australian Medicare Numbers	Australská čísla Medicare
 	Australian Business Numbers	Australská čísla podniků (ABN)
+
+# Comment, organize and search gaps (find comments, hide by type, page ranges, bookmark
+# properties, bookmarks from structure, advanced search, associated files, custom commands).
+	 in {f} of {s} documents	 v {f} z {s} dokumentů
+	(no name)	(bez názvu)
+	(this document doesn't allow copying its text)	(tento dokument nepovoluje kopírování textu)
+	* the tool needs this option	* nástroj tuto volbu potřebuje
+	A bookmark needs a title.	Záložka musí mít název.
+	A folder	Složka
+	A folder…	Složka…
+	Add an associated file	Přidat přidružený soubor
+	Add file…	Přidat soubor…
+	Added 1 bookmark	Přidána 1 záložka
+	Added {n} bookmarks	Přidáno záložek: {n}
+	All levels	Všechny úrovně
+	Another action (kept as it is)	Jiná akce (ponechána beze změny)
+	Ask for the options each time it runs	Při každém spuštění se zeptat na volby
+	Asks for its options when it runs.	Při spuštění se ptá na své volby.
+	Associated files	Přidružené soubory
+	Bookmark properties	Vlastnosti záložky
+	Bookmark properties…	Vlastnosti záložky…
+	Cancelled: not every document was searched.	Zrušeno: nebyly prohledány všechny dokumenty.
+	Check the options, then run the command.	Zkontrolujte volby a spusťte příkaz.
+	Choose a folder of PDFs	Vyberte složku s PDF
+	Choose a folder to search	Vyberte složku k prohledání
+	Choose a folder to search.	Vyberte složku k prohledání.
+	Choose folder…	Vybrat složku…
+	Choose one of the document's named destinations.	Vyberte jeden z pojmenovaných cílů dokumentu.
+	Choose the tool the command runs.	Vyberte nástroj, který příkaz spouští.
+	Choose…	Vybrat…
+	Comment	Komentář
+	Comment on page {label}	Komentář na straně {label}
+	Custom commands	Vlastní příkazy
+	Custom commands aren't available in this version of PdfCraft.	Vlastní příkazy nejsou v této verzi PdfCraft dostupné.
+	Custom commands…	Vlastní příkazy…
+	Description (optional)	Popis (nepovinný)
+	Destination:	Cíl:
+	Edit Command	Upravit příkaz
+	Enter a page number from 1 to {n}.	Zadejte číslo strany od 1 do {n}.
+	Enter a web address starting with https://, http:// or mailto:.	Zadejte webovou adresu začínající https://, http:// nebo mailto:.
+	Enter a zoom from 1% to 6400%.	Zadejte zvětšení od 1 % do 6400 %.
+	Existing bookmarks:	Stávající záložky:
+	Export custom commands	Exportovat vlastní příkazy
+	Files linked to the document, a page or a comment, each with its relationship (source, data, alternative…).	Soubory propojené s dokumentem, stranou nebo komentářem, každý se svým vztahem (zdroj, data, alternativa…).
+	Files…	Soubory…
+	Fixed zoom	Pevné zvětšení
+	Headings:	Nadpisy:
+	Import custom commands	Importovat vlastní příkazy
+	Imported {n} custom commands	Importováno vlastních příkazů: {n}
+	Include bookmarks and comments	Zahrnout záložky a komentáře
+	Include comments	Zahrnout komentáře
+	Include subfolders	Zahrnout podsložky
+	Keep them, add the new ones after	Ponechat je a nové přidat za ně
+	Levels 1 to {n}	Úrovně 1 až {n}
+	Look in	Hledat v
+	Make bookmarks	Vytvořit záložky
+	Make one bookmark for each heading of the document's tags, nested by heading level.	Vytvořit záložku pro každý nadpis ve značkách dokumentu, vnořenou podle úrovně nadpisu.
+	New Command	Nový příkaz
+	New Command…	Nový příkaz…
+	New bookmarks from structure	Nové záložky ze struktury
+	New bookmarks from structure…	Nové záložky ze struktury…
+	No associated files.	Žádné přidružené soubory.
+	No comments	Žádné komentáře
+	No custom commands yet.	Zatím žádné vlastní příkazy.
+	No folder chosen	Není vybrána žádná složka
+	No pages match.	Žádné strany neodpovídají.
+	Object {n}	Objekt {n}
+	One tool with the options you choose, run in one step.	Jeden nástroj se zvolenými volbami, spuštěný v jednom kroku.
+	Open a document to run the command on.	Otevřete dokument, na kterém se má příkaz spustit.
+	Page labels work too, as in Print.	Fungují i označení stran, stejně jako v Tisku.
+	Page range	Rozsah stran
+	Page:	Strana:
+	Ran {name}	Spuštěno: {name}
+	Relationship:	Vztah:
+	Remove associated file	Odebrat přidružený soubor
+	Replace them	Nahradit je
+	Run on this document	Spustit na tomto dokumentu
+	Run on:	Spustit na:
+	Runs: {tool}	Spouští: {tool}
+	Save associated file…	Uložit přidružený soubor…
+	Search a folder…	Prohledat složku…
+	Searching {d} of {t}…	Prohledávání {d} z {t}…
+	Select	Vybrat
+	Select a bookmark first	Nejprve vyberte záložku
+	Select pages…	Vybrat strany…
+	Show all comment types	Zobrazit všechny typy komentářů
+	Show all types	Zobrazit všechny typy
+	Show on pages by type	Zobrazit na stranách podle typu
+	Stopped at the result limit: narrow the search to see the rest.	Zastaveno na limitu výsledků: zužte hledání, abyste viděli zbytek.
+	Subset:	Podmnožina:
+	That bookmark no longer exists	Tato záložka už neexistuje
+	The current document	Aktuální dokument
+	The document changed; add the file again	Dokument se změnil; přidejte soubor znovu
+	The folder to search	Složka k prohledání
+	The script is too long.	Skript je příliš dlouhý.
+	There is no folder to keep custom commands in.	Není žádná složka pro uložení vlastních příkazů.
+	This bookmark runs a {kind} action, kept as it is unless you choose another.	Tato záložka spouští akci {kind}, která zůstane beze změny, pokud nevyberete jinou.
+	Title:	Název:
+	To the document	K dokumentu
+	To this page	K této straně
+	Tool:	Nástroj:
+	Type a word or phrase to search for.	Zadejte slovo nebo frázi k vyhledání.
+	Web address:	Webová adresa:
+	When clicked:	Po kliknutí:
+	Zoom:	Zvětšení:
+	cancelled	zrušeno
+	comment	komentář
+	e.g. 1-3, 7	např. 1-3, 7
+	e.g. 1-3, 7 (empty: all pages)	např. 1-3, 7 (prázdné: všechny strany)
+	larger than {n} MB	větší než {n} MB
+	not a file name	není název souboru
+	stopped at {n} files	zastaveno na {n} souborech
+	the action stopped unexpectedly	akce se nečekaně zastavila
+	{name} is larger than {n} MB	{name} je větší než {n} MB
+	{name} isn't valid	{name} není platné
+	{n} files skipped	přeskočeno souborů: {n}
+	{n} more	dalších {n}
+	{n} more not shown	dalších {n} nezobrazeno
+	{n} skipped	přeskočeno: {n}

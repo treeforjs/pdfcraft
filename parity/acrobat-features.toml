@@ -416,10 +416,10 @@ area = "A"
 tier = "P1"
 milestone = "M2"
 status = "partial"
-commands = []
+commands = ["file.associated_files"]
 tools = ["associated_files_list", "associated_file_add", "associated_file_remove", "associated_file_extract"]
-evidence = ["crates/organize/src/associated/tests.rs::a_document_file_is_embedded_associated_and_an_attachment", "crates/organize/src/associated/tests.rs::page_annotation_structure_and_xobject_files_stay_out_of_the_name_tree", "crates/organize/src/associated/tests.rs::removing_drops_the_entry_and_its_attachment", "crates/organize/src/associated/tests.rs::bad_selectors_targets_and_files_are_refused", "crates/organize/src/associated/tests.rs::relationship_names_parse_case_insensitively_and_reject_others", "crates/organize/src/associated/tests.rs::hostile_af_arrays_are_reported_not_fatal", "crates/organize/src/associated/tests.rs::huge_af_arrays_are_capped", "crates/organize/src/associated/tests.rs::a_cyclic_embedded_files_tree_is_never_rewritten", "crates/engine/src/tests.rs::associated_files_are_one_undo_step_each_and_survive_save", "crates/automation/tests/automation.rs::associated_files_through_tools"]
-notes = "Headless only (no panel yet; UI redesign in progress). List, add, remove and extract ISO 32000-2 §14.13 associated files on the document (catalog /AF), a page, an annotation (page + /Annots position; a direct annotation dictionary is made indirect), or by object number a structure element, form/image XObject, annotation or DPart. Adding embeds an /EmbeddedFile stream (Flate, /Subtype MIME type given or guessed from the extension, /Params Size, MD5 CheckSum, CreationDate, ModDate) in a /Filespec with /F, /UF, /EF (F and UF), /Desc and /AFRelationship (Source, Data, Alternative, Supplement, EncryptedPayload, FormData, Schema, Unspecified; default Unspecified), max 64 MiB. Document-level files are also registered in /Names /EmbeddedFiles (as PDF/A-3 expects, so they appear as attachments; duplicate names get \" (2)\"), and removing takes them out again; the tree is rewritten flat and sorted, and a cyclic, too deep or malformed tree refuses the edit instead of losing entries. Other owners' files are only in their /AF. Hostile /AF (not an array, self-references, missing objects, strings, >4096 entries) is reported as issues/problems, never fatal. Each add/remove is one undo step (Edit::AddAssociatedFile / RemoveAssociatedFile). Missing: an Attachments-panel UI showing relationships, editing an existing entry's relationship/description, scanning structure elements and XObjects in the no-target listing, second-class relationship names on add, freeing the removed filespec on incremental save (a full save drops it), and the document /Version is not raised to 2.0."
+evidence = ["crates/organize/src/associated/tests.rs::a_document_file_is_embedded_associated_and_an_attachment", "crates/organize/src/associated/tests.rs::page_annotation_structure_and_xobject_files_stay_out_of_the_name_tree", "crates/organize/src/associated/tests.rs::removing_drops_the_entry_and_its_attachment", "crates/organize/src/associated/tests.rs::bad_selectors_targets_and_files_are_refused", "crates/organize/src/associated/tests.rs::relationship_names_parse_case_insensitively_and_reject_others", "crates/organize/src/associated/tests.rs::hostile_af_arrays_are_reported_not_fatal", "crates/organize/src/associated/tests.rs::huge_af_arrays_are_capped", "crates/organize/src/associated/tests.rs::a_cyclic_embedded_files_tree_is_never_rewritten", "crates/engine/src/tests.rs::associated_files_are_one_undo_step_each_and_survive_save", "crates/automation/tests/automation.rs::associated_files_through_tools", "crates/ui-egui/tests/ui_gaps.rs::associated_files_add_and_remove"]
+notes = "Attachments panel ▸ Associated files (file.associated_files): every file associated with the document, a page or a comment, with its relationship, size and description; add a file (max 64 MiB) to the document or the current page with a relationship and description, save one, remove one, each one undo step. Headless tools: list, add, remove and extract on the document, a page, an annotation or an object (ISO 32000-2 §14.13; embedded /EmbeddedFile with /Params, /AFRelationship; document files also in /Names /EmbeddedFiles; hostile /AF reported, never fatal). Missing: editing an existing entry's relationship/description, scanning structure elements and XObjects in the no-target listing, second-class relationship names on add, freeing the removed filespec on incremental save, raising /Version to 2.0."
 
 [[feature]]
 id = "core.pdf20-dpart"
@@ -1432,11 +1432,11 @@ title = "Advanced search window"
 area = "B"
 tier = "P1"
 milestone = "M12"
-status = "partial"
-commands = ["edit.advanced_search"]
-tools = ["text_find"]
-evidence = ["crates/ui-egui/tests/viewer.rs::advanced_search_lists_results_with_context"]
-notes = "in the current document, as a side panel; searching other open documents, folders and indexes is still to come"
+status = "shipped"
+commands = ["edit.advanced_search", "edit.search_folder"]
+tools = ["text_find", "search_folder"]
+evidence = ["crates/ui-egui/tests/viewer.rs::advanced_search_lists_results_with_context", "crates/ui-egui/tests/ui_gaps.rs::advanced_search_open_documents_and_a_folder"]
+notes = "Search panel (side panel) with a Look in choice: the current document (results with context, comments too), all open documents, or a folder (with subfolders), with whole words, case and bookmarks/comments options. Other documents and folders are searched off the UI thread with progress and Cancel, capped (files, results, 512 MB and 60 s per file), never following folder links or file links out of the folder; results are a tree by file, and a click opens the file (or goes to the open document) at the page. Indexes (catalog) are not supported."
 
 [[feature]]
 id = "view.search-folder"
@@ -1444,11 +1444,11 @@ title = "Search all PDFs in a folder"
 area = "B"
 tier = "P1"
 milestone = "M12"
-status = "partial"
-commands = []
+status = "shipped"
+commands = ["edit.search_folder"]
 tools = ["search_folder"]
-evidence = ["crates/automation/tests/search_folder.rs::matches_across_files_and_pages_like_text_find", "crates/automation/tests/search_folder.rs::whole_words_and_case_options", "crates/automation/tests/search_folder.rs::subfolders_only_when_recursive", "crates/automation/tests/search_folder.rs::bookmarks_comments_and_attachments_on_request", "crates/automation/tests/search_folder.rs::corrupt_and_encrypted_files_are_skipped_with_reasons", "crates/automation/tests/search_folder.rs::symlink_loops_and_links_out_of_the_root_are_not_followed", "crates/automation/tests/search_folder.rs::caps_truncate_and_say_so", "crates/automation/tests/search_folder.rs::the_folder_must_be_inside_the_root"]
-notes = "Headless only: search_folder searches every .pdf in a folder (optionally its subfolders) with text_find's extraction and matcher, whole words / case-sensitive, and optionally bookmark titles, comment text, attachment names/descriptions and the page text of attached PDFs; results grouped by file with page, match, context and found_in; damaged, encrypted (without the right password) or oversized files are skipped with reasons; bounded walk (32 levels, 200000 entries, max_files, max_results, folder links never followed, file links only inside the root), 512 MB and 60 s per file (checked between pages, so one very slow page is not interrupted). Missing: the Advanced Search window in the UI (folder picker, results tree, open a result at its match), searching in a PDF Portfolio, Acrobat's further options (stemming, proximity, Boolean: view.search-boolean) and document properties/metadata search."
+evidence = ["crates/automation/tests/search_folder.rs::matches_across_files_and_pages_like_text_find", "crates/automation/tests/search_folder.rs::whole_words_and_case_options", "crates/automation/tests/search_folder.rs::subfolders_only_when_recursive", "crates/automation/tests/search_folder.rs::bookmarks_comments_and_attachments_on_request", "crates/automation/tests/search_folder.rs::corrupt_and_encrypted_files_are_skipped_with_reasons", "crates/automation/tests/search_folder.rs::symlink_loops_and_links_out_of_the_root_are_not_followed", "crates/automation/tests/search_folder.rs::caps_truncate_and_say_so", "crates/automation/tests/search_folder.rs::the_folder_must_be_inside_the_root", "crates/ui-egui/tests/ui_gaps.rs::advanced_search_open_documents_and_a_folder"]
+notes = "Search ▸ Search a folder… (edit.search_folder) opens the Search panel on a folder: choose it, include subfolders, search, see the results grouped by file and open one at its match; runs on a worker thread with progress and Cancel. Same engine as search_folder (moved to pdfcraft_engine::folder_search): bounded walk (32 levels, 200000 entries), folder links never followed, file links only inside the folder, damaged/encrypted/oversized files skipped with reasons. Not covered: PDF Portfolios, Boolean/stemming/proximity (view.search-boolean), metadata search."
 
 [[feature]]
 id = "view.search-boolean"
@@ -2820,11 +2820,11 @@ title = "Select by range, odd/even, landscape/portrait"
 area = "D"
 tier = "P1"
 milestone = "M4"
-status = "partial"
-commands = ["page.organize"]
-tools = ["page_rotate"]
-evidence = ["crates/engine/src/tests.rs::split_by_size_and_bookmarks_and_page_filters"]
-notes = "Organize ▸ Select: all, odd, even, landscape, portrait; ranges via the page tools"
+status = "shipped"
+commands = ["page.organize", "page.select_range"]
+tools = ["page_range_select", "page_rotate"]
+evidence = ["crates/engine/src/tests.rs::split_by_size_and_bookmarks_and_page_filters", "crates/engine/src/tests.rs::typed_page_ranges_select_pages", "crates/ui-egui/tests/ui_gaps.rs::select_pages_by_a_typed_range", "crates/automation/tests/ui_gaps.rs::page_ranges_select_pages"]
+notes = "Organize ▸ Select: all, odd, even, landscape, portrait, plus a typed range (1-3, 7, 9-, page labels) in the Select popup and in Pages ▸ Select pages… (combined with odd/even and orientation); page_range_select returns the pages. Ranges are capped (4000 characters, 256 parts) and refused with a message, never clamped."
 
 [[feature]]
 id = "organize.thumbnail-size"
@@ -3253,10 +3253,10 @@ area = "D"
 tier = "P1"
 milestone = "M4"
 status = "partial"
-commands = []
+commands = ["bookmark.properties"]
 tools = ["bookmark_set_action", "bookmark_list"]
-evidence = ["crates/organize/src/tests.rs::bookmark_actions_go_to_views_named_destinations_and_web_pages", "crates/automation/tests/automation.rs::named_destinations_views_and_bookmark_actions_through_tools"]
-notes = "Headless only: a bookmark's action can be set to go to a page view (any fit, with zoom), a named destination or a web address, replacing /Dest or /A (never both); bookmark_list reports each action (goto with view/dest, uri, or other such as JavaScript, kept as is). Not yet: a Bookmark Properties ▸ Actions dialog, creating other action types (JavaScript, open a file, menu items, show/hide), multiple actions per bookmark (/Next chains)"
+evidence = ["crates/organize/src/tests.rs::bookmark_actions_go_to_views_named_destinations_and_web_pages", "crates/automation/tests/automation.rs::named_destinations_views_and_bookmark_actions_through_tools", "crates/ui-egui/tests/ui_gaps.rs::bookmark_properties_and_bookmarks_from_structure"]
+notes = "Bookmark Properties (Bookmarks panel ▸ right-click ▸ Properties…, or bookmark.properties for the current page's bookmark): title and what a click does: go to a page (inherit zoom, fixed zoom 1–6400%, fit page/width/height/visible), a named destination, a web address (https, http, mailto) or run a JavaScript, each one undo step; other actions read from the file are shown and kept. Headless: bookmark_set_action / bookmark_list. Not yet: other action types (open a file, menu items, show/hide), multiple actions per bookmark (/Next chains), bookmark style (colour, bold, italic) in the dialog."
 
 [[feature]]
 id = "organize.bookmark-expand-collapse"
@@ -3276,11 +3276,11 @@ title = "Generate bookmarks from headings or tags"
 area = "D"
 tier = "P1"
 milestone = "M4"
-status = "partial"
-commands = []
+status = "shipped"
+commands = ["bookmark.from_structure"]
 tools = ["bookmark_from_structure"]
-evidence = ["crates/automation/tests/tags.rs::bookmarks_from_structure_headings_through_tools", "crates/automation/tests/tags.rs::bookmarks_from_structure_refuse_untagged_documents_and_documents_without_headings", "crates/engine/src/tests.rs::heading_bookmarks_come_from_tagged_headings_only", "crates/organize/src/tests.rs::bookmark_trees_nest_by_level_and_append_or_replace", "crates/organize/src/tests.rs::bookmark_trees_refuse_missing_pages_and_blank_titles_without_changing_anything", "crates/a11y/src/tests.rs::headings_in_document_order_with_levels_text_and_content", "crates/render/src/text.rs::glyphs_carry_the_mcid_of_their_marked_content"]
-notes = "Engine + agent tool (undoable Edit::AddBookmarkTree): one bookmark per structure heading (H1–H6, Hn, and H leveled by Sect/Part/Art nesting; role-mapped types count), nested by level, titled from /ActualText, else /Alt, else the text of the marked content it covers (glyphs now carry their MCID), going to /XYZ at the heading's top (page only on rotated pages); append or replace, max_level filter; untagged files and files without headings get a clear error. Missing: a menu command and dialog (UI is being redesigned), Acrobat's choice of other structure types than headings (e.g. Figure, Table, P), nesting the new bookmarks under one parent, text inside form XObjects referenced by MCRs with /Stm."
+evidence = ["crates/automation/tests/tags.rs::bookmarks_from_structure_headings_through_tools", "crates/automation/tests/tags.rs::bookmarks_from_structure_refuse_untagged_documents_and_documents_without_headings", "crates/engine/src/tests.rs::heading_bookmarks_come_from_tagged_headings_only", "crates/organize/src/tests.rs::bookmark_trees_nest_by_level_and_append_or_replace", "crates/organize/src/tests.rs::bookmark_trees_refuse_missing_pages_and_blank_titles_without_changing_anything", "crates/a11y/src/tests.rs::headings_in_document_order_with_levels_text_and_content", "crates/render/src/text.rs::glyphs_carry_the_mcid_of_their_marked_content", "crates/ui-egui/tests/ui_gaps.rs::bookmark_properties_and_bookmarks_from_structure"]
+notes = "Bookmarks panel ▸ … ▸ New bookmarks from structure… (and the empty panel's button): one bookmark per structure heading (H1–H6, Hn, H by nesting), nested by level, levels 1 to n or all, added after or replacing the existing ones, one undo step; untagged files and files without headings get a clear message. Engine + tool bookmark_from_structure as before (titles from /ActualText, /Alt or the marked content's text). Not covered: Acrobat's other structure types (Figure, Table, P) and nesting under one new parent."
 
 [[feature]]
 id = "organize.attachments-add"
@@ -3580,11 +3580,11 @@ title = "Insert-text proposal (caret)"
 area = "E"
 tier = "P1"
 milestone = "M5"
-status = "partial"
+status = "shipped"
 commands = ["comment.caret"]
 tools = ["comment_add"]
-evidence = ["crates/annot/src/tests.rs::polygons_clouds_connected_lines_callouts_and_carets_are_drawn", "crates/ui-egui/tests/comments.rs::polygons_clouds_connected_lines_callouts_and_inserted_text", "crates/automation/tests/automation.rs::drawing_comments_through_tools"]
-notes = "caret at a click; not yet snapped to the text insertion point"
+evidence = ["crates/annot/src/tests.rs::polygons_clouds_connected_lines_callouts_and_carets_are_drawn", "crates/ui-egui/tests/comments.rs::polygons_clouds_connected_lines_callouts_and_inserted_text", "crates/automation/tests/automation.rs::drawing_comments_through_tools", "crates/ui-egui/tests/ui_gaps.rs::insert_text_caret_snaps_to_the_insertion_point", "crates/automation/tests/ui_gaps.rs::caret_snaps_between_characters", "crates/render/src/text.rs::insertion_points_snap_between_glyphs_and_refuse_odd_input"]
+notes = "Insert Text (caret) snaps to the text insertion point: the gap between the two characters nearest the click (within 24 pt), sized to the line, with a preview while hovering; away from text it goes where clicked. comment_add takes snap: true (refuses when no text is near)."
 
 [[feature]]
 id = "comment.typewriter"
@@ -3952,11 +3952,11 @@ title = "Search comments"
 area = "E"
 tier = "P1"
 milestone = "M5"
-status = "partial"
-commands = ["comment.list"]
+status = "shipped"
+commands = ["comment.list", "edit.find"]
 tools = ["comment_list"]
-evidence = ["crates/ui-egui/tests/comments.rs::the_panel_posts_comments_and_replies"]
-notes = "search by author, text and type in the panel; not yet in the Find bar"
+evidence = ["crates/ui-egui/tests/comments.rs::the_panel_posts_comments_and_replies", "crates/ui-egui/tests/ui_gaps.rs::hide_comments_by_type_and_find_them"]
+notes = "Search by author, text and type in the Comments panel; the Find bar and the Search panel (Find options ▸ Include comments) also match comment text and authors, stepping through comments in page order with page text and selecting each comment found (capped at 5000 matches, refreshed only when the comments change)."
 
 [[feature]]
 id = "comment.show-hide-comments"
@@ -3964,11 +3964,11 @@ title = "Show or hide all comments and pop-ups"
 area = "E"
 tier = "P1"
 milestone = "M5"
-status = "partial"
-commands = ["comment.hide_all"]
+status = "shipped"
+commands = ["comment.hide_all", "comment.show_all_types"]
 tools = ["comments_hide"]
-evidence = ["crates/engine/src/tests.rs::comments_lock_take_checkmarks_hide_and_summarize", "crates/ui-egui/tests/comments.rs::comments_take_checkmarks_lock_hide_and_summarize", "crates/automation/tests/automation.rs::comment_checkmarks_locks_hiding_and_summaries_through_tools"]
-notes = "hide/show all comments (fields and links still draw); per-type hiding not yet"
+evidence = ["crates/engine/src/tests.rs::comments_lock_take_checkmarks_hide_and_summarize", "crates/ui-egui/tests/comments.rs::comments_take_checkmarks_lock_hide_and_summarize", "crates/automation/tests/automation.rs::comment_checkmarks_locks_hiding_and_summaries_through_tools", "crates/engine/src/tests.rs::comments_hide_by_type", "crates/render/src/raster.rs::hiding_comment_types_keeps_other_comments_and_fields", "crates/ui-egui/tests/ui_gaps.rs::hide_comments_by_type_and_find_them", "crates/automation/tests/ui_gaps.rs::comments_hide_by_type_and_refuse_odd_types"]
+notes = "Hide/show all comments (fields and links still draw), or hide comments per type (Comments panel ▸ … ▸ Show on pages by type; comments_hide types): hidden types are skipped by the renderer (vendored hayro patch 26), the canvas, pop-up notes and the panel's page overlay; Widget, Link and Popup can't be hidden this way."
 
 [[feature]]
 id = "comment.popups"
@@ -9213,11 +9213,11 @@ title = "Batch processing over files and folders"
 area = "N"
 tier = "P1"
 milestone = "M13"
-status = "partial"
+status = "shipped"
 commands = ["actions.wizard", "ocr.recognize_batch"]
 tools = ["action_run", "ocr_recognize_files"]
-evidence = ["crates/automation/tests/automation.rs::actions_through_tools", "crates/ui-egui/tests/actions.rs::run_and_create_actions"]
-notes = "Actions and OCR run over chosen files; whole folders (with subfolders) not yet."
+evidence = ["crates/automation/tests/automation.rs::actions_through_tools", "crates/ui-egui/tests/actions.rs::run_and_create_actions", "crates/ui-egui/tests/ui_gaps.rs::action_wizard_runs_on_a_folder_with_subfolders", "crates/automation/tests/ui_gaps.rs::actions_run_over_a_folder_and_its_subfolders"]
+notes = "Actions run over chosen files or a whole folder (Action Wizard ▸ Run on: A folder…, Include subfolders; action_run / ocr_recognize_files take source_folder + recursive): files are found and read one at a time on a worker thread with progress and Cancel, results keep their subfolders under the output folder, at most 10000 files, links out of the folder and folder links never followed, damaged files reported and skipped, each file under catch_unwind."
 
 [[feature]]
 id = "misc.action-prompt-steps"
@@ -9249,11 +9249,11 @@ title = "Custom commands"
 area = "N"
 tier = "P1"
 milestone = "M13"
-status = "partial"
-commands = []
+status = "shipped"
+commands = ["actions.custom_commands"]
 tools = ["custom_command_list", "custom_command_get", "custom_command_create", "custom_command_edit", "custom_command_delete", "custom_command_export", "custom_command_import", "custom_command_run"]
-evidence = ["crates/automation/tests/custom_commands.rs::create_list_get_edit_delete", "crates/automation/tests/custom_commands.rs::params_are_validated_against_the_tool_schema", "crates/automation/tests/custom_commands.rs::run_on_a_document_and_prompt_for_options", "crates/automation/tests/custom_commands.rs::run_on_files_under_the_root", "crates/automation/tests/custom_commands.rs::export_and_import"]
-notes = "Headless: one document tool (OCR, optimize, watermark, remove hidden information, …) bundled with preset options validated against its schema and a prompt-user flag; stored as one JSON file per command in a root-confined library folder; create, list, edit, delete, import and export; run on an open document or on files into a folder. Missing: no menu, dialog or command registry entry (UI redesign pending), no interactive prompt dialog (prompt_user means the caller passes params), schema pattern constraints are left to the tool, and file runs save with a full rewrite."
+evidence = ["crates/automation/tests/custom_commands.rs::create_list_get_edit_delete", "crates/automation/tests/custom_commands.rs::params_are_validated_against_the_tool_schema", "crates/automation/tests/custom_commands.rs::run_on_a_document_and_prompt_for_options", "crates/automation/tests/custom_commands.rs::run_on_files_under_the_root", "crates/automation/tests/custom_commands.rs::export_and_import", "crates/ui-egui/tests/ui_gaps.rs::custom_commands_build_and_run", "crates/automation/tests/ui_gaps.rs::session_tools_run_on_the_callers_session"]
+notes = "Action Wizard ▸ Custom commands… (actions.custom_commands): list, new, edit, delete, import and export commands that bundle one document tool with preset options, built with a form generated from the tool's schema (each option checked against its type), and run on the open document; a command marked Prompt user asks for its options in a dialog before running. The app reaches the tools through pdfcraft_engine::tool_host::ToolHost (pdfcraft_automation::SessionTools on the app's own session, under catch_unwind), so edits are the window's and undoable; the web app shows that it isn't available. Headless tools as before (root-confined JSON library). File runs save with a full rewrite."
 
 [[feature]]
 id = "misc.custom-tools"

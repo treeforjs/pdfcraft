@@ -2946,3 +2946,122 @@ compare-page	Moved	Преместена
 	Australian Tax File Numbers	Австралийски данъчни номера (TFN)
 	Australian Medicare Numbers	Австралийски номера Medicare
 	Australian Business Numbers	Австралийски фирмени номера (ABN)
+
+# Comment, organize and search gaps (find comments, hide by type, page ranges, bookmark
+# properties, bookmarks from structure, advanced search, associated files, custom commands).
+	 in {f} of {s} documents	 в {f} от {s} документа
+	(no name)	(без име)
+	(this document doesn't allow copying its text)	(този документ не позволява копиране на текста)
+	* the tool needs this option	* инструментът се нуждае от тази опция
+	A bookmark needs a title.	Отметката трябва да има заглавие.
+	A folder	Папка
+	A folder…	Папка…
+	Add an associated file	Добавяне на свързан файл
+	Add file…	Добавяне на файл…
+	Added 1 bookmark	Добавена е 1 отметка
+	Added {n} bookmarks	Добавени отметки: {n}
+	All levels	Всички нива
+	Another action (kept as it is)	Друго действие (запазва се)
+	Ask for the options each time it runs	Питане за опциите при всяко изпълнение
+	Asks for its options when it runs.	Пита за опциите си при изпълнение.
+	Associated files	Свързани файлове
+	Bookmark properties	Свойства на отметката
+	Bookmark properties…	Свойства на отметката…
+	Cancelled: not every document was searched.	Отменено: не всички документи бяха претърсени.
+	Check the options, then run the command.	Проверете опциите и изпълнете командата.
+	Choose a folder of PDFs	Изберете папка с PDF файлове
+	Choose a folder to search	Изберете папка за търсене
+	Choose a folder to search.	Изберете папка за търсене.
+	Choose folder…	Избор на папка…
+	Choose one of the document's named destinations.	Изберете една от именуваните дестинации на документа.
+	Choose the tool the command runs.	Изберете инструмента, който командата изпълнява.
+	Choose…	Избор…
+	Comment	Коментар
+	Comment on page {label}	Коментар на страница {label}
+	Custom commands	Потребителски команди
+	Custom commands aren't available in this version of PdfCraft.	Потребителските команди не са налични в тази версия на PdfCraft.
+	Custom commands…	Потребителски команди…
+	Description (optional)	Описание (по избор)
+	Destination:	Дестинация:
+	Edit Command	Редактиране на команда
+	Enter a page number from 1 to {n}.	Въведете номер на страница от 1 до {n}.
+	Enter a web address starting with https://, http:// or mailto:.	Въведете уеб адрес, започващ с https://, http:// или mailto:.
+	Enter a zoom from 1% to 6400%.	Въведете мащаб от 1% до 6400%.
+	Existing bookmarks:	Съществуващи отметки:
+	Export custom commands	Експорт на потребителски команди
+	Files linked to the document, a page or a comment, each with its relationship (source, data, alternative…).	Файлове, свързани с документа, страница или коментар, всеки със своята връзка (източник, данни, алтернатива…).
+	Files…	Файлове…
+	Fixed zoom	Фиксиран мащаб
+	Headings:	Заглавия:
+	Import custom commands	Импорт на потребителски команди
+	Imported {n} custom commands	Импортирани потребителски команди: {n}
+	Include bookmarks and comments	Включване на отметки и коментари
+	Include comments	Включване на коментари
+	Include subfolders	Включване на подпапки
+	Keep them, add the new ones after	Запазване и добавяне на новите след тях
+	Levels 1 to {n}	Нива от 1 до {n}
+	Look in	Търсене в
+	Make bookmarks	Създаване на отметки
+	Make one bookmark for each heading of the document's tags, nested by heading level.	Създаване на отметка за всяко заглавие от етикетите на документа, вложена по ниво на заглавието.
+	New Command	Нова команда
+	New Command…	Нова команда…
+	New bookmarks from structure	Нови отметки от структурата
+	New bookmarks from structure…	Нови отметки от структурата…
+	No associated files.	Няма свързани файлове.
+	No comments	Няма коментари
+	No custom commands yet.	Все още няма потребителски команди.
+	No folder chosen	Не е избрана папка
+	No pages match.	Няма съвпадащи страници.
+	Object {n}	Обект {n}
+	One tool with the options you choose, run in one step.	Един инструмент с избраните опции, изпълнен с една стъпка.
+	Open a document to run the command on.	Отворете документ, върху който да се изпълни командата.
+	Page labels work too, as in Print.	Етикетите на страници също работят, както при печат.
+	Page range	Диапазон от страници
+	Page:	Страница:
+	Ran {name}	Изпълнено: {name}
+	Relationship:	Връзка:
+	Remove associated file	Премахване на свързания файл
+	Replace them	Замяна
+	Run on this document	Изпълнение върху този документ
+	Run on:	Изпълнение върху:
+	Runs: {tool}	Изпълнява: {tool}
+	Save associated file…	Запазване на свързания файл…
+	Search a folder…	Търсене в папка…
+	Searching {d} of {t}…	Търсене: {d} от {t}…
+	Select	Избор
+	Select a bookmark first	Първо изберете отметка
+	Select pages…	Избор на страници…
+	Show all comment types	Показване на всички типове коментари
+	Show all types	Показване на всички типове
+	Show on pages by type	Показване на страниците по тип
+	Stopped at the result limit: narrow the search to see the rest.	Спряно при ограничението за резултати: стеснете търсенето, за да видите останалите.
+	Subset:	Подмножество:
+	That bookmark no longer exists	Тази отметка вече не съществува
+	The current document	Текущият документ
+	The document changed; add the file again	Документът се промени; добавете файла отново
+	The folder to search	Папката за търсене
+	The script is too long.	Скриптът е твърде дълъг.
+	There is no folder to keep custom commands in.	Няма папка за съхранение на потребителски команди.
+	This bookmark runs a {kind} action, kept as it is unless you choose another.	Тази отметка изпълнява действие {kind}, което се запазва, освен ако не изберете друго.
+	Title:	Заглавие:
+	To the document	Към документа
+	To this page	Към тази страница
+	Tool:	Инструмент:
+	Type a word or phrase to search for.	Въведете дума или фраза за търсене.
+	Web address:	Уеб адрес:
+	When clicked:	При щракване:
+	Zoom:	Мащаб:
+	cancelled	отменено
+	comment	коментар
+	e.g. 1-3, 7	напр. 1-3, 7
+	e.g. 1-3, 7 (empty: all pages)	напр. 1-3, 7 (празно: всички страници)
+	larger than {n} MB	по-голям от {n} MB
+	not a file name	не е име на файл
+	stopped at {n} files	спряно при {n} файла
+	the action stopped unexpectedly	действието спря неочаквано
+	{name} is larger than {n} MB	{name} е по-голям от {n} MB
+	{name} isn't valid	{name} е невалидно
+	{n} files skipped	пропуснати файлове: {n}
+	{n} more	още {n}
+	{n} more not shown	още {n} не са показани
+	{n} skipped	пропуснати: {n}

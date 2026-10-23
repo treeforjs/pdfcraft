@@ -2983,3 +2983,122 @@ compare-page	Moved	移動
 	Australian Tax File Numbers	オーストラリアの納税者番号（TFN）
 	Australian Medicare Numbers	オーストラリアの Medicare 番号
 	Australian Business Numbers	オーストラリアの事業者番号（ABN）
+
+# Comment, organize and search gaps (find comments, hide by type, page ranges, bookmark
+# properties, bookmarks from structure, advanced search, associated files, custom commands).
+	 in {f} of {s} documents	（{s} 件中 {f} 件の文書）
+	(no name)	（名前なし）
+	(this document doesn't allow copying its text)	（この文書はテキストのコピーを許可していません）
+	* the tool needs this option	* このオプションはツールに必須です
+	A bookmark needs a title.	しおりにはタイトルが必要です。
+	A folder	フォルダー
+	A folder…	フォルダー…
+	Add an associated file	関連ファイルを追加
+	Add file…	ファイルを追加…
+	Added 1 bookmark	しおりを 1 件追加しました
+	Added {n} bookmarks	しおりを {n} 件追加しました
+	All levels	すべてのレベル
+	Another action (kept as it is)	その他のアクション（そのまま保持）
+	Ask for the options each time it runs	実行するたびにオプションを確認する
+	Asks for its options when it runs.	実行時にオプションを確認します。
+	Associated files	関連ファイル
+	Bookmark properties	しおりのプロパティ
+	Bookmark properties…	しおりのプロパティ…
+	Cancelled: not every document was searched.	キャンセルしました：一部の文書は検索されていません。
+	Check the options, then run the command.	オプションを確認してからコマンドを実行してください。
+	Choose a folder of PDFs	PDF のフォルダーを選択
+	Choose a folder to search	検索するフォルダーを選択
+	Choose a folder to search.	検索するフォルダーを選択してください。
+	Choose folder…	フォルダーを選択…
+	Choose one of the document's named destinations.	文書の名前付きリンク先から選択してください。
+	Choose the tool the command runs.	コマンドが実行するツールを選択してください。
+	Choose…	選択…
+	Comment	注釈
+	Comment on page {label}	{label} ページの注釈
+	Custom commands	カスタムコマンド
+	Custom commands aren't available in this version of PdfCraft.	このバージョンの PdfCraft ではカスタムコマンドを使用できません。
+	Custom commands…	カスタムコマンド…
+	Description (optional)	説明（省略可）
+	Destination:	リンク先：
+	Edit Command	コマンドを編集
+	Enter a page number from 1 to {n}.	1 から {n} までのページ番号を入力してください。
+	Enter a web address starting with https://, http:// or mailto:.	https://、http:// または mailto: で始まる Web アドレスを入力してください。
+	Enter a zoom from 1% to 6400%.	1% から 6400% までのズーム倍率を入力してください。
+	Existing bookmarks:	既存のしおり：
+	Export custom commands	カスタムコマンドを書き出し
+	Files linked to the document, a page or a comment, each with its relationship (source, data, alternative…).	文書、ページ、注釈に関連付けられたファイルと、それぞれの関係（ソース、データ、代替…）。
+	Files…	ファイル…
+	Fixed zoom	固定ズーム
+	Headings:	見出し：
+	Import custom commands	カスタムコマンドを読み込み
+	Imported {n} custom commands	カスタムコマンドを {n} 件読み込みました
+	Include bookmarks and comments	しおりと注釈も含める
+	Include comments	注釈も含める
+	Include subfolders	サブフォルダーも含める
+	Keep them, add the new ones after	残して、新しいしおりを後ろに追加
+	Levels 1 to {n}	レベル 1〜{n}
+	Look in	検索対象
+	Make bookmarks	しおりを作成
+	Make one bookmark for each heading of the document's tags, nested by heading level.	文書のタグの見出しごとにしおりを作成し、見出しレベルで階層化します。
+	New Command	新規コマンド
+	New Command…	新規コマンド…
+	New bookmarks from structure	構造から新規しおり
+	New bookmarks from structure…	構造から新規しおり…
+	No associated files.	関連ファイルはありません。
+	No comments	注釈はありません
+	No custom commands yet.	カスタムコマンドはまだありません。
+	No folder chosen	フォルダーが選択されていません
+	No pages match.	一致するページがありません。
+	Object {n}	オブジェクト {n}
+	One tool with the options you choose, run in one step.	選んだオプションで 1 つのツールを 1 回で実行します。
+	Open a document to run the command on.	コマンドを実行する文書を開いてください。
+	Page labels work too, as in Print.	印刷と同様にページラベルも使えます。
+	Page range	ページ範囲
+	Page:	ページ：
+	Ran {name}	{name} を実行しました
+	Relationship:	関係：
+	Remove associated file	関連ファイルを削除
+	Replace them	置き換える
+	Run on this document	この文書で実行
+	Run on:	実行対象：
+	Runs: {tool}	実行するツール：{tool}
+	Save associated file…	関連ファイルを保存…
+	Search a folder…	フォルダーを検索…
+	Searching {d} of {t}…	検索中 {d} / {t}…
+	Select	選択
+	Select a bookmark first	先にしおりを選択してください
+	Select pages…	ページを選択…
+	Show all comment types	すべての注釈の種類を表示
+	Show all types	すべての種類を表示
+	Show on pages by type	ページ上で種類別に表示
+	Stopped at the result limit: narrow the search to see the rest.	結果の上限で停止しました：残りを見るには検索を絞り込んでください。
+	Subset:	サブセット：
+	That bookmark no longer exists	そのしおりはもう存在しません
+	The current document	現在の文書
+	The document changed; add the file again	文書が変更されました。ファイルをもう一度追加してください
+	The folder to search	検索するフォルダー
+	The script is too long.	スクリプトが長すぎます。
+	There is no folder to keep custom commands in.	カスタムコマンドを保存するフォルダーがありません。
+	This bookmark runs a {kind} action, kept as it is unless you choose another.	このしおりは {kind} アクションを実行します。別のアクションを選ばない限りそのまま保持されます。
+	Title:	タイトル：
+	To the document	文書に
+	To this page	このページに
+	Tool:	ツール：
+	Type a word or phrase to search for.	検索する語句を入力してください。
+	Web address:	Web アドレス：
+	When clicked:	クリック時：
+	Zoom:	ズーム：
+	cancelled	キャンセル済み
+	comment	注釈
+	e.g. 1-3, 7	例：1-3, 7
+	e.g. 1-3, 7 (empty: all pages)	例：1-3, 7（空欄：全ページ）
+	larger than {n} MB	{n} MB を超えています
+	not a file name	ファイル名ではありません
+	stopped at {n} files	{n} 件のファイルで停止しました
+	the action stopped unexpectedly	アクションが予期せず停止しました
+	{name} is larger than {n} MB	{name} は {n} MB を超えています
+	{name} isn't valid	{name} が正しくありません
+	{n} files skipped	{n} 件のファイルをスキップ
+	{n} more	ほか {n} 件
+	{n} more not shown	ほか {n} 件は非表示
+	{n} skipped	{n} 件をスキップ

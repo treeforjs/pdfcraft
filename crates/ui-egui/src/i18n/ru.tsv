@@ -2899,3 +2899,122 @@ compare-page	Moved	Перемещена
 	Australian Tax File Numbers	Австралийские налоговые номера (TFN)
 	Australian Medicare Numbers	Австралийские номера Medicare
 	Australian Business Numbers	Австралийские номера предприятий (ABN)
+
+# Comment, organize and search gaps (find comments, hide by type, page ranges, bookmark
+# properties, bookmarks from structure, advanced search, associated files, custom commands).
+	 in {f} of {s} documents	 в {f} из {s} документов
+	(no name)	(без имени)
+	(this document doesn't allow copying its text)	(этот документ запрещает копировать текст)
+	* the tool needs this option	* инструменту нужен этот параметр
+	A bookmark needs a title.	У закладки должно быть название.
+	A folder	Папка
+	A folder…	Папка…
+	Add an associated file	Добавить связанный файл
+	Add file…	Добавить файл…
+	Added 1 bookmark	Добавлена 1 закладка
+	Added {n} bookmarks	Добавлено закладок: {n}
+	All levels	Все уровни
+	Another action (kept as it is)	Другое действие (без изменений)
+	Ask for the options each time it runs	Запрашивать параметры при каждом запуске
+	Asks for its options when it runs.	Запрашивает параметры при запуске.
+	Associated files	Связанные файлы
+	Bookmark properties	Свойства закладки
+	Bookmark properties…	Свойства закладки…
+	Cancelled: not every document was searched.	Отменено: поиск выполнен не во всех документах.
+	Check the options, then run the command.	Проверьте параметры и запустите команду.
+	Choose a folder of PDFs	Выберите папку с PDF
+	Choose a folder to search	Выберите папку для поиска
+	Choose a folder to search.	Выберите папку для поиска.
+	Choose folder…	Выбрать папку…
+	Choose one of the document's named destinations.	Выберите одно из именованных назначений документа.
+	Choose the tool the command runs.	Выберите инструмент, который запускает команда.
+	Choose…	Выбрать…
+	Comment	Комментарий
+	Comment on page {label}	Комментарий на странице {label}
+	Custom commands	Пользовательские команды
+	Custom commands aren't available in this version of PdfCraft.	Пользовательские команды недоступны в этой версии PdfCraft.
+	Custom commands…	Пользовательские команды…
+	Description (optional)	Описание (необязательно)
+	Destination:	Назначение:
+	Edit Command	Изменить команду
+	Enter a page number from 1 to {n}.	Введите номер страницы от 1 до {n}.
+	Enter a web address starting with https://, http:// or mailto:.	Введите веб-адрес, начинающийся с https://, http:// или mailto:.
+	Enter a zoom from 1% to 6400%.	Введите масштаб от 1% до 6400%.
+	Existing bookmarks:	Существующие закладки:
+	Export custom commands	Экспорт пользовательских команд
+	Files linked to the document, a page or a comment, each with its relationship (source, data, alternative…).	Файлы, связанные с документом, страницей или комментарием, каждый со своим отношением (источник, данные, альтернатива…).
+	Files…	Файлы…
+	Fixed zoom	Фиксированный масштаб
+	Headings:	Заголовки:
+	Import custom commands	Импорт пользовательских команд
+	Imported {n} custom commands	Импортировано пользовательских команд: {n}
+	Include bookmarks and comments	Включить закладки и комментарии
+	Include comments	Включить комментарии
+	Include subfolders	Включить вложенные папки
+	Keep them, add the new ones after	Оставить и добавить новые после них
+	Levels 1 to {n}	Уровни с 1 по {n}
+	Look in	Искать в
+	Make bookmarks	Создать закладки
+	Make one bookmark for each heading of the document's tags, nested by heading level.	Создать закладку для каждого заголовка из тегов документа, вложенную по уровню заголовка.
+	New Command	Новая команда
+	New Command…	Новая команда…
+	New bookmarks from structure	Новые закладки из структуры
+	New bookmarks from structure…	Новые закладки из структуры…
+	No associated files.	Нет связанных файлов.
+	No comments	Нет комментариев
+	No custom commands yet.	Пользовательских команд пока нет.
+	No folder chosen	Папка не выбрана
+	No pages match.	Нет подходящих страниц.
+	Object {n}	Объект {n}
+	One tool with the options you choose, run in one step.	Один инструмент с выбранными параметрами, запускаемый за один шаг.
+	Open a document to run the command on.	Откройте документ, к которому применить команду.
+	Page labels work too, as in Print.	Метки страниц тоже подходят, как в окне печати.
+	Page range	Диапазон страниц
+	Page:	Страница:
+	Ran {name}	Выполнено: {name}
+	Relationship:	Отношение:
+	Remove associated file	Удалить связанный файл
+	Replace them	Заменить их
+	Run on this document	Запустить для этого документа
+	Run on:	Запустить для:
+	Runs: {tool}	Запускает: {tool}
+	Save associated file…	Сохранить связанный файл…
+	Search a folder…	Поиск в папке…
+	Searching {d} of {t}…	Поиск: {d} из {t}…
+	Select	Выбрать
+	Select a bookmark first	Сначала выберите закладку
+	Select pages…	Выбрать страницы…
+	Show all comment types	Показать все типы комментариев
+	Show all types	Показать все типы
+	Show on pages by type	Показывать на страницах по типу
+	Stopped at the result limit: narrow the search to see the rest.	Остановлено на пределе результатов: уточните поиск, чтобы увидеть остальное.
+	Subset:	Подмножество:
+	That bookmark no longer exists	Этой закладки больше нет
+	The current document	Текущий документ
+	The document changed; add the file again	Документ изменился; добавьте файл снова
+	The folder to search	Папка для поиска
+	The script is too long.	Сценарий слишком длинный.
+	There is no folder to keep custom commands in.	Нет папки для хранения пользовательских команд.
+	This bookmark runs a {kind} action, kept as it is unless you choose another.	Эта закладка выполняет действие {kind}, оно сохранится, если вы не выберете другое.
+	Title:	Название:
+	To the document	К документу
+	To this page	К этой странице
+	Tool:	Инструмент:
+	Type a word or phrase to search for.	Введите слово или фразу для поиска.
+	Web address:	Веб-адрес:
+	When clicked:	При щелчке:
+	Zoom:	Масштаб:
+	cancelled	отменено
+	comment	комментарий
+	e.g. 1-3, 7	напр. 1-3, 7
+	e.g. 1-3, 7 (empty: all pages)	напр. 1-3, 7 (пусто: все страницы)
+	larger than {n} MB	больше {n} МБ
+	not a file name	не имя файла
+	stopped at {n} files	остановлено на {n} файлах
+	the action stopped unexpectedly	действие неожиданно прервалось
+	{name} is larger than {n} MB	{name} больше {n} МБ
+	{name} isn't valid	{name}: недопустимое значение
+	{n} files skipped	пропущено файлов: {n}
+	{n} more	ещё {n}
+	{n} more not shown	ещё {n} не показано
+	{n} skipped	пропущено: {n}

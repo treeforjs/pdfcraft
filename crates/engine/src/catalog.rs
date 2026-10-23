@@ -457,6 +457,7 @@ pub static TOOL_GROUPS: &[ToolGroup] = &[
             title: "Actions list",
             items: &[
                 item("Action Wizard", "list-checks", "actions.wizard", Ready),
+                item("Custom commands", "square-terminal", "actions.custom_commands", Ready),
                 item("Make accessible", "accessibility", "actions.make_accessible", Ready),
                 item("Prepare for distribution", "send", "actions.distribution", Ready),
                 item("Optimize scanned documents", "scan-text", "actions.optimize_scans", Ready),

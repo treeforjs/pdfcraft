@@ -195,6 +195,88 @@ pub struct Find {
     pub whole_words: bool,
     /// Shown in the Search panel (Advanced Search) instead of the find bar.
     pub in_panel: bool,
+    /// Find options ▸ Include comments: comment text and authors are searched too.
+    pub comments: bool,
+    /// Comments that match, as (page, index in `/Annots`), in page order.
+    pub comment_matches: Vec<(usize, usize)>,
+    /// The current match is this comment match (instead of `current`).
+    pub comment_current: Option<usize>,
+    /// What `comment_matches` was found for: query, options and the annotations' revision.
+    comment_key: Option<(String, bool, bool, u64)>,
+}
+
+/// The most comment matches the find bar keeps.
+const MAX_COMMENT_MATCHES: usize = 5000;
+
+/// Whether comment text `hay` contains `query` with the find bar's options. Whitespace runs
+/// count as one space, like page text.
+pub fn comment_text_matches(hay: &str, query: &str, case_sensitive: bool, whole_words: bool) -> bool {
+    let norm = |s: &str| s.split_whitespace().collect::<Vec<_>>().join(" ");
+    let (hay, query) = if case_sensitive { (norm(hay), norm(query)) } else { (norm(hay).to_lowercase(), norm(query).to_lowercase()) };
+    if query.is_empty() {
+        return false;
+    }
+    if !whole_words {
+        return hay.contains(&query);
+    }
+    let word = |c: Option<char>| c.is_some_and(char::is_alphanumeric);
+    hay.match_indices(&query).any(|(i, m)| !word(hay[..i].chars().next_back()) && !word(hay[i + m.len()..].chars().next()))
+}
+
+impl Find {
+    /// Find again in comments when the query, options or comments changed (cheap otherwise).
+    pub fn refresh_comments(&mut self, info: &DocInfo, revision: u64) {
+        if !self.comments || self.case_query.trim().is_empty() {
+            self.comment_matches.clear();
+            self.comment_current = None;
+            self.comment_key = None;
+            return;
+        }
+        let key = (self.case_query.clone(), self.case_sensitive, self.whole_words, revision);
+        if self.comment_key.as_ref() == Some(&key) {
+            return;
+        }
+        let q = self.case_query.as_str();
+        self.comment_matches = info
+            .annotations
+            .iter()
+            .filter(|a| !matches!(a.subtype.as_str(), "Popup" | "Link" | "Widget"))
+            .filter(|a| {
+                [a.contents.as_deref(), a.author.as_deref()]
+                    .into_iter()
+                    .flatten()
+                    .any(|t| comment_text_matches(t, q, self.case_sensitive, self.whole_words))
+            })
+            .map(|a| (a.page, a.index))
+            .take(MAX_COMMENT_MATCHES)
+            .collect();
+        self.comment_matches.sort_unstable();
+        self.comment_current = None;
+        self.comment_key = Some(key);
+    }
+
+    /// All matches: page text then comments within each page, as (page, is a comment, index).
+    fn ordered(&self) -> Vec<(usize, bool, usize)> {
+        let mut all: Vec<(usize, bool, usize)> = self.matches.iter().enumerate().map(|(i, (p, _))| (*p, false, i)).collect();
+        all.extend(self.comment_matches.iter().enumerate().map(|(i, (p, _))| (*p, true, i)));
+        all.sort_unstable();
+        all
+    }
+
+    /// The position of the current match among all matches (1-based for display), and the
+    /// number of matches.
+    pub fn position(&self) -> (Option<usize>, usize) {
+        let total = self.matches.len() + self.comment_matches.len();
+        if self.comment_matches.is_empty() {
+            return (self.current, total);
+        }
+        let all = self.ordered();
+        let at = match self.comment_current {
+            Some(c) => all.iter().position(|e| e.1 && e.2 == c),
+            None => self.current.and_then(|c| all.iter().position(|e| !e.1 && e.2 == c)),
+        };
+        (at, total)
+    }
 }
 
 struct PageTex {
@@ -368,6 +450,9 @@ pub struct DocView {
     /// A zoom asked for this frame (toolbar, pinch, keys); the grid applies it once it has laid
     /// out, so it can keep the same pages in view.
     grid_zoom_request: Option<f32>,
+    /// Organize ▸ Select ▸ Page range: the range typed, and why it couldn't be used.
+    pub range_input: String,
+    pub range_error: Option<String>,
     /// The page to keep in place after a grid zoom, and how far below the top of the grid its
     /// cell was.
     grid_anchor: Option<(usize, f32)>,
@@ -554,6 +639,8 @@ impl DocView {
             grid_gap: None,
             grid_zoom: 1.0,
             grid_zoom_request: None,
+            range_input: String::new(),
+            range_error: None,
             grid_anchor: None,
             grid_pages: HashMap::new(),
             raster_share: 1,
@@ -863,6 +950,34 @@ impl DocView {
     /// Move to the next/previous match.
     pub fn find_step(&mut self, forward: bool) {
         let Some(f) = self.find.as_mut() else { return };
+        if !f.comment_matches.is_empty() {
+            // Page text and comments, in page order.
+            let all = f.ordered();
+            let n = all.len();
+            let next = match f.position().0 {
+                Some(c) if forward => (c + 1) % n,
+                Some(c) => (c + n - 1) % n,
+                None => {
+                    let cur = self.current;
+                    all.iter().position(|e| e.0 >= cur).unwrap_or(0)
+                }
+            };
+            let Some(&(page, comment, i)) = all.get(next) else { return };
+            if comment {
+                f.comment_current = Some(i);
+                f.current = None;
+                if let Some(&(p, index)) = f.comment_matches.get(i) {
+                    self.comments.selected = Some((p, index));
+                    self.comments.reveal = true;
+                }
+                self.go_to_page(page);
+            } else {
+                f.comment_current = None;
+                f.current = Some(i);
+                self.flash_match(page);
+            }
+            return;
+        }
         if f.matches.is_empty() {
             return;
         }
@@ -2298,6 +2413,8 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
     let prefs = &app.comment_prefs;
     let allowed = doc.allows_annotation();
     let comments_hidden = doc.comments_hidden();
+    // Comments ▸ Show by type: hidden types aren't drawn, selected or opened (usually none).
+    let hidden_types = doc.hidden_comment_types();
     let form = doc.form.clone();
     let can_fill = doc.allows_form_filling();
     let can_crop = doc.allows_assembly();
@@ -2542,7 +2659,19 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
             }
 
             // Comments: tools, selection, moving and resizing come before text selection.
-            let pcx = comments::PageCx { page: i, xf: &xf, info, tool, prefs, allowed, hidden: comments_hidden };
+            // Insert Text snaps its caret to the page's text, once that has been extracted.
+            let caret_text = if tool == QuickTool::Comment(comments::CommentTool::Caret) { view.page_text(i) } else { None };
+            let pcx = comments::PageCx {
+                page: i,
+                xf: &xf,
+                info,
+                tool,
+                prefs,
+                allowed,
+                hidden: comments_hidden,
+                hidden_types: &hidden_types,
+                text: caret_text,
+            };
             if let QuickTool::Measure(measure_tool) = tool {
                 crate::measure_ui::page_input(ui, &resp, doc, view, &pcx, measure_tool);
             }
@@ -3089,9 +3218,9 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
             });
         });
     }
-    find_bar(view, info.pages.len(), avail, ui, &t);
+    find_bar(view, info, doc.edit_generation(), avail, ui, &t);
     comments::load_rich(view, doc);
-    if let Some(e) = crate::popup_notes::show(ui.ctx(), view, info, allowed, comments_hidden) {
+    if let Some(e) = crate::popup_notes::show(ui.ctx(), view, info, allowed, comments_hidden, &hidden_types) {
         view.pending_edit = Some(e);
     }
     if let Some(e) = comments::composer(ui.ctx(), view, info, prefs) {
@@ -3361,8 +3490,11 @@ fn set_layers(app: &mut PdfCraftApp, index: usize, changes: &[(LayerOp, (u32, u1
 }
 
 /// Acrobat-style floating find bar at the top-right of the document area.
-fn find_bar(view: &mut DocView, pages: usize, area: Rect, ui: &mut egui::Ui, t: &Tokens) {
+fn find_bar(view: &mut DocView, info: &DocInfo, revision: u64, area: Rect, ui: &mut egui::Ui, t: &Tokens) {
+    let pages = info.pages.len();
     let Some(find) = view.find.as_mut() else { return };
+    // Comments are searched for the find bar and the Search panel alike.
+    find.refresh_comments(info, revision);
     // The Search panel shows this search.
     if find.in_panel {
         return;
@@ -3401,9 +3533,10 @@ fn find_bar(view: &mut DocView, pages: usize, area: Rect, ui: &mut egui::Ui, t: 
                         if r.has_focus() && ui.input(|i| i.key_pressed(egui::Key::Escape)) {
                             close = true;
                         }
+                        let (position, total) = find.position();
                         let status = if find.query.trim().is_empty() {
                             String::new()
-                        } else if find.matches.is_empty() {
+                        } else if total == 0 {
                             if searched < pages {
                                 crate::i18n::fmt(tl!("Searching… {s}/{p}"), &[("s", &searched.to_string()), ("p", &pages.to_string())])
                             } else {
@@ -3413,12 +3546,12 @@ fn find_bar(view: &mut DocView, pages: usize, area: Rect, ui: &mut egui::Ui, t: 
                             let more = if searched < pages { "+" } else { "" };
                             crate::i18n::fmt(
                                 tl!("{c} of {n}{more}"),
-                                &[
-                                    ("c", &find.current.map(|c| c + 1).unwrap_or(0).to_string()),
-                                    ("n", &find.matches.len().to_string()),
-                                    ("more", more),
-                                ],
+                                &[("c", &position.map(|c| c + 1).unwrap_or(0).to_string()), ("n", &total.to_string()), ("more", more)],
                             )
+                        };
+                        let status = match find.comment_current.and_then(|c| find.comment_matches.get(c)) {
+                            Some(_) => format!("{status} · {}", tl!("comment")),
+                            None => status,
                         };
                         ui.label(egui::RichText::new(status).font(theme::regular(12.0)).color(t.text_muted));
                         if icons::button(ui, "chevron-up", 26.0, false, tl!("Previous (⇧⌘G)")).clicked() {
@@ -3427,11 +3560,13 @@ fn find_bar(view: &mut DocView, pages: usize, area: Rect, ui: &mut egui::Ui, t: 
                         if icons::button(ui, "chevron-down", 26.0, false, tl!("Next (⌘G)")).clicked() {
                             step = Some(true);
                         }
-                        let opts = icons::button(ui, "settings-2", 26.0, find.case_sensitive || find.whole_words, tl!("Find options"));
+                        let opts =
+                            icons::button(ui, "settings-2", 26.0, find.case_sensitive || find.whole_words || find.comments, tl!("Find options"));
                         egui::Popup::menu(&opts).show(|ui| {
                             let a = ui.checkbox(&mut find.whole_words, tl!("Whole words only")).changed();
                             let b = ui.checkbox(&mut find.case_sensitive, tl!("Case-sensitive")).changed();
-                            if a || b {
+                            let c = ui.checkbox(&mut find.comments, tl!("Include comments")).changed();
+                            if a || b || c {
                                 // Search again with the new options.
                                 find.case_query.clear();
                             }
@@ -3448,6 +3583,9 @@ fn find_bar(view: &mut DocView, pages: usize, area: Rect, ui: &mut egui::Ui, t: 
     }
     if find.query != find.case_query {
         view.rerun_find();
+    }
+    if let Some(f) = view.find.as_mut() {
+        f.refresh_comments(info, revision);
     }
     if let Some(forward) = step {
         view.find_step(forward);
@@ -3785,6 +3923,32 @@ fn organize_toolbar(view: &mut DocView, info: &DocInfo, editable: bool, dirty: b
                     if ui.button(tl!("None")).clicked() {
                         view.select_pages(&[]);
                         ui.close();
+                    }
+                    ui.separator();
+                    ui.label(egui::RichText::new(tl!("Page range")).small().color(t.text_muted));
+                    let mut go = false;
+                    ui.horizontal(|ui| {
+                        let r = ui.add(
+                            egui::TextEdit::singleline(&mut view.range_input)
+                                .hint_text(tl!("e.g. 1-3, 7"))
+                                .desired_width(130.0)
+                                .id_salt("page-range-input"),
+                        );
+                        go = r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+                        go |= ui.button(tl!("Select")).clicked();
+                    });
+                    if go {
+                        match pdfcraft_engine::select_page_range(info, &view.range_input, P::Both, O::Both) {
+                            Ok(pages) => {
+                                view.range_error = None;
+                                view.select_pages(&pages);
+                                ui.close();
+                            }
+                            Err(e) => view.range_error = Some(e),
+                        }
+                    }
+                    if let Some(e) = &view.range_error {
+                        ui.label(egui::RichText::new(e).small().color(theme::DANGER));
                     }
                 });
                 ui.add_space(8.0);

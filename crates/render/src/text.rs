@@ -27,6 +27,17 @@ pub struct TextGlyph {
     pub mcid: Option<i32>,
 }
 
+/// Where text would be inserted: before or after glyph `glyph`, at `x` (view space, points),
+/// on a line from `top` to `bottom` (the glyph's box).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct InsertionPoint {
+    pub glyph: usize,
+    pub after: bool,
+    pub x: f32,
+    pub top: f32,
+    pub bottom: f32,
+}
+
 /// The text of one page, in content order, with line structure.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct PageText {
@@ -142,6 +153,40 @@ impl PageText {
             })
             .min_by(|a, b| a.1.total_cmp(&b.1))
             .map(|(i, _)| i)
+    }
+
+    /// The text insertion point nearest a view-space point (Insert Text's caret): the gap before
+    /// or after the nearest glyph, whichever side of its middle the point is on, if that glyph is
+    /// within `max_dist` points. Non-finite input or a page without text gives `None`.
+    pub fn insertion_point(&self, x: f32, y: f32, max_dist: f32) -> Option<InsertionPoint> {
+        if !(x.is_finite() && y.is_finite() && max_dist.is_finite()) {
+            return None;
+        }
+        let i = self.nearest(x, y)?;
+        let g = self.glyphs.get(i)?;
+        let [x0, y0, x1, y1] = g.rect;
+        if !(x0.is_finite() && y0.is_finite() && x1.is_finite() && y1.is_finite()) {
+            return None;
+        }
+        let dx = if x < x0 {
+            x0 - x
+        } else if x > x1 {
+            x - x1
+        } else {
+            0.0
+        };
+        let dy = if y < y0 {
+            y0 - y
+        } else if y > y1 {
+            y - y1
+        } else {
+            0.0
+        };
+        if dx.hypot(dy) > max_dist {
+            return None;
+        }
+        let after = x > (x0 + x1) / 2.0;
+        Some(InsertionPoint { glyph: i, after, x: if after { x1 } else { x0 }, top: y0, bottom: y1 })
     }
 
     /// The word around glyph `i` as its first and last glyph (double-click): it stops at word
@@ -625,6 +670,27 @@ pub fn layout(glyphs: Vec<TextGlyph>) -> PageText {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn insertion_points_snap_between_glyphs_and_refuse_odd_input() {
+        let g = |t: &str, x: f32| TextGlyph { text: t.into(), rect: [x, 100.0, x + 10.0, 112.0], mcid: None };
+        let text = PageText { glyphs: vec![g("a", 50.0), g("b", 60.0), g("c", 70.0)], line_of: vec![0, 0, 0], space_before: vec![false; 3] };
+        let p = text.insertion_point(58.0, 106.0, 20.0).unwrap();
+        assert_eq!((p.glyph, p.after, p.x, p.top, p.bottom), (0, true, 60.0, 100.0, 112.0), "right half of a: after it");
+        let p = text.insertion_point(61.0, 120.0, 20.0).unwrap();
+        assert_eq!((p.glyph, p.after, p.x), (1, false, 60.0), "below the line still snaps");
+        assert_eq!(text.insertion_point(200.0, 400.0, 20.0), None, "too far from any text");
+        for (x, y, d) in [(f32::NAN, 1.0, 20.0), (1.0, f32::INFINITY, 20.0), (55.0, 105.0, f32::NAN)] {
+            assert_eq!(text.insertion_point(x, y, d), None);
+        }
+        assert_eq!(PageText::default().insertion_point(1.0, 1.0, 20.0), None);
+        let bad = PageText {
+            glyphs: vec![TextGlyph { text: "x".into(), rect: [f32::NAN, 0.0, 1.0, 1.0], mcid: None }],
+            line_of: vec![0],
+            space_before: vec![false],
+        };
+        assert_eq!(bad.insertion_point(0.0, 0.0, 20.0), None);
+    }
 
     #[test]
     fn identity_v_columns_are_searchable_in_reading_order() {

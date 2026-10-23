@@ -644,6 +644,29 @@ impl Host for crate::PdfCraftApp {
                         "modified": c.result.modified(), "permitted": c.result.permitted()})),
                 }),
             );
+            let active_doc = self.active_ids().and_then(|(_, id)| self.session.get(id));
+            m.insert("advanced_search".into(), self.adv_search.state());
+            m.insert("custom_commands".into(), self.custom_commands.state());
+            m.insert("action_run".into(), self.action_run_state());
+            m.insert("action_wizard".into(), json!({ "folder": self.wizard.folder, "recursive": self.wizard.recursive }));
+            m.insert("hidden_comment_types".into(), json!(active_doc.map(|d| d.hidden_comment_types()).unwrap_or_default()));
+            m.insert("select_pages".into(), json!({ "range": self.select_pages.range, "error": self.select_pages.error }));
+            m.insert("bookmark_properties".into(), json!(self.bookmark_props.as_ref().map(|p| json!({ "path": p.path, "title": p.title }))));
+            m.insert(
+                "from_structure".into(),
+                json!({ "max_level": self.from_structure.max_level, "replace": self.from_structure.replace, "error": self.from_structure.error }),
+            );
+            m.insert(
+                "find_comments".into(),
+                json!(self.active.and_then(|i| self.views.get(i)).and_then(|v| v.find.as_ref()).map(|f| json!({
+                    "include": f.comments,
+                    "matches": f.comment_matches.iter().map(|(p, k)| json!({ "page": p + 1, "index": k })).collect::<Vec<_>>(),
+                    "current": f.comment_current,
+                }))),
+            );
+            if self.right == Some(crate::RightPanel::Attachments) {
+                m.insert("associated_files".into(), crate::assoc_ui::AssocFiles::state(active_doc));
+            }
             m.insert("output_preview".into(), json!((self.right == Some(crate::RightPanel::OutputPreview)).then(|| self.output_preview_state())));
             m.insert("ink_manager".into(), json!((self.dialog == Some(crate::Dialog::InkManager)).then(|| self.ink_manager_state())));
             // Tags / Order panels and the Reading Order tool: the selected tag (obj) and region.

@@ -2983,3 +2983,122 @@ compare-page	Moved	Déplacée
 	Australian Tax File Numbers	Numéros de dossier fiscal australiens (TFN)
 	Australian Medicare Numbers	Numéros Medicare australiens
 	Australian Business Numbers	Numéros d'entreprise australiens (ABN)
+
+# Comment, organize and search gaps (find comments, hide by type, page ranges, bookmark
+# properties, bookmarks from structure, advanced search, associated files, custom commands).
+	 in {f} of {s} documents	 dans {f} documents sur {s}
+	(no name)	(sans nom)
+	(this document doesn't allow copying its text)	(ce document ne permet pas de copier son texte)
+	* the tool needs this option	* l'outil a besoin de cette option
+	A bookmark needs a title.	Un signet doit avoir un titre.
+	A folder	Un dossier
+	A folder…	Un dossier…
+	Add an associated file	Ajouter un fichier associé
+	Add file…	Ajouter un fichier…
+	Added 1 bookmark	1 signet ajouté
+	Added {n} bookmarks	{n} signets ajoutés
+	All levels	Tous les niveaux
+	Another action (kept as it is)	Autre action (conservée telle quelle)
+	Ask for the options each time it runs	Demander les options à chaque exécution
+	Asks for its options when it runs.	Demande ses options à l'exécution.
+	Associated files	Fichiers associés
+	Bookmark properties	Propriétés du signet
+	Bookmark properties…	Propriétés du signet…
+	Cancelled: not every document was searched.	Annulé : tous les documents n'ont pas été parcourus.
+	Check the options, then run the command.	Vérifiez les options, puis exécutez la commande.
+	Choose a folder of PDFs	Choisir un dossier de PDF
+	Choose a folder to search	Choisir un dossier où rechercher
+	Choose a folder to search.	Choisissez un dossier où rechercher.
+	Choose folder…	Choisir un dossier…
+	Choose one of the document's named destinations.	Choisissez l'une des destinations nommées du document.
+	Choose the tool the command runs.	Choisissez l'outil que la commande exécute.
+	Choose…	Choisir…
+	Comment	Commentaire
+	Comment on page {label}	Commentaire en page {label}
+	Custom commands	Commandes personnalisées
+	Custom commands aren't available in this version of PdfCraft.	Les commandes personnalisées ne sont pas disponibles dans cette version de PdfCraft.
+	Custom commands…	Commandes personnalisées…
+	Description (optional)	Description (facultative)
+	Destination:	Destination :
+	Edit Command	Modifier la commande
+	Enter a page number from 1 to {n}.	Saisissez un numéro de page de 1 à {n}.
+	Enter a web address starting with https://, http:// or mailto:.	Saisissez une adresse web commençant par https://, http:// ou mailto:.
+	Enter a zoom from 1% to 6400%.	Saisissez un zoom de 1 % à 6400 %.
+	Existing bookmarks:	Signets existants :
+	Export custom commands	Exporter les commandes personnalisées
+	Files linked to the document, a page or a comment, each with its relationship (source, data, alternative…).	Fichiers liés au document, à une page ou à un commentaire, chacun avec sa relation (source, données, alternative…).
+	Files…	Fichiers…
+	Fixed zoom	Zoom fixe
+	Headings:	Titres :
+	Import custom commands	Importer des commandes personnalisées
+	Imported {n} custom commands	{n} commandes personnalisées importées
+	Include bookmarks and comments	Inclure les signets et les commentaires
+	Include comments	Inclure les commentaires
+	Include subfolders	Inclure les sous-dossiers
+	Keep them, add the new ones after	Les garder, ajouter les nouveaux après
+	Levels 1 to {n}	Niveaux 1 à {n}
+	Look in	Rechercher dans
+	Make bookmarks	Créer les signets
+	Make one bookmark for each heading of the document's tags, nested by heading level.	Créer un signet pour chaque titre des balises du document, imbriqué selon le niveau de titre.
+	New Command	Nouvelle commande
+	New Command…	Nouvelle commande…
+	New bookmarks from structure	Nouveaux signets d'après la structure
+	New bookmarks from structure…	Nouveaux signets d'après la structure…
+	No associated files.	Aucun fichier associé.
+	No comments	Aucun commentaire
+	No custom commands yet.	Aucune commande personnalisée pour l'instant.
+	No folder chosen	Aucun dossier choisi
+	No pages match.	Aucune page ne correspond.
+	Object {n}	Objet {n}
+	One tool with the options you choose, run in one step.	Un outil avec les options choisies, exécuté en une étape.
+	Open a document to run the command on.	Ouvrez un document sur lequel exécuter la commande.
+	Page labels work too, as in Print.	Les libellés de page fonctionnent aussi, comme dans Imprimer.
+	Page range	Plage de pages
+	Page:	Page :
+	Ran {name}	{name} exécutée
+	Relationship:	Relation :
+	Remove associated file	Supprimer le fichier associé
+	Replace them	Les remplacer
+	Run on this document	Exécuter sur ce document
+	Run on:	Exécuter sur :
+	Runs: {tool}	Exécute : {tool}
+	Save associated file…	Enregistrer le fichier associé…
+	Search a folder…	Rechercher dans un dossier…
+	Searching {d} of {t}…	Recherche {d} sur {t}…
+	Select	Sélectionner
+	Select a bookmark first	Sélectionnez d'abord un signet
+	Select pages…	Sélectionner des pages…
+	Show all comment types	Afficher tous les types de commentaires
+	Show all types	Afficher tous les types
+	Show on pages by type	Afficher sur les pages par type
+	Stopped at the result limit: narrow the search to see the rest.	Arrêté à la limite de résultats : affinez la recherche pour voir la suite.
+	Subset:	Sous-ensemble :
+	That bookmark no longer exists	Ce signet n'existe plus
+	The current document	Le document actuel
+	The document changed; add the file again	Le document a changé ; ajoutez de nouveau le fichier
+	The folder to search	Le dossier où rechercher
+	The script is too long.	Le script est trop long.
+	There is no folder to keep custom commands in.	Il n'y a pas de dossier où conserver les commandes personnalisées.
+	This bookmark runs a {kind} action, kept as it is unless you choose another.	Ce signet exécute une action {kind}, conservée telle quelle sauf si vous en choisissez une autre.
+	Title:	Titre :
+	To the document	Au document
+	To this page	À cette page
+	Tool:	Outil :
+	Type a word or phrase to search for.	Saisissez un mot ou une expression à rechercher.
+	Web address:	Adresse web :
+	When clicked:	Au clic :
+	Zoom:	Zoom :
+	cancelled	annulé
+	comment	commentaire
+	e.g. 1-3, 7	p. ex. 1-3, 7
+	e.g. 1-3, 7 (empty: all pages)	p. ex. 1-3, 7 (vide : toutes les pages)
+	larger than {n} MB	plus de {n} Mo
+	not a file name	pas un nom de fichier
+	stopped at {n} files	arrêté à {n} fichiers
+	the action stopped unexpectedly	l'action s'est arrêtée de façon inattendue
+	{name} is larger than {n} MB	{name} dépasse {n} Mo
+	{name} isn't valid	{name} n'est pas valide
+	{n} files skipped	{n} fichiers ignorés
+	{n} more	{n} de plus
+	{n} more not shown	{n} autres non affichés
+	{n} skipped	{n} ignorés

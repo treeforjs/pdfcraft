@@ -73,7 +73,7 @@ fn dragged(card: Rect, d: &PopupDrag) -> Rect {
 /// Draw the open pop-ups of the pages on screen. Returns the edit a card asked for (moved,
 /// resized or closed). `allowed`: the document allows comment changes; otherwise cards are
 /// shown but can't be moved or closed.
-pub(crate) fn show(ctx: &egui::Context, view: &mut DocView, info: &DocInfo, allowed: bool, hidden: bool) -> Option<Edit> {
+pub(crate) fn show(ctx: &egui::Context, view: &mut DocView, info: &DocInfo, allowed: bool, hidden: bool, hidden_types: &[String]) -> Option<Edit> {
     if hidden {
         view.comments.popup_drag = None;
         return None;
@@ -88,7 +88,7 @@ pub(crate) fn show(ctx: &egui::Context, view: &mut DocView, info: &DocInfo, allo
         let all = &info.annotations;
         let (lo, hi) = (all.partition_point(|a| a.page < page), all.partition_point(|a| a.page <= page));
         let Some(on_page) = all.get(lo..hi.max(lo)) else { continue };
-        for a in on_page.iter().filter(|a| a.in_reply_to.is_none() && a.subtype != "Popup") {
+        for a in on_page.iter().filter(|a| a.in_reply_to.is_none() && a.subtype != "Popup" && !hidden_types.contains(&a.subtype)) {
             if let Some(p) = a.popup.filter(|p| p.open)
                 && open.len() < MAX_CARDS
             {

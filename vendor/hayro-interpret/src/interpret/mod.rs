@@ -107,6 +107,9 @@ pub struct InterpreterSettings {
     /// PdfCraft patch: hide comments (markup annotations) but keep form fields (`/Widget`)
     /// and links, for the viewer's "Hide all comments".
     pub hide_comments: bool,
+    /// PdfCraft patch (26): annotation subtypes (`/Subtype` names such as `Highlight`, `Ink`)
+    /// not drawn, for the viewer's per-type comment hiding. Widgets and links are never hidden.
+    pub hidden_annotation_subtypes: Arc<Vec<Vec<u8>>>,
     /// PdfCraft patch: viewer overrides for optional content groups (object number, generation,
     /// visible), applied on top of the document's default configuration (Layers panel toggles).
     pub ocg_overrides: Arc<Vec<(i32, i32, bool)>>,
@@ -137,6 +140,7 @@ impl Default for InterpreterSettings {
             warning_sink: Arc::new(|_| {}),
             render_annotations: true,
             hide_comments: false,
+            hidden_annotation_subtypes: Arc::default(),
             ocg_overrides: Arc::new(Vec::new()),
             cancelled: None,
             device_color: None,
@@ -182,6 +186,14 @@ pub fn interpret_page<'a>(
             // PdfCraft patch: "Hide all comments" keeps widgets and links.
             if context.settings.hide_comments
                 && !matches!(annot.get::<hayro_syntax::object::Name<'_>>(SUBTYPE).as_deref(), Some(b"Widget" | b"Link"))
+            {
+                continue;
+            }
+            // PdfCraft patch (26): comments of the types the viewer hides.
+            if !context.settings.hidden_annotation_subtypes.is_empty()
+                && annot.get::<hayro_syntax::object::Name<'_>>(SUBTYPE).is_some_and(|st| {
+                    !matches!(&*st, b"Widget" | b"Link") && context.settings.hidden_annotation_subtypes.iter().any(|h| h.as_slice() == &*st)
+                })
             {
                 continue;
             }

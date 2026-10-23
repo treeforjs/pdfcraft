@@ -26,6 +26,7 @@ pub mod compare_view;
 pub mod dates;
 pub mod export;
 pub mod export_ocr;
+pub mod folder_search;
 pub mod help;
 pub mod js;
 pub mod js_debug;
@@ -49,7 +50,9 @@ pub mod signature_settings;
 pub mod signature_workflow;
 pub mod submit;
 pub mod summary;
+pub mod text_extract;
 pub mod text_preview;
+pub mod tool_host;
 mod upright_image;
 pub mod url_access;
 pub mod windows;
@@ -707,6 +710,16 @@ impl Document {
     /// Whether comments are hidden (Comments ▸ Hide all comments).
     pub fn comments_hidden(&self) -> bool {
         self.config.hide_comments
+    }
+
+    /// Comment types hidden by Comments ▸ Show by type (annotation subtypes, e.g. `Ink`).
+    pub fn hidden_comment_types(&self) -> Vec<String> {
+        self.config.hidden_comment_subtypes.iter().map(|s| String::from_utf8_lossy(s).into_owned()).collect()
+    }
+
+    /// Whether comments of `subtype` are hidden (by type or all of them).
+    pub fn comment_type_hidden(&self, subtype: &str) -> bool {
+        self.config.hide_comments || self.config.hidden_comment_subtypes.iter().any(|s| s.as_slice() == subtype.as_bytes())
     }
 
     pub fn can_undo(&self) -> Option<&str> {
@@ -4591,6 +4604,37 @@ impl Session {
         true
     }
 
+    /// Hide comments of these types (Comments ▸ Show by type): annotation subtypes such as
+    /// `Highlight` or `Ink`. Form fields, links and pop-ups can't be hidden this way and other
+    /// names are refused; at most 64 types. Returns whether anything changed.
+    pub fn set_hidden_comment_types(&mut self, id: DocId, types: &[String]) -> Result<bool, EditError> {
+        let mut list: Vec<Vec<u8>> = Vec::new();
+        if types.len() > 64 {
+            return Err(EditError::Invalid("at most 64 comment types can be hidden".into()));
+        }
+        for t in types {
+            let t = t.trim();
+            if t.is_empty() || t.len() > 64 || !t.chars().all(|c| c.is_ascii_alphanumeric()) {
+                return Err(EditError::Invalid(format!("{t:?} is not a comment type (use names such as Highlight, Ink or FreeText)")));
+            }
+            if matches!(t, "Widget" | "Link" | "Popup") {
+                return Err(EditError::Invalid(format!("{t} annotations are not comments and can't be hidden by type")));
+            }
+            if !list.iter().any(|l| l.as_slice() == t.as_bytes()) {
+                list.push(t.as_bytes().to_vec());
+            }
+        }
+        list.sort();
+        let doc = self.docs.iter_mut().find(|d| d.id == id).ok_or(EditError::NoDocument)?;
+        if *doc.config.hidden_comment_subtypes == list {
+            return Ok(false);
+        }
+        doc.config.hidden_comment_subtypes = Arc::new(list);
+        doc.renderer = RenderPool::new(doc.display.clone(), render_threads(), doc.config.clone());
+        doc.generation += 1;
+        Ok(true)
+    }
+
     /// Acrobat's Summarize Comments ("Comments only" layout): a new PDF listing every comment
     /// with its number, author, type, date, text and replies, grouped by page.
     pub fn summarize_comments(&self, id: DocId, sort: SummarySort) -> Result<Arc<Vec<u8>>, EditError> {
@@ -4978,4 +5022,39 @@ pub fn filter_pages(info: &pdfcraft_render::DocInfo, pages: &[usize], parity: Pa
             }
         })
         .collect()
+}
+
+/// The most comma-separated parts a typed page range may have.
+pub const MAX_RANGE_PARTS: usize = 256;
+
+/// Organize ▸ Select ▸ Page range: the pages a typed range names (`1-3, 7, 9-`; page labels
+/// work as in Print, so `iv-vi` or `A-1`), narrowed to odd or even page numbers and to
+/// landscape or portrait pages; sorted, without repeats. An empty range means every page.
+/// Errors say which part is wrong.
+pub fn select_page_range(
+    info: &pdfcraft_render::DocInfo,
+    range: &str,
+    parity: PageParity,
+    orientation: PageOrientation,
+) -> Result<Vec<usize>, String> {
+    let n = info.pages.len();
+    if range.chars().count() > 4000 {
+        return Err("the page range is too long".into());
+    }
+    let parts: Vec<&str> = range.split([',', ';']).map(str::trim).filter(|p| !p.is_empty()).collect();
+    if parts.len() > MAX_RANGE_PARTS {
+        return Err(format!("a page range can have at most {MAX_RANGE_PARTS} parts"));
+    }
+    let mut chosen = std::collections::BTreeSet::new();
+    if parts.is_empty() {
+        chosen.extend(0..n);
+    } else {
+        let labels: Vec<String> = info.pages.iter().map(|p| p.label.clone()).collect();
+        for part in parts {
+            let pages = print::select_pages(n, Some(part), &labels, print::Subset::All, false).map_err(|e| e.to_string())?;
+            chosen.extend(pages);
+        }
+    }
+    let all: Vec<usize> = chosen.into_iter().collect();
+    Ok(filter_pages(info, &all, parity, orientation))
 }

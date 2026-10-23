@@ -997,6 +997,25 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
                 close = crate::prepress_ui::printer_marks_body(ui, app, &t);
                 return;
             }
+            Dialog::BookmarkProperties => {
+                ui.set_width(440.0);
+                close = crate::bookmark_ui::props_body(ui, app, &t);
+                return;
+            }
+            Dialog::BookmarksFromStructure => {
+                ui.set_width(440.0);
+                close = crate::bookmark_ui::from_structure_body(ui, app, &t);
+                return;
+            }
+            Dialog::SelectPages => {
+                close = crate::select_pages_ui::body(ui, app, &t);
+                return;
+            }
+            Dialog::CustomCommands => {
+                ui.set_width(660.0);
+                close = crate::custom_commands_ui::body(ui, app, &t);
+                return;
+            }
             Dialog::ActionWizard => {
                 ui.set_width(620.0);
                 close = crate::actions_ui::body(ui, app, &t);

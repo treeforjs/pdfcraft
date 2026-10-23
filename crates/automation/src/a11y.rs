@@ -3,7 +3,7 @@
 use pdfcraft_engine::a11y::{Category, MAX_NS_MAPPINGS, Namespace, NamespaceSpec, NsMapping, Options, Report, Rule, Status, TagChange, TagKid};
 use serde_json::{Value, json};
 
-use crate::{Args, Automation, Result, ToolError, child, failed, write_atomic};
+use crate::{Args, Automation, Result, ToolError, failed, write_atomic};
 
 pub(crate) fn status_id(s: Status) -> &'static str {
     match s {
@@ -545,20 +545,24 @@ impl Automation {
     pub(crate) fn ocr_recognize_files(&mut self, a: &Args) -> Result<Value> {
         let settings = self.ocr_settings(a)?;
         let folder = self.resolve(a.str("folder")?, true)?;
-        std::fs::create_dir_all(&folder).map_err(|e| failed(e.to_string()))?;
         // Every source must be inside the root before any file is read or written; a missing
         // file inside it is reported for that file alone.
-        let sources = a.strs("paths")?.into_iter().map(|p| Ok((p, self.resolve(p, true)?))).collect::<Result<Vec<_>>>()?;
+        let (sources, walk) = self.batch_files(a, &folder)?;
+        std::fs::create_dir_all(&folder).map_err(|e| failed(e.to_string()))?;
         let ocr = self.ocr_ready(&settings)?;
         let mut out = Vec::new();
-        for (p, src) in sources {
-            let name = std::path::Path::new(p).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "document.pdf".into());
-            let result = std::fs::read(&src)
+        for f in sources {
+            let p = f.shown.as_str();
+            let name = f.output.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "document.pdf".into());
+            let result = std::fs::read(&f.source)
                 .map_err(|e| e.to_string())
                 .and_then(|bytes| pdfcraft_engine::ocr::recognize_file(&name, std::sync::Arc::new(bytes), None, settings.clone(), &ocr, |_, _| true));
             out.push(match result {
                 Ok(r) => {
-                    let target = child(&folder, &name);
+                    let target = f.output.clone();
+                    if let Some(dir) = target.parent() {
+                        std::fs::create_dir_all(dir).map_err(|e| failed(format!("{}: {e}", dir.display())))?;
+                    }
                     write_atomic(&target, &r.bytes)?;
                     let skipped: Vec<usize> = r.pages.iter().filter(|p| p.skipped.is_some()).map(|p| p.page + 1).collect();
                     let orientation: Vec<Value> =
@@ -574,7 +578,11 @@ impl Automation {
                 Err(e) => json!({ "path": p, "error": e }),
             });
         }
-        Ok(json!({ "files": out }))
+        let mut v = json!({ "files": out });
+        if !walk.is_null() {
+            v["walk"] = walk;
+        }
+        Ok(v)
     }
 
     pub(crate) fn ocr_recognize(&mut self, a: &Args) -> Result<Value> {
@@ -1314,25 +1322,31 @@ impl Automation {
             Action { name: "Custom".into(), description: String::new(), steps, builtin: false }
         };
         let folder = self.resolve(a.str("folder")?, true)?;
+        let (sources, walk) = self.batch_files(a, &folder)?;
         std::fs::create_dir_all(&folder).map_err(|e| failed(e.to_string()))?;
         let mut out = Vec::new();
-        for p in a.strs("paths")? {
-            let name = std::path::Path::new(p).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "document.pdf".into());
-            let result = self
-                .resolve(p, false)
-                .map_err(|e| e.to_string())
-                .and_then(|src| std::fs::read(&src).map_err(|e| e.to_string()))
-                .and_then(|bytes| run_on(&action, &name, std::sync::Arc::new(bytes), |_, _| {}));
+        for f in sources {
+            let p = f.shown.as_str();
+            let name = f.output.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "document.pdf".into());
+            let result =
+                std::fs::read(&f.source).map_err(|e| e.to_string()).and_then(|bytes| run_on(&action, &name, std::sync::Arc::new(bytes), |_, _| {}));
             out.push(match result {
                 Ok(r) => {
-                    let target = child(&folder, &name);
+                    let target = f.output.clone();
+                    if let Some(dir) = target.parent() {
+                        std::fs::create_dir_all(dir).map_err(|e| failed(format!("{}: {e}", dir.display())))?;
+                    }
                     write_atomic(&target, &r.bytes)?;
                     json!({ "path": p, "output": target.to_string_lossy(), "log": r.log })
                 }
                 Err(e) => json!({ "path": p, "error": e }),
             });
         }
-        Ok(json!({ "action": action.name, "files": out }))
+        let mut v = json!({ "action": action.name, "files": out });
+        if !walk.is_null() {
+            v["walk"] = walk;
+        }
+        Ok(v)
     }
 
     pub(crate) fn compare_ids(&self, a: &Args) -> Result<(pdfcraft_engine::DocId, pdfcraft_engine::DocId)> {

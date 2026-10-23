@@ -2983,3 +2983,122 @@ compare-page	Moved	Verschoben
 	Australian Tax File Numbers	Australische Steuerdateinummern (TFN)
 	Australian Medicare Numbers	Australische Medicare-Nummern
 	Australian Business Numbers	Australische Unternehmensnummern (ABN)
+
+# Comment, organize and search gaps (find comments, hide by type, page ranges, bookmark
+# properties, bookmarks from structure, advanced search, associated files, custom commands).
+	 in {f} of {s} documents	 in {f} von {s} Dokumenten
+	(no name)	(ohne Namen)
+	(this document doesn't allow copying its text)	(dieses Dokument erlaubt kein Kopieren seines Textes)
+	* the tool needs this option	* das Werkzeug braucht diese Option
+	A bookmark needs a title.	Ein Lesezeichen braucht einen Titel.
+	A folder	Ein Ordner
+	A folder…	Ein Ordner…
+	Add an associated file	Zugehörige Datei hinzufügen
+	Add file…	Datei hinzufügen…
+	Added 1 bookmark	1 Lesezeichen hinzugefügt
+	Added {n} bookmarks	{n} Lesezeichen hinzugefügt
+	All levels	Alle Ebenen
+	Another action (kept as it is)	Andere Aktion (unverändert)
+	Ask for the options each time it runs	Bei jeder Ausführung nach den Optionen fragen
+	Asks for its options when it runs.	Fragt bei der Ausführung nach seinen Optionen.
+	Associated files	Zugehörige Dateien
+	Bookmark properties	Lesezeicheneigenschaften
+	Bookmark properties…	Lesezeicheneigenschaften…
+	Cancelled: not every document was searched.	Abgebrochen: nicht alle Dokumente wurden durchsucht.
+	Check the options, then run the command.	Prüfen Sie die Optionen und führen Sie dann den Befehl aus.
+	Choose a folder of PDFs	Ordner mit PDFs wählen
+	Choose a folder to search	Ordner zum Durchsuchen wählen
+	Choose a folder to search.	Wählen Sie einen Ordner zum Durchsuchen.
+	Choose folder…	Ordner wählen…
+	Choose one of the document's named destinations.	Wählen Sie eines der benannten Ziele des Dokuments.
+	Choose the tool the command runs.	Wählen Sie das Werkzeug, das der Befehl ausführt.
+	Choose…	Wählen…
+	Comment	Kommentar
+	Comment on page {label}	Kommentar auf Seite {label}
+	Custom commands	Eigene Befehle
+	Custom commands aren't available in this version of PdfCraft.	Eigene Befehle sind in dieser Version von PdfCraft nicht verfügbar.
+	Custom commands…	Eigene Befehle…
+	Description (optional)	Beschreibung (optional)
+	Destination:	Ziel:
+	Edit Command	Befehl bearbeiten
+	Enter a page number from 1 to {n}.	Geben Sie eine Seitenzahl von 1 bis {n} ein.
+	Enter a web address starting with https://, http:// or mailto:.	Geben Sie eine Webadresse ein, die mit https://, http:// oder mailto: beginnt.
+	Enter a zoom from 1% to 6400%.	Geben Sie einen Zoom von 1 % bis 6400 % ein.
+	Existing bookmarks:	Vorhandene Lesezeichen:
+	Export custom commands	Eigene Befehle exportieren
+	Files linked to the document, a page or a comment, each with its relationship (source, data, alternative…).	Dateien, die mit dem Dokument, einer Seite oder einem Kommentar verknüpft sind, jeweils mit ihrer Beziehung (Quelle, Daten, Alternative…).
+	Files…	Dateien…
+	Fixed zoom	Fester Zoom
+	Headings:	Überschriften:
+	Import custom commands	Eigene Befehle importieren
+	Imported {n} custom commands	{n} eigene Befehle importiert
+	Include bookmarks and comments	Lesezeichen und Kommentare einbeziehen
+	Include comments	Kommentare einbeziehen
+	Include subfolders	Unterordner einbeziehen
+	Keep them, add the new ones after	Behalten, die neuen dahinter anfügen
+	Levels 1 to {n}	Ebenen 1 bis {n}
+	Look in	Suchen in
+	Make bookmarks	Lesezeichen erstellen
+	Make one bookmark for each heading of the document's tags, nested by heading level.	Für jede Überschrift der Tags des Dokuments ein Lesezeichen erstellen, nach Überschriftenebene verschachtelt.
+	New Command	Neuer Befehl
+	New Command…	Neuer Befehl…
+	New bookmarks from structure	Neue Lesezeichen aus Struktur
+	New bookmarks from structure…	Neue Lesezeichen aus Struktur…
+	No associated files.	Keine zugehörigen Dateien.
+	No comments	Keine Kommentare
+	No custom commands yet.	Noch keine eigenen Befehle.
+	No folder chosen	Kein Ordner gewählt
+	No pages match.	Keine passenden Seiten.
+	Object {n}	Objekt {n}
+	One tool with the options you choose, run in one step.	Ein Werkzeug mit den gewählten Optionen, in einem Schritt ausgeführt.
+	Open a document to run the command on.	Öffnen Sie ein Dokument, auf das der Befehl angewendet wird.
+	Page labels work too, as in Print.	Seitenbeschriftungen funktionieren auch, wie beim Drucken.
+	Page range	Seitenbereich
+	Page:	Seite:
+	Ran {name}	{name} ausgeführt
+	Relationship:	Beziehung:
+	Remove associated file	Zugehörige Datei entfernen
+	Replace them	Ersetzen
+	Run on this document	Auf dieses Dokument anwenden
+	Run on:	Ausführen auf:
+	Runs: {tool}	Führt aus: {tool}
+	Save associated file…	Zugehörige Datei speichern…
+	Search a folder…	Ordner durchsuchen…
+	Searching {d} of {t}…	Durchsuche {d} von {t}…
+	Select	Auswählen
+	Select a bookmark first	Wählen Sie zuerst ein Lesezeichen aus
+	Select pages…	Seiten auswählen…
+	Show all comment types	Alle Kommentartypen anzeigen
+	Show all types	Alle Typen anzeigen
+	Show on pages by type	Auf Seiten nach Typ anzeigen
+	Stopped at the result limit: narrow the search to see the rest.	Bei der Ergebnisgrenze angehalten: grenzen Sie die Suche ein, um den Rest zu sehen.
+	Subset:	Teilmenge:
+	That bookmark no longer exists	Dieses Lesezeichen existiert nicht mehr
+	The current document	Das aktuelle Dokument
+	The document changed; add the file again	Das Dokument hat sich geändert; fügen Sie die Datei erneut hinzu
+	The folder to search	Der zu durchsuchende Ordner
+	The script is too long.	Das Skript ist zu lang.
+	There is no folder to keep custom commands in.	Es gibt keinen Ordner für eigene Befehle.
+	This bookmark runs a {kind} action, kept as it is unless you choose another.	Dieses Lesezeichen führt eine Aktion vom Typ {kind} aus, die unverändert bleibt, solange Sie keine andere wählen.
+	Title:	Titel:
+	To the document	Zum Dokument
+	To this page	Zu dieser Seite
+	Tool:	Werkzeug:
+	Type a word or phrase to search for.	Geben Sie ein Wort oder einen Ausdruck ein.
+	Web address:	Webadresse:
+	When clicked:	Beim Klicken:
+	Zoom:	Zoom:
+	cancelled	abgebrochen
+	comment	Kommentar
+	e.g. 1-3, 7	z. B. 1-3, 7
+	e.g. 1-3, 7 (empty: all pages)	z. B. 1-3, 7 (leer: alle Seiten)
+	larger than {n} MB	größer als {n} MB
+	not a file name	kein Dateiname
+	stopped at {n} files	bei {n} Dateien angehalten
+	the action stopped unexpectedly	die Aktion wurde unerwartet beendet
+	{name} is larger than {n} MB	{name} ist größer als {n} MB
+	{name} isn't valid	{name} ist ungültig
+	{n} files skipped	{n} Dateien übersprungen
+	{n} more	{n} weitere
+	{n} more not shown	{n} weitere nicht angezeigt
+	{n} skipped	{n} übersprungen

@@ -356,6 +356,29 @@ impl PdfCraftApp {
                     self.right = Some(crate::RightPanel::Search);
                 }
             }
+            "edit.search_folder" => {
+                if let Some(i) = self.active {
+                    let f = self.views[i].find.get_or_insert_with(Default::default);
+                    f.in_panel = true;
+                    f.focus = true;
+                }
+                self.adv_search.scope = crate::search_ui::Scope::Folder;
+                self.right = Some(crate::RightPanel::Search);
+            }
+            "bookmark.properties" => match self.bookmark_for_current_page() {
+                Some(path) => self.open_bookmark_props(path),
+                None => self.notify_tr("Select a bookmark first"),
+            },
+            "bookmark.from_structure" => {
+                self.from_structure.error = None;
+                self.dialog = Some(Dialog::BookmarksFromStructure);
+            }
+            "page.select_range" => {
+                self.select_pages.error = None;
+                self.dialog = Some(Dialog::SelectPages);
+            }
+            "file.associated_files" => self.right = Some(crate::RightPanel::Attachments),
+            "actions.custom_commands" => self.open_custom_commands(),
             "a11y.report" => self.show_accessibility_report(),
             "a11y.alt_text" => self.start_alt_text(),
             "a11y.tags" | "a11y.order" | "a11y.tag_properties" | "a11y.new_tag" | "a11y.delete_tag" | "a11y.artifact" => self.tags_command(id),
@@ -506,6 +529,7 @@ impl PdfCraftApp {
             "page.copy" => self.copy_pages(false),
             "page.cut" => self.copy_pages(true),
             "page.paste" => self.paste_pages(),
+            "comment.show_all_types" => self.set_hidden_comment_types(&[]),
             "comment.hide_all" => {
                 if let Some(i) = active {
                     let id = self.views[i].id;

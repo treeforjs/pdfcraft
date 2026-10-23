@@ -1410,6 +1410,24 @@ fn revert_goes_back_to_the_saved_version() {
 }
 
 #[test]
+fn typed_page_ranges_select_pages() {
+    let (s, id) = session_with(6);
+    let info = &s.get(id).unwrap().info;
+    let sel = |r: &str, p: PageParity| select_page_range(info, r, p, PageOrientation::Both);
+    assert_eq!(sel("1-3, 5", PageParity::Both).unwrap(), vec![0, 1, 2, 4]);
+    assert_eq!(sel("5, 1-3, 2", PageParity::Both).unwrap(), vec![0, 1, 2, 4], "sorted, no repeats");
+    assert_eq!(sel("4-", PageParity::Both).unwrap(), vec![3, 4, 5]);
+    assert_eq!(sel("-2; 6", PageParity::Both).unwrap(), vec![0, 1, 5]);
+    assert_eq!(sel("", PageParity::Even).unwrap(), vec![1, 3, 5], "empty: every page, then even numbers");
+    assert_eq!(sel("3-1", PageParity::Odd).unwrap(), vec![0, 2]);
+    assert!(select_page_range(info, "1-6", PageParity::Both, PageOrientation::Landscape).unwrap().is_empty());
+    // Hostile ranges are errors, never panics or huge allocations.
+    for bad in ["0", "7", "1-99999999999999999999", "x", "1-x", "--", &"1,".repeat(300), &"9".repeat(5000)] {
+        assert!(sel(bad, PageParity::Both).is_err(), "{bad:?}");
+    }
+}
+
+#[test]
 fn split_by_size_and_bookmarks_and_page_filters() {
     let (mut s, id) = session_with(6);
     // Every page alone is a few hundred bytes: a limit of about two pages gives three parts.
@@ -1509,6 +1527,32 @@ fn comments_lock_take_checkmarks_hide_and_summarize() {
     let n = s.open_new("summary.pdf", pdf).unwrap();
     assert!(!s.get(n).unwrap().info.pages.is_empty());
     assert_eq!(comment_summary("x", &[], SummarySort::Page), "Summary of Comments on x\n\nThis document has no comments.\n");
+}
+
+#[test]
+fn comments_hide_by_type() {
+    let (mut s, id) = session_with(2);
+    s.apply(id, rect_comment(1, [80.0, 80.0, 120.0, 120.0])).unwrap();
+    let subtype = s.get(id).unwrap().info.annotations[0].subtype.clone();
+    assert!(pixel(&s, id, 1, 105, 100)[1] < 40, "drawn");
+    // Another type hidden: the rectangle stays.
+    assert!(s.set_hidden_comment_types(id, &["Ink".into()]).unwrap());
+    assert!(pixel(&s, id, 1, 105, 100)[1] < 40);
+    assert!(!s.get(id).unwrap().comment_type_hidden(&subtype));
+    assert!(s.set_hidden_comment_types(id, &["Ink".into(), subtype.clone(), "Ink".into()]).unwrap());
+    assert!(!s.set_hidden_comment_types(id, &[subtype.clone(), "Ink".into()]).unwrap(), "the same set in another order");
+    assert_eq!(pixel(&s, id, 1, 105, 100), [255, 255, 255, 255]);
+    assert!(s.get(id).unwrap().comment_type_hidden(&subtype));
+    assert_eq!(s.get(id).unwrap().hidden_comment_types(), vec!["Ink".to_string(), subtype.clone()]);
+    // Hostile names are refused without changing anything.
+    for bad in ["", "Widget", "Link", "Popup", "a/b", "x y", &"X".repeat(65)] {
+        assert!(s.set_hidden_comment_types(id, &[bad.to_string()]).is_err(), "{bad:?}");
+    }
+    assert!(s.set_hidden_comment_types(id, &vec!["Ink".to_string(); 65]).is_err());
+    assert!(s.set_hidden_comment_types(DocId(9999), &[]).is_err());
+    assert!(s.get(id).unwrap().comment_type_hidden(&subtype));
+    assert!(s.set_hidden_comment_types(id, &[]).unwrap());
+    assert!(pixel(&s, id, 1, 105, 100)[1] < 40);
 }
 
 #[test]

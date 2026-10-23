@@ -2945,3 +2945,122 @@ compare-page	Moved	తరలించబడింది
 	Australian Tax File Numbers	ఆస్ట్రేలియన్ పన్ను ఫైల్ సంఖ్యలు (TFN)
 	Australian Medicare Numbers	ఆస్ట్రేలియన్ మెడికేర్ సంఖ్యలు
 	Australian Business Numbers	ఆస్ట్రేలియన్ వ్యాపార సంఖ్యలు (ABN)
+
+# Comment, organize and search gaps (find comments, hide by type, page ranges, bookmark
+# properties, bookmarks from structure, advanced search, associated files, custom commands).
+	 in {f} of {s} documents	 {s} పత్రాలలో {f} పత్రాలలో
+	(no name)	(పేరు లేదు)
+	(this document doesn't allow copying its text)	(ఈ పత్రం దాని వచనాన్ని కాపీ చేయడానికి అనుమతించదు)
+	* the tool needs this option	* టూల్‌కు ఈ ఎంపిక అవసరం
+	A bookmark needs a title.	బుక్‌మార్క్‌కు శీర్షిక ఉండాలి.
+	A folder	ఒక ఫోల్డర్
+	A folder…	ఒక ఫోల్డర్…
+	Add an associated file	అనుబంధ ఫైల్‌ను జోడించు
+	Add file…	ఫైల్ జోడించు…
+	Added 1 bookmark	1 బుక్‌మార్క్ జోడించబడింది
+	Added {n} bookmarks	{n} బుక్‌మార్క్‌లు జోడించబడ్డాయి
+	All levels	అన్ని స్థాయిలు
+	Another action (kept as it is)	మరో చర్య (అలాగే ఉంచబడుతుంది)
+	Ask for the options each time it runs	ప్రతిసారి నడిపేటప్పుడు ఎంపికలను అడుగు
+	Asks for its options when it runs.	నడిపేటప్పుడు దాని ఎంపికలను అడుగుతుంది.
+	Associated files	అనుబంధ ఫైల్‌లు
+	Bookmark properties	బుక్‌మార్క్ లక్షణాలు
+	Bookmark properties…	బుక్‌మార్క్ లక్షణాలు…
+	Cancelled: not every document was searched.	రద్దు చేయబడింది: అన్ని పత్రాలు వెతకబడలేదు.
+	Check the options, then run the command.	ఎంపికలను సరిచూసి, ఆపై ఆదేశాన్ని నడపండి.
+	Choose a folder of PDFs	PDFల ఫోల్డర్‌ను ఎంచుకోండి
+	Choose a folder to search	వెతకడానికి ఫోల్డర్‌ను ఎంచుకోండి
+	Choose a folder to search.	వెతకడానికి ఒక ఫోల్డర్‌ను ఎంచుకోండి.
+	Choose folder…	ఫోల్డర్ ఎంచుకో…
+	Choose one of the document's named destinations.	పత్రంలోని పేరున్న గమ్యాలలో ఒకదాన్ని ఎంచుకోండి.
+	Choose the tool the command runs.	ఆదేశం నడిపే టూల్‌ను ఎంచుకోండి.
+	Choose…	ఎంచుకో…
+	Comment	వ్యాఖ్య
+	Comment on page {label}	పేజీ {label}లో వ్యాఖ్య
+	Custom commands	అనుకూల ఆదేశాలు
+	Custom commands aren't available in this version of PdfCraft.	PdfCraft యొక్క ఈ వెర్షన్‌లో అనుకూల ఆదేశాలు అందుబాటులో లేవు.
+	Custom commands…	అనుకూల ఆదేశాలు…
+	Description (optional)	వివరణ (ఐచ్ఛికం)
+	Destination:	గమ్యం:
+	Edit Command	ఆదేశాన్ని సవరించు
+	Enter a page number from 1 to {n}.	1 నుండి {n} వరకు పేజీ సంఖ్యను నమోదు చేయండి.
+	Enter a web address starting with https://, http:// or mailto:.	https://, http:// లేదా mailto:తో మొదలయ్యే వెబ్ చిరునామాను నమోదు చేయండి.
+	Enter a zoom from 1% to 6400%.	1% నుండి 6400% వరకు జూమ్‌ను నమోదు చేయండి.
+	Existing bookmarks:	ఉన్న బుక్‌మార్క్‌లు:
+	Export custom commands	అనుకూల ఆదేశాలను ఎగుమతి చేయి
+	Files linked to the document, a page or a comment, each with its relationship (source, data, alternative…).	పత్రానికి, పేజీకి లేదా వ్యాఖ్యకు లింక్ చేసిన ఫైల్‌లు, ఒక్కొక్కటి దాని సంబంధంతో (మూలం, డేటా, ప్రత్యామ్నాయం…).
+	Files…	ఫైల్‌లు…
+	Fixed zoom	స్థిర జూమ్
+	Headings:	శీర్షికలు:
+	Import custom commands	అనుకూల ఆదేశాలను దిగుమతి చేయి
+	Imported {n} custom commands	{n} అనుకూల ఆదేశాలు దిగుమతి చేయబడ్డాయి
+	Include bookmarks and comments	బుక్‌మార్క్‌లు మరియు వ్యాఖ్యలను చేర్చు
+	Include comments	వ్యాఖ్యలను చేర్చు
+	Include subfolders	ఉప ఫోల్డర్‌లను చేర్చు
+	Keep them, add the new ones after	వాటిని ఉంచి, కొత్తవాటిని తర్వాత జోడించు
+	Levels 1 to {n}	స్థాయిలు 1 నుండి {n}
+	Look in	ఇందులో వెతుకు
+	Make bookmarks	బుక్‌మార్క్‌లు సృష్టించు
+	Make one bookmark for each heading of the document's tags, nested by heading level.	పత్రం ట్యాగ్‌లలోని ప్రతి శీర్షికకు ఒక బుక్‌మార్క్ సృష్టించు, శీర్షిక స్థాయి ప్రకారం అమర్చబడుతుంది.
+	New Command	కొత్త ఆదేశం
+	New Command…	కొత్త ఆదేశం…
+	New bookmarks from structure	నిర్మాణం నుండి కొత్త బుక్‌మార్క్‌లు
+	New bookmarks from structure…	నిర్మాణం నుండి కొత్త బుక్‌మార్క్‌లు…
+	No associated files.	అనుబంధ ఫైల్‌లు లేవు.
+	No comments	వ్యాఖ్యలు లేవు
+	No custom commands yet.	ఇంకా అనుకూల ఆదేశాలు లేవు.
+	No folder chosen	ఫోల్డర్ ఎంచుకోలేదు
+	No pages match.	ఏ పేజీలూ సరిపోలలేదు.
+	Object {n}	వస్తువు {n}
+	One tool with the options you choose, run in one step.	మీరు ఎంచుకున్న ఎంపికలతో ఒక టూల్, ఒకే దశలో నడుస్తుంది.
+	Open a document to run the command on.	ఆదేశాన్ని నడపడానికి ఒక పత్రాన్ని తెరవండి.
+	Page labels work too, as in Print.	ముద్రణలో లాగే పేజీ లేబుళ్లు కూడా పనిచేస్తాయి.
+	Page range	పేజీ పరిధి
+	Page:	పేజీ:
+	Ran {name}	{name} నడిపింది
+	Relationship:	సంబంధం:
+	Remove associated file	అనుబంధ ఫైల్‌ను తీసివేయి
+	Replace them	వాటిని భర్తీ చేయి
+	Run on this document	ఈ పత్రంపై నడుపు
+	Run on:	దీనిపై నడుపు:
+	Runs: {tool}	నడుపుతుంది: {tool}
+	Save associated file…	అనుబంధ ఫైల్‌ను సేవ్ చేయి…
+	Search a folder…	ఫోల్డర్‌లో వెతుకు…
+	Searching {d} of {t}…	{t}లో {d} వెతుకుతోంది…
+	Select	ఎంచుకో
+	Select a bookmark first	ముందుగా ఒక బుక్‌మార్క్‌ను ఎంచుకోండి
+	Select pages…	పేజీలను ఎంచుకో…
+	Show all comment types	అన్ని వ్యాఖ్య రకాలను చూపు
+	Show all types	అన్ని రకాలను చూపు
+	Show on pages by type	పేజీలపై రకం ప్రకారం చూపు
+	Stopped at the result limit: narrow the search to see the rest.	ఫలితాల పరిమితి వద్ద ఆగింది: మిగతావి చూడటానికి వెతుకులాటను కుదించండి.
+	Subset:	ఉపసమితి:
+	That bookmark no longer exists	ఆ బుక్‌మార్క్ ఇక లేదు
+	The current document	ప్రస్తుత పత్రం
+	The document changed; add the file again	పత్రం మారింది; ఫైల్‌ను మళ్ళీ జోడించండి
+	The folder to search	వెతకవలసిన ఫోల్డర్
+	The script is too long.	స్క్రిప్ట్ చాలా పొడవుగా ఉంది.
+	There is no folder to keep custom commands in.	అనుకూల ఆదేశాలను ఉంచడానికి ఫోల్డర్ లేదు.
+	This bookmark runs a {kind} action, kept as it is unless you choose another.	ఈ బుక్‌మార్క్ {kind} చర్యను నడుపుతుంది, మీరు మరొకటి ఎంచుకోకపోతే అది అలాగే ఉంటుంది.
+	Title:	శీర్షిక:
+	To the document	పత్రానికి
+	To this page	ఈ పేజీకి
+	Tool:	టూల్:
+	Type a word or phrase to search for.	వెతకడానికి పదం లేదా పదబంధాన్ని టైప్ చేయండి.
+	Web address:	వెబ్ చిరునామా:
+	When clicked:	క్లిక్ చేసినప్పుడు:
+	Zoom:	జూమ్:
+	cancelled	రద్దు చేయబడింది
+	comment	వ్యాఖ్య
+	e.g. 1-3, 7	ఉదా. 1-3, 7
+	e.g. 1-3, 7 (empty: all pages)	ఉదా. 1-3, 7 (ఖాళీ: అన్ని పేజీలు)
+	larger than {n} MB	{n} MB కంటే పెద్దది
+	not a file name	ఫైల్ పేరు కాదు
+	stopped at {n} files	{n} ఫైల్‌ల వద్ద ఆగింది
+	the action stopped unexpectedly	చర్య అనుకోకుండా ఆగిపోయింది
+	{name} is larger than {n} MB	{name} {n} MB కంటే పెద్దది
+	{name} isn't valid	{name} చెల్లదు
+	{n} files skipped	{n} ఫైల్‌లు దాటవేయబడ్డాయి
+	{n} more	మరో {n}
+	{n} more not shown	మరో {n} చూపబడలేదు
+	{n} skipped	{n} దాటవేయబడ్డాయి

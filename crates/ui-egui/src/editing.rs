@@ -769,6 +769,7 @@ impl PdfCraftApp {
             }
             A::Rename(path, title) => Edit::RenameBookmark { path, title },
             A::EditScript(path) => return self.open_bookmark_script(path),
+            A::Properties(path) => return self.open_bookmark_props(path),
             A::Run(path) => {
                 // A bookmark without a page: run its script, or open its web address.
                 match self.session.bookmark_action(id, &path) {

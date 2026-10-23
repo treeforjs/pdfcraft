@@ -24,11 +24,17 @@ macro_rules! tl_ctx {
 
 mod a11y_ui;
 mod actions_ui;
+pub mod assoc_ui;
+#[cfg(not(target_arch = "wasm32"))]
+pub use actions_ui::safe_relative as actions_safe_relative;
+pub mod bookmark_ui;
 pub mod canvas;
 mod chrome;
 mod combine_ui;
+pub mod custom_commands_ui;
 pub mod make_accessible_ui;
 pub mod reading_order_ui;
+pub mod select_pages_ui;
 pub mod tags_ui;
 pub use combine_ui::{Columns as CombineColumns, Lock as CombineLock, SortKey};
 mod commands;
@@ -58,7 +64,7 @@ pub mod output_preview_ui;
 pub mod picked_ids;
 mod preflight_ui;
 pub mod prepress_ui;
-mod search_ui;
+pub mod search_ui;
 mod sign_settings_ui;
 mod sign_ui;
 mod stamps_ui;
@@ -373,6 +379,14 @@ pub enum Dialog {
     ProtectCertificates,
     /// Redact → Redaction code sets (create, edit, import and export saved sets).
     RedactCodeSets,
+    /// Bookmarks panel ▸ Properties (title, style, action).
+    BookmarkProperties,
+    /// Bookmarks panel ▸ New bookmarks from structure.
+    BookmarksFromStructure,
+    /// Pages ▸ Select pages (a typed range).
+    SelectPages,
+    /// Action Wizard ▸ Custom commands.
+    CustomCommands,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -567,6 +581,17 @@ pub struct PdfCraftApp {
     pub wizard: actions_ui::Wizard,
     pub action_run: Option<std::sync::Arc<std::sync::Mutex<actions_ui::RunProgress>>>,
     pub action_files_override: Option<Vec<String>>,
+    /// Bookmark Properties, New bookmarks from structure and Select pages dialogs.
+    pub bookmark_props: Option<bookmark_ui::BookmarkProps>,
+    pub from_structure: bookmark_ui::FromStructure,
+    pub select_pages: select_pages_ui::SelectPages,
+    /// Search panel beyond the current document (open documents, a folder).
+    pub adv_search: search_ui::AdvancedSearch,
+    /// Attachments panel ▸ Associated files.
+    pub assoc: assoc_ui::AssocFiles,
+    /// Custom commands: the dialog, and the automation tools they run (installed by the app).
+    pub custom_commands: custom_commands_ui::CustomCommands,
+    pub tool_host: Option<std::sync::Arc<dyn pdfcraft_engine::tool_host::ToolHost>>,
     /// Standards ▸ PDF/A: level and last result.
     pub pdfa: standards_ui::PdfaState,
     pub preflight: preflight_ui::PreflightState,
@@ -874,6 +899,13 @@ impl PdfCraftApp {
             wizard: Default::default(),
             action_run: None,
             action_files_override: None,
+            bookmark_props: None,
+            from_structure: Default::default(),
+            select_pages: Default::default(),
+            adv_search: Default::default(),
+            assoc: Default::default(),
+            custom_commands: Default::default(),
+            tool_host: None,
             pdfa: Default::default(),
             preflight: Default::default(),
             compare_old: None,

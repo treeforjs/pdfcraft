@@ -44,6 +44,14 @@ fn custom_library() -> Value {
     json!({ "type": "string", "description": "A file path: the custom command library folder (default custom-commands, inside the root)." })
 }
 
+fn source_folder() -> Value {
+    json!({ "type": "string", "description": "Instead of paths: a folder whose PDFs are processed (at most 10000; links to folders are never followed, links to files only inside the root)." })
+}
+
+fn recursive() -> Value {
+    json!({ "type": "boolean", "description": "With source_folder: its subfolders too (32 levels deep at most)." })
+}
+
 fn doc() -> Value {
     json!({ "type": "integer", "minimum": 1, "description": "Document id from doc_open or doc_list." })
 }
@@ -316,6 +324,17 @@ pub fn tools() -> Vec<ToolDef> {
                     "max_results": { "type": "integer", "minimum": 1, "maximum": 100000, "description": "Return at most this many matches in all (default 1000)." },
                 }),
                 &["folder", "query"],
+            )),
+        t("page_range_select", "Select pages by range", "Organize Pages ▸ Select: the pages (1-based, sorted, no repeats) a typed range names, such as \"1-3, 7, 9-\" (page labels work as in Print; empty: every page), narrowed by subset (all, even, odd page numbers) and orientation (all, landscape, portrait). Pass the result as another tool's pages.")
+            .ro()
+            .cmd("page.select_range")
+            .with(schema(
+                json!({
+                    "doc": doc(), "range": { "type": "string", "maxLength": 4000 },
+                    "subset": { "type": "string", "enum": ["all", "even", "odd"] },
+                    "orientation": { "type": "string", "enum": ["all", "landscape", "portrait"] },
+                }),
+                &["doc"],
             )),
         t("page_rotate", "Rotate pages", "Rotate pages by a multiple of 90 degrees (positive is clockwise): the listed pages (default all), filtered like Acrobat's Rotate Pages by subset (all, even, odd page numbers) and orientation (all, landscape, portrait). Undoable.")
             .cmd("page.rotate")
@@ -1410,7 +1429,7 @@ pub fn tools() -> Vec<ToolDef> {
             "Add a comment as Acrobat's commenting tools do. Geometry is in points with the origin at the top-left of the displayed page, y down (as in page_render images at 72 dpi and text_find rects). \
              note: `at` [x, y] (icon top-left). stamp: `at` [x, y] (its centre) and `stamp`: approved, completed, confidential, draft, final, for comment, for public release, information only, not approved, not for public release, preliminary results, void, accepted, initial here, rejected, sign here, witness; dynamic: true for the dynamic approved/confidential/received/reviewed/revised stamps with a By … at … line. highlight/underline/strikeout/squiggly: `find` (text on the page to mark; every match with all: true) or `quads`. \
              rectangle/oval/textbox: `rect` [x0, y0, x1, y1]. line/arrow: `from`, `to`. Optional `endings` (two names: start, end) for a line, arrow or polyline, or one name for a callout: None, Square, Circle, Diamond, OpenArrow, ClosedArrow, Butt, ROpenArrow, RClosedArrow, Slash. An arrow without endings is None then OpenArrow. ink: `strokes` [[[x, y], …], …]. \
-             polygon/cloud/polyline (connected lines): `points` [[x, y], …]. callout: `rect` (its text box), `to` (the point the arrow touches), optional `knee`. caret (inserted text): `at`, the insertion point on the baseline. replace (Replace Text): `find` or `quads` like highlight, `contents` the replacement. attachment: `path` (the file), `at`, optional `icon` (PushPin, Paperclip, Graph, Tag). Undoable.",
+             polygon/cloud/polyline (connected lines): `points` [[x, y], …]. callout: `rect` (its text box), `to` (the point the arrow touches), optional `knee`. caret (inserted text): `at`, the insertion point on the baseline; snap: true moves it to the gap between the characters nearest `at` (within 24 pt), sized to the line. replace (Replace Text): `find` or `quads` like highlight, `contents` the replacement. attachment: `path` (the file), `at`, optional `icon` (PushPin, Paperclip, Graph, Tag). Undoable.",
         )
         .with(schema(
             json!({
@@ -1431,6 +1450,7 @@ pub fn tools() -> Vec<ToolDef> {
                 "quads": { "type": "array", "items": { "type": "array", "items": { "type": "number" }, "minItems": 8, "maxItems": 8 } },
                 "stamp": { "type": "string" },
                 "dynamic": { "type": "boolean" },
+                "snap": { "type": "boolean", "description": "caret: snap `at` to the nearest text insertion point." },
                 "strokes": { "type": "array", "items": { "type": "array", "items": point() } },
                 "icon": { "type": "string", "description": "note: Comment, Note, Help, Insert, Key, NewParagraph, Paragraph; attachment: PushPin, Paperclip, Graph, Tag." },
                 "color": color(),
@@ -1677,9 +1697,16 @@ pub fn tools() -> Vec<ToolDef> {
         t("comment_popups_all", "Open or close all pop-ups", "Open All Pop-ups (open true, the default) or Close All Pop-ups (open false): every comment pop-up on `page` (1-based; the whole document when left out) not already in that state, plus, when opening, sticky notes without one (they get one). One undo step. Returns how many changed.")
             .cmd("comment.open_popups")
             .with(schema(json!({ "doc": doc(), "open": { "type": "boolean", "description": "Default true." }, "page": { "type": "integer", "minimum": 1 } }), &["doc"])),
-        t("comments_hide", "Hide all comments", "Hide or show every comment on the page (fields and links still draw). A view setting: the file doesn't change.")
+        t("comments_hide", "Hide all comments", "Hide or show every comment on the page (fields and links still draw), or with types hide just the comments of those types (annotation subtypes such as Highlight, Ink, FreeText, Square; an empty list shows every type again). A view setting: the file doesn't change. Returns hidden and hidden_types.")
             .cmd("comment.hide_all")
-            .with(schema(json!({ "doc": doc(), "hidden": { "type": "boolean", "description": "Default true." } }), &["doc"])),
+            .with(schema(
+                json!({
+                    "doc": doc(),
+                    "hidden": { "type": "boolean", "description": "Default true." },
+                    "types": { "type": "array", "items": { "type": "string" }, "maxItems": 64, "description": "Hide only these comment types (replaces the list)." },
+                }),
+                &["doc"],
+            )),
         t("comments_summarize", "Summarize comments", "Make a PDF summarising every comment (number, author, type, date, text, replies), sorted by page, author, date or type. layout: comments-only (default); connector-lines (each commented page beside its comments, joined by lines from numbered markers); sequence-numbers (each commented page with numbered markers, then its comments).")
             .cmd("comment.summarize")
             .with(schema(
@@ -2243,16 +2270,18 @@ pub fn tools() -> Vec<ToolDef> {
             .ro()
             .cmd("actions.wizard")
             .with(schema(json!({}), &[])),
-        t("action_run", "Run an action", "Action Wizard: run a built-in action (action: its name) or a list of steps ([{step, arg}], ids from action_list) on each PDF in paths, writing the results into folder under the same names. Returns each file's step log or error.")
+        t("action_run", "Run an action", "Action Wizard: run a built-in action (action: its name) or a list of steps ([{step, arg}], ids from action_list) on each PDF in paths, or in source_folder (with recursive, its subfolders too, kept as subfolders of folder), writing the results into folder under the same names. Returns each file's step log or error, and for a folder what the walk skipped (walk).")
             .cmd("actions.wizard")
             .with(schema(
                 json!({
                     "action": { "type": "string" },
                     "steps": { "type": "array", "items": { "type": "object", "properties": { "step": { "type": "string" }, "arg": { "type": "string" } }, "required": ["step"] } },
                     "paths": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+                    "source_folder": source_folder(),
+                    "recursive": recursive(),
                     "folder": { "type": "string" },
                 }),
-                &["paths", "folder"],
+                &["folder"],
             )),
         t("doc_compare", "Compare files", "Compare two open documents: other is the older version, doc the newer. Returns the page map (each page same, modified, moved, inserted or deleted, 1-based old and new numbers), summary counts and each text change (replaced, inserted, deleted) with the old and new text, pages (1-based) and rectangles (points, origin bottom-left); with visual, the paired pages that look different (changed_percent, regions) and visual_regions as flat {page, rect}. Moved pages are compared with their counterpart.")
             .ro()
@@ -2375,11 +2404,13 @@ pub fn tools() -> Vec<ToolDef> {
                 }),
                 &["doc"],
             )),
-        t("ocr_recognize_files", "Recognize text in multiple files", "Scan & OCR ▸ Recognize text ▸ In multiple files: read every page of each PDF in paths and write the searchable result into folder under the same name (pages that already have text are left alone). Returns, per file, the output path, word count and skipped pages, or the error.")
+        t("ocr_recognize_files", "Recognize text in multiple files", "Scan & OCR ▸ Recognize text ▸ In multiple files: read every page of each PDF in paths, or in source_folder (with recursive, its subfolders too, kept as subfolders of folder), and write the searchable result into folder under the same name (pages that already have text are left alone). Returns, per file, the output path, word count and skipped pages, or the error.")
             .cmd("ocr.recognize_batch")
             .with(schema(
                 json!({
                     "paths": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+                    "source_folder": source_folder(),
+                    "recursive": recursive(),
                     "folder": { "type": "string" },
                     "dpi": { "type": "number", "minimum": 72, "maximum": 600 },
                     "language": ocr_language(),
@@ -2394,7 +2425,7 @@ pub fn tools() -> Vec<ToolDef> {
                     "background": { "type": "string", "enum": ["off", "low", "medium", "high"], "description": "Whiten the off-white, grey or yellowed paper before reading (default off): the paper level is estimated from the page's luma histogram and pixels within a margin of it (low, medium, high reach further) become white; ink and mid-greys keep their values. Runs before despeckle. The page image changes only with output straighten." },
                     "background_white_point": { "type": "integer", "minimum": 128, "maximum": 255, "description": "With background (or alone): an explicit white point instead of the estimate; pixels at least this light become white." },
                 }),
-                &["paths", "folder"],
+                &["folder"],
             )),
         t("scan_remove_background", "Remove scan background", "Scan & OCR ▸ Enhance scan ▸ Remove background: whiten the off-white, grey or yellowed paper of the images the pages draw, as one undoable step. Each image's paper level is the main light peak of its luma histogram (at least 30 % of the pixels within 16 levels of it; photographs, dark and inverted scans are left alone); pixels within a margin below it (low, medium (default) or high, widened by the paper's measured noise; never below 128) become white, and a levels curve keeps ink and mid-greys at their values. Colour scans are neutralised per channel from the paper's own colour. 8-bit gray and RGB images are rewritten (JPEG at quality 90 when they were JPEG); one-bit images already have white paper and are counted in images_unchanged; JPEG 2000, CMYK and other images it cannot decode faithfully are left alone and counted in images_skipped. Images shared with other pages change there too. Returns images, images_changed, images_skipped, images_unchanged, pixels_whitened and pixels_changed; when nothing changed no step is added.")
             .with(schema(

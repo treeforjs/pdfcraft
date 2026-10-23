@@ -2948,3 +2948,122 @@ compare-page	Moved	已移动
 	Australian Tax File Numbers	澳大利亚税号（TFN）
 	Australian Medicare Numbers	澳大利亚 Medicare 号码
 	Australian Business Numbers	澳大利亚企业号码（ABN）
+
+# Comment, organize and search gaps (find comments, hide by type, page ranges, bookmark
+# properties, bookmarks from structure, advanced search, associated files, custom commands).
+	 in {f} of {s} documents	（在 {s} 个文档中的 {f} 个）
+	(no name)	（无名称）
+	(this document doesn't allow copying its text)	（此文档不允许复制其文本）
+	* the tool needs this option	* 工具需要此选项
+	A bookmark needs a title.	书签需要标题。
+	A folder	文件夹
+	A folder…	文件夹…
+	Add an associated file	添加关联文件
+	Add file…	添加文件…
+	Added 1 bookmark	已添加 1 个书签
+	Added {n} bookmarks	已添加 {n} 个书签
+	All levels	所有级别
+	Another action (kept as it is)	其他动作（保持不变）
+	Ask for the options each time it runs	每次运行时询问选项
+	Asks for its options when it runs.	运行时询问其选项。
+	Associated files	关联文件
+	Bookmark properties	书签属性
+	Bookmark properties…	书签属性…
+	Cancelled: not every document was searched.	已取消：并非所有文档都已搜索。
+	Check the options, then run the command.	请检查选项，然后运行命令。
+	Choose a folder of PDFs	选择 PDF 文件夹
+	Choose a folder to search	选择要搜索的文件夹
+	Choose a folder to search.	请选择要搜索的文件夹。
+	Choose folder…	选择文件夹…
+	Choose one of the document's named destinations.	请选择文档中的一个命名目标。
+	Choose the tool the command runs.	请选择命令运行的工具。
+	Choose…	选择…
+	Comment	注释
+	Comment on page {label}	第 {label} 页上的注释
+	Custom commands	自定义命令
+	Custom commands aren't available in this version of PdfCraft.	此版本的 PdfCraft 不提供自定义命令。
+	Custom commands…	自定义命令…
+	Description (optional)	描述（可选）
+	Destination:	目标：
+	Edit Command	编辑命令
+	Enter a page number from 1 to {n}.	请输入 1 到 {n} 之间的页码。
+	Enter a web address starting with https://, http:// or mailto:.	请输入以 https://、http:// 或 mailto: 开头的网址。
+	Enter a zoom from 1% to 6400%.	请输入 1% 到 6400% 之间的缩放比例。
+	Existing bookmarks:	现有书签：
+	Export custom commands	导出自定义命令
+	Files linked to the document, a page or a comment, each with its relationship (source, data, alternative…).	与文档、页面或注释关联的文件，各带其关系（源、数据、替代…）。
+	Files…	文件…
+	Fixed zoom	固定缩放
+	Headings:	标题：
+	Import custom commands	导入自定义命令
+	Imported {n} custom commands	已导入 {n} 个自定义命令
+	Include bookmarks and comments	包括书签和注释
+	Include comments	包括注释
+	Include subfolders	包括子文件夹
+	Keep them, add the new ones after	保留它们，在后面添加新书签
+	Levels 1 to {n}	级别 1 到 {n}
+	Look in	搜索范围
+	Make bookmarks	创建书签
+	Make one bookmark for each heading of the document's tags, nested by heading level.	为文档标签中的每个标题创建一个书签，按标题级别嵌套。
+	New Command	新建命令
+	New Command…	新建命令…
+	New bookmarks from structure	从结构新建书签
+	New bookmarks from structure…	从结构新建书签…
+	No associated files.	没有关联文件。
+	No comments	没有注释
+	No custom commands yet.	还没有自定义命令。
+	No folder chosen	未选择文件夹
+	No pages match.	没有匹配的页面。
+	Object {n}	对象 {n}
+	One tool with the options you choose, run in one step.	使用所选选项的一个工具，一步运行。
+	Open a document to run the command on.	请打开要运行命令的文档。
+	Page labels work too, as in Print.	也可以使用页面标签，与打印相同。
+	Page range	页面范围
+	Page:	页面：
+	Ran {name}	已运行 {name}
+	Relationship:	关系：
+	Remove associated file	移除关联文件
+	Replace them	替换它们
+	Run on this document	在此文档上运行
+	Run on:	运行于：
+	Runs: {tool}	运行：{tool}
+	Save associated file…	保存关联文件…
+	Search a folder…	搜索文件夹…
+	Searching {d} of {t}…	正在搜索 {d} / {t}…
+	Select	选择
+	Select a bookmark first	请先选择一个书签
+	Select pages…	选择页面…
+	Show all comment types	显示所有注释类型
+	Show all types	显示所有类型
+	Show on pages by type	在页面上按类型显示
+	Stopped at the result limit: narrow the search to see the rest.	已在结果上限处停止：缩小搜索范围以查看其余结果。
+	Subset:	子集：
+	That bookmark no longer exists	该书签已不存在
+	The current document	当前文档
+	The document changed; add the file again	文档已更改；请重新添加文件
+	The folder to search	要搜索的文件夹
+	The script is too long.	脚本过长。
+	There is no folder to keep custom commands in.	没有用于保存自定义命令的文件夹。
+	This bookmark runs a {kind} action, kept as it is unless you choose another.	此书签运行 {kind} 动作，除非您选择其他动作，否则保持不变。
+	Title:	标题：
+	To the document	添加到文档
+	To this page	添加到此页面
+	Tool:	工具：
+	Type a word or phrase to search for.	请输入要搜索的字词或短语。
+	Web address:	网址：
+	When clicked:	单击时：
+	Zoom:	缩放：
+	cancelled	已取消
+	comment	注释
+	e.g. 1-3, 7	例如 1-3, 7
+	e.g. 1-3, 7 (empty: all pages)	例如 1-3, 7（留空：所有页面）
+	larger than {n} MB	大于 {n} MB
+	not a file name	不是文件名
+	stopped at {n} files	在 {n} 个文件处停止
+	the action stopped unexpectedly	动作意外停止
+	{name} is larger than {n} MB	{name} 大于 {n} MB
+	{name} isn't valid	{name} 无效
+	{n} files skipped	已跳过 {n} 个文件
+	{n} more	还有 {n} 个
+	{n} more not shown	另有 {n} 个未显示
+	{n} skipped	已跳过 {n} 个
