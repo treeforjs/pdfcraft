@@ -42,7 +42,7 @@ pub use namespace::{
     MAX_NAMESPACES, MAX_NS_MAPPINGS, NS_MATHML, NS_PDF17, NS_PDF20, Namespace, NamespaceKind, NamespaceSpec, NsMapping, add_namespace, namespace_uri,
     namespaces,
 };
-pub use pdfa::{convert_pdfa, pdfa_blockers, pdfa_structure, verify_pdfa};
+pub use pdfa::{convert_pdfa, convert_pdfa_with_intent, pdfa_blockers, pdfa_structure, verify_pdfa};
 pub use pdfua::{MAX_UA_FINDINGS, UA_CHECKPOINTS, UA_NOT_CHECKED, UaCheckpoint, UaFinding, UaOptions, UaPart, UaReport, UaSeverity, verify_pdfua};
 pub use reading::{Block, BlockKind, Piece, reading_blocks};
 pub use reading_order::{

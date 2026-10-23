@@ -3153,3 +3153,46 @@ compare-page	Moved	Movida
 	Enhance scans…	Melhorar digitalizações…
 	SVG (one file per page)	SVG (um arquivo por página)
 	Accessible text	Texto acessível
+	Can't reach {standard} automatically; nothing was changed.	Não é possível chegar a {standard} automaticamente; nada foi alterado.
+	Checking…	Verificando…
+	Compress document structure	Compactar a estrutura do documento
+	Compress entire file	Compactar o arquivo inteiro
+	Convert to PDF/X	Converter em PDF/X
+	Converted to {standard}: {n} changes. Save to keep them.	Convertido em {standard}: {n} alterações. Salve para mantê-las.
+	Converting…	Convertendo…
+	Errors: {e} · Warnings: {w}	Erros: {e} · Avisos: {w}
+	Flatten transparency	Achatar transparência
+	High (600 ppi)	Alta (600 ppi)
+	Keep the document's (sRGB if it has none)	A do documento (sRGB se não houver)
+	Keep the document's output intent	Manter a condição de saída do documento
+	Low (150 ppi)	Baixa (150 ppi)
+	Make compatible with	Tornar compatível com
+	Medium (300 ppi)	Média (300 ppi)
+	No output intents	Nenhuma condição de saída
+	No problems found in the implemented checks.	Nenhum problema encontrado nas verificações disponíveis.
+	Nothing needed changing.	Não era preciso alterar nada.
+	Object compression	Compactação de objetos
+	Only the areas whose look depends on transparency become images; text and vectors elsewhere stay as they are.	Só as áreas cuja aparência depende da transparência viram imagens; o texto e os vetores no restante ficam como estão.
+	Only the first {n} findings are shown.	Apenas os primeiros {n} resultados são mostrados.
+	Optimizing… flattening transparency	Otimizando… achatando transparência
+	PDF 1.3 has no transparency: it is always flattened.	O PDF 1.3 não tem transparência: ela é sempre achatada.
+	PDF {v} · objects checked: {n}	PDF {v} · objetos verificados: {n}
+	PDF/X-4 embeds the output profile: choose a profile.	O PDF/X-4 incorpora o perfil de saída: escolha um perfil.
+	Raster/vector balance	Equilíbrio rasterização/vetor
+	Remove compression	Remover compactação
+	Save As optimizes for Fast Web View	“Salvar como” otimiza para exibição rápida na Web
+	Save As writes the file so a browser can show the first page before the download finishes.	“Salvar como” grava o arquivo para que um navegador mostre a primeira página antes de o download terminar.
+	Standard	Padrão
+	Syntax	Sintaxe
+	The chosen profile is no longer loaded.	O perfil escolhido não está mais carregado.
+	no profile (registered condition)	sem perfil (condição registrada)
+	object	objeto
+	the profile can't be read: {e}	não é possível ler o perfil: {e}
+	{space} {class} profile, ICC version {v}, {n} bytes	perfil {space} {class}, versão ICC {v}, {n} bytes
+	Checks what a machine can decide. Reading order, the quality of alternate text and the use of colour need a person.	Verifica o que uma máquina consegue decidir. A ordem de leitura, a qualidade do texto alternativo e o uso de cores precisam de uma pessoa.
+	Checks every object reachable from the trailer against the Arlington PDF model for the file's PDF version.	Verifica cada objeto alcançável a partir do trailer em relação ao modelo PDF Arlington para a versão PDF do arquivo.
+	Older versions: JPEG 2000 and 16-bit images are converted, JBIG2 becomes CCITT for PDF 1.3, transparency is flattened for PDF 1.3, and there are no object streams.	Versões antigas: imagens JPEG 2000 e de 16 bits são convertidas, JBIG2 vira CCITT no PDF 1.3, a transparência é achatada no PDF 1.3 e não há fluxos de objetos.
+	PDF/X…	PDF/X…
+	PDF/UA…	PDF/UA…
+	Validate PDF syntax…	Validar a sintaxe do PDF…
+	Validate PDF syntax	Validar a sintaxe do PDF

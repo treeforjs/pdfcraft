@@ -3117,3 +3117,46 @@ compare-page	Moved	已移动
 	Enhance scans…	增强扫描…
 	SVG (one file per page)	SVG（每页一个文件）
 	Accessible text	辅助功能文本
+	Can't reach {standard} automatically; nothing was changed.	无法自动达到 {standard}；未做任何更改。
+	Checking…	正在检查…
+	Compress document structure	压缩文档结构
+	Compress entire file	压缩整个文件
+	Convert to PDF/X	转换为 PDF/X
+	Converted to {standard}: {n} changes. Save to keep them.	已转换为 {standard}：{n} 处更改。保存后才会保留。
+	Converting…	正在转换…
+	Errors: {e} · Warnings: {w}	错误：{e} · 警告：{w}
+	Flatten transparency	拼合透明度
+	High (600 ppi)	高 (600 ppi)
+	Keep the document's (sRGB if it has none)	沿用文档的（没有则用 sRGB）
+	Keep the document's output intent	保留文档的输出意图
+	Low (150 ppi)	低 (150 ppi)
+	Make compatible with	兼容于
+	Medium (300 ppi)	中 (300 ppi)
+	No output intents	没有输出意图
+	No problems found in the implemented checks.	已实现的检查未发现问题。
+	Nothing needed changing.	无需更改。
+	Object compression	对象压缩
+	Only the areas whose look depends on transparency become images; text and vectors elsewhere stay as they are.	只有外观取决于透明度的区域会变成图像；其他位置的文本和矢量保持不变。
+	Only the first {n} findings are shown.	仅显示前 {n} 条结果。
+	Optimizing… flattening transparency	正在优化… 拼合透明度
+	PDF 1.3 has no transparency: it is always flattened.	PDF 1.3 不支持透明度：总是会拼合。
+	PDF {v} · objects checked: {n}	PDF {v} · 已检查对象：{n}
+	PDF/X-4 embeds the output profile: choose a profile.	PDF/X-4 会嵌入输出配置文件：请选择一个配置文件。
+	Raster/vector balance	栅格/矢量平衡
+	Remove compression	移除压缩
+	Save As optimizes for Fast Web View	“另存为”针对快速 Web 查看进行优化
+	Save As writes the file so a browser can show the first page before the download finishes.	“另存为”写出的文件可让浏览器在下载完成前显示第一页。
+	Standard	标准
+	Syntax	语法
+	The chosen profile is no longer loaded.	所选配置文件已不再加载。
+	no profile (registered condition)	无配置文件（已注册条件）
+	object	对象
+	the profile can't be read: {e}	无法读取配置文件：{e}
+	{space} {class} profile, ICC version {v}, {n} bytes	{space} {class} 配置文件，ICC 版本 {v}，{n} 字节
+	Checks what a machine can decide. Reading order, the quality of alternate text and the use of colour need a person.	检查机器能够判断的内容。阅读顺序、替代文本的质量和颜色的使用需要人工判断。
+	Checks every object reachable from the trailer against the Arlington PDF model for the file's PDF version.	按文件的 PDF 版本，对照 Arlington PDF 模型检查从 trailer 可到达的每个对象。
+	Older versions: JPEG 2000 and 16-bit images are converted, JBIG2 becomes CCITT for PDF 1.3, transparency is flattened for PDF 1.3, and there are no object streams.	较旧版本：JPEG 2000 和 16 位图像会被转换，PDF 1.3 中 JBIG2 变为 CCITT、透明度会被拼合，并且不使用对象流。
+	PDF/X…	PDF/X…
+	PDF/UA…	PDF/UA…
+	Validate PDF syntax…	验证 PDF 语法…
+	Validate PDF syntax	验证 PDF 语法

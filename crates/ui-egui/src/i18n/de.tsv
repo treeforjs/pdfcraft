@@ -3152,3 +3152,46 @@ compare-page	Moved	Verschoben
 	Enhance scans…	Scans verbessern…
 	SVG (one file per page)	SVG (eine Datei pro Seite)
 	Accessible text	Barrierefreier Text
+	Can't reach {standard} automatically; nothing was changed.	{standard} lässt sich nicht automatisch erreichen; nichts wurde geändert.
+	Checking…	Wird geprüft…
+	Compress document structure	Dokumentstruktur komprimieren
+	Compress entire file	Gesamte Datei komprimieren
+	Convert to PDF/X	In PDF/X konvertieren
+	Converted to {standard}: {n} changes. Save to keep them.	In {standard} konvertiert: {n} Änderungen. Speichern, um sie zu behalten.
+	Converting…	Wird konvertiert…
+	Errors: {e} · Warnings: {w}	Fehler: {e} · Warnungen: {w}
+	Flatten transparency	Transparenz reduzieren
+	High (600 ppi)	Hoch (600 ppi)
+	Keep the document's (sRGB if it has none)	Vom Dokument übernehmen (sRGB, falls keines vorhanden)
+	Keep the document's output intent	Ausgabebedingung des Dokuments beibehalten
+	Low (150 ppi)	Niedrig (150 ppi)
+	Make compatible with	Kompatibel machen mit
+	Medium (300 ppi)	Mittel (300 ppi)
+	No output intents	Keine Ausgabebedingungen
+	No problems found in the implemented checks.	In den umgesetzten Prüfungen wurden keine Probleme gefunden.
+	Nothing needed changing.	Es musste nichts geändert werden.
+	Object compression	Objektkomprimierung
+	Only the areas whose look depends on transparency become images; text and vectors elsewhere stay as they are.	Nur Bereiche, deren Aussehen von Transparenz abhängt, werden zu Bildern; Text und Vektoren an anderen Stellen bleiben unverändert.
+	Only the first {n} findings are shown.	Nur die ersten {n} Befunde werden angezeigt.
+	Optimizing… flattening transparency	Optimierung… Transparenz wird reduziert
+	PDF 1.3 has no transparency: it is always flattened.	PDF 1.3 kennt keine Transparenz: Sie wird immer reduziert.
+	PDF {v} · objects checked: {n}	PDF {v} · geprüfte Objekte: {n}
+	PDF/X-4 embeds the output profile: choose a profile.	PDF/X-4 bettet das Ausgabeprofil ein: Wählen Sie ein Profil.
+	Raster/vector balance	Raster/Vektor-Verhältnis
+	Remove compression	Komprimierung entfernen
+	Save As optimizes for Fast Web View	„Speichern unter“ optimiert für schnelle Webanzeige
+	Save As writes the file so a browser can show the first page before the download finishes.	„Speichern unter“ schreibt die Datei so, dass ein Browser die erste Seite zeigen kann, bevor der Download fertig ist.
+	Standard	Standard
+	Syntax	Syntax
+	The chosen profile is no longer loaded.	Das gewählte Profil ist nicht mehr geladen.
+	no profile (registered condition)	kein Profil (registrierte Bedingung)
+	object	Objekt
+	the profile can't be read: {e}	Das Profil kann nicht gelesen werden: {e}
+	{space} {class} profile, ICC version {v}, {n} bytes	{space}-{class}-Profil, ICC-Version {v}, {n} Byte
+	Checks what a machine can decide. Reading order, the quality of alternate text and the use of colour need a person.	Prüft, was eine Maschine entscheiden kann. Lesereihenfolge, die Qualität von Alternativtexten und der Einsatz von Farbe brauchen einen Menschen.
+	Checks every object reachable from the trailer against the Arlington PDF model for the file's PDF version.	Prüft jedes vom Trailer aus erreichbare Objekt gegen das Arlington-PDF-Modell für die PDF-Version der Datei.
+	Older versions: JPEG 2000 and 16-bit images are converted, JBIG2 becomes CCITT for PDF 1.3, transparency is flattened for PDF 1.3, and there are no object streams.	Ältere Versionen: JPEG-2000- und 16-Bit-Bilder werden umgewandelt, JBIG2 wird für PDF 1.3 zu CCITT, Transparenz wird für PDF 1.3 reduziert, und es gibt keine Objektstreams.
+	PDF/X…	PDF/X…
+	PDF/UA…	PDF/UA…
+	Validate PDF syntax…	PDF-Syntax prüfen…
+	Validate PDF syntax	PDF-Syntax prüfen

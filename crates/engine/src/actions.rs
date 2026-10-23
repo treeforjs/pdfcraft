@@ -197,7 +197,7 @@ fn apply_step(s: &mut Session, id: DocId, step: &Step, log: &mut Vec<String>) ->
             log.push(format!("Fix hairlines: {n}"));
             return Ok(None);
         }
-        Step::SaveAsPdfA => Edit::ConvertPdfA { level: pdfcraft_preflight::Level::A2b },
+        Step::SaveAsPdfA => Edit::ConvertPdfA { level: pdfcraft_preflight::Level::A2b, intent: None },
         Step::DetectFormFields => {
             let n = s.auto_detect_fields(id, &[])?.len();
             log.push(format!("Detect form fields: {n}"));

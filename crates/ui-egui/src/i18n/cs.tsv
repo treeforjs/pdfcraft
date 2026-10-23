@@ -3176,3 +3176,46 @@ compare-page	Moved	Přesunutá
 	Enhance scans…	Vylepšit skeny…
 	SVG (one file per page)	SVG (jeden soubor na stranu)
 	Accessible text	Přístupný text
+	Can't reach {standard} automatically; nothing was changed.	{standard} nelze dosáhnout automaticky; nic se nezměnilo.
+	Checking…	Kontrola…
+	Compress document structure	Komprimovat strukturu dokumentu
+	Compress entire file	Komprimovat celý soubor
+	Convert to PDF/X	Převést na PDF/X
+	Converted to {standard}: {n} changes. Save to keep them.	Převedeno na {standard}: změn: {n}. Uložte je, aby zůstaly.
+	Converting…	Převod…
+	Errors: {e} · Warnings: {w}	Chyby: {e} · Varování: {w}
+	Flatten transparency	Sloučit průhlednost
+	High (600 ppi)	Vysoké (600 ppi)
+	Keep the document's (sRGB if it has none)	Podle dokumentu (sRGB, pokud žádný nemá)
+	Keep the document's output intent	Zachovat výstupní podmínku dokumentu
+	Low (150 ppi)	Nízké (150 ppi)
+	Make compatible with	Zajistit kompatibilitu s
+	Medium (300 ppi)	Střední (300 ppi)
+	No output intents	Žádné výstupní podmínky
+	No problems found in the implemented checks.	Dostupné kontroly nenašly žádné problémy.
+	Nothing needed changing.	Nebylo třeba nic měnit.
+	Object compression	Komprese objektů
+	Only the areas whose look depends on transparency become images; text and vectors elsewhere stay as they are.	Na obrázky se převedou jen oblasti, jejichž vzhled závisí na průhlednosti; text a vektory jinde zůstanou beze změny.
+	Only the first {n} findings are shown.	Zobrazuje se jen prvních {n} nálezů.
+	Optimizing… flattening transparency	Optimalizace… slučování průhlednosti
+	PDF 1.3 has no transparency: it is always flattened.	PDF 1.3 průhlednost nezná: vždy se sloučí.
+	PDF {v} · objects checked: {n}	PDF {v} · zkontrolované objekty: {n}
+	PDF/X-4 embeds the output profile: choose a profile.	PDF/X-4 vkládá výstupní profil: vyberte profil.
+	Raster/vector balance	Poměr rastru a vektorů
+	Remove compression	Odebrat kompresi
+	Save As optimizes for Fast Web View	„Uložit jako“ optimalizuje pro rychlé zobrazení na webu
+	Save As writes the file so a browser can show the first page before the download finishes.	„Uložit jako“ zapíše soubor tak, aby prohlížeč mohl ukázat první stránku dřív, než stahování skončí.
+	Standard	Norma
+	Syntax	Syntaxe
+	The chosen profile is no longer loaded.	Zvolený profil už není načtený.
+	no profile (registered condition)	bez profilu (registrovaná podmínka)
+	object	objekt
+	the profile can't be read: {e}	profil nelze přečíst: {e}
+	{space} {class} profile, ICC version {v}, {n} bytes	profil {space} {class}, verze ICC {v}, bajtů: {n}
+	Checks what a machine can decide. Reading order, the quality of alternate text and the use of colour need a person.	Kontroluje, co dokáže rozhodnout stroj. Pořadí čtení, kvalitu alternativního textu a použití barev musí posoudit člověk.
+	Checks every object reachable from the trailer against the Arlington PDF model for the file's PDF version.	Kontroluje každý objekt dosažitelný z traileru podle modelu PDF Arlington pro verzi PDF souboru.
+	Older versions: JPEG 2000 and 16-bit images are converted, JBIG2 becomes CCITT for PDF 1.3, transparency is flattened for PDF 1.3, and there are no object streams.	Starší verze: obrázky JPEG 2000 a 16bitové obrázky se převedou, JBIG2 se pro PDF 1.3 změní na CCITT, průhlednost se pro PDF 1.3 sloučí a nepoužijí se proudy objektů.
+	PDF/X…	PDF/X…
+	PDF/UA…	PDF/UA…
+	Validate PDF syntax…	Ověřit syntaxi PDF…
+	Validate PDF syntax	Ověřit syntaxi PDF

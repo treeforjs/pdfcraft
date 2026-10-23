@@ -650,3 +650,27 @@ fn a_background_startup_forms_script_notice_waits_until_its_tab_is_selected() {
     h.run_steps(2);
     assert!(h.state().toast.is_none(), "the notice is delivered once");
 }
+
+#[test]
+fn save_as_writes_fast_web_view_when_the_preference_is_on() {
+    let dir = scratch("save-as-fast");
+    let linearized = |p: &std::path::Path| std::fs::read(p).unwrap().windows(11).any(|w| w == b"/Linearized");
+    let mut h = harness(&[3]);
+    // Off (the default): a plain full save.
+    let plain = dir.join("plain.pdf");
+    h.state_mut().pick_override = Some(vec![plain.to_string_lossy().into_owned()]);
+    assert!(h.state_mut().execute("file.save_as"));
+    h.run_steps(2);
+    assert!(!linearized(&plain));
+    // On: Save As writes a linearized file that reopens with its pages.
+    h.state_mut().session.set_pref("documents.fast_web_view", &serde_json::json!(true)).unwrap();
+    rotate_first_page(h.state_mut());
+    let fast = dir.join("fast.pdf");
+    h.state_mut().pick_override = Some(vec![fast.to_string_lossy().into_owned()]);
+    assert!(h.state_mut().execute("file.save_as"));
+    h.run_steps(2);
+    assert!(linearized(&fast), "Save As optimizes for Fast Web View");
+    assert_eq!(page_count(std::fs::read(&fast).unwrap()), 3);
+    assert!(!dirty(h.state(), 0));
+    let _ = std::fs::remove_dir_all(&dir);
+}

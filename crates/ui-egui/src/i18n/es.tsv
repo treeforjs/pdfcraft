@@ -3076,3 +3076,46 @@ compare-page	Moved	Movida
 	Enhance scans…	Mejorar escaneos…
 	SVG (one file per page)	SVG (un archivo por página)
 	Accessible text	Texto accesible
+	Can't reach {standard} automatically; nothing was changed.	No se puede alcanzar {standard} automáticamente; no se ha cambiado nada.
+	Checking…	Comprobando…
+	Compress document structure	Comprimir la estructura del documento
+	Compress entire file	Comprimir todo el archivo
+	Convert to PDF/X	Convertir a PDF/X
+	Converted to {standard}: {n} changes. Save to keep them.	Convertido a {standard}: {n} cambios. Guarde para conservarlos.
+	Converting…	Convirtiendo…
+	Errors: {e} · Warnings: {w}	Errores: {e} · Advertencias: {w}
+	Flatten transparency	Acoplar transparencia
+	High (600 ppi)	Alta (600 ppp)
+	Keep the document's (sRGB if it has none)	La del documento (sRGB si no tiene)
+	Keep the document's output intent	Conservar la condición de salida del documento
+	Low (150 ppi)	Baja (150 ppp)
+	Make compatible with	Hacer compatible con
+	Medium (300 ppi)	Media (300 ppp)
+	No output intents	Sin condiciones de salida
+	No problems found in the implemented checks.	No se encontraron problemas en las comprobaciones disponibles.
+	Nothing needed changing.	No hacía falta cambiar nada.
+	Object compression	Compresión de objetos
+	Only the areas whose look depends on transparency become images; text and vectors elsewhere stay as they are.	Solo las zonas cuyo aspecto depende de la transparencia se convierten en imágenes; el texto y los vectores del resto quedan como están.
+	Only the first {n} findings are shown.	Solo se muestran los primeros {n} resultados.
+	Optimizing… flattening transparency	Optimizando… acoplando transparencia
+	PDF 1.3 has no transparency: it is always flattened.	PDF 1.3 no admite transparencia: siempre se acopla.
+	PDF {v} · objects checked: {n}	PDF {v} · objetos comprobados: {n}
+	PDF/X-4 embeds the output profile: choose a profile.	PDF/X-4 incrusta el perfil de salida: elija un perfil.
+	Raster/vector balance	Equilibrio rasterizado/vectorial
+	Remove compression	Quitar compresión
+	Save As optimizes for Fast Web View	«Guardar como» optimiza para vista web rápida
+	Save As writes the file so a browser can show the first page before the download finishes.	«Guardar como» escribe el archivo para que un navegador pueda mostrar la primera página antes de que termine la descarga.
+	Standard	Norma
+	Syntax	Sintaxis
+	The chosen profile is no longer loaded.	El perfil elegido ya no está cargado.
+	no profile (registered condition)	sin perfil (condición registrada)
+	object	objeto
+	the profile can't be read: {e}	no se puede leer el perfil: {e}
+	{space} {class} profile, ICC version {v}, {n} bytes	perfil {space} {class}, versión ICC {v}, {n} bytes
+	Checks what a machine can decide. Reading order, the quality of alternate text and the use of colour need a person.	Comprueba lo que una máquina puede decidir. El orden de lectura, la calidad del texto alternativo y el uso del color necesitan una persona.
+	Checks every object reachable from the trailer against the Arlington PDF model for the file's PDF version.	Comprueba cada objeto accesible desde el tráiler con el modelo PDF Arlington para la versión PDF del archivo.
+	Older versions: JPEG 2000 and 16-bit images are converted, JBIG2 becomes CCITT for PDF 1.3, transparency is flattened for PDF 1.3, and there are no object streams.	Versiones antiguas: las imágenes JPEG 2000 y de 16 bits se convierten, JBIG2 pasa a CCITT para PDF 1.3, la transparencia se acopla para PDF 1.3 y no hay flujos de objetos.
+	PDF/X…	PDF/X…
+	PDF/UA…	PDF/UA…
+	Validate PDF syntax…	Validar la sintaxis PDF…
+	Validate PDF syntax	Validar la sintaxis PDF

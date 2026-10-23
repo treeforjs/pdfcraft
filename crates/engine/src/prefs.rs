@@ -67,6 +67,8 @@ pub struct Preferences {
     pub high_contrast: bool,
     /// Interface language: [`crate::locale::AUTO`] (follow the system) or a language code.
     pub language: String,
+    /// Documents: Save As writes a linearized file (Fast Web View).
+    pub fast_web_view: bool,
 }
 
 impl Default for Preferences {
@@ -83,6 +85,7 @@ impl Default for Preferences {
             reduce_motion: false,
             high_contrast: false,
             language: crate::locale::AUTO.to_string(),
+            fast_web_view: false,
         }
     }
 }
@@ -154,6 +157,14 @@ pub const SCHEMA: &[Spec] = &[
         "app",
         true,
         "How many recent files Home and File ▸ Open Recent list (default 12).",
+    ),
+    spec(
+        "documents.fast_web_view",
+        "documents",
+        Kind::Bool,
+        "app",
+        true,
+        "Save As optimizes for Fast Web View (default false): Save As writes a linearized file (ISO 32000 Annex F) so page 1 shows before a download finishes; signed documents are still saved incrementally. Save keeps saving incrementally.",
     ),
     spec(
         "documents.keep_tags_on_edit",
@@ -462,6 +473,7 @@ impl Session {
             "general.language" => json!(p.language),
             "documents.autosave_minutes" => json!(p.autosave_minutes),
             "documents.recent_files" => json!(p.recent_files),
+            "documents.fast_web_view" => json!(p.fast_web_view),
             "documents.keep_tags_on_edit" => json!(self.keep_tags_on_edit()),
             "forms.highlight_color" => json!(color_hex(p.field_highlight)),
             "forms.required_color" => json!(color_hex(p.required_highlight)),
@@ -535,6 +547,7 @@ impl Session {
             "general.language" => p.language = text(),
             "documents.autosave_minutes" => p.autosave_minutes = int(),
             "documents.recent_files" => p.recent_files = int(),
+            "documents.fast_web_view" => p.fast_web_view = flag(),
             "forms.highlight_color" => p.field_highlight = color(),
             "forms.required_color" => p.required_highlight = color(),
             "forms.date_format" => self.set_date_format(&text())?,

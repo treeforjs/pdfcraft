@@ -341,6 +341,7 @@ pub fn show(app: &mut PdfCraftApp, ctx: &egui::Context) {
                         }
                         PropsTab::Advanced => {
                             row(ui, "PDF version", i.pdf_version.clone());
+                            row(ui, "Fast Web View", yes(doc.fast_web_view()));
                             row(ui, "Location", crate::bidi::visual(doc.path.as_deref().unwrap_or_default()).into_owned());
                             row(
                                 ui,

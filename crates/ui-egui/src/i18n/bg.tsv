@@ -3115,3 +3115,46 @@ compare-page	Moved	Преместена
 	Enhance scans…	Подобряване на сканирани изображения…
 	SVG (one file per page)	SVG (един файл на страница)
 	Accessible text	Достъпен текст
+	Can't reach {standard} automatically; nothing was changed.	{standard} не може да се постигне автоматично; нищо не е променено.
+	Checking…	Проверка…
+	Compress document structure	Компресиране на структурата на документа
+	Compress entire file	Компресиране на целия файл
+	Convert to PDF/X	Преобразуване в PDF/X
+	Converted to {standard}: {n} changes. Save to keep them.	Преобразувано в {standard}: промени — {n}. Запазете, за да ги задържите.
+	Converting…	Преобразуване…
+	Errors: {e} · Warnings: {w}	Грешки: {e} · Предупреждения: {w}
+	Flatten transparency	Сливане на прозрачността
+	High (600 ppi)	Висока (600 ppi)
+	Keep the document's (sRGB if it has none)	От документа (sRGB, ако няма)
+	Keep the document's output intent	Запазване на изходното условие на документа
+	Low (150 ppi)	Ниска (150 ppi)
+	Make compatible with	Съвместимост с
+	Medium (300 ppi)	Средна (300 ppi)
+	No output intents	Няма изходни условия
+	No problems found in the implemented checks.	Наличните проверки не откриха проблеми.
+	Nothing needed changing.	Нищо не трябваше да се променя.
+	Object compression	Компресиране на обекти
+	Only the areas whose look depends on transparency become images; text and vectors elsewhere stay as they are.	В изображения се превръщат само областите, чийто вид зависи от прозрачността; текстът и векторите другаде остават непроменени.
+	Only the first {n} findings are shown.	Показани са само първите {n} резултата.
+	Optimizing… flattening transparency	Оптимизиране… сливане на прозрачността
+	PDF 1.3 has no transparency: it is always flattened.	PDF 1.3 няма прозрачност: тя винаги се слива.
+	PDF {v} · objects checked: {n}	PDF {v} · проверени обекти: {n}
+	PDF/X-4 embeds the output profile: choose a profile.	PDF/X-4 вгражда изходния профил: изберете профил.
+	Raster/vector balance	Баланс растер/вектор
+	Remove compression	Премахване на компресирането
+	Save As optimizes for Fast Web View	„Запиши като“ оптимизира за бърз преглед в уеб
+	Save As writes the file so a browser can show the first page before the download finishes.	„Запиши като“ записва файла така, че браузърът да покаже първата страница преди края на изтеглянето.
+	Standard	Стандарт
+	Syntax	Синтаксис
+	The chosen profile is no longer loaded.	Избраният профил вече не е зареден.
+	no profile (registered condition)	без профил (регистрирано условие)
+	object	обект
+	the profile can't be read: {e}	профилът не може да се прочете: {e}
+	{space} {class} profile, ICC version {v}, {n} bytes	профил {space} {class}, ICC версия {v}, байта: {n}
+	Checks what a machine can decide. Reading order, the quality of alternate text and the use of colour need a person.	Проверява това, което машина може да реши. Редът на четене, качеството на алтернативния текст и използването на цвят изискват човек.
+	Checks every object reachable from the trailer against the Arlington PDF model for the file's PDF version.	Проверява всеки обект, достижим от трейлъра, спрямо модела PDF Arlington за PDF версията на файла.
+	Older versions: JPEG 2000 and 16-bit images are converted, JBIG2 becomes CCITT for PDF 1.3, transparency is flattened for PDF 1.3, and there are no object streams.	По-стари версии: изображенията JPEG 2000 и 16-битовите се преобразуват, за PDF 1.3 JBIG2 става CCITT, а прозрачността се слива; няма потоци от обекти.
+	PDF/X…	PDF/X…
+	PDF/UA…	PDF/UA…
+	Validate PDF syntax…	Проверка на синтаксиса на PDF…
+	Validate PDF syntax	Проверка на синтаксиса на PDF

@@ -104,6 +104,7 @@ impl Page {
                 "documents.default_layout",
                 "documents.default_zoom",
                 "documents.keep_tags_on_edit",
+                "documents.fast_web_view",
             ],
             Page::Commenting => &["commenting.keep_tool_selected", "commenting.open_panel"],
             Page::Forms => {
@@ -173,6 +174,7 @@ fn label(key: &str) -> &'static str {
         "documents.default_layout" => tl!("Default page display"),
         "documents.default_zoom" => tl!("Default zoom"),
         "documents.keep_tags_on_edit" => tl!("Keep structure tags when editing content"),
+        "documents.fast_web_view" => tl!("Save As optimizes for Fast Web View"),
         "commenting.keep_tool_selected" => tl!("Keep the comment tool selected after adding a comment"),
         "commenting.open_panel" => tl!("Open the Comments panel when a comment tool is chosen"),
         "forms.highlight_fields" => tl!("Highlight form fields in documents that open"),
@@ -222,6 +224,7 @@ fn keywords(key: &str) -> &'static str {
         "documents.default_layout" => "page display layout continuous single two-up",
         "documents.default_zoom" => "zoom magnification fit width page",
         "documents.keep_tags_on_edit" => "tags structure tagged accessibility edit editing keep reading order",
+        "documents.fast_web_view" => "fast web view linearize linearized save as web download streaming",
         "commenting.keep_tool_selected" => "comment tool pin sticky",
         "commenting.open_panel" => "comments panel list sidebar",
         "forms.highlight_fields" => "form fields highlight",
@@ -736,6 +739,9 @@ fn row(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens, key: &'static str) 
         }),
         "documents.keep_tags_on_edit" => {
             check(ui, app, t, key, Some(tl!("Edited, added and deleted text and images update a tagged document's structure in the same undo step.")))
+        }
+        "documents.fast_web_view" => {
+            check(ui, app, t, key, Some(tl!("Save As writes the file so a browser can show the first page before the download finishes.")))
         }
         "documents.default_zoom" => setting(
             ui,

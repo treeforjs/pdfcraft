@@ -3789,7 +3789,13 @@ fn optimizing_scans_with_ccitt_lzw_to_flate_and_object_streams_through_tools() {
     assert_eq!((r["images_ccitt"].as_u64(), r["lzw_reencoded"].as_u64(), r["object_streams"].as_bool()), (Some(0), Some(0), Some(true)), "{r}");
     let packed = std::fs::read(dir.join("packed.pdf")).unwrap();
     assert!(contains(&packed, b"/ObjStm") && !contains(&packed, b"/CCITTFaxDecode"));
-    for bad in [json!("jbig2"), json!(7), json!({ "compression": 3 }), json!({ "downsample": "yes" })] {
+    // JBIG2 (lossless generic region): the same page, smaller than the LZW scan.
+    let r = ok(&mut a, "doc_optimize", json!({ "doc": doc, "path": "jbig2.pdf", "mono": "jbig2" }));
+    assert_eq!((r["images_jbig2"].as_u64(), r["images_ccitt"].as_u64()), (Some(1), Some(0)), "{r}");
+    assert!(contains(&std::fs::read(dir.join("jbig2.pdf")).unwrap(), b"/JBIG2Decode"));
+    let copy = ok(&mut a, "doc_open", json!({ "path": "jbig2.pdf" }))["doc"].as_u64().unwrap();
+    assert!(preview(&mut a, copy) == original, "the JBIG2 copy renders differently");
+    for bad in [json!("jbig3"), json!(7), json!({ "compression": 3 }), json!({ "downsample": "yes" })] {
         assert!(matches!(a.call("doc_optimize", &json!({ "doc": doc, "path": "x.pdf", "mono": bad })), Err(ToolError::InvalidArgs(_))), "{bad}");
     }
 }
@@ -7218,4 +7224,71 @@ fn hostile_watermark_appearance_is_refused() {
     }
     assert!(!page_text(&mut a, doc)[0].contains('X'), "nothing was added");
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn pdfa_with_a_chosen_output_intent_and_optimizing_down_through_tools() {
+    let dir = workdir("pdfa-intent");
+    let mut a = auto(&dir);
+    let header = |class: &[u8; 4], space: &[u8; 4], major: u8| {
+        let mut icc = vec![0u8; 256];
+        icc[0..4].copy_from_slice(&256u32.to_be_bytes());
+        icc[8] = major;
+        icc[12..16].copy_from_slice(class);
+        icc[16..20].copy_from_slice(space);
+        icc[20..24].copy_from_slice(b"Lab ");
+        icc[36..40].copy_from_slice(b"acsp");
+        icc
+    };
+    std::fs::write(dir.join("press.icc"), header(b"prtr", b"CMYK", 2)).unwrap();
+    std::fs::write(dir.join("abstract.icc"), header(b"abst", b"CMYK", 2)).unwrap();
+    std::fs::write(dir.join("new.icc"), header(b"prtr", b"CMYK", 4)).unwrap();
+    std::fs::write(dir.join("junk.icc"), b"not a profile").unwrap();
+    let doc = ok(&mut a, "doc_create", json!({ "from": "text", "text": "Archive me" }))["doc"].as_u64().unwrap();
+    for bad in [
+        json!({ "doc": doc, "level": "2b", "output_profile": "abstract.icc" }),
+        json!({ "doc": doc, "level": "1b", "output_profile": "new.icc" }),
+        json!({ "doc": doc, "level": "2b", "output_profile": "junk.icc" }),
+        json!({ "doc": doc, "level": "2b", "output_profile": "press.icc", "output_condition": "" }),
+        json!({ "doc": doc, "level": "2b", "output_profile": "press.icc", "output_condition": "a\nb" }),
+        json!({ "doc": doc, "level": "2b", "output_condition": "FOGRA39" }),
+    ] {
+        assert!(matches!(a.call("pdfa_convert", &bad), Err(ToolError::InvalidArgs(_))), "{bad}");
+    }
+    assert!(a.call("pdfa_convert", &json!({ "doc": doc, "output_profile": "missing.icc" })).is_err());
+    assert_eq!(ok(&mut a, "doc_inspect", json!({ "doc": doc }))["undo"], Value::Null, "refusals change nothing");
+    let r = ok(&mut a, "pdfa_convert", json!({ "doc": doc, "level": "2b", "output_profile": "press.icc", "output_condition": "FOGRA39" }));
+    assert_eq!(r["declared"]["output_intents"], json!(["FOGRA39"]), "{r}");
+    // Without output_condition the file name is the condition.
+    let other = ok(&mut a, "doc_create", json!({ "from": "text", "text": "Archive me too" }))["doc"].as_u64().unwrap();
+    let r = ok(&mut a, "pdfa_convert", json!({ "doc": other, "level": "2b", "output_profile": "press.icc" }));
+    assert_eq!(r["declared"]["output_intents"], json!(["press"]), "{r}");
+
+    // Optimizing: JBIG2 for monochrome, PDF 1.3 forces flattening; bad options are refused.
+    for bad in [
+        json!({ "doc": doc, "path": "x.pdf", "mono": { "compression": "jbig3" } }),
+        json!({ "doc": doc, "path": "x.pdf", "flatten_transparency": true, "flatten_preset": "ultra" }),
+        json!({ "doc": doc, "path": "x.pdf", "flatten_transparency": true, "flatten_balance": 101 }),
+        json!({ "doc": doc, "path": "x.pdf", "flatten_transparency": true, "flatten_balance": -1 }),
+    ] {
+        assert!(matches!(a.call("doc_optimize", &bad), Err(ToolError::InvalidArgs(_))), "{bad}");
+    }
+    std::fs::write(dir.join("t.pdf"), transparent_pdf()).unwrap();
+    let t = ok(&mut a, "doc_open", json!({ "path": "t.pdf" }))["doc"].as_u64().unwrap();
+    let r = ok(&mut a, "doc_optimize", json!({ "doc": t, "path": "old.pdf", "compatibility": "1.3", "mono": { "compression": "jbig2" } }));
+    assert_eq!(r["transparency_flattened_pages"], 1, "{r}");
+    assert!(r["newer_features"].as_array().unwrap().iter().all(|f| f["feature"] != "transparency"), "{r}");
+    let bytes = std::fs::read(dir.join("old.pdf")).unwrap();
+    assert!(bytes.starts_with(b"%PDF-1.3"));
+    let old = pdfcraft_cos::Document::open(std::sync::Arc::new(bytes)).unwrap();
+    let x1a = pdfcraft_engine::pdfa::XOptions { part: Some(pdfcraft_engine::pdfa::XPart::X1a2001), max_findings: 0 };
+    assert_eq!(pdfcraft_engine::pdfa::verify_pdfx(&old, &x1a).count("transparency"), 0);
+    // Flattening on request at PDF 1.7; the open document is not changed.
+    let r = ok(
+        &mut a,
+        "doc_optimize",
+        json!({ "doc": t, "path": "flat.pdf", "flatten_transparency": true, "flatten_preset": "low", "flatten_balance": 100 }),
+    );
+    assert_eq!(r["transparency_flattened_pages"], 1, "{r}");
+    assert_eq!(ok(&mut a, "doc_inspect", json!({ "doc": t }))["undo"], Value::Null);
 }

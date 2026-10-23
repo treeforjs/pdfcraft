@@ -3152,3 +3152,46 @@ compare-page	Moved	移動
 	Enhance scans…	スキャンを補正…
 	SVG (one file per page)	SVG (ページごとに 1 ファイル)
 	Accessible text	アクセシブルテキスト
+	Can't reach {standard} automatically; nothing was changed.	{standard} に自動で準拠させることはできません。何も変更していません。
+	Checking…	チェック中…
+	Compress document structure	文書構造を圧縮
+	Compress entire file	ファイル全体を圧縮
+	Convert to PDF/X	PDF/X に変換
+	Converted to {standard}: {n} changes. Save to keep them.	{standard} に変換しました: {n} 件の変更。保存すると保持されます。
+	Converting…	変換中…
+	Errors: {e} · Warnings: {w}	エラー: {e} · 警告: {w}
+	Flatten transparency	透明部分を分割・統合
+	High (600 ppi)	高 (600 ppi)
+	Keep the document's (sRGB if it has none)	文書のものを使用 (なければ sRGB)
+	Keep the document's output intent	文書の出力インテントを保持
+	Low (150 ppi)	低 (150 ppi)
+	Make compatible with	互換性
+	Medium (300 ppi)	中 (300 ppi)
+	No output intents	出力インテントなし
+	No problems found in the implemented checks.	実装済みのチェックでは問題は見つかりませんでした。
+	Nothing needed changing.	変更が必要な箇所はありませんでした。
+	Object compression	オブジェクトの圧縮
+	Only the areas whose look depends on transparency become images; text and vectors elsewhere stay as they are.	外観が透明に依存する部分だけが画像になります。それ以外のテキストやベクターはそのままです。
+	Only the first {n} findings are shown.	最初の {n} 件だけを表示しています。
+	Optimizing… flattening transparency	最適化中… 透明部分を分割・統合
+	PDF 1.3 has no transparency: it is always flattened.	PDF 1.3 には透明がないため、常に分割・統合されます。
+	PDF {v} · objects checked: {n}	PDF {v} · チェックしたオブジェクト: {n}
+	PDF/X-4 embeds the output profile: choose a profile.	PDF/X-4 は出力プロファイルを埋め込みます。プロファイルを選択してください。
+	Raster/vector balance	ラスター/ベクターのバランス
+	Remove compression	圧縮を解除
+	Save As optimizes for Fast Web View	「名前を付けて保存」で Web 表示用に最適化
+	Save As writes the file so a browser can show the first page before the download finishes.	「名前を付けて保存」で、ダウンロードが終わる前にブラウザーが最初のページを表示できるようにファイルを書き出します。
+	Standard	規格
+	Syntax	構文
+	The chosen profile is no longer loaded.	選択したプロファイルはもう読み込まれていません。
+	no profile (registered condition)	プロファイルなし (登録済みの条件)
+	object	オブジェクト
+	the profile can't be read: {e}	プロファイルを読み取れません: {e}
+	{space} {class} profile, ICC version {v}, {n} bytes	{space} {class} プロファイル、ICC バージョン {v}、{n} バイト
+	Checks what a machine can decide. Reading order, the quality of alternate text and the use of colour need a person.	機械で判断できる項目をチェックします。読み上げ順序、代替テキストの質、色の使い方は人による確認が必要です。
+	Checks every object reachable from the trailer against the Arlington PDF model for the file's PDF version.	トレーラーからたどれるすべてのオブジェクトを、ファイルの PDF バージョンの Arlington PDF モデルと照合します。
+	Older versions: JPEG 2000 and 16-bit images are converted, JBIG2 becomes CCITT for PDF 1.3, transparency is flattened for PDF 1.3, and there are no object streams.	古いバージョン: JPEG 2000 と 16 ビットの画像は変換され、PDF 1.3 では JBIG2 が CCITT になり透明部分が分割・統合されます。オブジェクトストリームは使われません。
+	PDF/X…	PDF/X…
+	PDF/UA…	PDF/UA…
+	Validate PDF syntax…	PDF 構文を検証…
+	Validate PDF syntax	PDF 構文を検証

@@ -1312,9 +1312,10 @@ impl Automation {
             if let Some(c) = compression {
                 m.compression = match c {
                     "ccitt-g4" | "ccitt" | "g4" => MonoCompression::CcittG4,
+                    "jbig2" => MonoCompression::Jbig2,
                     "zip" | "flate" => MonoCompression::Flate,
                     "retain" => MonoCompression::Retain,
-                    other => return Err(ToolError::InvalidArgs(format!("unknown mono compression {other:?} (ccitt-g4, zip, retain)"))),
+                    other => return Err(ToolError::InvalidArgs(format!("unknown mono compression {other:?} (ccitt-g4, jbig2, zip, retain)"))),
                 };
             }
         }
@@ -1343,6 +1344,21 @@ impl Automation {
                     ))
                 })?);
             }
+        }
+        if let Some(on) = a.opt_bool("flatten_transparency")? {
+            let mut t = pdfcraft_engine::optimize::Transparency::default();
+            if let Some(p) = a.opt_str("flatten_preset")? {
+                let preset = pdfcraft_engine::pdfa::FlattenPreset::from_id(p)
+                    .ok_or_else(|| ToolError::InvalidArgs(format!("unknown flatten_preset {p:?} (low, medium, high)")))?;
+                t.resolution = pdfcraft_engine::pdfa::FlattenSettings::preset(preset).resolution;
+            }
+            if let Some(b) = a.opt_int("flatten_balance")? {
+                t.balance = u8::try_from(b)
+                    .ok()
+                    .filter(|b| *b <= 100)
+                    .ok_or_else(|| ToolError::InvalidArgs(format!("flatten_balance must be 0 to 100, not {b}")))?;
+            }
+            settings.transparency = on.then_some(t);
         }
         let discard: Vec<pdfcraft_engine::Hidden> = match a.get("discard") {
             None => Vec::new(),
@@ -1386,6 +1402,10 @@ impl Automation {
             "image_bytes_before": o.image_bytes_before,
             "image_bytes_after": o.image_bytes_after,
             "images_ccitt": o.images_ccitt,
+            "images_jbig2": o.images_jbig2,
+            "images_downgraded": o.images_downgraded,
+            "images_not_downgraded": o.images_not_downgraded,
+            "transparency_flattened_pages": r.flattened,
             "thumbnails": o.thumbnails,
             "alternate_images": o.alternate_images,
             "tags_removed": o.tags_removed,

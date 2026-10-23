@@ -388,6 +388,8 @@ impl PdfCraftApp {
         let Some(id) = self.views.get(index).map(|v| v.id) else { return false };
         let Some(doc) = self.session.get(id) else { return false };
         let (name, path) = (doc.name.clone(), doc.path.clone());
+        // Preferences ▸ Documents: Save As writes a linearized (Fast Web View) file.
+        let fast = matches!(target, SaveTarget::As) && self.session.prefs().fast_web_view;
         #[cfg(not(target_arch = "wasm32"))]
         {
             let destination = match (target, path, &self.save_override) {
@@ -398,14 +400,14 @@ impl PdfCraftApp {
                     let dialog = rfd::AsyncFileDialog::new().add_filter("PDF", &["pdf"]).set_file_name(name);
                     // The bytes are taken once the user has chosen, so edits made meanwhile are saved too.
                     self.ask_one(crate::pickers::Ask::Save(dialog), None, move |app, dest| {
-                        if app.save_doc_to(id, &dest.to_string_lossy()) {
+                        if app.save_doc_to(id, &dest.to_string_lossy(), fast) {
                             after(app);
                         }
                     });
                     return false;
                 }
             };
-            let saved = self.save_doc_to(id, &destination);
+            let saved = self.save_doc_to(id, &destination, fast);
             if saved {
                 after(self);
             }
@@ -418,7 +420,7 @@ impl PdfCraftApp {
                 return false;
             }
             self.run_document_action(id, pdfcraft_engine::DocTrigger::WillSave);
-            let bytes = match self.session.save_bytes(id) {
+            let bytes = match self.bytes_to_save(id, fast) {
                 Ok(b) => b,
                 Err(e) => {
                     self.notify_fmt("Couldn't save {name}: {e}", &[("name", &name), ("e", &e.to_string())]);
@@ -465,7 +467,7 @@ impl PdfCraftApp {
 
     /// Write document `id` to `dest` and make it the document's file. Returns `true` if written.
     #[cfg(not(target_arch = "wasm32"))]
-    fn save_doc_to(&mut self, id: pdfcraft_engine::DocId, dest: &str) -> bool {
+    fn save_doc_to(&mut self, id: pdfcraft_engine::DocId, dest: &str, fast_web_view: bool) -> bool {
         // Save As answers on a later frame: commit what was typed meanwhile, too (#166), even
         // if another tab is active by then.
         if !self.commit_typing_in(id) || !self.flatten_fill_sign_for_save(id) {
@@ -477,7 +479,7 @@ impl PdfCraftApp {
             self.notify_tr("The document was closed before it could be saved.");
             return false;
         };
-        let bytes = match self.session.save_bytes(id) {
+        let bytes = match self.bytes_to_save(id, fast_web_view) {
             Ok(b) => b,
             Err(e) => {
                 self.notify_fmt("Couldn't save {name}: {e}", &[("name", &name), ("e", &e.to_string())]);
@@ -505,6 +507,15 @@ impl PdfCraftApp {
                 false
             }
         }
+    }
+
+    /// The bytes a save writes: an incremental update, or with `fast_web_view` a linearized
+    /// rewrite (signed documents, which a rewrite would break, are saved incrementally).
+    fn bytes_to_save(&self, id: pdfcraft_engine::DocId, fast_web_view: bool) -> Result<std::sync::Arc<Vec<u8>>, pdfcraft_engine::EditError> {
+        if fast_web_view && self.session.get(id).is_some_and(|d| d.editable() && !d.is_signed()) {
+            return self.session.save_linearized_bytes(id);
+        }
+        self.session.save_bytes(id)
     }
 
     /// Close a tab, asking first if it has unsaved changes.

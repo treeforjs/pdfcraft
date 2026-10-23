@@ -566,10 +566,10 @@ impl PdfCraftApp {
             "compare.next_change" => self.side_by_side_step(true),
             "compare.previous_change" => self.side_by_side_step(false),
             "compare.sync_scroll" => self.side_by_side_sync(None),
-            "standards.pdfa" => {
-                self.pdfa.issues = None;
-                self.dialog = Some(Dialog::PdfA);
-            }
+            "standards.pdfa" => self.open_standards(crate::standards_ui::StandardsTab::Pdfa),
+            "standards.pdfx" => self.open_standards(crate::standards_ui::StandardsTab::Pdfx),
+            "standards.pdfua" => self.open_standards(crate::standards_ui::StandardsTab::Pdfua),
+            "standards.validate" => self.open_standards(crate::standards_ui::StandardsTab::Syntax),
             "prepress.hairlines" => {
                 if let Some((_, id)) = self.active_ids() {
                     let pages: Vec<usize> = (0..self.session.get(id).map_or(0, |d| d.info.pages.len())).collect();

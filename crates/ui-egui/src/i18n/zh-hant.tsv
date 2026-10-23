@@ -3074,3 +3074,46 @@ compare-page	Moved	已移動
 	Enhance scans…	增強掃描…
 	SVG (one file per page)	SVG（每頁一個檔案）
 	Accessible text	協助工具文字
+	Can't reach {standard} automatically; nothing was changed.	無法自動達到 {standard}；未做任何變更。
+	Checking…	正在檢查…
+	Compress document structure	壓縮文件結構
+	Compress entire file	壓縮整個檔案
+	Convert to PDF/X	轉換為 PDF/X
+	Converted to {standard}: {n} changes. Save to keep them.	已轉換為 {standard}：{n} 處變更。儲存後才會保留。
+	Converting…	正在轉換…
+	Errors: {e} · Warnings: {w}	錯誤：{e} · 警告：{w}
+	Flatten transparency	平面化透明度
+	High (600 ppi)	高 (600 ppi)
+	Keep the document's (sRGB if it has none)	沿用文件的（沒有則用 sRGB）
+	Keep the document's output intent	保留文件的輸出意圖
+	Low (150 ppi)	低 (150 ppi)
+	Make compatible with	相容於
+	Medium (300 ppi)	中 (300 ppi)
+	No output intents	沒有輸出意圖
+	No problems found in the implemented checks.	已實作的檢查未發現問題。
+	Nothing needed changing.	無需變更。
+	Object compression	物件壓縮
+	Only the areas whose look depends on transparency become images; text and vectors elsewhere stay as they are.	只有外觀取決於透明度的區域會變成影像；其他位置的文字和向量保持不變。
+	Only the first {n} findings are shown.	僅顯示前 {n} 筆結果。
+	Optimizing… flattening transparency	正在最佳化… 平面化透明度
+	PDF 1.3 has no transparency: it is always flattened.	PDF 1.3 不支援透明度：一律會平面化。
+	PDF {v} · objects checked: {n}	PDF {v} · 已檢查物件：{n}
+	PDF/X-4 embeds the output profile: choose a profile.	PDF/X-4 會內嵌輸出描述檔：請選擇一個描述檔。
+	Raster/vector balance	點陣/向量平衡
+	Remove compression	移除壓縮
+	Save As optimizes for Fast Web View	「另存新檔」針對快速 Web 檢視進行最佳化
+	Save As writes the file so a browser can show the first page before the download finishes.	「另存新檔」寫出的檔案可讓瀏覽器在下載完成前顯示第一頁。
+	Standard	標準
+	Syntax	語法
+	The chosen profile is no longer loaded.	所選描述檔已不再載入。
+	no profile (registered condition)	無描述檔（已註冊條件）
+	object	物件
+	the profile can't be read: {e}	無法讀取描述檔：{e}
+	{space} {class} profile, ICC version {v}, {n} bytes	{space} {class} 描述檔，ICC 版本 {v}，{n} 位元組
+	Checks what a machine can decide. Reading order, the quality of alternate text and the use of colour need a person.	檢查機器能夠判斷的內容。閱讀順序、替代文字的品質和色彩的使用需要人工判斷。
+	Checks every object reachable from the trailer against the Arlington PDF model for the file's PDF version.	依檔案的 PDF 版本，對照 Arlington PDF 模型檢查從 trailer 可到達的每個物件。
+	Older versions: JPEG 2000 and 16-bit images are converted, JBIG2 becomes CCITT for PDF 1.3, transparency is flattened for PDF 1.3, and there are no object streams.	較舊版本：JPEG 2000 和 16 位元影像會被轉換，PDF 1.3 中 JBIG2 變為 CCITT、透明度會被平面化，並且不使用物件串流。
+	PDF/X…	PDF/X…
+	PDF/UA…	PDF/UA…
+	Validate PDF syntax…	驗證 PDF 語法…
+	Validate PDF syntax	驗證 PDF 語法

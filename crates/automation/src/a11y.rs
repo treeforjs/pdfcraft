@@ -1318,7 +1318,31 @@ impl Automation {
                 "hint": hint,
             }));
         }
-        self.session.apply(id, pdfcraft_engine::Edit::ConvertPdfA { level }).map_err(failed)?;
+        let intent = match a.opt_str("output_profile")? {
+            Some(p) => {
+                let path = self.resolve(p, false)?;
+                let max = pdfcraft_engine::pdfa::MAX_PROFILE_BYTES;
+                let size = std::fs::metadata(&path).map_err(|e| failed(format!("{}: {e}", path.display())))?.len();
+                if size > max as u64 {
+                    return Err(ToolError::InvalidArgs(format!("output_profile is larger than {} MB", max >> 20)));
+                }
+                let profile = std::sync::Arc::new(std::fs::read(&path).map_err(|e| failed(format!("{}: {e}", path.display())))?);
+                let condition = match a.opt_str("output_condition")? {
+                    Some(c) => c.to_owned(),
+                    None => path.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "Custom".into()),
+                };
+                let intent = pdfcraft_engine::pdfa::PdfaIntent { condition, info: a.opt_str("output_info")?.map(str::to_owned), profile };
+                intent.validate(level).map_err(ToolError::InvalidArgs)?;
+                Some(Box::new(intent))
+            }
+            None if a.opt_str("output_condition")?.is_some() => {
+                return Err(ToolError::InvalidArgs(
+                    "a PDF/A output intent embeds its profile: give output_profile (an ICC file) with output_condition".into(),
+                ));
+            }
+            None => None,
+        };
+        self.session.apply(id, pdfcraft_engine::Edit::ConvertPdfA { level, intent }).map_err(failed)?;
         let mut r = self.pdfa_verify_at(a, level, source)?;
         if let Some(o) = r.as_object_mut() {
             o.insert("converted".into(), json!(true));

@@ -23,6 +23,7 @@ pub enum OptimizeTab {
     Fonts,
     DiscardObjects,
     DiscardUserData,
+    Transparency,
     CleanUp,
 }
 
@@ -83,6 +84,7 @@ pub struct OptimizeRun {
 fn stage_label(stage: OptimizeStage) -> String {
     match stage {
         OptimizeStage::Discarding => tl!("Optimizing… removing user data").to_string(),
+        OptimizeStage::Flattening => tl!("Optimizing… flattening transparency").to_string(),
         OptimizeStage::Images { done, total } => crate::i18n::fmt(
             tl!("Optimizing… image {d} of {t}"),
             &[("d", &(done + 1).min(total.max(1)).to_string()), ("t", &total.max(1).to_string())],
@@ -104,6 +106,12 @@ fn summary(r: &OptimizeReport) -> String {
             o.images_resampled + o.images_recompressed,
             if o.images_resampled + o.images_recompressed == 1 { "" } else { "s" }
         ));
+    }
+    if r.flattened > 0 {
+        parts.push(format!("transparency flattened on {} page{}", r.flattened, if r.flattened == 1 { "" } else { "s" }));
+    }
+    if o.images_downgraded > 0 {
+        parts.push(format!("{} image{} converted for the older PDF version", o.images_downgraded, if o.images_downgraded == 1 { "" } else { "s" }));
     }
     if o.fonts_unembedded > 0 {
         parts.push(format!("{} font{} unembedded", o.fonts_unembedded, if o.fonts_unembedded == 1 { "" } else { "s" }));
@@ -167,18 +175,107 @@ fn mono_row(ui: &mut egui::Ui, s: &mut MonoSettings) {
     ui.horizontal(|ui| {
         ui.label(tl!("Compression"));
         // "CCITT Group 4" is a standard name and stays untranslated, like "JPEG".
+        // "JBIG2" is a standard name too.
         let label = match s.compression {
             MonoCompression::CcittG4 => "CCITT Group 4",
+            MonoCompression::Jbig2 => "JBIG2",
             MonoCompression::Flate => tl!("ZIP"),
             MonoCompression::Retain => tl!("Retain existing"),
         };
         egui::ComboBox::from_id_salt(("mono", "compression")).selected_text(label).show_ui(ui, |ui| {
             ui.selectable_value(&mut s.compression, MonoCompression::CcittG4, "CCITT Group 4");
+            ui.selectable_value(&mut s.compression, MonoCompression::Jbig2, "JBIG2");
             ui.selectable_value(&mut s.compression, MonoCompression::Flate, tl!("ZIP"));
             ui.selectable_value(&mut s.compression, MonoCompression::Retain, tl!("Retain existing"));
         });
     });
     ui.add_space(8.0);
+}
+
+/// Clean Up's object compression: the whole file (object streams and unencoded streams
+/// compressed), the document structure only (object streams), or none.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ObjectCompression {
+    EntireFile,
+    StructureOnly,
+    Remove,
+}
+
+impl ObjectCompression {
+    fn of(s: &Settings) -> Self {
+        match (s.compress_structure, s.flate_unencoded) {
+            (true, true) => ObjectCompression::EntireFile,
+            (true, false) => ObjectCompression::StructureOnly,
+            (false, _) => ObjectCompression::Remove,
+        }
+    }
+
+    fn apply(self, s: &mut Settings) {
+        let (structure, unencoded) = match self {
+            ObjectCompression::EntireFile => (true, true),
+            ObjectCompression::StructureOnly => (true, false),
+            ObjectCompression::Remove => (false, false),
+        };
+        s.compress_structure = structure;
+        s.flate_unencoded = unencoded;
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            ObjectCompression::EntireFile => tl!("Compress entire file"),
+            ObjectCompression::StructureOnly => tl!("Compress document structure"),
+            ObjectCompression::Remove => tl!("Remove compression"),
+        }
+    }
+}
+
+/// Transparency: flatten it in the copy, at a resolution preset and raster/vector balance.
+fn transparency_panel(ui: &mut egui::Ui, s: &mut Settings, t: &Tokens) {
+    let forced = s.compatibility.is_some_and(|v| v < (1, 4));
+    let mut on = s.transparency.is_some() || forced;
+    if ui.add_enabled(!forced, egui::Checkbox::new(&mut on, tl!("Flatten transparency"))).changed() {
+        s.transparency = on.then(pdfcraft_engine::optimize::Transparency::default);
+    }
+    if forced {
+        ui.label(egui::RichText::new(tl!("PDF 1.3 has no transparency: it is always flattened.")).small().color(t.text_muted));
+    }
+    let mut current = s.transparency.unwrap_or_default();
+    let before = current;
+    ui.add_enabled_ui(on, |ui| {
+        ui.horizontal(|ui| {
+            let l = ui.label(tl!("Resolution"));
+            let name = |ppi: f64| {
+                if ppi < 200.0 {
+                    tl!("Low (150 ppi)")
+                } else if ppi < 450.0 {
+                    tl!("Medium (300 ppi)")
+                } else {
+                    tl!("High (600 ppi)")
+                }
+            };
+            egui::ComboBox::from_id_salt("optimize-flatten-resolution")
+                .selected_text(name(current.resolution))
+                .show_ui(ui, |ui| {
+                    for ppi in [150.0, 300.0, 600.0] {
+                        ui.selectable_value(&mut current.resolution, ppi, name(ppi));
+                    }
+                })
+                .response
+                .labelled_by(l.id);
+        });
+        ui.horizontal(|ui| {
+            let l = ui.label(tl!("Raster/vector balance"));
+            ui.add(egui::Slider::new(&mut current.balance, 0..=100)).labelled_by(l.id);
+        });
+        ui.label(
+            egui::RichText::new(tl!("Only the areas whose look depends on transparency become images; text and vectors elsewhere stay as they are."))
+                .small()
+                .color(t.text_muted),
+        );
+    });
+    if current != before {
+        s.transparency = Some(current);
+    }
 }
 
 fn discard_box(ui: &mut egui::Ui, list: &mut Vec<Hidden>, h: Hidden, label: &str) {
@@ -256,11 +353,38 @@ pub(crate) fn body(ui: &mut egui::Ui, d: &mut OptimizeDraft, t: &Tokens) -> (boo
     ui.label(egui::RichText::new(tl!("PDF Optimizer")).font(theme::semibold(18.0)));
     ui.add_space(6.0);
     ui.horizontal(|ui| {
+        let l = ui.label(tl!("Make compatible with"));
+        let name = |v: Option<(u8, u8)>| {
+            v.map_or_else(|| tl!("Retain existing").to_string(), |v| format!("PDF {}", pdfcraft_engine::optimize::version_name(v)))
+        };
+        egui::ComboBox::from_id_salt("optimize-compatibility")
+            .selected_text(name(d.settings.compatibility))
+            .show_ui(ui, |ui| {
+                ui.selectable_value(&mut d.settings.compatibility, None, name(None));
+                for v in pdfcraft_engine::optimize::VERSIONS {
+                    ui.selectable_value(&mut d.settings.compatibility, Some(v), name(Some(v)));
+                }
+            })
+            .response
+            .labelled_by(l.id);
+    });
+    if d.settings.compatibility.is_some_and(|v| v < (1, 5)) {
+        ui.label(
+            egui::RichText::new(tl!(
+                "Older versions: JPEG 2000 and 16-bit images are converted, JBIG2 becomes CCITT for PDF 1.3, transparency is flattened for PDF 1.3, and there are no object streams."
+            ))
+            .small()
+            .color(t.text_muted),
+        );
+    }
+    ui.add_space(4.0);
+    ui.horizontal(|ui| {
         for (tab, label) in [
             (OptimizeTab::Images, tl!("Images")),
             (OptimizeTab::Fonts, tl!("Fonts")),
             (OptimizeTab::DiscardObjects, tl!("Discard Objects")),
             (OptimizeTab::DiscardUserData, tl!("Discard User Data")),
+            (OptimizeTab::Transparency, tl!("Transparency")),
             (OptimizeTab::CleanUp, tl!("Clean Up")),
         ] {
             if widgets::mode_tab(ui, label, d.tab == tab).clicked() {
@@ -300,12 +424,29 @@ pub(crate) fn body(ui: &mut egui::Ui, d: &mut OptimizeDraft, t: &Tokens) -> (boo
             discard_box(ui, &mut d.discard, Hidden::PrivateData, "Discard private data of other applications");
             discard_box(ui, &mut d.discard, Hidden::HiddenText, "Discard hidden text");
         }
+        OptimizeTab::Transparency => transparency_panel(ui, s, t),
         OptimizeTab::CleanUp => {
+            let current = ObjectCompression::of(s);
+            let mut chosen = current;
+            ui.horizontal(|ui| {
+                let l = ui.label(tl!("Object compression"));
+                egui::ComboBox::from_id_salt("optimize-object-compression")
+                    .selected_text(current.label())
+                    .show_ui(ui, |ui| {
+                        for c in [ObjectCompression::EntireFile, ObjectCompression::StructureOnly, ObjectCompression::Remove] {
+                            ui.selectable_value(&mut chosen, c, c.label());
+                        }
+                    })
+                    .response
+                    .labelled_by(l.id);
+            });
+            if chosen != current {
+                chosen.apply(s);
+            }
             ui.checkbox(&mut s.flate_unencoded, tl!("Use Flate to encode streams that are not encoded"));
             ui.checkbox(&mut s.lzw_to_flate, tl!("In streams that use LZW encoding, use Flate instead"));
             ui.checkbox(&mut s.remove_invalid_links, tl!("Remove invalid links and bookmarks"));
             ui.checkbox(&mut s.remove_unreferenced_dests, tl!("Remove unreferenced named destinations"));
-            ui.checkbox(&mut s.compress_structure, tl!("Compress document structure (object streams)"));
             ui.add_enabled(false, egui::Checkbox::new(&mut true, tl!("Remove unused objects and merge identical ones")));
         }
     }

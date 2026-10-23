@@ -256,6 +256,7 @@ fn pdfa_dialog_verifies_and_converts() {
     let mut h = Harness::builder().with_size(egui::vec2(1400.0, 900.0)).build_eframe(move |_cc| {
         let mut app = PdfCraftApp::new();
         app.set_option("language", "en").unwrap();
+        app.run_inline = true;
         app.open_bytes("keep.pdf", None, doc.clone()).unwrap();
         app
     });
@@ -273,6 +274,58 @@ fn pdfa_dialog_verifies_and_converts() {
     assert!(issues.iter().all(|i| !i.fixable), "{issues:?}");
     let id = h.state().active_ids().unwrap().1;
     assert_eq!(h.state().session.get(id).unwrap().can_undo(), Some("Save as PDF/A-2b"));
+}
+
+#[test]
+fn standards_window_checks_pdfx_pdfua_and_syntax_off_the_ui_thread() {
+    let doc = Session::new().create_from_text("t", "Check me").unwrap().to_vec();
+    let mut h = Harness::builder().with_size(egui::vec2(1400.0, 900.0)).build_eframe(move |_cc| {
+        let mut app = PdfCraftApp::new();
+        app.set_option("language", "en").unwrap();
+        app.open_bytes("check.pdf", None, doc.clone()).unwrap();
+        app
+    });
+    h.run_steps(4);
+    // Each command opens its tab; Verify runs on a worker thread and the result is taken when
+    // it arrives.
+    let wait = |h: &mut Harness<'_, PdfCraftApp>| {
+        for _ in 0..400 {
+            h.run_steps(1);
+            if h.state().pdfa.run.is_none() {
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        panic!("the check did not finish");
+    };
+    assert!(h.state_mut().execute("standards.pdfx"));
+    h.run_steps(2);
+    h.get_by_label("Convert to PDF/X");
+    h.get_by_label("Verify").click();
+    wait(&mut h);
+    let x = h.state().pdfa.pdfx.clone().expect("a PDF/X report");
+    assert!(!x.conforms(), "an undeclared document isn't PDF/X");
+    h.run_steps(2);
+    h.get_by_label("Declared conformance: none");
+    assert!(h.state_mut().execute("standards.pdfua"));
+    h.run_steps(2);
+    h.get_by_label("Verify").click();
+    wait(&mut h);
+    let ua = h.state().pdfa.pdfua.clone().expect("a PDF/UA report");
+    assert!(!ua.conforms(), "an untagged document isn't PDF/UA");
+    assert!(h.state_mut().execute("standards.validate"));
+    h.run_steps(2);
+    h.get_by_label("Validate").click();
+    wait(&mut h);
+    assert!(h.state().pdfa.syntax.is_some());
+    h.run_steps(2);
+    // Cancelling a run takes no result; closing the window with Escape is safe.
+    h.state_mut().pdfa_verify();
+    h.state_mut().cancel_standards();
+    h.run_steps(3);
+    assert!(h.state().pdfa.run.is_none());
+    let id = h.state().active_ids().unwrap().1;
+    assert_eq!(h.state().session.get(id).unwrap().can_undo(), None, "checks don't change the document");
 }
 
 #[test]

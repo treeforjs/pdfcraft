@@ -8,8 +8,8 @@
 //! `Crypt` and unknown filters are reported as [`FilterError::Unsupported`] so
 //! callers keep such data encoded.
 //!
-//! Encoding also covers CCITT Group 4 ([`encode_ccitt_g4`]) for bi-level images; there is no
-//! CCITT decoder here.
+//! Encoding also covers CCITT Group 4 ([`encode_ccitt_g4`]) and lossless JBIG2 generic region
+//! coding ([`encode_jbig2_generic`]) for bi-level images; there is no CCITT or JBIG2 decoder here.
 //!
 //! Every decoder is bounded by a caller-supplied `max_output` (decompression-bomb
 //! defence) and never panics on malformed input.
@@ -20,6 +20,7 @@ mod ascii85;
 mod asciihex;
 mod ccitt;
 mod flate;
+mod jbig2;
 mod lzw;
 mod predictor;
 mod runlength;
@@ -248,6 +249,15 @@ pub fn encode_flate(data: &[u8]) -> Vec<u8> {
 /// `max_output` bytes.
 pub fn encode_ccitt_g4(rows: &[u8], width: usize, height: usize, black_is_1: bool, max_output: usize) -> Result<Vec<u8>, FilterError> {
     ccitt::encode_g4(rows, width, height, black_is_1, max_output)
+}
+
+/// Lossless JBIG2 generic region encoding for `/JBIG2Decode` (no `/JBIG2Globals`): `rows` is
+/// laid out as for [`encode_ccitt_g4`] (0 = black, the PDF sample convention), and decoding the
+/// result gives the same samples back. The stream has a page information segment and one
+/// immediate generic region segment (template 0, typical prediction, arithmetic coding).
+/// Errors on an empty or oversized image, too few samples, or output past `max_output` bytes.
+pub fn encode_jbig2_generic(rows: &[u8], width: usize, height: usize, max_output: usize) -> Result<Vec<u8>, FilterError> {
+    jbig2::encode_jbig2_generic(rows, width, height, max_output)
 }
 
 /// PDF white-space characters (ISO 32000-2 Table 1).

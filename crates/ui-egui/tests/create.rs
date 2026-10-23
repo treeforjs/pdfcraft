@@ -162,18 +162,37 @@ fn the_pdf_optimizer_dialog_saves_an_optimized_copy() {
     h.run_steps(2);
     h.get_by_label("Discard document information and metadata").click();
     h.run_steps(1);
+    // Transparency: flattening is off unless asked for.
+    h.get_by_label("Transparency").click();
+    h.run_steps(2);
+    assert_eq!(h.state().optimize_draft.settings.transparency, None);
+    h.get_by_label("Flatten transparency").click();
+    h.run_steps(1);
+    assert_eq!(h.state().optimize_draft.settings.transparency, Some(pdfcraft_engine::optimize::Transparency::default()));
+    h.get_by_label("Flatten transparency").click();
+    h.run_steps(1);
     // Clean Up: object streams and LZW re-encoding are both on by default; turn both off.
     h.get_by_label("Clean Up").click();
     h.run_steps(2);
-    h.get_by_label("Compress document structure (object streams)").click();
+    h.get_by_role_and_label(egui::accesskit::Role::ComboBox, "Object compression").click();
+    h.run_steps(2);
+    h.get_by_label("Remove compression").click();
+    h.run_steps(1);
     h.get_by_label("In streams that use LZW encoding, use Flate instead").click();
     h.run_steps(1);
     {
         let d = &h.state().optimize_draft;
         assert!(d.settings.discard_tags && d.discard == vec![pdfcraft_engine::Hidden::Metadata]);
-        assert!(!d.settings.compress_structure && !d.settings.lzw_to_flate);
+        assert!(!d.settings.compress_structure && !d.settings.lzw_to_flate && !d.settings.flate_unencoded);
         assert_eq!(d.settings.mono.compression, pdfcraft_engine::optimize::MonoCompression::CcittG4);
+        assert_eq!(d.settings.transparency, None);
     }
+    // Make compatible with: PDF 1.4.
+    h.get_by_role_and_label(egui::accesskit::Role::ComboBox, "Make compatible with").click();
+    h.run_steps(2);
+    h.get_by_label("PDF 1.4").click();
+    h.run_steps(2);
+    assert_eq!(h.state().optimize_draft.settings.compatibility, Some((1, 4)));
     h.get_by_label("OK").click();
     // The click is handled next frame. The optimization then runs on a worker thread and the
     // copy is saved when it is done.
@@ -185,9 +204,10 @@ fn the_pdf_optimizer_dialog_saves_an_optimized_copy() {
     }
     h.run_steps(2);
     assert!(h.state().progress_notice.is_none(), "the progress card is gone");
-    let saved = std::fs::read(&out).unwrap();
+    let saved = std::fs::read(&out).unwrap_or_else(|e| panic!("{e}: {:?} {:?}", h.state().toast, h.state().dialog));
     assert!(saved.starts_with(b"%PDF-"));
     assert!(!saved.windows(7).any(|w| w == b"/ObjStm"), "object streams were turned off");
+    assert!(saved.starts_with(b"%PDF-1.4"), "made compatible with PDF 1.4");
     assert_eq!(h.state().dialog, None);
 }
 

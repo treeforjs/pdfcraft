@@ -3885,3 +3885,163 @@ fn browser_clock_readings() {
         assert_eq!(browser_now_secs(bad), None, "{bad}");
     }
 }
+
+#[test]
+fn standards_jobs_verify_and_convert_on_a_copy_as_one_undo_step() {
+    use crate::standards::{StandardsOutcome, StandardsTask};
+    let mut s = Session::new().with_clock(|| 1_700_000_000);
+    let original = Arc::new(transparency_fixture());
+    let id = s.open("t.pdf", None, original.clone(), None).unwrap();
+    // Checks change nothing.
+    for task in [
+        StandardsTask::VerifyPdfa(pdfcraft_preflight::Level::A2b),
+        StandardsTask::VerifyPdfx(pdfcraft_preflight::XOptions { part: Some(pdfcraft_preflight::XPart::X4), max_findings: 10 }),
+        StandardsTask::VerifyPdfua(pdfcraft_a11y::UaOptions::default()),
+        StandardsTask::ValidateSyntax(pdfcraft_preflight::ArlOptions::default()),
+    ] {
+        let r = s.standards_job(id, task.clone()).unwrap().run().unwrap();
+        assert!(!r.changes_document(), "{task:?}");
+        match s.finish_standards(id, r).unwrap() {
+            StandardsOutcome::Pdfa(_, issues) => assert!(issues.iter().any(|i| i.clause == "6.6.2.1"), "{issues:?}"),
+            StandardsOutcome::Pdfx(r) => assert!(!r.conforms()),
+            StandardsOutcome::Pdfua(r) => assert!(!r.conforms()),
+            StandardsOutcome::Syntax(r) => assert!(r.objects_checked > 0),
+            other => panic!("{other:?}"),
+        }
+    }
+    assert!(s.get(id).unwrap().can_undo().is_none());
+
+    // Convert to PDF/X-4 in the background: one undo step with the conversion's label.
+    let job = s.standards_job(id, StandardsTask::ConvertPdfx(pdfx_options("x4"))).unwrap();
+    let r = job.run().unwrap();
+    assert!(r.changes_document());
+    let StandardsOutcome::PdfxConverted(c) = s.finish_standards(id, r).unwrap() else { panic!() };
+    assert!(c.converted && c.after.conforms(), "{:?}", c.after.findings);
+    assert_eq!(s.get(id).unwrap().can_undo(), Some("Convert to PDF/X-4"));
+    let saved = s.save_bytes(id).unwrap();
+    assert!(pdfx_report(&saved, pdfcraft_preflight::XPart::X4).conforms());
+    s.undo(id).unwrap();
+    assert_eq!(page_pixels(&s.get(id).unwrap().bytes, 1), page_pixels(&original, 1));
+
+    // A job whose document changed meanwhile is refused and changes nothing.
+    let job = s.standards_job(id, StandardsTask::ConvertPdfx(pdfx_options("x4"))).unwrap();
+    s.apply(id, Edit::RotatePages { pages: vec![1], degrees: 90 }).unwrap();
+    let generation = s.get(id).unwrap().edit_generation();
+    let r = job.run().unwrap();
+    assert!(matches!(s.finish_standards(id, r), Err(EditError::Invalid(_))));
+    assert_eq!(s.get(id).unwrap().edit_generation(), generation);
+
+    // Bad options are refused before any work.
+    let mut bad = pdfx_options("x4");
+    bad.intent = Some(pdfcraft_preflight::XIntent { condition: "FOGRA39".into(), info: None, profile: Some(Arc::new(b"not a profile".to_vec())) });
+    assert!(matches!(s.standards_job(id, StandardsTask::ConvertPdfx(bad)), Err(EditError::Invalid(_))));
+}
+
+#[test]
+fn save_as_pdfa_with_a_chosen_output_intent() {
+    use crate::standards::{StandardsOutcome, StandardsTask};
+    use pdfcraft_preflight::{Level, PdfaIntent};
+    // A CMYK page: the default (sRGB) intent can't serve it.
+    let page = "0 0 0 1 k 10 10 50 50 re f";
+    let bodies = [
+        "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Contents 4 0 R >>".to_string(),
+        format!("<< /Length {} >>\nstream\n{page}\nendstream", page.len()),
+    ];
+    let mut out = b"%PDF-1.7\n".to_vec();
+    let mut offsets = Vec::new();
+    for (i, b) in bodies.iter().enumerate() {
+        offsets.push(out.len());
+        out.extend_from_slice(format!("{} 0 obj\n{b}\nendobj\n", i + 1).as_bytes());
+    }
+    let xref = out.len();
+    out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", bodies.len() + 1).as_bytes());
+    for o in offsets {
+        out.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+    }
+    out.extend_from_slice(format!("trailer << /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", bodies.len() + 1).as_bytes());
+    let mut s = Session::new().with_clock(|| 1_700_000_000);
+    let id = s.open("cmyk.pdf", None, Arc::new(out), None).unwrap();
+    s.apply(id, Edit::ConvertPdfA { level: Level::A2b, intent: None }).unwrap();
+    let left = s.get(id).unwrap().pdfa_verify(Level::A2b);
+    assert!(left.iter().any(|i| i.clause == "6.2.4.3" && i.message.contains("DeviceCMYK")), "{left:?}");
+    s.undo(id).unwrap();
+
+    // With a CMYK output profile the device colour is accounted for, as one undo step.
+    let intent = PdfaIntent { condition: "FOGRA39".into(), info: None, profile: output_profile(4, b"CMYK") };
+    let r = s.standards_job(id, StandardsTask::ConvertPdfa { level: Level::A2b, intent: Some(intent.clone()) }).unwrap().run().unwrap();
+    let StandardsOutcome::PdfaConverted(c) = s.finish_standards(id, r).unwrap() else { panic!() };
+    assert!(c.refused.is_none() && c.fixed.iter().any(|f| f.contains("FOGRA39")), "{:?}", c.fixed);
+    assert!(!c.remaining.iter().any(|i| i.clause.starts_with("6.2.")), "{:?}", c.remaining);
+    assert_eq!(s.get(id).unwrap().can_undo(), Some("Save as PDF/A-2b"));
+    let declared = s.get(id).unwrap().standards();
+    assert_eq!(declared.intents.len(), 1, "one PDF/A intent: {:?}", declared.intents);
+    assert_eq!(declared.intents[0].subtype, "GTS_PDFA1");
+    assert_eq!(declared.intents[0].registry.as_deref(), Some("http://www.color.org"));
+    assert!(matches!(&declared.intents[0].profile, Some(Ok((h, 256))) if &h.space == b"CMYK"));
+    // Converting again with the same intent keeps one intent.
+    s.apply(id, Edit::ConvertPdfA { level: Level::A2b, intent: Some(Box::new(intent)) }).unwrap();
+    assert_eq!(s.get(id).unwrap().standards().intents.len(), 1);
+
+    // Unsuitable intents are refused: a display class, a version too new for PDF/A-1, junk.
+    let mut scanner = output_profile(2, b"RGB ").to_vec();
+    scanner[12..16].copy_from_slice(b"scnr");
+    for (level, profile) in [(Level::A2b, Arc::new(scanner)), (Level::A1b, output_profile(4, b"CMYK")), (Level::A2b, Arc::new(vec![0xFF; 3]))] {
+        let bad = PdfaIntent { condition: "X".into(), info: None, profile };
+        assert!(bad.validate(level).is_err());
+        assert!(matches!(s.standards_job(id, StandardsTask::ConvertPdfa { level, intent: Some(bad.clone()) }), Err(EditError::Invalid(_))));
+        let generation = s.get(id).unwrap().edit_generation();
+        assert!(s.apply(id, Edit::ConvertPdfA { level, intent: Some(Box::new(bad)) }).is_err());
+        assert_eq!(s.get(id).unwrap().edit_generation(), generation);
+    }
+    let blank = PdfaIntent { condition: " \n".into(), info: None, profile: output_profile(2, b"CMYK") };
+    assert!(blank.validate(Level::A2b).is_err());
+}
+
+#[test]
+fn optimizing_flattens_transparency_and_makes_pdf_1_3_copies() {
+    let mut s = Session::new().with_clock(|| 1_700_000_000);
+    let original = Arc::new(transparency_fixture());
+    let id = s.open("t.pdf", None, original.clone(), None).unwrap();
+    // Off by default.
+    let (bytes, r) = s.optimized_bytes(id, &optimize::Settings::default(), &[]).unwrap();
+    assert_eq!(r.flattened, 0);
+    assert!(x1a_transparency(&bytes) > 0);
+    // The Transparency panel.
+    let settings = optimize::Settings { transparency: Some(optimize::Transparency::default()), ..optimize::Settings::default() };
+    let (bytes, r) = s.optimized_bytes(id, &settings, &[]).unwrap();
+    assert_eq!(r.flattened, 1);
+    assert_eq!(x1a_transparency(&bytes), 0);
+    // Made compatible with PDF 1.3: always flattened, nothing newer left.
+    let settings = optimize::Settings { compatibility: Some((1, 3)), ..optimize::Settings::default() };
+    let (bytes, r) = s.optimized_bytes(id, &settings, &[]).unwrap();
+    assert_eq!(r.flattened, 1);
+    assert!(bytes.starts_with(b"%PDF-1.3"));
+    assert!(r.optimize.newer_features.iter().all(|f| f.feature != "transparency"), "{:?}", r.optimize.newer_features);
+    // Bad settings are an error, and the job reports its flattening stage.
+    let bad =
+        optimize::Settings { transparency: Some(optimize::Transparency { resolution: f64::NAN, balance: 50 }), ..optimize::Settings::default() };
+    assert!(s.optimized_bytes(id, &bad, &[]).is_err());
+    let mut stages = Vec::new();
+    let settings = optimize::Settings { transparency: Some(optimize::Transparency::default()), ..optimize::Settings::default() };
+    s.optimize_job(id, &settings, &[])
+        .unwrap()
+        .run(|st| {
+            stages.push(st);
+            true
+        })
+        .unwrap();
+    assert_eq!(stages.get(1), Some(&crate::optimizer::OptimizeStage::Flattening));
+    assert_eq!(s.get(id).unwrap().bytes, original, "the open document is unchanged");
+}
+
+#[test]
+fn save_as_fast_web_view_preference_is_kept() {
+    let mut s = Session::new();
+    assert_eq!(s.pref("documents.fast_web_view"), Some(serde_json::json!(false)));
+    s.set_pref("documents.fast_web_view", &serde_json::json!(true)).unwrap();
+    assert!(s.prefs().fast_web_view);
+    assert!(s.set_pref("documents.fast_web_view", &serde_json::json!("sometimes")).is_err());
+    assert!(s.prefs().fast_web_view);
+}

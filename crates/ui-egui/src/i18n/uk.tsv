@@ -3175,3 +3175,46 @@ compare-page	Moved	Переміщена
 	Enhance scans…	Покращити скани…
 	SVG (one file per page)	SVG (один файл на сторінку)
 	Accessible text	Доступний текст
+	Can't reach {standard} automatically; nothing was changed.	Автоматично привести до {standard} не можна; нічого не змінено.
+	Checking…	Перевірка…
+	Compress document structure	Стиснути структуру документа
+	Compress entire file	Стиснути весь файл
+	Convert to PDF/X	Перетворити на PDF/X
+	Converted to {standard}: {n} changes. Save to keep them.	Перетворено на {standard}: змін — {n}. Збережіть, щоб їх зберегти.
+	Converting…	Перетворення…
+	Errors: {e} · Warnings: {w}	Помилки: {e} · Попередження: {w}
+	Flatten transparency	Зведення прозорості
+	High (600 ppi)	Висока (600 ppi)
+	Keep the document's (sRGB if it has none)	З документа (sRGB, якщо його немає)
+	Keep the document's output intent	Залишити умову виведення документа
+	Low (150 ppi)	Низька (150 ppi)
+	Make compatible with	Сумісність із
+	Medium (300 ppi)	Середня (300 ppi)
+	No output intents	Немає умов виведення
+	No problems found in the implemented checks.	Доступні перевірки не знайшли проблем.
+	Nothing needed changing.	Нічого не довелося змінювати.
+	Object compression	Стиснення об'єктів
+	Only the areas whose look depends on transparency become images; text and vectors elsewhere stay as they are.	На зображення перетворюються лише ділянки, вигляд яких залежить від прозорості; текст і вектори в інших місцях не змінюються.
+	Only the first {n} findings are shown.	Показано лише перші {n} результатів.
+	Optimizing… flattening transparency	Оптимізація… зведення прозорості
+	PDF 1.3 has no transparency: it is always flattened.	У PDF 1.3 немає прозорості: її завжди зводять.
+	PDF {v} · objects checked: {n}	PDF {v} · перевірено об'єктів: {n}
+	PDF/X-4 embeds the output profile: choose a profile.	PDF/X-4 вбудовує профіль виведення: виберіть профіль.
+	Raster/vector balance	Баланс растру й векторів
+	Remove compression	Прибрати стиснення
+	Save As optimizes for Fast Web View	«Зберегти як» оптимізує для швидкого перегляду у вебі
+	Save As writes the file so a browser can show the first page before the download finishes.	«Зберегти як» записує файл так, щоб браузер показав першу сторінку до завершення завантаження.
+	Standard	Стандарт
+	Syntax	Синтаксис
+	The chosen profile is no longer loaded.	Вибраний профіль більше не завантажено.
+	no profile (registered condition)	без профілю (зареєстрована умова)
+	object	об'єкт
+	the profile can't be read: {e}	профіль не читається: {e}
+	{space} {class} profile, ICC version {v}, {n} bytes	профіль {space} {class}, версія ICC {v}, байтів: {n}
+	Checks what a machine can decide. Reading order, the quality of alternate text and the use of colour need a person.	Перевіряє те, що може вирішити машина. Порядок читання, якість альтернативного тексту й використання кольору має оцінити людина.
+	Checks every object reachable from the trailer against the Arlington PDF model for the file's PDF version.	Перевіряє кожен об'єкт, досяжний із трейлера, за моделлю PDF Arlington для версії PDF файлу.
+	Older versions: JPEG 2000 and 16-bit images are converted, JBIG2 becomes CCITT for PDF 1.3, transparency is flattened for PDF 1.3, and there are no object streams.	Старші версії: зображення JPEG 2000 і 16-бітні перетворюються, для PDF 1.3 JBIG2 стає CCITT, а прозорість зводиться; потоків об'єктів немає.
+	PDF/X…	PDF/X…
+	PDF/UA…	PDF/UA…
+	Validate PDF syntax…	Перевірити синтаксис PDF…
+	Validate PDF syntax	Перевірити синтаксис PDF

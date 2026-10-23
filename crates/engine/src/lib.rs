@@ -49,6 +49,7 @@ pub mod revocation_fetch;
 pub mod signature_image;
 pub mod signature_settings;
 pub mod signature_workflow;
+pub mod standards;
 pub mod submit;
 pub mod summary;
 pub mod text_extract;
@@ -1673,6 +1674,16 @@ pub enum Edit {
     /// forbidden actions, annotation flags, …).
     ConvertPdfA {
         level: pdfcraft_preflight::Level,
+        /// The output intent to give the document (default: sRGB, when it has no PDF/A intent).
+        intent: Option<Box<pdfcraft_preflight::PdfaIntent>>,
+    },
+    /// The result of a conversion (Save as PDF/A, Convert to PDF/X) worked out on a copy in
+    /// the background ([`standards`]): the document becomes `result` as one undo step named
+    /// `label`. Only [`Session::finish_standards`] makes it, after checking the document hasn't
+    /// changed since the copy was taken.
+    Converted {
+        label: String,
+        result: standards::ConvertedDocument,
     },
     /// Preflight ▸ Convert to PDF/X: the fixes for `options.part` (see [`pdfx`]); run it through
     /// [`Session::pdfx_convert`], which checks the result first.
@@ -2036,7 +2047,8 @@ impl Edit {
             Edit::CorrectCameraImages { .. } => "Correct camera image".into(),
             Edit::ApplyScriptChanges { .. } => "Run JavaScript".into(),
             Edit::XfaEvent { .. } => "Run form script".into(),
-            Edit::ConvertPdfA { level } => format!("Save as {}", level.label()),
+            Edit::ConvertPdfA { level, .. } => format!("Save as {}", level.label()),
+            Edit::Converted { label, .. } => label.clone(),
             Edit::ConvertPdfX { options } => format!("Convert to {}", options.part.label()),
             Edit::PreflightFix { .. } => "Apply preflight fixes".into(),
             Edit::SetFieldScript { name, .. } => format!("Edit script of {name}"),
@@ -2287,6 +2299,7 @@ fn check_permission(edit: &Edit, p: &pdfcraft_cos::Permissions) -> Result<(), Ed
         | Edit::SetSignatureLock { .. }
         | Edit::ConvertPdfA { .. }
         | Edit::ConvertPdfX { .. }
+        | Edit::Converted { .. }
         | Edit::PreflightFix { .. }
         | Edit::EditTextLine { .. }
         | Edit::EditTextBlock { .. }
@@ -2709,9 +2722,10 @@ fn run_edit_inner(doc: &mut pdfcraft_cos::Document, edit: &Edit, cx: &mut EditCt
                 None => pdfcraft_forms::recalculate(doc)?,
             };
         }
-        Edit::ConvertPdfA { level } => {
-            pdfcraft_a11y::convert_pdfa(doc, *level).map_err(|e| EditError::Invalid(e.to_string()))?;
+        Edit::ConvertPdfA { level, intent } => {
+            pdfcraft_a11y::convert_pdfa_with_intent(doc, *level, intent.as_deref()).map_err(|e| EditError::Invalid(e.to_string()))?;
         }
+        Edit::Converted { result, .. } => *doc = result.document().clone(),
         Edit::ConvertPdfX { options } => {
             let date = cx.date.clone().unwrap_or_else(|| "D:19700101000000Z".into());
             pdfx::run(doc, options, &date)?;
@@ -4870,6 +4884,8 @@ pub struct OptimizeReport {
     pub merged: usize,
     /// Remove Hidden Information categories discarded, with counts.
     pub discarded: Vec<(Hidden, usize)>,
+    /// Pages whose transparency was flattened (Transparency panel, or compatible with PDF 1.3).
+    pub flattened: usize,
 }
 
 /// Order of Summarize Comments.

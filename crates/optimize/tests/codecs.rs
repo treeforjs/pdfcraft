@@ -572,3 +572,189 @@ fn poppler_decodes_g4_streams_of_awkward_shapes_exactly() {
         assert!(&got == px, "{w}x{h} decodes differently in Poppler");
     }
 }
+
+/// The samples of a JBIG2 stream, decoded by hayro-jbig2 (an independent decoder), packed as PDF
+/// samples (0 = black) with clear padding bits.
+fn jbig2_samples(s: &Stream, w: usize, h: usize) -> Vec<u8> {
+    struct Sink(Vec<Vec<bool>>, Vec<bool>);
+    impl hayro_jbig2::Decoder for Sink {
+        fn push_pixel(&mut self, black: bool) {
+            self.1.push(black);
+        }
+        fn push_pixel_chunk(&mut self, black: bool, chunk_count: u32) {
+            self.1.extend(std::iter::repeat_n(black, chunk_count as usize * 8));
+        }
+        fn next_line(&mut self) {
+            self.0.push(std::mem::take(&mut self.1));
+        }
+    }
+    let image = hayro_jbig2::Image::new_embedded(&s.raw, None).unwrap();
+    let mut sink = Sink(Vec::new(), Vec::new());
+    image.decode(&mut sink).unwrap();
+    let stride = w.div_ceil(8);
+    let mut out = vec![0u8; stride * h];
+    for (y, row) in sink.0.iter().enumerate().take(h) {
+        for x in 0..w {
+            if !row[x] {
+                out[y * stride + x / 8] |= 0x80 >> (x % 8);
+            }
+        }
+    }
+    out
+}
+
+/// `bits` with the padding bits of each row cleared.
+fn clear_padding(bits: &[u8], w: usize) -> Vec<u8> {
+    let stride = w.div_ceil(8);
+    let mut v = bits.to_vec();
+    if !w.is_multiple_of(8) {
+        for row in v.chunks_mut(stride) {
+            if let Some(last) = row.last_mut() {
+                *last &= !(0xFFu8 >> (w % 8));
+            }
+        }
+    }
+    v
+}
+
+#[test]
+fn one_bit_images_become_jbig2_with_the_same_samples_and_g4_for_pdf_1_3() {
+    let f = fixture();
+    let before = save(&f.doc);
+    let mut s = Settings::default();
+    s.mono.compression = MonoCompression::Jbig2;
+    let mut doc = f.doc.clone();
+    let r = optimize(&mut doc, &s).unwrap();
+    assert_eq!((r.images_jbig2, r.images_ccitt), (2, 0), "{r:?}");
+    for (img, (w, h)) in [(f.scan, SCAN), (f.mask, MASK)] {
+        let (new, old) = (stream(&doc, img), stream(&f.doc, img));
+        assert_eq!(new.dict.name(b"Filter"), Some(&b"JBIG2Decode"[..]));
+        assert!(new.raw.len() < old.raw.len(), "{} vs {}", new.raw.len(), old.raw.len());
+        assert_eq!(jbig2_samples(&new, w, h), clear_padding(&old.decoded_strict().unwrap(), w), "object {}", img.num);
+    }
+    assert_eq!(stream(&doc, f.mask).dict.get(b"Decode"), Some(&Object::Array(vec![1.into(), 0.into()])));
+    // The renderer draws the JBIG2 copy exactly like the original.
+    let jbig2 = save(&doc);
+    assert_eq!(render_all(&before, 2), render_all(&jbig2, 2));
+    // JBIG2 is PDF 1.4: made compatible with 1.3 the JBIG2 copy goes back to CCITT G4 with the
+    // same samples, and asking for JBIG2 with 1.3 gives G4 straight away.
+    let mut old = Document::open(Arc::new(jbig2)).unwrap();
+    let r = optimize(&mut old, &Settings { compatibility: Some((1, 3)), ..Settings::default() }).unwrap();
+    assert_eq!(r.images_downgraded, 2, "{r:?}");
+    assert!(r.newer_features.iter().all(|f| f.feature != "JBIG2 images"), "{:?}", r.newer_features);
+    let g4 = save(&old);
+    assert_eq!(render_all(&before, 2), render_all(&g4, 2));
+    let mut doc = f.doc.clone();
+    let r = optimize(&mut doc, &Settings { compatibility: Some((1, 3)), ..s }).unwrap();
+    assert_eq!((r.images_jbig2, r.images_ccitt), (0, 2), "{r:?}");
+}
+
+fn image_dict(w: i64, h: i64, bpc: i64, cs: Option<&str>) -> Dict {
+    let mut d = Dict::new();
+    d.set(b"Type".to_vec(), Object::name("XObject"));
+    d.set(b"Subtype".to_vec(), Object::name("Image"));
+    d.set(b"Width".to_vec(), Object::Int(w));
+    d.set(b"Height".to_vec(), Object::Int(h));
+    d.set(b"BitsPerComponent".to_vec(), Object::Int(bpc));
+    if let Some(cs) = cs {
+        d.set(b"ColorSpace".to_vec(), Object::name(cs));
+    }
+    d
+}
+
+/// Lossless 8 × 8 JPEG 2000 codestreams (generated once with OpenJPEG from synthetic pixels:
+/// red = 32·x, green = 32·y, blue = 128; the second also has alpha 255 for x < 4, else 0).
+const J2K_RGB: &str = "ff4fff51002f000000000008000000080000000000000000000000080000000800000000000000000003070101070101070101ff52000c00000001000304040001ff5c000d4040484850484850484850ff640025000143726561746564206279204f70656e4a5045472076657273696f6e20322e352e34ff90000a0000000000420001ff93c7d404082fc7d404082f80cfc008045fa7e004045f80c7da06000d0209a3ed03000b3d8680c3ea0300221a15a1f50180037feb80ffd9";
+const J2K_RGBA: &str = "ff4fff510032000000000008000000080000000000000000000000080000000800000000000000000004070101070101070101070101ff52000c00000001000304040001ff5c000d4040484850484850484850ff640025000143726561746564206279204f70656e4a5045472076657273696f6e20322e352e34ff90000a00000000005a0001ff93c7d404082fc7d404082f80cfb408049fcfc008045fa7e004045f80df9810073fc7da06000d0209a3ed03000b3d8680cfc01402887a3d7fc3ea0300221a15a1f50180037feb80cfc00c17d8b4ffd9";
+
+fn unhex(s: &str) -> Vec<u8> {
+    (0..s.len()).step_by(2).map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap()).collect()
+}
+
+#[test]
+fn made_compatible_jpeg_2000_and_16_bit_images_are_converted_down() {
+    let mut doc = Document::new_empty();
+    // JPEG 2000 without /ColorSpace (the codestream's RGB is used), stored as JPEG.
+    let mut d = image_dict(8, 8, 8, None);
+    d.remove(b"BitsPerComponent");
+    d.set(b"Filter".to_vec(), Object::name("JPXDecode"));
+    let jpx = doc.add(Object::Stream(Stream::from_raw(d.clone(), unhex(J2K_RGB))));
+    // With alpha in the codestream and /SMaskInData 1: the alpha becomes a soft mask.
+    d.set(b"SMaskInData".to_vec(), Object::Int(1));
+    let jpx_alpha = doc.add(Object::Stream(Stream::from_raw(d.clone(), unhex(J2K_RGBA))));
+    // Damaged JPEG 2000: left as it was and counted.
+    d.remove(b"SMaskInData");
+    let broken = doc.add(Object::Stream(Stream::from_raw(d.clone(), unhex(&J2K_RGB[..200]))));
+    // A declared colour space with the wrong number of components: left alone.
+    let mut gray = d.clone();
+    gray.set(b"ColorSpace".to_vec(), Object::name("DeviceGray"));
+    let mismatched = doc.add(Object::Stream(Stream::from_raw(gray, unhex(J2K_RGB))));
+    // 16-bit gray (a ramp of high bytes 0..=255) and one with a colour-key mask (left alone).
+    let samples: Vec<u8> = (0..256u32).flat_map(|v| [v as u8, 0x7F]).collect();
+    let deep = doc.add(Object::Stream(Stream::flate(image_dict(16, 16, 16, Some("DeviceGray")), &samples)));
+    let mut keyed = image_dict(16, 16, 16, Some("DeviceGray"));
+    keyed.set(b"Mask".to_vec(), Object::Array(vec![0.into(), 10.into()]));
+    let keyed = doc.add(Object::Stream(Stream::flate(keyed, &samples)));
+    let first = page(&mut doc, jpx, Stream::from_raw(Dict::new(), b"q 72 0 0 72 0 0 cm /Im0 Do Q".to_vec()), [72.0, 72.0]);
+    let _ = first;
+    let r = optimize(&mut doc, &Settings { compatibility: Some((1, 4)), ..Settings::default() }).unwrap();
+    assert_eq!((r.images_downgraded, r.images_not_downgraded), (3, 3), "{r:?}");
+    let found: Vec<(&str, usize)> = r.newer_features.iter().map(|f| (f.feature, f.count)).collect();
+    assert!(found.contains(&("JPEG 2000 images", 2)), "the damaged and mismatched ones remain: {found:?}");
+
+    let s = stream(&doc, jpx);
+    assert_eq!(s.dict.name(b"Filter"), Some(&b"DCTDecode"[..]), "{:?}", s.dict);
+    assert_eq!(s.dict.name(b"ColorSpace"), Some(&b"DeviceRGB"[..]));
+    assert_eq!((s.dict.int(b"Width"), s.dict.int(b"BitsPerComponent")), (Some(8), Some(8)));
+    let s = stream(&doc, jpx_alpha);
+    assert!(!s.dict.contains(b"SMaskInData"));
+    let mask = s.dict.reference(b"SMask").expect("a soft mask");
+    let alpha = stream(&doc, mask).decoded_strict().unwrap();
+    let expect: Vec<u8> = (0..64).map(|i| if i % 8 < 4 { 255 } else { 0 }).collect();
+    assert_eq!(alpha, expect);
+    assert_eq!(stream(&doc, broken).dict.name(b"Filter"), Some(&b"JPXDecode"[..]));
+    assert_eq!(stream(&doc, mismatched).dict.name(b"Filter"), Some(&b"JPXDecode"[..]));
+    let s = stream(&doc, deep);
+    assert_eq!(s.dict.int(b"BitsPerComponent"), Some(8));
+    assert_eq!(s.decoded_strict().unwrap(), (0..=255u8).collect::<Vec<_>>());
+    assert_eq!(stream(&doc, keyed).dict.int(b"BitsPerComponent"), Some(16));
+    // Not asked for: nothing is converted.
+    let mut doc2 = Document::new_empty();
+    let j = doc2.add(Object::Stream(Stream::from_raw(d, unhex(J2K_RGB))));
+    let r = optimize(&mut doc2, &Settings::default()).unwrap();
+    assert_eq!(r.images_downgraded, 0);
+    assert_eq!(stream(&doc2, j).dict.name(b"Filter"), Some(&b"JPXDecode"[..]));
+}
+
+#[test]
+fn hostile_jbig2_and_jpeg_2000_images_are_left_alone() {
+    let mut doc = Document::new_empty();
+    let mut refs = Vec::new();
+    for (filter, w, h, raw) in [
+        ("JBIG2Decode", 64, 64, vec![0u8; 40]),
+        ("JBIG2Decode", 1 << 30, 1 << 30, vec![0x97, 0x4A, 0x42, 0x32]),
+        ("JBIG2Decode", -1, 3, Vec::new()),
+        ("JPXDecode", 8, 8, vec![0xFF, 0x4F, 0xFF, 0x51, 0, 0x2F, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF]),
+        ("JPXDecode", 8, 8, Vec::new()),
+        ("JPXDecode", 8, 8, unhex(&J2K_RGB[..120])),
+    ] {
+        let mut d = image_dict(w, h, 1, Some("DeviceGray"));
+        d.set(b"Filter".to_vec(), Object::name(filter));
+        refs.push(doc.add(Object::Stream(Stream::from_raw(d, raw))));
+    }
+    // A JBIG2 image whose globals are not a stream, and a 16-bit image with too few samples.
+    let mut d = image_dict(64, 64, 1, Some("DeviceGray"));
+    d.set(b"Filter".to_vec(), Object::name("JBIG2Decode"));
+    let mut p = Dict::new();
+    p.set(b"JBIG2Globals".to_vec(), Object::Int(7));
+    d.set(b"DecodeParms".to_vec(), Object::Dict(p));
+    refs.push(doc.add(Object::Stream(Stream::from_raw(d, vec![0u8; 8]))));
+    refs.push(doc.add(Object::Stream(Stream::flate(image_dict(100, 100, 16, Some("DeviceRGB")), &[1, 2, 3]))));
+    let before: Vec<Stream> = refs.iter().map(|r| stream(&doc, *r)).collect();
+    let s = Settings { compatibility: Some((1, 3)), flate_unencoded: false, ..Settings::default() };
+    let r = optimize(&mut doc, &s).unwrap();
+    assert_eq!(r.images_downgraded, 0, "{r:?}");
+    for (r, s) in refs.iter().zip(&before) {
+        assert_eq!(&stream(&doc, *r), s, "object {}", r.num);
+    }
+}

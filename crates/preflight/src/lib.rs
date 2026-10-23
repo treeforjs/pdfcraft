@@ -44,7 +44,9 @@ pub use flatten::{
     FlattenPreset, FlattenReport, FlattenSettings, PageAction, PageFlatten, PageRaster, flatten_transparency, rasterize_pages, transparent_pages,
 };
 pub use pdfx::{MAX_X_FINDINGS, X_NOT_CHECKED, X_RULES, XFinding, XOptions, XPart, XReport, XRule, XSeverity, declared_pdfx, verify_pdfx};
-pub use pdfx_convert::{ICC_REGISTRY, IccHeader, MAX_PROFILE_BYTES, XConvertOptions, XIntent, pdfx_finish, pdfx_prepare};
+pub use pdfx_convert::{
+    ICC_REGISTRY, IccHeader, MAX_PROFILE_BYTES, REGISTERED_CONDITIONS, XConvertOptions, XIntent, is_registered, pdfx_finish, pdfx_prepare,
+};
 
 use pdfcraft_cos::{Dict, Document, ObjRef, Object, PdfString, Stream};
 
@@ -221,6 +223,23 @@ pub struct Declared {
     pub pdfua: Option<u8>,
     /// Output intents' condition identifiers.
     pub output_intents: Vec<String>,
+    /// `GTS_PDFXVersion` (document information, else XMP).
+    pub pdfx: Option<String>,
+    /// Each output intent in detail (at most 64).
+    pub intents: Vec<IntentInfo>,
+}
+
+/// One output intent as the Standards panel shows it.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct IntentInfo {
+    /// `S`: `GTS_PDFA1`, `GTS_PDFX`, `ISO_PDFE1`, …
+    pub subtype: String,
+    pub condition: String,
+    pub info: Option<String>,
+    pub registry: Option<String>,
+    /// The destination profile's header (class, colour space, version) and size, or why it
+    /// can't be read; `None` when the intent has no profile.
+    pub profile: Option<Result<(IccHeader, usize), String>>,
 }
 
 const FORBIDDEN_ACTIONS: &[&[u8]] =
@@ -261,12 +280,27 @@ pub fn declared(doc: &Document) -> Declared {
         d.pdfa = part.map(|p| (p, conf.to_uppercase()));
         d.pdfua = xmp::value(&x, "pdfuaid:part").and_then(|p| p.parse().ok());
     }
+    d.pdfx = pdfx::declared_pdfx(doc).0;
     let cat = catalog(doc);
     if let Some(list) = cat.get(b"OutputIntents").map(|o| doc.resolve(o)).and_then(|o| o.as_array().cloned()) {
-        for oi in list {
-            if let Some(od) = doc.resolve(&oi).as_dict() {
-                let id = od.get(b"OutputConditionIdentifier").and_then(|v| doc.resolve(v).as_string().map(|s| s.to_text())).unwrap_or_default();
-                d.output_intents.push(id);
+        for oi in list.iter().take(64) {
+            if let Some(od) = doc.resolve(oi).as_dict() {
+                let text = |k: &[u8]| od.get(k).and_then(|v| doc.resolve(v).as_string().map(|s| s.to_text()));
+                let id = text(b"OutputConditionIdentifier").unwrap_or_default();
+                d.output_intents.push(id.clone());
+                let profile = od.get(b"DestOutputProfile").map(|p| match &*doc.resolve(p) {
+                    Object::Stream(s) => {
+                        s.decoded_within(MAX_PROFILE_BYTES).map_err(|e| e.to_string()).and_then(|b| IccHeader::read(&b).map(|h| (h, b.len())))
+                    }
+                    _ => Err("not a stream".into()),
+                });
+                d.intents.push(IntentInfo {
+                    subtype: od.name(b"S").map(|n| String::from_utf8_lossy(n).into_owned()).unwrap_or_default(),
+                    condition: id,
+                    info: text(b"Info"),
+                    registry: text(b"RegistryName"),
+                    profile,
+                });
             }
         }
     }
@@ -302,14 +336,15 @@ fn has_pdfa_intent(doc: &Document) -> bool {
         .any(|oi| doc.resolve(oi).as_dict().is_some_and(|d| d.name(b"S") == Some(b"GTS_PDFA1") && d.get(b"DestOutputProfile").is_some()))
 }
 
-/// Whether any content or object uses a device colour space.
-fn uses_device_colour(doc: &Document, objs: &[(ObjRef, std::sync::Arc<Object>)]) -> (bool, bool) {
-    let (mut rgb_or_gray, mut cmyk) = (false, false);
+/// Which device colour spaces content or objects use: (DeviceRGB, DeviceGray, DeviceCMYK).
+fn uses_device_colour(doc: &Document, objs: &[(ObjRef, std::sync::Arc<Object>)]) -> (bool, bool, bool) {
+    let (mut rgb, mut gray, mut cmyk) = (false, false, false);
     for (_, o) in objs {
         let Some(d) = dict_of(o) else { continue };
         if let Some(cs) = d.get(b"ColorSpace").map(|c| doc.resolve(c)) {
             match &*cs {
-                Object::Name(n) if n == b"DeviceRGB" || n == b"DeviceGray" => rgb_or_gray = true,
+                Object::Name(n) if n == b"DeviceRGB" => rgb = true,
+                Object::Name(n) if n == b"DeviceGray" => gray = true,
                 Object::Name(n) if n == b"DeviceCMYK" => cmyk = true,
                 _ => {}
             }
@@ -322,14 +357,82 @@ fn uses_device_colour(doc: &Document, objs: &[(ObjRef, std::sync::Arc<Object>)])
             // Content streams: rg/RG/g/G/k/K operators.
             for line in data.split(|b| *b == b'\n' || *b == b' ') {
                 match line {
-                    b"rg" | b"RG" | b"g" | b"G" => rgb_or_gray = true,
+                    b"rg" | b"RG" => rgb = true,
+                    b"g" | b"G" => gray = true,
                     b"k" | b"K" => cmyk = true,
                     _ => {}
                 }
             }
         }
     }
-    (rgb_or_gray, cmyk)
+    (rgb, gray, cmyk)
+}
+
+/// The output intent a conversion to PDF/A gives the document (Standards ▸ PDF/A ▸ Output
+/// intent): an ICC output (`prtr`) or monitor (`mntr`) profile for gray, RGB or CMYK and the
+/// condition it stands for. Without one, conversion adds the built-in sRGB intent when the
+/// document has no PDF/A intent.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PdfaIntent {
+    /// `OutputConditionIdentifier` (a registered condition such as `FOGRA39`, or the profile's
+    /// name).
+    pub condition: String,
+    /// `Info` (default: the condition).
+    pub info: Option<String>,
+    pub profile: std::sync::Arc<Vec<u8>>,
+}
+
+impl PdfaIntent {
+    /// Check the intent for `level`: one line of text, an ICC output or monitor profile for
+    /// gray, RGB or CMYK, at most ICC version 2 for PDF/A-1 and 4 for PDF/A-2 and -3.
+    pub fn validate(&self, level: Level) -> Result<(), String> {
+        for (what, t) in [("the output condition", Some(&self.condition)), ("the output condition's description", self.info.as_ref())] {
+            if let Some(t) = t
+                && (t.trim().is_empty() || t.chars().count() > 256 || t.chars().any(char::is_control))
+            {
+                return Err(format!("{what} must be one line of 1 to 256 characters"));
+            }
+        }
+        let h = IccHeader::read(&self.profile).map_err(|e| format!("profile: {e}"))?;
+        intent_header_problem(&h, level).map_or(Ok(()), |m| Err(format!("profile: {m}")))
+    }
+}
+
+/// What makes an output intent profile header unusable for `level`, if anything.
+fn intent_header_problem(h: &IccHeader, level: Level) -> Option<String> {
+    if !matches!(&h.class, b"prtr" | b"mntr") {
+        return Some(format!(
+            "a PDF/A output intent needs an output (prtr) or monitor (mntr) profile, not a {:?} profile",
+            String::from_utf8_lossy(&h.class)
+        ));
+    }
+    if h.components().is_none() {
+        return Some(format!("the profile's colour space {:?} isn't gray, RGB or CMYK", String::from_utf8_lossy(&h.space).trim()));
+    }
+    let max = if level.part() == 1 { 2 } else { 4 };
+    if h.major > max {
+        return Some(format!("ICC version {} is newer than PDF/A-{} allows (version {max})", h.major, level.part()));
+    }
+    None
+}
+
+/// The PDF/A output intent's profile header (the first `GTS_PDFA1` intent with a profile), or
+/// why it can't be read; `None` when there is no such intent.
+fn pdfa_intent_header(doc: &Document) -> Option<Result<IccHeader, String>> {
+    let cat = catalog(doc);
+    let list = cat.get(b"OutputIntents").map(|o| doc.resolve(o)).and_then(|o| o.as_array().cloned()).unwrap_or_default();
+    let profile = list.iter().take(64).find_map(|oi| {
+        let oi = doc.resolve(oi);
+        let d = oi.as_dict()?;
+        (d.name(b"S") == Some(b"GTS_PDFA1")).then(|| d.get(b"DestOutputProfile").map(|p| doc.resolve(p)))?
+    })?;
+    Some(match &*profile {
+        Object::Stream(s) => match s.decoded_within(MAX_PROFILE_BYTES) {
+            Ok(bytes) => IccHeader::read(&bytes),
+            Err(e) => Err(format!("its profile can't be decoded ({e})")),
+        },
+        _ => Err("its DestOutputProfile isn't a stream".into()),
+    })
 }
 
 /// Check `doc` against `level`.
@@ -362,12 +465,29 @@ pub fn verify(doc: &Document, level: Level) -> Vec<Issue> {
     }
     // 6.2.2: output intent when device colour is used.
     let objs = objects(doc);
-    let (rgb, cmyk) = uses_device_colour(doc, &objs);
-    if (rgb || cmyk) && !has_pdfa_intent(doc) {
+    let (rgb, gray, cmyk) = uses_device_colour(doc, &objs);
+    if (rgb || gray || cmyk) && !has_pdfa_intent(doc) {
         issue("6.2.3", "Device colour is used, but there is no PDF/A output intent".into(), None, !cmyk);
         if cmyk {
-            issue("6.2.4.3", "DeviceCMYK is used: it needs a CMYK output intent (not added automatically)".into(), None, false);
+            issue("6.2.4.3", "DeviceCMYK is used: it needs a CMYK output intent (choose one when converting)".into(), None, false);
         }
+    }
+    // 6.2.3 / 6.2.4.3: the intent's profile, and device colour that doesn't match it.
+    match pdfa_intent_header(doc) {
+        Some(Err(e)) => issue("6.2.3", format!("The PDF/A output intent isn't usable: {e}"), None, false),
+        Some(Ok(h)) => {
+            if let Some(m) = intent_header_problem(&h, level) {
+                issue("6.2.3", format!("The PDF/A output intent's profile: {m}"), None, false);
+            }
+            let space = String::from_utf8_lossy(&h.space).trim().to_string();
+            if rgb && &h.space != b"RGB " {
+                issue("6.2.4.3", format!("DeviceRGB is used, but the output intent is {space}"), None, false);
+            }
+            if cmyk && &h.space != b"CMYK" {
+                issue("6.2.4.3", format!("DeviceCMYK is used, but the output intent is {space}"), None, false);
+            }
+        }
+        None => {}
     }
     // 6.1.3 / 6.6.1: catalog actions.
     if cat.get(b"AA").is_some() {
@@ -720,6 +840,23 @@ pub fn convert(doc: &mut Document, level: Level) -> Result<Report, ConvertError>
 /// [`convert`] with the logical-structure check for level a (`structure` returns its findings;
 /// any error refuses the conversion, and they're part of what remains afterwards).
 pub fn convert_with(doc: &mut Document, level: Level, structure: impl Fn(&Document) -> Vec<Issue>) -> Result<Report, ConvertError> {
+    convert_with_intent(doc, level, None, structure)
+}
+
+/// [`convert_with`], giving the document `intent` as its one PDF/A output intent (replacing
+/// any it has). An intent that doesn't suit `level` ([`PdfaIntent::validate`]) is refused,
+/// changing nothing.
+pub fn convert_with_intent(
+    doc: &mut Document,
+    level: Level,
+    intent: Option<&PdfaIntent>,
+    structure: impl Fn(&Document) -> Vec<Issue>,
+) -> Result<Report, ConvertError> {
+    if let Some(i) = intent
+        && let Err(m) = i.validate(level)
+    {
+        return Err(ConvertError::Refused { level, blocking: vec![Issue::error("6.2.3", m, None, false)] });
+    }
     let blocking = conversion_blockers(doc, level, &structure);
     if !blocking.is_empty() {
         return Err(ConvertError::Refused { level, blocking });
@@ -761,7 +898,27 @@ pub fn convert_with(doc: &mut Document, level: Level, structure: impl Fn(&Docume
         cat.set(b"AcroForm".to_vec(), Object::Dict(af));
         fixed.push("Cleared NeedAppearances".into());
     }
-    if !has_pdfa_intent(doc) {
+    if let Some(intent) = intent {
+        let space = IccHeader::read(&intent.profile).ok().and_then(|h| h.components()).unwrap_or(3);
+        let mut icc = Dict::new();
+        icc.set(b"N".to_vec(), Object::Int(space));
+        let profile = doc.add(Object::Stream(Stream::flate(icc, &intent.profile)));
+        let mut oi = Dict::new();
+        oi.set(b"Type".to_vec(), Object::name("OutputIntent"));
+        oi.set(b"S".to_vec(), Object::name("GTS_PDFA1"));
+        oi.set(b"OutputConditionIdentifier".to_vec(), PdfString::text(intent.condition.trim()));
+        oi.set(b"Info".to_vec(), PdfString::text(intent.info.as_deref().unwrap_or(&intent.condition).trim()));
+        if pdfx_convert::is_registered(intent.condition.trim()) {
+            oi.set(b"RegistryName".to_vec(), PdfString::text(ICC_REGISTRY));
+        }
+        oi.set(b"DestOutputProfile".to_vec(), Object::Ref(profile));
+        // One PDF/A intent: the others (and their different profiles) go.
+        let mut list = cat.get(b"OutputIntents").map(|o| doc.resolve(o)).and_then(|o| o.as_array().cloned()).unwrap_or_default();
+        list.retain(|o| doc.resolve(o).as_dict().is_none_or(|d| d.name(b"S") != Some(b"GTS_PDFA1")));
+        list.push(Object::Dict(oi));
+        cat.set(b"OutputIntents".to_vec(), Object::Array(list));
+        fixed.push(format!("Set the output intent to {}", intent.condition.trim()));
+    } else if !has_pdfa_intent(doc) {
         let mut icc = Dict::new();
         icc.set(b"N".to_vec(), Object::Int(3));
         let profile = doc.add(Object::Stream(Stream::flate(icc, &icc::srgb())));

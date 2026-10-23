@@ -3150,3 +3150,46 @@ compare-page	Moved	Áthelyezve
 	Enhance scans…	Beolvasások feljavítása…
 	SVG (one file per page)	SVG (oldalanként egy fájl)
 	Accessible text	Akadálymentes szöveg
+	Can't reach {standard} automatically; nothing was changed.	A(z) {standard} automatikusan nem érhető el; semmi sem változott.
+	Checking…	Ellenőrzés…
+	Compress document structure	Dokumentumszerkezet tömörítése
+	Compress entire file	Teljes fájl tömörítése
+	Convert to PDF/X	Konvertálás PDF/X formátumba
+	Converted to {standard}: {n} changes. Save to keep them.	Konvertálva erre: {standard}, {n} módosítás. Mentse a megtartásukhoz.
+	Converting…	Konvertálás…
+	Errors: {e} · Warnings: {w}	Hibák: {e} · Figyelmeztetések: {w}
+	Flatten transparency	Átlátszóság egyesítése
+	High (600 ppi)	Magas (600 ppi)
+	Keep the document's (sRGB if it has none)	A dokumentumé (sRGB, ha nincs)
+	Keep the document's output intent	A dokumentum kimeneti feltételének megtartása
+	Low (150 ppi)	Alacsony (150 ppi)
+	Make compatible with	Kompatibilissé tétel ezzel:
+	Medium (300 ppi)	Közepes (300 ppi)
+	No output intents	Nincs kimeneti feltétel
+	No problems found in the implemented checks.	Az elérhető ellenőrzések nem találtak hibát.
+	Nothing needed changing.	Semmit sem kellett módosítani.
+	Object compression	Objektumtömörítés
+	Only the areas whose look depends on transparency become images; text and vectors elsewhere stay as they are.	Csak azok a területek lesznek képek, amelyek megjelenése az átlátszóságtól függ; máshol a szöveg és a vektorok változatlanok maradnak.
+	Only the first {n} findings are shown.	Csak az első {n} találat látható.
+	Optimizing… flattening transparency	Optimalizálás… átlátszóság egyesítése
+	PDF 1.3 has no transparency: it is always flattened.	A PDF 1.3 nem ismeri az átlátszóságot: mindig egyesítve lesz.
+	PDF {v} · objects checked: {n}	PDF {v} · ellenőrzött objektumok: {n}
+	PDF/X-4 embeds the output profile: choose a profile.	A PDF/X-4 beágyazza a kimeneti profilt: válasszon profilt.
+	Raster/vector balance	Raszter/vektor arány
+	Remove compression	Tömörítés eltávolítása
+	Save As optimizes for Fast Web View	A Mentés másként gyors webes megjelenítésre optimalizál
+	Save As writes the file so a browser can show the first page before the download finishes.	A Mentés másként úgy írja a fájlt, hogy a böngésző már a letöltés vége előtt megjeleníthesse az első oldalt.
+	Standard	Szabvány
+	Syntax	Szintaxis
+	The chosen profile is no longer loaded.	A választott profil már nincs betöltve.
+	no profile (registered condition)	nincs profil (regisztrált feltétel)
+	object	objektum
+	the profile can't be read: {e}	a profil nem olvasható: {e}
+	{space} {class} profile, ICC version {v}, {n} bytes	{space} {class} profil, ICC-verzió: {v}, {n} bájt
+	Checks what a machine can decide. Reading order, the quality of alternate text and the use of colour need a person.	Azt ellenőrzi, amit egy gép el tud dönteni. Az olvasási sorrendhez, a helyettesítő szövegek minőségéhez és a színhasználathoz ember kell.
+	Checks every object reachable from the trailer against the Arlington PDF model for the file's PDF version.	A trailerből elérhető minden objektumot ellenőriz az Arlington PDF-modell alapján, a fájl PDF-verziójához.
+	Older versions: JPEG 2000 and 16-bit images are converted, JBIG2 becomes CCITT for PDF 1.3, transparency is flattened for PDF 1.3, and there are no object streams.	Régebbi verziók: a JPEG 2000 és a 16 bites képek átalakulnak, a JBIG2 PDF 1.3 esetén CCITT lesz, az átlátszóság PDF 1.3 esetén egyesül, és nincsenek objektumfolyamok.
+	PDF/X…	PDF/X…
+	PDF/UA…	PDF/UA…
+	Validate PDF syntax…	PDF-szintaxis ellenőrzése…
+	Validate PDF syntax	PDF-szintaxis ellenőrzése

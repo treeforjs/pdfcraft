@@ -2370,6 +2370,7 @@ version = "0.3.0"
 dependencies = [
  "fearless_simd",
  "hayro-ccitt",
+ "image",
 ]
 
 [[package]]
@@ -2379,6 +2380,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c75ab947623ef4ccaa7acf0579edf7cbb5a73838e3839a7be73335e522f433a1"
 dependencies = [
  "fearless_simd",
+ "image",
+ "moxcms",
 ]
 
 [[package]]
@@ -3787,6 +3790,7 @@ version = "0.5.0"
 dependencies = [
  "flate2",
  "hayro-ccitt",
+ "hayro-jbig2",
  "proptest",
  "thiserror 2.0.21",
  "weezl 0.2.1",
@@ -3860,6 +3864,8 @@ name = "pdfcraft-optimize"
 version = "0.5.0"
 dependencies = [
  "hayro-ccitt",
+ "hayro-jbig2",
+ "hayro-jpeg2000",
  "image",
  "pdfcraft-annot",
  "pdfcraft-content",

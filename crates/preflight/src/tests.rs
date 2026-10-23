@@ -342,3 +342,99 @@ fn tounicode_cmaps_round_trip() {
     assert_eq!(back.get(&1).map(String::as_str), Some("\u{1F600}"));
     assert_eq!(back.get(&200).map(String::as_str), Some("fi"));
 }
+
+/// A header-only ICC profile.
+fn icc_header(major: u8, class: &[u8; 4], space: &[u8; 4]) -> std::sync::Arc<Vec<u8>> {
+    let mut h = vec![0u8; 256];
+    h[0..4].copy_from_slice(&256u32.to_be_bytes());
+    h[8] = major;
+    h[12..16].copy_from_slice(class);
+    h[16..20].copy_from_slice(space);
+    h[20..24].copy_from_slice(b"XYZ ");
+    h[36..40].copy_from_slice(b"acsp");
+    std::sync::Arc::new(h)
+}
+
+fn intent(condition: &str, profile: std::sync::Arc<Vec<u8>>) -> PdfaIntent {
+    PdfaIntent { condition: condition.into(), info: None, profile }
+}
+
+#[test]
+fn a_chosen_output_intent_replaces_the_pdfa_intent_and_is_checked() {
+    // Converted first with the built-in sRGB intent, then with a registered CMYK condition: the
+    // document keeps one PDF/A intent, the chosen one, with the ICC registry named.
+    let mut doc = messy();
+    convert(&mut doc, Level::A2b).unwrap();
+    let fogra = intent("FOGRA39", icc_header(2, b"prtr", b"CMYK"));
+    let r = convert_with_intent(&mut doc, Level::A2b, Some(&fogra), |_| Vec::new()).unwrap();
+    assert!(r.fixed.contains(&"Set the output intent to FOGRA39".to_string()), "{:?}", r.fixed);
+    let d = declared(&doc);
+    assert_eq!(d.output_intents, ["FOGRA39"]);
+    let [i] = d.intents.as_slice() else { panic!("{:?}", d.intents) };
+    assert_eq!((i.subtype.as_str(), i.registry.as_deref(), i.info.as_deref()), ("GTS_PDFA1", Some(ICC_REGISTRY), Some("FOGRA39")));
+    let (h, size) = i.profile.clone().unwrap().unwrap();
+    assert_eq!((&h.class, &h.space, size), (b"prtr", b"CMYK", 256));
+    // The page paints DeviceRGB, which a CMYK intent doesn't cover.
+    let issues = verify(&doc, Level::A2b);
+    assert!(issues.iter().any(|i| i.clause == "6.2.4.3" && i.message == "DeviceRGB is used, but the output intent is CMYK"), "{issues:#?}");
+    // An RGB monitor profile covers it; an unregistered condition gets no registry name.
+    let mut doc = messy();
+    let own = PdfaIntent { condition: "My monitor".into(), info: Some("Calibrated".into()), profile: icc_header(4, b"mntr", b"RGB ") };
+    convert_with_intent(&mut doc, Level::A2b, Some(&own), |_| Vec::new()).unwrap();
+    let d = declared(&doc);
+    assert_eq!((d.intents[0].registry.as_deref(), d.intents[0].info.as_deref()), (None, Some("Calibrated")));
+    assert!(!verify(&doc, Level::A2b).iter().any(|i| i.clause == "6.2.3" || i.clause == "6.2.4.3"));
+    // ICC version 4 is too new for PDF/A-1: refused, nothing changes.
+    let mut doc = messy();
+    let before = doc.clone();
+    assert!(matches!(convert_with_intent(&mut doc, Level::A1b, Some(&own), |_| Vec::new()), Err(ConvertError::Refused { .. })));
+    assert_eq!(declared(&doc), declared(&before));
+}
+
+#[test]
+fn unsuitable_output_intents_are_refused_or_reported() {
+    let cmyk = || icc_header(2, b"prtr", b"CMYK");
+    for (i, why) in [
+        (intent("", cmyk()), "one line"),
+        (intent("A\nB", cmyk()), "one line"),
+        (intent(&"x".repeat(300), cmyk()), "one line"),
+        (PdfaIntent { condition: "X".into(), info: Some(" ".into()), profile: cmyk() }, "one line"),
+        (intent("X", icc_header(2, b"abst", b"CMYK")), "output (prtr) or monitor"),
+        (intent("X", icc_header(2, b"prtr", b"Lab ")), "isn't gray, RGB or CMYK"),
+        (intent("X", std::sync::Arc::new(vec![0; 12])), "too short"),
+        (intent("X", std::sync::Arc::new(vec![0; 300])), "acsp"),
+        (intent("X", std::sync::Arc::new(Vec::new())), "too short"),
+    ] {
+        let e = i.validate(Level::A2b).unwrap_err();
+        assert!(e.contains(why), "{e} / {why}");
+        let mut doc = messy();
+        assert!(convert_with_intent(&mut doc, Level::A2b, Some(&i), |_| Vec::new()).is_err());
+    }
+    assert!(intent("FOGRA39", cmyk()).validate(Level::A1b).is_ok());
+    // A PDF/A intent whose profile is missing, damaged or of the wrong class is reported.
+    for profile in [
+        "(not a stream)",
+        "7 0 R",
+        "<< /N 3 /Length 4 >>\nstream\nabcd\nendstream",
+        "<< /N 3 /Filter /FlateDecode /Length 4 >>\nstream\nabcd\nendstream",
+    ] {
+        let (profile, extra) = if profile.contains("stream\n") { ("6 0 R", profile) } else { (profile, "null") };
+        let doc = build(
+            &[
+                &format!(
+                    "<< /Type /Catalog /Pages 2 0 R /OutputIntents [<< /Type /OutputIntent /S /GTS_PDFA1 /OutputConditionIdentifier (X) /DestOutputProfile {profile} >>] >>"
+                ),
+                "<< /Type /Pages /Kids [3 0 R] /Count 1 /MediaBox [0 0 200 200] >>",
+                "<< /Type /Page /Parent 2 0 R /Contents 4 0 R >>",
+                "<< /Length 7 >>\nstream\n1 0 0 rg\nendstream",
+                "null",
+                extra,
+            ],
+            "",
+        );
+        let issues = verify(&doc, Level::A2b);
+        assert!(issues.iter().any(|i| i.clause == "6.2.3" && !i.fixable), "{profile}: {issues:#?}");
+        let d = declared(&doc);
+        assert_eq!(d.intents.len(), 1);
+    }
+}

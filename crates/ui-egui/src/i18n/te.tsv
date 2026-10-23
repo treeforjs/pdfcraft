@@ -3114,3 +3114,46 @@ compare-page	Moved	తరలించబడింది
 	Enhance scans…	స్కాన్‌లను మెరుగుపరచు…
 	SVG (one file per page)	SVG (ప్రతి పేజీకి ఒక ఫైల్)
 	Accessible text	యాక్సెసిబుల్ టెక్స్ట్
+	Can't reach {standard} automatically; nothing was changed.	{standard}‌ను స్వయంచాలకంగా చేరుకోలేము; ఏదీ మార్చలేదు.
+	Checking…	తనిఖీ చేస్తోంది…
+	Compress document structure	పత్ర నిర్మాణాన్ని కుదించు
+	Compress entire file	మొత్తం ఫైల్‌ను కుదించు
+	Convert to PDF/X	PDF/X‌కి మార్చు
+	Converted to {standard}: {n} changes. Save to keep them.	{standard}‌కి మార్చాం: {n} మార్పులు. వాటిని ఉంచడానికి సేవ్ చేయండి.
+	Converting…	మారుస్తోంది…
+	Errors: {e} · Warnings: {w}	లోపాలు: {e} · హెచ్చరికలు: {w}
+	Flatten transparency	పారదర్శకతను చదును చేయి
+	High (600 ppi)	అధికం (600 ppi)
+	Keep the document's (sRGB if it has none)	పత్రానిదే (లేకపోతే sRGB)
+	Keep the document's output intent	పత్రం అవుట్‌పుట్ ఇంటెంట్‌ను ఉంచు
+	Low (150 ppi)	తక్కువ (150 ppi)
+	Make compatible with	దీనితో అనుకూలంగా చేయి
+	Medium (300 ppi)	మధ్యస్థం (300 ppi)
+	No output intents	అవుట్‌పుట్ ఇంటెంట్‌లు లేవు
+	No problems found in the implemented checks.	అమలైన తనిఖీల్లో సమస్యలు కనిపించలేదు.
+	Nothing needed changing.	ఏదీ మార్చాల్సిన అవసరం రాలేదు.
+	Object compression	ఆబ్జెక్ట్ కుదింపు
+	Only the areas whose look depends on transparency become images; text and vectors elsewhere stay as they are.	పారదర్శకతపై ఆధారపడి కనిపించే ప్రాంతాలు మాత్రమే చిత్రాలుగా మారతాయి; మిగతా చోట్ల పాఠ్యం, వెక్టర్‌లు అలాగే ఉంటాయి.
+	Only the first {n} findings are shown.	మొదటి {n} ఫలితాలు మాత్రమే చూపబడ్డాయి.
+	Optimizing… flattening transparency	ఆప్టిమైజ్ చేస్తోంది… పారదర్శకతను చదును చేస్తోంది
+	PDF 1.3 has no transparency: it is always flattened.	PDF 1.3‌లో పారదర్శకత లేదు: అది ఎప్పుడూ చదును అవుతుంది.
+	PDF {v} · objects checked: {n}	PDF {v} · తనిఖీ చేసిన ఆబ్జెక్ట్‌లు: {n}
+	PDF/X-4 embeds the output profile: choose a profile.	PDF/X-4 అవుట్‌పుట్ ప్రొఫైల్‌ను పొందుపరుస్తుంది: ఒక ప్రొఫైల్‌ను ఎంచుకోండి.
+	Raster/vector balance	రాస్టర్/వెక్టర్ సమతుల్యం
+	Remove compression	కుదింపును తీసివేయి
+	Save As optimizes for Fast Web View	ఇలా సేవ్ చేయి వేగవంతమైన వెబ్ వీక్షణ కోసం ఆప్టిమైజ్ చేస్తుంది
+	Save As writes the file so a browser can show the first page before the download finishes.	డౌన్‌లోడ్ పూర్తయ్యేలోపే బ్రౌజర్ మొదటి పేజీని చూపగలిగేలా ఇలా సేవ్ చేయి ఫైల్‌ను రాస్తుంది.
+	Standard	ప్రమాణం
+	Syntax	సింటాక్స్
+	The chosen profile is no longer loaded.	ఎంచుకున్న ప్రొఫైల్ ఇక లోడ్ అయి లేదు.
+	no profile (registered condition)	ప్రొఫైల్ లేదు (నమోదైన షరతు)
+	object	ఆబ్జెక్ట్
+	the profile can't be read: {e}	ప్రొఫైల్‌ను చదవలేము: {e}
+	{space} {class} profile, ICC version {v}, {n} bytes	{space} {class} ప్రొఫైల్, ICC వెర్షన్ {v}, {n} బైట్‌లు
+	Checks what a machine can decide. Reading order, the quality of alternate text and the use of colour need a person.	యంత్రం నిర్ణయించగలిగే వాటిని తనిఖీ చేస్తుంది. చదివే క్రమం, ప్రత్యామ్నాయ పాఠ్యం నాణ్యత, రంగుల వినియోగం కోసం మనిషి అవసరం.
+	Checks every object reachable from the trailer against the Arlington PDF model for the file's PDF version.	ఫైల్ PDF వెర్షన్‌కు Arlington PDF మోడల్‌తో ట్రైలర్ నుండి చేరుకోగల ప్రతి ఆబ్జెక్ట్‌ను పోల్చి తనిఖీ చేస్తుంది.
+	Older versions: JPEG 2000 and 16-bit images are converted, JBIG2 becomes CCITT for PDF 1.3, transparency is flattened for PDF 1.3, and there are no object streams.	పాత వెర్షన్‌లు: JPEG 2000, 16-బిట్ చిత్రాలు మార్చబడతాయి, PDF 1.3‌కి JBIG2 CCITT‌గా మారుతుంది, పారదర్శకత చదును అవుతుంది, ఆబ్జెక్ట్ స్ట్రీమ్‌లు ఉండవు.
+	PDF/X…	PDF/X…
+	PDF/UA…	PDF/UA…
+	Validate PDF syntax…	PDF సింటాక్స్‌ను ధృవీకరించు…
+	Validate PDF syntax	PDF సింటాక్స్‌ను ధృవీకరించు
